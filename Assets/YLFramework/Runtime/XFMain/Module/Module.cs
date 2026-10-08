@@ -34,6 +34,10 @@ namespace YLFramework.Core
         /// </summary>
         internal Dictionary<Type, Controller> controllers = new Dictionary<Type, Controller>();
 
+        internal long nextModelId = 1;
+        internal HashSet<Type> creatingModels = new HashSet<Type>();
+        internal HashSet<Type> creatingControllers = new HashSet<Type>();
+
 
         private int ui_start_sort_order = 0; // UI 初始的SortingOrder
 
@@ -103,7 +107,7 @@ namespace YLFramework.Core
          
         #region Model
         /// <summary>
-        /// 添加数据
+        /// 注册本地Model；已完成注册的同实例重复调用幂等，键冲突或跨模块注册抛出异常。
         /// </summary>
         /// <param name="model">数据对象</param>
         public void AddModel(Model model)
@@ -113,7 +117,7 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 移除数据
+        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及owner。
         /// </summary>
         /// <param name="model"></param>
         public void RemoveModel(Model model)
@@ -138,7 +142,7 @@ namespace YLFramework.Core
         /// <param name="modelType"></param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public Model GetModel(Type modelType, int id)
+        public Model GetModel(Type modelType, long id)
         {
             return ModelManager.GetModel(this, modelType, id);
         }
@@ -185,7 +189,7 @@ namespace YLFramework.Core
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
         /// <returns></returns>
-        public T GetModel<T>(int id) where T : Model
+        public T GetModel<T>(long id) where T : Model
         {
             return GetModel(typeof(T), id) as T;
         }
@@ -222,7 +226,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
         /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
-        /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
+        /// 不使用对象池；初始化期间重入Load返回临时注册的自身，退出期间拒绝Load。
         /// </summary>
         /// <param name="type">数据类型</param>
         /// <returns></returns>
@@ -234,7 +238,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
         /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
-        /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
+        /// 不使用对象池；初始化期间重入Load返回临时注册的自身，退出期间拒绝Load。
         /// </summary>
         /// <typeparam name="T">数据类型</typeparam>
         /// <returns></returns>
@@ -792,6 +796,22 @@ namespace YLFramework.Core
         #region Controller
 
         /// <summary>
+        /// 注册外部构造的本地Controller；已完成注册的同实例重复调用幂等，冲突抛出异常。
+        /// </summary>
+        public void AddController(Controller controller)
+        {
+            ControllerManager.AddController(this, controller);
+        }
+
+        /// <summary>
+        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及owner。
+        /// </summary>
+        public void RemoveController(Controller controller)
+        {
+            ControllerManager.RemoveController(this, controller);
+        }
+
+        /// <summary>
         /// 只查询本模块已注册的精确类型Controller，不创建；缺失返回null。
         /// 跨模块共享须在明确的拥有者Module上调用查询，不改变归属或生命周期责任。
         /// </summary>
@@ -827,7 +847,7 @@ namespace YLFramework.Core
         /// <exception cref="Exception"></exception>
         public Controller LoadController(string controllerTypeFullName) 
         {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
             Type type = AssemblyTools.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return LoadController(type);
@@ -843,7 +863,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载本模块Controller，缺失时才创建并注册到本模块。
+        /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
         /// <param name="controllerType">业务逻辑类型</param>
         /// <returns></returns>
@@ -861,7 +881,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载本模块Controller，缺失时才创建并注册到本模块。
+        /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -881,7 +901,7 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 新建本地Controller并尝试注册，不查询或借用其他模块的实例。
+        /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
         /// </summary>
         public T CreateController<T>()  where T: Controller
         {
@@ -889,7 +909,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 新建本地Controller并尝试注册，不查询或借用其他模块的实例。
+        /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
         /// </summary>
         public Controller CreateController(Type type) 
         {
@@ -900,7 +920,7 @@ namespace YLFramework.Core
         /// 按完整类型名新建本地Controller，不查询或借用其他模块的实例。
         /// </summary>
         public Controller CreateController(string controllerTypeFullName) {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
             Type type = AssemblyTools.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return CreateController(type);

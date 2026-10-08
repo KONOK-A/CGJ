@@ -5,7 +5,6 @@
 // YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
 using System; 
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace YLFramework.Core
 {
@@ -13,38 +12,71 @@ namespace YLFramework.Core
     {
         internal static void AddController(Module module, Controller controller)
         {
-
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (controller == null) throw new ArgumentNullException(nameof(controller));
             Type type = controller.GetType();
-
-            if (!module.controllers.ContainsKey(type))
+            if (controller.Module != null)
             {
-                controller.Module = module;
-                controller.OnInit();
-                module.controllers.Add(type, controller);
+                if (!ReferenceEquals(controller.Module, module))
+                    throw new InvalidOperationException("Controller is already owned by another Module.");
+                if (controller.IsInitializing || controller.IsExiting)
+                    throw new InvalidOperationException("Cannot register a Controller during its lifecycle callback.");
+                if (ReferenceEquals(GetController(module, type), controller)) return;
+                throw new InvalidOperationException("Controller owner and registration do not match.");
             }
-            else
+            if (module.controllers.ContainsKey(type) || module.creatingControllers.Contains(type))
+                throw new InvalidOperationException($"Controller {type.FullName} is already registered or being constructed.");
+
+            module.controllers.Add(type, controller);
+            controller.Module = module;
+            controller.IsInitializing = true;
+            try
             {
-                Debug.LogWarningFormat("controller name:{0} 已经存在,请勿重复添加!", type);
+                controller.OnInit();
+                controller.IsInitializing = false;
+            }
+            catch (Exception initializationError)
+            {
+                controller.IsInitializing = false;
+                try { ExitController(module, controller); }
+                catch (Exception cleanupError) { initializationError.Data["YLFramework.Core.CleanupException"] = cleanupError; }
+                throw;
             }
         }
 
         internal static void RemoveController(Module module, Type controllerType)
         {
-            if (!module.controllers.ContainsKey(controllerType))
-                return;
+            RemoveController(module, GetController(module, controllerType));
+        }
 
-            Controller controller = module.controllers[controllerType];
+        internal static void RemoveController(Module module, Controller controller)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (controller == null || !ReferenceEquals(controller.Module, module)) return;
+            if (!ReferenceEquals(GetController(module, controller.GetType()), controller)) return;
+            if (controller.IsExiting) return;
+            if (controller.IsInitializing)
+                throw new InvalidOperationException("Cannot remove a Controller during initialization.");
+            ExitController(module, controller);
+        }
 
-            //if (controller.Type == ControllerType.CannotRemove)
-            //    return;
-
-            controller.OnExit();
-            module.controllers.Remove(controllerType); 
+        private static void ExitController(Module module, Controller controller)
+        {
+            controller.IsExiting = true;
+            try { controller.OnExit(); }
+            finally
+            {
+                Type type = controller.GetType();
+                if (module.controllers.TryGetValue(type, out var registered) && ReferenceEquals(registered, controller))
+                    module.controllers.Remove(type);
+                controller.Module = null;
+                controller.IsExiting = false;
+            }
         }
 
         internal static Controller GetController(Module module, Type controllerType)
         {
-
+            ValidateControllerType(controllerType);
             Controller controller;
             if (module.controllers.TryGetValue(controllerType, out controller))
             {
@@ -60,6 +92,7 @@ namespace YLFramework.Core
             Controller controller = GetController(module, controllerType);
             if (controller != null)
             {
+                if (controller.IsExiting) throw new InvalidOperationException("Cannot load a Controller during exit.");
                 return controller;
             }
               
@@ -74,39 +107,27 @@ namespace YLFramework.Core
 
         internal static void ClearController(Module module)
         {
-            List<Type> removes = new List<Type>();
-
-            foreach (var item in module.controllers.Keys)
-            {
-                removes.Add(item);
-            }
+            List<Controller> removes = new List<Controller>(module.controllers.Values);
 
             foreach (var item in removes)
             {  
                 module.RemoveController(item);
             }
-
-            module.controllers.Clear();
         }
 
 
         internal static Controller CreateController( Module module,Type controllerType) 
         { 
-            if (controllerType == null)
-            {
-                Debug.LogErrorFormat("加载Controller:{0}失败!未查询到对应类型", controllerType);
-                return null;
-            }
-
-            // 创建一个业务逻辑
-            Controller controller = Activator.CreateInstance(controllerType) as Controller;
-
-            if (controller == null)
-            {
-                Debug.LogErrorFormat("创建Controller:{0}失败! 请检查类名是否正确!如果有命名空间请加上!", controllerType);
-                return null;
-            }
-              
+            ValidateControllerType(controllerType);
+            if (module.controllers.ContainsKey(controllerType))
+                throw new InvalidOperationException($"Controller {controllerType.FullName} is already registered.");
+            if (controllerType.IsAbstract || controllerType.ContainsGenericParameters || controllerType.GetConstructor(Type.EmptyTypes) == null)
+                throw new ArgumentException("Controller type must be concrete and have a public parameterless constructor.", nameof(controllerType));
+            if (!module.creatingControllers.Add(controllerType))
+                throw new InvalidOperationException("Recursive Controller construction is not allowed.");
+            Controller controller;
+            try { controller = (Controller)Activator.CreateInstance(controllerType); }
+            finally { module.creatingControllers.Remove(controllerType); }
             AddController(module, controller);
              
             return controller;
@@ -115,18 +136,14 @@ namespace YLFramework.Core
 
         internal static T CreateController<T>(Module module ) where T : Controller
         { 
-            // 创建一个业务逻辑
-            T controller = Activator.CreateInstance<T>();
+            return CreateController(module, typeof(T)) as T;
+        }
 
-            if (controller == null)
-            {
-                Debug.LogErrorFormat("创建Controller:{0}失败! 请检查类名是否正确!如果有命名空间请加上!", typeof(T).FullName);
-                return null;
-            }
-
-            AddController(module, controller);
-
-            return controller;
+        private static void ValidateControllerType(Type controllerType)
+        {
+            if (controllerType == null) throw new ArgumentNullException(nameof(controllerType));
+            if (!typeof(Controller).IsAssignableFrom(controllerType))
+                throw new ArgumentException("Type must inherit from Controller.", nameof(controllerType));
         }
 
     }

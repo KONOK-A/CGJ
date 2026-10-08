@@ -5,7 +5,6 @@
 // YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
 using System; 
 using System.Collections.Generic; 
-using UnityEngine;
 
 
 namespace YLFramework.Core
@@ -16,56 +15,93 @@ namespace YLFramework.Core
         // 添加
         public static void AddModel(Module module, Model model)
         { 
-            if (model == null) return;
-              
-            //string Name = model.ModelName;
-            // 说明没有指定id , 这里使用它的hashcode作为id
-            // 如果希望通过id查询，请手动指定id
-            if (model.Id == -1)
-                model.Id = model.GetHashCode();
-
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (model == null) throw new ArgumentNullException(nameof(model));
             Type type = model.GetType();
-
-            if (!module.models.ContainsKey(type))
+            if (model.Module != null)
             {
-                module.models.Add(type, new Dictionary<long, Model>());
+                if (!ReferenceEquals(model.Module, module))
+                    throw new InvalidOperationException("Model is already owned by another Module.");
+                if (model.IsInitializing || model.IsExiting)
+                    throw new InvalidOperationException("Cannot register a Model during its lifecycle callback.");
+                if (ReferenceEquals(GetModel(module, type, model.Id), model)) return;
+                throw new InvalidOperationException("Model owner and registration do not match.");
             }
+            if (module.creatingModels.Contains(type))
+                throw new InvalidOperationException("Cannot register a Model while its constructor is running.");
 
-            if (!module.models[type].ContainsKey(model.Id))
+            module.models.TryGetValue(type, out var models);
+            long originalId = model.Id;
+            long id = originalId;
+            if (id == -1)
             {
-                model.Module = module;
-                module.models[type].Add(model.Id, model);
+                do
+                {
+                    id = module.nextModelId;
+                    module.nextModelId = id == long.MaxValue ? 0 : id + 1;
+                } while (models != null && models.ContainsKey(id));
+            }
+            if (models != null && models.ContainsKey(id))
+                throw new InvalidOperationException($"Model {type.FullName} with ID {id} is already registered.");
+
+            if (models == null)
+            {
+                models = new Dictionary<long, Model>();
+                module.models.Add(type, models);
+            }
+            model.Id = id;
+            models.Add(id, model);
+            model.Module = module;
+            model.IsInitializing = true;
+            try
+            {
                 model.OnInit();
+                model.IsInitializing = false;
             }
-            else
+            catch (Exception initializationError)
             {
-                Debug.LogWarningFormat("model name:{0} id:{1} 已经存在,请勿重复添加!", type.FullName, model.Id);
+                model.IsInitializing = false;
+                try { ExitModel(module, model); }
+                catch (Exception cleanupError) { initializationError.Data["YLFramework.Core.CleanupException"] = cleanupError; }
+                model.Id = originalId;
+                throw;
             }
         }
 
         // 移除
         public static void RemoveModel(Module module, Model model)
         {
-            if(model == null) return;
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (model == null || !ReferenceEquals(model.Module, module)) return;
             Type type = model.GetType();
-            if (module.models.ContainsKey(type) && module.models[type].ContainsKey(model.Id))
+            if (!ReferenceEquals(GetModel(module, type, model.Id), model)) return;
+            if (model.IsExiting) return;
+            if (model.IsInitializing)
+                throw new InvalidOperationException("Cannot remove a Model during initialization.");
+            ExitModel(module, model);
+        }
+
+        private static void ExitModel(Module module, Model model)
+        {
+            model.IsExiting = true;
+            try { model.OnExit(); }
+            finally
             {
-                model.OnExit();
-                //model.Module = null;
-                module.models[type].Remove(model.Id);
-                if (module.models[type].Count == 0)
-                    module.models.Remove(type);
-
-
-                ClassObjectPoolManager.Unload(model);
+                Type type = model.GetType();
+                if (module.models.TryGetValue(type, out var models) &&
+                    models.TryGetValue(model.Id, out var registered) && ReferenceEquals(registered, model))
+                {
+                    models.Remove(model.Id);
+                    if (models.Count == 0) module.models.Remove(type);
+                }
+                model.Module = null;
+                model.IsExiting = false;
             }
-            else
-                Debug.LogWarningFormat("移除 model name:{0} id:{1} 失败,未查询到 或 已经移除!", type, model.Id);
-
         }
 
         public static Model GetModel(Module module, Type modelType)
         {
+            ValidateModelType(modelType);
             // 从当前模块中查询
             if (module.models.ContainsKey(modelType) && module.models[modelType].Count > 1)
                 throw new Exception(string.Format("数据:{0}存在多份，请根据id查询!", modelType.FullName));
@@ -79,8 +115,9 @@ namespace YLFramework.Core
         }
 
         // 查询
-        public static Model GetModel(Module module, Type modelType, int id)
+        public static Model GetModel(Module module, Type modelType, long id)
         {
+            ValidateModelType(modelType);
             if (module.models.ContainsKey(modelType) && module.models[modelType].ContainsKey(id))
                 return module.models[modelType][id];
 
@@ -104,17 +141,21 @@ namespace YLFramework.Core
                 } 
             }
 
-            foreach (var item in temp_models)
+            try
             {
-                RemoveModel(module, item);
+                foreach (var item in temp_models) RemoveModel(module, item);
             }
-
-            ClassObjectPoolManager.Unload(temp_models);
+            finally
+            {
+                temp_models.Clear();
+                ClassObjectPoolManager.Unload(temp_models);
+            }
 
         }
 
         public static void ClearModel(Module module, Type modelType)
         {
+            ValidateModelType(modelType);
             List<Type> temp_model_keys = ClassObjectPoolManager.Load<List<Type>>();
             temp_model_keys.Clear();
 
@@ -142,19 +183,24 @@ namespace YLFramework.Core
 
             }
 
-            foreach (var item in temp_models)
+            try
             {
-                RemoveModel(module, item);
+                foreach (var item in temp_models) RemoveModel(module, item);
             }
-
-            ClassObjectPoolManager.Unload(temp_model_keys);
-            ClassObjectPoolManager.Unload(temp_models);
+            finally
+            {
+                temp_model_keys.Clear();
+                temp_models.Clear();
+                ClassObjectPoolManager.Unload(temp_model_keys);
+                ClassObjectPoolManager.Unload(temp_models);
+            }
 
 
         }
 
         public static List<Model> GetModels(Module module, Type modelType)
         {
+            ValidateModelType(modelType);
             List<Model> models = new List<Model>();
 
             foreach (var item in module.models.Keys)
@@ -172,21 +218,34 @@ namespace YLFramework.Core
 
         public static Model LoadModel(Module module, Type modelType) 
         {
-            if (!modelType.IsSubclassOf(typeof(Model)))
-                throw new Exception("类型必须继承自Model!");
+            ValidateModelType(modelType);
              
             Model model = GetModel(module, modelType);  
-            if (model == null) 
-            { 
-                model = ClassObjectPoolManager.Load(modelType) as Model;
-                AddModel(module, model);
-            } 
+            if (model != null)
+            {
+                if (model.IsExiting) throw new InvalidOperationException("Cannot load a Model during exit.");
+                return model;
+            }
+            if (modelType.IsAbstract || modelType.ContainsGenericParameters || modelType.GetConstructor(Type.EmptyTypes) == null)
+                throw new ArgumentException("Model type must be concrete and have a public parameterless constructor.", nameof(modelType));
+            if (!module.creatingModels.Add(modelType))
+                throw new InvalidOperationException("Recursive Model construction is not allowed.");
+            try { model = (Model)Activator.CreateInstance(modelType); }
+            finally { module.creatingModels.Remove(modelType); }
+            AddModel(module, model);
             return model;
         }
 
         public static T LoadModel<T>(Module module) where T : Model 
         { 
             return LoadModel(module,typeof(T)) as T;
+        }
+
+        private static void ValidateModelType(Type modelType)
+        {
+            if (modelType == null) throw new ArgumentNullException(nameof(modelType));
+            if (!typeof(Model).IsAssignableFrom(modelType))
+                throw new ArgumentException("Type must inherit from Model.", nameof(modelType));
         }
          
     }

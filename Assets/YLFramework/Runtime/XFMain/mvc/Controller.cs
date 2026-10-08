@@ -23,6 +23,8 @@ namespace YLFramework.Core
      
     public abstract class Controller
     {
+        internal bool IsInitializing;
+        internal bool IsExiting;
 
         #region 属性
 
@@ -30,7 +32,7 @@ namespace YLFramework.Core
         public virtual ControllerType Type => ControllerType.Normal;
 
         /// <summary>
-        /// 当前Controller所在的模块
+        /// 拥有者；初始化及退出回调期间有效，移除或初始化失败后为null。
         /// </summary>
         public Module Module { get; internal set; } 
 
@@ -38,7 +40,7 @@ namespace YLFramework.Core
 
         #region 方法
         /// <summary>
-        /// 第一次加载该Controller时触发，仅触发一次
+        /// 每次有效注册时触发一次；期间可查询自身，但注册尚未提交完成。
         /// </summary>
         public virtual void OnInit() { }
 

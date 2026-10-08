@@ -105,6 +105,55 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator ViewModelRemovalIgnoresBorrowedAndDifferentInstancesAndExitsLocalModelOnce()
+        {
+            yield return StartModule();
+            var owner = new YLCoreLifecycleModule();
+            try
+            {
+                var request = ModuleManager.StartUpModule(owner);
+                var deadline = Time.realtimeSinceStartup + 10;
+                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Is.Null.Or.Empty);
+                var shared = new YLCoreProbeModel { Id = 41 };
+                var local = new YLCoreProbeModel { Id = 41 };
+                owner.AddModel(shared);
+                module.AddModel(local);
+                var prefab = Template<YLCoreSmokeView>("YLCoreModelRemovalPrefab");
+                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view.BoundModel = shared;
+                view.Close();
+                Assert.That(shared.Module, Is.SameAs(owner));
+                Assert.That(shared.ExitCount, Is.Zero);
+                Assert.That(module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
+                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view.BoundModel = new YLCoreProbeModel { Id = 41 };
+                view.Close();
+                Assert.That(local.ExitCount, Is.Zero);
+                Assert.That(module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
+                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view.BoundModel = local;
+                view.Close();
+                Assert.That(local.Module, Is.Null);
+                Assert.That(local.ExitCount, Is.EqualTo(1));
+                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view.BoundModel = local;
+                view.Close();
+                Assert.That(local.ExitCount, Is.EqualTo(1));
+                Assert.That(shared.ExitCount, Is.Zero);
+            }
+            finally
+            {
+                try
+                {
+                    if (ReferenceEquals(ModuleManager.GetModule(owner.ModuleName), owner)) owner.Close();
+                }
+                finally { classPool.Restore(new Module[] { owner }); }
+            }
+        }
+
+        [UnityTest]
         public IEnumerator DirectPrefabInitializesOncePerLoadAndCloseReturnsSameObjectToBackendCache()
         {
             yield return StartModule();

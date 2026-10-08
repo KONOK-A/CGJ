@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace YLFramework.Core.Tests
@@ -51,40 +52,61 @@ namespace YLFramework.Core.Tests
     public class YLCoreProbeModel : YLFramework.Core.Model
     {
         public static int ConstructionCount;
-        public YLCoreProbeModel() => ConstructionCount++;
+        public static Action<YLCoreProbeModel> ConstructorAction;
+        public YLCoreProbeModel()
+        {
+            ConstructionCount++;
+            ConstructorAction?.Invoke(this);
+        }
 
         public int InitCount;
         public int ExitCount;
         public bool RegisteredAtInit;
         public bool RegisteredAtExit;
         public List<string> Events;
+        public Action<YLCoreProbeModel> InitAction;
+        public Action<YLCoreProbeModel> ExitAction;
 
         public override void OnInit()
         {
             InitCount++;
-            RegisteredAtInit = ReferenceEquals(Module.GetModel(GetType(), (int)Id), this);
+            RegisteredAtInit = ReferenceEquals(Module.GetModel(GetType(), Id), this);
             if (Events != null) Events.Add("model.init");
+            InitAction?.Invoke(this);
         }
 
         public override void OnExit()
         {
             ExitCount++;
-            RegisteredAtExit = ReferenceEquals(Module.GetModel(GetType(), (int)Id), this);
+            RegisteredAtExit = ReferenceEquals(Module.GetModel(GetType(), Id), this);
             if (Events != null) Events.Add("model.exit");
+            ExitAction?.Invoke(this);
         }
     }
 
     public sealed class YLCoreDerivedProbeModel : YLCoreProbeModel { }
 
+    public sealed class YLCoreConstantHashModel : YLCoreProbeModel
+    {
+        public override int GetHashCode() => 1;
+    }
+
     public sealed class YLCoreProbeController : YLFramework.Core.Controller
     {
         public static int ConstructionCount;
-        public YLCoreProbeController() => ConstructionCount++;
+        public static Action<YLCoreProbeController> ConstructorAction;
+        public YLCoreProbeController()
+        {
+            ConstructionCount++;
+            ConstructorAction?.Invoke(this);
+        }
 
         public int InitCount;
         public int ExitCount;
         public YLFramework.Core.Module OwnerAtInit;
         public YLFramework.Core.Module OwnerAtExit;
+        public Action<YLCoreProbeController> InitAction;
+        public Action<YLCoreProbeController> ExitAction;
 
         public override void OnInit()
         {
@@ -92,6 +114,7 @@ namespace YLFramework.Core.Tests
             OwnerAtInit = Module;
             var lifecycle = Module as YLCoreLifecycleModule;
             if (lifecycle != null) lifecycle.Events.Add("controller.init");
+            InitAction?.Invoke(this);
         }
 
         public override void OnExit()
@@ -100,6 +123,7 @@ namespace YLFramework.Core.Tests
             OwnerAtExit = Module;
             var lifecycle = Module as YLCoreLifecycleModule;
             if (lifecycle != null) lifecycle.Events.Add("controller.exit");
+            ExitAction?.Invoke(this);
         }
     }
 }

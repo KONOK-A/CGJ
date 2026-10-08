@@ -22,6 +22,8 @@ namespace YLFramework.Core.Tests
         [SetUp]
         public void SetUp()
         {
+            YLCoreProbeModel.ConstructorAction = null;
+            YLCoreProbeController.ConstructorAction = null;
             ownedModules.Clear();
             Assert.That(ManagerInstance, Is.Not.Null);
             Assert.That(CurrentModule, Is.Not.Null);
@@ -33,6 +35,8 @@ namespace YLFramework.Core.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
+            YLCoreProbeModel.ConstructorAction = null;
+            YLCoreProbeController.ConstructorAction = null;
             var failures = new List<Exception>();
             try
             {
@@ -165,7 +169,8 @@ namespace YLFramework.Core.Tests
                 Assert.That(model.InitCount, Is.EqualTo(1));
                 Assert.That(model.RegisteredAtInit, Is.True);
             }
-            Assert.That(automatic.Id, Is.EqualTo((long)automatic.GetHashCode()));
+            Assert.That(automatic.Id, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(module.GetModel<YLCoreDerivedProbeModel>(automatic.Id), Is.SameAs(automatic));
             Assert.That(module.GetModel<YLCoreProbeModel>(11), Is.SameAs(first));
             Assert.That(module.GetModel(typeof(YLCoreProbeModel), 22), Is.SameAs(second));
             Assert.That(module.GetModel<YLCoreDerivedProbeModel>(), Is.SameAs(automatic));
@@ -178,14 +183,14 @@ namespace YLFramework.Core.Tests
             Assert.That(module.GetModels(typeof(YLCoreProbeModel)), Is.EquivalentTo(new[] { first, second, automatic }));
 
             var duplicate = new YLCoreProbeModel { Id = 11 };
-            LogAssert.Expect(LogType.Warning, $"model name:{typeof(YLCoreProbeModel).FullName} id:11 已经存在,请勿重复添加!");
-            module.AddModel(duplicate);
+            Assert.Throws<InvalidOperationException>(() => module.AddModel(duplicate));
             Assert.That(duplicate.Module, Is.Null);
             Assert.That(duplicate.InitCount, Is.Zero);
             Assert.That(module.GetModel<YLCoreProbeModel>(11), Is.SameAs(first));
             module.RemoveModel(first);
             Assert.That(first.ExitCount, Is.EqualTo(1));
             Assert.That(first.RegisteredAtExit, Is.True);
+            Assert.That(first.Module, Is.Null);
             Assert.That(module.GetModel<YLCoreProbeModel>(11), Is.Null);
             Assert.That(module.GetModel<YLCoreProbeModel>(), Is.SameAs(second));
             Assert.That(module.GetModel(typeof(YLCoreProbeModel)), Is.SameAs(second),
@@ -308,8 +313,8 @@ namespace YLFramework.Core.Tests
 
             Assert.That(consumer.GetModel<YLCoreProbeModel>(), Is.Null);
             Assert.That(consumer.GetModel(typeof(YLCoreProbeModel)), Is.Null);
-            Assert.That(consumer.GetModel<YLCoreProbeModel>((int)sharedModel.Id), Is.Null);
-            Assert.That(consumer.GetModel(typeof(YLCoreProbeModel), (int)sharedModel.Id), Is.Null);
+            Assert.That(consumer.GetModel<YLCoreProbeModel>(sharedModel.Id), Is.Null);
+            Assert.That(consumer.GetModel(typeof(YLCoreProbeModel), sharedModel.Id), Is.Null);
             Assert.That(consumer.GetModels<YLCoreProbeModel>(), Is.Empty);
             Assert.That(consumer.GetModels(typeof(YLCoreProbeModel)), Is.Empty);
             Assert.That(consumer.GetController<YLCoreProbeController>(), Is.Null);
@@ -372,23 +377,294 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator DuplicateCreateControllerReturnsUnregisteredInstanceAsLegacyBehavior()
+        public IEnumerator DuplicateCreateControllerRejectsBeforeConstructionAcrossAllEntrypoints()
         {
             var module = new YLCoreLifecycleModule();
             yield return AwaitStartup(StartOwned(module));
             var registered = module.CreateController<YLCoreProbeController>();
-            LogAssert.Expect(LogType.Warning, $"controller name:{typeof(YLCoreProbeController)} 已经存在,请勿重复添加!");
-            var duplicate = (YLCoreProbeController)module.CreateController(typeof(YLCoreProbeController));
-
-            // Characterize the retained original defect, not an isolation guarantee for CreateController.
-            Assert.That(duplicate, Is.Not.SameAs(registered));
-            Assert.That(duplicate.Module, Is.Null);
-            Assert.That(duplicate.InitCount, Is.Zero);
+            int constructions = YLCoreProbeController.ConstructionCount;
+            Assert.Throws<InvalidOperationException>(() => module.CreateController<YLCoreProbeController>());
+            Assert.Throws<InvalidOperationException>(() => module.CreateController(typeof(YLCoreProbeController)));
+            Assert.Throws<InvalidOperationException>(() => module.CreateController(typeof(YLCoreProbeController).FullName));
+            Assert.That(YLCoreProbeController.ConstructionCount, Is.EqualTo(constructions));
             Assert.That(module.LoadController<YLCoreProbeController>(), Is.SameAs(registered));
             Assert.That(registered.InitCount, Is.EqualTo(1));
             module.Close();
             Assert.That(registered.ExitCount, Is.EqualTo(1));
-            Assert.That(duplicate.ExitCount, Is.Zero);
+            Assert.That(registered.Module, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator RegistrationIsIdempotentHasOneOwnerAndRemovalUsesExactInstances()
+        {
+            var owner = new YLCoreLifecycleModule();
+            var consumer = new YLCoreConsumerModule();
+            yield return AwaitStartup(StartOwned(owner));
+            yield return AwaitStartup(StartOwned(consumer));
+            long id = (long)int.MaxValue + 101;
+            var model = new YLCoreProbeModel { Id = id };
+            var otherModel = new YLCoreProbeModel { Id = id };
+            owner.AddModel(model);
+            owner.AddModel(model);
+            Assert.That(model.InitCount, Is.EqualTo(1));
+            Assert.That(owner.GetModel<YLCoreProbeModel>(id), Is.SameAs(model));
+            Assert.That(owner.GetModel(typeof(YLCoreProbeModel), id), Is.SameAs(model));
+            Assert.Throws<InvalidOperationException>(() => model.Id = id + 1);
+            Assert.Throws<InvalidOperationException>(() => consumer.AddModel(model));
+            owner.RemoveModel(otherModel);
+            consumer.AddModel(otherModel);
+            owner.RemoveModel(otherModel);
+            consumer.RemoveModel(model);
+            Assert.That(model.ExitCount, Is.Zero);
+            Assert.That(otherModel.ExitCount, Is.Zero);
+            Assert.That(model.Module, Is.SameAs(owner));
+            Assert.That(owner.GetModel<YLCoreProbeModel>(id), Is.SameAs(model));
+
+            var controller = owner.LoadController<YLCoreProbeController>();
+            owner.AddController(controller);
+            var otherController = new YLCoreProbeController();
+            owner.RemoveController(otherController);
+            Assert.Throws<InvalidOperationException>(() => owner.AddController(otherController));
+            Assert.Throws<InvalidOperationException>(() => consumer.AddController(controller));
+            consumer.AddController(otherController);
+            owner.RemoveController(otherController);
+            consumer.RemoveController(controller);
+            Assert.That(controller.InitCount, Is.EqualTo(1));
+            Assert.That(controller.ExitCount, Is.Zero);
+            Assert.That(owner.GetController<YLCoreProbeController>(), Is.SameAs(controller));
+            Assert.Throws<ArgumentNullException>(() => owner.AddModel(null));
+            Assert.Throws<ArgumentNullException>(() => owner.AddController(null));
+            int constructions = YLCoreProbeModel.ConstructionCount;
+            Assert.Throws<ArgumentException>(() => owner.CreateController(typeof(YLCoreProbeModel)));
+            Assert.Throws<ArgumentException>(() => owner.CreateController<YLFramework.Core.Controller>());
+            Assert.That(YLCoreProbeModel.ConstructionCount, Is.EqualTo(constructions));
+
+            owner.RemoveModel(model);
+            Assert.That(model.Module, Is.Null);
+            model.Id = id + 1;
+            consumer.AddModel(model);
+            Assert.That(model.InitCount, Is.EqualTo(2));
+            Assert.That(model.Module, Is.SameAs(consumer));
+            owner.RemoveController(controller);
+            Assert.That(controller.Module, Is.Null);
+            consumer.RemoveController(otherController);
+            consumer.AddController(controller);
+            Assert.That(controller.InitCount, Is.EqualTo(2));
+            consumer.Close();
+            Assert.That(model.ExitCount, Is.EqualTo(2));
+            Assert.That(controller.ExitCount, Is.EqualTo(2));
+            Assert.That(otherModel.Module, Is.Null);
+            Assert.That(otherController.Module, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator AutomaticIdsSkipExplicitKeysAndDoNotDependOnHashCodes()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var explicitModel = new YLCoreConstantHashModel { Id = 1 };
+            var first = new YLCoreConstantHashModel();
+            var second = new YLCoreConstantHashModel();
+            module.AddModel(explicitModel);
+            module.AddModel(first);
+            module.AddModel(second);
+            Assert.That(first.GetHashCode(), Is.EqualTo(second.GetHashCode()));
+            Assert.That(first.Id, Is.Not.EqualTo(1L));
+            Assert.That(second.Id, Is.Not.EqualTo(1L).And.Not.EqualTo(first.Id));
+            Assert.That(module.GetModel<YLCoreConstantHashModel>(1L), Is.SameAs(explicitModel));
+            Assert.That(module.GetModel<YLCoreConstantHashModel>(first.Id), Is.SameAs(first));
+            Assert.That(module.GetModel<YLCoreConstantHashModel>(second.Id), Is.SameAs(second));
+            Assert.That(module.GetModels<YLCoreProbeModel>(), Has.Count.EqualTo(3));
+            var maximum = new YLCoreConstantHashModel { Id = long.MaxValue };
+            module.AddModel(maximum);
+            typeof(YLFramework.Core.Module).GetField("nextModelId", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(module, long.MaxValue);
+            var wrapped = new YLCoreConstantHashModel();
+            module.AddModel(wrapped);
+            Assert.That(wrapped.Id, Is.EqualTo(0L));
+            Assert.That(module.GetModel<YLCoreConstantHashModel>(long.MaxValue), Is.SameAs(maximum));
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationCanQueryAndLoadTemporarySelfButCannotReregisterOrRemoveIt()
+        {
+            var module = new YLCoreLifecycleModule();
+            var consumer = new YLCoreConsumerModule();
+            yield return AwaitStartup(StartOwned(module));
+            yield return AwaitStartup(StartOwned(consumer));
+            var model = new YLCoreProbeModel();
+            model.InitAction = self =>
+            {
+                Assert.That(module.GetModel<YLCoreProbeModel>(self.Id), Is.SameAs(self));
+                Assert.That(module.LoadModel<YLCoreProbeModel>(), Is.SameAs(self));
+                Assert.That(module.LoadModel(typeof(YLCoreProbeModel)), Is.SameAs(self));
+                Assert.Throws<InvalidOperationException>(() => module.AddModel(self));
+                Assert.Throws<InvalidOperationException>(() => module.AddModel(new YLCoreProbeModel { Id = self.Id }));
+                Assert.Throws<InvalidOperationException>(() => consumer.AddModel(self));
+                Assert.Throws<InvalidOperationException>(() => self.Id++);
+                Assert.Throws<InvalidOperationException>(() => module.RemoveModel(self));
+            };
+            module.AddModel(model);
+            var controller = new YLCoreProbeController();
+            controller.InitAction = self =>
+            {
+                Assert.That(module.GetController<YLCoreProbeController>(), Is.SameAs(self));
+                Assert.That(module.LoadController<YLCoreProbeController>(), Is.SameAs(self));
+                Assert.That(module.LoadController(typeof(YLCoreProbeController).FullName), Is.SameAs(self));
+                int constructions = YLCoreProbeController.ConstructionCount;
+                Assert.Throws<InvalidOperationException>(() => module.CreateController<YLCoreProbeController>());
+                Assert.That(YLCoreProbeController.ConstructionCount, Is.EqualTo(constructions));
+                Assert.Throws<InvalidOperationException>(() => module.AddController(self));
+                Assert.Throws<InvalidOperationException>(() => consumer.AddController(self));
+                Assert.Throws<InvalidOperationException>(() => module.RemoveController(self));
+            };
+            module.AddController(controller);
+            module.AddModel(model);
+            module.AddController(controller);
+            Assert.That(model.InitCount, Is.EqualTo(1));
+            Assert.That(controller.InitCount, Is.EqualTo(1));
+            AssertIndexesEmpty(consumer);
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationFailureRollsBackAndCleanupFailurePreservesOriginalException()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var initializationError = new InvalidOperationException("MVC initialization failed");
+            var cleanupError = new InvalidOperationException("MVC cleanup failed");
+            YLCoreProbeModel failedModel = null;
+            YLCoreProbeController failedController = null;
+            YLCoreProbeModel.ConstructorAction = self =>
+            {
+                failedModel = self;
+                self.InitAction = _ => throw initializationError;
+                self.ExitAction = _ => throw cleanupError;
+            };
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadModel<YLCoreProbeModel>()), Is.SameAs(initializationError));
+            Assert.That(initializationError.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupError));
+            Assert.That(failedModel.Module, Is.Null);
+            Assert.That(failedModel.Id, Is.EqualTo(-1L));
+            Assert.That(failedModel.RegisteredAtExit, Is.True);
+            Assert.That(failedModel.ExitCount, Is.EqualTo(1));
+            AssertIndexesEmpty(module);
+            YLCoreProbeModel.ConstructorAction = null;
+            failedModel.InitAction = null;
+            failedModel.ExitAction = null;
+            module.RemoveModel(failedModel);
+            Assert.That(failedModel.ExitCount, Is.EqualTo(1));
+            module.AddModel(failedModel);
+            Assert.That(failedModel.InitCount, Is.EqualTo(2));
+            module.RemoveModel(failedModel);
+
+            var controllerInitializationError = new InvalidOperationException("Controller initialization failed");
+            YLCoreProbeController.ConstructorAction = self =>
+            {
+                failedController = self;
+                self.InitAction = _ => throw controllerInitializationError;
+                self.ExitAction = _ => throw cleanupError;
+            };
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.CreateController(typeof(YLCoreProbeController).FullName)), Is.SameAs(controllerInitializationError));
+            Assert.That(controllerInitializationError.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupError));
+            Assert.That(failedController.Module, Is.Null);
+            Assert.That(failedController.OwnerAtExit, Is.SameAs(module));
+            Assert.That(failedController.ExitCount, Is.EqualTo(1));
+            AssertIndexesEmpty(module);
+            YLCoreProbeController.ConstructorAction = null;
+            module.RemoveController(failedController);
+            Assert.That(failedController.ExitCount, Is.EqualTo(1));
+            var replacement = module.LoadController<YLCoreProbeController>();
+            Assert.That(replacement, Is.Not.SameAs(failedController));
+            Assert.That(replacement.Module, Is.SameAs(module));
+            Assert.That(replacement.InitCount, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator ExitFailureDetachesExactInstancesAndRecursiveRemovalAttemptsExitOnlyOnce()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var exitError = new InvalidOperationException("MVC exit failed");
+            var model = module.LoadModel<YLCoreProbeModel>();
+            model.ExitAction = self =>
+            {
+                Assert.That(module.GetModel<YLCoreProbeModel>(self.Id), Is.SameAs(self));
+                Assert.That(self.Module, Is.SameAs(module));
+                module.RemoveModel(self);
+                Assert.Throws<InvalidOperationException>(() => module.LoadModel<YLCoreProbeModel>());
+                Assert.Throws<InvalidOperationException>(() => module.AddModel(self));
+                throw exitError;
+            };
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.RemoveModel(model)), Is.SameAs(exitError));
+            Assert.That(model.Module, Is.Null);
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            Assert.That(module.GetModels<YLCoreProbeModel>(), Is.Empty);
+            module.RemoveModel(model);
+            var controller = module.LoadController<YLCoreProbeController>();
+            controller.ExitAction = self =>
+            {
+                Assert.That(module.GetController<YLCoreProbeController>(), Is.SameAs(self));
+                Assert.That(self.Module, Is.SameAs(module));
+                module.RemoveController(self);
+                Assert.Throws<InvalidOperationException>(() => module.LoadController<YLCoreProbeController>());
+                Assert.Throws<InvalidOperationException>(() => module.AddController(self));
+                throw exitError;
+            };
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.RemoveController<YLCoreProbeController>()), Is.SameAs(exitError));
+            Assert.That(controller.Module, Is.Null);
+            Assert.That(controller.ExitCount, Is.EqualTo(1));
+            module.RemoveController(controller);
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            Assert.That(controller.ExitCount, Is.EqualTo(1));
+            AssertIndexesEmpty(module);
+        }
+
+        [UnityTest]
+        public IEnumerator ConstructorReentryRejectsBeforeAnotherConstructionAndReleasesReservedKeys()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            int modelConstructions = YLCoreProbeModel.ConstructionCount;
+            YLCoreProbeModel.ConstructorAction = _ => module.LoadModel<YLCoreProbeModel>();
+            var modelError = Assert.Throws<TargetInvocationException>(() => module.LoadModel(typeof(YLCoreProbeModel)));
+            Assert.That(modelError.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(YLCoreProbeModel.ConstructionCount, Is.EqualTo(modelConstructions + 1));
+            AssertIndexesEmpty(module);
+            YLCoreProbeModel.ConstructorAction = null;
+            var model = module.LoadModel<YLCoreProbeModel>();
+            Assert.That(model.InitCount, Is.EqualTo(1));
+            module.RemoveModel(model);
+            int controllerConstructions = YLCoreProbeController.ConstructionCount;
+            YLCoreProbeController.ConstructorAction = _ => module.CreateController<YLCoreProbeController>();
+            var controllerError = Assert.Throws<TargetInvocationException>(() => module.CreateController(typeof(YLCoreProbeController)));
+            Assert.That(controllerError.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(YLCoreProbeController.ConstructionCount, Is.EqualTo(controllerConstructions + 1));
+            AssertIndexesEmpty(module);
+            YLCoreProbeController.ConstructorAction = null;
+            Assert.That(module.CreateController<YLCoreProbeController>().InitCount, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator RemovingModelDoesNotPoolOrReuseItsBusinessState()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var first = module.LoadModel<YLCoreProbeModel>();
+            first.Events = new List<string> { "old business state" };
+            module.RemoveModel(first);
+            Assert.That(first.Module, Is.Null);
+            var pool = typeof(ClassObjectPoolManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            if (pool != null)
+            {
+                var objects = (IDictionary)pool.GetType().GetField("objects", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
+                if (objects.Contains(typeof(YLCoreProbeModel)))
+                    Assert.That(((IList)objects[typeof(YLCoreProbeModel)]).Contains(first), Is.False);
+            }
+            var second = module.LoadModel(typeof(YLCoreProbeModel)) as YLCoreProbeModel;
+            Assert.That(second, Is.Not.SameAs(first));
+            Assert.That(second.Events, Is.Null);
+            Assert.That(second.InitCount, Is.EqualTo(1));
+            Assert.That(second.ExitCount, Is.Zero);
+            Assert.That(second.Id, Is.Not.EqualTo(first.Id));
         }
 
         [UnityTest]
@@ -412,6 +688,8 @@ namespace YLFramework.Core.Tests
             }));
             Assert.That(oldModel.ExitCount, Is.EqualTo(1), "Legacy OnExit and Exit must not notify a child twice.");
             Assert.That(oldController.ExitCount, Is.EqualTo(1));
+            Assert.That(oldModel.Module, Is.Null);
+            Assert.That(oldController.Module, Is.Null);
             Assert.That(module.RegisteredAtClose, Is.True);
             Assert.That(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), Is.Null);
             AssertIndexesEmpty(module);

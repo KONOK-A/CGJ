@@ -5,6 +5,7 @@
 // YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
 
 
+using System;
 using UnityEngine;
 using YLFramework.Core.RoslynAnalyzers;
 
@@ -14,16 +15,28 @@ namespace YLFramework.Core
     [ProtectedHierarchy(typeof(MonoBehaviour),typeof(View))]
     public abstract class Model
     {
+        private long id = -1;
+        internal bool IsInitializing;
+        internal bool IsExiting;
 
         #region 属性
 
         /// <summary>
-        /// Id
+        /// 业务ID；-1表示注册时自动分配。未注册时可赋值，注册期间不可改变。
         /// </summary>
-        public long Id { get; set; } = -1; // 默认等于 -1
+        public long Id
+        {
+            get => id;
+            set
+            {
+                if (Module != null && value != id)
+                    throw new InvalidOperationException("Cannot change the ID of a registered Model.");
+                id = value;
+            }
+        }
 
         /// <summary>
-        /// 当前数据所在的模块
+        /// 拥有者；初始化及退出回调期间有效，移除或初始化失败后为null。
         /// </summary>
         public Module Module { get; internal set; }
           
@@ -33,7 +46,7 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 添加Model时调用
+        /// 每次有效注册时调用一次；期间可查询自身，但注册尚未提交完成。
         /// </summary>  
         public virtual void OnInit() { }
 
