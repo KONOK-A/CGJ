@@ -1,0 +1,211 @@
+using System;
+using System.IO;
+using System.Reflection;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEditorInternal;
+using UnityEngine;
+using FirstSettings = YLFramework.Core.Editor.Tests.Settings.First.CoreEditorSettingsFixture;
+using SecondSettings = YLFramework.Core.Editor.Tests.Settings.Second.CoreEditorSettingsFixture;
+
+namespace YLFramework.Core.Editor.Tests
+{
+    public class CoreEditorConfigurationTests
+    {
+        [Test]
+        public void ScriptableObjectsAreCreatedOnlyUnderOwnedRootAndPersistentObjectsCannotMove()
+        {
+            string directory = ScriptableObjectExtensions.GeneratedAssetRoot + "/YLCoreEditorTest_" + Guid.NewGuid().ToString("N");
+            bool rootExisted = Directory.Exists(ScriptableObjectExtensions.GeneratedAssetRoot) || File.Exists(ScriptableObjectExtensions.GeneratedAssetRoot + ".meta");
+            var selection = Selection.objects;
+            var asset = ScriptableObject.CreateInstance<CoreEditorGeneratedAssetFixture>();
+            var second = ScriptableObject.CreateInstance<CoreEditorGeneratedAssetFixture>();
+            try
+            {
+                Assert.That(ScriptableObjectExtensions.GeneratedAssetRoot,
+                    Is.EqualTo("Assets/YLFramework/Editor/XFMain/GeneratedAssets"));
+                asset.Marker = "YL test owns this asset.";
+                asset.CreateAsset(directory);
+                string firstPath = AssetDatabase.GetAssetPath(asset);
+                Assert.That(firstPath, Is.EqualTo(directory + "/" + typeof(CoreEditorGeneratedAssetFixture).Name + ".asset"));
+                Assert.That(AssetDatabase.LoadAssetAtPath<CoreEditorGeneratedAssetFixture>(firstPath), Is.SameAs(asset));
+                byte[] firstBytes = File.ReadAllBytes(firstPath);
+                string firstGuid = AssetDatabase.AssetPathToGUID(firstPath);
+                Assert.Throws<InvalidOperationException>(() => asset.CreateAsset(directory + "/MoveAttempt"));
+                Assert.That(AssetDatabase.GetAssetPath(asset), Is.EqualTo(firstPath));
+                Assert.That(Directory.Exists(directory + "/MoveAttempt"), Is.False);
+                second.CreateAsset(directory);
+                Assert.That(AssetDatabase.GetAssetPath(second), Is.Not.EqualTo(firstPath).And.StartsWith(directory + "/"));
+                Assert.That(File.ReadAllBytes(firstPath), Is.EqualTo(firstBytes));
+                Assert.That(AssetDatabase.AssetPathToGUID(firstPath), Is.EqualTo(firstGuid));
+            }
+            finally
+            {
+                Selection.objects = selection;
+                if (AssetDatabase.IsValidFolder(directory))
+                    AssetDatabase.DeleteAsset(directory);
+                if (asset) UnityEngine.Object.DestroyImmediate(asset);
+                if (second) UnityEngine.Object.DestroyImmediate(second);
+                if (!rootExisted && AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot) &&
+                    Directory.GetFileSystemEntries(ScriptableObjectExtensions.GeneratedAssetRoot).Length == 0)
+                    AssetDatabase.DeleteAsset(ScriptableObjectExtensions.GeneratedAssetRoot);
+            }
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("Assets/Games")]
+        [TestCase("Assets/Resources/XFGameFramework")]
+        [TestCase("Assets/YLFramework/Editor/Help")]
+        [TestCase("Assets/YLFramework/Editor/XFMain/GeneratedAssets/../NotOwned")]
+        [TestCase("Assets/YLFramework/Editor/XFMain/GeneratedAssetsExtra")]
+        [TestCase("ProjectSettings")]
+        public void ScriptableObjectGeneratorRejectsPathsOutsideItsOwnedRoot(string path)
+        {
+            var asset = ScriptableObject.CreateInstance<CoreEditorGeneratedAssetFixture>();
+            var selection = Selection.objects;
+            try
+            {
+                Assert.Throws<ArgumentException>(() => asset.CreateAsset(path));
+                Assert.That(AssetDatabase.Contains(asset), Is.False);
+                Assert.That(Selection.objects, Is.EqualTo(selection));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
+        public void ScriptableObjectGeneratorRefusesAnExistingUnimportedDirectory()
+        {
+            string directory = ScriptableObjectExtensions.GeneratedAssetRoot + "/YLCoreEditorTest_" + Guid.NewGuid().ToString("N");
+            bool rootExisted = Directory.Exists(ScriptableObjectExtensions.GeneratedAssetRoot) || File.Exists(ScriptableObjectExtensions.GeneratedAssetRoot + ".meta");
+            var asset = ScriptableObject.CreateInstance<CoreEditorGeneratedAssetFixture>();
+            try
+            {
+                if (!rootExisted)
+                    Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Editor/XFMain", "GeneratedAssets"), Is.Not.Empty);
+                Assert.That(AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot), Is.True);
+                Directory.CreateDirectory(directory);
+                string sentinel = directory + "/owned-test-sentinel.txt";
+                File.WriteAllText(sentinel, "YL test owns this file.");
+                Assert.Throws<IOException>(() => asset.CreateAsset(directory));
+                Assert.That(File.ReadAllText(sentinel), Is.EqualTo("YL test owns this file."));
+                Assert.That(AssetDatabase.Contains(asset), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(asset);
+                if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                if (File.Exists(directory + ".meta")) File.Delete(directory + ".meta");
+                if (!rootExisted && AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot) &&
+                    Directory.GetFileSystemEntries(ScriptableObjectExtensions.GeneratedAssetRoot).Length == 0)
+                    AssetDatabase.DeleteAsset(ScriptableObjectExtensions.GeneratedAssetRoot);
+            }
+        }
+
+        [Test]
+        public void SameShortNameSettingsUseSeparateFullNameFilesAndRoundTripTheirOwnData()
+        {
+            WithOwnedSettings(() =>
+            {
+                Assert.That(typeof(FirstSettings).Name, Is.EqualTo(typeof(SecondSettings).Name));
+                Assert.That(SettingsPath<FirstSettings>(), Is.Not.EqualTo(SettingsPath<SecondSettings>()));
+                FirstSettings.Instance.Marker = "first-" + Guid.NewGuid().ToString("N");
+                SecondSettings.Instance.Marker = "second-" + Guid.NewGuid().ToString("N");
+                string first = FirstSettings.Instance.Marker;
+                string second = SecondSettings.Instance.Marker;
+                FirstSettings.Save();
+                SecondSettings.Save();
+                byte[] secondBytes = File.ReadAllBytes(SettingsPath<SecondSettings>());
+                ResetSettings<FirstSettings>();
+                FirstSettings.LoadOrCreate();
+                Assert.That(FirstSettings.Instance.Marker, Is.EqualTo(first));
+                Assert.That(SecondSettings.Instance.Marker, Is.EqualTo(second));
+                Assert.That(File.ReadAllBytes(SettingsPath<SecondSettings>()), Is.EqualTo(secondBytes));
+                ResetSettings<SecondSettings>();
+                SecondSettings.LoadOrCreate();
+                Assert.That(SecondSettings.Instance.Marker, Is.EqualTo(second));
+            });
+        }
+
+        [Test]
+        public void UninitializedSettingsCannotSaveOrCreateAFile()
+        {
+            WithOwnedSettings(() =>
+            {
+                Assert.Throws<InvalidOperationException>(() => FirstSettings.Save());
+                Assert.That(File.Exists(SettingsPath<FirstSettings>()), Is.False);
+                Assert.That(File.Exists(SettingsPath<SecondSettings>()), Is.False);
+            });
+        }
+
+        [Test]
+        public void IncompatibleSettingsAreRejectedByLoadAndSaveWithoutOverwriting()
+        {
+            WithOwnedSettings(() =>
+            {
+                var initialized = FirstSettings.Instance;
+                var wrongType = ScriptableObject.CreateInstance<SecondSettings>();
+                try
+                {
+                    wrongType.Marker = "YL test owns this incompatible input.";
+                    InternalEditorUtility.SaveToSerializedFileAndForget(new UnityEngine.Object[] { wrongType }, SettingsPath<FirstSettings>(), true);
+                    byte[] before = File.ReadAllBytes(SettingsPath<FirstSettings>());
+                    DateTime timestamp = File.GetLastWriteTimeUtc(SettingsPath<FirstSettings>());
+                    Assert.Throws<IOException>(() => FirstSettings.Save());
+                    Assert.That(FirstSettings.Instance, Is.SameAs(initialized));
+                    ResetSettings<FirstSettings>();
+                    Assert.Throws<IOException>(() => FirstSettings.LoadOrCreate());
+                    Assert.That(File.ReadAllBytes(SettingsPath<FirstSettings>()), Is.EqualTo(before));
+                    Assert.That(File.GetLastWriteTimeUtc(SettingsPath<FirstSettings>()), Is.EqualTo(timestamp));
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(wrongType);
+                }
+            });
+        }
+
+        private static void WithOwnedSettings(Action test)
+        {
+            string first = SettingsPath<FirstSettings>();
+            string second = SettingsPath<SecondSettings>();
+            // Never back up, delete or adopt a pre-existing configuration, even one using a test type name.
+            Assert.That(File.Exists(first), Is.False, "Pre-existing test configuration is not owned by this invocation: " + first);
+            Assert.That(File.Exists(second), Is.False, "Pre-existing test configuration is not owned by this invocation: " + second);
+            ResetSettings<FirstSettings>();
+            ResetSettings<SecondSettings>();
+            try
+            {
+                test();
+            }
+            finally
+            {
+                ResetSettings<FirstSettings>();
+                ResetSettings<SecondSettings>();
+                if (File.Exists(first)) File.Delete(first);
+                if (File.Exists(second)) File.Delete(second);
+            }
+        }
+
+        private static string SettingsPath<T>() where T : ScriptableObject
+        {
+            var method = typeof(ProjectSettingsScriptableObject<T>).GetMethod("GetFilePath", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            string path = (string)method.Invoke(null, null);
+            Assert.That(path, Is.EqualTo("ProjectSettings/YLFramework/Core/" + typeof(T).FullName + ".asset"));
+            return path;
+        }
+
+        private static void ResetSettings<T>() where T : ScriptableObject
+        {
+            var field = typeof(ProjectSettingsScriptableObject<T>).GetField("instance", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(field, Is.Not.Null);
+            var instance = (T)field.GetValue(null);
+            if (instance) UnityEngine.Object.DestroyImmediate(instance);
+            field.SetValue(null, null);
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Core.Tests.PlayMode",
+    "rootNamespace": "YLFramework.Core.Tests",
+    "references": ["YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime", "XFABManager", "UnityEngine.UI", "UnityEngine.TestRunner"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
