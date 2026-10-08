@@ -12,6 +12,7 @@ namespace YLFramework.Core.Tests
     {
         public bool FailStart;
         public bool FailClose;
+        public int CloseCount;
         public override void OnStart()
         {
             AddModel(new YLCoreFailureProbeModel { Id = 1 });
@@ -19,6 +20,7 @@ namespace YLFramework.Core.Tests
         }
         protected override void OnClose()
         {
+            CloseCount++;
             if (FailClose) throw new InvalidOperationException("YLCoreSmoke close failure");
         }
     }
@@ -28,6 +30,44 @@ namespace YLFramework.Core.Tests
         public int ExitCount;
         public override void OnInit() { }
         public override void OnExit() => ExitCount++;
+    }
+
+    public sealed class YLCoreShutdownProbeModule<T> : SingletonModule<YLCoreShutdownProbeModule<T>>
+    {
+        public bool IsBase;
+        public bool FailBaseGetter;
+        public bool EqualModules;
+        public Exception ProjectGetterError;
+        public Exception TableGetterError;
+        public Exception SceneGetterError;
+        public int ProjectReadCount;
+        public bool RegisteredAtProjectRead;
+        public Action StartAction;
+        public Action CloseAction;
+        public int CloseCount;
+        public override bool BaseModule => FailBaseGetter ? throw new InvalidOperationException("base classification failure") : IsBase;
+        public override string ProjectName
+        {
+            get
+            {
+                ProjectReadCount++;
+                RegisteredAtProjectRead = ReferenceEquals(ModuleManager.GetModule(ModuleName), this);
+                if (ProjectGetterError != null) throw ProjectGetterError;
+                return base.ProjectName;
+            }
+            set => base.ProjectName = value;
+        }
+        [Obsolete("已过时!")]
+        public override Dictionary<string, Type> PreloadConfigTables => TableGetterError != null ? throw TableGetterError : null;
+        public override string DefaultStartUpScene => SceneGetterError != null ? throw SceneGetterError : string.Empty;
+        public override bool Equals(object obj) => ReferenceEquals(this, obj) || (EqualModules && obj is Module);
+        public override int GetHashCode() => EqualModules ? 1 : base.GetHashCode();
+        public override void OnStart() => StartAction?.Invoke();
+        protected override void OnClose()
+        {
+            CloseCount++;
+            CloseAction?.Invoke();
+        }
     }
 
     public class CoreFailurePathPlayModeTests
@@ -60,23 +100,397 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator StartupFailureCompletesWithErrorButRetainsModuleAndModelAsUpstreamBehavior()
+        public IEnumerator StartupFailureAutomaticallyClosesAndDoesNotPolluteCurrent()
         {
-            module.FailStart = true;
-            var request = ModuleManager.StartUpModule(module);
-            var deadline = Time.realtimeSinceStartup + 5;
-            while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(request.isDone, Is.True);
-            Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
-            Assert.That(request.progress, Is.EqualTo(1));
-            Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module),
-                "Known upstream behavior: failed startup does not roll back registration.");
-            Assert.That(module.GetModel<YLCoreFailureProbeModel>(1).Module, Is.SameAs(module));
+            var other = new YLCoreDirectViewModule();
+            try
+            {
+                var otherRequest = ModuleManager.StartUpModule(other);
+                Assert.That(otherRequest.error, Is.Null.Or.Empty);
+                module.FailStart = true;
+                var request = ModuleManager.StartUpModule(module);
+                var deadline = Time.realtimeSinceStartup + 5;
+                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
+                Assert.That(request.progress, Is.EqualTo(1));
+                AssertStartupDetached(module);
+                Assert.That(module.CloseCount, Is.EqualTo(1));
+                var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                Assert.That(typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.SameAs(other));
+                module.Close();
+                Assert.That(module.CloseCount, Is.EqualTo(1));
+                module.FailStart = false;
+                var restarted = ModuleManager.StartUpModule(module);
+                Assert.That(restarted.isDone, Is.True);
+                Assert.That(restarted.error, Is.Null.Or.Empty);
+                Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
+            }
+            finally { other.Close(); }
             yield return null;
         }
 
         [UnityTest]
-        public IEnumerator FixtureCleanupDetachesOnlyOwnedRegistrationAfterCloseFailure()
+        public IEnumerator OnStartFailureUsesSingleClosePipelineForControllerViewAndModels()
+        {
+            var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+            var events = new List<string>();
+            var original = new InvalidOperationException("OnStart failure with MVC");
+            var bound = new YLCoreProbeModel { Id = 1, ExitAction = _ => events.Add("bound.exit") };
+            var remaining = new YLCoreProbeModel { Id = 2, ExitAction = _ => events.Add("remaining.exit") };
+            var controller = new YLCoreProbeController { ExitAction = _ => events.Add("controller.exit") };
+            var prefab = DirectViewPrefab("YLCoreStartupRollbackPrefab");
+            YLCoreSmokeView view = null;
+            try
+            {
+                failed.CloseAction = () =>
+                {
+                    events.Add("module.close");
+                    Assert.That(failed.State, Is.EqualTo(ModuleState.Closing));
+                    Assert.That(ModuleManager.GetModule(failed.ModuleName), Is.SameAs(failed));
+                    Assert.That(failed.GetController<YLCoreProbeController>(), Is.SameAs(controller));
+                    Assert.That(failed.GetView(prefab.name), Is.SameAs(view));
+                    Assert.That(bound.ExitCount + remaining.ExitCount, Is.Zero);
+                    failed.Close();
+                };
+                failed.StartAction = () =>
+                {
+                    failed.AddModel(bound);
+                    failed.AddModel(remaining);
+                    failed.AddController(controller);
+                    view = failed.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null);
+                    view.BoundModel = bound;
+                    view.onViewRemove = () => events.Add("view.remove");
+                    throw original;
+                };
+                var request = ModuleManager.StartUpModule(failed);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.Exception, Is.SameAs(original));
+                Assert.That(request.error, Does.Contain(original.Message));
+                Assert.That(events, Is.EqualTo(new[] { "module.close", "controller.exit", "view.remove", "bound.exit", "remaining.exit" }));
+                AssertStartupDetached(failed);
+                Assert.That(view.Module, Is.Null);
+                Assert.That(view.RemovedCount, Is.EqualTo(1));
+                Assert.That(view.gameObject.activeSelf, Is.False);
+                Assert.That(bound.Module, Is.Null);
+                Assert.That(remaining.Module, Is.Null);
+                Assert.That(controller.Module, Is.Null);
+                failed.Close();
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                Assert.That(controller.ExitCount, Is.EqualTo(1));
+                Assert.That(bound.ExitCount, Is.EqualTo(1));
+                Assert.That(remaining.ExitCount, Is.EqualTo(1));
+                Assert.That(view.RemovedCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                failed.CloseAction = null;
+                try { failed.Close(); }
+                finally
+                {
+                    classPool.Restore(new Module[] { failed });
+                    ReleaseDirectView(prefab, view);
+                }
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PartialModelInitializationFailureExitsCompletedAndFailedObjectsOnlyOnce()
+        {
+            var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+            var original = new InvalidOperationException("second Model initialization failure");
+            var completed = new YLCoreProbeModel { Id = 1 };
+            var partial = new YLCoreProbeModel { Id = 2, InitAction = _ => throw original };
+            try
+            {
+                failed.StartAction = () =>
+                {
+                    failed.AddModel(completed);
+                    failed.AddModel(partial);
+                };
+                var request = ModuleManager.StartUpModule(failed);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.Exception, Is.SameAs(original));
+                AssertStartupDetached(failed);
+                Assert.That(completed.InitCount, Is.EqualTo(1));
+                Assert.That(partial.InitCount, Is.EqualTo(1));
+                Assert.That(completed.ExitCount, Is.EqualTo(1));
+                Assert.That(partial.ExitCount, Is.EqualTo(1));
+                Assert.That(completed.RegisteredAtExit && partial.RegisteredAtExit, Is.True);
+                Assert.That(completed.Module, Is.Null);
+                Assert.That(partial.Module, Is.Null);
+                failed.Close();
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                Assert.That(completed.ExitCount, Is.EqualTo(1));
+                Assert.That(partial.ExitCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                failed.Close();
+                classPool.Restore(new Module[] { failed });
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator StartupPreservesOriginalAndAllObjectAndModuleCleanupExceptionsIncludingExistingData()
+        {
+            const string key = "YLFramework.Core.CleanupException";
+            for (int existing = 0; existing < 2; existing++)
+            {
+                var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+                var original = new InvalidOperationException("original Model init error");
+                var objectCleanup = new InvalidOperationException("failed Model object cleanup error");
+                var siblingCleanup = new InvalidOperationException("completed Model rollback error");
+                var moduleCleanup = new InvalidOperationException("module rollback hook error");
+                var previousCleanup = new InvalidOperationException("previous cleanup data");
+                if (existing != 0) original.Data[key] = previousCleanup;
+                var completed = new YLCoreProbeModel { Id = 1, ExitAction = _ => throw siblingCleanup };
+                var partial = new YLCoreProbeModel
+                {
+                    Id = 2,
+                    InitAction = _ => throw original,
+                    ExitAction = _ => throw objectCleanup
+                };
+                try
+                {
+                    failed.StartAction = () =>
+                    {
+                        failed.AddModel(completed);
+                        failed.AddModel(partial);
+                    };
+                    failed.CloseAction = () => throw moduleCleanup;
+                    var request = ModuleManager.StartUpModule(failed);
+                    Assert.That(request.isDone, Is.True);
+                    Assert.That(request.Exception, Is.SameAs(original));
+                    Assert.That(original.Data[key], Is.TypeOf<AggregateException>());
+                    var errors = ((AggregateException)original.Data[key]).Flatten().InnerExceptions;
+                    var expected = new List<Exception> { objectCleanup, siblingCleanup, moduleCleanup };
+                    if (existing != 0) expected.Add(previousCleanup);
+                    Assert.That(errors, Is.EquivalentTo(expected));
+                    Assert.That(request.error, Does.Contain(original.ToString()));
+                    foreach (var error in expected) Assert.That(request.error, Does.Contain(error.ToString()));
+                    AssertStartupDetached(failed);
+                    Assert.That(completed.Module, Is.Null);
+                    Assert.That(partial.Module, Is.Null);
+                    Assert.That(completed.ExitCount, Is.EqualTo(1));
+                    Assert.That(partial.ExitCount, Is.EqualTo(1));
+                    failed.Close();
+                    Assert.That(failed.CloseCount, Is.EqualTo(1));
+                }
+                finally
+                {
+                    failed.CloseAction = null;
+                    completed.ExitAction = null;
+                    partial.ExitAction = null;
+                    try { failed.Close(); }
+                    finally { classPool.Restore(new Module[] { failed }); }
+                }
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator FailureCallbacksSeeDetachedClosedModuleAndCanRestartSameOrNewInstance()
+        {
+            for (int newInstance = 0; newInstance < 2; newInstance++)
+            {
+                var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+                var original = new InvalidOperationException("failure before completion callback");
+                StartUpModuleRequest restarted = null;
+                StartUpModuleRequest pending = null;
+                int callbacks = 0;
+                try
+                {
+                    failed.StartAction = () =>
+                    {
+                        failed.AddModel(new YLCoreProbeModel());
+                        pending = ModuleManager.StartUpModule(failed);
+                        pending.AddCompleteEvent(completed =>
+                        {
+                            callbacks++;
+                            Assert.That(completed, Is.SameAs(pending));
+                            Assert.That(completed.isDone, Is.True);
+                            Assert.That(completed.progress, Is.EqualTo(1));
+                            Assert.That(completed.Exception, Is.SameAs(original));
+                            AssertStartupDetached(failed);
+                            Assert.That(YLCoreShutdownProbeModule<YLCoreProbeModel>.Instance, Is.Null);
+                            failed.StartAction = null;
+                            restarted = newInstance == 0 ? ModuleManager.StartUpModule(failed) :
+                                ModuleManager.StartUpModule<YLCoreShutdownProbeModule<YLCoreProbeModel>>();
+                        });
+                        throw original;
+                    };
+                    var request = ModuleManager.StartUpModule(failed);
+                    Assert.That(callbacks, Is.EqualTo(1));
+                    Assert.That(request, Is.SameAs(pending));
+                    Assert.That(restarted, Is.Not.Null.And.Not.SameAs(request));
+                    Assert.That(restarted.isDone, Is.True);
+                    Assert.That(restarted.error, Is.Null.Or.Empty);
+                    Assert.That(restarted.Exception, Is.Null);
+                    Assert.That(restarted.Module.State, Is.EqualTo(ModuleState.Running));
+                    Assert.That(ReferenceEquals(restarted.Module, failed), Is.EqualTo(newInstance == 0));
+                    Assert.That(ModuleManager.GetModule(failed.ModuleName), Is.SameAs(restarted.Module));
+                    Assert.That(request.Exception, Is.SameAs(original));
+                    Assert.That(request.error, Does.Contain(original.Message));
+                    Assert.That(failed.CloseCount, Is.EqualTo(1));
+                }
+                finally
+                {
+                    failed.StartAction = null;
+                    try
+                    {
+                        restarted?.Module.Close();
+                        failed.Close();
+                    }
+                    finally { classPool.Restore(new Module[] { failed, restarted?.Module }); }
+                }
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ProjectNameDefaultsBeforeStartupAndIsCapturedWithoutDependingOnOnStart()
+        {
+            var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+            var original = new InvalidOperationException("project capture before failed OnStart");
+            try
+            {
+                Assert.That(failed.ProjectName, Is.EqualTo(failed.GetType().Name));
+                failed.ProjectName = "YLCoreExplicitStartupProject";
+                failed.ProjectReadCount = 0;
+                failed.StartAction = () =>
+                {
+                    Assert.That(failed.ProjectReadCount, Is.GreaterThan(0), "Startup captures the project even when no table or scene is requested.");
+                    throw original;
+                };
+                var request = ModuleManager.StartUpModule(failed);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.Exception, Is.SameAs(original));
+                Assert.That(failed.ProjectName, Is.EqualTo("YLCoreExplicitStartupProject"));
+                AssertStartupDetached(failed);
+            }
+            finally
+            {
+                failed.Close();
+                classPool.Restore(new Module[] { failed });
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PreStartupGetterFailuresReleaseRecordsAndOnlyCloseAcquiredRegistration()
+        {
+            for (int getter = 0; getter < 3; getter++)
+            {
+                var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+                for (int closed = 0; closed < 2; closed++)
+                {
+                    var originalState = failed.State;
+                    var closes = failed.CloseCount;
+                    var original = new InvalidOperationException("pre-start getter failure " + getter);
+                    bool started = false;
+                    failed.StartAction = () => started = true;
+                    if (getter == 0) failed.ProjectGetterError = original;
+                    if (getter == 1) failed.TableGetterError = original;
+                    if (getter == 2) failed.SceneGetterError = original;
+                    try
+                    {
+                        var request = ModuleManager.StartUpModule(failed);
+                        Assert.That(request.isDone, Is.True);
+                        Assert.That(request.Exception, Is.SameAs(original));
+                        Assert.That(request.error, Does.Contain(original.Message));
+                        Assert.That(started, Is.False);
+                        if (getter == 0 && !failed.RegisteredAtProjectRead)
+                        {
+                            Assert.That(failed.State, Is.EqualTo(originalState));
+                            Assert.That(failed.CloseCount, Is.EqualTo(closes));
+                            AssertStartupRecordsDetached(failed);
+                        }
+                        else
+                        {
+                            AssertStartupDetached(failed);
+                            Assert.That(failed.CloseCount, Is.EqualTo(closes + 1));
+                        }
+                    }
+                    finally
+                    {
+                        failed.ProjectGetterError = null;
+                        failed.TableGetterError = null;
+                        failed.SceneGetterError = null;
+                        failed.StartAction = null;
+                        try { failed.Close(); }
+                        finally { classPool.Restore(new Module[] { failed }); }
+                    }
+                    // 下一轮在真正Closed的实例上失败，不能把注册前失败一律重置成Created。
+                    try { Assert.That(ModuleManager.StartUpModule(failed).error, Is.Null.Or.Empty); }
+                    finally { failed.Close(); }
+                }
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator OuterFailurePreservesNestedSuccessfulModuleAndExplicitlyBorrowedMvc()
+        {
+            var outer = new YLCoreShutdownProbeModule<YLCoreProbeModel>();
+            var inner = new YLCoreDirectViewModule();
+            var prefab = DirectViewPrefab("YLCoreBorrowedStartupViewPrefab");
+            YLCoreProbeModel sharedModel = null;
+            YLCoreProbeController sharedController = null;
+            YLCoreSmokeView sharedView = null;
+            var original = new InvalidOperationException("outer failed after borrowing MVC");
+            try
+            {
+                outer.StartAction = () =>
+                {
+                    Assert.That(ModuleManager.StartUpModule(inner).error, Is.Null.Or.Empty);
+                    sharedModel = inner.LoadModel<YLCoreProbeModel>();
+                    sharedController = inner.LoadController<YLCoreProbeController>();
+                    sharedView = inner.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null);
+                    var owner = ModuleManager.GetModule<YLCoreDirectViewModule>();
+                    Assert.That(owner.GetModel<YLCoreProbeModel>(), Is.SameAs(sharedModel));
+                    Assert.That(owner.GetController<YLCoreProbeController>(), Is.SameAs(sharedController));
+                    Assert.That(owner.GetView(prefab.name, sharedView.Id), Is.SameAs(sharedView));
+                    throw original;
+                };
+                var request = ModuleManager.StartUpModule(outer);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.Exception, Is.SameAs(original));
+                AssertStartupDetached(outer);
+                Assert.That(outer.CloseCount, Is.EqualTo(1));
+                Assert.That(ModuleManager.GetModule<YLCoreDirectViewModule>(), Is.SameAs(inner));
+                Assert.That(inner.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(sharedModel.Module, Is.SameAs(inner));
+                Assert.That(sharedController.Module, Is.SameAs(inner));
+                Assert.That(sharedView.Module, Is.SameAs(inner));
+                Assert.That(sharedModel.ExitCount, Is.Zero);
+                Assert.That(sharedController.ExitCount, Is.Zero);
+                Assert.That(sharedView.RemovedCount, Is.Zero);
+                Assert.That(sharedView.gameObject.activeSelf, Is.True);
+                var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                Assert.That(typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.SameAs(inner));
+            }
+            finally
+            {
+                try
+                {
+                    outer.Close();
+                    inner.Close();
+                }
+                finally
+                {
+                    classPool.Restore(new Module[] { outer, inner });
+                    ReleaseDirectView(prefab, sharedView);
+                }
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator CloseFailureDetachesOnlyOwnedRegistrationAndKeepsOtherCurrent()
         {
             var startup = ModuleManager.StartUpModule(module);
             var deadline = Time.realtimeSinceStartup + 5;
@@ -93,9 +507,8 @@ namespace YLFramework.Core.Tests
                 Assert.That(otherStartup.error, Is.Null.Or.Empty);
                 yield return null;
                 module.FailClose = true;
-                Assert.Throws<InvalidOperationException>(() => module.Close());
-                Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module));
-                classPool.Restore(new Module[] { module });
+                Assert.Throws<AggregateException>(() => module.Close());
+                Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
                 Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.Null);
                 Assert.That(ModuleManager.GetModule<YLCoreDirectViewModule>(), Is.SameAs(other));
                 var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
@@ -109,7 +522,7 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator CloseCallbackFailureLeavesRegistrationAfterChildrenExitAsUpstreamBehavior()
+        public IEnumerator CloseFailureEndsOwnershipBeforeReportingAndAllowsExplicitRestart()
         {
             var request = ModuleManager.StartUpModule(module);
             var deadline = Time.realtimeSinceStartup + 5;
@@ -119,16 +532,205 @@ namespace YLFramework.Core.Tests
             yield return null;
             var model = module.GetModel<YLCoreFailureProbeModel>(1);
             module.FailClose = true;
-            var error = Assert.Throws<InvalidOperationException>(() => module.Close());
-            Assert.That(error.Message, Is.EqualTo("YLCoreSmoke close failure"));
+            var error = Assert.Throws<AggregateException>(() => module.Close());
+            Assert.That(error.InnerExceptions[0].Message, Is.EqualTo("YLCoreSmoke close failure"));
             Assert.That(model.ExitCount, Is.EqualTo(1));
             Assert.That(module.GetModels<YLCoreFailureProbeModel>(), Is.Empty);
-            Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module),
-                "Known upstream behavior: OnClose failure prevents removal from the registry.");
-            module.FailClose = false;
+            Assert.That(model.Module, Is.Null);
+            Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.Null);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
             module.Close();
+            Assert.That(module.CloseCount, Is.EqualTo(1));
             Assert.That(model.ExitCount, Is.EqualTo(1));
             Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.Null);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            module.FailClose = false;
+            Assert.That(ModuleManager.StartUpModule(module).error, Is.Null.Or.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator ShutdownClosesOrdinaryThenBaseInReverseRegistrationOrderAndContinuesAfterErrors()
+        {
+            var events = new List<string>();
+            var baseFirst = new YLCoreShutdownProbeModule<YLCoreProbeModel> { IsBase = true };
+            var ordinaryFirst = new YLCoreShutdownProbeModule<YLCoreProbeController>();
+            var baseLast = new YLCoreShutdownProbeModule<YLCoreFailureProbeModel> { IsBase = true };
+            var ordinaryLast = new YLCoreShutdownProbeModule<YLCoreFailureProbeModule>();
+            var owned = new Module[] { baseFirst, ordinaryFirst, baseLast, ordinaryLast };
+            try
+            {
+                foreach (var item in owned)
+                {
+                    var request = ModuleManager.StartUpModule(item);
+                    Assert.That(request.isDone, Is.True);
+                    Assert.That(request.error, Is.Null.Or.Empty);
+                }
+                Assert.Throws<InvalidOperationException>(() => baseFirst.Close());
+                Assert.That(baseFirst.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(baseFirst.CloseCount, Is.Zero);
+                var model = baseFirst.LoadModel<YLCoreProbeModel>();
+                var closeError = new InvalidOperationException("ordinary close");
+                ordinaryLast.CloseAction = () =>
+                {
+                    events.Add("ordinary.last");
+                    Assert.That(baseFirst.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+                    Assert.That(baseFirst.State, Is.EqualTo(ModuleState.Running));
+                    Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
+                    Assert.Throws<InvalidOperationException>(() => ordinaryFirst.Close());
+                    ModuleManager.Shutdown();
+                    throw closeError;
+                };
+                ordinaryFirst.CloseAction = () => events.Add("ordinary.first");
+                baseLast.CloseAction = () => events.Add("base.last");
+                baseFirst.CloseAction = () => events.Add("base.first");
+                var error = Assert.Throws<AggregateException>(() => ModuleManager.Shutdown());
+                Assert.That(error.InnerExceptions, Is.EqualTo(new[] { closeError }));
+                Assert.That(events, Is.EqualTo(new[] { "ordinary.last", "ordinary.first", "base.last", "base.first" }));
+                Assert.That(ModuleManager.AllModules, Is.Empty);
+                Assert.That(ModuleManager.AllBaseModules, Is.Empty);
+                var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                foreach (var name in new[] { "current_module", "startupContext" })
+                    Assert.That(typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.Null, name);
+                foreach (var name in new[] { "startingModules", "registrationOrder" })
+                    Assert.That((ICollection)typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.Empty, name);
+                Assert.That(model.Module, Is.Null);
+                Assert.That(model.ExitCount, Is.EqualTo(1));
+                Assert.That(YLCoreShutdownProbeModule<YLCoreProbeModel>.Instance, Is.Null);
+                foreach (var item in owned) Assert.That(item.State, Is.EqualTo(ModuleState.Closed));
+                ModuleManager.Shutdown();
+                Assert.That(ordinaryLast.CloseCount, Is.EqualTo(1));
+                Assert.That(baseFirst.CloseCount, Is.EqualTo(1));
+                ordinaryLast.CloseAction = null;
+                Assert.That(ModuleManager.StartUpModule(ordinaryLast).error, Is.Null.Or.Empty);
+            }
+            finally
+            {
+                ordinaryLast.CloseAction = null;
+                ModuleManager.Shutdown();
+                classPool.Restore(owned);
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator FailedBaseStartupAutomaticallyClosesAndSingletonCanRestart()
+        {
+            var failed = new YLCoreShutdownProbeModule<YLCoreProbeModel> { IsBase = true };
+            var model = new YLCoreProbeModel();
+            try
+            {
+                failed.StartAction = () =>
+                {
+                    failed.AddModel(model);
+                    throw new InvalidOperationException("base startup failure");
+                };
+                failed.CloseAction = () =>
+                {
+                    Assert.That(failed.State, Is.EqualTo(ModuleState.Closing));
+                    Assert.That(model.ExitCount, Is.Zero);
+                    Assert.That(failed.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+                };
+                var request = ModuleManager.StartUpModule(failed);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Does.Contain("base startup failure"));
+                AssertStartupDetached(failed);
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                Assert.That(model.ExitCount, Is.EqualTo(1));
+                Assert.That(model.Module, Is.Null);
+                Assert.That(YLCoreShutdownProbeModule<YLCoreProbeModel>.Instance, Is.Null);
+                failed.Close();
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                failed.StartAction = null;
+                failed.CloseAction = null;
+                Assert.That(ModuleManager.StartUpModule(failed).error, Is.Null.Or.Empty);
+                Assert.That(failed.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(failed.GetModels<Model>(), Is.Empty);
+            }
+            finally
+            {
+                failed.CloseAction = null;
+                failed.IsBase = false;
+                failed.Close();
+                classPool.Restore(new Module[] { failed });
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ShutdownTracksReferenceIdentityAndPartiallyRegisteredStartupFailure()
+        {
+            var first = new YLCoreShutdownProbeModule<YLCoreProbeModel> { EqualModules = true };
+            var second = new YLCoreShutdownProbeModule<YLCoreProbeController> { EqualModules = true };
+            var failed = new YLCoreShutdownProbeModule<YLCoreFailureProbeModel> { FailBaseGetter = true };
+            var owned = new Module[] { first, second, failed };
+            try
+            {
+                Assert.That(ModuleManager.StartUpModule(first).error, Is.Null.Or.Empty);
+                Assert.That(ModuleManager.StartUpModule(second).error, Is.Null.Or.Empty);
+                second.Close();
+                var request = ModuleManager.StartUpModule(failed);
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Does.Contain("base classification failure"));
+                AssertStartupDetached(failed);
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                ModuleManager.Shutdown();
+                Assert.That(ModuleManager.AllModules, Is.Empty);
+                Assert.That(first.CloseCount, Is.EqualTo(1));
+                Assert.That(second.CloseCount, Is.EqualTo(1));
+                Assert.That(failed.CloseCount, Is.EqualTo(1));
+                Assert.That(first.State, Is.EqualTo(ModuleState.Closed));
+                Assert.That(failed.State, Is.EqualTo(ModuleState.Closed));
+            }
+            finally
+            {
+                ModuleManager.Shutdown();
+                classPool.Restore(owned);
+            }
+            yield return null;
+        }
+
+        private static void AssertStartupDetached(Module failed)
+        {
+            Assert.That(failed.State, Is.EqualTo(ModuleState.Closed));
+            AssertStartupRecordsDetached(failed);
+        }
+
+        private static void AssertStartupRecordsDetached(Module failed)
+        {
+            Assert.That(ModuleManager.GetModule(failed.ModuleName), Is.Null);
+            Assert.That(ModuleManager.AllBaseModules.ContainsKey(failed.ModuleName), Is.False);
+            foreach (var name in new[] { "models", "controllers", "views", "type_views" })
+                Assert.That((IDictionary)typeof(Module).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(failed), Is.Empty, name);
+            var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            foreach (var name in new[] { "current_module", "startupContext" })
+                Assert.That(typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.Not.SameAs(failed), name);
+            var starting = (IDictionary)typeof(ModuleManager).GetField("startingModules", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            Assert.That(starting.Contains(failed.GetType()), Is.False);
+            var order = (IList)typeof(ModuleManager).GetField("registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            foreach (var registered in order) Assert.That(ReferenceEquals(registered, failed), Is.False);
+        }
+
+        private static GameObject DirectViewPrefab(string name)
+        {
+            var prefab = new GameObject(name);
+            prefab.SetActive(false);
+            prefab.AddComponent<YLCoreSmokeView>();
+            return prefab;
+        }
+
+        private static void ReleaseDirectView(GameObject prefab, YLCoreSmokeView view)
+        {
+            // 与现有direct View fixture一致，仅删除本测试独有的后端缓存索引。
+            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            if (loader != null)
+            {
+                var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+                var mappings = (IDictionary)loader.GetType().GetField("allObjPoolMapping", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+                if (prefab) pools.Remove(prefab.GetHashCode());
+                if (view) mappings.Remove(view.gameObject.GetHashCode());
+            }
+            if (view) UnityEngine.Object.Destroy(view.gameObject);
+            if (prefab) UnityEngine.Object.Destroy(prefab);
         }
 
     }

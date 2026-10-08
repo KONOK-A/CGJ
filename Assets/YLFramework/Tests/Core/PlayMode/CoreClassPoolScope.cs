@@ -28,13 +28,19 @@ namespace YLFramework.Core.Tests
             foreach (var module in ownedModules)
             {
                 if (module == null) continue;
-                if (ModuleManager.AllModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module))
-                    ModuleManager.AllModules.Remove(module.ModuleName);
-                if (ModuleManager.AllBaseModules.TryGetValue(module.ModuleName, out var registeredBase) && ReferenceEquals(registeredBase, module))
-                    ModuleManager.AllBaseModules.Remove(module.ModuleName);
                 var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-                var current = typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (ReferenceEquals(current.GetValue(manager), module)) current.SetValue(manager, null);
+                if (manager == null) continue;
+                var starting = (IDictionary)typeof(ModuleManager).GetField("startingModules", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+                if (starting[module.GetType()] is StartUpModuleRequest request && ReferenceEquals(request.Module, module))
+                    throw new InvalidOperationException("Cannot restore a fixture with a pending startup record.");
+                // 唯一关闭管线负责注销；Fixture只能报告残留，不能摘除索引掩盖清理失败。
+                if (ModuleManager.AllModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) ||
+                    ModuleManager.AllBaseModules.TryGetValue(module.ModuleName, out var baseModule) && ReferenceEquals(baseModule, module))
+                    throw new InvalidOperationException("Fixture Module is still registered: " + module.ModuleName);
+                var order = (IList)typeof(ModuleManager).GetField("registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+                foreach (var item in order)
+                    if (ReferenceEquals(item, module))
+                        throw new InvalidOperationException("Fixture Module remains in registration order: " + module.ModuleName);
             }
             var pool = Instance.GetValue(null);
             if (pool == null) return;

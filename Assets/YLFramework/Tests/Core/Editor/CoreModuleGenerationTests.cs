@@ -67,6 +67,10 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(source, Does.Contain("BaseModule => " + (baseModule ? "true" : "false") + ";"));
                 Assert.That(source, Does.Not.Contain("using XFGameFramework"));
                 Assert.That(source, Does.Not.Contain("namespace Project.Game"));
+                Assert.That(source, Does.Not.Contain("OnExit"));
+                Assert.That(source, Does.Not.Contain("ClassObjectPoolManager"));
+                Assert.That(source, Does.Not.Contain("AllModules"));
+                Assert.That(source, Does.Not.Contain("AllBaseModules"));
                 var definition = CoreEditorIdentityTests.ReadDefinition(directory + "/" + name + ".asmdef");
                 Assert.That(definition.name, Is.EqualTo("YLFramework.Core.Examples." + name));
                 Assert.That(definition.rootNamespace, Is.EqualTo(CreateModuleCommand.ExampleNamespace));

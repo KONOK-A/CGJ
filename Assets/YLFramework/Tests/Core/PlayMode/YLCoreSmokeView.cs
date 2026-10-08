@@ -13,6 +13,15 @@ namespace YLFramework.Core.Tests
         public int EventCount { get; private set; }
         public int Token { get; private set; }
         public object Parameter { get; private set; }
+        public Model BoundModel;
+        public System.Action AfterClose;
+        public override Model Model => BoundModel;
+
+        public override void Close()
+        {
+            base.Close();
+            AfterClose?.Invoke();
+        }
 
         private void Awake() => RegisterEvent(ProbeEvent, (XFEvent)(() => EventCount++));
 

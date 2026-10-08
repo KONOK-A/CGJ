@@ -3,10 +3,6 @@
 // Revision: 2182708aecc596f30739fa8634fe2b9b6946ddd7 (XFGameFramework 1.18.8)
 // Original path: Runtime/Module/SingletonModule.cs
 // YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using YLFramework.Core.RoslynAnalyzers;
 
 
 namespace YLFramework.Core
@@ -14,14 +10,14 @@ namespace YLFramework.Core
     public class SingletonModule<T> : Module where T : Module
     {
 
-        public static T Instance;
+        /// <summary>
+        /// 查询实际注册实例（包括Starting）；未注册或关闭后返回null，不创建对象。
+        /// </summary>
+        public static T Instance => ModuleManager.GetModule<T>();
 
-        [MustCallBase]
         public override void OnStart()
         {
-            Instance = this as T;
         }
     }
 
 }
-

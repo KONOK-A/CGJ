@@ -9,6 +9,24 @@ using UnityEngine;
 
 namespace YLFramework.Core
 {
+    /// <summary>
+    /// 模块生命周期；启动失败复用关闭管线结束逻辑所有权后才报告。
+    /// </summary>
+    public enum ModuleState
+    {
+        Created,
+        /// <summary>已发布启动请求和注册；允许查询，拒绝Close与Abort取消。</summary>
+        Starting,
+        /// <summary>OnStart成功结束；重复启动不再次执行生命周期。</summary>
+        Running,
+        Closing,
+        /// <summary>已解除注册且核心对象索引无残留，允许显式重启同一实例。</summary>
+        Closed,
+        /// <summary>启动失败的内部过渡状态；回滚完成后进入Closed。</summary>
+        StartFailed,
+        /// <summary>保留的旧失败状态；唯一关闭管线在报告错误前已进入Closed。</summary>
+        CloseFailed
+    }
       
     // 模块
     public abstract class Module
@@ -34,8 +52,13 @@ namespace YLFramework.Core
         /// </summary>
         internal Dictionary<Type, Controller> controllers = new Dictionary<Type, Controller>();
 
+        internal long nextModelId = 1;
+        internal HashSet<Type> creatingModels = new HashSet<Type>();
+        internal HashSet<Type> creatingControllers = new HashSet<Type>();
+
 
         private int ui_start_sort_order = 0; // UI 初始的SortingOrder
+        private string projectName;
 
         #endregion
 
@@ -46,19 +69,27 @@ namespace YLFramework.Core
         public string ModuleName => GetType().FullName;
 
         /// <summary>
-        /// 当前模块使用的资源模块名
+        /// 由ModuleManager维护的生命周期状态；注册可见不代表已经Running。
         /// </summary>
-        public virtual string ProjectName { get; set; }
+        public ModuleState State { get; internal set; } = ModuleState.Created;
+
+        /// <summary>
+        /// XFAB资源项目名，与Module类型身份分离；默认类型短名。
+        /// 可在启动前赋值或重写，启动请求在首次加载前捕获该值，不依赖OnStart赋值。
+        /// </summary>
+        public virtual string ProjectName { get => projectName ?? GetType().Name; set => projectName = value; }
 
        
         /// <summary>
         /// 是否是基础模块
-        /// 基础模块启动之后不能关闭 默认false
+        /// 基础模块不能普通关闭，由ModuleManager.Shutdown或启动失败回滚结束；默认false
         /// </summary>
         public virtual bool BaseModule => false;
 
         /// <summary>
-        /// 需要预加载的配表
+        /// 必需的启动配表（资产名到Model数组类型）。空数组合法，缺失或无效文本导致启动失败。
+        /// 配表及其Bundle须启动过程专用，取文本期间不得由其他调用者并发加载或持有；
+        /// XFAB没有资源租约，框架复制文本后归还资产，再执行JSON构造与Model初始化。
         /// </summary>
 
         [Obsolete("已过时!")]
@@ -103,7 +134,7 @@ namespace YLFramework.Core
          
         #region Model
         /// <summary>
-        /// 添加数据
+        /// 注册本地Model；已完成注册的同实例重复调用幂等，键冲突或跨模块注册抛出异常。
         /// </summary>
         /// <param name="model">数据对象</param>
         public void AddModel(Model model)
@@ -113,7 +144,7 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 移除数据
+        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及owner。
         /// </summary>
         /// <param name="model"></param>
         public void RemoveModel(Model model)
@@ -122,8 +153,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据数据类型来查询数据，该重载方法不需要指定Id,但是该类型的数据必须只有一条,如果有多条数据会查询失败,
-        /// 从当前模块和基础模块中查询
+        /// 只查询本模块已注册的精确类型数据，不创建；缺失返回null，多实例抛出异常。
+        /// 跨模块共享须在明确的拥有者Module上调用查询，不改变归属或生命周期责任。
         /// </summary>
         /// <param name="modelType">数据名</param>
         /// <returns></returns>
@@ -133,18 +164,18 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据数据名和id来查询数据,从当前模块和基础模块中查询
+        /// 只按精确类型和id查询本模块已注册的数据，不创建；缺失返回null。
         /// </summary>
         /// <param name="modelType"></param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public Model GetModel(Type modelType, int id)
+        public Model GetModel(Type modelType, long id)
         {
             return ModelManager.GetModel(this, modelType, id);
         }
 
         /// <summary>
-        /// 查询某一类型的所有数据,从当前模块和基础模块中查询
+        /// 查询本模块该类型及其派生类型的所有数据，不创建；缺失返回空集合。
         /// </summary>
         /// <param name="modelType">数据类型</param>
         /// <returns></returns>
@@ -180,19 +211,18 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据泛型和id来查询数据,从当前模块和基础模块中查询
+        /// 只按精确类型和id查询本模块已注册的数据，不创建；缺失返回null。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
         /// <returns></returns>
-        public T GetModel<T>(int id) where T : Model
+        public T GetModel<T>(long id) where T : Model
         {
             return GetModel(typeof(T), id) as T;
         }
 
         /// <summary>
-        /// 根据泛型来查询数据,该重载方法不需要指定Id,但是该类型的数据必须只有一条,如果有多条数据会查询失败,
-        /// 从当前模块和基础模块中查询
+        /// 只查询本模块已注册的精确类型数据，不创建；缺失返回null，多实例抛出异常。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -202,7 +232,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据泛型来查询所有数据,从当前模块和基础模块中查询
+        /// 查询本模块该类型及其派生类型的所有数据，不创建；缺失返回空集合。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -222,8 +252,8 @@ namespace YLFramework.Core
 
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
-        /// 先查询数据，如果没有查询到则创建并添加数据，如果查询到了直接返回!
-        /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
+        /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
+        /// 不使用对象池；初始化期间重入Load返回临时注册的自身，退出期间拒绝Load。
         /// </summary>
         /// <param name="type">数据类型</param>
         /// <returns></returns>
@@ -234,8 +264,8 @@ namespace YLFramework.Core
 
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
-        /// 先查询数据，如果没有查询到则创建并添加数据，如果查询到了直接返回!
-        /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
+        /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
+        /// 不使用对象池；初始化期间重入Load返回临时注册的自身，退出期间拒绝Load。
         /// </summary>
         /// <typeparam name="T">数据类型</typeparam>
         /// <returns></returns>
@@ -793,14 +823,58 @@ namespace YLFramework.Core
         #region Controller
 
         /// <summary>
-        /// 加载业务逻辑(反射方式),从当前模块和基础模块中加载
+        /// 注册外部构造的本地Controller；已完成注册的同实例重复调用幂等，冲突抛出异常。
+        /// </summary>
+        public void AddController(Controller controller)
+        {
+            ControllerManager.AddController(this, controller);
+        }
+
+        /// <summary>
+        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及owner。
+        /// </summary>
+        public void RemoveController(Controller controller)
+        {
+            ControllerManager.RemoveController(this, controller);
+        }
+
+        /// <summary>
+        /// 只查询本模块已注册的精确类型Controller，不创建；缺失返回null。
+        /// 跨模块共享须在明确的拥有者Module上调用查询，不改变归属或生命周期责任。
+        /// </summary>
+        public Controller GetController(Type controllerType)
+        {
+            return ControllerManager.GetController(this, controllerType);
+        }
+
+        /// <summary>
+        /// 只查询本模块已注册的精确类型Controller，不创建；缺失返回null。
+        /// </summary>
+        public T GetController<T>() where T : Controller
+        {
+            return GetController(typeof(T)) as T;
+        }
+
+        /// <summary>
+        /// 按完整类型名只查询本模块Controller，不创建；类型或实例不存在时返回null。
+        /// </summary>
+        public Controller GetController(string controllerTypeFullName)
+        {
+            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            Type type = AssemblyTools.GetType(controllerTypeFullName);
+            if (type == null) return null;
+            return GetController(type);
+        }
+
+        /// <summary>
+        /// 按完整类型名加载本模块Controller，缺失时才创建并注册到本模块。
         /// </summary>
         /// <param name="controllerTypeFullName">业务逻辑脚本名称(包含命名空间)</param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
         public Controller LoadController(string controllerTypeFullName) 
         {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
             Type type = AssemblyTools.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return LoadController(type);
@@ -816,14 +890,13 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载业务逻辑,从当前模块和基础模块中加载
+        /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
         /// <param name="controllerType">业务逻辑类型</param>
-        /// <param name="load_from_base_modules">是否从基础模块加载，为true时,如果基础模块中已有该控制器，直接返回基础模块中的实例</param>
         /// <returns></returns>
-        public Controller LoadController(Type controllerType, bool load_from_base_modules = true)
+        public Controller LoadController(Type controllerType)
         {
-            return ControllerManager.LoadController(this, controllerType, load_from_base_modules);
+            return ControllerManager.LoadController(this, controllerType);
         }
 
         /// <summary>
@@ -835,14 +908,13 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载业务逻辑(泛型方式),从当前模块和基础模块中加载
+        /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
         /// <typeparam name="T"></typeparam>
-        /// <param name="load_from_base_modules">是否从基础模块加载，为true时,如果基础模块中已有该控制器，直接返回基础模块中的实例</param>
         /// <returns></returns>
-        public T LoadController<T>(bool load_from_base_modules = true) where T : Controller
+        public T LoadController<T>() where T : Controller
         {
-            return ControllerManager.LoadController<T>(this, load_from_base_modules);
+            return ControllerManager.LoadController<T>(this);
         }
 
         /// <summary>
@@ -855,18 +927,27 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>
+        /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
+        /// </summary>
         public T CreateController<T>()  where T: Controller
         {
             return ControllerManager.CreateController<T>(this);
         }
 
+        /// <summary>
+        /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
+        /// </summary>
         public Controller CreateController(Type type) 
         {
             return ControllerManager.CreateController(this, type);
         }
 
+        /// <summary>
+        /// 按完整类型名新建本地Controller，不查询或借用其他模块的实例。
+        /// </summary>
         public Controller CreateController(string controllerTypeFullName) {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
             Type type = AssemblyTools.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return CreateController(type);
@@ -882,45 +963,24 @@ namespace YLFramework.Core
         public abstract void OnStart();
 
         /// <summary>
-        /// 关闭模块时触发
-        /// </summary>
-        [Obsolete("已过时,请使用OnClose代替!")]
-        public virtual void OnExit()
-        {
-            if (BaseModule) return;
-
-            // 清空对象
-            this.ClearModel();
-            this.ClearView();
-            this.ClearController();
-        }
-
-
-        internal void Exit()
-        {
-
-            if (BaseModule) throw new Exception("基础模块不能关闭!");
-             
-            // 清空对象
-            this.ClearModel();
-            this.ClearView();
-            this.ClearController();
-
-
-            OnClose();
-        }
-
-        /// <summary>
-        /// 关闭模块时触发
+        /// 进入Closing后、业务对象清理前触发；无需调用base即可完成框架收尾。
         /// </summary>
         protected virtual void OnClose() { }
 
+        internal void Exit() => OnClose();
+
+        internal void EnsureCanAddObjects()
+        {
+            if (State == ModuleState.Closing || State == ModuleState.Closed || State == ModuleState.CloseFailed)
+                throw new InvalidOperationException($"Cannot add objects to Module in state {State}: {ModuleName}");
+        }
+
         /// <summary>
-        /// 关闭模块
+        /// 关闭当前注册的自身实例；Starting期间拒绝关闭，不作为启动取消。
         /// </summary>
         public void Close() 
         {
-            ModuleManager.CloseModule(GetType().FullName);
+            ModuleManager.CloseModule(this);
         }
 
 #endregion

@@ -18,6 +18,7 @@ namespace YLFramework.Core
         #region 添加 
         internal static void AddView(Module module, View view)
         {
+            module.EnsureCanAddObjects();
             if (!module.views.ContainsKey(view.AssetName))
                 module.views.Add(view.AssetName, new Dictionary<int, View>());
 
@@ -85,6 +86,7 @@ namespace YLFramework.Core
 
         internal static GameObject LoadGameObject(Module module, string asset_name, Transform parent = null)
         {
+            module.EnsureCanAddObjects();
             string project_name = module.ProjectName;
             GameObject obj = GameObjectLoader.Load(project_name, asset_name, parent);
             if (obj != null)
@@ -138,6 +140,7 @@ namespace YLFramework.Core
 
         internal static View LoadView(Module module, GameObject prefab, Transform parent = null, params object[] param)
         {
+            module.EnsureCanAddObjects();
             GameObject obj = GameObjectLoader.Load(prefab, parent);
 
             if (!obj) 
@@ -165,6 +168,7 @@ namespace YLFramework.Core
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null,bool sameScene = false, params object[] param) where T : View
         {
+            module.EnsureCanAddObjects();
             LoadViewRequest<T> loadView = new LoadViewRequest<T>();
             CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, param));
             return loadView;
@@ -222,6 +226,7 @@ namespace YLFramework.Core
 
         internal static T LoadView<T>(Module module, GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
+            module.EnsureCanAddObjects();
             GameObject obj = GameObjectLoader.Load(prefab, parent);
 
             if (!obj)
@@ -249,6 +254,7 @@ namespace YLFramework.Core
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null, bool sameScene = false, LoadViewArgs loadViewArgs = null) where T : View
         {
+            module.EnsureCanAddObjects();
             LoadViewRequest<T> loadView = new LoadViewRequest<T>();
             CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, loadViewArgs));
             return loadView;

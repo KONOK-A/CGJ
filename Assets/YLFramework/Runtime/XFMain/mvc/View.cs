@@ -57,7 +57,8 @@ namespace YLFramework.Core
         internal string AssetName { get; set; }
 
         /// <summary>
-        /// 当前View对应的数据，在View被回收时，该数据也会被移除!
+        /// 当前View对应的数据；索引内View移除时，仅尝试移除所属Module拥有且精确匹配的Model。
+        /// 显式借用其他Module的Model不改变owner，也不会随当前View退出。
         /// </summary>
         public virtual Model Model { get; }
 

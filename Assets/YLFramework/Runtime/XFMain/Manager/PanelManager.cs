@@ -200,6 +200,7 @@ namespace YLFramework.Core
         // 加载 Panel
         internal static Panel LoadPanel(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
         {
+            module.EnsureCanAddObjects();
 
             Panel panel = null;
 
@@ -235,6 +236,7 @@ namespace YLFramework.Core
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module , string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
+            module.EnsureCanAddObjects();
             LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
             CoroutineStarter.Start(loadPanel.LoadPanel(module,asset_name, type, parent, param));
             return loadPanel;
@@ -250,6 +252,7 @@ namespace YLFramework.Core
         // 加载 Panel
         internal static T LoadPanel<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)where T : Panel
         {
+            module.EnsureCanAddObjects();
 
             T panel = null;
 
@@ -285,6 +288,7 @@ namespace YLFramework.Core
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
         {
+            module.EnsureCanAddObjects();
             LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
             CoroutineStarter.Start(loadPanel.LoadPanel(module, asset_name, type, parent, loadViewArgs));
             return loadPanel;
@@ -646,4 +650,3 @@ namespace YLFramework.Core
 
     }
 }
-
