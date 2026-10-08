@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Actions.DOTween",
+    "rootNamespace": "YLFramework.Actions",
+    "references": ["YLFramework.Runtime"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["DOTween.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["DOTWEEN"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

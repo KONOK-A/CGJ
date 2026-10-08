@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Utilities.ZipTool",
+    "rootNamespace": "YLFramework.Utilities.ZipTool",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

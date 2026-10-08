@@ -1,0 +1,17 @@
+{
+    "name": "YLFramework.Runtime",
+    "rootNamespace": "YLFramework",
+    "references": [
+        "YLFramework.Utilities.ZipTool",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,22 @@
+{
+    "name": "Project.Game.MainModule",
+    "rootNamespace": "",
+    "references": [
+        "YLFramework.Runtime",
+        "XFGameFramework",
+        "XFABManager",
+        "XFFSM",
+        "XFGameFramework.Overlap",
+        "Unity.Cinemachine",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

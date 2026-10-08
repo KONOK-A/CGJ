@@ -1,0 +1,74 @@
+# ====================================================================
+#  Unity 项目 Git 忽略规则
+#  - Library/Temp/Logs 等为 Unity 本地生成内容，可随时重建，不提交
+#  - Assets 与 ProjectSettings 中的 .meta 文件必须保留
+# ====================================================================
+
+# ---------- Unity 本地生成目录 ----------
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]serSettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# ---------- 构建产物 ----------
+/[Bb]uild/
+/[Bb]uilds/
+/[Ee]xportedObj/
+/[Aa]ssetBundles/
+# XFABManager 与 YLFramework 构建后复制到 StreamingAssets 的 Bundle（由构建脚本重新生成）
+/Assets/StreamingAssets/MainModule/
+/Assets/StreamingAssets/MainModule.meta
+/Assets/StreamingAssets/AssetBundles/
+/Assets/StreamingAssets/AssetBundles.meta
+sysinfo.txt
+crashlytics-build.properties
+*.apk
+*.aab
+*.app
+
+# ---------- IDE / 工具生成文件 ----------
+.vs/
+.idea/
+.consulo/
+.gradle/
+*.csproj
+*.sln
+*.slnx
+*.unityproj
+*.booproj
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.pidb.meta
+*.opendb
+*.VC.db
+*.svd
+*.tmp
+*.orig
+
+# ---------- XFGameFramework 运行时生成的设置（含本地密钥字段，不入库） ----------
+/ProjectSettings/XFGameFramework.*.asset
+
+# ---------- 本机 / 工具遗留文件 ----------
+/Diagnostics/
+.DS_Store
+Thumbs.db
+Desktop.ini
+~UnityDirMonSyncFile~*
+*.private
+*.private.*
+
+# ---------- 自动生成的编辑器插件目录 ----------
+/[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# ---------- 本地 AI 工具缓存（项目自身的 .kilo/ 与 AGENTS.md 仍然提交） ----------
+.agents/
+.claude/
+.codex/
+.kilocode/
+.opencode/

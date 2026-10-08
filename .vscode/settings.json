@@ -1,0 +1,103 @@
+{
+    // 使用 Microsoft Unity + C# Dev Kit 的现代语言服务。
+    "dotnet.server.useOmnisharp": false,
+    "dotnet.preferCSharpExtension": true,
+
+    // 编译诊断：覆盖已加载的整个解决方案。
+    // 额外分析器：只分析打开的文件，避免第一轮负担过大。
+    "dotnet.backgroundAnalysis.compilerDiagnosticsScope": "fullSolution",
+    "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "openFiles",
+
+    // 迁移阶段先手动保存，避免意外刷新或大范围格式化。
+    "files.autoSave": "off",
+
+    "[csharp]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.formatOnSave": false,
+        "editor.formatOnPaste": false
+    },
+    // 默认全文搜索不遍历生成目录。
+    "search.exclude": {
+        "Library/**": true,
+        "Temp/**": true,
+        "Logs/**": true,
+        "obj/**": true,
+        "Build/**": true,
+        "Builds/**": true,
+        "UserSettings/**": true,
+        "**/.vs/**": true,
+        "**/.idea/**": true
+    },
+
+    // 不一刀切屏蔽整个 Library 的变化。
+    // 只排除高频生成目录，保留 ScriptAssemblies、PackageCache 等。
+    "files.watcherExclude": {
+        "**/Library/**": false,
+        "**/Library/Artifacts/**": true,
+        "**/Library/Bee/**": true,
+        "**/Library/ShaderCache/**": true,
+        "**/Temp/**": true,
+        "**/Logs/**": true,
+        "**/obj/**": true,
+        "**/Build/**": true,
+        "**/Builds/**": true
+    },
+    "files.exclude": {
+        "**/.DS_Store": true,
+        "**/.git": true,
+        "**/.vs": true,
+        "**/.gitmodules": true,
+        "**/.vsconfig": true,
+        "**/*.booproj": true,
+        "**/*.pidb": true,
+        "**/*.suo": true,
+        "**/*.user": true,
+        "**/*.userprefs": true,
+        "**/*.unityproj": true,
+        "**/*.dll": true,
+        "**/*.exe": true,
+        "**/*.pdf": true,
+        "**/*.mid": true,
+        "**/*.midi": true,
+        "**/*.wav": true,
+        "**/*.gif": true,
+        "**/*.ico": true,
+        "**/*.jpg": true,
+        "**/*.jpeg": true,
+        "**/*.png": true,
+        "**/*.psd": true,
+        "**/*.tga": true,
+        "**/*.tif": true,
+        "**/*.tiff": true,
+        "**/*.3ds": true,
+        "**/*.3DS": true,
+        "**/*.fbx": true,
+        "**/*.FBX": true,
+        "**/*.lxo": true,
+        "**/*.LXO": true,
+        "**/*.ma": true,
+        "**/*.MA": true,
+        "**/*.obj": true,
+        "**/*.OBJ": true,
+        "**/*.asset": true,
+        "**/*.cubemap": true,
+        "**/*.flare": true,
+        "**/*.mat": true,
+        "**/*.meta": true,
+        "**/*.prefab": true,
+        "**/*.unity": true,
+        "build/": true,
+        "Build/": true,
+        "Library/": true,
+        "library/": true,
+        "obj/": true,
+        "Obj/": true,
+        "Logs/": true,
+        "logs/": true,
+        "ProjectSettings/": true,
+        "UserSettings/": true,
+        "temp/": true,
+        "Temp/": true
+    },
+    "dotnet.defaultSolution": "CGJ2024.slnx"
+}
