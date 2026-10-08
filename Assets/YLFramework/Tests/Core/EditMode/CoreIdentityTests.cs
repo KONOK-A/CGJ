@@ -8,6 +8,18 @@ namespace YLFramework.Core.Tests
 {
     public class CoreIdentityTests
     {
+        [Test]
+        public void ModuleHasOneCloseHookAndExplicitShutdownWithoutLegacyExitEntry()
+        {
+            Assert.That(typeof(Module).GetMethod("OnExit"), Is.Null);
+            var hook = typeof(Module).GetMethod("OnClose", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(hook.IsFamily && hook.IsVirtual, Is.True);
+            var shutdown = typeof(ModuleManager).GetMethod("Shutdown");
+            Assert.That(shutdown.IsStatic, Is.True);
+            Assert.That(shutdown.ReturnType, Is.EqualTo(typeof(void)));
+            Assert.That(shutdown.GetParameters(), Is.Empty);
+        }
+
         [TestCase(typeof(StartUpModuleRequest))]
         [TestCase(typeof(SendWebRequest))]
         [TestCase(typeof(LoadViewRequest<View>))]

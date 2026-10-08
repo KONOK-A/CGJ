@@ -24,7 +24,7 @@ namespace YLFramework.Core
         Closed,
         /// <summary>启动失败，仍可能持有已注册对象；未完成逻辑回滚。</summary>
         StartFailed,
-        /// <summary>关闭失败且注册仍在；拒绝启动，允许再次尝试关闭。</summary>
+        /// <summary>保留的旧失败状态；唯一关闭管线在报告错误前已进入Closed。</summary>
         CloseFailed
     }
       
@@ -80,7 +80,7 @@ namespace YLFramework.Core
        
         /// <summary>
         /// 是否是基础模块
-        /// 基础模块启动之后不能关闭 默认false
+        /// 基础模块不能普通关闭，只能由ModuleManager.Shutdown结束；默认false
         /// </summary>
         public virtual bool BaseModule => false;
 
@@ -959,38 +959,17 @@ namespace YLFramework.Core
         public abstract void OnStart();
 
         /// <summary>
-        /// 关闭模块时触发
-        /// </summary>
-        [Obsolete("已过时,请使用OnClose代替!")]
-        public virtual void OnExit()
-        {
-            if (BaseModule) return;
-
-            // 清空对象
-            this.ClearModel();
-            this.ClearView();
-            this.ClearController();
-        }
-
-
-        internal void Exit()
-        {
-
-            if (BaseModule) throw new Exception("基础模块不能关闭!");
-             
-            // 清空对象
-            this.ClearModel();
-            this.ClearView();
-            this.ClearController();
-
-
-            OnClose();
-        }
-
-        /// <summary>
-        /// 关闭模块时触发
+        /// 进入Closing后、业务对象清理前触发；无需调用base即可完成框架收尾。
         /// </summary>
         protected virtual void OnClose() { }
+
+        internal void Exit() => OnClose();
+
+        internal void EnsureCanAddObjects()
+        {
+            if (State == ModuleState.Closing || State == ModuleState.Closed || State == ModuleState.CloseFailed)
+                throw new InvalidOperationException($"Cannot add objects to Module in state {State}: {ModuleName}");
+        }
 
         /// <summary>
         /// 关闭当前注册的自身实例；Starting期间拒绝关闭，不作为启动取消。

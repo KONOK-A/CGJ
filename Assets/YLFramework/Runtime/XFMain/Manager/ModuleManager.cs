@@ -78,6 +78,8 @@ namespace YLFramework.Core
         private readonly IReadOnlyDictionary<string, Module> allBaseModules;
         private readonly Dictionary<Type, StartUpModuleRequest> startingModules = new Dictionary<Type, StartUpModuleRequest>();
         private readonly HashSet<Type> creatingModules = new HashSet<Type>();
+        private readonly List<Module> registrationOrder = new List<Module>();
+        private bool shuttingDown;
  
         private Module current_module;
         private Module startupContext;
@@ -122,6 +124,7 @@ namespace YLFramework.Core
         {
 
             if (module == null) throw new ArgumentNullException(nameof(module));
+            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot register a Module during Shutdown.");
             if (Instance.modules.TryGetValue(module.ModuleName, out var registered))
             {
                 if (!ReferenceEquals(registered, module))
@@ -131,6 +134,7 @@ namespace YLFramework.Core
             if (module.State == ModuleState.Closed || module.State == ModuleState.Closing || module.State == ModuleState.CloseFailed)
                 throw new InvalidOperationException($"Cannot register Module in state {module.State}: {module.ModuleName}");
             Instance.modules.Add(module.ModuleName, module);
+            Instance.registrationOrder.Add(module);
             if (module.BaseModule) Instance.baseModules.Add(module.ModuleName, module);
         }
 
@@ -172,7 +176,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 关闭模块；Starting拒绝，CloseFailed允许再次清理。基础模块Shutdown尚未支持。
+        /// 唯一关闭管线；基础模块及Starting拒绝，清理错误在Closed与注销后汇总报告。
         /// </summary>
         /// <param name="moduleTypeFullName">模块类型名称(含命名空间)</param> 
         public static void CloseModule(string moduleTypeFullName)
@@ -188,36 +192,115 @@ namespace YLFramework.Core
 
         internal static void CloseModule(Module module)
         {
-            if (!ReferenceEquals(GetModule(module.ModuleName), module)) return;
+            CloseModule(module, false);
+        }
+
+        private static void ValidateClose(Module module)
+        {
             if (module.State == ModuleState.Starting)
                 throw new InvalidOperationException($"Cannot close a starting Module: {module.ModuleName}");
+            // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
+            if (module.creatingModels.Count != 0 || module.creatingControllers.Count != 0)
+                throw new InvalidOperationException("Cannot close a Module during object construction.");
+            foreach (var controller in module.controllers.Values)
+                if (controller.IsInitializing || controller.IsExiting)
+                    throw new InvalidOperationException("Cannot close a Module during Controller initialization or exit.");
+            foreach (var bucket in module.models.Values)
+                foreach (var model in bucket.Values)
+                    if (model.IsInitializing || model.IsExiting)
+                        throw new InvalidOperationException("Cannot close a Module during Model initialization or exit.");
+        }
+
+        private static void CloseModule(Module module, bool allowBaseModule)
+        {
+            if (!ReferenceEquals(GetModule(module.ModuleName), module)) return;
             if (module.State == ModuleState.Closing) return;
-            if (module.BaseModule) throw new InvalidOperationException("基础模块不能关闭!");
+            if (!allowBaseModule && Instance.shuttingDown)
+                throw new InvalidOperationException("Cannot close another Module during Shutdown.");
+            if (!allowBaseModule && module.BaseModule)
+                throw new InvalidOperationException("基础模块不能关闭! 请使用ModuleManager.Shutdown。");
+            ValidateClose(module);
             module.State = ModuleState.Closing;
-            try
+            var errors = new List<Exception>();
+            // 钩子可能提前移除View索引，保留进入关闭时的对象用于最终owner收尾。
+            var views = new HashSet<View>();
+            foreach (var bucket in module.views.Values)
+                foreach (var view in bucket.Values) views.Add(view);
+            foreach (var bucket in module.type_views.Values)
+                foreach (var view in bucket) views.Add(view);
+            try { module.Exit(); }
+            catch (Exception error) { errors.Add(error); }
+
+            foreach (var controller in new List<Controller>(module.controllers.Values))
             {
-#pragma warning disable CS0618 // 类型或成员已过时
-                module.OnExit();
-#pragma warning restore CS0618 // 类型或成员已过时
-                module.Exit();
-                if (HasRegisteredObjects(module))
-                    throw new InvalidOperationException($"Module still owns registered objects after close: {module.ModuleName}");
+                try { module.RemoveController(controller); }
+                catch (Exception error) { errors.Add(error); }
             }
-            catch
+
+            foreach (var view in views)
             {
-                // 完整异常清理管线留给后续阶段，不能把部分退出的实例标记为Closed。
-                module.State = ModuleState.CloseFailed;
-                if (ReferenceEquals(module, CurrentModule)) CurrentModule = null;
-                throw;
+                if (!view || !ReferenceEquals(view.Module, module) || !view.loaded) continue;
+                try { view.Close(); }
+                catch (Exception error) { errors.Add(error); }
             }
+
+            foreach (var model in module.GetModels<Model>())
+            {
+                try { module.RemoveModel(model); }
+                catch (Exception error) { errors.Add(error); }
+            }
+
+            // 不解绑在业务钩子中已被其他模块重新加载的View；资源异常收尾留给1.3。
+            foreach (var view in views)
+                if (view && ReferenceEquals(view.Module, module))
+                {
+                    view.loaded = false;
+                    view.Module = null;
+                }
             Instance.modules.Remove(module.ModuleName);
             Instance.baseModules.Remove(module.ModuleName);
+            Instance.registrationOrder.RemoveAll(item => ReferenceEquals(item, module));
             if (ReferenceEquals(module, CurrentModule)) CurrentModule = null;
-            // View移除会保留空桶；只清除已确认无对象的索引，为同实例重启建立干净状态。
+            if (ReferenceEquals(module, Instance.startupContext)) Instance.startupContext = null;
+            module.controllers.Clear();
             module.models.Clear();
             module.views.Clear();
             module.type_views.Clear();
             module.State = ModuleState.Closed;
+            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors);
+        }
+
+        /// <summary>
+        /// 显式结束全部已注册模块，普通组先于基础组，各组逆注册顺序。
+        /// Starting或对象生命周期事务中拒绝执行，不提供启动取消；清理继续并在结束后汇总错误。
+        /// </summary>
+        public static void Shutdown()
+        {
+            if (Instance.shuttingDown) return;
+            var order = new List<Module>();
+            for (int group = 0; group < 2; group++)
+                for (int i = Instance.registrationOrder.Count - 1; i >= 0; i--)
+                {
+                    var module = Instance.registrationOrder[i];
+                    if (!ReferenceEquals(GetModule(module.ModuleName), module)) continue;
+                    if (Instance.baseModules.ContainsKey(module.ModuleName) != (group == 1)) continue;
+                    if (module.State == ModuleState.Closing)
+                        throw new InvalidOperationException("Cannot begin Shutdown during Module close.");
+                    ValidateClose(module);
+                    order.Add(module);
+                }
+            var errors = new List<Exception>();
+            Instance.shuttingDown = true;
+            try
+            {
+                foreach (var module in order)
+                {
+                    try { CloseModule(module, true); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            }
+            finally { Instance.shuttingDown = false; }
+            if (errors.Count != 0) throw new AggregateException("Module Shutdown cleanup failed.", errors).Flatten();
         }
 
         private static bool HasRegisteredObjects(Module module)
@@ -244,7 +327,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 启动唯一实例；Starting返回同一请求，Running返回新的已完成成功结果。
         /// 请求不池化；普通模块失败后必须关闭并清理才能重启，冲突在执行OnStart前抛出异常。
-        /// 基础模块失败后的Shutdown与完整回滚由后续生命周期阶段提供。
+        /// 基础模块失败后可显式Shutdown；启动失败的自动完整回滚留给后续阶段。
         /// </summary>
         /// <param name="module">模块对象</param>
         /// <returns></returns>
@@ -252,6 +335,7 @@ namespace YLFramework.Core
         public static StartUpModuleRequest StartUpModule(Module module)
         {
             if (module == null) throw new ArgumentNullException(nameof(module));
+            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot start a Module during Shutdown.");
             var type = module.GetType();
             if (Instance.creatingModules.Contains(type))
                 throw new InvalidOperationException($"Module construction is in progress: {module.ModuleName}");
@@ -326,6 +410,7 @@ namespace YLFramework.Core
         /// <exception cref="Exception"></exception>
         public static StartUpModuleRequest StartUpModule(Type moduleType)
         {
+            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot start a Module during Shutdown.");
             if (moduleType == null) throw new ArgumentNullException(nameof(moduleType));
             if (!typeof(Module).IsAssignableFrom(moduleType) || moduleType.IsAbstract || moduleType.ContainsGenericParameters)
                 throw new ArgumentException("A concrete Module type is required.", nameof(moduleType));

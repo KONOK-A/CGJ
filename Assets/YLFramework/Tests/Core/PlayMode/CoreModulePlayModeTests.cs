@@ -145,6 +145,7 @@ namespace YLFramework.Core.Tests
                 Assert.That(ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule)), Is.SameAs(reentrant));
                 Assert.That(ModuleManager.StartUpModule(module.ModuleName), Is.SameAs(reentrant));
                 Assert.Throws<InvalidOperationException>(() => module.Close());
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.Shutdown());
                 YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest> operation = reentrant;
                 Assert.Throws<NotSupportedException>(() => operation.Abort());
                 Assert.That(operation.isDone, Is.False);
@@ -851,9 +852,9 @@ namespace YLFramework.Core.Tests
             Assert.That(module.Events, Is.EqualTo(new[]
             {
                 "module.start", "model.init", "controller.init", "request.complete",
-                "model.exit", "controller.exit", "module.close"
+                "module.close", "controller.exit", "model.exit"
             }));
-            Assert.That(oldModel.ExitCount, Is.EqualTo(1), "Legacy OnExit and Exit must not notify a child twice.");
+            Assert.That(oldModel.ExitCount, Is.EqualTo(1), "The single close pipeline must not notify a child twice.");
             Assert.That(oldController.ExitCount, Is.EqualTo(1));
             Assert.That(oldModel.Module, Is.Null);
             Assert.That(oldController.Module, Is.Null);
@@ -877,6 +878,97 @@ namespace YLFramework.Core.Tests
             Assert.That(oldModel.ExitCount, Is.EqualTo(1));
             Assert.That(oldController.ExitCount, Is.EqualTo(1));
             Assert.That(module.CloseCount, Is.EqualTo(2));
+            AssertIndexesEmpty(module);
+        }
+
+        [UnityTest]
+        public IEnumerator ClosingKeepsQueriesButRejectsNewObjectsAndRecursiveCloseIsIdempotent()
+        {
+            var module = new YLCoreLifecycleModule { SeedMvc = true };
+            yield return AwaitStartup(StartOwned(module));
+            var model = module.StartedModel;
+            var controller = module.StartedController;
+            module.CloseAction = () =>
+            {
+                Assert.That(module.State, Is.EqualTo(ModuleState.Closing));
+                Assert.That(module.GetModel<YLCoreProbeModel>(101), Is.SameAs(model));
+                Assert.That(module.GetController<YLCoreProbeController>(), Is.SameAs(controller));
+                Assert.That(module.LoadController<YLCoreProbeController>(), Is.SameAs(controller));
+                Assert.Throws<InvalidOperationException>(() => module.AddModel(new YLCoreProbeModel()));
+                int constructions = YLCoreConstantHashModel.ConstructionCount;
+                Assert.Throws<InvalidOperationException>(() => module.LoadModel<YLCoreConstantHashModel>());
+                Assert.That(YLCoreConstantHashModel.ConstructionCount, Is.EqualTo(constructions));
+                Assert.Throws<InvalidOperationException>(() => module.AddController(new YLCoreProbeController()));
+                Assert.Throws<InvalidOperationException>(() => module.CreateController<YLCoreProbeController>());
+                Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokeView>((GameObject)null, loadViewArgs: null));
+                Assert.Throws<InvalidOperationException>(() => module.LoadViewAsync<YLCoreSmokeView>("blocked", loadViewArgs: null));
+                Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>("blocked", loadViewArgs: null));
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.Shutdown());
+                module.Close();
+            };
+            controller.ExitAction = _ => module.Close();
+            model.ExitAction = _ => module.Close();
+            module.Close();
+            module.Close();
+            Assert.That(module.CloseCount, Is.EqualTo(1));
+            Assert.That(controller.ExitCount, Is.EqualTo(1));
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            AssertIndexesEmpty(module);
+            Assert.Throws<InvalidOperationException>(() => module.LoadModel<YLCoreProbeModel>());
+        }
+
+        [UnityTest]
+        public IEnumerator ObjectTransactionsCannotCloseTheirOwningModule()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var model = new YLCoreProbeModel
+            {
+                InitAction = _ => Assert.Throws<InvalidOperationException>(() => module.Close()),
+                ExitAction = _ => Assert.Throws<InvalidOperationException>(() => module.Close())
+            };
+            module.AddModel(model);
+            module.RemoveModel(model);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            Assert.That(model.Module, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator CloseCollectsHookAndSiblingErrorsBeforeReportingEndedOwnership()
+        {
+            var module = new YLCoreLifecycleModule { SeedMvc = true };
+            yield return AwaitStartup(StartOwned(module));
+            var first = module.StartedModel;
+            var sibling = new YLCoreProbeModel { Id = 102 };
+            module.AddModel(sibling);
+            var controller = module.StartedController;
+            var hookError = new InvalidOperationException("hook");
+            var controllerError = new InvalidOperationException("controller");
+            var modelError = new InvalidOperationException("model");
+            module.CloseAction = () => throw hookError;
+            controller.ExitAction = _ => throw controllerError;
+            first.ExitAction = _ => throw modelError;
+            var error = Assert.Throws<AggregateException>(() => module.Close());
+            Assert.That(error.Flatten().InnerExceptions, Is.EquivalentTo(new[] { hookError, controllerError, modelError }));
+            Assert.That(first.RegisteredAtExit, Is.True);
+            Assert.That(controller.OwnerAtExit, Is.SameAs(module));
+            Assert.That(first.Module, Is.Null);
+            Assert.That(sibling.Module, Is.Null);
+            Assert.That(controller.Module, Is.Null);
+            Assert.That(first.ExitCount, Is.EqualTo(1));
+            Assert.That(sibling.ExitCount, Is.EqualTo(1));
+            Assert.That(controller.ExitCount, Is.EqualTo(1));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
+            AssertIndexesEmpty(module);
+            module.Close();
+            Assert.That(module.CloseCount, Is.EqualTo(1));
+            module.CloseAction = null;
+            module.SeedMvc = false;
+            yield return AwaitStartup(StartOwned(module));
             AssertIndexesEmpty(module);
         }
 

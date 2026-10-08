@@ -14,6 +14,7 @@ namespace YLFramework.Core
         {
             if (module == null) throw new ArgumentNullException(nameof(module));
             if (controller == null) throw new ArgumentNullException(nameof(controller));
+            module.EnsureCanAddObjects();
             Type type = controller.GetType();
             if (controller.Module != null)
             {
@@ -119,6 +120,7 @@ namespace YLFramework.Core
         internal static Controller CreateController( Module module,Type controllerType) 
         { 
             ValidateControllerType(controllerType);
+            module.EnsureCanAddObjects();
             if (module.controllers.ContainsKey(controllerType))
                 throw new InvalidOperationException($"Controller {controllerType.FullName} is already registered.");
             if (controllerType.IsAbstract || controllerType.ContainsGenericParameters || controllerType.GetConstructor(Type.EmptyTypes) == null)

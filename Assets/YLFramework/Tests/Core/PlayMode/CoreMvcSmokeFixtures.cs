@@ -34,6 +34,7 @@ namespace YLFramework.Core.Tests
         public string ProjectNameAtStart;
         public YLCoreProbeModel StartedModel;
         public YLCoreProbeController StartedController;
+        public Action CloseAction;
 
         public override void OnStart()
         {
@@ -53,6 +54,7 @@ namespace YLFramework.Core.Tests
             CloseCount++;
             Events.Add("module.close");
             RegisteredAtClose = ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(ModuleName), this);
+            CloseAction?.Invoke();
         }
     }
 

@@ -17,6 +17,7 @@ namespace YLFramework.Core
         { 
             if (module == null) throw new ArgumentNullException(nameof(module));
             if (model == null) throw new ArgumentNullException(nameof(model));
+            module.EnsureCanAddObjects();
             Type type = model.GetType();
             if (model.Module != null)
             {
@@ -226,6 +227,7 @@ namespace YLFramework.Core
                 if (model.IsExiting) throw new InvalidOperationException("Cannot load a Model during exit.");
                 return model;
             }
+            module.EnsureCanAddObjects();
             if (modelType.IsAbstract || modelType.ContainsGenericParameters || modelType.GetConstructor(Type.EmptyTypes) == null)
                 throw new ArgumentException("Model type must be concrete and have a public parameterless constructor.", nameof(modelType));
             if (!module.creatingModels.Add(modelType))

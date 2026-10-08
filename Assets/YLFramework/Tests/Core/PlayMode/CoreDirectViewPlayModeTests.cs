@@ -11,7 +11,9 @@ namespace YLFramework.Core.Tests
 {
     public sealed class YLCoreDirectViewModule : YLFramework.Core.Module
     {
+        public Action CloseAction;
         public override void OnStart() { }
+        protected override void OnClose() => CloseAction?.Invoke();
     }
 
     public class CoreDirectViewPlayModeTests
@@ -261,6 +263,117 @@ namespace YLFramework.Core.Tests
             Assert.That(reused.ArgsCount, Is.EqualTo(2));
             yield return null;
             Assert.That(reused.LoadedCount, Is.EqualTo(2));
+        }
+
+        [UnityTest]
+        public IEnumerator ModuleCloseOrdersControllerViewAndRemainingModelsAndDetachesViewOwner()
+        {
+            yield return StartModule();
+            var events = new List<string>();
+            var bound = new YLCoreProbeModel { Id = 1, ExitAction = _ => events.Add("bound.exit") };
+            var remaining = new YLCoreProbeModel { Id = 2, ExitAction = _ => events.Add("remaining.exit") };
+            module.AddModel(bound);
+            module.AddModel(remaining);
+            var controller = module.LoadController<YLCoreProbeController>();
+            controller.ExitAction = _ => events.Add("controller.exit");
+            var prefab = Template<YLCoreSmokeView>("YLCoreCloseOrderPrefab");
+            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            view.BoundModel = bound;
+            view.onViewRemove = () => events.Add("view.remove");
+            module.CloseAction = () =>
+            {
+                events.Add("module.close");
+                Assert.That(module.GetView(prefab.name), Is.SameAs(view));
+                Assert.That(controller.ExitCount, Is.Zero);
+                Assert.That(bound.ExitCount, Is.Zero);
+            };
+            module.Close();
+            Assert.That(events, Is.EqualTo(new[] { "module.close", "controller.exit", "view.remove", "bound.exit", "remaining.exit" }));
+            Assert.That(bound.ExitCount, Is.EqualTo(1));
+            Assert.That(remaining.ExitCount, Is.EqualTo(1));
+            Assert.That(view.Module, Is.Null);
+            Assert.That(view.gameObject.activeSelf, Is.False);
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator ViewsRemovedInsideCloseHooksStillLoseOwnerAtModuleClose()
+        {
+            for (int phase = 0; phase < 2; phase++)
+            {
+                yield return StartModule();
+                var prefab = Template<YLCoreSmokeView>("YLCoreHookClosePrefab" + phase);
+                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var controller = module.LoadController<YLCoreProbeController>();
+                module.CloseAction = phase == 0 ? (Action)(() => view.Close()) : null;
+                controller.ExitAction = _ => view.Close();
+                view.onViewRemove = () => Assert.That(view.Module, Is.SameAs(module));
+                module.Close();
+                Assert.That(view.RemovedCount, Is.EqualTo(1));
+                Assert.That(view.Module, Is.Null);
+                Assert.That(view.gameObject.activeSelf, Is.False);
+                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ViewReloadedByAnotherModuleDuringCloseKeepsNewOwnerAndIndexes()
+        {
+            yield return StartModule();
+            var other = new YLCoreConsumerModule();
+            YLCoreSmokeView view = null;
+            try
+            {
+                Assert.That(ModuleManager.StartUpModule(other).error, Is.Null.Or.Empty);
+                var prefab = Template<YLCoreSmokeView>("YLCoreTransferOnClosePrefab");
+                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                YLCoreSmokeView reloaded = null;
+                view.AfterClose = () => reloaded = Track(other.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                module.Close();
+                view.AfterClose = null;
+                Assert.That(reloaded, Is.SameAs(view));
+                Assert.That(view.Module, Is.SameAs(other));
+                Assert.That(other.GetView(prefab.name, view.Id), Is.SameAs(view));
+                Assert.That(view.gameObject.activeSelf, Is.True);
+                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+                view.Close();
+                Assert.That(other.GetViews<YLCoreSmokeView>(), Is.Empty);
+                Assert.That(view.RemovedCount, Is.EqualTo(2));
+            }
+            finally
+            {
+                if (view) view.AfterClose = null;
+                other.Close();
+                classPool.Restore(new Module[] { other });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ViewCleanupErrorDoesNotBlockSiblingViewsOrRemainingModelCleanup()
+        {
+            yield return StartModule();
+            var model = module.LoadModel<YLCoreProbeModel>();
+            var prefab = Template<YLCoreSmokeView>("YLCoreCloseFailurePrefab");
+            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            first.BoundModel = model;
+            var viewError = new InvalidOperationException("view cleanup");
+            first.onViewRemove = () => throw viewError;
+            var error = Assert.Throws<AggregateException>(() => module.Close());
+            Assert.That(error.InnerExceptions, Is.EqualTo(new[] { viewError }));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            Assert.That(model.Module, Is.Null);
+            Assert.That(first.Module, Is.Null);
+            Assert.That(sibling.Module, Is.Null);
+            Assert.That(sibling.RemovedCount, Is.EqualTo(1));
+            Assert.That(sibling.gameObject.activeSelf, Is.False);
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            first.Close();
+            module.Close();
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            first.onViewRemove = null;
         }
 
         private IEnumerator StartModule()
