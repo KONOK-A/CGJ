@@ -56,7 +56,7 @@ namespace YLFramework.Core.Examples
             EditorGUILayout.LabelField("Output", OutputRoot);
             moduleName = EditorGUILayout.TextField(new GUIContent("ModuleName", "C# class name"), moduleName);
             projectName = EditorGUILayout.TextField(new GUIContent("ProjectName", "XFAB resource project name"), projectName);
-            baseModule = EditorGUILayout.Toggle(new GUIContent("BaseModule", "Base modules cannot be closed"), baseModule);
+            baseModule = EditorGUILayout.Toggle(new GUIContent("BaseModule", "基础模块不能通过普通 Close 关闭；使用 ModuleManager.Shutdown 统一结束"), baseModule);
             defaultStartUpScene = EditorGUILayout.TextField("DefaultStartUpScene", defaultStartUpScene);
             EditorGUILayout.HelpBox("Creates a new YL example and its Runtime assembly. Existing directories are never overwritten.", MessageType.Info);
             if (!GUILayout.Button("Create YL Module"))

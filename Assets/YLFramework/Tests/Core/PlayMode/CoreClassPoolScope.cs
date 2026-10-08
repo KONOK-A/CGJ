@@ -32,15 +32,15 @@ namespace YLFramework.Core.Tests
                 if (manager == null) continue;
                 var starting = (IDictionary)typeof(ModuleManager).GetField("startingModules", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
                 if (starting[module.GetType()] is StartUpModuleRequest request && ReferenceEquals(request.Module, module))
-                    throw new InvalidOperationException("Cannot detach a fixture with an active startup producer.");
-                // 仅故障Fixture清理反射移除自有记录；生产代码不能修改只读注册视图。
-                foreach (var name in new[] { "modules", "baseModules" })
-                {
-                    var registry = (IDictionary)typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-                    if (ReferenceEquals(registry[module.ModuleName], module)) registry.Remove(module.ModuleName);
-                }
-                var current = typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (ReferenceEquals(current.GetValue(manager), module)) current.SetValue(manager, null);
+                    throw new InvalidOperationException("Cannot restore a fixture with a pending startup record.");
+                // 唯一关闭管线负责注销；Fixture只能报告残留，不能摘除索引掩盖清理失败。
+                if (ModuleManager.AllModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) ||
+                    ModuleManager.AllBaseModules.TryGetValue(module.ModuleName, out var baseModule) && ReferenceEquals(baseModule, module))
+                    throw new InvalidOperationException("Fixture Module is still registered: " + module.ModuleName);
+                var order = (IList)typeof(ModuleManager).GetField("registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+                foreach (var item in order)
+                    if (ReferenceEquals(item, module))
+                        throw new InvalidOperationException("Fixture Module remains in registration order: " + module.ModuleName);
             }
             var pool = Instance.GetValue(null);
             if (pool == null) return;

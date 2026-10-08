@@ -64,6 +64,36 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator FixtureRestoreRejectsOwnedRegistrationWithoutDetachingItOrOtherModules()
+        {
+            var module = new YLCoreLifecycleModule { SeedMvc = true };
+            yield return AwaitStartup(StartOwned(module));
+            var other = new YLCoreConsumerModule();
+            yield return AwaitStartup(StartOwned(other));
+            var scope = new CoreClassPoolScope();
+            var order = (IList)typeof(ModuleManager).GetField("registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            var previousOrder = new List<object>();
+            foreach (var item in order) previousOrder.Add(item);
+
+            Assert.Throws<InvalidOperationException>(() => scope.Restore(new[] { module }));
+            Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
+            Assert.That(ModuleManager.GetModule<YLCoreConsumerModule>(), Is.SameAs(other));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+            Assert.That(module.StartedModel.Module, Is.SameAs(module));
+            Assert.That(module.StartedController.Module, Is.SameAs(module));
+            Assert.That(module.StartedModel.ExitCount, Is.Zero);
+            Assert.That(module.StartedController.ExitCount, Is.Zero);
+            CollectionAssert.AreEqual(previousOrder, order);
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(other));
+
+            module.Close();
+            Assert.DoesNotThrow(() => scope.Restore(new[] { module }));
+            Assert.That(order.Contains(module), Is.False);
+            Assert.That(ModuleManager.GetModule<YLCoreConsumerModule>(), Is.SameAs(other));
+            Assert.That(other.State, Is.EqualTo(ModuleState.Running));
+        }
+
+        [UnityTest]
         public IEnumerator EmptyModuleRegistersClosesAndRestarts()
         {
             var module = new YLCoreLifecycleModule();
