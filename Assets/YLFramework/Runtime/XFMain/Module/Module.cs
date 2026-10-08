@@ -122,8 +122,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据数据类型来查询数据，该重载方法不需要指定Id,但是该类型的数据必须只有一条,如果有多条数据会查询失败,
-        /// 从当前模块和基础模块中查询
+        /// 只查询本模块已注册的精确类型数据，不创建；缺失返回null，多实例抛出异常。
+        /// 跨模块共享须在明确的拥有者Module上调用查询，不改变归属或生命周期责任。
         /// </summary>
         /// <param name="modelType">数据名</param>
         /// <returns></returns>
@@ -133,7 +133,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据数据名和id来查询数据,从当前模块和基础模块中查询
+        /// 只按精确类型和id查询本模块已注册的数据，不创建；缺失返回null。
         /// </summary>
         /// <param name="modelType"></param>
         /// <param name="id"></param>
@@ -144,7 +144,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某一类型的所有数据,从当前模块和基础模块中查询
+        /// 查询本模块该类型及其派生类型的所有数据，不创建；缺失返回空集合。
         /// </summary>
         /// <param name="modelType">数据类型</param>
         /// <returns></returns>
@@ -180,7 +180,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据泛型和id来查询数据,从当前模块和基础模块中查询
+        /// 只按精确类型和id查询本模块已注册的数据，不创建；缺失返回null。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
@@ -191,8 +191,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据泛型来查询数据,该重载方法不需要指定Id,但是该类型的数据必须只有一条,如果有多条数据会查询失败,
-        /// 从当前模块和基础模块中查询
+        /// 只查询本模块已注册的精确类型数据，不创建；缺失返回null，多实例抛出异常。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -202,7 +201,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 根据泛型来查询所有数据,从当前模块和基础模块中查询
+        /// 查询本模块该类型及其派生类型的所有数据，不创建；缺失返回空集合。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -222,7 +221,7 @@ namespace YLFramework.Core
 
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
-        /// 先查询数据，如果没有查询到则创建并添加数据，如果查询到了直接返回!
+        /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
         /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
         /// </summary>
         /// <param name="type">数据类型</param>
@@ -234,7 +233,7 @@ namespace YLFramework.Core
 
         /// <summary>
         /// 加载数据(适用于只有一个数据实例的情况)
-        /// 先查询数据，如果没有查询到则创建并添加数据，如果查询到了直接返回!
+        /// 只查询本模块数据，缺失时才创建并注册到本模块；多实例抛出异常。
         /// *注:此种方式是通过对象池创建，可放心清空或移除，不会产生多余对象 
         /// </summary>
         /// <typeparam name="T">数据类型</typeparam>
@@ -793,7 +792,35 @@ namespace YLFramework.Core
         #region Controller
 
         /// <summary>
-        /// 加载业务逻辑(反射方式),从当前模块和基础模块中加载
+        /// 只查询本模块已注册的精确类型Controller，不创建；缺失返回null。
+        /// 跨模块共享须在明确的拥有者Module上调用查询，不改变归属或生命周期责任。
+        /// </summary>
+        public Controller GetController(Type controllerType)
+        {
+            return ControllerManager.GetController(this, controllerType);
+        }
+
+        /// <summary>
+        /// 只查询本模块已注册的精确类型Controller，不创建；缺失返回null。
+        /// </summary>
+        public T GetController<T>() where T : Controller
+        {
+            return GetController(typeof(T)) as T;
+        }
+
+        /// <summary>
+        /// 按完整类型名只查询本模块Controller，不创建；类型或实例不存在时返回null。
+        /// </summary>
+        public Controller GetController(string controllerTypeFullName)
+        {
+            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            Type type = AssemblyTools.GetType(controllerTypeFullName);
+            if (type == null) return null;
+            return GetController(type);
+        }
+
+        /// <summary>
+        /// 按完整类型名加载本模块Controller，缺失时才创建并注册到本模块。
         /// </summary>
         /// <param name="controllerTypeFullName">业务逻辑脚本名称(包含命名空间)</param>
         /// <returns></returns>
@@ -816,14 +843,13 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载业务逻辑,从当前模块和基础模块中加载
+        /// 加载本模块Controller，缺失时才创建并注册到本模块。
         /// </summary>
         /// <param name="controllerType">业务逻辑类型</param>
-        /// <param name="load_from_base_modules">是否从基础模块加载，为true时,如果基础模块中已有该控制器，直接返回基础模块中的实例</param>
         /// <returns></returns>
-        public Controller LoadController(Type controllerType, bool load_from_base_modules = true)
+        public Controller LoadController(Type controllerType)
         {
-            return ControllerManager.LoadController(this, controllerType, load_from_base_modules);
+            return ControllerManager.LoadController(this, controllerType);
         }
 
         /// <summary>
@@ -835,14 +861,13 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载业务逻辑(泛型方式),从当前模块和基础模块中加载
+        /// 加载本模块Controller，缺失时才创建并注册到本模块。
         /// </summary>
         /// <typeparam name="T"></typeparam>
-        /// <param name="load_from_base_modules">是否从基础模块加载，为true时,如果基础模块中已有该控制器，直接返回基础模块中的实例</param>
         /// <returns></returns>
-        public T LoadController<T>(bool load_from_base_modules = true) where T : Controller
+        public T LoadController<T>() where T : Controller
         {
-            return ControllerManager.LoadController<T>(this, load_from_base_modules);
+            return ControllerManager.LoadController<T>(this);
         }
 
         /// <summary>
@@ -855,16 +880,25 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>
+        /// 新建本地Controller并尝试注册，不查询或借用其他模块的实例。
+        /// </summary>
         public T CreateController<T>()  where T: Controller
         {
             return ControllerManager.CreateController<T>(this);
         }
 
+        /// <summary>
+        /// 新建本地Controller并尝试注册，不查询或借用其他模块的实例。
+        /// </summary>
         public Controller CreateController(Type type) 
         {
             return ControllerManager.CreateController(this, type);
         }
 
+        /// <summary>
+        /// 按完整类型名新建本地Controller，不查询或借用其他模块的实例。
+        /// </summary>
         public Controller CreateController(string controllerTypeFullName) {
             if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
             Type type = AssemblyTools.GetType(controllerTypeFullName);

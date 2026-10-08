@@ -24,7 +24,7 @@ namespace YLFramework.Core.Tests
 
             StartedModel = new YLCoreProbeModel { Id = 101, Events = Events };
             AddModel(StartedModel);
-            StartedController = LoadController<YLCoreProbeController>(false);
+            StartedController = LoadController<YLCoreProbeController>();
         }
 
         protected override void OnClose()
@@ -50,6 +50,9 @@ namespace YLFramework.Core.Tests
 
     public class YLCoreProbeModel : YLFramework.Core.Model
     {
+        public static int ConstructionCount;
+        public YLCoreProbeModel() => ConstructionCount++;
+
         public int InitCount;
         public int ExitCount;
         public bool RegisteredAtInit;
@@ -75,6 +78,9 @@ namespace YLFramework.Core.Tests
 
     public sealed class YLCoreProbeController : YLFramework.Core.Controller
     {
+        public static int ConstructionCount;
+        public YLCoreProbeController() => ConstructionCount++;
+
         public int InitCount;
         public int ExitCount;
         public YLFramework.Core.Module OwnerAtInit;

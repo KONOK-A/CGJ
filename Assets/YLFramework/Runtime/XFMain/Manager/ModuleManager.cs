@@ -287,23 +287,6 @@ namespace YLFramework.Core
             return null;
         }
 
-        internal static Module GetControllerModule(Module ignore)
-        {
-            // 优先找到一个基础模块
-            foreach (var item in AllBaseModules.Values)
-            {
-                if (item == ignore) continue;
-                return item;
-            }
-            // 如果没有 找一个默认的
-            foreach (var item in AllModules.Values)
-            {
-                if (item == ignore) continue;
-                return item;
-            }
-            return null;
-        }
-
         #endregion
     }
 

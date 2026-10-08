@@ -42,7 +42,7 @@ namespace YLFramework.Core
             module.controllers.Remove(controllerType); 
         }
 
-        internal static Controller GetController(Module module, Type controllerType, bool search_from_base_modules)
+        internal static Controller GetController(Module module, Type controllerType)
         {
 
             Controller controller;
@@ -51,28 +51,13 @@ namespace YLFramework.Core
                 return controller;
             }
 
-            if (search_from_base_modules) 
-            {
-                // 尝试 从基础其他模块中( Controller 只需要有一个 不需要有多个 )
-                foreach (var item in ModuleManager.AllModules.Values)
-                {
-
-                    if (item == module) continue;
-
-                    if (item.controllers.ContainsKey(controllerType))
-                        return item.controllers[controllerType];
-                }
-            }
-            
-
-
             return null;
         }
 
-        internal static Controller LoadController(Module module, Type controllerType, bool load_from_base_modules)
+        internal static Controller LoadController(Module module, Type controllerType)
         {
 
-            Controller controller = GetController(module, controllerType, load_from_base_modules);
+            Controller controller = GetController(module, controllerType);
             if (controller != null)
             {
                 return controller;
@@ -81,16 +66,9 @@ namespace YLFramework.Core
             return CreateController(module, controllerType);
         }
 
-        internal static T LoadController<T>(Module module,bool load_from_base_modules) where T : Controller
+        internal static T LoadController<T>(Module module) where T : Controller
         {
-            T controller = GetController(module,typeof(T),load_from_base_modules) as T;
-            if (controller != null) return controller;
-
-            // 创建一个业务逻辑
-            controller = Activator.CreateInstance<T>();
-            controller.Module = module;
-            AddController(module, controller) ;
-            return controller;
+            return LoadController(module, typeof(T)) as T;
         }
 
 

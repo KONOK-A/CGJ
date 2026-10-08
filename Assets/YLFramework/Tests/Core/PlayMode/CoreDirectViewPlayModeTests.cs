@@ -64,6 +64,47 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator MvcLocalQueriesDoNotChangeBaseModuleViewLookup()
+        {
+            yield return StartModule();
+            var baseModule = new YLCoreBaseProbeModule();
+            try
+            {
+                var request = ModuleManager.StartUpModule(baseModule);
+                var deadline = Time.realtimeSinceStartup + 10;
+                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Is.Null.Or.Empty);
+                var model = baseModule.LoadModel<YLCoreProbeModel>();
+                var controller = baseModule.LoadController<YLCoreProbeController>();
+                var prefab = Template<YLCoreSmokeView>("YLCoreBaseLookupPrefab");
+                var view = Track(baseModule.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+
+                Assert.That(module.GetModel<YLCoreProbeModel>(), Is.Null);
+                Assert.That(module.GetController<YLCoreProbeController>(), Is.Null);
+                Assert.That(module.GetView<YLCoreSmokeView>(prefab.name, view.Id), Is.SameAs(view));
+                Assert.That(module.GetView(prefab.name), Is.SameAs(view));
+                Assert.That(module.GetView<YLCoreSmokeView>(), Is.SameAs(view));
+                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { view }));
+                Assert.That(view.Module, Is.SameAs(baseModule));
+                module.Close();
+                Assert.That(view.gameObject.activeSelf, Is.True);
+                Assert.That(view.RemovedCount, Is.Zero);
+                Assert.That(model.ExitCount, Is.Zero);
+                Assert.That(controller.ExitCount, Is.Zero);
+            }
+            finally
+            {
+                baseModule.AllowClose = true;
+                try
+                {
+                    if (ReferenceEquals(ModuleManager.GetModule(baseModule.ModuleName), baseModule)) baseModule.Close();
+                }
+                finally { classPool.Restore(new Module[] { baseModule }); }
+            }
+        }
+
+        [UnityTest]
         public IEnumerator DirectPrefabInitializesOncePerLoadAndCloseReturnsSameObjectToBackendCache()
         {
             yield return StartModule();

@@ -67,22 +67,13 @@ namespace YLFramework.Core
         public static Model GetModel(Module module, Type modelType)
         {
             // 从当前模块中查询
-            if (module.models.ContainsKey(modelType) && module.models[modelType].Count != 1)
+            if (module.models.ContainsKey(modelType) && module.models[modelType].Count > 1)
                 throw new Exception(string.Format("数据:{0}存在多份，请根据id查询!", modelType.FullName));
 
 
             if (module.models.ContainsKey(modelType) && module.models[modelType].Count == 1)
                 foreach (var item in module.models[modelType].Values)
                     return item;
-
-            // 尝试 从基础模块中获取
-            foreach (var item in ModuleManager.AllBaseModules.Values)
-            {
-                if (item == module || item == null) continue;
-                Model model = item.GetModel(modelType);
-                if (model != null)
-                    return model;
-            }
 
             return null;
         }
@@ -92,15 +83,6 @@ namespace YLFramework.Core
         {
             if (module.models.ContainsKey(modelType) && module.models[modelType].ContainsKey(id))
                 return module.models[modelType][id];
-
-            // 尝试 从基础模块中获取
-            foreach (var item in ModuleManager.AllBaseModules.Values)
-            {
-                if (item == module || item == null) continue;
-
-                if (item.models.ContainsKey(modelType) && item.models[modelType].ContainsKey(id))
-                    return item.models[modelType][id];
-            }
 
             return null;
         }
@@ -184,21 +166,6 @@ namespace YLFramework.Core
                 }
             }
 
-
-            // 尝试 从基础模块中获取  
-            foreach (var baseModule in ModuleManager.AllBaseModules.Values)
-            {
-                if (baseModule == null || baseModule == module) continue;
-
-                foreach (var item in baseModule.models.Keys)
-                {
-                    if (item == modelType || item.IsSubclassOf(modelType))
-                    {
-                        foreach (var model in baseModule.models[item].Values)
-                            models.Add(model);
-                    }
-                }
-            }
 
             return models;
         }
