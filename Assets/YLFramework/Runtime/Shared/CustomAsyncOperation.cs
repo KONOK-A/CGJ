@@ -1,0 +1,143 @@
+// Copyright (c) 2021 弦小风. Licensed under the MIT License; see LICENSE.md.
+// Source: https://gitee.com/xianfengkeji/xfabmanager.git
+// Revision: c35dc4058ecd831409199b43cb328024202d4557 (XFABManager 1.24.0)
+// Original path: Runtime/AsyncOperation/CustomAsyncOperation.cs
+// YL adaptation: namespace only; original operation semantics retained.
+using System; 
+using UnityEngine; 
+
+
+namespace YLFramework.Foundation
+{
+    public class CustomAsyncOperation<T> : CustomYieldInstruction where T : CustomAsyncOperation<T>
+    {
+        #region 字段 
+
+        [Obsolete("已过时,请使用AddCompleteEvent代替!")] 
+        public event Action<T> completed = null;
+
+        private Action<T> _completed;
+        //public event Action<int> completed;
+
+        private bool _isCompleted = false;
+
+        private string _error = string.Empty;
+
+        private const string CHECKING_ERROR = "正在检测中...";
+
+        #endregion
+
+        #region 属性 
+
+#pragma warning disable IDE1006 // 命名样式
+        public bool isDone { get { return isCompleted; } }
+#pragma warning restore IDE1006 // 命名样式
+
+
+        protected bool isCompleted {
+            get {
+                return _isCompleted;
+            }
+
+            set {
+                _isCompleted = value;
+                if (_isCompleted) 
+                {
+                    completed?.Invoke(this as T);
+                    _completed?.Invoke(this as T);
+                    OnCompleted();
+                }
+            }
+        }
+
+        public float progress { get; protected set; }
+
+
+
+        public string error { 
+            get {
+                if (!isDone)
+                    return CHECKING_ERROR;
+                return _error;
+            } 
+            private set 
+            {
+                _error = value;
+            }
+        
+        }
+
+        #endregion
+
+        public override bool keepWaiting
+        {
+            get
+            {
+                return !isDone;
+            }
+        }
+
+        protected virtual void OnCompleted() { 
+
+        }
+
+        protected void Completed(string error = null) {
+            this.error = error;
+            Completed();
+        }
+
+        private void Completed() {
+            progress = 1;
+
+            if ( isCompleted ) return;
+            isCompleted = true;
+        }
+
+
+        protected void CompletedWithoutNotify(string error = null) 
+        {
+            this.error = error;
+            CompletedWithoutNotify();  
+        }
+
+        private void CompletedWithoutNotify() 
+        {
+            progress = 1;
+
+            if (isCompleted) return; 
+            _isCompleted = true; 
+            OnCompleted(); 
+        }
+
+
+        public void AddCompleteEvent(Action<T> action)
+        {
+            _completed += action;
+            // 如果该异步请求已经执行完成,则直接触发完成的回调
+            if (isDone)
+                action?.Invoke(this as T);
+        }
+
+        public void RemoveCompleteEvent(Action<T> action) { 
+            _completed -= action;
+        }
+
+
+        public void RemoveAllCompleteEvent() 
+        {
+            _completed = null;
+        }
+
+        public void Abort() 
+        { 
+            Completed("request abort!");
+            OnAbort();
+        }
+
+        protected virtual void OnAbort() {
+            
+        }
+
+    }
+
+}
