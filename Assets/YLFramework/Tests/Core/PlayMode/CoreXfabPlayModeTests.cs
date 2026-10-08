@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -186,7 +187,40 @@ namespace YLFramework.Core.Tests
         [UnityTest]
         public IEnumerator StartupDeserializesRealJsonIntoOwnedCoreModel()
         {
-            yield return StartModule();
+            module = new YLCoreSmokeModule();
+            var startup = YLFramework.Core.ModuleManager.StartUpModule(module);
+            Assert.That(startup.isDone, Is.False, "The real table request yields during startup.");
+            Assert.That(module.State, Is.EqualTo(ModuleState.Starting));
+            Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.SameAs(module));
+            Assert.That(YLFramework.Core.ModuleManager.StartUpModule(module), Is.SameAs(startup));
+            Assert.That(YLFramework.Core.ModuleManager.StartUpModule<YLCoreSmokeModule>(), Is.SameAs(startup));
+            var rejected = new YLCoreSmokeModule();
+            Assert.Throws<InvalidOperationException>(() => YLFramework.Core.ModuleManager.StartUpModule(rejected));
+            Assert.Throws<InvalidOperationException>(() => module.Close());
+            YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest> foundation = startup;
+            Assert.Throws<NotSupportedException>(() => foundation.Abort());
+            Assert.That(startup.isDone, Is.False);
+            var current = Field(moduleManager, "current_module");
+            Assert.That(current, Is.SameAs(module));
+            int callbacks = 0;
+            startup.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+                var repeated = YLFramework.Core.ModuleManager.StartUpModule(module);
+                Assert.That(repeated.isDone, Is.True);
+                Assert.That(repeated, Is.Not.SameAs(done));
+                Assert.That(repeated.error, Is.Null.Or.Empty);
+                Assert.That(Field(moduleManager, "current_module"), Is.SameAs(current));
+            });
+            startup.AddCompleteEvent(_ => throw new InvalidOperationException("YLCore completion subscriber failure"));
+            LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: YLCore completion subscriber failure"));
+            yield return Await(() => startup.isDone, "Core startup with real table and duplicate request");
+            Assert.That(startup.error, Is.Null.Or.Empty, "Subscriber failure is not startup failure.");
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(rejected.State, Is.EqualTo(ModuleState.Created));
+            Assert.That(rejected.StartCount, Is.Zero);
             Assert.That(module.ProjectName, Is.EqualTo(YLCoreSmokeModule.Project));
             Assert.That(module.RowReadyAtStart, Is.True);
             Assert.That(module.StartCount, Is.EqualTo(1));
@@ -508,6 +542,8 @@ namespace YLFramework.Core.Tests
             Assert.That(roots, Has.Length.EqualTo(1));
             var entry = roots[0].GetComponent<YLCoreSmokeSceneEntry>();
             Assert.That(entry, Is.Not.Null);
+            Assert.That(entry.ModuleAtAwake, Is.SameAs(module));
+            Assert.That(entry.StateAtAwake, Is.EqualTo(singleSceneTest ? ModuleState.Starting : ModuleState.Running));
             yield return Await(() => entry && entry.StartCount == 1, "fixture scene entry Start");
             Assert.That(entry.ModuleAtStart, Is.SameAs(module));
         }

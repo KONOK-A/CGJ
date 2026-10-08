@@ -9,6 +9,24 @@ using UnityEngine;
 
 namespace YLFramework.Core
 {
+    /// <summary>
+    /// 模块生命周期；失败状态仍可能持有业务对象，必须清理后才能重新启动。
+    /// </summary>
+    public enum ModuleState
+    {
+        Created,
+        /// <summary>已发布启动请求和注册；允许查询，拒绝Close与Abort取消。</summary>
+        Starting,
+        /// <summary>OnStart成功结束；重复启动不再次执行生命周期。</summary>
+        Running,
+        Closing,
+        /// <summary>已解除注册且核心对象索引无残留，允许显式重启同一实例。</summary>
+        Closed,
+        /// <summary>启动失败，仍可能持有已注册对象；未完成逻辑回滚。</summary>
+        StartFailed,
+        /// <summary>关闭失败且注册仍在；拒绝启动，允许再次尝试关闭。</summary>
+        CloseFailed
+    }
       
     // 模块
     public abstract class Module
@@ -48,6 +66,11 @@ namespace YLFramework.Core
         /// 模块名
         /// </summary>
         public string ModuleName => GetType().FullName;
+
+        /// <summary>
+        /// 由ModuleManager维护的生命周期状态；注册可见不代表已经Running。
+        /// </summary>
+        public ModuleState State { get; internal set; } = ModuleState.Created;
 
         /// <summary>
         /// 当前模块使用的资源模块名
@@ -970,11 +993,11 @@ namespace YLFramework.Core
         protected virtual void OnClose() { }
 
         /// <summary>
-        /// 关闭模块
+        /// 关闭当前注册的自身实例；Starting期间拒绝关闭，不作为启动取消。
         /// </summary>
         public void Close() 
         {
-            ModuleManager.CloseModule(GetType().FullName);
+            ModuleManager.CloseModule(this);
         }
 
 #endregion

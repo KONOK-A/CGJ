@@ -28,26 +28,67 @@ namespace YLFramework.Core
     }
 
 
-    public class StartUpModuleRequest : YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest>
+    /// <summary>
+    /// ModuleManager创建的非池化启动请求；不支持Abort取消启动协程。
+    /// </summary>
+    public sealed class StartUpModuleRequest : YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest>
     {
          
         public StartingModuleSteps Step { get;private set; }
         
-        public Module Module { get; protected set; }
+        public Module Module { get; }
 
+        internal Module PreviousCurrentModule { get; set; }
 
-        internal IEnumerator StartUp(Module module) 
+        internal StartUpModuleRequest(Module module, Module previousCurrentModule = null)
         {
-            if (module == null)
+            Module = module;
+            PreviousCurrentModule = previousCurrentModule;
+        }
+
+        /// <summary>
+        /// 启动协程不支持安全取消；在任何完成状态修改前拒绝Abort。
+        /// </summary>
+        public override void Abort()
+        {
+            throw new NotSupportedException("Module startup does not support Abort.");
+        }
+
+        internal void Finish(string error = null)
+        {
+            if (isDone) return;
+            // 先提交生命周期与移除进行中记录，通知异常不能反过来改写启动结果。
+            ModuleManager.CompleteStartup(this, error);
+            try { Completed(error); }
+            catch (Exception notificationError) { Debug.LogException(notificationError); }
+        }
+
+        internal IEnumerator StartUp()
+        {
+            var routine = RunStartup();
+            string failure = null;
+            try
             {
-                Completed("无法启动空模块！");
-                yield break;
+                while (true)
+                {
+                    bool hasNext;
+                    try { hasNext = ModuleManager.MoveStartup(Module, routine); }
+                    catch (Exception error)
+                    {
+                        failure = error.ToString();
+                        break;
+                    }
+                    if (!hasNext) break;
+                    yield return routine.Current;
+                }
             }
+            finally { (routine as IDisposable)?.Dispose(); }
+            Finish(failure);
+        }
 
-            this.Module = module; // 保存模块对象
-
-            ModuleManager.AddModule(module);
-
+        private IEnumerator RunStartup()
+        {
+            var module = Module;
             progress = 0;
 
             Step = StartingModuleSteps.PreloadConfigTables;
@@ -89,8 +130,7 @@ namespace YLFramework.Core
                     {
                         // 卸载资源
                         AssetBundleManager.UnloadAsset(text);
-                        Completed(string.Format("json解析异常:content:{0} error:{1}", text.text,e.ToString()));
-                        yield break;
+                        throw new InvalidOperationException(string.Format("json解析异常:content:{0} error:{1}", text.text,e.ToString()), e);
                     }
 
                     // 卸载资源
@@ -123,16 +163,8 @@ namespace YLFramework.Core
 
             }
 
-            try
-            {
-                module.ProjectName = module.GetType().Name; // 默认名称跟类名相同
-                module.OnStart();
-                Completed();
-            }
-            catch (Exception e)
-            {
-                Completed(e.ToString());
-            } 
+            module.ProjectName = module.GetType().Name; // 默认名称跟类名相同
+            module.OnStart();
         }
 
       

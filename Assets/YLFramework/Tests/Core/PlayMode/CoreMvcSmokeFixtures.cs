@@ -3,6 +3,26 @@ using System.Collections.Generic;
 
 namespace YLFramework.Core.Tests
 {
+    public sealed class YLCoreStartupProbeModule : SingletonModule<YLCoreStartupProbeModule>
+    {
+        public static int ConstructionCount;
+        public static Action ConstructorAction;
+        public int StartCount;
+        public Action StartAction;
+
+        public YLCoreStartupProbeModule()
+        {
+            ConstructionCount++;
+            ConstructorAction?.Invoke();
+        }
+
+        public override void OnStart()
+        {
+            StartCount++;
+            StartAction?.Invoke();
+        }
+    }
+
     public sealed class YLCoreLifecycleModule : YLFramework.Core.Module
     {
         public readonly List<string> Events = new List<string>();

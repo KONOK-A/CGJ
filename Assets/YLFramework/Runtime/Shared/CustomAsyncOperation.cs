@@ -128,7 +128,7 @@ namespace YLFramework.Foundation
             _completed = null;
         }
 
-        public void Abort() 
+        public virtual void Abort()
         { 
             Completed("request abort!");
             OnAbort();

@@ -60,18 +60,37 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator StartupFailureCompletesWithErrorButRetainsModuleAndModelAsUpstreamBehavior()
+        public IEnumerator StartupFailureRetainsOwnedObjectsRequiresCleanupAndDoesNotPolluteCurrent()
         {
-            module.FailStart = true;
-            var request = ModuleManager.StartUpModule(module);
-            var deadline = Time.realtimeSinceStartup + 5;
-            while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(request.isDone, Is.True);
-            Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
-            Assert.That(request.progress, Is.EqualTo(1));
-            Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module),
-                "Known upstream behavior: failed startup does not roll back registration.");
-            Assert.That(module.GetModel<YLCoreFailureProbeModel>(1).Module, Is.SameAs(module));
+            var other = new YLCoreDirectViewModule();
+            try
+            {
+                var otherRequest = ModuleManager.StartUpModule(other);
+                Assert.That(otherRequest.error, Is.Null.Or.Empty);
+                module.FailStart = true;
+                var request = ModuleManager.StartUpModule(module);
+                var deadline = Time.realtimeSinceStartup + 5;
+                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(request.isDone, Is.True);
+                Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
+                Assert.That(request.progress, Is.EqualTo(1));
+                Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module),
+                    "Complete startup rollback belongs to stage E, not C.");
+                Assert.That(module.State, Is.EqualTo(ModuleState.StartFailed));
+                Assert.That(module.GetModel<YLCoreFailureProbeModel>(1).Module, Is.SameAs(module));
+                var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                Assert.That(typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.SameAs(other));
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule<YLCoreFailureProbeModule>());
+                module.Close();
+                module.FailStart = false;
+                var restarted = ModuleManager.StartUpModule(module);
+                Assert.That(restarted.isDone, Is.True);
+                Assert.That(restarted.error, Is.Null.Or.Empty);
+                Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(request.error, Does.Contain("YLCoreSmoke startup failure"));
+            }
+            finally { other.Close(); }
             yield return null;
         }
 
@@ -109,7 +128,7 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator CloseCallbackFailureLeavesRegistrationAfterChildrenExitAsUpstreamBehavior()
+        public IEnumerator CloseFailureRetainsRegistrationAndRejectsRestartUntilCleanupSucceeds()
         {
             var request = ModuleManager.StartUpModule(module);
             var deadline = Time.realtimeSinceStartup + 5;
@@ -125,10 +144,13 @@ namespace YLFramework.Core.Tests
             Assert.That(module.GetModels<YLCoreFailureProbeModel>(), Is.Empty);
             Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.SameAs(module),
                 "Known upstream behavior: OnClose failure prevents removal from the registry.");
+            Assert.That(module.State, Is.EqualTo(ModuleState.CloseFailed));
+            Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
             module.FailClose = false;
             module.Close();
             Assert.That(model.ExitCount, Is.EqualTo(1));
             Assert.That(ModuleManager.GetModule<YLCoreFailureProbeModule>(), Is.Null);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
         }
 
     }

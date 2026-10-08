@@ -28,11 +28,17 @@ namespace YLFramework.Core.Tests
             foreach (var module in ownedModules)
             {
                 if (module == null) continue;
-                if (ModuleManager.AllModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module))
-                    ModuleManager.AllModules.Remove(module.ModuleName);
-                if (ModuleManager.AllBaseModules.TryGetValue(module.ModuleName, out var registeredBase) && ReferenceEquals(registeredBase, module))
-                    ModuleManager.AllBaseModules.Remove(module.ModuleName);
                 var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                if (manager == null) continue;
+                var starting = (IDictionary)typeof(ModuleManager).GetField("startingModules", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+                if (starting[module.GetType()] is StartUpModuleRequest request && ReferenceEquals(request.Module, module))
+                    throw new InvalidOperationException("Cannot detach a fixture with an active startup producer.");
+                // 仅故障Fixture清理反射移除自有记录；生产代码不能修改只读注册视图。
+                foreach (var name in new[] { "modules", "baseModules" })
+                {
+                    var registry = (IDictionary)typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+                    if (ReferenceEquals(registry[module.ModuleName], module)) registry.Remove(module.ModuleName);
+                }
                 var current = typeof(ModuleManager).GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic);
                 if (ReferenceEquals(current.GetValue(manager), module)) current.SetValue(manager, null);
             }

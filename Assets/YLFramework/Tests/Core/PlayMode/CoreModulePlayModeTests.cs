@@ -24,6 +24,7 @@ namespace YLFramework.Core.Tests
         {
             YLCoreProbeModel.ConstructorAction = null;
             YLCoreProbeController.ConstructorAction = null;
+            YLCoreStartupProbeModule.ConstructorAction = null;
             ownedModules.Clear();
             Assert.That(ManagerInstance, Is.Not.Null);
             Assert.That(CurrentModule, Is.Not.Null);
@@ -37,6 +38,7 @@ namespace YLFramework.Core.Tests
         {
             YLCoreProbeModel.ConstructorAction = null;
             YLCoreProbeController.ConstructorAction = null;
+            YLCoreStartupProbeModule.ConstructorAction = null;
             var failures = new List<Exception>();
             try
             {
@@ -65,6 +67,7 @@ namespace YLFramework.Core.Tests
         public IEnumerator EmptyModuleRegistersClosesAndRestarts()
         {
             var module = new YLCoreLifecycleModule();
+            Assert.That(module.State, Is.EqualTo(ModuleState.Created));
             Assert.That(module.DefaultStartUpScene, Is.Empty);
             var first = StartOwned(module);
             yield return AwaitStartup(first);
@@ -76,9 +79,11 @@ namespace YLFramework.Core.Tests
             Assert.That(module.RegisteredAtStart, Is.True);
             Assert.That(module.ProjectNameAtStart, Is.EqualTo(nameof(YLCoreLifecycleModule)));
             Assert.That(module.StartCount, Is.EqualTo(1));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
             AssertIndexesEmpty(module);
 
             module.Close();
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
             Assert.That(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), Is.Null);
             Assert.That(module.CloseCount, Is.EqualTo(1));
             Assert.That(module.RegisteredAtClose, Is.True);
@@ -92,20 +97,182 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator RepeatedStartupOfSameInstanceKeepsOneRegistrationAndRunsOnStartAgain()
+        public IEnumerator RunningStartupIsIdempotentAndReturnsIndependentStableResults()
         {
             var module = new YLCoreLifecycleModule();
-            yield return AwaitStartup(StartOwned(module));
+            var first = StartOwned(module);
+            yield return AwaitStartup(first);
             var count = YLFramework.Core.ModuleManager.AllModules.Count;
-            yield return AwaitStartup(StartOwned(module));
+            var other = new YLCoreConsumerModule();
+            yield return AwaitStartup(StartOwned(other));
+            var current = CurrentModule.GetValue(manager);
+            var repeated = StartOwned(module);
+            Assert.That(repeated.isDone, Is.True);
+            Assert.That(repeated.error, Is.Null.Or.Empty);
+            Assert.That(repeated, Is.Not.SameAs(first));
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
 
-            // Existing semantics rerun OnStart; this is not an idempotent-start assertion.
-            Assert.That(module.StartCount, Is.EqualTo(2));
-            Assert.That(YLFramework.Core.ModuleManager.AllModules.Count, Is.EqualTo(count));
+            Assert.That(module.StartCount, Is.EqualTo(1));
+            Assert.That(YLFramework.Core.ModuleManager.AllModules.Count, Is.EqualTo(count + 1));
             Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
             module.Close();
             Assert.That(module.CloseCount, Is.EqualTo(1));
             Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.Null);
+            var restarted = StartOwned(module);
+            Assert.That(restarted, Is.Not.SameAs(first).And.Not.SameAs(repeated));
+            Assert.That(module.StartCount, Is.EqualTo(2));
+            Assert.That(first.Module, Is.SameAs(module));
+            Assert.That(first.isDone && repeated.isDone, Is.True);
+            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.That(repeated.error, Is.Null.Or.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousStartupPublishesOneRequestBeforeReentryAndSingletonNeedsNoBaseCall()
+        {
+            var module = new YLCoreStartupProbeModule();
+            StartUpModuleRequest reentrant = null;
+            var constructions = YLCoreStartupProbeModule.ConstructionCount;
+            module.StartAction = () =>
+            {
+                Assert.That(module.State, Is.EqualTo(ModuleState.Starting));
+                Assert.That(YLCoreStartupProbeModule.Instance, Is.SameAs(module));
+                Assert.That(ModuleManager.GetModule(typeof(YLCoreStartupProbeModule)), Is.SameAs(module));
+                Assert.That(CurrentModule.GetValue(manager), Is.SameAs(module));
+                reentrant = ModuleManager.StartUpModule(module);
+                Assert.That(reentrant.isDone, Is.False);
+                Assert.That(ModuleManager.StartUpModule<YLCoreStartupProbeModule>(), Is.SameAs(reentrant));
+                Assert.That(ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule)), Is.SameAs(reentrant));
+                Assert.That(ModuleManager.StartUpModule(module.ModuleName), Is.SameAs(reentrant));
+                Assert.Throws<InvalidOperationException>(() => module.Close());
+                YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest> operation = reentrant;
+                Assert.Throws<NotSupportedException>(() => operation.Abort());
+                Assert.That(operation.isDone, Is.False);
+            };
+            var first = StartOwned(module);
+            Assert.That(first, Is.SameAs(reentrant));
+            Assert.That(first.isDone, Is.True, "No-yield startup completes synchronously.");
+            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.That(module.StartCount, Is.EqualTo(1));
+            Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions));
+            module.StartAction = null;
+            StartUpModuleRequest restarted = null;
+            first.AddCompleteEvent(_ =>
+            {
+                Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+                module.Close();
+                Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
+                restarted = StartOwned(module);
+            });
+            Assert.That(restarted, Is.Not.SameAs(first));
+            Assert.That(restarted.isDone, Is.True);
+            Assert.That(module.StartCount, Is.EqualTo(2));
+            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.Throws<NotSupportedException>(() => first.Abort());
+            Assert.That(first.error, Is.Null.Or.Empty);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ConflictingInstanceCannotStartCloseOwnerOrChangeCurrentAndRegistriesAreReadOnly()
+        {
+            var module = new YLCoreLifecycleModule();
+            yield return AwaitStartup(StartOwned(module));
+            var other = new YLCoreConsumerModule();
+            yield return AwaitStartup(StartOwned(other));
+            var current = CurrentModule.GetValue(manager);
+            var rejected = new YLCoreLifecycleModule();
+            var addModule = typeof(ModuleManager).GetMethod("AddModule", BindingFlags.Static | BindingFlags.NonPublic);
+            addModule.Invoke(null, new object[] { module });
+            Assert.That(module.StartCount, Is.EqualTo(1));
+            var registrationError = Assert.Throws<TargetInvocationException>(() => addModule.Invoke(null, new object[] { rejected }));
+            Assert.That(registrationError.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(rejected));
+            rejected.Close();
+            Assert.That(rejected.State, Is.EqualTo(ModuleState.Created));
+            Assert.That(rejected.StartCount, Is.Zero);
+            Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
+            var readOnly = ModuleManager.AllModules;
+            Assert.That(ModuleManager.AllModules, Is.SameAs(readOnly));
+            Assert.Throws<NotSupportedException>(() => ((IDictionary<string, Module>)readOnly).Remove(module.ModuleName));
+            Assert.Throws<NotSupportedException>(() => ((IDictionary<string, Module>)ModuleManager.AllBaseModules).Clear());
+            module.Close();
+            Assert.That(readOnly.ContainsKey(module.ModuleName), Is.False);
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
+            yield return AwaitStartup(StartOwned(rejected));
+            Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
+        }
+
+        [UnityTest]
+        public IEnumerator TypeStartupConstructsOnlyWhenMissingAndNeverImplicitlyUsesModulePool()
+        {
+            var pooled = new YLCoreStartupProbeModule();
+            ownedModules.Add(pooled);
+            ClassObjectPoolManager.Unload(pooled);
+            var constructions = YLCoreStartupProbeModule.ConstructionCount;
+            var first = ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
+            var module = (YLCoreStartupProbeModule)first.Module;
+            ownedModules.Add(module);
+            yield return AwaitStartup(first);
+            Assert.That(module, Is.Not.SameAs(pooled));
+            Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions + 1));
+            Assert.That(ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule)).Module, Is.SameAs(module));
+            Assert.That(ModuleManager.StartUpModule<YLCoreStartupProbeModule>().Module, Is.SameAs(module));
+            Assert.That(ModuleManager.StartUpModule(module.ModuleName).Module, Is.SameAs(module));
+            Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions + 1));
+            module.Close();
+            Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
+            var pool = typeof(ClassObjectPoolManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var objects = (IDictionary)pool.GetType().GetField("objects", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
+            Assert.That(((IList)objects[typeof(YLCoreStartupProbeModule)]).Contains(module), Is.False);
+            var next = ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule));
+            ownedModules.Add(next.Module);
+            yield return AwaitStartup(next);
+            Assert.That(next.Module, Is.Not.SameAs(module).And.Not.SameAs(pooled));
+            Assert.That(first.isDone, Is.True);
+            Assert.That(first.Module, Is.SameAs(module));
+        }
+
+        [UnityTest]
+        public IEnumerator ModuleConstructorReentryRejectsBeforeSecondConstructionAndReleasesReservation()
+        {
+            var count = YLCoreStartupProbeModule.ConstructionCount;
+            YLCoreStartupProbeModule.ConstructorAction = () => ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
+            var error = Assert.Throws<TargetInvocationException>(() => ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule)));
+            Assert.That(error.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(count + 1));
+            Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
+            YLCoreStartupProbeModule.ConstructorAction = null;
+            var request = ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
+            ownedModules.Add(request.Module);
+            yield return AwaitStartup(request);
+            Assert.That(request.Module.State, Is.EqualTo(ModuleState.Running));
+        }
+
+        [UnityTest]
+        public IEnumerator NestedStartupKeepsExecutingOwnerContextAndOuterFailurePreservesSuccessfulInnerCurrent()
+        {
+            var outer = new YLCoreStartupProbeModule();
+            var inner = new YLCoreConsumerModule();
+            var getCurrent = typeof(ModuleManager).GetMethod("GetCurrentModule", BindingFlags.Static | BindingFlags.NonPublic);
+            outer.StartAction = () =>
+            {
+                Assert.That(getCurrent.Invoke(null, null), Is.SameAs(outer));
+                var nested = StartOwned(inner);
+                Assert.That(nested.isDone, Is.True);
+                Assert.That(nested.error, Is.Null.Or.Empty);
+                Assert.That(getCurrent.Invoke(null, null), Is.SameAs(outer), "The active OnStart context owns automatic View loading.");
+                throw new InvalidOperationException("outer startup failure after inner success");
+            };
+            var request = StartOwned(outer);
+            Assert.That(request.isDone, Is.True);
+            Assert.That(request.error, Does.Contain("outer startup failure after inner success"));
+            Assert.That(outer.State, Is.EqualTo(ModuleState.StartFailed));
+            Assert.That(inner.State, Is.EqualTo(ModuleState.Running));
+            Assert.That(getCurrent.Invoke(null, null), Is.SameAs(inner));
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(inner));
+            yield return null;
         }
 
         [UnityTest]
@@ -733,8 +900,7 @@ namespace YLFramework.Core.Tests
             while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
             Assert.That(request.isDone, Is.True, "Module startup exceeded the five-second timeout.");
             Assert.That(request.error, Is.Null.Or.Empty);
-            // Let the backend's request-cache waiter release this key before a restart.
-            yield return null;
+            // Core不依赖后端缓存释放；完成当帧即可关闭或重启。
         }
 
         private static void AssertIndexesEmpty(YLFramework.Core.Module module)
