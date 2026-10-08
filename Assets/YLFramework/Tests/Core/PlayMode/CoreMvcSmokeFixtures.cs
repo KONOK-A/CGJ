@@ -1,0 +1,99 @@
+using System.Collections.Generic;
+
+namespace YLFramework.Core.Tests
+{
+    public sealed class YLCoreLifecycleModule : YLFramework.Core.Module
+    {
+        public readonly List<string> Events = new List<string>();
+        public bool SeedMvc;
+        public int StartCount;
+        public int CloseCount;
+        public bool RegisteredAtStart;
+        public bool RegisteredAtClose;
+        public string ProjectNameAtStart;
+        public YLCoreProbeModel StartedModel;
+        public YLCoreProbeController StartedController;
+
+        public override void OnStart()
+        {
+            StartCount++;
+            Events.Add("module.start");
+            RegisteredAtStart = ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(ModuleName), this);
+            ProjectNameAtStart = ProjectName;
+            if (!SeedMvc) return;
+
+            StartedModel = new YLCoreProbeModel { Id = 101, Events = Events };
+            AddModel(StartedModel);
+            StartedController = LoadController<YLCoreProbeController>(false);
+        }
+
+        protected override void OnClose()
+        {
+            CloseCount++;
+            Events.Add("module.close");
+            RegisteredAtClose = ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(ModuleName), this);
+        }
+    }
+
+    public sealed class YLCoreConsumerModule : YLFramework.Core.Module
+    {
+        public override void OnStart() { }
+    }
+
+    public sealed class YLCoreBaseProbeModule : YLFramework.Core.Module
+    {
+        // Only the fixture may make its own base module closable during cleanup.
+        public bool AllowClose;
+        public override bool BaseModule => !AllowClose;
+        public override void OnStart() { }
+    }
+
+    public class YLCoreProbeModel : YLFramework.Core.Model
+    {
+        public int InitCount;
+        public int ExitCount;
+        public bool RegisteredAtInit;
+        public bool RegisteredAtExit;
+        public List<string> Events;
+
+        public override void OnInit()
+        {
+            InitCount++;
+            RegisteredAtInit = ReferenceEquals(Module.GetModel(GetType(), (int)Id), this);
+            if (Events != null) Events.Add("model.init");
+        }
+
+        public override void OnExit()
+        {
+            ExitCount++;
+            RegisteredAtExit = ReferenceEquals(Module.GetModel(GetType(), (int)Id), this);
+            if (Events != null) Events.Add("model.exit");
+        }
+    }
+
+    public sealed class YLCoreDerivedProbeModel : YLCoreProbeModel { }
+
+    public sealed class YLCoreProbeController : YLFramework.Core.Controller
+    {
+        public int InitCount;
+        public int ExitCount;
+        public YLFramework.Core.Module OwnerAtInit;
+        public YLFramework.Core.Module OwnerAtExit;
+
+        public override void OnInit()
+        {
+            InitCount++;
+            OwnerAtInit = Module;
+            var lifecycle = Module as YLCoreLifecycleModule;
+            if (lifecycle != null) lifecycle.Events.Add("controller.init");
+        }
+
+        public override void OnExit()
+        {
+            ExitCount++;
+            OwnerAtExit = Module;
+            var lifecycle = Module as YLCoreLifecycleModule;
+            if (lifecycle != null) lifecycle.Events.Add("controller.exit");
+        }
+    }
+}

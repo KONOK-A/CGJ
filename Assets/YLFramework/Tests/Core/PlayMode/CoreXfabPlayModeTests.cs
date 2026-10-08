@@ -1,0 +1,596 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+using XFABManager;
+using Object = UnityEngine.Object;
+
+namespace YLFramework.Core.Tests
+{
+    public class CoreXfabPlayModeTests
+    {
+        private const float Timeout = 10f;
+        private const BindingFlags StaticPrivate = BindingFlags.Static | BindingFlags.NonPublic;
+        private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+        private readonly List<GameObject> ownedObjects = new List<GameObject>();
+        private readonly List<Object> ownedAssets = new List<Object>();
+        private CoreClassPoolScope classPool;
+        private readonly HashSet<int> prefabKeys = new HashSet<int>();
+        private readonly HashSet<int> previousEventSystems = new HashSet<int>();
+        private readonly Dictionary<YLFramework.Core.UIType, Canvas> ownedCanvases =
+            new Dictionary<YLFramework.Core.UIType, Canvas>();
+        private YLCoreSmokeModule module;
+        private YLCoreSmokeRow row;
+        private object moduleManager;
+        private object previousCurrent;
+        private object previousPanelManager;
+        private object previousLoader;
+        private GameObject previousManagerEventSystem;
+        private Scene previousActive;
+        private bool ownsScene;
+        private bool singleSceneTest;
+        private bool initialized;
+        private bool timedOut;
+        private Action<Canvas> canvasCallback;
+
+        [SetUp]
+        public void SetUp()
+        {
+            initialized = false;
+            timedOut = false;
+            ownsScene = singleSceneTest = false;
+            ownedObjects.Clear();
+            ownedAssets.Clear();
+            classPool = new CoreClassPoolScope();
+            prefabKeys.Clear();
+            previousEventSystems.Clear();
+            ownedCanvases.Clear();
+            module = null;
+            row = null;
+            canvasCallback = null;
+            previousActive = SceneManager.GetActiveScene();
+            foreach (var system in Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                previousEventSystems.Add(system.gameObject.GetInstanceID());
+            previousLoader = Singleton(typeof(GameObjectLoader));
+            previousPanelManager = Singleton(typeof(YLFramework.Core.PanelManager));
+            previousManagerEventSystem = previousPanelManager == null ? null :
+                (GameObject)Field(previousPanelManager, "_eventSystem");
+            moduleManager = typeof(YLFramework.Core.ModuleManager).GetProperty("Instance", StaticPrivate).GetValue(null);
+            previousCurrent = Field(moduleManager, "current_module");
+            initialized = true;
+
+            Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null,
+                "Never replace an externally registered fixture module.");
+            Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath).isLoaded, Is.False,
+                "The fixture scene must not already be loaded.");
+            var profile = AssetBundleManager.GetProfile(YLCoreSmokeModule.Project);
+            Assert.That(profile, Is.Not.Null);
+            Assert.That(profile.loadMode, Is.EqualTo(LoadMode.Assets), "These tests do not alter the selected XFAB Profile.");
+            Assert.That(profile.updateModel, Is.EqualTo(UpdateMode.LOCAL));
+            var project = AssetDatabase.LoadAssetAtPath<XFABProject>(YLCoreSmokeModule.FixtureRoot + "/YLCoreSmokeModule.asset");
+            Assert.That(project, Is.Not.Null, "Run CoreSmokeAssetFixture.CreateOrValidate in Edit Mode first.");
+            Assert.That(project.name, Is.EqualTo(YLCoreSmokeModule.Project));
+            Assert.That(XFABProjectManager.Instance.GetProject(YLCoreSmokeModule.Project), Is.SameAs(project),
+                "Create the fixture before entering Play Mode; do not refresh global project caches during a test.");
+            foreach (string name in new[] { nameof(YLCoreSmokeView), nameof(YLCoreSmokePanel) })
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(YLCoreSmokeModule.FixtureRoot + "/" + name + ".prefab");
+                Assert.That(prefab, Is.Not.Null, name);
+                int key = prefab.GetHashCode();
+                if (previousLoader != null)
+                    Assert.That(((IDictionary)Field(previousLoader, "allPools")).Contains(key), Is.False,
+                        "Fixture prefab already has a pool owned by another caller: " + name);
+                prefabKeys.Add(key);
+            }
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            if (!initialized) yield break;
+            // A timeout exits this isolated PlayMode session. Producers are not cancellable by Abort.
+            if (timedOut) yield break;
+            var failures = new List<Exception>();
+            void Attempt(Action action)
+            {
+                try { action(); }
+                catch (Exception error) { failures.Add(error); }
+            }
+            // Include cached instances created by a failed type-check request, not just returned Views.
+            var loader = Singleton(typeof(GameObjectLoader));
+            Attempt(() =>
+            {
+                if (loader == null) return;
+                var pools = (IDictionary)Field(loader, "allPools");
+                foreach (int key in prefabKeys)
+                {
+                    if (!pools.Contains(key)) continue;
+                    foreach (object info in ((IDictionary)Field(pools[key], "allObjs")).Values)
+                        Own((GameObject)info.GetType().GetProperty("Obj").GetValue(info));
+                }
+            });
+            Attempt(() =>
+            {
+                if (module == null || !ReferenceEquals(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), module)) return;
+                row = module.GetModel<YLCoreSmokeRow>(101);
+                module.Close();
+            });
+            Attempt(() => typeof(YLFramework.Core.ModuleManager).GetField("current_module", InstancePrivate).SetValue(moduleManager, previousCurrent));
+            if (canvasCallback != null) YLFramework.Core.PanelManager.onCreateCanvas -= canvasCallback;
+            Attempt(CleanPanelManager);
+            Attempt(() =>
+            {
+                if (loader == null) return;
+                var pools = (IDictionary)Field(loader, "allPools");
+                var mappings = (IDictionary)Field(loader, "allObjPoolMapping");
+                var keys = new List<object>();
+                foreach (DictionaryEntry mapping in mappings)
+                    if (prefabKeys.Contains((int)mapping.Value)) keys.Add(mapping.Key);
+                foreach (object key in keys) mappings.Remove(key);
+                foreach (int key in prefabKeys) pools.Remove(key);
+            });
+            Attempt(() => classPool.Restore(new Module[] { module }));
+            foreach (var obj in ownedObjects) if (obj) Attempt(() => Object.Destroy(obj));
+            foreach (var asset in ownedAssets) if (asset) Attempt(() => AssetBundleManager.UnloadAsset(asset));
+
+            if (singleSceneTest && (!previousActive.IsValid() || !previousActive.isLoaded))
+            {
+                // Single is opt-in and only accepts this managed empty harness as the original scene.
+                yield return AwaitUnity(EditorSceneManager.LoadSceneAsyncInPlayMode(YLCoreSmokeModule.HarnessPath,
+                    new LoadSceneParameters(LoadSceneMode.Additive)), "restore fixture harness");
+                previousActive = SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath);
+            }
+            if (previousActive.IsValid() && previousActive.isLoaded) SceneManager.SetActiveScene(previousActive);
+            var scene = SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath);
+            if (ownsScene && scene.IsValid() && scene.isLoaded)
+                yield return AwaitUnity(SceneManager.UnloadSceneAsync(scene), "unload fixture scene");
+            yield return null;
+            initialized = false;
+            if (failures.Count > 0) throw new AggregateException("XFAB fixture cleanup failed.", failures);
+            Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+            foreach (var obj in ownedObjects) Assert.That(obj == null, Is.True, "Fixture object survived cleanup.");
+
+            // Framework hosts run shared pool/resource maintenance coroutines, even when first
+            // created by this test. Keep those services alive; do not orphan or duplicate their checkers.
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator RepeatedFixtureSessionsRemoveOwnedPoolsWithoutDestroyingMaintenanceHosts()
+        {
+            for (var cycle = 0; cycle < 2; cycle++)
+            {
+                yield return NamedPanelsUseRealManagerCanvasEventSystemAsyncAndCacheIndexes();
+                var backendHost = Object.FindObjectsByType<XFABManager.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                var foundationHost = Object.FindObjectsByType<YLFramework.Foundation.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                yield return TearDown();
+                CollectionAssert.AreEquivalent(backendHost,
+                    Object.FindObjectsByType<XFABManager.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None));
+                CollectionAssert.AreEquivalent(foundationHost,
+                    Object.FindObjectsByType<YLFramework.Foundation.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None));
+                var loader = Singleton(typeof(GameObjectLoader));
+                var pools = (IDictionary)Field(loader, "allPools");
+                foreach (var key in prefabKeys) Assert.That(pools.Contains(key), Is.False);
+                if (cycle == 0) SetUp();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator StartupDeserializesRealJsonIntoOwnedCoreModel()
+        {
+            yield return StartModule();
+            Assert.That(module.ProjectName, Is.EqualTo(YLCoreSmokeModule.Project));
+            Assert.That(module.RowReadyAtStart, Is.True);
+            Assert.That(module.StartCount, Is.EqualTo(1));
+            row = module.GetModel<YLCoreSmokeRow>(101);
+            Assert.That(row, Is.InstanceOf<YLFramework.Core.Model>());
+            Assert.That(row.Marker, Is.EqualTo("yl-smoke"));
+            Assert.That(row.Module, Is.SameAs(module));
+            Assert.That(row.InitCount, Is.EqualTo(1));
+            Assert.That(module.GetModels<YLCoreSmokeRow>(), Is.EqualTo(new[] { row }));
+            module.Close();
+            Assert.That(row.ExitCount, Is.EqualTo(1));
+            Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator XfabLoadsRealPrefabAndTextSynchronouslyAndAsynchronously()
+        {
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            Assert.That(prefab.GetComponent<YLCoreSmokeView>(), Is.Not.Null);
+            var text = LoadFixture<TextAsset>(YLCoreSmokeModule.Table);
+            Assert.That(text.text, Is.EqualTo(YLCoreSmokeModule.Json));
+            foreach (string name in new[] { nameof(YLCoreSmokeView), YLCoreSmokeModule.Table })
+            {
+                var request = name == YLCoreSmokeModule.Table
+                    ? AssetBundleManager.LoadAssetAsync<TextAsset>(YLCoreSmokeModule.Project, name)
+                    : AssetBundleManager.LoadAssetAsync<GameObject>(YLCoreSmokeModule.Project, name);
+                int callbacks = 0;
+                bool callbackComplete = false;
+                request.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    callbackComplete = done.isDone && !done.keepWaiting && done.progress == 1f && string.IsNullOrEmpty(done.error);
+                });
+                yield return Await(() => request.isDone, "XFAB LoadAssetAsync " + name);
+                Assert.That(request.error, Is.Null.Or.Empty);
+                Assert.That(request.asset, Is.SameAs(name == YLCoreSmokeModule.Table ? (Object)text : prefab));
+                Assert.That(callbacks, Is.EqualTo(1));
+                Assert.That(callbackComplete, Is.True);
+                OwnAsset(request.asset);
+                yield return null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator NamedViewLoadAndAsyncInitializeArgsCallbacksIndexesAndReuseCache()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var parent = Own(new GameObject("YLCoreSmoke.ViewParent")).transform;
+            var args = NewArgs();
+            args.SetInt("token", 41);
+            var view = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: args));
+            AssertView(view, parent, 41, 1);
+            YLFramework.Core.EventManager.TriggerEvent(YLFramework.Core.EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+            Assert.That(view.EventCount, Is.EqualTo(1));
+            view.Close();
+            AssertRemoved(view, nameof(YLCoreSmokeView));
+            var nextArgs = NewArgs();
+            nextArgs.SetInt("token", 73);
+            var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: nextArgs);
+            int callbacks = 0;
+            bool completeState = false;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                completeState = done.isDone && !done.keepWaiting && done.progress == 1f && string.IsNullOrEmpty(done.error);
+                Track(done.view);
+            });
+            yield return Await(() => request.isDone, "Core named LoadViewAsync");
+            Assert.That(request.error, Is.Null.Or.Empty);
+            Assert.That(request.view, Is.SameAs(view));
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(completeState, Is.True);
+            AssertView(request.view, parent, 73, 2);
+            int late = 0;
+            request.AddCompleteEvent(_ => late++);
+            Assert.That(late, Is.EqualTo(1));
+            yield return null;
+            Assert.That(view.LoadedCount, Is.EqualTo(2), "View.Start must not initialize a loader-owned view again.");
+            module.Close();
+            Assert.That(view.RemovedCount, Is.EqualTo(2));
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator NamedPanelsUseRealManagerCanvasEventSystemAsyncAndCacheIndexes()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            Assert.That(prefab.GetComponent<Canvas>(), Is.Null);
+            Assert.That(prefab.GetComponent<RectTransform>(), Is.Not.Null);
+            Transform parent = PanelParent();
+            var args = NewArgs();
+            args.SetInt("token", 17);
+            var first = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                YLFramework.Core.UIType.UI, parent, loadViewArgs: args));
+            AssertPanel(first, 17, 1);
+            if (previousPanelManager == null)
+            {
+                var canvas = YLFramework.Core.PanelManager.UICanvas[YLFramework.Core.UIType.UI];
+                Assert.That(first.transform.parent, Is.SameAs(canvas.transform));
+                Assert.That(canvas.name, Is.EqualTo(Resources.Load<GameObject>("YLFramework/Core/Canvas").name + "(Clone)"));
+                Assert.That(ownedCanvases[YLFramework.Core.UIType.UI], Is.SameAs(canvas));
+            }
+            else Assert.That(first.transform.parent, Is.SameAs(parent));
+            Assert.That(Singleton(typeof(YLFramework.Core.PanelManager)), Is.Not.Null);
+            Assert.That(EventSystem.current, Is.Not.Null);
+            var managerSystem = (GameObject)Field(Singleton(typeof(YLFramework.Core.PanelManager)), "_eventSystem");
+            if (managerSystem && !previousEventSystems.Contains(managerSystem.GetInstanceID()))
+            {
+                Assert.That(managerSystem.GetComponent<EventSystem>(), Is.SameAs(EventSystem.current));
+                Assert.That(managerSystem.name, Is.EqualTo("EventSystem(Created By YLFramework.Core)"));
+            }
+            var canvasOnPanel = first.Canvas;
+            first.Close();
+            AssertRemoved(first, nameof(YLCoreSmokePanel));
+            Assert.That(((IDictionary)Field(Singleton(typeof(YLFramework.Core.PanelManager)), "uiOrders")).Contains(first), Is.False);
+            var nextArgs = NewArgs();
+            nextArgs.SetInt("token", 29);
+            var request = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                YLFramework.Core.UIType.UI, parent, loadViewArgs: nextArgs);
+            int callbacks = 0;
+            bool completeState = false;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                completeState = done.isDone && done.progress == 1f && !done.keepWaiting && string.IsNullOrEmpty(done.error);
+                Track(done.panel);
+            });
+            yield return Await(() => request.isDone, "Core named LoadPanelAsync");
+            Assert.That(request.error, Is.Null.Or.Empty);
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(completeState, Is.True);
+            Assert.That(request.panel, Is.SameAs(first));
+            Assert.That(first.Canvas, Is.SameAs(canvasOnPanel));
+            Assert.That(first.GetComponents<Canvas>(), Has.Length.EqualTo(1));
+            AssertPanel(first, 29, 2);
+            module.Close();
+            Assert.That(first.RemovedCount, Is.EqualTo(2));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+            Assert.That(((IDictionary)Field(Singleton(typeof(YLFramework.Core.PanelManager)), "uiOrders")).Contains(first), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator XfabAdditiveSceneRunsIndependentEntryWithoutReplacingActiveScene()
+        {
+            yield return StartModule();
+            Scene active = SceneManager.GetActiveScene();
+            ownsScene = true;
+            var request = AssetBundleManager.LoadSceneAsynchrony(YLCoreSmokeModule.Project,
+                YLCoreSmokeModule.SceneName, LoadSceneMode.Additive);
+            int callbacks = 0;
+            request.AddCompleteEvent(_ => callbacks++);
+            yield return Await(() => request.isDone, "XFAB additive scene");
+            Assert.That(request.error, Is.Null.Or.Empty);
+            Assert.That(request.progress, Is.EqualTo(1f));
+            Assert.That(request.keepWaiting, Is.False);
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(request.Scene.IsValid() && request.Scene.isLoaded, Is.True);
+            Assert.That(request.Scene.path, Is.EqualTo(YLCoreSmokeModule.ScenePath));
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(active));
+            yield return AssertSceneEntry(request.Scene);
+        }
+
+        [UnityTest]
+        public IEnumerator IncompatibleExistingPrefabCompletesViewFailureCallbackWithoutRegisteringView()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var parent = Own(new GameObject("YLCoreSmoke.FailureParent")).transform;
+            // Missing names hit the upstream null-prefab/hanging Assets branch. A valid prefab with
+            // the wrong component exercises the public failure contract without an unhandled coroutine exception.
+            var request = module.LoadViewAsync<YLCoreSmokePanel>(nameof(YLCoreSmokeView), parent, loadViewArgs: null);
+            int callbacks = 0;
+            string callbackError = null;
+            request.AddCompleteEvent(done => { callbacks++; callbackError = done.error; });
+            yield return Await(() => request.isDone, "incompatible View request");
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(callbackError, Is.Not.Null.And.Not.Empty);
+            StringAssert.Contains("View", callbackError);
+            Assert.That(request.error, Is.EqualTo(callbackError));
+            Assert.That(request.progress, Is.EqualTo(1f));
+            Assert.That(request.keepWaiting, Is.False);
+            Assert.That(request.view, Is.Null);
+            Assert.That(module.GetViews(nameof(YLCoreSmokeView)), Is.Empty);
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator DefaultStartupSceneUsesSingleAndRealFixtureEntry()
+        {
+            Assert.That(YLFramework.Core.ModuleManager.AllModules, Is.Empty);
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                Scene scene = SceneManager.GetSceneAt(i);
+                Assert.That(scene.isDirty, Is.False);
+                if (scene.path == YLCoreSmokeModule.HarnessPath)
+                    Assert.That(scene.GetRootGameObjects(), Is.Empty);
+                else
+                {
+                    // Unity Test Runner's own temporary scene is allowed, but not user objects.
+                    foreach (var root in scene.GetRootGameObjects())
+                    {
+                        var behaviours = root.GetComponentsInChildren<MonoBehaviour>(true);
+                        Assert.That(behaviours, Is.Not.Empty, "Unexpected non-runner root: " + root.name);
+                        foreach (var behaviour in behaviours)
+                            Assert.That(behaviour && behaviour.GetType().Assembly.GetName().Name == "UnityEngine.TestRunner",
+                                Is.True, "Single would unload a non-runner object: " + root.name);
+                    }
+                    Assert.That(string.IsNullOrEmpty(scene.path) || scene.name.StartsWith("InitTestScene", StringComparison.Ordinal),
+                        Is.True, "Single would unload a non-fixture scene: " + scene.path);
+                }
+            }
+            if (previousActive.path != YLCoreSmokeModule.HarnessPath)
+            {
+                yield return AwaitUnity(EditorSceneManager.LoadSceneAsyncInPlayMode(YLCoreSmokeModule.HarnessPath,
+                    new LoadSceneParameters(LoadSceneMode.Additive)), "load owned empty harness");
+                previousActive = SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath);
+                Assert.That(previousActive.GetRootGameObjects(), Is.Empty);
+                SceneManager.SetActiveScene(previousActive);
+            }
+            singleSceneTest = ownsScene = true;
+            yield return StartModule(true);
+            var loaded = SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath);
+            Assert.That(loaded.IsValid() && loaded.isLoaded, Is.True);
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(loaded));
+            Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath).isLoaded, Is.False);
+            Assert.That(module.SceneReadyAtStart, Is.True, "Startup can ignore scene errors; verify the actual loaded scene.");
+            Assert.That(module.RowReadyAtStart, Is.True);
+            yield return AssertSceneEntry(loaded);
+        }
+
+        private IEnumerator StartModule(bool withScene = false)
+        {
+            module = new YLCoreSmokeModule { StartWithScene = withScene };
+            var request = YLFramework.Core.ModuleManager.StartUpModule(module);
+            Assert.That(request, Is.Not.Null);
+            yield return Await(() => request.isDone, "Core startup");
+            Assert.That(request.error, Is.Null.Or.Empty);
+            Assert.That(request.Module, Is.SameAs(module));
+            Assert.That(request.progress, Is.EqualTo(1f));
+            Assert.That(request.keepWaiting, Is.False);
+            Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.SameAs(module));
+            row = module.GetModel<YLCoreSmokeRow>(101);
+            Assert.That(row, Is.Not.Null, "Assets requests can complete without an asset; startup success alone is insufficient.");
+            yield return null;
+        }
+
+        private T LoadFixture<T>(string name) where T : Object
+        {
+            var asset = AssetBundleManager.LoadAsset<T>(YLCoreSmokeModule.Project, name);
+            Assert.That(asset, Is.Not.Null, name);
+            string path = AssetDatabase.GetAssetPath(asset);
+            Assert.That(path.StartsWith(YLCoreSmokeModule.FixtureRoot + "/", StringComparison.Ordinal), Is.True);
+            OwnAsset(asset);
+            return asset;
+        }
+
+        private Transform PanelParent()
+        {
+            if (previousPanelManager != null)
+                return Own(new GameObject("YLCoreSmoke.PanelParent", typeof(RectTransform), typeof(Canvas))).transform;
+            canvasCallback = canvas =>
+            {
+                var manager = Singleton(typeof(YLFramework.Core.PanelManager));
+                foreach (var pair in (Dictionary<YLFramework.Core.UIType, Canvas>)Field(manager, "uiCanvas"))
+                    if (ReferenceEquals(pair.Value, canvas)) ownedCanvases[pair.Key] = canvas;
+                Own(canvas.gameObject);
+            };
+            YLFramework.Core.PanelManager.onCreateCanvas += canvasCallback;
+            return null;
+        }
+
+        private void AssertView(YLCoreSmokeView view, Transform parent, int token, int loads)
+        {
+            Assert.That(view, Is.Not.Null);
+            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.transform.parent, Is.SameAs(parent));
+            Assert.That(view.Token, Is.EqualTo(token));
+            Assert.That(view.LoadedCount, Is.EqualTo(loads));
+            Assert.That(view.ArgsCount, Is.EqualTo(loads));
+            Assert.That(module.GetView<YLCoreSmokeView>(nameof(YLCoreSmokeView), view.Id), Is.SameAs(view));
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { view }));
+        }
+
+        private void AssertPanel(YLCoreSmokePanel panel, int token, int loads)
+        {
+            Assert.That(panel, Is.Not.Null);
+            Assert.That(panel.Module, Is.SameAs(module));
+            Assert.That(panel.Token, Is.EqualTo(token));
+            Assert.That(panel.LoadedCount, Is.EqualTo(loads));
+            Assert.That(panel.ArgsCount, Is.EqualTo(loads));
+            Assert.That(panel.UIType, Is.EqualTo(YLFramework.Core.UIType.UI));
+            Assert.That(panel.Canvas, Is.SameAs(panel.GetComponent<Canvas>()));
+            Assert.That(panel.Canvas.overrideSorting, Is.True);
+            Assert.That(panel.GetComponent<UnityEngine.UI.GraphicRaycaster>(), Is.Not.Null);
+            Assert.That(panel.Canvas.sortingOrder, Is.EqualTo(panel.SortingOrder + module.UIStartSortOrder));
+            Assert.That(module.GetView<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), panel.Id), Is.SameAs(panel));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { panel }));
+            var orders = (IDictionary)Field(Singleton(typeof(YLFramework.Core.PanelManager)), "uiOrders");
+            Assert.That(orders.Contains(panel), Is.True);
+            Assert.That(orders[panel], Is.EqualTo(panel.SortingOrder));
+        }
+
+        private void AssertRemoved(YLFramework.Core.View view, string name)
+        {
+            Assert.That(view.gameObject.activeSelf, Is.False);
+            Assert.That(module.GetView(name, view.Id), Is.Null);
+            Assert.That(module.GetViews(name), Is.Empty);
+            var smokeView = view as YLCoreSmokeView;
+            var smokePanel = view as YLCoreSmokePanel;
+            Assert.That(smokeView ? smokeView.RemovedCount : smokePanel.RemovedCount, Is.EqualTo(1));
+        }
+
+        private IEnumerator AssertSceneEntry(Scene scene)
+        {
+            var roots = scene.GetRootGameObjects();
+            Assert.That(roots, Has.Length.EqualTo(1));
+            var entry = roots[0].GetComponent<YLCoreSmokeSceneEntry>();
+            Assert.That(entry, Is.Not.Null);
+            yield return Await(() => entry && entry.StartCount == 1, "fixture scene entry Start");
+            Assert.That(entry.ModuleAtStart, Is.SameAs(module));
+        }
+
+        private void CleanPanelManager()
+        {
+            var manager = Singleton(typeof(YLFramework.Core.PanelManager));
+            if (manager == null) return;
+            var canvases = (Dictionary<YLFramework.Core.UIType, Canvas>)Field(manager, "uiCanvas");
+            foreach (var pair in ownedCanvases)
+                if (canvases.TryGetValue(pair.Key, out var current) && ReferenceEquals(current, pair.Value)) canvases.Remove(pair.Key);
+            var system = (GameObject)Field(manager, "_eventSystem");
+            if (system && !previousEventSystems.Contains(system.GetInstanceID()))
+            {
+                Own(system);
+                manager.GetType().GetField("_eventSystem", InstancePrivate).SetValue(manager, previousManagerEventSystem);
+            }
+            if (previousPanelManager != null) return;
+            if (((IDictionary)Field(manager, "uiOrders")).Count != 0 ||
+                ((IDictionary)Field(manager, "dontDestroyUIOrders")).Count != 0 || canvases.Count != 0 ||
+                ((IList)Field(manager, "panelQueues")).Count != 0) return;
+            var type = typeof(YLFramework.Core.PanelManager);
+            YLFramework.Core.EventManager.RemoveEvent<YLFramework.Core.View>(YLFramework.Core.XFGameFrameworkEvents.ON_REMOVE_VIEW,
+                (YLFramework.Core.XFEvent<YLFramework.Core.View>)Delegate.CreateDelegate(
+                    typeof(YLFramework.Core.XFEvent<YLFramework.Core.View>), type.GetMethod("OnRemoveView", StaticPrivate)));
+            SceneManager.sceneLoaded -= (UnityEngine.Events.UnityAction<Scene, LoadSceneMode>)Delegate.CreateDelegate(
+                typeof(UnityEngine.Events.UnityAction<Scene, LoadSceneMode>), type.GetMethod("OnSceneLoaded", StaticPrivate));
+            // Instance never registers LateUpdate; this fixture never toggles MultiPanelListener.
+            ResetNewSingleton(type);
+        }
+
+        private YLFramework.Core.LoadViewArgs NewArgs()
+        {
+            var args = YLFramework.Core.LoadViewArgs.New();
+            classPool.Track(args);
+            return args;
+        }
+
+        private T Track<T>(T view) where T : YLFramework.Core.View
+        {
+            if (view) Own(view.gameObject);
+            return view;
+        }
+
+        private GameObject Own(GameObject obj)
+        {
+            if (obj && !ownedObjects.Contains(obj)) ownedObjects.Add(obj);
+            return obj;
+        }
+
+        private void OwnAsset(Object asset)
+        {
+            if (asset && !ownedAssets.Contains(asset)) ownedAssets.Add(asset);
+        }
+
+        private IEnumerator Await(Func<bool> done, string label)
+        {
+            float deadline = Time.realtimeSinceStartup + Timeout;
+            while (!done() && Time.realtimeSinceStartup < deadline) yield return null;
+            if (done()) yield break;
+            // Abort only marks these operations complete. Stop the entire test session instead of
+            // allowing a still-running producer to mutate the next test after ownership cleanup.
+            timedOut = true;
+            EditorApplication.isPlaying = false;
+            Assert.Fail(label + " exceeded the ten-second realtime timeout; isolated PlayMode is stopping.");
+        }
+
+        private IEnumerator AwaitUnity(AsyncOperation operation, string label)
+        {
+            Assert.That(operation, Is.Not.Null, label);
+            yield return Await(() => operation.isDone, label);
+        }
+
+        private static object Singleton(Type type) => type.GetField("_instance", StaticPrivate).GetValue(null);
+        private static object Field(object target, string name) => target.GetType().GetField(name, InstancePrivate).GetValue(target);
+
+        private static void ResetNewSingleton(Type type)
+        {
+            EditorApplication.playModeStateChanged -= (Action<PlayModeStateChange>)Delegate.CreateDelegate(
+                typeof(Action<PlayModeStateChange>), type.GetMethod("EditorApplication_playModeStateChanged", StaticPrivate));
+            type.GetField("_instance", StaticPrivate).SetValue(null, null);
+        }
+
+    }
+}
+#endif
