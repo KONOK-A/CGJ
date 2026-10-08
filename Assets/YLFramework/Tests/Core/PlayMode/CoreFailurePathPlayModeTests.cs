@@ -214,6 +214,11 @@ namespace YLFramework.Core.Tests
                 Assert.That(events, Is.EqualTo(new[] { "ordinary.last", "ordinary.first", "base.last", "base.first" }));
                 Assert.That(ModuleManager.AllModules, Is.Empty);
                 Assert.That(ModuleManager.AllBaseModules, Is.Empty);
+                var manager = typeof(ModuleManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                foreach (var name in new[] { "current_module", "startupContext" })
+                    Assert.That(typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.Null, name);
+                foreach (var name in new[] { "startingModules", "registrationOrder" })
+                    Assert.That((ICollection)typeof(ModuleManager).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.Empty, name);
                 Assert.That(model.Module, Is.Null);
                 Assert.That(model.ExitCount, Is.EqualTo(1));
                 Assert.That(YLCoreShutdownProbeModule<YLCoreProbeModel>.Instance, Is.Null);

@@ -203,6 +203,13 @@ namespace YLFramework.Core.Tests
             Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
             yield return AwaitStartup(StartOwned(rejected));
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
+            module.Close();
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(module.CloseCount, Is.EqualTo(1));
+            Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
+            Assert.That(rejected.State, Is.EqualTo(ModuleState.Running));
+            Assert.That(rejected.CloseCount, Is.Zero);
+            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(rejected));
         }
 
         [UnityTest]
