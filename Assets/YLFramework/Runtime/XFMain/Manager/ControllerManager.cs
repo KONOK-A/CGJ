@@ -40,7 +40,7 @@ namespace YLFramework.Core
             {
                 controller.IsInitializing = false;
                 try { ExitController(module, controller); }
-                catch (Exception cleanupError) { initializationError.Data["YLFramework.Core.CleanupException"] = cleanupError; }
+                catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
                 throw;
             }
         }

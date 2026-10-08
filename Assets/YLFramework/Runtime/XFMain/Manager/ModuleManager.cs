@@ -92,7 +92,7 @@ namespace YLFramework.Core
         #region 属性
 
         /// <summary>
-        /// 所有已注册模块的只读实时视图；须通过State区分运行与失败状态。
+        /// 所有已注册模块的只读实时视图；Starting可见不代表已经Running。
         /// </summary>
         public static IReadOnlyDictionary<string, Module> AllModules => Instance.allModules;
 
@@ -166,7 +166,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 按具体类型查询已注册实例；Starting可见，失败状态仍需显式清理。
+        /// 按具体类型查询已注册实例；Starting可见，启动失败回滚后不可见。
         /// </summary>
         public static Module GetModule(Type moduleType)
         {
@@ -199,16 +199,21 @@ namespace YLFramework.Core
         {
             if (module.State == ModuleState.Starting)
                 throw new InvalidOperationException($"Cannot close a starting Module: {module.ModuleName}");
+            ValidateObjectTransactions(module);
+        }
+
+        private static void ValidateObjectTransactions(Module module)
+        {
             // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
             if (module.creatingModels.Count != 0 || module.creatingControllers.Count != 0)
-                throw new InvalidOperationException("Cannot close a Module during object construction.");
+                throw new InvalidOperationException("Cannot start or close a Module during object construction.");
             foreach (var controller in module.controllers.Values)
                 if (controller.IsInitializing || controller.IsExiting)
-                    throw new InvalidOperationException("Cannot close a Module during Controller initialization or exit.");
+                    throw new InvalidOperationException("Cannot start or close a Module during Controller initialization or exit.");
             foreach (var bucket in module.models.Values)
                 foreach (var model in bucket.Values)
                     if (model.IsInitializing || model.IsExiting)
-                        throw new InvalidOperationException("Cannot close a Module during Model initialization or exit.");
+                        throw new InvalidOperationException("Cannot start or close a Module during Model initialization or exit.");
         }
 
         private static void CloseModule(Module module, bool allowBaseModule)
@@ -326,8 +331,8 @@ namespace YLFramework.Core
 
         /// <summary>
         /// 启动唯一实例；Starting返回同一请求，Running返回新的已完成成功结果。
-        /// 请求不池化；普通模块失败后必须关闭并清理才能重启，冲突在执行OnStart前抛出异常。
-        /// 基础模块失败后可显式Shutdown；启动失败的自动完整回滚留给后续阶段。
+        /// 请求不池化；启动失败先回滚逻辑所有权再通知，正确清理后可显式重启。
+        /// 基础模块同样回滚；身份冲突在建立本次请求前抛出异常，不清理实际拥有者。
         /// </summary>
         /// <param name="module">模块对象</param>
         /// <returns></returns>
@@ -356,6 +361,8 @@ namespace YLFramework.Core
                 throw new InvalidOperationException($"Module must be cleaned before restarting: {module.ModuleName} ({module.State})");
             if (module.State == ModuleState.Closed && HasRegisteredObjects(module))
                 throw new InvalidOperationException($"Closed Module still owns registered objects: {module.ModuleName}");
+            // 不能让启动回滚与尚未结束的B对象事务交叉；拒绝发生在本次注册和请求之前。
+            ValidateObjectTransactions(module);
             var request = new StartUpModuleRequest(module, CurrentModule);
             // 发布记录后才执行注册、协程和任何业务回调，支持无yield的同步完成与重入。
             module.State = ModuleState.Starting;
@@ -366,26 +373,44 @@ namespace YLFramework.Core
                 CurrentModule = module;
                 var coroutine = CoroutineStarter.Start(request.StartUp());
                 if (coroutine == null && !request.isDone)
-                    request.Finish("Module startup requires an active coroutine host.");
+                    request.Finish(new InvalidOperationException("Module startup requires an active coroutine host."));
             }
             catch (Exception error)
             {
-                if (!request.isDone) request.Finish(error.ToString());
+                if (!request.isDone) request.Finish(error);
                 else Debug.LogException(error);
             }
             return request;
         }
 
-        internal static void CompleteStartup(StartUpModuleRequest request, string error)
+        internal static void CompleteStartup(StartUpModuleRequest request, Exception error)
         {
             var module = request.Module;
             if (!Instance.startingModules.TryGetValue(module.GetType(), out var pending) || !ReferenceEquals(pending, request)) return;
-            Instance.startingModules.Remove(module.GetType());
-            module.State = string.IsNullOrEmpty(error) ? ModuleState.Running : ModuleState.StartFailed;
-            if (module.State == ModuleState.Running) CurrentModule = module;
-            else if (ReferenceEquals(CurrentModule, module))
-                CurrentModule = IsCurrentCandidate(request.PreviousCurrentModule) ? request.PreviousCurrentModule : null;
-            request.PreviousCurrentModule = null;
+            bool restoreCurrent = ReferenceEquals(CurrentModule, module);
+            try
+            {
+                if (error == null)
+                {
+                    module.State = ModuleState.Running;
+                    CurrentModule = module;
+                }
+                else if (ReferenceEquals(GetModule(module.ModuleName), module))
+                {
+                    // 启动事务已展开完毕；只绕过Starting和基础模块禁令，复用D的唯一管线。
+                    module.State = ModuleState.StartFailed;
+                    try { CloseModule(module, true); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                else module.State = request.InitialState;
+            }
+            finally
+            {
+                Instance.startingModules.Remove(module.GetType());
+                if (error != null && restoreCurrent && (CurrentModule == null || ReferenceEquals(CurrentModule, module)))
+                    CurrentModule = IsCurrentCandidate(request.PreviousCurrentModule) ? request.PreviousCurrentModule : null;
+                request.PreviousCurrentModule = null;
+            }
         }
 
         internal static bool MoveStartup(Module module, System.Collections.IEnumerator routine)

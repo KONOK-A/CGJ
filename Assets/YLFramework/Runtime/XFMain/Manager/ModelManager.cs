@@ -63,7 +63,7 @@ namespace YLFramework.Core
             {
                 model.IsInitializing = false;
                 try { ExitModel(module, model); }
-                catch (Exception cleanupError) { initializationError.Data["YLFramework.Core.CleanupException"] = cleanupError; }
+                catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
                 model.Id = originalId;
                 throw;
             }

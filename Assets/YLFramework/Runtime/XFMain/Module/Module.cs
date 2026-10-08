@@ -10,7 +10,7 @@ using UnityEngine;
 namespace YLFramework.Core
 {
     /// <summary>
-    /// 模块生命周期；失败状态仍可能持有业务对象，必须清理后才能重新启动。
+    /// 模块生命周期；启动失败复用关闭管线结束逻辑所有权后才报告。
     /// </summary>
     public enum ModuleState
     {
@@ -22,7 +22,7 @@ namespace YLFramework.Core
         Closing,
         /// <summary>已解除注册且核心对象索引无残留，允许显式重启同一实例。</summary>
         Closed,
-        /// <summary>启动失败，仍可能持有已注册对象；未完成逻辑回滚。</summary>
+        /// <summary>启动失败的内部过渡状态；回滚完成后进入Closed。</summary>
         StartFailed,
         /// <summary>保留的旧失败状态；唯一关闭管线在报告错误前已进入Closed。</summary>
         CloseFailed
@@ -58,6 +58,7 @@ namespace YLFramework.Core
 
 
         private int ui_start_sort_order = 0; // UI 初始的SortingOrder
+        private string projectName;
 
         #endregion
 
@@ -73,19 +74,22 @@ namespace YLFramework.Core
         public ModuleState State { get; internal set; } = ModuleState.Created;
 
         /// <summary>
-        /// 当前模块使用的资源模块名
+        /// XFAB资源项目名，与Module类型身份分离；默认类型短名。
+        /// 可在启动前赋值或重写，启动请求在首次加载前捕获该值，不依赖OnStart赋值。
         /// </summary>
-        public virtual string ProjectName { get; set; }
+        public virtual string ProjectName { get => projectName ?? GetType().Name; set => projectName = value; }
 
        
         /// <summary>
         /// 是否是基础模块
-        /// 基础模块不能普通关闭，只能由ModuleManager.Shutdown结束；默认false
+        /// 基础模块不能普通关闭，由ModuleManager.Shutdown或启动失败回滚结束；默认false
         /// </summary>
         public virtual bool BaseModule => false;
 
         /// <summary>
-        /// 需要预加载的配表
+        /// 必需的启动配表（资产名到Model数组类型）。空数组合法，缺失或无效文本导致启动失败。
+        /// 配表及其Bundle须启动过程专用，取文本期间不得由其他调用者并发加载或持有；
+        /// XFAB没有资源租约，框架复制文本后归还资产，再执行JSON构造与Model初始化。
         /// </summary>
 
         [Obsolete("已过时!")]

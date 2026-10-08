@@ -30,7 +30,7 @@ namespace YLFramework.Core
                 // 加载失败，尝试从基础模块中加载
                 foreach (var item in ModuleManager.AllBaseModules.Values)
                 {
-                    project_name = module.ProjectName;
+                    project_name = item.ProjectName;
                     request = GameObjectLoader.LoadAsync(project_name, asset_name, parent, sameScene);
                     yield return request;
                     if (string.IsNullOrEmpty(request.error))
@@ -78,7 +78,7 @@ namespace YLFramework.Core
                 // 加载失败，尝试从基础模块中加载
                 foreach (var item in ModuleManager.AllBaseModules.Values)
                 {
-                    project_name = module.ProjectName;
+                    project_name = item.ProjectName;
                     request = GameObjectLoader.LoadAsync(project_name, asset_name, parent, sameScene);
                     yield return request;
                     if (string.IsNullOrEmpty(request.error))

@@ -40,6 +40,15 @@ MonoBehaviour:
     - guid: 2d0060ffe0c75944ebd2ea7a962a4d92
       type: 0
       filter: 
+    - guid: f2b5fad229dcd3a42a3c1727c14ec639
+      type: 0
+      filter:
+    - guid: b1a86afe966a26848b5b30b1647af6fe
+      type: 0
+      filter:
+    - guid: 3431f86f1a15f874c91a1571d02b6492
+      type: 0
+      filter:
     projectName: YLCoreSmokeModule
     childrens: []
     bundleType: 0

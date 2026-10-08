@@ -46,6 +46,7 @@ namespace YLFramework.Core.Tests
         public void SetUp()
         {
             initialized = false;
+            YLCoreSmokeRow.InitAction = null;
             timedOut = false;
             ownsScene = singleSceneTest = false;
             ownedObjects.Clear();
@@ -97,6 +98,7 @@ namespace YLFramework.Core.Tests
         public IEnumerator TearDown()
         {
             if (!initialized) yield break;
+            YLCoreSmokeRow.InitAction = null;
             // A timeout exits this isolated PlayMode session. Producers are not cancellable by Abort.
             if (timedOut) yield break;
             var failures = new List<Exception>();
@@ -233,6 +235,153 @@ namespace YLFramework.Core.Tests
             module.Close();
             Assert.That(row.ExitCount, Is.EqualTo(1));
             Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator StartupDistinguishesMissingBlankInvalidAndEmptyArrayTables()
+        {
+            foreach (string name in new[] { string.Empty, "YLCoreMissingRows", YLCoreSmokeModule.BlankTable, YLCoreSmokeModule.InvalidTable, YLCoreSmokeModule.EmptyTable })
+            {
+                module = new YLCoreSmokeModule { TableName = name };
+                Assert.That(module.ProjectName, Is.EqualTo(YLCoreSmokeModule.Project), "Default identity exists before any resource request.");
+                var request = YLFramework.Core.ModuleManager.StartUpModule(module);
+                int callbacks = 0;
+                request.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    Assert.That(module.State, Is.EqualTo(name == YLCoreSmokeModule.EmptyTable ? ModuleState.Running : ModuleState.Closed));
+                    if (name != YLCoreSmokeModule.EmptyTable)
+                        Assert.That(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), Is.Null);
+                });
+                yield return Await(() => request.isDone, "Core startup table " + name);
+                Assert.That(callbacks, Is.EqualTo(1));
+                Assert.That(module.GetModels<Model>(), Is.Empty);
+                if (name == YLCoreSmokeModule.EmptyTable)
+                {
+                    Assert.That(request.error, Is.Null.Or.Empty);
+                    Assert.That(request.Exception, Is.Null);
+                    Assert.That(module.StartCount, Is.EqualTo(1));
+                    module.Close();
+                }
+                else
+                {
+                    Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+                    Assert.That(request.Exception, Is.Not.Null);
+                    Assert.That(module.StartCount, Is.Zero);
+                }
+                yield return null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator BaseStartupUsesItsExplicitResourceProjectInsteadOfCurrentModule()
+        {
+            var current = new YLCoreConsumerModule { ProjectName = "YLCoreUnrelatedCurrentProject" };
+            var baseModule = new YLCoreResourceProjectModule { ProjectName = YLCoreSmokeModule.Project };
+            try
+            {
+                Assert.That(YLFramework.Core.ModuleManager.StartUpModule(current).error, Is.Null.Or.Empty);
+                var startup = YLFramework.Core.ModuleManager.StartUpModule(baseModule);
+                yield return Await(() => startup.isDone, "base module explicit resource project");
+                Assert.That(startup.error, Is.Null.Or.Empty);
+                Assert.That(baseModule.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(baseModule.ProjectName, Is.EqualTo(YLCoreSmokeModule.Project));
+                Assert.That(baseModule.ModuleName, Is.EqualTo(typeof(YLCoreResourceProjectModule).FullName));
+                var loaded = baseModule.GetModel<YLCoreSmokeRow>(101);
+                Assert.That(loaded, Is.Not.Null);
+                Assert.That(loaded.Module, Is.SameAs(baseModule));
+                Assert.That(YLFramework.Core.ModuleManager.AllBaseModules[baseModule.ModuleName], Is.SameAs(baseModule));
+                Assert.That(current.GetModels<Model>(), Is.Empty);
+            }
+            finally
+            {
+                // 仅fixture结束自己的基础模块，不对全工程调用Shutdown。
+                baseModule.AllowClose = true;
+                baseModule.Close();
+                current.Close();
+                classPool.Restore(new Module[] { baseModule, current });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TemporaryTableCacheEntryIsReturnedBeforeModelInitializationAndOnInvalidJson()
+        {
+            // Assets模式不建立AB缓存；仅为自己的TextAsset登记可控条目，验证归还调用而非AB物理卸载。
+            var addCache = typeof(AssetBundleManager).GetMethod("AddAssetCache", StaticPrivate, null,
+                new[] { typeof(string), typeof(string), typeof(object) }, null);
+            Assert.That(addCache, Is.Not.Null);
+            var backend = Singleton(typeof(AssetBundleManager));
+            var hashes = (IDictionary)Field(backend, "asset_hash_project_name");
+            foreach (string name in new[] { YLCoreSmokeModule.Table, YLCoreSmokeModule.EmptyTable, YLCoreSmokeModule.BlankTable, YLCoreSmokeModule.InvalidTable })
+            {
+                var text = AssetDatabase.LoadAssetAtPath<TextAsset>(YLCoreSmokeModule.FixtureRoot + "/" + name + ".json");
+                Assert.That(text, Is.Not.Null);
+                Assert.That(hashes.Contains(text.GetHashCode()), Is.False, "Never assume ownership of an external cache entry.");
+                bool projectExisted = AssetBundleManager.BundleLoadedAssets.TryGetValue(YLCoreSmokeModule.Project, out var buckets);
+                bool bundleExisted = projectExisted && buckets.ContainsKey("text");
+                var sentinel = new TextAsset("owned cache sentinel");
+                try
+                {
+                    // sentinel只用于避免最后条目触发真实Bundle卸载；不是外部资源持有者。
+                    addCache.Invoke(null, new object[] { YLCoreSmokeModule.Project, "text", sentinel });
+                    addCache.Invoke(null, new object[] { YLCoreSmokeModule.Project, "text", text });
+                    bool returnedAtInit = false;
+                    YLCoreSmokeRow.InitAction = _ => returnedAtInit = !hashes.Contains(text.GetHashCode());
+                    module = new YLCoreSmokeModule { TableName = name };
+                    var request = YLFramework.Core.ModuleManager.StartUpModule(module);
+                    yield return Await(() => request.isDone, "temporary table cache return " + name);
+                    Assert.That(hashes.Contains(text.GetHashCode()), Is.False);
+                    Assert.That(AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project]["text"].ContainsKey(text.GetHashCode()), Is.False);
+                    Assert.That(hashes.Contains(sentinel.GetHashCode()), Is.True, "Return only the obtained table, not unrelated entries.");
+                    if (name == YLCoreSmokeModule.Table)
+                        Assert.That(returnedAtInit, Is.True, "Model initialization occurs after asset return.");
+                    if (name == YLCoreSmokeModule.Table || name == YLCoreSmokeModule.EmptyTable)
+                        Assert.That(request.error, Is.Null.Or.Empty);
+                    else Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+                }
+                finally
+                {
+                    YLCoreSmokeRow.InitAction = null;
+                    module?.Close();
+                    hashes.Remove(text.GetHashCode());
+                    hashes.Remove(sentinel.GetHashCode());
+                    var ownBucket = AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project]["text"];
+                    ownBucket.Remove(text.GetHashCode());
+                    ownBucket.Remove(sentinel.GetHashCode());
+                    if (!bundleExisted && ownBucket.Count == 0) AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project].Remove("text");
+                    if (!projectExisted && AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project].Count == 0)
+                        AssetBundleManager.BundleLoadedAssets.Remove(YLCoreSmokeModule.Project);
+                    Object.Destroy(sentinel);
+                }
+                yield return null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ReportedDefaultSceneFailureRollsBackInitializedModelsWithoutChangingScenes()
+        {
+            var before = new List<int>();
+            for (int i = 0; i < SceneManager.sceneCount; i++) before.Add(SceneManager.GetSceneAt(i).handle);
+            module = new YLCoreSmokeModule { SceneOverride = "YLCoreMissingScene_" + Guid.NewGuid().ToString("N") };
+            YLCoreSmokeRow.InitAction = value => row = value;
+            var startup = YLFramework.Core.ModuleManager.StartUpModule(module);
+            yield return Await(() => startup.isDone, "reported default scene failure");
+            YLCoreSmokeRow.InitAction = null;
+            Assert.That(row, Is.Not.Null);
+            Assert.That(startup.error, Does.Contain("Default scene load failed"));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(module.StartCount, Is.Zero);
+            Assert.That(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), Is.Null);
+            Assert.That(row.Module, Is.Null);
+            Assert.That(row.ExitCount, Is.EqualTo(1));
+            var after = new List<int>();
+            for (int i = 0; i < SceneManager.sceneCount; i++) after.Add(SceneManager.GetSceneAt(i).handle);
+            Assert.That(after, Is.EqualTo(before));
+            module.SceneOverride = null;
+            var restarted = YLFramework.Core.ModuleManager.StartUpModule(module);
+            yield return Await(() => restarted.isDone, "restart after scene failure");
+            Assert.That(restarted.error, Is.Null.Or.Empty);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
         }
 
         [UnityTest]
@@ -449,7 +598,7 @@ namespace YLFramework.Core.Tests
             Assert.That(loaded.IsValid() && loaded.isLoaded, Is.True);
             Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(loaded));
             Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath).isLoaded, Is.False);
-            Assert.That(module.SceneReadyAtStart, Is.True, "Startup can ignore scene errors; verify the actual loaded scene.");
+            Assert.That(module.SceneReadyAtStart, Is.True, "Startup validates the loaded scene before OnStart.");
             Assert.That(module.RowReadyAtStart, Is.True);
             yield return AssertSceneEntry(loaded);
         }

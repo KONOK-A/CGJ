@@ -192,6 +192,7 @@ namespace YLFramework.Core.Tests
             rejected.Close();
             Assert.That(rejected.State, Is.EqualTo(ModuleState.Created));
             Assert.That(rejected.StartCount, Is.Zero);
+            Assert.That(rejected.CloseCount, Is.Zero);
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
             Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
             var readOnly = ModuleManager.AllModules;
@@ -203,6 +204,7 @@ namespace YLFramework.Core.Tests
             Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
             yield return AwaitStartup(StartOwned(rejected));
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
+            Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
             module.Close();
             Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
             Assert.That(module.CloseCount, Is.EqualTo(1));
@@ -276,7 +278,10 @@ namespace YLFramework.Core.Tests
             var request = StartOwned(outer);
             Assert.That(request.isDone, Is.True);
             Assert.That(request.error, Does.Contain("outer startup failure after inner success"));
-            Assert.That(outer.State, Is.EqualTo(ModuleState.StartFailed));
+            Assert.That(outer.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(ModuleManager.GetModule<YLCoreStartupProbeModule>(), Is.Null);
+            Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
+            AssertIndexesEmpty(outer);
             Assert.That(inner.State, Is.EqualTo(ModuleState.Running));
             Assert.That(getCurrent.Invoke(null, null), Is.SameAs(inner));
             Assert.That(CurrentModule.GetValue(manager), Is.SameAs(inner));
@@ -924,6 +929,26 @@ namespace YLFramework.Core.Tests
             Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
             AssertIndexesEmpty(module);
             Assert.Throws<InvalidOperationException>(() => module.LoadModel<YLCoreProbeModel>());
+        }
+
+        [UnityTest]
+        public IEnumerator CreatedModuleCannotStartInsideAnExistingObjectTransaction()
+        {
+            var module = new YLCoreLifecycleModule();
+            var model = new YLCoreProbeModel
+            {
+                InitAction = _ =>
+                {
+                    Assert.Throws<InvalidOperationException>(() => StartOwned(module));
+                    Assert.That(module.State, Is.EqualTo(ModuleState.Created));
+                    Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
+                }
+            };
+            try { module.AddModel(model); }
+            finally { module.RemoveModel(model); }
+            Assert.That(model.ExitCount, Is.EqualTo(1));
+            yield return AwaitStartup(StartOwned(module));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
         }
 
         [UnityTest]

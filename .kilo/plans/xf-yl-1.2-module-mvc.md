@@ -6,8 +6,8 @@
 
 - 原 1.2 设计来自“YL Core Module/Model/Controller 融合设计研究”会话（`ses_ee39a09bdffeGweJ61c0aba4Mw`）；后续 A/B 实施任务明确说明架构已确认，批次细节以更晚的授权及验收反馈为准，不将研究中的条件性建议自动升级为决定。
 - A 已实施、验收、提交（`8ff1ea6`）；B 已实施、审阅通过、提交（`e39999e`），依据为本轮用户反馈、B 完成报告及 Git 核对。
-- C 已实施、验收并提交（`60d0465`）；D 已实施、通过专项验证并提交（`8c3fff6`），用户验收状态未据本轮推定，E/F 未实施。具体状态及验证摘要只在长期蓝图维护，不在本文件重复测试日志。
-- 初始化重入口径在原设计与 B 实现之间有实质细化，见第 4 节；C 的失败状态是未完整回滚的实际状态，不替代 E 的目标契约。
+- C 已实施、验收并提交（`60d0465`）；D 已实施、通过专项验证并提交（`8c3fff6`，补充回归 `750b32e`），用户验收状态未据本轮推定。E 已实施并通过本轮专项验证，尚未提交或验收；F 未实施。具体验证摘要只在长期蓝图维护，不在本文件重复测试日志。
+- 初始化重入口径在原设计与 B 实现之间有实质细化，见第 4 节；C 的历史失败状态已由 E 的自动逻辑回滚替代，见第 6 节。
 
 ## 2. 职责与所有权
 
@@ -29,7 +29,7 @@ IOC 只保留可选装配职责，不自动 Resolve 缺失 MVC；普通 Singleto
 - 单 Model 查询按精确类型匹配；无 ID 查询只允许本地唯一对象，多实例明确抛错。`GetModels` 保留该类型及派生类型集合查询，返回结果集合而非可修改的权威索引。
 - `LoadModel`、`LoadController` 是本地 Get-or-create；`CreateController` 是新建本地注册对象，已有同类型时在构造前拒绝。泛型、Type 及适用的完整类型名入口保持一致。
 - 注册统一遵守“校验 → 临时索引及 owner → OnInit → 完成”；临时可见不等于初始化完成。已完成注册的同实例 Add 幂等；跨 owner、冲突键、生命周期期间重复 Add 明确拒绝。
-- 初始化失败尝试对象级 OnExit，撤销本次索引及 owner；清理错误附在原异常的 `Data["YLFramework.Core.CleanupException"]`，不覆盖原始失败。只回滚该对象，不承诺撤销用户钩子的任意外部副作用。
+- 初始化失败尝试对象级 OnExit，撤销本次索引及 owner；清理错误附在原异常的 `Data["YLFramework.Core.CleanupException"]`，不覆盖原始失败。E 补充保留该位置已有异常，多个清理异常以 `AggregateException` 关联。只回滚该对象，不承诺撤销用户钩子的任意外部副作用。
 - 移除核对 owner 与实际索引实例；错误实例、跨模块借用及重复移除不误退出其他对象。OnExit 期间保留必要的 owner 与查询可见性；递归移除不重复退出，即使抛错也最终解绑。每次有效注册最多对应一次退出尝试。
 - Model ID 及查询参数统一为 `long`。保留 public setter 供注册前业务/JSON 赋值，注册期间锁定身份；`-1` 表示由框架分配。自动 ID 由 Module 生成并避开该实际类型的现有注册键，不依赖 GetHashCode，不保证跨运行持久化。初始化失败恢复注册前 ID。
 - Model 默认创建和移除不再使用 ClassPool；Controller 普通创建。不改变 View/GameObject/Audio 池、通用 Pool 或 XFAB 缓存。
@@ -57,21 +57,25 @@ IOC 只保留可选装配职责，不自动 Resolve 缺失 MVC；普通 Singleto
 - Starting 同实例重复启动取得同一有效进行中请求；Running 重复启动得到成功结果，不重复 OnStart。按类型启动先查询已有实例，不先构造第二个对象。
 - 启动记录先于可能同步执行的协程及回调建立，Core 自行去重，不依赖 XFAB 执行请求缓存。当前请求不池化，成功和失败后移除进行中记录；Running 返回新建的已完成成功请求，而非缓存旧请求。
 - 先提交生命周期结果，再调用完成回调，订阅者异常不反向改写启动结果。未改造 Foundation 的整条通知链，不承诺逐订阅者异常隔离。
-- 当前状态为 `Created → Starting → Running → Closing → Closed`，另有 `StartFailed`、`CloseFailed`。Starting 注册可见但不是 Running，普通 Close 明确拒绝；StartUpModuleRequest 在任何完成状态修改前拒绝 Abort，Abort 不构成取消，也不提供取消系统。
+- 正常状态为 `Created → Starting → Running → Closing → Closed`。E 使 `StartFailed` 仅为失败回滚的内部过渡状态，已注册失败实例经 `Closing` 到 `Closed` 后才通知；`CloseFailed` 仍保留但不进入。Starting 注册可见但不是 Running，普通 Close 明确拒绝；StartUpModuleRequest 在任何完成状态修改前拒绝 Abort，Abort 不构成取消，也不提供取消系统。
 - 注册表暴露缓存的只读实时视图；ModuleManager 保持注册、请求及实例身份一致。SingletonModule.Instance 只查询实际注册实例，无第二份可写缓存，不依赖 base.OnStart；解除注册后不返回旧实例。
 - CurrentModule 仍是 View/资源的过渡上下文；拒绝或重复启动不污染它，失败仅在 current 仍指向自身时恢复此前有效上下文，不覆盖其他已成功模块；嵌套启动的执行上下文有作用域。未全面设计并发场景归属或替换 View/资源系统。
 - Module 默认创建、关闭不再隐式使用 ClassPool。仅正确清理且核心索引无对象残留的实例可显式重启；不承诺重置全部业务字段。
-- C 验收时的限制：StartFailed 保留注册及可能的子对象；CloseFailed 保留注册、拒绝启动并允许重试关闭，且存在旧 OnExit/Exit 双路径。D 已替换关闭行为，见第 6 节；StartFailed 的自动完整回滚仍待 E，不将显式关闭或 Shutdown 称为启动事务回滚。
+- C 验收时曾有 StartFailed 保留注册和子对象、CloseFailed 重试关闭及旧 OnExit/Exit 双路径。D 已替换关闭行为，E 已补上自动失败逻辑回滚，当前契约见第 6 节；历史状态不是当前启动失败契约。
 
-## 6. 关闭与启动失败（D 已实施，E 仍为批准目标）
+## 6. 关闭与启动失败（D/E 已实施）
 
 - D 已建立唯一关闭清理管线，移除 public `Module.OnExit()` 旧入口；`OnClose` 是业务对象清理前钩子，无需调用 base。进入 Closing 后禁止 Add、缺失对象的 Load/Create 和 View/Panel 加载，已有未退出对象仍可查询/Load；Closed 拒绝新增，须先显式重启。顺序为 OnClose → Controller → 现有 View → 剩余 Model，View 对本地 Model 的既有移除联动保留，再清除核心索引/owner、注销并进入 Closed。
 - 每个 owned 对象独立尝试清理，单一异常不阻断兄弟对象；在 Closed/注销后以 `AggregateException` 汇总清理错误，保留原异常实例。重复/递归 Close 不重复通知。`CloseFailed` 枚举保留，但本管线不再进入该状态。Closed 表示逻辑所有权结束，不等于所有外部资源都释放成功，也不承诺重置业务字段。
 - 新公开入口为 `public static void ModuleManager.Shutdown()`：普通模块先于基础模块，各组逆注册顺序处理，继续清理并汇总错误，不引入自动拓扑；顺序索引按引用身份维护，包含当前部分注册失败的实例。基础模块普通 Close 仍拒绝。Starting 不提供取消，Shutdown 在任何模块 Starting 或 M/C 构造、初始化、退出事务中预先拒绝，不做部分 Shutdown；普通 Close 也保护这些对象事务。普通关闭期间不能嵌套开始 Shutdown，Shutdown 内递归 Shutdown 幂等，期间禁止模块启动/注册及跨模块普通 Close，避免钩子破坏顺序。
-- StartFailed 仍保留注册和子对象，普通模块可显式 Close，基础模块可显式 Shutdown；正确结束逻辑归属后允许重新启动，Singleton 身份随注销失效。自动启动失败回滚并未提前实现。关闭事务保留初始 View 集合以覆盖钩子提前移除索引的情况，最终仅解绑仍归当前模块的 View，不清掉其他模块重新加载后的新 owner。View 清理异常后仅保证逻辑 owner/index 结束，View 自身缓存、资源、事件等异常收尾留给 1.3。
-- E 将配表/有效资产/JSON/Model 初始化/默认场景/OnStart 错误统一为启动失败；区分合法空数组与无效空文本，临时资源在成功与失败路径成对归还。
-- E 复用 D 的清理管线，逻辑回滚、注销及移除启动记录后发布失败完成，保留原始错误及附带清理错误；基础模块失败不能被普通 Close 禁令阻断回滚。正确清理后允许重新启动，SingletonModule 的失败后失效以注销完成为前提。
-- ProjectName 与 Module 身份分离，在任何资源加载前确定，不再临启动钩子强制覆盖。具体 setter/只读签名尚未由专项落地确认，不在此固化研究中的 API 建议。
+- 关闭事务保留初始 View 集合以覆盖钩子提前移除索引的情况，最终仅解绑仍归当前模块的 View，不清掉其他模块重新加载后的新 owner。View 清理异常后仅保证逻辑 owner/index 结束，View 自身缓存、资源、事件等异常收尾留给 1.3。
+- E 将配表请求为空、已报告错误、资产为空或类型不符、空白文本、JSON/结构错误、Model 构造/初始化、默认场景已报告错误或无有效已加载 Scene、OnStart 异常作为启动失败。配表要求一维 Model 数组类型，JSON `[]` 合法，空文本或 JSON `null` 不作为空配置；额外 JSON 内容拒绝。未声明配表（null/空字典）仍合法，不增加可选表体系。保持原有先配表、默认场景、再 OnStart 的顺序。
+- 已取得注册的失败实例，包括 BaseModule 和注册阶段部分失败，复用 D 的唯一关闭管线回滚；回滚不要求 Running，不再次调用已经退出的 M/C。先清理 MVC/owner/索引、注销、进入 Closed、移除本次启动记录及恢复有效 CurrentModule，再发布最终失败。嵌套成功模块和借用对象不回滚；正确清理后可显式重启同实例或同类型新实例，Singleton 查询不再返回失败旧实例。不保证重置任意业务字段。
+- 身份冲突、非法类型和构造失败在取得本次注册前直接拒绝，不清理实际拥有者，也不假造 OnClose；请求建立后若未取得注册则恢复启动前状态。新增启动也不能与本模块尚未结束的 M/C 构造、初始化或退出事务交叉，此前置拒绝不影响 Starting/Running 的去重或幂等入口。
+- 新公开只读结果 `StartUpModuleRequest.Exception` 保留首次启动异常实例，额外资源/对象/模块清理错误关联到其 `Data["YLFramework.Core.CleanupException"]`，已有异常不被覆盖，多个错误聚合；`error` 字符串同时包含根因和额外清理异常。内部状态先提交，完成订阅者异常仅按既有机制记录，不把成功结果改成失败。Foundation 完成、late callback 和进度规则未改，不承诺逐订阅者隔离。
+- `Module.ProjectName` 保留 `public virtual string { get; set; }`，默认类型短名，可在构造/对象初始化时赋值或通过重写指定不同 XFAB 项目名；启动请求在首次加载前捕获非空白名称，不再由 OnStart 强制覆盖。ModuleName/具体类型仍为模块注册身份。基础模块加载不读取其他 CurrentModule 的项目名，异步 View 基础模块回退使用被遍历 owner 的 `ProjectName`；后端缺失 Prefab 挂起时仍不能到达回退。
+- 临时启动配表与长期持有的 View/场景资源分开：只将已取得的配表资产在复制文本后以局部 finally 调用 `UnloadAsset` 归还，再进行 JSON 构造和 Model 初始化；null 资产不卸载，成功、空数组、空文本及异常均不漏掉取得的资产，卸载异常使启动失败且不覆盖已有根因。默认成功场景不是临时配表，不在此自动卸载。
+- 本轮用户明确确认 **专用启动配表前置条件**：配表及其 Bundle 在取得/复制文本期间不存在其他调用者的持有或并发加载。实际 XFAB 没有按调用计数的租约，共享请求和对象缓存不能证明独占；本实现不提供任意共享配表的安全自动释放，也不建立新资源管理层。不得把缓存快照视为引用计数。Assets 模式通常不建立 AB 运行缓存，归还 API 不等于物理卸载；真实 AB 释放与并发共享仍未验证。
 - 回滚不是 Unity 世界事务：不自动恢复 Single 已卸载场景，不撤销任意用户外部副作用，也不修补原 XFAB 的挂起路径。View 自身异常收尾、缓存及场景归属的全面契约留给 1.3。
 
 ## 7. A～F 边界与门禁
@@ -82,7 +86,7 @@ IOC 只保留可选装配职责，不自动 Resolve 缺失 MVC；普通 Singleto
 | B 注册完整性 | A 稳定；单 owner、临时注册、精确移除、long ID、对象级异常安全、Model 非池化 | 已实施审阅通过并提交；不保证多对象 Module 关闭继续清理或模块启动整体回滚 |
 | C 唯一注册与启动 | B 稳定；Module 状态、请求去重与重入、只读注册表、Module 非池化、Singleton 身份及最小 Abort 防护 | 已验收并提交（`60d0465`）；D/E 仅有状态和最低限度清理支撑，不声称完整实现 |
 | D 关闭与 Shutdown | C 身份及状态稳定 | 已实施、通过专项验证并提交（`8c3fff6`），用户验收状态未据本轮推定；唯一管线、OnClose 顺序、逐对象异常继续清理、基础模块 Shutdown |
-| E 启动失败与资源前置 | B/C/D 稳定 | 未实施；完整逻辑回滚、错误传播、ProjectName 提前确定、临时资源成对归还 |
+| E 启动失败与资源前置 | B/C/D 稳定 | 已实施并通过本轮专项验证，未提交/验收；逻辑回滚、错误传播、ProjectName 提前确定、专用启动表复制后成对归还；后端挂起与真实 AB 物理释放验证边界保留 |
 | F 契约收口 | A～E 专项验证及验收成立 | 未实施；收敛本次替换直接产生的入口、模板和测试清理，完成 1.2 门禁，不扩展后续系统 |
 
 每批优先复用 Core 测试并补关键契约，执行 Unity 编译和直接受影响的专项回归；涉及 Foundation 时做最小相关验证。完整游戏、Audio、全量 Editor、Foundation 或 Windows Player 不作为逐批机械门槛；1.4 的完整核心与原游戏非干扰门禁仍保留。原 XF、XFAB PackageCache、游戏业务、既有 YL Audio、普通 IOC/Singleton/Root 均不在 1.2 默认修改范围。同工程专项通过不等于最终独立验收。

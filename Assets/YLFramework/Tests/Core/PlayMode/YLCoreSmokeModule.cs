@@ -14,20 +14,23 @@ namespace YLFramework.Core.Tests
         public const string HarnessPath = FixtureRoot + "/" + HarnessName + ".unity";
         public const string Json = "[{\"Id\":101,\"Marker\":\"yl-smoke\"}]";
 
+        public const string EmptyTable = "YLCoreEmptyRows";
+        public const string BlankTable = "YLCoreBlankRows";
+        public const string InvalidTable = "YLCoreInvalidRows";
+
         public bool StartWithScene;
+        public string TableName = Table;
+        public string SceneOverride;
         public int StartCount { get; private set; }
         public bool RowReadyAtStart { get; private set; }
         public bool SceneReadyAtStart { get; private set; }
 
-        // Startup reads the table/scene before it assigns ProjectName = type.Name.
-        public YLCoreSmokeModule() => ProjectName = Project;
-
 #pragma warning disable CS0618
         public override Dictionary<string, Type> PreloadConfigTables =>
-            new Dictionary<string, Type> { { Table, typeof(YLCoreSmokeRow[]) } };
+            new Dictionary<string, Type> { { TableName, typeof(YLCoreSmokeRow[]) } };
 #pragma warning restore CS0618
 
-        public override string DefaultStartUpScene => StartWithScene ? SceneName : string.Empty;
+        public override string DefaultStartUpScene => SceneOverride ?? (StartWithScene ? SceneName : string.Empty);
 
         public override void OnStart()
         {
@@ -41,10 +44,25 @@ namespace YLFramework.Core.Tests
 
     public sealed class YLCoreSmokeRow : YLFramework.Core.Model
     {
+        public static Action<YLCoreSmokeRow> InitAction;
         public string Marker { get; set; }
         public int InitCount { get; private set; }
         public int ExitCount { get; private set; }
-        public override void OnInit() => InitCount++;
+        public override void OnInit()
+        {
+            InitCount++;
+            InitAction?.Invoke(this);
+        }
         public override void OnExit() => ExitCount++;
+    }
+
+    public sealed class YLCoreResourceProjectModule : YLFramework.Core.Module
+    {
+        public bool AllowClose;
+        public override bool BaseModule => !AllowClose;
+        [Obsolete("已过时!")]
+        public override Dictionary<string, Type> PreloadConfigTables =>
+            new Dictionary<string, Type> { { YLCoreSmokeModule.Table, typeof(YLCoreSmokeRow[]) } };
+        public override void OnStart() { }
     }
 }

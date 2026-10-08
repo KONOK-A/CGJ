@@ -43,6 +43,9 @@ namespace YLFramework.Core.Editor.Tests
             }
             var text = AssetDatabase.LoadAssetAtPath<TextAsset>(tablePath);
             Require(text && text.text == YLCoreSmokeModule.Json, "Existing fixture JSON does not match; it was not overwritten.");
+            string[] failureTables = { YLCoreSmokeModule.EmptyTable, YLCoreSmokeModule.BlankTable, YLCoreSmokeModule.InvalidTable };
+            foreach (string name in failureTables)
+                Require(AssetDatabase.LoadAssetAtPath<TextAsset>(root + "/" + name + ".json"), "Missing startup JSON fixture: " + name);
             CreateOrValidateScene(YLCoreSmokeModule.ScenePath, true);
             CreateOrValidateScene(YLCoreSmokeModule.HarnessPath, false);
 
@@ -58,7 +61,7 @@ namespace YLFramework.Core.Editor.Tests
                 AssetDatabase.CreateAsset(project, projectPath);
                 AddBundle(project, "views", viewPath);
                 AddBundle(project, "panels", panelPath);
-                AddBundle(project, "text", tablePath);
+                AddBundle(project, "text", new[] { tablePath }.Concat(failureTables.Select(name => root + "/" + name + ".json")).ToArray());
                 AddBundle(project, "scenes", YLCoreSmokeModule.ScenePath, YLCoreSmokeModule.HarnessPath);
                 AssetDatabase.SaveAssetIfDirty(project);
             }
@@ -68,7 +71,7 @@ namespace YLFramework.Core.Editor.Tests
             Require(project.assetBundles != null && project.assetBundles.Count == 4, "Unexpected fixture bundles.");
             ValidateBundle(project, "views", viewPath);
             ValidateBundle(project, "panels", panelPath);
-            ValidateBundle(project, "text", tablePath);
+            ValidateBundle(project, "text", new[] { tablePath }.Concat(failureTables.Select(name => root + "/" + name + ".json")).ToArray());
             ValidateBundle(project, "scenes", YLCoreSmokeModule.ScenePath, YLCoreSmokeModule.HarnessPath);
             // No global SaveAssets/RefreshProjects/AB build or Profile mutation.
         }
