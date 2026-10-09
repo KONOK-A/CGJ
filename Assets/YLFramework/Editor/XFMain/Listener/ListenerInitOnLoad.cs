@@ -1,8 +1,3 @@
-// Copyright (c) 2021 弦小风. Licensed under the MIT License; see ../LICENSE.md.
-// Source: https://gitee.com/xianfengkeji/XFGameFramework.git
-// Revision: 2182708aecc596f30739fa8634fe2b9b6946ddd7 (XFGameFramework 1.18.8)
-// Original path: Editor/Listener/ListenerInitOnLoad.cs
-// YL adaptation: exact owned paths, deferred import and inactive preview-scene generation.
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;

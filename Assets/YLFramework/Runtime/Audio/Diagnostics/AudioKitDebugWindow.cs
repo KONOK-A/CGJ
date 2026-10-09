@@ -1,6 +1,3 @@
-// Copyright (c) 2015 - 2025 liangxiegame UNDER MIT LICENSE
-// https://github.com/liangxiegame/QFramework
-// Platform shortcuts adapted from ConsoleWindow; no ConsoleKit dependency.
 using System;
 using UnityEngine;
 using YLFramework.Core.Singleton;

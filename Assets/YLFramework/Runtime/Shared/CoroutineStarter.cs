@@ -1,8 +1,3 @@
-// Copyright (c) 2021 弦小风. Licensed under the MIT License; see LICENSE.md.
-// Source: https://gitee.com/xianfengkeji/xfabmanager.git
-// Revision: c35dc4058ecd831409199b43cb328024202d4557 (XFABManager 1.24.0)
-// Original path: Runtime/Tools/CoroutineStarter.cs
-// YL adaptation: namespace and host name only; lifecycle semantics retained.
 using System.Collections;
 using System.Collections.Generic;
 #if UNITY_EDITOR

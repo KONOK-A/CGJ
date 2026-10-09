@@ -1,6 +1,3 @@
-// Reflection 展示改编自项目内原有的 API 帮助实现；下方保留原来源与许可。
-// Copyright (c) 2015 - 2025 liangxiegame and the authors named in the original sources, MIT License.
-// https://github.com/liangxiegame/QFramework
 using System;
 using System.Collections.Generic;
 using System.Globalization;

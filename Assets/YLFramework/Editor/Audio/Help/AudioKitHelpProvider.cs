@@ -1,6 +1,3 @@
-// Copyright (c) 2015 - 2025 liangxiegame UNDER MIT LICENSE
-// https://github.com/liangxiegame/QFramework
-// Guides describe Clip-only playback and optional caller-owned Unity Mixer integration.
 using System;
 using System.IO;
 using System.Linq;
