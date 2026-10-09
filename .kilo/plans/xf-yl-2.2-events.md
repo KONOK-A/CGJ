@@ -1,8 +1,8 @@
 # XF × YL 2.2 Events 事件系统融合研究与技术设计
 
-**状态：整体设计已批准，待分批实施（2026-10-09 用户完成总体审阅；2.2-A 及后续批次待单独授权）。**
+**状态：整体设计已批准；2.2-A 实施及专项验证完成，待用户验收与 Git 收口（2026-10-10：Or 未完成连接轮的失败归属已按用户批准契约原子回滚并验证）。不进入 B～E，不执行 Git 收口。当前实施证据见第 10 节。**
 
-本文件是唯一专项方案。总体设计已获用户确认，但**尚未实施、尚未运行验证**。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。本状态更新仅记录审阅结论，不代表功能已实现、缺陷已运行复现或已获批次实施授权；不自动启动 2.2-A、其他专题或 Git 操作。
+本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10 节增量记录本轮 A 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。后续批次及 Git 操作未授权，不自动启动。
 
 ## 1. 基线与边界
 
@@ -259,10 +259,79 @@ facade的系统Dispose不是owner-scope清理，业务不要用来替代token；
 
 - 已具备：双方真实能力对照、可靠源码问题分类、唯一机制/领域适配边界、依赖方向、owner与token契约、API迁移、分批与最小验证方向。
 - 已确认（2026-10-09）：总体设计及第8节推荐方向；确认范围为架构方向、行为契约与阶段边界，不等同于批次实施授权，也不要求逐条照搬私有结构、算法或候选方法名。
-- 待授权：2.2-A 及后续每批的实施、专项验证与 Git 收口均需单独授权；重大行为、所有权或范围变化先说明并等待确认。
+- A 实施及定向验证已于本轮单独授权，实际结果见第 10 节；2026-10-10 用户批准 Or 未完成连接轮按“同轮临时注册原子回滚、旧轮不影响新轮”方向收口。B～E 与 Git 收口仍待单独授权。重大行为、所有权或范围变化先说明并等待确认。
 - 实施时需再查：具体移动类型的资产/反射、Global facade真正键域归属及直接asmdef引用；泛型无参观察已确认在同一typed序列，按第4节保持。发现真实外部持久化依赖时按该点暂停迁移，不猜测兼容方案。
 - 重要兼容变化保留：owner reset/回收/Dispose（含 Or.Dispose）截断旧在途快照、Global 旧实例不得摘除新 Instance 入口、键签名校验与 no-op 细节、批量清理异常汇总、历史 API 与 XF 命名退出等，均为有意的行为/API 变化，须按第7节在相应批次验收并在必要时同步 XML 文档。
-- 未验证：Unity编译、运行复现、所有平台/AOT、性能、实际无Domain Reload切换；历史Pool/Core验收不构成新Events通过证明。本次状态更新同样未执行任何编译、测试或运行验证。
+- 未验证（截至设计审议）：Unity编译、运行复现、所有平台/AOT、性能、实际无Domain Reload切换；历史Pool/Core验收不构成新Events通过证明。设计审议本身未执行编译、测试或运行验证；A 的实际编译与定向验证结果见第 10 节。
 - 非本专题：原XF/游戏改造、Update宿主重写、Timer调度、Audio播放/Mixer重构、Resource租约/AB释放、全局弱订阅或后台事件平台。
 
-结论：**总体设计已批准，待分批实施。尚未实施、尚未运行验证；等待单独授权 2.2-A，当前不宣布 2.2 已实现或已验收。**
+总体研究结论（历史）：**总体设计已批准。批准本身不证明功能已实现或已验收；当前 A 实施状态见下节，不宣布整个 2.2 COMPLETE。**
+
+## 10. 2.2-A 实施与当前验证
+
+### 10.1 基线和本轮范围
+
+- 本轮实际分支 `fusion/2.2-events`，HEAD `571483b`，开始时工作区干净；包含已批准方案以及 Pool 集成提交 `5754f3a`。未切换分支，未提交、推送、合并、回退或清理。
+- 对应 Unity `2022.3.62f3c1` 的当前 Editor 工程 `G:/Unity/Projects/CGJ2024`。只读取实施直接涉及的事件、取消、SessionState、程序集和现有断言，不重审 Pool/Core/View 领域。
+- A 共享基础落在 `Runtime/Shared/Events/`，归属现有 `YLFramework.Foundation.Runtime`。原 XF/XFAB Package、原游戏业务及资产、Packages/ProjectSettings 未修改。未进入 B～E。
+
+### 10.2 实际实现及 API
+
+| 文件/类型 | 本批成果 |
+|---|---|
+| `EventChannel.cs` / `EventChannelBase.cs` | `EventChannel` 0～7 参数，`Action` 强类型 Register/Once/UnRegister/Trigger/TriggerAll；监听数量、普通清监听、ResetOwner 和永久 Dispose。无参 channel 保留先立即调用成功后再注册的便利方法 |
+| `EventRegistrations.cs` | 唯一 copy-on-write 注册/分发机制；非池化引用 token 精确关联一次注册，取消成功或失效即释放 owner 引用；普通 multicast 展开为 target 记录，一次 token 撤自身整组剩余项；委托退订保持最后相等普通子序列；Once 整体回调作为一条监听、先 consumed 再用户代码 |
+| `IEventSource.cs` | 纯无参观察接口和共享空 token。泛型观察包装到同一个 typed 序列，null 不创建包装或监听 |
+| `EventKey.cs` / `EventBus.cs` | 单一带域 registry 和普通 channel；完整 Ordinal string、int、枚举类型+完整底层值、声明 Type 四域独立；0～7 Register/RegisterOnce/UnRegister/Send/SendAll；精确声明签名、无键 no-op、空注册不绑定、清监听保留签名、RemoveKey/ClearKeys 终结旧 channel；实例 Dispose 永久关闭 |
+| 类型消息入口 | `RegisterMessage<T>` / `RegisterMessageOnce<T>` / `UnRegisterMessage<T>` / `SendMessage<T>(T)` / `SendMessage<T>()` / `SendMessageAll<T>`，仍按 `typeof(T)` 转接同一 registry，不按 payload 运行时类型额外广播 |
+| Default 上下文 | `Default` 显式惰性创建，`TryGetDefault` / `ResetDefault` 非创建；首次显式访问挂接现有 `SingletonSessionState`。旧 Default 关闭不能摘除新实例，独立 bus 不加入全局 reset |
+| 迁移的纯取消辅助 | `IUnRegister`、`IUnRegisterList`、`CustomUnRegister`、`CallbackUnRegister`、`SingleUseUnRegister`、`SubscriptionCleanup/SubscriptionSet`、`RegisterListExtension` 保持完整类型名，进入 Foundation。Custom 增加同实例执行中重入守卫，失败仍可重试；其他旧消费/Strict/复制契约不变 |
+| 必要清理和 Scope | 新 `ReleaseAll` / `UnRegisterAllRetainingFailures` / `SubscriptionScope` 先摘本轮责任、全部尝试、整轮后回填失败并保留新项；单个原异常或聚合异常。Scope 先永久关闭，后续 Add 立即取消；不把 SingleUse 的失败伪装为可恢复 |
+| 唯一 `OrEvent` | 从原实现演进并下沉，依赖 IEventSource 和共享 channel；首监听连接/末监听断开、正常重连、重复/追加 source、永久 Dispose、连接轮次和 source 描述守卫、迟到 token、部分连接与失败追加回滚；必要取消责任唯一归还、成功取消从原轮连接表摘除。首次连接尚未完成期间同步产生的注册视为该轮临时责任，连接失败时整体回滚并保留原始失败原因；明确断连后新建的轮次不受旧轮回滚影响（10.5） |
+
+重要内部取舍：参数通过各签名的小型值类型 invocation 直接调用 typed Action，同一分发循环处理 0～7 参数，不借池、DynamicInvoke 或 `object[]` 打包 payload。注册/注销允许复制成本，正常发布捕获值类型 snapshot；没有性能测量，不宣称比原多播更快。枚举键构造使用 boxed Enum 以保留所有底层值，热点可复用 `EventKey`，不声称每次隐式 enum→key 构造无分配。
+
+与候选名的重要差异是类型消息使用 `*Message` 入口，避免单实参 `Send("key")` 被泛型 payload 重载抢占或依赖隐晦 extension 优先级。没有减少类型消息能力、没有第二个 registry。普通广播 fail-fast，显式继续通知才汇总；Once 中的 multicast 仍按一个回调的正常委托异常规则执行。
+
+### 10.3 迁移、依赖与 B/C 接入
+
+- 六个既有脚本及自身 `.meta` 一起移动：IUnRegister、CallbackUnRegister、SingleUseUnRegister、SubscriptionCleanup、RegisterListExtension、OrEvent。六份 meta 与 HEAD 原文件一致；新增文件和 `Shared/Events` 目录的 `.meta` 已由当前 Unity 正常导入生成。实际 AssetDatabase 查询的 13 个共享脚本、3 个新测试及目录共 17 个身份均非空且互不重复。
+- 定向类型名/GUID/文本资产及 SerializeReference/反射扫描未发现这些共享纯类型的真实持久化身份绑定；不据此证明仓库外消费者不存在，不增加猜测性 MovedFrom 或兼容壳。
+- `IEasyEvent : IEventSource, IOfPool, IPoolType` 保留 Runtime 池领域归属；EasyEvent 三处、BindableProperty/MappedProperty 两处只调整显式接口限定名。没有提前改旧 EasyEvent Once/分发/回收，也没有改 Binding 数据及 owner 行为。审查后按共享契约对 `IEventSource.Register(null)` 定点收口：EasyEvent 三个泛型适配与 BindableProperty 显式实现返回共享空句柄，不再把 null 包装成可触发 NRE 的幽灵监听（MappedProperty 经目标代理自然对齐）；该修复先临时还原实测 2 failed 红灯再恢复验证。
+- Runtime/Core 既有直接 Foundation 依赖不变。实际消费迁移取消返回类型的 `Tests/PlayMode` 加直接 Foundation 引用；无实际使用的 Editor/DOTween 不批量加依赖。
+- 首次实际编译查到 ColorSelector 示例属于预定义 `Assembly-CSharp`，调用 Runtime 扩展的 Foundation 返回类型时 CS0012。Foundation `autoReferenced` 改为 true，使预定义程序集可引用这些公开类型；自定义 asmdef 仍须直接引用。没有新建示例/Events asmdef、移动示例 MonoBehaviour 或改资产身份。Foundation 显式 `references` 仍是 `[]`，无 Runtime/Core/原 XF 反向依赖。
+- Unity 的实际程序集查询确认 Runtime/Core 向下引用 Foundation，Foundation 已加载二进制无 Runtime/Core/原 XF 引用；编辑器编译隐式 Unity UI 引用及现有条件编译 UnityEditor 支撑不能混称为新增 Events 领域依赖或 Player 验证。
+- Or 及迁移取消辅助已由现有 YL 消费者实际使用，不是新建长期无人接入的第二套组合/取消算法。EasyEvent/Global/EasyEvents 原分发暂存至 B；B 可继承/组合 channel，池化 owner 生命周期调用 ResetOwner，四 facade 各持独立 bus。
+- Core EventManager 的 hash/Delegate 算法和 XFEvent/View 声明暂存至 C；C 转接 Default 与 Action API、完整 key 和本轮 guarded token。`XFGameFrameworkEvents`、Unity trigger/EventListener 分别按 C～E 原边界处理，本批未改。
+
+### 10.4 实际验证
+
+| 本轮执行 | 当前结果与证据边界 |
+|---|---|
+| Unity 实际导入与编译 | 首次失败的共同根因是示例缺 Foundation 返回类型引用，以及当前 Unity NUnit 不提供 NonParallelizable。按 10.3 适配并移除无必要测试属性后，实际 AssetDatabase refresh 成功；`scriptCompilationFailed=false`、`isCompiling=false`，共享类型已加载到 Foundation |
+| `EventChannelContractTests` | 12/12 EditMode；复用快照/立即调用断言，补精确 A→B→A 身份顺序、旧 token、多播组、Once 嵌套/异常、普通快照 vs owner reset/Dispose、无参观察/null、0/1/3/7 强类型代表路径、显式继续通知 |
+| `EventBusContractTests` | 11/11 EditMode；四域/完整枚举值、声明签名/variance、缺失/no-op/null、不建键、清监听/删键重绑、旧 token、独立 bus、Default/reset、关闭实例及异常契约 |
+| `EventCancellationAndOrTests` | 最终 23/23 EditMode；必要清理/重入/失败责任、scope、Or 惰性连接/重连/重复追加/旧 source 快照/同步通知/迟到取消/回滚/Dispose，以及两个 pending 轮边界新回归。独立复核发现的两个清理根因先补断言运行，实际得到 18 passed/3 failed，修复后 21/21；pending 轮原子回滚在修复前由内存脚本复现、修复后经 23/23 锁定，不削弱旧断言 |
+| 原 `EventsContractTests` | 最终 16/16 EditMode；验证迁移辅助和唯一 Or 的直接消费者，旧取消消费、Strict 副本、ReleaseAfterSuccess、容器、无参观察及池化基本契约保持；含审查后新增的 `IEventSource` null 契约代表断言（三个泛型适配 + BindableProperty） |
+| `BindingContractTests` | 11/11 EditMode；本轮修改 BindableProperty 显式适配后的定向回归，比较器/初始回调/静默写/池化契约保持 |
+
+共 **73 个不同定向 EditMode 用例通过，0 Failed/Skipped**（channel 12 + bus 11 + 取消/Or 23 + 原 Events 16 + Binding 11）；Or 修复与 null 契约修复后重新运行受影响套件，其余未受改动的本轮结果复用。工具报告的全工程总发现数量不计为执行数量；最初不适用的复合 class filter 返回零执行，也未计作通过。
+
+审查后的 `IEventSource.Register(null)` 修复按红绿执行：先临时还原四处判空，实际得到 2 failed（泛型适配 `HasListener=True` 幽灵监听、属性变化 NRE），恢复判空后 16/16 与 Binding 11/11，不削弱旧断言。channel 与 bus 独立静态复核未发现重要问题；Or 复核的重复失败归还/同轮隐式重试、成功追加回滚残留连接引用问题已由红绿回归确认和修复，局部独立复核未发现新的具体问题；pending 轮原子回滚补丁另行复核为无新问题；六轨未提交审查另发现 null 契约漂移（已修复）与两条非阻塞建议（Once 压实、`Registration.Dispose` 别名；按用户选择暂不处理）。最终受管 `git diff --check` 与新增源码的差异检查无报错；新增/迁移 meta 的空字段保留 Unity 标准尾空格格式，没有为清理报告手动格式化元数据。原游戏/场景、Packages/ProjectSettings 的实际 diff 为空；最后不在 Play/编译中，`scriptCompilationFailed=false`，打开的 Main 场景未脏。静态检查不替代运行证明。
+
+未执行 PlayMode、真实关闭 Domain Reload 两轮 Play、Player/IL2CPP/AOT、性能测量、完整游戏、全部 Pool/Core/Action/Audio；本轮为纯机制及必要直接适配，不把历史验证当作新 Events 验证。Default 测试中的定向调用现有 session reset 证明挂接与独立上下文隔离，**不证明真实无 Domain Reload 切换**，该门禁仍在 E。
+
+### 10.5 Or 未完成连接轮的失败归属：批准契约与收口
+
+**契约（2026-10-10 用户批准）：** 同一轮尚未成功建立的 Or source 连接中，同步通知引发重入注册、随后该连接失败时，本轮产生的临时订阅与连接责任一致回滚，不留下看似有效、实际无法接收通知的监听。同时保证：旧轮回滚不影响明确断连后新建的轮次；已失效 token 不操作后续新订阅；保留原始连接失败原因及必要的清理错误信息；不改动普通快照、Once、Dispose 等无关契约。
+
+实现：`ConnectionRound` 增加 `Connecting` 与临时注册集合；首次连接期间（含同步通知及其重入）通过 `Register` 加入的监听都归入该轮。连接成功后临时责任转为正式监听；失败时先清 `_round`，再逐项回滚临时注册，最后释放本轮连接，错误按“原始失败 + 清理错误”聚合（单个原样重抛、多个 AggregateException）。明确断连（ClearListeners/末监听取消）终结旧轮并把后续注册交给新轮，旧轮回滚只触及自己的临时集合，新轮不受影响。
+
+验证：
+- 修复前本轮先以 Unity 内存脚本实际复现：同步通知后抛错且不保留订阅的 source，重入 Register 返回 token，外层失败后 `survivingListeners=1`、`connectedSourceListeners=0`、`deliveredCalls=0`；修复后复跑同一脚本为 `survivingListeners=0`，作为同一场景的红绿对照。只释放采样中创建的实例，不修正状态制造通过。
+- 新增两项最小回归：`PendingRoundConnectionFailureRollsBackReentrantRegistrationsAtomically`（重入注册随失败回滚，旧 token 不影响重连新订阅，重新注册可正常连接并接收通知）与 `FailedRoundRollbackDoesNotTouchRoundRecreatedAfterExplicitDisconnect`（ClearListeners 后重建的新轮在旧轮失败回滚后仍完整连接）。
+- 修复后 `EventCancellationAndOrTests` 23/23、`EventsContractTests` 14/14；未受影响的 channel/bus 结果按 10.4 复用。
+
+该契约与本方案其他已批准行为无冲突：普通取消仍保持快照，Once 与 Dispose 语义未变，未扩大为 OrEvent 或 Events 体系的其他重设计。
+
+**当前结论：A 实施及专项验证完成，待用户验收与 Git 收口。** 共享 channel/bus 与唯一 Or 已具备 B/C 接入所需契约，B 的技术前置（共享机制落地并验证、旧实现暂留原位待迁）已满足；B～E 实施、Git 收口及 PlayMode/Player/平台验证仍未授权或未执行。本轮保留未提交差异并停在 A，不进入 B～E。

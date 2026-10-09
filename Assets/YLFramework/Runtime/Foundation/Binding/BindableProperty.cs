@@ -194,9 +194,9 @@ namespace YLFramework.Binding
         }
         
         /// <inheritdoc />
-        IUnRegister IEasyEvent.Register(Action eventAction)
+        IUnRegister IEventSource.Register(Action eventAction)
         {
-            return Register(Action);
+            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
             void Action(T _) => eventAction();
         }
 

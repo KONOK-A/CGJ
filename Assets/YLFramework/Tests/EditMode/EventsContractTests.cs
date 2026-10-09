@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using YLFramework.Events;
+using YLFramework.Binding;
 using YLFramework.Core.Pool;
 
 namespace YLFramework.Tests
@@ -215,6 +216,55 @@ namespace YLFramework.Tests
             value.Trigger(9);
             Assert.That(observed.Count, Is.EqualTo(1));
             Assert.That(notifications, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TypeErasedNullRegistrationIsIgnoredWithoutCreatingListener()
+        {
+            var one = new EasyEvent<int>();
+            var two = new EasyEvent<int, string>();
+            var three = new EasyEvent<int, string, bool>();
+
+            var first = ((IEasyEvent)one).Register(null);
+            Assert.That(first, Is.Not.Null);
+            Assert.That(one.HasListener, Is.False);
+            Assert.That(one.ListenerCount, Is.Zero);
+            Assert.DoesNotThrow(() => one.Trigger(1));
+
+            var second = ((IEasyEvent)two).Register(null);
+            Assert.That(second, Is.Not.Null);
+            Assert.That(two.HasListener, Is.False);
+            Assert.DoesNotThrow(() => two.Trigger(1, "a"));
+
+            var third = ((IEasyEvent)three).Register(null);
+            Assert.That(third, Is.Not.Null);
+            Assert.That(three.HasListener, Is.False);
+            Assert.DoesNotThrow(() => three.Trigger(1, "a", true));
+
+            first.UnRegister();
+            second.UnRegister();
+            third.UnRegister();
+
+            var calls = 0;
+            three.Register((_, __, ___) => calls++);
+            three.Trigger(1, "a", true);
+            Assert.That(calls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TypeErasedNullPropertyRegistrationIsIgnored()
+        {
+            var property = new BindableProperty<int>(0);
+            var token = ((IEasyEvent)property).Register(null);
+            Assert.That(token, Is.Not.Null);
+            Assert.DoesNotThrow(() => property.Value = 1);
+            token.UnRegister();
+
+            var notifications = 0;
+            property.Register(value => notifications++);
+            property.Value = 2;
+            Assert.That(notifications, Is.EqualTo(1));
+            property.UnRegisterAll();
         }
 
         [Test]

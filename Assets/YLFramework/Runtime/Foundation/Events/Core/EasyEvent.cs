@@ -242,9 +242,9 @@ namespace YLFramework.Events
         public bool IsRecycled { get; set; } = false;
 
         // 接口的显式方法：把无参注册适配为丢弃参数的单参数注册
-        IUnRegister IEasyEvent.Register(Action eventAction)
+        IUnRegister IEventSource.Register(Action eventAction)
         {
-            return Register(Action);
+            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
             void Action(T _) => eventAction();
         }
     }
@@ -361,9 +361,9 @@ namespace YLFramework.Events
         public bool IsRecycled { get; set; } = false;
 
         // 接口的显式方法：把无参注册适配为丢弃参数的注册
-        IUnRegister IEasyEvent.Register(Action eventAction)
+        IUnRegister IEventSource.Register(Action eventAction)
         {
-            return Register(Action);
+            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
             void Action(T1 _, T2 __) => eventAction();
         }
     }
@@ -481,9 +481,9 @@ namespace YLFramework.Events
         public bool IsRecycled { get; set; } = false;
 
         // 接口的显式方法：把无参注册适配为丢弃参数的注册
-        IUnRegister IEasyEvent.Register(Action eventAction)
+        IUnRegister IEventSource.Register(Action eventAction)
         {
-            return Register(Action);
+            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
             void Action(T1 _, T2 __, T3 ___) => eventAction();
         }
     }
