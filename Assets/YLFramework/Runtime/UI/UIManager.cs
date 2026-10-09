@@ -65,7 +65,7 @@ namespace YLFramework.Services.UI
         {
             if (_tipsPool != null)
             {
-                _tipsPool.Clear(tip => tip.DestroyGameObjGracefully());
+                _tipsPool.Dispose();
                 _tipsPool = null;
             }
             base.OnDestroy();
@@ -512,32 +512,39 @@ namespace YLFramework.Services.UI
 
         #region UITip相关
 
-        private SimpleObjectPool<UITipsItem> _tipsPool;
+        private ObjectPool<UITipsItem> _tipsPool;
 
         private void InitTipsPool()
         {
             if (_tipsPool != null)
             {
-                _tipsPool.Clear(tip => tip.DestroyGameObjGracefully());
+                _tipsPool.Dispose();
                 _tipsPool = null;
             }
 
-            _tipsPool = new SimpleObjectPool<UITipsItem>(() =>
+            var poolRoot = uiTipItemPool;
+            _tipsPool = new ObjectPool<UITipsItem>(() =>
             {
-                var go = uiTipItemPrefab.InstantiateWithParent(uiTipItemPool);
-                return go?.GetComponent<UITipsItem>().Hide();
-            }, tip =>
+                var go = uiTipItemPrefab.InstantiateWithParent(poolRoot);
+                if (!go) return null;
+                var tip = go.GetComponent<UITipsItem>();
+                if (tip) return tip.Hide();
+                go.DestroySelfGracefully();
+                throw new InvalidOperationException("UI Tip prefab 缺少 UITipsItem。");
+            }, reset: tip =>
             {
+                if (!tip) return;
                 tip.OnReset();
-                tip.Parent(uiTipItemPool);
-            });
+                if (poolRoot) tip.Parent(poolRoot);
+            }, onDiscard: tip =>
+            {
+                if (tip) tip.DestroyGameObjGracefully();
+            }, maxPoolSize: 0);
         }
 
         public void ShowTips(string content, UITipPos uiTipPos, Color textColor = default, float showTime = 2f,
             bool isFade = true, Sprite bgSprite = null)
         {
-            var tip = _tipsPool.Allocate();
-
             var uiTipRoot = uiTipPos switch
             {
                 UITipPos.LeftTop => leftTopTipRoot,
@@ -548,8 +555,33 @@ namespace YLFramework.Services.UI
                 _ => throw new ArgumentOutOfRangeException(nameof(uiTipPos), uiTipPos, null)
             };
 
-            tip.Parent(uiTipRoot).OnInit(content, () => { _tipsPool.Recycle(tip); }, textColor, showTime, isFade,
-                bgSprite);
+            var pool = _tipsPool;
+            var tip = pool.Allocate();
+            // 内核只识别 managed null，销毁的 Unity 对象由领域摘除。
+            while (!ReferenceEquals(tip, null) && !tip)
+            {
+                pool.Discard(tip);
+                tip = pool.Allocate();
+            }
+            if (!tip) throw new InvalidOperationException("UI Tip 工厂未提供有效对象。");
+            var returned = false;
+            try
+            {
+                tip.Parent(uiTipRoot).OnInit(content, () =>
+                {
+                    if (returned) return;
+                    returned = true;
+                    if (tip) pool.Recycle(tip);
+                    else pool.Discard(tip);
+                }, textColor, showTime, isFade, bgSprite);
+            }
+            catch (Exception error)
+            {
+                returned = true;
+                try { pool.Discard(tip); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
         }
 
         #endregion

@@ -7,6 +7,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using YLFramework.Core.RoslynAnalyzers;
+using YLFramework.Core.Pool;
 
 namespace YLFramework.Core
 {
@@ -551,20 +552,23 @@ namespace YLFramework.Core
         /// </summary>
         public static void RemoveAllEvent() 
         { 
-            List<int> keys = ClassObjectPoolManager.Load<List<int>>();
-            keys.Clear();
-             
-            foreach (var item in _Event.Keys)
+            List<int> keys = ListPool<int>.Allocate();
+            try
             {
-                keys.Add(item);
-            }
+                foreach (var item in _Event.Keys)
+                {
+                    keys.Add(item);
+                }
 
-            foreach (var item in keys)
-            {
-                RemoveAllEvent(item);
+                foreach (var item in keys)
+                {
+                    RemoveAllEvent(item);
+                }
             }
-             
-            ClassObjectPoolManager.Unload(keys);
+            finally
+            {
+                ListPool<int>.Recycle(keys);
+            }
         }
 
         /// <summary>
@@ -644,4 +648,3 @@ namespace YLFramework.Core
     }
 
 }
-

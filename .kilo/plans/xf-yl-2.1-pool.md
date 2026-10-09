@@ -1,8 +1,8 @@
 # XF × YL 阶段 2.1：Pool 深度融合研究与技术设计
 
-**状态：2.1 Pool 专项设计目标已批准，审阅补充已确认；功能实施尚未开始。**
+**状态：2.1 Pool：COMPLETE（A～E 全部完成并通过用户验收；A～D 已 Git 收口 `a97cb2c` / `e8925e6` / `2529d5a` / `455088c`，E 的 Git 收口提交由用户后续执行）。阶段 2：IN PROGRESS。2.2 Events：待专项研究与设计，不自动启动。阶段决策与 E 实际结果见第 16～17 节。**
 
-本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。本次授权仅为设计文档 Git 收口与实施分支准备，不自动授权功能实施。
+本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究/设计与各批次授权、实际结果分别记录，历史“未开始/停止/待 Git”不覆盖当前状态；A～E 实际结果见第 12～17 节，2.2 待专项研究与设计且未自动授权。
 
 ## 1. 基线、范围与结论
 
@@ -11,7 +11,7 @@
 - 主范围为普通 C# 对象、List/Dictionary 缓存、直接消费者的必要接入及重复实现退出。Module/Model 不恢复默认隐式池化；Model 允许未来根据实际需求另行研究显式、可选的池化，不作为本专题自动新增任务。Action 的执行租约和延迟回收、LoadViewArgs 的接管协议不改变。
 - 推荐最终只有一套普通对象缓存内核，以 YL 的显式工厂、容量、预热和领域 reset 为主要技术基础，吸收 XF 的简洁取得/归还体验，不沿用 XF 的时间表和扫描宿主，也不沿用 YL 的反射自动重置。
 - 公共内核及集合池进入现有 `YLFramework.Foundation.Runtime`；Safe 池的类型入口和领域接口留在 `YLFramework.Runtime`，Core 使用中立内核，不引用整个 Runtime。只迁移最小真实依赖闭包，不重组 Foundation 全集。
-- GO 池不是必做项。建议登记并延期其独立正确性修复；允许审阅后选择完整的可选批次，但不替换 XFAB 后端、不设计完整资源租约或 Bundle 卸载系统。
+- 自有 GO 池的融合与正确性完善已纳入必做批次 E 并实施，实际结果见第 17 节；不替换 XFAB 后端、不设计完整资源租约或 Bundle 卸载系统。
 
 路径简称：`Y` = `Assets/YLFramework/Runtime/`，`C` = `Y/XFMain/`，`P` = `Y/Foundation/Pool/`，`T` = `Assets/YLFramework/Tests/`，`XF` = `Library/PackageCache/com.xfkj.xfgameframework@2182708aec/`，`AB` = `Library/PackageCache/com.xfkj.xfabmanager@c35dc4058e/`。行号对应研究基线；实施时重新核对受影响位置。
 
@@ -237,15 +237,15 @@ Assets 下定向 C#、meta/类型引用与测试检索未找到自有 GO 两类�
 
 ### 7.3 推荐范围
 
-**默认不把 GO 纳入 2.1 必做批次。**共享 Safe 适配时保证 Data.OnRecycle 的销毁责任不退化即可。独立 GO 缺陷留在本文，不将自有 GO 现状称为已安全统一。
+**GO 自有池已纳入 2.1 必做范围（批次 E，用户确认）。**A/B 的共享 Safe 适配承接 Data 普通缓存；E 实际修复、验证和保留限制见第 17 节，本节保留启动前的研究依据。
 
-可选 GO 批次必须作为完整正确性任务：实例→桶身份、转换态/桶代次、先摘清理与待销毁隔离、fake-null 数量维护、容量校验/缩容、唯一有效初始化输入及输入所有权。仅用带一次性触发守卫的 Unity probe 验证重入，不进行危险递归。
+**2.1-E** 作为完整正确性任务实施并已验收：实例→桶身份、转换态/桶代次、先摘清理与待销毁隔离、fake-null 数量维护、容量校验/缩容、唯一有效初始化输入及输入所有权。仅用带一次性触发守卫的 Unity probe 验证重入，不进行危险递归；实际结果见第 17 节。
 
 不纳入：接管 XFAB 缓存、重新设计 Prefab 资源 lease、AB 计数/物理卸载、共享异步取消、原游戏特效迁移、全局资源 Clear 或新自动超时宿主。Module.Close 仍不清全局池，不释放其他消费者持有的 Prefab。
 
 ## 8. 分批实施计划
 
-每批按已批准的设计目标与第 10 节调整边界，另行取得实施授权并验证；表中的独立提交价值不等于自动 Commit 授权。实施前重新核对工作区及源码变化，保护已有修改。默认四批，不把每个小 helper 切成一批。
+每批按已批准的设计目标与第 10 节调整边界，另行取得实施授权并验证；表中的独立提交价值不等于自动 Commit 授权。实施前重新核对工作区及源码变化，保护已有修改。正式范围共 A～E 五批，不把每个小 helper 切成一批。
 
 | 批次 | 核心目标/修改范围 | 前置与直接消费者 | 风险/难度 | 验收与独立价值 |
 |---|---|---|---|---|
@@ -254,7 +254,7 @@ Assets 下定向 C#、meta/类型引用与测试检索未找到自有 GO 两类�
 | **C Core 参数与集合收敛** | LoadViewArgs 私有池保留接管/线程/读取窗口；Core Event/Model/Panel 临时 List→ListPool + finally；退出 ClassObjectPoolManager/IReuseable；适配 CorePool 测试清理 | A/B 稳定，并遵守 D3/D4 的目标与调整边界；Core 参数、Panel、EventManager、Model 清理 | 中高：操作终态参数归还一次、旧 alias 限制、Panel Session 快照、fixture 不能清非法残留制造通过 | CoreLoadViewArgs、必要 DirectView/Xfab 参数成功/失败/Abort、Panel与Model清理、CoreIdentity；保持 Module/Model 非池化及原 XFAB GO链。可独立提交Core不再维护第二个普通池 |
 | **D API 退出与专题收口** | 删除已无消费者的 ClassObjectPool/Independent/旧基类及临时 API壳；保留纯创建工具；同步实际 Pool 文档、测试入口及必要使用说明；定向核对类型/资产/反射、许可/meta与程序集唯一归属 | A–C 验收，并遵守 D3 的目标与调整边界；真实C#/文本绑定、Editor/测试、公开API | 中：来源记录/脚本身份、遗漏间接消费者、误保留兼容壳；不顺带重命名Foundation | 差异、引用/asmdef静态核对；挑选跨模块回归与Domain Reload关闭验证；Audio受影响时代表性原游戏音频流程。只有一套普通/集合算法，无Core→Runtime，无Package/游戏修改。可独立提交正式收口 |
 
-**可选 E：自有 GO 正确性，难度中高。**只在 D5 明确选择后纳入，不阻塞 A–D。范围见 7.3；前置为公共 Safe/丢弃契约稳定。直接影响只有自有两类及新建最小 Unity probe；需要实际 PlayMode 验证跨 key、转换期、数组、死引用容量、Clear/宿主销毁及场景回迁。当前没有可复用 GO 专项，必须补必要测试；不迁游戏或Core后端。具备完整独立提交价值，但默认延期。
+**E：自有 GO 正确性，难度中高，必做。**用户已确认纳入 2.1 正式范围并在 D 之后实施完毕，不改变 A～D 已有结果。范围见 7.3；前置为公共 Safe/丢弃契约稳定（A/B 已完成）。直接影响只有自有两类及新建最小 Unity probe；实际 PlayMode 验证跨 key、转换期、数组、死引用容量、Clear/宿主销毁及场景回迁。新建 GO 专项测试，不迁游戏或Core后端。E 已通过用户验收，2.1 达到 COMPLETE。
 
 B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在同批按风险先编译再小范围验证，但不得把半迁移状态宣布为本批验收完成。若发现外部绑定、资源释放或状态 reset 需求超出本文，先报告并确认，不靠兼容补丁隐式扩大任务。
 
@@ -311,9 +311,9 @@ B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在�
 | **D2 默认安全与异常契约** | 默认只归还本池借出对象；弱键身份状态；禁止外部new自动接纳；回调失败隔离而不是自动可重试；null不缓存；容量提交前复核；永久清理逐项尝试 | 保留unchecked默认更快但持续暴露重复/跨池风险；保留Safe失败重试需承认状态不回滚，不能称安全。若需unchecked必须有实际测量及明确独占领域证明再单独批准 |
 | **D3 API收敛/兼容幅度** | 新ObjectPool内核；保留IPool形状、Safe/领域入口、List/Dictionary API；迁实际Simple/Action/Core消费者；退出旧Pool继承、Simple重复入口、Type类池/反射reset、Independent、Core manager/IReuseable | 保留Type分配或自动reset仅在查实动态调用/外部真实依赖时另立窄适配，不为未发布API保留全部旧产品。需接受外部new、旧基类继承、字段反射测试的明确变化 |
 | **D4 内存/生命周期策略** | 不保留普通池TTL协程；默认空闲20，已配置领域容量/顺序保留；集合有限默认20、显式Clear；没有每租用token或通用资源lease | 保留TTL须增加时钟/宿主/关闭/异常释放机制；强租约改变所有公共用法；大buffer自动淘汰须先证实收益。不把容量默认当最佳调参结果 |
-| **D5 GO专题范围** | 默认延期独立GO正确性批次；2.1只保证GO Data接入Safe不回归，不替换XFAB | 可选择可选E完整修复自有GO并补专项，但没有Core资源链收敛收益，增加Unity生命周期验证；依然不纳入完整资源系统 |
+| **D5 GO专题范围** | 自有 GO 池纳入必做批次 E（用户已确认）；D 之后实施完整正确性任务，2.1 只保证 GO Data 接入 Safe 不回归，不替换 XFAB | 原“默认延期/可选”推荐已被用户决策纠正；E 补专项验证，没有 Core 资源链收敛收益，不接管 Bundle 卸载；E 已完成并验收，2.1 为 COMPLETE |
 
-以上设计目标及两项补充已获用户确认，具体技术选择按 10.1 保留调整空间；GO 默认延期，可选 E 仍须单独确认。**本次仅授权文档提交到 `integration/xf-yl`、快进同步远端并准备 `fusion/2.1-pool` 分支，不据此启动 A、可选 E 或任何功能代码实施。**后续实施中若改变重要所有权、异常契约、API 兼容或 GO 范围，应先说明并同步本文件，避免下一会话自行猜测。
+以上设计目标及两项补充已获用户确认，具体技术选择按 10.1 保留调整空间；GO 已纳入必做批次 E（用户确认，当前状态见第 16 节）。**设计阶段仅授权文档提交到 `integration/xf-yl`、快进同步远端并准备 `fusion/2.1-pool` 分支，不据此启动 A、E 或任何功能代码实施；A 后续单独授权与结果见第 12 节。**后续实施中若改变重要所有权、异常契约、API 兼容或 GO 范围，应先说明并同步本文件，避免下一会话自行猜测。
 
 ## 11. 专题完成标准
 
@@ -321,7 +321,222 @@ B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在�
 - Core只向中立Foundation接入，不增加Core→整体Runtime/原XF引用，不恢复Module/Model默认池化。
 - Action延迟回收/租约、LoadViewArgs接管协议、AudioSource释放、Binding内部事件所有权、Resource领域释放顺序均有定向验证。
 - 冷热、身份、转换期、容量、清引用和失败隔离契约明确；普通池对旧别名、线程、工厂独占、资源释放的限制不作虚假保证。
-- GO和XFAB范围保持批准边界；原Package/游戏路径未迁移。必要Audio间接影响通过代表性非干扰验证。
+- 自有 GO 池按必做批次 E 完成融合与正确性验证；XFAB 范围保持批准边界，原 Package/游戏路径未迁移。必要 Audio 间接影响通过代表性非干扰验证。
 - API/测试/文档/程序集与meta对应真实最终状态，已发现但延期问题清楚保留；实际验证分别报告。Git操作继续单独授权。
 
-**设计目标与审阅补充已确认；本轮仅完成文档 Git 收口和实施分支准备，不进入功能代码实施。**
+**以上为设计阶段的确认记录；2.1-A 后续授权及实际实施状态见下节。**
+
+## 12. 2.1-A 实施与验证
+
+2026-10-09 用户明确授权仅实施 A。实际分支为 `fusion/2.1-pool`，开始时工作区干净；未执行 Commit、Push、Merge、分支切换或清理。实施期间用户另行修改的根 `AGENTS.md` 保留，不计入本批产品改动。
+
+- `Shared/Pool/ObjectPool.cs` 承接 YL 的委托/接口工厂、FIFO/LIFO、空闲容量、目标数预热及先摘缓存快照的机制；吸收 XF 可选加载/归还生命周期钩子的使用方式，冷/热统一执行。为池归属、转换态、失败隔离及永久清理新增实例内弱键状态，不复制 XF 时间表、TTL checker 或反射 reset。
+- `ConditionalWeakTable<T,Entry>` 仅记录状态，Entry 不持有键；空闲容器强持空闲对象，不强制保活失联借出对象。只接收本池 Leased 对象，foreign 抛异常；null、重复及转换期归还拒绝。原始旧别名、恶意跨池工厂同引用、并发和 Unity fake-null 不在保证范围。
+- Reset 清租用数据，Discard/满池/关闭池在 Reset 后永久丢弃；取得或 Reset 失败直接 Retired，不恢复成可重试对象。附加丢弃错误与原异常聚合。Clear/缩容先退休整个选定快照，逐项尝试永久清理；Dispose 先关闭，不强制清理借出对象，晚归还只清理不缓存。回调重入后复核容量和预热目标，不交付给已关闭池。
+- 迁入 IPool、IObjectFactory、Default/CustomObjectFactory、ListPool、DictionaryPool、SingletonSessionState，七个现有脚本均保留 `.meta`/GUID。PoolOptions 从旧 Pool 文件拆到公共层；旧 Pool 缓存行为未改变。仅 Runtime 和旧 EditMode 测试增 Foundation 引用；Foundation 不依赖 Runtime/Core，friend 仅 Runtime/Core，Core 未增加整体 Runtime 引用。新文件及目录 meta 由 Unity 生成。
+- 集合改用同一内核，保留 Allocate/void Recycle/扩展入口、LIFO、归还 Clear、List 最小容量保证、Dictionary 仅冷创建应用容量；默认空闲 20，可配置或 Clear。重复归还从抛错调整为幂等拒绝，不再接纳外部集合，避免 comparer 污染；capacity 热/冷均先校验。退出现有 StaticStackPool。TableIndex 仅适配构造前验证和新桶添加失败归还，不改索引算法。
+
+实际使用当前 Unity `2022.3.62f3c1` 编译并运行，最终 `scriptCompilationFailed=false`、`isCompiling=false`，Main 场景未脏、已退出 PlayMode。测试结果按实际执行项统计，不使用工具的全工程发现数：
+
+| 定向验证 | 实际结果 |
+|---|---|
+| ObjectPoolTests | EditMode 47/47，含弱引用 GC、预热 factory/reset 重入目标回归 |
+| CollectionPoolTests | EditMode 12/12，含集合、Table 与会话重置/旧 Singleton 状态 |
+| FoundationBoundaryTests / SingletonContractTests | EditMode 5/5、5/5，含公共类型唯一归属与窄 friend |
+| 原 PoolContractTests / CoreIdentityTests | EditMode 15/15、7/7，保留旧对象路径及 Core 无整体 Runtime 引用的断言 |
+| SingletonHostPlayModeTests | PlayMode 3/3，覆盖实际会话宿主与场景/释放生命周期 |
+
+最终定向 EditMode **91/91**、PlayMode **3/3**，无失败/跳过；只读审查发现的预热回调重入超目标问题已修复并通过用例。初次新增测试使用实际 NUnit 不支持的属性导致编译阻断，移除该属性后重新编译通过，未移除关键断言；旧 Pool 测试锁定的 null/重复/失败重试行为本批仍属于未迁移路径，不冒充新内核契约。
+
+Packages、ProjectSettings、原游戏业务/场景/资源无本批差异；未执行全量历史测试、Player、IL2CPP、性能测量或切换 Domain Reload 设置。会话重置已验证现存 reset 入口及实际 PlayMode 回归，不冒充关闭 Domain Reload 后的整体验收。既有 Package 恢复差异、原 Logger/MCP 边界和 XFAB 释放风险仍按长期蓝图保留。
+
+**A 达到技术完成标准，等待用户验收；不等于 2.1 专题完成。**旧 Pool/Simple/Safe、ClassObjectPool/Independent 与 Core ClassObjectPoolManager/IReuseable 暂时并存：B 迁 YL 领域消费者并退出 Pool/Simple 独立算法；C 迁 Core 参数与临时集合并退出 Core manager；D 核查引用/身份后删除剩余冗余 API。Module/Model 不恢复池化，LoadViewArgs、Action/Events/Binding/Audio/Resource 等整体迁移均未实施；A 完成后停止。
+
+## 13. 2.1-B 实施与验证
+
+2026-10-09 用户明确授权实施 B；A 基线为已提交并推送的 `a97cb2c`。本批在 `fusion/2.1-pool` 开始时工作区干净，未执行 Commit、Push、Merge、Reset、Clean 或分支切换。根 `AGENTS.md` 未修改。
+
+### 13.1 接入与契约
+
+- Safe 的冷/热取得、回收、Raw 标记、身份、转换态及失败隔离统一由 ObjectPool 承接；保留类型单例、工厂、容量、预热和 IOfPool 回调。回收前标记 true，失败保持退休，不允许改写 IsRecycled 重新接纳；OnAllocate 内归还当前对象被拒绝，关闭后的原池晚还只清理不缓存。静态新池及领域静态快捷入口拒绝旧池借用，原持有者须归还原池，不增加全局 owner 路由。
+- Safe 会话关闭使用封闭类型的弱引用记录原单例，不依赖 SingletonProperty 的注册/摘除顺序，也不注册每实例强闭包。独立审查发现 Events/Binding 先查 HasInstance 会打破原先的顺序假设，已用真实注册项顺序回归先复现再修复；旧实例 Dispose 不会关闭新单例。
+- 保留 `Pool<T>`、`SimpleObjectPool<T>` 的有价值公共入口，改为统一内核薄适配，无独立 Queue/Stack。FIFO/LIFO、容量、工厂替换、目标数预热、Clear(callback) 及默认值保留。Pool 新增引用类型约束；直接容器操作及 `PrepareRecycle(ref T,bool)` / `RecyclePrewarmed` 保护层改为 Create/OnAllocate/Reset/OnDiscard/PrepareRaw 钩子，这是明确的继承 API 变化，不维持旧不安全缓存算法。Simple 不再接纳外部 new、重复缓存或 Reset 失败重试。
+- 公共内核仅为适配保留 Clear 附加快照回调及内部 Raw 领域标记钩子；永久清理与 Clear 附加回调逐项尝试并汇总异常，不改变 A 的 public Raw 生命周期、容量或身份语义。不存在新线程池、TTL 或池宿主。
+- ActionPool 直接使用 ObjectPool，保留无限容量、LIFO、Raw 预热、执行租约/Generation、组合生命周期及 Drain 批次。Abstract/Coroutine 清理失败只安排延迟 Discard；UniRx 在 Finish/Reset/Deinit 及晚到句柄释放失败时记忆污染状态，Drain 才判定丢弃，不重放失败清理。自身已摘空引用的组合节点仍可在子清理失败后复用，不重写组合算法；有实际抛错点的取得初始化进入 Allocating 钩子。
+- EasyEvent、BindableProperty、FSM、Resource、GO Data 经 Safe 共用缓存。保留事件容量 50、0 参预热 10/泛型 1，属性容量 50/预热 1及值、Comparer、监听清理；属性 readonly 内部事件只清监听，不独立归还。普通实例事件、MappedProperty、TimeItem 不恢复池化。FSM 保留回调内归还门禁及状态对象所有权，Exit 失败隔离不等于完成 DeInit。
+- Resource 仅做直接接入修复：ResLoader 的实例销毁移入 Returning 门禁，foreign 拒绝前不产生清理副作用，保持销毁实例再 ReleaseAllRes。GameObjectLoader 和三类 AB 资源的直接初始化失败捕获原池 Discard，保留根因与追加错误；AssetRes 初始化查询的临时 Key 归还原池；ResourcesRes 路径切片前移至借用前。不改变真实资产释放、引用计数或 XFAB。
+- Audio 私有 Sound 池直接使用 ObjectPool；保留 LIFO、独立 Source 预热、0 禁缓存、Stop 的 Generation 失效和活动登记摘除。Reset 清回调/Clip/Target/播放状态，onDiscard 唯一负责永久 DestroySource，缩容/Clear/Shutdown 不再次 Reset 或根据 false 重复释放。Source OnDisable 在 Reset 内设容量 0 的回归已先复现再修复，归还提交后复核 no-cache 并清理。
+- UI Tips 私有池直接使用 ObjectPool；捕获原池与原根节点，位置校验先于借用，完成回调一次性归还，初始化失败 Discard，领域处理 fake-null 及 GameObject 销毁。未恢复被注释的显示流程，不宣称完整 Tips 显示闭环已验收。
+
+### 13.2 实际验证
+
+当前 Unity `2022.3.62f3c1` 实际编译完成，最终 `scriptCompilationFailed=false`、`isCompiling=false`、`isPlaying=false`，`Assets/Scenes/Main.unity` 未脏。统计采用实际执行通过数，不使用 MCP 返回的全工程发现数。
+
+| 定向验证 | 实际结果 |
+|---|---|
+| PoolContractTests | EditMode 21/21，含 Safe session 顺序、Raw 标记、旧池晚还、失败隔离及 FSM 两项 |
+| ActionInternalSupport / ObservableAction / ActionExecution / CompositeCancellation / ModernAction / ActionKitLifecycle | EditMode 8/8、59/59、25/25、31/31、51/51、13/13 |
+| EventsContract / BindingContract / ResourcePoolTests | EditMode 14/14、11/11、7/7 |
+| AudioCleanup / AudioSoundBudget / AudioSoundAdmission | 最终 EditMode 9/9、61/61、22/22 |
+| ObjectPool 的受影响 Raw/快照回归 | EditMode 4/4，未机械重跑未受影响的 A 套件 |
+| ActionKitLifecycle / ActionStart | PlayMode 13/13、17/17 |
+| AudioSoundBudgetPlayback / AudioSoundStarted | PlayMode 7/7、11/11，含 OnDisable 转换期容量 0 及帧后 Source 销毁 |
+| 原游戏 YLClickSound / YLAudioGameFlow | PlayMode 1/1、1/1，点击音效与菜单、设置、进入、退出、再入流程 |
+
+最终定向 EditMode **336/336**、PlayMode **50/50**，无失败或跳过。早段因工具类过滤未命中而扩大执行一次 Audio 命名空间，408/408 通过；与最终 92 项 Audio 定向回归有重叠，不重复累加。遗漏的旧 Action 失败复用断言及 external-new 夹具已按批准契约迁移，保留关键异常/队列/清理断言。独立只读复核已关闭 Safe session、Audio 转换期和上述旧测试迁移发现；无新重要缺陷。
+
+实际 diff 与新增 ResourcePoolTests/meta 已复查，空白检查通过。未修改 asmdef 或移动既有脚本，Foundation 仍无 Runtime/Core 引用，Core 未增加整体 Runtime 引用。Packages、ProjectSettings、原游戏业务/测试/场景/资源、XFMain 及 AGENTS 无本批差异。未执行 Player/IL2CPP、性能基准、全框架测试或切换 Domain Reload 配置；会话验证是注册项及正常 PlayMode 回归，不冒充关闭 Domain/Scene Reload 的全工程验收。
+
+### 13.3 边界与交付
+
+Pool/Simple、Safe、Action、Audio/UI 的重复普通缓存算法已退出；历史 Pool/Simple 薄入口保留到 D 评估收口。ClassObjectPool/Independent 等冗余历史实现留 D，Core manager、LoadViewArgs 和 Core 集合留 C；GO 自有缓存算法与独立正确性当时按可选 E 记录，后经用户确认纳入必做批次（见第 16 节）。
+
+旧事件 Token/Once 嵌套问题、Resource ReleaseAllRes 部分失败、FSM Exit 失败的剩余领域引用、Action 配置扩展回调抛错的旧漏归还、跨 Session 存活消费者的原池捕获及 UI 显示流程不在本批完整解决。失败隔离不会伪装为外部资源已全部释放；普通池仍不防旧原始别名、恶意工厂同引用、并发或 Unity fake-null。既有 Package、Logger/MCP、XFAB 物理卸载风险不扩展处理。
+
+**B 达到技术完成条件，具备进入 C 的技术前置条件；当前停止，等待用户验收与另行 Git 收口授权，不自动实施 C。**
+
+## 14. 2.1-C 实施与验证
+
+2026-10-09 用户明确授权仅实施 C。实际基线为 `fusion/2.1-pool` / `e8925e6`，开始时工作区干净；A/B 已由用户验收并提交、推送。以下为本批新证据，不重复 A/B 的全量验证；未执行 Commit、Push、Merge、Reset、Clean 或分支切换。
+
+### 14.1 能力收敛与生命周期
+
+- 退出 Core `ClassObjectPoolManager`、同文件 `IReuseable` 及配套 `.meta`，不保留转发壳或独立 Type→List/时间表。定向检索 Assets 的类型名、完整类型身份及旧 GUID，仅剩测试的退出断言，无实际资源或动态绑定引用；不声称已证明仓库外兼容。旧公开入口需要迁移至统一 `YLFramework.Core.Pool` API。
+- 泛型对象创建/复用由 Foundation `ObjectPool<T>` 承接；动态 `Type` 创建保留为显式 `ObjectPool<object>(() => Activator.CreateInstance(type))`，不要求运行时构造封闭泛型池或建立新的全局 registry。可选取得/reset 回调改为委托，冷/热一致；不强制普通对象实现领域接口。引用身份、转换期保护、失败隔离及永久清理复用 A/B 内核，不再照搬原 XF 的相等性、回调异常或冷创建漏钩子问题。
+- 按已批准 D4 退出普通池 TTL checker：空闲保留是通用需求，但固定 scaled-time 扫描引入时钟、宿主及跨会话责任，且丢引用不是资源释放。首版以有限容量、显式 Clear/缩容、Dispose 及会话清理替代；明确 TTL 不再是自动公共能力，需要 TTL 的领域留后续按实际时钟与释放需求设计，不仅以当前无消费者作为理由。
+- `LoadViewArgs` 留 Core，以私有 LIFO `ObjectPool<LoadViewArgs>` 缓存，默认空闲上限 20。New 的冷/热初始化统一在私有取得钩子，reset 立即清七类值并结束 leased/owned/reading。Claim、BeginRead/EndRead、原线程/访问门禁、Release/Recycle 的支持入口及重复归还语义保持；没有对业务暴露通用归还入口。
+- 参数池向既有会话状态注册一次空闲 Clear，不替换原池、不清借出参数；原操作仍负责终态 Release。同步/异步请求、View/Panel 生命周期和 XFAB 后端未改；请求已有的先摘 args 引用、终态门禁及 Session/owner 隔离继续承担迟到完成安全。普通原始旧别名仍不可识别，禁止保留归还后的参数引用，不伪装为新通用 token 保证。
+- EventManager、ModelManager、PanelManager 临时列表统一使用 ListPool，快照构造和消费纳入 finally。Model 双重租用采用嵌套 finally，第二次取得失败也归还第一份列表；归还立即 Clear 元素引用，保留 backing capacity。Panel 两类 UI 更新之间必要的 Clear、排序和原 Session 核验不变；Events 发布/签名/订阅及 Model 注册/移除流程不重构。
+- Module/Model 仍默认普通构造且不自动归池，不新增专用池化体系。非隐式池化测试改用显式业务池作对照，保留构造次数、实例、业务状态、owner 和 ID 隔离断言。CoreClassPoolScope 只报告注册、参数状态及七类值残留，不再修改旧 Manager 私有表，也不补归还掩盖失败。
+
+### 14.2 实际验证与边界
+
+当前 Unity `2022.3.62f3c1` 实际刷新、编译完成；最终 `scriptCompilationFailed=false`、`isCompiling=false`、`isPlaying=false`，唯一打开的 `Assets/Scenes/Main.unity` 未脏。新增测试 `.meta` 由 Unity 生成，现有未移动脚本 GUID 保持；旧 Manager 的源码与 meta 配套退出。
+
+| 定向验证 | 实际结果 |
+|---|---|
+| CoreLoadViewArgsTests | EditMode 11/11：七类清值、复用、Claim/读取窗口、线程、重复归还、foreign 拒收及真实注册会话回调 |
+| CoreTemporaryCollectionTests | EditMode 5/5：Event 清监听保留键、Model 两种清理异常、第二次分配失败、嵌套清理的独立快照及清引用 |
+| CoreIdentityTests | EditMode 8/8：依赖/类型唯一性、旧 Core Pool 退出、动态 Type 显式工厂及冷热回调 |
+| CoreDirectView 代表性参数用例 | PlayMode 3/3：无效同步输入、Claim/读取窗口重入、加载钩子/激活失败回滚 |
+| CoreXfab 参数用例 | PlayMode 5/5：命名同步/异步成功、取消后同参数实例重租及迟到 producer、真实缺失/初始化失败、读取窗口内 Abort 后重入、关闭失效后原实例重启 |
+| CoreXfab Panel 相关用例 | PlayMode 4/4：AlwaysInFront 异常快照归还、同组件新 Session/不同 UI 上下文隔离、排序/业务失败回滚、等待取消/重复 Claim/借用窗口 Abort |
+| CoreModule 代表性用例 | PlayMode 3/3：Module 非隐式池化、Model 非池化及状态/ID 隔离、owner/多实例/查询与清理 |
+
+最终实际定向执行 **EditMode 24/24、PlayMode 15/15**，无失败或跳过；数量采用实际返回的执行项，不使用工具的全工程发现数。组合 class 过滤未命中时未运行测试，随后逐类运行；首次批量 PlayMode 工具调用发生一次传输重试失败，不把无返回调用计作通过，恢复后逐项重跑并取得上述结果。没有以工具错误为由修改测试、原 Logger 或 MCP。
+
+只读独立复核未发现重要生产缺陷；会话注册覆盖和 Model 嵌套快照覆盖已补齐并通过。最终 diff/新增文件/meta 与空白检查通过。Core 继续仅向 Foundation、XFABManager、UnityEngine.UI 依赖，未改任何 asmdef，也未修改 A/B 公共内核；CoreIdentity 保留无整体 Runtime/原 XF/Editor 引用的关键断言。
+
+未修改原 Packages、ProjectSettings、CGJ2024 游戏业务/测试、场景、Prefab 或资源产物，未开展 Events/Update/Timer、资源所有权或 GameObject Pool 改造。未运行全量阶段 1/A/B 测试、完整游戏流程、Player、IL2CPP、性能测量或切换 Domain Reload 设置；会话验证仅是实际注册回调及正常 PlayMode，不等同关闭 Domain Reload 的全工程验收。动态反射构造仍需业务按目标平台保留所需构造信息；既有 Package、Logger/MCP 与 XFAB 物理卸载风险维持原边界。
+
+**C 达到技术完成标准，具备进入 D 的技术前置条件；本轮停止，等待用户验收与 Git 收口，不自动实施 D。**Runtime 的 ClassObjectPool/Independent 及历史 Pool/Simple 薄入口仍留 D 评估；本批仅退出直接替代的 Core 历史 API，不提前完成全局命名/目录/文档收口。
+
+## 15. 2.1-D 最终收口与技术验收
+
+2026-10-09 用户明确授权 D；实际起点为干净的 `fusion/2.1-pool` / `2529d5a`，A/B/C 已验收并提交。只核查最终源码及必要闭包，复用未受影响的 A/B/C 有效证据；没有重新开展完整架构研究或自动执行 Git 写入。
+
+### 15.1 最终体系与能力承接
+
+| 层次/能力 | 最终实现与取舍 |
+|---|---|
+| 唯一普通缓存内核 | Foundation 的 ObjectPool：引用身份、转换态、失败隔离、弱借用追踪、容量/顺序/预热、快照清理及永久丢弃。List/Dictionary 与所有直接消费者共用它 |
+| Safe 类型入口 | 直接组合 ObjectPool，退出旧 Pool 基类身份；保留 IOfPool、单例、工厂替换、容量、Init/两种预热、Clear/Discard/Dispose、原池晚归还及 protected 创建/生命周期钩子 |
+| 动态类型/非公开创建 | ObjectPool<object> 的显式动态工厂；保留 Runtime 中 NonPublicObjectFactory、MultiObjectFactory 与 ConstructorFinder 的构造缓存、带参/初始化及异常解包。不新建全局 Type registry，不把纯创建当重复缓存删除 |
+| 重复实现及旧入口 | 配套删除 ClassObjectPool、IndependentObjectPool、Pool、SimpleObjectPool 与四份 meta；C 已退出 Core manager/IReuseable，A 已退出 StaticStackPool。无永久兼容壳或第二套普通缓存 |
+| 缓存策略与生命周期 | 保留 FIFO/LIFO、有限/显式无限空闲容量、目标数 Recycle/Raw 预热、冷热可选钩子、显式 reset、永久清理。自动反射 reset 与普通池 TTL 已按批准方案退出；资源清理不能靠丢引用替代 |
+| 领域边界 | Action 延迟队列/租约、Audio Source 所有权、Binding 内部事件、LoadViewArgs 接管、Core Panel Session 快照保持；Module/Model 不恢复隐式池化；自有 GO 归必做批次 E（已由第 17 节完成），XFAB 原链不变 |
+
+Safe 原公开方法形状保留，但旧普通池基类和四类类型身份明确退出，是已批准 D3 的源/二进制兼容断点，不宣称仓库外零迁移。Simple 原第二参数为 reset、默认无限并构造预热；迁移为 ObjectPool 时使用命名 `reset:`、显式 `maxPoolSize: 0` 和后续 Prewarm，测试未机械改名或削弱原顺序/异常断言。
+
+### 15.2 身份、命名、依赖及文档
+
+- Assets C#/资源文本及相关 Packages/ProjectSettings 的符号、完整类型名和退出 GUID 定向检索没有实际绑定；退出 GUID 在删除前仅命中自身 meta。原 Package 的不同 ClassObjectPoolManager 保持只读。该证据不覆盖仓库外 DLL、拼接反射或二进制存档。
+- Safe、纯创建工具与保留脚本的 namespace/程序集/GUID 不变；没有新增/移动资产或 asmdef。Foundation 无 Core/Runtime/XFAB 依赖，Core 无整体 Runtime/原 XF 依赖，实际加载程序集断言通过。公开 namespace 继续为 `YLFramework.Core.Pool`，不因命名 tidy 改变程序集身份。
+- Pool 范围无遗留 XF 前缀产品入口；8 个 Action 文件仅把已为 ActionPool 的私有 `mSimpleObjectPool` 改为 `mPool`，无序列化/反射引用和算法变化。XFGameFrameworkEvents 等其他专题名称不改。
+- PoolContractTests 退出旧 TestPool/Simple 依赖，按正式内核保留关键断言；ApiHelpTests 使用仍属 Runtime 的 Safe 判断原帮助程序集。新增两项退出/直接组合与非公开工厂能力用例，不新建测试设施。
+- Modules/Pool.md 更新实际 API/程序集、用法、迁移、false 消费引用、异常隔离、会话、GO/XFAB 边界及真实测试入口；UI.md 仅修正 Tips 池说明。IntegrationPlan 更新 2.1 状态；总体规划仅同步当前状态，其原研究结论保留为历史。
+- Shared 的 XF MIT LICENSE 和已有第三方来源声明完整保留；未根据旧工厂名称猜测来源或冒署版权。没有改 AGENTS、原 Package、游戏业务/测试、场景、Prefab、资源产物或依赖。
+
+### 15.3 本轮实际验证
+
+Unity `2022.3.62f3c1` 实际刷新并编译，`scriptCompilationFailed=false`、`isCompiling=false`。统计采用实际执行结果，工具的全工程发现数不计入通过数：
+
+| 定向验证 | 实际结果 |
+|---|---|
+| PoolContractTests（迁移后） | EditMode 23/23，含两个新用例、Safe session/Raw/失败/晚归还及 FSM 门禁 |
+| Foundation 依赖/唯一 Pool 归属、Core 依赖 | EditMode 3/3，加载程序集及窄 friend 断言 |
+| Events / Binding / Resource 代表性接入 | EditMode 1/1、1/1、2/2，清监听/内部事件所有权、原池初始化失败丢弃及根因/追加清理错误 |
+| Action 失败延迟丢弃 / Audio 永久清理 / ApiHelp 程序集 | EditMode 各 1/1，未重跑全部领域套件 |
+| RuntimeRecycleIsDeferredAndReusesTheActionAfterUpdate | PlayMode 1/1，实际 Update 后才复用动作 |
+| 关闭 Domain/Scene Reload 的普通 Play 会话 | 两次真实会话内存 probe 均通过：Safe 原会话关闭、新池拒绝旧借用、原池晚还且只清一次；集合空闲重置但借出内容不被清理。非 Test Runner 计数，不冒充两项永久自动测试 |
+
+本轮共 **EditMode 33/33、PlayMode 1/1**，无失败/跳过；另有上述两次实际会话检查。初次 class 全限定过滤未找到测试、没有执行，随后使用实际支持的 class 过滤取得 23 项结果；一次内存 probe 工具脚本解析失败发生在执行前，修正后取得两个真实会话结果，不计作项目编译或测试失败。独立只读代码复核未发现本批新增重要问题；实际 diff、meta 和空白检查通过。
+
+实际会话使用未保存的临时空场景，不启动原游戏、不保存场景资产；完成后恢复进入前的 Editor 设置与 `Assets/Scenes/Main.unity`，场景未脏、已退出 PlayMode。D 未改变 Audio 行为/Source 路径，原游戏音频非干扰沿用 B 的 1/1 点击和 1/1 完整流程有效证据，不再次机械执行游戏或 Player。未运行全量 A/B、Windows Player、IL2CPP、性能基准或跨平台验证。
+
+### 15.4 D 阶段完成判定与保留限制
+
+A～D 范围内第 11 节技术条件已满足：只有一个普通/集合缓存内核，职责/依赖/身份/异常边界清晰，直接消费者已接入并有有效定向证据，API/meta/文档与最终源码对应。**D 技术验收通过（后已 Git 收口 `455088c`）；2.1 Pool 待 2.1-E 验收后 COMPLETE（E 已由第 17 节完成并验收）；2.2 Events 待专项研究与设计。**没有自动 Commit、Push、Merge、Reset、Clean 或切换分支，D 阶段至此停止。
+
+本批不新增内核算法或修复其他领域；A/B/C 已处理的冷创建漏钩子、相等性身份、转换期/异常污染、容量重入、引用保持及领域失败回收由最终统一体系承接。仍不防原始旧别名、恶意工厂同引用、并发或 Unity fake-null，不承诺所有资源释放成功。
+
+归属不变：GO 跨 key/转换期/初始化数组等缺陷归必做批次 E（已由第 17 节完成）；旧事件 token/Once 嵌套及事件历史名称归 2.2；Resource 部分释放及嵌套加载器跨会话内层原池捕获、FSM Exit 残余引用、Action 配置扩展失败和 UI 显示流程归领域后续。跨会话资源限制不是 D Safe 组合的新回归，不通过新静态池接纳旧对象掩盖它。Package 恢复差异、原 Logger/MCP 过渡期问题、XFAB 物理释放、最终独立与跨平台风险仍沿用长期蓝图。
+
+## 16. 阶段决策修正：2.1-E 纳入必做范围
+
+2026-10-09 用户验收 2.1-D 并纠正阶段决策记录：自有 GameObject Pool 的融合与正确性完善此前已明确批准纳入 2.1 正式必做范围，不是可选延期批次。本文及阶段 2 总体规划、长期蓝图此前的“可选 E／默认延期”表述均以本节为准；第 12～14 节为历史实施记录，其余历史措辞不再逐条标注。
+
+- 2.1-A～D：已验收并完成 Git 收口（`a97cb2c` / `e8925e6` / `2529d5a` / `455088c`）；实现与验证见第 12～15 节。
+- 2.1-E：必做且已完成；按第 7.3/8 节范围作为完整正确性任务实施，实现与验证见第 17 节，2026-10-09 用户验收通过。
+- 2.1 Pool：COMPLETE（A～E 全部完成并通过验收）；第 11 节技术条件已满足。
+- 2.2 Events：待专项研究与设计；不自动授权实施或 Git 操作。
+
+本轮仅修正状态及对应说明，未修改功能代码、测试或资产，未执行 Unity 验证与 Git 操作；第 15 节的实际工作与验证结果保持不变，其中 15.4 的完成判定已按本节修正。
+
+2026-10-09 用户验收 2.1-E 后，本节状态同步为最终结果：2.1 Pool COMPLETE（A～E 全部完成）；阶段 2 保持 IN PROGRESS；2.2 Events 待专项研究与设计；E 为必做批次且不再标记可选或延期。E 的 Git 收口提交由用户后续执行，本节不冒充已提交。
+
+## 17. 2.1-E GameObject Pool 融合与正确性完善
+
+2026-10-09 用户明确授权研究、设计、实现及最小充分验证 E。实际起点为干净的 `fusion/2.1-pool` / `455088c`；A～D 已验收并 Git 收口，本节覆盖历史“D 待 Git / E 未开始”的当前状态。没有执行 Commit、Push、Merge、Reset、Clean 或分支切换，不自动进入 2.2。
+
+### 17.1 取舍与最终职责
+
+- 保留 YL 的 string 分桶、FIFO、Prefab/已有实例初始化、目标缓存数量、`-1` 无限/`0` 禁缓存、归还失活/reparent、取得先层级后激活、无 parent 回 active scene、显式 Clear/ClearAll、固定单例路径。Prefab 只在本次预热 Instantiate，不保存资产引用、不提供空池自动创建。
+- 吸收 XFAB 实例→原桶归属与先摘后毁的成熟思想，以引用身份弱表及不可复用桶 Lifetime 代替 hash/name；没有复制 Package 代码、全表取闲、混合时钟 TTL checker 或 Prefab/Bundle 卸载责任。原 XF View 和原游戏仍使用 XFAB Loader。
+- Data 仍复用 Safe→ObjectPool 的普通缓存、容量和失败/关闭契约；GO 使用唯一 FIFO 和 Unity 专用状态，不强行普通化，也不重复维护 Queue + idle HashSet。静态 CWT 记录 GameObject 归属/状态及 cache-root 身份，弱键不强制保活借出实例；Entry 不持有可复用 Data，避免旧生命周期指向重用后的新桶。
+- 生命周期为 Leased/Returning/Idle/Allocating/Retired。只在成功完成转换并复核存活、桶、层级及容量后发布；空闲才由池拥有并销毁，借出对象由持有者负责，闭桶后的原 owner/key 晚归还只销毁。退休身份先于失活/Destroy，拒绝内部同帧待销毁重收。
+
+### 17.2 修复与 API
+
+- 跨 key/宿主归还在副作用前抛错；按对象回收优先原归属，不再依赖可变 name。保留首次接纳未登记场景实例的通用价值，拒绝 Prefab 资产与池根/宿主祖先。
+- 数组保持长度作为目标空闲总量，但唯一处理有效输入，不按下标截断；已有/重复实例不会因尾部再次 Destroy，null/重复前缀不误挡后续有效对象。超目标的独占输入只退休一次，外来归属先整体验证。
+- 非法容量/预热目标/key/缺 Prefab 在修改桶前拒绝；缩容立即退休多余空闲，fake-null 不占计数或缓存名额。根被外部销毁后主入口关闭旧 Data，再建立新生命周期。
+- OnEnable/OnDisable/父节点回调中的同对象归还拒绝；嵌套其他对象归还不会突破容量；回调 Clear/重建同 key 不交付旧转换实例。初始化先登记并守卫 Data/key 的在建态，Clear 可以取消未发布创建，失败根不会遗失。
+- 拒绝任何已登记缓存根及后代作为 Allocate parent，避免别桶 Clear 级联销毁本桶借出对象。宿主 Awake 保证根 DDOL，包括直接挂载/已有路径根；OnDestroy 关闭桶并通知已有单例缓存，不创建替代宿主。
+- 复用既有会话 reset，弱登记存活宿主；新会话关闭旧桶、摘旧 Data owner，原 Safe 关闭前后均归还原池。公有 Safe 类型单例直借 Data 的 `RecycleToCache` 也捕获原 owner；私有 Safe 显式归还其 owner，不新建通用资源/租约接口。
+- `GameObjectPool` 方法签名与 namespace/程序集/GUID 保留，新增 `GetCachedCount`。数组重载显式三参数及 `(key, gameObjects)` 入口修复两组可选参数歧义；普通 `(key, capacity)` 现在可直接使用。
+- Data 的 `RootTransform` 为只读属性，`PoolQueue` 为只读诊断快照，新增 `Count`，`MaxCapacity` 为校验/缩容属性；字段反射及直接容器写入需要迁移。Assets 定向核对无已发现的既有外部消费者/动态或序列化绑定，不冒充仓库外二进制兼容。既有两份 meta/GUID 保持，测试 meta 由 Unity 新生成，没有移动类型或修改 asmdef。
+
+### 17.3 实际验证
+
+当前 Unity `2022.3.62f3c1` 实际编译：`scriptCompilationFailed=false`、`isCompiling=false`；已退出 PlayMode，唯一打开的 `Assets/Scenes/Main.unity` 未脏。新增一个 GO PlayMode 套件及轻量生命周期 probe，不建立 Mock/Fixture 系统，不重跑 A～D 数百项历史测试。
+
+| 本轮实际执行 | 结果与范围 |
+|---|---|
+| GameObjectPoolPlayModeTests | 最终 PlayMode **13/13**，覆盖正常 FIFO/预热/场景回迁、跨 key/宿主/改名、数组重复与 null、激活/停用/Parent 回调重入、回调容量变化、fake-null/缩容/待销毁、Clear/宿主毁与晚还、桶重建、根失效、原 Safe owner/会话 reset、独立 Data/初始化重入、跨缓存 parent、Unity 消息异常 |
+| SafeClearAndDisposeDoNotTouchBorrowedObjectsOrRepeatHooks | EditMode **1/1**，复用普通 Data 底座的最小借出边界回归 |
+| SharedPoolTypesHaveOneFoundationOwnerAndOnlyNarrowSessionFriends | EditMode **1/1**，统一普通内核及窄 friend 不变 |
+| CoreDependsOnFoundationAndTemporaryBackendNotOriginalXFOrExistingYL | EditMode **1/1**，无 Core→整体 Runtime/原 XF/Editor 依赖 |
+
+统计仅含实际执行项，总发现数不计入通过数。最初 3 个回归在旧实现全部失败，修复后通过；复核补充的 2 个组合回归也先失败后通过。扩展测试曾有尾部括号/原重载歧义编译阻断，修正后重新编译；预热 probe 的序列化计数复制已用 NonSerialized 正确隔离，不削弱实际 OnEnable 断言。一次错误全限定测试过滤超时未取得结果，随后使用正确 namespace 取得 1/1，不计无返回调用为通过。
+
+独立只读复核确认原 Data owner、初始化转换期、跨缓存 parent 三项补充发现已关闭，声明的 API 契约内无新增重要回归；该复核是静态证据，不冒充另一次测试执行。最终 Data 独立入口也使用不持有 Data 的 opaque identity；此小调整后重新执行 GO PlayMode **13/13** 通过。最终 diff/新增测试及 meta、空白检查通过。
+
+### 17.4 限制与完成判定
+
+- 保留主线程、原始引用无租用代次、禁止保留归还后旧别名的约束。外部不得激活/改层级/使用缓存实例或把额外对象挂在缓存根下。外部同帧排队 Destroy 没有通用可查询标志，只在 fake-null 后剔除，不冒充已解决外部任意排队销毁。
+- Unity 消息异常通常由引擎记录，不从 SetActive 传播；池维持结构状态，不能自动判断组件业务污染或替调用者 reset。直接传播的 API 错误隔离当前实例，批量清理尽力继续后聚合；数组/预热不是整批事务。
+- 会话用例在真实 PlayMode 调用现存注册的 reset 路径并验证原 owner 顺序，没有切换 ProjectSettings，也不冒充本轮实际关闭 Domain/Scene Reload 的双会话验收。A～D 有效证据沿用，未改普通内核和领域消费者；未执行游戏完整流程、Player/IL2CPP、性能基准或全平台验证。
+- 未修改 AGENTS、原 XF/XFAB Package、Packages、ProjectSettings、游戏业务/测试/场景/资源或其他领域。Pool.md、IntegrationPlan 和总体状态按实际结果同步；既有许可声明保持，不创建重复计划/过程报告。
+
+**E 已通过用户验收（2026-10-09）；A～E 全部完成，整个 2.1 Pool 达到 COMPLETE。**阶段 2 保持 IN PROGRESS；2.2 Events 待专项研究与设计，不自动启动。E 的 Git 收口提交由用户后续执行，本阶段记录不冒充已提交/已合并。Resource/GameObjectLoader 的资产所有权、引用计数、异步取消及物理卸载仍归后续资源专题；Events 旧 token/Once 等既有限制不改变，本轮到 E 为止。

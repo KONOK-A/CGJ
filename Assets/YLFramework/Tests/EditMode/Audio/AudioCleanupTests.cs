@@ -211,6 +211,38 @@ namespace YLFramework.Tests.Audio
         }
 
         [Test]
+        public void SoundReturnClearsPlaybackReferencesButKeepsBorrowedClipAndTargetAlive()
+        {
+            var target = new GameObject("AudioCleanup.BorrowedTarget");
+            try
+            {
+                var callbacks = 0;
+                var sound = AudioKit.PlaySoundFollowing(mClip, target.transform, AudioSoundOptions.Defaults,
+                    (_, __) => callbacks++);
+                var voice = sound.Voice;
+                var source = voice.Source;
+                sound.Stop();
+                Assert.IsFalse(sound.IsValid);
+                Assert.IsNull(voice.Clip);
+                Assert.IsFalse(voice.IsFollowing);
+                Assert.AreEqual(0, voice.ClipId);
+                Assert.AreEqual(0, voice.Priority);
+                foreach (var field in new[] { "mTarget", "mOnStarted", "mOnFinished" })
+                    Assert.IsNull(typeof(AudioVoice).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(voice), field);
+                Assert.IsTrue(source);
+                Assert.IsNull(source.clip);
+                Assert.IsNull(source.outputAudioMixerGroup);
+                Assert.IsFalse(source.gameObject.activeSelf);
+                AudioKit.SoundCacheCapacity = 0;
+                Assert.IsFalse(source);
+                Assert.IsTrue(mClip);
+                Assert.IsTrue(target);
+                Assert.AreEqual(0, callbacks);
+            }
+            finally { Object.DestroyImmediate(target); }
+        }
+
+        [Test]
         public void ExplicitSlotStopClearsDisabledRequestAndReplacementChangesGeneration()
         {
             AudioKit.Settings.IsMusicOn.Value = false;

@@ -95,7 +95,28 @@ namespace YLFramework.Actions
     /// <remarks>完成或取消后的对象会被复用，不应将其作为长期有效的句柄保存。</remarks>
     public abstract class AbstractAction<T> : IAction where T : AbstractAction<T>, new()
     {
-        private static readonly ActionPool<T> mPool = new ActionPool<T>(() => new T(), null, 10);
+        private static readonly ActionPool<T> mPool = new ActionPool<T>(() => new T(), null, 10,
+            action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                try { action.Reset(); }
+                catch (System.Exception original)
+                {
+                    // 交付前失败由公共池结束本次取得；尝试一次领域清理并保留原始异常。
+                    if (!action.Deinited)
+                    {
+                        action.Deinited = true;
+                        try { action.OnDeinit(); }
+                        catch (System.Exception cleanup)
+                        {
+                            original.Data["ActionKit.CleanupException"] = original.Data["ActionKit.CleanupException"] is System.Exception previous
+                                ? new System.AggregateException(previous, cleanup) : cleanup;
+                        }
+                    }
+                    throw;
+                }
+            });
 
         /// <summary>初始化动作基类；实际使用应通过 Allocate 从池中取得实例。</summary>
         protected AbstractAction()
@@ -108,11 +129,7 @@ namespace YLFramework.Actions
         /// <returns>尚未启动的动作，调用方应在执行前设置本次使用的数据。</returns>
         public static T Allocate()
         {
-            var action = mPool.Allocate();
-            action.ActionID = ActionKit.ID_GENERATOR++;
-            action.Deinited = false;
-            action.Reset();
-            return action;
+            return mPool.Allocate();
         }
 
         /// <inheritdoc />
@@ -158,21 +175,23 @@ namespace YLFramework.Actions
         }
 
         /// <summary>
-        /// 仅清理一次，并将对象加入延迟回收队列，不触发正常完成通知。
+        /// 仅清理一次，并将对象加入延迟回收队列，不触发正常完成通知；清理失败时延迟丢弃，不重试清理。
         /// </summary>
         public void Deinit()
         {
             if (!Deinited)
             {
                 Deinited = true;
+                var cleaned = false;
                 try
                 {
                     OnDeinit();
+                    cleaned = true;
                 }
                 finally
                 {
                     // 等当前执行栈退出后再复用，避免旧回调继续操作新分配的动作。
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<T>(mPool, this as T));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<T>(mPool, this as T, discard: !cleaned));
                 }
             }
         }

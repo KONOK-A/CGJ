@@ -2,11 +2,44 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using YLFramework.Events;
+using YLFramework.Core.Pool;
 
 namespace YLFramework.Tests
 {
     public class EventsContractTests
     {
+        private sealed class PooledValue { }
+
+        [Test]
+        public void PooledEventClearsListenersReusesIdentityAndRejectsOrdinaryInstance()
+        {
+            var e = EasyEvent<PooledValue>.Allocate();
+            var pool = SafeObjectPool<EasyEvent<PooledValue>>.Instance;
+            try
+            {
+                Assert.That(pool.MaxPoolSize, Is.EqualTo(50));
+                var calls = 0;
+                e.Register(_ => calls++);
+                e.RecycleToCache();
+                Assert.That(e.IsRecycled, Is.True);
+                Assert.That(e.HasListener, Is.False);
+                Assert.That(pool.CurStoreCount, Is.EqualTo(1));
+                e.RecycleToCache();
+                Assert.That(pool.CurStoreCount, Is.EqualTo(1));
+                var next = EasyEvent<PooledValue>.Allocate();
+                Assert.That(next, Is.SameAs(e));
+                next.Trigger(new PooledValue());
+                Assert.That(calls, Is.Zero);
+                var ordinary = new EasyEvent<PooledValue>();
+                ordinary.Register(_ => calls++);
+                Assert.Throws<InvalidOperationException>(ordinary.RecycleToCache);
+                Assert.That(ordinary.HasListener, Is.True);
+                Assert.That(ordinary.IsRecycled, Is.False);
+                next.RecycleToCache();
+            }
+            finally { pool.Dispose(); }
+        }
+
         [Test]
         public void DispatchUsesSnapshotWhileListenersUnregisterAndRegister()
         {

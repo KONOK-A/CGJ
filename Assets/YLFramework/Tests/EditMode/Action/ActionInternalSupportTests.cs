@@ -65,7 +65,7 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void PoolRetainsNullAndDuplicateRecycleAndDoesNotResetCachedNullOnAllocate()
+        public void PoolDoesNotCacheNullAndRejectsDuplicateAndForeignRecycle()
         {
             var created = 0;
             var resets = 0;
@@ -73,15 +73,19 @@ namespace YLFramework.Tests.Actions
             Assert.That(resets, Is.Zero);
             Assert.That(pool.Allocate(), Is.Null);
             Assert.That(pool.Allocate(), Is.Null);
-            Assert.That(created, Is.EqualTo(2));
-            Assert.That(pool.Recycle(null), Is.True);
+            Assert.That(created, Is.EqualTo(4), "Raw 预热跳过 null；取得仍需调用工厂。");
+            Assert.That(pool.Recycle(null), Is.False);
             Assert.That(pool.Allocate(), Is.Null);
+            Assert.That(created, Is.EqualTo(5));
+            Assert.That(resets, Is.Zero);
+            Assert.Throws<InvalidOperationException>(() => pool.Recycle(new object()));
+            var owned = new ActionPool<object>(() => new object(), item => resets++);
+            var value = owned.Allocate();
+            Assert.That(owned.Recycle(value), Is.True);
+            Assert.That(owned.Recycle(value), Is.False);
             Assert.That(resets, Is.EqualTo(1));
-            var item = new object();
-            pool.Recycle(item);
-            pool.Recycle(item);
-            Assert.That(pool.Allocate(), Is.SameAs(item));
-            Assert.That(pool.Allocate(), Is.SameAs(item));
+            Assert.That(owned.Allocate(), Is.SameAs(value));
+            Assert.That(owned.Allocate(), Is.Not.SameAs(value));
         }
 
         [Test]
@@ -93,12 +97,101 @@ namespace YLFramework.Tests.Actions
             var empty = new ActionPool<object>(failure, initCount: -1);
             Assert.Throws<InvalidOperationException>(() => empty.Allocate());
             var calls = 0;
+            var resets = 0;
             var pool = new ActionPool<object>(() => { calls++; return new object(); },
-                item => throw new InvalidOperationException("expected"));
+                item => { resets++; throw new InvalidOperationException("expected"); });
             var value = pool.Allocate();
             Assert.Throws<InvalidOperationException>(() => pool.Recycle(value));
+            Assert.That(pool.Recycle(value), Is.False);
+            pool.Discard(value);
+            Assert.That(resets, Is.EqualTo(1));
             Assert.That(pool.Allocate(), Is.Not.SameAs(value));
             Assert.That(calls, Is.EqualTo(2));
+        }
+
+        public sealed class FailureAction : AbstractAction<FailureAction>
+        {
+            internal static Exception ResetError;
+            internal static Exception CleanupError;
+            internal static FailureAction Last;
+            internal int Cleanups;
+
+            protected override void OnReset()
+            {
+                Last = this;
+                Cleanups = 0;
+                if (ResetError != null) throw ResetError;
+            }
+
+            protected override void OnDeinit()
+            {
+                Cleanups++;
+                if (CleanupError != null) throw CleanupError;
+            }
+        }
+
+        [Test]
+        public void FailedDomainCleanupIsDiscardedOnlyWhenQueueDrainsAndNeverRetried()
+        {
+            var failed = FailureAction.Allocate();
+            FailureAction replacement = null;
+            try
+            {
+                var failure = new InvalidOperationException("domain cleanup");
+                FailureAction.CleanupError = failure;
+                Assert.That(Assert.Throws<InvalidOperationException>(failed.Deinit), Is.SameAs(failure));
+                Assert.That(failed.Deinited, Is.True);
+                Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
+                Assert.That(failed.Cleanups, Is.EqualTo(1));
+                FailureAction.CleanupError = null;
+                replacement = FailureAction.Allocate();
+                Assert.That(replacement, Is.Not.SameAs(failed));
+                ActionQueue.Drain();
+                failed.Deinit();
+                Assert.That(failed.Cleanups, Is.EqualTo(1));
+                var next = FailureAction.Allocate();
+                Assert.That(next, Is.Not.SameAs(failed));
+                next.Deinit();
+            }
+            finally
+            {
+                FailureAction.CleanupError = null;
+                replacement?.Deinit();
+                FailureAction.Last = null;
+            }
+        }
+
+        [Test]
+        public void FailedInitializationEndsTheBorrowAndPreservesOriginalAndCleanupErrors()
+        {
+            var original = new InvalidOperationException("initialization");
+            var cleanup = new InvalidOperationException("initialization cleanup");
+            FailureAction.ResetError = original;
+            FailureAction.CleanupError = cleanup;
+            FailureAction failed = null;
+            FailureAction replacement = null;
+            try
+            {
+                Assert.That(Assert.Throws<InvalidOperationException>(() => FailureAction.Allocate()), Is.SameAs(original));
+                Assert.That(original.Data["ActionKit.CleanupException"], Is.SameAs(cleanup));
+                failed = FailureAction.Last;
+                Assert.That(failed.Deinited, Is.True);
+                Assert.That(failed.Cleanups, Is.EqualTo(1));
+                FailureAction.ResetError = null;
+                FailureAction.CleanupError = null;
+                failed.Deinit();
+                ActionQueue.Drain();
+                replacement = FailureAction.Allocate();
+                Assert.That(replacement, Is.Not.SameAs(failed));
+                Assert.That(failed.Cleanups, Is.EqualTo(1));
+            }
+            finally
+            {
+                FailureAction.ResetError = null;
+                FailureAction.CleanupError = null;
+                replacement?.Deinit();
+                FailureAction.Last = null;
+            }
         }
 
         [Test]

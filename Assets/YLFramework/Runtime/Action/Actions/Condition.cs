@@ -19,7 +19,7 @@ namespace YLFramework.Actions
         private Func<bool> mCondition;
         private Action mOnCondition;
 
-        private static ActionPool<ConditionAction> mSimpleObjectPool =
+        private static ActionPool<ConditionAction> mPool =
             new ActionPool<ConditionAction>(() => new ConditionAction(), null, 10);
 
         private ConditionAction()
@@ -33,7 +33,7 @@ namespace YLFramework.Actions
         /// <param name="onCondition">条件满足后、标记完成前执行的可选回调。</param>
         public static ConditionAction Allocate(Func<bool> condition, Action onCondition = null)
         {
-            var conditionAction = mSimpleObjectPool.Allocate();
+            var conditionAction = mPool.Allocate();
             conditionAction.ActionID = ActionKit.ID_GENERATOR++;
             conditionAction.Deinited = false;
             conditionAction.Reset();
@@ -81,7 +81,7 @@ namespace YLFramework.Actions
                 Deinited = true;
                 mCondition = null;
                 mOnCondition = null;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionAction>(mSimpleObjectPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionAction>(mPool, this));
             }
         }
 

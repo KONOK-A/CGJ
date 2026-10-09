@@ -61,11 +61,21 @@ namespace YLFramework.Services.Resource
         /// </summary>
         public static AssetBundleRes Allocate(string name)
         {
-            var abRes = SafeObjectPool<AssetBundleRes>.Instance.Allocate();
-            abRes.AssetName = name;
-            abRes.AssetType = typeof(AssetBundle);
-            abRes.InitAssetBundleInfo();
-            return abRes;
+            var pool = SafeObjectPool<AssetBundleRes>.Instance;
+            var abRes = pool.Allocate();
+            try
+            {
+                abRes.AssetName = name;
+                abRes.AssetType = typeof(AssetBundle);
+                abRes.InitAssetBundleInfo();
+                return abRes;
+            }
+            catch (Exception error)
+            {
+                try { pool.Discard(abRes); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
         }
 
         /// <inheritdoc />

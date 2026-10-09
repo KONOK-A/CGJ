@@ -19,8 +19,20 @@ namespace YLFramework.Actions
         private Action<ISequence> mSequenceSetting;
         private ISequence mSequence;
 
-        private static ActionPool<ConditionSequence> mSimpleObjectPool =
-            new ActionPool<ConditionSequence>(() => new ConditionSequence(), null, 10);
+        private static ActionPool<ConditionSequence> mPool =
+            new ActionPool<ConditionSequence>(() => new ConditionSequence(), null, 10, action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                try { action.Reset(); }
+                catch
+                {
+                    action.Deinited = true;
+                    action.mCondition = null;
+                    action.mSequenceSetting = null;
+                    throw;
+                }
+            });
 
         private ConditionSequence()
         {
@@ -34,10 +46,7 @@ namespace YLFramework.Actions
         /// <returns>尚未判断条件的分支动作；配置回调不在分配时执行。</returns>
         public static ConditionSequence Allocate(Func<bool> condition, Action<ISequence> sequenceSetting)
         {
-            var whenAction = mSimpleObjectPool.Allocate();
-            whenAction.ActionID = ActionKit.ID_GENERATOR++;
-            whenAction.Deinited = false;
-            whenAction.Reset();
+            var whenAction = mPool.Allocate();
             whenAction.mCondition = condition;
             whenAction.mSequenceSetting = sequenceSetting;
             return whenAction;
@@ -150,7 +159,7 @@ namespace YLFramework.Actions
                     mSequence = null;
                     mCondition = null;
                     mSequenceSetting = null;
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionSequence>(mSimpleObjectPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionSequence>(mPool, this));
                 }
             }
         }

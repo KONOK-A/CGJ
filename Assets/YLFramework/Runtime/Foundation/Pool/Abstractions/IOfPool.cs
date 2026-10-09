@@ -1,10 +1,10 @@
 ﻿namespace YLFramework.Core.Pool
 {
     /// <summary>
-    /// 可由对象池安全管理的对象契约。
-    /// 约定：分配时先清除回收标记再调用 <see cref="OnAllocate"/>；
-    /// 回收时先标记 <see cref="IsRecycled"/>（使回调中的重入回收被拒绝），再调用 <see cref="OnRecycle"/>，
-    /// 回调失败时池会回滚标记并向上抛出异常。
+    /// Runtime 领域对象的生命周期接口，实现该接口不等于实例必定进入缓存。
+    /// SafeObjectPool 取得时清除回收标记再调用 <see cref="OnAllocate"/>；
+    /// 归还先进入内核转换态并标记 <see cref="IsRecycled"/>，再调用 <see cref="OnRecycle"/>。
+    /// 回调失败时对象永久隔离并传播异常，不回滚为可重试状态。
     /// </summary>
     public interface IOfPool
     {
@@ -17,13 +17,12 @@
 
         /// <summary>
         /// 对象被回收时调用，用于清理状态以便复用。
-        /// 注意：缓存已满导致回收失败时该方法也会被调用一次，用于释放对象持有的外部资源；
-        /// 调用后对象会被标记为已回收，不会再次触发。
+        /// Safe 池满或关闭时仍调用一次；成功归还或失败隔离后，不会因重复归还再次触发。
         /// </summary>
         void OnRecycle();
 
         /// <summary>
-        /// 是否已被回收。为 true 的对象会被池拒绝再次回收。
+        /// 领域可观察的回收状态，不表示真实池所有权或租用代次。
         /// </summary>
         bool IsRecycled { get; set; }
     }

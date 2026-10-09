@@ -486,6 +486,59 @@ namespace YLFramework.Tests.Audio
         }
 
         [Test]
+        public void PositiveShrinkAndShutdownPermanentlyRetireVoicesWithoutResettingIdleGenerations()
+        {
+            AudioKit.SoundCacheCapacity = 3;
+            var handles = new AudioHandle[3];
+            var roots = new GameObject[3];
+            var generations = new ulong[3];
+            for (var i = 0; i < handles.Length; i++)
+            {
+                handles[i] = AudioKit.PlaySound(mClip, Options());
+                roots[i] = handles[i].Voice.Source.gameObject;
+            }
+            for (var i = 0; i < handles.Length; i++)
+            {
+                handles[i].Stop();
+                generations[i] = handles[i].Voice.Generation;
+            }
+            var host = AudioManager.Instance;
+            var pool = (ObjectPool<AudioVoice>)typeof(AudioManager).GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Single(field => field.FieldType == typeof(ObjectPool<AudioVoice>)).GetValue(host);
+            AudioKit.SoundCacheCapacity = 1;
+            Assert.IsTrue(roots[0], "LIFO shrinking discards the next allocation candidates first.");
+            Assert.IsFalse(roots[1]);
+            Assert.IsFalse(roots[2]);
+            Assert.AreEqual(1, AudioKit.SoundStats.CachedCount);
+            Assert.AreEqual(1, AudioKit.SoundStats.OwnedSourceCount);
+            Assert.AreEqual(2L, AudioKit.SoundStats.SourceReleasedCount);
+            for (var i = 0; i < handles.Length; i++) Assert.AreEqual(generations[i], handles[i].Voice.Generation);
+            pool.Discard(handles[1].Voice);
+            pool.Discard(handles[2].Voice);
+            Assert.AreEqual(2L, AudioKit.SoundStats.SourceReleasedCount, "Retired voices cannot destroy their source twice.");
+
+            var active = AudioKit.PlaySound(mClip, Options());
+            Assert.AreSame(handles[0].Voice, active.Voice);
+            AudioKit.SoundCacheCapacity = 2;
+            var idle = AudioKit.PlaySound(mOther, Options());
+            var idleRoot = idle.Voice.Source.gameObject;
+            idle.Stop();
+            var idleGeneration = idle.Voice.Generation;
+            AudioKit.Shutdown();
+            Assert.IsFalse(active.IsValid);
+            Assert.IsFalse(roots[0]);
+            Assert.IsFalse(idleRoot);
+            Assert.IsNull(active.Voice.Source);
+            Assert.IsNull(idle.Voice.Source);
+            Assert.AreEqual(idleGeneration, idle.Voice.Generation, "Shutdown discards idle sources without another Stop.");
+            Assert.AreEqual(0, pool.CurStoreCount);
+            Assert.Throws<ObjectDisposedException>(() => pool.Allocate());
+            Assert.DoesNotThrow(() => { pool.Discard(active.Voice); pool.Discard(idle.Voice); pool.Dispose(); });
+            Assert.IsTrue(mClip);
+            Assert.IsTrue(mOther);
+        }
+
+        [Test]
         public void PrewarmCreatesDistinctInactiveRealSourcesWithoutListenerPlaybackQuotaOrRandom()
         {
             AudioKit.SoundCacheCapacity = 24;
@@ -561,8 +614,8 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.PrewarmSounds(2);
             var host = AudioManager.Instance;
-            var pool = (SimpleObjectPool<AudioVoice>)typeof(AudioManager).GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-                .Single(field => field.FieldType == typeof(SimpleObjectPool<AudioVoice>)).GetValue(host);
+            var pool = (ObjectPool<AudioVoice>)typeof(AudioManager).GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Single(field => field.FieldType == typeof(ObjectPool<AudioVoice>)).GetValue(host);
             var created = 0;
             pool.SetFactoryMethod(() =>
             {

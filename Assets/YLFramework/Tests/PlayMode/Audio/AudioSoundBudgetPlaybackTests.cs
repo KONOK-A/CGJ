@@ -176,6 +176,26 @@ namespace YLFramework.Tests.Audio
         }
 
         [UnityTest]
+        public IEnumerator DisableCallbackChangingCapacityToZeroCannotCacheTheReturningSource()
+        {
+            AudioKit.SoundCacheCapacity = 2;
+            var handle = AudioKit.PlaySound(mClip, Loop());
+            var sourceRoot = handle.Voice.Source.gameObject;
+            var relay = sourceRoot.AddComponent<AudioBudgetStopOnDisable>();
+            relay.DisableCache = true;
+            handle.Stop();
+            Assert.That(relay.Calls, Is.EqualTo(1));
+            Assert.That(AudioKit.SoundCacheCapacity, Is.Zero);
+            Assert.That(AudioKit.SoundStats.CachedCount, Is.Zero);
+            Assert.That(AudioKit.SoundStats.OwnedSourceCount, Is.Zero);
+            Assert.That(AudioKit.SoundStats.SourceReleasedCount, Is.EqualTo(1));
+            handle.Stop();
+            Assert.That(AudioKit.SoundStats.SourceReleasedCount, Is.EqualTo(1));
+            yield return null;
+            Assert.That(sourceRoot == null, Is.True);
+        }
+
+        [UnityTest]
         public IEnumerator StealingRefreshesClipCountAfterSourceDisableStopsAnotherRequest()
         {
             foreach (var clipLimit in new[] { 0, 2 })

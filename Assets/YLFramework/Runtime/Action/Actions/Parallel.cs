@@ -28,7 +28,7 @@ namespace YLFramework.Actions
         {
         }
 
-        private static ActionPool<Parallel> mSimpleObjectPool =
+        private static ActionPool<Parallel> mPool =
             new ActionPool<Parallel>(() => new Parallel(), null, 5);
 
         private List<ActionLease> mActions = new List<ActionLease>();
@@ -37,7 +37,7 @@ namespace YLFramework.Actions
 
         public static Parallel Allocate()
         {
-            var parallel = mSimpleObjectPool.Allocate();
+            var parallel = mPool.Allocate();
             parallel.ActionID = ActionKit.ID_GENERATOR++;
             parallel.Deinited = false;
             parallel.Reset();
@@ -143,7 +143,7 @@ namespace YLFramework.Actions
                 }
                 finally
                 {
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Parallel>(mSimpleObjectPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Parallel>(mPool, this));
                 }
                 if (exceptions != null) throw new AggregateException(exceptions);
             }

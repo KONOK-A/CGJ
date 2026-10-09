@@ -4,14 +4,14 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
-using UnityEditor;
+using YLFramework.Core.Pool;
 
 namespace YLFramework.Core.Tests
 {
     public class CoreLoadViewArgsTests
     {
-        private static readonly FieldInfo Instance = typeof(ClassObjectPoolManager)
-            .GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic);
+        private static ObjectPool<LoadViewArgs> ArgsPool => (ObjectPool<LoadViewArgs>)typeof(LoadViewArgs)
+            .GetField("Pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
         private static readonly Action<LoadViewArgs> Claim = Lifecycle("Claim");
         private static readonly Action<LoadViewArgs> Release = Lifecycle("Release");
         private static readonly Action<LoadViewArgs> BeginRead = Lifecycle("BeginRead");
@@ -19,8 +19,6 @@ namespace YLFramework.Core.Tests
         private static readonly Action<LoadViewArgs> Recycle = (Action<LoadViewArgs>)Delegate.CreateDelegate(
             typeof(Action<LoadViewArgs>), typeof(LoadViewArgs).GetMethod("Recycle", BindingFlags.Static | BindingFlags.NonPublic));
         private readonly HashSet<LoadViewArgs> arguments = new HashSet<LoadViewArgs>();
-        private readonly HashSet<object> previousArgs = new HashSet<object>();
-        private object previousPool;
 
         private static Action<LoadViewArgs> Lifecycle(string name) => (Action<LoadViewArgs>)Delegate.CreateDelegate(
             typeof(Action<LoadViewArgs>), typeof(LoadViewArgs).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic));
@@ -29,51 +27,21 @@ namespace YLFramework.Core.Tests
         public void CapturePool()
         {
             arguments.Clear();
-            previousArgs.Clear();
-            previousPool = Instance.GetValue(null);
-            if (previousPool != null)
-            {
-                var previousObjects = PoolDictionary(previousPool, "objects");
-                if (previousObjects.Contains(typeof(LoadViewArgs)))
-                    foreach (var value in (IList)previousObjects[typeof(LoadViewArgs)]) previousArgs.Add(value);
-            }
         }
 
         [TearDown]
         public void RestoreReturnedFixtureObjects()
         {
-            var pool = Instance.GetValue(null);
-            if (pool == null) return;
-            var objects = PoolDictionary(pool, "objects");
-            var times = PoolDictionary(pool, "unloaded_times");
             foreach (var args in arguments)
             {
                 // 只检查生产路径已完成归还，不用 reset 或补回收掩盖 lease/owner 残留。
                 Assert.That(typeof(LoadViewArgs).GetField("leased", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
                 Assert.That(typeof(LoadViewArgs).GetField("owned", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
                 AssertValuesCleared(args);
-                Assert.That(times.Contains(args), Is.True);
-                var entries = (IList)objects[typeof(LoadViewArgs)];
-                Assert.That(entries.Contains(args), Is.True);
-                if (previousArgs.Contains(args)) continue;
-                entries.Remove(args);
-                times.Remove(args);
-                if (entries.Count == 0) objects.Remove(typeof(LoadViewArgs));
             }
-            if (previousPool == null)
-            {
-                // EditMode 不创建 checker 协程；只撤销本 fixture 新建的空池及其事件订阅。
-                Assert.That(objects.Count, Is.Zero);
-                Assert.That(times.Count, Is.Zero);
-                var callback = (Action<PlayModeStateChange>)Delegate.CreateDelegate(typeof(Action<PlayModeStateChange>),
-                    typeof(ClassObjectPoolManager).GetMethod("EditorApplication_playModeStateChanged", BindingFlags.Static | BindingFlags.NonPublic));
-                EditorApplication.playModeStateChanged -= callback;
-                Instance.SetValue(null, null);
-            }
+            // 空闲参数不含 fixture 引用且容量有界；不改共享池结构或补回收掩盖残留。
+            arguments.Clear();
         }
-
-        private static IDictionary PoolDictionary(object pool, string name) => (IDictionary)pool.GetType()
-            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
 
         private LoadViewArgs NewArgs()
         {
@@ -226,12 +194,22 @@ namespace YLFramework.Core.Tests
             if (claimed) Claim(args);
             var returnArgs = claimed ? Release : Recycle;
             returnArgs(args);
+            var count = ArgsPool.CurStoreCount;
             returnArgs(args);
-            var entries = (IList)PoolDictionary(Instance.GetValue(null), "objects")[typeof(LoadViewArgs)];
-            var count = 0;
-            foreach (var entry in entries) if (ReferenceEquals(entry, args)) count++;
-            Assert.That(count, Is.EqualTo(1));
+            Assert.That(ArgsPool.CurStoreCount, Is.EqualTo(count));
             AssertValuesCleared(args);
+            var first = NewArgs();
+            LoadViewArgs second = null;
+            try
+            {
+                second = NewArgs();
+                Assert.That(second, Is.Not.SameAs(first), "Repeated return must not publish the same reference twice.");
+            }
+            finally
+            {
+                Recycle(first);
+                Recycle(second);
+            }
         }
 
         [Test]
@@ -253,39 +231,39 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void ReuseableHooksCannotResetAnActiveLeaseOrReviveAReturnedAlias()
+        public void GenericPoolCannotResetAnActiveLeaseOrReviveAReturnedAlias()
         {
             var args = NewArgs();
-            var reuseable = (IReuseable)args;
+            using var foreignPool = new ObjectPool<LoadViewArgs>(() => new LoadViewArgs());
             try
             {
                 Assert.That(typeof(LoadViewArgs).GetMethod("OnLoaded"), Is.Null);
                 Assert.That(typeof(LoadViewArgs).GetMethod("OnUnloaded"), Is.Null);
                 args.SetInt("value", 7);
-                Assert.Throws<InvalidOperationException>(() => reuseable.OnLoaded());
-                Assert.Throws<InvalidOperationException>(() => reuseable.OnUnloaded());
+                Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
+                Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
                 Assert.That(args.GetInt("value"), Is.EqualTo(7));
             }
             finally
             {
                 Recycle(args);
             }
-            reuseable.OnLoaded();
-            reuseable.OnUnloaded();
+            Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
+            Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
             Assert.Throws<ObjectDisposedException>(() => args.GetInt("value"));
         }
 
         [Test]
-        public void OwnedReuseableHooksCannotClearBorrowedData()
+        public void GenericPoolCannotClearOwnedBorrowedData()
         {
             var args = NewArgs();
             args.SetInt("value", 7);
             Claim(args);
             try
             {
-                var reuseable = (IReuseable)args;
-                Assert.Throws<InvalidOperationException>(() => reuseable.OnLoaded());
-                Assert.Throws<InvalidOperationException>(() => reuseable.OnUnloaded());
+                using var foreignPool = new ObjectPool<LoadViewArgs>(() => new LoadViewArgs());
+                Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
+                Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
                 BeginRead(args);
                 try { Assert.That(args.GetInt("value"), Is.EqualTo(7)); }
                 finally { EndRead(args); }
@@ -294,6 +272,37 @@ namespace YLFramework.Core.Tests
             {
                 Release(args);
             }
+        }
+
+        [Test]
+        public void RegisteredSessionResetClearsIdleCacheWithoutEndingOwnedLeaseOrRevivingReturnedArguments()
+        {
+            var idle = NewArgs();
+            var ownedArgs = NewArgs();
+            ownedArgs.SetInt("value", 7);
+            Claim(ownedArgs);
+            Recycle(idle);
+            try
+            {
+                var state = typeof(ObjectPool<>).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
+                var resets = (List<Action>)state.GetField("SessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                var callbacks = resets.FindAll(reset => ReferenceEquals(reset.Target, ArgsPool));
+                Assert.That(callbacks, Has.Count.EqualTo(1), "The parameter pool must register exactly one real session reset.");
+                callbacks[0]();
+                Assert.That(ArgsPool.CurStoreCount, Is.Zero);
+                Assert.Throws<ObjectDisposedException>(() => idle.GetInt("value"));
+                var next = NewArgs();
+                try
+                {
+                    Assert.That(next, Is.Not.SameAs(idle).And.Not.SameAs(ownedArgs));
+                    BeginRead(ownedArgs);
+                    try { Assert.That(ownedArgs.GetInt("value"), Is.EqualTo(7)); }
+                    finally { EndRead(ownedArgs); }
+                    Assert.That(next.GetInt("value"), Is.Zero);
+                }
+                finally { Recycle(next); }
+            }
+            finally { Release(ownedArgs); }
         }
 
         [Test]

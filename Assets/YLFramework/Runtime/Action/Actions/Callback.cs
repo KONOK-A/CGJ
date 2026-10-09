@@ -19,12 +19,12 @@ namespace YLFramework.Actions
 
         private Action mCallback;
 
-        private static ActionPool<CallbackAction> mSimpleObjectPool =
+        private static ActionPool<CallbackAction> mPool =
             new ActionPool<CallbackAction>(() => new CallbackAction(), null, 10);
 
         public static CallbackAction Allocate(Action callback)
         {
-            var callbackAction = mSimpleObjectPool.Allocate();
+            var callbackAction = mPool.Allocate();
             callbackAction.ActionID = ActionKit.ID_GENERATOR++;
             callbackAction.Reset();
             callbackAction.Deinited = false;
@@ -57,7 +57,7 @@ namespace YLFramework.Actions
             {
                 Deinited = true;
                 mCallback = null;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<CallbackAction>(mSimpleObjectPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<CallbackAction>(mPool, this));
             }
         }
 

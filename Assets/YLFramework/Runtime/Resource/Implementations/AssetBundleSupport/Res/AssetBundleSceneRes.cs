@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using YLFramework.Core.Pool;
 
 namespace YLFramework.Services.Resource
@@ -27,13 +28,23 @@ namespace YLFramework.Services.Resource
         /// </summary>
         public static AssetBundleSceneRes Allocate(string assetName)
         {
-            AssetBundleSceneRes res = SafeObjectPool<AssetBundleSceneRes>.Instance.Allocate();
-            if (res != null)
+            var pool = SafeObjectPool<AssetBundleSceneRes>.Instance;
+            AssetBundleSceneRes res = pool.Allocate();
+            try
             {
-                res.AssetName = assetName;
-                res.InitAssetBundleInfo();
+                if (res != null)
+                {
+                    res.AssetName = assetName;
+                    res.InitAssetBundleInfo();
+                }
+                return res;
             }
-            return res;
+            catch (Exception error)
+            {
+                try { pool.Discard(res); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
         }
 
         /// <summary>

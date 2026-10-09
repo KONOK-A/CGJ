@@ -35,12 +35,13 @@ namespace YLFramework.Services.Resource
         /// </summary>
         public static ResourcesRes Allocate(string name, ResNamePrefixType prefixType)
         {
+            var path = prefixType == ResNamePrefixType.Url
+                ? name["resources://".Length..]
+                : name["Resources/".Length..];
             var res = SafeObjectPool<ResourcesRes>.Instance.Allocate();
             if (res == null) return null;
             res.AssetName = name;
-            res._path = prefixType == ResNamePrefixType.Url
-                ? name["resources://".Length..]
-                : name["Resources/".Length..];
+            res._path = path;
             return res;
         }
 

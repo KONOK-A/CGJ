@@ -48,15 +48,25 @@ namespace YLFramework.Services.Resource
         /// </summary>
         public static AssetRes Allocate(string assetName, string ownerBundleName, Type assetType)
         {
-            var res = SafeObjectPool<AssetRes>.Instance.Allocate();
-            if (res != null)
+            var pool = SafeObjectPool<AssetRes>.Instance;
+            var res = pool.Allocate();
+            try
             {
-                res.AssetName = assetName;
-                res.OwnerBundleName = ownerBundleName;
-                res.AssetType = assetType;
-                res.InitAssetBundleInfo();
+                if (res != null)
+                {
+                    res.AssetName = assetName;
+                    res.OwnerBundleName = ownerBundleName;
+                    res.AssetType = assetType;
+                    res.InitAssetBundleInfo();
+                }
+                return res;
             }
-            return res;
+            catch (Exception error)
+            {
+                try { pool.Discard(res); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
         }
 
         /// <inheritdoc />
@@ -372,11 +382,20 @@ namespace YLFramework.Services.Resource
         {
             _assetBundles = null;
 
+            var keyPool = SafeObjectPool<ResKey>.Instance;
             var resKey = ResKey.Allocate(AssetName,_ownerBundleName,AssetType);
-
-            var config =  AssetBundleSetting.AssetBundleDataFile.GetAssetData(resKey);
-
-            resKey.RecycleToCache();
+            AssetData config;
+            try
+            {
+                config = AssetBundleSetting.AssetBundleDataFile.GetAssetData(resKey);
+            }
+            catch (Exception error)
+            {
+                try { keyPool.Recycle(resKey); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
+            keyPool.Recycle(resKey);
 
             if (config == null)
             {
