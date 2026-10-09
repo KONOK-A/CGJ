@@ -1,6 +1,6 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
-状态：蓝图已确认；1.1-A～G 已验收并完成 Git 集成收口；1.2 Module/MVC 已完成并合并（`30de1fc`）；**阶段 1.3：COMPLETE，A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）**。E 提交为 `e1be57f`；1.4 尚未开始，不自动启动。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项研究与实施的共同约束，不是具体类、接口或算法设计；当前有效状态及依据见第 6 节。
+状态：蓝图已确认；1.1-A～G 已验收并完成 Git 集成收口；1.2 Module/MVC 已完成并合并（`30de1fc`）；**阶段 1.3：COMPLETE，A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）**。E 提交为 `e1be57f`；**1.4 / 阶段 1：COMPLETE（当前工程与 Windows64/Mono 的技术验收）；用户恢复 MainModule 产物后，原游戏 Player 完整流程经用户实际确认，Core 测试 Player 4/4 通过，等待最终用户验收与 Git 收口，阶段 2 不自动启动**。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项研究与实施的共同约束，不是具体类、接口或算法设计；当前有效状态及依据见第 6、7 节。
 
 ## 1. 目标与边界
 
@@ -104,7 +104,8 @@
 | 1.3-C | 已验收并提交（`bee3e28`） | 用户确认及 E 本轮实际 Git 核对；显式挂载、inactive/嵌套、取得根与场景对象边界、销毁/卸载/迁移及默认Scene在OnStart前挂载。C 历史专项 PlayMode 101/101；详见 1.3 方案第12节 |
 | 1.3-D | 已验收并提交（`57d3595`） | 用户确认及 E 本轮实际 Git 核对；pending/owner代次、参数收尾、稳定终态、逻辑取消/失效与迟到隔离，绕开 Assets-null GameObject pool 路径，不物理取消共享后端。D 历史专项 PlayMode 110/110；详见 1.3 方案第13节 |
 | 1.3-E / 1.3 收口 | COMPLETE；A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）；E 提交 `e1be57f` | 用户最终确认及本次实际 Git 核对。Panel必要上下文/Canvas/order复用View事务，队列按Loaded+active接入，内部退出释放，请求直接转接View终态与Abort；E实际验证为Unity编译无失败、PlayMode120/120、身份EditMode7/7。A～E核心契约一致；详见1.3方案第14节，不等于完整UI融合、原游戏/Player或最终独立验收 |
-| 1.4、阶段 2～7 及其他长期系统 | 未开始 | 1.3已具备进入1.4的核心前置条件，1.4仍须专项授权；原游戏非干扰/按风险的Player及其他长期专题不由1.3 COMPLETE替代 |
+| 1.4 / 阶段 1 | COMPLETE（技术验收）；未提交、待最终用户验收及 Git 收口 | 2026-10-09 用户授权；沿用本轮 37 项 Core PlayMode、7 项身份 EditMode、原游戏 Editor 自动化及实际共存验证。用户恢复产物后，Windows64/Mono 游戏构建成功且完整流程经用户确认；独立 Core Player 定向 4/4 通过，临时设置完全恢复。首次阻断、恢复证据及保留风险见第 7 节 |
+| 阶段 2～7 及其他长期系统 | 未开始 | 阶段 2 的核心技术前置条件已具备，但须先完成阶段 1 用户验收/Git 收口并获得后续授权；不自动进入其他专题 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 
@@ -142,3 +143,64 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 当前保留的边界：1.2-E 已使已注册启动失败实例（含基础模块）在逻辑回滚/注销/Closed 后才报告失败；1.2-D 的异常继续清理及唯一管线保持。1.3-A～E 保持 OnClose → Controller → View → 剩余 Model，View/Panel.Close 只结束表现/绑定，不自动移除 Model。同步/异步加载统一使用归属、索引、初始化及退出事务，参数一次接管与归还；场景/层级显式纳管、存活Scene/DDOL迁移不改owner，取得根与普通子/调用方对象区别保持。pending代次、逻辑取消与迟到隔离已实现；Panel上下文和order在OnLoaded前准备，队列在Loaded+active阶段提交，直接退出不依赖广播，健康缓存Canvas复用，旧排序/事件轮次不误改新会话。完整旧YL UI导航/遮罩/输入/层级策略仍属阶段3。默认启动不承诺任意同目标场景并发的后端身份关联；Closed 不承诺所有外部资源释放成功，Destroy不等于XFAB登记或资产即时释放，不保证缓存跨场景保活或自动重置业务字段。原 XF、游戏业务、旧 YL UI 资产、现有 YL Audio 及普通 IOC/Singleton/Root 未因本批改变。
 
 1.2-E 的启动配表资源前置条件经用户明确确认，F 沿用：启动配表及其 Bundle 为启动过程专用，取文本期间不得有其他调用者持有或并发加载。实际 XFAB 缓存不提供按调用计数的租约，不为任意共享配表提供自动释放保证。归还调用在成功、空数组及失败路径经受控缓存条目验证，正常 Assets 加载的 UnloadAsset 通常不执行物理释放；真实 AB 物理卸载及在途共享未验证。1.3-D/E仅绕开Core命名View/Panel的Assets-null池挂起路径；底层协程异常/永久不完成和场景门闩等仍未修改，不宣称物理取消或全面资源释放。有效上下文中请求仍可能等待，但Core Abort、Module关闭或目标失效能逻辑终结且不迟到提交。默认 Single 场景成功后的逻辑回滚不恢复旧场景；Additive/Single 合法路径已做 fixture 回归，游戏 Start 场景未修改。
+
+## 7. 1.4 核心集成与非干扰验收
+
+本节按先后保留首次验证与资源恢复后的补验证据；当前结论以最后一节为准，覆盖前文历史记录中“1.4 未开始”的口径，不改写 1.2/1.3 当时的验证范围。
+
+### 首次验证基线与范围
+
+2026-10-09 实际核对分支 `fusion/1.4-core-validation`，HEAD `db4746e`，开始时工作区干净。Unity 为 `2022.3.62f3c1`，Windows64 模块可用，当前 Standalone 后端为 Mono，正常 Domain Reload。`Assets/Games`、`Assets/Scenes`、`Packages`、`ProjectSettings` 相对融合前研究基线 `d673af8` 无受管差异。本轮只更新本文，不修改产品代码、测试、资源身份或配置；未执行 Git 写入、XFAB 资源重建、全局卸载或缓存清理。
+
+| 本轮实际执行 | 结果与证据边界 |
+|---|---|
+| Unity Editor 编译状态 | 验证前及最终均 `isCompiling=false`、`scriptCompilationFailed=false`；以下测试实际使用当前源码。临时诊断脚本自身的 Roslyn 编译/时序错误不算项目编译错误，也不宣称 Console 全无错误 |
+| Core LOCAL + Assets 集成 | `CoreXfabPlayModeTests` 33/33；覆盖 JSON/专用配表归还、启动与失败回滚、命名同步/异步 View/Panel、绑定、缓存、取消/迟到隔离、Module 关闭后同实例重启、Single/Additive 场景及卸载 |
+| 直接生命周期代表性补验 | 4/4：`StartupAndCloseOrderClearAllMvcIndexesBeforeRestart`、`ShutdownClosesOrdinaryThenBaseInReverseRegistrationOrderAndContinuesAfterErrors`、`SharedModelBindingsDoNotOwnModelAndOldRegistrationCannotRevive`、`LoadedHierarchyIncludesInactiveChildrenAndOnlyRootReturnsToBackend`；其余 1.2/1.3 专项沿用第 6 节历史证据，未全量重跑 |
+| 程序集身份 EditMode | `CoreIdentityTests` 7/7；Core 直接依赖仍为 Foundation、临时 XFAB、Unity UI，无新增原 XF/整体旧 YL Runtime 引用。Player 程序集列表也核实这三项直接引用 |
+| 原游戏现有流程 PlayMode | `YLAudioGameFlowPlayModeTests.MainStartSettingsGameExitAndReentryUseFrameworkAudio` 1/1；真实 `Main.Start` → XFAB `ReadyRes` → 原 XF `MainModule` → XFFSM，启动/参数设置/进入/返回/再入/结束及音乐句柄清理通过 |
+| 原游戏真实按钮与音频补验 | 独立普通 Play 会话从 `Main` 启动；调用现有持久 Button/Slider 事件验证音量设置及关闭、开始/进入、暂停返回菜单、再入、结束后重开。音乐 `03`/`02`、点击音及控制器加载的 `机炮4` 均观察到实际播放 AudioSource，音量跟随 Slider；重开后活动 GamePanel 与循环 BGM 各一份。未以此代替听感、完整战斗输入或全游戏内容验收；音乐/音效及旧音乐偏好键按进入前快照恢复 |
+| 新旧同时运行 | 原游戏暂停时，在同一会话启动自有 smoke Module，加载 JSON Model、同步 View 并显式绑定 Model、异步 Panel，再正常 Close。Core 回到 Closed/零注册，View/Model owner 与绑定结束；原 XF MainModule 为同一实例、原音乐句柄有效，Game 场景和 `timeScale=0` 保持。之后原游戏真实暂停菜单按钮、再次进入及重开成功。临时内存诊断不新增资产/Fixture，不清非法 Core 索引制造通过 |
+
+本轮自动化实际执行 **37 项 Core PlayMode、1 项原游戏 PlayMode、7 项 EditMode**，无失败或跳过；工具的全工程发现数量不计入执行数量。没有新增测试设施，也未机械重跑全量 Core/Editor/Foundation/Audio。当前 Core 集成与 Editor 代表性原游戏非干扰成立，但不等于 Player 运行或最终独立验收。
+
+### Logger 定向归因
+
+两次空 `YLCoreSmokeHarness` 普通 Play 对照均复现：原游戏未启动，已采样的 Core Module/BaseModule/View/Foundation 协程宿主均为零，原 Logger 自动创建为一份。第二次对照中 `Editor.log` 的场景清理错误累计计数在进入前为 18，**仍在 PlayMode 时已变为 19，真正退出后仍为 19**；最终 EditMode 中 Logger 对象为零、场景未脏。
+
+本轮可确认的触发链是 `MCP Startup.OnBeforeAssemblyReload/TryDisconnectAndCleanup` 日志 → 原 `LoggerHandler.LogFormat` → `LoggerManager.FilterLogType/Instance/Init`。原 `LoggerManager.cs:105–113` 用 `isPlayingOrWillChangePlaymode` 允许进入过渡期创建；此时 Unity 尚不允许 `DontDestroyOnLoad`，先创建的 GameObject 留在异常路径，且 `_instance` 赋值尚未执行。日志确实报告该调用的 `InvalidOperationException`，随后场景清理列出三份 `LoggerManager`。因此历史笼统的“退出残留”不能一概按真正退出时创建解释；**本轮归因到原 Logger 的 PlayMode/Domain Reload 边界缺陷与 MCP 清理日志触发，不是新 Core Module/View 生命周期回归**。
+
+原 Package 的 OnDestroy 不恢复全局 handler、不设置退出屏障、关闭静态 writer 后不置空，仍存在另一条销毁后访问重建的源码风险；未将其冒充上述现场的唯一原因。未逐条重现历史所有残留，也未验证独立 Player 正常退出的 Logger 文件/委托清理。当前已执行 Core 与原游戏 Editor 功能未被该错误阻断，但工具日志/切换会被影响；保留为原系统问题，不修改 LoggerSystem Package、不加日志忽略。
+
+### Windows64 Player 与阻断条件
+
+实际使用现有 Unity、当前 Build Settings 的 `Assets/Scenes/Main.unity` 和既有 StreamingAssets 执行 Development Windows64 Player 构建，没有调用 XFAB 构建或复制流程。最终 `BuildReport` 为 **Succeeded，0 errors、4 warnings**；四项为 MCP 空 Runtime 程序集警告。可用诊断入口为 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-1.4-20261009-104421/CGJ2024.exe`，同目录 `player-validation.log` 保存实际启动结果。MCP 主线程调度在同步构建期间发生回调重入，一次请求意外产生多份临时输出且工具超时；后续通过实际 BuildReport/日志确认结果，未把超时算作构建失败。MCP 的 `packages-merged-link` 构建中间资产已由其 postprocess 正常移除，工作区无此残留；未修补工具 Package。
+
+既有 Overlap Runtime 对 Editor-only asmdef 的引用及 Overlap/Logger 未保护的 UnityEditor 导入仍有静态隔离风险，但本机实际 Player 编译成功，Player 程序集没有 `UNITY_EDITOR` defines，Overlap 的实际 Player 引用列表也不含 XF Editor。**不能将静态风险写成本轮已发生的编译阻断**。依赖恢复仍不完全可复现：manifest/lock 的 URP 16.0.6、UGUI 2.0.0 与注册包实际 URP 14.0.12、UGUI 1.0.0 不同；Cinemachine/Timeline 声明也不同于解析版本。未更改依赖，本机结果不外推为干净环境通过。
+
+现有 MainModule Windows64 资源清单为 **1.0.0，update_date 2024/07/10**；112 个 Bundle 大小/MD5 全部符合 `project_build_info.json`，且与 `AssetBundles/MainModule/1.0.0/StandaloneWindows64` 对应文件及六项辅助清单逐项一致。完整性不等于匹配当前源码；该构建信息文件 SHA-256（Base64）为 `kNMx3/RVMRMvSvzqXdqPWVJr8RimcOXi46pF96/TZ/Q=`。
+
+实际运行上述 Player，已初始化 Unity/D3D11/Mono 并进入原 XFAB/FSM 菜单加载链，但出现 `The referenced script (StartPanel) on this Behaviour is missing!`、旧 `XFGameFramework.AudioPlayer` 的 `未查询到AudioController:Music` 及 `view:StartPanel加载失败,未查询到View组件!`。当前 Editor 源 Prefab 使用现有 YL Audio，而 Player 从旧 Bundle 实例化旧 XF AudioPlayer，**已确认存在资源产物/当前脚本与音频契约不匹配**；missing script 的具体旧程序集/序列化身份仍待核验，不推定为 Core 类型冲突或自动裁剪缺陷。Player 已停止，未继续将设置、进入/退出/再进入、音频或新 Core 运行记为通过。
+
+必要恢复条件：取得可核验且匹配当前游戏程序集、脚本身份及现有 YL Audio 的 MainModule Windows64 产物，确认声明/锁文件/实际解析依赖的恢复口径，再补 Player 原游戏流程及相应核心运行验证。若只能重建/复制 MainModule，将影响全局 XFAB 输出与 StreamingAssets，**须先由用户确认**；本轮没有擅自执行。Logger 原包处置若需修改来源/依赖，同样另行授权，不借验收融合外围系统。
+
+**首次验证结论（历史）：必要 Player 运行门禁失败，当时阶段 1 不宣布 COMPLETE。**该批仅更新本文，原 XF、原游戏、既有 YL Audio、Packages/ProjectSettings 和资源配置未由代理修改；不得将以下用户资源恢复改动倒算为该批融合修改。
+
+### 资源恢复后的补验与当前结论
+
+用户完成 MainModule Windows64 产物恢复并授权继续。补验开始时，分支/HEAD 仍为 `fusion/1.4-core-validation` / `db4746e`；保留用户已有 `MainModule.asset`（含 `isClearFolders` 设置）、Start 场景 URP Camera/序列化及两个自动图集改动，未回退或代改。原游戏启动入口仍为 `Assets/Scenes/Main.unity`，不能用没有 Main 启动脚本的 Start 场景直接 Play 替代真实入口。
+
+| 补验项 | 实际结果 |
+|---|---|
+| 恢复产物核验 | MainModule 1.0.0 的 `update_date=2026/10/9 19:03:49`；112 个 Bundle 大小/MD5 全部匹配，与本地输出逐项一致。新构建使用 `AssetBundleNameMappingUpgrade.txt`，对应源码生成器/加载器，缺少旧 `AssetBundleNameMapping.txt` 不是故障。构建信息 SHA-256（Base64）`3x/8MuP9IKJVQxdt6W9nL7bLqL7bg3UbisVIk2WRgUU=`，Upgrade 映射为 `h1n4nD3zL4C4g+49uIdR3TDRl18CREXAGkEDPWFAonY=` |
+| 原游戏 Windows64/Mono 构建 | 单次、独立 Development 构建成功，0 errors、4 项 MCP 空程序集 warnings；未调用 XFAB 构建或复制。入口为 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-1.4-restored-20261009-112143/CGJ2024.exe`，日志同目录 `player-validation.log`。安装包中的 112 个 Bundle、构建信息和 Upgrade 映射与恢复后的源码侧产物一致 |
+| 原游戏 Player 非干扰 | 工具实际启动 Player，日志不再出现旧产物 missing script、AudioController 缺失或 View 加载失败。因 Windows 前台输入限制，代理未自动完成按钮操作；用户通过本轮 question 明确确认“完整流程通过”：菜单设置/音乐/点击音、进入、暂停返回、再入、结束重开。这是用户实际人工结果，不冒充自动化通过；正常关闭 Player 后日志无异常/失败，进程已退出 |
+| Core 真实测试 Player | 用户明确授权 Test Runner 临时启动设置及恢复；实际安装 Test Framework 1.3.9，使用现有跨平台 fixture，StandaloneWindows64/Mono 测试 Player 构建成功、0 errors；4/4 Passed，0 Failed/Skipped/Inconclusive。用例为 `EmptyModuleRegistersClosesAndRestarts`、`StartupAndCloseOrderClearAllMvcIndexesBeforeRestart`、`DirectPrefabInitializesOncePerLoadAndCloseReturnsSameObjectToBackendCache`、`EnableDisableAndCacheReuseSubscribeExactlyOnceAndUnsubscribe`；涵盖 Module/MVC 注册/关闭/重启和 DirectView 初始化、缓存及订阅生命周期 |
+| 测试产物与 warnings | Core 结果为 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-1.4-core-player-20261009-113712-results.json`；测试 Player 同名前缀目录下 `PlayerWithTests/PlayerWithTests.exe`。其构建 233 warnings：4 项 MCP 空程序集、10 项 CS0618、192 项 CS1591、6 项 CS1574、14 项 CS1573、2 项 CS0419、1 项 CS0672、4 项 CS0109，来自本轮未修改的已有源码/测试；未关闭诊断或顺带清理外围代码 |
+| 临时状态恢复 | Runner 恢复了内存设置，但磁盘曾留有 5 项测试值；仅还原本次产生的 Splash 两项、resizableWindow、fullscreenMode 和 aotOptions。以测试前 SHA-256 快照核对 ProjectSettings 三项、manifest/lock、用户 MainModule/Start/两图集共 9 个文件，全部完全一致；Packages/ProjectSettings 最终无 diff，临时 InitTestScene 无残留。恢复测试前音频偏好，原场景为 Main、未脏、未处于 PlayMode/构建、无编译失败，Core 注册及 Logger 对象均为零 |
+
+本轮补验不新增 Fixture、不重跑所有历史专项；CoreXfab 整文件为 Editor-only，其 Assets/AssetDatabase 及场景恢复路径不能原样用于 Player。命名资源/JSON/异步取消/场景/Panel 与新旧同会话协作沿用首次真实 Editor 证据，Player 只补上述代表性运行风险；不宣称全部 Core 历史用例、命名 smoke Bundle 或 IL2CPP/AOT 已在 Player 运行。
+
+首次旧资源阻断已由用户恢复产物并经实际 Player 验证解除，没有发现需要修改已批准 Core 的新回归。Logger 仍是已归因的原系统/MCP 过渡期问题，未修复，但未阻断已验证的游戏与 Core；独立 Player 正常退出日志未显示该异常，不外推为 Logger 文件日志/全部退出路径已修复。依赖声明/锁文件/注册包差异仍为已知环境恢复风险：门禁基于当前已核验的 Unity、实际注册包、源码与产物，不宣称干净 checkout 自动恢复相同环境；不擅自改包或把该旧问题扩大为本轮架构融合。
+
+**当前结论：阶段 1.4 / 第一阶段 COMPLETE（当前工程、Windows64/Mono 的必要技术验收范围）；具备阶段 2 公共运行能力融合的技术前置条件，但尚待用户最终验收与 Git 收口，不自动启动阶段 2。**代理的最终受管改动仍仅为本文；原 XF Package、游戏业务 C#、既有 YL Audio、Core 产品代码及测试未改，用户资源恢复差异原样保留。技术完成不等于最终独立于 XF，也不等于消除原系统所有问题或完成提交/合并。
