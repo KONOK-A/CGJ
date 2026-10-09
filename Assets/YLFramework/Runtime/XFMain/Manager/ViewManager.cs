@@ -189,85 +189,95 @@ namespace YLFramework.Core
 
         #region 加载
 
-        internal static GameObject LoadGameObject(Module module, string asset_name, Transform parent = null)
-        {
-            EnsureOwner(module);
-            string project_name = module.ProjectName;
-            GameObject obj = GameObjectLoader.Load(project_name, asset_name, parent);
-            if (obj != null)
-            {
-                obj.transform.localPosition = Vector3.zero;
-                return obj;
-            }
-            else
-            {
-                // 尝试从基础模块中加载
-                foreach (var item in ModuleManager.AllBaseModules.Values)
-                { 
-                    obj = GameObjectLoader.Load(item.ProjectName, asset_name, parent);
-                    if (obj != null)
-                    {
-                        obj.transform.localPosition = Vector3.zero;
-                        return obj;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        // 加载
         internal static View LoadView(Module module, string asset_name, Transform parent = null, params object[] param)
         {
-            GameObject obj = LoadGameObject(module, asset_name, parent);
-
-            if (obj == null) 
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            View view = obj.GetComponent<View>();
-              
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj); 
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-             
-            InitView(module,view,asset_name,null,param);
-
-            return view;
+            return LoadViewLegacy<View>(module, asset_name, parent, param);
         }
 
         internal static View LoadView(Module module, GameObject prefab, Transform parent = null, params object[] param)
         {
-            EnsureOwner(module);
-            GameObject obj = GameObjectLoader.Load(prefab, parent);
+            return LoadViewLegacy<View>(module, prefab, parent, param);
+        }
 
-            if (!obj) 
+        internal static T LoadViewLegacy<T>(Module module, string assetName, Transform parent, object[] param) where T : View
+            => LoadViewSync<T>(module, assetName, null, parent, null, param, true);
+
+        internal static T LoadViewLegacy<T>(Module module, GameObject prefab, Transform parent, object[] param) where T : View
+            => LoadViewSync<T>(module, null, prefab, parent, null, param, false);
+
+        private static T LoadViewSync<T>(Module module, string assetName, GameObject prefab, Transform parent,
+            LoadViewArgs args, object[] param, bool named, bool argsClaimed = false) where T : View
+        {
+            // 接管失败不进入finally，不能归还另一笔操作正在使用的参数。
+            if (args != null && !argsClaimed) args.Claim();
+            GameObject instance = null;
+            bool initializing = false;
+            bool transaction = false;
+            try
             {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", prefab.name)); 
-                Debug.LogException(e); 
-                return null; 
+                EnsureOwner(module);
+                if (!ReferenceEquals(parent, null) && !parent)
+                    throw new ArgumentException("View parent has been destroyed.", nameof(parent));
+                if (named)
+                {
+                    if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
+                    Exception resourceError = null;
+                    foreach (var project in ModuleManager.ViewResourceProjects(module))
+                    {
+                        try { prefab = XFABManager.AssetBundleManager.LoadAsset<GameObject>(project, assetName); }
+                        catch (Exception error) { resourceError = error; }
+                        if (prefab) break;
+                    }
+                    if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
+                }
+                else
+                {
+                    if (!prefab) throw new ArgumentNullException(nameof(prefab));
+                    assetName = prefab.name;
+                }
+                ValidateView<T>(prefab);
+                // 后端可能先触发Awake/OnEnable；取得实例也属于同步事务，不能在此关闭owner。
+                module.viewTransactions++;
+                transaction = true;
+                instance = GameObjectLoader.Load(prefab, parent);
+                if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
+                var view = ValidateView<T>(instance);
+                EnsureOwner(module);
+                if (!ReferenceEquals(parent, null) && !parent)
+                    throw new ArgumentException("View parent was destroyed during acquisition.", nameof(parent));
+                instance.transform.localPosition = Vector3.zero;
+                initializing = true;
+                InitializeView(module, view, assetName, args, param);
+                return view;
             }
-
-            View view = obj.GetComponent<View>();
-
-            if (view == null)
+            catch (Exception error)
             {
-                GameObjectLoader.UnLoad(obj); 
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", prefab.name));
-                Debug.Log(e); 
-                return null;
+                if (instance && !initializing)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
             }
-              
-            InitView(module, view, prefab.name, null, param);
+            finally
+            {
+                if (transaction) module.viewTransactions--;
+                if (args != null && !argsClaimed) args.Release();
+            }
+        }
 
-            return view;
+        private static T ValidateView<T>(GameObject obj) where T : View
+        {
+            var view = obj.GetComponent<View>();
+            if (!view) throw new InvalidOperationException($"Object {obj.name} has no root View component.");
+            if (view is T typed) return typed;
+            throw new InvalidCastException($"View {view.GetType().FullName} cannot be loaded as {typeof(T).FullName}.");
+        }
+
+        private static void DiscardInstance(GameObject instance)
+        {
+            try { instance.SetActive(false); }
+            finally { UnityEngine.Object.Destroy(instance); }
         }
 
         // 异步加载
@@ -282,37 +292,83 @@ namespace YLFramework.Core
 
         internal static void InitView(Module module,View view,string prefabName,LoadViewArgs loadViewArgs, params object[] param) 
         {
+            if (loadViewArgs != null) loadViewArgs.Claim();
+            try { InitializeView(module, view, prefabName, loadViewArgs, param); }
+            finally { if (loadViewArgs != null) loadViewArgs.Release(); }
+        }
+
+        private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param)
+        {
+            if (!view) throw new ArgumentNullException(nameof(view));
             if (view.Module != null || view.Session != null || view.IsRemoving)
                 throw new InvalidOperationException("Cannot initialize an existing View session.");
-            view.AssetName = prefabName;
-            AddView(module, view);
-            view.UsesBackend = true;
-            view.IsInitializing = true;
-            module.viewTransactions++;
+            object session = null;
+            GameObject instance = view.gameObject;
+            bool transaction = false;
+            bool defaultArgs = false;
             try
             {
+                EnsureOwner(module);
+                view.AssetName = prefabName;
+                AddView(module, view);
+                session = view.Session;
+                view.UsesBackend = true;
+                view.IsInitializing = true;
+                module.viewTransactions++;
+                transaction = true;
                 view.BeforeOnLoaded();
-                view.OnLoaded(param);
-                if (loadViewArgs == null) loadViewArgs = LoadViewArgs.New();
-                view.OnLoaded(loadViewArgs);
+                ValidateInitialization(module, view, session);
+                view.OnLoaded(param ?? Array.Empty<object>());
+                ValidateInitialization(module, view, session);
+                if (args == null)
+                {
+                    args = LoadViewArgs.New();
+                    args.Claim();
+                    defaultArgs = true;
+                }
+                args.BeginRead();
+                try { view.OnLoaded(args); }
+                finally { args.EndRead(); }
+                ValidateInitialization(module, view, session);
                 view.loaded = true;
                 view.ResumeEvents();
+                ValidateInitialization(module, view, session);
             }
             catch (Exception initializationError)
             {
                 view.IsInitializing = false;
                 view.loaded = false;
                 view.DiscardOnExit = true;
-                try { RemoveView(module, view); }
+                try
+                {
+                    if (session != null) RemoveView(module, view, session, !view);
+                    else
+                    {
+                        view.AssetName = null;
+                        if (view) DiscardInstance(view.gameObject);
+                    }
+                }
                 catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
+                // 组件可能已销毁而取得根对象仍存活；不能因fake-null跳过根实例处理。
+                if (!view && instance)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
+                }
                 throw;
             }
             finally
             {
                 view.IsInitializing = false;
-                module.viewTransactions--;
-                if (loadViewArgs != null) LoadViewArgs.Recycle(loadViewArgs);
+                if (transaction) module.viewTransactions--;
+                if (defaultArgs) args.Release();
             }
+        }
+
+        private static void ValidateInitialization(Module module, View view, object session)
+        {
+            if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding)
+                throw new InvalidOperationException("View initialization invalidated its instance, registration or Model binding.");
         }
 
         #endregion
@@ -322,55 +378,16 @@ namespace YLFramework.Core
         // 加载
         internal static T LoadView<T>(Module module, string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            GameObject obj = LoadGameObject(module, asset_name, parent);
-
-            if (obj == null)
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            T view = obj.GetComponent<T>();
-
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj);
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
- 
-            InitView(module, view, asset_name, loadViewArgs);
-
-            return view;
+            return LoadViewSync<T>(module, asset_name, null, parent, loadViewArgs, null, true);
         }
+
+        // Panel入口在解析父节点前已接管参数，并负责自己的finally归还。
+        internal static T LoadViewClaimed<T>(Module module, string assetName, Transform parent, LoadViewArgs args) where T : View
+            => LoadViewSync<T>(module, assetName, null, parent, args, null, true, true);
 
         internal static T LoadView<T>(Module module, GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            EnsureOwner(module);
-            GameObject obj = GameObjectLoader.Load(prefab, parent);
-
-            if (!obj)
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", prefab.name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            T view = obj.GetComponent<T>();
-
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj);
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", prefab.name));
-                Debug.Log(e);
-                return null;
-            }
-  
-            InitView(module, view, prefab.name, loadViewArgs);
-
-            return view;
+            return LoadViewSync<T>(module, null, prefab, parent, loadViewArgs, null, false);
         }
 
         // 异步加载

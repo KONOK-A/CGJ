@@ -5,6 +5,11 @@ namespace YLFramework.Core.Tests
     public sealed class YLCoreSmokeView : YLFramework.Core.View
     {
         public const string ProbeEvent = "YLCoreSmoke.View.Probe";
+        public static System.Action<YLCoreSmokeView> LoadingProbe;
+        public static System.Action<YLCoreSmokeView, LoadViewArgs> ArgsProbe;
+        public static System.Action<YLCoreSmokeView> EnabledProbe;
+        public static System.Action<YLCoreSmokeView> DisabledProbe;
+        public int AwakeCount { get; private set; }
         public int LoadedCount { get; private set; }
         public int ArgsCount { get; private set; }
         public int RemovedCount { get; private set; }
@@ -41,18 +46,22 @@ namespace YLFramework.Core.Tests
             UnboundAction?.Invoke(previousModel);
         }
 
-        private void Awake() => RegisterEvent(ProbeEvent, (XFEvent)(() => EventCount++));
-
-        protected override void OnEnable()
+        private void Awake()
         {
-            base.OnEnable();
-            EnabledCount++;
+            AwakeCount++;
+            RegisterEvent(ProbeEvent, (XFEvent)(() => EventCount++));
         }
 
-        protected override void OnDisable()
+        protected override void OnViewEnabled()
         {
-            base.OnDisable();
+            EnabledCount++;
+            EnabledProbe?.Invoke(this);
+        }
+
+        protected override void OnViewDisabled()
+        {
             DisabledCount++;
+            DisabledProbe?.Invoke(this);
         }
 
         public override void OnLoaded(params object[] param)
@@ -60,12 +69,14 @@ namespace YLFramework.Core.Tests
             LoadedCount++;
             Parameter = param.Length > 0 ? param[0] : null;
             LoadedAction?.Invoke();
+            LoadingProbe?.Invoke(this);
         }
 
         public override void OnLoaded(LoadViewArgs args)
         {
             ArgsCount++;
             Token = args.GetInt("token");
+            ArgsProbe?.Invoke(this, args);
         }
 
         public override void OnRemove()

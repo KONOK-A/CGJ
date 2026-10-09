@@ -44,7 +44,6 @@ namespace YLFramework.Core.Tests
             }
             var pool = Instance.GetValue(null);
             if (pool == null) return;
-            foreach (var args in arguments) args.OnLoaded();
             var objects = (IDictionary)pool.GetType().GetField("objects", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
             var times = (IDictionary)pool.GetType().GetField("unloaded_times", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
             var types = new List<object>();

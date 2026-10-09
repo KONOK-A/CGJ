@@ -29,6 +29,10 @@ namespace YLFramework.Core.Tests
         [SetUp]
         public void SetUp()
         {
+            YLCoreSmokeView.LoadingProbe = null;
+            YLCoreSmokeView.ArgsProbe = null;
+            YLCoreSmokeView.EnabledProbe = null;
+            YLCoreSmokeView.DisabledProbe = null;
             Assert.That(ModuleManager.AllModules, Is.Empty, "Use the independent test scene, not a running business module.");
             classPool = new CoreClassPoolScope();
             module = new YLCoreDirectViewModule();
@@ -43,6 +47,10 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
+                YLCoreSmokeView.LoadingProbe = null;
+                YLCoreSmokeView.ArgsProbe = null;
+                YLCoreSmokeView.EnabledProbe = null;
+                YLCoreSmokeView.DisabledProbe = null;
                 try { classPool?.Restore(new Module[] { module }); }
                 finally { ReleaseObjects(); }
             }
@@ -1103,6 +1111,407 @@ namespace YLFramework.Core.Tests
             yield return null;
             Assert.That(first == null, Is.True);
             Assert.That(sibling != null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator LegacyGenericMismatchIsRejectedBeforeInitialization()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreLegacyMismatchPrefab");
+#pragma warning disable CS0618
+            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(prefab, null, new object[0]));
+#pragma warning restore CS0618
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(prefab.GetComponent<YLCoreSmokeView>().LoadedCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator RejectedSynchronousInputsConsumeArgumentsWithoutCreatingViewsOrPools()
+        {
+            var prefab = Template<YLCoreSmokeView>("YLCoreInvalidInputsPrefab");
+            var args = NewArgs();
+            args.SetObject("retained", prefab);
+            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            args = NewArgs();
+            Assert.Throws<InvalidOperationException>(() => module.LoadPanel("unused", loadViewArgs: args));
+            AssertArgsReleased(args);
+            yield return StartModule();
+            args = NewArgs();
+            Assert.Throws<ArgumentNullException>(() => module.LoadView((GameObject)null, loadViewArgs: args));
+            AssertArgsReleased(args);
+            args = NewArgs();
+            Assert.Throws<ArgumentException>(() => module.LoadView(" ", loadViewArgs: args));
+            AssertArgsReleased(args);
+            args = NewArgs();
+            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            var noView = new GameObject("YLCoreNoViewPrefab");
+            objects.Add(noView);
+            args = NewArgs();
+            Assert.Throws<InvalidOperationException>(() => module.LoadView(noView, loadViewArgs: args));
+            AssertArgsReleased(args);
+            var deadParent = new GameObject("YLCoreDeadParent").transform;
+            Object.Destroy(deadParent.gameObject);
+            yield return null;
+            args = NewArgs();
+            Assert.Throws<ArgumentException>(() => module.LoadView(prefab, deadParent, loadViewArgs: args));
+            AssertArgsReleased(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            if (loader != null)
+            {
+                var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+                Assert.That(pools.Contains(prefab.GetHashCode()), Is.False, "Prefab validation precedes backend acquisition.");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationIsTemporarilyQueryableAndArgsCannotBeReenteredOrRetained()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreLoadTransactionPrefab");
+            var siblingPrefab = Template<YLCoreSmokePanel>("YLCoreNestedInitializationPrefab", true);
+            var args = NewArgs();
+            args.SetInt("token", 91);
+            YLCoreSmokeView.LoadingProbe = view =>
+            {
+                Track(view);
+                Assert.That(view.IsLoaded, Is.False);
+                Assert.That(module.GetView(prefab.name, view.Id), Is.SameAs(view));
+                Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
+                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", module, view, prefab.name, null, new object[0]));
+                Assert.Throws<InvalidOperationException>(() => view.Close());
+                Assert.Throws<InvalidOperationException>(() => module.Close());
+                Assert.Throws<InvalidOperationException>(() => ModuleManager.Shutdown());
+                Assert.Throws<InvalidOperationException>(() => args.GetInt("token"));
+                Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+                EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+                Assert.That(view.EventCount, Is.Zero);
+                var sibling = Track(module.LoadView<YLCoreSmokePanel>(siblingPrefab, loadViewArgs: null));
+                Assert.That(sibling.IsLoaded, Is.True, "Other valid objects may initialize inside the transaction.");
+            };
+            YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
+            {
+                Assert.That(borrowed, Is.SameAs(args));
+                Assert.That(borrowed.GetInt("token"), Is.EqualTo(91));
+                Assert.Throws<InvalidOperationException>(() => borrowed.SetInt("token", 2));
+                Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: borrowed));
+                Assert.That(borrowed.GetInt("token"), Is.EqualTo(91), "Rejected second takeover cannot recycle the first operation's input.");
+                Assert.That(view.IsLoaded, Is.False);
+            };
+            YLCoreSmokeView.EnabledProbe = view =>
+            {
+                Assert.That(view.IsLoaded, Is.True);
+                Assert.Throws<InvalidOperationException>(() => args.GetInt("token"), "The borrowing window ended before event activation.");
+            };
+            var loaded = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
+            Assert.That(loaded.Token, Is.EqualTo(91));
+            AssertArgsReleased(args);
+            Assert.That(loaded.LoadedCount, Is.EqualTo(1));
+            Assert.That(loaded.ArgsCount, Is.EqualTo(1));
+            Assert.That(module.GetViews<View>(), Has.Count.EqualTo(2));
+            Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", module, loaded, prefab.name, null, new object[0]));
+            Assert.That(loaded.LoadedCount, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator BothBusinessLoadHooksAndEventActivationFailureRollbackWithoutReusingDamagedInstance()
+        {
+            yield return StartModule();
+            var model = module.LoadModel<YLCoreProbeModel>();
+            for (int phase = 0; phase < 3; phase++)
+            {
+                var prefab = Template<YLCoreSmokeView>("YLCoreLoadFailurePrefab" + phase);
+                var args = NewArgs();
+                args.SetObject("model", model);
+                var failure = new InvalidOperationException("load failure " + phase);
+                var cleanupError = new ArgumentException("load rollback cleanup");
+                YLCoreSmokeView failed = null;
+                YLCoreSmokeView.LoadingProbe = view =>
+                {
+                    failed = Track(view);
+                    view.BoundModel = model;
+                    view.onViewRemove = () => Assert.Fail("Failed initialization must not publish normal removal notifications.");
+                    if (phase == 0)
+                    {
+                        view.RemoveAction = () => throw cleanupError;
+                        throw failure;
+                    }
+                };
+                YLCoreSmokeView.ArgsProbe = (view, borrowed) => { if (phase == 1) throw failure; };
+                YLCoreSmokeView.EnabledProbe = view => { if (phase == 2) throw failure; };
+                Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args)), Is.SameAs(failure));
+                AssertArgsReleased(args);
+                Assert.That(failed.Module, Is.Null);
+                Assert.That(failed.Model, Is.Null);
+                Assert.That(failed.IsLoaded, Is.False);
+                Assert.That(failed.RemovedCount, Is.EqualTo(1));
+                Assert.That(failed.UnboundCount, Is.EqualTo(1));
+                Assert.That(failed.ClosedCount, Is.Zero);
+                Assert.That(failed.onViewRemove, Is.Null);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(model.ExitCount, Is.Zero);
+                Assert.That(module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+                Assert.That(failed.gameObject.activeSelf, Is.False);
+                Assert.That(BackendInUse(prefab, failed.gameObject), Is.True, "Do not expose a pending Destroy as idle in the pool.");
+                if (phase == 0) Assert.That(failure.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupError));
+                YLCoreSmokeView.LoadingProbe = null;
+                YLCoreSmokeView.ArgsProbe = null;
+                YLCoreSmokeView.EnabledProbe = null;
+                var replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.That(replacement, Is.Not.SameAs(failed), "Same-frame load cannot reuse a damaged instance.");
+                Assert.That(replacement.IsLoaded, Is.True);
+                yield return null;
+                Assert.That(failed == null, Is.True);
+                replacement.Close();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator FrameworkPreparationFailureReleasesArgsAndDoesNotLeaveTemporaryRegistration()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokePanel>("YLCoreInvalidCanvasPrefab", true);
+            prefab.AddComponent<Canvas>();
+            var args = NewArgs();
+            Assert.Throws<Exception>(() => module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+            var all = (IDictionary)pools[prefab.GetHashCode()].GetType().GetField("allObjs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pools[prefab.GetHashCode()]);
+            Assert.That(all.Count, Is.EqualTo(1));
+            foreach (var info in all.Values)
+            {
+                var obj = (GameObject)info.GetType().GetProperty("Obj").GetValue(info);
+                var view = Track(obj.GetComponent<YLCoreSmokePanel>());
+                Assert.That(view.Module, Is.Null);
+                Assert.That(view.LoadedCount, Is.Zero);
+                Assert.That(view.ArgsCount, Is.Zero);
+                Assert.That(view.RemovedCount, Is.EqualTo(1));
+                Assert.That(BackendInUse(prefab, obj), Is.True);
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator InactiveParentInitializesBeforeAwakeAndNewCacheSessionStartsWithoutOldBindings()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreInactiveParentPrefab");
+            var parent = new GameObject("YLCoreInactiveParent");
+            parent.SetActive(false);
+            objects.Add(parent);
+            var model = module.LoadModel<YLCoreProbeModel>();
+            var args = NewArgs();
+            args.SetInt("token", 51);
+            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: args));
+            Assert.That(view.IsLoaded, Is.True);
+            Assert.That(view.AwakeCount, Is.Zero);
+            Assert.That(view.EnabledCount, Is.Zero);
+            Assert.That(view.Token, Is.EqualTo(51));
+            view.BoundModel = model;
+            view.onViewRemove = () => { };
+            EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+            Assert.That(view.EventCount, Is.Zero);
+            parent.SetActive(true);
+            Assert.That(view.AwakeCount, Is.EqualTo(1));
+            Assert.That(view.EnabledCount, Is.EqualTo(1));
+            EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+            Assert.That(view.EventCount, Is.EqualTo(1));
+            parent.SetActive(false);
+            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.Model, Is.SameAs(model));
+            view.Close();
+            var session = ViewSession(view);
+            Assert.That(session, Is.Null);
+            var reused = Track(module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: null));
+            Assert.That(reused, Is.SameAs(view));
+            Assert.That(reused.Model, Is.Null);
+            Assert.That(reused.onViewRemove, Is.Null);
+            Assert.That(reused.Token, Is.Zero);
+            Assert.That(reused.LoadedCount, Is.EqualTo(2));
+            Assert.That(reused.AwakeCount, Is.EqualTo(1));
+            Assert.That(reused.EnabledCount, Is.EqualTo(1));
+            parent.SetActive(true);
+            parent.SetActive(true);
+            Assert.That(reused.EnabledCount, Is.EqualTo(2));
+            EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+            Assert.That(reused.EventCount, Is.EqualTo(2));
+            Assert.That(model.ExitCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator CachedActualInstanceIsRevalidatedWhenItsViewComponentWasRemoved()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreMutatedCachePrefab");
+            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var instance = view.gameObject;
+            view.Close();
+            Object.DestroyImmediate(view);
+            var args = NewArgs();
+            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(BackendInUse(prefab, instance), Is.True);
+            Assert.That(instance.activeSelf, Is.False);
+            var fresh = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            Assert.That(fresh.gameObject, Is.Not.SameAs(instance));
+            yield return null;
+            Assert.That(instance == null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator OldEnableDisableHookErrorsCannotAffectReplacementSessionOrSubscriptionRound()
+        {
+            yield return StartModule();
+            for (int phase = 0; phase < 3; phase++)
+            {
+                var prefab = Template<YLCoreSmokeView>("YLCoreEventReplacementPrefab" + phase);
+                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var session = ViewSession(view);
+                var failure = new InvalidOperationException("old event hook " + phase);
+                YLCoreSmokeView replacement = null;
+                bool once = true;
+                view.AfterClose = () =>
+                {
+                    view.AfterClose = null;
+                    replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                };
+                Action<YLCoreSmokeView> hook = current =>
+                {
+                    if (!once) return;
+                    once = false;
+                    if (phase == 2)
+                    {
+                        InvokeViewInstance("StopEvents", current);
+                        InvokeViewInstance("ResumeEvents", current);
+                        replacement = current;
+                    }
+                    else current.Close();
+                    throw failure;
+                };
+                if (phase != 1)
+                {
+                    InvokeViewInstance("StopEvents", view);
+                    YLCoreSmokeView.EnabledProbe = hook;
+                }
+                else YLCoreSmokeView.DisabledProbe = hook;
+                var error = Assert.Throws<InvalidOperationException>(() => InvokeViewInstance(phase == 1 ? "StopEvents" : "ResumeEvents", view));
+                Assert.That(error, Is.SameAs(failure));
+                Assert.That(replacement, Is.SameAs(view));
+                Assert.That(ViewSession(replacement), phase == 2 ? Is.SameAs(session) : Is.Not.SameAs(session));
+                Assert.That(replacement.IsLoaded, Is.True);
+                Assert.That(replacement.Module, Is.SameAs(module));
+                var count = replacement.EventCount;
+                EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+                Assert.That(replacement.EventCount, Is.EqualTo(count + 1), "Old hook cleanup must not stop the replacement's listeners.");
+                YLCoreSmokeView.EnabledProbe = null;
+                YLCoreSmokeView.DisabledProbe = null;
+                replacement.AfterClose = null;
+                replacement.Close();
+                Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(replacement), "The replacement stays healthy and reusable.");
+                replacement.Close();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator FirstEventHookDestroyedComponentFailsLoadAndDiscardsAcquiredRoot()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreDestroyDuringEventOpenPrefab");
+            var model = module.LoadModel<YLCoreProbeModel>();
+            var args = NewArgs();
+            YLCoreSmokeView destroyed = null;
+            GameObject root = null;
+            YLCoreSmokeView.LoadingProbe = view => view.BoundModel = model;
+            YLCoreSmokeView.EnabledProbe = view =>
+            {
+                destroyed = Track(view);
+                root = view.gameObject;
+                Object.DestroyImmediate(view);
+            };
+            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            Assert.That(destroyed == null, Is.True);
+            Assert.That(destroyed.Module, Is.Null);
+            Assert.That(destroyed.Model, Is.Null);
+            Assert.That(destroyed.IsLoaded, Is.False);
+            Assert.That(destroyed.RemovedCount, Is.EqualTo(1));
+            Assert.That(destroyed.UnboundCount, Is.EqualTo(1));
+            Assert.That(destroyed.ClosedCount, Is.Zero);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(model.ExitCount, Is.Zero);
+            Assert.That(root.activeSelf, Is.False);
+            Assert.That(BackendInUse(prefab, root), Is.True);
+            yield return null;
+            Assert.That(root == null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator ModelRegistrationChangedDuringLoadCannotCommitTheOldBinding()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCoreModelChangesDuringLoadPrefab");
+            var model = module.LoadModel<YLCoreProbeModel>();
+            var args = NewArgs();
+            YLCoreSmokeView failed = null;
+            YLCoreSmokeView.LoadingProbe = view =>
+            {
+                failed = Track(view);
+                view.BoundModel = model;
+                module.RemoveModel(model);
+                module.AddModel(model);
+                Assert.That(view.Model, Is.Null);
+            };
+            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            AssertArgsReleased(args);
+            Assert.That(failed.Module, Is.Null);
+            Assert.That(failed.Model, Is.Null);
+            Assert.That(failed.IsLoaded, Is.False);
+            Assert.That(failed.UnboundCount, Is.EqualTo(1));
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+            Assert.That(model.ExitCount, Is.EqualTo(1), "Only the explicit business removal ends a registration.");
+            yield return null;
+            Assert.That(failed == null, Is.True);
+        }
+
+        private static void InvokeViewInstance(string name, View view)
+        {
+            try { typeof(View).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null); }
+            catch (TargetInvocationException error) when (error.InnerException != null)
+            {
+                ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
+        }
+
+        private LoadViewArgs NewArgs()
+        {
+            var args = LoadViewArgs.New();
+            classPool.Track(args);
+            return args;
+        }
+
+        private static void AssertArgsReleased(LoadViewArgs args)
+        {
+            Assert.Throws<ObjectDisposedException>(() => args.GetObject("retained"));
+            Assert.Throws<ObjectDisposedException>(() => args.SetInt("token", 1));
+            foreach (var field in typeof(LoadViewArgs).GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+                if (field.GetValue(args) is IDictionary values) Assert.That(values.Count, Is.Zero, field.Name);
+        }
+
+        private static bool BackendInUse(GameObject prefab, GameObject instance)
+        {
+            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+            var pool = pools[prefab.GetHashCode()];
+            var all = (IDictionary)pool.GetType().GetField("allObjs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
+            return (bool)all[instance.GetHashCode()].GetType().GetProperty("IsInUse").GetValue(all[instance.GetHashCode()]);
         }
 
         private IEnumerator StartModule()

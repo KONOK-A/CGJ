@@ -28,7 +28,11 @@ namespace YLFramework.Core
         CloseFailed
     }
       
-    // 模块
+    /// <summary>业务对象的唯一owner。</summary>
+    /// <remarks>
+    /// 同步LoadView只返回已完成初始化的实例，参数、资源或初始化错误直接抛出。
+    /// LoadViewArgs接管成功即由本次操作负责归还，入口拒绝也消耗参数；回调只借读，不得保存容器。
+    /// </remarks>
     public abstract class Module
     {
 
@@ -331,7 +335,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadView<T>(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadView<T>(string asset_name, Transform parent = null, params object[] param) where T : View
         {
-            return LoadView(asset_name, parent, param) as T;
+            return ViewManager.LoadViewLegacy<T>(this, asset_name, parent, param);
         }
 
         /// <summary>
@@ -357,7 +361,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadView<T>(GameObject prefab, Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadView<T>(GameObject prefab, Transform parent = null, params object[] param) where T : View
         {
-            return LoadView(prefab, parent, param) as T;
+            return ViewManager.LoadViewLegacy<T>(this, prefab, parent, param);
         }
 
         /// <summary>

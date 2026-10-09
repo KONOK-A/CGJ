@@ -455,6 +455,99 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator NamedSynchronousFailuresAndColdCacheReuseKeepArgsAndOwnerBoundaries()
+        {
+            yield return StartModule();
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            Assert.Throws<InvalidOperationException>(() => module.LoadView("YLCoreMissingView", loadViewArgs: args));
+            Assert.Throws<ObjectDisposedException>(() => args.GetObject("retained"));
+            Assert.That(module.GetViews<YLFramework.Core.View>(), Is.Empty);
+
+            args = NewArgs();
+            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(nameof(YLCoreSmokeView), loadViewArgs: args));
+            Assert.Throws<ObjectDisposedException>(() => args.GetInt("token"));
+#pragma warning disable CS0618
+            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(nameof(YLCoreSmokeView), null, new object[0]));
+#pragma warning restore CS0618
+            Assert.That(module.GetViews<YLFramework.Core.View>(), Is.Empty);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(YLCoreSmokeModule.FixtureRoot + "/" + nameof(YLCoreSmokeView) + ".prefab");
+            var loader = Singleton(typeof(GameObjectLoader));
+            if (loader != null)
+                Assert.That(((IDictionary)Field(loader, "allPools")).Contains(prefab.GetHashCode()), Is.False);
+
+            args = NewArgs();
+            args.SetInt("token", 52);
+            var parent = Own(new GameObject("YLCoreSmoke.ColdSyncParent")).transform;
+            // 不预调用LoadFixture，实际走命名资产取得、校验、实例化的冷入口。
+            var view = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: args));
+            OwnAsset(prefab);
+            AssertView(view, parent, 52, 1);
+            Assert.Throws<ObjectDisposedException>(() => args.GetInt("token"));
+            var model = module.LoadModel<YLCoreProbeModel>();
+            view.BoundModel = model;
+            var removed = 0;
+            view.onViewRemove = () => removed++;
+            view.Close();
+#pragma warning disable CS0618
+            var reused = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, new object[] { "new session" }));
+#pragma warning restore CS0618
+            Assert.That(reused, Is.SameAs(view));
+            AssertView(reused, parent, 0, 2);
+            Assert.That(reused.Model, Is.Null);
+            Assert.That(reused.onViewRemove, Is.Null);
+            Assert.That(reused.Parameter, Is.EqualTo("new session"));
+            reused.Close();
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(model.ExitCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator NamedResourceFallbackUsesBaseProjectButKeepsConsumerOwnership()
+        {
+            yield return StartModule();
+            var consumer = new YLCoreDirectViewModule { ProjectName = "YLCoreMissingViewProject" };
+            var resourceModule = new YLCoreBaseProbeModule { ProjectName = YLCoreSmokeModule.Project };
+            try
+            {
+                var startup = YLFramework.Core.ModuleManager.StartUpModule(resourceModule);
+                yield return Await(() => startup.isDone, "View resource base module");
+                Assert.That(startup.error, Is.Null.Or.Empty);
+                startup = YLFramework.Core.ModuleManager.StartUpModule(consumer);
+                yield return Await(() => startup.isDone, "View consumer module");
+                Assert.That(startup.error, Is.Null.Or.Empty);
+                var candidates = typeof(YLFramework.Core.ModuleManager).GetMethod("ViewResourceProjects", StaticPrivate);
+                Assert.That(candidates.Invoke(null, new object[] { consumer }),
+                    Is.EqualTo(new[] { consumer.ProjectName, YLCoreSmokeModule.Project }));
+                consumer.ProjectName = YLCoreSmokeModule.Project;
+                Assert.That(candidates.Invoke(null, new object[] { consumer }), Is.EqualTo(new[] { YLCoreSmokeModule.Project }));
+                consumer.ProjectName = "YLCoreMissingViewProject";
+                var args = NewArgs();
+                args.SetInt("token", 84);
+                var view = Track(consumer.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args));
+                OwnAsset(AssetDatabase.LoadAssetAtPath<GameObject>(YLCoreSmokeModule.FixtureRoot + "/" + nameof(YLCoreSmokeView) + ".prefab"));
+                Assert.That(view.Module, Is.SameAs(consumer));
+                Assert.That(view.Token, Is.EqualTo(84));
+                Assert.That(view.IsLoaded, Is.True);
+                Assert.That(consumer.GetView<YLCoreSmokeView>(), Is.SameAs(view));
+                Assert.That(module.GetViews<YLFramework.Core.View>(), Is.Empty);
+                Assert.That(resourceModule.GetViews<YLFramework.Core.View>(), Is.Empty);
+                Assert.Throws<ObjectDisposedException>(() => args.GetInt("token"));
+                consumer.Close();
+                Assert.That(view.Module, Is.Null);
+                Assert.That(resourceModule.State, Is.EqualTo(YLFramework.Core.ModuleState.Running));
+            }
+            finally
+            {
+                consumer.Close();
+                resourceModule.AllowClose = true;
+                resourceModule.Close();
+                classPool.Restore(new YLFramework.Core.Module[] { consumer, resourceModule });
+            }
+        }
+
+        [UnityTest]
         public IEnumerator NamedPanelsUseRealManagerCanvasEventSystemAsyncAndCacheIndexes()
         {
             yield return StartModule();

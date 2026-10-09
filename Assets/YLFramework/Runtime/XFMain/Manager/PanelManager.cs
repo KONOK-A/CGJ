@@ -210,7 +210,7 @@ namespace YLFramework.Core
                 return null;
             }
 
-            panel = ViewManager.LoadView(module , asset_name, parent, param) as Panel;
+            panel = ViewManager.LoadViewLegacy<Panel>(module, asset_name, parent, param);
 
             if (panel == null) return null;
 
@@ -250,37 +250,24 @@ namespace YLFramework.Core
         // 加载 Panel
         internal static T LoadPanel<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)where T : Panel
         {
-            ViewManager.EnsureOwner(module);
-
-            T panel = null;
-
-            parent = GetParent(module, parent, type);
-
-            if (parent == null)
+            if (loadViewArgs != null) loadViewArgs.Claim();
+            try
             {
-                Debug.LogError("parent is null! ");
-                return null;
+                ViewManager.EnsureOwner(module);
+                parent = GetParent(module, parent, type);
+                if (parent == null) throw new InvalidOperationException("Panel parent is unavailable.");
+
+                var panel = ViewManager.LoadViewClaimed<T>(module, asset_name, parent, loadViewArgs);
+                panel.UIType = type;
+                if (panel.IsMyselfAddCanvas)
+                {
+                    panel.SortingOrder = GetUIOrder(type);
+                    AddOrder(type, panel, panel.SortingOrder);
+                    AddPanelQueue(panel);
+                }
+                return panel;
             }
-
-            panel = ViewManager.LoadView<T>(module, asset_name, parent, loadViewArgs);
-
-            if (panel == null) return null;
-
-            panel.transform.localPosition = Vector3.zero;
-
-            // 设置层级
-            panel.UIType = type;
-
-            if (panel.IsMyselfAddCanvas)
-            {
-                panel.SortingOrder = GetUIOrder(type);
-                AddOrder(type, panel, panel.SortingOrder);
-                // 添加到panel队列(如果不是自己添加的Canvas，说明当前的UI是在其他的UI里面的，此时不需要考虑被遮挡的情况)
-                AddPanelQueue(panel);
-            }
-
-
-            return panel;
+            finally { if (loadViewArgs != null) loadViewArgs.Release(); }
         }
 
         // 异步加载 Panel

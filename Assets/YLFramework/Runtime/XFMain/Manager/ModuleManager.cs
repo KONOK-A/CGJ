@@ -299,6 +299,17 @@ namespace YLFramework.Core
             if (errors.Count != 0) throw new AggregateException("Module Shutdown cleanup failed.", errors).Flatten();
         }
 
+        internal static List<string> ViewResourceProjects(Module owner)
+        {
+            var projects = new List<string> { owner.ProjectName };
+            foreach (var module in Instance.registrationOrder)
+                if (Instance.baseModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) &&
+                    (module.State == ModuleState.Starting || module.State == ModuleState.Running) &&
+                    !projects.Contains(module.ProjectName))
+                    projects.Add(module.ProjectName);
+            return projects;
+        }
+
         private static bool HasRegisteredObjects(Module module)
         {
             if (module.ownedViews.Count != 0) return true;

@@ -33,6 +33,7 @@ namespace YLFramework.Core
         private object modelRegistration;
         internal bool IsUnbinding;
         private bool eventsRegistered;
+        private long eventEpoch;
 
         #endregion
 
@@ -73,6 +74,8 @@ namespace YLFramework.Core
             !boundModel.IsInitializing && !boundModel.IsExiting &&
             ReferenceEquals(ModelManager.GetModel(modelOwner, boundModel.GetType(), boundModel.Id), boundModel)
             ? boundModel : null;
+
+        internal bool HasValidModelBinding => boundModel == null || Model != null;
 
         /// <summary>当前表现会话已完成加载；退出期间为false。</summary>
         public bool IsLoaded => loaded;
@@ -140,9 +143,11 @@ namespace YLFramework.Core
             // 场景和嵌套对象的显式挂载由1.3-C实现，不再猜测CurrentModule。
         }
 
-        protected virtual void OnDestroy()
+        private void OnDestroy()
         {
             if (!ApplicationTool.isPlaying) return;
+            // 同步初始化事务持有取得实例，并在每个提交边界检查存活及完成回滚。
+            if (IsInitializing) return;
 
             if (Module != null && Session != null)
             {
@@ -152,14 +157,12 @@ namespace YLFramework.Core
         }
 
 
-        [MustCallBase("在重写OnEnable方法时,请通过 base.OnEnable() 调用父类中的OnEnable方法!")]
-        protected virtual void OnEnable()
+        private void OnEnable()
         {
             RegisterEvents();
         }
 
-        [MustCallBase("在重写OnDisable方法时,请通过 base.OnDisable() 调用父类中的OnDisable方法!")]
-        protected virtual void OnDisable()
+        private void OnDisable()
         {
             UnRegisterEvents();
         }
@@ -167,6 +170,12 @@ namespace YLFramework.Core
         #endregion
 
         #region 方法
+
+        /// <summary>Loaded且active时调用；首次激活可能早于加载，业务上下文应在此处使用。</summary>
+        protected virtual void OnViewEnabled() { }
+
+        /// <summary>暂停已开放的表现事件，不结束owner或Model绑定；与OnViewEnabled配对。</summary>
+        protected virtual void OnViewDisabled() { }
 
         /// <summary>
         /// 结束当前表现会话，不移除Model；框架取得的健康实例归还缓存，其他实例仅隐藏。
@@ -196,6 +205,7 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>仅在本回调期间借读参数；不得保存容器、修改或再次传入加载入口。</summary>
         public virtual void OnLoaded(LoadViewArgs args)
         {
         }
@@ -420,10 +430,25 @@ namespace YLFramework.Core
         private void RegisterEvents() 
         {
             if (!loaded || IsRemoving || !isActiveAndEnabled || eventsRegistered) return;
+            var session = Session;
+            long epoch = ++eventEpoch;
             eventsRegistered = true;
-            foreach (var event_name_hash in _events.Keys)
+            try
             {
-                EventManager.AddEvent(event_name_hash, _events[event_name_hash]);
+                foreach (var entry in _events)
+                    EventManager.AddEvent(entry.Key, entry.Value);
+                OnViewEnabled();
+            }
+            catch (Exception error)
+            {
+                // 钩子可结束旧会话或重开订阅轮次，旧异常不能退订或污染新的监听。
+                if (ReferenceEquals(Session, session) && eventEpoch == epoch)
+                {
+                    DiscardOnExit = true;
+                    try { UnRegisterEvents(); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
             }
         }
 
@@ -431,6 +456,8 @@ namespace YLFramework.Core
         private void UnRegisterEvents()
         {
             if (!eventsRegistered) return;
+            var session = Session;
+            long epoch = ++eventEpoch;
             eventsRegistered = false;
             var errors = new List<Exception>();
             foreach (var entry in _events)
@@ -438,6 +465,9 @@ namespace YLFramework.Core
                 try { EventManager.RemoveEvent(entry.Key, entry.Value); }
                 catch (Exception error) { errors.Add(error); }
             }
+            try { OnViewDisabled(); }
+            catch (Exception error) { errors.Add(error); }
+            if (errors.Count != 0 && ReferenceEquals(Session, session) && eventEpoch == epoch) DiscardOnExit = true;
             ViewManager.ThrowCleanupErrors(errors);
         }
 
