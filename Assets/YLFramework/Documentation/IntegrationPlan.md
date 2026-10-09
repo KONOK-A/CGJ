@@ -1,6 +1,6 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
-状态：蓝图已确认；1.1-A～G 已验收并完成 Git 集成收口；1.2 Module/MVC 已完成并合并（`30de1fc`）；1.3-A～D 已验收并提交（`22b281d` / `a1beb2e` / `bee3e28` / `57d3595`），E 已实施并通过专项技术验证：**阶段 1.3 实施及专项验证完成，待用户最终验收与 Git 收口**。E 尚未提交，不标记最终 COMPLETE，不自动进入 1.4。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项研究与实施的共同约束，不是具体类、接口或算法设计；当前有效状态及依据见第 6 节。
+状态：蓝图已确认；1.1-A～G 已验收并完成 Git 集成收口；1.2 Module/MVC 已完成并合并（`30de1fc`）；**阶段 1.3：COMPLETE，A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）**。E 提交为 `e1be57f`；1.4 尚未开始，不自动启动。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项研究与实施的共同约束，不是具体类、接口或算法设计；当前有效状态及依据见第 6 节。
 
 ## 1. 目标与边界
 
@@ -103,8 +103,8 @@
 | 1.3-B | 已验收并提交（`a1beb2e`） | 用户确认及 C 开始时实际 Git 核对；同步 View 统一 Prefab/实际实例类型校验及事务、LoadViewArgs 接管/只读借用/即时清引用、Loaded 事件钩子及订阅轮次隔离、健康缓存和污染实例同帧隔离。B 历史验证为 PlayMode 89/89、参数 EditMode 10/10；详见 1.3 方案第11节 |
 | 1.3-C | 已验收并提交（`bee3e28`） | 用户确认及 E 本轮实际 Git 核对；显式挂载、inactive/嵌套、取得根与场景对象边界、销毁/卸载/迁移及默认Scene在OnStart前挂载。C 历史专项 PlayMode 101/101；详见 1.3 方案第12节 |
 | 1.3-D | 已验收并提交（`57d3595`） | 用户确认及 E 本轮实际 Git 核对；pending/owner代次、参数收尾、稳定终态、逻辑取消/失效与迟到隔离，绕开 Assets-null GameObject pool 路径，不物理取消共享后端。D 历史专项 PlayMode 110/110；详见 1.3 方案第13节 |
-| 1.3-E / 1.3 技术收口 | 实施及专项验证完成，待用户最终验收与 Git 收口；未提交 | Panel必要上下文/Canvas/order复用View事务，队列按Loaded+active接入，内部退出释放，请求直接转接View终态与Abort；Unity编译无失败，PlayMode120/120、身份EditMode7/7。A～E核心契约一致；详见第14节，不等于完整UI融合、原游戏/Player或最终独立验收 |
-| 1.4、阶段 2～7 及其他长期系统 | 未开始 | E具备进入1.4的核心前置条件，但仍须用户验收和专项授权；原游戏非干扰/按风险的Player及其他长期专题不由1.3通过替代 |
+| 1.3-E / 1.3 收口 | COMPLETE；A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）；E 提交 `e1be57f` | 用户最终确认及本次实际 Git 核对。Panel必要上下文/Canvas/order复用View事务，队列按Loaded+active接入，内部退出释放，请求直接转接View终态与Abort；E实际验证为Unity编译无失败、PlayMode120/120、身份EditMode7/7。A～E核心契约一致；详见1.3方案第14节，不等于完整UI融合、原游戏/Player或最终独立验收 |
+| 1.4、阶段 2～7 及其他长期系统 | 未开始 | 1.3已具备进入1.4的核心前置条件，1.4仍须专项授权；原游戏非干扰/按风险的Player及其他长期专题不由1.3 COMPLETE替代 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 
@@ -114,9 +114,9 @@ F 本轮实际验证：Unity `2022.3.62f3c1` 导入并加载新增回归，`scri
 
 - [1.1 源码归属与承接方案](../../../.kilo/plans/1791455404620-xf-yl-core-ownership.md)：保留原设计与研究基线，其历史“当前源码”描述不覆盖本节较新的实施状态。
 - [1.2 Module/MVC 正式契约与 A～F 边界](../../../.kilo/plans/xf-yl-1.2-module-mvc.md)：唯一正式方案，分列目标、已实现内容和未实施边界，包含初始化重入口径差异及依据。
-- [1.3 View 正式设计与实施记录](../../../.kilo/plans/xf-yl-1.3-view.md)：第10～13节记录 A～D 实际实施；第14节记录 E 的必要 Panel 适配、A～E 最终契约、公开 API、实际专项验证和限制。E 开始时实际确认 `fusion/1.3-view` 干净、D 已提交；阶段 1.3 待最终验收与 Git 收口。
+- [1.3 View 正式设计与实施记录](../../../.kilo/plans/xf-yl-1.3-view.md)：第10～13节记录 A～D 实际实施；第14节记录 E 的必要 Panel 适配、A～E 最终契约、公开 API、实际专项验证和限制，第14.5节记录用户最终验收及 Git 收口。阶段 1.3 已 COMPLETE，E 提交 `e1be57f`、集成合并 `f206e7b`；当前分支 `integration/xf-yl` 已实际核对。
 - E 本轮实际执行 CoreDirectView 46/46、CoreXfab LOCAL + Assets 33/33、CoreModule 28/28、CoreFailurePath 13/13，合计120项PlayMode；CoreIdentity 7/7 EditMode。Unity `2022.3.62f3c1` 最终无脚本编译失败，Module/BaseModule/trackedViewOwners均零；新回归实际复现并修正inactive入队、旧会话排序及队列回调/事件顺序问题，最终只读复核无新增重要发现。无新增资源、meta或asmdef，不改原Package、游戏及旧YL UI资产；未执行全量Editor/Foundation/Audio、原游戏或Player。既有Logger退出残留仍观察到，留1.4定向定位。
-- 1.2 已完成合并；1.3 已具备进入 1.4 的核心前置条件，但尚未最终验收/提交，不自动授权 1.4 或最终独立验收。
+- 1.2 已完成合并；1.3 的 A～E 已全部完成并通过技术验收，Git 集成收口完成。已具备进入 1.4 的核心前置条件，但不自动授权或启动 1.4，也不代表原游戏非干扰、真实 AB/Player 或最终独立验收已完成。本次仅更新文档状态，沿用 E 的实际验证结果，没有新增测试或 Git 写入操作。
 
 ### 阶段门禁与后续边界
 
