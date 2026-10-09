@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using GameObjectLoader = XFABManager.GameObjectLoader;
 using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
@@ -15,6 +16,53 @@ namespace YLFramework.Core
 
     internal class ViewManager
     {
+        private static readonly HashSet<Module> sceneOwners = new HashSet<Module>();
+        private static readonly List<Module> pruneOwners = new List<Module>();
+
+        private static void TrackScene(Module module, View view)
+        {
+            view.SceneHandle = view.gameObject.scene.handle;
+            if (sceneOwners.Count == 0)
+            {
+                SceneManager.sceneUnloaded += OnSceneUnloaded;
+                UpdateManager.AddUpdateEvent(PruneDestroyedSessions);
+            }
+            sceneOwners.Add(module);
+        }
+
+        private static void PruneDestroyedSessions()
+        {
+            // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
+            pruneOwners.Clear();
+            pruneOwners.AddRange(sceneOwners);
+            foreach (var module in pruneOwners)
+            {
+                if (module.viewTransactions != 0) continue;
+                try { PruneDestroyed(module); }
+                catch (Exception error) { Debug.LogException(error); }
+            }
+            pruneOwners.Clear();
+        }
+
+        private static void OnSceneUnloaded(Scene scene)
+        {
+            var errors = new List<Exception>();
+            foreach (var module in new List<Module>(sceneOwners))
+                foreach (var entry in Snapshot(module))
+                {
+                    var view = entry.Key;
+                    // 迁移及DDOL不改变owner；死对象只能使用保存的会话及实例身份。
+                    if (view) view.SceneHandle = view.gameObject.scene.handle;
+                    else
+                    {
+                        try { RemoveView(module, view, entry.Value, true); }
+                        catch (Exception error) { errors.Add(error); }
+                    }
+                }
+            if (errors.Count != 0)
+                Debug.LogException(new AggregateException($"View cleanup after scene unload ({scene.handle}) failed.", errors).Flatten());
+        }
+
         #region 添加 
         internal static void AddView(Module module, View view)
         {
@@ -50,6 +98,7 @@ namespace YLFramework.Core
             }
             if (typed == null) module.type_views.Add(type, typed = new List<View>());
             typed.Add(view);
+            TrackScene(module, view);
         }
 
         internal static void EnsureOwner(Module module)
@@ -85,20 +134,34 @@ namespace YLFramework.Core
         }
 
         internal static void RemoveView(Module module, View view, object session, bool destroyed = false)
+            => RemoveViewCore(module, view, session, destroyed, false, false);
+
+        private static void RemoveViewCore(Module module, View view, object session, bool destroyed, bool preserveInstance, bool rollback)
         {
             if (module == null || ReferenceEquals(view, null) || session == null ||
                 !ReferenceEquals(view.Module, module) || !ReferenceEquals(view.Session, session) ||
                 !module.ownedViews.TryGetValue(view.RegisteredId, out var registered) || !ReferenceEquals(registered, view)) return;
             if (view.IsRemoving) return;
-            if (view.IsInitializing || view.IsUnbinding) throw new InvalidOperationException("Cannot close a View during initialization or unbinding.");
+            if (view.IsInitializing || view.IsUnbinding || (view.IsAttaching && !rollback))
+                throw new InvalidOperationException("Cannot close a View during initialization, attachment or unbinding.");
             bool notify = view.loaded;
             view.IsRemoving = true;
             view.loaded = false;
             module.viewTransactions++;
             var errors = new List<Exception>();
             bool damaged = view.DiscardOnExit;
-            GameObject instance = !destroyed && view ? view.gameObject : null;
             bool backend = view.UsesBackend;
+            bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
+            GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
+            if (backend && destroyed) damaged = true;
+            if (backend)
+                foreach (var child in Snapshot(module))
+                    if (!ReferenceEquals(child.Key, view) && ReferenceEquals(child.Key.BackendRoot, view) &&
+                        ReferenceEquals(child.Key.BackendRootSession, session))
+                    {
+                        try { RemoveViewCore(module, child.Key, child.Value, !child.Key, !child.Key.UsesBackend, rollback); }
+                        catch (Exception error) { errors.Add(error); }
+                    }
             try { view.StopEvents(); }
             catch (Exception error) { errors.Add(error); damaged = true; }
             if (notify && view.onViewRemove != null)
@@ -114,13 +177,18 @@ namespace YLFramework.Core
             try { PanelManager.ReleaseView(view); }
             catch (Exception error) { errors.Add(error); }
             damaged |= view.DiscardOnExit;
+            if (damaged && !backend && !ReferenceEquals(view.BackendRoot, null) &&
+                ReferenceEquals(view.BackendRoot.Session, view.BackendRootSession))
+                view.BackendRoot.DiscardOnExit = true;
 
             // 撤销当前会话后仍保持Removing，直到实例处理结束，禁止OnDisable重入复活。
             DetachIndexes(module, view, session);
             try
             {
-                if (instance)
+                if (instance && !preserveInstance)
                 {
+                    // 独立取得、挂在另一取得根下的实例仍独立归还，不能留在外层缓存子树中被再次纳管。
+                    if (nestedBackend) instance.transform.SetParent(null, true);
                     if (backend && !damaged) GameObjectLoader.UnLoad(instance);
                     else
                     {
@@ -174,9 +242,22 @@ namespace YLFramework.Core
             view.onViewRemove = null;
             view.AssetName = null;
             view.UsesBackend = false;
+            view.BackendInstance = null;
+            view.BackendRoot = null;
+            view.BackendRootSession = null;
+            view.SceneHandle = 0;
             view.DiscardOnExit = false;
             view.Module = null;
             view.Session = null;
+            if (module.ownedViews.Count == 0)
+            {
+                sceneOwners.Remove(module);
+                if (sceneOwners.Count == 0)
+                {
+                    SceneManager.sceneUnloaded -= OnSceneUnloaded;
+                    UpdateManager.RemoveUpdateEvent(PruneDestroyedSessions);
+                }
+            }
         }
 
         internal static void ThrowCleanupErrors(List<Exception> errors)
@@ -218,6 +299,7 @@ namespace YLFramework.Core
                 EnsureOwner(module);
                 if (!ReferenceEquals(parent, null) && !parent)
                     throw new ArgumentException("View parent has been destroyed.", nameof(parent));
+                FindBackendRoot(module, parent);
                 if (named)
                 {
                     if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
@@ -247,7 +329,7 @@ namespace YLFramework.Core
                     throw new ArgumentException("View parent was destroyed during acquisition.", nameof(parent));
                 instance.transform.localPosition = Vector3.zero;
                 initializing = true;
-                InitializeView(module, view, assetName, args, param);
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param);
                 return view;
             }
             catch (Exception error)
@@ -293,11 +375,18 @@ namespace YLFramework.Core
         internal static void InitView(Module module,View view,string prefabName,LoadViewArgs loadViewArgs, params object[] param) 
         {
             if (loadViewArgs != null) loadViewArgs.Claim();
-            try { InitializeView(module, view, prefabName, loadViewArgs, param); }
+            try
+            {
+                if (!view) throw new ArgumentNullException(nameof(view));
+                if (view.Module != null || view.Session != null || view.IsRemoving || view.IsAttaching)
+                    throw new InvalidOperationException("Cannot initialize an existing View session.");
+                InitializeHierarchy(module, new List<View>(view.GetComponentsInChildren<View>(true)), view, prefabName, loadViewArgs, param);
+            }
             finally { if (loadViewArgs != null) loadViewArgs.Release(); }
         }
 
-        private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param)
+        private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
+            View backendRoot = null, bool backend = false)
         {
             if (!view) throw new ArgumentNullException(nameof(view));
             if (view.Module != null || view.Session != null || view.IsRemoving)
@@ -312,7 +401,10 @@ namespace YLFramework.Core
                 view.AssetName = prefabName;
                 AddView(module, view);
                 session = view.Session;
-                view.UsesBackend = true;
+                view.UsesBackend = backend;
+                view.BackendInstance = backend ? instance : null;
+                view.BackendRoot = backendRoot;
+                view.BackendRootSession = backendRoot != null ? backendRoot.Session : null;
                 view.IsInitializing = true;
                 module.viewTransactions++;
                 transaction = true;
@@ -341,16 +433,16 @@ namespace YLFramework.Core
                 view.DiscardOnExit = true;
                 try
                 {
-                    if (session != null) RemoveView(module, view, session, !view);
+                    if (session != null) RemoveViewCore(module, view, session, !view, !backend, true);
                     else
                     {
                         view.AssetName = null;
-                        if (view) DiscardInstance(view.gameObject);
+                        if (backend && view) DiscardInstance(view.gameObject);
                     }
                 }
                 catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
                 // 组件可能已销毁而取得根对象仍存活；不能因fake-null跳过根实例处理。
-                if (!view && instance)
+                if (backend && !view && instance)
                 {
                     try { DiscardInstance(instance); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
@@ -369,6 +461,114 @@ namespace YLFramework.Core
         {
             if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding)
                 throw new InvalidOperationException("View initialization invalidated its instance, registration or Model binding.");
+        }
+
+        internal static void AttachView(Module module, View view, LoadViewArgs args)
+        {
+            if (args != null) args.Claim();
+            try { InitializeHierarchy(module, new List<View> { view }, null, null, args, null); }
+            finally { if (args != null) args.Release(); }
+        }
+
+        internal static List<View> AttachViews(Module module, GameObject root)
+        {
+            EnsureOwner(module);
+            if (!root) throw new ArgumentNullException(nameof(root));
+            var views = new List<View>(root.GetComponentsInChildren<View>(true));
+            InitializeHierarchy(module, views, null, null, null, null);
+            return views;
+        }
+
+        internal static List<View> AttachViews(Module module, Scene scene)
+        {
+            EnsureOwner(module);
+            if (!scene.IsValid() || !scene.isLoaded) throw new ArgumentException("View scene must be loaded.", nameof(scene));
+            var views = new List<View>();
+            foreach (var root in scene.GetRootGameObjects()) views.AddRange(root.GetComponentsInChildren<View>(true));
+            InitializeHierarchy(module, views, null, null, null, null);
+            return views;
+        }
+
+        private static View FindBackendRoot(Module module, Transform target)
+        {
+            for (var parent = target; parent; parent = parent.parent)
+            {
+                var ancestor = parent.GetComponent<View>();
+                if (!ancestor) continue;
+                if (ancestor.IsRemoving || ancestor.IsAttaching || ancestor.IsInitializing)
+                    throw new InvalidOperationException("Cannot attach under a View lifecycle transaction.");
+                if (!ancestor.UsesBackend) continue;
+                if (!ReferenceEquals(ancestor.Module, module)) throw new InvalidOperationException("Acquired hierarchy belongs to another Module.");
+                return ancestor;
+            }
+            return null;
+        }
+
+        private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
+            LoadViewArgs args, object[] param)
+        {
+            var added = new List<KeyValuePair<View, object>>();
+            var roots = new Dictionary<View, View>();
+            View outerRoot = null;
+            bool guarded = false;
+            try
+            {
+                EnsureOwner(module);
+                if (acquiredRoot != null) outerRoot = FindBackendRoot(module, acquiredRoot.transform);
+                foreach (var view in views)
+                {
+                    if (!view) throw new ArgumentNullException(nameof(views));
+                    if (!view.gameObject.scene.IsValid() || !view.gameObject.scene.isLoaded)
+                        throw new ArgumentException("Only live scene instances can be attached.", nameof(views));
+                    if (view.IsAttaching || view.IsInitializing || view.IsRemoving || view.IsUnbinding)
+                        throw new InvalidOperationException("Cannot attach during a View lifecycle transaction.");
+                    if (view.Session != null || view.Module != null)
+                    {
+                        if (!ReferenceEquals(view.Module, module) || !view.IsLoaded || !HasRegistration(module, view, view.Session))
+                            throw new InvalidOperationException("View already has a conflicting or incomplete registration.");
+                    }
+                    roots.Add(view, acquiredRoot != null ? acquiredRoot : FindBackendRoot(module, view.transform));
+                }
+                foreach (var view in views) view.IsAttaching = true;
+                module.viewTransactions++;
+                guarded = true;
+                foreach (var view in views)
+                {
+                    if (view.Session != null) continue;
+                    bool root = ReferenceEquals(view, acquiredRoot);
+                    InitializeView(module, view, root ? assetName : null,
+                        root || views.Count == 1 ? args : null, root ? param : null,
+                        root ? outerRoot : roots[view], root);
+                    added.Add(new KeyValuePair<View, object>(view, view.Session));
+                }
+                foreach (var entry in added) ValidateInitialization(module, entry.Key, entry.Value);
+            }
+            catch (Exception error)
+            {
+                // 批次没有提交，不派发成功退出通知；已有绑定与activeSelf保持不变。
+                foreach (var entry in added) entry.Key.loaded = false;
+                if (acquiredRoot != null) acquiredRoot.DiscardOnExit = true;
+                for (int i = added.Count - 1; i >= 0; i--)
+                {
+                    var entry = added[i];
+                    try { RemoveViewCore(module, entry.Key, entry.Value, !entry.Key, !entry.Key.UsesBackend, true); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                if (acquiredRoot && acquiredRoot.Session == null)
+                {
+                    try { DiscardInstance(acquiredRoot.gameObject); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            finally
+            {
+                if (guarded)
+                {
+                    foreach (var view in views) view.IsAttaching = false;
+                    module.viewTransactions--;
+                }
+            }
         }
 
         #endregion
@@ -434,6 +634,8 @@ namespace YLFramework.Core
             var sessions = new List<KeyValuePair<View, object>>(module.ownedViews.Count);
             foreach (var view in module.ownedViews.Values)
                 sessions.Add(new KeyValuePair<View, object>(view, view.Session));
+            // 取得根先退出，子会话不单独改变缓存子树的activeSelf。
+            sessions.Sort((left, right) => right.Key.UsesBackend.CompareTo(left.Key.UsesBackend));
             return sessions;
         }
 

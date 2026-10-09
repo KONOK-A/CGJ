@@ -311,6 +311,25 @@ namespace YLFramework.Core
 
         #region 加载View
 
+        /// <summary>纳管已有View，不实例化、不激活、不取得GameObject所有权。合法重复挂载不重复初始化；参数由本次调用接管。</summary>
+        public T AttachView<T>(T view, LoadViewArgs loadViewArgs = null) where T : View
+        {
+            ViewManager.AttachView(this, view, loadViewArgs);
+            return view;
+        }
+
+        /// <summary>纳管已有层级的所有View（包含inactive）。失败只撤销本次新增会话，不改变已有会话和对象激活状态。</summary>
+        public List<View> AttachViews(GameObject root)
+        {
+            return ViewManager.AttachViews(this, root);
+        }
+
+        /// <summary>明确纳管指定已加载Scene中的View（包含inactive），不自动卸载场景；使用Scene身份而非名称。</summary>
+        public List<View> AttachViews(UnityEngine.SceneManagement.Scene scene)
+        {
+            return ViewManager.AttachViews(this, scene);
+        }
+
         /// <summary>
         /// 加载View,从当前模块和基础模块中加载
         /// </summary>

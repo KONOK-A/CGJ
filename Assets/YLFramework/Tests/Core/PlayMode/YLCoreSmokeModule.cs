@@ -19,6 +19,7 @@ namespace YLFramework.Core.Tests
         public const string InvalidTable = "YLCoreInvalidRows";
 
         public bool StartWithScene;
+        public Action StartAction;
         public string TableName = Table;
         public string SceneOverride;
         public int StartCount { get; private set; }
@@ -39,6 +40,7 @@ namespace YLFramework.Core.Tests
             RowReadyAtStart = row != null && row.Marker == "yl-smoke" && ReferenceEquals(row.Module, this);
             var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(ScenePath);
             SceneReadyAtStart = scene.IsValid() && scene.isLoaded;
+            StartAction?.Invoke();
         }
     }
 

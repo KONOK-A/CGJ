@@ -5,8 +5,10 @@
 // YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
 using System;
 using System.Collections; 
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using AssetBundleManager = XFABManager.AssetBundleManager;
 using LoadAssetRequest = XFABManager.LoadAssetRequest;
 using LoadSceneRequest = XFABManager.LoadSceneRequest;
@@ -195,6 +197,8 @@ namespace YLFramework.Core
             string sceneName = module.DefaultStartUpScene;
             if (!string.IsNullOrEmpty(sceneName))
             {
+                var previousScenes = new HashSet<int>();
+                for (int i = 0; i < SceneManager.sceneCount; i++) previousScenes.Add(SceneManager.GetSceneAt(i).handle);
                 //startMessage = "正在加载场景...";
                 LoadSceneRequest operation = AssetBundleManager.LoadSceneAsynchrony(projectName, sceneName, UnityEngine.SceneManagement.LoadSceneMode.Single);
                 if (operation == null)
@@ -206,8 +210,19 @@ namespace YLFramework.Core
                 }
                 if (!string.IsNullOrEmpty(operation.error))
                     throw new InvalidOperationException($"Default scene load failed: {projectName}/{sceneName}: {operation.error}");
-                if (!operation.Scene.IsValid() || !operation.Scene.isLoaded)
-                    throw new InvalidOperationException($"Default scene result is not loaded: {projectName}/{sceneName}");
+                // XFAB在Assets模式按名称返回Scene，不能将先前的同名实例当作本次结果。
+                Scene loadedScene = default;
+                for (int i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var candidate = SceneManager.GetSceneAt(i);
+                    if (!candidate.isLoaded || candidate.name != sceneName || previousScenes.Contains(candidate.handle)) continue;
+                    if (loadedScene.IsValid())
+                        throw new InvalidOperationException($"Default scene result is ambiguous: {projectName}/{sceneName}");
+                    loadedScene = candidate;
+                }
+                if (!loadedScene.IsValid())
+                    throw new InvalidOperationException($"Default scene result is not newly loaded: {projectName}/{sceneName}");
+                module.AttachViews(loadedScene);
             }
 
             module.OnStart();

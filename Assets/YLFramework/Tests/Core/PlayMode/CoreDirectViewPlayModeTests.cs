@@ -6,6 +6,7 @@ using System.Runtime.ExceptionServices;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Tests
@@ -23,6 +24,7 @@ namespace YLFramework.Core.Tests
         private readonly List<GameObject> objects = new List<GameObject>();
         private readonly List<int> prefabKeys = new List<int>();
         private readonly List<int> instanceKeys = new List<int>();
+        private readonly List<Scene> scenes = new List<Scene>();
         private YLCoreDirectViewModule module;
         private CoreClassPoolScope classPool;
 
@@ -55,6 +57,9 @@ namespace YLFramework.Core.Tests
                 finally { ReleaseObjects(); }
             }
             yield return null;
+            foreach (var scene in scenes)
+                if (scene.IsValid() && scene.isLoaded) yield return SceneManager.UnloadSceneAsync(scene);
+            scenes.Clear();
             Assert.That(ModuleManager.GetModule<YLCoreDirectViewModule>(), Is.Null);
         }
 
@@ -600,16 +605,16 @@ namespace YLFramework.Core.Tests
             Assert.That(model.Module, Is.SameAs(module));
             Assert.That(model.ExitCount, Is.Zero);
 
-            // 从未激活的对象不保证收到OnDestroy，查询必须依靠保存的注册身份收尾。
+            // 从未激活的对象不保证收到OnDestroy，索引扫描和查询均依靠保存身份收尾。
             var inactive = Template<YLCoreSmokeView>("YLCoreUnactivatedView").GetComponent<YLCoreSmokeView>();
             typeof(View).GetProperty("AssetName", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(inactive, "YLCoreUnactivatedView");
             InvokeViewManager("AddView", module, inactive);
-            var session = ViewSession(inactive);
             id = inactive.Id;
             Object.Destroy(inactive.gameObject);
             yield return null;
+            yield return null;
             Assert.That(inactive == null, Is.True);
-            Assert.That(ViewSession(inactive), Is.SameAs(session));
+            Assert.That(ViewSession(inactive), Is.Null, "Destruction cleanup does not require a business query.");
             Assert.That(module.GetView<View>(id), Is.Null);
             Assert.That(inactive.Module, Is.Null);
             Assert.That(ViewSession(inactive), Is.Null);
@@ -1478,6 +1483,330 @@ namespace YLFramework.Core.Tests
             Assert.That(model.ExitCount, Is.EqualTo(1), "Only the explicit business removal ends a registration.");
             yield return null;
             Assert.That(failed == null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator ExplicitAttachInitializesInactiveInstanceOnceAndConsumesDuplicateArgs()
+        {
+            yield return StartModule();
+            var view = Template<YLCoreSmokeView>("YLCore.SceneOwned").GetComponent<YLCoreSmokeView>();
+            var args = NewArgs();
+            args.SetInt("token", 23);
+            Assert.That(module.AttachView(view, args), Is.SameAs(view));
+            AssertArgsReleased(args);
+            Assert.That(view.IsLoaded, Is.True);
+            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.Token, Is.EqualTo(23));
+            Assert.That(view.AwakeCount, Is.Zero);
+            Assert.That(view.EnabledCount, Is.Zero);
+            Assert.That(view.gameObject.activeSelf, Is.False);
+            Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
+            Assert.That(module.GetViews(view.gameObject.name), Is.Empty, "Scene names are not fabricated resource keys.");
+            args = NewArgs();
+            module.AttachView(view, args);
+            AssertArgsReleased(args);
+            module.AttachViews(view.gameObject);
+            Assert.That(view.LoadedCount, Is.EqualTo(1));
+            view.gameObject.SetActive(true);
+            Assert.That(view.AwakeCount, Is.EqualTo(1));
+            Assert.That(view.EnabledCount, Is.EqualTo(1));
+            view.Close();
+            Assert.That(view, Is.Not.Null);
+            Assert.That(view.gameObject.activeSelf, Is.False);
+            Assert.That(view.Module, Is.Null);
+            module.AttachView(view);
+            Assert.That(view.LoadedCount, Is.EqualTo(2));
+            module.Close();
+            Assert.That(view.RemovedCount, Is.EqualTo(2));
+            Assert.That(view, Is.Not.Null, "Caller instances are never discarded or pooled by Core.");
+        }
+
+        [UnityTest]
+        public IEnumerator HierarchyAttachFailureRollsBackOnlyNewSessionsWithoutHidingExistingViews()
+        {
+            yield return StartModule();
+            var root = Template<YLCoreSmokeView>("YLCore.AttachRoot").GetComponent<YLCoreSmokeView>();
+            var existing = Template<YLCoreSmokeView>("YLCore.ExistingChild").GetComponent<YLCoreSmokeView>();
+            existing.transform.SetParent(root.transform);
+            existing.gameObject.SetActive(true);
+            module.AttachView(existing);
+            var oldSession = ViewSession(existing);
+            var failing = Template<YLCoreSmokeView>("YLCore.FailingChild").GetComponent<YLCoreSmokeView>();
+            failing.transform.SetParent(root.transform);
+            var failure = new InvalidOperationException("hierarchy attach");
+            failing.LoadedAction = () => throw failure;
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.AttachViews(root.gameObject)), Is.SameAs(failure));
+            Assert.That(root.Module, Is.Null);
+            Assert.That(failing.Module, Is.Null);
+            Assert.That(root.RemovedCount, Is.EqualTo(1));
+            Assert.That(failing.RemovedCount, Is.EqualTo(1));
+            Assert.That(root.ClosedCount, Is.Zero);
+            Assert.That(root.gameObject.activeSelf, Is.False);
+            Assert.That(existing.gameObject.activeSelf, Is.True);
+            Assert.That(ViewSession(existing), Is.SameAs(oldSession));
+            Assert.That(existing.IsLoaded, Is.True);
+            Assert.That(existing.RemovedCount, Is.Zero);
+            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { existing }));
+            failing.LoadedAction = null;
+            Assert.That(module.AttachViews(root.gameObject).Count, Is.EqualTo(3));
+            Assert.That(existing.LoadedCount, Is.EqualTo(1));
+            Assert.That(root.gameObject.activeSelf, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator HierarchyOwnerConflictIsRejectedBeforeInitializingAnyNewView()
+        {
+            yield return StartModule();
+            var other = new YLCoreConsumerModule();
+            try
+            {
+                var request = ModuleManager.StartUpModule(other);
+                while (!request.isDone) yield return null;
+                Assert.That(request.error, Is.Null.Or.Empty);
+                var root = Template<YLCoreSmokeView>("YLCore.ConflictRoot").GetComponent<YLCoreSmokeView>();
+                var child = Template<YLCoreSmokeView>("YLCore.ForeignChild").GetComponent<YLCoreSmokeView>();
+                child.transform.SetParent(root.transform);
+                other.AttachView(child);
+                Assert.Throws<InvalidOperationException>(() => module.AttachView(child));
+                Assert.Throws<InvalidOperationException>(() => module.AttachViews(root.gameObject));
+                Assert.That(root.LoadedCount, Is.Zero);
+                Assert.That(root.Module, Is.Null);
+                Assert.That(child.Module, Is.SameAs(other));
+                Assert.That(child.RemovedCount, Is.Zero);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+            }
+            finally
+            {
+                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other)) other.Close();
+                classPool.Restore(new Module[] { other });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator LoadedHierarchyIncludesInactiveChildrenAndOnlyRootReturnsToBackend()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCore.NestedPrefab");
+            var active = Template<YLCoreSmokeView>("activeChild");
+            var inactive = Template<YLCoreSmokeView>("inactiveChild");
+            active.transform.SetParent(prefab.transform);
+            inactive.transform.SetParent(prefab.transform);
+            active.SetActive(true);
+            var args = NewArgs();
+            args.SetInt("token", 47);
+            var root = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
+            var child = root.transform.Find("activeChild").GetComponent<YLCoreSmokeView>();
+            var dormant = root.transform.Find("inactiveChild").GetComponent<YLCoreSmokeView>();
+            Assert.That(module.GetViews<View>().Count, Is.EqualTo(3));
+            Assert.That(root.Token, Is.EqualTo(47));
+            Assert.That(child.Token, Is.Zero);
+            Assert.That(dormant.Token, Is.Zero);
+            Assert.That(dormant.IsLoaded, Is.True);
+            Assert.That(dormant.AwakeCount, Is.Zero);
+            Assert.That(module.GetViews(prefab.name), Is.EqualTo(new View[] { root }));
+            child.Close();
+            Assert.That(root.IsLoaded, Is.True);
+            Assert.That(dormant.IsLoaded, Is.True);
+            Assert.That(BackendInUse(prefab, root.gameObject), Is.True);
+            Assert.That(child.gameObject.activeSelf, Is.False);
+            module.AttachView(child);
+            child.gameObject.SetActive(true);
+            child.AfterClose = () => Assert.Throws<InvalidOperationException>(() => module.AttachView(child));
+            module.ClearView();
+            child.AfterClose = null;
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(child.RemovedCount, Is.EqualTo(2));
+            Assert.That(dormant.RemovedCount, Is.EqualTo(1));
+            Assert.That(child.gameObject.activeSelf, Is.True, "Batch root return preserves nested activeSelf.");
+            Assert.That(dormant.gameObject.activeSelf, Is.False);
+            Assert.That(BackendInUse(prefab, root.gameObject), Is.False);
+            Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(root));
+            Assert.That(child.LoadedCount, Is.EqualTo(3));
+            Assert.That(dormant.LoadedCount, Is.EqualTo(2));
+        }
+
+        [UnityTest]
+        public IEnumerator NestedInitializationOrCleanupFailureDiscardsOnlyAcquiredRootAndEndsAllSessions()
+        {
+            yield return StartModule();
+            var prefab = Template<YLCoreSmokeView>("YLCore.BadNestedPrefab");
+            var childTemplate = Template<YLCoreSmokeView>("badChild");
+            childTemplate.transform.SetParent(prefab.transform);
+            var failure = new InvalidOperationException("nested initialization");
+            YLCoreSmokeView failedRoot = null;
+            YLCoreSmokeView.LoadingProbe = view =>
+            {
+                if (!view.transform.parent) failedRoot = Track(view);
+                else throw failure;
+            };
+            Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(failure));
+            YLCoreSmokeView.LoadingProbe = null;
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(failedRoot.Module, Is.Null);
+            Assert.That(failedRoot.ClosedCount, Is.Zero);
+            Assert.That(BackendInUse(prefab, failedRoot.gameObject), Is.True);
+            var root = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            Assert.That(root, Is.Not.SameAs(failedRoot));
+            var child = root.transform.Find("badChild").GetComponent<YLCoreSmokeView>();
+            child.RemoveAction = () => throw failure;
+            Assert.That(Assert.Throws<InvalidOperationException>(() => child.Close()), Is.SameAs(failure));
+            Assert.That(root.IsLoaded, Is.True);
+            root.Close();
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(BackendInUse(prefab, root.gameObject), Is.True);
+            yield return null;
+            Assert.That(root == null && failedRoot == null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator IndependentlyLoadedNestedRootReturnsSeparatelyWithoutBecomingOuterCachedChild()
+        {
+            yield return StartModule();
+            var outerPrefab = Template<YLCoreSmokeView>("YLCore.OuterPrefab");
+            var innerPrefab = Template<YLCoreSmokeView>("YLCore.InnerPrefab");
+            var outer = Track(module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null));
+            var inner = Track(module.LoadView<YLCoreSmokeView>(innerPrefab, outer.transform, loadViewArgs: null));
+            outer.Close();
+            Assert.That(inner.Module, Is.Null);
+            Assert.That(inner.RemovedCount, Is.EqualTo(1));
+            Assert.That(inner.transform.parent, Is.Null);
+            Assert.That(BackendInUse(innerPrefab, inner.gameObject), Is.False);
+            Assert.That(BackendInUse(outerPrefab, outer.gameObject), Is.False);
+            Assert.That(Track(module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null)), Is.SameAs(outer));
+            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { outer }));
+            Assert.That(Track(module.LoadView<YLCoreSmokeView>(innerPrefab, loadViewArgs: null)), Is.SameAs(inner));
+        }
+
+        [UnityTest]
+        public IEnumerator SameNameSceneUnloadCleansOnlyDeadSessionsIncludingNeverActivatedViews()
+        {
+            yield return StartModule();
+            var first = OwnScene("YLCore.SameName");
+            var second = OwnScene("YLCore.SecondName");
+            second.name = first.name;
+            Assert.That(first.handle, Is.Not.EqualTo(second.handle));
+            var dead = Template<YLCoreSmokeView>("YLCore.DeadInactive").GetComponent<YLCoreSmokeView>();
+            var survivor = Template<YLCoreSmokeView>("YLCore.Survivor").GetComponent<YLCoreSmokeView>();
+            SceneManager.MoveGameObjectToScene(dead.gameObject, first);
+            SceneManager.MoveGameObjectToScene(survivor.gameObject, second);
+            module.AttachViews(first);
+            module.AttachViews(second);
+            Assert.That(dead.AwakeCount, Is.Zero);
+            yield return SceneManager.UnloadSceneAsync(first);
+            Assert.That(dead == null, Is.True);
+            Assert.That(dead.Module, Is.Null, "sceneUnloaded cleans inactive wrappers without query-side pruning.");
+            Assert.That(dead.RemovedCount, Is.EqualTo(1));
+            Assert.That(survivor.Module, Is.SameAs(module));
+            Assert.That(survivor.IsLoaded, Is.True);
+            Assert.That(survivor.RemovedCount, Is.Zero);
+            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { survivor }));
+            Assert.Throws<ArgumentException>(() => module.AttachViews(first));
+        }
+
+        [UnityTest]
+        public IEnumerator SceneMigrationAndDdolKeepOwnerUntilActualDestructionOrModuleClose()
+        {
+            yield return StartModule();
+            var original = OwnScene("YLCore.Original");
+            var destination = OwnScene("YLCore.Destination");
+            var migrated = Template<YLCoreSmokeView>("YLCore.Migrated").GetComponent<YLCoreSmokeView>();
+            var persistent = Template<YLCoreSmokeView>("YLCore.Persistent").GetComponent<YLCoreSmokeView>();
+            SceneManager.MoveGameObjectToScene(migrated.gameObject, original);
+            SceneManager.MoveGameObjectToScene(persistent.gameObject, original);
+            module.AttachViews(original);
+            SceneManager.MoveGameObjectToScene(migrated.gameObject, destination);
+            Object.DontDestroyOnLoad(persistent.gameObject);
+            yield return SceneManager.UnloadSceneAsync(original);
+            Assert.That(migrated.IsLoaded && persistent.IsLoaded, Is.True);
+            Assert.That(migrated.Module, Is.SameAs(module));
+            Assert.That(persistent.Module, Is.SameAs(module));
+            Assert.That(migrated.RemovedCount + persistent.RemovedCount, Is.Zero);
+            yield return SceneManager.UnloadSceneAsync(destination);
+            Assert.That(migrated.Module, Is.Null);
+            Assert.That(migrated.RemovedCount, Is.EqualTo(1));
+            Assert.That(persistent.IsLoaded, Is.True);
+            module.Close();
+            Assert.That(persistent.Module, Is.Null);
+            Assert.That(persistent.RemovedCount, Is.EqualTo(1));
+            Assert.That(persistent, Is.Not.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator ExternalDestroyEndsActiveSessionAndQueriesPruneNeverActivatedDestroyedInstance()
+        {
+            yield return StartModule();
+            var active = Template<YLCoreSmokeView>("YLCore.DestroyActive").GetComponent<YLCoreSmokeView>();
+            var dormant = Template<YLCoreSmokeView>("YLCore.DestroyInactive").GetComponent<YLCoreSmokeView>();
+            module.AttachView(active);
+            module.AttachView(dormant);
+            active.gameObject.SetActive(true);
+            int dormantId = dormant.Id;
+            var model = module.LoadModel<YLCoreProbeModel>();
+            active.BoundModel = model;
+            Object.Destroy(active.gameObject);
+            Object.Destroy(dormant.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(active.Module, Is.Null);
+            Assert.That(active.RemovedCount, Is.EqualTo(1));
+            Assert.That(dormant.Module, Is.Null, "Never-activated external destruction is pruned without a business query.");
+            Assert.That(module.GetView<YLCoreSmokeView>(dormantId), Is.Null);
+            Assert.That(dormant.Module, Is.Null);
+            Assert.That(dormant.RemovedCount, Is.EqualTo(1));
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(model.ExitCount, Is.Zero);
+            Assert.That(model.Module, Is.SameAs(module));
+            active.Close();
+            dormant.Close();
+            Assert.That(active.RemovedCount + dormant.RemovedCount, Is.EqualTo(2));
+        }
+
+        [UnityTest]
+        public IEnumerator StartingAttachFailureUsesModuleRollbackWithoutClosingSuccessfulNestedOwner()
+        {
+            var inner = new YLCoreConsumerModule();
+            var outerView = Template<YLCoreSmokeView>("YLCore.OuterSceneView").GetComponent<YLCoreSmokeView>();
+            var innerView = Template<YLCoreSmokeView>("YLCore.InnerSceneView").GetComponent<YLCoreSmokeView>();
+            var failure = new InvalidOperationException("starting attach");
+            Module nestedOwner = null;
+            module.StartAction = () =>
+            {
+                var innerStart = ModuleManager.StartUpModule(inner);
+                Assert.That(innerStart.isDone, Is.True);
+                Assert.That(innerStart.error, Is.Null.Or.Empty);
+                inner.AttachView(innerView);
+                nestedOwner = innerView.Module;
+                module.AttachView(outerView);
+                var failing = Template<YLCoreSmokeView>("YLCore.StartingFailView").GetComponent<YLCoreSmokeView>();
+                failing.LoadedAction = () => throw failure;
+                module.AttachView(failing);
+            };
+            try
+            {
+                var request = ModuleManager.StartUpModule(module);
+                while (!request.isDone) yield return null;
+                Assert.That(request.Exception, Is.SameAs(failure));
+                Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(outerView.Module, Is.Null);
+                Assert.That(outerView.RemovedCount, Is.EqualTo(1));
+                Assert.That(innerView.Module, Is.SameAs(nestedOwner));
+                Assert.That(innerView.IsLoaded, Is.True);
+                Assert.That(innerView.RemovedCount, Is.Zero);
+                Assert.That(inner.State, Is.EqualTo(ModuleState.Running));
+            }
+            finally
+            {
+                if (ReferenceEquals(ModuleManager.GetModule(inner.ModuleName), inner)) inner.Close();
+                classPool.Restore(new Module[] { inner });
+            }
+        }
+
+        private Scene OwnScene(string name)
+        {
+            var scene = SceneManager.CreateScene(name);
+            scenes.Add(scene);
+            return scene;
         }
 
         private static void InvokeViewInstance(string name, View view)

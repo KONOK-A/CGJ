@@ -1,10 +1,10 @@
 # 阶段 1.3：View 核心融合研究与设计
 
-状态：**整体设计已批准；1.3-A 已验收并提交（`22b281d`）；1.3-B 已实施并通过专项技术验证，待用户验收，未提交；C～E 未开始**。
+状态：**整体设计已批准；1.3-A 已验收并提交（`22b281d`）；1.3-B 已验收并提交（`a1beb2e`）；1.3-C 已实施并通过专项技术验证，待用户验收，未提交；D/E 未开始**。
 
 本文是阶段 1.3 唯一专项方案，保存源码研究结论、已批准架构方向、已确认约束、实现参考与实施批次。用户已原则上批准 D1～D4 总体方向及 A～E 规划，保留 D1/C1/C2 原则；具体 API、内部机制及实现取舍不要求逐条照搬草案。第 8.3 节的三项开放评估原则优先于正文早期推荐的具体做法。
 
-整体设计批准不等于本轮代码实施、技术验收或 Git 授权。本轮仅同步本文，不修改 Runtime、Editor、测试或资源，不执行任何 Git 操作；完成后停止，等待用户开始 1.3-A。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
+整体设计批准不等于代码实施、技术验收或 Git 授权。第 1～9 节保留初始研究与设计记录，第 10～12 节及顶部状态记录后续获授权批次的实际实现，覆盖早期“尚未实施/等待开始”的历史表述。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
 
 长期边界见 [IntegrationPlan.md](../../Assets/YLFramework/Documentation/IntegrationPlan.md)，前置契约见 [1.2 Module/MVC 方案](xf-yl-1.2-module-mvc.md)，源码归属基础见 [1.1 承接方案](1791455404620-xf-yl-core-ownership.md)。
 
@@ -580,6 +580,57 @@ B 仍负责完整同步加载/LoadViewArgs 所有权、入口失败收尾、泛�
 
 独立只读审查发现的事件异常跨会话/轮次收尾、首次事件钩子后的最终存活检查已修正并加入实际回归；修正后的定向独立复核未发现新的实质问题。`git diff --check` 通过，无新增文件或 .meta/GUID 变更。退出 PlayMode 仍观察到已记录的原 LoggerManager 场景关闭残留，不将专项通过解释为全工程 Console 无错误，也未添加日志忽略来制造通过。Unity 专项结果只证明受影响 Core/LOCAL + Assets 链路，不代表真实 AB 物理释放、原游戏全流程、Player 或最终无 XF 生态独立运行。
 
-**已具备进入 1.3-C 的核心技术条件，仍须用户验收 B 并授权 C。**本批未提交，不自动推进 C。
+**B 完成时已具备进入 1.3-C 的核心技术条件。**C 开始时用户已确认 B 验收及提交，实际核对提交为 `a1beb2e`；C 实施见第 12 节。
 
 C 仍负责显式场景/层级挂载、场景卸载及完整销毁兜底；D 负责异步接管、pending、取消、跨重启/迟到隔离与终态；E 负责 Panel 必要上下文、后置准备失败及请求完整收口。后端在 Load 返回前抛错且不提供实例引用时，Core 不能保证清理全部后端半登记状态；原后端资源专题仍负责这一限制。
+
+## 12. 1.3-C 实施取舍与阶段边界
+
+本节记录本轮获授权 C 批的实际实现，覆盖早期 C 尚未实施的表述。开始时实际确认 `fusion/1.3-view`、干净工作区及 B 提交 `a1beb2e`；用户确认 A/B 已验收。未创建或切换分支，未提交、推送、合并或执行破坏性清理；完成后停止，不自动进入 D。
+
+### 12.1 显式挂载与业务归属
+
+- 新增 `Module.AttachView<T>(T view, LoadViewArgs loadViewArgs = null)`、`AttachViews(GameObject root)`、`AttachViews(Scene scene)`。单组件入口只挂载该 View，层级/场景入口发现全部 View，包含 inactive 对象。只接受实际已加载场景中的存活实例及精确注册的 Starting/Running owner；Prefab 资产、失效对象、未加载 Scene 和冲突会话明确拒绝。
+- 复用 A/B 的注册、初始化、Loaded、事件与退出管线，不增加第二套场景生命周期。Start 不推断 CurrentModule 或父节点 owner。场景与普通嵌套组件按实例 ID/实际类型查询，不将 GameObject 名字编造成资源名称。
+- 同 owner 的有效已完成会话重复挂载幂等，不重复加载钩子、不改变绑定或参数；传入参数仍按 B 的接管/归还规则消费一次。跨 Module、半完成或正在退出/解绑/挂载的会话拒绝。层级批次先检查全部冲突，再初始化新增会话；失败只撤销本次新增会话，不退出既有会话，也不改变调用方对象的 activeSelf。原异常及附加清理错误保持既有口径，不派发失败批次的成功退出通知。
+- 初始化和整批挂载使用现有 View 事务门禁；批次保留组件挂载标志，回调不能关闭/重新挂载本批对象或在事务中的取得根下新增会话。其他合法独立对象仍可初始化。合法重复 Attach 不等于允许内部 InitView 再初始化已存在会话，原 B 拒绝契约保持。
+
+### 12.2 inactive、层级与取得实例边界
+
+- 框架初始化不以 Unity Awake/Start 为前置条件，显式 Attach 不主动激活对象；Loaded 且 isActiveAndEnabled 时才开放框架表现事件。参数仅传给单组件挂载或本次加载根 View，普通子 View 使用独立空参数借读窗口，不共用 pooled args，不反射重置任意业务字段。
+- 同步加载和现有异步结果调用的 InitView 都定向发现取得根的 View 子树，包含 inactive；每个组件独立进入 owner/index/会话管线，后续动态新增 View 必须显式 Attach。此处只复用已取得结果的初始化基础，不实现 D 的 pending、取消或晚到协议。
+- 每个 XFAB 取得根保存其真实根 GameObject；普通嵌套 View 保存取得根及根会话身份。根退出先结束对应子会话，再只归还根一次；批量关闭让取得根优先，普通子会话不单独改变 activeSelf。单独 Close 普通子 View 只退出并隐藏该子对象，不归还根，不退出有效兄弟或关联 Model。重新挂载子组件会重新初始化，但不会自动恢复其自定义状态或激活状态。
+- 独立 Load 后挂在另一取得根下的实例仍是独立后端单元：各自退出/归还，归还时脱离外层根，防止它留在外层缓存子树中被再次当成普通子组件纳管。跨 owner 挂入正在使用的取得子树通过入口校验拒绝；不建立通用层级所有权框架，也不拦截 Unity 的任意 SetParent/MoveGameObjectToScene 操作。
+- 场景/调用方对象 Close 只结束逻辑会话并隐藏，不入 XFAB 池、不默认 Destroy；失败回滚保留调用方对象激活状态。健康取得根沿原 XFAB UnLoad 归还；必要子会话清理失败污染其当前取得根，最终按 A/B 策略停用并 Destroy，不先归还，避免同帧误复用。独立内层取得根污染只影响它自己的归还单元。纯观察者错误仍不等同实例污染。
+- E1/E3 沿实际需要补充根/子来源及当前根会话关联，不新增租约、全局池、持久缓存 root 或资源后端接口。Destroy 不即时移除 XFAB 登记或卸载共享 Prefab/Bundle；缓存对象继续可能随 parent/场景销毁，不承诺跨场景保活。原 Package、游戏及旧 YL UI 资产/序列化身份不变。
+
+### 12.3 Destroy、Scene 与迁移
+
+- OnDestroy、sceneUnloaded、查询剪枝与 Module/主动 Close 共用按保存 `(owner, View引用, 注册ID, Session)` 校验的退出管线。正常退出异常仍逐项清理，重复消息幂等，fake-null wrapper 不依赖现取实例 ID，也不再次把已销毁对象送池。
+- 场景入口持有确定 Scene，使用 handle 区分同名/同路径 Additive 实例。卸载事件仅检查受管 owner/index，不按 scene.name 或任意卸载事件退出存活对象；存活 View 更新实际 Scene handle，已销毁 View 按保存会话退出。迁移到其他 Scene 或 DDOL 不改变 Module owner，原场景卸载不会误关它们；真正销毁或所属 Module 关闭才结束会话。
+- Unity 2022.3 明确从未激活的对象不保证 OnDestroy。因此复用已有 UpdateManager 增加受管索引存活扫描，通常在销毁后下一次 Update 清理，不要求业务调用查询才释放 owner/绑定。正常帧只遍历受管索引，不进行全场景搜索或创建 View 快照；销毁清理才分配退出快照。同步对象事务进行时跳过该 owner，终态后再处理。
+- 第一个受管 owner 注册时订阅卸载与 Update，最后一个 owner 无 View 时解除；不监听任意 sceneLoaded 自动猜 owner。Unity 事件/帧扫描中清理错误在必要收尾完成后报告 Debug.LogException，不吞异常；显式调用路径仍抛回/汇总。项目当前使用正常 Domain Reload，未改变 Enter Play Mode 配置，也未开展关闭 Domain Reload 的全框架静态生命周期改造。
+
+### 12.4 默认启动与 1.2 协作
+
+- 保持默认场景 Single 模式及配表 -> 默认 Scene -> OnStart 顺序。加载前捕获当前 handles，成功后选择唯一新出现且名称匹配、已加载的 Scene，然后由启动请求的局部 `module` 挂载，在 Module.OnStart 前完成；不以 CurrentModule 推断归属。
+- 实际 XFAB Assets 场景结果使用 GetSceneByName，不能作为同名实例的普遍唯一身份。因此默认启动在 Core 最小范围使用前后 handle 差集，零个或多个候选明确失败，不取任意匹配对象，不修改 Package 或设计新的场景加载服务。外部 Single/Additive 加载后调用方直接指定真实 Scene 与 owner 挂载，合法路径保持。
+- 挂载异常直接进入已有 StartUpModuleRequest/ModuleManager 启动失败回滚，保留原异常，注销/Closed/退出后才完成失败请求。Controller -> View -> 剩余 Model 的关闭顺序、成功嵌套 Module/current 保护及 View.Close 不移除 Model 的 D1 保持。逻辑回滚不恢复 Single 卸载的旧场景、不自动卸载已加载的新场景。
+- 后端公共请求不提供 Unity 加载操作与 Scene handle 的可信一对一关联；默认启动不承诺任意并发的同目标场景加载。差集检测到歧义明确失败，任意匹配加载并发及真实 AB 身份关联仍需后续场景/资源后端专题处理，不把全局事件监听伪装成请求身份。
+
+### 12.5 实际验证与后续
+
+实际使用 Unity `2022.3.62f3c1` 导入、编译及执行专项 PlayMode；已取得 `isCompiling=false`、`scriptCompilationFailed=false`。独立只读审查未发现重要实质问题，测试后 `trackedViewOwners=0`、普通及基础 Module 注册均为零。原 Smoke Scene/Harness 资产和严格结构校验未修改；默认场景测试只在 PlayMode 向真实 Fixture 实例注入测试自有 inactive View，结束后清理，未创建新资产或 meta。
+
+| 实际执行套件 | 结果 |
+|---|---|
+| CoreDirectViewPlayModeTests | 44/44 |
+| CoreXfabPlayModeTests，LOCAL + Assets | 16/16 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+
+共 **101 项 PlayMode** 通过，无失败或跳过；其中直接 View 新增 10 项，场景/启动新增 2 项并扩充原默认 Single 用例。覆盖显式 owner/ID查询、inactive/重复/冲突、失败只回滚新增、子退出与根归还、污染子会话、独立嵌套根、普通 Destroy/从未激活销毁、同名临时 Scene、真实同路径重复 Additive、迁移/DDOL、默认 OnStart 前挂载、默认挂载失败 Model/View 回滚、成功嵌套 Module 保护及既有 A/B/1.2 回归。没有通过 Fixture 恢复内部索引来制造通过。
+
+本轮未机械执行全部 Editor/Foundation/Audio/XFAB 或 Player 测试，B 的参数 EditMode 结果仅作历史证据，不表述为 C 本轮执行。测试工具的全工程发现数量不计入执行数量，仅统计各明确类过滤返回的实际结果。退出 PlayMode 仍观察到已记录的原 LoggerManager 残留错误，未修改原 Package 或添加日志忽略，不将专项通过解释为全工程 Console 无错误。真实 AB 物理释放、原游戏完整非干扰、Player 和无 XF 生态最终独立未验证。
+
+**已具备进入 1.3-D 的核心技术条件，仍须用户验收 C 并授权 D。**本批未提交，不自动进入 D；D 仍负责异步参数接管、pending/取消、owner代次、目标在等待中失效及晚到终态，E 仍负责完整 Panel 直接适配/收口。现有下层永不完成、Load 返回前半登记无法提供根引用、共享资产真实释放及业务自有监听清理失败的边界，留给既定异步/资源/公共能力专题，不扩大本批范围。

@@ -27,6 +27,11 @@ namespace YLFramework.Core
         internal bool IsInitializing;
         internal bool IsRemoving;
         internal bool UsesBackend;
+        internal GameObject BackendInstance;
+        internal View BackendRoot;
+        internal object BackendRootSession;
+        internal int SceneHandle;
+        internal bool IsAttaching;
         internal bool DiscardOnExit;
         private Model boundModel;
         private Module modelOwner;
@@ -140,14 +145,14 @@ namespace YLFramework.Core
         [MustCallBase("在重写Start方法时,请通过 base.Start() 调用父类中的Start方法!")]
         protected virtual void Start()
         {
-            // 场景和嵌套对象的显式挂载由1.3-C实现，不再猜测CurrentModule。
+            // 场景及动态新增对象由Module显式挂载，Start不推断业务归属。
         }
 
         private void OnDestroy()
         {
             if (!ApplicationTool.isPlaying) return;
             // 同步初始化事务持有取得实例，并在每个提交边界检查存活及完成回滚。
-            if (IsInitializing) return;
+            if (IsInitializing || IsAttaching) return;
 
             if (Module != null && Session != null)
             {

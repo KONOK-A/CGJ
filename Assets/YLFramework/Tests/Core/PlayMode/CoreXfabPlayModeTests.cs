@@ -23,6 +23,7 @@ namespace YLFramework.Core.Tests
         private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         private readonly List<GameObject> ownedObjects = new List<GameObject>();
         private readonly List<Object> ownedAssets = new List<Object>();
+        private readonly List<Scene> ownedSceneInstances = new List<Scene>();
         private CoreClassPoolScope classPool;
         private readonly HashSet<int> prefabKeys = new HashSet<int>();
         private readonly HashSet<int> previousEventSystems = new HashSet<int>();
@@ -51,6 +52,7 @@ namespace YLFramework.Core.Tests
             ownsScene = singleSceneTest = false;
             ownedObjects.Clear();
             ownedAssets.Clear();
+            ownedSceneInstances.Clear();
             classPool = new CoreClassPoolScope();
             prefabKeys.Clear();
             previousEventSystems.Clear();
@@ -155,6 +157,9 @@ namespace YLFramework.Core.Tests
             var scene = SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath);
             if (ownsScene && scene.IsValid() && scene.isLoaded)
                 yield return AwaitUnity(SceneManager.UnloadSceneAsync(scene), "unload fixture scene");
+            foreach (var instance in ownedSceneInstances)
+                if (instance.IsValid() && instance.isLoaded)
+                    yield return AwaitUnity(SceneManager.UnloadSceneAsync(instance), "unload owned additive scene instance");
             yield return null;
             initialized = false;
             if (failures.Count > 0) throw new AggregateException("XFAB fixture cleanup failed.", failures);
@@ -653,7 +658,137 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator RepeatedAdditiveSceneAssetAttachesByHandleAndUnloadPreservesOtherInstance()
+        {
+            yield return StartModule();
+            void Capture(Scene scene, LoadSceneMode mode)
+            {
+                if (scene.path == YLCoreSmokeModule.ScenePath) ownedSceneInstances.Add(scene);
+            }
+            SceneManager.sceneLoaded += Capture;
+            try
+            {
+                for (int i = 0; i < 2; i++)
+                    yield return AwaitUnity(EditorSceneManager.LoadSceneAsyncInPlayMode(YLCoreSmokeModule.ScenePath,
+                        new LoadSceneParameters(LoadSceneMode.Additive)), "load repeated additive scene");
+            }
+            finally { SceneManager.sceneLoaded -= Capture; }
+            Assert.That(ownedSceneInstances.Count, Is.EqualTo(2));
+            var first = ownedSceneInstances[0];
+            var second = ownedSceneInstances[1];
+            Assert.That(first.name, Is.EqualTo(second.name));
+            Assert.That(first.path, Is.EqualTo(second.path));
+            Assert.That(first.handle, Is.Not.EqualTo(second.handle));
+            var firstObject = Own(new GameObject("YLCore.FirstAdditiveView"));
+            var secondObject = Own(new GameObject("YLCore.SecondAdditiveView"));
+            firstObject.SetActive(false);
+            secondObject.SetActive(false);
+            SceneManager.MoveGameObjectToScene(firstObject, first);
+            SceneManager.MoveGameObjectToScene(secondObject, second);
+            var firstView = firstObject.AddComponent<YLCoreSmokeView>();
+            var secondView = secondObject.AddComponent<YLCoreSmokeView>();
+            module.AttachViews(first);
+            Assert.That(secondView.Module, Is.Null);
+            module.AttachViews(second);
+            yield return AwaitUnity(SceneManager.UnloadSceneAsync(first), "unload first additive instance");
+            Assert.That(firstView == null, Is.True);
+            Assert.That(firstView.Module, Is.Null);
+            Assert.That(firstView.RemovedCount, Is.EqualTo(1));
+            Assert.That(secondView.Module, Is.SameAs(module));
+            Assert.That(secondView.IsLoaded, Is.True);
+            Assert.That(secondView.RemovedCount, Is.Zero);
+            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { secondView }));
+            Assert.That(second.isLoaded, Is.True);
+        }
+
+        [UnityTest]
         public IEnumerator DefaultStartupSceneUsesSingleAndRealFixtureEntry()
+        {
+            yield return PrepareDefaultSceneTest();
+            YLCoreSmokeView sceneView = null;
+            void InjectView(Scene scene, LoadSceneMode mode)
+            {
+                if (scene.path != YLCoreSmokeModule.ScenePath) return;
+                var obj = Own(new GameObject("YLCore.DefaultSceneView"));
+                obj.SetActive(false);
+                SceneManager.MoveGameObjectToScene(obj, scene);
+                obj.transform.SetParent(scene.GetRootGameObjects()[0].transform);
+                sceneView = obj.AddComponent<YLCoreSmokeView>();
+            }
+            SceneManager.sceneLoaded += InjectView;
+            try
+            {
+                yield return StartModule(true, () =>
+                {
+                    Assert.That(sceneView.IsLoaded, Is.True, "Default scene attachment commits before Module.OnStart.");
+                    Assert.That(sceneView.Module, Is.SameAs(module));
+                    Assert.That(module.GetView<YLCoreSmokeView>(sceneView.Id), Is.SameAs(sceneView));
+                    Assert.That(sceneView.AwakeCount, Is.Zero);
+                });
+            }
+            finally { SceneManager.sceneLoaded -= InjectView; }
+            var loaded = SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath);
+            Assert.That(loaded.IsValid() && loaded.isLoaded, Is.True);
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(loaded));
+            Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath).isLoaded, Is.False);
+            Assert.That(module.SceneReadyAtStart, Is.True, "Startup validates the loaded scene before OnStart.");
+            Assert.That(module.RowReadyAtStart, Is.True);
+            yield return AssertSceneEntry(loaded);
+            module.Close();
+            Assert.That(sceneView.Module, Is.Null);
+            Assert.That(sceneView.RemovedCount, Is.EqualTo(1));
+            Assert.That(sceneView, Is.Not.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator DefaultSceneAttachFailureRollsBackModuleViewsAndModelsBeforeCompletion()
+        {
+            yield return PrepareDefaultSceneTest();
+            YLCoreSmokeView first = null;
+            YLCoreSmokeView failing = null;
+            YLCoreSmokeRow initializedRow = null;
+            var failure = new InvalidOperationException("default scene attach failure");
+            YLCoreSmokeRow.InitAction = value => initializedRow = value;
+            void InjectViews(Scene scene, LoadSceneMode mode)
+            {
+                if (scene.path != YLCoreSmokeModule.ScenePath) return;
+                var root = Own(new GameObject("YLCore.DefaultFailureRoot"));
+                root.SetActive(false);
+                SceneManager.MoveGameObjectToScene(root, scene);
+                first = root.AddComponent<YLCoreSmokeView>();
+                var child = Own(new GameObject("YLCore.DefaultFailureChild"));
+                child.SetActive(false);
+                child.transform.SetParent(root.transform);
+                failing = child.AddComponent<YLCoreSmokeView>();
+                failing.LoadedAction = () => throw failure;
+            }
+            SceneManager.sceneLoaded += InjectViews;
+            try
+            {
+                module = new YLCoreSmokeModule { StartWithScene = true };
+                var request = YLFramework.Core.ModuleManager.StartUpModule(module);
+                yield return Await(() => request.isDone, "default scene attachment failure");
+                Assert.That(request.Exception, Is.SameAs(failure));
+                Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+                Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+                Assert.That(module.StartCount, Is.Zero);
+                Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(first.Module, Is.Null);
+                Assert.That(failing.Module, Is.Null);
+                Assert.That(first.RemovedCount, Is.EqualTo(1));
+                Assert.That(failing.RemovedCount, Is.EqualTo(1));
+                Assert.That(first.ClosedCount, Is.Zero);
+                Assert.That(first && failing, Is.True, "Startup owns business sessions, not the scene objects.");
+                Assert.That(initializedRow.ExitCount, Is.EqualTo(1));
+                Assert.That(initializedRow.Module, Is.Null);
+                Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath).isLoaded, Is.True,
+                    "Logical startup rollback does not restore or unload the scene.");
+            }
+            finally { SceneManager.sceneLoaded -= InjectViews; }
+        }
+
+        private IEnumerator PrepareDefaultSceneTest()
         {
             Assert.That(YLFramework.Core.ModuleManager.AllModules, Is.Empty);
             for (int i = 0; i < SceneManager.sceneCount; i++)
@@ -686,19 +821,11 @@ namespace YLFramework.Core.Tests
                 SceneManager.SetActiveScene(previousActive);
             }
             singleSceneTest = ownsScene = true;
-            yield return StartModule(true);
-            var loaded = SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath);
-            Assert.That(loaded.IsValid() && loaded.isLoaded, Is.True);
-            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(loaded));
-            Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.HarnessPath).isLoaded, Is.False);
-            Assert.That(module.SceneReadyAtStart, Is.True, "Startup validates the loaded scene before OnStart.");
-            Assert.That(module.RowReadyAtStart, Is.True);
-            yield return AssertSceneEntry(loaded);
         }
 
-        private IEnumerator StartModule(bool withScene = false)
+        private IEnumerator StartModule(bool withScene = false, Action onStart = null)
         {
-            module = new YLCoreSmokeModule { StartWithScene = withScene };
+            module = new YLCoreSmokeModule { StartWithScene = withScene, StartAction = onStart };
             var request = YLFramework.Core.ModuleManager.StartUpModule(module);
             Assert.That(request, Is.Not.Null);
             yield return Await(() => request.isDone, "Core startup");
