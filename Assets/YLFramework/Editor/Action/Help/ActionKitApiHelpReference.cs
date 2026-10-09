@@ -1,6 +1,3 @@
-// Descriptions checked against the local YLFramework.Actions runtime sources.
-// Copyright (c) liangxiegame and the runtime contributors, MIT License.
-// https://github.com/liangxiegame/QFramework
 using System;
 using System.Collections.Generic;
 using System.Reflection;

@@ -158,16 +158,11 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(source, Does.Not.Contain("ExpansionPackageListTree"), relative);
                 Assert.That(source, Does.Not.Contain("ExpansionPackages"), relative);
                 Assert.That(source, Does.Not.Contain("Packages/com.xfkj.xfgameframework/Editor/About"), relative);
-                Assert.That(source, Does.Contain("// Original path: Editor/"), relative);
-                var originalPath = Regex.Match(source, @"(?m)^// Original path: (Editor/[^\r\n]+)");
-                Assert.That(originalPath.Success, Is.True, relative);
-                Assert.That(File.Exists(Path.Combine(package.resolvedPath, originalPath.Groups[1].Value)),
-                    Is.True, "Source provenance cannot be resolved: " + relative);
             }
         }
 
         [Test]
-        public void EditorCopyCarriesCompleteUpstreamLicenseAndSourceRevision()
+        public void EditorCopyCarriesCompleteUpstreamLicense()
         {
             var package = PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.xfkj.xfgameframework");
             string upstreamLicense = Path.Combine(package.resolvedPath, "LICENSE.md");
@@ -178,14 +173,6 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(license.Replace("\r\n", "\n").Trim(),
                 Is.EqualTo(File.ReadAllText(upstreamLicense).Replace("\r\n", "\n").Trim()));
             Assert.That(license, Does.Contain("Copyright (c) 2021 \u5f26\u5c0f\u98ce"));
-            foreach (string path in Directory.GetFiles(EditorRoot, "*.cs", SearchOption.AllDirectories))
-            {
-                string source = File.ReadAllText(path);
-                Assert.That(source, Does.Contain("Copyright (c) 2021 \u5f26\u5c0f\u98ce"), path);
-                Assert.That(source, Does.Contain("Licensed under the MIT License"), path);
-                Assert.That(source, Does.Contain("https://gitee.com/xianfengkeji/XFGameFramework.git"), path);
-                Assert.That(source, Does.Contain("2182708aecc596f30739fa8634fe2b9b6946ddd7"), path);
-            }
         }
 
         internal static CoreEditorAssemblyDefinition ReadDefinition(string path)

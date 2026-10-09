@@ -1,5 +1,3 @@
-// 适配自本地 ActionKit ScreenTransition 源码，遵循模块的 MIT 许可证。
-// https://github.com/liangxiegame/QFramework
 using System;
 
 namespace YLFramework.Actions

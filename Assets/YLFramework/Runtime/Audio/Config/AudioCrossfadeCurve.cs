@@ -1,5 +1,3 @@
-// Copyright (c) 2015 - 2025 liangxiegame, MIT License.
-// https://github.com/liangxiegame/QFramework
 namespace YLFramework.Services.Audio
 {
     /// <summary>Transition gain mapping for music CrossFadeMusic.</summary>

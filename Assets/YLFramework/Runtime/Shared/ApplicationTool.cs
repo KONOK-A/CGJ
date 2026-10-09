@@ -1,9 +1,3 @@
-// Copyright (c) 2021 弦小风. Licensed under the MIT License; see LICENSE.md.
-// Source: https://gitee.com/xianfengkeji/xfabmanager.git
-// Revision: c35dc4058ecd831409199b43cb328024202d4557 (XFABManager 1.24.0)
-// Original path: Runtime/Tools/ApplicationTool.cs
-// YL adaptation: namespace only; Editor/Player state semantics retained.
- 
 #if UNITY_EDITOR
 using UnityEditor;
 #endif

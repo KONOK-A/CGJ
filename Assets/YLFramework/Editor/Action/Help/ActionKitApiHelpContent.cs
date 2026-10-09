@@ -1,6 +1,3 @@
-// Descriptions adapted from the local ActionKit API metadata and guidelines.
-// Copyright (c) 2015 - 2025 liangxiegame and the authors named in the runtime sources, MIT License.
-// https://github.com/liangxiegame/QFramework
 using System;
 using System.Collections.Generic;
 using System.Linq;

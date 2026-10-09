@@ -1,5 +1,3 @@
-// Copyright (c) 2015 - 2025 liangxiegame, MIT License.
-// https://github.com/liangxiegame/QFramework
 using System;
 using UnityEngine;
 using UnityEngine.Audio;

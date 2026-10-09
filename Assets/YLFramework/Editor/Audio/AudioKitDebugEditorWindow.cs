@@ -1,5 +1,3 @@
-// Copyright (c) 2015 - 2025 liangxiegame UNDER MIT LICENSE
-// https://github.com/liangxiegame/QFramework
 using YLFramework.Editor.Help;
 using YLFramework.Services.Audio;
 using UnityEditor;

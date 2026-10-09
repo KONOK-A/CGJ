@@ -708,6 +708,6 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 - [`Editor/Audio/Help/AudioKitHelpProvider.cs`](../../Editor/Audio/Help/AudioKitHelpProvider.cs) 的稳定 id 为 `audiokit`，反射真实 Audio 公开类型，包含组件与 Action，不泄漏内部实例或 Foundation 通用 API。
 - 帮助菜单 `YLFramework/Audio/帮助`；保留 9 个指南页及稳定 ID `overview/control/settings/spatial/mixer/components/action/timer/diagnostics`，在现有 settings/components/action/diagnostics 扩充总量/Clip/Priority/缓存/预热/统计合同，保留原 Sound 开始、Crossfade、手动/自动淡变与加权说明，不新增页面或文档文件。API 反射包含真实 AudioSoundStats、AudioSoundConcurrency/SoundOverflowPolicy、AudioAutoFade、AudioWeightedClip、AudioOutputRoute 及嵌套 RouteMode、AudioMixerConfig、AudioMixerControl、AudioMixerController，XML 来自共享 `Library/YLFramework.Runtime.xml`，不伪造类型或创建播放宿主。`timer` 页保留工具边界与导航，不新增独立 Timing Provider。
 - `AudioHelpTests` 应按真实契约检查 Options 为 Serializable sealed class、字段类型不变、new/Defaults 有效且每次新实例、MusicDefaults 循环且独立、default 为 null；将原 Nullable 参数反射改为引用类型，并保留 optional null、WithOptions 位置参数及回调顺序。新增最短路径/Slider/Listener、JSON 缺字段、请求与 Allocate 快照、Settings 坏值回退与拒绝赋值、Emitter 新旧策略、校验保护旧播放及 Mixer 缺 config 的帮助索引断言。原九页 ID、API 可发现性、被动创建与未受影响的高级合同仍需保留。合同断言不等同于实际编译、运行或听感验证。
-- 源码保留 QFramework/liangxiegame 的 MIT 版权与来源声明；原 Timing/Disposable 源保留各自原版权。删除旧包装不改变保留代码的许可，分发时保留声明。
+- QFramework/liangxiegame 的 MIT 版权与来源通过随附的集中声明保留（见 [`Runtime/THIRD-PARTY-NOTICES.md`](../../Runtime/THIRD-PARTY-NOTICES.md)）；原 Timing/Disposable 源保留各自原版权。删除旧包装不改变保留代码的许可，分发时保留对应声明。
 
 编译、EditMode、PlayMode、关闭 Domain Reload 的重复会话、真实游戏流程和人工听感必须分别报告；未实际执行不得称为已验证。导出边界见 [文档首页](../README.md#帮助与导出)，XML 是 Library 构建产物，不默认导出。

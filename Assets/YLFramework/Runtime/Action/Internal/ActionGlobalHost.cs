@@ -1,6 +1,3 @@
-// 全局消息和协程行为提取自本地 ActionKit 宿主。
-// Copyright (c) 2016 - 2022 liangxiegame UNDER MIT License
-// https://github.com/liangxiegame/QFramework
 using System;
 using System.Collections;
 using System.Collections.Generic;

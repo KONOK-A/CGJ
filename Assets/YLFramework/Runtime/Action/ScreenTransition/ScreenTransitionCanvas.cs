@@ -1,6 +1,3 @@
-// Prefab 查找逻辑适配自本地 ScreenTransitionCanvas 和 PrefabSingletonProperty。
-// Copyright (c) 2015 - 2023 liangxiegame UNDER MIT License
-// https://github.com/liangxiegame/QFramework
 using System;
 using UnityEngine;
 using UnityEngine.UI;
