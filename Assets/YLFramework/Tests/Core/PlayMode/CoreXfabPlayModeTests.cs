@@ -48,6 +48,8 @@ namespace YLFramework.Core.Tests
         {
             initialized = false;
             YLCoreSmokeRow.InitAction = null;
+            YLCoreSmokeView.LoadingProbe = null;
+            YLCoreSmokeView.ArgsProbe = null;
             timedOut = false;
             ownsScene = singleSceneTest = false;
             ownedObjects.Clear();
@@ -101,6 +103,8 @@ namespace YLFramework.Core.Tests
         {
             if (!initialized) yield break;
             YLCoreSmokeRow.InitAction = null;
+            YLCoreSmokeView.LoadingProbe = null;
+            YLCoreSmokeView.ArgsProbe = null;
             // A timeout exits this isolated PlayMode session. Producers are not cancellable by Abort.
             if (timedOut) yield break;
             var failures = new List<Exception>();
@@ -460,6 +464,454 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator ParallelNamedViewsCancelLateProducerWithoutInstanceOrRecycledArgsLeak()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var parent = Own(new GameObject("YLCore.AsyncParallelParent")).transform;
+            var firstArgs = NewArgs();
+            firstArgs.SetInt("token", 11);
+            var first = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: firstArgs);
+            var canceledArgs = NewArgs();
+            canceledArgs.SetObject("retained", module);
+            var canceled = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: canceledArgs);
+            Assert.That(first.Status, Is.EqualTo(LoadViewStatus.Pending));
+            Assert.That(canceled.Status, Is.EqualTo(LoadViewStatus.Pending));
+            Assert.That(PendingViewCount(), Is.EqualTo(2));
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+            Assert.Throws<InvalidOperationException>(() => canceledArgs.GetObject("retained"));
+            Assert.Throws<InvalidOperationException>(() => module.LoadViewAsync<YLCoreSmokeView>(
+                nameof(YLCoreSmokeView), parent, loadViewArgs: canceledArgs));
+            Assert.That(PendingViewCount(), Is.EqualTo(2), "Duplicate Claim cannot disturb the original pending request.");
+            int canceledCallbacks = 0;
+            canceled.AddCompleteEvent(_ => canceledCallbacks++);
+            YLFramework.Foundation.CustomAsyncOperation<LoadViewRequest<YLCoreSmokeView>> foundation = canceled;
+            foundation.Abort();
+            canceled.Abort();
+            AssertTerminal(canceled, LoadViewStatus.Canceled);
+            Assert.That(canceled.Exception, Is.TypeOf<OperationCanceledException>());
+            Assert.That(canceledCallbacks, Is.EqualTo(1));
+            Assert.That(PendingViewCount(), Is.EqualTo(1));
+            AssertReleasedArgs(canceledArgs);
+
+            // 立即重新租用真实池对象，旧producer仍在等待同一资源，不能读取或归还新租用。
+            var secondArgs = NewArgs();
+            Assert.That(secondArgs, Is.SameAs(canceledArgs));
+            secondArgs.SetInt("token", 73);
+            secondArgs.SetObject("retained", parent);
+            var observedTokens = new List<int>();
+            YLCoreSmokeView.ArgsProbe = (view, args) => observedTokens.Add(args.GetInt("token"));
+            var second = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: secondArgs);
+            Assert.That(second, Is.Not.SameAs(first));
+            Assert.That(PendingViewCount(), Is.EqualTo(2));
+            yield return Await(() => first.isDone && second.isDone, "parallel named Views after cancellation");
+            yield return null;
+            AssertTerminal(first, LoadViewStatus.Succeeded);
+            AssertTerminal(second, LoadViewStatus.Succeeded);
+            AssertTerminal(canceled, LoadViewStatus.Canceled);
+            var firstView = Track(first.view);
+            var secondView = Track(second.view);
+            Assert.That(firstView, Is.Not.SameAs(secondView));
+            Assert.That(firstView.Token, Is.EqualTo(11));
+            Assert.That(secondView.Token, Is.EqualTo(73));
+            CollectionAssert.AreEquivalent(new[] { 11, 73 }, observedTokens);
+            CollectionAssert.AreEquivalent(new[] { firstView, secondView }, module.GetViews<YLCoreSmokeView>());
+            Assert.That(firstView.Module, Is.SameAs(module));
+            Assert.That(secondView.Module, Is.SameAs(module));
+            Assert.That(firstView.transform.parent, Is.SameAs(parent));
+            Assert.That(secondView.transform.parent, Is.SameAs(parent));
+            Assert.That(FixtureInstanceCount(prefab), Is.EqualTo(2), "Canceled producer must never acquire an instance.");
+            Assert.That(canceledCallbacks, Is.EqualTo(1));
+            Assert.That(PendingViewCount(), Is.Zero);
+            AssertReleasedArgs(firstArgs);
+            AssertReleasedArgs(secondArgs);
+        }
+
+        [UnityTest]
+        public IEnumerator CloseInvalidatesPendingBeforeNotificationAndAllowsSameInstanceRestart()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var oldView = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: null));
+            var oldRow = row;
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+            var oldLifecycle = typeof(Module).GetField("ViewLifecycle", InstancePrivate).GetValue(module);
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
+            bool inputsReleasedBeforeViewExit = false;
+            oldView.RemoveAction = () =>
+            {
+                inputsReleasedBeforeViewExit = module.State == ModuleState.Closing && !request.isDone &&
+                    PendingViewCount() == 0 && Field(request, "owner") == null && Field(request, "args") == null;
+                AssertReleasedArgs(args);
+            };
+            StartUpModuleRequest restart = null;
+            LoadViewRequest<YLCoreSmokeView> fresh = null;
+            int callbacks = 0;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                AssertTerminal(done, LoadViewStatus.Invalidated);
+                Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+                Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+                Assert.That(oldRow.Module, Is.Null);
+                Assert.That(oldRow.ExitCount, Is.EqualTo(1));
+                Assert.That(PendingViewCount(), Is.Zero);
+                AssertReleasedArgs(args);
+                module.StartAction = () => fresh = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: null);
+                restart = YLFramework.Core.ModuleManager.StartUpModule(module);
+            });
+            module.Close();
+            Assert.That(inputsReleasedBeforeViewExit, Is.True, "Close releases pending inputs before running View cleanup.");
+            oldView.RemoveAction = null;
+            Assert.That(callbacks, Is.EqualTo(1), "Invalidation publishes synchronously after unregistering the owner.");
+            Assert.That(restart, Is.Not.Null);
+            yield return Await(() => restart.isDone && fresh != null && fresh.isDone, "restart same Module after pending invalidation");
+            Assert.That(restart.error, Is.Null.Or.Empty);
+            Assert.That(typeof(Module).GetField("ViewLifecycle", InstancePrivate).GetValue(module), Is.Not.SameAs(oldLifecycle));
+            AssertTerminal(request, LoadViewStatus.Invalidated);
+            AssertTerminal(fresh, LoadViewStatus.Succeeded);
+            var view = Track(fresh.view);
+            Assert.That(view, Is.SameAs(oldView));
+            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { view }));
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(PendingViewCount(), Is.Zero);
+            Assert.That(FixtureInstanceCount(prefab), Is.EqualTo(1), "Old invalidated producer cannot create an extra instance in the restarted owner.");
+        }
+
+        [UnityTest]
+        public IEnumerator OnStartPendingViewIsInvalidatedAfterStartupThrowRollback()
+        {
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var args = NewArgs();
+            var failure = new InvalidOperationException("YLCore OnStart pending View rollback");
+            LoadViewRequest<YLCoreSmokeView> viewRequest = null;
+            StartUpModuleRequest restart = null;
+            int callbacks = 0;
+            module = new YLCoreSmokeModule();
+            args.SetObject("retained", module);
+            module.StartAction = () =>
+            {
+                row = module.GetModel<YLCoreSmokeRow>(101);
+                viewRequest = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+                Assert.That(viewRequest.Status, Is.EqualTo(LoadViewStatus.Pending));
+                viewRequest.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    AssertTerminal(done, LoadViewStatus.Invalidated);
+                    Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+                    Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+                    Assert.That(row.Module, Is.Null);
+                    Assert.That(row.ExitCount, Is.EqualTo(1));
+                    Assert.That(module.GetViews<View>(), Is.Empty);
+                    Assert.That(PendingViewCount(), Is.Zero);
+                    AssertReleasedArgs(args);
+                    module.StartAction = null;
+                    restart = YLFramework.Core.ModuleManager.StartUpModule(module);
+                });
+                throw failure;
+            };
+            var startup = YLFramework.Core.ModuleManager.StartUpModule(module);
+            yield return Await(() => startup.isDone, "OnStart pending View rollback");
+            Assert.That(startup.Exception, Is.SameAs(failure));
+            Assert.That(callbacks, Is.EqualTo(1));
+            AssertTerminal(viewRequest, LoadViewStatus.Invalidated);
+            Assert.That(restart, Is.Not.Null, "Startup rollback removes its old startup record before pending callbacks can restart.");
+            yield return Await(() => restart.isDone, "restart from startup rollback pending callback");
+            Assert.That(restart.error, Is.Null.Or.Empty);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+            yield return DrainFixtureAssetProducer();
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(callbacks, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator PendingParentDestructionOrSessionEndInvalidatesButLiveSceneMigrationSucceeds()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var parent = Own(new GameObject("YLCore.PendingDestroyedParent"));
+            var args = NewArgs();
+            args.SetObject("retained", parent);
+            var destroyed = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent.transform, loadViewArgs: args);
+            Assert.That(destroyed.Status, Is.EqualTo(LoadViewStatus.Pending));
+            Object.DestroyImmediate(parent);
+            yield return Await(() => destroyed.isDone, "pending parent destruction");
+            AssertTerminal(destroyed, LoadViewStatus.Invalidated);
+            AssertReleasedArgs(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+
+            var parentObject = Own(new GameObject("YLCore.PendingParentSession"));
+            parentObject.SetActive(false);
+            var parentView = parentObject.AddComponent<YLCoreSmokeView>();
+            module.AttachView(parentView);
+            var ended = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parentView.transform, loadViewArgs: null);
+            parentView.Close();
+            module.AttachView(parentView);
+            yield return Await(() => ended.isDone, "pending parent session replaced on live object");
+            AssertTerminal(ended, LoadViewStatus.Invalidated);
+            Assert.That(parentView.Module, Is.SameAs(module));
+            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { parentView }));
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+            parentView.Close();
+
+            var destination = SceneManager.CreateScene("YLCore.PendingParentDestination");
+            ownedSceneInstances.Add(destination);
+            var moved = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), parentObject.transform, loadViewArgs: null);
+            SceneManager.MoveGameObjectToScene(parentObject, destination);
+            yield return Await(() => moved.isDone, "pending live parent scene migration");
+            AssertTerminal(moved, LoadViewStatus.Succeeded);
+            var view = Track(moved.view);
+            Assert.That(view.transform.parent, Is.SameAs(parentObject.transform));
+            Assert.That(view.gameObject.scene, Is.EqualTo(destination));
+            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(PendingViewCount(), Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator ParentlessPendingViewKeepsCapturedSceneAndInvalidatesWhenItUnloads()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var target = SceneManager.CreateScene("YLCore.PendingCapturedScene");
+            ownedSceneInstances.Add(target);
+            SceneManager.SetActiveScene(target);
+            var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: null);
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
+            SceneManager.SetActiveScene(previousActive);
+            yield return Await(() => request.isDone, "parentless captured scene after active switch");
+            AssertTerminal(request, LoadViewStatus.Succeeded);
+            var view = Track(request.view);
+            Assert.That(view.gameObject.scene, Is.EqualTo(target));
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(previousActive));
+            view.Close();
+
+            var unloading = SceneManager.CreateScene("YLCore.PendingUnloadedScene");
+            ownedSceneInstances.Add(unloading);
+            SceneManager.SetActiveScene(unloading);
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var invalidated = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+            Assert.That(invalidated.Status, Is.EqualTo(LoadViewStatus.Pending));
+            SceneManager.SetActiveScene(previousActive);
+            var unload = SceneManager.UnloadSceneAsync(unloading);
+            yield return AwaitUnity(unload, "unload pending captured scene");
+            yield return Await(() => invalidated.isDone, "pending captured scene invalidation");
+            AssertTerminal(invalidated, LoadViewStatus.Invalidated);
+            AssertReleasedArgs(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(PendingViewCount(), Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator RealMissingAndArgsInitializationFailureCompleteWithoutOwnerOrInputResidue()
+        {
+            yield return StartModule();
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var missing = module.LoadViewAsync<YLCoreSmokeView>("YLCoreMissingView_" + Guid.NewGuid().ToString("N"), loadViewArgs: args);
+            int callbacks = 0;
+            missing.AddCompleteEvent(_ => callbacks++);
+            yield return Await(() => missing.isDone, "real missing named prefab");
+            AssertTerminal(missing, LoadViewStatus.Failed);
+            Assert.That(missing.Exception, Is.TypeOf<InvalidOperationException>());
+            Assert.That(callbacks, Is.EqualTo(1));
+            AssertReleasedArgs(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var failure = new InvalidOperationException("YLCore async args initialization failure");
+            var cleanupFailure = new InvalidOperationException("YLCore async View rollback cleanup failure");
+            YLCoreSmokeView failedView = null;
+            LoadViewRequest<YLCoreSmokeView> failed = null;
+            args = NewArgs();
+            args.SetObject("retained", row);
+            YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
+            {
+                failedView = Track(view);
+                view.BoundModel = (Model)borrowed.GetObject("retained");
+                view.RemoveAction = () =>
+                {
+                    failed.Abort();
+                    throw cleanupFailure;
+                };
+                throw failure;
+            };
+            failed = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+            callbacks = 0;
+            failed.AddCompleteEvent(_ => callbacks++);
+            yield return Await(() => failed.isDone, "real async hierarchy initialization failure");
+            AssertTerminal(failed, LoadViewStatus.Failed);
+            Assert.That(failed.Exception, Is.SameAs(failure));
+            Assert.That(failed.Exception.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupFailure));
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(failedView, Is.Not.Null);
+            Assert.That(failedView.Module, Is.Null);
+            Assert.That(failedView.Model, Is.Null);
+            Assert.That(failedView.RemovedCount, Is.EqualTo(1));
+            Assert.That(failedView.ClosedCount, Is.Zero);
+            Assert.That(row.Module, Is.SameAs(module));
+            Assert.That(row.ExitCount, Is.Zero);
+            AssertReleasedArgs(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(PendingViewCount(), Is.Zero);
+            yield return null;
+            Assert.That(failedView == null, Is.True, "Failed initialization discards the obtained instance.");
+        }
+
+        [UnityTest]
+        public IEnumerator ArgsCallbackAbortDefersNotificationUntilRollbackThenAllowsReentrantLoad()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var args = NewArgs();
+            args.SetInt("token", 61);
+            args.SetObject("retained", row);
+            LoadViewRequest<YLCoreSmokeView> request = null;
+            LoadViewRequest<YLCoreSmokeView> next = null;
+            YLCoreSmokeView canceledView = null;
+            bool stillBorrowedAfterAbort = false;
+            YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
+            {
+                canceledView = Track(view);
+                view.BoundModel = (Model)borrowed.GetObject("retained");
+                request.Abort();
+                request.Abort();
+                stillBorrowedAfterAbort = !request.isDone && request.Status == LoadViewStatus.Pending &&
+                    borrowed.GetInt("token") == 61 && PendingViewCount() == 1;
+                YLCoreSmokeView.ArgsProbe = null;
+            };
+            request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
+            int callbacks = 0;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                AssertTerminal(done, LoadViewStatus.Canceled);
+                Assert.That(canceledView.Module, Is.Null);
+                Assert.That(canceledView.Model, Is.Null);
+                Assert.That(canceledView.IsLoaded, Is.False);
+                Assert.That(canceledView.RemovedCount, Is.EqualTo(1));
+                Assert.That(canceledView.ClosedCount, Is.Zero);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(PendingViewCount(), Is.Zero);
+                AssertReleasedArgs(args);
+                done.Abort();
+                var nextArgs = NewArgs();
+                nextArgs.SetInt("token", 62);
+                next = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: nextArgs);
+            });
+            yield return Await(() => request.isDone, "args Abort rollback");
+            Assert.That(next, Is.Not.Null, "Completion callback starts a new request after the rollback transaction ends.");
+            yield return Await(() => next.isDone, "reentrant named load after args Abort");
+            Assert.That(stillBorrowedAfterAbort, Is.True);
+            Assert.That(callbacks, Is.EqualTo(1));
+            AssertTerminal(request, LoadViewStatus.Canceled);
+            Assert.That(request.Exception, Is.TypeOf<OperationCanceledException>());
+            AssertTerminal(next, LoadViewStatus.Succeeded);
+            var nextView = Track(next.view);
+            Assert.That(nextView.Token, Is.EqualTo(62));
+            Assert.That(nextView.Module, Is.SameAs(module));
+            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { nextView }));
+            Assert.That(PendingViewCount(), Is.Zero);
+            Assert.That(row.ExitCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator ArgsModelRemovedWhilePendingOrReregisteredDuringInitializationCannotCommitBinding()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var model = module.LoadModel<YLCoreProbeModel>();
+            for (int phase = 0; phase < 2; phase++)
+            {
+                var args = NewArgs();
+                args.SetObject("retained", model);
+                YLCoreSmokeView failedView = null;
+                YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
+                {
+                    failedView = Track(view);
+                    view.BoundModel = (Model)borrowed.GetObject("retained");
+                    if (phase == 1)
+                    {
+                        module.RemoveModel(model);
+                        module.AddModel(model);
+                        Assert.That(view.Model, Is.Null, "A new registration cannot revive the old binding token.");
+                    }
+                };
+                var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+                Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
+                if (phase == 0) module.RemoveModel(model);
+                yield return Await(() => request.isDone, "invalid args Model registration " + phase);
+                AssertTerminal(request, LoadViewStatus.Failed);
+                Assert.That(request.Exception, Is.TypeOf<InvalidOperationException>());
+                Assert.That(failedView, Is.Not.Null);
+                Assert.That(failedView.Module, Is.Null);
+                Assert.That(failedView.Model, Is.Null);
+                Assert.That(failedView.IsLoaded, Is.False);
+                Assert.That(failedView.RemovedCount, Is.EqualTo(1));
+                Assert.That(failedView.ClosedCount, Is.Zero);
+                Assert.That(failedView.UnboundCount, Is.EqualTo(phase));
+                AssertReleasedArgs(args);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(PendingViewCount(), Is.Zero);
+                Assert.That(model.ExitCount, Is.EqualTo(phase + 1), "Only explicit business removal exits the Model.");
+                if (phase == 0) module.AddModel(model);
+                Assert.That(model.Module, Is.SameAs(module));
+                yield return null;
+                Assert.That(failedView == null, Is.True);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CompletionThrowAndRepeatedAbortDoNotRewriteSuccessAndArgsSelectCurrentModel()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var args = NewArgs();
+            args.SetInt("token", 95);
+            YLCoreSmokeView.ArgsProbe = (view, _) => view.BoundModel = module.GetModel<YLCoreSmokeRow>(101);
+            var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
+            var oldRow = row;
+            module.RemoveModel(oldRow);
+            row = new YLCoreSmokeRow { Id = 101, Marker = "replacement" };
+            module.AddModel(row);
+            int callbacks = 0;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                done.Abort();
+                throw new InvalidOperationException("YLCore async View completion subscriber failure");
+            });
+            LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: YLCore async View completion subscriber failure"));
+            yield return Await(() => request.isDone, "async View success with throwing completion callback");
+            AssertTerminal(request, LoadViewStatus.Succeeded);
+            var view = Track(request.view);
+            Assert.That(view.Model, Is.SameAs(row), "Args callback binds the valid registration at callback time, not the old request-time Model.");
+            Assert.That(oldRow.Module, Is.Null);
+            Assert.That(oldRow.ExitCount, Is.EqualTo(1));
+            Assert.That(view.Token, Is.EqualTo(95));
+            Assert.That(callbacks, Is.EqualTo(1));
+            AssertReleasedArgs(args);
+            request.Abort();
+            request.Abort();
+            int late = 0;
+            request.AddCompleteEvent(_ => late++);
+            yield return null;
+            AssertTerminal(request, LoadViewStatus.Succeeded);
+            Assert.That(request.view, Is.SameAs(view));
+            Assert.That(view.IsLoaded, Is.True);
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(late, Is.EqualTo(1));
+            Assert.That(PendingViewCount(), Is.Zero);
+        }
+
+        [UnityTest]
         public IEnumerator NamedSynchronousFailuresAndColdCacheReuseKeepArgsAndOwnerBoundaries()
         {
             yield return StartModule();
@@ -539,6 +991,18 @@ namespace YLFramework.Core.Tests
                 Assert.That(module.GetViews<YLFramework.Core.View>(), Is.Empty);
                 Assert.That(resourceModule.GetViews<YLFramework.Core.View>(), Is.Empty);
                 Assert.Throws<ObjectDisposedException>(() => args.GetInt("token"));
+                view.Close();
+                args = NewArgs();
+                args.SetInt("token", 85);
+                var asyncFallback = consumer.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: args);
+                yield return Await(() => asyncFallback.isDone, "async View fallback across resource projects");
+                AssertTerminal(asyncFallback, LoadViewStatus.Succeeded);
+                Assert.That(asyncFallback.view, Is.SameAs(view));
+                Assert.That(view.Module, Is.SameAs(consumer));
+                Assert.That(view.Token, Is.EqualTo(85));
+                Assert.That(resourceModule.GetViews<View>(), Is.Empty);
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                AssertReleasedArgs(args);
                 consumer.Close();
                 Assert.That(view.Module, Is.Null);
                 Assert.That(resourceModule.State, Is.EqualTo(YLFramework.Core.ModuleState.Running));
@@ -638,9 +1102,9 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             LoadFixture<GameObject>(nameof(YLCoreSmokeView));
             var parent = Own(new GameObject("YLCoreSmoke.FailureParent")).transform;
-            // Missing names hit the upstream null-prefab/hanging Assets branch. A valid prefab with
-            // the wrong component exercises the public failure contract without an unhandled coroutine exception.
-            var request = module.LoadViewAsync<YLCoreSmokePanel>(nameof(YLCoreSmokeView), parent, loadViewArgs: null);
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var request = module.LoadViewAsync<YLCoreSmokePanel>(nameof(YLCoreSmokeView), parent, loadViewArgs: args);
             int callbacks = 0;
             string callbackError = null;
             request.AddCompleteEvent(done => { callbacks++; callbackError = done.error; });
@@ -652,6 +1116,10 @@ namespace YLFramework.Core.Tests
             Assert.That(request.progress, Is.EqualTo(1f));
             Assert.That(request.keepWaiting, Is.False);
             Assert.That(request.view, Is.Null);
+            AssertTerminal(request, LoadViewStatus.Failed);
+            Assert.That(request.Exception, Is.TypeOf<InvalidCastException>());
+            AssertReleasedArgs(args);
+            Assert.That(PendingViewCount(), Is.Zero);
             Assert.That(module.GetViews(nameof(YLCoreSmokeView)), Is.Empty);
             Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
             yield return null;
@@ -946,6 +1414,62 @@ namespace YLFramework.Core.Tests
             var args = YLFramework.Core.LoadViewArgs.New();
             classPool.Track(args);
             return args;
+        }
+
+        private int PendingViewCount()
+        {
+            var pending = typeof(Module).GetField("pendingViews", InstancePrivate).GetValue(module);
+            return (int)pending.GetType().GetProperty("Count").GetValue(pending);
+        }
+
+        private static void AssertTerminal<T>(LoadViewRequest<T> request, LoadViewStatus status) where T : View
+        {
+            Assert.That(request.isDone, Is.True);
+            Assert.That(request.keepWaiting, Is.False);
+            Assert.That(request.progress, Is.EqualTo(1f));
+            Assert.That(request.Status, Is.EqualTo(status));
+            if (status == LoadViewStatus.Succeeded)
+            {
+                Assert.That(request.view, Is.Not.Null);
+                Assert.That(request.Exception, Is.Null);
+                Assert.That(request.error, Is.Null.Or.Empty);
+            }
+            else
+            {
+                Assert.That(request.view, Is.Null);
+                Assert.That(request.Exception, Is.Not.Null);
+                Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+            }
+            foreach (var name in new[] { "owner", "lifecycle", "assetName", "projects", "parent", "args", "param" })
+                Assert.That(Field(request, name), Is.Null, "Terminal request retains " + name);
+            Assert.That((IList)Field(request, "parentSessions"), Is.Empty);
+            Assert.That(((Scene)Field(request, "targetScene")).IsValid(), Is.False);
+        }
+
+        private static void AssertReleasedArgs(LoadViewArgs args)
+        {
+            Assert.Throws<ObjectDisposedException>(() => args.GetObject("retained"));
+            Assert.That((IDictionary)Field(args, "objects"), Is.Empty);
+            Assert.That((IDictionary)Field(args, "ints"), Is.Empty);
+        }
+
+        private static int FixtureInstanceCount(GameObject prefab)
+        {
+            var loader = Singleton(typeof(GameObjectLoader));
+            if (loader == null) return 0;
+            var pools = (IDictionary)Field(loader, "allPools");
+            return pools.Contains(prefab.GetHashCode()) ? ((IDictionary)Field(pools[prefab.GetHashCode()], "allObjs")).Count : 0;
+        }
+
+        private IEnumerator DrainFixtureAssetProducer()
+        {
+            // 等待同一真实后端的新请求结束，再留一帧让之前的Core producer退出；不使用假后端或改写注册。
+            var backend = AssetBundleManager.LoadAssetAsync<GameObject>(YLCoreSmokeModule.Project, nameof(YLCoreSmokeView));
+            yield return Await(() => backend.isDone, "drain real fixture asset producer");
+            Assert.That(backend.error, Is.Null.Or.Empty);
+            Assert.That(backend.asset, Is.Not.Null);
+            OwnAsset(backend.asset);
+            yield return null;
         }
 
         private T Track<T>(T view) where T : YLFramework.Core.View

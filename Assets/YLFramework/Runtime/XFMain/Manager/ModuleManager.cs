@@ -134,6 +134,7 @@ namespace YLFramework.Core
             if (module.State == ModuleState.Closed || module.State == ModuleState.Closing || module.State == ModuleState.CloseFailed)
                 throw new InvalidOperationException($"Cannot register Module in state {module.State}: {module.ModuleName}");
             Instance.modules.Add(module.ModuleName, module);
+            module.ViewLifecycle = new object();
             Instance.registrationOrder.Add(module);
             if (module.BaseModule) Instance.baseModules.Add(module.ModuleName, module);
         }
@@ -218,7 +219,7 @@ namespace YLFramework.Core
                         throw new InvalidOperationException("Cannot start or close a Module during Model initialization or exit.");
         }
 
-        private static void CloseModule(Module module, bool allowBaseModule)
+        private static void CloseModule(Module module, bool allowBaseModule, List<IPendingViewRequest> deferredNotifications = null)
         {
             if (!ReferenceEquals(GetModule(module.ModuleName), module)) return;
             if (module.State == ModuleState.Closing) return;
@@ -229,6 +230,13 @@ namespace YLFramework.Core
             ValidateClose(module);
             module.State = ModuleState.Closing;
             var errors = new List<Exception>();
+            module.ViewLifecycle = null;
+            var pendingViews = new List<IPendingViewRequest>(module.pendingViews);
+            foreach (var pending in pendingViews)
+            {
+                try { pending.Invalidate(); }
+                catch (Exception error) { errors.Add(error); }
+            }
             // 保存会话身份，钩子内关闭并复用的实例不能被旧快照再次退出。
             var views = ViewManager.Snapshot(module);
             try { module.Exit(); }
@@ -263,6 +271,13 @@ namespace YLFramework.Core
             module.type_views.Clear();
             module.ownedViews.Clear();
             module.State = ModuleState.Closed;
+            if (deferredNotifications != null) deferredNotifications.AddRange(pendingViews);
+            else
+                foreach (var pending in pendingViews)
+                {
+                    try { pending.PublishInvalidation(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
             if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors).Flatten();
         }
 
@@ -391,6 +406,7 @@ namespace YLFramework.Core
             var module = request.Module;
             if (!Instance.startingModules.TryGetValue(module.GetType(), out var pending) || !ReferenceEquals(pending, request)) return;
             bool restoreCurrent = ReferenceEquals(CurrentModule, module);
+            var deferredNotifications = new List<IPendingViewRequest>();
             try
             {
                 if (error == null)
@@ -402,7 +418,7 @@ namespace YLFramework.Core
                 {
                     // 启动事务已展开完毕；只绕过Starting和基础模块禁令，复用D的唯一管线。
                     module.State = ModuleState.StartFailed;
-                    try { CloseModule(module, true); }
+                    try { CloseModule(module, true, deferredNotifications); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
                 }
                 else module.State = request.InitialState;
@@ -413,6 +429,12 @@ namespace YLFramework.Core
                 if (error != null && restoreCurrent && (CurrentModule == null || ReferenceEquals(CurrentModule, module)))
                     CurrentModule = IsCurrentCandidate(request.PreviousCurrentModule) ? request.PreviousCurrentModule : null;
                 request.PreviousCurrentModule = null;
+                // View通知可重启同一实例；旧启动记录与上下文必须先完成收尾。
+                foreach (var pendingView in deferredNotifications)
+                {
+                    try { pendingView.PublishInvalidation(); }
+                    catch (Exception notificationError) { Debug.LogException(notificationError); }
+                }
             }
         }
 

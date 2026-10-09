@@ -32,6 +32,7 @@ namespace YLFramework.Core
     /// <remarks>
     /// 同步LoadView只返回已完成初始化的实例，参数、资源或初始化错误直接抛出。
     /// LoadViewArgs接管成功即由本次操作负责归还，入口拒绝也消耗参数；回调只借读，不得保存容器。
+    /// 异步View请求独立创建；Abort为逻辑取消，owner关闭后失效，终态与原始Exception只提交一次。
     /// </remarks>
     public abstract class Module
     {
@@ -52,6 +53,8 @@ namespace YLFramework.Core
         internal Dictionary<Type,List<View>> type_views = new Dictionary<Type, List<View>>();
         internal Dictionary<int, View> ownedViews = new Dictionary<int, View>();
         internal int viewTransactions;
+        internal object ViewLifecycle;
+        internal readonly HashSet<IPendingViewRequest> pendingViews = new HashSet<IPendingViewRequest>();
         
         /// <summary>
         /// 存放 所有的业务逻辑

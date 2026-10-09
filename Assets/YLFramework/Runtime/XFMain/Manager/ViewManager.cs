@@ -365,10 +365,70 @@ namespace YLFramework.Core
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null,bool sameScene = false, params object[] param) where T : View
         {
-            EnsureOwner(module);
-            LoadViewRequest<T> loadView = new LoadViewRequest<T>();
-            CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, param));
-            return loadView;
+            return StartAsync<T>(module, asset_name, parent, null, param);
+        }
+
+        private static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args, object[] param) where T : View
+        {
+            if (args != null) args.Claim();
+            LoadViewRequest<T> request;
+            try
+            {
+                EnsureOwner(module);
+                if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
+                if (!ReferenceEquals(parent, null) && !parent) throw new ArgumentException("View parent has been destroyed.", nameof(parent));
+                FindBackendRoot(module, parent);
+                request = new LoadViewRequest<T>(module, assetName, parent, args, param);
+            }
+            catch (Exception error)
+            {
+                if (args != null)
+                {
+                    try { args.Release(); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            try
+            {
+                if (CoroutineStarter.Start(request.Run()) == null && !request.isDone)
+                    request.FailToStart(new InvalidOperationException("View loading requires an active coroutine host."));
+            }
+            catch (Exception error) { request.FailToStart(error); }
+            return request;
+        }
+
+        internal static T CompleteAsync<T>(Module module, GameObject prefab, string assetName, Transform parent, Scene scene,
+            LoadViewArgs args, object[] param, Action validate) where T : View
+        {
+            ValidateView<T>(prefab);
+            GameObject instance = null;
+            bool initializing = false;
+            module.viewTransactions++;
+            try
+            {
+                validate();
+                FindBackendRoot(module, parent);
+                instance = GameObjectLoader.Load(prefab, parent);
+                if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
+                validate();
+                var view = ValidateView<T>(instance);
+                if (!parent && instance.scene != scene) SceneManager.MoveGameObjectToScene(instance, scene);
+                instance.transform.localPosition = Vector3.zero;
+                initializing = true;
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate);
+                return view;
+            }
+            catch (Exception error)
+            {
+                if (instance && !initializing)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            finally { module.viewTransactions--; }
         }
 
 
@@ -386,7 +446,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
-            View backendRoot = null, bool backend = false)
+            View backendRoot = null, bool backend = false, Action validate = null)
         {
             if (!view) throw new ArgumentNullException(nameof(view));
             if (view.Module != null || view.Session != null || view.IsRemoving)
@@ -409,8 +469,10 @@ namespace YLFramework.Core
                 module.viewTransactions++;
                 transaction = true;
                 view.BeforeOnLoaded();
+                validate?.Invoke();
                 ValidateInitialization(module, view, session);
                 view.OnLoaded(param ?? Array.Empty<object>());
+                validate?.Invoke();
                 ValidateInitialization(module, view, session);
                 if (args == null)
                 {
@@ -421,9 +483,11 @@ namespace YLFramework.Core
                 args.BeginRead();
                 try { view.OnLoaded(args); }
                 finally { args.EndRead(); }
+                validate?.Invoke();
                 ValidateInitialization(module, view, session);
                 view.loaded = true;
                 view.ResumeEvents();
+                validate?.Invoke();
                 ValidateInitialization(module, view, session);
             }
             catch (Exception initializationError)
@@ -505,7 +569,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
-            LoadViewArgs args, object[] param)
+            LoadViewArgs args, object[] param, Action validate = null)
         {
             var added = new List<KeyValuePair<View, object>>();
             var roots = new Dictionary<View, View>();
@@ -538,10 +602,11 @@ namespace YLFramework.Core
                     bool root = ReferenceEquals(view, acquiredRoot);
                     InitializeView(module, view, root ? assetName : null,
                         root || views.Count == 1 ? args : null, root ? param : null,
-                        root ? outerRoot : roots[view], root);
+                        root ? outerRoot : roots[view], root, validate);
                     added.Add(new KeyValuePair<View, object>(view, view.Session));
                 }
                 foreach (var entry in added) ValidateInitialization(module, entry.Key, entry.Value);
+                validate?.Invoke();
             }
             catch (Exception error)
             {
@@ -593,10 +658,7 @@ namespace YLFramework.Core
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null, bool sameScene = false, LoadViewArgs loadViewArgs = null) where T : View
         {
-            EnsureOwner(module);
-            LoadViewRequest<T> loadView = new LoadViewRequest<T>();
-            CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, loadViewArgs));
-            return loadView;
+            return StartAsync<T>(module, asset_name, parent, loadViewArgs, null);
         }
 
         #endregion
