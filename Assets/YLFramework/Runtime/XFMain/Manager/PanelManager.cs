@@ -6,6 +6,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using YLFramework.Core.Pool;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
 
 namespace YLFramework.Core
@@ -311,54 +312,57 @@ namespace YLFramework.Core
 
             int layer = 0;
 
-            List<Panel> TempUIOdersPanels = ClassObjectPoolManager.Load<List<Panel>>(); 
-            TempUIOdersPanels.Clear();
-
-            switch (type)
+            List<Panel> TempUIOdersPanels = ListPool<Panel>.Allocate();
+            try
             {
-                case UIType.UI:
+                switch (type)
+                {
+                    case UIType.UI:
 
-                    foreach (var item in UIOrders.Keys)
-                    {
-                        if (!item || item.Session == null || item.IsRemoving)
+                        foreach (var item in UIOrders.Keys)
                         {
-                            TempUIOdersPanels.Add(item);
-                            continue;
+                            if (!item || item.Session == null || item.IsRemoving)
+                            {
+                                TempUIOdersPanels.Add(item);
+                                continue;
+                            }
+
+                            if (UIOrders[item]>layer)
+                                layer = UIOrders[item];
                         }
 
-                        if (UIOrders[item]>layer)
-                            layer = UIOrders[item];
-                    }
-
-                    foreach (var item in TempUIOdersPanels)
-                    {
-                        UIOrders.Remove(item);
-                    }
-
-                    break;
-                case UIType.DontDestroyUI:
-
-                    foreach (var item in DontDestroyUIOrders.Keys)
-                    {
-                        if (!item || item.Session == null || item.IsRemoving)
+                        foreach (var item in TempUIOdersPanels)
                         {
-                            TempUIOdersPanels.Add(item);
-                            continue;
+                            UIOrders.Remove(item);
                         }
 
-                        if (DontDestroyUIOrders[item] > layer)
-                            layer = DontDestroyUIOrders[item];
-                    }
+                        break;
+                    case UIType.DontDestroyUI:
 
-                    foreach (var item in TempUIOdersPanels)
-                    {
-                        DontDestroyUIOrders.Remove(item);
-                    }
+                        foreach (var item in DontDestroyUIOrders.Keys)
+                        {
+                            if (!item || item.Session == null || item.IsRemoving)
+                            {
+                                TempUIOdersPanels.Add(item);
+                                continue;
+                            }
 
-                    break;
+                            if (DontDestroyUIOrders[item] > layer)
+                                layer = DontDestroyUIOrders[item];
+                        }
+
+                        foreach (var item in TempUIOdersPanels)
+                        {
+                            DontDestroyUIOrders.Remove(item);
+                        }
+
+                        break;
+                }
             }
-
-            ClassObjectPoolManager.Unload(TempUIOdersPanels);
+            finally
+            {
+                ListPool<Panel>.Recycle(TempUIOdersPanels);
+            }
 
             if (layer == 0)
                 layer =  type == UIType.UI ? UI_START_ORDER : DONTDESTROYUI_START_ORDER;
@@ -412,8 +416,7 @@ namespace YLFramework.Core
 
         internal static void UpdateAlwaysInFront()
         {
-            var panels = ClassObjectPoolManager.Load<List<KeyValuePair<Panel, object>>>();
-            panels.Clear();
+            var panels = ListPool<KeyValuePair<Panel, object>>.Allocate();
             bool IsCurrent(KeyValuePair<Panel, object> entry, UIType type) =>
                 entry.Value != null && entry.Key && !entry.Key.IsRemoving && entry.Key.UIType == type &&
                 ReferenceEquals(entry.Key.Session, entry.Value);
@@ -437,7 +440,7 @@ namespace YLFramework.Core
                 Update(UIType.UI, UIOrders);
                 Update(UIType.DontDestroyUI, DontDestroyUIOrders);
             }
-            finally { ClassObjectPoolManager.Unload(panels); }
+            finally { ListPool<KeyValuePair<Panel, object>>.Recycle(panels); }
         }
 
         internal static void LateUpdate() {

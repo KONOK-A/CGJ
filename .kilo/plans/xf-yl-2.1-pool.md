@@ -1,6 +1,6 @@
 # XF × YL 阶段 2.1：Pool 深度融合研究与技术设计
 
-**状态：2.1-A 已验收并完成 Git Commit/Push；2.1-B 已实现并通过定向技术验证，待用户验收与 Git 收口。C/D 未开始，GO 可选 E 仍延期。**
+**状态：2.1-A/B 已验收并完成 Git Commit/Push；2.1-C 已实现并通过定向技术验证，待用户验收与 Git 收口。D 未开始，GO 可选 E 仍延期。**
 
 本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。设计阶段授权仅为文档 Git 收口与分支准备；A、B 随后分别取得明确实施授权，实际结果见第 12、13 节，不扩展至 C/D。
 
@@ -394,3 +394,39 @@ Pool/Simple、Safe、Action、Audio/UI 的重复普通缓存算法已退出；�
 旧事件 Token/Once 嵌套问题、Resource ReleaseAllRes 部分失败、FSM Exit 失败的剩余领域引用、Action 配置扩展回调抛错的旧漏归还、跨 Session 存活消费者的原池捕获及 UI 显示流程不在本批完整解决。失败隔离不会伪装为外部资源已全部释放；普通池仍不防旧原始别名、恶意工厂同引用、并发或 Unity fake-null。既有 Package、Logger/MCP、XFAB 物理卸载风险不扩展处理。
 
 **B 达到技术完成条件，具备进入 C 的技术前置条件；当前停止，等待用户验收与另行 Git 收口授权，不自动实施 C。**
+
+## 14. 2.1-C 实施与验证
+
+2026-10-09 用户明确授权仅实施 C。实际基线为 `fusion/2.1-pool` / `e8925e6`，开始时工作区干净；A/B 已由用户验收并提交、推送。以下为本批新证据，不重复 A/B 的全量验证；未执行 Commit、Push、Merge、Reset、Clean 或分支切换。
+
+### 14.1 能力收敛与生命周期
+
+- 退出 Core `ClassObjectPoolManager`、同文件 `IReuseable` 及配套 `.meta`，不保留转发壳或独立 Type→List/时间表。定向检索 Assets 的类型名、完整类型身份及旧 GUID，仅剩测试的退出断言，无实际资源或动态绑定引用；不声称已证明仓库外兼容。旧公开入口需要迁移至统一 `YLFramework.Core.Pool` API。
+- 泛型对象创建/复用由 Foundation `ObjectPool<T>` 承接；动态 `Type` 创建保留为显式 `ObjectPool<object>(() => Activator.CreateInstance(type))`，不要求运行时构造封闭泛型池或建立新的全局 registry。可选取得/reset 回调改为委托，冷/热一致；不强制普通对象实现领域接口。引用身份、转换期保护、失败隔离及永久清理复用 A/B 内核，不再照搬原 XF 的相等性、回调异常或冷创建漏钩子问题。
+- 按已批准 D4 退出普通池 TTL checker：空闲保留是通用需求，但固定 scaled-time 扫描引入时钟、宿主及跨会话责任，且丢引用不是资源释放。首版以有限容量、显式 Clear/缩容、Dispose 及会话清理替代；明确 TTL 不再是自动公共能力，需要 TTL 的领域留后续按实际时钟与释放需求设计，不仅以当前无消费者作为理由。
+- `LoadViewArgs` 留 Core，以私有 LIFO `ObjectPool<LoadViewArgs>` 缓存，默认空闲上限 20。New 的冷/热初始化统一在私有取得钩子，reset 立即清七类值并结束 leased/owned/reading。Claim、BeginRead/EndRead、原线程/访问门禁、Release/Recycle 的支持入口及重复归还语义保持；没有对业务暴露通用归还入口。
+- 参数池向既有会话状态注册一次空闲 Clear，不替换原池、不清借出参数；原操作仍负责终态 Release。同步/异步请求、View/Panel 生命周期和 XFAB 后端未改；请求已有的先摘 args 引用、终态门禁及 Session/owner 隔离继续承担迟到完成安全。普通原始旧别名仍不可识别，禁止保留归还后的参数引用，不伪装为新通用 token 保证。
+- EventManager、ModelManager、PanelManager 临时列表统一使用 ListPool，快照构造和消费纳入 finally。Model 双重租用采用嵌套 finally，第二次取得失败也归还第一份列表；归还立即 Clear 元素引用，保留 backing capacity。Panel 两类 UI 更新之间必要的 Clear、排序和原 Session 核验不变；Events 发布/签名/订阅及 Model 注册/移除流程不重构。
+- Module/Model 仍默认普通构造且不自动归池，不新增专用池化体系。非隐式池化测试改用显式业务池作对照，保留构造次数、实例、业务状态、owner 和 ID 隔离断言。CoreClassPoolScope 只报告注册、参数状态及七类值残留，不再修改旧 Manager 私有表，也不补归还掩盖失败。
+
+### 14.2 实际验证与边界
+
+当前 Unity `2022.3.62f3c1` 实际刷新、编译完成；最终 `scriptCompilationFailed=false`、`isCompiling=false`、`isPlaying=false`，唯一打开的 `Assets/Scenes/Main.unity` 未脏。新增测试 `.meta` 由 Unity 生成，现有未移动脚本 GUID 保持；旧 Manager 的源码与 meta 配套退出。
+
+| 定向验证 | 实际结果 |
+|---|---|
+| CoreLoadViewArgsTests | EditMode 11/11：七类清值、复用、Claim/读取窗口、线程、重复归还、foreign 拒收及真实注册会话回调 |
+| CoreTemporaryCollectionTests | EditMode 5/5：Event 清监听保留键、Model 两种清理异常、第二次分配失败、嵌套清理的独立快照及清引用 |
+| CoreIdentityTests | EditMode 8/8：依赖/类型唯一性、旧 Core Pool 退出、动态 Type 显式工厂及冷热回调 |
+| CoreDirectView 代表性参数用例 | PlayMode 3/3：无效同步输入、Claim/读取窗口重入、加载钩子/激活失败回滚 |
+| CoreXfab 参数用例 | PlayMode 5/5：命名同步/异步成功、取消后同参数实例重租及迟到 producer、真实缺失/初始化失败、读取窗口内 Abort 后重入、关闭失效后原实例重启 |
+| CoreXfab Panel 相关用例 | PlayMode 4/4：AlwaysInFront 异常快照归还、同组件新 Session/不同 UI 上下文隔离、排序/业务失败回滚、等待取消/重复 Claim/借用窗口 Abort |
+| CoreModule 代表性用例 | PlayMode 3/3：Module 非隐式池化、Model 非池化及状态/ID 隔离、owner/多实例/查询与清理 |
+
+最终实际定向执行 **EditMode 24/24、PlayMode 15/15**，无失败或跳过；数量采用实际返回的执行项，不使用工具的全工程发现数。组合 class 过滤未命中时未运行测试，随后逐类运行；首次批量 PlayMode 工具调用发生一次传输重试失败，不把无返回调用计作通过，恢复后逐项重跑并取得上述结果。没有以工具错误为由修改测试、原 Logger 或 MCP。
+
+只读独立复核未发现重要生产缺陷；会话注册覆盖和 Model 嵌套快照覆盖已补齐并通过。最终 diff/新增文件/meta 与空白检查通过。Core 继续仅向 Foundation、XFABManager、UnityEngine.UI 依赖，未改任何 asmdef，也未修改 A/B 公共内核；CoreIdentity 保留无整体 Runtime/原 XF/Editor 引用的关键断言。
+
+未修改原 Packages、ProjectSettings、CGJ2024 游戏业务/测试、场景、Prefab 或资源产物，未开展 Events/Update/Timer、资源所有权或 GameObject Pool 改造。未运行全量阶段 1/A/B 测试、完整游戏流程、Player、IL2CPP、性能测量或切换 Domain Reload 设置；会话验证仅是实际注册回调及正常 PlayMode，不等同关闭 Domain Reload 的全工程验收。动态反射构造仍需业务按目标平台保留所需构造信息；既有 Package、Logger/MCP 与 XFAB 物理卸载风险维持原边界。
+
+**C 达到技术完成标准，具备进入 D 的技术前置条件；本轮停止，等待用户验收与 Git 收口，不自动实施 D。**Runtime 的 ClassObjectPool/Independent 及历史 Pool/Simple 薄入口仍留 D 评估；本批仅退出直接替代的 Core 历史 API，不提前完成全局命名/目录/文档收口。

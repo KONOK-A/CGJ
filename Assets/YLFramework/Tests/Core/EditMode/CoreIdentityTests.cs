@@ -2,12 +2,38 @@ using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
+using YLFramework.Core.Pool;
 using YLFramework.Foundation;
 
 namespace YLFramework.Core.Tests
 {
     public class CoreIdentityTests
     {
+        [Test]
+        public void CoreLegacyPoolExitsWhileFoundationSupportsExplicitDynamicCreationAndCallbacks()
+        {
+            var core = typeof(Module).Assembly;
+            Assert.That(core.GetType("YLFramework.Core.ClassObjectPoolManager"), Is.Null);
+            Assert.That(core.GetType("YLFramework.Core.IReuseable"), Is.Null);
+            Assert.That(typeof(ObjectPool<>).Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
+            var type = typeof(System.Text.StringBuilder);
+            var loads = 0;
+            var returns = 0;
+            using var pool = new ObjectPool<object>(() => Activator.CreateInstance(type),
+                onAllocate: _ => loads++, reset: value => { ((System.Text.StringBuilder)value).Clear(); returns++; });
+            var first = pool.Allocate();
+            ((System.Text.StringBuilder)first).Append("old lease");
+            Assert.That(pool.Recycle(first), Is.True);
+            var second = pool.Allocate();
+            Assert.That(second, Is.SameAs(first));
+            Assert.That(second.ToString(), Is.Empty);
+            Assert.That(loads, Is.EqualTo(2), "Both cold and cached allocations must run the optional callback.");
+            Assert.That(pool.Recycle(second), Is.True);
+            Assert.That(returns, Is.EqualTo(2));
+            pool.Clear();
+            Assert.That(pool.CurStoreCount, Is.Zero);
+        }
+
         [Test]
         public void ModuleHasOneCloseHookAndExplicitShutdownWithoutLegacyExitEntry()
         {

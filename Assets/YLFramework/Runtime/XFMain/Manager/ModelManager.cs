@@ -1,5 +1,6 @@
 using System; 
 using System.Collections.Generic; 
+using YLFramework.Core.Pool;
 
 
 namespace YLFramework.Core
@@ -128,25 +129,22 @@ namespace YLFramework.Core
         public static void ClearModel(Module module)
         {
 
-            List<Model> temp_models = ClassObjectPoolManager.Load<List<Model>>(); 
-            temp_models.Clear();
-
-            foreach (var item in module.models.Values)
-            {
-                foreach (var model in item.Values)
-                { 
-                    temp_models.Add(model);
-                } 
-            }
-
+            List<Model> temp_models = ListPool<Model>.Allocate();
             try
             {
+                foreach (var item in module.models.Values)
+                {
+                    foreach (var model in item.Values)
+                    {
+                        temp_models.Add(model);
+                    }
+                }
+
                 foreach (var item in temp_models) RemoveModel(module, item);
             }
             finally
             {
-                temp_models.Clear();
-                ClassObjectPoolManager.Unload(temp_models);
+                ListPool<Model>.Recycle(temp_models);
             }
 
         }
@@ -154,43 +152,43 @@ namespace YLFramework.Core
         public static void ClearModel(Module module, Type modelType)
         {
             ValidateModelType(modelType);
-            List<Type> temp_model_keys = ClassObjectPoolManager.Load<List<Type>>();
-            temp_model_keys.Clear();
-
-            foreach (var key in module.models.Keys)
-            {
-                if (key == modelType || key.IsSubclassOf(modelType))
-                {
-                    temp_model_keys.Add(key);
-                }
-            }
-
-            List<Model> temp_models = ClassObjectPoolManager.Load<List<Model>>(); 
-            temp_models.Clear();
-
-            foreach (var key in temp_model_keys)
-            {
-                if (!module.models.ContainsKey(key))
-                    continue;
-
-                Dictionary<long, Model> models = module.models[key];
-                foreach (Model item in models.Values)
-                {
-                    temp_models.Add(item);
-                }
-
-            }
-
+            List<Type> temp_model_keys = ListPool<Type>.Allocate();
             try
             {
-                foreach (var item in temp_models) RemoveModel(module, item);
+                foreach (var key in module.models.Keys)
+                {
+                    if (key == modelType || key.IsSubclassOf(modelType))
+                    {
+                        temp_model_keys.Add(key);
+                    }
+                }
+
+                List<Model> temp_models = ListPool<Model>.Allocate();
+                try
+                {
+                    foreach (var key in temp_model_keys)
+                    {
+                        if (!module.models.ContainsKey(key))
+                            continue;
+
+                        Dictionary<long, Model> models = module.models[key];
+                        foreach (Model item in models.Values)
+                        {
+                            temp_models.Add(item);
+                        }
+
+                    }
+
+                    foreach (var item in temp_models) RemoveModel(module, item);
+                }
+                finally
+                {
+                    ListPool<Model>.Recycle(temp_models);
+                }
             }
             finally
             {
-                temp_model_keys.Clear();
-                temp_models.Clear();
-                ClassObjectPoolManager.Unload(temp_model_keys);
-                ClassObjectPoolManager.Unload(temp_models);
+                ListPool<Type>.Recycle(temp_model_keys);
             }
 
 

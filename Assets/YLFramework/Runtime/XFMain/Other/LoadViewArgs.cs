@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using YLFramework.Core.Pool;
 using YLFramework.Core.RoslynAnalyzers;
+using YLFramework.Core.Singleton;
 
 
  
@@ -12,14 +14,24 @@ namespace YLFramework.Core
     /// 接管前可读写；接管后只有 OnLoaded 回调的借用窗口可读，操作终态立即归还并清引用。
     /// </summary>
     /// <remarks>
-    /// 不支持直接通过 ClassObjectPoolManager 或 IReuseable 管理此类型的生命周期。
+    /// 只能通过 New 和加载操作的专用入口管理生命周期，不支持通用池接管。
     /// 不为每次租用分配 token：原始池对象重新租用后无法识别非法旧别名，禁止保存参数引用。
     /// </remarks>
     [DisableNew("请使用静态方法 LoadViewArgs.New() 来创建对象!")]
     [MethodLocalOnlyAttribute("该类会在加载操作终态自动回收,请勿保存参数引用!")]
-    public class LoadViewArgs : IReuseable
+    public class LoadViewArgs
     {
         #region 字段
+
+        private static readonly ObjectPool<LoadViewArgs> Pool = new(
+            () => new LoadViewArgs(), onAllocate: args => args.BeginLease(),
+            reset: args => args.ResetLease(), cacheOrder: PoolCacheOrder.Lifo);
+
+        static LoadViewArgs()
+        {
+            // 只清空闲缓存；已接管参数仍由原操作终态负责释放，不替换其所属池。
+            SingletonSessionState.RegisterSessionReset(Pool.Clear);
+        }
 
 #pragma warning disable IDE0044 // 添加只读修饰符
         private Dictionary<string, string> strings = new Dictionary<string, string>(); 
@@ -159,18 +171,23 @@ namespace YLFramework.Core
 
         #region 生命周期
 
-        void IReuseable.OnLoaded()
+        private void BeginLease()
         {
-            // 泛型 Load 首次创建不调用此回调；统一由 New 初始化，回调不能复活旧引用。
             if (leased)
-                throw new InvalidOperationException("Cannot reset leased LoadViewArgs.");
+                throw new InvalidOperationException("The pool returned leased LoadViewArgs.");
+            ClearValues();
+            threadId = Thread.CurrentThread.ManagedThreadId;
+            owned = false;
+            reading = false;
+            leased = true;
         }
 
-        void IReuseable.OnUnloaded()
+        private void ResetLease()
         {
-            // 通用池在此回调前已修改时间表，故直接调用其 Unload 不在支持契约内。
-            if (leased)
-                throw new InvalidOperationException("Use Release or Recycle to return LoadViewArgs.");
+            ClearValues();
+            reading = false;
+            owned = false;
+            leased = false;
         }
 
         /// <summary>接管本次租用。失败不改变既有所有权或数据。</summary>
@@ -248,11 +265,7 @@ namespace YLFramework.Core
 
         private void ReturnToPool()
         {
-            ClearValues();
-            reading = false;
-            owned = false;
-            leased = false;
-            ClassObjectPoolManager.Unload(this);
+            Pool.Recycle(this);
         }
 
         #endregion
@@ -265,16 +278,7 @@ namespace YLFramework.Core
         /// <returns></returns>
         public static LoadViewArgs New()
         {
-            var args = ClassObjectPoolManager.Load<LoadViewArgs>();
-            if (args.leased)
-                throw new InvalidOperationException("The pool returned leased LoadViewArgs.");
-            // 初次创建和复用均只在此处开始租用，不依赖两种 Load 的回调差异。
-            args.ClearValues();
-            args.threadId = Thread.CurrentThread.ManagedThreadId;
-            args.owned = false;
-            args.reading = false;
-            args.leased = true;
-            return args;
+            return Pool.Allocate();
         }
 
         /// <summary>归还未接管参数；已归还时无操作，已接管时拒绝。</summary>

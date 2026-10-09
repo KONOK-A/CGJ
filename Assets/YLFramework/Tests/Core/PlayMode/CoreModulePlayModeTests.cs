@@ -5,6 +5,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Core.Pool;
 
 namespace YLFramework.Core.Tests
 {
@@ -247,9 +248,10 @@ namespace YLFramework.Core.Tests
         [UnityTest]
         public IEnumerator TypeStartupConstructsOnlyWhenMissingAndNeverImplicitlyUsesModulePool()
         {
-            var pooled = new YLCoreStartupProbeModule();
+            using var pool = new ObjectPool<YLCoreStartupProbeModule>(() => new YLCoreStartupProbeModule());
+            var pooled = pool.Allocate();
             ownedModules.Add(pooled);
-            ClassObjectPoolManager.Unload(pooled);
+            Assert.That(pool.Recycle(pooled), Is.True);
             var constructions = YLCoreStartupProbeModule.ConstructionCount;
             var first = ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
             var module = (YLCoreStartupProbeModule)first.Module;
@@ -263,9 +265,10 @@ namespace YLFramework.Core.Tests
             Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions + 1));
             module.Close();
             Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
-            var pool = typeof(ClassObjectPoolManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            var objects = (IDictionary)pool.GetType().GetField("objects", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
-            Assert.That(((IList)objects[typeof(YLCoreStartupProbeModule)]).Contains(module), Is.False);
+            Assert.That(pool.CurStoreCount, Is.EqualTo(1));
+            Assert.That(pool.Allocate(), Is.SameAs(pooled), "Startup and Close must not touch an explicit business pool.");
+            Assert.That(pool.Recycle(pooled), Is.True);
+            Assert.Throws<InvalidOperationException>(() => pool.Recycle(module), "Closed Modules must not be implicitly adopted by the public pool.");
             var next = ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule));
             ownedModules.Add(next.Module);
             yield return AwaitStartup(next);
@@ -858,23 +861,27 @@ namespace YLFramework.Core.Tests
         {
             var module = new YLCoreLifecycleModule();
             yield return AwaitStartup(StartOwned(module));
+            using var pool = new ObjectPool<YLCoreProbeModel>(() => new YLCoreProbeModel());
+            var pooled = pool.Allocate();
+            Assert.That(pool.Recycle(pooled), Is.True);
+            var constructions = YLCoreProbeModel.ConstructionCount;
             var first = module.LoadModel<YLCoreProbeModel>();
+            Assert.That(first, Is.Not.SameAs(pooled));
+            Assert.That(YLCoreProbeModel.ConstructionCount, Is.EqualTo(constructions + 1));
             first.Events = new List<string> { "old business state" };
             module.RemoveModel(first);
             Assert.That(first.Module, Is.Null);
-            var pool = typeof(ClassObjectPoolManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            if (pool != null)
-            {
-                var objects = (IDictionary)pool.GetType().GetField("objects", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
-                if (objects.Contains(typeof(YLCoreProbeModel)))
-                    Assert.That(((IList)objects[typeof(YLCoreProbeModel)]).Contains(first), Is.False);
-            }
+            Assert.That(pool.CurStoreCount, Is.EqualTo(1));
+            Assert.That(pool.Allocate(), Is.SameAs(pooled));
+            Assert.That(pool.Recycle(pooled), Is.True);
+            Assert.Throws<InvalidOperationException>(() => pool.Recycle(first));
             var second = module.LoadModel(typeof(YLCoreProbeModel)) as YLCoreProbeModel;
             Assert.That(second, Is.Not.SameAs(first));
             Assert.That(second.Events, Is.Null);
             Assert.That(second.InitCount, Is.EqualTo(1));
             Assert.That(second.ExitCount, Is.Zero);
             Assert.That(second.Id, Is.Not.EqualTo(first.Id));
+            Assert.That(YLCoreProbeModel.ConstructionCount, Is.EqualTo(constructions + 2));
         }
 
         [UnityTest]

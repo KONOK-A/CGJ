@@ -12,6 +12,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using XFABManager;
+using YLFramework.Core.Pool;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Tests
@@ -1305,6 +1306,29 @@ namespace YLFramework.Core.Tests
             Assert.That(module.GetViews<Panel>(), Is.Empty);
             Assert.That(PanelOrders(UIType.UI), Is.Empty);
             Assert.That(PanelOrders(UIType.DontDestroyUI), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator AlwaysInFrontFailureReturnsEmptySnapshot()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, PanelParent(), loadViewArgs: null));
+            panel.KeepInFront = true;
+            var snapshot = ListPool<KeyValuePair<Panel, object>>.Allocate();
+            ListPool<KeyValuePair<Panel, object>>.Recycle(snapshot);
+            var failure = new InvalidOperationException("AlwaysInFront sorting failure");
+            YLCoreSmokePanel.SortingProbe = (_, _) => throw failure;
+            var update = typeof(PanelManager).GetMethod("UpdateAlwaysInFront", StaticPrivate);
+            var error = Assert.Throws<TargetInvocationException>(() => update.Invoke(null, null));
+            Assert.That(error.InnerException, Is.SameAs(failure));
+            Assert.That(snapshot, Is.Empty, "归还必须清掉 Panel 和 Session 引用。");
+            var returned = ListPool<KeyValuePair<Panel, object>>.Allocate();
+            try { Assert.That(returned, Is.SameAs(snapshot)); }
+            finally { ListPool<KeyValuePair<Panel, object>>.Recycle(returned); }
+            YLCoreSmokePanel.ResetProbes();
+            panel.Close();
+            AssertPanelReleased(panel);
         }
 
         [UnityTest]
