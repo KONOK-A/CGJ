@@ -740,8 +740,10 @@ namespace YLFramework.Core.Tests
                     var prefab = Template<YLCoreSmokePanel>("YLCorePanelCleanupPrefab" + phase, true);
                     var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
                     var panel = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
-                    orders.Add(previous, 10);
-                    orders.Add(panel, 20);
+                    Assert.That(orders.Contains(previous), Is.True);
+                    Assert.That(orders.Contains(panel), Is.True);
+                    previous.SortingOrder = 10;
+                    panel.SortingOrder = 20;
                     persistentOrders.Add(panel, 20);
                     queue.Add(previous);
                     queue.Add(panel);
@@ -878,18 +880,98 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator InactivePanelAttachmentKeepsVisiblePanelUntilActivationAndRetainsOrderOnDisable()
+        {
+            yield return StartModule();
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            try
+            {
+                var prefab = Template<YLCoreSmokePanel>("YLCoreInactivePanelPrefab", true);
+                var visible = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var parent = new GameObject("YLCoreInactivePanelParent");
+                objects.Add(parent);
+                parent.SetActive(false);
+                var obj = new GameObject("YLCoreInactiveScenePanel", typeof(RectTransform));
+                objects.Add(obj);
+                obj.transform.SetParent(parent.transform);
+                var inactive = obj.AddComponent<YLCoreSmokePanel>();
+                module.AttachView(inactive);
+                Assert.That(inactive.IsLoaded, Is.True);
+                Assert.That(inactive.gameObject.activeSelf, Is.True);
+                Assert.That(inactive.gameObject.activeInHierarchy, Is.False);
+                Assert.That(visible.Canvas.enabled, Is.True, "Inactive preparation cannot hide the current Panel.");
+                var orders = (IDictionary)typeof(PanelManager).GetField("uiOrders", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
+                Assert.That(orders.Contains(inactive), Is.True);
+                module.UIStartSortOrder = 91;
+                Assert.That(inactive.Canvas.sortingOrder, Is.EqualTo(inactive.SortingOrder + 91), "Unnamed attached Panels receive owner sorting offsets.");
+                parent.SetActive(true);
+                Assert.That(visible.Canvas.enabled, Is.False);
+                Assert.That(inactive.Canvas.enabled, Is.True);
+                if (!inactive.Canvas.isRootCanvas) Assert.That(inactive.Canvas.overrideSorting, Is.True);
+                Assert.That(inactive.Canvas.sortingOrder, Is.EqualTo(inactive.DisplaySortingOrder), "First native Canvas activation must restore the prepared order.");
+                YLCoreSmokePanel.VisibleProbe = panel => EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokePanel.ProbeEvent));
+                parent.SetActive(false);
+                Assert.That(inactive.EventCount, Is.Zero, "The disabled Panel must unsubscribe before restoring the previous Panel's business callback.");
+                Assert.That(visible.EventCount, Is.EqualTo(1));
+                Assert.That(visible.Canvas.enabled, Is.True);
+                Assert.That(inactive.IsLoaded, Is.True);
+                Assert.That(inactive.Module, Is.SameAs(module));
+                Assert.That(orders.Contains(inactive), Is.True, "Disable pauses display, not business registration or sorting ownership.");
+                inactive.Close();
+                Assert.That(orders.Contains(inactive), Is.False);
+                visible.Close();
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelActivationCallbackCannotRemoveAnotherPanelsSharedEventSubscription()
+        {
+            yield return StartModule();
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            YLCoreSmokePanel.UseSharedHandler = true;
+            try
+            {
+                var prefab = Template<YLCoreSmokePanel>("YLCoreSharedPanelEventPrefab", true);
+                var first = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                YLCoreSmokePanel.InvisibleProbe = panel =>
+                {
+                    Assert.That(panel, Is.SameAs(first));
+                    var activating = module.GetViews<YLCoreSmokePanel>().Find(item => item != first);
+                    Assert.That(activating, Is.Not.Null);
+                    activating.gameObject.SetActive(false);
+                };
+                var second = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                Assert.That(second.IsLoaded, Is.True);
+                Assert.That(second.gameObject.activeSelf, Is.False);
+                Assert.That(first.Canvas.enabled, Is.True);
+                EventManager.TriggerEvent(EventManager.StringToHash(YLCoreSmokePanel.ProbeEvent));
+                Assert.That(YLCoreSmokePanel.SharedEventCount, Is.EqualTo(1), "Rollback of an activating Panel cannot remove the other Panel's equal delegate.");
+                first.Close();
+                second.Close();
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
         public IEnumerator DirectPanelUsesInheritedViewPrefabContractAndInitializesCanvasOnlyOnce()
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokePanel>("YLCoreDirectPanelPrefab", true);
             var parent = new GameObject("YLCoreDirectPanelParent", typeof(RectTransform), typeof(Canvas));
             objects.Add(parent);
+            parent.SetActive(false);
             var args = LoadViewArgs.New();
             classPool.Track(args);
             args.SetInt("token", 17);
             var panel = Track(module.LoadView<YLCoreSmokePanel>(prefab, parent.transform, loadViewArgs: args));
+            Assert.That(panel.IsLoaded, Is.True);
+            Assert.That(panel.gameObject.activeInHierarchy, Is.False);
+            parent.SetActive(true);
             Assert.That(panel.Canvas, Is.SameAs(panel.GetComponent<Canvas>()));
             Assert.That(panel.Canvas.overrideSorting, Is.True);
+            Assert.That(panel.Canvas.sortingOrder, Is.EqualTo(panel.DisplaySortingOrder));
             Assert.That(panel.GetComponent<UnityEngine.UI.GraphicRaycaster>(), Is.Not.Null);
             Assert.That(panel.Token, Is.EqualTo(17));
             panel.SortingOrder = 30;

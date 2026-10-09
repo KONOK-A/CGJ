@@ -50,6 +50,7 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeRow.InitAction = null;
             YLCoreSmokeView.LoadingProbe = null;
             YLCoreSmokeView.ArgsProbe = null;
+            YLCoreSmokePanel.ResetProbes();
             timedOut = false;
             ownsScene = singleSceneTest = false;
             ownedObjects.Clear();
@@ -105,6 +106,7 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeRow.InitAction = null;
             YLCoreSmokeView.LoadingProbe = null;
             YLCoreSmokeView.ArgsProbe = null;
+            YLCoreSmokePanel.ResetProbes();
             // A timeout exits this isolated PlayMode session. Producers are not cancellable by Abort.
             if (timedOut) yield break;
             var failures = new List<Exception>();
@@ -1024,11 +1026,38 @@ namespace YLFramework.Core.Tests
             Assert.That(prefab.GetComponent<Canvas>(), Is.Null);
             Assert.That(prefab.GetComponent<RectTransform>(), Is.Not.Null);
             Transform parent = PanelParent();
+            int loadingProbes = 0;
+            int argsProbes = 0;
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                loadingProbes++;
+                AssertPreparedPanel(panel, UIType.UI);
+            };
+            YLCoreSmokePanel.ArgsProbe = (panel, _) =>
+            {
+                argsProbes++;
+                AssertPreparedPanel(panel, UIType.UI);
+            };
             var args = NewArgs();
             args.SetInt("token", 17);
             var first = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
                 YLFramework.Core.UIType.UI, parent, loadViewArgs: args));
             AssertPanel(first, 17, 1);
+            first.SortingOrder += 37;
+            Assert.That(PanelOrders(UIType.UI)[first], Is.EqualTo(first.SortingOrder));
+            Assert.That(first.Canvas.sortingOrder, Is.EqualTo(first.DisplaySortingOrder));
+            first.gameObject.SetActive(false);
+            var siblingObject = Own(new GameObject("YLCoreSmoke.InactiveOrderSibling", typeof(RectTransform)));
+            siblingObject.SetActive(false);
+            siblingObject.transform.SetParent(first.transform.parent);
+            var sibling = module.AttachView(siblingObject.AddComponent<YLCoreSmokePanel>());
+            Assert.That(PanelOrders(UIType.UI).Contains(first), Is.True,
+                "An inactive but registered Panel must not be pruned while calculating the next order.");
+            Assert.That(sibling.SortingOrder, Is.GreaterThan(first.SortingOrder));
+            sibling.Close();
+            first.gameObject.SetActive(true);
+            Assert.That(first.Canvas.overrideSorting, Is.True);
+            Assert.That(first.Canvas.sortingOrder, Is.EqualTo(first.DisplaySortingOrder));
             if (previousPanelManager == null)
             {
                 var canvas = YLFramework.Core.PanelManager.UICanvas[YLFramework.Core.UIType.UI];
@@ -1063,16 +1092,495 @@ namespace YLFramework.Core.Tests
             });
             yield return Await(() => request.isDone, "Core named LoadPanelAsync");
             Assert.That(request.error, Is.Null.Or.Empty);
+            AssertTerminal(request, LoadViewStatus.Succeeded);
             Assert.That(callbacks, Is.EqualTo(1));
             Assert.That(completeState, Is.True);
             Assert.That(request.panel, Is.SameAs(first));
             Assert.That(first.Canvas, Is.SameAs(canvasOnPanel));
             Assert.That(first.GetComponents<Canvas>(), Has.Length.EqualTo(1));
             AssertPanel(first, 29, 2);
+            Assert.That(first.GetComponents<UnityEngine.UI.GraphicRaycaster>(), Has.Length.EqualTo(1));
+            Assert.That(loadingProbes, Is.EqualTo(3));
+            Assert.That(argsProbes, Is.EqualTo(3));
             module.Close();
             Assert.That(first.RemovedCount, Is.EqualTo(2));
             Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
             Assert.That(((IDictionary)Field(Singleton(typeof(YLFramework.Core.PanelManager)), "uiOrders")).Contains(first), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator OrdinaryViewPanelPreparationRetriesAndReselectsSharedCanvasOnReuse()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            Assert.That(PanelManager.UICanvas, Is.Not.Null);
+            var invalidObject = Own(new GameObject("YLCore.PanelInvalidCanvas", typeof(RectTransform), typeof(Canvas)));
+            invalidObject.SetActive(false);
+            var invalid = invalidObject.AddComponent<YLCoreSmokePanel>();
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            Assert.Throws<Exception>(() => module.AttachView(invalid, args));
+            Assert.That(typeof(Panel).GetField("isInitCanvas", InstancePrivate).GetValue(invalid), Is.False);
+            Assert.That(invalid.LoadedCount, Is.Zero);
+            AssertReleasedArgs(args);
+            AssertPanelReleased(invalid);
+            Object.DestroyImmediate(invalidObject.GetComponent<Canvas>());
+            YLCoreSmokePanel.LoadingProbe = panel => AssertPreparedPanel(panel, UIType.UI);
+            module.AttachView(invalid);
+            Assert.That(invalid.IsLoaded, Is.True);
+            Assert.That(invalid.GetComponents<Canvas>(), Has.Length.EqualTo(1));
+            invalid.Close();
+            AssertPanelReleased(invalid);
+
+            var root = Own(new GameObject("YLCore.SharedCanvasRoot", typeof(RectTransform)));
+            var firstParent = Own(new GameObject("YLCore.SharedCanvasFirst", typeof(RectTransform), typeof(Canvas)));
+            firstParent.transform.SetParent(root.transform);
+            var secondParent = Own(new GameObject("YLCore.SharedCanvasSecond", typeof(RectTransform), typeof(Canvas)));
+            secondParent.transform.SetParent(root.transform);
+            int probes = 0;
+            Canvas expected = firstParent.GetComponent<Canvas>();
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                probes++;
+                Assert.That(panel.UIType, Is.EqualTo(UIType.UI));
+                Assert.That(panel.Canvas, Is.SameAs(expected));
+                Assert.That(panel.GetComponent<Canvas>(), Is.Null);
+                Assert.That(panel.IsLoaded, Is.False);
+                Assert.That(module.GetView<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), panel.Id), Is.SameAs(panel));
+                Assert.That(PanelOrders(UIType.UI).Contains(panel), Is.False);
+                Assert.That(PanelQueues().Contains(panel), Is.False);
+            };
+            var shared = Track(module.LoadView<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), firstParent.transform, loadViewArgs: null));
+            shared.Close();
+            AssertPanelReleased(shared);
+            expected = secondParent.GetComponent<Canvas>();
+            var reused = module.LoadViewAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), secondParent.transform, loadViewArgs: null);
+            yield return Await(() => reused.isDone, "ordinary View Panel shared Canvas reload");
+            AssertTerminal(reused, LoadViewStatus.Succeeded);
+            Assert.That(reused.view, Is.SameAs(shared));
+            Assert.That(probes, Is.EqualTo(2));
+            shared.Close();
+            AssertPanelReleased(shared);
+            Assert.That(PendingViewCount(), Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelResourceAndGenericFailuresPublishChildTerminalWithoutResidue()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            LoadFixture<GameObject>(nameof(YLCoreSmokeView));
+            var parent = PanelParent();
+            foreach (string name in new[] { "YLCoreMissingPanel_" + Guid.NewGuid().ToString("N"), nameof(YLCoreSmokeView) })
+            {
+                var args = NewArgs();
+                args.SetObject("retained", module);
+                var request = module.LoadPanelAsync<YLCoreSmokePanel>(name, UIType.UI, parent, loadViewArgs: args);
+                var child = (LoadViewRequest<YLCoreSmokePanel>)Field(request, "child");
+                Assert.That(child, Is.Not.Null);
+                int callbacks = 0;
+                request.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    AssertTerminal(done, LoadViewStatus.Failed);
+                    AssertTerminal(child, LoadViewStatus.Failed);
+                    Assert.That(done.Exception, Is.SameAs(child.Exception));
+                    Assert.That(module.GetViews<View>(), Is.Empty);
+                    Assert.That(PendingViewCount(), Is.Zero);
+                    AssertReleasedArgs(args);
+                });
+                yield return Await(() => request.isDone, "Panel failed child " + name);
+                Assert.That(request.Exception, name == nameof(YLCoreSmokeView)
+                    ? Is.TypeOf<InvalidCastException>() : Is.TypeOf<InvalidOperationException>());
+                Assert.That(callbacks, Is.EqualTo(1));
+                request.Abort();
+                AssertTerminal(request, LoadViewStatus.Failed);
+            }
+#pragma warning disable CS0618
+            Assert.Throws<InvalidCastException>(() => module.LoadPanel<YLCoreIncompatiblePanel>(nameof(YLCoreSmokePanel),
+                UIType.UI, parent, new object[0]));
+            var legacy = module.LoadPanelAsync<YLCoreIncompatiblePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, new object[0]);
+#pragma warning restore CS0618
+            yield return Await(() => legacy.isDone, "legacy Panel generic mismatch");
+            AssertTerminal(legacy, LoadViewStatus.Failed);
+            Assert.That(legacy.Exception, Is.TypeOf<InvalidCastException>());
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(PendingViewCount(), Is.Zero);
+            Assert.That(FixtureInstanceCount(AssetDatabase.LoadAssetAtPath<GameObject>(
+                YLCoreSmokeModule.FixtureRoot + "/" + nameof(YLCoreSmokePanel) + ".prefab")), Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelSortingAndBusinessFailuresRollbackBeforeNotificationAndPreserveRootCause()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parent = PanelParent();
+            for (int phase = 0; phase < 3; phase++)
+            {
+                var failure = new InvalidOperationException("YLCore Panel transaction failure " + phase);
+                var cleanupFailure = new InvalidOperationException("YLCore Panel rollback failure " + phase);
+                var args = NewArgs();
+                args.SetObject("retained", module);
+                YLCoreSmokePanel failedPanel = null;
+                LoadPanelRequest<YLCoreSmokePanel> request = null;
+                void Fail(YLCoreSmokePanel panel)
+                {
+                    failedPanel = Track(panel);
+                    panel.RemoveAction = () =>
+                    {
+                        request.Abort();
+                        throw cleanupFailure;
+                    };
+                    throw failure;
+                }
+                YLCoreSmokePanel.SortingProbe = phase == 0 ? (Action<YLCoreSmokePanel, int>)((panel, _) => Fail(panel)) : null;
+                YLCoreSmokePanel.LoadingProbe = phase == 1 ? (Action<YLCoreSmokePanel>)Fail : null;
+                YLCoreSmokePanel.ArgsProbe = phase == 2 ? (Action<YLCoreSmokePanel, LoadViewArgs>)((panel, _) => Fail(panel)) : null;
+                request = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: args);
+                var child = (LoadViewRequest<YLCoreSmokePanel>)Field(request, "child");
+                int callbacks = 0;
+                request.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    AssertTerminal(done, LoadViewStatus.Failed);
+                    AssertTerminal(child, LoadViewStatus.Failed);
+                    Assert.That(done.Exception, Is.SameAs(failure));
+                    Assert.That(done.Exception.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupFailure));
+                    AssertPanelReleased(failedPanel);
+                    Assert.That(failedPanel.IsLoaded, Is.False);
+                    Assert.That(failedPanel.RemovedCount, Is.EqualTo(1));
+                    Assert.That(failedPanel.ClosedCount, Is.Zero);
+                    AssertReleasedArgs(args);
+                    Assert.That(PendingViewCount(), Is.Zero);
+                });
+                yield return Await(() => request.isDone, "Panel transaction rollback " + phase);
+                Assert.That(callbacks, Is.EqualTo(1));
+                Assert.That(module.GetViews<View>(), Is.Empty);
+                yield return null;
+                Assert.That(failedPanel == null, Is.True, "Failed initialization discards the acquired instance.");
+                YLCoreSmokePanel.ResetProbes();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AlwaysInFrontSortingSnapshotCannotChangeReusedPanelInAnotherUiContext()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parent = PanelParent();
+            var first = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: null));
+            var second = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: null));
+            first.KeepInFront = second.KeepInFront = true;
+            var ordered = new List<YLCoreSmokePanel>();
+            foreach (DictionaryEntry entry in PanelOrders(UIType.UI)) ordered.Add((YLCoreSmokePanel)entry.Key);
+            Assert.That(ordered, Has.Count.EqualTo(2));
+            var trigger = ordered[0];
+            var previous = ordered[1];
+            var persistentParent = Own(new GameObject("YLCore.SortingReentryPersistentParent", typeof(RectTransform), typeof(Canvas))).transform;
+            Object.DontDestroyOnLoad(persistentParent.gameObject);
+            YLCoreSmokePanel fresh = null;
+            bool reentered = false;
+            YLCoreSmokePanel.SortingProbe = (panel, _) =>
+            {
+                if (panel != trigger || reentered) return;
+                reentered = true;
+                previous.Close();
+                fresh = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.DontDestroyUI, persistentParent, loadViewArgs: null));
+                Assert.That(fresh, Is.SameAs(previous), "Exercise a new business session on the same healthy cached component.");
+            };
+            var third = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: null));
+            Assert.That(reentered, Is.True);
+            Assert.That(fresh.UIType, Is.EqualTo(UIType.DontDestroyUI));
+            Assert.That(fresh.IsLoaded, Is.True);
+            Assert.That(fresh.SortingOrder, Is.GreaterThanOrEqualTo(10000), "The old UI sorting snapshot cannot write the new DDOL session.");
+            Assert.That(PanelOrders(UIType.UI).Contains(fresh), Is.False);
+            Assert.That(PanelOrders(UIType.DontDestroyUI)[fresh], Is.EqualTo(fresh.SortingOrder));
+            Assert.That(fresh.Canvas.sortingOrder, Is.EqualTo(fresh.DisplaySortingOrder));
+            Assert.That(fresh.Module, Is.SameAs(module));
+            YLCoreSmokePanel.ResetProbes();
+            third.Close();
+            first.Close();
+            second.Close();
+            Assert.That(module.GetViews<Panel>(), Is.Empty);
+            Assert.That(PanelOrders(UIType.UI), Is.Empty);
+            Assert.That(PanelOrders(UIType.DontDestroyUI), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelQueuePreparationFailureRestoresPreviousPanelAndRemovesFailedRegistration()
+        {
+            yield return StartModule();
+            LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parent = PanelParent();
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            Assert.That(PanelManager.UICanvas, Is.Not.Null);
+            Assert.That(PanelQueues(), Is.Empty, "Do not hide Panels belonging to an external fixture.");
+            var previous = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: null));
+            var failure = new InvalidOperationException("YLCore Panel Invisible preparation failure");
+            int restored = 0;
+            YLCoreSmokePanel.VisibleProbe = panel =>
+            {
+                Assert.That(panel, Is.SameAs(previous));
+                restored++;
+            };
+            YLCoreSmokePanel failedPanel = null;
+            YLCoreSmokePanel.SortingProbe = (panel, _) => failedPanel = Track(panel);
+            YLCoreSmokePanel.InvisibleProbe = panel =>
+            {
+                Assert.That(panel, Is.SameAs(previous));
+                throw failure;
+            };
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var request = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: args);
+            yield return Await(() => request.isDone, "Panel queue preparation rollback");
+            AssertTerminal(request, LoadViewStatus.Failed);
+            Assert.That(request.Exception, Is.SameAs(failure));
+            Assert.That(failedPanel, Is.Not.Null);
+            AssertPanelReleased(failedPanel);
+            Assert.That(failedPanel.LoadedCount, Is.EqualTo(1), "Queue activation runs after business initialization, within the final Loaded transaction.");
+            Assert.That(failedPanel.ArgsCount, Is.EqualTo(1));
+            Assert.That(failedPanel.IsLoaded, Is.False);
+            Assert.That(previous.Module, Is.SameAs(module));
+            Assert.That(previous.IsLoaded, Is.True);
+            Assert.That(previous.Canvas.enabled, Is.True);
+            Assert.That(restored, Is.EqualTo(1));
+            Assert.That(PanelQueues().Contains(previous), Is.True);
+            Assert.That(Field(Singleton(typeof(PanelManager)), "_currentPanel"), Is.SameAs(previous));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { previous }));
+            AssertReleasedArgs(args);
+            Assert.That(PendingViewCount(), Is.Zero);
+            YLCoreSmokePanel.ResetProbes();
+            previous.Close();
+            AssertPanelReleased(previous);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelWaitingAbortDuplicateClaimAndBorrowedArgsAbortKeepStableOwnership()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parent = PanelParent();
+            var rejectedArgs = NewArgs();
+            rejectedArgs.SetObject("retained", module);
+            Assert.Throws<ArgumentException>(() => module.LoadPanelAsync<YLCoreSmokePanel>(string.Empty,
+                UIType.UI, parent, loadViewArgs: rejectedArgs));
+            AssertReleasedArgs(rejectedArgs);
+            Assert.That(PendingViewCount(), Is.Zero);
+
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            var waiting = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: args);
+            var waitingChild = (LoadViewRequest<YLCoreSmokePanel>)Field(waiting, "child");
+            Assert.That(waiting.Status, Is.EqualTo(LoadViewStatus.Pending));
+            Assert.Throws<InvalidOperationException>(() => module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                UIType.UI, parent, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => args.GetObject("retained"));
+            Assert.That(PendingViewCount(), Is.EqualTo(1));
+            int waitingCallbacks = 0;
+            waiting.AddCompleteEvent(_ => waitingCallbacks++);
+            YLFramework.Foundation.CustomAsyncOperation<LoadPanelRequest<YLCoreSmokePanel>> foundation = waiting;
+            foundation.Abort();
+            waitingChild.Abort();
+            AssertTerminal(waiting, LoadViewStatus.Canceled);
+            AssertTerminal(waitingChild, LoadViewStatus.Canceled);
+            Assert.That(waiting.Exception, Is.SameAs(waitingChild.Exception));
+            Assert.That(waitingCallbacks, Is.EqualTo(1));
+            AssertReleasedArgs(args);
+            Assert.That(PendingViewCount(), Is.Zero);
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+
+            args = NewArgs();
+            args.SetInt("token", 61);
+            args.SetObject("retained", module);
+            LoadPanelRequest<YLCoreSmokePanel> borrowedRequest = null;
+            LoadPanelRequest<YLCoreSmokePanel> next = null;
+            YLCoreSmokePanel canceledPanel = null;
+            bool borrowedAfterAbort = false;
+            YLCoreSmokePanel.ArgsProbe = (panel, borrowed) =>
+            {
+                canceledPanel = Track(panel);
+                AssertPreparedPanel(panel, UIType.UI);
+                Assert.Throws<InvalidOperationException>(() => module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                    UIType.UI, parent, loadViewArgs: borrowed));
+                borrowedRequest.Abort();
+                borrowedRequest.Abort();
+                borrowedAfterAbort = !borrowedRequest.isDone && borrowedRequest.Status == LoadViewStatus.Pending &&
+                    borrowed.GetInt("token") == 61 && PendingViewCount() == 1;
+                YLCoreSmokePanel.ArgsProbe = null;
+            };
+            borrowedRequest = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: args);
+            int callbacks = 0;
+            borrowedRequest.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                AssertTerminal(done, LoadViewStatus.Canceled);
+                AssertPanelReleased(canceledPanel);
+                Assert.That(canceledPanel.IsLoaded, Is.False);
+                Assert.That(canceledPanel.RemovedCount, Is.EqualTo(1));
+                Assert.That(canceledPanel.ClosedCount, Is.Zero);
+                AssertReleasedArgs(args);
+                Assert.That(PendingViewCount(), Is.Zero);
+                var nextArgs = NewArgs();
+                nextArgs.SetInt("token", 62);
+                next = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel), UIType.UI, parent, loadViewArgs: nextArgs);
+            });
+            yield return Await(() => borrowedRequest.isDone && next != null && next.isDone, "Panel borrowed Abort and reentrant load");
+            Assert.That(borrowedAfterAbort, Is.True);
+            Assert.That(callbacks, Is.EqualTo(1));
+            AssertTerminal(borrowedRequest, LoadViewStatus.Canceled);
+            Assert.That(borrowedRequest.Exception, Is.TypeOf<OperationCanceledException>());
+            AssertTerminal(next, LoadViewStatus.Succeeded);
+            var freshPanel = Track(next.panel);
+            Assert.That(freshPanel.Token, Is.EqualTo(62));
+            Assert.That(freshPanel.Module, Is.SameAs(module));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { freshPanel }));
+            Assert.That(waitingCallbacks, Is.EqualTo(1));
+            Assert.That(PendingViewCount(), Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator DontDestroyPanelKeepsOwnerAndClosePublishesAfterClosedBeforeRestartedSession()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parentObject = Own(new GameObject("YLCore.DontDestroyPanelParent", typeof(RectTransform), typeof(Canvas)));
+            Object.DontDestroyOnLoad(parentObject);
+            var parent = parentObject.transform;
+            int probes = 0;
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                probes++;
+                AssertPreparedPanel(panel, UIType.DontDestroyUI);
+            };
+            var oldPanel = Track(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                UIType.DontDestroyUI, parent, loadViewArgs: null));
+            Assert.That(oldPanel.gameObject.scene.name, Is.EqualTo("DontDestroyOnLoad"));
+            var consumer = new YLCoreConsumerModule();
+            try
+            {
+                var consumerStartup = ModuleManager.StartUpModule(consumer);
+                yield return Await(() => consumerStartup.isDone, "unrelated current Module for DDOL Panel");
+                Assert.That(consumerStartup.error, Is.Null.Or.Empty);
+                Assert.That(oldPanel.Module, Is.SameAs(module));
+                Assert.That(consumer.GetViews<View>(), Is.Empty);
+                var args = NewArgs();
+                args.SetObject("retained", module);
+                var pending = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                    UIType.DontDestroyUI, parent, loadViewArgs: args);
+                var child = (LoadViewRequest<YLCoreSmokePanel>)Field(pending, "child");
+                var lifecycle = typeof(Module).GetField("ViewLifecycle", InstancePrivate).GetValue(module);
+                var oldRow = row;
+                bool releasedBeforeExit = false;
+                oldPanel.RemoveAction = () =>
+                {
+                    releasedBeforeExit = module.State == ModuleState.Closing && !pending.isDone &&
+                        PendingViewCount() == 0 && Field(child, "owner") == null && Field(child, "args") == null;
+                    AssertReleasedArgs(args);
+                };
+                StartUpModuleRequest restarted = null;
+                LoadPanelRequest<YLCoreSmokePanel> fresh = null;
+                int callbacks = 0;
+                pending.AddCompleteEvent(done =>
+                {
+                    callbacks++;
+                    AssertTerminal(done, LoadViewStatus.Invalidated);
+                    AssertTerminal(child, LoadViewStatus.Invalidated);
+                    Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+                    Assert.That(ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
+                    Assert.That(oldRow.Module, Is.Null);
+                    Assert.That(oldRow.ExitCount, Is.EqualTo(1));
+                    AssertPanelReleased(oldPanel);
+                    AssertReleasedArgs(args);
+                    Assert.That(PendingViewCount(), Is.Zero);
+                    module.StartAction = () => fresh = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                        UIType.DontDestroyUI, parent, loadViewArgs: null);
+                    restarted = ModuleManager.StartUpModule(module);
+                });
+                module.Close();
+                oldPanel.RemoveAction = null;
+                Assert.That(releasedBeforeExit, Is.True);
+                Assert.That(callbacks, Is.EqualTo(1));
+                yield return Await(() => restarted != null && restarted.isDone && fresh != null && fresh.isDone,
+                    "DDOL Panel restarted owner session");
+                Assert.That(restarted.error, Is.Null.Or.Empty);
+                Assert.That(typeof(Module).GetField("ViewLifecycle", InstancePrivate).GetValue(module), Is.Not.SameAs(lifecycle));
+                AssertTerminal(pending, LoadViewStatus.Invalidated);
+                AssertTerminal(fresh, LoadViewStatus.Succeeded);
+                var panel = Track(fresh.panel);
+                Assert.That(panel, Is.SameAs(oldPanel));
+                Assert.That(panel.Module, Is.SameAs(module));
+                Assert.That(panel.UIType, Is.EqualTo(UIType.DontDestroyUI));
+                Assert.That(panel.GetComponents<Canvas>(), Has.Length.EqualTo(1));
+                Assert.That(PanelOrders(UIType.DontDestroyUI)[panel], Is.EqualTo(panel.SortingOrder));
+                Assert.That(PanelOrders(UIType.UI).Contains(panel), Is.False);
+                Assert.That(probes, Is.EqualTo(2));
+                Assert.That(PendingViewCount(), Is.Zero);
+                Assert.That(consumer.GetViews<View>(), Is.Empty);
+                yield return null;
+                Assert.That(FixtureInstanceCount(prefab), Is.EqualTo(1), "Old producer must not acquire an instance in the new session.");
+            }
+            finally
+            {
+                oldPanel.RemoveAction = null;
+                consumer.Close();
+                classPool.Restore(new Module[] { consumer });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelDestroyedParentAndThrowingCompletionKeepTerminalAndReleasedInputs()
+        {
+            yield return StartModule();
+            var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokePanel));
+            var parent = Own(new GameObject("YLCore.PanelDestroyedParent", typeof(RectTransform)));
+            var args = NewArgs();
+            args.SetObject("retained", parent);
+            var invalidated = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                UIType.UI, parent.transform, loadViewArgs: args);
+            var child = (LoadViewRequest<YLCoreSmokePanel>)Field(invalidated, "child");
+            Object.DestroyImmediate(parent);
+            yield return Await(() => invalidated.isDone, "Panel destroyed pending parent");
+            AssertTerminal(invalidated, LoadViewStatus.Invalidated);
+            AssertTerminal(child, LoadViewStatus.Invalidated);
+            Assert.That(invalidated.Exception, Is.SameAs(child.Exception));
+            AssertReleasedArgs(args);
+            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(PendingViewCount(), Is.Zero);
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero);
+
+            args = NewArgs();
+            args.SetInt("token", 95);
+            var request = module.LoadPanelAsync<YLCoreSmokePanel>(nameof(YLCoreSmokePanel),
+                UIType.UI, PanelParent(), loadViewArgs: args);
+            int callbacks = 0;
+            request.AddCompleteEvent(done =>
+            {
+                callbacks++;
+                AssertTerminal(done, LoadViewStatus.Succeeded);
+                Assert.That(PendingViewCount(), Is.Zero);
+                AssertReleasedArgs(args);
+                done.Abort();
+                throw new InvalidOperationException("YLCore Panel completion subscriber failure");
+            });
+            LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: YLCore Panel completion subscriber failure"));
+            yield return Await(() => request.isDone, "Panel throwing completion subscriber");
+            AssertTerminal(request, LoadViewStatus.Succeeded);
+            var panel = Track(request.panel);
+            AssertPanel(panel, 95, 1);
+            request.Abort();
+            int late = 0;
+            request.AddCompleteEvent(_ => late++);
+            yield return null;
+            AssertTerminal(request, LoadViewStatus.Succeeded);
+            Assert.That(request.panel, Is.SameAs(panel));
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(late, Is.EqualTo(1));
+            Assert.That(panel.IsLoaded, Is.True);
+            Assert.That(PendingViewCount(), Is.Zero);
+            panel.Close();
+            AssertPanelReleased(panel);
         }
 
         [UnityTest]
@@ -1363,6 +1871,42 @@ namespace YLFramework.Core.Tests
             Assert.That(orders[panel], Is.EqualTo(panel.SortingOrder));
         }
 
+        private static IDictionary PanelOrders(UIType type) => (IDictionary)Field(Singleton(typeof(PanelManager)),
+            type == UIType.UI ? "uiOrders" : "dontDestroyUIOrders");
+
+        private static IList PanelQueues() => (IList)Field(Singleton(typeof(PanelManager)), "panelQueues");
+
+        private void AssertPreparedPanel(YLCoreSmokePanel panel, UIType type)
+        {
+            Track(panel);
+            Assert.That(panel.Module, Is.SameAs(module));
+            Assert.That(panel.IsLoaded, Is.False, "Business callbacks run before the View transaction commits.");
+            Assert.That(panel.UIType, Is.EqualTo(type));
+            Assert.That(panel.Canvas, Is.Not.Null);
+            Assert.That(panel.Canvas, Is.SameAs(panel.GetComponent<Canvas>()));
+            if (panel.gameObject.activeInHierarchy) Assert.That(panel.Canvas.overrideSorting, Is.True);
+            Assert.That(panel.GetComponent<UnityEngine.UI.GraphicRaycaster>(), Is.Not.Null);
+            Assert.That(panel.Canvas.sortingOrder, Is.EqualTo(panel.DisplaySortingOrder));
+            Assert.That(module.GetView<YLCoreSmokePanel>(panel.Id), Is.SameAs(panel));
+            Assert.That(((IDictionary)Field(module, "ownedViews"))[panel.Id], Is.SameAs(panel));
+            Assert.That(PanelOrders(type)[panel], Is.EqualTo(panel.SortingOrder));
+            Assert.That(PanelOrders(type == UIType.UI ? UIType.DontDestroyUI : UIType.UI).Contains(panel), Is.False);
+            Assert.That(PanelQueues().Contains(panel), Is.False, "Visibility queue starts at Loaded activation, not during business initialization.");
+        }
+
+        private void AssertPanelReleased(YLCoreSmokePanel panel)
+        {
+            Assert.That(panel, Is.Not.Null);
+            Assert.That(panel.Module, Is.Null);
+            Assert.That(module.GetView<YLCoreSmokePanel>(panel.Id), Is.Null);
+            Assert.That(((IDictionary)Field(module, "ownedViews")).Contains(panel.Id), Is.False);
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Has.No.Member(panel));
+            Assert.That(module.GetViews(nameof(YLCoreSmokePanel)), Has.No.Member(panel));
+            Assert.That(PanelOrders(UIType.UI).Contains(panel), Is.False);
+            Assert.That(PanelOrders(UIType.DontDestroyUI).Contains(panel), Is.False);
+            Assert.That(PanelQueues().Contains(panel), Is.False);
+        }
+
         private void AssertRemoved(YLFramework.Core.View view, string name)
         {
             Assert.That(view.gameObject.activeSelf, Is.False);
@@ -1453,6 +1997,27 @@ namespace YLFramework.Core.Tests
             Assert.That((IDictionary)Field(args, "ints"), Is.Empty);
         }
 
+        private static void AssertTerminal<T>(LoadPanelRequest<T> request, LoadViewStatus status) where T : Panel
+        {
+            Assert.That(request.isDone, Is.True);
+            Assert.That(request.keepWaiting, Is.False);
+            Assert.That(request.progress, Is.EqualTo(1f));
+            Assert.That(request.Status, Is.EqualTo(status));
+            Assert.That(Field(request, "child"), Is.Null, "Terminal Panel wrapper must release its child request.");
+            if (status == LoadViewStatus.Succeeded)
+            {
+                Assert.That(request.panel, Is.Not.Null);
+                Assert.That(request.Exception, Is.Null);
+                Assert.That(request.error, Is.Null.Or.Empty);
+            }
+            else
+            {
+                Assert.That(request.panel, Is.Null);
+                Assert.That(request.Exception, Is.Not.Null);
+                Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+            }
+        }
+
         private static int FixtureInstanceCount(GameObject prefab)
         {
             var loader = Singleton(typeof(GameObjectLoader));
@@ -1516,6 +2081,8 @@ namespace YLFramework.Core.Tests
                 typeof(Action<PlayModeStateChange>), type.GetMethod("EditorApplication_playModeStateChanged", StaticPrivate));
             type.GetField("_instance", StaticPrivate).SetValue(null, null);
         }
+
+        private sealed class YLCoreIncompatiblePanel : Panel { }
 
     }
 }

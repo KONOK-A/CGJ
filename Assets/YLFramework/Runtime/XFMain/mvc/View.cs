@@ -442,6 +442,8 @@ namespace YLFramework.Core
             {
                 foreach (var entry in _events)
                     EventManager.AddEvent(entry.Key, entry.Value);
+                PanelManager.ActivateView(this);
+                if (!ReferenceEquals(Session, session) || eventEpoch != epoch || !loaded || IsRemoving || !isActiveAndEnabled) return;
                 OnViewEnabled();
             }
             catch (Exception error)
@@ -470,7 +472,9 @@ namespace YLFramework.Core
                 try { EventManager.RemoveEvent(entry.Key, entry.Value); }
                 catch (Exception error) { errors.Add(error); }
             }
-            try { OnViewDisabled(); }
+            try { PanelManager.DeactivateView(this); }
+            catch (Exception error) { errors.Add(error); }
+            try { if (ReferenceEquals(Session, session) && eventEpoch == epoch) OnViewDisabled(); }
             catch (Exception error) { errors.Add(error); }
             if (errors.Count != 0 && ReferenceEquals(Session, session) && eventEpoch == epoch) DiscardOnExit = true;
             ViewManager.ThrowCleanupErrors(errors);

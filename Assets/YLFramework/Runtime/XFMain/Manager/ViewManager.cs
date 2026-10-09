@@ -287,7 +287,7 @@ namespace YLFramework.Core
             => LoadViewSync<T>(module, null, prefab, parent, null, param, false);
 
         private static T LoadViewSync<T>(Module module, string assetName, GameObject prefab, Transform parent,
-            LoadViewArgs args, object[] param, bool named, bool argsClaimed = false) where T : View
+            LoadViewArgs args, object[] param, bool named, bool argsClaimed = false, UIType? panelType = null) where T : View
         {
             // 接管失败不进入finally，不能归还另一笔操作正在使用的参数。
             if (args != null && !argsClaimed) args.Claim();
@@ -329,7 +329,7 @@ namespace YLFramework.Core
                     throw new ArgumentException("View parent was destroyed during acquisition.", nameof(parent));
                 instance.transform.localPosition = Vector3.zero;
                 initializing = true;
-                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param);
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, panelType: panelType);
                 return view;
             }
             catch (Exception error)
@@ -368,9 +368,10 @@ namespace YLFramework.Core
             return StartAsync<T>(module, asset_name, parent, null, param);
         }
 
-        private static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args, object[] param) where T : View
+        internal static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
+            object[] param, bool argsClaimed = false, UIType? panelType = null) where T : View
         {
-            if (args != null) args.Claim();
+            if (args != null && !argsClaimed) args.Claim();
             LoadViewRequest<T> request;
             try
             {
@@ -378,11 +379,11 @@ namespace YLFramework.Core
                 if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
                 if (!ReferenceEquals(parent, null) && !parent) throw new ArgumentException("View parent has been destroyed.", nameof(parent));
                 FindBackendRoot(module, parent);
-                request = new LoadViewRequest<T>(module, assetName, parent, args, param);
+                request = new LoadViewRequest<T>(module, assetName, parent, args, param, panelType);
             }
             catch (Exception error)
             {
-                if (args != null)
+                if (args != null && !argsClaimed)
                 {
                     try { args.Release(); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
@@ -399,7 +400,7 @@ namespace YLFramework.Core
         }
 
         internal static T CompleteAsync<T>(Module module, GameObject prefab, string assetName, Transform parent, Scene scene,
-            LoadViewArgs args, object[] param, Action validate) where T : View
+            LoadViewArgs args, object[] param, Action validate, UIType? panelType = null) where T : View
         {
             ValidateView<T>(prefab);
             GameObject instance = null;
@@ -416,7 +417,7 @@ namespace YLFramework.Core
                 if (!parent && instance.scene != scene) SceneManager.MoveGameObjectToScene(instance, scene);
                 instance.transform.localPosition = Vector3.zero;
                 initializing = true;
-                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate);
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate, panelType);
                 return view;
             }
             catch (Exception error)
@@ -446,7 +447,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
-            View backendRoot = null, bool backend = false, Action validate = null)
+            View backendRoot = null, bool backend = false, Action validate = null, UIType? panelType = null)
         {
             if (!view) throw new ArgumentNullException(nameof(view));
             if (view.Module != null || view.Session != null || view.IsRemoving)
@@ -468,6 +469,7 @@ namespace YLFramework.Core
                 view.IsInitializing = true;
                 module.viewTransactions++;
                 transaction = true;
+                if (view is Panel panel) panel.UIType = panelType ?? PanelManager.GetUIType(panel.transform.parent);
                 view.BeforeOnLoaded();
                 validate?.Invoke();
                 ValidateInitialization(module, view, session);
@@ -523,8 +525,9 @@ namespace YLFramework.Core
 
         private static void ValidateInitialization(Module module, View view, object session)
         {
-            if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding)
-                throw new InvalidOperationException("View initialization invalidated its instance, registration or Model binding.");
+            if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding ||
+                (view is Panel panel && !panel.Canvas))
+                throw new InvalidOperationException("View initialization invalidated its instance, registration, Model binding or Panel Canvas.");
         }
 
         internal static void AttachView(Module module, View view, LoadViewArgs args)
@@ -569,7 +572,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
-            LoadViewArgs args, object[] param, Action validate = null)
+            LoadViewArgs args, object[] param, Action validate = null, UIType? panelType = null)
         {
             var added = new List<KeyValuePair<View, object>>();
             var roots = new Dictionary<View, View>();
@@ -602,7 +605,7 @@ namespace YLFramework.Core
                     bool root = ReferenceEquals(view, acquiredRoot);
                     InitializeView(module, view, root ? assetName : null,
                         root || views.Count == 1 ? args : null, root ? param : null,
-                        root ? outerRoot : roots[view], root, validate);
+                        root ? outerRoot : roots[view], root, validate, root ? panelType : null);
                     added.Add(new KeyValuePair<View, object>(view, view.Session));
                 }
                 foreach (var entry in added) ValidateInitialization(module, entry.Key, entry.Value);
@@ -647,8 +650,9 @@ namespace YLFramework.Core
         }
 
         // Panel入口在解析父节点前已接管参数，并负责自己的finally归还。
-        internal static T LoadViewClaimed<T>(Module module, string assetName, Transform parent, LoadViewArgs args) where T : View
-            => LoadViewSync<T>(module, assetName, null, parent, args, null, true, true);
+        internal static T LoadViewClaimed<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
+            object[] param = null, UIType? panelType = null) where T : View
+            => LoadViewSync<T>(module, assetName, null, parent, args, param, true, true, panelType);
 
         internal static T LoadView<T>(Module module, GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {

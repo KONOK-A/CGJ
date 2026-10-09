@@ -123,17 +123,16 @@ namespace YLFramework.Core
             {
                 ui_start_sort_order = value;
 
-                foreach (var view in views.Values)
+                var errors = new List<Exception>();
+                foreach (var entry in ViewManager.Snapshot(this))
                 {
-                    foreach (var item in view.Values)
+                    if (entry.Key is Panel panel && panel && ReferenceEquals(panel.Session, entry.Value))
                     {
-                        if (item is Panel) 
-                        {
-                            Panel panel = item as Panel;
-                            panel.RefreshSortingOrder(); // 刷新层级
-                        }
+                        try { panel.RefreshSortingOrder(); } // 包含显式挂载及嵌套Panel，不只命名资源。
+                        catch (Exception error) { errors.Add(error); }
                     }
                 }
+                ViewManager.ThrowCleanupErrors(errors);
 
             }
 
@@ -578,7 +577,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadPanel<T>(string asset_name, UIType type,Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadPanel<T>(  string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
-            return LoadPanel( asset_name, type, parent, param) as T;
+            return PanelManager.LoadPanelLegacy<T>(this, asset_name, type, parent, param);
         }
 
 
@@ -595,7 +594,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadPanel<T>(UIType type, Transform parent ,LoadViewArgs loadViewArgs)代替!")]
         public T LoadPanel<T>(UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
-            return LoadPanel(  typeof(T).Name, type, parent, param) as T;
+            return PanelManager.LoadPanelLegacy<T>(this, typeof(T).Name, type, parent, param);
         }
 
         /// <summary>

@@ -1,10 +1,10 @@
 # 阶段 1.3：View 核心融合研究与设计
 
-状态：**整体设计已批准；1.3-A/B/C 已验收并提交（`22b281d` / `a1beb2e` / `bee3e28`）；1.3-D 已实施并通过专项技术验证，待用户验收，未提交；E 未开始**。
+状态：**整体设计已批准；1.3-A～D 已验收并提交（`22b281d` / `a1beb2e` / `bee3e28` / `57d3595`）；阶段 1.3 实施及专项验证完成，待用户最终验收与 Git 收口。E 尚未提交，不标记最终 COMPLETE，不自动进入 1.4**。
 
 本文是阶段 1.3 唯一专项方案，保存源码研究结论、已批准架构方向、已确认约束、实现参考与实施批次。用户已原则上批准 D1～D4 总体方向及 A～E 规划，保留 D1/C1/C2 原则；具体 API、内部机制及实现取舍不要求逐条照搬草案。第 8.3 节的三项开放评估原则优先于正文早期推荐的具体做法。
 
-整体设计批准不等于代码实施、技术验收或 Git 授权。第 1～9 节保留初始研究与设计记录，第 10～12 节及顶部状态记录后续获授权批次的实际实现，覆盖早期“尚未实施/等待开始”的历史表述。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
+整体设计批准不等于代码实施、技术验收或 Git 授权。第 1～9 节保留初始研究与设计记录，第 10～14 节及顶部状态记录后续获授权批次的实际实现，覆盖早期“尚未实施/等待开始”的历史表述。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
 
 长期边界见 [IntegrationPlan.md](../../Assets/YLFramework/Documentation/IntegrationPlan.md)，前置契约见 [1.2 Module/MVC 方案](xf-yl-1.2-module-mvc.md)，源码归属基础见 [1.1 承接方案](1791455404620-xf-yl-core-ownership.md)。
 
@@ -678,3 +678,51 @@ C 仍负责显式场景/层级挂载、场景卸载及完整销毁兜底；D 负
 退出PlayMode实际日志仍出现已记录的原 `LoggerManager` 场景关闭残留；未修改原Package或添加日志忽略，专项通过不等于全工程Console无错误。未机械重跑全量Editor/Foundation/Audio/Player，Shared和LoadViewArgs基础实现未改变。没有安全复现任意后端永久挂起或物理取消，不把逐帧逻辑失效及LOCAL + Assets成功解释为底层任务停止；非GameObject共享资产返回的类型防护由实际源码确认，未构造不同泛型共享请求的真实AB复现。真实AB的Prefab延长持有/共享释放、物理I/O、Player、原游戏完整非干扰及无XF生态独立运行仍未验证，留既定资源/AsyncOperation/1.4专题。
 
 **具备进入1.3-E的技术条件，仍须用户验收D并授权E。**完整Panel取消/子请求失效传播、后置UI准备与登记失败收口仍由E负责；本批不将正常Panel回归通过描述为完整Panel请求协议已完成。未提交，不自动进入E，长期阶段边界不变。
+
+## 14. 1.3-E 实施与阶段技术收口
+
+本节覆盖早期 E 未开始、D 未提交的历史表述。用户已确认 A～D 验收；开始 E 时实际核对 `fusion/1.3-view`、干净工作区和 D 提交 `57d3595`，当前源码包含 A～D。仅修改 YLFramework 自有 Core、既有测试及指定两份文档，不切换分支、提交、推送、合并或清理，不启动 1.4。
+
+### 14.1 Panel 与 View 的唯一协议
+
+- 保留 `Panel : View`。直接 Panel、普通 View 加载 Panel、显式 Attach 及嵌套 Panel 均复用原临时归属/索引、BeforeOnLoaded、两种 OnLoaded、Loaded/事件、失败回滚和退出管线，不增加第二套 owner、pending 或初始化事务。普通 View 不创建 Canvas/EventSystem/PanelManager。
+- 初始化先确定当前会话 UIType。直接 Panel 根使用请求指定值；View/Attach/普通子 Panel 继承受管父 Panel 或已有持久 Canvas 的确切 Scene 上下文，否则默认 UI。不按 CurrentModule、Scene 名称或旧缓存字段猜 owner/UIType；普通 View 入口不自动创建全局 UI 根或 EventSystem。
+- Panel 的 Canvas、逻辑排序与 order 登记在业务 OnLoaded 前准备。自有 Canvas 健康复用不重复添加组件；借用 Canvas 每次按当前 parent（含 inactive）重新取得，不改借用 Canvas 的排序、启用状态或队列。非框架自带 Canvas 仍明确拒绝；`isInitCanvas` 仅在 Canvas 准备成功后设置，准备失败可在调用方修正对象后重新 Attach。
+- 显示队列在原 Loaded 且 active 的事件开放阶段接入，不让 inactive 初始化遮挡当前 Panel。真正激活再接入；GO 停用释放显示队列并尝试恢复前一有效 Panel，但保留 Module/index/order/主要 Model。只将 `PanelType.Panel` 的自有 Canvas 全屏 Panel 入遮挡队列，Window/Overlay 不当作全屏遮挡者；完整导航/遮罩/不可见策略没有融合。
+- 实际 Unity 探针确认 inactive Canvas 的 `overrideSorting` 写入可能读回 false，首次激活会重置原生 sortingOrder；根 Canvas 本身也不要求 overrideSorting=true。因此在 Loaded 激活边界重新应用自有 Canvas 配置和已准备的逻辑排序，不新增组件、不重复派发排序变更。已验证首次 inactive 根/嵌套 Canvas 激活；初始化各边界额外核对 Canvas 存活，回调销毁必要 Canvas 不能提交合法 Loaded。
+
+### 14.2 加载、请求及公开 API
+
+- Module 所有 `LoadPanel` / `LoadPanelAsync` 公开重载保留。旧 params 泛型同步入口直接进行 T 校验，不再先加载任意 Panel 后 `as T` 留下错误对象。同步正常返回已完成初始化的 Panel，入口拒绝、缺资源、类型或初始化失败抛异常；失败沿原会话清理并保留根因/附加清理错误。
+- 现代入口先 Claim 参数，再校验 owner/name/UIType/parent 并准备 UI 根。UI 根准备纳入现有同步对象事务门禁，创建通知不能关闭/Shutdown 正在准备的 owner。拒绝或准备失败归还已接管参数；重复 Claim 不动第一笔输入。同步入口 finally 归还，异步接受成功后输入唯一转交子 View 请求，不在 wrapper 保存或再次回收。
+- `LoadPanelRequest<T>` 改为 sealed、仅内部构造，`panel` 改为只读属性；新增只读 `Status`（复用 `LoadViewStatus`）及 `Exception`。定向未找到需兼容的外部构造、派生或结果写入。请求由一个 `LoadViewRequest<T>` 执行全部必要 UI 事务，wrapper 直接内部订阅并转接成功/失败/取消/失效，不再 yield 子请求后进行后置 UI 提交；子请求结束即完成 Panel 请求，原 Exception/附加清理错误保持一致，终态清空 child 引用。
+- Abort 委托原 View 逻辑取消：等待期立即终结；初始化借读期间标记中断，事务回滚和参数收尾后通知。独立业务失败及回滚错误不被重入 Abort 覆盖。Module 关闭/启动回滚/Shutdown、parent/目标失效及旧代次迟到沿 D 处理，完成通知异常只报告日志，不反向改写已提交结果，也不影响下一笔会话。没有独立 Panel producer/pending、默认超时或共享后端 Abort。
+
+### 14.3 排序、退出与重入收尾
+
+- SortingOrder 同步更新已存在的 order 登记及实际 Canvas，避免下一次排序仍用旧值；inactive 但有效的会话保留排序登记。`Module.UIStartSortOrder` 按 owned 会话快照刷新，覆盖无资源名的场景/嵌套 Panel，逐 Panel 尝试后汇总错误，不修改 1.2 关闭/回滚顺序。
+- AlwaysInFront 快照捕获 Panel 引用及 Session，处理前按会话和 UIType 校验，虚拟属性/排序回调后复验；旧普通 UI 快照不能修改复用后新 DDOL 会话或其 sibling。临时列表在异常时也归还，不重写完整排序算法。
+- 退出继续由 ViewManager 直接调用已有 `ReleaseView`：先删两类 order、全部该 Panel queue 及 current，再尝试恢复前一有效 Panel/Visible；不依赖开关或普通移除广播成功，不为普通 View 退出懒创建 manager。OnRemove/观察者异常仍继续 owner/index/Model 解绑及实例收尾；健康实例沿原池归还，污染实例沿 A～C 停用/Destroy，不先归池。
+- 事件实际添加先于会调用业务 Invisible 的队列激活，实际逐项退订先于会调用业务 Visible 的队列恢复；回调后的 Session/eventEpoch 守卫阻止旧轮次继续操作新会话。这是必要 Panel 生命周期直接适配，不修改 EventManager/Shared 的公共分发协议。
+
+### 14.4 A～E 核对、验证与剩余边界
+
+A～E 形成 Module 唯一 owner、实例/名称/类型索引、资源/场景取得区别、同步及异步初始化、Loaded/事件、显式挂载、退出/失效及缓存复用闭环。D1 保持：View/Panel.Close、失败、取消和销毁都不隐式移除 Model；Module 仍按 OnClose → Controller → View → 剩余 Model 唯一清理。DDOL 不改变业务 owner。原 Package、CGJ2024 游戏业务/场景、旧 YL UI Prefab/类型/序列化字段、Shared、asmdef 和 GUID 均未修改。
+
+本轮实际使用 Unity `2022.3.62f3c1` 导入编译，最终 `isCompiling=false`、`scriptCompilationFailed=false`；反射确认 Panel 请求 sealed、结果无公开 setter。最终普通 Module、BaseModule、trackedViewOwners 均为零。实际专项结果：
+
+| 套件 | 结果 |
+|---|---|
+| CoreDirectViewPlayModeTests | 46/46 |
+| CoreXfabPlayModeTests，LOCAL + Assets | 33/33 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+| CoreIdentityTests，EditMode | 7/7 |
+
+共 **120 项 PlayMode + 7 项 EditMode** 通过，无失败或跳过；全工程发现数量不计入执行数量。新增 10 项组合回归并增强既有 Panel/缓存断言；涵盖必要上下文、Canvas 失败后重试/共享重选/首次 inactive 激活、同步/异步/旧泛型错误、子请求失败/取消、参数接管/借读取消、Module 通知后重启/DDOL owner、parent 销毁、排序/业务/队列异常与根因、完成通知抛错、内部登记及退出收尾，保留 A～D 与 1.2 回归。关键断言先于 fixture 恢复，不通过反射摘除非法 Core 注册制造通过。
+
+独立只读审查定位的 inactive 入队、AlwaysInFront 旧会话排序及队列回调/事件顺序问题，均先在 Unity 实际失败复现后修正通过；最终定向复核未发现新增重要问题。源码审查与运行结果分别记录。`git diff --check` 通过，没有新增文件、资源、meta 或程序集；程序集身份测试确认无新增 Core → 原 XF/旧 YL Runtime 依赖。既有蓝图的并行编辑予以保留，仅增量更新本阶段状态与边界。
+
+本轮退出 PlayMode 仍观察到已记录的原 LoggerManager 场景残留，未修改原包或增加日志忽略，不将专项通过解释为全工程 Console 无错误。未运行完整原游戏、Player 或真实 AB；LOCAL + Assets 不证明 AB 物理释放。后端在有效上下文中永不完成仍可能等待，但 Core Abort/关闭/目标失效可以逻辑结束；不宣称物理取消、共享资产即时卸载、Destroy 即删池登记、跨场景缓存保活或自动重置任意业务字段。显式请求发起时 Model 身份输入仍未新增，业务 args 内 BindModel 是初始化时选择有效注册，不把任意 payload 当成接受时身份声明。
+
+**阶段 1.3 实施及专项验证完成，待用户最终验收与 Git 收口。**已达到本阶段技术验收条件，并具备进入 1.4 的核心前置条件，但未声明最终 COMPLETE、未提交或启动 1.4。完整 Panel/UI、Events/Pool/资源/AsyncOperation 等能力留既定专题；1.4 仍负责原游戏启动/菜单/设置/进入退出再进入/音频非干扰、Logger 残留定向定位及按风险的 Windows64 Player 检查；无原 XF 生态的最终独立验证仍属后续统一收口。

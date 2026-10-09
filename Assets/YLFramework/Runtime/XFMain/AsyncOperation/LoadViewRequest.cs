@@ -37,6 +37,7 @@ namespace YLFramework.Core
         private readonly List<KeyValuePair<View, object>> parentSessions = new List<KeyValuePair<View, object>>();
         private LoadViewArgs args;
         private object[] param;
+        private UIType? panelType;
         private bool executing;
         private bool closingOwner;
         private bool terminal;
@@ -44,7 +45,7 @@ namespace YLFramework.Core
         private LoadViewStatus interruptedStatus;
         private readonly int threadId = Thread.CurrentThread.ManagedThreadId;
 
-        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters)
+        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, UIType? uiType = null)
         {
             owner = module;
             lifecycle = module.ViewLifecycle;
@@ -60,6 +61,7 @@ namespace YLFramework.Core
             }
             args = claimedArgs;
             param = parameters;
+            panelType = uiType;
             Validate();
             owner.pendingViews.Add(this);
         }
@@ -125,6 +127,7 @@ namespace YLFramework.Core
             projects = null;
             assetName = null;
             param = null;
+            panelType = null;
             targetScene = default;
             if (previousArgs != null) previousArgs.Release();
         }
@@ -203,7 +206,7 @@ namespace YLFramework.Core
             }
             if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
             ValidateWaiting();
-            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting);
+            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, panelType);
             // 初始化已结束再提交；完成通知可以关闭或开启下一笔会话。
             executing = false;
             Finish(result, null, LoadViewStatus.Succeeded);
