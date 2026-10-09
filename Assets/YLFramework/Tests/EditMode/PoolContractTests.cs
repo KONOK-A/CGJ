@@ -17,6 +17,50 @@ namespace YLFramework.Tests
             public void OnRecycle() => Recycles++;
         }
 
+        private sealed class PrivateItem
+        {
+            internal int Value = 7;
+            private PrivateItem() { }
+        }
+
+        private sealed class ThrowingPrivateItem
+        {
+            internal static readonly Exception Error = new InvalidOperationException("private constructor");
+            private ThrowingPrivateItem() => throw Error;
+        }
+
+        [Test]
+        public void LegacyCacheTypesExitAndSafeDirectlyAdaptsTheFoundationKernel()
+        {
+            var runtime = typeof(SafeObjectPool<>).Assembly;
+            foreach (var name in new[] { "ClassObjectPool", "IndependentObjectPool`1", "Pool`1", "SimpleObjectPool`1" })
+                Assert.That(runtime.GetType("YLFramework.Core.Pool." + name), Is.Null, name);
+            Assert.That(typeof(SafeObjectPool<SessionItem>).BaseType, Is.EqualTo(typeof(object)));
+            Assert.That(typeof(SafeObjectPool<SessionItem>).GetField("_pool", BindingFlags.Instance | BindingFlags.NonPublic)
+                .FieldType, Is.EqualTo(typeof(ObjectPool<SessionItem>)));
+            Assert.That(typeof(IPool<SessionItem>).IsAssignableFrom(typeof(SafeObjectPool<SessionItem>)), Is.True);
+        }
+
+        [Test]
+        public void ExplicitFactoriesPreservePrivateConstructionAndDefaultsWithoutReflectiveReset()
+        {
+            var factory = new NonPublicObjectFactory<PrivateItem>();
+            using var pool = new ObjectPool<PrivateItem>(factory.Create, reset: item => item.Value = 7);
+            pool.SetObjectFactory(factory);
+            var item = pool.Allocate();
+            Assert.That(item.Value, Is.EqualTo(7));
+            item.Value = 99;
+            pool.Recycle(item);
+            Assert.That(pool.Allocate(), Is.SameAs(item));
+            Assert.That(item.Value, Is.EqualTo(7));
+            pool.Discard(item);
+            Assert.That(MultiObjectFactory.CreateNonPublicCtorObject(typeof(PrivateItem)), Is.TypeOf<PrivateItem>());
+            Assert.That(Assert.Throws<InvalidOperationException>(() => new NonPublicObjectFactory<ThrowingPrivateItem>().Create()),
+                Is.SameAs(ThrowingPrivateItem.Error));
+            Assert.That(Assert.Throws<InvalidOperationException>(() => MultiObjectFactory.CreateNonPublicCtorObject<ThrowingPrivateItem>()),
+                Is.SameAs(ThrowingPrivateItem.Error));
+        }
+
         [Test]
         public void SafeSessionClosesOriginalPoolEvenWhenSingletonPropertyRegistersFirst()
         {
@@ -85,13 +129,6 @@ namespace YLFramework.Tests
             finally { state.DeInit(); pool.Dispose(); }
         }
 
-        private sealed class TestPool : Pool<object>
-        {
-            internal Action<object> Prepare;
-            internal TestPool(PoolCacheOrder order = PoolCacheOrder.Fifo) : base(order) { }
-            protected override void Reset(object item) => Prepare?.Invoke(item);
-        }
-
         public sealed class SafeItem : IOfPool
         {
             public bool IsRecycled { get; set; }
@@ -117,10 +154,11 @@ namespace YLFramework.Tests
         public void TearDown() => _safe.Dispose();
 
         [Test]
-        public void SimpleDefaultsToUnboundedFifoAndResetsDuringPrewarmOnlyOnce()
+        public void ExplicitUnboundedFifoResetsDuringPrewarmOnlyOnce()
         {
             var resets = 0;
-            var pool = new SimpleObjectPool<object>(() => new object(), item => resets++, 25);
+            using var pool = new ObjectPool<object>(() => new object(), reset: item => resets++, maxPoolSize: 0);
+            pool.Prewarm(25);
             Assert.That(pool.CurStoreCount, Is.EqualTo(25));
             Assert.That(resets, Is.EqualTo(25));
             pool.Clear();
@@ -136,10 +174,10 @@ namespace YLFramework.Tests
         }
 
         [Test]
-        public void SimpleRejectsDuplicatesAndIsolatesFailedReset()
+        public void ObjectPoolRejectsDuplicatesAndIsolatesFailedReset()
         {
             var fail = false;
-            var pool = new SimpleObjectPool<object>(() => new object(), item =>
+            using var pool = new ObjectPool<object>(() => new object(), reset: item =>
             {
                 if (fail) throw new InvalidOperationException();
             });
@@ -156,11 +194,11 @@ namespace YLFramework.Tests
         }
 
         [Test]
-        public void SimpleSupportsBoundedLifoAndResetsDiscardedItems()
+        public void ObjectPoolSupportsBoundedLifoAndResetsDiscardedItems()
         {
             var resets = 0;
-            var pool = new SimpleObjectPool<object>(() => new object(), _ => resets++, 0, PoolCacheOrder.Lifo)
-                { MaxPoolSize = 2 };
+            using var pool = new ObjectPool<object>(() => new object(), reset: _ => resets++,
+                maxPoolSize: 2, cacheOrder: PoolCacheOrder.Lifo);
             var first = pool.Allocate();
             var second = pool.Allocate();
             var discarded = pool.Allocate();
@@ -179,8 +217,7 @@ namespace YLFramework.Tests
         public void AllocationAndShrinkUseTheSelectedOrderWithoutCleaning(PoolCacheOrder order)
         {
             var hooks = 0;
-            var pool = new TestPool(order) { Prepare = item => hooks++ };
-            pool.SetFactoryMethod(() => new object());
+            using var pool = new ObjectPool<object>(() => new object(), reset: item => hooks++, cacheOrder: order);
             var first = pool.Allocate();
             var second = pool.Allocate();
             pool.Recycle(first);
@@ -194,9 +231,8 @@ namespace YLFramework.Tests
         public void RawPrewarmSkipsNullWithoutResetAndRespectsTargetAndCapacity()
         {
             var calls = 0;
-            var pool = new TestPool(PoolCacheOrder.Lifo) { MaxPoolSize = 2,
-                Prepare = item => throw new InvalidOperationException() };
-            pool.SetFactoryMethod(() => { calls++; return null; });
+            using var pool = new ObjectPool<object>(() => { calls++; return null; },
+                reset: item => throw new InvalidOperationException(), maxPoolSize: 2, cacheOrder: PoolCacheOrder.Lifo);
             Assert.That(pool.Prewarm(-1, PoolPrewarmMode.Raw), Is.Zero);
             Assert.That(pool.Prewarm(int.MinValue, PoolPrewarmMode.Raw), Is.Zero);
             Assert.That(pool.Prewarm(5, PoolPrewarmMode.Raw), Is.Zero);
@@ -212,8 +248,7 @@ namespace YLFramework.Tests
         public void PrewarmUsesFiniteNullFactoryCallsAndFailuresPropagate()
         {
             var calls = 0;
-            var pool = new TestPool();
-            pool.SetFactoryMethod(() => { calls++; return null; });
+            using var pool = new ObjectPool<object>(() => { calls++; return null; });
             Assert.That(pool.Prewarm(3), Is.Zero);
             Assert.That(calls, Is.EqualTo(3));
             pool.SetFactoryMethod(() => throw new InvalidOperationException());
@@ -228,8 +263,7 @@ namespace YLFramework.Tests
         [TestCase(PoolCacheOrder.Lifo)]
         public void ClearSnapshotsBeforeCallbacksAndLeavesReentrantCacheIntact(PoolCacheOrder order)
         {
-            var pool = new TestPool(order);
-            pool.SetFactoryMethod(() => new object());
+            using var pool = new ObjectPool<object>(() => new object(), cacheOrder: order);
             var first = pool.Allocate();
             var second = pool.Allocate();
             var replacement = pool.Allocate();
@@ -251,12 +285,12 @@ namespace YLFramework.Tests
         [Test]
         public void CapacityDecisionPrecedesCleanupEvenWhenCleanupReenters()
         {
-            var pool = new TestPool { MaxPoolSize = 1 };
-            pool.SetFactoryMethod(() => new object());
+            Action<object> prepare = null;
+            using var pool = new ObjectPool<object>(() => new object(), reset: item => prepare?.Invoke(item), maxPoolSize: 1);
             var first = pool.Allocate();
             var second = pool.Allocate();
             pool.Recycle(first);
-            pool.Prepare = item =>
+            prepare = item =>
             {
                 pool.Allocate();
             };
@@ -378,7 +412,8 @@ namespace YLFramework.Tests
         [Test]
         public void ClearAttemptsEveryCallbackAndLeavesAllSnapshotObjectsRetired()
         {
-            var pool = new SimpleObjectPool<object>(() => new object(), initialSize: 3);
+            using var pool = new ObjectPool<object>(() => new object());
+            pool.Prewarm(3);
             var cleared = 0;
             Assert.Throws<AggregateException>(() => pool.Clear(item =>
             {

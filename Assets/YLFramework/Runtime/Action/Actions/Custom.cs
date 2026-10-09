@@ -57,7 +57,7 @@ namespace YLFramework.Actions
         protected Action<float> mOnExecute;
         protected Action mOnFinish;
 
-        private static ActionPool<Custom<TData>> mSimpleObjectPool =
+        private static ActionPool<Custom<TData>> mPool =
             new ActionPool<Custom<TData>>(() => new Custom<TData>(), null, 10);
 
         protected Custom()
@@ -66,7 +66,7 @@ namespace YLFramework.Actions
 
         public static Custom<TData> Allocate()
         {
-            var custom = mSimpleObjectPool.Allocate();
+            var custom = mPool.Allocate();
             custom.ActionID = ActionKit.ID_GENERATOR++;
             custom.Deinited = false;
             custom.Reset();
@@ -85,7 +85,7 @@ namespace YLFramework.Actions
                 mOnFinish = null;
                 Data = default;
 
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Custom<TData>>(mSimpleObjectPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Custom<TData>>(mPool, this));
             }
         }
 
@@ -141,7 +141,7 @@ namespace YLFramework.Actions
     // Custom 是 Custom<object> 的封闭派生类，需要独立池来分配和回收自身类型（基类泛型池只会创建 Custom<object>）。
     internal class Custom : Custom<object>
     {
-        private static ActionPool<Custom> mSimpleObjectPool =
+        private static ActionPool<Custom> mPool =
             new ActionPool<Custom>(() => new Custom(), null, 10);
 
         protected Custom()
@@ -150,7 +150,7 @@ namespace YLFramework.Actions
 
         public new static Custom Allocate()
         {
-            var custom = mSimpleObjectPool.Allocate();
+            var custom = mPool.Allocate();
             custom.ActionID = ActionKit.ID_GENERATOR++;
             custom.Deinited = false;
             custom.Reset();
@@ -168,7 +168,7 @@ namespace YLFramework.Actions
                 mOnFinish = null;
                 Data = default;
 
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Custom>(mSimpleObjectPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Custom>(mPool, this));
             }
         }
     }

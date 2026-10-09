@@ -908,7 +908,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(IsEngineOrFrameworkReference(typeof(ActionKitHelpProvider).Assembly.Location, contents, ui), Is.False);
             Assert.That(IsEngineOrFrameworkReference(typeof(UnityEngine.Object).Assembly.Location, contents, ui), Is.True);
             Assert.That(IsEngineOrFrameworkReference(ui, contents, ui), Is.True);
-            Assert.That(IsEngineOrFrameworkReference(typeof(YLFramework.Core.Pool.Pool<>).Assembly.Location, contents, ui), Is.True);
+            Assert.That(IsEngineOrFrameworkReference(typeof(YLFramework.Core.Pool.SafeObjectPool<>).Assembly.Location, contents, ui), Is.True);
             Assert.That(IsEngineOrFrameworkReference(typeof(ApiHelpTests).Assembly.Location, contents, ui), Is.False);
         }
 

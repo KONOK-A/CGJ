@@ -1,6 +1,6 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
-状态：蓝图已确认；1.1-A～G 已验收并完成 Git 集成收口；1.2 Module/MVC 已完成并合并（`30de1fc`）；**阶段 1.3：COMPLETE，A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）**。E 提交为 `e1be57f`；**阶段 1：COMPLETE（1.1～1.4 全部验收完成）：Module/MVC、View/Panel 核心融合已完成；原游戏 Editor 与 Windows64 Player 代表性非干扰验证通过；新 YL Core Windows64/Mono 代表性测试通过；已合并至 `integration/xf-yl`（`6cea527`），1.4 提交 `fd7b1e8`。临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项，阶段 2 不自动启动**。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项研究与实施的共同约束，不是具体类、接口或算法设计；当前有效状态及依据见第 6、7 节。
+状态：蓝图已确认；**阶段 1：COMPLETE（1.1～1.4 全部验收及 Git 集成收口完成，`6cea527`）**，Module/MVC、View/Panel 与原游戏 Editor/Windows64 代表性非干扰、Core Windows64/Mono 代表性验证通过。**阶段 2.1 Pool：IN PROGRESS；A～D 已完成技术工作，A/B/C 已验收并提交，D 技术验收通过、待 Git 收口；2.1-E 自有 GameObject Pool 为必做批次、尚未开始，E 验收后 2.1 才 COMPLETE；2.2 Events 已具备技术研究条件，按当前计划先完成 E 再正式进入。**临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项的共同约束，不自动授权 Git 或下一专题；当前状态及依据见第 6、7 节和 [Pool 专项](../../../.kilo/plans/xf-yl-2.1-pool.md)。
 
 ## 1. 目标与边界
 
@@ -105,7 +105,8 @@
 | 1.3-D | 已验收并提交（`57d3595`） | 用户确认及 E 本轮实际 Git 核对；pending/owner代次、参数收尾、稳定终态、逻辑取消/失效与迟到隔离，绕开 Assets-null GameObject pool 路径，不物理取消共享后端。D 历史专项 PlayMode 110/110；详见 1.3 方案第13节 |
 | 1.3-E / 1.3 收口 | COMPLETE；A～E 全部完成、技术验收通过，已合并至 `integration/xf-yl`（`f206e7b`）；E 提交 `e1be57f` | 用户最终确认及本次实际 Git 核对。Panel必要上下文/Canvas/order复用View事务，队列按Loaded+active接入，内部退出释放，请求直接转接View终态与Abort；E实际验证为Unity编译无失败、PlayMode120/120、身份EditMode7/7。A～E核心契约一致；详见1.3方案第14节，不等于完整UI融合、原游戏/Player或最终独立验收 |
 | 1.4 / 阶段 1 | COMPLETE（1.1～1.4 全部验收完成）；已合并集成主线（`6cea527`），提交 `fd7b1e8` | 2026-10-09 用户授权及最终验收；沿用本轮 37 项 Core PlayMode、7 项身份 EditMode、原游戏 Editor 自动化及实际共存验证。用户恢复产物后，Windows64/Mono 游戏构建成功且完整流程经用户确认；独立 Core Player 定向 4/4 通过，临时设置完全恢复。临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。首次阻断、恢复证据及保留风险见第 7 节 |
-| 阶段 2～7 及其他长期系统 | 未开始 | 阶段 1 用户验收与 Git 收口已完成，阶段 2 的核心技术前置条件已具备，但须获得后续授权；不自动进入其他专题 |
+| 2.1 Pool | IN PROGRESS；A～D 已完成技术工作；2.1-E 必做、尚未开始；E 验收后 COMPLETE | A/B/C 已验收并提交：`a97cb2c` / `e8925e6` / `2529d5a`；D 技术验收通过、待 Git 收口。Foundation 唯一 ObjectPool 内核与集合池，Safe 直接组合、Action/Audio/Binding/Events/Resource/FSM/Core 接入，四个遗留普通池入口退出。D 实际 Unity 编译无失败、EditMode 33/33、PlayMode 1/1 及两次关闭 Domain/Scene Reload 普通会话检查通过。自有 GO 池正确性为必做批次 E，尚未开始。详见 [专项第 12～16 节](../../../.kilo/plans/xf-yl-2.1-pool.md)，不冒充 Git 合并或最终独立验收 |
+| 2.2～2.5、阶段 3～7 及其他长期系统 | 未开始 | 2.2 Events 已具备技术研究条件，但按当前计划先完成 2.1-E，再正式进入 2.2；不自动启动其他专题 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 

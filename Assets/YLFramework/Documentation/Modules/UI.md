@@ -16,7 +16,7 @@
 - `UIManager`（`MonoSingleton`）：
   - 窗口数据注册与查询：`AddUIWindowData` / `GetUIWindowData` / `TryGetUIWindowData` / `RemoveUIWindowData` / `ClearAllUIWindowData`。
   - 打开与关闭：`Open<T>` / `Open(type/key)`、`ShowAsync`（异步）、`GetUIWindow`、`DestroyUIWindow`、`Close` / `TryClose` / `CloseAll`。
-  - 提示气泡：`ShowTips(content, UITipPos, ...)`，提示对象使用对象池（`SimpleObjectPool<UITipsItem>`）。
+  - 提示气泡：`ShowTips(content, UITipPos, ...)`，提示对象使用私有 `ObjectPool<UITipsItem>`；池统一不代表已启用当前注释掉的显示流程。
   - 层级与遮罩：`UILayer[]`（含遮罩显隐与层级计数）、`DragLayer`。
   - 屏幕：`SetResolution` / `GetResolution` / `ScreenSpaceOverlayRenderMode` / `ScreenSpaceCameraRenderMode` / `CheckMouseOnUI` / `CheckPositionOnUI`。
 - `UIWindowBase`：窗口生命周期（`OnInit` / `OnOpen` / `OnClose` / `BeforeDestroy` / `RegisterUIEvent` / `UnRegisterUIEvent`），持有窗口数据与加载器。

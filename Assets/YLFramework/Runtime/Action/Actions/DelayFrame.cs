@@ -19,14 +19,14 @@ namespace YLFramework.Actions
         public ulong ActionID { get; set; }
         public ActionStatus Status { get; set; }
 
-        private static ActionPool<DelayFrame> mSimpleObjectPool =
+        private static ActionPool<DelayFrame> mPool =
             new ActionPool<DelayFrame>(() => new DelayFrame(), null, 10);
 
         private Action mOnDelayFinish;
 
         public static DelayFrame Allocate(int frameCount, Action onDelayFinish = null)
         {
-            var delayFrame = mSimpleObjectPool.Allocate();
+            var delayFrame = mPool.Allocate();
             delayFrame.ActionID = ActionKit.ID_GENERATOR++;
             delayFrame.Reset();
             delayFrame.Deinited = false;
@@ -63,7 +63,7 @@ namespace YLFramework.Actions
             {
                 Deinited = true;
                 mOnDelayFinish = null;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<DelayFrame>(mSimpleObjectPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<DelayFrame>(mPool, this));
             }
         }
 

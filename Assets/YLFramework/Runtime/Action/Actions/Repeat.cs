@@ -28,7 +28,7 @@ namespace YLFramework.Actions
         private int mRepeatCount = -1;
         private int mCurrentRepeatCount = 0;
 
-        private static ActionPool<Repeat> mSimpleObjectPool =
+        private static ActionPool<Repeat> mPool =
             new ActionPool<Repeat>(() => new Repeat(), null, 5, action =>
             {
                 action.ActionID = ActionKit.ID_GENERATOR++;
@@ -61,7 +61,7 @@ namespace YLFramework.Actions
         /// <returns>尚未启动的重复组合，子动作可通过 Append 添加。</returns>
         public static Repeat Allocate(int repeatCount = -1)
         {
-            var repeat = mSimpleObjectPool.Allocate();
+            var repeat = mPool.Allocate();
             repeat.mRepeatCount = repeatCount;
             return repeat;
         }
@@ -166,7 +166,7 @@ namespace YLFramework.Actions
                 }
                 finally
                 {
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Repeat>(mSimpleObjectPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Repeat>(mPool, this));
                 }
             }
         }

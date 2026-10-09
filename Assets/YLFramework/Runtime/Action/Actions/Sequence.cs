@@ -36,12 +36,12 @@ namespace YLFramework.Actions
         {
         }
 
-        private static ActionPool<Sequence> mSimpleObjectPool =
+        private static ActionPool<Sequence> mPool =
             new ActionPool<Sequence>(() => new Sequence(), null, 10);
 
         public static Sequence Allocate()
         {
-            var sequence = mSimpleObjectPool.Allocate();
+            var sequence = mPool.Allocate();
             sequence.ActionID = ActionKit.ID_GENERATOR++;
             sequence.Reset();
             sequence.Deinited = false;
@@ -199,7 +199,7 @@ namespace YLFramework.Actions
                 finally
                 {
                     // 回收入队后延迟执行，不在此处立即复用对象。
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Sequence>(mSimpleObjectPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Sequence>(mPool, this));
                 }
                 if (exceptions != null) throw new AggregateException(exceptions);
             }

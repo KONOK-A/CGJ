@@ -184,7 +184,7 @@ namespace YLFramework.Core.Pool
             catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
         }
 
-        /// <summary>按目标空闲数量补齐并执行 Reset，返回实际缓存数。</summary>
+        /// <summary>按目标空闲数量补齐并执行 Reset，返回本次新增缓存数。</summary>
         public int Prewarm(int count) => Prewarm(count, PoolPrewarmMode.Recycle);
 
         /// <summary>
