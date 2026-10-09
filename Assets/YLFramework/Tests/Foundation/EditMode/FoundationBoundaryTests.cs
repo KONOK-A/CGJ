@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Pool;
 
 namespace YLFramework.Foundation.Tests
 {
@@ -33,6 +35,25 @@ namespace YLFramework.Foundation.Tests
                     .Count(assembly => assembly.GetType(type.FullName, false) != null);
                 Assert.That(definitions, Is.EqualTo(1), type.FullName);
             }
+        }
+
+        [Test]
+        public void SharedPoolTypesHaveOneFoundationOwnerAndOnlyNarrowSessionFriends()
+        {
+            var foundation = typeof(ApplicationTool).Assembly;
+            foreach (var type in new[] { typeof(ObjectPool<>), typeof(IPool<>), typeof(IObjectFactory<>),
+                typeof(DefaultObjectFactory<>), typeof(CustomObjectFactory<>), typeof(ListPool<>),
+                typeof(DictionaryPool<,>), typeof(PoolCacheOrder), typeof(PoolPrewarmMode) })
+            {
+                Assert.That(type.Assembly, Is.SameAs(foundation), type.FullName);
+                Assert.That(AppDomain.CurrentDomain.GetAssemblies()
+                    .Count(assembly => assembly.GetType(type.FullName, false) != null), Is.EqualTo(1), type.FullName);
+            }
+            var session = foundation.GetType("YLFramework.Core.Singleton.SingletonSessionState", true);
+            Assert.That(session.IsNotPublic, Is.True);
+            Assert.That(foundation.GetCustomAttributes(typeof(InternalsVisibleToAttribute), false)
+                .Cast<InternalsVisibleToAttribute>().Select(attribute => attribute.AssemblyName),
+                Is.EquivalentTo(new[] { "YLFramework.Runtime", "YLFramework.Core.Runtime" }));
         }
 
         [Test]

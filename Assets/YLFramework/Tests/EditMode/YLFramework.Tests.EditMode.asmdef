@@ -1,7 +1,7 @@
 {
     "name": "YLFramework.Tests.EditMode",
     "rootNamespace": "YLFramework.Tests",
-    "references": ["YLFramework.Runtime", "YLFramework.Editor", "YLFramework.Editor.Help", "YLFramework.Utilities.ZipTool", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["YLFramework.Runtime", "YLFramework.Foundation.Runtime", "YLFramework.Editor", "YLFramework.Editor.Help", "YLFramework.Utilities.ZipTool", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -2,6 +2,7 @@
     "name": "YLFramework.Runtime",
     "rootNamespace": "YLFramework",
     "references": [
+        "YLFramework.Foundation.Runtime",
         "YLFramework.Utilities.ZipTool",
         "UnityEngine.UI"
     ],

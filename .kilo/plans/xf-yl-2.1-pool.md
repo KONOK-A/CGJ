@@ -1,8 +1,8 @@
 # XF × YL 阶段 2.1：Pool 深度融合研究与技术设计
 
-**状态：2.1 Pool 专项设计目标已批准，审阅补充已确认；功能实施尚未开始。**
+**状态：2.1 Pool 专项设计目标及审阅补充已确认；2.1-A 已实现并通过定向技术验证，待用户验收与 Git 收口。B/C/D 未开始，GO 可选 E 仍延期。**
 
-本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。本次授权仅为设计文档 Git 收口与实施分支准备，不自动授权功能实施。
+本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。设计阶段授权仅为文档 Git 收口与分支准备；随后用户明确授权 2.1-A 实施，实际结果见第 12 节，不扩展至 B/C/D。
 
 ## 1. 基线、范围与结论
 
@@ -313,7 +313,7 @@ B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在�
 | **D4 内存/生命周期策略** | 不保留普通池TTL协程；默认空闲20，已配置领域容量/顺序保留；集合有限默认20、显式Clear；没有每租用token或通用资源lease | 保留TTL须增加时钟/宿主/关闭/异常释放机制；强租约改变所有公共用法；大buffer自动淘汰须先证实收益。不把容量默认当最佳调参结果 |
 | **D5 GO专题范围** | 默认延期独立GO正确性批次；2.1只保证GO Data接入Safe不回归，不替换XFAB | 可选择可选E完整修复自有GO并补专项，但没有Core资源链收敛收益，增加Unity生命周期验证；依然不纳入完整资源系统 |
 
-以上设计目标及两项补充已获用户确认，具体技术选择按 10.1 保留调整空间；GO 默认延期，可选 E 仍须单独确认。**本次仅授权文档提交到 `integration/xf-yl`、快进同步远端并准备 `fusion/2.1-pool` 分支，不据此启动 A、可选 E 或任何功能代码实施。**后续实施中若改变重要所有权、异常契约、API 兼容或 GO 范围，应先说明并同步本文件，避免下一会话自行猜测。
+以上设计目标及两项补充已获用户确认，具体技术选择按 10.1 保留调整空间；GO 默认延期，可选 E 仍须单独确认。**设计阶段仅授权文档提交到 `integration/xf-yl`、快进同步远端并准备 `fusion/2.1-pool` 分支，不据此启动 A、可选 E 或任何功能代码实施；A 后续单独授权与结果见第 12 节。**后续实施中若改变重要所有权、异常契约、API 兼容或 GO 范围，应先说明并同步本文件，避免下一会话自行猜测。
 
 ## 11. 专题完成标准
 
@@ -324,4 +324,30 @@ B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在�
 - GO和XFAB范围保持批准边界；原Package/游戏路径未迁移。必要Audio间接影响通过代表性非干扰验证。
 - API/测试/文档/程序集与meta对应真实最终状态，已发现但延期问题清楚保留；实际验证分别报告。Git操作继续单独授权。
 
-**设计目标与审阅补充已确认；本轮仅完成文档 Git 收口和实施分支准备，不进入功能代码实施。**
+**以上为设计阶段的确认记录；2.1-A 后续授权及实际实施状态见下节。**
+
+## 12. 2.1-A 实施与验证
+
+2026-10-09 用户明确授权仅实施 A。实际分支为 `fusion/2.1-pool`，开始时工作区干净；未执行 Commit、Push、Merge、分支切换或清理。实施期间用户另行修改的根 `AGENTS.md` 保留，不计入本批产品改动。
+
+- `Shared/Pool/ObjectPool.cs` 承接 YL 的委托/接口工厂、FIFO/LIFO、空闲容量、目标数预热及先摘缓存快照的机制；吸收 XF 可选加载/归还生命周期钩子的使用方式，冷/热统一执行。为池归属、转换态、失败隔离及永久清理新增实例内弱键状态，不复制 XF 时间表、TTL checker 或反射 reset。
+- `ConditionalWeakTable<T,Entry>` 仅记录状态，Entry 不持有键；空闲容器强持空闲对象，不强制保活失联借出对象。只接收本池 Leased 对象，foreign 抛异常；null、重复及转换期归还拒绝。原始旧别名、恶意跨池工厂同引用、并发和 Unity fake-null 不在保证范围。
+- Reset 清租用数据，Discard/满池/关闭池在 Reset 后永久丢弃；取得或 Reset 失败直接 Retired，不恢复成可重试对象。附加丢弃错误与原异常聚合。Clear/缩容先退休整个选定快照，逐项尝试永久清理；Dispose 先关闭，不强制清理借出对象，晚归还只清理不缓存。回调重入后复核容量和预热目标，不交付给已关闭池。
+- 迁入 IPool、IObjectFactory、Default/CustomObjectFactory、ListPool、DictionaryPool、SingletonSessionState，七个现有脚本均保留 `.meta`/GUID。PoolOptions 从旧 Pool 文件拆到公共层；旧 Pool 缓存行为未改变。仅 Runtime 和旧 EditMode 测试增 Foundation 引用；Foundation 不依赖 Runtime/Core，friend 仅 Runtime/Core，Core 未增加整体 Runtime 引用。新文件及目录 meta 由 Unity 生成。
+- 集合改用同一内核，保留 Allocate/void Recycle/扩展入口、LIFO、归还 Clear、List 最小容量保证、Dictionary 仅冷创建应用容量；默认空闲 20，可配置或 Clear。重复归还从抛错调整为幂等拒绝，不再接纳外部集合，避免 comparer 污染；capacity 热/冷均先校验。退出现有 StaticStackPool。TableIndex 仅适配构造前验证和新桶添加失败归还，不改索引算法。
+
+实际使用当前 Unity `2022.3.62f3c1` 编译并运行，最终 `scriptCompilationFailed=false`、`isCompiling=false`，Main 场景未脏、已退出 PlayMode。测试结果按实际执行项统计，不使用工具的全工程发现数：
+
+| 定向验证 | 实际结果 |
+|---|---|
+| ObjectPoolTests | EditMode 47/47，含弱引用 GC、预热 factory/reset 重入目标回归 |
+| CollectionPoolTests | EditMode 12/12，含集合、Table 与会话重置/旧 Singleton 状态 |
+| FoundationBoundaryTests / SingletonContractTests | EditMode 5/5、5/5，含公共类型唯一归属与窄 friend |
+| 原 PoolContractTests / CoreIdentityTests | EditMode 15/15、7/7，保留旧对象路径及 Core 无整体 Runtime 引用的断言 |
+| SingletonHostPlayModeTests | PlayMode 3/3，覆盖实际会话宿主与场景/释放生命周期 |
+
+最终定向 EditMode **91/91**、PlayMode **3/3**，无失败/跳过；只读审查发现的预热回调重入超目标问题已修复并通过用例。初次新增测试使用实际 NUnit 不支持的属性导致编译阻断，移除该属性后重新编译通过，未移除关键断言；旧 Pool 测试锁定的 null/重复/失败重试行为本批仍属于未迁移路径，不冒充新内核契约。
+
+Packages、ProjectSettings、原游戏业务/场景/资源无本批差异；未执行全量历史测试、Player、IL2CPP、性能测量或切换 Domain Reload 设置。会话重置已验证现存 reset 入口及实际 PlayMode 回归，不冒充关闭 Domain Reload 后的整体验收。既有 Package 恢复差异、原 Logger/MCP 边界和 XFAB 释放风险仍按长期蓝图保留。
+
+**A 达到技术完成标准，等待用户验收；不等于 2.1 专题完成。**旧 Pool/Simple/Safe、ClassObjectPool/Independent 与 Core ClassObjectPoolManager/IReuseable 暂时并存：B 迁 YL 领域消费者并退出 Pool/Simple 独立算法；C 迁 Core 参数与临时集合并退出 Core manager；D 核查引用/身份后删除剩余冗余 API。Module/Model 不恢复池化，LoadViewArgs、Action/Events/Binding/Audio/Resource 等整体迁移均未实施；A 完成后停止。

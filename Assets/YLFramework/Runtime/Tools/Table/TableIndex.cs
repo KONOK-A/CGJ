@@ -25,8 +25,7 @@ namespace YLFramework.Utilities.Table
     /// <typeparam name="TDataItem">数据项类型。</typeparam>
     public class TableIndex<TKeyType, TDataItem> : IDisposable
     {
-        private Dictionary<TKeyType, List<TDataItem>> _index =
-            DictionaryPool<TKeyType, List<TDataItem>>.Allocate();
+        private Dictionary<TKeyType, List<TDataItem>> _index;
 
         private readonly Func<TDataItem, TKeyType> _getKeyByDataItem;
 
@@ -41,6 +40,7 @@ namespace YLFramework.Utilities.Table
         {
             _getKeyByDataItem = keyGetterByDataItem ??
                                 throw new ArgumentNullException(nameof(keyGetterByDataItem));
+            _index = DictionaryPool<TKeyType, List<TDataItem>>.Allocate();
         }
 
         /// <summary>
@@ -82,8 +82,16 @@ namespace YLFramework.Utilities.Table
             }
 
             list = ListPool<TDataItem>.Allocate();
-            list.Add(dataItem);
-            _index.Add(key, list);
+            try
+            {
+                list.Add(dataItem);
+                _index.Add(key, list);
+            }
+            catch
+            {
+                list.RecycleToPool();
+                throw;
+            }
         }
 
         /// <summary>

@@ -4,30 +4,6 @@ using System.Collections.Generic;
 namespace YLFramework.Core.Pool
 {
     /// <summary>
-    /// 空闲对象的分配顺序。
-    /// </summary>
-    public enum PoolCacheOrder
-    {
-        /// <summary>先进先出：先回收的对象先被分配（默认）。</summary>
-        Fifo,
-
-        /// <summary>后进先出：最后回收的对象先被分配。</summary>
-        Lifo
-    }
-
-    /// <summary>
-    /// 预热方式。
-    /// </summary>
-    public enum PoolPrewarmMode
-    {
-        /// <summary>走正常回收流程（执行 PrepareRecycle / OnRecycle 等钩子）。</summary>
-        Recycle,
-
-        /// <summary>跳过回收钩子，直接把新对象放入缓存。</summary>
-        Raw
-    }
-
-    /// <summary>
     /// 对象池抽象基类：共享工厂、空闲缓存、容量和预热，子类只提供回收策略。
     /// </summary>
     /// <typeparam name="T">池化对象类型。</typeparam>
