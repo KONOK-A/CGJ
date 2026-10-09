@@ -46,6 +46,8 @@ namespace YLFramework.Core
         /// 存放所有的视图(key:type value:List<View>) 使用类型查询比较方便
         /// </summary>
         internal Dictionary<Type,List<View>> type_views = new Dictionary<Type, List<View>>();
+        internal Dictionary<int, View> ownedViews = new Dictionary<int, View>();
+        internal int viewTransactions;
         
         /// <summary>
         /// 存放 所有的业务逻辑
@@ -286,21 +288,19 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 清空指定类型的View(类型名需要与资源名称一致)
+        /// 清空本模块指定类型及派生类型的View。
         /// </summary>
-        /// <param name="clear_base_module">是否清空基础模块中的View</param>
-        public void ClearView<T>(bool clear_base_module = false) where T : View
+        public void ClearView<T>() where T : View
         {
-            ViewManager.ClearView<T>(this,clear_base_module);
+            ViewManager.ClearView<T>(this);
         }
 
         /// <summary>
         /// 清空指定名称的View
         /// </summary>
-        /// <param name="clear_base_module">是否清空基础模块中的View</param>
-        public void ClearView(string asset_name, bool clear_base_module = false)
+        public void ClearView(string asset_name)
         {
-            ViewManager.ClearView(this, asset_name, clear_base_module);
+            ViewManager.ClearView(this, asset_name);
         }
 
         #endregion
@@ -714,7 +714,7 @@ namespace YLFramework.Core
         #region 查询View
 
         /// <summary>
-        /// 查询View或Panel,从当前模块和基础模块中查询
+        /// 仅查询本模块View或Panel；跨模块访问须显式调用其owner。
         /// </summary>
         /// <param name="assetName">资源名</param>
         /// <param name="id">View ID</param>
@@ -725,7 +725,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 仅查询本模块View或Panel；结果类型不匹配时抛出异常。
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
         /// <param name="assetName">资源名称</param>
@@ -737,19 +737,18 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 按实例ID查询本模块View或Panel，不要求脚本名与资源名一致。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
         /// <returns></returns>
         public T GetView<T>(int id) where T : View
         {
-            return ViewManager.GetView<T>(this, typeof(T).Name, id);
+            return ViewManager.GetView<T>(this, id);
         }
 
         /// <summary>
-        /// 查询View或Panel,从当前模块和基础模块中查询
+        /// 按资源名查询本模块唯一View或Panel；多个实例时须指定ID。
         /// </summary>
         /// <param name="assetName">资源名</param> 
         /// <returns></returns>
@@ -759,7 +758,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 按资源名查询本模块唯一View或Panel；结果类型不匹配时抛出异常。
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
         /// <param name="assetName">资源名称</param> 
@@ -770,8 +769,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 按实际类型查询本模块唯一View或Panel；多个实例时须指定ID。
         /// </summary>
         /// <typeparam name="T"></typeparam> 
         /// <returns></returns>
@@ -781,7 +779,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel,从当前模块和基础模块中查询 
+        /// 查询本模块某个资源名的所有View或Panel，返回独立结果集合。
         /// </summary>
         /// <param name="assetName">预制体资源名称</param>
         /// <returns></returns>
@@ -791,7 +789,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 查询本模块某个资源名的所有可赋给T的View或Panel。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="assetName"></param>
@@ -802,8 +800,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 查询本模块指定类型及派生类型的所有View或Panel。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>

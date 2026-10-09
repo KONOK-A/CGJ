@@ -204,6 +204,8 @@ namespace YLFramework.Core
 
         private static void ValidateObjectTransactions(Module module)
         {
+            if (module.viewTransactions != 0)
+                throw new InvalidOperationException("Cannot start or close a Module during View initialization or exit.");
             // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
             if (module.creatingModels.Count != 0 || module.creatingControllers.Count != 0)
                 throw new InvalidOperationException("Cannot start or close a Module during object construction.");
@@ -227,12 +229,8 @@ namespace YLFramework.Core
             ValidateClose(module);
             module.State = ModuleState.Closing;
             var errors = new List<Exception>();
-            // 钩子可能提前移除View索引，保留进入关闭时的对象用于最终owner收尾。
-            var views = new HashSet<View>();
-            foreach (var bucket in module.views.Values)
-                foreach (var view in bucket.Values) views.Add(view);
-            foreach (var bucket in module.type_views.Values)
-                foreach (var view in bucket) views.Add(view);
+            // 保存会话身份，钩子内关闭并复用的实例不能被旧快照再次退出。
+            var views = ViewManager.Snapshot(module);
             try { module.Exit(); }
             catch (Exception error) { errors.Add(error); }
 
@@ -242,10 +240,9 @@ namespace YLFramework.Core
                 catch (Exception error) { errors.Add(error); }
             }
 
-            foreach (var view in views)
+            foreach (var session in views)
             {
-                if (!view || !ReferenceEquals(view.Module, module) || !view.loaded) continue;
-                try { view.Close(); }
+                try { ViewManager.RemoveView(module, session.Key, session.Value, !session.Key); }
                 catch (Exception error) { errors.Add(error); }
             }
 
@@ -255,13 +252,6 @@ namespace YLFramework.Core
                 catch (Exception error) { errors.Add(error); }
             }
 
-            // 不解绑在业务钩子中已被其他模块重新加载的View；资源异常收尾留给1.3。
-            foreach (var view in views)
-                if (view && ReferenceEquals(view.Module, module))
-                {
-                    view.loaded = false;
-                    view.Module = null;
-                }
             Instance.modules.Remove(module.ModuleName);
             Instance.baseModules.Remove(module.ModuleName);
             Instance.registrationOrder.RemoveAll(item => ReferenceEquals(item, module));
@@ -271,8 +261,9 @@ namespace YLFramework.Core
             module.models.Clear();
             module.views.Clear();
             module.type_views.Clear();
+            module.ownedViews.Clear();
             module.State = ModuleState.Closed;
-            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors);
+            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors).Flatten();
         }
 
         /// <summary>
@@ -310,6 +301,7 @@ namespace YLFramework.Core
 
         private static bool HasRegisteredObjects(Module module)
         {
+            if (module.ownedViews.Count != 0) return true;
             if (module.controllers.Count != 0) return true;
             foreach (var bucket in module.models.Values)
                 if (bucket.Count != 0) return true;

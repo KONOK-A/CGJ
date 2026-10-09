@@ -8,19 +8,37 @@ namespace YLFramework.Core.Tests
         public int LoadedCount { get; private set; }
         public int ArgsCount { get; private set; }
         public int RemovedCount { get; private set; }
+        public int UnboundCount { get; private set; }
+        public int ClosedCount { get; private set; }
         public int EnabledCount { get; private set; }
         public int DisabledCount { get; private set; }
         public int EventCount { get; private set; }
         public int Token { get; private set; }
         public object Parameter { get; private set; }
-        public Model BoundModel;
-        public System.Action AfterClose;
-        public override Model Model => BoundModel;
-
-        public override void Close()
+        public Model BoundModel
         {
-            base.Close();
+            get => Model;
+            set
+            {
+                if (value == null) UnbindModel();
+                else BindModel(value);
+            }
+        }
+        public System.Action RemoveAction;
+        public System.Action<Model> UnboundAction;
+        public System.Action LoadedAction;
+        public System.Action AfterClose;
+
+        protected override void OnClosed()
+        {
+            ClosedCount++;
             AfterClose?.Invoke();
+        }
+
+        protected override void OnModelUnbound(Model previousModel)
+        {
+            UnboundCount++;
+            UnboundAction?.Invoke(previousModel);
         }
 
         private void Awake() => RegisterEvent(ProbeEvent, (XFEvent)(() => EventCount++));
@@ -41,6 +59,7 @@ namespace YLFramework.Core.Tests
         {
             LoadedCount++;
             Parameter = param.Length > 0 ? param[0] : null;
+            LoadedAction?.Invoke();
         }
 
         public override void OnLoaded(LoadViewArgs args)
@@ -49,6 +68,10 @@ namespace YLFramework.Core.Tests
             Token = args.GetInt("token");
         }
 
-        public override void OnRemove() => RemovedCount++;
+        public override void OnRemove()
+        {
+            RemovedCount++;
+            RemoveAction?.Invoke();
+        }
     }
 }

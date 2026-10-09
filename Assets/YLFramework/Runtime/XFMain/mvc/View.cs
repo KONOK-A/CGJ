@@ -7,7 +7,6 @@ using YLFramework.Core.Extensions;
 using System;
 using System.Collections.Generic; 
 using UnityEngine;
-using GameObjectLoader = XFABManager.GameObjectLoader;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
 using YLFramework.Core.RoslynAnalyzers;
 
@@ -22,6 +21,18 @@ namespace YLFramework.Core
         internal bool loaded = false;
 
         private Module module;
+        internal object Session;
+        internal object LastSession;
+        internal int RegisteredId;
+        internal bool IsInitializing;
+        internal bool IsRemoving;
+        internal bool UsesBackend;
+        internal bool DiscardOnExit;
+        private Model boundModel;
+        private Module modelOwner;
+        private object modelRegistration;
+        internal bool IsUnbinding;
+        private bool eventsRegistered;
 
         #endregion
 
@@ -30,7 +41,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 唯一标识(只读)
         /// </summary>
-        public int Id => GetInstanceID();
+        public int Id => Session != null ? RegisteredId : GetInstanceID();
 
         /// <summary>
         /// 当前View所在的模块
@@ -39,9 +50,6 @@ namespace YLFramework.Core
         {
             get
             {
-                if (loaded && module == null)
-                    module = ModuleManager.GetCurrentModule();
-
                 return module;
             }
             internal set
@@ -57,10 +65,63 @@ namespace YLFramework.Core
         internal string AssetName { get; set; }
 
         /// <summary>
-        /// 当前View对应的数据；索引内View移除时，仅尝试移除所属Module拥有且精确匹配的Model。
-        /// 显式借用其他Module的Model不改变owner，也不会随当前View退出。
+        /// 当前有效的主要Model绑定；解绑或Model注册身份失效后为null，不取得Model所有权。
         /// </summary>
-        public virtual Model Model { get; }
+        public Model Model => boundModel != null &&
+            ReferenceEquals(boundModel.Module, modelOwner) &&
+            ReferenceEquals(boundModel.Registration, modelRegistration) &&
+            !boundModel.IsInitializing && !boundModel.IsExiting &&
+            ReferenceEquals(ModelManager.GetModel(modelOwner, boundModel.GetType(), boundModel.Id), boundModel)
+            ? boundModel : null;
+
+        /// <summary>当前表现会话已完成加载；退出期间为false。</summary>
+        public bool IsLoaded => loaded;
+
+        /// <summary>绑定已完成注册的Model，可以显式借用其他Module的数据，不自动注册或移除。</summary>
+        protected void BindModel(Model model)
+        {
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            if (Session == null || (!loaded && !IsInitializing) || IsRemoving || IsUnbinding)
+                throw new InvalidOperationException("Cannot bind a Model outside an active View session.");
+            if (model.Module == null || model.Registration == null || model.IsInitializing || model.IsExiting ||
+                !ReferenceEquals(ModelManager.GetModel(model.Module, model.GetType(), model.Id), model))
+                throw new InvalidOperationException("Model must have a completed registration.");
+            if (boundModel != null)
+            {
+                if (ReferenceEquals(Model, model)) return;
+                throw new InvalidOperationException("Unbind the previous Model before binding another registration.");
+            }
+            boundModel = model;
+            modelOwner = model.Module;
+            modelRegistration = model.Registration;
+        }
+
+        /// <summary>先结束框架绑定，再尝试业务解绑；不改变Model生命周期。</summary>
+        protected void UnbindModel()
+        {
+            if (IsUnbinding || boundModel == null) return;
+            var previous = boundModel;
+            var owner = Module;
+            boundModel = null;
+            modelOwner = null;
+            modelRegistration = null;
+            IsUnbinding = true;
+            if (owner != null) owner.viewTransactions++;
+            try { OnModelUnbound(previous); }
+            catch
+            {
+                DiscardOnExit = true;
+                throw;
+            }
+            finally
+            {
+                IsUnbinding = false;
+                if (owner != null) owner.viewTransactions--;
+            }
+        }
+
+        /// <summary>清理业务自己的Model监听；previousModel可能已退出。</summary>
+        protected virtual void OnModelUnbound(Model previousModel) { }
 
         #endregion
 
@@ -76,17 +137,17 @@ namespace YLFramework.Core
         [MustCallBase("在重写Start方法时,请通过 base.Start() 调用父类中的Start方法!")]
         protected virtual void Start()
         {
-            LoadOnStart();
+            // 场景和嵌套对象的显式挂载由1.3-C实现，不再猜测CurrentModule。
         }
 
         protected virtual void OnDestroy()
         {
             if (!ApplicationTool.isPlaying) return;
 
-            if (Module != null && loaded)
+            if (Module != null && Session != null)
             {
                 // 移除View
-                ViewManager.RemoveView(Module, this);
+                ViewManager.RemoveView(Module, this, Session, true);
             }
         }
 
@@ -108,25 +169,22 @@ namespace YLFramework.Core
         #region 方法
 
         /// <summary>
-        /// 关闭View(这里的关闭并不是销毁,而是放到缓存池中,所以不用担心销毁和创建的开销)
+        /// 结束当前表现会话，不移除Model；框架取得的健康实例归还缓存，其他实例仅隐藏。
         /// </summary>
-        public virtual void Close()
+        public void Close()
         {
-            if (this.IsDestroy()) return;
-            if (gameObject.IsDestroy()) return;
-            // 如果是false 说明已经关闭,直接return 就可以了
-            if (!loaded) return;
-            loaded = false;
-            if (Module != null)
-            {
-                // 移除View
-                ViewManager.RemoveView(Module, this);
-                //// 移除数据 
-                //ModelManager.RemoveModel(Module, model);
-            }
-
-            GameObjectLoader.UnLoad(gameObject);
+            if (Session == null || Module == null) return;
+            ViewManager.RemoveView(Module, this, Session);
         }
+
+        /// <summary>
+        /// 会话和实例收尾已提交后调用，可开启新会话；若移除广播已复用该组件，旧完成钩子不再派发。
+        /// </summary>
+        protected virtual void OnClosed() { }
+        internal void NotifyClosed() => OnClosed();
+        internal void DetachModel() => UnbindModel();
+        internal void StopEvents() => UnRegisterEvents();
+        internal void ResumeEvents() => RegisterEvents();
 
 
         /// <summary>
@@ -158,45 +216,6 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用该方法的重载函数代替!", true)]
         protected void RegisterEvent(int event_name_hash, Action<object[]> callback)
         {
-        }
-
-        private void LoadOnStart()
-        {
-            if (Module == null)
-            {
-                if (transform.parent != null)
-                {
-                    // 尝试去父节点中查找
-                    View view = transform.parent.GetComponentInParent<View>();
-                    if (view != null)
-                    {
-                        Module = view.Module;
-                    }
-                    else
-                    {
-                        Module = ModuleManager.GetCurrentModule();
-                    }
-                }
-                else
-                {
-                    Module = ModuleManager.GetCurrentModule();
-                }
-            }
-
-            if (loaded == false)
-            {
-                BeforeOnLoaded();
-                loaded = true;
-                OnLoaded();
-                LoadViewArgs loadViewArgs = LoadViewArgs.New();
-                OnLoaded(loadViewArgs);
-                LoadViewArgs.Recycle(loadViewArgs);
-            }
-        }
-
-        internal void Remove() {
-            onViewRemove?.Invoke();
-            OnRemove();
         }
 
         internal virtual void BeforeOnLoaded() { }
@@ -400,6 +419,8 @@ namespace YLFramework.Core
 
         private void RegisterEvents() 
         {
+            if (!loaded || IsRemoving || !isActiveAndEnabled || eventsRegistered) return;
+            eventsRegistered = true;
             foreach (var event_name_hash in _events.Keys)
             {
                 EventManager.AddEvent(event_name_hash, _events[event_name_hash]);
@@ -409,10 +430,15 @@ namespace YLFramework.Core
 
         private void UnRegisterEvents()
         {
-            foreach (var event_name_hash in _events.Keys)
+            if (!eventsRegistered) return;
+            eventsRegistered = false;
+            var errors = new List<Exception>();
+            foreach (var entry in _events)
             {
-                EventManager.RemoveEvent(event_name_hash, _events[event_name_hash]);
+                try { EventManager.RemoveEvent(entry.Key, entry.Value); }
+                catch (Exception error) { errors.Add(error); }
             }
+            ViewManager.ThrowCleanupErrors(errors);
         }
 
         #endregion

@@ -59,8 +59,6 @@ namespace YLFramework.Core
                     EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
 #endif
 
-                    EventManager.RemoveEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, OnRemoveView);
-                    EventManager.AddEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, OnRemoveView);
                     SceneManager.sceneLoaded -= OnSceneLoaded;
                     SceneManager.sceneLoaded += OnSceneLoaded;
 
@@ -200,7 +198,7 @@ namespace YLFramework.Core
         // 加载 Panel
         internal static Panel LoadPanel(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
         {
-            module.EnsureCanAddObjects();
+            ViewManager.EnsureOwner(module);
 
             Panel panel = null;
 
@@ -236,7 +234,7 @@ namespace YLFramework.Core
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module , string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
-            module.EnsureCanAddObjects();
+            ViewManager.EnsureOwner(module);
             LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
             CoroutineStarter.Start(loadPanel.LoadPanel(module,asset_name, type, parent, param));
             return loadPanel;
@@ -252,7 +250,7 @@ namespace YLFramework.Core
         // 加载 Panel
         internal static T LoadPanel<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)where T : Panel
         {
-            module.EnsureCanAddObjects();
+            ViewManager.EnsureOwner(module);
 
             T panel = null;
 
@@ -288,7 +286,7 @@ namespace YLFramework.Core
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
         {
-            module.EnsureCanAddObjects();
+            ViewManager.EnsureOwner(module);
             LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
             CoroutineStarter.Start(loadPanel.LoadPanel(module, asset_name, type, parent, loadViewArgs));
             return loadPanel;
@@ -458,12 +456,34 @@ namespace YLFramework.Core
             UpdatePanelQueue();
         }
 
-        internal static void OnRemoveView(View view) 
-        { 
-            Panel panel = view as Panel;
-            if (panel == null) return;
-            RemovePanelQueue(panel);
-            ReleaseOrder(panel);
+        internal static void ReleaseView(View view)
+        {
+            var manager = _instance;
+            var panel = view as Panel;
+            if (manager == null || ReferenceEquals(panel, null)) return;
+            // 必要登记先释放，不能依赖广播、开关或Visible业务回调成功。
+            manager.uiOrders.Remove(panel);
+            manager.dontDestroyUIOrders.Remove(panel);
+            manager.panelQueues.RemoveAll(item => ReferenceEquals(item, panel));
+            if (!ReferenceEquals(manager._currentPanel, panel)) return;
+            manager._currentPanel = null;
+            for (int i = manager.panelQueues.Count - 1; i >= 0; i--)
+            {
+                var previous = manager.panelQueues[i];
+                if (!previous || !previous.IsLoaded || previous.Module == null || previous.Module.State == ModuleState.Closing)
+                {
+                    manager.panelQueues.RemoveAt(i);
+                    continue;
+                }
+                manager._currentPanel = previous;
+                break;
+            }
+            var current = manager._currentPanel;
+            if (manager.multiPanelListener && current && current.Canvas && !current.Canvas.enabled)
+            {
+                current.Canvas.enabled = true;
+                current.Visible();
+            }
         }
 
         internal static Transform GetParent(Module module,Transform parent,UIType type)

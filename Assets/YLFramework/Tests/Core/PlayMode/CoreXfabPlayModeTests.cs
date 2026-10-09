@@ -715,9 +715,6 @@ namespace YLFramework.Core.Tests
                 ((IDictionary)Field(manager, "dontDestroyUIOrders")).Count != 0 || canvases.Count != 0 ||
                 ((IList)Field(manager, "panelQueues")).Count != 0) return;
             var type = typeof(YLFramework.Core.PanelManager);
-            YLFramework.Core.EventManager.RemoveEvent<YLFramework.Core.View>(YLFramework.Core.XFGameFrameworkEvents.ON_REMOVE_VIEW,
-                (YLFramework.Core.XFEvent<YLFramework.Core.View>)Delegate.CreateDelegate(
-                    typeof(YLFramework.Core.XFEvent<YLFramework.Core.View>), type.GetMethod("OnRemoveView", StaticPrivate)));
             SceneManager.sceneLoaded -= (UnityEngine.Events.UnityAction<Scene, LoadSceneMode>)Delegate.CreateDelegate(
                 typeof(UnityEngine.Events.UnityAction<Scene, LoadSceneMode>), type.GetMethod("OnSceneLoaded", StaticPrivate));
             // Instance never registers LateUpdate; this fixture never toggles MultiPanelListener.

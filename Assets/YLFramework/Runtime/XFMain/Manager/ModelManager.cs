@@ -53,6 +53,7 @@ namespace YLFramework.Core
             model.Id = id;
             models.Add(id, model);
             model.Module = module;
+            model.Registration = new object();
             model.IsInitializing = true;
             try
             {
@@ -96,6 +97,7 @@ namespace YLFramework.Core
                     if (models.Count == 0) module.models.Remove(type);
                 }
                 model.Module = null;
+                model.Registration = null;
                 model.IsExiting = false;
             }
         }
