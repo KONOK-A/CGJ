@@ -302,7 +302,7 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void AbstractActionDeinitFailureStillQueuesExactlyOnceAndCanBeReused()
+        public void AbstractActionDeinitFailureStillQueuesExactlyOnceButCannotBeReused()
         {
             var failure = new InvalidOperationException("hook failed");
             var action = Own(FailingAction.Allocate());
@@ -321,12 +321,14 @@ namespace YLFramework.Tests.Actions
 
             ActionQueue.Drain();
             var reused = Own(FailingAction.Allocate());
-            Assert.That(reused, Is.SameAs(action));
+            Assert.That(reused, Is.Not.SameAs(action));
             Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
             Assert.That(reused.Deinited, Is.False);
             Assert.That(reused.Failure, Is.Null);
             Assert.That(reused.Deinits, Is.Zero);
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.NotStart));
+            action.Deinit();
+            Assert.That(action.Deinits, Is.EqualTo(1), "失败的领域清理不得被延迟丢弃重放。");
         }
 
         [TestCase(0)]

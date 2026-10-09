@@ -15,7 +15,18 @@ namespace YLFramework.Actions
     internal class CoroutineAction : IAction
     {
         private static ActionPool<CoroutineAction> mPool =
-            new ActionPool<CoroutineAction>(() => new CoroutineAction(), null, 10);
+            new ActionPool<CoroutineAction>(() => new CoroutineAction(), null, 10, action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                try { action.Reset(); }
+                catch
+                {
+                    action.Deinited = true;
+                    action.mCoroutineGetter = null;
+                    throw;
+                }
+            });
 
         private Func<IEnumerator> mCoroutineGetter = null;
         private CompletionSlot mCompletion;
@@ -49,9 +60,6 @@ namespace YLFramework.Actions
         public static CoroutineAction Allocate(Func<IEnumerator> coroutineGetter)
         {
             var coroutineAction = mPool.Allocate();
-            coroutineAction.ActionID = ActionKit.ID_GENERATOR++;
-            coroutineAction.Deinited = false;
-            coroutineAction.Reset();
             coroutineAction.mCoroutineGetter = coroutineGetter;
             return coroutineAction;
         }
@@ -62,10 +70,17 @@ namespace YLFramework.Actions
             if (!Deinited)
             {
                 Deinited = true;
-                StopRunningCoroutine();
                 mCoroutineGetter = null;
-
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<CoroutineAction>(mPool, this));
+                var cleaned = false;
+                try
+                {
+                    StopRunningCoroutine();
+                    cleaned = true;
+                }
+                finally
+                {
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<CoroutineAction>(mPool, this, discard: !cleaned));
+                }
             }
         }
 

@@ -3,11 +3,54 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using YLFramework.Binding;
+using YLFramework.Core.Pool;
+using YLFramework.Events;
+using System.Reflection;
 
 namespace YLFramework.Tests
 {
     public class BindingContractTests
     {
+        private sealed class PooledValue { }
+
+        [Test]
+        public void PooledPropertyClearsValueComparerAndListenersButRetainsItsOwnedEvent()
+        {
+            var property = BindableProperty<PooledValue>.Allocate();
+            var pool = SafeObjectPool<BindableProperty<PooledValue>>.Instance;
+            var events = SafeObjectPool<EasyEvent<PooledValue>>.Instance;
+            var owned = (EasyEvent<PooledValue>)typeof(BindableProperty<PooledValue>)
+                .GetField("_onValueChanged", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(property);
+            try
+            {
+                var oldCalls = 0;
+                property.Register(_ => oldCalls++);
+                property.SetValueWithoutCallback(new PooledValue());
+                property.WithComparer((a, b) => true);
+                var eventCount = events.CurStoreCount;
+                BindableProperty<PooledValue>.Recycle(property);
+                Assert.That(oldCalls, Is.Zero);
+                Assert.That(property.Value, Is.Null);
+                Assert.That(owned.IsRecycled, Is.False);
+                Assert.That(owned.HasListener, Is.False);
+                Assert.That(events.CurStoreCount, Is.EqualTo(eventCount));
+                var next = BindableProperty<PooledValue>.Allocate();
+                Assert.That(next, Is.SameAs(property));
+                Assert.That(next.TrySetValue(new PooledValue()), Is.True);
+                Assert.That(oldCalls, Is.Zero);
+                var newCalls = 0;
+                next.Register(_ => newCalls++);
+                next.Value = new PooledValue();
+                Assert.That(newCalls, Is.EqualTo(1));
+                var separate = events.Allocate();
+                Assert.That(separate, Is.Not.SameAs(owned));
+                events.Recycle(separate);
+                BindableProperty<PooledValue>.Recycle(next);
+                Assert.Throws<InvalidOperationException>(() => BindableProperty<PooledValue>.Recycle(new BindableProperty<PooledValue>()));
+            }
+            finally { pool.Dispose(); events.Dispose(); }
+        }
+
         private sealed class FirstSetProperty : BindableProperty<string>
         {
             private bool _set;

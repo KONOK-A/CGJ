@@ -189,9 +189,19 @@ namespace YLFramework.Services.Resource
         /// <summary>从对象池分配并绑定一个新的 ResLoader。</summary>
         public static GameObjectLoader Allocate()
         {
-            var goLoader = SafeObjectPool<GameObjectLoader>.Instance.Allocate();
-            goLoader._resLoader = ResLoader.Allocate();
-            return goLoader;
+            var pool = SafeObjectPool<GameObjectLoader>.Instance;
+            var goLoader = pool.Allocate();
+            try
+            {
+                goLoader._resLoader = ResLoader.Allocate();
+                return goLoader;
+            }
+            catch (Exception error)
+            {
+                try { pool.Discard(goLoader); }
+                catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+                throw;
+            }
         }
         
         /// <summary>Dispose 等价于回收进对象池：先按回收流程释放内部 ResLoader，再执行基类释放。</summary>

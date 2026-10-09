@@ -21,9 +21,23 @@ namespace YLFramework.Actions
     /// </remarks>
     public class UniRxAction<T> : IAction, IActionExecutionVersion
     {
-        private static readonly ActionPool<UniRxAction<T>> mPool = new ActionPool<UniRxAction<T>>(() => new UniRxAction<T>(), null, 10);
+        private static readonly ActionPool<UniRxAction<T>> mPool = new ActionPool<UniRxAction<T>>(
+            () => new UniRxAction<T>(), null, 10, action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                action.mCleanupFailed = false;
+                try { action.Reset(); }
+                catch
+                {
+                    action.Deinited = true;
+                    action.mObservableGetter = null;
+                    throw;
+                }
+            });
         private Func<IObservable<T>> mObservableGetter;
         private Subscription mSubscription;
+        private bool mCleanupFailed;
         // 每次 Reset 递增；Execute 的重入保护用它识别"同一次推进期间对象是否已被重置或复用"。
         private ulong mExecutionVersion;
         ulong IActionExecutionVersion.ExecutionVersion => mExecutionVersion;
@@ -38,9 +52,6 @@ namespace YLFramework.Actions
         {
             if (observableGetter == null) throw new ArgumentNullException(nameof(observableGetter));
             var action = mPool.Allocate();
-            action.ActionID = ActionKit.ID_GENERATOR++;
-            action.Deinited = false;
-            action.Reset();
             action.mObservableGetter = observableGetter;
             return action;
         }
@@ -63,21 +74,32 @@ namespace YLFramework.Actions
             ReleaseSubscription();
         }
 
-        /// <summary>释放订阅并排队回收动作，不触发正常完成。</summary>
+        /// <summary>释放订阅并排队回收动作，不触发正常完成；订阅释放失败时延迟丢弃，不重试释放。</summary>
         public void Deinit()
         {
             if (Deinited) return;
             Deinited = true;
             mObservableGetter = null;
             try { ReleaseSubscription(); }
-            finally { ActionQueue.AddCallback(new ActionQueueRecycleCallback<UniRxAction<T>>(mPool, this)); }
+            finally
+            {
+                // Subscribe 返回前可能已取消；晚到句柄的释放结果要等当前栈退出后再判断。
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<UniRxAction<T>>(mPool, this,
+                    discardWhen: action => action.mCleanupFailed));
+            }
         }
 
         private void ReleaseSubscription()
         {
             var subscription = mSubscription;
             mSubscription = null;
-            subscription?.Close();
+            try { subscription?.Close(); }
+            catch
+            {
+                // Finish/Reset 已摘掉订阅槽，但释放失败不能在随后 Deinit 时被误判为干净。
+                if (subscription != null && ActionID == subscription.ActionId) mCleanupFailed = true;
+                throw;
+            }
         }
 
         /// <summary>调用事件源工厂并订阅，通知可在 Subscribe 返回前同步到达。</summary>
@@ -90,7 +112,13 @@ namespace YLFramework.Actions
                 var observable = mObservableGetter();
                 if (!IsCurrent(subscription)) return;
                 if (observable == null) throw new InvalidOperationException("The observable factory returned null.");
-                subscription.Attach(observable.Subscribe(subscription));
+                var disposable = observable.Subscribe(subscription);
+                try { subscription.Attach(disposable); }
+                catch
+                {
+                    if (disposable != null && ActionID == subscription.ActionId) mCleanupFailed = true;
+                    throw;
+                }
                 subscription.Deliver();
             }
             catch (Exception original)

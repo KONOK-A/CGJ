@@ -16,22 +16,34 @@ namespace YLFramework.Actions
     }
 
     // 延迟回收项：持有池与动作引用；Call 后立即清空引用，避免队列在清空之前长期持有对象。
-    internal struct ActionQueueRecycleCallback<T> : IActionQueueCallback
+    internal struct ActionQueueRecycleCallback<T> : IActionQueueCallback where T : class
     {
         public ActionPool<T> Pool;
         public T Action;
+        private readonly bool mDiscard;
+        private readonly System.Func<T, bool> mDiscardWhen;
 
-        public ActionQueueRecycleCallback(ActionPool<T> pool, T action)
+        public ActionQueueRecycleCallback(ActionPool<T> pool, T action, bool discard = false,
+            System.Func<T, bool> discardWhen = null)
         {
             Pool = pool;
             Action = action;
+            mDiscard = discard;
+            mDiscardWhen = discardWhen;
         }
 
         public void Call()
         {
-            Pool.Recycle(Action);
-            Pool = null;
-            Action = default;
+            try
+            {
+                if (mDiscard || (mDiscardWhen != null && mDiscardWhen(Action))) Pool.Discard(Action);
+                else Pool.Recycle(Action);
+            }
+            finally
+            {
+                Pool = null;
+                Action = null;
+            }
         }
     }
 

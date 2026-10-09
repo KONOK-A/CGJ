@@ -20,7 +20,19 @@ namespace YLFramework.Actions
         private ISequence mSequence;
 
         private static ActionPool<ConditionSequence> mSimpleObjectPool =
-            new ActionPool<ConditionSequence>(() => new ConditionSequence(), null, 10);
+            new ActionPool<ConditionSequence>(() => new ConditionSequence(), null, 10, action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                try { action.Reset(); }
+                catch
+                {
+                    action.Deinited = true;
+                    action.mCondition = null;
+                    action.mSequenceSetting = null;
+                    throw;
+                }
+            });
 
         private ConditionSequence()
         {
@@ -35,9 +47,6 @@ namespace YLFramework.Actions
         public static ConditionSequence Allocate(Func<bool> condition, Action<ISequence> sequenceSetting)
         {
             var whenAction = mSimpleObjectPool.Allocate();
-            whenAction.ActionID = ActionKit.ID_GENERATOR++;
-            whenAction.Deinited = false;
-            whenAction.Reset();
             whenAction.mCondition = condition;
             whenAction.mSequenceSetting = sequenceSetting;
             return whenAction;

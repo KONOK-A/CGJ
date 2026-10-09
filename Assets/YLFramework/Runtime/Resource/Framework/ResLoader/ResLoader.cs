@@ -14,9 +14,9 @@ namespace YLFramework.Services.Resource
     /// 1. Loader 持有 <c>_recordedRes</c> 中每个资源的一次引用（同一资源重复加载只追加监听，不重复计数）；
     ///    未 Ready 的资源同时进入预加载队列并计入加载计数。
     /// 2. <see cref="ReleaseRes(string)"/> / <see cref="ReleaseAllRes"/> 释放 Loader 的持有，重复释放安全（未持有则忽略）。
-    /// 3. <see cref="RecycleToCache"/> 先销毁 <see cref="AddObjectToDestroyWhenRecycle"/> 登记的对象，再回收到对象池；
-    ///    回池时 <see cref="OnRecycle"/> 会调用 <see cref="ReleaseAllRes"/> 释放全部引用并清空内部状态，
-    ///    因此 Loader 从池中复用时不会保留上一轮生命周期的资源引用。
+    /// 3. <see cref="RecycleToCache"/> 通过池身份校验后，由 <see cref="OnRecycle"/> 先销毁
+    ///    <see cref="AddObjectToDestroyWhenRecycle"/> 登记的对象，再调用 <see cref="ReleaseAllRes"/>；
+    ///    成功清理后才可复用，失败对象由池隔离，不自动重试释放。
     /// </para>
     /// </summary>
     public class ResLoader : DisposableObject,IResLoader,IPoolType,IOfPool
@@ -75,28 +75,11 @@ namespace YLFramework.Services.Resource
         }
 
         /// <summary>
-        /// 回收加载器：先销毁登记的实例对象（每个只销毁一次），再回收到对象池。
-        /// 回池过程中 <see cref="OnRecycle"/> 会释放全部资源引用；销毁列表会先与本对象脱钩，
-        /// 因此 Destroy 触发的 OnDestroy 回调即使重入本方法也不会破坏遍历或重复销毁。
+        /// 回收本池借出的加载器：身份校验后进入回收转换态，再销毁登记对象并释放资源引用。
+        /// 重复或转换期回收不会再次清理；不属于当前池的对象被拒绝且不产生清理副作用。
         /// </summary>
         public void RecycleToCache()
         {
-            //先把列表与本对象脱钩：Destroy 期间的重入（例如 OnDestroy 回调再次 Recycle）不会二次遍历。
-            var objectsToUnload = _objectsPreToUnload;
-            _objectsPreToUnload = null;
-            if (objectsToUnload != null)
-            {
-                foreach (var obj in objectsToUnload)
-                {
-                    //Unity 对象可能在登记后被外部销毁，这里用 Unity 的 null 语义过滤
-                    if (obj != null)
-                    {
-                        ResUnloadHelper.DestroyObject(obj);
-                    }
-                }
-                objectsToUnload.Clear();
-            }
-
             SafeObjectPool<ResLoader>.Instance.Recycle(this);
         }
 
@@ -456,7 +439,7 @@ namespace YLFramework.Services.Resource
         /// <summary>
         /// 登记一个随加载器回收而销毁的实例对象（通常是 Instantiate 出来的 GameObject）。
         /// null 会被忽略，同一对象重复登记只销毁一次；对象被外部提前销毁不影响回收。
-        /// 注意：<see cref="ReleaseAllRes"/> 不会销毁该列表，只有 <see cref="RecycleToCache"/> 会。
+        /// 注意：<see cref="ReleaseAllRes"/> 不会销毁该列表，由池回收清理 <see cref="OnRecycle"/> 处理。
         /// </summary>
         public void AddObjectToDestroyWhenRecycle(Object obj)
         {
@@ -662,10 +645,26 @@ namespace YLFramework.Services.Resource
         #endregion
 
         /// <summary>
-        /// 对象池回收回调：释放全部资源引用并清空内部状态，保证复用时无上一轮残留。
+        /// 对象池回收回调：先销毁登记的实例对象，再释放全部资源引用并清空内部状态。
         /// </summary>
         public void OnRecycle()
         {
+            // 清理只在池的 Returning 门禁内执行；先摘列表，避免清理回调重复遍历。
+            var objectsToUnload = _objectsPreToUnload;
+            _objectsPreToUnload = null;
+            if (objectsToUnload != null)
+            {
+                foreach (var obj in objectsToUnload)
+                {
+                    //Unity 对象可能在登记后被外部销毁，这里用 Unity 的 null 语义过滤
+                    if (obj != null)
+                    {
+                        ResUnloadHelper.DestroyObject(obj);
+                    }
+                }
+                objectsToUnload.Clear();
+            }
+
             ReleaseAllRes();
         }
 

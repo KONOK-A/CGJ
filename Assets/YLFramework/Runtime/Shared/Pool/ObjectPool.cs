@@ -191,7 +191,10 @@ namespace YLFramework.Core.Pool
         /// 最多创建目标缺口次数，受正容量裁剪；null 不缓存、不无限重试。
         /// Raw 不调用取得/Reset，但仍登记身份；失败前已缓存的对象保留。
         /// </summary>
-        public int Prewarm(int count, PoolPrewarmMode mode)
+        public int Prewarm(int count, PoolPrewarmMode mode) => Prewarm(count, mode, null);
+
+        // 领域适配只标记 Raw 空闲状态，不暴露额外公共预热模式或重复缓存机制。
+        internal int Prewarm(int count, PoolPrewarmMode mode, Action<T> prepareRaw)
         {
             ThrowIfDisposed();
             if (mode != PoolPrewarmMode.Recycle && mode != PoolPrewarmMode.Raw)
@@ -212,27 +215,40 @@ namespace YLFramework.Core.Pool
                     RetireFailed(item, entry, error);
                     throw error;
                 }
-                entry.State = State.Leased;
                 if (mode == PoolPrewarmMode.Recycle)
                 {
+                    entry.State = State.Leased;
                     if (Return(item, true, count)) cached++;
-                }
-                else if (CurStoreCount < count && (_maxPoolSize <= 0 || CurStoreCount < _maxPoolSize))
-                {
-                    Cache(item, entry);
-                    cached++;
                 }
                 else
                 {
-                    entry.State = State.Retired;
-                    _onDiscard?.Invoke(item);
+                    try
+                    {
+                        prepareRaw?.Invoke(item);
+                        ThrowIfDisposed();
+                    }
+                    catch (Exception error)
+                    {
+                        RetireFailed(item, entry, error);
+                        throw;
+                    }
+                    if (CurStoreCount < count && (_maxPoolSize <= 0 || CurStoreCount < _maxPoolSize))
+                    {
+                        Cache(item, entry);
+                        cached++;
+                    }
+                    else
+                    {
+                        entry.State = State.Retired;
+                        _onDiscard?.Invoke(item);
+                    }
                 }
                 ThrowIfDisposed();
             }
             return cached;
         }
 
-        private void RetireCached(int count)
+        private void RetireCached(int count, Action<T> itemClearCallback = null)
         {
             if (count == 0) return;
             var snapshot = new T[count];
@@ -248,12 +264,17 @@ namespace YLFramework.Core.Pool
             {
                 try { _onDiscard?.Invoke(item); }
                 catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                try { itemClearCallback?.Invoke(item); }
+                catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
             }
             if (errors != null) throw new AggregateException(errors);
         }
 
         /// <summary>摘除当前空闲快照再逐项永久清理，不再次 Reset；回调中新归还的缓存保留。</summary>
         public void Clear() => RetireCached(CurStoreCount);
+
+        /// <summary>清理空闲快照，并逐项执行附加回调；永久清理与附加回调均尽力完成后汇总异常。</summary>
+        public void Clear(Action<T> itemClearCallback) => RetireCached(CurStoreCount, itemClearCallback);
 
         /// <summary>
         /// 先关闭再清空闲缓存，重复关闭无操作；不强制清理借出对象。

@@ -11,7 +11,7 @@ namespace YLFramework.Services.Audio
 {
     internal sealed class AudioManager : MonoSingletonHost<AudioManager>
     {
-        private SimpleObjectPool<AudioVoice> mPool;
+        private ObjectPool<AudioVoice> mPool;
         private readonly HashSet<AudioVoice> mSounds = new HashSet<AudioVoice>();
         private readonly Dictionary<int, int> mClipCounts = new Dictionary<int, int>();
         private readonly List<int> mClipChecks = new List<int>();
@@ -42,8 +42,9 @@ namespace YLFramework.Services.Audio
         public override void OnSingletonInit()
         {
             mSoundSession = AudioKit.SoundSession;
-            mPool = new SimpleObjectPool<AudioVoice>(() => new AudioVoice(this, AudioVoice.Kind.Sound), null, 0, PoolCacheOrder.Lifo)
-                { MaxPoolSize = Math.Max(1, AudioKit.SoundCacheCapacity) };
+            mPool = new ObjectPool<AudioVoice>(() => new AudioVoice(this, AudioVoice.Kind.Sound),
+                reset: voice => voice.ResetPlayback(), onDiscard: voice => voice.DestroySource(),
+                maxPoolSize: Math.Max(1, AudioKit.SoundCacheCapacity), cacheOrder: PoolCacheOrder.Lifo);
             MusicPlayback = new AudioMusicPlayback(this); Voice = new AudioVoice(this, AudioVoice.Kind.Voice);
             var settings = AudioKit.Settings;
             mSubscriptions.Add(settings.IsMusicOn.Register(RefreshMusicEnabled));
@@ -196,14 +197,20 @@ namespace YLFramework.Services.Audio
         }
         private void ReturnIdle(AudioVoice voice)
         {
-            if (mDisposing || AudioKit.SoundCacheCapacity == 0 || !voice.Source || !mPool.Recycle(voice)) voice.DestroySource();
+            if (mDisposing || AudioKit.SoundCacheCapacity == 0 || !voice.Source) mPool.Discard(voice);
+            else
+            {
+                mPool.Recycle(voice);
+                // Source 的 OnDisable 可在 Reset 中改为禁缓存；提交后复核且不重复 Reset。
+                if (AudioKit.SoundCacheCapacity == 0) mPool.Clear();
+            }
         }
         internal void ResizeSoundCache(int capacity)
         {
             // A scene host may be adopted by Awake before its lazy playback initialization.
             if (!Available || mPool == null) return;
-            while (mPool.CurStoreCount > capacity) mPool.Allocate().DestroySource();
-            // The generic pool treats zero as unlimited; Audio enforces no-cache at ReturnIdle.
+            if (capacity == 0) mPool.Clear();
+            // 公共池的非正容量表示不限；Audio 的 0 由 Clear/Discard 明确禁缓存。
             mPool.MaxPoolSize = Math.Max(1, capacity);
         }
         internal int PrewarmSounds(int count)
@@ -359,7 +366,7 @@ namespace YLFramework.Services.Audio
             Cleanup(StopAllSound);
             if (MusicPlayback != null) Cleanup(MusicPlayback.DestroySources);
             if (Voice != null) Cleanup(Voice.DestroySource);
-            if (mPool != null) mPool.Clear(voice => Cleanup(voice.DestroySource));
+            if (mPool != null) Cleanup(mPool.Dispose);
             // A callback may release this host while Update is iterating its snapshot.
             if (failures != null) throw new AggregateException("AudioKit source cleanup failed.", failures);
         }

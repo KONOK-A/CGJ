@@ -1,17 +1,95 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using YLFramework.Core.Pool;
+using YLFramework.Core.Singleton;
 
 namespace YLFramework.Tests
 {
     public class PoolContractTests
     {
+        public sealed class SessionItem : IOfPool
+        {
+            public bool IsRecycled { get; set; }
+            public int Recycles;
+            public void OnAllocate() { }
+            public void OnRecycle() => Recycles++;
+        }
+
+        [Test]
+        public void SafeSessionClosesOriginalPoolEvenWhenSingletonPropertyRegistersFirst()
+        {
+            Assert.That(SingletonProperty<SafeObjectPool<SessionItem>>.HasInstance, Is.False);
+            var original = SafeObjectPool<SessionItem>.Instance;
+            var item = original.Allocate();
+            try
+            {
+                var stateType = typeof(ObjectPool<>).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
+                var resets = (List<Action>)stateType.GetField("SessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                // 按真实注册顺序只执行本测试类型的两项会话回调，不重置其他模块。
+                foreach (var reset in new List<Action>(resets))
+                {
+                    var type = reset.Method.DeclaringType;
+                    if (type == typeof(SingletonProperty<SafeObjectPool<SessionItem>>) || type == typeof(SafeObjectPool<SessionItem>))
+                        reset();
+                }
+                Assert.Throws<ObjectDisposedException>(() => original.Allocate());
+                Assert.That(original.Recycle(item), Is.False);
+                Assert.That(item.Recycles, Is.EqualTo(1));
+                Assert.That(SafeObjectPool<SessionItem>.Instance, Is.Not.SameAs(original));
+            }
+            finally { original.Dispose(); SafeObjectPool<SessionItem>.Instance.Dispose(); }
+        }
+
+        private enum FsmStateId { Active }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried(bool failExit)
+        {
+            var fsm = YLFramework.FSM.FSM<FsmStateId>.Allocate();
+            var pool = SafeObjectPool<YLFramework.FSM.FSM<FsmStateId>>.Instance;
+            var exits = 0;
+            var state = new YLFramework.FSM.CustomState()
+                .OnUpdate(() => Assert.Throws<InvalidOperationException>(fsm.RecycleToCache))
+                .OnExit(() =>
+                {
+                    exits++;
+                    if (failExit) throw new InvalidOperationException("exit");
+                });
+            try
+            {
+                fsm.AddState(FsmStateId.Active, state);
+                Assert.That(fsm.SetUp(FsmStateId.Active), Is.True);
+                fsm.Update();
+                Assert.That(fsm.IsRecycled, Is.False);
+                if (failExit)
+                {
+                    Assert.Throws<InvalidOperationException>(fsm.RecycleToCache);
+                    Assert.That(fsm.StateCount, Is.EqualTo(1), "隔离不等于已完成领域 Exit/DeInit。");
+                }
+                else
+                {
+                    fsm.RecycleToCache();
+                    Assert.That(fsm.CurrentState, Is.Null);
+                    Assert.That(fsm.StateCount, Is.Zero);
+                }
+                Assert.That(fsm.IsRecycled, Is.True);
+                fsm.RecycleToCache();
+                Assert.That(exits, Is.EqualTo(1));
+                var next = YLFramework.FSM.FSM<FsmStateId>.Allocate();
+                Assert.That(ReferenceEquals(next, fsm), Is.EqualTo(!failExit));
+                next.RecycleToCache();
+            }
+            finally { state.DeInit(); pool.Dispose(); }
+        }
+
         private sealed class TestPool : Pool<object>
         {
-            internal Func<object, bool, bool> Prepare;
+            internal Action<object> Prepare;
             internal TestPool(PoolCacheOrder order = PoolCacheOrder.Fifo) : base(order) { }
-            protected override bool PrepareRecycle(ref object item, bool willCache) =>
-                Prepare == null || Prepare(item, willCache);
+            protected override void Reset(object item) => Prepare?.Invoke(item);
         }
 
         public sealed class SafeItem : IOfPool
@@ -46,8 +124,8 @@ namespace YLFramework.Tests
             Assert.That(pool.CurStoreCount, Is.EqualTo(25));
             Assert.That(resets, Is.EqualTo(25));
             pool.Clear();
-            var first = new object();
-            var second = new object();
+            var first = pool.Allocate();
+            var second = pool.Allocate();
             pool.Recycle(first);
             pool.Recycle(second);
             Assert.That(pool.Allocate(), Is.SameAs(first));
@@ -58,7 +136,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
-        public void SimpleAllowsDuplicatesButDoesNotCacheFailedReset()
+        public void SimpleRejectsDuplicatesAndIsolatesFailedReset()
         {
             var fail = false;
             var pool = new SimpleObjectPool<object>(() => new object(), item =>
@@ -66,13 +144,15 @@ namespace YLFramework.Tests
                 if (fail) throw new InvalidOperationException();
             });
             var value = pool.Allocate();
-            pool.Recycle(value);
-            pool.Recycle(value);
-            Assert.That(pool.Allocate(), Is.SameAs(value));
+            Assert.That(pool.Recycle(value), Is.True);
+            Assert.That(pool.Recycle(value), Is.False);
             Assert.That(pool.Allocate(), Is.SameAs(value));
             fail = true;
             Assert.Throws<InvalidOperationException>(() => pool.Recycle(value));
+            Assert.That(pool.Recycle(value), Is.False);
             Assert.That(pool.CurStoreCount, Is.Zero);
+            Assert.That(pool.Allocate(), Is.Not.SameAs(value));
+            Assert.Throws<InvalidOperationException>(() => pool.Recycle(new object()));
         }
 
         [Test]
@@ -99,9 +179,10 @@ namespace YLFramework.Tests
         public void AllocationAndShrinkUseTheSelectedOrderWithoutCleaning(PoolCacheOrder order)
         {
             var hooks = 0;
-            var pool = new TestPool(order) { Prepare = (item, cache) => { hooks++; return true; } };
-            var first = new object();
-            var second = new object();
+            var pool = new TestPool(order) { Prepare = item => hooks++ };
+            pool.SetFactoryMethod(() => new object());
+            var first = pool.Allocate();
+            var second = pool.Allocate();
             pool.Recycle(first);
             pool.Recycle(second);
             pool.MaxPoolSize = 1;
@@ -110,27 +191,29 @@ namespace YLFramework.Tests
         }
 
         [Test]
-        public void RawPrewarmCachesNullWithoutResetAndRespectsTargetAndCapacity()
+        public void RawPrewarmSkipsNullWithoutResetAndRespectsTargetAndCapacity()
         {
             var calls = 0;
             var pool = new TestPool(PoolCacheOrder.Lifo) { MaxPoolSize = 2,
-                Prepare = (item, cache) => throw new InvalidOperationException() };
+                Prepare = item => throw new InvalidOperationException() };
             pool.SetFactoryMethod(() => { calls++; return null; });
             Assert.That(pool.Prewarm(-1, PoolPrewarmMode.Raw), Is.Zero);
             Assert.That(pool.Prewarm(int.MinValue, PoolPrewarmMode.Raw), Is.Zero);
-            Assert.That(pool.Prewarm(5, PoolPrewarmMode.Raw), Is.EqualTo(2));
-            Assert.That(pool.Prewarm(2, PoolPrewarmMode.Raw), Is.Zero);
+            Assert.That(pool.Prewarm(5, PoolPrewarmMode.Raw), Is.Zero);
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(pool.Allocate(), Is.Null);
-            Assert.That(calls, Is.EqualTo(2));
+            Assert.That(calls, Is.EqualTo(3));
+            pool.SetFactoryMethod(() => new object());
+            Assert.That(pool.Prewarm(5, PoolPrewarmMode.Raw), Is.EqualTo(2));
+            Assert.That(pool.Prewarm(2, PoolPrewarmMode.Raw), Is.Zero);
         }
 
         [Test]
-        public void RejectedPrewarmUsesFiniteFactoryCallsAndFactoryFailuresPropagate()
+        public void PrewarmUsesFiniteNullFactoryCallsAndFailuresPropagate()
         {
             var calls = 0;
-            var pool = new TestPool { Prepare = (item, cache) => false };
-            pool.SetFactoryMethod(() => { calls++; return new object(); });
+            var pool = new TestPool();
+            pool.SetFactoryMethod(() => { calls++; return null; });
             Assert.That(pool.Prewarm(3), Is.Zero);
             Assert.That(calls, Is.EqualTo(3));
             pool.SetFactoryMethod(() => throw new InvalidOperationException());
@@ -146,9 +229,10 @@ namespace YLFramework.Tests
         public void ClearSnapshotsBeforeCallbacksAndLeavesReentrantCacheIntact(PoolCacheOrder order)
         {
             var pool = new TestPool(order);
-            var first = new object();
-            var second = new object();
-            var replacement = new object();
+            pool.SetFactoryMethod(() => new object());
+            var first = pool.Allocate();
+            var second = pool.Allocate();
+            var replacement = pool.Allocate();
             pool.Recycle(first);
             pool.Recycle(second);
             var callbacks = 0;
@@ -168,14 +252,15 @@ namespace YLFramework.Tests
         public void CapacityDecisionPrecedesCleanupEvenWhenCleanupReenters()
         {
             var pool = new TestPool { MaxPoolSize = 1 };
-            pool.Recycle(new object());
-            pool.Prepare = (item, cache) =>
+            pool.SetFactoryMethod(() => new object());
+            var first = pool.Allocate();
+            var second = pool.Allocate();
+            pool.Recycle(first);
+            pool.Prepare = item =>
             {
-                Assert.That(cache, Is.False);
                 pool.Allocate();
-                return true;
             };
-            Assert.That(pool.Recycle(new object()), Is.False);
+            Assert.That(pool.Recycle(second), Is.False);
             Assert.That(pool.CurStoreCount, Is.Zero);
         }
 
@@ -183,14 +268,14 @@ namespace YLFramework.Tests
         public void SafeMarksBeforeHooksRejectsReentrancyAndCleansFullCacheOnlyOnce()
         {
             _safe.MaxPoolSize = 1;
-            var cached = new SafeItem();
+            var cached = _safe.Allocate();
+            var discarded = _safe.Allocate();
             cached.Recycled = () =>
             {
                 Assert.That(cached.IsRecycled, Is.True);
                 Assert.That(_safe.Recycle(cached), Is.False);
             };
             Assert.That(_safe.Recycle(cached), Is.True);
-            var discarded = new SafeItem();
             Assert.That(_safe.Recycle(discarded), Is.False);
             Assert.That(discarded.IsRecycled, Is.True);
             Assert.That(_safe.Recycle(discarded), Is.False);
@@ -202,13 +287,16 @@ namespace YLFramework.Tests
 
         [TestCase(false)]
         [TestCase(true)]
-        public void SafeRollsBackFailedHooksWithOrWithoutCapacity(bool full)
+        public void SafeIsolatesFailedHooksWithOrWithoutCapacity(bool full)
         {
             _safe.MaxPoolSize = 1;
-            if (full) _safe.Recycle(new SafeItem());
-            var item = new SafeItem { Recycled = () => throw new InvalidOperationException() };
+            var item = _safe.Allocate();
+            if (full) _safe.Recycle(_safe.Allocate());
+            item.Recycled = () => throw new InvalidOperationException();
             Assert.Throws<InvalidOperationException>(() => _safe.Recycle(item));
-            Assert.That(item.IsRecycled, Is.False);
+            Assert.That(item.IsRecycled, Is.True);
+            item.IsRecycled = false;
+            Assert.That(_safe.Recycle(item), Is.False);
             Assert.That(_safe.CurStoreCount, Is.EqualTo(full ? 1 : 0));
         }
 
@@ -240,6 +328,67 @@ namespace YLFramework.Tests
             _safe.Dispose();
             Assert.That(SafeObjectPool<SafeItem>.Instance, Is.Not.SameAs(_safe));
             Assert.That(SafeObjectPool<SafeItem>.Instance.CurStoreCount, Is.Zero);
+            var current = SafeObjectPool<SafeItem>.Instance;
+            _safe.Dispose();
+            Assert.That(SafeObjectPool<SafeItem>.Instance, Is.SameAs(current));
+            Assert.Throws<InvalidOperationException>(() => current.Recycle(borrowed));
+            Assert.That(borrowed.IsRecycled, Is.False);
+            Assert.That(_safe.Recycle(borrowed), Is.False);
+            Assert.That(borrowed.IsRecycled, Is.True);
+            Assert.That(borrowed.Hooks, Is.EqualTo(1));
+            Assert.Throws<ObjectDisposedException>(() => _safe.Allocate());
+            current.Dispose();
+        }
+
+        [Test]
+        public void SafeRawPrewarmMarksIdleWithoutLifecycleAndColdHotHooksRejectReturnDuringAllocation()
+        {
+            SafeItem created = null;
+            _safe.SetFactoryMethod(() => created = new SafeItem());
+            Assert.That(_safe.Prewarm(1, PoolPrewarmMode.Raw), Is.EqualTo(1));
+            Assert.That(created.IsRecycled, Is.True);
+            Assert.That(created.Hooks, Is.Zero);
+            created.Allocated = () =>
+            {
+                Assert.That(created.IsRecycled, Is.False);
+                Assert.That(_safe.Recycle(created), Is.False);
+            };
+            Assert.That(_safe.Allocate(), Is.SameAs(created));
+            _safe.Recycle(created);
+            Assert.That(_safe.Allocate(), Is.SameAs(created));
+            Assert.That(created.Hooks, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SafeFailedAllocationAndDisposeInsideHookNeverDeliverOrCacheTheObject()
+        {
+            var item = new SafeItem { Allocated = () => throw new InvalidOperationException("allocate") };
+            _safe.SetFactoryMethod(() => item);
+            Assert.Throws<InvalidOperationException>(() => _safe.Allocate());
+            Assert.That(item.IsRecycled, Is.True);
+            Assert.That(_safe.Recycle(item), Is.False);
+            Assert.That(_safe.CurStoreCount, Is.Zero);
+            item = new SafeItem { Allocated = () => _safe.Dispose() };
+            _safe.SetFactoryMethod(() => item);
+            Assert.Throws<ObjectDisposedException>(() => _safe.Allocate());
+            Assert.That(item.IsRecycled, Is.True);
+            Assert.That(_safe.Recycle(item), Is.False);
+        }
+
+        [Test]
+        public void ClearAttemptsEveryCallbackAndLeavesAllSnapshotObjectsRetired()
+        {
+            var pool = new SimpleObjectPool<object>(() => new object(), initialSize: 3);
+            var cleared = 0;
+            Assert.Throws<AggregateException>(() => pool.Clear(item =>
+            {
+                cleared++;
+                Assert.That(pool.Recycle(item), Is.False);
+                throw new InvalidOperationException();
+            }));
+            Assert.That(cleared, Is.EqualTo(3));
+            Assert.That(pool.CurStoreCount, Is.Zero);
+            pool.Dispose();
         }
     }
 }

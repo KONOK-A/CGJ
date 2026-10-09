@@ -243,14 +243,20 @@ namespace YLFramework.Services.Audio
         internal void Stop()
         {
             if (!Active) return;
-            Active = false; Generation++; Paused = false; mStarted = mEnabled = false;
+            Active = false; Generation++;
+            // Sound 先由 owner 摘除计数，再由池 reset 清租用数据；固定槽不进入 Sound 池。
+            if (IsSound) mOwner.Recycle(this);
+            else ResetPlayback();
+        }
+        internal void ResetPlayback()
+        {
+            Paused = false; mStarted = mEnabled = false;
             mOnStarted = mOnFinished = null; mClip = null; mTarget = null; mFollowing = false;
             mSpatial = false; mPosition = Vector3.zero;
             mOptions = default;
             ResetFade();
             ResetSource();
             if (Source) Source.gameObject.SetActive(false);
-            if (IsSound) mOwner.Recycle(this);
             ClipId = Priority = 0;
         }
         private void ResetSource()

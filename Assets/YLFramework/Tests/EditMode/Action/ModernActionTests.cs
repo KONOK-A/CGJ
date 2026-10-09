@@ -649,7 +649,12 @@ namespace YLFramework.Tests.Actions
             {
                 child = Own(inner);
                 inner.Append(leaf);
-                if (failDuringDeinit) inner.Append(new ThrowingDeinitAction { Failure = deinitFailure });
+                if (failDuringDeinit)
+                {
+                    var throwing = ThrowingDeinitAction.Allocate();
+                    throwing.Failure = deinitFailure;
+                    inner.Append(throwing);
+                }
                 throw settingFailure;
             }));
             var exception = Assert.Throws<InvalidOperationException>(() => branch.Execute(0));

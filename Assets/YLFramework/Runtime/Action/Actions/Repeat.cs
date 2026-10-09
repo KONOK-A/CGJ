@@ -29,7 +29,26 @@ namespace YLFramework.Actions
         private int mCurrentRepeatCount = 0;
 
         private static ActionPool<Repeat> mSimpleObjectPool =
-            new ActionPool<Repeat>(() => new Repeat(), null, 5);
+            new ActionPool<Repeat>(() => new Repeat(), null, 5, action =>
+            {
+                action.ActionID = ActionKit.ID_GENERATOR++;
+                action.Deinited = false;
+                try
+                {
+                    action.mSequence = Sequence.Allocate();
+                    action.Reset();
+                }
+                catch (Exception original)
+                {
+                    try { action.Deinit(); }
+                    catch (Exception cleanup)
+                    {
+                        original.Data["ActionKit.CleanupException"] = original.Data["ActionKit.CleanupException"] is Exception previous
+                            ? new AggregateException(previous, cleanup) : cleanup;
+                    }
+                    throw;
+                }
+            });
 
         private Repeat()
         {
@@ -43,10 +62,6 @@ namespace YLFramework.Actions
         public static Repeat Allocate(int repeatCount = -1)
         {
             var repeat = mSimpleObjectPool.Allocate();
-            repeat.ActionID = ActionKit.ID_GENERATOR++;
-            repeat.mSequence = Sequence.Allocate();
-            repeat.Deinited = false;
-            repeat.Reset();
             repeat.mRepeatCount = repeatCount;
             return repeat;
         }

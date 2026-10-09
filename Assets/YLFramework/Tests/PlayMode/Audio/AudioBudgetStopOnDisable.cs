@@ -7,10 +7,12 @@ namespace YLFramework.Tests.Audio
     {
         public AudioHandle Other;
         public int Calls;
+        public bool DisableCache;
 
         private void OnDisable()
         {
             Calls++;
+            if (DisableCache && Calls == 1) AudioKit.SoundCacheCapacity = 0;
             Other.Stop();
         }
     }

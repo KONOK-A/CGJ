@@ -270,7 +270,8 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 把实例归还对象池；归还时会清空监听、比较器并重置值，重复归还由池拒绝。
+        /// 把本池取得的实例归还当前类型池，清空监听、比较器并重置值。
+        /// 外部构造、派生实例及旧池借用不被新池接纳；持有旧池者可归还原池。
         /// </summary>
         public static void Recycle(BindableProperty<T> property)
         {
@@ -300,7 +301,7 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 池回收标记，由池维护；为 true 时重复回收会被拒绝。
+        /// 领域回收标记，由池维护；真实池身份不由此标记决定。
         /// </summary>
         public bool IsRecycled { get; set; }
 

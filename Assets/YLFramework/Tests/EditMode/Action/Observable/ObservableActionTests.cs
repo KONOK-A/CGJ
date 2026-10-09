@@ -369,6 +369,26 @@ namespace YLFramework.Tests.Actions
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
         }
 
+        [Test]
+        public void FailedLateHandleCleanupAfterCancellationDiscardsWithoutRetrying()
+        {
+            var source = Source();
+            var failure = new InvalidOperationException("late handle cleanup");
+            source.DisposeFailure = failure;
+            var action = Action(source);
+            source.DuringSubscribe = observer => action.Deinit();
+            Assert.That(Assert.Throws<InvalidOperationException>(action.OnStart), Is.SameAs(failure));
+            Assert.That(action.Deinited, Is.True);
+            Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
+            Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
+            ActionQueue.Drain();
+            var replacement = Action(Source());
+            Assert.That(replacement, Is.Not.SameAs(action));
+            action.Deinit();
+            Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
+            Assert.That(source.SourceDisposals, Is.Zero);
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void ResetDuringFactoryOrSubscribeRestartsThroughTheRealExecuteProtocol(bool resetInFactory)
@@ -623,7 +643,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(source.SourceDisposals, Is.Zero);
             ActionQueue.Drain();
             var reused = Action(Source());
-            Assert.That(reused, Is.SameAs(action));
+            Assert.That(reused, Is.Not.SameAs(action), "订阅释放失败的动作不得重新交付。");
             Assert.That(reused.ActionID, Is.Not.EqualTo(id));
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(reused.Deinited, Is.False);
@@ -648,7 +668,7 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void ExecutorPropagatesFinishDisposalFailureButStillRecyclesTheActionAndController()
+        public void ExecutorPropagatesFinishDisposalFailureAndDiscardsTheActionButRecyclesTheController()
         {
             var source = Source();
             var failure = new InvalidOperationException("executor finish disposal failure");
@@ -675,7 +695,7 @@ namespace YLFramework.Tests.Actions
                 Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
                 ActionQueue.Drain();
                 var reused = Action(Source());
-                Assert.That(reused, Is.SameAs(action));
+                Assert.That(reused, Is.Not.SameAs(action));
                 Assert.That(reused.ActionID, Is.Not.EqualTo(id));
                 Assert.That(reused.Deinited, Is.False);
                 Assert.That(source.SourceDisposals, Is.Zero);

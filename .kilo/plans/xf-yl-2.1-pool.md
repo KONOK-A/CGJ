@@ -1,8 +1,8 @@
 # XF × YL 阶段 2.1：Pool 深度融合研究与技术设计
 
-**状态：2.1 Pool 专项设计目标及审阅补充已确认；2.1-A 已实现并通过定向技术验证，待用户验收与 Git 收口。B/C/D 未开始，GO 可选 E 仍延期。**
+**状态：2.1-A 已验收并完成 Git Commit/Push；2.1-B 已实现并通过定向技术验证，待用户验收与 Git 收口。C/D 未开始，GO 可选 E 仍延期。**
 
-本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。设计阶段授权仅为文档 Git 收口与分支准备；随后用户明确授权 2.1-A 实施，实际结果见第 12 节，不扩展至 B/C/D。
+本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究阶段未修改产品、测试、资源、程序集、原 Package 或游戏，也未执行 Unity 或构建。设计阶段授权仅为文档 Git 收口与分支准备；A、B 随后分别取得明确实施授权，实际结果见第 12、13 节，不扩展至 C/D。
 
 ## 1. 基线、范围与结论
 
@@ -351,3 +351,46 @@ B/C 大小来自真实消费者闭包，不要求一次改全文件：允许在�
 Packages、ProjectSettings、原游戏业务/场景/资源无本批差异；未执行全量历史测试、Player、IL2CPP、性能测量或切换 Domain Reload 设置。会话重置已验证现存 reset 入口及实际 PlayMode 回归，不冒充关闭 Domain Reload 后的整体验收。既有 Package 恢复差异、原 Logger/MCP 边界和 XFAB 释放风险仍按长期蓝图保留。
 
 **A 达到技术完成标准，等待用户验收；不等于 2.1 专题完成。**旧 Pool/Simple/Safe、ClassObjectPool/Independent 与 Core ClassObjectPoolManager/IReuseable 暂时并存：B 迁 YL 领域消费者并退出 Pool/Simple 独立算法；C 迁 Core 参数与临时集合并退出 Core manager；D 核查引用/身份后删除剩余冗余 API。Module/Model 不恢复池化，LoadViewArgs、Action/Events/Binding/Audio/Resource 等整体迁移均未实施；A 完成后停止。
+
+## 13. 2.1-B 实施与验证
+
+2026-10-09 用户明确授权实施 B；A 基线为已提交并推送的 `a97cb2c`。本批在 `fusion/2.1-pool` 开始时工作区干净，未执行 Commit、Push、Merge、Reset、Clean 或分支切换。根 `AGENTS.md` 未修改。
+
+### 13.1 接入与契约
+
+- Safe 的冷/热取得、回收、Raw 标记、身份、转换态及失败隔离统一由 ObjectPool 承接；保留类型单例、工厂、容量、预热和 IOfPool 回调。回收前标记 true，失败保持退休，不允许改写 IsRecycled 重新接纳；OnAllocate 内归还当前对象被拒绝，关闭后的原池晚还只清理不缓存。静态新池及领域静态快捷入口拒绝旧池借用，原持有者须归还原池，不增加全局 owner 路由。
+- Safe 会话关闭使用封闭类型的弱引用记录原单例，不依赖 SingletonProperty 的注册/摘除顺序，也不注册每实例强闭包。独立审查发现 Events/Binding 先查 HasInstance 会打破原先的顺序假设，已用真实注册项顺序回归先复现再修复；旧实例 Dispose 不会关闭新单例。
+- 保留 `Pool<T>`、`SimpleObjectPool<T>` 的有价值公共入口，改为统一内核薄适配，无独立 Queue/Stack。FIFO/LIFO、容量、工厂替换、目标数预热、Clear(callback) 及默认值保留。Pool 新增引用类型约束；直接容器操作及 `PrepareRecycle(ref T,bool)` / `RecyclePrewarmed` 保护层改为 Create/OnAllocate/Reset/OnDiscard/PrepareRaw 钩子，这是明确的继承 API 变化，不维持旧不安全缓存算法。Simple 不再接纳外部 new、重复缓存或 Reset 失败重试。
+- 公共内核仅为适配保留 Clear 附加快照回调及内部 Raw 领域标记钩子；永久清理与 Clear 附加回调逐项尝试并汇总异常，不改变 A 的 public Raw 生命周期、容量或身份语义。不存在新线程池、TTL 或池宿主。
+- ActionPool 直接使用 ObjectPool，保留无限容量、LIFO、Raw 预热、执行租约/Generation、组合生命周期及 Drain 批次。Abstract/Coroutine 清理失败只安排延迟 Discard；UniRx 在 Finish/Reset/Deinit 及晚到句柄释放失败时记忆污染状态，Drain 才判定丢弃，不重放失败清理。自身已摘空引用的组合节点仍可在子清理失败后复用，不重写组合算法；有实际抛错点的取得初始化进入 Allocating 钩子。
+- EasyEvent、BindableProperty、FSM、Resource、GO Data 经 Safe 共用缓存。保留事件容量 50、0 参预热 10/泛型 1，属性容量 50/预热 1及值、Comparer、监听清理；属性 readonly 内部事件只清监听，不独立归还。普通实例事件、MappedProperty、TimeItem 不恢复池化。FSM 保留回调内归还门禁及状态对象所有权，Exit 失败隔离不等于完成 DeInit。
+- Resource 仅做直接接入修复：ResLoader 的实例销毁移入 Returning 门禁，foreign 拒绝前不产生清理副作用，保持销毁实例再 ReleaseAllRes。GameObjectLoader 和三类 AB 资源的直接初始化失败捕获原池 Discard，保留根因与追加错误；AssetRes 初始化查询的临时 Key 归还原池；ResourcesRes 路径切片前移至借用前。不改变真实资产释放、引用计数或 XFAB。
+- Audio 私有 Sound 池直接使用 ObjectPool；保留 LIFO、独立 Source 预热、0 禁缓存、Stop 的 Generation 失效和活动登记摘除。Reset 清回调/Clip/Target/播放状态，onDiscard 唯一负责永久 DestroySource，缩容/Clear/Shutdown 不再次 Reset 或根据 false 重复释放。Source OnDisable 在 Reset 内设容量 0 的回归已先复现再修复，归还提交后复核 no-cache 并清理。
+- UI Tips 私有池直接使用 ObjectPool；捕获原池与原根节点，位置校验先于借用，完成回调一次性归还，初始化失败 Discard，领域处理 fake-null 及 GameObject 销毁。未恢复被注释的显示流程，不宣称完整 Tips 显示闭环已验收。
+
+### 13.2 实际验证
+
+当前 Unity `2022.3.62f3c1` 实际编译完成，最终 `scriptCompilationFailed=false`、`isCompiling=false`、`isPlaying=false`，`Assets/Scenes/Main.unity` 未脏。统计采用实际执行通过数，不使用 MCP 返回的全工程发现数。
+
+| 定向验证 | 实际结果 |
+|---|---|
+| PoolContractTests | EditMode 21/21，含 Safe session 顺序、Raw 标记、旧池晚还、失败隔离及 FSM 两项 |
+| ActionInternalSupport / ObservableAction / ActionExecution / CompositeCancellation / ModernAction / ActionKitLifecycle | EditMode 8/8、59/59、25/25、31/31、51/51、13/13 |
+| EventsContract / BindingContract / ResourcePoolTests | EditMode 14/14、11/11、7/7 |
+| AudioCleanup / AudioSoundBudget / AudioSoundAdmission | 最终 EditMode 9/9、61/61、22/22 |
+| ObjectPool 的受影响 Raw/快照回归 | EditMode 4/4，未机械重跑未受影响的 A 套件 |
+| ActionKitLifecycle / ActionStart | PlayMode 13/13、17/17 |
+| AudioSoundBudgetPlayback / AudioSoundStarted | PlayMode 7/7、11/11，含 OnDisable 转换期容量 0 及帧后 Source 销毁 |
+| 原游戏 YLClickSound / YLAudioGameFlow | PlayMode 1/1、1/1，点击音效与菜单、设置、进入、退出、再入流程 |
+
+最终定向 EditMode **336/336**、PlayMode **50/50**，无失败或跳过。早段因工具类过滤未命中而扩大执行一次 Audio 命名空间，408/408 通过；与最终 92 项 Audio 定向回归有重叠，不重复累加。遗漏的旧 Action 失败复用断言及 external-new 夹具已按批准契约迁移，保留关键异常/队列/清理断言。独立只读复核已关闭 Safe session、Audio 转换期和上述旧测试迁移发现；无新重要缺陷。
+
+实际 diff 与新增 ResourcePoolTests/meta 已复查，空白检查通过。未修改 asmdef 或移动既有脚本，Foundation 仍无 Runtime/Core 引用，Core 未增加整体 Runtime 引用。Packages、ProjectSettings、原游戏业务/测试/场景/资源、XFMain 及 AGENTS 无本批差异。未执行 Player/IL2CPP、性能基准、全框架测试或切换 Domain Reload 配置；会话验证是注册项及正常 PlayMode 回归，不冒充关闭 Domain/Scene Reload 的全工程验收。
+
+### 13.3 边界与交付
+
+Pool/Simple、Safe、Action、Audio/UI 的重复普通缓存算法已退出；历史 Pool/Simple 薄入口保留到 D 评估收口。ClassObjectPool/Independent 等冗余历史实现留 D，Core manager、LoadViewArgs 和 Core 集合留 C；GO 自有缓存算法与独立正确性仍按可选 E 延期。
+
+旧事件 Token/Once 嵌套问题、Resource ReleaseAllRes 部分失败、FSM Exit 失败的剩余领域引用、Action 配置扩展回调抛错的旧漏归还、跨 Session 存活消费者的原池捕获及 UI 显示流程不在本批完整解决。失败隔离不会伪装为外部资源已全部释放；普通池仍不防旧原始别名、恶意工厂同引用、并发或 Unity fake-null。既有 Package、Logger/MCP、XFAB 物理卸载风险不扩展处理。
+
+**B 达到技术完成条件，具备进入 C 的技术前置条件；当前停止，等待用户验收与另行 Git 收口授权，不自动实施 C。**
