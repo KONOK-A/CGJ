@@ -18,6 +18,7 @@ namespace YLFramework.Core
         private long id = -1;
         internal bool IsInitializing;
         internal bool IsExiting;
+        [NonSerialized] internal object Registration;
 
         #region 属性
 

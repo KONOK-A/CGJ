@@ -6,8 +6,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using GameObjectLoader = XFABManager.GameObjectLoader;
-using ApplicationTool = YLFramework.Foundation.ApplicationTool;
+using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 
 namespace YLFramework.Core
@@ -15,31 +16,111 @@ namespace YLFramework.Core
 
     internal class ViewManager
     {
+        private static readonly HashSet<Module> sceneOwners = new HashSet<Module>();
+        private static readonly List<Module> pruneOwners = new List<Module>();
+
+        private static void TrackScene(Module module, View view)
+        {
+            view.SceneHandle = view.gameObject.scene.handle;
+            if (sceneOwners.Count == 0)
+            {
+                SceneManager.sceneUnloaded += OnSceneUnloaded;
+                UpdateManager.AddUpdateEvent(PruneDestroyedSessions);
+            }
+            sceneOwners.Add(module);
+        }
+
+        private static void PruneDestroyedSessions()
+        {
+            // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
+            pruneOwners.Clear();
+            pruneOwners.AddRange(sceneOwners);
+            foreach (var module in pruneOwners)
+            {
+                if (module.viewTransactions != 0) continue;
+                try { PruneDestroyed(module); }
+                catch (Exception error) { Debug.LogException(error); }
+            }
+            pruneOwners.Clear();
+        }
+
+        private static void OnSceneUnloaded(Scene scene)
+        {
+            var errors = new List<Exception>();
+            foreach (var module in new List<Module>(sceneOwners))
+                foreach (var entry in Snapshot(module))
+                {
+                    var view = entry.Key;
+                    // 迁移及DDOL不改变owner；死对象只能使用保存的会话及实例身份。
+                    if (view) view.SceneHandle = view.gameObject.scene.handle;
+                    else
+                    {
+                        try { RemoveView(module, view, entry.Value, true); }
+                        catch (Exception error) { errors.Add(error); }
+                    }
+                }
+            if (errors.Count != 0)
+                Debug.LogException(new AggregateException($"View cleanup after scene unload ({scene.handle}) failed.", errors).Flatten());
+        }
+
         #region 添加 
         internal static void AddView(Module module, View view)
         {
+            EnsureOwner(module);
+            if (!view) throw new ArgumentNullException(nameof(view));
+            if (view.IsRemoving || view.IsUnbinding) throw new InvalidOperationException("Cannot register a View during exit or unbinding.");
+            if (view.Module != null || view.Session != null)
+            {
+                if (!ReferenceEquals(view.Module, module))
+                    throw new InvalidOperationException("View is already owned by another Module.");
+                if (view.IsInitializing || view.IsRemoving)
+                    throw new InvalidOperationException("Cannot register a View during its lifecycle callback.");
+                if (HasRegistration(module, view, view.Session)) return;
+                throw new InvalidOperationException("View owner and registration do not match.");
+            }
+            int id = view.GetInstanceID();
+            if (module.ownedViews.ContainsKey(id) ||
+                (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var existing) && existing.ContainsKey(id)))
+                throw new InvalidOperationException($"View ID {id} is already registered.");
+            Type type = view.GetType();
+            if (module.type_views.TryGetValue(type, out var typed) && typed.Exists(item => ReferenceEquals(item, view)))
+                throw new InvalidOperationException("View type index already contains this instance.");
+            view.RegisteredId = id;
+            view.Session = new object();
+            view.LastSession = view.Session;
+            view.Module = module;
+            module.ownedViews.Add(id, view);
+            if (!string.IsNullOrEmpty(view.AssetName))
+            {
+                if (!module.views.TryGetValue(view.AssetName, out var named))
+                    module.views.Add(view.AssetName, named = new Dictionary<int, View>());
+                named.Add(id, view);
+            }
+            if (typed == null) module.type_views.Add(type, typed = new List<View>());
+            typed.Add(view);
+            TrackScene(module, view);
+        }
+
+        internal static void EnsureOwner(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
             module.EnsureCanAddObjects();
-            if (!module.views.ContainsKey(view.AssetName))
-                module.views.Add(view.AssetName, new Dictionary<int, View>());
+            if (!ReferenceEquals(ModuleManager.GetModule(module.ModuleName), module) ||
+                (module.State != ModuleState.Starting && module.State != ModuleState.Running))
+                throw new InvalidOperationException("View requires a registered Starting or Running Module.");
+        }
 
-            if (!module.views[view.AssetName].ContainsKey(view.Id))
-            {
-                view.Module = module;
-                module.views[view.AssetName].Add(view.Id, view);
-            }
-            else
-                Debug.LogWarningFormat("view name:{0} id:{1} 已经存在,请勿重复添加!", view.AssetName, view.Id);
-
-
-            // 同步 type 为 key
-            Type t = view.GetType();
-
-            if (!module.type_views.ContainsKey(t)) 
-            {
-                module.type_views.Add(t,new List<View>());
-            }
-
-            module.type_views[t].Add(view);
+        private static bool HasRegistration(Module module, View view, object session)
+        {
+            if (!(session != null && ReferenceEquals(view.Module, module) && ReferenceEquals(view.Session, session) &&
+                module.ownedViews.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view) &&
+                (string.IsNullOrEmpty(view.AssetName) || (module.views.TryGetValue(view.AssetName, out var named) &&
+                    named.TryGetValue(view.RegisteredId, out var byName) && ReferenceEquals(byName, view))) &&
+                module.type_views.TryGetValue(view.GetType(), out var typed))) return false;
+            int count = 0;
+            foreach (var item in typed)
+                if (ReferenceEquals(item, view)) count++;
+            return count == 1;
         }
 
         #endregion
@@ -48,149 +129,514 @@ namespace YLFramework.Core
 
         internal static void RemoveView(Module module, View view)
         {
-            // 如果不在运行中,则不需要移除
-            if (!ApplicationTool.isPlaying)
-                return;
+            if (ReferenceEquals(view, null)) return;
+            RemoveView(module, view, view.Session);
+        }
 
-            // 触发移除回调 
-            view.Remove();
+        internal static void RemoveView(Module module, View view, object session, bool destroyed = false)
+            => RemoveViewCore(module, view, session, destroyed, false, false);
 
-            // 清除引用(如果是直接拖到场景中的 没有保存引用 所以也不需要清空)
-            if (module == null || view == null || string.IsNullOrEmpty(view.AssetName)) return;
-            if (!module.views.ContainsKey(view.AssetName)) return;
-            if (module.views[view.AssetName] == null) return;
-            // 只是单纯的移除 
-            if (!module.views[view.AssetName].ContainsKey(view.Id)) return;
-             
-            // 移除数据 
-            if (view.Model != null)
-                ModelManager.RemoveModel(module, view.Model);
+        private static void RemoveViewCore(Module module, View view, object session, bool destroyed, bool preserveInstance, bool rollback)
+        {
+            if (module == null || ReferenceEquals(view, null) || session == null ||
+                !ReferenceEquals(view.Module, module) || !ReferenceEquals(view.Session, session) ||
+                !module.ownedViews.TryGetValue(view.RegisteredId, out var registered) || !ReferenceEquals(registered, view)) return;
+            if (view.IsRemoving) return;
+            if (view.IsInitializing || view.IsUnbinding || (view.IsAttaching && !rollback))
+                throw new InvalidOperationException("Cannot close a View during initialization, attachment or unbinding.");
+            bool notify = view.loaded;
+            view.IsRemoving = true;
+            view.loaded = false;
+            module.viewTransactions++;
+            var errors = new List<Exception>();
+            bool damaged = view.DiscardOnExit;
+            bool backend = view.UsesBackend;
+            bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
+            GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
+            if (backend && destroyed) damaged = true;
+            if (backend)
+                foreach (var child in Snapshot(module))
+                    if (!ReferenceEquals(child.Key, view) && ReferenceEquals(child.Key.BackendRoot, view) &&
+                        ReferenceEquals(child.Key.BackendRootSession, session))
+                    {
+                        try { RemoveViewCore(module, child.Key, child.Value, !child.Key, !child.Key.UsesBackend, rollback); }
+                        catch (Exception error) { errors.Add(error); }
+                    }
+            try { view.StopEvents(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            if (notify && view.onViewRemove != null)
+                foreach (Action observer in view.onViewRemove.GetInvocationList())
+                {
+                    try { observer(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            try { view.OnRemove(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            try { view.DetachModel(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            try { PanelManager.ReleaseView(view); }
+            catch (Exception error) { errors.Add(error); }
+            damaged |= view.DiscardOnExit;
+            if (damaged && !backend && !ReferenceEquals(view.BackendRoot, null) &&
+                ReferenceEquals(view.BackendRoot.Session, view.BackendRootSession))
+                view.BackendRoot.DiscardOnExit = true;
 
-            //view.Module = null;
-            module.views[view.AssetName].Remove(view.Id);
-
-            // 移除(type为key)
-            Type t = view.GetType(); 
-            if (module.type_views.ContainsKey(t))
+            // 撤销当前会话后仍保持Removing，直到实例处理结束，禁止OnDisable重入复活。
+            DetachIndexes(module, view, session);
+            try
             {
-                module.type_views[t].Remove(view);
+                if (instance && !preserveInstance)
+                {
+                    // 独立取得、挂在另一取得根下的实例仍独立归还，不能留在外层缓存子树中被再次纳管。
+                    if (nestedBackend) instance.transform.SetParent(null, true);
+                    if (backend && !damaged) GameObjectLoader.UnLoad(instance);
+                    else
+                    {
+                        instance.SetActive(false);
+                        if (backend && damaged) UnityEngine.Object.Destroy(instance);
+                    }
+                }
             }
-             
+            catch (Exception error)
+            {
+                errors.Add(error);
+                if (backend && instance)
+                {
+                    try { UnityEngine.Object.Destroy(instance); }
+                    catch (Exception discardError) { errors.Add(discardError); }
+                }
+            }
+            view.IsRemoving = false;
+            module.viewTransactions--;
+            if (notify)
+            {
+                try { EventManager.TriggerEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, view); }
+                catch (Exception error) { errors.Add(error); }
+                // 广播可以复用同一组件；不把旧完成钩子派发给已开启过的新会话。
+                if (ReferenceEquals(view.LastSession, session))
+                {
+                    try { view.NotifyClosed(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            }
+            ThrowCleanupErrors(errors);
+        }
 
-            EventManager.TriggerEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, view); 
+        private static void DetachIndexes(Module module, View view, object session)
+        {
+            if (!ReferenceEquals(view.Session, session) || !ReferenceEquals(view.Module, module)) return;
+            if (module.ownedViews.TryGetValue(view.RegisteredId, out var owned) && ReferenceEquals(owned, view))
+                module.ownedViews.Remove(view.RegisteredId);
+            if (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var named))
+            {
+                if (named.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view))
+                    named.Remove(view.RegisteredId);
+                if (named.Count == 0) module.views.Remove(view.AssetName);
+            }
+            Type type = view.GetType();
+            if (module.type_views.TryGetValue(type, out var typed))
+            {
+                typed.RemoveAll(item => ReferenceEquals(item, view));
+                if (typed.Count == 0) module.type_views.Remove(type);
+            }
+            view.onViewRemove = null;
+            view.AssetName = null;
+            view.UsesBackend = false;
+            view.BackendInstance = null;
+            view.BackendRoot = null;
+            view.BackendRootSession = null;
+            view.SceneHandle = 0;
+            view.DiscardOnExit = false;
+            view.Module = null;
+            view.Session = null;
+            if (module.ownedViews.Count == 0)
+            {
+                sceneOwners.Remove(module);
+                if (sceneOwners.Count == 0)
+                {
+                    SceneManager.sceneUnloaded -= OnSceneUnloaded;
+                    UpdateManager.RemoveUpdateEvent(PruneDestroyedSessions);
+                }
+            }
+        }
+
+        internal static void ThrowCleanupErrors(List<Exception> errors)
+        {
+            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            if (errors.Count > 1) throw new AggregateException("View cleanup failed.", errors).Flatten();
         }
 
         #endregion
 
         #region 加载
 
-        internal static GameObject LoadGameObject(Module module, string asset_name, Transform parent = null)
-        {
-            module.EnsureCanAddObjects();
-            string project_name = module.ProjectName;
-            GameObject obj = GameObjectLoader.Load(project_name, asset_name, parent);
-            if (obj != null)
-            {
-                obj.transform.localPosition = Vector3.zero;
-                return obj;
-            }
-            else
-            {
-                // 尝试从基础模块中加载
-                foreach (var item in ModuleManager.AllBaseModules.Values)
-                { 
-                    obj = GameObjectLoader.Load(item.ProjectName, asset_name, parent);
-                    if (obj != null)
-                    {
-                        obj.transform.localPosition = Vector3.zero;
-                        return obj;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        // 加载
         internal static View LoadView(Module module, string asset_name, Transform parent = null, params object[] param)
         {
-            GameObject obj = LoadGameObject(module, asset_name, parent);
-
-            if (obj == null) 
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            View view = obj.GetComponent<View>();
-              
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj); 
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-             
-            InitView(module,view,asset_name,null,param);
-
-            return view;
+            return LoadViewLegacy<View>(module, asset_name, parent, param);
         }
 
         internal static View LoadView(Module module, GameObject prefab, Transform parent = null, params object[] param)
         {
-            module.EnsureCanAddObjects();
-            GameObject obj = GameObjectLoader.Load(prefab, parent);
+            return LoadViewLegacy<View>(module, prefab, parent, param);
+        }
 
-            if (!obj) 
+        internal static T LoadViewLegacy<T>(Module module, string assetName, Transform parent, object[] param) where T : View
+            => LoadViewSync<T>(module, assetName, null, parent, null, param, true);
+
+        internal static T LoadViewLegacy<T>(Module module, GameObject prefab, Transform parent, object[] param) where T : View
+            => LoadViewSync<T>(module, null, prefab, parent, null, param, false);
+
+        private static T LoadViewSync<T>(Module module, string assetName, GameObject prefab, Transform parent,
+            LoadViewArgs args, object[] param, bool named, bool argsClaimed = false, UIType? panelType = null) where T : View
+        {
+            // 接管失败不进入finally，不能归还另一笔操作正在使用的参数。
+            if (args != null && !argsClaimed) args.Claim();
+            GameObject instance = null;
+            bool initializing = false;
+            bool transaction = false;
+            try
             {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", prefab.name)); 
-                Debug.LogException(e); 
-                return null; 
+                EnsureOwner(module);
+                if (!ReferenceEquals(parent, null) && !parent)
+                    throw new ArgumentException("View parent has been destroyed.", nameof(parent));
+                FindBackendRoot(module, parent);
+                if (named)
+                {
+                    if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
+                    Exception resourceError = null;
+                    foreach (var project in ModuleManager.ViewResourceProjects(module))
+                    {
+                        try { prefab = XFABManager.AssetBundleManager.LoadAsset<GameObject>(project, assetName); }
+                        catch (Exception error) { resourceError = error; }
+                        if (prefab) break;
+                    }
+                    if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
+                }
+                else
+                {
+                    if (!prefab) throw new ArgumentNullException(nameof(prefab));
+                    assetName = prefab.name;
+                }
+                ValidateView<T>(prefab);
+                // 后端可能先触发Awake/OnEnable；取得实例也属于同步事务，不能在此关闭owner。
+                module.viewTransactions++;
+                transaction = true;
+                instance = GameObjectLoader.Load(prefab, parent);
+                if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
+                var view = ValidateView<T>(instance);
+                EnsureOwner(module);
+                if (!ReferenceEquals(parent, null) && !parent)
+                    throw new ArgumentException("View parent was destroyed during acquisition.", nameof(parent));
+                instance.transform.localPosition = Vector3.zero;
+                initializing = true;
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, panelType: panelType);
+                return view;
             }
-
-            View view = obj.GetComponent<View>();
-
-            if (view == null)
+            catch (Exception error)
             {
-                GameObjectLoader.UnLoad(obj); 
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", prefab.name));
-                Debug.Log(e); 
-                return null;
+                if (instance && !initializing)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
             }
-              
-            InitView(module, view, prefab.name, null, param);
+            finally
+            {
+                if (transaction) module.viewTransactions--;
+                if (args != null && !argsClaimed) args.Release();
+            }
+        }
 
-            return view;
+        private static T ValidateView<T>(GameObject obj) where T : View
+        {
+            var view = obj.GetComponent<View>();
+            if (!view) throw new InvalidOperationException($"Object {obj.name} has no root View component.");
+            if (view is T typed) return typed;
+            throw new InvalidCastException($"View {view.GetType().FullName} cannot be loaded as {typeof(T).FullName}.");
+        }
+
+        private static void DiscardInstance(GameObject instance)
+        {
+            try { instance.SetActive(false); }
+            finally { UnityEngine.Object.Destroy(instance); }
         }
 
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null,bool sameScene = false, params object[] param) where T : View
         {
-            module.EnsureCanAddObjects();
-            LoadViewRequest<T> loadView = new LoadViewRequest<T>();
-            CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, param));
-            return loadView;
+            return StartAsync<T>(module, asset_name, parent, null, param);
+        }
+
+        internal static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
+            object[] param, bool argsClaimed = false, UIType? panelType = null) where T : View
+        {
+            if (args != null && !argsClaimed) args.Claim();
+            LoadViewRequest<T> request;
+            try
+            {
+                EnsureOwner(module);
+                if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
+                if (!ReferenceEquals(parent, null) && !parent) throw new ArgumentException("View parent has been destroyed.", nameof(parent));
+                FindBackendRoot(module, parent);
+                request = new LoadViewRequest<T>(module, assetName, parent, args, param, panelType);
+            }
+            catch (Exception error)
+            {
+                if (args != null && !argsClaimed)
+                {
+                    try { args.Release(); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            try
+            {
+                if (CoroutineStarter.Start(request.Run()) == null && !request.isDone)
+                    request.FailToStart(new InvalidOperationException("View loading requires an active coroutine host."));
+            }
+            catch (Exception error) { request.FailToStart(error); }
+            return request;
+        }
+
+        internal static T CompleteAsync<T>(Module module, GameObject prefab, string assetName, Transform parent, Scene scene,
+            LoadViewArgs args, object[] param, Action validate, UIType? panelType = null) where T : View
+        {
+            ValidateView<T>(prefab);
+            GameObject instance = null;
+            bool initializing = false;
+            module.viewTransactions++;
+            try
+            {
+                validate();
+                FindBackendRoot(module, parent);
+                instance = GameObjectLoader.Load(prefab, parent);
+                if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
+                validate();
+                var view = ValidateView<T>(instance);
+                if (!parent && instance.scene != scene) SceneManager.MoveGameObjectToScene(instance, scene);
+                instance.transform.localPosition = Vector3.zero;
+                initializing = true;
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate, panelType);
+                return view;
+            }
+            catch (Exception error)
+            {
+                if (instance && !initializing)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            finally { module.viewTransactions--; }
         }
 
 
         internal static void InitView(Module module,View view,string prefabName,LoadViewArgs loadViewArgs, params object[] param) 
         {
-            view.AssetName = prefabName;
+            if (loadViewArgs != null) loadViewArgs.Claim();
+            try
+            {
+                if (!view) throw new ArgumentNullException(nameof(view));
+                if (view.Module != null || view.Session != null || view.IsRemoving || view.IsAttaching)
+                    throw new InvalidOperationException("Cannot initialize an existing View session.");
+                InitializeHierarchy(module, new List<View>(view.GetComponentsInChildren<View>(true)), view, prefabName, loadViewArgs, param);
+            }
+            finally { if (loadViewArgs != null) loadViewArgs.Release(); }
+        }
 
-            AddView(module, view);
-            view.BeforeOnLoaded();
-            view.loaded = true;
-            view.OnLoaded(param);
+        private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
+            View backendRoot = null, bool backend = false, Action validate = null, UIType? panelType = null)
+        {
+            if (!view) throw new ArgumentNullException(nameof(view));
+            if (view.Module != null || view.Session != null || view.IsRemoving)
+                throw new InvalidOperationException("Cannot initialize an existing View session.");
+            object session = null;
+            GameObject instance = view.gameObject;
+            bool transaction = false;
+            bool defaultArgs = false;
+            try
+            {
+                EnsureOwner(module);
+                view.AssetName = prefabName;
+                AddView(module, view);
+                session = view.Session;
+                view.UsesBackend = backend;
+                view.BackendInstance = backend ? instance : null;
+                view.BackendRoot = backendRoot;
+                view.BackendRootSession = backendRoot != null ? backendRoot.Session : null;
+                view.IsInitializing = true;
+                module.viewTransactions++;
+                transaction = true;
+                if (view is Panel panel) panel.UIType = panelType ?? PanelManager.GetUIType(panel.transform.parent);
+                view.BeforeOnLoaded();
+                validate?.Invoke();
+                ValidateInitialization(module, view, session);
+                view.OnLoaded(param ?? Array.Empty<object>());
+                validate?.Invoke();
+                ValidateInitialization(module, view, session);
+                if (args == null)
+                {
+                    args = LoadViewArgs.New();
+                    args.Claim();
+                    defaultArgs = true;
+                }
+                args.BeginRead();
+                try { view.OnLoaded(args); }
+                finally { args.EndRead(); }
+                validate?.Invoke();
+                ValidateInitialization(module, view, session);
+                view.loaded = true;
+                view.ResumeEvents();
+                validate?.Invoke();
+                ValidateInitialization(module, view, session);
+            }
+            catch (Exception initializationError)
+            {
+                view.IsInitializing = false;
+                view.loaded = false;
+                view.DiscardOnExit = true;
+                try
+                {
+                    if (session != null) RemoveViewCore(module, view, session, !view, !backend, true);
+                    else
+                    {
+                        view.AssetName = null;
+                        if (backend && view) DiscardInstance(view.gameObject);
+                    }
+                }
+                catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
+                // 组件可能已销毁而取得根对象仍存活；不能因fake-null跳过根实例处理。
+                if (backend && !view && instance)
+                {
+                    try { DiscardInstance(instance); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(initializationError, cleanupError); }
+                }
+                throw;
+            }
+            finally
+            {
+                view.IsInitializing = false;
+                if (transaction) module.viewTransactions--;
+                if (defaultArgs) args.Release();
+            }
+        }
 
-            if (loadViewArgs == null)
-                loadViewArgs = LoadViewArgs.New();
+        private static void ValidateInitialization(Module module, View view, object session)
+        {
+            if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding ||
+                (view is Panel panel && !panel.Canvas))
+                throw new InvalidOperationException("View initialization invalidated its instance, registration, Model binding or Panel Canvas.");
+        }
 
-            view.OnLoaded(loadViewArgs);
+        internal static void AttachView(Module module, View view, LoadViewArgs args)
+        {
+            if (args != null) args.Claim();
+            try { InitializeHierarchy(module, new List<View> { view }, null, null, args, null); }
+            finally { if (args != null) args.Release(); }
+        }
 
-            // 回调结束之后 立即回收
-            LoadViewArgs.Recycle(loadViewArgs);
+        internal static List<View> AttachViews(Module module, GameObject root)
+        {
+            EnsureOwner(module);
+            if (!root) throw new ArgumentNullException(nameof(root));
+            var views = new List<View>(root.GetComponentsInChildren<View>(true));
+            InitializeHierarchy(module, views, null, null, null, null);
+            return views;
+        }
+
+        internal static List<View> AttachViews(Module module, Scene scene)
+        {
+            EnsureOwner(module);
+            if (!scene.IsValid() || !scene.isLoaded) throw new ArgumentException("View scene must be loaded.", nameof(scene));
+            var views = new List<View>();
+            foreach (var root in scene.GetRootGameObjects()) views.AddRange(root.GetComponentsInChildren<View>(true));
+            InitializeHierarchy(module, views, null, null, null, null);
+            return views;
+        }
+
+        private static View FindBackendRoot(Module module, Transform target)
+        {
+            for (var parent = target; parent; parent = parent.parent)
+            {
+                var ancestor = parent.GetComponent<View>();
+                if (!ancestor) continue;
+                if (ancestor.IsRemoving || ancestor.IsAttaching || ancestor.IsInitializing)
+                    throw new InvalidOperationException("Cannot attach under a View lifecycle transaction.");
+                if (!ancestor.UsesBackend) continue;
+                if (!ReferenceEquals(ancestor.Module, module)) throw new InvalidOperationException("Acquired hierarchy belongs to another Module.");
+                return ancestor;
+            }
+            return null;
+        }
+
+        private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
+            LoadViewArgs args, object[] param, Action validate = null, UIType? panelType = null)
+        {
+            var added = new List<KeyValuePair<View, object>>();
+            var roots = new Dictionary<View, View>();
+            View outerRoot = null;
+            bool guarded = false;
+            try
+            {
+                EnsureOwner(module);
+                if (acquiredRoot != null) outerRoot = FindBackendRoot(module, acquiredRoot.transform);
+                foreach (var view in views)
+                {
+                    if (!view) throw new ArgumentNullException(nameof(views));
+                    if (!view.gameObject.scene.IsValid() || !view.gameObject.scene.isLoaded)
+                        throw new ArgumentException("Only live scene instances can be attached.", nameof(views));
+                    if (view.IsAttaching || view.IsInitializing || view.IsRemoving || view.IsUnbinding)
+                        throw new InvalidOperationException("Cannot attach during a View lifecycle transaction.");
+                    if (view.Session != null || view.Module != null)
+                    {
+                        if (!ReferenceEquals(view.Module, module) || !view.IsLoaded || !HasRegistration(module, view, view.Session))
+                            throw new InvalidOperationException("View already has a conflicting or incomplete registration.");
+                    }
+                    roots.Add(view, acquiredRoot != null ? acquiredRoot : FindBackendRoot(module, view.transform));
+                }
+                foreach (var view in views) view.IsAttaching = true;
+                module.viewTransactions++;
+                guarded = true;
+                foreach (var view in views)
+                {
+                    if (view.Session != null) continue;
+                    bool root = ReferenceEquals(view, acquiredRoot);
+                    InitializeView(module, view, root ? assetName : null,
+                        root || views.Count == 1 ? args : null, root ? param : null,
+                        root ? outerRoot : roots[view], root, validate, root ? panelType : null);
+                    added.Add(new KeyValuePair<View, object>(view, view.Session));
+                }
+                foreach (var entry in added) ValidateInitialization(module, entry.Key, entry.Value);
+                validate?.Invoke();
+            }
+            catch (Exception error)
+            {
+                // 批次没有提交，不派发成功退出通知；已有绑定与activeSelf保持不变。
+                foreach (var entry in added) entry.Key.loaded = false;
+                if (acquiredRoot != null) acquiredRoot.DiscardOnExit = true;
+                for (int i = added.Count - 1; i >= 0; i--)
+                {
+                    var entry = added[i];
+                    try { RemoveViewCore(module, entry.Key, entry.Value, !entry.Key, !entry.Key.UsesBackend, true); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                if (acquiredRoot && acquiredRoot.Session == null)
+                {
+                    try { DiscardInstance(acquiredRoot.gameObject); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            finally
+            {
+                if (guarded)
+                {
+                    foreach (var view in views) view.IsAttaching = false;
+                    module.viewTransactions--;
+                }
+            }
         }
 
         #endregion
@@ -200,64 +646,23 @@ namespace YLFramework.Core
         // 加载
         internal static T LoadView<T>(Module module, string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            GameObject obj = LoadGameObject(module, asset_name, parent);
-
-            if (obj == null)
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            T view = obj.GetComponent<T>();
-
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj);
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", asset_name));
-                Debug.LogException(e);
-                return null;
-            }
- 
-            InitView(module, view, asset_name, loadViewArgs);
-
-            return view;
+            return LoadViewSync<T>(module, asset_name, null, parent, loadViewArgs, null, true);
         }
+
+        // Panel入口在解析父节点前已接管参数，并负责自己的finally归还。
+        internal static T LoadViewClaimed<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
+            object[] param = null, UIType? panelType = null) where T : View
+            => LoadViewSync<T>(module, assetName, null, parent, args, param, true, true, panelType);
 
         internal static T LoadView<T>(Module module, GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            module.EnsureCanAddObjects();
-            GameObject obj = GameObjectLoader.Load(prefab, parent);
-
-            if (!obj)
-            {
-                Exception e = new Exception(string.Format("View加载失败,请检查资源名称:{0}是否正确,或资源是否添加到资源模块!", prefab.name));
-                Debug.LogException(e);
-                return null;
-            }
-
-            T view = obj.GetComponent<T>();
-
-            if (view == null)
-            {
-                GameObjectLoader.UnLoad(obj);
-                Exception e = new Exception(string.Format("view:{0}加载失败,未查询到View组件!", prefab.name));
-                Debug.Log(e);
-                return null;
-            }
-  
-            InitView(module, view, prefab.name, loadViewArgs);
-
-            return view;
+            return LoadViewSync<T>(module, null, prefab, parent, loadViewArgs, null, false);
         }
 
         // 异步加载
         internal static LoadViewRequest<T> LoadViewAsync<T>(Module module, string asset_name, Transform parent = null, bool sameScene = false, LoadViewArgs loadViewArgs = null) where T : View
         {
-            module.EnsureCanAddObjects();
-            LoadViewRequest<T> loadView = new LoadViewRequest<T>();
-            CoroutineStarter.Start(loadView.LoadView(module, asset_name, parent, sameScene, loadViewArgs));
-            return loadView;
+            return StartAsync<T>(module, asset_name, parent, loadViewArgs, null);
         }
 
         #endregion
@@ -271,107 +676,57 @@ namespace YLFramework.Core
         /// <param name="module"></param>
         internal static void ClearView(Module module)
         {
-            List<View> views = ClassObjectPoolManager.Load<List<View>>();
-            views.Clear();
-
-            // 调用 关闭方法
-            foreach (var item in module.views.Values)
-                foreach (var view in item.Values)
-                    views.Add(view);
-
-            for (int i = 0; i < views.Count; i++)
-                views[i].Close();
-
-
-            ClassObjectPoolManager.Unload(views);
+            ClearSessions(module, Snapshot(module));
         }
 
-        internal static void ClearView(Module module, string asset_name, bool clear_base_module)
+        internal static void ClearView(Module module, string asset_name)
         {
-
-            List<View> views = ClassObjectPoolManager.Load<List<View>>();
-            views.Clear();
-
-            if (module != null && module.views.ContainsKey(asset_name))
-            {
-                foreach (var item in module.views[asset_name].Values)
-                {
-                    views.Add(item);
-                }
-            }
-
-            if (clear_base_module) 
-            {
-                // 当前模块没有尝试去基础模块中查找
-                foreach (var m in ModuleManager.AllBaseModules.Values)
-                {
-                    if (module == m) continue;
-
-                    if (m != null && m.views.ContainsKey(asset_name))
-                    {
-                        foreach (var item in m.views[asset_name].Values)
-                        {
-                            views.Add(item);
-                        }
-                    }
-                }
-            }
-
-              
-            for (int i = 0; i < views.Count; i++)
-                views[i].Close();
-
-            ClassObjectPoolManager.Unload(views);
+            if (asset_name == null) throw new ArgumentNullException(nameof(asset_name));
+            var sessions = Snapshot(module);
+            sessions.RemoveAll(item => item.Key.AssetName != asset_name);
+            ClearSessions(module, sessions);
         }
 
-        internal static void ClearView<T>(Module module,bool clear_base_module) where T : View
+        internal static void ClearView<T>(Module module) where T : View
         {
+            var sessions = Snapshot(module);
+            sessions.RemoveAll(item => !(item.Key is T));
+            ClearSessions(module, sessions);
+        }
 
-            List<View> views = ClassObjectPoolManager.Load<List<View>>();
-            views.Clear();
+        internal static List<KeyValuePair<View, object>> Snapshot(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            var sessions = new List<KeyValuePair<View, object>>(module.ownedViews.Count);
+            foreach (var view in module.ownedViews.Values)
+                sessions.Add(new KeyValuePair<View, object>(view, view.Session));
+            // 取得根先退出，子会话不单独改变缓存子树的activeSelf。
+            sessions.Sort((left, right) => right.Key.UsesBackend.CompareTo(left.Key.UsesBackend));
+            return sessions;
+        }
 
-
-            foreach (var type in module.type_views.Keys)
+        private static void ClearSessions(Module module, List<KeyValuePair<View, object>> sessions)
+        {
+            var errors = new List<Exception>();
+            foreach (var session in sessions)
             {
-                if (type == typeof(T) || type.IsSubclassOf(typeof(T)))
-                {
-                    foreach (var item in module.type_views[type])
-                    {
-                        T t = item as T;
-                        if (!t) continue;
-                        views.Add(t);
-                    }
-                }
+                try { RemoveView(module, session.Key, session.Value, !session.Key); }
+                catch (Exception error) { errors.Add(error); }
             }
+            ThrowCleanupErrors(errors);
+        }
 
-            if (clear_base_module) 
-            {
-                // 基础模块中查找
-                foreach (var m in ModuleManager.AllBaseModules.Values)
+        private static void PruneDestroyed(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            List<KeyValuePair<View, object>> dead = null;
+            foreach (var view in module.ownedViews.Values)
+                if (!view)
                 {
-                    if (m == module) continue;
-
-                    foreach (var type in m.type_views.Keys)
-                    {
-                        if (type == typeof(T) || type.IsSubclassOf(typeof(T)))
-                        {
-                            foreach (var item in m.type_views[type])
-                            {
-                                T t = item as T;
-                                if (!t) continue;
-                                views.Add(t);
-                            }
-                        }
-                    }
+                    if (dead == null) dead = new List<KeyValuePair<View, object>>();
+                    dead.Add(new KeyValuePair<View, object>(view, view.Session));
                 }
-            }
-
-
-
-            for (int i = 0; i < views.Count; i++)
-                views[i].Close();
-
-            ClassObjectPoolManager.Unload(views);
+            if (dead != null) ClearSessions(module, dead);
         }
 
         #endregion
@@ -380,143 +735,72 @@ namespace YLFramework.Core
 
         internal static View GetView(Module module, string assetName, int id)
         {
-            if (module.views.ContainsKey(assetName) && module.views[assetName].ContainsKey(id))
-                return module.views[assetName][id];
-
-            // 当前模块没有尝试去基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (module == m) continue;
-                if (m.views.ContainsKey(assetName) && m.views[assetName].ContainsKey(id))
-                    return m.views[assetName][id];
-            }
-
-            return null;
+            if (assetName == null) throw new ArgumentNullException(nameof(assetName));
+            PruneDestroyed(module);
+            return module.views.TryGetValue(assetName, out var named) && named.TryGetValue(id, out var view) ? view : null;
         }
 
         internal static T GetView<T>(Module module, string assetName, int id) where T : View
         {
-            return GetView(module, assetName, id) as T;
+            return Cast<T>(GetView(module, assetName, id));
+        }
+
+        internal static T GetView<T>(Module module, int id) where T : View
+        {
+            PruneDestroyed(module);
+            return module.ownedViews.TryGetValue(id, out var view) ? Cast<T>(view) : null;
+        }
+
+        private static T Cast<T>(View view) where T : View
+        {
+            if (view == null) return null;
+            if (view is T typed) return typed;
+            throw new InvalidCastException($"View {view.GetType().FullName} cannot be queried as {typeof(T).FullName}.");
+        }
+
+        private static View Single(IEnumerable<View> views)
+        {
+            View result = null;
+            foreach (var view in views)
+            {
+                if (result != null) throw new InvalidOperationException("Multiple Views match; specify an ID.");
+                result = view;
+            }
+            return result;
         }
 
 
         internal static View GetView(Module module, string assetName)
         {
-            if (module.views.ContainsKey(assetName))
-            {
-                if (module.views[assetName].Count == 1)
-                { 
-                    foreach (var item in module.views[assetName].Values)
-                    {
-                        return item;
-                    }
-                }
-                else if (module.views[assetName].Count > 1)
-                {
-                    Exception e = new Exception(string.Format("查询到当前模块中view:{0}有多个实例,请指定id进行查询!", assetName)); 
-                    Debug.LogException(e);
-                    return null;
-                }
-            }
-              
-            // 当前模块没有尝试去基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (module == m) continue;
-
-                View view = GetView(m, assetName);
-
-                if (view != null)
-                    return view;
-            }
-
-            return null;
+            if (assetName == null) throw new ArgumentNullException(nameof(assetName));
+            PruneDestroyed(module);
+            return module.views.TryGetValue(assetName, out var named) ? Single(named.Values) : null;
         }
          
         internal static T GetView<T>(Module module, string assetName ) where T : View
         {
-            return GetView(module, assetName ) as T;
+            return Cast<T>(GetView(module, assetName));
         }
 
 
         internal static T GetView<T>(Module module) where T : View
         {
-
-            if (module.type_views.ContainsKey(typeof(T))) 
-            {
-                foreach (var view in module.type_views[typeof(T)])
-                {
-                    if (!view) continue;
-                    return view as T;
-                }
-            }
-              
-            // 基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (m == module) continue;
-
-                if (m.type_views.ContainsKey(typeof(T)))
-                {
-                    foreach (var view in m.type_views[typeof(T)])
-                    {
-                        if (!view) continue;
-                        return view as T;
-                    }
-                }
-            }
-
-            return null;
+            PruneDestroyed(module);
+            return module.type_views.TryGetValue(typeof(T), out var typed) ? (T)Single(typed) : null;
         }
 
         internal static List<View> GetViews(Module module, string assetName)
         {
-            List<View> views = new List<View>();
-
-            if (module.views.ContainsKey(assetName))
-            {
-                foreach (var item in module.views[assetName].Values)
-                    views.Add(item);
-
-            }
-
-            // 基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (m == module) continue;
-                if (!m.views.ContainsKey(assetName)) continue;
-                foreach (var item in m.views[assetName].Values)
-                    views.Add(item);
-            }
-
-            return views;
+            if (assetName == null) throw new ArgumentNullException(nameof(assetName));
+            PruneDestroyed(module);
+            return module.views.TryGetValue(assetName, out var named) ? new List<View>(named.Values) : new List<View>();
         }
 
         internal static List<T> GetViews<T>(Module module, string assetName) where T : View
         {
-            List<T> views = new List<T>();
-
-            if (module.views.ContainsKey(assetName))
-            {
-                foreach (var item in module.views[assetName].Values)
-                {
-                    T t = item as T;
-                    if (t != null) views.Add(t);
-                }
-            }
-
-            // 基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (m == module) continue;
-                if (!m.views.ContainsKey(assetName)) continue;
-                foreach (var item in m.views[assetName].Values)
-                {
-                    T t = item as T;
-                    if (t != null) views.Add(t);
-                }
-            }
-
+            var views = new List<T>();
+            foreach (var view in GetViews(module, assetName))
+                if (view is T typed) views.Add(typed);
             return views;
         }
 
@@ -532,41 +816,11 @@ namespace YLFramework.Core
         internal static void GetViewsNonAlloc<T>(Module module,List<T> results) where T : View 
         {
             if (results == null)
-                throw new Exception("results 不能为空!");
-
+                throw new ArgumentNullException(nameof(results));
+            PruneDestroyed(module);
             results.Clear();
-
-            foreach (var type in module.type_views.Keys)
-            {
-                if (type == typeof(T) || type.IsSubclassOf(typeof(T)))
-                {
-                    foreach (var item in module.type_views[type])
-                    {
-                        T t = item as T;
-                        if (!t) continue;
-                        results.Add(t);
-                    }
-                }
-            }
-
-            // 基础模块中查找
-            foreach (var m in ModuleManager.AllBaseModules.Values)
-            {
-                if (m == module) continue;
-
-                foreach (var type in m.type_views.Keys)
-                {
-                    if (type == typeof(T) || type.IsSubclassOf(typeof(T)))
-                    {
-                        foreach (var item in m.type_views[type])
-                        {
-                            T t = item as T;
-                            if (!t) continue;
-                            results.Add(t);
-                        }
-                    }
-                }
-            }
+            foreach (var view in module.ownedViews.Values)
+                if (view is T typed) results.Add(typed);
         }
 
         #endregion

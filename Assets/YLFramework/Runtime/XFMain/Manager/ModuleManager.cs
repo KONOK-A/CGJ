@@ -134,6 +134,7 @@ namespace YLFramework.Core
             if (module.State == ModuleState.Closed || module.State == ModuleState.Closing || module.State == ModuleState.CloseFailed)
                 throw new InvalidOperationException($"Cannot register Module in state {module.State}: {module.ModuleName}");
             Instance.modules.Add(module.ModuleName, module);
+            module.ViewLifecycle = new object();
             Instance.registrationOrder.Add(module);
             if (module.BaseModule) Instance.baseModules.Add(module.ModuleName, module);
         }
@@ -204,6 +205,8 @@ namespace YLFramework.Core
 
         private static void ValidateObjectTransactions(Module module)
         {
+            if (module.viewTransactions != 0)
+                throw new InvalidOperationException("Cannot start or close a Module during View initialization or exit.");
             // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
             if (module.creatingModels.Count != 0 || module.creatingControllers.Count != 0)
                 throw new InvalidOperationException("Cannot start or close a Module during object construction.");
@@ -216,7 +219,7 @@ namespace YLFramework.Core
                         throw new InvalidOperationException("Cannot start or close a Module during Model initialization or exit.");
         }
 
-        private static void CloseModule(Module module, bool allowBaseModule)
+        private static void CloseModule(Module module, bool allowBaseModule, List<IPendingViewRequest> deferredNotifications = null)
         {
             if (!ReferenceEquals(GetModule(module.ModuleName), module)) return;
             if (module.State == ModuleState.Closing) return;
@@ -227,12 +230,15 @@ namespace YLFramework.Core
             ValidateClose(module);
             module.State = ModuleState.Closing;
             var errors = new List<Exception>();
-            // 钩子可能提前移除View索引，保留进入关闭时的对象用于最终owner收尾。
-            var views = new HashSet<View>();
-            foreach (var bucket in module.views.Values)
-                foreach (var view in bucket.Values) views.Add(view);
-            foreach (var bucket in module.type_views.Values)
-                foreach (var view in bucket) views.Add(view);
+            module.ViewLifecycle = null;
+            var pendingViews = new List<IPendingViewRequest>(module.pendingViews);
+            foreach (var pending in pendingViews)
+            {
+                try { pending.Invalidate(); }
+                catch (Exception error) { errors.Add(error); }
+            }
+            // 保存会话身份，钩子内关闭并复用的实例不能被旧快照再次退出。
+            var views = ViewManager.Snapshot(module);
             try { module.Exit(); }
             catch (Exception error) { errors.Add(error); }
 
@@ -242,10 +248,9 @@ namespace YLFramework.Core
                 catch (Exception error) { errors.Add(error); }
             }
 
-            foreach (var view in views)
+            foreach (var session in views)
             {
-                if (!view || !ReferenceEquals(view.Module, module) || !view.loaded) continue;
-                try { view.Close(); }
+                try { ViewManager.RemoveView(module, session.Key, session.Value, !session.Key); }
                 catch (Exception error) { errors.Add(error); }
             }
 
@@ -255,13 +260,6 @@ namespace YLFramework.Core
                 catch (Exception error) { errors.Add(error); }
             }
 
-            // 不解绑在业务钩子中已被其他模块重新加载的View；资源异常收尾留给1.3。
-            foreach (var view in views)
-                if (view && ReferenceEquals(view.Module, module))
-                {
-                    view.loaded = false;
-                    view.Module = null;
-                }
             Instance.modules.Remove(module.ModuleName);
             Instance.baseModules.Remove(module.ModuleName);
             Instance.registrationOrder.RemoveAll(item => ReferenceEquals(item, module));
@@ -271,8 +269,16 @@ namespace YLFramework.Core
             module.models.Clear();
             module.views.Clear();
             module.type_views.Clear();
+            module.ownedViews.Clear();
             module.State = ModuleState.Closed;
-            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors);
+            if (deferredNotifications != null) deferredNotifications.AddRange(pendingViews);
+            else
+                foreach (var pending in pendingViews)
+                {
+                    try { pending.PublishInvalidation(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors).Flatten();
         }
 
         /// <summary>
@@ -308,8 +314,20 @@ namespace YLFramework.Core
             if (errors.Count != 0) throw new AggregateException("Module Shutdown cleanup failed.", errors).Flatten();
         }
 
+        internal static List<string> ViewResourceProjects(Module owner)
+        {
+            var projects = new List<string> { owner.ProjectName };
+            foreach (var module in Instance.registrationOrder)
+                if (Instance.baseModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) &&
+                    (module.State == ModuleState.Starting || module.State == ModuleState.Running) &&
+                    !projects.Contains(module.ProjectName))
+                    projects.Add(module.ProjectName);
+            return projects;
+        }
+
         private static bool HasRegisteredObjects(Module module)
         {
+            if (module.ownedViews.Count != 0) return true;
             if (module.controllers.Count != 0) return true;
             foreach (var bucket in module.models.Values)
                 if (bucket.Count != 0) return true;
@@ -388,6 +406,7 @@ namespace YLFramework.Core
             var module = request.Module;
             if (!Instance.startingModules.TryGetValue(module.GetType(), out var pending) || !ReferenceEquals(pending, request)) return;
             bool restoreCurrent = ReferenceEquals(CurrentModule, module);
+            var deferredNotifications = new List<IPendingViewRequest>();
             try
             {
                 if (error == null)
@@ -399,7 +418,7 @@ namespace YLFramework.Core
                 {
                     // 启动事务已展开完毕；只绕过Starting和基础模块禁令，复用D的唯一管线。
                     module.State = ModuleState.StartFailed;
-                    try { CloseModule(module, true); }
+                    try { CloseModule(module, true, deferredNotifications); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
                 }
                 else module.State = request.InitialState;
@@ -410,6 +429,12 @@ namespace YLFramework.Core
                 if (error != null && restoreCurrent && (CurrentModule == null || ReferenceEquals(CurrentModule, module)))
                     CurrentModule = IsCurrentCandidate(request.PreviousCurrentModule) ? request.PreviousCurrentModule : null;
                 request.PreviousCurrentModule = null;
+                // View通知可重启同一实例；旧启动记录与上下文必须先完成收尾。
+                foreach (var pendingView in deferredNotifications)
+                {
+                    try { pendingView.PublishInvalidation(); }
+                    catch (Exception notificationError) { Debug.LogException(notificationError); }
+                }
             }
         }
 

@@ -12,7 +12,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
-using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 
 namespace YLFramework.Core
 {
@@ -59,8 +58,6 @@ namespace YLFramework.Core
                     EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
 #endif
 
-                    EventManager.RemoveEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, OnRemoveView);
-                    EventManager.AddEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, OnRemoveView);
                     SceneManager.sceneLoaded -= OnSceneLoaded;
                     SceneManager.sceneLoaded += OnSceneLoaded;
 
@@ -199,48 +196,14 @@ namespace YLFramework.Core
 
         // 加载 Panel
         internal static Panel LoadPanel(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
-        {
-            module.EnsureCanAddObjects();
+            => LoadPanelLegacy<Panel>(module, asset_name, type, parent, param);
 
-            Panel panel = null;
-
-            parent = GetParent(module, parent, type);
-
-            if (parent == null)
-            {
-                Debug.LogError("parent is null! ");
-                return null;
-            }
-
-            panel = ViewManager.LoadView(module , asset_name, parent, param) as Panel;
-
-            if (panel == null) return null;
-
-            panel.transform.localPosition = Vector3.zero;
-
-            // 设置层级
-            panel.UIType = type;
-
-            if (panel.IsMyselfAddCanvas)
-            { 
-                panel.SortingOrder = GetUIOrder(type); 
-                AddOrder(type, panel, panel.SortingOrder);
-                // 添加到panel队列(如果不是自己添加的Canvas，说明当前的UI是在其他的UI里面的，此时不需要考虑被遮挡的情况)
-                AddPanelQueue(panel);
-            }
-
-
-            return panel;
-        }
+        internal static T LoadPanelLegacy<T>(Module module, string assetName, UIType type, Transform parent, object[] param) where T : Panel
+            => LoadPanelCore<T>(module, assetName, type, parent, null, param);
 
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module , string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-        {
-            module.EnsureCanAddObjects();
-            LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
-            CoroutineStarter.Start(loadPanel.LoadPanel(module,asset_name, type, parent, param));
-            return loadPanel;
-        }
+            => StartPanelAsync<T>(module, asset_name, type, parent, null, param);
 
 
         #endregion
@@ -251,47 +214,74 @@ namespace YLFramework.Core
 
         // 加载 Panel
         internal static T LoadPanel<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)where T : Panel
+            => LoadPanelCore<T>(module, asset_name, type, parent, loadViewArgs, null);
+
+        private static T LoadPanelCore<T>(Module module, string assetName, UIType type, Transform parent,
+            LoadViewArgs args, object[] param) where T : Panel
         {
-            module.EnsureCanAddObjects();
-
-            T panel = null;
-
-            parent = GetParent(module, parent, type);
-
-            if (parent == null)
+            if (args != null) args.Claim();
+            try
             {
-                Debug.LogError("parent is null! ");
-                return null;
+                parent = ResolveParent(module, assetName, parent, type);
+                return ViewManager.LoadViewClaimed<T>(module, assetName, parent, args, param, type);
             }
-
-            panel = ViewManager.LoadView<T>(module, asset_name, parent, loadViewArgs);
-
-            if (panel == null) return null;
-
-            panel.transform.localPosition = Vector3.zero;
-
-            // 设置层级
-            panel.UIType = type;
-
-            if (panel.IsMyselfAddCanvas)
-            {
-                panel.SortingOrder = GetUIOrder(type);
-                AddOrder(type, panel, panel.SortingOrder);
-                // 添加到panel队列(如果不是自己添加的Canvas，说明当前的UI是在其他的UI里面的，此时不需要考虑被遮挡的情况)
-                AddPanelQueue(panel);
-            }
-
-
-            return panel;
+            finally { if (args != null) args.Release(); }
         }
 
         // 异步加载 Panel
         internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
+            => StartPanelAsync<T>(module, asset_name, type, parent, loadViewArgs, null);
+
+        private static LoadPanelRequest<T> StartPanelAsync<T>(Module module, string assetName, UIType type, Transform parent,
+            LoadViewArgs args, object[] param) where T : Panel
         {
-            module.EnsureCanAddObjects();
-            LoadPanelRequest<T> loadPanel = new LoadPanelRequest<T>();
-            CoroutineStarter.Start(loadPanel.LoadPanel(module, asset_name, type, parent, loadViewArgs));
-            return loadPanel;
+            if (args != null) args.Claim();
+            LoadViewRequest<T> child;
+            try
+            {
+                parent = ResolveParent(module, assetName, parent, type);
+                child = ViewManager.StartAsync<T>(module, assetName, parent, args, param, true, type);
+            }
+            catch (Exception error)
+            {
+                if (args != null)
+                {
+                    try { args.Release(); }
+                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                }
+                throw;
+            }
+            // 从此输入归子View请求所有，Panel没有额外producer或pending状态。
+            return new LoadPanelRequest<T>(child);
+        }
+
+        private static Transform ResolveParent(Module module, string assetName, Transform parent, UIType type)
+        {
+            ViewManager.EnsureOwner(module);
+            if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("Panel asset name is required.", nameof(assetName));
+            if (type != UIType.UI && type != UIType.DontDestroyUI) throw new ArgumentOutOfRangeException(nameof(type));
+            if (!ReferenceEquals(parent, null) && !parent) throw new ArgumentException("Panel parent has been destroyed.", nameof(parent));
+            module.viewTransactions++;
+            try
+            {
+                var result = GetParent(module, parent, type);
+                if (!result) throw new InvalidOperationException("Panel parent is unavailable.");
+                return result;
+            }
+            finally { module.viewTransactions--; }
+        }
+
+        internal static UIType GetUIType(Transform parent)
+        {
+            for (var ancestor = parent; ancestor; ancestor = ancestor.parent)
+            {
+                var panel = ancestor.GetComponent<Panel>();
+                if (panel && panel.Session != null) return panel.UIType;
+            }
+            var manager = _instance;
+            if (parent && manager != null && manager.uiCanvas.TryGetValue(UIType.DontDestroyUI, out var canvas) &&
+                canvas && parent.gameObject.scene == canvas.gameObject.scene) return UIType.DontDestroyUI;
+            return UIType.UI;
         }
 
         #endregion
@@ -335,7 +325,7 @@ namespace YLFramework.Core
 
                     foreach (var item in UIOrders.Keys)
                     {
-                        if (!item || !item.gameObject.activeInHierarchy)
+                        if (!item || item.Session == null || item.IsRemoving)
                         {
                             TempUIOdersPanels.Add(item);
                             continue;
@@ -355,7 +345,7 @@ namespace YLFramework.Core
 
                     foreach (var item in DontDestroyUIOrders.Keys)
                     {
-                        if (!item || !item.gameObject.activeInHierarchy)
+                        if (!item || item.Session == null || item.IsRemoving)
                         {
                             TempUIOdersPanels.Add(item);
                             continue;
@@ -417,53 +407,98 @@ namespace YLFramework.Core
             UpdateAlwaysInFront(); 
         }
 
+        internal static void UpdateOrder(Panel panel, int order)
+        {
+            var manager = _instance;
+            if (manager == null) return;
+            if (manager.uiOrders.ContainsKey(panel)) manager.uiOrders[panel] = order;
+            if (manager.dontDestroyUIOrders.ContainsKey(panel)) manager.dontDestroyUIOrders[panel] = order;
+        }
+
         internal static void UpdateAlwaysInFront()
         {
-            // 找到所有始终显示在最上层的界面
+            var panels = ClassObjectPoolManager.Load<List<KeyValuePair<Panel, object>>>();
+            panels.Clear();
+            bool IsCurrent(KeyValuePair<Panel, object> entry, UIType type) =>
+                entry.Value != null && entry.Key && !entry.Key.IsRemoving && entry.Key.UIType == type &&
+                ReferenceEquals(entry.Key.Session, entry.Value);
 
-            List<Panel> TempAddOrderPanels = ClassObjectPoolManager.Load<List<Panel>>(); 
-            TempAddOrderPanels.Clear();
-
-            foreach (var item in UIOrders.Keys)
+            void Update(UIType type, Dictionary<Panel, int> orders)
             {
-                if (item != null && item.AlwaysInFront)
-                    TempAddOrderPanels.Add(item);
+                foreach (var panel in orders.Keys)
+                    if (panel) panels.Add(new KeyValuePair<Panel, object>(panel, panel.Session));
+                foreach (var entry in panels)
+                {
+                    var panel = entry.Key;
+                    if (!IsCurrent(entry, type) || !panel.AlwaysInFront || !IsCurrent(entry, type)) continue;
+                    panel.SortingOrder = GetUIOrder(type);
+                    // 排序业务回调可以关闭并复用同一组件，不操作其新会话。
+                    if (IsCurrent(entry, type)) panel.transform.SetAsLastSibling();
+                }
+                panels.Clear();
             }
-
-            foreach (var item in TempAddOrderPanels)
+            try
             {
-                item.SortingOrder = GetUIOrder(UIType.UI);
-                item.transform.SetAsLastSibling(); // 节点设置到最后一个
+                Update(UIType.UI, UIOrders);
+                Update(UIType.DontDestroyUI, DontDestroyUIOrders);
             }
-
-            TempAddOrderPanels.Clear();
-
-            foreach (var item in DontDestroyUIOrders.Keys)
-            {
-                if (item != null && item.AlwaysInFront)
-                    TempAddOrderPanels.Add(item);
-            }
-
-            foreach (var item in TempAddOrderPanels)
-            {
-                item.SortingOrder = GetUIOrder(UIType.DontDestroyUI);
-                item.transform.SetAsLastSibling(); // 节点设置到最后一个
-            }
-
-            ClassObjectPoolManager.Unload(TempAddOrderPanels);
-
+            finally { ClassObjectPoolManager.Unload(panels); }
         }
 
         internal static void LateUpdate() {
             UpdatePanelQueue();
         }
 
-        internal static void OnRemoveView(View view) 
-        { 
-            Panel panel = view as Panel;
-            if (panel == null) return;
-            RemovePanelQueue(panel);
-            ReleaseOrder(panel);
+        internal static void ReleaseView(View view)
+        {
+            var manager = _instance;
+            var panel = view as Panel;
+            if (manager == null || ReferenceEquals(panel, null)) return;
+            // 必要登记先释放，不能依赖广播、开关或Visible业务回调成功。
+            manager.uiOrders.Remove(panel);
+            manager.dontDestroyUIOrders.Remove(panel);
+            ReleaseQueue(manager, panel);
+        }
+
+        internal static void ActivateView(View view)
+        {
+            if (view is Panel panel)
+            {
+                panel.RestoreCanvas();
+                if (panel.IsMyselfAddCanvas) AddPanelQueue(panel);
+            }
+        }
+
+        internal static void DeactivateView(View view)
+        {
+            var manager = _instance;
+            if (manager != null && view is Panel panel && panel && !panel.gameObject.activeInHierarchy)
+                ReleaseQueue(manager, panel);
+        }
+
+        private static void ReleaseQueue(PanelManager manager, Panel panel)
+        {
+            manager.panelQueues.RemoveAll(item => ReferenceEquals(item, panel));
+            if (!ReferenceEquals(manager._currentPanel, panel)) return;
+            manager._currentPanel = null;
+            for (int i = manager.panelQueues.Count - 1; i >= 0; i--)
+            {
+                var previous = manager.panelQueues[i];
+                if (!previous || !previous.IsLoaded || !previous.gameObject.activeInHierarchy || previous.IsRemoving ||
+                    previous.Module == null || previous.Module.State == ModuleState.Closing)
+                {
+                    manager.panelQueues.RemoveAt(i);
+                    continue;
+                }
+                manager._currentPanel = previous;
+                break;
+            }
+            var current = manager._currentPanel;
+            if (manager.multiPanelListener && current && current.Canvas && !current.Canvas.enabled)
+            {
+                current.Canvas.enabled = true;
+                current.Visible();
+            }
         }
 
         internal static Transform GetParent(Module module,Transform parent,UIType type)
@@ -576,10 +611,10 @@ namespace YLFramework.Core
         {
             // 判断是否开启该功能
             if (!MultiPanelListener) return;
-            if (panel == null || panel.PanelType == PanelType.Window) return;
+            if (panel == null || !panel.IsLoaded || !panel.gameObject.activeInHierarchy || panel.PanelType != PanelType.Panel) return;
 
-            // 检测当前的panel 是否已经在队列中 如果已经存在 需要移除
-            if (PanelQueues.Contains(panel)) PanelQueues.Remove(panel);
+            if (PanelQueues.Contains(panel)) return;
+            panel.Canvas.enabled = true;
             // 加入队列
             PanelQueues.Add(panel);
 
@@ -590,7 +625,7 @@ namespace YLFramework.Core
             // 把前面的Panel位置进行修改
             for (int i = 0; i < PanelQueues.Count - 1; i++)
             {
-                if (PanelQueues[i].Canvas.enabled)
+                if (PanelQueues[i] && PanelQueues[i].Canvas && PanelQueues[i].Canvas.enabled)
                 {
                     PanelQueues[i].Canvas.enabled = false;
                     PanelQueues[i].Invisible();

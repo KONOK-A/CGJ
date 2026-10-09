@@ -57,6 +57,7 @@ namespace YLFramework.Core
             {
                 if (!IsMyselfAddCanvas) return; // 用的是别人的Canvas 所以不能对层级进行修改
                 sortingOrder = value;
+                PanelManager.UpdateOrder(this, value);
                 RefreshSortingOrder();
             }
         }
@@ -88,7 +89,8 @@ namespace YLFramework.Core
         public virtual bool AlwaysInFront => false;
 
         /// <summary>
-        /// UIType UI的类型
+        /// 当前会话的UI类型，在业务OnLoaded之前确定。
+        /// 直接Panel入口使用指定值，View/Attach入口继承受管父Panel或已知持久Canvas上下文，否则为UI。
         /// </summary>
         public UIType UIType { get;internal set; }
         #endregion
@@ -106,9 +108,9 @@ namespace YLFramework.Core
         internal void InitCanvas() 
         {
 
-            // 判断是否已经初始化 这里初始化一次就可以了
-            if (isInitCanvas) return;
-            isInitCanvas = true;
+            // 自有Canvas随健康实例复用；借用的Canvas必须按当前层级重新取得。
+            if (isInitCanvas && IsMyselfAddCanvas && Canvas) return;
+            isInitCanvas = false;
 
             Canvas c = transform.GetComponent<Canvas>();
             if (c) 
@@ -117,7 +119,7 @@ namespace YLFramework.Core
                 throw new System.Exception(string.Format("检测到游戏物体:{0}身上有Canvas组件,请移除!", gameObject.name));
             }
 
-            Canvas parent_canvas = transform.GetComponentInParent<Canvas>();
+            Canvas parent_canvas = transform.parent ? transform.parent.GetComponentInParent<Canvas>(true) : null;
             if (parent_canvas != null && parent_canvas.transform.parent != null)
             {
                 Canvas = parent_canvas;
@@ -127,12 +129,22 @@ namespace YLFramework.Core
             { 
                 // 自己添加Canvas
                 Canvas = transform.gameObject.AddComponent<Canvas>();
-                Canvas.overrideSorting = true;
-                Canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2 | AdditionalCanvasShaderChannels.TexCoord3 | AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
                 gameObject.AddComponent<GraphicRaycaster>();
 
                 IsMyselfAddCanvas = true;
+                RestoreCanvas();
             }
+            isInitCanvas = true;
+        }
+
+        internal void RestoreCanvas()
+        {
+            if (!Canvas) throw new System.InvalidOperationException("Panel Canvas is unavailable.");
+            if (!IsMyselfAddCanvas) return;
+            // inactive Canvas首次激活会重置原生排序，Loaded激活边界重新应用，不重复添加组件或派发排序变更。
+            Canvas.overrideSorting = true;
+            Canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2 | AdditionalCanvasShaderChannels.TexCoord3 | AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
+            Canvas.sortingOrder = DisplaySortingOrder;
         }
 
         /// <summary>
@@ -197,7 +209,7 @@ namespace YLFramework.Core
 
         internal void RefreshSortingOrder() 
         {
-            if (!IsMyselfAddCanvas) return; // 用的是别人的Canvas 所以不能对层级进行修改 
+            if (!IsMyselfAddCanvas || !Canvas || Module == null) return;
             Canvas.sortingOrder = sortingOrder + Module.UIStartSortOrder;
             OnSortingOrderChange(Canvas.sortingOrder);
         }
@@ -207,6 +219,12 @@ namespace YLFramework.Core
         {
             base.BeforeOnLoaded();
             InitCanvas();
+            if (IsMyselfAddCanvas)
+            {
+                Canvas.enabled = true;
+                SortingOrder = PanelManager.GetUIOrder(UIType);
+                PanelManager.AddOrder(UIType, this, SortingOrder);
+            }
         }
 
         #endregion

@@ -2,86 +2,43 @@
 // Source: https://gitee.com/xianfengkeji/XFGameFramework.git
 // Revision: 2182708aecc596f30739fa8634fe2b9b6946ddd7 (XFGameFramework 1.18.8)
 // Original path: Runtime/AsyncOperation/LoadPanelRequest.cs
-// YL adaptation: independent identities and Foundation bindings; original runtime semantics retained.
-using System.Collections; 
+using System;
 using UnityEngine;
-
 
 namespace YLFramework.Core
 {
-
-    public class LoadPanelRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadPanelRequest<T>> where T : Panel
+    /// <summary>直接转接View事务结果；Abort仅取消Core业务请求，不物理取消共享资源加载。</summary>
+    public sealed class LoadPanelRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadPanelRequest<T>> where T : Panel
     {
+        public T panel { get; private set; }
+        public LoadViewStatus Status { get; private set; }
+        /// <summary>原始失败原因，附加清理错误沿用View请求的Data约定。</summary>
+        public Exception Exception { get; private set; }
 
-        public T panel;
+        private LoadViewRequest<T> child;
 
-        internal IEnumerator LoadPanel(Module module,  string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
+        internal LoadPanelRequest(LoadViewRequest<T> request)
         {
-            parent = PanelManager.GetParent(module, parent, type);
+            child = request;
+            request.AddCompleteEvent(Complete);
+        }
 
-            if (parent == null)
-            {
-                Completed("parent is null!");
-                yield break;
-            }
+        public override void Abort()
+        {
+            if (!isDone) child.Abort();
+        }
 
-            LoadViewRequest<T> request = ViewManager.LoadViewAsync<T>(module, asset_name, parent,type == UIType.UI, param);
-            yield return request;
-            if (!string.IsNullOrEmpty(request.error))
-                yield break;
-
+        private void Complete(LoadViewRequest<T> request)
+        {
+            if (isDone) return;
+            // 必要UI准备已由子请求事务完成，不存在成功后再补登记的提交窗口。
             panel = request.view;
-
-            if (panel == null)
-            {
-                Completed(string.Format("加载panel失败!:{0}",request.error));
-                yield break;
-            }
-            InitPanel(type);
+            Status = request.Status;
+            Exception = request.Exception;
+            request.RemoveCompleteEvent(Complete);
+            child = null;
+            try { Completed(request.error); }
+            catch (Exception notificationError) { Debug.LogException(notificationError); }
         }
-
-        internal IEnumerator LoadPanel(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null)
-        {
-            parent = PanelManager.GetParent(module, parent, type);
-
-            if (parent == null)
-            {
-                Completed("parent is null!");
-                yield break;
-            }
-
-            LoadViewRequest<T> request = ViewManager.LoadViewAsync<T>(module, asset_name, parent, type == UIType.UI, loadViewArgs);
-            yield return request;
-            if (!string.IsNullOrEmpty(request.error))
-                yield break;
-
-            panel = request.view;
-
-            if (panel == null)
-            {
-                Completed(string.Format("加载panel失败!:{0}", request.error));
-                yield break;
-            }
-            InitPanel(type); 
-        }
-
-        private void InitPanel(UIType type) 
-        {
-            panel.transform.localPosition = Vector3.zero;
-            // 设置层级
-            panel.UIType = type;
-
-            if (panel.IsMyselfAddCanvas)
-            {
-                panel.SortingOrder = PanelManager.GetUIOrder(type);
-                PanelManager.AddOrder(type, panel, panel.SortingOrder);
-            }
-
-            PanelManager.AddPanelQueue(panel);
-
-            Completed();
-        }
-
     }
 }
-

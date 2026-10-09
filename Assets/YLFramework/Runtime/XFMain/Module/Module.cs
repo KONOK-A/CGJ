@@ -28,7 +28,12 @@ namespace YLFramework.Core
         CloseFailed
     }
       
-    // 模块
+    /// <summary>业务对象的唯一owner。</summary>
+    /// <remarks>
+    /// 同步LoadView只返回已完成初始化的实例，参数、资源或初始化错误直接抛出。
+    /// LoadViewArgs接管成功即由本次操作负责归还，入口拒绝也消耗参数；回调只借读，不得保存容器。
+    /// 异步View请求独立创建；Abort为逻辑取消，owner关闭后失效，终态与原始Exception只提交一次。
+    /// </remarks>
     public abstract class Module
     {
 
@@ -46,6 +51,10 @@ namespace YLFramework.Core
         /// 存放所有的视图(key:type value:List<View>) 使用类型查询比较方便
         /// </summary>
         internal Dictionary<Type,List<View>> type_views = new Dictionary<Type, List<View>>();
+        internal Dictionary<int, View> ownedViews = new Dictionary<int, View>();
+        internal int viewTransactions;
+        internal object ViewLifecycle;
+        internal readonly HashSet<IPendingViewRequest> pendingViews = new HashSet<IPendingViewRequest>();
         
         /// <summary>
         /// 存放 所有的业务逻辑
@@ -114,17 +123,16 @@ namespace YLFramework.Core
             {
                 ui_start_sort_order = value;
 
-                foreach (var view in views.Values)
+                var errors = new List<Exception>();
+                foreach (var entry in ViewManager.Snapshot(this))
                 {
-                    foreach (var item in view.Values)
+                    if (entry.Key is Panel panel && panel && ReferenceEquals(panel.Session, entry.Value))
                     {
-                        if (item is Panel) 
-                        {
-                            Panel panel = item as Panel;
-                            panel.RefreshSortingOrder(); // 刷新层级
-                        }
+                        try { panel.RefreshSortingOrder(); } // 包含显式挂载及嵌套Panel，不只命名资源。
+                        catch (Exception error) { errors.Add(error); }
                     }
                 }
+                ViewManager.ThrowCleanupErrors(errors);
 
             }
 
@@ -286,26 +294,43 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 清空指定类型的View(类型名需要与资源名称一致)
+        /// 清空本模块指定类型及派生类型的View。
         /// </summary>
-        /// <param name="clear_base_module">是否清空基础模块中的View</param>
-        public void ClearView<T>(bool clear_base_module = false) where T : View
+        public void ClearView<T>() where T : View
         {
-            ViewManager.ClearView<T>(this,clear_base_module);
+            ViewManager.ClearView<T>(this);
         }
 
         /// <summary>
         /// 清空指定名称的View
         /// </summary>
-        /// <param name="clear_base_module">是否清空基础模块中的View</param>
-        public void ClearView(string asset_name, bool clear_base_module = false)
+        public void ClearView(string asset_name)
         {
-            ViewManager.ClearView(this, asset_name, clear_base_module);
+            ViewManager.ClearView(this, asset_name);
         }
 
         #endregion
 
         #region 加载View
+
+        /// <summary>纳管已有View，不实例化、不激活、不取得GameObject所有权。合法重复挂载不重复初始化；参数由本次调用接管。</summary>
+        public T AttachView<T>(T view, LoadViewArgs loadViewArgs = null) where T : View
+        {
+            ViewManager.AttachView(this, view, loadViewArgs);
+            return view;
+        }
+
+        /// <summary>纳管已有层级的所有View（包含inactive）。失败只撤销本次新增会话，不改变已有会话和对象激活状态。</summary>
+        public List<View> AttachViews(GameObject root)
+        {
+            return ViewManager.AttachViews(this, root);
+        }
+
+        /// <summary>明确纳管指定已加载Scene中的View（包含inactive），不自动卸载场景；使用Scene身份而非名称。</summary>
+        public List<View> AttachViews(UnityEngine.SceneManagement.Scene scene)
+        {
+            return ViewManager.AttachViews(this, scene);
+        }
 
         /// <summary>
         /// 加载View,从当前模块和基础模块中加载
@@ -331,7 +356,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadView<T>(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadView<T>(string asset_name, Transform parent = null, params object[] param) where T : View
         {
-            return LoadView(asset_name, parent, param) as T;
+            return ViewManager.LoadViewLegacy<T>(this, asset_name, parent, param);
         }
 
         /// <summary>
@@ -357,7 +382,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadView<T>(GameObject prefab, Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadView<T>(GameObject prefab, Transform parent = null, params object[] param) where T : View
         {
-            return LoadView(prefab, parent, param) as T;
+            return ViewManager.LoadViewLegacy<T>(this, prefab, parent, param);
         }
 
         /// <summary>
@@ -552,7 +577,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadPanel<T>(string asset_name, UIType type,Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public T LoadPanel<T>(  string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
-            return LoadPanel( asset_name, type, parent, param) as T;
+            return PanelManager.LoadPanelLegacy<T>(this, asset_name, type, parent, param);
         }
 
 
@@ -569,7 +594,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadPanel<T>(UIType type, Transform parent ,LoadViewArgs loadViewArgs)代替!")]
         public T LoadPanel<T>(UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
         {
-            return LoadPanel(  typeof(T).Name, type, parent, param) as T;
+            return PanelManager.LoadPanelLegacy<T>(this, typeof(T).Name, type, parent, param);
         }
 
         /// <summary>
@@ -714,7 +739,7 @@ namespace YLFramework.Core
         #region 查询View
 
         /// <summary>
-        /// 查询View或Panel,从当前模块和基础模块中查询
+        /// 仅查询本模块View或Panel；跨模块访问须显式调用其owner。
         /// </summary>
         /// <param name="assetName">资源名</param>
         /// <param name="id">View ID</param>
@@ -725,7 +750,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 仅查询本模块View或Panel；结果类型不匹配时抛出异常。
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
         /// <param name="assetName">资源名称</param>
@@ -737,19 +762,18 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 按实例ID查询本模块View或Panel，不要求脚本名与资源名一致。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="id"></param>
         /// <returns></returns>
         public T GetView<T>(int id) where T : View
         {
-            return ViewManager.GetView<T>(this, typeof(T).Name, id);
+            return ViewManager.GetView<T>(this, id);
         }
 
         /// <summary>
-        /// 查询View或Panel,从当前模块和基础模块中查询
+        /// 按资源名查询本模块唯一View或Panel；多个实例时须指定ID。
         /// </summary>
         /// <param name="assetName">资源名</param> 
         /// <returns></returns>
@@ -759,7 +783,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 按资源名查询本模块唯一View或Panel；结果类型不匹配时抛出异常。
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
         /// <param name="assetName">资源名称</param> 
@@ -770,8 +794,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 按实际类型查询本模块唯一View或Panel；多个实例时须指定ID。
         /// </summary>
         /// <typeparam name="T"></typeparam> 
         /// <returns></returns>
@@ -781,7 +804,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel,从当前模块和基础模块中查询 
+        /// 查询本模块某个资源名的所有View或Panel，返回独立结果集合。
         /// </summary>
         /// <param name="assetName">预制体资源名称</param>
         /// <returns></returns>
@@ -791,7 +814,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel(泛型方式),从当前模块和基础模块中查询
+        /// 查询本模块某个资源名的所有可赋给T的View或Panel。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="assetName"></param>
@@ -802,8 +825,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询某个名称的所有View或Panel(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中查询
+        /// 查询本模块指定类型及派生类型的所有View或Panel。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>

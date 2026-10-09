@@ -1,10 +1,10 @@
 # 阶段 1.3：View 核心融合研究与设计
 
-状态：**整体设计已批准，待分批实施**。
+状态：**整体设计已批准；1.3-A～D 已验收并提交（`22b281d` / `a1beb2e` / `bee3e28` / `57d3595`）；阶段 1.3 实施及专项验证完成，待用户最终验收与 Git 收口。E 尚未提交，不标记最终 COMPLETE，不自动进入 1.4**。
 
 本文是阶段 1.3 唯一专项方案，保存源码研究结论、已批准架构方向、已确认约束、实现参考与实施批次。用户已原则上批准 D1～D4 总体方向及 A～E 规划，保留 D1/C1/C2 原则；具体 API、内部机制及实现取舍不要求逐条照搬草案。第 8.3 节的三项开放评估原则优先于正文早期推荐的具体做法。
 
-整体设计批准不等于本轮代码实施、技术验收或 Git 授权。本轮仅同步本文，不修改 Runtime、Editor、测试或资源，不执行任何 Git 操作；完成后停止，等待用户开始 1.3-A。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
+整体设计批准不等于代码实施、技术验收或 Git 授权。第 1～9 节保留初始研究与设计记录，第 10～14 节及顶部状态记录后续获授权批次的实际实现，覆盖早期“尚未实施/等待开始”的历史表述。后续仍维护同一文件，不创建平行版本。重大架构方向变更先说明依据并等待确认，普通内部取舍可在获授权批次及已批准边界内自主确定。
 
 长期边界见 [IntegrationPlan.md](../../Assets/YLFramework/Documentation/IntegrationPlan.md)，前置契约见 [1.2 Module/MVC 方案](xf-yl-1.2-module-mvc.md)，源码归属基础见 [1.1 承接方案](1791455404620-xf-yl-core-ownership.md)。
 
@@ -494,3 +494,235 @@ A～E 顺序与主要职责保持：A 归属/退出，B 同步加载/复用，C 
 **整体设计已批准，等待开始 1.3-A**：D1～D4 方向及 A～E 规划已原则上批准，D1/C1/C2 继续约束全部批次。具体 API/内部机制按实际源码及 E1～E3 自主评估，不将草案候选强制化；重大方向变更仍先说明并等待确认。尚未实施或技术验收，本次仅增量维护本文，不执行任何 Git 操作或 Runtime/Editor/测试/资源修改。后续按用户明确开始的批次推进，必要时在获授权范围同步现有长期蓝图/1.2 局部契约，不新增重复计划。
 
 达到 1.3 只意味着通用 View 与直接 Panel 核心闭环通过专项验收；不意味着完整 UI/Pool/Events/资源融合、原游戏非干扰、Player 或最终独立已经完成。
+
+## 10. 1.3-A 实施取舍与阶段边界
+
+本节记录获授权 A 批的实际实现，覆盖前文研究基线中的“尚未实施/等待开始 A”表述，不把整体设计批准等同于 A 验收。开始时已实际确认 `fusion/1.3-view`，工作区干净，指定约定及三份设计文档均已跟踪；未切换分支或执行提交、推送、合并及清理。
+
+### 10.1 归属、索引与会话
+
+- Module 新增内部 `ownedViews` 实例 ID 权威索引，资源名及实际类型为辅助索引；无资源名的内部注册不编造名字。注册仅接受 ModuleManager 精确注册的 Starting/Running owner，不改变 M/C 注册前装配。
+- View 保存内部引用型 `Session` 与注册时实例 ID；合法已注册实例重复 Add 幂等，跨 owner、键冲突、辅助索引不一致或生命周期重入明确拒绝。移除核对 owner、权威实例和会话，辅助索引仅按精确实例删除，并移除空 bucket。
+- GetView/GetViews/ClearView 仅访问当前 owner；跨模块调用真实 owner 的入口。类型单查询按实际类型且多匹配抛错，集合查询包含派生类型，名称/ID 泛型单查询拒绝错误类型，`GetView<T>(id)` 不再猜资源名。集合是独立结果，NonAlloc 保留；查询发现销毁实例时按保存身份结束失效会话。
+- Module 关闭及 ClearView 捕获 `(View, Session)` 快照，不让旧操作退出已重新注册的新会话。原始 View 引用代表可复用组件，`Close()` 针对其当前会话，不是外部不可变会话句柄；内部旧事务必须使用捕获身份，不能重读新 Session。
+- 删除 Module getter/Start 的隐式 CurrentModule/父节点 owner 推断和未索引初始化。场景及嵌套对象显式挂载 API、默认场景接入和 inactive/sceneUnloaded 兜底仍由 C 实施，本批不提供“场景 View 已完整纳管”的承诺。
+
+### 10.2 唯一退出与 Model 分离
+
+- `View.Close()` 改为不可覆写入口；业务结束扩展使用 `OnRemove()`，新增 protected `OnClosed()` 作为退出和实例处理提交后的可选完成钩子。若移除广播已开启过新会话，按内部 LastSession 身份跳过旧 OnClosed，连“重装后立即关闭”也不再派发旧通知。重入 Close 幂等，初始化/显式解绑期 Close 拒绝，必要退出期不能新增绑定或重新注册。
+- 独立尝试框架事件退订、每个 `onViewRemove` 观察者、OnRemove、主要 Model 解绑和业务解绑钩子、Panel 必要登记释放、索引/owner/会话引用撤销、实例处理，之后才广播和调用 OnClosed。单错误保留原异常，多错误聚合；Module 在 Closed/注销后汇总，兄弟对象继续清理。onViewRemove 在退出收尾清空，Awake 声明的实例事件定义保留。
+- Module 保持 OnClose → Controller → View → 剩余 Model；View 初始化/退出加入已有对象事务门禁，完成通知不在必要清理门禁内。InitView 仅做维持 A 会话协议所需的初始化标记、失败结束会话及已有 args 的 finally 配对，不声称已实现 B 的完整取得/类型/参数接管事务。
+- `View.Model` 改为框架只读主要槽，新增 protected BindModel/UnbindModel/OnModelUnbound。绑定仅借用已完成注册的确切 Model，可跨 owner；解绑先清槽再调用业务钩子，不移除 Model。显式解绑也有 View 事务门禁，清理失败的污染标记保持到退出，不能因业务捕获异常或重新绑定而误归健康缓存。Model 被显式移除后 getter 无副作用返回 null，多个 View 不互相结束数据。
+- Model/ModelManager 仅增加内部引用型注册身份，每次新注册分配、退出/回滚清除，同实例重复 Add 不改变；旧绑定不能因为相同对象/owner/ID 再注册而恢复。未增加 Model→View 图、引用计数、自动监听解除或加载入口 model 参数；请求接受时捕获 Model 意图仍由后续 B/D 按实际入口实现。
+
+### 10.3 E1/E3 与最小 Panel 适配
+
+- E1 已核对实际 XFAB allObjs、实例映射、IsInUse、Load/UnLoad、死实例扫描与池关闭。健康退出（包括纯观察者抛错）沿原 UnLoad 归还；OnRemove/业务解绑/必要框架退订失败及本批已临时注册的初始化失败，停用并 Destroy 自己取得的实例，避免将不完整状态标成可复用。未修改后端池或共享策略，未新增隔离管理器。
+- Destroy 不即时移除 XFAB allObjs/映射或卸载 Prefab；后续 Load/自动池扫描可清死实例，非自动卸载池的周期清理存在原有边界。外部业务解绑失败仍可能残留监听，销毁不代替解绑或保证所有资源已释放。
+- E3 定向核对新 YL override、CloseView、Panel、Editor 模板及资源文本；新 Core Close/Model override 仅实际命中 smoke Fixture，迁移至受控槽/OnClosed。原游戏 Close override 和持久 UnityEvent 明确属于原 XF 类型，不迁移；旧 YL UI 资产、namespace、程序集及序列化字段未改。
+- PanelManager 仅做 A 退出必需的直接适配：取消必要全局广播订阅，ReleaseView 只访问已有 manager，先清 order/queue/current，再尝试恢复前一有效 Panel 的 Visible。普通 View 退出不懒创建 UI；不重做 Panel 加载准备、排序/遮挡策略及请求终态，完整适配仍为 E。
+
+### 10.4 验证与后续
+
+本批实际使用 Unity `2022.3.62f3c1` 刷新、编译并反射核对新 Close/Model API；最终 `isCompiling=false`、`scriptCompilationFailed=false`，测试结束后普通/基础 Module 注册均为空。复用现有 PlayMode Fixture：CoreDirectViewPlayModeTests **24/24**（含14项新增风险回归）、CoreModulePlayModeTests **28/28**、CoreFailurePathPlayModeTests **13/13**、CoreXfabPlayModeTests **12/12**，共 **77项**专项通过，无失败或跳过；工具的全工程发现数量不当作执行数量。
+
+已验证单 owner/重复与冲突、本地查询及基础模块隔离、精确和旧会话移除、共享 Model/显式移除/同实例重新注册隔离、退出重入、显式解绑失败污染、逐观察者与兄弟异常继续、Module 顺序/回滚/新 owner 保护、普通缓存复用与脏实例拒绝复用、已销毁及从未激活的 wrapper 按保存身份清理、Panel 必要登记释放不依赖广播和开关。销毁回归断言先于 Fixture 后端条目恢复，不通过清理工具修正 Core 索引。
+
+独立只读审查发现的旧完成钩子跨会话派发、显式解绑污染/重入两项问题已修正并加入实际通过的回归；最终审查无未解决的 A 范围实质问题。`git diff --check` 通过，没有新增文件或需要补充的 meta。退出 PlayMode 仍观察到原 LoggerManager 场景关闭残留，与长期蓝图已记录问题一致；XFAB 订阅者异常用例按既有 LogAssert 预期记录，不把专项通过表述为全工程 Console 无错误。
+
+**具备进入 B 的核心技术条件，仍须先由用户验收 A 并授权 B。**本批未提交，不自动进入 B；没有机械执行全量 Editor/Foundation/Audio/XFAB/Player 测试。真实 AB 物理释放、外部业务监听清理失败后的资源状态及原游戏完整非干扰仍未验证。
+
+B 仍负责完整同步加载/LoadViewArgs 所有权、入口失败收尾、泛型类型统一、缓存初始化与 Unity 消息扩展；C 负责场景/层级/挂载；D 负责 pending、取消、代次及迟到结果；E 负责完整 Panel 直接路径和阶段收口。未修改原 Package、游戏、旧 UI 资产、Shared、程序集或资源后端，也未运行 1.4 游戏/Player 或最终独立门禁。
+
+## 11. 1.3-B 实施取舍与阶段边界
+
+本节覆盖历史研究中的 B 尚未实施表述。依据用户本次确认，A 已验收并完成 Git 收口；开始 B 时实际核对 `fusion/1.3-view`、干净工作区及 A 提交 `22b281d`。本批未获 Git 写入授权，不切换分支或自动提交、推送、合并及清理。
+
+### 11.1 同步加载与初始化事务
+
+- Module 的命名、直接 Prefab、泛型/非泛型、旧 `params object[]` 与 `LoadViewArgs` 同步 View 入口共用加载事务。保留原公开重载，旧泛型不再先初始化任意 View 后 `as T`。同步成功只返回 Loaded 实例；无效输入、缺资源/组件、不兼容 T 及业务错误直接抛出，不用日志加 null 留下半完成注册。
+- 命名查找捕获请求项目及有效基础模块项目，按 ModuleManager 已有注册顺序去重；基础模块身份采用注册表，不重新调用可变的 BaseModule getter。资产缺失或资源取得错误可尝试下一候选；取得 Prefab 后类型错误及业务初始化失败不继续 fallback。最终资源错误保留最后取得异常为 InnerException，不能屏蔽 XFAB 底层自身日志。
+- E2 选择同步两段式：公开 `AssetBundleManager.LoadAsset<GameObject>` 取得 Prefab，验证根 View 可赋给 T，再进入原 `GameObjectLoader.Load(prefab,parent)` 池。XFAB 没有 `TryLoadAsset` API；原同步命名路径本身已有 null 检查，调整收益是统一实例化前校验，不是修复同步 null-pool。冷路径与命中路径都不重复进行第二次命名资产加载。
+- 取得实例后再次验证存活及根组件，防缓存对象被业务改变。后端取得阶段也纳入同步对象事务门禁，Awake/提前激活不能合法关闭正在加载的 owner；不全面禁止初始化其他对象。
+- 临时注册 -> BeforeOnLoaded -> 两种 OnLoaded -> 核对会话 -> Loaded -> 活跃时开放表现事件。各业务边界和事件开放之后复核实例、会话及主要 Model 注册身份；最后钩子销毁组件或旧绑定身份已结束时不提交成功。临时查询可见但 IsLoaded=false，重复初始化、Close、Module.Close/Shutdown 拒绝；已完成会话重复 Add 保持 A 幂等。未提供新的 model 输入参数，业务仍可在加载回调中显式 BindModel。
+- 注册前失败不派发业务 OnRemove；临时注册后异常沿 A 的退出管线尝试 OnRemove、解绑、必要退订、索引及实例清理，不派发成功会话移除通知或 OnClosed。抛回原始异常，额外清理错误关联 `Data["YLFramework.Core.CleanupException"]`，不隐式移除 Model。
+
+### 11.2 LoadViewArgs 的所有权
+
+- 沿用现有 ClassObjectPoolManager，仅局部增加 Claim/Release 及 BeginRead/EndRead。入口先 Claim，再校验 owner、参数及资源；接管成功后拒绝、失败、成功均由本次操作 finally Release 一次。重复接管失败不进入第二笔归还，也不清第一笔数据。未传容器时只在必要业务参数回调前租用默认空容器，不为入口拒绝预分配。
+- New 后由调用方填充和读取；接管后不可修改，只有 OnLoaded(LoadViewArgs) 期间可借读。退出回调及 Loaded 事件钩子不能继续读取参数；成功/失败终态立即清七类字典及所有权状态再归还。回池后 Get/Set/Claim 抛 ObjectDisposedException，不等待下次租用才清引用。
+- IReuseable 生命周期变为显式接口实现，池回调不能重置活跃容器或复活已回收引用；移除了 Fixture 手工 OnLoaded reset。直接通过通用 Pool 管理此类型不受支持，不借本批修改通用池的非原子异常语义。
+- 参数限定主线程 New、同线程接管/读取/归还；局部线程身份检查拒绝跨线程误用，不宣称通用池线程安全。不为每笔参数分配独立 token：同一个原始池对象重新 New 后无法识别非法旧别名，因此业务必须提取所需值，不得保存容器或跨异步访问它。
+- Panel 的现代同步直接入口在解析 parent 前接管，并将已接管参数交给 View 内部入口，最终由 Panel 入口归还；未重构完整 Panel 准备/队列事务。异步等待期的接管、取消、失败与迟到参数使用权仍由 D 完成，不能把同步结果解释为异步入口已收口。
+
+### 11.3 缓存、Unity 消息与 E1/E3
+
+- 新增 protected OnViewEnabled/OnViewDisabled 业务钩子，Loaded 且 isActiveAndEnabled 时幂等开放；Disable 只暂停表现事件，不结束 owner、会话或 Model。私有 OnEnable/OnDisable/OnDestroy 为框架消息，派生类不得隐藏；从现有 override 迁移到业务钩子的真实新 Core 调用方只有 smoke Fixture。业务无需调用 base 才完成必要退订。事件启停捕获会话及单调订阅轮次，钩子重入后旧异常不退订或污染新会话/新轮次。
+- Awake 仍用于声明实例级事件及本地组件准备，OnLoaded 负责每次表现会话的初始化。XFAB 返回前可能已触发 Awake/OnEnable；inactive parent 下 Loaded 甚至可先于 Awake。本批不引入 staging root，不承诺原始 Unity OnEnable 已有 owner/参数，不假定 Start 或 Awake 是框架初始化前置。
+- 初次加载 inactive 对象可完成框架初始化而不开放事件；后续激活的 Awake 声明仍由 OnEnable 订阅。正常复用再次执行加载钩子，而 Awake/实例事件定义保留；关闭先清主要 Model、onViewRemove、会话及事件使用权，新会话不恢复旧绑定/旧参数。不反射重置业务自定义字段、协程或额外外部监听。
+- E1 沿用 A 的污染策略。健康退出及纯观察者错误归还；初始化失败、实际缓存组件失效或必要退订/业务清理失败，停用并 Destroy 本次取得实例，**不先 UnLoad**，使其在延迟销毁前仍是 IsInUse=true，同帧新加载不会取得待销毁对象。后续 XFAB Load/扫描识别死对象，不新增隔离管理器或修改 Package。
+- 直接 Destroy 不即时删后端 allObjs/映射，不代表 Prefab/Bundle 立即释放；非自动卸载池的周期整理限制保留。共享资产不是每消费者租约，类型失败及实例失败均不擅自 UnloadAsset(prefab)，不更改全局池策略或共享所有权。
+- E3 保留全部公开 LoadView 重载，新增业务 enable/disable 钩子，参数池 reset 不再是公开普通方法；直接调用方和测试已按真实使用适配。未改变 View/Panel 类型身份、程序集、序列化字段、GUID、旧 YL UI Prefab 或游戏使用的原 XF 类型。
+
+### 11.4 验证与后续
+
+本批实际执行 Unity `2022.3.62f3c1` 脚本导入及编译，最终 `isCompiling=false`、`scriptCompilationFailed=false`，反射确认专用业务钩子和私有框架消息已加载、参数不再公开普通 reset。测试结束后普通及基础 Module 注册均为零。
+
+| 实际执行套件 | 结果 |
+|---|---|
+| CoreLoadViewArgsTests，EditMode | 10/10 |
+| CoreDirectViewPlayModeTests | 34/34 |
+| CoreXfabPlayModeTests，LOCAL + Assets | 14/14 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+
+共 **89 项 PlayMode + 10 项 EditMode** 通过，无失败或跳过；工具的全工程发现数量不计入实际执行。旧泛型不匹配、旧事件钩子影响新会话、首次事件钩子销毁组件三条回归均在修正前实际失败、修正后通过。覆盖入口拒绝及即时清引用、重复接管保护、框架准备/两种业务回调/首次事件开放失败、额外清理错误、临时查询与重入、inactive parent 首次 Awake/事件、健康及污染缓存同帧复用、实际缓存组件再校验、Model 注册身份变更、真实命名冷加载/错误类型/缺失资源/基础项目 fallback/参数及会话隔离，以及 A 的 owner/退出和 Module 关闭回滚回归。
+
+独立只读审查发现的事件异常跨会话/轮次收尾、首次事件钩子后的最终存活检查已修正并加入实际回归；修正后的定向独立复核未发现新的实质问题。`git diff --check` 通过，无新增文件或 .meta/GUID 变更。退出 PlayMode 仍观察到已记录的原 LoggerManager 场景关闭残留，不将专项通过解释为全工程 Console 无错误，也未添加日志忽略来制造通过。Unity 专项结果只证明受影响 Core/LOCAL + Assets 链路，不代表真实 AB 物理释放、原游戏全流程、Player 或最终无 XF 生态独立运行。
+
+**B 完成时已具备进入 1.3-C 的核心技术条件。**C 开始时用户已确认 B 验收及提交，实际核对提交为 `a1beb2e`；C 实施见第 12 节。
+
+C 仍负责显式场景/层级挂载、场景卸载及完整销毁兜底；D 负责异步接管、pending、取消、跨重启/迟到隔离与终态；E 负责 Panel 必要上下文、后置准备失败及请求完整收口。后端在 Load 返回前抛错且不提供实例引用时，Core 不能保证清理全部后端半登记状态；原后端资源专题仍负责这一限制。
+
+## 12. 1.3-C 实施取舍与阶段边界
+
+本节记录本轮获授权 C 批的实际实现，覆盖早期 C 尚未实施的表述。开始时实际确认 `fusion/1.3-view`、干净工作区及 B 提交 `a1beb2e`；用户确认 A/B 已验收。未创建或切换分支，未提交、推送、合并或执行破坏性清理；完成后停止，不自动进入 D。
+
+### 12.1 显式挂载与业务归属
+
+- 新增 `Module.AttachView<T>(T view, LoadViewArgs loadViewArgs = null)`、`AttachViews(GameObject root)`、`AttachViews(Scene scene)`。单组件入口只挂载该 View，层级/场景入口发现全部 View，包含 inactive 对象。只接受实际已加载场景中的存活实例及精确注册的 Starting/Running owner；Prefab 资产、失效对象、未加载 Scene 和冲突会话明确拒绝。
+- 复用 A/B 的注册、初始化、Loaded、事件与退出管线，不增加第二套场景生命周期。Start 不推断 CurrentModule 或父节点 owner。场景与普通嵌套组件按实例 ID/实际类型查询，不将 GameObject 名字编造成资源名称。
+- 同 owner 的有效已完成会话重复挂载幂等，不重复加载钩子、不改变绑定或参数；传入参数仍按 B 的接管/归还规则消费一次。跨 Module、半完成或正在退出/解绑/挂载的会话拒绝。层级批次先检查全部冲突，再初始化新增会话；失败只撤销本次新增会话，不退出既有会话，也不改变调用方对象的 activeSelf。原异常及附加清理错误保持既有口径，不派发失败批次的成功退出通知。
+- 初始化和整批挂载使用现有 View 事务门禁；批次保留组件挂载标志，回调不能关闭/重新挂载本批对象或在事务中的取得根下新增会话。其他合法独立对象仍可初始化。合法重复 Attach 不等于允许内部 InitView 再初始化已存在会话，原 B 拒绝契约保持。
+
+### 12.2 inactive、层级与取得实例边界
+
+- 框架初始化不以 Unity Awake/Start 为前置条件，显式 Attach 不主动激活对象；Loaded 且 isActiveAndEnabled 时才开放框架表现事件。参数仅传给单组件挂载或本次加载根 View，普通子 View 使用独立空参数借读窗口，不共用 pooled args，不反射重置任意业务字段。
+- 同步加载和现有异步结果调用的 InitView 都定向发现取得根的 View 子树，包含 inactive；每个组件独立进入 owner/index/会话管线，后续动态新增 View 必须显式 Attach。此处只复用已取得结果的初始化基础，不实现 D 的 pending、取消或晚到协议。
+- 每个 XFAB 取得根保存其真实根 GameObject；普通嵌套 View 保存取得根及根会话身份。根退出先结束对应子会话，再只归还根一次；批量关闭让取得根优先，普通子会话不单独改变 activeSelf。单独 Close 普通子 View 只退出并隐藏该子对象，不归还根，不退出有效兄弟或关联 Model。重新挂载子组件会重新初始化，但不会自动恢复其自定义状态或激活状态。
+- 独立 Load 后挂在另一取得根下的实例仍是独立后端单元：各自退出/归还，归还时脱离外层根，防止它留在外层缓存子树中被再次当成普通子组件纳管。跨 owner 挂入正在使用的取得子树通过入口校验拒绝；不建立通用层级所有权框架，也不拦截 Unity 的任意 SetParent/MoveGameObjectToScene 操作。
+- 场景/调用方对象 Close 只结束逻辑会话并隐藏，不入 XFAB 池、不默认 Destroy；失败回滚保留调用方对象激活状态。健康取得根沿原 XFAB UnLoad 归还；必要子会话清理失败污染其当前取得根，最终按 A/B 策略停用并 Destroy，不先归还，避免同帧误复用。独立内层取得根污染只影响它自己的归还单元。纯观察者错误仍不等同实例污染。
+- E1/E3 沿实际需要补充根/子来源及当前根会话关联，不新增租约、全局池、持久缓存 root 或资源后端接口。Destroy 不即时移除 XFAB 登记或卸载共享 Prefab/Bundle；缓存对象继续可能随 parent/场景销毁，不承诺跨场景保活。原 Package、游戏及旧 YL UI 资产/序列化身份不变。
+
+### 12.3 Destroy、Scene 与迁移
+
+- OnDestroy、sceneUnloaded、查询剪枝与 Module/主动 Close 共用按保存 `(owner, View引用, 注册ID, Session)` 校验的退出管线。正常退出异常仍逐项清理，重复消息幂等，fake-null wrapper 不依赖现取实例 ID，也不再次把已销毁对象送池。
+- 场景入口持有确定 Scene，使用 handle 区分同名/同路径 Additive 实例。卸载事件仅检查受管 owner/index，不按 scene.name 或任意卸载事件退出存活对象；存活 View 更新实际 Scene handle，已销毁 View 按保存会话退出。迁移到其他 Scene 或 DDOL 不改变 Module owner，原场景卸载不会误关它们；真正销毁或所属 Module 关闭才结束会话。
+- Unity 2022.3 明确从未激活的对象不保证 OnDestroy。因此复用已有 UpdateManager 增加受管索引存活扫描，通常在销毁后下一次 Update 清理，不要求业务调用查询才释放 owner/绑定。正常帧只遍历受管索引，不进行全场景搜索或创建 View 快照；销毁清理才分配退出快照。同步对象事务进行时跳过该 owner，终态后再处理。
+- 第一个受管 owner 注册时订阅卸载与 Update，最后一个 owner 无 View 时解除；不监听任意 sceneLoaded 自动猜 owner。Unity 事件/帧扫描中清理错误在必要收尾完成后报告 Debug.LogException，不吞异常；显式调用路径仍抛回/汇总。项目当前使用正常 Domain Reload，未改变 Enter Play Mode 配置，也未开展关闭 Domain Reload 的全框架静态生命周期改造。
+
+### 12.4 默认启动与 1.2 协作
+
+- 保持默认场景 Single 模式及配表 -> 默认 Scene -> OnStart 顺序。加载前捕获当前 handles，成功后选择唯一新出现且名称匹配、已加载的 Scene，然后由启动请求的局部 `module` 挂载，在 Module.OnStart 前完成；不以 CurrentModule 推断归属。
+- 实际 XFAB Assets 场景结果使用 GetSceneByName，不能作为同名实例的普遍唯一身份。因此默认启动在 Core 最小范围使用前后 handle 差集，零个或多个候选明确失败，不取任意匹配对象，不修改 Package 或设计新的场景加载服务。外部 Single/Additive 加载后调用方直接指定真实 Scene 与 owner 挂载，合法路径保持。
+- 挂载异常直接进入已有 StartUpModuleRequest/ModuleManager 启动失败回滚，保留原异常，注销/Closed/退出后才完成失败请求。Controller -> View -> 剩余 Model 的关闭顺序、成功嵌套 Module/current 保护及 View.Close 不移除 Model 的 D1 保持。逻辑回滚不恢复 Single 卸载的旧场景、不自动卸载已加载的新场景。
+- 后端公共请求不提供 Unity 加载操作与 Scene handle 的可信一对一关联；默认启动不承诺任意并发的同目标场景加载。差集检测到歧义明确失败，任意匹配加载并发及真实 AB 身份关联仍需后续场景/资源后端专题处理，不把全局事件监听伪装成请求身份。
+
+### 12.5 实际验证与后续
+
+实际使用 Unity `2022.3.62f3c1` 导入、编译及执行专项 PlayMode；已取得 `isCompiling=false`、`scriptCompilationFailed=false`。独立只读审查未发现重要实质问题，测试后 `trackedViewOwners=0`、普通及基础 Module 注册均为零。原 Smoke Scene/Harness 资产和严格结构校验未修改；默认场景测试只在 PlayMode 向真实 Fixture 实例注入测试自有 inactive View，结束后清理，未创建新资产或 meta。
+
+| 实际执行套件 | 结果 |
+|---|---|
+| CoreDirectViewPlayModeTests | 44/44 |
+| CoreXfabPlayModeTests，LOCAL + Assets | 16/16 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+
+共 **101 项 PlayMode** 通过，无失败或跳过；其中直接 View 新增 10 项，场景/启动新增 2 项并扩充原默认 Single 用例。覆盖显式 owner/ID查询、inactive/重复/冲突、失败只回滚新增、子退出与根归还、污染子会话、独立嵌套根、普通 Destroy/从未激活销毁、同名临时 Scene、真实同路径重复 Additive、迁移/DDOL、默认 OnStart 前挂载、默认挂载失败 Model/View 回滚、成功嵌套 Module 保护及既有 A/B/1.2 回归。没有通过 Fixture 恢复内部索引来制造通过。
+
+本轮未机械执行全部 Editor/Foundation/Audio/XFAB 或 Player 测试，B 的参数 EditMode 结果仅作历史证据，不表述为 C 本轮执行。测试工具的全工程发现数量不计入执行数量，仅统计各明确类过滤返回的实际结果。退出 PlayMode 仍观察到已记录的原 LoggerManager 残留错误，未修改原 Package 或添加日志忽略，不将专项通过解释为全工程 Console 无错误。真实 AB 物理释放、原游戏完整非干扰、Player 和无 XF 生态最终独立未验证。
+
+**已具备进入 1.3-D 的核心技术条件，仍须用户验收 C 并授权 D。**本批未提交，不自动进入 D；D 仍负责异步参数接管、pending/取消、owner代次、目标在等待中失效及晚到终态，E 仍负责完整 Panel 直接适配/收口。现有下层永不完成、Load 返回前半登记无法提供根引用、共享资产真实释放及业务自有监听清理失败的边界，留给既定异步/资源/公共能力专题，不扩大本批范围。
+
+## 13. 1.3-D 实施取舍与阶段边界
+
+本节覆盖早期 D 未开始及 C 未提交的历史表述。用户确认 A～C 已验收；D 开始时实际核对分支 `fusion/1.3-view`、干净工作区和 C 提交 `bee3e28`。本批不执行提交、推送、合并、分支切换或清理，不自动进入 E。
+
+### 13.1 请求身份与终态
+
+- 每笔加载独立创建请求，不按资源名去重Core请求。Module注册分配内部引用型 `ViewLifecycle`；请求接受时捕获owner、代次、有序去重资源候选、parent存在信息、目标Scene及parent已有View会话。pending登记先于协程启动，覆盖立即完成、共享请求和重入；等待本身不进入View对象事务门禁。
+- `LoadViewRequest<T>` 为sealed、仅内部构造，`view`改为只读属性；新增只读 `Status`（Pending/Succeeded/Failed/Canceled/Invalidated）及原始 `Exception`。必要收尾、输入释放及pending摘除先于完成通知；终态只提交一次，通知异常通过Debug.LogException报告，不反向改写结果。沿用Shared的AddCompleteEvent/late callback及多播语义，不承诺逐观察者继续分发；完成后Abort幂等，不调用Shared或XFAB Abort。
+- 主线程接受请求并在同线程Abort，跨线程Abort在改变状态前拒绝。等待期Abort立即逻辑取消。Awake/初始化等同步段中重入Abort只标记中断，通过正式初始化边界检查触发回滚，回滚和参数借读窗口结束后才完成取消；不在OnLoaded的BeginRead中回收参数。已经抛出的独立业务失败优先保留为Failed，回滚期间重入Abort不能覆盖原始异常或附加清理错误；取消检查引发的回滚则保持Canceled及其清理错误。
+- owner进入Closing时先清代次并失效pending，立即释放其输入，不让OnClose或后续回调恢复旧请求。沿1.2唯一管线结束Controller/View/Model、注销并进入Closed后才发布失效请求通知；启动失败回滚还须先移除旧startingModules记录并恢复旧上下文再通知，Shutdown沿同一管线且保留其重启禁令。普通关闭/回滚完成观察者可显式重启同一Module，旧快照及请求不会摘除新pending或注册新View。Module启动Abort仍明确拒绝。
+
+### 13.2 目标与正式加载事务
+
+- 等待逐帧检查owner代次、parent存活、parent捕获的表现会话及真实Scene。未指定parent固定接受时的Active Scene handle；等待时切换Active Scene不会改变目标，实例取得后必要时移入原Scene。指定parent被Destroy与未指定parent严格区分；存活parent合法迁移Scene/DDOL按C跟随其真实场景，已有parent View结束或复用新会话则失效。
+- Prefab、实际池实例及业务有效性分别校验；取得实例的同步段纳入原View事务门禁。初始化复用A～C的InitializeHierarchy/InitializeView，不另写较弱业务流程；BeforeOnLoaded、两种OnLoaded、Loaded事件及整批提交边界追加本请求检查。失败继续原会话回滚、额外清理错误关联与污染实例停用/Destroy策略，不先归还污染实例；正常成功/退出沿已有缓存协议。
+- 没有新增显式model公开入口：A～C实际接口均不支持该输入，现有调用只在OnLoaded中BindModel。args不是Model注册身份声明，业务在回调中选择当时有效注册；已经移除/临时/退出中的注册被现有BindModel拒绝，绑定后注册token变化被原初始化检查拒绝。请求接受时的Model意图需要未来有真实需求的显式入口，不能从任意payload推导，也不声称raw引用重新注册后仍代表旧身份。
+
+### 13.3 E2/E3、参数与后端边界
+
+- E2核对实际XFAB 1.24.0：Assets LoadAssetRequest先yield一帧，再可能以null资产且无error完成；原GameObject请求随后GetOrCreatePool(null)抛错且不能完成。异步选择LoadAssetAsync<GameObject>取得Prefab、检查error/实际类型/存活和根View类型，再Load(prefab,parent)，绕过此明确路径，不重复命名加载；资源错误/空结果可fallback，取得错误类型或业务初始化失败不继续fallback。
+- 泛型在途资产请求按项目+资源名共享，key不包含T；检查真实资产类型，不对共享请求Abort。XFAB资产记录按对象去重而非每消费者租约，取消/失效/类型失败后的共享Prefab仍归后端，不擅自UnloadAsset影响其他消费者。每个成功Core请求分别取得实例；关闭只处理自己取得的根。未建池Prefab可能延长真实AB持有，Destroy不即时删除池登记或保证物理卸载。
+- E3保留Module全部LoadViewAsync公开重载、params与LoadViewArgs入口；内部接管统一。公开请求写结果/派生生产者能力没有实际调用证据，改为只读sealed以保护终态；直接Panel只读取结果，其签名无需适配，完整Panel取消、后置准备与错误传播仍留E。原游戏、Package、Shared、旧YL UI资产、程序集和GUID不改。
+- LoadViewArgs在入口先Claim；接受前拒绝也消费并Release，重复接管失败不回收第一笔参数。等待期保持请求独占，成功、失败、取消、失效一次释放并清请求的args/owner/parent/资源候选/legacy参数引用。默认空args仍只在业务借读窗口租用。清理错误不覆盖原始失败，沿Data["YLFramework.Core.CleanupException"]关联；完成通知不承担必要回收。
+- 未新增超时、资源租约、通用请求管理器或物理取消。后端自身异常导致永不完成且业务上下文持续有效时仍可等待；Core逻辑Abort、owner/目标失效可以结束，不修补Package协程。实例取得抛错且未返回根引用时的后端半登记、真实AB释放及Player验证仍归后续资源/异步专题。长期阶段边界未变化，IntegrationPlan不机械重复本节。
+
+### 13.4 验证与后续
+
+本批实际使用Unity `2022.3.62f3c1`刷新并编译当前源码，最终 `isCompiling=false`、`scriptCompilationFailed=false`；反射确认请求sealed及结果无公开setter。测试结束后 `trackedViewOwners=0`、普通及基础Module注册均为零。没有新增文件或meta/GUID变化，`git diff --check`通过。
+
+| 本批实际执行PlayMode套件 | 结果 |
+|---|---|
+| CoreXfabPlayModeTests，LOCAL + Assets | 25/25 |
+| CoreDirectViewPlayModeTests | 44/44 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+
+共 **110项PlayMode** 通过，无失败或跳过。异步专项新增9项分组测试，增强原错误类型、资源fallback及参数接管断言；覆盖正常并行同资源、取消后真实参数立即复租与后端迟到不生成实例、普通Close/启动失败回滚通知内同实例重启、代次/缓存新会话隔离、parent销毁/旧会话替换/合法Scene迁移、无parent捕获Scene及卸载、实际missing/错误T/业务初始化及额外清理错误、Model显式移除和注册token变化、借读窗口Abort延期回滚、完成回调重入/抛错/late订阅和重复终态。关键owner/pending/输入/实例断言先于Fixture恢复，不反射清非法Core注册制造通过。既有A～C场景/嵌套/inactive/退出及1.2 Module回归保留。
+
+独立只读审查定位的两处重入问题已修正并纳入上述通过的测试：启动回滚必须在旧startingModules/current收尾之后发布失效通知；业务初始化失败后回滚重入Abort不能覆盖原始异常及清理错误。定向复核未发现新增实质问题。源码审查不是运行验证，两者分别记录。
+
+退出PlayMode实际日志仍出现已记录的原 `LoggerManager` 场景关闭残留；未修改原Package或添加日志忽略，专项通过不等于全工程Console无错误。未机械重跑全量Editor/Foundation/Audio/Player，Shared和LoadViewArgs基础实现未改变。没有安全复现任意后端永久挂起或物理取消，不把逐帧逻辑失效及LOCAL + Assets成功解释为底层任务停止；非GameObject共享资产返回的类型防护由实际源码确认，未构造不同泛型共享请求的真实AB复现。真实AB的Prefab延长持有/共享释放、物理I/O、Player、原游戏完整非干扰及无XF生态独立运行仍未验证，留既定资源/AsyncOperation/1.4专题。
+
+**具备进入1.3-E的技术条件，仍须用户验收D并授权E。**完整Panel取消/子请求失效传播、后置UI准备与登记失败收口仍由E负责；本批不将正常Panel回归通过描述为完整Panel请求协议已完成。未提交，不自动进入E，长期阶段边界不变。
+
+## 14. 1.3-E 实施与阶段技术收口
+
+本节覆盖早期 E 未开始、D 未提交的历史表述。用户已确认 A～D 验收；开始 E 时实际核对 `fusion/1.3-view`、干净工作区和 D 提交 `57d3595`，当前源码包含 A～D。仅修改 YLFramework 自有 Core、既有测试及指定两份文档，不切换分支、提交、推送、合并或清理，不启动 1.4。
+
+### 14.1 Panel 与 View 的唯一协议
+
+- 保留 `Panel : View`。直接 Panel、普通 View 加载 Panel、显式 Attach 及嵌套 Panel 均复用原临时归属/索引、BeforeOnLoaded、两种 OnLoaded、Loaded/事件、失败回滚和退出管线，不增加第二套 owner、pending 或初始化事务。普通 View 不创建 Canvas/EventSystem/PanelManager。
+- 初始化先确定当前会话 UIType。直接 Panel 根使用请求指定值；View/Attach/普通子 Panel 继承受管父 Panel 或已有持久 Canvas 的确切 Scene 上下文，否则默认 UI。不按 CurrentModule、Scene 名称或旧缓存字段猜 owner/UIType；普通 View 入口不自动创建全局 UI 根或 EventSystem。
+- Panel 的 Canvas、逻辑排序与 order 登记在业务 OnLoaded 前准备。自有 Canvas 健康复用不重复添加组件；借用 Canvas 每次按当前 parent（含 inactive）重新取得，不改借用 Canvas 的排序、启用状态或队列。非框架自带 Canvas 仍明确拒绝；`isInitCanvas` 仅在 Canvas 准备成功后设置，准备失败可在调用方修正对象后重新 Attach。
+- 显示队列在原 Loaded 且 active 的事件开放阶段接入，不让 inactive 初始化遮挡当前 Panel。真正激活再接入；GO 停用释放显示队列并尝试恢复前一有效 Panel，但保留 Module/index/order/主要 Model。只将 `PanelType.Panel` 的自有 Canvas 全屏 Panel 入遮挡队列，Window/Overlay 不当作全屏遮挡者；完整导航/遮罩/不可见策略没有融合。
+- 实际 Unity 探针确认 inactive Canvas 的 `overrideSorting` 写入可能读回 false，首次激活会重置原生 sortingOrder；根 Canvas 本身也不要求 overrideSorting=true。因此在 Loaded 激活边界重新应用自有 Canvas 配置和已准备的逻辑排序，不新增组件、不重复派发排序变更。已验证首次 inactive 根/嵌套 Canvas 激活；初始化各边界额外核对 Canvas 存活，回调销毁必要 Canvas 不能提交合法 Loaded。
+
+### 14.2 加载、请求及公开 API
+
+- Module 所有 `LoadPanel` / `LoadPanelAsync` 公开重载保留。旧 params 泛型同步入口直接进行 T 校验，不再先加载任意 Panel 后 `as T` 留下错误对象。同步正常返回已完成初始化的 Panel，入口拒绝、缺资源、类型或初始化失败抛异常；失败沿原会话清理并保留根因/附加清理错误。
+- 现代入口先 Claim 参数，再校验 owner/name/UIType/parent 并准备 UI 根。UI 根准备纳入现有同步对象事务门禁，创建通知不能关闭/Shutdown 正在准备的 owner。拒绝或准备失败归还已接管参数；重复 Claim 不动第一笔输入。同步入口 finally 归还，异步接受成功后输入唯一转交子 View 请求，不在 wrapper 保存或再次回收。
+- `LoadPanelRequest<T>` 改为 sealed、仅内部构造，`panel` 改为只读属性；新增只读 `Status`（复用 `LoadViewStatus`）及 `Exception`。定向未找到需兼容的外部构造、派生或结果写入。请求由一个 `LoadViewRequest<T>` 执行全部必要 UI 事务，wrapper 直接内部订阅并转接成功/失败/取消/失效，不再 yield 子请求后进行后置 UI 提交；子请求结束即完成 Panel 请求，原 Exception/附加清理错误保持一致，终态清空 child 引用。
+- Abort 委托原 View 逻辑取消：等待期立即终结；初始化借读期间标记中断，事务回滚和参数收尾后通知。独立业务失败及回滚错误不被重入 Abort 覆盖。Module 关闭/启动回滚/Shutdown、parent/目标失效及旧代次迟到沿 D 处理，完成通知异常只报告日志，不反向改写已提交结果，也不影响下一笔会话。没有独立 Panel producer/pending、默认超时或共享后端 Abort。
+
+### 14.3 排序、退出与重入收尾
+
+- SortingOrder 同步更新已存在的 order 登记及实际 Canvas，避免下一次排序仍用旧值；inactive 但有效的会话保留排序登记。`Module.UIStartSortOrder` 按 owned 会话快照刷新，覆盖无资源名的场景/嵌套 Panel，逐 Panel 尝试后汇总错误，不修改 1.2 关闭/回滚顺序。
+- AlwaysInFront 快照捕获 Panel 引用及 Session，处理前按会话和 UIType 校验，虚拟属性/排序回调后复验；旧普通 UI 快照不能修改复用后新 DDOL 会话或其 sibling。临时列表在异常时也归还，不重写完整排序算法。
+- 退出继续由 ViewManager 直接调用已有 `ReleaseView`：先删两类 order、全部该 Panel queue 及 current，再尝试恢复前一有效 Panel/Visible；不依赖开关或普通移除广播成功，不为普通 View 退出懒创建 manager。OnRemove/观察者异常仍继续 owner/index/Model 解绑及实例收尾；健康实例沿原池归还，污染实例沿 A～C 停用/Destroy，不先归池。
+- 事件实际添加先于会调用业务 Invisible 的队列激活，实际逐项退订先于会调用业务 Visible 的队列恢复；回调后的 Session/eventEpoch 守卫阻止旧轮次继续操作新会话。这是必要 Panel 生命周期直接适配，不修改 EventManager/Shared 的公共分发协议。
+
+### 14.4 A～E 核对、验证与剩余边界
+
+A～E 形成 Module 唯一 owner、实例/名称/类型索引、资源/场景取得区别、同步及异步初始化、Loaded/事件、显式挂载、退出/失效及缓存复用闭环。D1 保持：View/Panel.Close、失败、取消和销毁都不隐式移除 Model；Module 仍按 OnClose → Controller → View → 剩余 Model 唯一清理。DDOL 不改变业务 owner。原 Package、CGJ2024 游戏业务/场景、旧 YL UI Prefab/类型/序列化字段、Shared、asmdef 和 GUID 均未修改。
+
+本轮实际使用 Unity `2022.3.62f3c1` 导入编译，最终 `isCompiling=false`、`scriptCompilationFailed=false`；反射确认 Panel 请求 sealed、结果无公开 setter。最终普通 Module、BaseModule、trackedViewOwners 均为零。实际专项结果：
+
+| 套件 | 结果 |
+|---|---|
+| CoreDirectViewPlayModeTests | 46/46 |
+| CoreXfabPlayModeTests，LOCAL + Assets | 33/33 |
+| CoreModulePlayModeTests | 28/28 |
+| CoreFailurePathPlayModeTests | 13/13 |
+| CoreIdentityTests，EditMode | 7/7 |
+
+共 **120 项 PlayMode + 7 项 EditMode** 通过，无失败或跳过；全工程发现数量不计入执行数量。新增 10 项组合回归并增强既有 Panel/缓存断言；涵盖必要上下文、Canvas 失败后重试/共享重选/首次 inactive 激活、同步/异步/旧泛型错误、子请求失败/取消、参数接管/借读取消、Module 通知后重启/DDOL owner、parent 销毁、排序/业务/队列异常与根因、完成通知抛错、内部登记及退出收尾，保留 A～D 与 1.2 回归。关键断言先于 fixture 恢复，不通过反射摘除非法 Core 注册制造通过。
+
+独立只读审查定位的 inactive 入队、AlwaysInFront 旧会话排序及队列回调/事件顺序问题，均先在 Unity 实际失败复现后修正通过；最终定向复核未发现新增重要问题。源码审查与运行结果分别记录。`git diff --check` 通过，没有新增文件、资源、meta 或程序集；程序集身份测试确认无新增 Core → 原 XF/旧 YL Runtime 依赖。既有蓝图的并行编辑予以保留，仅增量更新本阶段状态与边界。
+
+本轮退出 PlayMode 仍观察到已记录的原 LoggerManager 场景残留，未修改原包或增加日志忽略，不将专项通过解释为全工程 Console 无错误。未运行完整原游戏、Player 或真实 AB；LOCAL + Assets 不证明 AB 物理释放。后端在有效上下文中永不完成仍可能等待，但 Core Abort/关闭/目标失效可以逻辑结束；不宣称物理取消、共享资产即时卸载、Destroy 即删池登记、跨场景缓存保活或自动重置任意业务字段。显式请求发起时 Model 身份输入仍未新增，业务 args 内 BindModel 是初始化时选择有效注册，不把任意 payload 当成接受时身份声明。
+
+**阶段 1.3 实施及专项验证完成，待用户最终验收与 Git 收口。**已达到本阶段技术验收条件，并具备进入 1.4 的核心前置条件，但未声明最终 COMPLETE、未提交或启动 1.4。完整 Panel/UI、Events/Pool/资源/AsyncOperation 等能力留既定专题；1.4 仍负责原游戏启动/菜单/设置/进入退出再进入/音频非干扰、Logger 残留定向定位及按风险的 Windows64 Player 检查；无原 XF 生态的最终独立验证仍属后续统一收口。
