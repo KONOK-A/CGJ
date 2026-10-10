@@ -1,6 +1,6 @@
 # XF × YL 2.4 Timer：融合研究与技术设计
 
-**状态：2.4-A 已实现并通过本批验证，待用户验收与 Git 收口；B/C/D 未实施。**
+**状态：2.4-A 已收口（`861404c`）；2.4-B 已实现并通过定向验证，待用户验收与 Git 收口；C/D 未实施。**
 
 本文的技术决策与实施路线已获用户总体审阅确认。批准仅覆盖总体设计方向、功能边界与 A→B→C→D 路线，不构成批次实施授权；未获另行授权前不改功能代码、不运行 Unity、不切分支、不执行 Git 写入，也不自动启动 2.4-A。
 
@@ -283,8 +283,8 @@ TimerScheduler manual; // 显式手动实例，同一个内核，不自动创建
 | 批次 | 主要变更轴与交付 | 最小验收 |
 |---|---|---|
 | **A 内核与正式计时契约** | Foundation 唯一手动内核、三个时钟域、独立 initial/interval、次数、精确 run/终态、暂停和异常继续。承接可用 YL 调度/lease/索引堆，补帧与 double/稳定比较，不重造已正确的索引算法；不先改 Core/MVC 或 Action | 用可控时间代表项验证恰好到期、零/负/非有限输入、帧 n、有限/无限、不补发、暂停剩余；单次抛错不重触发、非末轮 Cancel/Pause、末轮建立新 run、取消另一个到期任务、递归推进不重复。优先改用不依赖 Scope 名称的现存内核断言；Scope 同名验收归 B |
-| **B 默认驱动与 YL Scope 收敛** | 单一默认 TimerDriver、gate/session/owner、非创建控制、Scope/名称与默认范围、TimerHandleGroup 和日期转换薄入口、正式 namespace/API 及 Tools/Timing 迁移；退出旧 YL MonoSingleton/Root 双堆驱动和旧 Helper | 复用 Timing/TimerScope 的控制、名称、取消、Dispose、Remaining、末轮同名与同会话 Scope 跨 host 重建；补 registered clock anchor/冷启动/非 Update 输入、未锚定 Pause/Resume、LateUpdate 首次 host 帧等待、host disabled/destroy、clear 不清其他范围、句柄/Scope 查询取消不建 host、旧会话 Scope 拒绝投递、gate 关闭拒绝。日期转换及组清理用最小代表断言；PlayMode 只选真实时间/timeScale=0/场景保活代表路径 |
-| **C XF 互补能力与 Core 接入** | ReusableTimer、GO 生命周期、TimerObject、Timer 终态等待与窄 Coroutine 观察；移除自有 Core TimerManager/Timer 内核及不再有用的专用监听，保留字段/GUID | callback 内复用、旧句柄取消新 run 无效、重绑 A→B 不留 A、paused owner 失效、从未 active 后销毁、GO 停用/组件停用/重新启用、成功回调自停用不双 Abort、OnAbort 重启、监听/委托清引用。Coroutine 定向验证自然结束、producer 被 Stop/owner 销毁的实际等待结果、停止观察不停止 producer、Starter 拒绝不悬挂，不扩成异步矩阵 |
+| **B 默认驱动、Scope 与显式复用** | 单一正式默认 TimerDriver、gate/session/owner、非创建控制、Scope/名称、ReusableTimer、TimerHandleGroup 和 DateTimeOffset 薄入口。按本批明确授权，ReusableTimer 提前至 B；旧 Timing/Core 迁移及删除不在 B 执行 | 复用 Timing/TimerScope 的控制、名称、取消、Dispose、Remaining、末轮同名与同会话 Scope 跨 host 重建；补 registered clock anchor/冷启动/非 Update 输入、未锚定 Pause/Resume、LateUpdate 首次 host 帧等待、host disabled/destroy、句柄/Scope 查询取消不建 host、旧会话 Scope/复用槽拒绝投递、gate 关闭拒绝。验证复用旧句柄隔离、callback 新 run 与旧 finally，日期转换及组清理；PlayMode 选真实时间/timeScale=0/场景保活代表路径 |
+| **C XF 互补能力与 Core 接入** | 接入 B 已完成 ReusableTimer，实施 GO 生命周期、TimerObject、Timer 终态等待与窄 Coroutine 观察；迁移旧计时消费者与调度实现，保留字段/GUID。旧实现移除须随 C/D 授权完成 | 重绑 A→B 不留 A、paused owner 失效、从未 active 后销毁、GO 停用/组件停用/重新启用、成功回调自停用不双 Abort、OnAbort 重启、监听/委托清引用。Coroutine 定向验证自然结束、producer 被 Stop/owner 销毁的实际等待结果、停止观察不停止 producer、Starter 拒绝不悬挂，不扩成异步矩阵 |
 | **D 专题收口** | 消费者、命名/冗余入口、来源许可、程序集/资源身份、现有文档收口；确认唯一调度归属和默认驱动 | 真实关闭 Domain Reload 连续两轮 Play，旧 run/Scope/复用槽及迟到消息隔离、真实退出不重建；复用一个 Core/View 生命周期代表项和一个 Timer/Action 共存隔离项。按变化风险选择原游戏既有非干扰；不跑历史全集或默认建 Player |
 
 ### 7.1 优先复用与必要缺口
@@ -381,3 +381,81 @@ manual.Dispose();
 A 内核及正式手动契约具备进入 B 的基础，待用户验收与 Git 收口，不自动启动 B。B 仍需实现 TimerDriver、默认入口、Unity 合法采样/冷启动、gate/session/owner、Scope 名称与默认范围、TimerHandleGroup、日期转换及旧 YL Timing 迁移；其中真实自动驱动的继续运行/日志报告尚未交付。
 
 ReusableTimer、GO 绑定、TimerObject/Core TimerManager 消费者迁移、Coroutine Wait/观察、旧 Core 内核移除归 C；完整命名/许可/文档与真实会话收口归 D。旧 XF/Core Timer 与 YL Tools/Timing 仅作为迁移基线保留，本批没有删除或迁移它们，因此尚未宣称整个项目已只运行一套 Timer。Action、UpdateManager、原游戏消费者和长期蓝图均未修改。
+
+## 10. 2.4-B 实施结果（2026-10-10）
+
+本批按用户新的明确授权实施默认驱动、Scope、ReusableTimer、HandleGroup 与 DateTimeOffset。开始时核对 `fusion/2.4-timer`、HEAD `861404c`，工作区干净。新授权将 ReusableTimer 从原 C 路线提前到 B，并明确禁止在 B 迁移 Core TimerManager、TimerObject、Coroutine 或删除旧 Timer 实现；本节及第 7 节更新后的路线优先于第 9 节 A 当时的后续安排。未切换分支、提交、推送、合并或创建 Tag。
+
+### 10.1 默认运行服务与生命周期
+
+- 新增 `F/Timing/Timer.cs` 静态入口和内部 `Internal/TimerDriver.cs`。仅有效 Play 投递惰性创建 `YLFramework.Timing.TimerDriver` 独立顶级 DDOL GameObject；不搜索/收养场景对象，不创建 Root、UI 或公共 UpdateManager。默认与手动实例使用同一个 TimerScheduler 派发算法，自动实例拒绝公开手动 Advance。
+- 查询、Cancel/Pause/Resume、Scope/HandleGroup 清理和 Shutdown 都不创建驱动。无效参数先拒绝；Play/gate 无运行权限、仍存在的 disabled/released driver 拒绝投递并抛 InvalidOperationException，不静默返回假任务。
+- 自动时钟首个合法 Update 前保持未锚定，避免读取 Awake 未定义时间/帧。首个 Update 建立合法样本；每个已知 Unity rendered frame 只采一份 double 双时钟，维护会话内单调 long 帧身份。已就绪的非 Fixed 登记/控制/查询可同步当前帧样本，独立派发帧游标防止登记采样漏掉该帧的旧任务派发。
+- Fixed 步只更新已知帧身份，不把 fixed time 写入渲染秒样本。秒任务下个合法 Update 锚定 delay，帧任务使用已知登记帧。冷启动帧 n 在首个 Update 建立登记帧后再等 max(1,n) 帧；零秒/帧均不 inline、不进入登记帧或当前 callback 派发。
+- OnDisable 立即结束 owner，pending/scheduled/paused/非末轮执行责任统一 Invalidated。再次启用不复活已释放 owner，也不建立第二份 driver；需 Shutdown 或实际销毁后显式重投。空闲自有 host 保留，正常场景卸载不影响默认任务。
+- Shutdown 只清既有默认 Timer owner；先撤销静态 owner，再失效任务和销毁自有对象，通知期间禁止重建。后续同会话新投递可新建 owner，旧工作不自动恢复。没有调用公共 StopExecution 清其他领域；只有当前 driver 的 Quit 路径关闭共享 gate。
+- 捕获 SingletonSessionState.ExecutionSession 并注册 Timer 专属 session reset。Reset 终结旧 owner；旧 driver 的迟到 Quit/Destroy 不关闭新 gate 或释放新 owner。旧 Scope/复用槽投递拒绝，旧 handle 控制为空操作。默认异常在已提交终态与必要清理后逐项 Debug.LogException，其他就绪任务继续；手动实例维持原始/聚合异常传播契约。
+
+### 10.2 Scope、复用与句柄组 API
+
+```csharp
+TimerHandle once = Timer.Delay(1, callback); // 默认 Unscaled。
+TimerHandle date = Timer.At(targetDateTimeOffset, callback);
+TimerHandle frames = Timer.DelayFrames(2, callback);
+TimerHandle repeat = Timer.Repeat(0, 1, onTick, count: 5);
+
+using var scope = new TimerScope(); // 或 new TimerScope(manualScheduler)。
+scope.Delay(1, callback); // 匿名归属。
+scope.PostNamed("cooldown", 1, callback);
+scope.ReplaceNamed("cooldown", 2, callback);
+scope.PostNamedFrames("frameLoop", 1, 2, onTick, count: 5);
+scope.TryGet("cooldown", out TimerHandle named);
+scope.Pause("cooldown"); scope.Resume("cooldown");
+scope.CancelAll(); // 可继续使用，Dispose 则永久关闭。
+
+using var reusable = new ReusableTimer(); // 或绑定 manualScheduler。
+TimerHandle run = reusable.Start(1, callback);
+run.Cancel();
+TimerHandle newRun = reusable.StartFrames(1, callback); // run 已 Invalidated，不能控制 newRun。
+
+var group = new TimerHandleGroup();
+group.Add(once); group.Add(named);
+group.Remove(named); // 仅移出集合，不取消或转移 Scope。
+group.CancelAll(); // 与 Clear 一样取消并释放当前旧集合。
+Timer.Shutdown(); // 只结束默认 Timer owner。
+```
+
+- Scope 只持自己的匿名/命名 run 责任，名称使用 Ordinal；提供匿名秒/帧单次与周期、PostNamed/ReplaceNamed 及对应 Frames 重载、Contains/TryGet、按名控制、CancelAll、Dispose 和 IsDisposed。不是 scheduler、driver 或全局表。
+- ReplaceNamed 在取消前校验形状与当前时钟可表示的 deadline/frame 范围；实际登记仍重验。按名称的替换操作版本保证取消通知重入同名 Post/Replace 优先，外层不覆盖并返回默认 Invalidated 句柄，即使内层又取消自己也不恢复外层旧意图。取消后因通知、owner 变化或登记失败不回滚旧任务。
+- 单次/末轮在 callback 前释放 Scope/名称，旧 finally 不摘除 callback 中新建的同名 run。CancelAll 捕获入口旧责任并全部尝试；重入新任务保留。Dispose 先永久关闭再取消，通知不可复活。默认 Scope 在同会话 host 重建后可显式重投；手动 Scope 永久绑定原实例，不回退到默认服务。
+- ReusableTimer 调用方持有一个私有 TimerRun，不放入 ObjectPool、不公开记录；Start/StartRepeat/StartFrames/StartRepeatFrames 每次增加 run generation 并返回新值型 handle。旧 handle 下次 Start 后只呈现 Invalidated，控制无效，不承诺保存全部历史终态。Current 仅给槽当前代次句柄。
+- 活跃 run（含暂停及非末轮执行）拒绝 Start，需先显式 Cancel；单次/末轮 callback 中可直接新 Start。复用存储重置当前 run 数据，旧执行栈核验捕获 generation，不能完成、故障或重新调度新 run。取消通知中显式重启同样隔离。Dispose 先关闭槽再取消，永不复活；默认槽捕获 session，不跨会话收养。
+- HandleGroup 只收集明确交付的已有句柄，不创建 Timer、不拥有 Scope、不改名称/归属、不参与推进。Clear/CancelAll 先摘下旧集合再全部尝试取消并释放；重入 Add 留下一轮，单个失败不丢其余责任。Scope/Group 临时集合使用已有 ListPool，保留所吸收 Helper 的版权头；未改变 Pool 契约。
+- Timer.At 仅在请求时用 DateTimeOffset.UtcNow 换算一次非负 delay 后进入 Unscaled。相同绝对时间的不同 offset 正确归一，过去目标按零等待，后续不追踪系统时间、不后台唤醒。手动内核不隐式读取 DateTime。
+
+### 10.3 实际验证
+
+| 分层 | 本轮实际结果 | 范围 |
+|---|---|---|
+| Unity 编译 | `2022.3.62f3c1` 实际导入/编译成功；`EditorUtility.scriptCompilationFailed=false`、`EditorApplication.isCompiling=false`；正式类型载入 Foundation Runtime | 未新增 asmdef/依赖，未使用 dotnet 构建替代 Unity |
+| EditMode 内核回归 | TimerSchedulerContractTests **28/28** | A 内核在本轮采样、Scope、存储代次接入后的直接回归 |
+| EditMode Scope/Group | TimerOwnershipTests **29/29** | 名称/替换/匿名归属/控制、Dispose/重入、异常继续、终态清引用、组隔离、非创建及累计溢出拒绝 |
+| EditMode 复用与日期 | ReusableTimerTests **9/9** | 私有存储复用、新身份、旧句柄、末轮与取消 callback 重启、旧 finally/异常隔离、永久关闭及日期薄转换 |
+| EditMode 自动时钟 | TimerAutomaticClockTests **3/3** | 可控采样下冷启动/未锚定暂停、登记前采样排除当帧、Fixed 秒与已知帧域分离 |
+| EditMode 程序集边界 | FoundationBoundaryTests **5/5** | 复用现存正式程序集依赖断言 |
+| PlayMode 默认服务 | TimerDriverPlayModeTests **11/11** | 真实 Update/LateUpdate/FixedUpdate、timeScale=0、DateTime、Shutdown/disable/destroy、同会话重投、定向 session/quit、异常及真实临时场景 DDOL 保活 |
+
+- 实际执行 EditMode 74 项、PlayMode 11 项，全部通过，0 失败、0 跳过。MCP Summary.TotalTests 为全项目发现数量，不是执行全项目；初次组合 class 字符串过滤实际执行 0 项，未作为通过证据，随后按单类分别运行取得上表结果。
+- 首次测试编译暴露当前 NUnit 不支持 NonParallelizable，移除测试专属标记后重新 Unity 编译与运行，不新增依赖。替换累计溢出新增两例在修复前实际失败（旧责任已失活），前移校验后两例及相关回归通过。PlayMode 预期日志 `YLTimer.ExpectedFailure` 已由 LogAssert 断言，不是未处理失败。
+- Session/迟到生命周期/quit 使用 Timer 专属反射身份模拟，不调用公共全域 ResetForNewSession，不修改 SessionResets 列表；不是关闭 Domain Reload 的真实连续两轮 Play。该真实验收仍归 D。
+- Fixture 拒绝接管已有 TimerDriver，记录并仅清理自己创建的 host/probe/临时场景，恢复 timeScale/session/gate。测试后已退出 Play，TimerDriver 数为 0，原 `Assets/Scenes/Main.unity` 保持打开且 dirty=false，没有保存或覆盖场景。
+- 已检查实际差异和新增源码格式；9 个新增脚本均有 Unity 生成的 `.meta`，AssetDatabase 查询确认 9 个有效且互异 GUID。Unity `.meta` 模板空字段自带尾随空格，保留生成格式，未为格式检查重写资产。未新增 asmdef、配置或资源绑定依赖。
+- 独立只读复核确认累计溢出问题已关闭，未发现其余实质缺陷；该静态复核不替代上表实际运行证据。未重跑 Pool/Events/Update 历史全集，未运行 Player 构建、性能基准，也未声称实测 NonAlloc 全链路零 GC。
+
+### 10.4 边界与进入 C 条件
+
+B 正式控制体系已具备继续 C 的基础，待本批用户验收与 Git 收口；本轮在 B 停止，不自动启动 C。新服务无需手动挂载驱动；首次有效投递自建宿主，调用方显式持有并关闭 Scope/复用槽或取消 handle。
+
+未实现 GameObject Binding、TimerObject 私有实现迁移、Core TimerManager 接入/删除、Timer 终态 Coroutine Wait 或窄 Coroutine 观察。旧 `Y/Tools/Timing` 与自有 `C/Manager/TimerManager` 源码和原测试完整保留，原 XF 包及 CGJ2024 消费者未修改；因此本批只确认**正式 YLFramework.Timing 服务使用一套内核与一个默认驱动**，不宣称全工程已消除所有旧 Timer。
+
+C/D 仍需完成上述旧消费者/实现收敛、相关资源身份与许可/模块文档收口、真实关闭 Domain Reload 连续 Play 验收及必要跨领域代表验证。Action、UpdateManager、Events、Pool 的公共契约及 MVC/View 生命周期均未修改。

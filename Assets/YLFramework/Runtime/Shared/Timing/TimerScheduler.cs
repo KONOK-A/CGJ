@@ -10,7 +10,7 @@ namespace YLFramework.Timing
     /// Foundation 的秒/帧到期内核，仅主线程使用；显式实例不读取 Unity Time、不创建宿主。
     /// 三域共享 run 状态和派发算法。登记不执行回调，fixed-delay、不补发，每个 rendered frame 至多执行一次。
     /// </summary>
-    /// <remarks>默认 Unity 驱动及其采样/session 管理由后续集成提供。</remarks>
+    /// <remarks>默认实例由内部 TimerDriver 驱动，禁止调用其手动推进入口。</remarks>
     public sealed class TimerScheduler : IDisposable
     {
         private readonly TimerHeap _scaled = new(TimerClock.Scaled);
@@ -21,10 +21,46 @@ namespace YLFramework.Timing
         private double _scaledTime;
         private double _unscaledTime;
         private long _renderedFrame;
-        private ulong _generation;
         private ulong _order;
         private bool _advancing;
         private bool _disposed;
+        private readonly bool _automatic;
+        private Action _synchronize;
+        private bool _frameReady = true;
+        private bool _secondsReady = true;
+        private long _lastDispatchedFrame;
+        internal bool IsDisposed => _disposed;
+
+        internal TimerScheduler(Action synchronize) : this(0, 0, 0)
+        {
+            _automatic = true;
+            _synchronize = synchronize;
+            _frameReady = _secondsReady = false;
+        }
+
+        internal void Refresh() => _synchronize?.Invoke();
+
+        internal void Sample(double scaledTime, double unscaledTime, long frame, bool secondsReady)
+        {
+            _renderedFrame = frame;
+            _frameReady = true;
+            _secondsReady = secondsReady;
+            if (!secondsReady) return;
+            _scaledTime = scaledTime;
+            _unscaledTime = unscaledTime;
+        }
+
+        internal void AdvanceAutomatic() => AdvanceCore(_scaledTime, _unscaledTime, _renderedFrame);
+
+        // 替换先核对当前样本的可表示范围；取消通知可能改变样本，正式登记仍再次校验。
+        internal void ValidateDeadline(TimerClock clock, double delay, long frames)
+        {
+            Refresh();
+            ThrowIfDisposed();
+            if (_renderedFrame == long.MaxValue) throw new InvalidOperationException("Rendered frame clock is exhausted.");
+            if (clock == TimerClock.RenderedFrame) _ = checked(_renderedFrame + frames);
+            else AddSeconds(ReadClock(clock), delay);
+        }
 
         /// <summary>以明确的初始双时钟和 rendered frame 样本创建手动实例；输入须有限且非负。</summary>
         public TimerScheduler(double scaledTime, double unscaledTime, long renderedFrame)
@@ -33,6 +69,7 @@ namespace YLFramework.Timing
             _scaledTime = scaledTime;
             _unscaledTime = unscaledTime;
             _renderedFrame = renderedFrame;
+            _lastDispatchedFrame = renderedFrame;
         }
 
         /// <summary>登记一次秒等待；默认 Unscaled，零 delay 最早在下一 rendered frame 执行，callback 可为 null。</summary>
@@ -77,19 +114,35 @@ namespace YLFramework.Timing
             return Schedule(TimerClock.RenderedFrame, 0, Math.Max(1, firstDelay), 0, interval, count, null, callback, onCancelled);
         }
 
-        private TimerHandle Schedule(TimerClock clock, double delay, long frames, double intervalSeconds,
-            long intervalFrames, int? count, Action callback, Action<long> tickCallback, Action<TimerCancellationReason> onCancelled)
+        internal TimerHandle Schedule(TimerClock clock, double delay, long frames, double intervalSeconds,
+            long intervalFrames, int? count, Action callback, Action<long> tickCallback,
+            Action<TimerCancellationReason> onCancelled, TimerRun storage = null)
         {
+            Refresh();
             ThrowIfDisposed();
             if (_renderedFrame == long.MaxValue) throw new InvalidOperationException("Rendered frame clock is exhausted.");
             var dueSeconds = clock == TimerClock.RenderedFrame ? 0 : AddSeconds(ReadClock(clock), delay);
             var dueFrame = clock == TimerClock.RenderedFrame ? checked(_renderedFrame + frames) : 0;
-            var run = new TimerRun
-            {
-                Owner = this, Generation = checked(++_generation), State = TimerState.Scheduled, Clock = clock,
-                Callback = callback, TickCallback = tickCallback, OnCancelled = onCancelled, RemainingCount = count,
-                IntervalSeconds = intervalSeconds, IntervalFrames = intervalFrames, DueSeconds = dueSeconds, DueFrame = dueFrame
-            };
+            var run = storage ?? new TimerRun();
+            if (run.Owner != null) throw new InvalidOperationException("Timer run is still active.");
+            run.Generation = checked(run.Generation + 1);
+            run.Owner = this;
+            run.State = TimerState.Scheduled;
+            run.Clock = clock;
+            run.Callback = callback;
+            run.TickCallback = tickCallback;
+            run.OnCancelled = onCancelled;
+            run.RemainingCount = count;
+            run.IntervalSeconds = intervalSeconds;
+            run.IntervalFrames = intervalFrames;
+            run.DueSeconds = dueSeconds;
+            run.DueFrame = dueFrame;
+            run.ExecutionCount = 0;
+            run.ExecutingGeneration = 0;
+            run.PauseNext = false;
+            run.FrozenSeconds = delay;
+            run.FrozenFrames = frames;
+            run.NeedsAnchor = clock == TimerClock.RenderedFrame ? !_frameReady : !_secondsReady;
             Queue(run);
             _owned.Add(run);
             return new TimerHandle(run);
@@ -102,29 +155,47 @@ namespace YLFramework.Timing
         /// </summary>
         public void Advance(double scaledTime, double unscaledTime, long renderedFrame)
         {
+            if (_automatic) throw new InvalidOperationException("Default timers are driven by TimerDriver.");
+            AdvanceCore(scaledTime, unscaledTime, renderedFrame);
+        }
+
+        private void AdvanceCore(double scaledTime, double unscaledTime, long renderedFrame)
+        {
             if (_advancing) return;
             ThrowIfDisposed();
             ValidateSample(scaledTime, unscaledTime, renderedFrame);
             if (scaledTime < _scaledTime) throw new ArgumentOutOfRangeException(nameof(scaledTime));
             if (unscaledTime < _unscaledTime) throw new ArgumentOutOfRangeException(nameof(unscaledTime));
             if (renderedFrame < _renderedFrame) throw new ArgumentOutOfRangeException(nameof(renderedFrame));
-            var newFrame = renderedFrame > _renderedFrame;
+            var newFrame = renderedFrame > _lastDispatchedFrame;
             _scaledTime = scaledTime;
             _unscaledTime = unscaledTime;
             _renderedFrame = renderedFrame;
             if (!newFrame) return;
+            _lastDispatchedFrame = renderedFrame;
 
             List<Exception> errors = null;
             _advancing = true;
             try
             {
                 // 只转移此前的登记责任；callback 产生的 pending 不参与本轮任何时钟域。
-                foreach (var run in _pending)
+                for (var i = 0; i < _pending.Count;)
                 {
-                    run.PendingIndex = -1;
+                    var run = _pending[i];
+                    if (run.NeedsAnchor)
+                    {
+                        try
+                        {
+                            SetNextDeadline(run, run.FrozenSeconds, run.FrozenFrames);
+                            run.NeedsAnchor = false;
+                            run.EarliestFrame = checked(_renderedFrame + 1);
+                        }
+                        catch (Exception error) { Finish(run, TimerState.Faulted); AddError(ref errors, error); continue; }
+                    }
+                    if (run.EarliestFrame > _renderedFrame) { i++; continue; }
+                    RemoveQueued(run);
                     Heap(run.Clock).Insert(run);
                 }
-                _pending.Clear();
                 Dispatch(_unscaled, ref errors);
                 Dispatch(_scaled, ref errors);
                 Dispatch(_frames, ref errors);
@@ -190,15 +261,22 @@ namespace YLFramework.Timing
 
         internal bool Cancel(TimerRun run, ulong generation)
         {
+            Refresh();
             if (!Owns(run, generation)) return false;
             var notify = run.OnCancelled;
             Finish(run, TimerState.Cancelled);
-            notify?.Invoke(TimerCancellationReason.Cancelled);
+            try { notify?.Invoke(TimerCancellationReason.Cancelled); }
+            catch (Exception error)
+            {
+                if (!_automatic) throw;
+                UnityEngine.Debug.LogException(error);
+            }
             return true;
         }
 
         internal bool Pause(TimerRun run, ulong generation)
         {
+            Refresh();
             if (!Owns(run, generation)) return false;
             if (run.State == TimerState.Paused) return true;
             if (run.State == TimerState.Executing)
@@ -220,6 +298,7 @@ namespace YLFramework.Timing
 
         internal bool Resume(TimerRun run, ulong generation)
         {
+            Refresh();
             if (!Owns(run, generation)) return false;
             // 回调仍在栈上时，仅撤销暂停；旧租约退出后统一续调度，避免双入队。
             if (run.State == TimerState.Executing && run.ExecutingGeneration == generation && run.PauseNext)
@@ -228,7 +307,8 @@ namespace YLFramework.Timing
                 return true;
             }
             if (run.State != TimerState.Paused) return false;
-            SetNextDeadline(run, run.FrozenSeconds, run.FrozenFrames);
+            run.NeedsAnchor = run.Clock == TimerClock.RenderedFrame ? !_frameReady : !_secondsReady;
+            if (!run.NeedsAnchor) SetNextDeadline(run, run.FrozenSeconds, run.FrozenFrames);
             Queue(run);
             run.State = TimerState.Scheduled;
             return true;
@@ -236,10 +316,10 @@ namespace YLFramework.Timing
 
         internal double RemainingSeconds(TimerRun run) => run.Clock == TimerClock.RenderedFrame ? 0 :
             run.State == TimerState.Paused ? run.FrozenSeconds :
-            run.State == TimerState.Scheduled ? Math.Max(0, run.DueSeconds - ReadClock(run.Clock)) : 0;
+            run.State == TimerState.Scheduled ? run.NeedsAnchor ? run.FrozenSeconds : Math.Max(0, run.DueSeconds - ReadClock(run.Clock)) : 0;
         internal long RemainingFrames(TimerRun run) => run.Clock != TimerClock.RenderedFrame ? 0 :
             run.State == TimerState.Paused ? run.FrozenFrames :
-            run.State == TimerState.Scheduled ? Math.Max(0, run.DueFrame - _renderedFrame) : 0;
+            run.State == TimerState.Scheduled ? run.NeedsAnchor ? run.FrozenFrames : Math.Max(0, run.DueFrame - _renderedFrame) : 0;
 
         private bool Owns(TimerRun run, ulong generation) => ReferenceEquals(run.Owner, this) && run.Generation == generation;
         private double ReadClock(TimerClock clock) => clock == TimerClock.Scaled ? _scaledTime : _unscaledTime;
@@ -253,6 +333,7 @@ namespace YLFramework.Timing
 
         private void Queue(TimerRun run)
         {
+            run.EarliestFrame = checked(_renderedFrame + 1);
             run.Order = checked(++_order);
             run.PendingIndex = _pending.Count;
             _pending.Add(run);
@@ -273,6 +354,7 @@ namespace YLFramework.Timing
         {
             RemoveQueued(run);
             _owned.Remove(run);
+            run.Scope?.Detach(run);
             run.Owner = null;
             run.Callback = null;
             run.TickCallback = null;
@@ -291,6 +373,7 @@ namespace YLFramework.Timing
         {
             if (_disposed) return;
             _disposed = true;
+            _synchronize = null;
             var snapshot = ListPool<TimerRun>.Allocate();
             var notifications = ListPool<Action<TimerCancellationReason>>.Allocate();
             List<Exception> errors = null;
@@ -321,7 +404,7 @@ namespace YLFramework.Timing
         {
             if (_disposed) throw new ObjectDisposedException(nameof(TimerScheduler));
         }
-        private static void ValidateSeconds(double value, string name)
+        internal static void ValidateSeconds(double value, string name)
         {
             if (double.IsNaN(value) || double.IsInfinity(value) || value < 0) throw new ArgumentOutOfRangeException(name);
         }
@@ -331,11 +414,11 @@ namespace YLFramework.Timing
             ValidateSeconds(unscaledTime, nameof(unscaledTime));
             if (renderedFrame < 0) throw new ArgumentOutOfRangeException(nameof(renderedFrame));
         }
-        private static void ValidateCount(int? count)
+        internal static void ValidateCount(int? count)
         {
             if (count.HasValue && count.Value <= 0) throw new ArgumentOutOfRangeException(nameof(count));
         }
-        private static void ValidateSecondClock(TimerClock clock)
+        internal static void ValidateSecondClock(TimerClock clock)
         {
             if (clock != TimerClock.Scaled && clock != TimerClock.Unscaled) throw new ArgumentOutOfRangeException(nameof(clock));
         }
@@ -346,9 +429,14 @@ namespace YLFramework.Timing
             return due;
         }
         private static void AddError(ref List<Exception> errors, Exception error) => (errors ??= new List<Exception>()).Add(error);
-        private static void ThrowErrors(List<Exception> errors)
+        private void ThrowErrors(List<Exception> errors)
         {
             if (errors == null) return;
+            if (_automatic)
+            {
+                foreach (var error in errors) UnityEngine.Debug.LogException(error);
+                return;
+            }
             if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
             throw new AggregateException(errors);
         }

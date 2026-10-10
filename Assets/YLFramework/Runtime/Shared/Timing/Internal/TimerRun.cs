@@ -3,10 +3,14 @@ using System;
 namespace YLFramework.Timing.Internal
 {
     // 普通 run 不池化；句柄保留历史终态，而终态清除调度归属及用户委托。
-    // Generation 与执行租约独立于可复用存储；后续复用槽必须更换代次，不能重发旧句柄。
+    // 显式复用槽更换代次；旧回调栈只允许收尾捕获的代次。
     internal sealed class TimerRun
     {
         internal TimerScheduler Owner;
+        internal TimerScope Scope;
+        internal string Name;
+        internal bool NeedsAnchor;
+        internal long EarliestFrame;
         internal ulong Generation;
         internal ulong ExecutingGeneration;
         // 仅 Executing 的非末轮使用：请求回调退出后的暂停，不提前改写当前执行状态。
