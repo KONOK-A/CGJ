@@ -25,7 +25,7 @@ namespace YLFramework.Core.Tests
         protected override void Awake()
         {
             base.Awake();
-            RegisterEvent(ProbeEvent, UseSharedHandler ? (XFEvent)SharedHandler : HandleEvent);
+            RegisterEvent(ProbeEvent, UseSharedHandler ? (System.Action)SharedHandler : HandleEvent);
         }
 
         private static void SharedHandler() => SharedEventCount++;
