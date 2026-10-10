@@ -361,9 +361,10 @@ namespace YLFramework.Editor.Audio
                     "拒播/抢占仍按原 Action 检查完成，不把 onFinish 改为自然完成通知；固定签名反射/委托与预编译调用须按追加参数迁移，无旧重载。")),
             Guide("timer", "Timing 与生命周期边界", "计时工具独立于音频，不增加第二条播放链。",
                 Array.Empty<Type>(),
-                HelpBlock.Paragraph("工具归属", "Timer 位于 Runtime/Tools/Timing，负责到期回调；插值和组合使用 Action，音频播放进度直接读 AudioHandle.Time/Duration/Progress。TimerScope、ActionHandle 和 AudioHandle " +
+                HelpBlock.Paragraph("工具归属", "Timer 位于 Runtime/Shared/Timing，namespace 为 YLFramework.Timing，归属 Foundation；默认服务与显式手动 TimerScheduler 使用同一到期内核。" +
+                    "插值和组合使用 Action，音频播放进度直接读 AudioHandle.Time/Duration/Progress。TimerScope、ActionHandle 和 AudioHandle " +
                     "分别管理自己的任务或请求，不共享生命周期索引。Audio 的完成检测使用宿主 Update，不以 clip.length 计时。"),
-                HelpBlock.Paragraph("清理", "所有者在 OnDisable/OnDestroy/场景边界清理自有计时任务、播放句柄和订阅；不要用全局 Shutdown 代替普通组件退出。" +
+                HelpBlock.Paragraph("清理", "所有者在选定的 OnDisable/OnDestroy/场景边界取消自有 TimerHandle 或关闭 TimerScope，并清理播放句柄和订阅；不要用 Timer.Shutdown 代替普通组件退出。" +
                     "通用注销与生命周期工具使用 YLFramework.Events，不再提供 Audio 专属包装。完整 Timer API 见 Documentation/Modules/Timing.md。")),
             Guide("diagnostics", "诊断与平台入口", "被动读取 Sound 统计与实际 Clip 预算，唯一写操作为显式统计清零，不创建音频宿主。",
                 new[] { typeof(AudioKitDiagnostics), typeof(AudioKitDebugWindow), typeof(AudioKit), typeof(AudioSoundStats) },

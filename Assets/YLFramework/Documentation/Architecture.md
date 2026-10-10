@@ -6,7 +6,9 @@
 
 | 目录 | 程序集（asmdef） | 职责 |
 |---|---|---|
-| `Runtime/`（除 `Tools/ZipTool`） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / Audio-Action 桥接 |
+| `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / Audio-Action 桥接 |
+| `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter 与唯一 Timer 内核 |
+| `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
 | `Runtime/Tools/ZipTool/` | `YLFramework.Utilities.ZipTool` | Zip/GZip 工具与内置 SharpZipLib，不引用 UnityEngine |
 | `Editor/`（除 `Help`） | `YLFramework.Editor` | 普通编辑器工具、Action / Audio 帮助提供方，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor.Help` | 独立 Editor-only 帮助核心，显式 references 为 `[]` |
@@ -19,7 +21,9 @@
 
 ## 依赖方向
 
-- `YLFramework.Runtime` → `YLFramework.Utilities.ZipTool`、`UnityEngine.UI`
+- `YLFramework.Foundation.Runtime` → 无其他框架显式引用
+- `YLFramework.Core.Runtime` → Foundation、XFABManager、UnityEngine.UI
+- `YLFramework.Runtime` → Foundation、`YLFramework.Utilities.ZipTool`、`UnityEngine.UI`
 - `YLFramework.Editor` → `YLFramework.Runtime`、`YLFramework.Editor.Help`、`UnityEngine.UI`
 - `YLFramework.Editor.Help` → 无模块显式引用；Help 不反向依赖 Runtime 或提供方
 - `YLFramework.Actions.DOTween` → `YLFramework.Runtime` + `DOTween.dll`
@@ -37,14 +41,14 @@
 Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 - `Foundation/`：其他框架模块经常建立在其之上的基础机制（Binding、Events、IOC、Pool、Singleton）；
-- `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（AssemblyTool、Attributes、Extensions、FSM、Grid、Json、Table、Timing、ZipTool）；
+- `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（AssemblyTool、Attributes、Extensions、FSM、Grid、Json、Table、ZipTool）；
 - Runtime 根部：承担完整框架级服务/系统职责的大型模块（Action、Audio、Resource、Save、UI）。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace 不强制与目录一一对应。模块内部按实际复杂度组织：小模块保持扁平，大模块可继续内部细分。示例 `Samples/ColorSelector` 位于 `Assets/YLFramework/Samples/`，不在 Runtime 内。
 
 主要模块间协作：Binding 依赖 Events（变更回调）与 Pool；FSM 依赖 Pool（池化复用）；Resource / UI 复用 Pool、Singleton、Table、Extensions；Save 与 UI 目前相互独立。
 
-Timing 位于 `Runtime/Tools/Timing/`，属于现有 `YLFramework.Runtime` 程序集，不新增 asmdef；namespace 为 `YLFramework.Utilities.Timing`，`Internal/` 下的堆类型仍为 public。Timer 以缩放 / 非缩放双堆处理到期回调，`TimerScope` 只维护所属任务与名称，不提供 Update 或独立宿主。它是按需使用的计时工具，不承担完整框架级服务职责，因此仍归入 Tools；宿主复用 `MonoSingletonHost<T>`，自建宿主按需归入运行时层级 `YLFramework/Timing`，借用对象保持原层级。详见 [Modules/Timing.md](Modules/Timing.md)。
+Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
 
 ### Timer / Action / Audio 边界
 
@@ -70,8 +74,8 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 | [`Runtime/UI/UIManager.cs`](../Runtime/UI/UIManager.cs) | UI 单例（`MonoSingleton<UIManager>`），运行时层级路径 `YLFramework/UISystem/UIManager` |
 | [`Runtime/UI/UIRoot.cs`](../Runtime/UI/UIRoot.cs) | UI 根节点单例（层级路径 `YLFramework/UISystem`） |
 | [`Runtime/Resource/ResManager.cs`](../Runtime/Resource/ResManager.cs) | 资源服务入口（`Singleton<ResManager>`，`Init` / `InitAsync`） |
-| [`Runtime/Tools/Timing/Timer.cs`](../Runtime/Tools/Timing/Timer.cs) | 双堆计时入口（`Timer.Instance`），匿名 Post 与 `PostNamed` / `ReplaceNamed` 投递，静态查询不创建宿主 |
-| [`Runtime/Tools/Timing/TimerScope.cs`](../Runtime/Tools/Timing/TimerScope.cs) | 独立命名与任务所有权范围；`CancelAll` 可复用，`Dispose` 关闭范围但不关闭 Timer 宿主 |
+| [`Runtime/Shared/Timing/Timer.cs`](../Runtime/Shared/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
+| [`Runtime/Shared/Timing/TimerScope.cs`](../Runtime/Shared/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
 | [`Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs`](../Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs) | 为 Mono 单例指定运行时层级路径（如 `GameObjectPool`、`UIManager`） |
 
 框架预制体：`Prefabs/YLFramework.prefab`（包含框架根、UIManager 及提示相关组件），`Prefabs/UITips.prefab` 为其引用的提示项预制体。

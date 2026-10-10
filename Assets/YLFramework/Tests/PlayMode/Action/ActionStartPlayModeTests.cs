@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using YLFramework.Timing;
 using Kit = YLFramework.Actions.ActionKit;
 
 namespace YLFramework.Tests.Actions
@@ -155,6 +156,43 @@ namespace YLFramework.Tests.Actions
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(sequence.Deinited, Is.True);
             Assert.That(controller.Action, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator TimerAndActionNamesAndCleanupStayInTheirOwnDomains()
+        {
+            var driverType = typeof(YLFramework.Timing.Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
+            Assert.That(Object.FindObjectsByType(driverType, FindObjectsInactive.Include, FindObjectsSortMode.None), Is.Empty,
+                "不接管已有 TimerDriver。");
+            using var scope = new TimerScope();
+            Component ownedHost = null;
+            try
+            {
+                var ready = false;
+                var calls = 0;
+                var action = Own(Kit.Condition(() => ready));
+                var actionRun = action.StartNamed(mCaller, "same", () => calls++);
+                var timerRun = scope.PostNamed("same", 60);
+                ownedHost = (Component)Object.FindObjectsByType(driverType, FindObjectsInactive.Include, FindObjectsSortMode.None)[0];
+                scope.CancelAll();
+                Assert.That(timerRun.Status, Is.EqualTo(TimerState.Cancelled));
+                Assert.That(actionRun.IsActive, Is.True, "Timer Scope 清理不取消同名 Action。");
+                timerRun = scope.PostNamed("same", 60);
+                Assert.That(actionRun.Cancel(), Is.True);
+                Assert.That(timerRun.IsActive, Is.True, "Action 清理不取消同名 Timer。");
+                var survivor = Own(Kit.Condition(() => ready)).StartNamed(mCaller, "same", () => calls++);
+                YLFramework.Timing.Timer.Shutdown();
+                Assert.That(timerRun.Status, Is.EqualTo(TimerState.Invalidated));
+                Assert.That(survivor.IsActive, Is.True, "默认 Timer owner 结束不清 Action 执行器。");
+                ready = true;
+                for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+                Assert.That(calls, Is.EqualTo(1), "只有未取消的 Action 正常完成。");
+                Assert.That(survivor.IsActive, Is.False);
+            }
+            finally
+            {
+                if (ownedHost) Object.Destroy(ownedHost.gameObject);
+            }
         }
 
         [UnityTest]
