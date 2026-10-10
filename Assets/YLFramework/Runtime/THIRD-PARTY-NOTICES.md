@@ -16,7 +16,7 @@
 
 - Copyright (c) 2015 - 2025 liangxiegame
 - Copyright (c) 2017 snowcold、Copyright (c) 2017 liangxie（Timing 等部分文件）
-- Timer 的堆调度实现参考 [UnityTimer](https://github.com/akbiggs/UnityTimer)：Copyright (c) 2016 Alexander Biggs & Adam Robinson-Yu
+- 旧 Timer 文件同时标注 [UnityTimer](https://github.com/akbiggs/UnityTimer) 参考来源，统一计时后继续保留其声明：Copyright (c) 2016 Alexander Biggs & Adam Robinson-Yu。内部索引堆承接的是 YL / QFramework 的 BinaryHeap，不将该堆算法归于 UnityTimer。
 
 以上来源均采用 MIT License：
 

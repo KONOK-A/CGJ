@@ -111,6 +111,7 @@ bool bound = run.BindTo(gameObject); // GO 停用即取消。
 - 生命周期取消通知中不要嵌套对正在 SetActive 的同一个 GO 再调用 SetActive，Unity 会拒绝重入激活。可在后续帧重新启用、重绑其他对象，或按组件自己的启停边界重启。
 - Core TimerObject 保留 Core 类型、脚本 GUID 与 delay/ignoreTimeScale/Action/Abort；每次启用启动复用槽，自身组件禁用也精确取消。成功 callback 自停用不 Abort，Faulted 不 Abort，取消只通知一次；Action/Abort 内合法重启不会被旧收尾取消。
 - 无 owner 的默认任务跨场景；模块/View/Panel 不自动接管外部任务。普通所有者用自有 handle、Scope 或 Group 清理，不调用全局 Shutdown 代替局部结束。
+- View 的临时停用不等于 Close。若选择表现会话所有权，可在 OnLoaded 创建自有 TimerScope、在 OnRemove Dispose，下一次加载新建 Scope；只有明确选择 GO 停用取消时才 BindTo。不要让旧会话 Scope 或复用槽控制新 Play 会话。
 - Timer.Shutdown、driver 失效、session reset 只结束 Timer owner 的旧责任，不清公共 Update/Events/Action/CoroutineStarter，不自动续跑旧任务。
 
 ## 终态等待与协程观察
@@ -132,7 +133,7 @@ CoroutineObservation 不属于 Timer，不提供业务成功或统一异步终�
 
 本工程 `2022.3.62f3c1` 定向 PlayMode 实测：自然结束触发 callback 一次；Stop producer 或销毁 producer owner 后，六个后续渲染帧内原生等待未恢复、观察 callback 为零。不可依赖它们触发取消/成功通知；需要结束观察时由观察所有者 Dispose。Starter owner 失效也不保证 callback，不恢复旧观察。
 
-## TimeExtend 迁移
+## 旧计时入口迁移
 
 旧 TimeExtend 的 Timer / TimerDriver / TimerExtend 退出，不保留兼容门面、独立 Driver 或旧 clock：
 
@@ -145,6 +146,16 @@ CoroutineObservation 不属于 Timer，不提供业务成功或统一异步终�
 旧 Core TimerManager/Core.Timer/TimerType 和 Tools/Timing 的 Timer/TimeItem/TimerHelper/public Heap 已退出新 YL，不留兼容门面；原 XF Package 与原游戏继续使用自己的原类型，不在本次迁移范围。
 
 旧 Post2Scale 用显式 Scaled，Post2Really 用默认 Unscaled，Helper 用 TimerHandleGroup，NonAlloc 用 ReusableTimer。重要变化：默认 Unscaled、到期含等号、firstDelay 独立、有限 count 为正数、无限为 null、帧 n 为未来 n 帧、失败任务不阻断其余任务；可变 Set/Post(existing) 改为新 run，不公开永久 DefaultScope。
+
+| 旧 Core / XF 风格需求 | 正式 API 与兼容边界 |
+|---|---|
+| DelayInvoke / DelayFrame | Timer.Delay / DelayFrames；默认 Unscaled，帧 n 的冷启动例外见时钟说明 |
+| RepeatInvoke / RepeatFrame | Timer.Repeat / RepeatFrames；firstDelay 不再与 interval 叠加，正数 count 是总轮数，null 为无限 |
+| NonAlloc、Abort、IsRunning | 调用方持有 ReusableTimer，精确 run 的 Cancel、IsActive、Status；不要持旧可变任务别名控制新一轮 |
+| GameObject owner | handle.BindTo；停用取消或仅销毁取消显式选择，暂停任务仍受 owner 约束 |
+| WaitForCoroutine | CoroutineObservation.Observe；只观察原生等待，不是 Timer，也不承诺业务成功或物理取消 |
+
+TimerObject 保留原 Core namespace、程序集、脚本路径、GUID `8fd9c1c43a386034fbb60e5c2b0fa8b0` 和四个序列化字段，因此现有组件无需重新绑定。已退出的旧类型不提供源码或二进制兼容壳；仓库外预编译调用需重新编译，外部资产或反射字符串须由使用方按真实旧类型迁移。本仓库 C 阶段定向引用核查未发现被删除脚本的挂载，不等同于外部资源兼容保证。
 
 Action 根动作入口为 `StartNamed(owner, flag)` / `ReplaceNamed(owner, flag)`，以及 `StartNamedCurrentScene` / `StartNamedGlobal` 和对应 ReplaceNamedCurrentScene / ReplaceNamedGlobal。查询与控制为 `ActionKit.TryGetNamed` / `ContainsNamed` / `CancelNamed` / `PauseNamed` / `ResumeNamed`，场景与全局版本分别追加 CurrentScene / Global 后缀，均不创建执行器。对象作用域是 owner 的 GameObject，不是单个组件；返回的 `ActionHandle` 仅属于 Action，结束或池复用后失效，不与 TimerScope 共用状态。详细 Action 接入见 [ActionKit 文档](Action.md)。
 
@@ -163,6 +174,14 @@ Action 根动作入口为 `StartNamed(owner, flag)` / `ReplaceNamed(owner, flag)
 
 源码保留 QFramework、snowcold / liangxie、UnityTimer 来源与完整 MIT；承接 XF 的部分继续受 Shared/LICENSE.md 覆盖，集中声明见 Runtime/THIRD-PARTY-NOTICES.md。删除旧实现不删除被吸收代码的许可，分发时保留对应声明。
 
+性能只承诺已说明的算法成本和显式复用边界。本专题没有执行性能基准或稳态 GC 测量，不能据此宣称比旧实现普遍更快或整个调用链零分配。
+
 ## 当前状态
 
-2.4-C 实施及专项验证完成，待用户验收与 Git 收口；2.4 仍为 IN PROGRESS。实际 Unity 编译、定向内核/Scope/复用/绑定/等待 EditMode、默认驱动/TimerObject/观察 PlayMode 已验证；完整专题 API/命名/许可复查、真实关闭 Domain Reload 连续两轮 Play 及最终专题验收仍归 D。详细证据与历史记录见现有 [Timer 专项方案](../../../../.kilo/plans/xf-yl-2.4-timer.md)，不以专项通过替代 Player/IL2CPP、完整游戏或性能基准。
+**2.4-D 实施及验证完成，2.4 Timer 满足技术完成条件，待用户最终验收与 Git 收口。**阶段 2 整体仍为 IN PROGRESS，2.5 未启动。
+
+本轮在 `2022.3.62f3c1` 实际编译，通过一个包含连续两轮真实 Play 的 EditMode 用例（Domain Reload 关闭、Scene Reload 正常），以及 View 显式 Scope 生命周期、Timer/Action 名称和清理隔离两条 PlayMode 代表路径；Foundation 边界 5 项通过。Editor 设置及原场景已恢复。A～C 未受影响的内核/Scope/复用/绑定/TimerObject/等待与观察证据沿用，不重跑历史全集。
+
+原 XF Logger 在无 Domain Reload 的第二轮存在底层日志 handler 丢失的问题；经用户明确授权，连续 Play fixture 每轮 Play 前仅使用捕获的有效 Editor 日志路由（入口若是 XF 包装器则只读取其已保存的底层 handler），结束时恢复入口原值。所有日志与异常仍正常输出，不修改原包、不重置 Timer/session/gate。该结果只证明隔离验收环境中的 Timer 会话门禁，不证明原 XF Logger 或整框架支持此配置。MCP 自身的退出日志存储警告也不属于 Timer 行为。
+
+本轮未验证关闭 Scene Reload、Editor 应用退出、Player 退出、Player/IL2CPP、完整游戏或性能；不能把连续 Editor Play 退出扩大为全平台保证。详细证据与历史记录见现有 [Timer 专项方案第 12 节](../../../../.kilo/plans/xf-yl-2.4-timer.md#12-24-d-专题收口与整体验收2026-10-11)。

@@ -4,9 +4,12 @@ using YLFramework.Timing;
 
 namespace YLFramework.Core
 { 
+    /// <summary>
+    /// Inspector 计时组件，消费公共 Timing 服务；启用启动一轮，组件或 GameObject 停用取消本轮。
+    /// Action 仅在正常到期时调用，Abort 仅在取消或 owner 失效时调用，故障不视为中断。
+    /// </summary>
     public class TimerObject : MonoBehaviour
     {
-        // Fix编码
         [Tooltip("延迟时间")]
         public float delay = 2;
 

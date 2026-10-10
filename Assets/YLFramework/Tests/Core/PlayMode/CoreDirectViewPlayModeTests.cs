@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.SceneManagement;
 using YLFramework.Events;
+using YLFramework.Timing;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Tests
@@ -2193,6 +2194,59 @@ namespace YLFramework.Core.Tests
             var pool = pools[prefab.GetHashCode()];
             var all = (IDictionary)pool.GetType().GetField("allObjs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
             return (bool)all[instance.GetHashCode()].GetType().GetProperty("IsInUse").GetValue(all[instance.GetHashCode()]);
+        }
+
+        [UnityTest]
+        public IEnumerator ViewDisableKeepsExplicitTimerScopeAndCloseOnlyDisposesItsOwnSession()
+        {
+            var driverType = typeof(YLFramework.Timing.Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
+            Assert.That(Object.FindObjectsByType(driverType, FindObjectsInactive.Include, FindObjectsSortMode.None), Is.Empty,
+                "不接管已有 TimerDriver。");
+            yield return StartModule();
+            using var scope = new TimerScope();
+            Component ownedHost = null;
+            TimerHandle global = default;
+            try
+            {
+                var view = Template<YLCoreSmokeView>("YLTimer.ViewSession").GetComponent<YLCoreSmokeView>();
+                module.AttachView(view);
+                view.gameObject.SetActive(true);
+                var cancelled = 0;
+                view.RemoveAction = scope.Dispose;
+                var scoped = scope.PostNamed("view", 60, onCancelled: _ => cancelled++);
+                var completed = 0;
+                global = YLFramework.Timing.Timer.DelayFrames(4, () => completed++);
+                ownedHost = (Component)Object.FindObjectsByType(driverType, FindObjectsInactive.Include, FindObjectsSortMode.None)[0];
+                view.gameObject.SetActive(false);
+                yield return null;
+                Assert.That(view.IsLoaded, Is.True, "临时停用不是表现会话结束。");
+                Assert.That(scoped.IsActive, Is.True);
+                Assert.That(scope.IsDisposed, Is.False);
+                Assert.That(cancelled, Is.Zero);
+                view.gameObject.SetActive(true);
+                view.Close();
+                Assert.That(scoped.Status, Is.EqualTo(TimerState.Cancelled));
+                Assert.That(scope.IsDisposed, Is.True);
+                Assert.That(cancelled, Is.EqualTo(1));
+                Assert.That(global.IsActive, Is.True, "View.Close 不清外部全局 Timer。");
+                using var nextScope = new TimerScope();
+                module.AttachView(view);
+                view.gameObject.SetActive(true);
+                view.RemoveAction = nextScope.Dispose;
+                var next = nextScope.PostNamed("view", 60);
+                Assert.That(next.IsActive, Is.True);
+                module.Close();
+                Assert.That(next.Status, Is.EqualTo(TimerState.Cancelled));
+                Assert.That(cancelled, Is.EqualTo(1), "旧 Scope 不参与重启后的 View 会话。");
+                for (var frame = 0; frame < 8 && completed == 0; frame++) yield return null;
+                Assert.That(global.Status, Is.EqualTo(TimerState.Completed));
+                Assert.That(completed, Is.EqualTo(1));
+            }
+            finally
+            {
+                global.Cancel();
+                if (ownedHost) Object.Destroy(ownedHost.gameObject);
+            }
         }
 
         private IEnumerator StartModule()
