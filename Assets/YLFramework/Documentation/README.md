@@ -43,7 +43,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Grid | 网格数据结构（固定容量 / 动态扩容） | 已完成 | [Modules/Grid.md](Modules/Grid.md) |
 | Json | JSON 解析与构建（JSONObject） | 已完成 | [Modules/Json.md](Modules/Json.md) |
 | Table | 带索引的数据表基类 | 已完成（含专项测试） | [Modules/Table.md](Modules/Table.md) |
-| Timing | 双堆定时任务、状态与暂停恢复、独立命名范围及取消辅助 | 已实现（验证结果见具体执行记录） | [Modules/Timing.md](Modules/Timing.md) |
+| Timing | Foundation 唯一秒/帧内核、精确句柄、Scope/复用、GO 绑定与终态等待 | 2.4-C 实施及专项验证完成，待验收与 Git 收口；2.4 IN PROGRESS | [Modules/Timing.md](Modules/Timing.md) |
 | ZipTool | Zip / GZip 压缩解压工具（内置 SharpZipLib） | 已完成 | [Modules/ZipTool.md](Modules/ZipTool.md) |
 
 ### Runtime 大型模块

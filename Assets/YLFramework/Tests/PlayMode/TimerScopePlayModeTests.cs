@@ -1,94 +1,135 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
-using YLFramework.Utilities.Timing;
-using Timer = YLFramework.Utilities.Timing.Timer;
+using YLFramework.Timing;
+using Timer = YLFramework.Timing.Timer;
+using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests
 {
     public class TimerScopePlayModeTests
     {
         private TimerScope mScope;
-        private float mTimeScale;
+        private TimerScope mOtherScope;
+        private readonly List<Component> mHosts = new();
+        private bool mIsolated;
+        private static Type DriverType => typeof(Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
+        private static Component CurrentHost => DriverType.GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
+            .GetValue(null) as Component;
+        private static Component[] FindHosts() => Object.FindObjectsByType(DriverType,
+            FindObjectsInactive.Include, FindObjectsSortMode.None).Cast<Component>().ToArray();
 
-        [UnitySetUp]
-        public IEnumerator SetUp()
+        [SetUp]
+        public void SetUp()
         {
-            mTimeScale = Time.timeScale;
-            Time.timeScale = 1;
-            Timer.Shutdown();
+            mIsolated = false;
+            Assert.That(FindHosts(), Is.Empty, "不接管用户已有或停用的 TimerDriver。");
+            Assert.That(CurrentHost, Is.Null, "不接管尚未释放的静态 owner。");
+            mIsolated = true;
             mScope = new TimerScope();
-            yield return null;
+            mOtherScope = new TimerScope();
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
+            if (!mIsolated) yield break;
             mScope.Dispose();
-            Time.timeScale = mTimeScale;
-            Timer.Shutdown();
+            mOtherScope.Dispose();
+            if (!ReferenceEquals(CurrentHost, null) && mHosts.Contains(CurrentHost)) Timer.Shutdown();
+            foreach (var host in mHosts) if (host) Object.Destroy(host.gameObject);
+            mHosts.Clear();
             yield return null;
+        }
+
+        private TimerHandle Post(Func<TimerHandle> post)
+        {
+            var before = FindHosts();
+            Assert.That(before.All(mHosts.Contains), Is.True, "不接管并行创建的非自有宿主。");
+            try { return post(); }
+            finally
+            {
+                foreach (var host in FindHosts())
+                    if (!before.Contains(host) && !mHosts.Contains(host)) mHosts.Add(host);
+            }
+        }
+
+        private static IEnumerator Until(Func<bool> condition)
+        {
+            var limit = Time.realtimeSinceStartupAsDouble + 3;
+            while (!condition() && Time.realtimeSinceStartupAsDouble < limit) yield return null;
+            Assert.That(condition(), Is.True, "真实 Unity 帧未在期限内完成预期操作。");
         }
 
         [UnityTest]
         public IEnumerator PauseFreezesAcrossFramesWithoutBlockingOtherDueTasks()
         {
-            var timer = Timer.Instance;
             var calls = 0;
-            var paused = timer.PostNamed("cooldown", _ => calls++, 0.04f, true, scope: mScope);
-            Assert.That(paused.Pause(), Is.True);
+            var paused = Post(() => mScope.PostNamed("cooldown", 0.04, () => calls++));
+            Assert.That(mScope.Pause("cooldown"), Is.True);
             var remaining = paused.RemainingSeconds;
             var otherCalls = 0;
-            var other = timer.Post2Really(_ => otherCalls++, 0.01f);
+            var other = Post(() => Timer.Delay(0.01, () => otherCalls++));
             yield return new WaitForSecondsRealtime(0.08f);
+            yield return Until(() => otherCalls == 1);
             Assert.That(paused.RemainingSeconds, Is.EqualTo(remaining));
+            Assert.That(paused.Status, Is.EqualTo(TimerState.Paused));
             Assert.That(calls, Is.Zero);
-            Assert.That(otherCalls, Is.EqualTo(1));
-            Assert.That(other.State, Is.EqualTo(TimerState.Completed));
-            Assert.That(paused.Resume(), Is.True);
-            var limit = Time.realtimeSinceStartup + 2;
-            while (calls == 0 && Time.realtimeSinceStartup < limit) yield return null;
-            Assert.That(calls, Is.EqualTo(1));
-            Assert.That(paused.State, Is.EqualTo(TimerState.Completed));
+            Assert.That(other.Status, Is.EqualTo(TimerState.Completed));
+            Assert.That(mScope.Resume("cooldown"), Is.True);
+            yield return Until(() => calls == 1);
+            Assert.That(paused.Status, Is.EqualTo(TimerState.Completed));
             Assert.That(mScope.Contains("cooldown"), Is.False);
         }
 
         [UnityTest]
         public IEnumerator LastCallbackCanRebuildHostAndUseSameScopeNameWithoutOldCleanup()
         {
-            var oldHost = Timer.Instance;
-            TimeItem replacement = null;
-            var old = oldHost.PostNamed("rebuild", _ =>
+            TimerHandle replacement = default;
+            var created = false;
+            var calls = 0;
+            var old = Post(() => mScope.PostNamed("rebuild", 0, () =>
             {
+                Assert.That(mScope.Contains("rebuild"), Is.False);
                 Timer.Shutdown();
-                replacement = Timer.Instance.PostNamed("rebuild", null, 100, true, scope: mScope);
-            }, 0, true, scope: mScope);
-            var limit = Time.realtimeSinceStartup + 2;
-            while (replacement == null && Time.realtimeSinceStartup < limit) yield return null;
-            Assert.That(replacement, Is.Not.Null);
+                replacement = Post(() => mScope.PostNamed("rebuild", 100, () => calls++));
+                created = true;
+            }));
+            var oldHost = CurrentHost;
+            yield return Until(() => created);
             yield return null;
-            Assert.That(old.State, Is.EqualTo(TimerState.Cancelled));
-            Assert.That(old.IsRecycled, Is.True);
+            Assert.That(old.Status, Is.EqualTo(TimerState.Completed), "末轮在 callback 前预留完成，不被 Shutdown 改为取消。");
+            Assert.That(old.Cancel(), Is.False);
             Assert.That(mScope.TryGet("rebuild", out var found), Is.True);
-            Assert.That(found, Is.SameAs(replacement));
-            Assert.That(Timer.Instance, Is.Not.SameAs(oldHost));
+            Assert.That(found, Is.EqualTo(replacement));
+            Assert.That(replacement.Status, Is.EqualTo(TimerState.Scheduled));
+            Assert.That(calls, Is.Zero);
+            Assert.That(CurrentHost, Is.Not.SameAs(oldHost));
+            Assert.That(FindHosts(), Has.Length.EqualTo(1));
         }
 
         [UnityTest]
         public IEnumerator OwnerScopeDisposeCancelsOnlyItsTasksAndDoesNotShutdownHost()
         {
-            var host = Timer.Instance;
-            var owned = host.PostNamed("scope", null, 100, scope: mScope);
+            var owned = Post(() => mScope.PostNamed("scope", 100));
             owned.Pause();
-            var global = host.PostNamed("scope", null, 100);
+            var other = Post(() => mOtherScope.PostNamed("scope", 100));
+            var global = Post(() => Timer.Delay(100));
+            var host = CurrentHost;
             mScope.Dispose();
             yield return null;
-            Assert.That(owned.State, Is.EqualTo(TimerState.Cancelled));
-            Assert.That(global.State, Is.EqualTo(TimerState.Scheduled));
-            Assert.That(Timer.Instance, Is.SameAs(host));
-            Assert.That(Timer.TryGet("scope", out var found), Is.True);
-            Assert.That(found, Is.SameAs(global));
+            Assert.That(owned.Status, Is.EqualTo(TimerState.Cancelled));
+            Assert.That(other.Status, Is.EqualTo(TimerState.Scheduled));
+            Assert.That(global.Status, Is.EqualTo(TimerState.Scheduled));
+            Assert.That(CurrentHost, Is.SameAs(host));
+            Assert.That(mOtherScope.TryGet("scope", out var found), Is.True);
+            Assert.That(found, Is.EqualTo(other));
+            Assert.That(mScope.Contains("scope"), Is.False);
         }
     }
 }

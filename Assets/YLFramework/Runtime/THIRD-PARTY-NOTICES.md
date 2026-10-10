@@ -8,7 +8,7 @@
 
 - `Runtime/Action/`：ActionKit 及其执行、组合、屏幕过渡与 Observable 适配。
 - `Runtime/Audio/`：AudioKit 及音频管理、配置与诊断。
-- `Runtime/Tools/Timing/`：Timer、BinaryHeap 及相关工具。
+- `Runtime/Shared/Timing/`：统一 Timer 内核、内部索引堆与句柄收集；旧 `Runtime/Tools/Timing/` 的适用来源声明继续保留。
 - `Editor/Audio/`、`Editor/Action/Help/`、`Editor/Help/`：基于 ActionKit / AudioKit API 的帮助内容与窗口适配。
 - `Integrations/DOTween/`：ActionKit 的 DOTween 集成适配（不随默认导出；DOTween 本身适用 Demigiant 的独立 Artistic 许可）。
 

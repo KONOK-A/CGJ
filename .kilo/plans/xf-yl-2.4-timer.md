@@ -1,8 +1,8 @@
 # XF × YL 2.4 Timer：融合研究与技术设计
 
-**状态：2.4-A 已收口（`861404c`）；2.4-B 已实现并通过定向验证，待用户验收与 Git 收口；C/D 未实施。**
+**状态：2.4 IN PROGRESS；A 已验收提交（`861404c`），B 已验收提交（`01f881c`）；C 实施及专项验证完成，待用户验收与 Git 收口；D 未实施。**
 
-本文的技术决策与实施路线已获用户总体审阅确认。批准仅覆盖总体设计方向、功能边界与 A→B→C→D 路线，不构成批次实施授权；未获另行授权前不改功能代码、不运行 Unity、不切分支、不执行 Git 写入，也不自动启动 2.4-A。
+本文的技术决策与实施路线已获用户总体审阅确认（`91c062a`）。总体批准不构成后续批次自动授权；A/B 已独立授权验收提交，本轮按用户明确授权实施 C，结果见第 11 节。各批次原交付文字保留为历史记录，以本页当前状态和后续明确授权为准；不自动启动 D 或执行 Git 写入。
 
 ## 1. 基线与结论
 
@@ -459,3 +459,65 @@ B 正式控制体系已具备继续 C 的基础，待本批用户验收与 Git �
 未实现 GameObject Binding、TimerObject 私有实现迁移、Core TimerManager 接入/删除、Timer 终态 Coroutine Wait 或窄 Coroutine 观察。旧 `Y/Tools/Timing` 与自有 `C/Manager/TimerManager` 源码和原测试完整保留，原 XF 包及 CGJ2024 消费者未修改；因此本批只确认**正式 YLFramework.Timing 服务使用一套内核与一个默认驱动**，不宣称全工程已消除所有旧 Timer。
 
 C/D 仍需完成上述旧消费者/实现收敛、相关资源身份与许可/模块文档收口、真实关闭 Domain Reload 连续 Play 验收及必要跨领域代表验证。Action、UpdateManager、Events、Pool 的公共契约及 MVC/View 生命周期均未修改。
+
+## 11. 2.4-C 实施结果（2026-10-11）
+
+本批按用户明确授权实施，开始时实际核对 `fusion/2.4-timer`、HEAD `01f881c`，工作区干净；批准设计 `91c062a`、A `861404c`、B `01f881c` 均在当前历史中。没有此前未完成的 C 改动需接续。本批未切分支、Commit、Push、Merge、Tag、Reset 或 Clean；A/B 结果复用，未重新建设 ReusableTimer。
+
+### 11.1 实际融合与旧实现退出
+
+- 新增 `TimerHandle.BindTo(GameObject, TimerGameObjectLifetime)` 扩展，明确 CancelOnDisable 与 CancelOnDestroy 两策略。重绑先摘下旧责任；已失效对象或停用策略下初始 inactive 对象取消当前 run 并返回 false，不执行成功 callback。终态/旧代次返回 false，不创建驱动。
+- 监听持精确 binding/run 身份；取消、故障、末轮完成预留、Scope/owner 结束统一进入 Scheduler.Detach，解除原监听并清对象、句柄、scheduler 与委托。旧 listener 快照不能取消重绑/复用后的新代次。
+- 默认 Update/手动 Advance 在派发前按绑定 listener owner 做 O(B) 存活兜底；paused 与从未 active 后销毁的 owner 都覆盖。无绑定时不扫描任务；失效 owner 才逐项取消其绑定，一个取消通知失败仍清其他责任及派发无关到期任务，手动边界最终传播原始/聚合异常。
+- Core `TimerObject` 私有实现换为 B 的 ReusableTimer、当前精确 handle 和缓存事件包装委托。保留 namespace/程序集、原脚本路径与 GUID `8fd9c1c43a386034fbb60e5c2b0fa8b0`，`delay`/`ignoreTimeScale`/`Action`/`Abort` 四个序列化字段未改。OnEnable 启动本轮，自身组件 OnDisable 精确取消，OnDestroy 永久关闭槽并清包装引用；成功自停用、故障和已消费末轮不 Abort，取消只通知一次，Action/Abort 中合法新轮不受旧 finally 影响。
+- 删除新 YL 的 Core `TimerManager.cs`（含 Core.Timer/TimerType）及仅供其使用的 DisableListener，配套脚本 meta 一并退出；TimerObject 的目录/meta 保留。删除旧 `Y/Tools/Timing` 的 Timer/TimeItem/Scope/Helper/public Heap 及目录和脚本 meta，不保留永久兼容 facade。新 YL 的独立秒/帧调度已仅由 Foundation TimerScheduler 与唯一默认 TimerDriver 承担。
+- 五套旧 Timing/Scope 测试保留原路径、类名及 meta，迁移到正式服务。已有内核/Scope/复用断言复用 Foundation A/B 覆盖，仅保留索引移除/恢复、多次无限 tick 后取消、组与普通旧句柄、执行中 Dispose、异常后未来任务、Pause→Resume→Replace、真实跨帧暂停和同帧 host 重建等补充缺口，不用测试精简规避新契约。
+- 删除前对旧类型、API、脚本/目录 GUID、资源文本和动态字符串定向核对：仓库内未找到删除目标的挂载/外部资源绑定，实际消费者为 TimerObject 与五套测试；迁移后 `Assets/YLFramework` C# 无旧 namespace、TimeItem、TimerHelper、Post2Scale/Post2Really 或 TimerManager/DisableListener 残留。该证据不承诺仓库外预编译调用或外部资产兼容。
+- 保留 Shared/LICENSE.md 的 XF 声明、TimerHeap 中 QFramework/snowcold/liangxie 的完整 MIT、TimerHandleGroup 版权，以及 Runtime/THIRD-PARTY-NOTICES.md 中 QFramework/UnityTimer 作者和完整 MIT；仅更新实际吸收目录说明。没有修改原 XF/XFAB Package、游戏、持久场景/Prefab、asmdef 或项目配置。
+
+### 11.2 等待与窄 Coroutine 观察
+
+```csharp
+TimerHandle run = Timer.Delay(1, callback);
+run.BindTo(gameObject, TimerGameObjectLifetime.CancelOnDisable);
+TimerWait wait = run.WaitForTermination();
+yield return wait;
+if (wait.IsCompleted) { /* 仅 Completed 表示正常计时完成 */ }
+
+var observation = YLFramework.Foundation.CoroutineObservation.Observe(producer, callback);
+bool accepted = observation.IsStarted;
+observation.Dispose(); // 仅停止观察 wrapper，不停止借用的 producer。
+```
+
+- TimerWait 捕获精确 run，不因 !IsActive 提前结束末轮 Executing；Cancelled/Faulted/Invalidated 都不是成功。首次看到终态保存快照并释放 handle；复用槽在观察前重启则旧等待只能看到 Invalidated，不跟随新 run。停止等待协程不 Cancel Timer，等待器分配不计入 NonAlloc。
+- CoroutineObservation 不入 Timer 列表，不新增调度器。仅用 CoroutineStarter.Start/Stop 的原 owner 路由启动/停止自己的 wrapper；IsStarted 记录实际启动结果，拒绝时释放 callback，不伪装为活跃 Timer。callback 仅表示原生等待结束，不证明业务成功、未取消或资源释放；Starter owner 失效不恢复观察，也不保证 callback。
+- 真实 Unity 2022.3 运行确认同一个 Coroutine 仅允许一个 waiter。首次测试同时对同一 producer 加原生对照和 Observe 时，Starter 返回 null，Unity 输出 `Another coroutine is already waiting for this coroutine!`。测试改用独立、同条件 producer 对照，并补已有 waiter 的明确拒绝断言；没有通过吞日志或加多播/轮询层改变原生限制。
+- 自然结束 callback 一次；Stop producer 或销毁 producer owner 后，六个后续渲染帧内原生等待均未恢复，Observe callback 为零，生产者已不再推进。观察所有者仍须显式 Dispose，不把停止/销毁冒充成功或保证取消通知。
+- Unity 同时拒绝在 GO 正处于 SetActive 回调栈中再次嵌套 SetActive 同一对象。Play 用例改为取消通知中重绑其他有效 GO 验证旧快照隔离；同 GO 的后续重新启用及组件 Abort 中 enabled=false→true 重启分别由 Core/手动回归验证，不用 LogAssert 隐藏不合法激活。
+
+### 11.3 实际编译与专项验证
+
+| 分层 | 本轮实际通过 | 关键范围 |
+|---|---|---|
+| Unity 编译 | `2022.3.62f3c1` 导入/编译完成；scriptCompilationFailed=false、isCompiling=false | 正式类型载入 Foundation；未用 dotnet 或第二个 Unity 实例替代 |
+| EditMode 绑定 | TimerGameObjectBindingTests 7/7 | 重绑、paused、失效初始 owner、从未 active 兜底、组件/GO 边界、终态清引用、旧快照与取消通知失败继续 |
+| EditMode 等待 | TimerWaitTests 7/7 | 四种终态、末轮 Executing、精确复用代次、观察结果快照、不拥有取消 |
+| EditMode A/B 受影响回归 | 内核 28/28、Scope/Group 29/29、复用/日期 9/9、自动时钟 3/3 | Detach/Advance 接入后的直接契约重新验证 |
+| EditMode 边界与迁移 | FoundationBoundaryTests 5/5；旧三套测试 3/3、2/2、1/1 | 中立程序集、索引/异常/控制与迁移补充断言 |
+| PlayMode GO/Core | TimerBindingPlayModeTests 3/3、TimerObjectPlayModeTests 6/6 | 真实 paused owner 停用/销毁、取消重绑、组件身份/字段、启停、Action/Abort 重入、故障及 timeScale=0 |
+| PlayMode 等待/观察 | TimerWaitPlayModeTests 2/2、CoroutineObservationPlayModeTests 6/6 | 停止等待不取消 Timer；自然/Stop/destroy、释放观察不停止 producer、Starter/已有 waiter 拒绝 |
+| PlayMode 默认与迁移回归 | TimerDriverPlayModeTests 11/11；旧两套测试 1/1、3/3 | 真实相位/采样、owner/session、场景保活、暂停/同名与 host 重建 |
+
+- 最终实际执行 EditMode 94 项、PlayMode 32 项，全部通过，0 失败、0 跳过。组合 class 字符串过滤曾执行 0 项，不作证据；已逐类执行读取实际结果。一次多次 Play 工具脚本跨域重载失去返回结果，亦未作通过证据，随后逐类重新取得结果。
+- 首次 EditMode 两项错误地假设普通 MonoBehaviour 在编辑模式收到即时停用消息；改为手动 Advance 验证兜底，真实消息由 Play 独立验证，未改变产品行为或削弱断言。Coroutine 和嵌套激活的首次失败、根因与测试调整见上一节，最终均重新验证。
+- 测试 fixture 拒绝接管已有 host，仅清自建 owner/probe 并恢复时间设置；C 新增 fixture 不写全域 gate/reset。B 历史 driver fixture 的定向 session 模拟在本轮沿用运行，不冒充真实无 Domain Reload 综合门禁。
+- 最终 Unity 查询：11 个新增脚本均有有效且互异的 Unity 生成 GUID；TimerObject GUID 保持原值。已退出 Play，TimerDriver=0、CoroutineStarter=0；原 `Assets/Scenes/Main.unity` 保持打开、dirty=false，未保存或覆盖用户场景。
+- 已复查实际 tracked/untracked 修改、配套 meta、无新增程序集依赖及 `git diff --check`；独立只读审查未发现实质缺陷，提醒的绑定多项取消异常路径已补回归并实际通过。静态审查不替代上述运行证据。
+
+### 11.4 兼容变化、交付与停止
+
+本批达到 C 完成标准：**实施及专项验证完成，待用户验收与 Git 收口**。更新现有 Timing 使用说明、架构/导航、Audio 帮助及直接相关说明、许可目录与长期蓝图当前状态；原历史阶段记录保留。**整个 2.4 仍为 IN PROGRESS，D 未启动。**
+
+重要兼容变化：旧 Core/Tools Timer API 和公开可变 TimeItem/public Heap 已退出；调用方迁至正式 YLFramework.Timing。默认 Unscaled、包含等号、独立 firstDelay/interval、明确正 count/null 无限、末轮完成预留、错误只结束失败任务的 A/B 已批准变化在本批消费者中生效。TimerObject 无资源迁移，但仅禁用其组件也会取消本轮；普通句柄历史结果与复用槽旧代次规则不同。GO binding 接受新 run 时有适配记录分配，不声称绑定或观察全链路 NonAlloc。
+
+剩余验收为 D 的最终 API/命名/冗余入口、许可/文档完整复核、真实关闭 Domain Reload 连续两轮 Play，以及必要 Core/View 与 Timer/Action 共存代表门禁。本批未运行完整游戏、Player/IL2CPP、性能基准，未实测零 GC；未受影响的 Pool/Events/Update/MVC 历史证据未重跑。仓库外资源/预编译消费者及平台原生等待差异仍属边界，不由本轮源码检索或 Editor 专项通过保证。到此停止，不自动 Commit 或进入 D。

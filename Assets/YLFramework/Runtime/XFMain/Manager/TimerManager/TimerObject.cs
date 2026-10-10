@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Events; 
+using YLFramework.Timing;
 
 namespace YLFramework.Core
 { 
@@ -20,14 +21,21 @@ namespace YLFramework.Core
         [Tooltip("中断回调")]
         public UnityEvent Abort;
 
-        private Timer timer;
+        private ReusableTimer timer;
+        private TimerHandle current;
+        private System.Action onAction;
+        private System.Action<TimerCancellationReason> onCancelled;
+        private bool destroyed;
 
         private void OnEnable()
         {
-            if (timer == null)
-                timer = new Timer();
-
-            TimerManager.DelayInvokeNonAlloc(timer,gameObject,OnAction, delay, ignoreTimeScale, OnAbort);
+            if (destroyed) return;
+            timer ??= new ReusableTimer();
+            onAction ??= OnAction;
+            onCancelled ??= OnCancelled;
+            current = timer.Start(delay, onAction,
+                ignoreTimeScale ? TimerClock.Unscaled : TimerClock.Scaled, onCancelled);
+            current.BindTo(gameObject);
         }
 
         
@@ -38,8 +46,21 @@ namespace YLFramework.Core
         }
 
 
-        private void OnAbort() { 
+        private void OnCancelled(TimerCancellationReason reason)
+        {
             Abort?.Invoke();
+        }
+
+        private void OnDisable() => current.Cancel();
+
+        private void OnDestroy()
+        {
+            destroyed = true;
+            timer?.Dispose();
+            timer = null;
+            current = default;
+            onAction = null;
+            onCancelled = null;
         }
 
     } 

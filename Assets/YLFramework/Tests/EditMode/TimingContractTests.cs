@@ -1,136 +1,72 @@
 using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEngine;
-using YLFramework.Utilities.Timing;
-using Object = UnityEngine.Object;
+using YLFramework.Timing;
 
 namespace YLFramework.Tests
 {
     public class TimingContractTests
     {
-        private sealed class HeapElement : IBinaryHeapElement
+        [Test]
+        public void DeadlinesStayOrderedAfterIndexedCancellationAndResume()
         {
-            public float SortScore { get; set; }
-            public int HeapIndex { get; set; }
-            public void RebuildHeap<T>(BinaryHeap<T> heap) where T : IBinaryHeapElement => heap.RebuildAtIndex(HeapIndex);
-        }
-
-        private GameObject mRoot;
-
-        [SetUp]
-        public void SetUp()
-        {
-            mRoot = null;
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            Timer.Shutdown();
-            if (mRoot) Object.DestroyImmediate(mRoot);
-        }
-
-        [TestCase(BinaryHeapSortMode.kMin, BinaryHeapBuildMode.kN)]
-        [TestCase(BinaryHeapSortMode.kMin, BinaryHeapBuildMode.kNLog)]
-        [TestCase(BinaryHeapSortMode.kMax, BinaryHeapBuildMode.kN)]
-        [TestCase(BinaryHeapSortMode.kMax, BinaryHeapBuildMode.kNLog)]
-        public void BulkHeapBuildTracksEveryIndexAndPopsInOrder(BinaryHeapSortMode sortMode, BinaryHeapBuildMode buildMode)
-        {
-            var data = new[] { new HeapElement { SortScore = 3 }, new HeapElement { SortScore = 1 },
-                new HeapElement { SortScore = 4 }, new HeapElement { SortScore = 2 }, new HeapElement { SortScore = 5 } };
-            var heap = new BinaryHeap<HeapElement>(0, sortMode);
-            heap.Insert(data, buildMode);
-            foreach (var element in data) Assert.That(heap.GetElement(element.HeapIndex), Is.SameAs(element));
-            var values = new List<float>();
-            while (heap.HasValue())
+            using var scheduler = new TimerScheduler(0, 0, 0);
+            var calls = new List<int>();
+            var handles = new TimerHandle[16];
+            for (var i = 0; i < handles.Length; i++)
             {
-                var element = heap.Pop();
-                Assert.That(element.HeapIndex, Is.Zero);
-                values.Add(element.SortScore);
+                var delay = 16 - i;
+                handles[i] = scheduler.Delay(delay, () => calls.Add(delay));
             }
-            CollectionAssert.AreEqual(sortMode == BinaryHeapSortMode.kMin ? new float[] { 1, 2, 3, 4, 5 }
-                : new float[] { 5, 4, 3, 2, 1 }, values);
-            Assert.That(heap.Count, Is.Zero);
-            Assert.That(heap.GetElement(-1), Is.Null);
-            Assert.DoesNotThrow(() => heap.RebuildAtIndex(0));
+            scheduler.Advance(0, 0, 1);
+            Assert.That(handles[15].Cancel(), Is.True);
+            Assert.That(handles[5].Cancel(), Is.True);
+            Assert.That(handles[10].Pause(), Is.True);
+            scheduler.Advance(0, 4, 2);
+            CollectionAssert.AreEqual(new[] { 2, 3, 4 }, calls);
+            Assert.That(handles[10].RemainingSeconds, Is.EqualTo(6));
+            Assert.That(handles[10].Resume(), Is.True);
+            scheduler.Advance(0, 16, 3);
+            // 原 delay=6 的任务恢复后在 10 到期，同到期的原 delay=10 先登记。
+            CollectionAssert.AreEqual(new[] { 2, 3, 4, 5, 7, 8, 9, 10, 6, 12, 13, 14, 15, 16 }, calls);
+            for (var i = 0; i < handles.Length; i++)
+                Assert.That(handles[i].Status, Is.EqualTo(i == 15 || i == 5 ? TimerState.Cancelled : TimerState.Completed));
         }
 
         [Test]
-        public void HeapRepairsScoreChangesRemovalsAndSortDirection()
+        public void InfiniteRepeatCountsTicksUntilCancellation()
         {
-            var first = new HeapElement { SortScore = 1 };
-            var second = new HeapElement { SortScore = 2 };
-            var leaf = new HeapElement { SortScore = 3 };
-            var heap = new BinaryHeap<HeapElement>(new[] { first, second, leaf }, BinaryHeapSortMode.kMin);
-            leaf.SortScore = 0;
-            leaf.RebuildHeap(heap);
-            Assert.That(heap.Top(), Is.SameAs(leaf));
-            heap.RemoveAt(leaf.HeapIndex);
-            Assert.That(leaf.HeapIndex, Is.Zero);
-            heap.Sort(BinaryHeapSortMode.kMax);
-            Assert.That(heap.Top(), Is.SameAs(second));
-            heap.Clear();
-            Assert.That(first.HeapIndex, Is.Zero);
-            Assert.That(second.HeapIndex, Is.Zero);
+            using var scheduler = new TimerScheduler(0, 0, 0);
+            var ticks = new List<long>();
+            var repeated = scheduler.Repeat(0, 1, ticks.Add, count: null);
+            scheduler.Advance(0, 0, 1);
+            scheduler.Advance(0, 1, 2);
+            CollectionAssert.AreEqual(new long[] { 1, 2 }, ticks);
+            Assert.That(repeated.Status, Is.EqualTo(TimerState.Scheduled));
+            Assert.That(repeated.ExecutionCount, Is.EqualTo(2));
+            Assert.That(repeated.Cancel(), Is.True);
+            scheduler.Advance(0, 100, 3);
+            CollectionAssert.AreEqual(new long[] { 1, 2 }, ticks);
+            Assert.That(repeated.Status, Is.EqualTo(TimerState.Cancelled));
+            Assert.That(repeated.ExecutionCount, Is.EqualTo(2));
         }
 
         [Test]
-        public void TimerResetFromCallbackReleasesPendingAndCurrentRepeatedTasks()
+        public void ClearedGroupAndOldOrdinaryHandleCannotCancelNextRun()
         {
-            mRoot = new GameObject("AudioKit.UtilityTests.Timer");
-            var timer = mRoot.AddComponent<Timer>();
-            timer.OnSingletonInit();
-            var calls = 0;
-            var repeated = timer.Post2Really(_ => { calls++; timer.ResetMgr(); }, 0, -1);
-            var pending = timer.Post2Scale(_ => calls++, 100);
-            repeated.SortScore = -100;
-            timer.UpdateMgr();
-            Assert.That(calls, Is.EqualTo(1));
-            Assert.That(repeated.IsRecycled, Is.True);
-            Assert.That(pending.IsRecycled, Is.True);
-            Assert.That(repeated.callback, Is.Null);
-            Assert.That(pending.callback, Is.Null);
+            using var scheduler = new TimerScheduler(0, 0, 0);
+            var group = new TimerHandleGroup();
+            var previous = scheduler.Delay(100);
+            group.Add(previous);
+            group.Clear();
+            Assert.That(previous.Status, Is.EqualTo(TimerState.Cancelled));
+            var current = scheduler.Delay(1);
+            Assert.That(current, Is.Not.EqualTo(previous));
+            Assert.That(previous.Cancel() || previous.Pause() || previous.Resume(), Is.False);
+            group.Clear();
+            Assert.That(current.IsActive, Is.True);
+            scheduler.Advance(0, 1, 1);
+            Assert.That(current.Status, Is.EqualTo(TimerState.Completed));
+            Assert.That(previous.Status, Is.EqualTo(TimerState.Cancelled));
         }
-
-        [Test]
-        public void TimeItemCountsTicksRepeatsAndStopsAfterCancellation()
-        {
-            var ticks = new List<int>();
-            var item = TimeItem.Allocate(ticks.Add, 0, 2);
-            item.OnTimeTick();
-            Assert.That(item.NeedRepeat(), Is.True);
-            item.OnTimeTick();
-            Assert.That(item.NeedRepeat(), Is.False);
-            CollectionAssert.AreEqual(new[] { 1, 2 }, ticks);
-            item.Set(ticks.Add, 0, -1);
-            item.OnTimeTick();
-            Assert.That(item.NeedRepeat(), Is.True);
-            item.Cancel();
-            item.OnTimeTick();
-            CollectionAssert.AreEqual(new[] { 1, 2, 1 }, ticks);
-            item.Recycle2Cache();
-            Assert.That(item.callback, Is.Null);
-            Assert.That(item.HeapIndex, Is.Zero);
-            Assert.That(item.IsRecycled, Is.True);
-        }
-
-        [Test]
-        public void TimerHelperCancelAndRecycleNeverReuseExposedHandles()
-        {
-            var helper = new TimerHelper();
-            var previous = TimeItem.Allocate(_ => { }, 0);
-            helper.Add(previous);
-            helper.Clear();
-            Assert.That(previous.IsEnabled, Is.False);
-            previous.Recycle2Cache();
-            var current = TimeItem.Allocate(_ => { }, 0);
-            Assert.That(current, Is.Not.SameAs(previous));
-            previous.Cancel();
-            Assert.That(current.IsEnabled, Is.True);
-            current.Cancel();
-            current.Set(_ => { }, 1, 1);
-            Assert.That(current.IsEnabled, Is.True);
-        }
-
     }
 }

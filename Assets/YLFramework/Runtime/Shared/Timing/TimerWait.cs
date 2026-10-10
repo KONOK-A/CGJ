@@ -1,0 +1,42 @@
+using UnityEngine;
+
+namespace YLFramework.Timing
+{
+    /// <summary>
+    /// 仅观察一次精确 run 的 Coroutine 等待器，不拥有取消权限。仅主线程使用。
+    /// 首次观察到终态后保存结果，不再保留 run；仅 Completed 表示 Timer 正常完成。
+    /// </summary>
+    /// <remarks>
+    /// 复用槽在观察前启动新代次时，旧 run 呈现 Invalidated，而不是跟随新 run。
+    /// 未观察到的历史完成结果无法从复用槽恢复；需要保留结果时应在重启前观察。
+    /// </remarks>
+    public sealed class TimerWait : CustomYieldInstruction
+    {
+        private TimerHandle _handle;
+        private TimerState _status;
+        private bool _finished;
+
+        internal TimerWait(TimerHandle handle)
+        {
+            _handle = handle;
+            Observe();
+        }
+
+        /// <summary>未结束时为当前捕获 run 的状态，结束后为首次观察到的终态快照。</summary>
+        public TimerState Status { get { Observe(); return _status; } }
+        /// <summary>是否已观察到终态；末轮 Executing 仍为 false。</summary>
+        public bool IsFinished { get { Observe(); return _finished; } }
+        /// <summary>仅正常 Completed 为 true；取消、故障、失效均为 false。</summary>
+        public bool IsCompleted => Status == TimerState.Completed;
+        public override bool keepWaiting => !IsFinished;
+
+        private void Observe()
+        {
+            if (_finished) return;
+            _status = _handle.Status;
+            _finished = _status == TimerState.Completed || _status == TimerState.Cancelled ||
+                _status == TimerState.Faulted || _status == TimerState.Invalidated;
+            if (_finished) _handle = default;
+        }
+    }
+}

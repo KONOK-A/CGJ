@@ -1,6 +1,6 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
-状态：蓝图已确认；**阶段 1：COMPLETE（1.1～1.4 全部验收及 Git 集成收口完成，`6cea527`）**，Module/MVC、View/Panel 与原游戏 Editor/Windows64 代表性非干扰、Core Windows64/Mono 代表性验证通过。**阶段 2：IN PROGRESS；2.1 Pool：COMPLETE（验收及 Git 集成 `5754f3a`）；2.2 Events：COMPLETE（A～E 验收及 Git 收口，E `5674cf3`）；2.3 Update：技术 COMPLETE（A `d9f1b6c`、B `88cd76f` 已验收提交，C 待用户验收及 Git 收口）；2.4 Timer 未启动。**临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项的共同约束，不自动授权 Git 或下一专题；当前状态及依据见第 6～8 节和各专项方案。
+状态：蓝图已确认；**阶段 1：COMPLETE（1.1～1.4 全部验收及 Git 集成收口完成，`6cea527`）**，Module/MVC、View/Panel 与原游戏 Editor/Windows64 代表性非干扰、Core Windows64/Mono 代表性验证通过。**阶段 2：IN PROGRESS；2.1 Pool：COMPLETE（验收及 Git 集成 `5754f3a`）；2.2 Events：COMPLETE（A～E 验收及 Git 收口，E `5674cf3`）；2.3 Update：COMPLETE（Git 集成 `c9e6024`）；2.4 Timer：IN PROGRESS（A `861404c`、B `01f881c` 已验收提交；C 实施及专项验证完成，待用户验收与 Git 收口；D 未实施）。**临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项的共同约束，不自动授权 Git 或下一专题；当前状态及依据见第 6～8 节和各专项方案。
 
 ## 1. 目标与边界
 
@@ -107,8 +107,9 @@
 | 1.4 / 阶段 1 | COMPLETE（1.1～1.4 全部验收完成）；已合并集成主线（`6cea527`），提交 `fd7b1e8` | 2026-10-09 用户授权及最终验收；沿用本轮 37 项 Core PlayMode、7 项身份 EditMode、原游戏 Editor 自动化及实际共存验证。用户恢复产物后，Windows64/Mono 游戏构建成功且完整流程经用户确认；独立 Core Player 定向 4/4 通过，临时设置完全恢复。临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。首次阻断、恢复证据及保留风险见第 7 节 |
 | 2.1 Pool | COMPLETE；A～E 验收及 Git 集成完成 | A～D 提交：`a97cb2c` / `e8925e6` / `2529d5a` / `455088c`；E `71fc00d`，集成 `5754f3a`。唯一普通 ObjectPool/集合内核及领域消费者接入保持；E 保留 YL string/FIFO/预热/层级与场景能力，吸收 XFAB 稳定原桶/先摘后毁思想，完善归属、转换态、初始化、容量/fake-null、清理/晚还与 Data 原 owner。E 历史 Unity 编译无失败、PlayMode 13/13、EditMode 3/3；本轮未重跑。详见 [专项第 17 节](../../../.kilo/plans/xf-yl-2.1-pool.md)，最终独立验收仍待后续 |
 | 2.2 Events | **COMPLETE**（用户确认验收及 Git 收口，E `5674cf3`） | A～D 提交 `0c11270` / `c9cc2a5` / `31b4928` / `cc768a9` / `5a4ac6e`；E 完成 `XFGameFrameworkEvents`→`CoreEvents`（文件/meta/GUID 保留）、冗余 API/算法核查与真实关闭 Domain Reload 两轮 Play 门禁，代表性跨模块 87 项回归通过（CoreDirectView 49、EventsLifecycle 14、CoreEvents 7、Binding 15、Action/Audio 各 1）。Foundation 共享 channel/bus、取消与唯一 Or 承接全部实例/命名/类型/动态与 Unity 适配，Core `EventManager` 为 Default 薄入口，四个历史 facade 各持独立上下文并保留各自清理范围；历史命名、旧 API 与重复实现已收口。见 [专项第 14 节](../../../.kilo/plans/xf-yl-2.2-events.md) |
-| 2.3 Update | **技术 COMPLETE**；A/B 已验收提交，C 待用户验收与 Git 收口 | 单一 Foundation 三相位、Core 精确订阅、Starter 原 owner/会话隔离及 Action owned 消息桥接完成；Unity 编译、定向 EditMode 13/13、PlayMode 45/45、真实关闭 Domain Reload 连续两轮 Play 通过，原游戏代表性回归通过，Editor 配置/场景恢复。见第 8 节及 [专项方案](../../../.kilo/plans/xf-yl-2.3-update.md) |
-| 2.4～2.5、阶段 3～7 及其他长期系统 | 未开始 | 已具备 2.4 Timer 专项研究的技术前置条件；不自动授权或启动其他专题 |
+| 2.3 Update | **COMPLETE**；用户已确认验收，Git 集成 `c9e6024` | A `d9f1b6c`、B `88cd76f`、C `0b51a8a`。单一 Foundation 三相位、Core 精确订阅、Starter 原 owner/会话隔离及 Action owned 消息桥接完成；历史 Unity 编译、定向 EditMode 13/13、PlayMode 45/45、真实关闭 Domain Reload 连续两轮 Play 通过，原游戏代表性回归通过，Editor 配置/场景恢复。见第 8 节及 [专项方案](../../../.kilo/plans/xf-yl-2.3-update.md)，第 8 节原停止文字保留为历史 |
+| 2.4 Timer | **IN PROGRESS**；A/B 已验收提交，C 实施及专项验证完成，待用户验收与 Git 收口 | Foundation 唯一秒/帧内核与默认驱动、Scope/复用、GO 生命周期、Core TimerObject、终态等待/窄 Coroutine 观察完成；旧新 YL Core/Tools 计时调度退出。C 实际 Unity 编译通过，EditMode 94/94、PlayMode 32/32；真实无 Domain Reload 综合门禁及最终专题验收留 D。见 [Timer 专项第 11 节](../../../.kilo/plans/xf-yl-2.4-timer.md) |
+| 2.5、阶段 3～7 及其他长期系统 | 未开始 | 不因 Timer C 完成而自动授权或启动其他专题 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 

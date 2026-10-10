@@ -8,6 +8,7 @@ namespace YLFramework.Timing.Internal
     {
         internal TimerScheduler Owner;
         internal TimerScope Scope;
+        internal TimerGameObjectBinding Binding;
         internal string Name;
         internal bool NeedsAnchor;
         internal long EarliestFrame;

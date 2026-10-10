@@ -1,150 +1,78 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
-using YLFramework.Utilities.Timing;
-using Timer = YLFramework.Utilities.Timing.Timer;
+using YLFramework.Timing;
+using Timer = YLFramework.Timing.Timer;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests
 {
     public class TimingPlayModeTests
     {
-        private float mTimeScale;
-        private GameObject mBorrowedRoot;
+        private readonly List<Component> mHosts = new();
+        private bool mIsolated;
+        private static Type DriverType => typeof(Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
+        private static Component CurrentHost => DriverType.GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
+            .GetValue(null) as Component;
+        private static Component[] FindHosts() => Object.FindObjectsByType(DriverType,
+            FindObjectsInactive.Include, FindObjectsSortMode.None).Cast<Component>().ToArray();
 
-        [UnitySetUp]
-        public IEnumerator SetUp()
+        [SetUp]
+        public void SetUp()
         {
-            mTimeScale = Time.timeScale;
-            Time.timeScale = 1;
-            Timer.Shutdown();
-            yield return null;
+            mIsolated = false;
+            Assert.That(FindHosts(), Is.Empty, "不接管用户已有或停用的 TimerDriver。");
+            Assert.That(CurrentHost, Is.Null, "不接管尚未释放的静态 owner。");
+            mIsolated = true;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            Time.timeScale = mTimeScale;
-            Timer.Shutdown();
-            if (mBorrowedRoot) Object.Destroy(mBorrowedRoot);
+            if (!mIsolated) yield break;
+            if (!ReferenceEquals(CurrentHost, null) && mHosts.Contains(CurrentHost)) Timer.Shutdown();
+            foreach (var host in mHosts) if (host) Object.Destroy(host.gameObject);
+            mHosts.Clear();
             yield return null;
         }
 
-        [UnityTest]
-        public IEnumerator AutomaticUpdatesUseTheirOwnClocksWhileGameTimeIsPaused()
+        private TimerHandle Post(Func<TimerHandle> post)
         {
-            Time.timeScale = 0;
-            var timer = Timer.Instance;
-            var scaledCalls = 0;
-            var realCalls = 0;
-            timer.Post2Scale(_ => scaledCalls++, 0.02f);
-            timer.Post2Really(_ => realCalls++, 0.02f);
-            var limit = Time.realtimeSinceStartup + 2;
-            while (realCalls == 0 && Time.realtimeSinceStartup < limit) yield return null;
-            Assert.That(realCalls, Is.EqualTo(1));
-            Assert.That(scaledCalls, Is.Zero);
-            Time.timeScale = 1;
-            limit = Time.realtimeSinceStartup + 2;
-            while (scaledCalls == 0 && Time.realtimeSinceStartup < limit) yield return null;
-            Assert.That(scaledCalls, Is.EqualTo(1));
-        }
-
-        [UnityTest]
-        public IEnumerator OwnedHostUsesFrameworkHierarchyAndSurvivesSceneUnload()
-        {
-            var previous = SceneManager.GetActiveScene();
-            var scene = SceneManager.CreateScene("YL.Timing.TestScene");
-            Timer timer = null;
-            try
+            var before = FindHosts();
+            Assert.That(before.All(mHosts.Contains), Is.True, "不接管并行创建的非自有宿主。");
+            try { return post(); }
+            finally
             {
-                SceneManager.SetActiveScene(scene);
-                timer = Timer.Instance;
-                Assert.That(timer.transform.parent.name, Is.EqualTo("Timing"));
-                Assert.That(timer.transform.root.name, Is.EqualTo("YLFramework"));
-                Assert.That(timer.gameObject.scene.name, Is.EqualTo("DontDestroyOnLoad"));
+                foreach (var host in FindHosts())
+                    if (!before.Contains(host) && !mHosts.Contains(host)) mHosts.Add(host);
             }
-            finally { SceneManager.SetActiveScene(previous); }
-            yield return SceneManager.UnloadSceneAsync(scene);
-            Assert.That(timer != null, Is.True);
-            var pending = timer.Post2Really(null, 100);
-            Object.Destroy(timer.gameObject);
-            yield return null;
-            Assert.That(pending.IsRecycled, Is.True);
-            Assert.That(Timer.Instance, Is.Not.SameAs(timer));
         }
 
         [UnityTest]
         public IEnumerator RepeatedSameFrameShutdownCannotReadoptOldHostsOrClearReplacementTasks()
         {
-            var first = Timer.Instance;
-            var oldItem = first.Post2Really(null, 100);
+            var old = Post(() => Timer.Delay(100));
+            var first = CurrentHost;
             Timer.Shutdown();
-            var second = Timer.Instance;
+            var middle = Post(() => Timer.Delay(100));
+            var second = CurrentHost;
             Timer.Shutdown();
-            var current = Timer.Instance;
-            var pending = current.Post2Really(null, 100);
+            var pending = Post(() => Timer.Delay(100));
+            var current = CurrentHost;
             Assert.That(current, Is.Not.SameAs(first));
             Assert.That(current, Is.Not.SameAs(second));
-            Assert.That(oldItem.IsRecycled, Is.True);
+            Assert.That(old.Status, Is.EqualTo(TimerState.Invalidated));
+            Assert.That(middle.Status, Is.EqualTo(TimerState.Invalidated));
+            Assert.That(old.Cancel() || middle.Cancel(), Is.False);
             yield return null;
-            Assert.That(pending.IsRecycled, Is.False);
-            Assert.That(Timer.Instance, Is.SameAs(current));
-        }
-
-        [UnityTest]
-        public IEnumerator InactiveBorrowedHostIsNotActivatedAndShutdownPreservesItsGameObject()
-        {
-            mBorrowedRoot = new GameObject("Timing.Borrowed");
-            mBorrowedRoot.SetActive(false);
-            var borrowed = mBorrowedRoot.AddComponent<Timer>();
-            Assert.That(Timer.Instance, Is.SameAs(borrowed));
-            var pending = borrowed.Post2Really(null, 100);
-            Assert.That(mBorrowedRoot.activeSelf, Is.False);
-            Assert.That(mBorrowedRoot.transform.parent, Is.Null);
-            Timer.Shutdown();
-            Assert.That(pending.IsRecycled, Is.True);
-            yield return null;
-            Assert.That(mBorrowedRoot != null, Is.True);
-            Assert.That(mBorrowedRoot.GetComponent<Timer>(), Is.Null);
-        }
-
-        [UnityTest]
-        public IEnumerator DuplicateComponentsCannotTakeOwnershipOfCurrentTasks()
-        {
-            var current = Timer.Instance;
-            var item = current.Post2Really(null, 100);
-            mBorrowedRoot = new GameObject("Timing.Duplicate");
-            mBorrowedRoot.AddComponent<Timer>();
-            yield return null;
-            Assert.That(mBorrowedRoot != null, Is.True);
-            Assert.That(mBorrowedRoot.GetComponent<Timer>(), Is.Null);
-            Assert.That(Timer.Instance, Is.SameAs(current));
-            Assert.That(item.IsRecycled, Is.False);
-        }
-
-        [UnityTest]
-        public IEnumerator ShutdownInsideCallbackLeavesNewHostAndTasksAlive()
-        {
-            var old = Timer.Instance;
-            var calls = 0;
-            TimeItem replacement = null;
-            old.Post2Really(_ =>
-            {
-                Timer.Shutdown();
-                replacement = Timer.Instance.PostNamed("new", __ => calls++, 100);
-            }, 0);
-            var limit = Time.realtimeSinceStartup + 2;
-            while (replacement == null && Time.realtimeSinceStartup < limit) yield return null;
-            Assert.That(replacement, Is.Not.Null);
-            var current = Timer.Instance;
-            Assert.That(current, Is.Not.SameAs(old));
-            yield return null;
-            Assert.That(Timer.Contains("new"), Is.True);
-            Assert.That(replacement.IsActive, Is.True);
-            Assert.That(calls, Is.Zero);
+            Assert.That(pending.Status, Is.EqualTo(TimerState.Scheduled));
+            Assert.That(CurrentHost, Is.SameAs(current));
+            Assert.That(FindHosts(), Has.Length.EqualTo(1));
         }
     }
 }

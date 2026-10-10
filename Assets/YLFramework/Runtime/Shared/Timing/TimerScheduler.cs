@@ -18,6 +18,7 @@ namespace YLFramework.Timing
         private readonly TimerHeap _frames = new(TimerClock.RenderedFrame);
         private readonly HashSet<TimerRun> _owned = new();
         private readonly List<TimerRun> _pending = new();
+        private readonly Dictionary<TimerLifetimeListener, int> _bindingOwners = new();
         private double _scaledTime;
         private double _unscaledTime;
         private long _renderedFrame;
@@ -178,6 +179,7 @@ namespace YLFramework.Timing
             _advancing = true;
             try
             {
+                CheckBindings(ref errors);
                 // 只转移此前的登记责任；callback 产生的 pending 不参与本轮任何时钟域。
                 for (var i = 0; i < _pending.Count;)
                 {
@@ -355,11 +357,40 @@ namespace YLFramework.Timing
             RemoveQueued(run);
             _owned.Remove(run);
             run.Scope?.Detach(run);
+            run.Binding?.Detach();
             run.Owner = null;
             run.Callback = null;
             run.TickCallback = null;
             run.OnCancelled = null;
             run.PauseNext = false;
+        }
+
+        internal void AddBinding(TimerLifetimeListener listener)
+        {
+            _bindingOwners.TryGetValue(listener, out var count);
+            _bindingOwners[listener] = count + 1;
+        }
+        internal void RemoveBinding(TimerLifetimeListener listener)
+        {
+            if (!_bindingOwners.TryGetValue(listener, out var count)) return;
+            if (count == 1) _bindingOwners.Remove(listener);
+            else _bindingOwners[listener] = count - 1;
+        }
+
+        private void CheckBindings(ref List<Exception> errors)
+        {
+            if (_bindingOwners.Count == 0) return;
+            var snapshot = ListPool<TimerLifetimeListener>.Allocate();
+            try
+            {
+                snapshot.AddRange(_bindingOwners.Keys);
+                foreach (var listener in snapshot)
+                {
+                    try { listener.CheckOwner(); }
+                    catch (Exception error) { AddError(ref errors, error); }
+                }
+            }
+            finally { ListPool<TimerLifetimeListener>.Recycle(snapshot); }
         }
 
         private void Finish(TimerRun run, TimerState state)

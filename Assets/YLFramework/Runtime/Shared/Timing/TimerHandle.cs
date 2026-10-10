@@ -42,5 +42,11 @@ namespace YLFramework.Timing
         public bool Pause() => IsActive && _run.Owner.Pause(_run, _generation);
         /// <summary>按当前样本恢复等待，最早下一 rendered frame；非暂停状态返回 false。</summary>
         public bool Resume() => IsActive && _run.Owner.Resume(_run, _generation);
+
+        /// <summary>
+        /// 等待本句柄捕获的 run 进入终态；结束后读取 TimerWait.Status 区分完成、取消、故障和失效。
+        /// 停止等待协程不会取消 Timer；等待器分配不属于 NonAlloc 承诺。
+        /// </summary>
+        public TimerWait WaitForTermination() => new TimerWait(this);
     }
 }
