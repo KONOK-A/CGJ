@@ -5,6 +5,7 @@ using UnityEngine;
 using YLFramework;
 using YLFramework.Core.Singleton;
 using YLFramework.Events;
+using YLFramework.Foundation;
 
 namespace YLFramework.Actions
 {
@@ -15,7 +16,14 @@ namespace YLFramework.Actions
         // 由协程动作登记的取消回调；宿主释放时统一调用，确保协程先于宿主被停止和清理。
         private readonly HashSet<Action> mCoroutineCancellations = new HashSet<Action>();
 
-        // 宿主消息事件：由下方各 Unity 消息方法触发；订阅方应按自身生命周期解绑，宿主释放时会清空全部订阅。
+        private IUnRegister mUpdateToken;
+        private IUnRegister mFixedUpdateToken;
+        private IUnRegister mLateUpdateToken;
+        private object mUpdateRound;
+        private object mExecutionSession;
+        private bool mQuitting;
+
+        // owned 消息保持 Action 自己的上下文和 fail-fast；三相位只共享公共更新源。
         internal readonly EasyEvent OnUpdateEvent = new EasyEvent();
         internal readonly EasyEvent OnFixedUpdateEvent = new EasyEvent();
         internal readonly EasyEvent OnLateUpdateEvent = new EasyEvent();
@@ -32,22 +40,78 @@ namespace YLFramework.Actions
         {
             get
             {
-                if (HasInstance) return GetInstance();
-                if (!CanCreateHost()) return null;
+                if (ActionKit.IsShuttingDown) return null;
+                if (!HasInstance && (!CanCreateHost() || !SingletonSessionState.CanRunExecution)) return null;
                 ActionKit.Initialize();
                 return GetInstance();
             }
         }
 
-        private void Update() => OnUpdateEvent.Trigger();
-        private void FixedUpdate() => OnFixedUpdateEvent.Trigger();
-        private void LateUpdate() => OnLateUpdateEvent.Trigger();
+        public override void OnSingletonInit()
+        {
+            mExecutionSession = SingletonSessionState.ExecutionSession;
+            RefreshUpdateBridge();
+        }
+
+        private void OnEnable() => RefreshUpdateBridge();
+        private void OnDisable() => DisconnectUpdateBridge();
+
+        // 初始化补丁可以重入取得宿主；只有模块成功提交后才允许连接。
+        internal void RefreshUpdateBridge()
+        {
+            if (mUpdateRound != null || !CanForwardUpdate()) return;
+            var round = mUpdateRound = new object();
+            try
+            {
+                mUpdateToken = UpdateManager.AddUpdateEvent(() => ForwardUpdate(OnUpdateEvent, round));
+                mFixedUpdateToken = UpdateManager.AddFixedUpdateEvent(() => ForwardUpdate(OnFixedUpdateEvent, round));
+                mLateUpdateToken = UpdateManager.AddLateUpdateEvent(() => ForwardUpdate(OnLateUpdateEvent, round));
+            }
+            catch
+            {
+                DisconnectUpdateBridge();
+                throw;
+            }
+        }
+
+        private bool CanForwardUpdate() => this && !HostReleased && IsCurrentHost && isActiveAndEnabled &&
+            !mQuitting && ActionKit.Initialized && !ActionKit.IsShuttingDown &&
+            SingletonSessionState.CanRunExecution &&
+            ReferenceEquals(mExecutionSession, SingletonSessionState.ExecutionSession);
+
+        private void ForwardUpdate(EasyEvent message, object round)
+        {
+            if (!ReferenceEquals(mUpdateRound, round) || !CanForwardUpdate() || !message.HasListener) return;
+            message.Trigger();
+        }
+
+        private void DisconnectUpdateBridge()
+        {
+            // token 注销保留公共在途快照，先失效轮次；只释放本宿主的三个身份。
+            mUpdateRound = null;
+            var update = mUpdateToken;
+            var fixedUpdate = mFixedUpdateToken;
+            var lateUpdate = mLateUpdateToken;
+            mUpdateToken = mFixedUpdateToken = mLateUpdateToken = null;
+            try { update?.UnRegister(); }
+            finally
+            {
+                try { fixedUpdate?.UnRegister(); }
+                finally { lateUpdate?.UnRegister(); }
+            }
+        }
+
         private void OnGUI() => OnGUIEvent.Trigger();
         private void OnApplicationFocus(bool hasFocus) => OnApplicationFocusEvent.Trigger(hasFocus);
         private void OnApplicationPause(bool pauseStatus) => OnApplicationPauseEvent.Trigger(pauseStatus);
 
         protected override void OnApplicationQuit()
         {
+            if (HostReleased || !IsCurrentHost || mQuitting ||
+                !ReferenceEquals(mExecutionSession, SingletonSessionState.ExecutionSession)) return;
+            mQuitting = true;
+            SingletonSessionState.MarkApplicationQuitting();
+            DisconnectUpdateBridge();
             try { OnApplicationQuitEvent.Trigger(); }
             finally { base.OnApplicationQuit(); }
         }
@@ -95,7 +159,11 @@ namespace YLFramework.Actions
 
         protected override void OnHostRelease()
         {
-            try { CancelOwnedCoroutineActions(); }
+            try
+            {
+                DisconnectUpdateBridge();
+                CancelOwnedCoroutineActions();
+            }
             finally
             {
                 // 取消动作之后再清事件、停协程，避免动作清理期间仍收到宿主消息或继续被协程驱动。

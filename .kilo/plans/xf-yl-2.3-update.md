@@ -1,6 +1,6 @@
 # XF × YL 2.3 Update：融合研究与技术设计
 
-**状态：2.3-A 已验收并提交 `d9f1b6c`；2.3-B 已实施并通过本批技术验证，待用户验收及 Git 收口；C 尚未实施。**
+**状态：2.3 Update 技术 COMPLETE。A 已验收并提交 `d9f1b6c`，B 已验收并提交 `88cd76f`；C 已实施并通过最终技术门禁，待用户验收和 Git 收口。2.4 Timer 未启动。**
 
 本方案的总体设计已获批准，批准不等同于批次实施、Git 写入或下一专题授权。统一公共更新订阅与执行安全，保留领域调度；不是把所有 Unity 消息、任务或 MonoBehaviour 合成一个系统。
 
@@ -225,4 +225,21 @@ Core Timer、YL Timing 和 YL Audio 继续各自 Mono Update；职责边界、�
 - 本批 reset/退出门禁采用定向反射 reset 和 SendMessage(Quit)，协程推进、场景卸载和生命周期清理为实际 Unity PlayMode 验证；不将模拟 Quit 描述为真实退出验收。未改变 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合收口仍归 C；未进行 Player/IL2CPP、完整游戏、性能或专门 GC 回收验证。
 - B 已达到本批技术完成标准，A 的会话前置与 B 的协程安全支撑具备进入 C 的技术条件；C 实施仍须用户独立授权。当前变更未提交，未执行 Commit、Push、Merge、Reset、Clean 或切换分支。
 
-本批完成后停止，等待用户验收和 Git 收口，不自动进入 2.3-C。
+上述 A/B 记录保留为各批当时的实施证据；其验收与 Git 当前状态以上方状态及下节为准。
+
+### 2.3-C 实施与专题最终技术验收
+
+- 2026-10-10，用户正式授权 C 及整个 Update 专题技术收口。实际基线 `fusion/2.3-update`、HEAD `88cd76f`，工作区干净；A/B 已验收及 Git 收口。本轮未执行 Commit、Push、Merge、Reset、Clean 或分支切换，原 XF Package 严格只读。
+- ActionGlobalHost 退出自身 Update/FixedUpdate/LateUpdate 自动消息方法，使用 Foundation UpdateManager 三份精确 token。OnEnable/OnDisable、初始化成功提交及 Release 负责连接/断开；捕获连接轮次，检查 Unity 存活、当前宿主、有效启用、模块状态、执行门禁及会话身份。先失效轮次再退订，普通公共快照中的旧桥接不能进入恢复/重建后的生命周期。
+- 保留七个 owned EasyEvent 的上下文、手动 Trigger/清理/Dispose 与内部 fail-fast；公共 TriggerAll 继续其他消费者并报告 Action 异常。Shutdown 只注销 Action 自有三个身份，ResetOwner 截断旧内部快照；不调用公共清理或停止其他领域。初始化补丁重入取得宿主时不提前连接，成功后非创建式刷新，失败时不自动通知；不扩成完整 Action 初始化事务重写。
+- GUI/Focus/Pause/Quit、Action 自有协程、组合执行、任务租约/暂停/取消、对象/场景/全局范围及延迟回收均保留。当前宿主 Quit 先设置自己的退出屏障与共享会话标志再通知监听；旧宿主 Quit/Destroy 不关闭新会话。没有新增跨领域全序、监听数量适配层、统一任务调度或损坏自愈。
+- 最终真实 Play 门禁发现 A 的窄阻断：SubsystemRegistration 重新安装 Editor 监听后，较早注册的 ExitingPlayMode 监听可能先执行；当时 Application.isPlaying 仍为 true，Starter 仍能同步启动。连续两轮真实退出均复现。仅在 SingletonSessionState.CanRunExecution 的 UNITY_EDITOR 分支补充 isPlayingOrWillChangePlaymode 检查，退出请求后即拒绝，与 Editor 回调注册顺序无关；Player 表达式未改变，未重构 A/B 实现。
+- Unity `2022.3.62f3c1` 实际导入/编译无错误，StandaloneWindows64 / Mono。定向 EditMode **13/13**（既有 Action 生命周期/重入/组合 Shutdown/回收）；PlayMode **45/45**：全局消息 **7**、Action 生命周期 **16**、公共 Update **6**、CoroutineStarter **15**、原游戏流程 **1**。真实根树发现数不是执行数；工具的空筛选或传输失败未记为通过，最终读取了以上实际结果。没有机械重跑完整 Pool、Events 或 Core；A/B 未受影响的边界及直接 Core 消费者历史结果继续有效。
+- 新回归先确认原实现缺少共享源、初始化失败仍自动广播、Quit 通知内可重建等缺口，再实施并通过。只读审查发现的 fixture 所有权问题已修复：执行 Shutdown/reset 前拒绝已有 Action/Public Update/Starter owner；初始化补丁测试允许既有公共宿主；只清 fixture 自建且三个 channel 都无监听的公共宿主。最终独立静态复核无阻塞发现，diff 检查无错误。
+- **关闭 Domain Reload 的连续两轮真实 Play 最终通过**，保留正常 Scene Reload。在临时空场景使用内存诊断，第一轮公共 token、owned event、Starter Coroutine 和 ActionHandle 持续保存至第二轮，未在退出前主动注销以代替生命周期验收。两轮 Update/Action 数分别 **34379/34379**、**10727/10727**；Fixed **1050/339**、Late **34379/10727**、Starter 推进 **34381/10729**。三种宿主各一份，执行会话身份轮换；旧 token/事件/协程/命名任务句柄不影响新工作，旧回调零次进入第二轮。两个真实 ExitingPlayMode 和 OnApplicationQuit 各收到一次，均拒绝新启动/重建；不是 SendMessage(Quit) 验收。两轮总计失败项零。
+- 原始 Editor 设置为 enterPlayModeOptionsEnabled=false、保存 options=3；临时改为 enabled=true/options=DisableDomainReload（Scene Reload 保留），结束后恢复原 enabled=false/options=3。原 `Assets/Scenes/Main.unity`、活动场景与未脏状态恢复，无临时场景资产或新测试设施。随后现有 `YLAudioGameFlowPlayModeTests.MainStartSettingsGameExitAndReentryUseFrameworkAudio` **1/1**：真实 Main/XFAB→原 XF MainModule/XFFSM、菜单/设置/游戏/返回/再入/结束与现有 YL 音频通过，fixture 恢复音频偏好、timeScale 和 targetFrameRate。
+- A～C 形成单一 `YLFramework.Foundation.UpdateManager` 公共三相位实现，复用 Events channel；Core View/Panel/Audio 消费精确 token，Action 保留 owned 领域消息。Core 重复 UpdateManager、旧静态字段、消费者先 Remove 再 Add 模式以及 Action 重复三相位转发已退出。Starter 保留独立 DDOL 与弱键原 owner 路由；Core Timer、YL Timing/Audio、Action 执行器/回收等独立驱动保留，因为它们拥有时钟、任务或资源语义。
+- 本轮无新公共 API、程序集、资源迁移或 GUID 变化，Runtime/Core→Foundation 方向保持。A 的 UpdateManager 类型归属/返回 token 兼容变化仍适用；C 的自动消息连接需要初始化成功且宿主有效启用，Quit 回调不能关闭后重建。已同步 Action API XML 和既有模块说明；Foundation 不向 Core/Runtime 反向依赖，原 XF 的同名驱动继续供原游戏使用。
+- 未进行新 Player/IL2CPP 构建、完整原游戏人工流程、同时关闭 Scene Reload 的全面恢复或性能测量。当前 Windows64/Mono 未新增反射/泛型/AOT 路径或 Player 依赖；结合既有阶段 1 Player 证据与本轮 Editor 代表性非干扰，不要求无差别重建。原 Logger/MCP 过渡日志、依赖声明/实际解析差异、资源/producer 物理取消与释放、宿主损坏恢复保持既有归属；不修原包或把历史限制当已解决。Core Timer 调度/终态与 YL Timing 融合归 2.4，资源和完整 Audio 归对应专题。
+
+**结论：2.3 Update 已满足技术 COMPLETE 条件；具备进入 2.4 Timer 专项研究的技术前置条件。C 尚待用户验收与 Git 收口，完成后停止，不自动提交或启动 2.4。**

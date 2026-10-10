@@ -2,6 +2,10 @@ using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using YLFramework.Events;
+using YLFramework.Foundation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -17,6 +21,7 @@ namespace YLFramework.Tests.Actions
         private float mTimeScale;
         private bool mOwnEnvironment;
         private bool mOwnActionSession;
+        private UpdateManager mPreviousUpdateHost;
 
         [SetUp]
         public void SetUp()
@@ -25,6 +30,12 @@ namespace YLFramework.Tests.Actions
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
             mTimeScale = Time.timeScale;
             mOwnEnvironment = false;
+            mPreviousUpdateHost = Object.FindObjectOfType<UpdateManager>(true);
+            Assert.That(canOwnActionSession, Is.True,
+                "This fixture must exclusively own ActionKit before Shutdown or session reset.");
+            Assert.That(mPreviousUpdateHost, Is.Null, "Session reset must not terminate another public Update owner.");
+            Assert.That(Object.FindObjectOfType<CoroutineStarter>(true), Is.Null,
+                "Session reset must not terminate another coroutine owner.");
             Assert.That(Object.FindObjectOfType<ActionGlobalHost>(true) == null, Is.True,
                 "This fixture must own the module global host; it will not modify another owner's subscriptions.");
             mOwnEnvironment = true;
@@ -53,7 +64,135 @@ namespace YLFramework.Tests.Actions
                 finally { mOwnActionSession = false; }
                 yield return null;
             }
+            ActionFixtureSession.ReleaseIdleUpdateHost(mPreviousUpdateHost);
+            yield return null;
         }
+
+        [UnityTest]
+        public IEnumerator ThreeGlobalPhasesUseThePublicSourceAndRespectHostActivation()
+        {
+            Time.timeScale = 1;
+            var counts = new int[3];
+            Kit.OnUpdate.Register(() => counts[0]++);
+            Kit.OnFixedUpdate.Register(() => counts[1]++);
+            Kit.OnLateUpdate.Register(() => counts[2]++);
+            var host = ActionGlobalHost.Instance;
+            var source = Object.FindObjectOfType<UpdateManager>(true);
+            Assert.That(source, Is.Not.Null, "Action 三相位应复用公共源。");
+            yield return new WaitForFixedUpdate();
+            yield return null;
+            yield return null;
+            Assert.That(counts[0] > 0 && counts[1] > 0 && counts[2] > 0, Is.True);
+            try
+            {
+                source.enabled = false;
+                var before = (int[])counts.Clone();
+                yield return new WaitForFixedUpdate();
+                yield return null;
+                yield return null;
+                CollectionAssert.AreEqual(before, counts, "不得残留独立的三相位转发。");
+            }
+            finally { source.enabled = true; }
+            foreach (var inactiveObject in new[] { false, true })
+            {
+                if (inactiveObject) host.gameObject.SetActive(false);
+                else host.enabled = false;
+                var before = (int[])counts.Clone();
+                yield return new WaitForFixedUpdate();
+                yield return null;
+                yield return null;
+                CollectionAssert.AreEqual(before, counts);
+                if (inactiveObject) host.gameObject.SetActive(true);
+                else host.enabled = true;
+                var updateBefore = counts[0];
+                yield return null;
+                yield return null;
+                Assert.That(counts[0], Is.EqualTo(updateBefore + 2), "恢复后只有一份桥接。");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PublicSourceContinuesAfterActionFailFastAndActionCleanupIsLocal()
+        {
+            var eventAfterFailure = 0;
+            var otherDomain = 0;
+            var update = Kit.OnUpdate;
+            var failing = update.Register(() => throw new InvalidOperationException("Action bridge expected"));
+            update.Register(() => eventAfterFailure++);
+            var token = UpdateManager.AddUpdateEvent(() => otherDomain++);
+            mCleanup.Add(token.UnRegister);
+            var source = Object.FindObjectOfType<UpdateManager>(true);
+            source.enabled = false;
+            LogAssert.Expect(LogType.Exception, new Regex("Action bridge expected"));
+            source.SendMessage("Update");
+            Assert.That(eventAfterFailure, Is.Zero, "Action 内部仍为 fail-fast。");
+            Assert.That(otherDomain, Is.EqualTo(1), "公共广播继续其他领域。");
+            failing.UnRegister();
+            update.UnRegisterAll();
+            Kit.Shutdown();
+            source.SendMessage("Update");
+            Assert.That(otherDomain, Is.EqualTo(2));
+            source.enabled = true;
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ReenableDuringPublicSnapshotRejectsTheOldBridgeRound()
+        {
+            var calls = 0;
+            ActionGlobalHost host = null;
+            var token = UpdateManager.AddUpdateEvent(() =>
+            {
+                host.enabled = false;
+                host.enabled = true;
+            });
+            mCleanup.Add(token.UnRegister);
+            Kit.OnUpdate.Register(() => calls++);
+            host = ActionGlobalHost.Instance;
+            var source = Object.FindObjectOfType<UpdateManager>(true);
+            source.enabled = false;
+            source.SendMessage("Update");
+            Assert.That(calls, Is.Zero, "普通退订仍在公共快照中，旧轮次必须自行拒绝。");
+            token.UnRegister();
+            source.SendMessage("Update");
+            Assert.That(calls, Is.EqualTo(1));
+            source.enabled = true;
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator QuitClosesCreationBeforeCallbacksAndOldHostCannotCloseNewSession()
+        {
+            var session = typeof(UpdateManager).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
+            var reset = session.GetMethod("ResetForNewSession", BindingFlags.Static | BindingFlags.NonPublic);
+            var host = ActionGlobalHost.Instance;
+            var created = false;
+            var coroutineStarted = false;
+            host.OnApplicationQuitEvent.Register(() =>
+            {
+                Kit.Shutdown();
+                created = ActionGlobalHost.Instance != null;
+                coroutineStarted = CoroutineStarter.Start(Empty()) != null;
+                UpdateManager.AddUpdateEvent(() => { });
+            });
+            try
+            {
+                host.SendMessage("OnApplicationQuit");
+                Assert.That(created || coroutineStarted, Is.False, "退出通知之前必须关闭创建门禁。");
+                reset.Invoke(null, null);
+                var next = ActionGlobalHost.Instance;
+                host.SendMessage("OnApplicationQuit");
+                var calls = 0;
+                Kit.OnUpdate.Register(() => calls++);
+                yield return null;
+                yield return null;
+                Assert.That(ActionGlobalHost.Instance, Is.SameAs(next));
+                Assert.That(calls, Is.GreaterThan(0), "旧宿主 Quit 不应关闭新会话。");
+            }
+            finally { reset.Invoke(null, null); }
+        }
+
+        private static IEnumerator Empty() { yield break; }
 
         [UnityTest]
         public IEnumerator SevenPropertiesAreStableModuleOwnedEventsOnOneHost()
@@ -135,7 +274,13 @@ namespace YLFramework.Tests.Actions
             host.SendMessage("OnApplicationFocus", true);
             host.SendMessage("OnApplicationPause", true);
             host.SendMessage("OnApplicationPause", false);
-            host.SendMessage("OnApplicationQuit");
+            // 模拟 Quit 会关闭共享门禁；恢复本测试拥有的会话，不能污染后续用例。
+            var session = typeof(UpdateManager).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
+            try { host.SendMessage("OnApplicationQuit"); }
+            finally
+            {
+                session.GetMethod("ResetForNewSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+            }
             Assert.That(gui, Is.EqualTo(1));
             CollectionAssert.AreEqual(new[] { false, true }, focus);
             CollectionAssert.AreEqual(new[] { true, false }, pause);

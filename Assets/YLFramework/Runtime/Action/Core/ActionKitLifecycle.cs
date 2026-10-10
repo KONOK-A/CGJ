@@ -48,6 +48,8 @@ namespace YLFramework.Actions
                 mArchitecture.Init();
                 OnRegisterPatch?.Invoke(mArchitecture);
                 Initialized = true;
+                // 不创建宿主；连接补丁期间已取得的宿主，失败时由桥接回滚本轮 token。
+                if (ActionGlobalHost.TryGetInstance(out var host)) host.RefreshUpdateBridge();
             }
             catch
             {

@@ -21,6 +21,10 @@ namespace YLFramework.Core.Singleton
 
         // 只约束基础执行宿主，不改变 ApplicationTool 或其他领域单例的既有语义。
         internal static bool CanRunExecution => Application.isPlaying &&
+#if UNITY_EDITOR
+            // 请求退出后 isPlaying 暂时仍为 true；不依赖 ExitingPlayMode 监听的注册顺序。
+            EditorApplication.isPlayingOrWillChangePlaymode &&
+#endif
             !_executionStopping && !_isApplicationQuitting;
 
         internal static void StopExecution() => _executionStopping = true;
