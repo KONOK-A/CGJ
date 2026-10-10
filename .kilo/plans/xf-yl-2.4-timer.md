@@ -1,6 +1,6 @@
 # XF × YL 2.4 Timer：融合研究与技术设计
 
-**状态：2.4 Timer 总体设计已批准，待分批实施。**
+**状态：2.4-A 已实现并通过本批验证，待用户验收与 Git 收口；B/C/D 未实施。**
 
 本文的技术决策与实施路线已获用户总体审阅确认。批准仅覆盖总体设计方向、功能边界与 A→B→C→D 路线，不构成批次实施授权；未获另行授权前不改功能代码、不运行 Unity、不切分支、不执行 Git 写入，也不自动启动 2.4-A。
 
@@ -331,4 +331,53 @@ TimerScheduler manual; // 显式手动实例，同一个内核，不自动创建
 
 批准仅覆盖上述总体方向与路线，不自动授权批次实施、切换分支或 Git 写入。各批次仍需独立授权，按“实施 → 必要验证 → 用户验收 → Git 收口”推进；若实施发现重大新兼容证据或超出这些边界，先提出调整再继续。第 2～7 节的技术条款继续作为本批准范围内各批次的设计依据。
 
-**本次仅更新本文档状态与已批准决策记录，未修改 Runtime、Editor、测试、资源、asmdef、项目配置或旧长期文档，未执行 Unity 或 Git 写入。2.4-A 及各批次等待用户另行授权后启动。**
+**总体设计批准批次仅更新本文档状态与已批准决策记录，未修改 Runtime、Editor、测试、资源、asmdef、项目配置或旧长期文档，未执行 Unity 或 Git 写入。各批次另行授权后的实施结果记于下文。**
+
+## 9. 2.4-A 实施结果（2026-10-10）
+
+本批获明确实施授权，开始时核对 `fusion/2.4-timer`、HEAD `91c062a`、工作区干净。仅新增 Foundation 内核与其契约测试，增量维护本文；未切换分支、提交、推送、合并或创建 Tag。
+
+### 9.1 实际实现与融合
+
+- `F/Timing/TimerScheduler.cs` 为唯一正式手动内核，namespace `YLFramework.Timing`，归 `YLFramework.Foundation.Runtime`；未新增 asmdef 或程序集依赖。显式实例由调用方提供初始/推进样本，不读 Unity Time、不创建或借用 MonoBehaviour 宿主。
+- 保留 YL 的 deadline、执行租约和索引堆思路。`Internal/TimerHeap.cs` 从既有 BinaryHeap 收窄，沿用 1-based 索引、RemoveAt 与上浮/下沉局部修复；新增内部归属核验、double 秒分数、long 帧分数及 due/order 稳定比较，完整保留所吸收堆代码的 QFramework 来源、版权与 MIT 许可文本。
+- 吸收 XF 的 Frame Timer、独立首次/周期参数及复用身份需求；三域使用同一派发/终态算法，不新增第二套帧生命周期逻辑。
+- `TimerHandle` 为只读值类型，捕获私有 run 引用及 generation；任务存储不公开、普通 run 不池化。控制核验原 owner/run/代次，执行收尾只处理捕获代次。正常句柄可保留稳定终态和执行次数，终态释放 callback、取消通知、owner 和队列引用。
+- 本批不需要公开基础 Scope；唯一内核的 `_owned` 集合只维护自身责任。Scope 名称与所有权收敛留 B，未为了内部代次提前实现 ReusableTimer 或复用槽管理。
+
+### 9.2 已落地契约与 API
+
+```csharp
+var manual = new TimerScheduler(scaledTime, unscaledTime, renderedFrame);
+TimerHandle once = manual.Delay(delay, callback, clock: TimerClock.Unscaled);
+TimerHandle repeat = manual.Repeat(firstDelay, interval, onTick, count: null);
+TimerHandle frames = manual.DelayFrames(frameDelay, callback);
+TimerHandle frameRepeat = manual.RepeatFrames(firstDelay, interval, onTick, count: 5);
+manual.Advance(nextScaledTime, nextUnscaledTime, nextRenderedFrame);
+once.Pause(); once.Resume(); once.Cancel();
+manual.Dispose();
+```
+
+- 秒入口接受 Scaled/Unscaled，默认 Unscaled；Frame 使用专用入口。秒为 double、帧为 long。调用方须提供 rendered frame 样本，不得用 FixedUpdate 或 Action 执行次数充当帧时钟。
+- 有限、非负初始/推进样本；三个时钟均不得回拨。参数非法在登记前拒绝：负 delay/frameDelay、非有限秒、非正 interval 或有限 count、秒入口使用帧域/未知域。count 为总到期轮数，null 明确表示无限；重复回调参数与 `ExecutionCount` 使用 long，避免沿用旧 int 轮数上限。
+- 到期 `now >= deadline`。首次只等 firstDelay；后续 deadline 为实际派发样本 + interval。fixed-delay、不补发、不积累周期债务；同一任务每个推进渲染帧最多执行一次。null callback 的纯等待仍消费次数并正常完成。
+- 登记不 inline。Frame 的 n>0 等待登记帧之后 n 个未来帧，0 等待下一帧。相同帧的 Advance 仅刷新时间快照、不派发；递归 Advance 是空操作，不提交递归输入。pending 登记/恢复/下一周期只在后续帧入堆，回调新增任务不能串入当前任何时钟域，也不会挡住其他已就绪任务。
+- 状态为 Scheduled、Paused、Executing、Completed、Cancelled、Faulted、Invalidated。默认句柄为 Invalidated。提供 Status、IsActive、IsFinished、ExecutionCount、RemainingSeconds、RemainingFrames；两种 remaining 分别只对对应域有意义，均遵循手动实例最近合法样本。
+- Pause 保存剩余秒/帧，Resume 从当前样本重新建立 deadline；重复控制安全。非末轮回调内 Pause 保存完整下一 interval，当前状态保持 Executing，回调退出后才提交 Paused；回调内 Pause→Resume 不产生重复入队。
+- Cancel 先提交 Cancelled、撤销归属/队列并清委托，再通知 `TimerCancellationReason.Cancelled`。Dispose 先永久关闭实例并提交全部未完成责任 Invalidated，再逐项通知 `SchedulerDisposed`；一个通知失败仍尝试其他通知，重复取消/关闭不再次通知。
+- 单次/末轮在回调前预留完成责任：Status=Executing、IsActive=false、IsFinished=false，Cancel/Pause 不再生效；正常返回为 Completed、失败为 Faulted。非末轮取消/暂停优先于旧续调度；取消另一就绪任务立即撤销它的本轮派发。
+- 回调失败只终结该 run，不阻断本轮其他独立任务或时钟域。手动 Advance 完成必要收尾后以 ExceptionDispatchInfo 传播单一原始异常，多个错误以 AggregateException 汇总；已提交 Cancelled/Invalidated 不被后续抛错覆盖。异常终态不调用取消通知。默认自动驱动的日志边界留 B，核心已提供继续执行与汇总传播能力。
+
+### 9.3 实际验证
+
+- **Unity 实际编译**：在当前已打开的 `2022.3.62f3c1` 工程导入并编译新增源码/测试；编译结束后 `EditorUtility.scriptCompilationFailed=false`、`EditorApplication.isCompiling=false`，实际载入的 Scheduler 程序集为 `YLFramework.Foundation.Runtime`。未使用辅助 dotnet 编译替代 Unity 结果，未启动第二个 Unity 实例。
+- **定向 EditMode**：`TimerSchedulerContractTests` 28/28 通过、0 失败、0 跳过。覆盖双秒时钟、精确到期、零延迟、首次/周期、有限/无限、纯等待、帧 n/long 精度、不补发、秒/帧暂停、回调取消/暂停/恢复、新投递与跨域延期、递归推进、旧句柄隔离、末轮完成预留、单错/聚合异常、取消通知失败、关闭截断及终态回调对象释放。
+- 测试先验证新内核缺失的失败；公开形状就绪后 22 个核心行为断言失败，再实现后通过。复查时补充“全部失效先于任何关闭通知”回归，实际观察到其他任务仍为 Scheduled 的失败，修正为两阶段提交/通知后通过；收紧回调内暂停状态断言，实际观察到过早呈现 Paused，修正为执行租约退出后提交暂停，最终 Timer 集全部通过。
+- 复用 `FoundationBoundaryTests` 5/5 通过，确认公共程序集依赖及既有边界未扩张。MCP 的 Summary.TotalTests 是全项目发现数，实际执行数量以上述 PassedTests 为准，没有执行全项目 1188 个测试。
+- 实际检查新增源码与测试、Unity 生成的目录/脚本 `.meta`、无新增 asmdef/配置改动及 `git diff --check`。未重跑 Pool/Events/Update 历史全集；未执行 PlayMode、Player 构建、性能基准或真实 Domain Reload 会话验证，本批手动内核没有自动 Unity 生命周期集成。
+
+### 9.4 未完成边界与进入 B 条件
+
+A 内核及正式手动契约具备进入 B 的基础，待用户验收与 Git 收口，不自动启动 B。B 仍需实现 TimerDriver、默认入口、Unity 合法采样/冷启动、gate/session/owner、Scope 名称与默认范围、TimerHandleGroup、日期转换及旧 YL Timing 迁移；其中真实自动驱动的继续运行/日志报告尚未交付。
+
+ReusableTimer、GO 绑定、TimerObject/Core TimerManager 消费者迁移、Coroutine Wait/观察、旧 Core 内核移除归 C；完整命名/许可/文档与真实会话收口归 D。旧 XF/Core Timer 与 YL Tools/Timing 仅作为迁移基线保留，本批没有删除或迁移它们，因此尚未宣称整个项目已只运行一套 Timer。Action、UpdateManager、原游戏消费者和长期蓝图均未修改。
