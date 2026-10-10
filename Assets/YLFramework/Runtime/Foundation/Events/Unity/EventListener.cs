@@ -65,11 +65,11 @@ namespace YLFramework.Events
     }
 
     /// <summary>
-    /// Unity GameObject 事件监听组件：把鼠标 / 拖拽 / 碰撞 / Trigger 回调转成 EasyEvent 分发给代码注册，
+    /// Unity GameObject 事件监听组件：把鼠标 / 拖拽 / 碰撞 / Trigger 回调转成共享 EventChannel 分发给代码注册，
     /// 同时支持 Inspector 中配置 UnityEvent。
     /// 每个 <see cref="EventType"/> 只持有一个参数类型确定的事件实例，
-    /// 同一 EventType 混用不同参数类型时后续注册会被拒绝并输出警告。
-    /// 组件销毁时会回收代码注册的池化事件（不修改 Inspector 中的 UnityEvent）。
+    /// 注册时按 Unity 原生 payload 校验，错误类型或非法 EventType 在修改前抛出异常。
+    /// 组件拥有代码通道，销毁时永久关闭这些通道（不修改 Inspector 中的 UnityEvent）。
     /// </summary>
     [HideMonoScript]
     public class EventListener : MonoBehaviour, IMouseEvent
@@ -91,7 +91,8 @@ namespace YLFramework.Events
         #region 数据结构
 
         // 使用单例比较器
-        private readonly Dictionary<EventType, IEasyEvent> _eventInfoDict = new(EventTypeEnumComparer.Instance);
+        private readonly Dictionary<EventType, EventChannelBase> _eventInfoDict = new(EventTypeEnumComparer.Instance);
+        private bool _destroyed;
 
         #endregion
 
@@ -99,30 +100,68 @@ namespace YLFramework.Events
 
         /// <summary>
         /// 注册一个指定 EventType 的事件监听，返回用于注销本次注册的句柄。
-        /// 同一 EventType 只能使用一种参数类型，类型不一致时返回 null 且不注册。
+        /// 参数声明类型必须精确匹配 Unity 原生 payload；空回调返回空句柄，不分配事件。
+        /// 不随 Disable 自动清理；需要该边界时显式绑定返回的句柄。
         /// </summary>
         /// <typeparam name="T">事件参数类型。</typeparam>
         /// <param name="eventType">事件类型。</param>
         /// <param name="action">事件监听回调。</param>
-        /// <returns>用于注销本次注册的句柄；参数类型与已有事件不一致时返回 null。</returns>
+        /// <returns>用于精确注销本次注册的句柄。</returns>
         public IUnRegister Register<T>(EventType eventType, Action<T> action)
         {
+            if (_destroyed || !this) throw new ObjectDisposedException(nameof(EventListener));
+            ValidatePayload<T>(eventType);
+            if (action == null) return EmptyUnRegister.Instance;
             if (_eventInfoDict.TryGetValue(eventType, out var easyEvent))
             {
-                if (easyEvent is EasyEvent<T> e)
-                {
-                    return e.Register(action);
-                }
-
-                Debug.LogWarning(
-                    $"[Events] EventListener 上的 {eventType} 已注册为 {easyEvent.GetType().Name}，" +
-                    $"无法再用 {typeof(T).Name} 注册；请保持同一 EventType 使用同一参数类型。");
-                return null;
+                return ((EventChannel<T>)easyEvent).Register(action);
             }
 
-            var newEvent = EasyEvent<T>.Allocate();
+            var newEvent = new EventChannel<T>();
             _eventInfoDict.TryAdd(eventType, newEvent);
             return newEvent.Register(action);
+        }
+
+        private static void ValidatePayload<T>(EventType eventType)
+        {
+            Type payloadType;
+            switch (eventType)
+            {
+                case EventType.OnMouseEnter:
+                case EventType.OnMouseExit:
+                case EventType.OnClick:
+                case EventType.OnClickDown:
+                case EventType.OnClickUp:
+                case EventType.OnDrag:
+                case EventType.OnBeginDrag:
+                case EventType.OnEndDrag:
+                    payloadType = typeof(PointerEventData);
+                    break;
+                case EventType.OnCollisionEnter:
+                case EventType.OnCollisionStay:
+                case EventType.OnCollisionExit:
+                    payloadType = typeof(Collision);
+                    break;
+                case EventType.OnCollisionEnter2D:
+                case EventType.OnCollisionStay2D:
+                case EventType.OnCollisionExit2D:
+                    payloadType = typeof(Collision2D);
+                    break;
+                case EventType.OnTriggerEnter:
+                case EventType.OnTriggerStay:
+                case EventType.OnTriggerExit:
+                    payloadType = typeof(Collider);
+                    break;
+                case EventType.OnTriggerEnter2D:
+                case EventType.OnTriggerStay2D:
+                case EventType.OnTriggerExit2D:
+                    payloadType = typeof(Collider2D);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(eventType), eventType, "未知 Unity 事件类型。");
+            }
+            if (typeof(T) != payloadType)
+                throw new ArgumentException($"{eventType} 的 Unity payload 是 {payloadType.FullName}，不能注册 {typeof(T).FullName}。", nameof(eventType));
         }
 
         /// <summary>
@@ -133,24 +172,24 @@ namespace YLFramework.Events
         /// <param name="action">要注销的监听回调。</param>
         public void UnRegister<T>(EventType eventType, Action<T> action)
         {
+            ValidatePayload<T>(eventType);
             if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
             // 有保存的事件则移除
-            if (easyEvent is EasyEvent<T> e)
+            if (easyEvent is EventChannel<T> e)
             {
                 e.UnRegister(action);
             }
         }
 
         /// <summary>
-        /// 注销指定 EventType 上的全部代码监听，并回收对应事件。
+        /// 永久关闭指定 EventType 的代码通道，终结旧 token 和旧在途快照；后续注册建立新通道。
         /// </summary>
         /// <param name="eventType">事件类型。</param>
         public void UnRegister(EventType eventType)
         {
             if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
             // 有保存的事件则移除
-            easyEvent.UnRegisterAll();
-            easyEvent.RecycleToCache();
+            easyEvent.Dispose();
             _eventInfoDict.Remove(eventType);
         }
 
@@ -160,12 +199,10 @@ namespace YLFramework.Events
         /// <param name="isUnRegisterUnityEvent">是否同时清空在编辑器面板中设置的 UnityEvent。</param>
         public void UnRegisterAll(bool isUnRegisterUnityEvent = false)
         {
-            foreach (var easyEvent in _eventInfoDict.Values)
-            {
-                easyEvent.UnRegisterAll();
-                easyEvent.RecycleToCache();
-            }
-            _eventInfoDict.Clear();
+            // 组件私有通道直接结束 owner，不把其寿命绑定到全局事件池。
+            List<Exception> errors = null;
+            try { SubscriptionCleanup.ReleaseAll(_eventInfoDict, pair => pair.Value.Dispose()); }
+            catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
 
             if (isUnRegisterUnityEvent)
             {
@@ -194,6 +231,7 @@ namespace YLFramework.Events
                 triggerStay2D = null;
                 triggerExit2D = null;
             }
+            SubscriptionCleanup.ThrowErrors(errors);
         }
 
         #endregion
@@ -278,14 +316,16 @@ namespace YLFramework.Events
 
         private void OnDestroy()
         {
-            // 回收代码注册的池化事件；Inspector 中的 UnityEvent 不受影响
-            UnRegisterAll();
+            _destroyed = true;
+            // 终结组件自有代码通道；Inspector 中的 UnityEvent 不受影响
+            try { UnRegisterAll(); }
+            catch (Exception error) { Debug.LogException(error, this); }
         }
 
         private void TriggerEvent<T>(EventType eventType, T eventData)
         {
             if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
-            if (easyEvent is EasyEvent<T> e)
+            if (easyEvent is EventChannel<T> e)
             {
                 e.Trigger(eventData);
             }

@@ -9,6 +9,9 @@ namespace YLFramework.Core.Tests
         public static System.Action<YLCoreSmokeView, LoadViewArgs> ArgsProbe;
         public static System.Action<YLCoreSmokeView> EnabledProbe;
         public static System.Action<YLCoreSmokeView> DisabledProbe;
+        public static System.Action SharedEventHandler;
+        public static bool DuplicateProbeHandler;
+        public static string SignatureConflictEvent;
         public int AwakeCount { get; private set; }
         public int LoadedCount { get; private set; }
         public int ArgsCount { get; private set; }
@@ -33,6 +36,7 @@ namespace YLFramework.Core.Tests
         public System.Action<Model> UnboundAction;
         public System.Action LoadedAction;
         public System.Action AfterClose;
+        public System.Action EventAction;
 
         protected override void OnClosed()
         {
@@ -49,7 +53,16 @@ namespace YLFramework.Core.Tests
         private void Awake()
         {
             AwakeCount++;
-            RegisterEvent(ProbeEvent, (XFEvent)(() => EventCount++));
+            var handler = SharedEventHandler ?? (System.Action)HandleEvent;
+            if (DuplicateProbeHandler) handler += handler;
+            RegisterEvent(ProbeEvent, handler);
+            if (SignatureConflictEvent != null) RegisterEvent<int>(SignatureConflictEvent, _ => EventCount++);
+        }
+
+        private void HandleEvent()
+        {
+            EventCount++;
+            EventAction?.Invoke();
         }
 
         protected override void OnViewEnabled()

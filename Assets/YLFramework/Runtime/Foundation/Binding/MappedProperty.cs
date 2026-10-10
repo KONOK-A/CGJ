@@ -105,7 +105,7 @@ namespace YLFramework.Binding
 
         bool IOfPool.IsRecycled { get; set; }
 
-        IUnRegister IEasyEvent.Register(Action eventAction) => ((IEasyEvent)_target).Register(eventAction);
+        IUnRegister IEventSource.Register(Action eventAction) => ((IEasyEvent)_target).Register(eventAction);
 
         private void OnSourceValueChanged(TSource value)
         {

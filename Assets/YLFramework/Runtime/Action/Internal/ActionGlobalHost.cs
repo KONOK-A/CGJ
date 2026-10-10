@@ -104,16 +104,16 @@ namespace YLFramework.Actions
             }
         }
 
-        // 清空全部消息订阅，防止已释放宿主继续持有外部回调。
+        // 宿主结束须终结消息代次，避免旧快照在 Shutdown/重建后继续进入业务。
         private void ClearEvents()
         {
-            OnUpdateEvent.UnRegisterAll();
-            OnFixedUpdateEvent.UnRegisterAll();
-            OnLateUpdateEvent.UnRegisterAll();
-            OnGUIEvent.UnRegisterAll();
-            OnApplicationQuitEvent.UnRegisterAll();
-            OnApplicationFocusEvent.UnRegisterAll();
-            OnApplicationPauseEvent.UnRegisterAll();
+            if (!OnUpdateEvent.IsDisposed) OnUpdateEvent.ResetOwner();
+            if (!OnFixedUpdateEvent.IsDisposed) OnFixedUpdateEvent.ResetOwner();
+            if (!OnLateUpdateEvent.IsDisposed) OnLateUpdateEvent.ResetOwner();
+            if (!OnGUIEvent.IsDisposed) OnGUIEvent.ResetOwner();
+            if (!OnApplicationQuitEvent.IsDisposed) OnApplicationQuitEvent.ResetOwner();
+            if (!OnApplicationFocusEvent.IsDisposed) OnApplicationFocusEvent.ResetOwner();
+            if (!OnApplicationPauseEvent.IsDisposed) OnApplicationPauseEvent.ResetOwner();
         }
 
         // 模块级释放：释放所有全局宿主实例（含场景中被收养的），清空单例缓存，并聚合各宿主的清理异常。

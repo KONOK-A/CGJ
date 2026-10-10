@@ -1,8 +1,8 @@
 # XF × YL 阶段 2.1：Pool 深度融合研究与技术设计
 
-**状态：2.1 Pool：COMPLETE（A～E 全部完成并通过用户验收；A～D 已 Git 收口 `a97cb2c` / `e8925e6` / `2529d5a` / `455088c`，E 的 Git 收口提交由用户后续执行）。阶段 2：IN PROGRESS。2.2 Events：待专项研究与设计，不自动启动。阶段决策与 E 实际结果见第 16～17 节。**
+**状态：2.1 Pool：COMPLETE（A～E 全部完成并通过用户验收；A～D 已 Git 收口 `a97cb2c` / `e8925e6` / `2529d5a` / `455088c`，E 的 Git 收口提交由用户后续执行）。阶段 2：IN PROGRESS。2.2 Events：COMPLETE（A～E 技术验收完成，E 待用户 Git 收口）；下一专题 2.3 Update 未启动。阶段决策与 E 实际结果见第 16～17 节。**
 
-本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究/设计与各批次授权、实际结果分别记录，历史“未开始/停止/待 Git”不覆盖当前状态；A～E 实际结果见第 12～17 节，2.2 待专项研究与设计且未自动授权。
+本文是唯一 Pool 专项方案，承接 [阶段 2 总体规划](xf-yl-2-runtime-support.md) 与 [长期融合蓝图](../../Assets/YLFramework/Documentation/IntegrationPlan.md)。用户已批准可靠身份、异常安全及统一公共内核等设计目标，并确认第 10 节两项审阅补充；具体实施细节保留合理调整空间。研究/设计与各批次授权、实际结果分别记录，历史“未开始/停止/待 Git”不覆盖当前状态；A～E 实际结果见第 12～17 节；2.2 Events 已另行授权并完成技术验收，当前状态以阶段 2 规划与 [2.2 专项](xf-yl-2.2-events.md) 为准。
 
 ## 1. 基线、范围与结论
 

@@ -435,7 +435,7 @@ namespace YLFramework.Core.Tests
             args.SetInt("token", 41);
             var view = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: args));
             AssertView(view, parent, 41, 1);
-            YLFramework.Core.EventManager.TriggerEvent(YLFramework.Core.EventManager.StringToHash(YLCoreSmokeView.ProbeEvent));
+            YLFramework.Core.EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.EqualTo(1));
             view.Close();
             AssertRemoved(view, nameof(YLCoreSmokeView));

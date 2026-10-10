@@ -27,11 +27,12 @@ namespace YLFramework.Events
     }
 
     /// <summary>
-    /// 基于委托的自定义注销句柄；注销后自动清空回调，重复调用幂等。
+    /// 基于委托的自定义注销句柄；成功后清空回调，同实例重入为空操作，失败后可重试。
     /// </summary>
     public class CustomUnRegister : IUnRegister
     {
         private CallbackUnRegister _callback;
+        private bool _executing;
 
         /// <summary>
         /// 使用自定义注销回调创建句柄。
@@ -43,11 +44,14 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 执行自定义注销回调；重复调用只生效一次。
+        /// 执行自定义注销回调；成功后重复调用为空操作，失败保留回调供重试。
         /// </summary>
         public void UnRegister()
         {
-            _callback.UnRegister();
+            if (_executing) return;
+            _executing = true;
+            try { _callback.UnRegister(); }
+            finally { _executing = false; }
         }
     }
 }

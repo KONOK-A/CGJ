@@ -8,7 +8,7 @@ namespace YLFramework.Events
     {
         private void OnDisable()
         {
-            TriggerUnRegisters();
+            TriggerUnRegistersAndLog();
         }
     }
 }

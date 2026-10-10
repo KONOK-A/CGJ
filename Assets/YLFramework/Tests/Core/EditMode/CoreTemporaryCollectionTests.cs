@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using YLFramework.Events;
 using YLFramework.Core.Pool;
 
 namespace YLFramework.Core.Tests
@@ -31,35 +32,46 @@ namespace YLFramework.Core.Tests
             .GetField("Pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 
         [Test]
-        public void RemoveAllEventsReturnsEmptySnapshotAndKeepsExistingKeySemantics()
+        public void RemoveAllEventsTerminatesOldSnapshotAndAllowsNewSignaturesWithoutDisposingDefault()
         {
-            var instance = typeof(EventManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic);
+            var instance = typeof(EventBus).GetField("_default", BindingFlags.Static | BindingFlags.NonPublic);
             var previous = instance.GetValue(null);
-            var manager = Activator.CreateInstance(typeof(EventManager), true);
-            var snapshot = ListPool<int>.Allocate();
-            ListPool<int>.Recycle(snapshot);
-            instance.SetValue(null, manager);
+            var bus = new EventBus();
+            instance.SetValue(null, bus);
             try
             {
-                int calls = 0;
-                EventManager.AddEvent(101, (XFEvent)(() => calls++));
-                EventManager.AddEvent(102, (XFEvent)(() => calls++));
-                EventManager.RemoveAllEvent();
+                var calls = new List<string>();
+                EventManager.AddEvent(101, () =>
+                {
+                    calls.Add("clear");
+                    EventManager.RemoveAllEvent();
+                });
+                var oldToken = EventManager.AddEvent(101, () => calls.Add("old snapshot"));
+                EventManager.AddEvent(102, () => calls.Add("old other key"));
+                EventManager.AddEvent("101", () => calls.Add("old string key"));
                 EventManager.TriggerEvent(101);
                 EventManager.TriggerEvent(102);
+                EventManager.TriggerEvent("101");
 
-                Assert.That(calls, Is.Zero);
-                var events = (Dictionary<int, Delegate>)typeof(EventManager)
-                    .GetField("_events", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-                CollectionAssert.AreEquivalent(new[] { 101, 102 }, events.Keys);
-                Assert.That(events[101], Is.Null);
-                Assert.That(events[102], Is.Null);
-                Assert.That(snapshot, Is.Empty);
-                var returned = ListPool<int>.Allocate();
-                try { Assert.That(returned, Is.SameAs(snapshot)); }
-                finally { ListPool<int>.Recycle(returned); }
+                Assert.That(calls, Is.EqualTo(new[] { "clear" }));
+                Assert.That(bus.KeyCount, Is.Zero);
+                Assert.That(bus.IsDisposed, Is.False);
+                Assert.That(EventBus.Default, Is.SameAs(bus));
+                EventManager.AddEvent<int>(101, value => calls.Add("new " + value));
+                oldToken.UnRegister();
+                oldToken.UnRegister();
+                EventManager.TriggerEvent(101, 7);
+                Assert.That(calls, Is.EqualTo(new[] { "clear", "new 7" }));
+                EventManager.RemoveAllEvent();
+                EventManager.RemoveAllEvent();
+                Assert.That(bus.KeyCount, Is.Zero);
+                Assert.That(EventBus.Default, Is.SameAs(bus));
             }
-            finally { instance.SetValue(null, previous); }
+            finally
+            {
+                bus.Dispose();
+                instance.SetValue(null, previous);
+            }
         }
 
         [TestCase(false)]

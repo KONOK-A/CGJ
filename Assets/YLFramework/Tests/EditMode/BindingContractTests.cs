@@ -24,7 +24,8 @@ namespace YLFramework.Tests
             try
             {
                 var oldCalls = 0;
-                property.Register(_ => oldCalls++);
+                Action<PooledValue> listener = _ => oldCalls++;
+                var oldToken = property.Register(listener);
                 property.SetValueWithoutCallback(new PooledValue());
                 property.WithComparer((a, b) => true);
                 var eventCount = events.CurStoreCount;
@@ -39,8 +40,12 @@ namespace YLFramework.Tests
                 Assert.That(next.TrySetValue(new PooledValue()), Is.True);
                 Assert.That(oldCalls, Is.Zero);
                 var newCalls = 0;
+                next.Register(listener);
                 next.Register(_ => newCalls++);
+                oldToken.UnRegister();
+                oldToken.UnRegister();
                 next.Value = new PooledValue();
+                Assert.That(oldCalls, Is.EqualTo(1));
                 Assert.That(newCalls, Is.EqualTo(1));
                 var separate = events.Allocate();
                 Assert.That(separate, Is.Not.SameAs(owned));
@@ -56,6 +61,114 @@ namespace YLFramework.Tests
             private bool _set;
             protected override bool IsSameValue(string value) => _set && base.IsSameValue(value);
             protected override void SetValue(string value) { base.SetValue(value); _set = true; }
+        }
+
+        [Test]
+        public void OnceConsumedByEarlierListenersNestedNotificationDoesNotRunAgain()
+        {
+            var property = new BindableProperty<int>();
+            var observed = new List<int>();
+            property.Register(value => { if (value == 1) property.Value = 2; });
+            var once = property.RegisterOnce(observed.Add);
+
+            property.Value = 1;
+            once.UnRegister();
+            property.Value = 3;
+
+            CollectionAssert.AreEqual(new[] { 2 }, observed);
+            Assert.That(property.RegisterOnce(null), Is.SameAs(new EventChannel<int>().RegisterOnce(null)));
+        }
+
+        [Test]
+        public void RecycleDuringNotificationStopsOldSnapshotButKeepsNewOwnerUsable()
+        {
+            var property = new BindableProperty<int>();
+            var observed = new List<string>();
+            property.Register(value =>
+            {
+                observed.Add("old:" + value);
+                property.OnRecycle();
+                property.RegisterOnce(next => observed.Add("new:" + next));
+                property.ForceNotify();
+            });
+            var oldToken = property.Register(_ => observed.Add("stale"));
+
+            property.Value = 1;
+            oldToken.UnRegister();
+            property.ForceNotify();
+
+            Assert.That(property.Value, Is.Zero);
+            CollectionAssert.AreEqual(new[] { "old:1", "new:0" }, observed);
+        }
+
+        [Test]
+        public void ListNotificationsKeepDataFirstOperationCountChangedOrderAndBatchReset()
+        {
+            var list = new BindableList<int>();
+            var observed = new List<string>();
+            list.OnAdd.Register((index, value) =>
+            {
+                Assert.That(list[index], Is.EqualTo(value));
+                observed.Add("add:" + index + ":" + value);
+            });
+            list.OnReplace.Register((index, oldValue, newValue) =>
+            {
+                Assert.That(list[index], Is.EqualTo(newValue));
+                observed.Add("replace:" + index + ":" + oldValue + ":" + newValue);
+            });
+            list.OnClear.Register(() =>
+            {
+                Assert.That(list, Is.Empty);
+                observed.Add("clear");
+            });
+            list.OnCountChanged.Register(count =>
+            {
+                Assert.That(list.Count, Is.EqualTo(count));
+                observed.Add("count:" + count);
+            });
+            list.OnChanged.Register(change => observed.Add("changed:" + change.ChangeType));
+
+            list.Add(1);
+            list[0] = 2;
+            using (list.BeginBatchScope())
+            {
+                list.Add(3);
+                using (list.BeginBatchScope()) list.Add(4);
+                Assert.That(observed.Count, Is.EqualTo(5));
+            }
+            list.Clear();
+            list.Clear();
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "add:0:1", "count:1", "changed:Add",
+                "replace:0:1:2", "changed:Replace",
+                "count:3", "changed:Reset",
+                "clear", "count:0", "changed:Clear",
+                "clear", "changed:Clear"
+            }, observed);
+        }
+
+        [Test]
+        public void DisposedMappingIgnoresCapturedSourceCallbackButRetainsTargetListeners()
+        {
+            var source = new BindableProperty<int>(1);
+            MappedProperty<int, int> mapped = null;
+            source.Register(_ => mapped.Dispose());
+            mapped = source.Map(value => value * 2);
+            var observed = new List<int>();
+            var token = mapped.RegisterWithInitValue(observed.Add);
+
+            source.Value = 2;
+            Assert.That(mapped.IsDisposed, Is.True);
+            Assert.That(mapped.Value, Is.EqualTo(2));
+            mapped.ForceNotify();
+            mapped.Dispose();
+            token.UnRegister();
+            source.Value = 3;
+            mapped.ForceNotify();
+
+            CollectionAssert.AreEqual(new[] { 2, 2 }, observed);
         }
 
         [Test]

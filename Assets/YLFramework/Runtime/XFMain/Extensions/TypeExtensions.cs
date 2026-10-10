@@ -55,8 +55,6 @@ namespace YLFramework.Core.Extensions
                 name = string.Format("{0}()", name);
             }
 
-            // XFEvent`1
-
             return name;
         }
 

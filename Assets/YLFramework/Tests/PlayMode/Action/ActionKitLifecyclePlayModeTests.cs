@@ -111,6 +111,52 @@ namespace YLFramework.Tests.Actions
         }
 
         [UnityTest]
+        public IEnumerator ShutdownInsideMessageStopsOldSnapshotAndKeepsRestartedMessages()
+        {
+            var oldEvent = Kit.OnUpdate;
+            EasyEvent nextEvent = null;
+            var calls = 0;
+            Action callback = () => calls++;
+            oldEvent.Register(() =>
+            {
+                Kit.Shutdown();
+                nextEvent = Kit.OnUpdate;
+                nextEvent.Register(callback);
+            });
+            var oldToken = oldEvent.Register(callback);
+            oldEvent.Trigger();
+            Assert.That(calls, Is.Zero, "Ended host must not finish the old message snapshot.");
+            Assert.That(nextEvent, Is.Not.SameAs(oldEvent));
+            oldToken.UnRegister();
+            nextEvent.Trigger();
+            Assert.That(calls, Is.EqualTo(1));
+            yield return null;
+            yield return null;
+            Assert.That(calls, Is.GreaterThan(1));
+            Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true).Length, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator ShutdownAfterAnEventWasDisposedStillEndsOtherOwnedMessages()
+        {
+            var update = Kit.OnUpdate;
+            var late = Kit.OnLateUpdate;
+            var oldCalls = 0;
+            late.Register(() => oldCalls++);
+            update.Dispose();
+            Assert.DoesNotThrow(Kit.Shutdown);
+            late.Trigger();
+            Assert.That(oldCalls, Is.Zero);
+            var next = Kit.OnUpdate;
+            var newCalls = 0;
+            next.Register(() => newCalls++);
+            yield return null;
+            yield return null;
+            Assert.That(newCalls, Is.GreaterThan(0));
+            Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true).Length, Is.EqualTo(1));
+        }
+
+        [UnityTest]
         public IEnumerator ShutdownDetachesPendingTaskWithoutCancellingTheExternalTask()
         {
             mPending = new TaskCompletionSource<bool>();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using YLFramework.Core.Singleton;
 
 namespace YLFramework.Events
@@ -7,7 +8,7 @@ namespace YLFramework.Events
     /// <summary>
     /// 按类型存储一组事件实例的集合（类型 → 事件）。
     /// 实例版可用于子系统内部；静态入口维护一个全局实例，
-    /// 其映射会在每次进入 Play 会话时通过 Singleton 的会话重置机制清空，
+    /// 每次进入 Play 会话时通过 Singleton 重置机制终结标准事件的旧代次并清空映射，
     /// 避免 Domain Reload disabled 时旧监听残留到下一次 Play。
     /// 会话运行期内有意注册的全局事件不会被清空。
     /// </summary>
@@ -18,7 +19,7 @@ namespace YLFramework.Events
         static EasyEvents()
         {
             // Domain Reload disabled 时静态字段会跨 Play 会话保留，
-            // 使用项目既有的会话重置机制清空全局映射（仅清空映射，不替换实例）
+            // 保持全局容器实例，结束旧事件代次，不把其 owned event 归入池。
             SingletonSessionState.RegisterSessionReset(ClearGlobalEvents);
         }
 
@@ -42,7 +43,15 @@ namespace YLFramework.Events
 
         private static void ClearGlobalEvents()
         {
-            GlobalEasyEvents.Clear();
+            try
+            {
+                GlobalEasyEvents.ClearListeners(true);
+            }
+            catch (Exception error)
+            {
+                // 自定义事件清理失败不能阻断其他 Singleton/Pool 的会话重置。
+                Debug.LogException(error);
+            }
         }
 
         private readonly Dictionary<Type, IEasyEvent> _eventTypeDict = new();
@@ -105,12 +114,37 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注销所有已登记事件上的全部监听，再清空类型映射；不回收事件实例（生命周期由创建方管理）。
+        /// 摘除本轮映射并逐项注销监听；不回收实例、不截断普通在途快照。
+        /// 全部尝试后报告清理异常，重入新增的映射保留。
         /// </summary>
         public void ClearListeners()
         {
-            foreach (var e in _eventTypeDict.Values) e.UnRegisterAll();
+            ClearListeners(false);
+        }
+
+        private void ClearListeners(bool resetOwners)
+        {
+            var events = new List<IEasyEvent>(_eventTypeDict.Values);
             _eventTypeDict.Clear();
+            List<Exception> errors = null;
+            foreach (var e in events)
+            {
+                if (resetOwners && e is EventChannelBase channel)
+                {
+                    try { channel.ResetOwner(); }
+                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                }
+                try
+                {
+                    // 自定义事件可能重实现接口并持有额外责任，不能被标准 channel 的重置替代。
+                    e.UnRegisterAll();
+                }
+                catch (Exception error)
+                {
+                    (errors ??= new List<Exception>()).Add(error);
+                }
+            }
+            SubscriptionCleanup.ThrowErrors(errors);
         }
     }
 }

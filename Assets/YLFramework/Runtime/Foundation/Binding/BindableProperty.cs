@@ -194,9 +194,9 @@ namespace YLFramework.Binding
         }
         
         /// <inheritdoc />
-        IUnRegister IEasyEvent.Register(Action eventAction)
+        IUnRegister IEventSource.Register(Action eventAction)
         {
-            return Register(Action);
+            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
             void Action(T _) => eventAction();
         }
 
@@ -235,18 +235,11 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 只监听一次值变化，触发后自动注销
+        /// 只监听一次值变化；用户回调执行前消费注册，嵌套通知不会重复执行。
         /// </summary>
         public IUnRegister RegisterOnce(Action<T> onValueChanged)
         {
-            IUnRegister unRegister = null;
-            // 包装回调：第一次触发时先注销自身再调用用户回调，保证只触发一次
-            unRegister = Register(value =>
-            {
-                unRegister?.UnRegister();
-                onValueChanged?.Invoke(value);
-            });
-            return unRegister;
+            return _onValueChanged.RegisterOnce(onValueChanged);
         }
 
         /// <summary>
@@ -291,11 +284,12 @@ namespace YLFramework.Binding
         
         
         /// <summary>
-        /// 池回收时调用：清空全部监听、实例比较器并重置值；直接调用不会入池，入池应使用 <see cref="Recycle"/>。
+        /// 池回收时调用：终结旧通知代次、清空监听与实例比较器并重置值；保留自有事件，不将其归池。
+        /// 直接调用不会入池，入池应使用 <see cref="Recycle"/>。
         /// </summary>
         public virtual void OnRecycle()
         {
-            _onValueChanged.OnRecycle();
+            _onValueChanged.ResetOwner();
             _instanceComparer = null;
             _value = default;
         }

@@ -34,5 +34,14 @@ namespace YLFramework.Events
                 unRegister?.UnRegister();
             }
         }
+
+        /// <summary>
+        /// 尝试注销本轮全部句柄，保留失败项及回调中新加入项，最后统一报告异常。
+        /// 与旧 UnRegisterAll 的 fail-fast 行为不同，供必要所有权清理显式使用。
+        /// </summary>
+        public static void UnRegisterAllRetainingFailures(this IUnRegisterList self)
+        {
+            SubscriptionCleanup.ReleaseAll(self.UnRegisterList, token => token?.UnRegister());
+        }
     }
 }

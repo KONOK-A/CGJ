@@ -1,650 +1,272 @@
-using YLFramework.Core.Extensions;
-using System; 
-using System.Collections.Generic;
-using System.Linq;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-using UnityEngine;
+using System;
 using YLFramework.Core.RoslynAnalyzers;
-using YLFramework.Core.Pool;
+using YLFramework.Events;
 
 namespace YLFramework.Core
 {
-
-    // 事件委托(无参)
-    public delegate void XFEvent();
-    // 事件委托(1参)
-    public delegate void XFEvent<T1>(T1 p1);
-    // 事件委托(2参)
-    public delegate void XFEvent<T1, T2>(T1 p1, T2 p2);
-    // 事件委托(3参)
-    public delegate void XFEvent<T1, T2, T3>(T1 p1, T2 p2, T3 p3);
-    // 事件委托(4参)
-    public delegate void XFEvent<T1, T2, T3, T4>(T1 p1, T2 p2, T3 p3, T4 p4);
-    // 事件委托(5参)
-    public delegate void XFEvent<T1, T2, T3, T4, T5>(T1 p1, T2 p2, T3 p3, T4 p4, T5 p5);
-    // 事件委托(6参)
-    public delegate void XFEvent<T1, T2, T3, T4, T5, T6>(T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6);
-    // 事件委托(7参)
-    public delegate void XFEvent<T1, T2, T3, T4, T5, T6, T7>(T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7);
-
-
-    public class EventManager
+    /// <summary>
+    /// Core 的强类型事件入口，全部转接 EventBus.Default，不持有独立事件状态。
+    /// string 保留完整 Ordinal 身份，与 int 键互不相通；同一键必须使用精确一致的参数签名。
+    /// AddEvent 返回本次注册的精确取消句柄，null 回调返回空句柄但仍校验键及已有签名。
+    /// RemoveEvent 只取消最后匹配的委托子序列，保留签名及普通在途快照。
+    /// TriggerEvent 保留原异常并立即中断；TriggerEventAll 尝试所有观察者后汇总异常。
+    /// 发布、取消及清理不创建 Default，缺失键为空操作。
+    /// </summary>
+    public static class EventManager
     {
-
-        #region 单例
-
-        private static EventManager _instance;
-
-        internal static EventManager Instance
+        private static EventBus GetDefault(EventKey key, bool create = false)
         {
-            get
-            {
-#pragma warning disable IDE0074 // 使用复合分配
-                if (_instance == null)
-                {
-                    _instance = new EventManager();
-#if UNITY_EDITOR
-                    EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
-                    EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
-#endif
-                }
-#pragma warning restore IDE0074 // 使用复合分配
-
-                return _instance;
-            }
+            key.Validate();
+            return EventBus.TryGetDefault(out var bus) ? bus : create ? EventBus.Default : null;
         }
 
+        #region int 键
 
-#if UNITY_EDITOR
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent(int event_name_hash, Action callback)
+            => GetDefault(event_name_hash, callback != null)?.Register(event_name_hash, callback) ?? EmptyUnRegister.Instance;
 
-        private static void EditorApplication_playModeStateChanged(PlayModeStateChange obj)
-        {
-            // Edit > Project Settings > Editor >  Enter Play Mode Settings > Reload Domain 
-            // 该选项如果禁用掉,重新运行时静态数据不会清空,可能会导致异常,所以这里置空,防止异常
-            switch (obj)
-            {
-                case PlayModeStateChange.ExitingEditMode:
-                    _instance = null;
-                    break;
-                case PlayModeStateChange.EnteredEditMode:
-                    _instance = null;
-                    break;
-            }
-        }
-#endif
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent(int event_name_hash, Action callback)
+            => GetDefault(event_name_hash)?.UnRegister(event_name_hash, callback);
 
+        public static void TriggerEvent(int event_name_hash)
+            => GetDefault(event_name_hash)?.Send(event_name_hash);
 
-        private EventManager()
-        {
-        }
+        public static void TriggerEventAll(int event_name_hash)
+            => GetDefault(event_name_hash)?.SendAll(event_name_hash);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1>(int event_name_hash, Action<T1> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1>(int event_name_hash, Action<T1> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1>(int event_name_hash, T1 p)
+            => GetDefault(event_name_hash)?.Send<T1>(event_name_hash, p);
+
+        public static void TriggerEventAll<T1>(int event_name_hash, T1 p1)
+            => GetDefault(event_name_hash)?.SendAll<T1>(event_name_hash, p1);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2>(int event_name_hash, Action<T1, T2> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2>(int event_name_hash, Action<T1, T2> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2>(int event_name_hash, T1 p, T2 p2)
+            => GetDefault(event_name_hash)?.Send<T1, T2>(event_name_hash, p, p2);
+
+        public static void TriggerEventAll<T1, T2>(int event_name_hash, T1 p1, T2 p2)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2>(event_name_hash, p1, p2);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3>(int event_name_hash, Action<T1, T2, T3> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2, T3>(int event_name_hash, Action<T1, T2, T3> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2, T3>(int event_name_hash, T1 p, T2 p2, T3 p3)
+            => GetDefault(event_name_hash)?.Send<T1, T2, T3>(event_name_hash, p, p2, p3);
+
+        public static void TriggerEventAll<T1, T2, T3>(int event_name_hash, T1 p1, T2 p2, T3 p3)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3>(event_name_hash, p1, p2, p3);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3, T4>(int event_name_hash, Action<T1, T2, T3, T4> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2, T3, T4>(int event_name_hash, Action<T1, T2, T3, T4> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2, T3, T4>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4)
+            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4>(event_name_hash, p, p2, p3, p4);
+
+        public static void TriggerEventAll<T1, T2, T3, T4>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4>(event_name_hash, p1, p2, p3, p4);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5>(int event_name_hash, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2, T3, T4, T5>(int event_name_hash, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2, T3, T4, T5>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5>(event_name_hash, p, p2, p3, p4, p5);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5>(event_name_hash, p1, p2, p3, p4, p5);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5, T6>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5, T6>(event_name_hash, p, p2, p3, p4, p5, p6);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5, T6>(event_name_hash, p1, p2, p3, p4, p5, p6);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, callback);
+
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, p, p2, p3, p4, p5, p6, p7);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, p1, p2, p3, p4, p5, p6, p7);
 
         #endregion
 
-        #region 字段
-
-        private Dictionary<int, Action<object[]>> events = new Dictionary<int, Action<object[]>>();
-
-        private Dictionary<string, int> string_hashs = new Dictionary<string, int>();
-        private Dictionary<int, string> hash_strings = new Dictionary<int, string>();
-
-        private Dictionary<int, Delegate> _events = new Dictionary<int, Delegate>();
-
-        #endregion
-
-        #region 属性
-
-        private static Dictionary<int, Action<object[]>> Events => Instance.events;
-
-        private static Dictionary<string, int> StringHashs => Instance.string_hashs;
-
-        private static Dictionary<int, string> HashStrings => Instance.hash_strings;
-
-        private static Dictionary<int, Delegate> _Event => Instance._events;
-
-        #endregion
-
-
-
-        /// <summary>
-        /// 触发事件
-        /// </summary>
-        /// <param name="event_name_hash">事件名称</param>
-        /// <param name="args">参数</param>
-        [Obsolete("已过时,请使用同名的泛型方法代替!",true)]
-        public static void TriggerEvent(int event_name_hash, params object[] args)
-        {
-            if (!Events.ContainsKey(event_name_hash)) return;
-            Events[event_name_hash]?.Invoke(args);
-        }
-        [Obsolete("已过时,请使用同名的泛型方法代替!",true)]
-        public static void TriggerEvent(string event_name, params object[] args)
-        { 
-        }
-
-        /// <summary>
-        /// 注册事件
-        /// </summary>
-        /// <param name="event_name_hash">事件名称</param>
-        /// <param name="callback">回调</param>
-        [Obsolete("已过时,请使用同名的泛型方法代替!",true)]
-        public static void AddEvent(int event_name_hash, Action<object[]> callback)
-        {
-
-            if (Events.ContainsKey(event_name_hash))
-            {
-                Events[event_name_hash] += callback;
-            }
-            else
-            {
-                Action<object[]> action = null;
-                action += callback;
-                Events.Add(event_name_hash, action);
-            }
-
-        }
-
-        /// <summary>
-        /// 移除事件
-        /// </summary>
-        /// <param name="event_name_hash">事件名称</param>
-        /// <param name="callback">回调</param>
-        [Obsolete("已过时,请使用同名的泛型方法代替!",true)]
-        public static void RemoveEvent(int event_name_hash, Action<object[]> callback)
-        {
-
-            if (!Events.ContainsKey(event_name_hash))
-                return;
-
-            Events[event_name_hash] -= callback;
-
-            if (Events[event_name_hash] == null)
-                Events.Remove(event_name_hash);
-
-        }
-        [Obsolete("已过时,请使用同名的泛型方法代替!", true)]
-        public static void AddEvent(string event_name, Action<object[]> callback) {
-            AddEvent(StringToHash(event_name), callback);
-        }
-        [Obsolete("已过时,请使用同名的泛型方法代替!",true)]
-        public static void RemoveEvent(string event_name, Action<object[]> callback) {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
- 
-        public static int StringToHash(string event_name)
-        {
-            if (StringHashs.ContainsKey(event_name))
-                return StringHashs[event_name];
-
-            int hash = Animator.StringToHash(event_name);
-
-            StringHashs.Add(event_name, hash);
-            if (!HashStrings.ContainsKey(hash))
-                HashStrings.Add(hash, event_name);
-
-            return StringHashs[event_name];
-        }
-
-        internal static string HashToString(int hash)
-        {
-            if (HashStrings.ContainsKey(hash))
-                return HashStrings[hash];
-
-            return string.Empty;
-        }
-
-
-
-        #region 事件系统
+        #region string 键
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent(int event_name_hash, XFEvent callback) 
-        { 
-            AddEvent(event_name_hash, callback as Delegate); 
-        }
+        public static IUnRegister AddEvent(string event_name, Action callback)
+            => GetDefault(event_name, callback != null)?.Register(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent(int event_name_hash, XFEvent callback)
-        { 
-            RemoveEvent(event_name_hash,callback as Delegate); 
-        }
-
-        public static void TriggerEvent(int event_name_hash )
-        {
-            if (!_Event.ContainsKey(event_name_hash)) 
-                return;
-             
-            XFEvent d = _Event[event_name_hash] as XFEvent;
-            d?.Invoke();
-
-            if (d == null && _Event[event_name_hash] != null) 
-            {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1>(int event_name_hash, XFEvent<T1> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1>(int event_name_hash, XFEvent<T1> callback)
-        { 
-            RemoveEvent(event_name_hash, callback as Delegate);
-        }
-
-        public static void TriggerEvent<T1>(int event_name_hash,T1 p)
-        { 
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1> d = _Event[event_name_hash] as XFEvent<T1>;
-            d?.Invoke(p);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-               
-        }
-
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1,T2>(int event_name_hash, XFEvent<T1, T2> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1,T2>(int event_name_hash, XFEvent<T1, T2> callback)
-        { 
-            RemoveEvent(event_name_hash, callback as Delegate); 
-        }
-
-        public static void TriggerEvent<T1,T2>(int event_name_hash, T1 p,T2 p2)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2> d = _Event[event_name_hash] as XFEvent<T1,T2>;
-            d?.Invoke(p,p2);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2,T3>(int event_name_hash, XFEvent<T1, T2, T3> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3>(int event_name_hash, XFEvent<T1, T2, T3> callback)
-        {
-            RemoveEvent(event_name_hash, callback as Delegate); 
-        }
-
-        public static void TriggerEvent<T1, T2, T3>(int event_name_hash, T1 p, T2 p2,T3 p3)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2, T3> d = _Event[event_name_hash] as XFEvent<T1, T2, T3>;
-            d?.Invoke(p, p2,p3);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2, T3>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3,T4>(int event_name_hash, XFEvent<T1, T2, T3, T4> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4>(int event_name_hash, XFEvent<T1, T2, T3, T4> callback)
-        {
-            RemoveEvent(event_name_hash, callback as Delegate);
-        }
-
-        public static void TriggerEvent<T1, T2, T3, T4>(int event_name_hash, T1 p, T2 p2, T3 p3,T4 p4)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2, T3, T4> d = _Event[event_name_hash] as XFEvent<T1, T2, T3, T4>;
-            d?.Invoke(p, p2, p3,p4);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2, T3, T4>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4,T5>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5> callback)
-        {
-            RemoveEvent(event_name_hash, callback as Delegate); 
-        }
-
-        public static void TriggerEvent<T1, T2, T3, T4, T5>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4,T5 p5)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2, T3, T4, T5> d = _Event[event_name_hash] as XFEvent<T1, T2, T3, T4, T5>;
-            d?.Invoke(p, p2, p3, p4,p5);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2, T3, T4, T5>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4, T5,T6>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5, T6> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5, T6> callback)
-        {
-            RemoveEvent(event_name_hash, callback as Delegate); 
-        }
-
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5,T6 p6)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2, T3, T4, T5, T6> d = _Event[event_name_hash] as XFEvent<T1, T2, T3, T4, T5, T6>;
-            d?.Invoke(p, p2, p3, p4, p5,p6);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2, T3, T4, T5, T6>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4, T5, T6,T7>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5, T6, T7> callback)
-        {
-            AddEvent(event_name_hash, callback as Delegate);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, XFEvent<T1, T2, T3, T4, T5, T6, T7> callback)
-        {
-            RemoveEvent(event_name_hash, callback as Delegate); 
-        }
-
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6,T7 p7)
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            XFEvent<T1, T2, T3, T4, T5, T6, T7> d = _Event[event_name_hash] as XFEvent<T1, T2, T3, T4, T5, T6, T7>;
-            d?.Invoke(p, p2, p3, p4, p5, p6,p7);
-
-            if (d == null && _Event[event_name_hash] != null) {
-                Exception e = new Exception(string.Format("触发事件:{0}失败! 触发的委托类型和注册的类型不一致! \n\t触发类型:{1}\n\t注册类型:{2}\n触发类型和注册类型必须保持一致!", HashToString(event_name_hash), typeof(XFEvent<T1, T2, T3, T4, T5, T6, T7>).GetDelegateDisplayName(), _Event[event_name_hash].GetType().GetDelegateDisplayName()));
-                Debug.LogException(e);
-            }  
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent(string event_name, XFEvent callback)
-        {
-            AddEvent(StringToHash(event_name), callback);
-        }
-
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent(string event_name, XFEvent callback)
-        {
-            RemoveEvent( StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent(string event_name, Action callback)
+            => GetDefault(event_name)?.UnRegister(event_name, callback);
 
         public static void TriggerEvent(string event_name)
-        {
-            TriggerEvent(StringToHash(event_name));
-        }
+            => GetDefault(event_name)?.Send(event_name);
+
+        public static void TriggerEventAll(string event_name)
+            => GetDefault(event_name)?.SendAll(event_name);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1>(string event_name, XFEvent<T1> callback)
-        {
-            AddEvent(StringToHash(event_name),callback);
-        }
+        public static IUnRegister AddEvent<T1>(string event_name, Action<T1> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1>(string event_name, XFEvent<T1> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1>(string event_name, Action<T1> callback)
+            => GetDefault(event_name)?.UnRegister<T1>(event_name, callback);
 
         public static void TriggerEvent<T1>(string event_name, T1 p)
-        {
-            TriggerEvent(StringToHash(event_name), p);
-        }
+            => GetDefault(event_name)?.Send<T1>(event_name, p);
+
+        public static void TriggerEventAll<T1>(string event_name, T1 p1)
+            => GetDefault(event_name)?.SendAll<T1>(event_name, p1);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2>(string event_name, XFEvent<T1, T2> callback)
-        {
-            AddEvent(StringToHash(event_name), callback);
-        }
+        public static IUnRegister AddEvent<T1, T2>(string event_name, Action<T1, T2> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2>(string event_name, XFEvent<T1, T2> callback)
-        { 
-            RemoveEvent(StringToHash(event_name), callback); 
-        }
+        public static void RemoveEvent<T1, T2>(string event_name, Action<T1, T2> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2>(event_name, callback);
 
         public static void TriggerEvent<T1, T2>(string event_name, T1 p, T2 p2)
-        {
-            TriggerEvent(StringToHash(event_name), p, p2);
-        }
+            => GetDefault(event_name)?.Send<T1, T2>(event_name, p, p2);
+
+        public static void TriggerEventAll<T1, T2>(string event_name, T1 p1, T2 p2)
+            => GetDefault(event_name)?.SendAll<T1, T2>(event_name, p1, p2);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3>(string event_name, XFEvent<T1, T2, T3> callback)
-        {
-            AddEvent(StringToHash( event_name), callback);
-        }
+        public static IUnRegister AddEvent<T1, T2, T3>(string event_name, Action<T1, T2, T3> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3>(string event_name, XFEvent<T1, T2, T3> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1, T2, T3>(string event_name, Action<T1, T2, T3> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2, T3>(event_name, callback);
 
         public static void TriggerEvent<T1, T2, T3>(string event_name, T1 p, T2 p2, T3 p3)
-        {
-            TriggerEvent(StringToHash( event_name ), p, p2, p3);
-        }
+            => GetDefault(event_name)?.Send<T1, T2, T3>(event_name, p, p2, p3);
+
+        public static void TriggerEventAll<T1, T2, T3>(string event_name, T1 p1, T2 p2, T3 p3)
+            => GetDefault(event_name)?.SendAll<T1, T2, T3>(event_name, p1, p2, p3);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4>(string event_name, XFEvent<T1, T2, T3, T4> callback)
-        {
-            AddEvent(StringToHash(event_name), callback);
-        }
+        public static IUnRegister AddEvent<T1, T2, T3, T4>(string event_name, Action<T1, T2, T3, T4> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4>(string event_name, XFEvent<T1, T2, T3, T4> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1, T2, T3, T4>(string event_name, Action<T1, T2, T3, T4> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4>(event_name, callback);
 
         public static void TriggerEvent<T1, T2, T3, T4>(string event_name, T1 p, T2 p2, T3 p3, T4 p4)
-        {
-            TriggerEvent(StringToHash(event_name),   p,   p2,   p3,   p4);
-        }
+            => GetDefault(event_name)?.Send<T1, T2, T3, T4>(event_name, p, p2, p3, p4);
 
-        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")] 
-        public static void AddEvent<T1, T2, T3, T4, T5>(string event_name, XFEvent<T1, T2, T3, T4, T5> callback)
-        {
-            AddEvent(StringToHash(event_name), callback);
-        }
+        public static void TriggerEventAll<T1, T2, T3, T4>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4)
+            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4>(event_name, p1, p2, p3, p4);
+
+        [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5>(string event_name, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5>(string event_name, XFEvent<T1, T2, T3, T4, T5> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1, T2, T3, T4, T5>(string event_name, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5>(event_name, callback);
 
         public static void TriggerEvent<T1, T2, T3, T4, T5>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
-        {
-            TriggerEvent(StringToHash(event_name), p, p2, p3, p4, p5);
-        }
+            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5>(event_name, p, p2, p3, p4, p5);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5>(event_name, p1, p2, p3, p4, p5);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4, T5, T6>(string event_name, XFEvent<T1, T2, T3, T4, T5, T6> callback)
-        {
-            AddEvent(StringToHash(event_name), callback);
-        }
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6>(string event_name, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(string event_name, XFEvent<T1, T2, T3, T4, T5, T6> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(string event_name, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5, T6>(event_name, callback);
 
         public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
-        {
-            TriggerEvent(StringToHash(event_name),p,p2,p3, p4, p5, p6);
-        }
+            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5, T6>(event_name, p, p2, p3, p4, p5, p6);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5, T6>(event_name, p1, p2, p3, p4, p5, p6);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static void AddEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, XFEvent<T1, T2, T3, T4, T5, T6, T7> callback)
-        {
-            AddEvent(StringToHash(event_name),  callback);
-        }
+        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(event_name, callback) ?? EmptyUnRegister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, XFEvent<T1, T2, T3, T4, T5, T6, T7> callback)
-        {
-            RemoveEvent(StringToHash(event_name), callback);
-        }
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5, T6, T7>(event_name, callback);
 
         public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5, T6, T7>(event_name, p, p2, p3, p4, p5, p6, p7);
+
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(event_name, p1, p2, p3, p4, p5, p6, p7);
+
+        #endregion
+
+        /// <summary>
+        /// 终结并删除整个 Default 的全部键、签名及在途快照，包括通过其他 EventBus.Default 入口建立的键。
+        /// Default 实例保持可用；不影响独立 EventBus 或 YL Global facade，不应作为 Module/View 的退出清理。
+        /// </summary>
+        public static void RemoveAllEvent()
         {
-            TriggerEvent(StringToHash(event_name),   p,   p2,   p3,   p4,   p5,   p6,   p7);
+            if (EventBus.TryGetDefault(out var bus)) bus.ClearKeys();
         }
 
-
-        /// <summary>
-        /// 移除事件系统的所有监听
-        /// </summary>
-        public static void RemoveAllEvent() 
-        { 
-            List<int> keys = ListPool<int>.Allocate();
-            try
-            {
-                foreach (var item in _Event.Keys)
-                {
-                    keys.Add(item);
-                }
-
-                foreach (var item in keys)
-                {
-                    RemoveAllEvent(item);
-                }
-            }
-            finally
-            {
-                ListPool<int>.Recycle(keys);
-            }
-        }
-
-        /// <summary>
-        /// 移除某一个事件的所有监听
-        /// </summary>
-        /// <param name="event_name"></param>
+        /// <summary>终结并删除 Default 中此完整 string 键及在途快照，允许重新绑定签名；旧 token 失效。</summary>
         public static void RemoveAllEvent(string event_name)
-        {
-            RemoveAllEvent(StringToHash(event_name));
-        }
+            => GetDefault(event_name)?.RemoveKey(event_name);
 
-        public static void RemoveAllEvent(int event_name_hash) 
-        {
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            _Event[event_name_hash] = Delegate.RemoveAll(_Event[event_name_hash], _Event[event_name_hash]);  
-        }
- 
-        internal static void AddEvent(int event_name_hash, Delegate callback) 
-        {
-            if (callback == null) return;
-
-            if (!_Event.ContainsKey(event_name_hash))
-                _Event.Add(event_name_hash, null);
-
-            if (_Event[event_name_hash] != null)
-            {
-                Type origin_type = _Event[event_name_hash].GetType();
-                Type current_type = callback.GetType();
-
-                if (origin_type == current_type)
-                {
-                    _Event[event_name_hash] = Delegate.Combine(_Event[event_name_hash], callback);
-                }
-                else
-                { 
-                    Exception e = new Exception(string.Format("注册事件:{0}失败! 委托类型不一致! \n\t注册类型:{1}\n\t当前类型:{2}\n同一个事件的回调方法类型必须保持一致!", HashToString(event_name_hash), current_type.GetDelegateDisplayName(), origin_type.GetDelegateDisplayName()));
-                    Debug.LogException(e);
-                }
-            }
-            else 
-            {
-                _Event[event_name_hash] = Delegate.Combine(_Event[event_name_hash], callback);
-            }
-             
-        }
-        
-        internal static void RemoveEvent(int event_name_hash, Delegate callback)
-        {
-
-            if (callback == null) return;
-
-            if (!_Event.ContainsKey(event_name_hash))
-                return;
-
-            if (_Event[event_name_hash] == null)
-                return;
-
-            Type origin_type = _Event[event_name_hash].GetType();
-            Type current_type = callback.GetType();
-
-            if (origin_type == current_type)
-            {
-                _Event[event_name_hash] = Delegate.Remove(_Event[event_name_hash], callback);
-            }
-            else 
-            {
-                Exception e = new Exception(string.Format("移除事件:{0}失败! 委托类型不一致! \n\t移除类型:{1}\n\t当前类型:{2}\n同一个事件的回调方法类型必须保持一致!", HashToString(event_name_hash), current_type.GetDelegateDisplayName(), origin_type.GetDelegateDisplayName()));
-                //Exception e = new Exception(string.Format("移除事件:{0} 类型:{1} {2}不匹配!", HashToString(event_name_hash), callback.GetType().FullName, _Event[event_name_hash].GetType().FullName));
-                Debug.LogException(e);
-            } 
-        }
-         
-        #endregion 
-
+        /// <summary>终结并删除 Default 中此 int 键及在途快照，允许重新绑定签名；旧 token 失效。</summary>
+        public static void RemoveAllEvent(int event_name_hash)
+            => GetDefault(event_name_hash)?.RemoveKey(event_name_hash);
     }
-
 }

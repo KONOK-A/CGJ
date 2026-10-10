@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using YLFramework.Core.Singleton;
-using YLFramework.Events.Internal;
 
 namespace YLFramework.Events
 {
@@ -9,7 +7,8 @@ namespace YLFramework.Events
     /// 以整数 ID 为 key 的全局事件系统。
     /// key 通过 <see cref="IConvertible.ToInt32"/> 归一化，因此不同数值类型但数值相同的 key 会共享同一事件。
     /// 同一 key 共享一个事件实例；无监听回调时发送为空操作。
-    /// 实例由 SingletonProperty 管理：<see cref="Dispose"/> 后旧实例的监听全部失效。
+    /// 各系统持有独立 EventBus；Dispose 或 Play Session reset 永久关闭旧实例，截断旧在途通知。
+    /// 关闭后注册与发送抛出 ObjectDisposedException，退订为空操作；Instance 可创建新实例。
     /// </summary>
     public class IntIDEventSystem : ISingleton
     {
@@ -18,7 +17,21 @@ namespace YLFramework.Events
         /// </summary>
         public static IntIDEventSystem Instance => SingletonProperty<IntIDEventSystem>.Instance;
 
-        private readonly Dictionary<int, EasyEvent<int, object[]>> _events = new();
+        private static IntIDEventSystem _sessionInstance;
+        private readonly EventBus _bus = new();
+
+        static IntIDEventSystem()
+        {
+            SingletonSessionState.RegisterSessionReset(ResetSessionState);
+        }
+
+        private static void ResetSessionState()
+        {
+            // Singleton 自身可能已先清入口，独立保留本轮待关闭实例。
+            var previous = _sessionInstance;
+            _sessionInstance = null;
+            previous?.Dispose();
+        }
 
         /// <summary>
         /// 创建事件系统实例；外部请通过 <see cref="Instance"/> 访问单例。
@@ -36,16 +49,7 @@ namespace YLFramework.Events
         public IUnRegister Register<T>(T key, Action<int, object[]> eventAction) where T : IConvertible
         {
             var intKey = key.ToInt32(null);
-            if (_events.TryGetValue(intKey, out var e))
-            {
-                return e.Register(eventAction);
-            }
-            else
-            {
-                var easyEvent = EasyEvent<int, object[]>.Allocate();
-                _events.Add(intKey, easyEvent);
-                return easyEvent.Register(eventAction);
-            }
+            return _bus.Register(intKey, eventAction);
         }
 
         /// <summary>
@@ -57,14 +61,11 @@ namespace YLFramework.Events
         public void UnRegister<T>(T key, Action<int, object[]> eventAction) where T : IConvertible
         {
             var intKey = key.ToInt32(null);
-            if (_events.TryGetValue(intKey, out var easyEvent))
-            {
-                easyEvent?.UnRegister(eventAction);
-            }
+            _bus.UnRegister(intKey, eventAction);
         }
 
         /// <summary>
-        /// 移除并回收指定 key 的整个事件（该 key 上所有监听失效）。
+        /// 终结并移除指定 key 的整个事件及在途通知（该 key 上所有监听失效）。
         /// </summary>
         /// <typeparam name="T">可转换为 int 的 key 类型。</typeparam>
         /// <param name="key">事件 key。</param>
@@ -72,19 +73,15 @@ namespace YLFramework.Events
         {
             var intKey = key.ToInt32(null);
 
-            if (_events.TryGetValue(intKey, out var easyEvent))
-            {
-                easyEvent?.RecycleToCache();
-                _events.Remove(intKey);
-            }
+            _bus.RemoveKey(intKey);
         }
 
         /// <summary>
-        /// 移除并回收所有 key 的事件。
+        /// 终结并移除所有 key 的事件及在途通知，系统仍可用；关闭后为空操作。
         /// </summary>
         public void UnRegisterAll()
         {
-            EventSystemInternal.RecycleAllAndClear(_events);
+            if (!_bus.IsDisposed) _bus.ClearKeys();
         }
 
         /// <summary>
@@ -98,25 +95,29 @@ namespace YLFramework.Events
         {
             var intKey = key.ToInt32(null);
 
-            if (_events.TryGetValue(intKey, out var e))
-            {
-                e?.Trigger(intKey, args);
-            }
+            _bus.Send(intKey, intKey, args);
         }
 
         /// <inheritdoc />
         public void OnSingletonInit()
         {
-            _events.Clear();
+            _bus.ClearKeys();
+            _sessionInstance = this;
         }
 
         /// <summary>
-        /// 注销所有监听并释放单例实例；下次访问 <see cref="Instance"/> 会创建新实例。
+        /// 永久关闭自身并注销所有监听；仅释放仍指向自身的单例入口，重复调用为空操作。
+        /// 下次访问 <see cref="Instance"/> 会创建新实例，旧实例不能影响它。
         /// </summary>
         public void Dispose()
         {
-            UnRegisterAll();
-            SingletonProperty<IntIDEventSystem>.Dispose();
+            if (_bus.IsDisposed) return;
+            _bus.Dispose();
+            if (ReferenceEquals(_sessionInstance, this)) _sessionInstance = null;
+            if (SingletonProperty<IntIDEventSystem>.TryGetInstance(out var current) && ReferenceEquals(current, this))
+            {
+                SingletonProperty<IntIDEventSystem>.Dispose();
+            }
         }
     }
 }

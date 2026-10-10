@@ -5,12 +5,27 @@ namespace YLFramework.Events
 {
     /// <summary>
     /// 以事件类型为 key 的全局事件系统：每个泛型类型对应一个事件。
-    /// 事件实例由本系统持有、不参与对象池，随系统实例一起丢弃。
-    /// <see cref="Dispose"/> 后旧实例的监听不再触发，下次访问 <see cref="Instance"/> 从空开始。
+    /// 按泛型声明类型路由，独立 EventBus 不参与对象池。
+    /// Dispose 或 Play Session reset 永久关闭旧实例并截断旧在途通知。
+    /// 关闭后注册与发送抛出 ObjectDisposedException，退订为空操作；Instance 可创建新实例。
     /// </summary>
     public class TypeEventSystem : ISingleton
     {
-        private EasyEvents _events = new();
+        private static TypeEventSystem _sessionInstance;
+        private readonly EventBus _bus = new();
+
+        static TypeEventSystem()
+        {
+            SingletonSessionState.RegisterSessionReset(ResetSessionState);
+        }
+
+        private static void ResetSessionState()
+        {
+            // Singleton 自身可能已先清入口，独立保留本轮待关闭实例。
+            var previous = _sessionInstance;
+            _sessionInstance = null;
+            previous?.Dispose();
+        }
 
         /// <summary>
         /// 全局单例实例。
@@ -23,7 +38,7 @@ namespace YLFramework.Events
         /// <typeparam name="T">事件类型。</typeparam>
         public void Send<T>() where T : new()
         {
-            _events.GetEvent<EasyEvent<T>>()?.Trigger(new T());
+            _bus.SendMessage<T>();
         }
 
         /// <summary>
@@ -33,7 +48,7 @@ namespace YLFramework.Events
         /// <param name="e">事件实例。</param>
         public void Send<T>(T e)
         {
-            _events.GetEvent<EasyEvent<T>>()?.Trigger(e);
+            _bus.SendMessage(e);
         }
 
         /// <summary>
@@ -44,7 +59,7 @@ namespace YLFramework.Events
         /// <returns>用于注销本次注册的句柄。</returns>
         public IUnRegister Register<T>(Action<T> eventAction)
         {
-            return _events.GetOrAddEvent<EasyEvent<T>>().Register(eventAction);
+            return _bus.RegisterMessage(eventAction);
         }
 
         /// <summary>
@@ -54,23 +69,29 @@ namespace YLFramework.Events
         /// <param name="eventAction">要注销的监听回调。</param>
         public void UnRegister<T>(Action<T> eventAction)
         {
-            var e = _events.GetEvent<EasyEvent<T>>();
-            e?.UnRegister(eventAction);
+            _bus.UnRegisterMessage(eventAction);
         }
 
         /// <inheritdoc />
         public void OnSingletonInit()
         {
-            _events = new EasyEvents();
+            _bus.ClearKeys();
+            _sessionInstance = this;
         }
 
         /// <summary>
-        /// 清空全部监听并释放单例实例；下次访问 <see cref="Instance"/> 会创建新实例。
+        /// 永久关闭自身并注销所有监听；仅释放仍指向自身的单例入口，重复调用为空操作。
+        /// 下次访问 <see cref="Instance"/> 会创建新实例，旧实例不能影响它。
         /// </summary>
         public void Dispose()
         {
-            _events.Clear();
-            SingletonProperty<TypeEventSystem>.Dispose();
+            if (_bus.IsDisposed) return;
+            _bus.Dispose();
+            if (ReferenceEquals(_sessionInstance, this)) _sessionInstance = null;
+            if (SingletonProperty<TypeEventSystem>.TryGetInstance(out var current) && ReferenceEquals(current, this))
+            {
+                SingletonProperty<TypeEventSystem>.Dispose();
+            }
         }
     }
 }
