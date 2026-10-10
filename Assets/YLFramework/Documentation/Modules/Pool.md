@@ -131,7 +131,7 @@ pool.Clear("Projectile");
 
 ## 当前状态
 
-**2.1-A～E 已全部完成并通过用户验收，2.1 Pool 为 COMPLETE（A～D 已 Git 收口，E 的 Git 收口提交由用户后续执行）；阶段 2 保持 IN PROGRESS，2.2 Events 待专项研究与设计。**正式设计与各批实际结果见 [Pool 专项](../../../../.kilo/plans/xf-yl-2.1-pool.md)。
+**2.1-A～E 已全部完成并通过用户验收，2.1 Pool 为 COMPLETE（A～D 已 Git 收口，E 的 Git 收口提交由用户后续执行）；阶段 2 保持 IN PROGRESS，2.2 Events 已 COMPLETE（技术验收完成，待用户 Git 收口），下一专题 2.3 Update 未启动。**正式设计与各批实际结果见 [Pool 专项](../../../../.kilo/plans/xf-yl-2.1-pool.md)。
 
 实际测试入口为 `Tests/Foundation/EditMode/ObjectPoolTests`、`FoundationBoundaryTests`，`Tests/EditMode/PoolContractTests`、`CollectionPoolTests`、`ResourcePoolTests` 及 Action/Events/Binding/Audio 定向契约，Core 的参数/临时集合/身份及代表性 PlayMode 用例。GO 专项为 `Tests/PlayMode/GameObjectPoolPlayModeTests`，覆盖真实 Unity 生命周期、场景卸载及关键回归。不存在的旧套件名称不作为覆盖依据。
 

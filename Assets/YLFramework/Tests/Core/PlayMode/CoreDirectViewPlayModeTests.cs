@@ -423,13 +423,13 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.gameObject.activeSelf, Is.False);
                 view.Close();
             };
-            var firstBroadcastToken = EventManager.AddEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, removed =>
+            var firstBroadcastToken = EventManager.AddEvent<View>(CoreEvents.ON_REMOVE_VIEW, removed =>
             {
                 if (!ReferenceEquals(removed, view)) return;
                 events.Add("broadcast.throw");
                 throw broadcastError;
             });
-            var broadcastToken = EventManager.AddEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, broadcast);
+            var broadcastToken = EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
             try
             {
                 var error = Assert.Throws<AggregateException>(() => view.Close());
@@ -493,7 +493,7 @@ namespace YLFramework.Core.Tests
                     Assert.That(ViewSession(replacement), Is.Not.SameAs(oldSession));
                     if (phase == 1) replacement.Close();
                 };
-                EventManager.AddEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, broadcast);
+                EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
                 try
                 {
                     view.Close();
@@ -519,7 +519,7 @@ namespace YLFramework.Core.Tests
                 }
                 finally
                 {
-                    EventManager.RemoveEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, broadcast);
+                    EventManager.RemoveEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
                     view.AfterClose = null;
                     view.Close();
                 }
@@ -779,8 +779,8 @@ namespace YLFramework.Core.Tests
                         Assert.That(panel.Module, Is.Null);
                         throw failure;
                     };
-                    var broadcastToken = EventManager.AddEvent(XFGameFrameworkEvents.ON_REMOVE_VIEW, broadcast);
-                    var followingToken = EventManager.AddEvent<View>(XFGameFrameworkEvents.ON_REMOVE_VIEW, removed =>
+                    var broadcastToken = EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
+                    var followingToken = EventManager.AddEvent<View>(CoreEvents.ON_REMOVE_VIEW, removed =>
                     {
                         if (!ReferenceEquals(removed, panel)) return;
                         followingCalls++;

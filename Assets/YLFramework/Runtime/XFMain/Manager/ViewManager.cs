@@ -205,7 +205,7 @@ namespace YLFramework.Core
             module.viewTransactions--;
             if (notify)
             {
-                try { EventManager.TriggerEventAll(XFGameFrameworkEvents.ON_REMOVE_VIEW, view); }
+                try { EventManager.TriggerEventAll(CoreEvents.ON_REMOVE_VIEW, view); }
                 catch (Exception error) { errors.Add(error); }
                 // 广播可以复用同一组件；不把旧完成钩子派发给已开启过的新会话。
                 if (ReferenceEquals(view.LastSession, session))

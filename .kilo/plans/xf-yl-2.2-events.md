@@ -1,8 +1,8 @@
 # XF × YL 2.2 Events 事件系统融合研究与技术设计
 
-**状态：整体设计已批准；2.2-A～C 已技术验收并提交（A 核心 `0c11270`、文档 `c9cc2a5`；B `31b4928`；C `cc768a9`）。2026-10-10 正式授权的 2.2-D 已实现并通过 Unity 编译及定向验证，达到技术完成标准，待用户验收与 Git 收口；具备进入 E 的技术前置条件，不自动进入 E、不执行 Git 写操作。A/B/C/D 证据分别见第 10/11/12/13 节。**
+**状态：整体设计已批准；2.2-A～E 全部实施并完成技术验证（A 核心 `0c11270`、文档 `c9cc2a5`；B `31b4928`；C `cc768a9`；D `5a4ac6e`；E 为未提交的命名收口与专题验收）。2026-10-10 完成 2.2-E：`XFGameFrameworkEvents` 已迁移为 `CoreEvents`，冗余算法核查、代表性跨模块回归与真实关闭 Domain Reload 两轮 Play 门禁通过，**2.2 Events 达到 COMPLETE 技术条件，等待用户验收与 Git 收口**；阶段 2 仍为 IN PROGRESS，不自动进入 2.3 Update，不执行 Git 写操作。E 证据见第 14 节。**
 
-本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10/11/12/13 节增量记录 A/B/C/D 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。当前 D 已单独授权并完成技术验证；E 及本轮 Git 写操作未授权，不自动启动。
+本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10/11/12/13/14 节增量记录 A/B/C/D/E 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。A～E 均已单独授权并完成技术验证；E 的文档更新不构成 Git 授权。
 
 ## 1. 基线与边界
 
@@ -490,3 +490,41 @@ Core 与直接使用 Default 的新业务现在真实互通；YL 四个历史 Gl
 - E：`XFGameFrameworkEvents` 历史命名、完整 API/专题最终收口、真实关闭 Domain Reload 两轮 Play 及必要跨模块门禁，仍单独实施；不借 D 自动进入。
 - Unity 平台生命周期限制、SingleUse 失败不可恢复和显式取消失败的诊断责任是已说明的契约边界，不承诺绝对兜底。
 - 不扩展到 Update/Timer、UI/Audio/Resource、XFAB 缓存/AssetBundle 卸载，不执行 Commit/Push/Merge/Reset/Clean/切换分支；D 完成后停止。
+
+## 14. 2.2-E 命名收口、冗余核查与专题验收
+
+### 14.1 基线与实际范围
+
+- 分支 `fusion/2.2-events`，HEAD `5a4ac6e`，开始时工作区干净；Unity `2022.3.62f3c1`，连接的 Editor 工程与工作区一致。
+- E 的三类工作：历史 XF 命名迁移、A～D 融合结果与冗余 API 核查、专题级真实运行验收。产品改动仅为 `CoreEvents`（原 `XFGameFrameworkEvents`）文件及自身 meta、两份直接引用（`ViewManager.cs`、`CoreDirectViewPlayModeTests.cs`）和 `TypeExtensions.cs` 中随 XFEvent 退出的失效注释；同时增量维护本计划与两份现有文档。
+- 未修改共享 Foundation、四个 Global facade、EasyEvent/EasyEvents、EventListener、核心机制、asmdef、原 XF Package、游戏业务/场景/Prefab/资源、Packages、ProjectSettings；没有重新审计 Pool/Module/MVC/View，没有 Git 写操作。
+
+### 14.2 命名收口与冗余 API 结论
+
+| 项目 | 实际结果 |
+|---|---|
+| `XFGameFrameworkEvents` → `CoreEvents` | 文件与自身 meta 同步改名，GUID `400a6633333b837428dfaf762f92a43c` 保留并经 `AssetDatabase.GUIDToAssetPath` 实测一致；namespace `YLFramework.Core`、普通 class 形状、`ON_REMOVE_VIEW = "ON_REMOVE_VIEW"` 成员与字符串值、`Action<View>` payload 与 ViewManager 发布时机全部不变 |
+| 引用迁移 | 实用引用仅 `ViewManager.cs:208` 与 `CoreDirectViewPlayModeTests` 六处；Assets 全量文本与全局 GUID 检索未发现场景、Prefab、资产、反射字符串或游戏绑定；未增加旧名 alias，符合“不为未发布常量容器长期留兼容壳” |
+| 失效注释 | `TypeExtensions.cs` 的 `// XFEvent`1` 是 C 退出 XFEvent 后失效的历史注释，随命名收口移除；通用委托显示方法 `GetDelegateDisplayName` 保留（不承载事件算法，属 Extensions 范围） |
+| 重复算法核查 | Events 范围仅存唯一共享 channel/bus：EasyEvent 直接继承共享 channel，四个 Global facade 各持独立 `EventBus` 实例，EventListener 私有 `EventChannel`，Core EventManager 为 `EventBus.Default` 薄入口；未发现第二套分发/注册/注销/Once/Or 实现，历史 hash/Delegate 字典与 XFEvent 定义无残留（含 `Obsolete` 扫描为空） |
+| 价值能力保留 | XF 0～7 参命名事件（统一 `System.Action`）、YL 实例事件/Once/Or/类型消息/Enum与IntID动态协议/生命周期触发器/Unity EventListener 及 XF 物理/动画/EventTrigger 领域监听保持独立职责，未因当前游戏未使用而删除 |
+
+### 14.3 专题最终验证
+
+| 执行范围 | 结果与证据 |
+|---|---|
+| Unity 实际编译与身份 | 改名后 Assets 刷新成功，无脚本编译失败；实际加载程序集可见 `YLFramework.Core.CoreEvents`（`ON_REMOVE_VIEW` 值正确），`XFGameFrameworkEvents` 已不存在；`.meta`/GUID、程序集归属（Core.Runtime）与命名空间保持 |
+| 真实无 Domain Reload 两轮 Play | 临时以 `EditorSettings` 关闭 Domain Reload（验证后恢复；`ProjectSettings/EditorSettings.asset` SHA-256 前后完全一致），空场景连续两轮 Play 使用一次性临时诊断脚本（文件输出，验证后删除并重新编译）：第一轮注册 Default bus、String/Type facade、EasyEvents 全局容器与独立 `new EventBus()` 订阅并各触发成功；第二轮静态标记与计数跨会话保留，旧 Default/旧 facade 已关闭（Register/Send 抛 `ObjectDisposedException`，退订幂等空操作），旧 token 取消不影响新注册、旧回调未进入新生命周期，EasyEvents 全局监听被清理且实例仍可复用，独立 bus 未被全局 reset 关闭且其旧订阅仍可接收通知。临时输出 P1/P2 全断言通过（`staticsSurvived/markerOnDisk=true`、`before=2/5/9/1/7`、`defaultReplaced/defaultFresh/oldBusDisposed=true`、`newCoreOnceTwice=1/2 coreFinal=2`、`stringReplaced/newStringFired=4/stringFinal=5`、`typeReplaced/newTypeFired=4/typeFinal=9`、`easyReset/easyTokenSafe=true/newEasyOnceTwice=2/easyFinal=1`、`indepAlive=true/indepFinal=10`） |
+| 代表性跨模块回归 | PlayMode `CoreDirectViewPlayModeTests` **49/49**（含改名后的 `CoreEvents.ON_REMOVE_VIEW` 广播消费者）、`EventsLifecyclePlayModeTests` **14/14**、`ActionKitLifecyclePlayModeTests.ShutdownReleasesGlobalHostEventsAndAllowsImmediateRestart` **1/1**；EditMode `CoreEventsContractTests` **7/7**、`BindingContractTests` **15/15**、`AudioCoreTests.SettingsUseOriginalKeysAndDisconnectOldSubscriptionsAcrossRecreate` **1/1**。合计 **87 项通过，0 Failed/Skipped** |
+| 原游戏非干扰 | 游戏源码、场景、Prefab、资源、Packages/ProjectSettings 相对 HEAD 无 diff；游戏未引用该常量容器，E 不涉及事件机制与资源链；未重跑完整游戏流程，沿用 1.4 已验收的原游戏 Editor/Windows64 证据，并保持本轮 Main 场景 `dirty=false` |
+| 清理与恢复 | 临时诊断脚本与目录已删除并重新编译；Enter Play Mode 设置恢复原值（enabled=false、options=3）；Main 场景恢复打开；未保存或覆盖用户场景 |
+
+环境说明：A～D 已记录的原 Logger/MCP 过渡期问题在无 Domain Reload 的 Play 切换中再次出现（原 Logger 处理器在 Play 退出后对后续日志抛 NRE，影响 MCP 工具的日志/响应通道），按既定边界不改原 Package；两轮校验改用一次性临时脚本 + 文件输出完成，该问题与 Events 回归无关。
+
+### 14.4 完成标准与边界
+
+**2.2-E 技术验收条件满足：2.2 Events 达到 COMPLETE（技术完成，等待用户验收与 Git 收口）。** 历史命名与专题 API 完成收口，唯一算法与领域职责保持，真实关闭 Domain Reload 两轮 Play 门禁通过，代表性跨模块回归无新增失败，未发现 A～D 遗留的阻断缺陷。
+
+- 阶段 2 整体仍为 IN PROGRESS，下一专题 2.3 Update；本批完成并停止，不自动进入。
+- 未执行：Windows Player/IL2CPP/AOT、完整游戏与全部历史套件重跑、性能测量；已知 Logger/MCP 过渡期问题保留在原系统边界。
+- 没有 Commit/Push/Merge/Reset/Clean/切换分支。

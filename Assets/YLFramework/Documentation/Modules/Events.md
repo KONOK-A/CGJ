@@ -10,6 +10,8 @@
 
 Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接失败时整体回滚，明确断连后重建的轮次不受旧轮回滚影响；契约与验证见专项第 10.5 节。B 的实际验证与验收状态见专项第 11 节。
 
+2.2-E 已完成历史命名与专题收口：`XFGameFrameworkEvents` 迁移为 `YLFramework.Core.CoreEvents`（文件/meta/GUID、namespace、成员、`Action<View>` payload 与 ViewManager 发布时机不变）；唯一算法、领域职责与兼容边界核查完成，真实关闭 Domain Reload 的两轮 Play 与代表性跨模块回归通过，2.2 Events 达到 COMPLETE 技术条件，等待用户验收与 Git 收口。详见专项第 14 节。
+
 ## 位置
 
 - 共享机制：[`Runtime/Shared/Events/`](../../Runtime/Shared/Events/)，归属 `YLFramework.Foundation.Runtime`：`EventChannel`（0~7 参数）、`IEventSource`、`EventKey` / `EventBus`、`OrEvent`、取消辅助及 `SubscriptionScope`。
@@ -108,7 +110,7 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 ## Domain Reload 行为
 
 - `EasyEvents` 全局容器经 `SingletonSessionState` reset 清理：标准 channel 旋转旧代次，自定义 `IEasyEvent.UnRegisterAll` 仍逐项执行；全部尝试后集中记录异常，不阻断其他模块 reset。只丢映射不再作为会话清理。
-- 四个 Global EventSystem 挂接同一既有 session reset，实际关闭旧 bus；即使 Singleton 先摘入口也不遗漏旧实例。定向 reset 测试不等于真实关闭 Domain Reload 两轮 Play 验证，后者保留 E 门禁。
+- 四个 Global EventSystem 挂接同一既有 session reset，实际关闭旧 bus；即使 Singleton 先摘入口也不遗漏旧实例。定向 reset 测试之外，E 已用真实关闭 Domain Reload 的连续两轮 Play 验证：静态标记跨会话保留，旧 Default 与旧 facade 关闭（Register/Send 抛 `ObjectDisposedException`、退订幂等），旧 token 不影响新注册，EasyEvents 全局监听被清理而实例仍可复用，独立 `new EventBus()` 不受全局 reset 影响（专项第 14.3 节）。
 
 ## 重要限制
 
@@ -129,4 +131,5 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - Action 消息/shutdown/暂停与 Audio 设置重入/旧订阅隔离按方法筛选验证，未机械运行整个模块套件。
 - `Tests/PlayMode/EventsLifecyclePlayModeTests.cs`：GameObject Destroy/Disable、指定 Scene 与 AnyScene、失败责任 / 重入及 Listener 通道生命周期。
 - `Tests/EditMode/UnityEventListenerContractTests.cs`：20 种原生 payload 映射、真实 persistent UnityEvent 通道、便捷扩展及旧代码快照截断。物理消息映射通过直接调用验证，不等同于物理引擎全流程测试。
+- E 专题验收：`CoreDirectViewPlayModeTests` 49/49（含 `CoreEvents.ON_REMOVE_VIEW` 广播消费者）、`EventsLifecyclePlayModeTests` 14/14、Action/Audio 各一项代表性方法、`CoreEventsContractTests` 7/7、`BindingContractTests` 15/15，合计 87 项通过；真实关闭 Domain Reload 两轮 Play 门禁通过。
 - 各批实际验证结果及剩余边界见 [2.2 专项方案](../../../../.kilo/plans/xf-yl-2.2-events.md)。

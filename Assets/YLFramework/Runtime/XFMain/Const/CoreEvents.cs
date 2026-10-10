@@ -2,7 +2,7 @@ using System;
 
 namespace YLFramework.Core
 {
-    public class XFGameFrameworkEvents
+    public class CoreEvents
     { 
         /// <summary>
         /// 当某个View被移除时触发
