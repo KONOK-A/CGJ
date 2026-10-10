@@ -1,6 +1,6 @@
 # XF × YL 2.3 Update：融合研究与技术设计
 
-**状态：2.3-A 已实施并通过本批技术验证，待用户验收及 Git 收口；B/C 尚未实施。**
+**状态：2.3-A 已验收并提交 `d9f1b6c`；2.3-B 已实施并通过本批技术验证，待用户验收及 Git 收口；C 尚未实施。**
 
 本方案的总体设计已获批准，批准不等同于批次实施、Git 写入或下一专题授权。统一公共更新订阅与执行安全，保留领域调度；不是把所有 Unity 消息、任务或 MonoBehaviour 合成一个系统。
 
@@ -213,4 +213,16 @@ Core Timer、YL Timing 和 YL Audio 继续各自 Mono Update；职责边界、�
 - 本批验证的会话 reset/旧消息/退出门禁为定向模拟，加上真实 Unity 三相位和场景卸载；未将 SendMessage(Quit) 描述为真实退出验收。未修改 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合验收仍归 C；没有 Player/IL2CPP 构建、完整游戏或性能验证。本轮不声明宿主损坏自愈、全框架无 Scene Reload 恢复或跨领域全序。
 - A 已达到本批技术完成标准，等待用户验收与 Git 收口。B 的窄 gate/session 前置能力已就绪，但 CoroutineStarter 尚未接入，旧 Coroutine handle 所有权/Stop 和重入安全仍归 B；Action 三相位仍保留原自动消息，桥接及专题最终收口归 C。Timer、YL Timing/Audio 驱动与既已登记的外围缺陷保持原范围。
 
-本批完成后停止，等待用户验收和 Git 收口，不自动进入 2.3-B。
+### 2.3-B 实施与验证
+
+- 2026-10-10，用户独立授权实施 B。实际基线为 `fusion/2.3-update`、HEAD `d9f1b6c`，开始时工作区干净，A 已由用户验收并提交。本批仅修改 Shared `CoroutineStarter.cs`、既有 `CoroutineStarterTests.cs` 与本计划；未新增文件或改动 `.meta`、asmdef、公共 Update/Events/Pool、Core/Action 消费者、原 XF Package、游戏业务、场景/资源、Packages 或 ProjectSettings。
+- 保留 `Start(IEnumerator) -> Coroutine` / `Stop(Coroutine)`、Unity 同步首步与 yield 行为、独立命名 DDOL 宿主和正常跨场景运行。复用 A 的 `SingletonSessionState.CanRunExecution`、`ExecutionSession` 及 reset 注册，不引入新的全局管理器、迭代器状态机、公开 StopAll 或异步取消系统。
+- 句柄归属使用 `ConditionalWeakTable<Coroutine, CoroutineStarter>`：弱键不强保留全部已完成句柄，原宿主自身保存不可变的会话身份和释放标记，无需额外 owner 记录类型。Stop 先移除登记再调用有效原宿主，重复 Stop、null、无记录/外部句柄、旧宿主和旧会话句柄均非创建式；不把裸句柄交给当前替代宿主。自然完成后保留的句柄仍可安全 Stop，不影响同宿主新工作。
+- Start 捕获实际宿主，Unity 返回前允许用户同步重入；返回后复核宿主存活、当前 owner/会话、GameObject 活跃状态与门禁，只登记有效原宿主的句柄。同步 reset、Quit、销毁后新建或失活时返回 null，必要停止只访问捕获的原宿主。null 表示没有可用句柄，不保证迭代器从未推进或没有业务副作用。参数错误保持 Unity 原异常；启动失败只回滚本次新建的原宿主，不终结已有宿主的其他工作。
+- 宿主销毁、当前宿主 Quit 和会话 reset 先撤销 owner/登记，再停止自身全部协程；reset/Quit 额外禁用并销毁自有旧对象。当前宿主 Quit 先关闭共享门禁，旧宿主迟到的 Destroy/Quit 不清新实例/新归属表、不关闭新会话。无宿主 Stop 不创建，既有失活宿主不被替换；损坏后的新 Start 不恢复旧任务。Starter 清理与公共 Update 的订阅所有权仍独立。
+- 先对原实现执行定向回归，确认 Stop(old) 创建替代宿主、未登记句柄被静态 Stop 停止、reset 不停旧协程及同步 reset 后返回旧句柄等缺口，再修复。Unity `2022.3.62f3c1` 实际导入/编译成功；最终 Starter PlayMode **15/15** 通过，包含既有 6 项及 9 项关键生命周期用例。Foundation EditMode 边界 **5/5**、既有公共 Update reset/Quit 代表用例 **1/1**、直接消费者 Module 同步重入/启动失败与 View 异步加载/迟到 producer 取消代表用例 **4/4** 通过。通过的定向用例合计 EditMode 5 项、PlayMode 20 项；工具 TotalTests 包含未选择树节点，不作为运行数。独立只读审查无阻塞发现，`git diff --check` 无错误。
+- Core Module/View 对 `null && !request.isDone` 的既有处理继续兼容，不修改其业务所有权；Timer/HTTP 忽略启动返回值、Audio maintenance 缓存旧句柄及已登记的外围终态/恢复问题仍由对应专题负责。保留 `CustomAsyncOperation.Abort` 不取消 producer 的既有测试，协程 Stop 不代表业务取消、UnityWebRequest Abort/Dispose、资源释放或 iterator finally 必然执行。
+- 本批 reset/退出门禁采用定向反射 reset 和 SendMessage(Quit)，协程推进、场景卸载和生命周期清理为实际 Unity PlayMode 验证；不将模拟 Quit 描述为真实退出验收。未改变 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合收口仍归 C；未进行 Player/IL2CPP、完整游戏、性能或专门 GC 回收验证。
+- B 已达到本批技术完成标准，A 的会话前置与 B 的协程安全支撑具备进入 C 的技术条件；C 实施仍须用户独立授权。当前变更未提交，未执行 Commit、Push、Merge、Reset、Clean 或切换分支。
+
+本批完成后停止，等待用户验收和 Git 收口，不自动进入 2.3-C。

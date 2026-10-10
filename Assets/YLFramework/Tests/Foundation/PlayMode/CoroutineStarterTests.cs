@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,6 +21,7 @@ namespace YLFramework.Foundation.Tests
         private readonly List<CoroutineStarter> _ownedHosts = new List<CoroutineStarter>();
         private GameObject _foreignObject;
         private Scene _scene;
+        private bool _restoreSession;
 
         [SetUp]
         public void SetUp()
@@ -38,6 +40,11 @@ namespace YLFramework.Foundation.Tests
             if (_scene.IsValid() && _scene.isLoaded)
                 yield return SceneManager.UnloadSceneAsync(_scene);
             yield return null;
+            if (_restoreSession)
+            {
+                ResetSession();
+                _restoreSession = false;
+            }
         }
 
         [UnityTest]
@@ -73,6 +80,7 @@ namespace YLFramework.Foundation.Tests
             var runningTicks = 0;
             var stopped = StartOwned(Tick(() => stoppedTicks++));
             var running = StartOwned(Tick(() => runningTicks++));
+            CoroutineStarter.Stop(stopped);
             CoroutineStarter.Stop(stopped);
             var countAtStop = stoppedTicks;
             yield return null;
@@ -112,16 +120,21 @@ namespace YLFramework.Foundation.Tests
         public IEnumerator DestroyedHostStopsItsCoroutineAndNextStartCreatesNewHost()
         {
             var oldTicks = 0;
-            StartOwned(Tick(() => oldTicks++));
+            var oldCoroutine = StartOwned(Tick(() => oldTicks++));
             var oldHost = _host;
             Object.Destroy(oldHost.gameObject);
             yield return null;
             Assert.That(oldHost == null, Is.True);
             Assert.That(FindHosts(), Is.Empty);
+            CoroutineStarter.Stop(oldCoroutine);
+            // 回归失败时也清理本次 Stop 意外创建的宿主，不污染后续用例。
+            foreach (var host in FindHosts()) _ownedHosts.Add(host);
+            Assert.That(FindHosts(), Is.Empty, "Stop(old) 不得创建替代宿主。");
             var countAfterDestroy = oldTicks;
             var newTicks = 0;
             var coroutine = StartOwned(Tick(() => newTicks++));
             Assert.That(_host, Is.Not.SameAs(oldHost));
+            CoroutineStarter.Stop(oldCoroutine);
             yield return null;
             yield return null;
             Assert.That(oldTicks, Is.EqualTo(countAfterDestroy));
@@ -130,17 +143,193 @@ namespace YLFramework.Foundation.Tests
         }
 
         [UnityTest]
+        public IEnumerator UntrackedHandleIsNotStoppedEvenOnTheSameHost()
+        {
+            var tracked = StartOwned(Tick(() => { }));
+            var ticks = 0;
+            var untracked = _host.StartCoroutine(Tick(() => ticks++));
+            CoroutineStarter.Stop(untracked);
+            var before = ticks;
+            yield return null;
+            yield return null;
+            Assert.That(ticks, Is.GreaterThan(before), "只停止经静态 Start 返回的句柄。");
+            _host.StopCoroutine(untracked);
+            CoroutineStarter.Stop(tracked);
+        }
+
+        [UnityTest]
+        public IEnumerator SessionResetStopsOldWorkAndLateMessagesCannotAffectNewOwner()
+        {
+            var oldTicks = 0;
+            var oldCoroutine = StartOwned(Tick(() => oldTicks++));
+            var oldHost = _host;
+            _restoreSession = true;
+            ResetSession();
+            Assert.That(oldHost.enabled, Is.False);
+            var newTicks = 0;
+            var current = StartOwned(Tick(() => newTicks++));
+            var newHost = _host;
+            oldHost.SendMessage("OnApplicationQuit");
+            oldHost.SendMessage("OnDestroy");
+            var afterLateMessage = StartOwned(Tick(() => { }));
+            Assert.That(afterLateMessage, Is.Not.Null, "旧消息不能关闭新会话门禁。");
+            CoroutineStarter.Stop(afterLateMessage);
+            CoroutineStarter.Stop(oldCoroutine);
+            var countAtReset = oldTicks;
+            yield return null;
+            yield return null;
+            Assert.That(oldTicks, Is.EqualTo(countAtReset));
+            Assert.That(newTicks, Is.GreaterThan(1));
+            Assert.That(_host, Is.SameAs(newHost));
+            CoroutineStarter.Stop(current);
+            var countAtStop = newTicks;
+            yield return null;
+            Assert.That(newTicks, Is.EqualTo(countAtStop), "旧消息不能清掉新句柄的归属记录。");
+        }
+
+        [UnityTest]
+        public IEnumerator QuitStopsOwnerAndRefusesStartWithoutCreatingHost()
+        {
+            var ticks = 0;
+            var old = StartOwned(Tick(() => ticks++));
+            _restoreSession = true;
+            _host.SendMessage("OnApplicationQuit");
+            var countAtQuit = ticks;
+            Assert.That(StartTracked(Tick(() => Assert.Fail("退出期间不能推进迭代器。"))), Is.Null);
+            CoroutineStarter.Stop(old);
+            yield return null;
+            yield return null;
+            Assert.That(ticks, Is.EqualTo(countAtQuit));
+            Assert.That(FindHosts(), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousNestedStartAndStopKeepTheirOwnHandles()
+        {
+            var innerTicks = 0;
+            var outerTicks = 0;
+            var outer = StartOwned(RunFirst(() =>
+            {
+                var inner = StartOwned(Tick(() => innerTicks++));
+                CoroutineStarter.Stop(inner);
+            }, () => outerTicks++));
+            yield return null;
+            yield return null;
+            Assert.That(innerTicks, Is.EqualTo(1));
+            Assert.That(outerTicks, Is.GreaterThan(1));
+            CoroutineStarter.Stop(outer);
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousSessionResetRejectsOldReturnWithoutStoppingNewWork()
+        {
+            var newTicks = 0;
+            var oldTicks = 0;
+            Coroutine current = null;
+            CoroutineStarter oldHost = null;
+            _restoreSession = true;
+            var invalid = StartTracked(RunFirst(() =>
+            {
+                oldHost = FindHosts()[0];
+                ResetSession();
+                current = StartOwned(Tick(() => newTicks++));
+            }, () => oldTicks++));
+            Assert.That(invalid, Is.Null);
+            Assert.That(_host, Is.Not.SameAs(oldHost));
+            var countAfterStart = oldTicks;
+            yield return null;
+            yield return null;
+            Assert.That(oldTicks, Is.EqualTo(countAfterStart));
+            Assert.That(newTicks, Is.GreaterThan(1));
+            CoroutineStarter.Stop(current);
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousQuitRejectsReturnAndStopsInFlightStart()
+        {
+            var ticks = 0;
+            _restoreSession = true;
+            var invalid = StartTracked(RunFirst(() => FindHosts()[0].SendMessage("OnApplicationQuit"),
+                () => ticks++));
+            Assert.That(invalid, Is.Null);
+            var countAfterStart = ticks;
+            yield return null;
+            yield return null;
+            Assert.That(ticks, Is.EqualTo(countAfterStart));
+            Assert.That(FindHosts(), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousDeactivationRejectsReturnAndInactiveHostIsNotReplaced()
+        {
+            var ticks = 0;
+            var invalid = StartTracked(RunFirst(() => FindHosts()[0].gameObject.SetActive(false),
+                () => ticks++));
+            Assert.That(invalid, Is.Null);
+            Assert.That(StartTracked(Tick(() => Assert.Fail("失活宿主不能启动。"))), Is.Null);
+            Assert.That(FindHosts().Length, Is.EqualTo(1));
+            var countAfterStart = ticks;
+            yield return null;
+            Assert.That(ticks, Is.EqualTo(countAfterStart));
+        }
+
+        [UnityTest]
+        public IEnumerator SynchronousDestroyAndRecreateDoesNotAdoptTheOldReturn()
+        {
+            var oldTicks = 0;
+            var newTicks = 0;
+            Coroutine current = null;
+            var invalid = StartTracked(RunFirst(() =>
+            {
+                Object.DestroyImmediate(FindHosts()[0].gameObject);
+                current = StartOwned(Tick(() => newTicks++));
+            }, () => oldTicks++));
+            Assert.That(invalid, Is.Null);
+            Assert.That(FindHosts().Length, Is.EqualTo(1));
+            var countAfterStart = oldTicks;
+            yield return null;
+            yield return null;
+            Assert.That(oldTicks, Is.EqualTo(countAfterStart));
+            Assert.That(newTicks, Is.GreaterThan(1));
+            CoroutineStarter.Stop(current);
+        }
+
+        [UnityTest]
+        public IEnumerator InvalidEnumeratorPropagatesAndRollsBackOnlyNewHost()
+        {
+            Assert.Throws<NullReferenceException>(() => StartTracked(null));
+            yield return null;
+            Assert.That(FindHosts(), Is.Empty);
+            var ticks = 0;
+            var current = StartOwned(Tick(() => ticks++));
+            var host = _host;
+            Assert.Throws<NullReferenceException>(() => StartTracked(null));
+            yield return null;
+            Assert.That(_host, Is.SameAs(host));
+            Assert.That(ticks, Is.GreaterThan(1), "已有宿主的其他工作不随参数错误回滚。");
+            CoroutineStarter.Stop(current);
+        }
+
+        [UnityTest]
         public IEnumerator YieldingOperationWaitsUntilCompletionThenResumes()
         {
             var operation = new Probe();
             var resumed = false;
-            StartOwned(WaitForOperation(operation, () => resumed = true));
+            var completed = StartOwned(WaitForOperation(operation, () => resumed = true));
             yield return null;
             Assert.That(resumed, Is.False);
             operation.Finish();
             yield return null;
             yield return null;
             Assert.That(resumed, Is.True);
+            var ticks = 0;
+            var current = StartOwned(Tick(() => ticks++));
+            CoroutineStarter.Stop(completed);
+            CoroutineStarter.Stop(completed);
+            yield return null;
+            yield return null;
+            Assert.That(ticks, Is.GreaterThan(1), "自然完成的旧句柄不影响同宿主上的新工作。");
+            CoroutineStarter.Stop(current);
         }
 
         [UnityTest]
@@ -169,6 +358,15 @@ namespace YLFramework.Foundation.Tests
 
         private Coroutine StartOwned(IEnumerator enumerator)
         {
+            var coroutine = StartTracked(enumerator);
+            var activeHosts = Array.FindAll(FindHosts(), host => host.isActiveAndEnabled);
+            Assert.That(activeHosts.Length, Is.EqualTo(1));
+            _host = activeHosts[0];
+            return coroutine;
+        }
+
+        private Coroutine StartTracked(IEnumerator enumerator)
+        {
             var before = FindHosts();
             Coroutine coroutine;
             try
@@ -179,19 +377,30 @@ namespace YLFramework.Foundation.Tests
             {
                 // Track only this fixture's new hosts, even when Start or its assertion fails.
                 foreach (var host in FindHosts())
-                    if (Array.IndexOf(before, host) < 0) _ownedHosts.Add(host);
+                    if (Array.IndexOf(before, host) < 0 && !_ownedHosts.Contains(host)) _ownedHosts.Add(host);
             }
-            var hosts = FindHosts();
-            if (hosts.Length == 1) _host = hosts[0];
-            Assert.That(hosts.Length, Is.EqualTo(1));
             return coroutine;
         }
+
+        private static void ResetSession() => typeof(ApplicationTool).Assembly
+            .GetType("YLFramework.Core.Singleton.SingletonSessionState", true)
+            .GetMethod("ResetForNewSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
 
         private static CoroutineStarter[] FindHosts() => Object.FindObjectsByType<CoroutineStarter>(
             FindObjectsInactive.Include, FindObjectsSortMode.None);
 
         private static IEnumerator Tick(Action tick)
         {
+            while (true)
+            {
+                tick();
+                yield return null;
+            }
+        }
+
+        private static IEnumerator RunFirst(Action first, Action tick)
+        {
+            first();
             while (true)
             {
                 tick();

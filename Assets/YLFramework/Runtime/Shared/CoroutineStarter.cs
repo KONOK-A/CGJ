@@ -1,63 +1,131 @@
 using System.Collections;
-using System.Collections.Generic;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using System.Runtime.CompilerServices;
 using UnityEngine;
+using YLFramework.Core.Singleton;
 
 namespace YLFramework.Foundation
 {
-
     /// <summary>
-    /// 协程启动类(适用于非继承自MonoBehaviour的脚本启动协程)
+    /// 非 MonoBehaviour 调用者的协程启动支撑。仅主线程使用，独立 DDOL 宿主跨场景运行。
     /// </summary>
+    /// <remarks>
+    /// 外部销毁或失活宿主不会自动恢复旧工作。停止协程不代表业务操作完成取消或资源释放，
+    /// 也不保证 Unity 在原生停止路径执行迭代器的 finally。
+    /// </remarks>
     public class CoroutineStarter : MonoBehaviour
     {
-       
         private static CoroutineStarter _instance;
+        private static ConditionalWeakTable<Coroutine, CoroutineStarter> _owners = new();
+        private object _session;
+        private bool _released;
 
+        static CoroutineStarter() => SingletonSessionState.RegisterSessionReset(ResetSession);
 
-        private static CoroutineStarter Instance 
+        private bool IsCurrent => !_released && ReferenceEquals(_instance, this) &&
+            ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
+        private void Awake() => DontDestroyOnLoad(gameObject);
+
+        /// <summary>
+        /// 启动跨场景协程。非 Play、退出或宿主不可运行时返回 null；正常启动保持 Unity 的同步首步行为。
+        /// </summary>
+        /// <remarks>返回 null 表示没有可用句柄，不保证迭代器从未执行；同步执行可能已完成或使宿主失效。</remarks>
+        public static Coroutine Start(IEnumerator enumerator)
         {
-            get 
-            { 
-                if (!_instance && ApplicationTool.isPlaying)
-                {  
-                    GameObject obj = new GameObject("YLFramework.Foundation.CoroutineStarter");
-                    _instance = obj.AddComponent<CoroutineStarter>();
+            if (!SingletonSessionState.CanRunExecution) return null;
+            var host = _instance;
+            var created = !host;
+            if (created) host = CreateHost();
+            if (!host.IsCurrent || !host.gameObject.activeInHierarchy) return null;
+            try
+            {
+                var coroutine = host.StartCoroutine(enumerator);
+                // StartCoroutine 返回前会推进用户代码；只向捕获的原 owner 提交，不能收养到重入后的新宿主。
+                if (!host || !host.IsCurrent || !host.gameObject.activeInHierarchy ||
+                    !SingletonSessionState.CanRunExecution)
+                {
+                    if (host && coroutine != null) host.StopCoroutine(coroutine);
+                    return null;
                 }
-
-                return _instance;
+                if (coroutine != null) _owners.Add(coroutine, host);
+                return coroutine;
+            }
+            catch
+            {
+                if (created && host)
+                {
+                    host.ReleaseOwner();
+                    Destroy(host.gameObject);
+                }
+                throw;
             }
         }
 
-        void Awake() 
-        { 
-            DontDestroyOnLoad(gameObject); 
-        }
-
         /// <summary>
-        /// 启动协程（适用于在非继承自MonoBehaviour的脚本中启动协程）,且通过该方法启动的协程不会因为切换场景而停止
+        /// 幂等停止静态 Start 返回的协程，仅路由到有效的原宿主；无记录、旧会话或已销毁句柄为空操作。
         /// </summary>
-        /// <param name="enumerator"></param>
-        public static Coroutine Start(IEnumerator enumerator) 
-        { 
-            if (!Instance) return null; 
-            return Instance.StartCoroutine(enumerator);
-        }
-
-        /// <summary>
-        /// 停止由CoroutineStarter启动的协程 
-        /// </summary>
-        /// <param name="coroutine"></param>
-        public static void Stop(Coroutine coroutine) 
+        /// <remarks>不创建、查找或借用替代宿主；不停止其他 MonoBehaviour 或实例 StartCoroutine 拥有的工作。</remarks>
+        public static void Stop(Coroutine coroutine)
         {
-            if (coroutine == null) return;
-
-            if (!Instance) return;
-
-            Instance.StopCoroutine(coroutine);
+            if (coroutine == null || !_owners.TryGetValue(coroutine, out var host)) return;
+            _owners.Remove(coroutine);
+            if (host && host.IsCurrent) host.StopCoroutine(coroutine);
         }
-    }
 
+        private static CoroutineStarter CreateHost()
+        {
+            GameObject obj = null;
+            CoroutineStarter host = null;
+            try
+            {
+                obj = new GameObject("YLFramework.Foundation.CoroutineStarter");
+                obj.SetActive(false);
+                host = obj.AddComponent<CoroutineStarter>();
+                host._session = SingletonSessionState.ExecutionSession;
+                DontDestroyOnLoad(obj);
+                _instance = host;
+                obj.SetActive(true);
+                return host;
+            }
+            catch
+            {
+                if (host) host.ReleaseOwner();
+                if (obj) Destroy(obj);
+                throw;
+            }
+        }
+
+        private void ReleaseOwner()
+        {
+            if (_released) return;
+            _released = true;
+            if (ReferenceEquals(_instance, this))
+            {
+                _instance = null;
+                _owners = new ConditionalWeakTable<Coroutine, CoroutineStarter>();
+            }
+            if (this) StopAllCoroutines();
+        }
+
+        private static void ResetSession()
+        {
+            var old = _instance;
+            _instance = null;
+            _owners = new ConditionalWeakTable<Coroutine, CoroutineStarter>();
+            if (!old) return;
+            old.ReleaseOwner();
+            old.enabled = false;
+            Destroy(old.gameObject);
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (!IsCurrent) return;
+            SingletonSessionState.StopExecution();
+            ReleaseOwner();
+            enabled = false;
+            Destroy(gameObject);
+        }
+
+        private void OnDestroy() => ReleaseOwner();
+    }
 }
