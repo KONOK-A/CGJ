@@ -137,14 +137,18 @@ namespace YLFramework.Actions
         }
 
         /// <summary>全局宿主的 Update 通知，订阅后应按调用方生命周期解绑。</summary>
+        /// <remarks>自动消息复用 Foundation 公共相位，仅有效启用宿主接收；事件内部保持 fail-fast，不承诺与动作执行器的先后顺序。</remarks>
         public static EasyEvent OnUpdate => ActionGlobalHost.Instance.OnUpdateEvent;
         /// <summary>全局宿主的 FixedUpdate 通知。</summary>
+        /// <remarks>复用公共 FixedUpdate 相位，宿主停用时暂停自动通知。</remarks>
         public static EasyEvent OnFixedUpdate => ActionGlobalHost.Instance.OnFixedUpdateEvent;
         /// <summary>全局宿主的 LateUpdate 通知。</summary>
+        /// <remarks>复用公共 LateUpdate 相位，Shutdown 只结束 Action 自己的消息及桥接订阅。</remarks>
         public static EasyEvent OnLateUpdate => ActionGlobalHost.Instance.OnLateUpdateEvent;
         /// <summary>全局宿主的 OnGUI 通知，同帧可能触发多次。</summary>
         public static EasyEvent OnGUI => ActionGlobalHost.Instance.OnGUIEvent;
         /// <summary>应用退出时的通知，不等同于显式 Shutdown。</summary>
+        /// <remarks>通知前关闭会话创建门禁；监听中 Shutdown 后不能重建宿主，应提前保存需要注销的句柄。</remarks>
         public static EasyEvent OnApplicationQuit => ActionGlobalHost.Instance.OnApplicationQuitEvent;
         /// <summary>应用暂停状态变化通知，参数为当前是否暂停。</summary>
         public static EasyEvent<bool> OnApplicationPause => ActionGlobalHost.Instance.OnApplicationPauseEvent;

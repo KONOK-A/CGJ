@@ -113,6 +113,11 @@ private void OnDisable() => mBackground.Cancel();
 ## 生命周期与资源
 
 - `Initialize()` 幂等懒初始化；`Start` 或全局宿主访问会自动调用。`Shutdown()` 取消模块管理的动作、释放全局宿主与事件；Session reset 处理关闭 Domain Reload 的残留。
+- 全局 `OnUpdate` / `OnFixedUpdate` / `OnLateUpdate` 的自动通知复用 `YLFramework.Foundation.UpdateManager`。每个初始化成功且启用的全局宿主持有三个精确订阅，组件 disabled 或对象 inactive 时断开，恢复后重新连接；借用 inactive 宿主不会被自动激活。连接轮次与执行会话检查拒绝退订后仍留在公共快照中的旧回调。
+- 七个属性继续返回模块自有 `EasyEvent` / `EasyEvent<bool>`；手动 Trigger、UnRegisterAll、Dispose 及内部 fail-fast 语义保持。Action 监听抛异常会停止该消息的后续监听，公共源仍继续其他公共消费者并报告异常；清理 Action 消息或 Shutdown 不清理公共源的其他订阅。
+- 初始化补丁中取得宿主不会提前连接，成功提交后刷新已有宿主；初始化失败期间不自动广播。本次不扩展为完整的补丁事务回滚。Shutdown/重建终结旧 owned 消息代次，旧 token 不进入新宿主。
+- GUI/Focus/Pause/Quit 与 Action 协程仍由全局宿主处理；Quit 通知前设置共享会话退出屏障，监听中 Shutdown 后无法重建宿主或启动 Foundation 协程。需要注销的事件或句柄应提前保存，不在退出后重新访问创建式属性。
+- 对象执行器与延迟回收驱动仍独立推进；全局消息、执行器和回收之间不保证执行全序。公共宿主被外部销毁或停用时不自动恢复既有工作；共享更新源不构成性能提升结论。
 - 对象执行器、当前场景宿主、跨场景全局宿主保留独立生命周期；不能用 TimerScope 清理 Action，也不将 Action Delay 改成 Timer 包装。
 - `ActionPool<T>` 无缓存数量上限，组合 YL 池并以 LIFO 复用；领域回收队列、回收标记与租约由 Action 管理。同一动作不能同时交给两个执行器。
 - [`ScreenTransitionCanvas.prefab`](../../Runtime/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab) 随模块归位，Resources key 为 `ActionKit/ScreenTransitionCanvas`；菜单 `YLFramework/Action/创建屏幕过渡资源` 创建该资源。不新增 YL Resource / XFAB Loader。

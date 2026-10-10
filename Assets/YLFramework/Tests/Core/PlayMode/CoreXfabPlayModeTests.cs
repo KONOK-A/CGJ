@@ -26,6 +26,7 @@ namespace YLFramework.Core.Tests
         private readonly List<Object> ownedAssets = new List<Object>();
         private readonly List<Scene> ownedSceneInstances = new List<Scene>();
         private CoreClassPoolScope classPool;
+        private CoreUpdateHostScope updateHosts;
         private readonly HashSet<int> prefabKeys = new HashSet<int>();
         private readonly HashSet<int> previousEventSystems = new HashSet<int>();
         private readonly Dictionary<YLFramework.Core.UIType, Canvas> ownedCanvases =
@@ -58,6 +59,7 @@ namespace YLFramework.Core.Tests
             ownedAssets.Clear();
             ownedSceneInstances.Clear();
             classPool = new CoreClassPoolScope();
+            updateHosts = new CoreUpdateHostScope();
             prefabKeys.Clear();
             previousEventSystems.Clear();
             ownedCanvases.Clear();
@@ -150,6 +152,7 @@ namespace YLFramework.Core.Tests
                 foreach (int key in prefabKeys) pools.Remove(key);
             });
             Attempt(() => classPool.Restore(new Module[] { module }));
+            Attempt(updateHosts.ReleaseOwnedIdleHosts);
             foreach (var obj in ownedObjects) if (obj) Attempt(() => Object.Destroy(obj));
             foreach (var asset in ownedAssets) if (asset) Attempt(() => AssetBundleManager.UnloadAsset(asset));
 
@@ -1973,7 +1976,7 @@ namespace YLFramework.Core.Tests
             var type = typeof(YLFramework.Core.PanelManager);
             SceneManager.sceneLoaded -= (UnityEngine.Events.UnityAction<Scene, LoadSceneMode>)Delegate.CreateDelegate(
                 typeof(UnityEngine.Events.UnityAction<Scene, LoadSceneMode>), type.GetMethod("OnSceneLoaded", StaticPrivate));
-            // Instance never registers LateUpdate; this fixture never toggles MultiPanelListener.
+            // 最后一个 Panel 的必要退出已释放该 manager 自己的 Late token；不清公共宿主。
             ResetNewSingleton(type);
         }
 

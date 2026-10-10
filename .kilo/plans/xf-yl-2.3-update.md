@@ -1,6 +1,6 @@
 # XF × YL 2.3 Update：融合研究与技术设计
 
-**状态：2.3 Update 总体设计已批准，待分批实施。**
+**状态：2.3 Update 技术 COMPLETE。A 已验收并提交 `d9f1b6c`，B 已验收并提交 `88cd76f`；C 已实施并通过最终技术门禁，待用户验收和 Git 收口。2.4 Timer 未启动。**
 
 本方案的总体设计已获批准，批准不等同于批次实施、Git 写入或下一专题授权。统一公共更新订阅与执行安全，保留领域调度；不是把所有 Unity 消息、任务或 MonoBehaviour 合成一个系统。
 
@@ -202,8 +202,44 @@ Core Timer、YL Timing 和 YL Audio 继续各自 Mono Update；职责边界、�
 
 ### 实施与验证状态
 
-- 2.3-A、B、C 均尚未实施；总体设计批准不构成功能完成或技术验收。
-- 研究及本次审批记录更新均未运行 Unity 编译、测试、Play、构建或性能验证；第 8 节仍是未来验收方向，不是通过结果。
-- 本次仅增量更新本计划的状态及审批记录，未修改功能代码、测试、资源、程序集、项目配置或原 Package，未创建重复文档，未执行 Git 操作。
+- 2026-10-10，用户独立授权实施 A。实际基线为 `fusion/2.3-update`、HEAD `463feb5`，实施开始时工作区干净。本批变更尚未提交，未执行 Commit、Push、Merge、Reset、Clean 或切换分支。
+- A：正式公共类型为 `YLFramework.Foundation.UpdateManager`，实现从 Core 移入 `Runtime/Shared/`，三个私有 `EventChannel` 复用既有 Events 注册、精确 token、COW 快照、owner 终结及 `TriggerAll`；退出 Core 同职责类型及禁止编译的三个旧静态字段。仍提供无参 Add/Remove 三相位便利 API，Add 现返回 `IUnRegister`，允许重复注册；显式旧 namespace/程序集、返回 void 的方法组绑定需要调用方迁移。
+- 公共宿主仅有效 Play 注册惰性创建，DDOL、相位内注册顺序、主线程使用；null/非 Play/退出注册返回共享空句柄，Remove/token 注销非创建。空闲宿主保留到会话结束；异常逐 target 继续并汇总报告，失败项不自动删除，Events 默认 fail-fast 未改。普通取消保留当前快照，销毁/reset 终结 owner 并截断旧快照；外部销毁结束旧订阅，后续新注册不恢复旧领域工作。
+- 基于既有 `SingletonSessionState` 增加窄执行 gate 与 session 身份，Editor ExitingPlayMode 提前关闭，Application.quitting/当前宿主 Quit 拒绝重建；进入新会话终结、停用并销毁旧公共宿主。旧宿主迟到的 Destroy/Quit 不清新实例、不关闭新会话。没有公共 Tick、ClearAll、Shutdown 或新通用宿主层。
+- ViewManager 持有扫描 token/轮次，继续扫描从未激活的失效 View；reset 只清扫描/sceneUnloaded/bookkeeping，不主动 Close 业务或清 Module 索引。PanelManager 在默认 true 且队列有工作时连接 Late，队列空或关闭开关退订；旧轮次回调非创建且不能维护新实例，失活兜底复用直接 ReleaseQueue，排序和直接 Activate/Deactivate/Release 保持。AudioController 精确持有自身 token，Stop 保持持续驱动，Source 失效/Remove 先终结更新责任，释放钩子失败仍撤销订阅并释放自有 Source；保留原 unscaled 时间、暂停、循环及借用 Source 所有权。
+- 迁移保留 Update 脚本 GUID `9f463ae1c4e1b464691b55eff7c2ce36` 及原 `.meta`；定向检索没有既有场景、Prefab、asset 或旧完整类型字符串绑定。Foundation/Core/Runtime asmdef 和依赖方向未变，Shared 已有 XF MIT 完整许可证覆盖迁入实现。游戏业务、持久场景/资源、Packages、ProjectSettings 和原 XF Package 未修改。
+- Unity `2022.3.62f3c1` 实际导入/编译无错误；EditMode **15/15**（Update 边界 2、既有 Foundation 边界 5、Core 身份/依赖 8）通过。精确筛选的同一 Play 会话 **19/19** 通过：公共 Update 契约 6、Core View/Panel/Module/Session/回滚代表用例 10、Core Audio 更新/释放 2、既有 Audio prefs/Source 所有权 1；没有运行完整历史套件。测试工具 TotalTests 字段包含未选中的根树用例，以上数量依据真实执行结果与通过数。
+- 已先运行回归确认原实现的非创建操作、token、Panel 默认 Late 缺口及 Audio 释放异常问题，再实施修复。独立审查发现 Core→Foundation 同一 Play 会话的测试宿主残留问题，已真实复现并修复：测试仅清本 fixture 新建且三个相位均无监听的宿主，失败的 Foundation SetUp 不接管已有宿主；组合运行及只读复查通过。新增脚本的 `.meta` 由 Unity 导入生成。
+- 本批验证的会话 reset/旧消息/退出门禁为定向模拟，加上真实 Unity 三相位和场景卸载；未将 SendMessage(Quit) 描述为真实退出验收。未修改 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合验收仍归 C；没有 Player/IL2CPP 构建、完整游戏或性能验证。本轮不声明宿主损坏自愈、全框架无 Scene Reload 恢复或跨领域全序。
+- A 已达到本批技术完成标准，等待用户验收与 Git 收口。B 的窄 gate/session 前置能力已就绪，但 CoroutineStarter 尚未接入，旧 Coroutine handle 所有权/Stop 和重入安全仍归 B；Action 三相位仍保留原自动消息，桥接及专题最终收口归 C。Timer、YL Timing/Audio 驱动与既已登记的外围缺陷保持原范围。
 
-本次更新完成后停止，等待 2.3-A 的独立授权，不自动进入实施。
+### 2.3-B 实施与验证
+
+- 2026-10-10，用户独立授权实施 B。实际基线为 `fusion/2.3-update`、HEAD `d9f1b6c`，开始时工作区干净，A 已由用户验收并提交。本批仅修改 Shared `CoroutineStarter.cs`、既有 `CoroutineStarterTests.cs` 与本计划；未新增文件或改动 `.meta`、asmdef、公共 Update/Events/Pool、Core/Action 消费者、原 XF Package、游戏业务、场景/资源、Packages 或 ProjectSettings。
+- 保留 `Start(IEnumerator) -> Coroutine` / `Stop(Coroutine)`、Unity 同步首步与 yield 行为、独立命名 DDOL 宿主和正常跨场景运行。复用 A 的 `SingletonSessionState.CanRunExecution`、`ExecutionSession` 及 reset 注册，不引入新的全局管理器、迭代器状态机、公开 StopAll 或异步取消系统。
+- 句柄归属使用 `ConditionalWeakTable<Coroutine, CoroutineStarter>`：弱键不强保留全部已完成句柄，原宿主自身保存不可变的会话身份和释放标记，无需额外 owner 记录类型。Stop 先移除登记再调用有效原宿主，重复 Stop、null、无记录/外部句柄、旧宿主和旧会话句柄均非创建式；不把裸句柄交给当前替代宿主。自然完成后保留的句柄仍可安全 Stop，不影响同宿主新工作。
+- Start 捕获实际宿主，Unity 返回前允许用户同步重入；返回后复核宿主存活、当前 owner/会话、GameObject 活跃状态与门禁，只登记有效原宿主的句柄。同步 reset、Quit、销毁后新建或失活时返回 null，必要停止只访问捕获的原宿主。null 表示没有可用句柄，不保证迭代器从未推进或没有业务副作用。参数错误保持 Unity 原异常；启动失败只回滚本次新建的原宿主，不终结已有宿主的其他工作。
+- 宿主销毁、当前宿主 Quit 和会话 reset 先撤销 owner/登记，再停止自身全部协程；reset/Quit 额外禁用并销毁自有旧对象。当前宿主 Quit 先关闭共享门禁，旧宿主迟到的 Destroy/Quit 不清新实例/新归属表、不关闭新会话。无宿主 Stop 不创建，既有失活宿主不被替换；损坏后的新 Start 不恢复旧任务。Starter 清理与公共 Update 的订阅所有权仍独立。
+- 先对原实现执行定向回归，确认 Stop(old) 创建替代宿主、未登记句柄被静态 Stop 停止、reset 不停旧协程及同步 reset 后返回旧句柄等缺口，再修复。Unity `2022.3.62f3c1` 实际导入/编译成功；最终 Starter PlayMode **15/15** 通过，包含既有 6 项及 9 项关键生命周期用例。Foundation EditMode 边界 **5/5**、既有公共 Update reset/Quit 代表用例 **1/1**、直接消费者 Module 同步重入/启动失败与 View 异步加载/迟到 producer 取消代表用例 **4/4** 通过。通过的定向用例合计 EditMode 5 项、PlayMode 20 项；工具 TotalTests 包含未选择树节点，不作为运行数。独立只读审查无阻塞发现，`git diff --check` 无错误。
+- Core Module/View 对 `null && !request.isDone` 的既有处理继续兼容，不修改其业务所有权；Timer/HTTP 忽略启动返回值、Audio maintenance 缓存旧句柄及已登记的外围终态/恢复问题仍由对应专题负责。保留 `CustomAsyncOperation.Abort` 不取消 producer 的既有测试，协程 Stop 不代表业务取消、UnityWebRequest Abort/Dispose、资源释放或 iterator finally 必然执行。
+- 本批 reset/退出门禁采用定向反射 reset 和 SendMessage(Quit)，协程推进、场景卸载和生命周期清理为实际 Unity PlayMode 验证；不将模拟 Quit 描述为真实退出验收。未改变 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合收口仍归 C；未进行 Player/IL2CPP、完整游戏、性能或专门 GC 回收验证。
+- B 已达到本批技术完成标准，A 的会话前置与 B 的协程安全支撑具备进入 C 的技术条件；C 实施仍须用户独立授权。当前变更未提交，未执行 Commit、Push、Merge、Reset、Clean 或切换分支。
+
+上述 A/B 记录保留为各批当时的实施证据；其验收与 Git 当前状态以上方状态及下节为准。
+
+### 2.3-C 实施与专题最终技术验收
+
+- 2026-10-10，用户正式授权 C 及整个 Update 专题技术收口。实际基线 `fusion/2.3-update`、HEAD `88cd76f`，工作区干净；A/B 已验收及 Git 收口。本轮未执行 Commit、Push、Merge、Reset、Clean 或分支切换，原 XF Package 严格只读。
+- ActionGlobalHost 退出自身 Update/FixedUpdate/LateUpdate 自动消息方法，使用 Foundation UpdateManager 三份精确 token。OnEnable/OnDisable、初始化成功提交及 Release 负责连接/断开；捕获连接轮次，检查 Unity 存活、当前宿主、有效启用、模块状态、执行门禁及会话身份。先失效轮次再退订，普通公共快照中的旧桥接不能进入恢复/重建后的生命周期。
+- 保留七个 owned EasyEvent 的上下文、手动 Trigger/清理/Dispose 与内部 fail-fast；公共 TriggerAll 继续其他消费者并报告 Action 异常。Shutdown 只注销 Action 自有三个身份，ResetOwner 截断旧内部快照；不调用公共清理或停止其他领域。初始化补丁重入取得宿主时不提前连接，成功后非创建式刷新，失败时不自动通知；不扩成完整 Action 初始化事务重写。
+- GUI/Focus/Pause/Quit、Action 自有协程、组合执行、任务租约/暂停/取消、对象/场景/全局范围及延迟回收均保留。当前宿主 Quit 先设置自己的退出屏障与共享会话标志再通知监听；旧宿主 Quit/Destroy 不关闭新会话。没有新增跨领域全序、监听数量适配层、统一任务调度或损坏自愈。
+- 最终真实 Play 门禁发现 A 的窄阻断：SubsystemRegistration 重新安装 Editor 监听后，较早注册的 ExitingPlayMode 监听可能先执行；当时 Application.isPlaying 仍为 true，Starter 仍能同步启动。连续两轮真实退出均复现。仅在 SingletonSessionState.CanRunExecution 的 UNITY_EDITOR 分支补充 isPlayingOrWillChangePlaymode 检查，退出请求后即拒绝，与 Editor 回调注册顺序无关；Player 表达式未改变，未重构 A/B 实现。
+- Unity `2022.3.62f3c1` 实际导入/编译无错误，StandaloneWindows64 / Mono。定向 EditMode **13/13**（既有 Action 生命周期/重入/组合 Shutdown/回收）；PlayMode **45/45**：全局消息 **7**、Action 生命周期 **16**、公共 Update **6**、CoroutineStarter **15**、原游戏流程 **1**。真实根树发现数不是执行数；工具的空筛选或传输失败未记为通过，最终读取了以上实际结果。没有机械重跑完整 Pool、Events 或 Core；A/B 未受影响的边界及直接 Core 消费者历史结果继续有效。
+- 新回归先确认原实现缺少共享源、初始化失败仍自动广播、Quit 通知内可重建等缺口，再实施并通过。只读审查发现的 fixture 所有权问题已修复：执行 Shutdown/reset 前拒绝已有 Action/Public Update/Starter owner；初始化补丁测试允许既有公共宿主；只清 fixture 自建且三个 channel 都无监听的公共宿主。最终独立静态复核无阻塞发现，diff 检查无错误。
+- **关闭 Domain Reload 的连续两轮真实 Play 最终通过**，保留正常 Scene Reload。在临时空场景使用内存诊断，第一轮公共 token、owned event、Starter Coroutine 和 ActionHandle 持续保存至第二轮，未在退出前主动注销以代替生命周期验收。两轮 Update/Action 数分别 **34379/34379**、**10727/10727**；Fixed **1050/339**、Late **34379/10727**、Starter 推进 **34381/10729**。三种宿主各一份，执行会话身份轮换；旧 token/事件/协程/命名任务句柄不影响新工作，旧回调零次进入第二轮。两个真实 ExitingPlayMode 和 OnApplicationQuit 各收到一次，均拒绝新启动/重建；不是 SendMessage(Quit) 验收。两轮总计失败项零。
+- 原始 Editor 设置为 enterPlayModeOptionsEnabled=false、保存 options=3；临时改为 enabled=true/options=DisableDomainReload（Scene Reload 保留），结束后恢复原 enabled=false/options=3。原 `Assets/Scenes/Main.unity`、活动场景与未脏状态恢复，无临时场景资产或新测试设施。随后现有 `YLAudioGameFlowPlayModeTests.MainStartSettingsGameExitAndReentryUseFrameworkAudio` **1/1**：真实 Main/XFAB→原 XF MainModule/XFFSM、菜单/设置/游戏/返回/再入/结束与现有 YL 音频通过，fixture 恢复音频偏好、timeScale 和 targetFrameRate。
+- A～C 形成单一 `YLFramework.Foundation.UpdateManager` 公共三相位实现，复用 Events channel；Core View/Panel/Audio 消费精确 token，Action 保留 owned 领域消息。Core 重复 UpdateManager、旧静态字段、消费者先 Remove 再 Add 模式以及 Action 重复三相位转发已退出。Starter 保留独立 DDOL 与弱键原 owner 路由；Core Timer、YL Timing/Audio、Action 执行器/回收等独立驱动保留，因为它们拥有时钟、任务或资源语义。
+- 本轮无新公共 API、程序集、资源迁移或 GUID 变化，Runtime/Core→Foundation 方向保持。A 的 UpdateManager 类型归属/返回 token 兼容变化仍适用；C 的自动消息连接需要初始化成功且宿主有效启用，Quit 回调不能关闭后重建。已同步 Action API XML 和既有模块说明；Foundation 不向 Core/Runtime 反向依赖，原 XF 的同名驱动继续供原游戏使用。
+- 未进行新 Player/IL2CPP 构建、完整原游戏人工流程、同时关闭 Scene Reload 的全面恢复或性能测量。当前 Windows64/Mono 未新增反射/泛型/AOT 路径或 Player 依赖；结合既有阶段 1 Player 证据与本轮 Editor 代表性非干扰，不要求无差别重建。原 Logger/MCP 过渡日志、依赖声明/实际解析差异、资源/producer 物理取消与释放、宿主损坏恢复保持既有归属；不修原包或把历史限制当已解决。Core Timer 调度/终态与 YL Timing 融合归 2.4，资源和完整 Audio 归对应专题。
+
+**结论：2.3 Update 已满足技术 COMPLETE 条件；具备进入 2.4 Timer 专项研究的技术前置条件。C 尚待用户验收与 Git 收口，完成后停止，不自动提交或启动 2.4。**

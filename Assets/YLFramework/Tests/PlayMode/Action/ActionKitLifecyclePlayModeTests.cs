@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using YLFramework.Events;
+using YLFramework.Foundation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -17,11 +18,13 @@ namespace YLFramework.Tests.Actions
         private GameObject mUserRoot;
         private TaskCompletionSource<bool> mPending;
         private bool mOwnActionSession;
+        private UpdateManager mPreviousUpdateHost;
 
         [SetUp]
         public void SetUp()
         {
             mOwnActionSession = false;
+            mPreviousUpdateHost = Object.FindObjectOfType<UpdateManager>(true);
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
             mPreviousPatch = Kit.OnRegisterPatch;
             Assert.That(canOwnActionSession, Is.True,
@@ -46,6 +49,35 @@ namespace YLFramework.Tests.Actions
             }
             yield return null;
             yield return null;
+            ActionFixtureSession.ReleaseIdleUpdateHost(mPreviousUpdateHost);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator InitializationPatchHostConnectsOnlyAfterSuccessfulCommit()
+        {
+            var calls = 0;
+            ActionGlobalHost host = null;
+            Kit.OnRegisterPatch = _ =>
+            {
+                Kit.OnUpdate.Register(() => calls++);
+                host = ActionGlobalHost.Instance;
+                Assert.That(Object.FindObjectOfType<UpdateManager>(true), Is.SameAs(mPreviousUpdateHost),
+                    "配置回调中取得的宿主尚未提交，不应连接公共源。");
+                throw new InvalidOperationException("expected patch failure");
+            };
+            Assert.Throws<InvalidOperationException>(Kit.Initialize);
+            Assert.That(Kit.Initialized, Is.False);
+            yield return null;
+            yield return null;
+            Assert.That(calls, Is.Zero, "初始化失败期间不得自动广播。");
+            Kit.OnRegisterPatch = _ => { };
+            Kit.Initialize();
+            Assert.That(ActionGlobalHost.Instance, Is.SameAs(host));
+            yield return null;
+            var before = calls;
+            yield return null;
+            Assert.That(calls, Is.EqualTo(before + 1));
         }
 
         [UnityTest]
@@ -55,9 +87,12 @@ namespace YLFramework.Tests.Actions
             mUserRoot.SetActive(false);
             var host = mUserRoot.AddComponent<ActionGlobalHost>();
             Assert.That(ActionGlobalHost.Instance, Is.SameAs(host));
-            mUserRoot.SetActive(true);
             var calls = 0;
             Kit.OnUpdate.Register(() => calls++);
+            yield return null;
+            yield return null;
+            Assert.That(calls, Is.Zero);
+            mUserRoot.SetActive(true);
             yield return null;
             var before = calls;
             yield return null;
