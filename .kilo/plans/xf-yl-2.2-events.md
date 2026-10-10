@@ -1,8 +1,8 @@
 # XF × YL 2.2 Events 事件系统融合研究与技术设计
 
-**状态：整体设计已批准；2.2-A 实施及专项验证完成，待用户验收与 Git 收口（2026-10-10：Or 未完成连接轮的失败归属已按用户批准契约原子回滚并验证）。不进入 B～E，不执行 Git 收口。当前实施证据见第 10 节。**
+**状态：整体设计已批准；2.2-A 已技术验收并提交（核心 `0c11270`，文档状态补充 `c9cc2a5`）。2026-10-10 授权的 2.2-B 已实施并完成定向验证，待用户验收与 Git 收口；具备 C 的技术前置条件，但不自动进入 C～E、不执行 Git 收口。A/B 证据分别见第 10/11 节。**
 
-本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10 节增量记录本轮 A 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。后续批次及 Git 操作未授权，不自动启动。
+本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10/11 节增量记录 A/B 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。C～E 及 Git 操作未授权，不自动启动。
 
 ## 1. 基线与边界
 
@@ -259,7 +259,7 @@ facade的系统Dispose不是owner-scope清理，业务不要用来替代token；
 
 - 已具备：双方真实能力对照、可靠源码问题分类、唯一机制/领域适配边界、依赖方向、owner与token契约、API迁移、分批与最小验证方向。
 - 已确认（2026-10-09）：总体设计及第8节推荐方向；确认范围为架构方向、行为契约与阶段边界，不等同于批次实施授权，也不要求逐条照搬私有结构、算法或候选方法名。
-- A 实施及定向验证已于本轮单独授权，实际结果见第 10 节；2026-10-10 用户批准 Or 未完成连接轮按“同轮临时注册原子回滚、旧轮不影响新轮”方向收口。B～E 与 Git 收口仍待单独授权。重大行为、所有权或范围变化先说明并等待确认。
+- A 实施及定向验证单独授权，实际结果见第 10 节；2026-10-10 用户批准 Or 未完成连接轮按“同轮临时注册原子回滚、旧轮不影响新轮”方向收口。A 随后已技术验收并提交；B 于 2026-10-10 正式授权，实际结果见第 11 节。C～E 与 Git 收口仍待单独授权。重大行为、所有权或范围变化先说明并等待确认。
 - 实施时需再查：具体移动类型的资产/反射、Global facade真正键域归属及直接asmdef引用；泛型无参观察已确认在同一typed序列，按第4节保持。发现真实外部持久化依赖时按该点暂停迁移，不猜测兼容方案。
 - 重要兼容变化保留：owner reset/回收/Dispose（含 Or.Dispose）截断旧在途快照、Global 旧实例不得摘除新 Instance 入口、键签名校验与 no-op 细节、批量清理异常汇总、历史 API 与 XF 命名退出等，均为有意的行为/API 变化，须按第7节在相应批次验收并在必要时同步 XML 文档。
 - 未验证（截至设计审议）：Unity编译、运行复现、所有平台/AOT、性能、实际无Domain Reload切换；历史Pool/Core验收不构成新Events通过证明。设计审议本身未执行编译、测试或运行验证；A 的实际编译与定向验证结果见第 10 节。
@@ -334,4 +334,56 @@ facade的系统Dispose不是owner-scope清理，业务不要用来替代token；
 
 该契约与本方案其他已批准行为无冲突：普通取消仍保持快照，Once 与 Dispose 语义未变，未扩大为 OrEvent 或 Events 体系的其他重设计。
 
-**当前结论：A 实施及专项验证完成，待用户验收与 Git 收口。** 共享 channel/bus 与唯一 Or 已具备 B/C 接入所需契约，B 的技术前置（共享机制落地并验证、旧实现暂留原位待迁）已满足；B～E 实施、Git 收口及 PlayMode/Player/平台验证仍未授权或未执行。本轮保留未提交差异并停在 A，不进入 B～E。
+**A 当轮结论（历史）：A 实施及专项验证完成，待用户验收与 Git 收口。** 共享 channel/bus 与唯一 Or 已具备 B/C 接入所需契约；A 后续验收/提交及 B 的新授权与实际结果见本文件当前状态和第 11 节，不以本段历史阶段边界覆盖后续证据。
+
+## 11. 2.2-B YL 消费者融合与定向验证
+
+### 11.1 基线和实际范围
+
+- 分支 `fusion/2.2-events`，HEAD `c9cc2a5`，共享基础核心提交 `0c11270`；开始时无 A 未提交文档。已有 NuGet/MCP 三项、`Packages/manifest.json` / `packages-lock.json`、`ProjectSettings/ProjectSettings.asset` 脏改动全部保护，不纳入 B 功能差异，不手改这些文件。
+- 使用当前 Unity `2022.3.62f3c1` Editor；只实施 B，未修改原 XF Package、游戏业务/场景/资源、Core 源码或 asmdef，没有新公共内核、registry 或 Or 算法。没有 Git 写操作。
+
+### 11.2 实际融合与兼容契约
+
+| 范围 | 实现与退出机制 |
+|---|---|
+| `EasyEvent` 0～3 参数 | 直接继承对应共享 `EventChannel`，保留池接口、Allocate/Recycle/RecycleToCache/IsRecycled、Register/Once/立即调用/类型擦除观察/计数。删除四套 `_eventAction`、委托注册/取消及 Once 包装算法；普通 `UnRegisterAll` 转 `ClearListeners`，OnAllocate/OnRecycle 转 `ResetOwner` |
+| 池配置及 owned event | `EasyEventPool` 容量 50、无参预热 10/泛型预热 1、Safe→ObjectPool 链不改。Binding 内部事件保持 readonly 同实例，不归事件池、IsRecycled=false；旧 token 和旧快照不得触及新租期 |
+| String/Type/Enum/IntID facade | 各持独立 readonly `EventBus`，保留历史上下文和 Dispose 范围，不默认互通或共享 Default；String 0～3 参数、Type 声明类型消息、Enum 的类型+完整值/object[]、IntID 的 ToInt32(null)/int+object[] 保持。删除自有字典/签名分发、Type 的 payload EasyEvents 容器，以及无引用的 `EventSystemInternal.cs` 和 meta |
+| Global 生命周期 | Dispose 永久幂等、只摘仍指向自身的 Singleton 入口；旧 Register/Send/OnSingletonInit 不得复活。各 facade 经既有 session reset 关闭自身旧 bus，即使 Singleton 先摘入口也不丢旧实例；独立 bus 和其他 facade 不受影响 |
+| `EasyEvents` | 保留事件定义类型容器、自定义 IEasyEvent、普通 Remove/Clear 只丢映射。ClearListeners 摘本轮映射、逐项调用接口清理并汇总异常，重入新增映射保留；全局 reset 另旋转标准 channel 代次，仍执行自定义接口清理，错误集中 LogException 不阻断其他 SessionResets |
+| `OrEvent` | 直接复用 A 唯一共享实现；无需再建适配算法，真实 EasyEvent source 及末监听断连通过 Runtime 回归 |
+| Binding | RegisterOnce 直转 owned event 的共享 Once，删除本地包装；OnRecycle 调 ResetOwner。值、Comparer、silent/force、立即先调用后注册、持久化、集合顺序/批量、MappedProperty 领域 Dispose 行为均保持 |
+| Action | 仅七个宿主 owned 消息事件在 OnHostRelease 旋转代次，跳过已经永久 Dispose 的 channel，避免旧消息继续通知和首项阻断剩余清理；执行租约、调度、暂停、协程及延迟回收算法不改 |
+| Audio | 没有 Audio 源码修改。实例设置通知自然复用共享机制；保留现有 settings/revision/session 守卫及设置关闭契约，不修改播放、Mixer、音源或资源管理 |
+
+重要兼容变化：owner 回收/reset、整键删除/UnRegisterAll、facade Dispose 终结旧在途快照；普通委托/token 退订与清监听仍保留快照。Global 空 callback 不建键，普通退订保留绑定签名，整键删除后才允许重绑；内部不再消耗 EasyEvent 池库存。EasyEvent 继承的 Dispose 是永久终结，不是归池，池租用仍以 Recycle 结束，调用方不得 Dispose 别人持有的 borrowed event。既有方法名/namespace 与脚本 GUID 保持，签名错误文本由共享 bus 提供，不承诺旧错误字符串完全一致。已有 Events 模块文档同步上述边界。
+
+### 11.3 实际验证及独立复核
+
+| 本轮定向验证 | 结果与代表契约 |
+|---|---|
+| Unity 导入/编译及实际加载程序集 | 最终 `scriptCompilationFailed=false`、`isCompiling=false`。Foundation 实际二进制仅 netstandard/Unity Core/Editor 引用，无 Runtime/Core/原 XF 反向引用；Runtime/Core 仍向下引用 Foundation，Core 不引用 Runtime。没有 asmdef 修改，新 Global 测试 meta 由 Unity 生成并查询到非空 GUID |
+| `EventsContractTests` | 最终 22/22 EditMode：原普通快照/fail-fast/立即调用/Or/取消契约、精确 A→B→A 身份、旧 token/池复用、Once 嵌套及异常、回收中再租截断、容器重入清理、全局标准和自定义清理 |
+| `GlobalEventsContractTests` | 8/8 EditMode：四 facade 回调中 Dispose/重建、旧实例/旧 token 隔离、Singleton 先摘入口后的 reset、其他 facade/Default/独立 bus 隔离、String 签名/重绑及 fail-fast、Type 声明路由/缺失消息不构造、Enum 完整值/类型隔离、动态数组/Int 转换错误 |
+| `BindingContractTests` | 15/15 EditMode：原值/Comparer/立即通知/持久化回归，旧 token 与同委托新租期、Once 前序重入、owned reset 截断、集合操作→Count→Changed 和嵌套批量/空Clear、映射 Dispose 对旧源快照防护 |
+| Audio 方法筛选 | 8/8 EditMode：AudioMixer 的 ShutdownDisconnectsOldRoutingSubscriptionsAndOldHandles（1）、ReentrantDefaultChangesUseLatestSettingsRatherThanStaleNotificationPayload（3）、ShutdownDuringApplyDoesNotRestoreReferencesInDisposedSettingsOrContinueIntoNewSession（2）、RoutingIsTransientPreservesSixSaveKeysAndDoesNotChangeGlobalComparer（1）；AudioCore 的 SettingsUseOriginalKeysAndDisconnectOldSubscriptionsAcrossRecreate（1） |
+| Action 方法筛选 | 3/3 EditMode：ACancelledPooledActionCanStartANewLeaseBeforeTheOldTaskIsRemoved（1）、ExecutorSelectsTheConfiguredDeltaAndRecyclesAfterCompletion（2）。5/5 PlayMode：新增 shutdown 中消息重建/已Dispose首项清理（2），既有 ShutdownReleasesGlobalHostEventsAndAllowsImmediateRestart、BorrowedInactiveGlobalHostKeepsItsGameObjectAndDoesNotDuplicateUpdates、ControllerPauseResumeAndDeinitDoNotTurnCancellationIntoCompletion（3） |
+| 当前 Core 隔离采样 | Unity 内存脚本向现有 Core EventManager 注册唯一 int key，YL IntID facade 同值注册后 Dispose，Core 精确回调仍执行 1 次；finally 只移除采样注册，不清 Core 全局。不等同于 C 已接入 |
+
+共 **56 个不同 EditMode + 5 个 PlayMode 用例最终通过，0 Failed/Skipped**。工具 Summary.TotalTests 是发现数量，不计为执行数量；一次全限定 class filter 未命中、一次 PlayMode 清理尚在进行的请求被拒绝，均不计入通过。A 共享 channel/bus/Or 源码未改，不机械重跑 A 基础套件；原 Events 中的直接 Or 消费者已运行。
+
+独立只读复核发现两项本批适配缺陷，均先补最小回归实测失败再修复：全局 reset 绕过自定义 IEasyEvent.UnRegisterAll（清理次数 0，1 failed）改为分别尝试标准 owner reset 与接口清理后 Events 22/22；Action 首消息被 Dispose 后 Shutdown 因 ResetOwner 抛 ODE 而跳过其他清理（1 failed）改为跳过已终结的标准 owned channel 后该 PlayMode 1/1。未削弱有效断言、未以吞异常制造通过。首次新增 Binding 测试直接引用 internal 空 token 造成 CS0122，改为从公开 channel 取得空 token 对比后实际编译及 Binding 15/15 通过。
+
+实际差异和新增测试/meta 已复查；`git diff --check` 无差异格式错误（有既有 CRLF 提示，不批量格式化）。最终 Editor 不在 Play/编译中，打开的 Main 场景 `dirty=false`；这些编译/测试/Editor 状态分别报告，不相互替代。
+
+池化取舍的补充测量（Editor Mono 计时，非 Player/IL2CPP、非精确分配计数）：稳定发布路径两种承载均 0 字节堆增长；EventBus 键查找+分发约 100ns/次，旧直查字典路径约 73ns/次，差值来自 EventKey 包装与 bus 参数校验，与池化无关。键建销（建键+注册+发送+删除）EventBus 约 650ns/次、池化字典路径约 549ns/次，池化每周期少一个事件实例与注册表对象的分配；两次独立循环（5 万/10 万）排序一致。WeakReference 证据：非池化实例删除键后可被 GC 回收，池化实例留在池中并被下一次 Allocate 复用。结论：非池化的收益不在分配/耗时（该指标池化略优），而在生命周期正确性、算法统一与即时可回收；池化收益限于键高频建销场景（每周期约百纳秒级），当前 Global 键生命周期稳定，无实测成本。Editor Mono 的 `GC.GetAllocatedBytesForCurrentThread` 恒为 0、`GC.GetTotalMemory(true)` 不随回收回落，故采用计时与保留证据，不补设性能门禁。
+
+### 11.4 完成标准与后续边界
+
+**B 技术完成标准已达到，具备进入 C 的技术前置条件，等待用户验收和 Git 收口；不自动进入 C。** YL 实例事件和四 Global 入口使用同一公共机制，保留独立领域入口/清理上下文，B 范围的旧注册/分发/Once 算法已退出。
+
+- C：Core EventManager 的旧 hash/Delegate 算法、XFEvent 与 View/Panel 整体接入仍未实施，不能据 B 声称整个 Events 专题只有这一套算法。
+- D：Unity EventListener 原生 payload、Scene/GameObject 生命周期完整适配与必要批量取消责任仍保留原范围；本轮只因 EasyEvent 自然继承共享机制而间接生效，不宣称 D 完成。
+- E：历史命名/最终 API、真实关闭 Domain Reload 两轮 Play 及专题跨模块收口仍待实施。定向私有 reset 调用不是实际无 Domain Reload 会话验证。
+- 未执行 Player/IL2CPP/AOT、性能测量、全游戏、全部 Pool/Core/Action/Audio 套件；没有自动进入 Update/Timer/Audio/Resource 专题，没有 Commit/Push/Merge/Reset/Clean/切换分支。

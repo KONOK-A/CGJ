@@ -6,9 +6,9 @@
 
 提供实例事件、独立事件总线、精确订阅句柄与轻量组合。共享纯机制位于 `YLFramework.Foundation.Runtime`；池化、历史全局入口和 Unity owner 适配仍由 Runtime/Core 持有，不强制所有通知进入全局上下文。
 
-当前处于 2.2-A 共享基础批次：`OrEvent` 和纯取消类型已使用 Foundation；旧 `EasyEvent` / 四个 Global 系统和 Core `EventManager` 分别等待 B/C 接入，不能将新机制契约套用到尚未迁移的旧算法。
+2.2-B 已将 `EasyEvent`、四个 Global 系统和 Binding 的实例通知接到 Foundation 共享机制。`OrEvent` 复用 A 已完成的唯一组合实现；Core `EventManager` 仍在 C 接入，不将新机制契约套用到尚未迁移的 Core 算法。
 
-Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接失败时整体回滚，明确断连后重建的轮次不受旧轮回滚影响；契约与验证见专项第 10.5 节。A 实施及专项验证已完成，待用户验收与 Git 收口。
+Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接失败时整体回滚，明确断连后重建的轮次不受旧轮回滚影响；契约与验证见专项第 10.5 节。B 的实际验证与验收状态见专项第 11 节。
 
 ## 位置
 
@@ -18,7 +18,7 @@ Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接�
   - `Global/`：四个全局事件系统
   - `Lifecycle/`：生命周期触发器与批量注销扩展
   - `Unity/`：`EventListener` 组件与便捷扩展
-  - `Internal/`：内部池与回收助手
+   - `Internal/`：EasyEvent 池化入口
 
 ## 主要功能
 
@@ -55,14 +55,16 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - `CustomUnRegister` 同实例执行中重入为空操作，成功后释放回调，失败可重试；`SingleUseUnRegister` 与值类型 `CallbackUnRegister` 的原有消费/复制/Strict 契约不变。
 - `OrEvent` 首 listener 才连接 source，末 listener 断开并可再注册重连；重复/追加 source 保留。连接失败回滚本次责任，旧 source 快照和迟到 token 不影响重连后的新轮；Dispose 永久终结并截断自身在途通知。source 描述保留到 Dispose，不是弱订阅。
 
-### 尚未迁移的 Runtime 入口
+### Runtime 入口
 
-- `EasyEvent`（0~3 个参数）：可池化（`IOfPool`）的基础事件，`Register` 返回 `IUnRegister`。
+- `EasyEvent`（0~3 个参数）：继承对应共享 channel 的池化适配（`IOfPool`），`Register` 返回精确 `IUnRegister`，不再持有多播分发/Once 算法。
   - 支持 `RegisterOnce`（只触发一次）、`HasListener` / `ListenerCount`；
-  - 触发使用多播委托快照：回调中的注册 / 注销只影响后续 `Trigger`；listener 抛异常会中断后续调用并向上传播。
-- `EasyEvents`：按 `Type` 管理一组事件的集合；静态入口维护全局实例，并提供 `Clear` / `Remove<T>`。
+  - 普通注册 / 注销 / `UnRegisterAll` 保留在途快照；`OnAllocate` / `OnRecycle` 使用 `ResetOwner`，回收后旧通知不再进入业务。池容量 50，无参预热 10、泛型预热 1 保持。
+- `EasyEvents`：按事件定义 `Type` 管理实例，不是 payload bus。`Clear` / `Remove<T>` 只丢映射；`ClearListeners` 摘本轮映射后逐项清监听，错误集中报告，重入新增映射保留，不自动归池。
 - `EventListener` 组件：按 `EventType`（鼠标、拖拽、碰撞、触发器）注册回调，并支持 Inspector 中的 UnityEvent。
-- 全局事件单例：`EnumEventSystem`、`StringEventSystem`、`TypeEventSystem`、`IntIDEventSystem`，均支持 `Dispose()` 后重建。
+- 全局事件单例：`EnumEventSystem`、`StringEventSystem`、`TypeEventSystem`、`IntIDEventSystem` 各持独立 `EventBus`，统一算法但不隐式互通，`Dispose()` 只关闭自身上下文；下次访问 `Instance` 可重建，旧 facade 不能复活或摘除新入口。
+- Binding 的 owned event 不归事件池：属性回收只旋转事件代次，保留同实例；Once 直接使用共享机制。集合通知顺序、Comparer、立即通知和持久化语义不变。
+- Action 宿主结束时终结七个 owned 消息事件的代次；已永久关闭的事件无需再次 reset。不修改动作调度、执行租约、暂停及延迟回收。Audio 保留现有设置/session 守卫，不改变播放或 Mixer 实现。
 - 注销机制：`IUnRegister` / `IUnRegisterList` / `CustomUnRegister`，以及随生命周期自动注销的触发器 `OnDestroyUnRegisterTrigger`、`OnDisableUnRegisterTrigger`、`OnCurSceneUnLoadUnRegisterTrigger`。
 - 扩展方法：`EventListenerExtension`、`UnRegisterExtension`、`RegisterListExtension`。
 
@@ -83,7 +85,7 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 | `TypeEventSystem` | 事件类型 | `Send<T>(T e)` / `Send<T>()` | 每个泛型类型对应一个事件 |
 | `IntIDEventSystem` | int（`IConvertible`） | `Send(key, params object[])` | 回调首参为归一化后的 int key |
 
-四个系统均为 `SingletonProperty` 单例：`Dispose()` 会注销全部监听并释放实例，下次访问 `Instance` 创建新实例。
+四个系统均为 `SingletonProperty` 单例，各自的 `Dispose()` 永久关闭旧 bus、撤销监听并截断旧快照；仅当静态入口仍指向自身时才释放入口。已关闭 facade 的 Register/Send 抛 `ObjectDisposedException`，取消/重复 Dispose 幂等。整键 `UnRegister(key)` / `UnRegisterAll` 终结旧 channel 并删除签名，普通委托/token 退订保留签名；空回调不绑定新键。Global 内部不再使用 EasyEvent 池。
 
 ## 生命周期注销
 
@@ -95,23 +97,25 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 
 ## Domain Reload 行为
 
-- Domain Reload disabled 时，`EasyEvents` 全局映射会在每次进入 Play 时通过 `SingletonSessionState` 的会话重置机制清空，避免旧 listener 残留到下一次 Play；会话运行期内注册的全局事件不受影响。
-- 四个全局 EventSystem 与 `SafeObjectPool` 同样基于 `SingletonProperty` 的会话重置，Play → Stop → 再 Play 不残留。
+- `EasyEvents` 全局容器经 `SingletonSessionState` reset 清理：标准 channel 旋转旧代次，自定义 `IEasyEvent.UnRegisterAll` 仍逐项执行；全部尝试后集中记录异常，不阻断其他模块 reset。只丢映射不再作为会话清理。
+- 四个 Global EventSystem 挂接同一既有 session reset，实际关闭旧 bus；即使 Singleton 先摘入口也不遗漏旧实例。定向 reset 测试不等于真实关闭 Domain Reload 两轮 Play 验证，后者保留 E 门禁。
 
 ## 重要限制
 
 - `EasyEvent` 的 listener 顺序为注册顺序；重复注册同一委托会被调用多次，注销一次只移除一次。
 - 事件触发不做异常隔离：一个 listener 抛异常会中断后续 listener。
 - 池化 `EasyEvent` 回收及再次分配时都会清空 listener，旧引用不应在回收后继续使用。
+- 池租用应通过 `RecycleToCache` / `Recycle` 结束；继承的 `Dispose` 是永久关闭，不是归池或可重开的 reset。调用方不得 Dispose 其他 owner 持有的 borrowed event。
 - `StringEventSystem` 同一 key 混用不同参数签名时抛出 `InvalidOperationException`（包含 key、已绑定类型与请求类型），不再静默失败；更换签名前先 `UnRegister(key)`。
 - `EventListener` 同一 `EventType` 只能使用一种参数类型，混用会输出警告并拒绝注册。
 - 生命周期触发器与 `RegisterListExtension.UnRegisterAll` 采用“快照 + 先清空再执行”：若某个句柄抛异常，异常向上传播，本次剩余句柄不再注销（容器/集合已清空，不会重复执行旧句柄）。
 - 生命周期触发器（`IUnRegister.cs` 旧文件名问题已修复）现为独立文件，场景 / Prefab 中不再依赖旧脚本文件。
-- 原空静态类 `EventManager` 已删除（无任何调用方），统一由四个全局 EventSystem 承担分发职责。
+- Runtime 历史空静态 `EventManager` 已删除；不等同于 Core `EventManager` 已完成融合，后者保留 C 的独立接入边界。
 
 ## 测试
 
 - `Tests/Foundation/EditMode/`：`EventChannelContractTests`、`EventBusContractTests`、`EventCancellationAndOrTests`，直接验证共享基础；session reset 的定向调用不等于真实关闭 Domain Reload 两轮 Play 的验证。
-- `Tests/EditMode/EventsContractTests.cs`：既有 Runtime 契约与取消/Or 直接回归；`BindingContractTests.cs` 覆盖属性 owner。
+- `Tests/EditMode/EventsContractTests.cs`：Runtime 契约、池化代次、自定义容器清理与取消/Or 直接回归；`GlobalEventsContractTests.cs` 覆盖 facade 生命周期/上下文隔离和协议；`BindingContractTests.cs` 覆盖属性 owner、集合顺序与映射。
+- Action 消息/shutdown/暂停与 Audio 设置重入/旧订阅隔离按方法筛选验证，未机械运行整个模块套件。
 - `Tests/PlayMode/EventsLifecyclePlayModeTests.cs`：现存 Unity 生命周期契约，D 按影响迁移和补验。
 - 本批实际验证结果及 B～E 剩余边界见 [2.2 专项方案](../../../../.kilo/plans/xf-yl-2.2-events.md)。
