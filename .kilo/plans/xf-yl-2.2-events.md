@@ -1,8 +1,8 @@
 # XF × YL 2.2 Events 事件系统融合研究与技术设计
 
-**状态：整体设计已批准；2.2-A/B 已技术验收并提交（A 核心 `0c11270`、文档 `c9cc2a5`；B `31b4928`）。2026-10-10 正式授权的 2.2-C 已实现并通过 Unity 编译及定向验证，达到技术完成标准，待用户验收与 Git 收口；具备进入 D 的技术前置条件，不自动进入 D/E、不执行 Git 写操作。A/B/C 证据分别见第 10/11/12 节。**
+**状态：整体设计已批准；2.2-A～C 已技术验收并提交（A 核心 `0c11270`、文档 `c9cc2a5`；B `31b4928`；C `cc768a9`）。2026-10-10 正式授权的 2.2-D 已实现并通过 Unity 编译及定向验证，达到技术完成标准，待用户验收与 Git 收口；具备进入 E 的技术前置条件，不自动进入 E、不执行 Git 写操作。A/B/C/D 证据分别见第 10/11/12/13 节。**
 
-本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10/11/12 节增量记录 A/B/C 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。当前 C 已单独授权并完成技术验证；D/E 及本轮 Git 写操作未授权，不自动启动。
+本文件是唯一专项方案。第 1～9 节保留总体研究与批准方向，第 10/11/12/13 节增量记录 A/B/C/D 的实际实现和验证，不以历史研究的“尚未实施/尚未运行”覆盖新证据。确认的是架构方向、行为契约和阶段边界，不要求逐条照搬具体私有结构、算法或候选方法名；普通内部取舍由实施时依据源码自主决定，重大行为、所有权或范围变化先说明并等待确认。当前 D 已单独授权并完成技术验证；E 及本轮 Git 写操作未授权，不自动启动。
 
 ## 1. 基线与边界
 
@@ -440,3 +440,53 @@ Core 与直接使用 Default 的新业务现在真实互通；YL 四个历史 Gl
 - D：完整 Scene/GameObject 取消适配、EventListener 原生 payload 校验、Unity 边界的必要批量清理责任，仍按原批准范围实施；本批 View owner 守卫不等同 D 完成。
 - E：`XFGameFrameworkEvents` 历史命名、最终 API/专题收口、真实关闭 Domain Reload 两轮 Play 与跨模块最终门禁仍保留。常量键、payload 与当前通知时机未因 C 改名；必要生命周期通知的异常模式已在 C 明确。
 - 不进入 Update/Timer/UI/Audio/Resource 后续专题，不修改 XFAB GameObjectLoader 资源所有权。没有 Commit/Push/Merge/Reset/Clean/切换分支，完成 C 后停止。
+
+## 13. 2.2-D Unity 生命周期事件适配与定向验证
+
+### 13.1 基线与实际范围
+
+- 分支 `fusion/2.2-events`，HEAD `cc768a9`；开始时工作区干净，中断恢复后核对并继续保留本轮修改。Unity `2022.3.62f3c1`，连接的 Editor 工程路径与工作区一致。
+- 定向读取批准设计第 5/7 节、A～C 相关机制、Unity 生命周期触发器、监听器及现有测试，未重新审计 Events/Pool/Core 全体系。只修改 D 的 Runtime 适配、直接相关测试、已有 Action API 帮助文字、Events 使用说明及本计划。
+- 没有修改共享 Foundation、Core/View/Panel、Action/Binding/Audio 领域实现、原 XF Package、原游戏及场景/Prefab/资源、Packages、ProjectSettings 或 asmdef。没有 Git 写操作，不进入 E。
+
+### 13.2 实质实现与行为契约
+
+| 范围 | 本批实现与边界 |
+|---|---|
+| 必要批量取消 | `UnRegisterTriggerBase` 复用 `SubscriptionSet.ReleaseAll`，全部尝试后抛单个原异常或 AggregateException；失败责任与新加入项保留，同轮重入不重复处理。显式 `UnRegister()` 可重试；是否真正可重试仍由 token 自身契约决定，不恢复已消费的 SingleUse |
+| Unity 消息边界 | OnDisable、OnDestroy 和 sceneUnloaded 在全部尝试后集中 LogException；不吞异常、不把失败描述为成功。触发器销毁先关闭托管，新增责任立即取消；销毁后无法依靠后续 Unity 消息重试，错误用于明确诊断/处理 |
+| GameObject | 保留 GameObject/Component 两种绑定重载。null/fake-null 宿主立即取消，不创建组件；绑定 inactive 宿主的 Disable 表示下一次实际 OnDisable，Enable 不自动重订。Destroy、Disable trigger 自身销毁均收尾 pending 责任 |
+| Unity 限制 | Unity 2022.3 仅保证曾 active 的对象收到 OnDestroy；从未 active 的宿主须显式清理或使用现有 SubscriptionScope/Core owner 退出。没有全局扫描、强制激活或新生命周期管理器。Context7 未提供对应版本的有效条目，直接核对 Unity 2022.3 官方 OnDestroy 文档，并以实际 PlayMode 验证可保证的行为 |
+| 指定 Scene | 新 `UnRegisterWhenSceneUnloaded(Scene)` 捕获有效已加载 Scene.handle，只响应匹配卸载；active scene、Additive 其他场景和业务 GameObject 迁移不改变该所有权。无效/已卸载 Scene 立即取消且不创建宿主 |
+| AnyScene | 新 `UnRegisterWhenAnySceneUnloaded()` 明确保留旧任意场景卸载能力；任意卸载只取消本轮 AnyScene 及匹配 Scene，不误清其他 Scene 责任。误导旧扩展 `UnRegisterWhenCurrentSceneUnloaded()` 退出，本地测试与帮助迁到明确入口；当前工程定向检索未发现需保留的真实资产/动态绑定，不承诺仓库外二进制兼容，不加猜测性兼容别名 |
+| 场景宿主 | 复用原 `OnCurSceneUnLoadUnRegisterTrigger` 常驻脚本，保留类型/GUID；按 handle 保存订阅集合，不新增全局宿主。显式 UnRegister/宿主销毁收尾 AnyScene 和全部指定 Scene；销毁先解除 sceneUnloaded，不创建新 Instance。RemoveUnRegister 解除该宿主对 token 的 AnyScene/指定 Scene 托管，不取消订阅 |
+| EventListener schema | 20 类 Unity 事件按 PointerEventData、Collision、Collision2D、Collider、Collider2D 精确声明类型校验；错误 payload 在修改前抛 ArgumentException，非法 EventType 抛 ArgumentOutOfRangeException；正确 null 回调为空 token，不分配通道，销毁后不可注册复活 |
+| EventListener 代码通道 | 最终直接持有组件私有 `EventChannel<T>`，复用共享 token/注册/分发机制；清指定类型、清全部或销毁通过 Dispose 终结旧通道/快照，下一次有效注册建立新通道。组件 Disable 不自动清代码，可显式把返回 token 绑定 Disable。公开 EasyEvent 池化 API/配置与其他消费者不变 |
+| UnityEvent | 保留 20 个序列化字段、代码先于 Inspector、代码异常阻断 UnityEvent 的行为。默认清代码不改变 UnityEvent；显式 true 仍置 null，断开组件运行时 persistent 通道，不写资产、不清外部持有的旧 UnityEvent |
+| XF/YL 能力 | XF 的 2D/3D Enter/Stay/Exit、对方 layer 的 LayerMask 过滤、字符串 OnAnimationEvent 和完整 EventTriggerType/UnityAction 扩展不改；不因当前无消费者删除，也不让 Core 反向引用 Runtime。YL 指针/拖拽及物理监听、便利扩展、代码与 Inspector 双通道保留 |
+
+重要内部取舍：初始适配继续用池化 EasyEvent，独立复核实证其事件池关闭后旧借用归还被 foreign 检查拒绝，无法保证组件订阅结束。最终让组件私有通道直接由 Foundation EventChannel 承载，避免把组件寿命绑定到全局池，不修改池算法/拒绝规则，也不新建原池跟踪、回退回收或第二套取消机制。这只改变私有缓存库存，不改变脚本或公开监听身份；没有性能测量，不宣称性能提升。
+
+### 13.3 实际验证与缺陷收口
+
+| 本轮执行 | 结果与证据边界 |
+|---|---|
+| Unity 实际编译 | 最终 `scriptCompilationFailed=false`、`isCompiling=false`，当前源码已加载；不以 IDE/dotnet 替代。新增测试初次出现 EventType 名称歧义，使用类型 alias 后通过 Unity 编译 |
+| EventsLifecyclePlayModeTests | 最终 **14/14 PlayMode**：复用五项原断言，补 Additive 两场景指定/任意隔离与迁移、invalid/unloaded Scene、inactive Disable 和 fake-null、失败汇总/显式重试/重入新增、Unity Disable/Destroy 错误报告、场景 trigger 销毁、指定 Scene 解除托管、Listener 双通道/销毁/旧 token |
+| UnityEventListenerContractTests | 最终 **4/4 EditMode**：一项集中校验 20 类 native payload 与有效通知/非法类型；真实 persistent UnityEvent 默认保留、显式 true 只断开字段；便利扩展取消不创建组件及旧代码快照结束；事件池关闭不影响组件清理及旧 owner 终结 |
+| 红绿证据 | 产品修改前生命周期类 **5 passed/3 failed**，分别复现错误 payload 被接受、scene trigger 销毁残留、首取消异常阻断剩余责任。复核发现的原池关闭回收失败和指定 Scene 解除托管失效另各实测 **1 failed**，修复后上述 4/4 与 14/14 重新通过，没有删除/削弱有效断言或屏蔽异常制造通过 |
+| 资产与程序集 | EventListener 实际属 YLFramework.Runtime，保留 20 个 SerializeField；既有脚本/.meta 未移动。新测试 meta 由 Unity 导入生成，GUID `d3cf55bce66cbb546ab7d900e1ae324f` 已通过 AssetDatabase 核对。Core 实际二进制引用 Foundation、无 Runtime/原 XF 引用，Foundation 无反向领域依赖 |
+
+本轮最终 **4 个 EditMode + 14 个 PlayMode 用例通过，0 Failed/Skipped**。工具 Summary.TotalTests 为全工程发现数量，不计为执行数量。20 种物理/指针消息映射通过直接消息调用验证，不冒充真实物理引擎、AnimationClip 或 UGUI 输入完整流程；未改动的 XF 领域组件采用源码/身份/差异保留证据，不为其增建无关运行设施。
+
+独立只读复核发现的两项问题已按上述红绿证据收口，修复后定向再审未发现新的重要缺陷或阻断测试缺口。最终实际差异与新增测试/meta 已复查，`git diff --check` 无报错；原游戏/场景、Packages/ProjectSettings、共享 Foundation/Core、既有 meta/asmdef 的实际 diff 为空。不以静态复核替代本轮 Unity 编译及定向测试。
+
+未机械重跑 A～C、Pool/Core/Action/Audio 全套；这些机制与领域源码未改，复用各批仍有效证据。最终 Editor 不在 Play/切换/编译，Main 场景 `dirty=false`，未保存或覆盖用户场景。未执行 Player、IL2CPP/AOT、性能、完整游戏或真实关闭 Domain Reload 两轮 Play；后者仍属 E 门禁，不以本轮定向测试替代。
+
+### 13.4 完成标准与后续边界
+
+**2.2-D 达到技术完成标准，具备进入 2.2-E 的技术前置条件，等待用户验收与 Git 收口。** 指定 Scene/AnyScene、GameObject 和 Listener 的订阅责任已明确，必要清理复用共享基础，双方领域能力及身份保持；没有未解决的已确认阻断缺陷。
+
+- E：`XFGameFrameworkEvents` 历史命名、完整 API/专题最终收口、真实关闭 Domain Reload 两轮 Play 及必要跨模块门禁，仍单独实施；不借 D 自动进入。
+- Unity 平台生命周期限制、SingleUse 失败不可恢复和显式取消失败的诊断责任是已说明的契约边界，不承诺绝对兜底。
+- 不扩展到 Update/Timer、UI/Audio/Resource、XFAB 缓存/AssetBundle 卸载，不执行 Commit/Push/Merge/Reset/Clean/切换分支；D 完成后停止。

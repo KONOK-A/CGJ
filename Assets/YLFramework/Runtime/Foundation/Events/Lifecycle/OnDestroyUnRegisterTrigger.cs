@@ -6,9 +6,5 @@ namespace YLFramework.Events
     /// </summary>
     public class OnDestroyUnRegisterTrigger : UnRegisterTriggerBase
     {
-        private void OnDestroy()
-        {
-            TriggerUnRegisters();
-        }
     }
 }

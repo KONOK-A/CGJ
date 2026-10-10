@@ -344,7 +344,7 @@ namespace YLFramework.Editor.Actions
                 "ActionKit.Shutdown 只清空模块自有的事件监听，不处置用户创建的触发器与注销句柄。",
                 "句柄与生命周期触发器都来自 YLFramework.Events；绑定到生命周期后，应让该绑定负责释放，避免手工再释放同一句柄。" +
                 "不要把同一个句柄同时交给多个生命周期触发器反复处置。\n" +
-                "UnRegisterWhenCurrentSceneUnloaded 响应场景卸载通知，不是捕获注册时的某个场景并只监听它。",
+                "UnRegisterWhenAnySceneUnloaded 响应任意场景卸载；UnRegisterWhenSceneUnloaded(Scene) 只绑定显式指定的场景。",
                 MethodContext + "\nLocalEvent() 不需要 owner：创建独立事件，触发一次后手工注销一次；" +
                 "实际对象上的长期监听应选择与拥有者一致的生命周期。另需添加 using YLFramework.Events;。",
                 "public static void LocalEvent()\n{\n    var signal = new EasyEvent();\n" +
