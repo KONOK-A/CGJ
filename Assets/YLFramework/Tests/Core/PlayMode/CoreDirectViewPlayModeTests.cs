@@ -28,6 +28,7 @@ namespace YLFramework.Core.Tests
         private readonly List<Scene> scenes = new List<Scene>();
         private YLCoreDirectViewModule module;
         private CoreClassPoolScope classPool;
+        private CoreUpdateHostScope updateHosts;
 
         [SetUp]
         public void SetUp()
@@ -41,6 +42,7 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeView.SignatureConflictEvent = null;
             Assert.That(ModuleManager.AllModules, Is.Empty, "Use the independent test scene, not a running business module.");
             classPool = new CoreClassPoolScope();
+            updateHosts = new CoreUpdateHostScope();
             module = new YLCoreDirectViewModule();
         }
 
@@ -61,7 +63,11 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokeView.DuplicateProbeHandler = false;
                 YLCoreSmokeView.SignatureConflictEvent = null;
                 try { classPool?.Restore(new Module[] { module }); }
-                finally { ReleaseObjects(); }
+                finally
+                {
+                    ReleaseObjects();
+                    updateHosts?.ReleaseOwnedIdleHosts();
+                }
             }
             yield return null;
             foreach (var scene in scenes)
@@ -1040,6 +1046,107 @@ namespace YLFramework.Core.Tests
             Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { second }));
             Assert.That(module.GetView<YLCoreSmokeView>(prefab.name), Is.SameAs(second));
             Assert.Throws<InvalidCastException>(() => module.GetView<YLCoreSmokePanel>(prefab.name));
+        }
+
+        [UnityTest]
+        public IEnumerator PanelSwitchRevokesOldLateSnapshotAndEmptyQueueReleasesOnlyItsToken()
+        {
+            yield return StartModule();
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            var stopper = YLFramework.Foundation.UpdateManager.AddLateUpdateEvent(() => PanelManager.MultiPanelListener = false);
+            try
+            {
+                var prefab = Template<YLCoreSmokePanel>("YLCorePanelUpdateRound", true);
+                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                current.enabled = false;
+                current.gameObject.SetActive(false);
+                var host = UnityEngine.Object.FindFirstObjectByType<YLFramework.Foundation.UpdateManager>();
+                host.SendMessage("LateUpdate");
+                Assert.That(previous.Canvas.enabled, Is.False, "取消轮次后不得从旧快照进入 Panel 兜底。");
+                stopper.UnRegister();
+                PanelManager.MultiPanelListener = true;
+                PanelManager.MultiPanelListener = true;
+                host.SendMessage("LateUpdate");
+                Assert.That(previous.Canvas.enabled, Is.True);
+                var channel = (EventChannel)typeof(YLFramework.Foundation.UpdateManager)
+                    .GetField("_lateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
+                Assert.That(channel.ListenerCount, Is.EqualTo(1), "同值启用不能重复建立连接。");
+                current.Close(); previous.Close();
+                Assert.That(channel.ListenerCount, Is.Zero, "队列归零释放自身订阅，保留共享宿主。");
+                Assert.That(host != null, Is.True);
+            }
+            finally
+            {
+                stopper.UnRegister();
+                PanelManager.MultiPanelListener = true;
+                YLCoreSmokePanel.ResetProbes();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ViewScannerResetPreservesDomainOwnershipAndRejectsOldSnapshot()
+        {
+            yield return StartModule();
+            var template = Template<YLCoreSmokeView>("YLCoreViewUpdateRound");
+            YLCoreSmokeView first = null;
+            YLCoreSmokeView replacement = null;
+            object firstSession = null;
+            IUnRegister resetter = null;
+            resetter = YLFramework.Foundation.UpdateManager.AddUpdateEvent(() =>
+            {
+                resetter.UnRegister();
+                InvokeViewManager("ResetSession");
+                Assert.That(first.Module, Is.SameAs(module));
+                Assert.That(ViewSession(first), Is.SameAs(firstSession), "执行会话重置不调用业务 Close 或清 Module 索引。");
+                var obj = new GameObject("YLCoreNewInactiveViewRound");
+                objects.Add(obj);
+                obj.SetActive(false);
+                replacement = obj.AddComponent<YLCoreSmokeView>();
+                module.AttachView(replacement);
+                UnityEngine.Object.DestroyImmediate(obj);
+            });
+            try
+            {
+                first = Track(module.LoadView<YLCoreSmokeView>(template, loadViewArgs: null));
+                firstSession = ViewSession(first);
+                var host = UnityEngine.Object.FindFirstObjectByType<YLFramework.Foundation.UpdateManager>();
+                host.SendMessage("Update");
+                Assert.That(ViewSession(replacement), Is.Not.Null, "旧扫描快照不能扫描新订阅轮次的索引。");
+                yield return null;
+                yield return null;
+                Assert.That(ViewSession(replacement), Is.Null, "新轮次继续保留从未激活对象的必要扫描。");
+                Assert.That(first.Module, Is.SameAs(module));
+                first.Close();
+            }
+            finally { resetter.UnRegister(); }
+        }
+
+        [UnityTest]
+        public IEnumerator DefaultPanelListenerRestoresPreviousPanelWhenDisabledComponentMissesDeactivation()
+        {
+            yield return StartModule();
+            Assert.That(PanelManager.MultiPanelListener, Is.True);
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            try
+            {
+                var prefab = Template<YLCoreSmokePanel>("YLCorePanelLateFallback", true);
+                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                Assert.That(previous.Canvas.enabled, Is.False);
+                // 先停用组件时对象仍活跃，直接 Deactivate 不应释放队列。
+                // 随后停用对象不会再收到第二次 OnDisable，需原有 Late 兜底。
+                current.enabled = false;
+                current.gameObject.SetActive(false);
+                Assert.That(previous.Canvas.enabled, Is.False);
+                yield return null;
+                yield return null;
+                Assert.That(previous.Canvas.enabled, Is.True);
+                var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                Assert.That(typeof(PanelManager).GetField("_currentPanel", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.SameAs(previous));
+                current.Close(); previous.Close();
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
         }
 
         [UnityTest]

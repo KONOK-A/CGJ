@@ -8,6 +8,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using YLFramework.Core.Pool;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
+using UpdateManager = YLFramework.Foundation.UpdateManager;
+using YLFramework.Events;
+using YLFramework.Core.Singleton;
 
 namespace YLFramework.Core
 {
@@ -40,6 +43,47 @@ namespace YLFramework.Core
         #region 单例
 
         private static PanelManager _instance;
+        private IUnRegister lateSubscription;
+        private object lateRound;
+        private bool released;
+
+        static PanelManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
+
+        private static void ResetSession()
+        {
+            var manager = _instance;
+            _instance = null;
+            if (manager != null)
+            {
+                manager.released = true;
+                manager.EndLateRound();
+            }
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void EndLateRound()
+        {
+            lateRound = null;
+            var subscription = lateSubscription;
+            lateSubscription = null;
+            subscription?.UnRegister();
+        }
+
+        private void SyncLateSubscription()
+        {
+            if (released || !multiPanelListener || panelQueues.Count == 0)
+            {
+                EndLateRound();
+                return;
+            }
+            if (lateSubscription != null) return;
+            var round = lateRound = new object();
+            lateSubscription = UpdateManager.AddLateUpdateEvent(() =>
+            {
+                if (!released && ReferenceEquals(_instance, this) && ReferenceEquals(lateRound, round))
+                    UpdatePanelQueueCore();
+            });
+        }
 
         internal static PanelManager Instance
         {
@@ -74,10 +118,11 @@ namespace YLFramework.Core
             switch (obj)
             {
                 case PlayModeStateChange.ExitingEditMode:
-                    _instance = null;
+                case PlayModeStateChange.ExitingPlayMode:
+                    ResetSession();
                     break;
                 case PlayModeStateChange.EnteredEditMode:
-                    _instance = null;
+                    ResetSession();
                     break;
             }
         }
@@ -162,15 +207,9 @@ namespace YLFramework.Core
             }
             set 
             {
-                if (Instance.multiPanelListener == value) return;
-                Instance.multiPanelListener = value;
-
-                UpdateManager.RemoveLateUpdateEvent(LateUpdate);
-
-                if (Instance.multiPanelListener)
-                {
-                    UpdateManager.AddLateUpdateEvent(LateUpdate);
-                } 
+                var manager = Instance;
+                manager.multiPanelListener = value;
+                manager.SyncLateSubscription();
             }
         }
 
@@ -444,7 +483,7 @@ namespace YLFramework.Core
         }
 
         internal static void LateUpdate() {
-            UpdatePanelQueue();
+            _instance?.UpdatePanelQueueCore();
         }
 
         internal static void ReleaseView(View view)
@@ -477,7 +516,11 @@ namespace YLFramework.Core
         private static void ReleaseQueue(PanelManager manager, Panel panel)
         {
             manager.panelQueues.RemoveAll(item => ReferenceEquals(item, panel));
-            if (!ReferenceEquals(manager._currentPanel, panel)) return;
+            if (!ReferenceEquals(manager._currentPanel, panel))
+            {
+                manager.SyncLateSubscription();
+                return;
+            }
             manager._currentPanel = null;
             for (int i = manager.panelQueues.Count - 1; i >= 0; i--)
             {
@@ -492,6 +535,7 @@ namespace YLFramework.Core
                 break;
             }
             var current = manager._currentPanel;
+            manager.SyncLateSubscription();
             if (manager.multiPanelListener && current && current.Canvas && !current.Canvas.enabled)
             {
                 current.Canvas.enabled = true;
@@ -615,6 +659,7 @@ namespace YLFramework.Core
             panel.Canvas.enabled = true;
             // 加入队列
             PanelQueues.Add(panel);
+            Instance.SyncLateSubscription();
 
             if (PanelQueues.Count > 20) Debug.LogWarning("PanelManager.panel_queues队列数量过多,请检查是否存在异常!");
 
@@ -634,48 +679,32 @@ namespace YLFramework.Core
 
         internal static void RemovePanelQueue(Panel panel)
         {
-            // 判断是否开启该功能
-            if (!MultiPanelListener) return;
-            if (panel == null) return;
-            PanelQueues.Remove(panel);
-
-            if (panel == CurrentPanel) ReturnToPreviousPanel();
+            var manager = _instance;
+            if (manager == null || !manager.multiPanelListener || ReferenceEquals(panel, null)) return;
+            ReleaseQueue(manager, panel);
         }
 
 
         // 更新Panel队列
         internal static void UpdatePanelQueue()
         {
-            // 判断是否开启该功能
-            if (!MultiPanelListener) return;
-            if (CurrentPanel == null) return;
+            _instance?.UpdatePanelQueueCore();
+        }
 
-            // 监听当前的页面是否被关掉 或者 销毁
-            if (CurrentPanel.gameObject == null || CurrentPanel.gameObject.IsDestroy() || !CurrentPanel.gameObject.activeSelf)
-            {
-                while (PanelQueues.Count > 0)
-                {
-                    Panel last = PanelQueues[PanelQueues.Count - 1];
-                    PanelQueues.RemoveAt(PanelQueues.Count - 1);
-                    if (last == CurrentPanel) break;
-                }
-
-                // 把最后一个设置成当前的
-                ReturnToPreviousPanel();
-            }
+        private void UpdatePanelQueueCore()
+        {
+            if (released || !multiPanelListener) return;
+            var current = _currentPanel;
+            if (ReferenceEquals(current, null)) return;
+            // 直接生命周期是主路径；缺失 OnDisable/OnDestroy 时复用相同的必要队列清理。
+            if (!current || !current.gameObject.activeInHierarchy)
+                ReleaseQueue(this, current);
         }
 
         // 返回到上一个界面
         internal static void ReturnToPreviousPanel()
         {
-            if (PanelQueues.Count == 0) return;
-            Panel last = PanelQueues[PanelQueues.Count - 1];
-            if (last == null) return;
-            if (last.Canvas.enabled == false)
-            {
-                last.Canvas.enabled = true;
-                last.Visible();
-            }
+            _instance?.UpdatePanelQueueCore();
         }
 
         #endregion

@@ -23,9 +23,7 @@ namespace YLFramework.Core.Tests
             var oldMuteKey = "AudioConfigMute:" + name;
             Assert.That(PlayerPrefs.HasKey(volumeKey) || PlayerPrefs.HasKey(muteKey) ||
                 PlayerPrefs.HasKey(oldVolumeKey) || PlayerPrefs.HasKey(oldMuteKey), Is.False);
-            var before = new HashSet<int>();
-            foreach (var host in Object.FindObjectsByType<UpdateManager>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                before.Add(host.GetInstanceID());
+            var updateHosts = new CoreUpdateHostScope();
             var source = new GameObject(name, typeof(AudioSource));
             try
             {
@@ -51,8 +49,7 @@ namespace YLFramework.Core.Tests
                 PlayerPrefs.DeleteKey(muteKey);
                 PlayerPrefs.Save();
                 Object.Destroy(source);
-                foreach (var host in Object.FindObjectsByType<UpdateManager>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                    if (!before.Contains(host.GetInstanceID())) Object.Destroy(host.gameObject);
+                updateHosts.ReleaseOwnedIdleHosts();
             }
             yield return null;
             Assert.That(PlayerPrefs.HasKey(volumeKey) || PlayerPrefs.HasKey(muteKey), Is.False);

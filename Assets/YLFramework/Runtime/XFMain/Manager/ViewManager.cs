@@ -5,6 +5,9 @@ using UnityEngine.SceneManagement;
 using GameObjectLoader = XFABManager.GameObjectLoader;
 using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
+using UpdateManager = YLFramework.Foundation.UpdateManager;
+using YLFramework.Events;
+using YLFramework.Core.Singleton;
 
 namespace YLFramework.Core
 {
@@ -13,6 +16,26 @@ namespace YLFramework.Core
     {
         private static readonly HashSet<Module> sceneOwners = new HashSet<Module>();
         private static readonly List<Module> pruneOwners = new List<Module>();
+        private static IUnRegister pruneSubscription;
+        private static object pruneRound;
+
+        static ViewManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
+
+        private static void EndPruneRound()
+        {
+            pruneRound = null;
+            var subscription = pruneSubscription;
+            pruneSubscription = null;
+            subscription?.UnRegister();
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
+        }
+
+        private static void ResetSession()
+        {
+            EndPruneRound();
+            sceneOwners.Clear();
+            pruneOwners.Clear();
+        }
 
         private static void TrackScene(Module module, View view)
         {
@@ -20,18 +43,23 @@ namespace YLFramework.Core
             if (sceneOwners.Count == 0)
             {
                 SceneManager.sceneUnloaded += OnSceneUnloaded;
-                UpdateManager.AddUpdateEvent(PruneDestroyedSessions);
+                var round = pruneRound = new object();
+                pruneSubscription = UpdateManager.AddUpdateEvent(() =>
+                {
+                    if (ReferenceEquals(pruneRound, round)) PruneDestroyedSessions(round);
+                });
             }
             sceneOwners.Add(module);
         }
 
-        private static void PruneDestroyedSessions()
+        private static void PruneDestroyedSessions(object round)
         {
             // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
             pruneOwners.Clear();
             pruneOwners.AddRange(sceneOwners);
             foreach (var module in pruneOwners)
             {
+                if (!ReferenceEquals(pruneRound, round)) break;
                 if (module.viewTransactions != 0) continue;
                 try { PruneDestroyed(module); }
                 catch (Exception error) { Debug.LogException(error); }
@@ -249,8 +277,7 @@ namespace YLFramework.Core
                 sceneOwners.Remove(module);
                 if (sceneOwners.Count == 0)
                 {
-                    SceneManager.sceneUnloaded -= OnSceneUnloaded;
-                    UpdateManager.RemoveUpdateEvent(PruneDestroyedSessions);
+                    EndPruneRound();
                 }
             }
         }

@@ -1,6 +1,6 @@
 # XF × YL 2.3 Update：融合研究与技术设计
 
-**状态：2.3 Update 总体设计已批准，待分批实施。**
+**状态：2.3-A 已实施并通过本批技术验证，待用户验收及 Git 收口；B/C 尚未实施。**
 
 本方案的总体设计已获批准，批准不等同于批次实施、Git 写入或下一专题授权。统一公共更新订阅与执行安全，保留领域调度；不是把所有 Unity 消息、任务或 MonoBehaviour 合成一个系统。
 
@@ -202,8 +202,15 @@ Core Timer、YL Timing 和 YL Audio 继续各自 Mono Update；职责边界、�
 
 ### 实施与验证状态
 
-- 2.3-A、B、C 均尚未实施；总体设计批准不构成功能完成或技术验收。
-- 研究及本次审批记录更新均未运行 Unity 编译、测试、Play、构建或性能验证；第 8 节仍是未来验收方向，不是通过结果。
-- 本次仅增量更新本计划的状态及审批记录，未修改功能代码、测试、资源、程序集、项目配置或原 Package，未创建重复文档，未执行 Git 操作。
+- 2026-10-10，用户独立授权实施 A。实际基线为 `fusion/2.3-update`、HEAD `463feb5`，实施开始时工作区干净。本批变更尚未提交，未执行 Commit、Push、Merge、Reset、Clean 或切换分支。
+- A：正式公共类型为 `YLFramework.Foundation.UpdateManager`，实现从 Core 移入 `Runtime/Shared/`，三个私有 `EventChannel` 复用既有 Events 注册、精确 token、COW 快照、owner 终结及 `TriggerAll`；退出 Core 同职责类型及禁止编译的三个旧静态字段。仍提供无参 Add/Remove 三相位便利 API，Add 现返回 `IUnRegister`，允许重复注册；显式旧 namespace/程序集、返回 void 的方法组绑定需要调用方迁移。
+- 公共宿主仅有效 Play 注册惰性创建，DDOL、相位内注册顺序、主线程使用；null/非 Play/退出注册返回共享空句柄，Remove/token 注销非创建。空闲宿主保留到会话结束；异常逐 target 继续并汇总报告，失败项不自动删除，Events 默认 fail-fast 未改。普通取消保留当前快照，销毁/reset 终结 owner 并截断旧快照；外部销毁结束旧订阅，后续新注册不恢复旧领域工作。
+- 基于既有 `SingletonSessionState` 增加窄执行 gate 与 session 身份，Editor ExitingPlayMode 提前关闭，Application.quitting/当前宿主 Quit 拒绝重建；进入新会话终结、停用并销毁旧公共宿主。旧宿主迟到的 Destroy/Quit 不清新实例、不关闭新会话。没有公共 Tick、ClearAll、Shutdown 或新通用宿主层。
+- ViewManager 持有扫描 token/轮次，继续扫描从未激活的失效 View；reset 只清扫描/sceneUnloaded/bookkeeping，不主动 Close 业务或清 Module 索引。PanelManager 在默认 true 且队列有工作时连接 Late，队列空或关闭开关退订；旧轮次回调非创建且不能维护新实例，失活兜底复用直接 ReleaseQueue，排序和直接 Activate/Deactivate/Release 保持。AudioController 精确持有自身 token，Stop 保持持续驱动，Source 失效/Remove 先终结更新责任，释放钩子失败仍撤销订阅并释放自有 Source；保留原 unscaled 时间、暂停、循环及借用 Source 所有权。
+- 迁移保留 Update 脚本 GUID `9f463ae1c4e1b464691b55eff7c2ce36` 及原 `.meta`；定向检索没有既有场景、Prefab、asset 或旧完整类型字符串绑定。Foundation/Core/Runtime asmdef 和依赖方向未变，Shared 已有 XF MIT 完整许可证覆盖迁入实现。游戏业务、持久场景/资源、Packages、ProjectSettings 和原 XF Package 未修改。
+- Unity `2022.3.62f3c1` 实际导入/编译无错误；EditMode **15/15**（Update 边界 2、既有 Foundation 边界 5、Core 身份/依赖 8）通过。精确筛选的同一 Play 会话 **19/19** 通过：公共 Update 契约 6、Core View/Panel/Module/Session/回滚代表用例 10、Core Audio 更新/释放 2、既有 Audio prefs/Source 所有权 1；没有运行完整历史套件。测试工具 TotalTests 字段包含未选中的根树用例，以上数量依据真实执行结果与通过数。
+- 已先运行回归确认原实现的非创建操作、token、Panel 默认 Late 缺口及 Audio 释放异常问题，再实施修复。独立审查发现 Core→Foundation 同一 Play 会话的测试宿主残留问题，已真实复现并修复：测试仅清本 fixture 新建且三个相位均无监听的宿主，失败的 Foundation SetUp 不接管已有宿主；组合运行及只读复查通过。新增脚本的 `.meta` 由 Unity 导入生成。
+- 本批验证的会话 reset/旧消息/退出门禁为定向模拟，加上真实 Unity 三相位和场景卸载；未将 SendMessage(Quit) 描述为真实退出验收。未修改 Domain Reload 设置，真实关闭 Domain Reload 的两轮 Play 综合验收仍归 C；没有 Player/IL2CPP 构建、完整游戏或性能验证。本轮不声明宿主损坏自愈、全框架无 Scene Reload 恢复或跨领域全序。
+- A 已达到本批技术完成标准，等待用户验收与 Git 收口。B 的窄 gate/session 前置能力已就绪，但 CoroutineStarter 尚未接入，旧 Coroutine handle 所有权/Stop 和重入安全仍归 B；Action 三相位仍保留原自动消息，桥接及专题最终收口归 C。Timer、YL Timing/Audio 驱动与既已登记的外围缺陷保持原范围。
 
-本次更新完成后停止，等待 2.3-A 的独立授权，不自动进入实施。
+本批完成后停止，等待用户验收和 Git 收口，不自动进入 2.3-B。

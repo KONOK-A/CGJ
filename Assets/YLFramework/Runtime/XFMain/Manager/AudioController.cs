@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic; 
 using UnityEngine;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
+using UpdateManager = YLFramework.Foundation.UpdateManager;
+using YLFramework.Events;
 
 namespace YLFramework.Core
 {
@@ -147,6 +149,8 @@ namespace YLFramework.Core
 
 
         private bool createByMyself = false; // 是否是自己创建的AudioSource
+        private IUnRegister updateSubscription;
+        private bool removed;
 
         #endregion
 
@@ -179,8 +183,7 @@ namespace YLFramework.Core
             AudioSource.mute = Mute;
             AudioSource.spatialBlend = 0;
             // 注册Update
-            UpdateManager.RemoveUpdateEvent(Update);
-            UpdateManager.AddUpdateEvent(Update);
+            updateSubscription = UpdateManager.AddUpdateEvent(Update);
 
             createByMyself = true;
 
@@ -204,8 +207,7 @@ namespace YLFramework.Core
             Volume = AudioSource.volume;
             Mute = AudioSource.mute;
             // 注册Update 
-            UpdateManager.RemoveUpdateEvent(Update);
-            UpdateManager.AddUpdateEvent(Update);
+            updateSubscription = UpdateManager.AddUpdateEvent(Update);
         }
 
         #endregion
@@ -306,10 +308,11 @@ namespace YLFramework.Core
 
         private void Update()
         {
+            if (removed) return;
             if (AudioSource == null)
             {
+                ReleaseUpdate();
                 Stop();
-                UpdateManager.RemoveUpdateEvent(Update); 
                 return;
             }
 
@@ -350,19 +353,29 @@ namespace YLFramework.Core
                 if (AudioDatas[i].IsPlayEnd()) 
                 {
                     AudioDatas[i].OnFinsh();
+                    if (removed) return;
                     AudioDatas.RemoveAt(i);
                     i--;
                 }
             } 
         }
 
+        private void ReleaseUpdate()
+        {
+            removed = true;
+            var subscription = updateSubscription;
+            updateSubscription = null;
+            subscription?.UnRegister();
+        }
+
         internal void Remove() {
-            Stop(); 
-            UpdateManager.RemoveUpdateEvent(Update);// 取消Update的监听
-            if (createByMyself && AudioSource) 
+            if (removed) return;
+            ReleaseUpdate();
+            try { Stop(); }
+            finally
             {
-                GameObject.Destroy(AudioSource.gameObject);
-            } 
+                if (createByMyself && AudioSource) GameObject.Destroy(AudioSource.gameObject);
+            }
         } 
         #endregion
 
