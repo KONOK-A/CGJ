@@ -10,6 +10,32 @@ namespace YLFramework.Core.Tests
     public class CoreIdentityTests
     {
         [Test]
+        public void SerializedDictionaryHasOneFoundationOwnerAndLegacyTypesExit()
+        {
+            var foundation = typeof(CustomAsyncOperation<>).Assembly;
+            var core = typeof(Module).Assembly;
+            var runtime = typeof(YLFramework.Services.Save.SaveManager).Assembly;
+            var dictionary = foundation.GetType("YLFramework.Foundation.SerializedDictionary`2");
+            Assert.That(dictionary, Is.Not.Null);
+            var products = new[] { foundation, core, runtime };
+            foreach (var assembly in products)
+            {
+                Assert.That(assembly.GetType("YLFramework.Core.SerializedDictionary`2"), Is.Null);
+                Assert.That(assembly.GetType("YLFramework.Core.DictionaryItem`2"), Is.Null);
+                Assert.That(assembly.GetType("YLFramework.Services.Save.SerializedDictionary`2"), Is.Null);
+            }
+            var owners = AppDomain.CurrentDomain.GetAssemblies().Where(a =>
+                a.GetType("YLFramework.Foundation.SerializedDictionary`2") != null).ToArray();
+            Assert.That(owners, Is.EqualTo(new[] { foundation }));
+            foreach (var consumer in new[] { core, runtime })
+                Assert.That(consumer.GetReferencedAssemblies().Select(a => a.Name),
+                    Does.Contain("YLFramework.Foundation.Runtime"));
+            var original = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "XFGameFramework");
+            Assert.That(original.GetType("XFGameFramework.SerializedDictionary`2"), Is.Not.Null);
+            Assert.That(original.GetType("XFGameFramework.DictionaryItem`2").IsPublic, Is.True);
+        }
+
+        [Test]
         public void CoreLegacyPoolExitsWhileFoundationSupportsExplicitDynamicCreationAndCallbacks()
         {
             var core = typeof(Module).Assembly;

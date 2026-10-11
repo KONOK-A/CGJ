@@ -3,10 +3,12 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
-using YLFramework.Services.Save;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Tests;
+using SaveManager = YLFramework.Services.Save.SaveManager;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Core.Tests
+namespace YLFramework.Tests
 {
     public class SerializedDictionaryJsonTests
     {

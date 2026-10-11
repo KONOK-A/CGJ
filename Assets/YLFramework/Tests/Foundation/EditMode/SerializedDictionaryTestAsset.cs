@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Core.Tests
+namespace YLFramework.Foundation.Tests
 {
     [Serializable]
     public class StringIntDictionary : SerializedDictionary<string, int> { }

@@ -3,13 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Core
+namespace YLFramework.Foundation
 {
 
 #if UNITY_2020_1_OR_NEWER
 
     [Serializable]
-    public class DictionaryItem<TKey, TValue> 
+    internal class DictionaryItem<TKey, TValue>
     {
         public TKey Key;
         public TValue Value;

@@ -1,15 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Core.Tests
+namespace YLFramework.Foundation.Tests
 {
     public class SerializedDictionaryContractTests
     {
@@ -139,23 +141,19 @@ namespace YLFramework.Core.Tests
         public void RawNullAndDuplicateRowsArePreservedAndRemovePreventsResurrection()
         {
             var dictionary = new SerializedDictionary<string, int>();
-            var raw = new List<DictionaryItem<string, int>>
-            {
+            var raw = CreateRawRows(dictionary,
                 null,
-                new DictionaryItem<string, int> { Key = null, Value = 9 },
-                new DictionaryItem<string, int> { Key = "a", Value = 1 },
-                new DictionaryItem<string, int> { Key = "a", Value = 2 },
-                new DictionaryItem<string, int> { Key = "b", Value = 3 }
-            };
-            typeof(SerializedDictionary<string, int>).GetField("datas", BindingFlags.Instance | BindingFlags.NonPublic)
-                .SetValue(dictionary, raw);
+                new KeyValuePair<string, int>(null, 9),
+                new KeyValuePair<string, int>("a", 1),
+                new KeyValuePair<string, int>("a", 2),
+                new KeyValuePair<string, int>("b", 3));
             Assert.That(dictionary.Count, Is.EqualTo(2));
             Assert.That(dictionary.InvalidEntryCount, Is.EqualTo(3));
             Assert.That(dictionary.Values, Is.EqualTo(new[] { 1, 3 }));
             Assert.That(raw.Count, Is.EqualTo(5));
             dictionary["a"] = 4;
-            Assert.That(raw[2].Value, Is.EqualTo(4));
-            Assert.That(raw[3].Value, Is.EqualTo(2));
+            Assert.That(raw[2].GetType().GetField("Value").GetValue(raw[2]), Is.EqualTo(4));
+            Assert.That(raw[3].GetType().GetField("Value").GetValue(raw[3]), Is.EqualTo(2));
             Assert.That(dictionary.ContainsValue(2), Is.False);
             Assert.That(dictionary.Remove(new KeyValuePair<string, int>("a", 2)), Is.False);
             Assert.That(dictionary.Remove("a"), Is.True);
@@ -363,19 +361,33 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void CoreIdentityGuidAndUnitySerializedFieldLayoutRemainUnchanged()
+        public void FoundationIdentityPreservesGuidAndUnitySerializedFieldLayoutWithoutPublicEntryType()
         {
             var type = typeof(SerializedDictionary<string, int>);
-            Assert.That(type.Namespace, Is.EqualTo("YLFramework.Core"));
-            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Core.Runtime"));
-            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/XFMain/Extensions/SerializedDictionary.cs"),
+            Assert.That(type.Namespace, Is.EqualTo("YLFramework.Foundation"));
+            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
+            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/Shared/Serialization/SerializedDictionary.cs"),
                 Is.EqualTo("1418cb45915d1504e859f117b32ade29"));
             var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(f => !f.IsNotSerialized && (f.IsPublic || f.IsDefined(typeof(SerializeField), false))).ToArray();
             Assert.That(fields.Select(f => f.Name), Is.EqualTo(new[] { "datas" }));
-            Assert.That(fields[0].FieldType, Is.EqualTo(typeof(List<DictionaryItem<string, int>>)));
-            Assert.That(typeof(DictionaryItem<string, int>).GetFields().Select(f => f.Name), Is.EqualTo(new[] { "Key", "Value" }));
-            Assert.That(typeof(YLFramework.Services.Save.SerializedDictionary<string, int>), Is.Not.Null);
+            Assert.That(fields[0].FieldType.GetGenericTypeDefinition(), Is.EqualTo(typeof(List<>)));
+            var entry = fields[0].FieldType.GetGenericArguments()[0];
+            Assert.That(entry.FullName, Does.StartWith("YLFramework.Foundation.DictionaryItem`2"));
+            Assert.That(entry.IsVisible, Is.False);
+            Assert.That(entry.GetFields().Select(f => f.Name), Is.EqualTo(new[] { "Key", "Value" }));
+            Assert.That(entry.GetField("Key").FieldType, Is.EqualTo(typeof(string)));
+            Assert.That(entry.GetField("Value").FieldType, Is.EqualTo(typeof(int)));
+            var references = type.Assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
+            Assert.That(references.Any(n => n.StartsWith("YLFramework") || n.StartsWith("XF") ||
+                n == "Newtonsoft.Json"), Is.False, string.Join(", ", references));
+            // Foundation 的既有 Editor 条件分支会引用 UnityEditor；Player 编译图必须保持隔离。
+            var player = CompilationPipeline.GetAssemblies(AssembliesType.Player)
+                .Single(a => a.name == "YLFramework.Foundation.Runtime");
+            var playerReferences = player.assemblyReferences.Select(a => a.name)
+                .Concat(player.compiledAssemblyReferences.Select(Path.GetFileNameWithoutExtension)).ToArray();
+            Assert.That(playerReferences.Any(n => n.StartsWith("YLFramework") || n.StartsWith("XF") ||
+                n.StartsWith("UnityEditor") || n == "Newtonsoft.Json"), Is.False, string.Join(", ", playerReferences));
         }
 
         [Test]
@@ -385,14 +397,10 @@ namespace YLFramework.Core.Tests
             var restored = ScriptableObject.CreateInstance<SerializedDictionaryTestAsset>();
             try
             {
-                var raw = new List<DictionaryItem<UnityEngine.Object, int>>
-                {
-                    new DictionaryItem<UnityEngine.Object, int> { Key = null, Value = 9 },
-                    new DictionaryItem<UnityEngine.Object, int> { Key = source, Value = 1 },
-                    new DictionaryItem<UnityEngine.Object, int> { Key = source, Value = 2 }
-                };
-                typeof(SerializedDictionary<UnityEngine.Object, int>).GetField("datas", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .SetValue(source.ObjectKeys, raw);
+                CreateRawRows(source.ObjectKeys,
+                    new KeyValuePair<UnityEngine.Object, int>(null, 9),
+                    new KeyValuePair<UnityEngine.Object, int>(source, 1),
+                    new KeyValuePair<UnityEngine.Object, int>(source, 2));
                 Assert.That(source.ObjectKeys.InvalidEntryCount, Is.EqualTo(2));
                 JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source), restored);
                 Assert.That(restored.ObjectKeys.Count, Is.EqualTo(2));
@@ -413,6 +421,29 @@ namespace YLFramework.Core.Tests
                 Object.DestroyImmediate(source);
                 Object.DestroyImmediate(restored);
             }
+        }
+
+        // 条目已内部化：仅在测试内通过字段布局注入 Unity inline 无法表达的 CLR null 行。
+        private static IList CreateRawRows<TKey, TValue>(SerializedDictionary<TKey, TValue> dictionary,
+            params KeyValuePair<TKey, TValue>?[] entries)
+        {
+            var field = typeof(SerializedDictionary<TKey, TValue>).GetField("datas", BindingFlags.Instance | BindingFlags.NonPublic);
+            var raw = (IList)Activator.CreateInstance(field.FieldType);
+            var entryType = field.FieldType.GetGenericArguments()[0];
+            foreach (var pair in entries)
+            {
+                if (!pair.HasValue)
+                {
+                    raw.Add(null);
+                    continue;
+                }
+                var entry = Activator.CreateInstance(entryType);
+                entryType.GetField("Key").SetValue(entry, pair.Value.Key);
+                entryType.GetField("Value").SetValue(entry, pair.Value.Value);
+                raw.Add(entry);
+            }
+            field.SetValue(dictionary, raw);
+            return raw;
         }
 
         [Test]

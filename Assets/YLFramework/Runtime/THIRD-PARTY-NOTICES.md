@@ -42,6 +42,11 @@ THE SOFTWARE.
 
 YLFramework 承接上述代码时进行了命名空间统一、程序集隔离、API 调整与部分实现重写；源文件中已有的上游版权横幅保持原样。
 
+## XFGameFramework（弦小风）
+
+- `Runtime/Shared/Serialization/SerializedDictionary.cs`：承接并改编自 XFGameFramework 的 `Runtime/Extensions/SerializedDictionary.cs`，来源 revision 为 `2182708aec`。统一容器在 2.5-A 重写行为后，于 2.5-B 从 YL Core 迁入 Foundation；仍保留 `datas/Key/Value` 序列化条目布局。
+- 适用 MIT License，版权声明为 `Copyright (c) 2021 弦小风`；完整许可见 `Runtime/Shared/LICENSE.md`。其余 Core 承接源码的完整许可继续保留在 `Runtime/XFMain/LICENSE.md`。
+
 ## 其他第三方组件
 
 - `Runtime/Tools/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。
