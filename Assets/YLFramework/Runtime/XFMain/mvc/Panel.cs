@@ -37,11 +37,13 @@ namespace YLFramework.Core
         /// <summary>实际 Canvas 顺序；借用 Canvas 的子控件没有独立顺序。</summary>
         public int DisplaySortingOrder => Canvas ? Canvas.sortingOrder : 0;
 
-        public virtual PanelType PanelType => PanelType.Window;
+        public virtual PanelType PanelType => Window?.PanelType ?? PanelType.Window;
         public virtual bool AlwaysInFront => false;
 
-        /// <summary>是否为模态窗口。本批提供策略状态，不代替遮罩、EventSystem 或输入后端。</summary>
-        public virtual bool IsModal => false;
+        /// <summary>模态意图。PanelManager 派生输入阻挡，配置的 UIRootContext 据此呈现遮罩；不代替输入后端。</summary>
+        public virtual bool IsModal => Window?.Modal ?? false;
+        public string WindowKey => Window?.Key;
+        public int Layer => WindowLayer;
 
         /// <summary>Loaded、active 且未被同根全屏页面遮挡。</summary>
         public bool IsVisible => PanelManager.IsVisible(this);
@@ -55,6 +57,13 @@ namespace YLFramework.Core
         internal bool IsMyselfAddCanvas { get; private set; }
         internal int RequestedOrder => sortingOrder;
         internal void CommitOrder(int value) => sortingOrder = value;
+        internal WindowDefinition Window;
+        internal int WindowLayer => Window?.Layer ?? 0;
+        internal PanelType PolicyType => Window?.PanelType ?? PanelType;
+        internal bool PolicyModal => Window?.Modal ?? IsModal;
+
+        /// <summary>唯一入口再次打开已加载窗口时借读新参数，不重复 OnLoaded 或事件登记。</summary>
+        public virtual void OnWindowUpdated(LoadViewArgs args) { }
 
         /// <summary>当前会话的根寿命类型，在业务 OnLoaded 前确定。</summary>
         public UIType UIType { get; internal set; }
@@ -125,6 +134,14 @@ namespace YLFramework.Core
         internal override void BeforeOnLoaded()
         {
             base.BeforeOnLoaded();
+            if (Window != null && Window.Stretch)
+            {
+                var rect = transform as RectTransform;
+                if (!rect) throw new System.InvalidOperationException("Stretch window requires a RectTransform.");
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.offsetMin = rect.offsetMax = Vector2.zero;
+            }
             InitCanvas();
             PanelManager.Prepare(this);
         }

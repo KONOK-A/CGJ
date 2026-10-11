@@ -17,6 +17,10 @@ namespace YLFramework.Tests.Actions
 {
     public class ApiHelpTests
     {
+        private class ProtectedSetterExample
+        {
+            public int Value { get; protected set; }
+        }
         // Independently mapped from the Runtime and Observable public API inventory.
         private static readonly string[] ExpectedCoreTypeNames =
         {
@@ -240,7 +244,7 @@ namespace YLFramework.Tests.Actions
         {
             StringAssert.Contains("{ get; private set; }", ActionKitApiHelpContent.FormatSignature(typeof(ActionKit).GetProperty("Initialized")));
             StringAssert.Contains("{ get; protected set; }", ActionKitApiHelpContent.FormatSignature(
-                typeof(YLFramework.Services.UI.UIWindowBase).GetProperty("CurrentLayer")));
+                typeof(ProtectedSetterExample).GetProperty("Value")));
             StringAssert.Contains("{ get; set; }", ActionKitApiHelpContent.FormatSignature(typeof(AbstractAction<>).GetProperty("Status")));
         }
 

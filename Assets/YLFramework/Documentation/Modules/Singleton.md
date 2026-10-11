@@ -59,7 +59,7 @@
 
 ## 备注
 
-- 层级路径会决定单例对象的场景位置，例如 `YLFramework/Pool/GameObjectPool`、`YLFramework/UISystem/UIManager`、`YLFramework/ResService/ServiceManager`；修改路径会影响已有场景中的对象查找。本轮未改动任何既有路径，并由 `MonoSingletonPathCompatibilityTests` 锁定。
+- 层级路径会决定单例对象的场景位置，例如 `YLFramework/Pool/GameObjectPool`、`YLFramework/ResService/ServiceManager`；修改路径会影响已有场景中的对象查找。存续单例路径由 `MonoSingletonPathCompatibilityTests` 锁定；旧 UI 单例已退出，正式 `UIRootContext` 不采用单例路径。
 - 路径层级已存在时按原样复用（不会把已存在的父节点改为 DontDestroyOnLoad）；路径为空时回退为按类型名创建独立对象并 DontDestroyOnLoad。
 - `InstanceWithLoader` 替换的是静态 loader，作用于后续创建；已有实例不会被替换；loader 属于单次 Play Session 配置，进入 Play 会恢复默认。
 - Prefab / Scriptable 加载失败（loader 返回 null 或找不到资源）返回 null 并输出一次警告；loader 抛出的异常不会被吞掉，替换 loader 后可重试；loader 内重入 `Instance` 不会递归创建。

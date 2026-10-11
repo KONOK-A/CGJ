@@ -1,7 +1,6 @@
 ﻿using Sirenix.OdinInspector;
 using UnityEngine;
 using YLFramework.Core.Singleton;
-using YLFramework.Services.UI;
 
 namespace YLFramework
 {
@@ -25,7 +24,6 @@ namespace YLFramework
         private void Awake()
         {
             DontDestroyOnLoad(gameObject);
-            InputSystemBridge.EnsureEventSystemInputModule();
         }
     }
 }

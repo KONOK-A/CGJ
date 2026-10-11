@@ -394,7 +394,7 @@ namespace YLFramework.Core
         }
 
         internal static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
-            object[] param, bool argsClaimed = false, UIType? panelType = null) where T : View
+            object[] param, bool argsClaimed = false, UIType? panelType = null, GameObject directPrefab = null) where T : View
         {
             if (args != null && !argsClaimed) args.Claim();
             LoadViewRequest<T> request;
@@ -404,7 +404,7 @@ namespace YLFramework.Core
                 if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
                 if (!ReferenceEquals(parent, null) && !parent) throw new ArgumentException("View parent has been destroyed.", nameof(parent));
                 FindBackendRoot(module, parent);
-                request = new LoadViewRequest<T>(module, assetName, parent, args, param, panelType);
+                request = new LoadViewRequest<T>(module, assetName, parent, args, param, panelType, directPrefab);
             }
             catch (Exception error)
             {
@@ -496,7 +496,12 @@ namespace YLFramework.Core
                 InitializingView = new KeyValuePair<View, object>(view, session);
                 module.viewTransactions++;
                 transaction = true;
-                if (view is Panel panel) panel.UIType = panelType ?? PanelManager.GetUIType(panel.transform.parent);
+                if (view is Panel panel)
+                {
+                    panel.Window = args?.Window;
+                    panel.UIType = panelType ?? PanelManager.GetUIType(panel.transform.parent);
+                    if (panel.Window != null && !panel.Window.Reusable) view.DiscardOnExit = true;
+                }
                 view.BeforeOnLoaded();
                 validate?.Invoke();
                 ValidateInitialization(module, view, session);
@@ -682,6 +687,10 @@ namespace YLFramework.Core
         internal static T LoadViewClaimed<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
             object[] param = null, UIType? panelType = null) where T : View
             => LoadViewSync<T>(module, assetName, null, parent, args, param, true, true, panelType);
+
+        internal static T LoadWindowClaimed<T>(Module module, WindowDefinition definition, Transform parent, LoadViewArgs args) where T : Panel
+            => LoadViewSync<T>(module, definition.AssetName, definition.Prefab, parent, args, null,
+                !definition.Prefab, true, definition.UIType);
 
         internal static T LoadView<T>(Module module, GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {

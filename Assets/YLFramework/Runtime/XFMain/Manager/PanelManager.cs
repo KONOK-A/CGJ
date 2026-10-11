@@ -296,6 +296,39 @@ namespace YLFramework.Core
             return canvas.transform;
         }
 
+        internal static Canvas ResolveParentRoot(Transform parent)
+        {
+            Canvas root = null;
+            for (var current = parent; current; current = current.parent)
+            {
+                var canvas = current.GetComponent<Canvas>();
+                if (!canvas) continue;
+                root = canvas;
+                if (_instance != null && _instance.registeredRoots.Contains(canvas)) break;
+            }
+            return root;
+        }
+
+        internal static void BringToFront(Panel panel)
+        {
+            var manager = _instance;
+            if (manager == null) return;
+            manager.Reconcile();
+            if (!manager.states.TryGetValue(panel, out var state) || !manager.Current(state)) return;
+            int max = state.Order;
+            bool above = false;
+            foreach (var other in manager.states.Values)
+                if (manager.Current(other) && SameContext(state, other) && other.Panel.WindowLayer == panel.WindowLayer &&
+                    other.Panel.Canvas.sortingLayerID == panel.Canvas.sortingLayerID &&
+                    other.Panel.PolicyModal == panel.PolicyModal && other.Panel.AlwaysInFront == panel.AlwaysInFront &&
+                    Compare(other, state) > 0)
+                {
+                    above = true;
+                    max = Math.Max(max, other.Order);
+                }
+            if (above) SetOrder(panel, checked((int)((long)max + OrderDelta - panel.Module.UIStartSortOrder)));
+        }
+
         private static Canvas ResolveRoot(Panel panel)
         {
             if (!panel) return null;
@@ -363,7 +396,9 @@ namespace YLFramework.Core
                 if (comparison != 0) return comparison;
                 comparison = SortingLayer.GetLayerValueFromID(a.Panel.Canvas.sortingLayerID).CompareTo(SortingLayer.GetLayerValueFromID(b.Panel.Canvas.sortingLayerID));
                 if (comparison != 0) return comparison;
-                comparison = (a.Panel.IsModal && a.Panel.PanelType != PanelType.Overlay).CompareTo(b.Panel.IsModal && b.Panel.PanelType != PanelType.Overlay);
+                comparison = a.Panel.WindowLayer.CompareTo(b.Panel.WindowLayer);
+                if (comparison != 0) return comparison;
+                comparison = (a.Panel.PolicyModal && a.Panel.PolicyType != PanelType.Overlay).CompareTo(b.Panel.PolicyModal && b.Panel.PolicyType != PanelType.Overlay);
                 if (comparison != 0) return comparison;
                 comparison = a.Panel.AlwaysInFront.CompareTo(b.Panel.AlwaysInFront);
                 if (comparison != 0) return comparison;
@@ -379,8 +414,12 @@ namespace YLFramework.Core
                 if (previous != null && roots[previous] == roots[state] &&
                     previous.Panel.gameObject.scene == state.Panel.gameObject.scene &&
                     previous.Panel.Canvas.sortingLayerID == state.Panel.Canvas.sortingLayerID)
-                    order = Math.Max(order, previousOrder + 1);
+                    order = Math.Max(order, previousOrder + (state.Panel.PolicyModal ? 2 : 1));
                 if (order > short.MaxValue) throw new ArgumentOutOfRangeException(nameof(requested), "Panel priority exhausts the Canvas order range.");
+                var context = roots[state].GetComponent<UIRootContext>();
+                if (order == short.MinValue && state.Panel.PolicyModal && state.Panel.PolicyType != PanelType.Overlay &&
+                    context && context.HasMask(state.Panel.WindowLayer))
+                    throw new ArgumentOutOfRangeException(nameof(requested), "Modal window requires a Canvas order below it for the mask.");
                 result.Add(new KeyValuePair<PanelState, int>(state, order));
                 previous = state;
                 previousOrder = order;
@@ -400,7 +439,8 @@ namespace YLFramework.Core
                     if (manager.Current(existing) && ResolveRoot(existing.Panel) == state.Root &&
                         existing.Panel.gameObject.scene.handle == state.Scene && existing.Panel.IsMyselfAddCanvas &&
                         existing.Panel.Canvas.sortingLayerID == panel.Canvas.sortingLayerID &&
-                        existing.Panel.IsModal == panel.IsModal && existing.Panel.AlwaysInFront == panel.AlwaysInFront)
+                        existing.Panel.WindowLayer == panel.WindowLayer &&
+                        existing.Panel.PolicyModal == panel.PolicyModal && existing.Panel.AlwaysInFront == panel.AlwaysInFront)
                         max = Math.Max(max, existing.Panel.RequestedOrder);
                 panel.CommitOrder(checked(max + OrderDelta));
                 CheckedOrder(panel, panel.RequestedOrder);
@@ -481,16 +521,16 @@ namespace YLFramework.Core
                 bool active = Active(state);
                 bool visible = active;
                 bool blocked = !active;
-                state.Modal = state.Panel.IsModal && state.Panel.PanelType != PanelType.Overlay && state.Panel.IsMyselfAddCanvas;
+                state.Modal = state.Panel.PolicyModal && state.Panel.PolicyType != PanelType.Overlay && state.Panel.IsMyselfAddCanvas;
                 if (active)
                 {
                     foreach (var upper in snapshot)
                     {
                         if (ReferenceEquals(upper, state) || !Active(upper) || !SameContext(upper, state) ||
                             !upper.Panel.IsMyselfAddCanvas || Compare(upper, state) <= 0) continue;
-                        if (multiPanelListener && state.Panel.PanelType == PanelType.Panel && state.Panel.IsMyselfAddCanvas &&
-                            upper.Panel.PanelType == PanelType.Panel) visible = false;
-                        if (upper.Panel.IsModal && upper.Panel.PanelType != PanelType.Overlay) blocked = true;
+                        if (multiPanelListener && state.Panel.PolicyType == PanelType.Panel && state.Panel.IsMyselfAddCanvas &&
+                            upper.Panel.PolicyType == PanelType.Panel) visible = false;
+                        if (upper.Panel.PolicyModal && upper.Panel.PolicyType != PanelType.Overlay) blocked = true;
                     }
                 }
                 if (active && (state.Active ? state.Visible != visible : !visible))
@@ -520,6 +560,8 @@ namespace YLFramework.Core
                 state.Blocked = !visible || owner == null || owner.Blocked;
             }
             SyncLateSubscription();
+            foreach (var root in new List<Canvas>(registeredRoots))
+                if (root && root.TryGetComponent<UIRootContext>(out var context)) context.RefreshMasks();
             // 结构、排序与 Canvas 先全部提交，业务重入后只通知仍匹配的旧记录。
             var initializationErrors = new List<Exception>();
             foreach (var entry in sorting)
@@ -572,7 +614,7 @@ namespace YLFramework.Core
             PanelState top = null;
             foreach (var state in manager.states.Values)
             {
-                if (!manager.Active(state) || !state.Panel.IsMyselfAddCanvas || state.Panel.PanelType == PanelType.Overlay ||
+                if (!manager.Active(state) || !state.Panel.IsMyselfAddCanvas || state.Panel.PolicyType == PanelType.Overlay ||
                     !state.Visible || (root && state.Root != root) || (type.HasValue && state.Panel.UIType != type.Value) ||
                     (modal && !state.Modal) || (focus && state.Blocked)) continue;
                 if (top == null || Compare(state, top) > 0) top = state;
@@ -586,6 +628,16 @@ namespace YLFramework.Core
         public static Panel GetTopPanel(UIType type) => Query(null, false, false, type);
         public static Panel GetModalPanel(Canvas root) => Query(root, true, false);
         public static Panel GetFocusedPanel(Canvas root) => Query(root, false, true);
+
+        internal static Panel GetLayerModal(Canvas root, int layer)
+        {
+            if (_instance == null) return null;
+            PanelState top = null;
+            foreach (var state in _instance.states.Values)
+                if (_instance.Active(state) && state.Visible && state.Root == root && state.Modal &&
+                    state.Panel.WindowLayer == layer && (top == null || Compare(state, top) > 0)) top = state;
+            return top?.Panel;
+        }
 
         public static void GetAllPanels(UIType type, List<Panel> results)
         {
