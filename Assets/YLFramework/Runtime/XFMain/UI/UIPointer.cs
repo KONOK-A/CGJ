@@ -24,11 +24,12 @@ namespace YLFramework.Core
         {
             if (querying) throw new InvalidOperationException("UI pointer query cannot reenter a raycast.");
             var current = EventSystem.current;
-            if (!current) { system = null; pointer = null; return false; }
+            if (!current || !current.isActiveAndEnabled) { system = null; pointer = null; return false; }
             if (system != current) { system = current; pointer = new PointerEventData(current); }
             querying = true;
             try
             {
+                pointer.Reset();
                 pointer.position = position;
                 current.RaycastAll(pointer, results);
                 foreach (var result in results)
@@ -40,10 +41,16 @@ namespace YLFramework.Core
 
         public static bool CheckMouseOnUI()
         {
+#if ENABLE_INPUT_SYSTEM
+            var current = EventSystem.current;
+            var module = current ? current.currentInputModule : null;
+            if (module && module.GetType().FullName == "UnityEngine.InputSystem.UI.InputSystemUIInputModule")
+                return InputSystemBridge.TryGetMousePosition(out var position) && CheckPositionOnUI(position);
+#endif
 #if ENABLE_LEGACY_INPUT_MANAGER
             return CheckPositionOnUI(Input.mousePosition);
 #elif ENABLE_INPUT_SYSTEM
-            return InputSystemBridge.TryGetMousePosition(out var position) && CheckPositionOnUI(position);
+            return InputSystemBridge.TryGetMousePosition(out var fallbackPosition) && CheckPositionOnUI(fallbackPosition);
 #else
             return false;
 #endif

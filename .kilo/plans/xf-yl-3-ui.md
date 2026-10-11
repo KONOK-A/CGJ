@@ -216,10 +216,11 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 - **主要风险：**基类与程序集身份、旧 Close/按钮监听、Loader 提前释放、ColorSelector 坐标/几何/Shader 与素材来源、关闭中的新会话。类型/字段退出在引用迁移验收后，不保留永久 legacy 作为完成结果。
 - **迁移门禁：**先在受控自有样本验证新协议/字段与程序集变化，再定向迁上述模板与正式工具资产；存续资源保存 GUID/fileID/有效引用，退出资源处理引用及配套 meta，拒绝全库重序列化。迁移失败时停止对应退出，保留可恢复原数据，不自动创建兼容壳或执行 Git 回退；验证后按已确认范围清退无用旧组件/类型。未迁完或工具仍依赖旧 UI，不宣布批次或阶段 COMPLETE。
 - **实施节奏（已批准）：**本批工作量较大，允许在正式批次内部根据依赖渐进实施和验证（如先窗口/根、再 Tips、再 ColorSelector），不额外设立正式子批次；每一步保持可独立验证且不破坏现有行为。
-- **实施状态：技术 COMPLETE，待用户验收与 Git 收口。**实际成果、替代许可路线、资产身份及定向验证见第 11 节；3.3 未启动，整体阶段 3 仍 IN PROGRESS。
+- **实施状态：技术 COMPLETE，已完成用户技术验收与 Git 收口。**3.3 的授权基线为 `7cc933f`；3.2 实际成果与历史验证见第 11 节，整体阶段 3 仍 IN PROGRESS。
 
 ### 3.3 UI Adaptation 与统一输入接入
 
+- **实施状态：技术 COMPLETE，待用户验收与 Git 收口。**实现、独立后端验证及原状态恢复见第 12 节；3.4 未启动，不表示整体阶段 3 COMPLETE。
 - **交付：**Scaler 配置权威、显式 stretch、Background/Border 动态刷新与校验、经确认的可选 Safe Area；根 Overlay/Camera 模式、统一 EventSystem/输入桥、pointer 查询与真实模态输入。`Y/YLFrameworkRoot.cs` 只调整必要 UI 副作用，不能改普通 Singleton/Audio 生命周期。
 - **验收：**参考分辨率同屏变化、横竖屏/宽屏、实际 Canvas 尺寸变化、inactive 启用/重新挂载、零尺寸/缺依赖配置明确失败；Camera 模式窗口与背景布局合理。以正式 ColorSelector/Tips 为直接消费者验证取色坐标/游标、Mask/RectMask2D/alpha、提示位置随适配变化，及按钮/Slider/拖动、遮罩阻断、Submit/Cancel/焦点恢复。既有 EventSystem 不被替换，自建系统跨场景/根退出正确清理；实际可用后端分别报告，New-only 不能被 Both 结果覆盖。
 - **主要风险：**UGUI 布局刷新时点、camera 坐标、安全区、静态输入缓存/反射及 Player 裁剪。不引入 TMP、额外输入 Package 或全局屏幕服务作为默认解决方案。
@@ -383,3 +384,38 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 当前 `activeInputHandler=2`（Both）。本批不声称完整 Adaptation、自动选择/补齐 New-only/Legacy/Both、多根相机统一、综合 Player、无 Domain Reload 或原游戏实际交互非干扰门禁完成；这些仍分别属于 3.3、3.4。未升级 Package/Unity 或改输入设置，不以当前 Both/Editor 通过代替后续门禁。
 
 **本轮到此停止，不自动实施 3.3，不自动进行 Git 收口。**
+
+## 12. 3.3 实施与验证记录（2026-10-11）
+
+### 12.1 实际成果与契约
+
+- 基线为 `fusion/3-ui` / `7cc933f`，开始时工作区干净；Unity `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.0`，未升级工具链或 Package。
+- `AutomaticAdaptationCanvasScaler` 唯一持有参考分辨率及自动/手动匹配，首次采用既有 Scaler 配置，提供 `Configure(Vector2, bool, float)` 与 `Refresh()`。`UIRootContext.ConfigureResolution` 委托该组件，不存第二份分辨率；`ConfigureCanvas` 明确 Overlay/Camera、绑定 Camera、校验 planeDistance，不创建 Camera。现有显式 stretch 契约保留。
+- Background 独立 cover 整个 Canvas，保持既有不缩小策略，并响应 Canvas/内容尺寸、重新挂载与启用；Border 仅调整水平偏移，保留 Y，宽高比默认范围仍为 `1.77` 至 `2.22`。零尺寸、非法范围或缺依赖明确报告并保留旧布局，可在有效数据恢复后重试。
+- `SafeAreaAdaptation` 仅显式添加才启用，挂到需要保护的内容容器，例如全屏窗口的内容根；不要挂根 Canvas 或全屏背景。它转换主显示器 Overlay/Camera 的安全区到父 RectTransform，支持 `Refresh()` 及固定 Rect 的定向验证入口，不创建全局屏幕事件服务。WorldSpace、多显示器及非轴向容器不在该入口内；既有模板不默认添加 Safe Area 或改变布局。
+- 自建 EventSystem 服务有效 UI 根，最后有效根退出才释放；active 外部系统只借用，保留模块、导航配置与寿命。inactive 对象不被激活或销毁；多系统/无可用模块明确诊断。Both 自建优先 Input System，只有 Legacy 可用才允许 Standalone 回退，New-only 不可回退 Legacy。指针查询不创建输入对象，静态位置/系统缓存按会话清理。
+- 模态同时约束本会话 Raycaster、Selectable 与标准 UGUI 拖动；按可见性、层级和会话恢复有效焦点，不覆盖外部或新选择。Select/Deselect 重入、独立嵌套模态、控件与根重挂、设备移除均有回归。控件捕获用 pointerId + button + Session + epoch，并保存派发前帧身份，避免旧按压进入复用窗口。不清空借用系统的其他指针，也不停用任意业务 MonoBehaviour；自定义业务拖动仍应遵守 `Panel.IsInputBlocked`。
+- 实测确认 Input System `1.14.0` 的共享 runtime defaults 问题：自身模块退出会 Dispose 外部模块仍引用的 static defaults。现有输入桥仅在确有共享资源时保护退出期间的所有权，不修改 Package 或外部配置。UGUI active 系统小集合与该版本退出机制定向反射接入，避免常态全场景搜索，不增加新的 Manager/输入路由框架。
+- New-only 下自动诊断 UI 的 Legacy F1 轮询曾使所有资源测试失败。`AudioKitDebugWindow` 仅修复快捷键后端读取，保留 Both/Legacy 原分支及 Show/Hide；New-only 提供 F1、Android 返回键与 iOS 四触点对应读取。未改 Audio 播放、资源、生命周期或程序集引用，F1 已实际验证，移动端尚未设备实测。
+
+### 12.2 实际验证与状态恢复
+
+| 环境 | 实际模式证明 | 本批实际执行结果 |
+| --- | --- | --- |
+| Legacy-only | 持久配置 `0` 后重启，Core Input System 分支不存在，Legacy 原生位置 API 可用；包提示启用新后端时选择 No | 输入资源/归属 PlayMode `5/5`；正式 ColorSelector 的 Standalone 管线 `1/1`；模态实际 Raycast/Selectable/焦点 `1/1` |
+| Input System-only | 持久配置 `1` 后重启，Input System 分支存在，原生 Legacy API 实际抛 `InvalidOperationException` | 输入资源/归属 PlayMode `4/4`；窗口与真实输入回归 `97/97`，含 F1 和设备移除捕获 |
+| Both（最终恢复后） | 原配置 `2` 已还原并重启，Input System 分支存在，Legacy 原生位置 API 可用 | Core EditMode `57/57`；窗口/输入 PlayMode `97/97`；输入资源/归属 PlayMode `6/6` |
+
+- 上述均为对应 Unity 的实际编译与测试结果，不是 IDE/dotnet 或沿用 Both 冒认 New-only。窗口类作为 PanelManager 寿命/会话变化的直接消费者回归，未重跑公共系统全集；没有执行 Player 构建。
+- Input System 使用自有虚拟 Mouse/Keyboard 的真实设备事件，经实际 InputSystemUIInputModule 完成正式 ColorSelector 的 Overlay/Camera 取色、拖动、参考分辨率变化与按钮关闭，以及正式根遮罩、Submit/Cancel、焦点、Slider、Tips 锚点和旧会话/捕获验证。Standalone 使用自有 BaseInput override，经实际 StandaloneInputModule 完成控件交互。这些是自动化模块管线证据，不称为物理 OS 鼠标/键盘人工验证。
+- 原生鼠标可能覆盖虚拟 Mouse 的 PassThrough 位置流；测试只限制本轮自建系统的 runtime actions，先验证 prior EventSystem、当前 owner 与非持久资产边界，结束恢复 filter 并移除自有设备。不会重置全局输入、覆盖外部 actions 或保存用户场景。
+- 适配 EditMode 覆盖动态尺寸、重挂/启用、Border Y/宽高比、Scaler 配置权威、零尺寸恢复、固定横竖屏 Rect 的 Overlay/Camera Safe Area 和背景独立性；运行时坐标与分辨率变化由正式工具直接验证。
+- 输入切换最终无残留：`ProjectSettings` 与 `Packages` 无 diff，实际 Both 恢复；唯一打开、active 且已保存的原 `Assets/Scenes/Main.unity` 已恢复。未保存用户未保存场景或改变原游戏持久资产。未真正持久化的早期切换和工具超时不记为通过。
+
+### 12.3 影响、限制与停止边界
+
+- Core EventSystem 资源保留 key/GUID/主体 fileID 与导航字段，仅去掉预先启用的 Legacy 模块；YL 根模板去掉无模块的空 EventSystem 子对象，其他主体身份和字段保留。正式 ColorSelector/Tips 资产、原 XF/XFAB、原游戏链未迁移；新脚本/meta 由 Unity 导入，程序集及 Foundation/Core/Runtime 依赖方向未改变，公共 YLFrameworkRoot 的 Audio/Action 非 UI 职责未改。
+- 私有 UGUI/Input System 版本边界在包升级时必须复核；Player/裁剪、移动端真实 Safe Area/触屏、Android/iOS 诊断入口与物理 OS 输入仍未实测。通用屏幕服务、WorldSpace/多显示器 Safe Area、自定义业务拖动代理均不扩展。本轮不声称跨平台或完整阶段 3 验收。
+- 3.4 的综合资产/Inspector 连续验证、无 Domain Reload 的真实连续 Play、原游戏代表性交互非干扰和 Windows64/Mono Player 门禁仍留下一批；原 Logger/MCP 的既有退出噪声不在本批借机重构。
+
+**3.3 达到技术完成条件，具备进入 3.4 的适配/输入前置。待用户验收与 Git 收口；整体阶段 3 仍 IN PROGRESS。本轮停止，不自动执行 3.4、Commit、Push、Merge、Tag、Reset、Clean 或切换分支。**

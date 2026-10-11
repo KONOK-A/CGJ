@@ -48,7 +48,7 @@ namespace YLFramework.Core
         /// <summary>Loaded、active 且未被同根全屏页面遮挡。</summary>
         public bool IsVisible => PanelManager.IsVisible(this);
 
-        /// <summary>被较高的同根模态窗口阻挡，或当前不可见；不表示已完成输入系统接管。</summary>
+        /// <summary>被较高的同根模态窗口阻挡，或当前不可见；统一策略覆盖本会话的 Raycaster 与 Selectable。</summary>
         public bool IsInputBlocked => PanelManager.IsInputBlocked(this);
 
         /// <summary>当前根的有效导航焦点候选，不等于 EventSystem.currentSelectedGameObject。</summary>

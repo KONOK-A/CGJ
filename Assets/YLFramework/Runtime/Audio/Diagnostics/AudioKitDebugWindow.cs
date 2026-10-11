@@ -17,6 +17,30 @@ namespace YLFramework.Services.Audio
         private Vector2 mScrollPosition;
         private Rect mWindowRect = new Rect(12, 12, 640, 560);
 
+#if (UNITY_EDITOR || DEVELOPMENT_BUILD) && !ENABLE_LEGACY_INPUT_MANAGER && ENABLE_INPUT_SYSTEM
+        // 诊断 UI 只读取当前输入后端；反射避免 Runtime 程序集新增可选 Input System 包依赖。
+        private static readonly System.Reflection.PropertyInfo ButtonReleased =
+            Type.GetType("UnityEngine.InputSystem.Controls.ButtonControl, Unity.InputSystem", true).GetProperty("wasReleasedThisFrame");
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL || UNITY_ANDROID
+        private static readonly Type KeyboardType = Type.GetType("UnityEngine.InputSystem.Keyboard, Unity.InputSystem", true);
+        private static readonly System.Reflection.PropertyInfo KeyboardCurrent = KeyboardType.GetProperty("current");
+        private static readonly System.Reflection.PropertyInfo ShortcutKey = KeyboardType.GetProperty(
+#if UNITY_ANDROID && !UNITY_EDITOR
+            "escapeKey");
+#else
+            "f1Key");
+#endif
+#elif UNITY_IOS
+        private static readonly Type TouchscreenType = Type.GetType("UnityEngine.InputSystem.Touchscreen, Unity.InputSystem", true);
+        private static readonly System.Reflection.PropertyInfo TouchscreenCurrent = TouchscreenType.GetProperty("current");
+        private static readonly System.Reflection.PropertyInfo Touches = TouchscreenType.GetProperty("touches");
+        private static readonly System.Reflection.PropertyInfo TouchPress =
+            Type.GetType("UnityEngine.InputSystem.Controls.TouchControl, Unity.InputSystem", true).GetProperty("press");
+        private static readonly System.Reflection.PropertyInfo ButtonPressed =
+            Type.GetType("UnityEngine.InputSystem.Controls.ButtonControl, Unity.InputSystem", true).GetProperty("isPressed");
+#endif
+#endif
+
         /// <summary>当前运行时窗口是否可见；读取不会创建宿主或初始化音频。</summary>
         public static bool IsVisible => TryGetInstance(out var instance) && instance.mVisible;
 
@@ -61,6 +85,7 @@ namespace YLFramework.Services.Audio
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private void Update()
         {
+#if ENABLE_LEGACY_INPUT_MANAGER
 #if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
             if (Input.GetKeyUp(KeyCode.F1)) Toggle();
 #elif UNITY_ANDROID
@@ -72,6 +97,20 @@ namespace YLFramework.Services.Audio
                 Toggle();
             }
             else if (Input.touchCount == 0) mTouching = false;
+#endif
+#elif ENABLE_INPUT_SYSTEM
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL || UNITY_ANDROID
+            var keyboard = KeyboardCurrent.GetValue(null);
+            if (keyboard != null && (bool)ButtonReleased.GetValue(ShortcutKey.GetValue(keyboard))) Toggle();
+#elif UNITY_IOS
+            var touchscreen = TouchscreenCurrent.GetValue(null);
+            int count = 0;
+            if (touchscreen != null)
+                foreach (var touch in (System.Collections.IEnumerable)Touches.GetValue(touchscreen))
+                    if ((bool)ButtonPressed.GetValue(TouchPress.GetValue(touch))) count++;
+            if (!mTouching && count == 4) { mTouching = true; Toggle(); }
+            else if (count == 0) mTouching = false;
+#endif
 #endif
         }
 

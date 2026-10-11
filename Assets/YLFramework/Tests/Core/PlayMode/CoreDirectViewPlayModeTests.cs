@@ -21,6 +21,43 @@ namespace YLFramework.Core.Tests
         protected override void OnClose() => CloseAction?.Invoke();
     }
 
+    public sealed class YLCoreSelectionInputProbe : MonoBehaviour, UnityEngine.EventSystems.ICancelHandler, UnityEngine.EventSystems.IDeselectHandler, UnityEngine.EventSystems.ISelectHandler
+    {
+        public int Cancels;
+        public Action Deselected;
+        public Action Selected;
+        public void OnCancel(UnityEngine.EventSystems.BaseEventData data) => Cancels++;
+        public void OnDeselect(UnityEngine.EventSystems.BaseEventData data) => Deselected?.Invoke();
+        public void OnSelect(UnityEngine.EventSystems.BaseEventData data) => Selected?.Invoke();
+    }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+    public sealed class YLCoreLegacyPointerInput : UnityEngine.EventSystems.BaseInput
+    {
+        private Vector2 position;
+        private bool pressed;
+        private int downFrame = -1, upFrame = -1;
+        public void Set(Vector2 position, bool pressed)
+        {
+            this.position = position;
+            if (pressed != this.pressed)
+            {
+                if (pressed) downFrame = Time.frameCount + 1;
+                else upFrame = Time.frameCount + 1;
+            }
+            this.pressed = pressed;
+        }
+        public override bool mousePresent => true;
+        public override Vector2 mousePosition => position;
+        public override bool touchSupported => false;
+        public override bool GetMouseButton(int button) => button == 0 && pressed;
+        public override bool GetMouseButtonDown(int button) => button == 0 && Time.frameCount == downFrame;
+        public override bool GetMouseButtonUp(int button) => button == 0 && Time.frameCount == upFrame;
+        public override float GetAxisRaw(string axisName) => 0;
+        public override bool GetButtonDown(string buttonName) => false;
+    }
+#endif
+
     public class CoreDirectViewPlayModeTests
     {
         private readonly List<GameObject> objects = new List<GameObject>();
@@ -827,7 +864,16 @@ namespace YLFramework.Core.Tests
                     Assert.That(PanelManager.GetTopPanel(root.GetComponent<Canvas>()), Is.Null);
                 }
             }
-            finally { YLCoreSmokePanel.ResetProbes(); instanceField.SetValue(null, previousManager); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+                try
+                {
+                    typeof(PanelManager).GetMethod("EndLateRound", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
+                    typeof(PanelManager).GetMethod("ReleaseOwnedInput", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
+                }
+                finally { instanceField.SetValue(null, previousManager); }
+            }
         }
 
         [UnityTest]
@@ -1053,7 +1099,7 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator PanelSwitchRevokesOldLateSnapshotAndEmptyQueueReleasesOnlyItsToken()
+        public IEnumerator PanelSwitchDoesNotDuplicateTokenAndLastRootEndsInputLifetimeSubscription()
         {
             yield return StartModule();
             YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
@@ -1078,7 +1124,11 @@ namespace YLFramework.Core.Tests
                     .GetField("_lateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
                 Assert.That(channel.ListenerCount, Is.EqualTo(1), "同值启用不能重复建立连接。");
                 current.Close(); previous.Close();
-                Assert.That(channel.ListenerCount, Is.Zero, "队列归零释放自身订阅，保留共享宿主。");
+                Assert.That(channel.ListenerCount, Is.EqualTo(1), "窗口队列归零后仍服务有效输入根，不销毁其他 Module 可继续使用的输入。");
+                Object.Destroy(root.gameObject);
+                yield return null;
+                yield return null;
+                Assert.That(channel.ListenerCount, Is.Zero, "最后的 UI 根退出后释放自身输入寿命订阅，保留共享宿主。");
                 Assert.That(host != null, Is.True);
             }
             finally
@@ -2976,6 +3026,643 @@ namespace YLFramework.Core.Tests
             Assert.That(second.Module, Is.Null);
 #endif
         }
+
+        [UnityTest]
+        public IEnumerator ModalBlocksActualRaycastsSelectionAndRestoresValidFocus()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ModalRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Lower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var buttonObject = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            buttonObject.transform.SetParent(lower.transform, false);
+            var button = buttonObject.GetComponent<UnityEngine.UI.Button>();
+            var buttonRect = buttonObject.GetComponent<RectTransform>();
+            buttonRect.sizeDelta = new Vector2(100, 100);
+            buttonRect.anchoredPosition = new Vector2(-150, 0);
+            int clicks = 0;
+            button.onClick.AddListener(() => clicks++);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            if (!system)
+            {
+                var input = new GameObject("YLInput.TestSystem", typeof(UnityEngine.EventSystems.EventSystem));
+                objects.Add(input);
+                system = input.GetComponent<UnityEngine.EventSystems.EventSystem>();
+            }
+            system.SetSelectedGameObject(buttonObject);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Modal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Canvas.ForceUpdateCanvases();
+            Assert.That(button.IsInteractable(), Is.False, "Logical blocking must also constrain UGUI navigation and submit.");
+            Assert.That(system.currentSelectedGameObject, Is.Not.SameAs(buttonObject));
+            var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+            system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system)
+            { position = RectTransformUtility.WorldToScreenPoint(null, buttonRect.position) }, hits);
+            Assert.That(hits.Exists(hit => hit.gameObject == buttonObject), Is.False);
+            UnityEngine.EventSystems.ExecuteEvents.Execute(buttonObject, new UnityEngine.EventSystems.BaseEventData(system),
+                UnityEngine.EventSystems.ExecuteEvents.submitHandler);
+            Assert.That(clicks, Is.Zero);
+            modal.Close();
+            Assert.That(button.IsInteractable(), Is.True);
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(buttonObject));
+            lower.Close();
+            Assert.That(system.currentSelectedGameObject, Is.Null, "Closed sessions cannot remain selected.");
+        }
+
+        [UnityTest]
+        public IEnumerator DeselectCloseDoesNotLetOldInputCoveragePolluteReusedPanel()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ReentrantRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLInput.ReentrantLower", true);
+            foreach (var name in new[] { "First", "Second" })
+            {
+                var child = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+                child.transform.SetParent(prefab.transform, false);
+            }
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            var buttons = lower.GetComponentsInChildren<UnityEngine.UI.Button>();
+            buttons[0].GetComponent<YLCoreSelectionInputProbe>().Deselected = lower.Close;
+            system.SetSelectedGameObject(buttons[0].gameObject);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ReentrantModal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Assert.That(lower.Module, Is.Null);
+            modal.Close();
+            var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            Assert.That(next, Is.SameAs(lower));
+            next.gameObject.SetActive(true);
+            foreach (var button in next.GetComponentsInChildren<UnityEngine.UI.Button>())
+                Assert.That(button.IsInteractable(), Is.True, "Old Apply must stop as soon as Deselect ends its session.");
+            Assert.That(next.GetComponent<UnityEngine.UI.GraphicRaycaster>().enabled, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator NestedIndependentModalSelectionIsNotOwnedByBlockedAncestor()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.NestedRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.NestedLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var modalPrefab = Template<YLCoreSmokePanel>("YLInput.NestedModal", true);
+            modalPrefab.AddComponent<Canvas>();
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(modalPrefab, lower.transform, loadViewArgs: null));
+            var button = new GameObject("NestedModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            button.transform.SetParent(modal.transform, false);
+            int deselections = 0;
+            button.GetComponent<YLCoreSelectionInputProbe>().Deselected = () => deselections++;
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            system.SetSelectedGameObject(button);
+            yield return null;
+            yield return null;
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(button));
+            Assert.That(deselections, Is.Zero, "A blocked ancestor must not deselect an independent descendant modal each frame.");
+        }
+
+        [UnityTest]
+        public IEnumerator OnSelectCloseDefersSelectionCleanupWithoutLosingPreviousFocus()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.SelectCloseRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var previous = new GameObject("Previous", typeof(RectTransform), typeof(UnityEngine.UI.Button));
+            previous.transform.SetParent(lower.transform, false);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            system.SetSelectedGameObject(previous);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseModal", true), root, loadViewArgs: null));
+            var selected = new GameObject("CloseOnSelect", typeof(RectTransform), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            selected.transform.SetParent(modal.transform, false);
+            selected.GetComponent<YLCoreSelectionInputProbe>().Selected = modal.Close;
+            modal.Modal = true;
+            modal.gameObject.SetActive(true);
+            modal.RefreshUIState();
+            yield return null;
+            yield return null;
+            Assert.That(modal.Module, Is.Null);
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(previous));
+        }
+
+        [UnityTest]
+        public IEnumerator ReparentedControlsReleaseOldInputCoverageBeforeNewOwnerConfiguration()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ControlMoveRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var child = new GameObject("MovedButton", typeof(RectTransform), typeof(UnityEngine.UI.Button));
+            child.transform.SetParent(lower.transform, false);
+            var button = child.GetComponent<UnityEngine.UI.Button>();
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveModal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Assert.That(button.interactable, Is.False);
+            child.transform.SetParent(modal.transform, false);
+            yield return null;
+            Assert.That(button.interactable, Is.True);
+            button.interactable = false;
+            lower.Close();
+            Assert.That(button.interactable, Is.False, "The old state must not write attributes after ownership has moved.");
+        }
+
+        [UnityTest]
+        public IEnumerator ActivePanelMovedToPreviouslyUnusedRootKeepsItsOwnedInput()
+        {
+            yield return StartModule();
+            var first = PolicyRoot("YLInput.MoveRootA");
+            var second = PolicyRoot("YLInput.MoveRootB");
+            var panel = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.MovedPanel", true), first, loadViewArgs: null));
+            panel.gameObject.SetActive(true);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            panel.transform.SetParent(second, false);
+            yield return null;
+            Object.Destroy(first.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(panel.RootCanvas, Is.SameAs(second.GetComponent<Canvas>()));
+            Assert.That(system && system.isActiveAndEnabled, Is.True);
+            Assert.That(UnityEngine.EventSystems.EventSystem.current, Is.SameAs(system));
+        }
+
+#if ENABLE_INPUT_SYSTEM || ENABLE_LEGACY_INPUT_MANAGER
+#if ENABLE_INPUT_SYSTEM
+        [UnityTest]
+        public IEnumerator InputSystemMouseDrivesFormalColorDragAndCloseButton()
+            => DriveFormalColorWithInputSystem(false);
+
+        [UnityTest]
+        public IEnumerator InputSystemMouseDrivesCameraColorAfterResolutionChange()
+            => DriveFormalColorWithInputSystem(true);
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        [UnityTest]
+        public IEnumerator BorrowedStandaloneModuleDrivesFormalColorViaBaseInputOverride()
+            => DriveFormalColorWithInputSystem(false, true);
+#endif
+
+        private IEnumerator DriveFormalColorWithInputSystem(bool cameraMode, bool legacy = false)
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var root = PolicyRoot("YLInput.NativeMouseRoot");
+#if ENABLE_LEGACY_INPUT_MANAGER
+            YLCoreLegacyPointerInput scriptedInput = null;
+            if (legacy)
+            {
+                var external = new GameObject("YLInput.LegacySystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule), typeof(YLCoreLegacyPointerInput));
+                objects.Add(external);
+                scriptedInput = external.GetComponent<YLCoreLegacyPointerInput>();
+                external.GetComponent<UnityEngine.EventSystems.StandaloneInputModule>().inputOverride = scriptedInput;
+            }
+#endif
+            root.gameObject.AddComponent<UnityEngine.UI.CanvasScaler>();
+            var context = root.gameObject.AddComponent<UIRootContext>();
+            Camera camera = null;
+            if (cameraMode)
+            {
+                var cameraObject = new GameObject("YLInput.NativeCamera", typeof(Camera));
+                objects.Add(cameraObject);
+                camera = cameraObject.GetComponent<Camera>();
+                camera.transform.position = new Vector3(0, 0, -10);
+            }
+            context.ConfigureCanvas(cameraMode ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay, camera, 5);
+            context.ConfigureResolution(new Vector2(800, 600));
+            var catalog = new WindowCatalog();
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+            var prefab = Object.Instantiate(asset);
+            prefab.SetActive(false);
+            objects.Add(prefab);
+            prefabKeys.Add(prefab.GetHashCode());
+            catalog.Register(new WindowDefinition("inputColor", prefab));
+            int changes = 0;
+            var window = Track(catalog.Open<ColorSelectorWindow>(module, "inputColor", root,
+                ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.4f), _ => changes++)));
+            window.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            Assert.That(system.currentInputModule.GetType().FullName, Is.EqualTo(legacy ? "UnityEngine.EventSystems.StandaloneInputModule" : "UnityEngine.InputSystem.UI.InputSystemUIInputModule"));
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = legacy ? null : inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.OwnedMouse", null });
+            Action<Vector2, bool> queue = (position, pressed) =>
+            {
+#if ENABLE_LEGACY_INPUT_MANAGER
+                if (scriptedInput) { scriptedInput.Set(position, pressed); return; }
+#endif
+                QueueMouse(inputType, stateType, mouse, position, pressed);
+            };
+            Action restoreDevices = null;
+            try
+            {
+                if (mouse != null) restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse);
+                var wheel = window.GetComponentInChildren<ColorSelector>().GetComponent<RectTransform>();
+                var center = wheel.rect.center;
+                float radius = Mathf.Min(wheel.rect.width, wheel.rect.height) * 0.5f;
+                Vector2 green = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(center + new Vector2(-0.44f, 0.7621024f) * radius));
+                queue(green, false);
+                yield return null;
+                queue(green, true);
+                yield return null;
+                string pointerEvidence = "Legacy override";
+                if (mouse != null)
+                {
+                    var inputModule = system.currentInputModule;
+                    var pointReference = inputModule.GetType().GetProperty("point").GetValue(inputModule);
+                    var action = pointReference.GetType().GetProperty("action").GetValue(pointReference);
+                    var value = action.GetType().GetMethod("ReadValueAsObject").Invoke(action, null);
+                    int id = (int)mouse.GetType().GetProperty("deviceId").GetValue(mouse);
+                    var hit = (UnityEngine.EventSystems.RaycastResult)inputModule.GetType().GetMethod("GetLastRaycastResult").Invoke(inputModule, new object[] { id });
+                    pointerEvidence = $"focused={system.isFocused} requested={green} action={value} hit={hit.gameObject}";
+                }
+                Assert.That(window.CurrentColor.g, Is.EqualTo(1).Within(0.01f), pointerEvidence);
+                Assert.That(changes, Is.EqualTo(1));
+                context.ConfigureResolution(new Vector2(600, 800), false, 0.25f);
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                Vector2 blue = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(center + new Vector2(-0.44f, -0.7621024f) * radius));
+                queue(blue, true);
+                yield return null;
+                Assert.That(window.CurrentColor.b, Is.EqualTo(1).Within(0.01f));
+                Assert.That(window.CurrentColor.a, Is.EqualTo(0.4f));
+                queue(blue, false);
+                yield return null;
+                var close = window.GetComponentInChildren<UnityEngine.UI.Button>();
+                Vector2 closePoint = RectTransformUtility.WorldToScreenPoint(camera, close.transform.position);
+                queue(closePoint, false);
+                yield return null;
+                queue(closePoint, true);
+                yield return null;
+                queue(closePoint, false);
+                yield return null;
+                Assert.That(window.Module, Is.Null, "Close must be dispatched by the input module, not invoked directly.");
+            }
+            finally
+            {
+                restoreDevices?.Invoke();
+                if (mouse != null) inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+            }
+#endif
+        }
+
+        private static void QueueMouse(Type inputType, Type stateType, object mouse, Vector2 position, bool pressed, bool rightPressed = false)
+        {
+            var state = Activator.CreateInstance(stateType);
+            stateType.GetField("position").SetValue(state, position);
+            stateType.GetField("buttons").SetValue(state, (ushort)((pressed ? 1 : 0) | (rightPressed ? 2 : 0)));
+            QueueInputState(inputType, stateType, mouse, state);
+        }
+
+        // 真实原生鼠标也会向默认 PassThrough actions 推送位置；仅限制本测试自建系统的 assets，不重置全局输入。
+        private Action UseOwnedInputDevices(object module, params object[] devices)
+        {
+            var host = ((UnityEngine.EventSystems.BaseInputModule)module).gameObject;
+            Assert.That(priorEventSystems.Contains(host), Is.False, "Never change a pre-existing EventSystem's device filter.");
+            var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var owned = manager == null ? null : typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            Assert.That(ReferenceEquals(owned, host) || objects.Contains(host), Is.True, "Only this fixture's input host may be filtered.");
+            var asset = module.GetType().GetProperty("actionsAsset").GetValue(module);
+#if UNITY_EDITOR
+            Assert.That(UnityEditor.AssetDatabase.Contains((Object)asset), Is.False, "Only the owned runtime actions may be filtered, never persistent assets.");
+#endif
+            var property = asset.GetType().GetProperty("devices");
+            var previous = property.GetValue(asset);
+            var readonlyArray = property.PropertyType.GetGenericArguments()[0];
+            var deviceType = readonlyArray.GetGenericArguments()[0];
+            var array = Array.CreateInstance(deviceType, devices.Length);
+            for (int i = 0; i < devices.Length; i++) array.SetValue(devices[i], i);
+            property.SetValue(asset, Activator.CreateInstance(readonlyArray, new object[] { array }));
+            return () => property.SetValue(asset, previous);
+        }
+
+        private static void QueueInputState(Type inputType, Type stateType, object device, object state)
+        {
+            foreach (var method in inputType.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                if (method.Name == "QueueStateEvent" && method.IsGenericMethodDefinition)
+                {
+                    method.MakeGenericMethod(stateType).Invoke(null, new[] { device, state, (object)(-1d) });
+                    return;
+                }
+            Assert.Fail("Installed Input System does not expose QueueStateEvent<TState>.");
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private static void QueueKeyboard(Type inputType, object keyboard, string keyName = null)
+        {
+            var keyType = Type.GetType("UnityEngine.InputSystem.Key, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.KeyboardState, Unity.InputSystem");
+            var keys = Array.CreateInstance(keyType, keyName == null ? 0 : 1);
+            if (keyName != null) keys.SetValue(Enum.Parse(keyType, keyName), 0);
+            var state = Activator.CreateInstance(stateType, new object[] { keys });
+            QueueInputState(inputType, stateType, keyboard, state);
+        }
+
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        [UnityTest]
+        public IEnumerator InputSystemOnlyDiagnosticShortcutUsesF1WithoutLegacyPolling()
+        {
+            var type = Type.GetType("YLFramework.Services.Audio.AudioKitDebugWindow, YLFramework.Runtime");
+            Assert.That(type, Is.Not.Null);
+            bool visible = (bool)type.GetProperty("IsVisible").GetValue(null);
+            type.GetMethod("Hide").Invoke(null, null);
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var keyboard = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Keyboard", "YLInput.DiagnosticKeyboard", null });
+            try
+            {
+                yield return null;
+                QueueKeyboard(inputType, keyboard, "F1"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That((bool)type.GetProperty("IsVisible").GetValue(null), Is.True);
+            }
+            finally
+            {
+                type.GetMethod(visible ? "Show" : "Hide").Invoke(null, null);
+                inputType.GetMethod("RemoveDevice").Invoke(null, new[] { keyboard });
+            }
+        }
+#endif
+
+        [UnityTest]
+        public IEnumerator NewModalCancelsAlreadyCapturedScrollRectDrag()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ScrollRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollLower", true), root, loadViewArgs: null));
+            lower.GetComponent<RectTransform>().sizeDelta = new Vector2(400, 400);
+            var scroll = lower.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
+            lower.gameObject.AddComponent<UnityEngine.UI.Image>();
+            var content = new GameObject("Content", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            content.transform.SetParent(lower.transform, false);
+            var contentRect = content.GetComponent<RectTransform>();
+            contentRect.sizeDelta = new Vector2(600, 600);
+            scroll.content = contentRect;
+            scroll.viewport = lower.GetComponent<RectTransform>();
+            scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Unrestricted;
+            scroll.inertia = false;
+            lower.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.ScrollMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, lower.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(40, 40), true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(60, 60), true); yield return null;
+                Assert.That(contentRect.anchoredPosition.sqrMagnitude, Is.GreaterThan(1));
+                var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollModal", true), root, loadViewArgs: null));
+                modal.gameObject.SetActive(true);
+                modal.Modal = true;
+                modal.RefreshUIState();
+                Vector2 stopped = contentRect.anchoredPosition;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(100, 100), true); yield return null;
+                Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped));
+                modal.Close();
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(120, 120), true); yield return null;
+                Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped), "An old capture must not resume after the modal ends.");
+                Assert.That(scroll.enabled, Is.True);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator RemovingPressedDeviceReleasesInvalidControlCapture()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.RemovedDeviceRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceLower", true), root, loadViewArgs: null));
+            var sliderObject = new GameObject("CapturedSlider", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Slider));
+            sliderObject.transform.SetParent(lower.transform, false);
+            var slider = sliderObject.GetComponent<UnityEngine.UI.Slider>();
+            lower.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.RemovedMouse", null });
+            var remove = inputType.GetMethod("RemoveDevice");
+            Action restore = null;
+            bool removed = false;
+            try
+            {
+                restore = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                var point = RectTransformUtility.WorldToScreenPoint(null, slider.transform.position);
+                QueueMouse(inputType, stateType, mouse, point, false); yield return null;
+                QueueMouse(inputType, stateType, mouse, point, true); yield return null;
+                var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceModal", true), root, loadViewArgs: null));
+                modal.gameObject.SetActive(true);
+                modal.Modal = true;
+                modal.RefreshUIState();
+                Assert.That(slider.enabled, Is.False);
+                remove.Invoke(null, new[] { mouse });
+                removed = true;
+                yield return null;
+                modal.Close();
+                yield return null;
+                Assert.That(slider.enabled, Is.True, "Removed controls cannot retain an invalid capture or read device state.");
+            }
+            finally { restore?.Invoke(); if (!removed) remove.Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator OldPointerPressCannotClickAReusedWindowSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.OldPressRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var prefab = Template<YLCoreSmokePanel>("YLInput.OldPressPanel", true);
+            var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
+            child.transform.SetParent(prefab.transform, false);
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            int clicks = 0;
+            var button = lower.GetComponentInChildren<UnityEngine.UI.Button>();
+            button.onClick.AddListener(() => clicks++);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.OldPressMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                lower.Close();
+                var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                Assert.That(next, Is.SameAs(lower));
+                next.gameObject.SetActive(true);
+                QueueMouse(inputType, mouseType, mouse, point, true, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false, true); yield return null;
+                Assert.That(clicks, Is.Zero, "Up from an old session cannot invoke a new session's Button.");
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.EqualTo(1));
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeDownOnSelectReuseCannotAuthorizeOldPressForNewSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.DownSelectRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var prefab = Template<YLCoreSmokePanel>("YLInput.DownSelectPanel", true);
+            var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
+            child.transform.SetParent(prefab.transform, false);
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            int clicks = 0;
+            var button = lower.GetComponentInChildren<UnityEngine.UI.Button>();
+            button.onClick.AddListener(() => clicks++);
+            YLCoreSmokePanel replacement = null;
+            button.GetComponent<YLCoreSelectionInputProbe>().Selected = () =>
+            {
+                lower.Close();
+                replacement = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                replacement.GetComponentInChildren<YLCoreSelectionInputProbe>().Selected = null;
+                replacement.gameObject.SetActive(true);
+            };
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.DownSelectMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                Assert.That(replacement, Is.SameAs(lower));
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.Zero);
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.EqualTo(1));
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator InputSystemModalMaskSubmitCancelAndSliderNavigationUseCurrentSession()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var template = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
+            var host = Object.Instantiate(template);
+            objects.Add(host);
+            var context = host.GetComponentInChildren<UIRootContext>();
+            var catalog = new WindowCatalog();
+            var prefab = Template<YLCoreSmokePanel>("YLInput.NavigationWindow", true);
+            catalog.Register(new WindowDefinition("lowerInput", prefab) { Layer = 0 });
+            catalog.Register(new WindowDefinition("modalInput", prefab) { Layer = 3, Modal = true });
+            var lower = Track(catalog.Open<YLCoreSmokePanel>(module, "lowerInput", context.Canvas.transform));
+            lower.gameObject.SetActive(true);
+            var lowerButton = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            lowerButton.transform.SetParent(lower.transform, false);
+            int lowerClicks = 0, modalClicks = 0;
+            lowerButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => lowerClicks++);
+            var sliderObject = new GameObject("Slider", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Slider));
+            sliderObject.transform.SetParent(lower.transform, false);
+            var slider = sliderObject.GetComponent<UnityEngine.UI.Slider>();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            yield return null;
+            system.SetSelectedGameObject(lowerButton);
+            var modal = Track(catalog.Open<YLCoreSmokePanel>(module, "modalInput", context.Canvas.transform));
+            var modalButton = new GameObject("ModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            modalButton.transform.SetParent(modal.transform, false);
+            modalButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => modalClicks++);
+            modal.gameObject.SetActive(true);
+            modal.RefreshUIState();
+            yield return null;
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(modalButton));
+            Assert.That(lowerButton.GetComponent<UnityEngine.UI.Button>().IsInteractable(), Is.False);
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var add = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) });
+            var mouse = add.Invoke(null, new object[] { "Mouse", "YLInput.MaskMouse", null });
+            var keyboard = add.Invoke(null, new object[] { "Keyboard", "YLInput.NavigationKeyboard", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse, keyboard);
+                Canvas.ForceUpdateCanvases();
+                var point = new Vector2(10, 10);
+                var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+                system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system) { position = point }, hits);
+                Assert.That(hits, Is.Not.Empty);
+                Assert.That(hits[0].gameObject.name, Is.EqualTo("Mask"));
+                Assert.That(UIPointer.CheckPositionOnUI(point), Is.True, "Mask is a world-input blocker, not an empty UI result.");
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(lowerClicks, Is.Zero);
+                // 点击非 Selectable 遮罩可清空选择；显式选择模态按钮后验证真正后端的导航事件。
+                system.SetSelectedGameObject(modalButton);
+                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(modalClicks, Is.EqualTo(1));
+                Assert.That(lowerClicks, Is.Zero);
+                QueueKeyboard(inputType, keyboard, "Escape"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(modalButton.GetComponent<YLCoreSelectionInputProbe>().Cancels, Is.EqualTo(1));
+                modal.Close();
+                Assert.That(system.currentSelectedGameObject, Is.SameAs(lowerButton));
+                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(lowerClicks, Is.EqualTo(1));
+                system.SetSelectedGameObject(sliderObject);
+                float oldValue = slider.value;
+                QueueKeyboard(inputType, keyboard, "RightArrow"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(slider.value, Is.GreaterThan(oldValue));
+                var tip = host.GetComponentInChildren<UITipsPresenter>().Show(module, "Adapted input", UITipPos.RightTop);
+                Assert.That(((RectTransform)tip.Item.transform.parent).anchorMin, Is.EqualTo(Vector2.one));
+                tip.Dispose();
+            }
+            finally
+            {
+                restoreDevices?.Invoke();
+                var remove = inputType.GetMethod("RemoveDevice");
+                remove.Invoke(null, new[] { mouse });
+                remove.Invoke(null, new[] { keyboard });
+            }
+#endif
+        }
+#endif
+#endif
 
         [UnityTest]
         public IEnumerator MigratedRootTemplateHasLayersMasksAndBoundTipsWithoutLegacyComponents()
