@@ -201,7 +201,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4168617600262367926}
-  - {fileID: 4944253031805751439}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2321207646930679465
@@ -369,53 +368,6 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 23
---- !u!1 &1372473715029231078
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4944253031805751439}
-  - component: {fileID: 4295757300643374561}
-  m_Layer: 0
-  m_Name: EventSystem
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &4944253031805751439
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1372473715029231078}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1923763840815377268}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &4295757300643374561
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1372473715029231078}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_FirstSelected: {fileID: 0}
-  m_sendNavigationEvents: 1
-  m_DragThreshold: 10
 --- !u!1 &1443046975804669396
 GameObject:
   m_ObjectHideFlags: 0
@@ -781,9 +733,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8393898062696096868}
-  - component: {fileID: 4282308383682487630}
   m_Layer: 5
-  m_Name: UIManager
+  m_Name: Windows
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -808,42 +759,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &4282308383682487630
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4320755821653666496}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef050e654d014a7cb539e809f36326a2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  uiLayers:
-  - root: {fileID: 1107288401859239007}
-    enableMask: 1
-    maskImage: {fileID: 5392792011260555797}
-  - root: {fileID: 5791118976354111298}
-    enableMask: 1
-    maskImage: {fileID: 3822194222821184903}
-  - root: {fileID: 4168087723046849954}
-    enableMask: 1
-    maskImage: {fileID: 4713174751662775517}
-  - root: {fileID: 8385503694158263436}
-    enableMask: 1
-    maskImage: {fileID: 3155175579874337980}
-  - root: {fileID: 4114799338787284969}
-    enableMask: 1
-    maskImage: {fileID: 2324511424799412285}
-  dragLayer: {fileID: 4592011689858988641}
-  uiTipItemPrefab: {fileID: 1142028653147962587, guid: e71ff2cbb45a105459b3731fe3c7cb2f, type: 3}
-  leftTopTipRoot: {fileID: 4454682473874148812}
-  leftDownTipRoot: {fileID: 8642440994608629699}
-  rightDownTipRoot: {fileID: 3784660632750861910}
-  rightTopTipRoot: {fileID: 7366369249064467693}
-  middleTipRoot: {fileID: 9074644583861995545}
-  uiTipItemPool: {fileID: 3744863524722699870}
 --- !u!1 &4452908931080180010
 GameObject:
   m_ObjectHideFlags: 0
@@ -933,7 +848,8 @@ GameObject:
   - component: {fileID: 1035312125165664215}
   - component: {fileID: 735356482686683385}
   - component: {fileID: 5918871948980011761}
-  - component: {fileID: 4880376954622785697}
+  - component: {fileID: 6254117691631304046}
+  - component: {fileID: 2313083739765851799}
   m_Layer: 5
   m_Name: UISystem
   m_TagString: Untagged
@@ -1032,7 +948,7 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 55
---- !u!114 &4880376954622785697
+--- !u!114 &6254117691631304046
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1041,13 +957,49 @@ MonoBehaviour:
   m_GameObject: {fileID: 4487415712842133423}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eaa2ff45b0824bb0a88fbda69f891959, type: 3}
+  m_Script: {fileID: 11500000, guid: 8d6d596c53addfb459ce38f015a75b7b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   uiCamera: {fileID: 3989987567911391785}
   canvas: {fileID: 1035312125165664215}
   canvasScaler: {fileID: 735356482686683385}
   graphicRaycaster: {fileID: 5918871948980011761}
+  uiLayers:
+  - root: {fileID: 1107288401859239007}
+    enableMask: 1
+    maskImage: {fileID: 5392792011260555797}
+  - root: {fileID: 5791118976354111298}
+    enableMask: 1
+    maskImage: {fileID: 3822194222821184903}
+  - root: {fileID: 4168087723046849954}
+    enableMask: 1
+    maskImage: {fileID: 4713174751662775517}
+  - root: {fileID: 8385503694158263436}
+    enableMask: 1
+    maskImage: {fileID: 3155175579874337980}
+  - root: {fileID: 4114799338787284969}
+    enableMask: 1
+    maskImage: {fileID: 2324511424799412285}
+  dragLayer: {fileID: 4592011689858988641}
+--- !u!114 &2313083739765851799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4487415712842133423}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 113bd870c4a8e7c45a78403989d62d2b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  uiTipItemPrefab: {fileID: 1142028653147962587, guid: e71ff2cbb45a105459b3731fe3c7cb2f, type: 3}
+  leftTopTipRoot: {fileID: 4454682473874148812}
+  leftDownTipRoot: {fileID: 8642440994608629699}
+  rightTopTipRoot: {fileID: 3784660632750861910}
+  rightDownTipRoot: {fileID: 7366369249064467693}
+  middleTipRoot: {fileID: 9074644583861995545}
+  uiTipItemPool: {fileID: 3744863524722699870}
 --- !u!1 &5808907402084587762
 GameObject:
   m_ObjectHideFlags: 0

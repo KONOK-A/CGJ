@@ -21,6 +21,43 @@ namespace YLFramework.Core.Tests
         protected override void OnClose() => CloseAction?.Invoke();
     }
 
+    public sealed class YLCoreSelectionInputProbe : MonoBehaviour, UnityEngine.EventSystems.ICancelHandler, UnityEngine.EventSystems.IDeselectHandler, UnityEngine.EventSystems.ISelectHandler
+    {
+        public int Cancels;
+        public Action Deselected;
+        public Action Selected;
+        public void OnCancel(UnityEngine.EventSystems.BaseEventData data) => Cancels++;
+        public void OnDeselect(UnityEngine.EventSystems.BaseEventData data) => Deselected?.Invoke();
+        public void OnSelect(UnityEngine.EventSystems.BaseEventData data) => Selected?.Invoke();
+    }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+    public sealed class YLCoreLegacyPointerInput : UnityEngine.EventSystems.BaseInput
+    {
+        private Vector2 position;
+        private bool pressed;
+        private int downFrame = -1, upFrame = -1;
+        public void Set(Vector2 position, bool pressed)
+        {
+            this.position = position;
+            if (pressed != this.pressed)
+            {
+                if (pressed) downFrame = Time.frameCount + 1;
+                else upFrame = Time.frameCount + 1;
+            }
+            this.pressed = pressed;
+        }
+        public override bool mousePresent => true;
+        public override Vector2 mousePosition => position;
+        public override bool touchSupported => false;
+        public override bool GetMouseButton(int button) => button == 0 && pressed;
+        public override bool GetMouseButtonDown(int button) => button == 0 && Time.frameCount == downFrame;
+        public override bool GetMouseButtonUp(int button) => button == 0 && Time.frameCount == upFrame;
+        public override float GetAxisRaw(string axisName) => 0;
+        public override bool GetButtonDown(string buttonName) => false;
+    }
+#endif
+
     public class CoreDirectViewPlayModeTests
     {
         private readonly List<GameObject> objects = new List<GameObject>();
@@ -30,6 +67,7 @@ namespace YLFramework.Core.Tests
         private YLCoreDirectViewModule module;
         private CoreClassPoolScope classPool;
         private CoreUpdateHostScope updateHosts;
+        private readonly HashSet<GameObject> priorEventSystems = new HashSet<GameObject>();
 
         [SetUp]
         public void SetUp()
@@ -44,6 +82,9 @@ namespace YLFramework.Core.Tests
             Assert.That(ModuleManager.AllModules, Is.Empty, "Use the independent test scene, not a running business module.");
             classPool = new CoreClassPoolScope();
             updateHosts = new CoreUpdateHostScope();
+            priorEventSystems.Clear();
+            foreach (var system in Object.FindObjectsByType<UnityEngine.EventSystems.EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                priorEventSystems.Add(system.gameObject);
             module = new YLCoreDirectViewModule();
         }
 
@@ -79,6 +120,9 @@ namespace YLFramework.Core.Tests
 
         private void ReleaseObjects()
         {
+            var policy = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var inputHost = policy == null ? null : (GameObject)typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(policy);
+            if (inputHost && !priorEventSystems.Contains(inputHost)) objects.Add(inputHost);
             foreach (var obj in objects) if (obj) Object.Destroy(obj);
             // The backend has no public per-prefab disposal. Remove only our unique pool/mapping entries.
             var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
@@ -750,39 +794,37 @@ namespace YLFramework.Core.Tests
             // 独立构造不经过Instance属性，不注册场景或编辑器事件，也不污染已有manager。
             var manager = Activator.CreateInstance(type, true);
             instanceField.SetValue(null, manager);
-            var orders = (IDictionary)type.GetField("uiOrders", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-            var persistentOrders = (IDictionary)type.GetField("dontDestroyUIOrders", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-            var queue = (IList)type.GetField("panelQueues", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-            var current = type.GetField("_currentPanel", BindingFlags.Instance | BindingFlags.NonPublic);
-            var listener = type.GetField("multiPanelListener", BindingFlags.Instance | BindingFlags.NonPublic);
+            var states = (IDictionary)type.GetField("states", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            List<Panel> Queue()
+            {
+                var panels = new List<Panel>();
+                PanelManager.GetAllPanels(UIType.UI, panels);
+                panels.RemoveAll(item => !item.IsLoaded || !item.gameObject.activeInHierarchy || item.PanelType != PanelType.Panel);
+                return panels;
+            }
             try
             {
+                YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+                var root = PolicyRoot("YLCore.CleanupRoot");
                 for (int phase = 0; phase < 2; phase++)
                 {
                     var prefab = Template<YLCoreSmokePanel>("YLCorePanelCleanupPrefab" + phase, true);
-                    var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
-                    var panel = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
-                    Assert.That(orders.Contains(previous), Is.True);
-                    Assert.That(orders.Contains(panel), Is.True);
+                    var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                    var panel = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                    Assert.That(states.Contains(previous), Is.True);
+                    Assert.That(states.Contains(panel), Is.True);
                     previous.SortingOrder = 10;
                     panel.SortingOrder = 20;
-                    persistentOrders.Add(panel, 20);
-                    queue.Add(previous);
-                    queue.Add(panel);
-                    queue.Add(panel);
-                    current.SetValue(manager, panel);
-                    listener.SetValue(manager, phase == 1);
-                    previous.Canvas.enabled = false;
+                    PanelManager.MultiPanelListener = phase == 1;
                     var failure = new InvalidOperationException("global panel observer " + phase);
                     var followingCalls = 0;
                     Action<View> broadcast = removed =>
                     {
                         if (!ReferenceEquals(removed, panel)) return;
-                        Assert.That(orders.Contains(panel), Is.False);
-                        Assert.That(persistentOrders.Contains(panel), Is.False);
-                        Assert.That(queue, Is.EqualTo(new Panel[] { previous }));
-                        Assert.That(current.GetValue(manager), Is.SameAs(previous));
-                        Assert.That(previous.Canvas.enabled, Is.EqualTo(phase == 1));
+                        Assert.That(states.Contains(panel), Is.False);
+                        Assert.That(Queue(), Is.EqualTo(new Panel[] { previous }));
+                        Assert.That(PanelManager.GetTopPanel(previous.RootCanvas), Is.SameAs(previous));
+                        Assert.That(previous.Canvas.enabled, Is.True);
                         Assert.That(panel.Module, Is.Null);
                         throw failure;
                     };
@@ -794,11 +836,10 @@ namespace YLFramework.Core.Tests
                         Assert.That(panel.IsLoaded, Is.False);
                         Assert.That(panel.Module, Is.Null);
                         Assert.That(panel.gameObject.activeSelf, Is.False);
-                        Assert.That(orders.Contains(panel), Is.False);
-                        Assert.That(persistentOrders.Contains(panel), Is.False);
-                        Assert.That(queue, Is.EqualTo(new Panel[] { previous }));
-                        Assert.That(current.GetValue(manager), Is.SameAs(previous));
-                        Assert.That(previous.Canvas.enabled, Is.EqualTo(phase == 1));
+                        Assert.That(states.Contains(panel), Is.False);
+                        Assert.That(Queue(), Is.EqualTo(new Panel[] { previous }));
+                        Assert.That(PanelManager.GetTopPanel(previous.RootCanvas), Is.SameAs(previous));
+                        Assert.That(previous.Canvas.enabled, Is.True);
                     });
                     try
                     {
@@ -815,16 +856,24 @@ namespace YLFramework.Core.Tests
                         broadcastToken.UnRegister();
                         followingToken.UnRegister();
                     }
-                    Assert.That(Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null)), Is.SameAs(panel));
+                    Assert.That(Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null)), Is.SameAs(panel));
                     panel.Close();
                     previous.Close();
-                    Assert.That(orders, Is.Empty);
-                    Assert.That(persistentOrders, Is.Empty);
-                    Assert.That(queue, Is.Empty);
-                    Assert.That(current.GetValue(manager), Is.Null);
+                    Assert.That(states, Is.Empty);
+                    Assert.That(Queue(), Is.Empty);
+                    Assert.That(PanelManager.GetTopPanel(root.GetComponent<Canvas>()), Is.Null);
                 }
             }
-            finally { instanceField.SetValue(null, previousManager); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+                try
+                {
+                    typeof(PanelManager).GetMethod("EndLateRound", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
+                    typeof(PanelManager).GetMethod("ReleaseOwnedInput", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
+                }
+                finally { instanceField.SetValue(null, previousManager); }
+            }
         }
 
         [UnityTest]
@@ -1050,7 +1099,7 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator PanelSwitchRevokesOldLateSnapshotAndEmptyQueueReleasesOnlyItsToken()
+        public IEnumerator PanelSwitchDoesNotDuplicateTokenAndLastRootEndsInputLifetimeSubscription()
         {
             yield return StartModule();
             YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
@@ -1058,13 +1107,14 @@ namespace YLFramework.Core.Tests
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCorePanelUpdateRound", true);
-                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
-                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var root = PolicyRoot("YLCore.LateRoundRoot");
+                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
                 current.enabled = false;
                 current.gameObject.SetActive(false);
                 var host = UnityEngine.Object.FindFirstObjectByType<YLFramework.Foundation.UpdateManager>();
                 host.SendMessage("LateUpdate");
-                Assert.That(previous.Canvas.enabled, Is.False, "取消轮次后不得从旧快照进入 Panel 兜底。");
+                Assert.That(previous.Canvas.enabled, Is.True, "关闭遮挡策略应立即恢复显示。");
                 stopper.UnRegister();
                 PanelManager.MultiPanelListener = true;
                 PanelManager.MultiPanelListener = true;
@@ -1074,7 +1124,11 @@ namespace YLFramework.Core.Tests
                     .GetField("_lateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
                 Assert.That(channel.ListenerCount, Is.EqualTo(1), "同值启用不能重复建立连接。");
                 current.Close(); previous.Close();
-                Assert.That(channel.ListenerCount, Is.Zero, "队列归零释放自身订阅，保留共享宿主。");
+                Assert.That(channel.ListenerCount, Is.EqualTo(1), "窗口队列归零后仍服务有效输入根，不销毁其他 Module 可继续使用的输入。");
+                Object.Destroy(root.gameObject);
+                yield return null;
+                yield return null;
+                Assert.That(channel.ListenerCount, Is.Zero, "最后的 UI 根退出后释放自身输入寿命订阅，保留共享宿主。");
                 Assert.That(host != null, Is.True);
             }
             finally
@@ -1132,8 +1186,9 @@ namespace YLFramework.Core.Tests
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCorePanelLateFallback", true);
-                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
-                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var root = PolicyRoot("YLCore.LateFallbackRoot");
+                var previous = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                var current = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
                 Assert.That(previous.Canvas.enabled, Is.False);
                 // 先停用组件时对象仍活跃，直接 Deactivate 不应释放队列。
                 // 随后停用对象不会再收到第二次 OnDisable，需原有 Late 兜底。
@@ -1143,8 +1198,7 @@ namespace YLFramework.Core.Tests
                 yield return null;
                 yield return null;
                 Assert.That(previous.Canvas.enabled, Is.True);
-                var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-                Assert.That(typeof(PanelManager).GetField("_currentPanel", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager), Is.SameAs(previous));
+                Assert.That(PanelManager.GetTopPanel(previous.RootCanvas), Is.SameAs(previous));
                 current.Close(); previous.Close();
             }
             finally { YLCoreSmokePanel.ResetProbes(); }
@@ -1158,9 +1212,11 @@ namespace YLFramework.Core.Tests
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCoreInactivePanelPrefab", true);
-                var visible = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var root = PolicyRoot("YLCore.InactiveRoot");
+                var visible = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
                 var parent = new GameObject("YLCoreInactivePanelParent");
                 objects.Add(parent);
+                parent.transform.SetParent(root, false);
                 parent.SetActive(false);
                 var obj = new GameObject("YLCoreInactiveScenePanel", typeof(RectTransform));
                 objects.Add(obj);
@@ -1171,7 +1227,7 @@ namespace YLFramework.Core.Tests
                 Assert.That(inactive.gameObject.activeSelf, Is.True);
                 Assert.That(inactive.gameObject.activeInHierarchy, Is.False);
                 Assert.That(visible.Canvas.enabled, Is.True, "Inactive preparation cannot hide the current Panel.");
-                var orders = (IDictionary)typeof(PanelManager).GetField("uiOrders", BindingFlags.Instance | BindingFlags.NonPublic)
+                var orders = (IDictionary)typeof(PanelManager).GetField("states", BindingFlags.Instance | BindingFlags.NonPublic)
                     .GetValue(typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
                 Assert.That(orders.Contains(inactive), Is.True);
                 module.UIStartSortOrder = 91;
@@ -1205,7 +1261,8 @@ namespace YLFramework.Core.Tests
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCoreSharedPanelEventPrefab", true);
-                var first = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var root = PolicyRoot("YLCore.SharedEventRoot");
+                var first = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
                 YLCoreSmokePanel.InvisibleProbe = panel =>
                 {
                     Assert.That(panel, Is.SameAs(first));
@@ -1213,7 +1270,7 @@ namespace YLFramework.Core.Tests
                     Assert.That(activating, Is.Not.Null);
                     activating.gameObject.SetActive(false);
                 };
-                var second = Track(module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: null));
+                var second = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
                 Assert.That(second.IsLoaded, Is.True);
                 Assert.That(second.gameObject.activeSelf, Is.False);
                 Assert.That(first.Canvas.enabled, Is.True);
@@ -1632,8 +1689,10 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var prefab = Template<YLCoreSmokePanel>("YLCoreInvalidCanvasPrefab", true);
             prefab.AddComponent<Canvas>();
+            module.UIStartSortOrder = short.MaxValue;
             var args = NewArgs();
-            Assert.Throws<Exception>(() => module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
+            Assert.Throws<ArgumentOutOfRangeException>(() => module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
+            module.UIStartSortOrder = 0;
             AssertArgsReleased(args);
             Assert.That(module.GetViews<View>(), Is.Empty);
             var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
@@ -2247,6 +2306,1590 @@ namespace YLFramework.Core.Tests
                 global.Cancel();
                 if (ownedHost) Object.Destroy(ownedHost.gameObject);
             }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyUsesEffectiveModuleOrderAndStableFrontPriority()
+        {
+            yield return StartModule();
+            var other = new YLCoreConsumerModule();
+            try
+            {
+                var request = ModuleManager.StartUpModule(other);
+                while (!request.isDone) yield return null;
+                Assert.That(request.error, Is.Null.Or.Empty);
+                other.UIStartSortOrder = 200;
+                var root = new GameObject("YLPolicy.SharedRoot", typeof(RectTransform), typeof(Canvas));
+                objects.Add(root);
+                var prefab = Template<YLCoreSmokePanel>("YLPolicy.Order", true);
+                var high = Track(other.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+                var low = Track(module.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+                high.SortingOrder = 10;
+                low.SortingOrder = 50;
+                Assert.That(high.Canvas.sortingOrder, Is.GreaterThan(low.Canvas.sortingOrder));
+                Assert.That(high.IsTop(), Is.True);
+                Assert.That(low.IsTop(), Is.False);
+                Assert.That(PanelManager.GetTopPanel(UIType.UI), Is.SameAs(high));
+                high.TypeOverride = low.TypeOverride = PanelType.Panel;
+                high.RefreshUIState();
+                Assert.That(high.IsVisible, Is.True);
+                Assert.That(low.IsVisible, Is.False, "A later lower effective order cannot hide the higher Module's page.");
+                high.KeepInFront = true;
+                var third = Track(module.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+                var stable = high.Canvas.sortingOrder;
+                third.TypeOverride = PanelType.Panel;
+                third.Close();
+                int hiddenAtActivation = 0;
+                YLCoreSmokePanel.InvisibleProbe = _ => hiddenAtActivation++;
+                third = Track(module.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+                Assert.That(hiddenAtActivation, Is.EqualTo(1), "An initially occluded page must receive its Invisible transition.");
+                YLCoreSmokePanel.InvisibleProbe = null;
+                Assert.That(high.Canvas.sortingOrder, Is.EqualTo(stable), "AlwaysInFront must not drift with each registration.");
+                low.TypeOverride = PanelType.Window;
+                low.Modal = true;
+                low.RefreshUIState();
+                Assert.That(low.Canvas.sortingOrder, Is.GreaterThan(high.Canvas.sortingOrder), "Module offsets and AlwaysInFront cannot cross the modal priority band.");
+                Assert.That(high.IsInputBlocked, Is.True);
+                Assert.That(low.HasFocus, Is.True);
+            }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other)) other.Close();
+                classPool.Restore(new Module[] { other });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyIsolatesIndependentRootsAndControlsNestedWindowCanvas()
+        {
+            yield return StartModule();
+            YLCoreSmokePanel.ProbePanelType = PanelType.Panel;
+            try
+            {
+                var rootA = new GameObject("YLPolicy.RootA", typeof(RectTransform), typeof(Canvas));
+                var rootB = new GameObject("YLPolicy.RootB", typeof(RectTransform), typeof(Canvas));
+                objects.Add(rootA);
+                objects.Add(rootB);
+                var container = new GameObject("YLPolicy.Container", typeof(RectTransform));
+                objects.Add(container);
+                container.transform.SetParent(rootB.transform, false);
+                var prefab = Template<YLCoreSmokePanel>("YLPolicy.RootWindow", true);
+                var a = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootA.transform, loadViewArgs: null));
+                var b = Track(module.LoadView<YLCoreSmokePanel>(prefab, container.transform, loadViewArgs: null));
+                Assert.That(a.Canvas.enabled, Is.True, "A different effective root cannot occlude this Panel.");
+                Assert.That(b.Canvas, Is.SameAs(b.GetComponent<Canvas>()), "A nested root container is not another Panel's Canvas.");
+                Assert.That(rootA.GetComponent<Canvas>().enabled, Is.True);
+                Assert.That(rootB.GetComponent<Canvas>().enabled, Is.True);
+                Assert.That(a.IsTop(), Is.True);
+                Assert.That(b.IsTop(), Is.True);
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyAcceptsPresetCanvasAndRejectsOverflowBeforeMutation()
+        {
+            yield return StartModule();
+            var root = new GameObject("YLPolicy.PresetRoot", typeof(RectTransform), typeof(Canvas));
+            objects.Add(root);
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.Preset", true);
+            prefab.AddComponent<Canvas>();
+            var panel = Track(module.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+            var previous = panel.SortingOrder;
+            var display = panel.Canvas.sortingOrder;
+            Assert.Throws<ArgumentOutOfRangeException>(() => panel.SortingOrder = int.MaxValue);
+            Assert.That(panel.SortingOrder, Is.EqualTo(previous));
+            Assert.That(panel.Canvas.sortingOrder, Is.EqualTo(display));
+            Assert.Throws<ArgumentOutOfRangeException>(() => module.UIStartSortOrder = int.MaxValue);
+            Assert.That(module.UIStartSortOrder, Is.Zero);
+            Assert.That(panel.Canvas.sortingOrder, Is.EqualTo(display));
+            var sibling = Track(module.LoadView<YLCoreSmokePanel>(prefab, root.transform, loadViewArgs: null));
+            sibling.SortingOrder = previous;
+            Assert.That(sibling.Canvas.sortingOrder, Is.GreaterThan(panel.Canvas.sortingOrder));
+            Assert.That(sibling.IsTop(), Is.True, "Equal requested orders use stable registration order, not Dictionary enumeration.");
+            Assert.Throws<ArgumentOutOfRangeException>(() => module.UIStartSortOrder = short.MaxValue);
+            sibling.SortingOrder = short.MaxValue;
+            Assert.Throws<ArgumentOutOfRangeException>(() => panel.SortingOrder = short.MaxValue);
+            Assert.That(panel.SortingOrder, Is.EqualTo(previous), "A rejected priority collision cannot partially change the order.");
+            panel.Close();
+            Assert.DoesNotThrow(() => panel.SortingOrder = int.MaxValue, "A retired session must not operate on a cached Canvas or dereference its old owner.");
+            Assert.That(panel.SortingOrder, Is.EqualTo(previous));
+            Assert.That(sibling.Canvas.sortingOrder, Is.EqualTo(32767));
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyModalStackRestoresOnlyEffectiveFocusAndIgnoresOverlay()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.ModalRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.Modal", true);
+            var content = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            var first = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            first.Modal = true;
+            first.RefreshUIState();
+            var second = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            second.Modal = true;
+            second.RefreshUIState();
+            var overlay = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            overlay.TypeOverride = PanelType.Overlay;
+            overlay.RefreshUIState();
+            Assert.That(content.IsVisible, Is.True, "Modal does not imply full-screen rendering occlusion.");
+            Assert.That(content.IsInputBlocked, Is.True);
+            Assert.That(first.IsInputBlocked, Is.True);
+            Assert.That(second.HasFocus, Is.True);
+            Assert.That(PanelManager.GetTopPanel(root.GetComponent<Canvas>()), Is.SameAs(second));
+            second.gameObject.SetActive(false);
+            Assert.That(first.HasFocus, Is.True);
+            Assert.That(PanelManager.GetModalPanel(content.RootCanvas), Is.SameAs(first));
+            first.Close();
+            Assert.That(content.HasFocus, Is.True);
+            Assert.That(content.IsInputBlocked, Is.False);
+            second.gameObject.SetActive(true);
+            Assert.That(second.HasFocus, Is.True);
+            second.Close();
+            Assert.That(content.HasFocus, Is.True);
+            Assert.That(overlay.HasFocus, Is.False);
+            PanelManager.MultiPanelListener = false;
+            try
+            {
+                first = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                first.Modal = true;
+                first.RefreshUIState();
+                Assert.That(content.IsInputBlocked, Is.True);
+                first.enabled = false;
+                first.gameObject.SetActive(false);
+                yield return null;
+                yield return null;
+                Assert.That(content.HasFocus, Is.True, "Occlusion switch cannot disable modal/focus lifecycle maintenance.");
+                Assert.That(content.IsInputBlocked, Is.False);
+            }
+            finally { PanelManager.MultiPanelListener = true; }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyBorrowedCanvasInheritsOwnerWithoutHidingSharedRoot()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.BorrowRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.BorrowOwner", true);
+            var owner = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            owner.TypeOverride = PanelType.Panel;
+            owner.RefreshUIState();
+            var childObject = new GameObject("YLPolicy.BorrowedChild", typeof(RectTransform));
+            objects.Add(childObject);
+            childObject.transform.SetParent(owner.transform, false);
+            var child = module.AttachView(childObject.AddComponent<YLCoreSmokePanel>());
+            Assert.That(child.Canvas, Is.SameAs(owner.Canvas));
+            var before = owner.Canvas.sortingOrder;
+            child.SortingOrder = int.MaxValue;
+            Assert.That(owner.Canvas.sortingOrder, Is.EqualTo(before));
+            var covering = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            covering.TypeOverride = PanelType.Panel;
+            covering.RefreshUIState();
+            Assert.That(owner.IsVisible, Is.False);
+            Assert.That(child.IsVisible, Is.False, "Borrowed child must reflect the committed owner visibility.");
+            Assert.That(child.IsInputBlocked, Is.True);
+            child.Close();
+            Assert.That(root.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(covering.Canvas.enabled, Is.True);
+            covering.Close();
+            Assert.That(owner.Canvas.enabled, Is.True);
+            Assert.That(owner.IsLoaded, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyDefaultRootsAreSceneScopedAndPersistentRootIsIndependent()
+        {
+            yield return StartModule();
+            var previousScene = SceneManager.GetActiveScene();
+            var previousHook = PanelManager.onCreateCanvas;
+            var sceneA = OwnScene("YLPolicy.SceneA");
+            var sceneB = OwnScene("YLPolicy.SceneB");
+            var system = new GameObject("YLPolicy.OwnEventSystem", typeof(UnityEngine.EventSystems.EventSystem));
+            objects.Add(system);
+            var getParent = typeof(PanelManager).GetMethod("GetParent", BindingFlags.Static | BindingFlags.NonPublic);
+            PanelManager.onCreateCanvas = canvas => objects.Add(canvas.gameObject);
+            try
+            {
+                SceneManager.SetActiveScene(sceneA);
+                var rootA = (Transform)getParent.Invoke(null, new object[] { module, null, UIType.UI });
+                SceneManager.SetActiveScene(sceneB);
+                var rootB = (Transform)getParent.Invoke(null, new object[] { module, null, UIType.UI });
+                var persistent = (Transform)getParent.Invoke(null, new object[] { module, null, UIType.DontDestroyUI });
+                Assert.That(rootA, Is.Not.SameAs(rootB));
+                Assert.That(rootA.gameObject.scene, Is.EqualTo(sceneA));
+                Assert.That(rootB.gameObject.scene, Is.EqualTo(sceneB));
+                SceneManager.SetActiveScene(sceneA);
+                Assert.That(getParent.Invoke(null, new object[] { module, null, UIType.UI }), Is.SameAs(rootA));
+                var prefab = Template<YLCoreSmokePanel>("YLPolicy.ScenePanel", true);
+                var a = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootA, loadViewArgs: null));
+                var b = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootB, loadViewArgs: null));
+                var d = Track(module.LoadView<YLCoreSmokePanel>(prefab, persistent, loadViewArgs: null));
+                a.TypeOverride = b.TypeOverride = d.TypeOverride = PanelType.Panel;
+                a.RefreshUIState();
+                d.SortingOrder = 100;
+                Assert.That(d.UIType, Is.EqualTo(UIType.DontDestroyUI));
+                Assert.That(a.Canvas.enabled && b.Canvas.enabled && d.Canvas.enabled, Is.True);
+                Assert.That(a.IsTop() && b.IsTop() && d.IsTop(), Is.True);
+                SceneManager.SetActiveScene(previousScene);
+                yield return SceneManager.UnloadSceneAsync(sceneA);
+                Assert.That(a == null, Is.True);
+                Assert.That(a.IsTop(), Is.False, "Unity fake-null cannot compare equal to an empty Top query.");
+                Assert.That(a.HasFocus, Is.False);
+                Assert.That(b.IsLoaded && b.IsVisible && d.IsLoaded && d.IsVisible, Is.True);
+                Assert.That(b.Module, Is.SameAs(module));
+                Assert.That(d.Module, Is.SameAs(module));
+            }
+            finally
+            {
+                if (previousScene.IsValid() && previousScene.isLoaded) SceneManager.SetActiveScene(previousScene);
+                PanelManager.onCreateCanvas = previousHook;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyReparentingOutOfDestroyedRootRetainsTheSameViewSession()
+        {
+            yield return StartModule();
+            var rootA = PolicyRoot("YLPolicy.MovingRootA");
+            var rootB = PolicyRoot("YLPolicy.MovingRootB");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.Moving", true);
+            var moving = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootA, loadViewArgs: null));
+            var other = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootB, loadViewArgs: null));
+            moving.TypeOverride = other.TypeOverride = PanelType.Panel;
+            moving.SortingOrder = 50;
+            var session = ViewSession(moving);
+            moving.transform.SetParent(rootB, false);
+            Object.DestroyImmediate(rootA.gameObject);
+            moving.RefreshUIState();
+            Assert.That(moving.IsVisible, Is.True);
+            Assert.That(other.IsVisible, Is.False);
+            Assert.That(moving.RootCanvas, Is.SameAs(rootB.GetComponent<Canvas>()));
+            Assert.That(ViewSession(moving), Is.SameAs(session));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EquivalentTo(new[] { moving, other }));
+            Assert.That(moving.IsTop(), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicySortingFailureInsideOwnInitializationStillRollsBack()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.InitializationRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.Initialization", true);
+            var failure = new InvalidOperationException("YLPolicy.InitializationSortingFailure");
+            YLCoreSmokePanel prepared = null;
+            var args = NewArgs();
+            args.SetObject("retained", module);
+            YLCoreSmokePanel.SortingProbe = (_, order) => { if (order == 100) throw failure; };
+            YLCoreSmokePanel.LoadingProbe = panel => { prepared = Track(panel); panel.SortingOrder = 100; };
+            try
+            {
+                Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: args)), Is.SameAs(failure));
+                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+                Assert.That(prepared.IsLoaded, Is.False);
+                Assert.That(prepared.RemovedCount, Is.EqualTo(1));
+                AssertArgsReleased(args);
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyNestedInitializationDoesNotTreatOuterSortingObserverAsChildFailure()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.NestedInitRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.NestedInit", true);
+            YLCoreSmokePanel outer = null;
+            YLCoreSmokePanel child = null;
+            YLCoreSmokePanel.SortingProbe = (panel, order) =>
+            {
+                if (panel == outer && order >= 100) throw new InvalidOperationException("YLPolicy.OuterObserver");
+            };
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                if (outer == null)
+                {
+                    outer = Track(panel);
+                    outer.KeepInFront = true;
+                    LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: YLPolicy.OuterObserver"));
+                    child = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                }
+                else panel.SortingOrder = 100;
+            };
+            try
+            {
+                var loaded = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                Assert.That(loaded, Is.SameAs(outer));
+                Assert.That(outer.IsLoaded && child.IsLoaded, Is.True);
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyMergedRootsRejectModuleOffsetAndOrderWithoutPartialCommit()
+        {
+            yield return StartModule();
+            var rootA = PolicyRoot("YLPolicy.AtomicRootA");
+            var rootB = PolicyRoot("YLPolicy.AtomicRootB");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.Atomic", true);
+            var a = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootA, loadViewArgs: null));
+            var b = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootB, loadViewArgs: null));
+            a.SortingOrder = b.SortingOrder = 32766;
+            b.transform.SetParent(rootA, false);
+            Assert.Throws<ArgumentOutOfRangeException>(() => module.UIStartSortOrder = 1);
+            Assert.That(module.UIStartSortOrder, Is.Zero);
+            Assert.That(a.Canvas.sortingOrder, Is.EqualTo(32766));
+            Assert.That(b.SortingOrder, Is.EqualTo(32766));
+            b.SortingOrder = 32767;
+            Assert.Throws<ArgumentOutOfRangeException>(() => a.SortingOrder = 32767);
+            Assert.That(a.SortingOrder, Is.EqualTo(32766));
+            a.RefreshUIState();
+            Assert.That(b.Canvas.sortingOrder, Is.EqualTo(32767));
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyLiveBorrowedReparentInheritsNewOwnerCanvasAndModalState()
+        {
+            yield return StartModule();
+            var rootA = PolicyRoot("YLPolicy.BorrowMovingA");
+            var rootB = PolicyRoot("YLPolicy.BorrowMovingB");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.BorrowMoving", true);
+            var a = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootA, loadViewArgs: null));
+            var b = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootB, loadViewArgs: null));
+            var obj = new GameObject("YLPolicy.LiveBorrowed", typeof(RectTransform));
+            objects.Add(obj);
+            obj.transform.SetParent(a.transform, false);
+            var child = module.AttachView(obj.AddComponent<YLCoreSmokePanel>());
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(prefab, rootB, loadViewArgs: null));
+            modal.Modal = true;
+            modal.RefreshUIState();
+            obj.transform.SetParent(b.transform, false);
+            yield return null;
+            yield return null;
+            Assert.That(child.Canvas, Is.SameAs(b.Canvas));
+            Assert.That(child.RootCanvas, Is.SameAs(b.RootCanvas));
+            Assert.That(child.IsVisible, Is.True);
+            Assert.That(child.IsInputBlocked, Is.True);
+            Assert.That(a.Canvas.enabled && b.Canvas.enabled, Is.True);
+            modal.Close();
+            Assert.That(child.IsInputBlocked, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyHighModalOrderDoesNotExhaustNormalWindowGroup()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.PriorityGroupRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.PriorityGroup", true);
+            var content = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            modal.Modal = true;
+            modal.SortingOrder = 32767;
+            var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            Assert.That(next.SortingOrder, Is.EqualTo(20));
+            Assert.That(modal.Canvas.sortingOrder, Is.EqualTo(32767));
+            Assert.That(next.IsInputBlocked && content.IsInputBlocked, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicySortingLayerWinsOverOrderAndAllocatesOnlyWithinItsGroup()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.SortingLayerRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.DefaultLayer", true);
+            var low = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            var layeredPrefab = Template<YLCoreSmokePanel>("YLPolicy.UpperLayer", true);
+            var layer = SortingLayer.NameToID("Map");
+            Assert.That(SortingLayer.GetLayerValueFromID(layer), Is.GreaterThan(SortingLayer.GetLayerValueFromID(0)),
+                "使用工程已有 SortingLayer，不修改 TagManager。");
+            layeredPrefab.AddComponent<Canvas>().sortingLayerID = layer;
+            var high = Track(module.LoadView<YLCoreSmokePanel>(layeredPrefab, root, loadViewArgs: null));
+            high.SortingOrder = -300;
+            low.SortingOrder = 500;
+            Assert.That(high.IsTop(), Is.True);
+            low.TypeOverride = high.TypeOverride = PanelType.Panel;
+            high.RefreshUIState();
+            Assert.That(low.IsVisible, Is.False);
+            Assert.That(high.IsVisible, Is.True);
+            high.SortingOrder = 32767;
+            var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            Assert.That(next.SortingOrder, Is.EqualTo(510), "Other SortingLayer maxima cannot exhaust this group's default order.");
+            Assert.That(PanelManager.GetTopPanel(low.RootCanvas), Is.SameAs(high));
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicyExplicitNestedRootsRemainIndependentWithinOneOuterCanvas()
+        {
+            yield return StartModule();
+            var assetCanvas = Resources.Load<GameObject>("YLFramework/Core/Canvas").GetComponent<Canvas>();
+            Assert.Throws<ArgumentException>(() => PanelManager.RegisterRoot(assetCanvas), "A root asset is not a loaded Scene context.");
+            var outer = PolicyRoot("YLPolicy.OuterRoot");
+            var firstRoot = PolicyRoot("YLPolicy.ExplicitFirst");
+            var secondRoot = PolicyRoot("YLPolicy.ExplicitSecond");
+            firstRoot.SetParent(outer, false);
+            secondRoot.SetParent(outer, false);
+            PanelManager.RegisterRoot(firstRoot.GetComponent<Canvas>());
+            PanelManager.RegisterRoot(secondRoot.GetComponent<Canvas>());
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.ExplicitRootPanel", true);
+            var a = Track(module.LoadView<YLCoreSmokePanel>(prefab, firstRoot, loadViewArgs: null));
+            var b = Track(module.LoadView<YLCoreSmokePanel>(prefab, secondRoot, loadViewArgs: null));
+            a.TypeOverride = b.TypeOverride = PanelType.Panel;
+            a.RefreshUIState();
+            Assert.That(a.RootCanvas, Is.SameAs(firstRoot.GetComponent<Canvas>()));
+            Assert.That(b.RootCanvas, Is.SameAs(secondRoot.GetComponent<Canvas>()));
+            Assert.That(a.IsVisible && b.IsVisible && a.IsTop() && b.IsTop(), Is.True);
+            Assert.That(outer.GetComponent<Canvas>().enabled, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator PanelPolicySortingObserverFailureContinuesOtherNotificationsAfterCommit()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLPolicy.SortObserverRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLPolicy.SortObserver", true);
+            var first = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            var second = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            first.KeepInFront = second.KeepInFront = true;
+            int following = 0;
+            YLCoreSmokePanel.SortingProbe = (panel, _) =>
+            {
+                if (panel == first)
+                {
+                    Assert.That(second.Canvas.sortingOrder, Is.EqualTo(20), "All Canvas orders must be committed before notifying business code.");
+                    throw new InvalidOperationException("YLPolicy.SortObserverFailure");
+                }
+                if (panel == second) following++;
+            };
+            try
+            {
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: YLPolicy.SortObserverFailure"));
+                var third = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                Assert.That(following, Is.EqualTo(1));
+                Assert.That(first.IsLoaded && second.IsLoaded && third.IsLoaded, Is.True);
+                Assert.That(PanelManager.GetTopPanel(first.RootCanvas), Is.SameAs(second));
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator WindowEntryReopensUniqueSessionWithoutReloadAndCloseEndsIdentity()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.UniqueRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.Unique", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var first = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root));
+            Assert.That(first.gameObject.activeSelf && first.IsVisible, Is.True, "Open must show even an initially inactive prefab.");
+            var session = ViewSession(first);
+            var again = catalog.Open<YLCoreSmokePanel>(module, "unique", root);
+            Assert.That(again, Is.SameAs(first));
+            Assert.That(ViewSession(again), Is.SameAs(session));
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
+            first.Close();
+            Assert.That(first.Module, Is.Null);
+            var reopened = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root));
+            Assert.That(ViewSession(reopened), Is.Not.SameAs(session));
+            Assert.That(reopened.Module, Is.SameAs(module));
+        }
+
+        [UnityTest]
+        public IEnumerator WindowEntryAsyncRejectsPendingAndCancellationDoesNotOccupyKey()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.AsyncRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.Async", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var request = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root);
+            var rejectedArgs = LoadViewArgs.New();
+            Assert.Throws<InvalidOperationException>(() => catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root, rejectedArgs));
+            Assert.Throws<ObjectDisposedException>(() => rejectedArgs.GetInt("token"));
+            request.Abort();
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Canceled));
+            var next = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root);
+            yield return next;
+            Assert.That(next.Status, Is.EqualTo(LoadViewStatus.Succeeded), next.error);
+            var panel = Track(next.panel);
+            Assert.That(panel.gameObject.activeSelf && panel.IsVisible, Is.True);
+            var session = ViewSession(panel);
+            var again = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root);
+            Assert.That(again.isDone, Is.True);
+            Assert.That(again.panel, Is.SameAs(panel));
+            Assert.That(ViewSession(panel), Is.SameAs(session));
+            Assert.That(panel.LoadedCount, Is.EqualTo(1));
+            panel.Close();
+            var pending = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root);
+            module.Close();
+            Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Invalidated));
+            yield return null;
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator WindowEntryInvalidatedPrefabDoesNotFallBackToNamedLoading()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.DeadPrefabRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.DeadPrefab", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var request = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root);
+            Object.DestroyImmediate(prefab);
+            yield return request;
+            Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Invalidated));
+            Assert.That(request.panel, Is.Null);
+        }
+
+        [UnityTest]
+        public IEnumerator WindowEntryMultiInstanceAndNonReusableKeepOwnerAndDiscardContract()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.MultiRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.Multi", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("multi", prefab) { Unique = false, Reusable = false });
+            var first = Track(catalog.Open<YLCoreSmokePanel>(module, "multi", root));
+            var second = Track(catalog.Open<YLCoreSmokePanel>(module, "multi", root));
+            Assert.That(first, Is.Not.SameAs(second));
+            first.Close();
+            Assert.That(first.Module, Is.Null);
+            Assert.That(second.Module, Is.SameAs(module));
+            yield return null;
+            Assert.That(first == null, Is.True, "Non-reusable acquired instance must be destroyed, not cached.");
+        }
+
+        [UnityTest]
+        public IEnumerator TipsAreModuleOwnedAndFinishPausedWithoutLeakingActiveItems()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLTips.Root");
+            var presenter = CreateTips(root);
+            var oldScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0;
+                var handle = presenter.Show(module, "Paused tip", duration: 0.05f, fade: false);
+                var item = handle.Item;
+                Assert.That(item.Module, Is.SameAs(module));
+                var deadline = Time.realtimeSinceStartup + 2;
+                while (!handle.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That(handle.IsDone, Is.True);
+                Assert.That(handle.Result, Is.EqualTo(UITipResult.Completed));
+                Assert.That(item.Module, Is.Null);
+                Assert.That(item.gameObject.activeSelf, Is.False);
+                Assert.That(presenter.ActiveCount, Is.Zero);
+            }
+            finally { Time.timeScale = oldScale; }
+        }
+
+        [UnityTest]
+        public IEnumerator TipsCancelReuseModuleExitAndHostEndReleaseOnlyTheirSessions()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLTips.CancelRoot");
+            var presenter = CreateTips(root);
+            var first = presenter.Show(module, "first");
+            first.Dispose();
+            Assert.That(first.IsDone, Is.True);
+            var next = presenter.Show(module, "next");
+            Assert.That(next.Item, Is.SameAs(first.Item));
+            first.Dispose();
+            Assert.That(next.IsDone, Is.False, "Old handle cannot close the reused item.");
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("tips", Template<YLCoreSmokePanel>("YLTips.RealWindow", true)));
+            var window = Track(catalog.Open<YLCoreSmokePanel>(module, "tips", root));
+            Assert.That(window.Module, Is.SameAs(module), "Tips presentation must not occupy the caller's window key namespace.");
+            module.Close();
+            Assert.That(next.IsDone, Is.True);
+            Assert.That(presenter.ActiveCount, Is.Zero);
+            yield return StartModule();
+            var ending = presenter.Show(module, "host");
+            presenter.enabled = false;
+            Assert.That(ending.IsDone, Is.True);
+            Assert.That(ending.Result, Is.EqualTo(UITipResult.HostEnded));
+            Assert.That(ending.Item.Module, Is.Null);
+            Assert.That(presenter.ActiveCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator TipsCompletionFailureStillReturnsItemAndAllowsReentrantReuse()
+        {
+            yield return StartModule();
+            var presenter = CreateTips(PolicyRoot("YLTips.CallbackRoot"));
+            UITipHandle reentrant = null;
+            Assert.Throws<InvalidOperationException>(() => presenter.Show(module, "zero", duration: 0, completed: _ =>
+            {
+                reentrant = presenter.Show(module, "new session");
+                throw new InvalidOperationException("YLTips.CallbackFailure");
+            }));
+            Assert.That(presenter.ActiveCount, Is.EqualTo(1));
+            Assert.That(reentrant.IsDone, Is.False);
+            Assert.That(reentrant.Item.IsLoaded, Is.True);
+            reentrant.Dispose();
+            Assert.That(presenter.ActiveCount, Is.Zero);
+        }
+
+        private UITipsPresenter CreateTips(Transform root)
+        {
+            var prefab = Template<UITipsItem>("YLTips.Template", true);
+            var bg = prefab.AddComponent<UnityEngine.UI.Image>();
+            var label = new GameObject("Text", typeof(RectTransform), typeof(UnityEngine.UI.Text));
+            label.transform.SetParent(prefab.transform, false);
+            var text = label.GetComponent<UnityEngine.UI.Text>();
+            SetPrivate(prefab.GetComponent<UITipsItem>(), "bg", bg);
+            SetPrivate(prefab.GetComponent<UITipsItem>(), "text", text);
+            var presenter = root.gameObject.AddComponent<UITipsPresenter>();
+            SetPrivate(presenter, "uiTipItemPrefab", prefab);
+            SetPrivate(presenter, "uiTipItemPool", root);
+            foreach (var field in new[] { "middleTipRoot", "leftTopTipRoot", "leftDownTipRoot", "rightTopTipRoot", "rightDownTipRoot" })
+                SetPrivate(presenter, field, root);
+            return presenter;
+        }
+
+        private static void SetPrivate(object target, string name, object value)
+            => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
+
+        [UnityTest]
+        public IEnumerator FormalColorPrefabSupportsCameraCoordinatesCallbacksAndReuse()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+            Assert.That(asset, Is.Not.Null);
+            var prefab = Object.Instantiate(asset);
+            prefab.SetActive(false);
+            objects.Add(prefab);
+            prefabKeys.Add(prefab.GetHashCode());
+            var root = PolicyRoot("YLColor.CameraRoot");
+            var cameraObject = new GameObject("YLColor.Camera", typeof(Camera));
+            objects.Add(cameraObject);
+            var camera = cameraObject.GetComponent<Camera>();
+            camera.transform.position = new Vector3(0, 0, -10);
+            var canvas = root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = camera;
+            canvas.planeDistance = 1;
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("color", prefab));
+            int old = 0, current = 0;
+            var first = Track(catalog.Open<ColorSelectorWindow>(module, "color", root,
+                ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.35f), _ => old++)));
+            first.gameObject.SetActive(true);
+            first.GetComponent<RectTransform>().anchoredPosition = new Vector2(120, -80);
+            first.transform.localScale = new Vector3(0.8f, 0.8f, 1);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var selector = first.GetComponentInChildren<YLFramework.Core.ColorSelector>();
+            var wheel = selector.GetComponent<RectTransform>();
+            var local = wheel.rect.center + new Vector2(-0.44f, 0.7621024f) * (wheel.rect.width * 0.5f);
+            var data = new UnityEngine.EventSystems.PointerEventData(null)
+            {
+                pointerId = 3,
+                position = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(local)),
+                pointerPressRaycast = new UnityEngine.EventSystems.RaycastResult { module = first.GetComponent<UnityEngine.UI.GraphicRaycaster>() }
+            };
+            var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+            UnityEngine.EventSystems.EventSystem.current.RaycastAll(data, hits);
+            Assert.That(hits, Is.Not.Empty, "The actual Camera canvas must expose the wheel through UGUI raycasting.");
+            Assert.That(hits[0].gameObject, Is.SameAs(selector.gameObject));
+            Assert.That(UIPointer.CheckPositionOnUI(data.position), Is.True);
+            Assert.That(UIPointer.CheckPositionOnUI(new Vector2(-1, -1)), Is.False);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            try
+            {
+                system.enabled = false;
+                Assert.That(UIPointer.CheckPositionOnUI(data.position), Is.False);
+            }
+            finally { system.enabled = true; }
+            Assert.That(UIPointer.CheckPositionOnUI(data.position), Is.True, "Cache must follow the actual current EventSystem.");
+            data.pointerPressRaycast = hits[0];
+            UnityEngine.EventSystems.ExecuteEvents.Execute(hits[0].gameObject, data, UnityEngine.EventSystems.ExecuteEvents.pointerDownHandler);
+            Assert.That(first.CurrentColor.g, Is.EqualTo(1).Within(0.001f));
+            Assert.That(first.CurrentColor.r, Is.EqualTo(0).Within(0.001f));
+            Assert.That(first.CurrentColor.a, Is.EqualTo(0.35f));
+            Assert.That(old, Is.EqualTo(1));
+            first.Close();
+            var second = Track(catalog.Open<ColorSelectorWindow>(module, "color", root,
+                ColorSelectorWindow.Arguments(Color.blue, _ => current++)));
+            second.gameObject.SetActive(true);
+            Assert.That(second, Is.SameAs(first));
+            Assert.That(second.CurrentColor, Is.EqualTo(Color.blue));
+            selector.OnDrag(data);
+            Assert.That(current, Is.Zero, "Old pointer cannot change the next session.");
+            data.position = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(local));
+            selector.OnPointerDown(data);
+            Assert.That(current, Is.EqualTo(1));
+            Assert.That(old, Is.EqualTo(1));
+            second.GetComponentInChildren<UnityEngine.UI.Button>().onClick.Invoke();
+            Assert.That(second.Module, Is.Null);
+#endif
+        }
+
+        [UnityTest]
+        public IEnumerator ModalBlocksActualRaycastsSelectionAndRestoresValidFocus()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ModalRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Lower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var buttonObject = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            buttonObject.transform.SetParent(lower.transform, false);
+            var button = buttonObject.GetComponent<UnityEngine.UI.Button>();
+            var buttonRect = buttonObject.GetComponent<RectTransform>();
+            buttonRect.sizeDelta = new Vector2(100, 100);
+            buttonRect.anchoredPosition = new Vector2(-150, 0);
+            int clicks = 0;
+            button.onClick.AddListener(() => clicks++);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            if (!system)
+            {
+                var input = new GameObject("YLInput.TestSystem", typeof(UnityEngine.EventSystems.EventSystem));
+                objects.Add(input);
+                system = input.GetComponent<UnityEngine.EventSystems.EventSystem>();
+            }
+            system.SetSelectedGameObject(buttonObject);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Modal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Canvas.ForceUpdateCanvases();
+            Assert.That(button.IsInteractable(), Is.False, "Logical blocking must also constrain UGUI navigation and submit.");
+            Assert.That(system.currentSelectedGameObject, Is.Not.SameAs(buttonObject));
+            var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+            system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system)
+            { position = RectTransformUtility.WorldToScreenPoint(null, buttonRect.position) }, hits);
+            Assert.That(hits.Exists(hit => hit.gameObject == buttonObject), Is.False);
+            UnityEngine.EventSystems.ExecuteEvents.Execute(buttonObject, new UnityEngine.EventSystems.BaseEventData(system),
+                UnityEngine.EventSystems.ExecuteEvents.submitHandler);
+            Assert.That(clicks, Is.Zero);
+            modal.Close();
+            Assert.That(button.IsInteractable(), Is.True);
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(buttonObject));
+            lower.Close();
+            Assert.That(system.currentSelectedGameObject, Is.Null, "Closed sessions cannot remain selected.");
+        }
+
+        [UnityTest]
+        public IEnumerator DeselectCloseDoesNotLetOldInputCoveragePolluteReusedPanel()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ReentrantRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLInput.ReentrantLower", true);
+            foreach (var name in new[] { "First", "Second" })
+            {
+                var child = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+                child.transform.SetParent(prefab.transform, false);
+            }
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            var buttons = lower.GetComponentsInChildren<UnityEngine.UI.Button>();
+            buttons[0].GetComponent<YLCoreSelectionInputProbe>().Deselected = lower.Close;
+            system.SetSelectedGameObject(buttons[0].gameObject);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ReentrantModal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Assert.That(lower.Module, Is.Null);
+            modal.Close();
+            var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            Assert.That(next, Is.SameAs(lower));
+            next.gameObject.SetActive(true);
+            foreach (var button in next.GetComponentsInChildren<UnityEngine.UI.Button>())
+                Assert.That(button.IsInteractable(), Is.True, "Old Apply must stop as soon as Deselect ends its session.");
+            Assert.That(next.GetComponent<UnityEngine.UI.GraphicRaycaster>().enabled, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator NestedIndependentModalSelectionIsNotOwnedByBlockedAncestor()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.NestedRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.NestedLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var modalPrefab = Template<YLCoreSmokePanel>("YLInput.NestedModal", true);
+            modalPrefab.AddComponent<Canvas>();
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(modalPrefab, lower.transform, loadViewArgs: null));
+            var button = new GameObject("NestedModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            button.transform.SetParent(modal.transform, false);
+            int deselections = 0;
+            button.GetComponent<YLCoreSelectionInputProbe>().Deselected = () => deselections++;
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            system.SetSelectedGameObject(button);
+            yield return null;
+            yield return null;
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(button));
+            Assert.That(deselections, Is.Zero, "A blocked ancestor must not deselect an independent descendant modal each frame.");
+        }
+
+        [UnityTest]
+        public IEnumerator OnSelectCloseDefersSelectionCleanupWithoutLosingPreviousFocus()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.SelectCloseRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var previous = new GameObject("Previous", typeof(RectTransform), typeof(UnityEngine.UI.Button));
+            previous.transform.SetParent(lower.transform, false);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            system.SetSelectedGameObject(previous);
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseModal", true), root, loadViewArgs: null));
+            var selected = new GameObject("CloseOnSelect", typeof(RectTransform), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            selected.transform.SetParent(modal.transform, false);
+            selected.GetComponent<YLCoreSelectionInputProbe>().Selected = modal.Close;
+            modal.Modal = true;
+            modal.gameObject.SetActive(true);
+            modal.RefreshUIState();
+            yield return null;
+            yield return null;
+            Assert.That(modal.Module, Is.Null);
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(previous));
+        }
+
+        [UnityTest]
+        public IEnumerator ReparentedControlsReleaseOldInputCoverageBeforeNewOwnerConfiguration()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ControlMoveRoot");
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveLower", true), root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            var child = new GameObject("MovedButton", typeof(RectTransform), typeof(UnityEngine.UI.Button));
+            child.transform.SetParent(lower.transform, false);
+            var button = child.GetComponent<UnityEngine.UI.Button>();
+            var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveModal", true), root, loadViewArgs: null));
+            modal.gameObject.SetActive(true);
+            modal.Modal = true;
+            modal.RefreshUIState();
+            Assert.That(button.interactable, Is.False);
+            child.transform.SetParent(modal.transform, false);
+            yield return null;
+            Assert.That(button.interactable, Is.True);
+            button.interactable = false;
+            lower.Close();
+            Assert.That(button.interactable, Is.False, "The old state must not write attributes after ownership has moved.");
+        }
+
+        [UnityTest]
+        public IEnumerator ActivePanelMovedToPreviouslyUnusedRootKeepsItsOwnedInput()
+        {
+            yield return StartModule();
+            var first = PolicyRoot("YLInput.MoveRootA");
+            var second = PolicyRoot("YLInput.MoveRootB");
+            var panel = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.MovedPanel", true), first, loadViewArgs: null));
+            panel.gameObject.SetActive(true);
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            panel.transform.SetParent(second, false);
+            yield return null;
+            Object.Destroy(first.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(panel.RootCanvas, Is.SameAs(second.GetComponent<Canvas>()));
+            Assert.That(system && system.isActiveAndEnabled, Is.True);
+            Assert.That(UnityEngine.EventSystems.EventSystem.current, Is.SameAs(system));
+        }
+
+#if ENABLE_INPUT_SYSTEM || ENABLE_LEGACY_INPUT_MANAGER
+#if ENABLE_INPUT_SYSTEM
+        [UnityTest]
+        public IEnumerator InputSystemMouseDrivesFormalColorDragAndCloseButton()
+            => DriveFormalColorWithInputSystem(false);
+
+        [UnityTest]
+        public IEnumerator InputSystemMouseDrivesCameraColorAfterResolutionChange()
+            => DriveFormalColorWithInputSystem(true);
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        [UnityTest]
+        public IEnumerator BorrowedStandaloneModuleDrivesFormalColorViaBaseInputOverride()
+            => DriveFormalColorWithInputSystem(false, true);
+#endif
+
+        private IEnumerator DriveFormalColorWithInputSystem(bool cameraMode, bool legacy = false)
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var root = PolicyRoot("YLInput.NativeMouseRoot");
+#if ENABLE_LEGACY_INPUT_MANAGER
+            YLCoreLegacyPointerInput scriptedInput = null;
+            if (legacy)
+            {
+                var external = new GameObject("YLInput.LegacySystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule), typeof(YLCoreLegacyPointerInput));
+                objects.Add(external);
+                scriptedInput = external.GetComponent<YLCoreLegacyPointerInput>();
+                external.GetComponent<UnityEngine.EventSystems.StandaloneInputModule>().inputOverride = scriptedInput;
+            }
+#endif
+            root.gameObject.AddComponent<UnityEngine.UI.CanvasScaler>();
+            var context = root.gameObject.AddComponent<UIRootContext>();
+            Camera camera = null;
+            if (cameraMode)
+            {
+                var cameraObject = new GameObject("YLInput.NativeCamera", typeof(Camera));
+                objects.Add(cameraObject);
+                camera = cameraObject.GetComponent<Camera>();
+                camera.transform.position = new Vector3(0, 0, -10);
+            }
+            context.ConfigureCanvas(cameraMode ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay, camera, 5);
+            context.ConfigureResolution(new Vector2(800, 600));
+            var catalog = new WindowCatalog();
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+            var prefab = Object.Instantiate(asset);
+            prefab.SetActive(false);
+            objects.Add(prefab);
+            prefabKeys.Add(prefab.GetHashCode());
+            catalog.Register(new WindowDefinition("inputColor", prefab));
+            int changes = 0;
+            var window = Track(catalog.Open<ColorSelectorWindow>(module, "inputColor", root,
+                ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.4f), _ => changes++)));
+            window.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            Assert.That(system.currentInputModule.GetType().FullName, Is.EqualTo(legacy ? "UnityEngine.EventSystems.StandaloneInputModule" : "UnityEngine.InputSystem.UI.InputSystemUIInputModule"));
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = legacy ? null : inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.OwnedMouse", null });
+            Action<Vector2, bool> queue = (position, pressed) =>
+            {
+#if ENABLE_LEGACY_INPUT_MANAGER
+                if (scriptedInput) { scriptedInput.Set(position, pressed); return; }
+#endif
+                QueueMouse(inputType, stateType, mouse, position, pressed);
+            };
+            Action restoreDevices = null;
+            try
+            {
+                if (mouse != null) restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse);
+                var wheel = window.GetComponentInChildren<ColorSelector>().GetComponent<RectTransform>();
+                var center = wheel.rect.center;
+                float radius = Mathf.Min(wheel.rect.width, wheel.rect.height) * 0.5f;
+                Vector2 green = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(center + new Vector2(-0.44f, 0.7621024f) * radius));
+                queue(green, false);
+                yield return null;
+                queue(green, true);
+                yield return null;
+                string pointerEvidence = "Legacy override";
+                if (mouse != null)
+                {
+                    var inputModule = system.currentInputModule;
+                    var pointReference = inputModule.GetType().GetProperty("point").GetValue(inputModule);
+                    var action = pointReference.GetType().GetProperty("action").GetValue(pointReference);
+                    var value = action.GetType().GetMethod("ReadValueAsObject").Invoke(action, null);
+                    int id = (int)mouse.GetType().GetProperty("deviceId").GetValue(mouse);
+                    var hit = (UnityEngine.EventSystems.RaycastResult)inputModule.GetType().GetMethod("GetLastRaycastResult").Invoke(inputModule, new object[] { id });
+                    pointerEvidence = $"focused={system.isFocused} requested={green} action={value} hit={hit.gameObject}";
+                }
+                Assert.That(window.CurrentColor.g, Is.EqualTo(1).Within(0.01f), pointerEvidence);
+                Assert.That(changes, Is.EqualTo(1));
+                context.ConfigureResolution(new Vector2(600, 800), false, 0.25f);
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                Vector2 blue = RectTransformUtility.WorldToScreenPoint(camera, wheel.TransformPoint(center + new Vector2(-0.44f, -0.7621024f) * radius));
+                queue(blue, true);
+                yield return null;
+                Assert.That(window.CurrentColor.b, Is.EqualTo(1).Within(0.01f));
+                Assert.That(window.CurrentColor.a, Is.EqualTo(0.4f));
+                queue(blue, false);
+                yield return null;
+                var close = window.GetComponentInChildren<UnityEngine.UI.Button>();
+                Vector2 closePoint = RectTransformUtility.WorldToScreenPoint(camera, close.transform.position);
+                queue(closePoint, false);
+                yield return null;
+                queue(closePoint, true);
+                yield return null;
+                queue(closePoint, false);
+                yield return null;
+                Assert.That(window.Module, Is.Null, "Close must be dispatched by the input module, not invoked directly.");
+            }
+            finally
+            {
+                restoreDevices?.Invoke();
+                if (mouse != null) inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+            }
+#endif
+        }
+
+        private static void QueueMouse(Type inputType, Type stateType, object mouse, Vector2 position, bool pressed, bool rightPressed = false)
+        {
+            var state = Activator.CreateInstance(stateType);
+            stateType.GetField("position").SetValue(state, position);
+            stateType.GetField("buttons").SetValue(state, (ushort)((pressed ? 1 : 0) | (rightPressed ? 2 : 0)));
+            QueueInputState(inputType, stateType, mouse, state);
+        }
+
+        // 真实原生鼠标也会向默认 PassThrough actions 推送位置；仅限制本测试自建系统的 assets，不重置全局输入。
+        private Action UseOwnedInputDevices(object module, params object[] devices)
+        {
+            var host = ((UnityEngine.EventSystems.BaseInputModule)module).gameObject;
+            Assert.That(priorEventSystems.Contains(host), Is.False, "Never change a pre-existing EventSystem's device filter.");
+            var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            var owned = manager == null ? null : typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            Assert.That(ReferenceEquals(owned, host) || objects.Contains(host), Is.True, "Only this fixture's input host may be filtered.");
+            var asset = module.GetType().GetProperty("actionsAsset").GetValue(module);
+#if UNITY_EDITOR
+            Assert.That(UnityEditor.AssetDatabase.Contains((Object)asset), Is.False, "Only the owned runtime actions may be filtered, never persistent assets.");
+#endif
+            var property = asset.GetType().GetProperty("devices");
+            var previous = property.GetValue(asset);
+            var readonlyArray = property.PropertyType.GetGenericArguments()[0];
+            var deviceType = readonlyArray.GetGenericArguments()[0];
+            var array = Array.CreateInstance(deviceType, devices.Length);
+            for (int i = 0; i < devices.Length; i++) array.SetValue(devices[i], i);
+            property.SetValue(asset, Activator.CreateInstance(readonlyArray, new object[] { array }));
+            return () => property.SetValue(asset, previous);
+        }
+
+        private static void QueueInputState(Type inputType, Type stateType, object device, object state)
+        {
+            foreach (var method in inputType.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                if (method.Name == "QueueStateEvent" && method.IsGenericMethodDefinition)
+                {
+                    method.MakeGenericMethod(stateType).Invoke(null, new[] { device, state, (object)(-1d) });
+                    return;
+                }
+            Assert.Fail("Installed Input System does not expose QueueStateEvent<TState>.");
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private static void QueueKeyboard(Type inputType, object keyboard, string keyName = null)
+        {
+            var keyType = Type.GetType("UnityEngine.InputSystem.Key, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.KeyboardState, Unity.InputSystem");
+            var keys = Array.CreateInstance(keyType, keyName == null ? 0 : 1);
+            if (keyName != null) keys.SetValue(Enum.Parse(keyType, keyName), 0);
+            var state = Activator.CreateInstance(stateType, new object[] { keys });
+            QueueInputState(inputType, stateType, keyboard, state);
+        }
+
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        [UnityTest]
+        public IEnumerator InputSystemOnlyDiagnosticShortcutUsesF1WithoutLegacyPolling()
+        {
+            var type = Type.GetType("YLFramework.Services.Audio.AudioKitDebugWindow, YLFramework.Runtime");
+            Assert.That(type, Is.Not.Null);
+            bool visible = (bool)type.GetProperty("IsVisible").GetValue(null);
+            type.GetMethod("Hide").Invoke(null, null);
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var keyboard = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Keyboard", "YLInput.DiagnosticKeyboard", null });
+            try
+            {
+                yield return null;
+                QueueKeyboard(inputType, keyboard, "F1"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That((bool)type.GetProperty("IsVisible").GetValue(null), Is.True);
+            }
+            finally
+            {
+                type.GetMethod(visible ? "Show" : "Hide").Invoke(null, null);
+                inputType.GetMethod("RemoveDevice").Invoke(null, new[] { keyboard });
+            }
+        }
+#endif
+
+        [UnityTest]
+        public IEnumerator NewModalCancelsAlreadyCapturedScrollRectDrag()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.ScrollRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollLower", true), root, loadViewArgs: null));
+            lower.GetComponent<RectTransform>().sizeDelta = new Vector2(400, 400);
+            var scroll = lower.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
+            lower.gameObject.AddComponent<UnityEngine.UI.Image>();
+            var content = new GameObject("Content", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            content.transform.SetParent(lower.transform, false);
+            var contentRect = content.GetComponent<RectTransform>();
+            contentRect.sizeDelta = new Vector2(600, 600);
+            scroll.content = contentRect;
+            scroll.viewport = lower.GetComponent<RectTransform>();
+            scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Unrestricted;
+            scroll.inertia = false;
+            lower.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.ScrollMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, lower.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(40, 40), true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(60, 60), true); yield return null;
+                Assert.That(contentRect.anchoredPosition.sqrMagnitude, Is.GreaterThan(1));
+                var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollModal", true), root, loadViewArgs: null));
+                modal.gameObject.SetActive(true);
+                modal.Modal = true;
+                modal.RefreshUIState();
+                Vector2 stopped = contentRect.anchoredPosition;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(100, 100), true); yield return null;
+                Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped));
+                modal.Close();
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(120, 120), true); yield return null;
+                Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped), "An old capture must not resume after the modal ends.");
+                Assert.That(scroll.enabled, Is.True);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator RemovingPressedDeviceReleasesInvalidControlCapture()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.RemovedDeviceRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceLower", true), root, loadViewArgs: null));
+            var sliderObject = new GameObject("CapturedSlider", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Slider));
+            sliderObject.transform.SetParent(lower.transform, false);
+            var slider = sliderObject.GetComponent<UnityEngine.UI.Slider>();
+            lower.gameObject.SetActive(true);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.RemovedMouse", null });
+            var remove = inputType.GetMethod("RemoveDevice");
+            Action restore = null;
+            bool removed = false;
+            try
+            {
+                restore = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                var point = RectTransformUtility.WorldToScreenPoint(null, slider.transform.position);
+                QueueMouse(inputType, stateType, mouse, point, false); yield return null;
+                QueueMouse(inputType, stateType, mouse, point, true); yield return null;
+                var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceModal", true), root, loadViewArgs: null));
+                modal.gameObject.SetActive(true);
+                modal.Modal = true;
+                modal.RefreshUIState();
+                Assert.That(slider.enabled, Is.False);
+                remove.Invoke(null, new[] { mouse });
+                removed = true;
+                yield return null;
+                modal.Close();
+                yield return null;
+                Assert.That(slider.enabled, Is.True, "Removed controls cannot retain an invalid capture or read device state.");
+            }
+            finally { restore?.Invoke(); if (!removed) remove.Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator OldPointerPressCannotClickAReusedWindowSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.OldPressRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var prefab = Template<YLCoreSmokePanel>("YLInput.OldPressPanel", true);
+            var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
+            child.transform.SetParent(prefab.transform, false);
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            int clicks = 0;
+            var button = lower.GetComponentInChildren<UnityEngine.UI.Button>();
+            button.onClick.AddListener(() => clicks++);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.OldPressMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                lower.Close();
+                var next = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                Assert.That(next, Is.SameAs(lower));
+                next.gameObject.SetActive(true);
+                QueueMouse(inputType, mouseType, mouse, point, true, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false, true); yield return null;
+                Assert.That(clicks, Is.Zero, "Up from an old session cannot invoke a new session's Button.");
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.EqualTo(1));
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeDownOnSelectReuseCannotAuthorizeOldPressForNewSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.DownSelectRoot");
+            root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var prefab = Template<YLCoreSmokePanel>("YLInput.DownSelectPanel", true);
+            var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
+            child.transform.SetParent(prefab.transform, false);
+            var lower = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+            lower.gameObject.SetActive(true);
+            int clicks = 0;
+            var button = lower.GetComponentInChildren<UnityEngine.UI.Button>();
+            button.onClick.AddListener(() => clicks++);
+            YLCoreSmokePanel replacement = null;
+            button.GetComponent<YLCoreSelectionInputProbe>().Selected = () =>
+            {
+                lower.Close();
+                replacement = Track(module.LoadView<YLCoreSmokePanel>(prefab, root, loadViewArgs: null));
+                replacement.GetComponentInChildren<YLCoreSelectionInputProbe>().Selected = null;
+                replacement.gameObject.SetActive(true);
+            };
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var mouse = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) })
+                .Invoke(null, new object[] { "Mouse", "YLInput.DownSelectMouse", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
+                Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                Assert.That(replacement, Is.SameAs(lower));
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.Zero);
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(clicks, Is.EqualTo(1));
+            }
+            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+        }
+
+        [UnityTest]
+        public IEnumerator InputSystemModalMaskSubmitCancelAndSliderNavigationUseCurrentSession()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var template = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
+            var host = Object.Instantiate(template);
+            objects.Add(host);
+            var context = host.GetComponentInChildren<UIRootContext>();
+            var catalog = new WindowCatalog();
+            var prefab = Template<YLCoreSmokePanel>("YLInput.NavigationWindow", true);
+            catalog.Register(new WindowDefinition("lowerInput", prefab) { Layer = 0 });
+            catalog.Register(new WindowDefinition("modalInput", prefab) { Layer = 3, Modal = true });
+            var lower = Track(catalog.Open<YLCoreSmokePanel>(module, "lowerInput", context.Canvas.transform));
+            lower.gameObject.SetActive(true);
+            var lowerButton = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            lowerButton.transform.SetParent(lower.transform, false);
+            int lowerClicks = 0, modalClicks = 0;
+            lowerButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => lowerClicks++);
+            var sliderObject = new GameObject("Slider", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Slider));
+            sliderObject.transform.SetParent(lower.transform, false);
+            var slider = sliderObject.GetComponent<UnityEngine.UI.Slider>();
+            var system = UnityEngine.EventSystems.EventSystem.current;
+            yield return null;
+            system.SetSelectedGameObject(lowerButton);
+            var modal = Track(catalog.Open<YLCoreSmokePanel>(module, "modalInput", context.Canvas.transform));
+            var modalButton = new GameObject("ModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
+            modalButton.transform.SetParent(modal.transform, false);
+            modalButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(() => modalClicks++);
+            modal.gameObject.SetActive(true);
+            modal.RefreshUIState();
+            yield return null;
+            Assert.That(system.currentSelectedGameObject, Is.SameAs(modalButton));
+            Assert.That(lowerButton.GetComponent<UnityEngine.UI.Button>().IsInteractable(), Is.False);
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem");
+            var mouseType = Type.GetType("UnityEngine.InputSystem.LowLevel.MouseState, Unity.InputSystem");
+            var add = inputType.GetMethod("AddDevice", new[] { typeof(string), typeof(string), typeof(string) });
+            var mouse = add.Invoke(null, new object[] { "Mouse", "YLInput.MaskMouse", null });
+            var keyboard = add.Invoke(null, new object[] { "Keyboard", "YLInput.NavigationKeyboard", null });
+            Action restoreDevices = null;
+            try
+            {
+                restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse, keyboard);
+                Canvas.ForceUpdateCanvases();
+                var point = new Vector2(10, 10);
+                var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+                system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system) { position = point }, hits);
+                Assert.That(hits, Is.Not.Empty);
+                Assert.That(hits[0].gameObject.name, Is.EqualTo("Mask"));
+                Assert.That(UIPointer.CheckPositionOnUI(point), Is.True, "Mask is a world-input blocker, not an empty UI result.");
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                Assert.That(lowerClicks, Is.Zero);
+                // 点击非 Selectable 遮罩可清空选择；显式选择模态按钮后验证真正后端的导航事件。
+                system.SetSelectedGameObject(modalButton);
+                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(modalClicks, Is.EqualTo(1));
+                Assert.That(lowerClicks, Is.Zero);
+                QueueKeyboard(inputType, keyboard, "Escape"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(modalButton.GetComponent<YLCoreSelectionInputProbe>().Cancels, Is.EqualTo(1));
+                modal.Close();
+                Assert.That(system.currentSelectedGameObject, Is.SameAs(lowerButton));
+                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(lowerClicks, Is.EqualTo(1));
+                system.SetSelectedGameObject(sliderObject);
+                float oldValue = slider.value;
+                QueueKeyboard(inputType, keyboard, "RightArrow"); yield return null;
+                QueueKeyboard(inputType, keyboard); yield return null;
+                Assert.That(slider.value, Is.GreaterThan(oldValue));
+                var tip = host.GetComponentInChildren<UITipsPresenter>().Show(module, "Adapted input", UITipPos.RightTop);
+                Assert.That(((RectTransform)tip.Item.transform.parent).anchorMin, Is.EqualTo(Vector2.one));
+                tip.Dispose();
+            }
+            finally
+            {
+                restoreDevices?.Invoke();
+                var remove = inputType.GetMethod("RemoveDevice");
+                remove.Invoke(null, new[] { mouse });
+                remove.Invoke(null, new[] { keyboard });
+            }
+#endif
+        }
+#endif
+#endif
+
+        [UnityTest]
+        public IEnumerator MigratedRootTemplateHasLayersMasksAndBoundTipsWithoutLegacyComponents()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
+            var instance = Object.Instantiate(prefab);
+            objects.Add(instance);
+            var context = instance.GetComponentInChildren<UIRootContext>(true);
+            var presenter = instance.GetComponentInChildren<UITipsPresenter>(true);
+            Assert.That(context && presenter, Is.True);
+            var panelPrefab = Template<YLCoreSmokePanel>("YLWindow.LayerTemplate", true);
+            panelPrefab.AddComponent<UnityEngine.UI.Image>();
+            panelPrefab.SetActive(true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("lower", panelPrefab) { Layer = 0 });
+            catalog.Register(new WindowDefinition("modal", panelPrefab) { Layer = 3, Modal = true });
+            var lower = Track(catalog.Open<YLCoreSmokePanel>(module, "lower", context.Canvas.transform));
+            lower.SortingOrder = 300;
+            var modal = Track(catalog.Open<YLCoreSmokePanel>(module, "modal", context.Canvas.transform));
+            modal.SortingOrder = 0;
+            Assert.That(modal.RootCanvas, Is.SameAs(lower.RootCanvas));
+            Assert.That(modal.DisplaySortingOrder, Is.GreaterThan(lower.DisplaySortingOrder), "Module/raw order must not cross the configured layer priority.");
+            Assert.That(lower.IsInputBlocked, Is.True);
+            var masks = context.GetLayer(3).GetComponentsInChildren<UnityEngine.UI.Image>(true);
+            UnityEngine.UI.Image mask = null;
+            foreach (var image in masks) if (image.gameObject.name == "Mask") mask = image;
+            Assert.That(mask, Is.Not.Null);
+            Assert.That(mask.gameObject.activeSelf && mask.raycastTarget, Is.True);
+            Assert.That(mask.GetComponent<Canvas>().sortingOrder, Is.EqualTo(modal.DisplaySortingOrder - 1));
+            var placement = presenter.Show(module, "Right top", UITipPos.RightTop);
+            Assert.That(((RectTransform)placement.Item.transform.parent).anchorMin, Is.EqualTo(Vector2.one));
+            Assert.That(placement.Item.DisplaySortingOrder, Is.GreaterThan(modal.DisplaySortingOrder), "Non-interactive Tips must render above the configured window layers.");
+            placement.Dispose();
+            var tip = presenter.Show(module, "Migrated template", UITipPos.RightTop, duration: 0);
+            Assert.That(tip.IsDone, Is.True);
+            Assert.That(presenter.ActiveCount, Is.Zero);
+            modal.Close();
+            Assert.That(mask.gameObject.activeSelf, Is.False);
+            Assert.That(lower.IsInputBlocked, Is.False);
+            lower.Close();
+            modal = Track(catalog.Open<YLCoreSmokePanel>(module, "modal", context.Canvas.transform));
+            int order = modal.SortingOrder;
+            Assert.Throws<ArgumentOutOfRangeException>(() => modal.SortingOrder = short.MinValue);
+            Assert.That(modal.SortingOrder, Is.EqualTo(order), "Mask range rejection must happen before committing the order.");
+            modal.Close();
+            foreach (var component in instance.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                Assert.That(component, Is.Not.Null, "Migrated template must import without missing scripts.");
+                Assert.That(component.GetType().Namespace, Is.Not.EqualTo("YLFramework.Services.UI"));
+            }
+#endif
+        }
+
+        [UnityTest]
+        public IEnumerator WindowActivationReentryNeverUpdatesTheReplacementSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.ActivationRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.Activation", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var first = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root));
+            first.gameObject.SetActive(false);
+            YLCoreSmokePanel replacement = null;
+            int updates = 0;
+            YLCoreSmokePanel.UpdateProbe = (_, __) => updates++;
+            YLCoreSmokePanel.EnabledProbe = panel =>
+            {
+                YLCoreSmokePanel.EnabledProbe = null;
+                panel.Close();
+                var next = LoadViewArgs.New();
+                next.SetInt("token", 22);
+                replacement = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root, next));
+            };
+            try
+            {
+                var old = LoadViewArgs.New();
+                old.SetInt("token", 11);
+                Assert.Throws<InvalidOperationException>(() => catalog.Open<YLCoreSmokePanel>(module, "unique", root, old));
+                Assert.That(replacement, Is.SameAs(first));
+                Assert.That(replacement.Token, Is.EqualTo(22));
+                Assert.That(updates, Is.Zero);
+                Assert.Throws<ObjectDisposedException>(() => old.GetInt("token"));
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator UniquePendingRootMigrationInvalidatesBeforeDuplicateCommit()
+        {
+            yield return StartModule();
+            var a = PolicyRoot("YLWindow.PendingA");
+            var b = PolicyRoot("YLWindow.PendingB");
+            var parent = new GameObject("MovingParent", typeof(RectTransform)).transform;
+            parent.SetParent(a, false);
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.PendingMigration", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var pending = catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", parent);
+            parent.SetParent(b, false);
+            var current = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", b));
+            yield return pending;
+            Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Invalidated));
+            Assert.That(pending.panel, Is.Null);
+            Assert.That(module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
+            Assert.That(current.RootCanvas, Is.SameAs(b.GetComponent<Canvas>()));
+        }
+
+        [UnityTest]
+        public IEnumerator UniqueReopenBringsToFrontUsingModuleOffsetAndTieOrder()
+        {
+            yield return StartModule();
+            var other = new YLCoreBaseProbeModule();
+            yield return ModuleManager.StartUpModule(other);
+            try
+            {
+                other.UIStartSortOrder = 200;
+                var root = PolicyRoot("YLWindow.OffsetRoot");
+                var prefab = Template<YLCoreSmokePanel>("YLWindow.Offset", true);
+                var catalog = new WindowCatalog();
+                catalog.Register(new WindowDefinition("unique", prefab));
+                var first = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root));
+                var second = Track(catalog.Open<YLCoreSmokePanel>(other, "unique", root));
+                first.gameObject.SetActive(true);
+                second.gameObject.SetActive(true);
+                first.SortingOrder = 20;
+                second.SortingOrder = 10;
+                Assert.That(second.IsTop(), Is.True);
+                catalog.Open<YLCoreSmokePanel>(module, "unique", root);
+                Assert.That(first.IsTop(), Is.True);
+                other.UIStartSortOrder = 0;
+                first.SortingOrder = second.SortingOrder = 20;
+                Assert.That(second.IsTop(), Is.True);
+                catalog.Open<YLCoreSmokePanel>(module, "unique", root);
+                Assert.That(first.IsTop(), Is.True);
+            }
+            finally
+            {
+                other.AllowClose = true;
+                other.Close();
+                classPool.Restore(new Module[] { other });
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TipsHostReactivationDuringExitCannotBorrowFromTheRetiringPool()
+        {
+            yield return StartModule();
+            var presenter = CreateTips(PolicyRoot("YLTips.Reactivation"));
+            var handle = presenter.Show(module, "old host", completed: _ =>
+            {
+                presenter.enabled = true;
+                Assert.Throws<InvalidOperationException>(() => presenter.Show(module, "nested host"));
+            });
+            presenter.enabled = false;
+            Assert.That(handle.IsDone, Is.True);
+            Assert.That(presenter.ActiveCount, Is.Zero);
+            var next = presenter.Show(module, "new host");
+            next.Dispose();
+            Assert.That(next.IsDone, Is.True);
+            Assert.That(presenter.ActiveCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator ReopenCallbackEndingItsSessionDoesNotPublishAClosedWindowAsSuccess()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLWindow.UpdateExitRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLWindow.UpdateExit", true);
+            var catalog = new WindowCatalog();
+            catalog.Register(new WindowDefinition("unique", prefab));
+            var first = Track(catalog.Open<YLCoreSmokePanel>(module, "unique", root));
+            YLCoreSmokePanel.UpdateProbe = (panel, _) => panel.Close();
+            try
+            {
+                Assert.Throws<InvalidOperationException>(() => catalog.OpenAsync<YLCoreSmokePanel>(module, "unique", root));
+                Assert.That(first.Module, Is.Null);
+                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+            }
+            finally { YLCoreSmokePanel.ResetProbes(); }
+        }
+
+        [UnityTest]
+        public IEnumerator BoundSampleStartsTheFormalWindowAndDestroyClosesItsOwnModule()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var sampleAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Samples/ColorSelector/ColorSelectorSample.prefab");
+            var colorAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+            Assert.That(sampleAsset && colorAsset, Is.True);
+            var prefab = Object.Instantiate(colorAsset);
+            prefab.SetActive(false);
+            objects.Add(prefab);
+            prefabKeys.Add(prefab.GetHashCode());
+            var sample = Object.Instantiate(sampleAsset);
+            objects.Add(sample);
+            var consumer = sample.GetComponent<MonoBehaviour>();
+            SetPrivate(consumer, "windowPrefab", prefab);
+            SetPrivate(consumer, "uiRoot", PolicyRoot("YLColor.SampleRoot").GetComponent<Canvas>());
+            var deadline = Time.realtimeSinceStartup + 5;
+            ColorSelectorWindow window = null;
+            while (!window && Time.realtimeSinceStartup < deadline)
+            {
+                foreach (var owner in ModuleManager.AllModules.Values)
+                    foreach (var candidate in owner.GetViews<ColorSelectorWindow>())
+                        if (candidate.WindowKey == "color") window = Track(candidate);
+                if (!window) yield return null;
+            }
+            Assert.That(window, Is.Not.Null, "The shipped sample must start and consume the real tool, not merely compile.");
+            Assert.That(window.IsVisible, Is.True);
+            var sampleOwner = window.Module;
+            Object.Destroy(sample);
+            yield return null;
+            Assert.That(sampleOwner.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(window.Module, Is.Null);
+            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+            classPool.Restore(new[] { sampleOwner });
+#endif
+        }
+
+        private Transform PolicyRoot(string name)
+        {
+            var root = new GameObject(name, typeof(RectTransform), typeof(Canvas));
+            objects.Add(root);
+            return root.transform;
         }
 
         private IEnumerator StartModule()

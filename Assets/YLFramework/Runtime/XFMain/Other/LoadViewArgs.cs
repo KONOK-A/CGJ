@@ -52,6 +52,8 @@ namespace YLFramework.Core
         private bool owned;
         private bool reading;
         private int threadId;
+        internal WindowDefinition Window;
+        internal UnityEngine.Canvas WindowContext;
 
 #pragma warning restore IDE0044 // 添加只读修饰符
 
@@ -254,6 +256,8 @@ namespace YLFramework.Core
 
         private void ClearValues()
         {
+            Window = null;
+            WindowContext = null;
             strings.Clear();
             ints.Clear();
             bools.Clear();

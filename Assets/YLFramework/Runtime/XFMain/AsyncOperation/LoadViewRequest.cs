@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace YLFramework.Core
 {
@@ -13,6 +16,7 @@ namespace YLFramework.Core
     {
         void Invalidate();
         void PublishInvalidation();
+        bool MatchesWindow(string key, Canvas context);
     }
 
     /// <summary>主线程表现请求；Abort仅取消Core业务结果，不停止或卸载共享后端加载。</summary>
@@ -34,6 +38,10 @@ namespace YLFramework.Core
         private LoadViewArgs args;
         private object[] param;
         private UIType? panelType;
+        private GameObject directPrefab;
+        private bool hasDirectPrefab;
+        private WindowDefinition window;
+        private Canvas windowContext;
         private bool executing;
         private bool closingOwner;
         private bool terminal;
@@ -41,7 +49,7 @@ namespace YLFramework.Core
         private LoadViewStatus interruptedStatus;
         private readonly int threadId = Thread.CurrentThread.ManagedThreadId;
 
-        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, UIType? uiType = null)
+        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, UIType? uiType = null, GameObject prefab = null)
         {
             owner = module;
             lifecycle = module.ViewLifecycle;
@@ -58,19 +66,52 @@ namespace YLFramework.Core
             args = claimedArgs;
             param = parameters;
             panelType = uiType;
+            directPrefab = prefab;
+            hasDirectPrefab = !ReferenceEquals(prefab, null);
+            window = claimedArgs?.Window;
+            windowContext = claimedArgs?.WindowContext;
             Validate();
             owner.pendingViews.Add(this);
+            Application.quitting += OnExecutionEnded;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+#endif
+        }
+
+        // Unity 停止原生 Coroutine 不保证执行迭代器的 finally；业务请求必须自行提交退出终态。
+        private void OnExecutionEnded()
+            => Finish(null, new InvalidOperationException("View execution session has ended."), LoadViewStatus.Invalidated);
+
+#if UNITY_EDITOR
+        private void OnPlayModeChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode) OnExecutionEnded();
+        }
+#endif
+
+        bool IPendingViewRequest.MatchesWindow(string key, Canvas context)
+            => !terminal && window != null && window.Unique && window.Key == key && windowContext == context;
+
+        private LoadViewRequest() { }
+        internal static LoadViewRequest<T> FromResult(T result)
+        {
+            var request = new LoadViewRequest<T>();
+            request.Finish(result, null, LoadViewStatus.Succeeded);
+            return request;
         }
 
         private void Validate()
         {
             if (interruption != null) throw interruption;
             if (terminal) throw new InvalidOperationException("View request has already completed.");
+            if (hasDirectPrefab && !directPrefab) throw new InvalidOperationException("View prefab has been destroyed.");
             ViewManager.EnsureOwner(owner);
             if (!ReferenceEquals(owner.ViewLifecycle, lifecycle)) throw new InvalidOperationException("View owner lifecycle has ended.");
             if (hasParent)
             {
                 if (!parent) throw new InvalidOperationException("View parent has been destroyed.");
+                if (window != null && window.Unique && PanelManager.ResolveParentRoot(parent) != windowContext)
+                    throw new InvalidOperationException("Unique window request context has changed.");
                 foreach (var entry in parentSessions)
                     if (!entry.Key || !ReferenceEquals(entry.Key.Session, entry.Value))
                         throw new InvalidOperationException("View parent session has ended.");
@@ -113,6 +154,10 @@ namespace YLFramework.Core
 
         private void ReleaseInputs()
         {
+            Application.quitting -= OnExecutionEnded;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+#endif
             if (owner != null) owner.pendingViews.Remove(this);
             var previousArgs = args;
             args = null;
@@ -124,6 +169,9 @@ namespace YLFramework.Core
             assetName = null;
             param = null;
             panelType = null;
+            directPrefab = null;
+            window = null;
+            windowContext = null;
             targetScene = default;
             if (previousArgs != null) previousArgs.Release();
         }
@@ -174,10 +222,13 @@ namespace YLFramework.Core
 
         private IEnumerator Load()
         {
-            GameObject prefab = null;
+            GameObject prefab = directPrefab;
             Exception resourceError = null;
-            foreach (var project in projects)
+            // 直接 Prefab 也保留接受/取消边界，不另建加载协程或 pending 集合。
+            if (prefab) { yield return null; ValidateWaiting(); }
+            for (int i = 0; !prefab && i < projects.Count; i++)
             {
+                var project = projects[i];
                 Validate();
                 XFABManager.LoadAssetRequest request = null;
                 try { request = XFABManager.AssetBundleManager.LoadAssetAsync<GameObject>(project, assetName); }

@@ -88,24 +88,17 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void EventSystemPreservesOriginalSerializedInputSettings()
+        public void EventSystemPreservesNavigationSettingsAndDefersBackendSelectionToRuntime()
         {
-            Assert.That(File.ReadAllText(ResourceRoot + "YLFramework/Core/EventSystem.prefab"),
-                Is.EqualTo(File.ReadAllText(OriginalRoot + "EventSystem.prefab")));
             var prefab = Resources.Load<GameObject>("YLFramework/Core/EventSystem");
             Assert.That(prefab.GetComponents<Component>().Select(c => c.GetType()), Is.EqualTo(new[]
             {
-                typeof(Transform), typeof(EventSystem), typeof(StandaloneInputModule)
+                typeof(Transform), typeof(EventSystem)
             }));
             Assert.That(prefab.GetComponent<EventSystem>().sendNavigationEvents, Is.True);
             Assert.That(prefab.GetComponent<EventSystem>().pixelDragThreshold, Is.EqualTo(10));
-            var input = prefab.GetComponent<StandaloneInputModule>();
-            Assert.That(input.horizontalAxis, Is.EqualTo("Horizontal"));
-            Assert.That(input.verticalAxis, Is.EqualTo("Vertical"));
-            Assert.That(input.submitButton, Is.EqualTo("Submit"));
-            Assert.That(input.cancelButton, Is.EqualTo("Cancel"));
-            Assert.That(input.inputActionsPerSecond, Is.EqualTo(10));
-            Assert.That(input.repeatDelay, Is.EqualTo(0.5f));
+            Assert.That(prefab.GetComponents<BaseInputModule>(), Is.Empty,
+                "An active Legacy module must not run before the framework chooses the supported backend.");
         }
     }
 }

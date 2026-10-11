@@ -1,56 +1,52 @@
-using UnityEngine; 
+using UnityEngine;
 
 namespace YLFramework.Core
 {
 
-    /// <summary>
-    /// 背景适配 ( 原理是让当前的游戏物体 与 屏幕大小保持一致 )
-    /// </summary>
+    /// <summary>按当前 Canvas 与自身尺寸等比放大以覆盖背景，保留不缩小的既有行为。</summary>
+    [DisallowMultipleComponent]
     public class BackgroundAdaptation : MonoBehaviour
-    { 
-        private float currentScreenWidth;
-        private float currentScreenHeight;
+    {
+        private RectTransform rect;
+        private string lastError;
 
-        private float width;
-        private float height;
-
-        private Canvas canvas;
-        private RectTransform canvasRectTransform;
-
-        private void Awake()
+        /// <summary>重新计算 cover；依赖或尺寸无效时保留原缩放、报告一次错误并返回 false。</summary>
+        public bool Refresh()
         {
-            RectTransform rect = GetComponent<RectTransform>();
-            if (rect == null) return;
-            width = rect.rect.width;
-            height = rect.rect.height;
-
-            canvas = GetComponentInParent<Canvas>();
-            canvasRectTransform = canvas.GetComponent<RectTransform>(); 
+            if (!rect) rect = GetComponent<RectTransform>();
+            if (!rect) return Reject("BackgroundAdaptation requires a RectTransform.");
+            var canvas = GetComponentInParent<Canvas>();
+            if (!canvas || canvas.transform == transform)
+                return Reject("BackgroundAdaptation requires a parent Canvas.");
+            var canvasRect = canvas.transform as RectTransform;
+            if (!canvasRect) return Reject("BackgroundAdaptation requires a Canvas RectTransform.");
+            Vector2 size = canvasRect.rect.size;
+            Vector2 contentSize = rect.rect.size;
+            if (!PositiveFinite(size) || !PositiveFinite(contentSize))
+                return Reject("BackgroundAdaptation requires positive finite Canvas and content sizes.");
+            float scale = Mathf.Max(1, Mathf.Max(size.x / contentSize.x, size.y / contentSize.y));
+            if (float.IsInfinity(scale)) return Reject("BackgroundAdaptation cover scale is not finite.");
+            var target = new Vector3(scale, scale, scale);
+            if (rect.localScale != target) rect.localScale = target;
+            lastError = null;
+            return true;
         }
-  
-        private void OnEnable()
+
+        private bool Reject(string error)
         {
-            Refresh();
+            if (lastError != error) Debug.LogError(error, this);
+            lastError = error;
+            return false;
         }
 
+        private static bool PositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
+            !float.IsInfinity(value.x) && !float.IsInfinity(value.y);
 
-        // 如果能够动态调整分辨率 这里需要监听对应事件刷新( 暂时不考虑 )
-        private void Refresh()
+        private void OnEnable() => Refresh();
+        private void LateUpdate() => Refresh();
+        private void OnTransformParentChanged()
         {
-            if (currentScreenWidth == canvasRectTransform.rect.width && currentScreenHeight == canvasRectTransform.rect.height) 
-                return;
-
-            currentScreenWidth = canvasRectTransform.rect.width;
-            currentScreenHeight = canvasRectTransform.rect.height;
-
-            float scale_x = currentScreenWidth / width;
-            float scale_y = currentScreenHeight / height;
-            float s = scale_x > scale_y ? scale_x : scale_y;
-
-            if (s < 1) s = 1; // 不考虑缩小的情况
-
-            transform.localScale = new Vector3(s, s, s);
+            if (isActiveAndEnabled) Refresh();
         }
     }
 }
-

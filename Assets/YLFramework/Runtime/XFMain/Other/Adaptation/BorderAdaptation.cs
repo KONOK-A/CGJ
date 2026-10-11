@@ -9,8 +9,9 @@ namespace YLFramework.Core
     }
 
     /// <summary>
-    /// 边界适配
+    /// 按宽高比调整左右边距，不改变垂直位置；不是 Safe Area。
     /// </summary>
+    [DisallowMultipleComponent]
     public class BorderAdaptation : MonoBehaviour
     {
         /// <summary>
@@ -31,23 +32,51 @@ namespace YLFramework.Core
         [SerializeField]
         private float maxOffset = 100;
 
-        // Start is called before the first frame update
-        void Start()
+        [SerializeField, Tooltip("达到最小偏移的 Canvas 宽高比；无 Canvas 时使用屏幕尺寸。")]
+        private float minAspect = 1.77f;
+        [SerializeField, Tooltip("达到最大偏移的 Canvas 宽高比，必须大于最小宽高比。")]
+        private float maxAspect = 2.22f;
+        private RectTransform rect;
+        private string lastError;
+
+        /// <summary>刷新水平边距，保留 Y；非法配置或尺寸报告一次错误并返回 false。</summary>
+        public bool Refresh()
         {
-
-           float value = Mathf.InverseLerp(1.77f, 2.22f,  (float)Screen.width / Screen.height);
-
-            switch (borderType)
-            {
-                case BorderType.Left:
-                    transform.GetComponent<RectTransform>().anchoredPosition =  new Vector2(Mathf.Lerp(minOffset,maxOffset, value),0);
-                    break;
-                case BorderType.Right:
-                    transform.GetComponent<RectTransform>().anchoredPosition =  new Vector2(-Mathf.Lerp(minOffset, maxOffset, value), 0);
-                    break;
-            }
+            if (!rect) rect = GetComponent<RectTransform>();
+            if (!rect) return Reject("BorderAdaptation requires a RectTransform.");
+            if (!Finite(minAspect) || !Finite(maxAspect) || minAspect <= 0 || maxAspect <= minAspect ||
+                !Finite(minOffset) || !Finite(maxOffset) || maxOffset < minOffset ||
+                (borderType != BorderType.Left && borderType != BorderType.Right))
+                return Reject("BorderAdaptation requires increasing positive aspect bounds and finite ordered offsets.");
+            var canvas = GetComponentInParent<Canvas>();
+            Vector2 size = canvas ? ((RectTransform)canvas.transform).rect.size : new Vector2(Screen.width, Screen.height);
+            if (!Finite(size.x) || !Finite(size.y) || size.x <= 0 || size.y <= 0)
+                return Reject("BorderAdaptation requires a positive finite Canvas or screen size.");
+            float value = Mathf.InverseLerp(minAspect, maxAspect, size.x / size.y);
+            float offset = Mathf.Lerp(minOffset, maxOffset, value);
+            Vector2 position = rect.anchoredPosition;
+            position.x = borderType == BorderType.Left ? offset : -offset;
+            if (rect.anchoredPosition != position) rect.anchoredPosition = position;
+            lastError = null;
+            return true;
         }
 
+        private bool Reject(string error)
+        {
+            if (lastError != error) Debug.LogError(error, this);
+            lastError = error;
+            return false;
+        }
+
+        private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        private void Start() => Refresh();
+        private void OnEnable() => Refresh();
+        private void LateUpdate() => Refresh();
+        private void OnTransformParentChanged()
+        {
+            if (isActiveAndEnabled) Refresh();
+        }
     }
 
 }

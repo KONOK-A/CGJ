@@ -52,3 +52,11 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - `Runtime/Tools/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。
 - `Runtime/Tools/ZipTool/`：ICSharpCode.SharpZipLib（MIT），完整文本见该目录 `THIRD-PARTY-NOTICES.md`。
 - `Plugins/` 下的第三方编辑器插件随附各自的说明材料，其许可与使用条件以插件自身提供为准。
+
+## ColorSelector 的历史来源与替代
+
+- 原 `Samples/ColorSelector/Readme.txt` 标注 `CodeArtist.mx 2015`、`Code: Rodrigo Fernandez Diaz`、联系地址 `http://codeartist.mx/`；其 `.meta` 的 `licenseType: Store` 不是开源再分发许可。
+- 未取得覆盖原代码、Shader、图片、材质或 Prefab 布局且允许作为框架工具再分发的完整许可。2026-10-11 核查时作者站点不可读；没有将免费获取、署名、修改或其他来源的 MIT 当作该资源的授权。
+- Unity [Asset Store Terms/EULA](https://unity.com/legal/as-terms) 和[官方商业使用说明](https://support.unity.com/hc/en-us/articles/205623589-Can-I-use-assets-from-the-Asset-Store-in-my-commercial-game) 也不等同于资产类产品的自由再分发授权；这些规则不证明原目录具体取得过何种许可。
+- 原实现、Shader、素材及布局已从分发目录退出，未迁入 Runtime。历史作者署名仍在 Sample 说明中保留，原文件可由 Git 历史追溯，不以删署名或改名掩盖来源。
+- `Runtime/XFMain/UI/Tools/` 与 `Prefabs/ColorSelector.prefab` 按既定 HSV 功能契约独立实现/重建，不复制原源码表达、Shader 或图片。图形和游标由项目代码生成，材质使用安装的标准 UGUI 路径，不将 Unity 包 Shader 源码复制到框架。不声称本次采用了严格 clean-room 隔离。

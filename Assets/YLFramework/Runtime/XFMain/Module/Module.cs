@@ -105,7 +105,7 @@ namespace YLFramework.Core
         public virtual string DefaultStartUpScene => string.Empty;
 
         /// <summary>
-        /// 当前模块中的UI的初始层级, UI的实际层级 = 初始层级 + UI本身层级 
+        /// 模块 UI 的逻辑排序偏移；实际层级同时受根内 SortingLayer、模态及前置优先级约束。
         /// </summary>
         public int UIStartSortOrder 
         {
@@ -116,19 +116,9 @@ namespace YLFramework.Core
 
             set 
             {
+                PanelManager.ValidateModuleOrder(this, value);
                 ui_start_sort_order = value;
-
-                var errors = new List<Exception>();
-                foreach (var entry in ViewManager.Snapshot(this))
-                {
-                    if (entry.Key is Panel panel && panel && ReferenceEquals(panel.Session, entry.Value))
-                    {
-                        try { panel.RefreshSortingOrder(); } // 包含显式挂载及嵌套Panel，不只命名资源。
-                        catch (Exception error) { errors.Add(error); }
-                    }
-                }
-                ViewManager.ThrowCleanupErrors(errors);
-
+                PanelManager.Refresh(null);
             }
 
         }

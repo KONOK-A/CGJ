@@ -59,6 +59,14 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Documentation/Modules/Action.md",
                 FrameworkRoot + "/Documentation/Modules/Audio.md",
                 FrameworkRoot + "/Documentation/Modules/Help.md",
+                FrameworkRoot + "/Documentation/Modules/UI.md",
+                FrameworkRoot + "/Prefabs/YLFramework.prefab",
+                FrameworkRoot + "/Prefabs/UITips.prefab",
+                FrameworkRoot + "/Prefabs/ColorSelector.prefab",
+                FrameworkRoot + "/Samples/ColorSelector/ColorSelectorSample.prefab",
+                FrameworkRoot + "/Runtime/XFMain/UI/Tools/ColorWheelGraphic.cs",
+                FrameworkRoot + "/Runtime/XFMain/LICENSE.md",
+                FrameworkRoot + "/Runtime/THIRD-PARTY-NOTICES.md",
                 PrefabPath,
                 CanvasPath
             };
@@ -78,6 +86,11 @@ namespace YLFramework.Tests
             var excludedRoots = new[]
             {
                 FrameworkRoot + "/Tests", FrameworkRoot + "/Integrations",
+                FrameworkRoot + "/Runtime/UI",
+                FrameworkRoot + "/Samples/ColorSelector/Prefabs",
+                FrameworkRoot + "/Samples/ColorSelector/Shaders",
+                FrameworkRoot + "/Samples/ColorSelector/Materials",
+                FrameworkRoot + "/Samples/ColorSelector/Textures",
                 "Assets/Plugins/Demigiant/DOTween"
             };
             var retiredFiles = new[] { "ActionKitSingleFileCreator.cs", "ActionKitSingleFileExporter.cs", "ActionKitSingleFileCreator.asset" };
@@ -169,6 +182,12 @@ namespace YLFramework.Tests
                 Assert.That(recordsByGuid[PrefabGuid].Pathname, Is.EqualTo(PrefabPath));
                 Assert.That(recordsByGuid.ContainsKey(CanvasGuid), Is.True);
                 Assert.That(recordsByGuid[CanvasGuid].Pathname, Is.EqualTo(CanvasPath));
+                foreach (var retiredGuid in new[]
+                {
+                    "29e4e189755c172469818bfbd3d8a3a4", "18a39294c5bc61646be12faf6a17fe94",
+                    "ef050e654d014a7cb539e809f36326a2", "eaa2ff45b0824bb0a88fbda69f891959",
+                    "5117b7f5560b4af8a25c8d427cbae882"
+                }) Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired UI identity must not be distributed: " + retiredGuid);
                 var prefabYaml = Encoding.UTF8.GetString(recordsByPath[PrefabPath].Payload);
                 Assert.That(prefabYaml, Does.Match(@"m_Script:[ \t]*\{[^}\r\n]*\bguid:[ \t]*" + CanvasGuid + @"\b"));
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);

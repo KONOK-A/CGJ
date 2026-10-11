@@ -16,7 +16,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
 | [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
 | [`Plugins/`](../Plugins/) | 第三方插件（Sirenix Odin、Editor Enhancers） |
-| [`Prefabs/`](../Prefabs/) | 框架运行所需预制体（`YLFramework.prefab`、`UITips.prefab`） |
+| [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
 | [`Samples/`](../Samples/) | 示例（`ColorSelector`） |
 | `Documentation/` | 本文档目录 |
 
@@ -54,12 +54,12 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
 | Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
-| UI | 窗口管理、UI 根节点、提示气泡 | 部分功能待完善 | [Modules/UI.md](Modules/UI.md) |
+| UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips 与 Runtime ColorSelector | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
 ### 其他内容
 
 - [Help](Modules/Help.md)：`Editor/Help/` 中的 Editor-only 帮助核心，不属于 Runtime / Foundation；Action、Audio 提供方由普通 Editor 程序集承载。
-- [`Samples/ColorSelector/`](../Samples/ColorSelector/)：基于 UI 窗口的取色器示例，非框架模块（已移出 Runtime）。
+- [`Samples/ColorSelector/`](../Samples/ColorSelector/)：正式 `YLFramework.Core.ColorSelectorWindow` 的消费者演示，含已绑定的 Sample Prefab，不保存另一份工具实现。
 
 ## 架构与依赖
 

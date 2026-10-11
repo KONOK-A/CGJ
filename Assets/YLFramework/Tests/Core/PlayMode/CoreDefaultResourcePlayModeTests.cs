@@ -35,6 +35,7 @@ namespace YLFramework.Core.Tests
         {
             if (manager != null)
             {
+                typeof(PanelManager).GetMethod("EndLateRound", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
                 var eventSystem = (GameObject)OwnedEventSystemField.GetValue(manager);
                 if (eventSystem) UnityEngine.Object.Destroy(eventSystem);
                 foreach (var canvas in ((PanelManager)manager).uiCanvas.Values)
@@ -51,7 +52,7 @@ namespace YLFramework.Core.Tests
         [UnityTest]
         public IEnumerator DefaultEventSystemIsCreatedOnlyOnceWhenNoneExists()
         {
-            Refresh.Invoke(null, null);
+            var root = (Transform)GetParent.Invoke(null, new object[] { null, null, UIType.UI });
             var created = (GameObject)OwnedEventSystemField.GetValue(manager);
             Assert.That(created, Is.Not.Null);
             Assert.That(created.name, Is.EqualTo("EventSystem(Created By YLFramework.Core)"));
@@ -61,12 +62,78 @@ namespace YLFramework.Core.Tests
             Assert.That(OwnedEventSystemField.GetValue(manager), Is.SameAs(created));
             Assert.That(UnityEngine.Object.FindObjectsOfType<EventSystem>(), Has.Length.EqualTo(1));
             Assert.That(created.GetComponents<BaseInputModule>(), Has.Length.EqualTo(1));
+#if ENABLE_INPUT_SYSTEM
+            Assert.That(EventSystem.current.currentInputModule.GetType().FullName,
+                Is.EqualTo("UnityEngine.InputSystem.UI.InputSystemUIInputModule"));
+#else
             Assert.That(EventSystem.current.currentInputModule, Is.SameAs(created.GetComponent<StandaloneInputModule>()));
+#endif
             UnityEngine.Object.Destroy(created);
             yield return null;
             Assert.That(EventSystem.current, Is.Null);
         }
 
+        [UnityTest]
+        public IEnumerator OwnedInputLivesUntilLastServicedRootEnds()
+        {
+            var first = (Transform)GetParent.Invoke(null, new object[] { null, null, UIType.UI });
+            var second = (Transform)GetParent.Invoke(null, new object[] { null, null, UIType.DontDestroyUI });
+            var created = (GameObject)OwnedEventSystemField.GetValue(manager);
+            UnityEngine.Object.Destroy(first.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(created, Is.Not.Null);
+            Assert.That(EventSystem.current, Is.SameAs(created.GetComponent<EventSystem>()));
+            UnityEngine.Object.Destroy(second.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(created == null, Is.True, "Only the self-created system must end with the last UI root.");
+            Assert.That(EventSystem.current, Is.Null);
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        [UnityTest]
+        public IEnumerator LaterExternalSystemIsBorrowedWithoutOwningOrChangingItsModule()
+        {
+            GetParent.Invoke(null, new object[] { null, null, UIType.UI });
+            var owned = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var external = new GameObject("LaterExternalInput", typeof(EventSystem), typeof(StandaloneInputModule));
+            ownedObjects.Add(external);
+            var input = external.GetComponent<StandaloneInputModule>();
+            input.repeatDelay = 0.91f;
+            yield return null;
+            yield return null;
+            Assert.That(EventSystem.current, Is.SameAs(external.GetComponent<EventSystem>()));
+            Assert.That(owned == null, Is.True);
+            Assert.That(input.enabled, Is.True);
+            Assert.That(input.repeatDelay, Is.EqualTo(0.91f));
+        }
+#endif
+
+#if ENABLE_INPUT_SYSTEM
+        [UnityTest]
+        public IEnumerator BorrowingLaterInputSystemKeepsItsRuntimeDefaultActionsAlive()
+        {
+            GetParent.Invoke(null, new object[] { null, null, UIType.UI });
+            var owned = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var external = new GameObject("LaterInputSystem", typeof(EventSystem));
+            ownedObjects.Add(external);
+            var type = Type.GetType("UnityEngine.InputSystem.UI.InputSystemUIInputModule, Unity.InputSystem");
+            var module = external.AddComponent(type);
+            var asset = (UnityEngine.Object)type.GetProperty("actionsAsset").GetValue(module);
+            Assert.That(asset != null, Is.True);
+            yield return null;
+            yield return null;
+            Assert.That(EventSystem.current, Is.SameAs(external.GetComponent<EventSystem>()));
+            Assert.That(owned == null, Is.True);
+            Assert.That(asset != null, Is.True, "Input System 1.14 shares runtime defaults; ending our module must not dispose borrowed actions.");
+            var point = type.GetProperty("point").GetValue(module);
+            var action = point.GetType().GetProperty("action").GetValue(point);
+            Assert.That((bool)action.GetType().GetProperty("enabled").GetValue(action), Is.True);
+        }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
         [UnityTest]
         public IEnumerator ExistingXFEventSystemIsReusedWithoutTakingOwnershipOrChangingInput()
         {
@@ -109,6 +176,7 @@ namespace YLFramework.Core.Tests
             Assert.That(EventSystem.current, Is.SameAs(eventSystem));
             Assert.That(OwnedEventSystemField.GetValue(manager), Is.Null);
         }
+#endif
 
         [UnityTest]
         public IEnumerator DefaultCanvasesLoadAtBothLayersAndCoexistWithXFCanvas()

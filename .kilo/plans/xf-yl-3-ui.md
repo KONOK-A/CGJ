@@ -1,8 +1,8 @@
 # XF × YL 阶段 3：UI 系统深度融合研究与总体方案
 
-**状态：设计已批准，待分批实施；阶段 3 尚未实施。批准不等于授权 3.1 或后续批次实施，仍等待 Git 收口与 3.1 单独实施授权。**
+**状态：总体设计已批准；3.1～3.3 已完成用户技术验收与 Git 收口（`5be9c3f` / `7cc933f` / `ac23da8`）。3.4 实施及验证完成，阶段 3 UI 满足技术完成条件，待用户最终验收与 Git 收口。实际成果见第 10～13 节；历史停止文字仅记录当时边界，不自动启动阶段 4。**
 
-本文是阶段 3 的唯一总体方案，覆盖 **05 Panel/UI** 与 **12 UI Adaptation**，两项均以 XF 为主要架构基础、客观融合双方。本轮只编写本文，没有修改 Runtime、Editor、测试、资产、asmdef 或配置，没有运行 Unity 刷新、编译、测试、PlayMode 或 Player 构建，没有 Git 写入。方案批准、批次实施授权与 Git 授权分别处理；不得因阅读本文自动开始实施。
+本文是阶段 3 的唯一总体方案，覆盖 **05 Panel/UI** 与 **12 UI Adaptation**，两项均以 XF 为主要架构基础、客观融合双方。总体方案研究轮次只编写本文，没有修改 Runtime、Editor、测试、资产、asmdef 或配置，没有运行 Unity 刷新、编译、测试、PlayMode 或 Player 构建，没有 Git 写入。后续实施成果按批次增量记录；方案批准、批次实施授权与 Git 授权分别处理，不得因阅读本文自动开始实施。
 
 **已确认的补充范围（2026-10-11）：**用户接受 YL 自有资产定向迁移，要求 Tips、ColorSelector 真正进入统一 UI，而不是保留两套架构做适配；ColorSelector 在阶段 3 修复和优化，成为框架正式 Runtime UI 工具，Samples 只保留演示。没有融合后职责的旧 UI Root 可以退出，不以旧类型/模板形态作为永久约束。用户进一步选择：保留 HSV 色环/三角、初始颜色、当前颜色读取和实时变化回调，本阶段不新增 Alpha 编辑、数值/Hex 输入、确认取消流程或 Editor 专用取色器。这些确认不等于实现或 Git 写入授权；总体设计方向、功能边界与四批路线已于 2026-10-11 经用户审阅批准，批准范围与实施授权边界见第 9 节批准记录。
 
@@ -216,14 +216,18 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 - **主要风险：**基类与程序集身份、旧 Close/按钮监听、Loader 提前释放、ColorSelector 坐标/几何/Shader 与素材来源、关闭中的新会话。类型/字段退出在引用迁移验收后，不保留永久 legacy 作为完成结果。
 - **迁移门禁：**先在受控自有样本验证新协议/字段与程序集变化，再定向迁上述模板与正式工具资产；存续资源保存 GUID/fileID/有效引用，退出资源处理引用及配套 meta，拒绝全库重序列化。迁移失败时停止对应退出，保留可恢复原数据，不自动创建兼容壳或执行 Git 回退；验证后按已确认范围清退无用旧组件/类型。未迁完或工具仍依赖旧 UI，不宣布批次或阶段 COMPLETE。
 - **实施节奏（已批准）：**本批工作量较大，允许在正式批次内部根据依赖渐进实施和验证（如先窗口/根、再 Tips、再 ColorSelector），不额外设立正式子批次；每一步保持可独立验证且不破坏现有行为。
+- **实施状态：技术 COMPLETE，已完成用户技术验收与 Git 收口。**3.3 的授权基线为 `7cc933f`；3.2 实际成果与历史验证见第 11 节，整体阶段 3 仍 IN PROGRESS。
 
 ### 3.3 UI Adaptation 与统一输入接入
 
+- **实施状态：技术 COMPLETE，已完成用户技术验收与 Git 收口（`ac23da8`）。**实现、独立后端验证及原状态恢复见第 12 节；3.4 最终门禁见第 13 节。
 - **交付：**Scaler 配置权威、显式 stretch、Background/Border 动态刷新与校验、经确认的可选 Safe Area；根 Overlay/Camera 模式、统一 EventSystem/输入桥、pointer 查询与真实模态输入。`Y/YLFrameworkRoot.cs` 只调整必要 UI 副作用，不能改普通 Singleton/Audio 生命周期。
 - **验收：**参考分辨率同屏变化、横竖屏/宽屏、实际 Canvas 尺寸变化、inactive 启用/重新挂载、零尺寸/缺依赖配置明确失败；Camera 模式窗口与背景布局合理。以正式 ColorSelector/Tips 为直接消费者验证取色坐标/游标、Mask/RectMask2D/alpha、提示位置随适配变化，及按钮/Slider/拖动、遮罩阻断、Submit/Cancel/焦点恢复。既有 EventSystem 不被替换，自建系统跨场景/根退出正确清理；实际可用后端分别报告，New-only 不能被 Both 结果覆盖。
 - **主要风险：**UGUI 布局刷新时点、camera 坐标、安全区、静态输入缓存/反射及 Player 裁剪。不引入 TMP、额外输入 Package 或全局屏幕服务作为默认解决方案。
 
 ### 3.4 资产、Editor 与阶段门禁收口
+
+- **实施状态：技术门禁完成，待用户最终验收与 Git 收口。**本批授权、修复、实际证据与保留边界见第 13 节。
 
 - **交付：**复核唯一窗口生命周期/策略、旧 UI/Root 退出、正式工具资产身份、GUID/字段/UnityEvent、来源许可及实际程序集；补必要 UI 校验/局部迁移支撑，增量维护现有 UI 使用说明、README/Architecture 的“ColorSelector 仅 Sample”旧定位、长期蓝图及必要工具用法。导出只包含可合法分发内容。本轮不预先修改这些文档或导出配置。
 - **验收：**一次定向跨模块回归、原游戏代表性菜单/设置/进入/返回/再入及点击音非干扰；关闭 Domain Reload、正常 Scene Reload 的两轮真实 UI Play 验证根、静态 hook、pending、输入/短提示旧轮次及退出不重建，恢复用户设置/场景。继承既有门禁但不重跑整个公共系统全集。
@@ -252,7 +256,7 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 | 正式 UI/Tips/ColorSelector 收入现有 Core UI 域，旧 UI 专用层迁完退出 | 复用已验收协议，工具可独立接统一根；维持 Core/Runtime 的现有隔离，需要定向迁移身份/字段/素材 | **修订推荐**，不引入反向依赖，不预建新产品程序集 |
 | 新独立 UI asmdef 或全面重命名 | 可进一步分层，但需要跨已有 Panel/View/Runtime 闭包迁移，当前没有足够独立收益 | 不作为本阶段默认动作；正式工具命名可局部统一，不能演变为全库搬迁 |
 
-**批准记录（2026-10-11 用户审阅通过）：**批准的是总体架构、行为方向、功能边界与实施路线，不是强制采用方案中的全部具体 API、类结构或内部算法；普通实现细节保留批次内自主设计。**批准不等于执行授权：3.1 及任何后续批次仍等待 Git 收口与单独实施授权。**
+**批准记录（2026-10-11 用户审阅通过）：**批准的是总体架构、行为方向、功能边界与实施路线，不是强制采用方案中的全部具体 API、类结构或内部算法；普通实现细节保留批次内自主设计。**批准不等于执行授权：批准轮次结束时，3.1 及后续批次仍等待 Git 收口与单独实施授权；后续 3.1 授权及成果见第 10 节。**
 
 1. **D1 已批准（YL 自有 UI 定向迁移）：**接受 YL 自有定向迁移；Tips/ColorSelector 真正归统一 UI，不保留两套架构适配；融合后无职责的 UI Root 可退出。保护存续资产身份和有效数据，不迁移原游戏/原资源链，不全量补旧 API shim。公共 YLFrameworkRoot 有 Audio/Action 实际消费者，不属于可按旧 UI 直接删除的对象。
 2. **D2 推荐总体方向已批准：**Core Panel/View 统一体系、根与显示上下文、排序与遮挡/模态策略、输入与 UI 适配边界；正式 UI/工具归现有 Core UI 域，Samples 仅演示；不默认新增整体 Runtime→Core，不以旧入口形态驱动依赖。具体类型/组件/接口按功能价值演进；如果实际编译闭包迫使改变这一方向，提出真实阻塞和最小替代，不偷偷反向引用或扩大专题。
@@ -263,6 +267,211 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
    - 3.2 工作量较大，允许 Kilo 在正式批次内部根据依赖渐进实施和验证，不额外设立正式子批次。
    - ColorSelector 的来源许可与再分发权限必须核实；不能确认时采用合法的替代方案。这不阻断 3.1。
 
-先前被忽略的迁移问题已由用户后续回答解决，不能继续把 D1 写成未选择或把 3.2 视为范围未定。**总体设计批准不等于执行批准**；本轮完成批准记录后停止，等待 Git 收口与 3.1 单独实施授权，不自动启动 3.1 或任何后续批次。
+先前被忽略的迁移问题已由用户后续回答解决，不能继续把 D1 写成未选择或把 3.2 视为范围未定。**总体设计批准不等于执行批准**；总体方案批准轮次完成记录后停止，没有自动启动实施。
 
-**总体方案批准记录到此完成。停止，等待 Git 收口与 3.1 单独实施授权；不自动启动 3.1 或任何后续批次。**
+**总体方案批准记录到此完成。其后的逐批授权与技术成果单独记录，不授权自动启动后续批次。**
+
+## 10. 3.1 实施与技术验证（2026-10-11）
+
+### 10.1 授权、基线与范围
+
+- 用户正式授权 3.1。实施前核对 `fusion/3-ui`、HEAD `a53faeb`，工作区干净；复用 1.3/阶段 2 的事务、Session、事件 token 与公共 Update，不重新开展总体研究。
+- 实际修改限定为 Core `Panel`、`PanelManager`、`Module.UIStartSortOrder`、必要的 View 初始化身份接点，以及现有 CoreDirectView/CoreXfab 测试和 smoke probe；本节为唯一新增实施记录。
+- 未迁移旧 UIManager/UIWindowBase/UIRoot、Tips、ColorSelector 或模板；未修改原 XF/XFAB 包、原游戏、Resources/Prefab/Scene/Material/Shader、meta、asmdef、manifest/lock 或项目设置。未建立第二个 UI 管理器、窗口事务、缓存或状态机。
+
+### 10.2 实际设计与已实现契约
+
+| 主题 | 3.1 实际结果 |
+|---|---|
+| 根与 Scene | 缺省场景根按准确 Scene handle 缓存，DDOL 根独立。`RegisterRoot(Canvas, UIType)` 接受已加载 Scene 中的现有根，校验寿命，不接收资产 Canvas，也不改变外部根配置。最近的显式登记根构成边界；没有显式边界时取实际最外层 Canvas。inactive 准备不依赖尚未可靠建立的原生 `rootCanvas` |
+| 多根与 Module | 同一 Scene 可有多个明确根，包括同一外层 Canvas 下的两个登记根；不同根默认不互改显示状态。同一根中的多个 Module 有意共享显示排序，但各 Panel 的业务 owner/Session 仍独立，Module 退出只撤销自身会话 |
+| 唯一策略记录 | 移除原全局 `panelQueues`/`_currentPanel` 及重复的两个 raw order 登记字典，以一份带 Panel/Session、根/Scene、注册序号的记录推导有效排序、显示、模态阻挡和焦点候选。旧 Session、Removing、Closing owner 不成为有效候选 |
+| 有效排序 | 依次计入实际 SortingLayer 值、层内模态优先组、组内 AlwaysInFront、逻辑 order + Module 偏移、确定的注册序号。尽量保留原有效值，仅为平手/优先提升生成严格递增 order；前置窗口不因反复登记而持续漂移。普通窗口 Top、遮挡和焦点都用同一有效关系，Overlay 不进入普通 Top/焦点 |
+| 配置拒绝 | 有效 Canvas order 必须处于 signed 16-bit 范围，使用宽整数检查，不让 Unity 静默截断。setter/Module 偏移预检读取实时根；同帧根合并造成的冲突在请求顺序或偏移提交前拒绝。缺省 order 只参考同根、同 SortingLayer、同模态/前置组，其他组的最大值不会无故耗尽当前组 |
+| Canvas 控制权 | 独立 Panel 控制自己的新增或合法预置 Canvas，可排序及遮挡；补足自身 GraphicRaycaster，保留预置 Canvas 的其他配置。不删除预置组件。没有本地 Canvas 的子 Panel 可借用有效祖先窗口 Canvas，不独立排序/隐藏共享 Canvas，不成为独立 Top/模态/焦点候选 |
+| 活跃重挂 | 独立窗口从旧根移出后，即使旧根被销毁，仍保留原 View 会话并重新计算上下文；借用控件在两个有效祖先窗口之间活跃重挂时重新解析 Canvas/根，并继承新 owner 的显示与模态阻挡。这里只改变呈现上下文，不转移 Module/Model/资源后端所有权 |
+| 显示与遮挡 | 仅同根、同 Scene 的有效全屏 `PanelType.Panel` 按有效排序遮挡较低的全屏页面；Window/Overlay 不产生全屏遮挡。`IsVisible` 及 Visible/Invisible 与已提交显示状态一致，首次激活即被覆盖的页面也收到 Invisible。恢复只选择仍有效的窗口，不 Close、停用业务对象、移除 Model 或清理外部任务 |
+| 模态与焦点基础 | `IsModal`、`IsInputBlocked`、`HasFocus`、`GetModalPanel(root)`、`GetFocusedPanel(root)` 从当前有效记录推导；多层模态失活/关闭后恢复仍有效的未阻挡候选，不重放旧历史。`HasFocus` 是导航候选，不是 EventSystem selected。销毁的 Unity fake-null 不会因与空查询比较而成为 Top/焦点 |
+| 失活与退出 | 沿用组件停用本身不关闭窗口的边界；物体 inactive 退出有效显示集合但保留业务会话/排序。组件先停用、随后物体停用而漏掉第二次 OnDisable 时由自有 Late token 兜底。`MultiPanelListener=false` 立即恢复遮挡显示，但不关闭模态/焦点维护。Close 直接撤销会话记录；退休会话的排序 setter 不修改缓存 Canvas 或访问旧 Module |
+| 通知与初始化 | Canvas/必要结构先提交，再逐项通知。既有窗口的排序或显示观察异常逐项记录，不跳过后续通知、不使无关新窗口加载失败。ViewManager 仅增加保存/恢复的同步初始化 View/Session 身份；自身 Prepare、OnLoaded 内再次排序或修改 Module 偏移导致的必要排序通知失败仍回到原初始化回滚，原始异常/参数释放/异步终态保持不变。嵌套加载不把外层观察异常冒充子加载失败 |
+| 会话与宿主 | 自有 Late 连接保留 Session/轮次守卫，记录归零只释放自己的 token，不清共享宿主或三相位。静态 `onCreateCanvas` 随 Session 重置。Top/焦点/登记集合查询及 Release 不创建 UI 根或 EventSystem；场景加载不再因一个空 UI 管理器制造输入宿主 |
+
+排序重算发生在登记、启停、退出、显式状态/Module 偏移变化时；Late 仅检查已登记记录的失效与上下文迁移，不全场景查找、每帧重新排序或引入复杂测试设施。未做 Profiler 测量，不据此宣称性能提升。
+
+### 10.3 接入与兼容影响
+
+- 现有 Module LoadPanel/LoadPanelAsync、直接 Prefab、Attach 与 View.Close 继续共用唯一 View 事务；健康缓存实例仍开启新 Session，业务字段仍由调用方负责，不新增 key 唯一窗口入口。
+- 多根业务用 `panel.RootCanvas` 与 `GetTopPanel(Canvas)` 等明确根 API；`GetTopPanel(UIType)` 保留为寿命分类聚合查询，不能解释为不同显示器/不同根之间的通用渲染全序。`UICanvas[UI]` 是当前 Scene 的缺省根兼容入口，不再作为全局显示上下文权威。
+- SortingLayer、动态 PanelType/AlwaysInFront/IsModal 配置变更后调用 `RefreshUIState()`；排序值通过 Panel/Module API 提交。普通无父根的独立 Canvas 是不同上下文，要验证或使用同组遮挡必须明确放入共同根。
+- 原“所有预置 Canvas 都失败”、借用关系按父 Canvas 层级形状推断、全局入队权威及既有观察异常使新请求回滚的旧测试，已按批准的新契约定向调整；保留真实准备失败、登记释放、原始异常、Args、pending、缓存与 Session 重入断言，没有仅删除失败用例。
+- ViewManager 接点不改变初始化/退出次序、事务计数或业务 owner，只识别当前同步初始化通知的归属。Core/Runtime/Foundation 依赖方向及全部程序集引用不变。
+
+### 10.4 实际验证与审查
+
+| 验证 | 本轮实际结果 |
+|---|---|
+| Unity 编译/环境 | 使用当前已打开的 `G:/Unity/Projects/CGJ2024`、Unity `2022.3.62f3c1`；MCP tests-run 刷新并执行本轮源码。只读运行时探针确认 `YLFramework.Core.Runtime` 已加载且新 IsModal API 存在，Editor 不在编译/刷新/PlayMode；不是以 dotnet/IDE 代替 Unity |
+| PlayMode 定向及直接跨模块回归 | `testNamespace=YLFramework.Core.Tests` 最终 **156 通过、0 失败、0 跳过**。包含 CoreDirectView/CoreXfab、默认资源、MVC/Scene/Module/事件与直接 Timer 生命周期消费者；不把工具返回的发现总数 580 当作实际运行数量，不扩展为全工程历史全集 |
+| EditMode 默认资源 | `CoreDefaultResourceTests` **4 通过、0 失败**；Resources key、原/Core 隔离及模板契约保持 |
+| EditMode 身份与依赖 | `CoreIdentityTests` **9 通过、0 失败**；Core 类型及程序集边界保持 |
+| 缺陷回归 | 实际见红后修复并见绿：Module 偏移/Top 不一致、独立根误遮挡、预置 Canvas 拒绝、模态优先/关闭恢复、借用状态枚举依赖、inactive 根身份、同帧根合并范围原子性、借用活跃重挂、初始化内二次排序/嵌套观察、优先组分配、首次遮挡通知、已关闭 setter 空引用及销毁后的 fake-null Top |
+| 新边界覆盖 | Additive 两场景/准确缺省根、UI/DDOL 与 owner 保持、两个显式嵌套根、现有 SortingLayer 与 Module 偏移、相等顺序稳定平手、共享 Canvas 不被操作、组件/物体停用交错、Scene 卸载、新旧会话复用、排序通知结构先提交及异常后继续通知 |
+| 独立只读审查 | 一轮审查发现的自身二次排序异常、实时根预检、活跃借用重挂及跨优先组分配四项均已修复，并补充对应实际回归；随后复查完整 diff 与 `git diff --check` |
+| 资源与用户状态 | 没有新增文件或遗漏 meta；没有修改或保存游戏/用户场景与持久资源。只读探针确认返回 `Assets/Scenes/Main.unity` 且 dirty=False；测试只清自身宿主、窗口、Scene 和 fixture 资源 |
+
+### 10.5 技术结论与停止边界
+
+**3.1 达到技术完成条件，具备进入 3.2 的技术前置基础；用户验收与 Git 收口尚待完成。**本批没有 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+
+没有完成或验证模态 Image 遮罩、实际指针/Selectable/EventSystem selected/Submit/Cancel、输入后端切换、UI Adaptation/Safe Area、旧 UI 与工具资产融合、无 Domain Reload 两轮实际 UI 门禁、原游戏非干扰或 Player。模态逻辑阻挡状态不能作为已经阻断游戏输入的证明；这些仍属于 3.2～3.4。跨显示器/WorldSpace 全序、IL2CPP/移动目标及 XFAB 独立等既有限制继续保留。
+
+**到此停止，等待用户验收与单独 Git 授权；不自动启动 3.2，不声明整个 UI 系统 COMPLETE。**
+
+## 11. 3.2 实施与技术验证（2026-10-11）
+
+### 11.1 授权与范围
+
+- 用户确认 3.1 已完成技术验收/Git 收口并正式授权 3.2。启动核对为 `fusion/3-ui` / `5be9c3f`，工作区干净；复用 3.1 和 1.3 协议，不重开总体设计。
+- 本批渐进接入、验证后再清退旧 UI。没有 Commit/Push/Merge/Tag/Reset/Clean、切换分支或启动第二 Unity；没有迁移原游戏、原场景、Resources 链及原 XF/XFAB Package，没有重构 Resource/Audio/Action/Pool/Timer。
+
+### 11.2 正式实现与内部取舍
+
+| 主题 | 实际结果 |
+|---|---|
+| 窗口目录与 owner | `Runtime/XFMain/UI/WindowCatalog` 只保存 `WindowDefinition` 注册快照。活跃唯一会话查询 `Module.ownedViews`，在途查询原 `Module.pendingViews`；没有新的窗口状态机、实例缓存、请求表、Loader 池或业务 owner |
+| 唯一与多实例 | 唯一范围为 owner + key + 实际 Canvas 根；同 key 在途明确拒绝，不合并 Abort 权限。已加载会话再次打开借读 `OnWindowUpdated` 并在现有层/模态/front 组内置顶，不重复 OnLoaded/事件登记。`Unique=false` 保留多实例，`Reusable=false` 的 acquired 实例退出时丢弃 |
+| 请求与资源 | 直接 Prefab / 资源名均接既有 View 后端；资源名继续使用 Module project fallback，不将旧 BundleName 当 ProjectName。直接 Prefab 异步也使用 `LoadViewRequest` 的接受、Abort、失效、参数归还及通知，不创建第二条加载事务 |
+| 生命周期边界 | 未完成 View 事务内的窗口入口重入明确拒绝。激活、更新、排序通知后复核原 Session；结束/替代会话不误报 Open 成功。唯一 pending 固定接受根，等待中根改变即 Invalidated，普通 View/Panel 的合法迁移协议不改 |
+| 根/层/遮罩 | `UIRootContext` 承接 Camera/Canvas/Scaler/Raycaster、五层 root/mask 与 DragLayer 配置。层是既有原生 sortingLayer 内的独立排序轴；最上活跃模态派生 mask，位于其下方槽位，最低槽位越界在提交前拒绝。置顶使用实际有效 order、Module offset 与平手关系，不越过优先分组 |
+| Tips | `UITipsPresenter` 仅拥有普通呈现项池；每次显示由调用方 Module Attach 正式 UITipsItem 会话。五位置、颜色/Sprite、淡入淡出、unscaled 时间与零时长完成有效；取消、Module/项/宿主结束沿 View 收尾，通知前先归还/丢弃，旧 handle 不控制后续复用。退出进行中拒绝重启借用，结束后可恢复。Tips 在窗口层上方的非交互 Overlay 呈现，不占用目录 key，不增加 Timer/Action 调度链 |
+| 指针与公共 Root | `UIPointer` 只查询实际 current EventSystem 的 UGUI 命中，不创建 UI/Input 宿主，真实 mask 不再按名称排除；缓存随 current 变化及 Session reset 清理。输入桥保留 meta/GUID 迁入 Core，配置入口要求已有 EventSystem；公共 `YLFrameworkRoot` 只移除无条件 UI 输入副作用，非 UI 职责/身份保留 |
+| 旧机制退出 | `Runtime/UI` 的 UIManager/UIRoot/UIWindowBase、假 Attribute、无用 Extension/OpenType、专用 Loader 池及空 SceneTipsItem 已在消费者/资产迁移验证后退出，没有永久 legacy 壳 |
+
+### 11.3 ColorSelector 与许可门禁
+
+- 原 Readme 标注 `CodeArtist.mx 2015` / `Code: Rodrigo Fernandez Diaz`；Store meta 不是开源许可。未找到覆盖原代码、Shader、图片、材质和布局且允许通用框架再分发的完整授权，当日作者站点返回 403。
+- Unity 官方 [Asset Store Terms](https://unity.com/legal/as-terms) 与[商业使用说明](https://support.unity.com/hc/en-us/articles/205623589-Can-I-use-assets-from-the-Asset-Store-in-my-commercial-game) 也不等同于资产类产品再分发授权；不据此猜测原目录具体取得过何种许可，不用其他来源的 MIT 补授权。
+- 按批准替代路线，正式 `ColorSelector` / `ColorSelectorWindow` / `ColorWheelGraphic` / `ColorSelectorCursor` 按 HSV 契约独立实现，Prefab 独立重建，不复制原源码表达、Shader、图片或布局。使用自绘色环/三角/黑白游标和安装的标准 UGUI 材质路径；不修改共享 Material，也不把 Unity 包 Shader 源码复制入框架。
+- 初始同步不通知，支持当前值及实时回调；SDR RGB `[0,1]`，非有限/HDR 初值明确拒绝，Alpha 保留但不编辑。实际 RectTransform/pivot/尺寸与事件 Camera 换算一致，三角最近边界夹取，拖动锁定原区域/指针；关闭/禁用/复用不保留旧拖动、回调或按钮订阅。
+- 没有 Alpha/数值/Hex、确认取消或 Editor 取色。Samples 只包含演示消费者、绑定好的 Sample 及来源说明；旧实现/Shader/材质/PNG/Prefab 已从分发树退出，现有递归 ExportRoots 不会带出它们。
+- 原作者署名仍在 Sample 来源说明及现有 THIRD-PARTY-NOTICES 中，原文件和完整 Readme 可由 Git 历史追溯。不声明严格 clean-room 隔离，**不宣称原授权已获确认**；门禁通过的是排除未确认内容并使用独立替代的路线。
+
+### 11.4 资产、程序集与消费者
+
+- `Prefabs/YLFramework.prefab` GUID `5cdd75c99ad87f642a43d6e65b7b8635` 保留。旧两个组件在绑定迁移后退出，新配置/presenter 不保持旧组件身份；存续 Camera/Canvas/Scaler/Raycaster、五层 root/mask、DragLayer、Tips 根/池、布局及 fileID 保留。空旧容器改名 `Windows`，不保留旧单例路径壳。
+- `UITips.prefab` GUID `e71ff2cbb45a105459b3731fe3c7cb2f`、组件 fileID `1058220433775594438`、`bg` `7796792508018691828` / `text` `7271027915193056046` 和原视觉数据保留，仅 Script 接到新正式类型。旧 RightTop/RightDown 绑定与物理锚点颠倒，已交换到对应原 Transform，不重建布局。
+- 原取色 Prefab `29e4e189755c172469818bfbd3d8a3a4` 因许可门禁清退，而非直接搬运。独立正式 `Prefabs/ColorSelector.prefab` 新 GUID `a6a470d31ae453c49a0d9ae92d0510e4`；演示 `ColorSelectorSample.prefab` 为 `151b6b54d6304454880ee84ff559511b`。Unity 生成新身份/绑定，不复用原 Shader/素材 GUID。
+- Sample 脚本身份保留，内容重写为正式消费者；新增 `YLFramework.Samples.ColorSelector` asmdef，显式 Core/Foundation/UGUI，`autoReferenced=false`。正式工具归既有 Core.Runtime，没有 Runtime → Core 反向依赖。
+- ApiHelp 的旧 CurrentLayer 编译依赖改为测试内 protected-setter fixture，保留可见性断言。存续移动脚本 InputSystemBridge 保留 GUID `ababd830cbe857348a46901bf78234d3`；新增 Assets 脚本/目录/Prefab/asmdef/Test 均有 Unity 生成 meta。
+- 实际使用说明已同步现有 UI.md、README、Architecture、Singleton 导航和 Sample Readme；没有建立重复计划、子批次或过程报告。
+
+### 11.5 实际验证
+
+| 验证层次 | 证据与限制 |
+|---|---|
+| Unity 编译 | 当前打开的 Unity `2022.3.62f3c1` 实际刷新/编译完成；不是 dotnet/IDE 结论。最后状态非 Play、非编译，`Assets/Scenes/Main.unity` dirty=False，没有保存用户场景 |
+| Core PlayMode | `YLFramework.Core.Tests.PlayMode` 最终 **171 通过、0 失败、0 跳过**，含原 Module/View/Panel 契约及 CoreDirectView 的窗口/Tips/ColorSelector/Sample 集成，不扩展为历史 Audio/Action/Timer/Resource 全集 |
+| Core EditMode | `YLFramework.Core.Tests.EditMode` 最终 **48 通过、0 失败、0 跳过**；含初始纯色/黑白灰/Alpha、几何顶点/边缘、平移/缩放/旋转/pivot、区域/指针/回调重入、退化/HDR 拒绝、独立网格/共享材质不变及原生渲染像素 |
+| 受影响 API Help | `PropertiesRetainPrivateProtectedAndPublicSetterVisibility` **1 通过、0 失败**；MCP 的发现 TotalTests 不作本批执行数 |
+| 真实输入与演示 | 实际 Camera Canvas 经 UGUI RaycastAll/事件派发命中色环，核验色值/Alpha/回调/关闭/复用；绑定好的 Sample 实际启动并消费正式窗口，销毁只关闭自己 Module，不是仅编译成功 |
+| 资产 | 根模板实际实例化验证五层、mask 插槽、Tips 绑定、导入无 Missing Script；AssetDatabase 已发现四个有效正式/演示 Prefab 及上述 GUID。无旧 C# 消费者及有效旧取色 GUID/Shader/素材引用 |
+| 呈现 | 原生 Camera.Render 像素断言及本轮截图读取核验独立绿/蓝实例、红色环段、三角白顶点、stencil、RectMask2D 和 0.5 CanvasGroup alpha；只使用并释放自建预览 Scene/Camera/RT/Texture |
+| 缺陷回归 | 独立只读审查的激活重入、pending 根迁移、Tips 退出重启、跨 Module 置顶、mask 最低槽位五项实际见红后修复。另修复真实 Raycast 揭示的 CanvasRenderer 缺失、右上/右下绑定、Tips 置顶/key 隔离及更新关闭误报成功 |
+| 工作区 | `git diff --check` 通过；原 Games/Resources/Scenes/Packages/ProjectSettings 无差异，HEAD 仍 `5be9c3f`，无 Git 写操作 |
+
+### 11.6 技术结论与停止边界
+
+**3.2 达到技术完成条件，具备进入 3.3 的正式根/窗口/领域能力前置；待用户验收与单独 Git 收口。** 原授权未知不作为带入框架的剩余许可缺口，因为相关内容已完整排除并替代；不表示原实现得到授权或整个阶段 3 已完成。
+
+当前 `activeInputHandler=2`（Both）。本批不声称完整 Adaptation、自动选择/补齐 New-only/Legacy/Both、多根相机统一、综合 Player、无 Domain Reload 或原游戏实际交互非干扰门禁完成；这些仍分别属于 3.3、3.4。未升级 Package/Unity 或改输入设置，不以当前 Both/Editor 通过代替后续门禁。
+
+**本轮到此停止，不自动实施 3.3，不自动进行 Git 收口。**
+
+## 12. 3.3 实施与验证记录（2026-10-11）
+
+### 12.1 实际成果与契约
+
+- 基线为 `fusion/3-ui` / `7cc933f`，开始时工作区干净；Unity `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.0`，未升级工具链或 Package。
+- `AutomaticAdaptationCanvasScaler` 唯一持有参考分辨率及自动/手动匹配，首次采用既有 Scaler 配置，提供 `Configure(Vector2, bool, float)` 与 `Refresh()`。`UIRootContext.ConfigureResolution` 委托该组件，不存第二份分辨率；`ConfigureCanvas` 明确 Overlay/Camera、绑定 Camera、校验 planeDistance，不创建 Camera。现有显式 stretch 契约保留。
+- Background 独立 cover 整个 Canvas，保持既有不缩小策略，并响应 Canvas/内容尺寸、重新挂载与启用；Border 仅调整水平偏移，保留 Y，宽高比默认范围仍为 `1.77` 至 `2.22`。零尺寸、非法范围或缺依赖明确报告并保留旧布局，可在有效数据恢复后重试。
+- `SafeAreaAdaptation` 仅显式添加才启用，挂到需要保护的内容容器，例如全屏窗口的内容根；不要挂根 Canvas 或全屏背景。它转换主显示器 Overlay/Camera 的安全区到父 RectTransform，支持 `Refresh()` 及固定 Rect 的定向验证入口，不创建全局屏幕事件服务。WorldSpace、多显示器及非轴向容器不在该入口内；既有模板不默认添加 Safe Area 或改变布局。
+- 自建 EventSystem 服务有效 UI 根，最后有效根退出才释放；active 外部系统只借用，保留模块、导航配置与寿命。inactive 对象不被激活或销毁；多系统/无可用模块明确诊断。Both 自建优先 Input System，只有 Legacy 可用才允许 Standalone 回退，New-only 不可回退 Legacy。指针查询不创建输入对象，静态位置/系统缓存按会话清理。
+- 模态同时约束本会话 Raycaster、Selectable 与标准 UGUI 拖动；按可见性、层级和会话恢复有效焦点，不覆盖外部或新选择。Select/Deselect 重入、独立嵌套模态、控件与根重挂、设备移除均有回归。控件捕获用 pointerId + button + Session + epoch，并保存派发前帧身份，避免旧按压进入复用窗口。不清空借用系统的其他指针，也不停用任意业务 MonoBehaviour；自定义业务拖动仍应遵守 `Panel.IsInputBlocked`。
+- 实测确认 Input System `1.14.0` 的共享 runtime defaults 问题：自身模块退出会 Dispose 外部模块仍引用的 static defaults。现有输入桥仅在确有共享资源时保护退出期间的所有权，不修改 Package 或外部配置。UGUI active 系统小集合与该版本退出机制定向反射接入，避免常态全场景搜索，不增加新的 Manager/输入路由框架。
+- New-only 下自动诊断 UI 的 Legacy F1 轮询曾使所有资源测试失败。`AudioKitDebugWindow` 仅修复快捷键后端读取，保留 Both/Legacy 原分支及 Show/Hide；New-only 提供 F1、Android 返回键与 iOS 四触点对应读取。未改 Audio 播放、资源、生命周期或程序集引用，F1 已实际验证，移动端尚未设备实测。
+
+### 12.2 实际验证与状态恢复
+
+| 环境 | 实际模式证明 | 本批实际执行结果 |
+| --- | --- | --- |
+| Legacy-only | 持久配置 `0` 后重启，Core Input System 分支不存在，Legacy 原生位置 API 可用；包提示启用新后端时选择 No | 输入资源/归属 PlayMode `5/5`；正式 ColorSelector 的 Standalone 管线 `1/1`；模态实际 Raycast/Selectable/焦点 `1/1` |
+| Input System-only | 持久配置 `1` 后重启，Input System 分支存在，原生 Legacy API 实际抛 `InvalidOperationException` | 输入资源/归属 PlayMode `4/4`；窗口与真实输入回归 `97/97`，含 F1 和设备移除捕获 |
+| Both（最终恢复后） | 原配置 `2` 已还原并重启，Input System 分支存在，Legacy 原生位置 API 可用 | Core EditMode `57/57`；窗口/输入 PlayMode `97/97`；输入资源/归属 PlayMode `6/6` |
+
+- 上述均为对应 Unity 的实际编译与测试结果，不是 IDE/dotnet 或沿用 Both 冒认 New-only。窗口类作为 PanelManager 寿命/会话变化的直接消费者回归，未重跑公共系统全集；没有执行 Player 构建。
+- Input System 使用自有虚拟 Mouse/Keyboard 的真实设备事件，经实际 InputSystemUIInputModule 完成正式 ColorSelector 的 Overlay/Camera 取色、拖动、参考分辨率变化与按钮关闭，以及正式根遮罩、Submit/Cancel、焦点、Slider、Tips 锚点和旧会话/捕获验证。Standalone 使用自有 BaseInput override，经实际 StandaloneInputModule 完成控件交互。这些是自动化模块管线证据，不称为物理 OS 鼠标/键盘人工验证。
+- 原生鼠标可能覆盖虚拟 Mouse 的 PassThrough 位置流；测试只限制本轮自建系统的 runtime actions，先验证 prior EventSystem、当前 owner 与非持久资产边界，结束恢复 filter 并移除自有设备。不会重置全局输入、覆盖外部 actions 或保存用户场景。
+- 适配 EditMode 覆盖动态尺寸、重挂/启用、Border Y/宽高比、Scaler 配置权威、零尺寸恢复、固定横竖屏 Rect 的 Overlay/Camera Safe Area 和背景独立性；运行时坐标与分辨率变化由正式工具直接验证。
+- 输入切换最终无残留：`ProjectSettings` 与 `Packages` 无 diff，实际 Both 恢复；唯一打开、active 且已保存的原 `Assets/Scenes/Main.unity` 已恢复。未保存用户未保存场景或改变原游戏持久资产。未真正持久化的早期切换和工具超时不记为通过。
+
+### 12.3 影响、限制与停止边界
+
+- Core EventSystem 资源保留 key/GUID/主体 fileID 与导航字段，仅去掉预先启用的 Legacy 模块；YL 根模板去掉无模块的空 EventSystem 子对象，其他主体身份和字段保留。正式 ColorSelector/Tips 资产、原 XF/XFAB、原游戏链未迁移；新脚本/meta 由 Unity 导入，程序集及 Foundation/Core/Runtime 依赖方向未改变，公共 YLFrameworkRoot 的 Audio/Action 非 UI 职责未改。
+- 私有 UGUI/Input System 版本边界在包升级时必须复核；Player/裁剪、移动端真实 Safe Area/触屏、Android/iOS 诊断入口与物理 OS 输入仍未实测。通用屏幕服务、WorldSpace/多显示器 Safe Area、自定义业务拖动代理均不扩展。本轮不声称跨平台或完整阶段 3 验收。
+- 3.4 的综合资产/Inspector 连续验证、无 Domain Reload 的真实连续 Play、原游戏代表性交互非干扰和 Windows64/Mono Player 门禁仍留下一批；原 Logger/MCP 的既有退出噪声不在本批借机重构。
+
+**3.3 达到技术完成条件，具备进入 3.4 的适配/输入前置。待用户验收与 Git 收口；整体阶段 3 仍 IN PROGRESS。本轮停止，不自动执行 3.4、Commit、Push、Merge、Tag、Reset、Clean 或切换分支。**
+
+## 13. 3.4 实施与阶段门禁收口（2026-10-11）
+
+### 13.1 授权、基线与最终体系
+
+- 用户正式授权 3.4，启动实际核对 `fusion/3-ui` / `ac23da8`，工作区干净；3.1～3.3 的技术验收与 Git 收口以用户确认和实际提交为准。
+- 新 YL 只有 Core 的 Module/View 请求与退出事务、PanelManager 策略、显式 WindowCatalog、UIRootContext、正式 Tips/ColorSelector 及统一适配/输入。目录不拥有活跃窗口或第二份 pending；旧 Runtime/UI、Manager/Root/Base、Loader 池与旧取色实现已退出。
+- Foundation 不依赖 UI，Core 不引用整体 Runtime，Runtime 不反向引用 Core。公共 YLFrameworkRoot 继续承担原 Audio/Action 非 UI 职责；原游戏继续使用原 XF/XFAB 与既有 YL Audio，没有业务或资源迁移。
+
+### 13.2 本批直接修复
+
+| 问题 | 实际证据与最小修复 |
+|---|---|
+| 正式工具 Camera 层不匹配 | 模板 UICamera cullingMask=32，仅渲染 UI；ColorSelector/Tips 位于 Default。真实模板输入正常而 Camera.Render 三角像素为背景，临时包含 Default 后通过。正式两个 Prefab 子树改为 UI layer，保留 GUID/fileID/字段；随后 Editor 与 Mono Player 的双实例绿/蓝像素断言通过。不改 Camera、原游戏资产或任意窗口的用户层 |
+| 真正在途请求跨 Play 残留 | 暂停真实 Play 后接受直接 Prefab pending，退出后仍为 Pending；Unity 停 Coroutine 不保证 finally。原 LoadViewRequest 按实际 Application.quitting / Editor ExitingPlayMode 提交 Invalidated，ReleaseInputs 撤销自有退出监听并归还参数，不新增请求表、不关闭其他 Module 或共享 producer |
+| 退出通知重新取得 UI | ViewManager.EnsureOwner 同时校验 Foundation 执行门禁；退出期间不得同步/异步加载或 Attach。真实退出完成通知尝试再次 Open，按明确执行会话错误拒绝，未重建根/输入。Module 事务、Model 归属与复用协议不变 |
+
+新增 `Tests/Core/Acceptance` 的窄验收程序集、入口和绑定场景用于真实 Play/Player，不在 ExportRoots 内，不加入正式游戏 Build Settings。原游戏模式只消费原 Main、按钮/Slider 持久事件和资源链，不复制业务。导出测试增量覆盖正式 UI/来源通知/完整 XF MIT、meta 字节和退出 GUID/路径排除；现有 UI、README、Architecture、Sample 用法与蓝图同步。
+
+独立只读审查未发现确定的产品级 P0/P1 回归，指出三处验收入口风险，已按最小范围收紧并复验：每轮 arm 前清零退出拒绝标记，避免无 Domain Reload 时沿用前轮结果；Player 成功标记移到真实退出断言之后，验收仍同时要求退出码、两个终态标记及无相关异常；原游戏 Module/FSM 的 fresh-session 检查移到自有清理范围之前，拒绝前置不清理既有全局状态。
+
+### 13.3 资产、身份与分发核查
+
+- 正式 Root `5cdd75c99ad87f642a43d6e65b7b8635`、Tips `e71ff2cbb45a105459b3731fe3c7cb2f`、独立 ColorSelector `a6a470d31ae453c49a0d9ae92d0510e4`、Sample `151b6b54d6304454880ee84ff559511b` 均实际 LoadPrefabContents、保存、卸载及重开；自有 MonoScript 类型/程序集有效、无 Missing Script 或破损对象引用。正式 Root 五层/mask/Camera/Tips 与工具 selector/按钮/游标绑定有效；空持久 UnityEvent 不冒充 Close 已验证，Close 使用会话动态监听并实际运行。
+- 两个 Core Resources key/GUID 保持有效并与原 XF Resources 隔离。存续模板身份、有效 fileID/字段、InputSystemBridge GUID 保留；新增验收资产由 Unity 导入生成 meta。没有原游戏、Packages、原 Resources 或持久配置变更。
+- 3.2 的独立取色替代路线沿用并复核：自绘网格/游标使用标准 UGUI，不带回原 CodeArtist 源码、Shader、材质、图片或 Prefab。署名和未确认原授权的事实保留在现有通知/Readme；门禁通过的是排除未知内容，不是原授权已取得。原 XF 完整 MIT 随 Core 导出。
+- 实际 unitypackage 解包验证正式 UI/演示、源码/文档/许可和 meta 字节，排除 Tests、旧 Runtime/UI、旧取色目录/GUID。沿用 Recurse、不使用 IncludeDependencies；并未认证整个 Plugins 的所有许可，也不宣称 UGUI/XFAB/Odin 等包外依赖已独立打包或干净工程导入。
+
+### 13.4 实际验证证据
+
+| 验证层次 | 本轮实际结果 |
+|---|---|
+| Unity 编译 | 当前打开的 Unity 2022.3.62f3c1 实际刷新、编译及 Player 构建；非 IDE/dotnet 结论 |
+| 定向跨模块 PlayMode | Core namespace **188/188**，含 View/请求/Module/Panel、窗口/Tips/工具/输入与直接 Foundation 生命周期消费者，0 失败/跳过；未重跑公共系统历史全集 |
+| 受影响 EditMode | Core **57/57**；实际导出 **1/1**。UGUI alpha、Mask/RectMask2D 与几何有效历史证据复用，同时正式模板 Camera 层修复由真实像素与 Player 重新验证 |
+| 真实连续双 Play | 审查收紧后重新执行，同一脚本域连续两轮，enterPlayModeOptionsEnabled=True、仅 DisableDomainReload，正常 Scene Reload；两轮 READY/EXIT_PASS，第二轮检查旧根/窗口销毁、旧 hook 清空、pending Invalidated、Tips 恰一次和旧颜色闭包不调用。每轮重新清零后，两次真实退出通知独立拒绝再 Open。没有用反射 Reset/Quit 代替 Play |
+| 原游戏 Editor 非干扰 | 既有 MainStartSettingsGameExitAndReentryUseFrameworkAudio **1/1**；真实按钮点击音 ButtonClickInvokesFrameworkAudioEmitter **1/1**。使用原 Main/FSM/XF/XFAB/音频链，未改游戏测试或业务 |
+| Windows64/Mono 构建 | 审查收紧后的当前源码 Development Player，显式验收场景 + 原 Main；最终实际 BuildReport **Succeeded、0 errors、4 warnings**（仅现有 MCP 空程序集），大小 152806513 bytes。首次构建回执曾超时，随后读取实际 BuildReport 确认；最终重建实际回执及 BuildReport 均通过，不把超时或 exe 存在当成功证据 |
+| 正式 UI Player | 最终新 exe 实际 WindowsPlayer / Mono / D3D11：正式模板、双实例独立色值与绿/蓝三角像素、Overlay/Camera 取色拖动/适配/Alpha、模态遮罩/Selectable/焦点、键盘 Submit、按钮关闭、Tips、Abort/owner 退出/重启复用、自建系统最后根退出通过。真实 Quit 断言后日志 PLAYER_PASS / QUIT_PENDING_PASS，未检出相关异常，进程 exit 0；退出码本身不独立证明退出断言 |
+| 原游戏 Player 非干扰 | 同一 exe 的 -ui34-game 实际加载 Main 和现有 MainModule Bundle，日志 GAME_PLAYER_PASS、exit 0。菜单设置/点击音、持久音量 Slider、两次参数配置/进入/暂停返回/BGM 句柄失效通过；游戏运行期间新 YL 工具借用原 Standalone，关闭 Module/自有根后原 EventSystem/模块与 BGM 保持 |
+
+最终 Player 产物及原始运行日志位于 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-3.4-20261011-final/`（`CGJ2024-UI34.exe`、`ui-player.log`、`game-player.log`），不提交构建产物。UI 输入采用自有虚拟 Mouse/Keyboard，经过实际 InputSystemUIInputModule；游戏采用真实持久 UnityEvent/Slider 事件，不声称物理 OS 设备人工输入或音频听感验收。Tips 在 Player 核验完成与回收，不把该断言写成文字像素已验证。
+
+### 13.5 资源前提、隔离与状态恢复
+
+- MainModule 产物源为 1.4 用户恢复并验收版：project=MainModule，StandaloneWindows64，1.0.0，2026/10/9 19:03:49；当前清单/Upgrade SHA-256 与历史记录一致。StreamingAssets 和 AssetBundles 两处各 **112 项**实算大小/MD5通过（109 普通 Bundle、平台 manifest Bundle、Upgrade/suffix），110 对 manifest 与六项配套文件 SHA-256一致，61 名称/63 类型映射及场景/FSM 目标有效。原资源输入未改，没有重建 XFAB。
+- 无 Domain Reload 探测复现原 LoggerHandler 的 UnityLogHandler 空引用；用户在本批明确批准临时原生日志隔离，保留所有错误输出，不改包/日志路径。最终双 Play 在该隔离下完成；原处理器身份已恢复。先前游戏测试留下原 XF sceneLoaded 自动创建 Standalone 的静态订阅，最终双 Play 前通过 Unity 正常 Editor 脚本域重载建立干净前置，不删除原输入或手动清原静态事件；两轮之间没有重载。
+- 原配置 enterPlayModeOptionsEnabled=False、options=DisableDomainReload|DisableSceneReload 已恢复；实际 Both、Windows64/Mono 与 Build Settings 不变，唯一原 Main 已重新打开且 dirty=False。没有保存或覆盖用户未保存场景，没有清其他系统宿主/任务；Player 游戏模式恢复自己临时改变的音频偏好、timeScale/targetFrameRate。
+
+### 13.6 技术结论与停止边界
+
+**3.4 实施及验证完成，阶段 3 UI 满足技术完成条件，待用户最终验收与 Git 收口。** 完成的是批准范围内的新 YL 统一 UI、资产/分发与代表性实际运行门禁，不表示原 Logger 已修复或全生态无 Domain Reload 兼容。
+
+IL2CPP/裁剪、移动设备真实 Safe Area/触屏、物理 OS 输入、WorldSpace/多显示器、完全无原 XF 生态的独立承载及真实 AB 全面释放仍在后续边界。UGUI/Input System 私有反射依赖已在当前 Mono Player 路径运行，但包升级和其他后端仍需复核。没有 Commit/Push/Merge/Tag/Reset/Clean、切换分支、创建里程碑或启动第二 Unity；本轮到此停止，不自动进入阶段 4 Audio。

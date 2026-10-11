@@ -1,45 +1,109 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
+    /// <summary>参考分辨率与宽高匹配的唯一配置入口，不改变 CanvasScaler 的缩放模式。</summary>
     [ExecuteInEditMode]
     [RequireComponent(typeof(CanvasScaler))]
+    [DisallowMultipleComponent]
     public class AutomaticAdaptationCanvasScaler : MonoBehaviour
     {
+        // 旧资源没有此字段，首次读取时采用其 CanvasScaler 已有配置。
+        [SerializeField] private Vector2 referenceResolution;
+        [SerializeField] private bool automaticMatch = true;
+        [SerializeField, Range(0, 1)] private float manualMatch;
         private CanvasScaler scaler;
-        private int currentWidth;
-        private int currentHeight;
+        private Canvas canvas;
+        private string lastError;
 
-        private void Awake()
+        /// <summary>设计参考分辨率；修改后立即刷新。</summary>
+        public Vector2 ReferenceResolution
         {
-            scaler = GetComponent<CanvasScaler>();
+            get { AdoptExistingConfiguration(); return referenceResolution; }
+            set => Configure(value, automaticMatch, ManualMatch);
         }
 
-        // 如果能够动态调整分辨率 这里需要监听对应事件刷新( 暂时不考虑 )
-        private void UpdateScreenAspect()
+        /// <summary>自动选择宽或高匹配；关闭后使用 ManualMatch。</summary>
+        public bool AutomaticMatch
         {
-            if (Screen.width == currentWidth && Screen.height == currentHeight)
-                return;
-
-            // 计算出比例
-            float aspect = (float)Screen.width / Screen.height; // 当前屏幕的宽高比
-
-            float scaler_aspect = scaler.referenceResolution.x / scaler.referenceResolution.y; // 设定的宽高比
-
-            scaler.matchWidthOrHeight = aspect > scaler_aspect ? 1 : 0;
-
-
-            currentWidth = Screen.width;
-            currentHeight = Screen.height;
+            get => automaticMatch;
+            set => Configure(ReferenceResolution, value, ManualMatch);
         }
 
-
-        private void Update()
+        /// <summary>手动宽高匹配值，范围为 0 到 1。</summary>
+        public float ManualMatch
         {
-            UpdateScreenAspect();
+            get { AdoptExistingConfiguration(); return manualMatch; }
+            set => Configure(ReferenceResolution, automaticMatch, value);
         }
 
+        /// <summary>一次提交根的适配配置；非法参数不会改变已有配置。</summary>
+        public void Configure(Vector2 referenceResolution, bool automaticMatch, float manualMatch)
+        {
+            if (!PositiveFinite(referenceResolution))
+                throw new ArgumentException("Reference resolution must contain positive finite values.", nameof(referenceResolution));
+            if (float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
+                throw new ArgumentException("Manual match must be between 0 and 1.", nameof(manualMatch));
+            this.referenceResolution = referenceResolution;
+            this.automaticMatch = automaticMatch;
+            this.manualMatch = manualMatch;
+            Refresh();
+        }
+
+        /// <summary>重新应用配置；依赖或尺寸无效时报告一次错误并返回 false。</summary>
+        public bool Refresh()
+        {
+            AdoptExistingConfiguration();
+            if (!scaler || !canvas) return Reject("AutomaticAdaptationCanvasScaler requires a Canvas and CanvasScaler.");
+            if (!PositiveFinite(referenceResolution) || float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
+                return Reject("AutomaticAdaptationCanvasScaler requires a positive finite reference resolution and a manual match between 0 and 1.");
+
+            float match = manualMatch;
+            if (automaticMatch)
+            {
+                // 与已安装 CanvasScaler 使用同一显示尺寸，避免参考分辨率更新后沿用旧 match。
+                Vector2 size = canvas.renderingDisplaySize;
+                int display = canvas.targetDisplay;
+                if (display > 0 && display < Display.displays.Length)
+                    size = new Vector2(Display.displays[display].renderingWidth, Display.displays[display].renderingHeight);
+                if (!PositiveFinite(size)) return Reject("AutomaticAdaptationCanvasScaler requires a positive finite rendering size.");
+                match = size.x / size.y > referenceResolution.x / referenceResolution.y ? 1 : 0;
+            }
+            if (scaler.referenceResolution != referenceResolution) scaler.referenceResolution = referenceResolution;
+            if (scaler.matchWidthOrHeight != match) scaler.matchWidthOrHeight = match;
+            lastError = null;
+            return true;
+        }
+
+        private void AdoptExistingConfiguration()
+        {
+            if (!scaler) scaler = GetComponent<CanvasScaler>();
+            if (!canvas) canvas = GetComponent<Canvas>();
+            if (referenceResolution.x == 0 && referenceResolution.y == 0 && scaler)
+            {
+                referenceResolution = scaler.referenceResolution;
+                manualMatch = scaler.matchWidthOrHeight;
+            }
+        }
+
+        private bool Reject(string error)
+        {
+            if (lastError != error) Debug.LogError(error, this);
+            lastError = error;
+            return false;
+        }
+
+        private static bool PositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
+            !float.IsInfinity(value.x) && !float.IsInfinity(value.y);
+
+        private void Awake() => AdoptExistingConfiguration();
+        private void OnEnable() => Refresh();
+        private void Update() => Refresh();
+        private void OnRectTransformDimensionsChange()
+        {
+            if (isActiveAndEnabled) Refresh();
+        }
     }
 }
-

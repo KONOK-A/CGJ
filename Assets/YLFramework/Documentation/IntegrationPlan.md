@@ -112,7 +112,8 @@
 | 2.3 Update | **COMPLETE**；用户已确认验收，Git 集成 `c9e6024` | A `d9f1b6c`、B `88cd76f`、C `0b51a8a`。单一 Foundation 三相位、Core 精确订阅、Starter 原 owner/会话隔离及 Action owned 消息桥接完成；历史 Unity 编译、定向 EditMode 13/13、PlayMode 45/45、真实关闭 Domain Reload 连续两轮 Play 通过，原游戏代表性回归通过，Editor 配置/场景恢复。见第 8 节及 [专项方案](../../../.kilo/plans/xf-yl-2.3-update.md)，第 8 节原停止文字保留为历史 |
 | 2.4 Timer | **IN PROGRESS**；2.4-D 实施及验证完成，2.4 Timer 满足技术完成条件，待用户最终验收与 Git 收口 | A～C 已验收提交，Foundation 唯一秒/帧内核、默认驱动及互补能力完成；D 实际 Unity 编译通过，连续两轮真实 Play（无 Domain Reload、正常 Scene Reload）1 项、Foundation 边界 5 项、View/Scope 与 Timer/Action 协作各 1 项通过。连续 Play 的原 XF Logger 测试环境隔离经用户授权，不代表整框架或原 Logger 会话兼容；未执行 Player/IL2CPP 或性能测量。见 [Timer 专项第 12 节](../../../.kilo/plans/xf-yl-2.4-timer.md) |
 | 2.5 SerializedDictionary | **技术完成**；C 实施与验证完成，待用户最终验收与 Git 收口 | A/B 已验收提交 `13cb2ce` / `045641b`；唯一 Foundation 容器、Core/Save 旧类型退出、原生 Inspector/raw 诊断与修复、Undo/Prefab/多对象保护、真实 SaveManager 隔离磁盘往返完成。C 实际 Unity 编译与 48 项定向用例通过；原包/游戏不迁移，保留对象键/Unity inline/复杂 JSON 与外部历史格式边界。见 [专项第 16 节](../../../.kilo/plans/xf-yl-2.5-serialized-dictionary.md)及 [Save 使用说明](Modules/Save.md)；不等于阶段 2 Git 集成、里程碑或最终独立验收 |
-| 阶段 3～7 及其他长期系统 | 未开始 | 不因 2.5 技术完成而自动授权或启动其他专题 |
+| 阶段 3 UI（05 Panel/UI + 12 UI Adaptation） | **技术完成，待用户最终验收与 Git 收口** | 3.1～3.3 已验收提交 `5be9c3f` / `7cc933f` / `ac23da8`；3.4 正式资产/来源分发核查、真实无 Domain Reload 双 Play、原游戏菜单/设置/进入/返回非干扰及 Windows64/Mono Player 通过。唯一 Core Module/View/Panel 策略、Tips/ColorSelector 与适配/输入统一，旧 UI 退出；原游戏/包/资源链不迁移。原 Logger 连续 Play 干扰仅经本次用户授权临时隔离并恢复，不表示整框架无 Domain Reload 兼容。见 [UI 专项第 13 节](../../../.kilo/plans/xf-yl-3-ui.md#13-34-实施与阶段门禁收口2026-10-11) |
+| 阶段 4～7 及其他长期系统 | 未开始 | 阶段 3 技术完成不自动授权 Audio 或其他专题，不自动合并或创建里程碑 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 
