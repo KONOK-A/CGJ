@@ -1,6 +1,6 @@
 # XF × YL 阶段 3：UI 系统深度融合研究与总体方案
 
-**状态：总体设计已批准；3.1 已获单独实施授权并达到技术完成条件，待用户验收与 Git 收口。3.2～3.4 尚未实施，阶段 3 未完成。3.1 的实际成果与验证见第 10 节，不自动启动后续批次。**
+**状态：总体设计已批准；3.1～3.3 已完成用户技术验收与 Git 收口（`5be9c3f` / `7cc933f` / `ac23da8`）。3.4 实施及验证完成，阶段 3 UI 满足技术完成条件，待用户最终验收与 Git 收口。实际成果见第 10～13 节；历史停止文字仅记录当时边界，不自动启动阶段 4。**
 
 本文是阶段 3 的唯一总体方案，覆盖 **05 Panel/UI** 与 **12 UI Adaptation**，两项均以 XF 为主要架构基础、客观融合双方。总体方案研究轮次只编写本文，没有修改 Runtime、Editor、测试、资产、asmdef 或配置，没有运行 Unity 刷新、编译、测试、PlayMode 或 Player 构建，没有 Git 写入。后续实施成果按批次增量记录；方案批准、批次实施授权与 Git 授权分别处理，不得因阅读本文自动开始实施。
 
@@ -220,12 +220,14 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 
 ### 3.3 UI Adaptation 与统一输入接入
 
-- **实施状态：技术 COMPLETE，待用户验收与 Git 收口。**实现、独立后端验证及原状态恢复见第 12 节；3.4 未启动，不表示整体阶段 3 COMPLETE。
+- **实施状态：技术 COMPLETE，已完成用户技术验收与 Git 收口（`ac23da8`）。**实现、独立后端验证及原状态恢复见第 12 节；3.4 最终门禁见第 13 节。
 - **交付：**Scaler 配置权威、显式 stretch、Background/Border 动态刷新与校验、经确认的可选 Safe Area；根 Overlay/Camera 模式、统一 EventSystem/输入桥、pointer 查询与真实模态输入。`Y/YLFrameworkRoot.cs` 只调整必要 UI 副作用，不能改普通 Singleton/Audio 生命周期。
 - **验收：**参考分辨率同屏变化、横竖屏/宽屏、实际 Canvas 尺寸变化、inactive 启用/重新挂载、零尺寸/缺依赖配置明确失败；Camera 模式窗口与背景布局合理。以正式 ColorSelector/Tips 为直接消费者验证取色坐标/游标、Mask/RectMask2D/alpha、提示位置随适配变化，及按钮/Slider/拖动、遮罩阻断、Submit/Cancel/焦点恢复。既有 EventSystem 不被替换，自建系统跨场景/根退出正确清理；实际可用后端分别报告，New-only 不能被 Both 结果覆盖。
 - **主要风险：**UGUI 布局刷新时点、camera 坐标、安全区、静态输入缓存/反射及 Player 裁剪。不引入 TMP、额外输入 Package 或全局屏幕服务作为默认解决方案。
 
 ### 3.4 资产、Editor 与阶段门禁收口
+
+- **实施状态：技术门禁完成，待用户最终验收与 Git 收口。**本批授权、修复、实际证据与保留边界见第 13 节。
 
 - **交付：**复核唯一窗口生命周期/策略、旧 UI/Root 退出、正式工具资产身份、GUID/字段/UnityEvent、来源许可及实际程序集；补必要 UI 校验/局部迁移支撑，增量维护现有 UI 使用说明、README/Architecture 的“ColorSelector 仅 Sample”旧定位、长期蓝图及必要工具用法。导出只包含可合法分发内容。本轮不预先修改这些文档或导出配置。
 - **验收：**一次定向跨模块回归、原游戏代表性菜单/设置/进入/返回/再入及点击音非干扰；关闭 Domain Reload、正常 Scene Reload 的两轮真实 UI Play 验证根、静态 hook、pending、输入/短提示旧轮次及退出不重建，恢复用户设置/场景。继承既有门禁但不重跑整个公共系统全集。
@@ -419,3 +421,57 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 - 3.4 的综合资产/Inspector 连续验证、无 Domain Reload 的真实连续 Play、原游戏代表性交互非干扰和 Windows64/Mono Player 门禁仍留下一批；原 Logger/MCP 的既有退出噪声不在本批借机重构。
 
 **3.3 达到技术完成条件，具备进入 3.4 的适配/输入前置。待用户验收与 Git 收口；整体阶段 3 仍 IN PROGRESS。本轮停止，不自动执行 3.4、Commit、Push、Merge、Tag、Reset、Clean 或切换分支。**
+
+## 13. 3.4 实施与阶段门禁收口（2026-10-11）
+
+### 13.1 授权、基线与最终体系
+
+- 用户正式授权 3.4，启动实际核对 `fusion/3-ui` / `ac23da8`，工作区干净；3.1～3.3 的技术验收与 Git 收口以用户确认和实际提交为准。
+- 新 YL 只有 Core 的 Module/View 请求与退出事务、PanelManager 策略、显式 WindowCatalog、UIRootContext、正式 Tips/ColorSelector 及统一适配/输入。目录不拥有活跃窗口或第二份 pending；旧 Runtime/UI、Manager/Root/Base、Loader 池与旧取色实现已退出。
+- Foundation 不依赖 UI，Core 不引用整体 Runtime，Runtime 不反向引用 Core。公共 YLFrameworkRoot 继续承担原 Audio/Action 非 UI 职责；原游戏继续使用原 XF/XFAB 与既有 YL Audio，没有业务或资源迁移。
+
+### 13.2 本批直接修复
+
+| 问题 | 实际证据与最小修复 |
+|---|---|
+| 正式工具 Camera 层不匹配 | 模板 UICamera cullingMask=32，仅渲染 UI；ColorSelector/Tips 位于 Default。真实模板输入正常而 Camera.Render 三角像素为背景，临时包含 Default 后通过。正式两个 Prefab 子树改为 UI layer，保留 GUID/fileID/字段；随后 Editor 与 Mono Player 的双实例绿/蓝像素断言通过。不改 Camera、原游戏资产或任意窗口的用户层 |
+| 真正在途请求跨 Play 残留 | 暂停真实 Play 后接受直接 Prefab pending，退出后仍为 Pending；Unity 停 Coroutine 不保证 finally。原 LoadViewRequest 按实际 Application.quitting / Editor ExitingPlayMode 提交 Invalidated，ReleaseInputs 撤销自有退出监听并归还参数，不新增请求表、不关闭其他 Module 或共享 producer |
+| 退出通知重新取得 UI | ViewManager.EnsureOwner 同时校验 Foundation 执行门禁；退出期间不得同步/异步加载或 Attach。真实退出完成通知尝试再次 Open，按明确执行会话错误拒绝，未重建根/输入。Module 事务、Model 归属与复用协议不变 |
+
+新增 `Tests/Core/Acceptance` 的窄验收程序集、入口和绑定场景用于真实 Play/Player，不在 ExportRoots 内，不加入正式游戏 Build Settings。原游戏模式只消费原 Main、按钮/Slider 持久事件和资源链，不复制业务。导出测试增量覆盖正式 UI/来源通知/完整 XF MIT、meta 字节和退出 GUID/路径排除；现有 UI、README、Architecture、Sample 用法与蓝图同步。
+
+独立只读审查未发现确定的产品级 P0/P1 回归，指出三处验收入口风险，已按最小范围收紧并复验：每轮 arm 前清零退出拒绝标记，避免无 Domain Reload 时沿用前轮结果；Player 成功标记移到真实退出断言之后，验收仍同时要求退出码、两个终态标记及无相关异常；原游戏 Module/FSM 的 fresh-session 检查移到自有清理范围之前，拒绝前置不清理既有全局状态。
+
+### 13.3 资产、身份与分发核查
+
+- 正式 Root `5cdd75c99ad87f642a43d6e65b7b8635`、Tips `e71ff2cbb45a105459b3731fe3c7cb2f`、独立 ColorSelector `a6a470d31ae453c49a0d9ae92d0510e4`、Sample `151b6b54d6304454880ee84ff559511b` 均实际 LoadPrefabContents、保存、卸载及重开；自有 MonoScript 类型/程序集有效、无 Missing Script 或破损对象引用。正式 Root 五层/mask/Camera/Tips 与工具 selector/按钮/游标绑定有效；空持久 UnityEvent 不冒充 Close 已验证，Close 使用会话动态监听并实际运行。
+- 两个 Core Resources key/GUID 保持有效并与原 XF Resources 隔离。存续模板身份、有效 fileID/字段、InputSystemBridge GUID 保留；新增验收资产由 Unity 导入生成 meta。没有原游戏、Packages、原 Resources 或持久配置变更。
+- 3.2 的独立取色替代路线沿用并复核：自绘网格/游标使用标准 UGUI，不带回原 CodeArtist 源码、Shader、材质、图片或 Prefab。署名和未确认原授权的事实保留在现有通知/Readme；门禁通过的是排除未知内容，不是原授权已取得。原 XF 完整 MIT 随 Core 导出。
+- 实际 unitypackage 解包验证正式 UI/演示、源码/文档/许可和 meta 字节，排除 Tests、旧 Runtime/UI、旧取色目录/GUID。沿用 Recurse、不使用 IncludeDependencies；并未认证整个 Plugins 的所有许可，也不宣称 UGUI/XFAB/Odin 等包外依赖已独立打包或干净工程导入。
+
+### 13.4 实际验证证据
+
+| 验证层次 | 本轮实际结果 |
+|---|---|
+| Unity 编译 | 当前打开的 Unity 2022.3.62f3c1 实际刷新、编译及 Player 构建；非 IDE/dotnet 结论 |
+| 定向跨模块 PlayMode | Core namespace **188/188**，含 View/请求/Module/Panel、窗口/Tips/工具/输入与直接 Foundation 生命周期消费者，0 失败/跳过；未重跑公共系统历史全集 |
+| 受影响 EditMode | Core **57/57**；实际导出 **1/1**。UGUI alpha、Mask/RectMask2D 与几何有效历史证据复用，同时正式模板 Camera 层修复由真实像素与 Player 重新验证 |
+| 真实连续双 Play | 审查收紧后重新执行，同一脚本域连续两轮，enterPlayModeOptionsEnabled=True、仅 DisableDomainReload，正常 Scene Reload；两轮 READY/EXIT_PASS，第二轮检查旧根/窗口销毁、旧 hook 清空、pending Invalidated、Tips 恰一次和旧颜色闭包不调用。每轮重新清零后，两次真实退出通知独立拒绝再 Open。没有用反射 Reset/Quit 代替 Play |
+| 原游戏 Editor 非干扰 | 既有 MainStartSettingsGameExitAndReentryUseFrameworkAudio **1/1**；真实按钮点击音 ButtonClickInvokesFrameworkAudioEmitter **1/1**。使用原 Main/FSM/XF/XFAB/音频链，未改游戏测试或业务 |
+| Windows64/Mono 构建 | 审查收紧后的当前源码 Development Player，显式验收场景 + 原 Main；最终实际 BuildReport **Succeeded、0 errors、4 warnings**（仅现有 MCP 空程序集），大小 152806513 bytes。首次构建回执曾超时，随后读取实际 BuildReport 确认；最终重建实际回执及 BuildReport 均通过，不把超时或 exe 存在当成功证据 |
+| 正式 UI Player | 最终新 exe 实际 WindowsPlayer / Mono / D3D11：正式模板、双实例独立色值与绿/蓝三角像素、Overlay/Camera 取色拖动/适配/Alpha、模态遮罩/Selectable/焦点、键盘 Submit、按钮关闭、Tips、Abort/owner 退出/重启复用、自建系统最后根退出通过。真实 Quit 断言后日志 PLAYER_PASS / QUIT_PENDING_PASS，未检出相关异常，进程 exit 0；退出码本身不独立证明退出断言 |
+| 原游戏 Player 非干扰 | 同一 exe 的 -ui34-game 实际加载 Main 和现有 MainModule Bundle，日志 GAME_PLAYER_PASS、exit 0。菜单设置/点击音、持久音量 Slider、两次参数配置/进入/暂停返回/BGM 句柄失效通过；游戏运行期间新 YL 工具借用原 Standalone，关闭 Module/自有根后原 EventSystem/模块与 BGM 保持 |
+
+最终 Player 产物及原始运行日志位于 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-3.4-20261011-final/`（`CGJ2024-UI34.exe`、`ui-player.log`、`game-player.log`），不提交构建产物。UI 输入采用自有虚拟 Mouse/Keyboard，经过实际 InputSystemUIInputModule；游戏采用真实持久 UnityEvent/Slider 事件，不声称物理 OS 设备人工输入或音频听感验收。Tips 在 Player 核验完成与回收，不把该断言写成文字像素已验证。
+
+### 13.5 资源前提、隔离与状态恢复
+
+- MainModule 产物源为 1.4 用户恢复并验收版：project=MainModule，StandaloneWindows64，1.0.0，2026/10/9 19:03:49；当前清单/Upgrade SHA-256 与历史记录一致。StreamingAssets 和 AssetBundles 两处各 **112 项**实算大小/MD5通过（109 普通 Bundle、平台 manifest Bundle、Upgrade/suffix），110 对 manifest 与六项配套文件 SHA-256一致，61 名称/63 类型映射及场景/FSM 目标有效。原资源输入未改，没有重建 XFAB。
+- 无 Domain Reload 探测复现原 LoggerHandler 的 UnityLogHandler 空引用；用户在本批明确批准临时原生日志隔离，保留所有错误输出，不改包/日志路径。最终双 Play 在该隔离下完成；原处理器身份已恢复。先前游戏测试留下原 XF sceneLoaded 自动创建 Standalone 的静态订阅，最终双 Play 前通过 Unity 正常 Editor 脚本域重载建立干净前置，不删除原输入或手动清原静态事件；两轮之间没有重载。
+- 原配置 enterPlayModeOptionsEnabled=False、options=DisableDomainReload|DisableSceneReload 已恢复；实际 Both、Windows64/Mono 与 Build Settings 不变，唯一原 Main 已重新打开且 dirty=False。没有保存或覆盖用户未保存场景，没有清其他系统宿主/任务；Player 游戏模式恢复自己临时改变的音频偏好、timeScale/targetFrameRate。
+
+### 13.6 技术结论与停止边界
+
+**3.4 实施及验证完成，阶段 3 UI 满足技术完成条件，待用户最终验收与 Git 收口。** 完成的是批准范围内的新 YL 统一 UI、资产/分发与代表性实际运行门禁，不表示原 Logger 已修复或全生态无 Domain Reload 兼容。
+
+IL2CPP/裁剪、移动设备真实 Safe Area/触屏、物理 OS 输入、WorldSpace/多显示器、完全无原 XF 生态的独立承载及真实 AB 全面释放仍在后续边界。UGUI/Input System 私有反射依赖已在当前 Mono Player 路径运行，但包升级和其他后端仍需复核。没有 Commit/Push/Merge/Tag/Reset/Clean、切换分支、创建里程碑或启动第二 Unity；本轮到此停止，不自动进入阶段 4 Audio。

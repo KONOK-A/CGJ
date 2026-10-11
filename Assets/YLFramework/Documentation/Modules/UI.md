@@ -38,11 +38,27 @@ window.Close();
 
 ## 根与层
 
-- `UIRootContext` 只保存 Canvas、Camera、CanvasScaler、GraphicRaycaster、层 root/mask 和 DragLayer。Canvas/Scaler 的设置可在模板 Inspector 配置；完整统一 Adaptation 与输入接入另行收口。
+- `UIRootContext` 保存 Canvas、Camera、CanvasScaler、GraphicRaycaster、层 root/mask 和 DragLayer，不拥有窗口或 Module。Canvas/Scaler 可在模板 Inspector 配置，也可使用下面的显式配置入口。
 - `Prefabs/YLFramework.prefab` 已迁为根配置和 `UITipsPresenter`，保留原布局与资产身份。其公共 `YLFrameworkRoot` 仍承担非 UI 宿主职责，不再无条件制造 UI 输入对象。
 - 配置模板提供层 0～4。层是窗口目录的显式选择与排序轴，在同原生 sortingLayer 内不能由 Module offset 或窗口 raw order 穿越。没有 `UIRootContext` 的普通 Canvas 只接受窗口层 0。
 - 遮罩由实际活跃模态会话派生，不保存窗口计数；位于该层最上模态窗口下方，关闭后恢复。排序越界在提交前拒绝，包含遮罩所需的下方槽位。
 - `Panel.IsVisible` / `IsInputBlocked`、Top / Modal / Focused 查询继续使用正式策略；Overlay 不成为普通 Top。自定义交互代码仍应遵守输入阻挡状态。
+
+## 适配与输入
+
+```csharp
+root.ConfigureResolution(new Vector2(1920, 1080), automaticMatch: true);
+// 手动 match 时，关闭自动匹配，避免两份配置相互覆盖。
+root.ConfigureResolution(new Vector2(1280, 720), automaticMatch: false, manualMatch: 0.5f);
+root.ConfigureCanvas(RenderMode.ScreenSpaceCamera, uiCamera, planeDistance: 5);
+```
+
+- `AutomaticAdaptationCanvasScaler` 是唯一参考分辨率与 match 配置权威；动态尺寸、配置、启用和重挂后刷新。`BackgroundAdaptation` 保持 cover，`BorderAdaptation` 只调整水平宽屏边距，不冒充 Safe Area。
+- `SafeAreaAdaptation` 显式添加到内容容器才启用，背景仍可铺满；支持主显示器 Overlay/Camera。不要挂根 Canvas，不用于 WorldSpace、多显示器或非轴向容器。移动设备真实安全区与触屏尚未实测。
+- Camera 由调用方提供并管理激活、cullingMask 和 clipping planes，`ConfigureCanvas` 不创建或改写 Camera。模板 Camera 默认 inactive；正式 ColorSelector/Tips 均使用 UI layer，Camera 模式必须渲染该层。
+- active 外部 EventSystem 只借用，保留其模块和寿命；没有有效系统时才自建。自建 Both 优先 Input System，Legacy-only 使用 Standalone，New-only 不回退 Legacy。最后有效根退出释放自建系统，不激活/删除 inactive 外部系统；多系统或无可用模块明确诊断。
+- 模态同时覆盖本会话的 Raycaster、Selectable、标准 UGUI 拖动和焦点。恢复仅针对仍有效的可导航最上窗口，不覆盖外部或新选择；旧 pointer 按压不进入复用窗口。自定义业务拖动仍须遵守 `IsInputBlocked`。
+- 接口在有效 Play 执行会话内取得窗口；退出期间拒绝重新加载或挂载。真实 Play/Player Quit 会使 pending 请求提交 `Invalidated`，释放参数和退出监听，不依赖 Unity 停止 Coroutine 时执行 `finally`。
 
 ## Tips
 
@@ -73,6 +89,10 @@ handle.Dispose();
 
 `UIPointer.CheckPositionOnUI` / `CheckMouseOnUI` 复用实际当前 EventSystem，只统计 UGUI 命中；无 current 时返回 false，不创建宿主。模态遮罩属于真实 UI，不再按名称 `Mask` 跳过。缓存跟随 EventSystem 变化并在 Session reset 清理。
 
-当前 Core 默认创建路径仍沿用既有 EventSystem 机制；本批不宣称已经完成 New-only / Legacy / Both 的自动选择、停用实例补齐、多根相机统一、输入桥隔离或 Adaptation。使用方应让有效 EventSystem 配置匹配实际输入后端。完整输入与 Adaptation 属于 3.3，综合 Player/无 Domain Reload 门禁属于 3.4。
+Legacy-only、Input System-only、Both 已在 3.3 分别重启 Unity 验证。3.4 已完成正式模板、真实无 Domain Reload/正常 Scene Reload 连续双 Play，以及 Windows64/Mono Player 的工具输入、渲染、复用和原游戏非干扰。自动化虚拟设备经过真实输入模块，不等于物理 OS 鼠标/键盘人工验收；IL2CPP、移动设备及完全退出原 XF 生态的独立运行仍待后续。
+
+源码仓库的 `Tests/Core/Acceptance/UIAcceptance.unity` 显式绑定正式 Prefab，可用于定向 Play/Player 验收。默认模式验证统一 UI；验收 Player 的 `-ui34-game` 模式加载原 `Main` 场景及现有 MainModule 产物，调用真实持久按钮/Slider 事件。该程序集和场景不在默认框架导出根内；不把它们加入正式游戏 Build Settings。连续 Play 的原 XF Logger 干扰只在用户批准后临时隔离，不表示已修复原 Logger。
+
+验收入口不是通用游戏驱动：原游戏模式要求没有既有 MainModule 或 GameState FSM，前置拒绝时不清理他人状态。默认 Player 模式必须同时核验 exit 0、真实退出断言后的 `PLAYER_PASS` / `QUIT_PENDING_PASS` 和无相关异常，不能只凭退出码判定通过。Editor 每轮 READY 后暂停，再调用该入口的 `PrepareExit()`、真正停止 Play 并调用 `VerifyExit()`；每轮退出拒绝标记独立重置，两轮之间不编译或重载。
 
 旧 `UIManager`、`UIRoot`、`UIWindowBase`、窗口 Attribute/Extension、专用 Loader 池和空 `SceneTipsItem` 已退出，没有永久兼容壳。原 XF/XFAB Package 与原游戏资源链不在此次迁移范围。

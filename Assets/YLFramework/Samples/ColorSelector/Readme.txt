@@ -1,7 +1,8 @@
 ColorSelector 正式工具演示
 
 ColorSelectorSample.prefab 已绑定 Assets/YLFramework/Prefabs/ColorSelector.prefab。
-在已有场景中放置 Sample；可选绑定匹配输入后端的 EventSystem 与 uiRoot Canvas。
+在已有场景中放置 Sample；可选绑定 uiRoot Canvas。场景已有 EventSystem 时应配置匹配
+输入后端的有效模块；没有有效系统时由统一 UI 入口自建，不是 Sample 的 Inspector 字段。
 未绑定 uiRoot 时沿 Core 默认根。不要重复放置多个相同 Sample Module 宿主。
 TestColorSelector 只创建演示 Module、打开正式工具和消费颜色回调；可选 preview Renderer
 仅使用演示自己的材质实例，宿主结束后释放并恢复原引用。

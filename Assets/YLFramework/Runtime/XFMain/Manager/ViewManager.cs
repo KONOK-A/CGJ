@@ -130,6 +130,8 @@ namespace YLFramework.Core
         internal static void EnsureOwner(Module module)
         {
             if (module == null) throw new ArgumentNullException(nameof(module));
+            if (!SingletonSessionState.CanRunExecution)
+                throw new InvalidOperationException("Views cannot be acquired outside an active execution session.");
             module.EnsureCanAddObjects();
             if (!ReferenceEquals(ModuleManager.GetModule(module.ModuleName), module) ||
                 (module.State != ModuleState.Starting && module.State != ModuleState.Running))

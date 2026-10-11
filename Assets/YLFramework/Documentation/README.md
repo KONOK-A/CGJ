@@ -54,7 +54,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
 | Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
-| UI | Core Panel/View、显式窗口目录、根/层/遮罩、Tips 与 Runtime ColorSelector | 正式融合；完整 Adaptation/输入与综合构建另行验收 | [Modules/UI.md](Modules/UI.md) |
+| UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips 与 Runtime ColorSelector | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
 ### 其他内容
 

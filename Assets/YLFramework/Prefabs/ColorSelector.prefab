@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 587195367508247659}
   - component: {fileID: 1938538333450178480}
   - component: {fileID: 3712227319927367496}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: HueCursor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -76,7 +76,7 @@ GameObject:
   - component: {fileID: 4526272952858355126}
   - component: {fileID: 3280822230042964675}
   - component: {fileID: 3632843832766353113}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -156,7 +156,7 @@ GameObject:
   - component: {fileID: 5046898326210136683}
   - component: {fileID: 8469113106045624881}
   - component: {fileID: 4581110874883613210}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Close
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -279,7 +279,7 @@ GameObject:
   - component: {fileID: 3185593585114768375}
   - component: {fileID: 641012024462182172}
   - component: {fileID: 4495954561190625850}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ColorSelector
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -412,7 +412,7 @@ GameObject:
   - component: {fileID: 5426711659254618856}
   - component: {fileID: 3265877842729904943}
   - component: {fileID: 2473677624142509380}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: HSV
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -493,7 +493,7 @@ GameObject:
   - component: {fileID: 419464314633689239}
   - component: {fileID: 4918899487297316}
   - component: {fileID: 5275073118088998394}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ValueCursor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -558,7 +558,7 @@ GameObject:
   - component: {fileID: 4824917160598095790}
   - component: {fileID: 1932115870437846695}
   - component: {fileID: 6100235894851491509}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Title
   m_TagString: Untagged
   m_Icon: {fileID: 0}

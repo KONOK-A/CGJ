@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace YLFramework.Core
 {
@@ -69,7 +72,22 @@ namespace YLFramework.Core
             windowContext = claimedArgs?.WindowContext;
             Validate();
             owner.pendingViews.Add(this);
+            Application.quitting += OnExecutionEnded;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+#endif
         }
+
+        // Unity 停止原生 Coroutine 不保证执行迭代器的 finally；业务请求必须自行提交退出终态。
+        private void OnExecutionEnded()
+            => Finish(null, new InvalidOperationException("View execution session has ended."), LoadViewStatus.Invalidated);
+
+#if UNITY_EDITOR
+        private void OnPlayModeChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode) OnExecutionEnded();
+        }
+#endif
 
         bool IPendingViewRequest.MatchesWindow(string key, Canvas context)
             => !terminal && window != null && window.Unique && window.Key == key && windowContext == context;
@@ -136,6 +154,10 @@ namespace YLFramework.Core
 
         private void ReleaseInputs()
         {
+            Application.quitting -= OnExecutionEnded;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+#endif
             if (owner != null) owner.pendingViews.Remove(this);
             var previousArgs = args;
             args = null;
