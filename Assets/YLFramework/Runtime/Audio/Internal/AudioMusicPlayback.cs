@@ -30,29 +30,34 @@ namespace YLFramework.Services.Audio
         }
 
         internal AudioHandle Play(AudioClip clip, in AudioPlaybackOptions options,
-            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished)
+            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, AudioResourceLease resource = null)
         {
-            Stop();
+            var epoch = Epoch;
+            Stop(AudioRequestEnd.Replaced);
+            if (!mOwner.Available || Epoch != epoch + 1) return default;
             var settings = AudioKit.Settings;
             return Current.Begin(clip, in options, settings.IsMusicOn.Value, settings.MusicVolume.Value,
-                settings.IsMusicMuted.Value, started, finished);
+                settings.IsMusicMuted.Value, started, finished, resource: resource);
         }
 
         internal AudioHandle CrossFade(AudioClip clip, float duration, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, bool ignoreTimeScale,
-            AudioCrossfadeCurve curve)
+            AudioCrossfadeCurve curve, AudioResourceLease resource = null)
         {
             var settings = AudioKit.Settings;
-            if (!settings.IsMusicOn.Value) return Play(clip, in options, started, finished);
+            if (!settings.IsMusicOn.Value) return Play(clip, in options, started, finished, resource);
             var paused = Current.Active && Current.Paused;
             if (duration == 0f)
             {
-                Stop();
+                var previousEpoch = Epoch;
+                Stop(AudioRequestEnd.Replaced);
+                if (!mOwner.Available || Epoch != previousEpoch + 1) return default;
                 return Current.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
-                    started, finished, paused: paused);
+                    started, finished, paused: paused, resource: resource);
             }
             var epoch = ++Epoch;
-            mOutgoing.Stop();
+            if (mOutgoing.IsValid) mOutgoing.Voice.Stop(AudioRequestEnd.Replaced);
+            if (!mOwner.Available || Epoch != epoch) return default;
             mOutgoing = Current.Handle;
             if (mOutgoing.IsValid) Current.SuppressCompletion();
             mOutgoingGain = Current.TransitionGain;
@@ -60,15 +65,17 @@ namespace YLFramework.Services.Audio
             mElapsed = 0d; mDuration = duration; mIgnoreTimeScale = ignoreTimeScale; mTransition = true; mCurve = curve;
             try
             {
-                mIncoming = Current.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
-                    started, finished, startImmediately: false, initialTransitionGain: 0f, paused: paused);
-                var result = mIncoming;
-                Current.StartConfigured(result.Generation);
+                var incoming = Current;
+                var result = incoming.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
+                    started, finished, startImmediately: false, initialTransitionGain: 0f, paused: paused, resource: resource);
+                if (Epoch != epoch) return result;
+                mIncoming = result;
+                incoming.StartConfigured(result.Generation);
                 return result;
             }
             catch
             {
-                if (Epoch == epoch) Stop();
+                if (Epoch == epoch) Stop(AudioRequestEnd.Failed);
                 throw;
             }
         }
@@ -97,17 +104,21 @@ namespace YLFramework.Services.Audio
             if (mElapsed >= mDuration) CancelTransition();
         }
 
-        private void CancelTransition()
+        private void CancelTransition(AudioRequestEnd reason = AudioRequestEnd.Replaced)
         {
             Epoch++;
-            mOutgoing.Stop();
+            var outgoing = mOutgoing;
             mOutgoing = default; mIncoming = default;
             mTransition = false; mElapsed = mDuration = 0d; mCurve = AudioCrossfadeCurve.Linear;
+            if (outgoing.IsValid) outgoing.Voice.Stop(reason);
         }
-        internal void Stop()
+        internal void Stop(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
-            CancelTransition();
-            mFirst.Stop(); mSecond.Stop();
+            var first = mFirst.Handle;
+            var second = mSecond.Handle;
+            CancelTransition(reason);
+            if (first.IsValid) first.Voice.Stop(reason);
+            if (second.IsValid) second.Voice.Stop(reason);
         }
         internal void Pause()
         {
@@ -127,16 +138,22 @@ namespace YLFramework.Services.Audio
         internal void StartFailed(AudioHandle failed, ulong epoch)
         {
             if (Epoch != epoch) return;
-            if (ReferenceEquals(Current, failed.Voice)) Stop();
-            else failed.Stop();
+            if (ReferenceEquals(Current, failed.Voice) && failed.IsValid) Stop(AudioRequestEnd.Failed);
+            else if (failed.IsValid) failed.Voice.Stop(AudioRequestEnd.Failed);
         }
         internal void SetEnabled(bool enabled)
         {
             if (!enabled)
             {
+                var previousEpoch = Epoch;
+                var disabling = Current.Handle;
                 CancelTransition();
-                Current.SetEnabled(false);
-                Current.SetTransitionGain(1f);
+                if (!mOwner.Available || Epoch != previousEpoch + 1 || AudioKit.CurrentSettings.IsMusicOn.Value) return;
+                if (disabling.IsValid)
+                {
+                    disabling.Voice.SetEnabled(false);
+                    disabling.Voice.SetTransitionGain(1f);
+                }
                 return;
             }
             var control = ++mControlVersion;
@@ -168,8 +185,12 @@ namespace YLFramework.Services.Audio
         }
         internal void DestroySources()
         {
-            Stop();
-            mFirst.DestroySource(); mSecond.DestroySource();
+            try { Stop(AudioRequestEnd.Shutdown); }
+            finally
+            {
+                try { mFirst.DestroySource(); }
+                finally { mSecond.DestroySource(); }
+            }
         }
     }
 }

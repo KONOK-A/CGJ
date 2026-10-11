@@ -1,6 +1,6 @@
 # XF × YL 阶段 4：Audio 深度融合研究与总体方案
 
-**状态：总体研究完成，总体方案已审核通过，4.1 待单独授权；统一归属与资源释放过渡两项重大取舍已由用户确认。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。
+**状态：总体方案及 D1/D2 已批准；4.1 已单独授权并完成本批技术实施与定向验证，待用户验收及 Git 收口；4.2～4.5 未实施。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。阶段 4 尚未 COMPLETE。
 
 **目标：**新 YL 只有一个音频播放、请求生命周期与资源收尾权威，融合双方有价值的能力；原游戏、原 XF/XFAB/XFFSM Package 和阶段 1～3 成果不受破坏。方案批准、批次实施和 Git 授权分别处理。
 
@@ -162,6 +162,36 @@ Foundation 提供公共支撑；YLFrameworkRoot 保持共享非 UI 层级。
 - **EditMode：**复用 Cleanup/Started/Admission/Crossfade/Fade 的核心代次断言；补自然完成、Stop、替换、onStarted 重入/抛错、清理异常与旧租约不能影响新请求的最小用例。只有确认问题才新增回归，不根据推测大改预算算法。
 - **PlayMode 门禁：**实际 Source、暂停/静音/关闭/重播、短 Clip 结束、Source/owner 外部销毁及重复 Shutdown，资源收尾恰一次。直接组件和 PlaySoundAction 的同步开始重入保持；既有游戏点击及 Music lease 隔离定向回归无新增失败。
 
+#### 4.1 实际成果与验证（2026-10-12，Editor 本地时间）
+
+**实施基线：**开始时实际分支 `fusion/4-audio`，HEAD `aa1ff5af2f2c48c8b8e767703fbd80d7f1739e65`，工作区干净；Unity `2022.3.62f3c1`。本批结束保持该分支/HEAD，全部成果未提交。
+
+- **请求与终态：**继续以 Voice 身份、Generation 和宿主 Audio 会话共同判断有效性，增加内部 `AudioRequestEnd`，统一 Completed / Stopped / Replaced / Unavailable / Failed / Shutdown 的 Voice 收尾。先失效、摘 Sound 计数，再复位/归还 Source，并在 finally 释放原责任；配置失败和 Tick 异常也结束自己的原代次。Music 尾轨与控制 epoch 继续属于原双声部内核。
+- **窄资源基础：**新增内部 `AudioResourceLease`，只封装调用方明确交付的 `IDisposable` 责任与创建会话；经现有 Sound/Slot/Crossfade snapshot 入口，在 `Source.Play/onStarted` 之前绑定。校验失败、拒播、旧会话迟到提交和未绑定的重入中断由入口成对归还；已绑定责任由 Voice 全终态释放。先置 released 再调用清理，异常记录为可观察日志，不重试或复活请求。直接 Clip 路径不创建该对象、不 Destroy/Unload Clip；未接入 provider、命名加载或缓存，也未创建公共 pending/task 框架。
+- **回调兼容：**onStarted 仍在 `Source.Play` 后同步通知；自停、替换、Shutdown 和抛异常均保持原返回句柄及代次隔离。onFinished 仍只用于自然完成，回调内原 Handle 仍有效；原资源转为局部责任，保活到自然通知及其 finally 结束，即便回调中 Stop、复用同一 Voice 或 Shutdown。Stop/取消/替换/失活不伪装自然完成。
+- **释放重入：**StopAllSound 改为原 Handle 快照，不能被旧资源释放误停新代次；Music 控制先撤销旧过渡索引，再释放尾轨，释放后复核 epoch、原 Handle、最新开关和宿主。已用失败用例复现并修复“旧 Music false 设置投递误停释放中创建的新曲”和“Sound 抢占释放关闭开关后仍接纳新请求”。不重写预算算法。
+- **Source 与数据：**已复现并修复外部失活/禁用循环 Source 仍留有效请求，以及播放中外部 `UnloadAudioData` 后请求滞留。Source/Clip/跟随目标失效走非自然终结；Failed 数据状态走失败收尾，Loading 不按 `!isPlaying` 判断完成，也不推进 fade/crossfade 时钟。保持 Unity `Play` 自行触发数据加载，不重复提交播放、不修改游戏 importer。
+- **真实背景数据证据：**测试仅生成并删除自己的 120 秒 PCM WAV，使用非 preload、background、DecompressOnLoad 导入配置；当前 Editor 实际观察 `loadState=Loading` 且 `isPlaying=True`，之后 Loaded 并持续播放。保留同步通知是兼容选择，onStarted 表示播放已提交，不保证此刻可听见。该素材没有复现研究时推测的 Loading 提前自然结束；新增就绪检查是基于真实状态和官方契约的防护，不描述为已复现游戏故障。外部卸载后的非自然收尾、重新载入及 Stop 不卸载借用数据均有实际断言。
+- **宿主/会话：**Audio 沿用 Foundation 的 `CanRunExecution` gate，不改其权威或共享 Root；初始化失败同步撤销部分订阅/池/宿主，保留原异常并允许干净重试。Audio 自己订阅 `Application.quitting`，无有效宿主时也能关闭设置。已释放/旧会话宿主的迟到 quit 不调用基类 gate 或关闭新会话。重复 Shutdown、同帧重建及旧设置/Handle 隔离沿用并回归。
+
+**本轮实际执行：**通过连接的同一 Unity Editor 刷新、编译及 `tests-run`，没有第二个 Unity 实例、辅助 dotnet 编译替代或 Player 构建。以下数字使用实际通过数，不使用 MCP 返回的全工程 discovery `TotalTests` 作为执行数量。
+
+| 定向集合 / 过滤器 | 本轮最终结果与范围 |
+|---|---|
+| EditMode `testNamespace=YLFramework.Tests.Audio` | **422 passed，0 failed，0 skipped**；包括 Cleanup、Admission/Budget、Core/Defaults、Fade/AutoFade/Crossfade、Mixer、组件/Help/Action 和新资源生命周期最小用例 |
+| EditMode `testClass=AudioExitTests`（独立 `YLFramework.Tests.AudioSession`） | **1 passed**；真实单次 EnterPlayMode/ExitPlayMode，活跃资源在 Application.quitting 返回前释放一次，ExitingPlayMode 与释放中的重入均拒绝新播放/宿主。正常 Domain Reload，不改 EditorSettings 或原包 Logger；断言完成后仅恢复 fixture 的 Audio 静态状态，清理 reset 不作为退出证据 |
+| PlayMode `testNamespace=YLFramework.Tests.Audio` | **156 passed，0 failed，0 skipped**；既有 154 项及真实短 Clip/资源释放/Source 销毁、背景数据 2 项；包含同步 Started、直接组件/PlaySoundAction、Pause/Mute/On-Off、Music 重播、fade/crossfade、Mixer与预热分配断言 |
+| PlayMode `YLClickSoundPlayModeTests.ButtonClickInvokesFrameworkAudioEmitter` | **1 passed**；实际 StartPanel/Button 持久事件，点击显式 EveryOne 同帧重叠，面板失活不截断 one-shot |
+| PlayMode `YLClickSoundPlayModeTests.DisablingMusicComponentDoesNotStopReplacementMusic` | **1 passed**；原组件的旧 lease 不停止他人替换后的 Music |
+
+验证过程中修复了新 fixture 的本版本 importer API（`AudioImporterSampleSettings.preloadAudioData`）、真实退出后的 EditMode fixture 隔离及局部变量编译错误，修正后重新取得上述最终结果。全局 namespace 的游戏测试使用完整方法过滤器；MCP 的 class 过滤器不匹配此类无 namespace 类型，一次该调用超时，不计为测试通过。真实退出跨域会使 MCP 汇总 duration/count 不可靠，因此退出单独运行并使用具名用例的 Passed 证据。新 `.meta` 由 Unity 导入生成，`git diff --check` 通过；独立只读审查的两处释放重入发现已用红绿回归闭合。
+
+**兼容与未覆盖范围：**未改 AudioHandle 的公开语义/签名、组件字段/GUID/程序集/UnityEvent、AudioEmitter/AudioMusicPlayer/PlaySoundAction 代码、游戏业务/Prefab/Scene、六个设置键、Root/Action 或其他模块；不引入 timeScale 自动暂停。没有实际 API/用法变化，未新增或重写 Audio 使用说明。Core Audio 与原 XF/XFAB/XFFSM Package 保持不变。
+
+`AudioDataLoadState.Failed` 的真实损坏/解码失败素材尚未构造；初始化失败使用局部缺失设置属性的受控注入，而非声称真实 Root 已发生故障。背景 PCM 不证明压缩/Streaming、所有平台或实际听感；本轮没有实际听感、Player、原游戏完整战斗流程、4.3 provider/资源物理释放、4.5 关闭 Domain Reload 双 Play 门禁。释放函数抛异常后只能保证调用恰一次及状态终结，不能保证外部后端物理释放已成功。
+
+**4.1 技术结论：**本批生命周期、内部全终态资源责任、退出和初始化安全基础及必要消费者回归满足 4.1 技术完成条件，具备进入 4.2 的前置基础；尚待用户验收及 Git 收口。到此停止，不自动实施 4.2，不创建 Commit/Push/Merge/Tag/Reset/Clean，不宣布整个阶段 4 COMPLETE。
+
 ### 4.2 命名控制通道、Source 借用与局部暂停
 
 - **范围/产物：**正式音频域的命名通道/局部控制、稳定持久化身份和受控 Source 接入；吸收 XF 任意独立循环、Volume/Mute 与 AutoPause 用途。Foundation Pool/Events 不重写，缺省三类的设置/预算/路由不变。
@@ -204,6 +234,6 @@ Foundation 提供公共支撑；YLFrameworkRoot 保持共享非 UI 层级。
 
 **主要风险：**把借用当取得所有权；开始/完成回调重入在资源责任提交前发生；慢加载覆盖新曲；尾轨或 disabled 请求被提前卸载；借源复位误改调用方对象；游戏缺字段默认值与 UnityEvent 程序集断链；退出阶段静态/协程残留；同工程原包掩盖新 Audio 的可选依赖；当前依赖/Bundle/音频设备不满足复现条件。风险分别落在 4.1～4.5，不用“全量测试通过”替代逐项证据。
 
-**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过，4.1 待单独授权；这不是实施或 Git 授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
+**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过；4.1 已获得单独实施授权并完成上述技术批次，不代表 Git 或后续批次授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
 
-**本轮到此停止：**仅交付本文，不同步非计划文档，不实施 4.1，不创建分支，不执行 Commit/Push/Merge/Tag/Reset/Clean；后续由实施能力的代理在获授权批次内执行。
+**总体方案研究轮的历史边界：**当时仅交付本文，不同步非计划文档、不实施 4.1、不创建分支、不执行 Git 写入。后续已单独授权的 4.1 实施与停止边界见第 7 节实际成果；其余批次仍需用户验收前批及单独授权。

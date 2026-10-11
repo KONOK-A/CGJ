@@ -20,7 +20,7 @@ namespace YLFramework.Services.Audio
         private bool mDisposing;
         private ulong mAdmissionOrder;
         private ulong mSoundSession;
-        internal bool Available => !HostReleased && !mDisposing && !AudioKit.IsClosing;
+        internal bool Available => !HostReleased && !mDisposing && !AudioKit.IsClosing && IsCurrentSoundSession;
         internal AudioMusicPlayback MusicPlayback { get; private set; }
         internal AudioVoice Music => MusicPlayback?.Current;
         internal AudioVoice Voice { get; private set; }
@@ -36,7 +36,14 @@ namespace YLFramework.Services.Audio
             {
                 if (AudioKit.IsClosing || !CanCreateHost(true)) throw new InvalidOperationException("Audio playback is unavailable during cleanup.");
                 AudioKit.Initialize();
-                return GetInstance(true);
+                try { return GetInstance(true); }
+                catch
+                {
+                    // 基类只回滚初始化标记；Audio 必须撤销部分订阅、池和 Source 后才允许重试。
+                    try { AudioKit.Shutdown(); }
+                    catch (Exception exception) { Debug.LogException(exception); }
+                    throw;
+                }
             }
         }
         public override void OnSingletonInit()
@@ -66,17 +73,19 @@ namespace YLFramework.Services.Audio
         }
         internal AudioHandle PlaySlot(bool music, AudioClip clip, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
-            bool spatial = false, Vector3 position = default, Transform target = null)
+            bool spatial = false, Vector3 position = default, Transform target = null, AudioResourceLease resource = null)
         {
-            if (music) return MusicPlayback.Play(clip, in options, started, finished);
+            if (music) return MusicPlayback.Play(clip, in options, started, finished, resource);
             var slot = Voice;
-            slot.Stop();
+            slot.Stop(AudioRequestEnd.Replaced);
+            if (!Available || slot.Active) return default;
             var settings = AudioKit.Settings;
             return slot.Begin(clip, in options, settings.IsVoiceOn.Value, settings.VoiceVolume.Value,
-                settings.IsVoiceMuted.Value, started, finished, spatial, position, target);
+                settings.IsVoiceMuted.Value, started, finished, spatial, position, target, resource: resource);
         }
         internal AudioHandle PlaySound(AudioClip clip, in AudioPlaybackOptions options, AudioKit.PlaySoundModes mode,
-            Action<AudioClip, AudioHandle> finished, Action<AudioClip, AudioHandle> started, bool spatial, Vector3 position, Transform target)
+            Action<AudioClip, AudioHandle> finished, Action<AudioClip, AudioHandle> started, bool spatial, Vector3 position, Transform target,
+            AudioResourceLease resource = null)
         {
             var capacity = AudioKit.CurrentSoundConcurrency;
             var clipId = clip.GetInstanceID();
@@ -99,7 +108,9 @@ namespace YLFramework.Services.Audio
                     AudioKit.SoundCounters.PriorityRejectedCount++;
                     return default;
                 }
-                victim.Stop();
+                var order = mAdmissionOrder;
+                victim.Stop(AudioRequestEnd.Replaced);
+                if (!Available || mAdmissionOrder != order || !AudioKit.CurrentSettings.IsSoundOn.Value) return default;
                 // Stop can synchronously change other counts; discard the cached budget lookup.
                 clipCount = -1;
                 AudioKit.SoundCounters.StolenCount++;
@@ -120,7 +131,8 @@ namespace YLFramework.Services.Audio
             {
                 var settings = AudioKit.Settings;
                 handle = voice.Begin(clip, in options, true, settings.SoundVolume.Value, settings.IsSoundMuted.Value,
-                    started, finished, spatial, position, target, startImmediately: false);
+                    started, finished, spatial, position, target, startImmediately: false, resource: resource);
+                if (!handle.IsValid) return handle;
                 channels.Record(clipId, mode, Time.frameCount, handle);
                 AudioKit.SoundCounters.AdmittedCount++;
                 AudioKit.SoundCounters.PeakActiveCount = Math.Max(AudioKit.SoundCounters.PeakActiveCount, mSounds.Count);
@@ -131,7 +143,8 @@ namespace YLFramework.Services.Audio
             {
                 if (IsCurrentSoundSession) AudioKit.SoundCounters.StartFailureCount++;
                 if (!ReferenceEquals(handle.Voice, null)) channels.Rollback(clipId, mode, handle);
-                if (voice.Generation == generation) voice.Stop();
+                if (voice.Generation == generation) voice.Stop(AudioRequestEnd.Failed);
+                else if (!voice.Active && mSounds.Contains(voice)) Recycle(voice);
                 throw;
             }
         }
@@ -292,15 +305,17 @@ namespace YLFramework.Services.Audio
         {
             foreach (var voice in mSounds) destination.Add(voice.Handle);
         }
-        internal void StopAllSound()
+        internal void StopAllSound(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
-            // Stop never calls user callbacks, so removing one entry at a time is safe and allocation-free.
-            while (mSounds.Count != 0)
-            {
-                AudioVoice voice;
-                using (var iterator = mSounds.GetEnumerator()) { iterator.MoveNext(); voice = iterator.Current; }
-                voice.Stop();
-            }
+            if (mSounds.Count == 0) return;
+            // 释放责任可重入播放；只终结本次调用进入时的租约，不能误停新代次。
+            var snapshot = new List<AudioHandle>(mSounds.Count);
+            CopySounds(snapshot);
+            List<Exception> failures = null;
+            foreach (var handle in snapshot)
+                try { if (handle.Voice.Active && handle.Voice.Generation == handle.Generation) handle.Voice.Stop(reason); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            if (failures != null) throw new AggregateException("AudioKit sound cleanup failed.", failures);
         }
         private void Update()
         {
@@ -319,7 +334,12 @@ namespace YLFramework.Services.Audio
                     handle.Voice.CheckFinished();
                     if (handle.IsValid) handle.Voice.TickFade(Time.deltaTime, Time.unscaledDeltaTime);
                 }
-                catch (Exception exception) { Debug.LogException(exception); }
+                catch (Exception exception)
+                {
+                    try { if (handle.IsValid) handle.Voice.Stop(AudioRequestEnd.Failed); }
+                    catch (Exception cleanup) { Debug.LogException(cleanup); }
+                    Debug.LogException(exception);
+                }
             }
             mChecks.Clear();
             if (Available && musicEpoch == MusicPlayback.Epoch) MusicPlayback.Tick(Time.deltaTime, Time.unscaledDeltaTime);
@@ -363,13 +383,19 @@ namespace YLFramework.Services.Audio
 #endif
             foreach (var subscription in mSubscriptions) Cleanup(subscription.UnRegister);
             mSubscriptions.Clear();
-            Cleanup(StopAllSound);
+            Cleanup(() => StopAllSound(AudioRequestEnd.Shutdown));
             if (MusicPlayback != null) Cleanup(MusicPlayback.DestroySources);
             if (Voice != null) Cleanup(Voice.DestroySource);
             if (mPool != null) Cleanup(mPool.Dispose);
             // A callback may release this host while Update is iterating its snapshot.
             if (failures != null) throw new AggregateException("AudioKit source cleanup failed.", failures);
         }
-        protected override void OnApplicationQuit() { base.OnApplicationQuit(); AudioKit.BeginQuit(); }
+        protected override void OnApplicationQuit()
+        {
+            // 已释放或旧会话宿主的迟到消息不能关闭新会话，亦不能重置公共宿主 gate。
+            if (HostReleased || !IsCurrentSoundSession) return;
+            base.OnApplicationQuit();
+            AudioKit.BeginQuit();
+        }
     }
 }

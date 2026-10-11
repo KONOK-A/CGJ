@@ -25,7 +25,8 @@ namespace YLFramework.Services.Audio
             internal ClipSoundRule(AudioClip clip, int limit) { Clip = clip; Limit = limit; }
         }
         private static bool sShuttingDown, sQuitting;
-        internal static bool IsClosing => sShuttingDown || sQuitting;
+        internal static bool IsClosing => sShuttingDown || sQuitting ||
+            Application.isPlaying && !YLFramework.Core.Singleton.SingletonSessionState.CanRunExecution;
         internal static AudioKitSettings CurrentSettings => sSettings;
         internal static SoundDeduplicator Channels { get { Initialize(); return sChannels; } }
         /// <summary>持久化的分类通道设置。首次访问会初始化，但不会创建播放宿主。</summary>
@@ -182,8 +183,15 @@ namespace YLFramework.Services.Audio
         {
             if (IsClosing) throw new InvalidOperationException("AudioKit is shutting down.");
             if (sSettings != null) return;
-            sSettings = new AudioKitSettings();
-            sChannels = new SoundDeduplicator();
+            var settings = new AudioKitSettings();
+            try
+            {
+                sChannels = new SoundDeduplicator();
+                sSettings = settings;
+                Application.quitting -= BeginQuit;
+                Application.quitting += BeginQuit;
+            }
+            catch { settings.Dispose(); throw; }
         }
 
         /// <summary>Release owned sources and subscriptions, but never unload borrowed clips.</summary>
@@ -280,14 +288,19 @@ namespace YLFramework.Services.Audio
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished) =>
             PlaySlotWithSnapshot(clip, music, AudioPlaybackOptions.Capture(options, music), started, finished);
         internal static AudioHandle PlaySlotWithSnapshot(AudioClip clip, bool music, AudioPlaybackOptions options,
-            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished)
+            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, AudioResourceLease resource = null)
         {
-            if (!clip) return default;
-            options.PlaySoundMode = null;
-            options.Priority = 0;
-            options.Validate(false);
-            options.ValidateClip(clip);
-            return AudioManager.Instance.PlaySlot(music, clip, in options, started, finished);
+            try
+            {
+                resource?.Validate();
+                if (!clip) return default;
+                options.PlaySoundMode = null;
+                options.Priority = 0;
+                options.Validate(false);
+                options.ValidateClip(clip);
+                return AudioManager.Instance.PlaySlot(music, clip, in options, started, finished, resource: resource);
+            }
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Replace the voice request with a 3D voice at a fixed world position. Sound deduplication options do not apply.</summary>
         /// <param name="clip">Caller-owned clip that must remain alive for this request.</param>
@@ -352,16 +365,21 @@ namespace YLFramework.Services.Audio
                 onStarted, onFinished, ignoreTimeScale, curve);
         internal static AudioHandle CrossFadeMusicWithSnapshot(AudioClip clip, float duration, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null,
-            bool ignoreTimeScale = true, AudioCrossfadeCurve curve = AudioCrossfadeCurve.EqualPower)
+            bool ignoreTimeScale = true, AudioCrossfadeCurve curve = AudioCrossfadeCurve.EqualPower, AudioResourceLease resource = null)
         {
-            if (!AudioSoundOptions.IsFinite(duration) || duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration));
-            if ((uint)curve > (uint)AudioCrossfadeCurve.EqualPower) throw new ArgumentOutOfRangeException(nameof(curve));
-            if (!clip) return default;
-            options.PlaySoundMode = null;
-            options.Priority = 0;
-            options.Validate(false);
-            options.ValidateClip(clip);
-            return AudioManager.Instance.MusicPlayback.CrossFade(clip, duration, in options, onStarted, onFinished, ignoreTimeScale, curve);
+            try
+            {
+                resource?.Validate();
+                if (!AudioSoundOptions.IsFinite(duration) || duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration));
+                if ((uint)curve > (uint)AudioCrossfadeCurve.EqualPower) throw new ArgumentOutOfRangeException(nameof(curve));
+                if (!clip) return default;
+                options.PlaySoundMode = null;
+                options.Priority = 0;
+                options.Validate(false);
+                options.ValidateClip(clip);
+                return AudioManager.Instance.MusicPlayback.CrossFade(clip, duration, in options, onStarted, onFinished, ignoreTimeScale, curve, resource);
+            }
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Stop current music, its outgoing tail and any transition. Does not create a host.</summary>
         public static void StopMusic() { if (AudioManager.TryGetInstance(out var host)) host.MusicPlayback.Stop(); }
@@ -422,28 +440,33 @@ namespace YLFramework.Services.Audio
             PlaySoundWithSnapshot(clip, AudioPlaybackOptions.Capture(options), finished, started, spatial, position, target);
         internal static AudioHandle PlaySoundWithSnapshot(AudioClip clip, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> onFinished = null, Action<AudioClip, AudioHandle> onStarted = null,
-            bool spatial = false, Vector3 position = default, Transform target = null)
+            bool spatial = false, Vector3 position = default, Transform target = null, AudioResourceLease resource = null)
         {
-            if (spatial)
+            try
             {
-                if (!ReferenceEquals(target, null))
+                resource?.Validate();
+                if (spatial)
                 {
-                    if (!target || !target.gameObject.activeInHierarchy) return default;
-                    position = target.position;
+                    if (!ReferenceEquals(target, null))
+                    {
+                        if (!target || !target.gameObject.activeInHierarchy) return default;
+                        position = target.position;
+                    }
+                    ValidatePosition(position);
                 }
-                ValidatePosition(position);
+                if (!clip) return default;
+                options.Validate(spatial);
+                options.ValidateClip(clip);
+                if (!Settings.IsSoundOn.Value) return default;
+                var mode = options.PlaySoundMode ?? PlaySoundMode;
+                if (!Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
+                {
+                    sSoundCounters.DedupRejectedCount++;
+                    return default;
+                }
+                return AudioManager.Instance.PlaySound(clip, in options, mode, onFinished, onStarted, spatial, position, target, resource);
             }
-            if (!clip) return default;
-            options.Validate(spatial);
-            options.ValidateClip(clip);
-            if (!Settings.IsSoundOn.Value) return default;
-            var mode = options.PlaySoundMode ?? PlaySoundMode;
-            if (!Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
-            {
-                sSoundCounters.DedupRejectedCount++;
-                return default;
-            }
-            return AudioManager.Instance.PlaySound(clip, in options, mode, onFinished, onStarted, spatial, position, target);
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Select uniformly among valid clips without allocating a filtered collection.</summary>
         /// <param name="clips">Caller-owned candidates; null and destroyed entries are ignored.</param>

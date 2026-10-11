@@ -27,6 +27,25 @@ namespace YLFramework.Tests.Audio
         }
 
         [Test]
+        public void InactiveOrDisabledSourceEndsLoopWithoutNaturalNotification()
+        {
+            var options = AudioSoundOptions.Defaults;
+            options.Loop = true;
+            var finishes = 0;
+            var inactive = AudioKit.PlaySound(mClip, options, (_, __) => finishes++);
+            inactive.Voice.Source.gameObject.SetActive(false);
+            inactive.Voice.CheckFinished();
+            Assert.IsFalse(inactive.IsValid);
+            var disabled = AudioKit.PlaySound(mClip, options, (_, __) => finishes++);
+            disabled.Voice.Source.enabled = false;
+            disabled.Voice.CheckFinished();
+            Assert.IsFalse(disabled.IsValid);
+            Assert.AreEqual(0, AudioKit.SoundCount);
+            Assert.AreEqual(0, finishes);
+            Assert.IsTrue(mClip);
+        }
+
+        [Test]
         public void EmptyQueriesAndCleanupNeverCreateAHost()
         {
             AudioKit.Shutdown();
