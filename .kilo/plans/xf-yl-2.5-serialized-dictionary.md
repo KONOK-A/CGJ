@@ -1,8 +1,8 @@
 # XF × YL 2.5 SerializedDictionary 研究与 Implementation Plan
 
-**状态：总体技术方案已批准（2026-10-11，批准范围见第 13 节）；A/B/C 待逐批实施、验收与 Git 收口，尚未授权任何实施批次。**
+**状态：总体技术方案已批准；2.5-A/B 已通过用户技术验收与 Git 收口，提交为 `13cb2ce` / `045641b`；2.5-C 实施与验证完成，2.5 专题满足技术完成条件，待用户最终验收与 Git 收口（第 16 节）。不代表阶段 2 Git 集成或里程碑已完成。**
 
-> 后续实施代理仅在用户授权具体批次后，按 `executing-plans` 或适用的 `subagent-driven-development` 工作方式执行。本次批准仅覆盖第 13 节记录的架构方向、公开行为契约、兼容边界与批次路线，不构成任何批次的实施授权或 Git 权限；本文不授权源码修改、测试执行、分支操作或 Git 收口，不自动启动 2.5-A。
+> 各批次授权独立：第 13 节是总体批准，第 14/15/16 节分别是 A/B/C 实施记录。C 的实施授权不扩展到 Commit、Push、Merge、Tag、Reset、Clean、分支切换或阶段 3。
 
 **目标：** 将新 YL 内的两份序列化字典收敛为可独立复用、运行时修改可保存、Inspector 可编辑的唯一通用容器。
 
@@ -279,6 +279,146 @@ Json.NET 的元数据保留名/自定义设置只做与承诺范围相关的代�
 - **批次逐批推进**：A/B/C 仍需逐批实施、验收与 Git 收口，逐批另行授权；本次批准不构成任何批次的实施授权或 Git 权限，不自动启动 2.5-A。
 - 既有源码研究、证据、风险分类与验证设计要求继续有效；实施中若发现真实消费者或数据，按第 9 节条件分支处理（暂停对应退出并补充有样本迁移方案）。
 
+## 14. 2.5-A 实施与验证记录
+
+### 14.1 授权、基线与范围
+
+- 2026-10-11 用户单独授权正式实施 A。开始时实际分支 `fusion/2.5-serialized-dictionary`，HEAD `e6ba5e4`，工作区干净。定向复查 `Assets` C#，两份 YL 容器及 `DictionaryItem` 仍只有自身定义/内部使用，没有发现新的源码消费者。
+- 产品修改仅限 `C/Extensions/SerializedDictionary.cs`；新增 `T/Core/EditMode/SerializedDictionaryContractTests.cs`、`SerializedDictionaryJsonTests.cs` 和共用的 `SerializedDictionaryTestAsset.cs`，Unity 为三份脚本生成独立 meta。只在既有 Core EditMode 测试 asmdef 中加入 `Newtonsoft.Json.dll`。
+- 保留 `YLFramework.Core.SerializedDictionary<TKey,TValue>`、`YLFramework.Core.Runtime`、原脚本路径/GUID `1418cb45915d1504e859f117b32ade29`、私有 `List<DictionaryItem<TKey,TValue>> datas` 及 `Key/Value` 字段。`DictionaryItem` 本批仍公开，内部化留给 B。旧 Save 容器保持不变。
+- 未移动身份、修改 Core Runtime asmdef、新增产品 JSON 依赖、修改 SaveManager/后端、修改原游戏或原包，也未进行 Commit/Push/Merge/Tag/Reset/Clean 或分支切换。
+
+### 14.2 实际实现与取舍
+
+- `datas` 是唯一事实源；删除两个键到值/条目缓存，改为一份非序列化 `Dictionary<TKey,int>` 首项行索引。索引按失效状态延迟重建，以局部完整结果发布，不再用 Count 判断有效性。
+- 实现 `IDictionary<TKey,TValue>`、`IReadOnlyDictionary<TKey,TValue>`、`ISerializationCallbackReceiver`、复制来源构造、`TryAdd/TryGetValue`、pair 操作和 `CopyTo`。setter 更新首个有效行或追加新行，Add 严格拒绝重复；缺键 get 抛 `KeyNotFoundException`；所有键入口只拒绝 CLR null。
+- Keys/Values 是不可修改的 live view，没有可变字典/原始列表出口。查询、Count、ContainsValue、视图及枚举只使用有效唯一投影；有效行顺序保留。`InvalidEntryCount` 诊断 null 行/CLR null 键/重复行，不记录错误日志或自动清理。
+- setter 保留重复行；Remove 删除同键全部行，Clear 清空全部原始行。对正常重复/null 校验失败不改已有数据。缺失/null `datas` 按空输入处理；不会轮询可变 key 内部状态，也不宣称线程安全。
+- `OnBeforeSerialize` 不做数据复制或清理；`OnAfterDeserialize` 只清除索引/诊断缓存并递增枚举版本，不遍历键或调用 Unity 对象 API。实际 Unity 编辑/overwrite/Undo 路径已支持此机制，无需额外 hash 扫描、Count 检测、手动 Refresh 或 Editor 回调桥接。
+- 独立只读审查发现 `yield` 枚举器在结束后不再检查版本。补充 `ExhaustedEnumeratorsStillDetectSubsequentMutation`，先实际观察失败，再改为共享的显式枚举器；pair/Keys/Values 在首次移动前、移动期间和结束后均检查版本。反序列化后旧 live view 更新、旧枚举器失效也有直接覆盖。
+- Json.NET 使用标准字典 contract，经 setter 写穿列表；无 attributes/converter/resolver/.NET callback bridge。当前 Core 的其他模块（HttpManager、StartUpModuleRequest）本来已引用 Newtonsoft，因此本批不能将“整个 Core 无 Newtonsoft 依赖”作为断言；容器自身不绑定 JSON DLL，Foundation 无此依赖的程序集断言留给 B。
+
+### 14.3 本轮真实验证
+
+验证通过已打开的 Unity `2022.3.62f3c1` Editor/MCP 进行，没有启动第二个 Unity 实例，没有以辅助 dotnet 编译代替 Unity。所有 Unity 往返用例均调用真实序列化/编辑 API，而不是手动调用容器回调。
+
+| 验证 | 本轮结果与证据 |
+|---|---|
+| 修复前失败证据 | 原实现的 `IndexerWritesSurviveRealUnityJsonRoundTrip` 恢复旧值 1 而非 2；SerializedProperty 同 Count 编辑及 Unity overwrite 均保留旧键；默认 Json.NET 写出 `Keys/Values/Count` 而非 `{"a":1}`。四项在产品修改前实际失败，修改后通过 |
+| Unity 实际编译 | `assets-refresh(ForceSynchronousImport)` 最终返回 Success；新容器及测试在 Unity 中编译后执行。测试扩充过程中出现过 using 位置编译错误，已修正并重新编译/运行，不沿用失败状态 |
+| 运行时与身份 | 标准操作/null/default/重复/缺失键、复制所有权、pair/CopyTo、只读 live view、有效顺序、失败操作不失效枚举、有效修改失效枚举、全部重复 Remove、全部 raw Clear，以及 namespace/assembly/GUID/序列化布局通过 |
+| Unity 编辑与缓存 | 直接泛型字段和具体非泛型子类，SerializedProperty 同长度改 key/value、单改 value、Undo/Redo、JsonUtility.FromJsonOverwrite 同 Count、旧视图及枚举器行为通过；无需手动失效调用 |
+| Unity 保存恢复 | 测试独占临时 SO 资产，运行时 set/add/remove/clear 后 SaveAssetIfDirty、UnloadAsset、ForceUpdate 导入并 LoadAsset，断言不是原 managed 实例；恢复的有效行、具体子类、嵌套值和 Unity 对象自引用通过。Instantiate 后独立修改以及 Clear 后 JsonUtility 恢复为空也通过；仅删除测试自己的临时资产 |
+| 无效 raw 数据 | CLR null 行/键通过定向注入验证保留、计数及有效投影；Unity 可表达的重复行经真实 JSON 保存恢复仍保留，SerializedProperty 修复后即时有效，Remove 不复活。不能把 CLR 注入当成 Unity 任意 inline null 的保真证明 |
+| Unity fake-null 实测 | Object key 的 CLR null 经 JsonUtility 往返恢复为 CLR 非 null、Unity `== null` 为 true 的包装对象：原三行（null/同对象重复）从有效 1、无效 2 变为有效 2、无效 1，raw 行数仍为 3。测试明确断言此实际转换；按已批准契约，fake-null 键仍合法且不会被自动清除。另验已销毁 Unity 对象键也按 CLR 非 null 处理。这不构成跨会话对象键持久化保证 |
+| Json.NET 实际往返 | 当前安装 Json.NET 的默认设置及只读使用真实 `SaveManager.SerializerSettings`：根/记录字段裸对象，string/int/enum 键、null/嵌套 POCO 值、空对象、读取后修改/再次写出，再转 Unity 保存恢复全部通过；没有调用 SaveManager IO、索引或缓存路径 |
+| JSON 边界 | 重复名称与 `"1"/"01"` 转换为同键均后值覆盖，无 Unity 重复行；无法转换键及截断 JSON 实际抛 `JsonSerializationException`，没有吞异常或更改后端设置 |
+| 最终定向回归 | `tests-run(testMode=EditMode, testAssembly=YLFramework.Core.Tests.EditMode)` 最终 **58 passed、0 failed、0 skipped**，含新增 **23** 项容器/JSON 用例及既有 Core EditMode 回归。工具的 `TotalTests=1246` 是全工程发现数，不是本次执行数；不将其报告为全工程通过 |
+
+### 14.4 完成边界与待验收事项
+
+- A 的技术完成条件已达到，可作为 B 的技术前置；仍需用户验收和 Git 收口，未自动启动 B/C。
+- 行为变化明确：缺键不再返回 default，Add 不再接受重复，Keys/Values 公开类型从具体 Dictionary collection 改为只读 live `ICollection`，Json.NET 从旧 POCO 包装改为裸字典对象。未发现需迁移的源码消费者，本批不为未知历史数据增加兼容层。
+- 未执行 Foundation 身份迁移/旧 Save 退出、正式 Drawer/UI Toolkit/IMGUI、多对象/Prefab override 链、真实 SaveManager 写盘端到端、Player/IL2CPP 或完整游戏测试；分别留给 B/C 或既有后续范围。复杂 JSON key、自定义元数据/保引用设置、任意 inline null/多态/alias 保真仍在既有保证范围之外。
+- Unity 刷新/测试期间工作区另外出现既有 `T/Core/Fixtures/YLCoreSmokeModule/YLCoreSmokeModule.asset` 三处 `filter:` 尾空白差异（无字段值变化）。该资产未由本轮手动编辑，来源未进一步断定；按保护并行/现有改动约束保留，不纳入 A 交付改动。全工作区 `git diff --check` 因这三处差异报尾空白；A 的源码/测试/专项方案定向差异检查无此问题。
+- 本批没有真实历史资产/存档迁移样本，不能把测试临时资产往返称为历史数据迁移完成。原 XF/XFAB 与原游戏资源保持原 owner。
+
+## 15. 2.5-B 实施与验证记录
+
+### 15.1 授权、基线与依赖复查
+
+- 2026-10-11 用户单独授权正式实施 B，并确认 A 已验收及 Git 收口。实际核对分支 `fusion/2.5-serialized-dictionary`、HEAD `13cb2ce`，开始时工作区干净；第 14 节中的待验收文字保留为 A 实施轮历史记录。
+- 复查 `Assets` 中的目标类型、条目、脚本 GUID、反射/字符串绑定及 `*.unity/*.prefab/*.asset` 的类型名和 `datas/keyList/valueList` 字段；产品类型仍无 A 测试之外的已查实源码消费者，未发现真实 YL 资产或持久化样例需要迁移。共用测试 fixture 的 GUID 也无已查实资产绑定。
+- 只读复查已安装 PackageCache 源码；原 XF 保留自己的字典/条目，SRP 的同名实现不属于退出范围。未读取仓库外真实用户存档、未反编译 DLL 或分析 Bundle，结论不扩展为外部历史数据无迁移风险。
+
+### 15.2 实际迁移、API 与兼容影响
+
+- 唯一正式类型为 `YLFramework.Foundation.SerializedDictionary<TKey,TValue>`，归 `YLFramework.Foundation.Runtime`，路径 `Assets/YLFramework/Runtime/Shared/Serialization/SerializedDictionary.cs`。从 A 的 Core 文件连同 meta 移动，脚本 GUID 仍为 `1418cb45915d1504e859f117b32ade29`；新增 `Serialization/` 目录的 meta 由 Unity 导入生成。
+- 产品代码只改变 namespace 和 `DictionaryItem<TKey,TValue>` 的可见性（public → internal）；未重构 A 的内部算法、公开字典操作、Unity 回调或 JSON 契约。仍以私有 `List<DictionaryItem<TKey,TValue>> datas` 为事实源，条目保留 `[Serializable]`、公开字段 `Key/Value`，没有改成 SerializeReference 或双列表。
+- Core 旧路径及 `YLFramework.Core.SerializedDictionary/DictionaryItem` 退出；删除旧 Save 容器及 meta（GUID `92f87fcb20da409a84c5c36308bed9fb`），`YLFramework.Services.Save.SerializedDictionary` 退出。没有添加 forwarder、alias、obsolete facade、MovedFrom、旧格式 reader 或历史转换系统。SerializedVector/Color、Save 系统及普通 Dictionary 未修改。
+- namespace/程序集身份与条目公开性是本批有意的 API 变化。保留 GUID 和字段布局不等于自动兼容旧 assembly-qualified name、SerializeReference 或外部历史持久化数据；本批无已查实真实资产需要迁移，因此不报告历史数据迁移通过。
+- A 的契约测试与共用 SO fixture 连同各自 meta 移到已有 `Tests/Foundation/EditMode/`，namespace 改为 `YLFramework.Foundation.Tests`；CLR null 原始行测试只在测试内反射注入内部条目，不新增产品测试入口或 friend assembly。JSON 测试/meta 移到已有 `Tests/EditMode/`，namespace 改为 `YLFramework.Tests`。
+- 集成测试 asmdef 显式引用现有 `YLFramework.Foundation.Tests.EditMode` 以复用同一 fixture，并加入现有 `Newtonsoft.Json.dll`；Core EditMode 测试撤回仅供 A 的 JSON DLL 引用。Foundation 产品和 Foundation 测试均未加入 JSON/Core/Runtime 依赖，没有新建测试程序集。Core/Runtime 原本直接依赖 Foundation，产品 asmdef 不需改动。
+- 保留 `Shared/LICENSE.md`、`XFMain/LICENSE.md` 的完整 MIT 和 `Copyright (c) 2021 弦小风`；在现有 `Runtime/THIRD-PARTY-NOTICES.md` 标明容器承接路径、来源 revision `2182708aec` 和适用许可。
+
+### 15.3 本轮实际验证
+
+在已打开的 Unity `2022.3.62f3c1` 中执行，没有启动第二实例，没有用 dotnet/IDE 结果代替 Unity 编译。以下为本轮迁移后的结果；A 的算法设计与既有行为依据沿用第 14 节，不重新研究实现。
+
+| 验证 | 结果与证据 |
+|---|---|
+| 身份变更的失败证据 | 实施迁移前，更新后的归属断言实际得到 `YLFramework.Core` 而非 Foundation；新增 Core 身份测试在 Foundation 中找不到正式容器。迁移后两项通过 |
+| Unity 实际编译 | `assets-refresh(ForceSynchronousImport)` 返回 Success；最终 Editor 检查 `IsCompiling=false`、`EditorUtility.scriptCompilationFailed=false`，迁移后的三个现有测试程序集均已在 Unity 中加载和执行 |
+| Foundation 容器/Unity 定向回归 | `tests-run(EditMode, YLFramework.Foundation.Tests.EditMode, testClass=SerializedDictionaryContractTests)`：**17 passed、0 failed、0 skipped**。覆盖标准接口、枚举失效、raw 无效行保留/Remove 不复活、direct/derived 同 Count 编辑、Undo/Redo、Unity overwrite、保存卸载重载/Instantiate、嵌套值与对象引用及 fake-null 既定行为 |
+| JSON 定向回归 | `tests-run(EditMode, YLFramework.Tests.EditMode, testClass=SerializedDictionaryJsonTests)`：**6 passed、0 failed、0 skipped**。真实 Json.NET 默认/SaveSettings 裸对象、string/int/enum 键、嵌套/null 值、重复名称与转换键、坏输入、读回后再 Unity 序列化及重复 raw 行有效投影通过 |
+| Core/Runtime/原 XF 身份 | `tests-run(EditMode, YLFramework.Core.Tests.EditMode, testClass=CoreIdentityTests)`：**9 passed、0 failed、0 skipped**。含新增 Foundation 唯一 owner、两旧 YL 容器及旧 Core 条目不存在、Core/Runtime 直接引用 Foundation、原 XF 容器与公共条目仍属原程序集 |
+| 字段、GUID 与导入身份 | Foundation 身份测试反射确认唯一序列化字段 `datas`、List 内部条目的 `Key/Value` 名称和类型、条目非 public。AssetDatabase 将产品及三份测试原 GUID 映射到各自新路径，原 XF GUID 仍映射原 Package；旧 Save/Core 文件及 meta 均不存在，旧路径 MonoScript 加载为 null。Editor 当前会话的默认 GUIDToAssetPath 仍缓存已删除 Save 路径，不代表文件或脚本仍存在 |
+| JSON/框架依赖隔离 | 实际 Foundation Editor DLL 只引用 `netstandard/UnityEngine.CoreModule/UnityEditor.CoreModule`；Foundation/Core 测试 DLL 均无 Newtonsoft 引用，本批 JSON 测试引用仅在现有集成测试 DLL 中显式加入，Core/Runtime 产品原有的 JSON 依赖不变。Foundation 无 Core/Runtime/XF/XFAB/框架 Editor 依赖 |
+| Player 编译图 | `CompilationPipeline.GetAssemblies(AssembliesType.Player)` 的 Foundation 引用图无 YL/Core/Runtime/XF/XFAB/Newtonsoft/UnityEditor 依赖；该图检查不是 Player 实际构建 |
+
+本轮共执行上述 **32 项**定向用例，未机械重跑 A 的完整 Core EditMode 套件、其他专题全集或全工程测试。工具返回的 `TotalTests=1247` 是全工程发现数，不是本轮执行数。
+
+**隔离断言的实际修正：** 最初把 Editor 中整个 Foundation DLL 的 `UnityEditor` 引用判为非法，导致迁后身份测试一度为 16 passed / 1 failed。查实既有 `ApplicationTool`、`SingletonSessionState` 的 `UNITY_EDITOR` 条件分支本就引用 `UnityEditor.CoreModule`，与迁入容器无关；因此保留既有产品代码，区分 Editor 加载依赖和 Player 编译图断言，重新运行容器组得到上述 17/17。不声称 Editor 版本 DLL 完全没有 UnityEditor 引用，不通过修改其他已验收专题制造隔离通过。
+
+### 15.4 完成边界与下一停止点
+
+- 一次独立只读审查对照 `13cb2ce` 与迁移后的新路径，未发现可证实的严重、重要或轻微问题；确认产品算法仅归属/可见性变化、meta/GUID 保留、测试依赖隔离及许可一致。最终 `git diff --check` 通过；旧完整类型名仅剩退出断言，无测试临时资产残留，本轮编译/测试后的新增 Unity Error 日志为空。
+- B 的公共归属、重复实现退出和定向技术验证已完成。上述待验收状态为 B 实施轮历史；C 开始时用户确认 B 已验收及 Git 收口，实际 HEAD 为 `045641b`，C 另获授权。
+- 未实施正式 Drawer、UI Toolkit/IMGUI、多对象/Prefab override 编辑链、真实 SaveManager 写盘端到端、Player/IL2CPP 构建或完整游戏验证；继续保持第 9/14 节关于复杂 JSON key、任意 serializer 设置及 Unity inline 身份的限制。
+- 原游戏、原 XF/XFAB Package、Save 后端、其他已验收专题及产品 asmdef 未修改。没有 Commit、Push、Merge、Tag、Reset、Clean 或切换分支；本轮完成后停止，不自动推进 C。
+
+## 16. 2.5-C 实施与验证记录
+
+### 16.1 授权、基线与实现边界
+
+- 2026-10-11 用户正式授权 C。实际分支 `fusion/2.5-serialized-dictionary`，HEAD `045641b`，开始时工作区干净；当前 Editor 为 `2022.3.62f3c1`，打开的 `Assets/Scenes/Main.unity` 无未保存改动。没有启动第二个 Unity 实例。
+- 产品新增 `E/Serialization/SerializedDictionaryDrawer.cs`，仅在既有 `YLFramework.Editor.asmdef` 直接加入 Foundation 引用；没有改动 Runtime 容器、SaveManager/SaveFileIO、原游戏、原 XF/XFAB Package 或其他专题。
+- 在现有集成 EditMode 程序集增加 Editor 与 Save 测试；Prefab/list/enum 的 MonoBehaviour fixture 放入既有 Foundation PlayMode 测试程序集，集成测试直接引用它。当前 Unity 不允许在 GameObject 上挂载 Editor-only 程序集的 MonoBehaviour，故没有把 fixture 留在 EditMode，也没有新建测试程序集、长期场景或 Prefab。该 fixture 无 Editor/Json.NET/旧 Runtime 引用。
+- Unity 为 Drawer、测试及新增目录生成独立 meta；产品容器 GUID 仍为 `1418cb45915d1504e859f117b32ade29`。完整 MIT 与 `Copyright (c) 2021 弦小风`、既有第三方 notice 保持不变；Drawer 未复制第三方插件代码。
+
+### 16.2 Inspector 的实际能力与局部决策
+
+- 实际 `CustomPropertyDrawer(typeof(SerializedDictionary<,>), true)` 可以绑定直接泛型字段、具体非泛型子类、列表元素与代表性 int/enum/Unity Object 键类型；没有增加运行时非泛型基类、公开编辑接口、friend assembly 或全局反射路由。
+- UI Toolkit 用原生 `PropertyField` 与 binding，跟踪 SerializedObject 更新诊断与结构保护；IMGUI 实现 `OnGUI/GetPropertyHeight` 和 `BeginProperty/EndProperty`，交由所属 Inspector ApplyModifiedProperties。IMGUI 诊断为固定四行高的原生可滚动区域，按实际 Rect 宽度计算内容，不因窄列覆盖后续字段。所有修改走 SerializedProperty，不直接操作 Runtime 缓存、不自动 SaveAssets。
+- 单对象复用原生 `datas` 列表与 Key/Value 字段，支持查看有效投影统计及全部可表达 raw 行、编辑、增删与重排。诊断按实际 `EqualityComparer<TKey>.Default` 指出后续重复行及首项行号，保留原行供修复；不按 ToString 判等，不加入自动修复/导出/搜索/分页等系统。
+- **基于实测调整装箱方式**：2022.3 的 `boxedValue` 不能读取闭合泛型 `DictionaryItem` 条目；改为根据 Drawer 的 fieldInfo 找到闭合 TKey，并读取当前 Key 子字段。Enum boxedValue 是整数，显式还原为 Enum 后再用其真实默认比较器。待 Apply 的同 Count key 修改已能被诊断读取，不借用旧 Runtime 索引。
+- **对象键诊断限制**：JsonUtility 产生的 Unity fake-null 键在 Runtime 是 CLR 非 null、可参与投影，但 SerializedProperty 将它表示为 None；因此 None/Missing 显示“待确认”而不是错误判为非法或给出假精确有效数。这不改 A/B 的 CLR-null 契约，不自动清除对象键。其他无法 boxedValue 的键明确提示诊断不可用，原始字段仍能编辑；Unity inline 不表达的 null/多态/alias 身份不由 Drawer 补造。
+- **多对象保守策略**：每个目标单独诊断；所有多选都禁止批量列表增删/重排，相同长度只提供同行 Key/Value 的原生 mixed-value 编辑。行头不绑定 raw 数组元素，避免原生右键 Duplicate/Delete 命令绕过结构保护；Toolkit 行头是普通 Foldout，IMGUI 是普通标签。长度不同或字段缺失时禁用整组编辑并提示分别选择修复，外部结构变化后 UI 同步禁用。此策略比第 8 节最低结构保护要求更保守，不扩展复杂批量列表算法。
+- 工程安装的全局 `Sirenix.OdinInspector.Editor.OdinEditor` 会抢占默认 Editor；测试明确创建 Unity 原生 `GenericInspector` 验证 UI Toolkit，并另测 IMGUI 自定义 Inspector。实现无 Odin 依赖，不把第三方 Editor 的表现当作原生能力，也不承诺任何第三方 Editor 必定转发 Unity Drawer。
+
+### 16.3 真实 SaveManager 与恢复验证
+
+- 同步测试使用 Guid 独占临时 root，只在自有目录内调用 `CreateSaveItem → SaveObject → SetStorageRoot(同 root 清缓存/索引) → LoadObject`，没有触碰真实用户存档。当前 NUnit 2 不提供 NonParallelizable attribute；使用当前 Unity Runner 的主线程同步 EditMode 用例，不伪造不适用的 NUnit API。
+- 实际读取 `SaveData/{id}/root-dictionary.json` 与 `nested-record.json`，独立 literal JSON 比对根字典 `{"a":2,"b":4}` 与记录 `{"Direct":{"a":2,"b":4},"Nested":{"7":{"Number":6},"-2":{"Number":8}}}`，不是仅检查内存或再序列化预期对象。
+- 保存后故意只改源对象为 `a=-1`、增加 `memory-only` 及修改 Nested Payload，随后清缓存并读盘；读回根容器、记录、内嵌字典及 Payload 都不是原实例，恢复 `a=2/b=4/7.Number=6/-2.Number=8` 且无内存专用键。磁盘索引也恢复为新实例，字典再经 JsonUtility 写出 `datas` 并读回有效值。
+- finally 恢复原 root override、索引原引用、缓存原条目及内层引用、原 serializer/metadata settings 字段与输出格式，仅删除自有目录；恢复后再次断言状态与目录不存在。没有改 Save 产品代码、存档版本或全局默认设置。
+- 定向源码检查发现与本专题无关的 Save 边界：`SaveFileIO.ReadJson` 在主文件缺失、备份存在但读取失败时仍返回 Missing（`SaveFileIO.cs:120–135`），索引初始化因而跳过 Failed 诊断分支（`SaveManager.cs:169–177`）。这是静态控制流确认，未执行故障分支复现；有效文件往返不受阻，本批不修复或宣称完成整个 Save 故障恢复。
+
+### 16.4 本轮真实门禁与沿用证据
+
+以下通过已打开的 Unity `2022.3.62f3c1` 执行，不以 IDE 或 dotnet build 代替 Unity 编译。
+
+| 验证 | 本轮结果 |
+|---|---|
+| 失败证据与修正 | Drawer 实施前 5 项检查均因未绑定失败；实施后通过。装箱泛型条目、Enum 默认比较器类型与 fake-null 错误判无效均有真实失败/探针证据后修正。测试过程中不适用的 NUnit attribute、Editor-only MonoBehaviour 与全局 OdinEditor 干扰已定位并修正测试承载，不削弱容器断言 |
+| 原生 Editor | `tests-run(EditMode, YLFramework.Tests.EditMode, SerializedDictionaryEditorTests)`：**15 passed、0 failed、0 skipped**；包含原生绑定、待 Apply 重复诊断与修复、list/enum、fake-null 提示、实际 UI Toolkit 字段编辑/Undo/Redo及新增/重排/删除后的重绑定、IMGUI 展开绘制与字段回写、多对象 mixed 值及结构变化禁用、原生右键结构菜单阻断、窄 Rect 固定高诊断、Prefab override/apply/revert、重复行保存重开与修复再次保存 |
+| 真实 SaveManager | `tests-run(EditMode, YLFramework.Tests.EditMode, SerializedDictionarySaveTests)`：**1 passed、0 failed、0 skipped**；磁盘内容、新实例、索引恢复、再次 Unity 序列化及恢复后的原静态状态/自有目录删除断言均通过 |
+| Foundation 定向回归 | `tests-run(EditMode, YLFramework.Foundation.Tests.EditMode, SerializedDictionaryContractTests)`：**17 passed、0 failed、0 skipped**；重新验证 A/B 标准操作、回调/同 Count、Undo、raw 保留、资产保存重载、GUID/布局及 Player 编译图依赖 |
+| Json.NET 定向回归 | `tests-run(EditMode, YLFramework.Tests.EditMode, SerializedDictionaryJsonTests)`：**6 passed、0 failed、0 skipped**；实际后端形状/代表键/坏输入/重复名称与转换键、JSON→Unity 保持 |
+| Core/原 XF 身份 | `tests-run(EditMode, YLFramework.Core.Tests.EditMode, CoreIdentityTests)`：**9 passed、0 failed、0 skipped**；Foundation 唯一 owner、旧 YL 类型退出、原 XF 原身份及 Core/Runtime 直接引用 Foundation |
+| 编译/资产与场景 | 当前 Editor `scriptCompilationFailed=false`、`IsCompiling=false`；Drawer 与新增 fixture/meta 均导入；原容器 GUID 不变。`YLFramework.Editor` 直接引用 Foundation，Player 编译图无框架 Editor，Foundation 无 Core/Runtime/XF/Newtonsoft/UnityEditor 引用；此图不是实际 Player 构建。测试自有 Prefab 目录和测试窗口数量均为 0，原 Main 场景仍 `dirty=false` |
+
+本轮执行 **48 个不同定向用例**（含重新运行的 32 项 A/B 回归）；工具最终 `TotalTests=1263` 是工程发现数，不是本轮通过数。A/B 未受影响的完整 Core 历史套件及设计结论沿用第 14/15 节；没有运行其他专题全集、完整游戏、Player/IL2CPP 构建或性能测试。
+
+### 16.5 专题完成边界
+
+- 统一体系仍只有 `YLFramework.Foundation.SerializedDictionary<TKey,TValue>`，内部条目、事实源、写穿与无效 raw 保留/首项投影不变。旧 Core/Save 容器、Core 公开 DictionaryItem 已退出，原 XF/XFAB 保留原 owner；没有新增兼容 facade/迁移 hook 或普通 Dictionary 替代。
+- 沿用 B 的消费者/历史数据结论，并复查当前旧类型名仅在退出断言；没有新增真实业务消费者或历史数据迁移样本。保留 GUID/字段布局不是旧动态类型名或双列表数据自动兼容证明。
+- 在既有 `Documentation/Modules/Save.md` 补齐通用用法、原生编辑限制、JSON 与 Unity 的不同保证、缓存和兼容变化；长期蓝图仅增量同步 2.5，不将 C 技术完成扩大为阶段 2 Git 集成或里程碑。
+- 独立只读审查发现多选原生右键结构入口和窄列高度不一致两项问题；本机分别观察到原生菜单含 Duplicate/Delete、宽/窄窗口高度从 140 变为 176 的回归失败，再按第 16.2 节局部修复，最终 Editor 15/15 通过。没有把审查时的 13/13 旧结果当作修复后的证据，也没有扩展 A/B 算法。
+- 最终 `git diff --check` 与四份新增 C# 的 no-index 格式检查通过；改动范围只有本专题的 Drawer、既有程序集引用、测试/fixture/meta 和三份既有文档。资源复查发现早期失败路径中尚未 Show 的自有窗口未被 Close 销毁，补齐测试 Release 清理并定向删除该残留，再跑 Editor 15/15 后确认测试窗口为 0；没有关闭用户窗口、保存用户场景或清空 Console。最终近期 Error/Exception 日志复查无新项。
+- **2.5-C 实施与验证完成，2.5 专题满足技术完成条件，待用户最终验收与 Git 收口。** 没有 Commit/Push/Merge/Tag/Reset/Clean 或切换分支，不建立阶段 2 里程碑，不自动进入阶段 3。Player/IL2CPP、跨平台和无原 XF 生态的最终整框架独立验收仍归后续范围。
+
 ## 资料依据
 
 - Unity [2022.3 Script Serialization](https://docs.unity3d.com/2022.3/Documentation/Manual/script-Serialization.html)、[ISerializationCallbackReceiver](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ISerializationCallbackReceiver.html)：字段规则、Inspector 反序列化、回调线程与 inline 限制。
@@ -286,3 +426,6 @@ Json.NET 的元数据保留名/自定义设置只做与承诺范围相关的代�
 - Unity [FormerlySerializedAs](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/Serialization.FormerlySerializedAsAttribute.html)、[FromJsonOverwrite](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/JsonUtility.FromJsonOverwrite.html)：字段改名不能代替格式/类型迁移，overwrite 应区分缺失字段保留与清空。
 - Json.NET 官方 [Serialization Guide](https://www.newtonsoft.com/json/help/html/SerializationGuide.htm)、[Serialization Callbacks](https://www.newtonsoft.com/json/help/html/SerializationCallbacks.htm)，以及 [13.0.2 DefaultContractResolver](https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.2/Src/Newtonsoft.Json/Serialization/DefaultContractResolver.cs)、[CollectionUtils](https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.2/Src/Newtonsoft.Json/Utilities/CollectionUtils.cs)、[JsonSerializerInternalReader](https://github.com/JamesNK/Newtonsoft.Json/blob/13.0.2/Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs)。通用官方说明以版本源码及当前包配置核对，不作为已运行结果。
 - 当前可调用工具没有 Context7 查询能力；未声称已获得 Context7 结果，使用现有源码、已安装包元数据及上述版本匹配的一手资料。
+- A 实施时 Context7 已可调用：查询 `/websites/unity3d_manual` 的序列化回调资料，但返回没有明确的 2022.3 版本限定；仅作辅助说明，以当前 Editor 的真实测试作为本批回调/缓存结论。上一条是研究轮工具能力的历史记录。
+- B 核对 Player 编译图时查询同一 Context7 库的 `CompilationPipeline.GetAssemblies(AssembliesType.Player)`，结果仍未明确限定 2022.3；另核对 [Unity 2022.3 GetAssemblies API](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/Compilation.CompilationPipeline.GetAssemblies.html)，并以当前 Editor 返回的编译图验证，不将其当作 Player 构建结果。
+- C 查询同一 Context7 库的 PropertyDrawer/boxedValue/多对象编辑，返回仍未明确限定 2022.3；定向读取上列 Unity 2022.3 PropertyDrawer 与 boxedValue 一手 API，并以当前 Editor 绑定、实际 UI 编辑和限制探针为准，不照搬最新 UI Toolkit 示例。
