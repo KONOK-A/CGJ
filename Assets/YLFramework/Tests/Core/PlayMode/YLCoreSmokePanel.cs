@@ -11,9 +11,12 @@ namespace YLFramework.Core.Tests
         public const string ProbeEvent = "YLCoreSmoke.PanelEvent";
         public static bool UseSharedHandler;
         public static int SharedEventCount;
-        public override PanelType PanelType => ProbePanelType;
         public bool KeepInFront;
         public override bool AlwaysInFront => KeepInFront;
+        public bool Modal;
+        public override bool IsModal => Modal;
+        public PanelType? TypeOverride;
+        public override PanelType PanelType => TypeOverride ?? ProbePanelType;
         public int LoadedCount { get; private set; }
         public int ArgsCount { get; private set; }
         public int RemovedCount { get; private set; }

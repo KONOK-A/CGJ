@@ -3,228 +3,130 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
-
-
     public enum PanelType
     {
-        /// <summary>
-        /// 普通的UI界面 ( 不透明，占满全屏 ) 当前显示的如果是这种类型的界面, 框架会自动把后面的移出显示区,以此来节省性能
-        /// </summary>
+        /// <summary>不透明且完整覆盖所属根的页面，可遮挡同一上下文内较低的页面。</summary>
         Panel = 1,
-        /// <summary>
-        /// 弹窗界面 ( 可能会看到后面的界面 ) 默认是这种类型
-        /// </summary>
+        /// <summary>普通窗口，不产生全屏渲染遮挡。</summary>
         Window = 2,
-
-        /// <summary>
-        /// 悬浮控件(提示或按钮),Panel.IsTop 的方法会忽略该类型的UI,因为悬浮控件不是一个完整的UI界面! 
-        /// </summary>
+        /// <summary>悬浮内容，不参与普通窗口 Top 或焦点候选。</summary>
         Overlay = 3
     }
 
     public abstract class Panel : View
     {
-
-        #region 字段
-
         private int sortingOrder;
 
-
-        private bool isInitCanvas = false;
-
-        #endregion
-
-
-        #region 属性
-        /// <summary>
-        /// 当前Panel的Canvas
-        /// </summary>
+        /// <summary>本窗口控制的 Canvas，或子控件借用的祖先 Panel Canvas。</summary>
         public Canvas Canvas { get; private set; }
-         
-        /// <summary>
-        /// 当前Panel的层级
-        /// </summary>
+
+        /// <summary>当前会话所属的实际根。不同根与 Scene 的显示策略相互隔离。</summary>
+        public Canvas RootCanvas => PanelManager.GetRoot(this);
+
+        /// <summary>逻辑顺序。Module 偏移、平手与 AlwaysInFront 统一生成有效顺序。</summary>
         public int SortingOrder
         {
-            get { return sortingOrder; }
+            get => sortingOrder;
             set
             {
-                if (!IsMyselfAddCanvas) return; // 用的是别人的Canvas 所以不能对层级进行修改
-                sortingOrder = value;
-                PanelManager.UpdateOrder(this, value);
-                RefreshSortingOrder();
+                if (!IsMyselfAddCanvas) return;
+                PanelManager.SetOrder(this, value);
             }
         }
 
+        /// <summary>实际 Canvas 顺序；借用 Canvas 的子控件没有独立顺序。</summary>
+        public int DisplaySortingOrder => Canvas ? Canvas.sortingOrder : 0;
 
-        /// <summary>
-        /// 当前UI真实的显示层级( SortingOrder + Module.UIStartSortOrder )
-        /// </summary>
-        public int DisplaySortingOrder
-        {
-            get { 
-                return SortingOrder + Module.UIStartSortOrder;
-            }
-        }
-
-        /// <summary>
-        /// 当前Panel的类型
-        /// </summary>
         public virtual PanelType PanelType => PanelType.Window;
-
-        /// <summary>
-        /// 用来判断 Canvas是不是当前页面自己添加的
-        /// </summary>
-        internal bool IsMyselfAddCanvas { get;private set; }
-
-        /// <summary>
-        /// 是否始终显示在最上层，默认:false
-        /// </summary>
         public virtual bool AlwaysInFront => false;
 
-        /// <summary>
-        /// 当前会话的UI类型，在业务OnLoaded之前确定。
-        /// 直接Panel入口使用指定值，View/Attach入口继承受管父Panel或已知持久Canvas上下文，否则为UI。
-        /// </summary>
-        public UIType UIType { get;internal set; }
-        #endregion
+        /// <summary>是否为模态窗口。本批提供策略状态，不代替遮罩、EventSystem 或输入后端。</summary>
+        public virtual bool IsModal => false;
 
-        #region 生命周期
-        protected virtual void Awake()
-        { 
-        }
+        /// <summary>Loaded、active 且未被同根全屏页面遮挡。</summary>
+        public bool IsVisible => PanelManager.IsVisible(this);
 
-        #endregion
+        /// <summary>被较高的同根模态窗口阻挡，或当前不可见；不表示已完成输入系统接管。</summary>
+        public bool IsInputBlocked => PanelManager.IsInputBlocked(this);
 
+        /// <summary>当前根的有效导航焦点候选，不等于 EventSystem.currentSelectedGameObject。</summary>
+        public bool HasFocus => this && PanelManager.GetFocusedPanel(RootCanvas) == this;
 
-        #region 方法
+        internal bool IsMyselfAddCanvas { get; private set; }
+        internal int RequestedOrder => sortingOrder;
+        internal void CommitOrder(int value) => sortingOrder = value;
 
-        internal void InitCanvas() 
+        /// <summary>当前会话的根寿命类型，在业务 OnLoaded 前确定。</summary>
+        public UIType UIType { get; internal set; }
+
+        protected virtual void Awake() { }
+
+        internal void InitCanvas()
         {
-
-            // 自有Canvas随健康实例复用；借用的Canvas必须按当前层级重新取得。
-            if (isInitCanvas && IsMyselfAddCanvas && Canvas) return;
-            isInitCanvas = false;
-
-            Canvas c = transform.GetComponent<Canvas>();
-            if (c) 
+            var local = GetComponent<Canvas>();
+            // 独立窗口可接管自身预置 Canvas；只有没有本地 Canvas 的子 Panel 借用祖先窗口。
+            var borrowed = FindBorrowedCanvas();
+            if (!local && borrowed)
             {
-                // 因为要动态控制UI层级 所以不能自己添加Canvas
-                throw new System.Exception(string.Format("检测到游戏物体:{0}身上有Canvas组件,请移除!", gameObject.name));
+                Canvas = borrowed;
+                IsMyselfAddCanvas = false;
+                return;
             }
-
-            Canvas parent_canvas = transform.parent ? transform.parent.GetComponentInParent<Canvas>(true) : null;
-            if (parent_canvas != null && parent_canvas.transform.parent != null)
+            Canvas = local ? local : gameObject.AddComponent<Canvas>();
+            if (!GetComponent<GraphicRaycaster>()) gameObject.AddComponent<GraphicRaycaster>();
+            if (!local)
             {
-                Canvas = parent_canvas;
-                IsMyselfAddCanvas = false; // 用的别人的
+                Canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 |
+                    AdditionalCanvasShaderChannels.TexCoord2 | AdditionalCanvasShaderChannels.TexCoord3 |
+                    AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
             }
-            else
-            { 
-                // 自己添加Canvas
-                Canvas = transform.gameObject.AddComponent<Canvas>();
-                gameObject.AddComponent<GraphicRaycaster>();
-
-                IsMyselfAddCanvas = true;
-                RestoreCanvas();
-            }
-            isInitCanvas = true;
+            IsMyselfAddCanvas = true;
+            Canvas.overrideSorting = true;
         }
 
         internal void RestoreCanvas()
         {
+            RefreshBorrowedCanvas();
             if (!Canvas) throw new System.InvalidOperationException("Panel Canvas is unavailable.");
-            if (!IsMyselfAddCanvas) return;
-            // inactive Canvas首次激活会重置原生排序，Loaded激活边界重新应用，不重复添加组件或派发排序变更。
-            Canvas.overrideSorting = true;
-            Canvas.additionalShaderChannels = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2 | AdditionalCanvasShaderChannels.TexCoord3 | AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
-            Canvas.sortingOrder = DisplaySortingOrder;
+            if (IsMyselfAddCanvas) PanelManager.RestoreCanvas(this);
         }
 
-        /// <summary>
-        /// 当UI层级发生改变时触发
-        /// </summary>
-        /// <param name="sortingOrder">层级</param>
+        internal Canvas FindBorrowedCanvas()
+        {
+            for (var parent = transform.parent; parent; parent = parent.parent)
+            {
+                var owner = parent.GetComponent<Panel>();
+                if (owner && owner.Session != null && !owner.IsRemoving && owner.IsMyselfAddCanvas && owner.Canvas)
+                    return owner.Canvas;
+            }
+            return null;
+        }
+
+        internal void RefreshBorrowedCanvas()
+        {
+            if (!IsMyselfAddCanvas) Canvas = FindBorrowedCanvas();
+        }
+
+        /// <summary>有效排序变更通知。自身初始化时抛错会回滚；其他窗口的观察异常单独报告。</summary>
         protected virtual void OnSortingOrderChange(int sortingOrder) { }
+        internal void NotifySortingOrder() => OnSortingOrderChange(DisplaySortingOrder);
 
-        /// <summary>
-        /// 变为不可见(当前页面被其他页面完全挡住时触发)
-        /// </summary>
+        /// <summary>被同根的有效全屏页面遮挡；不会 Close、停用对象或清理其他系统。</summary>
         public virtual void Invisible() { }
-
-        /// <summary>
-        /// 变为可见的(当页面被其他页面完全挡住 又重新显示出来时触发)
-        /// </summary>
+        /// <summary>从全屏遮挡恢复。</summary>
         public virtual void Visible() { }
 
-        /// <summary>
-        /// 判断当前页面是否在最上层
-        /// </summary>
-        /// <returns></returns>
-        public bool IsTop() 
-        {
-            switch (UIType)
-            {
-                case UIType.UI:
+        /// <summary>同根、同 Scene 内的有效普通窗口 Top；排除 Overlay、失活与旧会话。</summary>
+        public bool IsTop() => this && PanelManager.GetTopPanel(RootCanvas) == this;
 
-                    foreach (var item in PanelManager.UIOrders.Keys)
-                    {
-                        if (item.PanelType == PanelType.Overlay) 
-                            continue;
-
-                        if (item == this) 
-                            continue;
-
-                        if (SortingOrder < PanelManager.UIOrders[item])
-                            return false;
-                    }
-
-                    break;
-                case UIType.DontDestroyUI:
-
-                    foreach (var item in PanelManager.DontDestroyUIOrders.Keys)
-                    {
-                        if (item.PanelType == PanelType.Overlay)
-                            continue;
-
-                        if (item == this)
-                            continue;
-
-                        if (SortingOrder < PanelManager.DontDestroyUIOrders[item])
-                            return false;
-                    }
-
-                    break; 
-            }
-
-            return true;
-        }
-
-
-        internal void RefreshSortingOrder() 
-        {
-            if (!IsMyselfAddCanvas || !Canvas || Module == null) return;
-            Canvas.sortingOrder = sortingOrder + Module.UIStartSortOrder;
-            OnSortingOrderChange(Canvas.sortingOrder);
-        }
-
+        /// <summary>排序层、AlwaysInFront 或模态配置改变后，重新提交本窗口策略。</summary>
+        public void RefreshUIState() => PanelManager.Refresh(this);
 
         internal override void BeforeOnLoaded()
         {
             base.BeforeOnLoaded();
             InitCanvas();
-            if (IsMyselfAddCanvas)
-            {
-                Canvas.enabled = true;
-                SortingOrder = PanelManager.GetUIOrder(UIType);
-                PanelManager.AddOrder(UIType, this, SortingOrder);
-            }
+            PanelManager.Prepare(this);
         }
-
-        #endregion
-
-
-
-
     }
 }

@@ -1,8 +1,8 @@
 # XF × YL 阶段 3：UI 系统深度融合研究与总体方案
 
-**状态：设计已批准，待分批实施；阶段 3 尚未实施。批准不等于授权 3.1 或后续批次实施，仍等待 Git 收口与 3.1 单独实施授权。**
+**状态：总体设计已批准；3.1 已获单独实施授权并达到技术完成条件，待用户验收与 Git 收口。3.2～3.4 尚未实施，阶段 3 未完成。3.1 的实际成果与验证见第 10 节，不自动启动后续批次。**
 
-本文是阶段 3 的唯一总体方案，覆盖 **05 Panel/UI** 与 **12 UI Adaptation**，两项均以 XF 为主要架构基础、客观融合双方。本轮只编写本文，没有修改 Runtime、Editor、测试、资产、asmdef 或配置，没有运行 Unity 刷新、编译、测试、PlayMode 或 Player 构建，没有 Git 写入。方案批准、批次实施授权与 Git 授权分别处理；不得因阅读本文自动开始实施。
+本文是阶段 3 的唯一总体方案，覆盖 **05 Panel/UI** 与 **12 UI Adaptation**，两项均以 XF 为主要架构基础、客观融合双方。总体方案研究轮次只编写本文，没有修改 Runtime、Editor、测试、资产、asmdef 或配置，没有运行 Unity 刷新、编译、测试、PlayMode 或 Player 构建，没有 Git 写入。后续实施成果按批次增量记录；方案批准、批次实施授权与 Git 授权分别处理，不得因阅读本文自动开始实施。
 
 **已确认的补充范围（2026-10-11）：**用户接受 YL 自有资产定向迁移，要求 Tips、ColorSelector 真正进入统一 UI，而不是保留两套架构做适配；ColorSelector 在阶段 3 修复和优化，成为框架正式 Runtime UI 工具，Samples 只保留演示。没有融合后职责的旧 UI Root 可以退出，不以旧类型/模板形态作为永久约束。用户进一步选择：保留 HSV 色环/三角、初始颜色、当前颜色读取和实时变化回调，本阶段不新增 Alpha 编辑、数值/Hex 输入、确认取消流程或 Editor 专用取色器。这些确认不等于实现或 Git 写入授权；总体设计方向、功能边界与四批路线已于 2026-10-11 经用户审阅批准，批准范围与实施授权边界见第 9 节批准记录。
 
@@ -252,7 +252,7 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
 | 正式 UI/Tips/ColorSelector 收入现有 Core UI 域，旧 UI 专用层迁完退出 | 复用已验收协议，工具可独立接统一根；维持 Core/Runtime 的现有隔离，需要定向迁移身份/字段/素材 | **修订推荐**，不引入反向依赖，不预建新产品程序集 |
 | 新独立 UI asmdef 或全面重命名 | 可进一步分层，但需要跨已有 Panel/View/Runtime 闭包迁移，当前没有足够独立收益 | 不作为本阶段默认动作；正式工具命名可局部统一，不能演变为全库搬迁 |
 
-**批准记录（2026-10-11 用户审阅通过）：**批准的是总体架构、行为方向、功能边界与实施路线，不是强制采用方案中的全部具体 API、类结构或内部算法；普通实现细节保留批次内自主设计。**批准不等于执行授权：3.1 及任何后续批次仍等待 Git 收口与单独实施授权。**
+**批准记录（2026-10-11 用户审阅通过）：**批准的是总体架构、行为方向、功能边界与实施路线，不是强制采用方案中的全部具体 API、类结构或内部算法；普通实现细节保留批次内自主设计。**批准不等于执行授权：批准轮次结束时，3.1 及后续批次仍等待 Git 收口与单独实施授权；后续 3.1 授权及成果见第 10 节。**
 
 1. **D1 已批准（YL 自有 UI 定向迁移）：**接受 YL 自有定向迁移；Tips/ColorSelector 真正归统一 UI，不保留两套架构适配；融合后无职责的 UI Root 可退出。保护存续资产身份和有效数据，不迁移原游戏/原资源链，不全量补旧 API shim。公共 YLFrameworkRoot 有 Audio/Action 实际消费者，不属于可按旧 UI 直接删除的对象。
 2. **D2 推荐总体方向已批准：**Core Panel/View 统一体系、根与显示上下文、排序与遮挡/模态策略、输入与 UI 适配边界；正式 UI/工具归现有 Core UI 域，Samples 仅演示；不默认新增整体 Runtime→Core，不以旧入口形态驱动依赖。具体类型/组件/接口按功能价值演进；如果实际编译闭包迫使改变这一方向，提出真实阻塞和最小替代，不偷偷反向引用或扩大专题。
@@ -263,6 +263,62 @@ ColorSelector 目前无 asmdef、处于预定义程序集。正式工具 C#/Pref
    - 3.2 工作量较大，允许 Kilo 在正式批次内部根据依赖渐进实施和验证，不额外设立正式子批次。
    - ColorSelector 的来源许可与再分发权限必须核实；不能确认时采用合法的替代方案。这不阻断 3.1。
 
-先前被忽略的迁移问题已由用户后续回答解决，不能继续把 D1 写成未选择或把 3.2 视为范围未定。**总体设计批准不等于执行批准**；本轮完成批准记录后停止，等待 Git 收口与 3.1 单独实施授权，不自动启动 3.1 或任何后续批次。
+先前被忽略的迁移问题已由用户后续回答解决，不能继续把 D1 写成未选择或把 3.2 视为范围未定。**总体设计批准不等于执行批准**；总体方案批准轮次完成记录后停止，没有自动启动实施。
 
-**总体方案批准记录到此完成。停止，等待 Git 收口与 3.1 单独实施授权；不自动启动 3.1 或任何后续批次。**
+**总体方案批准记录到此完成。其后的逐批授权与技术成果单独记录，不授权自动启动后续批次。**
+
+## 10. 3.1 实施与技术验证（2026-10-11）
+
+### 10.1 授权、基线与范围
+
+- 用户正式授权 3.1。实施前核对 `fusion/3-ui`、HEAD `a53faeb`，工作区干净；复用 1.3/阶段 2 的事务、Session、事件 token 与公共 Update，不重新开展总体研究。
+- 实际修改限定为 Core `Panel`、`PanelManager`、`Module.UIStartSortOrder`、必要的 View 初始化身份接点，以及现有 CoreDirectView/CoreXfab 测试和 smoke probe；本节为唯一新增实施记录。
+- 未迁移旧 UIManager/UIWindowBase/UIRoot、Tips、ColorSelector 或模板；未修改原 XF/XFAB 包、原游戏、Resources/Prefab/Scene/Material/Shader、meta、asmdef、manifest/lock 或项目设置。未建立第二个 UI 管理器、窗口事务、缓存或状态机。
+
+### 10.2 实际设计与已实现契约
+
+| 主题 | 3.1 实际结果 |
+|---|---|
+| 根与 Scene | 缺省场景根按准确 Scene handle 缓存，DDOL 根独立。`RegisterRoot(Canvas, UIType)` 接受已加载 Scene 中的现有根，校验寿命，不接收资产 Canvas，也不改变外部根配置。最近的显式登记根构成边界；没有显式边界时取实际最外层 Canvas。inactive 准备不依赖尚未可靠建立的原生 `rootCanvas` |
+| 多根与 Module | 同一 Scene 可有多个明确根，包括同一外层 Canvas 下的两个登记根；不同根默认不互改显示状态。同一根中的多个 Module 有意共享显示排序，但各 Panel 的业务 owner/Session 仍独立，Module 退出只撤销自身会话 |
+| 唯一策略记录 | 移除原全局 `panelQueues`/`_currentPanel` 及重复的两个 raw order 登记字典，以一份带 Panel/Session、根/Scene、注册序号的记录推导有效排序、显示、模态阻挡和焦点候选。旧 Session、Removing、Closing owner 不成为有效候选 |
+| 有效排序 | 依次计入实际 SortingLayer 值、层内模态优先组、组内 AlwaysInFront、逻辑 order + Module 偏移、确定的注册序号。尽量保留原有效值，仅为平手/优先提升生成严格递增 order；前置窗口不因反复登记而持续漂移。普通窗口 Top、遮挡和焦点都用同一有效关系，Overlay 不进入普通 Top/焦点 |
+| 配置拒绝 | 有效 Canvas order 必须处于 signed 16-bit 范围，使用宽整数检查，不让 Unity 静默截断。setter/Module 偏移预检读取实时根；同帧根合并造成的冲突在请求顺序或偏移提交前拒绝。缺省 order 只参考同根、同 SortingLayer、同模态/前置组，其他组的最大值不会无故耗尽当前组 |
+| Canvas 控制权 | 独立 Panel 控制自己的新增或合法预置 Canvas，可排序及遮挡；补足自身 GraphicRaycaster，保留预置 Canvas 的其他配置。不删除预置组件。没有本地 Canvas 的子 Panel 可借用有效祖先窗口 Canvas，不独立排序/隐藏共享 Canvas，不成为独立 Top/模态/焦点候选 |
+| 活跃重挂 | 独立窗口从旧根移出后，即使旧根被销毁，仍保留原 View 会话并重新计算上下文；借用控件在两个有效祖先窗口之间活跃重挂时重新解析 Canvas/根，并继承新 owner 的显示与模态阻挡。这里只改变呈现上下文，不转移 Module/Model/资源后端所有权 |
+| 显示与遮挡 | 仅同根、同 Scene 的有效全屏 `PanelType.Panel` 按有效排序遮挡较低的全屏页面；Window/Overlay 不产生全屏遮挡。`IsVisible` 及 Visible/Invisible 与已提交显示状态一致，首次激活即被覆盖的页面也收到 Invisible。恢复只选择仍有效的窗口，不 Close、停用业务对象、移除 Model 或清理外部任务 |
+| 模态与焦点基础 | `IsModal`、`IsInputBlocked`、`HasFocus`、`GetModalPanel(root)`、`GetFocusedPanel(root)` 从当前有效记录推导；多层模态失活/关闭后恢复仍有效的未阻挡候选，不重放旧历史。`HasFocus` 是导航候选，不是 EventSystem selected。销毁的 Unity fake-null 不会因与空查询比较而成为 Top/焦点 |
+| 失活与退出 | 沿用组件停用本身不关闭窗口的边界；物体 inactive 退出有效显示集合但保留业务会话/排序。组件先停用、随后物体停用而漏掉第二次 OnDisable 时由自有 Late token 兜底。`MultiPanelListener=false` 立即恢复遮挡显示，但不关闭模态/焦点维护。Close 直接撤销会话记录；退休会话的排序 setter 不修改缓存 Canvas 或访问旧 Module |
+| 通知与初始化 | Canvas/必要结构先提交，再逐项通知。既有窗口的排序或显示观察异常逐项记录，不跳过后续通知、不使无关新窗口加载失败。ViewManager 仅增加保存/恢复的同步初始化 View/Session 身份；自身 Prepare、OnLoaded 内再次排序或修改 Module 偏移导致的必要排序通知失败仍回到原初始化回滚，原始异常/参数释放/异步终态保持不变。嵌套加载不把外层观察异常冒充子加载失败 |
+| 会话与宿主 | 自有 Late 连接保留 Session/轮次守卫，记录归零只释放自己的 token，不清共享宿主或三相位。静态 `onCreateCanvas` 随 Session 重置。Top/焦点/登记集合查询及 Release 不创建 UI 根或 EventSystem；场景加载不再因一个空 UI 管理器制造输入宿主 |
+
+排序重算发生在登记、启停、退出、显式状态/Module 偏移变化时；Late 仅检查已登记记录的失效与上下文迁移，不全场景查找、每帧重新排序或引入复杂测试设施。未做 Profiler 测量，不据此宣称性能提升。
+
+### 10.3 接入与兼容影响
+
+- 现有 Module LoadPanel/LoadPanelAsync、直接 Prefab、Attach 与 View.Close 继续共用唯一 View 事务；健康缓存实例仍开启新 Session，业务字段仍由调用方负责，不新增 key 唯一窗口入口。
+- 多根业务用 `panel.RootCanvas` 与 `GetTopPanel(Canvas)` 等明确根 API；`GetTopPanel(UIType)` 保留为寿命分类聚合查询，不能解释为不同显示器/不同根之间的通用渲染全序。`UICanvas[UI]` 是当前 Scene 的缺省根兼容入口，不再作为全局显示上下文权威。
+- SortingLayer、动态 PanelType/AlwaysInFront/IsModal 配置变更后调用 `RefreshUIState()`；排序值通过 Panel/Module API 提交。普通无父根的独立 Canvas 是不同上下文，要验证或使用同组遮挡必须明确放入共同根。
+- 原“所有预置 Canvas 都失败”、借用关系按父 Canvas 层级形状推断、全局入队权威及既有观察异常使新请求回滚的旧测试，已按批准的新契约定向调整；保留真实准备失败、登记释放、原始异常、Args、pending、缓存与 Session 重入断言，没有仅删除失败用例。
+- ViewManager 接点不改变初始化/退出次序、事务计数或业务 owner，只识别当前同步初始化通知的归属。Core/Runtime/Foundation 依赖方向及全部程序集引用不变。
+
+### 10.4 实际验证与审查
+
+| 验证 | 本轮实际结果 |
+|---|---|
+| Unity 编译/环境 | 使用当前已打开的 `G:/Unity/Projects/CGJ2024`、Unity `2022.3.62f3c1`；MCP tests-run 刷新并执行本轮源码。只读运行时探针确认 `YLFramework.Core.Runtime` 已加载且新 IsModal API 存在，Editor 不在编译/刷新/PlayMode；不是以 dotnet/IDE 代替 Unity |
+| PlayMode 定向及直接跨模块回归 | `testNamespace=YLFramework.Core.Tests` 最终 **156 通过、0 失败、0 跳过**。包含 CoreDirectView/CoreXfab、默认资源、MVC/Scene/Module/事件与直接 Timer 生命周期消费者；不把工具返回的发现总数 580 当作实际运行数量，不扩展为全工程历史全集 |
+| EditMode 默认资源 | `CoreDefaultResourceTests` **4 通过、0 失败**；Resources key、原/Core 隔离及模板契约保持 |
+| EditMode 身份与依赖 | `CoreIdentityTests` **9 通过、0 失败**；Core 类型及程序集边界保持 |
+| 缺陷回归 | 实际见红后修复并见绿：Module 偏移/Top 不一致、独立根误遮挡、预置 Canvas 拒绝、模态优先/关闭恢复、借用状态枚举依赖、inactive 根身份、同帧根合并范围原子性、借用活跃重挂、初始化内二次排序/嵌套观察、优先组分配、首次遮挡通知、已关闭 setter 空引用及销毁后的 fake-null Top |
+| 新边界覆盖 | Additive 两场景/准确缺省根、UI/DDOL 与 owner 保持、两个显式嵌套根、现有 SortingLayer 与 Module 偏移、相等顺序稳定平手、共享 Canvas 不被操作、组件/物体停用交错、Scene 卸载、新旧会话复用、排序通知结构先提交及异常后继续通知 |
+| 独立只读审查 | 一轮审查发现的自身二次排序异常、实时根预检、活跃借用重挂及跨优先组分配四项均已修复，并补充对应实际回归；随后复查完整 diff 与 `git diff --check` |
+| 资源与用户状态 | 没有新增文件或遗漏 meta；没有修改或保存游戏/用户场景与持久资源。只读探针确认返回 `Assets/Scenes/Main.unity` 且 dirty=False；测试只清自身宿主、窗口、Scene 和 fixture 资源 |
+
+### 10.5 技术结论与停止边界
+
+**3.1 达到技术完成条件，具备进入 3.2 的技术前置基础；用户验收与 Git 收口尚待完成。**本批没有 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+
+没有完成或验证模态 Image 遮罩、实际指针/Selectable/EventSystem selected/Submit/Cancel、输入后端切换、UI Adaptation/Safe Area、旧 UI 与工具资产融合、无 Domain Reload 两轮实际 UI 门禁、原游戏非干扰或 Player。模态逻辑阻挡状态不能作为已经阻断游戏输入的证明；这些仍属于 3.2～3.4。跨显示器/WorldSpace 全序、IL2CPP/移动目标及 XFAB 独立等既有限制继续保留。
+
+**到此停止，等待用户验收与单独 Git 授权；不自动启动 3.2，不声明整个 UI 系统 COMPLETE。**

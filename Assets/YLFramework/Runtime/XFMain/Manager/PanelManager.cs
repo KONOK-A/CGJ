@@ -1,53 +1,61 @@
-using YLFramework.Core.Extensions;
-using System; 
+using System;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using YLFramework.Events;
+using YLFramework.Core.Singleton;
+using ApplicationTool = YLFramework.Foundation.ApplicationTool;
+using UpdateManager = YLFramework.Foundation.UpdateManager;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using YLFramework.Core.Pool;
-using ApplicationTool = YLFramework.Foundation.ApplicationTool;
-using UpdateManager = YLFramework.Foundation.UpdateManager;
-using YLFramework.Events;
-using YLFramework.Core.Singleton;
 
 namespace YLFramework.Core
 {
-
     public enum UIType
     {
-        /// <summary>
-        /// 把UI创建在当前场景的Canvas下面，需要对当前模块的Canvas进行赋值
-        /// </summary>
+        /// <summary>准确 Scene 下的 UI 根。</summary>
         UI = 1,
-        /// <summary>
-        /// 把UI创建到不被销毁的Canvas下面
-        /// </summary>
+        /// <summary>持久 UI 根；不会转移 Module 业务所有权。</summary>
         DontDestroyUI = 2
     }
 
     public class PanelManager
     {
-
-        #region 常量
-
-        // 界面与界面之间的层级差量
         internal const int OrderDelta = 10;
         internal const int UI_START_ORDER = 0;
         internal const int DONTDESTROYUI_START_ORDER = 10000;
-
-        #endregion
-
-
-        #region 单例
-
         private static PanelManager _instance;
         private IUnRegister lateSubscription;
         private object lateRound;
         private bool released;
+        private bool multiPanelListener = true;
+        private GameObject _eventSystem;
+        private long sequence;
+
+        public readonly Dictionary<UIType, Canvas> uiCanvas = new Dictionary<UIType, Canvas>();
+        private readonly Dictionary<int, Canvas> sceneCanvases = new Dictionary<int, Canvas>();
+        private readonly HashSet<Canvas> registeredRoots = new HashSet<Canvas>();
+        private readonly Dictionary<Panel, PanelState> states = new Dictionary<Panel, PanelState>();
+
+        private sealed class PanelState
+        {
+            internal Panel Panel;
+            internal object Session;
+            internal Canvas Root;
+            internal int Scene;
+            internal long Sequence;
+            internal int Order;
+            internal int Layer;
+            internal bool Front;
+            internal bool Modal;
+            internal bool Active;
+            internal bool Visible;
+            internal bool Blocked;
+        }
 
         static PanelManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
+        private PanelManager() { }
 
         private static void ResetSession()
         {
@@ -57,9 +65,43 @@ namespace YLFramework.Core
             {
                 manager.released = true;
                 manager.EndLateRound();
+                manager.states.Clear();
+                manager.registeredRoots.Clear();
+                manager.sceneCanvases.Clear();
+                manager.uiCanvas.Clear();
             }
+            onCreateCanvas = null;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
         }
+
+        internal static PanelManager Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = new PanelManager();
+                    SceneManager.sceneLoaded -= OnSceneLoaded;
+                    SceneManager.sceneLoaded += OnSceneLoaded;
+                    SceneManager.sceneUnloaded -= OnSceneUnloaded;
+                    SceneManager.sceneUnloaded += OnSceneUnloaded;
+#if UNITY_EDITOR
+                    EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
+                    EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
+#endif
+                }
+                return _instance;
+            }
+        }
+
+#if UNITY_EDITOR
+        private static void EditorApplication_playModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode ||
+                state == PlayModeStateChange.EnteredEditMode) ResetSession();
+        }
+#endif
 
         private void EndLateRound()
         {
@@ -71,11 +113,7 @@ namespace YLFramework.Core
 
         private void SyncLateSubscription()
         {
-            if (released || !multiPanelListener || panelQueues.Count == 0)
-            {
-                EndLateRound();
-                return;
-            }
+            if (released || states.Count == 0) { EndLateRound(); return; }
             if (lateSubscription != null) return;
             var round = lateRound = new object();
             lateSubscription = UpdateManager.AddLateUpdateEvent(() =>
@@ -85,174 +123,45 @@ namespace YLFramework.Core
             });
         }
 
-        internal static PanelManager Instance
+        /// <summary>缺省根入口。UI 项只代表当前 Scene；多根请传明确 parent 或使用 RegisterRoot。</summary>
+        public static Dictionary<UIType, Canvas> UICanvas
         {
             get
             {
-#pragma warning disable IDE0074 // 使用复合分配
-                if (_instance == null)
+                var manager = Instance;
+                var scene = SceneManager.GetActiveScene();
+                if (!manager.uiCanvas.TryGetValue(UIType.UI, out var current) || !current || current.gameObject.scene != scene)
                 {
-                    _instance = new PanelManager();
-#if UNITY_EDITOR
-                    EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
-                    EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
-#endif
-
-                    SceneManager.sceneLoaded -= OnSceneLoaded;
-                    SceneManager.sceneLoaded += OnSceneLoaded;
-
+                    if (manager.sceneCanvases.TryGetValue(scene.handle, out var root) && root) manager.uiCanvas[UIType.UI] = root;
+                    else manager.uiCanvas.Remove(UIType.UI);
                 }
-#pragma warning restore IDE0074 // 使用复合分配
-
-                return _instance;
+                return manager.uiCanvas;
             }
         }
 
-
-#if UNITY_EDITOR
-
-        private static void EditorApplication_playModeStateChanged(PlayModeStateChange obj)
+        /// <summary>是否启用同根全屏渲染遮挡。关闭时恢复显示，不改变 View 会话或模态状态。</summary>
+        public static bool MultiPanelListener
         {
-            // Edit > Project Settings > Editor >  Enter Play Mode Settings > Reload Domain 
-            // 该选项如果禁用掉,重新运行时静态数据不会清空,可能会导致异常,所以这里置空,防止异常
-            switch (obj)
-            {
-                case PlayModeStateChange.ExitingEditMode:
-                case PlayModeStateChange.ExitingPlayMode:
-                    ResetSession();
-                    break;
-                case PlayModeStateChange.EnteredEditMode:
-                    ResetSession();
-                    break;
-            }
-        }
-#endif
-         
-        private PanelManager()
-        {
-        }
-
-        #endregion
-
-
-
-        #region 字段
-         
-        internal  Dictionary<Panel,int> uiOrders = new Dictionary<Panel, int>();
-        
-        internal  Dictionary<Panel,int> dontDestroyUIOrders = new Dictionary<Panel, int>();
-      
-        private  List<Panel> panelQueues = new List<Panel>(); // 保存所有的依次打开的Panel
-
-        private  Panel _currentPanel = null; // 当前显示的panel 
-         
-        private  GameObject _eventSystem;
-
-        private bool multiPanelListener = true; // 默认是true
-
-        public  Dictionary<UIType, Canvas> uiCanvas= new Dictionary<UIType, Canvas>();
-
-        #endregion
-
-
-
-        #region 静态属性
-
-
-        /// <summary>
-        /// 保存Panel的层级
-        /// </summary>
-        internal static Dictionary<Panel, int> UIOrders => Instance.uiOrders;
-        /// <summary>
-        /// 保存DontDestroyPanel的层级
-        /// </summary>
-        internal static Dictionary<Panel, int> DontDestroyUIOrders => Instance.dontDestroyUIOrders; 
-
-        private static List<Panel> PanelQueues => Instance.panelQueues; // 保存所有的依次打开的Panel
-
-        private static Panel CurrentPanel 
-        {
-            get {
-                return Instance._currentPanel;
-            }
-            set {
-                Instance._currentPanel = value;
-            }
-        }
-           
-        private static GameObject EventSystem
-        {
-            get {
-                return Instance._eventSystem;
-            }
-            set {
-                Instance._eventSystem = value;
-            }
-        }
-
-        /// <summary>
-        /// Canvas
-        /// </summary>
-        public static Dictionary<UIType, Canvas> UICanvas => Instance.uiCanvas;
- 
-        /// <summary>
-        /// 多个界面的重叠监听，默认:true
-        /// 当为true时，如果界面的类型为Panel,当该Panel被其他的Panel挡住时,将不会再渲染,以此来节省性能
-        /// </summary>
-        public static bool MultiPanelListener 
-        { 
-            get 
-            {
-                return Instance.multiPanelListener;        
-            }
-            set 
+            get => Instance.multiPanelListener;
+            set
             {
                 var manager = Instance;
                 manager.multiPanelListener = value;
-                manager.SyncLateSubscription();
+                manager.Reconcile();
             }
         }
 
-
-        #endregion
-
-        #region 事件
-
-        /// <summary>
-        /// 创建Canvas时触发
-        /// </summary>
+        /// <summary>缺省根创建通知，仅当前 Session 有效。</summary>
         public static Action<Canvas> onCreateCanvas;
 
-        #endregion
-
-
-        #region 加载Panel
-
-
-        // 加载 Panel
-        internal static Panel LoadPanel(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
-            => LoadPanelLegacy<Panel>(module, asset_name, type, parent, param);
-
+        internal static Panel LoadPanel(Module module, string assetName, UIType type = UIType.UI, Transform parent = null, params object[] param)
+            => LoadPanelLegacy<Panel>(module, assetName, type, parent, param);
         internal static T LoadPanelLegacy<T>(Module module, string assetName, UIType type, Transform parent, object[] param) where T : Panel
             => LoadPanelCore<T>(module, assetName, type, parent, null, param);
+        internal static T LoadPanel<T>(Module module, string assetName, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
+            => LoadPanelCore<T>(module, assetName, type, parent, loadViewArgs, null);
 
-        // 异步加载 Panel
-        internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module , string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-            => StartPanelAsync<T>(module, asset_name, type, parent, null, param);
-
-
-        #endregion
-
-
-        #region 加载Panel(With LoadViewArgs)
-
-
-        // 加载 Panel
-        internal static T LoadPanel<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)where T : Panel
-            => LoadPanelCore<T>(module, asset_name, type, parent, loadViewArgs, null);
-
-        private static T LoadPanelCore<T>(Module module, string assetName, UIType type, Transform parent,
-            LoadViewArgs args, object[] param) where T : Panel
+        private static T LoadPanelCore<T>(Module module, string assetName, UIType type, Transform parent, LoadViewArgs args, object[] param) where T : Panel
         {
             if (args != null) args.Claim();
             try
@@ -263,12 +172,12 @@ namespace YLFramework.Core
             finally { if (args != null) args.Release(); }
         }
 
-        // 异步加载 Panel
-        internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
-            => StartPanelAsync<T>(module, asset_name, type, parent, loadViewArgs, null);
+        internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string assetName, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
+            => StartPanelAsync<T>(module, assetName, type, parent, null, param);
+        internal static LoadPanelRequest<T> LoadPanelAsync<T>(Module module, string assetName, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
+            => StartPanelAsync<T>(module, assetName, type, parent, loadViewArgs, null);
 
-        private static LoadPanelRequest<T> StartPanelAsync<T>(Module module, string assetName, UIType type, Transform parent,
-            LoadViewArgs args, object[] param) where T : Panel
+        private static LoadPanelRequest<T> StartPanelAsync<T>(Module module, string assetName, UIType type, Transform parent, LoadViewArgs args, object[] param) where T : Panel
         {
             if (args != null) args.Claim();
             LoadViewRequest<T> child;
@@ -286,7 +195,6 @@ namespace YLFramework.Core
                 }
                 throw;
             }
-            // 从此输入归子View请求所有，Panel没有额外producer或pending状态。
             return new LoadPanelRequest<T>(child);
         }
 
@@ -313,402 +221,394 @@ namespace YLFramework.Core
                 var panel = ancestor.GetComponent<Panel>();
                 if (panel && panel.Session != null) return panel.UIType;
             }
-            var manager = _instance;
-            if (parent && manager != null && manager.uiCanvas.TryGetValue(UIType.DontDestroyUI, out var canvas) &&
-                canvas && parent.gameObject.scene == canvas.gameObject.scene) return UIType.DontDestroyUI;
+            if (parent && parent.gameObject.scene.name == "DontDestroyOnLoad") return UIType.DontDestroyUI;
             return UIType.UI;
         }
 
-        #endregion
-
-
-        #region 方法
-
-
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            RefreshEventSystem();
+            var manager = _instance;
+            if (manager == null) return;
+            foreach (var state in manager.states.Values)
+                if (manager.Active(state) && (state.Panel.gameObject.scene == scene || state.Panel.UIType == UIType.DontDestroyUI))
+                {
+                    RefreshEventSystem();
+                    return;
+                }
+        }
+        private static void OnSceneUnloaded(Scene scene)
+        {
+            var manager = _instance;
+            if (manager == null) return;
+            manager.sceneCanvases.Remove(scene.handle);
+            manager.registeredRoots.RemoveWhere(root => !root || root.gameObject.scene == scene);
+            manager.Reconcile();
         }
 
         private static void RefreshEventSystem()
         {
-
-            if (!ApplicationTool.isPlaying)
-                return;
-
-            if(UnityEngine.EventSystems.EventSystem.current != null) return;
-            // 如果场景中没有 EventSystem 需要创建一个
-            GameObject prefab = Resources.Load<GameObject>("YLFramework/Core/EventSystem");
-            EventSystem = GameObject.Instantiate(prefab);
-            EventSystem.name = "EventSystem(Created By YLFramework.Core)";
-            EventSystem.gameObject.SetActive(true);
+            if (!ApplicationTool.isPlaying || UnityEngine.EventSystems.EventSystem.current != null) return;
+            var prefab = Resources.Load<GameObject>("YLFramework/Core/EventSystem");
+            var manager = Instance;
+            manager._eventSystem = UnityEngine.Object.Instantiate(prefab);
+            manager._eventSystem.name = "EventSystem(Created By YLFramework.Core)";
+            manager._eventSystem.SetActive(true);
         }
 
-
-        // 获取UI层级
-        internal static int GetUIOrderMax(UIType type)
+        /// <summary>将有效的现有根登记为所属 Scene 或 DDOL 的缺省根，不改变其寿命或组件配置。</summary>
+        public static void RegisterRoot(Canvas root, UIType type = UIType.UI)
         {
-
-            int layer = 0;
-
-            List<Panel> TempUIOdersPanels = ListPool<Panel>.Allocate();
-            try
-            {
-                switch (type)
-                {
-                    case UIType.UI:
-
-                        foreach (var item in UIOrders.Keys)
-                        {
-                            if (!item || item.Session == null || item.IsRemoving)
-                            {
-                                TempUIOdersPanels.Add(item);
-                                continue;
-                            }
-
-                            if (UIOrders[item]>layer)
-                                layer = UIOrders[item];
-                        }
-
-                        foreach (var item in TempUIOdersPanels)
-                        {
-                            UIOrders.Remove(item);
-                        }
-
-                        break;
-                    case UIType.DontDestroyUI:
-
-                        foreach (var item in DontDestroyUIOrders.Keys)
-                        {
-                            if (!item || item.Session == null || item.IsRemoving)
-                            {
-                                TempUIOdersPanels.Add(item);
-                                continue;
-                            }
-
-                            if (DontDestroyUIOrders[item] > layer)
-                                layer = DontDestroyUIOrders[item];
-                        }
-
-                        foreach (var item in TempUIOdersPanels)
-                        {
-                            DontDestroyUIOrders.Remove(item);
-                        }
-
-                        break;
-                }
-            }
-            finally
-            {
-                ListPool<Panel>.Recycle(TempUIOdersPanels);
-            }
-
-            if (layer == 0)
-                layer =  type == UIType.UI ? UI_START_ORDER : DONTDESTROYUI_START_ORDER;
-
-            return layer;
+            if (!root) throw new ArgumentNullException(nameof(root));
+            if (!root.gameObject.scene.IsValid() || !root.gameObject.scene.isLoaded)
+                throw new ArgumentException("UI root must belong to a loaded Scene, not an asset.", nameof(root));
+            if (type != UIType.UI && type != UIType.DontDestroyUI) throw new ArgumentOutOfRangeException(nameof(type));
+            var persistent = root.gameObject.scene.name == "DontDestroyOnLoad";
+            if (persistent != (type == UIType.DontDestroyUI)) throw new ArgumentException("UI root lifetime does not match its Scene.", nameof(type));
+            var manager = Instance;
+            manager.registeredRoots.Add(root);
+            if (type == UIType.UI) manager.sceneCanvases[root.gameObject.scene.handle] = root;
+            manager.uiCanvas[type] = root;
+            manager.Reconcile();
         }
 
-        internal static int GetUIOrder(UIType type)
-        { 
-            return GetUIOrderMax(type) + OrderDelta;
-        }
-
-        // 释放层级
-        internal static void ReleaseOrder(Panel panel)
-        {
-            if (panel == null) return;
-            if (UIOrders.ContainsKey(panel))
-                UIOrders.Remove(panel);
-            if (DontDestroyUIOrders.ContainsKey(panel))
-                DontDestroyUIOrders.Remove(panel);
-        }
-
-        internal static void AddOrder(UIType type, Panel panel, int order) {
-            switch (type)
-            {
-                case UIType.UI:
-                    if(UIOrders.ContainsKey(panel))
-                        UIOrders[panel] = order;
-                    else
-                        UIOrders.Add(panel, order);
-                    break;
-                case UIType.DontDestroyUI:
-                    if (DontDestroyUIOrders.ContainsKey(panel))
-                        DontDestroyUIOrders[panel] = order;
-                    else
-                        DontDestroyUIOrders.Add(panel, order);
-                    break; 
-            }
-
-            // 更新所有在最前面的界面的层级
-            UpdateAlwaysInFront(); 
-        }
-
-        internal static void UpdateOrder(Panel panel, int order)
-        {
-            var manager = _instance;
-            if (manager == null) return;
-            if (manager.uiOrders.ContainsKey(panel)) manager.uiOrders[panel] = order;
-            if (manager.dontDestroyUIOrders.ContainsKey(panel)) manager.dontDestroyUIOrders[panel] = order;
-        }
-
-        internal static void UpdateAlwaysInFront()
-        {
-            var panels = ListPool<KeyValuePair<Panel, object>>.Allocate();
-            bool IsCurrent(KeyValuePair<Panel, object> entry, UIType type) =>
-                entry.Value != null && entry.Key && !entry.Key.IsRemoving && entry.Key.UIType == type &&
-                ReferenceEquals(entry.Key.Session, entry.Value);
-
-            void Update(UIType type, Dictionary<Panel, int> orders)
-            {
-                foreach (var panel in orders.Keys)
-                    if (panel) panels.Add(new KeyValuePair<Panel, object>(panel, panel.Session));
-                foreach (var entry in panels)
-                {
-                    var panel = entry.Key;
-                    if (!IsCurrent(entry, type) || !panel.AlwaysInFront || !IsCurrent(entry, type)) continue;
-                    panel.SortingOrder = GetUIOrder(type);
-                    // 排序业务回调可以关闭并复用同一组件，不操作其新会话。
-                    if (IsCurrent(entry, type)) panel.transform.SetAsLastSibling();
-                }
-                panels.Clear();
-            }
-            try
-            {
-                Update(UIType.UI, UIOrders);
-                Update(UIType.DontDestroyUI, DontDestroyUIOrders);
-            }
-            finally { ListPool<KeyValuePair<Panel, object>>.Recycle(panels); }
-        }
-
-        internal static void LateUpdate() {
-            _instance?.UpdatePanelQueueCore();
-        }
-
-        internal static void ReleaseView(View view)
-        {
-            var manager = _instance;
-            var panel = view as Panel;
-            if (manager == null || ReferenceEquals(panel, null)) return;
-            // 必要登记先释放，不能依赖广播、开关或Visible业务回调成功。
-            manager.uiOrders.Remove(panel);
-            manager.dontDestroyUIOrders.Remove(panel);
-            ReleaseQueue(manager, panel);
-        }
-
-        internal static void ActivateView(View view)
-        {
-            if (view is Panel panel)
-            {
-                panel.RestoreCanvas();
-                if (panel.IsMyselfAddCanvas) AddPanelQueue(panel);
-            }
-        }
-
-        internal static void DeactivateView(View view)
-        {
-            var manager = _instance;
-            if (manager != null && view is Panel panel && panel && !panel.gameObject.activeInHierarchy)
-                ReleaseQueue(manager, panel);
-        }
-
-        private static void ReleaseQueue(PanelManager manager, Panel panel)
-        {
-            manager.panelQueues.RemoveAll(item => ReferenceEquals(item, panel));
-            if (!ReferenceEquals(manager._currentPanel, panel))
-            {
-                manager.SyncLateSubscription();
-                return;
-            }
-            manager._currentPanel = null;
-            for (int i = manager.panelQueues.Count - 1; i >= 0; i--)
-            {
-                var previous = manager.panelQueues[i];
-                if (!previous || !previous.IsLoaded || !previous.gameObject.activeInHierarchy || previous.IsRemoving ||
-                    previous.Module == null || previous.Module.State == ModuleState.Closing)
-                {
-                    manager.panelQueues.RemoveAt(i);
-                    continue;
-                }
-                manager._currentPanel = previous;
-                break;
-            }
-            var current = manager._currentPanel;
-            manager.SyncLateSubscription();
-            if (manager.multiPanelListener && current && current.Canvas && !current.Canvas.enabled)
-            {
-                current.Canvas.enabled = true;
-                current.Visible();
-            }
-        }
-
-        internal static Transform GetParent(Module module,Transform parent,UIType type)
+        internal static Transform GetParent(Module module, Transform parent, UIType type)
         {
             RefreshEventSystem();
-            
-            if (parent != null) return parent;
-
-            //try
-            //{
-                if (UICanvas.ContainsKey(type) && UICanvas[type])
-                    return UICanvas[type].transform;
-            //}
-            //catch (System.Exception)
-            //{ 
-            //}
-
-
-            UICanvas.Remove(type);
-
-            GameObject canvasObj = GameObject.Instantiate(Resources.Load<GameObject>("YLFramework/Core/Canvas"));
-            Canvas canvas = canvasObj.GetComponent<Canvas>();
- 
+            if (parent) return parent;
+            var manager = Instance;
+            var scene = SceneManager.GetActiveScene();
+            if (manager.uiCanvas.TryGetValue(type, out var legacy) && legacy &&
+                (type == UIType.DontDestroyUI || legacy.gameObject.scene == scene)) return legacy.transform;
+            if (type == UIType.UI && manager.sceneCanvases.TryGetValue(scene.handle, out var existing) && existing)
+            {
+                manager.uiCanvas[type] = existing;
+                return existing.transform;
+            }
+            var obj = UnityEngine.Object.Instantiate(Resources.Load<GameObject>("YLFramework/Core/Canvas"));
+            var canvas = obj.GetComponent<Canvas>();
             canvas.sortingOrder = type == UIType.UI ? UI_START_ORDER : DONTDESTROYUI_START_ORDER;
-
-            if (type == UIType.DontDestroyUI)
-                GameObject.DontDestroyOnLoad(canvasObj);
-
-            UICanvas.Add(type, canvas);
-            // 触发事件
+            if (type == UIType.DontDestroyUI) UnityEngine.Object.DontDestroyOnLoad(obj);
+            else SceneManager.MoveGameObjectToScene(obj, scene);
+            manager.uiCanvas[type] = canvas;
+            manager.registeredRoots.Add(canvas);
+            if (type == UIType.UI) manager.sceneCanvases[scene.handle] = canvas;
             onCreateCanvas?.Invoke(canvas);
             return canvas.transform;
         }
 
-        public static Panel GetTopPanel(UIType type)
+        private static Canvas ResolveRoot(Panel panel)
         {
-
-            Panel panel = null;
-
-            switch (type)
+            if (!panel) return null;
+            var canvasToUse = panel.IsMyselfAddCanvas ? panel.Canvas : panel.FindBorrowedCanvas();
+            if (!canvasToUse) return null;
+            // inactive Canvas 的原生 rootCanvas 尚未可靠建立；以真实层级取得同一个根身份。
+            var root = canvasToUse;
+            if (_instance != null && _instance.registeredRoots.Contains(root)) return root;
+            for (var parent = root.transform.parent; parent; parent = parent.parent)
             {
-                case UIType.UI:
-
-                    foreach (var item in UIOrders.Keys)
-                    {
-                        if (panel == null)
-                        {
-                            panel = item;
-                            continue;
-                        }
-                        if (panel.SortingOrder < item.SortingOrder)
-                            panel = item;
-                    }
-
-                    break;
-                case UIType.DontDestroyUI:
-
-                    foreach (var item in DontDestroyUIOrders.Keys)
-                    {
-                        if (panel == null)
-                        {
-                            panel = item;
-                            continue;
-                        }
-                        if (panel.SortingOrder < item.SortingOrder)
-                            panel = item;
-                    }
-
-                    break; 
-            }
-
-            return panel;
-        }
-
-        public static void GetAllPanels(UIType type,List<Panel> results) 
-        {
-
-            if (results == null)
-                throw new Exception("result cannot be null!");
-
-            results.Clear();
-
-            switch (type)
-            {
-                case UIType.UI:
-
-                    foreach (var item in UIOrders.Keys)
-                    {
-                        results.Add(item);
-                    }
-
-                    break;
-                case UIType.DontDestroyUI:
-
-                    foreach (var item in DontDestroyUIOrders.Keys)
-                    {
-                        results.Add(item);
-                    }
-
-                    break;
-            }
-
-        }
-         
-#endregion
-
-        #region 自动管理多个Panel重叠问题
-
-        internal static void AddPanelQueue(Panel panel)
-        {
-            // 判断是否开启该功能
-            if (!MultiPanelListener) return;
-            if (panel == null || !panel.IsLoaded || !panel.gameObject.activeInHierarchy || panel.PanelType != PanelType.Panel) return;
-
-            if (PanelQueues.Contains(panel)) return;
-            panel.Canvas.enabled = true;
-            // 加入队列
-            PanelQueues.Add(panel);
-            Instance.SyncLateSubscription();
-
-            if (PanelQueues.Count > 20) Debug.LogWarning("PanelManager.panel_queues队列数量过多,请检查是否存在异常!");
-
-            CurrentPanel = panel;
-
-            // 把前面的Panel位置进行修改
-            for (int i = 0; i < PanelQueues.Count - 1; i++)
-            {
-                if (PanelQueues[i] && PanelQueues[i].Canvas && PanelQueues[i].Canvas.enabled)
+                var canvas = parent.GetComponent<Canvas>();
+                if (canvas)
                 {
-                    PanelQueues[i].Canvas.enabled = false;
-                    PanelQueues[i].Invisible();
+                    root = canvas;
+                    if (_instance != null && _instance.registeredRoots.Contains(root)) break;
                 }
             }
-
+            return root;
         }
 
-        internal static void RemovePanelQueue(Panel panel)
+        internal static Canvas GetRoot(Panel panel)
+        {
+            if (!panel || panel.Session == null) return null;
+            return ResolveRoot(panel);
+        }
+
+        private bool Current(PanelState state) => !released && state.Panel && state.Session != null &&
+            ReferenceEquals(state.Panel.Session, state.Session) && !state.Panel.IsRemoving &&
+            (!state.Panel.IsMyselfAddCanvas || state.Panel.Canvas) && state.Panel.Module != null && state.Panel.Module.State != ModuleState.Closing &&
+            states.TryGetValue(state.Panel, out var registered) && ReferenceEquals(registered, state);
+
+        private bool Active(PanelState state) => Current(state) && state.Panel.IsLoaded && state.Panel.gameObject.activeInHierarchy;
+        private static bool SameContext(PanelState a, PanelState b) => a.Root == b.Root && a.Scene == b.Scene;
+
+        private static int CheckedOrder(Panel panel, int requested, int? offset = null)
+        {
+            var value = (long)requested + (offset ?? panel.Module.UIStartSortOrder);
+            if (value < short.MinValue || value > short.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(requested), "Effective Canvas order must fit a signed 16-bit integer.");
+            return (int)value;
+        }
+
+        internal static void ValidateModuleOrder(Module module, int offset)
         {
             var manager = _instance;
-            if (manager == null || !manager.multiPanelListener || ReferenceEquals(panel, null)) return;
-            ReleaseQueue(manager, panel);
+            if (manager == null) return;
+            manager.BuildOrders(null, 0, module, offset);
         }
 
-
-        // 更新Panel队列
-        internal static void UpdatePanelQueue()
+        // 每个根/排序层稳定排序；原始有效值尽量保留，平手及前置组只做必要提升。
+        private List<KeyValuePair<PanelState, int>> BuildOrders(Panel changed = null, int requested = 0, Module module = null, int offset = 0)
         {
-            _instance?.UpdatePanelQueueCore();
+            var list = new List<PanelState>();
+            foreach (var state in states.Values) if (Current(state) && state.Panel.IsMyselfAddCanvas) list.Add(state);
+            var roots = new Dictionary<PanelState, Canvas>();
+            foreach (var state in list) roots.Add(state, ResolveRoot(state.Panel));
+            int Raw(PanelState state) => CheckedOrder(state.Panel, state.Panel == changed ? requested : state.Panel.RequestedOrder,
+                state.Panel.Module == module ? (int?)offset : null);
+            foreach (var state in list) Raw(state);
+            list.Sort((a, b) =>
+            {
+                int comparison = roots[a].GetInstanceID().CompareTo(roots[b].GetInstanceID());
+                if (comparison != 0) return comparison;
+                comparison = a.Panel.gameObject.scene.handle.CompareTo(b.Panel.gameObject.scene.handle);
+                if (comparison != 0) return comparison;
+                comparison = SortingLayer.GetLayerValueFromID(a.Panel.Canvas.sortingLayerID).CompareTo(SortingLayer.GetLayerValueFromID(b.Panel.Canvas.sortingLayerID));
+                if (comparison != 0) return comparison;
+                comparison = (a.Panel.IsModal && a.Panel.PanelType != PanelType.Overlay).CompareTo(b.Panel.IsModal && b.Panel.PanelType != PanelType.Overlay);
+                if (comparison != 0) return comparison;
+                comparison = a.Panel.AlwaysInFront.CompareTo(b.Panel.AlwaysInFront);
+                if (comparison != 0) return comparison;
+                comparison = Raw(a).CompareTo(Raw(b));
+                return comparison != 0 ? comparison : a.Sequence.CompareTo(b.Sequence);
+            });
+            var result = new List<KeyValuePair<PanelState, int>>(list.Count);
+            PanelState previous = null;
+            int previousOrder = 0;
+            foreach (var state in list)
+            {
+                int order = Raw(state);
+                if (previous != null && roots[previous] == roots[state] &&
+                    previous.Panel.gameObject.scene == state.Panel.gameObject.scene &&
+                    previous.Panel.Canvas.sortingLayerID == state.Panel.Canvas.sortingLayerID)
+                    order = Math.Max(order, previousOrder + 1);
+                if (order > short.MaxValue) throw new ArgumentOutOfRangeException(nameof(requested), "Panel priority exhausts the Canvas order range.");
+                result.Add(new KeyValuePair<PanelState, int>(state, order));
+                previous = state;
+                previousOrder = order;
+            }
+            return result;
         }
 
+        internal static void Prepare(Panel panel)
+        {
+            var manager = Instance;
+            var state = new PanelState { Panel = panel, Session = panel.Session, Root = ResolveRoot(panel),
+                Scene = panel.gameObject.scene.handle, Sequence = ++manager.sequence };
+            if (panel.IsMyselfAddCanvas)
+            {
+                int max = panel.UIType == UIType.UI ? UI_START_ORDER : DONTDESTROYUI_START_ORDER;
+                foreach (var existing in manager.states.Values)
+                    if (manager.Current(existing) && ResolveRoot(existing.Panel) == state.Root &&
+                        existing.Panel.gameObject.scene.handle == state.Scene && existing.Panel.IsMyselfAddCanvas &&
+                        existing.Panel.Canvas.sortingLayerID == panel.Canvas.sortingLayerID &&
+                        existing.Panel.IsModal == panel.IsModal && existing.Panel.AlwaysInFront == panel.AlwaysInFront)
+                        max = Math.Max(max, existing.Panel.RequestedOrder);
+                panel.CommitOrder(checked(max + OrderDelta));
+                CheckedOrder(panel, panel.RequestedOrder);
+            }
+            manager.states[panel] = state;
+            manager.Reconcile(panel);
+            manager.SyncLateSubscription();
+            // 当前窗口自身的准备通知仍在 View 初始化事务内，不能按无关观察异常处理。
+            if (manager.Current(state) && panel.IsMyselfAddCanvas) panel.NotifySortingOrder();
+        }
+
+        internal static void SetOrder(Panel panel, int value)
+        {
+            var manager = _instance;
+            if (manager == null || !manager.states.TryGetValue(panel, out var state) || !manager.Current(state)) return;
+            CheckedOrder(panel, value);
+            manager.BuildOrders(panel, value);
+            panel.CommitOrder(value);
+            manager.Reconcile();
+        }
+
+        internal static void Refresh(Panel panel)
+        {
+            var manager = _instance;
+            if (manager != null) manager.Reconcile();
+        }
+
+        internal static void RestoreCanvas(Panel panel)
+        {
+            if (_instance != null && _instance.states.TryGetValue(panel, out var state) && _instance.Current(state))
+            {
+                panel.Canvas.overrideSorting = true;
+                panel.Canvas.sortingOrder = state.Order;
+            }
+        }
+
+        private static int Compare(PanelState a, PanelState b)
+        {
+            int comparison = a.Layer.CompareTo(b.Layer);
+            if (comparison != 0) return comparison;
+            comparison = a.Order.CompareTo(b.Order);
+            return comparison != 0 ? comparison : a.Sequence.CompareTo(b.Sequence);
+        }
+
+        private void Reconcile(Panel preparing = null)
+        {
+            if (released) return;
+            var stale = new List<Panel>();
+            foreach (var state in states.Values)
+            {
+                if (state.Panel)
+                {
+                    state.Panel.RefreshBorrowedCanvas();
+                    state.Root = ResolveRoot(state.Panel);
+                    state.Scene = state.Panel.gameObject.scene.handle;
+                }
+                if (!Current(state)) stale.Add(state.Panel);
+            }
+            foreach (var panel in stale) states.Remove(panel);
+            var orders = BuildOrders();
+            var sorting = new List<KeyValuePair<PanelState, int>>();
+            foreach (var entry in orders)
+            {
+                var state = entry.Key;
+                if (state.Order != entry.Value || state.Front != state.Panel.AlwaysInFront ||
+                    state.Layer != SortingLayer.GetLayerValueFromID(state.Panel.Canvas.sortingLayerID)) sorting.Add(entry);
+                state.Order = entry.Value;
+                state.Layer = SortingLayer.GetLayerValueFromID(state.Panel.Canvas.sortingLayerID);
+                state.Front = state.Panel.AlwaysInFront;
+                state.Panel.Canvas.overrideSorting = true;
+                state.Panel.Canvas.sortingOrder = state.Order;
+            }
+            var snapshot = new List<PanelState>(states.Values);
+            var visibility = new List<KeyValuePair<PanelState, bool>>();
+            foreach (var state in snapshot)
+            {
+                if (!state.Panel.IsMyselfAddCanvas) continue;
+                bool active = Active(state);
+                bool visible = active;
+                bool blocked = !active;
+                state.Modal = state.Panel.IsModal && state.Panel.PanelType != PanelType.Overlay && state.Panel.IsMyselfAddCanvas;
+                if (active)
+                {
+                    foreach (var upper in snapshot)
+                    {
+                        if (ReferenceEquals(upper, state) || !Active(upper) || !SameContext(upper, state) ||
+                            !upper.Panel.IsMyselfAddCanvas || Compare(upper, state) <= 0) continue;
+                        if (multiPanelListener && state.Panel.PanelType == PanelType.Panel && state.Panel.IsMyselfAddCanvas &&
+                            upper.Panel.PanelType == PanelType.Panel) visible = false;
+                        if (upper.Panel.IsModal && upper.Panel.PanelType != PanelType.Overlay) blocked = true;
+                    }
+                }
+                if (active && (state.Active ? state.Visible != visible : !visible))
+                    visibility.Add(new KeyValuePair<PanelState, bool>(state, visible));
+                state.Active = active;
+                state.Visible = visible;
+                state.Blocked = blocked || !visible;
+                if (state.Panel.IsMyselfAddCanvas) state.Panel.Canvas.enabled = !active || visible;
+            }
+            // 所有独立窗口提交后再计算借用控件，不能依赖 Dictionary 枚举顺序或上轮状态。
+            foreach (var state in snapshot)
+            {
+                if (state.Panel.IsMyselfAddCanvas) continue;
+                PanelState owner = null;
+                for (var parent = state.Panel.transform.parent; parent; parent = parent.parent)
+                {
+                    var panel = parent.GetComponent<Panel>();
+                    if (panel && panel.IsMyselfAddCanvas && panel.Canvas == state.Panel.Canvas &&
+                        states.TryGetValue(panel, out var candidate) && Current(candidate)) { owner = candidate; break; }
+                }
+                bool active = Active(state);
+                bool visible = active && owner != null && owner.Visible;
+                if (active && (state.Active ? state.Visible != visible : !visible))
+                    visibility.Add(new KeyValuePair<PanelState, bool>(state, visible));
+                state.Active = active;
+                state.Visible = visible;
+                state.Blocked = !visible || owner == null || owner.Blocked;
+            }
+            SyncLateSubscription();
+            // 结构、排序与 Canvas 先全部提交，业务重入后只通知仍匹配的旧记录。
+            var initializationErrors = new List<Exception>();
+            foreach (var entry in sorting)
+                if (entry.Key.Panel != preparing && Current(entry.Key) && entry.Key.Order == entry.Value)
+                {
+                    if (entry.Key.Panel.IsInitializing && ReferenceEquals(ViewManager.InitializingView.Key, entry.Key.Panel) &&
+                        ReferenceEquals(ViewManager.InitializingView.Value, entry.Key.Session))
+                    {
+                        try { entry.Key.Panel.NotifySortingOrder(); }
+                        catch (Exception error) { initializationErrors.Add(error); }
+                    }
+                    else Notify(() => entry.Key.Panel.NotifySortingOrder());
+                }
+            foreach (var entry in visibility)
+                if (Active(entry.Key) && entry.Key.Visible == entry.Value)
+                    Notify(() => { if (entry.Value) entry.Key.Panel.Visible(); else entry.Key.Panel.Invisible(); });
+            ViewManager.ThrowCleanupErrors(initializationErrors);
+        }
+
+        private static void Notify(Action action)
+        {
+            try { action(); }
+            catch (Exception error) { Debug.LogException(error); }
+        }
+
+        internal static void ActivateView(View view)
+        {
+            if (view is Panel panel) { panel.RestoreCanvas(); _instance?.Reconcile(); }
+        }
+        internal static void DeactivateView(View view)
+        {
+            if (view is Panel panel && panel && !panel.gameObject.activeInHierarchy) _instance?.Reconcile();
+        }
+        internal static void ReleaseView(View view)
+        {
+            var manager = _instance;
+            if (manager == null || !(view is Panel panel)) return;
+            manager.states.Remove(panel);
+            manager.Reconcile();
+        }
+
+        internal static bool IsVisible(Panel panel) => _instance != null && panel &&
+            _instance.states.TryGetValue(panel, out var state) && _instance.Active(state) && state.Visible;
+        internal static bool IsInputBlocked(Panel panel) => !IsVisible(panel) || _instance.states[panel].Blocked;
+
+        private static Panel Query(Canvas root, bool modal, bool focus, UIType? type = null)
+        {
+            var manager = _instance;
+            if (manager == null || (!root && !type.HasValue)) return null;
+            PanelState top = null;
+            foreach (var state in manager.states.Values)
+            {
+                if (!manager.Active(state) || !state.Panel.IsMyselfAddCanvas || state.Panel.PanelType == PanelType.Overlay ||
+                    !state.Visible || (root && state.Root != root) || (type.HasValue && state.Panel.UIType != type.Value) ||
+                    (modal && !state.Modal) || (focus && state.Blocked)) continue;
+                if (top == null || Compare(state, top) > 0) top = state;
+            }
+            return top?.Panel;
+        }
+
+        /// <summary>指定实际根的普通窗口 Top，不创建 Manager 或宿主。</summary>
+        public static Panel GetTopPanel(Canvas root) => Query(root, false, false);
+        /// <summary>兼容寿命分类查询；多根业务应使用明确根重载。</summary>
+        public static Panel GetTopPanel(UIType type) => Query(null, false, false, type);
+        public static Panel GetModalPanel(Canvas root) => Query(root, true, false);
+        public static Panel GetFocusedPanel(Canvas root) => Query(root, false, true);
+
+        public static void GetAllPanels(UIType type, List<Panel> results)
+        {
+            if (results == null) throw new ArgumentNullException(nameof(results));
+            results.Clear();
+            var manager = _instance;
+            if (manager == null) return;
+            foreach (var state in manager.states.Values)
+                if (manager.Current(state) && state.Panel.UIType == type && state.Panel.IsMyselfAddCanvas) results.Add(state.Panel);
+        }
+
+        internal static void LateUpdate() => _instance?.UpdatePanelQueueCore();
         private void UpdatePanelQueueCore()
         {
-            if (released || !multiPanelListener) return;
-            var current = _currentPanel;
-            if (ReferenceEquals(current, null)) return;
-            // 直接生命周期是主路径；缺失 OnDisable/OnDestroy 时复用相同的必要队列清理。
-            if (!current || !current.gameObject.activeInHierarchy)
-                ReleaseQueue(this, current);
+            if (released) return;
+            foreach (var state in states.Values)
+                if (!Current(state) || state.Active != Active(state) || state.Root != ResolveRoot(state.Panel) ||
+                    (!state.Panel.IsMyselfAddCanvas && state.Panel.Canvas != state.Panel.FindBorrowedCanvas()) ||
+                    state.Scene != state.Panel.gameObject.scene.handle)
+                {
+                    Reconcile();
+                    return;
+                }
         }
-
-        // 返回到上一个界面
-        internal static void ReturnToPreviousPanel()
-        {
-            _instance?.UpdatePanelQueueCore();
-        }
-
-        #endregion
-
-
     }
 }

@@ -18,6 +18,8 @@ namespace YLFramework.Core
         private static readonly List<Module> pruneOwners = new List<Module>();
         private static IUnRegister pruneSubscription;
         private static object pruneRound;
+        // 同步初始化调用栈的当前事务身份，仅用于区分 UI 自身准备失败与其他窗口观察异常。
+        internal static KeyValuePair<View, object> InitializingView;
 
         static ViewManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
 
@@ -35,6 +37,7 @@ namespace YLFramework.Core
             EndPruneRound();
             sceneOwners.Clear();
             pruneOwners.Clear();
+            InitializingView = default;
         }
 
         private static void TrackScene(Module module, View view)
@@ -478,6 +481,7 @@ namespace YLFramework.Core
             GameObject instance = view.gameObject;
             bool transaction = false;
             bool defaultArgs = false;
+            var previousInitialization = InitializingView;
             try
             {
                 EnsureOwner(module);
@@ -489,6 +493,7 @@ namespace YLFramework.Core
                 view.BackendRoot = backendRoot;
                 view.BackendRootSession = backendRoot != null ? backendRoot.Session : null;
                 view.IsInitializing = true;
+                InitializingView = new KeyValuePair<View, object>(view, session);
                 module.viewTransactions++;
                 transaction = true;
                 if (view is Panel panel) panel.UIType = panelType ?? PanelManager.GetUIType(panel.transform.parent);
@@ -539,6 +544,8 @@ namespace YLFramework.Core
             }
             finally
             {
+                if (ReferenceEquals(InitializingView.Key, view) && ReferenceEquals(InitializingView.Value, session))
+                    InitializingView = previousInitialization;
                 view.IsInitializing = false;
                 if (transaction) module.viewTransactions--;
                 if (defaultArgs) args.Release();
