@@ -12,7 +12,7 @@ namespace YLFramework.Services.Audio
         public bool IsValid => Voice != null && Voice.IsValid(Generation);
         /// <summary>底层 AudioSource 当前是否正在播放。静音时仍为 true，因此不能作为能否听见的依据。</summary>
         public bool IsPlaying => IsValid && Voice.Source && Voice.Source.isPlaying;
-        /// <summary>该请求是否被显式暂停。等待分类通道重新启用不计为暂停。</summary>
+        /// <summary>该请求是否被手动、命名通道或 opt-in 自动暂停。等待分类通道重新启用不计为暂停。</summary>
         public bool IsPaused => IsValid && Voice.Paused;
         /// <summary>Current clip position in seconds; zero for expired or not-yet-started requests. Pausing freezes it, muting does not.</summary>
         /// <remarks>Loops report the current cycle. Compressed audio inherits AudioSource.time packet precision; no completed history is retained.</remarks>

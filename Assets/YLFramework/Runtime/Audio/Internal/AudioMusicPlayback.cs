@@ -46,7 +46,7 @@ namespace YLFramework.Services.Audio
         {
             var settings = AudioKit.Settings;
             if (!settings.IsMusicOn.Value) return Play(clip, in options, started, finished, resource);
-            var paused = Current.Active && Current.Paused;
+            var paused = Current.Active && Current.ManuallyPaused;
             if (duration == 0f)
             {
                 var previousEpoch = Epoch;

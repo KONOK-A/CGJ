@@ -10,6 +10,7 @@ namespace YLFramework.Services.Audio
         internal enum Kind { Sound, Music, Voice }
         internal readonly Kind Category;
         internal bool IsSound => Category == Kind.Sound;
+        internal readonly bool PooledSound;
         internal ulong AdmissionOrder;
         internal int ClipId;
         internal int Priority;
@@ -20,7 +21,11 @@ namespace YLFramework.Services.Audio
         internal AudioSource Source { get; private set; }
         internal ulong Generation { get; private set; }
         internal bool Active { get; private set; }
-        internal bool Paused { get; private set; }
+        internal bool Paused => mManualPaused || mAutomaticPaused || mChannelPaused;
+        private bool mManualPaused, mAutomaticPaused, mChannelPaused;
+        internal bool ManuallyPaused => mManualPaused;
+        internal AudioChannel Channel { get; private set; }
+        private AudioBorrowedSource mBorrowed;
         internal float Duration => Source && mClip && Source.clip ? mClip.length : 0f;
         internal float PlaybackTime => mStarted && Source && mClip && Source.clip ? Mathf.Clamp(Source.time, 0f, Duration) : 0f;
         internal AudioHandle Handle => Active ? new AudioHandle(this) : default;
@@ -41,21 +46,24 @@ namespace YLFramework.Services.Audio
         private Action<AudioClip, AudioHandle> mOnStarted, mOnFinished;
         private AudioResourceLease mResource;
         internal AudioRequestEnd EndReason { get; private set; }
-        internal AudioVoice(AudioManager owner, Kind category) { mOwner = owner; Category = category; }
+        internal AudioVoice(AudioManager owner, Kind category, bool pooledSound = true) { mOwner = owner; Category = category; PooledSound = pooledSound; }
         internal bool IsValid(ulong generation) => Active && Generation == generation && mOwner && mOwner.Available;
 
         internal AudioHandle Begin(AudioClip clip, in AudioPlaybackOptions options, bool enabled, float sharedVolume, bool muted,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             bool spatial = false, Vector3 position = default, Transform target = null,
             bool startImmediately = true, float initialTransitionGain = 1f, bool paused = false,
-            AudioResourceLease resource = null)
+            AudioResourceLease resource = null, AudioChannel channel = null, AudioSource borrowedSource = null)
         {
             if (!mOwner.Available) throw new InvalidOperationException("Audio host is unavailable.");
             resource?.Bind();
             mResource = resource;
             Generation++;
             EndReason = AudioRequestEnd.None;
-            Active = true; Paused = paused; mStarted = false; mEnabled = enabled;
+            Active = true; mManualPaused = paused; mStarted = false; mEnabled = enabled;
+            Channel = channel;
+            mChannelPaused = channel != null && channel.IsPaused;
+            mAutomaticPaused = options.AutoPauseWhenTimeScaleZero && Time.timeScale == 0f;
             mClip = clip; mOptions = options; mOnStarted = started; mOnFinished = finished;
             var generation = Generation;
             try
@@ -72,21 +80,30 @@ namespace YLFramework.Services.Audio
                 }
                 mTarget = target; mFollowing = target;
                 mSpatial = spatial; mPosition = position;
-                EnsureSource();
-                ResetSource();
-                Source.outputAudioMixerGroup = options.OutputRoute.Resolve(mOwner.GetOutputGroup(this));
-                Source.clip = clip; Source.loop = options.Loop; Source.pitch = options.Pitch;
-                Source.spatialBlend = spatial ? 1f : 0f;
-                if (spatial)
+                if (borrowedSource)
+                {
+                    mOwner.BorrowSource(borrowedSource, this);
+                    mBorrowed = new AudioBorrowedSource(borrowedSource, clip, in options);
+                    Source = borrowedSource;
+                }
+                else
+                {
+                    EnsureSource();
+                    ResetSource();
+                    Source.clip = clip; Source.loop = options.Loop; Source.pitch = options.Pitch;
+                    Source.spatialBlend = spatial ? 1f : 0f;
+                }
+                SetOutput(options.OutputRoute.Resolve(mOwner.GetOutputGroup(this)));
+                if (spatial && mBorrowed == null)
                 {
                     Source.minDistance = options.MinDistance; Source.maxDistance = options.MaxDistance;
                     Source.rolloffMode = options.RolloffMode;
                 }
                 if (spatial) Source.transform.position = position;
                 SetVolume(sharedVolume);
-                Source.mute = muted;
+                SetMute(muted);
                 var handle = new AudioHandle(this);
-                Source.gameObject.SetActive(true);
+                if (mBorrowed == null) Source.gameObject.SetActive(true);
                 if (IsValid(generation) && enabled && startImmediately) StartSource();
                 return handle;
             }
@@ -98,7 +115,10 @@ namespace YLFramework.Services.Audio
         }
         internal void SetVolume(float sharedVolume)
         {
-            if (Active && Source) Source.volume = Mathf.Clamp01(sharedVolume * Options.Volume) * mFadeGain * TransitionGain;
+            if (!Active || !Source) return;
+            var value = Mathf.Clamp01(sharedVolume * Options.Volume) * mFadeGain * TransitionGain;
+            if (mBorrowed != null) mBorrowed.SetVolume(value);
+            else Source.volume = value;
         }
         internal void SetTransitionGain(float value)
         {
@@ -110,14 +130,20 @@ namespace YLFramework.Services.Audio
         internal void SetMute(bool value)
         {
             if (!Active || !Source) return;
-            Source.mute = value;
+            if (mBorrowed != null) mBorrowed.SetMute(value);
+            else Source.mute = value;
             // Unmuting must restore the latest channel volume and request scale, not a stale Unity snapshot.
             SetVolume(mOwner.GetSharedVolume(this));
         }
         internal void SetInheritedOutputGroup(AudioMixerGroup group)
         {
             if (Active && Source && Options.OutputRoute.Mode == AudioOutputRoute.RouteMode.Inherit)
-                Source.outputAudioMixerGroup = group ? group : null;
+                SetOutput(group ? group : null);
+        }
+        private void SetOutput(AudioMixerGroup group)
+        {
+            if (mBorrowed != null) mBorrowed.SetOutput(group);
+            else if (Source) Source.outputAudioMixerGroup = group;
         }
         internal void SetVolumeScale(float volumeScale)
         {
@@ -129,7 +155,8 @@ namespace YLFramework.Services.Audio
         {
             if (!AudioSoundOptions.IsFinite(pitch) || pitch <= 0 || pitch > 3) throw new ArgumentOutOfRangeException(nameof(pitch));
             mOptions.Pitch = pitch;
-            if (Source) Source.pitch = pitch;
+            if (mBorrowed != null) mBorrowed.SetPitch(pitch);
+            else if (Source) Source.pitch = pitch;
         }
         internal void FadeIn(float duration, bool ignoreTimeScale) => BeginFade(1f, duration, false, ignoreTimeScale, true);
         internal void FadeOut(float duration, bool stopWhenDone, bool ignoreTimeScale) => BeginFade(0f, duration, stopWhenDone, ignoreTimeScale, false);
@@ -191,11 +218,12 @@ namespace YLFramework.Services.Audio
         private void StartSource()
         {
             if (!Active || Paused || !mEnabled) return;
-            if (!Source || !mClip || mFollowing && (!mTarget || !mTarget.gameObject.activeInHierarchy)) { Stop(AudioRequestEnd.Unavailable); return; }
+            if (!Source || !Source.isActiveAndEnabled || !mClip || mBorrowed != null && !mBorrowed.OwnsPlayback ||
+                mFollowing && (!mTarget || !mTarget.gameObject.activeInHierarchy)) { Stop(AudioRequestEnd.Unavailable); return; }
             if (mClip.loadState == AudioDataLoadState.Failed) { Stop(AudioRequestEnd.Failed); return; }
             if (mFollowing) Source.transform.position = mTarget.position;
             else if (mSpatial) Source.transform.position = mPosition;
-            Source.outputAudioMixerGroup = Options.OutputRoute.Resolve(mOwner.GetOutputGroup(this));
+            SetOutput(Options.OutputRoute.Resolve(mOwner.GetOutputGroup(this)));
             if (mAutoFadeActive)
             {
                 ResetAutoPosition();
@@ -204,13 +232,13 @@ namespace YLFramework.Services.Audio
             var generation = Generation;
             var clip = mClip;
             var handle = Handle;
-            var musicEpoch = Category == Kind.Music ? mOwner.MusicPlayback.Epoch : 0;
+            var musicEpoch = Category == Kind.Music && Channel == null ? mOwner.MusicPlayback.Epoch : 0;
             Source.Play(); mStarted = true;
             var callback = mOnStarted; mOnStarted = null;
             try { callback?.Invoke(clip, handle); }
             catch
             {
-                if (Category == Kind.Music) mOwner.MusicPlayback.StartFailed(handle, musicEpoch);
+                if (Category == Kind.Music && Channel == null) mOwner.MusicPlayback.StartFailed(handle, musicEpoch);
                 else if (Active && Generation == generation) Stop(AudioRequestEnd.Failed);
                 throw;
             }
@@ -219,22 +247,33 @@ namespace YLFramework.Services.Audio
         {
             if (!Active || mEnabled == value) return;
             mEnabled = value;
-            if (!value) { if (Source) Source.Stop(); mStarted = false; }
+            if (!value) { if (Source && (mBorrowed == null || mBorrowed.OwnsPlayback)) Source.Stop(); mStarted = false; }
             else StartSource();
         }
         internal void Pause()
         {
-            if (!Active || Paused) return;
-            if (mAutoFadeActive) RefreshAutoFade();
-            Paused = true;
-            if (mStarted && Source) Source.Pause();
+            SetPauseReason(ref mManualPaused, true);
         }
         internal void Resume()
         {
-            if (!Active || !Paused) return;
-            Paused = false;
+            SetPauseReason(ref mManualPaused, false);
+        }
+        internal void SetChannelPaused(bool value) => SetPauseReason(ref mChannelPaused, value);
+        internal void RefreshAutomaticPause(bool timeScaleZero) => SetPauseReason(ref mAutomaticPaused, Options.AutoPauseWhenTimeScaleZero && timeScaleZero);
+        private void SetPauseReason(ref bool reason, bool value)
+        {
+            if (!Active || reason == value) return;
+            var wasPaused = Paused;
+            if (!wasPaused && value && mAutoFadeActive) RefreshAutoFade();
+            reason = value;
+            if (wasPaused == Paused) return;
+            if (Paused)
+            {
+                if (mStarted && Source && (mBorrowed == null || mBorrowed.OwnsPlayback)) Source.Pause();
+                return;
+            }
             if (!mEnabled) return;
-            if (mStarted && Source) Source.UnPause();
+            if (mStarted && Source && (mBorrowed == null || mBorrowed.OwnsPlayback)) Source.UnPause();
             else StartSource();
         }
         internal void CheckFinished()
@@ -275,24 +314,37 @@ namespace YLFramework.Services.Audio
             EndReason = reason;
             Active = false; Generation++;
             var resource = mResource; mResource = null;
+            var channel = Channel;
+            channel?.Remove(this);
             // Sound 先由 owner 摘除计数，再由池 reset 清租用数据；固定槽不进入 Sound 池。
             try
             {
                 if (IsSound) mOwner.Recycle(this);
+                else if (channel != null) mOwner.ReleaseChannelVoice(this);
                 else ResetPlayback();
             }
             finally { resource?.Dispose(); }
         }
         internal void ResetPlayback()
         {
-            Paused = false; mStarted = mEnabled = false;
+            mManualPaused = mAutomaticPaused = mChannelPaused = false; mStarted = mEnabled = false;
             mOnStarted = mOnFinished = null; mClip = null; mTarget = null; mFollowing = false;
             mSpatial = false; mPosition = Vector3.zero;
             mOptions = default;
             ResetFade();
             ClipId = Priority = 0;
-            ResetSource();
-            if (Source) Source.gameObject.SetActive(false);
+            Channel = null;
+            if (mBorrowed != null)
+            {
+                var borrowed = mBorrowed; mBorrowed = null; Source = null;
+                try { borrowed.Release(); }
+                finally { mOwner.ReturnBorrowedSource(borrowed.Source, this); }
+            }
+            else
+            {
+                ResetSource();
+                if (Source) Source.gameObject.SetActive(false);
+            }
         }
         private void ResetSource()
         {
@@ -318,6 +370,7 @@ namespace YLFramework.Services.Audio
                 root.transform.SetParent(mOwner.transform, false);
                 Source = root.AddComponent<AudioSource>();
                 mOwnsSource = true;
+                mOwner.RegisterOwnedSource(Source);
                 if (IsSound) mOwner.SoundSourceCreated();
                 ResetSource();
             }
@@ -336,6 +389,7 @@ namespace YLFramework.Services.Audio
         {
             var root = mSourceRoot;
             mSourceRoot = null;
+            if (mOwnsSource) mOwner.UnregisterOwnedSource(Source);
             Source = null;
             if (mOwnsSource)
             {

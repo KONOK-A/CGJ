@@ -35,6 +35,17 @@ namespace YLFramework.Services.Audio
         public static AudioHandle Music => AudioManager.TryGetInstance(out var host) ? host.Music?.Handle ?? default : default;
         /// <summary>最新 Voice 请求的句柄；没有请求时返回无效句柄。读取不会创建宿主。</summary>
         public static AudioHandle Voice => AudioManager.TryGetInstance(out var host) ? host.Voice?.Handle ?? default : default;
+        /// <summary>登记独立命名通道。名称与显式持久化身份冲突均拒绝；省略 persistenceId 不读写通道偏好键。</summary>
+        /// <remarks>区分大小写，身份限 ASCII 字母/数字及 . _ - /。登记创建同一 Audio 宿主但不播放；Dispose/Shutdown 后身份失效。</remarks>
+        public static AudioChannel RegisterChannel(string name, AudioCategory category = AudioCategory.Music,
+            AudioChannelMode mode = AudioChannelMode.Exclusive, string persistenceId = null)
+        {
+            AudioChannel.ValidateIdentity(name, nameof(name));
+            if (persistenceId != null) AudioChannel.ValidateIdentity(persistenceId, nameof(persistenceId));
+            if ((uint)category > (uint)AudioCategory.Sound) throw new ArgumentOutOfRangeException(nameof(category));
+            if ((uint)mode > (uint)AudioChannelMode.Overlap) throw new ArgumentOutOfRangeException(nameof(mode));
+            return AudioManager.Instance.RegisterChannel(name, category, mode, persistenceId);
+        }
         /// <summary>当前有效的 Sound 请求数，包含暂停、静音和循环中的请求。读取不会创建宿主。</summary>
         public static int SoundCount => AudioManager.TryGetInstance(out var host) ? host.SoundCount : 0;
         internal static AudioSoundConcurrency CurrentSoundConcurrency => sSoundConcurrency;
