@@ -1,6 +1,6 @@
 # XF × YL 阶段 4：Audio 深度融合研究与总体方案
 
-**状态：总体方案及 D1/D2 已批准；4.1～4.3 已用户验收及 Git 收口；4.4 已单独授权并完成技术实施与定向验证，待用户验收及 Git 收口；4.5 未实施。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。阶段 4 尚未 COMPLETE。
+**状态：总体方案及 D1/D2 已批准；4.1～4.4 已用户验收及 Git 收口；4.5 自动验收及 Windows64/Mono Player 构建、运行已通过，系统实际出声与人工听感待确认。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。必要听感门禁未满足，阶段 4 尚未 COMPLETE。
 
 **目标：**新 YL 只有一个音频播放、请求生命周期与资源收尾权威，融合双方有价值的能力；原游戏、原 XF/XFAB/XFFSM Package 和阶段 1～3 成果不受破坏。方案批准、批次实施和 Git 授权分别处理。
 
@@ -334,6 +334,48 @@ Unity `2022.3.62f3c1` 实际定向结果如下。以过滤器返回的 PassedTes
 
 **主要风险：**把借用当取得所有权；开始/完成回调重入在资源责任提交前发生；慢加载覆盖新曲；尾轨或 disabled 请求被提前卸载；借源复位误改调用方对象；游戏缺字段默认值与 UnityEvent 程序集断链；退出阶段静态/协程残留；同工程原包掩盖新 Audio 的可选依赖；当前依赖/Bundle/音频设备不满足复现条件。风险分别落在 4.1～4.5，不用“全量测试通过”替代逐项证据。
 
-**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过；4.1～4.3 已验收及 Git 收口，4.4 已单独授权并完成上述技术批次，仍不代表本批 Git 或 4.5 授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
+**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过；4.1～4.4 已验收及 Git 收口，4.5 已于 2026-10-12 正式授权，但本批未获 Git 写入授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
 
 **总体方案研究轮的历史边界：**当时仅交付本文，不同步非计划文档、不实施 4.1、不创建分支、不执行 Git 写入。后续已单独授权的 4.1 实施与停止边界见第 7 节实际成果；其余批次仍需用户验收前批及单独授权。
+
+## 9. 4.5 综合验收与待确认门禁（2026-10-12）
+
+**基线与范围：**本轮开始实际分支 `fusion/4-audio`、HEAD `e25d87c`，`git ls-remote` 实时远端一致，工作区干净。Unity `2022.3.62f3c1`，Windows64/Mono，初始 Main 已保存。4.1～4.4 的研究、定向回归、源码闭包与分发证据未因本批失效；各批当时的停止文字作为历史保留。本批不改变产品 Audio、游戏、原 Package、Root、程序集或持久资产，仅新增自有验收入口及同步既有文档，没有 Git 写入。
+
+### 架构、身份与资源前提
+
+- 唯一正式 Audio 仍为 `Runtime/Audio` / `YLFramework.Services.Audio` / `YLFramework.Runtime`；Kit、Channel、Handle、Library、GroupPlayer、Provider、Mixer、组件及 Action 共用同一播放、会话与资源责任内核。自有 Core 的四份旧 Audio Runtime 和旧 Inspector 已退出，不留包装权威，原包不删。Runtime/Core 互不引用；Audio 使用的 `YLFramework.Core.Singleton/Pool` namespace 实际属于 Foundation 共享程序集，不是反向 Core 依赖。
+- 正式 Emitter/MusicPlayer GUID、游戏 ClickPlayer Prefab GUID及既有 UnityEvent/字段身份保持。直接 Clip 借用，ResLoader Provider 持有并归还实际 Loader，取消只取消逻辑等待，不冒认后端物理取消；可选 XFAB Provider 借共享资产，不自动卸载、不自动注册。
+- 可选适配位于 `Integrations/XFAB/Audio`，依赖隔离、默认 ExportRoots 排除 Integrations 与 Tests。随 Runtime 导出的集中来源声明和完整 MIT 许可证仍有效；本批原创验收代码不改变既有第三方许可，无需新增重复版权记录。
+- 重新核对 `StreamingAssets/MainModule/StandaloneWindows64` 与 `AssetBundles/MainModule/1.0.0/StandaloneWindows64`：版本 1.0.0、112 项 build-info 大小/MD5（109 普通 Bundle、平台 manifest、两份映射）逐项一致，两处 115 项非普通 Bundle/非 meta 配套文件 SHA256 一致，0 差异。build-info 记录 `2026/10/9 18:59:57`，日期、版本及两处产物一致，符合阶段 3 已恢复资源前提；清单 SHA256 `964628dfb29c77470e35f98a583393407c726f949e2d7967844e2c4861d58e82dd`，映射 SHA256 `8759f89c2b2891bcb1005faebf97148b21692be276d9915ba419bfc982083adf7`。未重建、迁移或改写既有 Bundle。
+
+### 实际验证
+
+| 门禁 | 本轮证据与边界 |
+|---|---|
+| 真实同域连续双 Play | `AudioContinuousPlayTests.ConsecutiveRealPlayRejectsExitReentryAndIsolatesOldIdentities`，1/1 通过并复验。仅 DisableDomainReload，正常 Scene Reload；域对象同一性、真实 Enter/Exit 两次、退出前同步清理请求/Channel/pending/租约/Settings/宿主、退出和释放回调拒绝新播放、新会话同名通道重建、旧 Handle/token/Channel隔离、旧 producer 迟到租约归还、Pool 退出归零均有断言。反射 ResetSession 仅最后 TearDown 恢复 fixture，不作门禁证据 |
+| 原 Logger 环境隔离 | 无隔离首次真实运行被原 `LoggerManager.cs:22/41` 空引用阻断；报告后获本轮用户专门授权，fixture 临时路由 Unity 原生 handler，保留所有错误/异常，不改 Package、不忽略日志，结束恢复保存的 handler。不得因此宣称原 XF Logger 或整个框架支持无 Domain Reload |
+| 原游戏 Editor | 既有完整 Main 流程、真实按钮 Emitter、禁用旧 Music 不停止替代 Music 三项各 1/1 通过。新增 `AudioGameAcceptanceFlow` 实际 Main/XFAB/FSM/持久按钮与 Slider链取得 `GAME_PASS`：首次菜单 BGM、EveryOne 双点击、旧 Music 键 0.42 迁移并删除、六键快照、音量 0.37/0.61、两次进入、真实 Pause/菜单返回、timeScale=0 BGM 推进、GameOver 声音及无 BGM；七种战斗/失败素材通过真实业务 Controller 起播。不是武器/碰撞/死亡的所有自然事件回归 |
+| 正式组件与真实输出 | `AudioAcceptanceEntry` 挂正式 GroupPlayer/Library及独立 Resources PCM，另有直接借用的 440/660 Hz Clip 和既有 Mixer fixture。Editor 取得 `AUDIO_PASS/QUIT_PASS`；真实 Source loop/Stop/Pause/Mute/Fade/Crossfade/3D 与音量、命名 sync/async/取消/租约/同名 Channel/Pool/退出均核验。Listener RMS 约 0.0915→半音量约 0.0458；Mute、Pause、FadeOut、Stop、远距离为 0，恢复及近距离非零。Mixer 0.5 原生参数使输出约减半。初次空间探针误移动固定点 Source 已按正式契约纠正为移动自有 Listener，不改内核或弱化断言 |
+| 最终 Windows64/Mono Development 构建 | 当前最终验收源码真实 BuildPlayer 成功，0 errors、4 warnings，153972041 bytes；warnings 全为既有 MCP Tilemap/InputSystem/Cinemachine/Timeline 空程序集，不是 Audio 编译错误。显式构建自有临时验收场景 + 原 Main，不改变正式 Build Settings、后端或业务资产 |
+| 实际窗口 Player | 同一最终 exe 的 Audio 与 `-audio45-game` 两模式均非 batchmode、非 noaudio，真实 Direct3D11/Mono，均 exit 0。Audio 有明确 `AUDIO_PASS/QUIT_PASS`，原游戏有 `GAME_PASS`；最终日志无异常、缺脚本、退场残留错误。真实命名 Resources 在尾轨和取消后 RefCount=0、Asset=null、State=Waiting，Clip 已失效或音频数据 Unloaded；不是仅 mock release 计数。Audio 输出 RMS 0.08894/半音量 0.04575、Mixer 0.09155→0.04574，静音/暂停/淡出/停止/远距为 0。游戏菜单、暂停、点击/七种业务音效/结算阶段混音均有连续非零采样 |
+| OS 实际出声与人工听感 | **待用户确认**。Listener/DSP 数值与 WASAPI backend 活动不证明系统端点、扬声器/耳机实际出声，游戏混音不单独证明每个短音效的音质或无爆音；本轮没有 OS loopback 录音，也未声称听到声音 |
+
+**本批缺陷与复查：**未发现需要修改产品 Audio 的实际缺陷。独立审查发现自有入口的 Editor 失败后遗留播放、退出失败仍可能返回 0 两处缺口，已仅在夹具修正：失败停自有 Group并 Shutdown 自有会话，保留成功路径的真实退出资源；退出证明失败记录 Error，并在 Mono Player 以非零码结束。故意把自有 Group 改为非循环，实测失败后 Source 拥有数=0、Settings=null、宿主数=0，随后恢复夹具配置；此预期负例不是产品回归。最后重新构建/运行两种 Player，显式检查成功标记及退出码，不能仅凭 exit 0 判成功。
+
+**环境恢复与产物：**临时空场景、生成的独立 PCM/Library/MixerConfig/验收场景及其 meta 均已清理，原 Main 已恢复且无未保存改动。Editor Play Options 恢复为 enabled=false/options=3，正常退出 Play，临时日志路由、Listener 和运行设置恢复；业务探针在 FSM/Module 清理后再次恢复七键/timeScale/targetFrameRate。原游戏资源/Importer/Package与设置无 Git 差异。所有构建和日志保留在工程外 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-4.5-20261012/`：`CGJ2024-Audio45.exe`、`build-summary.txt`、`audio-player.log`、`game-player.log`、Editor JSON/输出标记及失败清理负例。源码入口留在 Tests，不混入默认分发。期间有既有 MCP skills 同步 Sharing violation 和一次清理工具超时，已分别检查实际运行结果及恢复状态，不算 Audio 行为通过或隐藏异常。
+
+### 待确认的人工验收
+
+在正常有声设备、非系统静音的 Windows 桌面上，使用本轮最终 exe，分别运行下列模式（不可加 `-batchmode` 或 `-noaudio`）。`-audio45-listen` 延长观察窗口，顶部显示阶段；自动 PASS 仍仅代表断言。
+
+```powershell
+$player = "$env:LOCALAPPDATA\Temp\kilo\CGJ2024-4.5-20261012\CGJ2024-Audio45.exe"
+& $player -audio45-listen -windowed -screen-width 960 -screen-height 540 -force-d3d11 | Out-Host
+& $player -audio45-game -audio45-listen -windowed -screen-width 960 -screen-height 540 -force-d3d11 | Out-Host
+```
+
+1. Audio 模式：确认 440 Hz 音、音量减弱、Mute/Pause/Stop 静音、Resume/FadeIn 恢复、FadeOut 渐弱，440→660 Hz Crossfade 连续无明显爆音，空间 near 可听/far 衰减至静音；退出后无残留音。
+2. Game 模式：确认菜单 BGM、两次点击、设置音量变化、进入/暂停/返回/再次进入音乐、七个具名 Controller 素材和结算音效实际可听，暂停游戏仍继续 BGM，结算停止 BGM，退出不残留。不把自动混音采样当每个音效的独立听感证明。
+
+**阶段结论：**架构/身份/资源/许可核查、真实连续双 Play、原游戏自动非干扰、真实 DSP 行为以及最终 Windows64/Mono Player 构建/运行门禁已具备证据；系统实际出声和人工听感必要门禁仍待确认，因此**尚不满足阶段 4 技术 COMPLETE 全部条件**。停止等待用户验收，不使用预先完成句，不 Commit/Push/Merge/Tag/Reset/Clean、不切分支、不进入阶段 5。
