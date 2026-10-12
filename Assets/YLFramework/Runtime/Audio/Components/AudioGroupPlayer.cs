@@ -1,0 +1,123 @@
+using System;
+using UnityEngine;
+using UnityEngine.Events;
+
+namespace YLFramework.Services.Audio
+{
+    /// <summary>显式的组自动播放时机；不改变已有 Emitter/MusicPlayer 的首次 Start 行为。</summary>
+    public enum AudioGroupAutoPlay { Manual, FirstStart, EveryEnable }
+
+    /// <summary>具名素材组播放所有者；自有音源为 2D，借源保留调用方空间配置，复用唯一内核与显式命名通道。</summary>
+    /// <remarks>素材组与控制通道是两种身份。失活取消 pending 并停止自有播放；不控制其他组件的通道。
+    /// 均匀/加权只抽选一次，坏组和加载失败不停止旧播放。自定义 Music 通道不占缺省双声部。</remarks>
+    [AddComponentMenu("YLFramework/Audio/Group Player")]
+    public sealed class AudioGroupPlayer : MonoBehaviour
+    {
+        [SerializeField] private AudioClipLibrary library;
+        [SerializeField] private string groupName;
+        [Tooltip("必须显式配置唯一通道名；不以对象名或实例哈希作为登记/存储身份。")]
+        [SerializeField] private string channelName;
+        [SerializeField] private AudioCategory category = AudioCategory.Sound;
+        [SerializeField] private AudioChannelMode channelMode = AudioChannelMode.Exclusive;
+        [Tooltip("可选：明确让渡控制的有效、已停止 Source，仅 Exclusive 支持。空值使用框架音源；不移动或销毁借入对象。")]
+        [SerializeField] private AudioSource borrowedSource;
+        [Tooltip("空值不持久化；仅显式稳定 ID 才读写独立通道偏好。")]
+        [SerializeField] private string persistenceId;
+        [SerializeField] private AudioGroupAutoPlay autoPlay = AudioGroupAutoPlay.Manual;
+        [SerializeField] private bool loadAsync = true;
+        [SerializeField] private AudioSoundOptions options = new AudioSoundOptions();
+        [SerializeField] private UnityEvent onStarted = new UnityEvent();
+        private AudioChannel mChannel;
+        private IAudioClipProvider mProvider;
+        private ulong mVersion, mSubmission;
+        private bool mStarted, mDestroyed;
+
+        /// <summary>已登记的原控制通道；未播放/已退出时为 null 或失效身份。</summary>
+        public AudioChannel Channel => mChannel;
+        /// <summary>最近有效提交的命名请求；保留错误/终态供诊断，不代表当前一定在播放。</summary>
+        public AudioPlayRequest LastRequest { get; private set; }
+        /// <summary>最近开始的原句柄；失效后不能控制复用代次。</summary>
+        public AudioHandle LastHandle { get; private set; }
+        /// <summary>原句柄已归入本通道后触发；允许同步 Stop/失活/销毁。</summary>
+        public UnityEvent Started => onStarted;
+
+        /// <summary>设置 ExternalProvider 条目的显式后端；先停止本所有者的旧请求，不注册全局后端。</summary>
+        public void SetProvider(IAudioClipProvider provider) { Stop(); mProvider = provider; }
+        private void Start()
+        {
+            mStarted = true;
+            if (autoPlay != AudioGroupAutoPlay.Manual) Play();
+        }
+        private void OnEnable()
+        {
+            if (mStarted && autoPlay == AudioGroupAutoPlay.EveryEnable) Play();
+        }
+        /// <summary>按 Inspector 的组名抽选播放；无参入口可绑定 UnityEvent。</summary>
+        public void Play() => PlayGroup(groupName);
+
+        /// <summary>按明确组名抽选并提交；不是控制通道名称。失活组件不提交在途请求。</summary>
+        public void PlayGroup(string name)
+        {
+            if (mDestroyed || !isActiveAndEnabled || !library || !library.TrySelect(name, out var selection, mProvider)) return;
+            var snapshot = AudioPlaybackOptions.Capture(options);
+            if (category != AudioCategory.Sound) { snapshot.Priority = 0; snapshot.PlaySoundMode = null; }
+            snapshot.Validate(false);
+            if (!selection.IsNamed) snapshot.ValidateClip(selection.Clip);
+            if ((uint)autoPlay > (uint)AudioGroupAutoPlay.EveryEnable) throw new ArgumentOutOfRangeException(nameof(autoPlay));
+            var borrowed = AudioOutputRoute.HasReference(borrowedSource);
+            if (borrowed)
+            {
+                if (channelMode != AudioChannelMode.Exclusive) throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                if (!borrowedSource || !borrowedSource.isActiveAndEnabled) throw new ArgumentException("Borrowed Source must be live and enabled.", nameof(borrowedSource));
+            }
+            if (mChannel == null || !mChannel.IsValid)
+                mChannel = AudioKit.RegisterChannel(channelName, category, channelMode, string.IsNullOrEmpty(persistenceId) ? null : persistenceId);
+            var version = mVersion;
+            var submission = ++mSubmission;
+            Action<AudioClip, AudioHandle> started = (clip, handle) =>
+            {
+                if (mDestroyed || version != mVersion || !isActiveAndEnabled) { handle.Stop(); return; }
+                LastHandle = handle;
+                try { onStarted.Invoke(); }
+                finally
+                {
+                    if (mDestroyed || version != mVersion || !isActiveAndEnabled) handle.Stop();
+                }
+            };
+            // 命名路径由 4.3 pending/租约负责加载失败、最新独占提交和迟到结果；这里不提前 Stop。
+            if (selection.IsNamed)
+            {
+                var request = loadAsync ? (borrowed ? mChannel.PlayBorrowedAsync(borrowedSource, selection.Address, options, started) :
+                    mChannel.PlayAsync(selection.Address, options, started)) : null;
+                if (!loadAsync)
+                {
+                    var handle = borrowed ? mChannel.PlayBorrowedNamed(borrowedSource, selection.Address, options, started) :
+                        mChannel.PlayNamed(selection.Address, options, started);
+                    if (version != mVersion || mDestroyed) handle.Stop();
+                    if (submission == mSubmission) LastRequest = null;
+                }
+                else
+                {
+                    if (version != mVersion || mDestroyed) request.Cancel();
+                    if (submission == mSubmission) LastRequest = request;
+                }
+            }
+            else
+            {
+                var handle = mChannel.PlayWithSnapshot(selection.Clip, snapshot, started, source: borrowed ? borrowedSource : null, borrowed: borrowed);
+                if (version != mVersion || mDestroyed) handle.Stop();
+                if (submission == mSubmission) LastRequest = null;
+            }
+        }
+
+        /// <summary>停止进入时本通道的播放与 pending；不停止清理重入中新建的请求。</summary>
+        public void Stop() { mVersion++; mChannel?.Stop(); }
+        private void OnDisable() => Stop();
+        private void OnDestroy()
+        {
+            mDestroyed = true; mVersion++;
+            var channel = mChannel; mChannel = null;
+            channel?.Dispose();
+        }
+    }
+}

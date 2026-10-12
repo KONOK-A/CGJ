@@ -47,14 +47,19 @@ namespace YLFramework.Services.Audio
         }
         private static AudioPlayRequest PlayNamed(AudioClipAddress address, AudioCategory category, AudioChannel channel,
             AudioSoundOptions options, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
-            bool asynchronous, float crossfade = -1f)
+            bool asynchronous, float crossfade = -1f, AudioSource source = null, bool borrowed = false)
         {
             address.Validate(); channel?.RequireValid();
             var snapshot = AudioPlaybackOptions.Capture(options, channel == null && category == AudioCategory.Music);
             if (category != AudioCategory.Sound) { snapshot.Priority = 0; snapshot.PlaySoundMode = null; }
             snapshot.Validate(false);
             var host = channel?.Owner ?? AudioManager.Instance;
-            var request = new AudioPlayRequest(host, address, category, channel, snapshot, started, finished, asynchronous, crossfade);
+            if (borrowed)
+            {
+                if (channel == null || channel.Mode != AudioChannelMode.Exclusive) throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                host.ValidateBorrowedSource(source);
+            }
+            var request = new AudioPlayRequest(host, address, category, channel, snapshot, started, finished, asynchronous, crossfade, source, borrowed);
             host.AddPending(request);
             request.Load(asynchronous);
             return request;
@@ -102,8 +107,9 @@ namespace YLFramework.Services.Audio
             if (!AudioSoundOptions.IsFinite(duration) || duration < 0) throw new ArgumentOutOfRangeException(nameof(duration));
         }
         internal static AudioPlayRequest PlayChannelNamed(AudioChannel channel, AudioClipAddress address, AudioSoundOptions options,
-            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, bool asynchronous) =>
-            PlayNamed(address, channel.Category, channel, options, started, finished, asynchronous);
+            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, bool asynchronous,
+            AudioSource source = null, bool borrowed = false) =>
+            PlayNamed(address, channel.Category, channel, options, started, finished, asynchronous, source: source, borrowed: borrowed);
     }
 
     public sealed partial class AudioChannel
@@ -116,5 +122,18 @@ namespace YLFramework.Services.Audio
         public AudioPlayRequest PlayAsync(AudioClipAddress address, AudioSoundOptions options = null,
             Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null) =>
             AudioKit.PlayChannelNamed(this, address, options, onStarted, onFinished, true);
+        /// <summary>同步取得命名 Clip 后借用 Source；仅 Exclusive，省略 options 为非循环 Defaults。加载或替换前校验失败不停止旧请求。</summary>
+        /// <remarks>主线程调用。入口要求 Source 有效、启用、已停止且未被借用；提交前再次校验，不抢占旧播放。
+        /// 资源由原 Voice 全终态归还；字段恢复、caller 控制限制与 PlayBorrowed 相同，不恢复先前播放历史。
+        /// 替换释放旧资源后发生的重入冲突会终结新提交，不回滚旧播放；原请求不能覆盖嵌套取得 Source 的新 owner。</remarks>
+        public AudioHandle PlayBorrowedNamed(AudioSource source, AudioClipAddress address, AudioSoundOptions options = null,
+            Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null) =>
+            AudioKit.PlayChannelNamed(this, address, options, onStarted, onFinished, false, source, true).Handle;
+        /// <summary>异步取得命名 Clip 后借用 Source；仅 Exclusive。加载期间不占用、停止或修改 Source。</summary>
+        /// <remarks>入口须满足 PlayBorrowed 的源校验；加载就绪时再次校验，占用冲突以 Failed/Error 结束而不抢占。
+        /// 等待中的源失活或销毁由原请求 Tick 结束为 Unavailable；取消只撤销自身等待者/播放，迟到结果成对归还。</remarks>
+        public AudioPlayRequest PlayBorrowedAsync(AudioSource source, AudioClipAddress address, AudioSoundOptions options = null,
+            Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null) =>
+            AudioKit.PlayChannelNamed(this, address, options, onStarted, onFinished, true, source, true);
     }
 }

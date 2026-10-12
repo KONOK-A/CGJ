@@ -14,48 +14,6 @@ namespace YLFramework.Core.Tests
     public class CoreCoexistencePlayModeTests
     {
         [UnityTest]
-        public IEnumerator AudioPreferencesUseOnlyYLKeysAndRemoveOnlyOwnedController()
-        {
-            var name = "YLCoreSmoke." + Guid.NewGuid().ToString("N");
-            var volumeKey = "YLFramework.Core.Audio.Volume:" + name;
-            var muteKey = "YLFramework.Core.Audio.Mute:" + name;
-            var oldVolumeKey = "AudioConfigVolume:" + name;
-            var oldMuteKey = "AudioConfigMute:" + name;
-            Assert.That(PlayerPrefs.HasKey(volumeKey) || PlayerPrefs.HasKey(muteKey) ||
-                PlayerPrefs.HasKey(oldVolumeKey) || PlayerPrefs.HasKey(oldMuteKey), Is.False);
-            var updateHosts = new CoreUpdateHostScope();
-            var source = new GameObject(name, typeof(AudioSource));
-            try
-            {
-                AudioPlayer.RegisterAudioController(name, source.GetComponent<AudioSource>());
-                var controller = AudioPlayer.GetAuidoController(name);
-                Assert.That(controller, Is.Not.Null);
-                controller.Volume = 0.37f;
-                controller.Mute = true;
-                Assert.That(PlayerPrefs.GetFloat(volumeKey), Is.EqualTo(0.37f));
-                Assert.That(PlayerPrefs.GetInt(muteKey), Is.EqualTo(1));
-                Assert.That(controller.Volume, Is.EqualTo(0.37f));
-                Assert.That(controller.Mute, Is.True);
-                Assert.That(PlayerPrefs.HasKey(oldVolumeKey), Is.False);
-                Assert.That(PlayerPrefs.HasKey(oldMuteKey), Is.False);
-                AudioPlayer.RemoveAudioController(name);
-                Assert.That(AudioPlayer.GetAuidoController(name), Is.Null);
-                Assert.That(source != null, Is.True, "Caller-owned AudioSource must not be destroyed.");
-            }
-            finally
-            {
-                AudioPlayer.RemoveAudioController(name);
-                PlayerPrefs.DeleteKey(volumeKey);
-                PlayerPrefs.DeleteKey(muteKey);
-                PlayerPrefs.Save();
-                Object.Destroy(source);
-                updateHosts.ReleaseOwnedIdleHosts();
-            }
-            yield return null;
-            Assert.That(PlayerPrefs.HasKey(volumeKey) || PlayerPrefs.HasKey(muteKey), Is.False);
-        }
-
-        [UnityTest]
         public IEnumerator ActualLogWriteStaysInOwnedYLDirectoryAndLeavesOriginalLogsUnchanged()
         {
             var oldDirectory = Path.Combine(Application.temporaryCachePath, "Logs");

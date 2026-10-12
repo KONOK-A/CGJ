@@ -199,7 +199,53 @@ AudioKit.ClearClipCache(); // 活跃 Music 不受影响
 
 `Integrations/XFAB/Audio/` 独立程序集 `YLFramework.Audio.XFAB` 由包版本约束启用，`autoReferenced=false`，不反向进入正式 Runtime，也不自动注册或纳入默认框架导出。使用方显式引用它并构造 `YLFramework.Integrations.XFAB.Audio.XfabAudioClipProvider(projectName)`，以 `new AudioClipAddress(provider, assetName)` 调用上述入口。
 
-XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/Shutdown 仅结束本地观察，不调用 `UnloadAsset`、`Abort` 或清除其他完成监听。真正保活与物理释放必须由外部明确的 XFAB 资源 owner 管理；Audio 租约不伪装成 XFAB 全局租约，也不能阻止外部 owner 提前卸载。正式 Audio 组件和素材组的 Editor 接入另行整合，此处不改原游戏 AudioKit/XF 链路或 MainModule Bundle。
+XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/Shutdown 仅结束本地观察，不调用 `UnloadAsset`、`Abort` 或清除其他完成监听。真正保活与物理释放必须由外部明确的 XFAB 资源 owner 管理；Audio 租约不伪装成 XFAB 全局租约，也不能阻止外部 owner 提前卸载。素材组的 ExternalProvider 必须显式调用 `SetProvider`，不改原游戏 AudioKit/XF 链路或 MainModule Bundle。
+
+## 素材组与组件
+
+`AudioClipLibrary` 是可共享的选曲资产，不是控制通道或第二个播放器。通过 `Assets/Create/YLFramework/Audio/Clip Library` 新建，Groups 内填写区分大小写的组名及 Entries；一个组可以混用直接 Clip 和命名定位。`Uniform` 在有效条目中均匀选取，忽略存储的 Weight；`Weighted` 只选正权重条目，Weight=0 明确排除。每次提交只抽选一次并保存定位快照，不在异步完成后重新随机。
+
+| Entry Source | 必要配置与责任 |
+|---|---|
+| Clip | 绑定外部 AudioClip；继续借用，外部 owner 保活 |
+| Resources | Key 如 `resources://Audio/ui_click`；BundleName 留空，使用正式 ResLoader provider |
+| AssetBundle | Key 为完整资源名，BundleName 为 YL 明确 owner Bundle，不是 XFAB ProjectName；同 Library/Bundle 复用 provider 身份 |
+| ExternalProvider | Key 由显式后端定义；代码向 GroupPlayer.SetProvider 或 Library.TrySelect 传入同一个 provider 实例，不隐式回退/注册后端 |
+
+空 Clip/空 key、不可用定位不参与抽选；缺组、空/全坏组、重名组、非法选择/来源枚举或 Weighted 的负数/NaN/Infinity 权重返回失败，不停止旧播放。命名加载失败/迟到/取消继续使用 pending、资源租约与最新独占提交契约；异步错误查看 `LastRequest.Error/EndReason`。播放配置不合法仍按正式 API 抛错，不静默修复字段。
+
+### Inspector 最短配置
+
+1. 新建 Library，添加 `ui-clicks` 组，放入两个 Clip，选择 Uniform；或选择 Weighted 并填写相对权重。
+2. 添加 `YLFramework/Audio/Group Player`，绑定 Library，Group Name 填 `ui-clicks`，Channel Name 填该 owner 的唯一稳定名称，如 `menu/clicks`。组名只选素材；通道名只控制播放。相同登记名冲突明确拒绝，不能按对象名/哈希隐式共享。
+3. 点击音选择 Sound + Overlap、Options.Loop=false；独立环境循环选择 Music + Exclusive、显式 Options.Loop=true。新组件即使选 Music 也不自动改写 Loop，自定义 Music 不占缺省双声部。
+4. Auto Play 默认 Manual；UnityEvent 绑定无参 `Play/Stop`，或字符串入口 `PlayGroup`。FirstStart 仅首次 Start 播放；EveryEnable 首次也从 Start 播放，之后每次启用重播，不修改现有 MusicPlayer/Emitter 的首次 Start 语义。
+5. 命名资源默认 Load Async=true；Persistence ID 默认空，不读写通道键。Options.AutoPauseWhenTimeScaleZero 默认 false，输出默认 Inherit；Inspector 的 Sound 继承全局去重，因为 Unity 不序列化 `Nullable<PlaySoundModes>`。
+
+GroupPlayer 停用取消自己的 pending 并停止自己的播放，销毁撤销原通道登记；不会 StopMusic/StopAllSound 或影响其他 owner。Started UnityEvent 在原句柄/通道归属绑定后触发，事件内 Stop、失活、销毁或异常仍收尾原身份。`Channel` 是已登记身份（读取不创建），`LastHandle` 是最近启播身份，`LastRequest` 仅记录最近异步命名提交，不是第二张请求管理表。登记后的 category/mode/name/persistence 身份保持不变，运行期修改 Inspector 身份不重登，重新创建 owner 才应用新身份。
+
+素材组选曲也可单独用于代码：
+
+```csharp
+using YLFramework.Services.Audio;
+
+// library 为绑定的素材库，channel 为 owner 已显式登记的控制通道。
+if (library.TrySelect("ambience", out var selected))
+{
+    var options = AudioSoundOptions.MusicDefaults;
+    if (selected.IsNamed) channel.PlayAsync(selected.Address, options);
+    else channel.Play(selected.Clip, options);
+}
+// owner 退出时 Dispose 自己的通道，不关闭全局 Audio 或他人的资源。
+```
+
+### 素材组借源
+
+可选 Borrowed Source 接入调用方的 AudioSource，保留其空间曲线/滤镜，只有 Exclusive 支持。必须在调用前明确 Stop 并让渡控制；已播放、已借用（含暂停）或框架自有 Source 拒绝，不自动抢占旧租约。普通组播放默认 2D；借源时沿用调用方空间配置，不重挂/移动/停用/销毁对象。
+
+代码命名借源入口为 `channel.PlayBorrowedNamed(source, address, options)` / `channel.PlayBorrowedAsync(source, address, options)`。加载期间不预留或修改 Source，提交时重新校验；在途 Source 失活/销毁走 Unavailable，占用冲突走异步 Failed/Error（同步抛错）。加载或不可逆替换前校验失败保留旧播放；替换释放旧资源后发生的重入冲突不回滚已结束旧请求，新请求不得覆盖嵌套取得 Source 的 owner，这与原 PlayBorrowed 契约一致。资源在原 Voice 全终态归还，不靠公开 onFinished；释放仍按最后写入字段比较与归属恢复协议，不恢复此前播放历史。同一借源不支持原生 PlayOneShot 重叠；重叠使用池化独立 Source。
+
+自有 `YLFramework.Core` AudioController/AudioPlayer/Extension/AutoPause、旧 Inspector 及重复根/表/Update/卸载协程已退出，不提供永久兼容空壳。原 XF Package 同名类型仍独立保留；游戏正式 AudioEmitter/AudioMusicPlayer 的字段、GUID、程序集与 UnityEvent 不迁移，Core 其他模块与资源过渡不因此退出。
 
 ## 模块定位
 
@@ -226,13 +272,14 @@ AudioKit 的直接 `AudioClip` 入口只借用外部资源；显式命名入口�
 | [`Config/AudioAutoFade.cs`](../../Runtime/Audio/Config/AudioAutoFade.cs) | 可序列化首尾片段秒配置，零值关闭、短片段归一化 |
 | [`Config/AudioCrossfadeCurve.cs`](../../Runtime/Audio/Config/AudioCrossfadeCurve.cs) | Music Crossfade 的 Linear/EqualPower 曲线选择 |
 | [`Config/AudioWeightedClip.cs`](../../Runtime/Audio/Config/AudioWeightedClip.cs) | 可序列化 Clip/Weight 配对项，供纯加权选择及播放使用 |
+| [`Config/AudioClipLibrary.cs`](../../Runtime/Audio/Config/AudioClipLibrary.cs) | 具名选曲组、直接 Clip/显式后端定位及一次抽选快照 |
 | [`Config/AudioOutputRoute.cs`](../../Runtime/Audio/Config/AudioOutputRoute.cs) | 单次播放的继承、指定 MixerGroup、直接输出三态路由 |
 | [`Config/AudioKitSettings.cs`](../../Runtime/Audio/Config/AudioKitSettings.cs) | 基于 YL Binding 的六个持久化属性与 Audio 音量校验、临时静音及默认输出组 |
 | [`Config/AudioMixerConfig.cs`](../../Runtime/Audio/Config/AudioMixerConfig.cs) | 可选的分类 Mixer 路由配置资产 |
 | [`Mixer/`](../../Runtime/Audio/Mixer/) | 独立静态 AudioMixerControl 操作逻辑 |
 | [`Internal/`](../../Runtime/Audio/Internal/) | AudioManager 宿主、AudioVoice 实例、SoundDeduplicator |
 | [`Internal/AudioPlaybackOptions.cs`](../../Runtime/Audio/Internal/AudioPlaybackOptions.cs) | 内部播放值快照、集中有效默认值、公开配置捕获与校验；不新增公开配置类型 |
-| [`Components/`](../../Runtime/Audio/Components/) | AudioEmitter / AudioMusicPlayer 播放组件与 AudioMixerController 薄配置组件 |
+| [`Components/`](../../Runtime/Audio/Components/) | 原 AudioEmitter / AudioMusicPlayer、AudioGroupPlayer 组 owner 与 AudioMixerController 薄配置组件 |
 | [`Actions/`](../../Runtime/Audio/Actions/) | PlaySoundAction / PlaySoundExtension |
 | [`Diagnostics/`](../../Runtime/Audio/Diagnostics/) | 被动诊断；运行 GUI 仅 Editor/Development Build |
 | [`Editor/Audio/`](../../Editor/Audio/) | 分层 Inspector、Debug 编辑器窗口与 Help 提供方 |
@@ -339,7 +386,7 @@ Sound 开始回调在 `Source.Play` 之后、方法返回前同步触发。此�
 
 ## 命名控制通道
 
-命名通道是同一 AudioManager 中的请求归属，不是第二个播放器、素材选曲组或 MVC Controller。目前通过代码登记，没有新增组件/Inspector，也不迁移旧游戏资产。
+命名通道是同一 AudioManager 中的请求归属，不是第二个播放器、素材选曲组或 MVC Controller。可通过代码显式登记，也由 AudioGroupPlayer 以明确身份登记自己的通道；不迁移旧游戏资产。
 
 ```csharp
 var wind = AudioKit.RegisterChannel("environment/wind");
@@ -364,6 +411,7 @@ rain.Dispose();
 - 局部 `Volume` 为 `[0,1]`，初值 1，与分类和请求倍率相乘；`Muted` 初值 false，与分类 Mute 取 OR。它们不会反向修改缺省设置。分类 On/Off 保持旧语义：Music/Voice off 保留请求、on 从头重播；Sound off 终结请求并拒播。输出使用既有 Options.OutputRoute，Inherit 跟随分类路由，ToMixer/Direct 保持独立。
 - `Pause` 保持通道暂停，也应用于后续请求；`Resume` 只解除通道原因，不解除逐请求手动暂停或自动暂停。开始回调抛错只终结失败的原租约；批量 Resume/分类开启继续处理其他原请求后汇总报告异常。
 - 省略 `persistenceId` 完全不读写通道键，不根据 Source 名字、对象哈希或实例 ID 落盘。显式稳定身份使用 `YLFramework.Audio.Channel:{id}:Volume` / `:Mute`，不改六个分类键、不写 XF/Core 旧键；登记只读取，坏音量内存回退 1、不重写。Pause/拓扑/路由不持久化，不自动迁移旧键或每次调用 PlayerPrefs.Save。
+- `VolumeChanged` / `MutedChanged` 仅观察局部实际变化，先更新原请求再通知，同值写入不通知；不自动投递初始值或分类设置变化。所有者负责退订，Dispose/Shutdown 也撤销原订阅。通知中重入同属性或 Dispose 撤销余下的旧值投递；单个监听抛错后继续仍属原代次的监听并聚合抛出，不回滚已应用值。
 - Dispose、Shutdown 或原会话宿主失效后 `IsValid=false`。旧身份的 Stop/Pause/Resume/Dispose 安全 no-op，Play/设置写入明确抛错；不能控制同名新登记或已复用的请求。RequestCount 包含暂停和等待分类启用的请求。
 
 ### 受控 Source 借用

@@ -58,7 +58,8 @@ namespace YLFramework.Tests.Audio
                 typeof(AudioOutputRoute), typeof(AudioOutputRoute.RouteMode), typeof(AudioMixerConfig),
                 typeof(AudioMixerControl), typeof(AudioMixerController), typeof(AudioChannel), typeof(AudioCategory), typeof(AudioChannelMode),
                 typeof(AudioClipAddress), typeof(AudioClipLease), typeof(IAudioClipProvider), typeof(ResLoaderAudioClipProvider),
-                typeof(AudioPlayRequest), typeof(AudioPlayState), typeof(AudioPlayEnd)
+                typeof(AudioPlayRequest), typeof(AudioPlayState), typeof(AudioPlayEnd), typeof(AudioClipLibrary), typeof(AudioClipGroup),
+                typeof(AudioClipEntry), typeof(AudioClipSource), typeof(AudioClipSelectionMode), typeof(AudioClipSelection), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay)
             };
             var apiTypes = module.ApiTypes.Select(definition => definition.Type).ToArray();
             foreach (var type in requiredTypes) CollectionAssert.Contains(apiTypes, type);
@@ -183,6 +184,16 @@ namespace YLFramework.Tests.Audio
                           "useGlobalPlaySoundMode", "字段缺省 false", "playSoundMode=EveryOne", "Reset", "AddComponent",
                           "options.PlaySoundMode=null", "空候选", "旧循环", "空 Clip", "旧音乐", "duration/curve",
                           "Advanced 默认折叠", "隐藏字段不静默清空", "新增项 Weight=1", "旧 Weight=0" })
+                StringAssert.Contains(contract, components.SearchText);
+            foreach (var type in new[] { typeof(AudioClipLibrary), typeof(AudioClipGroup), typeof(AudioClipEntry), typeof(AudioClipSource),
+                         typeof(AudioClipSelectionMode), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay) })
+            {
+                CollectionAssert.Contains(components.RelatedTypes, type);
+                CollectionAssert.Contains(components.FeaturedTypes, type);
+            }
+            foreach (var contract in new[] { "AudioClipLibrary", "素材组与控制通道是两种身份", "Uniform/Weighted", "resources://", "YL owner BundleName",
+                         "ExternalProvider", "SetProvider", "空 persistenceId 不持久化", "Manual", "FirstStart", "EveryEnable", "PlayGroup(string)",
+                         "停用停止所有自有播放与 pending", "nullable PlaySoundMode 不被 Unity 序列化", "不随机抽选", "Prefab Override" })
                 StringAssert.Contains(contract, components.SearchText);
             Assert.IsFalse(AudioManager.HasInstance);
             Assert.IsNull(AudioKit.CurrentSettings);

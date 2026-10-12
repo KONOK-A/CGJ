@@ -24,7 +24,8 @@ namespace YLFramework.Tests.Audio
         private sealed class Resource : IDisposable
         {
             internal int Releases;
-            public void Dispose() => Releases++;
+            internal Action Releasing;
+            public void Dispose() { Releases++; Releasing?.Invoke(); }
         }
         [SetUp]
         public void SetUp()
@@ -179,6 +180,187 @@ namespace YLFramework.Tests.Audio
             channel.PlayBorrowed(source, mClip, onStarted: (_, __) => { AudioKit.Shutdown(); source.volume = .22f; });
             yield return null;
             Assert.AreEqual(.22f, source.volume); Assert.IsTrue(mExternal.activeSelf); Assert.IsTrue(source);
+        }
+
+        [UnityTest]
+        public IEnumerator BorrowedChannelProgressUsesUnscaledTimeAndStopAllowsReplay()
+        {
+            var source = mExternal.AddComponent<AudioSource>();
+            var channel = AudioKit.RegisterChannel("migrated-core-progress");
+            Time.timeScale = 0;
+            var first = channel.PlayBorrowed(source, mClip, AudioSoundOptions.MusicDefaults);
+            yield return new WaitForSecondsRealtime(.08f);
+            Assert.Greater(first.Time, 0);
+            channel.Pause(); var paused = first.Time;
+            yield return new WaitForSecondsRealtime(.08f);
+            Assert.AreEqual(paused, first.Time, .01f);
+            channel.Stop(); channel.Resume();
+            Assert.IsFalse(first.IsValid);
+            var second = channel.PlayBorrowed(source, mClip, AudioSoundOptions.MusicDefaults);
+            yield return new WaitForSecondsRealtime(.08f);
+            Assert.Greater(second.Time, 0);
+            Object.Destroy(source); yield return null; yield return null;
+            Assert.IsFalse(second.IsValid); Assert.AreEqual(0, channel.RequestCount);
+            channel.Dispose();
+            Assert.IsTrue(mExternal, "Retiring a channel cannot destroy the caller's GameObject.");
+        }
+
+        [UnityTest]
+        public IEnumerator BorrowedCleanupFailureRevokesOwnershipAndCannotRepeatAcrossFrames()
+        {
+            var source = mExternal.AddComponent<AudioSource>(); source.volume = .37f;
+            var channel = AudioKit.RegisterChannel("migrated-core-cleanup");
+            var otherChannel = AudioKit.RegisterChannel("unrelated-cleanup");
+            var other = otherChannel.Play(mClip, AudioSoundOptions.MusicDefaults);
+            var resource = new Resource { Releasing = () => throw new InvalidOperationException("migrated-cleanup-failure") };
+            var original = channel.PlayWithSnapshot(mClip, AudioPlaybackOptions.Capture(AudioSoundOptions.MusicDefaults),
+                resource: new AudioResourceLease(resource), source: source, borrowed: true);
+            LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("migrated-cleanup-failure"));
+            channel.Dispose();
+            Assert.IsFalse(channel.IsValid); Assert.IsFalse(original.IsValid);
+            Assert.AreEqual(1, resource.Releases);
+            Assert.IsTrue(source); Assert.IsTrue(mExternal.activeSelf);
+            Assert.AreEqual(.37f, source.volume); Assert.IsNull(source.clip);
+            yield return null; yield return null;
+            Assert.AreEqual(1, resource.Releases);
+            Assert.IsTrue(other.IsPlaying);
+            channel.Dispose(); Assert.AreEqual(1, resource.Releases);
+        }
+
+        private static void ConfigureGroupPlayer(AudioGroupPlayer player, string field, object value) =>
+            typeof(AudioGroupPlayer).GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(player, value);
+
+        [UnityTest]
+        public IEnumerator GroupAutoPlayDefaultsToManualAndEnableReplayIsExplicit()
+        {
+            var library = ScriptableObject.CreateInstance<AudioClipLibrary>();
+            library.Groups.Add(new AudioClipGroup { Name = "loop", Entries = new System.Collections.Generic.List<AudioClipEntry> { new AudioClipEntry { Clip = mClip } } });
+            var root = new GameObject("group-auto"); root.SetActive(false);
+            try
+            {
+                var player = root.AddComponent<AudioGroupPlayer>();
+                ConfigureGroupPlayer(player, "library", library); ConfigureGroupPlayer(player, "groupName", "loop");
+                ConfigureGroupPlayer(player, "channelName", "group-auto"); ConfigureGroupPlayer(player, "category", AudioCategory.Music);
+                ConfigureGroupPlayer(player, "options", AudioSoundOptions.MusicDefaults);
+                root.SetActive(true); yield return null;
+                Assert.IsNull(player.Channel, "Manual default cannot create an audio owner in Start.");
+                player.Play(); var first = player.LastHandle;
+                yield return new WaitForSecondsRealtime(.08f);
+                Assert.IsTrue(first.IsPlaying); Assert.Greater(first.Time, 0);
+                root.SetActive(false); Assert.IsFalse(first.IsValid);
+                root.SetActive(true); yield return null;
+                Assert.IsFalse(player.LastHandle.IsValid, "Manual does not replay on Enable.");
+                ConfigureGroupPlayer(player, "autoPlay", AudioGroupAutoPlay.EveryEnable);
+                root.SetActive(false); root.SetActive(true);
+                yield return new WaitForSecondsRealtime(.08f);
+                Assert.IsTrue(player.LastHandle.IsPlaying);
+                var replay = player.LastHandle;
+                root.SetActive(false); root.SetActive(true); yield return null;
+                Assert.IsFalse(replay.IsValid); Assert.IsTrue(player.LastHandle.IsValid);
+            }
+            finally { Object.Destroy(root); Object.Destroy(library); }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator GroupFirstStartRunsOnceWithoutEnableReplay()
+        {
+            var library = ScriptableObject.CreateInstance<AudioClipLibrary>();
+            library.Groups.Add(new AudioClipGroup { Name = "loop", Entries = new System.Collections.Generic.List<AudioClipEntry> { new AudioClipEntry { Clip = mClip } } });
+            var root = new GameObject("group-start"); root.SetActive(false);
+            try
+            {
+                var player = root.AddComponent<AudioGroupPlayer>();
+                ConfigureGroupPlayer(player, "library", library); ConfigureGroupPlayer(player, "groupName", "loop");
+                ConfigureGroupPlayer(player, "channelName", "group-start"); ConfigureGroupPlayer(player, "autoPlay", AudioGroupAutoPlay.FirstStart);
+                var starts = 0; player.Started.AddListener(() => starts++);
+                root.SetActive(true); yield return null; yield return null;
+                Assert.AreEqual(1, starts); Assert.IsTrue(player.LastHandle.IsValid);
+                root.SetActive(false); root.SetActive(true); yield return null;
+                Assert.AreEqual(1, starts); Assert.IsFalse(player.LastHandle.IsValid);
+            }
+            finally { Object.Destroy(root); Object.Destroy(library); }
+            yield return null;
+        }
+
+        private sealed class GroupProvider : IAudioClipProvider
+        {
+            public AudioClip Clip;
+            public Resource Resource = new Resource();
+            public Action<AudioClipLease, Exception> Completed;
+            public bool CanCache => false;
+            public AudioClipLease Load(string key) => new AudioClipLease(Clip, Resource);
+            public void LoadAsync(string key, Action<AudioClipLease, Exception> completed, Action<float> progress) { Completed = completed; }
+        }
+
+        [UnityTest]
+        public IEnumerator NamedGroupNaturalCompletionReturnsLeaseAndDisableCannotReviveLateRequest()
+        {
+            var library = ScriptableObject.CreateInstance<AudioClipLibrary>();
+            library.Groups.Add(new AudioClipGroup { Name = "named", Entries = new System.Collections.Generic.List<AudioClipEntry> { new AudioClipEntry { Source = AudioClipSource.ExternalProvider, Key = "clip" } } });
+            var root = new GameObject("group-named");
+            try
+            {
+                var player = root.AddComponent<AudioGroupPlayer>();
+                ConfigureGroupPlayer(player, "library", library); ConfigureGroupPlayer(player, "groupName", "named");
+                ConfigureGroupPlayer(player, "channelName", "group-named");
+                var provider = new GroupProvider { Clip = mShortClip }; player.SetProvider(provider);
+                player.Play(); var request = player.LastRequest;
+                Assert.AreEqual(AudioPlayState.Loading, request.State);
+                provider.Completed(provider.Load("clip"), null);
+                Assert.IsTrue(request.Handle.IsPlaying);
+                var deadline = Time.realtimeSinceStartup + 2;
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.AreEqual(AudioPlayEnd.Completed, request.EndReason); Assert.AreEqual(1, provider.Resource.Releases);
+                provider = new GroupProvider { Clip = mClip }; player.SetProvider(provider);
+                player.Play(); var late = player.LastRequest;
+                root.SetActive(false); root.SetActive(true);
+                provider.Completed(provider.Load("clip"), null); yield return null;
+                Assert.IsTrue(late.IsDone); Assert.IsFalse(late.Handle.IsValid);
+                Assert.AreEqual(1, provider.Resource.Releases); Assert.AreEqual(0, player.Channel.RequestCount);
+            }
+            finally { Object.Destroy(root); Object.Destroy(library); }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator GroupComponentUsesTheBorrowedSourceForDirectAndNamedPlayback()
+        {
+            var source = mExternal.AddComponent<AudioSource>();
+            source.clip = mClip; source.volume = .27f; source.spatialBlend = .5f;
+            var library = ScriptableObject.CreateInstance<AudioClipLibrary>();
+            library.Groups.Add(new AudioClipGroup { Name = "direct", Entries = new System.Collections.Generic.List<AudioClipEntry> { new AudioClipEntry { Clip = mClip } } });
+            library.Groups.Add(new AudioClipGroup { Name = "named", Entries = new System.Collections.Generic.List<AudioClipEntry> { new AudioClipEntry { Source = AudioClipSource.ExternalProvider, Key = "clip" } } });
+            var root = new GameObject("group-borrowed");
+            try
+            {
+                var player = root.AddComponent<AudioGroupPlayer>();
+                ConfigureGroupPlayer(player, "library", library); ConfigureGroupPlayer(player, "channelName", "group-borrowed");
+                ConfigureGroupPlayer(player, "borrowedSource", source); ConfigureGroupPlayer(player, "options", AudioSoundOptions.MusicDefaults);
+                player.PlayGroup("direct");
+                Assert.AreSame(source, player.LastHandle.Voice.Source);
+                yield return new WaitForSecondsRealtime(.08f);
+                Assert.IsTrue(source.isPlaying); Assert.Greater(player.LastHandle.Time, 0);
+                player.Stop(); Assert.AreEqual(.27f, source.volume); Assert.AreSame(mClip, source.clip);
+                var provider = new GroupProvider { Clip = mShortClip }; player.SetProvider(provider);
+                ConfigureGroupPlayer(player, "options", AudioSoundOptions.Defaults);
+                player.PlayGroup("named"); var request = player.LastRequest;
+                Assert.AreSame(mClip, source.clip); Assert.IsFalse(source.isPlaying);
+                provider.Completed(provider.Load("clip"), null);
+                Assert.AreSame(source, request.Handle.Voice.Source);
+                var deadline = Time.realtimeSinceStartup + 2;
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.AreEqual(AudioPlayEnd.Completed, request.EndReason); Assert.AreEqual(1, provider.Resource.Releases);
+                Assert.AreEqual(.27f, source.volume); Assert.AreSame(mClip, source.clip); Assert.AreEqual(.5f, source.spatialBlend);
+                provider = new GroupProvider { Clip = mClip }; player.SetProvider(provider);
+                ConfigureGroupPlayer(player, "loadAsync", false); ConfigureGroupPlayer(player, "options", AudioSoundOptions.MusicDefaults);
+                player.PlayGroup("named"); Assert.AreSame(source, player.LastHandle.Voice.Source);
+                root.SetActive(false);
+                Assert.IsFalse(player.LastHandle.IsValid); Assert.AreEqual(1, provider.Resource.Releases);
+                Assert.IsTrue(source); Assert.IsTrue(mExternal.activeSelf); Assert.AreEqual(.27f, source.volume);
+            }
+            finally { Object.Destroy(root); Object.Destroy(library); }
+            yield return null;
         }
     }
 }

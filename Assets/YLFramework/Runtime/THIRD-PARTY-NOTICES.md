@@ -45,6 +45,7 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 ## XFGameFramework（弦小风）
 
 - `Runtime/Shared/Serialization/SerializedDictionary.cs`：承接并改编自 XFGameFramework 的 `Runtime/Extensions/SerializedDictionary.cs`，来源 revision 为 `2182708aec`。统一容器在 2.5-A 重写行为后，于 2.5-B 从 YL Core 迁入 Foundation；仍保留 `datas/Key/Value` 序列化条目布局。
+- `Runtime/Audio/AudioChannel.cs`、`AudioKit.Named.cs`、`AudioPlayRequest.cs`、`Config/AudioClipLibrary.cs`、`Components/AudioGroupPlayer.cs` 与 `Editor/Audio/` 对应素材组 Inspector：承接 XF revision `2182708aec` 的命名控制、素材组选曲/配置、借入 Source、变化观察和 Enable 播放用途，按唯一 YL 请求/资源内核重新实现，未整类搬移旧播放器。自有 `Runtime/XFMain/Manager/Audio*.cs` 与旧 AudioPlayerInspector 已退出；删除重复实现不撤销历史来源、署名或完整许可。原 XF Package 保持只读且独立存在。
 - 适用 MIT License，版权声明为 `Copyright (c) 2021 弦小风`；完整许可见 `Runtime/Shared/LICENSE.md`。其余 Core 承接源码的完整许可继续保留在 `Runtime/XFMain/LICENSE.md`。
 
 ## 其他第三方组件

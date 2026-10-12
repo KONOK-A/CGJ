@@ -157,6 +157,8 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(.6f, restored.Volume); Assert.IsTrue(restored.Muted);
                 Assert.IsFalse(PlayerPrefs.HasKey(oldKey));
                 Assert.IsFalse(PlayerPrefs.HasKey("YLFramework.Core.Audio.Volume:" + id));
+                Assert.IsFalse(PlayerPrefs.HasKey("AudioConfigMute:" + id));
+                Assert.IsFalse(PlayerPrefs.HasKey("YLFramework.Core.Audio.Mute:" + id));
             }
             finally { PlayerPrefs.DeleteKey(volumeKey); PlayerPrefs.DeleteKey(muteKey); }
         }

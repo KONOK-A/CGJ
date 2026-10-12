@@ -19,6 +19,8 @@ namespace YLFramework.Services.Audio
         private readonly Action<AudioClip, AudioHandle> mStarted, mFinished;
         private readonly float mCrossfade;
         private readonly bool mWaitForData;
+        private readonly AudioSource mBorrowedSource;
+        private readonly bool mBorrowed;
         private readonly ulong mSession;
         private IDisposable mWaiting;
         private AudioClipLease mClip;
@@ -48,10 +50,11 @@ namespace YLFramework.Services.Audio
 
         internal AudioPlayRequest(AudioManager owner, AudioClipAddress address, AudioCategory category, AudioChannel channel,
             AudioPlaybackOptions options, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
-            bool waitForData, float crossfade)
+            bool waitForData, float crossfade, AudioSource source = null, bool borrowed = false)
         {
             mOwner = owner; Address = address; Category = category; Channel = channel; mOptions = options;
             mStarted = started; mFinished = finished; mWaitForData = waitForData; mCrossfade = crossfade;
+            mBorrowedSource = source; mBorrowed = borrowed;
             mSession = AudioKit.SoundSession;
         }
         internal void Load(bool asynchronous)
@@ -83,8 +86,11 @@ namespace YLFramework.Services.Audio
         }
         internal void Tick()
         {
-            if (IsDone || !AssetReady || !Pending || mSubmitting) return;
+            if (IsDone || !Pending || mSubmitting) return;
             if (!Available) { End(AudioPlayEnd.Unavailable); return; }
+            // 等待期间仅观察存活，不占用 Source；真正借用仍由提交时的原 Voice 完成。
+            if (mBorrowed && (!mBorrowedSource || !mBorrowedSource.isActiveAndEnabled)) { End(AudioPlayEnd.Unavailable); return; }
+            if (!AssetReady) return;
             var clip = mClip.Clip;
             if (!clip) { End(AudioPlayEnd.Unavailable); return; }
             if (clip.loadState == AudioDataLoadState.Failed) { Fail(new InvalidOperationException("Audio data failed to load: " + Address.Key)); return; }
@@ -113,7 +119,8 @@ namespace YLFramework.Services.Audio
                 mStarted?.Invoke(actual, handle);
             };
             AudioHandle result;
-            if (Channel != null) result = Channel.PlayWithSnapshot(clip, mOptions, started, mFinished, mResource, namedCommit: true);
+            if (Channel != null) result = Channel.PlayWithSnapshot(clip, mOptions, started, mFinished, mResource,
+                source: mBorrowedSource, borrowed: mBorrowed, namedCommit: true);
             else if (Category == AudioCategory.Sound) result = AudioKit.PlaySoundWithSnapshot(clip, mOptions, mFinished, started, resource: mResource);
             else if (mCrossfade >= 0f) result = AudioKit.CrossFadeMusicWithSnapshot(clip, mCrossfade, mOptions, started, mFinished, resource: mResource, namedCommit: true);
             else result = AudioKit.PlaySlotWithSnapshot(clip, Category == AudioCategory.Music, mOptions, started, mFinished, mResource, namedCommit: true);

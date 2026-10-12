@@ -32,6 +32,7 @@ namespace YLFramework.Services.Audio
         private bool mDisposed, mPaused, mMuted;
         private float mVolume = 1f;
         private ulong mPauseVersion;
+        private ulong mVolumeVersion, mMuteVersion;
         internal ulong Epoch { get; private set; }
         internal ulong PendingVersion;
         /// <summary>区分大小写的登记名，不用作隐式存储身份。</summary>
@@ -48,6 +49,10 @@ namespace YLFramework.Services.Audio
         public bool IsPaused => IsValid && mPaused;
         /// <summary>有效请求数，包含暂停和等待分类启用的请求。</summary>
         public int RequestCount => IsValid ? mRequests.Count : 0;
+        /// <summary>局部音量实际变化且已更新原请求后通知；同值不通知。Dispose 撤销订阅，不投递初始值。</summary>
+        public event Action<float> VolumeChanged;
+        /// <summary>局部静音实际变化且已更新原请求后通知；不表示分类静音变化。</summary>
+        public event Action<bool> MutedChanged;
         /// <summary>局部 [0,1] 音量，不回写缺省分类设置。</summary>
         public float Volume
         {
@@ -56,9 +61,12 @@ namespace YLFramework.Services.Audio
             {
                 RequireValid();
                 if (!AudioSoundOptions.IsFinite(value) || value < 0f || value > 1f) throw new ArgumentOutOfRangeException(nameof(value));
-                mVolume = value;
                 if (PersistenceId != null) PlayerPrefs.SetFloat(StorageKey("Volume"), value);
+                if (mVolume == value) return;
+                mVolume = value;
+                var version = ++mVolumeVersion;
                 foreach (var request in mRequests) request.SetVolume(Owner.GetSharedVolume(request));
+                if (VolumeChanged != null) Notify(VolumeChanged, value, () => IsValid && mVolumeVersion == version);
             }
         }
         /// <summary>局部静音，不停止、重播或暂停请求；仅显式 PersistenceId 才持久化。</summary>
@@ -67,9 +75,13 @@ namespace YLFramework.Services.Audio
             get => mMuted;
             set
             {
-                RequireValid(); mMuted = value;
+                RequireValid();
                 if (PersistenceId != null) PlayerPrefs.SetInt(StorageKey("Mute"), value ? 1 : 0);
+                if (mMuted == value) return;
+                mMuted = value;
+                var version = ++mMuteVersion;
                 foreach (var request in mRequests) request.SetMute(Owner.GetMuted(request));
+                if (MutedChanged != null) Notify(MutedChanged, value, () => IsValid && mMuteVersion == version);
             }
         }
         internal AudioChannel(AudioManager owner, string name, AudioCategory category, AudioChannelMode mode, string persistenceId)
@@ -81,6 +93,18 @@ namespace YLFramework.Services.Audio
             mMuted = PlayerPrefs.GetInt(StorageKey("Mute"), 0) != 0;
         }
         private string StorageKey(string setting) => "YLFramework.Audio.Channel:" + PersistenceId + ":" + setting;
+        private static void Notify<T>(Action<T> listeners, T value, Func<bool> current)
+        {
+            if (listeners == null) return;
+            List<Exception> failures = null;
+            foreach (Action<T> listener in listeners.GetInvocationList())
+            {
+                if (!current()) break;
+                try { listener(value); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            }
+            if (failures != null) throw new AggregateException("Audio channel setting notification failed.", failures);
+        }
         internal void RequireValid() { if (!IsValid) throw new InvalidOperationException("Audio channel has expired."); }
         internal static void ValidateIdentity(string identity, string parameter)
         {
@@ -181,6 +205,7 @@ namespace YLFramework.Services.Audio
         {
             if (mDisposed) return;
             mDisposed = true; Epoch++;
+            VolumeChanged = null; MutedChanged = null;
             Owner.UnregisterChannel(this);
             Owner.CancelPending(Category, this, (AudioPlayEnd)reason);
             StopRequests(reason);
