@@ -1,10 +1,13 @@
 using System;
+using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.TestTools;
 using FirstSettings = YLFramework.Core.Editor.Tests.Settings.First.CoreEditorSettingsFixture;
 using SecondSettings = YLFramework.Core.Editor.Tests.Settings.Second.CoreEditorSettingsFixture;
 
@@ -12,6 +15,72 @@ namespace YLFramework.Core.Editor.Tests
 {
     public class CoreEditorConfigurationTests
     {
+        [UnityTest]
+        public IEnumerator BothSettingsEntrypointsSelectPublicProjectPagesWithoutCreatingConfiguration()
+        {
+            var previousFocus = EditorWindow.focusedWindow;
+            var existing = Resources.FindObjectsOfTypeAll<EditorWindow>()
+                .SingleOrDefault(window => window.GetType().FullName == "UnityEditor.ProjectSettingsWindow");
+            var getProvider = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.SettingsWindow")
+                .GetMethod("GetCurrentProvider", BindingFlags.NonPublic | BindingFlags.Instance);
+            string previousPath = existing ? ((SettingsProvider)getProvider.Invoke(existing, null))?.settingsPath : null;
+            const string selectionKey = "SettingsWindow_Project Settings_current_provider";
+            const string splitterKey = "SettingsWindow_m_Splitter";
+            bool hadSelection = EditorPrefs.HasKey(selectionKey);
+            bool hadSplitter = EditorPrefs.HasKey(splitterKey);
+            string selection = EditorPrefs.GetString(selectionKey);
+            float splitter = EditorPrefs.GetFloat(splitterKey);
+            var settings = ScriptableObject.CreateInstance<FirstSettings>();
+            EditorWindow opened = null;
+            try
+            {
+                OpenAndDrainOwnedSettingsFocus(() => ProjectSettingTools.OpenProjectSettings("Project/Tags and Layers"));
+                opened = Resources.FindObjectsOfTypeAll<EditorWindow>()
+                    .Single(window => window.GetType().FullName == "UnityEditor.ProjectSettingsWindow");
+                Assert.That(((SettingsProvider)getProvider.Invoke(opened, null)).settingsPath, Is.EqualTo("Project/Tags and Layers"));
+                OpenAndDrainOwnedSettingsFocus(() => settings.OpenProjectSettings("Project/Physics"));
+                Assert.That(((SettingsProvider)getProvider.Invoke(opened, null)).settingsPath, Is.EqualTo("Project/Physics"));
+                Assert.That(Resources.FindObjectsOfTypeAll<EditorWindow>()
+                    .Count(window => window.GetType().FullName == "UnityEditor.ProjectSettingsWindow"), Is.EqualTo(1));
+                Assert.That(File.Exists(SettingsPath<FirstSettings>()), Is.False);
+                yield return null;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(settings);
+                if (!existing && opened) opened.Close();
+                else if (existing && previousPath != null)
+                    OpenAndDrainOwnedSettingsFocus(() => SettingsService.OpenProjectSettings(previousPath));
+                if (hadSelection) EditorPrefs.SetString(selectionKey, selection);
+                else EditorPrefs.DeleteKey(selectionKey);
+                if (hadSplitter) EditorPrefs.SetFloat(splitterKey, splitter);
+                else EditorPrefs.DeleteKey(splitterKey);
+                if (previousFocus) previousFocus.Focus();
+            }
+            yield return null;
+            if (previousFocus) Assert.That(EditorWindow.focusedWindow, Is.SameAs(previousFocus));
+        }
+
+        private static void OpenAndDrainOwnedSettingsFocus(Action open)
+        {
+            var before = EditorApplication.delayCall?.GetInvocationList() ?? Array.Empty<Delegate>();
+            try { open(); }
+            finally
+            {
+                // 测试运行中 delayCall 不保证逐帧分发；只执行本次调用产生的原生 Show focus 回调。
+                var added = (EditorApplication.delayCall?.GetInvocationList() ?? Array.Empty<Delegate>())
+                    .Where(callback => !before.Contains(callback) &&
+                        callback.Method.DeclaringType?.DeclaringType?.FullName == "UnityEditor.SettingsWindow" &&
+                        callback.Method.Name.StartsWith("<Show>", StringComparison.Ordinal))
+                    .Cast<EditorApplication.CallbackFunction>().ToArray();
+                foreach (var callback in added)
+                {
+                    EditorApplication.delayCall -= callback;
+                    callback();
+                }
+            }
+        }
+
         [Test]
         public void ScriptableObjectsAreCreatedOnlyUnderOwnedRootAndPersistentObjectsCannotMove()
         {

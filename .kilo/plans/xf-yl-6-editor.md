@@ -1,6 +1,6 @@
 # XF × YL：阶段 6 Editor 深度融合总体方案
 
-**状态：APPROVED，6.1 待单独实施授权。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成任何单批实施授权，各批仍须单独授权。
+**状态：APPROVED，阶段 6 IN PROGRESS。6.1 已获单独实施授权，实施记录见第 6.1 节；待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
 
 **目标：** 保留成熟工具，把已承接的 XF Editor 支撑与 YL authoring、帮助、导出协调起来，修复真实工具链缺陷，并接入可维护的自有分析器。不是重做 Inspector 平台、资源系统或包管理器。
 
@@ -122,6 +122,21 @@
 
 **门禁：** Unity 编译；定向 CoreDefaultResourceEditorTests + CoreDefaultResourceTests，测试只创建独立临时资源，验证中立 EventSystem 经现有 bridge 得到正确输入后端，不删除正式默认资产来测试；CoreEditorConfigurationTests、相关 CoreEditorIdentityTests。Clipboard 增补 null 引用、版本不可用反馈以及一次真实 Undo/Redo、Prefab override、混值多对象粘贴（若不能可靠支持则明确拒绝，不部分应用）。Drawer 高度/禁用/GUI 恢复复用 DisableEditDrawerTests；模块生成器未改模板不重跑整个生成套件。
 
+#### 6.1 实施记录（2026-10-12）
+
+- 基线：`fusion/6-editor`、HEAD `7db580635661165acb42826d3a66f885f9809930`，开始时工作区干净；`git ls-remote` 确认远端 `fusion/6-editor` 与 `integration/xf-yl` 同提交。未创建或切换分支，未 Commit/Push/Merge/Tag/Reset/Clean。
+- 默认资源：只从 `CreateEventSystem` 移除硬编码 StandaloneInputModule，生成与正式随包 Prefab 一致的中立 EventSystem。临时独立 Prefab 验证现有 Runtime bridge 在本工程 Both 环境选择 InputSystemUIInputModule、重复调用不追加模块；不改 Runtime，不改现有生成保护与删除保护。
+- 资产保护：未删除、重建或编辑正式 Canvas/EventSystem；重复生成与实际延迟初始化验证其文件和 `.meta` 字节、时间戳均不变。两者 GUID 仍为 `0df4ee5a6aa484a40b5d537a1c23a2c0` / `e5f419ca4a6e564439be23e0257ffb3c`。临时工厂对象保持 inactive，未接管外部 EventSystem；测试后活动场景仍为 `Assets/Scenes/Main.unity`、3 个根对象、dirty=false。
+- SerializedProperty/Clipboard：空 ObjectReference 与 ExposedReference 显示 `None`；保留现有三个 Clipboard API。原生成员只从 Unity Editor 程序集按精确参数/返回类型解析，缺失/失配抛带版本和成员的 NotSupportedException。使用 Unity 自身 Clipboard/JSON 编解码在独立 SerializedObject 缓冲中试粘贴，核对完整 round-trip 后仅复制目标属性并 ApplyModifiedProperties；不建立自定义 Clipboard 协议，不克隆/实例化用户目标，不应用失败操作或调用者待修改数据。
+- 支持边界：同类型、非混值的单/多对象标量、结构、数组及兼容引用保持可用；混值、不同类型多对象、不可编辑目标、损坏/不兼容内容，以及原生不可靠的 ManagedReference/ExposedReference/FixedBufferSize/double 明确拒绝。实际 Copy/Paste 的 InvalidOperationException 反馈原因，IsCanPaste 对不兼容输入返回 false；版本 API 不可用则明确抛 NotSupportedException。
+- Settings：`ProjectSettingTools.OpenProjectSettings` 使用公开 `SettingsService.OpenProjectSettings`，Settings SO 实例入口复用前者，重复私有 SettingsWindow 反射退出。SO 类型、FullName 文件名、`ProjectSettings/YLFramework/Core/{FullName}.asset`、创建/保存/不兼容保护未改；没有新增 SettingsProvider 或配置中心。真实窗口测试验证两个入口分别选中原生设置页、复用同一窗口、不创建 Settings 配置，恢复既有窗口选择/相关偏好与 focus。
+- 旧空壳：核实自有 Excel2JsonTool 两个 error-obsolete 入口均为空实现，代码/动态名称和脚本/目录 GUID 无有效消费者后，删除自有脚本及 `.meta`；通过 AssetDatabase 删除已空的 `Tools/excel2json` 和旧 `Inspector` 目录及各自 `.meta`。原 XF/ExcelSystem Package、成熟 Editor 工具及来源许可证均保留。
+- 本轮实际验证：Unity `2022.3.62f3c1` 导入/脚本编译通过，最终 `isCompiling=false`、`scriptCompilationFailed=false`、`isUpdating=false`。定向 EditMode 共 **69 项通过、0 失败**：CoreDefaultResourceEditorTests 26、CoreDefaultResourceTests 4、CoreEditorConfigurationTests 14、CoreEditorIdentityTests 8、DisableEditDrawerTests 3、新增 CoreSerializedPropertyTests 14。数量按实际 PassedTests/单项结果计，不使用 MCP 的全工程发现总数冒充执行数量。
+- 真实行为证据：Clipboard 原缺陷回归先观察到空引用异常、混值复制未拒绝、错误类型及损坏内容仍可粘贴的失败；默认工厂观察到多余 Legacy 模块失败，修复后通过。验证了实际 Undo/Redo、临时 Prefab instance override 的撤销/重做与原 Prefab 字节/GUID 不变、同值多对象标量/结构/数组编辑及 Undo、混值零写入拒绝、兼容/不兼容 ObjectReference、结构/数组完整粘贴、保留待应用修改与系统 Clipboard、缺失类型/错误签名的确定性反馈。
+- 独立审查与修正：未发现 P1/P2 产品问题，指出一项 Settings 测试延迟 focus 清理问题。实际执行本次设置操作新增的原生回调，确认同步恢复的 SceneView 焦点会再次被覆盖；修正测试只摘下并执行自己调用产生的原生 Show focus 回调，再恢复/关闭自己拥有的窗口与原焦点，不清空或调用其他全局回调。配置 14 项重新通过；已有 Settings 窗口且焦点在 SceneView 的分支另行确认测试后仍为 SceneView、残留 Settings focus 回调为 0，最后仅清理探针自建窗口。
+- 隔离/验证限制：三个现有 Editor asmdef、Runtime 与公开类型/序列化身份不变；身份测试通过，Unity Player 编译程序集图无自有 Editor 程序集或 Editor 依赖边。未修改原游戏/正式 Scene/Prefab/Packages/ProjectSettings 配置或 Bundle。未重跑 Module/UI/Audio/Foundation 全集，未运行 Player 构建或阶段 6 综合验收；没有切换输入模式或在其他 Unity 版本执行，私有 Clipboard API 的其他版本仅由精确签名门禁明确拒绝，不承诺跨版本成功。
+- 交接：6.1 定向技术门禁已满足，具备继续 6.2 的前置基础；用户验收与 Git 收口仍待处理。阶段 6 整体保持 IN PROGRESS，6.2～6.5 未实施、仍须单独授权。
+
 ### 6.2 自有 Resource 操作安全与真实界面
 
 **目标/前置：** 保留标记→YL 构建→ResData 的旧流程，先把路径/归属与破坏性操作做安全，再提供可信窗口。这里不融合 XFAB，不构建或清理实际游戏 Bundle。
@@ -172,7 +187,7 @@
 
 | 决策 | 已确认边界 |
 |---|---|
-| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1 待单独实施授权，各批实施不自动衔接 |
+| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1 已单独授权并完成定向技术门禁，待用户验收/Git 收口，各批实施不自动衔接 |
 | Editor 程序集结构 | 保留普通 Editor、Core Editor、独立 Help 三套程序集；不合并程序集，不新建大型编辑器管理中心 |
 | 成熟工具保留 | Module 创建器、SerializedDictionary Drawer、Audio Inspector、Help 与 Resource 工具优先保留；修复真实缺陷而非因未使用退役 |
 | 默认 Plugins 导出 | 保持整个 Plugins 递归导出；插件许可核查暂缓，不据此宣称已获公开再分发授权 |

@@ -53,6 +53,10 @@
 
 元数据回归位于 `Tests/Foundation/EditMode/AttributesTests.cs`；真实 SerializedObject、展开高度、子 Drawer 禁用/异常状态恢复与 Clipboard 直接消费者回归位于 `Tests/Core/Editor/DisableEditDrawerTests.cs`。
 
+Core Editor 的 `SerializedPropertyExtensions` 保留 `CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 入口与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；同类型、非混值的单对象和多对象可编辑，沿用真实 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
+
+混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
+
 CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥；分析器/整个 Editor 工具整合不属本次元数据归口。
 
 ## 备注

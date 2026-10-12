@@ -74,18 +74,26 @@ namespace YLFramework.Core.Editor.Tests
                 {
                     Assert.That(prefab.GetComponents<Component>().Select(c => c.GetType()), Is.EqualTo(new[]
                     {
-                        typeof(Transform), typeof(EventSystem), typeof(StandaloneInputModule)
+                        typeof(Transform), typeof(EventSystem)
                     }));
                     var eventSystem = prefab.GetComponent<EventSystem>();
                     Assert.That(eventSystem.sendNavigationEvents, Is.True);
                     Assert.That(eventSystem.pixelDragThreshold, Is.EqualTo(10));
-                    var input = prefab.GetComponent<StandaloneInputModule>();
-                    Assert.That(input.horizontalAxis, Is.EqualTo("Horizontal"));
-                    Assert.That(input.verticalAxis, Is.EqualTo("Vertical"));
-                    Assert.That(input.submitButton, Is.EqualTo("Submit"));
-                    Assert.That(input.cancelButton, Is.EqualTo("Cancel"));
-                    Assert.That(input.inputActionsPerSecond, Is.EqualTo(10));
-                    Assert.That(input.repeatDelay, Is.EqualTo(0.5f));
+                    Assert.That(prefab.GetComponents<BaseInputModule>(), Is.Empty);
+                    var bridge = typeof(PanelManager).Assembly.GetType("YLFramework.Core.InputSystemBridge")
+                        .GetMethod("EnsureEventSystemInputModule", BindingFlags.Public | BindingFlags.Static);
+                    var instanceSystem = created.GetComponent<EventSystem>();
+                    bridge.Invoke(null, new object[] { instanceSystem });
+                    var input = created.GetComponent<BaseInputModule>();
+#if ENABLE_INPUT_SYSTEM
+                    Assert.That(input.GetType().FullName, Is.EqualTo("UnityEngine.InputSystem.UI.InputSystemUIInputModule"));
+#else
+                    Assert.That(input, Is.TypeOf<StandaloneInputModule>());
+#endif
+                    bridge.Invoke(null, new object[] { instanceSystem });
+                    Assert.That(created.GetComponents<BaseInputModule>(), Is.EqualTo(new[] { input }));
+                    Assert.That(EventSystem.current, Is.SameAs(externalEventSystem));
+                    Assert.That(prefab.GetComponents<BaseInputModule>(), Is.Empty, "Runtime setup must not rewrite the asset.");
                 }
             }
             finally
