@@ -28,6 +28,22 @@ namespace YLFramework.Utilities.Extensions
 
         #region 层级、标签、父物体
 
+        /// <summary>设置自身及活跃子孙的 layer；保留默认 GetComponentsInChildren 的 inactive 排除语义。</summary>
+        public static void SetLayer(this GameObject gameObject, int layer)
+        {
+            Transform[] transforms = gameObject.GetComponentsInChildren<Transform>();
+            foreach (var item in transforms)
+            {
+                item.gameObject.layer = layer;
+            }
+        }
+
+        /// <summary>按层名设置自身及活跃子孙的 layer；未定义层名沿用 Unity 的 -1 写入行为。</summary>
+        public static void SetLayer(this GameObject gameObject, string layerName)
+        {
+            SetLayer(gameObject, LayerMask.NameToLayer(layerName));
+        }
+
         /// <summary>设置 layer，返回原对象。</summary>
         public static GameObject Layer(this GameObject selfObj, int layer)
         {

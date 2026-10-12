@@ -38,7 +38,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 
 | 模块 | 作用 | 状态 | 文档 |
 |---|---|---|---|
-| Extensions | 常用 Unity / System 类型扩展方法 | 已完成 | [Modules/Extensions.md](Modules/Extensions.md) |
+| Extensions / StringTools | 常用 Unity / System / 几何扩展及字节 / 进度显示 | 正式归 Runtime，共用掩码判断归 Foundation | [Modules/Extensions.md](Modules/Extensions.md) |
 | FSM | 程序员直接使用的轻量纯代码状态机，不替代可视化 XFFSM | 成熟实现保留 | [Modules/FSM.md](Modules/FSM.md) |
 | Grid | 通用二维数据结构（矩形 / 稀疏坐标） | 成熟实现保留 | [Modules/Grid.md](Modules/Grid.md) |
 | Json | JSON 树解析与构建（JSONObject），不统一 Save / HTTP 序列化内核 | 成熟实现保留 | [Modules/Json.md](Modules/Json.md) |
@@ -54,6 +54,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
 | Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
+| HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips 与 Runtime ColorSelector | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
 ### 其他内容

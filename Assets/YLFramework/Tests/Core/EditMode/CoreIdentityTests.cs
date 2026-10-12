@@ -10,6 +10,27 @@ namespace YLFramework.Core.Tests
     public class CoreIdentityTests
     {
         [Test]
+        public void PeripheralToolsHaveOneRuntimeOwnerAndCoreHasNoUtilityAuthority()
+        {
+            var runtime = typeof(YLFramework.Services.Save.SaveManager).Assembly;
+            var core = typeof(Module).Assembly;
+            foreach (var name in new[] { "AnimatorExtensions", "BoundsExtensions", "ColorExtensions", "EventTriggerExtensions",
+                "LayerMaskExtensions", "QuaternionExtensions", "RandomExtensions", "RayExtensions", "RigidbodyExtensions",
+                "SceneExtensions", "TimeExtensions", "TypeExtensions", "Vector2Extensions", "Vector3Extensions" })
+            {
+                Assert.That(runtime.GetType("YLFramework.Utilities.Extensions." + name), Is.Not.Null, name);
+                Assert.That(core.GetType("YLFramework.Core.Extensions." + name), Is.Null, name);
+            }
+            foreach (var name in new[] { "GameObjectExtensions", "ComponentExtensions" })
+            {
+                Assert.That(core.GetType("YLFramework.Core.Extensions." + name), Is.Null);
+                Assert.That(runtime.GetType("YLFramework.Utilities.Extensions." + name), Is.Null);
+            }
+            Assert.That(runtime.GetType("YLFramework.Utilities.StringTools"), Is.Not.Null);
+            Assert.That(core.GetType("YLFramework.Core.StringTools"), Is.Null);
+        }
+
+        [Test]
         public void SerializedDictionaryHasOneFoundationOwnerAndLegacyTypesExit()
         {
             var foundation = typeof(CustomAsyncOperation<>).Assembly;
@@ -73,7 +94,6 @@ namespace YLFramework.Core.Tests
         }
 
         [TestCase(typeof(StartUpModuleRequest))]
-        [TestCase(typeof(SendWebRequest))]
         [TestCase(typeof(LoadViewRequest<View>))]
         [TestCase(typeof(LoadPanelRequest<Panel>))]
         public void RequestsBelongToCoreAndInheritYLFoundation(Type requestType)
@@ -112,7 +132,7 @@ namespace YLFramework.Core.Tests
                 (t.Namespace == "YLFramework.Core" || t.Namespace.StartsWith("YLFramework.Core."))), Is.True);
             Assert.That(typeof(YLFramework.Foundation.Attributes.CustomClassNameGUI).Assembly,
                 Is.SameAs(typeof(CustomAsyncOperation<>).Assembly));
-            Assert.That(typeof(Extensions.GameObjectExtensions).Namespace, Is.EqualTo("YLFramework.Core.Extensions"));
+            Assert.That(core.GetTypes().Any(t => t.Namespace == "YLFramework.Core.Extensions"), Is.False);
 
             var others = AppDomain.CurrentDomain.GetAssemblies().Where(a => a != core &&
                 (a.GetName().Name.StartsWith("YLFramework") || a.GetName().Name.StartsWith("XFGameFramework") ||

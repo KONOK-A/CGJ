@@ -6,7 +6,7 @@
 
 | 目录 | 程序集（asmdef） | 职责 |
 |---|---|---|
-| `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / Audio-Action 桥接 |
+| `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / HTTP / 通用工具与扩展 |
 | `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter、唯一 Timer 内核及中立类型查找、LayerMask 成员判断、展示元数据 |
 | `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
 | `Samples/ColorSelector/` | `YLFramework.Samples.ColorSelector` | 消费正式 Core UI 的演示，显式引用 Core / Foundation / UGUI |
@@ -44,8 +44,9 @@
 Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 - `Foundation/`：其他框架模块经常建立在其之上的基础机制（Binding、Events、IOC、Pool、Singleton）；
-- `Shared/`：实际独立的 Foundation 程序集，中立共用闭包；`AssemblyTool`、`LayerMaskUtility` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用；
+- `Shared/`：实际独立的 Foundation 程序集，中立共用闭包；`AssemblyTool`、`LayerMaskUtility` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用；5.4 未扩大该闭包；
 - `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；
+- `Services/Http/`：轻量 HTTP 服务域，共用整体 Runtime，不新增服务程序集；
 - Runtime 根部：承担完整框架级服务/系统职责的大型模块（Action、Audio、Resource、Save）；正式 UI 位于 Core 的 `XFMain/UI/`，复用 Module / Panel / View。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace 不强制与目录一一对应。模块内部按实际复杂度组织：小模块保持扁平，大模块可继续内部细分。`Samples/ColorSelector` 仅演示正式 `Runtime/XFMain/UI/Tools/` 工具；取色能力本身位于 Core Runtime。
@@ -64,17 +65,21 @@ Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 这些工具无需组件挂载或公共 Root。现有 `YLFramework.Core.Pool` namespace 不表示依赖 Core Runtime；池的实际程序集边界见 [Pool](Modules/Pool.md)。五个工具保持现有类型、namespace、程序集及 GUID，不为目录或名称形式统一增加迁移风险。JSONObject 与 SharpZipLib 的来源和完整 MIT 许可随 Runtime 导出，分发入口及限制见下文。
 
+Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界，不提前开展阶段 6 Editor 整合。
+
 Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
 
 ### HTTP / AsyncOperation 边界
 
-HTTP 暂保留 `YLFramework.Core.HttpManager` / `SendWebRequest` 与 Core 程序集身份；正式 Runtime HTTP 域迁移归阶段 5.4。所有入口与 Abort 仅在 Unity 主线程使用，无需挂载组件：GET、POST Form/JSON、PUT/DELETE 返回可 yield 的请求。默认 timeout 为 5 秒，可在前置配置中覆盖；显式 headers 可覆盖默认 Content-Type。GET 合并原 query、保留 fragment，新增键/值分别编码，null 值为空，数值按 InvariantCulture；Form 为 UTF-8 URL 编码，JSON 字典使用 Json.NET，字符串原样发送。
+HTTP 正式位于 `Runtime/Services/Http/`，namespace 为 `YLFramework.Services.Http`，`HttpManager` / `SendWebRequest` / `HttpRequestStatus` 归 `YLFramework.Runtime`。使用 asmdef 的消费者显式引用 Runtime，不再为 HTTP 带入 Core / XFAB；旧 Core 类型退出且不留转发壳，调用方更新 using / 完整类型名。所有入口与 Abort 仅在 Unity 主线程使用，无需挂载组件：GET、POST Form/JSON、PUT/DELETE 返回可 yield 的请求。默认 timeout 为 5 秒，可在前置配置中覆盖；显式 headers 可覆盖默认 Content-Type。GET 合并原 query、保留 fragment，新增键/值分别编码，null 值为空，数值按 InvariantCulture；Form 为 UTF-8 URL 编码，JSON 字典使用 Json.NET，字符串原样发送。
 
 `PreWebRequest` / `PostWebRequest` 现在为可 `+=` / `-=` 的静态事件，订阅者在自身结束时解除订阅，HTTP 会话重置会清空订阅。前置事件同步配置原生请求，异常提交 Failed 并保留原始 Exception；后置事件只观察原生完成（含协议/网络错误），不在构造失败、取消或退出时调用。后置事件的原生对象仅在回调内借读，返回后释放，不能持有、重发或主动 Dispose；若前置配置替换 Handler，原先的 Handler 和回调返回时附着的新 Handler 均交由 HTTP 清理，配置过程中自行创建但从未交付/又自行替换的中间对象仍由配置者负责。
 
 `SendWebRequest.Status` 为独立稳定终态（Pending / Succeeded / Failed / Canceled / Invalidated），`error`、`NativeResult`、`ResponseCode`、`ResponseHeaders`、`Text` / `Data` 在完成通知时脱离已释放的原生对象读取；协议失败也保留响应正文。`Abort` 幂等，只停止本请求独占的传输，不撤销服务器已执行的副作用。启动拒绝、退出及会话失效都释放 HTTP 自有请求/Handler；Module.Close 不清全局 HTTP。后置观察和完成通知异常报告但不反写终态，资源清理不依赖通知成功。
 
 Foundation `CustomAsyncOperation` 仅提供等待和历史通知：legacy `completed` 先于 `AddCompleteEvent`，多播抛错会中断后续通知；完成后新增 `AddCompleteEvent` 立即同步调用（异常仍传播给订阅者）。基类重复完成和完成后 Abort 仍可更新 error，重复 Abort 仍运行 hook，不作为领域稳定终态或物理取消权威。HTTP 自管终态；View/Panel、Audio、Resource 保留各自 owner、逻辑取消、租约与共享 producer 所有权，不新增公共任务系统。
+
+自有旧 `YLFramework.Core.LogUtil` 已退役，不保留转发壳或第二套文件 Logger；其全局异常订阅、后台写盘、三天文件清理及退出回调随实现退出。历史日志文件、原 XF LoggerSystem 和原游戏日志路径不修改。正式文件日志仍是长期需求，由后续 LoggerSystem 专题融合，本次退出不表示已有正式替代品。
 
 ### Timer / Action / Audio 边界
 

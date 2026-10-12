@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED / 阶段 5 IN PROGRESS；5.1～5.3 已验收及 Git 收口，新增批次 5.3.5 技术整合与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3 保持不变，当前路线为 5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5；5.4、5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
+**状态：APPROVED / 阶段 5 IN PROGRESS；5.1～5.3.5 已由用户确认技术验收及 Git 收口，5.4 技术整合与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3 保持不变，当前路线为 5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5；5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -348,12 +348,67 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 
 **结论：满足 5.3.5 技术完成条件，五模块已有合理代码 / 程序集边界保持，正式定位、使用说明及分发接点已收口，具备进入 5.4 的前置基础。等待用户验收与 Git 收口，不自动进入 5.4；D1～D3 保持，阶段 5 仍 IN PROGRESS，不执行任何 Git 写操作。**
 
+以上为 5.3.5 实施轮次的历史停止点。5.4 开始前用户已确认 5.1～5.3.5 技术验收，并报告 5.3.5 提交完成；实际本地与实时远端均指向 `98d08fe0c1f31b3bc91ea8443af4db18f1d87d11`。
+
 ### 5.4 正式外围接口与旧机制退出
 
 - **主要轴：**行为验证后的类型/API/程序集归属收口。HTTP 移入 Runtime HTTP 域；其余非 Core 领域的 XF 扩展与格式化进入正式工具家族，UGUI 留 Runtime，实际共享 helper 留 Foundation。合并同职责入口，迁完退出旧副本；经 D2 确认退役 LogUtil，不新建文件 logger。
 - **前置/退出：**5.2/5.3 行为证据有效，5.3.5 成熟 Tools 定位、接入与分发边界确认；重查真实调用、meta、反射与资产绑定。最终 Core 无 HTTP/非领域工具重复权威，只有一组展示元数据/一套同职责扩展算法；原 XF 原样保留，不被新 API 转发。既有组件及游戏身份不动。
 - **验收：**实际 Unity 编译、迁后的 HTTP 行为用例、Core/Foundation/Editor 身份与依赖、AudioSourceIndependence 两 profile、直接 Resource/Singleton/事件适配回归；确认退出类型、旧路径和无用途壳不存在。导出测试检查迁后源码/meta/许可及旧副本排除，Runtime 无 Editor 产品程序集依赖。不把源码闭包通过当成实际 Player 通过。
 - **文档：**只增量维护 Architecture、现有 HTTP/Tools/Extensions/Attributes 使用入口及必要来源说明，说明接入、取消和所有权。FSM/Grid/Json/Table/Zip 的定位及现有测试入口由 5.3.5 收口；其他模块继续按实际变更核对覆盖口径，不为凑齐文档名称批量创建测试。
+
+#### 5.4 实际整合与验证记录（2026-10-12）
+
+**实际基线：**`fusion/5-runtime`，HEAD `98d08fe0c1f31b3bc91ea8443af4db18f1d87d11`，开始时工作区干净；`git ls-remote origin refs/heads/fusion/5-runtime` 实时返回同一提交，本地远端跟踪一致，无未推送提交或未知改动。已核对全局 / 项目 AGENTS、LF 约定、Unity `2022.3.62f3c1`、manifest 及批准方案第 4 节 / 5.4 / D1～D3；仅定向研究外围模块与直接闭包，没有重新研究总体架构或成熟 Tools 内部实现。
+
+**正式归属与兼容变化：**
+
+| 能力 | 最终归属及实际取舍 |
+|---|---|
+| HTTP | `Runtime/Services/Http/`，`YLFramework.Services.Http.HttpManager` / `SendWebRequest` / `HttpRequestStatus`，整体 `YLFramework.Runtime`。两个产品文件仅变 namespace，不改 5.2 请求构造、会话 / 取消、稳定终态、快照、Handler 所有权或通知代码；消费者引用 Runtime，不再为 HTTP 带入 Core / XFAB。旧 Core 类型 / 路径不留副本或转发壳 |
+| 独立扩展 | 14 个原 Core 类型按职责迁到 `Tools/Extensions/{Math,Unity,System,Utilities}/`，统一 `YLFramework.Utilities.Extensions`：Animator、Bounds、Color、EventTrigger、LayerMask、Quaternion、Random、Ray、Rigidbody、Scene、Time、Type、Vector2、Vector3。除 namespace 与文件尾部空行外算法不变，UGUI 留 Runtime；不为单 / 复数类名形式统一重命名 |
+| 相同机制收敛 | 两份 `IsDestroy` 的 `!UnityEngine.Object` 合为既有 `ObjectExtension.IsDestroy(Object)`，GameObject / Component 均可直接扩展调用。原 GameObject 的递归 `SetLayer` 合入既有 `GameObjectExtension`，保留默认 GetComponentsInChildren 排除 inactive 子孙的范围；与仅改自身的 `Layer` 不互换。旧 GameObjectExtensions / ComponentExtensions 实现及 meta 退出，无资产绑定 |
+| 语义不同的保留能力 | 百分比两种离散化 / RNG 推进、逆插值与方向 / 分量、Unity fake-null 与托管 null、无限直线与射线半轴等按原契约保留；不造来源别名或通用工具平台。5.3 的几何、有效重力 / 不可达拒绝、掩码和格式化行为保持 |
+| 格式化 | `Runtime/Tools/StringTools.cs` / `YLFramework.Utilities.StringTools`，整体 Runtime；FormatByte / FormatProgress 算法不变，不扩展成格式库 |
+| Foundation / Core | 本批不扩大 Foundation 闭包：唯一类型查找、严格 LayerMask 成员判断、展示 Attributes 与 Foundation 历史异步通知均保持。Core 仅保留领域请求 / 组件和分析器标记，不再包含 HTTP、通用 Extensions、StringTools 或 LogUtil；Core 与 Runtime 互不引用 |
+| 成熟 Tools | FSM / Grid / Json / Table / ZipTool 的代码、API、程序集及定位未改；轻量纯代码 FSM 与可视化 XFFSM 的独立职责保持，不开展 XFFSM 融合 |
+| LogUtil | 按 D2 删除自有实现及 `.meta`，不留壳或新 Logger。产品消费者为零，唯一历史测试改为退出 / 共存检查；惰性全局 Exception 订阅、后台文件写入、三天文件清理和旧退出回调随实现退出。未删除已有日志、调用原包惰性 LogUtil 或修改原 LoggerSystem / 游戏日志；正式文件日志留后续 LoggerSystem 专题，当前没有正式替代品 |
+
+**消费者、身份与分发：**
+
+- HTTP 两份测试移到 `Tests/{EditMode,PlayMode}/Http/`，三份工具 / 抛物线测试移到 `Tests/{EditMode,PlayMode}/Extensions/`，由既有 Runtime 测试程序集编译；不为迁后测试增加 Core PlayMode→Runtime 依赖。CoreIdentity 同步领域请求边界及外围退出门禁，历史 CoreCoexistence 测试文件 / GUID 保留。
+- 17 份迁移产品 `.meta` 与 5 份迁移测试 `.meta` 均通过 `git rev-parse HEAD:<old>` / `git hash-object --no-filters <new>` 实际核对，原始字节相同。HTTP GUID 仍为 `fe1d02983613d0e49b3a622fa7377063`、`cc8484abb98c20245860b999454a03e7`；AssetDatabase 实际解析到新路径。6 个新目录由 Unity 导入生成新身份，GUID 各唯一。两个抽空旧目录经验证为空且无 GUID 引用后由 Unity AssetDatabase 删除。
+- 定向搜索迁移 / 退出脚本与目录 GUID、类型字符串、Editor 和真实消费者，未发现 Scene / Prefab / asset / config 的绑定。旧类型名仅剩测试退出守卫；Listener / Drawer / 领域组件的类型、字段、程序集和 GUID 均未改变。不为未确认的仓库外消费者建立永久兼容层。
+- Runtime / Core / Foundation / Editor 的产品 asmdef 全部未改。HTTP 的会话支撑实际属于 Foundation，Runtime 沿用既有窄 friend 许可；Foundation 无上层业务依赖，Core / Runtime 互不引用，Runtime 不依赖 Editor 产品程序集。Editor 直接 IO / 字符串消费者继续编译，阶段 6 Inspector / Editor 扩展不提前整合。
+- 增量更新 Architecture、README、Extensions 使用说明和 Runtime 总来源记录；Attributes / 必要 Drawer 无本批行为或归属变化，不重复改写。XF / QFramework 既有署名及完整 MIT、JSONObject / SharpZipLib 许可继续随默认导出，未改全 Plugins 许可范围。修正文档中当前不存在的 GameObjectLoaderPlayModeTests 导航，不重建历史全集。
+- 原 Package、原游戏、持久资产 / Prefab / Scene、Packages / ProjectSettings、Audio / Resource / Action / UI / Module / Root 与成熟 Tools 产品代码均无本批差异。
+
+**分层验证（本轮实际取得有效 Results，不计发现总数或重复运行）：**
+
+| 验证层 | 有效结果与范围 |
+|---|---|
+| Unity 实际编译 | 当前打开的 `2022.3.62f3c1` 工程经实际 AssetDatabase 刷新 / 重编译，迁后测试由 Test Runner 执行；最终 `isCompiling=false`、`scriptCompilationFailed=false`，dataPath 与本项目相符，不使用 IDE / dotnet 替代 |
+| HTTP | **EditMode 5 Passed、PlayMode 20 Passed**。正式 Runtime 服务归属门禁先在旧 Core 实际失败，再迁移后通过；复用完整 5.2 真实 TCP 回环用例，覆盖 GET / Form / JSON / PUT / DELETE、200 / 503、timeout、在途 / 未发送取消和退出、前后 / 完成异常与同步重入、宿主销毁、快照隔离及原生 m_Ptr 释放。后台夹具不访问 Unity 对象 |
+| 工具 / 几何 | **ToolsExtensionsContractTests 32 Passed、ParabolicMotionContractTests 5 Passed、ParabolicMotionNativeTests 2 PlayMode Passed**。Object 唯一入口及递归 / 单对象设层门禁先缺入口失败，再通过；LayerMask、字节阈值、Ray、Quaternion、Type、失效组件与有效重力 / 拒绝路径保持。原生测试只模拟自身局部 3D / 2D PhysicsScene |
+| 身份 / 依赖 | **CoreIdentity 9、FoundationBoundary 6、CoreEditorIdentity 8、NeutralLayerMaskConsumer 2 EditMode Passed**。覆盖正式类型 / 旧副本退出、程序集依赖、5.1 唯一查找 / Attributes / 掩码、必要 Drawer 接线及真实 Core Collider 过滤消费者 |
+| Foundation 历史通知 | **CustomAsyncOperationTests 16 EditMode Passed**。重复完成更新 error、完成后 Abort、重复 hook、通知中断 / 顺序及迟到通知的历史契约不变，不把 HTTP 稳定终态推广到基类 |
+| Audio 真实源码闭包 | **AudioSourceIndependenceTests 3 Passed**：固定清单仍指向正式 Component / GameObject / Object / Vector / Shared LayerMask 文件，两个 profile 重编译包含本次合并后的源码；EditorAssembly、Windows Development 非 Editor 和引用白名单通过。未引用预编译 YL / XF / XFAB 实现来放宽门禁，不替代 Player 构建 |
+| 直接消费者 | **ResourcePoolTests 7、UnityEventListenerContractTests 4 EditMode Passed**；**ExtensionLifecycle 1、SingletonHost 3、CoreModulePlayModeTests.CreateControllerOverloadsCreateLocallyWithoutBorrowingOtherModules 1 PlayMode Passed**。保留 Resource / Events / Singleton 的代表性闭包、真实帧末 fake-null、旧宿主 / 场景卸载责任和字符串 Controller 创建，不重跑领域全集或原游戏综合流程 |
+| LogUtil 退出 / 共存 | **CoreCoexistence 1 PlayMode Passed**。先因旧类型仍存在实际失败，再退出后通过；仅检查原包类型身份、不初始化原日志入口，观察 Application / Editor 静态委托无旧回调，原 / YL 日志目录存在性与全部 SHA256 内容不变，无替代写盘或清理；短观察窗不是真实连续双 Play 证明 |
+| 正式导出 | **ExportUnityPackageTests 1 EditMode Passed**。实际 ExportPackage(Recurse) 并读取真实 unitypackage；新增 23 个固定 sentinel 覆盖 HTTP、工具、合并入口、Foundation / Core / Runtime asmdef 与完整 XF MIT，payload / meta 字节与当前源码一致；旧 Core 路径、旧 LogUtil / 合并退出 GUID 和 Tests / 可选 Integrations / 包外 DOTween 排除。临时包 / 目录由 finally 清理，未触发菜单 SaveAssets，不证明干净工程 import |
+| 静态 / 最终状态 | `git diff --check` 通过，受保护目录零差异；独立只读全差异审查未发现可确认的本批代码缺陷或越界改动。最终 Editor 非 Play / 不编译，HTTP pending=0、pre / post 订阅为空、Foundation CoroutineStarter host=0；仅 Main 场景打开，IsDirty=false |
+
+合计 **98 项 EditMode、28 项 PlayMode，共 126 项 Passed，目标用例 0 Failed / Skipped**。中间 red、重复 green 和未取得结果的批量调用不重复计数。
+
+**失败分类、限制与停止点：**
+
+- 导出排除 Core 旧目录的门禁先实际失败，再迁移 / 删除空目录后通过。新增退休 GUID 查询起初误把 `GUIDToAssetPath` 的会话删除缓存当存续资产；动态探针确认文件、meta、可加载资产均已不存在。Context7 没有匹配该 API 的资料，改查 Unity 2022.3 官方 AssetPathToGUID 文档，按 `OnlyExistingAssets` 加磁盘 / 包内排除断言后通过，没有重启、清缓存或弱化退出条件。
+- Play 批量连续调用曾触发 MCP “another test run is already in progress”（request `26774fb7-0a73-4440-b870-a87abb40958d`）；丢失的批量结果不计通过，待实际 Editor 恢复后各目标类 / 方法分别取得上表有效结果。临时最终探针一次 MCP timeout 不计验证，修正探针并恢复连接后取得明确最终状态；未修改产品来解决工具瞬断。
+- 实际退出日志仍出现原 XF `LoggerManager` 的 `Some objects were not cleaned up when closing the scene`（Console sequence `46069`）。另有 MCP 自动 SkillFileGenerator 写 `.kilocode/skills/inputsystem-action-add/SKILL.md` 失败（`46066`），属于插件生成 / 工具日志，不是 YL 脚本编译失败。本批不改 Package、权限、工具配置或 logHandler，不屏蔽这些错误，目标测试通过不证明原 Logger 退出安全。
+- namespace / 程序集归属是批准的公开迁移：旧 Core HTTP / Extensions / StringTools 和两个合并类的静态调用名退出；仓库内直接消费者及测试已迁。仓库外程序集限定类型名、动态反射拼接、裁剪 / AOT 风险未获得额外兼容证明，不虚构兼容 shim。
+- 没有执行阶段 5.5 的真实同域连续双 Play、Application 进程退出、Windows64 / Mono Player 构建运行、原游戏综合路径或干净工程 import；IL2CPP / AOT、移动 / WebGL、全 Plugins 许可认证和无原 15 系统最终独立承载仍未验证。后续 LoggerSystem、资源后端、阶段 6 Editor 与阶段 7 命名 / 独立承载均未自动实施。
+
+**结论：满足 5.4 正式归属、必要同职责整合、旧 LogUtil 退出及定向技术门禁，具备进入 5.5 的基础；原 Logger 退出问题必须在 5.5 如实处理，不能据本批判定综合退出通过。等待用户验收及 Git 收口，阶段 5 仍 IN PROGRESS，5.5 不自动实施；本批未 Commit / Push / Merge / Tag / Reset / Clean 或切换分支。**
 
 ### 5.5 阶段综合门禁
 
@@ -371,7 +426,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已另获正式新增及实施授权。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1～5.3 已验收及 Git 收口；5.3.5 的结果以本批记录为准；5.4、5.5 尚未实施。
+D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已另获正式新增及实施授权，5.4 已正式授权实施。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1～5.3.5 已由用户确认验收及 Git 收口；5.4 的结果以本批记录为准，待用户验收及 Git 收口；5.5 尚未实施。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -381,4 +436,4 @@ D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准；D1～D3、既有批次边界与跨阶段限制保持原样。本次仅按授权完成新增 **5.3.5 成熟 Tools 技术整合及定向验证，待用户验收和 Git 收口**，停止于此。5.4、5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+本方案已经用户正式批准；D1～D3、既有批次边界与跨阶段限制保持原样。本次按授权完成 **5.4 正式外围接口整合、旧机制退出与定向技术验证，待用户验收和 Git 收口**，停止于此。5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
