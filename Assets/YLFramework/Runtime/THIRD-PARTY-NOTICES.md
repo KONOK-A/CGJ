@@ -52,7 +52,7 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 ## 其他第三方组件
 
 - `Runtime/Tools/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。
-- `Runtime/Tools/ZipTool/`：ICSharpCode.SharpZipLib（MIT），完整文本见该目录 `THIRD-PARTY-NOTICES.md`。
+- `Runtime/Tools/ZipTool/`：ICSharpCode.SharpZipLib（MIT），来源、署名与完整文本见 [`Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。内置源码与许可随默认 Runtime 导出一并分发。
 - `Plugins/` 下的第三方编辑器插件随附各自的说明材料，其许可与使用条件以插件自身提供为准。
 
 ## ColorSelector 的历史来源与替代

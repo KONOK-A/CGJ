@@ -52,6 +52,18 @@ Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 主要模块间协作：Binding 依赖 Events（变更回调）与 Pool；FSM 依赖 Pool（池化复用）；Resource 复用 Runtime 基础工具。正式 UI 归 Core，复用 Module/View 的唯一会话与请求、Foundation Events/Update/Pool 及暂存的 XFAB 后端，不依赖整体 Runtime 的旧 UI Manager；Save 与 UI 相互独立。
 
+### 成熟 Tools 边界
+
+| 工具 / namespace | 正式职责与协作 | 接入与所有权 |
+|---|---|---|
+| FSM / `YLFramework.FSM` | Runtime 轻量纯代码状态机，复用 Runtime Safe 池与 Foundation 池内核；与带完整 Editor 的大型可视化 XFFSM 分层共存 | `FSM<TStateId>.Allocate`，调用方驱动及回收；不依赖 Module / XFFSM / 统一 FSM Manager，Module 关闭不自动停止 |
+| Grid / `YLFramework.Utilities.Grid` | Runtime 矩形 / 稀疏二维数据结构，无框架内依赖；不强制替代为其他 Foundation 容器 | 直接 `new NormalGrid<T>` / `DynamicGrid<T>`，调用方管理数据 |
+| Json / `YLFramework.Utilities.Json` | Runtime JSONObject 树处理，无框架内依赖；与 Json.NET 的强类型序列化、Save 文件策略、HTTP 传输职责分离 | 直接创建 / 解析节点，不建设全局 JSON 服务 |
+| Table / `YLFramework.Utilities.Table` | Runtime 通用表与多值索引；TableIndex 复用 Foundation 的 List / Dictionary 池，Resource 的 ResTable / AssetDataTable 直接消费 | 调用方维护索引及 Clear / Dispose；不取得数据项 / 资源的释放权 |
+| ZipTool / `YLFramework.Utilities.ZipTool` | 独立 `noEngineReferences` 程序集，无框架内依赖；Resource APK 路径及 Editor 导出验证可继续使用内置低层类型 | 常规使用 ZipUtility / GZipUtility，多次读取以 `using` 管理 ZipArchiveReader；不建设压缩 Manager |
+
+这些工具无需组件挂载或公共 Root。现有 `YLFramework.Core.Pool` namespace 不表示依赖 Core Runtime；池的实际程序集边界见 [Pool](Modules/Pool.md)。五个工具保持现有类型、namespace、程序集及 GUID，不为目录或名称形式统一增加迁移风险。JSONObject 与 SharpZipLib 的来源和完整 MIT 许可随 Runtime 导出，分发入口及限制见下文。
+
 Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
 
 ### HTTP / AsyncOperation 边界

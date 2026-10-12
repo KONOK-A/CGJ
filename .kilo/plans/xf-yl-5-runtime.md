@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED / 阶段 5 IN PROGRESS；5.1、5.2 已验收及 Git 收口，5.3 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，5.1～5.3 已分别获正式实施授权；5.4、5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
+**状态：APPROVED / 阶段 5 IN PROGRESS；5.1～5.3 已验收及 Git 收口，新增批次 5.3.5 技术整合与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3 保持不变，当前路线为 5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5；5.4、5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -157,7 +157,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 
 ## 5. 实施批次与退出门禁
 
-**批准路线：5.1 → 5.2 → 5.3 → 5.4 → 5.5。** 5.2 与 5.3 没有互相的硬依赖，默认顺序是先处理有原生资源责任的 HTTP，再修纯工具契约；不按五个功能各立一批，也不为每个类拆批。每批依赖前批验收和独立实施授权，批准本方案不自动实施 5.1。
+**批准路线：5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5。** 5.3.5 是用户在 5.3 验收及 Git 收口后正式授权新增的成熟 Tools 整合批次；其余批准边界不变。5.2 与 5.3 没有互相的硬依赖，默认顺序是先处理有原生资源责任的 HTTP，再修纯工具契约；不按五个功能各立一批，也不为每个类拆批。每批依赖前批验收和独立实施授权，批准总体方案不自动授权后续批次。
 
 ### 5.1 中立支撑归口
 
@@ -301,12 +301,59 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 
 **结论：满足 5.3 本批技术完成条件，保留能力的关键行为、直接闭包和最小原生门禁已取得有效证据，具备进入 5.4 的前置基础。等待用户验收及 Git 收口，阶段 5 仍 IN PROGRESS；不自动实施 5.4，不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。**
 
+以上为 5.3 实施轮次的历史停止点。5.3.5 开始前用户已确认 5.1～5.3 技术验收及 Git 收口；5.3 对应提交为 `5586f40967f09be14f4f7e9d79f95d0eb3509acd`。
+
+### 5.3.5 成熟 Tools 模块的框架整合
+
+- **主要轴：**仅研究并按需要整合既有 `Tools/FSM`、`Grid`、`Json`、`Table`、`ZipTool` 的架构归属、现有能力协同、正式入口、分发与直接消费者。融合前成熟模块的功能 / 质量验证作为既有背景，不重新全面源码审查，不要求每个模块产生代码变更。
+- **职责边界：**FSM 是程序员运行时直接编写的轻量纯代码状态机；与具备完整 Editor 的大型可视化 XFFSM 定位不同，可分层共存。本批不承接 XFFSM，不强制依赖 Module / Manager，不预建兼容抽象。Grid 保留二维结构；JSONObject 保留 JSON 树，不与 Json.NET / Save / HTTP 强制统一内核；Table 保留表与索引及 Resource 协作；ZipTool 保留独立无 UnityEngine 程序集和内置 SharpZipLib 许可。
+- **前置 / 退出：**5.1～5.3 已验收，D1～D3 及阶段 1～5.3 核心契约有效。只对实质接入问题做最小必要调整；重大公共接口、程序集方向或资源身份变化先提供证据并等待确认。原包、游戏、资源、Scene / Prefab、Packages / ProjectSettings 均不修改。
+- **验收：**Runtime / asmdef 修改才要求相应实际 Unity 编译与直接消费者回归；导出 / Editor / 身份调整定向验证实际入口。未修改成熟模块不重跑原有完整测试，不为批次新增抽象或机械用例。同步现有架构 / 使用说明，覆盖口径以当前可运行入口为准。
+- **衔接：**5.4 继续 HTTP 正式迁移、其余外围机制退出和 D2 LogUtil 退役，不重复改造本批已确认合理的成熟 Tools；5.5 综合 Player 门禁仍单独授权实施。
+
+#### 5.3.5 实际整合与验证记录（2026-10-12）
+
+**实际基线：**`fusion/5-runtime`，HEAD `5586f40967f09be14f4f7e9d79f95d0eb3509acd`，开始时工作区干净；与用户指定基线相符。已读全局 / 项目 AGENTS、批准计划、Architecture 与阶段 1～5.3 的必要成果约束，核对 Unity `2022.3.62f3c1`、manifest、工具声明、asmdef 与实际消费者。没有重新进行成熟模块全面源码审查，也没有修改原包 / 原游戏或调整依赖包。
+
+**最终定位与必要取舍：**
+
+| 模块 | 正式定位、协作与接入 | 本批调整 |
+|---|---|---|
+| FSM | `YLFramework.FSM`，整体 Runtime；程序员纯代码使用，Allocate / 注册 / 显式驱动 / 回收，复用现有 Runtime Safe 池与 Foundation 池内核。与独立大型可视化 XFFSM 分层共存，无 Module / Manager / XFFSM 依赖 | 保留代码、名称及程序集；补 IFsmOwner 示例前提、调用方生命周期责任，以及既有池契约的退出失败隔离边界。隔离不等于状态资源已清理，不改阶段 2 池契约或 FSM 算法 |
+| Grid | `YLFramework.Utilities.Grid`，整体 Runtime；NormalGrid 矩形 / DynamicGrid 稀疏二维容器，无框架内依赖 | 保留代码与直接构造入口；纠正导航的“动态扩容”措辞，不用其他容器强制替代 |
+| Json | `YLFramework.Utilities.Json`，整体 Runtime；JSONObject JSON 树 / 字段处理，与 Json.NET typed serialization、Save 文件策略、HTTP 传输各司其职 | 保留独立内核和上游类型名；补接入 / 职责与许可分发说明，不改 Save / HTTP 消费链 |
+| Table | `YLFramework.Utilities.Table`，整体 Runtime；Table / TableIndex 通用表与多值索引，复用 Foundation List / Dictionary 池，Resource ResTable / AssetDataTable 已直接消费 | 保留实现和消费者；补真实 Pool 程序集归属、数据项借用 / 索引释放责任，不替代 SerializedDictionary，不接管资源 Retain / Release |
+| ZipTool | 独立 `YLFramework.Utilities.ZipTool`，`noEngineReferences: true`、框架 references=[]；通用 Zip / GZip 与会话读取。Resource Android APK 路径及导出测试已消费内置低层类型 | 保留程序集 / 门面 / 低层公开类型；明确显式程序集引用、Resource 平台边界及来源 / 完整 MIT 许可，不强制消费者迁到高层门面 |
+
+**实际改动：**增量维护现有 Architecture、README、五个模块使用说明及长期蓝图的阶段 5 状态；修正 Runtime 总来源说明中错误的 SharpZipLib 许可导航，真实文件为 `Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`。JSONObject `LICENSE.md`、SharpZipLib 原完整 MIT 文本及署名未改。原模块文档列出的 FSM / Grid / Json / Table / Zip 专项测试文件当前不在仓库，已明确现存入口和覆盖范围，去掉不可作为当前证据的旧全量数字；不因文档旧名字而重建测试套件。既有 ExportUnityPackageTests 仅增加 15 个固定 sentinel（工具源码、Zip asmdef、两份完整许可及五份使用说明），沿用原真实 ExportPackage / GZip / Tar 检查与临时目录清理，不增加新测试类型或设施。
+
+五个模块的产品 C#、namespace、公开 API、asmdef、所有 `.meta` / GUID 均未修改；Resource / Editor 产品消费者不改，无资源身份迁移。正式 Runtime / Core 仍互不引用，Foundation 不反向依赖工具。没有新增 Manager、抽象层、公共 Root 或其他生命周期系统。
+
+**分层验证（本轮实际执行）：**
+
+| 验证层 | 有效结果与范围 |
+|---|---|
+| Unity 实际编译 | 当前打开的 `2022.3.62f3c1` 工程经 AssetDatabase 刷新；修改后的导出测试已在 Test Runner 执行。实时 `EditorApplication.isCompiling == false`、`EditorUtility.scriptCompilationFailed == false`，dataPath 与本项目相符；不是 IDE / dotnet 替代证据 |
+| 实际导出 | ExportUnityPackageTests **1 Passed**；调用实际默认 ExportRoots + Recurse，读取真正 unitypackage。核对所有当前源文件 / 配置 / 文档在包内、GUID / meta 一致，新增 15 个 sentinel 的 payload 与 meta 字节一致，两份完整 MIT 许可实际随包输出；Tests / 可选 Integrations / 包外 DOTween 排除。自有临时包与目录由 finally 清理，不调用带 SaveAssets / UI 副作用的菜单 |
+| FSM / Pool 直接接点 | 既有 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried(False)` / `(True)` **2 Passed**；正常复用、回调内拒绝回收、退出失败不重试 / 不重新出借及残余状态引用边界保持 |
+| Table / Foundation 池接点 | CollectionPoolTests 的 `TableConstructorValidatesSelectorBeforeBorrowingDictionary`、`TableClearAndDisposeReturnOwnedCollectionsOnlyOnce`、`TableRemoveReturnsEmptyBucketAndKeepsOtherKeys`、`TableInsertionFailureReturnsNewBucketAndPreservesOriginalError` **4 Passed**；仅复用既有直接协作用例，不扩大为 Resource / Table 全部契约验收 |
+| 实际类型 / 程序集 | 当前 Unity 已加载类型确认 FSM / Grid / JSONObject / Table / TableIndex / SafeObjectPool 属 Runtime，ListPool / DictionaryPool 属 Foundation，ZipUtility 属独立 ZipTool；实际 ZipTool Assembly references 仅 `netstandard`，Runtime 不引用 Core 或原 XF / XFAB / XFFSM。这是当前 Editor 程序集证据，不替代 Player 条件分支验证 |
+| 静态范围 | 实际 diff 仅现有文档、总许可导航及导出测试清单；没有新增文件 / meta、产品源码 / asmdef 变化或禁止目录改动；`git diff --check` 通过 |
+
+合计 **7 项 EditMode Passed，0 Failed / Skipped**，逐项 Results 与 PassedTests 为准；工具发现总数 1442 不计为本轮执行数。最初省略参数的 FSM 方法过滤及尝试 class 正则过滤返回 No tests found，不算执行或通过；使用真实含 `(False)` / `(True)` 的完整用例名后取得有效结果，不修改产品或测试断言。
+
+独立只读 diff 复查未发现阻断或重要问题，范围仅本批新增说明与直接接点，不扩展为成熟模块质量审查。类型 / 程序集动态探针初次因字符串换行转义错误被 Roslyn 拒绝，修正探针后取得上表有效结果；该失败属于临时探针，不是工程脚本编译或产品行为失败，没有文件写入。最终 Editor 非 Play / 不编译 / 不更新，仍只有 Main 场景打开且 IsDirty=false。
+
+**限制与停止点：**没有重跑五个成熟模块的历史全量测试，没有 PlayMode、Player 构建 / 运行、干净工程 import、Android APK 实机或 IL2CPP / AOT 验证；本批未改变产品源码或身份，因此未扩大到上述门禁，也不以本批导出证明最终独立承载。FSM 退出失败后的领域资源收尾仍由调用方负责；本批只明确既有契约，不顺手修生命周期。XFFSM、Resource 平台 / 后端整合、全 Plugins 分发、阶段 6 Editor 整体收口与阶段 7 独立承载仍属后续专题。
+
+**结论：满足 5.3.5 技术完成条件，五模块已有合理代码 / 程序集边界保持，正式定位、使用说明及分发接点已收口，具备进入 5.4 的前置基础。等待用户验收与 Git 收口，不自动进入 5.4；D1～D3 保持，阶段 5 仍 IN PROGRESS，不执行任何 Git 写操作。**
+
 ### 5.4 正式外围接口与旧机制退出
 
 - **主要轴：**行为验证后的类型/API/程序集归属收口。HTTP 移入 Runtime HTTP 域；其余非 Core 领域的 XF 扩展与格式化进入正式工具家族，UGUI 留 Runtime，实际共享 helper 留 Foundation。合并同职责入口，迁完退出旧副本；经 D2 确认退役 LogUtil，不新建文件 logger。
-- **前置/退出：**5.2/5.3 行为证据有效；重查真实调用、meta、反射与资产绑定。最终 Core 无 HTTP/非领域工具重复权威，只有一组展示元数据/一套同职责扩展算法；原 XF 原样保留，不被新 API 转发。既有组件及游戏身份不动。
+- **前置/退出：**5.2/5.3 行为证据有效，5.3.5 成熟 Tools 定位、接入与分发边界确认；重查真实调用、meta、反射与资产绑定。最终 Core 无 HTTP/非领域工具重复权威，只有一组展示元数据/一套同职责扩展算法；原 XF 原样保留，不被新 API 转发。既有组件及游戏身份不动。
 - **验收：**实际 Unity 编译、迁后的 HTTP 行为用例、Core/Foundation/Editor 身份与依赖、AudioSourceIndependence 两 profile、直接 Resource/Singleton/事件适配回归；确认退出类型、旧路径和无用途壳不存在。导出测试检查迁后源码/meta/许可及旧副本排除，Runtime 无 Editor 产品程序集依赖。不把源码闭包通过当成实际 Player 通过。
-- **文档：**只增量维护 Architecture、现有 HTTP/Tools/Extensions/Attributes 使用入口及必要来源说明，说明接入、取消和所有权。模块文档引用的 AssemblyTool/FSM/Grid/Json/Table/Zip/Extensions/Attributes 专项测试有多项当前不存在，修正其覆盖口径，不为凑齐文档名称批量创建测试。
+- **文档：**只增量维护 Architecture、现有 HTTP/Tools/Extensions/Attributes 使用入口及必要来源说明，说明接入、取消和所有权。FSM/Grid/Json/Table/Zip 的定位及现有测试入口由 5.3.5 收口；其他模块继续按实际变更核对覆盖口径，不为凑齐文档名称批量创建测试。
 
 ### 5.5 阶段综合门禁
 
@@ -324,7 +371,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1、5.2 已验收及 Git 收口；5.3 已获单独正式授权并实施，证据见对应批次记录；5.4、5.5 尚未实施。
+D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已另获正式新增及实施授权。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1～5.3 已验收及 Git 收口；5.3.5 的结果以本批记录为准；5.4、5.5 尚未实施。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -334,4 +381,4 @@ D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.3 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.4、5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+本方案已经用户正式批准；D1～D3、既有批次边界与跨阶段限制保持原样。本次仅按授权完成新增 **5.3.5 成熟 Tools 技术整合及定向验证，待用户验收和 Git 收口**，停止于此。5.4、5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
