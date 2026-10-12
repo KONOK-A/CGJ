@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using UnityEditor;
 #endif
 using UnityEngine;
+using YLFramework.Foundation;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 
 namespace YLFramework.Core
@@ -491,7 +492,7 @@ namespace YLFramework.Core
         /// <returns></returns>
         public static StartUpModuleRequest StartUpModule(string moduleTypeFullName)
         {
-            Type type = AssemblyTools.GetType(moduleTypeFullName);
+            Type type = AssemblyTool.GetType(moduleTypeFullName);
             return StartUpModule(type);
         }
 

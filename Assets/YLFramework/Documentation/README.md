@@ -31,20 +31,20 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Events | 事件系统：EasyEvent、事件组件、按枚举/字符串/类型分发 | 基本完成（EventManager 为空占位） | [Modules/Events.md](Modules/Events.md) |
 | Binding | 可监听数据：属性/列表/字典、PlayerPrefs 持久化属性 | 已完成 | [Modules/Binding.md](Modules/Binding.md) |
 | IOC | 依赖注入容器：注册、解析、成员注入 | 已完成 | [Modules/IOC.md](Modules/IOC.md) |
+| AssemblyTool | 按类型全名查找 `Type` 的唯一中立工具 | 已归 Foundation，供 Core / Editor 使用 | [Modules/AssemblyTool.md](Modules/AssemblyTool.md) |
+| Attributes | 展示元数据、刷新配置与 DisableEdit | 元数据已归 Foundation，必要 Drawer 保持 Editor-only | [Modules/Attributes.md](Modules/Attributes.md) |
 
 ### Tools（通用工具）
 
 | 模块 | 作用 | 状态 | 文档 |
 |---|---|---|---|
-| AssemblyTool | 按类型全名查找 `Type` 的反射工具 | 已完成（含专项测试，暂无调用方） | [Modules/AssemblyTool.md](Modules/AssemblyTool.md) |
-| Attributes | 自定义编辑器显示特性 | 已完成（含专项测试，暂无调用方） | [Modules/Attributes.md](Modules/Attributes.md) |
-| Extensions | 常用 Unity / System 类型扩展方法 | 已完成 | [Modules/Extensions.md](Modules/Extensions.md) |
-| FSM | 有限状态机 | 已完成 | [Modules/FSM.md](Modules/FSM.md) |
-| Grid | 网格数据结构（固定容量 / 动态扩容） | 已完成 | [Modules/Grid.md](Modules/Grid.md) |
-| Json | JSON 解析与构建（JSONObject） | 已完成 | [Modules/Json.md](Modules/Json.md) |
-| Table | 带索引的数据表基类 | 已完成（含专项测试） | [Modules/Table.md](Modules/Table.md) |
+| Extensions / StringTools | 常用 Unity / System / 几何扩展及字节 / 进度显示 | 正式归 Runtime，共用掩码判断归 Foundation | [Modules/Extensions.md](Modules/Extensions.md) |
+| FSM | 程序员直接使用的轻量纯代码状态机，不替代可视化 XFFSM | 成熟实现保留 | [Modules/FSM.md](Modules/FSM.md) |
+| Grid | 通用二维数据结构（矩形 / 稀疏坐标） | 成熟实现保留 | [Modules/Grid.md](Modules/Grid.md) |
+| Json | JSON 树解析与构建（JSONObject），不统一 Save / HTTP 序列化内核 | 成熟实现保留 | [Modules/Json.md](Modules/Json.md) |
+| Table | 通用表与多值索引，Resource 的直接支撑 | 成熟实现保留 | [Modules/Table.md](Modules/Table.md) |
 | Timing | Foundation 唯一秒/帧内核、精确句柄、Scope/复用、GO 绑定与终态等待 | 2.4-C 实施及专项验证完成，待验收与 Git 收口；2.4 IN PROGRESS | [Modules/Timing.md](Modules/Timing.md) |
-| ZipTool | Zip / GZip 压缩解压工具（内置 SharpZipLib） | 已完成 | [Modules/ZipTool.md](Modules/ZipTool.md) |
+| ZipTool | 独立 Zip / GZip 能力（内置 SharpZipLib，无 UnityEngine 依赖） | 成熟实现保留 | [Modules/ZipTool.md](Modules/ZipTool.md) |
 
 ### Runtime 大型模块
 
@@ -54,6 +54,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
 | Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
+| HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips 与 Runtime ColorSelector | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
 ### 其他内容
@@ -64,6 +65,8 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 ## 架构与依赖
 
 程序集划分、依赖方向与目录分层说明见 [Architecture.md](Architecture.md)。
+
+FSM / Grid / Json / Table 位于 `YLFramework.Runtime`，按需直接使用；ZipTool 保持独立程序集。工具不强制依赖 Module、统一 Manager 或公共 Root；各模块文档列明正式 namespace、入口与实际存在的测试范围，成熟实现保留不等于当前仓库具备其历史完整测试套件。
 
 Timing 的 Timer 负责到期回调；逐帧进度、插值与组合流程由 ActionKit 的 Delay / Lerp / Repeat 等动作承担。两边各自管理名字与生命周期，`TimerScope` 不与 `ActionHandle` 共用任务表。Action / Audio 位于 `Runtime/Action/`、`Runtime/Audio/`，共用 `YLFramework.Runtime`；公共入口仍为 `ActionKit` / `AudioKit`。
 

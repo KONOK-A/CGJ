@@ -9,6 +9,9 @@ namespace YLFramework.Utilities.Extensions
     /// </summary>
     public static class ObjectExtension
     {
+        /// <summary>判断 Unity 对象是否为 null 或已销毁；不使用托管引用判空。</summary>
+        public static bool IsDestroy(this Object selfObj) => !selfObj;
+
         /// <summary>
         /// 克隆对象（等价于 Object.Instantiate）；原对象不变，返回克隆体。
         /// </summary>

@@ -51,7 +51,7 @@ namespace YLFramework.Tests.Audio
                 "Resource/Framework/ResLoader/IResLoader.cs", "Resource/Framework/ResLoader/ResLoader.cs",
                 "Tools/Extensions/Unity/ComponentExtension.cs", "Tools/Extensions/Unity/GameObjectExtension.cs",
                 "Tools/Extensions/Unity/ObjectExtension.cs", "Tools/Extensions/Math/VectorExtension.cs",
-                "Tools/Extensions/Utilities/LayerMaskUtility.cs"
+                 "Shared/LayerMaskUtility.cs"
             };
             var sources = directories.SelectMany(directory => Directory.GetFiles(Path.Combine(runtime, directory),
                     "*.cs", SearchOption.AllDirectories))

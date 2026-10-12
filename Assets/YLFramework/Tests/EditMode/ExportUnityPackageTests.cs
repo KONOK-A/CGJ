@@ -67,6 +67,44 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/XFMain/UI/Tools/ColorWheelGraphic.cs",
                 FrameworkRoot + "/Runtime/XFMain/LICENSE.md",
                 FrameworkRoot + "/Runtime/THIRD-PARTY-NOTICES.md",
+                FrameworkRoot + "/Runtime/Shared/LICENSE.md",
+                FrameworkRoot + "/Runtime/Services/Http/HttpManager.cs",
+                FrameworkRoot + "/Runtime/Services/Http/SendWebRequest.cs",
+                FrameworkRoot + "/Runtime/Shared/YLFramework.Foundation.Runtime.asmdef",
+                FrameworkRoot + "/Runtime/YLFramework.Runtime.asmdef",
+                FrameworkRoot + "/Runtime/XFMain/YLFramework.Core.Runtime.asmdef",
+                FrameworkRoot + "/Runtime/Tools/StringTools.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/GameObjectExtension.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/ObjectExtension.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/AnimatorExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/ColorExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/EventTriggerExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/LayerMaskExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/RigidbodyExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/SceneExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Unity/TimeExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Math/BoundsExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Math/QuaternionExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Math/RayExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Math/Vector2Extensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Math/Vector3Extensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/System/TypeExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/Extensions/Utilities/RandomExtensions.cs",
+                FrameworkRoot + "/Runtime/Tools/FSM/Core/FSM.cs",
+                FrameworkRoot + "/Runtime/Tools/Grid/NormalGrid.cs",
+                FrameworkRoot + "/Runtime/Tools/Grid/DynamicGrid.cs",
+                FrameworkRoot + "/Runtime/Tools/Json/JSONObject.cs",
+                FrameworkRoot + "/Runtime/Tools/Json/LICENSE.md",
+                FrameworkRoot + "/Runtime/Tools/Table/Table.cs",
+                FrameworkRoot + "/Runtime/Tools/Table/TableIndex.cs",
+                FrameworkRoot + "/Runtime/Tools/ZipTool/Utilities/ZipUtility.cs",
+                FrameworkRoot + "/Runtime/Tools/ZipTool/YLFramework.Utilities.ZipTool.asmdef",
+                FrameworkRoot + "/Runtime/Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md",
+                FrameworkRoot + "/Documentation/Modules/FSM.md",
+                FrameworkRoot + "/Documentation/Modules/Grid.md",
+                FrameworkRoot + "/Documentation/Modules/Json.md",
+                FrameworkRoot + "/Documentation/Modules/Table.md",
+                FrameworkRoot + "/Documentation/Modules/ZipTool.md",
                 PrefabPath,
                 CanvasPath
             };
@@ -87,13 +125,15 @@ namespace YLFramework.Tests
             {
                 FrameworkRoot + "/Tests", FrameworkRoot + "/Integrations",
                 FrameworkRoot + "/Runtime/UI",
+                FrameworkRoot + "/Runtime/XFMain/Extensions",
+                FrameworkRoot + "/Runtime/XFMain/Tools",
                 FrameworkRoot + "/Samples/ColorSelector/Prefabs",
                 FrameworkRoot + "/Samples/ColorSelector/Shaders",
                 FrameworkRoot + "/Samples/ColorSelector/Materials",
                 FrameworkRoot + "/Samples/ColorSelector/Textures",
                 "Assets/Plugins/Demigiant/DOTween"
             };
-            var retiredFiles = new[] { "ActionKitSingleFileCreator.cs", "ActionKitSingleFileExporter.cs", "ActionKitSingleFileCreator.asset" };
+            var retiredFiles = new[] { "ActionKitSingleFileCreator.cs", "ActionKitSingleFileExporter.cs", "ActionKitSingleFileCreator.asset", "LogUtil.cs" };
             var tempDirectory = Path.Combine(@"C:\Users\Kano\AppData\Local\Temp\kilo", "YLFramework.ExportTests-" + Guid.NewGuid().ToString("N"));
             var packagePath = Path.Combine(tempDirectory, "framework.unitypackage");
             try
@@ -163,7 +203,7 @@ namespace YLFramework.Tests
                     else Assert.That(record.MemberSizes.ContainsKey("asset"), Is.True, "Missing asset: " + record.Pathname);
                     Assert.That(excludedRoots.Any(root => IsAtOrBelow(record.Pathname, root)), Is.False, "Excluded export path: " + record.Pathname);
                     Assert.That(Path.GetFileName(record.Pathname), Is.Not.EqualTo("DOTween.dll").IgnoreCase, "External DOTween must not be exported: " + record.Pathname);
-                    Assert.That(retiredFiles.Contains(Path.GetFileName(record.Pathname), StringComparer.Ordinal), Is.False, "Retired single-file export asset: " + record.Pathname);
+                    Assert.That(retiredFiles.Contains(Path.GetFileName(record.Pathname), StringComparer.Ordinal), Is.False, "Retired export asset: " + record.Pathname);
                     Assert.That(roots.Any(root => IsAtOrBelow(record.Pathname, root)) || (isFolder && roots.Any(root => IsAtOrBelow(root, record.Pathname))),
                         Is.True, "Unexpected path outside export roots: " + record.Pathname);
                 }
@@ -188,6 +228,20 @@ namespace YLFramework.Tests
                     "ef050e654d014a7cb539e809f36326a2", "eaa2ff45b0824bb0a88fbda69f891959",
                     "5117b7f5560b4af8a25c8d427cbae882"
                 }) Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired UI identity must not be distributed: " + retiredGuid);
+                foreach (var retiredGuid in new[] { "6b5d25785704e1d488a8656928450940", "0b536a55a19ee624189b83d3c308893e", "3b3ac1c2986230d43a7e7cee1e54d130" })
+                {
+                    Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired utility identity must not be distributed: " + retiredGuid);
+                    // Unity 在本 Editor 会话中保留最近删除的 GUID 路径；检查真实存续资产而非缓存墓碑。
+                    var retiredPath = AssetDatabase.GUIDToAssetPath(retiredGuid);
+                    if (!string.IsNullOrEmpty(retiredPath))
+                    {
+                        Assert.That(AssetDatabase.AssetPathToGUID(retiredPath, AssetPathToGUIDOptions.OnlyExistingAssets), Is.Empty, retiredGuid);
+                        Assert.That(File.Exists(Path.Combine(projectRoot, retiredPath)), Is.False, retiredPath);
+                        Assert.That(File.Exists(Path.Combine(projectRoot, retiredPath + ".meta")), Is.False, retiredPath + ".meta");
+                    }
+                }
+                foreach (var oldPath in new[] { "/Runtime/XFMain/Manager/HttpManager.cs", "/Runtime/XFMain/AsyncOperation/SendWebRequest.cs" })
+                    Assert.That(recordsByPath.ContainsKey(FrameworkRoot + oldPath), Is.False, oldPath);
                 var prefabYaml = Encoding.UTF8.GetString(recordsByPath[PrefabPath].Payload);
                 Assert.That(prefabYaml, Does.Match(@"m_Script:[ \t]*\{[^}\r\n]*\bguid:[ \t]*" + CanvasGuid + @"\b"));
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);

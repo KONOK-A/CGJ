@@ -8,20 +8,25 @@
 
 本模块**不提供可视化 FSM Editor**，也**不以大型状态图制作为目标**：没有 GraphView、节点编辑器、状态机资产、序列化状态图、Hierarchical FSM、State Stack、异步 / 线程安全等能力。需要这些能力时应使用专门的状态机或行为树方案。
 
+独立 XF `XFFSM` 是带完整编辑器的可视化大型状态机，与本模块职责层级不同，允许共存；本模块不替代或依赖 XFFSM，也不需要 Module、统一状态机 Manager 或公共 Root。调用方自行驱动并管理回收，Module 关闭不会自动停止外部 FSM。
+
 ## 位置
 
 - 运行时：[`Runtime/Tools/FSM/`](../../Runtime/Tools/FSM/)
   - `Abstractions/`：`IState`、`IFsmOwner`、`MachineState`
   - `Core/`：`FSM<TStateId>`
   - `States/`：`CustomState`、`AbstractState<TStateId>`
+- namespace：`YLFramework.FSM`；程序集：`YLFramework.Runtime`。有 asmdef 的使用者引用 Runtime 即可，不需要引用 `YLFramework.Core.Runtime` 或 XFFSM。
 
 ## 快速使用
+
+使用 `using YLFramework.FSM;`。以下为业务方法内的调用片段，`State` 枚举放在类型声明中；提供宿主时，其类型应实现空标记接口 `IFsmOwner`，不需要宿主可省略 `Init`。
 
 ```csharp
 enum State { Idle, Move, Attack }
 
 var fsm = FSM<State>.Allocate();
-fsm.Init(this);                                     // 可选；不调用则 Owner 为 null
+fsm.Init(null);                                     // 可选；仅实现 IFsmOwner 的宿主才能传 this
 
 fsm.State(State.Idle)
    .OnEnter(() => { })
@@ -54,7 +59,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 - 只有 `NotStart` 状态可 `SetUp`；起始状态必须已注册，且**不检查**起始状态的 `Condition`。
 - `SetUp` 的 `Enter` 成功后才提交 Running；`Enter` 抛异常时回滚为干净的 `NotStart` 并原样抛出，可重试。
 - 启动后再调用 `SetUp` 返回 false；`Stop` 后也不能重新 `SetUp`，只能 `Continue` / `Continue(stateId)`。
-- 回收后实例回到对象池，所有状态、宿主、回调和计时被清空；再次 `Allocate` 得到的实例必须重新注册状态。
+- 正常回收后实例回到对象池，所有状态、宿主、回调和计时被清空；再次 `Allocate` 得到的实例必须重新注册状态。退出回调失败的隔离边界见下节 Pool 生命周期。
 
 ## 状态切换
 
@@ -118,6 +123,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 - 状态对象由调用方创建并持有，FSM 只保存引用并调用 `Init` / `DeInit`，不会 Dispose 状态对象。同一个状态实例同一时间只应属于一个 FSM。
 - 若某个 `DeInit` 抛异常：其余状态的 `DeInit` 仍会继续执行，只向上抛出第一个异常；FSM 内部状态已清空，且对象池会拒绝把该实例入池，不会以脏状态被复用。
+- 若当前状态的 `Exit` 在回收时抛异常，Safe 池隔离该实例且不会重试 / 重新出借；隔离不等于已完成领域清理，状态引用可能仍保留。调用方仍负责状态所持有的外部资源，不把 Pool 会话重置当作 FSM 的成功退出。
 - 不要修改 Pool 本身；FSM 只依赖 `Pool` 的公开契约。
 
 ## 主要类型
@@ -139,10 +145,10 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 ## 依赖
 
-- `Pool`：状态机实例通过对象池分配。
+- `Pool`：实例复用现有 Runtime `SafeObjectPool` 包装及 Foundation 池内核，沿用 `YLFramework.Core.Pool` namespace；不依赖 Core Module / MVC，不新增独立缓存或生命周期管理器。
 
 ## 当前状态
 
-已完成，并完成异常一致性、生命周期重入、Recycle 与 Pause/Continue 异常路径的专项复核；切换提交点、`_isTransitioning` 恢复、计时归属与 Pool 清理语义均有回归测试锁定。
+成熟实现保持不变。当前可运行的相关入口为 `Tests/EditMode/PoolContractTests.cs` 的 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried`（两个参数用例），仅覆盖 FSM 与池的回调回收 gate、退出失败隔离及正常复用，不代表 FSM 全部行为覆盖。
 
-测试：`Tests/EditMode/FSMTests.cs`（72 个用例）；全量 EditMode 569/569、PlayMode 61/61 通过。
+文档旧列出的 `Tests/EditMode/FSMTests.cs` 当前不在仓库，旧专项 / 全量通过数字不作为当前可执行证据。阶段 5.3.5 仅完善框架定位与接入说明，不重做融合前的全面质量验证。

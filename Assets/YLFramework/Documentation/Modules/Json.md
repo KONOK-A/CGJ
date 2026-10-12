@@ -8,6 +8,8 @@
 
 该模块的定位是**轻量 JSON 解析 / 构建 / 字段操作工具**，不是完整对象序列化框架，不提供反射 Object Mapper、Schema Validator、JSONPath / LINQ to JSON。
 
+JSONObject 用于直接遍历 / 修改 JSON 树；Json.NET 用于强类型对象序列化。Save 继续拥有存档格式、文件与恢复策略，HTTP 继续拥有请求体与传输生命周期，两者不强制改用 JSONObject。本模块不提供全局 JSON Manager，也不接管存档或网络服务。
+
 ## 位置
 
 - 运行时：[`Runtime/Tools/Json/`](../../Runtime/Tools/Json/)
@@ -15,6 +17,7 @@
   - `JSONObjectEnumerator.cs`：容器枚举器。
   - `JSONTemplates.cs`：Unity 类型互转扩展。
   - `LICENSE.md`、`readme.md`：上游第三方许可与说明。
+- namespace：`YLFramework.Utilities.Json`；程序集：`YLFramework.Runtime`。使用 `JSONObject.Create(...)` / `EmptyObject` 等直接入口，无需 Module、组件挂载或公共 Root。
 
 ## 核心数据模型
 
@@ -27,7 +30,7 @@
 
 - 解析：`JSONObject.Create(jsonString, offset, endOffset, maxDepth, storeExcessLevels)` 或 `new JSONObject(jsonString)`。
 - 构建：`JSONObject.EmptyObject` / `EmptyArray` / `NullObject`，以及 `Create(bool/float/double/int/long/string 委托/数组/List/Dictionary)`。
-- 宽松解析规则（历史语义，测试锁定）：
+- 宽松解析规则（历史语义）：
   - 括号不匹配 / 未闭合不会抛低级运行时异常；`{`、`[`、`[[`、`{"a":{` 等以开括号结尾的输入返回对应空容器，其余情况返回部分结果或 `Null`。
   - 游离分隔符（`[,1]`、`{,"a":1}`、`[1,,2]`）被跳过，不生成幽灵 `null` 节点。
   - 未闭合对象收尾时会清理没有值的悬空 key，保证 `Keys.Count <= Count`。
@@ -40,7 +43,7 @@
 - `AddField`：追加字段；同名 key 允许重复，查找 API 返回第一个匹配项。
 - `SetField`：存在则替换（重复 key 只替换第一个），不存在则添加；传入 null 只删除。
 - `RemoveField` / `HasField` / `HasFields` / `GetField`：常规增删查。
-- 重复 key 契约（与上游一致，测试锁定）：解析与 `Print` 保留全部重复项；`HasField` / `GetField` / 索引器取第一个；`SetField` 移除第一个匹配再追加；`RemoveField` 删除第一个；`ToDictionary` 由最后一个覆盖；`Copy` 保留重复项。
+- 重复 key 契约（与上游一致）：解析与 `Print` 保留全部重复项；`HasField` / `GetField` / 索引器取第一个；`SetField` 移除第一个匹配再追加；`RemoveField` 删除第一个；`ToDictionary` 由最后一个覆盖；`Copy` 保留重复项。
 - 易用 API：`TryGetField` / `TryGetString` / `TryGetInt` / `TryGetFloat` / `TryGetBool`。语义为“字段存在即成功”，值按节点自身字段读取（类型不匹配得到该类型默认值，如字符串节点 `TryGetInt` 返回 `0`）。
 - 索引器：`obj[int]` 数组越界（含负数）返回 `null`，赋值越界静默忽略；`obj[string]` 缺 key 返回 `null`。
 - 枚举：`foreach (JSONObject child in obj)` 对数组枚举元素，对对象枚举字段值（不含 key）；非容器枚举会抛 `InvalidOperationException`。
@@ -92,14 +95,15 @@
 
 ## 依赖
 
-- 无框架内模块依赖；`JSONObject` 核心不依赖 Stable 模块。
+- 无框架内模块依赖；JSONObject 核心不依赖 Foundation、Core、Json.NET 或 Save。
 - `JSONTemplates` 依赖 `UnityEngine` 数学类型。
 
 ## 当前状态
 
-已完成并通过专项测试与全量测试。测试：`Tests/EditMode/JsonTests.cs`。
+成熟实现保持不变。当前仓库没有文档旧列出的 `Tests/EditMode/JsonTests.cs`，不作为可运行入口或本批验证证据；`SerializedDictionaryJsonTests` 验证的是序列化字典，不是 JSONObject。阶段 5.3.5 不重跑融合前成熟模块的全面验证。
 
 ## 备注
 
 - 来源：Matt Schoen（Defective Studios）的 JSONObject 库，MIT 许可，保留原始 LICENSE 与 readme（见目录内 `LICENSE.md`、`readme.md`）。类型名保持上游风格（如全大写 `JSONObject`）。
+- 默认 Runtime 递归导出包含 JSONObject 源码及完整 `LICENSE.md`。上游 readme 中的 JSONChecker / 可选池化等说明不代表当前框架已提供对应编辑器或默认池化功能。
 - 已知限制：非完整 JSON 序列化框架；宽松解析会容忍部分非法 JSON（括号不匹配、未闭合、尾随垃圾、非法 escape、`NaN` / `Infinity` 非标准输出等，具体策略见上文）；`Merge` 与 `Absorb` 为浅合并（引用共享），需要独立副本时使用 `Copy()`；不做线程安全保证。

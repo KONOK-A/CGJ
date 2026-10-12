@@ -1,6 +1,7 @@
 using System; 
 using System.Collections.Generic; 
 using UnityEngine; 
+using YLFramework.Foundation;
 
 namespace YLFramework.Core
 {
@@ -868,7 +869,7 @@ namespace YLFramework.Core
         public Controller GetController(string controllerTypeFullName)
         {
             if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
-            Type type = AssemblyTools.GetType(controllerTypeFullName);
+            Type type = AssemblyTool.GetType(controllerTypeFullName);
             if (type == null) return null;
             return GetController(type);
         }
@@ -882,7 +883,7 @@ namespace YLFramework.Core
         public Controller LoadController(string controllerTypeFullName) 
         {
             if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
-            Type type = AssemblyTools.GetType(controllerTypeFullName);
+            Type type = AssemblyTool.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return LoadController(type);
         }
@@ -955,7 +956,7 @@ namespace YLFramework.Core
         /// </summary>
         public Controller CreateController(string controllerTypeFullName) {
             if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
-            Type type = AssemblyTools.GetType(controllerTypeFullName);
+            Type type = AssemblyTool.GetType(controllerTypeFullName);
             if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
             return CreateController(type);
         }

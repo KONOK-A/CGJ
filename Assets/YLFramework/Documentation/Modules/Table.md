@@ -15,6 +15,8 @@
 
 - 运行时：[`Runtime/Tools/Table/`](../../Runtime/Tools/Table/)
 - `Table.cs`：数据表基类；`TableIndex.cs`：键索引。
+- namespace：`YLFramework.Utilities.Table`；程序集：`YLFramework.Runtime`。
+- 按需 `new` 子类或 `TableIndex`，由调用方负责 `Clear` / `Dispose`；无需 Module、Manager、组件挂载或公共 Root。
 
 ## Table&lt;TDataItem&gt;
 
@@ -39,7 +41,7 @@ Ownership：
 
 - 同 key 多值（multi-set）：同一键可关联多个数据项，**允许重复项**（同一个 item 重复 Add 会出现两次，不去重、不抛异常），保持添加顺序。
 - 键由构造函数传入的选择器在 `Add`/`Remove` 时实时计算，索引不缓存键。
-- **mutable key 契约**：索引期间用于生成键的值必须保持稳定；若 item 的键属性发生变化，必须先按原状态 `Remove`，再修改并重新 `Add`。否则 `Remove` 按新键查找而旧索引项残留（已用测试固化）。
+- **mutable key 契约**：索引期间用于生成键的值必须保持稳定；若 item 的键属性发生变化，必须先按原状态 `Remove`，再修改并重新 `Add`。否则 `Remove` 按新键查找而旧索引项残留。
 - `Add(item)`：按键追加；键不存在时从 `ListPool` 租用列表。
 - `Remove(item)`：返回 `bool`；键或项不存在返回 false、不抛异常；移除后列表为空会立即删除该键并把列表归还 `ListPool`。
 - `Get(key)`：键不存在返回空集合（不返回 null）；命中时返回**内部实时列表（借用引用，无拷贝）**。
@@ -57,13 +59,14 @@ Ownership：
 
 ## 依赖
 
-- `Pool`：`ListPool<T>` 与 `DictionaryPool<TKey, TValue>`（Clear / Dispose 时归还）。本轮未修改 Pool 模块。
+- Foundation 的 `Pool`：`ListPool<T>` 与 `DictionaryPool<TKey, TValue>`（Clear / Dispose 时归还），沿用既有 `YLFramework.Core.Pool` namespace；这不构成对 `YLFramework.Core.Runtime` 的依赖。
+- Table 提供数据项与多值索引，不替代 Foundation 的 `SerializedDictionary` 序列化容器，也不接管 Resource 的资源加载、Retain / Release 或缓存策略。
 
 ## Resource 消费者
 
 - `ResTable : Table<IRes>`（`Runtime/Resource/Framework/ResTable.cs`）：`OnAdd`/`OnRemove`/`OnClear` 转发到 `TableIndex<string, IRes>`（按小写 AssetName 索引），枚举通过 `Dictionary.SelectMany`。
 - `AssetDataTable : Table<AssetData>`（`.../AssetBundleSupport/ConfigFile/AssetDataTable.cs`）：公开 `NameIndex` 属性，`OnDispose` 调用 `NameIndex.Dispose()`；`ResData.Reset()` 是真实 Dispose 调用点。
-- 第二轮最小消费者修复：`ResTable.OnDispose()` 由空实现改为 `_nameIndex.Dispose()`。证据：`_nameIndex` 为 ResTable 私有只读、由 ResTable 独占创建与使用；全工程无 `_resTable.Dispose()` 调用方，也不存在 Dispose 后复用路径；修复前一旦调用 Dispose 会泄漏索引内的 List/Dictionary 池对象。除这一处外 Resource 源码未改动。
+- `ResTable.OnDispose()` 释放其独占的 `_nameIndex`；`ServiceManager` 负责资源登记、移除与资源生命周期，Table 不取得资源所有权。现有 Resource 消费者保持直接调用，无需额外适配层。
 
 ## Update() 最终处理
 
@@ -71,9 +74,9 @@ Ownership：
 
 ## 测试
 
-- `Tests/EditMode/TableTests.cs`：基类钩子转发、枚举、Callback 顺序与异常（OnAdd/OnRemove/OnClear/OnDispose 抛异常均传播且基类不回滚）、Callback 重入、重复 Dispose、Count、ownership。
-- `Tests/EditMode/TableIndexTests.cs`：同 key 多值、duplicate 语义、Remove 语义、空 key 回收、ListPool/DictionaryPool 生命周期（多轮复用无重复回收）、Clear/Dispose 幂等与释放后行为、null/空字符串/default key、keySelector 抛异常/重入（Clear/嵌套 Add/Dispose fail-fast）、Get/Dictionary 旧引用契约。
-- `Tests/EditMode/TableResourceConsumerTests.cs`：ResTable / AssetDataTable 定向回归；多轮 Add/Remove/Clear/Dispose；同名多条的索引一致性；ResTable Dispose 释放索引。
+- 当前仓库的 `Tests/EditMode/CollectionPoolTests.cs` 中四个 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约或 Resource 消费者的完整覆盖。
+- `Tests/EditMode/Audio/AudioSourceIndependenceTests.cs` 的真实源码闭包包含 Table / ResTable；它验证编译边界，不替代 Table 行为测试。
+- 文档旧列出的 `TableTests.cs`、`TableIndexTests.cs`、`TableResourceConsumerTests.cs` 当前不在仓库，不作为可运行入口或本批验证证据。阶段 5.3.5 不重跑融合前成熟模块的全面验证。
 
 ## 已知限制
 

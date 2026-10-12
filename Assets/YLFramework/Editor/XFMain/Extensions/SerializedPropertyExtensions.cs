@@ -190,7 +190,7 @@ namespace YLFramework.Core.Editor
         /// <param name="serializedProperty"></param>
         public static void CopyToClipboard(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Core.AssemblyTools.GetType("UnityEditor.Clipboard"); 
+            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
             MethodInfo SetSerializedProperty = type.GetMethod("SetSerializedProperty", BindingFlags.Static | BindingFlags.Public);
             SetSerializedProperty.Invoke(null, new object[] { serializedProperty });
         }
@@ -201,7 +201,7 @@ namespace YLFramework.Core.Editor
         /// <param name="serializedProperty"></param>
         public static void PasteFromClipboard(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Core.AssemblyTools.GetType("UnityEditor.Clipboard"); 
+            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
             MethodInfo GetSerializedProperty = type.GetMethod("GetSerializedProperty", BindingFlags.Static | BindingFlags.Public); 
             GetSerializedProperty.Invoke(null, new object[] { serializedProperty }); 
             serializedProperty.serializedObject.ApplyModifiedProperties(); 
@@ -214,7 +214,7 @@ namespace YLFramework.Core.Editor
         /// <returns></returns>
         public static bool IsCanPaste(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Core.AssemblyTools.GetType("UnityEditor.Clipboard"); 
+            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
             MethodInfo HasSerializedProperty = type.GetMethod("HasSerializedProperty", BindingFlags.Static | BindingFlags.Public);  
             return (bool)(HasSerializedProperty.Invoke(null, null)); ;
         }

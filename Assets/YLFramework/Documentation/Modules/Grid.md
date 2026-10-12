@@ -9,6 +9,8 @@
 ## 位置
 
 - 运行时：[`Runtime/Tools/Grid/`](../../Runtime/Tools/Grid/)
+- namespace：`YLFramework.Utilities.Grid`；程序集：`YLFramework.Runtime`。直接 `new` 容器，无需 Module、Manager、组件挂载或公共 Root。
+- 保留通用二维数据结构职责，不替代普通字典 / 列表，也不因存在 Foundation 容器而强制改为序列化容器、资源索引或网格服务。
 
 ## 坐标与越界约定
 
@@ -40,7 +42,7 @@
 
 ## 当前状态
 
-已完成。测试：`Tests/EditMode/GridTests.cs`（覆盖构造 / 越界 / Resize 各方向 / Clear 回调与异常 / 遍历顺序 / 稀疏语义）。
+成熟实现保持不变。当前仓库没有文档旧列出的 `Tests/EditMode/GridTests.cs`，不作为可运行入口或本批验证证据。阶段 5.3.5 不修改 Grid 算法，不重跑融合前成熟模块的全面验证。
 
 ## 已知限制
 
