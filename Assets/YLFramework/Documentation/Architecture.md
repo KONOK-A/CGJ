@@ -81,6 +81,8 @@ Foundation `CustomAsyncOperation` 仅提供等待和历史通知：legacy `compl
 
 自有旧 `YLFramework.Core.LogUtil` 已退役，不保留转发壳或第二套文件 Logger；其全局异常订阅、后台写盘、三天文件清理及退出回调随实现退出。历史日志文件、原 XF LoggerSystem 和原游戏日志路径不修改。正式文件日志仍是长期需求，由后续 LoggerSystem 专题融合，本次退出不表示已有正式替代品。
 
+上述外围闭包已通过阶段 5.5 的真实同域双 Play、Windows64/Mono Development Player 回环与退出、代表性 Core UI / Audio 消费者、原游戏 Editor / Player 非干扰及实际导出门禁。HTTP 独占原生清理不扩展为领域统一取消；`Application.quitting` 与后续场景销毁是不同验证相位。测试隔离原 Logger 不表示原 XF 生态已支持无 Domain Reload；临时 XFAB 依赖、文件 Logger、跨平台 / AOT 与最终独立承载仍按后续专题处理。范围、原生取消诊断与恢复证据见 [运行时外围方案的 5.5 记录](../../../.kilo/plans/xf-yl-5-runtime.md)。
+
 ### Timer / Action / Audio 边界
 
 | 模块 | 职责 | 名字与清理范围 |

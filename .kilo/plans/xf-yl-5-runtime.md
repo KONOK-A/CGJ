@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED / 阶段 5 IN PROGRESS；5.1～5.3.5 已由用户确认技术验收及 Git 收口，5.4 技术整合与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3 保持不变，当前路线为 5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5；5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
+**状态：APPROVED / 阶段 5 技术 COMPLETE，待最终 Git 集成收口；5.1～5.4 已由用户确认技术验收及 Git 收口（5.4 `a4399a6`），5.5 综合门禁及技术文档验收已由用户确认。** 总体方案及 D1～D3 保持不变，路线为 5.1 → 5.2 → 5.3 → 5.3.5 → 5.4 → 5.5；阶段 6 尚未启动。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -418,6 +418,27 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 - **原游戏非干扰：**复用现有 Main/FSM/XFAB/YL Audio 的菜单设置、点击、进入/暂停返回/再入代表性路径；保持既有 Bundle 与配置。HTTP 单批不机械重跑全游戏，阶段末因 Runtime/helper 迁移补一次必要 Editor/Player 代表性检查。产物不足则列环境阻塞，不擅自重建 XFAB。
 - **完成条件：**五项能力的归属和有价值用途明确，旧自有重复机制已退出，直接消费者与必要 Player 门禁通过；迁移/许可/分发证据独立成立。IL2CPP/AOT、移动/WebGL 网络限制及无原 15 系统承载仍属后续，不以本阶段通过证明最终独立。
 
+#### 5.5 实施与验证记录（2026-10-12）
+
+- **基线：**用户独立授权。实际 `fusion/5-runtime`，HEAD、本地 upstream 与实时 `git ls-remote` 均为 `a4399a617654f2828b10f6e2bd5752cd0e4271f0`；开始时工作区干净。Unity `2022.3.62f3c1`，StandaloneWindows64 / Mono，Main 场景无未保存修改。
+- **最终职责：**D1～D3 成立。HTTP / StringTools / 通用 Extensions 归 Runtime；类型查找、严格 LayerMask 成员判断、展示元数据及最小等待通知归 Foundation；View/Panel、Audio 保留各自 owner / 取消 / 租约 / 共享 producer。旧 Core HTTP / Tools / Extensions 与 LogUtil 无转发壳；正式文件日志留 LoggerSystem。FSM、Grid、JSONObject、Table、独立 ZipTool 的职责、依赖与完整许可保持 5.3.5 结论。
+- **修改范围：**未发现需要修复的阶段 5 产品缺陷，未修改产品源码、未重新重构成熟模块。新增仅为不参与分发的 `Tests/Core/Acceptance/RuntimeAcceptanceEntry`、Editor-only Driver、配套 meta 与现有文档增量；复用 5.4 程序集 / 迁移 meta-GUID / 定向测试及 5.3.5 的未受影响证据。
+- **本轮 Logger 授权：**首次真实 Enter Play 的 Console `46079` 证明 `LoggerHandler.LogFormat → LoggerManager.Instance → Init` 在过渡期创建 DDOL 对象，`46080/46081` 为日志处理器 `NullReferenceException`。先退出并恢复，再取得用户本轮“授权本轮临时隔离”答复；只在受控验收窗口保存、临时替换并恢复 `Debug.unityLogger.logHandler`，未改 Package、未吞异常。原游戏 / Player 使用原 Logger，未隔离。
+- **真实双 Play：**Driver 准备自有临时场景，由真实 Editor Play 入口开始；关闭 Domain Reload、保留正常 Scene Reload。同一 AppDomain / 探针身份经历两轮真实 Enter / Exit，最终 `DOUBLE_PLAY_PASS enters=2 exits=2 verified=2`。未以反射 Reset / Quit 替代真实 Play。
+- **HTTP 会话证据：**两轮成功 / 503 响应快照、在途 POST / UploadHandler、幂等物理 Abort、退出 Invalidated 通过；request / DownloadHandler / UploadHandler 原生指针归零，退出 pending 表及最终 Foundation 宿主为零。旧钩子 / 身份 / 完成通知不污染新轮，退出通知不能创建新请求或替换宿主。真实退出后的旧原生通知 / 旧 HTTP 操作 / 旧 Audio provider 补充调用，仅用于证明迟到隔离，不代替真实退出。
+- **消费者证据：**代表性 Core owner、活跃 View、独立 pending Panel 和 Audio active voice / pending acquisition 通过。按真实相位验证 `Application.quitting` 的 HTTP / pending Panel / Audio 清理，以及场景销毁后的活跃 View 解绑，不要求 View 在场景销毁前提前解绑。测试 Provider 计数只证明探针自有租约归还，不冒认 XFAB Bundle 物理卸载。
+- **验收代码加固：**独立审查后修正后置回调失败锁存、双轮就绪 / 证据身份、进入 / 运行 / 退出超时、日志失败与恢复、自有 Clip 清理及活跃 View 证据。修正探针的错误前置条件，不修改成熟产品契约。提前停止、进入超时与服务丢失的负向尝试未记为 PASS；最终加固源码重新执行完整双 Play 后通过。
+- **Player 构建：**显式 `BuildPlayerOptions.scenes` 使用自有临时场景 + 原 Main，构建一次 Windows64 / Mono Development Player，不改正式 Build Settings / backend / 持久 Player 配置。Succeeded，0 errors、4 warnings、152934569 bytes；警告均为既有 MCP Tilemap / InputSystem / Cinemachine / Timeline 空 Runtime 程序集。
+- **Player 运行：**独立 Node 服务仅绑定 `127.0.0.1`，系统选择可用端口（最终 7378）；`/ok` 为 200、`/error` 为 503、`/hold` 保持在途，无公网依赖。初始会话生命周期服务失去后记为失败，改用受控独立进程，完成后只停止本任务服务。真实 Direct3D11 窗口 Player 无 `-noaudio` / `-nographics`；成功、协议错误、取消、退出 Invalidated、原生释放、Foundation 查找 / Attributes / StringTools / Grid / JSONObject 与 Core / Audio 协作通过，`RUNTIME55 QUIT_PASS round=1`，实际进程退出码 **0**。
+- **Player 日志分类：**保留 `Curl error 42: Callback aborted` 原生取消 / 退出诊断，不忽略或改写；未见未处理托管异常、探针 FAILED 或退出残留宿主错误。Direct3D refresh / vsync 与 Mono symbol 提示不作为 HTTP 失败；原 Logger 未阻断本次 Player。两份日志末尾还有 Unity `##utp MemoryLeaks / Immediate` 分配汇总（HTTP 585750 bytes / WebRequest 1427，原游戏 595684 bytes / WebRequest 4440），无具体对象 / 调用栈，不能据此定位为正式 HTTP 自有泄漏，也不能声称整个引擎零泄漏；本轮仅凭实际独占对象指针归零及连接关闭证明 HTTP 所有权范围内释放，未执行全引擎内存专题。
+- **当前资源匹配：**两处 MainModule 1.0.0 / StandaloneWindows64 均为 `2026/10/9 19:03:49`；112 个 build-info 条目大小 / MD5 全通过，109 个普通 Bundle、143 条依赖与映射目标齐全，224 个非 meta 文件逐项大小 / SHA256 一致，122 个 manifest 源资产路径存在。build-info SHA256 为 `df1ffc32e3fd20a25543176de96f672fb6cba8bedb83751b8ac5489365918145`，bundle-list 为 `964628dfc049317628961f631e941616ebd4531d3088a61f73558d0be8f9d648`，映射为 `8759f89c3df32f80b883ee3db88751dd30d1975f024445c01a41033d6140a276`。这些 hash / 日期不同于 4.5 文档第 350 行历史值，不声称历史字节同一；以当前自洽产物、源码 / 组件 / 程序集身份及实际运行证明匹配。未重建、复制或替换 XFAB 产物。
+- **原游戏：**复用既有 `AudioGameAcceptanceFlow`，在正常 Domain Reload 的 Editor 和同一最终 Player 中，真实执行 Main / 原 XF Module / XFFSM / XFAB 启动、菜单、设置 Slider 持久回调、实际 Button pointer-click / AudioEmitter 音效、进入游戏、暂停返回、再次进入。原 EventSystem、音效全局去重与 BGM 暂停策略保持，Source / DSP 输出和接线通过；两处 `RUNTIME55 GAME_PASS`，Player 退出码 **0**。Flow 恢复测试偏好键、timeScale 与自有 FSM / Module；不当作完整战斗回归或本轮人工听感验收。
+- **实际分发：**`ExportUnityPackageTests.DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab` 本轮实际 **1/1 通过**，检查真实 unitypackage 源码、asmdef、meta、文档、XF / QFramework / JSONObject / SharpZipLib 完整许可、sentinel 字节及退役路径 / GUID 排除。不是干净工程 import 或无原生态独立承载证明；Architecture / Modules 的正式入口和依赖说明保持。
+- **验证口径：**一次过早启动的 Export 测试被 Unity 拒绝（Play 中不能保存测试场景设置），随后确认 EditMode 空闲并重跑通过。额外组合身份筛选的 MCP 请求超时、未取得有效结果，**不计为通过项**；对应未变化产品的身份 / Foundation 边界复用 5.4 已验收证据，不把工具 timeout 当作产品成功或失败。明确范围 `98d08fe..a4399a6` 的完整 `git diff --check` 有四份 Unity 目录 meta 的 12 处尾随空格；限定 C# / asmdef / Markdown 检查通过。校正 5.4 的空白检查范围，不顺手格式化历史 meta。
+- **恢复：**原 Main 场景恢复且无未保存修改；Play options 恢复 enabled=false / flags=3，持久 `EditorSettings.asset` 无 diff，正常游戏会话保留原 XF LoggerHandler。删除自有临时 `Runtime55.unity` / meta；自有 Clip、pending、宿主清理，独立服务停止。原游戏、Prefab、Scene、Bundle、Packages、ProjectSettings 及原日志未被修改或清理。
+- **产物与复验：**工程外入口 `C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-5.5-20261012/`，包含最终 exe / Data / Mono runtime、`build-summary.txt`、`http-player.log`、`game-player.log`、`double-play.log`、`game-editor.json`。验收源码留在 Tests、不随框架导出；复验须先准备本地服务，调用 Driver 的 `Begin(url, logPath)` 后使用真实 Editor Play 入口，不能把准备调用当作已进入 Play。
+- **完成与限制：**阶段 5 必要技术门禁均满足。原 Logger 无 Domain Reload 兼容、正式文件 Logger、真实 AB 物理卸载、无原生态独立承载、IL2CPP / 移动 / WebGL、Runtime 历史目录整体收口仍归后续；不借本批全面整理 `XFMain` / `Shared`。待用户最终验收与 Git 收口，不自动进入阶段 6。
+
 ## 6. 总体审核决策与跨阶段事项
 
 | 决策 | 简明比较 | 推荐结论与确认状态 |
@@ -426,7 +447,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已另获正式新增及实施授权，5.4 已正式授权实施。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1～5.3.5 已由用户确认验收及 Git 收口；5.4 的结果以本批记录为准，待用户验收及 Git 收口；5.5 尚未实施。
+D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已另获正式新增及实施授权；5.1～5.4 已由用户确认验收及 Git 收口。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.5 经本轮独立授权完成综合门禁，阶段 5 技术 COMPLETE，待最终 Git 集成收口。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -436,4 +457,4 @@ D1、D2、D3 已由用户确认，原 5.1～5.5 路线正式批准，5.3.5 已�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准；D1～D3、既有批次边界与跨阶段限制保持原样。本次按授权完成 **5.4 正式外围接口整合、旧机制退出与定向技术验证，待用户验收和 Git 收口**，停止于此。5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+本方案已经用户正式批准；D1～D3、既有批次边界与跨阶段限制保持原样。**5.5 实施与验证完成，阶段 5 运行时外围满足技术完成条件；待 `integration/xf-yl` 合并与 `milestone/5-runtime` 里程碑完成最后 Git 收口。** 不启动阶段 6。
