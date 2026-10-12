@@ -12,7 +12,8 @@
   - `Unity/`：`GameObjectExtension`、`ComponentExtension`、`MonoBehaviourExtension`、`ObjectExtension`、`RectTransformExtension`、`PositionSyncExtension`、`CameraExtension`、`ColorExtension`、`UIGraphicExtension`
   - `System/`：`SystemStringExtension`、`SystemIOExtension`、`SystemCollectionsExtension`、`SystemObjectExtension`、`SystemReflectionExtension`
   - `Math/`：`MathExtension`、`VectorExtension`
-  - `Utilities/`：`RandomUtility`、`LayerMaskUtility`
+  - `Utilities/`：`RandomUtility`
+- 共用成员判断：[`Runtime/Shared/LayerMaskUtility.cs`](../../Runtime/Shared/LayerMaskUtility.cs)，namespace `YLFramework.Foundation`，供 Core Listener 与 Runtime 包装扩展使用。
 
 ## 主要功能
 
@@ -50,7 +51,8 @@
 ### Random / LayerMask
 
 - `RandomUtility` 使用 `UnityEngine.Random` 全局随机状态；`Percent(p)` 中 p≤0 恒为 false、p≥1 恒为 true；`Choose` 空数组抛异常。
-- `LayerMaskUtility` 只接受 0..31 的层号；越界 layer 或 null GameObject 返回 false。
+- Foundation `LayerMaskUtility.IsInLayerMask` 只接受 0..31 的层号；越界 layer、null 或已销毁 GameObject 返回 false。Runtime 的 GameObject/Component 包装签名不变。
+- Foundation `LayerMaskUtility.Contains` 保留迁移前 Core 位移取模语义（未定义层名映射 bit31）；双方共用一个成员判断实现，不在 5.1 静默修订边界。Core 的重复 Contains 已移除，Set / PhysicsSetting / Physics2DSetting 仍暂留 Core；完整边界修复与其余工具归属按 5.3 / 5.4 收口。
 
 ## 主要消费者
 
@@ -71,7 +73,8 @@
 
 ## 测试
 
-- `Tests/EditMode/Extension*.cs`：API、边界、fake-null（DestroyImmediate 制造）、Culture、IO、反射、Random / LayerMask。
+- 共用 LayerMask 的真实包装、Unity null 与 Core Trigger 3D/2D 回调过滤回归：`Tests/Core/EditMode/NeutralLayerMaskConsumerTests.cs`。该测试直接调用真实过滤消费者，不代表物理引擎自动分发门禁。
+- 原文所列 `Tests/EditMode/Extension*.cs` 当前不存在，不作为已执行覆盖的证据；无关扩展的覆盖口径留阶段 5 后续收口。
 - `Tests/PlayMode/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
 - 消费者间接回归：`GameObjectLoaderPlayModeTests` 等 Resource / Singleton / Pool 测试。
 

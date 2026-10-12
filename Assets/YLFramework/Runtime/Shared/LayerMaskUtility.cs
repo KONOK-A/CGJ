@@ -1,12 +1,26 @@
 using UnityEngine;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Foundation
 {
     /// <summary>
     /// LayerMask 判断工具。
     /// </summary>
     public static class LayerMaskUtility
     {
+        /// <summary>
+        /// 判断层掩码是否包含指定层；保留原 Core 的位移取模语义，严格层号校验请用 IsInLayerMask。
+        /// </summary>
+        public static bool Contains(this LayerMask layerMask, int layer)
+        {
+            return IsInLayerMask(layer & 31, layerMask);
+        }
+
+        /// <summary>按层名判断；未定义层名仍保留原 Core 的 bit31 映射，边界契约另行修订。</summary>
+        public static bool Contains(this LayerMask layerMask, string layerName)
+        {
+            return layerMask.Contains(LayerMask.NameToLayer(layerName));
+        }
+
         /// <summary>
         /// 判断 layer 是否包含在 layerMask 中。合法层号为 0..31，越界直接返回 false（避免位移按 32 取模）。
         /// </summary>

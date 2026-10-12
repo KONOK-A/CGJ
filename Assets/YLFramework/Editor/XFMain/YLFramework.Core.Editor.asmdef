@@ -3,6 +3,7 @@
     "rootNamespace": "YLFramework.Core.Editor",
     "references": [
         "YLFramework.Core.Runtime",
+        "YLFramework.Foundation.Runtime",
         "XFABManager",
         "UnityEngine.UI"
     ],

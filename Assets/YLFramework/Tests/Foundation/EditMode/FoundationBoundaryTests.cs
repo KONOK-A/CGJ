@@ -25,6 +25,24 @@ namespace YLFramework.Foundation.Tests
         }
 
         [Test]
+        public void NeutralLookupMaskAndDisplayMetadataHaveOneFoundationOwner()
+        {
+            var foundation = typeof(ApplicationTool).Assembly;
+            foreach (string name in new[] { "YLFramework.Foundation.AssemblyTool", "YLFramework.Foundation.LayerMaskUtility",
+                "YLFramework.Foundation.Attributes.CustomClassNameGUI", "YLFramework.Foundation.Attributes.CustomPropertyGUI",
+                "YLFramework.Foundation.Attributes.DisableEdit" })
+            {
+                Assert.That(foundation.GetType(name), Is.Not.Null, name);
+                Assert.That(AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetType(name) != null), Is.EqualTo(1), name);
+            }
+            foreach (string oldName in new[] { "YLFramework.Core.AssemblyTools", "YLFramework.Utilities.AssemblyTool.AssemblyTool",
+                "YLFramework.Utilities.Extensions.LayerMaskUtility", "YLFramework.Core.CustomClassNameGUI",
+                "YLFramework.Core.CustomPropertyGUI", "YLFramework.Core.DisableEdit",
+                "YLFramework.Core.Attributes.CustomClassNameGUI", "YLFramework.Core.Attributes.CustomPropertyGUI" })
+                Assert.That(AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetType(oldName) != null), Is.False, oldName);
+        }
+
+        [Test]
         public void NewFoundationTypesHaveUniqueFullyQualifiedNames()
         {
             foreach (var type in new[] { typeof(ApplicationTool), typeof(CoroutineStarter), typeof(CustomAsyncOperation<>) })

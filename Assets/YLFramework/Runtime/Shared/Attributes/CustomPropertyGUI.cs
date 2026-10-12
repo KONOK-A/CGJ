@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace YLFramework.Core.Attributes
+namespace YLFramework.Foundation.Attributes
 {
     /// <summary>
     /// 标记需要自定义 Editor 绘制的序列化字段。
@@ -13,6 +13,17 @@ namespace YLFramework.Core.Attributes
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
     public abstract class CustomPropertyGUI : Attribute
     {
+        /// <summary>字段值改变时是否请求接入方重新加载 TreeView；在 Editor 与 Player 中均可配置。</summary>
+        public bool reloadTreeViewOnValueChange;
+
+        public CustomPropertyGUI() : this(false) { }
+
+        /// <param name="reloadTreeViewOnValueChange">字段值改变时是否重新加载 TreeView。</param>
+        public CustomPropertyGUI(bool reloadTreeViewOnValueChange)
+        {
+            this.reloadTreeViewOnValueChange = reloadTreeViewOnValueChange;
+        }
+
 #if UNITY_EDITOR
         /// <summary>
         /// 在编辑器中绘制当前字段。

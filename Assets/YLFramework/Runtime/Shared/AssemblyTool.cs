@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace YLFramework.Utilities.AssemblyTool
+namespace YLFramework.Foundation
 {
     /// <summary>
     /// 按类型完整名称在当前 AppDomain 已加载的程序集中查找 <see cref="Type"/>。
@@ -9,7 +9,7 @@ namespace YLFramework.Utilities.AssemblyTool
     public static class AssemblyTool
     {
         // 仅记录成功结果；失败不缓存，避免新程序集加载后命中永久失效的 null。
-        private static readonly Dictionary<string, Type> TypeCacheDict = new();
+        private static readonly Dictionary<string, Type> TypeCacheDict = new(StringComparer.Ordinal);
 
         /// <summary>
         /// 按类型完整名称查找类型，成功结果会被缓存。

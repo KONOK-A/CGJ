@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace YLFramework.Core.Attributes
+namespace YLFramework.Foundation.Attributes
 {
     /// <summary>
     /// 为类型提供编辑器中的自定义显示名称。

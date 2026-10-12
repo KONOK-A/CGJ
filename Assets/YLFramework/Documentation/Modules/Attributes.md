@@ -4,13 +4,14 @@
 
 ## 作用
 
-提供两个用于编辑器显示 / 绘制的元数据特性，供编辑器扩展与业务代码读取使用。
+提供类型显示名、自定义字段绘制/刷新配置与 DisableEdit 中立元数据，供编辑器扩展与业务代码使用。
 
 定位边界：不是 Odin-like Inspector 框架 / PropertyDrawer 框架 / Attribute Processor，不提供 Attribute 自动扫描或注册系统。
 
 ## 位置
 
-- 运行时：[`Runtime/Tools/Attributes/`](../../Runtime/Tools/Attributes/)
+- 元数据：[`Runtime/Shared/Attributes/`](../../Runtime/Shared/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
+- 必要原生 Drawer：[`Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs`](../../Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs)，程序集 `YLFramework.Core.Editor` 显式引用 Foundation。
 
 ## CustomClassNameGUI
 
@@ -24,19 +25,25 @@
 - 语义：标记需要自定义 Editor 绘制的序列化字段（metadata + Editor 契约）。
 - 目标：`AttributeTargets.Field`；`AllowMultiple = false`；`Inherited = false`。
 - 契约：抽象特性，仅供派生；编辑器下派生类**必须实现** `OnPropertyGUI(UnityEditor.SerializedProperty)`，由外部编辑器代码读取字段上的派生特性后调用（框架内暂无内置消费者 / 绘制器）。
-- 历史设计保留：该 Editor 行为不迁出 Runtime——移除后类型只剩空壳；消费方应位于 `Editor/`，以自行读取字段特性的方式接入。
+- 构造：无参默认不刷新；`CustomPropertyGUI(bool reloadTreeViewOnValueChange)` 配置刷新意图；同名 public 字段可供命名特性参数与接入方读取/修改，Editor 与 Player 均可用。框架不自动发现或刷新 TreeView。
+
+## DisableEdit
+
+- `PropertyAttribute`，保留 `Field | Property`、单次使用、默认继承的声明；原生 Inspector 实际绘制的是序列化字段，普通 C# property 不因此变为可序列化。
+- 已注册的 Drawer 禁用字段及展开子属性，使用原生 `PropertyField` 与对应子属性高度；正常或抛异常时均恢复进入前的 GUI enabled 状态，不应用或保存序列化对象。
 
 ## Runtime / Editor 边界
 
-- 两个特性都位于 Runtime 程序集（`YLFramework.Runtime`），不依赖其他 YLFramework 模块。
+- 三个特性均位于 `YLFramework.Foundation.Runtime`，不依赖 Core / 整体 Runtime / Editor 产品程序集；旧自有 Core 与 Tools 元数据副本已退出。
 - 仅 `CustomPropertyGUI.OnPropertyGUI` 位于 `#if UNITY_EDITOR` 内：Editor 编译时存在、Player 编译时不存在，Player 程序集不会残留 `UnityEditor` 引用。
 - 使用 `CustomPropertyGUI` 的业务代码需注意：Player 下没有 `OnPropertyGUI`，派生类中的重写必须包在 `#if UNITY_EDITOR` 内。
-- `AttributesTests.CustomPropertyGUI_Source_Keeps_UnityEditor_Guarded` 会在 EditMode 下守卫该边界（源码中所有 `UnityEditor` 引用必须处于 `#if UNITY_EDITOR` 区间）。
+- `Tests/Foundation/EditMode/AttributesTests.cs` 直接编译正式元数据源码和派生构造使用者，覆盖 Editor 与无 UnityEditor 引用的 Windows Development 源码 profile；不借用预编译 Foundation DLL，不等于实际 Player 构建/运行。
 
 ## 主要类型
 
 - `CustomClassNameGUI`：类型显示名特性。
 - `CustomPropertyGUI`：字段自定义绘制抽象特性。
+- `DisableEdit`：原生 Inspector 只读绘制特性。
 
 ## 依赖
 
@@ -44,9 +51,9 @@
 
 ## 当前状态
 
-已完成并含专项测试：`Tests/EditMode/AttributesTests.cs`（AttributeUsage、构造 / `GetName`、继承行为、abstract 契约、Editor 方法存在性、字段标注读取、源码边界守卫）。
+元数据回归位于 `Tests/Foundation/EditMode/AttributesTests.cs`；真实 SerializedObject、展开高度、子 Drawer 禁用/异常状态恢复与 Clipboard 直接消费者回归位于 `Tests/Core/Editor/DisableEditDrawerTests.cs`。
 
-当前工程内暂无调用方：没有字段 / 类型使用这两个特性，也没有消费它们的编辑器代码，模块处于“metadata 已定义、Editor 消费者待接入”的状态。
+CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥；分析器/整个 Editor 工具整合不属本次元数据归口。
 
 ## 备注
 

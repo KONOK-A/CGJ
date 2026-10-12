@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED（总体方案及 D1～D3、5.1～5.5 批次路线已获用户正式批准）；5.1 待单独实施授权。** 本文是阶段 5 唯一总体方案，不另建逐类实施脚本；批准方案不表示功能实施、实施分支或 Git 写操作已获授权。
+**状态：APPROVED / 阶段 5 IN PROGRESS；5.1 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，用户另行正式授权了 5.1；5.2～5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -9,6 +9,8 @@
 **技术基线：**Unity `2022.3.62f3c1`，既有 UnityWebRequest、UGUI、Json.NET 与自有 Foundation；不升级工具链或包。
 
 ## 1. 基线、证据与范围
+
+第 1～3 节保留总体研究轮次的实施前证据及静态结论；其中“当前/本轮/未执行”均指该研究基线，不覆盖后续实施结果。5.1 的实际基线、迁移与本轮验证见第 5.1 节实施记录。
 
 - 2026-10-12 实际核验：分支 `integration/xf-yl`，HEAD `6e5b113`，研究开始时工作区干净。`milestone/4-audio` 指向 `0a0e74f`；两提交间只有 `IntegrationPlan.md` 的状态修正，产品源码基线一致，不回退 HEAD。
 - 阶段 2 各里程碑、阶段 3 `7e44d9f` / `milestone/3-ui`、阶段 4 `0a0e74f` / `milestone/4-audio` 已由 Git 历史及用户确认核对。蓝图首页、第 6 节与 Audio 编号 `06` 已在 `6e5b113` 修正，本轮不重复编辑；专项方案中的旧停止文字保留为历史，不覆盖较新的完成状态。
@@ -163,6 +165,42 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 - **前置/退出：**接受第 6 节 D1；核对类型/反射字符串及 Editor asmdef。完成后新 YL 无两套相同类型查找和展示元数据，Core/Runtime 只能向中立闭包依赖；迁移失败不退出原自有类型。
 - **验收：**实际 Unity 编译；FoundationBoundary、CoreIdentity、CoreEditorIdentity；定向 Module 字符串启动/Controller 查找及生成器/SerializedProperty 直接回归。补查找失败后可见晚加载、命名歧义及特性跨 Editor/非 Editor 编译；真实 SerializedObject 验证 DisableEdit 不改值、高度/GUI 状态正确。若移动 LayerMaskUtility，同步并运行 AudioSourceIndependence 的两个源码闭包 profile。
 
+#### 5.1 实施与验证记录（2026-10-12）
+
+**实际基线：**`fusion/5-runtime`，HEAD `e222accdc29103d2e1e77bd70a702071fe9167fd`，开始时工作区干净。已核对全局/项目 AGENTS、Unity `2022.3.62f3c1`、manifest 与本方案第 4 节/5.1；本次没有切分支、Commit、Push、Merge、Tag、Reset 或 Clean。
+
+**实际成果及取舍：**
+
+- 唯一类型查找为 `Y/Shared/AssemblyTool.cs` / `YLFramework.Foundation.AssemblyTool`，以既有 YL 清晰契约为基底，成功结果使用 Ordinal 字典缓存，失败不缓存。保留已加载程序集顺序的首匹配及成功缓存稳定性，不把同名类型改为异常；不自行裁剪/补 namespace/做短名扫描，不提供程序集限定名解析或加载器，底层名称解析交由 `Assembly.GetType`。声明 Unity 主线程/单线程边界，没有新增并发反射平台。
+- Core `AssemblyTools` 和旧 `Utilities.AssemblyTool.AssemblyTool` 不留双实现或转发壳。Module 的三个字符串 Controller 入口、ModuleManager 字符串启动，以及 Core Editor 的三个 Clipboard 查找已迁到 Foundation；注册、owner 与生命周期未改。
+- `Y/Shared/LayerMaskUtility.cs` / `YLFramework.Foundation.LayerMaskUtility` 承接唯一成员判断算法。Core 的两个 Contains 重复实现移除，Listener 使用 Foundation 扩展；Runtime 的 GameObject/Component 包装签名与 Unity null 语义保持。仅为本批迁移兼容保留两种入口：Contains 使用旧 Core 的位移取模语义（未定义层名仍映射 bit31），IsInLayerMask 严格校验 0..31；两者共用同一位判断。Set / PhysicsSetting / Physics2DSetting 仍暂留 Core，完整边界修复归 5.3、其余归属收口归 5.4，不下沉整组工具。
+- 唯一展示特性为 `Y/Shared/Attributes/` / `YLFramework.Foundation.Attributes`：CustomClassNameGUI 保留 YL 的 AttributeUsage/只读名称元数据，CustomPropertyGUI 合入 XF 的 public 刷新字段、无参/布尔构造，类型/构造/配置在 Player 可编译，只有 OnPropertyGUI 条件编译为 Editor。旧 Core 与 Tools 的同职责展示定义退出；DisableEdit 保留有效 PropertyAttribute/AttributeUsage。
+- 必要 DisableEditDrawer 保留在 Core Editor 原文件，以 Foundation 特性重新绑定；Core Editor asmdef 显式增加 Foundation 引用。Drawer 使用 DisabledScope 确保正常/异常状态恢复，原生 PropertyField 与高度计算均包含展开子属性，不应用/保存 SerializedObject；未建设特性扫描器、Editor 产品平台或 Analyzer。
+- 五个迁移脚本的 `.meta` 内容与 GUID 保持：AssemblyTool `0d642493baff4da3a1658e765259bdda`、LayerMaskUtility `2df0ea77b7acdc64ea603270e62697f7`、CustomClassNameGUI `c7fc0b53a07a4c4ba926bb6236296c73`、CustomPropertyGUI `d3749dc9c74244c488c5590c4589b1f0`、DisableEdit `3a18a3569256cf14aa3e03ac64826127`。Unity AssetDatabase 实际解析到上述新路径；新增测试及 Attributes 目录身份由 Unity 导入生成。Listener/Drawer 原 GUID、组件/程序集/序列化字段均未改。迁移/退出 GUID 在 Assets 定向搜索未发现资产绑定，旧 API 字符串仅剩退出守卫。
+- Foundation asmdef 未增加产品程序集依赖；Core 与整体 Runtime 保持互不引用，Core Editor-only 边界保留。仅增量更新现有 Architecture、模块说明/导航和 THIRD-PARTY-NOTICES；完整许可仍随附。未改原 Package、游戏、Scene、Prefab、Bundle、Packages 或 ProjectSettings。
+
+**分层证据（本轮实际执行）：**
+
+| 验证层 | 结果与范围 |
+|---|---|
+| 静态引用/身份检查 | 旧查找与展示类型只剩测试退出守卫；迁移 GUID 无资产引用且在新路径唯一；新增源码/目录均有 Unity 生成或保留的 meta；`git diff --check` 通过。 |
+| Unity 实际编译 | 已通过当前打开工程的 AssetDatabase 刷新/重编译；Unity `EditorUtility.scriptCompilationFailed == false`，未用 IDE 或 dotnet 构建替代。 |
+| 定向 EditMode | **70 项通过，0 失败/跳过**：FoundationBoundary 6、CoreIdentity 9、CoreEditorIdentity 8、CoreModuleGeneration 33、AssemblyTool 3、Attributes 3、DisableEditDrawer 3、NeutralLayerMaskConsumer 2、AudioSourceIndependence 3。统计使用实际 PassedTests/单项 Results，不将工具的全工程发现总数作为执行数量。 |
+| 类型查找回归 | 完整名/大小写/嵌套/开放泛型、成功缓存、失败不缓存及之后的动态程序集晚加载、同名首匹配/缓存稳定性均通过。归属门禁先实际失败，迁移后通过。 |
+| Inspector/Editor 直接消费者 | 真实 SerializedObject 的展开高度由迁移前 18（期望 38）失败转为通过；已注册 DisableEdit Drawer 实际禁用子字段，正常及子 Drawer 抛异常时都恢复 enabled/disabled 状态、不改值；Clipboard 复制/可粘贴/粘贴真实调用往返通过并恢复系统剪贴板文本。 |
+| 非 Editor 元数据源码 | AttributesTests 用 AssemblyBuilder 直接编译三份正式源码与派生/命名参数探针，EditorAssembly、Windows Development 无 UnityEditor 引用两个 profile 均通过；不借用项目预编译 Foundation 实现，不声称实际 Player 运行。 |
+| Audio 源码闭包 | 固定清单已改为真实 `Shared/LayerMaskUtility.cs`；EditorAssembly 与 Windows Development 两个源码闭包及引用白名单门禁通过，不改为引用预编译 Foundation DLL，不替代 Player 构建。 |
+| 定向 PlayMode | **4 项逐项取得 Passed，0 用例失败**：CoreModulePlayModeTests 的 TypeStartupConstructsOnlyWhenMissingAndNeverImplicitlyUsesModulePool、SynchronousStartupPublishesOneRequestBeforeReentryAndSingletonNeedsNoBaseCall、ControllersAreLocalAndExplicitBorrowingPreservesOwnershipAndExit、CreateControllerOverloadsCreateLocallyWithoutBorrowingOtherModules。覆盖字符串 Module 启动和 Controller 查询/加载/创建，不跑整个 Core/Audio/UI 全集。 |
+
+**限制、失败分类及停止点：**
+
+- 最初类型查找测试的反射助手误选继承的 GetType，改为直接正式 API 后通过；LayerMask 夹具曾混用同对象 2D/3D Collider 且在 EditMode 使用 SendMessage，修正为分离的真实 Collider 和直接调用实际过滤消费者后通过。未修改业务行为或削弱断言；该 EditMode 回调测试不证明物理引擎自动分发。
+- Play 测试退出曾出现原 Logger 的 `LoggerManager` 对象清理错误，以及 MCP 批量连续调用时的域重载瞬断。连接恢复后四个目标用例已分别返回有效通过结果；丢失结果的批量调用不计为通过。没有修改原 Logger/Package、替换 logHandler 或沿用此前临时隔离授权；用例本体通过不证明原 Logger 的退出安全，综合退出门禁仍留 5.5。
+- 独立只读代码审查未发现阻断性缺陷。非阻断覆盖限制：Contains 的非法层号/未定义层名取模保留已静态核对等价，本轮没有新增将该缺陷锁为永久契约的测试；按 5.3 的正式修订补完整边界回归。
+- 没有实际 Player 构建/运行、阶段综合双 Play、原游戏综合验收或 IL2CPP/AOT 证明；均未提前实施。Core 其余 Tools/Extensions、HTTP 和 LogUtil 仍按后续批准批次收口。
+
+**结论：5.1 唯一中立权威、消费者迁移、身份保护与定向技术门禁满足，具备进入 5.2 的前置基础；等待用户验收及 Git 收口。阶段 5 不标记 COMPLETE，5.2 不自动实施。**
+
 ### 5.2 HTTP 请求生命周期与 AsyncOperation 边界
 
 - **主要轴：**现有 HTTP 的行为正确性，暂留当前类型/程序集身份以便独立比对。修 query/body/headers、钩子可订阅性、耗时、结果快照、稳定终态、取消及全路径释放；补 HTTP 自有退出收尾。AsyncOperation 只收口真实契约与直接消费者证明，不改基类历史多播/Abort 语义。
@@ -200,7 +238,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；批准方案不自动授权实施，每批仍须单独实施授权，5.1 尚未启动。
+D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1 已按本次正式授权实施，证据见 5.1 记录；5.2 尚未授权实施。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -210,4 +248,4 @@ D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准并由本轮完成审核收口：架构、批次范围、验收门禁及跨阶段限制保持原样，不重新研究或设计方案。**5.1 尚未实施**；不修改 Runtime/Editor/Tests/Prefab/Scene 或其他产品文件，不创建实施分支，不 Commit/Push/Merge/Tag/Reset/Clean。
+本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.1 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.2～5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。

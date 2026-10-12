@@ -7,13 +7,13 @@
 | 目录 | 程序集（asmdef） | 职责 |
 |---|---|---|
 | `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / Audio-Action 桥接 |
-| `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter 与唯一 Timer 内核 |
+| `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter、唯一 Timer 内核及中立类型查找、LayerMask 成员判断、展示元数据 |
 | `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
 | `Samples/ColorSelector/` | `YLFramework.Samples.ColorSelector` | 消费正式 Core UI 的演示，显式引用 Core / Foundation / UGUI |
 | `Runtime/Tools/ZipTool/` | `YLFramework.Utilities.ZipTool` | Zip/GZip 工具与内置 SharpZipLib，不引用 UnityEngine |
 | `Editor/`（除 `Help`、`XFMain`） | `YLFramework.Editor` | 普通编辑器工具、Action / Audio 帮助提供方，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor.Help` | 独立 Editor-only 帮助核心，显式 references 为 `[]` |
-| `Editor/XFMain/` | `YLFramework.Core.Editor` | Core 模块生成工具，显式引用 Core / XFAB / UGUI，仅 Editor 平台 |
+| `Editor/XFMain/` | `YLFramework.Core.Editor` | Core 模块生成工具与必要 Drawer，显式引用 Core / Foundation / XFAB / UGUI，仅 Editor 平台 |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Tests/EditMode/` | `YLFramework.Tests.EditMode` | 编辑器内单元测试 |
 | `Tests/PlayMode/` | `YLFramework.Tests.PlayMode` | 运行时测试 |
@@ -27,7 +27,7 @@
 - `YLFramework.Core.Runtime` → Foundation、XFABManager、UnityEngine.UI
 - `YLFramework.Runtime` → Foundation、`YLFramework.Utilities.ZipTool`、`UnityEngine.UI`
 - `YLFramework.Editor` → Foundation、`YLFramework.Runtime`、`YLFramework.Editor.Help`、`UnityEngine.UI`
-- `YLFramework.Core.Editor` → `YLFramework.Core.Runtime`、XFABManager、UnityEngine.UI
+- `YLFramework.Core.Editor` → `YLFramework.Core.Runtime`、Foundation、XFABManager、UnityEngine.UI
 - `YLFramework.Editor.Help` → 无模块显式引用；Help 不反向依赖 Runtime 或提供方
 - `YLFramework.Actions.DOTween` → `YLFramework.Runtime` + `DOTween.dll`
 - `YLFramework.Tests.EditMode` → Runtime、Editor、Help、ZipTool、UI、TestRunner / NUnit
@@ -44,7 +44,8 @@
 Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 - `Foundation/`：其他框架模块经常建立在其之上的基础机制（Binding、Events、IOC、Pool、Singleton）；
-- `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（AssemblyTool、Attributes、Extensions、FSM、Grid、Json、Table、ZipTool）；
+- `Shared/`：实际独立的 Foundation 程序集，中立共用闭包；`AssemblyTool`、`LayerMaskUtility` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用；
+- `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；
 - Runtime 根部：承担完整框架级服务/系统职责的大型模块（Action、Audio、Resource、Save）；正式 UI 位于 Core 的 `XFMain/UI/`，复用 Module / Panel / View。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace 不强制与目录一一对应。模块内部按实际复杂度组织：小模块保持扁平，大模块可继续内部细分。`Samples/ColorSelector` 仅演示正式 `Runtime/XFMain/UI/Tools/` 工具；取色能力本身位于 Core Runtime。

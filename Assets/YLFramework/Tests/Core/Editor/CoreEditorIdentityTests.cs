@@ -42,7 +42,7 @@ namespace YLFramework.Core.Editor.Tests
             var references = definition.references.Select(ResolveReference).ToArray();
             Assert.That(references, Is.EquivalentTo(new[]
             {
-                "YLFramework.Core.Runtime", "UnityEngine.UI", "XFABManager"
+                "YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime", "UnityEngine.UI", "XFABManager"
             }), "Only the declared temporary XFAB backend may reference original assemblies.");
             Assert.That(references.Distinct().Count(), Is.EqualTo(references.Length));
 
@@ -116,12 +116,12 @@ namespace YLFramework.Core.Editor.Tests
             }
         }
 
-        [TestCase(typeof(DisableEditDrawer), typeof(CustomPropertyDrawer), typeof(DisableEdit))]
-        public void InspectorAndDrawerBindOnlyNewCoreTypes(Type editorType, Type attributeType, Type runtimeType)
+        [TestCase(typeof(DisableEditDrawer), typeof(CustomPropertyDrawer), typeof(YLFramework.Foundation.Attributes.DisableEdit))]
+        public void InspectorAndDrawerBindNeutralFoundationMetadata(Type editorType, Type attributeType, Type runtimeType)
         {
             var binding = editorType.GetCustomAttributesData().Single(a => a.AttributeType == attributeType);
             Assert.That(binding.ConstructorArguments[0].Value, Is.EqualTo(runtimeType));
-            Assert.That(runtimeType.Assembly.GetName().Name, Is.EqualTo("YLFramework.Core.Runtime"));
+            Assert.That(runtimeType.Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
             Assert.That(editorType.Assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
         }
 

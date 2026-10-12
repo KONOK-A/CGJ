@@ -10,7 +10,7 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Tools/AssemblyTool/`](../../Runtime/Tools/AssemblyTool/)
+- 运行时：[`Runtime/Shared/AssemblyTool.cs`](../../Runtime/Shared/AssemblyTool.cs)，程序集 `YLFramework.Foundation.Runtime`。
 
 ## 查找规则
 
@@ -23,7 +23,7 @@
 
 ## Cache 语义
 
-- **只缓存成功结果**：找到的 `Type` 写入 `TypeCacheDict`，重复查询直接命中；
+- **只缓存成功结果**：找到的 `Type` 写入 Ordinal 字典，重复查询直接命中；缓存键不自行裁剪或转换大小写，底层类型名解析仍交由 `Assembly.GetType`；
 - **失败不缓存**：不存在的类型不写缓存，运行期间新加载程序集后再次查询仍可找到，不存在永久 stale miss；
 - 无 `ClearCache` 等手动失效 API：成功缓存的 `Type` 随程序集存活，Unity 运行期不卸载程序集，缓存不会失效；
 - 非线程安全，按 Unity 主线程 / 普通单线程使用（不使用并发 cache、lock、weak cache、后台扫描）。
@@ -38,11 +38,11 @@
 
 ## 当前状态
 
-已完成并含专项测试：`Tests/EditMode/AssemblyToolTests.cs`（null/空白、不存在、成功缓存、失败不缓存、BCL / 框架类型、嵌套类型、开放泛型）。
+定向测试位于 `Tests/Foundation/EditMode/AssemblyToolTests.cs`：null/空白、完整名与大小写、程序集限定名不作为查找入口、嵌套/开放泛型、成功缓存、失败后的晚加载与同名类型首匹配。
 
-当前工程内暂无生产调用方；测试内会读取私有缓存字段验证缓存语义。
+实际消费者为 Core 的 Module 字符串 Controller 查询/创建、ModuleManager 字符串启动，以及 Core Editor 的 SerializedProperty Clipboard 查找。原自有 `Core.AssemblyTools` 与 `Utilities.AssemblyTool.AssemblyTool` 已退出，不保留转发壳；原 XF Package 不修改。
 
 ## 备注
 
-- 命名空间为 `YLFramework.Utilities.AssemblyTool`，避免与 `System.Reflection.Assembly` 同名。
+- 命名空间为 `YLFramework.Foundation`，入口为 `AssemblyTool.GetType`。
 - 调用方应传入完整类型名（`typeof(T).FullName` 即可）。

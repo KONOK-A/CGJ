@@ -110,7 +110,8 @@ namespace YLFramework.Core.Tests
             }).ToArray();
             Assert.That(types.All(t => t.Namespace != null &&
                 (t.Namespace == "YLFramework.Core" || t.Namespace.StartsWith("YLFramework.Core."))), Is.True);
-            Assert.That(typeof(CustomClassNameGUI).FullName, Is.EqualTo("YLFramework.Core.CustomClassNameGUI"));
+            Assert.That(typeof(YLFramework.Foundation.Attributes.CustomClassNameGUI).Assembly,
+                Is.SameAs(typeof(CustomAsyncOperation<>).Assembly));
             Assert.That(typeof(Extensions.GameObjectExtensions).Namespace, Is.EqualTo("YLFramework.Core.Extensions"));
 
             var others = AppDomain.CurrentDomain.GetAssemblies().Where(a => a != core &&

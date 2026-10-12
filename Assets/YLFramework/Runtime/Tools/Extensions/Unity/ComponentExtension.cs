@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using YLFramework.Foundation;
 
 namespace YLFramework.Utilities.Extensions
 {

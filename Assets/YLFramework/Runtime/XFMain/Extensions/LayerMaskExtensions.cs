@@ -39,31 +39,6 @@ namespace YLFramework.Core.Extensions
 
         }
 
-
-        /// <summary>
-        /// 判断某个层级是否打开
-        /// </summary>
-        /// <param name="layerMask"></param>
-        /// <param name="layerName"></param>
-        /// <returns></returns>
-        public static bool Contains(this ref LayerMask layerMask, string layerName) 
-        {
-
-            return layerMask.Contains(LayerMask.NameToLayer(layerName));
-        }
-
-        /// <summary>
-        /// 判断某个层级是否打开
-        /// </summary>
-        /// <param name="layerMask"></param>
-        /// <param name="layer"></param>
-        /// <returns></returns>
-        public static bool Contains(this ref LayerMask layerMask, int layer)
-        {
-            int v = layerMask & (1 << layer);
-            return v != 0;
-        }
-
         /// <summary>
         /// 获取ProjectSetting Physics2D中某一个层级和其他层级的碰撞关系
         /// </summary>
@@ -117,4 +92,3 @@ namespace YLFramework.Core.Extensions
     }
 
 }
-
