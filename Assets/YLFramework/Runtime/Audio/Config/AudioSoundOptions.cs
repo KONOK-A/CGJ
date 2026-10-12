@@ -27,6 +27,8 @@ namespace YLFramework.Services.Audio
         public AudioAutoFade AutoFade;
         /// <summary>Sound admission priority: nonnegative, with larger values more important. Ignored by Music and Voice; not Unity AudioSource.priority.</summary>
         public int Priority;
+        /// <summary>显式启用 timeScale == 0 时的局部自动暂停。默认 false；解除自动暂停不解除手动或通道暂停。</summary>
+        public bool AutoPauseWhenTimeScaleZero;
         /// <summary>Create a nonlooping configuration with valid playback defaults.</summary>
         public AudioSoundOptions()
         {

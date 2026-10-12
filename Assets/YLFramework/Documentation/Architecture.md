@@ -33,7 +33,7 @@
 - `YLFramework.Tests.EditMode` → Runtime、Editor、Help、ZipTool、UI、TestRunner / NUnit
 - `YLFramework.Tests.PlayMode` → Runtime、UI、TestRunner / NUnit
 
-模块内协作：`Runtime/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；只有 DOTween 保留第三方程序集边界。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
+模块内协作：`Runtime/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；DOTween 与可选 `Integrations/XFAB/Audio/` 各保留独立第三方程序集边界。正式 Audio Runtime 不反向引用 XFAB adapter；后者不自动注册或纳入默认导出。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
 
 无循环依赖；Runtime 不引用 Editor 程序集。Runtime 中少量编辑器模拟代码（资源加载、AssetBundle 模拟、存档编辑器保护等）使用 `#if UNITY_EDITOR` 条件编译，玩家程序集不依赖 UnityEditor。
 
@@ -59,7 +59,7 @@ Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，�
 |---|---|---|
 | Timer | 独立延迟、有限 / 无限周期到期回调 | `TimerScope` 管理命名与匿名任务；普通所有者用 CancelAll / Dispose 清理 |
 | ActionKit | 逐帧进度、插值、条件与 Sequence / Parallel / Repeat 组合 | 命名根动作复用对象 GameObject、当前场景或全局执行器；`ActionHandle` 仅控制原动作执行租约 |
-| AudioKit | Clip-only Music / Voice / Sound、随机与空间音效、代次安全 AudioHandle、去重、可选 Unity Mixer 路由与显式控制 | 维持音频领域生命周期；`Runtime/Audio/Actions/` 内建 Action 桥接，Clip / Mixer 资源由外部所有者管理 |
+| AudioKit | Music / Voice / Sound、显式命名同步/异步取得与逻辑取消、代次安全 AudioHandle、随机/空间音效、去重与可选 Mixer | 唯一音频播放生命周期；内建 Action 桥接。直接 Clip / Mixer 借用，命名 Clip 通过窄 ResLoader Provider 租约保活/受控闲置缓存；物理释放仍由后端 owner 管理，XFAB 适配仅借用 |
 
 Timer 与 Action 使用独立名称索引，不增加共享 scope、全局任务表或第三套执行器。Timing 不提供逐帧 progress；Action 的 Delay 不改写为 Timer 包装，Audio 播放链也不强制绑定 Timer。两者的首帧、循环、异常和时钟行为并不完全等价。
 
@@ -67,12 +67,14 @@ Action 的 namespace 为 `YLFramework.Actions`（复数，避免遮蔽 `System.A
 
 Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继承分类默认、指定组与 Direct，`Mixer/AudioMixerConfig` 只保存外部资产引用，Apply/Clear 仅更新运行时默认组，不写 PlayerPrefs。`AudioMixerControl` 独立显式控制参数与 Snapshot；Settings 音量仍只控制 Source，不自动绑定 Mixer 音量或 Ducking。薄 `AudioMixerController` 的 Awake 仅路由，禁用/销毁不清全局配置；清路由不停止单次覆盖，Shutdown 仍停播并清理自有请求，两者均不撤销原生参数控制或 Snapshot 状态。详见 [Audio 的可选 Mixer](Modules/Audio.md#可选-mixer)。
 
+正式 `AudioClipLibrary` 只负责具名素材的均匀/加权选择；`AudioGroupPlayer` 是显式命名通道的组件 owner，直接 Clip、命名异步和借源均提交同一 AudioManager/Voice。其自动播放默认 Manual，FirstStart/EveryEnable 显式配置，不改原游戏组件身份或六个设置键。通道 `VolumeChanged/MutedChanged` 先应用原请求再通知，同值不通知，重入/退出不会向新身份投递旧值；监听异常继续通知仍属原代次的其他监听后聚合报告。自有 Core Audio 四份 Runtime、旧 Inspector 和重复驱动/卸载机制已退出；Core 保留其他模块的 XFAB 过渡依赖，原 XF Package 不修改。详见 [素材组与组件](Modules/Audio.md#素材组与组件)。
+
 ## 主要入口
 
 | 入口 | 说明 |
 |---|---|
 | [`Runtime/Action/Core/ActionKit.cs`](../Runtime/Action/Core/ActionKit.cs) | 动作工厂与全局消息入口；详见 [Action](Modules/Action.md) |
-| [`Runtime/Audio/AudioKit.cs`](../Runtime/Audio/AudioKit.cs) | Clip-only 音频播放、安全句柄、设置、查询与可选 Mixer 默认路由；显式参数/Snapshot 控制见 `Mixer/AudioMixerControl`，详见 [Audio](Modules/Audio.md) |
+| [`Runtime/Audio/AudioKit.cs`](../Runtime/Audio/AudioKit.cs) | 直接 Clip / 显式命名音频播放、安全句柄、请求取消与资源租约、设置、查询及可选 Mixer；显式参数/Snapshot 控制见 `Mixer/AudioMixerControl`，详见 [Audio](Modules/Audio.md) |
 | [`Runtime/YLFrameworkRoot.cs`](../Runtime/YLFrameworkRoot.cs) | 框架根单例（`MonoSingleton<YLFrameworkRoot>`，`DefaultExecutionOrder(-20)`），负责框架根对象的 DontDestroyOnLoad |
 | [`Runtime/XFMain/UI/WindowCatalog.cs`](../Runtime/XFMain/UI/WindowCatalog.cs) | 仅保存窗口定义；同步/异步入口复用 Module 的活跃会话与 pending 请求 |
 | [`Runtime/XFMain/UI/UIRootContext.cs`](../Runtime/XFMain/UI/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
@@ -93,6 +95,10 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 ## XML 与分发
 
 唯一核心配置 `Runtime/csc.rsp` 生成 `Library/YLFramework.Runtime.xml`，包含 Action、Observable、Audio 与桥接文档；DOTween 独立配置生成 `Library/YLFramework.Actions.DOTween.xml`。提供方按真实 Assembly 作为 `XmlPaths` 字典 key 去重，不把同一 Runtime 重复添加。`Library/` XML 是构建产物，不默认导出。
+
+`AudioSourceIndependenceTests` 使用 AssemblyBuilder 直接编译正式 Audio 全目录及其必要自有源码依赖，排除预编译 YL/XF/XFAB 实现 DLL，分别验证 Editor 和 Windows64 Development 非 Editor 条件分支。该源码闭包仍需要 Unity/BCL、UGUI 和 Root 既有 Odin Attributes；不是整个尚在融合中的工程独立验收，也不替代真正 Player 构建/运行。
+
+Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干扰、Source/DSP 输出与实际 Windows64/Mono Player 的证据，不能以源码闭包或构建成功互相替代。验收场景和 PCM 属于 Tests 的显式夹具，不改变唯一 Runtime Audio 权威、游戏持久资产或默认分发；系统端点出声与人工听感仍需单独确认，阶段状态以 [Audio 专项](../../../.kilo/plans/xf-yl-4-audio.md)为准。
 
 默认 ExportRoots 仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`。普通模块、帮助源码与屏幕资源包含在默认包；Tests、根目录 DOTween 扩展及包外供应商 DLL 排除。可选源码另行引入依赖，不复制 Core / Vendor。导出回归仅验证当前工程实际包清单与 GUID / meta 字节，不宣称干净工程 import。入口见 [文档首页](README.md#帮助与导出)。
 

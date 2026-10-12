@@ -4,11 +4,11 @@ using UnityEngine;
 
 namespace YLFramework.Services.Audio
 {
-    /// <summary>Clip-only music, voice and pooled sound service. The caller owns every supplied clip.</summary>
+    /// <summary>统一 AudioClip 播放内核。直接传 Clip 只借用；显式命名入口通过窄 Provider 持有资源。不创建 AudioListener。</summary>
     /// <remarks>Playback callbacks receive the actual clip and original lease. Start callbacks may run before Play returns.
     /// Natural completion callbacks run before lease cleanup; Stop, replacement and Shutdown can invalidate it within the callback.
     /// Stop, rejection, replacement, disabling and target loss do not invoke natural completion callbacks.</remarks>
-    public static class AudioKit
+    public static partial class AudioKit
     {
         private static AudioKitSettings sSettings;
         private static SoundDeduplicator sChannels;
@@ -25,7 +25,8 @@ namespace YLFramework.Services.Audio
             internal ClipSoundRule(AudioClip clip, int limit) { Clip = clip; Limit = limit; }
         }
         private static bool sShuttingDown, sQuitting;
-        internal static bool IsClosing => sShuttingDown || sQuitting;
+        internal static bool IsClosing => sShuttingDown || sQuitting ||
+            Application.isPlaying && !YLFramework.Core.Singleton.SingletonSessionState.CanRunExecution;
         internal static AudioKitSettings CurrentSettings => sSettings;
         internal static SoundDeduplicator Channels { get { Initialize(); return sChannels; } }
         /// <summary>持久化的分类通道设置。首次访问会初始化，但不会创建播放宿主。</summary>
@@ -34,6 +35,17 @@ namespace YLFramework.Services.Audio
         public static AudioHandle Music => AudioManager.TryGetInstance(out var host) ? host.Music?.Handle ?? default : default;
         /// <summary>最新 Voice 请求的句柄；没有请求时返回无效句柄。读取不会创建宿主。</summary>
         public static AudioHandle Voice => AudioManager.TryGetInstance(out var host) ? host.Voice?.Handle ?? default : default;
+        /// <summary>登记独立命名通道。名称与显式持久化身份冲突均拒绝；省略 persistenceId 不读写通道偏好键。</summary>
+        /// <remarks>区分大小写，身份限 ASCII 字母/数字及 . _ - /。登记创建同一 Audio 宿主但不播放；Dispose/Shutdown 后身份失效。</remarks>
+        public static AudioChannel RegisterChannel(string name, AudioCategory category = AudioCategory.Music,
+            AudioChannelMode mode = AudioChannelMode.Exclusive, string persistenceId = null)
+        {
+            AudioChannel.ValidateIdentity(name, nameof(name));
+            if (persistenceId != null) AudioChannel.ValidateIdentity(persistenceId, nameof(persistenceId));
+            if ((uint)category > (uint)AudioCategory.Sound) throw new ArgumentOutOfRangeException(nameof(category));
+            if ((uint)mode > (uint)AudioChannelMode.Overlap) throw new ArgumentOutOfRangeException(nameof(mode));
+            return AudioManager.Instance.RegisterChannel(name, category, mode, persistenceId);
+        }
         /// <summary>当前有效的 Sound 请求数，包含暂停、静音和循环中的请求。读取不会创建宿主。</summary>
         public static int SoundCount => AudioManager.TryGetInstance(out var host) ? host.SoundCount : 0;
         internal static AudioSoundConcurrency CurrentSoundConcurrency => sSoundConcurrency;
@@ -182,8 +194,15 @@ namespace YLFramework.Services.Audio
         {
             if (IsClosing) throw new InvalidOperationException("AudioKit is shutting down.");
             if (sSettings != null) return;
-            sSettings = new AudioKitSettings();
-            sChannels = new SoundDeduplicator();
+            var settings = new AudioKitSettings();
+            try
+            {
+                sChannels = new SoundDeduplicator();
+                sSettings = settings;
+                Application.quitting -= BeginQuit;
+                Application.quitting += BeginQuit;
+            }
+            catch { settings.Dispose(); throw; }
         }
 
         /// <summary>Release owned sources and subscriptions, but never unload borrowed clips.</summary>
@@ -200,6 +219,7 @@ namespace YLFramework.Services.Audio
                     sSettings = null; sChannels = null; sSoundConcurrency = default;
                     sSoundCacheCapacity = 10; sSoundCounters = default; sSoundSession++;
                     sClipSoundLimits = null; sExpiredClipRules = null;
+                    sClipCacheCapacity = 0; sClipCacheIdleSeconds = 0;
                     sShuttingDown = false;
                 }
             }
@@ -280,14 +300,20 @@ namespace YLFramework.Services.Audio
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished) =>
             PlaySlotWithSnapshot(clip, music, AudioPlaybackOptions.Capture(options, music), started, finished);
         internal static AudioHandle PlaySlotWithSnapshot(AudioClip clip, bool music, AudioPlaybackOptions options,
-            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished)
+            Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, AudioResourceLease resource = null, bool namedCommit = false)
         {
-            if (!clip) return default;
-            options.PlaySoundMode = null;
-            options.Priority = 0;
-            options.Validate(false);
-            options.ValidateClip(clip);
-            return AudioManager.Instance.PlaySlot(music, clip, in options, started, finished);
+            try
+            {
+                resource?.Validate();
+                if (!clip) return default;
+                options.PlaySoundMode = null;
+                options.Priority = 0;
+                options.Validate(false);
+                options.ValidateClip(clip);
+                if (!namedCommit && !InvalidateNamed(music ? AudioCategory.Music : AudioCategory.Voice)) return default;
+                return AudioManager.Instance.PlaySlot(music, clip, in options, started, finished, resource: resource);
+            }
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Replace the voice request with a 3D voice at a fixed world position. Sound deduplication options do not apply.</summary>
         /// <param name="clip">Caller-owned clip that must remain alive for this request.</param>
@@ -326,6 +352,7 @@ namespace YLFramework.Services.Audio
             resolved.Priority = 0;
             resolved.Validate(true);
             resolved.ValidateClip(clip);
+            if (!InvalidateNamed(AudioCategory.Voice)) return default;
             return AudioManager.Instance.PlaySlot(false, clip, in resolved, started, finished, true, position, target);
         }
         private static AudioHandle PlaySlot(AudioClip clip, bool music, bool loop, float volume,
@@ -334,6 +361,7 @@ namespace YLFramework.Services.Audio
             if (!clip) return default;
             var options = AudioPlaybackOptions.Defaults;
             options.Loop = loop; options.Volume = volume; options.OutputRoute = outputRoute; options.Validate(false);
+            if (!InvalidateNamed(music ? AudioCategory.Music : AudioCategory.Voice)) return default;
             var host = AudioManager.Instance;
             return host.PlaySlot(music, clip, in options, started, finished);
         }
@@ -352,25 +380,46 @@ namespace YLFramework.Services.Audio
                 onStarted, onFinished, ignoreTimeScale, curve);
         internal static AudioHandle CrossFadeMusicWithSnapshot(AudioClip clip, float duration, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null,
-            bool ignoreTimeScale = true, AudioCrossfadeCurve curve = AudioCrossfadeCurve.EqualPower)
+            bool ignoreTimeScale = true, AudioCrossfadeCurve curve = AudioCrossfadeCurve.EqualPower, AudioResourceLease resource = null, bool namedCommit = false)
         {
-            if (!AudioSoundOptions.IsFinite(duration) || duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration));
-            if ((uint)curve > (uint)AudioCrossfadeCurve.EqualPower) throw new ArgumentOutOfRangeException(nameof(curve));
-            if (!clip) return default;
-            options.PlaySoundMode = null;
-            options.Priority = 0;
-            options.Validate(false);
-            options.ValidateClip(clip);
-            return AudioManager.Instance.MusicPlayback.CrossFade(clip, duration, in options, onStarted, onFinished, ignoreTimeScale, curve);
+            try
+            {
+                resource?.Validate();
+                if (!AudioSoundOptions.IsFinite(duration) || duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration));
+                if ((uint)curve > (uint)AudioCrossfadeCurve.EqualPower) throw new ArgumentOutOfRangeException(nameof(curve));
+                if (!clip) return default;
+                options.PlaySoundMode = null;
+                options.Priority = 0;
+                options.Validate(false);
+                options.ValidateClip(clip);
+                if (!namedCommit && !InvalidateNamed(AudioCategory.Music)) return default;
+                return AudioManager.Instance.MusicPlayback.CrossFade(clip, duration, in options, onStarted, onFinished, ignoreTimeScale, curve, resource);
+            }
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Stop current music, its outgoing tail and any transition. Does not create a host.</summary>
-        public static void StopMusic() { if (AudioManager.TryGetInstance(out var host)) host.MusicPlayback.Stop(); }
+        public static void StopMusic()
+        {
+            if (!AudioManager.TryGetInstance(out var host)) return;
+            host.AdvancePendingVersion(AudioCategory.Music, null);
+            var pending = host.PendingSnapshot(AudioCategory.Music, null);
+            try { host.MusicPlayback.Stop(); }
+            finally { AudioManager.EndPending(pending, AudioPlayEnd.Stopped); }
+        }
         /// <summary>Pause both music requests and freeze their common transition clock.</summary>
         public static void PauseMusic() { if (AudioManager.TryGetInstance(out var host)) host.MusicPlayback.Pause(); }
         /// <summary>Resume both music requests and the remaining transition.</summary>
         public static void ResumeMusic() { if (AudioManager.TryGetInstance(out var host)) host.MusicPlayback.Resume(); }
         /// <summary>停止当前 Voice 请求，不触发其自然完成回调。没有宿主或请求时安全 no-op。</summary>
-        public static void StopVoice() => Voice.Stop();
+        public static void StopVoice()
+        {
+            if (!AudioManager.TryGetInstance(out var host)) return;
+            host.AdvancePendingVersion(AudioCategory.Voice, null);
+            var pending = host.PendingSnapshot(AudioCategory.Voice, null);
+            var handle = host.Voice.Handle;
+            try { handle.Stop(); }
+            finally { AudioManager.EndPending(pending, AudioPlayEnd.Stopped); }
+        }
         /// <summary>暂停当前 Voice 请求。没有宿主或请求时安全 no-op。</summary>
         public static void PauseVoice() => Voice.Pause();
         /// <summary>恢复当前 Voice 请求；等待 Voice 通道重新启用的请求会保持停止，直到该通道恢复启用。</summary>
@@ -422,28 +471,33 @@ namespace YLFramework.Services.Audio
             PlaySoundWithSnapshot(clip, AudioPlaybackOptions.Capture(options), finished, started, spatial, position, target);
         internal static AudioHandle PlaySoundWithSnapshot(AudioClip clip, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> onFinished = null, Action<AudioClip, AudioHandle> onStarted = null,
-            bool spatial = false, Vector3 position = default, Transform target = null)
+            bool spatial = false, Vector3 position = default, Transform target = null, AudioResourceLease resource = null)
         {
-            if (spatial)
+            try
             {
-                if (!ReferenceEquals(target, null))
+                resource?.Validate();
+                if (spatial)
                 {
-                    if (!target || !target.gameObject.activeInHierarchy) return default;
-                    position = target.position;
+                    if (!ReferenceEquals(target, null))
+                    {
+                        if (!target || !target.gameObject.activeInHierarchy) return default;
+                        position = target.position;
+                    }
+                    ValidatePosition(position);
                 }
-                ValidatePosition(position);
+                if (!clip) return default;
+                options.Validate(spatial);
+                options.ValidateClip(clip);
+                if (!Settings.IsSoundOn.Value) return default;
+                var mode = options.PlaySoundMode ?? PlaySoundMode;
+                if (!Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
+                {
+                    sSoundCounters.DedupRejectedCount++;
+                    return default;
+                }
+                return AudioManager.Instance.PlaySound(clip, in options, mode, onFinished, onStarted, spatial, position, target, resource);
             }
-            if (!clip) return default;
-            options.Validate(spatial);
-            options.ValidateClip(clip);
-            if (!Settings.IsSoundOn.Value) return default;
-            var mode = options.PlaySoundMode ?? PlaySoundMode;
-            if (!Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
-            {
-                sSoundCounters.DedupRejectedCount++;
-                return default;
-            }
-            return AudioManager.Instance.PlaySound(clip, in options, mode, onFinished, onStarted, spatial, position, target);
+            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
         }
         /// <summary>Select uniformly among valid clips without allocating a filtered collection.</summary>
         /// <param name="clips">Caller-owned candidates; null and destroyed entries are ignored.</param>
@@ -510,7 +564,7 @@ namespace YLFramework.Services.Audio
             return false;
         }
         /// <summary>停止所有有效 Sound 请求，不触发自然完成回调。不影响 Music 和 Voice；没有宿主时安全 no-op。</summary>
-        public static void StopAllSound() { if (AudioManager.TryGetInstance(out var host)) host.StopAllSound(); }
+        public static void StopAllSound() { if (AudioManager.TryGetInstance(out var host)) host.StopSoundsAndPending(); }
         /// <summary>A snapshot of active requests, including paused sounds. Reading does not create the host.</summary>
         public static AudioHandle[] GetPlayingSounds()
         {

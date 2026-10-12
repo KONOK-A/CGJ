@@ -116,7 +116,6 @@ namespace YLFramework.Core.Editor.Tests
             }
         }
 
-        [TestCase(typeof(AudioPlayerInspector), typeof(CustomEditor), typeof(AudioPlayer))]
         [TestCase(typeof(DisableEditDrawer), typeof(CustomPropertyDrawer), typeof(DisableEdit))]
         public void InspectorAndDrawerBindOnlyNewCoreTypes(Type editorType, Type attributeType, Type runtimeType)
         {
@@ -124,6 +123,24 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(binding.ConstructorArguments[0].Value, Is.EqualTo(runtimeType));
             Assert.That(runtimeType.Assembly.GetName().Name, Is.EqualTo("YLFramework.Core.Runtime"));
             Assert.That(editorType.Assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
+        }
+
+        [Test]
+        public void CoreAudioHasRetiredWhileFormalRuntimeAndOriginalPackageKeepSeparateIdentities()
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var core = assemblies.Single(a => a.GetName().Name == "YLFramework.Core.Runtime");
+            var formal = assemblies.Single(a => a.GetName().Name == "YLFramework.Runtime");
+            var original = assemblies.Single(a => a.GetName().Name == "XFGameFramework");
+            foreach (var name in new[] { "AudioData", "AudioController", "AudioPlayer", "AudioPlayerExtension", "AudioPlayerAutoPause",
+                "AudioAssetType", "AudioPlayType", "StopType", "ClipAssetNameInfo", "ClipAssetInfo" })
+                Assert.IsNull(core.GetType("YLFramework.Core." + name), name);
+            Assert.IsNull(typeof(CreateModuleCommand).Assembly.GetType("YLFramework.Core.Editor.AudioPlayerInspector"));
+            foreach (var name in new[] { "AudioKit", "AudioHandle", "AudioEmitter", "AudioMusicPlayer", "AudioClipLibrary", "AudioGroupPlayer" })
+                Assert.IsNotNull(formal.GetType("YLFramework.Services.Audio." + name), name);
+            Assert.IsNotNull(original.GetType("XFGameFramework.AudioPlayer"));
+            CollectionAssert.DoesNotContain(core.GetReferencedAssemblies().Select(a => a.Name).ToArray(), formal.GetName().Name);
+            CollectionAssert.DoesNotContain(formal.GetReferencedAssemblies().Select(a => a.Name).ToArray(), core.GetName().Name);
         }
 
         [Test]

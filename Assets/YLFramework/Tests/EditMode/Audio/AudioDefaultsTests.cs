@@ -127,8 +127,8 @@ namespace YLFramework.Tests.Audio
         private static void AssertOptionsSnapshot(AudioSoundOptions expected, AudioPlaybackOptions actual)
         {
             var fields = typeof(AudioSoundOptions).GetFields(BindingFlags.Public | BindingFlags.Instance);
-            Assert.AreEqual(10, fields.Length);
-            Assert.AreEqual(10, typeof(AudioPlaybackOptions).GetFields(
+            Assert.AreEqual(11, fields.Length);
+            Assert.AreEqual(11, typeof(AudioPlaybackOptions).GetFields(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Length);
             foreach (var field in fields)
             {

@@ -13,6 +13,10 @@ namespace YLFramework.Services.Audio
     {
         private ObjectPool<AudioVoice> mPool;
         private readonly HashSet<AudioVoice> mSounds = new HashSet<AudioVoice>();
+        private readonly HashSet<AudioVoice> mChannelVoices = new HashSet<AudioVoice>();
+        private readonly Dictionary<string, AudioChannel> mNamedChannels = new Dictionary<string, AudioChannel>(StringComparer.Ordinal);
+        private readonly Dictionary<AudioSource, AudioVoice> mBorrowedSources = new Dictionary<AudioSource, AudioVoice>();
+        private readonly HashSet<AudioSource> mOwnedSources = new HashSet<AudioSource>();
         private readonly Dictionary<int, int> mClipCounts = new Dictionary<int, int>();
         private readonly List<int> mClipChecks = new List<int>();
         private readonly List<AudioHandle> mChecks = new List<AudioHandle>();
@@ -20,7 +24,10 @@ namespace YLFramework.Services.Audio
         private bool mDisposing;
         private ulong mAdmissionOrder;
         private ulong mSoundSession;
-        internal bool Available => !HostReleased && !mDisposing && !AudioKit.IsClosing;
+        private readonly List<AudioPlayRequest> mPending = new List<AudioPlayRequest>();
+        private readonly ulong[] mPendingVersions = new ulong[3];
+        internal AudioClipCache ClipCache { get; } = new AudioClipCache();
+        internal bool Available => !HostReleased && !mDisposing && !AudioKit.IsClosing && IsCurrentSoundSession;
         internal AudioMusicPlayback MusicPlayback { get; private set; }
         internal AudioVoice Music => MusicPlayback?.Current;
         internal AudioVoice Voice { get; private set; }
@@ -36,7 +43,14 @@ namespace YLFramework.Services.Audio
             {
                 if (AudioKit.IsClosing || !CanCreateHost(true)) throw new InvalidOperationException("Audio playback is unavailable during cleanup.");
                 AudioKit.Initialize();
-                return GetInstance(true);
+                try { return GetInstance(true); }
+                catch
+                {
+                    // 基类只回滚初始化标记；Audio 必须撤销部分订阅、池和 Source 后才允许重试。
+                    try { AudioKit.Shutdown(); }
+                    catch (Exception exception) { Debug.LogException(exception); }
+                    throw;
+                }
             }
         }
         public override void OnSingletonInit()
@@ -48,13 +62,13 @@ namespace YLFramework.Services.Audio
             MusicPlayback = new AudioMusicPlayback(this); Voice = new AudioVoice(this, AudioVoice.Kind.Voice);
             var settings = AudioKit.Settings;
             mSubscriptions.Add(settings.IsMusicOn.Register(RefreshMusicEnabled));
-            mSubscriptions.Add(settings.IsVoiceOn.Register(Voice.SetEnabled));
-            mSubscriptions.Add(settings.IsSoundOn.Register(value => { if (!value) StopAllSound(); }));
+            mSubscriptions.Add(settings.IsVoiceOn.Register(RefreshVoiceEnabled));
+            mSubscriptions.Add(settings.IsSoundOn.Register(value => { if (!value) StopSoundsAndPending(); }));
             mSubscriptions.Add(settings.MusicVolume.Register(RefreshMusicVolume));
-            mSubscriptions.Add(settings.VoiceVolume.Register(Voice.SetVolume));
+            mSubscriptions.Add(settings.VoiceVolume.Register(value => { Voice.SetVolume(value); RefreshChannelVolume(AudioCategory.Voice); }));
             mSubscriptions.Add(settings.SoundVolume.Register(SetSoundVolume));
             mSubscriptions.Add(settings.IsMusicMuted.Register(RefreshMusicMute));
-            mSubscriptions.Add(settings.IsVoiceMuted.Register(Voice.SetMute));
+            mSubscriptions.Add(settings.IsVoiceMuted.Register(value => { Voice.SetMute(value); RefreshChannelMute(AudioCategory.Voice); }));
             mSubscriptions.Add(settings.IsSoundMuted.Register(SetSoundMute));
             mSubscriptions.Add(settings.MusicOutputGroup.Register(RefreshMusicOutputGroup));
             mSubscriptions.Add(settings.VoiceOutputGroup.Register(RefreshVoiceOutputGroup));
@@ -64,21 +78,118 @@ namespace YLFramework.Services.Audio
             CheckListener();
 #endif
         }
+        internal AudioChannel RegisterChannel(string name, AudioCategory category, AudioChannelMode mode, string persistenceId)
+        {
+            if (mNamedChannels.ContainsKey(name)) throw new InvalidOperationException("Audio channel name is already registered: " + name);
+            if (persistenceId != null)
+                foreach (var channel in mNamedChannels.Values)
+                    if (channel.PersistenceId == persistenceId) throw new InvalidOperationException("Audio channel storage identity is already registered: " + persistenceId);
+            var result = new AudioChannel(this, name, category, mode, persistenceId);
+            mNamedChannels.Add(name, result);
+            return result;
+        }
+        internal void AddPending(AudioPlayRequest request)
+        {
+            if (request.Category == AudioCategory.Sound && !AudioKit.Settings.IsSoundOn.Value)
+            { request.End(AudioPlayEnd.Rejected); return; }
+            var version = AdvancePendingVersion(request.Category, request.Channel);
+            if (request.Channel?.Mode != AudioChannelMode.Overlap && (request.Channel != null || request.Category != AudioCategory.Sound))
+                CancelPending(request.Category, request.Channel, AudioPlayEnd.Replaced, incrementVersion: false);
+            if (!Available || version != PendingVersion(request.Category, request.Channel) || request.Channel != null && !request.Channel.IsValid)
+            { request.End(AudioPlayEnd.Unavailable); return; }
+            mPending.Add(request);
+        }
+        internal void RemovePending(AudioPlayRequest request) => mPending.Remove(request);
+        internal ulong PendingVersion(AudioCategory category, AudioChannel channel) => channel?.PendingVersion ?? mPendingVersions[(int)category];
+        internal ulong AdvancePendingVersion(AudioCategory category, AudioChannel channel) => channel != null ? ++channel.PendingVersion : ++mPendingVersions[(int)category];
+        internal AudioPlayRequest[] PendingSnapshot(AudioCategory category, AudioChannel channel, bool allChannels = false)
+        {
+            if (mPending.Count == 0) return Array.Empty<AudioPlayRequest>();
+            var result = new List<AudioPlayRequest>();
+            foreach (var request in mPending)
+                if (request.Category == category && (allChannels || ReferenceEquals(request.Channel, channel))) result.Add(request);
+            return result.ToArray();
+        }
+        internal static void EndPending(AudioPlayRequest[] snapshot, AudioPlayEnd reason)
+        {
+            List<Exception> failures = null;
+            foreach (var request in snapshot)
+                try { request.End(reason); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            if (failures != null) throw new AggregateException("Audio pending cleanup failed.", failures);
+        }
+        internal void CancelPending(AudioCategory category, AudioChannel channel, AudioPlayEnd reason, bool allChannels = false, bool incrementVersion = true)
+        {
+            if (incrementVersion) AdvancePendingVersion(category, channel);
+            if (mPending.Count == 0) return;
+            EndPending(PendingSnapshot(category, channel, allChannels), reason);
+        }
+        internal void StopSoundsAndPending()
+        {
+            AdvancePendingVersion(AudioCategory.Sound, null);
+            var pending = PendingSnapshot(AudioCategory.Sound, null, true);
+            try { StopAllSound(); }
+            finally { EndPending(pending, AudioPlayEnd.Stopped); }
+        }
+        internal void UnregisterChannel(AudioChannel channel)
+        {
+            if (mNamedChannels.TryGetValue(channel.Name, out var registered) && ReferenceEquals(channel, registered)) mNamedChannels.Remove(channel.Name);
+        }
+        internal void RegisterOwnedSource(AudioSource source) => mOwnedSources.Add(source);
+        internal void UnregisterOwnedSource(AudioSource source) => mOwnedSources.Remove(source);
+        internal void ValidateBorrowedSource(AudioSource source)
+        {
+            if (!source) throw new ArgumentNullException(nameof(source));
+            if (!source.isActiveAndEnabled) throw new ArgumentException("Borrowed Source must be active and enabled.", nameof(source));
+            if (mOwnedSources.Contains(source) || mBorrowedSources.ContainsKey(source) || source.isPlaying)
+                throw new InvalidOperationException("Source is owned, already borrowed or still playing. Explicitly stop and relinquish it first.");
+        }
+        internal void BorrowSource(AudioSource source, AudioVoice voice)
+        {
+            ValidateBorrowedSource(source);
+            mBorrowedSources.Add(source, voice);
+        }
+        internal void ReturnBorrowedSource(AudioSource source, AudioVoice voice)
+        {
+            if (mBorrowedSources.TryGetValue(source, out var current) && ReferenceEquals(current, voice)) mBorrowedSources.Remove(source);
+        }
+        internal AudioHandle PlayChannel(AudioChannel channel, AudioClip clip, in AudioPlaybackOptions options,
+            AudioKit.PlaySoundModes mode, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
+            AudioResourceLease resource, AudioSource source)
+        {
+            if (resource != null && !resource.CanBind) return default;
+            if (channel.Category == AudioCategory.Sound)
+                return PlaySound(clip, in options, mode, finished, started, false, default, null, resource, channel, source);
+            if (!ReferenceEquals(source, null)) ValidateBorrowedSource(source);
+            var voice = new AudioVoice(this, channel.Category == AudioCategory.Music ? AudioVoice.Kind.Music : AudioVoice.Kind.Voice);
+            channel.Add(voice); mChannelVoices.Add(voice);
+            return voice.Begin(clip, in options, GetEnabled(voice.Category), GetCategoryVolume(voice.Category) * channel.Volume,
+                GetCategoryMuted(voice.Category) || channel.Muted, started, finished, resource: resource, channel: channel, borrowedSource: source);
+        }
+        internal void ReleaseChannelVoice(AudioVoice voice)
+        {
+            mChannelVoices.Remove(voice);
+            try { voice.ResetPlayback(); }
+            finally { voice.DestroySource(); }
+        }
         internal AudioHandle PlaySlot(bool music, AudioClip clip, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
-            bool spatial = false, Vector3 position = default, Transform target = null)
+            bool spatial = false, Vector3 position = default, Transform target = null, AudioResourceLease resource = null)
         {
-            if (music) return MusicPlayback.Play(clip, in options, started, finished);
+            if (music) return MusicPlayback.Play(clip, in options, started, finished, resource);
             var slot = Voice;
-            slot.Stop();
+            slot.Stop(AudioRequestEnd.Replaced);
+            if (!Available || slot.Active || resource != null && !resource.CanBind) return default;
             var settings = AudioKit.Settings;
             return slot.Begin(clip, in options, settings.IsVoiceOn.Value, settings.VoiceVolume.Value,
-                settings.IsVoiceMuted.Value, started, finished, spatial, position, target);
+                settings.IsVoiceMuted.Value, started, finished, spatial, position, target, resource: resource);
         }
         internal AudioHandle PlaySound(AudioClip clip, in AudioPlaybackOptions options, AudioKit.PlaySoundModes mode,
-            Action<AudioClip, AudioHandle> finished, Action<AudioClip, AudioHandle> started, bool spatial, Vector3 position, Transform target)
+            Action<AudioClip, AudioHandle> finished, Action<AudioClip, AudioHandle> started, bool spatial, Vector3 position, Transform target,
+            AudioResourceLease resource = null, AudioChannel channel = null, AudioSource borrowedSource = null)
         {
             var capacity = AudioKit.CurrentSoundConcurrency;
+            var channelEpoch = channel?.Epoch ?? 0;
             var clipId = clip.GetInstanceID();
             var clipLimit = AudioKit.GetEffectiveClipSoundLimit(clip);
             var clipCount = clipLimit > 0 ? GetSoundCount(clipId) : -1;
@@ -99,28 +210,39 @@ namespace YLFramework.Services.Audio
                     AudioKit.SoundCounters.PriorityRejectedCount++;
                     return default;
                 }
-                victim.Stop();
+                var order = mAdmissionOrder;
+                victim.Stop(AudioRequestEnd.Replaced);
+                if (!Available || mAdmissionOrder != order || !AudioKit.CurrentSettings.IsSoundOn.Value || resource != null && !resource.CanBind ||
+                    channel != null && (!channel.IsValid || channel.Epoch != channelEpoch)) return default;
                 // Stop can synchronously change other counts; discard the cached budget lookup.
                 clipCount = -1;
                 AudioKit.SoundCounters.StolenCount++;
             }
-            if (mPool.CurStoreCount > 0) AudioKit.SoundCounters.CacheHitCount++;
-            else AudioKit.SoundCounters.CacheMissCount++;
-            var voice = mPool.Allocate();
+            if (resource != null && !resource.CanBind) return default;
+            if (!ReferenceEquals(borrowedSource, null)) ValidateBorrowedSource(borrowedSource);
+            if (!borrowedSource)
+            {
+                if (mPool.CurStoreCount > 0) AudioKit.SoundCounters.CacheHitCount++;
+                else AudioKit.SoundCounters.CacheMissCount++;
+            }
+            var voice = borrowedSource ? new AudioVoice(this, AudioVoice.Kind.Sound, false) : mPool.Allocate();
             mSounds.Add(voice);
             mClipCounts[clipId] = (clipCount >= 0 ? clipCount : GetSoundCount(clipId)) + 1;
             voice.ClipId = clipId;
             voice.Priority = options.Priority;
             voice.AdmissionOrder = ++mAdmissionOrder;
             voice.Mode = mode;
+            channel?.Add(voice);
             var generation = voice.Generation + 1;
             var channels = AudioKit.Channels;
             AudioHandle handle = default;
             try
             {
                 var settings = AudioKit.Settings;
-                handle = voice.Begin(clip, in options, true, settings.SoundVolume.Value, settings.IsSoundMuted.Value,
-                    started, finished, spatial, position, target, startImmediately: false);
+                handle = voice.Begin(clip, in options, true, settings.SoundVolume.Value * (channel?.Volume ?? 1f),
+                    settings.IsSoundMuted.Value || (channel?.Muted ?? false),
+                    started, finished, spatial, position, target, startImmediately: false, resource: resource, channel: channel, borrowedSource: borrowedSource);
+                if (!handle.IsValid) return handle;
                 channels.Record(clipId, mode, Time.frameCount, handle);
                 AudioKit.SoundCounters.AdmittedCount++;
                 AudioKit.SoundCounters.PeakActiveCount = Math.Max(AudioKit.SoundCounters.PeakActiveCount, mSounds.Count);
@@ -131,7 +253,8 @@ namespace YLFramework.Services.Audio
             {
                 if (IsCurrentSoundSession) AudioKit.SoundCounters.StartFailureCount++;
                 if (!ReferenceEquals(handle.Voice, null)) channels.Rollback(clipId, mode, handle);
-                if (voice.Generation == generation) voice.Stop();
+                if (voice.Generation == generation) voice.Stop(AudioRequestEnd.Failed);
+                else if (!voice.Active && mSounds.Contains(voice)) Recycle(voice);
                 throw;
             }
         }
@@ -197,7 +320,12 @@ namespace YLFramework.Services.Audio
         }
         private void ReturnIdle(AudioVoice voice)
         {
-            if (mDisposing || AudioKit.SoundCacheCapacity == 0 || !voice.Source) mPool.Discard(voice);
+            if (!voice.PooledSound)
+            {
+                try { voice.ResetPlayback(); }
+                finally { voice.DestroySource(); }
+            }
+            else if (mDisposing || AudioKit.SoundCacheCapacity == 0 || !voice.Source) mPool.Discard(voice);
             else
             {
                 mPool.Recycle(voice);
@@ -252,29 +380,78 @@ namespace YLFramework.Services.Audio
         }
         private void SetSoundVolume(float value)
         {
-            foreach (var voice in mSounds) voice.SetVolume(value);
+            foreach (var voice in mSounds) voice.SetVolume(value * (voice.Channel?.Volume ?? 1f));
         }
         private void SetSoundMute(bool value)
         {
-            foreach (var voice in mSounds) voice.SetMute(value);
+            foreach (var voice in mSounds) voice.SetMute(value || (voice.Channel?.Muted ?? false));
         }
         internal float GetSharedVolume(AudioVoice voice)
         {
-            var settings = AudioKit.Settings;
-            return voice.IsSound ? settings.SoundVolume.Value :
-                voice.Category == AudioVoice.Kind.Music ? settings.MusicVolume.Value : settings.VoiceVolume.Value;
+            return GetCategoryVolume(voice.Category) * (voice.Channel?.Volume ?? 1f);
         }
-        private void RefreshMusicEnabled(bool _) { if (Available) MusicPlayback.SetEnabled(AudioKit.CurrentSettings.IsMusicOn.Value); }
-        private void RefreshMusicVolume(float _) { if (Available) MusicPlayback.SetVolume(AudioKit.CurrentSettings.MusicVolume.Value); }
-        private void RefreshMusicMute(bool _) { if (Available) MusicPlayback.SetMute(AudioKit.CurrentSettings.IsMusicMuted.Value); }
+        internal bool GetMuted(AudioVoice voice) => GetCategoryMuted(voice.Category) || (voice.Channel?.Muted ?? false);
+        private float GetCategoryVolume(AudioVoice.Kind category)
+        {
+            var settings = AudioKit.Settings;
+            return category == AudioVoice.Kind.Sound ? settings.SoundVolume.Value : category == AudioVoice.Kind.Music ? settings.MusicVolume.Value : settings.VoiceVolume.Value;
+        }
+        private bool GetCategoryMuted(AudioVoice.Kind category)
+        {
+            var settings = AudioKit.Settings;
+            return category == AudioVoice.Kind.Sound ? settings.IsSoundMuted.Value : category == AudioVoice.Kind.Music ? settings.IsMusicMuted.Value : settings.IsVoiceMuted.Value;
+        }
+        private bool GetEnabled(AudioVoice.Kind category)
+        {
+            var settings = AudioKit.Settings;
+            return category == AudioVoice.Kind.Music ? settings.IsMusicOn.Value : category == AudioVoice.Kind.Voice ? settings.IsVoiceOn.Value : settings.IsSoundOn.Value;
+        }
+        private void RefreshEnabled(AudioCategory category)
+        {
+            if (!Available) return;
+            var snapshot = new List<AudioHandle>(mChannelVoices.Count);
+            foreach (var voice in mChannelVoices) if (voice.Channel.Category == category) snapshot.Add(voice.Handle);
+            List<Exception> failures = null;
+            try
+            {
+                if (category == AudioCategory.Music) MusicPlayback.SetEnabled(AudioKit.CurrentSettings.IsMusicOn.Value);
+                else Voice.SetEnabled(AudioKit.CurrentSettings.IsVoiceOn.Value);
+            }
+            catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            foreach (var handle in snapshot)
+                try { if (handle.IsValid) handle.Voice.SetEnabled(GetEnabled(handle.Voice.Category)); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            if (failures != null) throw new AggregateException("Audio category enabled refresh failed.", failures);
+        }
+        private void RefreshChannelVolume(AudioCategory category)
+        {
+            if (!Available) return;
+            foreach (var voice in mChannelVoices) if (voice.Channel.Category == category) voice.SetVolume(GetSharedVolume(voice));
+        }
+        private void RefreshChannelMute(AudioCategory category)
+        {
+            if (!Available) return;
+            foreach (var voice in mChannelVoices) if (voice.Channel.Category == category) voice.SetMute(GetMuted(voice));
+        }
+        private void RefreshMusicEnabled(bool _) => RefreshEnabled(AudioCategory.Music);
+        private void RefreshVoiceEnabled(bool _) => RefreshEnabled(AudioCategory.Voice);
+        private void RefreshMusicVolume(float _) { if (Available) { MusicPlayback.SetVolume(AudioKit.CurrentSettings.MusicVolume.Value); RefreshChannelVolume(AudioCategory.Music); } }
+        private void RefreshMusicMute(bool _) { if (Available) { MusicPlayback.SetMute(AudioKit.CurrentSettings.IsMusicMuted.Value); RefreshChannelMute(AudioCategory.Music); } }
         // A listener can synchronously change the property again or release this host before our turn.
         private void RefreshMusicOutputGroup(AudioMixerGroup _)
         {
             if (Available) MusicPlayback.SetInheritedOutputGroup(AudioKit.CurrentSettings.MusicOutputGroup.Value);
+            RefreshChannelOutput(AudioCategory.Music);
         }
         private void RefreshVoiceOutputGroup(AudioMixerGroup _)
         {
             if (Available) Voice.SetInheritedOutputGroup(AudioKit.CurrentSettings.VoiceOutputGroup.Value);
+            RefreshChannelOutput(AudioCategory.Voice);
+        }
+        private void RefreshChannelOutput(AudioCategory category)
+        {
+            if (!Available) return;
+            foreach (var voice in mChannelVoices) if (voice.Channel.Category == category) voice.SetInheritedOutputGroup(GetOutputGroup(voice));
         }
         private void RefreshSoundOutputGroup(AudioMixerGroup _)
         {
@@ -292,24 +469,32 @@ namespace YLFramework.Services.Audio
         {
             foreach (var voice in mSounds) destination.Add(voice.Handle);
         }
-        internal void StopAllSound()
+        internal void StopAllSound(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
-            // Stop never calls user callbacks, so removing one entry at a time is safe and allocation-free.
-            while (mSounds.Count != 0)
-            {
-                AudioVoice voice;
-                using (var iterator = mSounds.GetEnumerator()) { iterator.MoveNext(); voice = iterator.Current; }
-                voice.Stop();
-            }
+            if (mSounds.Count == 0) return;
+            // 释放责任可重入播放；只终结本次调用进入时的租约，不能误停新代次。
+            var snapshot = new List<AudioHandle>(mSounds.Count);
+            CopySounds(snapshot);
+            List<Exception> failures = null;
+            foreach (var handle in snapshot)
+                try { if (handle.Voice.Active && handle.Voice.Generation == handle.Generation) handle.Voice.Stop(reason); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            if (failures != null) throw new AggregateException("AudioKit sound cleanup failed.", failures);
         }
         private void Update()
         {
             if (Music == null || !Available) return;
+            if (mPending.Count > 0)
+                foreach (var request in mPending.ToArray())
+                    try { request.Tick(); }
+                    catch (Exception exception) { request.Fail(exception); }
+            ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
             mChecks.Clear();
             var musicEpoch = MusicPlayback.Epoch;
             MusicPlayback.CopyTo(mChecks);
             if (Voice.Active) mChecks.Add(Voice.Handle);
             CopySounds(mChecks);
+            foreach (var voice in mChannelVoices) if (voice.Active) mChecks.Add(voice.Handle);
             for (var i = 0; i < mChecks.Count; i++)
             {
                 var handle = mChecks[i];
@@ -317,9 +502,15 @@ namespace YLFramework.Services.Audio
                 try
                 {
                     handle.Voice.CheckFinished();
+                    if (handle.IsValid) handle.Voice.RefreshAutomaticPause(Time.timeScale == 0f);
                     if (handle.IsValid) handle.Voice.TickFade(Time.deltaTime, Time.unscaledDeltaTime);
                 }
-                catch (Exception exception) { Debug.LogException(exception); }
+                catch (Exception exception)
+                {
+                    try { if (handle.IsValid) handle.Voice.Stop(AudioRequestEnd.Failed); }
+                    catch (Exception cleanup) { Debug.LogException(cleanup); }
+                    Debug.LogException(exception);
+                }
             }
             mChecks.Clear();
             if (Available && musicEpoch == MusicPlayback.Epoch) MusicPlayback.Tick(Time.deltaTime, Time.unscaledDeltaTime);
@@ -363,13 +554,24 @@ namespace YLFramework.Services.Audio
 #endif
             foreach (var subscription in mSubscriptions) Cleanup(subscription.UnRegister);
             mSubscriptions.Clear();
-            Cleanup(StopAllSound);
+            foreach (var request in mPending.ToArray()) Cleanup(() => request.End(AudioPlayEnd.Shutdown));
+            mPending.Clear();
+            foreach (var channel in new List<AudioChannel>(mNamedChannels.Values)) Cleanup(() => channel.Release(AudioRequestEnd.Shutdown));
+            mNamedChannels.Clear();
+            Cleanup(() => StopAllSound(AudioRequestEnd.Shutdown));
             if (MusicPlayback != null) Cleanup(MusicPlayback.DestroySources);
             if (Voice != null) Cleanup(Voice.DestroySource);
             if (mPool != null) Cleanup(mPool.Dispose);
+            Cleanup(ClipCache.Dispose);
             // A callback may release this host while Update is iterating its snapshot.
             if (failures != null) throw new AggregateException("AudioKit source cleanup failed.", failures);
         }
-        protected override void OnApplicationQuit() { base.OnApplicationQuit(); AudioKit.BeginQuit(); }
+        protected override void OnApplicationQuit()
+        {
+            // 已释放或旧会话宿主的迟到消息不能关闭新会话，亦不能重置公共宿主 gate。
+            if (HostReleased || !IsCurrentSoundSession) return;
+            base.OnApplicationQuit();
+            AudioKit.BeginQuit();
+        }
     }
 }

@@ -51,7 +51,8 @@ namespace YLFramework.Editor.Audio
         {
             Guide("overview", "入门", "提供 Clip 与场景 Listener 即可播放，无需初始化、Mixer 或配置资产；从代码、背景音乐组件或按钮点击音开始。",
                 new[] { typeof(AudioKit), typeof(AudioHandle), typeof(AudioSoundOptions), typeof(AudioAutoFade),
-                    typeof(AudioSoundConcurrency), typeof(SoundOverflowPolicy), typeof(AudioMusicPlayer), typeof(AudioEmitter), typeof(AudioKitSettings) },
+                    typeof(AudioSoundConcurrency), typeof(SoundOverflowPolicy), typeof(AudioMusicPlayer), typeof(AudioEmitter), typeof(AudioKitSettings),
+                    typeof(AudioClipLibrary), typeof(AudioGroupPlayer) },
                 HelpBlock.Code("代码播放三类 Clip", "using YLFramework.Services.Audio；提供外部 Clip，无需调用 Initialize。Music 默认循环，Voice/Sound 默认单次。",
                     "AudioKit.PlayMusic(musicClip);\nAudioKit.PlayVoice(voiceClip);\nAudioKit.PlaySound(soundClip);"),
                 HelpBlock.Paragraph("背景音乐组件", "添加 AudioMusicPlayer 并绑定 Clip，默认 Loop 与 playOnAwake 开启，在首次 Start 自动播放，不是每次 OnEnable。" +
@@ -96,7 +97,7 @@ namespace YLFramework.Editor.Audio
                     "Unity 2022.3.62f3c1 Editor PlayMode 预热后的 4096 次配置捕获/校验/值存储测得 0 次 GC.Alloc 事件；完整路径前后数据见 Audio 文档，不是字节统计，不能替代 Player/IL2CPP 设备实测。"),
                 HelpBlock.Paragraph("接入", "业务程序集引用 YLFramework.Runtime，代码使用 using YLFramework.Services.Audio。" +
                     "Audio 与 Action 同属共享 Runtime，直接复用 YL 池、Binding 和 Events；不依赖 QFramework、XF、ResKit 或 Timing 调度。" +
-                    "资源加载由业务负责，Audio 不再提供名称加载、Loader 或 Fluent 播放入口。" +
+                    "直接 Clip 由业务保活；具名素材使用显式 AudioClipAddress/provider 与租约，组配置复用同一加载链，不提供旧 Loader 或 Fluent 播放入口。" +
                     "Mixer 路由、暴露参数与 Snapshot 控制可选；不配置 Mixer 的旧调用保持原功能，不自动绑定 Settings 音量或 Ducking。"),
                 HelpBlock.Notice("只读帮助", "帮助仅反射 Audio 命名空间内的公开类型，不执行示例，不播放音频，也不创建运行时宿主。" +
                     "声明及源码 XML 说明由共享 Runtime 和 HelpKit 提供，不混入 Foundation 的通用类型。")),
@@ -316,7 +317,8 @@ namespace YLFramework.Editor.Audio
                     "ClearMixerRouting/ClearRouting 不 ClearFloat、不恢复 Snapshot、不停止单次覆盖；Shutdown 仍停止全部自有请求并清理路由，但不 ClearFloat 或恢复 Snapshot。共享 Mixer 状态由调用方显式管理。")),
             Guide("components", "Inspector 与 UnityEvent", "播放组件管理自己的句柄，Mixer 配置使用显式全局生命周期。",
                 new[] { typeof(AudioEmitter), typeof(AudioMusicPlayer), typeof(AudioMixerController), typeof(AudioOutputRoute), typeof(AudioWeightedClip), typeof(AudioAutoFade),
-                    typeof(AudioSoundConcurrency), typeof(SoundOverflowPolicy), typeof(AudioCrossfadeCurve) },
+                    typeof(AudioSoundConcurrency), typeof(SoundOverflowPolicy), typeof(AudioCrossfadeCurve), typeof(AudioClipLibrary), typeof(AudioClipGroup),
+                    typeof(AudioClipEntry), typeof(AudioClipSource), typeof(AudioClipSelectionMode), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay) },
                 HelpBlock.Paragraph("AudioEmitter", "在 Inspector 配置 Clip 列表、2D/固定位置/跟随模式和音效参数，UnityEvent 绑定无参 Play/Stop。" +
                     "useGlobalPlaySoundMode 字段缺省 false，旧缺字段资源保持原 playSoundMode=EveryOne；编辑器新建/Reset 设置 true，通过 options.PlaySoundMode=null 继承全局。运行时 AddComponent 不保证触发 Reset。" +
                     "私有序列化 useWeightedRandom 默认 false，旧 clips 仍为均匀模式；开启后使用配对的 weightedClips 列表（每项 Clip/Weight），三种位置模式都支持加权。" +
@@ -340,6 +342,17 @@ namespace YLFramework.Editor.Audio
                     "Pitch/Priority、去重、路由、自动淡变和事件按需展开，空间参数仅非 2D 显示，Group 仅 MixerGroup 显示，隐藏字段不静默清空。" +
                     "加权模式切换不擦除另一列表，编辑器新增项 Weight=1，旧 Weight=0 继续表示排除。autoFade Tooltip 说明片段秒、短片段同比缩短、循环不可尾淡出；两个组件原字段/GUID 不改，旧数据无需迁移或重存。"),
                 HelpBlock.Notice("输入保护边界", "空/非法输入先校验，不切断旧自有音频；此保护不保证容量拒播、通道关闭、原生启动失败或回调异常时回滚旧声音。"),
+                HelpBlock.Paragraph("AudioClipLibrary 素材组", "菜单 Assets/Create/YLFramework/Audio/Clip Library 创建共享资产；Groups 的 Name 精确区分大小写，不是控制通道名。" +
+                    "每组 Selection 为 Uniform/Weighted，Entries 每项 Source/Clip/Key/BundleName/Weight；Uniform 忽略 Weight，Weighted 的 0 排除，所有加权值必须有限且非负。缺组、重名、非法枚举/权重或无候选返回失败，不停止已有播放。" +
+                    "Clip 为借用；Resources Key 须以 resources:// 或 resources/ 开头且 BundleName 为空；AssetBundle 使用完整 Key 与 YL owner BundleName，不是 XFAB ProjectName。ExternalProvider 必须代码 SetProvider，不自动注册后端。" +
+                    "Inspector 使用 SerializedObject，多对象追加分别保留各自列表长度，新条目为 Clip/null/空 Key/空 BundleName/Weight=1；Undo 保留旧零权重，不随机抽选、不加载、不静默修复配置。"),
+                HelpBlock.Paragraph("AudioGroupPlayer 组播放所有者", "绑定 library/groupName，再显式配置唯一 channelName；素材组与控制通道是两种身份。category 选择 Music/Voice/Sound 设置，channelMode 为 Exclusive/Overlap；空 persistenceId 不持久化，稳定 ID 只允许 ASCII 字母/数字及 . _ - /，多个实例不得共用通道名或持久化 ID。" +
+                    "autoPlay 默认 Manual，FirstStart 在首次 Start 播放，EveryEnable 在 Start 及后续启用时播放；UnityEvent 可绑定无参 Play/Stop 或 PlayGroup(string)。停用停止所有自有播放与 pending，销毁释放通道，不控制其他组件。" +
+                    "框架自有 Source 为 2D，借源保留 caller 空间曲线/滤镜，options 不配置空间距离/衰减。options 提供 Volume/Pitch/Loop/OutputRoute/AutoFade/Priority/AutoPauseWhenTimeScaleZero；Music 不自动启用 Loop，Music/Voice 忽略 Sound Priority。nullable PlaySoundMode 不被 Unity 序列化，Inspector Sound 继承全局策略。" +
+                    "borrowedSource 默认 null，使用框架自有 Source；可显式引用调用方 AudioSource，直接 Clip 与具名素材都沿用受控借源入口。借源只支持 Exclusive，Source 必须活跃、启用、已停止且未被占用；重播同一借源前也须明确 Stop 让渡，不自动抢占或恢复旧播放历史。" +
+                    "具名借源使用 PlayBorrowedNamed/PlayBorrowedAsync，加载中不占 Source，提交时再次校验；Inspector 只检查可观察的活跃/播放状态，不初始化宿主或查询所有权表，暂停或已有借用仍以运行时校验为准。" +
+                    "loadAsync 默认 true，仅控制具名素材；每次只抽选一次，选中定位沿用正式 provider/租约，失败不重抽。onStarted 在句柄归入本通道后触发，Started 可 Stop/失活/销毁；没有自然完成 UnityEvent 或自动 Crossfade。" +
+                    "通道配置在首次登记捕获，运行中修改 Inspector 不重建已有通道。Inspector 支持多对象、Undo 与 Prefab Override；诊断不写 Prefs、不创建 Settings 或播放宿主。"),
                 HelpBlock.Paragraph("AudioMixerController", "配置与 UnityEvent 入口详见 Mixer 页；编辑器新建/Reset 的 applyOnAwake=false、transitionDuration=0.5，字段初始化 true/0 保留旧资产。运行时 AddComponent 不承诺 Reset。" +
                     "新预设只绑定 Config 不自动改全局路由，勾选 Apply Routing On Awake 才自动应用；未配置 config 的 Awake 安静跳过，显式 Apply 缺配置仍报错。仅参数/Snapshot 用途保持自动 Apply 关闭，Group=null 的显式完整 Apply 会清成 Direct。" +
                     "禁用/销毁不恢复旧配置，不采用播放组件的句柄所有权规则。")),
@@ -387,7 +400,7 @@ namespace YLFramework.Editor.Audio
         private static HelpPage[] CreateAbout() => new[]
         {
             new HelpPage("usage", "使用与版本", "关于与许可", "",
-                HelpBlock.Paragraph("", "AudioKit 是 YLFramework 的 Clip-only 音频服务，命名空间 YLFramework.Services.Audio，属于共享程序集 YLFramework.Runtime；" +
+                HelpBlock.Paragraph("", "AudioKit 是 YLFramework 的 Clip 与显式具名资源音频服务，命名空间 YLFramework.Services.Audio，属于共享程序集 YLFramework.Runtime；" +
                     "音效动作桥接内建于同一程序集。帮助复用 YLFramework.Editor.Help。\n\n" +
                     "Unity 版本：" + Application.unityVersion + "\nRuntime 程序集版本：" + typeof(AudioKit).Assembly.GetName().Version +
                     "\n程序集版本来自编译元数据，不代表模块单独发布版本。\n\n" +

@@ -16,6 +16,7 @@ namespace YLFramework.Services.Audio
         internal AudioOutputRoute OutputRoute;
         internal AudioAutoFade AutoFade;
         internal int Priority;
+        internal bool AutoPauseWhenTimeScaleZero;
 
         // The zero value is only a cleared record, never valid playback defaults.
         internal static AudioPlaybackOptions Defaults => new AudioPlaybackOptions
@@ -35,7 +36,8 @@ namespace YLFramework.Services.Audio
                 Loop = options.Loop, Volume = options.Volume, Pitch = options.Pitch,
                 PlaySoundMode = options.PlaySoundMode, MinDistance = options.MinDistance,
                 MaxDistance = options.MaxDistance, RolloffMode = options.RolloffMode,
-                OutputRoute = options.OutputRoute, AutoFade = options.AutoFade, Priority = options.Priority
+                OutputRoute = options.OutputRoute, AutoFade = options.AutoFade, Priority = options.Priority,
+                AutoPauseWhenTimeScaleZero = options.AutoPauseWhenTimeScaleZero
             };
         }
         internal void Validate(bool spatial)
