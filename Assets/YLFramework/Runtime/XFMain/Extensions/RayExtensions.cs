@@ -1,149 +1,121 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-
 
 namespace YLFramework.Core.Extensions
 {
-    public static class RayExtensions  
+    public static class RayExtensions
     {
-
-
         /// <summary>
-        /// 计算两个射线之间的最小距离
+        /// 计算两个 Ray 所在无限直线之间的非负最小距离，不限制在射线半轴。
+        /// 零方向按原点处理。
         /// </summary>
-        /// <param name="ray"></param>
-        /// <param name="other"></param>
-        /// <returns></returns>
-
-        public static float MiniDistance(this Ray ray,Ray other )
+        public static float MiniDistance(this Ray ray, Ray other)
         {
+            Vector3 u = ray.direction, v = other.direction;
+            double nx = (double)u.y * v.z - (double)u.z * v.y;
+            double ny = (double)u.z * v.x - (double)u.x * v.z;
+            double nz = (double)u.x * v.y - (double)u.y * v.x;
+            double lengthSquared = nx * nx + ny * ny + nz * nz;
+            if (lengthSquared == 0)
+                return Dot(u, u) == 0 ? other.Distance(ray.origin) : ray.Distance(other.origin);
+            double dx = (double)other.origin.x - ray.origin.x;
+            double dy = (double)other.origin.y - ray.origin.y;
+            double dz = (double)other.origin.z - ray.origin.z;
+            // 距离不经过 float 最近点重建，避免近乎平行时巨大的参数放大舍入误差。
+            return FiniteParameter(Math.Abs(dx * nx + dy * ny + dz * nz) / Math.Sqrt(lengthSquared));
+        }
 
-            if (Mathf.Approximately( Vector3.Angle(ray.direction, other.direction),0 )) 
-            {
-                // 方向相同 说明射线平行
-                Vector3 n = other.origin - ray.origin;
-                float angle = Vector3.Angle(n,ray.direction);
-                float distance = Vector3.Distance(other.origin, ray.origin);
-                return distance * Mathf.Sin(angle * Mathf.Deg2Rad);
-            }
-
-            // 先求出垂直这两个射线的向量
-            Vector3 normal = Vector3.Cross(ray.direction, other.direction);
-              
-            // 任意在两个向量上分别取一个点 计算出向量
-            Vector3 m = ray.origin - other.origin;
-            // 求出该向量在法线上的投影 就是两个向量之间的最小距离  
-            return Vector3.Dot(m.normalized, normal.normalized ) * Vector3.Distance(ray.origin, other.origin);
+        /// <summary>计算无限直线之间最近的点；点可能在原点后方。</summary>
+        public static void MiniDistancePoint(this Ray ray, Ray other, out Vector3 ray_point, out Vector3 other_point)
+        {
+            ray.MiniDistancePoint(other, out float first, out float second);
+            ray_point = ray.GetPoint(first);
+            other_point = other.GetPoint(second);
         }
 
         /// <summary>
-        /// 计算两条射线之间最近的点
+        /// 计算无限直线最近点的有符号参数；负值代表原点反方向，不保证落在射线半轴。
+        /// 平行时返回一组最近点，零方向按原点处理。
         /// </summary>
-        /// <param name="ray"></param>
-        /// <param name="other"></param>
-        /// <param name="ray_point"></param>
-        /// <param name="other_point"></param>
-        public static void MiniDistancePoint(this Ray ray, Ray other,out Vector3 ray_point,out Vector3 other_point)
-        {
-            float ray_point_distance;
-            float other_point_distance;
-
-            ray.MiniDistancePoint(other,out ray_point_distance,out other_point_distance);
-
-            ray_point = ray.GetPoint(ray_point_distance);
-            other_point = other.GetPoint(other_point_distance);
-        }
-
-
-        /// <summary>
-        /// 计算两条射线之间最近的点到原点的距离(返回的距离如果是负的,代表该点在起点的反方向)
-        /// </summary>
-        /// <param name="ray"></param>
-        /// <param name="other"></param>
-        /// <param name="ray_point_distance"></param>
-        /// <param name="other_point_ditance"></param>
         public static void MiniDistancePoint(this Ray ray, Ray other, out float ray_point_distance, out float other_point_ditance)
         {
-
-            // 判断向量是否平行
-            if (Mathf.Approximately(Vector3.Angle(ray.direction, other.direction), 0))
+            Vector3 u = ray.direction, v = other.direction;
+            Vector3 delta = other.origin - ray.origin;
+            double a = Dot(u, u), c = Dot(v, v);
+            double first = 0, second = 0;
+            if (a == 0)
             {
-                float angle = Vector3.Angle(other.origin - ray.origin, ray.direction);
-                float distance = Vector3.Distance(other.origin, ray.origin) * Mathf.Cos(angle * Mathf.Deg2Rad);
-
-                if (distance >= 0)
+                if (c != 0) second = -Dot(delta, v) / c;
+            }
+            else if (c == 0) first = Dot(delta, u) / a;
+            else
+            {
+                // 用 double 叉积求分母，避免 a*c-b*b 在近乎平行时消减为零。
+                double nx = (double)u.y * v.z - (double)u.z * v.y;
+                double ny = (double)u.z * v.x - (double)u.x * v.z;
+                double nz = (double)u.x * v.y - (double)u.y * v.x;
+                double denominator = nx * nx + ny * ny + nz * nz;
+                if (denominator == 0)
                 {
-                    // 方向相同 说明射线平行  
-                    other_point_ditance = 0;
-                    ray_point_distance = distance;
+                    first = Dot(delta, u) / a;
+                    if (first < 0)
+                    {
+                        first = 0;
+                        second = -Dot(delta, v) / c;
+                    }
                 }
                 else
                 {
-                    // 方向相同 说明射线平行 
-                    ray_point_distance = 0;
-                    other_point_ditance = -distance;
+                    first = (((double)delta.y * v.z - (double)delta.z * v.y) * nx
+                        + ((double)delta.z * v.x - (double)delta.x * v.z) * ny
+                        + ((double)delta.x * v.y - (double)delta.y * v.x) * nz) / denominator;
+                    second = (((double)delta.y * u.z - (double)delta.z * u.y) * nx
+                        + ((double)delta.z * u.x - (double)delta.x * u.z) * ny
+                        + ((double)delta.x * u.y - (double)delta.y * u.x) * nz) / denominator;
                 }
-                return;
             }
-             
-            float a = Vector3.Dot(other.origin, ray.direction);
-            float b = Vector3.Dot(other.direction, ray.direction);
-            float c = Vector3.Dot(ray.origin, ray.direction);
-            float d = Vector3.Dot(ray.direction, ray.direction);
-             
-            float e = Vector3.Dot(other.origin, other.direction);
-            float f = Vector3.Dot(other.direction, other.direction);
-            float g = Vector3.Dot(ray.origin, other.direction);
-            float h = Vector3.Dot(ray.direction, other.direction);
-
-            float y = (e * d - g * d - a * h + c * h) / (b * h - f * d);
-            float x = (a + b * y - c) / d;
-
-            ray_point_distance = x;
-            other_point_ditance = y;
-  
-
-            // 推导过程
-
-            // 假设最近的点距离射线远点的位置是:x 另外一条线的距离是:y 两个点分别为: a , b
-
-            // a = ray.origin + ray.direction * x 
-
-            // b = other.origin + other.direction * y
-
-            // (a - b   ) * ray.direction = 0
-
-            // 代入a和b的值
-            // (ray.origin + ray.direction * x - other.origin - other.direction * y) * ray.direction = 0
-
-            // ray.origin * ray.direction + ray.direction * x* ray.direction - other.origin* ray.direction - other.direction * y * ray.direction = 0
-
-            // ray.origin * ray.direction + ray.direction * x* ray.direction = other.origin* ray.direction + other.direction * y * ray.direction
-
-            // x = (other.origin* ray.direction + other.direction * y * ray.direction - ray.origin * ray.direction ) / ray.direction * ray.direction
-
-            // 相同的步骤推导 (a - b   ) * other.direction = 0 
-
-            // 然后把 x 代入 即可求的 x 和 y 的值!
-             
+            ray_point_distance = FiniteParameter(first);
+            other_point_ditance = FiniteParameter(second);
         }
-
 
         /// <summary>
-        /// 计算点到射线的最短距离
+        /// 计算点到 Ray 所在无限直线的最短距离；保留反向延长线语义。
+        /// 射线半轴距离请用 DistanceToRay，零方向按原点处理。
         /// </summary>
-        /// <param name="ray"></param>
-        /// <param name="point"></param>
-        /// <returns></returns>
-        public static float Distance(this Ray ray, Vector3 point) 
-        { 
-            float angle = Vector3.Angle( point - ray.origin, ray.direction );
-            if (Mathf.Approximately(angle, 0) || Mathf.Approximately(angle,180)) return 0;
-            return Vector3.Distance(ray.origin,point) * Mathf.Sin(angle * Mathf.Deg2Rad);
+        public static float Distance(this Ray ray, Vector3 point)
+        {
+            return PointDistance(ray, point, false);
         }
 
+        /// <summary>计算点到射线半轴的距离，投影在原点后方时取到原点的距离；零方向按原点处理。</summary>
+        public static float DistanceToRay(this Ray ray, Vector3 point)
+        {
+            return PointDistance(ray, point, true);
+        }
+
+        private static float PointDistance(Ray ray, Vector3 point, bool halfLine)
+        {
+            double dx = (double)point.x - ray.origin.x;
+            double dy = (double)point.y - ray.origin.y;
+            double dz = (double)point.z - ray.origin.z;
+            double lengthSquared = Dot(ray.direction, ray.direction);
+            double parameter = lengthSquared == 0 ? 0
+                : (dx * ray.direction.x + dy * ray.direction.y + dz * ray.direction.z) / lengthSquared;
+            if (halfLine && parameter < 0) parameter = 0;
+            dx -= parameter * ray.direction.x;
+            dy -= parameter * ray.direction.y;
+            dz -= parameter * ray.direction.z;
+            return FiniteParameter(Math.Sqrt(dx * dx + dy * dy + dz * dz));
+        }
+
+        private static double Dot(Vector3 a, Vector3 b) =>
+            (double)a.x * b.x + (double)a.y * b.y + (double)a.z * b.z;
+
+        private static float FiniteParameter(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) > float.MaxValue)
+                throw new ArgumentException("几何参数必须可表示为有限 float。");
+            return (float)value;
+        }
     }
 }
-

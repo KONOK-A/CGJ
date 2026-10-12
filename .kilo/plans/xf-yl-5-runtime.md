@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED / 阶段 5 IN PROGRESS；5.1 已验收及 Git 收口，5.2 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，5.1、5.2 已分别获正式实施授权；5.3～5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
+**状态：APPROVED / 阶段 5 IN PROGRESS；5.1、5.2 已验收及 Git 收口，5.3 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，5.1～5.3 已分别获正式实施授权；5.4、5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -249,12 +249,57 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 
 **结论：满足 5.2 本批技术完成条件，HTTP 独立终态、全路径自有资源收尾及 D3 定向兼容证据成立，具备进入 5.3 的基础。等待用户验收和 Git 收口，阶段 5 仍 IN PROGRESS；不自动实施 5.3 或执行 Git 写操作。**
 
+以上为 5.2 实施轮次的历史停止点。5.3 开始前用户已确认 5.2 技术验收及 Git 收口，对应提交为 `5a14250c5766be6c89c7e0e4845d9ab324a6c638`。
+
 ### 5.3 工具与扩展的契约修复
 
 - **主要轴：**保留能力的确定正确性。在现有身份下修无效 layer、字节格式化、Ray/Quaternion/抛物线/类型显示的关键缺陷；明确概率、枚举、Culture、Unity fake-null 与相机返回资源责任，不把已写明的限制一概当缺陷。
 - **前置/退出：**已选定保留用途与正式语义；先以确定输入复现静态问题。完成后层设置不写错 bit、几何距离非负且退化不产生非法运动状态、q/-q 等价、>=TB 不返回空字节文本；没有测量不宣称整体性能提升。
 - **验收：**相关 EditMode 纯契约与最小 PlayMode 原生对象用例；LayerMask 0/31/未定义名、同/反向平行与原点背后、Quaternion 等价/同端点、零重力及不可达、Unity 对象销毁、开放泛型 Type 与格式化阈值。碰撞规则验证只读取或用自己的受控 fixture 并恢复，不更改持久设置。集合 live/snapshot 契约分别验证，不以统一快照扩大高频分配。
 - **复用：**实际存在的 CollectionPoolTests、PoolContractTests、ResourcePoolTests、SingletonContractTests/SingletonHostPlayModeTests 按修改闭包选取；未修改 JSONObject/Grid/FSM/Zip 的内部实现时不补机械全量测试，也不宣称它们已获全面验收。
+
+#### 5.3 实施与验证记录（2026-10-12）
+
+**实际基线：**`fusion/5-runtime`，HEAD `5a14250c5766be6c89c7e0e4845d9ab324a6c638`，工作区干净；`git ls-remote origin refs/heads/fusion/5-runtime` 实时返回同一提交，与远端跟踪一致。已读 AGENTS、Unity `2022.3.62f3c1`、manifest 和批准方案第 3/4.3/5.3 节，定向核对工具、两组扩展、Foundation 共享算法及真实消费者，没有重新研究阶段 5 总体路线。
+
+**实际修复与兼容取舍：**
+
+- Foundation `LayerMaskUtility.Contains` 结束 5.1 临时保留的位移取模，统一调用已有严格 0..31 判断；非法编号及未定义层名返回 false。Core `Set`、`PhysicsSetting`、`Physics2DSetting` 在操作前拒绝非法编号，抛 `ArgumentOutOfRangeException` 且不改掩码。bit0/bit31 及有效碰撞规则读取保持原语义，仍只选已命名且可碰撞的层；没有调用碰撞矩阵写 API 或修改持久物理设置。
+- Runtime `ComponentExtension.IsInLayerMask` 在访问 gameObject 前使用 Unity fake-null 判断；null/已销毁组件返回 false，避免真实 `MissingReferenceException`。GameObject 包装与 Foundation 算法共用不变；没有把普通 managed null、强制销毁、Gracefully 销毁、单对象/递归层设置强行合并。
+- `StringTools.FormatByte` 保留 1024 进制、b/kb/mb/gb 小写后缀及当前 Culture 的 N2 人类显示，补 tb 分支；大于 TB 至最大 long 继续以 tb 显示，不扩展成单位大全。除法使用 double，避免 float 在单位阈值附近过早舍入；小于 1024 的历史有符号 b 显示和 FormatProgress 不变。
+- Ray 原 `MiniDistancePoint` 已明确允许负参数，因此旧 `MiniDistance`、两个 `MiniDistancePoint` 与 `Distance(Vector3)` 继续表达无限直线，不偷偷夹到半轴；XML 和现有使用说明明确该边界。距离非负，同向/反向平行返回有限的一组最近点，零方向当原点；双精度叉积分母避免近乎平行时点积消减，距离用独立双精度三重积/残差长度计算，不由 float 最近点重建，以免放大参数舍入误差。无法表示的距离/最近点参数明确拒绝。新增唯一窄入口 `DistanceToRay(Vector3)` 表达点到射线半轴距离，不新增通用几何框架或两个射线半轴的最近点平台。
+- `QuaternionExtensions.InverseLerp` 仍为最短角距离比、不 clamp、不验证 current 在同一弧上；对有限非零输入归一化、对齐等价符号，使用双精度 atan2 差长/和长计算保留小角度精度，使所有 q/-q 表示等价，同端点返回 0。零/非有限旋转抛 `ArgumentException`，无法表示为有限 float 的比例抛 `InvalidOperationException`，不静默替换 identity 或引入 Quaternion.Angle 小角度死区。
+- 抛物线使用有效恒定重力：3D 尊重 useGravity 和完整 Physics.gravity，2D 尊重 Physics2D.gravity * gravityScale 的方向并忽略目标 Z。按指定 Y 初速度解二次式，稳定求根并取最晚正时间（通常下落段），修正顶点时间和高于顶点仍返回错误速度的旧行为；零重力可直线求解，零初速度向下落仍可达，负 gravityScale 保留实际方向。不可达、无正时间/时间无法确定、所需速度无法表示时抛 `InvalidOperationException`，非有限输入抛 `ArgumentException`；ParabolicMotion 仅在计算成功后赋值，失败保留原生速度。无阻力、无约束的连续解不是原生离散积分精确落点承诺，不改 drag/constraints 或建设运动控制系统。
+- `GetDelegateDisplayName` 对 FullName=null 回退 Name，开放和部分构造泛型也使用 GetGenericArguments；基于泛型定义移除元数、保留嵌套类型名，继续使用 Name(ArgName,...) 风格，null Type 明确抛 `ArgumentNullException`。不扩展为委托签名/反射平台。
+- 定向检索 Assets 下未发现自有 StringTools、Ray、Quaternion、Rigidbody、Type 扩展的功能消费者；游戏火箭的 Physics2DSetting 仍来自原 XF，未改游戏或原包。Core Listener 仍消费 Foundation Contains 的有效 Collider layer，直接回归保留。保留现有类型、namespace、程序集、方法签名和产品脚本 GUID，仅新增 DistanceToRay；无 asmdef 变更，Foundation 中立闭包、Core/Runtime 互不引用及领域请求所有权不变。
+- 集合 IEnumerable 快照（数组复用）与 Dictionary 实时枚举、当前 Culture 解析、两种概率离散化及 RNG 推进差异、相机临时/返回资源责任保持原契约。本批未修改这些算法，不为形式统一添加分配或隐式副作用。JSONObject/Grid/Table/FSM/Zip 及其他独立通用能力原样保留，不宣称获得全量验收。
+- 增量更新现有 `Documentation/Modules/Extensions.md` 的公开行为、异常、Ray 半轴用法与实际测试入口，不新建重复方案/过程文档；四个新增测试脚本 meta 由 Unity 导入生成，八个产品脚本 meta 未变。原 Package、游戏、Scene/Prefab/Bundle、Packages 与 ProjectSettings 无改动。
+
+**分层证据（本轮实际执行，按 PassedTests/逐项 Results 统计）：**
+
+| 验证层 | 结果与范围 |
+|---|---|
+| 确定性 RED | Tools 首轮 7 Passed/18 Failed，复现 TB 空文本、非法层别名、距离 -3/反向平行错误、q/-q 得到 2.75 而非 0.25、FullName=null 异常及销毁 Component 的 MissingReferenceException；抛物线首轮 3 Failed，另两个定向用例分别复现非法写不拒绝与不可达赋值不拒绝。不可达 RED 实际产生原生 NaN velocity 错误（Console sequence 45429），未屏蔽。 |
+| Unity 实际编译 | 当前打开的 Unity `2022.3.62f3c1` 经 AssetDatabase 刷新实际编译，新增/修改源码在 Test Runner 实际执行；最终 Editor IsCompiling=false、IsUpdating=false。没有以 IDE/dotnet 替代。 |
+| Tools EditMode | ToolsExtensionsContractTests **30 Passed**：非法层极值、bit0/31、未定义名、碰撞矩阵只读、单位阈值至 long.MaxValue、CurrentCulture、直线有符号参数/半轴、同向/反向/近乎平行、零方向/大有限距离、q/-q 八种组合及缩放/同端点/非法旋转/小角度/无法表示的比例、开放 Type、失效组件。 |
+| 抛物线 EditMode | ParabolicMotionContractTests **5 Passed**：正常下落/顶点、零速度自由落体、不可达及速度保持、useGravity=false 直线、零速度无确定时间、非有限输入、2D 零/负 gravityScale；大有限有效重力通过实际私有纯计算内核验证连续解，不更改全局重力，也不宣称原生引擎支持该极端运动参数。 |
+| 直接闭包 EditMode | FoundationBoundaryTests **6 Passed**、CoreIdentityTests **9 Passed**、NeutralLayerMaskConsumerTests **2 Passed**、AudioSourceIndependenceTests **3 Passed**；Audio 为真实源码的 EditorAssembly 与 Windows Development 两 profile，不替代 Player 构建。 |
+| 原生 PlayMode | ParabolicMotionNativeTests **2 Passed**：自有局部 3D/2D PhysicsScene 固定步长模拟、成功赋值/失败保留速度、3D 重力抛物线及零重力直线、2D 零 gravityScale 运动；原生积分与连续解的步长偏差分别断言，不操作默认物理 Scene 或全局自动模拟设置。 |
+| 对象生命周期 PlayMode | ExtensionLifecyclePlayModeTests **1 Passed**：延迟 Destroy 生效前后、managed 引用仍存在但 Unity fake-null、GameObject/Component 掩码与重复 Gracefully 销毁；SingletonHostPlayModeTests **3 Passed**：同帧退休身份、跨场景存活/外部销毁重建、既有路径单例 Dispose。临时对象/局部场景由自身 finally/TearDown 清理。 |
+| 静态与收尾 | `git diff --check` 通过；没有产品文件迁移/程序集变更、产品 meta 修改或禁止目录改动；最终 Editor 非 Play、不编译/更新，仅 Main 场景打开且 IsDirty=false，测试局部场景已卸载；新增测试均有导入生成的 meta。 |
+
+最终定向通过数 **EditMode 55、PlayMode 6，共 61 项**，不使用 MCP 全工程发现总数计为执行数，不重复计 RED/重复 GREEN。审查修复后重跑受影响的 Tools/抛物线、Foundation/Core/掩码/Audio 闭包及原生抛物线；未受这些修复影响的生命周期和 Singleton 结果沿用本轮有效证据。
+
+**失败分类与剩余限制：**
+
+- 独立只读审查发现两个实际回归：Quaternion.Angle 的死区吞掉 0.1° 终点比例，以及近乎平行共面直线经 float 最近点重建误报距离 2。新增用例在本工程 Unity 实际分别返回 0（期望 1）和 2（期望 0），修复后通过；随后补不可表示比例的实际拒绝 RED→GREEN，防止小角度算法输出 Infinity。没有静默将小角度死区改成新契约。
+- 审查的另两个大数溢出候选来自外部 CLR 纯计算探针/源码，不在当前 Unity 执行环境复现为产品失败；大有限 Ray 距离用例及直接纯计算内核用例在修复前后均 Passed，不将其写成 Unity RED→GREEN。距离修复同时显式使用双精度长度，抛物线判别式首乘改为 `2.0`，避免依赖不同后端对 float 中间精度的保留。最初尝试原生 gravityScale 极值被当前 Unity 夹到有效上限，属于夹具前提失败，改为直接纯计算验证而非修改全局物理设置；这些证据不替代 IL2CPP/Player 验证。
+- 初次新增测试导入前的组合筛选返回 Unknown/空 Results，不计为通过；显式刷新后用单类过滤取得有效逐项 RED/GREEN。两次 Roslyn script-execute 环境探针超时，不作为验证证据；后续使用有效的 Editor 状态、刷新和实际 Test Runner 结果，没有启动第二个 Unity 实例或修改工具配置。
+- Play 测试本体取得有效 Passed，但退出 Console 仍记录原 XF LoggerManager 的 `Some objects were not cleaned up when closing the scene`（sequence 45593～45597）。复查后的批量 Play 调用曾在域重载交界连接失败，丢失结果不计通过；连接恢复后原生抛物线类单独重跑取得 2 Passed。没有修改原 Logger/Package、替换 logHandler、清除/吞异常或沿用旧隔离授权；本批不证明原 Logger 退出安全。
+- 未改变集合/概率/Culture 解析/相机算法，未机械补全量回归；Pool/Resource 请求、JSONObject/Grid/Table/FSM/Zip 不在本次修改闭包，不因保留就宣称全面验收。原生局部场景证明本批速度及对象行为，不替代碰撞引擎自动分发、原游戏综合路径或实际进程退出。
+- HTTP 正式归属、完整 Tools/Extensions 迁移和旧机制/LogUtil 退出留 5.4；阶段 5.5 的同域连续双 Play、Windows64/Mono Player 构建运行与综合游戏门禁均未提前执行，移动/WebGL/IL2CPP/AOT 仍未验证。没有性能测量，不宣称性能提升。
+
+**结论：满足 5.3 本批技术完成条件，保留能力的关键行为、直接闭包和最小原生门禁已取得有效证据，具备进入 5.4 的前置基础。等待用户验收及 Git 收口，阶段 5 仍 IN PROGRESS；不自动实施 5.4，不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。**
 
 ### 5.4 正式外围接口与旧机制退出
 
@@ -279,7 +324,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1 已验收及 Git 收口；5.2 已按单独正式授权实施，证据见对应批次记录；5.3 尚未授权实施。
+D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1、5.2 已验收及 Git 收口；5.3 已获单独正式授权并实施，证据见对应批次记录；5.4、5.5 尚未实施。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -289,4 +334,4 @@ D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.2 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.3～5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.3 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.4、5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。

@@ -577,10 +577,10 @@ namespace YLFramework.Utilities.Extensions
         }
 
 
-        /// <summary>判断所在层是否包含在 layerMask 中。</summary>
+        /// <summary>判断所在层是否包含在 layerMask 中；null 或已销毁组件返回 false。</summary>
         public static bool IsInLayerMask<T>(this T selfComponent, LayerMask layerMask) where T : Component
         {
-            return LayerMaskUtility.IsInLayerMask(selfComponent.gameObject, layerMask);
+            return selfComponent != null && LayerMaskUtility.IsInLayerMask(selfComponent.gameObject, layerMask);
         }
 
         /// <summary>设置所在 GameObject 的 tag，返回原组件。</summary>

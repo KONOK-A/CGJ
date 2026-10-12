@@ -18,20 +18,20 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 格式化字节 例如: 1024 = 1kb
+        /// 按 1024 进制和当前 Culture 格式化字节，单位为 b/kb/mb/gb/tb；TB 以上继续以 tb 显示。
         /// </summary>
         /// <param name="length">字节长度</param>
         public static string FormatByte(long length) {
             if (length < kb) 
                 return string.Format("{0}b", length);
              else if (length >= kb && length < mb )
-                return string.Format("{0:N2}kb", length / 1024.0f);
+                return string.Format("{0:N2}kb", length / (double)kb);
             else if (length >= mb && length < gb)
-                return string.Format("{0:N2}mb", length / 1024.0f / 1024.0f);
+                return string.Format("{0:N2}mb", length / (double)mb);
             else if (length >= gb && length < tb)
-                return string.Format("{0:N2}gb", length / 1024.0f / 1024.0f / 1024.0f);
+                return string.Format("{0:N2}gb", length / (double)gb);
 
-            return "";
+            return string.Format("{0:N2}tb", length / (double)tb);
         }
 
 
@@ -48,4 +48,3 @@ namespace YLFramework.Core
     }
 
 }
-

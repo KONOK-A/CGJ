@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,7 +9,7 @@ namespace YLFramework.Core.Extensions
     {
         // Fix编码
         /// <summary>
-        /// 打开或关闭某个层级
+        /// 打开或关闭某个层级；未定义层名抛 ArgumentOutOfRangeException，掩码不变。
         /// </summary>
         /// <param name="layerMask"></param>
         /// <param name="layerName">层级名称</param>
@@ -19,13 +20,14 @@ namespace YLFramework.Core.Extensions
         }
 
         /// <summary>
-        /// 打开或关闭某个层级
+        /// 打开或关闭 0..31 的层级；非法层号抛 ArgumentOutOfRangeException，掩码不变。
         /// </summary>
         /// <param name="layerMask"></param>
         /// <param name="layer">层级</param>
         /// <param name="open"></param>
         public static void Set(this ref LayerMask layerMask, int layer, bool open)
         {
+            ValidateLayer(layer);
             if (open)
             {
                 // 打开某个层级
@@ -46,6 +48,7 @@ namespace YLFramework.Core.Extensions
         /// <param name="layer"></param>
         public static void Physics2DSetting(this ref LayerMask layerMask, int layer) 
         {
+            ValidateLayer(layer);
              
             List<string> layers = new List<string>();
 
@@ -71,6 +74,7 @@ namespace YLFramework.Core.Extensions
         /// <param name="layer"></param>
         public static void PhysicsSetting(this ref LayerMask layerMask, int layer)
         {
+            ValidateLayer(layer);
 
             List<string> layers = new List<string>();
 
@@ -87,6 +91,12 @@ namespace YLFramework.Core.Extensions
             }
 
             layerMask = LayerMask.GetMask(layers.ToArray());
+        }
+
+        private static void ValidateLayer(int layer)
+        {
+            if (layer < 0 || layer > 31)
+                throw new ArgumentOutOfRangeException(nameof(layer), layer, "层号必须在 0..31 范围内。");
         }
 
     }

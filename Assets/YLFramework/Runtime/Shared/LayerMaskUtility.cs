@@ -8,14 +8,14 @@ namespace YLFramework.Foundation
     public static class LayerMaskUtility
     {
         /// <summary>
-        /// 判断层掩码是否包含指定层；保留原 Core 的位移取模语义，严格层号校验请用 IsInLayerMask。
+        /// 判断层掩码是否包含指定层；非法层号返回 false，不进行位移取模。
         /// </summary>
         public static bool Contains(this LayerMask layerMask, int layer)
         {
-            return IsInLayerMask(layer & 31, layerMask);
+            return IsInLayerMask(layer, layerMask);
         }
 
-        /// <summary>按层名判断；未定义层名仍保留原 Core 的 bit31 映射，边界契约另行修订。</summary>
+        /// <summary>按层名判断；未定义层名返回 false。</summary>
         public static bool Contains(this LayerMask layerMask, string layerName)
         {
             return layerMask.Contains(LayerMask.NameToLayer(layerName));
