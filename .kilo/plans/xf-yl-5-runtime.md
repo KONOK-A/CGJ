@@ -1,6 +1,6 @@
 # XF × YL 阶段 5：运行时外围融合总体研究与方案
 
-**状态：APPROVED / 阶段 5 IN PROGRESS；5.1 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，用户另行正式授权了 5.1；5.2～5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
+**状态：APPROVED / 阶段 5 IN PROGRESS；5.1 已验收及 Git 收口，5.2 技术实施与定向验证完成，待用户验收及 Git 收口。** 总体方案及 D1～D3、5.1～5.5 批次路线已获批准，5.1、5.2 已分别获正式实施授权；5.3～5.5 尚未实施。本文仍是阶段 5 唯一总体方案，不另建逐类实施脚本，批次实施授权不包含 Git 写操作。
 
 **目标：**收口 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的唯一职责、有效能力及依赖方向，保持阶段 1～4 的领域所有权、业务行为和存续资源身份。
 
@@ -10,7 +10,7 @@
 
 ## 1. 基线、证据与范围
 
-第 1～3 节保留总体研究轮次的实施前证据及静态结论；其中“当前/本轮/未执行”均指该研究基线，不覆盖后续实施结果。5.1 的实际基线、迁移与本轮验证见第 5.1 节实施记录。
+第 1～3 节保留总体研究轮次的实施前证据及静态结论；其中“当前/本轮/未执行”均指该研究基线，不覆盖后续实施结果。5.1、5.2 的实际基线、实施与验证见对应批次记录。
 
 - 2026-10-12 实际核验：分支 `integration/xf-yl`，HEAD `6e5b113`，研究开始时工作区干净。`milestone/4-audio` 指向 `0a0e74f`；两提交间只有 `IntegrationPlan.md` 的状态修正，产品源码基线一致，不回退 HEAD。
 - 阶段 2 各里程碑、阶段 3 `7e44d9f` / `milestone/3-ui`、阶段 4 `0a0e74f` / `milestone/4-audio` 已由 Git 历史及用户确认核对。蓝图首页、第 6 节与 Audio 编号 `06` 已在 `6e5b113` 修正，本轮不重复编辑；专项方案中的旧停止文字保留为历史，不覆盖较新的完成状态。
@@ -201,12 +201,53 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 
 **结论：5.1 唯一中立权威、消费者迁移、身份保护与定向技术门禁满足，具备进入 5.2 的前置基础；等待用户验收及 Git 收口。阶段 5 不标记 COMPLETE，5.2 不自动实施。**
 
+以上为 5.1 实施轮次的历史停止点。5.2 开始前用户已确认 5.1 技术验收及 Git 收口；实际对应提交为 `40f0c5fb5f1d686aa30dd4afd7f173814eb3cb72`。
+
 ### 5.2 HTTP 请求生命周期与 AsyncOperation 边界
 
 - **主要轴：**现有 HTTP 的行为正确性，暂留当前类型/程序集身份以便独立比对。修 query/body/headers、钩子可订阅性、耗时、结果快照、稳定终态、取消及全路径释放；补 HTTP 自有退出收尾。AsyncOperation 只收口真实契约与直接消费者证明，不改基类历史多播/Abort 语义。
 - **前置/退出：**Foundation 原 owner/gate 可用且 D3 边界确认；不依赖几何工具。完成后 HTTP 不能在 Abort 后改写结果，不能把通知当清理入口，拒绝启动与退出均不留自有 transport；不调用共享后端 Abort。
 - **验收：**实际 Unity 编译；新增最小本地回环 HTTP fixture，不依赖公网/第三方服务。覆盖 GET 原 query/fragment、特殊字符和空参数、Form/JSON/PUT/DELETE 的 method/body/content-type、headers、成功/协议错误 body、timeout、取消与重复取消、前/后/完成回调抛错及同步重入、未开始/在途退出、宿主拒绝及迟到结果；用原生请求/handler 的实际释放证据，不仅断言逻辑 isDone。测试服务使用系统分配端口、严格释放，只处理 HTTP 字节，后台不访问 Unity 对象。
 - **直接回归：**CustomAsyncOperationTests、CoroutineStarterTests；CoreXfab 中 View/Panel 取消、owner 关闭/重启/late callback 和启动拒绝 Abort；Audio 命名取消/旧会话租约代表性用例。只复用最相关用例，不重跑每个领域全集。
+
+#### 5.2 实施与验证记录（2026-10-12）
+
+**实际基线：**`fusion/5-runtime`，HEAD `40f0c5fb5f1d686aa30dd4afd7f173814eb3cb72`，开始时工作区干净；`git ls-remote origin refs/heads/fusion/5-runtime` 实时返回同一提交，与本地远端跟踪一致。已读项目 AGENTS、批准计划 4.2/5.2/D3、Unity `2022.3.62f3c1` 和 manifest，并定向核对 HTTP、Foundation 与直接消费者；没有重新开展阶段 5 总体研究。
+
+**实际成果及取舍：**
+
+- `HttpManager` 的 GET、POST Form、POST JSON 字典/字符串、PUT、DELETE 签名与 Core namespace/程序集身份保留。GET 合并原 query/fragment、分别编码键值、null 转空值、数字使用 InvariantCulture；无 query 的路径即使以 `&` 结尾也先添加 `?`。Form 明确 UTF-8 URL 编码；JSON 直接创建合适的 method/body/Content-Type，不再先造 Form/PUT 的 Handler 然后覆盖；显式 headers 可覆盖默认类型。要求绝对 http/https URI，JSON 字符串 null 返回 Failed，字典 null 序列化为 JSON null，不增加内容验证、认证、重试或下载系统。
+- `SendWebRequest` 仍继承原 Foundation 基类，但 sealed、构造与生产入口内部化；新增 HTTP 自有 Pending/Succeeded/Failed/Canceled/Invalidated、Exception、NativeResult、ResponseCode、ResponseHeaders 与未缩放 ElapsedSeconds。Text/Data/响应头为完成后可读快照，协议错误也保留正文；自定义 Handler 的虚方法先局部读取、每次读取后检查终态/会话，再集中发布，Data 复制以避免 Handler.Dispose 修改其原数组。原始失败异常保留；异常自身 ToString 再抛错时使用安全备用错误文本，不让请求登记逃逸。
+- 每笔请求在 CoroutineStarter.Start 的同步首步前已登记在 HTTP 专用 pending 表；构造、配置、发送失败、null 启动句柄、正常完成、协议/网络失败、超时、取消与退出均提交一次终态并撤销登记。复用 Foundation 会话身份/gate/reset，不增加公共任务表或新执行宿主。原生 completed 回调独立于协程等待，实际销毁 CoroutineStarter 宿主后仍完成本请求并释放资源，不创建替代宿主。HTTP 真实订阅 Application.quitting 与 Editor 退出，收尾不依赖迭代器 finally。
+- Abort 幂等，终态后不修改结果，只 Abort/Dispose 自己独占的 UnityWebRequest；旧协程及迟到原生通知不能反写。先提交状态、撤销登记和原生通知，再进行借读 post、可靠释放及基类完成通知。同步 pre 取消/退出、post 重入 Abort/创建另一请求、完成回调重入 Abort 都有定向覆盖；不停止 View/Audio/Resource 的共享 producer。
+- Handler 所有权为入口接管的初始对象与各配置回调边界附着的对象，逐回调 finally/收尾捕获当前 Handler，包含替换后的旧/新 Download、Upload、Certificate Handler。显式释放接管对象，不受调用者更改 dispose*OnDispose 标志影响。同一回调自行创建又在交付前移除的中间 Handler 归配置者自行释放，HTTP 不承诺观察不可见的赋值；不为此添加 setter 中间件。post 原生对象只同步借读，完成回调读取快照。
+- 前/后钩子改为可订阅/解除的静态事件，HTTP 会话 reset 清空订阅；pre 异常使本请求 Failed，post 异常仅报告且继续后续观察，完成通知仍保持 legacy -> registered 及历史多播中断顺序，异常报告不改终态或跳过清理。迟到 AddCompleteEvent 保留立即同步调用及异常向订阅者传播的基类语义。Foundation CustomAsyncOperation/CoroutineStarter、View/Panel、Audio/Resource 源码未改。
+- 两个既有产品脚本 GUID 保留：HttpManager `fe1d02983613d0e49b3a622fa7377063`、SendWebRequest `cc8484abb98c20245860b999454a03e7`；CoreIdentity 实际通过。仅新增两个测试脚本，meta 由 Unity 生成；没有移动产品类型、修改 asmdef、原 Package、原游戏、持久资源、ProjectSettings 或 Packages。实际 API/使用变化增量写入既有 Architecture 的 HTTP/AsyncOperation 节，不另建方案或过程报告。
+
+**分层证据（本轮实际执行，按实际 PassedTests/单项 Results 统计）：**
+
+| 验证层 | 结果与范围 |
+|---|---|
+| Unity 实际编译 | 当前打开的 Unity `2022.3.62f3c1` 经 AssetDatabase 刷新实际编译；最终 `EditorApplication.isCompiling == false`、`EditorUtility.scriptCompilationFailed == false`。没有以 IDE/dotnet 替代。 |
+| HTTP EditMode | **4 Passed，0 Failed/Skipped**：非 Play 启动拒绝、未启动 native 与三类 Handler 释放（关闭自动 Dispose 标志）、构造/JSON 参数失败稳定终态、异常格式化失败仍收尾。 |
+| 真实 HTTP PlayMode | **20 Passed，0 Failed/Skipped**：系统分配端口 TCP 回环，真实 UnityWebRequest；GET query/fragment/特殊字符/空值/Culture/路径末尾 `&`，Form/JSON/PUT/DELETE method/body/type/headers，200/503 快照，timeScale=0 下真实 1 秒 timeout，独占在途取消/重复取消，pre/post/legacy/registered 异常与重入，未开始与在途退出、失活启动拒绝、实际销毁协程宿主后收尾、迟到通知、Handler getter 取消与 Dispose 数组变更隔离。 |
+| 原生释放 | 正常、协议失败、超时、取消、前置失败/同步取消、拒绝启动及退出路径实际检查 UnityWebRequest/DownloadHandler/UploadHandler/CertificateHandler 的原生 `m_Ptr` 从非零到零；替换前后的对象均检查，完成通知时已归零，post 时仍可借读。未用 isDone 代替释放证据，未写原生指针。 |
+| Foundation EditMode | **CustomAsyncOperationTests 16 Passed**：历史重复完成更新 error、完成后 Abort 改 error、重复 Abort hook、legacy/registered/hook 顺序、多播抛错中断、静默完成与迟到通知均保持。 |
+| Foundation PlayMode | **CoroutineStarterTests 15 Passed**：原 owner、同步首步重入、失活/销毁、会话 reset/迟到消息、退出拒绝新宿主、等待和基类逻辑 Abort 不取消 producer 均保持。 |
+| Core 代表性回归 | **CoreIdentityTests 9 EditMode Passed**；**5 PlayMode Passed**：Module 的 SynchronousStartupPublishesOneRequestBeforeReentryAndSingletonNeedsNoBaseCall（含启动拒绝 Abort）；CoreXfab 的 ParallelNamedViewsCancelLateProducerWithoutInstanceOrRecycledArgsLeak、CloseInvalidatesPendingBeforeNotificationAndAllowsSameInstanceRestart、CompletionThrowAndRepeatedAbortDoNotRewriteSuccessAndArgsSelectCurrentModel、PanelWaitingAbortDuplicateClaimAndBorrowedArgsAbortKeepStableOwnership。复用既有 Assets/LOCAL 夹具，没有创建/修改资产。 |
+| Audio 代表性回归 | **3 EditMode Passed**：AudioNamedBorrowedTests.LoadingDoesNotReserveSourceAndOneCanceledWaiterCannotStopItsNewBorrowerOrSharedPeer；AudioRequestLifecycleTests.RejectionValidationAndOldSessionReleaseWithoutBuildingHost、OldHostLateQuitCannotCloseReplacementSession。证明借用/共享取消与旧会话责任不受 HTTP 物理取消影响，不声称本批实际音频输出验证。 |
+| 静态/收尾 | `git diff --check` 通过；原 GUID 与程序集归属实际核对。最终 Editor 非 Play、HTTP pending=0、FoundationHosts=0、HTTP pre/post 订阅=0。回环每个夹具只关闭并等待自身 listener/socket/Task，后台无 Unity 对象访问。 |
+
+定向通过总数为 **EditMode 32、PlayMode 40，共 72 项**，不是 MCP 输出的全工程发现总数；中间 red/重复 green 不重复计数。
+
+**审查、失败分类与限制：**
+
+- 首个拒绝启动用例实际先失败（isDone=false）再通过。独立只读审查发现 Handler getter 重入导致完成后反写、数组别名、路径末尾 `&` 及异常 ToString 逃逸；补充用例分别实际失败，再修复为通过。复查未发现阻断性实证缺陷；中间 Handler 所有权通过明确交付边界解决，不增加新网络中间件。
+- 初次测试导入/完整类名筛选曾返回 Unknown/无测试；确认编译和实际类型后使用短类名或完整 testMethod 得到有效逐项结果，空结果不计通过，也不冒充产品故障。
+- Play 测试本体、回环与资源断言均取得有效结果，但测试退出日志仍出现原 XF `LoggerManager` 的 `Some objects were not cleaned up when closing the scene` 历史错误（MCP Console sequence 45405、45409、45410、45420、45421）。未修改原 Logger/Package、替换 logHandler、吞错误或重用旧隔离授权；本批通过不证明原 Logger 的退出安全。
+- HTTP gate/OnExecutionEnded/Reset 的未开始与在途退出为受控回调/会话测试；另有真实销毁本夹具 CoroutineStarter 宿主的原生完成与释放验证。没有执行阶段 5.5 的同域连续双 Play、实际 Application 进程退出或 Windows64/Mono Player 综合门禁，不把受控 reset 描述为真实双 Play。移动/WebGL/IL2CPP/AOT、原游戏综合路径与全生态独立性均未验证。
+
+**结论：满足 5.2 本批技术完成条件，HTTP 独立终态、全路径自有资源收尾及 D3 定向兼容证据成立，具备进入 5.3 的基础。等待用户验收和 Git 收口，阶段 5 仍 IN PROGRESS；不自动实施 5.3 或执行 Git 写操作。**
 
 ### 5.3 工具与扩展的契约修复
 
@@ -238,7 +279,7 @@ namespace 可以跨正确的程序集边界组织同一逻辑家族，不为了�
 | **D2 历史 LogUtil（用户已确认）** | 保留须修后台队列/Writer/线程准入/退出/全局订阅，等于继续维护一个独立文件日志 owner；原工具已标记过时且未覆盖这些风险 | **自有旧 LogUtil 在 5.4 满足迁移及验收条件后退役，不留兼容空壳**（不删除原游戏日志、不修改原 XF Logger，也不删除已有日志文件）；正式文件日志仍是长期需求，留 LoggerSystem 专题融合。原 XF Logger、原游戏日志及现有日志文件不受本阶段退役影响 |
 | **D3 异步共享幅度（用户已确认）** | 全部请求统一会碰触 View事务、Audio自然完成/租约和共享 producer；只硬化基类也会改变明确历史测试契约 | **保留最小基类及历史通知语义，HTTP 自己管稳定终态与独占 transport**；不统一 Status/取消/owner，不新增公共任务表。可独立取消 HTTP 不等于可物理取消 View/Audio 后端 |
 
-D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1 已按本次正式授权实施，证据见 5.1 记录；5.2 尚未授权实施。
+D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体类名、API 布局与算法由获授权批次据上述契约自主决定，不要求逐类确认；每批仍须单独实施授权。5.1 已验收及 Git 收口；5.2 已按单独正式授权实施，证据见对应批次记录；5.3 尚未授权实施。
 
 **当前未发现必须先修改跨阶段系统才能完成本阶段的源码阻塞。** 以下是真实保留边界，不扩大为本阶段前置修复：
 
@@ -248,4 +289,4 @@ D1、D2、D3 已由用户确认，五批路线 5.1～5.5 正式批准。具体�
 - 类型反射/字符串构造仍有裁剪与 AOT 风险，当前未证明 IL2CPP；本阶段明确依赖并用 Mono 门禁，最终独立/目标平台保留按真实消费者补充 Preserve/link.xml 的职责，不无依据全局保留程序集。
 - 当前同工程测试与源闭包不能证明无原 15 系统的最终独立运行；阶段 7/长期系统仍需独立承载及完整分发验证。
 
-本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.1 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.2～5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
+本方案已经用户正式批准；架构、五批边界与跨阶段限制保持原样。本次仅按授权完成 **5.2 技术实施及定向验证，待用户验收和 Git 收口**，停止于此。5.3～5.5 尚未实施，阶段 5 不标记 COMPLETE；不 Commit/Push/Merge/Tag/Reset/Clean 或切换分支。
