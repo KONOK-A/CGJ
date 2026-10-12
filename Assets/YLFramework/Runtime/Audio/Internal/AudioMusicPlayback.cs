@@ -34,7 +34,7 @@ namespace YLFramework.Services.Audio
         {
             var epoch = Epoch;
             Stop(AudioRequestEnd.Replaced);
-            if (!mOwner.Available || Epoch != epoch + 1) return default;
+            if (!mOwner.Available || Epoch != epoch + 1 || resource != null && !resource.CanBind) return default;
             var settings = AudioKit.Settings;
             return Current.Begin(clip, in options, settings.IsMusicOn.Value, settings.MusicVolume.Value,
                 settings.IsMusicMuted.Value, started, finished, resource: resource);
@@ -51,13 +51,13 @@ namespace YLFramework.Services.Audio
             {
                 var previousEpoch = Epoch;
                 Stop(AudioRequestEnd.Replaced);
-                if (!mOwner.Available || Epoch != previousEpoch + 1) return default;
+                if (!mOwner.Available || Epoch != previousEpoch + 1 || resource != null && !resource.CanBind) return default;
                 return Current.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
                     started, finished, paused: paused, resource: resource);
             }
             var epoch = ++Epoch;
             if (mOutgoing.IsValid) mOutgoing.Voice.Stop(AudioRequestEnd.Replaced);
-            if (!mOwner.Available || Epoch != epoch) return default;
+            if (!mOwner.Available || Epoch != epoch || resource != null && !resource.CanBind) return default;
             mOutgoing = Current.Handle;
             if (mOutgoing.IsValid) Current.SuppressCompletion();
             mOutgoingGain = Current.TransitionGain;

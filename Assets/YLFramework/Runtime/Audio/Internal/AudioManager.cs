@@ -24,6 +24,9 @@ namespace YLFramework.Services.Audio
         private bool mDisposing;
         private ulong mAdmissionOrder;
         private ulong mSoundSession;
+        private readonly List<AudioPlayRequest> mPending = new List<AudioPlayRequest>();
+        private readonly ulong[] mPendingVersions = new ulong[3];
+        internal AudioClipCache ClipCache { get; } = new AudioClipCache();
         internal bool Available => !HostReleased && !mDisposing && !AudioKit.IsClosing && IsCurrentSoundSession;
         internal AudioMusicPlayback MusicPlayback { get; private set; }
         internal AudioVoice Music => MusicPlayback?.Current;
@@ -60,7 +63,7 @@ namespace YLFramework.Services.Audio
             var settings = AudioKit.Settings;
             mSubscriptions.Add(settings.IsMusicOn.Register(RefreshMusicEnabled));
             mSubscriptions.Add(settings.IsVoiceOn.Register(RefreshVoiceEnabled));
-            mSubscriptions.Add(settings.IsSoundOn.Register(value => { if (!value) StopAllSound(); }));
+            mSubscriptions.Add(settings.IsSoundOn.Register(value => { if (!value) StopSoundsAndPending(); }));
             mSubscriptions.Add(settings.MusicVolume.Register(RefreshMusicVolume));
             mSubscriptions.Add(settings.VoiceVolume.Register(value => { Voice.SetVolume(value); RefreshChannelVolume(AudioCategory.Voice); }));
             mSubscriptions.Add(settings.SoundVolume.Register(SetSoundVolume));
@@ -84,6 +87,49 @@ namespace YLFramework.Services.Audio
             var result = new AudioChannel(this, name, category, mode, persistenceId);
             mNamedChannels.Add(name, result);
             return result;
+        }
+        internal void AddPending(AudioPlayRequest request)
+        {
+            if (request.Category == AudioCategory.Sound && !AudioKit.Settings.IsSoundOn.Value)
+            { request.End(AudioPlayEnd.Rejected); return; }
+            var version = AdvancePendingVersion(request.Category, request.Channel);
+            if (request.Channel?.Mode != AudioChannelMode.Overlap && (request.Channel != null || request.Category != AudioCategory.Sound))
+                CancelPending(request.Category, request.Channel, AudioPlayEnd.Replaced, incrementVersion: false);
+            if (!Available || version != PendingVersion(request.Category, request.Channel) || request.Channel != null && !request.Channel.IsValid)
+            { request.End(AudioPlayEnd.Unavailable); return; }
+            mPending.Add(request);
+        }
+        internal void RemovePending(AudioPlayRequest request) => mPending.Remove(request);
+        internal ulong PendingVersion(AudioCategory category, AudioChannel channel) => channel?.PendingVersion ?? mPendingVersions[(int)category];
+        internal ulong AdvancePendingVersion(AudioCategory category, AudioChannel channel) => channel != null ? ++channel.PendingVersion : ++mPendingVersions[(int)category];
+        internal AudioPlayRequest[] PendingSnapshot(AudioCategory category, AudioChannel channel, bool allChannels = false)
+        {
+            if (mPending.Count == 0) return Array.Empty<AudioPlayRequest>();
+            var result = new List<AudioPlayRequest>();
+            foreach (var request in mPending)
+                if (request.Category == category && (allChannels || ReferenceEquals(request.Channel, channel))) result.Add(request);
+            return result.ToArray();
+        }
+        internal static void EndPending(AudioPlayRequest[] snapshot, AudioPlayEnd reason)
+        {
+            List<Exception> failures = null;
+            foreach (var request in snapshot)
+                try { request.End(reason); }
+                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+            if (failures != null) throw new AggregateException("Audio pending cleanup failed.", failures);
+        }
+        internal void CancelPending(AudioCategory category, AudioChannel channel, AudioPlayEnd reason, bool allChannels = false, bool incrementVersion = true)
+        {
+            if (incrementVersion) AdvancePendingVersion(category, channel);
+            if (mPending.Count == 0) return;
+            EndPending(PendingSnapshot(category, channel, allChannels), reason);
+        }
+        internal void StopSoundsAndPending()
+        {
+            AdvancePendingVersion(AudioCategory.Sound, null);
+            var pending = PendingSnapshot(AudioCategory.Sound, null, true);
+            try { StopAllSound(); }
+            finally { EndPending(pending, AudioPlayEnd.Stopped); }
         }
         internal void UnregisterChannel(AudioChannel channel)
         {
@@ -111,6 +157,7 @@ namespace YLFramework.Services.Audio
             AudioKit.PlaySoundModes mode, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             AudioResourceLease resource, AudioSource source)
         {
+            if (resource != null && !resource.CanBind) return default;
             if (channel.Category == AudioCategory.Sound)
                 return PlaySound(clip, in options, mode, finished, started, false, default, null, resource, channel, source);
             if (!ReferenceEquals(source, null)) ValidateBorrowedSource(source);
@@ -132,7 +179,7 @@ namespace YLFramework.Services.Audio
             if (music) return MusicPlayback.Play(clip, in options, started, finished, resource);
             var slot = Voice;
             slot.Stop(AudioRequestEnd.Replaced);
-            if (!Available || slot.Active) return default;
+            if (!Available || slot.Active || resource != null && !resource.CanBind) return default;
             var settings = AudioKit.Settings;
             return slot.Begin(clip, in options, settings.IsVoiceOn.Value, settings.VoiceVolume.Value,
                 settings.IsVoiceMuted.Value, started, finished, spatial, position, target, resource: resource);
@@ -165,12 +212,13 @@ namespace YLFramework.Services.Audio
                 }
                 var order = mAdmissionOrder;
                 victim.Stop(AudioRequestEnd.Replaced);
-                if (!Available || mAdmissionOrder != order || !AudioKit.CurrentSettings.IsSoundOn.Value ||
+                if (!Available || mAdmissionOrder != order || !AudioKit.CurrentSettings.IsSoundOn.Value || resource != null && !resource.CanBind ||
                     channel != null && (!channel.IsValid || channel.Epoch != channelEpoch)) return default;
                 // Stop can synchronously change other counts; discard the cached budget lookup.
                 clipCount = -1;
                 AudioKit.SoundCounters.StolenCount++;
             }
+            if (resource != null && !resource.CanBind) return default;
             if (!ReferenceEquals(borrowedSource, null)) ValidateBorrowedSource(borrowedSource);
             if (!borrowedSource)
             {
@@ -436,6 +484,11 @@ namespace YLFramework.Services.Audio
         private void Update()
         {
             if (Music == null || !Available) return;
+            if (mPending.Count > 0)
+                foreach (var request in mPending.ToArray())
+                    try { request.Tick(); }
+                    catch (Exception exception) { request.Fail(exception); }
+            ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
             mChecks.Clear();
             var musicEpoch = MusicPlayback.Epoch;
             MusicPlayback.CopyTo(mChecks);
@@ -501,12 +554,15 @@ namespace YLFramework.Services.Audio
 #endif
             foreach (var subscription in mSubscriptions) Cleanup(subscription.UnRegister);
             mSubscriptions.Clear();
+            foreach (var request in mPending.ToArray()) Cleanup(() => request.End(AudioPlayEnd.Shutdown));
+            mPending.Clear();
             foreach (var channel in new List<AudioChannel>(mNamedChannels.Values)) Cleanup(() => channel.Release(AudioRequestEnd.Shutdown));
             mNamedChannels.Clear();
             Cleanup(() => StopAllSound(AudioRequestEnd.Shutdown));
             if (MusicPlayback != null) Cleanup(MusicPlayback.DestroySources);
             if (Voice != null) Cleanup(Voice.DestroySource);
             if (mPool != null) Cleanup(mPool.Dispose);
+            Cleanup(ClipCache.Dispose);
             // A callback may release this host while Update is iterating its snapshot.
             if (failures != null) throw new AggregateException("AudioKit source cleanup failed.", failures);
         }

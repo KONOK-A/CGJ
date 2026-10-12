@@ -1,6 +1,6 @@
 # XF × YL 阶段 4：Audio 深度融合研究与总体方案
 
-**状态：总体方案及 D1/D2 已批准；4.1 已用户验收及 Git 收口；4.2 已单独授权并完成本批技术实施与定向验证，待用户验收及 Git 收口；4.3～4.5 未实施。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。阶段 4 尚未 COMPLETE。
+**状态：总体方案及 D1/D2 已批准；4.1、4.2 已用户验收及 Git 收口；4.3 已单独授权并完成本批技术实施与定向验证，待用户验收及 Git 收口；4.4、4.5 未实施。** 本文是阶段 4 的唯一方案；不规定逐类逐方法的实现脚本，具体 API 与内部结构由获授权批次按下述契约设计。阶段 4 尚未 COMPLETE。
 
 **目标：**新 YL 只有一个音频播放、请求生命周期与资源收尾权威，融合双方有价值的能力；原游戏、原 XF/XFAB/XFFSM Package 和阶段 1～3 成果不受破坏。方案批准、批次实施和 Git 授权分别处理。
 
@@ -131,6 +131,8 @@ Foundation 提供公共支撑；YLFrameworkRoot 保持共享非 UI 层级。
 
 ### 5.3 窄资源契约与安全过渡
 
+**4.3 落地索引（2026-10-12）：**完整身份为 `AudioClipAddress` 的 Provider 引用身份 + 完整 key；窄取得为 `IAudioClipProvider` / `AudioClipLease`，异步播放为 `AudioPlayRequest`，正式后端为 `ResLoaderAudioClipProvider`。同步使用不同名 `PlayMusicNamed/PlayVoiceNamed/PlaySoundNamed/CrossFadeMusicNamed`，不重载原 Clip API；对应 `*Async` 与通道 `PlayNamed/PlayAsync` 仍提交原 Voice/Handle。会话内 Clip 缓存默认 Capacity=0、IdleSeconds=0；可选适配为独立 `YLFramework.Audio.XFAB`，不自动注册/默认导出。实际责任、状态和限制见第 7 节 4.3 成果及现有 Audio 使用说明。
+
 **D2 已确认：**直接 Clip 永远借用；命名取得支持明确资源租约和可选闲置缓存释放；暂存 XFAB adapter 只借用共享资产、不自动 UnloadAsset，完整 XFAB 所有权与物理释放留待资源专题。
 
 - Audio 只定义取得 AudioClip、成功/错误/进度、逻辑取消和成对收尾所需的窄接点，不建立通用 Resource 门面、下载/更新/Bundle 管理器。定位含 provider/backend 与完整资源身份，不把 ProjectName 与 BundleName 混用，不按 clip.name 合并所有权。
@@ -238,6 +240,35 @@ Unity 2022.3 官方 isPlaying/Pause 与 PlayOneShot 文档补充确认：暂停�
 - **PlayMode 门禁：**真实 Resources/YL ResLoader 的同步/异步 AudioClip，加载等待/取消/重试；disabled Music、双轨尾曲、暂停与组件失活 one-shot 的保活；idle 淘汰/重取/关闭后成对释放。背景加载、非 preload、压缩/Streaming 用少量受控素材实际验证，不改游戏 importer；不能以 PCM 或 Assets 模拟证明全部数据路径。
 - **后端证据：**复用现有资源测试的最小独立 Bundle 构建/清理模式验证受控 YL provider 的真实 AB 保活/归还，不重建 MainModule，不把对象清引用当物理释放。XFAB 只验证借用加载与逻辑取消不影响其他使用者；若原后端挂起/产物阻塞，分类报告，不能修 Package或虚称物理取消通过。
 
+#### 4.3 实际成果与验证（2026-10-12）
+
+**实施基线：**开始核对 `fusion/4-audio`、HEAD `590c49f`，工作区干净；用户已验收并收口 4.1/4.2。Unity `2022.3.62f3c1`，原 manifest/lock 未改。全部成果保持未提交，没有切换分支或执行 Git 写操作。
+
+- **命名请求：**直接 Clip 仍借用，显式命名同步/异步入口提交唯一原 Voice/Handle。资源身份包含 Provider 实例与完整 key，不按 Clip 名称/对象相同合并。同步取得/提交异常仍抛出；异步公开稳定 Error/终态、资产/数据就绪、资产进度及原 Handle，Started 只代表 Source.Play 已提交。独占最新请求撤销旧 pending，但新资源/数据可提交前不截断旧曲；失败保留旧 BGM。
+- **重入/取消：**共享 producer 与各等待者分开计数；Cancel/Stop/通道 Dispose/Shutdown 结束自己的原身份，不物理取消其他等待者。提交 pending 保留到原 Voice 绑定并交付句柄，旧资源释放重入可撤销此次提交。Stop 同时捕获进入时播放/pending 快照，清理中新建的请求/宿主不被旧操作覆盖；版本按分类/通道隔离。自然完成在原自然回调之前确定命名请求 Completed，保留 4.1 原 Handle 回调内可控、资源保活到返回的契约。
+- **YL 租约/缓存：**一个 producer 持有一个真实 ResLoader，保活 Clip 与依赖；Audio 仅归还 owner，物理释放由 Resource 实现。AB 显式 owner Bundle 不混作 ProjectName。异步总通知只置标记，避开 Loader 自己的通知栈再交付，避免通知中的池回收/重入复用。等待者、数据等待、Loop/Pause、Music/Voice off 待重播、尾轨与未取消 one-shot 各自保活。闲置 Clip 缓存默认关闭、独立于 Source 池，显式容量/秒数与 ClearClipCache 只释放闲置，淘汰释放重入后重新检查活跃责任；没有固定 600 秒策略。AcquireClip 的显式预加载租约由调用方 Dispose，可跨 Audio Shutdown 保活到自己归还；同步撞上同缓存的在途异步取得时明确抛错，不阻塞主线程。
+- **可选 XFAB：**约定目录内独立 `YLFramework.Audio.XFAB`、包版本约束、autoReferenced=false，无正式 Runtime 反向引用、不自动注册、不默认导出。仅借用并摘除自己的 observer，CanCache=false；不调用 UnloadAsset/Abort/RemoveAllCompleteEvent。真正保活/物理释放仍由外部 XFAB owner 管理，未改 XF/XFAB Package 或游戏资源链。
+
+本批最终具名证据均来自当前打开的 Unity Editor，未以静态检查或 dotnet 代替实际编译，未启动第二实例：
+
+| 定向集合 | 实际结果与范围 |
+|---|---|
+| Unity 编译；Audio EditMode | **469 passed、0 failed/skipped**；含新命名时序 21、XFAB 程序集/导出边界 1，其余为相关 Audio 契约与回归。保留原方法组/反射签名；旧默认值/Help 断言精确补齐 4.2 已批准的第 11 字段 AutoPauseWhenTimeScaleZero，不忽略失败 |
+| 独立 Bundle 准备 EditMode | **1 passed**；独立双 Clip Bundle 和资源表显式声明的独立依赖 Bundle，输出仅批准的 Temp/kilo UUID 私有目录，不构建 MainModule、不调用全局导出构建入口 |
+| AudioNamedResourcePlaybackTests | **7 passed**；实际 ResLoader sync/async Resources/AB、共享取消/失败重试/Shutdown 迟到、Loop/Pause/off 重播、缓存重取/到期、尾轨及未取消 one-shot、自然通知终态与真实资源保活到返回 |
+| XfabAudioBorrowPlaybackTests | **1 passed**；临时独立内存 Project/WAV、现有 Assets 模式和共享缓存，外部等待者正常完成；本地归还/取消/Shutdown/迟到不卸载 Clip 或删除外部监听，不改全局 Profile |
+| 4.1/4.2 PlayMode 定向回归 | **24 passed**：RequestLifecycle 2、Channel/借源/自动暂停 5、Music 双声部 14、Options 分配 3；原回调/代次/Source/预算和预热分配契约无新增失败 |
+
+真实非 preload 素材包括 120 秒 PCM 背景解码、短 Vorbis CompressedInMemory/Streaming；断言 Loaded 才 Started，并实际观察 Source.timeSamples 前进。全部使用自有 UUID 资产和 Importer，不修改游戏素材。Resources 归还实测 RefCount=0、Res.Asset 清空/Waiting、音频数据 Unloaded；Editor 导入对象可能仍通过 bool 存活检查，不把它说成对象销毁。真实 Bundle 则明确断言最终 Loader 归还后两个 Bundle 均 Unload(true)、依赖资产和活跃 Clip 原生对象失效，并可重载播放。
+
+独立源码审查发现的提交窗口取消、缓存淘汰重入重新取得、Stop/替换清理重入、同步 producer 重入异步 waiter 丢通知及跨分类版本误伤，均用实际失败用例闭合；另补同拓扑 Stop、自然回调终态与缓存 Clip 被外部提前销毁后复用不漏等待者计数的红绿回归。组合 PlayMode 过滤调用曾 MCP 超时，不计为通过证据，之后逐类执行并读取上表成功结果。PlayMode 后的 sQuitting 测试环境按 4.1/4.2 既有方式，在确认 EditMode、无 Audio 宿主/Settings、非 shuttingDown 后隔离恢复，不改生产 gate，也不把反射恢复当作退出/双 Play 证据。
+
+**清理与兼容：**临时资产/Bundle/SessionState 标记按归属清理，Resource 配置、模拟开关及六个偏好键恢复；新增 .meta 由 Unity 导入生成，实际 diff/新增文件纳入检查。正式 namespace、Runtime/Core 身份、组件/GUID/UnityEvent、Music 双声部、Sound 预算、Mute/Pause/Mixer、4.2 命名通道/借源、原游戏源码/资产/设置、公共 Root、Packages 与 ExportRoots 均保持。增量同步现有 Audio.md、Architecture 中的 Audio/可选适配边界及本文，没有新增过程报告/管理平台或永久兼容壳。
+
+**剩余边界：**不声称 Source.Play 等于首采样或实际可听见，Streaming Loaded 不表示全文件驻留。无物理取消能力的永久 pending producer 可以结束逻辑等待者，生产责任仍依赖真实后端完成。XFAB 无通用全局租约，提前外部卸载不在 adapter 可保证范围；本批未运行其真实运行时 Bundle/下载场景。未构造真实损坏解码 Failed 素材，加载失败有真实缺失资产与受控异常证据。4.4 素材组/组件命名加载 Editor 接入及 Core Audio 退出、4.5 完整游戏/关闭 Domain Reload 双 Play/Player/实际听感均未执行。
+
+**4.3 技术结论：**本批满足命名取得/请求取消、资源租约/受控缓存、ResLoader 真实资源归还及 D2 可选 XFAB 非干扰的技术完成条件，具备进入 4.4 的前置基础；等待用户验收与 Git 收口。到此停止，不自动实施 4.4，不创建 Commit/Push/Merge/Tag/Reset/Clean，不宣布整个阶段 4 COMPLETE。
+
 ### 4.4 正式组件/Editor 接入与 Core 旧机制退出
 
 - **范围/产物：**正式素材组/命名入口与必要 Inspector、局部预设/示例和说明；现有 AudioEmitter/MusicPlayer 身份与默认值保留。迁完 Core 音频的有价值测试后退出四份 Runtime/旧 Inspector/meta，不留重复注册表、驱动、根或卸载协程。
@@ -267,6 +298,6 @@ Unity 2022.3 官方 isPlaying/Pause 与 PlayOneShot 文档补充确认：暂停�
 
 **主要风险：**把借用当取得所有权；开始/完成回调重入在资源责任提交前发生；慢加载覆盖新曲；尾轨或 disabled 请求被提前卸载；借源复位误改调用方对象；游戏缺字段默认值与 UnityEvent 程序集断链；退出阶段静态/协程残留；同工程原包掩盖新 Audio 的可选依赖；当前依赖/Bundle/音频设备不满足复现条件。风险分别落在 4.1～4.5，不用“全量测试通过”替代逐项证据。
 
-**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过；4.1 已验收及 Git 收口，4.2 已另行授权并完成上述技术批次，仍不代表本批 Git 或后续批次授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
+**已确认与已审核：**D1（唯一 Runtime Audio，吸收价值后退出自有 Core.Audio*，不删原包/Root）与 D2（直接 Clip 借用、受控资源租约、XFAB 不自动卸载共享资产）已通过用户 question 确认。整体方案、五批路线及明确的借源独占/可选缓存/数据就绪和实际声音门禁已审核通过；4.1、4.2 已验收及 Git 收口，4.3 已另行授权并完成上述技术批次，仍不代表本批 Git 或 4.4/4.5 授权。没有额外跨阶段前置融合需要用户批准；如实施发现必须改变游戏身份、全局 Root/程序集方向、XFAB 资源所有权或重建游戏产物，则停止该分支并提交新证据与最小替代方案。
 
 **总体方案研究轮的历史边界：**当时仅交付本文，不同步非计划文档、不实施 4.1、不创建分支、不执行 Git 写入。后续已单独授权的 4.1 实施与停止边界见第 7 节实际成果；其余批次仍需用户验收前批及单独授权。

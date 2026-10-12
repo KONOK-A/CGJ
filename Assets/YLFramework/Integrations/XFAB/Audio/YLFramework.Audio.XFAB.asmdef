@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Audio.XFAB",
+    "rootNamespace": "YLFramework.Integrations.XFAB.Audio",
+    "references": ["YLFramework.Runtime", "XFABManager"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": ["YL_AUDIO_XFAB"],
+    "versionDefines": [{ "name": "com.xfkj.xfabmanager", "expression": "1.0.0", "define": "YL_AUDIO_XFAB" }],
+    "noEngineReferences": false
+}

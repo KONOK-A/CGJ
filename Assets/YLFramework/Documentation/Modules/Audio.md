@@ -35,7 +35,7 @@ musicSlider.onValueChanged.AddListener(value => AudioKit.Settings.MusicVolume.Va
 
 | 无需配置 | 仅使用对应高级功能时配置 |
 |---|---|
-| 初始化、Mixer、配置资产、资源 Loader、并发上限、预热 | Mixer 路由/暴露参数/Snapshot；资源加载仍由业务负责 |
+| 初始化、Mixer、配置资产、资源 Loader、并发上限、预热 | Mixer 路由/暴露参数/Snapshot；命名加载时显式指定 Audio Provider |
 | 普通 2D 播放的距离、跟随目标、淡变、Priority | At/Following 空间参数；自动淡变/Crossfade；去重、并发与缓存预算 |
 
 ## 默认值与配置
@@ -54,7 +54,8 @@ musicSlider.onValueChanged.AddListener(value => AudioKit.Settings.MusicVolume.Va
 | 去重模式 / Options.PlaySoundMode | 全局 EveryOne / null 继承 | 默认允许重叠，由全局统一策略或单次覆盖控制 |
 | 全局 / 每 Clip 去重窗口 | 5 / 5 帧 | 启用窗口去重模式后抑制短时连发，比 10 帧更少影响快速操作；按帧计数，不是固定毫秒数 |
 | Sound 并发 | Limit=0、DefaultClipLimit=0，不限；RejectNew | 开箱即用不拒播；显式设置上限后不默认抢停旧声音 |
-| 闲置缓存 / 预热 | 10 / 不自动预热 | 复用小规模常规音效，避免无请求时分配音源 |
+| 闲置 Source 缓存 / 预热 | 10 / 不自动预热 | 复用小规模常规音效，避免无请求时分配音源 |
+| 闲置 Clip 缓存 | Capacity=0、IdleSeconds=0 | 默认不缓存资产，按需显式启用；与 Source 池预算完全分离 |
 | AutoFade | 首尾时长均 0 | 保留素材原有起止，淡变由业务显式启用 |
 | AutoPauseWhenTimeScaleZero | false | 不改变原游戏暂停时 BGM 的播放行为；只对显式开启的请求生效 |
 | CrossFadeMusic API | curve=EqualPower；ignoreTimeScale=true；duration 必填 | 不相关 BGM 交接减少中点功率下陷，暂停游戏时间时仍可过渡 |
@@ -134,11 +135,77 @@ AudioKit.PlaySound(soundClip, options);
 
 完整旧 JSON 保留原字段格式。显式 Pitch=0 仍非法，Volume=0 仍合法，不按零值猜缺字段。原 `Nullable<AudioSoundOptions>` 不再适用，原值类型可选 `AudioSoundOptions?` 参数改为 `AudioSoundOptions options=null`；`PlaySoundMode` 字段仍是可空枚举。依赖值复制、值相等、反射签名或生成绑定的使用方需更新，外部预编译程序集必须重新构建；不承诺二进制 ABI 稳定。
 
+## 命名加载与资源责任
+
+命名入口不重载旧 Clip API，使用 `PlayMusicNamed`、`PlayVoiceNamed`、`PlaySoundNamed`、`CrossFadeMusicNamed`；对应异步入口为 `PlayMusicAsync`、`PlayVoiceAsync`、`PlaySoundAsync`、`CrossFadeMusicAsync`。命名通道使用 `channel.PlayNamed` / `channel.PlayAsync`，仍复用原 Exclusive/Overlap 拓扑与 `AudioHandle`。异步接口返回可观察、可逻辑取消的 `AudioPlayRequest`，不是通用 Task/协程调度框架。
+
+```csharp
+using YLFramework.Services.Audio;
+
+var click = new AudioClipAddress(ResLoaderAudioClipProvider.Resources,
+    "resources://Audio/ui_click");
+AudioKit.PlaySoundNamed(click);
+
+var music = new AudioClipAddress(ResLoaderAudioClipProvider.Resources,
+    "resources://Audio/bgm");
+var request = AudioKit.PlayMusicAsync(music,
+    onStarted: (clip, originalHandle) => { /* 已提交原 Source.Play，可控制原句柄 */ });
+// 在所有者退出或需要撤销本次请求时：
+request.Cancel(); // Dispose 等价；不会物理取消共享加载或停止另一等待者
+
+// YL AB 使用明确的 owner Bundle，不是 XF/XFAB 的 ProjectName：
+var bundleAudio = new ResLoaderAudioClipProvider("my-audio-bundle");
+var voice = new AudioClipAddress(bundleAudio, "Assets/MyAudio/voice.wav");
+var voiceRequest = AudioKit.PlayVoiceAsync(voice);
+```
+
+Provider 配置和引用身份属于资源身份的一部分。只有同一个 Provider 实例、相同完整 key 的在途加载/租约可以合并；不同 Bundle/Project/后端或不同 key 不按 `clip.name`、Clip 对象相等合并所有权。应复用已配置的 Provider 实例，而不是每次 Play 创建新后端。接口 `IAudioClipProvider` 只负责同步取得和主线程异步完成投递，成功必须返回独立 `AudioClipLease`；Audio 不查 Module 或建立全局资源注册表。Provider 的调用、进度、完成与租约归还均须在 Unity 主线程。
+
+| 阶段/证据 | 语义 |
+|---|---|
+| `Loading` | 等待后端取得，Handle 无效；不创建播放 Source，也不占 Sound 播放预算 |
+| `Ready` / `AssetReady` | 资产已取得并保活；异步仍可能等待 `LoadAudioData`，`Progress=1` 只表示资产取得 |
+| `DataReady` | 音频数据达到 `Loaded`；Streaming 不承诺全文件驻留内存 |
+| `Accepted` | 原 Voice 已绑定责任与句柄；Music/Voice off、通道 Pause 等可能尚未首次启播 |
+| `Started` / `HasStarted` | 已提交原 `Source.Play`，不是首采样、DSP 或实际可听见保证 |
+| `Ended` / `IsDone` | 本请求恰一次终结；`EndReason`、原 Handle、已开始证据和 `Error` 保留，不复活为新请求 |
+
+`Cancel` 可在加载、数据等待、提交重入或已接纳播放期间使用，只取消/停止自己的原请求。`Completed` 仅自然完成，其他终态区分 `Canceled`、`Stopped`、`Replaced`、`Unavailable`、`Failed`、`Shutdown`、`Rejected`。异步取得/开始异常保存在 `Error`；同步取得或提交异常仍抛给调用方。`onFinished` 仍只在自然完成调用，不当作全终态通知。自然回调进入前命名请求已是 Completed，但保留原 4.1 回调窗口，原 Handle 可仍有效；Clip 保活直到回调返回，不提前归还资源。
+
+Exclusive 的最新有效命名请求撤销同拓扑旧 pending；旧曲在新资源/数据可提交前继续播放，加载失败不先截断旧曲。普通直接 Clip 播放、Stop、通道 Dispose、Sound off 和 Shutdown 同样约束 pending。Overlap 的等待者独立取消，共享 producer 继续。旧会话迟到结果只能归还原资源责任，不能进入新宿主、创建 Source 或投递新会话的开始/失败通知。后端没有物理取消能力时，Audio 不声称底层已经停止；永久不完成的 producer 可结束所有逻辑等待者，但只能由真实后端完成后归还生产责任。
+
+同步命名入口只承诺资产取得同步，不将后台解码/Streaming 伪装为同步加载；原 4.1 数据等待收尾仍适用。同一 Audio 缓存条目尚在异步取得时，同步取得明确抛错，不阻塞主线程或抢占在途 producer；使用异步等待者即可共享结果。跨 Audio 缓存的实际 ResLoader 在途同步限制仍遵守 Resource 后端原契约。
+
+### 租约、预加载与缓存
+
+- 直接 `AudioClip` 入口继续借用，调用方负责保活；Audio 不自行 `Destroy` 或 `Resources.UnloadAsset`。
+- `ResLoaderAudioClipProvider` 每个 producer 持有一个真正的 YL `ResLoader`，同时保活 Clip 及 Bundle 依赖。同步/异步取得后的物理释放交给 Loader/Resource，Audio 只归还 owner。
+- 等待者、数据等待、循环/暂停、Music/Voice off 后待重播、Crossfade 尾轨和未被业务取消的 one-shot 都保留自己的有效责任；Source 闲置池不持有 Clip 资源。
+- `AudioKit.AcquireClip(address)` 提供同步预加载租约，必须由调用方 `Dispose`。显式租约可跨 Audio Shutdown 继续由调用方保活；关闭的缓存不再接纳它进入闲置缓存，最终 Dispose 才归还其 owner。
+- `ClipCacheCapacity` 限制闲置条目数，`ClipCacheIdleSeconds` 使用 unscaled 时钟；两个值都大于 0 才缓存。`ClearClipCache()` 只释放当下闲置条目。缩容、到期与清缓存不卸载活跃责任，淘汰释放重入后会重新检查条目是否已被取得。Shutdown 释放闲置缓存；不采用 XF 固定 600 秒策略。
+
+```csharp
+AudioKit.ClipCacheCapacity = 4;
+AudioKit.ClipCacheIdleSeconds = 15;
+using (var preload = AudioKit.AcquireClip(music))
+{
+    // 原租约保活，命名播放可共享同一完整资源身份。
+    AudioKit.PlayMusicNamed(music);
+}
+AudioKit.ClearClipCache(); // 活跃 Music 不受影响
+```
+
+### 可选 XFAB 借用
+
+`Integrations/XFAB/Audio/` 独立程序集 `YLFramework.Audio.XFAB` 由包版本约束启用，`autoReferenced=false`，不反向进入正式 Runtime，也不自动注册或纳入默认框架导出。使用方显式引用它并构造 `YLFramework.Integrations.XFAB.Audio.XfabAudioClipProvider(projectName)`，以 `new AudioClipAddress(provider, assetName)` 调用上述入口。
+
+XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/Shutdown 仅结束本地观察，不调用 `UnloadAsset`、`Abort` 或清除其他完成监听。真正保活与物理释放必须由外部明确的 XFAB 资源 owner 管理；Audio 租约不伪装成 XFAB 全局租约，也不能阻止外部 owner 提前卸载。正式 Audio 组件和素材组的 Editor 接入另行整合，此处不改原游戏 AudioKit/XF 链路或 MainModule Bundle。
+
 ## 模块定位
 
-AudioKit 只播放外部提供的 `AudioClip`，可选接入 Unity Audio Mixer。缺省音乐支持最多两轨 Crossfade（Linear/EqualPower，API 默认 EqualPower），缺省人声为独占槽位并支持 2D、固定世界位置和跟随 Transform；命名通道可以独立循环、独占替换或使用独立 Source 重叠，也可受控独占借入调用方 Source。音效支持总量/每 Clip 并发上限、请求优先级抢占、独立闲置缓存预算与显式预热、会话统计、同步开始回调、均匀/加权随机、空间播放及按 Clip 身份的帧窗口去重。控制、单请求淡变与只读进度统一使用代次安全的 `AudioHandle`，自动首尾淡变由 `AudioSoundOptions.AutoFade` 配置。分类开关与音量保留六个 PlayerPrefs 键和合法存档；临时静音、并发/Clip/缓存配置、统计、淡变与 Mixer 路由不持久化。命名通道仅在显式提供稳定存储身份时持久化局部 Volume/Mute。两级并发默认不限、Priority=0、闲置缓存=10 且不自动预热，组件 Crossfade、自动淡变与 timeScale 自动暂停默认关闭。旧组件保留有效配置，无需批量重存；Options 类与 API 迁移见上文，回调签名迁移及高级生命周期见下文。
+AudioKit 的直接 `AudioClip` 入口只借用外部资源；显式命名入口通过 Audio 窄 Provider 取得并持有资源，可选接入 Unity Audio Mixer。缺省音乐支持最多两轨 Crossfade（Linear/EqualPower，API 默认 EqualPower），缺省人声为独占槽位并支持 2D、固定世界位置和跟随 Transform；命名通道可以独立循环、独占替换或使用独立 Source 重叠，也可受控独占借入调用方 Source。音效支持总量/每 Clip 并发上限、请求优先级抢占、独立闲置缓存预算与显式预热、会话统计、同步开始回调、均匀/加权随机、空间播放及按 Clip 身份的帧窗口去重。控制、单请求淡变与只读进度统一使用代次安全的 `AudioHandle`，自动首尾淡变由 `AudioSoundOptions.AutoFade` 配置。分类开关与音量保留六个 PlayerPrefs 键和合法存档；临时静音、并发/Clip/缓存配置、统计、淡变与 Mixer 路由不持久化。命名通道仅在显式提供稳定存储身份时持久化局部 Volume/Mute。两级并发默认不限、Priority=0、闲置 Source 缓存=10 且不自动预热，Clip 缓存默认关闭，组件 Crossfade、自动淡变与 timeScale 自动暂停默认关闭。旧组件保留有效配置，无需批量重存；Options 类与 API 迁移见上文，回调签名迁移及高级生命周期见下文。
 
-- 不加载名称、不缓存资源、不卸载或销毁 Clip；资源系统或业务所有者负责加载和释放。
+- 直接 Clip API 不接管资源；命名加载与受控 Clip 缓存只管理后端租约，物理卸载/销毁仍由真正资源 owner 决定。
 - 不提供旧 Loader、裸播放器、Fluent 构建器或 Audio 专属 Binding/注销包装，不保留旧 API 兼容层。
 - Mixer 仅提供可选输出路由、显式暴露参数控制和 Snapshot 切换；句柄淡变控制单请求包络，与音乐 Crossfade 独立叠乘。不提供逻辑分组预算、重要音效无限豁免、距离/可听度抢占、音源虚拟化、自动 Ducking、Mixer 参数淡变调度、DSP 调度、防重复随机、HRTF 或遮挡。
 - namespace 为 `YLFramework.Services.Audio`，与 Action 共用 `YLFramework.Runtime`；音效动作桥接内建，不是可拆卸程序集。

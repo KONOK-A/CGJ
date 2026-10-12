@@ -56,14 +56,17 @@ namespace YLFramework.Tests.Audio
                 typeof(AudioKitSettings), typeof(AudioEmitter), typeof(AudioMusicPlayer), typeof(PlaySoundAction),
                 typeof(PlaySoundExtension), typeof(AudioKitDiagnostics), typeof(AudioKitDebugWindow),
                 typeof(AudioOutputRoute), typeof(AudioOutputRoute.RouteMode), typeof(AudioMixerConfig),
-                typeof(AudioMixerControl), typeof(AudioMixerController)
+                typeof(AudioMixerControl), typeof(AudioMixerController), typeof(AudioChannel), typeof(AudioCategory), typeof(AudioChannelMode),
+                typeof(AudioClipAddress), typeof(AudioClipLease), typeof(IAudioClipProvider), typeof(ResLoaderAudioClipProvider),
+                typeof(AudioPlayRequest), typeof(AudioPlayState), typeof(AudioPlayEnd)
             };
             var apiTypes = module.ApiTypes.Select(definition => definition.Type).ToArray();
             foreach (var type in requiredTypes) CollectionAssert.Contains(apiTypes, type);
             CollectionAssert.AreEquivalent(runtime.GetExportedTypes().Where(type =>
                 type.Namespace == "YLFramework.Services.Audio" ||
                 type.Namespace != null && type.Namespace.StartsWith("YLFramework.Services.Audio.", StringComparison.Ordinal)), apiTypes);
-            Assert.IsFalse(apiTypes.Any(type => type.Name.Contains("Loader") || type.Name.Contains("Fluent")));
+            Assert.IsFalse(apiTypes.Any(type => type.Name.Contains("Fluent")));
+            CollectionAssert.DoesNotContain(apiTypes, typeof(YLFramework.Services.Resource.ResLoader));
             CollectionAssert.DoesNotContain(apiTypes, typeof(AudioManager));
             CollectionAssert.DoesNotContain(apiTypes, typeof(AudioVoice));
             CollectionAssert.DoesNotContain(apiTypes, typeof(SoundDeduplicator));
@@ -315,13 +318,15 @@ namespace YLFramework.Tests.Audio
                 "StopVoice", "PauseVoice", "ResumeVoice", "PlaySound", "PlaySoundAt", "PlaySoundFollowing", "PlayRandomSound",
                 "StopAllSound", "GetPlayingSounds", "CopyPlayingSounds", "PlayWeightedRandomSound", "TrySelectWeightedRandomClip",
                 "PlayMusicWithOptions", "PlayVoiceWithOptions", "CrossFadeMusic", "SetClipSoundLimit", "RemoveClipSoundLimit",
-                "ClearClipSoundLimits", "GetEffectiveClipSoundLimit", "GetSoundCount", "PrewarmSounds", "ResetSoundStats" },
+                "ClearClipSoundLimits", "GetEffectiveClipSoundLimit", "GetSoundCount", "PrewarmSounds", "ResetSoundStats", "RegisterChannel",
+                "PlayMusicNamed", "PlayVoiceNamed", "PlaySoundNamed", "CrossFadeMusicNamed", "PlayMusicAsync", "PlayVoiceAsync",
+                "PlaySoundAsync", "CrossFadeMusicAsync", "AcquireClip", "ClearClipCache" },
                 kit.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                     .Where(method => !method.IsSpecialName).Select(method => method.Name), "Do not add or replace legacy Play overloads.");
             var propertyNames = new[] { "Settings", "Music", "Voice", "SoundCount", "PlaySoundMode",
-                "GlobalFrameCountForIgnoreSameSound", "SoundFrameCountForIgnoreSameSound", "SoundConcurrency", "SoundCacheCapacity", "SoundStats" };
+                "GlobalFrameCountForIgnoreSameSound", "SoundFrameCountForIgnoreSameSound", "SoundConcurrency", "SoundCacheCapacity", "SoundStats", "ClipCacheCapacity", "ClipCacheIdleSeconds" };
             var propertyTypes = new[] { typeof(AudioKitSettings), typeof(AudioHandle), typeof(AudioHandle), typeof(int),
-                typeof(AudioKit.PlaySoundModes), typeof(int), typeof(int), typeof(AudioSoundConcurrency), typeof(int), typeof(AudioSoundStats) };
+                typeof(AudioKit.PlaySoundModes), typeof(int), typeof(int), typeof(AudioSoundConcurrency), typeof(int), typeof(AudioSoundStats), typeof(int), typeof(double) };
             CollectionAssert.AreEquivalent(propertyNames, kit.GetProperties(BindingFlags.Public | BindingFlags.Static).Select(property => property.Name));
             for (var i = 0; i < propertyNames.Length; i++)
             {
@@ -497,11 +502,11 @@ namespace YLFramework.Tests.Audio
                 typeof(AudioSoundOptions).GetProperties(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly).Select(property => property.Name));
             Assert.IsEmpty(typeof(AudioSoundOptions).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 "Request copying is internal; do not add a public Clone API.");
-            CollectionAssert.AreEquivalent(new[] { "Loop", "Volume", "Pitch", "PlaySoundMode", "MinDistance", "MaxDistance", "RolloffMode", "OutputRoute", "AutoFade", "Priority" },
+            CollectionAssert.AreEquivalent(new[] { "Loop", "Volume", "Pitch", "PlaySoundMode", "MinDistance", "MaxDistance", "RolloffMode", "OutputRoute", "AutoFade", "Priority", "AutoPauseWhenTimeScaleZero" },
                 typeof(AudioSoundOptions).GetFields(BindingFlags.Public | BindingFlags.Instance).Select(field => field.Name));
-            var optionFields = new[] { "Loop", "Volume", "Pitch", "PlaySoundMode", "MinDistance", "MaxDistance", "RolloffMode", "OutputRoute", "AutoFade", "Priority" };
+            var optionFields = new[] { "Loop", "Volume", "Pitch", "PlaySoundMode", "MinDistance", "MaxDistance", "RolloffMode", "OutputRoute", "AutoFade", "Priority", "AutoPauseWhenTimeScaleZero" };
             var optionTypes = new[] { typeof(bool), typeof(float), typeof(float), typeof(AudioKit.PlaySoundModes?), typeof(float),
-                typeof(float), typeof(AudioRolloffMode), typeof(AudioOutputRoute), typeof(AudioAutoFade), typeof(int) };
+                typeof(float), typeof(AudioRolloffMode), typeof(AudioOutputRoute), typeof(AudioAutoFade), typeof(int), typeof(bool) };
             for (var i = 0; i < optionFields.Length; i++)
                 Assert.AreEqual(optionTypes[i], typeof(AudioSoundOptions).GetField(optionFields[i]).FieldType, optionFields[i]);
             var defaults = AudioSoundOptions.Defaults;
@@ -515,6 +520,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(default(AudioOutputRoute), defaults.OutputRoute);
             Assert.AreEqual(default(AudioAutoFade), defaults.AutoFade);
             Assert.AreEqual(0, defaults.Priority);
+            Assert.IsFalse(defaults.AutoPauseWhenTimeScaleZero);
             var settings = typeof(AudioKitSettings);
             CollectionAssert.AreEquivalent(new[] { "IsSoundOn", "IsMusicOn", "IsVoiceOn", "SoundVolume", "MusicVolume", "VoiceVolume",
                 "IsSoundMuted", "IsMusicMuted", "IsVoiceMuted", "MusicOutputGroup", "VoiceOutputGroup", "SoundOutputGroup", "IsOn" },

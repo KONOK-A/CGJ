@@ -25,7 +25,7 @@ namespace YLFramework.Services.Audio
 
     /// <summary>当前 Audio 会话内的命名控制身份。Dispose 只撤销自己的登记与请求；旧身份不能控制同名新通道。</summary>
     /// <remarks>所有操作须在 Unity 主线程调用。分类音量与本通道音量相乘，静音取 OR；分类 On/Off 语义保持不变。</remarks>
-    public sealed class AudioChannel : IDisposable
+    public sealed partial class AudioChannel : IDisposable
     {
         internal readonly AudioManager Owner;
         private readonly HashSet<AudioVoice> mRequests = new HashSet<AudioVoice>();
@@ -33,6 +33,7 @@ namespace YLFramework.Services.Audio
         private float mVolume = 1f;
         private ulong mPauseVersion;
         internal ulong Epoch { get; private set; }
+        internal ulong PendingVersion;
         /// <summary>区分大小写的登记名，不用作隐式存储身份。</summary>
         public string Name { get; }
         /// <summary>显式稳定持久化身份；null 表示不读写任何通道偏好键。</summary>
@@ -101,7 +102,7 @@ namespace YLFramework.Services.Audio
             PlayWithSnapshot(clip, AudioPlaybackOptions.Capture(options), onStarted, onFinished, source: source, borrowed: true);
         internal AudioHandle PlayWithSnapshot(AudioClip clip, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started = null, Action<AudioClip, AudioHandle> finished = null,
-            AudioResourceLease resource = null, AudioSource source = null, bool borrowed = false)
+            AudioResourceLease resource = null, AudioSource source = null, bool borrowed = false, bool namedCommit = false)
         {
             try
             {
@@ -119,6 +120,8 @@ namespace YLFramework.Services.Audio
                 if (Category == AudioCategory.Sound && !AudioKit.Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
                 { AudioKit.SoundCounters.DedupRejectedCount++; return default; }
                 var epoch = ++Epoch;
+                if (!namedCommit && Mode == AudioChannelMode.Exclusive) Owner.CancelPending(Category, this, AudioPlayEnd.Replaced);
+                if (!IsValid || Epoch != epoch || resource != null && !resource.CanBind) return default;
                 if (Mode == AudioChannelMode.Exclusive) StopRequests(AudioRequestEnd.Replaced);
                 if (!IsValid || Epoch != epoch) return default;
                 if (Category == AudioCategory.Sound)
@@ -146,7 +149,14 @@ namespace YLFramework.Services.Audio
             if (failures != null) throw new AggregateException("Audio channel cleanup failed.", failures);
         }
         /// <summary>停止调用进入时的请求，不停其他通道或清理重入中创建的新代次。</summary>
-        public void Stop() { if (!IsValid) return; Epoch++; StopRequests(AudioRequestEnd.Stopped); }
+        public void Stop()
+        {
+            if (!IsValid) return;
+            Epoch++; PendingVersion++;
+            var pending = Owner.PendingSnapshot(Category, this);
+            try { StopRequests(AudioRequestEnd.Stopped); }
+            finally { AudioManager.EndPending(pending, AudioPlayEnd.Stopped); }
+        }
         /// <summary>局部暂停也应用于后续本通道请求；不会覆盖逐请求手动暂停。</summary>
         public void Pause() { if (!IsValid) return; mPauseVersion++; mPaused = true; foreach (var voice in mRequests) voice.SetChannelPaused(true); }
         /// <summary>只解除本通道暂停，不解除请求的手动或自动暂停。</summary>
@@ -172,6 +182,7 @@ namespace YLFramework.Services.Audio
             if (mDisposed) return;
             mDisposed = true; Epoch++;
             Owner.UnregisterChannel(this);
+            Owner.CancelPending(Category, this, (AudioPlayEnd)reason);
             StopRequests(reason);
         }
     }

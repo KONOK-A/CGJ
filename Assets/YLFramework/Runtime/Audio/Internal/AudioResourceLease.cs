@@ -12,10 +12,27 @@ namespace YLFramework.Services.Audio
         internal bool IsBound { get; private set; }
         internal bool IsReleased { get; private set; }
         private IDisposable mResource;
+        private Action<AudioRequestEnd> mEnded;
+        private Action<AudioHandle> mAccepted;
+        internal bool CanBind => !IsBound && !IsReleased && Session == AudioKit.SoundSession;
 
-        internal AudioResourceLease(IDisposable resource)
+        internal AudioResourceLease(IDisposable resource, Action<AudioRequestEnd> ended = null, Action<AudioHandle> accepted = null)
         {
             mResource = resource ?? throw new ArgumentNullException(nameof(resource));
+            mEnded = ended;
+            mAccepted = accepted;
+        }
+
+        internal void Accept(AudioHandle handle)
+        {
+            var accepted = mAccepted; mAccepted = null;
+            accepted?.Invoke(handle);
+        }
+
+        internal void End(AudioRequestEnd reason)
+        {
+            var ended = mEnded; mEnded = null;
+            ended?.Invoke(reason);
         }
 
         internal void Bind()
@@ -34,6 +51,7 @@ namespace YLFramework.Services.Audio
         {
             if (IsReleased) return;
             IsReleased = true;
+            mAccepted = null;
             var resource = mResource;
             mResource = null;
             try { resource.Dispose(); }

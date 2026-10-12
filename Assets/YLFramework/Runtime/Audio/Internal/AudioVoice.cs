@@ -103,6 +103,7 @@ namespace YLFramework.Services.Audio
                 SetVolume(sharedVolume);
                 SetMute(muted);
                 var handle = new AudioHandle(this);
+                resource?.Accept(handle);
                 if (mBorrowed == null) Source.gameObject.SetActive(true);
                 if (IsValid(generation) && enabled && startImmediately) StartSource();
                 return handle;
@@ -301,7 +302,7 @@ namespace YLFramework.Services.Audio
             var callback = mOnFinished; mOnFinished = null;
             // 回调可停止并复用同一 Voice；旧资源保活到原自然通知返回，之后只释放局部责任。
             var resource = mResource; mResource = null;
-            try { callback?.Invoke(clip, handle); }
+            try { resource?.End(AudioRequestEnd.Completed); callback?.Invoke(clip, handle); }
             finally
             {
                 try { if (Active && Generation == generation) Stop(AudioRequestEnd.Completed); }
@@ -323,7 +324,7 @@ namespace YLFramework.Services.Audio
                 else if (channel != null) mOwner.ReleaseChannelVoice(this);
                 else ResetPlayback();
             }
-            finally { resource?.Dispose(); }
+            finally { resource?.End(reason); resource?.Dispose(); }
         }
         internal void ResetPlayback()
         {
