@@ -170,7 +170,7 @@ namespace YLFramework.Editor.Resource
             //生成资源名引用文件
             if (GUILayout.Button(LocalText.GenerateResReference))
             {
-                RunOperation(() => { BuildScript.WriteResReferenceClass(); return true; }, "资源常量生成入口已执行。该工具的完整可靠性修复属于阶段 6.3。");
+                RunOperation(() => { BuildScript.WriteResReferenceClass(); return true; }, "资源常量已生成到 Assets/YLFrameworkData/YLResData.cs。业务 asmdef 请引用 YLFramework.Generated.ResourceNames；编译结果以 Unity Console 为准。");
             }
             //构建按钮
             using (new EditorGUI.DisabledScope(_pending != null || _precheckError != null || !_hasBuilds))

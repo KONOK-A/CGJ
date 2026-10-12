@@ -57,7 +57,17 @@
 - 取消不创建输出或临时构建目录；原生构建失败、返回 null、数据表写入/回读失败时不发布。发布/清理中的可恢复文件系统异常回滚旧目录；若回滚本身也受磁盘/权限错误阻止，保留 `Temp/YLResourceBuild/<transaction>/` 备份并报告恢复位置。多目录发布不承诺断电/进程崩溃级原子性，也不承诺与外部并发写者协调。
 - 再发布保留仍存在的文件/目录 `.meta`，清理将被删叶目录自身的 `.meta` 一并纳入事务，不让 Unity 因孤立 metadata 重建空输出目录。构建与清理不支持 Undo。
 - `AssetBundleExporter.BuildDataTable` 的独立调用仅更新当前平台、已构建且归属明确的输出目录；默认路径包含平台层，不再写到 `AssetBundles/` 父目录。源指纹由 Bundle 分配、资产路径/类型、Unity 依赖 hash 和 Bundle 依赖组成；与已发布快照不一致时，要求重新构建并保留旧表，不能将当前标记状态写进旧 Bundle。通过校验后，表文件完整序列化/回读再替换，保留原 `.meta`；它不是任意路径导出或旧产物迁移入口。
-- 资源常量生成器仍为既有工具，完整可靠性与消费者程序集承载修复属于阶段 6.3；本批没有修复其多 Bundle/名称碰撞等生成缺陷。自动常量生成与 Bundle 发布结果分开报告，不应把 Bundle 构建成功视为常量源码编译通过。
+- 自动常量生成与 Bundle 发布结果分开报告：Bundle 已成功发布后，常量失败会明确警告并保留旧源码；Bundle 构建成功不等于常量源码编译通过。
+
+### 资源常量源码与消费者
+
+- 使用窗口的资源常量按钮或 `BuildScript.WriteResReferenceClass()`，在复用上述来源、子工程、Bundle 分组及依赖归属预检后，一次生成所有有效 Bundle。单独生成只读取当前标记，不要求事先构建，不修改 Bundle 输出；构建后的自动生成则核验已发布源指纹并使用该次构建的完整 owner 快照。
+- 固定源码路径为 `Assets/YLFrameworkData/YLResData.cs`，namespace 为 `YLFramework.Services.Resource`。它是**项目消费者源码**，不属于 `YLFramework.Runtime`，也不进入默认 UnityPackage 导出。不要把业务源码放入这个生成专用目录。
+- 首次在空目录生成 `YLFramework.Generated.ResourceNames.asmdef`：无 Framework/Editor/UnityEngine/插件依赖，`autoReferenced=true`。`Assembly-CSharp` 等预定义程序集自动引用；业务 asmdef 必须在 `references` 中显式加入 `YLFramework.Generated.ResourceNames`（也可通过 Inspector 选择其 GUID）。不会自动改写既有业务 asmdef 或迁移消费者。
+- 每个 Bundle 一个公开类，`BundleName` 的值为原 Bundle 名；资源常量值为文件名**只去一次扩展名**后的原始键，保留大小写和中间的点，与 `ResKey` / 数据表的 `ToLowerInvariant` 查询规则一致。例：Bundle `ui-icons`、资产 `Panel.Icon.prefab` 生成 `Ui_icons.BundleName = "ui-icons"` 和 `Ui_icons.Panel_Icon = "Panel.Icon"`。
+- 标识符首字符使用 invariant 大写，完整名称中的非字母/数字/下划线替换为 `_`，数字开头加 `_`。有效输入按 ordinal 排序，重复生成结果稳定；相同源码不重写文件。无有效 Bundle、空清单/名称、非法 Bundle/namespace、类/成员规范化碰撞、同 Bundle 的小写资源键碰撞、`BundleName`/所属类名保留成员冲突，以及与已加载类型/namespace 的冲突都会明确失败，不静默跳过资源。
+- 全量校验与源码生成先于落盘，使用同目录临时文件更新，保留既有源码、asmdef 与目录 `.meta`/GUID；写入失败清理自己的暂存文件。生成文件带内容校验标记，手写文件、手动修改的生成源码/asmdef、未知文件或上级程序集配置、旧承载与孤立 metadata 均拒绝自动接管。遇到这些情况须先确认消费者承载/迁移，不应手工伪造标记绕过保护。
+- 工具校验当前 Editor 已加载的符号；后续新增或尚未成功编译的业务类型仍以 Unity Console 的实际编译结果为准。首次源码与 asmdef 的双文件发布不承诺断电/进程崩溃级原子性，也不协调外部并发写者；生成和文件更新不支持 Undo。
 
 ## 核心运行时契约（第一阶段整理后）
 

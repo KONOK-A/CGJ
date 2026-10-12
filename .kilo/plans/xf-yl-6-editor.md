@@ -1,6 +1,6 @@
 # XF × YL：阶段 6 Editor 深度融合总体方案
 
-**状态：APPROVED，阶段 6 IN PROGRESS。6.1 已完成用户验收及 Git 收口（`5781c2e`）；6.2 已获单独实施授权，实施记录见第 6.2 节，待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
+**状态：APPROVED，阶段 6 IN PROGRESS。6.1、6.2 已完成用户验收及 Git 收口（`5781c2e`、`b0a050c`）；6.3 已获单独实施授权，实施记录见第 6.3 节，待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
 
 **目标：** 保留成熟工具，把已承接的 XF Editor 支撑与 YL authoring、帮助、导出协调起来，修复真实工具链缺陷，并接入可维护的自有分析器。不是重做 Inspector 平台、资源系统或包管理器。
 
@@ -162,7 +162,7 @@
 - 独立审查与修正：只读审查发现 P1 测试全工程入口可能夹带其他 owner、P2 独立数据表可能以新源改写旧 Bundle 配置。前者新增执行前完整计划硬隔离，纯临时事务计划验证额外无 Bundle owner/外部源均拒绝；后者先观察到资产重命名后更新未拒绝的失败，再加入构建源指纹，旧表字节保持。补足 junction、中途发布失败及叶 meta 移动失败风险验证；最终 30 项全绿。原初轮运行的 owner/Bundle 名为空，897 文件指纹不变，不把潜在误删问题描述为本轮已发生的损失。
 - 保护证据：开始/结束只读核对 `AssetBundles/MainModule` 与 `Assets/StreamingAssets/MainModule` **897 个文件**的 SHA-256、大小及最后写入时间，完全一致。最终两输出根只剩原 MainModule；Bundle 标记/子工程资产/临时测试资产/事务 workspace 均无残留，场景 dirty=false，`isCompiling=false`、`scriptCompilationFailed=false`、`isUpdating=false`。原游戏、XF/XFAB/XFFSM Package、Runtime、其他 Editor 模块和现有 asmdef 均未修改。
 - 剩余边界：旧/未知目录、移动工程路径或变更 SubProject 输出名/GUID 后的旧产物只拒绝，不自动迁移。仅 Windows 实际原生 Bundle/GUI 闭环，其他平台只做目录映射与预检验证；未重跑未受影响的 Resource Runtime 全集或阶段 6 Player 综合门禁。既有资源常量生成器缺陷仍交 6.3，自动常量结果与 Bundle 发布结果分开报告，本批未修其完整可靠性或生成程序集承载。
-- 交接：6.2 定向技术完成条件已满足，具备进入 6.3 的基础；等待用户验收与 Git 收口，未 Commit/Push/Merge/Tag/Reset/Clean/切换分支。阶段 6 保持 IN PROGRESS，6.3～6.5 未实施、仍须单独授权。
+- 交接：6.2 定向技术完成条件已满足；后续用户确认已完成验收及 Git 收口，6.3 起始提交为 `b0a050c`。6.2 实施轮本身未 Commit/Push/Merge/Tag/Reset/Clean/切换分支。阶段 6 保持 IN PROGRESS，后续批次仍按单独授权推进。
 
 ### 6.3 资源常量生成可靠性与消费者承载
 
@@ -173,6 +173,22 @@
 **方案：** 保留既有 `Assets/YLFrameworkData/YLResData.cs` 路径/namespace；有存量时不搬、不覆盖手写文件、不改变 meta。当前无已查实生成物，新输出作为消费者源码，不放回 Framework Runtime，也不纳入默认导出。空承载目录可生成独立 `YLFramework.Generated.ResourceNames` asmdef、无 Runtime/Editor 依赖，预定义程序集可自动引用，业务 asmdef 显式引用；若目录已有源码/asmdef，先报告并由消费者确定承载，不能对未知业务文件批量改变程序集身份。不写泛用代码生成框架。
 
 **门禁：** 临时多 Bundle 生成类唯一、合法 C#、稳定重复生成、真实键值、规范化碰撞/空输入失败前不覆盖；writer 释放、既有 GUID 保留。用实际 Unity 编译的临时 consumer asmdef 引用产物；不以文本/正则检查代替生成源码编译。未改变的 Module 生成器只做必要同工程冒烟，不重复全部 Core 回归。
+
+#### 6.3 实施记录（2026-10-13）
+
+- 基线：`fusion/6-editor`、HEAD `b0a050cf7aecbfdedfe32d03784f929626a1aa3f`；开始工作区干净，`git ls-remote` 确认远端阶段分支同提交，远端 `integration/xf-yl` 为 `7db5806`，未擅自同步/合并。重新读取 AGENTS、批准方案、Unity `2022.3.62f3c1` 与 manifest，未改变环境配置。
+- 缺陷与修复：实际先观察到四项旧缺陷回归失败：两个 Bundle 输出三个类、`hero-icon` 成员非法、`hero.icon` 原始键被二次截断、重复成员静默丢失。保留 CodeDOM 与公开 `WriteClass(TextWriter, string)`，一次收集、完整校验、单次生成后才写 writer；provider 和内部 writer 正确释放，外部 writer 仍由调用方拥有。按 ordinal 排序和 invariant 标识符生成，原 Bundle 名/一次去扩展名的资源键原样作为常量值。
+- 名称与输入契约：完整符号中的非法字符替换为下划线、数字开头加下划线；拒绝空/不可用名称、无有效 Bundle、空资源清单、非法 Bundle/namespace、Bundle 类与成员规范化碰撞、保留的 `BundleName`/所属类名冲突、同 Bundle 的 runtime 小写键碰撞，以及与已加载类型/namespace 的身份冲突。不静默覆盖或丢资源，不修改 Resource Runtime 的查询、数据表格式或公共 API。
+- 生成承载：实际确认 `Assets/YLFrameworkData`、源码及 `.meta` 均不存在，Assets 根无上级 asmdef/asmref，也没有已查实的生成常量/反射消费者。因此首次仅在空承载创建 `YLResData.cs` 与 `YLFramework.Generated.ResourceNames.asmdef`，namespace 仍为 `YLFramework.Services.Resource`。新程序集无 Framework、Editor、UnityEngine 或插件依赖，autoReferenced=true；预定义程序集自动引用，业务 asmdef 显式引用（名称或 GUID）。不改已有消费者程序集身份，不往框架 Runtime 放生成物，默认 UnityPackage 六根清单保持不变、不携带该项目生成目录。
+- 写入与身份保护：新增窄内部 `ResReferenceOutput`，全量验证/生成先于文件操作，同目录暂存后 File.Replace/File.Move 发布；相同源码不重写，已有源码/asmdef/目录 `.meta` 不删除或重建。源码内容校验标记防止覆盖手写/修改过的文件；未知资产、旧或不完整承载、未知上级程序集、孤立 metadata、链接及其他位置的同名 asmdef 明确拒绝。asmdef 身份通过 AssetDatabase 读取，不依赖 Package 虚拟路径的物理布局。写入失败释放句柄、移除自己的暂存与首次创建但未完成发布的 asmdef。
+- 与 6.2 协作：单独生成直接复用 `SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas` 的来源/Bundle/子工程/依赖归属安全预检，不操作 Bundle 输出；自动生成保留构建确认/事务路径，在成功发布后核验源指纹并使用同次计划中的所有 owner map，不再次随意扫描得出不同清单。Bundle 发布成功与常量失败分别报告，失败保留旧常量。跨 owner 的生成入口拒绝已有真实回归；分组、标记、资源身份与现有 MainModule/XFAB 管线未改。
+- 本轮实际验证：Unity 导入及脚本编译通过；`ResourceCodeGenerationTests` **22 项通过、0 失败**，覆盖多 Bundle/排序文化无关/真实键值、非法与空输入/类成员/runtime 键/namespace 碰撞、失败不覆盖、未知源码/asmdef与手写修改/孤立 meta 拒绝、同源码时间戳不变、实际 Windows 文件锁失败及更新后 metadata 保留。独立审查提出空集合、runtime 小写键和 namespace 缺口，三项先实际失败后修复并全绿；Package 路径的故障推断在当前环境未复现，仍改为资产 API 读取避免物理路径假设。
+- 实际消费者编译门禁：新增一个窄 `ResourceCodeCompilationTests` UnityTest，**1 项通过、0 失败**；仅在无外部 Bundle 标记/SubProject、固定生成目标及唯一临时根预先不存在时运行。自建默认/子工程 TextAsset，三个 Bundle（含点、连字符、数字开头和 keyword-like 名称）通过正式入口生成真实源码；实际 Unity csc/domain reload 后核对三个类型及常量值，并编译和调用显式引用生成程序集且同时引用 Runtime 的隔离业务 asmdef，以及自动引用的 `Assembly-CSharp` 消费者。验证生成程序集图无 Framework/Editor/Engine 依赖；实际资源碰撞和文件锁均保留旧源码，更新保留源码/asmdef/目录真实 `.meta` 字节及 GUID，再次编译可读新增常量；清理临时消费者、源资产、SubProject与生成目录后再次实际编译通过。初轮仅因 GetAssemblyNameFromScriptPath 返回 `.dll` 后缀的测试断言失败，修正断言后完整门禁通过，不以生成文本替代编译。
+- 编译探针恢复保护：最终只读复核发现测试在清理后的编译等待期间中断会残留 SessionState；修正为根目录消失时清除旧恢复状态并重新执行完整前置检查，操作/清理前校验自建目录及固定输出的完整文件与 metadata 指纹，并拒绝夹带外部标记/owner。不凭旧路径字符串清理后来创建或被外部修改的目录。新增中断后输出重建/修改的独立回归 **1 项通过**，修正后的真实编译闭环重新通过并清理；本批共取得 **24 项独立定向通过结果**（22 生成、1 编译、1 恢复保护），不使用 MCP 全工程发现总数或跨 domain reload 失真的总时长冒充执行统计。
+- 编译证据增强与诊断工具差异：消费者 asmdef 改为每轮唯一身份，并断言生成/业务/预定义程序集的实际 sourceFiles 精确指向本轮源码；首轮编译必须没有 `Extra`，更新后重新编译必须出现该常量，排除复用旧消费者或旧生成 DLL 的假通过。添加这些断言时曾触发 UnityTest 对跨 reload 闭包的恢复异常，去掉迭代器中的捕获闭包后完整编译门禁再次通过。MCP 原始日志仍反复返回已删除旧探针路径的同名 asmdef 诊断，日志缓存清空工具还因其缓存文件被占用失败；未把这类返回值直接认作当前编译状态。分别核实当前 Unity 编译器消息数=0、程序集配置异常=0、原生 Console error/warning/log 均=0，旧探针在资产索引/编译图/文件系统均=0，唯一消费者与新源码的实际编译及调用通过。本轮曾通过 Unity 公共 API 仅重建脚本编译缓存（CleanBuildCache），没有清空 Library、全量 Reimport、重启 Editor 或修改 MCP/Packages；MCP 这类日志一致性问题的根因未最终确认，不宣称原始 MCP 日志已净空，也不扩大本批修复范围。
+- 保护与影响核查：开始/结束核对 MainModule 两输出目录 **897 个文件**的 SHA-256、大小和最后写入时间完全一致。最终 Bundle 标记/SubProject/临时源码与生成目录均无残留，活动场景仍为 `Assets/Scenes/Main.unity`、dirty=false，`isCompiling=false`、`scriptCompilationFailed=false`、`isUpdating=false`。既有脚本/asmdef `.meta` 未修改；新增工具/测试 `.meta` 均由 Unity 导入生成。未修改原游戏、Prefab/Scene、XF/XFAB/XFFSM Package、Packages、ProjectSettings、Runtime、Module 创建器与默认导出清单。Module 只核对不交叉的输出路径/程序集/引用契约并随工程编译，没有重跑完整生成测试。
+- 证据复用与限制：复用 6.2 已验收的标记、分组、构建事务及实际 Bundle/ResData 闭环，不机械重跑 Resource/Core/Audio/UI/Editor 全集，不运行 Player 构建或最终综合验收。新生成目录是工具专用承载，不自动迁移已有/手写目录；符号检查限当前 Editor 已加载类型，后续新类型或未成功编译的消费者以 Unity 实际诊断为准。首次源码/asmdef 双文件发布不承诺断电/崩溃级原子性，不协调外部并发写者；其他平台文件替换行为未实际运行。
+- 交接：6.3 定向技术完成条件已满足，具备进入 6.4 的技术基础；等待用户验收与 Git 收口。本轮未 Commit/Push/Merge/Tag/Reset/Clean/切换分支，未实施 6.4/6.5，阶段 6 整体保持 IN PROGRESS。
 
 ### 6.4 自有分析器源码化与接入
 
@@ -204,7 +220,7 @@
 
 | 决策 | 已确认边界 |
 |---|---|
-| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1 已验收/Git 收口，6.2 已授权实施，待用户验收/Git 收口，6.3～6.5 不自动衔接 |
+| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1/6.2 已验收/Git 收口，6.3 已授权实施，待用户验收/Git 收口，6.4/6.5 不自动衔接 |
 | Editor 程序集结构 | 保留普通 Editor、Core Editor、独立 Help 三套程序集；不合并程序集，不新建大型编辑器管理中心 |
 | 成熟工具保留 | Module 创建器、SerializedDictionary Drawer、Audio Inspector、Help 与 Resource 工具优先保留；修复真实缺陷而非因未使用退役 |
 | 默认 Plugins 导出 | 保持整个 Plugins 递归导出；插件许可核查暂缓，不据此宣称已获公开再分发授权 |
