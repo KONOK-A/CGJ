@@ -1,5 +1,5 @@
-﻿using System.IO;
-using System.Linq;
+﻿using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Utilities.Extensions;
@@ -30,55 +30,30 @@ namespace YLFramework.Editor.Resource
     public class BuildScript
     {
         /// <summary>
-        /// 构建 AssetBundle：清理未使用的 Bundle 名、构建默认与各子工程的 Bundle，
-        /// 生成版本配置与资源名常量类，最后把产物复制到 StreamingAssets 并生成资源数据表。
+        /// 预检并确认当前平台的 YL 输出，全部 Bundle 与数据表在暂存目录成功后统一发布。
+        /// 未知归属、取消及构建失败不替换旧产物。平台须已在 Unity Build Settings 激活。
         /// </summary>
         /// <param name="buildTarget">构建目标平台。</param>
         public static void BuildAssetBundles(BuildTarget buildTarget)
         {
-            // 先清空一下没用的 ab 名字
-            AssetDatabase.RemoveUnusedAssetBundleNames();
-
-            var defaultSubProjectData = new SubProjectData();
-            var subProjectDatas = SubProjectData.SearchAllInProject();
-            SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaultSubProjectData, subProjectDatas);
-            
-            var outputPath = Path.Combine("AssetBundles", GetPlatformName());
-            outputPath.CreateDirIfNotExists();
-            
-            BuildPipeline.BuildAssetBundles(outputPath,defaultSubProjectData.Builds.ToArray(),
-                BuildAssetBundleOptions.ChunkBasedCompression,buildTarget);
-            
-            GenerateVersionConfig();
-            
-            var finalDir = Application.streamingAssetsPath + "/AssetBundles/" + GetPlatformName();
-            finalDir.DeleteDirIfExists();
-            finalDir.CreateDirIfNotExists();
-            
-            FileUtil.ReplaceDirectory(outputPath, finalDir);
-
-            AssetBundleExporter.BuildDataTable(defaultSubProjectData.Builds.Select(b => b.assetBundleName).ToArray());
-
-            foreach (var subProjectData in subProjectDatas)
-            {
-                outputPath = Path.Combine("AssetBundles/" + subProjectData.Name,
-                    GetPlatformName());
-                outputPath.CreateDirIfNotExists();
-
-                BuildPipeline.BuildAssetBundles(outputPath, subProjectData.Builds.ToArray(),
-                    BuildAssetBundleOptions.ChunkBasedCompression, buildTarget);
-                finalDir = Application.streamingAssetsPath + "/" + subProjectData.Name + "/AssetBundles/" +
-                           GetPlatformName();
-
-                finalDir.DeleteDirIfExists();
-                finalDir.CreateDirIfNotExists();
-
-                FileUtil.ReplaceDirectory(outputPath, finalDir);
-                AssetBundleExporter.BuildDataTable(subProjectData.Builds.Select(b => b.assetBundleName).ToArray(),
-                    finalDir + "/");
-            }
-            AssetDatabase.Refresh();    
+            BuildWithConfirmation(buildTarget);
         }
+
+        internal static bool BuildWithConfirmation(BuildTarget buildTarget)
+        {
+            if (!RunBuild(buildTarget, summary => EditorUtility.DisplayDialog("确认构建 YL AssetBundle", summary, "构建", "取消"),
+                    (path, builds, target) => BuildPipeline.BuildAssetBundles(path, builds,
+                        BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.StrictMode, target))) return false;
+            Debug.Log("YL AssetBundle 与 ResData 构建及发布成功。");
+            // 常量工具保留既有入口，与 Bundle 发布分开报告；完整修复在阶段 6.3。
+            try { GenerateVersionConfig(); }
+            catch (Exception exception) { Debug.LogWarning("Bundle 已发布，但资源常量生成失败：" + exception.Message); }
+            return true;
+        }
+
+        internal static bool RunBuild(BuildTarget target, Func<string, bool> confirm,
+            Func<string, AssetBundleBuild[], BuildTarget, AssetBundleManifest> builder) =>
+            ResourceBuildOperation.Execute(ResourceBuildOperation.CreatePlan(target, true), true, confirm, builder);
 
         private static void GenerateVersionConfig()
         {
@@ -100,9 +75,5 @@ namespace YLFramework.Editor.Resource
             AssetDatabase.Refresh();
         }
 
-        private static string GetPlatformName()
-        {
-            return AssetBundleHelper.GetPlatformName();
-        }
     }
 }

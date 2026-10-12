@@ -1,6 +1,6 @@
 # XF × YL：阶段 6 Editor 深度融合总体方案
 
-**状态：APPROVED，阶段 6 IN PROGRESS。6.1 已获单独实施授权，实施记录见第 6.1 节；待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
+**状态：APPROVED，阶段 6 IN PROGRESS。6.1 已完成用户验收及 Git 收口（`5781c2e`）；6.2 已获单独实施授权，实施记录见第 6.2 节，待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
 
 **目标：** 保留成熟工具，把已承接的 XF Editor 支撑与 YL authoring、帮助、导出协调起来，修复真实工具链缺陷，并接入可维护的自有分析器。不是重做 Inspector 平台、资源系统或包管理器。
 
@@ -135,7 +135,7 @@
 - 真实行为证据：Clipboard 原缺陷回归先观察到空引用异常、混值复制未拒绝、错误类型及损坏内容仍可粘贴的失败；默认工厂观察到多余 Legacy 模块失败，修复后通过。验证了实际 Undo/Redo、临时 Prefab instance override 的撤销/重做与原 Prefab 字节/GUID 不变、同值多对象标量/结构/数组编辑及 Undo、混值零写入拒绝、兼容/不兼容 ObjectReference、结构/数组完整粘贴、保留待应用修改与系统 Clipboard、缺失类型/错误签名的确定性反馈。
 - 独立审查与修正：未发现 P1/P2 产品问题，指出一项 Settings 测试延迟 focus 清理问题。实际执行本次设置操作新增的原生回调，确认同步恢复的 SceneView 焦点会再次被覆盖；修正测试只摘下并执行自己调用产生的原生 Show focus 回调，再恢复/关闭自己拥有的窗口与原焦点，不清空或调用其他全局回调。配置 14 项重新通过；已有 Settings 窗口且焦点在 SceneView 的分支另行确认测试后仍为 SceneView、残留 Settings focus 回调为 0，最后仅清理探针自建窗口。
 - 隔离/验证限制：三个现有 Editor asmdef、Runtime 与公开类型/序列化身份不变；身份测试通过，Unity Player 编译程序集图无自有 Editor 程序集或 Editor 依赖边。未修改原游戏/正式 Scene/Prefab/Packages/ProjectSettings 配置或 Bundle。未重跑 Module/UI/Audio/Foundation 全集，未运行 Player 构建或阶段 6 综合验收；没有切换输入模式或在其他 Unity 版本执行，私有 Clipboard API 的其他版本仅由精确签名门禁明确拒绝，不承诺跨版本成功。
-- 交接：6.1 定向技术门禁已满足，具备继续 6.2 的前置基础；用户验收与 Git 收口仍待处理。阶段 6 整体保持 IN PROGRESS，6.2～6.5 未实施、仍须单独授权。
+- 交接：6.1 定向技术门禁已满足；后续用户确认已完成验收及 Git 收口，6.2 起始提交为 `5781c2e`。阶段 6 整体保持 IN PROGRESS，后续批次仍按单独授权推进。
 
 ### 6.2 自有 Resource 操作安全与真实界面
 
@@ -146,6 +146,23 @@
 **方案：** 清空与替换只针对当前目标的明确 YL 默认/子工程产物目录，保留父目录及未知兄弟目录；确认展示实际路径，拒绝越界/根目录/重叠 owner，取消不产生副作用。BuildTarget 和路径名同源，所有预检在 BuildPipeline/删除之前；构建失败不得替换旧可用产物。窗口显示 activeBuildTarget 并引导 Unity Build Settings，不建设自己的平台切换器。标记支持既有单选契约，修改 importer 应具备 Undo 或明确的可逆操作与保存/重导入验证。
 
 **门禁：** 自有临时资产/目录中的标记→取消→重导入、菜单状态、不支持目标、路径越界、子工程边界/跨 owner、取消清理、清理保留无关兄弟目录；必要 importer Undo/Redo。新增测试只锁真实缺陷。一次隔离的小 Bundle 构建/数据表读取验证，可用临时输出承载，不写原 AssetBundles/MainModule 或 StreamingAssets/MainModule；窗口真实 GUI 冒烟、关闭后无重复事件订阅。现有 Resource Runtime 回归只选数据表/路径直接消费者。
+
+#### 6.2 实施记录（2026-10-13）
+
+- 基线：`fusion/6-editor`、HEAD `5781c2ed639633f1654ef90f281db8f2cb8ff47b`，开始时工作区干净；重新读取工程/global AGENTS、Unity `2022.3.62f3c1` 与 manifest。只研究自有 Resource Editor、实际标记/构建/数据表和直接 Runtime 路径消费者，没有重新研究或改造 Resource 架构。
+- 安全归属：新增普通 Editor 内部 `ResourceBuildOperation`，不改变 Runtime API/asmdef 或 SubProject 序列化身份。来源按 `Path.GetDirectoryName(assetPath)` 的完整边界分组，重复分组重新计算；同目录/嵌套目录、大小写不敏感的同输出名、同 Bundle 跨 owner、Bundle 依赖跨 owner、Bundle 文件/目录及 manifest/数据表/归属文件名称冲突均在构建前拒绝。
+- 路径/预检：BuildTarget 与目录映射同源，非当前已激活/已安装平台和播放/编译/导入状态拒绝构建。保留默认 `AssetBundles/<Platform>` → `StreamingAssets/AssetBundles/<Platform>`、子工程 `AssetBundles/<Name>/<Platform>` → `StreamingAssets/<Name>/AssetBundles/<Platform>`。清理只含当前平台叶目录；不清空 AssetBundles、StreamingAssets 或子工程父容器。
+- 既有目录保护：平台叶目录须有本工具生成的 `.yl-resource-output.json`，校验工程路径、默认身份/子工程 GUID、平台及完整文件清单；未知目录、owner 冲突、缺文件、额外文件/空目录、孤立 meta、symlink/junction、根/父目录/越界/重叠目标均安全拒绝。标记来源、SubProject 及显式 Bundle 资产也拒绝链接越界。子工程容器已有未知内容时不接管；共享根下无关兄弟目录不作为清理对象。没有自动认领旧 YL/XFAB 或 MainModule 产物的迁移机制。
+- 事务边界：确认展示实际平台、Bundle 数及绝对路径，取消前不创建目录、不写 importer、不调用 BuildPipeline。全部 owner 的非空显式 map 用 ChunkBasedCompression + StrictMode 在 `Temp/YLResourceBuild/<transaction>/<group>/<Platform>` 构建，检查 manifest/文件，按该 manifest 的直接依赖写现有 ResData 二进制格式并回读，全部成功后才发布两套输出。原生返回 null/异常及数据表失败不发布；文件系统发布/清理失败回滚。回滚也失败时保留备份并报告位置；不宣称断电/崩溃级多目录原子性。
+- 资产 metadata/源一致性：再次发布为仍存在的文件/目录保留原 `.meta`。实际验证发现叶目录孤立 `.meta` 会使 Unity 重建空目录，修正为清理时一起备份/删除、失败时一起恢复。产物记录 Bundle 分配、资产路径/类型、Unity GetAssetDependencyHash（包含源文件、meta、平台和 importer）及 Bundle 依赖的指纹；构建期间变化则拒绝发布。独立 `BuildDataTable` 只允许当前平台已构建的已知 owner 输出，并核对已发布源指纹，资产重命名/标记/内容/依赖变更后要求重新构建，保留旧表。通过校验后写临时文件并完整回读再替换，默认路径修正到平台层；不提供任意路径写入或未知目录认领。
+- 标记/窗口：菜单以 validator 更新当前单选及 checked 状态，不再从未实例化的构造函数接线、不覆盖全局 Selection 订阅；名称规则统一 invariant，已有不同 Bundle/variant 拒绝覆盖。标记/取消立即 SaveAndReimport，两次操作互为可逆，不承诺 importer Undo。窗口显示真实 activeBuildTarget、打开原生 Build Settings、显示输出预检与操作结果；保留模拟模式、常量入口、资源选择/取消。退出无效平台 Toolbar/版本输入但不删除旧偏好，构建不自动关闭窗口，关闭只撤销自己的待执行回调并解除自己的订阅。
+- 本轮实际验证：Unity 导入/脚本编译通过，最终定向 EditMode `testNamespace=YLFramework.Tests.ResourceEditor` **30 项通过、0 失败、0 跳过**（按 PassedTests/单项结果，而非 MCP 的全工程发现总数）。覆盖归属/路径/名称拒绝、未知产物保留、取消无文件及时间戳改变、null/throwing build 保留旧输出、后一个清理失败恢复前一个目标、叶目录 meta 移动失败恢复、菜单单选/多选/check 更新、文化无关标记、保存/重导入与拒绝覆盖。实际 Windows junction 分别验证标记来源、输出祖先和输出内嵌链接拒绝，测试先移除自己的链接再清理自己的 target，不递归触及外部目录。真实窗口经 Layout/Repaint 和 SendEvent 点击“选择”/“取消”，重导入后仍取消，关闭无自己的 Selection 订阅或 delayCall。
+- 小型闭环：仅用自建临时 `.bytes` TextAsset、独立 SubProject；运行前拒绝既有 Bundle 标记/SubProject，默认输出和唯一子工程输出明确不存在才允许测试创建。每次构建确认及清理前核验完整计划的四个路径和三个源资产白名单，不允许额外 owner（即使当前无 Bundle）。一次构建操作的两个原生 map 生成三个小 Bundle，读取两个 StreamingAssets 平台目录的 ResData、核验多 Bundle 组内 AbIndex、实际 AssetBundle.LoadAsset<TextAsset>；复用本次产物/manifest 验证后一个 owner 失败零发布、再次发布 metadata 保留、实际文件锁造成的中途发布失败完整回滚、独立表更新/资产重命名后拒绝更新及最终清理，不为事务用例重复原生构建。回归调试期间按失败证据重跑过此小型测试，未运行 Player 构建。
+- 验证隔离：初轮旧 MarkAB 无效路径探针产生了 Assets 根 importer 与 Package 文本 importer 的未保存 Bundle 名，立即撤销并核对 Bundle 名列表恢复为空，没有改写原资源/Package 文件。后续拒绝用例使用纯 validator 或自有临时路径。临时 `.txt` 曾触发既有 VS Editor 项目生成与外部写者的 `.csproj` Sharing violation；定位官方包同步入口后改用同语义 `.bytes`，最终无该失败，不改 ProjectSettings/Packages、不跳过日志或禁用诊断。
+- 独立审查与修正：只读审查发现 P1 测试全工程入口可能夹带其他 owner、P2 独立数据表可能以新源改写旧 Bundle 配置。前者新增执行前完整计划硬隔离，纯临时事务计划验证额外无 Bundle owner/外部源均拒绝；后者先观察到资产重命名后更新未拒绝的失败，再加入构建源指纹，旧表字节保持。补足 junction、中途发布失败及叶 meta 移动失败风险验证；最终 30 项全绿。原初轮运行的 owner/Bundle 名为空，897 文件指纹不变，不把潜在误删问题描述为本轮已发生的损失。
+- 保护证据：开始/结束只读核对 `AssetBundles/MainModule` 与 `Assets/StreamingAssets/MainModule` **897 个文件**的 SHA-256、大小及最后写入时间，完全一致。最终两输出根只剩原 MainModule；Bundle 标记/子工程资产/临时测试资产/事务 workspace 均无残留，场景 dirty=false，`isCompiling=false`、`scriptCompilationFailed=false`、`isUpdating=false`。原游戏、XF/XFAB/XFFSM Package、Runtime、其他 Editor 模块和现有 asmdef 均未修改。
+- 剩余边界：旧/未知目录、移动工程路径或变更 SubProject 输出名/GUID 后的旧产物只拒绝，不自动迁移。仅 Windows 实际原生 Bundle/GUI 闭环，其他平台只做目录映射与预检验证；未重跑未受影响的 Resource Runtime 全集或阶段 6 Player 综合门禁。既有资源常量生成器缺陷仍交 6.3，自动常量结果与 Bundle 发布结果分开报告，本批未修其完整可靠性或生成程序集承载。
+- 交接：6.2 定向技术完成条件已满足，具备进入 6.3 的基础；等待用户验收与 Git 收口，未 Commit/Push/Merge/Tag/Reset/Clean/切换分支。阶段 6 保持 IN PROGRESS，6.3～6.5 未实施、仍须单独授权。
 
 ### 6.3 资源常量生成可靠性与消费者承载
 
@@ -187,7 +204,7 @@
 
 | 决策 | 已确认边界 |
 |---|---|
-| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1 已单独授权并完成定向技术门禁，待用户验收/Git 收口，各批实施不自动衔接 |
+| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1 已验收/Git 收口，6.2 已授权实施，待用户验收/Git 收口，6.3～6.5 不自动衔接 |
 | Editor 程序集结构 | 保留普通 Editor、Core Editor、独立 Help 三套程序集；不合并程序集，不新建大型编辑器管理中心 |
 | 成熟工具保留 | Module 创建器、SerializedDictionary Drawer、Audio Inspector、Help 与 Resource 工具优先保留；修复真实缺陷而非因未使用退役 |
 | 默认 Plugins 导出 | 保持整个 Plugins 递归导出；插件许可核查暂缓，不据此宣称已获公开再分发授权 |

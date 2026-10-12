@@ -38,6 +38,27 @@
 - `HotUpdateManager` / `HotUpdateConfig` / `FakeResServer` / `ResVersion`：热更新。
 - 编辑器：`ResServiceEditorWindow`（菜单 `YLFramework/Service/ResService`）、`ResServiceEditorAPI`（模拟模式 / 打包 API）、`ResServiceAssetsMenu`（资源标记）、`AssetBundleExporter`、`BuildScript`、`ResDataCodeGenerator`、`SubProjectData`。
 
+## Resource Editor 操作
+
+1. 在 Project 中单选 `Assets/` 内的文件或子目录，通过 `Assets/YLFramework - AssetBundle Mark` 标记或取消。Bundle 名取最后一段名称，将 `.` 替换为 `_` 并使用 `ToLowerInvariant`。操作立即保存并重导入；标记与取消互为可逆操作，不提供 importer Undo。多选、Assets 根目录、Packages、越界路径不可操作；已有不同 Bundle 名或 variant 的标记不会被覆盖，须先在 Inspector 中确认处理。
+2. 用现有 `SubProject` 资产声明子工程：其所在目录是该子工程的资源边界，输出名仍取该资产的名称。没有落入子工程的已标记资源属于默认工程。相同输出名、同目录或嵌套目录、同一个 Bundle 跨多个 owner、Bundle 依赖跨 owner 均预检拒绝，不隐式归入多个工程。不要将子工程命名为 `AssetBundles` 或平台目录名。
+3. 打开 `YLFramework/Service/ResService`，检查实际平台与绝对输出路径。平台只来自 Unity Build Settings；需要其他平台时从窗口打开原生 Build Settings，安装对应模块并激活目标。旧的平台 Toolbar、未参与构建的版本输入已退出，不删除旧版本偏好。模拟模式、已标记资源的选择/取消以及资源常量入口仍保留。
+4. 构建与清理先展示本次平台、Bundle 数量及每个目标目录，确认后才操作。构建仅接受非空且归属有效的显式 build map；全部 owner 的 Bundle、manifest、`asset_bundle_config.bin` 暂存构建/回读成功后才统一发布。窗口保持打开并显示取消、成功或失败信息；关闭窗口会撤销本窗口尚未执行的排队操作。
+
+输出路径保持现有 Runtime 契约（`<Platform>` 为 `Windows`、`Linux`、`OSX`、`Android`、`iOS`、`WebGL` 或 `WSAPlayer`）：
+
+| Owner | 工程输出 | Runtime StreamingAssets 输出 |
+|---|---|---|
+| 默认工程 | `AssetBundles/<Platform>/` | `Assets/StreamingAssets/AssetBundles/<Platform>/` |
+| 子工程 | `AssetBundles/<SubProject>/<Platform>/` | `Assets/StreamingAssets/<SubProject>/AssetBundles/<Platform>/` |
+
+- 工具只替换或清理明确归属的**平台叶目录**，不删除共享父目录、其他平台或未知兄弟目录；原 XFAB 和 MainModule 构建链独立，不由 YL 工具迁移或接管。
+- 新产物携带 `.yl-resource-output.json`，记录当前工程、默认 owner / 子工程资产 GUID、平台、文件清单及构建源指纹。已有目标没有有效记录、owner 冲突、文件缺失、出现未登记内容、未知孤立 `.meta`，或路径经过 symlink/junction 时，拒绝替换和清理。标记来源和 SubProject 也不能经过 symlink/junction。不要手写归属记录绕过检查；旧目录、移动工程或变更子工程身份后遗留的输出需另行确认备份/迁移，工具不自动认领。
+- 取消不创建输出或临时构建目录；原生构建失败、返回 null、数据表写入/回读失败时不发布。发布/清理中的可恢复文件系统异常回滚旧目录；若回滚本身也受磁盘/权限错误阻止，保留 `Temp/YLResourceBuild/<transaction>/` 备份并报告恢复位置。多目录发布不承诺断电/进程崩溃级原子性，也不承诺与外部并发写者协调。
+- 再发布保留仍存在的文件/目录 `.meta`，清理将被删叶目录自身的 `.meta` 一并纳入事务，不让 Unity 因孤立 metadata 重建空输出目录。构建与清理不支持 Undo。
+- `AssetBundleExporter.BuildDataTable` 的独立调用仅更新当前平台、已构建且归属明确的输出目录；默认路径包含平台层，不再写到 `AssetBundles/` 父目录。源指纹由 Bundle 分配、资产路径/类型、Unity 依赖 hash 和 Bundle 依赖组成；与已发布快照不一致时，要求重新构建并保留旧表，不能将当前标记状态写进旧 Bundle。通过校验后，表文件完整序列化/回读再替换，保留原 `.meta`；它不是任意路径导出或旧产物迁移入口。
+- 资源常量生成器仍为既有工具，完整可靠性与消费者程序集承载修复属于阶段 6.3；本批没有修复其多 Bundle/名称碰撞等生成缺陷。自动常量生成与 Bundle 发布结果分开报告，不应把 Bundle 构建成功视为常量源码编译通过。
+
 ## 核心运行时契约（第一阶段整理后）
 
 - **ResKey**：查询规则对象。`AssetName` / `OwnerBundleName` 创建时统一转小写（`ToLowerInvariant`），`OriginalAssetName` 保留原始大小写；`assetName` 为 null 抛 `ArgumentNullException`、空白抛 `ArgumentException`。`Match(IRes)` 是唯一的值匹配：资源名必须相等（资源侧也须是已归一化的小写名）、`AssetType` / `OwnerBundleName` 为 null 表示不过滤。未重写 `Equals` / `GetHashCode`，保持引用语义，不应作为哈希容器 key；使用后必须 `RecycleToCache()` 归还对象池，重复回收由对象池拒绝。
