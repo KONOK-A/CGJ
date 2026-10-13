@@ -1,8 +1,15 @@
 # XF × YL：阶段 7 最终架构收口与独立交付总体方案
 
-**状态：APPROVED — 六批路线确认，7.1 待单独实施授权。** 阶段 7 总体方案已经用户审核批准，D1～D4 已确认（见第 7 节），本研究轮次本身没有实施任何批次。方案批准不自动授权各批实施、公共契约变更或 Git 操作；具体文件迁移、类型与 API 设计在对应批次启动时完成，7.3 的资源契约细节仍须实施前专项设计审核。
+**状态：IN PROGRESS — 7.1 技术验收通过，正在进行本轮 Git 收口。** 阶段 7 具体路线已由用户最新确认，调整为“框架结构整理”，仅保留两个结构批次：
 
-**目标：** 保留阶段 1～6 的正式能力与身份，收敛历史目录及依赖，以现有 YL Resource 支撑主框架，在不提供原 15 个 XF 系统的独立 Unity 工程中证明内部技术交付能力。遵循“融合优先、重构其次、重写最后”，不追求零第三方依赖。
+- **7.1** `Runtime/Shared → Runtime/Foundation/Kernel`（已完成实施并通过技术验收，本轮进行 Git 收口）。
+- **7.2** `Runtime/XFMain → Runtime/Core`、`Editor/XFMain → Editor/Core`，并同步 Core 内部职责目录、默认资源路径与 Analyzer 接线（未实施）。
+
+阶段 7 保持公开类型、程序集身份与功能契约；**暂时保留 Core 对 XFAB 的现有依赖，不改变 `ProjectName` 语义，不新增资源替代后端**。阶段 7 完成标准改为两个结构批次及必要迁移验证通过，不再要求在本阶段完成无 XFAB 的独立资源运行。
+
+原 7.3/7.4 的“先补 YL 原生替代后端、再去 XFAB”路线，以及与之绑定的 D2 具体方向，已被新路线替代（见第 4、6、7 节）；资源系统深度融合调整为**阶段 8**（以 XFAB 成熟能力体系为主体），最终收口与独立交付调整为**阶段 9**。阶段 8、9 不在本轮生成专项方案，本轮不自动实施 7.2，也不启动资源系统研究。
+
+**目标：** 保留阶段 1～6 的正式能力与身份，收口历史目录与依赖，使 Foundation 逻辑归口与 Core 结构清晰。阶段 7 只做两个结构批次及必要迁移验证；资源系统在阶段 8 以 XFAB 为主体深度融合，形成 YLFramework 自己完整、统一、可维护的资源系统；最终在阶段 9 于真实独立载体中收口验收。遵循“融合优先、重构其次、重写最后”，同时允许有依据的合理创新与必要重新设计，不追求零第三方依赖。
 
 ## 1. 实际基线与模块归属
 
@@ -43,7 +50,7 @@ Assets/YLFramework/Runtime/
     Kernel/                           # 由 Shared 移入；中立共享闭包
       YLFramework.Foundation.Runtime.asmdef
       Pool/ Events/ Timing/ Serialization/ Attributes/ Internal/ ...
-      Resources/                      # 获批后新增的窄资源契约，不是加载系统
+      # 原计划在此新增的窄资源契约（原 D2 方向）已被阶段 8 新路线替代，阶段 7 不新增
     Binding/ Events/ IOC/ Pool/ Singleton/
                                       # 现有较高层入口，仍编入 Runtime
   Core/                               # 由 XFMain 收敛，程序集身份不变
@@ -82,7 +89,7 @@ Editor        -> Runtime + Foundation.Runtime + Editor.Help + UGUI
 Editor.Help   -> 无模块显式引用
 ```
 
-Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonsoft；Core/Runtime 继续互不引用。资源契约在 Foundation，真实后端在 Runtime，通过显式装配协作，不把加载系统下沉。未来外部适配仍保持叶子程序集，不进入默认依赖闭包。
+Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonsoft；Core/Runtime 继续互不引用。未来外部适配仍保持叶子程序集，不进入默认依赖闭包。（原“资源契约在 Foundation、真实后端在 Runtime 的显式装配协作”属原 D2 方向，已由阶段 8 新路线替代。）
 
 公开 `YLFramework.Core`、`YLFramework.Actions`、`YLFramework.Services.*`、工具 namespace 和已经形成的 API 保留。`YLFramework.Core.Pool/Singleton/IOC` 的前缀确有归属误导，但它们已经是正式 YL 身份，不是待删除的 XF API。推荐本阶段以目录与程序集导航纠正认知，**不默认公开改名**；若用户选择清理这些 FullName，须单独进行消费者/反射/序列化及 Analyzer 迁移，不与纯目录移动捆绑，也不预建兼容壳。
 
@@ -97,11 +104,13 @@ Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonso
 - **必要联动：** `build.ps1:17` 部署路径及 `Tests/AnalyzerFixture.cs:55` 标记源码路径随移动更新；仓库 SDK 重建入口须可用，UnityPackage 仍只带 DLL/meta/说明，不带 SDK、Roslyn/NuGet 和中间产物。
 - **验收：** 合法消费者无误报，七项负例必须实际产生 YL0001～YL0007 的指定 Warning/位置，无 AD0001/load error；保留两个内部 owner 的边界。只改路径不要求重写规则；若身份改动导致源码/DLL变化，再按影响重建并重跑 SDK 契约。Player 可有编译器 `-analyzer` 输入，但不得有 Analyzer/Roslyn/自有 Editor 运行引用。
 
-## 4. Resource 与原生态独立性
+## 4. Resource 与原生态独立性（背景证据；具体路线已由阶段 8 替代）
 
-### 4.1 当前不能宣称独立
+> **路线状态：** 本节原推荐的“Foundation 中立窄契约 + Runtime 真实原生 Resource owner，先补 YL 替代后端再去 XFAB”整体方向（4.2、4.3 及 D2）**已被新路线替代**。阶段 7 保留 Core 对 XFAB 的现有依赖；资源系统改为阶段 8 以 XFAB 成熟能力体系为主体深度融合。以下 4.1 的真实依赖清单继续作为阶段 8 研究输入保留；4.2/4.3 的推荐与门禁不再作为阶段 7 目标，仅在阶段 8 重新研究后再定。
 
-默认产品闭包中没有原 XFGameFramework/XFFSM 的直接引用，但 Core Runtime/Core Editor 仍硬引用 XFABManager。这足以阻止无 XFAB 的完整包编译；可选 Audio.XFAB 不属于默认包，不能与该硬依赖混为一谈。
+### 4.1 当前不能宣称独立（事实基线，仍有效）
+
+默认产品闭包中没有原 XFGameFramework/XFFSM 的直接引用，但 Core Runtime/Core Editor 仍硬引用 XFABManager。这足以阻止无 XFAB 的完整包编译；可选 Audio.XFAB 不属于默认包，不能与该硬依赖混为一谈。阶段 7 不解除该依赖。
 
 | 真实依赖 | 证据 | 必须收口的责任 |
 |---|---|---|
@@ -113,7 +122,7 @@ Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonso
 
 原游戏继续保留原包及原资源链，**不从原工程 manifest 卸载任何 XF 系统**。去依赖只作用于 YL 正式 asmdef/代码/资产/工具闭包；独立载体不安装原系统，二者不是同一操作。
 
-### 4.2 候选路线与推荐
+### 4.2 候选路线与推荐（已被阶段 8 替代，保留为历史分析）
 
 | 路线 | 代价与判断 |
 |---|---|
@@ -126,7 +135,7 @@ Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonso
 
 **必须解决的真实缺口：** `R/Resource/GameObjectLoader.cs:8-16,26-48` 只持有 Prefab 并 Instantiate，不负责实例池；而 `CoreDirectViewPlayModeTests.cs:880-922` 已要求 Close 后回池和同实例复用。现有 `R/Foundation/Pool/GameObject/GameObjectPool.cs:8-15` 实际属于 Runtime，明确不拥有 Prefab/Bundle 资产。原生桥接应组合现有池与 ResLoader，保住闲置/借出实例所需资产，隔离自有桶并有明确清理；不能仅把 XFAB 调用换成 Instantiate/Destroy，不能复制第二套通用池。
 
-### 4.3 后端与公开语义门禁
+### 4.3 后端与公开语义门禁（已被阶段 8 替代，保留为历史分析）
 
 - **资源寻址：** 推荐保留 ProjectName 的 public virtual get/set 和启动前捕获形状，将其含义改为后端解析的资源组；原生映射必须显式、可检查。不得默默忽略 scope、假设全工程资产短名唯一，或把 XFAB 项目格式等同于 YL Bundle/SubProject。`AssetDataTable` 当前无 ownerBundle 时可能取首个同名项；具体映射规则在资源批次提交审核。
 - **租约/实例：** 请求接受时捕获 producer、Loader/池 owner 与会话；取消/退出后的迟到完成只能归还原取得结果，不能交给新会话。Direct Prefab 是借用资产，不错误卸载调用方资产。健康实例回池、污染实例退出缓存；不清理其他消费者的全局池或资源。
@@ -134,9 +143,9 @@ Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonso
 - **场景：** 复用现有 YL Bundle 场景链，明确新 Scene 的实际 handle、Single/Additive、释放 Bundle 与卸载 Scene 的区别。`R/Resource/Framework/ResLoader/ResLoaderExtensions.cs:284-287,320-334` 在非法地址/Bundle失败时仅记录日志、不会调用 onStartLoading；不能直接包装成永不结束的启动请求。普通 Build Settings 场景与已加载 Bundle 场景的定位前提分别说明，验证本批选用路线，不据此新增场景后端模式。交给 SceneManager 后不承诺物理取消，启动回滚不恢复已被 Single 卸载的场景。
 - **停止条件：** 若必要适配要求重做资源计数/Loader 会话模型、完整热更新、原产物格式兼容或所有场景/AB 的物理取消释放策略，停止该批并转资源专题；不删能力、吞失败或添加永久补丁层。
 
-现有 Audio.XFAB 保持独立、可选且不默认导出。没有发现原游戏使用新 Core 的证据，**不预建永久 Core-XFAB 兼容适配**；旧测试不构成产品兼容需求。若批次研究发现真实外部 Core 消费者，再提出有限适配及退出条件供审核。
+现有 Audio.XFAB 保持独立、可选且不默认导出。阶段 7 保留 Core 对 XFAB 的现有依赖，**不预建永久 Core-XFAB 兼容适配层**；旧测试不构成产品兼容需求。Core 与 XFAB 的解除与统一在阶段 8 研究后处理。原 XFAB Package 严格只读，原游戏继续使用原资源链。
 
-阶段 7 的可达目标是主框架默认闭包不依赖原 15 系统，并在原生资源路线上运行；不等于完成 XFABManager/XFFSM 等 14 个后续系统融合，也不承诺完整资源热更新、任意共享 AB 的物理卸载、IL2CPP/AOT 或跨平台。
+阶段 8 的目标是以 XFAB 成熟能力体系为主体深度融合资源系统，吸收现有 YL Resource、GO 池与 Resource Editor 的有价值成果，形成 YLFramework 自己完整、统一、可维护的资源系统；其最终 API、租约模型、资源组含义与装配方式在阶段 8 研究双方源码后提出并审核，本轮不预定。阶段 8 不等于完成 XFABManager/XFFSM 等全部 14 个后续系统融合，也不承诺完整资源热更新、任意共享 AB 的物理卸载、IL2CPP/AOT 或跨平台。
 
 ## 5. Tools、Editor 与正式交付
 
@@ -144,7 +153,7 @@ Foundation 不反向引用 Core、Runtime、Resource、Tools、Odin 或 Newtonso
 
 FSM、Grid、JSONObject、Table、ZipTool 继续正式交付，保持当前入口、namespace、程序集和来源许可。轻量代码 FSM 由调用方驱动/回收，不与未来可视化 XFFSM 合并；Table 只管理索引/集合，不获得资源释放权；JSONObject 与 Json.NET 强类型序列化不统一；ZipTool 保持 noEngineReferences。当前缺少部分文档曾声称的工具全集测试，不据此重建无关套件或删除工具。
 
-三套 Editor/Help 继续单向协作，保留 Help id、菜单、窗口 MovedFrom、只读行为和 Resource 标记/构建/生成器。Core Editor 去 XFAB 与对应 Runtime 接入同批完成，不合并普通 Editor。Core XML 缺失已有真实声明回落机制，不是独立交付阻塞；不为填满目录/帮助条目而另建文档平台或强制新增 Core csc.rsp。
+三套 Editor/Help 继续单向协作，保留 Help id、菜单、窗口 MovedFrom、只读行为和 Resource 标记/构建/生成器。Core Editor 的去 XFAB 不再作为阶段 7 目标，随阶段 8 资源系统融合统一处理；阶段 7 不合并普通 Editor。Core XML 缺失已有真实声明回落机制，不是独立交付阻塞；不为填满目录/帮助条目而另建文档平台或强制新增 Core csc.rsp。
 
 ### 5.2 默认包与必要依赖
 
@@ -163,9 +172,9 @@ FSM、Grid、JSONObject、Table、ZipTool 继续正式交付，保持当前入�
 
 XF/QFramework/JSONObject/SharpZipLib 的完整许可和通知随迁后路径继续发行。Odin、Editor Enhancers 的公开再分发授权没有充分证据；**技术独立与内部交付可验收，公开发布许可仍为独立停止门禁**。不以减少 Plugins 或改变导出范围来规避已确认决策。
 
-## 6. 实施批次与最小充分门禁
+## 6. 实施路线与最小充分门禁
 
-以下六批按变更轴安排，不按目录机械分割。每批实施前重核基线和并行变化；先完成本批详细设计与必要审批，再执行。小批失败即停止，不在未通过的结构/owner 假设上叠加后续迁移。
+阶段 7 只包含两个结构批次（7.1、7.2），按变更轴安排，不按目录机械分割。每批实施前重核基线和并行变化；先完成本批详细设计与必要审批，再执行。小批失败即停止，不在未通过的结构假设上叠加后续迁移。阶段 8、9 的路线在本节给出，具体专项方案在对应阶段启动前另行设计与审核，本轮不生成。
 
 ### 7.1 Foundation 逻辑归口，保持类型身份
 
@@ -227,35 +236,26 @@ Runtime/Foundation/
 - **必要门禁：** CoreIdentity/CoreEditorIdentity、CoreDefaultResource 与 Editor 版、配置/路径直接测试；正式 Prefab/Sample 无 Missing Script；Help 对应 provider、真实导出、SDK 路径重建入口与第 3.2 节实际 scope/七项负例。无符号或 DLL 变化不机械重跑全部 SDK 内部场景。
 - **独立停止：** 新旧 Core/Analyzer 副本、默认器重复生成、负例零诊断、作用域污染或资源身份断裂，均阻止进入资源接入批。不通过改 ruleset/关闭规则制造成功。
 
-### 7.3 窄资源契约与原生执行 owner
+### 阶段 8：以 XFAB 为主体的资源系统深度融合
 
-- **目标/前置：** 7.1/7.2 通过，资源所有权与 ProjectName 方向获得审核。详细设计中明确地址映射、显式装配、未配置/加载失败终态、Loader/实例/Scene 生命周期，然后再新增契约与真实桥接；Core 旧执行链暂不切换。
-- **退出/保护：** 为退出硬 XFAB 建立真实替代前提；复用 ResLoader/ResManager、现有 GO 池与场景支撑，不重写 Resource/池，不动 Audio 默认 provider、全局游戏资源模式或原产物。
-- **必要门禁：** 用自有 fixture 验证同步/异步、缺失/错误类型、同名资源组隔离、共享表租约、直接/命名 Prefab、原实例复用、污染丢弃、asset 保活、清理/晚还与失败重入；选定场景路线的成功和失败必须终结。小型真实 YL Bundle/ResData 闭环复用 ResourceBuildIntegration 与 AudioNamedBundle 的现有构建方法，输出仅限自有临时位置，不写原 MainModule/全局产物。
-- **独立停止：** 租约未闭环、跨会话向新池归还、Scene 失败挂起，或必须大规模改成熟 Resource 才能满足契约，停止并提交专题边界调整；不能先让 Core 接入再补 owner。
+> **本路线替代原 7.3/7.4 及 D2 的具体方向。** 原 7.3“窄资源契约与原生执行 owner”、原 7.4“Core 接入原生资源并退出默认 XF 依赖”不再作为阶段 7 目标；其保留的依赖事实、候选路线与语义门禁见第 4 节，仅作阶段 8 输入。
 
-### 7.4 Core 接入原生资源，退出默认 XF 依赖
+- **目标：** 以 XFAB 的成熟能力体系为主体，吸收现有 YL Resource、GO 池及 Resource Editor 的有价值成果，形成 YLFramework 自己完整、统一、可维护的资源系统。目标不止于源码承接、去重或解除程序集引用，还包括有依据的架构、性能、可靠性和资源生命周期优化，API、Editor 与开发工作流改进，以及具有明确实用价值的新能力扩展。最终不长期保留两套相互竞争的资源所有权。
+- **前置：** 阶段 7 通过；阶段 8 启动前先研究 XFAB 与 YL Resource 双方真实源码、依赖、资源所有权与使用场景，再提出方案。
+- **不预定：** 最终 API、租约模型、资源组含义、装配方式与批次数量均不在本轮预定，由阶段 8 研究双方源码后提出并审核。
+- **退出/保护：** 原 XFAB Package 严格只读，所有融合、修复与升级只在 YL 自有源码中进行；原游戏继续使用原资源链，不迁移、不改变其行为。复用阶段 7 保留的公开类型、程序集身份与既有数据契约，重大公共接口或数据格式变化先确认。
+- **必要门禁：** 按阶段 8 研究后确定的实际变更轴设计，覆盖资源取得/提交/失败/归还闭环、真实资源或 Bundle 消费链、Editor 资源工具回归及原游戏非干扰；具体门禁在阶段 8 专项方案中给出。
+- **独立停止：** 出现无法在 YL 自有源码内解决的资源所有权冲突、必须迁移原游戏资产或原产物、必须破坏公开身份且未获批准时停止，提交专题边界调整。
 
-- **目标/前置：** 7.3 原生 owner 门禁通过且具体公开契约获批。按启动表/场景、命名 View、直接实例取得/归还的事务路径分小步接线；保留 owner→BaseModule 查找及既有失败/取消顺序。
-- **退出/保护：** 删除 Core Runtime/Editor 的 XFAB 类型调用与 asmdef 边；处理 EditorAssetTool 的原项目绑定用途及模板说明，不保留无依据兼容层。原包/游戏仍走原线，Audio.XFAB 可选边界不变。
-- **必要门禁：** 复用 CoreModule、CoreFailurePath、CoreDirectView、原 CoreXfab 中有效生命周期/加载/回滚断言，改原生输入和 owner 断言而非削弱测试；针对 Panel/窗口/ColorSelector、场景 attach、参数归还、取消迟到及同实例重启选择直接回归。CoreEditorIdentity/生成模板与无 XF 的 Framework 编译闭包必须成立。
-- **独立停止：** 原生定位不能保留资源组/回退约束、关闭变成销毁而非已批准复用、启动/取消契约改变未获批，或需要迁移原游戏资产时停止。旧 XFAB fixture 可归可选测试，不再作为默认能力证明；不把其测试历史删除当迁移成功。
+### 阶段 9：最终收口与独立交付
 
-### 7.5 正式入口、Help 与交付契约收口
+承接原 7.5/7.6 的最终文档、Help、分发、依赖与真实独立载体验收目标，依据阶段 8 最终成果重新设计详细门禁；本轮不生成阶段 9 专项方案。
 
-- **目标/前置：** 结构与资源路线已稳定；增量维护现有 Architecture、README、相关模块说明、Help、来源许可导航和导出哨兵，说明 Foundation 层级、资源装配/地址、外部依赖及残留限制。
-- **退出/保护：** 退出失效 XFMain/Shared 产品路径、默认 Core 的 XFAB 说明和虚构测试导航；保留 Tools 入口/说明、三套 Editor、Help 注册与缺 XML 回落、资源工具、六导出根和全部 Plugins。
-- **必要门禁：** 对受影响 Help/provider/生成器作直接回归；实际导出并解包，核对全部递归文件内容、meta/GUID、迁后 Analyzer 唯一身份/禁用平台、许可与排除项。记录本轮真实包指纹，不沿用 6.5 的记录数量或旧 SHA。
-- **独立停止：** 缺外部依赖恢复说明、默认包遗漏 owner/契约/正式资源、Plugin 范围意外变化或许可通知丢失，停止交付；公开再分发仍需独立许可确认。
-
-### 7.6 真实独立载体与最终兼容验收
-
-- **目标/前置：** 使用 7.5 的最终真实 UnityPackage，在工程外新建同版本 Unity 载体，明确提供第 5.2 节必要依赖；不复制原工程 Library、ProjectSettings、manifest、游戏或原 XF DLL/Package。不对已打开的同一工程再启动 Unity 实例。
-- **首次证明：** 真实导入/编译和重开后资产身份；最小业务 asmdef/场景仅引用所需 YL/Unity 类型；Module/MVC 启动关闭重启、原生 JSON、直接/命名 View/Panel、复用/取消迟到、Single/Additive、新场景 attach，及一条真实 YL Bundle 消费链。不能只展示空 Module 或同工程 AssemblyBuilder 通过。
-- **Editor/Analyzer/Tools：** 创建模块与默认资源、原生资源标记/构建/常量生成、Help GUI、Prefab/Sample、七项分析器正反例/作用域与一个必要配置覆盖。FSM/Grid/Json/Table/Zip 只做接入和代表性协作冒烟，不补造其历史全集。
-- **Player：** 在独立载体实际构建并运行 Windows64/Mono Development Player，核验 Core/资源/代表性 UI/Audio/HTTP 协作及退出；无原生态、自有 Editor、Analyzer/Roslyn 运行依赖。编译参数、PE/运行引用与运行结果分别报告。
-- **会话/原游戏：** 独立载体做一次真实关闭 Domain Reload、正常 Scene Reload 的连续双 Play，检查新桥接/旧租约/宿主退出；无需原 Logger 隔离。原工程按最终 Runtime/资源风险补原 Main/XF/XFAB/XFFSM/YL Audio 的代表性 Editor 与 Windows64/Mono 非干扰路径，不重建原 Bundle。历史 Logger 临时隔离授权不可沿用，产物/环境不足或外部错误阻断则报告并停止相应门禁。
-- **独立停止：** 任一隐性 XF 引用、必要插件缺失、真实资源启动失败、Analyzer 静默失效、Missing Script、Player 泄漏 Editor/编译器依赖或原游戏新增回归，均不宣布阶段 COMPLETE。验证设置仅修改独立载体；原工程需要配置变更时先取得单独授权，保留用户未保存场景与受保护文件。
+- **目标/前置：** 结构与资源路线已稳定（阶段 7 结构批次与阶段 8 资源融合完成）；增量维护 Architecture、README、相关模块说明、Help、来源许可导航与导出哨兵，说明 Foundation 层级、资源装配/地址、外部依赖及残留限制。
+- **独立交付：** 使用最终真实 UnityPackage，在工程外新建同版本 Unity 载体，明确提供必要依赖；不复制原工程 Library、ProjectSettings、manifest、游戏或原 XF DLL/Package。首次证明真实导入/编译、资产身份、Module/MVC 生命周期、资源/View/Panel/UI/Audio/HTTP 协作、Editor/Analyzer 正反例与作用域，以及 Windows64/Mono Player 构建与运行；不新增原生态、自有 Editor 或 Analyzer/Roslyn 运行依赖。
+- **会话/原游戏：** 独立载体做一次真实关闭 Domain Reload、正常 Scene Reload 的连续双 Play；原工程按最终风险补原 Main/XF/XFAB/XFFSM/YL Audio 的代表性 Editor 与 Windows64/Mono 非干扰路径。历史 Logger 临时隔离授权不可沿用。
+- **退出/保护：** 退出失效 XFMain/Shared 产品路径、默认 Core 的旧 XFAB 说明与虚构测试导航；保留 Tools 入口/说明、三套 Editor、Help 注册与缺 XML 回落、资源工具、六导出根和全部 Plugins。
+- **独立停止：** 缺外部依赖恢复说明、默认包遗漏 owner/契约/正式资源、Plugin 范围意外变化、许可通知丢失、任一隐性 XF 引用、必要插件缺失、真实资源启动失败、Analyzer 静默失效、Missing Script、Player 泄漏 Editor/编译器依赖或原游戏新增回归，均不宣布阶段 COMPLETE；公开再分发仍需独立许可确认。
 
 ### 验收证据使用原则
 
@@ -263,17 +263,17 @@ Runtime/Foundation/
 
 ## 7. 已批准决策与完成条件
 
-以下 D1～D4 为批准的总体决策；7.1～7.6 六批路线及既有风险门禁同时确认，不重新研究或重新拆分阶段。
+以下 D1、D3、D4 仍为批准的总体决策；**D2 的原生资源路线及原 7.3～7.6 批次已被阶段 7～9 新路线替代**（见第 6 节）。阶段 7 仅保留 7.1、7.2 两个结构批次，不重新研究或重新拆分阶段。
 
 | 决策 | 已批准内容 |
 |---|---|
 | D1 最终结构 | `Runtime/XFMain → Runtime/Core`；`Runtime/Shared → Runtime/Foundation/Kernel`；`Editor/XFMain → Editor/Core`。保留合理的 Foundation 高层入口、成熟大型系统、Tools 及现有程序集身份 |
-| D2 独立资源路线 | 批准 Foundation 中立窄契约 + Runtime 真实原生 Resource owner 的总体方向；允许 `ProjectName` 保持既有公开属性形状并转向显式映射的资源组语义。具体 API、资源组映射、装配时机、资产租约、实例池 owner、取消/迟到归还及 Scene 生命周期必须在 7.3 实施前完成专项设计审核。不批准直接复制 XFAB、添加空资源后端、隐式回退 XFAB 或重写整个 Resource |
+| D2 独立资源路线（**已被替代**） | 原批准“Foundation 中立窄契约 + Runtime 真实原生 Resource owner、先补 YL 替代后端再去 XFAB”的方向及 `ProjectName` 转向显式资源组语义的具体设计，已由新路线替代：阶段 7 保留 Core 对 XFAB 的现有依赖且不改 `ProjectName` 语义；资源系统在阶段 8 以 XFAB 成熟能力体系为主体深度融合。原 D2 细节不再作为当前实施约定，具体 API/租约/资源组/装配在阶段 8 研究双方源码后提出并审核 |
 | D3 公开身份 | 保留四套 Runtime 与三套 Editor 程序集的正式名称/GUID；保留现有 YL 公共 namespace、类型 FullName、序列化契约和成熟工具，不为目录一致性机械改名 |
-| D4 独立交付 | 阶段 7 目标为默认主框架在不安装原 XF 生态系统的独立 Unity 工程中真正可用；必要 Unity 与第三方依赖允许显式提供，不追求零依赖。默认 Plugins 继续完整递归导出；公开再分发许可仍属后续独立限制 |
+| D4 独立交付 | 最终目标（阶段 9）为默认主框架在不安装原 XF 生态系统的独立 Unity 工程中真正可用；必要 Unity 与第三方依赖允许显式提供，不追求零依赖。默认 Plugins 继续完整递归导出；公开再分发许可仍属后续独立限制 |
 
-总体批准只确认路线与停止门禁；每批仍须单独获授权，**7.1 待单独实施授权**。D2 的总体方向已批准，但资源所有权与公共接入的具体契约仍以 7.3 实施前的专项设计审核为准，不能视为已批准全部细节或可直接开始改代码。
+总体批准只确认路线与停止门禁；每批仍须单独获授权。**7.1 已获授权、通过技术验收并进入本轮 Git 收口；7.2 未实施；阶段 8、9 未启动。** 阶段 7 保持公开类型、程序集身份与功能契约，暂时保留 Core 对 XFAB 的现有依赖；资源系统到阶段 8 再研究双方源码后提出方案，本轮不预定其细节，也不能视为可直接开始改代码。
 
-**阶段完成条件：** 推荐结构与正式职责一致；默认 Runtime/Editor/资产/Analyzer/保留工具链无原生态直接或间接可执行依赖；最终包在真实独立载体中导入、启动、Editor/Analyzer 与 Windows64/Mono Player 通过；原游戏代表性非干扰通过；GUID、序列化/反射及必要公共身份保留；分发范围、必要依赖和公开许可限制准确。其他未验证平台/资源能力明确保留，不扩大 COMPLETE 含义。
+**阶段 7 完成条件：** 两个结构批次（7.1、7.2）及必要迁移验证通过；Foundation 逻辑归口与 Core 职责目录清晰，公开类型、程序集身份与功能契约保持；不再要求本阶段完成无 XFAB 的独立资源运行。**阶段 8/9 完成条件：** 依据阶段 8 资源融合与阶段 9 独立载体成果分别重新设计；GUID、序列化/反射及必要公共身份须保留，分发范围、必要依赖和公开许可限制须准确。其他未验证平台/资源能力明确保留，不扩大 COMPLETE 含义。
 
-**阶段 7 总体方案已批准；7.1 待单独实施授权，不自动实施任何批次。**
+**阶段 7 保持 IN PROGRESS；7.1 技术验收通过并进入本轮 Git 收口；不自动实施 7.2，不启动阶段 8 资源研究。**

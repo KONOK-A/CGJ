@@ -1,6 +1,6 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
-状态：蓝图已确认；**阶段 1：COMPLETE（1.1～1.4 全部验收及 Git 集成收口完成，`6cea527`）**，Module/MVC、View/Panel 与原游戏 Editor/Windows64 代表性非干扰、Core Windows64/Mono 代表性验证通过。**阶段 2：COMPLETE（2.1～2.5 全部验收及 Git 收口，里程碑 `milestone/2.1-pool`、`milestone/2.2-events`、`milestone/2.3-update`、`milestone/2.4-timer`、`milestone/2.5-serialized-dictionary`）**。**阶段 3：COMPLETE（3.1～3.4 全部验收及 Git 收口，集成 `7e44d9f`，里程碑 `milestone/3-ui`）**。**阶段 4：COMPLETE（4.1～4.5 全部验收及 Git 收口，集成 `0a0e74f`，里程碑 `milestone/4-audio`；Windows64/Mono Player、原游戏非干扰、系统实际出声与用户人工听感均已确认通过）**。**阶段 5：COMPLETE（5.1、5.2、5.3、5.3.5、5.4、5.5 全部验收及 Git 收口；合并提交位于 `integration/xf-yl`（5.5 提交 `16e283a`），里程碑 `milestone/5-runtime`）**。**阶段 6：COMPLETE（6.1～6.5 全部验收及 Git 收口，集成于 `integration/xf-yl`，里程碑 `milestone/6-editor`；Help、UnityPackage、Windows64/Mono Player 与编译器隔离门禁通过）**。阶段 7 尚未启动。临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项的共同约束，不自动授权 Git 或下一专题；当前状态及依据见第 6～8 节和各专项方案。
+状态：蓝图已确认；**阶段 1：COMPLETE（1.1～1.4 全部验收及 Git 集成收口完成，`6cea527`）**，Module/MVC、View/Panel 与原游戏 Editor/Windows64 代表性非干扰、Core Windows64/Mono 代表性验证通过。**阶段 2：COMPLETE（2.1～2.5 全部验收及 Git 收口，里程碑 `milestone/2.1-pool`、`milestone/2.2-events`、`milestone/2.3-update`、`milestone/2.4-timer`、`milestone/2.5-serialized-dictionary`）**。**阶段 3：COMPLETE（3.1～3.4 全部验收及 Git 收口，集成 `7e44d9f`，里程碑 `milestone/3-ui`）**。**阶段 4：COMPLETE（4.1～4.5 全部验收及 Git 收口，集成 `0a0e74f`，里程碑 `milestone/4-audio`；Windows64/Mono Player、原游戏非干扰、系统实际出声与用户人工听感均已确认通过）**。**阶段 5：COMPLETE（5.1、5.2、5.3、5.3.5、5.4、5.5 全部验收及 Git 收口；合并提交位于 `integration/xf-yl`（5.5 提交 `16e283a`），里程碑 `milestone/5-runtime`）**。**阶段 6：COMPLETE（6.1～6.5 全部验收及 Git 收口，集成于 `integration/xf-yl`，里程碑 `milestone/6-editor`；Help、UnityPackage、Windows64/Mono Player 与编译器隔离门禁通过）**。**阶段 7：IN PROGRESS（框架结构整理）。** 7.1 `Runtime/Shared → Runtime/Foundation/Kernel` 已通过用户技术验收；7.2 `Runtime/XFMain`、`Editor/XFMain → Core`（含 Core 内部职责目录、默认资源路径与 Analyzer 接线）未实施。阶段 7 保持公开类型、程序集身份与功能契约，暂时保留 Core 对 XFAB 的现有依赖，不改变 `ProjectName` 语义、不新增资源替代后端。资源系统深度融合调整为**阶段 8**（以 XFAB 成熟能力体系为主体）；最终收口与独立交付调整为**阶段 9**。临时 XFAB 依赖、真实 AB 释放、跨平台与最终独立运行仍属后续事项。原 XFGameFramework、XFABManager、XFFSM 等原系统继续留在 CGJ2024 供原游戏使用，原游戏不迁移到新 YL；新 YL 通过源码承接和功能融合逐步独立，最终不依赖原 XF 生态程序集。本文是后续专项的共同约束，不自动授权 Git 或下一专题；当前状态及依据见第 6～8 节和各专项方案。
 
 **2.5 状态：2.5-C 实施与验证完成，A/B 验收提交 `13cb2ce` / `045641b`；2.5 的验收与 Git 收口已随阶段 2 完成（里程碑 `milestone/2.5-serialized-dictionary`），阶段 3、4 亦已于后续完成。** 详见 [2.5 专项第 16 节](../../../.kilo/plans/xf-yl-2.5-serialized-dictionary.md)；其他专题的历史状态不由本批改写。
 
@@ -55,11 +55,13 @@
 | 4 音频系统 | 06 Audio，客观评估并统一领域能力 | 相关基础设施稳定，当前播放行为与资源所有权已确认 | 专项验证通过；原游戏音频经非干扰检查不受影响 | 不默认保留 YL Audio，不无依据改变游戏效果 |
 | 5 运行时外围 | 08 HTTP、13 AsyncOperation、15 Tools、16 Extensions、17 Attributes 的专项融合与收口 | 相关核心及调用方稳定 | 各项专项测试与调用方回归通过，无新增 Editor/Player 边界泄漏 | 不扩展成通用网络平台、工具大全或统一异步框架 |
 | 6 Editor 整合 | 18 Editor，整合保留功能对应的编辑器能力 | 相关运行时 API 与资源格式稳定 | 创建、Inspector、帮助、构建/导出等选定入口可用，Editor 隔离正确 | 不引入包安装器，不全面整合第三方插件或独立扩展 |
-| 7 统一收口与整体验收 | 公开命名、必要兼容、资源引用与非 UPM 分发收口；独立验证承载 | 18 项范围已验收，迁移引用可核验 | namespace 统一；兼容保留有依据；新 YL 在无原 15 系统的承载中通过独立验证；原游戏正常运行；分发内容与许可完整 | 不以命名统一为理由重新设计已验收模块 |
+| 7 框架结构整理 | 7.1 `Runtime/Shared → Runtime/Foundation/Kernel`；7.2 `Runtime/XFMain`、`Editor/XFMain → Core` 并同步 Core 内部职责目录、默认资源路径与 Analyzer 接线 | 阶段 6 完成 | 两个结构批次及必要迁移验证通过；公开类型、程序集身份与功能契约保持；暂留 Core 对 XFAB 依赖 | 不在本阶段解资源依赖、改名或重设计已验收功能 |
+| 8 资源系统深度融合 | 以 XFAB 成熟能力体系为主体，吸收 YL Resource、GO 池及 Resource Editor 的有价值成果，形成统一、可维护的资源系统；含架构/性能/可靠性/生命周期优化、API/Editor/工作流改进与有价值的能力扩展 | 阶段 7 通过；先研究 XFAB 与 YL Resource 双方源码 | 阶段 8 专项方案确定的门禁通过；不长期保留两套相互竞争的资源所有权 | 不改原 XFAB Package 与游戏资源链；不预设最终 API、租约模型或资源组含义 |
+| 9 最终收口与独立交付 | 公开命名/兼容/资源与非 UPM 分发收口；真实独立载体导入、Editor/Analyzer、Windows64/Mono Player 与依赖许可验证 | 阶段 8 通过 | 新 YL 在无原 15 系统的承载中通过独立验证；原游戏正常运行；分发内容与许可完整 | 不以命名统一为理由重新设计已验收模块 |
 
 13、17 等在早期出现，仅表示承接核心所需支撑，不提前决定最终实现。Editor 支撑可随运行时批次迁移，阶段 6 负责整体收口，并非此前禁止修改 Editor。
 
-长期系统（XFABManager、XFFSM 及独立扩展等）的融合阶段在上述主框架阶段之后另行规划，本表不自动授权其启动；主框架阶段的收口亦不等于完整 YL 收口。
+长期系统中，XFABManager 由阶段 8 承担；XFFSM 及独立扩展等其他系统的融合在阶段 8、9 之后另行规划，本表不自动授权其启动；阶段 7 结构收口亦不等于完整 YL 收口。
 
 ## 4. 长期工程规范
 
@@ -72,7 +74,7 @@
 7. 缺陷与改进以证据为准：当前获授权专题内的既有缺陷有复现或可靠源码证据时可以修复；有明确实际收益的优化、升级或必要增强也可以实施，验证深度与风险相称。不借局部改进顺手重构无关模块，不弱化断言制造通过。
 8. Git 保护既有工作：默认以 `integration/xf-yl` 为集成主线，实施前检查工作区并保留用户改动。需要子分支时明确用途；提交、合并和推送按授权执行，不自动 commit/push。
 9. 本文是唯一长期蓝图：后续仅增量更新确认的架构决策、阶段状态及必要基线信息。专项正式方案各保留一份并从本文链接，不生成重复方案、过程日志、日报或审计记录；区分已批准目标、实际实现、验证报告、用户验收和 Git 收口。
-10. 融合质量与技术演进：本工程不是简单复制、改名或机械兼容 XF。“XF 为主”不等于原样继承其全部设计，YL 也不是被动兼容方。Kilo 应在专项研究中客观比较 XF 与 YL 的真实源码、依赖及使用场景：成熟合理的实现可以保留；有证据的缺陷可以在 YL 自有源码中修复；对正确性、稳定性、性能、易用性、扩展性或长期维护确有收益的优化、升级及必要增强，可以在获授权批次内自主实施；YL 方案更合理时可以借鉴或优先采用，双方均不合适时也可提出新实现。具体 API、算法与内部结构由 Kilo 根据源码研究决定，不由总体规划预先指定。改进应与当前阶段目标、依赖和风险相称，并进行必要的针对性验证；重大架构取舍、跨阶段扩张及高风险兼容变更须先说明并取得确认。不为形式统一、追求新技术或未经证实的收益做无意义重构。原 XF/XFAB 等 Package 严格只读，所有融合、修复和升级只在 YL 自有源码中进行，不擅自改变原游戏路径与行为。
+10. 融合质量与技术演进：本工程不是简单复制、改名或机械兼容 XF。“XF 为主”不等于原样继承其全部设计，YL 也不是被动兼容方。Kilo 应在专项研究中客观比较 XF 与 YL 的真实源码、依赖及使用场景：成熟合理的实现可以保留；有证据的缺陷可以在 YL 自有源码中修复；对正确性、稳定性、性能、易用性、扩展性或长期维护确有收益的优化、升级及必要增强，可以在获授权批次内自主实施；YL 方案更合理时可以借鉴或优先采用，双方均不合适时也可提出新实现。具体 API、算法与内部结构由 Kilo 根据源码研究决定，不由总体规划预先指定。改进应与当前阶段目标、依赖和风险相称，并进行必要的针对性验证；重大架构取舍、跨阶段扩张及高风险兼容变更须先说明并取得确认。不为形式统一、追求新技术或未经证实的收益做无意义重构。原 XF/XFAB 等 Package 严格只读，所有融合、修复和升级只在 YL 自有源码中进行，不擅自改变原游戏路径与行为。所有后续 XF 系统融合，都应评估优势融合、缺陷修复、质量优化和有价值的能力扩展，以实际收益提升最终 YLFramework 的整体水平；“融合优先、重构其次、重写最后”不禁止合理创新和必要重新设计，也不要求每个成熟模块都必须重构或新增功能。必要测试按实际风险做到充分，复用未受影响的有效证据，不机械重复测试或按数量扩测。
 
 ## 5. 可复现基线与阶段衔接
 
@@ -116,7 +118,8 @@
 | 阶段 4 Audio（06 Audio） | **COMPLETE**；用户已确认验收，集成 `0a0e74f`，里程碑 `milestone/4-audio` | 4.1～4.4 已用户验收及 Git 收口，4.5 基线 `fusion/4-audio` / `e25d87c`，正式独立授权。唯一 Runtime Audio、Core 旧副本退出、组件身份及许可/分发边界保持；真实同域双 Play、原游戏 Main/XFAB 代表性音频流程、Source/DSP 输出、最终 Windows64/Mono Development 构建与真实窗口运行均通过；系统实际出声与用户人工听感已确认。原 Logger 仅经本轮临时原生日志隔离并恢复。见 [Audio 专项第 9 节](../../../.kilo/plans/xf-yl-4-audio.md#9-45-综合验收与待确认门禁2026-10-12) |
 | 阶段 5 运行时外围（5.1～5.5） | **COMPLETE**；用户已确认技术验收，合并提交位于 `integration/xf-yl`（5.5 提交 `16e283a`），里程碑 `milestone/5-runtime` | 5.1 中立支撑归口、5.2 HTTP 请求生命周期与异步边界、5.3 工具/扩展契约、5.3.5 成熟 Tools 整合、5.4 正式外围接口整合与旧机制退出、5.5 综合验收全部完成并 Git 收口。HTTP / StringTools / 通用 Extensions 归 Runtime，类型查找 / LayerMask / 展示元数据 / 最小等待通知归 Foundation，View/Panel / Audio 保持各自 owner / 取消 / 租约；旧 Core HTTP/Tools/Extensions 与 LogUtil 退出、无转发壳；FSM / Grid / JSONObject / Table / 独立 ZipTool 定位、依赖与许可不变。5.5 真实同域双 Play、Windows64/Mono Development 构建及实际 HTTP 回环 / 退出、原游戏 Editor / Player、真实导出与许可核查通过；原 Logger 隔离仅限本轮授权受控窗口并已恢复。结果与限制见唯一 [运行时外围方案](../../../.kilo/plans/xf-yl-5-runtime.md) |
 | 阶段 6 Editor | **COMPLETE**；用户已确认 6.1～6.5 技术验收，合并于 `integration/xf-yl`，里程碑 `milestone/6-editor` | 6.1 Core Editor、6.2 Resource、6.3 生成器、6.4 七项自有 YL 分析器（YL0001～YL0007，默认 Warning）与 6.5 Help/导出/Player 收口全部完成并 Git 收口。6.5 交付 Core 与 Foundation/Tools Help、真实 UnityPackage 解包（752 记录、Plugins 全递归）、Windows64/Mono Development Player 构建与启动、及自有 Editor/Analyzer/Roslyn 运行引用隔离门禁；三套 Editor 程序集与原依赖边界保持。第三方公开再分发许可、外部依赖、IL2CPP/其他平台及阶段 7 独立承载仍属保留限制。实际交付见 [阶段 6 总体方案](../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口) |
-| 阶段 7 及其他长期系统 | 未启动 | 公开命名 / 兼容 / 资源与最终非 UPM 分发收口及独立验证承载留后续。IL2CPP/AOT、移动 / WebGL、真实 AB 物理卸载、无原 15 系统独立承载、Runtime 目录整体统一及第三方公开再分发许可仍未完成，不因阶段 6 技术门禁通过而视为已解决 |
+| 阶段 7 框架结构整理 | **IN PROGRESS**；7.1 技术验收通过（`Runtime/Shared → Runtime/Foundation/Kernel`），7.2 未实施 | 7.1 迁移/身份/编译/导出门禁与用户技术验收通过，详见 [阶段 7 方案](../../../.kilo/plans/xf-yl-7-consolidation.md)。7.2（`Runtime/XFMain`、`Editor/XFMain → Core`）待单独授权；阶段 7 暂留 Core 对 XFAB 依赖，公开类型 / 程序集身份 / 功能契约保持 |
+| 阶段 8/9 及长期系统 | 未启动 | 阶段 8 以 XFAB 为主体深度融合资源系统，阶段 9 最终收口与独立交付；XFFSM 及独立扩展等其他系统在阶段 8、9 之后另行规划。IL2CPP/AOT、移动 / WebGL、真实 AB 物理卸载、无原 15 系统独立承载及第三方公开再分发许可仍未完成，不因阶段 6 技术门禁通过而视为已解决 |
 
 状态依据为批次报告、用户验收反馈及实际 Git 历史。以下 F 记录保留为历史验证，不覆盖上表已确认的 1.2 合并和 1.3-A 当前状态。D 验证来自提交 `8c3fff6`，补充回归为 `750b32e`；E 为 `10f7a79`，F 为 `5105c46`。测试工具的总发现数量不是实际执行数量，本文仅统计实际通过用例。完整游戏回归或 Player 构建未在 D/E/F/A 执行，不以专项通过替代 1.4 门禁。
 
