@@ -59,7 +59,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 
 ### 其他内容
 
-- [Help](Modules/Help.md)：`Editor/Help/` 中的 Editor-only 帮助核心，不属于 Runtime / Foundation；Action、Audio 提供方由普通 Editor 程序集承载。
+- [Help](Modules/Help.md)：独立 Editor-only 帮助核心；普通 Editor 承载 Action、Audio、Foundation/Tools，Core Editor 单向接入 Core Provider。
 - [`Samples/ColorSelector/`](../Samples/ColorSelector/)：正式 `YLFramework.Core.ColorSelectorWindow` 的消费者演示，含已绑定的 Sample Prefab，不保存另一份工具实现。
 
 ## 架构与依赖
@@ -74,12 +74,14 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 
 ## 帮助与导出
 
-- 菜单：`YLFramework/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。
+- 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。Core 与 Foundation/Tools 只提供必要接入指南、精选 API 和详细文档导航，不执行示例或创建宿主。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
 - `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出。
-- 默认不导出 `Tests/`、根目录 `Integrations/DOTween/` 及包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`。可选扩展源码须另行引入并满足 DOTween 依赖，不复制 Core 或供应商 DLL。
-- 框架仍沿用 UGUI、Odin、Newtonsoft 等既有依赖，不是零依赖安装包。XML 位于 `Library/`，是构建产物，不默认导出。
-- 导出回归检查当前工程实际包清单及 GUID / meta 字节，不等于干净工程导入、Player 构建或第二 Unity 实例验证。
+- `Plugins/` 完整递归，保留商业插件、Demo 与辅助工具，不裁剪或重配导入平台。这是内部交付决策，公开再分发许可仍需后续核查。
+- 包含正式 Editor/Help 与唯一 `Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll` 及 meta。七项分析器默认 Warning，DLL 仅作为 Core 作用域的编译器输入，不是 Runtime 引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
+- 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
+- 框架仍沿用 UGUI、Odin、Newtonsoft 等既有依赖，Core 保留过渡 XFAB，不是零依赖安装包。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
+- 导出回归真实解包并检查递归资产内容、GUID / meta、完整 Plugins、Analyzer 唯一身份与禁用平台及排除项，不等于干净工程导入。实际 Player 门禁与阶段状态单独记录于 [阶段 6 方案](../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口)。
 
 ## 测试
 

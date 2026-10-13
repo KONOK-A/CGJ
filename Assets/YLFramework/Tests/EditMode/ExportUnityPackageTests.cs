@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
@@ -23,6 +24,7 @@ namespace YLFramework.Tests
         private const string CanvasPath = FrameworkRoot + "/Runtime/Action/ScreenTransition/ScreenTransitionCanvas.cs";
         private const string PrefabGuid = "2a0bf8e4b9b44ec46a47f771105de1e4";
         private const string CanvasGuid = "256f0a9016a7098469c8afed875a5d50";
+        private const string AnalyzerPath = FrameworkRoot + "/Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll";
 
         [Test]
         public void DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab()
@@ -55,6 +57,13 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Editor/Help/YLFramework.Editor.Help.asmdef",
                 FrameworkRoot + "/Editor/Action/Help/ActionKitHelpProvider.cs",
                 FrameworkRoot + "/Editor/Audio/Help/AudioKitHelpProvider.cs",
+                FrameworkRoot + "/Editor/XFMain/CoreHelpProvider.cs",
+                FrameworkRoot + "/Editor/FoundationToolsHelpProvider.cs",
+                FrameworkRoot + "/Editor/XFMain/YLFramework.Core.Editor.asmdef",
+                FrameworkRoot + "/Editor/Resource/ResourceBuildOperation.cs",
+                FrameworkRoot + "/Editor/Resource/ResReferenceOutput.cs",
+                FrameworkRoot + "/Documentation/Modules/Attributes.md",
+                AnalyzerPath,
                 FrameworkRoot + "/Runtime/csc.rsp",
                 FrameworkRoot + "/Documentation/Modules/Action.md",
                 FrameworkRoot + "/Documentation/Modules/Audio.md",
@@ -117,13 +126,13 @@ namespace YLFramework.Tests
                 Assert.That(payloadGuids.Add(guid), Is.True, "Duplicate sentinel GUID: " + path);
             }
 
-            var sourceExtensions = new[] { ".cs", ".md", ".asmdef", ".rsp" };
             var requiredPaths = AssetDatabase.GetAllAssetPaths()
-                .Where(path => roots.Any(root => IsAtOrBelow(path, root)))
-                .Where(path => sourceExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)).ToArray();
+                .Where(path => roots.Any(root => IsAtOrBelow(path, root))).ToArray();
             var excludedRoots = new[]
             {
                 FrameworkRoot + "/Tests", FrameworkRoot + "/Integrations",
+                FrameworkRoot + "/Examples", "Assets/YLFrameworkData", "Assets/Games", "Assets/Scenes",
+                "Assets/StreamingAssets", "Assets/Plugins/NuGet", "Tools", "Temp", "Library", "Packages",
                 FrameworkRoot + "/Runtime/UI",
                 FrameworkRoot + "/Runtime/XFMain/Extensions",
                 FrameworkRoot + "/Runtime/XFMain/Tools",
@@ -170,7 +179,12 @@ namespace YLFramework.Tests
                         // Select by GUID before pathname arrives; archive order is not a contract.
                         if (member == "pathname") record.Pathname = Encoding.UTF8.GetString(ReadEntry(tar, entry)).TrimEnd('\r', '\n', '\0');
                         else if (member == "asset.meta") record.Meta = ReadEntry(tar, entry);
-                        else if (member == "asset" && payloadGuids.Contains(guid)) record.Payload = ReadEntry(tar, entry);
+                        else if (member == "asset")
+                        {
+                            var payload = ReadEntry(tar, entry);
+                            using (var sha = new SHA256Managed()) record.PayloadHash = sha.ComputeHash(payload);
+                            if (payloadGuids.Contains(guid)) record.Payload = payload;
+                        }
                     }
                 }
 
@@ -191,6 +205,7 @@ namespace YLFramework.Tests
                     Assert.That(metaGuids.Count, Is.EqualTo(1), record.Pathname);
                     Assert.That(metaGuids[0].Groups[1].Value, Is.EqualTo(guid), record.Pathname);
                     Assert.That(AssetDatabase.AssetPathToGUID(record.Pathname), Is.EqualTo(guid), record.Pathname);
+                    Assert.That(record.Meta, Is.EqualTo(File.ReadAllBytes(Path.Combine(projectRoot, record.Pathname + ".meta"))), record.Pathname + ".meta");
                     var isFolder = AssetDatabase.IsValidFolder(record.Pathname);
                     Assert.That(Directory.Exists(Path.Combine(projectRoot, record.Pathname)), Is.EqualTo(isFolder), record.Pathname);
                     // Existing folder metadata can predate the folderAsset marker; do not rewrite it during export.
@@ -200,7 +215,14 @@ namespace YLFramework.Tests
                     {
                         if (record.MemberSizes.TryGetValue("asset", out var size)) Assert.That(size, Is.Zero, "Unexpected folder payload: " + record.Pathname);
                     }
-                    else Assert.That(record.MemberSizes.ContainsKey("asset"), Is.True, "Missing asset: " + record.Pathname);
+                    else
+                    {
+                        Assert.That(record.MemberSizes.ContainsKey("asset"), Is.True, "Missing asset: " + record.Pathname);
+                        var source = File.ReadAllBytes(Path.Combine(projectRoot, record.Pathname));
+                        Assert.That(record.MemberSizes["asset"], Is.EqualTo(source.LongLength), record.Pathname);
+                        using (var sha = new SHA256Managed())
+                            Assert.That(record.PayloadHash, Is.EqualTo(sha.ComputeHash(source)), record.Pathname);
+                    }
                     Assert.That(excludedRoots.Any(root => IsAtOrBelow(record.Pathname, root)), Is.False, "Excluded export path: " + record.Pathname);
                     Assert.That(Path.GetFileName(record.Pathname), Is.Not.EqualTo("DOTween.dll").IgnoreCase, "External DOTween must not be exported: " + record.Pathname);
                     Assert.That(retiredFiles.Contains(Path.GetFileName(record.Pathname), StringComparer.Ordinal), Is.False, "Retired export asset: " + record.Pathname);
@@ -208,7 +230,21 @@ namespace YLFramework.Tests
                         Is.True, "Unexpected path outside export roots: " + record.Pathname);
                 }
 
-                foreach (var path in requiredPaths) Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing source/config/documentation: " + path);
+                foreach (var path in requiredPaths) Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing recursive asset: " + path);
+                // Plugins 全递归，包含二进制、Demo 与辅助资产，不只核验源码扩展名。
+                Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins")),
+                    Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins"))));
+                Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "YLFramework.Analyzers.dll"), Is.EqualTo(new[] { AnalyzerPath }));
+                Assert.That(recordsByPath.Keys.Any(p => Path.GetFileName(p).StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)), Is.False);
+                var analyzerMeta = Encoding.UTF8.GetString(recordsByPath[AnalyzerPath].Meta);
+                Assert.That(analyzerMeta, Does.Contain("guid: 471f81c4273ee66429677df44cbd6960"));
+                Assert.That(Regex.Matches(analyzerMeta, @"(?m)^- RoslynAnalyzer\s*$").Count, Is.EqualTo(1));
+                Assert.That(analyzerMeta, Does.Contain("isExplicitlyReferenced: 1"));
+                Assert.That(Regex.Matches(analyzerMeta, @"(?m)^\s+enabled:\s*1\s*$"), Is.Empty);
+                var importer = (PluginImporter)AssetImporter.GetAtPath(AnalyzerPath);
+                Assert.That(importer.GetCompatibleWithAnyPlatform(), Is.False);
+                Assert.That(importer.GetCompatibleWithEditor(), Is.False);
+                Assert.That(importer.GetCompatibleWithPlatform(BuildTarget.StandaloneWindows64), Is.False);
                 foreach (var path in sentinels)
                 {
                     Assert.That(recordsByPath.TryGetValue(path, out var record), Is.True, "Missing fixed sentinel: " + path);
@@ -297,6 +333,7 @@ namespace YLFramework.Tests
             public string Pathname;
             public byte[] Meta;
             public byte[] Payload;
+            public byte[] PayloadHash;
         }
     }
 }

@@ -1,6 +1,6 @@
 # XF × YL：阶段 6 Editor 深度融合总体方案
 
-**状态：APPROVED，阶段 6 IN PROGRESS。6.1、6.2 已验收/Git 收口，6.3 已通过技术验收且提交 `8065d65`；6.4 的G0～G5实施与门禁已完成并通过用户技术验收，Git 收口已获单独授权，详情独立维护于 [6.4 专题计划](xf-yl-6.4-analyzers.md)；6.5 未启动。** 本文件保留阶段 6 总体路线、既定契约与 6.1～6.3 历史成果，不再重复维护 6.4 的详细研究和实施记录。
+**状态：COMPLETE，阶段 6 已完成技术验收与 Git 里程碑收口，最终标签 `milestone/6-editor`。6.1～6.5 全部完成；6.4 提交为 `bc3db767`，后续 Analyzer 改进经用户功能验收并提交 `28dbb576`，专题详情见 [6.4 专题计划](xf-yl-6.4-analyzers.md)。6.5 实现、正式包留存、必要技术门禁和受保护文件复核均已完成，并针对最终 DLL 重新验证受影响部分。** 阶段 7 尚未启动。
 
 **目标：** 保留成熟工具，把已承接的 XF Editor 支撑与 YL authoring、帮助、导出协调起来，修复真实工具链缺陷，并接入可维护的自有分析器。不是重做 Inspector 平台、资源系统或包管理器。
 
@@ -211,6 +211,20 @@
 
 复用 ExportUnityPackageTests 的真实包解包校验，增加新 provider/Analyzer DLL 与 meta 哨兵，不弱化既有 GUID/meta、退役入口、Tests/Integrations 排除断言。由于新增编译器输入，最终安排一次既有独立验收承载的 Windows Development/Mono Player 构建与最小启动冒烟，确认没有自有 Editor/Analyzer/Roslyn 运行引用；不默认执行 5.5 综合流程、原游戏综合验收或 IL2CPP。任何需临时状态的旧验收 driver 先读其前置授权，不能自动沿用 Logger 隔离。纯 Editor 批次不逐批构建 Player。
 
+#### 6.5 实施与验收记录（2026-10-13，技术门禁完成）
+
+- **实际基线：** 本批开始时 `fusion/6-editor` 的 HEAD / 远端同为 `bc3db76728b710cae01b13b1fc225247990f8978`。用户完成并行 Analyzer 验收/提交后，恢复时重新核实 HEAD / 实际远端同为 **`28dbb576fda4b1f79b189b9eec94c15e3469903f`**，远端 `integration/xf-yl` 仍为 `7db580635661165acb42826d3a66f885f9809930`。工作区 DLL、meta、SDK 源码与新提交一致。已有 `.gitignore`、`.kilo/kilo.jsonc` 修改原样保护；并行 test-worktree 仅只读核实。本代理没有 Commit/Push/Merge/Tag/Reset/Clean/切分支。
+- **Help 实现：** `Editor/XFMain/CoreHelpProvider.cs` 注册 `core`，菜单 `YLFramework/Core/帮助`，四篇指南涵盖 Module/MVC、View/UI、生成器及 YL0001～YL0007 的默认 Warning、实际 asmdef 作用域、单 ID 配置限制与 SDK 源码重建。`Editor/FoundationToolsHelpProvider.cs` 注册 `foundation-tools`，菜单 `YLFramework/Toolkit/帮助`，三篇指南提供 Foundation/Tools/Attributes 导航与精选真实 API。只读取元数据和指南，不执行示例或实例化宿主；缺 XML 保留真实声明。Action/Audio Provider、Help 核心及公共协议未改。
+- **程序集：** 普通 `YLFramework.Editor` 继续引用 Foundation/Runtime/Help/UGUI，不引用 Core Runtime；`YLFramework.Core.Editor` 仅新增单向 `YLFramework.Editor.Help` 引用，保留 Core/Foundation/XFAB/UGUI；Help 显式 references 仍为 `[]`。CoreEditorIdentityTests 的编译引用与 asmdef 白名单只豁免准确的 Help 身份，不放宽其他 `YLFramework.Editor.*`、整体 Runtime、原 XF 或游戏依赖。
+- **测试证据：** 新 Provider 测试先出现预期的缺注册失败，再完成实现。独立审查发现重复注册刷新可能读旧内容且污染正式注册项；新增注册身份断言实测失败后，改用唯一临时 id、可区分替换内容及工厂调用计数，finally 注销。新 DLL 基线下实际重新执行 Help **52/52**、CoreEditorIdentityTests **8/8**、ExportUnityPackageTests **1/1**，共 **61 个不同 EditMode 用例**、0 失败/跳过，不将工具总发现量或重复执行次数冒充测试数量。Help 包含真实 ShowUtility/Repaint、MouseDown/MouseUp 页签与清空、搜索和高亮、缺 XML、宿主/场景/输出文件只读、事件释放。没有机械重跑 6.1～6.4 全集；新提交记载的 SDK121/Core59/Play185 为用户确认及提交记录中的既有证据，并非本代理本轮重跑。
+- **真实导出门禁与产物：** 保留 ExportUnityPackage 的六根与 Recurse，不改产品导出实现。既有真实导出/解包测试增强为全部递归资产的内容 SHA-256、完整 meta 字节/GUID、Plugins 全量等价、新 Provider/生成器/Analyzer 哨兵、唯一 DLL、RoslynAnalyzer 标签、显式引用及 Any/Editor/Windows64 禁用配置；Tests、根 Integrations、Examples/YLFrameworkData、游戏/Bundle、SDK/NuGet/缓存/中间产物均排除。正式产物复用同一 ExportRoots/Unity ExportPackage API，直接写工程外目录，不调用菜单的全局 SaveAssets 或剪贴板/打开目录副作用。对**留存的真实包再次解包**：752 条记录（586 文件、166 目录），Plugins 114 条；全部递归内容哈希、meta 字节/GUID 与源资产一致，Analyzer 唯一且为新提交字节。文件 **`YLFramework-6.5.unitypackage`**，10635755 bytes，SHA-256 **`5211315324E1CDECF7B5D37DE69E03FC2BCFF3B0037FA0E5B60E40E7A0CF9FB7`**。完整 Plugins 是内部交付，不代表公开再分发许可；UGUI/Odin/Newtonsoft/Core 过渡 XFAB 边界未改，不宣称干净工程零依赖导入。
+- **实际 Player：** 新 DLL 后重新使用既有 `Tests/Core/Acceptance/UIAcceptance.unity`，显式 scenes + StandaloneWindows64 + Development，沿用 Mono2x，不改 Build Settings/ProjectSettings、不调用 RuntimeAcceptanceDriver、不加载 `-ui34-game`、不重建游戏资源链。新基线实际构建 Succeeded，optionsNumeric=1 / development=True，0 Error、**4 条既有 MCP 空程序集 Warning**，用时 9.41 秒，148374220 bytes。这是正常增量构建，未清 Library；不将本次警告较少描述为修复旧源码/XML 警告。新 Player 真实窗口启动出现 `UI34 READY round=1`、`UI34 PLAYER_PASS`、`UI34 QUIT_PENDING_PASS`，显式捕获进程退出码 **0**。日志包含原 `XFGameFramework.LoggerSystem.LoggerHandler` 调用栈及 Mono 启动路径，未隔离 Logger；旧 DLL 的先前 Player 结果不替代本次验证。
+- **Player 隔离：** 实际 Player 编译图 67 个程序集不含三套自有 Editor 或 Analyzer Runtime 边；Core 的实际 `Library/Bee/artifacts/1900b0aPDevDbg.dag/YLFramework.Core.Runtime.rsp` 仅以 `-analyzer` 引用自有 DLL，不以 `-r` 引用。读取产物 **199 个 Managed PE** 的 AssemblyRef 与 ScriptingAssemblies.json，自有 Editor/Analyzer 和 UnityEditor 非法运行边为 0，所有 YL 程序集没有 Microsoft.CodeAnalysis/NuGet/Microsoft.Build 引用，Foundation 的 CustomPropertyGUI.OnPropertyGUI 不在 Player。与既有 5.5 Managed DLL 名称集合相比没有新增项；工程原有 MCP/NuGet Roslyn DLL 仍在，不宣称原工程零 Roslyn 依赖。
+- **正式证据位置：** **`C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-6.5-20261013-28dbb576/`** 下保留正式 UnityPackage、`YLFramework-Editor65.exe`、`build-summary.txt`、`player.log`、`player-verification.txt`、`package-verification.txt`、`final-state.txt`。旧 `...-bc3db767/` 仅为历史产物。原场景仍为 `Assets/Scenes/Main.unity`、无 dirty、未进入 Play；编译结束且 scriptCompilationFailed=false。新 Provider/测试各有 Unity 生成的独立 meta；未新增验收场景、Prefab、程序集或临时工程脚本。
+- **保护检查：** 28 组 **4452 个文件**按路径/长度/UTC mtime/SHA-256 复核，无额外差异。Runtime 组仅在确认工作区与新提交一致后，以 `28dbb576` 的正式 DLL 更新验收基线；其余组沿用本批最初指纹，含 Packages/ProjectSettings、15 个原 XF Package、游戏/Scene、原 Bundle/StreamingAssets、Prefab/Samples 与 Action/Audio Provider、用户已有忽略/配置修改。原 MainModule 两套产物共 **897 项**保持。Git 再确认 Runtime、Plugins、原游戏/Scene/Prefab、Packages/ProjectSettings 与 SDK 源码无额外差异，所有已有 GUID 与 meta 保留；`git diff --check` 通过。
+- **并行变更处理：** 首轮按用户选择锁定 `bc3db767` 的 CE8DA252… DLL；并行部署 E18A17AE… 中间产物时正式导出在写包前拦截，并按用户选择暂停，没有覆盖或替并行任务提交。04:10Z 用户明确告知新 DLL 已完成功能验证和提交，本轮重新核实正式提交 `28dbb576` 及实际远端；最终 DLL SHA-256 **`6861D339663AAA0235C1A83047F78FB81C11588282068D2DE437CD4B5E09EBF3`**，47616 bytes，GUID **`471f81c4273ee66429677df44cbd6960`**。新提交包含 Memory/ReadOnlyMemory、并发容器及 Mono System.dll 身份处理，已增量同步 Attributes 能力说明；本轮不重写 Analyzer，不把中间产物或旧基线当最终交付。
+- **当前结论：** 6.5 实现、正式 UnityPackage、Windows64/Mono Player 与必要技术门禁全部完成，阶段 6 **已具备最终技术验收条件并完成 Git 里程碑收口**（集成分支 `integration/xf-yl`，最终标签 `milestone/6-editor`）。没有执行 IL2CPP、移动/WebGL、全原游戏或阶段 7 独立承载；原 Logger Domain Reload 历史风险、第三方许可与外部依赖限制保持。实施到此停止，不自动启动阶段 7。
+
 ## 7. 导出与跨阶段交接
 
 - 按用户明确补充，默认根仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 Recurse，不使用 IncludeDependencies。**整个 Plugins 继续递归包含，不裁剪 Odin/Demo/Editor Enhancers，也不改变插件自身 asmdef、源码或导入平台。** 插件许可核查本阶段不处理，不据此宣称最终公开再分发已获许可。
@@ -223,11 +237,11 @@
 
 | 决策 | 已确认边界 |
 |---|---|
-| 实施路线 | 6.1～6.5 总体路线已批准；6.1/6.2 已验收/Git 收口，6.3 技术验收且提交 `8065d65`；6.4 的G0～G5实施/门禁已完成并通过技术验收，Git 收口已获单独授权；6.5 未启动 |
+| 实施路线 | 6.1～6.5 全部完成并完成 Git 里程碑收口；集成于 `integration/xf-yl`，最终标签 `milestone/6-editor`。并行 Analyzer 改进由用户验收并提交 `28dbb576`，6.5 针对该基线完成正式包与必要技术门禁 |
 | Editor 程序集结构 | 保留普通 Editor、Core Editor、独立 Help 三套程序集；不合并程序集，不新建大型编辑器管理中心 |
 | 成熟工具保留 | Module 创建器、SerializedDictionary Drawer、Audio Inspector、Help 与 Resource 工具优先保留；修复真实缺陷而非因未使用退役 |
 | 默认 Plugins 导出 | 保持整个 Plugins 递归导出；插件许可核查暂缓，不据此宣称已获公开再分发授权 |
-| 分析器范围 | 六基础 ID YL0001～YL0006/默认 Warning 不变，实证后启用窄YL0007；自有工具109项/实际Unity门禁完成，不复制原DLL或以Logger冒充，未改Runtime契约 |
+| 分析器范围 | 七项自有 YL 分析器 YL0001～YL0007 正式交付、默认 Warning；只作为 Core 作用域编译器输入，不进入 Player 运行引用。自有 SDK 测试、实际 Unity 编译正反例与 6.5 Player 隔离门禁完成；不复制原 DLL 或以 Logger 冒充，未改 Runtime 契约 |
 | 原游戏产物保护 | 6.2 的自有 Resource 清理与构建操作必须保护原游戏 MainModule 产物，不做整根清理 |
 | SDK 项目受管方式 | 用户已解除必要精确工具权限；已追加两个自有 SDK 项目的精确 `.gitignore` 例外，SDK 锁定及默认不部署的构建测试入口已实际运行 |
 | 阶段 7 边界 | Runtime 目录结构、公开命名与最终独立承载收口保持后续范围，阶段 6 不预做 |

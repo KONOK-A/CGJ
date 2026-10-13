@@ -16,9 +16,11 @@ HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显�
 |---|---|---|
 | [`Editor/Help/`](../../Editor/Help/) | `YLFramework.Editor.Help` | UnityEditor / UnityEngine（IMGUI），显式 references 为 `[]` |
 | [`Editor/Action/Help/`](../../Editor/Action/Help/)、[`Editor/Audio/Help/`](../../Editor/Audio/Help/) | `YLFramework.Editor` | Runtime + Help + UI |
+| [`Editor/FoundationToolsHelpProvider.cs`](../../Editor/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 既有 Foundation / Runtime / Help 引用，不引用 Core Runtime |
+| [`Editor/XFMain/CoreHelpProvider.cs`](../../Editor/XFMain/CoreHelpProvider.cs) | `YLFramework.Core.Editor` | Core / Foundation / Help / UGUI / 过渡 XFAB；仅向 Help 单向引用 |
 | [`Tests/EditMode/Help/`](../../Tests/EditMode/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
 
-核心 namespace 为 `YLFramework.Editor.Help`，独立 Editor-only，不属于 Runtime / Foundation，不依赖 Action、Audio 或第三方模块。提供方在普通 Editor 侧单向引用核心，namespace 为 `YLFramework.Editor.Actions` / `.Audio`。
+核心 namespace 为 `YLFramework.Editor.Help`，独立 Editor-only，不属于 Runtime / Foundation，不依赖 Action、Audio、Core 或第三方模块。提供方在各自 Editor 程序集侧单向引用核心；保持普通 Editor、Core Editor、独立 Help 三程序集，不引入帮助管理中心。
 
 Help 的 `autoReferenced` 为 false；普通 Runtime / Editor / ZipTool 为 true，optional / tests 为 false。`AssemblyInfo.cs` 仅向 `YLFramework.Tests.EditMode` 开放所需 internal。完整依赖见 [架构总览](../Architecture.md)。
 
@@ -62,17 +64,21 @@ Help 的 `autoReferenced` 为 false；普通 Runtime / Editor / ZipTool 为 true
 
 - `HelpWindowTests`：注册表的显式/惰性/重复 id 替换语义、模块切换不串搜索与页签、空注册时窗口完整可用、菜单与"窗口程序集不依赖业务模块"约束、布局尺寸。
 - `ApiTests`：签名/声明格式化（可见性、泛型、默认值）、索引顺序与真实类型关联、XML 读取与合并规则、搜索匹配、XML 缺失回退。
+- `FrameworkHelpProviderTests`：Core / Foundation-Tools 的正式注册、精选类型与指南关联、规则检索、缺 XML 声明、真实窗口搜索/页签/重复注册刷新、关闭订阅释放及不创建宿主/改写场景或生成文件。
 - 测试复用 `YLFramework.Tests.EditMode`，带 `UNITY_INCLUDE_TESTS`；Action / Audio 提供方的 API 库存、示例编译与 XML 回归位于各自测试目录，见 [Action](Action.md#测试与帮助)、[Audio](Audio.md#测试与帮助)。
 
 ## 注册、XML 与菜单
 
-- HelpKit 自身不注册帮助模块；打开 `YLFramework/帮助` 可看到所有已注册模块（如 ActionKit、AudioKit）。
+- HelpKit 自身不注册帮助模块；打开 `YLFramework/帮助` 可看到 Core、Foundation / Tools、ActionKit、AudioKit。
 - 窗口标题："项目帮助"或 "`<DisplayName>` 帮助"。
 - 模块快捷菜单：`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`；稳定注册 id 为 `actionkit` / `audiokit`，显示名仍为 ActionKit / AudioKit。
+- `YLFramework/Core/帮助` 的稳定 id 为 `core`：Module/MVC、View/UI 最小接入、现有生成器入口、依赖边界，以及 YL0001～YL0007 的 Warning 默认、作用域、配置与源码重建。详细规则仍以 [Attributes](Attributes.md#core-使用诊断) 为准，不在 Help 复制整份说明。
+- `YLFramework/Toolkit/帮助` 的稳定 id 为 `foundation-tools`：Foundation、Tools、Attributes 的简洁导航与精选真实 API。CustomClassNameGUI/CustomPropertyGUI 仍是显式扩展元数据，不宣称已有自动 Inspector 平台。
 - factory 在选中时惰性创建内容；API 索引只读取元数据与文档，不执行成员或 demo，也不初始化 Runtime 宿主。
-- Provider 按所属 namespace 的精确或点分边界筛选类型；共享 Runtime 不意味着展示全程序集。Observable / Audio bridge 内建，只有 DOTween 指南保留 optional 门控。
+- Action/Audio Provider 按所属 namespace 的精确或点分边界筛选类型；Core/Foundation-Tools 直接列出精选类型，共享 Runtime 不意味着展示全程序集。Observable / Audio bridge 内建，只有 DOTween 指南保留 optional 门控。
 - 唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 生成 `Library/YLFramework.Runtime.xml`，覆盖 Action、Observable、Audio、bridge；optional 生成 `Library/YLFramework.Actions.DOTween.xml`。`XmlPaths` 按真实 Assembly key 去重。
 - Help 优先显式 XML 路径，仅文件缺失时回退 DLL 邻接 XML；格式或访问错误只警告，不掩盖为路径回退。`Library/` 是构建产物，不默认导出。
+- Core/Foundation 的 XML 未必生成；新 Provider 不增加编译配置，缺失时保留元数据声明与人工编写的指南，不根据名称伪造成员说明。文档链接仅在点击时打开本地说明，不执行示例或工具操作。
 - `HelpWindow` 与 `AudioKitDebugEditorWindow` 针对既有 layout 旧身份保留 `MovedFrom`；没有 namespace / assembly wrapper。旧 API 导航身份无法匹配时沿用窗口回退，不另建持久化名字转换系统。
 - 默认框架包包含 Editor 下帮助核心与提供方及 Documentation，不含 Tests 或根目录 optional；导出与依赖边界见 [文档首页](../README.md#帮助与导出)。
 

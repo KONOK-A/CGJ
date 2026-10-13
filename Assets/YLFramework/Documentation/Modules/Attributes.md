@@ -61,6 +61,8 @@ CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置�
 
 ## Core 使用诊断
 
+Editor 内可从 `YLFramework/Core/帮助` 阅读规则和接入摘要；`YLFramework/Toolkit/帮助` 提供 Foundation 展示元数据导航。两个入口均只读，详细规则、配置及源码重建以本节为准。
+
 六个正式 marker 位于 [`Runtime/XFMain/Attribute/RoslynAnalyzers/`](../../Runtime/XFMain/Attribute/RoslynAnalyzers/)，namespace `YLFramework.Core.RoslynAnalyzers`、程序集 `YLFramework.Core.Runtime`。它们保留原有构造及 AttributeUsage，只提供编译元数据，不执行运行时权限检查。
 
 自有分析器源码位于 `Tools/YLFramework.Analyzers/`，唯一 Unity 产物为 [`Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll)。默认均为 **Warning**；自行采用严策略时按 ID 配置，不修改默认严重级别。分析器不依赖 Unity/Core/Workspaces，生成代码默认不分析，缓存仅当前 compilation。
@@ -109,7 +111,7 @@ protected override void OnViewEnabled() { Refresh(); } // 正确
 - marker/View 必须解析到真实 Core 程序集符号；短名或同 namespace 的异程序集类型不替代它们。方法 marker 只按真实 AttributeUsage 和 override 链取得，接口只在调用的静态目标本身带标记时生效，不叠加任意实现接口的契约。
 - caller 选择器为 `Method`、`Type.Method`、`Namespace.Outer.Type.Method`，区分大小写并使用声明类型，泛型 arity 不写入选择器。accessor 可用 `get_P`/`set_P`、限定的 `Type.P`；构造器可显式用 `.ctor`/`.cctor`。Lambda/local 没有可冒充外层的选择器，field/property initializer 不借用外层方法。null/空调用者被忽略，空名单不允许调用；Warn 的空类型名单不匹配。
 - 开放泛型类型匹配原定义，闭合类型按完整构造符号比较；只从有效类/类型参数约束确定受管类型，不因 `IEnumerable<Args>` 等接口签名钻入隐藏内容。
-- 存储 profiles 包括实际 framework 的持有容器/对应只读集合、字典键和值、Tuple/ValueTuple/Rest、KeyValuePair、Task/ValueTask 结果及真实 Foundation ObjectPool。`IEnumerable`、`IEnumerator`、comparer/delegate 的签名本身不是实例持有证据。
+- 存储 profiles 包括实际 framework 的持有容器/对应只读集合、字典键和值、Tuple/ValueTuple/Rest、KeyValuePair、Task/ValueTask 结果、Memory/ReadOnlyMemory、ConcurrentQueue/Stack/Bag/Dictionary 及真实 Foundation ObjectPool；ArraySegment 和含值槽的 Nullable 结构也按真实存储识别。`IEnumerable`、`IEnumerator`、comparer/delegate 的签名本身不是实例持有证据，伪同名第三方容器不因名称进入 BCL profile。
 - 自有泛型摘要只沿含参数的实例 field、auto-property backing 与构造 BaseType 证明内容位，有限定义图按固定点收敛。`Box<Box<Args>>` 有值槽则报告，phantom/static-only wrapper 不报告；互环无叶不误判，有叶正确传播，未知 metadata 不猜持有。入口不全对象图扫描无关 non-generic 成员；这不是通用泄漏/closure 逃逸检查。
 - YL0005 仅豁免实际 Core `LoadViewArgs.Pool` 的 private static readonly 真实 `ObjectPool<LoadViewArgs>` 字段和 `LoadViewRequest<T>.args` 的 private instance 字段；同名/其他成员/public/static/其他泛型形态不自动豁免。故意契约测试使用声明级局部 pragma，不排除整个 Editor/Test/Core。
 - YL0006 包含 compound/coalesce/inc/dec/deconstruction 各左值叶、ref/out/ref local/ref return 的可写暴露；读取、`in`/`ref readonly`、static 成员和 event subscription 不报。结构体值链写回外层保护成员，引用对象内部 mutation 不当成外层写；保护层级自身仍可修改状态。不追任意被调副作用或 ref 别名后续写入。
@@ -159,7 +161,7 @@ pwsh -NoLogo -NoProfile -NonInteractive -File "Tools/YLFramework.Analyzers/build
 
 只有两个手工 SDK csproj 受管，Unity 生成工程仍被忽略；源码和实际 `packages.lock.json` 为重建输入。bin/obj/TRX/构建输入 SHA receipt 都在 `Temp/YLFramework.Analyzers/`。SDK 测试使用真实六 Attribute 源码生成合同引用，覆盖 ID/Warning/span/中文关键实体、异程序集/错误符号/取消/并发/生成代码及压力语料；不依赖原包 DLL 或反编译目录。
 
-SDK 编译/测试、实际 Unity csc、PlayMode 生命周期、确定性 DLL 重建与程序集输出引用是不同证据。Player/IL2CPP/完整阶段 6 导出验收另行执行，不用这些工具侧结果冒充目标平台构建。
+SDK 编译/测试、实际 Unity csc、PlayMode 生命周期、确定性 DLL 重建与程序集输出引用是不同证据。阶段 6.5 已针对后续正式提交的 Analyzer DLL 重新验证真实解包、Windows64/Mono Development Player 与编译器隔离，不沿用旧 DLL 的 Player 结果。交付状态与实际证据见 [阶段 6 记录](../../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口)。IL2CPP、其他平台及无原 XF 生态的独立载体仍未验证。
 
 ## 备注
 
