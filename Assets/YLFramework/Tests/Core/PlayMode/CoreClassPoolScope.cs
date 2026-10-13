@@ -7,7 +7,9 @@ namespace YLFramework.Core.Tests
 {
     internal sealed class CoreClassPoolScope
     {
+#pragma warning disable YL0005 // Fixture 仅持有清理验证所需身份，Restore 验证生产终态后清空跟踪集合。
         private readonly HashSet<LoadViewArgs> arguments = new HashSet<LoadViewArgs>();
+#pragma warning restore YL0005
 
         public void Track(LoadViewArgs args) => arguments.Add(args);
 

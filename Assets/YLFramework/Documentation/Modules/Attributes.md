@@ -1,4 +1,4 @@
-# Attributes（编辑器显示特性）
+# Attributes（显示元数据与 Core 使用诊断）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
@@ -57,7 +57,109 @@ Core Editor 的 `SerializedPropertyExtensions` 保留 `CopyToClipboard`、`IsCan
 
 混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
 
-CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥；分析器/整个 Editor 工具整合不属本次元数据归口。
+CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据是不同程序集和消费方式。
+
+## Core 使用诊断
+
+六个正式 marker 位于 [`Runtime/XFMain/Attribute/RoslynAnalyzers/`](../../Runtime/XFMain/Attribute/RoslynAnalyzers/)，namespace `YLFramework.Core.RoslynAnalyzers`、程序集 `YLFramework.Core.Runtime`。它们保留原有构造及 AttributeUsage，只提供编译元数据，不执行运行时权限检查。
+
+自有分析器源码位于 `Tools/YLFramework.Analyzers/`，唯一 Unity 产物为 [`Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll)。默认均为 **Warning**；自行采用严策略时按 ID 配置，不修改默认严重级别。分析器不依赖 Unity/Core/Workspaces，生成代码默认不分析，缓存仅当前 compilation。
+
+| ID | 契约与典型修复 |
+|---|---|
+| YL0001 | `MustCallBase` 的有效 override 链要求当前方法直接调用同一 base 槽；修复为 `base.Start()`，不是同名 overload 或嵌套 callback 中的调用。仅证明存在，不证明所有控制流执行；抽象层级冲突需调整标记/覆写结构。 |
+| YL0002 | `RestrictedCall` 限定直接调用者；例如 `View.RegisterEvent` 在 `Awake` 方法本体调用，callback 参数声明合法，callback 内调用不借用外层身份。 |
+| YL0003 | `WarnInClasses` 对当前词法类型的本身/基类/接口匹配警告；View 中用 `RegisterEvent` 代替直接 `EventManager.AddEvent/RemoveEvent`。普通 nested helper 不自动继承外层调用类型。 |
+| YL0004 | `DisableNew` 检查外部普通/目标类型 new 及可确定类约束 new T；用 `LoadViewArgs.New()` 等正式工厂。标记类型自身及词法嵌套实现可构造自身，派生类/同程序集不是全免。 |
+| YL0005 | `MethodLocalOnly` 检查显式 field/property 持有；将参数保持在方法借用窗口，不保存回收后的 lease 引用。数组、tuple、真实容器与自有实例值槽都可构成存储。 |
+| YL0006 | `ProtectedHierarchy` 检查指定类型层级对受保护实例 field/property/indexer 的写入和可写 ref 暴露；例如 View 读取 Model 状态，修改通过 Model 的受管方法进行。 |
+| YL0007 | 真实 Core View 派生声明无参、非 static、非 generic 的 `void OnEnable/OnDisable/OnDestroy` 会竞争 private 框架消息；改用 `OnViewEnabled/OnViewDisabled/OnClosed`。不要求新 marker，不禁止 Awake/其他 Unity 消息。 |
+
+### 错误与正确示例
+
+```csharp
+// YL0001：直接 base 调用必须在本方法，不用 Lambda 或方法组代替。
+protected override void Start() { /* 缺少 base */ } // Warning
+protected override void Start() { base.Start(); } // 正确
+
+// YL0002/3：以下方法位于 View 子类中。
+void Wrong() { RegisterEvent("changed", OnChanged); } // YL0002
+void Wrong() { EventManager.AddEvent("changed", OnChanged); } // YL0003
+void Awake() { RegisterEvent("changed", OnChanged); } // 正确，框架管理轮次
+
+// YL0004/5：局部工厂借用可以，直接构造和成员保存不可以。
+var args = new LoadViewArgs(); // YL0004
+LoadViewArgs saved; // YL0005，List<LoadViewArgs> 等真实持有同样报告
+void Load() { var args = LoadViewArgs.New(); /* 交给接管参数的正式加载入口 */ }
+
+// YL0006：以下方法位于 View 子类中。
+void Wrong(Model model) { model.Id = 7; } // Warning
+long Read(Model model) => model.Id; // 合法读取
+// 修改应封装在 Model 自身业务方法中；不把所有 setter 访问权交给 View。
+
+// YL0007：只比较消息声明本身，不做运行时全局扫描。
+void OnEnable() { Refresh(); } // Warning
+protected override void OnViewEnabled() { Refresh(); } // 正确
+```
+
+这些片段是各规则的独立对照，不是可同时声明的完整类型。`OnChanged`/`Refresh` 代表业务回调，不是额外框架 API。
+
+### 匹配与边界
+
+- marker/View 必须解析到真实 Core 程序集符号；短名或同 namespace 的异程序集类型不替代它们。方法 marker 只按真实 AttributeUsage 和 override 链取得，接口只在调用的静态目标本身带标记时生效，不叠加任意实现接口的契约。
+- caller 选择器为 `Method`、`Type.Method`、`Namespace.Outer.Type.Method`，区分大小写并使用声明类型，泛型 arity 不写入选择器。accessor 可用 `get_P`/`set_P`、限定的 `Type.P`；构造器可显式用 `.ctor`/`.cctor`。Lambda/local 没有可冒充外层的选择器，field/property initializer 不借用外层方法。null/空调用者被忽略，空名单不允许调用；Warn 的空类型名单不匹配。
+- 开放泛型类型匹配原定义，闭合类型按完整构造符号比较；只从有效类/类型参数约束确定受管类型，不因 `IEnumerable<Args>` 等接口签名钻入隐藏内容。
+- 存储 profiles 包括实际 framework 的持有容器/对应只读集合、字典键和值、Tuple/ValueTuple/Rest、KeyValuePair、Task/ValueTask 结果及真实 Foundation ObjectPool。`IEnumerable`、`IEnumerator`、comparer/delegate 的签名本身不是实例持有证据。
+- 自有泛型摘要只沿含参数的实例 field、auto-property backing 与构造 BaseType 证明内容位，有限定义图按固定点收敛。`Box<Box<Args>>` 有值槽则报告，phantom/static-only wrapper 不报告；互环无叶不误判，有叶正确传播，未知 metadata 不猜持有。入口不全对象图扫描无关 non-generic 成员；这不是通用泄漏/closure 逃逸检查。
+- YL0005 仅豁免实际 Core `LoadViewArgs.Pool` 的 private static readonly 真实 `ObjectPool<LoadViewArgs>` 字段和 `LoadViewRequest<T>.args` 的 private instance 字段；同名/其他成员/public/static/其他泛型形态不自动豁免。故意契约测试使用声明级局部 pragma，不排除整个 Editor/Test/Core。
+- YL0006 包含 compound/coalesce/inc/dec/deconstruction 各左值叶、ref/out/ref local/ref return 的可写暴露；读取、`in`/`ref readonly`、static 成员和 event subscription 不报。结构体值链写回外层保护成员，引用对象内部 mutation 不当成外层写；保护层级自身仍可修改状态。不追任意被调副作用或 ref 别名后续写入。
+- YL0007 是声明级提示，普通 MonoBehaviour、XF/伪 View、普通 nested helper、static/有参/generic/非 void overload 不报。实测消息遮蔽会破坏订阅轮次，OnDestroy 的及时关闭可能延后到兜底扫描；不宣称必然永久泄漏，也不改变 Runtime 可见性。
+- object/接口擦除、反射/Activator/dynamic、无约束泛型工厂、所有执行路径和跨过程所有权不保证。错误符号交给编译器，不吞异常或把 analyzer failure 当无诊断；这些 Warning 不是运行时安全边界。
+
+### Unity 接入与配置
+
+DLL 保留新生成的 GUID；Importer 禁用 Any/Editor/普通平台、关闭自动 Runtime 引用，仅精确标为 `RoslynAnalyzer`。位于 Core.Runtime 的 asmdef 范围内，正常 Core 及其实际引用消费者注入；仅 Foundation/旧 Runtime/无 Core/游戏或预定义程序集需核对真实图，不能假定全局覆盖。原 XF/Logger 不关闭，不复制第二套 DLL 扩大 scope。
+
+IDE/SDK 可以按单 ID 配置 `.editorconfig`，例如在消费者目录：
+
+```ini
+[*.cs]
+dotnet_diagnostic.YL0002.severity = none
+```
+
+Unity 2022.3 的实际 csc 不自动跟随 IDE `.editorconfig`；用 asmdef 目录中的叶子 ruleset（例如 `Game.UI.ruleset`），只配置需要的 ID：
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<RuleSet Name="Game UI" Description="Local policy" ToolsVersion="10.0">
+  <Rules AnalyzerId="YLFramework.Analyzers" RuleNamespace="YLFramework.Analyzers">
+    <Rule Id="YL0002" Action="Error" />
+  </Rules>
+</RuleSet>
+```
+
+`Error` 会阻止该消费者编译，`None` 抑制该 ID；其余 ID 保持默认 Warning。根 `Default.ruleset` 可影响全工程，勿为局部需求覆盖根策略。故意测试可精确关闭一个声明/语句的 ID，并紧接恢复：
+
+```csharp
+#pragma warning disable YL0005 // 仅用于验证 lease 的归还终态，不是业务保存入口。
+private readonly HashSet<LoadViewArgs> borrowed = new();
+#pragma warning restore YL0005
+```
+
+### 重建与验证
+
+唯一入口从仓库根执行，要求已安装 SDK `9.0.312`（工具 `global.json` 禁止漂移）及 PowerShell，Roslyn API 固定 `3.8.0`，Analyzer 为 `netstandard2.0`、独立 Tests 为 `net9.0`：
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File "Tools/YLFramework.Analyzers/build.ps1"
+pwsh -NoLogo -NoProfile -NonInteractive -File "Tools/YLFramework.Analyzers/build.ps1" -Deploy
+```
+
+默认只做 locked restore、Release build 和诊断测试，失败即停止、不顶替旧 DLL；显式 `-Deploy` 才原子替换这一 DLL、保留 meta。唯一入口用自有 Temp 合作锁串行化 build/test/deploy，第二入口在动共享输出前拒绝；发布前及 stage 完成后指纹检查会拒绝已观察到的目标变更。该合作锁不是针对任意外部写者的 compare-and-swap，发布期间不要用其他工具写此 DLL。Unity 导入后核对标签、禁用平台和实际编译结果，不向 Assets 复制 Roslyn/Immutable 或测试宿主 DLL。
+
+只有两个手工 SDK csproj 受管，Unity 生成工程仍被忽略；源码和实际 `packages.lock.json` 为重建输入。bin/obj/TRX/构建输入 SHA receipt 都在 `Temp/YLFramework.Analyzers/`。SDK 测试使用真实六 Attribute 源码生成合同引用，覆盖 ID/Warning/span/中文关键实体、异程序集/错误符号/取消/并发/生成代码及压力语料；不依赖原包 DLL 或反编译目录。
+
+SDK 编译/测试、实际 Unity csc、PlayMode 生命周期、确定性 DLL 重建与程序集输出引用是不同证据。Player/IL2CPP/完整阶段 6 导出验收另行执行，不用这些工具侧结果冒充目标平台构建。
 
 ## 备注
 

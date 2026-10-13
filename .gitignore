@@ -72,3 +72,7 @@ Desktop.ini
 .codex/
 .kilocode/
 .opencode/
+
+# Hand-maintained analyzer SDK projects, not Unity-generated projects.
+!/Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj
+!/Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj

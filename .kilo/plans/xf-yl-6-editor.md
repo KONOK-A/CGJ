@@ -1,6 +1,6 @@
 # XF × YL：阶段 6 Editor 深度融合总体方案
 
-**状态：APPROVED，阶段 6 IN PROGRESS。6.1、6.2 已完成用户验收及 Git 收口（`5781c2e`、`b0a050c`）；6.3 已获单独实施授权，实施记录见第 6.3 节，待用户验收与 Git 收口。** 本文件是阶段 6 唯一总体方案；6.1～6.5 五批实施路线已获用户正式批准，但本文件不构成后续单批实施授权，各批仍须单独授权。
+**状态：APPROVED，阶段 6 IN PROGRESS。6.1、6.2 已验收/Git 收口，6.3 已通过技术验收且提交 `8065d65`；6.4 的G0～G5实施与门禁已完成并通过用户技术验收，Git 收口已获单独授权，详情独立维护于 [6.4 专题计划](xf-yl-6.4-analyzers.md)；6.5 未启动。** 本文件保留阶段 6 总体路线、既定契约与 6.1～6.3 历史成果，不再重复维护 6.4 的详细研究和实施记录。
 
 **目标：** 保留成熟工具，把已承接的 XF Editor 支撑与 YL authoring、帮助、导出协调起来，修复真实工具链缺陷，并接入可维护的自有分析器。不是重做 Inspector 平台、资源系统或包管理器。
 
@@ -84,20 +84,20 @@
 
 `XF/Editor/Analyzers/XFGameFrameworkCodeAnalyzer.dll.meta:2-19` 有 RoslynAnalyzer 标签、显式引用且普通平台禁用，但位于 XFGameFrameworkEditor asmdef 下。Unity 2022.3 官方作用域规则是所属程序集及引用者，不是同工程所有类型。现有 `YLFramework.Core.Runtime.csproj:47`/Core.Editor.csproj 等列有 Logger 分析器，未列原 XF 分析器；这些是生成快照，不是本轮实际诊断实验。Logger 分析器的内部规则未知，不能拿其全局注入证明六类 YL 标记已有等效覆盖。
 
-自有标记使用点：`C/mvc/View.cs:141,234-370`、`mvc/Model.cs:8`、`Manager/EventManager.cs:25-243`、`Other/LoadViewArgs.cs:20-27`。六类定义、namespace `YLFramework.Core.RoslynAnalyzers` 及 GUID 原样保留。原 DLL 规则 ID/严重级与完整算法不可核实，因此交付的是明确的 YL 等效能力契约，不宣称逐位复刻原 DLL。
+自有标记使用点：`C/mvc/View.cs:141,234-370`、`mvc/Model.cs:8`、`Manager/EventManager.cs:25-243`、`Other/LoadViewArgs.cs:20-27`。六类定义、namespace `YLFramework.Core.RoslynAnalyzers` 及 GUID 原样保留。原 DLL 研究及证据层级见 [6.4 专题计划](xf-yl-6.4-analyzers.md#2-xf-真实能力与融合判断)；正式交付采用 YL 契约、自有源码和验证，不宣称逐位复刻或复制原 DLL。
 
 ### 5.2 源码、构建与 Unity 接入
 
 - 自有源码项目：`Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj`；诊断测试项目：同根 `Tests/YLFramework.Analyzers.Tests.csproj`。这是手工维护的 SDK 工具项目，不是 Unity 生成工程，也不是新 UPM/插件安装系统。
 - 按用户确认，仅给上述两个项目添加 `.gitignore` 精确例外；中间产物按项目隔离到既有忽略的 Temp 或工程外临时位置。不强制纳入 Unity 生成 csproj，不修改工具权限，不提交 NuGet 缓存。
-- 分析器产物目标 `netstandard2.0`，锁定 `Microsoft.CodeAnalysis.CSharp 3.8.0` 与 Unity 2022.3 编译器契约，依赖设为工具侧私有；不把 Roslyn/NuGet/SDK DLL 复制入 Unity。测试使用实际可用 SDK 的兼容承载，必须与被测分析器使用同版 Roslyn。
+- 分析器产物目标 `netstandard2.0`，锁定 `Microsoft.CodeAnalysis.CSharp 3.8.0` 作为已批准的 API 兼容起点，依赖设为工具侧私有；不把 Roslyn/NuGet/SDK DLL 复制入 Unity。本机 Unity 的实际宿主依赖为 4.3.1，不因宿主更高就升级工具侧 API。测试使用实际可用 SDK 的兼容承载，必须与被测分析器使用同版 Roslyn，并另外验证 Unity 真实加载。
 - SDK 可用性本轮未核实，`dotnet --info` 被工具权限拒绝；不将拒绝解释为 SDK 缺失。6.4 前须只读确认工具链及 restore，缺失时报告，不自动安装/升级环境。
 - 新 DLL 名为 `YLFramework.Analyzers.dll`，放 `C/Analyzers/`，由标签接入 Core.Runtime 及其引用者。不能放 Core.Editor 下而误以为会分析 Runtime/业务；DLL 普通 Editor/Player 平台均禁用、只作为编译器输入，不加入任何 Runtime asmdef 的 precompiledReferences。这只是为 Unity 作用域增加编译器资产，不改 Runtime C#、移动标记或改 Runtime 程序集。
 - 仓库保留源码、版本锁定与构建入口；正常 UnityPackage 携带 DLL/meta/使用说明，不携带工具测试和 SDK。最终源码分发形态留阶段 7，本阶段必须保证从受管源码可重建产物。
 
 ### 5.3 诊断契约
 
-按属性符号及程序集身份识别，不按短类型名、源码字符串或 namespace 前缀全局匹配。使用 ConstructorArguments 读取参数，不加载用户程序集执行 Attribute 构造。稳定 ID 为 `YL0001`～`YL0006`，首版默认 Warning，避免未知原严重级变成已验收 Runtime/测试的编译破坏；警告提供实际诊断，不等于运行时安全证明。消费者可按正常 Roslyn 设置提升严重级，本阶段不全局压制诊断或加 NoWarn。
+按属性符号及程序集身份识别，不按短类型名、源码字符串或 namespace 前缀全局匹配。使用 ConstructorArguments 读取参数，不加载用户程序集执行 Attribute 构造。稳定基础 ID 为 `YL0001`～`YL0006`，首版默认 Warning；这是已批准的 YL 契约。警告不等于运行时安全证明，消费者可按标准 Roslyn 配置调整单 ID；细化语义与额外候选在 [6.4 专题计划](xf-yl-6.4-analyzers.md)维护，不在本文件展开。
 
 | ID/标记 | 最小明确规则 | 必要合法场景/非承诺 |
 |---|---|---|
@@ -189,14 +189,17 @@
 - 保护与影响核查：开始/结束核对 MainModule 两输出目录 **897 个文件**的 SHA-256、大小和最后写入时间完全一致。最终 Bundle 标记/SubProject/临时源码与生成目录均无残留，活动场景仍为 `Assets/Scenes/Main.unity`、dirty=false，`isCompiling=false`、`scriptCompilationFailed=false`、`isUpdating=false`。既有脚本/asmdef `.meta` 未修改；新增工具/测试 `.meta` 均由 Unity 导入生成。未修改原游戏、Prefab/Scene、XF/XFAB/XFFSM Package、Packages、ProjectSettings、Runtime、Module 创建器与默认导出清单。Module 只核对不交叉的输出路径/程序集/引用契约并随工程编译，没有重跑完整生成测试。
 - 证据复用与限制：复用 6.2 已验收的标记、分组、构建事务及实际 Bundle/ResData 闭环，不机械重跑 Resource/Core/Audio/UI/Editor 全集，不运行 Player 构建或最终综合验收。新生成目录是工具专用承载，不自动迁移已有/手写目录；符号检查限当前 Editor 已加载类型，后续新类型或未成功编译的消费者以 Unity 实际诊断为准。首次源码/asmdef 双文件发布不承诺断电/崩溃级原子性，不协调外部并发写者；其他平台文件替换行为未实际运行。
 - 交接：6.3 定向技术完成条件已满足，具备进入 6.4 的技术基础；等待用户验收与 Git 收口。本轮未 Commit/Push/Merge/Tag/Reset/Clean/切换分支，未实施 6.4/6.5，阶段 6 整体保持 IN PROGRESS。
+- 后续基线核查：6.4 Plan 开始时，实际 HEAD 与远端 `fusion/6-editor` 均为 `8065d65c4dddd2b0aebfa43f86f9a3222e16589d`，提交说明为“完成6.3资源常量生成与程序集承载修复”，主工作区及暂存区干净。上述“等待 Git 收口”保留为 6.3 实施轮历史，不再作为 6.4 阻塞；不推定已经合并 `integration/xf-yl`。
 
 ### 6.4 自有分析器源码化与接入
 
-**目标/前置：** 按第 5 节交付六类诊断、受管 SDK 项目、最小构建/测试入口及 Core 作用域 DLL。先确认 SDK/Roslyn 兼容与新增两项目的精确忽略例外，再构建；不移植原 DLL，不使用已有 Logger DLL 冒充实现。
+**目标/前置：** 在第 5 节六规则契约基础上交付自有、准确、可维护的 Analyzer；吸收 XF 的有效设计，补齐真正的语义覆盖与开发体验，按证据而非数量决定额外规则。受管 SDK 项目、可复现 build/test 与 Core 作用域 DLL 是正式交付；先过 G0，再实现，不移植原 DLL、不使用 Logger 冒充。
 
 **退出机制：** “标记存在即已有静态强制”的错误表述；不删除标记、不修改已验收的行为契约。
 
 **门禁：** 工具侧 build + 诊断测试，包括每个 ID 的合法/非法、必要符号边界与两个实际内部 owner；从源码重建产物。Unity 实际重编译验证正例无误报、负例产生规定 ID/位置/Warning，无 analyzer-load/AD0001；探针使用自有临时消费者，不把违规脚本留在工程。元数据核验标签/GUID/普通平台禁用，Core 与无关程序集的实际作用域对照；日志/诊断须区分自有 YL、原 XF、原 Logger。工具测试通过不等于 Unity 兼容通过；最终 Player 隔离在 6.5 验证。
+
+**专题入口：** 原版研究、六规则细化、额外候选、SDK/Unity 验证顺序及剩余证据统一维护于 [xf-yl-6.4-analyzers.md](xf-yl-6.4-analyzers.md)。本节仅保留阶段导航，基础契约仍见第 5.3 节，不在两个文件复制详细记录。
 
 ### 6.5 帮助、导出与阶段收口
 
@@ -213,20 +216,20 @@
 - 按用户明确补充，默认根仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 Recurse，不使用 IncludeDependencies。**整个 Plugins 继续递归包含，不裁剪 Odin/Demo/Editor Enhancers，也不改变插件自身 asmdef、源码或导入平台。** 插件许可核查本阶段不处理，不据此宣称最终公开再分发已获许可。
 - 保持 Tests、根 Integrations、包外 DOTween、游戏资产/Bundle、PackageCache 排除；新测试/SDK 工具项目、NuGet/中间产物和用户生成的 Examples/YLFrameworkData 不加入默认导出。Editor 工具代码、帮助及自有分析器 DLL/meta 必须随现有根进入包。
 - 仍需要既有 UGUI、Newtonsoft、Odin 等依赖，Core 仍有过渡 XFAB；保持 InputSystem 的现有条件/反射契约。不增加 UPM、安装器或“零依赖导入”承诺。DLL 的编译器接入不能变成 Player 运行依赖。
-- 各批只同步必要的现有 README/Architecture/Help/Attributes/Resource/UI 使用说明，不重复建立研究报告，不修改已经正确的长期蓝图状态。本轮唯一新增文件仍是本方案。
+- 各批只同步必要的现有 README/Architecture/Help/Attributes/Resource/UI 使用说明，不重复建立研究报告，不修改已经正确的长期蓝图状态。按用户要求，6.4 在独立专题计划维护；本文件保持总体导航与历史成果。实施新增的正式源码/测试/编译器资产按对应批次授权与门禁处理。
 - 阶段 7 再处理最终目录/公开命名/程序集和独立承载；移动 Analyzer 时必须重新核对 Unity 作用域，不能只保留 GUID 就认定接线仍有效。资源专题接手 EditorAssetTool/XFAB；Logger 专题接手全局分析器与生命周期风险；最终发布前再处理插件许可及完整外部依赖/源码交付。
 
 ## 8. 已确认决策与停止条件
 
 | 决策 | 已确认边界 |
 |---|---|
-| 实施路线 | 6.1～6.5 五批实施路线正式批准；6.1/6.2 已验收/Git 收口，6.3 已授权实施，待用户验收/Git 收口，6.4/6.5 不自动衔接 |
+| 实施路线 | 6.1～6.5 总体路线已批准；6.1/6.2 已验收/Git 收口，6.3 技术验收且提交 `8065d65`；6.4 的G0～G5实施/门禁已完成并通过技术验收，Git 收口已获单独授权；6.5 未启动 |
 | Editor 程序集结构 | 保留普通 Editor、Core Editor、独立 Help 三套程序集；不合并程序集，不新建大型编辑器管理中心 |
 | 成熟工具保留 | Module 创建器、SerializedDictionary Drawer、Audio Inspector、Help 与 Resource 工具优先保留；修复真实缺陷而非因未使用退役 |
 | 默认 Plugins 导出 | 保持整个 Plugins 递归导出；插件许可核查暂缓，不据此宣称已获公开再分发授权 |
-| 分析器范围 | 阶段 6 正式接入自有六类 Roslyn Analyzer（YL0001～YL0006、默认 Warning）；不复制原二进制，不使用 Logger DLL 冒充实现 |
+| 分析器范围 | 六基础 ID YL0001～YL0006/默认 Warning 不变，实证后启用窄YL0007；自有工具109项/实际Unity门禁完成，不复制原DLL或以Logger冒充，未改Runtime契约 |
 | 原游戏产物保护 | 6.2 的自有 Resource 清理与构建操作必须保护原游戏 MainModule 产物，不做整根清理 |
-| SDK 项目受管方式 | 6.4 为自有 SDK 项目增加精确 `.gitignore` 例外；当前不修改规则 |
+| SDK 项目受管方式 | 用户已解除必要精确工具权限；已追加两个自有 SDK 项目的精确 `.gitignore` 例外，SDK 锁定及默认不部署的构建测试入口已实际运行 |
 | 阶段 7 边界 | Runtime 目录结构、公开命名与最终独立承载收口保持后续范围，阶段 6 不预做 |
 
 当前没有还需先决定的重大公共接口/序列化迁移取舍；第 5 节新诊断语义、Warning 默认及窄内部 owner 例外已随总体方案批准，不沿用未知原 DLL 契约。若实施研究发现真实持久生成物/外部 Settings 类型/反射消费者需身份迁移，或分析器必须改变 Runtime 才能成立，暂停相关批次，提交证据与替代方案再确认，不静默放宽规则或扩大授权。
@@ -234,3 +237,5 @@
 **完成标准：** 五批的必要门禁均有实际证据；已保留/修复/退出能力与文档一致；没有原游戏/原 Package/Bundle 或未授权环境变更；默认包包含有效 Editor 工具与编译器资产、不携带框架测试；Player 隔离与依赖边界准确。方案获批不代表任何批次实施或验收通过；各批实施、Commit/Push/Merge/Tag 与分支操作均按用户单独授权执行。
 
 版本依据：[Unity 2022.3 Analyzer scope](https://docs.unity3d.com/2022.3/Documentation/Manual/roslyn-analyzers.html)、[SettingsService.OpenProjectSettings](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/SettingsService.OpenProjectSettings.html)、[ApplyModifiedProperties 的 Undo 契约](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/SerializedObject.ApplyModifiedProperties.html)。Context7 专用查询工具本轮未提供，使用对应版本 Unity 官方文档，不以最新版经验代替工程证据。
+
+6.4 的具体版本证据与反编译来源见 [独立专题计划](xf-yl-6.4-analyzers.md#7-技术完成与剩余证据)。
