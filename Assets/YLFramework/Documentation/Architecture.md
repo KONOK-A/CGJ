@@ -11,15 +11,15 @@
 | `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
 | `Samples/ColorSelector/` | `YLFramework.Samples.ColorSelector` | 消费正式 Core UI 的演示，显式引用 Core / Foundation / UGUI |
 | `Runtime/Tools/ZipTool/` | `YLFramework.Utilities.ZipTool` | Zip/GZip 工具与内置 SharpZipLib，不引用 UnityEngine |
-| `Editor/`（除 `Help`、`XFMain`） | `YLFramework.Editor` | 普通编辑器工具、Action / Audio 帮助提供方，仅 Editor 平台 |
+| `Editor/`（除 `Help`、`XFMain`） | `YLFramework.Editor` | 普通编辑器工具、Action / Audio / Foundation-Tools 帮助提供方，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor.Help` | 独立 Editor-only 帮助核心，显式 references 为 `[]` |
-| `Editor/XFMain/` | `YLFramework.Core.Editor` | Core 模块生成工具与必要 Drawer，显式引用 Core / Foundation / XFAB / UGUI，仅 Editor 平台 |
+| `Editor/XFMain/` | `YLFramework.Core.Editor` | Core 模块生成工具、必要 Drawer 与 Core Help，显式引用 Core / Foundation / Help / XFAB / UGUI，仅 Editor 平台 |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Tests/EditMode/` | `YLFramework.Tests.EditMode` | 编辑器内单元测试 |
 | `Tests/PlayMode/` | `YLFramework.Tests.PlayMode` | 运行时测试 |
 | `Tests/Integrations/DOTween/EditMode/`、`PlayMode/` | `YLFramework.Actions.DOTween.Tests.EditMode`、`.PlayMode` | 独立可选集成测试 |
 
-`Runtime`、普通 `Editor`、`ZipTool` 的 `autoReferenced` 为 true；Help、可选 DOTween 与测试程序集为 false。使用 asmdef 的业务代码仍须显式声明所需引用。
+`Runtime`、普通 `Editor`、`ZipTool` 的 `autoReferenced` 为 true；Core Runtime / Core Editor、Help、可选 DOTween 与测试程序集为 false。使用 asmdef 的业务代码仍须显式声明所需引用。
 
 ## 依赖方向
 
@@ -27,7 +27,7 @@
 - `YLFramework.Core.Runtime` → Foundation、XFABManager、UnityEngine.UI
 - `YLFramework.Runtime` → Foundation、`YLFramework.Utilities.ZipTool`、`UnityEngine.UI`
 - `YLFramework.Editor` → Foundation、`YLFramework.Runtime`、`YLFramework.Editor.Help`、`UnityEngine.UI`
-- `YLFramework.Core.Editor` → `YLFramework.Core.Runtime`、Foundation、XFABManager、UnityEngine.UI
+- `YLFramework.Core.Editor` → `YLFramework.Core.Runtime`、Foundation、`YLFramework.Editor.Help`、XFABManager、UnityEngine.UI
 - `YLFramework.Editor.Help` → 无模块显式引用；Help 不反向依赖 Runtime 或提供方
 - `YLFramework.Actions.DOTween` → `YLFramework.Runtime` + `DOTween.dll`
 - `YLFramework.Tests.EditMode` → Runtime、Editor、Help、ZipTool、UI、TestRunner / NUnit
@@ -65,7 +65,7 @@ Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 这些工具无需组件挂载或公共 Root。现有 `YLFramework.Core.Pool` namespace 不表示依赖 Core Runtime；池的实际程序集边界见 [Pool](Modules/Pool.md)。五个工具保持现有类型、namespace、程序集及 GUID，不为目录或名称形式统一增加迁移风险。JSONObject 与 SharpZipLib 的来源和完整 MIT 许可随 Runtime 导出，分发入口及限制见下文。
 
-Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界，不提前开展阶段 6 Editor 整合。
+Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界。
 
 Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
 
@@ -119,7 +119,7 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 - 通用工具：`ClearLog`、`OpenFolder`、`ExportUnityPackage`，菜单 `YLFramework/Toolkit/...`。
 - 资源工具：`Editor/Resource/`，菜单 `YLFramework/Service/ResService`，包含 AssetBundle 模拟模式、资源标记、打包（`AssetBundleExporter` / `BuildScript`）与资源数据代码生成（`ResDataCodeGenerator`）。详见 [Modules/Resource.md](Modules/Resource.md)。
-- 帮助：`YLFramework/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`；独立 [Help 核心](Modules/Help.md) 承载普通 Editor 中的提供方，稳定 id 为 `actionkit` / `audiokit`。
+- 帮助：`YLFramework/帮助` 复用独立 [Help 核心](Modules/Help.md)。Core Editor 的 `core` 入口为 `YLFramework/Core/帮助`；普通 Editor 的 `foundation-tools` 入口为 `YLFramework/Toolkit/帮助`。既有 `actionkit` / `audiokit` 及 Action/Audio 菜单保持。Help 不反向引用提供方，普通 Editor 不因帮助而依赖 Core Runtime；只读指南/索引不实例化宿主或运行示例。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。运行时 `AudioKitDebugWindow` 位于 Audio / Diagnostics，仅 Editor/Development Build 提供运行 GUI；诊断不为读取空状态创建 AudioManager、Source 或 Listener。
 
 ## XML 与分发
@@ -130,7 +130,9 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干扰、Source/DSP 输出与实际 Windows64/Mono Player 的证据，不能以源码闭包或构建成功互相替代。验收场景和 PCM 属于 Tests 的显式夹具，不改变唯一 Runtime Audio 权威、游戏持久资产或默认分发；系统端点出声与人工听感仍需单独确认，阶段状态以 [Audio 专项](../../../.kilo/plans/xf-yl-4-audio.md)为准。
 
-默认 ExportRoots 仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`。普通模块、帮助源码与屏幕资源包含在默认包；Tests、根目录 DOTween 扩展及包外供应商 DLL 排除。可选源码另行引入依赖，不复制 Core / Vendor。导出回归仅验证当前工程实际包清单与 GUID / meta 字节，不宣称干净工程 import。入口见 [文档首页](README.md#帮助与导出)。
+自有 `YLFramework.Analyzers.dll` 仅一份，位于 Core.Runtime asmdef 范围的 `Runtime/XFMain/Analyzers/`。RoslynAnalyzer 标签将其作为 Core 及实际引用消费者的编译器输入；普通平台禁用、显式引用，不加入 Runtime precompiledReferences。七项 Warning、实际 scope、配置限制与仓库源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。SDK/Roslyn/NuGet 工具链不复制进框架运行时；不要把同工程既有 MCP/NuGet 插件与本分析器混为一谈。
+
+默认 ExportRoots 仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`。Plugins 完整递归，包括商业插件、Demo 和辅助工具；内部交付不代表公开再分发许可已核查。正式 Editor/Help、Analyzer DLL/meta、Runtime 与资源/说明进入包；Tests、根 Integrations、游戏资源、Examples/YLFrameworkData、SDK 项目、NuGet 缓存和中间产物排除。现有外部依赖不自动携带，Core 过渡 XFAB 仍保留。回归真实解包核验全部递归资产内容及 GUID/meta，不宣称干净工程 import。入口见 [文档首页](README.md#帮助与导出)。
 
 ## 测试
 

@@ -4,6 +4,7 @@
     "references": [
         "YLFramework.Core.Runtime",
         "YLFramework.Foundation.Runtime",
+        "YLFramework.Editor.Help",
         "XFABManager",
         "UnityEngine.UI"
     ],

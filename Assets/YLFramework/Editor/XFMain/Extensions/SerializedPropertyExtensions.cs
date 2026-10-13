@@ -125,7 +125,7 @@ namespace YLFramework.Core.Editor
                     return serializedProperty.colorValue.ToString();
                      
                 case SerializedPropertyType.ObjectReference:
-                    return serializedProperty.objectReferenceValue.ToString(); 
+                    return serializedProperty.objectReferenceValue ? serializedProperty.objectReferenceValue.ToString() : "None";
                 case SerializedPropertyType.LayerMask:
                     return serializedProperty.intValue.ToString();
 
@@ -161,7 +161,7 @@ namespace YLFramework.Core.Editor
                     return serializedProperty.quaternionValue.ToString();
                     
                 case SerializedPropertyType.ExposedReference:
-                    return serializedProperty.exposedReferenceValue.ToString();
+                    return serializedProperty.exposedReferenceValue ? serializedProperty.exposedReferenceValue.ToString() : "None";
                     
                 case SerializedPropertyType.FixedBufferSize:
                     //serializedProperty.fixedBufferSize = target.fixedBufferSize;
@@ -185,38 +185,148 @@ namespace YLFramework.Core.Editor
         }
          
         /// <summary>
-        /// 把当前属性的值复制到粘贴板
+        /// 使用 Unity 原生格式复制属性；混值或原生解析器不支持的属性明确拒绝。
         /// </summary>
         /// <param name="serializedProperty"></param>
         public static void CopyToClipboard(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
-            MethodInfo SetSerializedProperty = type.GetMethod("SetSerializedProperty", BindingFlags.Static | BindingFlags.Public);
-            SetSerializedProperty.Invoke(null, new object[] { serializedProperty });
+            string error = ClipboardPropertyError(serializedProperty, false);
+            if (error != null) throw new InvalidOperationException(error);
+            GetClipboardMethod("UnityEditor.Clipboard", "SetSerializedProperty", typeof(void), typeof(SerializedProperty))
+                .Invoke(null, new object[] { serializedProperty });
         }
 
         /// <summary>
-        /// 把粘贴板的数据赋值给当前属性
+        /// 完整预检后粘贴并应用修改，沿用 SerializedObject 的 Undo 与 Prefab override 契约。
+        /// 不支持混值、多种目标类型或不兼容的原生数据；拒绝时不应用任何修改。
         /// </summary>
         /// <param name="serializedProperty"></param>
         public static void PasteFromClipboard(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
-            MethodInfo GetSerializedProperty = type.GetMethod("GetSerializedProperty", BindingFlags.Static | BindingFlags.Public); 
-            GetSerializedProperty.Invoke(null, new object[] { serializedProperty }); 
-            serializedProperty.serializedObject.ApplyModifiedProperties(); 
+            if (!PrepareClipboardPaste(serializedProperty, out var staged, out string error))
+                throw new InvalidOperationException(error);
+            using (staged)
+            {
+                serializedProperty.serializedObject.CopyFromSerializedProperty(staged.FindProperty(serializedProperty.propertyPath));
+                serializedProperty.serializedObject.ApplyModifiedProperties();
+            }
         }
 
         /// <summary>
-        /// 判断粘贴板的内容是否能够粘贴给当前属性
+        /// 判断原生 Clipboard 数据能否完整粘贴；不修改对象、待应用修改或系统粘贴板。
+        /// Unity 私有 API 不可用时抛出带版本与成员信息的 NotSupportedException。
         /// </summary>
         /// <param name="serializedProperty"></param>
         /// <returns></returns>
         public static bool IsCanPaste(this SerializedProperty serializedProperty)
         {
-            Type type = YLFramework.Foundation.AssemblyTool.GetType("UnityEditor.Clipboard");
-            MethodInfo HasSerializedProperty = type.GetMethod("HasSerializedProperty", BindingFlags.Static | BindingFlags.Public);  
-            return (bool)(HasSerializedProperty.Invoke(null, null)); ;
+            bool compatible = PrepareClipboardPaste(serializedProperty, out var staged, out _);
+            staged?.Dispose();
+            return compatible;
+        }
+
+        private static MethodInfo GetClipboardMethod(string typeName, string name, Type returnType, params Type[] parameters)
+        {
+            // 只解析 Unity Editor 自身的类型，不从业务程序集接收同名替身。
+            var type = typeof(UnityEditor.Editor).Assembly.GetType(typeName);
+            var method = type?.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                null, parameters, null);
+            if (method == null || method.ReturnType != returnType)
+                throw new NotSupportedException($"Unity {Application.unityVersion} Clipboard API 不兼容：{typeName}.{name}({string.Join(", ", parameters.Select(p => p.Name))}) -> {returnType.Name}。");
+            return method;
+        }
+
+        private static string ClipboardPropertyError(SerializedProperty property, bool paste)
+        {
+            if (property == null) return "Clipboard 操作需要有效的 SerializedProperty。";
+            if (paste && (!property.editable || property.serializedObject.targetObjects.Any(target =>
+                !target || (target.hideFlags & HideFlags.NotEditable) != 0 ||
+                PrefabUtility.IsPartOfImmutablePrefab(target) ||
+                (EditorUtility.IsPersistent(target) && !AssetDatabase.IsOpenForEdit(target)))))
+                return "Clipboard 目标不可编辑。";
+            if (property.serializedObject.targetObjects.Select(target => target.GetType()).Distinct().Count() != 1)
+                return "Clipboard 不支持不同类型的多对象操作。";
+            using var iterator = property.Copy();
+            using var end = property.GetEndProperty();
+            do
+            {
+                if (iterator.hasMultipleDifferentValues) return "Clipboard 不支持混值属性，请分别编辑目标对象。";
+                if (iterator.propertyType == SerializedPropertyType.ManagedReference ||
+                    iterator.propertyType == SerializedPropertyType.ExposedReference ||
+                    iterator.propertyType == SerializedPropertyType.FixedBufferSize ||
+                    (iterator.propertyType == SerializedPropertyType.Float && iterator.type == "double"))
+                    return "Unity 原生 Clipboard 不能可靠处理此属性：" + iterator.propertyPath;
+            } while (iterator.Next(true) && !SerializedProperty.EqualContents(iterator, end));
+            return null;
+        }
+
+        private static bool PrepareClipboardPaste(SerializedProperty property, out SerializedObject staged, out string error)
+        {
+            staged = null;
+            error = ClipboardPropertyError(property, true);
+            if (error != null) return false;
+
+            var has = GetClipboardMethod("UnityEditor.Clipboard", "HasSerializedProperty", typeof(bool));
+            var read = GetClipboardMethod("UnityEditor.Clipboard", "GetSerializedProperty", typeof(void), typeof(SerializedProperty));
+            var write = GetClipboardMethod("UnityEditor.ClipboardParser", "WriteGenericSerializedProperty",
+                typeof(Dictionary<string, object>), typeof(SerializedProperty));
+            var deserialize = GetClipboardMethod("UnityEditor.Json", "Deserialize", typeof(object), typeof(string));
+            var serialize = GetClipboardMethod("UnityEditor.Json", "Serialize", typeof(string), typeof(object), typeof(bool), typeof(string));
+            error = "Clipboard 数据损坏、不兼容或无法完整粘贴；未应用修改。";
+            if (!(bool)has.Invoke(null, null)) return false;
+            // 使用 Unity 自身的格式、编码器与解析器，不建立自有 Clipboard 协议。
+            var clipboardType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.Clipboard");
+            var prefixField = clipboardType.GetField("kGenericPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+            if (prefixField == null || !prefixField.IsLiteral || prefixField.FieldType != typeof(string))
+                throw new NotSupportedException($"Unity {Application.unityVersion} Clipboard API 不兼容：kGenericPrefix。");
+            string prefix = (string)prefixField.GetRawConstantValue();
+            string contents = EditorGUIUtility.systemCopyBuffer;
+            if (string.IsNullOrEmpty(prefix) || !contents.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            bool accepted = false;
+            try
+            {
+                var expected = deserialize.Invoke(null, new object[] { contents.Substring(prefix.Length) }) as Dictionary<string, object>;
+                if (expected == null || !expected.TryGetValue("name", out var name) ||
+                    !(name is string sourceName) || string.IsNullOrEmpty(sourceName)) return false;
+                // 独立缓冲以相同目标初始化；原生解析即使部分写入，也不会碰到调用者或真实对象。
+                staged = new SerializedObject(property.serializedObject.targetObjects);
+                staged.CopyFromSerializedProperty(property);
+                var destination = staged.FindProperty(property.propertyPath);
+                read.Invoke(null, new object[] { destination });
+                var encoded = write.Invoke(null, new object[] { destination });
+                // 再经过 Unity JSON 编解码统一数值表示，检查原生解析是否遗漏或改变任何字段。
+                string json = (string)serialize.Invoke(null, new object[] { encoded, false, "" });
+                var actual = deserialize.Invoke(null, new object[] { json }) as Dictionary<string, object>;
+                expected["name"] = destination.name;
+                accepted = ClipboardValuesEqual(expected, actual);
+                return accepted;
+            }
+            catch (Exception exception) when (exception.GetBaseException() is ArgumentException ||
+                exception.GetBaseException() is FormatException || exception.GetBaseException() is InvalidCastException ||
+                exception.GetBaseException() is OverflowException)
+            {
+                error += " " + exception.GetBaseException().Message;
+                return false;
+            }
+            finally
+            {
+                if (!accepted)
+                {
+                    staged?.Dispose();
+                    staged = null;
+                }
+            }
+        }
+
+        private static bool ClipboardValuesEqual(object expected, object actual)
+        {
+            if (expected is Dictionary<string, object> dictionary)
+                return actual is Dictionary<string, object> other && dictionary.Count == other.Count &&
+                    dictionary.All(pair => other.TryGetValue(pair.Key, out var value) && ClipboardValuesEqual(pair.Value, value));
+            if (expected is List<object> list)
+                return actual is List<object> otherList && list.Count == otherList.Count &&
+                    list.Select((value, index) => ClipboardValuesEqual(value, otherList[index])).All(equal => equal);
+            return Equals(expected, actual);
         }
 
          

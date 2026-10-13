@@ -9,7 +9,10 @@ namespace YLFramework.Core.RoslynAnalyzers
 {
 
     /// <summary>
-    /// 标记一个类为受保护的层次结构，其字段和属性不能被指定类型（及其子类）修改。
+    /// 保护类型实例的 field/property/indexer，YL0006 默认对指定禁止类型及其基类/接口层级中的写入报告 Warning。
+    /// 包含赋值、复合赋值、自增减、解构、ref/out 及可写 ref 暴露；读取、in/ref readonly 与 static 成员不报。
+    /// 结构体值链回查外层保护成员，引用对象内部 mutation 不等于外层写；保护类型本身及派生实现保留修改权。
+    /// 不追可写 ref 别名后续使用或任意被调副作用，不提供运行时访问控制。
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, Inherited = true)]
     public class ProtectedHierarchyAttribute : Attribute
@@ -30,4 +33,3 @@ namespace YLFramework.Core.RoslynAnalyzers
     }
 
 }
-

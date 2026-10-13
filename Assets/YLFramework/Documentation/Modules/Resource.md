@@ -38,6 +38,37 @@
 - `HotUpdateManager` / `HotUpdateConfig` / `FakeResServer` / `ResVersion`：热更新。
 - 编辑器：`ResServiceEditorWindow`（菜单 `YLFramework/Service/ResService`）、`ResServiceEditorAPI`（模拟模式 / 打包 API）、`ResServiceAssetsMenu`（资源标记）、`AssetBundleExporter`、`BuildScript`、`ResDataCodeGenerator`、`SubProjectData`。
 
+## Resource Editor 操作
+
+1. 在 Project 中单选 `Assets/` 内的文件或子目录，通过 `Assets/YLFramework - AssetBundle Mark` 标记或取消。Bundle 名取最后一段名称，将 `.` 替换为 `_` 并使用 `ToLowerInvariant`。操作立即保存并重导入；标记与取消互为可逆操作，不提供 importer Undo。多选、Assets 根目录、Packages、越界路径不可操作；已有不同 Bundle 名或 variant 的标记不会被覆盖，须先在 Inspector 中确认处理。
+2. 用现有 `SubProject` 资产声明子工程：其所在目录是该子工程的资源边界，输出名仍取该资产的名称。没有落入子工程的已标记资源属于默认工程。相同输出名、同目录或嵌套目录、同一个 Bundle 跨多个 owner、Bundle 依赖跨 owner 均预检拒绝，不隐式归入多个工程。不要将子工程命名为 `AssetBundles` 或平台目录名。
+3. 打开 `YLFramework/Service/ResService`，检查实际平台与绝对输出路径。平台只来自 Unity Build Settings；需要其他平台时从窗口打开原生 Build Settings，安装对应模块并激活目标。旧的平台 Toolbar、未参与构建的版本输入已退出，不删除旧版本偏好。模拟模式、已标记资源的选择/取消以及资源常量入口仍保留。
+4. 构建与清理先展示本次平台、Bundle 数量及每个目标目录，确认后才操作。构建仅接受非空且归属有效的显式 build map；全部 owner 的 Bundle、manifest、`asset_bundle_config.bin` 暂存构建/回读成功后才统一发布。窗口保持打开并显示取消、成功或失败信息；关闭窗口会撤销本窗口尚未执行的排队操作。
+
+输出路径保持现有 Runtime 契约（`<Platform>` 为 `Windows`、`Linux`、`OSX`、`Android`、`iOS`、`WebGL` 或 `WSAPlayer`）：
+
+| Owner | 工程输出 | Runtime StreamingAssets 输出 |
+|---|---|---|
+| 默认工程 | `AssetBundles/<Platform>/` | `Assets/StreamingAssets/AssetBundles/<Platform>/` |
+| 子工程 | `AssetBundles/<SubProject>/<Platform>/` | `Assets/StreamingAssets/<SubProject>/AssetBundles/<Platform>/` |
+
+- 工具只替换或清理明确归属的**平台叶目录**，不删除共享父目录、其他平台或未知兄弟目录；原 XFAB 和 MainModule 构建链独立，不由 YL 工具迁移或接管。
+- 新产物携带 `.yl-resource-output.json`，记录当前工程、默认 owner / 子工程资产 GUID、平台、文件清单及构建源指纹。已有目标没有有效记录、owner 冲突、文件缺失、出现未登记内容、未知孤立 `.meta`，或路径经过 symlink/junction 时，拒绝替换和清理。标记来源和 SubProject 也不能经过 symlink/junction。不要手写归属记录绕过检查；旧目录、移动工程或变更子工程身份后遗留的输出需另行确认备份/迁移，工具不自动认领。
+- 取消不创建输出或临时构建目录；原生构建失败、返回 null、数据表写入/回读失败时不发布。发布/清理中的可恢复文件系统异常回滚旧目录；若回滚本身也受磁盘/权限错误阻止，保留 `Temp/YLResourceBuild/<transaction>/` 备份并报告恢复位置。多目录发布不承诺断电/进程崩溃级原子性，也不承诺与外部并发写者协调。
+- 再发布保留仍存在的文件/目录 `.meta`，清理将被删叶目录自身的 `.meta` 一并纳入事务，不让 Unity 因孤立 metadata 重建空输出目录。构建与清理不支持 Undo。
+- `AssetBundleExporter.BuildDataTable` 的独立调用仅更新当前平台、已构建且归属明确的输出目录；默认路径包含平台层，不再写到 `AssetBundles/` 父目录。源指纹由 Bundle 分配、资产路径/类型、Unity 依赖 hash 和 Bundle 依赖组成；与已发布快照不一致时，要求重新构建并保留旧表，不能将当前标记状态写进旧 Bundle。通过校验后，表文件完整序列化/回读再替换，保留原 `.meta`；它不是任意路径导出或旧产物迁移入口。
+- 自动常量生成与 Bundle 发布结果分开报告：Bundle 已成功发布后，常量失败会明确警告并保留旧源码；Bundle 构建成功不等于常量源码编译通过。
+
+### 资源常量源码与消费者
+
+- 使用窗口的资源常量按钮或 `BuildScript.WriteResReferenceClass()`，在复用上述来源、子工程、Bundle 分组及依赖归属预检后，一次生成所有有效 Bundle。单独生成只读取当前标记，不要求事先构建，不修改 Bundle 输出；构建后的自动生成则核验已发布源指纹并使用该次构建的完整 owner 快照。
+- 固定源码路径为 `Assets/YLFrameworkData/YLResData.cs`，namespace 为 `YLFramework.Services.Resource`。它是**项目消费者源码**，不属于 `YLFramework.Runtime`，也不进入默认 UnityPackage 导出。不要把业务源码放入这个生成专用目录。
+- 首次在空目录生成 `YLFramework.Generated.ResourceNames.asmdef`：无 Framework/Editor/UnityEngine/插件依赖，`autoReferenced=true`。`Assembly-CSharp` 等预定义程序集自动引用；业务 asmdef 必须在 `references` 中显式加入 `YLFramework.Generated.ResourceNames`（也可通过 Inspector 选择其 GUID）。不会自动改写既有业务 asmdef 或迁移消费者。
+- 每个 Bundle 一个公开类，`BundleName` 的值为原 Bundle 名；资源常量值为文件名**只去一次扩展名**后的原始键，保留大小写和中间的点，与 `ResKey` / 数据表的 `ToLowerInvariant` 查询规则一致。例：Bundle `ui-icons`、资产 `Panel.Icon.prefab` 生成 `Ui_icons.BundleName = "ui-icons"` 和 `Ui_icons.Panel_Icon = "Panel.Icon"`。
+- 标识符首字符使用 invariant 大写，完整名称中的非字母/数字/下划线替换为 `_`，数字开头加 `_`。有效输入按 ordinal 排序，重复生成结果稳定；相同源码不重写文件。无有效 Bundle、空清单/名称、非法 Bundle/namespace、类/成员规范化碰撞、同 Bundle 的小写资源键碰撞、`BundleName`/所属类名保留成员冲突，以及与已加载类型/namespace 的冲突都会明确失败，不静默跳过资源。
+- 全量校验与源码生成先于落盘，使用同目录临时文件更新，保留既有源码、asmdef 与目录 `.meta`/GUID；写入失败清理自己的暂存文件。生成文件带内容校验标记，手写文件、手动修改的生成源码/asmdef、未知文件或上级程序集配置、旧承载与孤立 metadata 均拒绝自动接管。遇到这些情况须先确认消费者承载/迁移，不应手工伪造标记绕过保护。
+- 工具校验当前 Editor 已加载的符号；后续新增或尚未成功编译的业务类型仍以 Unity Console 的实际编译结果为准。首次源码与 asmdef 的双文件发布不承诺断电/进程崩溃级原子性，也不协调外部并发写者；生成和文件更新不支持 Undo。
+
 ## 核心运行时契约（第一阶段整理后）
 
 - **ResKey**：查询规则对象。`AssetName` / `OwnerBundleName` 创建时统一转小写（`ToLowerInvariant`），`OriginalAssetName` 保留原始大小写；`assetName` 为 null 抛 `ArgumentNullException`、空白抛 `ArgumentException`。`Match(IRes)` 是唯一的值匹配：资源名必须相等（资源侧也须是已归一化的小写名）、`AssetType` / `OwnerBundleName` 为 null 表示不过滤。未重写 `Equals` / `GetHashCode`，保持引用语义，不应作为哈希容器 key；使用后必须 `RecycleToCache()` 归还对象池，重复回收由对象池拒绝。

@@ -95,7 +95,6 @@ namespace YLFramework.Core.Editor
             eventSystem.SetActive(false);
             SceneManager.MoveGameObjectToScene(eventSystem, scene);
             eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<StandaloneInputModule>();
             return eventSystem;
         }
 

@@ -42,7 +42,7 @@ namespace YLFramework.Core.Editor.Tests
             var references = definition.references.Select(ResolveReference).ToArray();
             Assert.That(references, Is.EquivalentTo(new[]
             {
-                "YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime", "UnityEngine.UI", "XFABManager"
+                "YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime", "UnityEngine.UI", "XFABManager", "YLFramework.Editor.Help"
             }), "Only the declared temporary XFAB backend may reference original assemblies.");
             Assert.That(references.Distinct().Count(), Is.EqualTo(references.Length));
 
@@ -50,6 +50,7 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
             var compiledReferences = assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
             Assert.That(compiledReferences, Does.Contain("YLFramework.Core.Runtime"));
+            Assert.That(compiledReferences, Does.Contain("YLFramework.Editor.Help"));
             Assert.That(compiledReferences.Any(n => n == "UnityEditor" || n.StartsWith("UnityEditor.", StringComparison.Ordinal)), Is.True);
             Assert.That(compiledReferences.Any(IsForbiddenReference), Is.False,
                 string.Join(", ", compiledReferences));
@@ -209,7 +210,8 @@ namespace YLFramework.Core.Editor.Tests
             return name.StartsWith("XFGameFramework", StringComparison.Ordinal) ||
                 name.StartsWith("Project.Game", StringComparison.Ordinal) || name == "Assembly-CSharp" ||
                 name == "Assembly-CSharp-Editor" || name == "YLFramework.Runtime" ||
-                name == "YLFramework.Editor" || name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal);
+                name == "YLFramework.Editor" ||
+                (name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal) && name != "YLFramework.Editor.Help");
         }
 
         private static string NormalizeMenuPath(string path)

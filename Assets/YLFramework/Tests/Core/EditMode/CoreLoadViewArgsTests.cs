@@ -10,15 +10,19 @@ namespace YLFramework.Core.Tests
 {
     public class CoreLoadViewArgsTests
     {
+#pragma warning disable YL0005 // 只为检查真实参数池的回收契约，通过反射借用池而不提供业务持有入口。
         private static ObjectPool<LoadViewArgs> ArgsPool => (ObjectPool<LoadViewArgs>)typeof(LoadViewArgs)
             .GetField("Pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+#pragma warning restore YL0005
         private static readonly Action<LoadViewArgs> Claim = Lifecycle("Claim");
         private static readonly Action<LoadViewArgs> Release = Lifecycle("Release");
         private static readonly Action<LoadViewArgs> BeginRead = Lifecycle("BeginRead");
         private static readonly Action<LoadViewArgs> EndRead = Lifecycle("EndRead");
         private static readonly Action<LoadViewArgs> Recycle = (Action<LoadViewArgs>)Delegate.CreateDelegate(
             typeof(Action<LoadViewArgs>), typeof(LoadViewArgs).GetMethod("Recycle", BindingFlags.Static | BindingFlags.NonPublic));
+#pragma warning disable YL0005 // Fixture 故意跟踪借用对象，TearDown 验证生产路径已归还并清引用。
         private readonly HashSet<LoadViewArgs> arguments = new HashSet<LoadViewArgs>();
+#pragma warning restore YL0005
 
         private static Action<LoadViewArgs> Lifecycle(string name) => (Action<LoadViewArgs>)Delegate.CreateDelegate(
             typeof(Action<LoadViewArgs>), typeof(LoadViewArgs).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic));
@@ -234,7 +238,9 @@ namespace YLFramework.Core.Tests
         public void GenericPoolCannotResetAnActiveLeaseOrReviveAReturnedAlias()
         {
             var args = NewArgs();
+#pragma warning disable YL0004 // 构造故意的外来池工厂，验证通用池不能接管真实参数 lease。
             using var foreignPool = new ObjectPool<LoadViewArgs>(() => new LoadViewArgs());
+#pragma warning restore YL0004
             try
             {
                 Assert.That(typeof(LoadViewArgs).GetMethod("OnLoaded"), Is.Null);
@@ -261,7 +267,9 @@ namespace YLFramework.Core.Tests
             Claim(args);
             try
             {
+#pragma warning disable YL0004 // 同一外来工厂用于验证 owned 借用数据不会被通用池清理。
                 using var foreignPool = new ObjectPool<LoadViewArgs>(() => new LoadViewArgs());
+#pragma warning restore YL0004
                 Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
                 Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
                 BeginRead(args);

@@ -9,23 +9,24 @@ namespace YLFramework.Core.RoslynAnalyzers
     // Fixed 编码
 
     /// <summary>
-    /// 标记某个方法,使其只能由指定的方法调用,否则会报错!
+    /// 限制方法的直接调用者，YL0002 默认报告 Warning；不限制传入 callback 的声明本身。
+    /// 调用者可写方法名、Type.Method 或 Namespace.Outer.Type.Method，按声明类型及名称精确匹配。
+    /// Lambda/local 是独立调用体，不能借用外层或同名 local 的身份；标记按有效覆写链继承，不叠加实现接口。
     /// </summary>
     public class RestrictedCallAttribute : Attribute
     {
 
         /// <summary>
-        /// 限制某个方法的调用(比如可以通过这个特性,限制某个方法只能由某些方法调用,否则会报错!)
+        /// 配置一个允许的直接调用方法；空值不表示任意调用者。
         /// </summary>
-        /// <param name="caller_method">允许调用的方法</param>
+        /// <param name="caller_method">允许的方法选择器；accessor 可使用 get_P/set_P 或限定的 Type.P，构造器可用 .ctor/.cctor。</param>
         public RestrictedCallAttribute(string caller_method) { }
 
         /// <summary>
-        /// 限制某个方法的调用(比如可以通过这个特性,限制某个方法只能由某些方法调用,否则会报错!)
+        /// 配置允许的直接调用方法集合；null/空项被忽略，没有有效项时不允许直接调用。
         /// </summary>
         /// <param name="caller_methods">允许调用的方法</param>
         public RestrictedCallAttribute(string[] caller_methods) { } 
     }
 
 }
-

@@ -40,7 +40,7 @@
 
 定向测试位于 `Tests/Foundation/EditMode/AssemblyToolTests.cs`：null/空白、完整名与大小写、程序集限定名不作为查找入口、嵌套/开放泛型、成功缓存、失败后的晚加载与同名类型首匹配。
 
-实际消费者为 Core 的 Module 字符串 Controller 查询/创建、ModuleManager 字符串启动，以及 Core Editor 的 SerializedProperty Clipboard 查找。原自有 `Core.AssemblyTools` 与 `Utilities.AssemblyTool.AssemblyTool` 已退出，不保留转发壳；原 XF Package 不修改。
+实际消费者为 Core 的 Module 字符串 Controller 查询/创建与 ModuleManager 字符串启动。Core Editor Clipboard 直接从 Unity Editor 程序集解析原生成员并核验签名，不再使用全局类型名查找。原自有 `Core.AssemblyTools` 与 `Utilities.AssemblyTool.AssemblyTool` 已退出，不保留转发壳；原 XF Package 不修改。
 
 ## 备注
 
