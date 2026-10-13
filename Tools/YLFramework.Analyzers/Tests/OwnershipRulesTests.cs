@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
 using NUnit.Framework;
 
 namespace YLFramework.Analyzers.Tests
@@ -26,6 +29,16 @@ namespace YLFramework.Analyzers.Tests
             yield return Case("Storage_ExpandingCycleTerminates", "class Empty<T>{Empty<List<T>> next;}class Full<T>{Full<List<T>> next;T value;}class C{Empty<YLFramework.Core.LoadViewArgs> no;Full<YLFramework.Core.LoadViewArgs> {|YL0005:yes|};}");
             yield return Case("Storage_DictionaryKeysAndValues", "class C{Dictionary<YLFramework.Core.LoadViewArgs,int> {|YL0005:key|};Dictionary<int,YLFramework.Core.LoadViewArgs> {|YL0005:value|};}");
             yield return Case("Storage_TupleRestAndResults", "class C{(int,int,int,int,int,int,int,int,YLFramework.Core.LoadViewArgs) {|YL0005:tuple|};System.Threading.Tasks.Task<YLFramework.Core.LoadViewArgs> {|YL0005:task|};System.Threading.Tasks.ValueTask<YLFramework.Core.LoadViewArgs> {|YL0005:valueTask|};KeyValuePair<int,YLFramework.Core.LoadViewArgs> {|YL0005:pair|};}");
+            yield return Case("Storage_NullableValueCarrier", "struct Box<T>{public T Value;}struct Phantom<T>{public T Get()=>default;}class C{Box<YLFramework.Core.LoadViewArgs>? {|YL0005:held|};Phantom<YLFramework.Core.LoadViewArgs>? no;int? plain;}", "LoadViewArgs");
+            yield return Case("Storage_NullableMarkedStruct", "[MethodLocalOnly]struct Lease{}class C{Lease? {|YL0005:held|};}", "Lease");
+            foreach (var container in new[] { "System.ArraySegment", "System.Memory", "System.ReadOnlyMemory",
+                "System.Collections.Concurrent.ConcurrentQueue", "System.Collections.Concurrent.ConcurrentStack", "System.Collections.Concurrent.ConcurrentBag" })
+                yield return Case("Storage_ValueCarrier_" + container.Substring(container.LastIndexOf('.') + 1),
+                    "class Phantom<T>{public T Get()=>default;}class C{" + container + "<YLFramework.Core.LoadViewArgs> {|YL0005:held|};" +
+                    container + "<int> plain;" + container + "<Phantom<YLFramework.Core.LoadViewArgs>> phantom;" +
+                    container + "<Func<YLFramework.Core.LoadViewArgs>> callbacks;}", "LoadViewArgs");
+            yield return Case("Storage_ConcurrentDictionaryKeysAndValues", "class C{System.Collections.Concurrent.ConcurrentDictionary<YLFramework.Core.LoadViewArgs,int> {|YL0005:key|};System.Collections.Concurrent.ConcurrentDictionary<int,YLFramework.Core.LoadViewArgs> {|YL0005:value|};}");
+            yield return Case("Storage_PseudoConcurrentCarrierNotSeeded", "namespace System.Collections.Concurrent{class ConcurrentQueue<T>{public static T cache;}}class C{System.Collections.Concurrent.ConcurrentQueue<YLFramework.Core.LoadViewArgs> no;}");
             yield return Case("Storage_HoldingVsEnumerableProtocol", "class C{IReadOnlyDictionary<YLFramework.Core.LoadViewArgs,int> {|YL0005:held|};IEnumerable<YLFramework.Core.LoadViewArgs> sequence;IEnumerator<YLFramework.Core.LoadViewArgs> iterator;IComparer<YLFramework.Core.LoadViewArgs> comparer;}");
             yield return Case("Storage_PseudoBclNameNotSeeded", "namespace System.Collections.Generic{class List<T>{public static T cache;}}class C{System.Collections.Generic.List<YLFramework.Core.LoadViewArgs> no;}");
             yield return Case("Storage_ClassNotInterfaceConstraint", "class C<T,U,V>where T:U where U:YLFramework.Core.LoadViewArgs where V:IEnumerable<YLFramework.Core.LoadViewArgs>{T {|YL0005:held|};V no;}");
@@ -72,6 +85,27 @@ namespace YLFramework.Analyzers.Tests
             var opaque = AnalyzerFixture.Emit("Opaque", new[]{"public class Opaque<T>{public T Get()=>default;}"}, AnalyzerFixture.Platform);
             var compilation = AnalyzerFixture.Compilation(AnalyzerFixture.Prefix + "class C{Opaque<YLFramework.Core.LoadViewArgs> field;}").AddReferences(opaque);
             Assert.That(await AnalyzerFixture.Diagnostics(compilation), Is.Empty);
+        }
+
+        [TestCase("System", true)]
+        [TestCase("ThirdPartyContainers", false)]
+        public async Task ConcurrentBagProfileRespectsFrameworkAssemblyIdentity(string assemblyName, bool violation)
+        {
+            var replaced = AnalyzerFixture.Platform.Where(r => Path.GetFileNameWithoutExtension(r.Display) == "System" ||
+                Path.GetFileNameWithoutExtension(r.Display) == "System.Collections.Concurrent").ToArray();
+            var bag = AnalyzerFixture.Emit(assemblyName, new[] {
+                "namespace System.Collections.Concurrent { public class ConcurrentBag<T> { public void Add(T item) {} } }"
+            }, AnalyzerFixture.Platform.Except(replaced));
+            var source = AnalyzerFixture.Prefix + "class C { System.Collections.Concurrent.ConcurrentBag<YLFramework.Core.LoadViewArgs> held; }";
+            var compilation = AnalyzerFixture.Compilation(source).RemoveReferences(replaced).AddReferences(bag);
+            var diagnostics = await AnalyzerFixture.Diagnostics(compilation);
+            Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(violation ? new[] { "YL0005" } : new string[0]));
+            if (violation)
+            {
+                Assert.That(diagnostics.Single().Severity, Is.EqualTo(DiagnosticSeverity.Warning));
+                Assert.That(diagnostics.Single().Location.SourceSpan.Start, Is.EqualTo(source.IndexOf("held;", StringComparison.Ordinal)));
+                Assert.That(diagnostics.Single().Location.SourceSpan.Length, Is.EqualTo(4));
+            }
         }
 
         [Test]

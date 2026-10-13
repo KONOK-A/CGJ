@@ -33,12 +33,16 @@ namespace YLFramework.Analyzers
                 "System.Collections.Generic.ICollection`1", "System.Collections.Generic.IList`1", "System.Collections.Generic.ISet`1",
                 "System.Collections.Generic.IReadOnlyCollection`1", "System.Collections.Generic.IReadOnlyList`1",
                 "System.Collections.Generic.IDictionary`2", "System.Collections.Generic.IReadOnlyDictionary`2",
-                "System.Collections.Generic.KeyValuePair`2", "System.Threading.Tasks.Task`1", "System.Threading.Tasks.ValueTask`1"
+                "System.Collections.Generic.KeyValuePair`2", "System.Threading.Tasks.Task`1", "System.Threading.Tasks.ValueTask`1",
+                "System.Memory`1", "System.ReadOnlyMemory`1",
+                "System.Collections.Concurrent.ConcurrentQueue`1", "System.Collections.Concurrent.ConcurrentStack`1",
+                "System.Collections.Concurrent.ConcurrentBag`1", "System.Collections.Concurrent.ConcurrentDictionary`2"
             }.Concat(Enumerable.Range(1, 8).SelectMany(i => new[] { "System.Tuple`" + i, "System.ValueTuple`" + i })))
             {
                 var type = symbols.Compilation.GetTypeByMetadataName(name);
                 if (type == null || type.Locations.Any(l => l.IsInSource)) continue;
-                if (new[] { "mscorlib", "System.Private.CoreLib", "System.Runtime", "netstandard", "System.Collections", "System.ObjectModel", "System.Threading.Tasks", "System.Threading.Tasks.Extensions" }
+                // Unity 的 .NET Framework/Mono 引用集将 ConcurrentBag<T> 定义在 System.dll 中。
+                if (new[] { "mscorlib", "System", "System.Private.CoreLib", "System.Runtime", "netstandard", "System.Collections", "System.ObjectModel", "System.Threading.Tasks", "System.Threading.Tasks.Extensions", "System.Memory", "System.Collections.Concurrent" }
                     .Contains(type.ContainingAssembly.Name, StringComparer.Ordinal)) profiles.Add(type);
             }
             if (symbols.ObjectPool != null) profiles.Add(symbols.ObjectPool);
@@ -46,11 +50,16 @@ namespace YLFramework.Analyzers
 
         internal string Find(ITypeSymbol type, CancellationToken token)
         {
-            if (!Candidate(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), token)) return null;
             lock (gate)
             {
                 token.ThrowIfCancellationRequested();
+                if (type == null || type.TypeKind == TypeKind.Error) return null;
                 if (results.TryGetValue(type, out var cached)) return cached;
+                if (!Candidate(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), token))
+                {
+                    results[type] = null;
+                    return null;
+                }
                 Ensure(type, token);
                 var known = true;
                 var witness = Witness(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), ref known, token);

@@ -88,7 +88,7 @@ namespace YLFramework.Analyzers.Tests
                     WarmMedianOnBytes=on.Select(s=>s.AllocatedBytes).OrderBy(x=>x).ElementAt(1)
                 });
             }
-            var directory = Path.Combine(AnalyzerFixture.Root,"Temp/YLFramework.Analyzers/TestResults");
+            var directory = Path.Combine(TestContext.CurrentContext.TestDirectory,"TestResults");
             Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory,"performance.json"),JsonSerializer.Serialize(results,new JsonSerializerOptions{WriteIndented=true}));
         }
