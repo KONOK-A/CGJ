@@ -7,7 +7,8 @@
 | 目录 | 程序集（asmdef） | 职责 |
 |---|---|---|
 | `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / HTTP / 通用工具与扩展 |
-| `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter、唯一 Timer 内核及中立类型查找、LayerMask 成员判断、展示元数据 |
+| `Runtime/Foundation/Kernel/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter、唯一 Timer 内核、序列化字典及中立类型查找、LayerMask 成员判断、展示元数据 |
+| `Runtime/Foundation/`（除 `Kernel`） | `YLFramework.Runtime` | Binding、IOC、Events 便捷入口与 Unity 适配、Safe / GameObject 池及 Singleton；不是第二套中立内核 |
 | `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
 | `Samples/ColorSelector/` | `YLFramework.Samples.ColorSelector` | 消费正式 Core UI 的演示，显式引用 Core / Foundation / UGUI |
 | `Runtime/Tools/ZipTool/` | `YLFramework.Utilities.ZipTool` | Zip/GZip 工具与内置 SharpZipLib，不引用 UnityEngine |
@@ -43,8 +44,8 @@
 
 Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
-- `Foundation/`：其他框架模块经常建立在其之上的基础机制（Binding、Events、IOC、Pool、Singleton）；
-- `Shared/`：实际独立的 Foundation 程序集，中立共用闭包；`AssemblyTool`、`LayerMaskUtility` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用；5.4 未扩大该闭包；
+- `Foundation/`：基础能力的逻辑分类；Binding、Events 便捷入口与 Unity 适配、IOC、Safe / GameObject 池及 Singleton 保持 `YLFramework.Runtime` 归属；
+- `Foundation/Kernel/`：独立 `YLFramework.Foundation.Runtime` 的中立共用闭包，由原根级 Shared 整体迁入；`AssemblyTool`、`LayerMaskUtility`、`SerializedDictionary` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用。不将引用 Odin / UGUI / Runtime 工具的上层入口强制下沉，不新增 asmref；
 - `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；
 - `Services/Http/`：轻量 HTTP 服务域，共用整体 Runtime，不新增服务程序集；
 - Runtime 根部：承担完整框架级服务/系统职责的大型模块（Action、Audio、Resource、Save）；正式 UI 位于 Core 的 `XFMain/UI/`，复用 Module / Panel / View。
@@ -67,7 +68,7 @@ Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 
 Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界。
 
-Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
+Timing 位于 `Runtime/Foundation/Kernel/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
 
 ### HTTP / AsyncOperation 边界
 
@@ -109,8 +110,8 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 | [`Runtime/XFMain/UI/WindowCatalog.cs`](../Runtime/XFMain/UI/WindowCatalog.cs) | 仅保存窗口定义；同步/异步入口复用 Module 的活跃会话与 pending 请求 |
 | [`Runtime/XFMain/UI/UIRootContext.cs`](../Runtime/XFMain/UI/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
 | [`Runtime/Resource/ResManager.cs`](../Runtime/Resource/ResManager.cs) | 资源服务入口（`Singleton<ResManager>`，`Init` / `InitAsync`） |
-| [`Runtime/Shared/Timing/Timer.cs`](../Runtime/Shared/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
-| [`Runtime/Shared/Timing/TimerScope.cs`](../Runtime/Shared/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
+| [`Runtime/Foundation/Kernel/Timing/Timer.cs`](../Runtime/Foundation/Kernel/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
+| [`Runtime/Foundation/Kernel/Timing/TimerScope.cs`](../Runtime/Foundation/Kernel/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
 | [`Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs`](../Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs) | 为 Mono 单例指定运行时层级路径（如 `GameObjectPool`）；正式 UI 根不是 Mono 单例 |
 
 框架预制体：`Prefabs/YLFramework.prefab` 保留公共框架根与原 UI 布局，UI 组件已迁为 `UIRootContext` 和 `UITipsPresenter`；`Prefabs/UITips.prefab` 为正式提示项，`Prefabs/ColorSelector.prefab` 为独立重建的取色工具，均使用 UI layer。Runtime 不反向引用 Core；适配与统一输入已完成，阶段 3 真实双 Play 和 Windows64/Mono Player 门禁已验证。IL2CPP、移动设备与最终独立承载不由这些结果替代，详见 [UI](Modules/UI.md)。

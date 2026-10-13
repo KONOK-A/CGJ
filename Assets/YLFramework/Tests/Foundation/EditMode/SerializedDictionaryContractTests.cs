@@ -366,7 +366,7 @@ namespace YLFramework.Foundation.Tests
             var type = typeof(SerializedDictionary<string, int>);
             Assert.That(type.Namespace, Is.EqualTo("YLFramework.Foundation"));
             Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
-            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/Shared/Serialization/SerializedDictionary.cs"),
+            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs"),
                 Is.EqualTo("1418cb45915d1504e859f117b32ade29"));
             var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(f => !f.IsNotSerialized && (f.IsPublic || f.IsDefined(typeof(SerializeField), false))).ToArray();

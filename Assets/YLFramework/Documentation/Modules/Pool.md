@@ -12,7 +12,7 @@
 
 | 内容 | 路径 | 程序集 |
 |---|---|---|
-| ObjectPool、IPool、工厂接口、Default/Custom 工厂、List/Dictionary、预热/顺序选项 | [`Runtime/Shared/Pool/`](../../Runtime/Shared/Pool/) | `YLFramework.Foundation.Runtime` |
+| ObjectPool、IPool、工厂接口、Default/Custom 工厂、List/Dictionary、预热/顺序选项 | [`Runtime/Foundation/Kernel/Pool/`](../../Runtime/Foundation/Kernel/Pool/) | `YLFramework.Foundation.Runtime` |
 | Safe、IOfPool/IPoolType、非公开/动态创建工具、自有 GO 池 | [`Runtime/Foundation/Pool/`](../../Runtime/Foundation/Pool/) | `YLFramework.Runtime` |
 | LoadViewArgs 私有参数池、Core 临时集合消费者 | [`Runtime/XFMain/`](../../Runtime/XFMain/) | `YLFramework.Core.Runtime` |
 

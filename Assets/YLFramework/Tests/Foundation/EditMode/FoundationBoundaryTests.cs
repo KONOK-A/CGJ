@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using YLFramework.Core.Pool;
 
@@ -11,6 +13,36 @@ namespace YLFramework.Foundation.Tests
 {
     public class FoundationBoundaryTests
     {
+        [Test]
+        public void KernelKeepsItsAssetIdentityAndNeutralSourceClosureWithoutAbsorbingRuntimeAdapters()
+        {
+            const string runtimeRoot = "Assets/YLFramework/Runtime/";
+            const string kernel = runtimeRoot + "Foundation/Kernel";
+            Assert.That(AssetDatabase.AssetPathToGUID(kernel), Is.EqualTo("cbd6de2a25410264eb6ff85bef17fe73"));
+            Assert.That(AssetDatabase.AssetPathToGUID(kernel + "/YLFramework.Foundation.Runtime.asmdef"),
+                Is.EqualTo("6b2be150d22ce3f4c9d858f1dafc81a4"));
+            Assert.That(Directory.Exists(runtimeRoot + "Shared"), Is.False);
+            Assert.That(File.Exists(runtimeRoot + "Shared.meta"), Is.False);
+            foreach (var retired in new[] { "Tools/AssemblyTool", "Tools/Attributes" })
+            {
+                Assert.That(Directory.Exists(runtimeRoot + retired), Is.False, retired);
+                Assert.That(File.Exists(runtimeRoot + retired + ".meta"), Is.False, retired);
+            }
+
+            var assemblies = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
+            var foundation = assemblies.Single(a => a.name == "YLFramework.Foundation.Runtime");
+            Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(foundation.name),
+                Is.EqualTo(kernel + "/YLFramework.Foundation.Runtime.asmdef"));
+            Assert.That(foundation.sourceFiles.Select(Path.GetFullPath), Is.EquivalentTo(
+                Directory.GetFiles(kernel, "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
+            var adapters = Directory.GetFiles(runtimeRoot + "Foundation", "*.cs", SearchOption.AllDirectories)
+                .Where(path => !Path.GetFullPath(path).StartsWith(Path.GetFullPath(kernel) + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase)).Select(Path.GetFullPath).ToArray();
+            Assert.That(adapters, Is.Not.Empty);
+            Assert.That(assemblies.Single(a => a.name == "YLFramework.Runtime").sourceFiles.Select(Path.GetFullPath),
+                Is.SupersetOf(adapters));
+        }
+
         [Test]
         public void FoundationHasNoFrameworkResourceOrPluginAssemblyDependencies()
         {

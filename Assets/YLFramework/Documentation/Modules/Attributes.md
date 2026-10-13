@@ -10,7 +10,7 @@
 
 ## 位置
 
-- 元数据：[`Runtime/Shared/Attributes/`](../../Runtime/Shared/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
+- 元数据：[`Runtime/Foundation/Kernel/Attributes/`](../../Runtime/Foundation/Kernel/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
 - 必要原生 Drawer：[`Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs`](../../Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs)，程序集 `YLFramework.Core.Editor` 显式引用 Foundation。
 
 ## CustomClassNameGUI

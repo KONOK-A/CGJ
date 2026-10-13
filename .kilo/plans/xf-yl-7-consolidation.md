@@ -18,19 +18,19 @@
 
 下文源码简称：`R` = `Assets/YLFramework/Runtime/`，`C` = `R/XFMain/`，`E` = `Assets/YLFramework/Editor/`，`T` = `Assets/YLFramework/Tests/`。行号对应本研究基线。
 
-### 1.2 当前真实归属
+### 1.2 当前真实归属（7.1 后）
 
 | 位置 / 程序集 | 当前职责与依赖 | 判断 |
 |---|---|---|
-| `R/Shared` / `YLFramework.Foundation.Runtime` | Pool/集合内核、EventBus/channel、Update、Timing、协程/会话、序列化字典、类型查找、展示元数据；显式 references=[] | 合理中立闭包，目录仍是承接期名字 |
-| `R/Foundation` / **`YLFramework.Runtime`** | Binding、EasyEvent/全局便捷入口、IOC、Safe/GO 池、普通/Mono/资产单例 | 不是第二套底层内核；是较高层入口和 Unity 适配，不能整包下沉 |
+| `R/Foundation/Kernel` / `YLFramework.Foundation.Runtime` | Pool/集合内核、EventBus/channel、Update、Timing、协程/会话、序列化字典、类型查找、展示元数据；显式 references=[] | 7.1 从 Shared 整闭包迁入，保持中立程序集及唯一实现 |
+| `R/Foundation`（除 Kernel） / **`YLFramework.Runtime`** | Binding、EasyEvent/全局便捷入口、IOC、Safe/GO 池、普通/Mono/资产单例 | 不是第二套底层内核；是较高层入口和 Unity 适配，保持原程序集归属 |
 | `C` / `YLFramework.Core.Runtime` | Module/MVC、View/Panel/UI、领域请求、组件/监听及分析器标记；依赖 Foundation、UGUI、过渡 XFAB | 正式 Core 已形成，`XFMain` 不应继续作为永久分类 |
 | `R/{Action,Audio,Resource,Save}`、`Services/Http` | 完整系统与轻量 HTTP，共用 Runtime；Runtime→Foundation、ZipTool、UGUI | 职责合理，保留领域所有权与目录策略 |
 | `R/Tools` | Extensions、StringTools、FSM、Grid、Json、Table；ZipTool 独立无引擎程序集 | 保留成熟工具，不再按来源拆分 |
-| `E`、`E/XFMain`、`E/Help` | 普通 Editor、Core Editor、无模块反向依赖的 Help 核心 | 三程序集保留；Core Editor 的 XFAB 边需要退出 |
+| `E`、`E/XFMain`、`E/Help` | 普通 Editor、Core Editor、无模块反向依赖的 Help 核心 | 三程序集保留；Core 对 XFAB 的过渡依赖在阶段 7 保留，由阶段 8 资源融合处理 |
 | 根 `Integrations` | 可选 DOTween Action、XFAB Audio 适配 | 与正式 Runtime 分离，保持不默认导出、不自动注册 |
 
-边界依据：四份 Runtime asmdef；`R/Shared/Internal/AssemblyInfo.cs:3-4`；`T/Foundation/EditMode/FoundationBoundaryTests.cs:15-25,58-75`；`T/Core/EditMode/CoreIdentityTests.cs:96-117`。原游戏 `Project.Game.MainModule.asmdef:4-12` 引用 Runtime、原 XF/XFAB/XFFSM 等，但不引用新 Core；`MainModule.cs:4,27-28` 实际消费正式 YL Audio。游戏不是可忽略的 Runtime 消费者。
+边界依据：四份 Runtime asmdef；`R/Foundation/Kernel/Internal/AssemblyInfo.cs`；`T/Foundation/EditMode/FoundationBoundaryTests.cs`；`T/Core/EditMode/CoreIdentityTests.cs:96-117`。原游戏 `Project.Game.MainModule.asmdef:4-12` 引用 Runtime、原 XF/XFAB/XFFSM 等，但不引用新 Core；`MainModule.cs:4,27-28` 实际消费正式 YL Audio。游戏不是可忽略的 Runtime 消费者。
 
 ## 2. Runtime 最终组织
 
@@ -173,6 +173,52 @@ XF/QFramework/JSONObject/SharpZipLib 的完整许可和通知随迁后路径继�
 - **退出/保护：** 退出根 Shared 与查实空壳目录，保持唯一 Pool/Events/Update/Timer/字典内核、friend、所有 namespace/asmdef/GUID、Root 和成熟领域实现。
 - **必要门禁：** Unity 实际编译；FoundationBoundary、CoreIdentity；直接路径敏感的 AudioSourceIndependence 两 profile、字典/Attributes 身份及真实导出哨兵。只选 Binding/集合池等直接消费者，不重跑支撑五专题全集。
 - **独立停止：** 出现程序集重归属、Odin/UGUI/Runtime 反向边、既有数据/反射身份变化，停止纯路径批并单独审核，不借迁移修改算法或公开 API。
+
+#### 7.1 实施与验证记录（2026-10-13）
+
+**7.1 技术验收通过，正在进行本轮 Git 收口；阶段 7 保持 IN PROGRESS，未启动 7.2。**
+
+- 启动前实际核对项目 `AGENTS.md`、Unity `2022.3.62f3c1`、manifest、Git 状态、源码及 asmdef。工作分支为 `fusion/7-consolidation`，起始 HEAD 为 `19fd485f0c5ed93e40916f17d8a11472cc4f5e95`；仅有用户已有 `.gitignore`、`.kilo/kilo.jsonc` 修改，两者保留且不计为本批产物。既有 test-worktree 未读取、修改或清理；本轮没有 Commit、Push、Merge、Tag、Reset、Clean 或切换分支。
+- 通过 Unity `AssetDatabase.MoveAsset` 将 `R/Shared` 整体迁为 `R/Foundation/Kernel`，asmdef 与全部源码同批移动，不新增 asmref、不生成替代 meta。根 Shared 及其旧路径 meta 已退出。原 Foundation 的 Binding、Events、IOC、Pool、Singleton 保持位置和 `YLFramework.Runtime` 归属；Core / Editor/XFMain / Analyzer、资源 owner 与成熟领域实现均未迁移或接线。
+- Unity 实查 `R/Tools/AssemblyTool`、`R/Tools/Attributes` 为零条目的空目录，资产 GUID 分别为 `79e6be29ee1d4af89530a3dfe585c0c4`、`ed3279bece18477089b01f45c2d67464`；定向搜索 Assets / ProjectSettings 未发现自身 meta 外的引用。使用 `AssetDatabase.DeleteAssets` 仅删除这两个空目录及对应 meta，没有批量清理其他历史目录。
+
+实际结构：
+
+```text
+Runtime/Foundation/
+  Kernel/                              # 原 Shared，YLFramework.Foundation.Runtime
+    YLFramework.Foundation.Runtime.asmdef
+    Attributes/ Events/ Internal/ Pool/ Serialization/ Timing/
+    ApplicationTool.cs / AssemblyTool.cs / LayerMaskUtility.cs
+    CoroutineStarter.cs / CoroutineObservation.cs / CustomAsyncOperation.cs
+    UpdateManager.cs / LICENSE.md
+  Binding/ Events/ IOC/ Pool/ Singleton/
+                                       # 保持 YLFramework.Runtime
+```
+
+迁移前后保护与验证：
+
+| 门禁 | 本轮实际结果 |
+|---|---|
+| 文件 / meta | 迁移前快照与迁后逐项 SHA-256 比对：113 个文件完全一致，包含 49 个 C#、asmdef、LICENSE 及 62 份文件/目录 meta；无新增或遗漏 Kernel 文件 |
+| 正式资产身份 | Kernel 根目录 GUID 保持 `cbd6de2a25410264eb6ff85bef17fe73`，Foundation asmdef GUID 保持 `6b2be150d22ce3f4c9d858f1dafc81a4`；所有迁移资产 GUID 保持，35 个可解析 MonoScript 的程序集限定类型名保持 |
+| 公共 / 反射身份 | Foundation / Runtime / Core 三程序集共 390 个公开类型的程序集限定名、基类、公开声明成员签名及序列化字段快照一致；程序集完整名称、运行时引用与 friend 集合一致，`datas/Key/Value` 直接身份测试通过 |
+| Unity 实际编译及归属 | 编译完成且 `scriptCompilationFailed=false`；迁前后实际 Editor 源码集合除路径替换外一致：Foundation 49、Runtime 230、Core 46。同步刷新后磁盘与 AssetDatabase 仅一份 Foundation asmdef；Editor / Player 图均只有 49 个 Kernel 脚本，无高层适配误编入 Kernel |
+| FoundationBoundary | 7/7；新增 Kernel 根 GUID / asmdef GUID、精确闭包及高层适配归属门禁，迁前因 Kernel 不存在而失败，迁后通过；中立依赖与仅 Runtime / Core 两个 friend 保持 |
+| CoreIdentity | 9/9；Core / Foundation / Runtime 原类型及依赖边界保持，未提前退出 7.4 的 XFAB 过渡引用 |
+| AudioSourceIndependence | 3/3，实际执行 Editor 与 Windows64 Development 非 Editor 两种源码编译 profile 及引用白名单；仅更新 Kernel 路径，不借用项目已编译实现 |
+| Attributes / AssemblyTool | 各 3/3；展示元数据及派生构造在 Editor / 无 Editor 引用 profile 编译通过，FullName 查找与缓存行为保持 |
+| 直接消费者 | Binding 15/15、CollectionPool 12/12、SerializedDictionaryJson 6/6；另选字典 GUID/字段身份、Unity JSON 往返、资产保存/卸载/重载/实例化 3/3。实际 Unity 编译的 Core、Runtime、Editor 与测试消费者正常，不重跑底层算法全集 |
+| Help / Prefab | 受影响 Audio Help 注册 1/1，实际 Timing 页已显示 Kernel 路径；只读检查正式 Runtime / Prefabs / Samples 下 7 个 Prefab、112 个组件，无 Missing Script，没有修改或保存游戏场景/Prefab |
+| 正式导出 | ExportUnityPackageTests 1/1；实际按原六根 + Recurse 导出并解包，比对全部递归文件内容、meta/GUID、完整 Plugins、许可、Analyzer 及排除项。新增八个 Kernel 固定源码哨兵，旧 Shared 与两个空壳工具路径不进入包；未使用 IncludeDependencies |
+
+上述定向 EditMode 共 **63/63**，无失败或跳过；MCP 的 `TotalTests` 为发现目录数量，执行数量以实际 Passed/Failed/Skipped 为准，不代表运行了历史全集。路径消费者、现有模块导航、Architecture、Timing Help 和来源许可路径已同步更新；没有新建研究报告。
+
+最终独立只读审查未发现可行动的重要问题；复核了 HEAD 旧路径与 Kernel 新路径的 113 个文件字节、meta/asmdef、测试断言、有效路径消费者、导出哨兵及阶段边界。该审查为静态复核，不替代上述主执行者实际完成的 Unity 编译、反射、测试和导出验证。
+
+移动导入瞬间 Unity 曾报告旧 Shared / 新 Kernel 两路径的同名 asmdef 诊断。后续同步刷新、磁盘/AssetDatabase 唯一资产核对、Editor/Player 编译图及实际编译均确认无持久重复；刷新后没有新增 Error 日志。不以清 Console、删除 Library、弱化测试或添加兼容层消除诊断。辅助 MCP 只读脚本首轮有字符串转义编译错误，修正后完成检查，未写入产品源码。
+
+本批未改变算法、运行时 owner、公共 API 或程序集归属，因此没有额外 PlayMode、完整 Player、原游戏综合验收或独立工程导入；这些历史功能证据仅用于未受影响契约，不充当阶段 7 最终独立交付证明。7.1 技术验收已通过并进入本轮 Git 收口，已建立 7.2 所需的稳定 Foundation 前置；7.2 仍需在 Git 收口完成后单独授权，不自动实施。
 
 ### 7.2 Core 职责目录与 Analyzer 接线收口
 

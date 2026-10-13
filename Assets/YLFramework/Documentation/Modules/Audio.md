@@ -849,7 +849,7 @@ Action 在用户 onStarted 之前写入实际 lease，允许回调 Reset/Deinit 
 
 该 `onFinish` 仍为无参 `Action`，不迁移为音频的 `(clip, handle)` 签名；它通知 Action 等待结束，包含拒播/外部停止，不等同于 AudioKit 的自然完成回调。Action 序列的 `.Callback(() => ...)` 也保持不变。
 
-Timer 位于 Foundation 的 `Runtime/Shared/Timing`，是独立到期回调服务；Audio 不使用 Timer 或 `clip.length` 代替 Source 完成检测。TimerScope、ActionHandle、AudioHandle 各管自己的所有权与生命周期，详见 [Timing](Timing.md)。
+Timer 位于 Foundation 的 `Runtime/Foundation/Kernel/Timing`，是独立到期回调服务；Audio 不使用 Timer 或 `clip.length` 代替 Source 完成检测。TimerScope、ActionHandle、AudioHandle 各管自己的所有权与生命周期，详见 [Timing](Timing.md)。
 
 ## 宿主、池与诊断
 

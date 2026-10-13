@@ -14,7 +14,7 @@ Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接�
 
 ## 位置
 
-- 共享机制：[`Runtime/Shared/Events/`](../../Runtime/Shared/Events/)，归属 `YLFramework.Foundation.Runtime`：`EventChannel`（0~7 参数）、`IEventSource`、`EventKey` / `EventBus`、`OrEvent`、取消辅助及 `SubscriptionScope`。
+- 共享机制：[`Runtime/Foundation/Kernel/Events/`](../../Runtime/Foundation/Kernel/Events/)，归属 `YLFramework.Foundation.Runtime`：`EventChannel`（0~7 参数）、`IEventSource`、`EventKey` / `EventBus`、`OrEvent`、取消辅助及 `SubscriptionScope`。
 - Runtime 适配：[`Runtime/Foundation/Events/`](../../Runtime/Foundation/Events/)
   - `Core/`：`IEasyEvent` / `EasyEvent`（0~3 参数）/ `EasyEvents`
   - `Global/`：四个全局事件系统

@@ -10,7 +10,7 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Shared/AssemblyTool.cs`](../../Runtime/Shared/AssemblyTool.cs)，程序集 `YLFramework.Foundation.Runtime`。
+- 运行时：[`Runtime/Foundation/Kernel/AssemblyTool.cs`](../../Runtime/Foundation/Kernel/AssemblyTool.cs)，程序集 `YLFramework.Foundation.Runtime`。
 
 ## 查找规则
 

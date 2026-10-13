@@ -13,7 +13,7 @@
 - 运行时：[`Runtime/Save/`](../../Runtime/Save/)
   - 文件读写辅助：`SaveFileIO.cs`（原子写入 / 备份恢复）
   - 序列化辅助：[`Serialization/`](../../Runtime/Save/Serialization/)
-- 通用字典：[`Runtime/Shared/Serialization/SerializedDictionary.cs`](../../Runtime/Shared/Serialization/SerializedDictionary.cs)，归 `YLFramework.Foundation.Runtime`，不是 Save 专属类型。
+- 通用字典：[`Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs`](../../Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs)，归 `YLFramework.Foundation.Runtime`，不是 Save 专属类型。
 - 原生 Inspector：[`Editor/Serialization/SerializedDictionaryDrawer.cs`](../../Editor/Serialization/SerializedDictionaryDrawer.cs)，归 Editor-only 的 `YLFramework.Editor`。
 
 ## 主要功能

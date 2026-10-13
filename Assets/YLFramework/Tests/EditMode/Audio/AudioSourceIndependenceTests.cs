@@ -30,14 +30,14 @@ namespace YLFramework.Tests.Audio
             // Audio 必须全量收集，避免新增正式组件被固定文件清单漏掉；其他目录仅取真实依赖闭包。
             var directories = new[]
             {
-                "Audio", "Action", "Shared/Pool", "Shared/Events",
+                "Audio", "Action", "Foundation/Kernel/Pool", "Foundation/Kernel/Events",
                 "Foundation/Pool/Abstractions", "Foundation/Events/Core", "Foundation/Events/Internal",
                 "Resource/Implementations", "Resource/Utilities", "Tools/Table",
                 "Tools/ZipTool/ICSharpCode.SharpZipLib"
             };
             var files = new[]
             {
-                "YLFrameworkRoot.cs", "Shared/UpdateManager.cs", "Shared/Internal/SingletonSessionState.cs",
+                "YLFrameworkRoot.cs", "Foundation/Kernel/UpdateManager.cs", "Foundation/Kernel/Internal/SingletonSessionState.cs",
                 "Foundation/Singleton/ISingleton.cs", "Foundation/Singleton/Internal/SingletonCreator.cs",
                 "Foundation/Singleton/Plain/Singleton.cs", "Foundation/Singleton/Plain/SingletonProperty.cs",
                 "Foundation/Singleton/Mono/MonoSingleton.cs", "Foundation/Singleton/Mono/MonoSingletonProperty.cs",
@@ -51,7 +51,7 @@ namespace YLFramework.Tests.Audio
                 "Resource/Framework/ResLoader/IResLoader.cs", "Resource/Framework/ResLoader/ResLoader.cs",
                 "Tools/Extensions/Unity/ComponentExtension.cs", "Tools/Extensions/Unity/GameObjectExtension.cs",
                 "Tools/Extensions/Unity/ObjectExtension.cs", "Tools/Extensions/Math/VectorExtension.cs",
-                 "Shared/LayerMaskUtility.cs"
+                 "Foundation/Kernel/LayerMaskUtility.cs"
             };
             var sources = directories.SelectMany(directory => Directory.GetFiles(Path.Combine(runtime, directory),
                     "*.cs", SearchOption.AllDirectories))

@@ -8,7 +8,7 @@
 
 - `Runtime/Action/`：ActionKit 及其执行、组合、屏幕过渡与 Observable 适配。
 - `Runtime/Audio/`：AudioKit 及音频管理、配置与诊断。
-- `Runtime/Shared/Timing/`：统一 Timer 内核、内部索引堆与句柄收集；旧 `Runtime/Tools/Timing/` 的适用来源声明继续保留。
+- `Runtime/Foundation/Kernel/Timing/`：统一 Timer 内核、内部索引堆与句柄收集；旧 `Runtime/Tools/Timing/` 的适用来源声明继续保留。
 - `Editor/Audio/`、`Editor/Action/Help/`、`Editor/Help/`：基于 ActionKit / AudioKit API 的帮助内容与窗口适配。
 - `Integrations/DOTween/`：ActionKit 的 DOTween 集成适配（不随默认导出；DOTween 本身适用 Demigiant 的独立 Artistic 许可）。
 
@@ -44,11 +44,11 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 
 ## XFGameFramework（弦小风）
 
-- `Runtime/Shared/Serialization/SerializedDictionary.cs`：承接并改编自 XFGameFramework 的 `Runtime/Extensions/SerializedDictionary.cs`，来源 revision 为 `2182708aec`。统一容器在 2.5-A 重写行为后，于 2.5-B 从 YL Core 迁入 Foundation；仍保留 `datas/Key/Value` 序列化条目布局。
-- `Runtime/Shared/AssemblyTool.cs`、`LayerMaskUtility.cs`、`Attributes/`：统一原 YL 实现与 XF revision `2182708aec` 的类型全名查找、掩码成员判断和展示元数据用途；其中 `DisableEdit` 迁自自有 Core，`CustomPropertyGUI` 保留 XF 的 TreeView 刷新配置。必要 Drawer 仍在 `Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs`，完整 Editor 许可继续保留于 `Editor/XFMain/LICENSE.md`。
-- `Runtime/Services/Http/`、`Runtime/Tools/StringTools.cs` 与 `Runtime/Tools/Extensions/` 中的 Animator / Bounds / Color / EventTrigger / LayerMask / Quaternion / Random / Ray / Rigidbody / Scene / Time / Type / Vector2 / Vector3 扩展：由自有 Core 承接的 XF revision `2182708aec` 能力迁入正式 Runtime；HTTP 和几何行为修复仍保留来源。旧 GameObject / Component 扩展的递归设层及 Unity 存活判断合入现有 `GameObjectExtension` / `ObjectExtension`，不保留双实现。LogUtil 实现退役不撤销历史来源；原包不修改，完整 XF MIT 许可仍随 `Runtime/Shared/LICENSE.md` 与 `Runtime/XFMain/LICENSE.md` 分发。
+- `Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs`：承接并改编自 XFGameFramework 的 `Runtime/Extensions/SerializedDictionary.cs`，来源 revision 为 `2182708aec`。统一容器在 2.5-A 重写行为后，于 2.5-B 从 YL Core 迁入 Foundation；仍保留 `datas/Key/Value` 序列化条目布局。
+- `Runtime/Foundation/Kernel/AssemblyTool.cs`、`LayerMaskUtility.cs`、`Attributes/`：统一原 YL 实现与 XF revision `2182708aec` 的类型全名查找、掩码成员判断和展示元数据用途；其中 `DisableEdit` 迁自自有 Core，`CustomPropertyGUI` 保留 XF 的 TreeView 刷新配置。必要 Drawer 仍在 `Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs`，完整 Editor 许可继续保留于 `Editor/XFMain/LICENSE.md`。
+- `Runtime/Services/Http/`、`Runtime/Tools/StringTools.cs` 与 `Runtime/Tools/Extensions/` 中的 Animator / Bounds / Color / EventTrigger / LayerMask / Quaternion / Random / Ray / Rigidbody / Scene / Time / Type / Vector2 / Vector3 扩展：由自有 Core 承接的 XF revision `2182708aec` 能力迁入正式 Runtime；HTTP 和几何行为修复仍保留来源。旧 GameObject / Component 扩展的递归设层及 Unity 存活判断合入现有 `GameObjectExtension` / `ObjectExtension`，不保留双实现。LogUtil 实现退役不撤销历史来源；原包不修改，完整 XF MIT 许可仍随 `Runtime/Foundation/Kernel/LICENSE.md` 与 `Runtime/XFMain/LICENSE.md` 分发。
 - `Runtime/Audio/AudioChannel.cs`、`AudioKit.Named.cs`、`AudioPlayRequest.cs`、`Config/AudioClipLibrary.cs`、`Components/AudioGroupPlayer.cs` 与 `Editor/Audio/` 对应素材组 Inspector：承接 XF revision `2182708aec` 的命名控制、素材组选曲/配置、借入 Source、变化观察和 Enable 播放用途，按唯一 YL 请求/资源内核重新实现，未整类搬移旧播放器。自有 `Runtime/XFMain/Manager/Audio*.cs` 与旧 AudioPlayerInspector 已退出；删除重复实现不撤销历史来源、署名或完整许可。原 XF Package 保持只读且独立存在。
-- 适用 MIT License，版权声明为 `Copyright (c) 2021 弦小风`；完整许可见 `Runtime/Shared/LICENSE.md`。其余 Core 承接源码的完整许可继续保留在 `Runtime/XFMain/LICENSE.md`。
+- 适用 MIT License，版权声明为 `Copyright (c) 2021 弦小风`；完整许可见 `Runtime/Foundation/Kernel/LICENSE.md`。其余 Core 承接源码的完整许可继续保留在 `Runtime/XFMain/LICENSE.md`。
 
 ## 其他第三方组件
 
