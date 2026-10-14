@@ -1,0 +1,491 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
+using YLFramework.Services.Resource;
+using YLFramework.Core;
+using UnityEngine.SceneManagement;
+using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
+using Object = UnityEngine.Object;
+
+namespace YLFramework.Tests.Resource
+{
+    public class ResourceSystemTests
+    {
+        private TextAsset asset;
+        private ControlledSource source;
+        private ResourceConfiguration config;
+        private readonly ResourceAddress address = new("fixture81", "text");
+        private readonly ResourceAddress alias = new("fixture81", "alias");
+
+        internal sealed class ControlledOperation : ResourceSourceOperation
+        {
+            public float Fraction;
+            public override float Progress => IsDone ? 1 : Fraction;
+            public void Finish(Object value, Exception error = null) => Complete(value, error);
+        }
+
+        internal sealed class ControlledSource : IResourceSource
+        {
+            public ResourceSourceId Id { get; }
+            public bool SupportsSynchronousLoad => Synchronous;
+            public bool Synchronous = true;
+            public bool Immediate;
+            public bool ThrowOnStart;
+            public Action OnValidate;
+            public Action OnLoad;
+            public Object Asset;
+            public int Loads;
+            public int Releases;
+            public readonly List<ControlledOperation> Operations = new();
+            public ControlledSource(string id) => Id = new ResourceSourceId(id);
+            public void Validate(ResourceCatalogEntry entry) => OnValidate?.Invoke();
+            public Object Load(ResourceCatalogEntry entry, Type type)
+            {
+                Loads++;
+                OnLoad?.Invoke();
+                if (ThrowOnStart) throw new InvalidOperationException("controlled-load-start");
+                return Asset;
+            }
+            public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type)
+            {
+                Loads++;
+                OnLoad?.Invoke();
+                if (ThrowOnStart) throw new InvalidOperationException("controlled-load-start");
+                var operation = new ControlledOperation();
+                Operations.Add(operation);
+                if (Immediate) operation.Finish(Asset);
+                return operation;
+            }
+            public void Release(Object value) => Releases++;
+        }
+
+        [SetUp]
+        public void SetUp()
+        {
+            Assert.That(ResourceSystem.Current, Is.Null, "Do not take over another resource authority.");
+            asset = new TextAsset("resource81-owned-fixture");
+            source = new ControlledSource("controlled81") { Asset = asset };
+            config = Configure(source);
+        }
+
+        private ResourceConfiguration Configure(ControlledSource first, ControlledSource second = null)
+        {
+            var entries = new List<ResourceCatalogEntry>
+            {
+                new("text-id", address, new ResourceLocation(first.Id, "Exact/Locator", typeof(TextAsset)), new[] { alias })
+            };
+            if (second != null) entries.Add(new ResourceCatalogEntry("other-id", new ResourceAddress("fixture81", "other"),
+                new ResourceLocation(second.Id, "Exact/Locator", typeof(TextAsset))));
+            return new ResourceConfiguration(new[] { new ResourceCatalog("fixture81", entries) },
+                second == null ? new IResourceSource[] { first } : new IResourceSource[] { first, second });
+        }
+
+        private ResourceSystem Initialize()
+        {
+            using var request = ResourceSystem.InitializeAsync(config);
+            Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), request.Error?.ToString());
+            return request.TakeResult();
+        }
+
+        private static void SessionEvent(string method) => typeof(ResourceSystem)
+            .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
+
+        [TearDown]
+        public void TearDown()
+        {
+            SessionEvent("EndSession");
+            foreach (var operation in source.Operations) if (!operation.IsDone) operation.Finish(asset);
+            SessionEvent("ResetSession");
+            Object.DestroyImmediate(asset);
+        }
+
+        [Test]
+        public void FailedInitializationCanRetryWithoutHalfReadyOrSecondAuthority()
+        {
+            source.OnValidate = () => throw new InvalidOperationException("controlled-config");
+            using (var failed = ResourceSystem.InitializeAsync(config))
+            {
+                Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+                Assert.That(failed.Error.Kind, Is.EqualTo(ResourceError.InvalidConfiguration));
+                Assert.That(failed.Error.InnerException, Is.InstanceOf<InvalidOperationException>());
+                Assert.That(ResourceSystem.Current, Is.Null);
+            }
+            source.OnValidate = null;
+            var system = Initialize();
+            using var same = ResourceSystem.InitializeAsync(config);
+            Assert.That(same.TakeResult(), Is.SameAs(system));
+            using var conflict = ResourceSystem.InitializeAsync(Configure(source));
+            Assert.That(conflict.Error.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+            Assert.That(ResourceSystem.Current, Is.SameAs(system));
+        }
+
+        [Test]
+        public void ReentrantInitializationJoinsTheSameConfiguration()
+        {
+            ResourceRequest<ResourceSystem> joined = null;
+            source.OnValidate = () =>
+            {
+                source.OnValidate = null;
+                joined = ResourceSystem.InitializeAsync(config);
+                Assert.That(joined.Status, Is.EqualTo(ResourceRequestStatus.Pending));
+            };
+            var system = Initialize();
+            using (joined) Assert.That(joined.TakeResult(), Is.SameAs(system));
+        }
+
+        [Test]
+        public void AliasesShareProductionWhileRequestsAndLeasesAreIndependent()
+        {
+            var system = Initialize();
+            using var first = system.AcquireAsync<TextAsset>(address);
+            using var second = system.AcquireAsync<TextAsset>(alias);
+            Assert.That(first, Is.Not.SameAs(second));
+            Assert.That(source.Loads, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().WaiterCount, Is.EqualTo(2));
+            source.Operations[0].Finish(asset);
+            using var a = first.TakeResult();
+            using var b = second.TakeResult();
+            Assert.That(a, Is.Not.SameAs(b));
+            Assert.That(a.Asset, Is.SameAs(b.Asset));
+            a.Dispose();
+            Assert.That(b.Asset.text, Is.EqualTo("resource81-owned-fixture"));
+            Assert.That(source.Releases, Is.Zero);
+            b.Dispose();
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void CancelingOneWaiterDoesNotHarmTheOtherOrDuplicateSynchronousProduction()
+        {
+            var system = Initialize();
+            using var first = system.AcquireAsync<TextAsset>(address);
+            using var second = system.AcquireAsync<TextAsset>(address);
+            first.Cancel();
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<TextAsset>(address)).Kind, Is.EqualTo(ResourceError.InProgress));
+            Assert.That(source.Loads, Is.EqualTo(1));
+            source.Operations[0].Finish(asset);
+            Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
+            using var lease = second.TakeResult();
+            Assert.That(lease.Asset, Is.SameAs(asset));
+        }
+
+        [Test]
+        public void LastWaiterExitKeepsCleanupOwnerAndGracefulShutdownDrainsNativeWork()
+        {
+            var system = Initialize();
+            using var request = system.AcquireAsync<TextAsset>(address);
+            request.Dispose();
+            using var shutdown = system.ShutdownAsync();
+            Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Pending));
+            Assert.That(system.State, Is.EqualTo(ResourceSystemState.ShuttingDown));
+            source.Operations[0].Finish(asset);
+            Assert.That(shutdown.TakeResult(), Is.True);
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(source.Operations[0].IsDisposed, Is.True);
+            Assert.That(ResourceSystem.Current, Is.Null);
+        }
+
+        [Test]
+        public void ShutdownBusyRestoresAvailabilityForLiveAndUnclaimedLeases()
+        {
+            var system = Initialize();
+            source.Immediate = true;
+            using var request = system.AcquireAsync<TextAsset>(address);
+            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            Assert.That(system.IsAvailable, Is.True);
+            using var lease = request.TakeResult();
+            request.Dispose();
+            using (var other = system.Acquire<TextAsset>(address)) Assert.That(other.Asset, Is.SameAs(asset));
+            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            lease.Dispose();
+            using var closed = system.ShutdownAsync();
+            Assert.That(closed.TakeResult(), Is.True);
+        }
+
+        [Test]
+        public void AllConsumersArePinnedAndTerminalBeforeTheFirstObserverRuns()
+        {
+            var system = Initialize();
+            using var first = system.AcquireAsync<TextAsset>(address);
+            using var second = system.AcquireAsync<TextAsset>(address);
+            var observed = false;
+            first.Completed += value =>
+            {
+                Assert.That(second.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
+                Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(2));
+                value.Dispose();
+                throw new InvalidOperationException("resource-system-observer");
+            };
+            second.Completed += value => { observed = true; Assert.That(value.Status, Is.EqualTo(ResourceRequestStatus.Succeeded)); };
+            LogAssert.Expect(LogType.Exception, "InvalidOperationException: resource-system-observer");
+            source.Operations[0].Finish(asset);
+            Assert.That(observed, Is.True);
+            using var lease = second.TakeResult();
+            Assert.That(lease.Asset, Is.SameAs(asset));
+            Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.Zero);
+        }
+
+        [Test]
+        public void ScopeClaimsOwnedResultsAndOnlyStopsItsOwnWaitersAndPins()
+        {
+            var system = Initialize();
+            using var scope = system.CreateScope();
+            using var outside = system.AcquireAsync<TextAsset>(address);
+            var inside = scope.AcquireAsync<TextAsset>(address);
+            source.Operations[0].Finish(asset);
+            var taken = scope.TakeResult(inside);
+            using var separate = outside.TakeResult();
+            scope.Dispose();
+            Assert.That(taken.IsDisposed, Is.True);
+            Assert.That(separate.Asset, Is.SameAs(asset));
+            using var newScope = system.CreateScope();
+            var own = newScope.Acquire<TextAsset>(address);
+            Assert.That(own.Asset, Is.SameAs(asset));
+        }
+
+        [Test]
+        public void DisposingPendingScopeDoesNotCancelOtherConsumers()
+        {
+            var system = Initialize();
+            using var scope = system.CreateScope();
+            var inside = scope.AcquireAsync<TextAsset>(address);
+            using var outside = system.AcquireAsync<TextAsset>(address);
+            scope.Dispose();
+            source.Operations[0].Finish(asset);
+            Assert.That(inside.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
+            using var lease = outside.TakeResult();
+            Assert.That(lease.Asset, Is.SameAs(asset));
+        }
+
+        [Test]
+        public void FailureWrongTypeAndThrownStartHaveCausesAndReleaseTheirOwnResult()
+        {
+            var system = Initialize();
+            using (var wrongRequest = system.AcquireAsync<TextAsset>(address))
+            {
+                var wrong = new Texture2D(1, 1);
+                source.Operations[0].Finish(wrong);
+                Assert.That(wrongRequest.Error.Kind, Is.EqualTo(ResourceError.TypeMismatch));
+                Assert.That(source.Releases, Is.EqualTo(1));
+                Object.DestroyImmediate(wrong);
+            }
+            var cause = new InvalidOperationException("controlled-native-failure");
+            using (var failed = system.AcquireAsync<TextAsset>(address))
+            {
+                source.Operations[1].Fraction = 0.5f;
+                Assert.That(failed.Progress, Is.EqualTo(0.5f));
+                source.Operations[1].Finish(null, cause);
+                Assert.That(failed.Error.InnerException, Is.SameAs(cause));
+                Assert.That(failed.Progress, Is.EqualTo(1), "Completion must not reset the observed producer progress to zero.");
+            }
+            source.ThrowOnStart = true;
+            using var thrown = system.AcquireAsync<TextAsset>(address);
+            Assert.That(thrown.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+            Assert.That(thrown.Error.Address, Is.EqualTo(address));
+            Assert.That(thrown.Error.Source, Is.EqualTo(source.Id));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void AddressTypeAndSourceValidationNeverUseFuzzyFallback()
+        {
+            var other = new ControlledSource("second81") { Asset = asset };
+            config = Configure(source, other);
+            var system = Initialize();
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<GameObject>(address)).Kind, Is.EqualTo(ResourceError.TypeMismatch));
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<TextAsset>(default)).Kind, Is.EqualTo(ResourceError.InvalidAddress));
+            using var missing = system.AcquireAsync<TextAsset>(new ResourceAddress("fixture81", "Text"));
+            Assert.That(missing.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            using var a = system.Acquire<TextAsset>(address);
+            using var b = system.Acquire<TextAsset>(new ResourceAddress("fixture81", "other"));
+            Assert.That(source.Loads, Is.EqualTo(1));
+            Assert.That(other.Loads, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SessionExitInvalidatesOldHandlesAndBlocksNewAuthorityUntilLateCleanup()
+        {
+            var system = Initialize();
+            using var pending = system.AcquireAsync<TextAsset>(address);
+            SessionEvent("EndSession");
+            Assert.That(pending.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(ResourceSystem.Current, Is.Null);
+            SessionEvent("ResetSession");
+            using (var blocked = ResourceSystem.InitializeAsync(config)) Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            source.Operations[0].Finish(asset);
+            Assert.That(source.Releases, Is.EqualTo(1));
+            var newer = Initialize();
+            Assert.That(newer, Is.Not.SameAs(system));
+            pending.Dispose();
+            using var lease = newer.Acquire<TextAsset>(address);
+            SessionEvent("EndSession");
+            Assert.That(lease.IsValid, Is.False);
+            Assert.Throws<ResourceException>(() => _ = lease.Asset);
+            lease.Dispose();
+            Assert.That(newer.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void SynchronousAndImmediateAsyncReentrancyCannotReviveExitedSession()
+        {
+            var system = Initialize();
+            source.OnLoad = () => SessionEvent("EndSession");
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<TextAsset>(address)).Kind, Is.EqualTo(ResourceError.SessionUnavailable));
+            Assert.That(source.Releases, Is.EqualTo(1));
+            SessionEvent("ResetSession");
+            system = Initialize();
+            source.Immediate = true;
+            using var request = system.AcquireAsync<TextAsset>(address);
+            Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(source.Releases, Is.EqualTo(2));
+            Assert.That(ResourceSystem.Current, Is.Null);
+        }
+
+        private sealed class ContractProvider : ICoreResourceProvider
+        {
+            public CoreResourceRequest<string> ReadTextAsync(string projectId, string address) => throw new NotSupportedException();
+            public CorePrefabLease AcquirePrefab(string projectId, string address) => throw new NotSupportedException();
+            public CoreResourceRequest<CorePrefabLease> AcquirePrefabAsync(string projectId, string address) => throw new NotSupportedException();
+            public CoreResourceRequest<CoreSceneResult> LoadSceneAsync(string projectId, string address, LoadSceneMode mode) => throw new NotSupportedException();
+        }
+
+        [Test]
+        public void CoreBindingIsExplicitAndOldUnbindCannotClearReplacement()
+        {
+            Assert.That(CoreResourceAccess.Provider, Is.Null);
+            var first = new ContractProvider();
+            var second = new ContractProvider();
+            try
+            {
+                CoreResourceAccess.Bind(first);
+                CoreResourceAccess.Bind(second);
+                Assert.That(CoreResourceAccess.Unbind(first), Is.False);
+                Assert.That(CoreResourceAccess.Provider, Is.SameAs(second));
+                Assert.That(CoreResourceAccess.Unbind(second), Is.True);
+                Assert.That(CoreResourceAccess.Provider, Is.Null);
+            }
+            finally { CoreResourceAccess.Unbind(second); }
+        }
+
+        [Test]
+        public void InitializationRejectsNullDuplicateProjectsAndUnknownSources()
+        {
+            using (var invalid = ResourceSystem.InitializeAsync(null))
+                Assert.That(invalid.Error.Kind, Is.EqualTo(ResourceError.InvalidConfiguration));
+            using (var invalid = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { config.Catalogs[0], config.Catalogs[0] })))
+                Assert.That(invalid.Error.Kind, Is.EqualTo(ResourceError.InvalidConfiguration));
+            using (var invalid = ResourceSystem.InitializeAsync(new ResourceConfiguration(config.Catalogs)))
+                Assert.That(invalid.Error.Kind, Is.EqualTo(ResourceError.InvalidConfiguration));
+            Assert.That(ResourceSystem.Current, Is.Null);
+            Assert.That(Initialize().IsAvailable, Is.True);
+        }
+
+        [Test]
+        public void UnsupportedColdSyncDoesNotBlockSyncUseOfAnAsyncReadyAsset()
+        {
+            var system = Initialize();
+            source.Synchronous = false;
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<TextAsset>(address)).Kind, Is.EqualTo(ResourceError.Unsupported));
+            Assert.That(source.Loads, Is.Zero);
+            using var pending = system.AcquireAsync<TextAsset>(address);
+            source.Operations[0].Finish(asset);
+            using var ready = system.Acquire<TextAsset>(address);
+            Assert.That(ready.Asset, Is.SameAs(asset));
+            Assert.That(source.Loads, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ImmediateScopeDisposalDuringSourceStartCannotLeakUnreturnedResult()
+        {
+            var system = Initialize();
+            using var scope = system.CreateScope();
+            source.Immediate = true;
+            source.OnLoad = scope.Dispose;
+            Assert.Throws<ObjectDisposedException>(() => scope.AcquireAsync<TextAsset>(address));
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void ExternallyDestroyedObjectIsRejectedWithoutReleasingOtherConsumers()
+        {
+            var system = Initialize();
+            using var first = system.Acquire<TextAsset>(address);
+            using var second = system.Acquire<TextAsset>(address);
+            Object.DestroyImmediate(asset);
+            Assert.That(first.IsValid, Is.False);
+            Assert.That(Assert.Throws<ResourceException>(() => _ = first.Asset).Kind, Is.EqualTo(ResourceError.LoadFailed));
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<TextAsset>(address)).Kind, Is.EqualTo(ResourceError.LoadFailed));
+            first.Dispose();
+            Assert.That(source.Releases, Is.Zero);
+            second.Dispose();
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void SessionExitFreezesAllPendingConsumersBeforeReentrantCancellation()
+        {
+            var system = Initialize();
+            using var first = system.AcquireAsync<TextAsset>(address);
+            using var second = system.AcquireAsync<TextAsset>(address);
+            var firstObserved = ResourceRequestStatus.Pending;
+            var secondObserved = ResourceRequestStatus.Pending;
+            first.Completed += _ => { firstObserved = second.Status; second.Cancel(); };
+            second.Completed += _ => { secondObserved = first.Status; first.Cancel(); };
+            SessionEvent("EndSession");
+            Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(second.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(firstObserved, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(secondObserved, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(system.GetDiagnosticsSnapshot().WaiterCount, Is.Zero);
+            source.Operations[0].Finish(asset);
+            Assert.That(source.Releases, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SessionExitScopeDisposalCannotTurnAnotherInvalidatedWaiterIntoCanceled()
+        {
+            var system = Initialize();
+            using var scope = system.CreateScope();
+            var first = scope.AcquireAsync<TextAsset>(address);
+            using var second = system.AcquireAsync<TextAsset>(address);
+            first.Completed += _ => scope.Dispose();
+            second.Completed += _ => scope.Dispose();
+            SessionEvent("EndSession");
+            Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            Assert.That(second.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
+            source.Operations[0].Finish(asset);
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+            Assert.That(source.Releases, Is.EqualTo(1));
+        }
+
+        private sealed class EqualOwner : IDisposable
+        {
+            public int Releases;
+            public void Dispose() => Releases++;
+            public override bool Equals(object other) => other is EqualOwner;
+            public override int GetHashCode() => 1;
+        }
+
+        [Test]
+        public void ScopeOwnUsesReferenceIdentityRatherThanDisposableValueEquality()
+        {
+            var system = Initialize();
+            using var scope = system.CreateScope();
+            var first = new EqualOwner();
+            var second = new EqualOwner();
+            scope.Own(first);
+            scope.Own(second);
+            scope.Own(first);
+            scope.Dispose();
+            Assert.That(first.Releases, Is.EqualTo(1));
+            Assert.That(second.Releases, Is.EqualTo(1));
+        }
+    }
+}

@@ -1,8 +1,8 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 待单独实施授权。
+> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已获正式实施及本批 Commit/Push 授权，当前实施证据见第 14 节。其余批次未实施。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
-> 本轮授权为本方案的状态批准与 Git 准备（提交、推送、创建实施分支）；仍不实施 8.1、不修改产品、原 Package、长期蓝图或历史权威方案。
+> 原方案批准与 Git 准备已完成。2026-10-14 新授权仅实施 8.1，允许相关 Runtime、必要 Core 窄合同与测试，以及验收/独立审查后精确提交并推送 `fusion/8-resource`；不执行 8.2、集成合并或阶段里程碑。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
@@ -431,7 +431,7 @@ Unity BuildPipeline输出叶名决定manifest Bundle内部名，因此固定work
 
 下列十个主批次按依赖与可独立拒收的闭环拆分，不按目录机械分包；8.2与8.6内部还有必须逐个完成/review的独立子批次，不允许一次合成巨型修改。8.1-8.5是隔离夹具中的新链，不改变默认Core后端；**8.6c后不能继续保留新旧YL两套运行authority**。8.7-8.8新增完整更新，不把8.6“加载融合”冒充阶段8全部完成。
 
-每批共用步骤：`- [ ]` 建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。以下复选框均未执行，且不包含任何自动Git写步骤。
+每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1 已完成，其余复选框仍未执行；Git 写入仅按用户当前单独授权，不由本路线自动触发。
 
 ### 8.1 正式合同、目录及Resources最小闭环
 
@@ -441,10 +441,12 @@ Unity BuildPipeline输出叶名决定manifest Bundle内部名，因此固定work
 
 **风险**：通知重入、pooled handle身份、source ownership、退出门控。
 
-- [ ] 验证同地址两consumer共享producer但独立lease；取消A不伤B；Ready回调先看到保活，抛异常/Dispose/重启不跳收尾。
-- [ ] owning结果未领取Dispose、yield后领取一次、二次领取/Dispose后领取、领取后request Dispose不影响lease、observer异常与Scope接管分别锁定；值结果无伪释放责任。
-- [ ] 验证无效配置/最小Catalog模型/type/address、未知路径、两source相似key、大小写URI不混淆；初始化失败可重试但不出现半ready，不以完整持久化字段定稿作为8.1通过条件。
-- [ ] 真Resources资产归零只drop自身引用，外部borrow仍有效；公开handle旧代次不能影响新epoch；Core/Foundation闭包无Systems逆向类型。
+**状态**：**COMPLETE（2026-10-14，实际能力与验收证据见第14节）**；交付后停止，等待用户技术验收。
+
+- [x] 验证同地址两consumer共享producer但独立lease；取消A不伤B；Ready回调先看到保活，抛异常/Dispose/重启不跳收尾。
+- [x] owning结果未领取Dispose、yield后领取一次、二次领取/Dispose后领取、领取后request Dispose不影响lease、observer异常与Scope接管分别锁定；值结果无伪释放责任。
+- [x] 验证无效配置/最小Catalog模型/type/address、未知路径、两source相似key、大小写URI不混淆；初始化失败可重试但不出现半ready，不以完整持久化字段定稿作为8.1通过条件。
+- [x] 真Resources资产归零只drop自身引用，外部borrow仍有效；公开handle旧代次不能影响新epoch；Core/Foundation闭包无Systems逆向类型。
 
 ### 8.2 XFAB主导组织/构建 + YL安全/生成融合
 
@@ -603,7 +605,7 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 以下每项都给出具体推荐值，实施不再由代理临时猜测。用户改变推荐时，应先修订受影响设计及门禁，而不是加永久兼容壳。
 
-**本次审核状态**：**总体方案已批准（APPROVED）** — 架构B、D1～D8总体方向、十个主批次及独立子批次、XF主体/YL优秀成果、统一生命周期和双主体分层均已批准。总体方向批准不等于逐项实施批准：具体公共API、Schema最终字段、资源所有权实现和重大迁移仍在对应实施批次单独审查；D2的持久化字段定稿由8.2闭环门禁决定，D6的生产远端与最小防重放策略由8.8门禁验收。8.1待单独实施授权，其余既定设计不重开研究。
+**本次审核状态**：**总体方案已批准（APPROVED）** — 架构B、D1～D8总体方向、十个主批次及独立子批次、XF主体/YL优秀成果、统一生命周期和双主体分层均已批准。总体方向批准不等于逐项实施批准：具体公共API、Schema最终字段、资源所有权实现和重大迁移仍在对应实施批次单独审查；D2的持久化字段定稿由8.2闭环门禁决定，D6的生产远端与最小防重放策略由8.8门禁验收。8.1已获单独正式授权，实施事实见第14节，其余既定设计不重开研究。
 
 | 决策 | 推荐 | 影响 |
 |---|---|---|
@@ -640,4 +642,59 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 独立架构审查已促成四项实质裁定：不承诺native多版本热共存；检查不能删旧文件；持久增量workspace与交付staging分离；Resources零自有引用不意味着外部未持有。最终定向复审还补齐了自动manifest的项目化native名、persistent版本/指针及内置回退、catalog Group权威、yield/TakeResult、创建/场景前置pin和可拒收子批次。源码回查修正了阶段7标签、Editor实际依赖和旧数据表的精确缺陷位置。所有约束均进入合同/路线/门禁，审查不构成用户实施批准。
 
-**本轮结束条件**：本文件已完成源码与架构交叉审查、引用及工作区保护复核，并经用户审核批准（APPROVED）；本次仅完成方案状态更新与 Git 准备（提交、推送、创建实施分支），不开始8.1，不创建或迁移任何产品资源，不做阶段9独立载体。
+**总体方案研究结束记录**：本文件已完成源码与架构交叉审查、引用及工作区保护复核，并经用户审核批准（APPROVED）；原批准轮次仅完成方案状态更新与 Git 准备，不开始8.1、不迁移产品资源、不做阶段9独立载体。后续8.1已获正式实施授权，实际交付及停止边界见第14节。
+
+## 14. 8.1 实施与验收证据（2026-10-14）
+
+### 14.1 实际范围与基线
+
+- **8.1 COMPLETE**：核心、内存 Catalog、Resources source、Core 窄合同与定向测试已实现，必要 Unity 验证及一次独立 Review 的修复门禁已通过；交付后停止，不实施 8.2。
+- 开始时本地 `fusion/8-resource`、HEAD、远端实施分支和 `integration/xf-yl` 均为 `0e71c8b8cafefc807c076b7476bb23e8093b72b0`。本批仅收口到 `fusion/8-resource`，不创建里程碑、不合并集成分支；实际 Commit/Push 标识由本轮完成报告和 Git 记录提供。
+- Runtime 新代码位于 `Systems/Resource` 的 `Catalog`、`Loading`、`Lifetime`、`Sources` 及 `ResourceSystem` / `ResourceConfiguration`；没有第二个 Manager、独立加载表、Resource DLL 或永久兼容转发层。
+- `Core/ResourceAccess/ICoreResourceProvider.cs` 建立窄 Request/prefab/instance/Scene 合同及显式绑定槽，只依赖 Unity/Foundation。8.1 不提供 Core provider 后端，不改 Module/View/Panel 的 XFAB 正式流、Audio 的旧 ResLoader、`ProjectName` 实际语义或旧 YL Resource。
+- 新增 17 个 C# 文件均由 Unity 导入生成独立 `.meta`，AssetDatabase 的 MonoScript/GUID 定向核对无缺失或冲突。TextAsset 与 Sprite PNG 夹具仅在新增测试 Resources 目录中使用，不交给旧 ResLoader。原 Package、游戏、Scene、Prefab、Bundle、Packages、ProjectSettings 未纳入本批改动。
+
+### 14.2 核心 API 与实际语义
+
+- `ResourceSystem.InitializeAsync(config)` / `Current` / `IsAvailable` / `ShutdownAsync()`：显式 Play/Player 主线程入口，读取 Current 不创建宿主。内存验证允许即时完成；同一只读配置对象可重入 join，不同配置须先关闭旧权威。失败无半就绪 Current，可用合法配置重试。
+- `ResourceAddress`、`ResourceSourceId`、`ResourceLocation`、`ResourceCatalogEntry`、`ResourceDependencyNode`、`ResourceCatalog`：不可变内存身份/加载描述/快照，精确 ordinal 解析显式 alias；验证 canonical 重复、大小写冲突、项目/source、编译后的 Unity 类型、有界节点/边、缺失依赖与真实环路径。没有持久化解析器、编码或磁盘 Schema 冻结，仍等待 8.2 真实构建与读回闭环。
+- `Acquire<T>` / `AcquireAsync<T>` 返回独立 `AssetLease<T>` 或 `ResourceRequest<AssetLease<T>>`。producer 按 Catalog 快照、canonical assetId 和目录声明的实际加载类型共享；当前基类请求只是可赋值投影，`Object` / `Sprite` 消费同一声明 Sprite 时共享一个 producer。native filter 使用目录声明类型，不以模糊地址或宽泛类型回退。
+- Request 观察 `Status` / `IsDone` / `Progress` / `Error` / `Completed`，支持 yield、Cancel、Dispose；没有自动领取 await。成功前已建立独立 Lease，等待完成不拥有结果。`TakeResult()` 恰一次转移；未领取 Dispose 会释放，已领取 Request Dispose 不释放调用方 Lease。失败/取消领取抛资源错误，重复领取抛 `InvalidOperationException`，Dispose 后领取抛 `ObjectDisposedException`；通知异常逐个报告而不反写终态。
+- `ResourceScope` 的 `Acquire` / `AcquireAsync` / `Track` / `Own` / `TakeResult` 只聚合接管责任，以引用身份去重；Dispose 先移出自身记账再释放所有自有请求/Lease，不损害外部消费者。公开 Request/Lease 不池化，不靠 finalizer 释放。
+- 正常 Shutdown 若还有合法等待者或 Lease（含未领取成功结果）返回 Busy，服务保持可用；零消费者的原生 producer 排空后关闭。退出先整批冻结 Pending 为 Invalidated、解绑等待、结算未领取结果/退役记录，再通知；重入 Cancel 或 Scope.Dispose 不改变兄弟退出终态。旧会话未完成 producer 保持 cleanup owner，并阻止同域新初始化直到迟到清理完成。
+- Resources 使用真实同步/异步 Unity API；原生 `completed` 独立观察，不依赖协程宿主。归零只丢自身记录和引用，不调用 `Resources.UnloadAsset`、Destroy 或 `UnloadUnusedAssets`，不宣称 native memory 已物理释放。显式子资产 key 与显式依赖执行尚不支持，校验会明确拒绝。
+
+### 14.3 Unity 验证与独立 Review
+
+在已打开的 Unity `2022.3.62f3c1` 中实际执行，未启动第二个实例、未修改 Domain Reload 设置。按短类名或 `YLFramework.Tests.Resource` namespace 定向筛选，统计实际 Passed/Failed，不使用发现树 TotalTests 冒充执行数。
+
+| 门禁 | 模式 | 实际通过 |
+|---|---|---:|
+| `ResourceCatalogTests` | EditMode | 10 |
+| `ResourceRequestTests` | EditMode | 5 |
+| `ResourceSessionSafetyTests` | EditMode，dirty 无路径场景保护 | 2 |
+| `ResourceSessionTests` | EditMode 驱动真实双 EnterPlay/ExitPlay | 1 |
+| `ResourceSystemTests` | PlayMode，可控源/所有权/重入/迟到 | 21 |
+| `ResourcesSourceTests` | PlayMode，真实 TextAsset 与 Sprite/Texture | 6 |
+| `CoreArchitectureBoundaryTests` | Core 完整 Editor/Development 闭包 | 3 |
+| `FoundationBoundaryTests` | Foundation 闭包及身份/friend 门禁 | 9 |
+| **合计** | **零失败、零跳过** | **57** |
+
+- 修复后重跑 Resource PlayMode 27 项、Request 5 项、真实双 Play 1 项及安全守卫 2 项；Catalog 10 项、Core/Foundation 12 项采用本批已执行且未受后续 Systems 内部修复影响的有效结果。真实双 Play 的工具耗时字段跨域不可靠，不用于性能结论。
+- 一次新上下文只读 Review 确认两项 P2：基类请求丢失 native 类型消歧、逐个退出通知使兄弟 Pending 可被重入改为 Canceled。已用真实 Sprite/Texture 同 locator 和互 Cancel/Scope.Dispose 退出用例复现，修复后完整定向回归通过。未确认 P0/P1，不另做重复形式审查。
+- Scope 值相等对象漏记责任与 fixture dirty 无路径漏验也建立红灯后修复：引用身份聚合、检查实际 open scenes；允许 Runner 的 clean 空场景，拒绝 dirty/有内容且不可恢复的场景，不自动保存用户场景。原“标准 Runner 丢失用户原 dirty 场景”的 P1 推断经 Test Framework 1.3.9 源码核对撤回，不作为事实。
+- 另复现并修复迟到多播观察者异常跳过其他观察者，以及 producer 清理后失败进度回退到零。状态先提交、生产责任先结算，再通知；失败进度保留 producer 终态样本。
+- 未运行阶段 1～7/Tidy 历史全量、Player 重建、资源导出或完整 XFAB 套件。Canvas 旧整文件等价断言不纳入本批，不修改 Canvas 或降低其断言。预期观察者异常由 LogAssert 验证，不描述为未处理错误。
+
+### 14.4 保护状态与后续基础
+
+四个受保护文件在开始、实施及审查修复后重复 `git hash-object`，身份一致，未修正、暂存、还原或更新其基线：
+
+| 文件 | 开始与收口前一致的 blob identity |
+|---|---|
+| `.gitignore` | `a14b361253c8210930577bcc1816c8008d1b68fb` |
+| `.kilo/kilo.jsonc` | `e943dde58693de12fbe7c00caa5e4545b7d10412` |
+| ProBuilder `Settings.json` | `59b16de7964ef4f16b0e333554796396b9747b21` |
+| Core `Canvas.prefab` | `c6b7d124a5b70f320748fcedc04467599e258a25` |
+
+8.2 可依赖实测的单权威、不可变内存 Catalog、producer/consumer 分离、独立 Lease/Scope、单次交割及主线程会话门禁。尚无持久化 Catalog/BuildMap、AssetBundle、实例池、Scene pin、Editor build/update 或生产网络安全能力；Core 窄合同仍无正式后端。不将本批完成理解为阶段 8 整体完成、原消费者已迁移或生产分发已成立。
