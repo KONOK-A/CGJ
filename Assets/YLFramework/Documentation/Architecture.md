@@ -41,12 +41,16 @@ Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集�
 Runtime 按机制、领域所有权和使用方式组织为四个责任分区，不按模块大小或来源命名分类：
 
 - `Foundation/`：基础逻辑分类。Async/Attributes/Binding/Events/IOC/Pool/Serialization/Singleton/Timing/Update/Utilities按功能分组；Binding分Collections/Prefs/Unity，Events分Global/Internal/Subscriptions/Unity，Pool分Abstractions/Collections/Factories/GameObject/Object；
-- 原Shared/Kernel闭包并回这些唯一功能族。独立源码探针精确选择原49文件，在Editor/Development Player排除高层框架/插件依赖，不以主体宽依赖替代职责边界；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
+- 原Shared/Kernel闭包并回这些唯一功能族。完整Foundation源码守卫递归收集该目录，且只额外包含根级 `YLFrameworkRoot.cs`，不锁定历史49文件数，不借正式Runtime DLL或附加Core/Systems/Utilities；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
 - `Core/`：Modules/MVC/Events、View/Panel/UI、领域组件、marker/Analyzer 与正式默认资源；归 Runtime 主体，职责归位与partial保持唯一状态权威，不按来源建立第二产品程序集；
 - `Utilities/`：具有明确具体功能职责、按需直接使用的便利工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool、ColorSelector）；仓库根 `Tools/` 则承载 SDK 与开发工具；
 - `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
 
 `Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 和许可汇总属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
+
+Tidy守卫分别验证完整Foundation和Foundation+Core闭包：Core递归包含自身全部C#文件，允许Foundation，以及真实UGUI、Json.NET和暂时的XFABManager；XFAB消费及其解除属于阶段8，不放行整个原XF生态。两闭包在Editor和Windows64 Development profile先验证合法消费者，再以相同参考/define验证Foundation→Core、Core→Audio的限定名/别名等违规符号不可解析。参考按真实程序集身份及编译图选择，Json.NET分别使用Editor/AOT插件，固定产品当前两类输入宏；伪路径、预编译YLFramework/测试/optional DLL及错profile插件被拒绝。
+
+Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层GetOrAdd/Destroy便利扩展新增底层helper。历史namespace `YLFramework.Core.Pool/Singleton/IOC` 不改变实际Foundation所有权；Systems/Utilities按具体能力合法协作，Resource→Extensions/Table、ColorSelector→Core仍被允许。该守卫不替代动态字符串/序列化/生命周期评审，也不等于全平台、SDK、Player构建或无原XF生态独立交付。测试入口为 `Tests/Foundation/EditMode/FoundationBoundaryTests.cs` 与 `Tests/Core/EditMode/CoreArchitectureBoundaryTests.cs`；实际批次记录见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。阶段 7.5 将取色控件、渲染及窗口统一归 Utilities/UI/ColorSelector，定位为与 Json、FSM 同类的按需便利工具。工具层直接依赖 Core Panel 的加载/输入策略；IUIInputGate 及自定义门禁入口退出，不向 Foundation 增加 UI 合同。正式Prefab、取色类型的 namespace/API/序列化字段/GUID 保持，引用已退出接口的客户端须重编译。旧样例及其程序集已退役，Samples导出根保留。
 

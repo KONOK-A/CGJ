@@ -1,7 +1,7 @@
 # XF × YL: Tidy 架构分层审计与治理总体方案
 
-> 状态: 原规划轮为只读研究；Tidy-1 当前原生方案及交付见 §14、§15，初版历史见 §13。Tidy-2 已按用户授权完成，结果与限制见 §16；Tidy-3 和阶段 8 未启动。
-> Tidy-2 实施仅迁移七个 Editor 源码/meta、更新直接测试与导航，不修改用户配置、原 Package、游戏或正式资源；用户现另行授权本批 Git 交付，范围见 §17。§15 的授权与记录对应已交付的 Tidy-1。
+> 状态: Tidy-1 原生方案及交付见 §14、§15，初版历史见 §13；Tidy-2 实施与交付见 §16、§17。Tidy-3 已按用户授权完成，门禁、最终导出及一项用户批准的配置例外见 §18；阶段 8 未启动。
+> Tidy-3 技术实施只新增/扩展测试守卫、同步直接导航及实际分发验证，不改产品实现、asmdef、原 Package、游戏或正式资源。ProBuilder 新默认项经用户批准保留，原快照不改；用户现另行授权 Tidy-3 Git 收口，范围见 §19。
 > 实施者仅在用户另行授权后按批推进，可使用 `executing-plans` 或 `subagent-driven-development`；每批先核对现场，完成其验收后停止，不自动进入阶段 8。
 
 **Goal:** 使 Foundation 真正不依赖上层，保持 Core 的结构核心职责，以最小必要治理支撑 Systems / Utilities 有序协作和后续资源融合。
@@ -411,12 +411,12 @@ Foundation 必须单独先证明无上引；不能用 Foundation+Core 可编译�
 
 **实际范围:** 增量扩展 Foundation 边界 fixture 的参考/源集合检查；可在 `T/Core/EditMode/` 新增一个 `CoreArchitectureBoundaryTests.cs` 与 meta承担完整 Foundation+Core 双profile闭包。优先已有私有测试方法，不建设跨测试程序集通用 harness，不改测试 asmdef/产品 Analyzer。
 
-- [ ] 在 Tidy-1 基线上落实 §8.2 两类白名单与来源集合；Core 的 Json.NET 必需引用和 XFAB 过渡边明确保留，不能以缩水 Core 文件集代替完整 Core。
-- [ ] 有效执行 Foundation→Core 和 Core→上层的负例、伪参考拒绝与合法历史 namespace/UGUI/XFAB/Json.NET正例；检查负例确由目标违规失败。
-- [ ] 实际执行一项取色/Resource-Table 或已有跨系统编译消费者正例；不额外跑全部上层测试，只证明未错误施加平行层隔离规则。
-- [ ] 完成源码依赖复核和公开API/字段/GUID保护核对。可选 Analyzer传播断言仅当输入相关代码受本批实际修改时增加，不为 Tidy再跑SDK123或13份rsp。
-- [ ] 若 Tidy-1/Tidy-2 的新增源码/路径改变分发内容，只在最终源码状态执行一次现有六根真实导出/解包，验证七文件新路径、原完整许可/Plugins与排除项；不重复逐批导出。先检查脏资产，不调用全局SaveAssets菜单，测试仅清自己拥有的内容。
-- [ ] 增量同步现有 Architecture/Extensions/相关Help与蓝图当前状态（须实施授权包含），说明完整Foundation规则、具体阶段8例外、namespace导航和未验证限制；本文记录批次真实结果，不再创建另一份审计报告。
+- [x] 在 Tidy-1 基线上落实 §8.2 两类白名单与来源集合；Core 的 Json.NET 必需引用和 XFAB 过渡边明确保留，不能以缩水 Core 文件集代替完整 Core。
+- [x] Foundation→Core、Core→Audio指定符号负例及伪参考拒绝、合法历史 namespace/UGUI/XFAB/Json.NET正例均实际通过；Json.NET按Editor/Player图核对普通/AOT插件身份。
+- [x] 实际执行取色工具消费Core的Development源码正例，不施加平行层零依赖规则，不重跑全部上层测试。
+- [x] 源码依赖及11394条全主体类型/成员/字段、1488条严格保护hash保持；一条ProBuilder新增默认项由用户批准，精确重建原hash验证，详见§18。不追加未受影响的Analyzer/SDK/rsp门禁。
+- [x] 最终包内源码与文档状态的一次六根真实导出/解包通过，七文件新路径、GUID/meta、完整许可/Plugins与排除项核对；未调用全局SaveAssets，测试仅清自有Temp包。
+- [x] Architecture/Extensions/长期蓝图直接状态已同步；Help provider/sourceLinks未受影响，不改共享功能或额外跑GUI。本节及§18记录真实结果，不创建另份审计报告。
 
 **默认不做:** Player 重建、完整双Play、原游戏全流程、SDK重建、全量EditMode/PlayMode。只有出现真实生命周期/API/字段/编译输入变化，按 §10 提升必要门禁，不靠沿用历史结果遮盖新增风险。
 
@@ -489,7 +489,7 @@ Foundation 必须单独先证明无上引；不能用 Foundation+Core 可编译�
 
 **未来Tidy完成条件:** A1实际归零，完整Foundation边界及Core边界的有效正反例通过；批准的目录归位保持所有身份与直接消费者；未引入第二权威/下层反向依赖；保护现场/必要分发内容核对通过，未验证平台及资源专题保持明确。失败批不能由其他历史绿记录覆盖。
 
-当前授权实施止于 Tidy-2。后续 Tidy-3、阶段 8 研究实施及任何 Git 写操作不自动启动。
+当前授权实施止于 Tidy-3。阶段 8 研究实施及任何 Git 写操作不自动启动。
 
 ## 13. Tidy-1 初版历史记录 (2026-10-14)
 
@@ -620,3 +620,59 @@ Tidy-2 源码移动、直接导航和门禁完成后停止，验收时改动未�
 暂存核对确认十四项重命名均为100%内容相同。完整 `git diff --cached --check` 仅报告六份新目录meta中Unity生成的空字段尾空格，与既有目录meta格式一致，保留原生成内容；非meta暂存补丁检查通过。没有修改Git配置、关闭诊断或跳过hook，不把完整检查冒称为零报告。
 
 本节记录授权及交付范围，实际提交ID、推送同步及原集成分支保护结果以Git历史、实时远端核对和本次交付回复为准。不自动推进Tidy-3或阶段8。
+
+## 18. Tidy-3 门禁与最终分发验收 (2026-10-14)
+
+### 18.1 实现范围
+
+- Tidy-3技术验收时分支为 `refactor/xf-yl-tidy`，基线HEAD为已推送Tidy-2提交 `57b8dc3830c61a26fc0e694bb2749dc663b63fa9`；技术实施期间没有Git写操作，不修改Runtime/Editor实现、asmdef、产品Analyzer、原包、游戏或正式资产。随后Git收口按§19的另行授权执行。
+- 增量修改 `FoundationBoundaryTests`，新增一个 `CoreArchitectureBoundaryTests.cs`；后者由Unity正常生成meta，GUID为 `da1142f0eb5afda4881eaeb5773546c3`。没有跨程序集通用harness、产品helper、wrapper、条件分流或上层替代实现。
+- 完整Foundation递归源码+唯一Root当前为124个正式输入；Foundation+Root+全部Core当前为172个正式输入（123+1+48）。不固定计数，每次实际核对来源集合，额外只附加自有Temp见证，不借正式Runtime DLL，不附加Systems/Utilities。
+- Foundation仅允许可信Unity BCL/Engine、该真实UGUI；Core额外允许真实XFABManager与必需Json.NET。UGUI/XFAB由唯一加载程序集marker和Editor编译图outputPath核对；Json.NET的Editor图实际指向普通DLL，Player图实际指向同包AOT DLL，两个候选完整身份都与唯一加载Json.NET一致。没有猜缓存路径、加入InputSystem编译参考或放行原XFGameFramework/XFFSM。
+- 每profile正负例使用相同源集合、参考和define配置；产品当前 `ENABLE_INPUT_SYSTEM` / `ENABLE_LEGACY_INPUT_MANAGER` 同时启用，显式核对Editor/Development标志。正例验证历史Foundation Pool namespace、UGUI及真实ModuleManager/XFAB/Json.NET成员；负例分别使用Core Module别名/字段/泛型、AudioKit别名/typeof/真实成员。
+- 负例检查原始CompilerMessage的指定Temp文件、有效行号、目标符号及CS0234/CS0246，并要求无输出DLL；先通过本profile合法baseline，不能靠缺基础依赖制造红态。错误、警告、完整define/有效参考列表写入测试输出，程序集不加载，不影响正式类型唯一归属。
+- 参考拒绝测试复制真实UGUI/XFAB/Json.NET DLL到自有Temp的同名或伪前缀路径，实际验证拒绝；同时拒绝premade YL主体/测试、原XF/optional依赖、TestRunner/NUnit、Player Editor参考、错profile的Json.NET。全部Temp夹具在finally清理。
+- 静态复核Core无Services/Utilities/Editor上引；Foundation出现的 `YLFramework.Core.Pool/Singleton/IOC` 是目录内历史namespace而非Core领域依赖，合法Pool正例实际通过。一个现有ColorSelector→Core Development消费者通过，未追加“所有Utilities不得依赖Core/Systems”规则。
+
+### 18.2 实际验证
+
+| 本轮实际用例 | 结果 |
+|---|---|
+| `FoundationBoundaryTests`，含2个profile的合法/违规构建、伪参考拒绝与原身份断言 | 9 passed |
+| `CoreArchitectureBoundaryTests`，2个profile合法/违规构建及双profile参考拒绝 | 3 passed |
+| `ColorSelectorTests.ToolConsumerCompilesWithCoreForDevelopmentPlayer`，合法上层消费者 | 1 passed |
+| `ExportUnityPackageTests.DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab`，真实最终六根导出/解包 | 1 passed |
+
+合计 **14个不同EditMode用例通过**，不是全量1551个发现节点；未执行PlayMode、SDK123、全平台或Player重建。新增Core闭包最初仅沿用Foundation参考时，以必需XFAB/Json.NET缺失的CS0246取得有效红态；补齐实际身份参考后正例绿，再确认指定违规符号红。该初始红态不是违规负例baseline，不混淆两者。
+
+一次Foundation全限定方法筛选返回无发现，未计通过；使用已知短类名精确执行9项，Core与取色/导出分别使用真正方法名执行，未复现Tidy-2组合筛选扩大到整程序集的问题。独立静态审查完成，Critical/Important/Minor均无发现。
+
+### 18.3 保护与批准例外
+
+本批实施前以平面文本捕获1489条文件SHA-256和11394条完整Runtime/Editor类型/成员/字段/特性记录，避免动态复合JSON数组漏写；文件为 `C:/Users/Kano/AppData/Local/Temp/kilo/xf-yl-tidy3-protected.txt`，从未覆盖或更新。
+
+保护复核曾有效失败：原已修改ProBuilder设置中新增 `lightmapping.autoUnwrapLightmapUV=true`，hash从 `05F81F5F5A872D21A0E1205DCE3B5D111CF395397F3A5B90BC431D03472ABE3C` 变为 `BFC31833E8505755F58FF90D614D3992E44B2C78E11D88086B7189B71FB5A533`。包 `com.unity.probuilder@5.2.4/Editor/EditorCore/Lightmapping.cs:26` 将该项定义为默认true，行为与编辑器持久化默认项一致，但此次触发来源未完全确认。
+
+按§10停止未批准收口后，通过question明确询问，用户选择 **“保留并记录例外”**，允许保留该条默认值及原用户修改后继续。不回退文件、不清用户状态、不把未知漂移当零变化，不改变原快照。新的临时只读检查要求该条唯一、类型为原bool、值为true；只在内存去掉该条记录后，整个文件的精确原字节哈希必须恢复，不能忽略整份配置。
+
+导出前及唯一真实导出后均实际通过：**1488条其余严格保护SHA-256 + 单条批准配置重建 + 11394条全主体身份/成员/字段记录全部匹配**。保护文件集合相同、Main场景/meta和原源码/插件/资源保持；新增测试meta作为唯一实际新测试资产单独审查。原三项用户配置改动保留，ProBuilder新增条目仍属于未提交环境设置，不擅自写入框架提交。
+
+### 18.4 最终导航与分发
+
+- 唯一真实导出前已完成包内最终导航：Architecture从旧49文件口径改为完整两闭包、可信参考/输入宏/阶段8例外与有限profile；Extensions修正Foundation不再消费便利扩展及实际客户端说明；长期IntegrationPlan只修正7.5已提交状态并增量登记Tidy边界，不重写旧阶段记录或无关文档。
+- Help provider、菜单/id、SourceLinks、XML配置和共享GUI功能均无受影响改动，不额外扩展提供方或重跑无关GUI。文档链接存在，八个Editor通用类型仍保留历史namespace。
+- 只读检查六目录根及显式LICENSE的已加载资产、所有打开场景无dirty后，直接调用现有导出fixture而非会全局SaveAssets的菜单。`AssetDatabase.ExportPackage(...Recurse)`仅一次，在最终源码/包内文档状态执行；测试真实解包逐项验证路径、唯一GUID、原meta完整字节、资产长度/哈希与递归全集。
+- 七个Tidy-2新路径、完整XF许可、原THIRD-PARTY/Plugins递归全集、Analyzer唯一载荷与标记、正式Prefab/MonoScript/UI绑定保持；Tests/Integrations/Examples/游戏/原包/DOTween/退役路径与身份均不进入载荷。测试清理自有Temp包，没有在工程创建分发副本或改保存资产。
+- 实际导出1/1通过后，不再修改包内文档或重复导出；只将本节写到非导出根的方案。测试发现失败、初始基线红及保护漂移仍有原始记录，不声称整个Console零Error。
+
+Tidy-3及三批总体Tidy技术实施完成，技术验收时保持未提交；之后Git收口另获用户授权，见§19，不自动进入阶段8资源融合或阶段9独立承载。四类目录仍是同一Runtime/Editor主体的责任分区；本批源码守卫和分发检查不等于动态行为、真实Player/AOT运行、原游戏全流程或最终摆脱原XF生态已完成。
+
+## 19. Tidy-3 Git 收口授权 (2026-10-14)
+
+用户另行要求完成Tidy-3的Git收口。在现有 `refactor/xf-yl-tidy` 提交本批并推送 `origin`，不创建其他分支、不合并原集成分支、不强制推送或启动下一阶段。
+
+提交只包含Foundation守卫、Core新守卫及其Unity生成meta、Architecture/IntegrationPlan/Extensions三份当前文档及本方案，共七个文件。`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder用户配置和经批准的新增默认项均不暂存、不提交。新增meta保留Unity原格式；完整补丁检查与非meta检查分别记录，不跳hook或修改Git配置。
+
+实际暂存恰为七个文本文件。完整 `git diff --cached --check` 仅报告新测试meta的 `userData`、`assetBundleName`、`assetBundleVariant` 三个空字段尾空格；非meta暂存补丁检查通过，未将完整检查冒称为零报告。
+
+本次源码/包内文档与§18验收状态一致，沿用14项实际验证、唯一真实导出和批准例外的严格保护证据，不重复测试、重建或导出。这里只增补非导出根的Git授权记录；实际提交ID、远端同步和三批交付结果以Git历史及本次交付回复为准。收口不等于合并到 `integration/xf-yl`，也不授权阶段8。

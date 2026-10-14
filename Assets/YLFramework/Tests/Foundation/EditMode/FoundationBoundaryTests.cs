@@ -84,40 +84,62 @@ namespace YLFramework.Foundation.Tests
             Directory.CreateDirectory(folder);
             try
             {
-                var output = Path.Combine(folder, "FoundationSourceClosure.dll");
-                var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
-                var builder = new AssemblyBuilder(output, sources) { flags = flags,
-                    buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
-                    referencesOptions = ReferencesOptions.UseEngineModules };
-                Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
-                builder.additionalDefines = inputDefines.Except(builder.defaultDefines).ToArray();
-                var defines = builder.defaultDefines.Concat(builder.additionalDefines).Distinct().ToArray();
-                Assert.That(defines.Contains("DEVELOPMENT_BUILD"), Is.EqualTo(!editor));
-                Assert.That(defines.Where(define => define == "ENABLE_INPUT_SYSTEM" || define == "ENABLE_LEGACY_INPUT_MANAGER"),
-                    Is.EquivalentTo(inputDefines));
-                var contents = EditorApplication.applicationContentsPath;
-                builder.excludeReferences = builder.defaultReferences.Where(path => !IsAllowedReference(path, contents, ui, editor)).ToArray();
-                builder.additionalReferences = new[] { ui };
-                var references = builder.defaultReferences.Except(builder.excludeReferences)
-                    .Concat(builder.additionalReferences).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                Assert.That(references, Is.Not.Empty);
-                Assert.That(references.All(path => IsAllowedReference(path, contents, ui, editor)), Is.True);
-                Assert.That(references.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
-                Assert.That(references.Any(path => Path.GetFileName(path) == "mscorlib.dll" || Path.GetFileName(path) == "netstandard.dll"), Is.True);
-                Assert.That(references.Any(path => Path.GetFileName(path).StartsWith("YLFramework") ||
-                    Path.GetFileName(path).StartsWith("XF") || Path.GetFileName(path) == "Newtonsoft.Json.dll"), Is.False);
-                TestContext.WriteLine("Compiling {0} complete Foundation sources with {1}; defines:\n{2}\nReferences:\n{3}",
-                    sources.Length, flags, string.Join("\n", defines), string.Join("\n", references));
-                CompilerMessage[] messages = null;
-                builder.buildFinished += (_, result) => messages = result;
-                Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
-                Assert.That(messages, Is.Not.Null);
-                foreach (var message in messages)
-                    TestContext.WriteLine("{0}:{1}:{2}: {3}: {4}", message.file, message.line, message.column, message.type, message.message);
-                Assert.That(messages.Where(m => m.type == CompilerMessageType.Error)
-                    .Select(m => m.file + ":" + m.line + ": " + m.message), Is.Empty);
-                Assert.That(File.Exists(output), Is.True);
+                var legal = Path.Combine(folder, "LegalFoundationConsumer.cs");
+                File.WriteAllText(legal, "internal class LegalFoundationConsumer { " +
+                    "public global::YLFramework.Core.Pool.ObjectPool<object> pool; " +
+                    "public global::UnityEngine.UI.Image image; }");
+                var forbidden = Path.Combine(folder, "ForbiddenCoreConsumer.cs");
+                File.WriteAllText(forbidden, "using Domain = global::YLFramework.Core.Module; " +
+                    "internal class ForbiddenCoreConsumer { public Domain module; " +
+                    "public global::System.Collections.Generic.List<global::YLFramework.Core.Module> modules; }");
+                foreach (var consumer in new[] { legal, forbidden })
+                {
+                    var output = Path.Combine(folder, Path.GetFileNameWithoutExtension(consumer) + ".dll");
+                    var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
+                    var builder = new AssemblyBuilder(output, sources.Append(consumer).ToArray()) { flags = flags,
+                        buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
+                        referencesOptions = ReferencesOptions.UseEngineModules };
+                    Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
+                    builder.additionalDefines = inputDefines.Except(builder.defaultDefines).ToArray();
+                    var defines = builder.defaultDefines.Concat(builder.additionalDefines).Distinct().ToArray();
+                    Assert.That(defines.Contains("DEVELOPMENT_BUILD"), Is.EqualTo(!editor));
+                    Assert.That(defines.Where(define => define == "ENABLE_INPUT_SYSTEM" || define == "ENABLE_LEGACY_INPUT_MANAGER"),
+                        Is.EquivalentTo(inputDefines));
+                    var contents = EditorApplication.applicationContentsPath;
+                    builder.excludeReferences = builder.defaultReferences.Where(path => !IsAllowedReference(path, contents, ui, editor)).ToArray();
+                    builder.additionalReferences = new[] { ui };
+                    var references = builder.defaultReferences.Except(builder.excludeReferences)
+                        .Concat(builder.additionalReferences).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    Assert.That(references, Is.Not.Empty);
+                    Assert.That(references.All(path => IsAllowedReference(path, contents, ui, editor)), Is.True);
+                    Assert.That(references.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
+                    Assert.That(references.Any(path => Path.GetFileName(path) == "mscorlib.dll" || Path.GetFileName(path) == "netstandard.dll"), Is.True);
+                    Assert.That(references.Any(path => Path.GetFileName(path).StartsWith("YLFramework") ||
+                        Path.GetFileName(path).StartsWith("XF") || Path.GetFileName(path) == "Newtonsoft.Json.dll"), Is.False);
+                    TestContext.WriteLine("Compiling {0} complete Foundation sources with {1}, {2}; defines:\n{3}\nReferences:\n{4}",
+                        sources.Length, flags, consumer, string.Join("\n", defines), string.Join("\n", references));
+                    CompilerMessage[] messages = null;
+                    builder.buildFinished += (_, result) => messages = result;
+                    Assert.That(builder.Build(), Is.True);
+                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    Assert.That(messages, Is.Not.Null);
+                    foreach (var message in messages)
+                        TestContext.WriteLine("{0}:{1}:{2}: {3}: {4}", message.file, message.line, message.column, message.type, message.message);
+                    var errors = messages.Where(m => m.type == CompilerMessageType.Error).ToArray();
+                    if (consumer == legal)
+                    {
+                        Assert.That(errors.Select(m => m.file + ":" + m.line + ": " + m.message), Is.Empty);
+                        Assert.That(File.Exists(output), Is.True);
+                    }
+                    else
+                    {
+                        Assert.That(errors, Is.Not.Empty);
+                        Assert.That(errors.Any(m => Path.GetFullPath(m.file) == forbidden && m.line > 0 &&
+                            m.message.Contains("Module") && (m.message.Contains("CS0234") || m.message.Contains("CS0246"))), Is.True,
+                            "负例必须因指定Core符号不可解析失败，不能借缺失基础参考制造红态。");
+                        Assert.That(File.Exists(output), Is.False);
+                    }
+                }
             }
             finally { Directory.Delete(folder, true); }
         }
@@ -148,6 +170,35 @@ namespace YLFramework.Foundation.Tests
         {
             var prefix = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Path.GetFullPath(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Test]
+        public void FoundationReferencesRejectPremadeProductsAndSubstitutedUGUI()
+        {
+            var uiAssembly = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "UnityEngine.UI");
+            var ui = Path.GetFullPath(uiAssembly.Location);
+            var contents = EditorApplication.applicationContentsPath;
+            var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLFramework.Foundation.ReferenceRejection-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                foreach (var name in new[] { "UnityEngine.UI.dll", "UnityEngine.UI.Fake.dll", "System.Fake.dll" })
+                {
+                    var fake = Path.Combine(folder, name);
+                    File.Copy(ui, fake);
+                    foreach (bool editor in new[] { false, true })
+                        Assert.That(IsAllowedReference(fake, contents, ui, editor), Is.False, fake);
+                }
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(a =>
+                    a.GetName().Name.StartsWith("YLFramework", StringComparison.Ordinal) ||
+                    new[] { "XFABManager", "XFGameFramework", "XFFSM", "Newtonsoft.Json" }.Contains(a.GetName().Name)))
+                    Assert.That(IsAllowedReference(assembly.Location, contents, ui, true), Is.False, assembly.FullName);
+                Assert.That(IsAllowedReference(typeof(LogAssert).Assembly.Location, contents, ui, true), Is.False);
+                Assert.That(IsAllowedReference(typeof(EditorApplication).Assembly.Location, contents, ui, false), Is.False);
+                Assert.That(IsAllowedReference(ui, contents, ui, false), Is.True);
+                Assert.That(IsAllowedReference(typeof(UnityEngine.Object).Assembly.Location, contents, ui, false), Is.True);
+            }
+            finally { Directory.Delete(folder, true); }
         }
 
         [Test]

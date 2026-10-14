@@ -4,7 +4,7 @@
 
 ## 作用
 
-集中存放常用 Unity 与 System 类型的扩展方法与小型静态工具，减少样板代码；框架内部（Resource、Events、Singleton、Pool、UI 等）也使用其中的辅助方法。
+集中存放常用 Unity 与 System 类型的扩展方法与小型静态工具，减少样板代码；Resource 等上层消费者按需使用。Foundation 的事件/单例适配直接使用 Unity 原生 API，不为复用这些便利方法增加底层封装。
 
 ## 位置
 
@@ -77,10 +77,9 @@
 ## 主要消费者
 
 - Resource：`InstantiateWithParent`、`GetOrAddComponent`。
-- Events：`GetOrAddComponent`。
-- Singleton / Pool：`DestroyGameObjGracefully`、`DestroySelfGracefully`。
-- UI：`IsNotNullAndEmpty`、`Parent`、`Show/Hide`、`Destroy*`。
-- Editor（Resource 工具）：`CreateDirIfNotExists`、`DeleteDirIfExists`、`GetFolderPath`、`RemoveInvalidCharsFromClassName`、`RemoveString`。
+- Foundation 的 Events / Singleton / Pool 不再因便利写法依赖本扩展；原 GetOrAdd / Destroy API 及行为保留，供上层和通用客户端选择使用。
+- 当前 Core/UI 未发现原列举的 `IsNotNullAndEmpty`、`Parent`、`Show/Hide`、`Destroy*` 消费，不以没有仓库调用为由删除这些通用 API。
+- Editor（Resource 工具）：已核实消费 `GetFolderPath`；目录创建/删除、类名清洗和字符串替换等通用入口保留，不冒称当前Resource工具全部使用。
 
 ## 已知限制
 
@@ -99,6 +98,7 @@
 - 原文所列 `Tests/EditMode/Extension*.cs` 当前不存在，不作为已执行覆盖的证据；无关扩展的覆盖口径留阶段 5 后续收口。
 - `Tests/PlayMode/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
 - 消费者代表性回归：现存 `ResourcePoolTests`、`UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。历史提及的 `GameObjectLoaderPlayModeTests` 当前不在仓库，不作为已执行证据。
+- 完整Foundation/Core源码边界守卫见 `FoundationBoundaryTests` 与 `CoreArchitectureBoundaryTests`；不施加“所有Utilities不得依赖Core/Systems”的额外规则，取色工具消费Core是合法正例。源码闭包通过不代替本模块各项运行时行为验证。
 
 ## 当前状态
 
