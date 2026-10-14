@@ -676,3 +676,12 @@ Tidy-3及三批总体Tidy技术实施完成，技术验收时保持未提交；�
 实际暂存恰为七个文本文件。完整 `git diff --cached --check` 仅报告新测试meta的 `userData`、`assetBundleName`、`assetBundleVariant` 三个空字段尾空格；非meta暂存补丁检查通过，未将完整检查冒称为零报告。
 
 本次源码/包内文档与§18验收状态一致，沿用14项实际验证、唯一真实导出和批准例外的严格保护证据，不重复测试、重建或导出。这里只增补非导出根的Git授权记录；实际提交ID、远端同步和三批交付结果以Git历史及本次交付回复为准。收口不等于合并到 `integration/xf-yl`，也不授权阶段8。
+
+## 20. Tidy 最终 Git 收口与阶段 8 基线准备 (2026-10-14)
+
+用户另行授权在一个会话内完成 Tidy 最终文档状态、Git 合并、Annotated Tag 和远端同步，并作为阶段 8 基线的准备。本次不运行 Unity/SDK/Player 构建、导出或新架构审查，已有技术证据有效。
+
+- 开始时核对：`refactor/xf-yl-tidy` 位于 `37d0fc0`，与 `origin/refactor/xf-yl-tidy` 一致；`integration/xf-yl` 仍为 `63e152e` 且与远端一致；远端无 `milestone/tidy-architecture`；暂存区为空。工作区仅 `.gitignore`、`.kilo/kilo.jsonc`、`ProjectSettings/Packages/com.unity.probuilder/Settings.json` 三项用户改动，其三者在两分支间字节一致，切换/合并不覆盖。另一 `test-worktree` 未触碰。
+- 最终文档状态：IntegrationPlan 将 Tidy 条目改为 COMPLETE 并在里程碑状态行增列 `milestone/tidy-architecture`；Architecture 直接说明 Tidy 已收口且阶段 8 未实施；Tidy 本方案增补本节。其余已正确内容不重复。
+- 文档状态精确暂存并提交到 `refactor/xf-yl-tidy`，推送 `origin`。随后在远端未非预期推进时以 `--no-ff` 将 `refactor/xf-yl-tidy` 合并到 `integration/xf-yl`，在 Merge Commit 创建 Annotated Tag `milestone/tidy-architecture` 并推送集成分支与标签。
+- 未修改产品代码、未启动或创建阶段 8 分支；未 Reset/Clean/Stash/Rebase/Force Push。实际提交ID、Merge Commit、Tag 对象与目标及远端同步结果以 Git 历史、`ls-remote` 核对和本次交付回复为准。

@@ -50,7 +50,7 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 
 Tidy守卫分别验证完整Foundation和Foundation+Core闭包：Core递归包含自身全部C#文件，允许Foundation，以及真实UGUI、Json.NET和暂时的XFABManager；XFAB消费及其解除属于阶段8，不放行整个原XF生态。两闭包在Editor和Windows64 Development profile先验证合法消费者，再以相同参考/define验证Foundation→Core、Core→Audio的限定名/别名等违规符号不可解析。参考按真实程序集身份及编译图选择，Json.NET分别使用Editor/AOT插件，固定产品当前两类输入宏；伪路径、预编译YLFramework/测试/optional DLL及错profile插件被拒绝。
 
-Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层GetOrAdd/Destroy便利扩展新增底层helper。历史namespace `YLFramework.Core.Pool/Singleton/IOC` 不改变实际Foundation所有权；Systems/Utilities按具体能力合法协作，Resource→Extensions/Table、ColorSelector→Core仍被允许。该守卫不替代动态字符串/序列化/生命周期评审，也不等于全平台、SDK、Player构建或无原XF生态独立交付。测试入口为 `Tests/Foundation/EditMode/FoundationBoundaryTests.cs` 与 `Tests/Core/EditMode/CoreArchitectureBoundaryTests.cs`；实际批次记录见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)。
+Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层GetOrAdd/Destroy便利扩展新增底层helper。历史namespace `YLFramework.Core.Pool/Singleton/IOC` 不改变实际Foundation所有权；Systems/Utilities按具体能力合法协作，Resource→Extensions/Table、ColorSelector→Core仍被允许。该守卫不替代动态字符串/序列化/生命周期评审，也不等于全平台、SDK、Player构建或无原XF生态独立交付。测试入口为 `Tests/Foundation/EditMode/FoundationBoundaryTests.cs` 与 `Tests/Core/EditMode/CoreArchitectureBoundaryTests.cs`；实际批次记录见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)。Tidy-1～3 已完成技术验收与 Git 收口（里程碑 `milestone/tidy-architecture`）；阶段 8 资源融合尚未实施。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。阶段 7.5 将取色控件、渲染及窗口统一归 Utilities/UI/ColorSelector，定位为与 Json、FSM 同类的按需便利工具。工具层直接依赖 Core Panel 的加载/输入策略；IUIInputGate 及自定义门禁入口退出，不向 Foundation 增加 UI 合同。正式Prefab、取色类型的 namespace/API/序列化字段/GUID 保持，引用已退出接口的客户端须重编译。旧样例及其程序集已退役，Samples导出根保留。
 
