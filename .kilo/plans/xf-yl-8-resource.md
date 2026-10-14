@@ -458,7 +458,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **子批次次序**：8.2a完成自有定义/map/依赖分包/持久workspace，只构建隔离产物并过manifest身份/重复与增量门禁；8.2b接安全发布/catalog/归属/回滚，故障注入旧产物不变；8.2c接工作台/Editor模拟索引/常量生成与实际编译。每个子批次都独立review和停止检查，不把生成器失败变成整个构建未知状态。
 
-**8.2b 状态**：**技术 COMPLETE（2026-10-15，实际能力、真实发布及独立 Review 修复证据见第16节）**。尚未 Git 收口，未实施 8.2c；以下是 8.2 总门禁，不能将 8.2b 完成标成整个 8.2 完成。
+**8.2b 状态**：**技术 COMPLETE，并已完成 Git 收口（2026-10-15，实际能力、真实发布、独立 Review 修复及提交证据见第16节）**。未实施 8.2c；以下是 8.2 总门禁，不能将 8.2b 完成标成整个 8.2 完成。
 
 **Schema最终冻结门禁**：8.2c收口前对真实BuildMap/Manifest依赖、资产与子资产加载描述、Group成员、catalog序列化/读回及生成常量消费逐项对照；用最小原生读回探针确认子资产描述确能定位Bundle内容，不将8.3完整Runtime加载器提前实施。闭环证据充分后记录首版Schema和规范化规则；必要字段修正属于本批设计验证，不为未冻结原型增加永久兼容层。
 
@@ -800,4 +800,11 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 8.2c可依赖真实已验证 BuildResult、不可变Catalog文档/严格codec、GUID/localId与子资产加载描述、Group canonical成员、完整版本目录、唯一Release Index及显式owned恢复入口。工作台、Editor模拟索引、常量生成/实际消费编译、旧Editor入口最终收口仍属8.2c；签名及远端安全留8.8，Runtime加载/激活与更新留8.3/8.7，未提前实现。
 - 未做Player、非Windows平台、真实杀进程/断电或生产远端验证。不承诺运行时同项目多版本native包热共存，不将摘要当认证。保留8.2总门禁中尚涉及8.2c/8.8的未完成项。
 
-**8.2b 技术 COMPLETE。到此停止，等待用户技术验收与 Git 收口授权；不自动 Commit/Push，不自动进入8.2c。**
+### 16.5 Git 收口（2026-10-15）
+
+- 用户技术验收后单独授权本批 Git 收口。开始前只读核对分支 `fusion/8-resource`、HEAD `d7301fa`、空暂存区及远端 `d7301fa` 同值，未 fetch/pull、未 rebase/merge/force。
+- 精确暂存本批21个文件后执行 `git diff --cached --check`：仅 `.meta` 中 Unity 生成的 `userData:`/`assetBundleName:`/`assetBundleVariant:` 行尾空格，抽样400份既有已提交meta有345份同格式，属项目内Unity规范输出，未修改其内容。无冲突标记、无无关文件混入。
+- Commit `1b547b2b9168fe610662e7e3e4519182d5affc46`（`feat(resource): 完成8.2b资源目录与安全发布事务`，仅含本批21个文件，1836+/5-），线性落在 `d7301fa` 之上；随后 Push 到 `origin/fusion/8-resource`（`d7301fa..1b547b2`）。推送后 `git ls-remote`、本地 HEAD 与 `origin/fusion/8-resource` 均为 `1b547b2`。
+- 四项既有用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Canvas.prefab）及并行UI Plan保持未暂存、未提交，收口前后 blob identity 与第14.4节一致。未暂存测试 Bundle、临时 Staging、Workspace、缓存或未经授权的发布产物；未执行 Reset/Clean/Stash/Rebase/Force Push/Merge 或里程碑。
+
+**8.2b 技术 COMPLETE 且已 Git 收口。到此停止，不自动进入8.2c，不合并 `integration/xf-yl`，不创建阶段8里程碑。**
