@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using YLFramework.Utilities.Extensions;
 
 namespace YLFramework.Core.Singleton
 {
@@ -80,7 +79,10 @@ namespace YLFramework.Core.Singleton
             {
                 if (this != _instance)
                 {
-                    this.DestroyGameObjGracefully();
+                    if (this && gameObject)
+                    {
+                        Object.Destroy(gameObject);
+                    }
                     return;
                 }
             }

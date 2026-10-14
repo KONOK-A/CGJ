@@ -1,7 +1,6 @@
 ﻿using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using YLFramework.Utilities.Extensions;
 
 namespace YLFramework.Events
 {
@@ -23,7 +22,12 @@ namespace YLFramework.Events
         /// <returns>用于注销本次注册的句柄。</returns>
         public static IUnRegister RegisterEvent<T>(this Component selfComponent, EventType eventType, Action<T> action)
         {
-            var listener = selfComponent.GetOrAddComponent<EventListener>();
+            var owner = selfComponent.gameObject;
+            var listener = owner.GetComponent<EventListener>();
+            if (!listener)
+            {
+                listener = owner.AddComponent<EventListener>();
+            }
             return listener.Register(eventType, action);
         }
 

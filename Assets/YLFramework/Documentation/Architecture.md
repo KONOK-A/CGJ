@@ -14,7 +14,7 @@
 | `Runtime/Utilities/ZipTool/` | `YLFramework.Runtime` | Zip/GZip 与 SharpZipLib 源码保持；额外 asmdef/meta 已退役，BCL-only 源码探针待 S6 |
 | `Editor/` | `YLFramework.Editor` | 全部自有编辑器主体，显式引用 Runtime / XFAB / UGUI，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor` | 共享 Help 功能分区，保留稳定窗口、菜单/Provider id与持久配置身份，无独立产品 DLL |
-| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、设置、工具、必要 Drawer 与 Core Help，功能目录不增加编译边界 |
+| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、持久设置、资产生成/预览与 Core Help；通用支撑按职责归 Foundation / Utilities，功能目录不增加编译边界 |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Tests/EditMode/` | `YLFramework.Tests.EditMode` | 编辑器内单元测试 |
 | `Tests/PlayMode/` | `YLFramework.Tests.PlayMode` | 运行时测试 |
@@ -41,12 +41,16 @@ Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集�
 Runtime 按机制、领域所有权和使用方式组织为四个责任分区，不按模块大小或来源命名分类：
 
 - `Foundation/`：基础逻辑分类。Async/Attributes/Binding/Events/IOC/Pool/Serialization/Singleton/Timing/Update/Utilities按功能分组；Binding分Collections/Prefs/Unity，Events分Global/Internal/Subscriptions/Unity，Pool分Abstractions/Collections/Factories/GameObject/Object；
-- 原Shared/Kernel闭包并回这些唯一功能族。独立源码探针精确选择原49文件，在Editor/Development Player排除高层框架/插件依赖，不以主体宽依赖替代职责边界；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
+- 原Shared/Kernel闭包并回这些唯一功能族。完整Foundation源码守卫递归收集该目录，且只额外包含根级 `YLFrameworkRoot.cs`，不锁定历史49文件数，不借正式Runtime DLL或附加Core/Systems/Utilities；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
 - `Core/`：Modules/MVC/Events、View/Panel/UI、领域组件、marker/Analyzer 与正式默认资源；归 Runtime 主体，职责归位与partial保持唯一状态权威，不按来源建立第二产品程序集；
 - `Utilities/`：具有明确具体功能职责、按需直接使用的便利工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool、ColorSelector）；仓库根 `Tools/` 则承载 SDK 与开发工具；
 - `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
 
 `Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 和许可汇总属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
+
+Tidy守卫分别验证完整Foundation和Foundation+Core闭包：Core递归包含自身全部C#文件，允许Foundation，以及真实UGUI、Json.NET和暂时的XFABManager；XFAB消费及其解除属于阶段8，不放行整个原XF生态。两闭包在Editor和Windows64 Development profile先验证合法消费者，再以相同参考/define验证Foundation→Core、Core→Audio的限定名/别名等违规符号不可解析。参考按真实程序集身份及编译图选择，Json.NET分别使用Editor/AOT插件，固定产品当前两类输入宏；伪路径、预编译YLFramework/测试/optional DLL及错profile插件被拒绝。
+
+Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层GetOrAdd/Destroy便利扩展新增底层helper。历史namespace `YLFramework.Core.Pool/Singleton/IOC` 不改变实际Foundation所有权；Systems/Utilities按具体能力合法协作，Resource→Extensions/Table、ColorSelector→Core仍被允许。该守卫不替代动态字符串/序列化/生命周期评审，也不等于全平台、SDK、Player构建或无原XF生态独立交付。测试入口为 `Tests/Foundation/EditMode/FoundationBoundaryTests.cs` 与 `Tests/Core/EditMode/CoreArchitectureBoundaryTests.cs`；实际批次记录见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)。Tidy-1～3 已完成技术验收与 Git 收口（里程碑 `milestone/tidy-architecture`）；阶段 8 资源融合尚未实施。
 
 目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。阶段 7.5 将取色控件、渲染及窗口统一归 Utilities/UI/ColorSelector，定位为与 Json、FSM 同类的按需便利工具。工具层直接依赖 Core Panel 的加载/输入策略；IUIInputGate 及自定义门禁入口退出，不向 Foundation 增加 UI 合同。正式Prefab、取色类型的 namespace/API/序列化字段/GUID 保持，引用已退出接口的客户端须重编译。旧样例及其程序集已退役，Samples导出根保留。
 
@@ -62,7 +66,7 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 | `Attributes/`、`Analyzers/` | 正式 marker 与唯一编译器 DLL，属于 Runtime 主体输入作用域，marker namespace 保持 |
 | `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
 
-Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/` 保留序列化/Handles/资产生成扩展；`Utilities/Assets`、`Preview`、`TreeViews` 为编辑器辅助工具；`Windows/` 与 `Inspectors/` 分别承载窗口和 Drawer。生成配置资产位于 `Editor/Core/GeneratedAssets`，ProjectSettings 持久路径及 Examples 输出不变。
+Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/ScriptableObjectExtensions` 和 `Utilities/Preview` 保留当前资产生成/定位契约。通用序列化、Handles、资产命名、TreeView 状态与 SplitWindow 已分别归 `Editor/Utilities/{Serialization,Scene,Assets,TreeViews,Windows}/`，DisableEdit Drawer 归 `Editor/Foundation/Attributes/`。七文件仍使用 `YLFramework.Core.Editor` namespace、原 GUID 和同一 Editor 程序集；生成配置资产、ProjectSettings 持久路径及 Examples 输出不变。
 
 上述目录承接既有结构整理成果，不重复历史迁移。五类产品程序集归属迁移已明确授权，原脚本/存续资源GUID、namespace、公开API和序列化字段保持；Core的XFAB/ProjectName、Prefab/Resources键与生命周期不改。UI Toolkit测试用有上限的真实绑定状态等待，Drawer/容器实现不变；当前技术验收范围见顶部及§17.12，不扩大为全量套件/全平台或阶段8、9交付。
 
@@ -139,8 +143,8 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 Resource Editor按Build/Service/CodeGeneration/Data归组，全部路径批保留原算法/owner/Bundle/生成输出。Help归Editor主体的独立功能分区，Core/Action/Audio/Foundation-Tools提供方及菜单/窗口/持久配置身份保持。Zip源码以全量BCL-only编译探针验证，不再以旧Zip产品DLL维持独立性。
 
-- `Editor/Foundation/`：原生字典 Drawer 与 EventListener Inspector；`Editor/Core/` 保持 Core Editor 的领域边界。
-- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载通用菜单和 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
+- `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 保持原默认资源、生成、设置与预览契约。
+- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载 Serialization/Scene/Assets/TreeViews/Windows 通用支撑、菜单及 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
 - `Editor/Help/`：Editor主体中的共享帮助分区，额外Help asmdef已退役；保持提供方id、菜单与配置键，不机械拆入每个领域。
 - 通用工具：`Editor/Utilities/Menus/ClearLog` / `OpenFolder`、`Editor/Distribution/ExportUnityPackage`，菜单 `YLFramework/Toolkit/...` 保持。
 - 资源工具：`Editor/Systems/Resource/`，菜单 `YLFramework/Service/ResService`，包含 AssetBundle 模拟模式、资源标记、打包（`AssetBundleExporter` / `BuildScript`）与资源数据代码生成（`ResDataCodeGenerator`）。详见 [Modules/Resource.md](Modules/Resource.md)。

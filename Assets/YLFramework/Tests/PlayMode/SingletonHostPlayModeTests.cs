@@ -17,8 +17,97 @@ namespace YLFramework.Tests
     [MonoSingletonPath("YL.Singleton.Path/Child")]
     public sealed class PathSingletonProbe : MonoSingleton<PathSingletonProbe> { }
 
+    public sealed class PersistentSingletonProbe : PersistentMonoSingleton<PersistentSingletonProbe> { }
+    public sealed class PrefabSingletonProbe : MonoBehaviour { }
+
     public class SingletonHostPlayModeTests
     {
+        [UnityTest]
+        public IEnumerator PersistentDuplicateDestroysOnlyTheLaterGameObject()
+        {
+            var first = new GameObject("YL.Singleton.Persistent.First");
+            var duplicate = new GameObject("YL.Singleton.Persistent.Duplicate");
+            try
+            {
+                var current = first.AddComponent<PersistentSingletonProbe>();
+                duplicate.AddComponent<PersistentSingletonProbe>();
+                Assert.That(PersistentSingletonProbe.Instance, Is.SameAs(current));
+                Assert.That(duplicate != null, Is.True);
+                yield return null;
+                Assert.That(duplicate == null, Is.True);
+                Assert.That(first != null, Is.True);
+                Assert.That(first.scene.name, Is.EqualTo("DontDestroyOnLoad"));
+                Assert.That(PersistentSingletonProbe.Instance, Is.SameAs(current));
+            }
+            finally
+            {
+                if (first) Object.Destroy(first);
+                if (duplicate) Object.Destroy(duplicate);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PrefabDisposeSkipsTheRetiredCloneInTheSameFrame()
+        {
+            var template = new GameObject("YL.Singleton.Prefab.Template");
+            template.SetActive(false);
+            template.AddComponent<PrefabSingletonProbe>();
+            GameObject firstRoot = null;
+            GameObject secondRoot = null;
+            try
+            {
+                var first = PrefabSingletonProperty<PrefabSingletonProbe>.InstanceWithLoader(_ => template);
+                Assert.That(first, Is.Not.Null);
+                Assert.That(first.gameObject, Is.Not.SameAs(template));
+                firstRoot = first.gameObject;
+                firstRoot.SetActive(true);
+                PrefabSingletonProperty<PrefabSingletonProbe>.Dispose();
+                var second = PrefabSingletonProperty<PrefabSingletonProbe>.Instance;
+                Assert.That(second, Is.Not.Null.And.Not.SameAs(first));
+                secondRoot = second.gameObject;
+                Assert.That(first != null, Is.True);
+                Assert.That(firstRoot != null, Is.True);
+                yield return null;
+                Assert.That(first == null, Is.True);
+                Assert.That(firstRoot == null, Is.True, "Dispose 必须销毁整个克隆，而不是只移除单例组件。");
+                Assert.That(PrefabSingletonProperty<PrefabSingletonProbe>.Instance, Is.SameAs(second));
+                Assert.That(second.gameObject.scene.name, Is.EqualTo("DontDestroyOnLoad"));
+            }
+            finally
+            {
+                PrefabSingletonProperty<PrefabSingletonProbe>.Dispose();
+                PrefabSingletonProperty<PrefabSingletonProbe>.PrefabLoader = Resources.Load<GameObject>;
+                if (firstRoot) Object.Destroy(firstRoot);
+                if (secondRoot) Object.Destroy(secondRoot);
+                if (template) Object.Destroy(template);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator MissingPrefabComponentCleansOnlyTheFailedCloneAtFrameEnd()
+        {
+            var template = new GameObject("YL.Singleton.Prefab.MissingComponent");
+            GameObject clone = null;
+            try
+            {
+                LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("PrefabSingletonProperty<PrefabSingletonProbe>"));
+                Assert.That(PrefabSingletonProperty<PrefabSingletonProbe>.InstanceWithLoader(_ => template), Is.Null);
+                clone = GameObject.Find(template.name + "(Clone)");
+                Assert.That(clone, Is.Not.Null);
+                yield return null;
+                Assert.That(clone == null, Is.True);
+                Assert.That(template != null, Is.True);
+                Assert.That(GameObject.Find(template.name + "(Clone)"), Is.Null);
+            }
+            finally
+            {
+                PrefabSingletonProperty<PrefabSingletonProbe>.Dispose();
+                PrefabSingletonProperty<PrefabSingletonProbe>.PrefabLoader = Resources.Load<GameObject>;
+                if (clone) Object.Destroy(clone);
+                if (template) Object.Destroy(template);
+            }
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {

@@ -10,6 +10,49 @@ namespace YLFramework.Tests
     public class ExtensionLifecyclePlayModeTests
     {
         [UnityTest]
+        public IEnumerator GetOrAddReusesBothOverloadsAndReplacesDestroyedComponents()
+        {
+            var go = new GameObject("YL.Tests.Extension.GetOrAdd");
+            try
+            {
+                var first = go.GetOrAddComponent<BoxCollider>();
+                Assert.That(go.GetOrAddComponent<BoxCollider>(), Is.SameAs(first));
+                Assert.That(go.transform.GetOrAddComponent<BoxCollider>(), Is.SameAs(first));
+                Assert.That(go.GetOrAddComponent(typeof(BoxCollider)), Is.SameAs(first));
+                Object.Destroy(first);
+                yield return null;
+                Assert.That(first == null, Is.True);
+                var second = go.GetOrAddComponent(typeof(BoxCollider));
+                Assert.That(second, Is.Not.Null.And.Not.SameAs(first));
+                Assert.That(go.GetOrAddComponent<BoxCollider>(), Is.SameAs(second));
+                Object.Destroy(second);
+                yield return null;
+                var third = go.transform.GetOrAddComponent<BoxCollider>();
+                Assert.That(third, Is.Not.Null.And.Not.SameAs(second));
+                Assert.That(go.GetComponents<BoxCollider>().Length, Is.EqualTo(1));
+            }
+            finally { if (go) Object.Destroy(go); }
+        }
+
+        [UnityTest]
+        public IEnumerator GracefulComponentDestroyReturnsTheOriginalReferenceAndKeepsItsGameObject()
+        {
+            var go = new GameObject("YL.Tests.Extension.ComponentDestroy");
+            try
+            {
+                var component = go.AddComponent<BoxCollider>();
+                Assert.That(component.DestroySelfGracefully(), Is.SameAs(component));
+                Assert.That(component != null, Is.True);
+                yield return null;
+                Assert.That(component == null, Is.True);
+                Assert.That(go != null, Is.True);
+                Assert.That(component.DestroySelfGracefully(), Is.SameAs(component));
+                Assert.That(((Object)null).DestroySelfGracefully(), Is.Null);
+            }
+            finally { if (go) Object.Destroy(go); }
+        }
+
+        [UnityTest]
         public IEnumerator DeferredDestroyKeepsManagedReferenceButMaskAndGracefulHelpersRespectFakeNull()
         {
             var go = new GameObject("YL.Tests.ExtensionLifetime.53");

@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using YLFramework.Utilities.Extensions;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Singleton
@@ -107,7 +106,7 @@ namespace YLFramework.Core.Singleton
 
             //Unity 的 Destroy 到帧末才实际生效，同帧内重新创建时需要跳过该对象
             _disposedInstance = instance;
-            instance.DestroyGameObjGracefully();
+            Object.Destroy(instance.gameObject);
         }
 
         private static T FindSceneInstance()
@@ -139,12 +138,15 @@ namespace YLFramework.Core.Singleton
                     return null;
                 }
 
-                var prefabInstance = prefab.Instantiate();
+                var prefabInstance = Object.Instantiate(prefab);
                 var instance = prefabInstance.GetComponent<T>();
                 if (instance == null)
                 {
                     //预制体缺少目标组件：销毁克隆，不留下半初始化对象
-                    prefabInstance.DestroySelfGracefully();
+                    if (prefabInstance)
+                    {
+                        Object.Destroy(prefabInstance);
+                    }
                     return null;
                 }
 

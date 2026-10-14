@@ -11,7 +11,7 @@
 ## 位置
 
 - 元数据：[`Runtime/Foundation/Attributes/`](../../Runtime/Foundation/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
-- 必要原生 Drawer：[`Editor/Core/Inspectors/DisableEditDrawer.cs`](../../Editor/Core/Inspectors/DisableEditDrawer.cs)，程序集 `YLFramework.Editor`，只在Editor主体中消费Runtime元数据。
+- 必要原生 Drawer：[`Editor/Foundation/Attributes/DisableEditDrawer.cs`](../../Editor/Foundation/Attributes/DisableEditDrawer.cs)，程序集 `YLFramework.Editor`，只在Editor主体中消费Runtime元数据；原 `YLFramework.Core.Editor` 类型身份保持。
 
 ## CustomClassNameGUI
 
@@ -53,7 +53,7 @@
 
 元数据回归位于 `Tests/Foundation/EditMode/AttributesTests.cs`；真实 SerializedObject、展开高度、子 Drawer 禁用/异常状态恢复与 Clipboard 直接消费者回归位于 `Tests/Core/Editor/DisableEditDrawerTests.cs`。
 
-Core Editor 的 `SerializedPropertyExtensions` 保留 `CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 入口与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；同类型、非混值的单对象和多对象可编辑，沿用真实 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
+`Editor/Utilities/Serialization/SerializedPropertyExtensions` 保留 `YLFramework.Core.Editor` 类型身份、`CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 入口与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；同类型、非混值的单对象和多对象可编辑，沿用真实 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
 
 混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
 
