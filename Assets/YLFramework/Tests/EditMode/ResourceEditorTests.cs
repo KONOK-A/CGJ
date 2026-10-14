@@ -23,7 +23,8 @@ namespace YLFramework.Tests.ResourceEditor
         {
             const string root = "Assets/YLFramework/Editor/Systems/Resource/";
             foreach (var file in new[] { "Build/AssetBundleExporter.cs", "Build/BuildScript.cs", "Build/ResourceBuildOperation.cs",
-                "Build/ResourceBuildMap.cs", "Build/ResourceBuildWorkspace.cs", "Build/ResourceBundleBuilder.cs", "Data/ResourceProject.cs",
+                "Build/ResourceBuildMap.cs", "Build/ResourceBuildWorkspace.cs", "Build/ResourceBundleBuilder.cs", "Build/ResourceCatalogBuilder.cs", "Data/ResourceProject.cs",
+                "Publishing/ResourcePublisher.cs",
                 "Service/ResServiceAssetsMenu.cs", "Service/ResServiceEditorAPI.cs", "Service/ResServiceEditorWindow.cs",
                 "CodeGeneration/ResDataCodeGenerator.cs", "CodeGeneration/ResReferenceOutput.cs" })
             {

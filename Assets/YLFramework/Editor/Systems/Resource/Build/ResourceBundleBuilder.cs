@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -31,6 +32,17 @@ namespace YLFramework.Editor.Resource
         { Name = name; UnityHash = hash; Dependencies = Array.AsReadOnly(dependencies); }
     }
 
+    /// <summary>已在真实 Bundle 中按唯一 name+type 验证过的公开子资产；localId 只作稳定身份。</summary>
+    public sealed class ResourceBuiltSubAsset
+    {
+        public ResourceBuildAsset MainAsset { get; }
+        public long LocalId { get; }
+        public string Name { get; }
+        public Type AssetType { get; }
+        internal ResourceBuiltSubAsset(ResourceBuildAsset main, long localId, string name, Type type)
+        { MainAsset = main; LocalId = localId; Name = name; AssetType = type; }
+    }
+
     /// <summary>已验证的 Editor 构建结果及真实工作量；Workspace 是可变缓存，不是已发布版本或持久化 Catalog。</summary>
     public sealed class ResourceBuildResult
     {
@@ -38,8 +50,12 @@ namespace YLFramework.Editor.Resource
         public string WorkspacePath { get; internal set; }
         public string ManifestBundleFile { get; internal set; }
         public string InputFingerprint { get; internal set; }
+        public string BuildSettingsFingerprint { get; internal set; }
+        public string Platform { get; internal set; }
+        public string UnityCompatibility { get; internal set; }
         public IReadOnlyList<ResourceBuiltFile> Files { get; internal set; }
         public IReadOnlyList<ResourceBuiltBundle> Bundles { get; internal set; }
+        public IReadOnlyList<ResourceBuiltSubAsset> SubAssets { get; internal set; }
         public bool IsCacheHit { get; internal set; }
         public bool UnityBuildInvoked { get; internal set; }
         public bool ForcedRebuild { get; internal set; }
@@ -100,6 +116,7 @@ namespace YLFramework.Editor.Resource
                 cancellation.ThrowIfCancellationRequested();
                 using var locked = workspace.AcquireLock(ref record);
                 var result = new ResourceBuildResult { Map = map, WorkspacePath = workspace.Output, InputFingerprint = fingerprint,
+                    BuildSettingsFingerprint = settings, Platform = target.ToString(), UnityCompatibility = Application.unityVersion,
                     CacheReuseBlockedBy = Array.AsReadOnly(callbacks) };
                 var expected = workspace.ExpectedFiles();
                 long artifactBytes = 0;
@@ -134,9 +151,10 @@ namespace YLFramework.Editor.Resource
                 result.BuildMilliseconds = watch.Elapsed.TotalMilliseconds;
                 watch.Restart();
                 workspace.ValidateContents(record);
-                var built = ReadBack(map, workspace, cancellation);
+                var built = ReadBack(map, workspace, cancellation, out var subAssets);
                 result.ManifestBundleFile = workspace.Leaf;
                 result.Bundles = built.AsReadOnly();
+                result.SubAssets = subAssets.AsReadOnly();
                 ResourceBuildWorkspace.FileDigest[] files;
                 if (result.IsCacheHit) files = record.Files;
                 else files = expected.Select(name =>
@@ -223,8 +241,9 @@ namespace YLFramework.Editor.Resource
         }
 
         private static List<ResourceBuiltBundle> ReadBack(ResourceBuildMap map, ResourceBuildWorkspace workspace,
-            CancellationToken cancellation)
+            CancellationToken cancellation, out List<ResourceBuiltSubAsset> subAssets)
         {
+            subAssets = new List<ResourceBuiltSubAsset>();
             var loaded = new List<AssetBundle>();
             try
             {
@@ -262,6 +281,21 @@ namespace YLFramework.Editor.Resource
                             var value = bundle.LoadAsset(asset.SourcePath, asset.AssetType);
                             if (!value || !asset.AssetType.IsInstanceOfType(value))
                                 throw new InvalidOperationException("Bundle resource identity/type readback failed: " + asset.Address);
+                            var subKeys = new HashSet<(string, Type)>();
+                            foreach (var source in AssetDatabase.LoadAllAssetRepresentationsAtPath(asset.SourcePath))
+                            {
+                                if (!source) continue;
+                                var type = ResourceBuildMap.BuildType(source.GetType());
+                                if (type == null || type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal)) continue;
+                                if (string.IsNullOrWhiteSpace(source.name) || !subKeys.Add((source.name, type)) ||
+                                    !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long localId) ||
+                                    guid != asset.Guid || localId == 0 || localId == asset.LocalId)
+                                    throw new InvalidOperationException("Ambiguous subasset identity: " + asset.Address);
+                                var matches = bundle.LoadAssetWithSubAssets(asset.SourcePath, type).Where(x => x && x.name == source.name && type.IsInstanceOfType(x)).ToArray();
+                                if (matches.Length != 1)
+                                    throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + localId.ToString(CultureInfo.InvariantCulture));
+                                subAssets.Add(new ResourceBuiltSubAsset(asset, localId, source.name, type));
+                            }
                         }
                         result.Add(new ResourceBuiltBundle(entry.Name, manifest.GetAssetBundleHash(entry.Name).ToString(), dependencies));
                         done.Add(entry.Name);

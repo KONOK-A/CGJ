@@ -431,7 +431,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 下列十个主批次按依赖与可独立拒收的闭环拆分，不按目录机械分包；8.2与8.6内部还有必须逐个完成/review的独立子批次，不允许一次合成巨型修改。8.1-8.5是隔离夹具中的新链，不改变默认Core后端；**8.6c后不能继续保留新旧YL两套运行authority**。8.7-8.8新增完整更新，不把8.6“加载融合”冒充阶段8全部完成。
 
-每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1 已完成，其余复选框仍未执行；Git 写入仅按用户当前单独授权，不由本路线自动触发。
+每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1、8.2a 已收口，8.2b 技术 COMPLETE，实际证据见第14～16节；8.2c 及后续仍未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
 
 ### 8.1 正式合同、目录及Resources最小闭环
 
@@ -458,9 +458,11 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **子批次次序**：8.2a完成自有定义/map/依赖分包/持久workspace，只构建隔离产物并过manifest身份/重复与增量门禁；8.2b接安全发布/catalog/归属/回滚，故障注入旧产物不变；8.2c接工作台/Editor模拟索引/常量生成与实际编译。每个子批次都独立review和停止检查，不把生成器失败变成整个构建未知状态。
 
+**8.2b 状态**：**技术 COMPLETE（2026-10-15，实际能力、真实发布及独立 Review 修复证据见第16节）**。尚未 Git 收口，未实施 8.2c；以下是 8.2 总门禁，不能将 8.2b 完成标成整个 8.2 完成。
+
 **Schema最终冻结门禁**：8.2c收口前对真实BuildMap/Manifest依赖、资产与子资产加载描述、Group成员、catalog序列化/读回及生成常量消费逐项对照；用最小原生读回探针确认子资产描述确能定位Bundle内容，不将8.3完整Runtime加载器提前实施。闭环证据充分后记录首版Schema和规范化规则；必要字段修正属于本批设计验证，不为未冻结原型增加永久兼容层。
 
-- [ ] 自有Fixture构建：Text/Prefab依赖/Scene分包；读回catalog/manifest一致；输入无变化二次构建记录各阶段时长/hash/复制量。
+- [x] 自有Fixture构建：Text/Prefab依赖/Scene分包；读回catalog/manifest一致；输入无变化二次构建记录各阶段时长/hash/复制量。8.2a见第15节，8.2b新增真实子资产/发布和受影响读回见第16节；六项回调仍禁止整体缓存命中。
 - [ ] 注入BuildPipeline返回null/throw、表/签名输入/复制/替换失败，取消、unknown文件、junction、owner重叠均不改旧发布；保留`.meta`及可恢复备份。
 - [ ] 同名地址/子资产歧义/资产合法互引与Bundle环分别验证；Unity选项无效不能发布；marker/锁跨窗口有效。
 - [x] 普通Bundle native name使用自有project命名空间；自动根manifest按第10节已批准的实际身份门禁验证，不把文件名冒充native name。另一新project同时读回成功、同产物改名仍被拒绝；固定路径测试和Export哨兵当批同步并通过。8.2a证据见第15节。
@@ -740,3 +742,62 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 ### 15.4 停止点
 
 8.2a 自有资源定义、稳定显式 BuildMap、实际依赖分包与 owned 隔离构建闭环技术通过。未实施正式发布/事务回滚/持久化Catalog、完整工作台/生成器、8.3 Runtime AssetBundle加载，也未完成子资产正式描述、Scene运行切换、Player或非本机平台验收。保留8.2总门禁中属于后续子批次的未完成项；Commit/Push 已按后续授权执行完毕（见15.1）。**到此停止，不自动进入8.2b。**
+
+## 16. 8.2b 实际成果与技术验收（2026-10-15）
+
+### 16.1 基线、入口与 Catalog 契约
+
+- 实施基线为 `fusion/8-resource` / `d7301fa2621390352a7619077abd9d50b095a1e2`。本轮仅授权实现、验证、独立 Review 和更新本 Plan；未创建或切换分支，未 Commit/Push。
+- 在现有 Runtime `Catalog/` 增加 `ResourceCatalogDocument`、`ResourceCatalogCodec`、`ResourceReleaseIndex`；Editor 增加 `Build/ResourceCatalogBuilder` 与 `Publishing/ResourcePublisher`。没有新增程序集，不修改 8.1 Request/Lease/Scope、Core/Audio 或旧 YL Runtime，不读取旧 ResData 或调用原 XF/XFAB 构建流程。
+- 使用入口为 `ResourceBundleBuilder.Build(...)` 取得真实已验证结果，再调用 `ResourcePublisher.Publish(result, appContentCompatibilityId, cancellation)`；单独目录生成可用 `ResourceCatalogBuilder.Create(result, appContentCompatibilityId)`，返回不可变文档。`GetReleaseRoot(result)` 只定位预期输出；`Recover(project, target, appContentCompatibilityId)` 显式处理 owned 本地未完事务。
+- 生成前独占锁住可变 Workspace，核对归属、Complete、输入指纹、完整产物集合与逐文件长度/SHA-256。旧 result 不能悄悄改指向 Workspace 新一代产物；工作区损坏不能成为有效发布。
+- 交付 `resource-catalog.json` 使用可实际读写的 **SchemaVersion=1 验证版**：固定字段；对象属性按 ordinal 排序，Bundles/Assets/Groups/SupportFiles 和依赖、成员按稳定 identity 排序；InvariantCulture、无 BOM/空白/尾换行的 UTF-8、EscapeNonAscii。BuildId 为不含自身字段的规范 payload SHA-256，CatalogDigest 为最终实际 catalog bytes SHA-256，二者不自引用。最终 Schema 冻结仍留到 8.2c 的生成与消费闭环，不增加旧原型永久兼容层。
+- codec 在 Runtime 主体但不启动或挂载另一个 ResourceSystem；不按 AQN/类型字符串反射创建对象。严格限制 16 MiB、32 层 JSON 深度及各集合16384条，拒绝缺失/未知字段、重复键、非法 UTF-8、非规范字节、错 schema/摘要/路径、大小写地址/Group冲突、身份冲突、缺包/非法 DAG 和错误平台/Unity/App兼容值。固定 `JObject` 字段读取无 CLR 类型反序列化，等价于 `TypeNameHandling.None`；Editor metadata 显式使用该设置。
+- Catalog 保留 GUID/localId canonical AssetId、main/Scene/子资产加载描述、Bundle 与直接依赖、Group 成员及 Required；一 GUID 只能有一个 main descriptor。公开子资产来自真实 AssetDatabase representations，并在 Bundle 内以唯一 name+type 读回；SubAssetKey 为 localId 的十进制文本，不把 localId 直接传给 native LoadAsset。同文件同 name+type 歧义拒绝。
+- Release Index 只含 schema/project/platform/Unity/app、BuildId、CatalogDigest 与 `<digest>/resource-catalog.json` 定位，不重复资产/Group表，不承担 Runtime 激活或生产签名授权。读者须提供显式预期兼容值，AppContentCompatibilityId 精确匹配，不能只凭平台/Unity推断 Player 内容兼容。
+
+### 16.2 发布归属、提交及恢复保证
+
+- 输出限定 `AssetBundles/YLFramework/<ProjectId>/<Platform>/<CatalogDigest>/`；发布 root 的 `.ylr-release-owner.json` 精确绑定工程根、Project SO GUID/ID、平台和已登记版本。未知叶（即使空目录）、文件占位、归属冲突、非法路径/保留名、junction/reparse point、未登记文件/目录一律拒绝；不接管旧 YL/XF 输出、原 StreamingAssets 或历史版本。
+- `.ylr-release.lock` 保护跨窗口/进程访问；同卷 `.staging/<attemptId>/` 与可变构建 Workspace 分开。单 journal 在任何 staging 写入前登记 From/To、attempt 与允许文件集合。产物复制、catalog 写入后逐文件 hash/length 校验，重新 native 读回 Manifest、Bundle 名/依赖/UnityHash/资源路径/main类型/子资产，再写 Complete。新版本登记后以 `Directory.Move` 安装；最后才原子 `File.Replace`/首次 `File.Move` 提交 Index。
+- Windows Unity Mono 实测：长路径文件可以被枚举且 `File.Exists=true`，但超过260字符的 `File.OpenRead` 会失败。交付普通物理文件使用 `b_<nativeName SHA256前32hex>`、根 Manifest 使用 `manifest`，同时保留实际 `ylr_` native identity；`.manifest` 调试文件仍列入支持产物摘要。发布前检查目标路径长度并拒绝过长根/ID，不改系统设置、不冒充 native 多版本隔离。
+- 完整版本只新增，不原地覆盖，也不自动删除已安装版本。完全相同的当前 CatalogDigest 为幂等重复发布，Index/版本字节不变且复制字节为0；同摘要已安装但未索引的完整 owned 版本可验证后复用。坏文件、不同归属或不完整目录不会被覆盖成“有效”。目前明确上限为每 root 1024条版本登记，达到上限拒绝继续发布，没有隐式 GC。
+- 失败/取消只在 Index 提交前中止，保留原 Index 和所有旧版本；部分 staging 和 journal 留作可恢复证据，不在 catch/finally 里连串删目录或让回滚异常覆盖原始首因。`Publish` 开始会先恢复既有 owned journal；显式 `Recover` 也可只靠磁盘记录重建，不依赖上次内存状态。
+- 恢复只接受 actual Index 等于 journal From 或 To，且当前引用快照完整可验证：From 表示中止新尝试；To 表示确认已提交；两者均不匹配则报 stale/conflict。只清理该 attempt 登记过的 partial staging，不清未知内容，不挑“最新目录”，已安装但未提交的完整版本也保留。清理遇文件锁等 IO 故障保留 journal 可再次重试。
+- 提交点之后的异常不宣称撤销成功，也不因晚到 cancellation 降级 Index；可能出现调用结果未定，由 `Recover` 按实际 Index 确认。丢失/损坏 owner、journal、Index 或 Complete 时保守拒绝，不自动猜测/修补归属；完整快照仍保留供诊断。目录切换与 pointer 不是跨目录断电级原子，不声称已做真实杀进程/断电验证。
+- 提交前和恢复清理前重新读磁盘 owner 并核对持锁身份及完整版本登记，实际 journal 必须与本 attempt 授权内容一致；不能使用缓存 Owner 在 marker/journal 被删除或替换后继续提交/误删。
+
+### 16.3 真实发布与测试证据
+
+- 最终 Unity 2022.3.62f3c1 / StandaloneWindows64 EditMode 本批 **16/16 Passed、0 Failed、0 Skipped**：Codec/Index 11项、真实 Catalog 1项、Publishing 4项。Publishing 最终4项279.73秒，Codec 0.64秒，真实 Catalog 48.23秒。MCP Summary 的 `TotalTests=1608` 是测试树数量，不是实际执行数；上述数量依据真实逐项结果与 PassedTests。
+- 真实夹具使用 Text、两个共享 Texture 的 Prefab、双 Sprite 子资产、带普通依赖的非空 Scene。发布为 **7个资源 Bundle + 1个根 Manifest Bundle**，9份支持文件、7个 Catalog Asset（含2个 Sprite子资产）、5个 Group。实际 Manifest 包集合/DAG/hash、主资产 GUID/localId/type、Scene完整路径、子资产唯一 name+type、Group成员及各文件摘要均读回一致；产物不是模拟文件。
+- 连续两代真实 Bundle 发布后，分别从已安装版本读取 Text 得到第一代/第二代实际内容。输入无变化第三次真实 build 得到同 CatalogDigest，仍检测6项未冻结回调并强制 native rebuild，不返回缓存命中；重复 Publish 不复制、不重写 Index。旧版本逐文件字节快照在取消、每个失败点及新版本成功后均保持不变。
+- 真实故障包括 `FileMode.CreateNew` 目标冲突导致复制失败、Index 无 delete-share 文件锁导致真实 `File.Replace` 失败；另注入 StagingCreated/FileCopied/CatalogWritten/StageVerified/VersionInstalled/BeforeIndex 故障、Catalog 写入后的取消及 IndexCommitted 后中断。恢复分别确认旧/新实际 Index，清空登记 staging，不删除任何已安装版本。
+- 负例包括未知 root/文件、独占锁、错 owner、junction、坏 Workspace/发布 Bundle、错误兼容/Schema、非法 catalog/index路径、摘要篡改、JSON大小/深度/重复/未知字段，以及 partial stage 新出现 foreign 文件。foreign 存在时恢复拒绝且逐文件快照不变；测试只删除自己制造的 foreign 后恢复，再次确认旧有效发布。
+- 本轮另执行受影响的 `RealBundlesManifestSharedIdentityAndIncrementalChangesRoundTrip` 1项（169.79秒、4次真实构建、含 AnimatorController/非空Scene/shared identity/变更与修复），既有 Catalog身份/DAG 10项、Resource固定路径1项、默认Export实际哨兵1项，均 Passed。不重复历史23项/8.1全量、Core/Audio Player或无关模块；8.2a的 null/throw/平台/资源互引与分包门禁沿用有效证据，不重新验收整个8.2a。
+
+| 本轮受影响 Builder 夹具 | 预检 ms | native构建 ms | 验证 ms | 输入哈希字节 | 产物哈希字节 | 构建复制字节 |
+|---|---:|---:|---:|---:|---:|---:|
+| 首次 | 13003.41 | 2180.73 | 12953.08 | 232589078 | 81527 | 0 |
+| 无变化 | 12721.76 | 2149.40 | 12917.68 | 232589078 | 163054 | 0 |
+| Text变更 | 12810.59 | 2182.03 | 13230.46 | 232589116 | 163068 | 0 |
+| 损坏后修复 | 12863.56 | 2176.18 | 13905.68 | 232589116 | 134982 | 0 |
+
+真实两代发布保留在 `AssetBundles/YLFramework/yl-release-75b0c703626c4386b8a29366ae3c0fdf/StandaloneWindows64/`。最后另做一次独立磁盘读回，逐文件复验两代全部长度/SHA-256，Index指向第二代、journal不存在、Staging为空、Unity scriptCompilationFailed=false：
+
+| 版本 | BuildId | CatalogDigest | Catalog bytes | 制品 bytes |
+|---|---|---|---:|---:|
+| 第一代 | `33b6287f8bd0079f09408a831406fd067e4279a369f9844ecee048162b7e36b1` | `772f6af3967a1e405748b1b99a2518fc6a49bdb2dd9852f78ba9277e09279b8f` | 8541 | 82629 |
+| 第二代 | `c0d8acb1caf2e3e6ce28425fcab86e2e4fdb2b175b11aa0f735d0f1297e849e9` | `8b2d00d17e4424c04054dd252de9ce0ee06fee993d5a6028ab46d89adc199b96` | 8541 | 82638 |
+
+夹具源码/config按测试生命周期清理，保留发布是本机验证证据，不自动装配为游戏配置。其他此前本批生成的完整验证版本不做未经授权的清理。
+
+### 16.4 独立 Review、工程保护与停止点
+
+- 完成一次独立新上下文、只读的本批 Review，实际检查全部8份新源码、9份meta、3份tracked源码/测试差异、相关程序集与Plan契约；初判 Request Changes，发现P1提交前live owner/journal未复核及P2同GUID多个main可通过codec。两项均先在Unity观察对应回归失败，再最小修复并通过；P1另锁定 owner缺失/身份冲突、journal缺失/attempt替换四分支且旧Index不变。最终本批16项复验全部通过，没有遗留实质Review问题；未用作者自查替代独立审查，也未新增重复Review轮次。
+- 每个真实夹具前后逐文件 SHA-256 对照保护 `Assets/Games`、`Assets/Scenes`、原 `Assets/StreamingAssets`、`AssetBundles/MainModule`、`Packages`、`ProjectSettings`，均通过。最终diff限定本批源码、测试和本Plan；原XF/XFAB/XFFSM包/游戏及旧发布不新增修改，9份meta均由Unity导入生成，新脚本GUID唯一、可加载，无dirty场景。
+- `.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Core Canvas.prefab 的开始/最终 blob identity 与第14.4节相同，未编辑/暂存/回退。并行新增UI Plan在本轮期间外部更新，原样保留，不读取或修改其内容，不将它纳入本批。
+- 8.2c可依赖真实已验证 BuildResult、不可变Catalog文档/严格codec、GUID/localId与子资产加载描述、Group canonical成员、完整版本目录、唯一Release Index及显式owned恢复入口。工作台、Editor模拟索引、常量生成/实际消费编译、旧Editor入口最终收口仍属8.2c；签名及远端安全留8.8，Runtime加载/激活与更新留8.3/8.7，未提前实现。
+- 未做Player、非Windows平台、真实杀进程/断电或生产远端验证。不承诺运行时同项目多版本native包热共存，不将摘要当认证。保留8.2总门禁中尚涉及8.2c/8.8的未完成项。
+
+**8.2b 技术 COMPLETE。到此停止，等待用户技术验收与 Git 收口授权；不自动 Commit/Push，不自动进入8.2c。**
