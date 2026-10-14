@@ -95,29 +95,34 @@ namespace YLFramework.Tests.Help
         }
 
         [Test]
-        public void CommonWindowHasOneMenuAndNoModuleAssemblyDependencies()
+        public void CommonWindowHasOneMenuAndBelongsToTheEditorMainAssembly()
         {
             var type = typeof(Editor.HelpWindow);
-            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Editor.Help"));
+            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Editor"));
             var menu = type.GetMethod("OpenMenu", BindingFlags.NonPublic | BindingFlags.Static).GetCustomAttribute<MenuItem>();
             Assert.That(menu.menuItem, Is.EqualTo("YLFramework/帮助"));
             var references = type.Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
             Assert.That(references.Any(name => name.StartsWith("Project.ActionKit", StringComparison.Ordinal) ||
-                name.Contains("AudioKit") || name.Contains("QFramework") || name.StartsWith("XF", StringComparison.Ordinal) ||
-                name.StartsWith("YLFramework.", StringComparison.Ordinal) || name.StartsWith("DOTween", StringComparison.Ordinal)), Is.False);
+                name.Contains("AudioKit") || name.Contains("QFramework") ||
+                (name.StartsWith("XF", StringComparison.Ordinal) && name != "XFABManager") ||
+                (name.StartsWith("YLFramework.", StringComparison.Ordinal) && name != "YLFramework.Runtime") ||
+                name.StartsWith("DOTween", StringComparison.Ordinal)), Is.False);
         }
 
         [Test]
         public void HelpBoundaryAndPersistedWindowIdentityArePreserved()
         {
             const string assemblyPath = "Assets/YLFramework/Editor/Help/YLFramework.Editor.Help.asmdef";
-            Assert.That(AssetDatabase.AssetPathToGUID(assemblyPath), Is.EqualTo("2290d80bb884fa141aca8bc526126d89"));
+            Assert.That(File.Exists(assemblyPath), Is.False);
+            Assert.That(File.Exists(assemblyPath + ".meta"), Is.False);
+            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/YLFramework.Editor.asmdef"),
+                Is.EqualTo("62b3fd14a5c704743835cacd6a6870a1"));
             Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/Help/HelpWindow.cs"),
                 Is.EqualTo("e42278efa6283704aa34a807cacdfff0"));
-            var definition = JsonUtility.FromJson<HelpAssemblyDefinition>(File.ReadAllText(assemblyPath));
-            Assert.That(definition.references, Is.Empty);
+            var definition = JsonUtility.FromJson<HelpAssemblyDefinition>(File.ReadAllText("Assets/YLFramework/Editor/YLFramework.Editor.asmdef"));
+            CollectionAssert.AreEquivalent(new[] { "YLFramework.Runtime", "UnityEngine.UI", "XFABManager" }, definition.references);
             CollectionAssert.AreEqual(new[] { "Editor" }, definition.includePlatforms);
-            Assert.That(definition.overrideReferences, Is.True);
+            Assert.That(definition.overrideReferences, Is.False);
             Assert.That(definition.precompiledReferences, Is.Empty);
             Assert.That(typeof(HelpWindowTests).Assembly.GetName().Name, Is.EqualTo("YLFramework.Tests.EditMode"));
             var moved = typeof(Editor.HelpWindow).GetCustomAttributesData()

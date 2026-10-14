@@ -74,7 +74,7 @@ namespace YLFramework.Core.Editor.Tests
                 var definition = CoreEditorIdentityTests.ReadDefinition(directory + "/" + name + ".asmdef");
                 Assert.That(definition.name, Is.EqualTo("YLFramework.Core.Examples." + name));
                 Assert.That(definition.rootNamespace, Is.EqualTo(CreateModuleCommand.ExampleNamespace));
-                Assert.That(definition.references, Is.EqualTo(new[] { "YLFramework.Core.Runtime" }));
+                Assert.That(definition.references, Is.EqualTo(new[] { "YLFramework.Runtime" }));
                 Assert.That(definition.autoReferenced, Is.False);
                 Assert.That(definition.includePlatforms ?? new string[0], Is.Empty);
             }

@@ -50,7 +50,7 @@ namespace YLFramework.Core.Tests
                 var callback = method.GetParameters()[1].ParameterType;
                 Assert.That(callback == typeof(Action) || callback.Name.StartsWith("Action`"), Is.True);
             }
-            Assert.That(typeof(IUnRegister).Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
+            Assert.That(typeof(IUnRegister).Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
         }
 
         [Test]

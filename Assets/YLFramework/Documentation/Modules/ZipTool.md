@@ -8,9 +8,9 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Tools/ZipTool/`](../../Runtime/Tools/ZipTool/)
-- 对外封装：[`Utilities/`](../../Runtime/Tools/ZipTool/Utilities/)；内置库：[`ICSharpCode.SharpZipLib/`](../../Runtime/Tools/ZipTool/ICSharpCode.SharpZipLib/)
-- namespace / 独立程序集：`YLFramework.Utilities.ZipTool`。有 asmdef 的消费者须显式引用此程序集；只使用 ZipTool 时无需引用整体 Runtime、Core 或 Foundation。
+- 运行时：[`Runtime/Utilities/ZipTool/`](../../Runtime/Utilities/ZipTool/)
+- 对外封装：[`Utilities/`](../../Runtime/Utilities/ZipTool/Utilities/)；内置库：[`ICSharpCode.SharpZipLib/`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/)
+- namespace：`YLFramework.Utilities.ZipTool`；归 `YLFramework.Runtime` 主体，原独立asmdef/meta已退役。有asmdef的消费者引用Runtime并重编译，不保留旧DLL兼容壳；工具源码保持BCL-only，不等于整个主体DLL无引擎/XFAB编译依赖。
 - 常规业务直接使用 `ZipUtility` / `GZipUtility`，多次读取同一归档使用 `using` 管理 `ZipArchiveReader`；无需 Manager、组件挂载或公共 Root。
 
 ## 主要功能
@@ -19,7 +19,7 @@
 - `ZipArchiveReader`：会话式读取 zip（一次打开多次读取，`IDisposable`），解压前预扫描配额与 Zip Slip 路径。
 - `UnzipOptions`：解压配额（总大小 / 单条目大小 / 条目数量，`ForNetworkDownloads` 预设）；0 = 不限制。
 - `GZipUtility`：字节数组 / 流的 GZip 压缩与解压（永不关闭调用方流，支持 0 字节数据）。
-- 内置 `ICSharpCode.SharpZipLib`：命名空间统一为 `YLFramework.Utilities.ZipTool.*`，随源码维护；来源与 MIT 许可见 [`THIRD-PARTY-NOTICES.md`](../../Runtime/Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。
+- 内置 `ICSharpCode.SharpZipLib`：命名空间统一为 `YLFramework.Utilities.ZipTool.*`，随源码维护；来源与 MIT 许可见 [`THIRD-PARTY-NOTICES.md`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。
 
 ## 主要类型
 
@@ -42,13 +42,13 @@
 
 ## 依赖
 
-- 无框架内模块依赖；asmdef 声明 `noEngineReferences: true`，不引用 UnityEngine / UnityEditor。
-- `YLFramework.Runtime` 显式引用 ZipTool。Resource 的 `ZipFileHelper` 在 Android 非 Editor 分支直接使用内置 `ZipFile` 读取 APK 内的 StreamingAssets，其他平台走文件目录；该平台资源接入仍归 Resource，不强制迁到通用解压门面。
+- Zip源码无框架内模块或UnityEngine/UnityEditor依赖；`ZipToolSourceTests` 独立编译全源码，仅接受Unity安装目录Mono/NetStandard下BCL参考，排除主体、Engine、Editor、测试与XF DLL。合入主体不撤销这条源码边界，也不承诺模块独立裁剪交付。
+- Resource的ZipFileHelper仍在Android非Editor分支直接用内置ZipFile读取APK内StreamingAssets，其他平台走文件目录；平台资源接入仍归Resource，不强制迁到通用解压门面。
 - `Tests/EditMode/ExportUnityPackageTests.cs` 直接使用内置 GZip / Tar 读取 Unity 导出包。内置低层类型继续保留，避免破坏现有消费者。
 
 ## 分发与许可
 
-默认导出递归包含 `Runtime/`，因此 ZipTool 的封装、内置库、asmdef / meta 与完整 MIT 许可一并随包分发；不需要额外安装 SharpZipLib Package 或供应商 DLL。源码来源与完整许可保留在 [`ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](../../Runtime/Tools/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)，不可只导出封装而漏掉内置实现或许可。此结论仅针对 ZipTool，不表示整个框架已完成独立分发验收。
+默认导出递归包含 `Runtime/`，因此 ZipTool 的封装、内置库、asmdef / meta 与完整 MIT 许可一并随包分发；不需要额外安装 SharpZipLib Package 或供应商 DLL。源码来源与完整许可保留在 [`ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)，不可只导出封装而漏掉内置实现或许可。此结论仅针对 ZipTool，不表示整个框架已完成独立分发验收。
 
 ## 当前状态
 

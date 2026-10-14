@@ -16,7 +16,20 @@ namespace YLFramework.Tests.Help
     {
         private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
 
-        [TestCase("core", "YLFramework.Core.Editor", "YLFramework/Core/帮助")]
+        [Test]
+        public void FoundationAndToolsKeepTheirCuratedNavigationGroupsAfterAssemblyMerge()
+        {
+            var module = Registration("foundation-tools").Create();
+            var index = HelpApiIndex.Build(module);
+            foreach (var guide in module.Guides)
+                foreach (var type in guide.FeaturedTypes)
+                    Assert.That(index.Single(entry => entry.Type == type).Group,
+                        Is.EqualTo(guide.Id == "tools" ? "Tools 精选 API" : "Foundation 精选 API"), type.FullName);
+            Assert.That(index.Select(entry => entry.Group).Distinct(),
+                Is.EquivalentTo(new[] { "Tools 精选 API", "Foundation 精选 API" }));
+        }
+
+        [TestCase("core", "YLFramework.Editor", "YLFramework/Core/帮助")]
         [TestCase("foundation-tools", "YLFramework.Editor", "YLFramework/Toolkit/帮助")]
         public void RegisteredProviderOffersOnlyCuratedOwnedApi(string id, string assemblyName, string menu)
         {
@@ -38,8 +51,7 @@ namespace YLFramework.Tests.Help
                     Assert.That(index.Single(t => t.Type == type).RelatedPages, Does.Contain(page));
                 }
             }
-            var allowed = id == "core" ? new[] { "YLFramework.Core.Runtime" } :
-                new[] { "YLFramework.Foundation.Runtime", "YLFramework.Runtime" };
+            var allowed = new[] { "YLFramework.Runtime" };
             Assert.That(index.All(t => allowed.Contains(t.Type.Assembly.GetName().Name)), Is.True);
             Assert.That(index.Any(t => t.Type.Namespace != null &&
                 (t.Type.Namespace.StartsWith("YLFramework.Services.Audio") || t.Type.Namespace.StartsWith("YLFramework.Actions"))), Is.False);
@@ -81,7 +93,7 @@ namespace YLFramework.Tests.Help
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
             for (var id = 1; id <= 7; id++)
                 Assert.That(core.Guides.Any(p => p.Matches("YL000" + id + " Warning")), Is.True);
-            foreach (var query in new[] { "RoslynAnalyzer Core.Runtime", "ruleset editorconfig", "build.ps1 -Deploy", "SDK 9.0.312" })
+            foreach (var query in new[] { "RoslynAnalyzer YLFramework.Runtime", "ruleset editorconfig", "build.ps1 -Deploy", "SDK 9.0.312" })
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
             var tools = Registration("foundation-tools").Create();
             foreach (var query in new[] { "ObjectPool", "EventBus", "Timer", "FSM", "ZipTool",
@@ -174,7 +186,7 @@ namespace YLFramework.Tests.Help
 
         private static string ReadOnlyState()
         {
-            var core = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "YLFramework.Core.Runtime");
+            var core = typeof(YLFramework.Core.Module).Assembly;
             var manager = core.GetType("YLFramework.Core.ModuleManager").GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             YLFramework.Events.EventBus.TryGetDefault(out var bus);
             var scenes = Enumerable.Range(0, EditorSceneManager.sceneCount).Select(i =>

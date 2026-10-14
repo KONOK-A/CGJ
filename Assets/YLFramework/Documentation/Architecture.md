@@ -4,56 +4,71 @@
 
 ## 目录与程序集
 
+当前§16修订已完成技术门禁：主体为YLFramework.Runtime/YLFramework.Editor两个，五个额外产品asmdef/meta及ColorSelector样例已退出。用户授权后Canvas恢复原基线，正式Panel混合门禁优先级和Help分组回归先红后绿；最终实际输入、六根导出、新Windows64/Mono MVC/UI/持久UnityEvent/退出Player及独立审查已收口。已随阶段 7 Git 收口提交（`milestone/7-structure`），不宣称阶段8、独立无依赖或所有平台验收完成；实际证据与迁移限制见 [结构方案§17.12](../../../.kilo/plans/xf-yl-7-structure-redesign.md#1712-授权修复与最终验收2026-10-14)。
+
 | 目录 | 程序集（asmdef） | 职责 |
 |---|---|---|
-| `Runtime/`（除下列独立程序集目录） | `YLFramework.Runtime` | 运行时功能，含 Action / Observable / Audio / HTTP / 通用工具与扩展 |
-| `Runtime/Shared/` | `YLFramework.Foundation.Runtime` | 公共 Pool、Events、Update、CoroutineStarter、唯一 Timer 内核及中立类型查找、LayerMask 成员判断、展示元数据 |
-| `Runtime/XFMain/` | `YLFramework.Core.Runtime` | Core 领域组件，TimerObject 消费 Foundation Timer |
-| `Samples/ColorSelector/` | `YLFramework.Samples.ColorSelector` | 消费正式 Core UI 的演示，显式引用 Core / Foundation / UGUI |
-| `Runtime/Tools/ZipTool/` | `YLFramework.Utilities.ZipTool` | Zip/GZip 工具与内置 SharpZipLib，不引用 UnityEngine |
-| `Editor/`（除 `Help`、`XFMain`） | `YLFramework.Editor` | 普通编辑器工具、Action / Audio / Foundation-Tools 帮助提供方，仅 Editor 平台 |
-| `Editor/Help/` | `YLFramework.Editor.Help` | 独立 Editor-only 帮助核心，显式 references 为 `[]` |
-| `Editor/XFMain/` | `YLFramework.Core.Editor` | Core 模块生成工具、必要 Drawer 与 Core Help，显式引用 Core / Foundation / Help / XFAB / UGUI，仅 Editor 平台 |
+| `Runtime/` | `YLFramework.Runtime` | 运行时主体，含 Foundation / Core / Systems / Utilities；暂留 Core 的 XFAB / UGUI 依赖 |
+| `Runtime/Foundation/` | `YLFramework.Runtime` | 中立机制与Unity适配按功能统一分组；Kernel空容器/meta已退出，无第二套内核或产品DLL |
+| `Runtime/Core/` | `YLFramework.Runtime` | Modules/MVC/Events/UI 与领域组件；partial仅导航，不改变唯一生命周期与事务 |
+| `Runtime/Utilities/ZipTool/` | `YLFramework.Runtime` | Zip/GZip 与 SharpZipLib 源码保持；额外 asmdef/meta 已退役，BCL-only 源码探针待 S6 |
+| `Editor/` | `YLFramework.Editor` | 全部自有编辑器主体，显式引用 Runtime / XFAB / UGUI，仅 Editor 平台 |
+| `Editor/Help/` | `YLFramework.Editor` | 共享 Help 功能分区，保留稳定窗口、菜单/Provider id与持久配置身份，无独立产品 DLL |
+| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、设置、工具、必要 Drawer 与 Core Help，功能目录不增加编译边界 |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Tests/EditMode/` | `YLFramework.Tests.EditMode` | 编辑器内单元测试 |
 | `Tests/PlayMode/` | `YLFramework.Tests.PlayMode` | 运行时测试 |
 | `Tests/Integrations/DOTween/EditMode/`、`PlayMode/` | `YLFramework.Actions.DOTween.Tests.EditMode`、`.PlayMode` | 独立可选集成测试 |
 
-`Runtime`、普通 `Editor`、`ZipTool` 的 `autoReferenced` 为 true；Core Runtime / Core Editor、Help、可选 DOTween 与测试程序集为 false。使用 asmdef 的业务代码仍须显式声明所需引用。
+Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集成与测试程序集保留各自关闭自动引用和约束。使用 asmdef 的业务仍须显式声明所需引用；五份已退役产品的二进制/AQN消费者须更新并重编译，不提供旧身份兼容壳。
 
 ## 依赖方向
 
-- `YLFramework.Foundation.Runtime` → 无其他框架显式引用
-- `YLFramework.Core.Runtime` → Foundation、XFABManager、UnityEngine.UI
-- `YLFramework.Runtime` → Foundation、`YLFramework.Utilities.ZipTool`、`UnityEngine.UI`
-- `YLFramework.Editor` → Foundation、`YLFramework.Runtime`、`YLFramework.Editor.Help`、`UnityEngine.UI`
-- `YLFramework.Core.Editor` → `YLFramework.Core.Runtime`、Foundation、`YLFramework.Editor.Help`、XFABManager、UnityEngine.UI
-- `YLFramework.Editor.Help` → 无模块显式引用；Help 不反向依赖 Runtime 或提供方
+- `YLFramework.Runtime` → XFABManager、UnityEngine.UI；主体不 self-reference 已合入源码
+- `YLFramework.Editor` → `YLFramework.Runtime`、XFABManager、UnityEngine.UI；Help与提供方保持源码职责分离，不再是不同产品DLL
 - `YLFramework.Actions.DOTween` → `YLFramework.Runtime` + `DOTween.dll`
-- `YLFramework.Tests.EditMode` → Runtime、Editor、Help、ZipTool、UI、TestRunner / NUnit
+- `YLFramework.Tests.EditMode` → Runtime、Editor、Foundation 测试辅助、UI、TestRunner / NUnit
 - `YLFramework.Tests.PlayMode` → Runtime、UI、TestRunner / NUnit
 
-模块内协作：`Runtime/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；DOTween 与可选 `Integrations/XFAB/Audio/` 各保留独立第三方程序集边界。正式 Audio Runtime 不反向引用 XFAB adapter；后者不自动注册或纳入默认导出。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
+模块内协作：`Runtime/Systems/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；DOTween 与可选 `Integrations/XFAB/Audio/` 各保留独立第三方程序集边界。正式 Audio Runtime 不反向引用 XFAB adapter；后者不自动注册或纳入默认导出。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
 
 无循环依赖；Runtime 不引用 Editor 程序集。Runtime 中少量编辑器模拟代码（资源加载、AssetBundle 模拟、存档编辑器保护等）使用 `#if UNITY_EDITOR` 条件编译，玩家程序集不依赖 UnityEditor。
 
-外部依赖：UGUI，以及通过插件自动引用使用的 Sirenix Odin（Inspector 标注）与 Newtonsoft.Json（存档与热更新序列化）等既有依赖；排除 DOTween 不意味着框架零外部依赖。
+外部依赖：UGUI、Newtonsoft.Json（存档与热更新序列化）等既有依赖；排除 DOTween 不意味着框架零外部依赖。EventListener 的折叠、页签与 UnityEvent 编辑由普通 Editor 中的原生 CustomEditor 承担，Sirenix Odin 插件整树及其编译引用已退出，不提供 mini-Odin 或兼容空壳。ProjectSettings 的五个未使用 Odin 宏按原配置权限边界保留。
 
-## Runtime 目录规则（Foundation + Tools + 大型模块）
+## Runtime 目录规则（Foundation / Core / Systems / Utilities）
 
-Runtime 采用“Foundation + Tools + 一级大型模块”结构：
+Runtime 按机制、领域所有权和使用方式组织为四个责任分区，不按模块大小或来源命名分类：
 
-- `Foundation/`：其他框架模块经常建立在其之上的基础机制（Binding、Events、IOC、Pool、Singleton）；
-- `Shared/`：实际独立的 Foundation 程序集，中立共用闭包；`AssemblyTool`、`LayerMaskUtility` 与 `Foundation.Attributes` 的唯一实现均在此，Core / Runtime 互不引用；5.4 未扩大该闭包；
-- `Tools/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；
-- `Services/Http/`：轻量 HTTP 服务域，共用整体 Runtime，不新增服务程序集；
-- Runtime 根部：承担完整框架级服务/系统职责的大型模块（Action、Audio、Resource、Save）；正式 UI 位于 Core 的 `XFMain/UI/`，复用 Module / Panel / View。
+- `Foundation/`：基础逻辑分类。Async/Attributes/Binding/Events/IOC/Pool/Serialization/Singleton/Timing/Update/Utilities按功能分组；Binding分Collections/Prefs/Unity，Events分Global/Internal/Subscriptions/Unity，Pool分Abstractions/Collections/Factories/GameObject/Object；
+- 原Shared/Kernel闭包并回这些唯一功能族。独立源码探针精确选择原49文件，在Editor/Development Player排除高层框架/插件依赖，不以主体宽依赖替代职责边界；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
+- `Core/`：Modules/MVC/Events、View/Panel/UI、领域组件、marker/Analyzer 与正式默认资源；归 Runtime 主体，职责归位与partial保持唯一状态权威，不按来源建立第二产品程序集；
+- `Utilities/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；仓库根 `Tools/` 则承载 SDK 与开发工具；
+- `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
 
-目录分类只是组织方式，不等于新的程序集边界；namespace 不强制与目录一一对应。模块内部按实际复杂度组织：小模块保持扁平，大模块可继续内部细分。`Samples/ColorSelector` 仅演示正式 `Runtime/XFMain/UI/Tools/` 工具；取色能力本身位于 Core Runtime。
+`Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 和许可汇总属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
 
-主要模块间协作：Binding 依赖 Events（变更回调）与 Pool；FSM 依赖 Pool（池化复用）；Resource 复用 Runtime 基础工具。正式 UI 归 Core，复用 Module/View 的唯一会话与请求、Foundation Events/Update/Pool 及暂存的 XFAB 后端，不依赖整体 Runtime 的旧 UI Manager；Save 与 UI 相互独立。
+目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。取色控件位于Utilities/UI/ColorSelector，Core窗口适配位于UI/Windows/Tools，正式Prefab保持；控件只依赖一个只读IUIInputGate，Panel显式实现原策略。旧样例及其程序集已退役，Samples导出根保留。
 
-### 成熟 Tools 边界
+### Core 职责归口
+
+| Core Runtime 子目录 | 职责 |
+|---|---|
+| `Modules/` | Module / SingletonModule / ModuleManager；原主文件集中状态和生命周期，Models/Controllers/Views/Panels partial 仅组织入口，`Requests/` 为启动请求 |
+| `MVC/Models/`、`Controllers/`、`Views/` | 各自的正式类型及唯一索引 Manager；ViewManager 的 Registration/Loading/Queries partial 保持同一会话，`Views/Parameters/` 为 LoadViewArgs |
+| `Events/` | CoreEvents / EventManager 领域事件入口，不增加另一份总线 |
+| `UI/Windows/`、`Roots/`、`Input/`、`Tips/` | 窗口/加载请求、根配置、输入策略与Tips；PanelManager Loading/Sorting/Input partial共用原状态。Windows/Tools保留ColorSelectorWindow；控件迁Utilities/UI，原namespace不改 |
+| `MVC/Views/Components/` | CloseView；TimerObject转Foundation/Timing/Components，物理/动画Listener转Foundation/Events/Unity，原namespace/GUID/字段保持 |
+| `Attributes/`、`Analyzers/` | 正式 marker 与唯一编译器 DLL，属于 Runtime 主体输入作用域，marker namespace 保持 |
+| `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
+
+Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/` 保留序列化/Handles/资产生成扩展；`Utilities/Assets`、`Preview`、`TreeViews` 为编辑器辅助工具；`Windows/` 与 `Inspectors/` 分别承载窗口和 Drawer。生成配置资产位于 `Editor/Core/GeneratedAssets`，ProjectSettings 持久路径及 Examples 输出不变。
+
+上述目录承接既有结构整理成果，不重复历史迁移。五类产品程序集归属迁移已明确授权，原脚本/存续资源GUID、namespace、公开API和序列化字段保持；Core的XFAB/ProjectName、Prefab/Resources键与生命周期不改。UI Toolkit测试用有上限的真实绑定状态等待，Drawer/容器实现不变；当前技术验收范围见顶部及§17.12，不扩大为全量套件/全平台或阶段8、9交付。
+
+主要模块间协作：Binding 依赖 Events（变更回调）与 Pool；FSM 依赖 Pool（池化复用）；Resource 复用 Runtime 基础工具。正式 UI 逻辑归 Core，复用唯一 Module/View 会话、Foundation Events/Update/Pool 与暂存 XFAB 后端；同程序集不代表恢复旧 UI Manager，Save 与 UI 职责相互独立。
+
+### 成熟 Utilities 边界
 
 | 工具 / namespace | 正式职责与协作 | 接入与所有权 |
 |---|---|---|
@@ -61,17 +76,17 @@ Runtime 采用“Foundation + Tools + 一级大型模块”结构：
 | Grid / `YLFramework.Utilities.Grid` | Runtime 矩形 / 稀疏二维数据结构，无框架内依赖；不强制替代为其他 Foundation 容器 | 直接 `new NormalGrid<T>` / `DynamicGrid<T>`，调用方管理数据 |
 | Json / `YLFramework.Utilities.Json` | Runtime JSONObject 树处理，无框架内依赖；与 Json.NET 的强类型序列化、Save 文件策略、HTTP 传输职责分离 | 直接创建 / 解析节点，不建设全局 JSON 服务 |
 | Table / `YLFramework.Utilities.Table` | Runtime 通用表与多值索引；TableIndex 复用 Foundation 的 List / Dictionary 池，Resource 的 ResTable / AssetDataTable 直接消费 | 调用方维护索引及 Clear / Dispose；不取得数据项 / 资源的释放权 |
-| ZipTool / `YLFramework.Utilities.ZipTool` | 独立 `noEngineReferences` 程序集，无框架内依赖；Resource APK 路径及 Editor 导出验证可继续使用内置低层类型 | 常规使用 ZipUtility / GZipUtility，多次读取以 `using` 管理 ZipArchiveReader；不建设压缩 Manager |
+| ZipTool / `YLFramework.Utilities.ZipTool` | Runtime主体内的BCL-only源码闭包；原独立产品asmdef已退役，仍用全源码无Engine探针核验 | 常规使用ZipUtility/GZipUtility，多次读取以using管理ZipArchiveReader；不建设压缩Manager |
 
-这些工具无需组件挂载或公共 Root。现有 `YLFramework.Core.Pool` namespace 不表示依赖 Core Runtime；池的实际程序集边界见 [Pool](Modules/Pool.md)。五个工具保持现有类型、namespace、程序集及 GUID，不为目录或名称形式统一增加迁移风险。JSONObject 与 SharpZipLib 的来源和完整 MIT 许可随 Runtime 导出，分发入口及限制见下文。
+这些工具无需组件挂载或公共Root。现有YLFramework.Core.Pool namespace不表示依赖Core领域，机制闭包见[Pool](Modules/Pool.md)。类型/namespace/GUID保持，五个产品程序集身份迁移是本次明确成本；JSONObject/SharpZipLib来源与完整MIT随Runtime导出，分发限制见下文。
 
 Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界。
 
-Timing 位于 `Runtime/Shared/Timing/`，namespace 为 `YLFramework.Timing`，归 Foundation。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Foundation 的 CoroutineObservation 仅观察借用 producer。Core TimerObject 保留组件身份与事件字段，消费公共服务。旧 Core TimerManager 与 Tools/Timing 已退出新 YL；原 XF 包不修改。详见 [Modules/Timing.md](Modules/Timing.md)。
+Timing 位于 `Runtime/Foundation/Timing/`，namespace 为 `YLFramework.Timing`。默认服务与显式手动 TimerScheduler 共用唯一秒/帧内核；内部 TimerDriver 为独立 DDOL 薄驱动，不借用场景组件或创建 Root/UI。Scope、ReusableTimer、GO binding 与 TimerWait 不增加调度器；Async中的CoroutineObservation仅观察借用producer。Core.TimerObject保留组件身份与事件字段，作为Timing/Components适配消费公共服务。旧TimerManager与Tools/Timing已退出新YL；原XF包不修改。详见 [Timing](Modules/Timing.md)。
 
 ### HTTP / AsyncOperation 边界
 
-HTTP 正式位于 `Runtime/Services/Http/`，namespace 为 `YLFramework.Services.Http`，`HttpManager` / `SendWebRequest` / `HttpRequestStatus` 归 `YLFramework.Runtime`。使用 asmdef 的消费者显式引用 Runtime，不再为 HTTP 带入 Core / XFAB；旧 Core 类型退出且不留转发壳，调用方更新 using / 完整类型名。所有入口与 Abort 仅在 Unity 主线程使用，无需挂载组件：GET、POST Form/JSON、PUT/DELETE 返回可 yield 的请求。默认 timeout 为 5 秒，可在前置配置中覆盖；显式 headers 可覆盖默认 Content-Type。GET 合并原 query、保留 fragment，新增键/值分别编码，null 值为空，数值按 InvariantCulture；Form 为 UTF-8 URL 编码，JSON 字典使用 Json.NET，字符串原样发送。
+HTTP 正式位于 `Runtime/Systems/Http/`，namespace 为 `YLFramework.Services.Http`，`HttpManager` / `SendWebRequest` / `HttpRequestStatus` 归 `YLFramework.Runtime`。使用 asmdef 的消费者显式引用 Runtime，不再为 HTTP 带入 Core / XFAB；旧 Core 类型退出且不留转发壳，调用方更新 using / 完整类型名。所有入口与 Abort 仅在 Unity 主线程使用，无需挂载组件：GET、POST Form/JSON、PUT/DELETE 返回可 yield 的请求。默认 timeout 为 5 秒，可在前置配置中覆盖；显式 headers 可覆盖默认 Content-Type。GET 合并原 query、保留 fragment，新增键/值分别编码，null 值为空，数值按 InvariantCulture；Form 为 UTF-8 URL 编码，JSON 字典使用 Json.NET，字符串原样发送。
 
 `PreWebRequest` / `PostWebRequest` 现在为可 `+=` / `-=` 的静态事件，订阅者在自身结束时解除订阅，HTTP 会话重置会清空订阅。前置事件同步配置原生请求，异常提交 Failed 并保留原始 Exception；后置事件只观察原生完成（含协议/网络错误），不在构造失败、取消或退出时调用。后置事件的原生对象仅在回调内借读，返回后释放，不能持有、重发或主动 Dispose；若前置配置替换 Handler，原先的 Handler 和回调返回时附着的新 Handler 均交由 HTTP 清理，配置过程中自行创建但从未交付/又自行替换的中间对象仍由配置者负责。
 
@@ -103,34 +118,41 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 | 入口 | 说明 |
 |---|---|
-| [`Runtime/Action/Core/ActionKit.cs`](../Runtime/Action/Core/ActionKit.cs) | 动作工厂与全局消息入口；详见 [Action](Modules/Action.md) |
-| [`Runtime/Audio/AudioKit.cs`](../Runtime/Audio/AudioKit.cs) | 直接 Clip / 显式命名音频播放、安全句柄、请求取消与资源租约、设置、查询及可选 Mixer；显式参数/Snapshot 控制见 `Mixer/AudioMixerControl`，详见 [Audio](Modules/Audio.md) |
+| [`Runtime/Systems/Action/Core/ActionKit.cs`](../Runtime/Systems/Action/Core/ActionKit.cs) | 动作工厂与全局消息入口；详见 [Action](Modules/Action.md) |
+| [`Runtime/Systems/Audio/AudioKit.cs`](../Runtime/Systems/Audio/AudioKit.cs) | 直接 Clip / 显式命名音频播放、安全句柄、请求取消与资源租约、设置、查询及可选 Mixer；显式参数/Snapshot 控制见 `Mixer/AudioMixerControl`，详见 [Audio](Modules/Audio.md) |
 | [`Runtime/YLFrameworkRoot.cs`](../Runtime/YLFrameworkRoot.cs) | 框架根单例（`MonoSingleton<YLFrameworkRoot>`，`DefaultExecutionOrder(-20)`），负责框架根对象的 DontDestroyOnLoad |
-| [`Runtime/XFMain/UI/WindowCatalog.cs`](../Runtime/XFMain/UI/WindowCatalog.cs) | 仅保存窗口定义；同步/异步入口复用 Module 的活跃会话与 pending 请求 |
-| [`Runtime/XFMain/UI/UIRootContext.cs`](../Runtime/XFMain/UI/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
-| [`Runtime/Resource/ResManager.cs`](../Runtime/Resource/ResManager.cs) | 资源服务入口（`Singleton<ResManager>`，`Init` / `InitAsync`） |
-| [`Runtime/Shared/Timing/Timer.cs`](../Runtime/Shared/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
-| [`Runtime/Shared/Timing/TimerScope.cs`](../Runtime/Shared/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
+| [`Runtime/Core/Modules/Module.cs`](../Runtime/Core/Modules/Module.cs) | 唯一业务 owner，保留模块启动/关闭、MVC 与 View 接入协议 |
+| [`Runtime/Core/MVC/Views/View.cs`](../Runtime/Core/MVC/Views/View.cs) | 正式 View 会话与表现生命周期 |
+| [`Runtime/Core/UI/Windows/WindowCatalog.cs`](../Runtime/Core/UI/Windows/WindowCatalog.cs) | 仅保存窗口定义；同步/异步入口复用 Module 的活跃会话与 pending 请求 |
+| [`Runtime/Core/UI/Roots/UIRootContext.cs`](../Runtime/Core/UI/Roots/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
+| [`Runtime/Systems/Resource/ResManager.cs`](../Runtime/Systems/Resource/ResManager.cs) | 资源服务入口（`Singleton<ResManager>`，`Init` / `InitAsync`） |
+| [`Runtime/Foundation/Timing/Timer.cs`](../Runtime/Foundation/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
+| [`Runtime/Foundation/Timing/TimerScope.cs`](../Runtime/Foundation/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
 | [`Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs`](../Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs) | 为 Mono 单例指定运行时层级路径（如 `GameObjectPool`）；正式 UI 根不是 Mono 单例 |
 
 框架预制体：`Prefabs/YLFramework.prefab` 保留公共框架根与原 UI 布局，UI 组件已迁为 `UIRootContext` 和 `UITipsPresenter`；`Prefabs/UITips.prefab` 为正式提示项，`Prefabs/ColorSelector.prefab` 为独立重建的取色工具，均使用 UI layer。Runtime 不反向引用 Core；适配与统一输入已完成，阶段 3 真实双 Play 和 Windows64/Mono Player 门禁已验证。IL2CPP、移动设备与最终独立承载不由这些结果替代，详见 [UI](Modules/UI.md)。
 
 ## Editor 工具
 
-- 通用工具：`ClearLog`、`OpenFolder`、`ExportUnityPackage`，菜单 `YLFramework/Toolkit/...`。
-- 资源工具：`Editor/Resource/`，菜单 `YLFramework/Service/ResService`，包含 AssetBundle 模拟模式、资源标记、打包（`AssetBundleExporter` / `BuildScript`）与资源数据代码生成（`ResDataCodeGenerator`）。详见 [Modules/Resource.md](Modules/Resource.md)。
-- 帮助：`YLFramework/帮助` 复用独立 [Help 核心](Modules/Help.md)。Core Editor 的 `core` 入口为 `YLFramework/Core/帮助`；普通 Editor 的 `foundation-tools` 入口为 `YLFramework/Toolkit/帮助`。既有 `actionkit` / `audiokit` 及 Action/Audio 菜单保持。Help 不反向引用提供方，普通 Editor 不因帮助而依赖 Core Runtime；只读指南/索引不实例化宿主或运行示例。
+Resource Editor按Build/Service/CodeGeneration/Data归组，全部路径批保留原算法/owner/Bundle/生成输出。Help归Editor主体的独立功能分区，Core/Action/Audio/Foundation-Tools提供方及菜单/窗口/持久配置身份保持。Zip源码以全量BCL-only编译探针验证，不再以旧Zip产品DLL维持独立性。
+
+- `Editor/Foundation/`：原生字典 Drawer 与 EventListener Inspector；`Editor/Core/` 保持 Core Editor 的领域边界。
+- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载通用菜单和 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
+- `Editor/Help/`：Editor主体中的共享帮助分区，额外Help asmdef已退役；保持提供方id、菜单与配置键，不机械拆入每个领域。
+- 通用工具：`Editor/Utilities/Menus/ClearLog` / `OpenFolder`、`Editor/Distribution/ExportUnityPackage`，菜单 `YLFramework/Toolkit/...` 保持。
+- 资源工具：`Editor/Systems/Resource/`，菜单 `YLFramework/Service/ResService`，包含 AssetBundle 模拟模式、资源标记、打包（`AssetBundleExporter` / `BuildScript`）与资源数据代码生成（`ResDataCodeGenerator`）。详见 [Modules/Resource.md](Modules/Resource.md)。
+- 帮助：YLFramework/帮助复用共享[Help](Modules/Help.md)。core入口仍为YLFramework/Core/帮助，foundation-tools仍为YLFramework/Toolkit/帮助，actionkit/audiokit及菜单保持；源码职责分离但共用Editor主体，不以独立DLL宣称单向编译隔离，只读索引不实例化宿主或运行示例。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。运行时 `AudioKitDebugWindow` 位于 Audio / Diagnostics，仅 Editor/Development Build 提供运行 GUI；诊断不为读取空状态创建 AudioManager、Source 或 Listener。
 
 ## XML 与分发
 
 唯一核心配置 `Runtime/csc.rsp` 生成 `Library/YLFramework.Runtime.xml`，包含 Action、Observable、Audio 与桥接文档；DOTween 独立配置生成 `Library/YLFramework.Actions.DOTween.xml`。提供方按真实 Assembly 作为 `XmlPaths` 字典 key 去重，不把同一 Runtime 重复添加。`Library/` XML 是构建产物，不默认导出。
 
-`AudioSourceIndependenceTests` 使用 AssemblyBuilder 直接编译正式 Audio 全目录及其必要自有源码依赖，排除预编译 YL/XF/XFAB 实现 DLL，分别验证 Editor 和 Windows64 Development 非 Editor 条件分支。该源码闭包仍需要 Unity/BCL、UGUI 和 Root 既有 Odin Attributes；不是整个尚在融合中的工程独立验收，也不替代真正 Player 构建/运行。
+`AudioSourceIndependenceTests` 使用 AssemblyBuilder 直接编译正式 Audio 全目录及其必要自有源码依赖，排除预编译 YL/XF/XFAB 实现 DLL，分别验证 Editor 和 Windows64 Development 非 Editor 条件分支。该源码闭包只允许 Unity/BCL 与精确的 UGUI 引用，不再允许 Sirenix DLL；不是整个尚在融合中的工程独立验收，也不替代真正 Player 构建/运行。
 
 Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干扰、Source/DSP 输出与实际 Windows64/Mono Player 的证据，不能以源码闭包或构建成功互相替代。验收场景和 PCM 属于 Tests 的显式夹具，不改变唯一 Runtime Audio 权威、游戏持久资产或默认分发；系统端点出声与人工听感仍需单独确认，阶段状态以 [Audio 专项](../../../.kilo/plans/xf-yl-4-audio.md)为准。
 
-自有 `YLFramework.Analyzers.dll` 仅一份，位于 Core.Runtime asmdef 范围的 `Runtime/XFMain/Analyzers/`。RoslynAnalyzer 标签将其作为 Core 及实际引用消费者的编译器输入；普通平台禁用、显式引用，不加入 Runtime precompiledReferences。七项 Warning、实际 scope、配置限制与仓库源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。SDK/Roslyn/NuGet 工具链不复制进框架运行时；不要把同工程既有 MCP/NuGet 插件与本分析器混为一谈。
+自有YLFramework.Analyzers.dll仅一份，位于Runtime主体作用域的Runtime/Core/Analyzers；RoslynAnalyzer标签作用于主体及真实引用消费者，普通平台禁用，不作为Runtime precompiledReference或Player运行引用。最终Editor/Development Player的实际rsp已核对：Runtime/Editor、MainModule与自动引用主体的Assembly-CSharp-firstpass各一份输入；原XF/XFAB/XFFSM无自有分析器输入。七项Warning和真实正负见证见[Attributes](Modules/Attributes.md#core-使用诊断)。新Player仍含原MCP/NuGet的Microsoft.CodeAnalysis载荷，主体IL无其运行引用，不把它归因于本分析器或宣称整个工程无Roslyn。
 
 默认 ExportRoots 仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`。Plugins 完整递归，包括商业插件、Demo 和辅助工具；内部交付不代表公开再分发许可已核查。正式 Editor/Help、Analyzer DLL/meta、Runtime 与资源/说明进入包；Tests、根 Integrations、游戏资源、Examples/YLFrameworkData、SDK 项目、NuGet 缓存和中间产物排除。现有外部依赖不自动携带，Core 过渡 XFAB 仍保留。回归真实解包核验全部递归资产内容及 GUID/meta，不宣称干净工程 import。入口见 [文档首页](README.md#帮助与导出)。
 

@@ -397,7 +397,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(ActionKitHelpProvider.ModuleId, Is.EqualTo("actionkit"));
             Assert.That(typeof(ActionKitHelpProvider).Namespace, Is.EqualTo("YLFramework.Editor.Actions"));
             Assert.That(typeof(ActionKitHelpProvider).IsDefined(typeof(InitializeOnLoadAttribute), false), Is.True);
-            Assert.That(typeof(HelpWindow).Assembly.GetName().Name, Is.EqualTo("YLFramework.Editor.Help"));
+            Assert.That(typeof(HelpWindow).Assembly, Is.SameAs(typeof(ActionKitHelpProvider).Assembly));
             Assert.That(typeof(EditorWindow).IsAssignableFrom(typeof(HelpWindow)), Is.True);
             Assert.That(typeof(HelpWindow).GetMethod("Open", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
             var registered = HelpRegistry.GetModules().Single(module => module.Id == ActionKitHelpProvider.ModuleId);
@@ -408,7 +408,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(menu.menuItem, Is.EqualTo("YLFramework/Action/帮助"));
             var asmdef = File.ReadAllText(Path.Combine(Application.dataPath, "YLFramework/Editor/YLFramework.Editor.asmdef"));
             StringAssert.IsMatch("\"includePlatforms\"\\s*:\\s*\\[\\s*\"Editor\"\\s*\\]", asmdef);
-            StringAssert.Contains("\"YLFramework.Editor.Help\"", asmdef);
+            StringAssert.DoesNotContain("\"YLFramework.Editor.Help\"", asmdef);
         }
 
         [Test]
@@ -868,7 +868,8 @@ namespace YLFramework.Tests.Actions
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var allowed = builder.defaultReferences.Where(path => IsEngineOrFrameworkReference(path, contents, ui)).ToArray();
                 builder.excludeReferences = builder.defaultReferences.Except(allowed).ToArray();
-                builder.additionalReferences = ActionKitApiHelpContent.GetReferenceAssemblies().Concat(new[] { ui }).ToArray();
+                builder.additionalReferences = ActionKitApiHelpContent.GetReferenceAssemblies()
+                    .Concat(new[] { ui, typeof(YLFramework.Events.EventChannel).Assembly.Location }).Distinct().ToArray();
                 CollectionAssert.IsSubsetOf(ActionKitApiHelpContent.GetReferenceAssemblies(), builder.additionalReferences);
                 Assert.That(allowed.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True,
                     "Help example compilation must retain CoreModule; rejected references: " + string.Join("\n", builder.excludeReferences));
@@ -890,6 +891,7 @@ namespace YLFramework.Tests.Actions
         [TestCase("UnityEngine.Game.dll")]
         [TestCase("UnityEngine.TestRunner.dll")]
         [TestCase("YLFramework.Runtime.dll")]
+        [TestCase("YLFramework.Foundation.Runtime.dll")]
         [TestCase("YLFramework.Utilities.ZipTool.dll")]
         [TestCase("QFramework.dll")]
         [TestCase("YLFramework.Actions.DOTween.dll")]
@@ -913,6 +915,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(IsEngineOrFrameworkReference(typeof(UnityEngine.Object).Assembly.Location, contents, ui), Is.True);
             Assert.That(IsEngineOrFrameworkReference(ui, contents, ui), Is.True);
             Assert.That(IsEngineOrFrameworkReference(typeof(YLFramework.Core.Pool.SafeObjectPool<>).Assembly.Location, contents, ui), Is.True);
+            Assert.That(IsEngineOrFrameworkReference(typeof(YLFramework.Events.EventChannel).Assembly.Location, contents, ui), Is.True);
             Assert.That(IsEngineOrFrameworkReference(typeof(ApiHelpTests).Assembly.Location, contents, ui), Is.False);
         }
 
@@ -960,6 +963,7 @@ namespace YLFramework.Tests.Actions
             var absolute = Path.GetFullPath(path);
             if (string.Equals(absolute, Path.GetFullPath(uiAssembly), StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(absolute, Path.GetFullPath(typeof(ActionKit).Assembly.Location), StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(absolute, Path.GetFullPath(typeof(YLFramework.Events.EventChannel).Assembly.Location), StringComparison.OrdinalIgnoreCase)) return true;
             var name = Path.GetFileName(absolute);
             if ((name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal)) && name != "UnityEngine.TestRunner.dll")
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
@@ -1017,7 +1021,7 @@ namespace YLFramework.Tests.Actions
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var allowed = builder.defaultReferences.Where(path => IsEngineOrFrameworkReference(path, contents, ui)).ToArray();
                 builder.excludeReferences = builder.defaultReferences.Except(allowed).ToArray();
-                builder.additionalReferences = new[] { ui, typeof(ActionKit).Assembly.Location };
+                builder.additionalReferences = new[] { ui, typeof(ActionKit).Assembly.Location, typeof(YLFramework.Events.EventChannel).Assembly.Location };
                 var effective = builder.defaultReferences.Except(builder.excludeReferences).Concat(builder.additionalReferences).Distinct().ToArray();
                 Assert.That(effective.All(path => IsEngineOrFrameworkReference(path, contents, ui)), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);

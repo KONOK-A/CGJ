@@ -1,0 +1,312 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using GameObjectLoader = XFABManager.GameObjectLoader;
+using System.Runtime.ExceptionServices;
+using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
+using UpdateManager = YLFramework.Foundation.UpdateManager;
+using YLFramework.Events;
+using YLFramework.Core.Singleton;
+
+namespace YLFramework.Core
+{
+
+    internal partial class ViewManager
+    {
+        private static void EndPruneRound()
+        {
+            pruneRound = null;
+            var subscription = pruneSubscription;
+            pruneSubscription = null;
+            subscription?.UnRegister();
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
+        }
+
+        private static void PruneDestroyedSessions(object round)
+        {
+            // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
+            pruneOwners.Clear();
+            pruneOwners.AddRange(sceneOwners);
+            foreach (var module in pruneOwners)
+            {
+                if (!ReferenceEquals(pruneRound, round)) break;
+                if (module.viewTransactions != 0) continue;
+                try { PruneDestroyed(module); }
+                catch (Exception error) { Debug.LogException(error); }
+            }
+            pruneOwners.Clear();
+        }
+
+        #region 添加 
+        internal static void AddView(Module module, View view)
+        {
+            EnsureOwner(module);
+            if (!view) throw new ArgumentNullException(nameof(view));
+            if (view.IsRemoving || view.IsUnbinding) throw new InvalidOperationException("Cannot register a View during exit or unbinding.");
+            if (view.Module != null || view.Session != null)
+            {
+                if (!ReferenceEquals(view.Module, module))
+                    throw new InvalidOperationException("View is already owned by another Module.");
+                if (view.IsInitializing || view.IsRemoving)
+                    throw new InvalidOperationException("Cannot register a View during its lifecycle callback.");
+                if (HasRegistration(module, view, view.Session)) return;
+                throw new InvalidOperationException("View owner and registration do not match.");
+            }
+            int id = view.GetInstanceID();
+            if (module.ownedViews.ContainsKey(id) ||
+                (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var existing) && existing.ContainsKey(id)))
+                throw new InvalidOperationException($"View ID {id} is already registered.");
+            Type type = view.GetType();
+            if (module.type_views.TryGetValue(type, out var typed) && typed.Exists(item => ReferenceEquals(item, view)))
+                throw new InvalidOperationException("View type index already contains this instance.");
+            view.RegisteredId = id;
+            view.Session = new object();
+            view.LastSession = view.Session;
+            view.Module = module;
+            module.ownedViews.Add(id, view);
+            if (!string.IsNullOrEmpty(view.AssetName))
+            {
+                if (!module.views.TryGetValue(view.AssetName, out var named))
+                    module.views.Add(view.AssetName, named = new Dictionary<int, View>());
+                named.Add(id, view);
+            }
+            if (typed == null) module.type_views.Add(type, typed = new List<View>());
+            typed.Add(view);
+            TrackScene(module, view);
+        }
+
+        internal static void EnsureOwner(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (!SingletonSessionState.CanRunExecution)
+                throw new InvalidOperationException("Views cannot be acquired outside an active execution session.");
+            module.EnsureCanAddObjects();
+            if (!ReferenceEquals(ModuleManager.GetModule(module.ModuleName), module) ||
+                (module.State != ModuleState.Starting && module.State != ModuleState.Running))
+                throw new InvalidOperationException("View requires a registered Starting or Running Module.");
+        }
+
+        private static bool HasRegistration(Module module, View view, object session)
+        {
+            if (!(session != null && ReferenceEquals(view.Module, module) && ReferenceEquals(view.Session, session) &&
+                module.ownedViews.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view) &&
+                (string.IsNullOrEmpty(view.AssetName) || (module.views.TryGetValue(view.AssetName, out var named) &&
+                    named.TryGetValue(view.RegisteredId, out var byName) && ReferenceEquals(byName, view))) &&
+                module.type_views.TryGetValue(view.GetType(), out var typed))) return false;
+            int count = 0;
+            foreach (var item in typed)
+                if (ReferenceEquals(item, view)) count++;
+            return count == 1;
+        }
+
+        #endregion
+
+        #region 移除
+
+        internal static void RemoveView(Module module, View view)
+        {
+            if (ReferenceEquals(view, null)) return;
+            RemoveView(module, view, view.Session);
+        }
+
+        internal static void RemoveView(Module module, View view, object session, bool destroyed = false)
+            => RemoveViewCore(module, view, session, destroyed, false, false);
+
+        private static void RemoveViewCore(Module module, View view, object session, bool destroyed, bool preserveInstance, bool rollback)
+        {
+            if (module == null || ReferenceEquals(view, null) || session == null ||
+                !ReferenceEquals(view.Module, module) || !ReferenceEquals(view.Session, session) ||
+                !module.ownedViews.TryGetValue(view.RegisteredId, out var registered) || !ReferenceEquals(registered, view)) return;
+            if (view.IsRemoving) return;
+            if (view.IsInitializing || view.IsUnbinding || (view.IsAttaching && !rollback))
+                throw new InvalidOperationException("Cannot close a View during initialization, attachment or unbinding.");
+            bool notify = view.loaded;
+            view.IsRemoving = true;
+            view.loaded = false;
+            module.viewTransactions++;
+            var errors = new List<Exception>();
+            bool damaged = view.DiscardOnExit;
+            bool backend = view.UsesBackend;
+            bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
+            GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
+            if (backend && destroyed) damaged = true;
+            if (backend)
+                foreach (var child in Snapshot(module))
+                    if (!ReferenceEquals(child.Key, view) && ReferenceEquals(child.Key.BackendRoot, view) &&
+                        ReferenceEquals(child.Key.BackendRootSession, session))
+                    {
+                        try { RemoveViewCore(module, child.Key, child.Value, !child.Key, !child.Key.UsesBackend, rollback); }
+                        catch (Exception error) { errors.Add(error); }
+                    }
+            try { view.StopEvents(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            if (notify && view.onViewRemove != null)
+                foreach (Action observer in view.onViewRemove.GetInvocationList())
+                {
+                    try { observer(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            try { view.OnRemove(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            try { view.DetachModel(); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
+            try { PanelManager.ReleaseView(view); }
+            catch (Exception error) { errors.Add(error); }
+            damaged |= view.DiscardOnExit;
+            if (damaged && !backend && !ReferenceEquals(view.BackendRoot, null) &&
+                ReferenceEquals(view.BackendRoot.Session, view.BackendRootSession))
+                view.BackendRoot.DiscardOnExit = true;
+
+            // 撤销当前会话后仍保持Removing，直到实例处理结束，禁止OnDisable重入复活。
+            DetachIndexes(module, view, session);
+            try
+            {
+                if (instance && !preserveInstance)
+                {
+                    // 独立取得、挂在另一取得根下的实例仍独立归还，不能留在外层缓存子树中被再次纳管。
+                    if (nestedBackend) instance.transform.SetParent(null, true);
+                    if (backend && !damaged) GameObjectLoader.UnLoad(instance);
+                    else
+                    {
+                        instance.SetActive(false);
+                        if (backend && damaged) UnityEngine.Object.Destroy(instance);
+                    }
+                }
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+                if (backend && instance)
+                {
+                    try { UnityEngine.Object.Destroy(instance); }
+                    catch (Exception discardError) { errors.Add(discardError); }
+                }
+            }
+            view.IsRemoving = false;
+            module.viewTransactions--;
+            if (notify)
+            {
+                try { EventManager.TriggerEventAll(CoreEvents.ON_REMOVE_VIEW, view); }
+                catch (Exception error) { errors.Add(error); }
+                // 广播可以复用同一组件；不把旧完成钩子派发给已开启过的新会话。
+                if (ReferenceEquals(view.LastSession, session))
+                {
+                    try { view.NotifyClosed(); }
+                    catch (Exception error) { errors.Add(error); }
+                }
+            }
+            ThrowCleanupErrors(errors);
+        }
+
+        private static void DetachIndexes(Module module, View view, object session)
+        {
+            if (!ReferenceEquals(view.Session, session) || !ReferenceEquals(view.Module, module)) return;
+            if (module.ownedViews.TryGetValue(view.RegisteredId, out var owned) && ReferenceEquals(owned, view))
+                module.ownedViews.Remove(view.RegisteredId);
+            if (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var named))
+            {
+                if (named.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view))
+                    named.Remove(view.RegisteredId);
+                if (named.Count == 0) module.views.Remove(view.AssetName);
+            }
+            Type type = view.GetType();
+            if (module.type_views.TryGetValue(type, out var typed))
+            {
+                typed.RemoveAll(item => ReferenceEquals(item, view));
+                if (typed.Count == 0) module.type_views.Remove(type);
+            }
+            view.onViewRemove = null;
+            view.AssetName = null;
+            view.UsesBackend = false;
+            view.BackendInstance = null;
+            view.BackendRoot = null;
+            view.BackendRootSession = null;
+            view.SceneHandle = 0;
+            view.DiscardOnExit = false;
+            view.Module = null;
+            view.Session = null;
+            if (module.ownedViews.Count == 0)
+            {
+                sceneOwners.Remove(module);
+                if (sceneOwners.Count == 0)
+                {
+                    EndPruneRound();
+                }
+            }
+        }
+
+        internal static void ThrowCleanupErrors(List<Exception> errors)
+        {
+            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            if (errors.Count > 1) throw new AggregateException("View cleanup failed.", errors).Flatten();
+        }
+
+        #endregion
+
+        #region 清空
+
+        /// <summary>
+        /// 清空某一个模块的所有View
+        /// </summary>
+        /// <param name="module"></param>
+        internal static void ClearView(Module module)
+        {
+            ClearSessions(module, Snapshot(module));
+        }
+
+        internal static void ClearView(Module module, string asset_name)
+        {
+            if (asset_name == null) throw new ArgumentNullException(nameof(asset_name));
+            var sessions = Snapshot(module);
+            sessions.RemoveAll(item => item.Key.AssetName != asset_name);
+            ClearSessions(module, sessions);
+        }
+
+        internal static void ClearView<T>(Module module) where T : View
+        {
+            var sessions = Snapshot(module);
+            sessions.RemoveAll(item => !(item.Key is T));
+            ClearSessions(module, sessions);
+        }
+
+        internal static List<KeyValuePair<View, object>> Snapshot(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            var sessions = new List<KeyValuePair<View, object>>(module.ownedViews.Count);
+            foreach (var view in module.ownedViews.Values)
+                sessions.Add(new KeyValuePair<View, object>(view, view.Session));
+            // 取得根先退出，子会话不单独改变缓存子树的activeSelf。
+            sessions.Sort((left, right) => right.Key.UsesBackend.CompareTo(left.Key.UsesBackend));
+            return sessions;
+        }
+
+        private static void ClearSessions(Module module, List<KeyValuePair<View, object>> sessions)
+        {
+            var errors = new List<Exception>();
+            foreach (var session in sessions)
+            {
+                try { RemoveView(module, session.Key, session.Value, !session.Key); }
+                catch (Exception error) { errors.Add(error); }
+            }
+            ThrowCleanupErrors(errors);
+        }
+
+        private static void PruneDestroyed(Module module)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            List<KeyValuePair<View, object>> dead = null;
+            foreach (var view in module.ownedViews.Values)
+                if (!view)
+                {
+                    if (dead == null) dead = new List<KeyValuePair<View, object>>();
+                    dead.Add(new KeyValuePair<View, object>(view, view.Session));
+                }
+            if (dead != null) ClearSessions(module, dead);
+        }
+
+        #endregion
+
+
+    }
+}

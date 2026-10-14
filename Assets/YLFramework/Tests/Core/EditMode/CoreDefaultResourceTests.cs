@@ -11,10 +11,10 @@ namespace YLFramework.Core.Tests
 {
     public class CoreDefaultResourceTests
     {
-        private const string ResourceRoot = "Assets/YLFramework/Runtime/XFMain/Resources/";
+        private const string ResourceRoot = "Assets/YLFramework/Runtime/Core/Resources/";
         private const string OriginalRoot = "Assets/Resources/XFGameFramework/";
         private const string OriginalAdaptationGuid = "abf116dc13c27ef4583812631aacc1c3";
-        private const string AdaptationPath = "Assets/YLFramework/Runtime/XFMain/Other/Adaptation/AutomaticAdaptationCanvasScaler.cs";
+        private const string AdaptationPath = "Assets/YLFramework/Runtime/Core/UI/Adaptation/AutomaticAdaptationCanvasScaler.cs";
 
         [TestCase("Canvas")]
         [TestCase("EventSystem")]
@@ -81,7 +81,7 @@ namespace YLFramework.Core.Tests
                 typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(AutomaticAdaptationCanvasScaler)
             }));
             var adaptation = prefab.GetComponent<AutomaticAdaptationCanvasScaler>();
-            Assert.That(adaptation.GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Core.Runtime"));
+            Assert.That(adaptation.GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
             Assert.That(AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(adaptation)), Is.EqualTo(AdaptationPath));
             Assert.That(prefab.GetComponent<Canvas>().renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
             Assert.That(prefab.GetComponent<CanvasScaler>().referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));

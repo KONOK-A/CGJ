@@ -262,27 +262,27 @@ AudioKit 的直接 `AudioClip` 入口只借用外部资源；显式命名入口�
 
 | 位置 | 职责 |
 |---|---|
-| [`Runtime/Audio/AudioKit.cs`](../../Runtime/Audio/AudioKit.cs) | 播放、设置、槽位控制、去重/Clip/缓存预算与统计查询 |
-| [`AudioHandle.cs`](../../Runtime/Audio/AudioHandle.cs) | 播放代次与所属宿主生命周期校验、控制与只读进度 |
-| [`AudioChannel.cs`](../../Runtime/Audio/AudioChannel.cs) | 会话内命名控制登记、局部设置、独占/重叠拓扑与受控借源入口 |
-| [`Config/`](../../Runtime/Audio/Config/) | 集中存放设置、请求参数及可序列化配置类型；命名空间与 Runtime 程序集不变 |
-| [`Config/AudioSoundOptions.cs`](../../Runtime/Audio/Config/AudioSoundOptions.cs) | 音效、空间语音及 Music/Voice WithOptions 的公开可变配置类、独立 Defaults 实例与校验入口 |
-| [`Config/AudioSoundConcurrency.cs`](../../Runtime/Audio/Config/AudioSoundConcurrency.cs) | Sound 总量/默认 Clip 上限及 RejectNew/StopOldest/StopLowestPriority 策略 |
-| [`AudioSoundStats.cs`](../../Runtime/Audio/AudioSoundStats.cs) | 不分配集合的 Sound 会话统计值快照与资源拥有数 |
-| [`Config/AudioAutoFade.cs`](../../Runtime/Audio/Config/AudioAutoFade.cs) | 可序列化首尾片段秒配置，零值关闭、短片段归一化 |
-| [`Config/AudioCrossfadeCurve.cs`](../../Runtime/Audio/Config/AudioCrossfadeCurve.cs) | Music Crossfade 的 Linear/EqualPower 曲线选择 |
-| [`Config/AudioWeightedClip.cs`](../../Runtime/Audio/Config/AudioWeightedClip.cs) | 可序列化 Clip/Weight 配对项，供纯加权选择及播放使用 |
-| [`Config/AudioClipLibrary.cs`](../../Runtime/Audio/Config/AudioClipLibrary.cs) | 具名选曲组、直接 Clip/显式后端定位及一次抽选快照 |
-| [`Config/AudioOutputRoute.cs`](../../Runtime/Audio/Config/AudioOutputRoute.cs) | 单次播放的继承、指定 MixerGroup、直接输出三态路由 |
-| [`Config/AudioKitSettings.cs`](../../Runtime/Audio/Config/AudioKitSettings.cs) | 基于 YL Binding 的六个持久化属性与 Audio 音量校验、临时静音及默认输出组 |
-| [`Config/AudioMixerConfig.cs`](../../Runtime/Audio/Config/AudioMixerConfig.cs) | 可选的分类 Mixer 路由配置资产 |
-| [`Mixer/`](../../Runtime/Audio/Mixer/) | 独立静态 AudioMixerControl 操作逻辑 |
-| [`Internal/`](../../Runtime/Audio/Internal/) | AudioManager 宿主、AudioVoice 实例、SoundDeduplicator |
-| [`Internal/AudioPlaybackOptions.cs`](../../Runtime/Audio/Internal/AudioPlaybackOptions.cs) | 内部播放值快照、集中有效默认值、公开配置捕获与校验；不新增公开配置类型 |
-| [`Components/`](../../Runtime/Audio/Components/) | 原 AudioEmitter / AudioMusicPlayer、AudioGroupPlayer 组 owner 与 AudioMixerController 薄配置组件 |
-| [`Actions/`](../../Runtime/Audio/Actions/) | PlaySoundAction / PlaySoundExtension |
-| [`Diagnostics/`](../../Runtime/Audio/Diagnostics/) | 被动诊断；运行 GUI 仅 Editor/Development Build |
-| [`Editor/Audio/`](../../Editor/Audio/) | 分层 Inspector、Debug 编辑器窗口与 Help 提供方 |
+| [`Runtime/Systems/Audio/AudioKit.cs`](../../Runtime/Systems/Audio/AudioKit.cs) | 播放、设置、槽位控制、去重/Clip/缓存预算与统计查询 |
+| [`AudioHandle.cs`](../../Runtime/Systems/Audio/AudioHandle.cs) | 播放代次与所属宿主生命周期校验、控制与只读进度 |
+| [`AudioChannel.cs`](../../Runtime/Systems/Audio/AudioChannel.cs) | 会话内命名控制登记、局部设置、独占/重叠拓扑与受控借源入口 |
+| [`Config/`](../../Runtime/Systems/Audio/Config/) | 集中存放设置、请求参数及可序列化配置类型；命名空间与 Runtime 程序集不变 |
+| [`Config/AudioSoundOptions.cs`](../../Runtime/Systems/Audio/Config/AudioSoundOptions.cs) | 音效、空间语音及 Music/Voice WithOptions 的公开可变配置类、独立 Defaults 实例与校验入口 |
+| [`Config/AudioSoundConcurrency.cs`](../../Runtime/Systems/Audio/Config/AudioSoundConcurrency.cs) | Sound 总量/默认 Clip 上限及 RejectNew/StopOldest/StopLowestPriority 策略 |
+| [`AudioSoundStats.cs`](../../Runtime/Systems/Audio/AudioSoundStats.cs) | 不分配集合的 Sound 会话统计值快照与资源拥有数 |
+| [`Config/AudioAutoFade.cs`](../../Runtime/Systems/Audio/Config/AudioAutoFade.cs) | 可序列化首尾片段秒配置，零值关闭、短片段归一化 |
+| [`Config/AudioCrossfadeCurve.cs`](../../Runtime/Systems/Audio/Config/AudioCrossfadeCurve.cs) | Music Crossfade 的 Linear/EqualPower 曲线选择 |
+| [`Config/AudioWeightedClip.cs`](../../Runtime/Systems/Audio/Config/AudioWeightedClip.cs) | 可序列化 Clip/Weight 配对项，供纯加权选择及播放使用 |
+| [`Config/AudioClipLibrary.cs`](../../Runtime/Systems/Audio/Config/AudioClipLibrary.cs) | 具名选曲组、直接 Clip/显式后端定位及一次抽选快照 |
+| [`Config/AudioOutputRoute.cs`](../../Runtime/Systems/Audio/Config/AudioOutputRoute.cs) | 单次播放的继承、指定 MixerGroup、直接输出三态路由 |
+| [`Config/AudioKitSettings.cs`](../../Runtime/Systems/Audio/Config/AudioKitSettings.cs) | 基于 YL Binding 的六个持久化属性与 Audio 音量校验、临时静音及默认输出组 |
+| [`Config/AudioMixerConfig.cs`](../../Runtime/Systems/Audio/Config/AudioMixerConfig.cs) | 可选的分类 Mixer 路由配置资产 |
+| [`Mixer/`](../../Runtime/Systems/Audio/Mixer/) | 独立静态 AudioMixerControl 操作逻辑 |
+| [`Internal/`](../../Runtime/Systems/Audio/Internal/) | AudioManager 宿主、AudioVoice 实例、SoundDeduplicator |
+| [`Internal/AudioPlaybackOptions.cs`](../../Runtime/Systems/Audio/Internal/AudioPlaybackOptions.cs) | 内部播放值快照、集中有效默认值、公开配置捕获与校验；不新增公开配置类型 |
+| [`Components/`](../../Runtime/Systems/Audio/Components/) | 原 AudioEmitter / AudioMusicPlayer、AudioGroupPlayer 组 owner 与 AudioMixerController 薄配置组件 |
+| [`Actions/`](../../Runtime/Systems/Audio/Actions/) | PlaySoundAction / PlaySoundExtension |
+| [`Diagnostics/`](../../Runtime/Systems/Audio/Diagnostics/) | 被动诊断；运行 GUI 仅 Editor/Development Build |
+| [`Editor/Systems/Audio/`](../../Editor/Systems/Audio/) | 分层 Inspector、Debug 编辑器窗口与 Help 提供方 |
 
 核心链直接复用 `YLFramework.Core.Pool`、`YLFramework.Binding`、`YLFramework.Events` 和 `MonoSingletonHost<AudioManager>`。没有新增程序集或第三方音频库；共享 Runtime 仍沿用框架既有依赖，不表示零依赖安装包。完整依赖见 [架构总览](../Architecture.md)。
 
@@ -849,7 +849,7 @@ Action 在用户 onStarted 之前写入实际 lease，允许回调 Reset/Deinit 
 
 该 `onFinish` 仍为无参 `Action`，不迁移为音频的 `(clip, handle)` 签名；它通知 Action 等待结束，包含拒播/外部停止，不等同于 AudioKit 的自然完成回调。Action 序列的 `.Callback(() => ...)` 也保持不变。
 
-Timer 位于 Foundation 的 `Runtime/Shared/Timing`，是独立到期回调服务；Audio 不使用 Timer 或 `clip.length` 代替 Source 完成检测。TimerScope、ActionHandle、AudioHandle 各管自己的所有权与生命周期，详见 [Timing](Timing.md)。
+Timer 位于 `Runtime/Foundation/Timing`，是独立到期回调服务；Audio 不使用 Timer 或 `clip.length` 代替 Source 完成检测。TimerScope、ActionHandle、AudioHandle 各管自己的所有权与生命周期，详见 [Timing](Timing.md)。
 
 ## 宿主、池与诊断
 
@@ -876,11 +876,12 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 - [`Tests/EditMode/Audio/`](../../Tests/EditMode/Audio/)：设置六键/默认/重建退订、临时 Mute 分类隔离/池复用/最新音量恢复、只读查询与失效/缺失资源的安全返回、初始与运行时参数校验、倍率截断与分类音量、去重边界与提交/代次清理、随机有效 Clip、快照、句柄隔离、非创建读取、宿主清理与池边界，以及 Action 拒播/Stop/取消/Reset/重入。
 - [`Tests/PlayMode/Audio/`](../../Tests/PlayMode/Audio/)：真实播放进度、暂停冻结/静音推进/循环/Pitch、静音中创建与自然完成、随机回调的实际 Clip 与原句柄、同步开始/完成回调的控制与重入、运行中倍率与请求隔离、待播放请求修改与开关完整重播、显式 Stop、并发/池复用、音量、Sound/Voice 3D→2D 重置、语音分类隔离及同帧重播目标校验、目标移动/停用/销毁/场景卸载、回调替换/Shutdown，以及 Action 序列等待。
+- 独立 AB 所有权验收是跨模式配对流程：先运行 EditMode `AudioNamedBundlePreparationTests.BuildIndependentAudioBundlesForRuntimeOwnershipVerification`，再运行 PlayMode `AudioNamedResourcePlaybackTests.RealAssetBundleSyncAsyncDependenciesAndFinalPhysicalUnload`。准备阶段在 `Tests/Fixtures/Audio/Bundle-<id>` 与 Temp/kilo 下构建独立资产/主 Bundle/依赖，消费阶段验证真实加载和最终物理卸载，并在 finally 清理本 Fixture 及四个 SessionState 键。尚未消费时重复准备会拒绝覆盖；只反复运行 EditMode 不等于完成该验收。有效待消费数据应交给配对测试，不清键或删除资产制造通过；失效/中断残留须先核对路径及所有权，不涉及正式游戏 Bundle。
 - 旧 AudioLoader 包装专属测试随已删除功能移除；命名 Provider/资源租约另有正式回归，播放、属性和清理断言迁为新契约，不冻结旧 40 公共类型。测试源码存在不等于已通过，结果以当前 Unity 实际编译和运行记录为准。
 - `AudioContinuousPlayTests` 使用真实 Enter/Exit Play，保持同一脚本域与正常 Scene Reload，跨轮验证旧请求/通道/订阅/加载责任隔离。原 XF Logger 的临时原生日志隔离只属于获授权验收 fixture，结束恢复原 handler，不表示修复原包或全框架重复会话。
 - `Tests/Core/Acceptance/AudioAcceptanceEntry` 与 `AudioGameAcceptanceFlow` 是 Editor/Windows64 Mono 共用的显式验收入口，不是产品自动启动入口、不随默认 ExportRoots 分发。自有场景挂 Camera/Listener 与正式 GroupPlayer，配置 Library 的独立 Resources 信号、另两份直接 Clip、MixerConfig 与 ResourceKey；直接 Clip 不复用命名资源实例，避免用场景借用引用掩盖资源归还。临时场景与素材仅供构建，结束清理，产物路径及本轮结果见 [4.5 专项](../../../../.kilo/plans/xf-yl-4-audio.md#9-45-综合验收与待确认门禁2026-10-12)。Player 默认 Audio 模式，`-audio45-game` 走原 Main/XFAB，`-audio45-listen` 延长观察并显示阶段；Listener/DSP 采样、系统出声和听感分层报告，自动 PASS 不代表人工听感通过。
 - `AudioMixerTests` / `AudioMixerPlaybackTests` 使用 `Tests/Fixtures/Audio/` 下的独立 Mixer 资产，覆盖三态路由、Inspector 空引用、配置归属、同步重入、池与会话清理、原生参数/快照及组件/Action；夹具不放 Resources，也不修改业务 Mixer。
-- [`Editor/Audio/Help/AudioKitHelpProvider.cs`](../../Editor/Audio/Help/AudioKitHelpProvider.cs) 的稳定 id 为 `audiokit`，反射真实 Audio 公开类型，包含组件与 Action，不泄漏内部实例或 Foundation 通用 API。
+- [`Editor/Systems/Audio/Help/AudioKitHelpProvider.cs`](../../Editor/Systems/Audio/Help/AudioKitHelpProvider.cs) 的稳定 id 为 `audiokit`，反射真实 Audio 公开类型，包含组件与 Action，不泄漏内部实例或 Foundation 通用 API。
 - 帮助菜单 `YLFramework/Audio/帮助`；保留 9 个指南页及稳定 ID `overview/control/settings/spatial/mixer/components/action/timer/diagnostics`，在现有 settings/components/action/diagnostics 扩充总量/Clip/Priority/缓存/预热/统计合同，保留原 Sound 开始、Crossfade、手动/自动淡变与加权说明，不新增页面或文档文件。API 反射包含真实 AudioSoundStats、AudioSoundConcurrency/SoundOverflowPolicy、AudioAutoFade、AudioWeightedClip、AudioOutputRoute 及嵌套 RouteMode、AudioMixerConfig、AudioMixerControl、AudioMixerController，XML 来自共享 `Library/YLFramework.Runtime.xml`，不伪造类型或创建播放宿主。`timer` 页保留工具边界与导航，不新增独立 Timing Provider。
 - `AudioHelpTests` 应按真实契约检查 Options 为 Serializable sealed class、字段类型不变、new/Defaults 有效且每次新实例、MusicDefaults 循环且独立、default 为 null；将原 Nullable 参数反射改为引用类型，并保留 optional null、WithOptions 位置参数及回调顺序。新增最短路径/Slider/Listener、JSON 缺字段、请求与 Allocate 快照、Settings 坏值回退与拒绝赋值、Emitter 新旧策略、校验保护旧播放及 Mixer 缺 config 的帮助索引断言。原九页 ID、API 可发现性、被动创建与未受影响的高级合同仍需保留。合同断言不等同于实际编译、运行或听感验证。
 - QFramework/liangxiegame 的 MIT 版权与来源通过随附的集中声明保留（见 [`Runtime/THIRD-PARTY-NOTICES.md`](../../Runtime/THIRD-PARTY-NOTICES.md)）；原 Timing/Disposable 源保留各自原版权。删除旧包装不改变保留代码的许可，分发时保留对应声明。

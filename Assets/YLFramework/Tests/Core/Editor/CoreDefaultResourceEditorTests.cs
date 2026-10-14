@@ -68,7 +68,7 @@ namespace YLFramework.Core.Editor.Tests
                     Assert.That(scaler.referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));
                     Assert.That(scaler.matchWidthOrHeight, Is.EqualTo(1));
                     Assert.That(prefab.GetComponent<AutomaticAdaptationCanvasScaler>().GetType().Assembly.GetName().Name,
-                        Is.EqualTo("YLFramework.Core.Runtime"));
+                        Is.EqualTo("YLFramework.Runtime"));
                 }
                 else
                 {
@@ -151,9 +151,9 @@ namespace YLFramework.Core.Editor.Tests
         [TestCase(ListenerInitOnLoad.CanvasPath)]
         [TestCase(ListenerInitOnLoad.EventSystemPath)]
         [TestCase(ListenerInitOnLoad.ResourceRoot)]
-        [TestCase("Assets/YLFramework/Runtime/XFMain/Resources")]
-        [TestCase("Assets/YLFramework/Runtime/XFMain/Resources/YLFramework")]
-        [TestCase("Assets/YLFramework/Runtime/XFMain")]
+        [TestCase("Assets/YLFramework/Runtime/Core/Resources")]
+        [TestCase("Assets/YLFramework/Runtime/Core/Resources/YLFramework")]
+        [TestCase("Assets/YLFramework/Runtime/Core")]
         public void DeletionProtectionRecognizesOnlyOwnedDefaultsAndNarrowAncestors(string path)
         {
             Assert.That(ListenerFileChange.IsProtectedDefaultResource(path), Is.True);
@@ -169,12 +169,13 @@ namespace YLFramework.Core.Editor.Tests
         [TestCase("Assets/Resources/XFGameFramework/EventSystem.prefab")]
         [TestCase("Packages/com.xfkj.xfgameframework/Runtime/Resources/Canvas.prefab")]
         [TestCase("Assets/YLFramework/Editor/Help")]
-        [TestCase("Assets/YLFramework/Editor/XFMain")]
+        [TestCase("Assets/YLFramework/Editor/Core")]
+        [TestCase("Assets/YLFramework/Runtime/XFMain")]
         [TestCase("Assets/YLFramework/Runtime")]
         [TestCase("Assets/YLFramework")]
-        [TestCase("Assets/YLFramework/Runtime/XFMain/Resources/YLFramework/CoreExtra")]
-        [TestCase("Assets/YLFramework/Runtime/XFMain/Resources/YLFramework/Core/Unrelated.asset")]
-        [TestCase("Assets/YLFramework/Runtime/XFMain/Resources/YLFramework/Core/Canvas.prefab.backup")]
+        [TestCase("Assets/YLFramework/Runtime/Core/Resources/YLFramework/CoreExtra")]
+        [TestCase("Assets/YLFramework/Runtime/Core/Resources/YLFramework/Core/Unrelated.asset")]
+        [TestCase("Assets/YLFramework/Runtime/Core/Resources/YLFramework/Core/Canvas.prefab.backup")]
         public void DeletionCallbackDoesNotBlockGameOriginalXFHelpOrUnrelatedAssets(string path)
         {
             Assert.That(ListenerFileChange.IsProtectedDefaultResource(path), Is.False);
@@ -185,7 +186,7 @@ namespace YLFramework.Core.Editor.Tests
         private static DefaultFileSnapshot[] CaptureExistingDefaults()
         {
             Assert.That(ListenerInitOnLoad.ResourceRoot,
-                Is.EqualTo("Assets/YLFramework/Runtime/XFMain/Resources/YLFramework/Core"));
+                Is.EqualTo("Assets/YLFramework/Runtime/Core/Resources/YLFramework/Core"));
             var paths = new[]
             {
                 ListenerInitOnLoad.CanvasPath, ListenerInitOnLoad.CanvasPath + ".meta",

@@ -10,10 +10,10 @@ Foundation 中唯一的独立到期任务内核，提供 Scaled / Unscaled 秒�
 
 ## 位置与接入
 
-- 运行时：[`Runtime/Shared/Timing/`](../../Runtime/Shared/Timing/)，归属 `YLFramework.Foundation.Runtime`，namespace 为 `YLFramework.Timing`。
-- 业务 asmdef 显式引用 Foundation；Core / Runtime 向下引用 Foundation，计时不依赖 Core、Root、UI、原 XF 或 XFAB。
+- 运行时：[`Runtime/Foundation/Timing/`](../../Runtime/Foundation/Timing/)，归属 `YLFramework.Runtime`，namespace 为 `YLFramework.Timing`。
+- 业务 asmdef 显式引用 Runtime；计时的中立源码不消费 Core/Systems/Utilities、Root/UI 或 XF/XFAB，整主体仍承担当前 Core 的临时后端编译依赖。
 - `Internal/` 的 run、堆、生命周期监听和默认驱动均为实现细节，不公开可写堆字段。
-- Core `TimerObject` 仍位于原脚本路径，无需迁移 Inspector 绑定；默认 TimerDriver 自动建立，不手动挂载。
+- Core `TimerObject` 归 [`Timing/Components/`](../../Runtime/Foundation/Timing/Components/)，namespace、脚本GUID与事件字段保持，无需重绑 Inspector；默认 TimerDriver 自动建立，不手动挂载。
 
 ## 投递入口
 
@@ -165,14 +165,14 @@ Action 根动作入口为 `StartNamed(owner, flag)` / `ReplaceNamed(owner, flag)
 
 | namespace / 目录 | 类型 |
 |---|---|
-| `YLFramework.Timing` / `Shared/Timing` | Timer、TimerScheduler、TimerHandle、TimerState、TimerClock、TimerCancellationReason、TimerScope、ReusableTimer、TimerHandleGroup、TimerWait、TimerGameObjectLifetime、TimerGameObjectExtensions |
-| `YLFramework.Foundation` / `Shared` | CoroutineObservation（不调度计时任务） |
+| `YLFramework.Timing` / `Foundation/Timing` | Timer、TimerScheduler、TimerHandle、TimerState、TimerClock、TimerCancellationReason、TimerScope、ReusableTimer、TimerHandleGroup、TimerWait、TimerGameObjectLifetime、TimerGameObjectExtensions |
+| `YLFramework.Foundation` / `Foundation/Async` | CoroutineObservation（不调度计时任务） |
 
 ## 边界与来源
 
 不提供线程安全、跨线程调度、持久化任务、后台运行或高精度时钟保证。全部 Unity 对象访问与任务操作应在 Unity 主线程进行。
 
-源码保留 QFramework、snowcold / liangxie、UnityTimer 来源与完整 MIT；承接 XF 的部分继续受 Shared/LICENSE.md 覆盖，集中声明见 Runtime/THIRD-PARTY-NOTICES.md。删除旧实现不删除被吸收代码的许可，分发时保留对应声明。
+源码保留 QFramework、snowcold / liangxie、UnityTimer 来源与完整 MIT；承接 XF 的部分继续受 Foundation/LICENSE.md 覆盖，集中声明见 Runtime/THIRD-PARTY-NOTICES.md。删除旧实现不删除被吸收代码的许可，分发时保留对应声明。
 
 性能只承诺已说明的算法成本和显式复用边界。本专题没有执行性能基准或稳态 GC 测量，不能据此宣称比旧实现普遍更快或整个调用链零分配。
 

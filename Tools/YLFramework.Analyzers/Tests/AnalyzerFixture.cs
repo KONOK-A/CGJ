@@ -22,9 +22,7 @@ namespace YLFramework.Analyzers.Tests
         internal static readonly MetadataReference[] Platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
             .Split(Path.PathSeparator).Select(p => MetadataReference.CreateFromFile(p)).ToArray();
         internal static readonly string Root = FindRoot();
-        internal static readonly MetadataReference Foundation = Emit("YLFramework.Foundation.Runtime", new[] {
-            "namespace YLFramework.Core.Pool { public class ObjectPool<T> { private T[] storage; public ObjectPool(System.Func<T> factory) {} public T Allocate()=>default; } }"
-        }, Platform);
+        internal const string PoolSource = "namespace YLFramework.Core.Pool { public class ObjectPool<T> { private T[] storage; public ObjectPool(System.Func<T> factory) {} public T Allocate()=>default; } }";
         internal static readonly MetadataReference Core = CreateCore();
 
         private static string FindRoot()
@@ -52,9 +50,10 @@ namespace YLFramework.Analyzers.Tests
 
         internal static CSharpCompilation CoreCompilation(string replacement = null)
         {
-            var sources = Directory.GetFiles(Path.Combine(Root, "Assets/YLFramework/Runtime/XFMain/Attribute/RoslynAnalyzers"), "*.cs")
+            var sources = Directory.GetFiles(Path.Combine(Root, "Assets/YLFramework/Runtime/Core/Attributes"), "*.cs")
                 .OrderBy(p => p, StringComparer.Ordinal).Select(File.ReadAllText).ToList();
             sources.Add("namespace UnityEngine {}");
+            sources.Add(PoolSource);
             sources.Add(replacement ?? @"using System;
 namespace UnityEngine {}
 namespace YLFramework.Core {
@@ -75,8 +74,8 @@ namespace YLFramework.Core {
  }
  public class LoadViewRequest<T> { private LoadViewArgs args; }
 }");
-            return CSharpCompilation.Create("YLFramework.Core.Runtime", sources.Select(s => CSharpSyntaxTree.ParseText(s, Parse)),
-                Platform.Concat(new[] { Foundation }), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            return CSharpCompilation.Create("YLFramework.Runtime", sources.Select(s => CSharpSyntaxTree.ParseText(s, Parse)),
+                Platform, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
 
         private static MetadataReference CreateCore() => Emit(CoreCompilation())
@@ -84,7 +83,7 @@ namespace YLFramework.Core {
 
         internal static CSharpCompilation Compilation(string source, string path = "Consumer.cs", bool core = true)
             => CSharpCompilation.Create("Consumer", new[] { CSharpSyntaxTree.ParseText(source, Parse, path) },
-                core ? Platform.Concat(new[] { Foundation, Core }) : Platform,
+                core ? Platform.Concat(new[] { Core }) : Platform,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         internal static async Task<ImmutableArray<Diagnostic>> Diagnostics(CSharpCompilation compilation, CancellationToken token = default)

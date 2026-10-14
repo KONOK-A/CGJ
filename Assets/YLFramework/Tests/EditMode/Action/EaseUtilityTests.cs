@@ -89,8 +89,8 @@ namespace YLFramework.Tests.Actions
             foreach (var reference in assembly.GetReferencedAssemblies())
             {
                 var name = reference.Name;
-                var allowed = name == "YLFramework.Utilities.ZipTool" || name == "Newtonsoft.Json" ||
-                              name == "Sirenix.OdinInspector.Attributes" || name == "UnityEditor.CoreModule" ||
+                Assert.That(name.StartsWith("Sirenix", StringComparison.Ordinal), Is.False, "Odin dependency must not return: " + name);
+                var allowed = name == "XFABManager" || name == "Newtonsoft.Json" || name == "UnityEditor.CoreModule" ||
                               name == "mscorlib" || name == "netstandard" || name == "System" ||
                               name.StartsWith("System.", StringComparison.Ordinal) ||
                               name == "UnityEngine" || name.StartsWith("UnityEngine.", StringComparison.Ordinal);

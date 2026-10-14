@@ -44,7 +44,7 @@ namespace YLFramework.Analyzers.Tests
             var allocation = GC.GetTotalAllocatedBytes(true);
             var watch = Stopwatch.StartNew();
             var compilation = CSharpCompilation.Create("Measured", new[]{tree},
-                AnalyzerFixture.Platform.Concat(new[]{AnalyzerFixture.Foundation,AnalyzerFixture.Core}),
+                AnalyzerFixture.Platform.Concat(new[]{AnalyzerFixture.Core}),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
             var diagnostics = enabled
                 ? await compilation.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new CoreUsageAnalyzer())).GetAllDiagnosticsAsync()

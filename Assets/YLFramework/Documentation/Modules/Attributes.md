@@ -10,8 +10,8 @@
 
 ## 位置
 
-- 元数据：[`Runtime/Shared/Attributes/`](../../Runtime/Shared/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
-- 必要原生 Drawer：[`Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs`](../../Editor/XFMain/CustomPropertyDrawer/DisableEditDrawer.cs)，程序集 `YLFramework.Core.Editor` 显式引用 Foundation。
+- 元数据：[`Runtime/Foundation/Attributes/`](../../Runtime/Foundation/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
+- 必要原生 Drawer：[`Editor/Core/Inspectors/DisableEditDrawer.cs`](../../Editor/Core/Inspectors/DisableEditDrawer.cs)，程序集 `YLFramework.Editor`，只在Editor主体中消费Runtime元数据。
 
 ## CustomClassNameGUI
 
@@ -34,7 +34,7 @@
 
 ## Runtime / Editor 边界
 
-- 三个特性均位于 `YLFramework.Foundation.Runtime`，不依赖 Core / 整体 Runtime / Editor 产品程序集；旧自有 Core 与 Tools 元数据副本已退出。
+- 三个特性均归 `YLFramework.Runtime`，其源码保持中立，不消费 Core/Systems/Utilities；旧自有 Core 与 Tools 元数据副本已退出。合并后的主体允许 Core 当前 XFAB/Json.NET 依赖，不能再用整个 DLL 的引用列表代替元数据源码闭包验证。
 - 仅 `CustomPropertyGUI.OnPropertyGUI` 位于 `#if UNITY_EDITOR` 内：Editor 编译时存在、Player 编译时不存在，Player 程序集不会残留 `UnityEditor` 引用。
 - 使用 `CustomPropertyGUI` 的业务代码需注意：Player 下没有 `OnPropertyGUI`，派生类中的重写必须包在 `#if UNITY_EDITOR` 内。
 - `Tests/Foundation/EditMode/AttributesTests.cs` 直接编译正式元数据源码和派生构造使用者，覆盖 Editor 与无 UnityEditor 引用的 Windows Development 源码 profile；不借用预编译 Foundation DLL，不等于实际 Player 构建/运行。
@@ -57,15 +57,15 @@ Core Editor 的 `SerializedPropertyExtensions` 保留 `CopyToClipboard`、`IsCan
 
 混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
 
-CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据是不同程序集和消费方式。
+CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据共用 Runtime 主体，但属于不同职责和消费方式。
 
 ## Core 使用诊断
 
 Editor 内可从 `YLFramework/Core/帮助` 阅读规则和接入摘要；`YLFramework/Toolkit/帮助` 提供 Foundation 展示元数据导航。两个入口均只读，详细规则、配置及源码重建以本节为准。
 
-六个正式 marker 位于 [`Runtime/XFMain/Attribute/RoslynAnalyzers/`](../../Runtime/XFMain/Attribute/RoslynAnalyzers/)，namespace `YLFramework.Core.RoslynAnalyzers`、程序集 `YLFramework.Core.Runtime`。它们保留原有构造及 AttributeUsage，只提供编译元数据，不执行运行时权限检查。
+六个正式 marker 位于 [`Runtime/Core/Attributes/`](../../Runtime/Core/Attributes/)，namespace `YLFramework.Core.RoslynAnalyzers`、程序集 `YLFramework.Runtime`。它们保留原有构造及 AttributeUsage，只提供编译元数据，不执行运行时权限检查。
 
-自有分析器源码位于 `Tools/YLFramework.Analyzers/`，唯一 Unity 产物为 [`Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll)。默认均为 **Warning**；自行采用严策略时按 ID 配置，不修改默认严重级别。分析器不依赖 Unity/Core/Workspaces，生成代码默认不分析，缓存仅当前 compilation。
+自有分析器源码位于 `Tools/YLFramework.Analyzers/`，唯一 Unity 产物为 [`Runtime/Core/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/Core/Analyzers/YLFramework.Analyzers.dll)。默认均为 **Warning**；自行采用严策略时按 ID 配置，不修改默认严重级别。分析器不依赖 Unity/Core/Workspaces，生成代码默认不分析，缓存仅当前 compilation。
 
 | ID | 契约与典型修复 |
 |---|---|
@@ -108,7 +108,7 @@ protected override void OnViewEnabled() { Refresh(); } // 正确
 
 ### 匹配与边界
 
-- marker/View 必须解析到真实 Core 程序集符号；短名或同 namespace 的异程序集类型不替代它们。方法 marker 只按真实 AttributeUsage 和 override 链取得，接口只在调用的静态目标本身带标记时生效，不叠加任意实现接口的契约。
+- marker/View/ObjectPool 必须解析到真实 `YLFramework.Runtime` 的符号；支持主体自身 source compilation 与引用主体的 metadata consumer，短名或同 namespace 的异程序集类型不替代它们。方法 marker 只按真实 AttributeUsage 和 override 链取得，接口只在调用的静态目标本身带标记时生效，不叠加任意实现接口的契约。
 - caller 选择器为 `Method`、`Type.Method`、`Namespace.Outer.Type.Method`，区分大小写并使用声明类型，泛型 arity 不写入选择器。accessor 可用 `get_P`/`set_P`、限定的 `Type.P`；构造器可显式用 `.ctor`/`.cctor`。Lambda/local 没有可冒充外层的选择器，field/property initializer 不借用外层方法。null/空调用者被忽略，空名单不允许调用；Warn 的空类型名单不匹配。
 - 开放泛型类型匹配原定义，闭合类型按完整构造符号比较；只从有效类/类型参数约束确定受管类型，不因 `IEnumerable<Args>` 等接口签名钻入隐藏内容。
 - 存储 profiles 包括实际 framework 的持有容器/对应只读集合、字典键和值、Tuple/ValueTuple/Rest、KeyValuePair、Task/ValueTask 结果、Memory/ReadOnlyMemory、ConcurrentQueue/Stack/Bag/Dictionary 及真实 Foundation ObjectPool；ArraySegment 和含值槽的 Nullable 结构也按真实存储识别。`IEnumerable`、`IEnumerator`、comparer/delegate 的签名本身不是实例持有证据，伪同名第三方容器不因名称进入 BCL profile。
@@ -120,7 +120,9 @@ protected override void OnViewEnabled() { Refresh(); } // 正确
 
 ### Unity 接入与配置
 
-DLL 保留新生成的 GUID；Importer 禁用 Any/Editor/普通平台、关闭自动 Runtime 引用，仅精确标为 `RoslynAnalyzer`。位于 Core.Runtime 的 asmdef 范围内，正常 Core 及其实际引用消费者注入；仅 Foundation/旧 Runtime/无 Core/游戏或预定义程序集需核对真实图，不能假定全局覆盖。原 XF/Logger 不关闭，不复制第二套 DLL 扩大 scope。
+DLL 保留既有 GUID；Importer 禁用 Any/Editor/普通平台、关闭自动 Runtime 引用，仅精确标为 `RoslynAnalyzer`。位于 `YLFramework.Runtime` 的 asmdef 范围内，合并后的完整 Runtime 及其实际引用消费者注入；Editor、Tests、游戏和预定义程序集需按本轮真实引用图及 csc 输入核对，不能把旧 Core 范围内的零诊断沿用为新门禁。原 XF/Logger 不关闭，不复制第二套 DLL 扩大 scope，也不把 DLL 或 Roslyn 依赖带入 Player Runtime 引用。
+
+§16最终输入核对：Runtime为403个源码，Editor为53个源码；Editor与Windows Development Player实际rsp中的Runtime/MainModule/Assembly-CSharp-firstpass（自动引用主体）各有唯一自有分析器，Editor rsp亦有一份，原XF/XFAB/XFFSM无该输入。Editor及非Editor消费者正/负Unity csc见证均成立，七YL Warning/无AD0001，原XF负例Error保留。Player载荷无自有Analyzer和Editor/退役产品DLL；整个工程仍有既有MCP/NuGet的Microsoft.CodeAnalysis.dll，主体IL不引用它，不扩大为“整个工程无Roslyn”的承诺。
 
 IDE/SDK 可以按单 ID 配置 `.editorconfig`，例如在消费者目录：
 
@@ -157,7 +159,7 @@ pwsh -NoLogo -NoProfile -NonInteractive -File "Tools/YLFramework.Analyzers/build
 pwsh -NoLogo -NoProfile -NonInteractive -File "Tools/YLFramework.Analyzers/build.ps1" -Deploy
 ```
 
-默认只做 locked restore、Release build 和诊断测试，失败即停止、不顶替旧 DLL；显式 `-Deploy` 才原子替换这一 DLL、保留 meta。唯一入口用自有 Temp 合作锁串行化 build/test/deploy，第二入口在动共享输出前拒绝；发布前及 stage 完成后指纹检查会拒绝已观察到的目标变更。该合作锁不是针对任意外部写者的 compare-and-swap，发布期间不要用其他工具写此 DLL。Unity 导入后核对标签、禁用平台和实际编译结果，不向 Assets 复制 Roslyn/Immutable 或测试宿主 DLL。
+默认只做 locked restore、Release build 和诊断测试，失败即停止、不顶替旧 DLL；显式 `-Deploy` 才原子替换 `Assets/YLFramework/Runtime/Core/Analyzers/YLFramework.Analyzers.dll`、保留 meta。Fixture 从 `Runtime/Core/Attributes` 编译正式 marker 源码。唯一入口用自有 Temp 合作锁串行化 build/test/deploy，第二入口在动共享输出前拒绝；发布前及 stage 完成后指纹检查会拒绝已观察到的目标变更。该合作锁不是针对任意外部写者的 compare-and-swap，发布期间不要用其他工具写此 DLL。Unity 导入后核对标签、禁用平台和实际编译结果，不向 Assets 复制 Roslyn/Immutable 或测试宿主 DLL。
 
 只有两个手工 SDK csproj 受管，Unity 生成工程仍被忽略；源码和实际 `packages.lock.json` 为重建输入。bin/obj/TRX/构建输入 SHA receipt 都在 `Temp/YLFramework.Analyzers/`。SDK 测试使用真实六 Attribute 源码生成合同引用，覆盖 ID/Warning/span/中文关键实体、异程序集/错误符号/取消/并发/生成代码及压力语料；不依赖原包 DLL 或反编译目录。
 

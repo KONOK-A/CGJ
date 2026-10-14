@@ -3,9 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Collections;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Compilation;
+using UnityEngine.TestTools;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 using UnityEngine;
 
@@ -27,30 +30,112 @@ namespace YLFramework.Core.Editor.Tests
 
     public class CoreEditorIdentityTests
     {
-        private const string EditorRoot = "Assets/YLFramework/Editor/XFMain";
-        private const string EditorAssemblyName = "YLFramework.Core.Editor";
+        private const string EditorRoot = "Assets/YLFramework/Editor/Core";
+        private const string EditorAssemblyName = "YLFramework.Editor";
+
+        [UnityTest]
+        public IEnumerator MergedRuntimeHasActualUnityPositiveAndNegativeAnalyzerWitnesses()
+            => CompileAnalyzerWitnesses(AssemblyBuilderFlags.EditorAssembly);
+
+        [UnityTest]
+        public IEnumerator MergedRuntimeHasActualUnityPlayerPositiveAndNegativeAnalyzerWitnesses()
+            => CompileAnalyzerWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
+
+        private static IEnumerator CompileAnalyzerWitnesses(AssemblyBuilderFlags flags)
+        {
+            var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
+            var runtime = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player)
+                .Single(a => a.name == "YLFramework.Runtime");
+            Assert.That(runtime.compilerOptions.RoslynAnalyzerDllPaths.Count(path => path.EndsWith("YLFramework.Analyzers.dll")), Is.EqualTo(1));
+            var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLFramework.Analyzer.Unity-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                foreach (bool negative in new[] { true, false })
+                {
+                    string source = "using YLFramework.Core;class Probe:View{" + (negative
+                        ? "LoadViewArgs held;protected override void Start(){}void OnEnable(){}void Wrong(Model model){RegisterEvent(1,Changed);EventManager.AddEvent(1,Changed);var args=new LoadViewArgs();model.Id=1;}"
+                        : "protected override void Start(){base.Start();}void Awake(){RegisterEvent(1,Changed);}void Borrow(){var args=LoadViewArgs.New();}long Read(Model model)=>model.Id;") + "void Changed(){}}";
+                    string path = Path.Combine(folder, negative ? "Negative.cs" : "Positive.cs");
+                    string output = Path.ChangeExtension(path, ".dll");
+                    File.WriteAllText(path, source);
+                    var builder = new AssemblyBuilder(output, new[] { path })
+                    {
+                        flags = flags,
+                        buildTarget = BuildTarget.StandaloneWindows64,
+                        buildTargetGroup = BuildTargetGroup.Standalone,
+                        referencesOptions = ReferencesOptions.UseEngineModules,
+                        additionalReferences = new[] { typeof(Module).Assembly.Location },
+                        compilerOptions = new ScriptCompilerOptions { RoslynAnalyzerDllPaths = runtime.compilerOptions.RoslynAnalyzerDllPaths }
+                    };
+                    builder.excludeReferences = builder.defaultReferences.Where(reference =>
+                        Path.GetFileName(reference).StartsWith("YLFramework", StringComparison.Ordinal) ||
+                        Path.GetFileName(reference).EndsWith("TestRunner.dll", StringComparison.Ordinal) ||
+                        (!editor && Path.GetFileName(reference).StartsWith("UnityEditor", StringComparison.Ordinal))).ToArray();
+                    Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
+                    CompilerMessage[] messages = null;
+                    builder.buildFinished += (_, result) => messages = result;
+                    Assert.That(builder.Build(), Is.True);
+                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    Assert.That(messages, Is.Not.Null);
+                    var errors = messages.Where(message => message.type == CompilerMessageType.Error).ToArray();
+                    // 故意违规同时触发原 XF 全局分析器；保留其 Error，不用关闭它来验收自有 Warning。
+                    Assert.That(errors.Select(message => Regex.Match(message.message, @"\berror ([A-Z0-9_]+):").Groups[1].Value),
+                        Is.EquivalentTo(negative ? new[] { "MUST_CALL_BASE_ATTRIBUTE", "DISABLE_NEW", "PROTECTED_HIERARCHY_MODIFICATION",
+                            "METHOD_LOCAL_ONLY_TYPE", "RESTRICTED_CALL_ATTRIBUTE" } : Array.Empty<string>()),
+                        string.Join("\n", errors.Select(message => message.message)));
+                    Assert.That(messages.Any(message => message.message.Contains("AD0001")), Is.False);
+                    var diagnostics = messages.Where(message => Regex.IsMatch(message.message, @"\bYL000[1-7]\b")).ToArray();
+                    Assert.That(diagnostics.All(message => message.type == CompilerMessageType.Warning), Is.True);
+                    Assert.That(diagnostics.Select(message => Regex.Match(message.message, @"\bYL000[1-7]\b").Value),
+                        Is.EquivalentTo(negative ? Enumerable.Range(1, 7).Select(id => "YL000" + id) : Array.Empty<string>()));
+                    Assert.That(File.Exists(output), Is.EqualTo(!negative));
+                }
+            }
+            finally { Directory.Delete(folder, true); }
+        }
+
+        [Test]
+        public void FormalCoreEditorRootPreservesGuidAndExactEditorAssemblyOwnership()
+        {
+            Assert.That(AssetDatabase.AssetPathToGUID(EditorRoot), Is.EqualTo("d9b09bbe8b78666468f046d49ff546f3"));
+            var assembly = UnityEditor.Compilation.CompilationPipeline.GetAssemblies(UnityEditor.Compilation.AssembliesType.Editor)
+                .Single(a => a.name == EditorAssemblyName);
+            var files = Directory.GetFiles("Assets/YLFramework/Editor", "*.cs", SearchOption.AllDirectories)
+                .Select(p => p.Replace('\\', '/')).ToArray();
+            Assert.That(assembly.sourceFiles.Select(p => p.Replace('\\', '/')), Is.EquivalentTo(files));
+            Assert.That(File.Exists(EditorRoot + "/YLFramework.Core.Editor.asmdef"), Is.False);
+            Assert.That(File.Exists(EditorRoot + "/YLFramework.Core.Editor.asmdef.meta"), Is.False);
+            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/YLFramework.Editor.asmdef"),
+                Is.EqualTo("62b3fd14a5c704743835cacd6a6870a1"));
+            var help = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Editor.Help.HelpWindow"))
+                .Single(type => type != null);
+            Assert.That(typeof(CreateModuleCommand).Assembly, Is.SameAs(help.Assembly));
+            Assert.That(Directory.Exists("Assets/YLFramework/Editor/XFMain"), Is.False);
+        }
 
         [Test]
         public void EditorAssemblyIsEditorOnlyWithExplicitAllowedDependencies()
         {
-            var definition = ReadDefinition(EditorRoot + "/YLFramework.Core.Editor.asmdef");
+            var definition = ReadDefinition("Assets/YLFramework/Editor/YLFramework.Editor.asmdef");
             Assert.That(definition.name, Is.EqualTo(EditorAssemblyName));
-            Assert.That(definition.rootNamespace, Is.EqualTo("YLFramework.Core.Editor"));
+            Assert.That(definition.rootNamespace, Is.EqualTo("YLFramework.Editor"));
             Assert.That(definition.includePlatforms, Is.EqualTo(new[] { "Editor" }));
             Assert.That(definition.excludePlatforms, Is.Empty);
-            Assert.That(definition.autoReferenced, Is.False);
+            Assert.That(definition.autoReferenced, Is.True);
             var references = definition.references.Select(ResolveReference).ToArray();
             Assert.That(references, Is.EquivalentTo(new[]
             {
-                "YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime", "UnityEngine.UI", "XFABManager", "YLFramework.Editor.Help"
+                "YLFramework.Runtime", "UnityEngine.UI", "XFABManager"
             }), "Only the declared temporary XFAB backend may reference original assemblies.");
             Assert.That(references.Distinct().Count(), Is.EqualTo(references.Length));
 
             var assembly = typeof(CreateModuleCommand).Assembly;
             Assert.That(assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
             var compiledReferences = assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
-            Assert.That(compiledReferences, Does.Contain("YLFramework.Core.Runtime"));
-            Assert.That(compiledReferences, Does.Contain("YLFramework.Editor.Help"));
+            Assert.That(compiledReferences, Does.Contain("YLFramework.Runtime"));
+            Assert.That(compiledReferences, Does.Not.Contain("YLFramework.Editor.Help"));
+            Assert.That(compiledReferences, Does.Not.Contain("YLFramework.Core.Editor"));
             Assert.That(compiledReferences.Any(n => n == "UnityEditor" || n.StartsWith("UnityEditor.", StringComparison.Ordinal)), Is.True);
             Assert.That(compiledReferences.Any(IsForbiddenReference), Is.False,
                 string.Join(", ", compiledReferences));
@@ -65,7 +150,7 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(definition.excludePlatforms, Is.Empty);
             Assert.That(definition.references.Select(ResolveReference), Is.EquivalentTo(new[]
             {
-                EditorAssemblyName, "YLFramework.Core.Runtime", "YLFramework.Foundation.Runtime",
+                EditorAssemblyName, "YLFramework.Runtime",
                 "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"
             }));
             Assert.That(definition.overrideReferences, Is.True);
@@ -80,7 +165,9 @@ namespace YLFramework.Core.Editor.Tests
         public void EditorTypeNamesAreOwnedAndUniqueAcrossLoadedAssemblies()
         {
             var assembly = typeof(CreateModuleCommand).Assembly;
-            foreach (var type in assembly.GetTypes())
+            Assert.That(assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
+            foreach (var type in assembly.GetTypes().Where(type => type.Namespace == "YLFramework.Core.Editor" ||
+                (type.Namespace != null && type.Namespace.StartsWith("YLFramework.Core.Editor.", StringComparison.Ordinal))))
             {
                 var root = type;
                 while (root.DeclaringType != null)
@@ -101,7 +188,8 @@ namespace YLFramework.Core.Editor.Tests
             var entries = TypeCache.GetMethodsWithAttribute<MenuItem>()
                 .SelectMany(method => method.GetCustomAttributes(typeof(MenuItem), false)
                     .Cast<MenuItem>().Select(attribute => new { method, attribute })).ToArray();
-            var owned = entries.Where(e => e.method.DeclaringType.Assembly == typeof(CreateModuleCommand).Assembly).ToArray();
+            var owned = entries.Where(e => e.method.DeclaringType.Assembly == typeof(CreateModuleCommand).Assembly &&
+                e.method.DeclaringType.Namespace != null && e.method.DeclaringType.Namespace.StartsWith("YLFramework.Core.Editor", StringComparison.Ordinal)).ToArray();
             Assert.That(owned.Any(e => e.attribute.menuItem == CreateModuleCommand.MenuPath), Is.True);
             Assert.That(owned.Any(e => e.attribute.menuItem == "YLFramework/Core/Create Missing Default Resources"), Is.True);
             foreach (var entry in owned)
@@ -122,7 +210,7 @@ namespace YLFramework.Core.Editor.Tests
         {
             var binding = editorType.GetCustomAttributesData().Single(a => a.AttributeType == attributeType);
             Assert.That(binding.ConstructorArguments[0].Value, Is.EqualTo(runtimeType));
-            Assert.That(runtimeType.Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
+            Assert.That(runtimeType.Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
             Assert.That(editorType.Assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
         }
 
@@ -130,7 +218,7 @@ namespace YLFramework.Core.Editor.Tests
         public void CoreAudioHasRetiredWhileFormalRuntimeAndOriginalPackageKeepSeparateIdentities()
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var core = assemblies.Single(a => a.GetName().Name == "YLFramework.Core.Runtime");
+            var core = typeof(Module).Assembly;
             var formal = assemblies.Single(a => a.GetName().Name == "YLFramework.Runtime");
             var original = assemblies.Single(a => a.GetName().Name == "XFGameFramework");
             foreach (var name in new[] { "AudioData", "AudioController", "AudioPlayer", "AudioPlayerExtension", "AudioPlayerAutoPause",
@@ -209,9 +297,8 @@ namespace YLFramework.Core.Editor.Tests
         {
             return name.StartsWith("XFGameFramework", StringComparison.Ordinal) ||
                 name.StartsWith("Project.Game", StringComparison.Ordinal) || name == "Assembly-CSharp" ||
-                name == "Assembly-CSharp-Editor" || name == "YLFramework.Runtime" ||
-                name == "YLFramework.Editor" ||
-                (name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal) && name != "YLFramework.Editor.Help");
+                name == "Assembly-CSharp-Editor" ||
+                name == "YLFramework.Core.Editor" || name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal);
         }
 
         private static string NormalizeMenuPath(string path)

@@ -1,7 +1,7 @@
 {
     "name": "YLFramework.Tests.PlayMode",
     "rootNamespace": "YLFramework.Tests",
-    "references": ["YLFramework.Runtime", "YLFramework.Foundation.Runtime", "UnityEngine.UI", "UnityEngine.TestRunner"],
+    "references": ["YLFramework.Runtime", "UnityEngine.UI", "UnityEngine.TestRunner"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

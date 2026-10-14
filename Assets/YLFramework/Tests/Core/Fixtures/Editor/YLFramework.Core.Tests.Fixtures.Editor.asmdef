@@ -1,7 +1,7 @@
 {
     "name": "YLFramework.Core.Tests.Fixtures.Editor",
     "rootNamespace": "YLFramework.Core.Tests",
-    "references": ["YLFramework.Core.Runtime", "YLFramework.Core.Tests.PlayMode", "XFABManager"],
+    "references": ["YLFramework.Runtime", "YLFramework.Core.Tests.PlayMode", "XFABManager"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

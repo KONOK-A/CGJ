@@ -56,6 +56,21 @@ namespace YLFramework.Analyzers.Tests
         public async Task ActualCoreOwnersAndOwnFactoryAreLegal()
             => Assert.That(await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation()), Is.Empty);
 
+        [Test]
+        public async Task MergedRuntimeDoesNotGrantOwnershipToAForeignSameNamedPool()
+        {
+            var foreign = AnalyzerFixture.Emit("ForeignPool", new[] {
+                AnalyzerFixture.PoolSource.Replace("private T[] storage", "public T[] storage")
+            }, AnalyzerFixture.Platform).WithProperties(new MetadataReferenceProperties(aliases: System.Collections.Immutable.ImmutableArray.Create("foreign")));
+            var source = "extern alias foreign;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" +
+                "private static readonly foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs> Pool=" +
+                "new foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs>(()=>null);}}";
+            var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source).AddReferences(foreign));
+            Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
+            Assert.That(diagnostics.Single().Location.SourceSpan.Start,
+                Is.EqualTo(source.IndexOf(" Pool=", StringComparison.Ordinal) + 1));
+        }
+
         [TestCase("public static readonly", "ObjectPool<LoadViewArgs>", "Pool")]
         [TestCase("private static", "ObjectPool<LoadViewArgs>", "Pool")]
         [TestCase("private static readonly", "ObjectPool<LoadViewArgs>", "OtherPool")]

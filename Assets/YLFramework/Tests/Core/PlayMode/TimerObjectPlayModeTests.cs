@@ -105,7 +105,7 @@ namespace YLFramework.Core.Tests
         {
             var type = typeof(TimerObject);
             Assert.That(type.FullName, Is.EqualTo("YLFramework.Core.TimerObject"));
-            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Core.Runtime"));
+            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
             Assert.That(type.BaseType, Is.EqualTo(typeof(MonoBehaviour)));
             foreach (var expected in new[]
             {

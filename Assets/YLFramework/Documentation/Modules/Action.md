@@ -7,7 +7,7 @@
 ActionKit 是 Unity 动作编排模块：把回调、等待、条件、插值等步骤组合成可启动的动作链（Sequence / Parallel / Repeat / Delay / Lerp / Coroutine / Task 等），并绑定到对象、当前场景或跨场景全局宿主执行。
 
 - 主要能力：动作创建与组合、逐帧推进、暂停/取消、池化复用、屏幕过渡、全局 Unity 消息转发、内建 BCL Observable，以及可选 DOTween 扩展。
-- 运行时位于 `Runtime/Action/`，namespace 为 `YLFramework.Actions`，公共入口 `ActionKit` 不改名；归属共享 `YLFramework.Runtime`，不是 Foundation 或 Timing 的子模块。
+- 运行时位于 `Runtime/Systems/Action/`，namespace 为 `YLFramework.Actions`，公共入口 `ActionKit` 不改名；归属共享 `YLFramework.Runtime`，不是 Foundation 或 Timing 的子模块。
 - 不负责业务资源管线、依赖注入或统一对象生命周期；状态机使用独立的 [FSM 模块](FSM.md)。动作统一使用 `IAction` 契约，不提供旧版 ActionKit 兼容 API。源自 QFramework / liangxiegame 的代码保留 MIT 版权与来源，不依赖 QFramework 运行时。
 - API 浏览：`YLFramework/Action/帮助`，由 [Help 核心](Help.md) 承载。
 
@@ -17,10 +17,10 @@ ActionKit 是 Unity 动作编排模块：把回调、等待、条件、插值等
 
 | 目录 | 职责 | 程序集 |
 |---|---|---|
-| [`Runtime/Action/`](../../Runtime/Action/) | Core、Actions、Execution、Internal、ScreenTransition、Extensions | `YLFramework.Runtime` |
-| [`Runtime/Action/Observable/`](../../Runtime/Action/Observable/) | 内建 BCL `IObservable<T>` 适配，无 UniRx 包依赖 | 同上 |
-| [`Runtime/Action/Resources/`](../../Runtime/Action/Resources/) | 屏幕过渡 Prefab | 同上 |
-| [`Editor/Action/`](../../Editor/Action/) | 资源创建工具与 Help 提供方 | `YLFramework.Editor` |
+| [`Runtime/Systems/Action/`](../../Runtime/Systems/Action/) | Core、Actions、Execution、Internal、ScreenTransition、Extensions | `YLFramework.Runtime` |
+| [`Runtime/Systems/Action/Observable/`](../../Runtime/Systems/Action/Observable/) | 内建 BCL `IObservable<T>` 适配，无 UniRx 包依赖 | 同上 |
+| [`Runtime/Systems/Action/Resources/`](../../Runtime/Systems/Action/Resources/) | 屏幕过渡 Prefab | 同上 |
+| [`Editor/Systems/Action/`](../../Editor/Systems/Action/) | 资源创建工具与 Help 提供方 | `YLFramework.Editor` |
 | [`Integrations/DOTween/Runtime/`](../../Integrations/DOTween/Runtime/) | 可选 `Tween` 适配 | `YLFramework.Actions.DOTween` |
 
 Runtime 引用既有 ZipTool 与 `UnityEngine.UI`；普通 Editor 引用 Runtime、Help、UI。二者不静态引用 DOTween wrapper 或供应商 DLL。Runtime / 普通 Editor / ZipTool 的 `autoReferenced` 为 true，Help / optional / tests 为 false；完整程序集契约见 [架构总览](../Architecture.md)。
@@ -43,12 +43,12 @@ DOTween wrapper 显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应
 
 按阅读顺序：
 
-1. [`Core/IAction.cs`](../../Runtime/Action/Core/IAction.cs)：动作契约与池化基类。
-2. [`Core/ActionKit.cs`](../../Runtime/Action/Core/ActionKit.cs)：工厂与全局消息；生命周期见同目录 `ActionKitLifecycle.cs`。
-3. [`Extensions/ActionStartExtensions.cs`](../../Runtime/Action/Extensions/ActionStartExtensions.cs)、[`ActionNamedExtensions.cs`](../../Runtime/Action/Extensions/ActionNamedExtensions.cs)：匿名与命名执行。
-4. [`Execution/MonoUpdateActionExecutor.cs`](../../Runtime/Action/Execution/MonoUpdateActionExecutor.cs)、[`ActionHandle.cs`](../../Runtime/Action/Execution/ActionHandle.cs)：推进、回收与租约。
-5. [`Actions/Sequence.cs`](../../Runtime/Action/Actions/Sequence.cs)：组合实现范式；Delay / Task 同目录。
-6. [`Editor/Action/Help/ActionKitHelpProvider.cs`](../../Editor/Action/Help/ActionKitHelpProvider.cs)：注册与内容组装。
+1. [`Core/IAction.cs`](../../Runtime/Systems/Action/Core/IAction.cs)：动作契约与池化基类。
+2. [`Core/ActionKit.cs`](../../Runtime/Systems/Action/Core/ActionKit.cs)：工厂与全局消息；生命周期见同目录 `ActionKitLifecycle.cs`。
+3. [`Extensions/ActionStartExtensions.cs`](../../Runtime/Systems/Action/Extensions/ActionStartExtensions.cs)、[`ActionNamedExtensions.cs`](../../Runtime/Systems/Action/Extensions/ActionNamedExtensions.cs)：匿名与命名执行。
+4. [`Execution/MonoUpdateActionExecutor.cs`](../../Runtime/Systems/Action/Execution/MonoUpdateActionExecutor.cs)、[`ActionHandle.cs`](../../Runtime/Systems/Action/Execution/ActionHandle.cs)：推进、回收与租约。
+5. [`Actions/Sequence.cs`](../../Runtime/Systems/Action/Actions/Sequence.cs)：组合实现范式；Delay / Task 同目录。
+6. [`Editor/Systems/Action/Help/ActionKitHelpProvider.cs`](../../Editor/Systems/Action/Help/ActionKitHelpProvider.cs)：注册与内容组装。
 
 ## Runtime Flow
 
@@ -120,7 +120,7 @@ private void OnDisable() => mBackground.Cancel();
 - 对象执行器与延迟回收驱动仍独立推进；全局消息、执行器和回收之间不保证执行全序。公共宿主被外部销毁或停用时不自动恢复既有工作；共享更新源不构成性能提升结论。
 - 对象执行器、当前场景宿主、跨场景全局宿主保留独立生命周期；不能用 TimerScope 清理 Action，也不将 Action Delay 改成 Timer 包装。
 - `ActionPool<T>` 无缓存数量上限，组合 YL 池并以 LIFO 复用；领域回收队列、回收标记与租约由 Action 管理。同一动作不能同时交给两个执行器。
-- [`ScreenTransitionCanvas.prefab`](../../Runtime/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab) 随模块归位，Resources key 为 `ActionKit/ScreenTransitionCanvas`；菜单 `YLFramework/Action/创建屏幕过渡资源` 创建该资源。不新增 YL Resource / XFAB Loader。
+- [`ScreenTransitionCanvas.prefab`](../../Runtime/Systems/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab) 随模块归位，Resources key 为 `ActionKit/ScreenTransitionCanvas`；菜单 `YLFramework/Action/创建屏幕过渡资源` 创建该资源。不新增 YL Resource / XFAB Loader。
 - 源码及资源移动保留原 meta / GUID；资源键已从 `ProjectActionKit` 更名为 `ActionKit`，与模块命名一致。
 
 ## 测试与帮助

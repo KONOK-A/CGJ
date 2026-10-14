@@ -1,5 +1,4 @@
-﻿using Sirenix.OdinInspector;
-using UnityEngine;
+﻿using UnityEngine;
 using YLFramework.Core.Singleton;
 
 namespace YLFramework

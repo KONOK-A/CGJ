@@ -4,7 +4,7 @@
 
 ## 作用
 
-提供实例事件、独立事件总线、精确订阅句柄与轻量组合。共享纯机制位于 `YLFramework.Foundation.Runtime`；池化、历史全局入口和 Unity owner 适配仍由 Runtime/Core 持有，不强制所有通知进入全局上下文。
+提供实例事件、独立事件总线、精确订阅句柄与轻量组合。共享机制、便捷入口及Unity适配均归Runtime主体的Foundation职责；Core领域入口单独分组，不强制所有通知进入全局上下文，也不增加第二总线。
 
 2.2-B 已将 `EasyEvent`、四个 Global 系统和 Binding 的实例通知接到 Foundation 共享机制。`OrEvent` 复用 A 已完成的唯一组合实现；C 的 Core `EventManager` 转接 `EventBus.Default`，D 的 Unity 适配复用同一订阅和必要清理机制。
 
@@ -14,13 +14,10 @@ Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接�
 
 ## 位置
 
-- 共享机制：[`Runtime/Shared/Events/`](../../Runtime/Shared/Events/)，归属 `YLFramework.Foundation.Runtime`：`EventChannel`（0~7 参数）、`IEventSource`、`EventKey` / `EventBus`、`OrEvent`、取消辅助及 `SubscriptionScope`。
-- Runtime 适配：[`Runtime/Foundation/Events/`](../../Runtime/Foundation/Events/)
-  - `Core/`：`IEasyEvent` / `EasyEvent`（0~3 参数）/ `EasyEvents`
-  - `Global/`：四个全局事件系统
-  - `Lifecycle/`：生命周期触发器与批量注销扩展
-  - `Unity/`：`EventListener` 组件与便捷扩展
-   - `Internal/`：EasyEvent 池化入口
+- 共享机制与注销族：[`Runtime/Foundation/Events/Subscriptions/`](../../Runtime/Foundation/Events/Subscriptions/)，归 `YLFramework.Runtime`：Channel/Bus/Key/OrEvent、IUnRegister/Scope、EasyEvent 与原生命周期触发器；逻辑仍为唯一注册算法，不因目录合并改变协议。
+- `Global/`：四个全局事件系统。
+- `Unity/`：EventListener 与便捷扩展，以及保持 `YLFramework.Core` 身份的物理/动画 Listener；不把各用途合并为同一组件。
+- `Internal/`：EasyEvent 池化入口。Core 的领域 `CoreEvents/EventManager` 另在 [`Runtime/Core/Events/`](../../Runtime/Core/Events/)，不移成第二份 Foundation 总线。
 
 ## 主要功能
 
@@ -106,6 +103,7 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - 代码监听由组件私有 `EventChannel<T>` 承载，直接复用共享精确 token，不依赖全局 EasyEvent 池寿命；公共 EasyEvent 池化能力不变。组件 Disable 不自动清代码，需要停用边界时绑定返回 token。销毁 / 清指定类型 / 清全部代码永久关闭对应通道，旧 token 和旧在途代码快照不能进入新通道。
 - 始终先代码监听、后 Inspector UnityEvent；代码异常仍阻断后续 UnityEvent。默认 `UnRegisterAll()` 不动 Inspector 通道；显式 `UnRegisterAll(true)` 把全部 20 个字段置 null，仅断开组件的运行时通道，不改资产，也不清外部持有的旧 UnityEvent 对象。
 - Core 的 LayerMask 物理监听、`OnAnimationEvent(string)` 和覆盖完整 EventTriggerType 的 UGUI 扩展仍独立保留；它们不是 EventListener 的冗余替代品，不把 UnityEvent 持久化算法搬进 bus。
+- 原生 Inspector 位于 [`Editor/Foundation/Events/EventListenerEditor.cs`](../../Editor/Foundation/Events/EventListenerEditor.cs)，属于 `YLFramework.Editor`。隐藏 Script 字段，默认展开“Unity事件中心”，按鼠标事件、碰撞事件、Trigger事件展示原 20 个中文标签；折叠和页签只保存在 Editor 会话，不写入组件。派生类额外序列化字段仍按原生方式显示。UnityEvent 使用 Unity 原生 Drawer，保留多对象编辑、Undo/Redo 和 Prefab override/apply/revert，不依赖 Odin 或 Runtime 展示标注框架。
 
 ## Domain Reload 行为
 
@@ -131,5 +129,6 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - Action 消息/shutdown/暂停与 Audio 设置重入/旧订阅隔离按方法筛选验证，未机械运行整个模块套件。
 - `Tests/PlayMode/EventsLifecyclePlayModeTests.cs`：GameObject Destroy/Disable、指定 Scene 与 AnyScene、失败责任 / 重入及 Listener 通道生命周期。
 - `Tests/EditMode/UnityEventListenerContractTests.cs`：20 种原生 payload 映射、真实 persistent UnityEvent 通道、便捷扩展及旧代码快照截断。物理消息映射通过直接调用验证，不等同于物理引擎全流程测试。
+- `Tests/EditMode/Editor/Events/EventListenerEditorTests.cs`：原生 CustomEditor 选择、20 字段真实覆盖与标签/顺序、多对象、派生字段、Undo/Redo 及自有临时 Prefab 的持久目标与覆盖语义；视觉页签和实际 GUI 交互另行验收，不以映射反射测试代替。
 - E 专题验收：`CoreDirectViewPlayModeTests` 49/49（含 `CoreEvents.ON_REMOVE_VIEW` 广播消费者）、`EventsLifecyclePlayModeTests` 14/14、Action/Audio 各一项代表性方法、`CoreEventsContractTests` 7/7、`BindingContractTests` 15/15，合计 87 项通过；真实关闭 Domain Reload 两轮 Play 门禁通过。
 - 各批实际验证结果及剩余边界见 [2.2 专项方案](../../../../.kilo/plans/xf-yl-2.2-events.md)。

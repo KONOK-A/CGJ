@@ -14,7 +14,8 @@ namespace YLFramework.Tests.Http
         public void HttpHasOneRuntimeServiceOwnerWithoutCoreOrEditorProductDependencies()
         {
             var runtime = typeof(YLFramework.Services.Save.SaveManager).Assembly;
-            var core = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "YLFramework.Core.Runtime");
+            var core = typeof(YLFramework.Core.Module).Assembly;
+            Assert.That(core, Is.SameAs(runtime));
             foreach (var name in new[] { "HttpManager", "SendWebRequest", "HttpRequestStatus" })
             {
                 Assert.That(runtime.GetType("YLFramework.Services.Http." + name), Is.Not.Null, name);

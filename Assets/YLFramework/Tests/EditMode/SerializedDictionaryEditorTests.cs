@@ -17,6 +17,15 @@ namespace YLFramework.Tests
 {
     public class SerializedDictionaryEditorTests
     {
+        private static IEnumerator WaitForBinding(Func<bool> ready, string message)
+        {
+            // Unity 2022.3 的绑定按时间间隔轮询，固定帧数不能代表绑定或结构刷新完成。
+            var deadline = EditorApplication.timeSinceStartup + 3;
+            while (!ready() && EditorApplication.timeSinceStartup < deadline)
+                yield return null;
+            Assert.That(ready(), Is.True, message);
+        }
+
         internal static PropertyDrawer GetDrawer(SerializedProperty property)
         {
             var utility = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.ScriptAttributeUtility");
@@ -245,7 +254,7 @@ namespace YLFramework.Tests
             {
                 asset.Direct.Add("a", 1);
                 Assert.That(asset.Direct["a"], Is.EqualTo(1));
-                // 工程安装了全局 OdinEditor；验收的是 Unity 原生 Inspector，不借用第三方编辑器。
+                // 显式验收 Unity 原生 Inspector，不借用第三方或其他 CustomEditor。
                 editor = UnityEditor.Editor.CreateEditor(asset, typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GenericInspector"));
                 var rows = editor.serializedObject.FindProperty("Direct.datas");
                 rows.isExpanded = true;
@@ -253,9 +262,10 @@ namespace YLFramework.Tests
                 window.position = new Rect(100, 100, 650, 700);
                 window.rootVisualElement.Add(new InspectorElement(editor));
                 window.Show();
-                yield return null;
-                yield return null;
-                yield return null;
+                yield return WaitForBinding(() =>
+                    window.rootVisualElement.Query<TextField>().ToList().Count(f => f.bindingPath == "Direct.datas.Array.data[0].Key" && f.value == "a") == 1 &&
+                    window.rootVisualElement.Query<IntegerField>().ToList().Count(f => f.bindingPath == "Direct.datas.Array.data[0].Value" && f.value == 1) == 1,
+                    "默认 Inspector 未在时限内生成唯一绑定的 Key/Value 控件。");
                 var key = window.rootVisualElement.Query<TextField>().ToList()
                     .SingleOrDefault(f => f.bindingPath == "Direct.datas.Array.data[0].Key");
                 var value = window.rootVisualElement.Query<IntegerField>().ToList()
@@ -270,11 +280,11 @@ namespace YLFramework.Tests
                 Assert.That(asset.Direct.ContainsKey("a"), Is.False);
                 Assert.That(asset.Direct["edited"], Is.EqualTo(7));
                 Undo.PerformUndo();
-                yield return null;
+                yield return WaitForBinding(() => key.value == "a" && value.value == 1, "Undo 后绑定控件未刷新。");
                 Assert.That(asset.Direct["a"], Is.EqualTo(1));
                 Assert.That(asset.Direct.ContainsKey("edited"), Is.False);
                 Undo.PerformRedo();
-                yield return null;
+                yield return WaitForBinding(() => key.value == "edited" && value.value == 7, "Redo 后绑定控件未刷新。");
                 Assert.That(asset.Direct["edited"], Is.EqualTo(7));
                 rows = editor.serializedObject.FindProperty("Direct.datas");
                 rows.arraySize = 2;
@@ -282,9 +292,9 @@ namespace YLFramework.Tests
                 rows.GetArrayElementAtIndex(1).FindPropertyRelative("Key").stringValue = "added";
                 rows.GetArrayElementAtIndex(1).FindPropertyRelative("Value").intValue = 3;
                 editor.serializedObject.ApplyModifiedProperties();
-                yield return null;
-                yield return null;
-                yield return null;
+                yield return WaitForBinding(() => window.rootVisualElement.Query<IntegerField>().ToList()
+                    .Count(f => f.bindingPath == "Direct.datas.Array.data[1].Value" && f.value == 3) == 1,
+                    "新增行未在时限内生成唯一绑定的 Value 控件。");
                 var addedValue = window.rootVisualElement.Query<IntegerField>().ToList()
                     .Single(f => f.bindingPath == "Direct.datas.Array.data[1].Value");
                 addedValue.value = 8;
@@ -379,9 +389,9 @@ namespace YLFramework.Tests
                 ui.Bind(serialized);
                 window.rootVisualElement.Add(ui);
                 window.Show();
-                yield return null;
-                yield return null;
-                yield return null;
+                yield return WaitForBinding(() => ui.Query<IntegerField>().ToList()
+                    .Any(f => f.bindingPath == "Direct.datas.Array.data[0].Value" && f.showMixedValue),
+                    "多选 Value 控件未在时限内完成混合值绑定。");
                 var value = ui.Query<IntegerField>().ToList().Single(f => f.bindingPath == "Direct.datas.Array.data[0].Value");
                 Assert.That(value.showMixedValue, Is.True);
                 value.value = 9;
@@ -398,8 +408,8 @@ namespace YLFramework.Tests
                     second.ApplyModifiedProperties();
                 }
                 serialized.Update();
-                yield return null;
-                yield return null;
+                yield return WaitForBinding(() => !ui.Q<Foldout>().enabledSelf && ui.Q<HelpBox>().text.Contains("禁止批量编辑"),
+                    "目标结构不一致后，原生变更监听未在时限内禁用多选结构编辑。");
                 Assert.That(ui.Q<Foldout>().enabledSelf, Is.False);
                 Assert.That(ui.Q<HelpBox>().text, Does.Contain("禁止批量编辑"));
                 Assert.That(a.Direct.Count, Is.EqualTo(1));

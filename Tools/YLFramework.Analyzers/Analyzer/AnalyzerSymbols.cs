@@ -31,8 +31,7 @@ namespace YLFramework.Analyzers
             inherited = Markers.Select(m => m == null || !m.GetAttributes().Any(a =>
                 a.AttributeClass?.ToDisplayString() == "System.AttributeUsageAttribute" && a.NamedArguments.Any(p => p.Key == "Inherited" && Equals(p.Value.Value, false)))).ToArray();
             attributes = names.Select(_ => new ConcurrentDictionary<ISymbol, ImmutableArray<AttributeData>>(SymbolEqualityComparer.Default)).ToArray();
-            var pool = compilation.GetTypeByMetadataName("YLFramework.Core.Pool.ObjectPool`1");
-            if (pool?.ContainingAssembly.Name == "YLFramework.Foundation.Runtime" && !pool.Locations.Any(l => l.IsInSource)) ObjectPool = pool;
+            ObjectPool = core.GetTypeByMetadataName("YLFramework.Core.Pool.ObjectPool`1");
             var args = core.GetTypeByMetadataName("YLFramework.Core.LoadViewArgs");
             var candidates = args?.GetMembers("Pool").OfType<IFieldSymbol>().ToArray();
             var field = candidates?.Length == 1 ? candidates[0] : null;
@@ -49,9 +48,9 @@ namespace YLFramework.Analyzers
         internal static AnalyzerSymbols Create(Compilation compilation)
         {
             var candidates = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
-            if (compilation.Assembly.Name == "YLFramework.Core.Runtime") candidates.Add(compilation.Assembly);
+            if (compilation.Assembly.Name == "YLFramework.Runtime") candidates.Add(compilation.Assembly);
             foreach (var reference in compilation.References)
-                if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly && assembly.Name == "YLFramework.Core.Runtime") candidates.Add(assembly);
+                if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly && assembly.Name == "YLFramework.Runtime") candidates.Add(assembly);
             return candidates.Count == 1 ? new AnalyzerSymbols(candidates.Single(), compilation) : null;
         }
 

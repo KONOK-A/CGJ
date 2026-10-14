@@ -8,14 +8,14 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Tools/Extensions/`](../../Runtime/Tools/Extensions/)
+- 运行时：[`Runtime/Utilities/Extensions/`](../../Runtime/Utilities/Extensions/)
   - `Unity/`：`GameObjectExtension`、`ComponentExtension`、`MonoBehaviourExtension`、`ObjectExtension`、`RectTransformExtension`、`PositionSyncExtension`、`CameraExtension`、`ColorExtension`、`UIGraphicExtension`
   - `System/`：`SystemStringExtension`、`SystemIOExtension`、`SystemCollectionsExtension`、`SystemObjectExtension`、`SystemReflectionExtension`
   - `Math/`：`MathExtension`、`VectorExtension`
   - `Utilities/`：`RandomUtility`
 - 所有通用扩展统一 namespace `YLFramework.Utilities.Extensions`，归 `YLFramework.Runtime`。原 Core 的 Animator / Bounds / Color / EventTrigger / LayerMask / Quaternion / Random / Ray / Rigidbody / Scene / Time / Type / Vector2 / Vector3 扩展已按能力进入上述目录，类型及方法名不为形式统一重命名。
-- 字节与进度显示：[`Runtime/Tools/StringTools.cs`](../../Runtime/Tools/StringTools.cs)，namespace `YLFramework.Utilities`，归 Runtime。
-- 共用成员判断：[`Runtime/Shared/LayerMaskUtility.cs`](../../Runtime/Shared/LayerMaskUtility.cs)，namespace `YLFramework.Foundation`，供 Core Listener 与 Runtime 包装扩展使用。
+- 字节与进度显示：[`Runtime/Utilities/StringTools.cs`](../../Runtime/Utilities/StringTools.cs)，namespace `YLFramework.Utilities`，归 Runtime。
+- 共用成员判断：[`Runtime/Foundation/Utilities/LayerMaskUtility.cs`](../../Runtime/Foundation/Utilities/LayerMaskUtility.cs)，namespace `YLFramework.Foundation`，供物理 Listener 与 Runtime 包装扩展使用。
 - 旧 `YLFramework.Core.Extensions` 与 `YLFramework.Core.StringTools` 不保留转发壳；消费者改用上述 namespace，并显式引用 Runtime。旧 GameObjectExtensions / ComponentExtensions 类型退出，递归设层归 `GameObjectExtension.SetLayer`，唯一 Unity fake-null 查询归 `ObjectExtension.IsDestroy(UnityEngine.Object)`，GameObject / Component 扩展调用仍可直接使用。
 
 ## 主要功能
