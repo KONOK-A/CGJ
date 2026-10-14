@@ -1,8 +1,8 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已完成技术验收及 Git 收口，见第 14 节。8.2a 已完成技术验收及独立 Review，见第 15 节；尚未 Commit/Push。8.2b 及后续批次未实施。
+> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已完成技术验收及 Git 收口，见第 14 节。8.2a 已完成技术验收、独立 Review 及 Git 收口（Commit `8910345`），见第 15 节。8.2b 及后续批次未实施。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
-> 原方案批准与 Git 准备已完成。2026-10-14 的 8.1 授权允许验收/独立审查后精确提交并推送 `fusion/8-resource`。随后本批明确授权仅实施 8.2a 资源定义、依赖分包与隔离构建；未授权本批 Commit/Push，不执行 8.2b、集成合并或阶段里程碑。
+> 原方案批准与 Git 准备已完成。2026-10-14 的 8.1 授权允许验收/独立审查后精确提交并推送 `fusion/8-resource`。随后 8.2a 获授权实施资源定义、依赖分包与隔离构建，并在技术验收通过后授权完成本批 Commit/Push；不执行 8.2b、集成合并或阶段里程碑。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
@@ -699,11 +699,11 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 8.2 可依赖实测的单权威、不可变内存 Catalog、producer/consumer 分离、独立 Lease/Scope、单次交割及主线程会话门禁。8.1 收口时尚无持久化 Catalog/BuildMap、AssetBundle、实例池、Scene pin、Editor build/update 或生产网络安全能力；8.2a 的新增构建能力见第15节。Core 窄合同仍无正式后端，不将子批次完成理解为阶段 8 整体完成、原消费者已迁移或生产分发已成立。
 
-## 15. 8.2a 技术验收（2026-10-15，未 Git 收口）
+## 15. 8.2a 技术验收与 Git 收口（2026-10-15）
 
 ### 15.1 基线、实现与边界
 
-- 开始及收口均为 `fusion/8-resource`、HEAD `1666213882f4d0b6626db9fef6911cdabd7845f5`；开始只读 `git ls-remote origin refs/heads/fusion/8-resource` 确认远端同值，未 fetch/pull、Commit/Push。既有四项用户改动保留，收口 blob identity 与第14.4节一致。
+- 开始 HEAD 为 `1666213882f4d0b6626db9fef6911cdabd7845f5`；开始只读 `git ls-remote origin refs/heads/fusion/8-resource` 确认远端同值，未 fetch/pull。技术验收通过后按后续授权完成 Commit（`8910345` `feat(resource): 完成8.2a资源分包与增量构建基础`，仅含本批17个文件）与 Push，推送后远端核对同值；未 rebase/merge/force。既有四项用户改动保留，未进入提交，收口 blob identity 与第14.4节一致。
 - 在现有 `YLFramework.Editor` 主体新增 `Data/ResourceProject.cs` 与 `Build/ResourceBuildMap.cs`、`ResourceBuildWorkspace.cs`、`ResourceBundleBuilder.cs`。不新建程序集，Runtime/Foundation/Core/Audio 源码、8.1 Request/Lease/Scope 与 `ProjectName` 不变；旧 YL Resource 仍保留，不调用 XF/XFAB 构建入口。
 - Project 使用已保存的 SO GUID、独立稳定 `ProjectId`、资源根 GUID；Group 显式选择文件/递归文件夹 GUID，可筛选扩展名，支持 Together/PerAsset。地址为项目根相对规范路径或显式覆写；检测大小写地址/路径冲突、重复选择、项目身份及根重叠。记录主资产 GUID/localId、实际运行时读回类型、Group 成员及最终 Bundle 归属，不提前定义正式持久化 Catalog 或子资产 Schema。
 - 真实直接依赖图驱动分包：普通私有依赖归所属包，共享依赖按排序后的依赖者集合与资产 GUID 聚合；Scene 私有普通依赖进入独立普通 `d_` 桶；合法资源互引引起的 Bundle SCC 归并后复验 DAG，每个最终包拒绝 Scene/普通资产混装。无历史 1MB/10资产阈值，不使用旧全局 Importer 标记。
@@ -739,4 +739,4 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 ### 15.4 停止点
 
-8.2a 自有资源定义、稳定显式 BuildMap、实际依赖分包与 owned 隔离构建闭环技术通过。未实施正式发布/事务回滚/持久化Catalog、完整工作台/生成器、8.3 Runtime AssetBundle加载，也未完成子资产正式描述、Scene运行切换、Player或非本机平台验收。保留8.2总门禁中属于后续子批次的未完成项；本批无Commit/Push授权且未执行。**到此停止，不自动进入8.2b。**
+8.2a 自有资源定义、稳定显式 BuildMap、实际依赖分包与 owned 隔离构建闭环技术通过。未实施正式发布/事务回滚/持久化Catalog、完整工作台/生成器、8.3 Runtime AssetBundle加载，也未完成子资产正式描述、Scene运行切换、Player或非本机平台验收。保留8.2总门禁中属于后续子批次的未完成项；Commit/Push 已按后续授权执行完毕（见15.1）。**到此停止，不自动进入8.2b。**
