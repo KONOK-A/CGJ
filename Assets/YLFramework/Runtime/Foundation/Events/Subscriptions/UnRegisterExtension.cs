@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using YLFramework.Utilities.Extensions;
 
 namespace YLFramework.Events
 {
@@ -24,7 +23,12 @@ namespace YLFramework.Events
                 unRegister.UnRegister();
                 return unRegister;
             }
-            return gameObject.GetOrAddComponent<OnDestroyUnRegisterTrigger>().AddUnRegister(unRegister);
+            var trigger = gameObject.GetComponent<OnDestroyUnRegisterTrigger>();
+            if (!trigger)
+            {
+                trigger = gameObject.AddComponent<OnDestroyUnRegisterTrigger>();
+            }
+            return trigger.AddUnRegister(unRegister);
         }
 
         /// <summary>
@@ -53,7 +57,12 @@ namespace YLFramework.Events
                 unRegister.UnRegister();
                 return unRegister;
             }
-            return gameObject.GetOrAddComponent<OnDisableUnRegisterTrigger>().AddUnRegister(unRegister);
+            var trigger = gameObject.GetComponent<OnDisableUnRegisterTrigger>();
+            if (!trigger)
+            {
+                trigger = gameObject.AddComponent<OnDisableUnRegisterTrigger>();
+            }
+            return trigger.AddUnRegister(unRegister);
         }
 
         /// <summary>

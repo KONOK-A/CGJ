@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using YLFramework.Utilities.Extensions;
 using MonoBehaviour = UnityEngine.MonoBehaviour;
 
 namespace YLFramework.Core.Singleton
@@ -45,9 +44,9 @@ namespace YLFramework.Core.Singleton
             {
                 MonoSingletonProperty<T>.Dispose();
             }
-            else
+            else if (this && gameObject)
             {
-                this.DestroyGameObjGracefully();
+                Object.Destroy(gameObject);
             }
         }
 
@@ -58,7 +57,10 @@ namespace YLFramework.Core.Singleton
         {
             SingletonSessionState.MarkApplicationQuitting();
             if (!MonoSingletonProperty<T>.HasInstance) return;
-            this.DestroyGameObjGracefully();
+            if (this && gameObject)
+            {
+                Object.Destroy(gameObject);
+            }
             MonoSingletonProperty<T>.ResetIfCurrent(this as T);
         }
 
