@@ -14,15 +14,15 @@ HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显�
 
 | 目录 | 程序集 | 依赖 |
 |---|---|---|
-| [`Editor/Help/`](../../Editor/Help/) | `YLFramework.Editor.Help` | UnityEditor / UnityEngine（IMGUI），显式 references 为 `[]` |
-| [`Editor/Action/Help/`](../../Editor/Action/Help/)、[`Editor/Audio/Help/`](../../Editor/Audio/Help/) | `YLFramework.Editor` | Runtime + Help + UI |
-| [`Editor/FoundationToolsHelpProvider.cs`](../../Editor/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 既有 Foundation / Runtime / Help 引用，不引用 Core Runtime |
-| [`Editor/XFMain/CoreHelpProvider.cs`](../../Editor/XFMain/CoreHelpProvider.cs) | `YLFramework.Core.Editor` | Core / Foundation / Help / UGUI / 过渡 XFAB；仅向 Help 单向引用 |
+| [`Editor/Help/`](../../Editor/Help/) | `YLFramework.Editor` | 共享Help功能核心，namespace保持，不增加产品DLL |
+| [`Editor/Systems/Action/Help/`](../../Editor/Systems/Action/Help/)、[`Editor/Systems/Audio/Help/`](../../Editor/Systems/Audio/Help/) | `YLFramework.Editor` | 对应领域提供方，按显式类型索引 |
+| [`Editor/Utilities/Help/FoundationToolsHelpProvider.cs`](../../Editor/Utilities/Help/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 基础机制与工具提供方 |
+| [`Editor/Core/CoreHelpProvider.cs`](../../Editor/Core/CoreHelpProvider.cs) | `YLFramework.Editor` | Core提供方，暂留主体Runtime/UGUI/XFAB编译依赖 |
 | [`Tests/EditMode/Help/`](../../Tests/EditMode/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
 
-核心 namespace 为 `YLFramework.Editor.Help`，独立 Editor-only，不属于 Runtime / Foundation，不依赖 Action、Audio、Core 或第三方模块。提供方在各自 Editor 程序集侧单向引用核心；保持普通 Editor、Core Editor、独立 Help 三程序集，不引入帮助管理中心。
+核心namespace保持 `YLFramework.Editor.Help`，所有正式编辑器类型共用Editor-only主体。Help源码与提供方仍按职责分离，注册/索引不扫描程序集、不新增管理中心；窗口GUID、原MovedFrom、菜单/Provider id与配置持久键保持。Editor整体依赖不代表Help需要引用任何领域对象。
 
-Help 的 `autoReferenced` 为 false；普通 Runtime / Editor / ZipTool 为 true，optional / tests 为 false。`AssemblyInfo.cs` 仅向 `YLFramework.Tests.EditMode` 开放所需 internal。完整依赖见 [架构总览](../Architecture.md)。
+Runtime/Editor主体autoReferenced为true，optional/tests保留其独立配置；旧Core.Editor/Editor.Help/ZipTool产品asmdef/meta退役。Editor的同一测试friend只声明一次，不以兼容壳维持旧身份；五类旧二进制/AQN消费者须更新并重编译。完整依赖见 [架构总览](../Architecture.md)。
 
 ## Core Concepts
 

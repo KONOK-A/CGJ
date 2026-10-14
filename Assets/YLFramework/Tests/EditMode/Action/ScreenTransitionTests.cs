@@ -181,7 +181,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(prefab, Is.Not.Null,
                 "Run YLFramework > Action > 创建屏幕过渡资源 once, outside Play Mode.");
             Assert.That(AssetDatabase.GetAssetPath(prefab),
-                Is.EqualTo("Assets/YLFramework/Runtime/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab"));
+                Is.EqualTo("Assets/YLFramework/Runtime/Systems/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab"));
             Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(prefab), Is.Zero);
             Assert.That(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(prefab)),
                 Is.EqualTo("2a0bf8e4b9b44ec46a47f771105de1e4"));

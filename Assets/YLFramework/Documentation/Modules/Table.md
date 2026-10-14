@@ -13,7 +13,7 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Tools/Table/`](../../Runtime/Tools/Table/)
+- 运行时：[`Runtime/Utilities/Table/`](../../Runtime/Utilities/Table/)
 - `Table.cs`：数据表基类；`TableIndex.cs`：键索引。
 - namespace：`YLFramework.Utilities.Table`；程序集：`YLFramework.Runtime`。
 - 按需 `new` 子类或 `TableIndex`，由调用方负责 `Clear` / `Dispose`；无需 Module、Manager、组件挂载或公共 Root。
@@ -64,7 +64,7 @@ Ownership：
 
 ## Resource 消费者
 
-- `ResTable : Table<IRes>`（`Runtime/Resource/Framework/ResTable.cs`）：`OnAdd`/`OnRemove`/`OnClear` 转发到 `TableIndex<string, IRes>`（按小写 AssetName 索引），枚举通过 `Dictionary.SelectMany`。
+- `ResTable : Table<IRes>`（`Runtime/Systems/Resource/Framework/ResTable.cs`）：`OnAdd`/`OnRemove`/`OnClear` 转发到 `TableIndex<string, IRes>`（按小写 AssetName 索引），枚举通过 `Dictionary.SelectMany`。
 - `AssetDataTable : Table<AssetData>`（`.../AssetBundleSupport/ConfigFile/AssetDataTable.cs`）：公开 `NameIndex` 属性，`OnDispose` 调用 `NameIndex.Dispose()`；`ResData.Reset()` 是真实 Dispose 调用点。
 - `ResTable.OnDispose()` 释放其独占的 `_nameIndex`；`ServiceManager` 负责资源登记、移除与资源生命周期，Table 不取得资源所有权。现有 Resource 消费者保持直接调用，无需额外适配层。
 

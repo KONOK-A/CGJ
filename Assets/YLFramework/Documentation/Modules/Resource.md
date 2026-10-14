@@ -8,12 +8,14 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Resource/`](../../Runtime/Resource/)
-  - 核心：[`Framework/`](../../Runtime/Resource/Framework/)（加载器、资源表、工厂）
-  - 实现：[`Implementations/`](../../Runtime/Resource/Implementations/)（AssetBundle / Resources / 本地与网络图片）
-  - 热更新：[`HotUpdate/`](../../Runtime/Resource/HotUpdate/)
-  - 工具：[`Utilities/`](../../Runtime/Resource/Utilities/)
-- 编辑器工具：[`Editor/Resource/`](../../Editor/Resource/)
+- 运行时：[`Runtime/Systems/Resource/`](../../Runtime/Systems/Resource/)
+  - 核心：[`Framework/`](../../Runtime/Systems/Resource/Framework/)（加载器、资源表、工厂）
+  - 实现：[`Implementations/`](../../Runtime/Systems/Resource/Implementations/)（AssetBundle / Resources / 本地与网络图片）
+  - 热更新：[`HotUpdate/`](../../Runtime/Systems/Resource/HotUpdate/)
+  - 工具：[`Utilities/`](../../Runtime/Systems/Resource/Utilities/)
+- 编辑器工具：[`Editor/Systems/Resource/`](../../Editor/Systems/Resource/)，Build为构建/所有权事务，Service为菜单/窗口接入，CodeGeneration为资源常量生成/原子输出，Data保留原资源描述；均归Editor主体。
+
+本次只按职责归位八个Editor源码路径，内容/meta/GUID/namespace、owner/Bundle身份、生成输出与加载/清理算法保持；不表示阶段8资源融合或热更新已完成，不创建/迁移HotUpdate/Remote真实业务数据。Runtime当前仍暂留Core的XFAB依赖与ProjectName语义。
 
 ## 主要功能
 
@@ -141,4 +143,4 @@
 
 - 资源名在 `ResKey` 中统一转小写，`OriginalAssetName` 保留原名。
 - 编辑器可通过模拟模式直接按 AssetBundle 名加载工程内资源，无需真实打包。
-- `FakeResServer` 的远端目录指向 `Runtime/Resource/HotUpdate/Remote/`（工程内当前没有该目录）。
+- `FakeResServer` 的远端目录指向 `Runtime/Systems/Resource/HotUpdate/Remote/`（工程内当前没有该目录）。

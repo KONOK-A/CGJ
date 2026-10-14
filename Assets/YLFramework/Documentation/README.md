@@ -11,14 +11,16 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 
 | 目录 | 说明 |
 |---|---|
-| [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Tools / 大型模块） |
-| [`Editor/`](../Editor/) | 编辑器工具、模块帮助提供方与独立 Help 核心 |
+| [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
+| [`Editor/`](../Editor/) | Editor-only主体；功能工具、模块帮助提供方与共享Help分区 |
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
 | [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
-| [`Plugins/`](../Plugins/) | 第三方插件（Sirenix Odin、Editor Enhancers） |
+| [`Plugins/`](../Plugins/) | 剩余第三方插件（Editor Enhancers）；Sirenix Odin 已整树退出 |
 | [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
-| [`Samples/`](../Samples/) | 示例（`ColorSelector`） |
+| [`Samples/`](../Samples/) | 示例导出根保留；ColorSelector样例整树已退役 |
 | `Documentation/` | 本文档目录 |
+
+Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Distribution/Help组织；正式主体仅YLFramework.Runtime与YLFramework.Editor。五个额外产品asmdef退役，测试/可选集成/Analyzer SDK继续隔离，旧二进制消费者须重编译。目录分类不新增系统管理器或namespace迁移，Tools仍为仓库SDK/开发工具。
 
 ## 模块导航
 
@@ -34,7 +36,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | AssemblyTool | 按类型全名查找 `Type` 的唯一中立工具 | 已归 Foundation，供 Core / Editor 使用 | [Modules/AssemblyTool.md](Modules/AssemblyTool.md) |
 | Attributes | 展示元数据、刷新配置与 DisableEdit | 元数据已归 Foundation，必要 Drawer 保持 Editor-only | [Modules/Attributes.md](Modules/Attributes.md) |
 
-### Tools（通用工具）
+### Utilities（通用工具）
 
 | 模块 | 作用 | 状态 | 文档 |
 |---|---|---|---|
@@ -44,7 +46,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | Json | JSON 树解析与构建（JSONObject），不统一 Save / HTTP 序列化内核 | 成熟实现保留 | [Modules/Json.md](Modules/Json.md) |
 | Table | 通用表与多值索引，Resource 的直接支撑 | 成熟实现保留 | [Modules/Table.md](Modules/Table.md) |
 | Timing | Foundation 唯一秒/帧内核、精确句柄、Scope/复用、GO 绑定与终态等待 | 2.4-C 实施及专项验证完成，待验收与 Git 收口；2.4 IN PROGRESS | [Modules/Timing.md](Modules/Timing.md) |
-| ZipTool | 独立 Zip / GZip 能力（内置 SharpZipLib，无 UnityEngine 依赖） | 成熟实现保留 | [Modules/ZipTool.md](Modules/ZipTool.md) |
+| ZipTool | Zip/GZip与SharpZipLib，BCL-only源码闭包，归Runtime主体 | 实现/许可保留，旧独立DLL退役 | [Modules/ZipTool.md](Modules/ZipTool.md) |
 
 ### Runtime 大型模块
 
@@ -59,16 +61,16 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 
 ### 其他内容
 
-- [Help](Modules/Help.md)：独立 Editor-only 帮助核心；普通 Editor 承载 Action、Audio、Foundation/Tools，Core Editor 单向接入 Core Provider。
-- [`Samples/ColorSelector/`](../Samples/ColorSelector/)：正式 `YLFramework.Core.ColorSelectorWindow` 的消费者演示，含已绑定的 Sample Prefab，不保存另一份工具实现。
+- [Help](Modules/Help.md)：Editor-only主体中的共享Help与各领域提供方，原菜单/窗口/Provider与配置身份保持。
+- [ColorSelector](Modules/UI.md#colorselector)：正式 `YLFramework.Core.ColorSelectorWindow` 与 `Prefabs/ColorSelector.prefab` 保留；由业务 Module 显式打开，旧样例已退役。
 
 ## 架构与依赖
 
 程序集划分、依赖方向与目录分层说明见 [Architecture.md](Architecture.md)。
 
-FSM / Grid / Json / Table 位于 `YLFramework.Runtime`，按需直接使用；ZipTool 保持独立程序集。工具不强制依赖 Module、统一 Manager 或公共 Root；各模块文档列明正式 namespace、入口与实际存在的测试范围，成熟实现保留不等于当前仓库具备其历史完整测试套件。
+FSM/Grid/Json/Table/ZipTool均归Runtime主体，按需直接调用；工具不强制创建Module/统一Manager/公共Root，Zip源码继续独立验证BCL-only。模块文档列明正式namespace与实际测试范围；成熟实现保留不等于历史完整套件均在仓库内。
 
-Timing 的 Timer 负责到期回调；逐帧进度、插值与组合流程由 ActionKit 的 Delay / Lerp / Repeat 等动作承担。两边各自管理名字与生命周期，`TimerScope` 不与 `ActionHandle` 共用任务表。Action / Audio 位于 `Runtime/Action/`、`Runtime/Audio/`，共用 `YLFramework.Runtime`；公共入口仍为 `ActionKit` / `AudioKit`。
+Timing 的 Timer 负责到期回调；逐帧进度、插值与组合流程由 ActionKit 的 Delay / Lerp / Repeat 等动作承担。两边各自管理名字与生命周期，`TimerScope` 不与 `ActionHandle` 共用任务表。Action / Audio 位于 `Runtime/Systems/Action/`、`Runtime/Systems/Audio/`，共用 `YLFramework.Runtime`；公共入口仍为 `ActionKit` / `AudioKit`。
 
 Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct 路由均可选，配置资产与薄 UnityEvent 组件不新增播放宿主或资源加载。Settings 音量不自动写 Mixer；路由、原生参数控制及资源所有权各自显式管理，见 [Audio](Modules/Audio.md#可选-mixer)。
 
@@ -78,9 +80,9 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
 - `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出。
 - `Plugins/` 完整递归，保留商业插件、Demo 与辅助工具，不裁剪或重配导入平台。这是内部交付决策，公开再分发许可仍需后续核查。
-- 包含正式 Editor/Help 与唯一 `Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll` 及 meta。七项分析器默认 Warning，DLL 仅作为 Core 作用域的编译器输入，不是 Runtime 引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
+- 包含Runtime/Editor正式功能分区及唯一 `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 与meta。七项分析器默认Warning，现为Runtime主体及真实引用消费者的编译器输入，不是Player运行引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
-- 框架仍沿用 UGUI、Odin、Newtonsoft 等既有依赖，Core 保留过渡 XFAB，不是零依赖安装包。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
+- 框架仍沿用 UGUI、Newtonsoft 等既有依赖，Core 保留过渡 XFAB，不是零依赖安装包。EventListener 使用原生 Inspector，Sirenix Odin 插件及其编译引用已退出；ProjectSettings 的五个未使用 Odin 宏按配置权限边界保留。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
 - 导出回归真实解包并检查递归资产内容、GUID / meta、完整 Plugins、Analyzer 唯一身份与禁用平台及排除项，不等于干净工程导入。实际 Player 门禁与阶段状态单独记录于 [阶段 6 方案](../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口)。
 
 ## 测试

@@ -7,6 +7,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
+using UnityEngine.TestTools;
 using YLFramework.Core.Pool;
 
 namespace YLFramework.Foundation.Tests
@@ -14,13 +15,14 @@ namespace YLFramework.Foundation.Tests
     public class FoundationBoundaryTests
     {
         [Test]
-        public void KernelKeepsItsAssetIdentityAndNeutralSourceClosureWithoutAbsorbingRuntimeAdapters()
+        public void FoundationFamiliesHaveOneRuntimeOwnerAndTheKernelContainerIsRetired()
         {
             const string runtimeRoot = "Assets/YLFramework/Runtime/";
             const string kernel = runtimeRoot + "Foundation/Kernel";
-            Assert.That(AssetDatabase.AssetPathToGUID(kernel), Is.EqualTo("cbd6de2a25410264eb6ff85bef17fe73"));
-            Assert.That(AssetDatabase.AssetPathToGUID(kernel + "/YLFramework.Foundation.Runtime.asmdef"),
-                Is.EqualTo("6b2be150d22ce3f4c9d858f1dafc81a4"));
+            Assert.That(Directory.Exists(kernel), Is.False);
+            Assert.That(File.Exists(kernel + ".meta"), Is.False);
+            Assert.That(File.Exists(kernel + "/YLFramework.Foundation.Runtime.asmdef"), Is.False);
+            Assert.That(File.Exists(kernel + "/YLFramework.Foundation.Runtime.asmdef.meta"), Is.False);
             Assert.That(Directory.Exists(runtimeRoot + "Shared"), Is.False);
             Assert.That(File.Exists(runtimeRoot + "Shared.meta"), Is.False);
             foreach (var retired in new[] { "Tools/AssemblyTool", "Tools/Attributes" })
@@ -30,30 +32,72 @@ namespace YLFramework.Foundation.Tests
             }
 
             var assemblies = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
-            var foundation = assemblies.Single(a => a.name == "YLFramework.Foundation.Runtime");
+            var foundation = assemblies.Single(a => a.name == "YLFramework.Runtime");
             Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(foundation.name),
-                Is.EqualTo(kernel + "/YLFramework.Foundation.Runtime.asmdef"));
-            Assert.That(foundation.sourceFiles.Select(Path.GetFullPath), Is.EquivalentTo(
-                Directory.GetFiles(kernel, "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
-            var adapters = Directory.GetFiles(runtimeRoot + "Foundation", "*.cs", SearchOption.AllDirectories)
-                .Where(path => !Path.GetFullPath(path).StartsWith(Path.GetFullPath(kernel) + Path.DirectorySeparatorChar,
-                    StringComparison.OrdinalIgnoreCase)).Select(Path.GetFullPath).ToArray();
+                Is.EqualTo(runtimeRoot + "YLFramework.Runtime.asmdef"));
+            Assert.That(foundation.sourceFiles.Select(Path.GetFullPath), Is.SupersetOf(
+                Directory.GetFiles(runtimeRoot + "Foundation", "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
+            var adapters = new[] { runtimeRoot + "Foundation/Timing/Components/TimerObject.cs",
+                runtimeRoot + "Foundation/Events/Unity/AnimationEventListener.cs",
+                runtimeRoot + "Core/MVC/Views/Components/CloseView.cs" }.Select(Path.GetFullPath).ToArray();
             Assert.That(adapters, Is.Not.Empty);
             Assert.That(assemblies.Single(a => a.name == "YLFramework.Runtime").sourceFiles.Select(Path.GetFullPath),
                 Is.SupersetOf(adapters));
         }
 
-        [Test]
-        public void FoundationHasNoFrameworkResourceOrPluginAssemblyDependencies()
+        [UnityTest]
+        public IEnumerator FoundationHasNoFrameworkResourceOrPluginAssemblyDependencies()
+            => CompileNeutralSources(AssemblyBuilderFlags.EditorAssembly);
+
+        [UnityTest]
+        public IEnumerator NeutralFoundationSourcesCompileForDevelopmentPlayerWithoutEditorReferences()
+            => CompileNeutralSources(AssemblyBuilderFlags.DevelopmentBuild);
+
+        private static IEnumerator CompileNeutralSources(AssemblyBuilderFlags flags)
         {
-            var assembly = typeof(ApplicationTool).Assembly;
-            Assert.That(assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
-            var unexpected = assembly.GetReferencedAssemblies().Select(reference => reference.Name)
-                .Where(name => name != "mscorlib" && name != "netstandard" && name != "System"
-                    && !name.StartsWith("System.", StringComparison.Ordinal)
-                    && !name.StartsWith("UnityEngine", StringComparison.Ordinal)
-                    && !name.StartsWith("UnityEditor", StringComparison.Ordinal));
-            Assert.That(unexpected, Is.Empty);
+            Assert.That(typeof(ApplicationTool).Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
+            const string root = "Assets/YLFramework/Runtime/Foundation/";
+            // 精确保持原 Kernel 49 文件闭包，合并目录不代表可偷渡上层适配与 Runtime DLL。
+            var directories = new[] { "Async", "Utilities", "Attributes", "Serialization", "Update", "Internal", "Timing", "Timing/Internal", "Pool/Collections" };
+            var subscriptions = new[] { "CallbackUnRegister", "EventBus", "EventChannel", "EventChannelBase", "EventKey",
+                "EventRegistrations", "IEventSource", "IUnRegister", "OrEvent", "RegisterListExtension", "SingleUseUnRegister", "SubscriptionCleanup", "SubscriptionScope" };
+            var files = new[] { "Singleton/Internal/SingletonSessionState.cs", "Pool/Object/ObjectPool.cs", "Pool/Object/PoolOptions.cs",
+                "Pool/Abstractions/IPool.cs", "Pool/Abstractions/IObjectFactory.cs", "Pool/Factories/CustomObjectFactory.cs", "Pool/Factories/DefaultObjectFactory.cs" };
+            var sources = directories.SelectMany(directory => Directory.GetFiles(root + directory, "*.cs"))
+                .Concat(subscriptions.Select(name => root + "Events/Subscriptions/" + name + ".cs"))
+                .Concat(files.Select(path => root + path)).ToArray();
+            Assert.That(sources.Length, Is.EqualTo(49));
+            Assert.That(sources.All(File.Exists), Is.True);
+            var parent = Path.GetTempPath();
+            Assert.That(Directory.Exists(parent), Is.True);
+            var folder = Path.Combine(parent, "kilo", "YLFramework.Foundation.SourceClosure-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                var output = Path.Combine(folder, "FoundationSourceClosure.dll");
+                var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
+                var builder = new AssemblyBuilder(output, sources) { flags = flags,
+                    buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
+                    referencesOptions = ReferencesOptions.UseEngineModules };
+                Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
+                var trustedRoot = Path.GetFullPath(EditorApplication.applicationContentsPath) + Path.DirectorySeparatorChar;
+                builder.excludeReferences = builder.defaultReferences.Where(path =>
+                    !Path.GetFullPath(path).StartsWith(trustedRoot, StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetFileName(path).Contains("TestRunner") ||
+                    (!editor && Path.GetFileName(path).StartsWith("UnityEditor", StringComparison.Ordinal))).ToArray();
+                var references = builder.defaultReferences.Except(builder.excludeReferences).ToArray();
+                Assert.That(references, Is.Not.Empty);
+                Assert.That(references.Any(path => Path.GetFileName(path).StartsWith("YLFramework") ||
+                    Path.GetFileName(path).StartsWith("XF") || Path.GetFileName(path) == "Newtonsoft.Json.dll"), Is.False);
+                CompilerMessage[] messages = null;
+                builder.buildFinished += (_, result) => messages = result;
+                Assert.That(builder.Build(), Is.True);
+                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                Assert.That(messages, Is.Not.Null);
+                Assert.That(messages.Where(m => m.type == CompilerMessageType.Error).Select(m => m.message), Is.Empty);
+                Assert.That(File.Exists(output), Is.True);
+            }
+            finally { Directory.Delete(folder, true); }
         }
 
         [Test]
@@ -103,7 +147,8 @@ namespace YLFramework.Foundation.Tests
             Assert.That(session.IsNotPublic, Is.True);
             Assert.That(foundation.GetCustomAttributes(typeof(InternalsVisibleToAttribute), false)
                 .Cast<InternalsVisibleToAttribute>().Select(attribute => attribute.AssemblyName),
-                Is.EquivalentTo(new[] { "YLFramework.Runtime", "YLFramework.Core.Runtime" }));
+                Is.EquivalentTo(new[] { "YLFramework.Tests.EditMode", "YLFramework.Tests.PlayMode", "YLFramework.Editor",
+                    "YLFramework.Actions.DOTween", "YLFramework.Actions.DOTween.Tests.EditMode", "YLFramework.Actions.DOTween.Tests.PlayMode" }));
         }
 
         [Test]

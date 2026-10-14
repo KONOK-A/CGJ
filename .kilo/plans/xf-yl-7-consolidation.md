@@ -1,9 +1,9 @@
 # XF × YL：阶段 7 最终架构收口与独立交付总体方案
 
-**状态：IN PROGRESS — 7.1 技术验收通过，正在进行本轮 Git 收口。** 阶段 7 具体路线已由用户最新确认，调整为“框架结构整理”，仅保留两个结构批次：
+**状态：COMPLETE（2026-10-14）：7.1、7.2 技术验收通过；7.R/7.O1 补充与 §16 两主体收口完成，随 `milestone/7-structure` Git 收口。** 阶段 7 具体路线已由用户最新确认，调整为“框架结构整理”，仅保留两个结构批次：
 
-- **7.1** `Runtime/Shared → Runtime/Foundation/Kernel`（已完成实施并通过技术验收，本轮进行 Git 收口）。
-- **7.2** `Runtime/XFMain → Runtime/Core`、`Editor/XFMain → Editor/Core`，并同步 Core 内部职责目录、默认资源路径与 Analyzer 接线（未实施）。
+- **7.1 COMPLETE** `Runtime/Shared → Runtime/Foundation/Kernel`（实施、用户技术验收与 Git 收口已完成，`0f9876f`）。
+- **7.2 COMPLETE**（技术门禁通过，随阶段 7 Git 收口）`Runtime/XFMain → Runtime/Core`、`Editor/XFMain → Editor/Core`，Core 内部职责目录、默认资源路径与 Analyzer 接线已同步，见第 8 节。
 
 阶段 7 保持公开类型、程序集身份与功能契约；**暂时保留 Core 对 XFAB 的现有依赖，不改变 `ProjectName` 语义，不新增资源替代后端**。阶段 7 完成标准改为两个结构批次及必要迁移验证通过，不再要求在本阶段完成无 XFAB 的独立资源运行。
 
@@ -185,7 +185,7 @@ XF/QFramework/JSONObject/SharpZipLib 的完整许可和通知随迁后路径继�
 
 #### 7.1 实施与验证记录（2026-10-13）
 
-**7.1 技术验收通过，正在进行本轮 Git 收口；阶段 7 保持 IN PROGRESS，未启动 7.2。**
+**7.1 COMPLETE：用户技术验收及 Git 收口已完成，提交 `0f9876f`；阶段 7 保持 IN PROGRESS。** 下文保留 7.1 实施时的实际证据，不重复提交或重跑未受影响验证。
 
 - 启动前实际核对项目 `AGENTS.md`、Unity `2022.3.62f3c1`、manifest、Git 状态、源码及 asmdef。工作分支为 `fusion/7-consolidation`，起始 HEAD 为 `19fd485f0c5ed93e40916f17d8a11472cc4f5e95`；仅有用户已有 `.gitignore`、`.kilo/kilo.jsonc` 修改，两者保留且不计为本批产物。既有 test-worktree 未读取、修改或清理；本轮没有 Commit、Push、Merge、Tag、Reset、Clean 或切换分支。
 - 通过 Unity `AssetDatabase.MoveAsset` 将 `R/Shared` 整体迁为 `R/Foundation/Kernel`，asmdef 与全部源码同批移动，不新增 asmref、不生成替代 meta。根 Shared 及其旧路径 meta 已退出。原 Foundation 的 Binding、Events、IOC、Pool、Singleton 保持位置和 `YLFramework.Runtime` 归属；Core / Editor/XFMain / Analyzer、资源 owner 与成熟领域实现均未迁移或接线。
@@ -227,7 +227,7 @@ Runtime/Foundation/
 
 移动导入瞬间 Unity 曾报告旧 Shared / 新 Kernel 两路径的同名 asmdef 诊断。后续同步刷新、磁盘/AssetDatabase 唯一资产核对、Editor/Player 编译图及实际编译均确认无持久重复；刷新后没有新增 Error 日志。不以清 Console、删除 Library、弱化测试或添加兼容层消除诊断。辅助 MCP 只读脚本首轮有字符串转义编译错误，修正后完成检查，未写入产品源码。
 
-本批未改变算法、运行时 owner、公共 API 或程序集归属，因此没有额外 PlayMode、完整 Player、原游戏综合验收或独立工程导入；这些历史功能证据仅用于未受影响契约，不充当阶段 7 最终独立交付证明。7.1 技术验收已通过并进入本轮 Git 收口，已建立 7.2 所需的稳定 Foundation 前置；7.2 仍需在 Git 收口完成后单独授权，不自动实施。
+本批未改变算法、运行时 owner、公共 API 或程序集归属，因此没有额外 PlayMode、完整 Player、原游戏综合验收或独立工程导入；这些历史功能证据仅用于未受影响契约，不充当阶段 7 最终独立交付证明。7.1 用户技术验收及 Git 收口现已完成，已建立 7.2 所需的稳定 Foundation 前置；7.2 已于本轮获得单独授权。
 
 ### 7.2 Core 职责目录与 Analyzer 接线收口
 
@@ -272,8 +272,69 @@ Runtime/Foundation/
 | D3 公开身份 | 保留四套 Runtime 与三套 Editor 程序集的正式名称/GUID；保留现有 YL 公共 namespace、类型 FullName、序列化契约和成熟工具，不为目录一致性机械改名 |
 | D4 独立交付 | 最终目标（阶段 9）为默认主框架在不安装原 XF 生态系统的独立 Unity 工程中真正可用；必要 Unity 与第三方依赖允许显式提供，不追求零依赖。默认 Plugins 继续完整递归导出；公开再分发许可仍属后续独立限制 |
 
-总体批准只确认路线与停止门禁；每批仍须单独获授权。**7.1 已获授权、通过技术验收并进入本轮 Git 收口；7.2 未实施；阶段 8、9 未启动。** 阶段 7 保持公开类型、程序集身份与功能契约，暂时保留 Core 对 XFAB 的现有依赖；资源系统到阶段 8 再研究双方源码后提出方案，本轮不预定其细节，也不能视为可直接开始改代码。
+总体批准只确认路线与停止门禁；每批仍须单独获授权。**7.1 COMPLETE（`0f9876f`）；7.2 及 7.R/7.O1 补充完成技术验收并随阶段 7 Git 收口；阶段 8、9 未启动。** 阶段 7 保持公开类型、程序集身份与功能契约，暂时保留 Core 对 XFAB 的现有依赖；资源系统到阶段 8 再研究双方源码后提出方案，本轮不预定其细节，也不能视为可直接开始改代码。
 
 **阶段 7 完成条件：** 两个结构批次（7.1、7.2）及必要迁移验证通过；Foundation 逻辑归口与 Core 职责目录清晰，公开类型、程序集身份与功能契约保持；不再要求本阶段完成无 XFAB 的独立资源运行。**阶段 8/9 完成条件：** 依据阶段 8 资源融合与阶段 9 独立载体成果分别重新设计；GUID、序列化/反射及必要公共身份须保留，分发范围、必要依赖和公开许可限制须准确。其他未验证平台/资源能力明确保留，不扩大 COMPLETE 含义。
 
-**阶段 7 保持 IN PROGRESS；7.1 技术验收通过并进入本轮 Git 收口；不自动实施 7.2，不启动阶段 8 资源研究。**
+**阶段 7 COMPLETE（2026-10-14 Git 收口，`milestone/7-structure`）；不启动阶段 8 资源研究。**
+
+## 8. 7.2 实施与必要验证（2026-10-13）
+
+本批正式授权基线为 `fusion/7-consolidation` / `0a39928`；本地与实际远端分支起始 HEAD 一致。7.1 已由 `0f9876f` 完成 Git 收口，本轮只增量修正过期状态，不补做提交。阶段 7 仍为 IN PROGRESS，7.2 的技术结果不替代用户验收或 Git 里程碑。
+
+### 8.1 最终职责与安全迁移
+
+| 正式目录 | 实际归属 |
+|---|---|
+| `Runtime/Core/MVC` | Module/SingletonModule、Model/Controller、ModuleManager；Internal 为注册索引，Events 为 Core 事件入口，Requests 为 StartUpModuleRequest |
+| `Runtime/Core/Views` | View、ViewManager、LoadViewRequest；Parameters 为 LoadViewArgs |
+| `Runtime/Core/UI` | Panel/PanelManager/LoadPanelRequest 与原窗口、输入、根、Tips；Adaptation 为原 UI 适配，Tools 原取色结构保持 |
+| `Runtime/Core/Components` | TimerObject、CloseView、Listeners UnityEvent 桥接 |
+| `Runtime/Core/Attributes/RoslynAnalyzers`、`Analyzers` | 六个正式 marker 与唯一编译器 DLL，仍在 Core Runtime asmdef 子树 |
+| `Runtime/Core/Resources/YLFramework/Core` | 原 Canvas/EventSystem，逻辑加载键不变 |
+| `Editor/Core` | DefaultResources、ModuleGeneration、Settings、Extensions、Utilities/Assets/Preview/TreeViews、Windows、Inspectors 与 CoreHelpProvider |
+
+未拆分成熟类或 UI 子系统，未改 Module/View/Panel/资源请求的算法、owner、租约、实例池、场景或取消生命周期。`ProjectName` 语义及 Core 对 XFAB 的现有依赖保持。
+
+首次优先使用 AssetDatabase.MoveAsset，遇到 Windows 目录重命名“拒绝访问”及反复模态弹窗；用户恢复编辑器后，非动态编译入口和 Directory.Move 也复现拒绝访问。只读 ACL、独占文件打开及目录 DELETE 句柄检查均未证明 Analyzer 文件占用，不能将动态 Roslyn 缓存推定为已确认根因。最终在禁止自动刷新/重载及批量编辑保护下，逐文件迁移整个目录内容、原 meta 并删除空源目录；禁止覆盖目标，先迁出原 mvc 再归 Module→MVC，规避 Windows 大小写冲突。先完成生成器/监听器/配置路径同步，再平衡释放全部保护计数并由 Unity 重新导入。
+
+### 8.2 身份与默认资源
+
+- 迁前/迁后均为 165 个文件，其中 61 个 C#（Runtime 46、Editor 15）及 97 份 meta；全部 meta 原始内容/GUID 保持，所有目标存在，无重复目标。仅四份 Core Editor 的路径/Help 文案改变，其余 Core C#、两个 asmdef、资源、Analyzer DLL 和 LICENSE 保持原始内容。
+- Runtime/Core 根 GUID `cc6645c11ab57e145b6b167078de0fac`、Editor/Core 根 GUID `d9b09bbe8b78666468f046d49ff546f3` 保持。目录 meta 亦全部归口保留，没有以新 GUID 替换原目录身份。
+- 五个相关正式程序集共 420 个公开类型的 AssemblyQualifiedName、基类、公开成员签名、可序列化字段及程序集引用完全一致；61 个脚本的 GUID→类型绑定一致。实际编译 sourceFiles 与 Analyzer 图按迁移映射比较无变化。
+- Resources.Load 实际解析 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 到新 Core 资源目录；Canvas GUID `0df4ee5a6aa484a40b5d537a1c23a2c0`、EventSystem GUID `e5f419ca4a6e564439be23e0257ffb3c` 保持，没有旧目录重生或双份默认资源。
+- 实际检查 Prefabs、Samples 及默认资源共 6 个 Prefab、40 个脚本组件，均无 Missing Script，Core 组件解析到新 Core 路径及原类型。配置生成根更新为 `Editor/Core/GeneratedAssets`；ProjectSettings 的持久键及 Examples 的生成输出保持。
+
+### 8.3 Analyzer 实际接线
+
+- 唯一正式 DLL 位于 `Runtime/Core/Analyzers`；GUID `471f81c4273ee66429677df44cbd6960`、RoslynAnalyzer 标签、禁用平台、显式引用和 Core asmdef 作用域保持。正式 DLL 原字节保持（SHA256 `6861D339663AAA0235C1A83047F78FB81C11588282068D2DE437CD4B5E09EBF3`）。
+- 修复 SDK Fixture 的 marker 源码路径及 build.ps1 的 -Deploy 目标，说明同步至 Attributes 文档。默认构建入口实际成功：PowerShell 7.6.6 / SDK 9.0.312，0 build error/warning，SDK 121 项测试通过；本批没有使用 -Deploy，不以 SDK 新构建产物顶替既有 DLL。
+- Unity 实际编译事件中，正式 Core 与独立 Core 消费者各有且仅有 YL0001～YL0007 七项负例诊断；合法探针文件无 YL 误报。Core Editor 注入正确，无关程序集及观察器不注入，无 AD0001 / CS8032 / CS8784 / CS8785 或加载失败。
+- 真实 Bee/csc rsp 的 -analyzer 指向新 Core 路径；Core、Core Editor、原有 Core 测试/夹具、UI Acceptance 和 ColorSelector Sample 消费者范围保持。普通 Runtime、Foundation、Editor、Help 及无关程序集未被扩大作用域。清理负例后最新 Core/Core Editor 编译事件均为 0 YL 诊断、0 编译/加载失败。
+
+### 8.4 必要验证与交接
+
+| 本轮实际验证 | 结果 |
+|---|---|
+| Unity 2022.3.62f3c1 实际导入/编译与身份/编译图比对 | 通过；scriptCompilationFailed=false；无身份、GUID 或图差异 |
+| Core Editor 门禁程序集 | 实际通过 101 项，含 CoreEditorIdentity、默认资源工厂/保护、配置路径、模块生成、序列化与 Drawer |
+| Core EditMode 门禁程序集 | 实际通过 60 项，含 CoreIdentity、Resources.Load、UI/Tips/取色直接消费者 |
+| FrameworkHelpProviderTests | 实际通过 6 项 |
+| AudioSourceIndependenceTests（受排除路径变化影响） | 实际通过 3 项，包含 Editor/Windows Development 源码 profile；不是 Player 构建 |
+| ExportUnityPackageTests | 真实导出/解包通过；新增 Core 职责目录、默认资源、Editor 与 marker 哨兵，核验递归内容/GUID/meta、唯一 Analyzer、平台及排除项 |
+| SDK 构建入口与诊断测试 | 121 项通过；Unity 七项诊断另行实际验证，不以 SDK 文本或测试替代接线 |
+| 独立只读复核及差异检查 | 165 文件/97 meta 独立复核保持；无其他可行动问题；git diff --check 通过 |
+
+工具返回的全工程总发现数不计入实际通过数量。验证期间正式 ColorSelector Prefab 出现单一遮挡 mask 序列化副作用；用户确认非用户修改并授权仅恢复该字段后已恢复基线，Prefabs/Samples/原业务目录最终 diff 为空，最终内容已重新真实导出/解包通过。诊断探针、观察器及临时脚本/资产已清理；SDK 标准生成输出在取得合作锁后清理，保留既有 entry.lock。移除全部临时程序集后，CoreIdentity 10 项、CoreEditorIdentity 9 项再次通过，不重复计入上表。未修改 MainModule 资源或真实游戏场景。
+
+Architecture、README、Attributes/UI/Pool/Help 导航、THIRD-PARTY-NOTICES 和 IntegrationPlan 增量同步。保留 `.gitignore`、`.kilo/kilo.jsonc` 及执行期间出现的非本批 MCP/NuGet/Packages/ProjectSettings 环境变化，不覆盖或纳入本批；未访问既有 test-worktree。未执行任何 Commit/Push/Merge/Tag/Reset/Clean 或切换分支，HEAD 保持 `0a39928`。
+
+Core Runtime 行为及依赖未改变，未机械重跑完整 Module/UI/Audio/Resource 或 PlayMode 集，未执行 Player/独立载体验收。复用阶段 1～6 与 7.1 未受影响的历史证据，只作未变契约依据；阶段 8 资源融合、阶段 9 最终独立交付及公开再分发/未验证平台限制仍保留。7.2 满足本批技术完成条件，阶段 7 具备最终技术验收/Git 收口基础，但保持 IN PROGRESS；本轮停止，不启动阶段 8。
+
+## 9. 7.2 后职责结构补充（2026-10-13）
+
+用户另行授权 [结构重整方案 A](xf-yl-7-structure-redesign.md)，7.R1 → 7.R2 → 7.R3 → 7.O1 → 7.R4 已串行实施并通过各批技术门禁，完整结果见该方案 §15。Runtime 归 Foundation/Core/Systems/Utilities，普通 Editor 对应归口，Help/Core/Kernel 编译边界保持；原生 EventListener Inspector 验收后 Sirenix 整树退出。原公开类型、字段、GUID、Resources 键、Analyzer scope 与 Core XFAB/ProjectName 契约未变，未重新执行 7.1/7.2。
+
+本轮实际六根递归导出/解包和 Windows64/Mono 开发 Player 启动/持久 UnityEvent smoke 通过；这些结果不替代阶段8资源融合、阶段9独立载体或公开商业分发许可。Core 7.2 与补充批成果已随阶段 7 最终 Git 收口提交（收口前 HEAD `0a39928e76e36564a4b354e370b0d939727b7aad`）；不自动启动阶段8。
+ 收口授权；不自动启动阶段8。

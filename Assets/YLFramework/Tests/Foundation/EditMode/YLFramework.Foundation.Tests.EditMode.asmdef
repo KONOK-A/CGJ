@@ -1,7 +1,7 @@
 {
     "name": "YLFramework.Foundation.Tests.EditMode",
     "rootNamespace": "YLFramework.Foundation.Tests",
-    "references": ["YLFramework.Foundation.Runtime", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["YLFramework.Runtime", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

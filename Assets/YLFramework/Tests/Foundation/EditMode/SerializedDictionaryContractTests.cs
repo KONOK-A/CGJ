@@ -365,8 +365,8 @@ namespace YLFramework.Foundation.Tests
         {
             var type = typeof(SerializedDictionary<string, int>);
             Assert.That(type.Namespace, Is.EqualTo("YLFramework.Foundation"));
-            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Foundation.Runtime"));
-            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs"),
+            Assert.That(type.Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
+            Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/Foundation/Serialization/SerializedDictionary.cs"),
                 Is.EqualTo("1418cb45915d1504e859f117b32ade29"));
             var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(f => !f.IsNotSerialized && (f.IsPublic || f.IsDefined(typeof(SerializeField), false))).ToArray();
@@ -379,15 +379,18 @@ namespace YLFramework.Foundation.Tests
             Assert.That(entry.GetField("Key").FieldType, Is.EqualTo(typeof(string)));
             Assert.That(entry.GetField("Value").FieldType, Is.EqualTo(typeof(int)));
             var references = type.Assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
-            Assert.That(references.Any(n => n.StartsWith("YLFramework") || n.StartsWith("XF") ||
-                n == "Newtonsoft.Json"), Is.False, string.Join(", ", references));
-            // Foundation 的既有 Editor 条件分支会引用 UnityEditor；Player 编译图必须保持隔离。
+            Assert.That(references, Does.Not.Contain("YLFramework.Foundation.Runtime"));
+            Assert.That(references, Does.Not.Contain("YLFramework.Core.Runtime"));
+            Assert.That(references.Any(n => n.StartsWith("YLFramework.Editor") || n == "XFGameFramework" || n == "XFFSM"),
+                Is.False, string.Join(", ", references));
+            // 中立源码闭包另行验证；主体仍有临时 XFAB/Json.NET 依赖，Player 必须保持 Editor 隔离。
             var player = CompilationPipeline.GetAssemblies(AssembliesType.Player)
-                .Single(a => a.name == "YLFramework.Foundation.Runtime");
+                .Single(a => a.name == "YLFramework.Runtime");
             var playerReferences = player.assemblyReferences.Select(a => a.name)
                 .Concat(player.compiledAssemblyReferences.Select(Path.GetFileNameWithoutExtension)).ToArray();
-            Assert.That(playerReferences.Any(n => n.StartsWith("YLFramework") || n.StartsWith("XF") ||
-                n.StartsWith("UnityEditor") || n == "Newtonsoft.Json"), Is.False, string.Join(", ", playerReferences));
+            Assert.That(playerReferences.Any(n => n.StartsWith("YLFramework.Editor") || n.StartsWith("UnityEditor") ||
+                n == "XFGameFramework" || n == "XFFSM" || n == "YLFramework.Foundation.Runtime" || n == "YLFramework.Core.Runtime"),
+                Is.False, string.Join(", ", playerReferences));
         }
 
         [Test]

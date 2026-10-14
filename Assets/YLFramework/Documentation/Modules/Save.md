@@ -10,11 +10,11 @@
 
 ## 位置
 
-- 运行时：[`Runtime/Save/`](../../Runtime/Save/)
+- 运行时：[`Runtime/Systems/Save/`](../../Runtime/Systems/Save/)
   - 文件读写辅助：`SaveFileIO.cs`（原子写入 / 备份恢复）
-  - 序列化辅助：[`Serialization/`](../../Runtime/Save/Serialization/)
-- 通用字典：[`Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs`](../../Runtime/Foundation/Kernel/Serialization/SerializedDictionary.cs)，归 `YLFramework.Foundation.Runtime`，不是 Save 专属类型。
-- 原生 Inspector：[`Editor/Serialization/SerializedDictionaryDrawer.cs`](../../Editor/Serialization/SerializedDictionaryDrawer.cs)，归 Editor-only 的 `YLFramework.Editor`。
+  - 序列化辅助：[`Serialization/`](../../Runtime/Systems/Save/Serialization/)
+- 通用字典：[`Runtime/Foundation/Serialization/SerializedDictionary.cs`](../../Runtime/Foundation/Serialization/SerializedDictionary.cs)，归 Runtime 主体的 Foundation 职责，不是 Save 专属类型。
+- 原生 Inspector：[`Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs`](../../Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs)，归 Editor-only 的 `YLFramework.Editor`。
 
 ## 主要功能
 
@@ -60,14 +60,14 @@ public class ExampleConfig : MonoBehaviour
 }
 ```
 
-直接泛型字段可用，也可声明 `[Serializable]` 的具体非泛型子类；字段所属业务 asmdef 应直接引用 `YLFramework.Foundation.Runtime`。无需挂载字典组件或手动 Refresh。
+直接泛型字段可用，也可声明 `[Serializable]` 的具体非泛型子类；字段所属业务asmdef引用 `YLFramework.Runtime`。无需挂载字典组件或手动Refresh。
 
 - 运行时：标准 `IDictionary` / `IReadOnlyDictionary`，缺键索引器抛 `KeyNotFoundException`，`Add` 拒绝重复，`TryAdd` 返回是否新增；只拒绝 CLR null 键，允许空字符串及 default/null 值。来源构造复制条目，不借用外部字典；Keys/Values 是只读实时视图。
 - Unity：`datas/Key/Value` 原始条目是事实源，修改写穿列表；原生 Inspector 展示条目、计数及重复行号，支持字段编辑、单对象增删/重排、Undo/Redo 与 Prefab override/apply/revert。只有首个有效键参与运行时，重复/无效原始行不自动删除；修复 Key 后即可重新有效。`Remove(key)` 删除全部同键行，`Clear()` 包括无效行。
 - 多对象：逐目标诊断，保留 mixed-value 字段编辑；禁止所有批量列表增删/重排，长度不同或字段缺失时禁止整组字段编辑，须单独选择目标修复。相同位置的值编辑不复制首个目标的键。
 - 类型限制：Key/Value 必须符合 Unity 字段序列化规则；Drawer 不为任意泛型键、固定缓冲、嵌套容器、多态或 alias 建立自定义 serializer。Unity 无法通过 `boxedValue` 诊断的键会明确提示，而非按 ToString 判断重复。Unity inline 序列化不保证任意 null 条目保真。
 - 对象键：不把 Unity fake-null 当 CLR null 自动清除。原生 `SerializedProperty` 的 None/Missing 无法可靠区分二者，Inspector 标为“待确认”，不虚报精确有效数；跨会话持久化建议使用稳定 ID，不以 Unity 对象引用作 JSON 键。
-- UI：同时提供 UI Toolkit `PropertyField`/binding 和 IMGUI 实现；IMGUI 的长诊断可在固定高区域内滚动，避免窄列覆盖后续字段。已验证 Unity 2022.3 原生 GenericInspector 与 IMGUI 自定义 Inspector；不依赖 Odin，也不承诺第三方抢占的 Editor 会转发原生 Drawer。本工程全局 OdinEditor 不作为原生 Inspector 的验收替代。
+- UI：同时提供 UI Toolkit `PropertyField`/binding 和 IMGUI 实现；IMGUI 的长诊断可在固定高区域内滚动，避免窄列覆盖后续字段。已验证 Unity 2022.3 原生 GenericInspector 与 IMGUI 自定义 Inspector；不依赖第三方 Inspector，也不承诺第三方抢占的 Editor 会转发原生 Drawer。Sirenix 全局 Inspector 已退出，其他组件回落 Unity 原生或既有 CustomEditor。
 - JSON：当前 SaveManager/Json.NET 输出裸对象，例如 `{"a":2,"b":4}`，只保存有效字典投影；不导出 Unity 原始无效行。支持该后端可往返的 string/int/enum 键及相应值，复杂键的 ToString 不代表可逆编码。自定义 converter/resolver、元数据保留名称（`$type/$id/$ref`）、Unity 对象引用与任意保引用设置需调用方另验实际磁盘往返。
 - 缓存：`SaveObject(dictionary, "scores", slot.SaveID)` 可直接写盘；随后 `LoadObject<SerializedDictionary<string,int>>("scores", slot.SaveID)` 可能命中同一内存对象，不是磁盘验证。隔离测试才使用独占 root、清缓存及重新读盘，不在真实用户目录为测试切换或清除存档状态。
 - 兼容变化：旧 `YLFramework.Core.SerializedDictionary/DictionaryItem` 与 `YLFramework.Services.Save.SerializedDictionary` 已退出，没有 facade 或旧双列表 reader。正式容器保留自有脚本 GUID 与 `datas/Key/Value`，但 namespace/程序集身份改变；不保证旧 assembly-qualified name、SerializeReference 或旧 JSON 包装自动兼容。没有已查实待迁移的真实 YL 资产/存档，发现历史数据时应基于样本另做定向迁移。

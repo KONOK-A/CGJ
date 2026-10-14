@@ -92,7 +92,7 @@ namespace YLFramework.Core.Editor.Tests
             try
             {
                 Assert.That(ScriptableObjectExtensions.GeneratedAssetRoot,
-                    Is.EqualTo("Assets/YLFramework/Editor/XFMain/GeneratedAssets"));
+                    Is.EqualTo("Assets/YLFramework/Editor/Core/GeneratedAssets"));
                 asset.Marker = "YL test owns this asset.";
                 asset.CreateAsset(directory);
                 string firstPath = AssetDatabase.GetAssetPath(asset);
@@ -126,8 +126,9 @@ namespace YLFramework.Core.Editor.Tests
         [TestCase("Assets/Games")]
         [TestCase("Assets/Resources/XFGameFramework")]
         [TestCase("Assets/YLFramework/Editor/Help")]
-        [TestCase("Assets/YLFramework/Editor/XFMain/GeneratedAssets/../NotOwned")]
-        [TestCase("Assets/YLFramework/Editor/XFMain/GeneratedAssetsExtra")]
+        [TestCase("Assets/YLFramework/Editor/Core/GeneratedAssets/../NotOwned")]
+        [TestCase("Assets/YLFramework/Editor/Core/GeneratedAssetsExtra")]
+        [TestCase("Assets/YLFramework/Editor/XFMain/GeneratedAssets")]
         [TestCase("ProjectSettings")]
         public void ScriptableObjectGeneratorRejectsPathsOutsideItsOwnedRoot(string path)
         {
@@ -154,7 +155,7 @@ namespace YLFramework.Core.Editor.Tests
             try
             {
                 if (!rootExisted)
-                    Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Editor/XFMain", "GeneratedAssets"), Is.Not.Empty);
+                    Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Editor/Core", "GeneratedAssets"), Is.Not.Empty);
                 Assert.That(AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot), Is.True);
                 Directory.CreateDirectory(directory);
                 string sentinel = directory + "/owned-test-sentinel.txt";

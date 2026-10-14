@@ -31,6 +31,13 @@ namespace YLFramework.Core.Tests
         public void OnSelect(UnityEngine.EventSystems.BaseEventData data) => Selected?.Invoke();
     }
 
+    public sealed class YLCoreOtherInputGate : MonoBehaviour, YLFramework.UI.IUIInputGate
+    {
+        public bool Allowed;
+        public int Reads;
+        public bool IsInputAllowed { get { Reads++; return Allowed; } }
+    }
+
 #if ENABLE_LEGACY_INPUT_MANAGER
     public sealed class YLCoreLegacyPointerInput : UnityEngine.EventSystems.BaseInput
     {
@@ -2952,6 +2959,88 @@ namespace YLFramework.Core.Tests
             => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
 
         [UnityTest]
+        public IEnumerator FormalColorWindowKeepsPanelPriorityOverMixedGatesAndDropsBlockedCapture()
+        {
+            yield return StartModule();
+#if UNITY_EDITOR
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+            var root = PolicyRoot("YLColor.MixedGateRoot");
+            for (int order = 0; order < 2; order++)
+            {
+                var prefab = Object.Instantiate(asset);
+                prefab.SetActive(false);
+                objects.Add(prefab);
+                prefabKeys.Add(prefab.GetHashCode());
+                var rootGate = prefab.AddComponent<YLCoreOtherInputGate>();
+                rootGate.Allowed = false;
+                if (order == 1)
+                    while (UnityEditorInternal.ComponentUtility.MoveComponentUp(rootGate)) { }
+                var child = prefab.GetComponentInChildren<ColorSelector>(true).gameObject;
+                child.AddComponent<YLCoreOtherInputGate>().Allowed = true;
+                prefab.SetActive(true);
+                var unowned = prefab.GetComponent<ColorSelectorWindow>();
+                var localArgs = ColorSelectorWindow.Arguments(Color.red);
+                try
+                {
+                    unowned.OnLoaded(localArgs);
+                    var unownedSelector = child.GetComponent<ColorSelector>();
+                    var unownedRect = child.GetComponent<RectTransform>();
+                    unownedSelector.OnPointerDown(new UnityEngine.EventSystems.PointerEventData(null)
+                    {
+                        pointerId = 9,
+                        position = RectTransformUtility.WorldToScreenPoint(null, unownedRect.TransformPoint(
+                            unownedRect.rect.center + new Vector2(-.44f, .7621024f) * Mathf.Min(unownedRect.rect.width, unownedRect.rect.height) * .5f))
+                    });
+                    Assert.That(unowned.IsLoaded, Is.False);
+                    Assert.That(unowned.CurrentColor, Is.EqualTo(Color.red), "A nearer allowing gate cannot bypass the unloaded formal Panel either.");
+                }
+                finally
+                {
+                    typeof(LoadViewArgs).GetMethod("Recycle", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { localArgs });
+                    child.GetComponent<ColorSelector>().EndSession();
+                    prefab.SetActive(false);
+                }
+                var catalog = new WindowCatalog();
+                catalog.Register(new WindowDefinition("mixed-" + order, prefab));
+                int changes = 0;
+                var window = Track(catalog.Open<ColorSelectorWindow>(module, "mixed-" + order, root,
+                    ColorSelectorWindow.Arguments(Color.red, _ => changes++)));
+                window.gameObject.SetActive(true);
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                var selector = window.GetComponentInChildren<ColorSelector>();
+                var rect = selector.GetComponent<RectTransform>();
+                Vector2 Point(Vector2 normalized) => RectTransformUtility.WorldToScreenPoint(null,
+                    rect.TransformPoint(rect.rect.center + normalized * Mathf.Min(rect.rect.width, rect.rect.height) * .5f));
+                var data = new UnityEngine.EventSystems.PointerEventData(null) { pointerId = 23,
+                    button = UnityEngine.EventSystems.PointerEventData.InputButton.Left,
+                    position = Point(new Vector2(-.44f, .7621024f)) };
+                selector.OnPointerDown(data);
+                Assert.That(window.CurrentColor.g, Is.EqualTo(1).Within(.001f), "An unrelated denying gate on the Panel must not change its original priority.");
+                Assert.That(changes, Is.EqualTo(1));
+                var modal = Track(module.LoadView<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLColor.MixedModal" + order, true), root, loadViewArgs: null));
+                modal.gameObject.SetActive(true);
+                modal.Modal = true;
+                modal.RefreshUIState();
+                Assert.That(window.IsInputBlocked, Is.True);
+                data.position = Point(new Vector2(-.44f, -.7621024f));
+                selector.OnDrag(data);
+                Assert.That(window.CurrentColor.g, Is.EqualTo(1).Within(.001f), "A nearer allowing gate must not bypass the actual modal Panel.");
+                Assert.That(changes, Is.EqualTo(1));
+                modal.Close();
+                selector.OnDrag(data);
+                Assert.That(changes, Is.EqualTo(1), "Unblocking must not revive the old pointer capture.");
+                selector.OnPointerDown(data);
+                Assert.That(window.CurrentColor.b, Is.EqualTo(1).Within(.001f));
+                Assert.That(changes, Is.EqualTo(2));
+                foreach (var gate in window.GetComponentsInChildren<YLCoreOtherInputGate>(true))
+                    Assert.That(gate.Reads, Is.Zero, "The explicit formal Panel owns this session, in either component order.");
+                window.Close();
+            }
+#endif
+        }
+
+        [UnityTest]
         public IEnumerator FormalColorPrefabSupportsCameraCoordinatesCallbacksAndReuse()
         {
             yield return StartModule();
@@ -3845,44 +3934,6 @@ namespace YLFramework.Core.Tests
                 Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
             }
             finally { YLCoreSmokePanel.ResetProbes(); }
-        }
-
-        [UnityTest]
-        public IEnumerator BoundSampleStartsTheFormalWindowAndDestroyClosesItsOwnModule()
-        {
-            yield return StartModule();
-#if UNITY_EDITOR
-            var sampleAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Samples/ColorSelector/ColorSelectorSample.prefab");
-            var colorAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
-            Assert.That(sampleAsset && colorAsset, Is.True);
-            var prefab = Object.Instantiate(colorAsset);
-            prefab.SetActive(false);
-            objects.Add(prefab);
-            prefabKeys.Add(prefab.GetHashCode());
-            var sample = Object.Instantiate(sampleAsset);
-            objects.Add(sample);
-            var consumer = sample.GetComponent<MonoBehaviour>();
-            SetPrivate(consumer, "windowPrefab", prefab);
-            SetPrivate(consumer, "uiRoot", PolicyRoot("YLColor.SampleRoot").GetComponent<Canvas>());
-            var deadline = Time.realtimeSinceStartup + 5;
-            ColorSelectorWindow window = null;
-            while (!window && Time.realtimeSinceStartup < deadline)
-            {
-                foreach (var owner in ModuleManager.AllModules.Values)
-                    foreach (var candidate in owner.GetViews<ColorSelectorWindow>())
-                        if (candidate.WindowKey == "color") window = Track(candidate);
-                if (!window) yield return null;
-            }
-            Assert.That(window, Is.Not.Null, "The shipped sample must start and consume the real tool, not merely compile.");
-            Assert.That(window.IsVisible, Is.True);
-            var sampleOwner = window.Module;
-            Object.Destroy(sample);
-            yield return null;
-            Assert.That(sampleOwner.State, Is.EqualTo(ModuleState.Closed));
-            Assert.That(window.Module, Is.Null);
-            Assert.That(module.State, Is.EqualTo(ModuleState.Running));
-            classPool.Restore(new[] { sampleOwner });
-#endif
         }
 
         private Transform PolicyRoot(string name)

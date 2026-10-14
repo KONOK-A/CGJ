@@ -12,11 +12,11 @@
 
 | 内容 | 路径 | 程序集 |
 |---|---|---|
-| ObjectPool、IPool、工厂接口、Default/Custom 工厂、List/Dictionary、预热/顺序选项 | [`Runtime/Foundation/Kernel/Pool/`](../../Runtime/Foundation/Kernel/Pool/) | `YLFramework.Foundation.Runtime` |
+| ObjectPool、IPool、工厂接口、Default/Custom 工厂、List/Dictionary、预热/顺序选项 | [`Runtime/Foundation/Pool/`](../../Runtime/Foundation/Pool/)，按 Object/Abstractions/Factories/Collections 分组 | `YLFramework.Runtime` |
 | Safe、IOfPool/IPoolType、非公开/动态创建工具、自有 GO 池 | [`Runtime/Foundation/Pool/`](../../Runtime/Foundation/Pool/) | `YLFramework.Runtime` |
-| LoadViewArgs 私有参数池、Core 临时集合消费者 | [`Runtime/XFMain/`](../../Runtime/XFMain/) | `YLFramework.Core.Runtime` |
+| LoadViewArgs 私有参数池、Core 临时集合消费者 | [`Runtime/Core/MVC/Views/Parameters/`](../../Runtime/Core/MVC/Views/Parameters/)、[`Runtime/Core/`](../../Runtime/Core/) | `YLFramework.Runtime` |
 
-公开 namespace 保持 `YLFramework.Core.Pool`，不据目录名推断程序集。Foundation 无 Core/Runtime/XFAB 依赖；Runtime 和 Core 向下引用 Foundation，Core 不引用整体 Runtime。Core 的 XFAB 资源后端仍是独立的过渡依赖。会话状态不作为公共 API，仅向 Runtime/Core 提供窄 friend 访问。
+公开 namespace 保持 `YLFramework.Core.Pool`，不据目录名推断职责。Foundation/Core 共用 Runtime 主体，但池中立源码闭包不消费上层领域或 XF/XFAB；主体仍暂留 Core 的 XFAB 编译依赖，不能宣传整个 DLL 零依赖。会话状态不作为公共 API，friend 仅保留既有实际 Editor/测试/可选集成消费。
 
 ## 主要类型
 

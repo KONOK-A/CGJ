@@ -14,7 +14,7 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $tests = Join-Path $PSScriptRoot 'Tests/YLFramework.Analyzers.Tests.csproj'
 $output = Join-Path $root 'Temp/YLFramework.Analyzers'
 $dll = Join-Path $output 'YLFramework.Analyzers/bin/Release/netstandard2.0/YLFramework.Analyzers.dll'
-$destination = Join-Path $root 'Assets/YLFramework/Runtime/XFMain/Analyzers/YLFramework.Analyzers.dll'
+$destination = Join-Path $root 'Assets/YLFramework/Runtime/Core/Analyzers/YLFramework.Analyzers.dll'
 if (-not (Test-Path -LiteralPath (Join-Path $root 'Temp'))) { throw 'Repository Temp parent is missing.' }
 [IO.Directory]::CreateDirectory($output) | Out-Null
 try { $entryLock = [IO.File]::Open((Join-Path $output 'entry.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }

@@ -9,6 +9,32 @@ namespace YLFramework.Core.Tests
     public class NeutralLayerMaskConsumerTests
     {
         [Test]
+        public void AnimationBridgeKeepsItsFieldAndExactStringCallbackContract()
+        {
+            var host = new GameObject("Animation bridge migration");
+            try
+            {
+                var listener = host.AddComponent<AnimationEventListener>();
+                string observed = null;
+                UnityEngine.Events.UnityAction<string> callback = value => observed = value;
+#pragma warning disable CS0618
+                listener.animationEvent = new AnimationEvent();
+                listener.animationEvent.AddListener(callback);
+#pragma warning restore CS0618
+                listener.OnAnimationEvent("walk");
+                Assert.That(observed, Is.EqualTo("walk"));
+#pragma warning disable CS0618
+                listener.animationEvent.RemoveListener(callback);
+#pragma warning restore CS0618
+                listener.OnAnimationEvent("idle");
+                Assert.That(observed, Is.EqualTo("walk"));
+                Assert.That(typeof(AnimationEventListener).GetField("animationEvent").FieldType,
+                    Is.EqualTo(typeof(AnimationEvent)));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(host); }
+        }
+
+        [Test]
         public void RuntimeWrappersAndFoundationKeepValidatedMembershipAndUnityNullSemantics()
         {
             var target = new GameObject("LayerMask consumer");

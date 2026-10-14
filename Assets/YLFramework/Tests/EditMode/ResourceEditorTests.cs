@@ -18,6 +18,21 @@ namespace YLFramework.Tests.ResourceEditor
         private string _folder;
         private Object[] _selection;
 
+        [Test]
+        public void ResourceEditorPathsFollowBuildServiceCodeGenerationAndDataResponsibilities()
+        {
+            const string root = "Assets/YLFramework/Editor/Systems/Resource/";
+            foreach (var file in new[] { "Build/AssetBundleExporter.cs", "Build/BuildScript.cs", "Build/ResourceBuildOperation.cs",
+                "Service/ResServiceAssetsMenu.cs", "Service/ResServiceEditorAPI.cs", "Service/ResServiceEditorWindow.cs",
+                "CodeGeneration/ResDataCodeGenerator.cs", "CodeGeneration/ResReferenceOutput.cs" })
+            {
+                Assert.That(File.Exists(root + file), Is.True, file);
+                Assert.That(File.Exists(root + file + ".meta"), Is.True, file);
+            }
+            Assert.That(Directory.GetFiles(root, "*.cs"), Is.Empty);
+            Assert.That(Directory.GetFiles(root + "Data", "*.cs"), Is.Not.Empty);
+        }
+
         [SetUp]
         public void SetUp()
         {

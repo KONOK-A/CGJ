@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -71,7 +70,6 @@ namespace YLFramework.Events
     /// 注册时按 Unity 原生 payload 校验，错误类型或非法 EventType 在修改前抛出异常。
     /// 组件拥有代码通道，销毁时永久关闭这些通道（不修改 Inspector 中的 UnityEvent）。
     /// </summary>
-    [HideMonoScript]
     public class EventListener : MonoBehaviour, IMouseEvent
     {
         // 为了避免枚举类作为字典 Key 的性能问题（Enum 未实现 IEquatable），使用自定义比较器避免装箱
@@ -239,75 +237,54 @@ namespace YLFramework.Events
         #region UnityEvent
 
         #region Unity鼠标事件
-        [FoldoutGroup("Unity事件中心")]
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("指针进入")]
+        [SerializeField]
         private UnityEvent<PointerEventData> pointerEnter;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("指针离开")]
+        [SerializeField]
         private UnityEvent<PointerEventData> pointerExit;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("指针点击")]
+        [SerializeField]
         private UnityEvent<PointerEventData> pointerClick;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("指针按下")]
+        [SerializeField]
         private UnityEvent<PointerEventData> pointerDown;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("指针抬起")]
+        [SerializeField]
         private UnityEvent<PointerEventData> pointerUp;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("开始拖拽")]
+        [SerializeField]
         private UnityEvent<PointerEventData> beginDrag;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("拖拽中")]
+        [SerializeField]
         private UnityEvent<PointerEventData> drag;
-        [TabGroup("Unity事件中心/Events", "鼠标事件")]
-        [SerializeField, LabelText("结束拖拽")]
+        [SerializeField]
         private UnityEvent<PointerEventData> endDrag;
 
         #endregion
 
         #region Unity碰撞事件
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞进入")]
+        [SerializeField]
         private UnityEvent<Collision> collisionEnter;
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞保持")]
+        [SerializeField]
         private UnityEvent<Collision> collisionStay;
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞离开")]
+        [SerializeField]
         private UnityEvent<Collision> collisionExit;
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞进入2D")]
+        [SerializeField]
         private UnityEvent<Collision2D> collisionEnter2D;
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞保持2D")]
+        [SerializeField]
         private UnityEvent<Collision2D> collisionStay2D;
-        [TabGroup("Unity事件中心/Events", "碰撞事件")]
-        [SerializeField, LabelText("碰撞离开2D")]
+        [SerializeField]
         private UnityEvent<Collision2D> collisionExit2D;
 
         #endregion
 
         #region Trigger事件
 
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger进入")]
+        [SerializeField]
         private UnityEvent<Collider> triggerEnter;
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger保持")]
+        [SerializeField]
         private UnityEvent<Collider> triggerStay;
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger离开")]
+        [SerializeField]
         private UnityEvent<Collider> triggerExit;
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger进入2D")]
+        [SerializeField]
         private UnityEvent<Collider2D> triggerEnter2D;
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger保持2D")]
+        [SerializeField]
         private UnityEvent<Collider2D> triggerStay2D;
-        [TabGroup("Unity事件中心/Events", "Trigger事件")]
-        [SerializeField, LabelText("Trigger离开2D")]
+        [SerializeField]
         private UnityEvent<Collider2D> triggerExit2D;
 
         #endregion

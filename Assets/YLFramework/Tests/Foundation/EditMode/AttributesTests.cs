@@ -89,7 +89,7 @@ public class DrawAttribute : CustomPropertyGUI {
     public override void OnPropertyGUI(UnityEditor.SerializedProperty property) { }
 #endif
 }");
-                string root = Path.Combine(Application.dataPath, "YLFramework/Runtime/Foundation/Kernel/Attributes");
+                string root = Path.Combine(Application.dataPath, "YLFramework/Runtime/Foundation/Attributes");
                 string output = Path.Combine(folder, "Metadata.dll");
                 var builder = new AssemblyBuilder(output, Directory.GetFiles(root, "*.cs").Concat(new[] { probe }).ToArray())
                 {
