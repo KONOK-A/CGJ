@@ -33,6 +33,44 @@ namespace YLFramework.Core.Editor.Tests
         private const string EditorRoot = "Assets/YLFramework/Editor/Core";
         private const string EditorAssemblyName = "YLFramework.Editor";
 
+        [Test]
+        public void NeutralEditorHelpersKeepTheirGuidsAndSingleEditorOwnerAtTheDeclaredPaths()
+        {
+            const string root = "Assets/YLFramework/Editor/";
+            var moves = new[]
+            {
+                (type: typeof(DisableEditDrawer), oldPath: "Core/Inspectors/DisableEditDrawer.cs", newPath: "Foundation/Attributes/DisableEditDrawer.cs", guid: "fac117eb3216be84e9e4f3089011b84b"),
+                (type: typeof(SerializedObjectExtensions), oldPath: "Core/Extensions/SerializedObjectExtensions.cs", newPath: "Utilities/Serialization/SerializedObjectExtensions.cs", guid: "f658c2a8eb0ce3d41a46c6612f44b294"),
+                (type: typeof(SerializedPropertyExtensions), oldPath: "Core/Extensions/SerializedPropertyExtensions.cs", newPath: "Utilities/Serialization/SerializedPropertyExtensions.cs", guid: "75f4e5425829b58458510ac9994f3744"),
+                (type: typeof(HandlesExtensions), oldPath: "Core/Extensions/HandlesExtensions.cs", newPath: "Utilities/Scene/HandlesExtensions.cs", guid: "d7fc63baa0640114a99a6bbc20b1c847"),
+                (type: typeof(AssetNameTools), oldPath: "Core/Utilities/Assets/AssetNameTools.cs", newPath: "Utilities/Assets/AssetNameTools.cs", guid: "38fb61f5e49fe5d40b2013e5c8266e34"),
+                (type: typeof(TreeViewStateGroup), oldPath: "Core/Utilities/TreeViews/TreeViewStateGroup.cs", newPath: "Utilities/TreeViews/TreeViewStateGroup.cs", guid: "61cd0951782754842a7806170fc61254"),
+                (type: typeof(SplitWindow), oldPath: "Core/Windows/SplitWindow.cs", newPath: "Utilities/Windows/SplitWindow.cs", guid: "c9b6cf7bd9e787f48a839406ebcde184")
+            };
+            var assembly = typeof(CreateModuleCommand).Assembly;
+            var player = CompilationPipeline.GetAssemblies(AssembliesType.Player);
+            var playerSources = player.SelectMany(a => a.sourceFiles).Select(Path.GetFullPath).ToArray();
+            Assert.That(player.Any(a => a.name == EditorAssemblyName), Is.False);
+            Assert.That(player.Single(a => a.name == "YLFramework.Runtime").assemblyReferences.Any(a => a.name == EditorAssemblyName), Is.False);
+            foreach (var move in moves)
+            {
+                string path = root + move.newPath;
+                Assert.That(File.Exists(path), Is.True, path);
+                Assert.That(File.Exists(path + ".meta"), Is.True, path);
+                Assert.That(File.Exists(root + move.oldPath), Is.False, move.oldPath);
+                Assert.That(File.Exists(root + move.oldPath + ".meta"), Is.False, move.oldPath);
+                Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(move.guid), path);
+                Assert.That(AssetDatabase.GUIDToAssetPath(move.guid), Is.EqualTo(path));
+                Assert.That(AssetDatabase.LoadAssetAtPath<MonoScript>(path).GetClass(), Is.SameAs(move.type));
+                Assert.That(move.type.FullName, Is.EqualTo("YLFramework.Core.Editor." + move.type.Name));
+                Assert.That(move.type.Assembly, Is.SameAs(assembly));
+                Assert.That(AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetType(move.type.FullName) != null), Is.EqualTo(1));
+                Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(path), Is.EqualTo(root + "YLFramework.Editor.asmdef"));
+                Assert.That(playerSources.Contains(Path.GetFullPath(path), StringComparer.OrdinalIgnoreCase), Is.False);
+            }
+            Assert.That(typeof(TreeViewStateInfo).Assembly, Is.SameAs(assembly));
+        }
+
         [UnityTest]
         public IEnumerator MergedRuntimeHasActualUnityPositiveAndNegativeAnalyzerWitnesses()
             => CompileAnalyzerWitnesses(AssemblyBuilderFlags.EditorAssembly);

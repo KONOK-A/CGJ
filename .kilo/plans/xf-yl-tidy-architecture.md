@@ -1,7 +1,7 @@
 # XF × YL: Tidy 架构分层审计与治理总体方案
 
-> 状态: 原规划轮为只读研究；Tidy-1 初版记录见 §13。2026-10-14 用户批准 Foundation 直接使用原生 API、移除便利 helper，当前方案以本次修订及 §14 为准。Tidy-2、Tidy-3 和阶段 8 未启动。
-> 原规划轮唯一写入产物为本文件。Tidy-1 实施仅涉及源码、直接测试和本文件结果记录，不修改用户配置、原 Package、游戏或正式资源；用户现另行授权专用分支、首次提交及推送，范围见 §15。
+> 状态: 原规划轮为只读研究；Tidy-1 当前原生方案及交付见 §14、§15，初版历史见 §13。Tidy-2 已按用户授权完成，结果与限制见 §16；Tidy-3 和阶段 8 未启动。
+> Tidy-2 实施仅迁移七个 Editor 源码/meta、更新直接测试与导航，不修改用户配置、原 Package、游戏或正式资源；用户现另行授权本批 Git 交付，范围见 §17。§15 的授权与记录对应已交付的 Tidy-1。
 > 实施者仅在用户另行授权后按批推进，可使用 `executing-plans` 或 `subagent-driven-development`；每批先核对现场，完成其验收后停止，不自动进入阶段 8。
 
 **Goal:** 使 Foundation 真正不依赖上层，保持 Core 的结构核心职责，以最小必要治理支撑 Systems / Utilities 有序协作和后续资源融合。
@@ -369,7 +369,7 @@ Foundation 必须单独先证明无上引；不能用 Foundation+Core 可编译�
 
 ## 9. 建议实施批次
 
-以下为原规划的分批任务；当前完成情况见复选框及 §13，后续批次仍须另行推进。默认顺序 Tidy-1 → Tidy-2 → Tidy-3。保护基线捕获、GUID核对和直接导航更新并入各自批次，不独立制造一个“准备阶段”。
+以下为原规划的分批任务；当前完成情况见复选框及 §14、§16，后续批次仍须另行推进。默认顺序 Tidy-1 → Tidy-2 → Tidy-3。保护基线捕获、GUID核对和直接导航更新并入各自批次，不独立制造一个“准备阶段”。
 
 ### Tidy-1: Foundation 断环与完整底层证明
 
@@ -395,11 +395,11 @@ Foundation 必须单独先证明无上引；不能用 Foundation+Core 可编译�
 
 **实际范围:** 七文件与原 meta；新目录由 Unity 正常生成身份；直接路径/职责测试、Help/Architecture 导航和导出哨兵。Runtime、SDK、ProjectSettings、正式资源内容不变。
 
-- [ ] 核对七文件内全部类型的继承/成员/字段/实际消费者和路径字符串；尤其 SplitWindow、TreeViewStateGroup/TreeViewStateInfo 的持久字段、SerializedPropertyExtensions 的反射方法。
-- [ ] 写路径/唯一类型归属红例，再用 AssetDatabase/API 移动并保 meta/GUID；全部文件内容逐字节保持。空旧目录仅在确认无 GUID/字符串消费者后处理，不清无关目录。
-- [ ] 验证 Editor 唯一程序集、Editor-only、Runtime/Player无 Editor 产品依赖；保持所有 FullName/AQN、序列化字段、菜单/Help id及资源键，不新建公共“EditorCore”。
-- [ ] 运行受影响的 `CoreSerializedPropertyTests` / `DisableEditDrawerTests` 和直接身份/路径断言；Help只选受改导航提供方。纯路径不要求完整 Core Editor 或重跑 SDK七规则。
-- [ ] 复核新旧源码集合除路径映射外等价；同步获授权的现有说明与导出哨兵，不迁测试程序集、不迁持久设置。
+- [x] 核对七文件内全部类型的继承/成员/字段/实际消费者和路径字符串；尤其 SplitWindow、TreeViewStateGroup/TreeViewStateInfo 的持久字段、SerializedPropertyExtensions 的反射方法。
+- [x] 写路径/唯一类型归属红例，再用 AssetDatabase/API 移动并保 meta/GUID；全部文件内容逐字节保持。旧空目录/meta保留，不清无关目录。
+- [x] 验证 Editor 唯一程序集、Editor-only、Runtime/Player无 Editor 产品依赖；保持所有 FullName/AQN、序列化字段、菜单/Help id及资源键，不新建公共“EditorCore”。
+- [x] 受影响的 `CoreSerializedPropertyTests` / `DisableEditDrawerTests` 和直接身份/路径断言通过；Help无受改提供方。纯路径不要求完整 Core Editor 或重跑 SDK七规则；本次组合筛选实际扩大到104项，偏差与结果如§16，不继续重复运行。
+- [x] 新旧源码集合除路径映射外等价；现有直接说明与导出哨兵已同步，不迁测试程序集、不迁持久设置。
 
 **保持:** 同一 Editor assembly、算法、GUI布局/Undo/序列化/反射和既有数据。Settings、ScriptableObjectExtensions、EditorAssetTool 不参与本批。
 
@@ -489,7 +489,7 @@ Foundation 必须单独先证明无上引；不能用 Foundation+Core 可编译�
 
 **未来Tidy完成条件:** A1实际归零，完整Foundation边界及Core边界的有效正反例通过；批准的目录归位保持所有身份与直接消费者；未引入第二权威/下层反向依赖；保护现场/必要分发内容核对通过，未验证平台及资源专题保持明确。失败批不能由其他历史绿记录覆盖。
 
-本次实施止于 Tidy-1。后续 Tidy-2、Tidy-3、阶段 8 研究实施及任何 Git 写操作不自动启动。
+当前授权实施止于 Tidy-2。后续 Tidy-3、阶段 8 研究实施及任何 Git 写操作不自动启动。
 
 ## 13. Tidy-1 初版历史记录 (2026-10-14)
 
@@ -571,3 +571,52 @@ Unity 已实际刷新、编译并加载新 Runtime helper 和修改后的测试�
 首次提交只纳入五个 Foundation 调用方、三个直接测试文件及本方案，共九个文件；`.gitignore`、`.kilo/kilo.jsonc`、`ProjectSettings/Packages/com.unity.probuilder/Settings.json` 的用户改动保留在工作区，不暂存或提交。代码与 §14 验证状态一致，本次仅进行 Git 交付，不重复运行未受影响的测试，也不授权合并、强制推送或后续实施批次。
 
 本节记录授权与交付范围，实际提交 ID 和推送结果以 Git 历史、远端核对和本次交付回复为准。
+
+## 16. Tidy-2 实施与验收 (2026-10-14)
+
+### 16.1 实际范围
+
+- Tidy-2 实施验收时分支为 `refactor/xf-yl-tidy`，HEAD 为已推送的 Tidy-1 提交 `846a02f7d928e4c32b74756b101304b6bcaf1732`；实施期间未创建分支、暂存、提交或推送，原三项用户配置修改继续保护。随后 Git 交付按 §17 的另行授权执行。
+- 经当前 Unity AssetDatabase 确认七个原脚本及 GUID，再由 `assets-create-folder` 创建六个实际目录，`assets-move` 完成 §8.1 七对源码/meta 迁移；没有覆写目标、改名类或合并实现。
+- 新目录为 `Editor/Foundation/Attributes/` 及 `Editor/Utilities/{Serialization,Scene,Assets,TreeViews,Windows}/`，其六份目录 meta 正常导入且 GUID 各自唯一。七个原脚本/meta 的字节、BOM/换行、版权及 GUID 全部保持。
+- 八个类型包含同文件的 `TreeViewStateInfo`，仍为 `YLFramework.Core.Editor.*`，属于唯一 `YLFramework.Editor`；公开/私有成员、序列化字段及特性未变。旧 Core 的四个空目录及 meta 保留，非空 Extensions、Preview、Settings 等不移动。
+- 仅更新 `Documentation/Architecture.md`、`Documentation/Modules/Attributes.md` 和 `Runtime/THIRD-PARTY-NOTICES.md` 的直接位置说明，来源/完整许可证不改变。Help provider 未引用七个旧路径或类型，不改 SourceLinks、菜单、ID、配置键或共享 Help 功能，也未重写旧阶段方案。
+- 现有 `CoreEditorIdentityTests` 增加一个七文件路径/GUID/MonoScript、唯一类型/Editor归属及Player源码缺席断言，没有新建 fixture/asmdef/测试平台。`ExportUnityPackageTests` 加入七个新路径哨兵；实际导出留 Tidy-3 最终源码状态执行一次。
+
+### 16.2 实际验证与偏差
+
+- 同一 Unity `2022.3.62f3c1` Editor 未进入 PlayMode；迁移后实际刷新、重新编译并加载类型。新路径断言先以目标缺失有效失败，再验证七对路径/GUID/类型/程序集与 Player 源码隔离通过。
+- 初次短类名 `CoreSerializedPropertyTests` 调用返回无发现；增加 assembly/namespace/class 的组合筛选未按预期缩小到单一fixture，实际执行了 `YLFramework.Core.Editor.Tests` 下 **104 项**，全部 Passed、无失败/跳过。此为真实扩大的验证范围，不冒称只运行14项；随后不重复执行其中已经有效的用例。
+
+| 本次实际执行中包含的直接门禁 | 实际结果 |
+|---|---|
+| `CoreSerializedPropertyTests`：真实Clipboard、拒绝不兼容数据、Undo/Redo、多对象及Prefab override/原资产保护 | 14 passed |
+| `DisableEditDrawerTests`：原生高度、注册绑定、展开子属性禁用及异常后GUI恢复、Clipboard直接消费 | 3 passed |
+| `CoreEditorIdentityTests`：新路径、完整Editor源码集合、唯一类型归属、仅Editor程序集、原资源/许可、菜单及原分析器正负见证 | 12 passed |
+| 同次组合筛选额外执行的DefaultResources、Configuration、ModuleGeneration既有用例 | 75 passed |
+
+合计104个不同用例，而非 `TotalTests:1547` 的整棵发现树。额外用例是测试工具筛选的实际偏差，不扩大产品实施范围；未重跑完整工程/Resource UI、SDK 或 Player 构建。Help 无受改提供方，本批未专门重跑HelpGUI；Window/TreeView状态以原字节、FullName/AQN、字段/特性和唯一类型身份保护，未宣称Editor布局重启测试。
+
+本轮保护核对使用的证据明确区分:
+
+- 迁移前不可变 `xf-yl-tidy2-baseline.json` 完整保留七份源码 SHA-256、七份 meta SHA-256、七组 GUID/MonoScript 类型映射及八类型共53条身份/成员/字段记录，迁移后全部逐项匹配。
+- 临时工具的 `JsonUtility` 未写入动态复合 `FileRecord[]`，初次回读因该数组为空失败。没有把失败当通过、覆盖原快照，或迁移后重抓数据冒充迁移前基线。
+- 缺失的资源集合证据由已有不可变 Tidy-1 保护记录补足：七份meta做唯一旧新路径映射，六份新目录meta作为实际新资产单独核对，其余 **994个受保护文件SHA-256全部匹配**。不把原捕获工具打印的996条数值当作完整往返验证通过。
+- 源码集合使用开始时无Editor源码改动的不可变Git提交 `846a02f` 恢复，反向应用七路径映射后仍为同一 **53个Editor源文件**；既有root源码集合测试也实际通过。保存的Main场景/meta另由Git无差异及打开场景无dirty验证，不冒称新996条完整hash校验。
+- 原快照未改写；修正后的只读验证工具和证据均在 `C:/Users/Kano/AppData/Local/Temp/kilo/xf-yl-tidy2-*`，没有添加工程工具或正式资产。终态脚本返回MATCHED全部上述原字节、GUID、53条身份字段、994条哈希、53文件源集合及6目录meta/GUID唯一性。
+
+一次独立静态审查没有Critical/Important/Minor发现，未重复主执行者的运行验证。本批的测试发现失败和临时校验工具回读错误仍留日志，不声称整个Console清洁；未发现迁移造成的正式项目编译错误。
+
+### 16.3 停止位置
+
+Tidy-2 源码移动、直接导航和门禁完成后停止，验收时改动未提交；之后的 Git 交付另获用户授权，见 §17，而非扩展之前仅针对Tidy-1的授权。不进入Tidy-3/Core闭包负例、真实导出或阶段8，不修改asmdef、用户场景、原Package、游戏、SDK/Player配置及已有用户改动。
+
+## 17. Tidy-2 Git 交付授权 (2026-10-14)
+
+用户另行要求处理 Tidy-2 的 Git 工作，按已采用的交付方式，在现有 `refactor/xf-yl-tidy` 分支提交并推送到 `origin`，不创建另一分支、不合并或强制推送。
+
+提交只包含七对源码/meta的纯重命名、六份实际新目录meta、三份直接导航/来源说明、两个直接测试文件及本方案，共26项Git文件记录。三项用户配置修改不暂存、不提交。源码/测试差异与§16已通过的104项实际验证一致，本次不重复运行未受影响的测试；暂存后检查重命名相似度、完整meta与排除项。
+
+暂存核对确认十四项重命名均为100%内容相同。完整 `git diff --cached --check` 仅报告六份新目录meta中Unity生成的空字段尾空格，与既有目录meta格式一致，保留原生成内容；非meta暂存补丁检查通过。没有修改Git配置、关闭诊断或跳过hook，不把完整检查冒称为零报告。
+
+本节记录授权及交付范围，实际提交ID、推送同步及原集成分支保护结果以Git历史、实时远端核对和本次交付回复为准。不自动推进Tidy-3或阶段8。

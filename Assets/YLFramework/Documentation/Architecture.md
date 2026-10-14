@@ -14,7 +14,7 @@
 | `Runtime/Utilities/ZipTool/` | `YLFramework.Runtime` | Zip/GZip 与 SharpZipLib 源码保持；额外 asmdef/meta 已退役，BCL-only 源码探针待 S6 |
 | `Editor/` | `YLFramework.Editor` | 全部自有编辑器主体，显式引用 Runtime / XFAB / UGUI，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor` | 共享 Help 功能分区，保留稳定窗口、菜单/Provider id与持久配置身份，无独立产品 DLL |
-| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、设置、工具、必要 Drawer 与 Core Help，功能目录不增加编译边界 |
+| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、持久设置、资产生成/预览与 Core Help；通用支撑按职责归 Foundation / Utilities，功能目录不增加编译边界 |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Tests/EditMode/` | `YLFramework.Tests.EditMode` | 编辑器内单元测试 |
 | `Tests/PlayMode/` | `YLFramework.Tests.PlayMode` | 运行时测试 |
@@ -62,7 +62,7 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 | `Attributes/`、`Analyzers/` | 正式 marker 与唯一编译器 DLL，属于 Runtime 主体输入作用域，marker namespace 保持 |
 | `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
 
-Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/` 保留序列化/Handles/资产生成扩展；`Utilities/Assets`、`Preview`、`TreeViews` 为编辑器辅助工具；`Windows/` 与 `Inspectors/` 分别承载窗口和 Drawer。生成配置资产位于 `Editor/Core/GeneratedAssets`，ProjectSettings 持久路径及 Examples 输出不变。
+Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/ScriptableObjectExtensions` 和 `Utilities/Preview` 保留当前资产生成/定位契约。通用序列化、Handles、资产命名、TreeView 状态与 SplitWindow 已分别归 `Editor/Utilities/{Serialization,Scene,Assets,TreeViews,Windows}/`，DisableEdit Drawer 归 `Editor/Foundation/Attributes/`。七文件仍使用 `YLFramework.Core.Editor` namespace、原 GUID 和同一 Editor 程序集；生成配置资产、ProjectSettings 持久路径及 Examples 输出不变。
 
 上述目录承接既有结构整理成果，不重复历史迁移。五类产品程序集归属迁移已明确授权，原脚本/存续资源GUID、namespace、公开API和序列化字段保持；Core的XFAB/ProjectName、Prefab/Resources键与生命周期不改。UI Toolkit测试用有上限的真实绑定状态等待，Drawer/容器实现不变；当前技术验收范围见顶部及§17.12，不扩大为全量套件/全平台或阶段8、9交付。
 
@@ -139,8 +139,8 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 Resource Editor按Build/Service/CodeGeneration/Data归组，全部路径批保留原算法/owner/Bundle/生成输出。Help归Editor主体的独立功能分区，Core/Action/Audio/Foundation-Tools提供方及菜单/窗口/持久配置身份保持。Zip源码以全量BCL-only编译探针验证，不再以旧Zip产品DLL维持独立性。
 
-- `Editor/Foundation/`：原生字典 Drawer 与 EventListener Inspector；`Editor/Core/` 保持 Core Editor 的领域边界。
-- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载通用菜单和 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
+- `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 保持原默认资源、生成、设置与预览契约。
+- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载 Serialization/Scene/Assets/TreeViews/Windows 通用支撑、菜单及 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
 - `Editor/Help/`：Editor主体中的共享帮助分区，额外Help asmdef已退役；保持提供方id、菜单与配置键，不机械拆入每个领域。
 - 通用工具：`Editor/Utilities/Menus/ClearLog` / `OpenFolder`、`Editor/Distribution/ExportUnityPackage`，菜单 `YLFramework/Toolkit/...` 保持。
 - 资源工具：`Editor/Systems/Resource/`，菜单 `YLFramework/Service/ResService`，包含 AssetBundle 模拟模式、资源标记、打包（`AssetBundleExporter` / `BuildScript`）与资源数据代码生成（`ResDataCodeGenerator`）。详见 [Modules/Resource.md](Modules/Resource.md)。
