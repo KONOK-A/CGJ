@@ -1,8 +1,8 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已获正式实施及本批 Commit/Push 授权，当前实施证据见第 14 节。其余批次未实施。
+> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已完成技术验收及 Git 收口，见第 14 节。8.2a 已完成技术验收及独立 Review，见第 15 节；尚未 Commit/Push。8.2b 及后续批次未实施。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
-> 原方案批准与 Git 准备已完成。2026-10-14 新授权仅实施 8.1，允许相关 Runtime、必要 Core 窄合同与测试，以及验收/独立审查后精确提交并推送 `fusion/8-resource`；不执行 8.2、集成合并或阶段里程碑。
+> 原方案批准与 Git 准备已完成。2026-10-14 的 8.1 授权允许验收/独立审查后精确提交并推送 `fusion/8-resource`。随后本批明确授权仅实施 8.2a 资源定义、依赖分包与隔离构建；未授权本批 Commit/Push，不执行 8.2b、集成合并或阶段里程碑。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
@@ -371,7 +371,7 @@ Scene request可支持明确Activate门控，但`allowSceneActivation=false`会�
 
 构建流程：预检完整project/map/地址/平台/归属 -> 冻结输入指纹 -> 上锁 -> 持久增量workspace构建 -> readback manifest/依赖/类型/文件 -> SHA256/catalog/codegen预检 -> 新交付stage -> 归属+完整制品校验 -> immutable publish -> 最后替换release index。未知内容和失败永不覆盖旧release；多目录复制不能宣称断电级原子，以journal/完整标记恢复。
 
-Unity BuildPipeline输出叶名决定manifest Bundle内部名，因此固定workspace叶token为`ylr_<projectToken>_<Platform>`；projectToken取稳定ProjectId的SHA-256前32个hex，注册/预检检测碰撞，不直接使用原`StandaloneWindows64`/`Windows`叶名。该manifest也纳入自有native命名隔离，不能只给普通Bundle加前缀。workspace按Project GUID、target、Unity版本/选项/配置fingerprint分隔，不用随机transaction叶破坏增量；只认本工具有效marker。不清整个缓存，损坏workspace可单独重建，不影响已发布产物。无变更跳构建须可靠source fingerprint+已验证产物，不只靠mtime+length。Unity生成manifest和逐包`.manifest`留构建验证/调试集合；Runtime依赖权威是catalog，不在运行加载一个原平台名manifest槽。
+Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定workspace叶token为`ylr_<projectToken>_<Platform>`；projectToken取稳定ProjectId的SHA-256前32个hex，注册/预检检测碰撞，不直接使用原`StandaloneWindows64`/`Windows`叶名。2026-10-14真实Unity 2022.3探针确认自动根manifest的`Object.name`/`m_AssetBundleName`为空，用户已批准修正该技术假设：不把文件名冒充native身份，不伪造native名称；通过完整manifest项目命名空间、产物摘要和实际readback，以及不同项目命名空间的manifest同时加载成功、同产物复制改名仍被拒绝的真实证据验收隔离。普通Bundle的native name仍须带自有前缀。workspace按Project GUID、target、Unity版本/选项/配置fingerprint分隔，不用随机transaction叶破坏增量；只认本工具有效marker。不清整个缓存，损坏workspace可单独重建，不影响已发布产物。无变更跳构建须可靠source fingerprint+已验证产物，不只靠mtime+length。Unity生成manifest和逐包`.manifest`留构建验证/调试集合；Runtime依赖权威是catalog，不在运行加载一个原平台名manifest槽。该修正不改变Runtime、发布或Catalog的阶段边界。
 
 共享依赖分包以XF设计为主体，命名使用稳定GUID集合及规范化依赖者集合；先测重复字节和更新影响，不默默拆出大量小包。LZ4+StrictMode为默认，Full Rebuild为明确操作，DryRun只产预检报告不发布，AppendHash只有目录完全支持时才开放，不给无效选项外观。
 
@@ -463,7 +463,7 @@ Unity BuildPipeline输出叶名决定manifest Bundle内部名，因此固定work
 - [ ] 自有Fixture构建：Text/Prefab依赖/Scene分包；读回catalog/manifest一致；输入无变化二次构建记录各阶段时长/hash/复制量。
 - [ ] 注入BuildPipeline返回null/throw、表/签名输入/复制/替换失败，取消、unknown文件、junction、owner重叠均不改旧发布；保留`.meta`及可恢复备份。
 - [ ] 同名地址/子资产歧义/资产合法互引与Bundle环分别验证；Unity选项无效不能发布；marker/锁跨窗口有效。
-- [ ] 包含自动生成manifest在内的native name均有自有project命名空间，不与原XF或另一新project相撞；改造/移动路径时当批同步固定路径测试和Export哨兵，不能拖到8.6才修。
+- [x] 普通Bundle native name使用自有project命名空间；自动根manifest按第10节已批准的实际身份门禁验证，不把文件名冒充native name。另一新project同时读回成功、同产物改名仍被拒绝；固定路径测试和Export哨兵当批同步并通过。8.2a证据见第15节。
 - [ ] 常量碰撞/篡改/无变化生成/实际编译，Bundle成功和常量失败分别报告；改造原ResourceOutputSafety/CodeGeneration测试而非抛弃保护。
 
 ### 8.3 AssetBundle、依赖、子资产与动态source闭环
@@ -697,4 +697,46 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 | ProBuilder `Settings.json` | `59b16de7964ef4f16b0e333554796396b9747b21` |
 | Core `Canvas.prefab` | `c6b7d124a5b70f320748fcedc04467599e258a25` |
 
-8.2 可依赖实测的单权威、不可变内存 Catalog、producer/consumer 分离、独立 Lease/Scope、单次交割及主线程会话门禁。尚无持久化 Catalog/BuildMap、AssetBundle、实例池、Scene pin、Editor build/update 或生产网络安全能力；Core 窄合同仍无正式后端。不将本批完成理解为阶段 8 整体完成、原消费者已迁移或生产分发已成立。
+8.2 可依赖实测的单权威、不可变内存 Catalog、producer/consumer 分离、独立 Lease/Scope、单次交割及主线程会话门禁。8.1 收口时尚无持久化 Catalog/BuildMap、AssetBundle、实例池、Scene pin、Editor build/update 或生产网络安全能力；8.2a 的新增构建能力见第15节。Core 窄合同仍无正式后端，不将子批次完成理解为阶段 8 整体完成、原消费者已迁移或生产分发已成立。
+
+## 15. 8.2a 技术验收（2026-10-15，未 Git 收口）
+
+### 15.1 基线、实现与边界
+
+- 开始及收口均为 `fusion/8-resource`、HEAD `1666213882f4d0b6626db9fef6911cdabd7845f5`；开始只读 `git ls-remote origin refs/heads/fusion/8-resource` 确认远端同值，未 fetch/pull、Commit/Push。既有四项用户改动保留，收口 blob identity 与第14.4节一致。
+- 在现有 `YLFramework.Editor` 主体新增 `Data/ResourceProject.cs` 与 `Build/ResourceBuildMap.cs`、`ResourceBuildWorkspace.cs`、`ResourceBundleBuilder.cs`。不新建程序集，Runtime/Foundation/Core/Audio 源码、8.1 Request/Lease/Scope 与 `ProjectName` 不变；旧 YL Resource 仍保留，不调用 XF/XFAB 构建入口。
+- Project 使用已保存的 SO GUID、独立稳定 `ProjectId`、资源根 GUID；Group 显式选择文件/递归文件夹 GUID，可筛选扩展名，支持 Together/PerAsset。地址为项目根相对规范路径或显式覆写；检测大小写地址/路径冲突、重复选择、项目身份及根重叠。记录主资产 GUID/localId、实际运行时读回类型、Group 成员及最终 Bundle 归属，不提前定义正式持久化 Catalog 或子资产 Schema。
+- 真实直接依赖图驱动分包：普通私有依赖归所属包，共享依赖按排序后的依赖者集合与资产 GUID 聚合；Scene 私有普通依赖进入独立普通 `d_` 桶；合法资源互引引起的 Bundle SCC 归并后复验 DAG，每个最终包拒绝 Scene/普通资产混装。无历史 1MB/10资产阈值，不使用旧全局 Importer 标记。
+- Unity 不允许向 `Library` 输出 AssetBundle，故 Workspace 使用 `AssetBundles/YLR_<ProjectGuid>_<SettingsSHA256前32hex>/ylr_<ProjectToken>_<Platform>`；只管理该新 owned 根，不接管或清理 `AssetBundles` 父目录、`MainModule` 或未知目录。Marker 比较完整配置 SHA-256、工程根、Project GUID/ID 与叶名；持久文件独占锁，登记可能产物后才调用 native build，失败/取消仅使本 Workspace 无效，不删除部分或过时登记产物。
+- 构建入口为 `ResourceBundleBuilder.Build(project, activeTarget, forceRebuild, cancellation)`；API 仅支持与 Editor 主机匹配的已安装、已活动桌面目标，本批实际验证 Windows64。固定 LZ4/StrictMode，拒绝后台线程、Play、dirty scene、重入、路径链接及任何外部已加载 Bundle，不自动保存用户场景或切平台。实测 native build 会卸载外部 Bundle，故不能只检查同 namespace 冲突。取消在同步 native build 前后/验证检查点生效，不承诺中途中断 Unity BuildPipeline。
+
+### 15.2 真实产物、身份与增量记录
+
+- 自有隔离夹具包含 Text、两个共用 Texture 的 Prefab、AnimatorController、带私有 Material/Texture 的非空 Scene。最终 **6 个资源 Bundle + 1 个根 Manifest Bundle**，逐包 `.manifest` 一并保存；实际 Manifest 包列表、直接依赖、Bundle native name、资源/Scene 路径与主资产类型读回均与 BuildMap 一致。共享 Texture 只显式归属一个共享包，两个 Prefab 实际读回同一 native Texture；修改 Text 后只有其资源包 SHA-256 变化，其余资源包摘要保持一致；损坏产物后强制重建恢复原摘要。
+- 自动根 Manifest 的 `Object.name`/`m_AssetBundleName` 为空。已由用户明确批准第10节门禁修正，完整项目命名空间/摘要/实际读回作为证据；两个独立保存的 ResourceProject 先各自构建再同时加载根 Manifest 成功，同一产物复制改名仍被 Unity 拒绝。不宣称输出叶名等于根 Manifest native 身份。
+- 输入指纹包含资源原始字节/meta/Unity dependency hash、地址/类型/归属/Group、Project 配置、Unity/目标/选项、ProjectSettings、包声明/锁、实际编译源/defines/程序集依赖、asmdef/asmref 与预编译引用字节。产物复用须匹配完整 SHA-256 与已验证文件集合，不能只比较 mtime/length。
+- 未能冻结全部输入的包/用户 Scene/Shader 构建回调会保守禁止整体 skip，并使用 ForceRebuild。当前工程检测到 **6 项**此类回调，因此最终无变更也确实调用 native build；没有最终缓存命中或整体性能提升结论。早期尚未补全门禁时的 skip 测量仅属探索，不沿用为最终优化证据。
+
+| 最终同一夹具 | 预检 ms | Unity 构建 ms | 验证 ms | 输入哈希字节 | 产物哈希字节 | 复制字节 |
+|---|---:|---:|---:|---:|---:|---:|
+| 首次 | 11653.23 | 2802.70 | 11762.80 | 232383058 | 81868 | 0 |
+| 无变更 | 11292.86 | 2154.73 | 11611.07 | 232383058 | 163736 | 0 |
+| Text 实际变更 | 11523.45 | 2201.26 | 11383.84 | 232383096 | 163749 | 0 |
+| 产物损坏后修复 | 11576.50 | 2135.76 | 11630.87 | 232383096 | 135637 | 0 |
+
+计数为本内核实际文件读取/复制量，不代表 Unity 内部 IO；无 staging 发布复制，所以四次均为0。未冻结回调输入时宁可失去增量收益也不返回过时结果；哈希预检/复验目前占主要耗时，未做无证据的性能承诺。
+
+### 15.3 测试、Review 与保护证据
+
+- 最终 Unity EditMode 定向 **23/23 Passed，0 Failed，0 Skipped**：BuildMap 10项、Builder 13项；Runner `RunFinished` 的实际执行汇总23项，601.21秒。包含非空 Scene/Controller 回归、共享身份、双项目 Manifest、compiled DLL/asmdef 输入变更、未冻结回调缓存门禁、真实 source-change/cancel/recovery，以及 null/throw、取消前零目录、独占锁、重入、unknown目录/文件、owner冲突、junction、错误平台/后台线程保护。
+- CLI 的600秒等待早于 Runner 完成而超时，不据此推断通过。额外只读/记录回调保存逐项结果，完成后实际读取23条 Passed及Runner汇总；本机证据为 `C:/Users/Kano/AppData/Local/Temp/kilo/resource82a-20261015-final.jsonl`、`resource82a-20261015-final-summary.json`、`resource82a-20261015-final-metrics.txt`。不将工具库测试树总数1592误写成实际执行数。
+- 本批另实际通过 Catalog 10项、Core Runtime identity 11项、Foundation owner/friend 1项、Core Editor identity 1项、Resource 固定路径 1项、Export 哨兵 1项。后续只修改独立 Editor 构建实现及许可文字，不修改这些已验证的下层合同；沿用其本批有效结果，不重复8.1完整 PlayMode验收。
+- 一次独立新上下文只读技术 Review 确认2项P1（指纹遗漏编译/回调输入、非空Scene私有普通依赖混装）及1项P2（误拒AnimatorController）。各自建立失败回归后修复，最终23项同批回归全部通过；不以作者自查替代独立Review，不添加第二轮形式审查。
+- 每个真实构建闭环对 `Assets/Games`、`Assets/Scenes`、`Assets/StreamingAssets`、`AssetBundles/MainModule`、`Packages`、`ProjectSettings` 进行前后逐文件 SHA-256 对照并通过。Git 差异确认原资源/包/Runtime未新增产品修改；四项既有用户改动指纹不变，新增6份脚本meta由Unity生成并核对，未移动旧资源/GUID。中断遗留的单个自有夹具按Project GUID/根GUID/准确已知文件集合复核后定向清理，未清理未知资产或历史Bundle。
+- 唯一旧产品代码差异是 `ResourceBuildOperation.RejectLinks` 从 private 改 internal，供新内核复用既有路径保护；不调用旧 Execute/发布事务。固定路径及 Export 哨兵同步；`YLFramework/LICENSE.md` 保留上游版权及完整MIT许可并补充实际XFAB来源。
+
+真实验证产物保留在 `AssetBundles/YLR_085459f03b27a434e88698868ee5a4d9_8289def5b7b4d3ebe73eff8a26e2b41f/ylr_915a9fb65487d34c786e2450c5d31d17_StandaloneWindows64`，marker为Complete=true并记录完整输入及各产物SHA-256。夹具源码/config按测试生命周期清理，保留产物仅供本机验证/调试，不是正式可消费发布目录。
+
+### 15.4 停止点
+
+8.2a 自有资源定义、稳定显式 BuildMap、实际依赖分包与 owned 隔离构建闭环技术通过。未实施正式发布/事务回滚/持久化Catalog、完整工作台/生成器、8.3 Runtime AssetBundle加载，也未完成子资产正式描述、Scene运行切换、Player或非本机平台验收。保留8.2总门禁中属于后续子批次的未完成项；本批无Commit/Push授权且未执行。**到此停止，不自动进入8.2b。**

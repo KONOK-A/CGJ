@@ -247,7 +247,7 @@ namespace YLFramework.Editor.Resource
         private static bool IsWithin(string root, string path) =>
             FullPath(path).StartsWith(FullPath(root) + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-        private static void RejectLinks(string path)
+        internal static void RejectLinks(string path)
         {
             if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException("拒绝符号链接文件：" + path);
