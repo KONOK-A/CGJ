@@ -1,8 +1,8 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1、8.2a、8.2b 已技术验收及 Git 收口，见第14～16节。8.2c 技术 COMPLETE、Schema v1 已冻结，等待用户技术验收及单独 Git 收口授权，见第17节；未实施8.3及后续批次。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1、8.2a、8.2b 已技术验收及 Git 收口，见第14～16节。8.2c 技术 COMPLETE、Schema v1 已冻结，并已按单独授权完成 Git 收口（Commit `66400c8`，见第17.7节）；未实施8.3及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
-> 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 本轮只授权实施、必要验证及一次独立技术 Review，不授权 Commit/Push、集成合并、阶段8里程碑或自动开始8.3。
+> 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
@@ -813,7 +813,7 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 ### 17.1 基线、授权与工作台
 
-- 实施分支 `fusion/8-resource`，实际起始及交付 HEAD 均为 `b4c2c6cc74a407be6ffefab0c7019dea5edc8edb`。只实施本批、必要验证及一次独立技术 Review；未暂存、Commit、Push、合并或创建里程碑。
+- 实施分支 `fusion/8-resource`，起始 HEAD 为 `b4c2c6cc74a407be6ffefab0c7019dea5edc8edb`。实施阶段只做本批、必要验证及一次独立技术 Review，随后在单独授权下完成 Git 收口（第17.7节）；未合并或创建里程碑。
 - 正式入口 `YLFramework/Resource/Workbench`（`Ctrl+Shift+R`）；ResourceProject 资产菜单 `Assets/YLFramework/Resource Workbench`。项目列表/显式选择/创建、资源根、Group与Packing、文件/文件夹GUID选择、地址覆写、aliases、扩展名筛选均编辑正式定义。SerializedObject支持Undo/Redo，保存仅调用本定义的 `SaveAssetIfDirty`，不保存场景。
 - `ResourceEditorOperations` 是窄编排，不是新的构建权威：只读Preflight -> `ResourceBundleBuilder` -> `ResourcePublisher` -> `ResourceCodeGenerator`。报告独立 `BuildError/PublicationError/GenerationError`；生成失败不回滚成功发布。预检显示身份、平台/App、数量、Workspace和发布根，检测未保存定义、归属、当前版本完整性及native约束；排队操作可取消，切换项目/关闭窗口取消旧回调。同步native构建期间不能GUI中途取消。
 - 选择、绘制编辑、保存及创建都执行Assets-only、可编辑、真实路径及meta链接门禁；Package/外部junction定义不进入写入路径。未知目标文件或孤立meta不被覆盖。工作台不读写原Importer标记，不执行XFAB，不接管旧输出。
@@ -874,4 +874,9 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 - 8.3可直接依赖稳定Project/Group/GUID/alias定义、唯一BuildMap/verified BuildResult及共同子资产描述、冻结Catalog v1/严格Codec、不可变版本/Release Index/owned恢复、正式工作台和常量程序集输入。Editor借用解析可作为统一source/lease接入的依据，但当前不伪装已接入Runtime加载器。
 - 剩余边界：没有AssetBundle运行时取得/释放、低层Bundle lease、运行时Group加载、Scene切换、实例池、Core/Audio迁移、版本激活、下载或签名/防重放。保持六项不可冻结回调下的保守native重建策略，不宣称整体缓存或性能提升。常量默认位置仍需真实用户Project发布后生成，夹具输出已清理。
-- **8.2c 技术 COMPLETE；SchemaVersion=1 正式冻结。等待用户技术验收与Git收口授权。到此停止，不自动实施8.3，不合并integration/xf-yl，不创建阶段8里程碑。**
+- **8.2c 技术 COMPLETE；SchemaVersion=1 正式冻结；Git 收口见第17.7节。到此停止，不自动实施8.3，不合并integration/xf-yl，不创建阶段8里程碑。**
+
+### 17.7 Git 收口（2026-10-15）
+
+- 以独立授权一次性完成：精确暂存本批 Changed 范围后，提交 `66400c8bcf08f73085eb9e79c236a18cdbdced2f`（`feat(resource): 完成8.2c资源工作台与代码生成`，37个文件，1501+/1948-），线性落在 `b4c2c6c` 之上；随后推送至 `origin/fusion/8-resource`（`b4c2c6c..66400c8`）。本地 HEAD、`origin/fusion/8-resource` 与实际 `git ls-remote` 均为 `66400c8`。
+- 提交只含本批 Resource Editor/Runtime Catalog/迁移测试及本 Plan；受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Core `Canvas.prefab`）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md` 未暂存、未提交、未修改，仍留在工作区。原游戏、XF/XFAB/XFFSM、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；未 Reset/Clean/Stash/Rebase/Force Push。本次未新增产品行为，故未重跑 Unity 编译/测试/构建/生成/Review。
