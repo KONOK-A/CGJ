@@ -11,23 +11,25 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Editor.Resource;
 using YLFramework.Services.Resource;
+using YLFramework.Tests.ResourceBuild;
+using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Tests.ResourceEditor
 {
     public class ResourceCodeCompilationTests
     {
-        private const string Key = "YL.Resource63.CompilationProbe";
+        private const string Key = "YL.Resource82c.CompilationProbe";
         private const string Output = "Assets/YLFrameworkData";
         private const string GeneratedAssembly = "YLFramework.Generated.ResourceNames";
         private static string ConsumerAssembly => "YLFramework.Tests.ResourceNamesConsumer63." +
-            Path.GetFileName(SessionState.GetString(Key, "")).Replace("NamesCompile63-", "");
+             Path.GetFileName(SessionState.GetString(Key, "")).Replace("Release82b-", "");
 
         [Test]
         public void InterruptedCleanupRefusesRecreatedOrModifiedOutput()
         {
             Assert.IsEmpty(SessionState.GetString(Key, ""));
             Assert.IsFalse(Directory.Exists(Output) || File.Exists(Output) || File.Exists(Output + ".meta"));
-            var root = "Assets/NamesCompile63-" + Guid.NewGuid().ToString("N");
+            var root = "Assets/YLFramework/Tests/Fixtures/Release82b-" + Guid.NewGuid().ToString("N");
             Directory.CreateDirectory(Output);
             try
             {
@@ -64,26 +66,39 @@ namespace YLFramework.Tests.ResourceEditor
             if (string.IsNullOrEmpty(SessionState.GetString(Key, ""))) Prepare();
             RequireOwned();
             yield return new RecompileScripts();
+            VerifyCompiledAndUpdate();
+            yield return new RecompileScripts();
+            Assert.IsFalse(EditorUtility.scriptCompilationFailed);
+            var generated = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == GeneratedAssembly);
+            var name = "YLFramework.Resources." + SessionState.GetString(Key + ".Class", "") + "+Aliases";
+            Assert.AreEqual("new-alias", generated.GetType(name, true).GetField("New_alias").GetRawConstantValue());
+        }
+
+        // Test Framework 恢复 iterator 时不保留跨 Domain Reload 的闭包对象，验证局部值在普通方法中重建。
+        private static void VerifyCompiledAndUpdate()
+        {
             var root = SessionState.GetString(Key, "");
             Assert.IsFalse(EditorUtility.scriptCompilationFailed);
             var generated = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == GeneratedAssembly);
-            var types = generated.GetTypes().Where(x => x.Namespace == "YLFramework.Services.Resource").ToArray();
-            Assert.AreEqual(3, types.Length);
-            AssertConstant(generated, root, "Resource63_default", "First_Icon", "First.Icon");
-            AssertConstant(generated, root, "Resource63_icons", "Class", "class");
-            AssertConstant(generated, root, "_9_resource63", "_9_item", "9-item");
-            AssertConstant(generated, root, "_9_resource63", "BundleName", "9-resource63");
-            Assert.IsNull(generated.GetType("YLFramework.Services.Resource.Resource63_default", true).GetField("Extra"),
-                "First compilation must load this run's initial source, not an earlier updated assembly.");
+            var catalog = Catalog(root);
+            var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(root + "/Project.asset");
+            var simulation = new ResourceEditorSimulation(new[] { project }, new[] { catalog });
             foreach (var assemblyName in new[] { ConsumerAssembly, "Assembly-CSharp" })
             {
                 var assembly = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == assemblyName);
-                var consumer = assembly.GetType("YLFramework.Tests.GeneratedConsumer63." +
-                    (assemblyName == ConsumerAssembly ? "Explicit" : "Predefined"), true);
-                Assert.AreEqual("First.Icon|class|9-item|9-resource63", consumer.GetMethod("Read").Invoke(null, null));
+                var consumer = assembly.GetType("YLFramework.Tests.GeneratedConsumer82c." +
+                     (assemblyName == ConsumerAssembly ? "Explicit" : "Predefined"), true);
+                var address = (ResourceAddress)consumer.GetMethod("Address").Invoke(null, null);
+                Assert.AreEqual("entry.txt", address.Path);
+                Assert.AreEqual("first release content", simulation.Load<TextAsset>(address).text);
+                var sub = (ResourceAddress)consumer.GetMethod("Sprite").Invoke(null, null);
+                Assert.AreEqual("Left", simulation.Load<Sprite>(sub).name);
+                Assert.AreEqual("entry", consumer.GetMethod("Group").Invoke(null, null));
+                Assert.AreEqual("stable-alias", consumer.GetMethod("Alias").Invoke(null, null));
+                Assert.AreEqual(simulation.Resolve(address).AssetId, simulation.GetGroup(project.ProjectId, "entry").Single().AssetId);
             }
             var graph = CompilationPipeline.GetAssemblies().Single(x => x.name == GeneratedAssembly);
-            CollectionAssert.AreEqual(new[] { Output + "/YLResData.cs" }, graph.sourceFiles.Select(x => x.Replace('\\', '/')).ToArray());
+            CollectionAssert.AreEqual(new[] { Output + "/YLResourceReferences.cs" }, graph.sourceFiles.Select(x => x.Replace('\\', '/')).ToArray());
             Assert.IsEmpty(graph.assemblyReferences, "Generated constants must not depend on Framework/Editor/consumers.");
             Assert.IsFalse(graph.compiledAssemblyReferences.Any(x => Path.GetFileName(x).StartsWith("UnityEngine") ||
                                                                    Path.GetFileName(x).StartsWith("UnityEditor")));
@@ -94,7 +109,7 @@ namespace YLFramework.Tests.ResourceEditor
             CollectionAssert.Contains(CompilationPipeline.GetAssemblies().Single(x => x.name == "Assembly-CSharp").sourceFiles
                 .Select(x => x.Replace('\\', '/')).ToArray(), root + "/Predefined.cs");
 
-            var path = Output + "/YLResData.cs";
+            var path = Output + "/YLResourceReferences.cs";
             var asmdef = Output + "/" + GeneratedAssembly + ".asmdef";
             var before = File.ReadAllBytes(path);
             var meta = File.ReadAllBytes(path + ".meta");
@@ -102,76 +117,65 @@ namespace YLFramework.Tests.ResourceEditor
             var folderMeta = File.ReadAllBytes(Output + ".meta");
             var time = File.GetLastWriteTimeUtc(path);
             RequireOwned();
-            BuildScript.WriteResReferenceClass();
+            Assert.IsFalse(ResourceCodeGenerator.GenerateReferences(new[] { catalog }));
             CollectionAssert.AreEqual(before, File.ReadAllBytes(path));
             Assert.AreEqual(time, File.GetLastWriteTimeUtc(path));
 
             // 加入真实的规范化碰撞，公共入口必须在写入之前拒绝，且旧有效产物仍可用。
-            Text(root + "/First_Icon.bytes", "resource63_default");
-            RequireOwned();
-            Assert.Throws<InvalidOperationException>(() => BuildScript.WriteResReferenceClass());
+            var data = JObject.Parse(Encoding.UTF8.GetString(ResourceCatalogCodec.Write(catalog))); data.Remove("BuildId");
+            data["Assets"].First(x => (string)x["Address"] == "A.prefab")["Address"] = "entry_txt";
+            var collision = ResourceCodeGenerationTests.Read(data);
+            Assert.Throws<InvalidOperationException>(() => ResourceCodeGenerator.GenerateReferences(new[] { collision }));
             CollectionAssert.AreEqual(before, File.ReadAllBytes(path));
-            AssetDatabase.DeleteAsset(root + "/First_Icon.bytes");
-            RecordOwned();
 
-            Text(root + "/Extra.bytes", "resource63_default");
+            data = JObject.Parse(Encoding.UTF8.GetString(ResourceCatalogCodec.Write(catalog))); data.Remove("BuildId");
+            data["Assets"].First(x => (string)x["Address"] == "entry.txt")["Aliases"] = new JArray("new-alias", "stable-alias");
+            var updated = ResourceCodeGenerationTests.Read(data);
             RequireOwned();
             using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                Assert.Throws<IOException>(() => BuildScript.WriteResReferenceClass());
+                Assert.Throws<IOException>(() => ResourceCodeGenerator.GenerateReferences(new[] { updated }));
             CollectionAssert.AreEqual(before, File.ReadAllBytes(path));
-            BuildScript.WriteResReferenceClass();
+            Assert.IsTrue(ResourceCodeGenerator.GenerateReferences(new[] { updated }));
             RecordOwned();
             CollectionAssert.AreEqual(meta, File.ReadAllBytes(path + ".meta"));
             CollectionAssert.AreEqual(asmMeta, File.ReadAllBytes(asmdef + ".meta"));
             CollectionAssert.AreEqual(folderMeta, File.ReadAllBytes(Output + ".meta"));
             Assert.IsFalse(Directory.GetFiles(Output).Any(x => Path.GetFileName(x).StartsWith(".yl-names-")));
-            yield return new RecompileScripts();
-            Assert.IsFalse(EditorUtility.scriptCompilationFailed);
-            generated = AppDomain.CurrentDomain.GetAssemblies().Single(x => x.GetName().Name == GeneratedAssembly);
-            AssertConstant(generated, root, "Resource63_default", "Extra", "Extra");
         }
 
-        private static void AssertConstant(System.Reflection.Assembly generated, string root, string type, string member, string expected)
-        {
-            var value = (string)generated.GetType("YLFramework.Services.Resource." + type, true).GetField(member).GetRawConstantValue();
-            Assert.AreEqual(expected, value);
-            if (member != "BundleName") Assert.AreEqual(ConfigFileUtility.AssetPathToName(root + "/" + expected + ".bytes"), value.ToLowerInvariant());
-        }
+        private static ResourceCatalogDocument Catalog(string root) => ResourceCatalogCodec.Read(File.ReadAllBytes(root + "/catalog.json"),
+            SessionState.GetString(Key + ".Project", ""), EditorUserBuildSettings.activeBuildTarget.ToString(), Application.unityVersion, "fixture-v1");
 
         private static void Prepare()
         {
-            Assert.IsEmpty(AssetDatabase.GetAllAssetBundleNames(), "Cannot probe alongside external Bundle marks.");
-            Assert.IsEmpty(AssetDatabase.FindAssets("t:SubProject"), "Cannot probe alongside external owners.");
             Assert.IsFalse(Directory.Exists(Output) || File.Exists(Output) || File.Exists(Output + ".meta"), "Do not take over existing generated/user assets.");
-            var root = "Assets/NamesCompile63-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder("Assets", Path.GetFileName(root));
+            var fixture = new ResourceReleaseFixture();
+            var root = fixture.Folder;
             SessionState.SetString(Key, root);
-            AssetDatabase.CreateFolder(root, "Project");
-            Text(root + "/First.Icon.bytes", "resource63_default");
-            Text(root + "/class.bytes", "resource63-icons");
-            Text(root + "/Project/9-item.bytes", "9-resource63");
-            var owner = ScriptableObject.CreateInstance<SubProject>();
-            AssetDatabase.CreateAsset(owner, root + "/Project/Names63Project.asset");
+            var project = fixture.Project;
+            ResourceEditorSimulationTests.Aliases(project.Groups[0].Selections[0], "stable-alias");
+            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            var result = fixture.Build();
+            var catalog = ResourceCatalogBuilder.Create(result, "fixture-v1");
+            fixture.AssertProtected();
+            // 编译消费只需 immutable Catalog 和源夹具，不保留这个测试已完整验证的私有 Workspace。
+            Directory.Delete(Path.GetDirectoryName(result.WorkspacePath), true);
+            File.WriteAllBytes(root + "/catalog.json", ResourceCatalogCodec.Write(catalog));
+            SessionState.SetString(Key + ".Project", catalog.ProjectId);
+            var type = "Yl_release_" + catalog.ProjectId.Substring("yl-release-".Length);
+            SessionState.SetString(Key + ".Class", type);
             AssetDatabase.CreateFolder(root, "Consumer");
-            var body = "public static string Read() => YLFramework.Services.Resource.Resource63_default.First_Icon + \"|\" + " +
-                       "YLFramework.Services.Resource.Resource63_icons.Class + \"|\" + " +
-                       "YLFramework.Services.Resource._9_resource63._9_item + \"|\" + YLFramework.Services.Resource._9_resource63.BundleName;";
-            File.WriteAllText(root + "/Consumer/Explicit.cs", "namespace YLFramework.Tests.GeneratedConsumer63 { public static class Explicit { " + body + " } }");
-            File.WriteAllText(root + "/Predefined.cs", "namespace YLFramework.Tests.GeneratedConsumer63 { public static class Predefined { " + body + " } }");
+            var full = "YLFramework.Resources." + type;
+            var body = "public static YLFramework.Services.Resource.ResourceAddress Address() => new YLFramework.Services.Resource.ResourceAddress(" + full + ".ProjectId," + full + ".Addresses.Entry_txt);" +
+                "public static YLFramework.Services.Resource.ResourceAddress Sprite() => new YLFramework.Services.Resource.ResourceAddress(" + full + ".ProjectId," + full + ".SubAssets.Sprites_png_Left.Address," + full + ".SubAssets.Sprites_png_Left.Key);" +
+                "public static string Group() => " + full + ".Groups.Entry; public static string Alias() => " + full + ".Aliases.Stable_alias;";
+            File.WriteAllText(root + "/Consumer/Explicit.cs", "namespace YLFramework.Tests.GeneratedConsumer82c { public static class Explicit { " + body + " } }");
+            File.WriteAllText(root + "/Predefined.cs", "namespace YLFramework.Tests.GeneratedConsumer82c { public static class Predefined { " + body + " } }");
             File.WriteAllText(root + "/Consumer/Consumer.asmdef", "{\"name\":\"" + ConsumerAssembly + "\",\"references\":[\"" +
                 GeneratedAssembly + "\",\"YLFramework.Runtime\"],\"autoReferenced\":false,\"overrideReferences\":true,\"precompiledReferences\":[],\"noEngineReferences\":true}");
-            BuildScript.WriteResReferenceClass();
+            Assert.IsTrue(ResourceCodeGenerator.GenerateReferences(new[] { catalog }));
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             RecordOwned();
-        }
-
-        private static void Text(string path, string bundle)
-        {
-            File.WriteAllText(path, "resource63 isolated compilation text");
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            var importer = AssetImporter.GetAtPath(path);
-            importer.assetBundleName = bundle;
-            importer.SaveAndReimport();
-            if (!string.IsNullOrEmpty(SessionState.GetString(Key + ".Fingerprint", ""))) RecordOwned();
         }
 
         private static string Fingerprint()
@@ -189,12 +193,8 @@ namespace YLFramework.Tests.ResourceEditor
         private static void RequireOwned()
         {
             var root = SessionState.GetString(Key, "");
-            Assert.IsTrue(root.StartsWith("Assets/NamesCompile63-", StringComparison.Ordinal) && Directory.Exists(root));
+            Assert.IsTrue(root.StartsWith("Assets/YLFramework/Tests/Fixtures/Release82b-", StringComparison.Ordinal) && Directory.Exists(root));
             Assert.IsTrue(Directory.Exists(Output), "Generated output disappeared; refuse to take over replacement assets.");
-            Assert.IsTrue(AssetDatabase.GetAllAssetBundleNames().SelectMany(AssetDatabase.GetAssetPathsFromAssetBundle)
-                .All(path => path.StartsWith(root + "/", StringComparison.Ordinal)), "Probe cannot include external marked sources.");
-            Assert.IsTrue(AssetDatabase.FindAssets("t:SubProject").Select(AssetDatabase.GUIDToAssetPath)
-                .All(path => path.StartsWith(root + "/", StringComparison.Ordinal)), "Probe cannot include external owners.");
             Assert.AreEqual(SessionState.GetString(Key + ".Fingerprint", ""), Fingerprint(),
                 "Probe assets or generated identities changed outside this run; refuse cleanup.");
         }
@@ -203,6 +203,7 @@ namespace YLFramework.Tests.ResourceEditor
         {
             SessionState.EraseString(Key);
             SessionState.EraseString(Key + ".Fingerprint");
+            SessionState.EraseString(Key + ".Project"); SessionState.EraseString(Key + ".Class");
         }
 
         [UnityTearDown]
@@ -218,12 +219,10 @@ namespace YLFramework.Tests.ResourceEditor
                 Assert.IsTrue(AssetDatabase.DeleteAsset(Output));
             }
             else Assert.IsFalse(Directory.Exists(Output), "Never delete a recreated output after interrupted cleanup.");
-            AssetDatabase.RemoveUnusedAssetBundleNames();
             yield return new RecompileScripts();
             ClearState();
             Assert.IsFalse(Directory.Exists(root) || Directory.Exists(Output));
             Assert.IsFalse(EditorUtility.scriptCompilationFailed);
-            Assert.IsEmpty(AssetDatabase.GetAllAssetBundleNames());
         }
     }
 }

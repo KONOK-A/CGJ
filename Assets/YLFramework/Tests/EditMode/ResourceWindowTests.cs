@@ -10,54 +10,53 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Editor.Resource;
 using Object = UnityEngine.Object;
+using YLFramework.Tests.ResourceBuild;
 
 namespace YLFramework.Tests.ResourceEditor
 {
     public class ResourceWindowTests
     {
         [UnityTest]
-        public IEnumerator ActualWindowGuiSelectCancelRefreshAndClose()
+        public IEnumerator ActualWindowGuiSelectRefreshProjectSwitchAndCloseCancelQueuedOperations()
         {
             var previousSelection = Selection.objects;
             var previousFocus = EditorWindow.focusedWindow;
-            var folder = "Assets/YLFramework/Tests/EditMode/Window62-" + Guid.NewGuid().ToString("N");
+            using var fixture = new ResourceReleaseFixture();
             ResourceGuiTestWindow window = null;
-            AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode", Path.GetFileName(folder));
             try
             {
-                var path = folder + "/Click.bytes";
-                File.WriteAllText(path, "isolated GUI asset");
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-                ResServiceAssetsMenu.MarkAB(path);
+                var path = fixture.TextPath;
+                fixture.Project.Groups.RemoveRange(1, fixture.Project.Groups.Count - 1);
                 window = ScriptableObject.CreateInstance<ResourceGuiTestWindow>();
-                window.position = new Rect(100, 100, 760, 850);
+                window.position = new Rect(100, 50, 760, 950);
                 window.ShowUtility();
                 window.Focus();
+                window.SetProject(fixture.Project);
+                var view = (ResServiceView)typeof(ResServiceEditorWindow).GetField("_resServiceView", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
+                yield return null;
+                view.RefreshPreview();
                 for (var frame = 0; frame < 20 && (window.Repaints == 0 || window.SelectButton.width == 0); frame++)
                 { window.Repaint(); yield return null; }
                 Assert.Greater(window.Layouts, 0);
                 Assert.Greater(window.Repaints, 0);
                 Assert.Greater(window.SelectButton.width, 0, "Actual GUI selection button was not laid out.");
-                var view = typeof(ResServiceEditorWindow).GetField("_resServiceView", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
-                var preview = (string)typeof(ResServiceView).GetField("_preview", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
-                StringAssert.Contains("StandaloneWindows64 / Windows", preview);
-                StringAssert.Contains(Path.GetFullPath("AssetBundles/Windows"), preview);
                 Selection.objects = Array.Empty<Object>();
                 Click(window, window.SelectButton.center);
                 yield return null;
-                Assert.AreEqual(path, AssetDatabase.GetAssetPath(Selection.activeObject));
-                Click(window, window.CancelButton.center);
-                yield return null;
-                Assert.IsFalse(ResServiceAssetsMenu.IsMarked(path));
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                Assert.AreEqual(path, AssetDatabase.GetAssetPath(Selection.activeObject), "Button=" + window.SelectButton + "; status=" +
+                    typeof(ResServiceView).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view));
                 Assert.IsEmpty(AssetImporter.GetAtPath(path).assetBundleName);
-                Assert.IsFalse(Directory.Exists("AssetBundles/Windows"));
 
                 var calls = 0;
                 typeof(ResServiceView).GetMethod("QueueOperation", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(view, new object[] { new Func<bool>(() => { calls++; return true; }), "test owned callback" });
-                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("_pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
+                    .Invoke(view, new object[] { new Func<string>(() => { calls++; return "owned callback"; }) });
+                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
                 Assert.IsTrue(EditorApplication.delayCall.GetInvocationList().Contains(pending));
+                window.SetProject(null);
+                Assert.IsFalse(EditorApplication.delayCall?.GetInvocationList().Contains(pending) ?? false, "Project switching cancels the old queued action.");
+                typeof(ResServiceView).GetMethod("QueueOperation", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(view, new object[] { new Func<string>(() => { calls++; return "owned callback"; }) });
+                pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
                 Assert.AreEqual(1, Selection.selectionChanged.GetInvocationList().Count(callback => callback.Target == window));
                 window.Close();
                 Assert.IsFalse(EditorApplication.delayCall?.GetInvocationList().Contains(pending) ?? false);
@@ -70,8 +69,6 @@ namespace YLFramework.Tests.ResourceEditor
             {
                 if (window) window.Close();
                 Selection.objects = previousSelection;
-                AssetDatabase.DeleteAsset(folder);
-                AssetDatabase.RemoveUnusedAssetBundleNames();
                 if (previousFocus) previousFocus.Focus();
             }
         }
@@ -88,7 +85,6 @@ namespace YLFramework.Tests.ResourceEditor
         internal int Layouts;
         internal int Repaints;
         internal Rect SelectButton;
-        internal Rect CancelButton;
 
         private void OnGUI()
         {
@@ -102,19 +98,19 @@ namespace YLFramework.Tests.ResourceEditor
                         typeof(GUILayoutUtility).GetField("current", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)?.GetValue(null);
             Assert.IsNotNull(cache, "Unity layout cache is unavailable.");
             var group = cache.GetType().GetField("topLevel", flags).GetValue(cache);
-            Read(group);
-            void Read(object entry)
+            Read(group, Vector2.zero);
+            void Read(object entry, Vector2 offset)
             {
                 var entryType = entry.GetType();
                 var rectangle = (Rect)entryType.GetField("rect", flags).GetValue(entry);
+                if (entryType.Name == "GUIScrollGroup") offset += rectangle.position;
                 var style = (GUIStyle)entryType.GetProperty("style", flags)?.GetValue(entry);
                 if (style != null && style.name == "button")
                 {
-                    if (Mathf.Abs(rectangle.width - 50) < 1) SelectButton = rectangle;
-                    if (Mathf.Abs(rectangle.width - 75) < 1) CancelButton = rectangle;
+                    if (Mathf.Abs(rectangle.width - 50) < 1) SelectButton = new Rect(rectangle.position + offset, rectangle.size);
                 }
                 var children = entryType.GetField("entries", flags)?.GetValue(entry) as IEnumerable;
-                if (children != null) foreach (var child in children) Read(child);
+                if (children != null) foreach (var child in children) Read(child, offset);
             }
         }
     }

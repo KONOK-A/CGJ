@@ -1,8 +1,8 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED** — 架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1 已完成技术验收及 Git 收口，见第 14 节。8.2a 已完成技术验收、独立 Review 及 Git 收口（Commit `8910345`），见第 15 节。8.2b 及后续批次未实施。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1、8.2a、8.2b 已技术验收及 Git 收口，见第14～16节。8.2c 技术 COMPLETE、Schema v1 已冻结，等待用户技术验收及单独 Git 收口授权，见第17节；未实施8.3及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
-> 原方案批准与 Git 准备已完成。2026-10-14 的 8.1 授权允许验收/独立审查后精确提交并推送 `fusion/8-resource`。随后 8.2a 获授权实施资源定义、依赖分包与隔离构建，并在技术验收通过后授权完成本批 Commit/Push；不执行 8.2b、集成合并或阶段里程碑。
+> 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 本轮只授权实施、必要验证及一次独立技术 Review，不授权 Commit/Push、集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
@@ -270,7 +270,7 @@ Systems/Audio/ResourceAudioClipProvider.cs   Audio领域后端，替换ResLoader
 
 ### 7.2 资源身份、Catalog模型和构建定义
 
-**冻结时机**：8.1先稳定资源身份、Request/Lease/Scope、所有权、终态及必要的最小只读Catalog内存模型（定位、加载描述、依赖节点/边与快照身份），不冻结全部持久化字段。下列持久化字段、编码与摘要计算为设计候选；在8.2真实BuildMap、Bundle Manifest、依赖、子资产定位、生成及序列化/读回闭环通过后，才最终冻结首版Schema及规范化字节规则。身份隔离、唯一权威和生命周期原则不因此重开；冻结后的协议变更需明确版本与兼容门禁，不建永久格式适配层。
+**冻结时机**：8.1只稳定内存身份、Request/Lease/Scope 与所有权；8.2a/b 的持久化格式是未冻结原型。8.2c 已完成真实BuildMap/Manifest、子资产描述、发布、序列化读回和常量编译消费闭环，正式冻结 **SchemaVersion=1**，完整字段/身份/规范化/兼容契约以第17.4节和正式 Codec 为准。身份隔离、唯一权威和生命周期原则不重开；冻结后的协议变更需明确版本与兼容门禁，不建永久格式适配层。
 
 - `ProjectId` 是经过校验的稳定资源项目标识，不是Module的AQN、DisplayName、磁盘绝对路径或XFABProject类型。项目定义SO GUID用于Editor归属；DisplayName可改，技术ID变化需要显式重建/缓存迁移。
 - `ResourceAddress` 是不可变值，至少含project与逻辑地址；optional subasset key明确区分。逻辑地址按ordinal匹配，默认从项目相对路径生成，允许明确alias；不默认把不同目录同名合并。构建拒绝大小写折叠后冲突以保障跨平台一致。
@@ -431,7 +431,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 下列十个主批次按依赖与可独立拒收的闭环拆分，不按目录机械分包；8.2与8.6内部还有必须逐个完成/review的独立子批次，不允许一次合成巨型修改。8.1-8.5是隔离夹具中的新链，不改变默认Core后端；**8.6c后不能继续保留新旧YL两套运行authority**。8.7-8.8新增完整更新，不把8.6“加载融合”冒充阶段8全部完成。
 
-每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1、8.2a 已收口，8.2b 技术 COMPLETE，实际证据见第14～16节；8.2c 及后续仍未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
+每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1～8.2b 已收口，8.2c 技术 COMPLETE、待用户验收及 Git 授权，证据见第14～17节；8.3及后续未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
 
 ### 8.1 正式合同、目录及Resources最小闭环
 
@@ -458,15 +458,15 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **子批次次序**：8.2a完成自有定义/map/依赖分包/持久workspace，只构建隔离产物并过manifest身份/重复与增量门禁；8.2b接安全发布/catalog/归属/回滚，故障注入旧产物不变；8.2c接工作台/Editor模拟索引/常量生成与实际编译。每个子批次都独立review和停止检查，不把生成器失败变成整个构建未知状态。
 
-**8.2b 状态**：**技术 COMPLETE，并已完成 Git 收口（2026-10-15，实际能力、真实发布、独立 Review 修复及提交证据见第16节）**。未实施 8.2c；以下是 8.2 总门禁，不能将 8.2b 完成标成整个 8.2 完成。
+**8.2b 状态**：**技术 COMPLETE，已完成 Git 收口**，见第16节。**8.2c 状态：技术 COMPLETE，Schema v1 冻结，等待用户验收及单独 Git 授权**，见第17节。本地/内部受控8.2闭环通过，不等于8.8生产远端安全或8.3 Runtime加载通过。
 
 **Schema最终冻结门禁**：8.2c收口前对真实BuildMap/Manifest依赖、资产与子资产加载描述、Group成员、catalog序列化/读回及生成常量消费逐项对照；用最小原生读回探针确认子资产描述确能定位Bundle内容，不将8.3完整Runtime加载器提前实施。闭环证据充分后记录首版Schema和规范化规则；必要字段修正属于本批设计验证，不为未冻结原型增加永久兼容层。
 
 - [x] 自有Fixture构建：Text/Prefab依赖/Scene分包；读回catalog/manifest一致；输入无变化二次构建记录各阶段时长/hash/复制量。8.2a见第15节，8.2b新增真实子资产/发布和受影响读回见第16节；六项回调仍禁止整体缓存命中。
-- [ ] 注入BuildPipeline返回null/throw、表/签名输入/复制/替换失败，取消、unknown文件、junction、owner重叠均不改旧发布；保留`.meta`及可恢复备份。
-- [ ] 同名地址/子资产歧义/资产合法互引与Bundle环分别验证；Unity选项无效不能发布；marker/锁跨窗口有效。
+- [x] 本地门禁：native构建失败、Catalog输入/复制/替换失败、取消、unknown文件、junction、owner重叠及旧发布不变；`.meta`保留和恢复沿唯一Workspace/Publisher进行，8.2a/b证据见第15～16节，8.2c真实闭环与回归见第17节。生产签名输入及信任链不属于本地交付，仍留8.8。
+- [x] 同名地址/alias、main/sub同名同类型及可赋值类型歧义、资产合法互引与Bundle环、Unity选项和marker/锁门禁均由正式链验证。8.2a/b已通过部分不重复全量构建，本批补共同描述与模拟一致性负例，见第17节。
 - [x] 普通Bundle native name使用自有project命名空间；自动根manifest按第10节已批准的实际身份门禁验证，不把文件名冒充native name。另一新project同时读回成功、同产物改名仍被拒绝；固定路径测试和Export哨兵当批同步并通过。8.2a证据见第15节。
-- [ ] 常量碰撞/篡改/无变化生成/实际编译，Bundle成功和常量失败分别报告；改造原ResourceOutputSafety/CodeGeneration测试而非抛弃保护。
+- [x] 常量碰撞/篡改/无变化生成/实际程序集编译及地址消费通过；Bundle/发布成功与常量失败独立报告；原ResourceOutputSafety/CodeGeneration/Compilation/Window测试改造到正式输入，保护机制保留，见第17节。
 
 ### 8.3 AssetBundle、依赖、子资产与动态source闭环
 
@@ -808,3 +808,70 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 四项既有用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Canvas.prefab）及并行UI Plan保持未暂存、未提交，收口前后 blob identity 与第14.4节一致。未暂存测试 Bundle、临时 Staging、Workspace、缓存或未经授权的发布产物；未执行 Reset/Clean/Stash/Rebase/Force Push/Merge 或里程碑。
 
 **8.2b 技术 COMPLETE 且已 Git 收口。到此停止，不自动进入8.2c，不合并 `integration/xf-yl`，不创建阶段8里程碑。**
+
+## 17. 8.2c 实际成果与技术验收（2026-10-15）
+
+### 17.1 基线、授权与工作台
+
+- 实施分支 `fusion/8-resource`，实际起始及交付 HEAD 均为 `b4c2c6cc74a407be6ffefab0c7019dea5edc8edb`。只实施本批、必要验证及一次独立技术 Review；未暂存、Commit、Push、合并或创建里程碑。
+- 正式入口 `YLFramework/Resource/Workbench`（`Ctrl+Shift+R`）；ResourceProject 资产菜单 `Assets/YLFramework/Resource Workbench`。项目列表/显式选择/创建、资源根、Group与Packing、文件/文件夹GUID选择、地址覆写、aliases、扩展名筛选均编辑正式定义。SerializedObject支持Undo/Redo，保存仅调用本定义的 `SaveAssetIfDirty`，不保存场景。
+- `ResourceEditorOperations` 是窄编排，不是新的构建权威：只读Preflight -> `ResourceBundleBuilder` -> `ResourcePublisher` -> `ResourceCodeGenerator`。报告独立 `BuildError/PublicationError/GenerationError`；生成失败不回滚成功发布。预检显示身份、平台/App、数量、Workspace和发布根，检测未保存定义、归属、当前版本完整性及native约束；排队操作可取消，切换项目/关闭窗口取消旧回调。同步native构建期间不能GUI中途取消。
+- 选择、绘制编辑、保存及创建都执行Assets-only、可编辑、真实路径及meta链接门禁；Package/外部junction定义不进入写入路径。未知目标文件或孤立meta不被覆盖。工作台不读写原Importer标记，不执行XFAB，不接管旧输出。
+- 删除旧 `BuildScript/AssetBundleExporter` 及配套meta，退出旧全局标记/清理/ResData生成入口；`ResourceBuildOperation` 只保留链接/路径及旧SubProjectData所需纯验证。原Runtime消费者及原模拟元数据行为不改，旧Runtime退役仍留8.6。Generator/Output/API改为正式命名，三处原meta GUID保持；窗口脚本身份保持。
+
+### 17.2 Editor模拟取得
+
+- `ResourceEditorSimulation` 以明确的Project集合为输入，可绑定对应已发布 `ResourceCatalogDocument`。每次Resolve/Load/GetGroup从当前正式Project/BuildMap重建同一 `ResourceCatalog` 内存模型，不缓存独立地址表或Unity对象；GUID重新取得Project和路径，定义、移动、导入、删除和项目身份变化不会复用旧索引。窗口仅保留可失效诊断快照。
+- canonical地址、aliases、Group成员、GUID/localId和类型规则共用正式链。`DescribeSubAssets` 对Project view可见子资产产出描述，并以包含main/隐藏资产及可赋值类型的native匹配语义拒绝歧义；构建读回与零打包预览不会各自接受不同的name/type描述。
+- 显式编译类型校验后借用AssetDatabase对象；子资产按GUID/localId精确取得，但不能用localId掩盖native名称/类型歧义。绑定published Catalog时检查当前定义、地址/alias、类型/程序集、加载路径、子名和Group一致性；过期描述明确拒绝。内容重新导入允许身份描述不变，不声称还原旧Bundle字节。
+- 借用对象不得Destroy/Unload；Scene只取得SceneAsset预览，不执行加载/激活，也不初始化ResourceSystem。接入8.3统一source/lease和Scene生命周期仍是后续工作。
+
+### 17.3 正式常量生成
+
+- `ResourceCodeGenerator.GenerateReferences(catalogs, directory, namespace)` 只接受正式Catalog显式集合。默认 `Assets/YLFrameworkData/YLResourceReferences.cs`，独立无Framework/Editor/引擎依赖程序集 `YLFramework.Generated.ResourceNames`。每Project生成 `ProjectId`、`Addresses`、`Aliases`、`Groups`，子资产嵌套类生成canonical `Address` 和 invariant `Key`；值不使用Bundle名或旧文件名键。
+- invariant标识符转换、确定性项目/成员排序、关键字/数字前缀、保留成员、项目/成员规范化碰撞、既有类型及namespace冲突在写入前拒绝；namespace必须canonical，不接受可绕过CLR身份检查的verbatim `@` 写法。
+- 沿用并收紧旧成熟保护：专用目录完整归属、生成源SHA256篡改检查、asmdef内容/祖先asmdef/asmref/全工程重名程序集检查、孤立meta及未知目录拒绝、同目录临时文件原子替换、实际IO失败保留旧源码、无变化字节/mtime不改、更新保留source/asmdef/folder meta。旧 `YLResData.cs` 输出不是正式归属，不自动迁移或接管。
+- 工作台共享一个常量程序集，集合来自当前平台/App全部明确owned已发布Project；`ReadCurrent`只读，不借收集执行Recover或清理。不兼容或未保存候选明示失败，不把临时改名的项目当成未发布而删除已有常量。未发布项目不混入；特殊消费者可通过API显式提供集合。
+- 自动发布后生成与独立集合生成均明确报告源码结果，Unity编译结果独立确认。业务asmdef须显式引用 `YLFramework.Generated.ResourceNames`；预定义Assembly-CSharp按autoReferenced消费。测试是真实生成、两次Unity重编译、实际编译程序集加载和地址取得，不以静态语法或Mock代替。
+
+### 17.4 Schema v1 冻结契约
+
+**冻结结论：SchemaVersion=1 正式冻结。** 第16节未冻结验证版补齐 `Aliases` 与 `AssetAssembly`，共同地址上限、完整类型身份及native子资产歧义门禁已验证；不为原型增加永久兼容层。
+
+- 顶层固定字段：`SchemaVersion,ProjectId,BuildId,Platform,UnityCompatibility,AppContentCompatibilityId,BuildSettingsFingerprint,ManifestFile,Bundles,Assets,Groups,SupportFiles`。Bundle固定 `LogicalId,NativeName,RelativeFile,Length,Sha256,UnityHash,IsScene,Dependencies`；SupportFile固定 `RelativeFile,Length,Sha256`；Group固定 `Id,Members[{AssetId,Required}]`。不加入未实现的项目版本依赖、签名或Runtime激活字段。
+- Asset固定 `AssetId,Guid,LocalId,Address,Aliases,SubAssetKey,BundleId,LoadName,AssetType,AssetAssembly,Kind,SubAssetName`。canonical身份是小写32位GUID加 `_` 加非零Int64 localId的invariant十进制文本；ProjectId/GroupId为有界安全技术ID。地址在Project中精确ordinal，保留原始规范大小写，拒绝大小写折叠冲突、绝对/逃逸路径；alias指向同一canonical，子资产继承同一alias路径并附自己的SubAssetKey，不生成第二份映射。
+- `SubAssetKey`等于子资产localId十进制文本，main为null；`Kind`只允许Asset/Scene/SubAsset。普通native LoadName是实际 `assets/...` 小写路径，Scene保留 `Assets/...unity` 精确路径；native子资产按唯一 `SubAssetName + 编译Type`定位。类型持久化为 `AssetType.FullName + AssetAssembly简单名`，不含AQN/程序集版本；Scene使用 `Scene/null`。同名同FullName但不同程序集可区分，同完整类型身份同名子资产拒绝；不按外部字符串反射创建类型。
+- 编码/规范化：严格UTF-8、无BOM/空白/尾换行，EscapeNonAscii、InvariantCulture；JSON属性ordinal排序，Bundles/Assets/Groups/SupportFiles、依赖、Group成员、aliases按稳定identity/字符串ordinal排序。重复/未知/缺失字段、非法UTF-8或非canonical实际字节拒绝；Int64及布尔类型不接受字符串冒充。
+- `BuildId = SHA256(移除BuildId字段后的canonical payload bytes)`；`CatalogDigest = SHA256(包含BuildId的最终catalog bytes)`，没有自引用。制品路径/长度/SHA256、Unity native name/hash、依赖图和加载描述继续由实际BuildResult、Manifest及native读回支撑；摘要不是认证。
+- 每数组/集合上限16384、依赖边上限65536、JSON上限16MiB、深度64；canonical+alias共享16384个总地址上限，子资产和所有项目内地址均计入，重排输入不能改变结论。Group仍允许显式Required合同，但本批Project生成成员全为required。
+- 读取明确要求Schema=1以及精确ProjectId、BuildTarget平台、完整Unity版本、AppContentCompatibilityId；消费脚本类型/布局或Player能力变化必须更新App兼容ID。Release Index维持SchemaVersion=1及第16节的单摘要快照合同。冻结后字段/身份/编码变更必须新版本和明确兼容门禁，未知格式fail closed。
+- 兼容边界：不兼容旧XF映射、YL ResData/BinaryFormatter或缺少新必需字段的8.2a/b验证原型；需要从正式定义重新构建/发布，不自动改写或清理既有原型版本。只承诺本机Unity `2022.3.62f3c1` / `StandaloneWindows64`真实验收，不宣称跨Unity版本、Player、其他平台或生产远端通过。
+
+### 17.5 实际验证与独立Review
+
+下表合计50个实际执行的定向测试用例，均有通过结果；MCP的 `TotalTests` 是全工程发现量，不冒充本批执行量。未重跑阶段8.1～8.2b历史完整套件，也未构建整个游戏或Player。
+
+| 验证范围 | 实际通过 | 主要证据 |
+| --- | --- | --- |
+| ResourceCatalogCodecTests | 15 | canonical/读回/身份/兼容、alias、程序集身份、同完整类型子资产冲突、16384总地址边界及重排 |
+| ResourceEditorSimulationTests | 5 | 多Project/alias/Group/Text/Sprite、修改/移动/导入/删除失效、published过期描述、main/sub及Base/Derived歧义负例 |
+| ResourceCodeGenerationTests | 9 | 正式值、子key、命名/类型/namespace碰撞、verbatim拒绝、invariant确定性、篡改、幂等、真实锁IO及meta保留 |
+| ResourceOutputSafetyTests | 3 | 祖先程序集/文件/Packages路径拒绝、junction与外部哨兵、无变化也拒绝live重复程序集 |
+| ResourceEditorTests | 8 | Undo/Redo与GUID持久化、未保存/取消、候选dirty集合拒绝、真实定义创建/保存/不覆盖、junction外部字节/meta保护、旧Runtime纯分区保护、Editor身份 |
+| ResourceWindowTests | 1 | 真EditorWindow Layout/Repaint/点击取得、选择事件、切换和关闭取消排队操作，无导入标记写入 |
+| ResourceBuildIntegrationTests | 1 | A/B两个正式Project、三次native构建和正式发布；只读集合不改root快照；dirty A不能遗漏；合法地址但生成标识符碰撞使生成独立失败，旧/新版本完整、Recover和借用取得准确 |
+| ResourceCatalogBuildTests | 1 | 实际Manifest/native name/hash/依赖、Group成员、类型程序集、Sprite子描述、Scene路径及canonical读回 |
+| ResourcePublishingTests | 4 | 本轮执行第16节原事务定向回归：提交重验证、重复/故障/取消/恢复、unknown/link/corruption/foreign拒绝、路径限制；没有改变其Publish/Recover提交合同 |
+| ResourceCodeCompilationTests | 2 | 真实Catalog生成，独立常量DLL、显式consumer asmdef、Assembly-CSharp编译与Text/Sprite/Group/alias消费；重复/失败/更新后的第二次编译及meta身份；中断清理归属保护 |
+| ExportUnityPackageTests | 1 | 正式新/迁移Editor源码与配套meta进入实际UnityPackage，原Screen prefab身份/内容保持 |
+
+- 一次独立只读技术Review提出1项P1和5项P2；全部已修复并定向回归，无挂起实质finding：编辑/保存/创建越界门禁，dirty候选丢失，verbatim namespace碰撞，共同子资产native语义，子去重完整程序集身份，canonical/alias总量限制。新增负例先在旧实现观察失败，再验证修复通过；没有二次Review冒充独立新结论。
+- 编译探针发现Domain Reload后iterator闭包不恢复，已定位IL并把跨重编译验证移至普通方法，原碰撞/锁/更新断言保留。期间遇到一次Unity firstpass DLL外部文件锁、生成更新偶发IO锁；未吞异常、弱化断言或增加盲重试，锁故障明确返回且旧文件保护不变，最终相关完整测试/编译重跑通过。不能承诺外部工具持锁时生成或Unity编译一定成功。
+- Runtime/Editor实际Unity编译边界验证：`YLFramework.Runtime` 的Player编译图417个源文件，无Editor源码/程序集/UnityEditor引用泄漏；这是编译图校验，不是Player构建。三处迁移GUID与AssetDatabase实际值一致，新增两个脚本配套meta齐全。最终Unity无脚本编译失败、已加载Bundle=0、原 `Assets/Scenes/Main.unity` 未标脏、无残留本批ResourceProject夹具或 `Assets/YLFrameworkData` 测试输出。
+- 原游戏/Games/MainModule、原XF/XFAB/XFFSM、历史Bundle、StreamingAssets、Packages及ProjectSettings由原Fixture保护快照及diff核对；`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Core Canvas和并行UI Plan的既有内容保持。本轮没有暂存或触碰这些用户修改。
+
+### 17.6 8.3依赖与停止点
+
+- 8.3可直接依赖稳定Project/Group/GUID/alias定义、唯一BuildMap/verified BuildResult及共同子资产描述、冻结Catalog v1/严格Codec、不可变版本/Release Index/owned恢复、正式工作台和常量程序集输入。Editor借用解析可作为统一source/lease接入的依据，但当前不伪装已接入Runtime加载器。
+- 剩余边界：没有AssetBundle运行时取得/释放、低层Bundle lease、运行时Group加载、Scene切换、实例池、Core/Audio迁移、版本激活、下载或签名/防重放。保持六项不可冻结回调下的保守native重建策略，不宣称整体缓存或性能提升。常量默认位置仍需真实用户Project发布后生成，夹具输出已清理。
+- **8.2c 技术 COMPLETE；SchemaVersion=1 正式冻结。等待用户技术验收与Git收口授权。到此停止，不自动实施8.3，不合并integration/xf-yl，不创建阶段8里程碑。**

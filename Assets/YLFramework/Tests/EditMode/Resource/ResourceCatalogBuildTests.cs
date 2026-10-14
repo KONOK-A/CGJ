@@ -48,10 +48,11 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(asset.Address, Is.EqualTo(main.Address.Path));
                 Assert.That(asset.BundleId, Is.EqualTo(main.BundleName));
                 Assert.That(asset.Kind, Is.EqualTo(main.IsScene ? "Scene" : "Asset"));
+                Assert.That(asset.AssetAssembly, Is.EqualTo(main.IsScene ? null : main.AssetType.Assembly.GetName().Name));
             }
             var sprites = read.Assets.Where(x => x.Kind == "SubAsset").ToArray();
             CollectionAssert.AreEquivalent(new[] { "Left", "Right" }, sprites.Select(x => x.SubAssetName));
-            Assert.That(sprites.All(x => x.AssetType == typeof(Sprite).FullName && x.SubAssetKey == x.LocalId.ToString()), Is.True);
+            Assert.That(sprites.All(x => x.AssetType == typeof(Sprite).FullName && x.AssetAssembly == typeof(Sprite).Assembly.GetName().Name && x.SubAssetKey == x.LocalId.ToString()), Is.True);
             foreach (var group in read.Groups)
                 CollectionAssert.AreEqual(result.Map.Groups[group.Id], group.Members.Select(x => x.AssetId));
             var loaded = new Dictionary<string, AssetBundle>();

@@ -21,11 +21,12 @@ namespace YLFramework.Editor.Resource
         public string AssetId => Guid + "_" + LocalId;
         public string SourcePath { get; }
         public ResourceAddress Address { get; }
+        public IReadOnlyList<ResourceAddress> Aliases { get; }
         public Type AssetType { get; }
         public string BundleName { get; internal set; }
         public bool IsScene => AssetType == typeof(SceneAsset);
 
-        internal ResourceBuildAsset(string path, ResourceAddress address)
+        internal ResourceBuildAsset(string path, ResourceAddress address, IEnumerable<string> aliases)
         {
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
             if (!asset || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string guid, out long localId))
@@ -34,6 +35,7 @@ namespace YLFramework.Editor.Resource
             LocalId = localId;
             SourcePath = path;
             Address = address;
+            Aliases = aliases.Select(x => new ResourceAddress(address.ProjectId, x)).OrderBy(x => x.Path, StringComparer.Ordinal).ToList().AsReadOnly();
             AssetType = ResourceBuildMap.BuildType(asset.GetType());
         }
     }
@@ -138,7 +140,9 @@ namespace YLFramework.Editor.Resource
                     var selected = ResolveGuid(selection.Guid);
                     RequireWithin(root, selected);
                     var folder = AssetDatabase.IsValidFolder(selected);
-                    if (folder && !string.IsNullOrEmpty(selection.Address))
+                    var aliases = selection.Aliases ?? Array.Empty<string>();
+                    if (aliases.Length > Limit) throw new InvalidOperationException("Resource alias limit exceeded.");
+                    if (folder && (!string.IsNullOrEmpty(selection.Address) || aliases.Length != 0))
                         throw new InvalidOperationException("Folder selections cannot override individual addresses.");
                     var extensions = selection.Extensions ?? Array.Empty<string>();
                     if (extensions.Any(x => string.IsNullOrEmpty(x) || x[0] != '.' || x.IndexOfAny(new[] { '/', '\\', '*' }) >= 0))
@@ -156,8 +160,14 @@ namespace YLFramework.Editor.Resource
                         ResourceAddress address;
                         try { address = new ResourceAddress(project.ProjectId, addressText); }
                         catch (ArgumentException error) { throw new InvalidOperationException("Invalid resource address: " + addressText, error); }
-                        if (!foldedAddresses.Add(addressText)) throw new InvalidOperationException("Duplicate/case-folded resource address: " + addressText);
-                        var asset = new ResourceBuildAsset(path, address);
+                        foreach (var key in new[] { addressText }.Concat(aliases))
+                        {
+                            try { _ = new ResourceAddress(project.ProjectId, key); }
+                            catch (ArgumentException error) { throw new InvalidOperationException("Invalid resource alias/address: " + key, error); }
+                            if (foldedAddresses.Count == Limit || !foldedAddresses.Add(key))
+                                throw new InvalidOperationException("Duplicate/case-folded resource alias/address: " + key);
+                        }
+                        var asset = new ResourceBuildAsset(path, address, aliases);
                         var bundle = prefix + (group.Packing == ResourcePacking.PerAsset ? "a_" + asset.Guid :
                             "g_" + Token(group.Id) + (asset.IsScene ? "_scenes" : "_assets"));
                         assets.Add(asset);

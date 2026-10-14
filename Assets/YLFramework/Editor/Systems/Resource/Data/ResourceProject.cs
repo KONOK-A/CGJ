@@ -32,6 +32,8 @@ namespace YLFramework.Editor.Resource
     {
         public string Guid;
         public string Address;
+        [Tooltip("同一 canonical 资产的额外逻辑地址；仅文件选择支持，子资产继承这些 alias。")]
+        public string[] Aliases = Array.Empty<string>();
         public string[] Extensions = Array.Empty<string>();
     }
 }

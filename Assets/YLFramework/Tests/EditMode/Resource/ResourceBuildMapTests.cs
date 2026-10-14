@@ -224,7 +224,7 @@ namespace YLFramework.Tests.ResourceBuild
 
         private ScriptableObject Project(params object[] groups)
         {
-            var assembly = typeof(BuildScript).Assembly;
+            var assembly = typeof(ResourceProject).Assembly;
             var projectType = assembly.GetType("YLFramework.Editor.Resource.ResourceProject");
             Assert.That(projectType, Is.Not.Null, "8.2a requires its own project definition, not SubProject/XFABProject.");
             var project = ScriptableObject.CreateInstance(projectType);
@@ -240,7 +240,7 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static object Map(ScriptableObject project)
         {
-            var assembly = typeof(BuildScript).Assembly;
+            var assembly = typeof(ResourceProject).Assembly;
             var mapType = assembly.GetType("YLFramework.Editor.Resource.ResourceBuildMap");
             Assert.That(mapType, Is.Not.Null);
             return mapType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { project });

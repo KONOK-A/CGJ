@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Services.Resource
 {
-    /// <summary>版本化、已验证的持久目录。它不挂载 ResourceSystem，也不按类型字符串反射创建对象。</summary>
+    /// <summary>8.2c 冻结的 Schema v1 持久目录。它不挂载 ResourceSystem，也不按类型字符串反射创建对象。</summary>
     public sealed class ResourceCatalogDocument
     {
         private readonly byte[] bytes;
@@ -65,24 +65,28 @@ namespace YLFramework.Services.Resource
         }
     }
 
-    /// <summary>GUID/localId 是 canonical 身份；SubAssetKey 使用 localId 的十进制文本，native 按唯一 name+type 定位。</summary>
+    /// <summary>GUID/localId 是 canonical 身份；SubAssetKey 是 invariant 十进制 localId。类型由 FullName+程序集简单名描述，native 按唯一 name+编译类型定位。</summary>
     public sealed class ResourceCatalogAsset
     {
         public string AssetId { get; }
         public string Guid { get; }
         public long LocalId { get; }
         public string Address { get; }
+        public IReadOnlyList<string> Aliases { get; }
         public string SubAssetKey { get; }
         public string BundleId { get; }
         public string LoadName { get; }
         public string AssetType { get; }
+        public string AssetAssembly { get; }
         public string Kind { get; }
         public string SubAssetName { get; }
         internal ResourceCatalogAsset(JObject data)
         {
             AssetId = (string)data["AssetId"]; Guid = (string)data["Guid"]; LocalId = (long)data["LocalId"];
             Address = (string)data["Address"]; SubAssetKey = (string)data["SubAssetKey"]; BundleId = (string)data["BundleId"];
+            Aliases = ((JArray)data["Aliases"]).Select(x => (string)x).ToList().AsReadOnly();
             LoadName = (string)data["LoadName"]; AssetType = (string)data["AssetType"]; Kind = (string)data["Kind"];
+            AssetAssembly = (string)data["AssetAssembly"];
             SubAssetName = (string)data["SubAssetName"];
         }
     }

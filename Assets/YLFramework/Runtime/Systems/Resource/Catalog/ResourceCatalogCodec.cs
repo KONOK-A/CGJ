@@ -199,11 +199,11 @@ namespace YLFramework.Services.Resource
             var addresses = new HashSet<(string, string)>();
             var mainFiles = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
             var mainGuids = new HashSet<string>(StringComparer.Ordinal);
-            var subIdentities = new HashSet<(string, string, string, string)>();
+            var subIdentities = new HashSet<(string, string, string, string, string)>();
             foreach (var item in Items(data, "Assets", true))
             {
                 var asset = Object(item);
-                Fields(asset, "AssetId,Guid,LocalId,Address,SubAssetKey,BundleId,LoadName,AssetType,Kind,SubAssetName");
+                Fields(asset, "AssetId,Guid,LocalId,Address,Aliases,SubAssetKey,BundleId,LoadName,AssetType,AssetAssembly,Kind,SubAssetName");
                 var guid = Text(asset, "Guid"); Hex(guid, 32);
                 var local = Integer(asset, "LocalId");
                 var id = Text(asset, "AssetId");
@@ -213,18 +213,28 @@ namespace YLFramework.Services.Resource
                 var address = Text(asset, "Address"); PathValue(address);
                 var sub = Text(asset, "SubAssetKey", true);
                 if (sub != null) PathValue(sub);
-                if (!addresses.Add((address.ToUpperInvariant(), sub?.ToUpperInvariant()))) throw new InvalidDataException("Case-folded address conflict.");
+                if (addresses.Count >= Limit || !addresses.Add((address.ToUpperInvariant(), sub?.ToUpperInvariant()))) throw new InvalidDataException("Catalog address limit or case-folded address conflict.");
+                foreach (var alias in Items(asset, "Aliases"))
+                {
+                    if (alias.Type != JTokenType.String) throw new InvalidDataException("Expected alias address.");
+                    var key = Text(new JObject { ["Alias"] = alias.DeepClone() }, "Alias"); PathValue(key);
+                    if (addresses.Count >= Limit || !addresses.Add((key.ToUpperInvariant(), sub?.ToUpperInvariant())))
+                        throw new InvalidDataException("Duplicate/case-folded alias address conflict.");
+                }
                 var bundle = Text(asset, "BundleId");
                 if (!bundles.TryGetValue(bundle, out var owner)) throw new InvalidDataException("Unknown asset Bundle.");
                 var kind = Text(asset, "Kind");
                 var load = Text(asset, "LoadName"); PathValue(load);
                 var type = Text(asset, "AssetType");
+                var assembly = Text(asset, "AssetAssembly", true);
+                if (kind == "Scene" ? type != "Scene" || assembly != null : type == "Scene" || assembly == null || assembly.Length > 128)
+                    throw new InvalidDataException("Scene/type/assembly identity mismatch.");
                 if (type.Contains(",") || type.Contains("[") || type.Contains(" ")) throw new InvalidDataException("AssetType must be a descriptive full name, not an AQN.");
                 var subName = Text(asset, "SubAssetName", true);
                 if (kind == "SubAsset")
                 {
                     if ((bool)owner["IsScene"] || sub != local.ToString(CultureInfo.InvariantCulture) || subName == null ||
-                        !subIdentities.Add((bundle, load, type, subName))) throw new InvalidDataException("Ambiguous or invalid subasset identity.");
+                        !subIdentities.Add((bundle, load, type, assembly, subName))) throw new InvalidDataException("Ambiguous or invalid subasset identity.");
                 }
                 else if (kind == "Asset" || kind == "Scene")
                 {
@@ -239,7 +249,9 @@ namespace YLFramework.Services.Resource
             }
             foreach (var asset in assets.Values.Where(x => (string)x["Kind"] == "SubAsset"))
                 if (!mainFiles.TryGetValue((string)asset["LoadName"], out var main) || (string)main["Guid"] != (string)asset["Guid"] ||
-                    (string)main["Address"] != (string)asset["Address"] || (string)main["BundleId"] != (string)asset["BundleId"])
+                    (string)main["Address"] != (string)asset["Address"] || (string)main["BundleId"] != (string)asset["BundleId"] ||
+                    !((JArray)main["Aliases"]).Select(x => (string)x).OrderBy(x => x, StringComparer.Ordinal)
+                        .SequenceEqual(((JArray)asset["Aliases"]).Select(x => (string)x).OrderBy(x => x, StringComparer.Ordinal)))
                     throw new InvalidDataException("Subasset is not bound to its canonical main asset.");
             var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in Items(data, "Groups", true))
@@ -270,6 +282,8 @@ namespace YLFramework.Services.Resource
         {
             void Sort(JObject owner, string key, string field) => owner[key] = new JArray(((JArray)owner[key]).OrderBy(x => (string)x[field], StringComparer.Ordinal));
             Sort(data, "Bundles", "LogicalId"); Sort(data, "Assets", "AssetId"); Sort(data, "Groups", "Id"); Sort(data, "SupportFiles", "RelativeFile");
+            foreach (var asset in ((JArray)data["Assets"]).Cast<JObject>())
+                asset["Aliases"] = new JArray(((JArray)asset["Aliases"]).OrderBy(x => (string)x, StringComparer.Ordinal));
             foreach (var bundle in ((JArray)data["Bundles"]).Cast<JObject>())
                 bundle["Dependencies"] = new JArray(((JArray)bundle["Dependencies"]).OrderBy(x => (string)x, StringComparer.Ordinal));
             foreach (var group in ((JArray)data["Groups"]).Cast<JObject>()) Sort(group, "Members", "AssetId");

@@ -89,6 +89,15 @@ namespace YLFramework.Editor.Resource
             return new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString()).Output;
         }
 
+        internal static string PreflightWorkspace(ResourceProject project, BuildTarget target)
+        {
+            var map = ResourceBuildMap.Create(project);
+            long bytes = 0;
+            var workspace = new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString());
+            _ = workspace.Read();
+            return workspace.Output;
+        }
+
         /// <summary>取消在 native 构建前后及验证检查点生效；Unity 同步 BuildPipeline 本身不可由 token 中断。</summary>
         public static ResourceBuildResult Build(ResourceProject project, BuildTarget target, bool forceRebuild = false,
             CancellationToken cancellation = default) => Execute(project, target, forceRebuild, cancellation, BuildPipeline.BuildAssetBundles);
@@ -211,7 +220,7 @@ namespace YLFramework.Editor.Resource
                 .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         }
 
-        private static void ValidateEditor(BuildTarget target)
+        internal static void ValidateEditor(BuildTarget target)
         {
             if (Thread.CurrentThread.ManagedThreadId != MainThread || EditorApplication.isPlayingOrWillChangePlaymode ||
                 EditorApplication.isCompiling || EditorApplication.isUpdating)
@@ -233,7 +242,7 @@ namespace YLFramework.Editor.Resource
                     throw new InvalidOperationException("Dirty scenes must not be saved or replaced by the resource builder.");
         }
 
-        private static void RejectLoadedBundles()
+        internal static void RejectLoadedBundles()
         {
             // 实测 native build 会卸载其他项目已经加载的 Bundle；只防同 namespace 不足以保护外部所有权。
             if (AssetBundle.GetAllLoadedAssetBundles().Any(x => x))
@@ -243,7 +252,8 @@ namespace YLFramework.Editor.Resource
         private static List<ResourceBuiltBundle> ReadBack(ResourceBuildMap map, ResourceBuildWorkspace workspace,
             CancellationToken cancellation, out List<ResourceBuiltSubAsset> subAssets)
         {
-            subAssets = new List<ResourceBuiltSubAsset>();
+            subAssets = DescribeSubAssets(map);
+            var descriptions = subAssets;
             var loaded = new List<AssetBundle>();
             try
             {
@@ -281,20 +291,12 @@ namespace YLFramework.Editor.Resource
                             var value = bundle.LoadAsset(asset.SourcePath, asset.AssetType);
                             if (!value || !asset.AssetType.IsInstanceOfType(value))
                                 throw new InvalidOperationException("Bundle resource identity/type readback failed: " + asset.Address);
-                            var subKeys = new HashSet<(string, Type)>();
-                            foreach (var source in AssetDatabase.LoadAllAssetRepresentationsAtPath(asset.SourcePath))
+                            foreach (var sub in descriptions.Where(x => x.MainAsset == asset))
                             {
-                                if (!source) continue;
-                                var type = ResourceBuildMap.BuildType(source.GetType());
-                                if (type == null || type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal)) continue;
-                                if (string.IsNullOrWhiteSpace(source.name) || !subKeys.Add((source.name, type)) ||
-                                    !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long localId) ||
-                                    guid != asset.Guid || localId == 0 || localId == asset.LocalId)
-                                    throw new InvalidOperationException("Ambiguous subasset identity: " + asset.Address);
-                                var matches = bundle.LoadAssetWithSubAssets(asset.SourcePath, type).Where(x => x && x.name == source.name && type.IsInstanceOfType(x)).ToArray();
+                                var type = sub.AssetType;
+                                var matches = bundle.LoadAssetWithSubAssets(asset.SourcePath, type).Where(x => x && x.name == sub.Name && type.IsInstanceOfType(x)).ToArray();
                                 if (matches.Length != 1)
-                                    throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + localId.ToString(CultureInfo.InvariantCulture));
-                                subAssets.Add(new ResourceBuiltSubAsset(asset, localId, source.name, type));
+                                    throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + sub.LocalId.ToString(CultureInfo.InvariantCulture));
                             }
                         }
                         result.Add(new ResourceBuiltBundle(entry.Name, manifest.GetAssetBundleHash(entry.Name).ToString(), dependencies));
@@ -307,6 +309,36 @@ namespace YLFramework.Editor.Resource
             {
                 for (var i = loaded.Count - 1; i >= 0; i--) if (loaded[i]) loaded[i].Unload(true);
             }
+        }
+
+        // 构建读回与零打包模拟共用身份/歧义规则，只公开 Project view 可见、可运行时消费的子资产。
+        internal static List<ResourceBuiltSubAsset> DescribeSubAssets(ResourceBuildMap map)
+        {
+            var result = new List<ResourceBuiltSubAsset>();
+            foreach (var asset in map.Assets.Where(x => !x.IsScene))
+            {
+                // native 的 typed 查询包含 main 和隐藏对象，并按可赋值关系匹配；localId 不能掩盖其名称歧义。
+                var candidates = AssetDatabase.LoadAllAssetsAtPath(asset.SourcePath).Where(x => x)
+                    .Select(x => (x.name, Type: ResourceBuildMap.BuildType(x.GetType()))).Where(x => x.Type != null)
+                    .GroupBy(x => x.name, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Select(v => v.Type).ToArray(), StringComparer.Ordinal);
+                var keys = new HashSet<(string, Type)>();
+                var ids = new HashSet<long> { asset.LocalId };
+                foreach (var source in AssetDatabase.LoadAllAssetRepresentationsAtPath(asset.SourcePath))
+                {
+                    if (!source) continue;
+                    var type = ResourceBuildMap.BuildType(source.GetType());
+                    if (type == null || type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal)) continue;
+                    if (!candidates.TryGetValue(source.name, out var matches) || matches.Count(type.IsAssignableFrom) != 1)
+                        throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + source.name);
+                    if (string.IsNullOrWhiteSpace(source.name) || !keys.Add((source.name, type)) ||
+                        !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long localId) ||
+                        guid != asset.Guid || localId == 0 || !ids.Add(localId))
+                        throw new InvalidOperationException("Ambiguous subasset identity: " + asset.Address);
+                    if (map.Assets.Count + result.Count >= 16384) throw new InvalidOperationException("Catalog asset limit exceeded.");
+                    result.Add(new ResourceBuiltSubAsset(asset, localId, source.name, type));
+                }
+            }
+            return result;
         }
 
         private static string Settings(ResourceBuildMap map, ResourceProject project, BuildTarget target, ref long bytes)
@@ -328,6 +360,8 @@ namespace YLFramework.Editor.Resource
                 {
                     Add(data, selection.Guid);
                     Add(data, selection.Address ?? "");
+                    Add(data, (selection.Aliases?.Length ?? 0).ToString(CultureInfo.InvariantCulture));
+                    foreach (var alias in (selection.Aliases ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal)) Add(data, alias);
                     Add(data, (selection.Extensions?.Length ?? 0).ToString());
                     foreach (var extension in (selection.Extensions ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal)) Add(data, extension);
                 }
@@ -381,6 +415,7 @@ namespace YLFramework.Editor.Resource
             {
                 Add(data, asset.AssetId);
                 Add(data, asset.Address.ToString());
+                foreach (var alias in asset.Aliases) Add(data, alias.ToString());
                 Add(data, asset.AssetType.AssemblyQualifiedName);
                 Add(data, asset.BundleName);
             }

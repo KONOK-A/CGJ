@@ -80,6 +80,40 @@ namespace YLFramework.Editor.Resource
             return Root(result.Map.ProjectId, result.Platform);
         }
 
+        internal static string Preflight(ResourceProject project, BuildTarget target)
+        {
+            ValidateEditor();
+            var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
+            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
+            var root = Root(project.ProjectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
+            if (owner != null)
+            {
+                ValidateRoot(root, owner);
+                var index = ReadIndex(root, owner);
+                if (index != null) VerifyVersion(root, owner, index);
+            }
+            return root;
+        }
+
+        /// <summary>只读取得当前 owned 发布，不执行 Recover 的提交点恢复或临时目录清理。</summary>
+        public static ResourceRelease ReadCurrent(ResourceProject project, BuildTarget target, string appContentCompatibilityId)
+        {
+            ValidateEditor();
+            if (project && EditorUtility.IsDirty(project)) throw new InvalidOperationException("发布集合候选定义未保存，拒绝按临时身份遗漏项目：" + AssetDatabase.GetAssetPath(project));
+            var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
+            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
+            var root = Root(project.ProjectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
+            if (owner == null) return null;
+            ValidateRoot(root, owner);
+            var index = ReadIndex(root, owner);
+            if (index == null) return null;
+            if (index.UnityCompatibility != Application.unityVersion || index.AppContentCompatibilityId != appContentCompatibilityId)
+                throw new InvalidOperationException("Published Project has different Unity/App compatibility: " + project.ProjectId);
+            return new ResourceRelease(root, VerifyVersion(root, owner, index));
+        }
+
         /// <summary>取消只在 Index 提交前生效。提交后的 IO 故障可能使调用结果未定，Recover 以实际 Index 确认完整快照。</summary>
         public static ResourceRelease Publish(ResourceBuildResult result, string appContentCompatibilityId, CancellationToken cancellation = default) =>
             Execute(result, appContentCompatibilityId, cancellation, null);

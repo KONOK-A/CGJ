@@ -26,8 +26,10 @@ namespace YLFramework.Editor.Resource
                 ["AssetId"] = main.Guid + "_" + (sub?.LocalId ?? main.LocalId).ToString(CultureInfo.InvariantCulture),
                 ["Guid"] = main.Guid, ["LocalId"] = sub?.LocalId ?? main.LocalId, ["Address"] = main.Address.Path,
                 ["SubAssetKey"] = sub?.LocalId.ToString(CultureInfo.InvariantCulture), ["BundleId"] = main.BundleName,
+                ["Aliases"] = new JArray(main.Aliases.Select(x => x.Path)),
                 ["LoadName"] = main.IsScene ? main.SourcePath : main.SourcePath.ToLowerInvariant(),
                 ["AssetType"] = main.IsScene ? "Scene" : (sub?.AssetType ?? main.AssetType).FullName,
+                ["AssetAssembly"] = main.IsScene ? null : (sub?.AssetType ?? main.AssetType).Assembly.GetName().Name,
                 ["Kind"] = main.IsScene ? "Scene" : sub == null ? "Asset" : "SubAsset", ["SubAssetName"] = sub?.Name
             };
             var bundles = new JArray();

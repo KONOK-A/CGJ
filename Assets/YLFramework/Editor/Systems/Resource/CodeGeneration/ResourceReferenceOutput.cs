@@ -8,16 +8,17 @@ using UnityEditor;
 namespace YLFramework.Editor.Resource
 {
     // 项目生成物的窄承载契约，不为未知业务源码创建/改写程序集。
-    internal static class ResReferenceOutput
+    internal static class ResourceReferenceOutput
     {
         internal const string DirectoryPath = "Assets/YLFrameworkData";
         internal const string AssemblyName = "YLFramework.Generated.ResourceNames";
-        internal const string SourceName = "YLResData.cs";
-        private const string Header = "// YL Resource names v1 SHA256: ";
+        internal const string SourceName = "YLResourceReferences.cs";
+        private const string Header = "// YL Catalog references v1 SHA256: ";
         internal const string AssemblyDefinition = "{\n  \"name\": \"" + AssemblyName + "\",\n  \"references\": [],\n  \"autoReferenced\": true,\n  \"overrideReferences\": true,\n  \"precompiledReferences\": [],\n  \"noEngineReferences\": true\n}\n";
 
-        internal static void Publish(string directory, string source)
+        internal static bool Publish(string directory, string source)
         {
+            directory = Path.GetFullPath(directory).TrimEnd('/', '\\');
             var content = Header + Hash(source) + "\n" + source;
             var path = Path.Combine(directory, SourceName);
             var asmdef = Path.Combine(directory, AssemblyName + ".asmdef");
@@ -41,6 +42,7 @@ namespace YLFramework.Editor.Resource
                         throw new InvalidOperationException("生成目录含未知源码或资产，拒绝改变程序集身份：" + entry);
             var hadSource = File.Exists(path);
             var hadAssembly = File.Exists(asmdef);
+            if (existed && !hadSource) throw new InvalidOperationException("生成目录没有本工具的完整归属，拒绝接管：" + directory);
             if (hadSource != hadAssembly || (!hadSource && (File.Exists(path + ".meta") || File.Exists(asmdef + ".meta"))))
                 throw new InvalidOperationException("生成物/程序集不完整或属于旧承载，请先确认迁移：" + directory);
             if (hadSource)
@@ -50,7 +52,6 @@ namespace YLFramework.Editor.Resource
                 if (newline < 0 || old.Substring(0, newline) != Header + Hash(old.Substring(newline + 1)) ||
                     File.ReadAllText(asmdef) != AssemblyDefinition)
                     throw new InvalidOperationException("已有源码被手写/修改或程序集配置不匹配，拒绝覆盖：" + directory);
-                if (old == content) return;
             }
             foreach (var guid in AssetDatabase.FindAssets("t:AssemblyDefinitionAsset"))
             {
@@ -61,6 +62,8 @@ namespace YLFramework.Editor.Resource
                 if (JsonUtilityName(asset.text) == AssemblyName)
                     throw new InvalidOperationException("生成程序集名称已被其他位置占用：" + other);
             }
+            // 无变化也必须先查程序集占用，不能因提前返回接受重复身份。
+            if (hadSource && File.ReadAllText(path) == content) return false;
             var temporary = Path.Combine(directory, ".yl-names-" + Guid.NewGuid().ToString("N"));
             var assemblyTemporary = temporary + ".asmdef-tmp";
             var createdAssembly = false;
@@ -77,6 +80,7 @@ namespace YLFramework.Editor.Resource
                 // 同目录暂存后替换文件本体，绝不删除/重建已有 .meta。
                 if (hadSource) File.Replace(temporary, path, null);
                 else File.Move(temporary, path);
+                return true;
             }
             catch
             {

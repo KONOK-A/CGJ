@@ -1,256 +1,192 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Resource;
 using YLFramework.Services.Resource;
+using YLFramework.Tests.ResourceBuild;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.ResourceEditor
 {
     public class ResourceEditorTests
     {
-        private string _folder;
-        private Object[] _selection;
+        private string folder;
+        [SetUp]
+        public void SetUp()
+        {
+            folder = "Assets/YLFramework/Tests/EditMode/Resource82c-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode", Path.GetFileName(folder));
+        }
+        [TearDown] public void TearDown() => AssetDatabase.DeleteAsset(folder);
 
         [Test]
         public void ResourceEditorPathsFollowBuildServiceCodeGenerationAndDataResponsibilities()
         {
             const string root = "Assets/YLFramework/Editor/Systems/Resource/";
-            foreach (var file in new[] { "Build/AssetBundleExporter.cs", "Build/BuildScript.cs", "Build/ResourceBuildOperation.cs",
-                "Build/ResourceBuildMap.cs", "Build/ResourceBuildWorkspace.cs", "Build/ResourceBundleBuilder.cs", "Build/ResourceCatalogBuilder.cs", "Data/ResourceProject.cs",
-                "Publishing/ResourcePublisher.cs",
-                "Service/ResServiceAssetsMenu.cs", "Service/ResServiceEditorAPI.cs", "Service/ResServiceEditorWindow.cs",
-                "CodeGeneration/ResDataCodeGenerator.cs", "CodeGeneration/ResReferenceOutput.cs" })
+            foreach (var file in new[] { "Build/ResourceBuildOperation.cs", "Build/ResourceBuildMap.cs", "Build/ResourceBuildWorkspace.cs",
+                "Build/ResourceBundleBuilder.cs", "Build/ResourceCatalogBuilder.cs", "Data/ResourceProject.cs", "Publishing/ResourcePublisher.cs",
+                "Service/ResourceEditorOperations.cs", "Service/ResourceEditorSimulation.cs", "Service/ResServiceAssetsMenu.cs", "Service/ResServiceEditorWindow.cs",
+                "CodeGeneration/ResourceCodeGenerator.cs", "CodeGeneration/ResourceReferenceOutput.cs" })
             {
-                Assert.That(File.Exists(root + file), Is.True, file);
-                Assert.That(File.Exists(root + file + ".meta"), Is.True, file);
+                Assert.That(File.Exists(root + file) && File.Exists(root + file + ".meta"), Is.True, file);
+                Assert.That(Path.GetFileNameWithoutExtension(UnityEditor.Compilation.CompilationPipeline.GetAssemblyNameFromScriptPath(root + file)), Is.EqualTo("YLFramework.Editor"));
             }
-            Assert.That(Directory.GetFiles(root, "*.cs"), Is.Empty);
-            Assert.That(Directory.GetFiles(root + "Data", "*.cs"), Is.Not.Empty);
-        }
-
-        [SetUp]
-        public void SetUp()
-        {
-            _selection = Selection.objects;
-            _folder = "Assets/YLFramework/Tests/EditMode/Resource62-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode", Path.GetFileName(_folder));
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            Selection.objects = _selection;
-            foreach (var guid in AssetDatabase.FindAssets("", new[] { _folder }))
-            {
-                var importer = AssetImporter.GetAtPath(AssetDatabase.GUIDToAssetPath(guid));
-                if (importer) Undo.ClearUndo(importer);
-            }
-            AssetDatabase.DeleteAsset(_folder);
-            AssetDatabase.RemoveUnusedAssetBundleNames();
-        }
-
-        private string Text(string folder, string name, string bundle = null)
-        {
-            var path = folder + "/" + name + ".bytes";
-            File.WriteAllText(path, "Resource62 isolated text");
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            if (bundle != null)
-            {
-                var importer = AssetImporter.GetAtPath(path);
-                importer.assetBundleName = bundle;
-                importer.SaveAndReimport();
-            }
-            return path;
-        }
-
-        private SubProjectData Owner(string folder, string name)
-        {
-            var asset = ScriptableObject.CreateInstance<SubProject>();
-            AssetDatabase.CreateAsset(asset, folder + "/" + name + ".asset");
-            return SubProjectData.SearchAllInProject().Single(x => x.Path == folder + "/" + name + ".asset");
+            var assembly = typeof(ResourceProject).Assembly;
+            Assert.That(assembly.GetType("YLFramework.Editor.Resource.BuildScript"), Is.Null);
+            Assert.That(assembly.GetType("YLFramework.Editor.Resource.AssetBundleExporter"), Is.Null);
+            Assert.That(assembly.GetType("YLFramework.Editor.Resource.ResourceBuildOperation").GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                .Any(x => x.Name == "Execute" || x.Name == "CreatePlan"), Is.False, "There must not be a competing legacy builder.");
         }
 
         [Test]
-        public void DirectoryBoundaryDoesNotClaimSiblingWithSamePrefix()
+        public void FormalSelectionEditingSupportsUndoAndSavedGuidWithoutImporterWrites()
         {
-            AssetDatabase.CreateFolder(_folder, "Owner");
-            AssetDatabase.CreateFolder(_folder, "OwnerExtra");
-            var owner = Owner(_folder + "/Owner", "Project");
-            var bundle = "resource62-" + Guid.NewGuid().ToString("N");
-            Text(_folder + "/OwnerExtra", "Text", bundle);
-            var defaults = new SubProjectData();
-            SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaults, new List<SubProjectData> { owner });
-            Assert.IsEmpty(owner.Builds);
-            Assert.IsTrue(defaults.Builds.Any(x => x.assetBundleName == bundle));
-        }
-
-        [Test]
-        public void NestedOwnersAreRejectedBeforeAnyBuildListChanges()
-        {
-            AssetDatabase.CreateFolder(_folder, "Child");
-            var parent = Owner(_folder, "Parent");
-            var child = Owner(_folder + "/Child", "Child");
-            Text(_folder + "/Child", "Text", "resource62-" + Guid.NewGuid().ToString("N"));
-            var defaults = new SubProjectData();
-            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(
-                defaults, new List<SubProjectData> { parent, child }));
-            Assert.IsEmpty(defaults.Builds);
-            Assert.IsEmpty(parent.Builds);
-            Assert.IsEmpty(child.Builds);
-        }
-
-        [Test]
-        public void OneBundleAcrossDefaultAndSubprojectIsRejected()
-        {
-            AssetDatabase.CreateFolder(_folder, "Owner");
-            var owner = Owner(_folder + "/Owner", "Project");
-            var bundle = "resource62-" + Guid.NewGuid().ToString("N");
-            Text(_folder, "Default", bundle);
-            Text(_folder + "/Owner", "Owned", bundle);
-            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(
-                new SubProjectData(), new List<SubProjectData> { owner }));
-        }
-
-        [Test]
-        public void RepeatedPartitionDoesNotDuplicateBuilds()
-        {
-            var owner = Owner(_folder, "Project");
-            Text(_folder, "Text", "resource62-" + Guid.NewGuid().ToString("N"));
-            var defaults = new SubProjectData();
-            var owners = new List<SubProjectData> { owner };
-            SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaults, owners);
-            SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaults, owners);
-            Assert.AreEqual(1, owner.Builds.Count);
-        }
-
-        [Test]
-        public void MarkAndCancelPersistAcrossImportWithInvariantCase()
-        {
-            var path = Text(_folder, "FILE.I");
-            var oldCulture = CultureInfo.CurrentCulture;
-            try
-            {
-                CultureInfo.CurrentCulture = new CultureInfo("tr-TR");
-                ResServiceAssetsMenu.MarkAB(path);
-                Assert.IsTrue(ResServiceAssetsMenu.IsMarked(path));
-                Assert.AreEqual("file_i_bytes", AssetImporter.GetAtPath(path).assetBundleName);
-                StringAssert.Contains("assetBundleName: file_i_bytes", File.ReadAllText(path + ".meta"));
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                Assert.IsTrue(ResServiceAssetsMenu.IsMarked(path));
-                ResServiceAssetsMenu.MarkAB(path);
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                Assert.IsEmpty(AssetImporter.GetAtPath(path).assetBundleName);
-            }
-            finally { CultureInfo.CurrentCulture = oldCulture; }
-        }
-
-        [Test]
-        public void UnknownExistingBundleMarkIsNotOverwritten()
-        {
-            var path = Text(_folder, "Text", "foreign-" + Guid.NewGuid().ToString("N"));
+            using var fixture = new ResourceReleaseFixture();
+            var project = fixture.Project;
+            var path = fixture.Folder + "/Content/Shared.asset";
             var before = File.ReadAllBytes(path + ".meta");
-            Assert.Throws<InvalidOperationException>(() => ResServiceAssetsMenu.MarkAB(path));
+            var count = project.Groups[0].Selections.Count;
+            ResourceEditorOperations.AddSelections(project, 0, new[] { AssetDatabase.LoadMainAssetAtPath(path) });
+            Assert.That(project.Groups[0].Selections.Count, Is.EqualTo(count + 1));
+            Undo.PerformUndo(); Assert.That(project.Groups[0].Selections.Count, Is.EqualTo(count));
+            Undo.PerformRedo(); Assert.That(project.Groups[0].Selections[count].Guid, Is.EqualTo(AssetDatabase.AssetPathToGUID(path)));
+            AssetDatabase.SaveAssetIfDirty(project);
+            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(project), ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            Assert.That(fixture.Project.Groups[0].Selections.Count, Is.EqualTo(count + 1));
             CollectionAssert.AreEqual(before, File.ReadAllBytes(path + ".meta"));
+            Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.AddSelections(fixture.Project, 0, new[] { AssetDatabase.LoadMainAssetAtPath(folder) }));
+            Undo.ClearUndo(fixture.Project);
         }
 
         [Test]
-        public void BuildCancellationDoesNotCreateOutputDirectories()
+        public void WorkbenchCreatesAndSavesOnlyNewAssetsIdentityWithoutOverwritingExistingData()
         {
-            var name = "Resource62-" + Guid.NewGuid().ToString("N");
-            Owner(_folder, name);
-            Text(_folder, "Text", name.ToLowerInvariant());
-            var output = Path.GetFullPath("AssetBundles/" + name + "/Windows");
-            var streaming = Path.Combine(Application.streamingAssetsPath, name, "AssetBundles", "Windows");
-            Func<string, bool> cancel = summary =>
-            {
-                StringAssert.Contains(output, summary);
-                StringAssert.Contains(Path.GetFullPath(streaming), summary);
-                return false;
-            };
-            Func<string, AssetBundleBuild[], BuildTarget, AssetBundleManifest> neverBuild = (_, _, _) =>
-            { Assert.Fail("Cancelled operation must not invoke BuildPipeline"); return null; };
-            Assert.IsFalse((bool)Invoke(typeof(BuildScript), "RunBuild", EditorUserBuildSettings.activeBuildTarget, cancel, neverBuild));
-            Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(output)));
-            Assert.IsFalse(Directory.Exists(Path.Combine(Application.streamingAssetsPath, name)));
+            var path = folder + "/Created.asset";
+            var project = ResourceEditorOperations.CreateProject(path);
+            Assert.That(project, Is.SameAs(AssetDatabase.LoadAssetAtPath<ResourceProject>(path)));
+            Assert.That(AssetDatabase.AssetPathToGUID(path), Has.Length.EqualTo(32));
+            project.DisplayName = "saved definition"; EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
+            var bytes = File.ReadAllBytes(path); var meta = File.ReadAllBytes(path + ".meta");
+            Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.CreateProject(path));
+            Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.CreateProject("Packages/Protected82c.asset"));
+            Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.CreateProject(folder + "/../Escaped.asset"));
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path)); CollectionAssert.AreEqual(meta, File.ReadAllBytes(path + ".meta"));
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            Assert.That(AssetDatabase.LoadAssetAtPath<ResourceProject>(path).DisplayName, Is.EqualTo("saved definition"));
         }
 
         [Test]
-        public void MenuValidationTracksCurrentSingleSelectionWithoutReplacingSubscribers()
+        public void WorkbenchRefusesJunctionDefinitionBeforeEditingOrSavingExternalBytes()
         {
-            var first = Text(_folder, "First");
-            var second = Text(_folder, "Second");
-            var notifications = 0;
-            Action listener = () => notifications++;
-            Selection.selectionChanged += listener;
-            try
-            {
-                Selection.objects = new[] { AssetDatabase.LoadAssetAtPath<Object>(first) };
-                Assert.IsTrue((bool)Invoke(typeof(ResServiceAssetsMenu), "ValidateMarkDirOrFile"));
-                Assert.IsFalse(Menu.GetChecked("Assets/YLFramework - AssetBundle Mark"));
-                ResServiceAssetsMenu.MarkDirOrFile();
-                Assert.IsTrue(Menu.GetChecked("Assets/YLFramework - AssetBundle Mark"));
-                Selection.objects = new[] { AssetDatabase.LoadAssetAtPath<Object>(second) };
-                Invoke(typeof(ResServiceAssetsMenu), "ValidateMarkDirOrFile");
-                Assert.IsFalse(Menu.GetChecked("Assets/YLFramework - AssetBundle Mark"));
-                Selection.objects = new[] { AssetDatabase.LoadAssetAtPath<Object>(first), AssetDatabase.LoadAssetAtPath<Object>(second) };
-                Assert.IsFalse((bool)Invoke(typeof(ResServiceAssetsMenu), "ValidateMarkDirOrFile"));
-                Assert.Greater(notifications, 0);
-                foreach (var path in new[] { "Assets", "Packages/com.unity.test-framework/package.json" })
-                    Assert.IsFalse((bool)Invoke(typeof(ResServiceAssetsMenu), "IsValidAssetPath", path));
-            }
-            finally { Selection.selectionChanged -= listener; }
-        }
-
-        [Test]
-        public void BundleFileAndDirectoryCollisionIsRejectedBeforeBuild()
-        {
-            var name = "resource62-" + Guid.NewGuid().ToString("N");
-            Text(_folder, "First", name);
-            Text(_folder, "Second", name + "/second");
-            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(
-                new SubProjectData(), new List<SubProjectData>()));
-        }
-
-        [Test]
-        public void MarkValidatorRejectsJunctionSourceWithoutImportingOrWritingIt()
-        {
-            var outside = Path.GetFullPath("Temp/Resource62-" + Guid.NewGuid().ToString("N"));
-            var link = Path.GetFullPath(_folder + "/Linked");
+            using var fixture = new ResourceReleaseFixture();
+            var source = fixture.Folder + "/Project.asset";
+            var outside = Path.GetFullPath("Temp/Definition82c-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(outside);
-            File.WriteAllText(Path.Combine(outside, "Foreign.bytes"), "keep external source");
+            File.Copy(source, Path.Combine(outside, "Project.asset")); File.Copy(source + ".meta", Path.Combine(outside, "Project.asset.meta"));
+            AssetDatabase.DeleteAsset(source);
+            var link = Path.GetFullPath(folder + "/Linked");
             try
             {
                 ResourceOutputSafetyTests.CreateJunction(link, outside);
-                Assert.IsFalse((bool)Invoke(typeof(ResServiceAssetsMenu), "IsValidAssetPath", _folder + "/Linked/Foreign.bytes"));
-                Assert.AreEqual("keep external source", File.ReadAllText(Path.Combine(outside, "Foreign.bytes")));
+                AssetDatabase.ImportAsset(folder + "/Linked/Project.asset", ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                var linked = AssetDatabase.LoadAssetAtPath<ResourceProject>(folder + "/Linked/Project.asset");
+                Assert.That(linked, Is.Not.Null);
+                var bytes = File.ReadAllBytes(Path.Combine(outside, "Project.asset"));
+                var meta = File.ReadAllBytes(Path.Combine(outside, "Project.asset.meta"));
+                var view = new ResServiceView();
+                try { Assert.Throws<InvalidOperationException>(() => view.SetProject(linked)); }
+                finally { view.OnDispose(); }
+                Assert.Throws<InvalidOperationException>(() => Invoke(typeof(ResourceEditorOperations), "SaveProject", linked));
+                Assert.Throws<InvalidOperationException>(() => Invoke(typeof(ResourceEditorOperations), "CreateProject", folder + "/Linked/New.asset"));
+                CollectionAssert.AreEqual(bytes, File.ReadAllBytes(Path.Combine(outside, "Project.asset")));
+                CollectionAssert.AreEqual(meta, File.ReadAllBytes(Path.Combine(outside, "Project.asset.meta")));
+                Assert.That(File.Exists(Path.Combine(outside, "New.asset")), Is.False);
             }
             finally
             {
                 if (Directory.Exists(link)) Directory.Delete(link);
+                if (File.Exists(folder + "/Linked.meta")) File.Delete(folder + "/Linked.meta");
                 Directory.Delete(outside, true);
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             }
         }
 
-        [TestCase("Assets/../Packages/manifest.json")]
-        public void InvalidMarkTargetIsRejected(string path)
+        [Test]
+        public void DirtyCandidateCannotDisappearFromPublishedGenerationCollection()
         {
-            Assert.Throws<ArgumentException>(() => ResServiceAssetsMenu.MarkAB(path));
+            using var first = new ResourceReleaseFixture();
+            using var second = new ResourceReleaseFixture();
+            var output = folder + "/Generated";
+            Directory.CreateDirectory(output);
+            File.WriteAllText(output + "/YLResourceReferences.cs", "collection sentinel");
+            var path = output + "/YLResourceReferences.cs";
+            var bytes = File.ReadAllBytes(path); var time = File.GetLastWriteTimeUtc(path);
+            first.Project.ProjectId = "unpersisted-id"; EditorUtility.SetDirty(first.Project);
+            var error = Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.PublishedCatalogs("fixture-v1"));
+            StringAssert.Contains("未保存", error.Message, "A dirty definition must fail as dirty, not be interpreted as an unpublished project.");
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
+            Assert.That(File.GetLastWriteTimeUtc(path), Is.EqualTo(time));
         }
 
+        [Test]
+        public void DirtyDefinitionsAndCanceledOperationsDoNotCreateOutputs()
+        {
+            using var fixture = new ResourceReleaseFixture();
+            var project = fixture.Project;
+            project.DisplayName = "pending definition edit"; EditorUtility.SetDirty(project);
+            Assert.Throws<InvalidOperationException>(() => ResourceEditorOperations.Preflight(project, "fixture-v1"));
+            using var cancel = new CancellationTokenSource(); cancel.Cancel();
+            var report = ResourceEditorOperations.BuildAndPublish(project, "fixture-v1", cancellation: cancel.Token);
+            Assert.That(report.BuildError, Is.InstanceOf<OperationCanceledException>());
+            Assert.That(report.Build, Is.Null); Assert.That(report.Release, Is.Null);
+            Assert.That(Directory.Exists("AssetBundles/YLFramework/" + project.ProjectId), Is.False);
+        }
+
+        // 旧 Runtime 尚在消费 SubProjectData；只保留其纯分区契约，不执行旧构建或标记菜单。
+        private SubProjectData Owner(string path, string name)
+        {
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<SubProject>(), path + "/" + name + ".asset");
+            return SubProjectData.SearchAllInProject().Single(x => x.Path == path + "/" + name + ".asset");
+        }
+        private void MarkedText(string path, string bundle)
+        {
+            File.WriteAllText(path, "isolated legacy Runtime metadata"); AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            var importer = AssetImporter.GetAtPath(path); importer.assetBundleName = bundle; importer.SaveAndReimport();
+        }
+        [Test]
+        public void DirectoryBoundaryDoesNotClaimSiblingWithSamePrefix()
+        {
+            AssetDatabase.CreateFolder(folder, "Owner"); AssetDatabase.CreateFolder(folder, "OwnerExtra");
+            var owner = Owner(folder + "/Owner", "Project"); var bundle = "resource82c-" + Guid.NewGuid().ToString("N");
+            MarkedText(folder + "/OwnerExtra/Text.bytes", bundle);
+            var defaults = new SubProjectData(); SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaults, new List<SubProjectData> { owner });
+            Assert.That(owner.Builds, Is.Empty); Assert.That(defaults.Builds.Any(x => x.assetBundleName == bundle), Is.True);
+        }
+        [Test]
+        public void NestedAndCrossOwnerLegacyMetadataRemainRejected()
+        {
+            AssetDatabase.CreateFolder(folder, "Child");
+            var parent = Owner(folder, "Parent"); var child = Owner(folder + "/Child", "Child");
+            var bundle = "resource82c-" + Guid.NewGuid().ToString("N");
+            MarkedText(folder + "/Child/Text.bytes", bundle);
+            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(new SubProjectData(), new List<SubProjectData> { parent, child }));
+            Assert.That(parent.Builds.Concat(child.Builds), Is.Empty);
+            AssetDatabase.DeleteAsset(folder + "/Parent.asset");
+            MarkedText(folder + "/Default.bytes", bundle);
+            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(new SubProjectData(), new List<SubProjectData> { child }));
+        }
         internal static object Invoke(Type type, string method, params object[] args)
         {
-            var member = type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
-                .SingleOrDefault(x => x.Name == method && x.GetParameters().Length == args.Length);
-            Assert.IsNotNull(member, "Missing operation: " + method);
-            try { return member.Invoke(null, args); }
-            catch (TargetInvocationException exception) { throw exception.InnerException ?? exception; }
+            var member = type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).SingleOrDefault(x => x.Name == method && x.GetParameters().Length == args.Length);
+            Assert.That(member, Is.Not.Null, "Missing operation: " + method);
+            try { return member.Invoke(null, args); } catch (TargetInvocationException error) { throw error.InnerException ?? error; }
         }
     }
 }

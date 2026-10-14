@@ -111,6 +111,82 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         [Test]
+        public void ExplicitAliasesAreCanonicalAndCannotIntroduceAmbiguousAddresses()
+        {
+            var input = Payload();
+            input["Assets"][0]["Aliases"] = new JArray("z-alias", "a-alias");
+            var first = Seal(input);
+            input["Assets"][0]["Aliases"] = new JArray("a-alias", "z-alias");
+            CollectionAssert.AreEqual(first, Seal(input));
+            var doc = (ResourceCatalogDocument)Read(first);
+            var property = typeof(ResourceCatalogAsset).GetProperty("Aliases");
+            Assert.That(property, Is.Not.Null);
+            CollectionAssert.AreEqual(new[] { "a-alias", "z-alias" }, (System.Collections.IEnumerable)property.GetValue(doc.Assets[0]));
+            foreach (var aliases in new[] { new[] { "entry.txt" }, new[] { "alias", "ALIAS" }, new[] { "../escape" } })
+            {
+                input["Assets"][0]["Aliases"] = new JArray(aliases);
+                AssertRejected(() => Seal(input));
+            }
+        }
+
+        [Test]
+        public void SubassetTypeIdentityIncludesAssemblyAndStillRejectsExactDuplicateNativeSelectors()
+        {
+            var input = Payload();
+            var first = input["Assets"][0].DeepClone();
+            first["AssetId"] = (string)first["Guid"] + "_11400001"; first["LocalId"] = 11400001;
+            first["SubAssetKey"] = "11400001"; first["Kind"] = "SubAsset"; first["SubAssetName"] = "Same";
+            first["AssetType"] = "Example.SameType"; first["AssetAssembly"] = "AssemblyOne";
+            var second = first.DeepClone();
+            second["AssetId"] = (string)second["Guid"] + "_11400002"; second["LocalId"] = 11400002; second["SubAssetKey"] = "11400002";
+            second["AssetAssembly"] = "AssemblyTwo";
+            ((JArray)input["Assets"]).Add(first); ((JArray)input["Assets"]).Add(second);
+            Assert.That(((ResourceCatalogDocument)Read(Seal(input))).Assets.Count, Is.EqualTo(3));
+            second["AssetAssembly"] = "AssemblyOne";
+            AssertRejected(() => Seal(input));
+        }
+
+        [Test]
+        public void TotalAddressLimitIsSharedByCanonicalAndAliasesIndependentOfAssetOrder()
+        {
+            var input = Payload();
+            var template = input["Assets"][0];
+            var entries = new JArray(Enumerable.Range(1, 16384).Select(i =>
+            {
+                var asset = template.DeepClone(); var guid = i.ToString("x32");
+                asset["Guid"] = guid; asset["AssetId"] = guid + "_11400000";
+                asset["Address"] = "entry-" + i; asset["LoadName"] = "assets/owned/entry-" + i + ".txt";
+                if (i == 1) asset["Aliases"] = new JArray("alias");
+                return asset;
+            }));
+            input["Assets"] = entries;
+            input["Groups"][0]["Members"] = new JArray(new JObject { ["AssetId"] = (string)entries[0]["AssetId"], ["Required"] = true });
+            AssertRejected(() => Seal(input));
+            input["Assets"] = new JArray(entries.Reverse());
+            AssertRejected(() => Seal(input));
+            entries.RemoveAt(entries.Count - 1); input["Assets"] = entries;
+            Assert.That(((ResourceCatalogDocument)Read(Seal(input))).Assets.Count, Is.EqualTo(16383), "16383 canonical + 1 alias reaches the exact shared limit.");
+        }
+
+        [Test]
+        public void TypeAssemblyIdentityChangesBuildIdentityAndScenesCannotPretendToBeAssets()
+        {
+            var input = Payload();
+            var first = Seal(input);
+            input["Assets"][0]["AssetAssembly"] = "AnotherCompiledAssembly";
+            var second = Seal(input);
+            Assert.That(JObject.Parse(Encoding.UTF8.GetString(second))["BuildId"].ToString(), Is.Not.EqualTo(JObject.Parse(Encoding.UTF8.GetString(first))["BuildId"].ToString()));
+            var property = typeof(ResourceCatalogAsset).GetProperty("AssetAssembly");
+            Assert.That(property, Is.Not.Null);
+            Assert.That(property.GetValue(((ResourceCatalogDocument)Read(second)).Assets[0]), Is.EqualTo("AnotherCompiledAssembly"));
+            input["Assets"][0]["AssetAssembly"] = null;
+            AssertRejected(() => Seal(input));
+            input["Assets"][0]["AssetAssembly"] = "UnityEngine.CoreModule";
+            input["Assets"][0]["AssetType"] = "Scene";
+            AssertRejected(() => Seal(input));
+        }
+
+        [Test]
         public void TwoDifferentMainFilesCannotClaimTheSameUnityGuid()
         {
             var input = Payload();
@@ -146,8 +222,8 @@ namespace YLFramework.Tests.ResourceBuild
                 ["Assets"] = new JArray(new JObject
                 {
                     ["AssetId"] = guid + "_11400000", ["Guid"] = guid, ["LocalId"] = 11400000,
-                    ["Address"] = "entry.txt", ["SubAssetKey"] = null, ["BundleId"] = name,
-                    ["LoadName"] = "assets/owned/entry.txt", ["AssetType"] = "UnityEngine.TextAsset",
+                    ["Address"] = "entry.txt", ["Aliases"] = new JArray(), ["SubAssetKey"] = null, ["BundleId"] = name,
+                    ["LoadName"] = "assets/owned/entry.txt", ["AssetType"] = "UnityEngine.TextAsset", ["AssetAssembly"] = "UnityEngine.CoreModule",
                     ["Kind"] = "Asset", ["SubAssetName"] = null
                 }),
                 ["Groups"] = new JArray(new JObject { ["Id"] = "main", ["Members"] = new JArray(new JObject { ["AssetId"] = guid + "_11400000", ["Required"] = true }) }),
