@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
-    /// <summary>正式取色窗口。Module 为业务 owner，窗口和内容均不创建全局 UI Manager。</summary>
+    /// <summary>按需打开的取色工具窗口；复用 Core 的 Module/Panel 生命周期，不创建全局 UI Manager。</summary>
     public sealed class ColorSelectorWindow : Panel
     {
         [SerializeField] private ColorSelector selector;
@@ -25,7 +25,7 @@ namespace YLFramework.Core
         {
             if (!selector || !closeButton) throw new InvalidOperationException("ColorSelectorWindow requires selector and close button bindings.");
             selector.BeginSession(args.GetObject("initialColor") is Color initial ? initial : Color.white,
-                args.GetObject("colorChanged") as Action<Color>, selector.GetComponentInParent<Panel>());
+                args.GetObject("colorChanged") as Action<Color>);
         }
 
         private void CloseFromButton() { if (IsLoaded && !IsInputBlocked) Close(); }

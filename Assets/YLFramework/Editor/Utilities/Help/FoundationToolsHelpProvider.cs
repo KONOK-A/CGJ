@@ -32,18 +32,23 @@ namespace YLFramework.Editor
                         "Singleton、Pool、Events、Binding、IOC、Timing、AssemblyTool 的完整契约见 Documentation/Modules 下对应说明；" +
                         "这里仅展示精选 API，不扫描整个工程或执行成员。"),
                     Document("基础模块导航", "README.md")),
-                Guide("tools", "Tools 与 Editor 工具", "复用成熟纯代码工具和各自入口，不增加统一工具宿主或配置中心。",
-                    new[] { typeof(Utilities.StringTools), typeof(FSM.FSM<>), typeof(Utilities.Grid.NormalGrid<>), typeof(Utilities.Json.JSONObject) },
+                Guide("tools", "Tools 与 Editor 工具", "按需选用数据与 UI 便利工具，不增加统一工具宿主或配置中心。",
+                    new[] { typeof(Utilities.StringTools), typeof(FSM.FSM<>), typeof(Utilities.Grid.NormalGrid<>), typeof(Utilities.Json.JSONObject),
+                        typeof(Core.ColorSelector), typeof(Core.ColorSelectorWindow) },
                     HelpBlock.Paragraph("选用工具", "StringTools/Extensions、FSM、Grid、Json/JSONObject、Table 位于 YLFramework.Runtime；FSM 由调用方驱动及回收，" +
-                        "不替代可视化XFFSM。ZipTool也归Runtime主体，源码仍BCL-only；Zip/GZip的reader以using管理寿命。" +
-                        "这些工具不强制依赖 Core Module，也不把 Save/HTTP 改为另一套 JSON 内核。"),
+                         "不替代可视化XFFSM。ZipTool也归Runtime主体，源码仍BCL-only；Zip/GZip的reader以using管理寿命。" +
+                         "这些工具不强制依赖 Core Module，也不把 Save/HTTP 改为另一套 JSON 内核。"),
+                    HelpBlock.Paragraph("取色便利工具", "ColorSelector 的控件、渲染与窗口统一位于 Utilities/UI/ColorSelector，不是 Foundation 基础机制。" +
+                        "窗口通过 Module/WindowCatalog 显式打开；控件直接读取最近 Panel 的 IsLoaded/IsInputBlocked，无 Panel 时沿默认输入行为。" +
+                        "IUIInputGate 与自定义宿主门禁已退出，不新增 Manager 或要求控件脱离 Core 编译。"),
                     HelpBlock.Paragraph("Editor 入口", "YLFramework/Service/ResService 提供自有资源标记、构建和常量生成；" +
                         "YLFramework/Toolkit 下保留日志清理、打开目录与导出框架包。生成物与构建操作不从 Help 执行。" +
                         "Action/Audio 保持各自帮助和成熟工具，不在此复制其 API 文档。"),
-                    HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六根，Plugins 完整递归。" +
+                    HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六个目录及根级 LICENSE.md，Plugins 完整递归。" +
                         "不含 Tests、根 Integrations、SDK 工具项目、NuGet/中间产物、游戏资源或 Assets/YLFrameworkData。" +
                         "框架仍需 UGUI、Newtonsoft 等既有依赖，Core 保留过渡 XFAB；EventListener 使用原生 Inspector，Sirenix 插件已退出。剩余 Plugins 是内部交付决策，不表示已取得公开再分发许可。"),
-                    Document("工具导航与导出说明", "README.md")),
+                    Document("工具导航与导出说明", "README.md"),
+                    Document("取色工具接入", "Modules/UI.md")),
                 Guide("attributes", "Attributes 与显示边界", "Foundation 展示元数据与 Core 编译器诊断是不同机制。",
                     new[] { typeof(DisableEdit), typeof(CustomClassNameGUI), typeof(CustomPropertyGUI) },
                     HelpBlock.Paragraph("必要 Drawer", "DisableEdit的原生Drawer位于Editor主体，只在编辑器禁用序列化字段及子属性并恢复GUI状态；普通C# property不会因此变成可序列化字段。" +

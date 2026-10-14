@@ -42,9 +42,10 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Prefabs",
                 FrameworkRoot + "/Runtime",
                 FrameworkRoot + "/Samples",
-                FrameworkRoot + "/Documentation"
+                FrameworkRoot + "/Documentation",
+                FrameworkRoot + "/LICENSE.md"
             }));
-            foreach (var root in roots) Assert.That(AssetDatabase.IsValidFolder(root), Is.True, root);
+            foreach (var root in roots) Assert.That(AssetDatabase.LoadMainAssetAtPath(root), Is.Not.Null, root);
 
             var projectRoot = Directory.GetParent(Application.dataPath).FullName;
             var sentinels = new[]
@@ -78,9 +79,8 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Prefabs/UITips.prefab",
                 FrameworkRoot + "/Prefabs/ColorSelector.prefab",
                 FrameworkRoot + "/Runtime/Utilities/UI/ColorSelector/ColorWheelGraphic.cs",
-                FrameworkRoot + "/Runtime/Utilities/UI/Input/IUIInputGate.cs",
-                FrameworkRoot + "/Runtime/Core/UI/Windows/Tools/ColorSelectorWindow.cs",
-                FrameworkRoot + "/Runtime/Core/LICENSE.md",
+                FrameworkRoot + "/Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs",
+                FrameworkRoot + "/LICENSE.md",
                 FrameworkRoot + "/Runtime/Core/Modules/Module.cs",
                 FrameworkRoot + "/Runtime/Core/MVC/Views/View.cs",
                 FrameworkRoot + "/Runtime/Core/UI/Windows/Panel.cs",
@@ -90,7 +90,6 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Core/Resources/YLFramework/Core/EventSystem.prefab",
                 FrameworkRoot + "/Editor/Core/DefaultResources/ListenerInitOnLoad.cs",
                 FrameworkRoot + "/Runtime/THIRD-PARTY-NOTICES.md",
-                FrameworkRoot + "/Runtime/Foundation/LICENSE.md",
                 FrameworkRoot + "/Runtime/Systems/Http/HttpManager.cs",
                 FrameworkRoot + "/Runtime/Systems/Http/SendWebRequest.cs",
                 FrameworkRoot + "/Runtime/Foundation/Pool/Object/ObjectPool.cs",
@@ -171,6 +170,11 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Editor/XFMain",
                 FrameworkRoot + "/Runtime/Core/Extensions",
                 FrameworkRoot + "/Runtime/Core/Tools",
+                FrameworkRoot + "/Runtime/Core/UI/Windows/Tools",
+                FrameworkRoot + "/Runtime/Utilities/UI/Input",
+                FrameworkRoot + "/Runtime/Core/LICENSE.md",
+                FrameworkRoot + "/Runtime/Foundation/LICENSE.md",
+                FrameworkRoot + "/Editor/Core/LICENSE.md",
                 FrameworkRoot + "/Samples/ColorSelector",
                 "Assets/Plugins/Demigiant/DOTween"
             };
@@ -288,6 +292,8 @@ namespace YLFramework.Tests
                     Assert.That(record.Meta, Is.EqualTo(File.ReadAllBytes(Path.Combine(projectRoot, path + ".meta"))), path + ".meta");
                 }
                 Assert.That(Encoding.UTF8.GetString(recordsByPath[FrameworkRoot + "/Runtime/csc.rsp"].Payload), Does.Contain("-doc:Library/YLFramework.Runtime.xml"));
+                Assert.That(AssetDatabase.AssetPathToGUID(FrameworkRoot + "/LICENSE.md"), Is.EqualTo("52c8029f1cf2acf41bba065d713f352b"));
+                Assert.That(AssetDatabase.AssetPathToGUID(FrameworkRoot + "/Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs"), Is.EqualTo("4878c19ecf0794f45baa1869cc9513cb"));
                 Assert.That(recordsByGuid.ContainsKey(PrefabGuid), Is.True);
                 Assert.That(recordsByGuid[PrefabGuid].Pathname, Is.EqualTo(PrefabPath));
                 Assert.That(recordsByGuid.ContainsKey(CanvasGuid), Is.True);

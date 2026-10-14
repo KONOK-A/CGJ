@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.UI;
-using YLFramework.UI;
 
 namespace YLFramework.Core
 {
@@ -14,7 +13,7 @@ namespace YLFramework.Core
         Overlay = 3
     }
 
-    public abstract class Panel : View, IUIInputGate
+    public abstract class Panel : View
     {
         private int sortingOrder;
 
@@ -51,8 +50,6 @@ namespace YLFramework.Core
 
         /// <summary>被较高的同根模态窗口阻挡，或当前不可见；统一策略覆盖本会话的 Raycaster 与 Selectable。</summary>
         public bool IsInputBlocked => PanelManager.IsInputBlocked(this);
-
-        bool IUIInputGate.IsInputAllowed => this && IsLoaded && !IsInputBlocked;
 
         /// <summary>当前根的有效导航焦点候选，不等于 EventSystem.currentSelectedGameObject。</summary>
         public bool HasFocus => this && PanelManager.GetFocusedPanel(RootCanvas) == this;

@@ -19,6 +19,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
 | [`Samples/`](../Samples/) | 示例导出根保留；ColorSelector样例整树已退役 |
 | `Documentation/` | 本文档目录 |
+| [`LICENSE.md`](../LICENSE.md) | XF 承接源码的完整 MIT 上游版权与许可，集中保留一份并随默认包分发 |
 
 Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Distribution/Help组织；正式主体仅YLFramework.Runtime与YLFramework.Editor。五个额外产品asmdef退役，测试/可选集成/Analyzer SDK继续隔离，旧二进制消费者须重编译。目录分类不新增系统管理器或namespace迁移，Tools仍为仓库SDK/开发工具。
 
@@ -47,6 +48,7 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 | Table | 通用表与多值索引，Resource 的直接支撑 | 成熟实现保留 | [Modules/Table.md](Modules/Table.md) |
 | Timing | Foundation 唯一秒/帧内核、精确句柄、Scope/复用、GO 绑定与终态等待 | 2.4-C 实施及专项验证完成，待验收与 Git 收口；2.4 IN PROGRESS | [Modules/Timing.md](Modules/Timing.md) |
 | ZipTool | Zip/GZip与SharpZipLib，BCL-only源码闭包，归Runtime主体 | 实现/许可保留，旧独立DLL退役 | [Modules/ZipTool.md](Modules/ZipTool.md) |
+| ColorSelector | 按需使用的取色控件与窗口，直接复用 Core Panel 输入与窗口生命周期 | 完整归 Utilities/UI/ColorSelector；自定义 IUIInputGate 退出 | [Modules/UI.md#colorselector](Modules/UI.md#colorselector) |
 
 ### Runtime 大型模块
 
@@ -57,12 +59,12 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 | Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
-| UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips 与 Runtime ColorSelector | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
+| UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
 ### 其他内容
 
 - [Help](Modules/Help.md)：Editor-only主体中的共享Help与各领域提供方，原菜单/窗口/Provider与配置身份保持。
-- [ColorSelector](Modules/UI.md#colorselector)：正式 `YLFramework.Core.ColorSelectorWindow` 与 `Prefabs/ColorSelector.prefab` 保留；由业务 Module 显式打开，旧样例已退役。
+- [ColorSelector](Modules/UI.md#colorselector)：四个取色类型完整归 `Runtime/Utilities/UI/ColorSelector/`，不是框架底层；正式 `YLFramework.Core.ColorSelectorWindow` 与 `Prefabs/ColorSelector.prefab` 保留，由业务 Module 显式打开，旧样例已退役。
 
 ## 架构与依赖
 
@@ -78,7 +80,7 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 
 - 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。Core 与 Foundation/Tools 只提供必要接入指南、精选 API 和详细文档导航，不执行示例或创建宿主。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
-- `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出。
+- `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，加框架根级 `LICENSE.md`；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出，XF 完整 MIT 许可显式随包携带。
 - `Plugins/` 完整递归，保留商业插件、Demo 与辅助工具，不裁剪或重配导入平台。这是内部交付决策，公开再分发许可仍需后续核查。
 - 包含Runtime/Editor正式功能分区及唯一 `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 与meta。七项分析器默认Warning，现为Runtime主体及真实引用消费者的编译器输入，不是Player运行引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。

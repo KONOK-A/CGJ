@@ -268,17 +268,24 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
-        public void EditorCopyCarriesCompleteUpstreamLicense()
+        public void FrameworkRootCarriesTheOnlyCompleteXfLicense()
         {
             var package = PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.xfkj.xfgameframework");
             string upstreamLicense = Path.Combine(package.resolvedPath, "LICENSE.md");
             if (!File.Exists(upstreamLicense))
                 upstreamLicense = Path.Combine(package.resolvedPath, "LICENSE");
             Assert.That(File.Exists(upstreamLicense), Is.True, "Upstream license must be available for comparison.");
-            string license = File.ReadAllText(EditorRoot + "/LICENSE.md");
+            const string licensePath = "Assets/YLFramework/LICENSE.md";
+            Assert.That(File.Exists(licensePath), Is.True, "The shared XF license must be distributed at the framework root.");
+            string license = File.ReadAllText(licensePath);
             Assert.That(license.Replace("\r\n", "\n").Trim(),
                 Is.EqualTo(File.ReadAllText(upstreamLicense).Replace("\r\n", "\n").Trim()));
             Assert.That(license, Does.Contain("Copyright (c) 2021 \u5f26\u5c0f\u98ce"));
+            foreach (var oldPath in new[] { "Runtime/Core/LICENSE.md", "Runtime/Foundation/LICENSE.md", "Editor/Core/LICENSE.md" })
+            {
+                Assert.That(File.Exists("Assets/YLFramework/" + oldPath), Is.False, oldPath);
+                Assert.That(File.Exists("Assets/YLFramework/" + oldPath + ".meta"), Is.False, oldPath + ".meta");
+            }
         }
 
         internal static CoreEditorAssemblyDefinition ReadDefinition(string path)

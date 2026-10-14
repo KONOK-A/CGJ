@@ -5,7 +5,7 @@
 ## 位置与依赖
 
 - Panel/窗口在 [`UI/Windows/`](../../Runtime/Core/UI/Windows/)，根、输入、Tips 和适配各按职责分组，namespace `YLFramework.Core`；View/加载参数在 [`MVC/Views/`](../../Runtime/Core/MVC/Views/)，业务 Module 在 [`Modules/`](../../Runtime/Core/Modules/)。
-- 正式取色控件在 [`Utilities/UI/ColorSelector/`](../../Runtime/Utilities/UI/ColorSelector/)，窗口适配在 [`UI/Windows/Tools/`](../../Runtime/Core/UI/Windows/Tools/)；旧样例已经退役，namespace与正式Prefab保持。
+- 完整取色工具（控件、渲染及窗口）统一在 [`Utilities/UI/ColorSelector/`](../../Runtime/Utilities/UI/ColorSelector/)；它与 Json、FSM 一样是按需使用的便利工具，不属于框架底层。旧样例已经退役，现有取色类型的 namespace、API、字段和正式Prefab保持。
 - 程序集为 `YLFramework.Runtime`，主体暂留 Core 的 XFABManager/UGUI 依赖。业务 asmdef 显式引用 Runtime；Foundation 与 Core 仅为源码职责分区，不再是两个运行 DLL。
 - `Module`、`ViewManager`、`PanelManager` 以少量 partial 改善导航；状态字段与初始化集中在原主文件，仍是同一个类型及同一事务，不新增 Manager 或加载权威。
 - `Module` 是唯一业务 owner。目录、根配置和呈现项池不代替 Module/View 的会话、请求、取消或资源归还协议。
@@ -79,12 +79,12 @@ handle.Dispose();
 
 ## ColorSelector
 
-- 正式 Prefab：`Prefabs/ColorSelector.prefab`。业务通过 `WindowCatalog.Open<ColorSelectorWindow>(owner, key, parent, args)` 显式打开；`owner` 为已启动的 Module，`parent` 可指定外部 Canvas，未指定时沿 Core 默认根。旧演示样例已退役，不提供第二份控件实现。
+- 正式 Prefab：`Prefabs/ColorSelector.prefab`。工具层窗口 [`YLFramework.Core.ColorSelectorWindow`](../../Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs) 依赖并复用 Core 的 Panel；业务通过 `WindowCatalog.Open<ColorSelectorWindow>(owner, key, parent, args)` 显式打开，`owner` 为已启动的 Module，`parent` 可指定外部 Canvas，未指定时沿 Core 默认根。旧演示样例已退役，不提供第二份控件实现。
 - `ColorSelectorWindow.Arguments(initial, changed)` 提供初值和实时 `Action<Color>`；初始同步不触发变化通知，`CurrentColor` 可读取当前值。窗口关闭清回调，唯一窗口再次打开替换初值和回调。
 - 独立控件 `ColorSelector.BeginSession(initial, callback)` / `EndSession()` 也可用于自有 UI。RGB 为 SDR `[0,1]`，非有限/HDR 初值明确拒绝；保留初始 Alpha 但不编辑它。
-- 控件只读取 [`YLFramework.UI.IUIInputGate.IsInputAllowed`](../../Runtime/Utilities/UI/Input/IUIInputGate.cs)，不引用Panel/View/Module或创建新Manager/会话。正式Panel显式实现原判断 `IsLoaded && !IsInputBlocked`，仍由原模块/模态策略决定；独立控件可由自己的Unity宿主实现该predicate。
-- 独立两参BeginSession按Unity最近活跃祖先规则选择IUIInputGate，组件禁用不自动排除候选，同对象候选顺序不额外保证。正式ColorSelectorWindow则在Core适配层按原GetComponentInParent<Panel>()解析最近活跃Panel，经内部入口显式注入同一控件实现；其他允许/拒绝型门禁不替换正式Panel的原加载与模态策略。
-- 每个输入事件读取即时资格，阻挡丢弃当前拖拽，无宿主/已销毁缓存宿主沿原默认行为；重开才重新解析，不抛新多候选注册错误。两种组件顺序、较近其他门禁、未加载/模态拒绝及旧拖拽不复活均已由真实窗口回归及新Windows64/Mono Player验证，历史停止和修复证据见结构方案§17.11-17.12。
+- `BeginSession` 按原 `GetComponentInParent<Panel>()` 规则缓存最近活跃 Panel；每次交互读取 `IsLoaded && !IsInputBlocked`，加载、可见性和模态判断仍由 Core 决定。同对象多个 Panel 的选择不额外保证，组件禁用不会被祖先查找自动排除。
+- 无 Panel 的控件按原默认行为允许输入；缓存宿主销毁使用 Unity 存活语义，不在会话中自动改选另一祖先。阻挡后仍释放旧拖拽捕获，恢复资格不复活旧拖拽。
+- 阶段 7.5 按上层便利工具定位删除公开 `YLFramework.UI.IUIInputGate` 及自定义宿主门禁能力，不再要求控件源码脱离 Core 编译；调用方若曾实现或引用该接口，须删除旧引用并重编译。两参 `BeginSession`、颜色/回调 API 与正式窗口的加载方式不变。历史混合门禁修复与 Player 证据属于阶段 7，记录保留于结构方案§17.11-17.12，不冒充 7.5 的新 Player 验证。
 - 色环更新 Hue，三角更新 Saturation/Value；使用实际 RectTransform 与事件 Camera 换算，拖出三角夹到最近边界。拖动锁定原区域/指针，结束/禁用/重开不延续旧拖动。
 - 色环、三角和游标由独立网格生成；使用标准 UGUI 默认材质、stencil、RectMask2D 和 CanvasGroup alpha，不修改共享材质，不携带旧 CodeArtist Shader/图片。
 - 不提供 Alpha 编辑、数值/Hex、确认取消流程或 Editor 专用取色。历史来源与独立重建说明集中保留于 `Runtime/THIRD-PARTY-NOTICES.md`，原文件可从 Git 历史追溯。

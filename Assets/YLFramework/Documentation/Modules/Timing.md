@@ -172,7 +172,7 @@ Action 根动作入口为 `StartNamed(owner, flag)` / `ReplaceNamed(owner, flag)
 
 不提供线程安全、跨线程调度、持久化任务、后台运行或高精度时钟保证。全部 Unity 对象访问与任务操作应在 Unity 主线程进行。
 
-源码保留 QFramework、snowcold / liangxie、UnityTimer 来源与完整 MIT；承接 XF 的部分继续受 Foundation/LICENSE.md 覆盖，集中声明见 Runtime/THIRD-PARTY-NOTICES.md。删除旧实现不删除被吸收代码的许可，分发时保留对应声明。
+源码保留 QFramework、snowcold / liangxie、UnityTimer 来源与完整 MIT；承接 XF 的部分由框架根级 [LICENSE.md](../../LICENSE.md) 保留完整上游许可，集中声明见 Runtime/THIRD-PARTY-NOTICES.md。删除旧实现不删除被吸收代码的许可，分发时保留对应声明。
 
 性能只承诺已说明的算法成本和显式复用边界。本专题没有执行性能基准或稳态 GC 测量，不能据此宣称比旧实现普遍更快或整个调用链零分配。
 

@@ -1,19 +1,17 @@
 using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using YLFramework.UI;
 
 namespace YLFramework.Core
 {
-    /// <summary>HSV Runtime 控件。初始同步不通知；不编辑 Alpha，回调前先提交颜色和游标状态。</summary>
+    /// <summary>按需使用的 HSV 取色工具；遵守祖先 Panel 的输入策略，不拥有窗口生命周期。</summary>
     [RequireComponent(typeof(ColorWheelGraphic))]
     public sealed class ColorSelector : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler, IInitializePotentialDragHandler
     {
         [SerializeField] private RectTransform outerCursor;
         [SerializeField] private RectTransform innerCursor;
         private ColorWheelGraphic wheel;
-        private Component inputGateComponent;
-        private IUIInputGate inputGate;
+        private Panel inputPanel;
         private Action<Color> changed;
         private float hue;
         private float saturation;
@@ -26,18 +24,13 @@ namespace YLFramework.Core
 
         /// <summary>替换 SDR 初值和调用方回调；RGB 必须在 [0,1] 内。灰色采用 Hue=0，不继承上一轮任意 Hue。</summary>
         public void BeginSession(Color initial, Action<Color> onChanged)
-            => BeginSession(initial, onChanged, GetComponentInParent<IUIInputGate>());
-
-        // 正式窗口显式提供原策略宿主，通用控件不识别或争夺 Panel 的优先级。
-        internal void BeginSession(Color initial, Action<Color> onChanged, IUIInputGate gate)
         {
             if (!Finite(initial.r) || !Finite(initial.g) || !Finite(initial.b) || !Finite(initial.a))
                 throw new ArgumentException("Color must be finite.", nameof(initial));
             if (initial.r < 0 || initial.r > 1 || initial.g < 0 || initial.g > 1 || initial.b < 0 || initial.b > 1)
                 throw new ArgumentException("ColorSelector edits SDR RGB values in [0,1].", nameof(initial));
             wheel = GetComponent<ColorWheelGraphic>();
-            inputGate = gate;
-            inputGateComponent = inputGate as Component;
+            inputPanel = GetComponentInParent<Panel>();
             Color.RGBToHSV(initial, out hue, out saturation, out value);
             if (saturation == 0) hue = 0;
             alpha = initial.a;
@@ -49,12 +42,12 @@ namespace YLFramework.Core
         }
 
         private static bool Finite(float number) => !float.IsNaN(number) && !float.IsInfinity(number);
-        public void EndSession() { session = false; pointer = null; changed = null; inputGate = null; inputGateComponent = null; }
+        public void EndSession() { session = false; pointer = null; changed = null; inputPanel = null; }
         private void OnDisable() => pointer = null;
         private void OnDestroy() => EndSession();
         private void OnRectTransformDimensionsChange() { if (session && wheel) UpdateVisual(); }
 
-        private bool CanInput => session && isActiveAndEnabled && (!inputGateComponent || inputGate.IsInputAllowed);
+        private bool CanInput => session && isActiveAndEnabled && (!inputPanel || inputPanel.IsLoaded && !inputPanel.IsInputBlocked);
 
         private bool Normalize(PointerEventData data, out Vector2 point)
         {

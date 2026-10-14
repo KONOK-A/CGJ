@@ -12,7 +12,7 @@ namespace YLFramework.Editor
         private const string FrameworkRoot = "Assets/YLFramework";
         private const string PackageVersion = "1.0.0";
 
-        // 按清单递归导出（刻意排除 Tests 与包外依赖）
+        // 六个目录递归导出，并显式携带根级 XF 许可；排除 Tests 与包外依赖。
         private static readonly string[] ExportRoots =
         {
             "Assets/YLFramework/Editor",
@@ -21,6 +21,7 @@ namespace YLFramework.Editor
             "Assets/YLFramework/Runtime",
             "Assets/YLFramework/Samples",
             "Assets/YLFramework/Documentation",
+            "Assets/YLFramework/LICENSE.md",
         };
 
         [MenuItem("YLFramework/Toolkit/导出框架包", priority = 1)] //%e 表示快捷键 ctrl + e 
@@ -35,9 +36,9 @@ namespace YLFramework.Editor
             var hasMissingRoot = false;
             foreach (var exportRoot in ExportRoots)
             {
-                if (!AssetDatabase.IsValidFolder(exportRoot))
+                if (!AssetDatabase.LoadMainAssetAtPath(exportRoot))
                 {
-                    Debug.LogError("导出框架包失败：找不到导出目录 " + exportRoot);
+                    Debug.LogError("导出框架包失败：找不到导出资源 " + exportRoot);
                     hasMissingRoot = true;
                 }
             }

@@ -31,7 +31,7 @@ namespace YLFramework.Core.Tests
         public void OnSelect(UnityEngine.EventSystems.BaseEventData data) => Selected?.Invoke();
     }
 
-    public sealed class YLCoreOtherInputGate : MonoBehaviour, YLFramework.UI.IUIInputGate
+    public sealed class YLCoreOtherInputGate : MonoBehaviour
     {
         public bool Allowed;
         public int Reads;
@@ -2959,7 +2959,7 @@ namespace YLFramework.Core.Tests
             => target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
 
         [UnityTest]
-        public IEnumerator FormalColorWindowKeepsPanelPriorityOverMixedGatesAndDropsBlockedCapture()
+        public IEnumerator FormalColorWindowUsesPanelPolicyAndDropsBlockedCapture()
         {
             yield return StartModule();
 #if UNITY_EDITOR

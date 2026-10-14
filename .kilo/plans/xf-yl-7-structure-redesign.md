@@ -1170,3 +1170,16 @@ Resource Editor八个既有脚本归Build3/Service3/CodeGeneration2，Data和其
 未验证IL2CPP/AOT、移动及其他平台、物理OS输入人工/完整游戏流程、干净载体导入及外部旧Bundle/AQN数据；第三方再分发许可仍以现有原文及用户授权范围为准。此前Clipboard/Windows文件替换波动保留为环境/时序风险记录，未吞异常或放宽合同。Canvas未知写者未重现仍是残余风险，后续正常保存/重序列化不得无核对宣称资源保持。本轮技术收口不等于用户最终验收、commit/push、阶段8或产品独立发布。
 
 最终清理后资源保留测试1/1、最终导出/完整解包1/1再次通过；一次构建后立即发现不到测试的请求不计通过，确认Editor已加载正式测试并用全限定方法执行取得有效结果。最终独立机器收据 `FinalProtection.json` 核对1154保护文件（较1151追加两主体asmdef.meta和Samples.meta）、549原公开类型/字段、445原脚本GUID/meta/绑定及251个文档相对文件/目录链接，差异0；Runtime403/Editor53源，三套S7夹具/根meta、自有状态键、生成probe与待消费音频数据均清理。Main未脏、Unity编译无失败且非Play/编译/刷新，分支fusion/7-consolidation、HEAD0a39928e76e36564a4b354e370b0d939727b7aad、暂存区保持空；完整工作树76修改/1044删除/955未跟踪包含全部历史，不是本轮数量。git diff --check通过，已有CRLF提示保留，不作全库格式化。
+
+## 18. 阶段 7.5 便利工具与 XF 许可集中（2026-10-14）
+
+**状态：技术实施与定向验证完成，未提交/推送。** 本节是用户在阶段 7 Git 收口后新增的授权，不重做 S0-S7，也不改写 §17 的历史门禁。起点为 `integration/xf-yl` / `bcfeb3d`；已有 `.gitignore`、`.kilo/kilo.jsonc` 修改不动，不自动创建分支、提交、推送或启动阶段 8。
+
+- ColorSelector 与 Json、FSM 同属按需便利工具；三控件和 ColorSelectorWindow 统一位于 `Runtime/Utilities/UI/ColorSelector/`。窗口通过 AssetDatabase 移动，保留 GUID `4878c19ecf0794f45baa1869cc9513cb`、namespace/API/序列化字段及正式 Prefab。
+- 用户明确选择直接依赖 Panel：删除公开 `YLFramework.UI.IUIInputGate` 及其自定义宿主能力，Panel 不再实现该接口，也不向 Foundation 增加 UI 合同。控件每轮 BeginSession 缓存最近活跃 Panel，按原 `IsLoaded && !IsInputBlocked` 读取即时资格；无 Panel/已销毁缓存宿主沿默认行为，阻挡释放拖拽，恢复不复活旧捕获。HSV/Alpha/Camera/通知与窗口生命周期不变。
+- 原 Editor/Core、Runtime/Core、Runtime/Foundation 三份相同 XF MIT 许可收敛为 `Assets/YLFramework/LICENSE.md`：移动原 Runtime/Core 文件，保留 GUID `52c8029f1cf2acf41bba065d713f352b`、版权与完整文本，删除另外两份及配套 meta。六个默认导出目录之外显式加入根级许可；QFramework、JSONObject、SharpZipLib 等其他来源许可不动。
+- 旧无 Core 源码闭包要求由用户明确取消，改为实际消费源码的 Editor/Development 编译探针。公开接口退出是本节的兼容成本：外部自定义门禁或类型引用须移除并重编译；其余取色公共 API、类型归属与资源身份不变。
+
+验证取得预期红绿：两项新输入场景先失败（旧自定义门禁能绕过未加载 Panel、无 Panel 时仍限制控件）；默认导出缺根级许可、根级完整许可缺失、Tools 导航缺取色入口亦先红。最终取色整类 18/18（含实际消费源码 Editor/Development 编译）、与原 XF Package 完整许可比对 1/1、FrameworkHelpProvider 7/7、正式窗口 Panel 策略/阻挡捕获和 Camera/回调/复用 Play 各 1/1、默认实际导出与完整 tar 解包 1/1 均通过。导出仍排除 Tests/旧样例/退役身份，包含新窗口路径与根级许可，不包含三份旧许可位置及 IUIInputGate。
+
+原 Runtime/Core 许可全文、其 meta 和窗口脚本 meta 的 Git blob hash 在移动前后逐项相等；窗口 GUID/类型绑定、根级许可 GUID 由实际导出和取色测试再次断言。正式 Prefab/Core Resources、Packages、ProjectSettings.asset、原插件与 Analyzer SDK 无本批差异。工作期间出现的 ProBuilder `Settings.json` 日志选项变化不回退、不纳入本批。未运行新的 SDK123、Player 构建、全量测试、跨平台/AOT 或外部旧二进制验证；No tests found 请求不计绿，待正式类型与加载状态确认后取得上述有效结果。

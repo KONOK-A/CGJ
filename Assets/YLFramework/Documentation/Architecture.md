@@ -43,12 +43,12 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 - `Foundation/`：基础逻辑分类。Async/Attributes/Binding/Events/IOC/Pool/Serialization/Singleton/Timing/Update/Utilities按功能分组；Binding分Collections/Prefs/Unity，Events分Global/Internal/Subscriptions/Unity，Pool分Abstractions/Collections/Factories/GameObject/Object；
 - 原Shared/Kernel闭包并回这些唯一功能族。独立源码探针精确选择原49文件，在Editor/Development Player排除高层框架/插件依赖，不以主体宽依赖替代职责边界；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
 - `Core/`：Modules/MVC/Events、View/Panel/UI、领域组件、marker/Analyzer 与正式默认资源；归 Runtime 主体，职责归位与partial保持唯一状态权威，不按来源建立第二产品程序集；
-- `Utilities/`：具有明确具体功能职责、按需直接使用的通用工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool）；仓库根 `Tools/` 则承载 SDK 与开发工具；
+- `Utilities/`：具有明确具体功能职责、按需直接使用的便利工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool、ColorSelector）；仓库根 `Tools/` 则承载 SDK 与开发工具；
 - `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
 
 `Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 和许可汇总属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
 
-目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。取色控件位于Utilities/UI/ColorSelector，Core窗口适配位于UI/Windows/Tools，正式Prefab保持；控件只依赖一个只读IUIInputGate，Panel显式实现原策略。旧样例及其程序集已退役，Samples导出根保留。
+目录分类只是组织方式，不等于新的程序集边界；namespace不强制与目录一一对应。阶段 7.5 将取色控件、渲染及窗口统一归 Utilities/UI/ColorSelector，定位为与 Json、FSM 同类的按需便利工具。工具层直接依赖 Core Panel 的加载/输入策略；IUIInputGate 及自定义门禁入口退出，不向 Foundation 增加 UI 合同。正式Prefab、取色类型的 namespace/API/序列化字段/GUID 保持，引用已退出接口的客户端须重编译。旧样例及其程序集已退役，Samples导出根保留。
 
 ### Core 职责归口
 
@@ -57,7 +57,7 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 | `Modules/` | Module / SingletonModule / ModuleManager；原主文件集中状态和生命周期，Models/Controllers/Views/Panels partial 仅组织入口，`Requests/` 为启动请求 |
 | `MVC/Models/`、`Controllers/`、`Views/` | 各自的正式类型及唯一索引 Manager；ViewManager 的 Registration/Loading/Queries partial 保持同一会话，`Views/Parameters/` 为 LoadViewArgs |
 | `Events/` | CoreEvents / EventManager 领域事件入口，不增加另一份总线 |
-| `UI/Windows/`、`Roots/`、`Input/`、`Tips/` | 窗口/加载请求、根配置、输入策略与Tips；PanelManager Loading/Sorting/Input partial共用原状态。Windows/Tools保留ColorSelectorWindow；控件迁Utilities/UI，原namespace不改 |
+| `UI/Windows/`、`Roots/`、`Input/`、`Tips/` | 窗口/加载请求、根配置、输入策略与Tips；PanelManager Loading/Sorting/Input partial共用原状态。取色便利工具完整归 Utilities/UI/ColorSelector，原namespace不改 |
 | `MVC/Views/Components/` | CloseView；TimerObject转Foundation/Timing/Components，物理/动画Listener转Foundation/Events/Unity，原namespace/GUID/字段保持 |
 | `Attributes/`、`Analyzers/` | 正式 marker 与唯一编译器 DLL，属于 Runtime 主体输入作用域，marker namespace 保持 |
 | `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
@@ -77,8 +77,11 @@ Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`Modu
 | Json / `YLFramework.Utilities.Json` | Runtime JSONObject 树处理，无框架内依赖；与 Json.NET 的强类型序列化、Save 文件策略、HTTP 传输职责分离 | 直接创建 / 解析节点，不建设全局 JSON 服务 |
 | Table / `YLFramework.Utilities.Table` | Runtime 通用表与多值索引；TableIndex 复用 Foundation 的 List / Dictionary 池，Resource 的 ResTable / AssetDataTable 直接消费 | 调用方维护索引及 Clear / Dispose；不取得数据项 / 资源的释放权 |
 | ZipTool / `YLFramework.Utilities.ZipTool` | Runtime主体内的BCL-only源码闭包；原独立产品asmdef已退役，仍用全源码无Engine探针核验 | 常规使用ZipUtility/GZipUtility，多次读取以using管理ZipArchiveReader；不建设压缩Manager |
+| ColorSelector / `YLFramework.Core` | 四个取色类型统一归 Utilities/UI/ColorSelector，依赖 Core Panel 策略的便利工具，不是中立基础机制 | 窗口由 Module/WindowCatalog 按需打开；独立控件无 Panel 时不强制创建 owner；无自定义门禁接口或新 Manager |
 
-这些工具无需组件挂载或公共Root。现有YLFramework.Core.Pool namespace不表示依赖Core领域，机制闭包见[Pool](Modules/Pool.md)。类型/namespace/GUID保持，五个产品程序集身份迁移是本次明确成本；JSONObject/SharpZipLib来源与完整MIT随Runtime导出，分发限制见下文。
+FSM/Grid/Json/Table/ZipTool 无需组件挂载或公共Root；ColorSelector 是 UGUI 工具，窗口按需复用 Core 的 Module/Panel。现有YLFramework.Core.Pool namespace不表示依赖Core领域，机制闭包见[Pool](Modules/Pool.md)。类型/namespace/GUID保持，五个产品程序集身份迁移是阶段 7 的明确成本；JSONObject/SharpZipLib来源与完整MIT随Runtime导出，分发限制见下文。
+
+XF 承接源码的完整 MIT 许可只保留于 [`Assets/YLFramework/LICENSE.md`](../LICENSE.md)，保留上游版权与全文；默认导出在六个目录之外显式加入该文件。其他来源的完整许可和 Runtime/THIRD-PARTY-NOTICES.md 的来源说明保持。
 
 Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界。
 

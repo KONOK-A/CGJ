@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Collections;
 using System.IO;
 using System.Linq;
@@ -10,43 +9,54 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.TestTools;
-using YLFramework.UI;
 
 namespace YLFramework.Core.Tests
 {
     public class ColorSelectorTests
     {
         [UnityTest]
-        public IEnumerator WidgetSourceClosureCompilesWithoutCoreForEditor() => CompileWidget(AssemblyBuilderFlags.EditorAssembly);
+        public IEnumerator ToolConsumerCompilesWithCoreForEditor() => CompileToolConsumer(AssemblyBuilderFlags.EditorAssembly);
 
         [UnityTest]
-        public IEnumerator WidgetSourceClosureCompilesWithoutCoreForDevelopmentPlayer() => CompileWidget(AssemblyBuilderFlags.DevelopmentBuild);
+        public IEnumerator ToolConsumerCompilesWithCoreForDevelopmentPlayer() => CompileToolConsumer(AssemblyBuilderFlags.DevelopmentBuild);
 
-        private static IEnumerator CompileWidget(AssemblyBuilderFlags flags)
+        private static IEnumerator CompileToolConsumer(AssemblyBuilderFlags flags)
         {
-            const string root = "Assets/YLFramework/Runtime/Utilities/UI/";
-            var sources = Directory.GetFiles(root + "ColorSelector", "*.cs")
-                .Concat(new[] { root + "Input/IUIInputGate.cs" }).ToArray();
-            Assert.That(sources.Length, Is.EqualTo(4));
-            var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLColor.SourceClosure-" + Guid.NewGuid().ToString("N"));
+            var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLColor.ToolConsumer-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             try
             {
-                var output = Path.Combine(folder, "ColorWidget.dll");
+                var source = Path.Combine(folder, "ColorToolConsumer.cs");
+                File.WriteAllText(source, @"using System;
+using UnityEngine;
+using YLFramework.Core;
+public static class ColorToolConsumer
+{
+    public static LoadViewArgs Use(ColorSelector selector, Color initial, Action<Color> changed)
+    {
+        selector.BeginSession(initial, changed);
+        var current = selector.CurrentColor;
+        selector.EndSession();
+        return ColorSelectorWindow.Arguments(current, changed);
+    }
+}");
+                var output = Path.Combine(folder, "ColorToolConsumer.dll");
                 var ui = typeof(Graphic).Assembly.Location;
+                var runtime = typeof(Panel).Assembly.Location;
                 var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
                 var trusted = Path.GetFullPath(EditorApplication.applicationContentsPath) + Path.DirectorySeparatorChar;
-                var builder = new AssemblyBuilder(output, sources) { flags = flags,
+                var builder = new AssemblyBuilder(output, new[] { source }) { flags = flags,
                     buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
-                    referencesOptions = ReferencesOptions.UseEngineModules, additionalReferences = new[] { ui } };
+                    referencesOptions = ReferencesOptions.UseEngineModules, additionalReferences = new[] { ui, runtime } };
                 builder.excludeReferences = builder.defaultReferences.Where(path =>
                     !Path.GetFullPath(path).StartsWith(trusted, StringComparison.OrdinalIgnoreCase) ||
                     Path.GetFileName(path).Contains("TestRunner") ||
                     (!editor && Path.GetFileName(path).StartsWith("UnityEditor", StringComparison.Ordinal))).ToArray();
                 Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
-                var references = builder.defaultReferences.Except(builder.excludeReferences).Concat(new[] { ui }).ToArray();
-                Assert.That(references.Any(path => Path.GetFileName(path).StartsWith("YLFramework", StringComparison.Ordinal) ||
-                    Path.GetFileName(path).StartsWith("XF", StringComparison.Ordinal)), Is.False);
+                var references = builder.defaultReferences.Except(builder.excludeReferences).Concat(new[] { ui, runtime }).ToArray();
+                Assert.That(references.Contains(runtime), Is.True, "The convenience tool is consumed through the Runtime/Core API.");
+                Assert.That(references.Any(path => Path.GetFileName(path).Contains("TestRunner") ||
+                    Path.GetFileName(path).StartsWith("YLFramework.Core.Tests", StringComparison.Ordinal)), Is.False);
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
@@ -59,77 +69,95 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void WidgetAndPanelMeetOnlyThroughOneReadOnlyInputGate()
+        public void ConvenienceWidgetCannotBypassAnUnloadedPanelWithACustomGate()
         {
-            var gate = typeof(ColorSelector).Assembly.GetType("YLFramework.UI.IUIInputGate");
-            Assert.That(gate, Is.Not.Null);
-            Assert.That(gate.IsInterface, Is.True);
-            Assert.That(gate.GetProperties().Length, Is.EqualTo(1));
-            var property = gate.GetProperty("IsInputAllowed");
-            Assert.That(property.PropertyType, Is.EqualTo(typeof(bool)));
-            Assert.That(property.CanWrite, Is.False);
-            Assert.That(gate.IsAssignableFrom(typeof(Panel)), Is.True);
-            foreach (var field in typeof(ColorSelector).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                Assert.That(field.FieldType == typeof(Panel) || field.FieldType == typeof(View) || field.FieldType == typeof(Module),
-                    Is.False, field.Name);
-        }
-
-        [Test]
-        public void StandaloneWidgetReadsTheNearestGateAndReleasesBlockedDragCapture()
-        {
-            var root = new GameObject("YLColor.OuterGate");
-            var host = new GameObject("YLColor.NearestGate");
-            var go = new GameObject("YLColor.GatedWidget", typeof(RectTransform));
+            var root = new GameObject("YLColor.UnloadedPanel", typeof(ColorSelectorWindow));
+            var go = new GameObject("YLColor.NearerGate", typeof(RectTransform));
             try
             {
-                host.transform.SetParent(root.transform);
-                go.transform.SetParent(host.transform);
-                var outer = root.AddComponent<ColorInputGateProbe>();
-                outer.Allowed = false;
-                var nearest = host.AddComponent<ColorInputGateProbe>();
-                nearest.Allowed = true;
+                go.transform.SetParent(root.transform);
+                var gate = go.AddComponent<ColorInputGateProbe>();
+                gate.Allowed = true;
                 var selector = go.AddComponent<ColorSelector>();
                 var rect = go.GetComponent<RectTransform>();
                 rect.sizeDelta = new Vector2(300, 300);
                 int changes = 0;
                 selector.BeginSession(Color.red, _ => changes++);
-                var data = Pointer(rect, new Vector2(-0.44f, 0.7621024f), 6);
-                selector.OnPointerDown(data);
-                AssertColor(selector.CurrentColor, Color.green);
-                Assert.That(outer.Reads, Is.Zero);
-                nearest.Allowed = false;
-                data.position = Screen(rect, new Vector2(-0.44f, -0.7621024f));
-                selector.OnDrag(data);
-                AssertColor(selector.CurrentColor, Color.green);
-                nearest.Allowed = true;
-                selector.OnDrag(data);
-                AssertColor(selector.CurrentColor, Color.green, "Blocked drag must drop the old pointer capture.");
-                Assert.That(changes, Is.EqualTo(1));
-                Assert.That(nearest.Reads, Is.EqualTo(3));
-                selector.OnPointerDown(data);
-                AssertColor(selector.CurrentColor, Color.blue);
-                UnityEngine.Object.DestroyImmediate(nearest);
-                selector.OnPointerUp(data);
-                selector.OnPointerDown(Pointer(rect, new Vector2(0.88f, 0), 7));
+                selector.OnPointerDown(Pointer(rect, new Vector2(-0.44f, 0.7621024f), 1));
+                Assert.That(root.GetComponent<Panel>().IsLoaded, Is.False);
                 AssertColor(selector.CurrentColor, Color.red);
-                Assert.That(outer.Reads, Is.Zero, "Destroyed cached host behaves as no host, not a stale CLR interface.");
+                Assert.That(changes, Is.Zero);
+                Assert.That(gate.Reads, Is.Zero);
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
 
         [Test]
-        public void InactiveAncestorsAndMultipleGatesDoNotCreateANewRegistrationError()
+        public void StandaloneWidgetWithoutPanelIgnoresCustomInputProperties()
         {
-            var root = new GameObject("YLColor.ActiveGate");
-            var host = new GameObject("YLColor.InactiveGate");
+            var go = new GameObject("YLColor.Standalone", typeof(RectTransform));
+            try
+            {
+                var gate = go.AddComponent<ColorInputGateProbe>();
+                gate.Allowed = false;
+                var selector = go.AddComponent<ColorSelector>();
+                var rect = go.GetComponent<RectTransform>();
+                rect.sizeDelta = new Vector2(300, 300);
+                selector.BeginSession(Color.red, null);
+                selector.OnPointerDown(Pointer(rect, new Vector2(-0.44f, 0.7621024f), 1));
+                AssertColor(selector.CurrentColor, Color.green);
+                Assert.That(gate.Reads, Is.Zero);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void ConvenienceToolKeepsItsScriptIdentityWithoutASharedInputGate()
+        {
+            Assert.That(typeof(ColorSelector).Assembly.GetType("YLFramework.UI.IUIInputGate"), Is.Null);
+            const string windowPath = "Assets/YLFramework/Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs";
+            Assert.That(AssetDatabase.AssetPathToGUID(windowPath), Is.EqualTo("4878c19ecf0794f45baa1869cc9513cb"));
+            Assert.That(AssetDatabase.LoadAssetAtPath<MonoScript>(windowPath).GetClass(), Is.EqualTo(typeof(ColorSelectorWindow)));
+        }
+
+        [Test]
+        public void WidgetCachesNearestPanelAndDoesNotFallBackAfterItsDestruction()
+        {
+            var root = new GameObject("YLColor.OuterPanel", typeof(ColorSelectorWindow));
+            var host = new GameObject("YLColor.NearestPanel", typeof(ColorSelectorWindow));
+            var go = new GameObject("YLColor.GatedWidget", typeof(RectTransform));
+            try
+            {
+                host.transform.SetParent(root.transform);
+                go.transform.SetParent(host.transform);
+                var nearest = host.GetComponent<Panel>();
+                var selector = go.AddComponent<ColorSelector>();
+                var rect = go.GetComponent<RectTransform>();
+                rect.sizeDelta = new Vector2(300, 300);
+                selector.BeginSession(Color.red, null);
+                var data = Pointer(rect, new Vector2(-0.44f, 0.7621024f), 6);
+                selector.OnPointerDown(data);
+                AssertColor(selector.CurrentColor, Color.red);
+                UnityEngine.Object.DestroyImmediate(nearest);
+                selector.OnPointerDown(data);
+                AssertColor(selector.CurrentColor, Color.green, "A destroyed cached Panel follows the no-host default without resolving another ancestor.");
+                selector.BeginSession(Color.red, null);
+                selector.OnPointerDown(data);
+                AssertColor(selector.CurrentColor, Color.red);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
+        [Test]
+        public void InactiveAncestorsAndDisabledPanelsKeepUnityHostSelectionRules()
+        {
+            var root = new GameObject("YLColor.ActivePanel", typeof(ColorSelectorWindow));
+            var host = new GameObject("YLColor.InactivePanel", typeof(ColorSelectorWindow));
             var go = new GameObject("YLColor.ChildWidget", typeof(RectTransform));
             try
             {
                 host.transform.SetParent(root.transform);
                 go.transform.SetParent(host.transform);
-                root.AddComponent<ColorInputGateProbe>().Allowed = false;
-                host.AddComponent<ColorInputGateProbe>().Allowed = true;
-                host.AddComponent<ColorInputGateProbe>().Allowed = true;
                 var selector = go.AddComponent<ColorSelector>();
                 var rect = go.GetComponent<RectTransform>();
                 rect.sizeDelta = new Vector2(300, 300);
@@ -139,9 +167,13 @@ namespace YLFramework.Core.Tests
                 var data = Pointer(rect, new Vector2(-0.44f, 0.7621024f), 1);
                 selector.OnPointerDown(data);
                 AssertColor(selector.CurrentColor, Color.red);
-                Assert.DoesNotThrow(() => selector.BeginSession(Color.red, null));
+                UnityEngine.Object.DestroyImmediate(root.GetComponent<Panel>());
                 selector.OnPointerDown(data);
                 AssertColor(selector.CurrentColor, Color.green);
+                host.GetComponent<Panel>().enabled = false;
+                selector.BeginSession(Color.red, null);
+                selector.OnPointerDown(data);
+                AssertColor(selector.CurrentColor, Color.red, "Disabled Panel components remain eligible hosts under Unity's ancestor lookup.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
@@ -328,7 +360,7 @@ namespace YLFramework.Core.Tests
         }
     }
 
-    public sealed class ColorInputGateProbe : MonoBehaviour, IUIInputGate
+    public sealed class ColorInputGateProbe : MonoBehaviour
     {
         public bool Allowed;
         public int Reads;

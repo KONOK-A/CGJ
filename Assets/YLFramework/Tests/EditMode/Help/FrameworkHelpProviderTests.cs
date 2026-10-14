@@ -27,6 +27,8 @@ namespace YLFramework.Tests.Help
                         Is.EqualTo(guide.Id == "tools" ? "Tools 精选 API" : "Foundation 精选 API"), type.FullName);
             Assert.That(index.Select(entry => entry.Group).Distinct(),
                 Is.EquivalentTo(new[] { "Tools 精选 API", "Foundation 精选 API" }));
+            foreach (var type in new[] { typeof(YLFramework.Core.ColorSelector), typeof(YLFramework.Core.ColorSelectorWindow) })
+                Assert.That(module.Guides.Single(guide => guide.Id == "tools").FeaturedTypes, Does.Contain(type), type.FullName);
         }
 
         [TestCase("core", "YLFramework.Editor", "YLFramework/Core/帮助")]
