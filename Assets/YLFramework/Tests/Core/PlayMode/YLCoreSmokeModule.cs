@@ -5,8 +5,9 @@ namespace YLFramework.Core.Tests
 {
     public sealed class YLCoreSmokeModule : YLFramework.Core.Module
     {
-        public const string FixtureRoot = "Assets/YLFramework/Tests/Core/Fixtures/YLCoreSmokeModule";
-        public const string Project = nameof(YLCoreSmokeModule);
+        public const string FixtureRoot = "Assets/YLFramework/Tests/Core/Fixtures/YLCoreResourceModule";
+        public const string Project = "yl-core-resource";
+        public YLCoreSmokeModule() => ProjectName = Project;
         public const string Table = "YLCoreSmokeRows";
         public const string SceneName = "YLCoreSmokeScene";
         public const string HarnessName = "YLCoreSmokeHarness";
@@ -28,7 +29,7 @@ namespace YLFramework.Core.Tests
 
 #pragma warning disable CS0618
         public override Dictionary<string, Type> PreloadConfigTables =>
-            new Dictionary<string, Type> { { TableName, typeof(YLCoreSmokeRow[]) } };
+            TableName == null ? new Dictionary<string, Type>() : new Dictionary<string, Type> { { TableName, typeof(YLCoreSmokeRow[]) } };
 #pragma warning restore CS0618
 
         public override string DefaultStartUpScene => SceneOverride ?? (StartWithScene ? SceneName : string.Empty);

@@ -24,9 +24,12 @@ namespace YLFramework.Services.Resource
 
         /// <summary>不消费输入 Lease；实例缓存取得自己的 Prefab pin。裸 Prefab/Attach 不由此入口纳管。</summary>
         public InstanceLease Instantiate(AssetLease<GameObject> prefab, Transform parent = null)
+            => Instantiate(prefab, parent, SceneManager.GetActiveScene());
+
+        internal InstanceLease Instantiate(AssetLease<GameObject> prefab, Transform parent, Scene targetScene)
         {
             CheckThread();
-            var scene = InstanceCache.TargetScene(parent, SceneManager.GetActiveScene());
+            var scene = InstanceCache.TargetScene(parent, targetScene);
             var cache = GetInstanceCacheCore(prefab, InstanceCachePolicy.SceneScoped, scene);
             var lease = cache.Instantiate(parent, scene);
             cache.Commit();

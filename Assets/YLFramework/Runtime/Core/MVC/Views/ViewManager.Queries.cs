@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using GameObjectLoader = XFABManager.GameObjectLoader;
 using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 using UpdateManager = YLFramework.Foundation.UpdateManager;

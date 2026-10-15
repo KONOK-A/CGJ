@@ -4,9 +4,6 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using AssetBundleManager = XFABManager.AssetBundleManager;
-using LoadAssetRequest = XFABManager.LoadAssetRequest;
-using LoadSceneRequest = XFABManager.LoadSceneRequest;
 
 namespace YLFramework.Core
 {
@@ -116,6 +113,7 @@ namespace YLFramework.Core
             var module = Module;
             progress = 0;
             string projectName = module.ProjectName;
+            var provider = CoreResourceAccess.Provider;
             if (string.IsNullOrWhiteSpace(projectName))
                 throw new InvalidOperationException($"Resource project name is required: {module.ModuleName}");
 
@@ -136,41 +134,16 @@ namespace YLFramework.Core
                     if (table.Value == null || !table.Value.IsArray || table.Value.GetArrayRank() != 1 ||
                         !typeof(Model).IsAssignableFrom(table.Value.GetElementType()))
                         throw new InvalidOperationException($"Config table must specify a Model array type: {asset_name}");
-                    LoadAssetRequest request = AssetBundleManager.LoadAssetAsync<TextAsset>(projectName, asset_name);
-                    if (request == null)
-                        throw new InvalidOperationException($"Config table request is null: {projectName}/{asset_name}");
-                    yield return request;
-                    // 启动表及其Bundle须专用且无外部并发持有者；XFAB没有按调用计数的租约。
-                    // 复制文本后立即归还，反序列化和业务初始化不再持有TextAsset。
-                    var asset = request.asset;
                     string json;
-                    Exception tableError = null;
-                    try
+                    using (var request = CoreResourceAccess.RequireProvider(provider).ReadTextAsync(projectName, asset_name))
                     {
-                        if (!string.IsNullOrEmpty(request.error))
-                            throw new InvalidOperationException($"Config table load failed: {projectName}/{asset_name}: {request.error}");
-                        var text = asset as TextAsset;
-                        if (!text || string.IsNullOrWhiteSpace(text.text))
+                        if (request == null) throw new InvalidOperationException($"Config table request is null: {projectName}/{asset_name}");
+                        yield return request;
+                        if (request.Status != CoreResourceStatus.Succeeded)
+                            throw new InvalidOperationException($"Config table load failed: {projectName}/{asset_name}", request.Error);
+                        json = request.TakeResult();
+                        if (string.IsNullOrWhiteSpace(json))
                             throw new InvalidOperationException($"Config table asset or JSON text is empty: {projectName}/{asset_name}");
-                        json = text.text;
-                    }
-
-                    catch (Exception error)
-                    {
-                        tableError = error;
-                        throw;
-                    }
-                    finally
-                    {
-                        if (asset)
-                        {
-                            try { AssetBundleManager.UnloadAsset(asset); }
-                            catch (Exception cleanupError)
-                            {
-                                if (tableError == null) throw;
-                                AttachCleanupError(tableError, cleanupError);
-                            }
-                        }
                     }
 
                     var models = JsonConvert.DeserializeObject(json, table.Value,
@@ -192,31 +165,19 @@ namespace YLFramework.Core
             string sceneName = module.DefaultStartUpScene;
             if (!string.IsNullOrEmpty(sceneName))
             {
-                var previousScenes = new HashSet<int>();
-                for (int i = 0; i < SceneManager.sceneCount; i++) previousScenes.Add(SceneManager.GetSceneAt(i).handle);
-                //startMessage = "正在加载场景...";
-                LoadSceneRequest operation = AssetBundleManager.LoadSceneAsynchrony(projectName, sceneName, UnityEngine.SceneManagement.LoadSceneMode.Single);
+                using var operation = CoreResourceAccess.RequireProvider(provider).LoadSceneAsync(projectName, sceneName, LoadSceneMode.Single);
                 if (operation == null)
                     throw new InvalidOperationException($"Default scene request is null: {projectName}/{sceneName}");
-                while (!operation.isDone)
+                while (operation.Status == CoreResourceStatus.Pending)
                 {
                     yield return null;
-                    progress = 0.5f + operation.progress * 0.5f;
+                    progress = 0.5f + operation.Progress * 0.5f;
                 }
-                if (!string.IsNullOrEmpty(operation.error))
-                    throw new InvalidOperationException($"Default scene load failed: {projectName}/{sceneName}: {operation.error}");
-                // XFAB在Assets模式按名称返回Scene，不能将先前的同名实例当作本次结果。
-                Scene loadedScene = default;
-                for (int i = 0; i < SceneManager.sceneCount; i++)
-                {
-                    var candidate = SceneManager.GetSceneAt(i);
-                    if (!candidate.isLoaded || candidate.name != sceneName || previousScenes.Contains(candidate.handle)) continue;
-                    if (loadedScene.IsValid())
-                        throw new InvalidOperationException($"Default scene result is ambiguous: {projectName}/{sceneName}");
-                    loadedScene = candidate;
-                }
-                if (!loadedScene.IsValid())
-                    throw new InvalidOperationException($"Default scene result is not newly loaded: {projectName}/{sceneName}");
+                if (operation.Status != CoreResourceStatus.Succeeded)
+                    throw new InvalidOperationException($"Default scene load failed: {projectName}/{sceneName}", operation.Error);
+                var loadedScene = operation.TakeResult().Scene;
+                if (!loadedScene.IsValid() || !loadedScene.isLoaded)
+                    throw new InvalidOperationException($"Default scene result is not loaded: {projectName}/{sceneName}");
                 module.AttachViews(loadedScene);
             }
 

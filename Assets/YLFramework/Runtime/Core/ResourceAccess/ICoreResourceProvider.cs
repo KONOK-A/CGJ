@@ -19,7 +19,7 @@ namespace YLFramework.Core
     }
 
     /// <summary>消费方窄请求合同。yield 只观察；TakeResult 单次交割，Dispose 不释放已交割结果。</summary>
-    /// <remarks>完成通知逐个隔离异常；终态稳定，Dispose 后领取抛 ObjectDisposedException。具体后端在消费者迁移批次实现。</remarks>
+    /// <remarks>完成通知逐个隔离异常；终态稳定，Dispose 后领取抛 ObjectDisposedException。</remarks>
     public abstract class CoreResourceRequest<T> : CustomYieldInstruction, IDisposable
     {
         public abstract CoreResourceStatus Status { get; }
@@ -60,7 +60,7 @@ namespace YLFramework.Core
         public CoreSceneResult(Scene scene, bool hasSceneSideEffects) { Scene = scene; HasSceneSideEffects = hasSceneSideEffects; }
     }
 
-    /// <summary>仅覆盖 Core 文本、prefab/实例和场景消费。8.1 不提供后端、不接入现有正式加载流程。</summary>
+    /// <summary>仅覆盖 Core 文本、prefab/实例和场景消费。命名操作必须显式绑定后端。</summary>
     public interface ICoreResourceProvider
     {
         CoreResourceRequest<string> ReadTextAsync(string projectId, string address);
@@ -69,11 +69,17 @@ namespace YLFramework.Core
         CoreResourceRequest<CoreSceneResult> LoadSceneAsync(string projectId, string address, LoadSceneMode mode);
     }
 
-    /// <summary>显式主线程绑定槽，无默认后端、无 XFAB 回退、无加载表。现有 Core 调用尚不消费此槽。</summary>
+    /// <summary>显式主线程绑定槽，无默认后端、无 XFAB 回退、无加载表。</summary>
     public static class CoreResourceAccess
     {
         private static ICoreResourceProvider provider;
         public static ICoreResourceProvider Provider => SingletonSessionState.CanRunExecution ? provider : null;
+
+        internal static ICoreResourceProvider RequireProvider(ICoreResourceProvider value) => value ??
+            throw new CoreResourceException(CoreResourceError.Unavailable, "Named Core resources require an explicitly bound resource provider.");
+
+        internal static bool CanFallback(Exception error) => error is CoreResourceException resource &&
+            (resource.Kind == CoreResourceError.Missing || resource.Kind == CoreResourceError.LoadFailed);
 
         static CoreResourceAccess()
         {

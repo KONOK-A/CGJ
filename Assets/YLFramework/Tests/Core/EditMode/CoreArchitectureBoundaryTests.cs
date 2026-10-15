@@ -48,7 +48,7 @@ namespace YLFramework.Core.Tests
                 File.WriteAllText(legal, "internal static class LegalCoreConsumer { " +
                     "static global::YLFramework.Core.Pool.ObjectPool<object> pool; " +
                     "static void Use() { var module = global::YLFramework.Core.ModuleManager.GetModule(\"X\"); " +
-                    "global::System.Action<object> unload = global::XFABManager.AssetBundleManager.UnloadAsset; " +
+                    "var provider = global::YLFramework.Core.CoreResourceAccess.Provider; " +
                     "var settings = new global::Newtonsoft.Json.JsonSerializerSettings { CheckAdditionalContent = true }; " +
                     "var json = global::Newtonsoft.Json.JsonConvert.DeserializeObject(\"{}\", typeof(object), settings); " +
                     "var ui = typeof(global::UnityEngine.UI.Image); } }");
@@ -109,7 +109,6 @@ namespace YLFramework.Core.Tests
         private static string[] GetExternalReferences(bool editor)
         {
             var ui = ResolveLoadedGraphAssembly("UnityEngine.UI", "UnityEngine.EventSystems.EventSystem");
-            var xfab = ResolveLoadedGraphAssembly("XFABManager", "XFABManager.AssetBundleManager");
             var loadedJson = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "Newtonsoft.Json");
             Assert.That(loadedJson.GetType("Newtonsoft.Json.JsonSerializerSettings"), Is.Not.Null);
             var editorRuntime = CompilationPipeline.GetAssemblies(AssembliesType.Editor).Single(a => a.name == "YLFramework.Runtime");
@@ -123,7 +122,7 @@ namespace YLFramework.Core.Tests
                 .Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).Single();
             Assert.That(File.Exists(json), Is.True);
             Assert.That(AssemblyName.GetAssemblyName(json).FullName, Is.EqualTo(loadedJson.FullName));
-            return new[] { ui, xfab, json };
+            return new[] { ui, json };
         }
 
         [Test]
@@ -149,7 +148,7 @@ namespace YLFramework.Core.Tests
                     }
                     foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(a =>
                         a.GetName().Name.StartsWith("YLFramework", StringComparison.Ordinal) ||
-                        new[] { "XFGameFramework", "XFFSM", "Unity.InputSystem" }.Contains(a.GetName().Name)))
+                        new[] { "XFABManager", "XFGameFramework", "XFFSM", "Unity.InputSystem" }.Contains(a.GetName().Name)))
                         Assert.That(IsAllowedReference(assembly.Location, contents, extra, editor), Is.False, assembly.FullName);
                     Assert.That(IsAllowedReference(typeof(LogAssert).Assembly.Location, contents, extra, editor), Is.False);
                     Assert.That(IsAllowedReference(typeof(TestAttribute).Assembly.Location, contents, extra, editor), Is.False);

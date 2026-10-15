@@ -18,7 +18,7 @@ namespace YLFramework.Core
         public UIType UIType { get; set; } = UIType.UI;
 
         public WindowDefinition(string key, GameObject prefab) { Key = key; Prefab = prefab; }
-        /// <summary>资源名沿 Module 的 XFAB project fallback 解析，不将 BundleName 当 ProjectName。</summary>
+        /// <summary>资源地址沿 Module 的 YL ProjectId fallback 解析，不将 BundleName 当 ProjectName。</summary>
         public WindowDefinition(string key, string assetName) { Key = key; AssetName = assetName; }
 
         internal WindowDefinition Snapshot()

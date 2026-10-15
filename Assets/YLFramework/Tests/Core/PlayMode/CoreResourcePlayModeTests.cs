@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Linq;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
@@ -11,19 +12,22 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
-using XFABManager;
+using YLFramework.Services.Resource;
 using YLFramework.Core.Pool;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Tests
 {
-    public class CoreXfabPlayModeTests
+    public class CoreResourcePlayModeTests
     {
         private const float Timeout = 10f;
         private const BindingFlags StaticPrivate = BindingFlags.Static | BindingFlags.NonPublic;
         private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         private readonly List<GameObject> ownedObjects = new List<GameObject>();
         private readonly List<Object> ownedAssets = new List<Object>();
+        private readonly List<IDisposable> assetLeases = new List<IDisposable>();
+        private ResourceSystem resources;
+        private CoreResourceProvider provider;
         private readonly List<Scene> ownedSceneInstances = new List<Scene>();
         private CoreClassPoolScope classPool;
         private CoreUpdateHostScope updateHosts;
@@ -36,7 +40,6 @@ namespace YLFramework.Core.Tests
         private object moduleManager;
         private object previousCurrent;
         private object previousPanelManager;
-        private object previousLoader;
         private GameObject previousManagerEventSystem;
         private Scene previousActive;
         private bool ownsScene;
@@ -57,6 +60,7 @@ namespace YLFramework.Core.Tests
             ownsScene = singleSceneTest = false;
             ownedObjects.Clear();
             ownedAssets.Clear();
+            assetLeases.Clear();
             ownedSceneInstances.Clear();
             classPool = new CoreClassPoolScope();
             updateHosts = new CoreUpdateHostScope();
@@ -69,7 +73,6 @@ namespace YLFramework.Core.Tests
             previousActive = SceneManager.GetActiveScene();
             foreach (var system in Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 previousEventSystems.Add(system.gameObject.GetInstanceID());
-            previousLoader = Singleton(typeof(GameObjectLoader));
             previousPanelManager = Singleton(typeof(YLFramework.Core.PanelManager));
             previousManagerEventSystem = previousPanelManager == null ? null :
                 (GameObject)Field(previousPanelManager, "_eventSystem");
@@ -81,23 +84,18 @@ namespace YLFramework.Core.Tests
                 "Never replace an externally registered fixture module.");
             Assert.That(SceneManager.GetSceneByPath(YLCoreSmokeModule.ScenePath).isLoaded, Is.False,
                 "The fixture scene must not already be loaded.");
-            var profile = AssetBundleManager.GetProfile(YLCoreSmokeModule.Project);
-            Assert.That(profile, Is.Not.Null);
-            Assert.That(profile.loadMode, Is.EqualTo(LoadMode.Assets), "These tests do not alter the selected XFAB Profile.");
-            Assert.That(profile.updateModel, Is.EqualTo(UpdateMode.LOCAL));
-            var project = AssetDatabase.LoadAssetAtPath<XFABProject>(YLCoreSmokeModule.FixtureRoot + "/YLCoreSmokeModule.asset");
-            Assert.That(project, Is.Not.Null, "Run CoreSmokeAssetFixture.CreateOrValidate in Edit Mode first.");
-            Assert.That(project.name, Is.EqualTo(YLCoreSmokeModule.Project));
-            Assert.That(XFABProjectManager.Instance.GetProject(YLCoreSmokeModule.Project), Is.SameAs(project),
-                "Create the fixture before entering Play Mode; do not refresh global project caches during a test.");
+            Assert.That(ResourceSystem.Current, Is.Null, "Do not replace an external resource authority.");
+            var fixture = Type.GetType("YLFramework.Core.Editor.Tests.CoreSmokeAssetFixture, YLFramework.Core.Tests.Fixtures.Editor", true);
+            var config = (ResourceConfiguration)fixture.GetMethod("CreateConfiguration").Invoke(null, null);
+            using var initialize = ResourceSystem.InitializeAsync(config);
+            Assert.That(initialize.Error, Is.Null);
+            resources = initialize.TakeResult();
+            provider = resources.BindCoreResourceProvider();
             foreach (string name in new[] { nameof(YLCoreSmokeView), nameof(YLCoreSmokePanel) })
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(YLCoreSmokeModule.FixtureRoot + "/" + name + ".prefab");
                 Assert.That(prefab, Is.Not.Null, name);
                 int key = prefab.GetHashCode();
-                if (previousLoader != null)
-                    Assert.That(((IDictionary)Field(previousLoader, "allPools")).Contains(key), Is.False,
-                        "Fixture prefab already has a pool owned by another caller: " + name);
                 prefabKeys.Add(key);
             }
         }
@@ -118,19 +116,6 @@ namespace YLFramework.Core.Tests
                 try { action(); }
                 catch (Exception error) { failures.Add(error); }
             }
-            // Include cached instances created by a failed type-check request, not just returned Views.
-            var loader = Singleton(typeof(GameObjectLoader));
-            Attempt(() =>
-            {
-                if (loader == null) return;
-                var pools = (IDictionary)Field(loader, "allPools");
-                foreach (int key in prefabKeys)
-                {
-                    if (!pools.Contains(key)) continue;
-                    foreach (object info in ((IDictionary)Field(pools[key], "allObjs")).Values)
-                        Own((GameObject)info.GetType().GetProperty("Obj").GetValue(info));
-                }
-            });
             Attempt(() =>
             {
                 if (module == null || !ReferenceEquals(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), module)) return;
@@ -140,21 +125,12 @@ namespace YLFramework.Core.Tests
             Attempt(() => typeof(YLFramework.Core.ModuleManager).GetField("current_module", InstancePrivate).SetValue(moduleManager, previousCurrent));
             if (canvasCallback != null) YLFramework.Core.PanelManager.onCreateCanvas -= canvasCallback;
             Attempt(CleanPanelManager);
-            Attempt(() =>
-            {
-                if (loader == null) return;
-                var pools = (IDictionary)Field(loader, "allPools");
-                var mappings = (IDictionary)Field(loader, "allObjPoolMapping");
-                var keys = new List<object>();
-                foreach (DictionaryEntry mapping in mappings)
-                    if (prefabKeys.Contains((int)mapping.Value)) keys.Add(mapping.Key);
-                foreach (object key in keys) mappings.Remove(key);
-                foreach (int key in prefabKeys) pools.Remove(key);
-            });
             Attempt(() => classPool.Restore(new Module[] { module }));
             Attempt(updateHosts.ReleaseOwnedIdleHosts);
             foreach (var obj in ownedObjects) if (obj) Attempt(() => Object.Destroy(obj));
-            foreach (var asset in ownedAssets) if (asset) Attempt(() => AssetBundleManager.UnloadAsset(asset));
+            foreach (var lease in assetLeases) Attempt(lease.Dispose);
+            assetLeases.Clear();
+            if (resources != null) Attempt(resources.ClearInstanceCaches);
 
             if (singleSceneTest && (!previousActive.IsValid() || !previousActive.isLoaded))
             {
@@ -171,8 +147,18 @@ namespace YLFramework.Core.Tests
                 if (instance.IsValid() && instance.isLoaded)
                     yield return AwaitUnity(SceneManager.UnloadSceneAsync(instance), "unload owned additive scene instance");
             yield return null;
+            if (resources != null)
+            {
+                using var shutdown = resources.ShutdownAsync();
+                yield return Await(() => shutdown.IsDone, "resource fixture shutdown");
+                Assert.That(shutdown.Error, Is.Null, shutdown.Error?.ToString());
+                Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
+                Assert.That(CoreResourceAccess.Provider, Is.Null);
+                resources = null;
+                provider = null;
+            }
             initialized = false;
-            if (failures.Count > 0) throw new AggregateException("XFAB fixture cleanup failed.", failures);
+            if (failures.Count > 0) throw new AggregateException("Core Resource fixture cleanup failed.", failures);
             Assert.That(YLFramework.Core.ModuleManager.GetModule<YLCoreSmokeModule>(), Is.Null);
             foreach (var obj in ownedObjects) Assert.That(obj == null, Is.True, "Fixture object survived cleanup.");
 
@@ -187,18 +173,131 @@ namespace YLFramework.Core.Tests
             for (var cycle = 0; cycle < 2; cycle++)
             {
                 yield return NamedPanelsUseRealManagerCanvasEventSystemAsyncAndCacheIndexes();
-                var backendHost = Object.FindObjectsByType<XFABManager.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
                 var foundationHost = Object.FindObjectsByType<YLFramework.Foundation.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None);
                 yield return TearDown();
-                CollectionAssert.AreEquivalent(backendHost,
-                    Object.FindObjectsByType<XFABManager.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None));
                 CollectionAssert.AreEquivalent(foundationHost,
                     Object.FindObjectsByType<YLFramework.Foundation.CoroutineStarter>(FindObjectsInactive.Include, FindObjectsSortMode.None));
-                var loader = Singleton(typeof(GameObjectLoader));
-                var pools = (IDictionary)Field(loader, "allPools");
-                foreach (var key in prefabKeys) Assert.That(pools.Contains(key), Is.False);
+                Assert.That(ResourceSystem.Current, Is.Null);
                 if (cycle == 0) SetUp();
             }
+        }
+
+        [UnityTest]
+        public IEnumerator ProviderReturningAfterOwnerCloseDisposesItsUnclaimedPrefabRequest()
+        {
+            yield return StartModule();
+            var probe = new InspectingProvider(provider) { AfterAcquire = _ => module.Close() };
+            CoreResourceAccess.Bind(probe);
+            try
+            {
+                var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: NewArgs());
+                yield return Await(() => request.isDone, "provider reentry owner close");
+                Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Invalidated));
+                Assert.That(probe.Captured.IsDisposed, Is.True, "A request returned after Core invalidation must be released locally.");
+                Assert.That(Field(request, "resourceRequest"), Is.Null);
+                Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
+            }
+            finally
+            {
+                probe.Captured?.Dispose();
+                resources.BindCoreResourceProvider();
+            }
+        }
+
+        private sealed class InspectingProvider : ICoreResourceProvider
+        {
+            private readonly ICoreResourceProvider inner;
+            internal Action<CoreResourceRequest<CorePrefabLease>> AfterAcquire;
+            internal CoreResourceRequest<CorePrefabLease> Captured;
+            internal InspectingProvider(ICoreResourceProvider inner) => this.inner = inner;
+            public CoreResourceRequest<string> ReadTextAsync(string projectId, string address) => inner.ReadTextAsync(projectId, address);
+            public CorePrefabLease AcquirePrefab(string projectId, string address) => inner.AcquirePrefab(projectId, address);
+            public CoreResourceRequest<CorePrefabLease> AcquirePrefabAsync(string projectId, string address)
+            {
+                Captured = inner.AcquirePrefabAsync(projectId, address);
+                AfterAcquire?.Invoke(Captured);
+                return Captured;
+            }
+            public CoreResourceRequest<CoreSceneResult> LoadSceneAsync(string projectId, string address, LoadSceneMode mode)
+                => inner.LoadSceneAsync(projectId, address, mode);
+        }
+
+        [UnityTest]
+        public IEnumerator UnclaimedPrefabRequestDisposalReleasesOnlyItsLease()
+        {
+            using var independent = resources.Acquire<GameObject>(new ResourceAddress(YLCoreSmokeModule.Project, nameof(YLCoreSmokeView)));
+            using var request = provider.AcquirePrefabAsync(YLCoreSmokeModule.Project, nameof(YLCoreSmokeView));
+            yield return Await(() => request.Status != CoreResourceStatus.Pending, "unclaimed Core Prefab result");
+            Assert.That(request.Status, Is.EqualTo(CoreResourceStatus.Succeeded));
+            Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(2));
+            int notified = 0;
+            request.Completed += _ => notified++;
+            Assert.That(notified, Is.EqualTo(1), "Late completion observers see the stable terminal exactly once.");
+            request.Dispose();
+            request.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => request.TakeResult());
+            Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1));
+            Assert.That(independent.IsValid, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator MissingProviderFailsNamedOperationsButLeavesDirectAndAttachPathsAvailable()
+        {
+            Assert.That(CoreResourceAccess.Unbind(provider), Is.True);
+            Assert.That(CoreResourceAccess.Unbind(provider), Is.False);
+            module = new YLCoreSmokeModule();
+            var failed = YLFramework.Core.ModuleManager.StartUpModule(module);
+            yield return Await(() => failed.isDone, "unbound Module table failure");
+            Assert.That(failed.Exception, Is.TypeOf<CoreResourceException>());
+            Assert.That(((CoreResourceException)failed.Exception).Kind, Is.EqualTo(CoreResourceError.Unavailable));
+            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
+            module = new YLCoreSmokeModule { TableName = null };
+            yield return StartWithoutTables();
+            var args = NewArgs();
+            var sync = Assert.Throws<CoreResourceException>(() => module.LoadView(nameof(YLCoreSmokeView), loadViewArgs: args));
+            Assert.That(sync.Kind, Is.EqualTo(CoreResourceError.Unavailable));
+            AssertReleasedArgs(args);
+            var request = module.LoadViewAsync<YLCoreSmokeView>(nameof(YLCoreSmokeView), loadViewArgs: NewArgs());
+            yield return Await(() => request.isDone, "unbound named View failure");
+            AssertTerminal(request, LoadViewStatus.Failed);
+            Assert.That(((CoreResourceException)request.Exception).Kind, Is.EqualTo(CoreResourceError.Unavailable));
+            var attached = Own(new GameObject("YLCore86.UnboundAttach")).AddComponent<YLCoreSmokeView>();
+            module.AttachView(attached);
+            Assert.That(attached.IsLoaded, Is.True);
+            attached.Close();
+            var directPrefab = Own(new GameObject("YLCore86.Direct", typeof(YLCoreSmokeView)));
+            directPrefab.SetActive(false);
+            var direct = Track(module.LoadView<YLCoreSmokeView>(directPrefab, loadViewArgs: null));
+            Assert.That(direct.IsLoaded, Is.True);
+            direct.Close();
+            var pool = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
+            if (pool) pool.Clear("YL.Core.Direct/" + directPrefab.GetInstanceID());
+            resources.BindCoreResourceProvider();
+        }
+
+        private IEnumerator StartWithoutTables()
+        {
+            var startup = YLFramework.Core.ModuleManager.StartUpModule(module);
+            yield return Await(() => startup.isDone, "resource-free Module startup");
+            Assert.That(startup.error, Is.Null.Or.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator NamedInstanceBucketsDoNotCrossSceneOwnership()
+        {
+            yield return StartModule();
+            var parent = Own(new GameObject("YLCore86.SceneParent")).transform;
+            var first = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: null));
+            first.Close();
+            var otherScene = SceneManager.CreateScene("YLCore86.Other" + Guid.NewGuid().ToString("N"));
+            ownedSceneInstances.Add(otherScene);
+            var otherParent = Own(new GameObject("YLCore86.OtherParent")).transform;
+            SceneManager.MoveGameObjectToScene(otherParent.gameObject, otherScene);
+            var second = Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), otherParent, loadViewArgs: null));
+            Assert.That(second, Is.Not.SameAs(first));
+            Assert.That(second.gameObject.scene, Is.EqualTo(otherScene));
+            second.Close();
+            Assert.That(Track(module.LoadView<YLCoreSmokeView>(nameof(YLCoreSmokeView), parent, loadViewArgs: null)), Is.SameAs(first));
         }
 
         [UnityTest]
@@ -321,33 +420,18 @@ namespace YLFramework.Core.Tests
         [UnityTest]
         public IEnumerator TemporaryTableCacheEntryIsReturnedBeforeModelInitializationAndOnInvalidJson()
         {
-            // Assets模式不建立AB缓存；仅为自己的TextAsset登记可控条目，验证归还调用而非AB物理卸载。
-            var addCache = typeof(AssetBundleManager).GetMethod("AddAssetCache", StaticPrivate, null,
-                new[] { typeof(string), typeof(string), typeof(object) }, null);
-            Assert.That(addCache, Is.Not.Null);
-            var backend = Singleton(typeof(AssetBundleManager));
-            var hashes = (IDictionary)Field(backend, "asset_hash_project_name");
             foreach (string name in new[] { YLCoreSmokeModule.Table, YLCoreSmokeModule.EmptyTable, YLCoreSmokeModule.BlankTable, YLCoreSmokeModule.InvalidTable })
             {
-                var text = AssetDatabase.LoadAssetAtPath<TextAsset>(YLCoreSmokeModule.FixtureRoot + "/" + name + ".json");
-                Assert.That(text, Is.Not.Null);
-                Assert.That(hashes.Contains(text.GetHashCode()), Is.False, "Never assume ownership of an external cache entry.");
-                bool projectExisted = AssetBundleManager.BundleLoadedAssets.TryGetValue(YLCoreSmokeModule.Project, out var buckets);
-                bool bundleExisted = projectExisted && buckets.ContainsKey("text");
-                var sentinel = new TextAsset("owned cache sentinel");
+                using var independent = resources.Acquire<TextAsset>(new ResourceAddress(YLCoreSmokeModule.Project, name));
                 try
                 {
-                    // sentinel只用于避免最后条目触发真实Bundle卸载；不是外部资源持有者。
-                    addCache.Invoke(null, new object[] { YLCoreSmokeModule.Project, "text", sentinel });
-                    addCache.Invoke(null, new object[] { YLCoreSmokeModule.Project, "text", text });
                     bool returnedAtInit = false;
-                    YLCoreSmokeRow.InitAction = _ => returnedAtInit = !hashes.Contains(text.GetHashCode());
+                    YLCoreSmokeRow.InitAction = _ => returnedAtInit = resources.GetDiagnosticsSnapshot().LeaseCount == 1;
                     module = new YLCoreSmokeModule { TableName = name };
                     var request = YLFramework.Core.ModuleManager.StartUpModule(module);
                     yield return Await(() => request.isDone, "temporary table cache return " + name);
-                    Assert.That(hashes.Contains(text.GetHashCode()), Is.False);
-                    Assert.That(AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project]["text"].ContainsKey(text.GetHashCode()), Is.False);
-                    Assert.That(hashes.Contains(sentinel.GetHashCode()), Is.True, "Return only the obtained table, not unrelated entries.");
+                    Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1));
+                    Assert.That(independent.IsValid, Is.True, "Core must not release another consumer's lease.");
                     if (name == YLCoreSmokeModule.Table)
                         Assert.That(returnedAtInit, Is.True, "Model initialization occurs after asset return.");
                     if (name == YLCoreSmokeModule.Table || name == YLCoreSmokeModule.EmptyTable)
@@ -358,15 +442,6 @@ namespace YLFramework.Core.Tests
                 {
                     YLCoreSmokeRow.InitAction = null;
                     module?.Close();
-                    hashes.Remove(text.GetHashCode());
-                    hashes.Remove(sentinel.GetHashCode());
-                    var ownBucket = AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project]["text"];
-                    ownBucket.Remove(text.GetHashCode());
-                    ownBucket.Remove(sentinel.GetHashCode());
-                    if (!bundleExisted && ownBucket.Count == 0) AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project].Remove("text");
-                    if (!projectExisted && AssetBundleManager.BundleLoadedAssets[YLCoreSmokeModule.Project].Count == 0)
-                        AssetBundleManager.BundleLoadedAssets.Remove(YLCoreSmokeModule.Project);
-                    Object.Destroy(sentinel);
                 }
                 yield return null;
             }
@@ -400,7 +475,7 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator XfabLoadsRealPrefabAndTextSynchronouslyAndAsynchronously()
+        public IEnumerator ResourceLoadsRealPrefabAndTextSynchronouslyAndAsynchronously()
         {
             var prefab = LoadFixture<GameObject>(nameof(YLCoreSmokeView));
             Assert.That(prefab.GetComponent<YLCoreSmokeView>(), Is.Not.Null);
@@ -408,22 +483,21 @@ namespace YLFramework.Core.Tests
             Assert.That(text.text, Is.EqualTo(YLCoreSmokeModule.Json));
             foreach (string name in new[] { nameof(YLCoreSmokeView), YLCoreSmokeModule.Table })
             {
-                var request = name == YLCoreSmokeModule.Table
-                    ? AssetBundleManager.LoadAssetAsync<TextAsset>(YLCoreSmokeModule.Project, name)
-                    : AssetBundleManager.LoadAssetAsync<GameObject>(YLCoreSmokeModule.Project, name);
+                using var request = resources.AcquireAsync<Object>(new ResourceAddress(YLCoreSmokeModule.Project, name));
                 int callbacks = 0;
                 bool callbackComplete = false;
-                request.AddCompleteEvent(done =>
+                request.Completed += done =>
                 {
                     callbacks++;
-                    callbackComplete = done.isDone && !done.keepWaiting && done.progress == 1f && string.IsNullOrEmpty(done.error);
-                });
-                yield return Await(() => request.isDone, "XFAB LoadAssetAsync " + name);
-                Assert.That(request.error, Is.Null.Or.Empty);
-                Assert.That(request.asset, Is.SameAs(name == YLCoreSmokeModule.Table ? (Object)text : prefab));
+                    callbackComplete = done.IsDone && !done.keepWaiting && done.Progress == 1f && done.Error == null;
+                };
+                yield return Await(() => request.IsDone, "Resource AcquireAsync " + name);
+                Assert.That(request.Error, Is.Null);
+                using var lease = request.TakeResult();
+                Assert.That(lease.Asset, Is.SameAs(name == YLCoreSmokeModule.Table ? (Object)text : prefab));
                 Assert.That(callbacks, Is.EqualTo(1));
                 Assert.That(callbackComplete, Is.True);
-                OwnAsset(request.asset);
+                OwnAsset(lease.Asset);
                 yield return null;
             }
         }
@@ -935,9 +1009,7 @@ namespace YLFramework.Core.Tests
 #pragma warning restore CS0618
             Assert.That(module.GetViews<YLFramework.Core.View>(), Is.Empty);
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(YLCoreSmokeModule.FixtureRoot + "/" + nameof(YLCoreSmokeView) + ".prefab");
-            var loader = Singleton(typeof(GameObjectLoader));
-            if (loader != null)
-                Assert.That(((IDictionary)Field(loader, "allPools")).Contains(prefab.GetHashCode()), Is.False);
+            Assert.That(FixtureInstanceCount(prefab), Is.Zero, "Prefab validation precedes instance checkout.");
 
             args = NewArgs();
             args.SetInt("token", 52);
@@ -1294,7 +1366,7 @@ namespace YLFramework.Core.Tests
             var trigger = ordered[0];
             var previous = ordered[1];
             var persistentParent = Own(new GameObject("YLCore.SortingReentryPersistentParent", typeof(RectTransform), typeof(Canvas))).transform;
-            Object.DontDestroyOnLoad(persistentParent.gameObject);
+            // 两种 UI context 保持在同一 Scene，按新 scene-scoped 合同复用同一 checkout。
             YLCoreSmokePanel fresh = null;
             bool reentered = false;
             YLCoreSmokePanel.SortingProbe = (panel, _) =>
@@ -1625,24 +1697,25 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
-        public IEnumerator XfabAdditiveSceneRunsIndependentEntryWithoutReplacingActiveScene()
+        public IEnumerator ResourceAdditiveSceneRunsIndependentEntryWithoutReplacingActiveScene()
         {
             yield return StartModule();
             Scene active = SceneManager.GetActiveScene();
             ownsScene = true;
-            var request = AssetBundleManager.LoadSceneAsynchrony(YLCoreSmokeModule.Project,
+            using var request = provider.LoadSceneAsync(YLCoreSmokeModule.Project,
                 YLCoreSmokeModule.SceneName, LoadSceneMode.Additive);
             int callbacks = 0;
-            request.AddCompleteEvent(_ => callbacks++);
-            yield return Await(() => request.isDone, "XFAB additive scene");
-            Assert.That(request.error, Is.Null.Or.Empty);
-            Assert.That(request.progress, Is.EqualTo(1f));
+            request.Completed += _ => callbacks++;
+            yield return Await(() => request.Status != CoreResourceStatus.Pending, "Resource additive scene");
+            Assert.That(request.Error, Is.Null);
+            Assert.That(request.Progress, Is.EqualTo(1f));
             Assert.That(request.keepWaiting, Is.False);
             Assert.That(callbacks, Is.EqualTo(1));
-            Assert.That(request.Scene.IsValid() && request.Scene.isLoaded, Is.True);
-            Assert.That(request.Scene.path, Is.EqualTo(YLCoreSmokeModule.ScenePath));
+            var result = request.TakeResult();
+            Assert.That(result.Scene.IsValid() && result.Scene.isLoaded, Is.True);
+            Assert.That(result.Scene.path, Is.EqualTo(YLCoreSmokeModule.ScenePath));
             Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(active));
-            yield return AssertSceneEntry(request.Scene);
+            yield return AssertSceneEntry(result.Scene);
         }
 
         [UnityTest]
@@ -1858,7 +1931,9 @@ namespace YLFramework.Core.Tests
 
         private T LoadFixture<T>(string name) where T : Object
         {
-            var asset = AssetBundleManager.LoadAsset<T>(YLCoreSmokeModule.Project, name);
+            var lease = resources.Acquire<T>(new ResourceAddress(YLCoreSmokeModule.Project, name));
+            assetLeases.Add(lease);
+            var asset = lease.Asset;
             Assert.That(asset, Is.Not.Null, name);
             string path = AssetDatabase.GetAssetPath(asset);
             Assert.That(path.StartsWith(YLCoreSmokeModule.FixtureRoot + "/", StringComparison.Ordinal), Is.True);
@@ -2079,20 +2154,19 @@ namespace YLFramework.Core.Tests
 
         private static int FixtureInstanceCount(GameObject prefab)
         {
-            var loader = Singleton(typeof(GameObjectLoader));
-            if (loader == null) return 0;
-            var pools = (IDictionary)Field(loader, "allPools");
-            return pools.Contains(prefab.GetHashCode()) ? ((IDictionary)Field(pools[prefab.GetHashCode()], "allObjs")).Count : 0;
+            return Resources.FindObjectsOfTypeAll<View>().Count(view => view && view.gameObject.scene.IsValid() &&
+                view.gameObject.name == prefab.name + "(Clone)");
         }
 
         private IEnumerator DrainFixtureAssetProducer()
         {
             // 等待同一真实后端的新请求结束，再留一帧让之前的Core producer退出；不使用假后端或改写注册。
-            var backend = AssetBundleManager.LoadAssetAsync<GameObject>(YLCoreSmokeModule.Project, nameof(YLCoreSmokeView));
-            yield return Await(() => backend.isDone, "drain real fixture asset producer");
-            Assert.That(backend.error, Is.Null.Or.Empty);
-            Assert.That(backend.asset, Is.Not.Null);
-            OwnAsset(backend.asset);
+            using var backend = resources.AcquireAsync<GameObject>(new ResourceAddress(YLCoreSmokeModule.Project, nameof(YLCoreSmokeView)));
+            yield return Await(() => backend.IsDone, "drain real fixture asset producer");
+            Assert.That(backend.Error, Is.Null);
+            using var lease = backend.TakeResult();
+            Assert.That(lease.Asset, Is.Not.Null);
+            OwnAsset(lease.Asset);
             yield return null;
         }
 

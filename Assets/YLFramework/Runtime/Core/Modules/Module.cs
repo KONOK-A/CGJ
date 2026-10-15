@@ -79,7 +79,7 @@ namespace YLFramework.Core
         public ModuleState State { get; internal set; } = ModuleState.Created;
 
         /// <summary>
-        /// XFAB资源项目名，与Module类型身份分离；默认类型短名。
+        /// YL Resource ProjectId，与Module类型身份分离；默认类型短名，必须对应显式挂载的新YL项目。
         /// 可在启动前赋值或重写，启动请求在首次加载前捕获该值，不依赖OnStart赋值。
         /// </summary>
         public virtual string ProjectName { get => projectName ?? GetType().Name; set => projectName = value; }
@@ -94,7 +94,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 必需的启动配表（资产名到Model数组类型）。空数组合法，缺失或无效文本导致启动失败。
         /// 配表及其Bundle须启动过程专用，取文本期间不得由其他调用者并发加载或持有；
-        /// XFAB没有资源租约，框架复制文本后归还资产，再执行JSON构造与Model初始化。
+        /// Provider复制文本并归还自己的资产租约后，再执行JSON构造与Model初始化。
         /// </summary>
 
         [Obsolete("已过时!")]

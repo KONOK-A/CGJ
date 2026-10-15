@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using GameObjectLoader = XFABManager.GameObjectLoader;
+using YLFramework.Core.Pool;
 using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 using UpdateManager = YLFramework.Foundation.UpdateManager;
@@ -38,7 +38,8 @@ namespace YLFramework.Core
             // 接管失败不进入finally，不能归还另一笔操作正在使用的参数。
             if (args != null && !argsClaimed) args.Claim();
             GameObject instance = null;
-            bool initializing = false;
+            CorePrefabLease prefabLease = null;
+            CoreInstanceLease instanceLease = null;
             bool transaction = false;
             try
             {
@@ -49,12 +50,13 @@ namespace YLFramework.Core
                 if (named)
                 {
                     if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("View asset name is required.", nameof(assetName));
+                    var provider = CoreResourceAccess.RequireProvider(CoreResourceAccess.Provider);
                     Exception resourceError = null;
                     foreach (var project in ModuleManager.ViewResourceProjects(module))
                     {
-                        try { prefab = XFABManager.AssetBundleManager.LoadAsset<GameObject>(project, assetName); }
-                        catch (Exception error) { resourceError = error; }
-                        if (prefab) break;
+                        try { prefabLease = provider.AcquirePrefab(project, assetName); }
+                        catch (Exception error) when (CoreResourceAccess.CanFallback(error)) { resourceError = error; }
+                        if (prefabLease != null) { prefab = prefabLease.Prefab; break; }
                     }
                     if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
                 }
@@ -67,28 +69,30 @@ namespace YLFramework.Core
                 // 后端可能先触发Awake/OnEnable；取得实例也属于同步事务，不能在此关闭owner。
                 module.viewTransactions++;
                 transaction = true;
-                instance = GameObjectLoader.Load(prefab, parent);
+                var scene = parent ? parent.gameObject.scene : SceneManager.GetActiveScene();
+                instanceLease = named ? prefabLease.Instantiate(parent, scene) : AcquireDirectInstance(prefab, parent, scene);
+                instance = instanceLease.Instance;
                 if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
                 var view = ValidateView<T>(instance);
                 EnsureOwner(module);
                 if (!ReferenceEquals(parent, null) && !parent)
                     throw new ArgumentException("View parent was destroyed during acquisition.", nameof(parent));
                 instance.transform.localPosition = Vector3.zero;
-                initializing = true;
-                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, panelType: panelType);
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, panelType: panelType, instanceLease: instanceLease);
                 return view;
             }
             catch (Exception error)
             {
-                if (instance && !initializing)
+                if (instanceLease != null)
                 {
-                    try { DiscardInstance(instance); }
+                    try { instanceLease.Discard(); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
                 }
                 throw;
             }
             finally
             {
+                prefabLease?.Dispose();
                 if (transaction) module.viewTransactions--;
                 if (args != null && !argsClaimed) args.Release();
             }
@@ -106,6 +110,48 @@ namespace YLFramework.Core
         {
             try { instance.SetActive(false); }
             finally { UnityEngine.Object.Destroy(instance); }
+        }
+
+        private static CoreInstanceLease AcquireDirectInstance(GameObject prefab, Transform parent, Scene scene)
+        {
+            var pool = GameObjectPool.Instance;
+            string key = "YL.Core.Direct/" + prefab.GetInstanceID();
+            var instance = pool.Allocate(key, parent);
+            if (!instance) instance = UnityEngine.Object.Instantiate(prefab, parent);
+            if (!instance) throw new InvalidOperationException("Direct Prefab checkout failed.");
+            var lease = new DirectInstanceLease(pool, key, instance);
+            try
+            {
+                if (!parent && instance.scene != scene) SceneManager.MoveGameObjectToScene(instance, scene);
+                instance.SetActive(true);
+                return lease;
+            }
+            catch { lease.Discard(); throw; }
+        }
+
+        private sealed class DirectInstanceLease : CoreInstanceLease
+        {
+            private readonly GameObjectPool pool;
+            private readonly string key;
+            private GameObject instance;
+            internal DirectInstanceLease(GameObjectPool pool, string key, GameObject instance)
+            { this.pool = pool; this.key = key; this.instance = instance; }
+            public override GameObject Instance => instance;
+            public override bool IsValid => instance;
+            public override void Return()
+            {
+                var owned = instance;
+                instance = null;
+                if (!owned) return;
+                if (pool) pool.Recycle(key, owned);
+                else DiscardInstance(owned);
+            }
+            public override void Discard()
+            {
+                var owned = instance;
+                instance = null;
+                if (owned) DiscardInstance(owned);
+            }
         }
 
         // 异步加载
@@ -146,31 +192,31 @@ namespace YLFramework.Core
         }
 
         internal static T CompleteAsync<T>(Module module, GameObject prefab, string assetName, Transform parent, Scene scene,
-            LoadViewArgs args, object[] param, Action validate, UIType? panelType = null) where T : View
+            LoadViewArgs args, object[] param, Action validate, UIType? panelType = null, CorePrefabLease prefabLease = null) where T : View
         {
             ValidateView<T>(prefab);
             GameObject instance = null;
-            bool initializing = false;
+            CoreInstanceLease instanceLease = null;
             module.viewTransactions++;
             try
             {
                 validate();
                 FindBackendRoot(module, parent);
-                instance = GameObjectLoader.Load(prefab, parent);
+                instanceLease = prefabLease != null ? prefabLease.Instantiate(parent, scene) : AcquireDirectInstance(prefab, parent, scene);
+                instance = instanceLease.Instance;
                 if (!instance) throw new InvalidOperationException($"View instance load failed: {assetName}.");
                 validate();
                 var view = ValidateView<T>(instance);
                 if (!parent && instance.scene != scene) SceneManager.MoveGameObjectToScene(instance, scene);
                 instance.transform.localPosition = Vector3.zero;
-                initializing = true;
-                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate, panelType);
+                InitializeHierarchy(module, new List<View>(instance.GetComponentsInChildren<View>(true)), view, assetName, args, param, validate, panelType, instanceLease);
                 return view;
             }
             catch (Exception error)
             {
-                if (instance && !initializing)
+                if (instanceLease != null)
                 {
-                    try { DiscardInstance(instance); }
+                    try { instanceLease.Discard(); }
                     catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
                 }
                 throw;
@@ -193,7 +239,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
-            View backendRoot = null, bool backend = false, Action validate = null, UIType? panelType = null)
+            View backendRoot = null, bool backend = false, Action validate = null, UIType? panelType = null, CoreInstanceLease instanceLease = null)
         {
             if (!view) throw new ArgumentNullException(nameof(view));
             if (view.Module != null || view.Session != null || view.IsRemoving)
@@ -211,6 +257,7 @@ namespace YLFramework.Core
                 session = view.Session;
                 view.UsesBackend = backend;
                 view.BackendInstance = backend ? instance : null;
+                view.BackendLease = backend ? instanceLease : null;
                 view.BackendRoot = backendRoot;
                 view.BackendRootSession = backendRoot != null ? backendRoot.Session : null;
                 view.IsInitializing = true;
@@ -327,7 +374,7 @@ namespace YLFramework.Core
         }
 
         private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
-            LoadViewArgs args, object[] param, Action validate = null, UIType? panelType = null)
+            LoadViewArgs args, object[] param, Action validate = null, UIType? panelType = null, CoreInstanceLease instanceLease = null)
         {
             var added = new List<KeyValuePair<View, object>>();
             var roots = new Dictionary<View, View>();
@@ -360,7 +407,7 @@ namespace YLFramework.Core
                     bool root = ReferenceEquals(view, acquiredRoot);
                     InitializeView(module, view, root ? assetName : null,
                         root || views.Count == 1 ? args : null, root ? param : null,
-                        root ? outerRoot : roots[view], root, validate, root ? panelType : null);
+                         root ? outerRoot : roots[view], root, validate, root ? panelType : null, root ? instanceLease : null);
                     added.Add(new KeyValuePair<View, object>(view, view.Session));
                 }
                 foreach (var entry in added) ValidateInitialization(module, entry.Key, entry.Value);

@@ -268,7 +268,7 @@ namespace YLFramework.Services.Resource
             record.Operation.Cancel();
         }
 
-        private void Track<T>(ResourceRequest<T> request)
+        internal void Track<T>(ResourceRequest<T> request)
         {
             ownedRequests.Add(request);
             request.Terminal = () =>
@@ -442,6 +442,7 @@ namespace YLFramework.Services.Resource
             draining.Remove(this);
             if (State != ResourceSystemState.ShuttingDown) return;
             State = ResourceSystemState.Closed;
+            UnbindCoreResourceProvider();
             if (ReferenceEquals(authority, this)) authority = null;
             var completed = shutdowns.ToArray();
             shutdowns.Clear();
@@ -456,6 +457,7 @@ namespace YLFramework.Services.Resource
             authority = null;
             if (system == null) return;
             system.State = ResourceSystemState.Invalidated;
+            system.UnbindCoreResourceProvider();
             draining.Add(system);
             var requests = new List<IResourceRequest>(system.ownedRequests);
             system.ownedRequests.Clear();

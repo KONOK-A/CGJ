@@ -64,6 +64,7 @@ namespace YLFramework.Tests.ResourceBuild
                 EditorUtility.SetDirty(project);
                 AssetDatabase.SaveAssetIfDirty(project);
                 AddScene85Fixture(fixture);
+                AddCore86Fixture(fixture);
                 var build = fixture.Build();
                 fixture.ReleaseRoot = ResourcePublisher.GetReleaseRoot(build);
                 var release = ResourcePublisher.Publish(build, "fixture-v1");
@@ -100,7 +101,7 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static void ClearFixtureSession()
         {
-            foreach (var key in new[] { "root", "path", "project", "digest", "scenes", "scene", "folder", "guid", "workspace", "protected" }) SessionState.EraseString(Key + key);
+            foreach (var key in new[] { "root", "path", "project", "digest", "scenes", "scene", "folder", "guid", "workspace", "protected", "core86fallback" }) SessionState.EraseString(Key + key);
             SessionState.EraseBool(Key + "owned");
             SessionState.EraseBool(Key + "quit");
         }

@@ -31,6 +31,9 @@ namespace YLFramework.Core
         private object lifecycle;
         private string assetName;
         private List<string> projects;
+        private ICoreResourceProvider provider;
+        private CoreResourceRequest<CorePrefabLease> resourceRequest;
+        private CorePrefabLease prefabLease;
         private Transform parent;
         private bool hasParent;
         private Scene targetScene;
@@ -68,6 +71,7 @@ namespace YLFramework.Core
             panelType = uiType;
             directPrefab = prefab;
             hasDirectPrefab = !ReferenceEquals(prefab, null);
+            provider = hasDirectPrefab ? null : CoreResourceAccess.Provider;
             window = claimedArgs?.Window;
             windowContext = claimedArgs?.WindowContext;
             Validate();
@@ -160,6 +164,11 @@ namespace YLFramework.Core
 #endif
             if (owner != null) owner.pendingViews.Remove(this);
             var previousArgs = args;
+            var previousRequest = resourceRequest;
+            var previousPrefab = prefabLease;
+            resourceRequest = null;
+            prefabLease = null;
+            provider = null;
             args = null;
             owner = null;
             lifecycle = null;
@@ -173,7 +182,12 @@ namespace YLFramework.Core
             window = null;
             windowContext = null;
             targetScene = default;
-            if (previousArgs != null) previousArgs.Release();
+            try { previousRequest?.Dispose(); }
+            finally
+            {
+                try { previousPrefab?.Dispose(); }
+                finally { if (previousArgs != null) previousArgs.Release(); }
+            }
         }
 
         private void Finish(T result, Exception failure, LoadViewStatus status)
@@ -224,36 +238,52 @@ namespace YLFramework.Core
         {
             GameObject prefab = directPrefab;
             Exception resourceError = null;
-            // 直接 Prefab 也保留接受/取消边界，不另建加载协程或 pending 集合。
-            if (prefab) { yield return null; ValidateWaiting(); }
+            // 即时完成的后端与直接 Prefab 同样保留接受/取消边界。
+            yield return null;
+            ValidateWaiting();
+            if (!hasDirectPrefab) CoreResourceAccess.RequireProvider(provider);
             for (int i = 0; !prefab && i < projects.Count; i++)
             {
                 var project = projects[i];
                 Validate();
-                XFABManager.LoadAssetRequest request = null;
-                try { request = XFABManager.AssetBundleManager.LoadAssetAsync<GameObject>(project, assetName); }
-                catch (Exception error) { resourceError = error; }
-                if (request == null) { resourceError = resourceError ?? new InvalidOperationException("View asset request is null."); continue; }
-                while (!request.isDone)
+                CoreResourceRequest<CorePrefabLease> acquired;
+                try { acquired = provider.AcquirePrefabAsync(project, assetName); }
+                catch (Exception error) when (CoreResourceAccess.CanFallback(error)) { resourceError = error; continue; }
+                // Provider/Source 可同步重入关闭 owner，返回值仍须由本调用接管或归还。
+                try { ValidateWaiting(); }
+                catch (Exception error)
+                {
+                    try { acquired?.Dispose(); }
+                    catch (Exception cleanup) { StartUpModuleRequest.AttachCleanupError(error, cleanup); }
+                    throw;
+                }
+                resourceRequest = acquired;
+                var request = resourceRequest ?? throw new InvalidOperationException("View asset request is null.");
+                while (request.Status == CoreResourceStatus.Pending)
                 {
                     ValidateWaiting();
-                    progress = request.progress;
+                    progress = request.Progress;
                     yield return null;
                 }
                 ValidateWaiting();
-                if (!string.IsNullOrEmpty(request.error))
+                if (request.Status != CoreResourceStatus.Succeeded)
                 {
-                    resourceError = new InvalidOperationException($"View asset load failed: {project}/{assetName}: {request.error}");
+                    resourceError = request.Error ?? new CoreResourceException(CoreResourceError.LoadFailed, $"View asset load failed: {project}/{assetName}.");
+                    request.Dispose();
+                    resourceRequest = null;
+                    if (request.Status == CoreResourceStatus.Canceled || request.Status == CoreResourceStatus.Invalidated ||
+                        !CoreResourceAccess.CanFallback(resourceError)) throw resourceError;
                     continue;
                 }
-                prefab = request.asset as GameObject;
-                if (prefab) break;
-                if (request.asset) throw new InvalidCastException("View asset is not a GameObject prefab.");
-                resourceError = new InvalidOperationException($"View prefab not found: {project}/{assetName}.");
+                prefabLease = request.TakeResult();
+                request.Dispose();
+                resourceRequest = null;
+                prefab = prefabLease.Prefab;
+                if (!prefab) throw new InvalidOperationException($"View prefab is no longer valid: {project}/{assetName}.");
             }
             if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
             ValidateWaiting();
-            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, panelType);
+            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, panelType, prefabLease);
             // 初始化已结束再提交；完成通知可以关闭或开启下一笔会话。
             executing = false;
             Finish(result, null, LoadViewStatus.Succeeded);

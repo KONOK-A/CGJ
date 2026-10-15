@@ -13,6 +13,47 @@ namespace YLFramework.Tests.ResourceBuild
     public class ResourceEditorSimulationTests
     {
         [Test]
+        public void CorePreviewUsesFormalIdentityAndNeverKeepsAStaleAssetOrProjectIndex()
+        {
+            using var fixture = new ResourceReleaseFixture();
+            var project = fixture.Project;
+            project.Groups.Add(new ResourceGroup { Id = "core-preview-texture", Selections =
+                { new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content/Shared.asset") } } });
+            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            var simulation = new ResourceEditorSimulation(new[] { fixture.Project });
+            var property = typeof(YLFramework.Core.Editor.EditorAssetTool).GetProperty("PreviewResolver");
+            Assert.That(property, Is.Not.Null, "Core Editor must consume an installed preview delegate, not XFAB project lookup.");
+            var resolver = (Func<string, string, string, UnityEngine.Object>)property.GetValue(null);
+            Assert.That(resolver, Is.Not.Null, "The Resource Editor installs the formal resolver on domain load.");
+            var main = AssetDatabase.LoadAssetAtPath<Texture2D>(fixture.Folder + "/Content/Shared.asset");
+            Assert.That(YLFramework.Core.Editor.EditorAssetTool.GetTexture2D(project.ProjectId, "Shared.asset"), Is.SameAs(main));
+            var sprite = AssetDatabase.LoadAllAssetRepresentationsAtPath(fixture.Folder + "/Content/Sprites.png").OfType<Sprite>().First();
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(sprite, out string _, out long id);
+            Assert.That(resolver(project.ProjectId, "Sprites.png", id.ToString()), Is.SameAs(sprite));
+            project.Groups[0].Selections[0].Aliases = new[] { "core-preview-alias" };
+            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            Assert.That(resolver(project.ProjectId, "core-preview-alias", null), Is.SameAs(AssetDatabase.LoadAssetAtPath<TextAsset>(fixture.TextPath)));
+            project.Groups[0].Selections[0].Address = "moved";
+            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            Assert.Throws<ArgumentException>(() => resolver(project.ProjectId, "entry.txt", null));
+            var duplicate = ScriptableObject.CreateInstance<ResourceProject>();
+            duplicate.ProjectId = project.ProjectId;
+            duplicate.AssetRootGuid = project.AssetRootGuid;
+            duplicate.Groups = project.Groups;
+            AssetDatabase.CreateAsset(duplicate, fixture.Folder + "/DuplicateProject.asset");
+            Assert.Throws<InvalidOperationException>(() => resolver(project.ProjectId, "moved", null));
+            AssetDatabase.DeleteAsset(fixture.Folder + "/DuplicateProject.asset");
+            Assert.That(resolver(project.ProjectId, "moved", null), Is.Not.Null);
+            try
+            {
+                property.SetValue(null, null);
+                Assert.Throws<InvalidOperationException>(() => YLFramework.Core.Editor.EditorAssetTool.GetTexture2D(project.ProjectId, "Shared.asset"));
+            }
+            finally { property.SetValue(null, resolver); }
+            Assert.That(main, Is.Not.Null, "Preview only borrows AssetDatabase objects.");
+        }
+
+        [Test]
         public void SimulationCanComposeTheUniqueRuntimeAuthorityWithoutOwningBorrowedAssets()
         {
             using var fixture = new ResourceReleaseFixture();

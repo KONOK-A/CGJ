@@ -23,6 +23,7 @@ namespace YLFramework.Core
         internal bool IsRemoving;
         internal bool UsesBackend;
         internal GameObject BackendInstance;
+        internal CoreInstanceLease BackendLease;
         internal View BackendRoot;
         internal object BackendRootSession;
         internal int SceneHandle;

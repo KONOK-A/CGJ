@@ -28,7 +28,10 @@ namespace YLFramework.Core.Editor
                     HelpBlock.Paragraph("MVC 所有权", "通过 Module.AddModel / GetModel、AddController / GetController 管理注册，不从 View 改写 Model 的受保护状态。" +
                         "Model/Controller 的 OnInit 与 OnExit 对应每次注册；Module 负责退出，业务监听与借用资源仍须按自身所有权收尾。"),
                     HelpBlock.Notice("接入边界", "业务 asmdef 显式引用 YLFramework.Runtime；Core、Foundation 和 ZipTool 共用该主体程序集，仍按职责组织源码。" +
-                        "Core 保留 XFABManager、UGUI 依赖，ProjectName 是 XFAB 项目名，不是 YL Resource 的 BundleName；本次不融合资源后端。")),
+                        "ProjectName 是正式 YL Resource ProjectId，不是 XFAB 项目名或 BundleName。命名加载无 XFAB 回退；缺失 Provider 明确失败。" +
+                        "主体程序集暂时仍引用 XFABManager，旧 Resource/Audio 的退出分批处理，不代表已全局解除依赖。"),
+                    HelpBlock.Paragraph("资源启动与退出", "应用持有 ResourceConfiguration，等待 ResourceSystem.InitializeAsync 完成并 TakeResult，调用 resources.BindCoreResourceProvider() 后再启动 Module。" +
+                        "关闭业务 Module 后，按所有权归还实例、清理缓存、卸载 Scene，再等待 ShutdownAsync；成功关闭只解绑自身 Provider。SceneLease 释放不卸载场景，SceneRecord 持有依赖直到 native sceneUnloaded。")),
                 Guide("view-ui", "View 与 UI", "复用 Module/View 的唯一会话；WindowCatalog 是纯代码定义目录，不是另一套窗口宿主。",
                     new[] { typeof(View), typeof(Panel), typeof(LoadViewArgs), typeof(LoadViewRequest<>), typeof(WindowCatalog), typeof(WindowDefinition), typeof(UIRootContext) },
                     HelpBlock.Paragraph("加载与参数", "场景或动态对象使用 owner.AttachView(view) 显式纳管；Prefab/具名资产使用 Module.LoadView / LoadPanel 或异步入口。" +
@@ -44,7 +47,7 @@ namespace YLFramework.Core.Editor
                     HelpBlock.Paragraph("Module 模板", "Assets/Create/YLFramework/Core/Module 输出 Assets/YLFramework/Examples/Core/Modules 下的独立示例和 asmdef，拒绝覆盖已有目录。" +
                         "namespace 为 YLFramework.Core.Examples；不会生成完整 MVC/View/Panel 代码或改写 Assets/Games。"),
                     HelpBlock.Paragraph("默认资源与资源常量", "YLFramework/Core/Create Missing Default Resources 只补缺失的 Core Canvas/EventSystem，不替换已有身份。" +
-                        "YLFramework/Service/ResService 保留资源标记、构建与常量入口。新常量承载为 Assets/YLFrameworkData/YLResData.cs 和 YLFramework.Generated.ResourceNames；" +
+                        "YLFramework/Resource/Workbench 使用正式 ResourceProject、Group 和 Catalog，Core Editor 预览复用同一模拟层，不查 XFAB 项目。新常量承载为 Assets/YLFrameworkData/YLResourceReferences.cs 和 YLFramework.Generated.ResourceNames；" +
                         "业务 asmdef 需显式引用生成程序集，未知/手写承载拒绝覆盖。这些用户生成物不在默认导出范围。"),
                     Document("资源工具与生成承载", "Modules/Resource.md")),
                 Guide("analyzers", "自有分析器 YL0001～YL0007", "七项诊断默认启用且均为 Warning；提示使用约束，不是运行时安全证明。",

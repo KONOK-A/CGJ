@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using NUnit.Framework;
@@ -131,15 +132,8 @@ namespace YLFramework.Core.Tests
             var inputHost = policy == null ? null : (GameObject)typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(policy);
             if (inputHost && !priorEventSystems.Contains(inputHost)) objects.Add(inputHost);
             foreach (var obj in objects) if (obj) Object.Destroy(obj);
-            // The backend has no public per-prefab disposal. Remove only our unique pool/mapping entries.
-            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            if (loader != null)
-            {
-                var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-                var mappings = (IDictionary)loader.GetType().GetField("allObjPoolMapping", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-                foreach (var key in prefabKeys) pools.Remove(key);
-                foreach (var key in instanceKeys) mappings.Remove(key);
-            }
+            var pool = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
+            if (pool) foreach (var key in prefabKeys) pool.Clear("YL.Core.Direct/" + key);
             objects.Clear();
             prefabKeys.Clear();
             instanceKeys.Clear();
@@ -1580,11 +1574,11 @@ namespace YLFramework.Core.Tests
             Assert.Throws<ArgumentException>(() => module.LoadView(prefab, deadParent, loadViewArgs: args));
             AssertArgsReleased(args);
             Assert.That(module.GetViews<View>(), Is.Empty);
-            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            if (loader != null)
+            var loader = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
+            if (loader)
             {
-                var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-                Assert.That(pools.Contains(prefab.GetHashCode()), Is.False, "Prefab validation precedes backend acquisition.");
+                var pools = (IDictionary)loader.GetType().GetField("_pools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+                Assert.That(pools.Contains("YL.Core.Direct/" + prefab.GetInstanceID()), Is.False, "Prefab validation precedes backend acquisition.");
             }
         }
 
@@ -1702,13 +1696,12 @@ namespace YLFramework.Core.Tests
             module.UIStartSortOrder = 0;
             AssertArgsReleased(args);
             Assert.That(module.GetViews<View>(), Is.Empty);
-            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-            var all = (IDictionary)pools[prefab.GetHashCode()].GetType().GetField("allObjs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pools[prefab.GetHashCode()]);
-            Assert.That(all.Count, Is.EqualTo(1));
-            foreach (var info in all.Values)
+            var all = Resources.FindObjectsOfTypeAll<YLCoreSmokePanel>().Where(view => view && view.gameObject.scene.IsValid() &&
+                view.gameObject.name == prefab.name + "(Clone)").ToArray();
+            Assert.That(all.Length, Is.EqualTo(1));
+            foreach (var item in all)
             {
-                var obj = (GameObject)info.GetType().GetProperty("Obj").GetValue(info);
+                var obj = item.gameObject;
                 var view = Track(obj.GetComponent<YLCoreSmokePanel>());
                 Assert.That(view.Module, Is.Null);
                 Assert.That(view.LoadedCount, Is.Zero);
@@ -2088,7 +2081,7 @@ namespace YLFramework.Core.Tests
             outer.Close();
             Assert.That(inner.Module, Is.Null);
             Assert.That(inner.RemovedCount, Is.EqualTo(1));
-            Assert.That(inner.transform.parent, Is.Null);
+            Assert.That(inner.transform.IsChildOf(outer.transform), Is.False, "Independent checkout must leave the outer cached hierarchy.");
             Assert.That(BackendInUse(innerPrefab, inner.gameObject), Is.False);
             Assert.That(BackendInUse(outerPrefab, outer.gameObject), Is.False);
             Assert.That(Track(module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null)), Is.SameAs(outer));
@@ -2255,11 +2248,11 @@ namespace YLFramework.Core.Tests
 
         private static bool BackendInUse(GameObject prefab, GameObject instance)
         {
-            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-            var pool = pools[prefab.GetHashCode()];
-            var all = (IDictionary)pool.GetType().GetField("allObjs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(pool);
-            return (bool)all[instance.GetHashCode()].GetType().GetProperty("IsInUse").GetValue(all[instance.GetHashCode()]);
+            var loader = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
+            if (!loader) return true;
+            var pools = (IDictionary)loader.GetType().GetField("_pools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
+            var pool = (YLFramework.Core.Pool.GameObjectPoolData)pools["YL.Core.Direct/" + prefab.GetInstanceID()];
+            return pool == null || !pool.PoolQueue.Contains(instance);
         }
 
         [UnityTest]

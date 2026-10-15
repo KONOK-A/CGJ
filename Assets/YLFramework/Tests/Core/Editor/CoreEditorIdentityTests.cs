@@ -316,8 +316,16 @@ namespace YLFramework.Core.Editor.Tests
             const string licensePath = "Assets/YLFramework/LICENSE.md";
             Assert.That(File.Exists(licensePath), Is.True, "The shared XF license must be distributed at the framework root.");
             string license = File.ReadAllText(licensePath);
-            Assert.That(license.Replace("\r\n", "\n").Trim(),
-                Is.EqualTo(File.ReadAllText(upstreamLicense).Replace("\r\n", "\n").Trim()));
+            string normalized = license.Replace("\r\n", "\n").Trim();
+            string upstream = File.ReadAllText(upstreamLicense).Replace("\r\n", "\n").Trim();
+            const string copyright = "Copyright (c) 2021 \u5f26\u5c0f\u98ce";
+            int actualBody = normalized.IndexOf(copyright, StringComparison.Ordinal);
+            int expectedBody = upstream.IndexOf(copyright, StringComparison.Ordinal);
+            Assert.That(actualBody, Is.GreaterThan(0));
+            Assert.That(expectedBody, Is.GreaterThan(0));
+            // 共享标题下允许已有的来源前言，完整版权、许可及免责声明仍须逐字保留。
+            Assert.That(normalized, Does.StartWith(upstream.Substring(0, expectedBody)));
+            Assert.That(normalized.Substring(actualBody), Is.EqualTo(upstream.Substring(expectedBody)));
             Assert.That(license, Does.Contain("Copyright (c) 2021 \u5f26\u5c0f\u98ce"));
             foreach (var oldPath in new[] { "Runtime/Core/LICENSE.md", "Runtime/Foundation/LICENSE.md", "Editor/Core/LICENSE.md" })
             {

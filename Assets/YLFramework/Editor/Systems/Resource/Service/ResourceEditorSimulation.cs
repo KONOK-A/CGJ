@@ -23,7 +23,22 @@ namespace YLFramework.Editor.Resource
         private static readonly int MainThread;
         private readonly Dictionary<string, string> projects = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ResourceCatalogDocument> catalogs = new(StringComparer.Ordinal);
-        static ResourceEditorSimulation() => MainThread = Thread.CurrentThread.ManagedThreadId;
+        static ResourceEditorSimulation()
+        {
+            MainThread = Thread.CurrentThread.ManagedThreadId;
+            YLFramework.Core.Editor.EditorAssetTool.PreviewResolver = ResolveCorePreview;
+        }
+
+        private static Object ResolveCorePreview(string projectId, string address, string subAsset)
+        {
+            CheckEditor();
+            var matches = AssetDatabase.FindAssets("t:ResourceProject")
+                .Select(guid => AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(guid)))
+                .Where(project => project && project.ProjectId == projectId).ToArray();
+            if (matches.Length == 0) throw new ArgumentException("No formal YL resource project matches ProjectId: " + projectId);
+            if (matches.Length != 1) throw new InvalidOperationException("Ambiguous YL resource ProjectId: " + projectId);
+            return new ResourceEditorSimulation(matches).Load(new ResourceAddress(projectId, address, subAsset), typeof(Object));
+        }
 
         public ResourceEditorSimulation(ResourceProject[] projects, ResourceCatalogDocument[] catalogs = null)
         {

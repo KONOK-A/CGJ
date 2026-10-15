@@ -5,7 +5,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using XFABManager;
+using YLFramework.Editor.Resource;
+using YLFramework.Services.Resource;
 using YLFramework.Core.Tests;
 using Object = UnityEngine.Object;
 
@@ -20,12 +21,12 @@ namespace YLFramework.Core.Editor.Tests
                 Require(!SceneManager.GetSceneAt(i).isDirty, "Refusing to touch fixtures while any open scene is dirty.");
 
             string root = YLCoreSmokeModule.FixtureRoot;
-            string projectPath = root + "/YLCoreSmokeModule.asset";
-            foreach (string guid in AssetDatabase.FindAssets("t:XFABProject"))
+            string projectPath = root + "/ResourceProject.asset";
+            foreach (string guid in AssetDatabase.FindAssets("t:ResourceProject"))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                var candidate = AssetDatabase.LoadAssetAtPath<XFABProject>(path);
-                Require(candidate.name != YLCoreSmokeModule.Project || path == projectPath,
+                var candidate = AssetDatabase.LoadAssetAtPath<ResourceProject>(path);
+                Require(candidate.ProjectId != YLCoreSmokeModule.Project || path == projectPath,
                     "Fixture project name is already owned by " + path);
             }
 
@@ -45,52 +46,65 @@ namespace YLFramework.Core.Editor.Tests
             Require(text && text.text == YLCoreSmokeModule.Json, "Existing fixture JSON does not match; it was not overwritten.");
             string[] failureTables = { YLCoreSmokeModule.EmptyTable, YLCoreSmokeModule.BlankTable, YLCoreSmokeModule.InvalidTable };
             foreach (string name in failureTables)
-                Require(AssetDatabase.LoadAssetAtPath<TextAsset>(root + "/" + name + ".json"), "Missing startup JSON fixture: " + name);
+            {
+                string path = root + "/" + name + ".json";
+                if (!File.Exists(path))
+                {
+                    Require(string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)), "Unresolved existing table asset.");
+                    File.WriteAllText(path, name == YLCoreSmokeModule.EmptyTable ? "[]" : name == YLCoreSmokeModule.BlankTable ? " " : "invalid JSON");
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                }
+                Require(AssetDatabase.LoadAssetAtPath<TextAsset>(path), "Missing startup JSON fixture: " + name);
+            }
             CreateOrValidateScene(YLCoreSmokeModule.ScenePath, true);
             CreateOrValidateScene(YLCoreSmokeModule.HarnessPath, false);
 
-            var project = AssetDatabase.LoadAssetAtPath<XFABProject>(projectPath);
+            var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(projectPath);
             if (!project)
             {
                 Require(!File.Exists(projectPath) && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(projectPath)),
                     "Existing project asset has an unexpected type.");
-                project = ScriptableObject.CreateInstance<XFABProject>();
-                project.name = YLCoreSmokeModule.Project;
-                project.suffix = ".unity3d";
-                project.version = "1.0.0";
+                project = ScriptableObject.CreateInstance<ResourceProject>();
+                project.ProjectId = YLCoreSmokeModule.Project;
+                project.DisplayName = "Core Resource Fixture";
+                project.AssetRootGuid = AssetDatabase.AssetPathToGUID(root);
                 AssetDatabase.CreateAsset(project, projectPath);
                 AddBundle(project, "views", viewPath);
                 AddBundle(project, "panels", panelPath);
                 AddBundle(project, "text", new[] { tablePath }.Concat(failureTables.Select(name => root + "/" + name + ".json")).ToArray());
                 AddBundle(project, "scenes", YLCoreSmokeModule.ScenePath, YLCoreSmokeModule.HarnessPath);
+                EditorUtility.SetDirty(project);
                 AssetDatabase.SaveAssetIfDirty(project);
             }
 
-            Require(project.name == YLCoreSmokeModule.Project && project.suffix == ".unity3d" && project.version == "1.0.0",
+            Require(project.ProjectId == YLCoreSmokeModule.Project && project.AssetRootGuid == AssetDatabase.AssetPathToGUID(root),
                 "Existing project identity does not match; it was not overwritten.");
-            Require(project.assetBundles != null && project.assetBundles.Count == 4, "Unexpected fixture bundles.");
+            Require(project.Groups != null && project.Groups.Count == 4, "Unexpected fixture groups.");
             ValidateBundle(project, "views", viewPath);
             ValidateBundle(project, "panels", panelPath);
             ValidateBundle(project, "text", new[] { tablePath }.Concat(failureTables.Select(name => root + "/" + name + ".json")).ToArray());
             ValidateBundle(project, "scenes", YLCoreSmokeModule.ScenePath, YLCoreSmokeModule.HarnessPath);
-            // No global SaveAssets/RefreshProjects/AB build or Profile mutation.
+            ResourceBuildMap.Create(project);
         }
 
-        private static void AddBundle(XFABProject project, string name, params string[] paths)
+        public static ResourceConfiguration CreateConfiguration()
         {
-            var bundle = new XFABAssetBundle(name, project.name);
-            foreach (string path in paths) bundle.AddFile(path);
-            Require(project.AddAssetBundle(bundle), "Could not register fixture bundle " + name);
+            var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(YLCoreSmokeModule.FixtureRoot + "/ResourceProject.asset");
+            Require(project, "Create the independent YL fixture in Edit Mode first.");
+            return new ResourceEditorSimulation(new[] { project }).CreateConfiguration();
         }
 
-        private static void ValidateBundle(XFABProject project, string name, params string[] paths)
+        private static void AddBundle(ResourceProject project, string name, params string[] paths)
         {
-            var bundles = project.assetBundles.Where(bundle => bundle.bundle_name == name).ToArray();
-            Require(bundles.Length == 1 && bundles[0].projectName == project.name, "Unexpected bundle " + name);
-            Require(bundles[0].Files.Count == paths.Length &&
-                bundles[0].Files.All(file => file.type == XFBundleFileType.File) &&
-                bundles[0].GetAllAssetPaths().OrderBy(path => path).SequenceEqual(paths.OrderBy(path => path)),
-                "Existing bundle paths do not match; they were not overwritten: " + name);
+            project.Groups.Add(new ResourceGroup { Id = name, Selections = paths.Select(path => new ResourceSelection
+                { Guid = AssetDatabase.AssetPathToGUID(path), Address = Path.GetFileNameWithoutExtension(path) }).ToList() });
+        }
+
+        private static void ValidateBundle(ResourceProject project, string name, params string[] paths)
+        {
+            var groups = project.Groups.Where(group => group.Id == name).ToArray();
+            Require(groups.Length == 1 && groups[0].Selections.Select(x => AssetDatabase.GUIDToAssetPath(x.Guid))
+                .OrderBy(x => x).SequenceEqual(paths.OrderBy(x => x)), "Unexpected fixture group " + name);
         }
 
         private static void CreateOrValidatePrefab<T>(string path, bool panel) where T : Component

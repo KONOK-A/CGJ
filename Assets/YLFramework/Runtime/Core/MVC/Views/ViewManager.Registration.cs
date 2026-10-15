@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using GameObjectLoader = XFABManager.GameObjectLoader;
 using System.Runtime.ExceptionServices;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 using UpdateManager = YLFramework.Foundation.UpdateManager;
@@ -130,6 +129,7 @@ namespace YLFramework.Core
             bool backend = view.UsesBackend;
             bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
             GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
+            var instanceLease = view.BackendLease;
             if (backend && destroyed) damaged = true;
             if (backend)
                 foreach (var child in Snapshot(module))
@@ -162,12 +162,16 @@ namespace YLFramework.Core
             DetachIndexes(module, view, session);
             try
             {
-                if (instance && !preserveInstance)
+                if (!preserveInstance)
                 {
                     // 独立取得、挂在另一取得根下的实例仍独立归还，不能留在外层缓存子树中被再次纳管。
-                    if (nestedBackend) instance.transform.SetParent(null, true);
-                    if (backend && !damaged) GameObjectLoader.UnLoad(instance);
-                    else
+                    if (nestedBackend && instance) instance.transform.SetParent(null, true);
+                    if (backend && instanceLease != null)
+                    {
+                        if (damaged) instanceLease.Discard();
+                        else instanceLease.Return();
+                    }
+                    else if (instance)
                     {
                         instance.SetActive(false);
                         if (backend && damaged) UnityEngine.Object.Destroy(instance);
@@ -177,6 +181,8 @@ namespace YLFramework.Core
             catch (Exception error)
             {
                 errors.Add(error);
+                try { instanceLease?.Discard(); }
+                catch (Exception discardError) { errors.Add(discardError); }
                 if (backend && instance)
                 {
                     try { UnityEngine.Object.Destroy(instance); }
@@ -220,6 +226,7 @@ namespace YLFramework.Core
             view.AssetName = null;
             view.UsesBackend = false;
             view.BackendInstance = null;
+            view.BackendLease = null;
             view.BackendRoot = null;
             view.BackendRootSession = null;
             view.SceneHandle = 0;

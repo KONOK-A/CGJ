@@ -151,13 +151,14 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void CoreDependsOnFoundationAndTemporaryBackendNotOriginalXFOrExistingYL()
+        public void CoreMetadataUsesUnifiedRuntimeAndUiWithoutOriginalXfBackend()
         {
             var references = typeof(Module).Assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
             Assert.That(references, Does.Not.Contain("YLFramework.Foundation.Runtime"));
             Assert.That(references, Does.Not.Contain("YLFramework.Core.Runtime"));
             Assert.That(references, Does.Not.Contain("YLFramework.Utilities.ZipTool"));
-            Assert.That(references, Does.Contain("XFABManager"));
+            // asmdef 的过渡引用留待 8.6c；实际消费者移除后，编译产物不应再生成 XFAB 类型引用。
+            Assert.That(references, Does.Not.Contain("XFABManager"));
             Assert.That(references, Does.Contain("UnityEngine.UI"));
             Assert.That(references, Does.Not.Contain("XFGameFramework"));
             Assert.That(references, Does.Not.Contain("YLFramework.Runtime"));

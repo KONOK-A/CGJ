@@ -720,15 +720,8 @@ namespace YLFramework.Core.Tests
 
         private static void ReleaseDirectView(GameObject prefab, YLCoreSmokeView view)
         {
-            // 与现有direct View fixture一致，仅删除本测试独有的后端缓存索引。
-            var loader = typeof(XFABManager.GameObjectLoader).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-            if (loader != null)
-            {
-                var pools = (IDictionary)loader.GetType().GetField("allPools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-                var mappings = (IDictionary)loader.GetType().GetField("allObjPoolMapping", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
-                if (prefab) pools.Remove(prefab.GetHashCode());
-                if (view) mappings.Remove(view.gameObject.GetHashCode());
-            }
+            var loader = UnityEngine.Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
+            if (loader && prefab) loader.Clear("YL.Core.Direct/" + prefab.GetInstanceID());
             if (view) UnityEngine.Object.Destroy(view.gameObject);
             if (prefab) UnityEngine.Object.Destroy(prefab);
         }

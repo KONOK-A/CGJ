@@ -21,6 +21,14 @@ namespace YLFramework.Core.Examples
 {
     public class {ModuleName} : global::YLFramework.Core.SingletonModule<{ModuleName}>
     {
+        // ProjectName 是正式 YL Resource ProjectId，不是 XFAB 项目名或 BundleName。
+        // 应用启动协程先持有显式 configuration，再完成以下装配，最后启动本 Module：
+        // using var initialize = global::YLFramework.Services.Resource.ResourceSystem.InitializeAsync(configuration);
+        // yield return initialize;
+        // var resources = initialize.TakeResult();
+        // resources.BindCoreResourceProvider();
+        // yield return global::YLFramework.Core.ModuleManager.StartUpModule<{ModuleName}>();
+        // 应用退出先关闭 Module，再按实际所有权清理实例缓存和 Scene，最后 ShutdownAsync。
         public override string ProjectName => {ProjectName};
         public override bool BaseModule => {BaseModule};
         public override string DefaultStartUpScene => {DefaultStartUpScene};
@@ -50,10 +58,10 @@ namespace YLFramework.Core.Examples
         {
             EditorGUILayout.LabelField("Output", OutputRoot);
             moduleName = EditorGUILayout.TextField(new GUIContent("ModuleName", "C# class name"), moduleName);
-            projectName = EditorGUILayout.TextField(new GUIContent("ProjectName", "XFAB resource project name"), projectName);
+            projectName = EditorGUILayout.TextField(new GUIContent("ProjectName", "YL Resource ProjectId；须由应用显式初始化并绑定 Core Provider"), projectName);
             baseModule = EditorGUILayout.Toggle(new GUIContent("BaseModule", "基础模块不能通过普通 Close 关闭；使用 ModuleManager.Shutdown 统一结束"), baseModule);
             defaultStartUpScene = EditorGUILayout.TextField("DefaultStartUpScene", defaultStartUpScene);
-            EditorGUILayout.HelpBox("Creates a new YL example and its Runtime assembly. Existing directories are never overwritten.", MessageType.Info);
+            EditorGUILayout.HelpBox("生成独立 YL Module 和 Runtime asmdef。命名加载前由应用初始化 YL Resource 并绑定 Core Provider；生成器不修改资源项目或场景。已有目录不会被覆盖。", MessageType.Info);
             if (!GUILayout.Button("Create YL Module"))
                 return;
 
