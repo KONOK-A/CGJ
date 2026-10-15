@@ -5,6 +5,8 @@
 > 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
 
+> 8.8 已于 2026-10-15 获正式实施、隔离验证和一次独立 Review 授权，并已通过用户技术验收；现单独授权本批唯一 Commit/Push，除此之外不扩展实施范围。实施与验收记录见第26节，8.9/8.10不在本轮范围。
+
 **目标**：以 XFAB 的项目组织、构建分包、资源加载与更新能力体系为主体，吸收 YL 的优秀生命周期和 Editor 安全成果，形成只有一个资源管理权威、可独立维护、整体质量优于双方的正式 YL Resource。
 
 **推荐架构**：自有 `ResourceSystem` 统管资源目录快照、共享加载、资产租约、实例/场景保活与版本激活；Editor 使用同一目录模型和显式 BuildMap。Core 只定义实际消费所需的窄合同，由 Resource 向下实现；Audio 保留自己的领域 Provider。不是 XFAB 包装层，也不是给 YL `ResLoader` 加第二套更新 Manager。
@@ -1284,3 +1286,69 @@ Unity `2022.3.62f3c1`、Windows Editor/D3D11、正常Domain Reload；**本轮共
 - 重新初始化时从持久 Complete 版本和整组Prepared记录恢复 `GetPreparedUpdates()`；应用可查看明确from/to后重试。`DiscardPreparedUpdate()` 仅解除该组准备保护。`CleanupVersionsAsync()` 保护active、整组LKG、所有Prepared的from/to、当前托管snapshot及in-flight责任；只按有效owned marker的文件allowlist删除允许清理的版本/stage，返回 `DeletedPaths/ProtectedVersions/Errors`，不能删除未知内容或接管旧XFAB目录。pending journal期间拒绝越过初始化/激活边界进行写操作。
 - `RecoveryNotes` 暴露active/LKG候选被拒绝的最小原因。SHA-256、长度、Catalog身份、DAG与精确文件集合是本批的本地完整性门，不是来源签名授权。File.Replace/Flush/journal不构成跨目录绝对断电原子性承诺；恢复仅接受验证通过的完整闭包，无有效恢复候选就明确失败。
 - 当前实际验证平台为 Windows Editor/`StandaloneWindows64`、Unity `2022.3.62f3c1`；格式/挂载接受既有v1桌面平台，但未宣称OSX/Linux运行验收。Windows Development profile仅做主体源码编译，不等价于Player构建或平台验收。8.8的HTTPS、签名、远端下载/Range/续传/重试和生产授权，以及8.9整体Workbench体验、8.10最终Player全流程仍未实施。
+
+## 26. 8.8 远端分发与安全验证实施
+
+**技术状态：COMPLETE，已通过用户技术验收；本次单独授权唯一 Commit/Push 收口。** 实施基线为分支 `fusion/8-resource`、HEAD `05add9c8984ae045e56df301b830c67b6c203ff5`，起始外部修改为 `.gitignore`、`.kilo/kilo.jsonc`、`AGENTS.md`、ProBuilder Settings及未跟踪UI Plan，均保留。实施阶段未提交或推送；本次仅按26.6授权进行Git收口，不改依赖和工程设置。验证末尾曾被外部MCP1.0.0/NuGet更新阻塞；用户重启并恢复环境后已完成清理、实际编译/导入检查与16项受影响边界复验，详见26.5。不将本批验收等同于8.10 Player/IL2CPP总验收。
+
+- 沿用第8.2节已批准的 RSA-2048+／PKCS#1 v1.5／SHA-256；签名 envelope 独立于冻结Catalog v1，签名覆盖规范UTF-8的schema/algorithm/keyId及Base64 payload，payload绑定身份、channel、序号、有效期与实际Catalog/Complete文件长度摘要。Catalog继续是Bundle/SupportFiles唯一清单。
+- 发布序号门槛纳入既有active/LKG镜像与整组journal，不新建第二个持久版本权威；既有8.7 v1控制记录有具体持久兼容需要，新增控制格式显式版本化。Check只读，激活失败不推进，显式本地回滚保留最高已确认门槛。
+- 实施开始时实时Editor为Windows Unity `2022.3.62f3c1`、非Play/编译、Main已保存、native Bundle为0。初始RSA BCL探针 SignData/VerifyData SHA256/PKCS1往返成功，但首轮安全测试揭示 `RSA.Create()` 后设置KeySize=2048在此Mono实际仍导出1024位，产品正确拒绝；测试改用 `RSACryptoServiceProvider(2048)` 并断言实际Modulus长度。Standalone配置读回 `NET_Standard_2_0`、`Mono2x`；不据此宣称Player/IL2CPP或其他平台验收。
+- Ruling: 复用本Plan作执行/验收记录，不另建重复ledger；原地授权分支实施，不创建新worktree；可选archive本批不启用。生产支持范围以本批真实验证的平台为准，未验证后端须明确失败而非静默降级。
+
+### 26.1 实现与信任边界
+
+- 应用通过 `ResourceProjectMount(..., remote: ResourceRemoteSource)` 显式绑定HTTPS目录端点、channel、公钥KeyId/Modulus/Exponent和最低发布序号。没有生产默认公钥，不从网络接纳公钥，不将测试身份设为默认信任根。`CheckRemoteUpdatesAsync()` 只认证发布metadata和Catalog、检查本地已确认门槛并返回既有 `UpdatePlan`；没有store时不会创建目录。
+- 独立canonical envelope v1绑定schema/algorithm/keyId及Base64确切payload；payload绑定ProjectId、Platform、Unity/App兼容、channel、单调序号、CatalogDigest/长度、BuildId、Complete长度/SHA-256和有限有效期。严格拒绝重复/额外字段、非canonical编码、弱RSA密钥、身份不符和错误签名。有效期最长31天，issued容忍本地时钟5分钟偏差，过期拒绝Check/Prepare/首次激活；已经激活的离线完整版本不因发布metadata过期而被强制卸载。
+- `PrepareUpdateAsync(remotePlan)` 仍由唯一ResourceSystem与ArtifactStore驱动，在既有主线程tick中使用UWR；每store一个网络流水线、文件GET串行、同计划消费者join。单个消费者取消不撤销其他消费者；最后取消或会话退出同步撤销私有UWR、关闭文件及store锁，复制块、发布边界和成功结算前重新检查共享存活。
+- 默认HTTPS正常证书校验，自动重定向禁用；端点和相对URL不允许HTTP、凭据、query/fragment、转义和越界路径。仅Editor内部的loopback精确证书pin用于隔离测试，不是生产跳过证书校验开关。metadata最大64KiB、Catalog沿用16MiB门限，文件/总量/timeout/idle/attempts均有明确界限；空间检查是保守预算，不是磁盘空间预留。
+- `parts` 使用root OwnerId、项目/平台、CatalogDigest、文件身份、长度、SHA、来源URL和强ETag绑定；offset以实际文件长度为准。只有匹配206/Content-Range/ETag才追加；200安全清零重下、416或目标响应变化有限重试回退，无强ETag不续传，编码和错误长度拒绝。实际完成长度、摘要及签名授权通过后才复用8.7 staging/Complete/Prepared；partial记录始终为Partial，不参与挂载。显式Cleanup只清理已注册自有partial，未知/foreign内容保留并报告。
+- 最高已确认序号随同一整组journal与active/LKG镜像提交；失败不确认新序号，显式本地rollback不降低历史。既有8.7 v1控制记录仍可读取；同From/To Prepared可原位升级/续签，保留稳定transition身份和已有授权，不允许静默降低Prepared授权序号。它不是防本地篡改的可信存储：首次安装、状态丢失/恶意回滚、本地时钟倒退和有效发布冻结都不能据此宣称强防回滚；生产须由应用最低序号和可信配置补足其实际威胁模型。
+- Editor新增最小“签名发布元数据”入口，读取当前已经发布且重新验证的制品，不构建、不上传、不激活。`Create(RSA)`支持外部安全签名提供者；`CreateFromEnvironment`只读取工程外 `YL_RESOURCE_SIGNING_PFX` 与 `YL_RESOURCE_SIGNING_PASSWORD`，不保存或打印私钥。Export新增文件、不覆盖已有文件。部署者将metadata放在endpoint的 `release.json`，按 `<endpoint>/<CatalogDigest>/` 原样部署完整版本内的Catalog/Complete/Bundle/SupportFiles；不改Publisher既有release-index或Runtime active。
+
+### 26.2 当前验证记录
+
+- 原生结果目录：`C:/Users/Kano/AppData/Local/Temp/kilo/resource88-evidence/`。临时自有回调输出XML及叶子JSON，不以MCP错误TotalTests或跨Domain Reload的Unknown summary冒充结果。所有测试私钥/PFX均在该机器自有Temp隔离空间或内存，不修改证书信任/网络配置，不上传游戏资源。
+- RSA明确2048位测试与签名拒绝 **2/2**；HTTPS/响应/路径首批 **6/6**，包括真实自签名默认拒绝、显式loopback pin成功、有限503/429重试、302不跟随、错误长度/编码/截断/摘要拒绝。Mono `CertificateRequest.CreateSelfSigned` 实际不支持，测试PFX由外部.NET在隔离Temp生成，Unity以EphemeralKeySet导入并取得真实2048位私钥成功。
+- Editor签实际制品、Runtime验签及错误身份/过期/兼容性拒绝 **1/1**：`639276844339784257.xml`。签名不改变原Publisher产物。Windows Unity默认系统证书校验额外真实读取公开CA端点 `https://example.com/`，`CertificateHandler == null`、HTTP200、577字节、正常成功，见 `system-tls.json`；不是Mock或关闭验证后的结果。
+- owned partial的首个实际失败暴露Json.NET string-null与JSON null token不等导致归属比较误拒，显式Null修复；随后Cleanup用例真实RED（`639276849036716509.xml`）证明旧GC不回收partial，新增同一store归属清理后GREEN。
+- 取消后的六种真实TLS续传终态（206、忽略Range的200、416、ETag改变、无validator、错误range）、owned GC、常规floor失败恢复/rollback已通过。真实连接在200之后中断的测试揭示ConnectionError不应仅按状态码判重试，修复后实际自动Range成功。大磁盘预算拒绝不分配巨量数据，active/LKG不变。
+- 新增native流程首次失败为测试未退休仍持有prefab pin的空实例桶；保留断言并按既有8.5合同显式清桶。后一轮8项为 **7 passed/1 failed**（`639276867115271077.xml`），唯一失败是新增EditMode测试直接yield AsyncOperation；改为逐帧等待相同operation完成后已纳入最终38项GREEN，不把前一轮写成全绿。
+
+### 26.3 独立 Review 与回归
+
+- 已完成一次新鲜上下文独立只读技术Review（不调用Unity、不修改源码、不提交），初审Request Changes：1项P1、2项P2，无P0。没有要求或宣称第二轮review批准。
+- 三项均建立真实失败回归，`639276857709085591.xml` 为 **0 passed/3 failed**：有效floor控制记录尚可读但内容双坏时失败恢复丢失floor；8.7 v1 Prepared/同目标续期不能升级签名授权；同步From复制checkpoint取消唯一消费者却结算Succeeded。
+- 修复后上述三项在 `639276867115271077.xml` 中全部GREEN：恢复失败将原floor落回已验证From，不确认新序号；同一Prepared记录分离稳定transition与可刷新授权，原位升级/续期且不丢更高序号；共享存活探针在块/阶段/结算检查所有waiter，单个取消不误杀其余消费者，并覆盖会话退出后不得迟到发布Prepared。
+- 合并原生run `f55f5e1b-963d-432e-bc46-1416ce849870` 实际为 **58 passed/2 failed/0 skipped**（`639276876629462371.xml`），不是全绿。分别修复了重定向限制被UWR归类ConnectionError导致重试，以及8.7大Catalog测试错误修改排序首个资产、破坏SubAsset/main共享Aliases的测试数据；仅改为明确的 `entry.txt` 主资产，不放宽Catalog校验与原空间预算断言。
+- 另一个补充安全用例真实RED（`639276881056699482.xml`）证明已有owned版本可能跳过签名声明的Complete身份。Check、Prepare和Commit现均复验签名声明的Catalog/Complete长度与SHA，不再只因CatalogDigest相同而复用。对应三边界回归GREEN并纳入最终38项。
+- 实际Mono还接受了公钥指数1，不能仅凭ImportParameters认定信任锚参数有效。新增真实RED（`639276888722046101.xml`）、配置端拒绝非canonical/零/偶数/小于3的退化指数，最终签名3项GREEN；标准65537与合法密钥流程不变，不实现自有签名算法。
+
+### 26.4 最终证据、生产配置与历史收口阻塞
+
+- 本批相关 **62个不同用例取得通过证据**，不是声称同一轮62/62：版本事务/远端安全 **38/38**（`639276885182833208.xml`）；签名/信任锚 **3/3**（`639276889613297785.xml`）；真实HTTPS/响应 **7/7**（`639276889721149946.xml`）；完整Runtime/Editor源码及程序集主体独立性 **6/6**（`639276889824650285.xml`）。Core/Audio正式消费者 **8/8** 取自上述合并60项中对应的原生通过叶子，之后仅改动远端重试、远端Complete复验、信任锚参数和一项空间测试数据，不影响这些未配置远端的消费者路径。聚合记录为同目录 `verified-summary.json`，不是新的测试执行。
+- 全部8.7原有23项包含在上述最终38项；8.8涵盖签名/身份/过期/兼容拒绝、真实TLS证书、重定向/有限重试/超时、取消与断线续传六种终态、未知partial归属、篡改Catalog/Complete/Bundle拒绝、空间预算拒绝、多项目闭包、native Asset/Instance/Scene Busy与激活回滚、同步取消/join/退出迟到、真实Domain Reload和签名Prepared/floor持久恢复。没有默认重跑阶段8全部历史或构建Player。
+- 已成功调用本批自有fixture teardown，GUID核对、原工程保护hash断言、native Bundle为0断言全部通过；保留的正式A/B测试发布、workspace、全部SessionState登记的隔离store和两份fixture已回收，Main Scene恢复且当时非dirty。临时取证脚本及meta已移除；其移除后的Unity实际编译/导入在环境恢复后确认通过，见26.5。
+- 阻塞实证：验证完成并进入收口后，外部将 `Packages/manifest.json` 的MCP `0.93.4` 改为 `1.0.0`，并更新 `packages-lock.json`、`Assets/Plugins/NuGet` 的MCP/Rql二进制及meta。没有由本批执行安装/升级/回退。诊断时Editor.log报5项CS1061：Cinemachine.Get、Navigation.Get、Tilemap.Get、ParticleSystem.Get/Modify调用的 `ComponentRef.Matches` 在新依赖中不存在，随后出现Burst的Assembly-CSharp-firstpass解析下游错误。诊断时旧有Unity PID20956仍响应，但MCP两个既有本地端点均拒绝连接；官方wait-for-ready等待120秒仍失败。最后CLI已检测到Editor变为PID26992，两个端点仍未连接，本批没有启动或重启Unity，亦未跨此新进程复验。此为实际编译/服务阻塞，继续定时等待不能代替兼容修复。
+- 为保护外部改动，没有回退、修改新Package/NuGet、补丁PackageCache、开第二个Unity或改权限/网络/信任设置。以上62项原生证据来自升级前的MCP0.93.4环境，环境恢复后另外定向复验16项，不把历史证据改写为新环境执行。
+- 恢复前登记的剩余自有产物现已按26.5全部清理：fixture `Release82b-4e335b5a384a4561b12bb068049329a5`（folder GUID `36cdc30fc784cc94999fd7e614e04103`、Project GUID `9ae18359444e4404c997f7800f40d95f`）与 `Release82b-0c2b353414514d14b9fa75395d12d56b`（folder GUID `325a0c46f5d15ec41b0e3170ab89a869`、Project GUID `f4a2620772b084649b68daae0ea4b347`）；workspace分别为 `AssetBundles/YLR_9ae18359444e4404c997f7800f40d95f_6c5c41b7eb9cd413841bff0b8c2f2403`、`AssetBundles/YLR_f4a2620772b084649b68daae0ea4b347_3d618cd43db4203c057d52ebe2bce7af`；发布根为 `AssetBundles/YLFramework/yl-release-78dc97659cab4d2899610a8ec68360c9/StandaloneWindows64`。清理前重新核对GUID/marker和实际文件allowlist，未清理旧游戏或未知目录，没有无条件重跑全部阶段技术验收。
+- 生产仍须显式提供：工程外安全签名密钥/HSM、应用固定的生产公钥与可信KeyId、明确的HTTPS发布端点/channel、符合实际威胁模型的最低序号/本地历史与时钟策略、按不可变digest目录部署并由签名metadata绑定的完整产物。没有生产服务器或私钥时本批仅完成隔离测试，不上传真实游戏资源。真实Player/IL2CPP/其他平台仍在8.10；当前未验证后端明确Unsupported，可选archive未启用。
+- 安全测试的PFX经 `YL_RESOURCE_TEST_PFX` / `YL_RESOURCE_TEST_PASSWORD` 显式提供，仅在自有Temp中使用；其精确loopback信任不进入生产默认。缺少测试身份时fixture明确失败而不是跳过或关闭证书校验。
+
+### 26.5 环境恢复后的最终收口
+
+- 用户于2026-10-15重启Unity后，既有MCP配置端点恢复。新环境为Unity `2022.3.62f3c1` / MCP `1.0.0`；实际读取 `EditorUtility.scriptCompilationFailed == false`，非Play/编译/导入、Main Scene非dirty、native Bundle=0、ResourceSystem authority为空。旧MCP会话/部分工具注册不可直接沿用，使用现有CLI的已注册 `script-execute` 完成只读检查与自有产物清理，没有启用工具、修改权限或配置。
+- 两份fixture先按目录GUID/Project GUID、实际ProjectId及代码中明确的fixture资产白名单核对；workspace按ProjectRoot/ProjectGuid/ProjectId与KnownFiles核对；发布根按owner/KnownVersions检查并经 `ResourcePublisher.ReadVersion` 严格复验三个确切版本。空 `.staging` 经检查确为空后才删除；所有归属检查在递归清理前完成，未知内容会被拒绝。只删除上述两份自有fixture、两份workspace和一个自有发布根，记录 `post-restart-cleanup.json`；Main Scene设置未改变。
+- `AssetDatabase.Refresh(ForceSynchronousImport)` 后，19份新增脚本均有meta、可加载为MonoScript、GUID反查路径正确且19个GUID互异；两份fixture及其目录meta、临时取证脚本及meta均已不存在。实际编译失败标志为false，Main非dirty，native Bundle=0，记录 `post-restart-import.json`。
+- 对环境变化直接相关的密码学/真实HTTPS/主体源码与程序集闭包定向复验 **16 passed / 0 failed / 0 skipped**，原生XML/叶子JSON为 `post-restart-validation.xml` / `post-restart-validation.json`。包含签名/信任锚3项、下载响应与真实TLS7项、完整Runtime/Editor及Windows Development源码/二进制闭包6项。该16项是62项的重复复验，不累加为78个不同用例；未重新构建五代资源或默认重跑阶段8全历史。
+- 测试身份只在当前Editor进程临时配置，回调完成后恢复原环境变量并注销自有TestRunner callback。没有在Assets中重新创建取证工具；原生记录保留于自有Temp证据目录。主体Runtime/Editor无新MCP依赖，用户的Package/NuGet、`UNITY_MCP_DEPS_10`与其他工程设置变动保留不编辑。
+- 最终 `post-restart-final-state.json` 实证：非Play/编译/导入、无编译失败，Main为唯一已保存active场景；native Bundle、authority、draining、remote jobs均为0，自有TestRunner callback已注销释放，测试环境变量已恢复。`git diff --check` 本批范围通过，19份新增脚本/meta齐全，HEAD仍为授权基线；没有遗留此前登记的两份fixture或临时取证源码。
+- 8.8安全边界及生产配置仍以26.1/26.4为准；WindowsEditor之外后端明确Unsupported，8.9/8.10未提前实施。上述实施与技术验收阶段保持原分支与HEAD，未暂存、提交或推送；后续Git操作仅按26.6的单独授权执行。
+
+### 26.6 用户技术验收与 Git 收口授权
+
+- 用户于2026-10-15确认8.8技术验收通过，正式授权本批唯一Commit与Push；不重新实施功能，不重跑Unity测试、真实下载/签名测试、Bundle构建或独立Review。62个不同用例及重启后16/16的有效证据沿用，不变更Windows Editor支持范围、生产部署要求与Player/IL2CPP/AOT及其他平台限制。
+- 仅纳入本批可信发布/数字签名、安全HTTPS与Range续传、8.7事务直接协作、Editor签名入口、正式测试/必要夹具/meta及本节Plan记录。私钥、凭据、临时证书、服务器日志、下载缓存、临时发布与取证文件不得入库；外部Package/NuGet、原工程及用户并行修改不纳入本次提交。
+- Git收口不改变产品行为：仅补齐本节授权/技术COMPLETE记录，并去除19份新meta空字段的行尾空格以满足暂存差异检查；GUID及导入字段取值保持不变，既有技术证据继续有效，不重复技术验收。
+- 指定唯一提交消息：`feat(resource): 完成8.8远端分发与安全更新`；推送至 `origin/fusion/8-resource`。实际Hash、推送结果和本地/upstream/实时远端一致性由完成回复报告，不为回填Hash或Git COMPLETE追加第二个docs提交。
+- 完成本次Git收口即停止；8.8作为8.9的已验收前置基础，不自动实施8.9，不合并 `integration/xf-yl`，不创建阶段8里程碑或Tag。

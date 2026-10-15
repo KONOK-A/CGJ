@@ -11,16 +11,18 @@ namespace YLFramework.Services.Resource
         public string Platform { get; }
         public string AppContentCompatibilityId { get; }
         public ResourceLocalSnapshot BuiltIn { get; }
+        public ResourceRemoteSource Remote { get; }
         internal IReadOnlyList<Type> AssetTypes { get; }
 
         public ResourceProjectMount(string projectId, string platform, string appContentCompatibilityId,
-            ResourceLocalSnapshot builtIn = null, IEnumerable<Type> assetTypes = null)
+            ResourceLocalSnapshot builtIn = null, IEnumerable<Type> assetTypes = null, ResourceRemoteSource remote = null)
         {
             ResourceCatalogCodec.Id(projectId);
             ResourceCatalogCodec.Id(appContentCompatibilityId);
             if (!new[] { "StandaloneWindows64", "StandaloneOSX", "StandaloneLinux64" }.Contains(platform))
                 throw new ArgumentException("A supported local desktop platform is required.", nameof(platform));
             ProjectId = projectId; Platform = platform; AppContentCompatibilityId = appContentCompatibilityId; BuiltIn = builtIn;
+            Remote = remote;
             AssetTypes = ResourceCatalog.Copy(assetTypes);
             if (builtIn != null && (builtIn.Document.ProjectId != projectId || builtIn.Document.Platform != platform ||
                 builtIn.Document.AppContentCompatibilityId != appContentCompatibilityId))
@@ -50,11 +52,18 @@ namespace YLFramework.Services.Resource
         public bool IsChanged => FromDigest != ToDigest;
         internal ResourceLocalSnapshot From;
         internal ResourceLocalSnapshot Target;
+        internal ResourceRemoteRelease Remote;
         internal UpdateProject(ResourceLocalSnapshot from, ResourceLocalSnapshot target, IEnumerable<UpdateFile> files)
         {
             From = from; Target = target; ProjectId = target.Document.ProjectId; Platform = target.Document.Platform;
             FromDigest = from.Document.CatalogDigest; ToDigest = target.Document.CatalogDigest;
             SourceDirectory = target.DirectoryPath; Files = ResourceCatalog.Copy(files);
+        }
+        internal UpdateProject(ResourceLocalSnapshot from, ResourceRemoteRelease remote, IEnumerable<UpdateFile> files)
+        {
+            From = from; Remote = remote; ProjectId = remote.ProjectId; Platform = remote.Platform;
+            FromDigest = from.Document.CatalogDigest; ToDigest = remote.CatalogDigest;
+            Files = ResourceCatalog.Copy(files);
         }
     }
 
@@ -69,6 +78,7 @@ namespace YLFramework.Services.Resource
         public long AvailableBytes { get; }
         public bool HasEnoughSpace => AvailableBytes >= RequiredBytes;
         internal string Root;
+        internal bool IsRemote => Projects.Any(x => x.Remote != null);
         internal UpdatePlan(string root, IEnumerable<UpdateProject> projects, long available, long required)
         {
             Root = root; Projects = ResourceCatalog.Copy(projects); AvailableBytes = available; RequiredBytes = required;
@@ -83,8 +93,9 @@ namespace YLFramework.Services.Resource
         public IReadOnlyList<UpdateProject> Projects { get; }
         internal string Root;
         internal bool IsRollback { get; }
-        internal PreparedUpdate(string root, IEnumerable<UpdateProject> projects, bool isRollback = false)
-        { Root = root; Projects = ResourceCatalog.Copy(projects); IsRollback = isRollback; }
+        internal IReadOnlyList<ResourceRemoteRelease> Releases { get; }
+        internal PreparedUpdate(string root, IEnumerable<UpdateProject> projects, bool isRollback = false, IEnumerable<ResourceRemoteRelease> releases = null)
+        { Root = root; Projects = ResourceCatalog.Copy(projects); IsRollback = isRollback; Releases = ResourceCatalog.Copy(releases); }
     }
 
     public sealed class VersionCleanupResult

@@ -148,6 +148,7 @@ namespace YLFramework.Editor.Resource
                     var release = ResourcePublisher.Recover(project, EditorUserBuildSettings.activeBuildTarget, app);
                     return release == null ? "该 Project/平台尚无 owned 发布。" : "已验证发布：" + release.DirectoryPath;
                 });
+                if (GUILayout.Button("签名发布元数据")) ResourceReleaseSigningWindow.Open(project, app);
                 if (GUILayout.Button("从发布集合生成常量")) QueueOperation(() =>
                 {
                     var catalogs = ResourceEditorOperations.PublishedCatalogs(app);

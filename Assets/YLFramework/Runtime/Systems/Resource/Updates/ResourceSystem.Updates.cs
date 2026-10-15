@@ -21,7 +21,10 @@ namespace YLFramework.Services.Resource
 
         /// <summary>复制到自有 staging，完整验证后安装。取消和失败都不写 active；不提供 HTTP/签名降级入口。</summary>
         public ResourceRequest<PreparedUpdate> PrepareUpdateAsync(UpdatePlan plan, CancellationToken cancellation = default)
-            => UpdateRequest(() => configuration.ArtifactStore.Prepare(plan, cancellation));
+        {
+            CheckThread();
+            return plan?.IsRemote == true ? PrepareRemoteUpdate(plan, cancellation) : UpdateRequest(() => configuration.ArtifactStore.Prepare(plan, cancellation));
+        }
 
         public IReadOnlyList<PreparedUpdate> GetPreparedUpdates()
         {
@@ -55,7 +58,7 @@ namespace YLFramework.Services.Resource
                 update.Projects.Select(x => x.ProjectId).Distinct(StringComparer.Ordinal).Count() != store.Projects.Count ||
                 update.Projects.Any(x => !catalogs.TryGetValue(x.ProjectId, out var catalog) || catalog.Snapshot == null))
                 return Fail(request, ResourceError.InvalidConfiguration, "PreparedUpdate does not match this store's explicit closure.");
-            if (update.Projects.All(x => catalogs[x.ProjectId].CatalogDigest == x.ToDigest))
+            if (update.Projects.All(x => catalogs[x.ProjectId].CatalogDigest == x.ToDigest) && store.HasConfirmedReleases(update))
             { request.SetSuccess(true); return request; }
             if (update.Projects.Any(x => catalogs[x.ProjectId].CatalogDigest != x.FromDigest))
                 return Fail(request, ResourceError.StaleBase, "PreparedUpdate's source version changed; Check and Prepare again, or explicitly Rollback.");
@@ -135,7 +138,7 @@ namespace YLFramework.Services.Resource
         {
             error = !IsAvailable ? new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.") :
                 configuration.ArtifactStore == null ? new ResourceException(ResourceError.Unsupported, "No local ArtifactStore is configured.") :
-                updating ? new ResourceException(ResourceError.Busy, "A resource version operation is already in progress.") : null;
+                updating || remoteJobs.Count != 0 ? new ResourceException(ResourceError.Busy, "A resource version operation is already in progress.") : null;
             return error == null;
         }
 
@@ -158,7 +161,7 @@ namespace YLFramework.Services.Resource
             return request;
         }
 
-        private static ResourceException AsUpdateError(Exception cause) => cause as ResourceException ?? new ResourceException(ResourceError.UpdateFailed, "Local resource version operation failed.", cause);
+        private static ResourceException AsUpdateError(Exception cause) => cause as ResourceException ?? new ResourceException(ResourceError.UpdateFailed, "Resource version operation failed.", cause);
         private static ResourceRequest<T> UpdateFailure<T>(Exception cause) => Fail(new ResourceRequest<T>(),
             cause is ResourceException resource ? resource.Kind : ResourceError.UpdateFailed, "Local resource version operation failed.", cause: cause);
     }

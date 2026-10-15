@@ -16,25 +16,37 @@ namespace YLFramework.Services.Resource
             RecoverLocked();
             var transition = Transition(update.Projects);
             ReadTransition(transition);
+            var releases = Array.Empty<ResourceRemoteRelease>();
             if (!update.IsRollback)
             {
                 var preparedPath = PreparedPath(transition);
                 if (!File.Exists(preparedPath)) throw new InvalidDataException("PreparedUpdate was discarded or consumed; Check and Prepare again.");
-                ValidatePreparedRecord(Read(preparedPath), preparedPath);
+                var record = Read(preparedPath);
+                ValidatePreparedRecord(record, preparedPath);
+                releases = ReadReleaseRecords(record, true);
             }
+            foreach (var release in releases) CheckReleaseFloor(release);
+            var floorsBefore = ReadReleaseFloors();
+            var floorsAfter = MergeFloors(floorsBefore.Cast<JObject>().Concat(releases.Select(x => x.Floor())));
             var current = Select().ToDictionary(x => x.Document.ProjectId, StringComparer.Ordinal);
             foreach (var item in update.Projects)
             {
                 if (current[item.ProjectId].Document.CatalogDigest != item.FromDigest)
                     throw new ResourceException(ResourceError.StaleBase, "The persistent activation base changed: " + item.ProjectId);
-                Open(item.ProjectId, item.ToDigest, true);
+                var release = releases.SingleOrDefault(x => x.ProjectId == item.ProjectId);
+                if (release == null) Open(item.ProjectId, item.ToDigest, true);
+                else OpenRemoteVersion(release);
             }
             var journal = new JObject { ["Version"] = 1, ["OwnerId"] = ownerId, ["Phase"] = "Verified", ["Transition"] = transition,
                 ["ActiveBefore"] = ValidIndex("active.json"), ["GoodBefore"] = ValidIndex("last-known-good.json") };
+            if (floorsAfter.Count != 0)
+            {
+                journal["Version"] = 2; journal["ReleaseFloorsBefore"] = floorsBefore; journal["ReleaseFloorsAfter"] = floorsAfter;
+            }
             Write(JournalPath, journal);
             Checkpoint?.Invoke("JournalVerified");
-            var from = TransitionIndex(transition, "From");
-            var to = TransitionIndex(transition, "To");
+            var from = WithFloors(TransitionIndex(transition, "From"), floorsAfter);
+            var to = WithFloors(TransitionIndex(transition, "To"), floorsAfter);
             // LKG 是上一整个闭包，而不是各项目最近一次变化的版本。
             foreach (var item in update.Projects)
             {
@@ -64,11 +76,17 @@ namespace YLFramework.Services.Resource
 
         private JObject ValidateJournal(JObject journal)
         {
-            ResourceCatalogCodec.Fields(journal, "Version,OwnerId,Phase,Transition,ActiveBefore,GoodBefore");
-            if (ResourceCatalogCodec.Integer(journal, "Version") != 1 || ResourceCatalogCodec.Text(journal, "OwnerId") != ownerId ||
+            var version = ResourceCatalogCodec.Integer(journal, "Version");
+            ResourceCatalogCodec.Fields(journal, version == 2 ? "Version,OwnerId,Phase,Transition,ActiveBefore,GoodBefore,ReleaseFloorsBefore,ReleaseFloorsAfter" : "Version,OwnerId,Phase,Transition,ActiveBefore,GoodBefore");
+            if (version != 1 && version != 2 || ResourceCatalogCodec.Text(journal, "OwnerId") != ownerId ||
                 !new[] { "Verified", "Committed" }.Contains(ResourceCatalogCodec.Text(journal, "Phase")))
                 throw new InvalidDataException("Invalid commit journal identity/state.");
             ReadTransition(journal["Transition"]);
+            if (version == 2)
+            {
+                var before = ValidateFloors(journal["ReleaseFloorsBefore"]); var after = ValidateFloors(journal["ReleaseFloorsAfter"]);
+                if (!JToken.DeepEquals(MergeFloors(before.Cast<JObject>().Concat(after.Cast<JObject>())), after)) throw new InvalidDataException("Journal lowers confirmed release history.");
+            }
             foreach (var field in new[] { "ActiveBefore", "GoodBefore" })
             {
                 if (journal[field]?.Type == JTokenType.Null) continue;
@@ -98,8 +116,10 @@ namespace YLFramework.Services.Resource
             var journal = ValidateJournal(Read(JournalPath));
             var transition = ReadTransition(journal["Transition"]);
             var committed = (string)journal["Phase"] == "Committed";
-            var from = TransitionIndex(transition, "From");
-            var to = TransitionIndex(transition, "To");
+            var floorsBefore = (long)journal["Version"] == 2 ? ValidateFloors(journal["ReleaseFloorsBefore"]) : new JArray();
+            var floorsAfter = (long)journal["Version"] == 2 ? ValidateFloors(journal["ReleaseFloorsAfter"]) : new JArray();
+            var from = WithFloors(TransitionIndex(transition, "From"), floorsBefore);
+            var to = WithFloors(TransitionIndex(transition, "To"), floorsAfter);
             try { OpenIndex(committed ? to : from); }
             catch (Exception error) when (committed && IsFileFailure(error))
             {
@@ -107,7 +127,14 @@ namespace YLFramework.Services.Resource
                 committed = false;
             }
             var active = committed ? to : journal["ActiveBefore"] as JObject;
-            var good = committed ? from : journal["GoodBefore"] as JObject;
+            var good = committed ? WithFloors(TransitionIndex(transition, "From"), floorsAfter) : journal["GoodBefore"] as JObject;
+            if (!committed && floorsBefore.Count != 0)
+            {
+                // 内容损坏可能使Before索引不可挂载，但不能丢弃其中仍有效的已确认历史。
+                // From已完整复验；只恢复原门槛，不确认本次失败的发布序号。
+                active = WithFloors(active == null ? from : (JObject)active.DeepClone(), floorsBefore);
+                if (good != null) good = WithFloors((JObject)good.DeepClone(), floorsBefore);
+            }
             if (active != null) OpenIndex(active);
             if (good != null) OpenIndex(good);
             // 全部验证完成后才恢复镜像。每个镜像自身也携带完整闭包，journal 收尾后仍能识别混代。
@@ -180,10 +207,12 @@ namespace YLFramework.Services.Resource
 
         private void ValidatePreparedRecord(JObject record, string path)
         {
-            ResourceCatalogCodec.Fields(record, "Version,OwnerId,State,Transition");
-            if (ResourceCatalogCodec.Integer(record, "Version") != 1 || ResourceCatalogCodec.Text(record, "OwnerId") != ownerId ||
+            var version = ResourceCatalogCodec.Integer(record, "Version");
+            ResourceCatalogCodec.Fields(record, version == 2 ? "Version,OwnerId,State,Transition,Releases" : "Version,OwnerId,State,Transition");
+            if (version != 1 && version != 2 || ResourceCatalogCodec.Text(record, "OwnerId") != ownerId ||
                 ResourceCatalogCodec.Text(record, "State") != "Complete" || PreparedPath(ReadTransition(record["Transition"])) != path)
                 throw new InvalidDataException("Prepared closure record ownership/identity mismatch.");
+            if (version == 2) ReadReleaseRecords(record);
         }
 
         public void DiscardPreparedUpdate(PreparedUpdate update)
@@ -232,6 +261,7 @@ namespace YLFramework.Services.Resource
             foreach (var mount in Projects)
             {
                 var root = ProjectRoot(mount.ProjectId);
+                CleanupParts(mount, errors);
                 foreach (var path in Directory.GetDirectories(Path.Combine(root, "versions")))
                 {
                     if (!File.Exists(Path.Combine(path, VersionFile))) continue; // 未知目录不是本系统清理对象。

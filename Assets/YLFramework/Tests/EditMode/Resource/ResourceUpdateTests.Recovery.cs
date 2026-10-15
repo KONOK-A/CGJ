@@ -181,7 +181,8 @@ namespace YLFramework.Tests.ResourceBuild
             var doc = source.Document;
             var payload = ResourceCatalogCodec.ParseObject(ResourceCatalogCodec.Write(doc));
             payload.Remove("BuildId");
-            payload["Assets"][0]["Aliases"] = new JArray(Enumerable.Range(0, 4096).Select(n => "large-explicit-alias-" + n.ToString("D5")));
+            ((JArray)payload["Assets"]).OfType<JObject>().Single(asset => (string)asset["Kind"] == "Asset" && (string)asset["Address"] == "entry.txt")["Aliases"] =
+                new JArray(Enumerable.Range(0, 4096).Select(n => "large-explicit-alias-" + n.ToString("D5")));
             var bytes = ResourceCatalogCodec.Seal(ResourceCatalogCodec.CanonicalBytes(payload));
             var large = ResourceCatalogCodec.Read(bytes, doc.ProjectId, doc.Platform, doc.UnityCompatibility, doc.AppContentCompatibilityId);
             var sourceRoot = NewStore().RootPath;

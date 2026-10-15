@@ -410,7 +410,7 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<bool>();
             if (State == ResourceSystemState.Closed) { request.SetSuccess(true); return request; }
             if (!IsSessionActive) return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
-            if (updating) return Fail(request, ResourceError.Busy, "A resource version operation is in progress.");
+            if (updating || remoteJobs.Count != 0) return Fail(request, ResourceError.Busy, "A resource version operation is in progress.");
             if (checkingShutdown) return Fail(request, ResourceError.Busy, "Resource shutdown is checking its ownership barrier.");
             if (State == ResourceSystemState.ShuttingDown) { shutdowns.Add(request); CheckDrain(); return request; }
             State = ResourceSystemState.ShuttingDown;
@@ -442,7 +442,7 @@ namespace YLFramework.Services.Resource
         private void CheckDrain()
         {
             if (checkingShutdown) return;
-            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0) return;
+            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0 || remoteJobs.Count != 0) return;
             bundleQueue.Clear();
             draining.Remove(this);
             if (State != ResourceSystemState.ShuttingDown) return;

@@ -222,11 +222,12 @@ namespace YLFramework.Services.Resource
 
         private static JArray ReadArray(JObject data, string field) => data[field] as JArray ?? throw new InvalidDataException("Expected array: " + field);
 
-        private JObject VersionMarker(ResourceLocalSnapshot snapshot) => new()
+        private JObject VersionMarker(ResourceLocalSnapshot snapshot) => VersionMarker(snapshot.Document);
+        private JObject VersionMarker(ResourceCatalogDocument document) => new()
         {
-            ["Version"] = 1, ["OwnerId"] = ownerId ?? new string('0', 32), ["ProjectId"] = snapshot.Document.ProjectId, ["Platform"] = snapshot.Document.Platform,
-            ["CatalogDigest"] = snapshot.Document.CatalogDigest, ["State"] = "Complete",
-            ["Files"] = new JArray(Files(snapshot.Document).Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }))
+            ["Version"] = 1, ["OwnerId"] = ownerId ?? new string('0', 32), ["ProjectId"] = document.ProjectId, ["Platform"] = document.Platform,
+            ["CatalogDigest"] = document.CatalogDigest, ["State"] = "Complete",
+            ["Files"] = new JArray(Files(document).Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }))
         };
 
         private ResourceLocalSnapshot Reopen(ResourceLocalSnapshot snapshot)
@@ -238,18 +239,20 @@ namespace YLFramework.Services.Resource
             return ResourceLocalSnapshot.Open(snapshot.DirectoryPath, doc.ProjectId, doc.CatalogDigest, mount.Platform, mount.AppContentCompatibilityId);
         }
 
-        private JObject Index(IEnumerable<ResourceLocalSnapshot> snapshots) => new()
+        private JObject Index(IEnumerable<ResourceLocalSnapshot> snapshots) => WithFloors(new JObject
         {
             ["Version"] = 1, ["OwnerId"] = ownerId,
             ["Projects"] = new JArray(snapshots.OrderBy(x => x.Document.ProjectId, StringComparer.Ordinal).Select(x => new JObject
                 { ["ProjectId"] = x.Document.ProjectId, ["Platform"] = x.Document.Platform, ["CatalogDigest"] = x.Document.CatalogDigest }))
-        };
+        }, ReadReleaseFloors());
 
         private JObject ValidateIndex(JObject index)
         {
-            ResourceCatalogCodec.Fields(index, "Version,OwnerId,Projects");
-            if (ResourceCatalogCodec.Integer(index, "Version") != 1 || ResourceCatalogCodec.Text(index, "OwnerId") != ownerId)
+            var version = ResourceCatalogCodec.Integer(index, "Version");
+            ResourceCatalogCodec.Fields(index, version == 2 ? "Version,OwnerId,Projects,ReleaseFloors" : "Version,OwnerId,Projects");
+            if (version != 1 && version != 2 || ResourceCatalogCodec.Text(index, "OwnerId") != ownerId)
                 throw new InvalidDataException("Activation index ownership mismatch.");
+            if (version == 2) ValidateFloors(index["ReleaseFloors"]);
             var projects = ReadArray(index, "Projects");
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var token in projects)
@@ -379,11 +382,11 @@ namespace YLFramework.Services.Resource
         internal PreparedUpdate Prepare(UpdatePlan plan, CancellationToken cancellation)
         {
             if (plan == null || plan.Root != RootPath) throw new ArgumentException("The plan belongs to another store.");
+            if (plan.IsRemote) throw new ResourceException(ResourceError.Unsupported, "Remote plans require the ResourceSystem asynchronous download path.");
             cancellation.ThrowIfCancellationRequested();
             using var guard = Enter(true);
             RecoverMetadata();
             RequireNoJournal();
-            var transition = Transition(plan.Projects);
             foreach (var entry in plan.Projects)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -391,20 +394,43 @@ namespace YLFramework.Services.Resource
                 Install(entry.Target, cancellation, entry.Files);
             }
             cancellation.ThrowIfCancellationRequested();
-            var record = new JObject { ["Version"] = 1, ["OwnerId"] = ownerId, ["State"] = "Complete", ["Transition"] = transition };
+            return RecordPrepared(plan);
+        }
+
+        private PreparedUpdate RecordPrepared(UpdatePlan plan)
+        {
+            var transition = Transition(plan.Projects);
+            var releases = plan.Projects.Where(x => x.Remote != null).Select(x => x.Remote).ToArray();
             var preparedPath = PreparedPath(transition);
             // 此时完整闭包已逐一验证，同名候选有本次显式选择作为归属依据。
             RemoveCandidate(preparedPath + ".next", x => ValidatePreparedRecord(x, preparedPath));
+            JObject previous = null;
             if (File.Exists(preparedPath))
             {
-                if (!JToken.DeepEquals(Read(preparedPath), record)) throw new InvalidDataException("Prepared closure identity changed.");
+                previous = Read(preparedPath);
+                ValidatePreparedRecord(previous, preparedPath);
+                if (!JToken.DeepEquals(ReadTransition(previous["Transition"]), transition)) throw new InvalidDataException("Prepared closure identity changed.");
+                var authorizations = ReadReleaseRecords(previous).ToDictionary(x => x.ProjectId, StringComparer.Ordinal);
+                foreach (var release in releases)
+                {
+                    if (authorizations.TryGetValue(release.ProjectId, out var existing) && release.Sequence < existing.Sequence)
+                        throw new InvalidDataException("A prepared authorization cannot be silently downgraded; discard it explicitly before choosing an older authorized release.");
+                    authorizations[release.ProjectId] = release;
+                }
+                releases = authorizations.Values.OrderBy(x => x.ProjectId, StringComparer.Ordinal).ToArray();
             }
-            else Write(preparedPath, record);
-            return new PreparedUpdate(RootPath, plan.Projects.Select(x => new UpdateProject(x.From, Open(x.ProjectId, x.ToDigest), Array.Empty<UpdateFile>())));
+            var record = new JObject { ["Version"] = releases.Length == 0 ? 1 : 2, ["OwnerId"] = ownerId, ["State"] = "Complete", ["Transition"] = transition };
+            if (releases.Length != 0) record["Releases"] = ReleaseRecords(releases);
+            if (!JToken.DeepEquals(previous, record)) Write(preparedPath, record, () =>
+            {
+                if (previous != null && !JToken.DeepEquals(Read(preparedPath), previous)) throw new InvalidDataException("Prepared authorization changed during refresh.");
+            });
+            return new PreparedUpdate(RootPath, plan.Projects.Select(x => new UpdateProject(x.From, Open(x.ProjectId, x.ToDigest), Array.Empty<UpdateFile>())), releases: releases);
         }
 
-        private ResourceLocalSnapshot Install(ResourceLocalSnapshot source, CancellationToken cancellation, IReadOnlyList<UpdateFile> reuse = null)
+        private ResourceLocalSnapshot Install(ResourceLocalSnapshot source, CancellationToken cancellation, IReadOnlyList<UpdateFile> reuse = null, Action ensureAlive = null)
         {
+            ensureAlive?.Invoke();
             var project = source.Document.ProjectId;
             var digest = source.Document.CatalogDigest;
             var target = VersionPath(project, digest);
@@ -423,6 +449,7 @@ namespace YLFramework.Services.Resource
             foreach (var name in registered)
             {
                 cancellation.ThrowIfCancellationRequested();
+                ensureAlive?.Invoke();
                 var inputPath = reuse?.FirstOrDefault(x => x.RelativeFile == name)?.Input ?? Path.Combine(source.DirectoryPath, name);
                 ResourceLocalSnapshot.RejectLinks(inputPath);
                 using (var input = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -431,25 +458,36 @@ namespace YLFramework.Services.Resource
                     var buffer = new byte[64 * 1024];
                     int count;
                     while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
-                    { cancellation.ThrowIfCancellationRequested(); output.Write(buffer, 0, count); }
+                    { cancellation.ThrowIfCancellationRequested(); ensureAlive?.Invoke(); output.Write(buffer, 0, count); }
                     output.Flush(true);
                 }
                 Checkpoint?.Invoke("FileCopied");
+                ensureAlive?.Invoke();
             }
             // 先验证普通发布文件，最后写 owned Complete。取消/失败留下的 staging 从不参与挂载。
             var mount = mounts[project];
             ResourceLocalSnapshot.OpenStaging(stage, project, digest, mount.Platform, mount.AppContentCompatibilityId);
             cancellation.ThrowIfCancellationRequested();
+            ensureAlive?.Invoke();
+            return PromoteStage(stage, stageMarker, source.Document, ensureAlive);
+        }
+
+        private ResourceLocalSnapshot PromoteStage(string stage, JObject stageMarker, ResourceCatalogDocument document, Action ensureAlive = null)
+        {
+            ensureAlive?.Invoke();
+            var project = document.ProjectId; var digest = document.CatalogDigest;
             RequireOwner();
-            var versionMarker = VersionMarker(source);
+            var versionMarker = VersionMarker(document);
             Write(Path.Combine(stage, VersionFile), versionMarker);
             Checkpoint?.Invoke("CompleteWritten");
+            ensureAlive?.Invoke();
             RequireOwner();
             if (!JToken.DeepEquals(Read(Path.Combine(stage, ".ylr-stage.json")), stageMarker) || !JToken.DeepEquals(Read(Path.Combine(stage, VersionFile)), versionMarker))
                 throw new InvalidDataException("Staging ownership changed before promotion.");
             File.Delete(Path.Combine(stage, ".ylr-stage.json"));
-            Directory.Move(stage, target);
+            Directory.Move(stage, VersionPath(project, digest));
             Checkpoint?.Invoke("VersionInstalled");
+            ensureAlive?.Invoke();
             return Open(project, digest);
         }
 
@@ -479,7 +517,7 @@ namespace YLFramework.Services.Resource
             if (!ValidateOwner()) return Array.Empty<PreparedUpdate>();
             RecoverMetadata();
             RequireNoJournal();
-            return PreparedRecords().Select(x => RecoverPrepared(ReadTransition(x["Transition"]))).ToArray();
+            return PreparedRecords().Select(x => RecoverPrepared(ReadTransition(x["Transition"]), ReadReleaseRecords(x))).ToArray();
         }
 
         private JObject[] PreparedRecords()
@@ -493,7 +531,7 @@ namespace YLFramework.Services.Resource
             }).ToArray();
         }
 
-        private PreparedUpdate RecoverPrepared(JArray transition)
+        private PreparedUpdate RecoverPrepared(JArray transition, ResourceRemoteRelease[] releases)
         {
             var projects = new List<UpdateProject>();
             foreach (JObject item in transition)
@@ -502,7 +540,7 @@ namespace YLFramework.Services.Resource
                 var target = Open(project, to, true);
                 projects.Add(new UpdateProject(Open(project, from), target, Array.Empty<UpdateFile>()));
             }
-            return new PreparedUpdate(RootPath, projects);
+            return new PreparedUpdate(RootPath, projects, releases: releases);
         }
 
         internal static bool IsFileFailure(Exception error) => error is IOException || error is InvalidDataException || error is UnauthorizedAccessException || error is ArgumentException;

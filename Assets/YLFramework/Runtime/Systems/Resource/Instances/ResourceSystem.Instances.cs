@@ -162,6 +162,7 @@ namespace YLFramework.Services.Resource
             pruningInstances = true;
             try
             {
+                TickRemoteUpdates();
                 TickSceneCleanup();
                 var count = Math.Min(8, instanceCleanup.Count);
                 for (var i = 0; i < count && instanceCleanup.Count != 0; i++)
