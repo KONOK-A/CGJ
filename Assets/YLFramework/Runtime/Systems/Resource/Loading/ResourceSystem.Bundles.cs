@@ -57,6 +57,7 @@ namespace YLFramework.Services.Resource
             CheckThread();
             var request = new ResourceRequest<BundleLease>(value => value.Dispose());
             if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (IsProjectBlocked(projectId)) return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.");
             if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
                 bundleId == null || !catalog.Snapshot.Bundles.ContainsKey(bundleId))
                 return Fail(request, ResourceError.AddressNotFound, "Unknown mounted project/Bundle identity.");

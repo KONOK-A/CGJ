@@ -23,12 +23,21 @@ namespace YLFramework.Services.Resource
 
         /// <summary>摘要来自调用方的明确发布选择，不能从待验证文件自身推导信任。仅支持普通可读本地目录。</summary>
         public static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false);
+
+        internal static ResourceLocalSnapshot OpenOwned(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, true);
+
+        internal static ResourceLocalSnapshot OpenStaging(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false, true);
+
+        private static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId, bool owned, bool staging = false)
         {
             ResourceCatalogCodec.Hex(catalogDigest, 64);
             if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathFullyQualified(directory)) throw new ArgumentException("An absolute local publication directory is required.");
             directory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             RejectLinks(directory);
-            if (Path.GetFileName(directory) != catalogDigest) throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
+            if (!staging && Path.GetFileName(directory) != catalogDigest) throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
             var bytes = ReadBounded(Path.Combine(directory, "resource-catalog.json"));
             if (ResourceCatalogCodec.Digest(bytes) != catalogDigest) throw new InvalidDataException("Explicit CatalogDigest mismatch.");
             var document = ResourceCatalogCodec.Read(bytes, projectId, platform, Application.unityVersion, appContentCompatibilityId);
@@ -40,7 +49,9 @@ namespace YLFramework.Services.Resource
                 ResourceCatalogCodec.Text(complete, "CatalogDigest") != catalogDigest)
                 throw new InvalidDataException("Publication Complete/Catalog identity mismatch.");
             var files = document.Bundles.Cast<ResourceCatalogFile>().Concat(document.SupportFiles).ToArray();
-            var expected = files.Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }).OrderBy(x => x, StringComparer.Ordinal);
+            var expected = files.Select(x => x.RelativeFile).Concat(owned ? new[] { "resource-catalog.json", ".ylr-complete.json", ".ylr-version.json" } :
+                staging ? new[] { "resource-catalog.json", ".ylr-complete.json", ".ylr-stage.json" } :
+                new[] { "resource-catalog.json", ".ylr-complete.json" }).OrderBy(x => x, StringComparer.Ordinal);
             if (!Directory.GetFileSystemEntries(directory).All(File.Exists) || !Directory.GetFiles(directory).Select(Path.GetFileName).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(expected))
                 throw new InvalidDataException("Publication contains missing or unregistered content.");
             var snapshot = new ResourceLocalSnapshot(directory, document);

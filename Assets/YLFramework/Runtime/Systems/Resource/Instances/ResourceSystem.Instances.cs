@@ -91,6 +91,7 @@ namespace YLFramework.Services.Resource
             CheckThread();
             if (!IsAvailable) throw new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
             if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+            if (IsProjectBlocked(prefab.Address.ProjectId)) throw new ResourceException(ResourceError.Busy, "The project is inside its activation barrier.");
             var asset = prefab.Asset;
             if (!ReferenceEquals(prefab.Record.Owner, this) || asset.scene.IsValid())
                 throw new ArgumentException("An asset Prefab lease from this authority is required.", nameof(prefab));

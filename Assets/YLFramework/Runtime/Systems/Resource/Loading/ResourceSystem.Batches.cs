@@ -11,6 +11,7 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             if (!IsAvailable) return BatchFailure<T>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (IsProjectBlocked(projectId)) return BatchFailure<T>(ResourceError.Busy, "The project is inside its activation barrier.");
             if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
                 bundleId == null || !catalog.Snapshot.Bundles.TryGetValue(bundleId, out var descriptor))
                 return BatchFailure<T>(ResourceError.AddressNotFound, "Unknown mounted project/Bundle identity.");
@@ -24,6 +25,7 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             if (!IsAvailable) return BatchFailure<UnityEngine.Object>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (IsProjectBlocked(projectId)) return BatchFailure<UnityEngine.Object>(ResourceError.Busy, "The project is inside its activation barrier.");
             if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog))
                 return BatchFailure<UnityEngine.Object>(ResourceError.AddressNotFound, "Unknown resource project.");
             var group = catalog.Groups.FirstOrDefault(x => x.Id == groupId);

@@ -74,6 +74,7 @@ namespace YLFramework.Services.Resource
         {
             Owner.CheckThread();
             if (!Owner.IsAvailable) throw new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (Owner.IsProjectBlocked(AssetRecord.Entry.Address.ProjectId)) throw new ResourceException(ResourceError.Busy, "The project is inside its activation barrier.");
             if (IsRetired) throw new ObjectDisposedException(nameof(InstanceCache));
             if (!data.RootTransform) { Dispose(); throw new ObjectDisposedException(nameof(InstanceCache)); }
             if (Policy == InstanceCachePolicy.SceneScoped && (!ScopeScene.IsValid() || !ScopeScene.isLoaded))

@@ -135,7 +135,7 @@ namespace YLFramework.Services.Resource
 
         private void ValidateConfiguration()
         {
-            if (configuration == null || configuration.Catalogs.Count == 0)
+            if (configuration == null || configuration.Catalogs.Count == 0 && configuration.ArtifactStore == null)
                 throw new ArgumentException("An explicit nonempty catalog configuration is required.");
             foreach (var source in configuration.Sources)
             {
@@ -144,7 +144,10 @@ namespace YLFramework.Services.Resource
             }
             sources.Add(ResourceSourceId.AssetBundle, new AssetBundleSource(this));
             var projects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var catalog in configuration.Catalogs)
+            var configuredCatalogs = new List<ResourceCatalog>(configuration.Catalogs);
+            if (configuration.ArtifactStore != null)
+                foreach (var snapshot in configuration.ArtifactStore.Mount()) configuredCatalogs.Add(CreateStoreCatalog(snapshot));
+            foreach (var catalog in configuredCatalogs)
             {
                 if (catalog == null || !projects.Add(catalog.ProjectId)) throw new ArgumentException("Null or case-conflicting project catalog.");
                 catalogs.Add(catalog.ProjectId, catalog);
@@ -189,6 +192,7 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<AssetLease<T>>(lease => lease.Dispose());
             if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address);
             if (!address.IsValid) return Fail(request, ResourceError.InvalidAddress, "A valid resource address is required.", address);
+            if (IsProjectBlocked(address.ProjectId)) return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address);
             ResourceCatalogEntry entry;
             ResourceCatalog catalog;
             try
@@ -406,6 +410,7 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<bool>();
             if (State == ResourceSystemState.Closed) { request.SetSuccess(true); return request; }
             if (!IsSessionActive) return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
+            if (updating) return Fail(request, ResourceError.Busy, "A resource version operation is in progress.");
             if (checkingShutdown) return Fail(request, ResourceError.Busy, "Resource shutdown is checking its ownership barrier.");
             if (State == ResourceSystemState.ShuttingDown) { shutdowns.Add(request); CheckDrain(); return request; }
             State = ResourceSystemState.ShuttingDown;

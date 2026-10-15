@@ -7,10 +7,14 @@ namespace YLFramework.Services.Resource
     public sealed class ResourceConfiguration
     {
         public IReadOnlyList<ResourceCatalog> Catalogs { get; }
+        public ArtifactStore ArtifactStore { get; }
         internal IReadOnlyList<IResourceSource> Sources { get; }
 
         public ResourceConfiguration(IEnumerable<ResourceCatalog> catalogs)
             : this(catalogs, new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true), new TextureResourceSource(false) }) { }
+
+        public ResourceConfiguration(ArtifactStore artifactStore, IEnumerable<ResourceCatalog> catalogs = null) : this(catalogs ?? Array.Empty<ResourceCatalog>())
+            => ArtifactStore = artifactStore ?? throw new ArgumentNullException(nameof(artifactStore));
 
         internal ResourceConfiguration(IEnumerable<ResourceCatalog> catalogs, IEnumerable<IResourceSource> sources)
         {

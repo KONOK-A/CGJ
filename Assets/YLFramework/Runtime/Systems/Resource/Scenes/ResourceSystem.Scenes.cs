@@ -40,6 +40,7 @@ namespace YLFramework.Services.Resource
             CheckThread();
             var request = new SceneRequest(this, mode, ++nextSceneSequence, activateOnLoad);
             if (!IsAvailable) { Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address); return request; }
+            if (IsProjectBlocked(address.ProjectId)) { Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address); return request; }
             if (mode != LoadSceneMode.Single && mode != LoadSceneMode.Additive ||
                 float.IsNaN(activationTimeoutSeconds) || activationTimeoutSeconds <= 0 || activationTimeoutSeconds > 300)
             { Fail(request, ResourceError.InvalidConfiguration, "Scene mode and a finite activation deadline are required.", address); return request; }

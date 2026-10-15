@@ -114,6 +114,24 @@ namespace YLFramework.Editor.Resource
             return new ResourceRelease(root, VerifyVersion(root, owner, index));
         }
 
+        /// <summary>按确切摘要只读选择历史 owned Release，供本地更新/回滚准备；不改最后发布 Index，也不操作 Runtime active。</summary>
+        public static ResourceRelease ReadVersion(ResourceProject project, BuildTarget target, string appContentCompatibilityId, string catalogDigest)
+        {
+            ValidateEditor();
+            ResourceCatalogCodec.Hex(catalogDigest, 64);
+            if (project && EditorUtility.IsDirty(project)) throw new InvalidOperationException("Save the ResourceProject before selecting a release.");
+            var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
+            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
+            var root = Root(project.ProjectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
+            if (owner == null || !owner.KnownVersions.Contains(catalogDigest)) throw new InvalidDataException("The selected version is not an owned release.");
+            ValidateRoot(root, owner);
+            var catalog = VerifyComplete(Path.Combine(root, catalogDigest), owner, null);
+            if (catalog.UnityCompatibility != Application.unityVersion || catalog.AppContentCompatibilityId != appContentCompatibilityId)
+                throw new InvalidDataException("The selected release has incompatible Unity/App requirements.");
+            return new ResourceRelease(root, catalog);
+        }
+
         /// <summary>取消只在 Index 提交前生效。提交后的 IO 故障可能使调用结果未定，Recover 以实际 Index 确认完整快照。</summary>
         public static ResourceRelease Publish(ResourceBuildResult result, string appContentCompatibilityId, CancellationToken cancellation = default) =>
             Execute(result, appContentCompatibilityId, cancellation, null);

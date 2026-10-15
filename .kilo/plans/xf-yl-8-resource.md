@@ -1,6 +1,6 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.5、8.6a、8.6b 已完成技术验收及前序 Git 收口，见第14～23节，Schema v1 保持冻结。8.6c 技术 **COMPLETE**，必要编译、消费者回归及独立Review修复证据见第24节；等待用户技术验收与Git收口授权，不实施8.7及后续批次。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.6c 已完成技术验收及 Git 收口，8.7 起始基线为 `be3dcb8`。Schema v1 保持冻结。8.7 技术 **COMPLETE**，实际实现、74项相关通过证据、独立Review修复和保护核对见第25节；按用户追加授权仅为8.7单次 Commit/Push 收口，不实施8.8及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
 > 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
@@ -529,16 +529,16 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **8.6b 状态（2026-10-15）：技术 COMPLETE，已完成用户技术验收及 Git 收口（`b1116085eb4290c6cc202f63b761797e4eac739e`）。** Audio正式Provider、配置显式迁移、真实音频/Bundle保活及独立Review修复证据见第23节。
 
-**8.6c 状态（2026-10-15）：技术 COMPLETE，待用户技术验收与 Git 收口。** 旧栈退役、主体实际编译/二进制闭包隔离、定向Editor/native/PlayMode消费者与原游戏/可选适配共存、独立Review修复及保护核对均完成，见第24节。本轮未Commit/Push，8.7未开始。
+**8.6c 状态（2026-10-15）：技术 COMPLETE，已完成用户技术验收及 Git 收口（`be3dcb8`）。** 旧栈退役、主体实际编译/二进制闭包隔离、定向Editor/native/PlayMode消费者与原游戏/可选适配共存、独立Review修复及保护核对均完成，见第24节。
 
 - [x] 文本string交付前释放自己lease、共享读表不伤另一模块；fallback次序/error cause/Model初始化和startup rollback保持。
 - [x] Core `yield`等待后只领取一次owned结果，Dispose未领取/领取后两条路无泄漏或双释放；同步InProgress不错误fallback到基础模块，异步join同producer。
 - [x] Core命名View/Panel同步异步、正常Close复用、damaged/Attach/父销毁/场景迁移/取消迟到/关闭重启选定回归；direct prefab及默认Canvas无需Resource仍可用。
 - [x] Audio Resources/AB命名lease、idle cache、crossfade尾轨、cancel、Shutdown迟到、依赖最终释放；直Clip不被新Resource或Audio卸载。
 - [x] 新配置/序列化字段定向资产审查和一次性迁移入口；原XF配置与MainModule地址完全不读写。Core closure拒绝Systems/XFAB，Editor模拟通过正式目录工作。
-- [ ] 迁移`ResourcePoolTests`、Audio内部Res状态断言、CoreXfab fixture/池反射与Export哨兵到等价行为；不删除关键断言制造通过。不再容忍旧YLManager永久并存。
+- [x] 迁移`ResourcePoolTests`、Audio内部Res状态断言、CoreXfab fixture/池反射与Export哨兵到等价行为；不删除关键断言制造通过。不再容忍旧YLManager永久并存。
 
-上述剩余混合门禁中，8.6a已完成Core closure、正式Editor目录、新身份Core fixture/池断言迁移及Export回归，8.6b已完成Audio配置与内部Res状态断言迁移；旧ResourcePool/旧YLManager整体退役及最终导出/主体依赖清理仍归8.6c，不将部分完成标为全批通过。
+上述混合门禁分别由8.6a/b/c完成，旧ResourcePool/旧YLManager整体退役及最终导出/主体依赖清理证据见第24节；不将8.6的加载融合或8.7的本地事务冒充阶段8整体完成。
 
 ### 8.7 版本目录、纯更新计划与激活/回滚事务
 
@@ -548,11 +548,13 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **风险**：旧native包仍占用文件、snapshot去重key遗漏、崩溃半commit、版本同名异内容、多项目部分激活。
 
-- [ ] 只Check/取消/准备失败不改active文件/hash或版本；v1 lease/scene/instance活着时v2激活Busy且旧Acquire仍可用，neutral边界flush/真实卸载后才切snapshot。
-- [ ] 相同target重复Prepare不重复下载，Check不使prepared失效，跨重启恢复Complete；already-active激活无副作用、from已变化明确StaleBase。
-- [ ] journal每个写入/切换阶段注入故障，重新初始化只选一个完整兼容快照；回滚走同一安全边界，native不混代。
-- [ ] 清理排除active/prepared/last-good/在途及原XF/未知目录；多project closure有确切摘要与平台，任何Busy都不部分激活。
-- [ ] 未通过8.8的production远端入口明确拒绝，不能将本地摘要校验、内部导出或恢复成功标为生产真实性/防重放验收通过。
+**技术状态（2026-10-15）：COMPLETE。** 仅本地普通文件系统来源；真实多版本/native、整组恢复、独立Review修复及必要消费者门禁见第25节。按追加授权单次Commit/Push，不开始8.8。
+
+- [x] 只Check/取消/准备失败不改active文件/hash或版本；v1 lease/scene/instance活着时v2激活Busy且旧Acquire仍可用，neutral边界flush/真实卸载后才切snapshot。
+- [x] 相同target重复Prepare不重复复制/验证，Check不使prepared失效，跨会话重新初始化恢复Complete；already-active激活无副作用、from已变化明确StaleBase。
+- [x] journal具有实质风险的写入/切换边界注入故障，重新初始化只选完整兼容闭包；回滚走同一安全边界，native不混代。
+- [x] 清理排除active/prepared/last-good/在途及原XF/未知目录；多project closure有确切摘要与平台，任何Busy都不部分激活。
+- [x] 没有开放production远端入口；本地摘要校验、内部导出或恢复成功不代表生产真实性/防重放验收，正式远端能力留8.8。
 
 ### 8.8 正式远端下载、真实性、断点与恢复
 
@@ -1239,3 +1241,46 @@ Unity `2022.3.62f3c1`、Windows Editor/D3D11、正常Domain Reload；**本轮共
 - 原游戏/XF/XFAB/XFFSM保持原链；独立可选XFAB音频叶子不是主体必需依赖。AudioClipLibrary旧字段只保留显式持久化迁移能力，通用Pool/Table/Serialization/Zip等能力不因旧栈退役误删。
 - 进入8.7前未发现新增技术阻塞；当前流程前置仅为用户技术验收与8.6c单次Git收口授权。8.7版本激活/回滚、8.8下载安全和8.9 Editor体验均未实施，不把现有本地发布能力宣称为生产安全更新闭环。
 - **到此停止。** 当前全部成果留在工作区，后续获授权时按一批一个Commit合入代码、测试、必要文档和本Plan记录，不增加无意义的状态提交。不自动合并integration/xf-yl、不创建阶段8里程碑、不自动开始8.7。
+
+## 25. 8.7 本地版本事务实施（2026-10-15）
+
+**技术状态：COMPLETE。** 必要技术门禁及最终保护/meta核对均已完成，证据见下。用户先授权实施、必要真实 Unity 测试及一次独立技术 Review；2026-10-15 14:06 UTC 追加授权技术门禁全部通过后自动 Commit/Push。仅为8.7将代码、测试、必要 meta 和本 Plan 合为一个 Commit，不另建 docs 状态提交，提交信息参照前两次资源阶段收口；实际Hash与远端同步结果由最终Git回执报告，不在本提交内制造自引用Hash。
+
+### 25.1 基线、契约与实现边界
+
+- 实查分支 `fusion/8-resource`、HEAD `be3dcb8`，最近历史确认8.6a/b/c收口。起始外部修改 `.gitignore`、`.kilo/kilo.jsonc`、`AGENTS.md`、ProBuilder Settings 及未跟踪 UI Plan 保留，不作为本批成果。起始 Unity `2022.3.62f3c1` 无编译错误、无 Resource authority/native Bundle，唯一 Main Scene 已保存。
+- 实施复用正式 `ResourceLocalSnapshot`、严格 Catalog v1 codec、不可变 Release、唯一 ResourceSystem 及现有 Asset/Instance/Scene/native 图，不重新引入旧 Resource/XFAB authority。
+- Catalog v1 实际没有跨项目依赖字段，继续冻结。8.7 由应用显式选择包含 store 全部项目的确切 `ProjectId/Platform/CatalogDigest` 集合，未变化项目也须列出；不扫描或推断跨 Catalog 包依赖。同一 store 配置闭包精确绑定 owner，配置集合变化不自动接管已有根。
+- `ArtifactStore` 使用显式绝对 owned-root；默认根为 `persistentDataPath/YLFramework/Resource`，各项目/平台下有 `versions/<digest>`、`staging/<attempt>`、`parts`、active 与 last-known-good。事务 journal 位于稳定排序首项目的平台目录，记录整个 store 闭包，避免逐项目独立恢复造成混合版本。原发布根只读，原游戏/StreamingAssets/Packages/ProjectSettings及历史Bundle不参与。
+- Runtime 的 active/LKG 是自有控制记录，每个项目镜像都携带相同的完整 `ProjectId/Platform/CatalogDigest` 集合。启动先恢复 journal，再整体尝试全部 active、全部 LKG、显式内置闭包；任一镜像不一致或任一版本损坏，拒绝整个候选层，不拼接逐项目 fallback。可恢复的 owned 损坏 active 会按完整有效闭包修复；未知根和完整 foreign 候选明确拒绝。
+- 每个版本 Complete 仅认证不可变版本内容和 owned 文件 allowlist，不再承担可变的单个 Prepared 归属。首项目 `prepared/<transitionDigest>.json` 在整组 From/To 全部完成后才发布，保存全部 from/to 身份；重叠 Prepare 有各自独立记录，半完成 Prepare 不进入恢复枚举。记录在激活消费或显式 Discard 前保护所有 from/to，新的纯 Check 不影响已有记录。
+- 激活采用保守安全边界：关闭该 store 项目新取得入口，退休自有 idle 实例桶，真实 Asset/Instance/Scene/native 责任未排空即 Busy，恢复入口后由应用释放责任并重试。不强制释放外部消费者，不修改原游戏 Scene；不宣称同项目多版本 native 热共存。
+
+### 25.2 当前验证与待办
+
+- 新入口基线测试真实 RED：原始 ResourceSystem 不含 ArtifactStore/Check/Prepare/Activate/Rollback。
+- 首次真实构建五个隔离 Release（A三代/B两代）后，首轮6项中1通过、5失败；首因是 Windows Mono 对过长 staging 文件路径打开失败。已取消额外摘要子目录，以批准的 `staging/<attempt>` 直接承载文件并进行严格完整验证，后续结果待记录。没有放宽文件/摘要断言或原工程保护。
+- 取证目录：`C:/Users/Kano/AppData/Local/Temp/kilo/Resource87-20261015-evidence/`。首次 RED 保留为 `initial-red.json`；后续由临时自有 TestRunner callback 保存原生 XML 与叶子结果，跨 Domain Reload 不以 MCP 的全库发现数或错误 Duration 冒充完整结果。临时取证脚本及meta已移除，最终重新导入/编译无误。暂停后的五个既有 owned Release 按确切摘要、Project GUID 和真实 native TextAsset 内容重新验证并显式绑定，见 `resumed-fixtures.json`；没有扫描目录挑“最新版本”。
+- 最终完整8.7专项 **23 passed / 0 failed / 0 skipped**，与6项主体独立性合并的原生 XML 为 `639276731155523614.xml`（合并 **29/29**）。覆盖真实 A1/A2/A3 与 B1/B2 Catalog/Bundle、Check 不创建目录、文件复用和空间预算、重复 Prepare 不复制/替换、取消/失败保留旧 active、跨 Domain Reload 恢复 Prepared/active/LKG、already-active/StaleBase/Discard、Asset/Instance/Scene/native Busy 后旧 Acquire 可用、自动 idle 退休、Core 正式 prefab pin、安全切换后真实新版加载及显式回滚、多项目 Busy/坏目标不部分激活、8个实质 commit 边界的整组中断恢复、归属丢失/foreign 候选拒绝、截断 next、整组 fallback 和 owned 清理续跑。额外直接加载同项目native包的真实RED揭示托管图外的阻塞，修复后明确Busy且不卸载或接管外部Bundle，并纳入最终23项GREEN。
+- 一次首次 Play 测试失败定位为 TestRunner 跨 Domain Reload 无法保留编译器捕获闭包；将回调捕获的测试主体在进入 Play 后的普通方法中创建，不修改产品初始化门禁。另两项真实失败揭示“恢复到 From 却误报 To 成功”和“失败 fallback 未同步内存”；补真实 native RED 后修复，并纳入上述22项完整 GREEN。
+- Editor 最小协作为 `ResourcePublisher.ReadVersion(project, target, appId, digest)`，复用现有 owner/Complete/文件校验只读选择确切历史 Release，不改 `release-index.json`，不承担 Runtime active 权威；已覆盖选A1仍保持最后发布A3且发布根字节不变。未重新设计 Builder、Catalog 或 Workbench。
+- 正式 Core/Audio 8项与主体独立性6项回归 **14/14**（`639276723621232274.xml`），含真实Audio Bundle依赖、同步/异步、cancel/Shutdown/迟到清理和Core绑定退出；最终主体源码/程序集闭包又在上述29项末轮中复验。正式 Resource PlayMode 生命周期 **37/37**（`639276726548040319.xml`），覆盖Request/Lease/Scope、初始化重入、取消、旧会话迟到、Resources/Texture所有权等直接受影响底座。
+- `final-summary.json` 按原生XML叶子去重确认本批相关验证 **74个不同用例通过**；未默认重跑阶段8全历史。`final-editor-state.json` 确认最终 Main Scene已恢复且非dirty、非Play、非编译、无编译失败、Runner inactive、native Bundle/authority/draining均为0；7个新增脚本和1个目录的8份meta导入/反查正确且GUID互异。自有测试发布、workspace、测试资源与隔离store已回收；原游戏/历史Bundle/Packages/ProjectSettings的保护哈希检查通过，外部修改不编辑、不暂存、不回退。
+- 真实Editor进程杀死、断电、Player/IL2CPP和其他平台未验收；本批通过实际Domain Reload和重新初始化验证持久记录恢复，不将它们冒充实机崩溃测试。8.8 HTTPS/签名/HTTP续传/生产防重放均未实施。
+
+### 25.3 独立技术 Review 与修复
+
+- 完成一次独立只读技术 Review，重点覆盖事务恢复、归属、完整性、native 代隔离、Busy 恢复、多项目一致性、重入和代码结构。初审 Request Changes，发现4项P1及5项P2；未以作者自检替代独立 Review，也未宣称 reviewer 对修复后代码作过第二轮批准。
+- 9项发现逐项建立真实失败用例：完整闭包含未变化项目的LKG、journal收尾后整组fallback、写前重验owner/journal/stage、截断替换候选、半完成/重叠Prepared发布、版本marker.next恢复、坏active后继续更新、取消stage与中断删除续清、大Catalog空间预算。原生 RED XML `639276703817407478.xml` 为 **0 passed / 9 failed**；修复后的定向 XML `639276712005527542.xml` 为 **9 passed / 0 failed**，随后上述22项全绿。
+- 修复统一了状态不变量而非引入第二个 Manager：版本内容/Complete 不可变，Prepared 是整组发布记录，active/LKG镜像是同一完整闭包，journal 是关键写入期间的整组决策。Root marker 明确登记控制槽；仅由有效root/项目/版本归属授权处理未提交截断候选，完整foreign内容不被删除。GC以持久allowlist和最后删除的marker续清，未知文件阻止该目录删除并报告。
+- 必要可读性、命名和结构检查纳入同一轮 Review 与修复自检：采用 `ArtifactStore`、`UpdatePlan`、`PreparedUpdate` 等领域名称，事务与文件归属保持在一个 ArtifactStore 的 partial 实现内；沿用现有 ResourceSystem 图，无额外网络层、全局单例或同义 authority。
+
+### 25.4 接入与边界
+
+- 应用显式创建 `ResourceProjectMount(projectId, platform, appId, builtIn, assetTypes)`，将全部参与版本事务的项目交给同一个 `ArtifactStore`，再通过 `ResourceConfiguration(store, otherCatalogs)` 初始化唯一 ResourceSystem。`builtIn` 是按确切摘要打开的本地快照，可以为空；若 active/LKG 均无有效完整闭包且没有完整内置绑定，初始化明确失败。自定义资源类型通过 `assetTypes` 提供编译类型，不按类型字符串创建对象。
+- 更新来源是普通文件系统中本地已发布并验证的 Release/owned snapshot。使用 `CheckUpdatesAsync(targetClosure)` 获取只读 UpdatePlan，再用 `PrepareUpdateAsync(plan, cancellationToken)` 完整复制和校验。当前本地IO在调用线程完成，取消通过 CancellationToken 在复制块/阶段边界检查，不宣称后台网络进度、HTTP下载或 Request.Cancel 能中止已经同步完成的复制。
+- 应用仅在适当 bootstrap/neutral 场景显式调用 `ActivatePreparedUpdateAsync(prepared)`。Request失败的 `Error.Kind == Busy` 表示旧版本仍可取得，应由应用停止消费者、释放全部外部lease/checkout并卸载自己负责的旧Scene后重试。屏障不会替应用卸载场景、停止Audio或强制归还外部资源；会退休框架自有idle桶。除托管图外还检查同项目Catalog v1 native namespace中已经加载的外部Bundle并返回Busy，不接管或卸载它们；其他代码不得绕过唯一ResourceSystem并发生产同项目原生资源，未登记的外部在途IO不属于可接管事务。
+- 成功后新 Acquire 才使用新 snapshot；already-active 幂等成功，不再写指针。旧 PreparedUpdate 的 from 不匹配当前版本即 StaleBase；已消费/Discard的记录不能重新作为受保护激活令牌。`RollbackAsync()` 显式选择整个LKG闭包并走相同屏障，而不是放宽旧Prepared的基线检查。
+- 重新初始化时从持久 Complete 版本和整组Prepared记录恢复 `GetPreparedUpdates()`；应用可查看明确from/to后重试。`DiscardPreparedUpdate()` 仅解除该组准备保护。`CleanupVersionsAsync()` 保护active、整组LKG、所有Prepared的from/to、当前托管snapshot及in-flight责任；只按有效owned marker的文件allowlist删除允许清理的版本/stage，返回 `DeletedPaths/ProtectedVersions/Errors`，不能删除未知内容或接管旧XFAB目录。pending journal期间拒绝越过初始化/激活边界进行写操作。
+- `RecoveryNotes` 暴露active/LKG候选被拒绝的最小原因。SHA-256、长度、Catalog身份、DAG与精确文件集合是本批的本地完整性门，不是来源签名授权。File.Replace/Flush/journal不构成跨目录绝对断电原子性承诺；恢复仅接受验证通过的完整闭包，无有效恢复候选就明确失败。
+- 当前实际验证平台为 Windows Editor/`StandaloneWindows64`、Unity `2022.3.62f3c1`；格式/挂载接受既有v1桌面平台，但未宣称OSX/Linux运行验收。Windows Development profile仅做主体源码编译，不等价于Player构建或平台验收。8.8的HTTPS、签名、远端下载/Range/续传/重试和生产授权，以及8.9整体Workbench体验、8.10最终Player全流程仍未实施。

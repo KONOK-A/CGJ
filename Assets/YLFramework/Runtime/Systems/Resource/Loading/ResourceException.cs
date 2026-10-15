@@ -6,7 +6,7 @@ namespace YLFramework.Services.Resource
     {
         InvalidConfiguration, ConfigurationConflict, InvalidAddress, AddressNotFound, TypeMismatch,
         SourceUnavailable, Unsupported, InProgress, LoadFailed, Canceled, SessionUnavailable, Busy,
-        SceneIdentityAmbiguous, SceneUnloaded, ActivationTimedOut
+        SceneIdentityAmbiguous, SceneUnloaded, ActivationTimedOut, StaleBase, UpdateFailed
     }
 
     /// <summary>资源域失败，保留原始 cause 与调用地址/来源，不使用 null 伪装取得成功。</summary>
