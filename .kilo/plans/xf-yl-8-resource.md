@@ -1007,4 +1007,11 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 新脚本/目录由Unity导入生成独立meta，既有GUID/序列化身份不变；本批改动与起始用户改动均留在工作区，未暂存或提交。
 - 8.5可依赖 `InstanceLease`、Prefab/依赖pin、scene-scoped/persistent缓存、迁移/DDOL后的退休晚归还、Destroy-pending drain与旧会话隔离；Scene加载、SceneRecord、独立Scene pin仍须另行实施验收。
 - 未运行Player构建、IL2CPP/AOT、其他平台、禁用Domain Reload或完整Scene资源系统验收，不将Windows Editor证据外推。第三方任意修改/销毁借读裸对象，只能按Unity可观察的存活状态收尾，不能承诺阻止原生对象越权操作。
-- **停止点：8.4技术 COMPLETE，等待用户技术验收与Git收口授权；不自动实施8.5。**
+- **8.4 技术 COMPLETE；Git 收口见第20节。到此停止，不自动实施8.5。**
+
+## 20. 8.4 Git 收口（2026-10-15）
+
+- 以独立授权一次性完成：精确暂存本批16个文件（5个已跟踪修改 + 11个新增含 `.meta`）后，提交 `d26c166aa7695b098b81d77aa8ee3c49d896004e`（`feat(resource): 完成8.4实例缓存与Prefab资源保活`，1171+/14-），线性落在 `0e2ec2e` 之上；随后推送至 `origin/fusion/8-resource`（`0e2ec2e..d26c166`）。推送后本地 HEAD、upstream 与实际 `git ls-remote` 均为 `d26c166`。
+- 提交只含本批 Instance/Cache 实现、`GameObjectPoolData`/`AssetLease`/`ResourceSystem` 的必要改动、本批测试及本 Plan 第19节；未暂存、未提交、未修改受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md`，均仍留在工作区。原游戏、XF/XFAB/XFFSM、MainModule、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；Canvas.prefab 未再次修改。
+- 未执行 Reset/Clean/Stash/Rebase/Force Push/Merge，未进入8.5、未合并 `integration/xf-yl`、未创建阶段8里程碑。暂存的11份 `.meta` 仅 `userData/assetBundleName/assetBundleVariant` 生成行含行尾空格，与既有已提交格式一致，未改其内容；`git diff --cached --check` 除此外无冲突标记或无关文件混入。
+- 本次未新增产品行为，故未重跑 Unity 编译/测试/Review；不将第19节验收证据外推到隔离的 Player/其他平台。
