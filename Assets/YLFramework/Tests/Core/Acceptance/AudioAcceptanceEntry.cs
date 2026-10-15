@@ -97,11 +97,24 @@ namespace YLFramework.Core.Tests
             var existed = new bool[6]; var values = new float[6];
             for (var i = 0; i < 6; i++) { existed[i] = PlayerPrefs.HasKey(keys[i]); values[i] = i < 3 ? PlayerPrefs.GetInt(keys[i]) : PlayerPrefs.GetFloat(keys[i]); }
             var scale = Time.timeScale;
+            ResourceSystem resources = null;
+            var completed = false;
             try
             {
                 Check(Signal && SecondSignal && Group && MixerConfig, "formal serialized fixture dependencies");
                 Check(!AudioKit.Music.IsValid && !AudioKit.Voice.IsValid && AudioKit.SoundCount == 0 &&
                     AudioKit.SoundStats.OwnedSourceCount == 0, "fresh isolated audio fixture");
+                Check(ResourceSystem.Current == null, "fresh isolated Resource fixture");
+                // 历史验收夹具的 Resources 物理路径显式登记到独立 Catalog，不推断任何旧 Bundle 身份。
+                var locator = ResourceKey;
+                if (locator.StartsWith("resources://", StringComparison.OrdinalIgnoreCase)) locator = locator.Substring("resources://".Length);
+                else if (locator.StartsWith("resources/", StringComparison.OrdinalIgnoreCase)) locator = locator.Substring("resources/".Length);
+                using (var initialized = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[]
+                {
+                    new ResourceCatalog("yl-audio-acceptance", new[] { new ResourceCatalogEntry("signal",
+                        new ResourceAddress("yl-audio-acceptance", "signal"),
+                        new YLFramework.Services.Resource.ResourceLocation(ResourceSourceId.Resources, locator, typeof(AudioClip))) })
+                }))) resources = initialized.TakeResult();
                 mOwnAudioSession = true;
                 AudioKit.Settings.IsOn = true;
                 AudioKit.Settings.MusicVolume.Value = 1; AudioKit.Settings.VoiceVolume.Value = 1; AudioKit.Settings.SoundVolume.Value = 1;
@@ -142,12 +155,11 @@ namespace YLFramework.Core.Tests
                 Check(!playing.IsValid, "component Stop terminates original handle");
                 yield return Measure("stopped", value => Check(value < .00001, "Stop silences output"));
 
-                var address = new AudioClipAddress(ResLoaderAudioClipProvider.Resources, ResourceKey);
+                var address = new AudioClipAddress(resources.GetAudioClipProvider("yl-audio-acceptance"), "signal");
                 var loop = AudioSoundOptions.MusicDefaults;
                 var first = AudioKit.PlayMusicNamed(address, loop);
                 var namedClip = FindSource().clip;
-                var resource = ObserveResource();
-                Check(first.IsPlaying && resource.RefCount > 0, "sync Resources holds real Loader");
+                Check(first.IsPlaying && resources.GetDiagnosticsSnapshot().LeaseCount > 0, "sync Resources holds a real Resource lease");
                 AudioKit.ApplyMixerConfig(MixerConfig);
                 Check(FindSource().outputAudioMixerGroup == MixerConfig.MusicGroup, "formal Mixer inherited route");
                 double mixerFull = 0, mixerHalf = 0;
@@ -158,12 +170,11 @@ namespace YLFramework.Core.Tests
                 AudioMixerControl.TryClearFloat(MixerConfig.Mixer, "MusicVolume");
                 var second = AudioKit.CrossFadeMusic(SecondSignal, .4f);
                 yield return new WaitForSecondsRealtime(.12f);
-                Check(first.IsValid && second.IsPlaying && resource.RefCount > 0, "two real crossfade voices retain tail resource");
+                Check(first.IsValid && second.IsPlaying && resources.GetDiagnosticsSnapshot().LeaseCount > 0, "two real crossfade voices retain tail resource");
                 yield return Measure("crossfade", value => Check(value > .001, "crossfade has real output"), .1f);
                 yield return new WaitForSecondsRealtime(.45f);
-                Check(!first.IsValid && second.IsPlaying && resource.RefCount == 0, "tail completion returns real Loader");
-                Check(resource.Asset == null && resource.State == ResState.Waiting &&
-                    (!namedClip || namedClip.loadState == AudioDataLoadState.Unloaded), "tail release unloads actual named audio data");
+                Check(!first.IsValid && second.IsPlaying && resources.GetDiagnosticsSnapshot().RecordCount == 0, "tail completion returns its Resource lease");
+                Check(namedClip, "returning a Resources lease preserves the shared borrowed Clip");
                 second.Stop(); AudioKit.ClearMixerRouting();
 
                 var spatial = AudioKit.PlaySoundAt(Signal, new Vector3(0, 0, 1), loop);
@@ -182,13 +193,11 @@ namespace YLFramework.Core.Tests
                 Check(canceled.IsDone && !canceled.Handle.IsValid && canceled.EndReason == AudioPlayEnd.Canceled, "named async logical cancel");
                 var async = AudioKit.PlaySoundAsync(address, loop);
                 yield return Wait(() => async.Handle.IsPlaying, "real named async retry");
-                var asyncResource = ObserveResource();
                 namedClip = FindSource().clip;
-                Check(asyncResource.RefCount > 0, "async resource kept while playing");
+                Check(resources.GetDiagnosticsSnapshot().LeaseCount > 0, "async resource kept while playing");
                 async.Cancel();
-                Check(asyncResource.RefCount == 0, "cancel returns resource ownership");
-                Check(asyncResource.Asset == null && asyncResource.State == ResState.Waiting &&
-                    (!namedClip || namedClip.loadState == AudioDataLoadState.Unloaded), "cancel unloads actual named audio data");
+                Check(resources.GetDiagnosticsSnapshot().RecordCount == 0, "cancel returns resource ownership");
+                Check(namedClip, "cancel does not unload a borrowed Resources Clip");
                 var old = AudioKit.PlaySound(Signal, loop); old.Stop();
                 var current = AudioKit.PlaySound(Signal, loop); old.Stop();
                 Check(current.IsPlaying, "pool reuse rejects old generation Stop"); current.Stop();
@@ -198,15 +207,47 @@ namespace YLFramework.Core.Tests
                 mExitHandle = AudioKit.PlaySoundNamed(new AudioClipAddress(mExitProvider, "active"), loop);
                 mExitPending = AudioKit.PlayVoiceAsync(new AudioClipAddress(mExitProvider, "pending"));
                 Application.quitting += VerifyQuit;
+                completed = true;
             }
             finally
             {
-                if (MixerConfig) AudioMixerControl.TryClearFloat(MixerConfig.Mixer, "MusicVolume");
-                Time.timeScale = scale;
-                for (var i = 0; i < 6; i++)
-                    if (!existed[i]) PlayerPrefs.DeleteKey(keys[i]);
-                    else if (i < 3) PlayerPrefs.SetInt(keys[i], (int)values[i]);
-                    else PlayerPrefs.SetFloat(keys[i], values[i]);
+                try
+                {
+                    if (!completed && mOwnAudioSession)
+                    {
+                        if (Group) Group.Stop();
+                        AudioKit.Shutdown();
+                    }
+                    if (MixerConfig && MixerConfig.Mixer) AudioMixerControl.TryClearFloat(MixerConfig.Mixer, "MusicVolume");
+                }
+                finally
+                {
+                    try
+                    {
+                        if (resources != null && resources.IsAvailable)
+                        {
+                            // 在途 native 可晚于 iterator 退出；关闭请求继续负责收尾，不用 Busy 断言覆盖原始失败。
+                            var shutdown = resources.ShutdownAsync();
+                            shutdown.Completed += done =>
+                            {
+                                try
+                                {
+                                    if (done.Status != ResourceRequestStatus.Succeeded)
+                                        Debug.LogError("AUDIO45 Resource cleanup failed: " + done.Error);
+                                }
+                                finally { done.Dispose(); }
+                            };
+                        }
+                    }
+                    finally
+                    {
+                        Time.timeScale = scale;
+                        for (var i = 0; i < 6; i++)
+                            if (!existed[i]) PlayerPrefs.DeleteKey(keys[i]);
+                            else if (i < 3) PlayerPrefs.SetInt(keys[i], (int)values[i]);
+                            else PlayerPrefs.SetFloat(keys[i], values[i]);
+                    }
+                }
             }
         }
 
@@ -225,14 +266,6 @@ namespace YLFramework.Core.Tests
                 // quitting 已不可撤销；Mono fixture 的失败必须以非零码结束，不能被先前 Quit(0) 覆盖。
                 if (!Application.isEditor) Environment.Exit(1);
             }
-        }
-        private IRes ObserveResource()
-        {
-            // 仅在已有播放持有资源时临时取得/归还观察租约，不给验收程序集增加内部 API 特权。
-            var loader = ResLoader.Allocate();
-            var key = ResKey.Allocate(ResourceKey, null, typeof(AudioClip));
-            try { return loader.LoadResSync(key); }
-            finally { key.RecycleToCache(); loader.RecycleToCache(); }
         }
         private static AudioSource FindSource(AudioClip clip = null)
         {

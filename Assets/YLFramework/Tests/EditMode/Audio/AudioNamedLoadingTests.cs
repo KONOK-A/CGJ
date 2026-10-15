@@ -362,7 +362,7 @@ namespace YLFramework.Tests.Audio
             Assert.NotNull(assembly.GetType("YLFramework.Services.Audio.IAudioClipProvider"));
             Assert.NotNull(assembly.GetType("YLFramework.Services.Audio.AudioPlayRequest"));
             Assert.NotNull(typeof(AudioKit).GetMethod("PlayMusicAsync"));
-            Assert.NotNull(assembly.GetType("YLFramework.Services.Audio.ResLoaderAudioClipProvider"));
+            Assert.NotNull(assembly.GetType("YLFramework.Services.Audio.ResourceAudioClipProvider"));
         }
     }
 }

@@ -343,9 +343,9 @@ namespace YLFramework.Editor.Audio
                     "加权模式切换不擦除另一列表，编辑器新增项 Weight=1，旧 Weight=0 继续表示排除。autoFade Tooltip 说明片段秒、短片段同比缩短、循环不可尾淡出；两个组件原字段/GUID 不改，旧数据无需迁移或重存。"),
                 HelpBlock.Notice("输入保护边界", "空/非法输入先校验，不切断旧自有音频；此保护不保证容量拒播、通道关闭、原生启动失败或回调异常时回滚旧声音。"),
                 HelpBlock.Paragraph("AudioClipLibrary 素材组", "菜单 Assets/Create/YLFramework/Audio/Clip Library 创建共享资产；Groups 的 Name 精确区分大小写，不是控制通道名。" +
-                    "每组 Selection 为 Uniform/Weighted，Entries 每项 Source/Clip/Key/BundleName/Weight；Uniform 忽略 Weight，Weighted 的 0 排除，所有加权值必须有限且非负。缺组、重名、非法枚举/权重或无候选返回失败，不停止已有播放。" +
-                    "Clip 为借用；Resources Key 须以 resources:// 或 resources/ 开头且 BundleName 为空；AssetBundle 使用完整 Key 与 YL owner BundleName，不是 XFAB ProjectName。ExternalProvider 必须代码 SetProvider，不自动注册后端。" +
-                    "Inspector 使用 SerializedObject，多对象追加分别保留各自列表长度，新条目为 Clip/null/空 Key/空 BundleName/Weight=1；Undo 保留旧零权重，不随机抽选、不加载、不静默修复配置。"),
+                    "每组 Selection 为 Uniform/Weighted，Entries 每项 Source/Clip/ProjectId/Key/Weight；Uniform 忽略 Weight，Weighted 的 0 排除，所有加权值必须有限且非负。缺组、重名、非法枚举/权重或无候选返回失败，不停止已有播放。" +
+                    "Clip 为借用；Resource 使用正式 ProjectId 与 Key 逻辑地址，物理来源由已初始化的 Resource Catalog 决定。应用先 InitializeAsync，再通过 GetAudioClipProvider 装配领域地址；Library 只读取已初始化的 Current，不隐式初始化。旧 Resources/AssetBundle 配置保留序列化值但须显式迁移，Inspector 按逐条映射创建新 GUID 副本，不猜 BundleName、不覆盖原配置。ExternalProvider 必须代码 SetProvider，不自动注册后端。" +
+                    "Inspector 使用 SerializedObject，多对象追加分别保留各自列表长度，新条目为 Clip/null/空 ProjectId/空 Key/空 BundleName/Weight=1；Undo 保留旧零权重，不随机抽选、不加载、不静默修复配置。"),
                 HelpBlock.Paragraph("AudioGroupPlayer 组播放所有者", "绑定 library/groupName，再显式配置唯一 channelName；素材组与控制通道是两种身份。category 选择 Music/Voice/Sound 设置，channelMode 为 Exclusive/Overlap；空 persistenceId 不持久化，稳定 ID 只允许 ASCII 字母/数字及 . _ - /，多个实例不得共用通道名或持久化 ID。" +
                     "autoPlay 默认 Manual，FirstStart 在首次 Start 播放，EveryEnable 在 Start 及后续启用时播放；UnityEvent 可绑定无参 Play/Stop 或 PlayGroup(string)。停用停止所有自有播放与 pending，销毁释放通道，不控制其他组件。" +
                     "框架自有 Source 为 2D，借源保留 caller 空间曲线/滤镜，options 不配置空间距离/衰减。options 提供 Volume/Pitch/Loop/OutputRoute/AutoFade/Priority/AutoPauseWhenTimeScaleZero；Music 不自动启用 Loop，Music/Voice 忽略 Sound Priority。nullable PlaySoundMode 不被 Unity 序列化，Inspector Sound 继承全局策略。" +

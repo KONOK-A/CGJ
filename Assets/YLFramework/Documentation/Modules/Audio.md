@@ -141,21 +141,24 @@ AudioKit.PlaySound(soundClip, options);
 
 ```csharp
 using YLFramework.Services.Audio;
+using YLFramework.Services.Resource;
 
-var click = new AudioClipAddress(ResLoaderAudioClipProvider.Resources,
-    "resources://Audio/ui_click");
+// configuration 由应用显式持有，包含所需的 Resources Catalog 或正式 Bundle 快照。
+using var initialize = ResourceSystem.InitializeAsync(configuration);
+yield return initialize;
+var resources = initialize.TakeResult();
+var audio = resources.GetAudioClipProvider("game-audio");
+var click = new AudioClipAddress(audio, "ui/click");
 AudioKit.PlaySoundNamed(click);
 
-var music = new AudioClipAddress(ResLoaderAudioClipProvider.Resources,
-    "resources://Audio/bgm");
+var music = new AudioClipAddress(audio, "music/theme");
 var request = AudioKit.PlayMusicAsync(music,
     onStarted: (clip, originalHandle) => { /* 已提交原 Source.Play，可控制原句柄 */ });
 // 在所有者退出或需要撤销本次请求时：
 request.Cancel(); // Dispose 等价；不会物理取消共享加载或停止另一等待者
 
-// YL AB 使用明确的 owner Bundle，不是 XF/XFAB 的 ProjectName：
-var bundleAudio = new ResLoaderAudioClipProvider("my-audio-bundle");
-var voice = new AudioClipAddress(bundleAudio, "Assets/MyAudio/voice.wav");
+// 物理来源由同一 Catalog 决定，Audio 不接触 Bundle 名或依赖图。
+var voice = new AudioClipAddress(audio, "voice/intro");
 var voiceRequest = AudioKit.PlayVoiceAsync(voice);
 ```
 
@@ -174,15 +177,17 @@ Provider 配置和引用身份属于资源身份的一部分。只有同一个 P
 
 Exclusive 的最新有效命名请求撤销同拓扑旧 pending；旧曲在新资源/数据可提交前继续播放，加载失败不先截断旧曲。普通直接 Clip 播放、Stop、通道 Dispose、Sound off 和 Shutdown 同样约束 pending。Overlap 的等待者独立取消，共享 producer 继续。旧会话迟到结果只能归还原资源责任，不能进入新宿主、创建 Source 或投递新会话的开始/失败通知。后端没有物理取消能力时，Audio 不声称底层已经停止；永久不完成的 producer 可结束所有逻辑等待者，但只能由真实后端完成后归还生产责任。
 
-同步命名入口只承诺资产取得同步，不将后台解码/Streaming 伪装为同步加载；原 4.1 数据等待收尾仍适用。同一 Audio 缓存条目尚在异步取得时，同步取得明确抛错，不阻塞主线程或抢占在途 producer；使用异步等待者即可共享结果。跨 Audio 缓存的实际 ResLoader 在途同步限制仍遵守 Resource 后端原契约。
+同步命名入口只承诺资产取得同步，不将后台解码/Streaming 伪装为同步加载；原 4.1 数据等待收尾仍适用。同一 Audio 缓存条目尚在异步取得时，同步取得明确抛错，不阻塞主线程或抢占在途 producer；使用异步等待者即可共享结果。跨 Audio 缓存的 Resource 在途同步取得同样明确返回 `InProgress`。
 
 ### 租约、预加载与缓存
 
 - 直接 `AudioClip` 入口继续借用，调用方负责保活；Audio 不自行 `Destroy` 或 `Resources.UnloadAsset`。
-- `ResLoaderAudioClipProvider` 每个 producer 持有一个真正的 YL `ResLoader`，同时保活 Clip 及 Bundle 依赖。同步/异步取得后的物理释放交给 Loader/Resource，Audio 只归还 owner。
+- `ResourceAudioClipProvider` 捕获所属 ResourceSystem 与 ProjectId，每次成功取得独立 `AssetLease<AudioClip>`，包装为原 `AudioClipLease`。后端元数据按会话/项目复用，不另建资产缓存或 Bundle 引用表，也不隐式初始化 Resource。
+- Audio 缓存合并同 Provider/key 的使用；播放、显式预加载或 idle 条目保有一个真实后端租约，最后释放交还 Resource。当前 Resource 不额外缓存零租约 Clip，因此不存在双重 idle 永久持有。Resources 是共享 borrowed 来源，归零只清本系统记录，不调用 `UnloadAudioData/UnloadAsset/Destroy`；AB 最后一个资产/依赖 owner 归还才实际 `Unload(true)`。
 - 等待者、数据等待、循环/暂停、Music/Voice off 后待重播、Crossfade 尾轨和未被业务取消的 one-shot 都保留自己的有效责任；Source 闲置池不持有 Clip 资源。
 - `AudioKit.AcquireClip(address)` 提供同步预加载租约，必须由调用方 `Dispose`。显式租约可跨 Audio Shutdown 继续由调用方保活；关闭的缓存不再接纳它进入闲置缓存，最终 Dispose 才归还其 owner。
 - `ClipCacheCapacity` 限制闲置条目数，`ClipCacheIdleSeconds` 使用 unscaled 时钟；两个值都大于 0 才缓存。`ClearClipCache()` 只释放当下闲置条目。缩容、到期与清缓存不卸载活跃责任，淘汰释放重入后会重新检查条目是否已被取得。Shutdown 释放闲置缓存；不采用 XF 固定 600 秒策略。
+- 应用关闭先结束 Audio 播放/缓存并归还显式 Clip 租约，再 `ResourceSystem.ShutdownAsync()`；尚有播放、显式租约或 idle 缓存时 Resource 返回可恢复的 Busy，不强制销毁 Clip。Audio Shutdown 后的迟到结果由原 Resource 请求交付给已关闭缓存并立即归还，不会创建新 Audio 宿主。Resource 会话退出则失效请求并继续 native 收尾；旧 Provider 不重新绑定新会话。
 
 ```csharp
 AudioKit.ClipCacheCapacity = 4;
@@ -208,11 +213,13 @@ XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/
 | Entry Source | 必要配置与责任 |
 |---|---|
 | Clip | 绑定外部 AudioClip；继续借用，外部 owner 保活 |
-| Resources | Key 如 `resources://Audio/ui_click`；BundleName 留空，使用正式 ResLoader provider |
-| AssetBundle | Key 为完整资源名，BundleName 为 YL 明确 owner Bundle，不是 XFAB ProjectName；同 Library/Bundle 复用 provider 身份 |
+| Resource | ProjectId 如 `game-audio`，Key 为 Catalog 逻辑地址如 `ui/click`；Resources/AB 由正式目录决定，Library 只读取已显式初始化的 ResourceSystem |
+| Resources / AssetBundle（旧值） | 仅保留旧序列化值供一次性显式迁移，不参与运行时选择；不把 BundleName 解释为 ProjectId，不回退旧 ResLoader |
 | ExternalProvider | Key 由显式后端定义；代码向 GroupPlayer.SetProvider 或 Library.TrySelect 传入同一个 provider 实例，不隐式回退/注册后端 |
 
 空 Clip/空 key、不可用定位不参与抽选；缺组、空/全坏组、重名组、非法选择/来源枚举或 Weighted 的负数/NaN/Infinity 权重返回失败，不停止旧播放。命名加载失败/迟到/取消继续使用 pending、资源租约与最新独占提交契约；异步错误查看 `LastRequest.Error/EndReason`。播放配置不合法仍按正式 API 抛错，不静默修复字段。
+
+旧配置通过 Library Inspector 的“迁移旧资源定位到新配置副本”入口逐条填写经过核对的 ProjectId 与逻辑地址。工具要求每个旧条目都有明确映射，只向既有 Assets 目录创建新 GUID 的 `.asset`，拒绝覆盖或遗留 `.meta`；原配置、直接 Clip、外部 Provider、组名、权重及选择规则不变。`BundleName` 原字段和旧枚举数字保留以读取既有配置，但不提供永久运行时转发。当前 Audio Provider 的 string key 表达主资产逻辑地址；转换遇到 SubAsset 映射会明确拒绝，不会静默丢弃身份。
 
 ### Inspector 最短配置
 
@@ -868,7 +875,7 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 ## 业务接入
 
-原游戏业务资源加载仍由 XFAB 提供 Clip，再以直接 Clip 借用方式提交 AudioKit，不自动改走命名 Provider。统一 Audio 的命名入口可使用正式 Resources/ResLoader Provider，XFAB Provider 是单独选择的可选适配，不自动接管游戏共享资源。`MainModule` 的全局 10 帧配置保留，UI 点击与结算通过 options 显式 EveryOne。点击组件迁为框架 AudioEmitter，BGM 组件迁为 AudioMusicPlayer；Game 的 Gaming 入口取得该组件启动，退出停止自己的 BGM。首次启动的旧 XF 音量键 `AudioConfigVolume:Music` 迁移仍只在业务层。
+原游戏业务资源加载仍由 XFAB 提供 Clip，再以直接 Clip 借用方式提交 AudioKit，不自动改走命名 Provider。正式命名入口使用 ResourceAudioClipProvider，XFAB Provider 是单独选择的可选适配，不自动接管游戏共享资源。`MainModule` 的全局 10 帧配置保留，UI 点击与结算通过 options 显式 EveryOne。点击组件迁为框架 AudioEmitter，BGM 组件迁为 AudioMusicPlayer；Game 的 Gaming 入口取得该组件启动，退出停止自己的 BGM。首次启动的旧 XF 音量键 `AudioConfigVolume:Music` 迁移仍只在业务层。
 
 `Art/Prefabs/3DAudioPlayer.prefab` 是无新 Clip、无新增业务引用的固定位置 AudioEmitter 模板；场景 Listener 由业务保持。业务接线与真实 Main/Start/设置/Gaming 流程由独立业务测试和主代理验证，不以单次按钮测试代替完整流程。
 
@@ -876,7 +883,7 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 - [`Tests/EditMode/Audio/`](../../Tests/EditMode/Audio/)：设置六键/默认/重建退订、临时 Mute 分类隔离/池复用/最新音量恢复、只读查询与失效/缺失资源的安全返回、初始与运行时参数校验、倍率截断与分类音量、去重边界与提交/代次清理、随机有效 Clip、快照、句柄隔离、非创建读取、宿主清理与池边界，以及 Action 拒播/Stop/取消/Reset/重入。
 - [`Tests/PlayMode/Audio/`](../../Tests/PlayMode/Audio/)：真实播放进度、暂停冻结/静音推进/循环/Pitch、静音中创建与自然完成、随机回调的实际 Clip 与原句柄、同步开始/完成回调的控制与重入、运行中倍率与请求隔离、待播放请求修改与开关完整重播、显式 Stop、并发/池复用、音量、Sound/Voice 3D→2D 重置、语音分类隔离及同帧重播目标校验、目标移动/停用/销毁/场景卸载、回调替换/Shutdown，以及 Action 序列等待。
-- 独立 AB 所有权验收是跨模式配对流程：先运行 EditMode `AudioNamedBundlePreparationTests.BuildIndependentAudioBundlesForRuntimeOwnershipVerification`，再运行 PlayMode `AudioNamedResourcePlaybackTests.RealAssetBundleSyncAsyncDependenciesAndFinalPhysicalUnload`。准备阶段在 `Tests/Fixtures/Audio/Bundle-<id>` 与 Temp/kilo 下构建独立资产/主 Bundle/依赖，消费阶段验证真实加载和最终物理卸载，并在 finally 清理本 Fixture 及四个 SessionState 键。尚未消费时重复准备会拒绝覆盖；只反复运行 EditMode 不等于完成该验收。有效待消费数据应交给配对测试，不清键或删除资产制造通过；失效/中断残留须先核对路径及所有权，不涉及正式游戏 Bundle。
+- 独立 AB 所有权验收由 EditMode `AudioResourceBundleTests` 自动构建正式 ResourceProject/BuildMap/Catalog/发布，进入真实 Play 后验证 Clip/共享依赖、跨通道与 crossfade、取消/Audio Shutdown/Resource 退出和最终 native 卸载，再恢复原场景并清理其登记的夹具、workspace、发布及 SessionState。跨 Domain Reload 时按具体方法运行并读取叶结果，不把 MCP 发现树总数当成执行数；不涉及正式游戏 Bundle。
 - 旧 AudioLoader 包装专属测试随已删除功能移除；命名 Provider/资源租约另有正式回归，播放、属性和清理断言迁为新契约，不冻结旧 40 公共类型。测试源码存在不等于已通过，结果以当前 Unity 实际编译和运行记录为准。
 - `AudioContinuousPlayTests` 使用真实 Enter/Exit Play，保持同一脚本域与正常 Scene Reload，跨轮验证旧请求/通道/订阅/加载责任隔离。原 XF Logger 的临时原生日志隔离只属于获授权验收 fixture，结束恢复原 handler，不表示修复原包或全框架重复会话。
 - `Tests/Core/Acceptance/AudioAcceptanceEntry` 与 `AudioGameAcceptanceFlow` 是 Editor/Windows64 Mono 共用的显式验收入口，不是产品自动启动入口、不随默认 ExportRoots 分发。自有场景挂 Camera/Listener 与正式 GroupPlayer，配置 Library 的独立 Resources 信号、另两份直接 Clip、MixerConfig 与 ResourceKey；直接 Clip 不复用命名资源实例，避免用场景借用引用掩盖资源归还。临时场景与素材仅供构建，结束清理，产物路径及本轮结果见 [4.5 专项](../../../../.kilo/plans/xf-yl-4-audio.md#9-45-综合验收与待确认门禁2026-10-12)。Player 默认 Audio 模式，`-audio45-game` 走原 Main/XFAB，`-audio45-listen` 延长观察并显示阶段；Listener/DSP 采样、系统出声和听感分层报告，自动 PASS 不代表人工听感通过。

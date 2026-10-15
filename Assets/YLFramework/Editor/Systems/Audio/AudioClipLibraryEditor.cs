@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Services.Audio;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Editor.Audio
 {
@@ -57,10 +58,12 @@ namespace YLFramework.Editor.Audio
                                 EditorGUILayout.PropertyField(entry.FindPropertyRelative("Clip"));
                             if (source.hasMultipleDifferentValues || source.intValue != (int)AudioClipSource.Clip)
                                 EditorGUILayout.PropertyField(entry.FindPropertyRelative("Key"));
-                            if (AudioInspectorUtility.ShowWhen(source, (int)AudioClipSource.AssetBundle))
-                                EditorGUILayout.PropertyField(entry.FindPropertyRelative("BundleName"), new GUIContent("Owner Bundle Name"));
-                            else if (!string.IsNullOrEmpty(entry.FindPropertyRelative("BundleName").stringValue) || entry.FindPropertyRelative("BundleName").hasMultipleDifferentValues)
-                                EditorGUILayout.PropertyField(entry.FindPropertyRelative("BundleName"), new GUIContent("Stored Bundle Name"));
+                            if (AudioInspectorUtility.ShowWhen(source, (int)AudioClipSource.Resource))
+                                EditorGUILayout.PropertyField(entry.FindPropertyRelative("ProjectId"));
+                            if (source.hasMultipleDifferentValues || source.intValue == (int)AudioClipSource.AssetBundle ||
+                                !string.IsNullOrEmpty(entry.FindPropertyRelative("BundleName").stringValue))
+                                using (new EditorGUI.DisabledScope(true))
+                                    EditorGUILayout.PropertyField(entry.FindPropertyRelative("BundleName"), new GUIContent("Legacy Bundle Name"));
                             if (AudioInspectorUtility.ShowWhen(selection, (int)AudioClipSelectionMode.Weighted))
                                 EditorGUILayout.PropertyField(entry.FindPropertyRelative("Weight"));
                         }
@@ -70,6 +73,8 @@ namespace YLFramework.Editor.Audio
             }
             if (GUILayout.Button("Add Group")) AddGroup(serializedObject);
             serializedObject.ApplyModifiedProperties();
+            if (targets.Length == 1 && GUILayout.Button("迁移旧资源定位到新配置副本"))
+                AudioClipLibraryMigration.Open((AudioClipLibrary)target);
             foreach (var selected in targets)
                 foreach (var warning in GetWarnings((AudioClipLibrary)selected))
                     EditorGUILayout.HelpBox(selected.name + ": " + warning, MessageType.Warning);
@@ -111,6 +116,7 @@ namespace YLFramework.Editor.Audio
                     entry.FindPropertyRelative("Source").intValue = (int)AudioClipSource.Clip;
                     entry.FindPropertyRelative("Clip").objectReferenceValue = null;
                     entry.FindPropertyRelative("Key").stringValue = "";
+                    entry.FindPropertyRelative("ProjectId").stringValue = "";
                     entry.FindPropertyRelative("BundleName").stringValue = "";
                     entry.FindPropertyRelative("Weight").floatValue = 1f;
                     entry.isExpanded = true;
@@ -161,7 +167,7 @@ namespace YLFramework.Editor.Audio
                     foreach (var entry in group.Entries)
                     {
                         if (entry == null) continue;
-                        if ((uint)entry.Source > (uint)AudioClipSource.ExternalProvider)
+                        if ((uint)entry.Source > (uint)AudioClipSource.Resource)
                         { warnings.Add(label + "Unknown Source prevents selection."); continue; }
                         var weighted = group.Selection == AudioClipSelectionMode.Weighted;
                         if (weighted && (!AudioSoundOptions.IsFinite(entry.Weight) || entry.Weight < 0f))
@@ -170,16 +176,15 @@ namespace YLFramework.Editor.Audio
                         if (entry.Source == AudioClipSource.Clip) selectable = entry.Clip;
                         else if (!string.IsNullOrWhiteSpace(entry.Key))
                         {
-                            var resources = entry.Key.StartsWith("resources://", StringComparison.OrdinalIgnoreCase) || entry.Key.StartsWith("resources/", StringComparison.OrdinalIgnoreCase);
-                            if (entry.Source == AudioClipSource.Resources)
+                            if (AudioClipLibraryMigration.IsLegacy(entry))
                             {
-                                selectable = resources && string.IsNullOrEmpty(entry.BundleName);
-                                if (!selectable) warnings.Add(label + "Resources requires resources:// or resources/ Key and an empty BundleName.");
+                                warnings.Add(label + "Legacy Resources/AssetBundle entry requires explicit ProjectId/address migration to a new copy; BundleName is never inferred.");
                             }
-                            else if (entry.Source == AudioClipSource.AssetBundle)
+                            else if (entry.Source == AudioClipSource.Resource)
                             {
-                                selectable = !resources && !string.IsNullOrWhiteSpace(entry.BundleName);
-                                if (!selectable) warnings.Add(label + "AssetBundle requires an owner BundleName and a non-Resources Key (not an XFAB project name).");
+                                try { _ = new ResourceAddress(entry.ProjectId, entry.Key); selectable = string.IsNullOrEmpty(entry.BundleName); }
+                                catch (ArgumentException) { }
+                                if (!selectable) warnings.Add(label + "Resource requires a valid ProjectId, logical address and no legacy BundleName. Initialize ResourceSystem before playback.");
                             }
                             else
                             {

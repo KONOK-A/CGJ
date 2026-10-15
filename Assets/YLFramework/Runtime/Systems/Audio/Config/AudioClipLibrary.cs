@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Services.Audio
 {
     /// <summary>素材定位方式；ExternalProvider 必须由调用方显式提供后端，不自动注册 XFAB。</summary>
-    public enum AudioClipSource { Clip, Resources, AssetBundle, ExternalProvider }
+    public enum AudioClipSource { Clip, Resources, AssetBundle, ExternalProvider, Resource }
     /// <summary>组内抽选规则；Weighted 的零权重排除条目。</summary>
     public enum AudioClipSelectionMode { Uniform, Weighted }
 
-    /// <summary>直接借用的 Clip 或完整命名资源定位。BundleName 是 YL owner Bundle，不是 XFAB ProjectName。</summary>
+    /// <summary>直接借用的 Clip 或 ProjectId/逻辑地址。旧 Resources/AssetBundle 枚举值仅供显式迁移读取。</summary>
     [Serializable]
     public sealed class AudioClipEntry
     {
@@ -17,10 +18,12 @@ namespace YLFramework.Services.Audio
         public AudioClipSource Source;
         /// <summary>仅 Clip 模式使用，调用方负责保活，不自动卸载。</summary>
         public AudioClip Clip;
-        /// <summary>命名模式的完整后端 key；Resources 必须包含明确前缀。</summary>
+        /// <summary>Resource 模式的逻辑地址；ExternalProvider 模式为该后端的完整 key。</summary>
         public string Key;
-        /// <summary>仅 AssetBundle 模式使用的 YL owner Bundle 名，不是 ProjectName。</summary>
-        public string BundleName;
+        /// <summary>Resource 模式的稳定资源项目身份，不是旧 BundleName 或 XFAB ProjectName。</summary>
+        public string ProjectId;
+        /// <summary>保留既有序列化值供一次性显式转换；运行时不使用或推断其含义。</summary>
+        [HideInInspector] public string BundleName;
         /// <summary>Weighted 模式的有限非负相对权重；0 排除，Uniform 忽略。</summary>
         public float Weight = 1f;
     }
@@ -55,11 +58,10 @@ namespace YLFramework.Services.Audio
     {
         /// <summary>序列化素材组；不包含控制通道、音源或播放资源租约。</summary>
         public List<AudioClipGroup> Groups = new List<AudioClipGroup>();
-        private readonly Dictionary<string, ResLoaderAudioClipProvider> mBundles = new Dictionary<string, ResLoaderAudioClipProvider>(StringComparer.Ordinal);
 
         /// <summary>精确按组名抽选一次。缺组、重名、非法权重或定位失败返回 false，不创建播放/通道。</summary>
         /// <remarks>均匀模式忽略 Weight；空 Clip/空 key 为不可选条目。非法枚举、负数/非有限加权权重使整组失败。
-        /// ExternalProvider 只使用显式传入的实例；Resources 要求 resources:// 或 resources/ 前缀。</remarks>
+        /// ExternalProvider 只使用显式传入的实例；Resource 必须先显式初始化 ResourceSystem。旧配置须显式迁移。</remarks>
         public bool TrySelect(string groupName, out AudioClipSelection selection, IAudioClipProvider externalProvider = null)
         {
             selection = default;
@@ -77,7 +79,7 @@ namespace YLFramework.Services.Audio
             foreach (var entry in group.Entries)
             {
                 if (entry == null) continue;
-                if ((uint)entry.Source > (uint)AudioClipSource.ExternalProvider ||
+                if ((uint)entry.Source > (uint)AudioClipSource.Resource ||
                     weighted && (!AudioSoundOptions.IsFinite(entry.Weight) || entry.Weight < 0)) return false;
                 if (CanSelect(entry, externalProvider)) total += weighted ? entry.Weight : 1;
             }
@@ -98,13 +100,8 @@ namespace YLFramework.Services.Audio
             else
             {
                 IAudioClipProvider provider = externalProvider;
-                if (selected.Source == AudioClipSource.Resources) provider = ResLoaderAudioClipProvider.Resources;
-                else if (selected.Source == AudioClipSource.AssetBundle)
-                {
-                    if (!mBundles.TryGetValue(selected.BundleName, out var bundle))
-                        mBundles.Add(selected.BundleName, bundle = new ResLoaderAudioClipProvider(selected.BundleName));
-                    provider = bundle;
-                }
+                if (selected.Source == AudioClipSource.Resource)
+                    provider = ResourceSystem.Current.GetAudioClipProvider(selected.ProjectId);
                 selection = new AudioClipSelection(null, new AudioClipAddress(provider, selected.Key));
             }
             return true;
@@ -114,10 +111,13 @@ namespace YLFramework.Services.Audio
         {
             if (entry.Source == AudioClipSource.Clip) return entry.Clip;
             if (string.IsNullOrWhiteSpace(entry.Key)) return false;
-            var resources = entry.Key.StartsWith("resources://", StringComparison.OrdinalIgnoreCase) || entry.Key.StartsWith("resources/", StringComparison.OrdinalIgnoreCase);
-            if (entry.Source == AudioClipSource.Resources) return resources && string.IsNullOrEmpty(entry.BundleName);
-            if (entry.Source == AudioClipSource.AssetBundle) return !resources && !string.IsNullOrWhiteSpace(entry.BundleName);
-            return externalProvider != null;
+            if (entry.Source == AudioClipSource.ExternalProvider) return externalProvider != null;
+            if (entry.Source != AudioClipSource.Resource || !string.IsNullOrEmpty(entry.BundleName)) return false;
+            var system = ResourceSystem.Current;
+            if (system == null || !system.IsAvailable) return false;
+            try { _ = new ResourceAddress(entry.ProjectId, entry.Key); system.GetAudioClipProvider(entry.ProjectId); return true; }
+            catch (ArgumentException) { return false; }
+            catch (ResourceException) { return false; }
         }
     }
 }

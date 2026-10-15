@@ -27,8 +27,11 @@ namespace YLFramework.Core.Examples
         // yield return initialize;
         // var resources = initialize.TakeResult();
         // resources.BindCoreResourceProvider();
+        // 命名 Audio 显式取得同一资源会话的领域 Provider：
+        // var audio = resources.GetAudioClipProvider({ProjectName});
+        // var clip = new global::YLFramework.Services.Audio.AudioClipAddress(audio, ""audio/theme"");
         // yield return global::YLFramework.Core.ModuleManager.StartUpModule<{ModuleName}>();
-        // 应用退出先关闭 Module，再按实际所有权清理实例缓存和 Scene，最后 ShutdownAsync。
+        // 应用退出先关闭 Module/Audio，归还显式 Clip 租约，再清理实例缓存和 Scene，最后 ShutdownAsync。
         public override string ProjectName => {ProjectName};
         public override bool BaseModule => {BaseModule};
         public override string DefaultStartUpScene => {DefaultStartUpScene};

@@ -106,12 +106,13 @@ namespace YLFramework.Tests.Audio
             group.Selection = AudioClipSelectionMode.Weighted;
             group.Entries[0].Weight = 0;
             Assert.IsFalse(mLibrary.TrySelect("direct", out _));
-            group.Entries.Add(new AudioClipEntry { Source = AudioClipSource.Resources, Key = "resources://audio/selected", Weight = 100 });
+            var provider = new Provider { Clip = mClip };
+            group.Entries.Add(new AudioClipEntry { Source = AudioClipSource.ExternalProvider, Key = "audio/selected", Weight = 100 });
             for (var i = 0; i < 20; i++)
             {
-                Assert.IsTrue(mLibrary.TrySelect("direct", out var selected));
+                Assert.IsTrue(mLibrary.TrySelect("direct", out var selected, provider));
                 Assert.IsTrue(selected.IsNamed);
-                Assert.AreSame(ResLoaderAudioClipProvider.Resources, selected.Address.Provider);
+                Assert.AreSame(provider, selected.Address.Provider);
             }
             group.Entries.RemoveAt(1);
             group.Selection = AudioClipSelectionMode.Uniform;
@@ -149,13 +150,12 @@ namespace YLFramework.Tests.Audio
         }
 
         [Test]
-        public void BundleUsesExplicitOwnerAndReusesItsProviderIdentity()
+        public void LegacyBundleNeverGuessesProjectIdentityOrCreatesAProvider()
         {
             mLibrary.Groups[0].Entries[0] = new AudioClipEntry { Source = AudioClipSource.AssetBundle, Key = "ambience.wav", BundleName = "ambience" };
-            Assert.IsTrue(mLibrary.TrySelect("direct", out var first));
-            Assert.IsTrue(mLibrary.TrySelect("direct", out var second));
-            Assert.AreSame(first.Address.Provider, second.Address.Provider);
-            Assert.AreEqual("ambience", ((ResLoaderAudioClipProvider)first.Address.Provider).OwnerBundleName);
+            Assert.IsFalse(mLibrary.TrySelect("direct", out _));
+            Assert.IsFalse(mLibrary.TrySelect("direct", out _));
+            Assert.IsNull(YLFramework.Services.Resource.ResourceSystem.Current);
         }
 
         [Test]

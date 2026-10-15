@@ -25,7 +25,7 @@ namespace YLFramework.Editor
                 Guide("foundation", "Foundation 基础机制", "按需使用池、事件、绑定、计时与序列化，不要求创建 Module 或公共 Root。",
                     new[] { typeof(Core.Pool.ObjectPool<>), typeof(Events.EventBus), typeof(Binding.BindableProperty<>),
                         typeof(Timing.Timer), typeof(Timing.TimerScope), typeof(SerializedDictionary<,>) },
-                    HelpBlock.Paragraph("引用与所有权", "业务 asmdef 显式引用 YLFramework.Runtime。Foundation与Core是同主体的职责分区；Core 已通过窄合同消费新 YL Resource，旧 Resource/Audio 尚待后续迁移；ObjectPool<T>的借用对象由调用方归还；" +
+                    HelpBlock.Paragraph("引用与所有权", "业务 asmdef 显式引用 YLFramework.Runtime。Foundation与Core是同主体的职责分区；Core 与 Audio 已通过消费合同接入新 YL Resource，旧 Resource 整体退役另批处理；ObjectPool<T>的借用对象由调用方归还；" +
                         "EventBus 的 IUnRegister 令牌由订阅所有者注销，独立 EventBus 实例须自行 Dispose。BindableProperty<T> 的监听沿同一注销协议。" +
                         "Timer/TimerScope 管理到期回调与生命周期，不替代 Action 的逐帧插值/组合。"),
                     HelpBlock.Paragraph("编辑与导航", "SerializedDictionary<TKey,TValue> 由普通 Editor 的现有 Drawer 编辑并提示重复键等问题。" +

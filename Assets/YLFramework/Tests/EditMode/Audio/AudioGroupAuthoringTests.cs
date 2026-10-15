@@ -12,6 +12,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using YLFramework.Editor.Audio;
 using YLFramework.Services.Audio;
+using YLFramework.Services.Resource;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.Audio
@@ -68,6 +69,40 @@ namespace YLFramework.Tests.Audio
         }
 
         [Test]
+        public void ExplicitMigrationCreatesIndependentCopyAndNeverGuessesLegacyBundleIdentity()
+        {
+            var source = Library("Legacy");
+            var clip = Own(AudioClip.Create("BorrowedMigration", 100, 1, 1000, false));
+            AssetDatabase.CreateAsset(clip, _folder + "/clip.asset");
+            var old = new AudioClipEntry { Source = AudioClipSource.AssetBundle, BundleName = "not-a-project", Key = "old.wav", Weight = 2f };
+            source.Groups.Add(new AudioClipGroup { Name = "Mix", Selection = AudioClipSelectionMode.Weighted,
+                Entries = new() { new AudioClipEntry { Clip = clip, Weight = 3f }, old } });
+            AssetDatabase.SaveAssetIfDirty(source);
+            var before = EditorJsonUtility.ToJson(source);
+            var type = typeof(AudioClipLibraryEditor).Assembly.GetType("YLFramework.Editor.Audio.AudioClipLibraryMigration");
+            Assert.That(type, Is.Not.Null, "Legacy identity requires an explicit copy-only conversion entry.");
+            var method = type.GetMethod("CreateCopy");
+            var path = _folder + "/Converted.asset";
+            var empty = new Dictionary<AudioClipEntry, ResourceAddress>();
+            var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() => method.Invoke(null, new object[] { source, path, empty }));
+            Assert.That(failure.InnerException, Is.TypeOf<ArgumentException>());
+            Assert.That(AssetDatabase.LoadMainAssetAtPath(path), Is.Null);
+            var mapping = new Dictionary<AudioClipEntry, ResourceAddress> { [old] = new ResourceAddress("new-audio", "music/theme") };
+            var copy = Own((AudioClipLibrary)method.Invoke(null, new object[] { source, path, mapping }));
+            Assert.That(EditorJsonUtility.ToJson(source), Is.EqualTo(before));
+            Assert.That(AssetDatabase.AssetPathToGUID(path), Is.Not.EqualTo(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(source))));
+            Assert.That(AssetDatabase.GetAssetPath(copy.Groups[0].Entries[0].Clip), Is.EqualTo(_folder + "/clip.asset"));
+            Assert.That(copy.Groups[0].Selection, Is.EqualTo(AudioClipSelectionMode.Weighted));
+            Assert.That(copy.Groups[0].Entries[1].Source, Is.EqualTo(AudioClipSource.Resource));
+            Assert.That(copy.Groups[0].Entries[1].ProjectId, Is.EqualTo("new-audio"));
+            Assert.That(copy.Groups[0].Entries[1].Key, Is.EqualTo("music/theme"));
+            Assert.That(copy.Groups[0].Entries[1].BundleName, Is.Empty);
+            Assert.That(copy.Groups[0].Entries[1].Weight, Is.EqualTo(2f));
+            Assert.Throws<System.Reflection.TargetInvocationException>(() => method.Invoke(null, new object[] { source, path, mapping }));
+            Assert.That(AudioClipLibraryEditor.GetWarnings(copy), Is.Empty, "Editor validates identity without starting a runtime session.");
+        }
+
+        [Test]
         public void LibraryAssetRoundTripPreservesSelectionAddressesAndClipReferences()
         {
             var library = Library("Library");
@@ -80,15 +115,16 @@ namespace YLFramework.Tests.Audio
                 group.FindPropertyRelative("Name").stringValue = "UI/Click";
                 group.FindPropertyRelative("Selection").intValue = (int)AudioClipSelectionMode.Weighted;
                 serialized.ApplyModifiedProperties();
-                for (var i = 0; i < 4; i++) AudioClipLibraryEditor.AddEntry(serialized, 0);
+                for (var i = 0; i < 5; i++) AudioClipLibraryEditor.AddEntry(serialized, 0);
                 var entries = serialized.FindProperty("Groups").GetArrayElementAtIndex(0).FindPropertyRelative("Entries");
-                for (var i = 0; i < 4; i++)
+                for (var i = 0; i < 5; i++)
                 {
                     var entry = entries.GetArrayElementAtIndex(i);
                     entry.FindPropertyRelative("Source").intValue = i;
                     entry.FindPropertyRelative("Weight").floatValue = i == 0 ? 0f : i;
                     entry.FindPropertyRelative("Key").stringValue = i == 1 ? "resources://Audio/Click" : "Audio/Click";
                     entry.FindPropertyRelative("BundleName").stringValue = i == 2 ? "audio/ui" : "";
+                    entry.FindPropertyRelative("ProjectId").stringValue = i == 4 ? "audio-ui" : "";
                 }
                 entries.GetArrayElementAtIndex(0).FindPropertyRelative("Clip").objectReferenceValue = clip;
                 serialized.ApplyModifiedProperties();
@@ -103,13 +139,15 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(typeof(AudioClipLibrary), reopened.GetType());
             Assert.AreEqual("UI/Click", reopened.Groups[0].Name);
             Assert.AreEqual(AudioClipSelectionMode.Weighted, reopened.Groups[0].Selection);
-            CollectionAssert.AreEqual(new[] { 0f, 1f, 2f, 3f }, reopened.Groups[0].Entries.Select(entry => entry.Weight));
-            CollectionAssert.AreEqual(new[] { AudioClipSource.Clip, AudioClipSource.Resources, AudioClipSource.AssetBundle, AudioClipSource.ExternalProvider },
+            CollectionAssert.AreEqual(new[] { 0f, 1f, 2f, 3f, 4f }, reopened.Groups[0].Entries.Select(entry => entry.Weight));
+            CollectionAssert.AreEqual(new[] { AudioClipSource.Clip, AudioClipSource.Resources, AudioClipSource.AssetBundle, AudioClipSource.ExternalProvider, AudioClipSource.Resource },
                 reopened.Groups[0].Entries.Select(entry => entry.Source));
             Assert.AreEqual(_folder + "/clip.asset", AssetDatabase.GetAssetPath(reopened.Groups[0].Entries[0].Clip));
             Assert.AreEqual("resources://Audio/Click", reopened.Groups[0].Entries[1].Key);
             Assert.AreEqual("audio/ui", reopened.Groups[0].Entries[2].BundleName);
             Assert.AreEqual("Audio/Click", reopened.Groups[0].Entries[3].Key);
+            Assert.AreEqual("audio-ui", reopened.Groups[0].Entries[4].ProjectId);
+            Assert.AreEqual("Audio/Click", reopened.Groups[0].Entries[4].Key);
         }
 
         [Test]
@@ -301,7 +339,7 @@ namespace YLFramework.Tests.Audio
             var warnings = AudioClipLibraryEditor.GetWarnings(library);
             Assert.That(warnings.Any(message => message.Contains("Duplicate")));
             Assert.That(warnings.Any(message => message.Contains("finite and nonnegative")));
-            Assert.That(warnings.Any(message => message.Contains("resources://")));
+            Assert.That(warnings.Any(message => message.Contains("explicit ProjectId/address migration")));
             Assert.That(warnings.Any(message => message.Contains("No selectable")));
             Assert.AreEqual(before, EditorJsonUtility.ToJson(library));
             Assert.AreEqual(random, UnityEngine.Random.state);

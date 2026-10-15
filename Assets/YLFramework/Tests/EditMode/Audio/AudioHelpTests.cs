@@ -57,7 +57,7 @@ namespace YLFramework.Tests.Audio
                 typeof(PlaySoundExtension), typeof(AudioKitDiagnostics), typeof(AudioKitDebugWindow),
                 typeof(AudioOutputRoute), typeof(AudioOutputRoute.RouteMode), typeof(AudioMixerConfig),
                 typeof(AudioMixerControl), typeof(AudioMixerController), typeof(AudioChannel), typeof(AudioCategory), typeof(AudioChannelMode),
-                typeof(AudioClipAddress), typeof(AudioClipLease), typeof(IAudioClipProvider), typeof(ResLoaderAudioClipProvider),
+                typeof(AudioClipAddress), typeof(AudioClipLease), typeof(IAudioClipProvider), typeof(ResourceAudioClipProvider),
                 typeof(AudioPlayRequest), typeof(AudioPlayState), typeof(AudioPlayEnd), typeof(AudioClipLibrary), typeof(AudioClipGroup),
                 typeof(AudioClipEntry), typeof(AudioClipSource), typeof(AudioClipSelectionMode), typeof(AudioClipSelection), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay)
             };
@@ -191,7 +191,7 @@ namespace YLFramework.Tests.Audio
                 CollectionAssert.Contains(components.RelatedTypes, type);
                 CollectionAssert.Contains(components.FeaturedTypes, type);
             }
-            foreach (var contract in new[] { "AudioClipLibrary", "素材组与控制通道是两种身份", "Uniform/Weighted", "resources://", "YL owner BundleName",
+            foreach (var contract in new[] { "AudioClipLibrary", "素材组与控制通道是两种身份", "Uniform/Weighted", "ProjectId", "逻辑地址", "显式迁移",
                          "ExternalProvider", "SetProvider", "空 persistenceId 不持久化", "Manual", "FirstStart", "EveryEnable", "PlayGroup(string)",
                          "停用停止所有自有播放与 pending", "nullable PlaySoundMode 不被 Unity 序列化", "不随机抽选", "Prefab Override" })
                 StringAssert.Contains(contract, components.SearchText);

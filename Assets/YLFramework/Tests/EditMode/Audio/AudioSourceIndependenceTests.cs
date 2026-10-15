@@ -30,10 +30,9 @@ namespace YLFramework.Tests.Audio
             // Audio 必须全量收集，避免新增正式组件被固定文件清单漏掉；其他目录仅取真实依赖闭包。
             var directories = new[]
             {
-                "Systems/Audio", "Systems/Action", "Foundation/Pool/Collections", "Foundation/Pool/Object",
-                "Foundation/Pool/Abstractions", "Foundation/Events/Subscriptions", "Foundation/Events/Internal",
-                "Systems/Resource/Implementations", "Systems/Resource/Utilities", "Utilities/Table",
-                "Utilities/ZipTool/ICSharpCode.SharpZipLib"
+                "Systems/Audio", "Systems/Action", "Foundation", "Core/ResourceAccess",
+                "Systems/Resource/Catalog", "Systems/Resource/Loading", "Systems/Resource/Lifetime",
+                "Systems/Resource/Sources", "Systems/Resource/Instances", "Systems/Resource/Scenes", "Systems/Resource/Integration"
             };
             var files = new[]
             {
@@ -46,24 +45,18 @@ namespace YLFramework.Tests.Audio
                 "Foundation/Pool/Object/SafeObjectPool.cs",
                 "Foundation/Binding/BindableProperty.cs", "Foundation/Binding/Prefs/PlayerPrefsProperty.cs",
                 "Foundation/Binding/Prefs/PlayerPrefsBoolProperty.cs", "Foundation/Binding/Prefs/PlayerPrefsFloatProperty.cs",
-                "Systems/Resource/Framework/IResCreator.cs", "Systems/Resource/Framework/ResFactory.cs", "Systems/Resource/Framework/ResKey.cs",
-                "Systems/Resource/Framework/ResTable.cs", "Systems/Resource/Framework/ServiceManager.cs",
-                "Systems/Resource/Framework/Res/IRes.cs", "Systems/Resource/Framework/Res/Res.cs",
-                "Systems/Resource/Framework/ResLoader/IResLoader.cs", "Systems/Resource/Framework/ResLoader/ResLoader.cs",
+                "Systems/Resource/ResourceSystem.cs", "Systems/Resource/ResourceConfiguration.cs",
                 "Utilities/Extensions/Unity/ComponentExtension.cs", "Utilities/Extensions/Unity/GameObjectExtension.cs",
                 "Utilities/Extensions/Unity/ObjectExtension.cs", "Utilities/Extensions/Math/VectorExtension.cs",
                  "Foundation/Utilities/LayerMaskUtility.cs"
             };
-            var lifecycle = new[] { "UnRegisterTriggerBase.cs", "UnRegisterExtension.cs", "OnDisableUnRegisterTrigger.cs",
-                "OnDestroyUnRegisterTrigger.cs", "OnCurSceneUnLoadUnRegisterTrigger.cs" };
             var sources = directories.SelectMany(directory => Directory.GetFiles(Path.Combine(runtime, directory),
                     "*.cs", SearchOption.AllDirectories))
-                .Where(path => !lifecycle.Contains(Path.GetFileName(path)))
                 .Concat(files.Select(file => Path.Combine(runtime, file)))
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => path, StringComparer.Ordinal).ToArray();
             foreach (var source in sources) Assert.That(File.Exists(source), Is.True, source);
             Assert.That(sources.All(source => IsInsideFolder(source, runtime) &&
-                !IsInsideFolder(source, Path.Combine(runtime, "Core"))), Is.True);
+                (!IsInsideFolder(source, Path.Combine(runtime, "Core")) || IsInsideFolder(source, Path.Combine(runtime, "Core/ResourceAccess")))), Is.True);
             Assert.That(Directory.GetFiles(Path.Combine(runtime, "Systems/Audio"), "*.cs", SearchOption.AllDirectories), Is.Not.Empty);
 
             var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLFramework.Audio.SourceClosure-" + Guid.NewGuid().ToString("N"));
@@ -80,15 +73,18 @@ namespace YLFramework.Tests.Audio
                     additionalDefines = Array.Empty<string>()
                 };
                 var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
+                var profile = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player).Single(x => x.name == "YLFramework.Runtime");
+                var json = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "Newtonsoft.Json.dll");
+                Assert.That(File.Exists(json), Is.True);
                 Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
                 CollectionAssert.DoesNotContain(builder.defaultDefines, "YL_AUDIO_XFAB");
                 var contents = EditorApplication.applicationContentsPath;
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var references = builder.defaultReferences;
-                builder.excludeReferences = references.Where(path => !IsAllowedReference(path, contents, ui, editor)).ToArray();
-                builder.additionalReferences = new[] { ui };
+                builder.excludeReferences = references.Where(path => !IsAllowedReference(path, contents, ui, editor, json)).ToArray();
+                builder.additionalReferences = new[] { ui, json };
                 var effective = references.Except(builder.excludeReferences).Concat(builder.additionalReferences).Distinct().ToArray();
-                Assert.That(effective.All(path => IsAllowedReference(path, contents, ui, editor)), Is.True);
+                Assert.That(effective.All(path => IsAllowedReference(path, contents, ui, editor, json)), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "mscorlib.dll" || Path.GetFileName(path) == "netstandard.dll"), Is.True);
                 if (editor)
@@ -138,9 +134,10 @@ namespace YLFramework.Tests.Audio
             Assert.That(IsAllowedReference(ui, contents, ui, false), Is.True);
         }
 
-        private static bool IsAllowedReference(string path, string unityContents, string ui, bool editor)
+        private static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
         {
             var absolute = Path.GetFullPath(path);
+            if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase)) return true;
             var name = Path.GetFileName(absolute);
             if ((name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal)) && name != "UnityEngine.TestRunner.dll")
