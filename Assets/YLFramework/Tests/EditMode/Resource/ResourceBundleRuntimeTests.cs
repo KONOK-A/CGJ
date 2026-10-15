@@ -14,7 +14,7 @@ using YLFramework.Services.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
-    public class ResourceBundleRuntimeTests
+    public partial class ResourceBundleRuntimeTests
     {
         private const string Key = "YL.Resource83.Native.";
         [Serializable] private sealed class SceneList { public SavedScene[] Items; }
@@ -31,6 +31,14 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 var project = fixture.Project;
+                var instancePrefabPath = fixture.Folder + "/Content/A.prefab";
+                var instancePrefab = PrefabUtility.LoadPrefabContents(instancePrefabPath);
+                try
+                {
+                    instancePrefab.AddComponent<InstanceLifecycleProbe>();
+                    PrefabUtility.SaveAsPrefabAsset(instancePrefab, instancePrefabPath);
+                }
+                finally { PrefabUtility.UnloadPrefabContents(instancePrefab); }
                 var go = new GameObject("Diamond83");
                 var diamondPath = fixture.Folder + "/Content/C.prefab";
                 try
@@ -136,6 +144,7 @@ namespace YLFramework.Tests.ResourceBuild
         [UnityTearDown]
         public IEnumerator ExitOwnedSession()
         {
+            InstanceLifecycleProbe.ResetCallbacks();
             if (!EditorApplication.isPlaying) yield break;
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
             var until = Time.realtimeSinceStartup + 10;

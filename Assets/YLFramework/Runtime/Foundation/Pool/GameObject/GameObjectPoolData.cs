@@ -91,7 +91,7 @@ namespace YLFramework.Core.Pool
                 throw new ArgumentException("不能将缓存根放入对象池。", nameof(obj));
         }
 
-        private static bool IsCacheHierarchy(Transform parent)
+        internal static bool IsCacheHierarchy(Transform parent)
         {
             for (var node = parent; node; node = node.parent)
                 if (CacheRoots.TryGetValue(node, out _)) return true;
@@ -249,12 +249,17 @@ namespace YLFramework.Core.Pool
         /// 空池返回 null；取得期间拒绝同对象归还。先设置最终层级/场景，再激活。
         /// parent 为 null 时移入当前活动场景；回调关闭桶或破坏对象时不交付失效实例。
         /// </summary>
-        public GameObject Allocate(Transform parent = null)
+        public GameObject Allocate(Transform parent = null) => Allocate(parent, SceneManager.GetActiveScene());
+
+        // 异步调用方可捕获目标场景；不能在完成时误用后来切换的 active scene。
+        internal GameObject Allocate(Transform parent, Scene targetScene)
         {
             var lifetime = _lifetime;
             if (!IsLive(lifetime)) return null;
             if (parent && IsCacheHierarchy(parent))
                 throw new ArgumentException("不能将借出对象挂在任何缓存节点或其后代下。", nameof(parent));
+            if (!parent && (!targetScene.IsValid() || !targetScene.isLoaded))
+                throw new ArgumentException("借出对象的目标场景必须仍然有效。", nameof(targetScene));
             PruneDestroyed();
             while (_queue.Count > 0)
             {
@@ -271,7 +276,7 @@ namespace YLFramework.Core.Pool
                     obj.transform.SetParent(parent, true);
                     if (obj && IsLive(lifetime))
                     {
-                        if (!parent) SceneManager.MoveGameObjectToScene(obj, SceneManager.GetActiveScene());
+                        if (!parent) SceneManager.MoveGameObjectToScene(obj, targetScene);
                         obj.SetActive(true);
                     }
                     if (obj && IsLive(lifetime) && obj.activeSelf && obj.transform.parent == parent &&

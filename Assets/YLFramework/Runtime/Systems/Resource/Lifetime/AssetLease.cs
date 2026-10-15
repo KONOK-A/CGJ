@@ -7,6 +7,8 @@ namespace YLFramework.Services.Resource
     public sealed class AssetLease<T> : IDisposable where T : UnityEngine.Object
     {
         private ResourceSystem.AssetRecord record;
+        private readonly bool instancePin;
+        internal ResourceSystem.AssetRecord Record => record;
         public ResourceAddress Address { get; }
         public bool IsDisposed => record == null;
         public bool IsValid => record != null && record.Owner.IsSessionActive && record.Asset;
@@ -26,11 +28,13 @@ namespace YLFramework.Services.Resource
             }
         }
 
-        internal AssetLease(ResourceSystem.AssetRecord record, ResourceAddress address)
+        internal AssetLease(ResourceSystem.AssetRecord record, ResourceAddress address, bool instancePin = false)
         {
             this.record = record;
+            this.instancePin = instancePin;
             Address = address;
             record.LeaseCount++;
+            if (instancePin) record.InstancePins++;
         }
 
         public void Dispose()
@@ -39,7 +43,7 @@ namespace YLFramework.Services.Resource
             record.Owner.CheckThread();
             var owned = record;
             record = null;
-            owned.Owner.ReleaseLease(owned);
+            owned.Owner.ReleaseLease(owned, instancePin);
         }
     }
 }

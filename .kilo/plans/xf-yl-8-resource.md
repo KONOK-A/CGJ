@@ -1,6 +1,6 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1、8.2a、8.2b 已技术验收及 Git 收口，见第14～16节。8.2c 技术 COMPLETE、Schema v1 已冻结，并已按单独授权完成 Git 收口（Commit `66400c8`，见第17.7节）；未实施8.3及后续批次。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.3 已技术验收及 Git 收口，见第14～18节，Schema v1 保持冻结。8.4 技术 COMPLETE，待用户技术验收及 Git 收口，见第19节；未实施8.5及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
 > 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
@@ -485,6 +485,8 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 ### 8.4 Prefab实例、缓存与Foundation桶协作
 
+**技术状态（2026-10-15）：COMPLETE。** 实施及真实 Unity/native Bundle 证据见第19节；当前仅工作区改动，尚未获用户验收或 Git 收口，不表示阶段8整体完成。
+
 **主要范围**：`R/Instances`；复用`F/Pool/GameObject/GameObjectPoolData.cs`，仅有证明必要的通用改动才碰Foundation；对应新实例集成测试。
 
 **依赖/输出**：依赖8.3；可创建、复用、预热、Return/Discard的实例lease，bucket持prefab graph，scene-scoped/persistent显式策略。
@@ -954,3 +956,55 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 以独立授权一次性完成：精确暂存本批32个文件（12个已跟踪修改 + 20个新增含 `.meta`）后，提交 `732c8286ea1b04bdfb1b58bb2626c203d76a0454`（`feat(resource): 完成8.3 AssetBundle加载与生命周期`，2180+/39-），线性落在 `57f00a9` 之上；随后推送至 `origin/fusion/8-resource`（`57f00a9..732c828`）。推送后本地 HEAD、upstream 与实际 `git ls-remote` 均为 `732c828`。
 - 提交只含本批 Resource Runtime/Editor/Catalog/Loading/Sources、本批测试及本 Plan；Canvas.prefab 已按18.6独立授权恢复并随本批提交，工作区无该资产差异。受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md` 未暂存、未提交、未修改，仍留在工作区。原游戏、XF/XFAB/XFFSM、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；未 Reset/Clean/Stash/Rebase/Force Push/Merge，未进入8.4、未合并 integration/xf-yl、未创建阶段8里程碑。
 - 暂存的10份 `.meta` 仅 `userData/assetBundleName/assetBundleVariant` 生成行含行尾空格，与8.2b既有已提交格式一致，未改其内容；`git diff --cached --check` 除此外无冲突标记或无关文件混入。
+
+## 19. 8.4 实施与技术验收（2026-10-15）
+
+### 19.1 状态与实施边界
+
+- **8.4 技术 COMPLETE，待用户技术验收与 Git 收口。** 起始分支 `fusion/8-resource`、HEAD `0e2ec2eb7a3b317a4d13b1659e127f7428789ef2` 已核对。本轮未暂存、Commit/Push、切分支、合并 integration 或创建阶段8里程碑。
+- 实现集中在 `Runtime/Systems/Resource/Instances/`，以及 `ResourceSystem`/`AssetLease` 的实例 pin 与退出协作。保持唯一权威、Catalog v1、现有 Request/Lease/Scope 与四层架构；不新增 Resource DLL/Manager/永久兼容层。
+- 场景事件只负责实例缓存退休，不建立 Scene 加载、SceneRecord 或独立 Scene pin。未提前实施8.5～8.9；原游戏、Core/Audio、直接 Prefab/Attach 的 borrowed 输入及旧资源链不变。
+
+### 19.2 正式 API 与所有权
+
+- `ResourceSystem.Instantiate(ResourceAddress/AssetLease<GameObject>, parent)` 返回独立 `InstanceLease`；输入 Lease 必须属于当前 authority 且指向 Prefab 资产，不被消费。`InstantiateAsync(ResourceAddress, parent)` 返回 `ResourceRequest<InstanceLease>`；Ready Prefab Lease 的 native 实例创建直接同步执行，不伪造异步 producer。
+- `InstanceLease.GameObject` 只在当前 checkout 有效时借读；`Return`/`Dispose` 幂等结束 checkout，健康对象回原桶；`Discard` 结束 checkout 并销毁损坏/失败对象。先撤销旧身份再触发用户回调，旧 Lease 迟到 Return/Discard 不得操作新 checkout。Return 后不得继续使用借读裸对象；框架不能撤销外部保存的 Unity 引用。
+- `GetInstanceCache(address/prefab, policy, scene)` 显式取得 `InstanceCache`，支持 `Instantiate`、`Prewarm(target)`、`CachedCount`、`MaxCapacity`、`Dispose`。默认空闲容量32，`0`不缓存，`-1`无限；FIFO、容量裁剪、归还及桶复用由 Foundation `GameObjectPoolData` 执行，Resource 不建立第二套可重用对象队列。
+- 缓存身份是本 authority 的 `AssetRecord + policy + scene handle`。每桶持有内部 Prefab `AssetLease` pin，覆盖 creation、active、idle、retired 和 Destroy-pending；每次 checkout 有独立 Lease。冷创建在失活根下登记后才移动到最终层级/场景并激活，预热逐个登记从未激活对象，不依赖其可能永不触发的 `OnDestroy`。
+- `InstanceCache.Dispose`/`ClearInstanceCaches` 退休缓存并清理空闲对象，不销毁借出实例；晚归还销毁，不重入桶。旧 Data 在全部实例实际 fake-null 前不回原 Safe owner，Prefab pin 与8.3图 retention也等到真实销毁后才结算，不把引用归零或调用 Destroy 当成 native 死亡证据。
+- 显式取得的缓存或成功交付过 checkout 的缓存可以继续持有空桶。隐式首次创建尚未成功交付时为 provisional，失败/交付前取消自动退休，不留下无主 creation pin，不误退休显式缓存或已被嵌套成功 checkout 使用的共享缓存。
+- 异步沿用 Request 单次交割：`TakeResult` 转移实例责任；未领取成功结果 Dispose 时 Return；创建中已取消的结果 Discard。可直接复用 `ResourceScope.Track/TakeResult/Own`，不增加第二套域所有权。
+
+### 19.3 场景、关闭与 Foundation 边界
+
+- `SceneScoped` 默认捕获目标父对象所在场景，无父对象时捕获活动场景。异步完成时重验父对象；无父对象时不误用后来切换的 active scene。卸载 scope scene 会退休空闲缓存，迁移到其他场景或 DDOL 的有效借出实例继续存活并保活，晚归还才销毁。
+- `Persistent` 只表示空闲缓存跨场景保留，不自动 DDOL 借出对象，也不取得 Scene pin。两类缓存均使用 Resource 自有 DDOL 缓存根，只纳管自己创建的对象。
+- PlayerLoop 有界轮转 prune 每轮至多8桶、每桶8项，Editor 非Play时继续收尾。无协程/MonoBehaviour Manager 宿主，退出不新建宿主；最后一桶释放后解绑该 authority 的 scene 事件并销毁自有空根。
+- Shutdown 暂时拒绝新生产并退休缓存；外部 Asset/Bundle Lease、活跃 checkout 或执行中的创建/回调导致 Busy，恢复 Resource 可用性；仅 Destroy-pending/native producer 可异步排空。空缓存同步释放也不会在 Shutdown 请求登记前误触发最终关闭。
+- 会话退出先使旧身份失效并销毁自有实例，保留 Destroy-pending pin/record；旧 public AssetLease 迟到 Dispose 不扣实例 pin，旧 InstanceLease 不影响新 authority，旧责任未排空时新初始化返回 Busy。
+- Foundation 仅增加内部 `Allocate(parent, targetScene)`，修正原入口只能使用当前活动场景、不能履行 Resource 捕获目的场景合同的限制；公开 `Allocate(parent)` 原行为不变。既有 `IsCacheHierarchy` 改为 internal，复用于 Resource 冷创建校验。未复制桶算法、添加 Foundation→Resource 反向依赖或重构通用池。
+
+### 19.4 实际验收与独立 Review
+
+环境为 Unity `2022.3.62f3c1`、Windows Editor/D3D11、正常 Domain Reload。复用8.2/8.3独立 YL fixture、正式Builder/Publisher及发布副本，仅向测试 Prefab 增加 test-only lifecycle probe。下列 native 综合入口登记在 EditMode 程序集，但通过 `EnterPlayMode` 在**真实 PlayMode**执行实例/native断言，并跨实际 `ExitPlayMode/EnterPlayMode` 检查退出和再次初始化。
+
+| 本轮实际验证 | 结果与范围 |
+| --- | --- |
+| `CompleteNative84InstanceLifecycleRegression` | 最终 Passed（方法20.071秒）。覆盖真实创建/复用、旧身份、预热/容量/Discard、退休 Data、active/idle/never-active/Destroy-pending pin、OnDestroy 中依赖仍存活、外部 Destroy/损坏缓存根、Awake/OnEnable/OnDisable 异常与重入、创建中取消/退出、未领取结果、scene unload/迁移/DDOL/Persistent及真实双Play。各轮排空核对 asset/bundle record 和原生Bundle集合归零、Prefab/共享Texture实际fake-null，不以计数器替代native证据。 |
+| Review finding 红绿回归 | `FailedImplicitCreationReleasesItsGraphWithoutExplicitClear` 先实际失败：记录残留1；修复后相同用例纳入上述最终 Passed 门禁。父对象等待期销毁、首次回调拒绝、创建中取消，不调用 `ClearInstanceCaches` 即回基线；显式缓存与嵌套成功 checkout 不被误退休。 |
+| Foundation `GameObjectPoolPlayModeTests` | 13/13 Passed，原直接消费者、跨场景、生命周期回调、旧Data/Safe owner、容量与根损坏合同不变。 |
+| Resource PlayMode `YLFramework.Tests.Resource` | 36/36 Passed，受影响 Request/Lease/Scope、源、取消、迟到收尾、旧会话及 Shutdown Busy 合同保持正确。 |
+| `CompleteNative83RegressionSharesOnePublicationAndPreservesReloadEvidence` | Passed（方法19.368秒），复验本次 pin/退出协作直接影响的8.3 native Bundle/依赖生命周期，不重复全部历史批次验收。 |
+| `CompleteFoundationAndCoreCompileInDevelopmentAndRejectSystemsSymbols` | Passed，真实 Foundation+Core 源码闭包及反向 Systems 编译拒绝保持有效；不以辅助编译替代 Unity 编译或运行。 |
+
+完成一次 fresh-context 只读独立技术 Review，聚焦身份、Prefab pin、Data退休、重入、迟到清理及 Foundation/场景边界。报告1项P2“首次失败隐式缓存保活未结算”，已复现、修复并定向回归；没有未处理的实质 finding，未追加形式复审。实施中另复现并修复空缓存 Shutdown 请求遗失、损坏缓存根未及时退休，均由最终综合门禁覆盖。
+
+最终 Unity 实查：`scriptCompilationFailed=false`、非Play/非编译、Current为空、旧authority draining=0、instance cleanup=0、自有缓存根=0、已加载原生Bundle=0，原 `Assets/Scenes/Main.unity` 未标脏。Runtime Player编译图427个源码、无UnityEditor程序集引用；这是编译图核对，不是Player构建。新增5脚本及Instances目录的6份Unity生成meta均可在AssetDatabase读回、GUID非空且互异。
+
+### 19.5 保护、后续依赖与停止点
+
+- `.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings 及既有 `Canvas.prefab` 起止内容哈希相同。并行 `.kilo/plans/1791960935353-ui-panel-redesign.md` 未由本轮修改或接管；终检观察到其blob从 `c0ab167...` 变为 `0790062...`，保留当前外部更新，不回退/覆盖。native fixture保护快照和最终diff保持原XF/XFAB/XFFSM、原游戏/Scene、MainModule、历史Bundle/StreamingAssets、Packages及其余ProjectSettings不变；不清理未知目录或其他任务产物。
+- 新脚本/目录由Unity导入生成独立meta，既有GUID/序列化身份不变；本批改动与起始用户改动均留在工作区，未暂存或提交。
+- 8.5可依赖 `InstanceLease`、Prefab/依赖pin、scene-scoped/persistent缓存、迁移/DDOL后的退休晚归还、Destroy-pending drain与旧会话隔离；Scene加载、SceneRecord、独立Scene pin仍须另行实施验收。
+- 未运行Player构建、IL2CPP/AOT、其他平台、禁用Domain Reload或完整Scene资源系统验收，不将Windows Editor证据外推。第三方任意修改/销毁借读裸对象，只能按Unity可观察的存活状态收尾，不能承诺阻止原生对象越权操作。
+- **停止点：8.4技术 COMPLETE，等待用户技术验收与Git收口授权；不自动实施8.5。**

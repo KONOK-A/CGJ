@@ -49,6 +49,7 @@ namespace YLFramework.Services.Resource
         private readonly HashSet<IResourceRequest> ownedRequests = new();
         private readonly List<ResourceRequest<ResourceSystem>> initialization = new();
         private readonly List<ResourceRequest<bool>> shutdowns = new();
+        private bool checkingShutdown;
 
         /// <summary>读取不加载资源、不初始化服务、不创建宿主；初始化失败或关闭后为 null。</summary>
         public static ResourceSystem Current => authority != null &&
@@ -64,6 +65,7 @@ namespace YLFramework.Services.Resource
             Application.quitting += EndSession;
 #if UNITY_EDITOR
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
+            EditorApplication.update += () => { if (!Application.isPlaying) TickInstanceCleanup(); };
 #endif
         }
 
@@ -89,6 +91,7 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<ResourceSystem>();
             if (ending || !SingletonSessionState.CanRunExecution)
                 return Fail(request, ResourceError.SessionUnavailable, "Resource initialization requires an active Play/Player session.");
+            TickInstanceCleanup();
             if (draining.Count != 0)
                 return Fail(request, ResourceError.Busy, "An old session still owns unfinished native producers.");
             if (authority != null)
@@ -337,6 +340,7 @@ namespace YLFramework.Services.Resource
             internal UnityEngine.Object Asset;
             internal IDisposable Retention;
             internal int LeaseCount;
+            internal int InstancePins;
             internal float LastProgress;
             internal bool Loading = true;
             internal bool CancelRequested;
@@ -367,9 +371,11 @@ namespace YLFramework.Services.Resource
             public void Notify() => request.Notify();
         }
 
-        internal void ReleaseLease(AssetRecord record)
+        internal void ReleaseLease(AssetRecord record, bool instancePin = false)
         {
+            if (!instancePin && !IsSessionActive) return; // 退出已结算public责任，不能扣仍在等待Destroy的实例pin。
             if (record.LeaseCount == 0) return; // 会话强制退出已结算；旧 lease 不得影响新 record。
+            if (instancePin) record.InstancePins--;
             if (--record.LeaseCount == 0 && !record.Loading) ReleaseRecord(record);
             CheckDrain();
         }
@@ -400,11 +406,29 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<bool>();
             if (State == ResourceSystemState.Closed) { request.SetSuccess(true); return request; }
             if (!IsSessionActive) return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
-            if (publicBundleLeases.Count != 0) return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live Bundle leases or consumers.");
-            foreach (var record in records.Values)
-                if (record.LeaseCount != 0 || record.Waiters.Count != 0)
-                    return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live leases or consumers.");
+            if (checkingShutdown) return Fail(request, ResourceError.Busy, "Resource shutdown is checking its ownership barrier.");
+            if (State == ResourceSystemState.ShuttingDown) { shutdowns.Add(request); CheckDrain(); return request; }
             State = ResourceSystemState.ShuttingDown;
+            checkingShutdown = true;
+            try
+            {
+                ClearInstanceCaches();
+                var busy = publicBundleLeases.Count != 0;
+                foreach (var cache in instanceCaches) if (cache.HasLiveOwners) busy = true;
+                foreach (var record in records.Values)
+                    if (record.LeaseCount > record.InstancePins || record.Waiters.Count != 0) busy = true;
+                if (busy)
+                {
+                    State = ResourceSystemState.Ready;
+                    return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live leases, instances or consumers.");
+                }
+            }
+            catch
+            {
+                State = ResourceSystemState.Ready;
+                throw;
+            }
+            finally { checkingShutdown = false; }
             shutdowns.Add(request);
             CheckDrain();
             return request;
@@ -412,7 +436,8 @@ namespace YLFramework.Services.Resource
 
         private void CheckDrain()
         {
-            if (records.Count != 0 || bundleRecords.Count != 0) return;
+            if (checkingShutdown) return;
+            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0) return;
             bundleQueue.Clear();
             draining.Remove(this);
             if (State != ResourceSystemState.ShuttingDown) return;
@@ -443,8 +468,13 @@ namespace YLFramework.Services.Resource
             foreach (var request in requests)
                 try { request.ReleaseInvalidatedResult(); }
                 catch (Exception error) { Debug.LogException(error); }
+            foreach (var cache in new List<InstanceCache>(system.instanceCaches)) cache.EndSession();
             foreach (var record in new List<AssetRecord>(system.records.Values))
-                if (!record.Loading) system.ReleaseRecord(record);
+                if (!record.Loading)
+                {
+                    if (record.InstancePins == 0) system.ReleaseRecord(record);
+                    else record.LeaseCount = record.InstancePins;
+                }
             foreach (var lease in new List<BundleLease>(system.publicBundleLeases)) lease.Dispose();
             system.CheckDrain();
             foreach (var request in requests) request.NotifyInvalidation();
