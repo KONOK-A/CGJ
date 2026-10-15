@@ -1,6 +1,6 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.4 已技术验收及 Git 收口，见第14～20节，Schema v1 保持冻结。8.5 技术 COMPLETE，待用户技术验收及 Git 收口，见第21节；未实施8.6及后续批次。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.5、8.6a、8.6b 已完成技术验收及前序 Git 收口，见第14～23节，Schema v1 保持冻结。8.6c 技术 **COMPLETE**，必要编译、消费者回归及独立Review修复证据见第24节；等待用户技术验收与Git收口授权，不实施8.7及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
 > 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
@@ -500,7 +500,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 ### 8.5 Scene真实身份、保活与不可逆取消
 
-**技术状态（2026-10-15）：COMPLETE。** 真实 Scene Bundle/PlayMode、实际退出排空与独立 Review 证据见第21节；待用户技术验收及 Git 收口，本批未提交。
+**技术状态（2026-10-15）：COMPLETE，已完成用户技术验收及前序 Git 收口。** 真实 Scene Bundle/PlayMode、实际退出排空与独立 Review 证据见第21节。
 
 **主要范围**：`R/Scenes`，8.2自有Scene Bundle/Editor模拟与PlayMode夹具；不改游戏BuildSettings。
 
@@ -527,7 +527,9 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **8.6a 状态（2026-10-15）：技术 COMPLETE，已完成用户技术验收及 Git 收口。** 正式 Core Provider、ProjectName 语义、消费者与 Editor 接入及独立 Review 证据见第22节。
 
-**8.6b 状态（2026-10-15）：技术 COMPLETE，待用户技术验收及 Git 收口。** Audio正式Provider、配置显式迁移、真实音频/Bundle保活及独立Review修复证据见第23节。8.6c仍未实施，不将8.6整体或主体XFAB解耦标为完成。
+**8.6b 状态（2026-10-15）：技术 COMPLETE，已完成用户技术验收及 Git 收口（`b1116085eb4290c6cc202f63b761797e4eac739e`）。** Audio正式Provider、配置显式迁移、真实音频/Bundle保活及独立Review修复证据见第23节。
+
+**8.6c 状态（2026-10-15）：技术 COMPLETE，待用户技术验收与 Git 收口。** 旧栈退役、主体实际编译/二进制闭包隔离、定向Editor/native/PlayMode消费者与原游戏/可选适配共存、独立Review修复及保护核对均完成，见第24节。本轮未Commit/Push，8.7未开始。
 
 - [x] 文本string交付前释放自己lease、共享读表不伤另一模块；fallback次序/error cause/Model初始化和startup rollback保持。
 - [x] Core `yield`等待后只领取一次owned结果，Dispose未领取/领取后两条路无泄漏或双释放；同步InProgress不错误fallback到基础模块，异步join同producer。
@@ -1134,6 +1136,8 @@ MCP TotalTests是发现树，跨Domain Reload的总Duration/多方法计数会�
 
 ## 23. 8.6b Audio Resource Provider 与配置接入（2026-10-15）
 
+> 本节保留技术实施时的验收记录与停止点。随后用户技术验收及单次 Git 收口已完成；8.6c 开始前实际 HEAD、upstream 与远端均为 `b1116085eb4290c6cc202f63b761797e4eac739e`，不再以本节历史“待提交”文字作为当前 Git 状态。
+
 ### 23.1 基线与技术状态
 
 - **8.6b 技术 COMPLETE，待用户技术验收及单独 Git 收口授权。** 分支始终为 `fusion/8-resource`，实际起始/交付HEAD均为 `4075bd354be3d1005deef1e7a942e79d4a80dfc3`。8.1～8.5、8.6a沿用已批准成果，不重复验收历史全量。
@@ -1185,3 +1189,53 @@ Unity `2022.3.62f3c1`、Windows Editor/D3D11、正常Domain Reload；**本轮共
 - 8.6c仍须处理旧 `Systems/Resource/Framework` 的ResLoader/ResKey/ResTable/ServiceManager/ResFactory、`Implementations`、旧ResManager/数据与配置工具及其Editor/测试/导出哨兵，并据实际引用解除主体Runtime/Editor asmdef的XFABManager声明。本批已完成Audio运行时与这些旧服务的接点移除，不等于旧YL Resource整体退役。
 - 正式 `ResourceSystem`、新Catalog/Lease/Bundle内核、Core/Audio Provider及新Editor/测试不得混入旧栈清理；Library旧枚举/BundleName是持久化迁移数据，不是可恢复的旧authority。原游戏、原XF/XFAB/XFFSM及明确可选的 `Integrations/XFAB/Audio`借用leaf不属清理目标。
 - **到此停止。** 等待用户技术验收与本批单次Commit授权，未来Git收口把代码/测试/必要文档/本Plan合为一次Commit，不为Git状态再建docs Commit。不实施8.6c或8.7～8.9，不合并integration/xf-yl，不创建阶段8里程碑。
+
+## 24. 8.6c 旧 YL Resource 退役与主体 XFAB 依赖解除（2026-10-15）
+
+**技术状态：COMPLETE，待用户技术验收与本批单次 Git 收口授权。** 必要门禁均有真实通过证据，发现的问题已定向修复或在正确隔离条件下复验；本轮未Commit/Push、集成合并、创建阶段里程碑或实施8.7。
+
+### 24.1 基线与退役边界
+
+- 分支 `fusion/8-resource`，起始 HEAD 为8.6b实际收口提交 `b1116085eb4290c6cc202f63b761797e4eac739e`；upstream为 `origin/fusion/8-resource`，`git ls-remote --heads origin refs/heads/fusion/8-resource` 确认远端相同，未补交前序代码。
+- 起始外部修改为 `.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings，另有未跟踪UI Plan；暂存区为空。全部保持，原Package/游戏/MainModule/历史Bundle/StreamingAssets/场景Prefab/Canvas/Packages与ProjectSettings不属本批改动。
+- 先审查旧Runtime41文件GUID与全部91份Assets序列化候选文本，未命中引用；Editor `SubProjectData` GUID另查无引用。游戏EffectController的同名GameObjectLoader来自XFGameFramework，不是被删YL类型。未将“无C#引用”单独当成可删除依据。
+- 删除旧 `Resource/Framework`、`Implementations`、`HotUpdate`、`Utilities` 及 `ResManager/GameObjectLoader/SubProject`；旧ServiceManager/引用计数/池化Key/二进制表/Bundle加载、图片入口及假更新栈不留永久转发。旧Resource专用包装随闭包退出，Foundation Pool/Table/Serialization、自有ZipTool与正式图片Source保留其独立职责。
+- Editor仅退出旧 `SubProjectData` 和仅服务它的owner/Bundle命名校验；`ResourceBuildOperation.ValidateAssetPath/RejectLinks` 保留给正式Builder/Publisher/生成。正式Workbench窗口及GUID、Catalog Schema v1、Core/Audio正式Provider和生命周期实现不改。
+- `AudioClipLibrary` 旧枚举数字与隐藏BundleName、全量显式映射的新GUID副本迁移入口保持；旧配置不能重新激活资源authority。
+
+### 24.2 主体编译隔离与源码证据
+
+- 起始实际Unity编译图除显式XFABManager外，还自动注入原XFAB包内 `ICSharpCode.SharpZipLib.dll`。两主体均改 `overrideReferences=true`，唯一预编译插件白名单为 `Newtonsoft.Json.dll`，同时移除XFABManager asmdef引用；不修改原包或全局插件设置。
+- 新增 `FrameworkAssemblyIndependenceTests`：真实Editor/Player编译图递归检查、主体直接预编译输入检查、Editor已加载程序集的递归AssemblyRef检查，以及完整Runtime/Editor源码重编译；不是仅搜索asmdef文本。源码清单与Unity图严格等价，Editor引用本次隔离新构建的Runtime，不借旧YL产品或optional实现DLL。
+- Unity `2022.3.62f3c1` 实测Runtime391源码、Editor58源码。6/6通过，原生结果 `C:/Users/Kano/AppData/Local/Temp/kilo/Resource86c-20261015-0c314fd7-evidence/639276568531818303.xml`。包含Windows64 Development的完整Runtime源码profile，不宣称执行本批Player构建或干净工程导入。
+- 验证探针保留了真实RED：三份旧编译图因XFABManager失败、旧authority类型存在失败。AssemblyBuilder调试另发现默认引用与Editor .NET4.8不符，以及exclusion在additional合并后过滤；最终使用当前真实profile的合法白名单差集，保留BCL/UGUI/Json.NET，未补入XF/XFAB或放宽产品白名单。
+- `YLFramework.Audio.XFAB` 继续作为独立可选叶子：单向引用Runtime/XFABManager，`autoReferenced=false`、包版本与编译条件保持；不自动注册、不进入默认导出，也不是主体必要依赖。
+
+### 24.3 定向验收与Review修复
+
+- 已迁移旧Importer测试至正式ResourceProject/BuildMap边界测试；旧ResourcePool实现断言退出，池拒绝/分配失败/非法地址/初始化回滚由既有正式用例覆盖，另补ResourceScope多清理错误聚合、健康lease归还和不重放的PlayMode覆盖。
+- 导出哨兵改指正式ResourceSystem/Configuration/Core/Audio入口，明确禁止旧树/旧文件；现有Resource说明、架构/首页/Singleton/Table及Core/Foundation Help同步正式入口，不保留失效旧菜单说明。
+- 首批14类定向Editor/构建发布/生成/显式Audio迁移/原游戏wiring共63例，原生 `639276574167521262.xml` 为62绿、1个Workbench未稳定刷新拒绝；未更改产品保护或测试断言，稳定后该实际GUI用例独立1/1绿（`639276575750889615.xml`）。不是将最初失败直接记成通过。
+- 独立Review完成：未发现P0/P1或结构性误删/隐式依赖；一组P2为HelpWindow/CoreEditorIdentity两处仍要求旧XFABManager的精确契约。两用例分别真实RED（`639276575487678330.xml` / `639276575563560535.xml`），保留GUID/身份/平台断言后精确迁移为Runtime/UI、`overrideReferences=true`、唯一Json.NET白名单，并收紧旧XF放行。修复回归 `639276577155249964.xml` 中两者及公共Help程序集检查均绿。
+- Review指出的Workspace/发布路径混写及直接受退役影响的使用导航已定向修正，未重写IntegrationPlan历史；不以“未使用”为理由删除通用Pool/Table/Zip能力。
+- 修复回归附带ObjectPool、Help提供方、实际导出、Workbench及Audio源码门禁共62例，原生结果60绿、2个Audio源码Builder因编译忙未启动。确认Editor及AssemblyBuilder均idle后独立复跑Audio源码门禁3/3绿（`639276578103211486.xml`），保留原Build-start断言及插件白名单，不绕过编译。
+- native代表性门禁11/11绿（`639276581977896646.xml`）：真实Text/Prefab/SubAsset共享与最终卸载、实例复用与隐式创建失败归还、SceneLease与真实场景pin、Core命名Prefab/Panel共享取消和关闭/退出迟到排空、Module文本/Single场景/关闭重启，以及三项真实Audio Bundle保活/取消/实际交付窗口退出。复用自有Publication与保护摘要，不机械重跑83/84/85完整复合门禁。
+- PlayMode首批49例为48绿、1个Single场景测试被保护门禁拒绝（`639276583343168967.xml`）：原用户Main场景的Virtual Camera不是测试runner对象，守卫在卸载前拒绝继续，产品未改。原游戏MainStart/Settings/GameExit/reentry、可选XFAB借用适配、正式ResourceSystem/Resources Source、Core代表性View/Panel、命名Audio播放/缓存、直接Clip借用与新增Scope错误聚合均已绿。保留守卫，在既有空Harness独立复验Single启动成功与失败回滚，两项2/2绿（`639276587402549842.xml`）；未覆盖未保存场景、未将最初失败记为成功。
+- 上述计数包含交叉及单项复验，不机械相加为无重复总数。跨Domain Reload时原XF Logger/MCP仍出现既有退出/断连噪声，结果以独立保存的Unity原生树为准，不把断连计作成功。完整证据目录为 `C:/Users/Kano/AppData/Local/Temp/kilo/Resource86c-20261015-0c314fd7-evidence/`，保留RED与环境拒绝的原始结果，不以日志过滤代替门禁。
+
+### 24.4 保护、身份与最终状态
+
+- native夹具及构建发布回归对原游戏/Scenes、StreamingAssets、历史MainModule Bundle、Packages与ProjectSettings进行前后保护摘要核对；本批未改动这些目录或Canvas/Prefab及其meta。原游戏PlayMode流程和可选XFAB borrowed适配实际通过，不只是源码静态检查。
+- 退役差异为43个旧脚本（Runtime41、Editor1、过时测试1）及54个meta（配套脚本43、已确认空旧目录11），没有缺失脚本配套meta。存续资源、两主体asmdef与Workbench/Help窗口GUID保持；新独立性测试GUID为 `bc9c1a925b25a9847892c5fcdd23c4eb`，经AssetDatabase反查精确返回新路径。
+- 临时取证回调仅解绑自有1份，取证脚本/meta已删除并真实刷新编译，旧类型及临时取证类型均不在新加载程序集。仅清理由本轮TestRunner创建且已确认归属的 `InitTestScene639276870751882200.unity` 与meta，不清理未知文件。
+- Single复验保存并恢复其入场SceneSetup；前序TestRunner留下的是临时InitTestScene，因此随后按本批起始清单另行恢复唯一活动 `Assets/Scenes/Main.unity`。每次替换前检查无dirty场景、无活动测试、当前场景属于已知测试范围，未保存或重写用户Scene。最终Main已加载、活动且干净，恢复SessionState已清除。
+- 临时脚本退出后的Unity最终实查：非Play/非编译/非更新、`scriptCompilationFailed=false`；Resource Current、公开及原始Core Provider均为空，YL AudioManager数量0，native Bundle数量0。Runtime/Editor仍为391/58源码；Player图391源码、0个Editor路径、无UnityEditor或XFAB产品依赖。实际主体图与二进制/独立源码门禁相互补充，不以生成的csproj或grep替代。
+- 最终diff只在本批框架/测试/既有说明与本Plan范围；原有 `.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings及并行UI Plan保留，未修改这些外部成果。`git diff --check`通过，暂存区为空，HEAD保持8.6b基线，未创建或切换分支、未Commit/Push。
+- 本批没有运行历史全量、真正Player/IL2CPP/AOT构建、其他平台、干净工程导入或新增关闭Domain Reload验收；不把Windows Development源码编译等同这些结果。最终独立载体与生产更新安全仍按后续阶段验收。
+
+### 24.5 8.6整体能力与停止点
+
+- 8.6a/b/c现已具备：唯一ResourceSystem的显式初始化/关闭、Catalog/Lease/Source/Bundle依赖图、实例缓存与Scene pin、Core Module/View/Panel与Audio正式Provider、Workbench/Builder/Catalog/Publisher/代码生成，以及旧YL资源栈退出后的Runtime/Editor主体XFAB独立性。没有恢复双资源表、旧卸载driver或永久转发层。
+- 原游戏/XF/XFAB/XFFSM保持原链；独立可选XFAB音频叶子不是主体必需依赖。AudioClipLibrary旧字段只保留显式持久化迁移能力，通用Pool/Table/Serialization/Zip等能力不因旧栈退役误删。
+- 进入8.7前未发现新增技术阻塞；当前流程前置仅为用户技术验收与8.6c单次Git收口授权。8.7版本激活/回滚、8.8下载安全和8.9 Editor体验均未实施，不把现有本地发布能力宣称为生产安全更新闭环。
+- **到此停止。** 当前全部成果留在工作区，后续获授权时按一批一个Commit合入代码、测试、必要文档和本Plan记录，不增加无意义的状态提交。不自动合并integration/xf-yl、不创建阶段8里程碑、不自动开始8.7。

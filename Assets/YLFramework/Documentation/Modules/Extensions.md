@@ -97,7 +97,7 @@
 - `Tests/PlayMode/Extensions/ParabolicMotionNativeTests.cs`：只模拟自有局部 3D/2D PhysicsScene，验证速度赋值、退化输入不改速度和无重力运动，区分连续解与原生离散积分误差。
 - 原文所列 `Tests/EditMode/Extension*.cs` 当前不存在，不作为已执行覆盖的证据；无关扩展的覆盖口径留阶段 5 后续收口。
 - `Tests/PlayMode/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
-- 消费者代表性回归：现存 `ResourcePoolTests`、`UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。历史提及的 `GameObjectLoaderPlayModeTests` 当前不在仓库，不作为已执行证据。
+- 消费者代表性回归：正式 `ResourceSystemTests`、`ResourceBundleRuntimeTests` 的实例/销毁用例，以及 `UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。旧 `ResourcePoolTests` 已随旧栈退出，历史提及但不在仓库的 `GameObjectLoaderPlayModeTests` 也不作为已执行证据。
 - 完整Foundation/Core源码边界守卫见 `FoundationBoundaryTests` 与 `CoreArchitectureBoundaryTests`；不施加“所有Utilities不得依赖Core/Systems”的额外规则，取色工具消费Core是合法正例。源码闭包通过不代替本模块各项运行时行为验证。
 
 ## 当前状态

@@ -6,7 +6,7 @@
 
 - Panel/窗口在 [`UI/Windows/`](../../Runtime/Core/UI/Windows/)，根、输入、Tips 和适配各按职责分组，namespace `YLFramework.Core`；View/加载参数在 [`MVC/Views/`](../../Runtime/Core/MVC/Views/)，业务 Module 在 [`Modules/`](../../Runtime/Core/Modules/)。
 - 完整取色工具（控件、渲染及窗口）统一在 [`Utilities/UI/ColorSelector/`](../../Runtime/Utilities/UI/ColorSelector/)；它与 Json、FSM 一样是按需使用的便利工具，不属于框架底层。旧样例已经退役，现有取色类型的 namespace、API、字段和正式Prefab保持。
-- 程序集为 `YLFramework.Runtime`，主体暂留 Core 的 XFABManager/UGUI 依赖。业务 asmdef 显式引用 Runtime；Foundation 与 Core 仅为源码职责分区，不再是两个运行 DLL。
+- 程序集为 `YLFramework.Runtime`，主体依赖 UGUI/Json.NET，不要求 XFABManager。业务 asmdef 显式引用 Runtime；Foundation 与 Core 仅为源码职责分区，不再是两个运行 DLL。
 - `Module`、`ViewManager`、`PanelManager` 以少量 partial 改善导航；状态字段与初始化集中在原主文件，仍是同一个类型及同一事务，不新增 Manager 或加载权威。
 - `Module` 是唯一业务 owner。目录、根配置和呈现项池不代替 Module/View 的会话、请求、取消或资源归还协议。
 
@@ -30,7 +30,7 @@ var color = window.CurrentColor;
 window.Close();
 ```
 
-- `owner` 必须是已有效注册的 Module。`WindowDefinition(key, prefab)` 使用直接 Prefab；`WindowDefinition(key, assetName)` 使用既有 Module project fallback / XFAB View 入口，不把旧 BundleName 映射为 ProjectName。
+- `owner` 必须是已有效注册的 Module。`WindowDefinition(key, prefab)` 使用直接 Prefab；`WindowDefinition(key, assetName)` 通过 Core 的正式 Resource Provider 使用 Module project fallback，ProjectName 为 Resource ProjectId，不把旧 BundleName 猜成新身份。
 - 唯一范围为同 owner、同 key、同实际 Canvas 根。已加载会话再次打开时显示、借读新参数调用 `Panel.OnWindowUpdated` 并在既有层/模态/front 分组内置顶，不重复 `OnLoaded` 或事件注册。
 - 同 key 在途明确拒绝，不合并独立调用方的 Abort 权限。未完成的 View 事务内不重入窗口入口；启用、更新、排序通知使原会话结束时，该 Open 不把关闭/替代会话作为成功结果。
 - `OpenAsync<T>` 返回统一 `LoadPanelRequest<T>`；直接 Prefab 也进入原 `LoadViewRequest`。可 yield、检查 `Status/error` 或 `Abort`；有效现有会话可立即返回成功。入口校验/更新失败可同步抛错。

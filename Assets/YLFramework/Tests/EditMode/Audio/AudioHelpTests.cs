@@ -67,7 +67,7 @@ namespace YLFramework.Tests.Audio
                 type.Namespace == "YLFramework.Services.Audio" ||
                 type.Namespace != null && type.Namespace.StartsWith("YLFramework.Services.Audio.", StringComparison.Ordinal)), apiTypes);
             Assert.IsFalse(apiTypes.Any(type => type.Name.Contains("Fluent")));
-            CollectionAssert.DoesNotContain(apiTypes, typeof(YLFramework.Services.Resource.ResLoader));
+            CollectionAssert.DoesNotContain(apiTypes, typeof(YLFramework.Services.Resource.ResourceSystem));
             CollectionAssert.DoesNotContain(apiTypes, typeof(AudioManager));
             CollectionAssert.DoesNotContain(apiTypes, typeof(AudioVoice));
             CollectionAssert.DoesNotContain(apiTypes, typeof(SoundDeduplicator));

@@ -134,7 +134,7 @@ namespace YLFramework.Tests.Audio
             Assert.That(IsAllowedReference(ui, contents, ui, false), Is.True);
         }
 
-        private static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
+        internal static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
         {
             var absolute = Path.GetFullPath(path);
             if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase)) return true;
@@ -149,7 +149,7 @@ namespace YLFramework.Tests.Audio
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEditor")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEditor.dll")), StringComparison.OrdinalIgnoreCase);
-            if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
+            if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "Microsoft.CSharp.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "NetStandard")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "UnityReferenceAssemblies")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "MonoBleedingEdge/lib/mono"));

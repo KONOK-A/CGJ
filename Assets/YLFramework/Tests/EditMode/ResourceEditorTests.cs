@@ -8,7 +8,6 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
 using YLFramework.Tests.ResourceBuild;
 using Object = UnityEngine.Object;
 
@@ -149,38 +148,44 @@ namespace YLFramework.Tests.ResourceEditor
             Assert.That(Directory.Exists("AssetBundles/YLFramework/" + project.ProjectId), Is.False);
         }
 
-        // 旧 Runtime 尚在消费 SubProjectData；只保留其纯分区契约，不执行旧构建或标记菜单。
-        private SubProjectData Owner(string path, string name)
+        private ResourceProject Project(string root, string name, string selection)
         {
-            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<SubProject>(), path + "/" + name + ".asset");
-            return SubProjectData.SearchAllInProject().Single(x => x.Path == path + "/" + name + ".asset");
+            var project = ScriptableObject.CreateInstance<ResourceProject>();
+            project.ProjectId = "yl-editor-" + Guid.NewGuid().ToString("N");
+            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(root);
+            project.Groups = new List<ResourceGroup> { new() { Id = "main", Selections = new List<ResourceSelection>
+                { new() { Guid = AssetDatabase.AssetPathToGUID(selection), Extensions = new[] { ".bytes" } } } } };
+            AssetDatabase.CreateAsset(project, folder + "/" + name + ".asset");
+            return project;
         }
-        private void MarkedText(string path, string bundle)
+        private void Text(string path)
         {
-            File.WriteAllText(path, "isolated legacy Runtime metadata"); AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            var importer = AssetImporter.GetAtPath(path); importer.assetBundleName = bundle; importer.SaveAndReimport();
+            File.WriteAllText(path, "isolated formal resource selection");
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
         }
         [Test]
         public void DirectoryBoundaryDoesNotClaimSiblingWithSamePrefix()
         {
             AssetDatabase.CreateFolder(folder, "Owner"); AssetDatabase.CreateFolder(folder, "OwnerExtra");
-            var owner = Owner(folder + "/Owner", "Project"); var bundle = "resource82c-" + Guid.NewGuid().ToString("N");
-            MarkedText(folder + "/OwnerExtra/Text.bytes", bundle);
-            var defaults = new SubProjectData(); SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(defaults, new List<SubProjectData> { owner });
-            Assert.That(owner.Builds, Is.Empty); Assert.That(defaults.Builds.Any(x => x.assetBundleName == bundle), Is.True);
+            Text(folder + "/Owner/Text.bytes"); Text(folder + "/OwnerExtra/Text.bytes");
+            var project = Project(folder + "/Owner", "Project", folder + "/Owner");
+            var map = ResourceBuildMap.Create(project);
+            CollectionAssert.AreEqual(new[] { folder + "/Owner/Text.bytes" }, map.Assets.Select(x => x.SourcePath));
+            project.Groups[0].Selections[0].Guid = AssetDatabase.AssetPathToGUID(folder + "/OwnerExtra/Text.bytes");
+            Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(project));
+            Assert.That(AssetImporter.GetAtPath(folder + "/OwnerExtra/Text.bytes").assetBundleName, Is.Empty);
         }
         [Test]
-        public void NestedAndCrossOwnerLegacyMetadataRemainRejected()
+        public void OverlappingProjectsAndOutsideSelectionsRemainRejected()
         {
             AssetDatabase.CreateFolder(folder, "Child");
-            var parent = Owner(folder, "Parent"); var child = Owner(folder + "/Child", "Child");
-            var bundle = "resource82c-" + Guid.NewGuid().ToString("N");
-            MarkedText(folder + "/Child/Text.bytes", bundle);
-            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(new SubProjectData(), new List<SubProjectData> { parent, child }));
-            Assert.That(parent.Builds.Concat(child.Builds), Is.Empty);
+            Text(folder + "/Child/Text.bytes"); Text(folder + "/Default.bytes");
+            var parent = Project(folder, "Parent", folder + "/Child/Text.bytes");
+            var child = Project(folder + "/Child", "Child", folder + "/Child/Text.bytes");
+            Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(parent));
             AssetDatabase.DeleteAsset(folder + "/Parent.asset");
-            MarkedText(folder + "/Default.bytes", bundle);
-            Assert.Throws<InvalidOperationException>(() => SubProjectData.SplitAssetBundles2DefaultAndSubProjectDatas(new SubProjectData(), new List<SubProjectData> { child }));
+            child.Groups[0].Selections[0].Guid = AssetDatabase.AssetPathToGUID(folder + "/Default.bytes");
+            Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(child));
         }
         internal static object Invoke(Type type, string method, params object[] args)
         {

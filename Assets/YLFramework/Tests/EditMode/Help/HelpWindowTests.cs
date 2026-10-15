@@ -104,7 +104,7 @@ namespace YLFramework.Tests.Help
             var references = type.Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
             Assert.That(references.Any(name => name.StartsWith("Project.ActionKit", StringComparison.Ordinal) ||
                 name.Contains("AudioKit") || name.Contains("QFramework") ||
-                (name.StartsWith("XF", StringComparison.Ordinal) && name != "XFABManager") ||
+                name.StartsWith("XF", StringComparison.Ordinal) ||
                 (name.StartsWith("YLFramework.", StringComparison.Ordinal) && name != "YLFramework.Runtime") ||
                 name.StartsWith("DOTween", StringComparison.Ordinal)), Is.False);
         }
@@ -120,10 +120,10 @@ namespace YLFramework.Tests.Help
             Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/Help/HelpWindow.cs"),
                 Is.EqualTo("e42278efa6283704aa34a807cacdfff0"));
             var definition = JsonUtility.FromJson<HelpAssemblyDefinition>(File.ReadAllText("Assets/YLFramework/Editor/YLFramework.Editor.asmdef"));
-            CollectionAssert.AreEquivalent(new[] { "YLFramework.Runtime", "UnityEngine.UI", "XFABManager" }, definition.references);
+            CollectionAssert.AreEquivalent(new[] { "YLFramework.Runtime", "UnityEngine.UI" }, definition.references);
             CollectionAssert.AreEqual(new[] { "Editor" }, definition.includePlatforms);
-            Assert.That(definition.overrideReferences, Is.False);
-            Assert.That(definition.precompiledReferences, Is.Empty);
+            Assert.That(definition.overrideReferences, Is.True);
+            CollectionAssert.AreEqual(new[] { "Newtonsoft.Json.dll" }, definition.precompiledReferences);
             Assert.That(typeof(HelpWindowTests).Assembly.GetName().Name, Is.EqualTo("YLFramework.Tests.EditMode"));
             var moved = typeof(Editor.HelpWindow).GetCustomAttributesData()
                 .Single(attribute => attribute.AttributeType == typeof(UnityEngine.Scripting.APIUpdating.MovedFromAttribute));

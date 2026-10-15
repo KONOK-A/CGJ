@@ -60,13 +60,12 @@ Ownership：
 ## 依赖
 
 - Foundation 的 `Pool`：`ListPool<T>` 与 `DictionaryPool<TKey, TValue>`（Clear / Dispose 时归还），沿用既有 `YLFramework.Core.Pool` namespace；这不构成对 `YLFramework.Core.Runtime` 的依赖。
-- Table 提供数据项与多值索引，不替代 Foundation 的 `SerializedDictionary` 序列化容器，也不接管 Resource 的资源加载、Retain / Release 或缓存策略。
+- Table 提供数据项与多值索引，不替代 Foundation 的 `SerializedDictionary` 序列化容器，也不接管 Resource 的资源加载、租约或缓存策略。
 
 ## Resource 消费者
 
-- `ResTable : Table<IRes>`（`Runtime/Systems/Resource/Framework/ResTable.cs`）：`OnAdd`/`OnRemove`/`OnClear` 转发到 `TableIndex<string, IRes>`（按小写 AssetName 索引），枚举通过 `Dictionary.SelectMany`。
-- `AssetDataTable : Table<AssetData>`（`.../AssetBundleSupport/ConfigFile/AssetDataTable.cs`）：公开 `NameIndex` 属性，`OnDispose` 调用 `NameIndex.Dispose()`；`ResData.Reset()` 是真实 Dispose 调用点。
-- `ResTable.OnDispose()` 释放其独占的 `_nameIndex`；`ServiceManager` 负责资源登记、移除与资源生命周期，Table 不取得资源所有权。现有 Resource 消费者保持直接调用，无需额外适配层。
+- 旧 `ResTable`、`AssetDataTable` 与 `ResData` 随旧资源栈退役。正式 `ResourceSystem` 使用自己的 Catalog 与资源图，不依赖 Table 维持第二张资源索引。
+- Table 仍作为独立的通用多值索引保留；是否由当前资源系统消费不是其通用能力去留的依据。
 
 ## Update() 最终处理
 
@@ -75,7 +74,7 @@ Ownership：
 ## 测试
 
 - 当前仓库的 `Tests/EditMode/CollectionPoolTests.cs` 中四个 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约或 Resource 消费者的完整覆盖。
-- `Tests/EditMode/Audio/AudioSourceIndependenceTests.cs` 的真实源码闭包包含 Table / ResTable；它验证编译边界，不替代 Table 行为测试。
+- `Tests/EditMode/Resource/FrameworkAssemblyIndependenceTests.cs` 的完整 Runtime 源码闭包包含 Table；它验证编译边界，不替代 Table 行为测试。
 - 文档旧列出的 `TableTests.cs`、`TableIndexTests.cs`、`TableResourceConsumerTests.cs` 当前不在仓库，不作为可运行入口或本批验证证据。阶段 5.3.5 不重跑融合前成熟模块的全面验证。
 
 ## 已知限制

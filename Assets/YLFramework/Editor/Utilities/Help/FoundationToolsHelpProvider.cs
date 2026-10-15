@@ -25,7 +25,7 @@ namespace YLFramework.Editor
                 Guide("foundation", "Foundation 基础机制", "按需使用池、事件、绑定、计时与序列化，不要求创建 Module 或公共 Root。",
                     new[] { typeof(Core.Pool.ObjectPool<>), typeof(Events.EventBus), typeof(Binding.BindableProperty<>),
                         typeof(Timing.Timer), typeof(Timing.TimerScope), typeof(SerializedDictionary<,>) },
-                    HelpBlock.Paragraph("引用与所有权", "业务 asmdef 显式引用 YLFramework.Runtime。Foundation与Core是同主体的职责分区；Core 与 Audio 已通过消费合同接入新 YL Resource，旧 Resource 整体退役另批处理；ObjectPool<T>的借用对象由调用方归还；" +
+                    HelpBlock.Paragraph("引用与所有权", "业务 asmdef 显式引用 YLFramework.Runtime。Foundation与Core是同主体的职责分区；Core 与 Audio 已通过消费合同接入唯一 ResourceSystem；ObjectPool<T>的借用对象由调用方归还；" +
                         "EventBus 的 IUnRegister 令牌由订阅所有者注销，独立 EventBus 实例须自行 Dispose。BindableProperty<T> 的监听沿同一注销协议。" +
                         "Timer/TimerScope 管理到期回调与生命周期，不替代 Action 的逐帧插值/组合。"),
                     HelpBlock.Paragraph("编辑与导航", "SerializedDictionary<TKey,TValue> 由普通 Editor 的现有 Drawer 编辑并提示重复键等问题。" +
@@ -46,7 +46,7 @@ namespace YLFramework.Editor
                         "Action/Audio 保持各自帮助和成熟工具，不在此复制其 API 文档。"),
                     HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六个目录及根级 LICENSE.md，Plugins 完整递归。" +
                         "不含 Tests、根 Integrations、SDK 工具项目、NuGet/中间产物、游戏资源或 Assets/YLFrameworkData。" +
-                        "框架仍需 UGUI、Newtonsoft 等既有依赖，主体暂保留旧 Resource 的 XFAB 程序集引用；EventListener 使用原生 Inspector，Sirenix 插件已退出。剩余 Plugins 是内部交付决策，不表示已取得公开再分发许可。"),
+                        "框架仍需 UGUI、Newtonsoft 等既有依赖，主体不引用 XFAB 或可选适配；原游戏仍使用原包资源链。EventListener 使用原生 Inspector，Sirenix 插件已退出。剩余 Plugins 是内部交付决策，不表示已取得公开再分发许可。"),
                     Document("工具导航与导出说明", "README.md"),
                     Document("取色工具接入", "Modules/UI.md")),
                 Guide("attributes", "Attributes 与显示边界", "Foundation 展示元数据与 Core 编译器诊断是不同机制。",

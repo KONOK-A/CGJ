@@ -56,7 +56,7 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 |---|---|---|---|
 | Action | 动作组合、命名执行、安全句柄、屏幕过渡与内建 BCL Observable | 已归入 Runtime | [Modules/Action.md](Modules/Action.md) |
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
-| Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
+| Resource | 唯一 ResourceSystem、Catalog、资产/实例/Scene 租约、Core/Audio Provider 与正式构建发布工作台 | 正式加载链已接入；版本激活及生产安全更新另阶段实施 | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
@@ -84,7 +84,7 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 - `Plugins/` 完整递归，保留商业插件、Demo 与辅助工具，不裁剪或重配导入平台。这是内部交付决策，公开再分发许可仍需后续核查。
 - 包含Runtime/Editor正式功能分区及唯一 `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 与meta。七项分析器默认Warning，现为Runtime主体及真实引用消费者的编译器输入，不是Player运行引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
-- 框架仍沿用 UGUI、Newtonsoft 等既有依赖，Core 保留过渡 XFAB，不是零依赖安装包。EventListener 使用原生 Inspector，Sirenix Odin 插件及其编译引用已退出；ProjectSettings 的五个未使用 Odin 宏按配置权限边界保留。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
+- 框架仍沿用 UGUI、Newtonsoft 等既有依赖，不是零依赖安装包。Runtime/Editor 主体不依赖 XFAB；可选 XFAB Audio 适配独立、显式装配且不默认导出，原游戏保持原链。EventListener 使用原生 Inspector，Sirenix Odin 插件及其编译引用已退出；ProjectSettings 的五个未使用 Odin 宏按配置权限边界保留。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
 - 导出回归真实解包并检查递归资产内容、GUID / meta、完整 Plugins、Analyzer 唯一身份与禁用平台及排除项，不等于干净工程导入。实际 Player 门禁与阶段状态单独记录于 [阶段 6 方案](../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口)。
 
 ## 测试

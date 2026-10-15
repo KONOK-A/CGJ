@@ -164,9 +164,11 @@ namespace YLFramework.Core.Editor.Tests
             var references = definition.references.Select(ResolveReference).ToArray();
             Assert.That(references, Is.EquivalentTo(new[]
             {
-                "YLFramework.Runtime", "UnityEngine.UI", "XFABManager"
-            }), "Only the declared temporary XFAB backend may reference original assemblies.");
+                "YLFramework.Runtime", "UnityEngine.UI"
+            }), "The Editor subject must not require the original backend or optional adapters.");
             Assert.That(references.Distinct().Count(), Is.EqualTo(references.Length));
+            Assert.That(definition.overrideReferences, Is.True);
+            Assert.That(definition.precompiledReferences, Is.EqualTo(new[] { "Newtonsoft.Json.dll" }));
 
             var assembly = typeof(CreateModuleCommand).Assembly;
             Assert.That(assembly.GetName().Name, Is.EqualTo(EditorAssemblyName));
@@ -348,7 +350,7 @@ namespace YLFramework.Core.Editor.Tests
 
         private static bool IsForbiddenReference(string name)
         {
-            return name.StartsWith("XFGameFramework", StringComparison.Ordinal) ||
+            return name.StartsWith("XF", StringComparison.Ordinal) || name == "YLFramework.Audio.XFAB" ||
                 name.StartsWith("Project.Game", StringComparison.Ordinal) || name == "Assembly-CSharp" ||
                 name == "Assembly-CSharp-Editor" ||
                 name == "YLFramework.Core.Editor" || name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal);

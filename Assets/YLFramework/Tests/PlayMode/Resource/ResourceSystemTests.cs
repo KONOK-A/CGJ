@@ -552,6 +552,38 @@ namespace YLFramework.Tests.Resource
             public override int GetHashCode() => 1;
         }
 
+        private sealed class FailingOwner : IDisposable
+        {
+            internal readonly Exception Error = new InvalidOperationException("scope-cleanup-failure");
+            internal int Releases;
+            public void Dispose() { Releases++; throw Error; }
+        }
+
+        [Test]
+        public void ScopeCleanupPreservesEveryFailureReleasesHealthyLeasesAndNeverReplays()
+        {
+            var system = Initialize();
+            using var external = system.Acquire<TextAsset>(address);
+            using var scope = system.CreateScope();
+            var first = scope.Own(new FailingOwner());
+            var second = scope.Own(new FailingOwner());
+            var owned = scope.Acquire<TextAsset>(address);
+            var errors = Assert.Throws<AggregateException>(() => scope.Dispose());
+            CollectionAssert.AreEquivalent(new[] { first.Error, second.Error }, errors.InnerExceptions);
+            Assert.That(owned.IsValid, Is.False);
+            Assert.That(external.Asset.text, Is.EqualTo("resource81-owned-fixture"));
+            Assert.That(source.Releases, Is.Zero);
+            Assert.That(scope.IsDisposed, Is.True);
+            scope.Dispose();
+            Assert.That(first.Releases, Is.EqualTo(1));
+            Assert.That(second.Releases, Is.EqualTo(1));
+            external.Dispose();
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+            using var shutdown = system.ShutdownAsync();
+            Assert.That(shutdown.TakeResult(), Is.True);
+        }
+
         [Test]
         public void ScopeOwnUsesReferenceIdentityRatherThanDisposableValueEquality()
         {

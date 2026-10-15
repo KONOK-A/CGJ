@@ -86,7 +86,11 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Editor/Systems/Resource/CodeGeneration/ResourceCodeGenerator.cs",
                 FrameworkRoot + "/Editor/Systems/Resource/Service/ResourceEditorOperations.cs",
                 FrameworkRoot + "/Editor/Systems/Resource/Service/ResourceEditorSimulation.cs",
-                FrameworkRoot + "/Runtime/Systems/Resource/ResManager.cs",
+                FrameworkRoot + "/Runtime/Systems/Resource/ResourceSystem.cs",
+                FrameworkRoot + "/Runtime/Systems/Resource/ResourceConfiguration.cs",
+                FrameworkRoot + "/Runtime/Systems/Resource/Integration/CoreResourceProvider.cs",
+                FrameworkRoot + "/Runtime/Systems/Audio/ResourceAudioClipProvider.cs",
+                FrameworkRoot + "/Editor/Systems/Audio/AudioClipLibraryMigration.cs",
                 FrameworkRoot + "/Documentation/Modules/Attributes.md",
                 AnalyzerPath,
                 FrameworkRoot + "/Runtime/csc.rsp",
@@ -195,11 +199,16 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Foundation/LICENSE.md",
                 FrameworkRoot + "/Editor/Core/LICENSE.md",
                 FrameworkRoot + "/Samples/ColorSelector",
-                "Assets/Plugins/Demigiant/DOTween"
+                "Assets/Plugins/Demigiant/DOTween",
+                FrameworkRoot + "/Runtime/Systems/Resource/Framework",
+                FrameworkRoot + "/Runtime/Systems/Resource/Implementations",
+                FrameworkRoot + "/Runtime/Systems/Resource/HotUpdate",
+                FrameworkRoot + "/Runtime/Systems/Resource/Utilities"
             };
             var retiredFiles = new[] { "ActionKitSingleFileCreator.cs", "ActionKitSingleFileExporter.cs", "ActionKitSingleFileCreator.asset", "LogUtil.cs",
                 "YLFramework.Foundation.Runtime.asmdef", "YLFramework.Core.Runtime.asmdef", "YLFramework.Utilities.ZipTool.asmdef",
-                "YLFramework.Core.Editor.asmdef", "YLFramework.Editor.Help.asmdef" };
+                "YLFramework.Core.Editor.asmdef", "YLFramework.Editor.Help.asmdef",
+                "ResManager.cs", "ResLoader.cs", "ServiceManager.cs", "GameObjectLoader.cs", "SubProject.cs", "SubProjectData.cs" };
             var tempDirectory = Path.Combine(@"C:\Users\Kano\AppData\Local\Temp\kilo", "YLFramework.ExportTests-" + Guid.NewGuid().ToString("N"));
             var packagePath = Path.Combine(tempDirectory, "framework.unitypackage");
             try

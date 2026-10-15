@@ -10,7 +10,7 @@
 
 - 运行时：[`Runtime/Utilities/ZipTool/`](../../Runtime/Utilities/ZipTool/)
 - 对外封装：[`Utilities/`](../../Runtime/Utilities/ZipTool/Utilities/)；内置库：[`ICSharpCode.SharpZipLib/`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/)
-- namespace：`YLFramework.Utilities.ZipTool`；归 `YLFramework.Runtime` 主体，原独立asmdef/meta已退役。有asmdef的消费者引用Runtime并重编译，不保留旧DLL兼容壳；工具源码保持BCL-only，不等于整个主体DLL无引擎/XFAB编译依赖。
+- namespace：`YLFramework.Utilities.ZipTool`；归 `YLFramework.Runtime` 主体，原独立asmdef/meta已退役。有asmdef的消费者引用Runtime并重编译，不保留旧DLL兼容壳；工具源码保持BCL-only，不等于整个主体DLL无引擎依赖。主体已解除XFAB编译依赖。
 - 常规业务直接使用 `ZipUtility` / `GZipUtility`，多次读取同一归档使用 `using` 管理 `ZipArchiveReader`；无需 Manager、组件挂载或公共 Root。
 
 ## 主要功能
@@ -43,7 +43,7 @@
 ## 依赖
 
 - Zip源码无框架内模块或UnityEngine/UnityEditor依赖；`ZipToolSourceTests` 独立编译全源码，仅接受Unity安装目录Mono/NetStandard下BCL参考，排除主体、Engine、Editor、测试与XF DLL。合入主体不撤销这条源码边界，也不承诺模块独立裁剪交付。
-- Resource的ZipFileHelper仍在Android非Editor分支直接用内置ZipFile读取APK内StreamingAssets，其他平台走文件目录；平台资源接入仍归Resource，不强制迁到通用解压门面。
+- 旧Resource的ZipFileHelper随旧栈退役，不再通过它读取旧二进制表或APK内配置；内置ZipFile等低层接口仍可供明确调用方使用，不因此改变通用解压门面的职责，也不宣称已验证所有平台的资源交付。
 - `Tests/EditMode/ExportUnityPackageTests.cs` 直接使用内置 GZip / Tar 读取 Unity 导出包。内置低层类型继续保留，避免破坏现有消费者。
 
 ## 分发与许可

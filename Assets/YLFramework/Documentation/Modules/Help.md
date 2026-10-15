@@ -17,7 +17,7 @@ HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显�
 | [`Editor/Help/`](../../Editor/Help/) | `YLFramework.Editor` | 共享Help功能核心，namespace保持，不增加产品DLL |
 | [`Editor/Systems/Action/Help/`](../../Editor/Systems/Action/Help/)、[`Editor/Systems/Audio/Help/`](../../Editor/Systems/Audio/Help/) | `YLFramework.Editor` | 对应领域提供方，按显式类型索引 |
 | [`Editor/Utilities/Help/FoundationToolsHelpProvider.cs`](../../Editor/Utilities/Help/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 基础机制与工具提供方 |
-| [`Editor/Core/CoreHelpProvider.cs`](../../Editor/Core/CoreHelpProvider.cs) | `YLFramework.Editor` | Core提供方，暂留主体Runtime/UGUI/XFAB编译依赖 |
+| [`Editor/Core/CoreHelpProvider.cs`](../../Editor/Core/CoreHelpProvider.cs) | `YLFramework.Editor` | Core提供方；主体依赖Runtime/UGUI/Json.NET，不要求XFAB |
 | [`Tests/EditMode/Help/`](../../Tests/EditMode/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
 
 核心namespace保持 `YLFramework.Editor.Help`，所有正式编辑器类型共用Editor-only主体。Help源码与提供方仍按职责分离，注册/索引不扫描程序集、不新增管理中心；窗口GUID、原MovedFrom、菜单/Provider id与配置持久键保持。Editor整体依赖不代表Help需要引用任何领域对象。

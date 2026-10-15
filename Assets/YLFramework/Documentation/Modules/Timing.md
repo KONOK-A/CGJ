@@ -11,7 +11,7 @@ Foundation 中唯一的独立到期任务内核，提供 Scaled / Unscaled 秒�
 ## 位置与接入
 
 - 运行时：[`Runtime/Foundation/Timing/`](../../Runtime/Foundation/Timing/)，归属 `YLFramework.Runtime`，namespace 为 `YLFramework.Timing`。
-- 业务 asmdef 显式引用 Runtime；计时的中立源码不消费 Core/Systems/Utilities、Root/UI 或 XF/XFAB，整主体仍承担当前 Core 的临时后端编译依赖。
+- 业务 asmdef 显式引用 Runtime；计时的中立源码不消费 Core/Systems/Utilities、Root/UI 或 XF/XFAB。主体保留必要UGUI/Json.NET依赖，但不再要求XFAB。
 - `Internal/` 的 run、堆、生命周期监听和默认驱动均为实现细节，不公开可写堆字段。
 - Core `TimerObject` 归 [`Timing/Components/`](../../Runtime/Foundation/Timing/Components/)，namespace、脚本GUID与事件字段保持，无需重绑 Inspector；默认 TimerDriver 自动建立，不手动挂载。
 
