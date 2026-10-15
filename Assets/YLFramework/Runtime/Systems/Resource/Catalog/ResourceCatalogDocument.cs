@@ -96,6 +96,7 @@ namespace YLFramework.Services.Resource
         public string AssetId { get; }
         public bool Required { get; }
         internal ResourceCatalogGroupMember(JObject data) { AssetId = (string)data["AssetId"]; Required = (bool)data["Required"]; }
+        internal ResourceCatalogGroupMember(string assetId, bool required) { AssetId = assetId; Required = required; }
     }
 
     public sealed class ResourceCatalogGroup
@@ -107,5 +108,7 @@ namespace YLFramework.Services.Resource
             Id = (string)data["Id"];
             Members = ((JArray)data["Members"]).Select(x => new ResourceCatalogGroupMember((JObject)x)).ToList().AsReadOnly();
         }
+        internal ResourceCatalogGroup(string id, IEnumerable<ResourceCatalogGroupMember> members)
+        { Id = id; Members = ResourceCatalog.Copy(members); }
     }
 }

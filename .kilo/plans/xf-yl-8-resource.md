@@ -48,7 +48,7 @@
 
 本轮完成只读源码、配置、资产文本、提交及远端目标核对，使用五个独立专题研究和一个架构交叉审查。未运行 Unity、测试、构建、导入、资源刷新或性能测量；未计算 MainModule 文件 hash。结论中的“成熟”指生产者/消费者/释放链已存在，不表示本轮实测全部平台可靠。
 
-Canvas外部变更不改变本文Core资源取得/释放链或新旧身份隔离裁定，但过去对该Prefab序列化值/UI运行效果的验证不能视为当前仍有效。现有`CoreDefaultResourceTests.CanvasPreservesOriginalSerializedDataExceptYLAdaptationBinding`整文件等价断言（源码70-76行）与最新dirty资产静态不符，属于本轮之外的变更影响；后续须先确认该外部改动意图再复验相应契约，不能为阶段8过关而静默削弱断言。本轮不改资产或测试、不还原它。
+Canvas外部变更不改变本文Core资源取得/释放链或新旧身份隔离裁定，但过去对该Prefab序列化值/UI运行效果的验证不能视为当前仍有效。现有`CoreDefaultResourceTests.CanvasPreservesOriginalSerializedDataExceptYLAdaptationBinding`整文件等价断言（源码70-76行）与研究时dirty资产静态不符，属于本轮之外的变更影响；后续须先确认该外部改动意图再复验相应契约，不能为阶段8过关而静默削弱断言。研究及8.3初次交付未改资产或测试；用户随后明确授权恢复旧数据，恢复与回归见18.6。
 
 Context7 查询能力未暴露、MCP resource/template 列表为空；版本敏感结论补核 Unity **2022.3** 官方文档，不冒充 MCP 实时结果。官方依据见第 13 节。
 
@@ -431,7 +431,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 下列十个主批次按依赖与可独立拒收的闭环拆分，不按目录机械分包；8.2与8.6内部还有必须逐个完成/review的独立子批次，不允许一次合成巨型修改。8.1-8.5是隔离夹具中的新链，不改变默认Core后端；**8.6c后不能继续保留新旧YL两套运行authority**。8.7-8.8新增完整更新，不把8.6“加载融合”冒充阶段8全部完成。
 
-每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1～8.2b 已收口，8.2c 技术 COMPLETE、待用户验收及 Git 授权，证据见第14～17节；8.3及后续未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
+每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1～8.2c 已完成技术验收和 Git 收口；8.3 技术 COMPLETE、待用户验收及单独 Git 授权，证据见第18节；8.4及后续未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
 
 ### 8.1 正式合同、目录及Resources最小闭环
 
@@ -458,7 +458,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **子批次次序**：8.2a完成自有定义/map/依赖分包/持久workspace，只构建隔离产物并过manifest身份/重复与增量门禁；8.2b接安全发布/catalog/归属/回滚，故障注入旧产物不变；8.2c接工作台/Editor模拟索引/常量生成与实际编译。每个子批次都独立review和停止检查，不把生成器失败变成整个构建未知状态。
 
-**8.2b 状态**：**技术 COMPLETE，已完成 Git 收口**，见第16节。**8.2c 状态：技术 COMPLETE，Schema v1 冻结，等待用户验收及单独 Git 授权**，见第17节。本地/内部受控8.2闭环通过，不等于8.8生产远端安全或8.3 Runtime加载通过。
+**8.2b 状态**：**技术 COMPLETE，已完成 Git 收口**，见第16节。**8.2c 状态：技术 COMPLETE，Schema v1 冻结且已 Git 收口**，见第17节。本地/内部受控8.2闭环通过，不等于8.8生产远端安全；8.3 Runtime加载的独立验收证据见第18节。
 
 **Schema最终冻结门禁**：8.2c收口前对真实BuildMap/Manifest依赖、资产与子资产加载描述、Group成员、catalog序列化/读回及生成常量消费逐项对照；用最小原生读回探针确认子资产描述确能定位Bundle内容，不将8.3完整Runtime加载器提前实施。闭环证据充分后记录首版Schema和规范化规则；必要字段修正属于本批设计验证，不为未冻结原型增加永久兼容层。
 
@@ -476,10 +476,12 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 **风险**：native不可取消、同步/异步竞争、图环/菱形与失败pin释放、动态图片创建后迟到。
 
-- [ ] 真实Text/Prefab/Sprite subasset、typed多资产加载/卸载重载；菱形依赖只产一次，缺包/损坏/未知子名有稳定终态。
-- [ ] 依赖首项即时失败及大于并发槽的排队失败不挂起；typed同名并行不串结果，sync遇async无二次nativeIO。
-- [ ] 两scope共享资产，一方Dispose另一方存活；失败/最后取消/退出的native迟到完成最终native差集回本系统基线。
-- [ ] 本地图片真实大小写、网络错误/坏图/零owner/解码后取消，Destroy仅作用本系统创建Texture；保留source行为而退出WWW机制。
+**状态**：**技术 COMPLETE（2026-10-15，见第18节），待用户技术验收和单独 Git 收口授权**。
+
+- [x] 真实Text/Prefab/Sprite subasset、typed多资产加载/卸载重载；菱形依赖只产一次，缺包/损坏/未知子名有稳定终态。
+- [x] 依赖首项即时失败及大于并发槽的排队失败不挂起；typed同名并行不串结果，sync遇async无二次nativeIO。
+- [x] 两scope共享资产，一方Dispose另一方存活；失败/最后取消/退出的native迟到完成最终native差集回本系统基线。
+- [x] 本地图片真实大小写、网络错误/坏图/零owner/解码后取消，Destroy仅作用本系统创建Texture；新正式 source 使用 UWR，不修改或退役8.6前的旧图片后端。
 
 ### 8.4 Prefab实例、缓存与Foundation桶协作
 
@@ -880,3 +882,69 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 
 - 以独立授权一次性完成：精确暂存本批 Changed 范围后，提交 `66400c8bcf08f73085eb9e79c236a18cdbdced2f`（`feat(resource): 完成8.2c资源工作台与代码生成`，37个文件，1501+/1948-），线性落在 `b4c2c6c` 之上；随后推送至 `origin/fusion/8-resource`（`b4c2c6c..66400c8`）。本地 HEAD、`origin/fusion/8-resource` 与实际 `git ls-remote` 均为 `66400c8`。
 - 提交只含本批 Resource Editor/Runtime Catalog/迁移测试及本 Plan；受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Core `Canvas.prefab`）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md` 未暂存、未提交、未修改，仍留在工作区。原游戏、XF/XFAB/XFFSM、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；未 Reset/Clean/Stash/Rebase/Force Push。本次未新增产品行为，故未重跑 Unity 编译/测试/构建/生成/Review。
+
+## 18. 8.3 实际成果与技术验收（2026-10-15）
+
+### 18.1 基线与正式入口
+
+- 分支 `fusion/8-resource`，起始及交付 HEAD 均为 `57f00a9a26be7da4af4c91e441f4a4f5c36b0f6e`。本轮仅授权8.3代码、必要测试和一次独立技术Review；未暂存、Commit、Push、合并或创建里程碑。
+- `ResourceLocalSnapshot.Open(absoluteDirectory, projectId, expectedCatalogDigest, platform, appContentCompatibilityId)` 显式绑定本地完整版本，不读 active/current index，不选最新版本，不执行恢复/激活。严格消费冻结v1 Codec，验证确切Catalog摘要、Project/Unity/平台/App、Complete与完整文件集合、长度/SHA-256，拒绝链接输入。缺文件/未登记内容在集合门禁报告 `InvalidDataException`；明确路径必须 fully-qualified，Windows drive-relative/current-drive-rooted 输入不能冒充绝对路径。
+- `snapshot.CreateCatalog(compiledAssetTypes)` 产生正式内存Catalog，保留canonical/alias、资产/子资产身份、Bundle和Group描述；常用Unity类型有明确编译映射，自定义类型须显式提供 `typeof`。不扫描程序集，不从Catalog字符串反射创建类型，不修改v1字段、编码、身份或持久化含义。
+- `new ResourceConfiguration(new[] { catalog })` 默认装配Resources、Local/URL Texture，唯一ResourceSystem按明确快照装配AssetBundle Source。`ResourceEditorSimulation.CreateConfiguration()` 显式装配Editor borrowed Source；预览入口仍不会自动初始化Runtime。没有新增Manager、加载表权威或生产XFAB后端。
+- 正式能力：`Acquire<T>/AcquireAsync<T>`（子资产通过 `ResourceAddress.SubAsset` 取得）、`AcquireBundle/AcquireBundleAsync`、`AcquireAllAsync<T>(projectId,bundleId)`、`AcquireGroupAsync(projectId,groupId)`。typed批量仅取得Catalog登记且可赋值的成员，返回拥有型 `AssetBatchLease<T>`，不是裸数组；Group按canonical成员及Required取得，required失败归还整批、optional失败保留cause。Scene成员不能被Group伪装成普通资产加载。
+
+### 18.2 唯一图与所有权
+
+- Bundle records 属于ResourceSystem，以 `CatalogDigest + BundleId` 唯一索引；先迭代建立完整DAG节点、依赖入边和根pin，再运行IO。异步Bundle创建使用FIFO队列及4槽；同步只驱动本次保留的冷图，不接管异步队列，遇相同在途图明确 `InProgress`。此4槽不是所有Asset/Texture请求的全局限流。
+- Source交割 `asset + retention` 给唯一AssetRecord；AssetBundle资产/subasset的retention是图根Lease。每个consumer独立AssetLease，原生生产共享；物理Bundle拥有其所加载资产。无idle缓存pin，最终责任归零时依赖者先 `Unload(true)`，再归还依赖入边；共享/菱形叶不提前卸载。使用前重验Bundle文件并保持只读句柄至节点释放，不用mtime或Complete自身代替内容验证。
+- Bundle与Asset请求均先冻结整批终态及责任，再通知观察者。Request单次TakeResult、未领取Dispose、Scope、稳定终态、主线程、会话epoch及观察者异常隔离仍有效。退出先冻结全部请求，再执行解绑/私有取消/释放，不能由级联取消重写其他请求的终态。
+- AssetBundleCreateRequest/AssetBundleRequest不可取消，producer持续观察到最后收尾，零owner迟到结果仍归还图；Shutdown对合法live owner返回Busy并保持可用，纯在途收尾可等待关闭。旧authority由draining保留，新初始化在旧图未排空时拒绝Busy；没有协程宿主或全局Unload兜底。
+- 私有UWR的最后consumer可Abort；取消generation不再向后来的consumer交割旧Abort结果。新consumer等待旧IO结束，清理旧结果后在同一record串行重新生产，不重叠native IO。不可取消来源则继续共享有效在途producer。
+- Resources/AssetDatabase只drop自己的引用，不Destroy外借资产；Local/URL Texture仅Destroy自己创建/解码的对象。Local支持冷同步及异步，URL只支持冷异步（Ready缓存可同步取得），保留完整路径/URL大小写。Local输入32MiB上限，UWR请求30秒timeout；不具备生产远端签名、下载预算/续传或重试更新协议。
+- `BundleLease.Bundle` 是低层借读入口；调用方自行启动的native操作不进入内部pending账本，必须把BundleLease持有到这些操作和使用结束，不得自行Unload。正常消费优先使用Asset API。8.4可直接用Prefab AssetLease及其依赖retention覆盖后续active/idle/destroy-pending实例；本轮不创建实例或实例桶。
+
+### 18.3 实际Unity证据
+
+实际环境：Unity `2022.3.62f3c1` / `StandaloneWindows64` / 正常Domain Reload，所有native夹具使用8.2正式Builder/Publisher及冻结v1产物，在可恢复的空场景中运行，不进入原游戏资源链。
+
+| 最终定向范围 | 实际结果 | 证明内容 |
+| --- | --- | --- |
+| Resource PlayMode namespace | 36 Passed / 0 Failed / 0 Skipped | 8.1受影响producer/Request/Scope/Resources合同、optional Group、取消generation重取；7项真实Local/loopback HTTP Texture门禁 |
+| ResourceRequestTests | 5 Passed | owning结果单次交割、Dispose/异常/观察者合同 |
+| ResourceCatalogTests | 10 Passed | 地址/alias/type、重复身份、缺依赖/环/菱形内存模型 |
+| ResourceCatalogCodecTests | 15 Passed | 冻结v1规范化、类型/子身份/alias、非法依赖/兼容和集合上限 |
+| ResourceEditorSimulationTests | 6 Passed | 现有描述/失效/歧义门禁与正式Source装配，borrow不Destroy |
+| ResourceSessionSafetyTests | 2 Passed | dirty/未保存场景拒绝且不关闭/保存 |
+| ResourceLocalSnapshotTests | 1 Passed | 完整真实发布挂载、编译type/子key、无native副作用、坏/缺文件及非绝对路径拒绝 |
+| CompleteNative83RegressionSharesOnePublicationAndPreservesReloadEvidence | 1 Passed | 单份真实发布连续覆盖下述10段native合同，任一断言失败使整个用例失败；最终方法16.727秒（不含夹具构建） |
+| ResourceSessionTests.RealPlayExitInvalidatesOwnershipRejectsReentryAndNextPlayCanInitialize | 1 Passed | 既有Resources借用、退出重入、未领取结果及双Play直接回归 |
+| CoreArchitectureBoundaryTests（Development闭包） | 1 Passed | Foundation+Root+Core实际辅助编译及Systems符号拒绝；不是完整Player构建 |
+| AudioXfabBoundaryTests | 1 Passed | 既有可选适配器边界/默认导出不变 |
+| CoreDefaultResourceTests | 授权恢复后4 Passed / 0 Failed | 初次交付为3 Passed / 1已知基线 Failed；随后按独立授权恢复Canvas旧数据并原断言复验，见18.6 |
+
+- native综合合同：Text内容、Prefab/共享Texture及真实菱形依赖、Sprite子资产rect/name与卸载/重载；两个Scope与第三个独立consumer；typed Text/Sprite批量、Group与公开BundleLease；缺失共享叶、坏文件、超过4槽的排队失败与无关健康请求；观察者异常/最后取消/会话失效及迟到收尾；Editor正式Scope借用；Bundle整批通知重入；失败观察者内同步冷加载；真实native Sprite被本测试临时改名后0匹配/2匹配明确失败并清账；已启动AssetBundleRequest后最后取消及真实退出/下一Play。没有用Mock证明Bundle生命周期。
+- 菱形加载次数与实际Catalog闭包节点数一致，每个native图节点一次生产；归零后真实Unity对象 `== null`、加载Bundle差集回0、asset/bundle记录及根/边pin归零，随后正式reload成功。原生asset阶段通过直接观察实际AssetBundleRequest存在且尚未完成锁定，不把等待Bundle阶段当成已开始asset加载。
+- 动态图片实测：大小写Local PNG、缺失/坏图、独立consumer取消、未领取Dispose、物理Destroy；HTTP路径/query大小写、404及坏图、共享仅一个GET、最后Abort；服务端确认传输开始后取消并立即重取成功、两代请求顺序明确；真实新解码结果在完成observer未领取Dispose后最终fake-null。cancelable producer的可控收尾窗口只用于确定性内核回归，不冒充真实Bundle证据。
+- MCP `TotalTests` 是发现树，不是执行量；跨Domain Reload的Summary duration有异常大值，部分多用例汇总会重置，故native最终采用单一完整用例与逐项实际结果，不用发现量/异常时长冒充验收。未重跑阶段1～7完整套件、完整8.2历史构建/事务、原游戏或Player；新Schema读回、必要闭包及直接受影响合同按风险定向回归。
+
+### 18.4 实质修复与独立Review
+
+- 本批真实RED→GREEN修复：Bundle逐个通知让兄弟请求仍Pending/可被取消；同步共用全局pump在观察者重入时返回Pending TakeResult；最后私有取消后新consumer加入旧Abort generation；Windows rooted但非fully-qualified路径被误接受。前两项使用真实Bundle，generation窗口使用确定性内核回归并补真实HTTP开始后重取验证；不是弱化断言或盲重试。
+- 一次独立新上下文只读Review，无Critical；2项Important是测试场景安全检查位置及缺文件断言/实现不一致，1项Minor是跨reload Setup失败前的所有权登记。已将guard移到任何fixture构造前，交割前失败清理限定自有fixture，缺文件明确固定InvalidDataException及原因消息。成功流程/场景保护及native整体回归通过。
+- Review另外指出取消重取、已启动asset native与解码零owner的待证窗口，均补必要验证并修复generation缺口。调用方直接启动的低层native操作保活边界写入BundleLease文档，不将内部账本推定为自动纳管外部operation。没有第二次Review或虚构审查者执行过Unity。
+
+### 18.5 保护、限制与停止点
+
+- native综合夹具前后对 `Assets/Games`、`Assets/Scenes`、原 `Assets/StreamingAssets`、`AssetBundles/MainModule`、`Packages`、`ProjectSettings` 全部保护快照比对通过，只清理登记的本次fixture源码、workspace、发布及临时场景；不清理先前完整验证版本、未知缓存或其他任务产物。Schema v1磁盘格式未修改，原XF/XFAB/XFFSM、MainModule、Core/Audio消费者/旧后端及ProjectName语义未改。
+- 8.3初次交付时四项用户改动blob与14.4完全相同：`.gitignore`=`a14b361...`、`.kilo/kilo.jsonc`=`e943dde...`、ProBuilder=`59b16de...`、Canvas=`c6b7d12...`。并行UI Plan原样保留，不纳入本批。实际暂存区为空、HEAD不变，tracked diff-check通过。Canvas后续单独授权恢复见18.6，其他保护不变。
+- 初次交付时 `CoreDefaultResourceTests.CanvasPreservesOriginalSerializedDataExceptYLAdaptationBinding` 实际失败：用户既有GraphicRaycaster mask为4294967295（旧断言期望2047），另有已记录Scaler字段。当时blob正是14.4的保护基线，属于第1节已注明的外部变化，不是8.3回归；未擅自还原或降低断言。该失败随后依据明确授权恢复数据并复验通过，见18.6。
+- 新增7个Runtime脚本、3个测试脚本及10份Unity生成meta，GUID唯一、AssetDatabase导入/反查一致；最终无dirty场景、无资源authority、加载Bundle=0、scriptCompilationFailed=false。Player编译图Runtime有424个源文件，无Editor source或Editor assembly反向泄漏；这不是Player实机验证。
+- 仅验收本机Windows Editor/正常Domain Reload。未验证Player、IL2CPP、其他平台、关闭Domain Reload、jar/WebGL/StreamingAssets自动装配、生产HTTPS/CDN或同项目多版本native共存。URL是基础Texture来源，不是8.7/8.8生产下载更新；无idle缓存或磁盘清理API，释放由实际责任驱动。Scene只可显式Bundle准备，真实Scene/Scene pin仍留8.5。
+- **8.3 技术 COMPLETE，等待用户技术验收和单独Git收口授权。到此停止，不自动进入8.4、不改变Core/Audio默认后端、不合并integration/xf-yl、不创建阶段8里程碑。**
+
+### 18.6 Canvas旧数据授权恢复（2026-10-15）
+
+- 用户在确认上述基线冲突后明确授权“恢复旧数据”。仅将自有YL `Canvas.prefab` 的 `m_BlockingMask.m_Bits` 从4294967295恢复2047，并删除额外显式序列化的 `referenceResolution/automaticMatch/manualMatch` 三字段，恢复原序列化表达；未改变UGUI CanvasScaler配置、YL Adaptation脚本绑定或其他资源数据。
+- 恢复后Canvas blob为 `5d8cf22e5ef5a2c31a028798d4268fc8f0cfb4c5`，与当前HEAD版本一致，该Prefab不再有工作区差异。其meta blob仍为 `8e2351424d2703663e4bfeee924b9f79bc2740e8`，GUID仍为 `0df4ee5a6aa484a40b5d537a1c23a2c0`；原XF对照件blob仍为 `041390a1b7280f816c0d0dd22c48579ef36d7c7b`，未修改。
+- Unity重新导入后定向执行 `CoreDefaultResourceTests`：**4 Passed / 0 Failed / 0 Skipped**，包含原Canvas整文件等价断言、Canvas/EventSystem独立身份与默认组件检查。未修改测试源码或断言，无dirty场景；未运行无关native Bundle/Player回归。
+- 此项为用户单独授权的资源恢复，不是撤回此前保护记录或扩展8.3范围；其他用户改动及并行UI Plan保持原样。未暂存、Commit、Push、进入8.4或改变Git停止点。

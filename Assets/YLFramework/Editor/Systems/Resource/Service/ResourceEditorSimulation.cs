@@ -13,7 +13,7 @@ namespace YLFramework.Editor.Resource
     /// <summary>
     /// Editor 专用的零打包取得/预览。每次操作从正式 Project 重建 Catalog 内存快照，不缓存 Unity 对象或第二份地址表。
     /// 可绑定已发布 Catalog，定义/身份不一致时明确失效。结果是 AssetDatabase 借用对象，不得 Destroy/Unload。
-    /// 不初始化 Runtime，不加载 Scene，也不模拟 Bundle 生命周期；8.3 再接入正式 source/lease。
+    /// 预览不初始化 Runtime；CreateConfiguration 可显式装配到唯一 ResourceSystem，不加载 Scene 或模拟 Bundle 生命周期。
     /// </summary>
     [InitializeOnLoad]
     public sealed class ResourceEditorSimulation
@@ -69,6 +69,32 @@ namespace YLFramework.Editor.Resource
 
         public ResourceCatalog GetCatalog(string projectId) => Snapshot(projectId).Catalog;
 
+        /// <summary>显式装配 Editor borrowed Source。地址/类型身份在每次生产时重验，不根据旧 XF 设置自动启用。</summary>
+        public ResourceConfiguration CreateConfiguration() => new(projects.Keys.Select(id => Snapshot(id).Catalog),
+            new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true), new TextureResourceSource(false), new SimulationSource(this) });
+
+        private sealed class SimulationSource : IResourceSource
+        {
+            private readonly ResourceEditorSimulation simulation;
+            internal SimulationSource(ResourceEditorSimulation simulation) => this.simulation = simulation;
+            public ResourceSourceId Id => ResourceSourceId.Editor;
+            public bool SupportsSynchronousLoad => true;
+            public void Validate(ResourceCatalogEntry entry)
+            {
+                var current = simulation.Resolve(entry.Address);
+                if (current.AssetId != entry.AssetId || !current.Location.Equals(entry.Location)) throw new InvalidOperationException("Editor Source snapshot is stale: " + entry.Address);
+            }
+            public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type)
+            {
+                Validate(entry);
+                if (entry.Location.AssetType == typeof(SceneAsset)) throw new ResourceException(ResourceError.Unsupported, "Scene previews are not Runtime asset acquisitions.");
+                return new ResourceSourceResult(simulation.Load(entry.Address, type));
+            }
+            public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => new Operation(Load(entry, type).Asset);
+            public void Release(Object asset) { }
+            private sealed class Operation : ResourceSourceOperation { internal Operation(Object asset) => Complete(asset, null); }
+        }
+
         private (ResourceBuildMap Map, ResourceCatalog Catalog) Snapshot(string projectId)
         {
             CheckEditor();
@@ -86,7 +112,8 @@ namespace YLFramework.Editor.Resource
             }
             foreach (var main in map.Assets) Add(main);
             foreach (var sub in ResourceBundleBuilder.DescribeSubAssets(map)) Add(sub.MainAsset, sub);
-            var snapshot = new ResourceCatalog(projectId, entries);
+            var snapshot = new ResourceCatalog(projectId, entries) { Groups = map.Groups.Select(x => new ResourceCatalogGroup(x.Key,
+                x.Value.Select(id => new ResourceCatalogGroupMember(id, true)))).ToList().AsReadOnly() };
             if (catalogs.TryGetValue(projectId, out var published))
             {
                 // immutable Catalog 不随源重命名/定义切换偷偷漂移；仅允许内容重导入而身份描述不变。

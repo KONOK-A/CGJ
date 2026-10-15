@@ -18,12 +18,24 @@ namespace YLFramework.Services.Resource
         public int ProducerCount { get; }
         public int WaiterCount { get; }
         public int LeaseCount { get; }
-        internal ResourceDiagnosticsSnapshot(int records, int producers, int waiters, int leases)
-        { RecordCount = records; ProducerCount = producers; WaiterCount = waiters; LeaseCount = leases; }
+        public int BundleRecordCount { get; }
+        public int BundleRootPinCount { get; }
+        public int BundleDependencyPinCount { get; }
+        public int RunningBundleCount { get; }
+        public int QueuedBundleCount { get; }
+        public int NativeBundleLoadCount { get; }
+        public int NativeBundleUnloadCount { get; }
+        internal ResourceDiagnosticsSnapshot(int records, int producers, int waiters, int leases, int bundles,
+            int roots, int edges, int running, int queued, int loads, int unloads)
+        {
+            RecordCount = records; ProducerCount = producers; WaiterCount = waiters; LeaseCount = leases;
+            BundleRecordCount = bundles; BundleRootPinCount = roots; BundleDependencyPinCount = edges;
+            RunningBundleCount = running; QueuedBundleCount = queued; NativeBundleLoadCount = loads; NativeBundleUnloadCount = unloads;
+        }
     }
 
     /// <summary>每会话唯一、显式初始化的资源权威。所有入口仅用于 Unity 主线程，不创建协程宿主。</summary>
-    public sealed class ResourceSystem
+    public sealed partial class ResourceSystem
     {
         private static ResourceSystem authority;
         private static readonly HashSet<ResourceSystem> draining = new();
@@ -127,11 +139,13 @@ namespace YLFramework.Services.Resource
                 if (source == null || !source.Id.IsValid || sources.ContainsKey(source.Id)) throw new ArgumentException("Null, invalid or duplicate source identity.");
                 sources.Add(source.Id, source);
             }
+            sources.Add(ResourceSourceId.AssetBundle, new AssetBundleSource(this));
             var projects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var catalog in configuration.Catalogs)
             {
                 if (catalog == null || !projects.Add(catalog.ProjectId)) throw new ArgumentException("Null or case-conflicting project catalog.");
                 catalogs.Add(catalog.ProjectId, catalog);
+                if (catalog.Snapshot != null) ValidateSnapshotPlatform(catalog.Snapshot);
                 var resourcePaths = new HashSet<(string, Type)>(new ResourcesPathComparer());
                 foreach (var entry in catalog.Entries)
                 {
@@ -209,7 +223,11 @@ namespace YLFramework.Services.Resource
             var waiter = new Waiter<T>(request, address);
             record.Waiters.Add(waiter);
             var loading = record;
-            request.Attach(() => loading.Waiters.Remove(waiter), () => loading.Operation?.Progress ?? loading.LastProgress);
+            request.Attach(() =>
+            {
+                loading.Waiters.Remove(waiter);
+                CancelUnobservedProducer(loading);
+            }, () => loading.Operation?.Progress ?? loading.LastProgress);
             if (record.Started) return request;
             record.Started = true;
             try
@@ -217,19 +235,34 @@ namespace YLFramework.Services.Resource
                 if (synchronous) CompleteRecord(record, record.Source.Load(entry, entry.Location.AssetType), null);
                 else
                 {
-                    record.Operation = record.Source.LoadAsync(entry, entry.Location.AssetType) ?? throw new InvalidOperationException("The source did not return a producer operation.");
-                    record.Completion = () => FinishOperation(record);
-                    record.Operation.Completed += record.Completion;
-                    if (record.Operation.IsDone) FinishOperation(record);
+                    StartAsyncProducer(record);
                 }
             }
             catch (Exception cause)
             {
                 // 只捕获来源生产失败；观察者异常已在 Request 中隔离，不伪装成加载失败。
-                if (record.Loading) CompleteRecord(record, null, cause);
+                if (record.Loading) CompleteRecord(record, default, cause);
                 else throw;
             }
             return request;
+        }
+
+        private void StartAsyncProducer(AssetRecord record)
+        {
+            var operation = record.Source.LoadAsync(record.Entry, record.Entry.Location.AssetType) ?? throw new InvalidOperationException("The source did not return a producer operation.");
+            record.Operation = operation;
+            record.Completion = () => FinishOperation(record);
+            operation.Completed += record.Completion;
+            if (operation.IsDone) FinishOperation(record);
+            else CancelUnobservedProducer(record);
+        }
+
+        private static void CancelUnobservedProducer(AssetRecord record)
+        {
+            if (record.Waiters.Count != 0 || record.CancelRequested || record.Operation?.SupportsCancellation != true) return;
+            // 先标记这一代已进入取消收尾，再调用可能同步完成/重入的私有 IO 取消。
+            record.CancelRequested = true;
+            record.Operation.Cancel();
         }
 
         private void Track<T>(ResourceRequest<T> request)
@@ -249,17 +282,32 @@ namespace YLFramework.Services.Resource
             if (!record.Loading) return;
             var operation = record.Operation;
             record.LastProgress = operation.Progress;
-            var asset = operation.TakeAsset();
+            var result = operation.TakeResult();
             var cause = operation.Error;
             operation.Completed -= record.Completion;
             record.Completion = null;
             record.Operation = null;
             operation.Dispose();
-            CompleteRecord(record, asset, cause);
+            if (record.CancelRequested && record.Waiters.Count != 0 && IsAvailable)
+            {
+                // 新消费者等待旧 IO 收尾，不接收旧 Abort 结果，也不与它重叠生产。
+                try
+                {
+                    ReleaseProduction(record.Source, result);
+                    record.CancelRequested = false;
+                    record.LastProgress = 0;
+                    StartAsyncProducer(record);
+                }
+                catch (Exception error) { if (record.Loading) CompleteRecord(record, default, error); else throw; }
+                return;
+            }
+            CompleteRecord(record, result, cause);
         }
 
-        private void CompleteRecord(AssetRecord record, UnityEngine.Object asset, Exception cause)
+        private void CompleteRecord(AssetRecord record, ResourceSourceResult result, Exception cause)
         {
+            var asset = result.Asset;
+            record.Retention = result.Retention;
             record.Loading = false;
             var waiters = record.Waiters.ToArray();
             record.Waiters.Clear();
@@ -267,7 +315,8 @@ namespace YLFramework.Services.Resource
             if (!IsSessionActive)
                 failure = new ResourceException(ResourceError.SessionUnavailable, "The producing session ended.", cause, record.Entry.Address, record.Entry.Location.Source);
             else if (cause != null || !asset)
-                failure = new ResourceException(ResourceError.LoadFailed, $"Source failed to load '{record.Entry.Address}' from {record.Entry.Location}.", cause, record.Entry.Address, record.Entry.Location.Source);
+                failure = new ResourceException(cause is ResourceException resourceError ? resourceError.Kind : ResourceError.LoadFailed,
+                    $"Source failed to load '{record.Entry.Address}' from {record.Entry.Location}.", cause, record.Entry.Address, record.Entry.Location.Source);
             else if (!record.Entry.Location.AssetType.IsInstanceOfType(asset))
                 failure = new ResourceException(ResourceError.TypeMismatch, $"Source returned {asset.GetType().FullName} for {record.Entry.Location}.", address: record.Entry.Address, source: record.Entry.Location.Source);
             record.Asset = asset;
@@ -286,9 +335,11 @@ namespace YLFramework.Services.Resource
             internal readonly IResourceSource Source;
             internal readonly List<IWaiter> Waiters = new();
             internal UnityEngine.Object Asset;
+            internal IDisposable Retention;
             internal int LeaseCount;
             internal float LastProgress;
             internal bool Loading = true;
+            internal bool CancelRequested;
             internal bool Started;
             internal ResourceSourceOperation Operation;
             internal Action Completion;
@@ -329,9 +380,17 @@ namespace YLFramework.Services.Resource
             var asset = record.Asset;
             record.Asset = null;
             record.LeaseCount = 0;
-            if (!ReferenceEquals(asset, null))
-                try { record.Source.Release(asset); }
+            var retention = record.Retention;
+            record.Retention = null;
+            ReleaseProduction(record.Source, new ResourceSourceResult(asset, retention));
+        }
+
+        private static void ReleaseProduction(IResourceSource source, ResourceSourceResult result)
+        {
+            if (!ReferenceEquals(result.Asset, null))
+                try { source.Release(result.Asset); }
                 catch (Exception error) { Debug.LogException(error); }
+            result.Retention?.Dispose();
         }
 
         /// <summary>live Lease/等待者返回 Busy 并保持可用；零 owner 原生操作由同一 cleanup owner 排空后关闭。</summary>
@@ -341,6 +400,7 @@ namespace YLFramework.Services.Resource
             var request = new ResourceRequest<bool>();
             if (State == ResourceSystemState.Closed) { request.SetSuccess(true); return request; }
             if (!IsSessionActive) return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
+            if (publicBundleLeases.Count != 0) return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live Bundle leases or consumers.");
             foreach (var record in records.Values)
                 if (record.LeaseCount != 0 || record.Waiters.Count != 0)
                     return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live leases or consumers.");
@@ -352,7 +412,8 @@ namespace YLFramework.Services.Resource
 
         private void CheckDrain()
         {
-            if (records.Count != 0) return;
+            if (records.Count != 0 || bundleRecords.Count != 0) return;
+            bundleQueue.Clear();
             draining.Remove(this);
             if (State != ResourceSystemState.ShuttingDown) return;
             State = ResourceSystemState.Closed;
@@ -384,6 +445,7 @@ namespace YLFramework.Services.Resource
                 catch (Exception error) { Debug.LogException(error); }
             foreach (var record in new List<AssetRecord>(system.records.Values))
                 if (!record.Loading) system.ReleaseRecord(record);
+            foreach (var lease in new List<BundleLease>(system.publicBundleLeases)) lease.Dispose();
             system.CheckDrain();
             foreach (var request in requests) request.NotifyInvalidation();
         }
@@ -398,7 +460,17 @@ namespace YLFramework.Services.Resource
             var leases = 0;
             foreach (var record in records.Values)
             { if (record.Loading) producers++; waiters += record.Waiters.Count; leases += record.LeaseCount; }
-            return new ResourceDiagnosticsSnapshot(records.Count, producers, waiters, leases);
+            var roots = 0;
+            var edges = 0;
+            var queued = 0;
+            foreach (var record in bundleRecords.Values)
+            {
+                roots += record.RootPins;
+                edges += record.References - record.RootPins;
+                if (record.State == BundleState.Queued) queued++;
+            }
+            return new ResourceDiagnosticsSnapshot(records.Count, producers, waiters, leases, bundleRecords.Count, roots, edges,
+                runningBundles, queued, nativeBundleLoads, nativeBundleUnloads);
         }
 
         private static ResourceRequest<T> Fail<T>(ResourceRequest<T> request, ResourceError kind, string message,

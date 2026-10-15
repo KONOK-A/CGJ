@@ -7,6 +7,10 @@ namespace YLFramework.Services.Resource
     public readonly struct ResourceSourceId : IEquatable<ResourceSourceId>
     {
         public static ResourceSourceId Resources { get; } = new ResourceSourceId("resources");
+        public static ResourceSourceId AssetBundle { get; } = new ResourceSourceId("asset-bundle");
+        public static ResourceSourceId LocalTexture { get; } = new ResourceSourceId("local-texture");
+        public static ResourceSourceId UrlTexture { get; } = new ResourceSourceId("url-texture");
+        public static ResourceSourceId Editor { get; } = new ResourceSourceId("editor");
         public string Value { get; }
         public bool IsValid => Value != null;
         public ResourceSourceId(string value)

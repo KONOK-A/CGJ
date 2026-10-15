@@ -20,7 +20,7 @@ namespace YLFramework.Services.Resource
                 throw new ArgumentException("Resources subasset selection and explicit dependency execution are not supported in 8.1.");
         }
 
-        public UnityEngine.Object Load(ResourceCatalogEntry entry, Type type) => Resources.Load(entry.Location.Locator, type);
+        public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => new(Resources.Load(entry.Location.Locator, type));
         public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => new Operation(entry.Location.Locator, type);
 
         // 外部借用者不可枚举，也不属于本系统；禁止单租约触发 UnloadAsset/Destroy/全局扫描。

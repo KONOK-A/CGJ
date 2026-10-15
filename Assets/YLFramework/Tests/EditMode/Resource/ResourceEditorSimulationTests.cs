@@ -12,6 +12,25 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public class ResourceEditorSimulationTests
     {
+        [Test]
+        public void SimulationCanComposeTheUniqueRuntimeAuthorityWithoutOwningBorrowedAssets()
+        {
+            using var fixture = new ResourceReleaseFixture();
+            var simulation = new ResourceEditorSimulation(new[] { fixture.Project });
+            var factory = typeof(ResourceEditorSimulation).GetMethod("CreateConfiguration");
+            Assert.That(factory, Is.Not.Null, "Editor simulation must compose formal Source/Lease contracts, not another resource manager.");
+            var config = (ResourceConfiguration)factory.Invoke(simulation, null);
+            var entry = config.Catalogs[0].Resolve(new ResourceAddress(fixture.Project.ProjectId, "entry.txt"));
+            var source = config.Sources.Single(x => x.Id.Equals(ResourceSourceId.Editor));
+            source.Validate(entry);
+            var result = source.Load(entry, typeof(TextAsset));
+            var text = (TextAsset)result.Asset;
+            Assert.That(text.text, Is.EqualTo("first release content"));
+            source.Release(text);
+            Assert.That(text, Is.SameAs(AssetDatabase.LoadAssetAtPath<TextAsset>(fixture.TextPath)));
+            Assert.That(text == null, Is.False);
+        }
+
         private static object Simulation(ResourceProject[] projects, ResourceCatalogDocument[] catalogs = null)
         {
             var type = typeof(ResourceProject).Assembly.GetType("YLFramework.Editor.Resource.ResourceEditorSimulation");

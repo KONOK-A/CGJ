@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -42,12 +43,12 @@ namespace YLFramework.Tests.Resource
             public readonly List<ControlledOperation> Operations = new();
             public ControlledSource(string id) => Id = new ResourceSourceId(id);
             public void Validate(ResourceCatalogEntry entry) => OnValidate?.Invoke();
-            public Object Load(ResourceCatalogEntry entry, Type type)
+            public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type)
             {
                 Loads++;
                 OnLoad?.Invoke();
                 if (ThrowOnStart) throw new InvalidOperationException("controlled-load-start");
-                return Asset;
+                return new ResourceSourceResult(Asset);
             }
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type)
             {
@@ -60,6 +61,84 @@ namespace YLFramework.Tests.Resource
                 return operation;
             }
             public void Release(Object value) => Releases++;
+        }
+
+        private sealed class CancelableOperation : ResourceSourceOperation
+        {
+            public override bool SupportsCancellation => true;
+            public override void Cancel() { }
+            internal void Finish(Object asset = null, Exception error = null) => Complete(asset, error);
+        }
+
+        private sealed class CancelableSource : IResourceSource
+        {
+            public ResourceSourceId Id => new("cancelable");
+            public bool SupportsSynchronousLoad => false;
+            internal readonly List<CancelableOperation> Operations = new();
+            public void Validate(ResourceCatalogEntry entry) { }
+            public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => throw new NotSupportedException();
+            public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type)
+            {
+                var operation = new CancelableOperation();
+                Operations.Add(operation);
+                return operation;
+            }
+            public void Release(Object asset) => new TextureResourceSource(true).Release(asset);
+        }
+
+        [UnityTest]
+        public IEnumerator LastCancellationDrainsBeforeSameIdentityConsumerRestartsItsOwnProducer()
+        {
+            var source = new CancelableSource();
+            var key = new ResourceAddress("cancel83", "image");
+            using var initialized = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { new ResourceCatalog("cancel83", new[]
+            {
+                new ResourceCatalogEntry("image", key, new ResourceLocation(source.Id, "controlled-native-drain-window", typeof(Texture2D)))
+            }) }, new IResourceSource[] { source }));
+            var system = initialized.TakeResult();
+            using var canceled = system.AcquireAsync<Texture2D>(key);
+            canceled.Cancel();
+            using var replacement = system.AcquireAsync<Texture2D>(key);
+            Assert.That(source.Operations.Count, Is.EqualTo(1), "No overlapping IO while the abandoned producer drains.");
+            source.Operations[0].Finish(error: new OperationCanceledException("old private IO ended"));
+            Assert.That(replacement.Status, Is.EqualTo(ResourceRequestStatus.Pending), "A new consumer cannot inherit an earlier consumer's Abort failure.");
+            Assert.That(source.Operations.Count, Is.EqualTo(2));
+            var texture = new Texture2D(2, 3);
+            try
+            {
+                source.Operations[1].Finish(texture);
+                using var lease = replacement.TakeResult();
+                Assert.That(lease.Asset, Is.SameAs(texture));
+                lease.Dispose();
+                yield return null;
+                Assert.That(texture == null, Is.True);
+            }
+            finally { if (texture) Object.DestroyImmediate(texture); }
+            Assert.That(canceled.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
+        }
+
+        [Test]
+        public void OptionalGroupFailurePreservesItsCauseAndHealthyIndependentLease()
+        {
+            source.Immediate = true;
+            var failed = new ControlledSource("optional83") { ThrowOnStart = true };
+            config = Configure(source, failed);
+            config.Catalogs[0].Groups = new[] { new ResourceCatalogGroup("optional83", new[]
+            {
+                new ResourceCatalogGroupMember("text-id", true), new ResourceCatalogGroupMember("other-id", false)
+            }) };
+            var system = Initialize();
+            using var request = system.AcquireGroupAsync("fixture81", "optional83");
+            using var group = request.TakeResult();
+            Assert.That(group.Items.Count, Is.EqualTo(1));
+            Assert.That(group.Items[0].Asset, Is.SameAs(asset));
+            Assert.That(group.Errors.Count, Is.EqualTo(1));
+            Assert.That(group.Errors[0].InnerException, Is.InstanceOf<InvalidOperationException>());
+            Assert.That(source.Releases, Is.Zero);
+            group.Dispose();
+            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
         }
 
         [SetUp]

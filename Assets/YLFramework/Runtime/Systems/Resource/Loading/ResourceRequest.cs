@@ -24,6 +24,7 @@ namespace YLFramework.Services.Resource
         private Func<float> progressReader;
         private Action<ResourceRequest<T>> observers;
         private Action<ResourceRequest<T>> invalidationObservers;
+        private Action invalidationDetach;
         private bool claimed;
         private float progress;
         internal Action OwnershipEnded;
@@ -131,7 +132,7 @@ namespace YLFramework.Services.Resource
             return value;
         }
 
-        /// <summary>只退出自己的等待；已完成时无副作用，不撤销共享原生生产。</summary>
+        /// <summary>只退出自己的等待；已完成时无副作用，存在其他消费者时不撤销共享生产。</summary>
         public void Cancel()
         {
             CheckThread();
@@ -147,9 +148,8 @@ namespace YLFramework.Services.Resource
             if (IsDisposed) return;
             if (!IsDone)
             {
-                var detach = cancel;
+                invalidationDetach = cancel;
                 SetTerminal(ResourceRequestStatus.Invalidated, new ResourceException(ResourceError.SessionUnavailable, "The resource session ended."));
-                detach?.Invoke();
             }
             IsDisposed = true;
             invalidationObservers = observers;
@@ -158,7 +158,13 @@ namespace YLFramework.Services.Resource
 
         void IResourceRequest.ReleaseInvalidatedResult()
         {
-            try { ReleaseUnclaimedResult(); }
+            try
+            {
+                var detach = invalidationDetach;
+                invalidationDetach = null;
+                detach?.Invoke();
+                ReleaseUnclaimedResult();
+            }
             finally { EndOwnership(); }
         }
 

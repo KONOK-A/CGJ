@@ -12,6 +12,8 @@ namespace YLFramework.Services.Resource
         public ResourceLocation Location { get; }
         public IReadOnlyList<ResourceAddress> Aliases { get; }
         public IReadOnlyList<string> Dependencies { get; }
+        internal ResourceLocalSnapshot Snapshot;
+        internal ResourceCatalogAsset Descriptor;
 
         public ResourceCatalogEntry(string assetId, ResourceAddress address, ResourceLocation location,
             IEnumerable<ResourceAddress> aliases = null, IEnumerable<string> dependencies = null)
@@ -48,6 +50,9 @@ namespace YLFramework.Services.Resource
         public string ProjectId { get; }
         public IReadOnlyList<ResourceCatalogEntry> Entries { get; }
         public IReadOnlyList<ResourceDependencyNode> DependencyNodes { get; }
+        public string CatalogDigest => Snapshot?.Document.CatalogDigest;
+        public IReadOnlyList<ResourceCatalogGroup> Groups { get; internal set; } = Array.Empty<ResourceCatalogGroup>();
+        internal ResourceLocalSnapshot Snapshot;
 
         public ResourceCatalog(string projectId, IEnumerable<ResourceCatalogEntry> entries,
             IEnumerable<ResourceDependencyNode> dependencyNodes = null)
