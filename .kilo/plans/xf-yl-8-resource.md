@@ -948,3 +948,9 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 恢复后Canvas blob为 `5d8cf22e5ef5a2c31a028798d4268fc8f0cfb4c5`，与当前HEAD版本一致，该Prefab不再有工作区差异。其meta blob仍为 `8e2351424d2703663e4bfeee924b9f79bc2740e8`，GUID仍为 `0df4ee5a6aa484a40b5d537a1c23a2c0`；原XF对照件blob仍为 `041390a1b7280f816c0d0dd22c48579ef36d7c7b`，未修改。
 - Unity重新导入后定向执行 `CoreDefaultResourceTests`：**4 Passed / 0 Failed / 0 Skipped**，包含原Canvas整文件等价断言、Canvas/EventSystem独立身份与默认组件检查。未修改测试源码或断言，无dirty场景；未运行无关native Bundle/Player回归。
 - 此项为用户单独授权的资源恢复，不是撤回此前保护记录或扩展8.3范围；其他用户改动及并行UI Plan保持原样。未暂存、Commit、Push、进入8.4或改变Git停止点。
+
+### 18.7 Git 收口（2026-10-15）
+
+- 以独立授权一次性完成：精确暂存本批32个文件（12个已跟踪修改 + 20个新增含 `.meta`）后，提交 `732c8286ea1b04bdfb1b58bb2626c203d76a0454`（`feat(resource): 完成8.3 AssetBundle加载与生命周期`，2180+/39-），线性落在 `57f00a9` 之上；随后推送至 `origin/fusion/8-resource`（`57f00a9..732c828`）。推送后本地 HEAD、upstream 与实际 `git ls-remote` 均为 `732c828`。
+- 提交只含本批 Resource Runtime/Editor/Catalog/Loading/Sources、本批测试及本 Plan；Canvas.prefab 已按18.6独立授权恢复并随本批提交，工作区无该资产差异。受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md` 未暂存、未提交、未修改，仍留在工作区。原游戏、XF/XFAB/XFFSM、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；未 Reset/Clean/Stash/Rebase/Force Push/Merge，未进入8.4、未合并 integration/xf-yl、未创建阶段8里程碑。
+- 暂存的10份 `.meta` 仅 `userData/assetBundleName/assetBundleVariant` 生成行含行尾空格，与8.2b既有已提交格式一致，未改其内容；`git diff --cached --check` 除此外无冲突标记或无关文件混入。
