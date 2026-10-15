@@ -15,7 +15,7 @@ namespace YLFramework.Services.Resource
 
     /// <summary>独立消费者。yield 只等待终态；TakeResult 恰一次转交结果，Dispose 只释放未领取结果。</summary>
     /// <remarks>所有操作在接受请求的 Unity 主线程执行；完成观察异常逐个报告，不改终态。</remarks>
-    public sealed class ResourceRequest<T> : CustomYieldInstruction, IDisposable, IResourceRequest
+    public class ResourceRequest<T> : CustomYieldInstruction, IDisposable, IResourceRequest
     {
         private readonly int threadId = Thread.CurrentThread.ManagedThreadId;
         private readonly Action<T> releaseResult;

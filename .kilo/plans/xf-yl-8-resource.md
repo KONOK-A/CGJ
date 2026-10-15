@@ -1,6 +1,6 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级总体 Plan
 
-> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.3 已技术验收及 Git 收口，见第14～18节，Schema v1 保持冻结。8.4 技术 COMPLETE，待用户技术验收及 Git 收口，见第19节；未实施8.5及后续批次。
+> 状态：**APPROVED**。架构 B、D1～D8 总体方向及 8.1～8.10 路线已批准；8.1～8.4 已技术验收及 Git 收口，见第14～20节，Schema v1 保持冻结。8.5 技术 COMPLETE，待用户技术验收及 Git 收口，见第21节；未实施8.6及后续批次。
 > 两项审核修订已落实：8.1 只稳定资源身份、Request/Lease/Scope、所有权及最小只读 Catalog 内存模型，持久化 Schema 在 8.2 真实构建闭环后冻结；8.2/8.7 只宣称本地或内部受控交付，生产远端更新须通过 8.8 安全门禁，并如实记录签名、防重放与状态丢失限制。
 > 原方案批准与 Git 准备已完成；各批 Git 收口以对应单独授权为准。8.2c 先只授权实施、必要验证及一次独立技术 Review，随后在单独授权下完成一次性 Commit/Push 与状态同步；始终不授权集成合并、阶段8里程碑或自动开始8.3。
 > 实施代理：仅在用户对具体实施批次明确授权后，使用 `subagent-driven-development` 或 `executing-plans` 按下文门禁推进；不得因为 Plan 已批准而自动开始。
@@ -431,7 +431,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 下列十个主批次按依赖与可独立拒收的闭环拆分，不按目录机械分包；8.2与8.6内部还有必须逐个完成/review的独立子批次，不允许一次合成巨型修改。8.1-8.5是隔离夹具中的新链，不改变默认Core后端；**8.6c后不能继续保留新旧YL两套运行authority**。8.7-8.8新增完整更新，不把8.6“加载融合”冒充阶段8全部完成。
 
-每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1～8.2c 已完成技术验收和 Git 收口；8.3 技术 COMPLETE、待用户验收及单独 Git 授权，证据见第18节；8.4及后续未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
+每批共用步骤：建立本批失败/基线用例；实现本批最小闭环；运行本批有影响的门禁；核对diff/新增meta/原数据保护；完成独立review。8.1～8.4 已完成技术验收和 Git 收口；8.5 技术 COMPLETE、待用户验收及单独 Git 授权，证据见第21节；8.6及后续未执行。Git 写入仅按用户当前单独授权，不由本路线自动触发。
 
 ### 8.1 正式合同、目录及Resources最小闭环
 
@@ -485,7 +485,7 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 ### 8.4 Prefab实例、缓存与Foundation桶协作
 
-**技术状态（2026-10-15）：COMPLETE。** 实施及真实 Unity/native Bundle 证据见第19节；当前仅工作区改动，尚未获用户验收或 Git 收口，不表示阶段8整体完成。
+**技术状态（2026-10-15）：COMPLETE。** 实施及真实 Unity/native Bundle 证据见第19节，已完成用户验收及 Git 收口，见第20节；不表示阶段8整体完成。
 
 **主要范围**：`R/Instances`；复用`F/Pool/GameObject/GameObjectPoolData.cs`，仅有证明必要的通用改动才碰Foundation；对应新实例集成测试。
 
@@ -499,16 +499,18 @@ Unity BuildPipeline输出叶名决定根manifest产物文件名，因此固定wo
 
 ### 8.5 Scene真实身份、保活与不可逆取消
 
+**技术状态（2026-10-15）：COMPLETE。** 真实 Scene Bundle/PlayMode、实际退出排空与独立 Review 证据见第21节；待用户技术验收及 Git 收口，本批未提交。
+
 **主要范围**：`R/Scenes`，8.2自有Scene Bundle/Editor模拟与PlayMode夹具；不改游戏BuildSettings。
 
 **依赖/输出**：依赖8.3/8.4；SceneRecord与准确handle、explicit unload、默认生命周期转交，Core所需Single与Additive结果。
 
 **风险**：Unity全局async queue、Single不可逆、同名scene、last-scene不可卸载、scene对象依赖提前释放。
 
-- [ ] 加载/激活/真实unload前后Bundle与依赖pin准确；释放调用方SceneLease不把已加载scene的材料/资源毁掉。
-- [ ] 两个同名Additive scene按handle区分；external unload/Single替换只释放正确scene；不用短名/hash猜结果。
-- [ ] 同path重复Additive逐次排队、external同path无法归属时明确报歧义；SceneRequest领取与未领取Dispose、旧SceneLease卸载调用不能释放新一轮handle。
-- [ ] native前取消、Additive迟到取消、Single开始后取消、手动0.9激活门控分别验证，无假“已撤销旧scene”，无永久queue阻塞。
+- [x] 加载/激活/真实unload前后Bundle与依赖pin准确；释放调用方SceneLease不把已加载scene的材料/资源毁掉。
+- [x] 两个同名Additive scene按handle区分；external unload/Single替换只释放正确scene；不用短名/hash猜结果。
+- [x] 同path重复Additive逐次排队、external同path无法归属时明确报歧义；SceneRequest领取与未领取Dispose、旧SceneLease卸载调用不能释放新一轮handle。
+- [x] native前取消、Additive迟到取消、Single开始后取消、手动0.9激活门控分别验证，无假“已撤销旧scene”，无永久queue阻塞。
 
 ### 8.6 Core/Audio/Editor真实消费者接入与旧YL退场
 
@@ -1015,3 +1017,54 @@ XFAB/YL行为对照优先同平台、同输入、同压缩、同冷/热条件的
 - 提交只含本批 Instance/Cache 实现、`GameObjectPoolData`/`AssetLease`/`ResourceSystem` 的必要改动、本批测试及本 Plan 第19节；未暂存、未提交、未修改受保护用户改动（`.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings）及并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md`，均仍留在工作区。原游戏、XF/XFAB/XFFSM、MainModule、历史 Bundle、StreamingAssets、Packages、ProjectSettings 保持原样；Canvas.prefab 未再次修改。
 - 未执行 Reset/Clean/Stash/Rebase/Force Push/Merge，未进入8.5、未合并 `integration/xf-yl`、未创建阶段8里程碑。暂存的11份 `.meta` 仅 `userData/assetBundleName/assetBundleVariant` 生成行含行尾空格，与既有已提交格式一致，未改其内容；`git diff --cached --check` 除此外无冲突标记或无关文件混入。
 - 本次未新增产品行为，故未重跑 Unity 编译/测试/Review；不将第19节验收证据外推到隔离的 Player/其他平台。
+
+## 21. 8.5 Scene 生命周期技术证据（2026-10-15）
+
+### 21.1 基线与技术状态
+
+- 起始与交付时分支均为 `fusion/8-resource`，HEAD 为现场核对的 `c515b4f26992764d5a7d913bc6d124a52d1ca35a`（8.4 Git 收口后的实际基线）；本批未 Commit/Push、未合并、未创建里程碑。
+- **8.5 技术 COMPLETE，待用户技术验收与 Git 收口**；8.6 及后续批次仍未实施。现场出现的重叠 Scene 实现经用户确认后保留沿用，没有回退或覆盖另一批工作。
+
+### 21.2 正式入口与所有权
+
+- `ResourceSystem.LoadSceneAsync(address, mode, activateOnLoad, activationTimeoutSeconds)` 返回正式 `SceneRequest : ResourceRequest<SceneLease>`，直接沿用单次领取、未领取结果释放和 Scope 的 Track/TakeResult/Own 协议。
+- `SceneLease.Dispose()` 不卸载 Scene。独立 `SceneRecord` 保存实际 Scene/handle、LoadSequence、Address、完整 native Path、SnapshotId、CatalogDigest 与加载模式；caller 身份释放不影响 Scene 合法保活。
+- `GetSceneRecords()` 与 `SceneRequest.Scenes` 提供本次真实关联结果。Lease 已释放或 Single 取消后，可显式 `UnloadSceneAsync(record)`；已 Dispose Lease 的卸载调用拒绝，旧记录不能命中新一轮加载。
+- pending Scene 在 native 开始前即持有已有 Bundle 图的根 Lease，完成后转为 SceneRecord 图 pin。Scene 事件、OnDestroy 及 native unload 完成后，cleanup 才归还责任；没有独立 Bundle 引用表或第二份 Scene 资源权威。
+- 重复在途卸载消费者独立等待同一 native 操作；外部卸载与 Single 替换按真实 handle 结算。正常 Shutdown 在 pending native/live SceneRecord 存在时返回 Busy 并恢复 Ready，不隐式卸载业务 Scene。
+
+### 21.3 身份、取消与实际边界
+
+- 框架内部每次 Scene 意图独立保留，native 加载逐次执行，依靠 native 前 handle 快照、Scene 事件和完成后一帧结算窗关联，不使用短名或路径首次匹配。相同 path/短名重复 Additive 拥有独立 handle/LoadSequence。
+- Bundle 准备期间已加载的外部 Scene 属于 Before，不参与本次新候选。native 窗口内多个同 path 新身份无法归属时返回 `SceneIdentityAmbiguous`，保守保活所有候选，拒绝 facade 卸载，等待真实外部 owner 卸载后分别结算。
+- native 前取消不启动该 Scene native；native 后 Cancel/Dispose 只结束消费者等待，解除激活门控并保留 pending 图。唯一迟到 Additive 尝试真实卸载；歧义候选或不可卸载的最后 Scene 保留可观察记录与 pin，不伪装回滚。
+- Single 取消后的 native 完成仍可能替换旧 Scene；新 Scene 从 `Scenes`/`GetSceneRecords()` 可观察和接管，不声称恢复旧场景。最后 Scene 的显式卸载返回 Busy，框架不自动创建 neutral 宿主。
+- `SceneRequest.Activate()` 只允许激活，不是 `SetActiveScene`。门控从 native 开始计时，默认30秒、合法范围 `(0, 300]` 秒；到期返回 `ActivationTimedOut` 并放行 native。门控中显式卸载返回 Busy，须先激活/取消；不留下本框架无限0.9等待。外部 owner 的无限 native 门控或直接全局销毁 Bundle 不在本 facade 可撤销/恢复的能力内。
+- Runtime 使用冻结 Catalog v1 与真实 Scene Bundle；EditorSimulation 使用正式 GUID/path 快照及 `LoadSceneAsyncInPlayMode`，仍由同一 ResourceSystem 管理身份和生命周期，不模拟 Bundle pin。
+- Unity 2022.3 传统 `BuildPipeline.BuildAssetBundles` 实测：不同 path 但相同短名称的 Scene Bundle 内部文件均为 `BuildPlayer-Owned`，同时读回被引擎以 `another AssetBundle with the same files is already loaded` 拒绝。本批未更换构建链/Schema，产品链没有以临时重命名副本伪造对这类布局的支持。独立路径夹具使用 `Other/Alternate.unity`，同 path/同名重复 Additive 已真实通过。
+- 验证平台为 Windows Editor `2022.3.62f3c1`、D3D11；未新增独立 Player、IL2CPP/AOT、其他平台或关闭 Domain Reload 验收。
+
+### 21.4 实际验证与独立 Review
+
+| 验证 | 实际结果 |
+| --- | --- |
+| `RealSceneLeaseReleaseDoesNotUnloadOrDestroyItsBundleDependencies` | 正式入口缺失时 RED；实现后真实 Scene、OnDestroy 依赖保活、caller 释放及外部卸载排空 GREEN |
+| `CompleteNative85SceneLifecycleRegression` | 最终修复后 1/1，24.385秒；EditMode 入口内执行真实 EnterPlayMode/ExitPlayMode、独立构建/发布的 Scene Bundle，不以 Mock 替代 native |
+| 综合路径 | Single/Additive、同 path/短名多 handle、领取/未领取/重复/Scope、显式卸载/join、外部卸载/Single替换、native前后取消/迟到、0.9激活/超时/Busy、失败后后继推进、外部真歧义/准备期非歧义 |
+| 实例及退出 | SceneScoped 闲置退休/原场景实例销毁、迁移/DDOL 活实例继续持有 prefab 图；synthetic EndSession 后 native 继续、旧会话阻挡 Init；真实退出失效/解除门控，第二次 Play 原生包为0且可重新加载/卸载 |
+| `ConcurrentUnloadsReserveTheLastSceneBeforeNativeDestruction` | 1/1，9.166秒；在途卸载后最后 Scene 明确 Busy，综合再次覆盖 |
+| `ExternalSceneLoadedBeforeNativeStartIsExcludedFromTheIdentityWindow` | 真实外部 Editor Scene 在 Bundle 准备期完成；假歧义 RED（9.538秒）→ 唯一新 handle 且外部 Scene 保留 GREEN（9.693秒），最终综合再次 GREEN |
+| `ResourceRequestTests` | 5/5，SceneRequest 直接继承的领取/释放基础合同 |
+| `YLFramework.Tests.Resource` PlayMode | 36/36，既有 Resource/Request/Lease/Scope 定向回归 |
+| `CompleteNative84InstanceLifecycleRegression` | 1/1，20.597秒；只针对 cleanup/EndSession 直接影响回归，不重做历史批次全量验收 |
+| `CompleteFoundationAndCoreCompileInDevelopmentAndRejectSystemsSymbols` | 1/1，1.860秒；另核对 Runtime Player 编译图431个源码、无 UnityEditor 引用，不等同 Player 构建 |
+
+- 完成一次 fresh-context 只读独立技术 Review，覆盖身份、不可逆取消、图保活、事件、实例、退出及双主体边界。唯一 P2 为准备期外部 Scene 污染 Observed；真实复现后在 `StartNativeScene` 建立 Before 时清空准备期 Observed，完成定向 RED→GREEN 与最终综合回归，无未解决 finding；未追加形式复审。
+- MCP 的 TotalTests/跨 Domain Reload 总 Duration 会包含完整发现树或失真时间；上表按具体执行方法、PassedTests 与方法 Duration 记录，不把发现树总数视为执行数。
+- 测试后实查 `Current=null`、draining/Scene cleanup/Instance cleanup 均为0、原生 Bundle 为0，原 `Assets/Scenes/Main.unity` 恢复且干净；自有临时发布/Workspace/Scene/Prefab 夹具清理完成，新增正式脚本及目录 `.meta` 由 Unity 生成、GUID 非空互异。
+
+### 21.5 保护与8.6依赖
+
+- `.gitignore`、`.kilo/kilo.jsonc`、ProBuilder Settings、Canvas.prefab 起止内容哈希相同。并行 UI Plan `.kilo/plans/1791960935353-ui-panel-redesign.md` 在终检期间由外部从起始 `68f4651...` 更新为 `6496908...`，本轮未写入、覆盖或接管，保留其当前更新。原游戏、XF/XFAB/XFFSM、MainModule、历史 Bundle、StreamingAssets、Packages、其余 ProjectSettings、Core ProjectName 和 Module/View/Panel 正式资源链未改；未保存/覆盖用户脏 Scene，未清理外部拥有对象或产物。
+- 8.6 可直接依赖唯一 ResourceSystem 的正式 SceneRequest/SceneLease/SceneRecord、Single/Additive、显式激活/卸载，不需自行按短名找 Scene 或另维持 Bundle 引用。Scope 只聚合 caller 身份；SceneRecord 真实卸载和迁移/DDOL InstanceRecord 真实销毁分别结算已有图责任。
+- 后续接入须承接可恢复 Busy、不可逆 Single、有限门控与外部歧义边界。本批到此停止，不自动接入 Core/Audio、退役旧 Resource、合并 integration 或创建阶段8里程碑。

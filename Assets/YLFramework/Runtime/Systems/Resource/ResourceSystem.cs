@@ -413,14 +413,14 @@ namespace YLFramework.Services.Resource
             try
             {
                 ClearInstanceCaches();
-                var busy = publicBundleLeases.Count != 0;
+                var busy = publicBundleLeases.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0;
                 foreach (var cache in instanceCaches) if (cache.HasLiveOwners) busy = true;
                 foreach (var record in records.Values)
                     if (record.LeaseCount > record.InstancePins || record.Waiters.Count != 0) busy = true;
                 if (busy)
                 {
                     State = ResourceSystemState.Ready;
-                    return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live leases, instances or consumers.");
+                    return Fail(request, ResourceError.Busy, "Resource shutdown is blocked by live leases, instances, Scenes or consumers.");
                 }
             }
             catch
@@ -437,7 +437,7 @@ namespace YLFramework.Services.Resource
         private void CheckDrain()
         {
             if (checkingShutdown) return;
-            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0) return;
+            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0) return;
             bundleQueue.Clear();
             draining.Remove(this);
             if (State != ResourceSystemState.ShuttingDown) return;
@@ -468,6 +468,7 @@ namespace YLFramework.Services.Resource
             foreach (var request in requests)
                 try { request.ReleaseInvalidatedResult(); }
                 catch (Exception error) { Debug.LogException(error); }
+            system.EndSceneSession();
             foreach (var cache in new List<InstanceCache>(system.instanceCaches)) cache.EndSession();
             foreach (var record in new List<AssetRecord>(system.records.Values))
                 if (!record.Loading)

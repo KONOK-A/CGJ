@@ -63,6 +63,7 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 EditorUtility.SetDirty(project);
                 AssetDatabase.SaveAssetIfDirty(project);
+                AddScene85Fixture(fixture);
                 var build = fixture.Build();
                 fixture.ReleaseRoot = ResourcePublisher.GetReleaseRoot(build);
                 var release = ResourcePublisher.Publish(build, "fixture-v1");
@@ -147,6 +148,7 @@ namespace YLFramework.Tests.ResourceBuild
             InstanceLifecycleProbe.ResetCallbacks();
             if (!EditorApplication.isPlaying) yield break;
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
+            yield return DrainOwnedScene85Fixture();
             var until = Time.realtimeSinceStartup + 10;
             while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < until) yield return null;
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
