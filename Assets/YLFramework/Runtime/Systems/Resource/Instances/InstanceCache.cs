@@ -13,7 +13,7 @@ namespace YLFramework.Services.Resource
     /// Resource 拥有 Prefab pin 和实例责任，Foundation 桶拥有 FIFO/容量/复用机制。
     /// Dispose 退休缓存但不销毁借出对象；晚归还销毁，全部实例真实死亡后才释放 pin/Data。
     /// </summary>
-    public sealed class InstanceCache : IDisposable
+    public sealed partial class InstanceCache : IDisposable
     {
         internal sealed class Entry
         {
@@ -97,6 +97,7 @@ namespace YLFramework.Services.Resource
         internal InstanceLease Instantiate(Transform parent, Scene scene)
         {
             CheckOpen();
+            Owner.RequireContentAdmission(AssetRecord.Entry);
             scene = TargetScene(parent, scene);
             operations++;
             Entry entry = null;
@@ -121,6 +122,7 @@ namespace YLFramework.Services.Resource
                 if (!entry.Object || IsRetired || !Owner.IsAvailable || !entry.Object.activeSelf || entry.Object.transform.parent != parent ||
                     GameObjectPoolData.IsCacheHierarchy(entry.Object.transform.parent))
                     throw new ResourceException(ResourceError.LoadFailed, "A lifecycle callback invalidated the instance checkout.");
+                Owner.RequireContentAdmission(AssetRecord.Entry);
                 return new InstanceLease(this, entry);
             }
             catch
@@ -147,6 +149,7 @@ namespace YLFramework.Services.Resource
         public int Prewarm(int target)
         {
             CheckOpen();
+            Owner.RequireContentAdmission(AssetRecord.Entry);
             if (target < 0 || (data.MaxCapacity >= 0 && target > data.MaxCapacity)) throw new ArgumentOutOfRangeException(nameof(target));
             var added = 0;
             var missing = Math.Max(0, target - data.Count);
@@ -157,7 +160,7 @@ namespace YLFramework.Services.Resource
                 {
                     CheckOpen();
                     var entry = CreateInactive();
-                    try { if (data.Recycle(entry.Object)) added++; }
+                    try { Owner.RequireContentAdmission(AssetRecord.Entry); if (data.Recycle(entry.Object)) added++; }
                     catch { Destroy(entry); throw; }
                 }
                 return added;

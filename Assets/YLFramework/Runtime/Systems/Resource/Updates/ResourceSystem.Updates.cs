@@ -14,16 +14,89 @@ namespace YLFramework.Services.Resource
         internal bool IsProjectBlocked(string project) => project != null && activationProjects.Contains(project);
 
         private IEnumerable<ResourceLocalSnapshot> StoreSnapshots() => configuration.ArtifactStore.Projects.Select(x => catalogs[x.ProjectId].Snapshot);
+        private IEnumerable<(ResourceLocalSnapshot snapshot, ArtifactProtection reason)> HeldStoreVersions()
+        {
+            foreach (var mount in configuration.ArtifactStore.Projects)
+                if (catalogs.TryGetValue(mount.ProjectId, out var catalog) && catalog.Snapshot != null)
+                    yield return (catalog.Snapshot, ArtifactProtection.Mounted);
+            foreach (var bundle in bundleRecords.Values)
+                yield return (bundle.Snapshot, ArtifactProtection.Held |
+                    (bundle.Native != null || bundle.State is BundleState.Waiting or BundleState.Queued or BundleState.Loading ? ArtifactProtection.InFlight : ArtifactProtection.None));
+            foreach (var work in contentWork)
+                foreach (var snapshot in work.Snapshots)
+                    yield return (snapshot, ArtifactProtection.Held | ArtifactProtection.InFlight);
+            foreach (var cleanup in retainedContentCleanup)
+                if (cleanup.Owner is ArtifactStore.ValidationReceipt receipt)
+                    foreach (var snapshot in receipt.Snapshots)
+                        yield return (snapshot, ArtifactProtection.Held | ArtifactProtection.InFlight);
+        }
 
         /// <summary>本地只读检查。targetClosure 必须明确列出 store 的全部项目及目标摘要，未变化项目也不可省略。</summary>
         public ResourceRequest<UpdatePlan> CheckUpdatesAsync(IEnumerable<ResourceLocalSnapshot> targetClosure)
-            => UpdateRequest(() => configuration.ArtifactStore.Check(StoreSnapshots(), targetClosure));
+        {
+            CheckThread();
+            if (!CanUpdate(out var error)) return Fail(new ResourceRequest<UpdatePlan>(), error.Kind, error.Message);
+            var request = new ResourceRequest<UpdatePlan>();
+            var store = configuration.ArtifactStore;
+            ContentWork work = null;
+            updating = true;
+            Track(request);
+            request.Attach(() => work?.Cancel(), null);
+
+            void Complete(UpdatePlan plan, Exception failure)
+            {
+                RetainContentFailureOwners(failure);
+                try
+                {
+                    if (!request.IsDone)
+                    {
+                        if (!IsSessionActive) request.SetFailure(ResourceRequestStatus.Invalidated, new ResourceException(ResourceError.SessionUnavailable, "The check session ended."));
+                        else if (failure is OperationCanceledException || failure is ResourceException { Kind: ResourceError.Canceled })
+                            request.SetFailure(ResourceRequestStatus.Canceled, new ResourceException(ResourceError.Canceled, "The read-only update check was canceled.", failure));
+                        else if (failure != null) request.SetFailure(ResourceRequestStatus.Failed, AsUpdateError(failure));
+                        else { RequireCheckedFrom(plan); request.SetSuccess(plan); }
+                    }
+                }
+                catch (Exception cause) { request.SetFailure(ResourceRequestStatus.Failed, AsUpdateError(cause)); }
+                finally { updating = false; }
+                request.Notify();
+                CheckDrain();
+            }
+
+            try
+            {
+                var current = StoreSnapshots().ToArray();
+                // 调用方枚举器也只在主线程展开，worker只收到固定快照输入。
+                var targets = (targetClosure ?? throw new ArgumentNullException(nameof(targetClosure))).ToArray();
+                if (!IsSessionActive || request.IsDone) throw new OperationCanceledException("The check no longer has an active consumer.");
+                work = StartContentWork(token => store.CheckForContent(current, targets, token), Complete,
+                    snapshots: current.Concat(targets));
+            }
+            catch (Exception failure) { Complete(null, failure); }
+            return request;
+        }
+
+        private void RequireCheckedFrom(UpdatePlan plan)
+        {
+            if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The update check session ended before handoff.");
+            configuration.ArtifactStore.RequireCheckedPlan(plan);
+            if (plan.Projects.Any(x =>
+                !catalogs.TryGetValue(x.ProjectId, out var current) || current.CatalogDigest != x.FromDigest))
+                throw new ResourceException(ResourceError.StaleBase, "The mounted source closure changed during the update check.");
+        }
 
         /// <summary>复制到自有 staging，完整验证后安装。取消和失败都不写 active；不提供 HTTP/签名降级入口。</summary>
         public ResourceRequest<PreparedUpdate> PrepareUpdateAsync(UpdatePlan plan, CancellationToken cancellation = default)
         {
             CheckThread();
-            return plan?.IsRemote == true ? PrepareRemoteUpdate(plan, cancellation) : UpdateRequest(() => configuration.ArtifactStore.Prepare(plan, cancellation));
+            if (plan?.IsRemote == true) return PrepareRemoteUpdate(plan, cancellation);
+            if (!CanUpdate(out var error)) return Fail(new ResourceRequest<PreparedUpdate>(), error.Kind, error.Message);
+            var request = new ResourceRequest<PreparedUpdate>();
+            var store = configuration.ArtifactStore;
+            return RunUpdateContent(request, () => store.CapturePreparation(plan, configuration.Decryption, contentBudget),
+                receipt => store.CompletePreparation(plan, receipt, cancellation), cancellation,
+                token => store.InstallPreparationForContent(plan, token),
+                plan?.Projects.SelectMany(x => new[] { x.From, x.Target }));
         }
 
         public IReadOnlyList<PreparedUpdate> GetPreparedUpdates()
@@ -62,64 +135,155 @@ namespace YLFramework.Services.Resource
             { request.SetSuccess(true); return request; }
             if (update.Projects.Any(x => catalogs[x.ProjectId].CatalogDigest != x.FromDigest))
                 return Fail(request, ResourceError.StaleBase, "PreparedUpdate's source version changed; Check and Prepare again, or explicitly Rollback.");
-            updating = true;
+            return RunUpdateContent(request, () => store.CaptureCommit(update, configuration.Decryption, contentBudget),
+                receipt => CommitContentUpdate(update, receipt));
+        }
+
+        private bool CommitContentUpdate(PreparedUpdate update, ArtifactStore.ValidationReceipt receipt)
+        {
+            var store = configuration.ArtifactStore;
+            if (update.Projects.Any(x => catalogs[x.ProjectId].CatalogDigest != x.FromDigest))
+                throw new ResourceException(ResourceError.StaleBase, "The mounted activation base changed during content validation.");
+            receipt.Require(store, update);
+            var replacements = receipt.Targets.ToDictionary(x => x.Document.ProjectId, CreateStoreCatalog, StringComparer.Ordinal);
+            // 全部To认证完成后才进入native屏障；预验失败不退休仍有效的旧输入。
             foreach (var project in update.Projects) activationProjects.Add(project.ProjectId);
+            foreach (var cache in instanceCaches.ToArray())
+                if (IsProjectBlocked(cache.AssetRecord.Entry.Address.ProjectId)) cache.Dispose();
+            TickInstanceCleanup();
+            var busy = records.Values.Any(x => IsProjectBlocked(x.Entry.Address.ProjectId)) ||
+                bundleRecords.Values.Any(x => IsProjectBlocked(x.Snapshot.Document.ProjectId)) ||
+                instanceCaches.Any(x => IsProjectBlocked(x.AssetRecord.Entry.Address.ProjectId)) ||
+                sceneLoads.Any(x => IsProjectBlocked(x.Address.ProjectId)) || sceneRecords.Any(x => IsProjectBlocked(x.Address.ProjectId));
+            if (busy) throw new ResourceException(ResourceError.Busy, "Activation is blocked by live leases, instances, Scenes or native operations. The old version remains available.");
+            // v1 的项目 native namespace 也覆盖已移除的旧 Bundle；不接管其他代码已加载的同项目原生资源。
+            var nativePrefixes = update.Projects.Select(x => "ylr_" + ResourceCatalogCodec.Digest(System.Text.Encoding.UTF8.GetBytes(x.ProjectId)).Substring(0, 32) + "_").ToArray();
+            if (AssetBundle.GetAllLoadedAssetBundles().Any(bundle => bundle && nativePrefixes.Any(prefix => bundle.name.StartsWith(prefix, StringComparison.Ordinal))))
+                throw new ResourceException(ResourceError.Busy, "The project's native Bundle namespace is still loaded outside the managed graph.");
+            // 目标内容、类型和平台已通过；持久提交后只做无回调的字典替换。
+            if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "Activation session ended before commit.");
+            Exception commitFailure = null;
             try
             {
-                foreach (var cache in instanceCaches.ToArray())
-                    if (IsProjectBlocked(cache.AssetRecord.Entry.Address.ProjectId)) cache.Dispose();
-                TickInstanceCleanup();
-                var busy = records.Values.Any(x => IsProjectBlocked(x.Entry.Address.ProjectId)) ||
-                    bundleRecords.Values.Any(x => IsProjectBlocked(x.Snapshot.Document.ProjectId)) ||
-                    instanceCaches.Any(x => IsProjectBlocked(x.AssetRecord.Entry.Address.ProjectId)) ||
-                    sceneLoads.Any(x => IsProjectBlocked(x.Address.ProjectId)) || sceneRecords.Any(x => IsProjectBlocked(x.Address.ProjectId));
-                if (busy) throw new ResourceException(ResourceError.Busy, "Activation is blocked by live leases, instances, Scenes or native operations. The old version remains available.");
-                // v1 的项目 native namespace 也覆盖已移除的旧 Bundle；不接管其他代码已加载的同项目原生资源。
-                var nativePrefixes = update.Projects.Select(x => "ylr_" + ResourceCatalogCodec.Digest(System.Text.Encoding.UTF8.GetBytes(x.ProjectId)).Substring(0, 32) + "_").ToArray();
-                if (AssetBundle.GetAllLoadedAssetBundles().Any(bundle => bundle && nativePrefixes.Any(prefix => bundle.name.StartsWith(prefix, StringComparison.Ordinal))))
-                    throw new ResourceException(ResourceError.Busy, "The project's native Bundle namespace is still loaded outside the managed graph.");
-                // 目标类型和平台先通过；持久提交后只做无回调的字典替换，不再开始新的可失败资源生产。
-                var replacements = update.Projects.ToDictionary(x => x.ProjectId, x => CreateStoreCatalog(x.Target), StringComparer.Ordinal);
-                if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "Activation session ended before commit.");
-                Exception commitFailure = null;
+                var selected = store.CommitValidated(update, receipt);
+                foreach (var snapshot in selected)
+                    if (replacements[snapshot.Document.ProjectId].CatalogDigest != snapshot.Document.CatalogDigest)
+                        replacements[snapshot.Document.ProjectId] = CreateStoreCatalog(snapshot);
+            }
+            catch (Exception commitError)
+            {
+                commitFailure = commitError;
                 try
                 {
-                    var selected = store.Commit(update);
-                    foreach (var snapshot in selected)
-                        if (replacements[snapshot.Document.ProjectId].CatalogDigest != snapshot.Document.CatalogDigest)
-                            replacements[snapshot.Document.ProjectId] = CreateStoreCatalog(snapshot);
+                    var recovered = store.Mount();
+                    replacements = recovered.ToDictionary(x => x.Document.ProjectId, CreateStoreCatalog, StringComparer.Ordinal);
                 }
-                catch (Exception commitError)
+                catch (Exception recoveryError)
                 {
-                    commitFailure = commitError;
-                    try
+                    throw new ResourceException(ResourceError.UpdateFailed, "Commit recovery is pending; the old in-memory snapshot remains usable. Reinitialize after resolving the IO failure.",
+                        new AggregateException(commitError, recoveryError));
+                }
+            }
+            if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The activation session ended; startup will mount the committed closure.");
+            foreach (var pair in replacements) catalogs[pair.Key] = pair.Value;
+            // 恢复到 From/LKG 也必须同步内存，但不能把它报告为目标激活成功。
+            if (replacements.Any(x => x.Value.CatalogDigest != update.Projects.Single(y => y.ProjectId == x.Key).ToDigest))
+                throw commitFailure is ResourceException { Kind: ResourceError.StaleBase } stale ? stale :
+                    new ResourceException(ResourceError.UpdateFailed, "Activation did not reach its target; memory and disk recovered the same complete closure.", commitFailure);
+            return true;
+        }
+
+        private ResourceRequest<T> RunUpdateContent<T>(ResourceRequest<T> request, Func<ArtifactStore.ValidationReceipt> capture,
+            Func<ArtifactStore.ValidationReceipt, T> complete, CancellationToken cancellation = default,
+            Action<CancellationToken> install = null, IEnumerable<ResourceLocalSnapshot> installationSnapshots = null)
+        {
+            ArtifactStore.ValidationReceipt receipt = null;
+            ContentWork work = null;
+            var finished = false;
+            updating = true;
+            Track(request);
+            request.Attach(() => work?.Cancel(), null);
+
+            void Finish(Exception failure)
+            {
+                if (finished) return;
+                finished = true;
+                RetainContentFailureOwners(failure);
+                T result = default;
+                try
+                {
+                    if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The update session ended before content handoff.");
+                    if (!request.IsDone)
                     {
-                        var recovered = store.Mount();
-                        replacements = recovered.ToDictionary(x => x.Document.ProjectId, CreateStoreCatalog, StringComparer.Ordinal);
-                    }
-                    catch (Exception recoveryError)
-                    {
-                        throw new ResourceException(ResourceError.UpdateFailed, "Commit recovery is pending; the old in-memory snapshot remains usable. Reinitialize after resolving the IO failure.",
-                            new AggregateException(commitError, recoveryError));
+                        cancellation.ThrowIfCancellationRequested();
+                        if (failure != null) throw failure;
+                        result = complete(receipt);
                     }
                 }
-                if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The activation session ended; startup will mount the committed closure.");
-                foreach (var pair in replacements) catalogs[pair.Key] = pair.Value;
-                // 恢复到 From/LKG 也必须同步内存，但不能把它报告为目标激活成功。
-                if (replacements.Any(x => x.Value.CatalogDigest != update.Projects.Single(y => y.ProjectId == x.Key).ToDigest))
-                    request.SetFailure(ResourceRequestStatus.Failed, commitFailure is ResourceException { Kind: ResourceError.StaleBase } stale ? stale :
-                        new ResourceException(ResourceError.UpdateFailed, "Activation did not reach its target; memory and disk recovered the same complete closure.", commitFailure));
-                else request.SetSuccess(true);
+                catch (Exception error) { failure = error; }
+                finally
+                {
+                    failure = ReleaseUpdateValidation(receipt, failure);
+                    activationProjects.Clear(); updating = false;
+                }
+                if (!request.IsDone)
+                {
+                    if (!IsSessionActive) request.SetFailure(ResourceRequestStatus.Invalidated, new ResourceException(ResourceError.SessionUnavailable, "The update session ended."));
+                    else if (failure is OperationCanceledException || failure is ResourceException { Kind: ResourceError.Canceled })
+                        request.SetFailure(ResourceRequestStatus.Canceled, new ResourceException(ResourceError.Canceled, "Content validation was canceled; no new transaction was committed.", failure));
+                    else if (failure != null) request.SetFailure(ResourceRequestStatus.Failed, AsUpdateError(failure));
+                    else request.SetSuccess(result);
+                }
+                request.Notify();
+                CheckDrain();
             }
-            catch (Exception cause)
-            { request.SetFailure(ResourceRequestStatus.Failed, AsUpdateError(cause)); }
-            finally { activationProjects.Clear(); updating = false; }
-            request.Notify();
+
+            void Validate()
+            {
+                try
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (!IsSessionActive || request.IsDone) throw new OperationCanceledException("The update no longer has an active consumer.");
+                    receipt = capture();
+                    if (!IsSessionActive || request.IsDone) throw new OperationCanceledException("The update no longer has an active consumer.");
+                    var captured = receipt;
+                    work = StartContentWork(token => { captured.Validate(token); return true; }, (_, failure) => Finish(failure),
+                        cancellation, receipt.Snapshots);
+                }
+                catch (Exception failure) { Finish(failure); }
+            }
+
+            if (install == null) Validate();
+            else
+                try
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    work = StartContentWork(token => { install(token); return true; }, (_, failure) =>
+                    {
+                        if (failure != null || !IsSessionActive || request.IsDone) Finish(failure);
+                        else Validate();
+                    }, cancellation, installationSnapshots);
+                }
+                catch (Exception failure) { Finish(failure); }
             return request;
         }
 
-        public ResourceRequest<VersionCleanupResult> CleanupVersionsAsync() => UpdateRequest(() => configuration.ArtifactStore.Cleanup(
-            StoreSnapshots().Concat(bundleRecords.Values.Select(x => x.Snapshot)).Distinct()));
+        private Exception ReleaseUpdateValidation(ArtifactStore.ValidationReceipt receipt, Exception failure)
+        {
+            RetainContentFailureOwners(failure);
+            if (receipt != null)
+                try { receipt.Dispose(); }
+                catch (Exception cleanup)
+                {
+                    RetainContentCleanup(receipt, cleanup);
+                    RetainContentFailureOwners(cleanup);
+                    return new ResourceException(ResourceError.UpdateFailed, "Update validation cleanup failed; unfinished inputs remain owned.",
+                        failure == null ? cleanup : new AggregateException(failure, cleanup));
+                }
+            return failure;
+        }
+
+        public ResourceRequest<VersionCleanupResult> CleanupVersionsAsync() => UpdateRequest(() => configuration.ArtifactStore.Cleanup(HeldStoreVersions().Select(x => x.snapshot).Distinct()));
 
         public string GetActiveCatalogDigest(string projectId)
         {

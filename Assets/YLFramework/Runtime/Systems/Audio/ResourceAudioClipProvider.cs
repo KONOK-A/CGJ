@@ -80,6 +80,11 @@ namespace YLFramework.Services.Audio
                     error = new ResourceException(resources.IsSessionActive ? ResourceError.LoadFailed : ResourceError.SessionUnavailable,
                         "The Audio resource became unavailable before delivery.");
                 }
+                if (lease != null)
+                {
+                    try { lease.ValidateAcquisition(); }
+                    catch (Exception failure) { lease.ReleaseSafely(); lease = null; error = failure; }
+                }
                 try { completed(lease, error); }
                 catch { lease?.ReleaseSafely(); throw; }
             };
@@ -98,7 +103,7 @@ namespace YLFramework.Services.Audio
 
         private static AudioClipLease Wrap(AssetLease<AudioClip> lease)
         {
-            try { return new AudioClipLease(lease.Asset, lease); }
+            try { return new AudioClipLease(lease.Asset, lease, () => lease.Record.Owner.RequireContentAdmission(lease.Record.Entry)); }
             catch { lease.Dispose(); throw; }
         }
     }

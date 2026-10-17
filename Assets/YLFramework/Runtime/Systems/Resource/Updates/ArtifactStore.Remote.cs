@@ -5,13 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
 
 namespace YLFramework.Services.Resource
 {
     public sealed partial class ArtifactStore
     {
-        internal IEnumerator CheckRemote(IEnumerable<ResourceLocalSnapshot> current, Action<UpdatePlan> complete, Action ensureAlive = null)
+        internal IEnumerator CheckRemote(IEnumerable<ResourceLocalSnapshot> current, Action<UpdatePlan> complete, Action ensureAlive = null,
+            Func<Action<CancellationToken>, IEnumerator> runIO = null, Action<string, string> observeTarget = null)
         {
             CheckThread();
             ResourceRemoteSource.RequireSupportedRuntime();
@@ -27,21 +27,18 @@ namespace YLFramework.Services.Resource
                 if (mount.Remote == null) { entries.Add(new UpdateProject(old, old, Array.Empty<UpdateFile>())); continue; }
                 using var metadata = new ResourceTransfer(mount.Remote, mount.Remote.Resolve("release.json"));
                 yield return metadata;
-                var release = new ResourceRemoteRelease(metadata.Bytes, mount, Application.unityVersion, DateTimeOffset.UtcNow);
+                var release = new ResourceRemoteRelease(metadata.Bytes, mount, unityCompatibility, DateTimeOffset.UtcNow);
                 CheckReleaseFloor(release);
                 using var catalog = new ResourceTransfer(mount.Remote, mount.Remote.Resolve(release.CatalogDigest + "/resource-catalog.json"), release.CatalogLength, release.CatalogDigest);
                 yield return catalog;
-                release.ReadCatalog(catalog.Bytes, mount, Application.unityVersion);
-                var files = new List<UpdateFile>();
-                if (Exists(VersionPath(mount.ProjectId, release.CatalogDigest))) OpenRemoteVersion(release);
-                else
+                release.ReadCatalog(catalog.Bytes, mount, unityCompatibility);
+                observeTarget?.Invoke(mount.ProjectId, release.CatalogDigest);
+                IReadOnlyList<UpdateFile> files = null;
+                if (runIO == null) files = CheckRemoteFiles(old, release, CancellationToken.None);
+                else yield return runIO(token => files = CheckRemoteFilesForContent(old, release, token));
+                ensureAlive?.Invoke();
+                if (files.Count != 0)
                 {
-                    foreach (var file in Files(release.Catalog))
-                    {
-                        var reusable = Files(old.Document).Any(x => x.RelativeFile == file.RelativeFile && x.Length == file.Length && x.Sha256 == file.Sha256);
-                        if (reusable) using (old.OpenVerified(file)) { }
-                        files.Add(new UpdateFile(file.RelativeFile, file.Length, reusable, reusable ? Path.Combine(old.DirectoryPath, file.RelativeFile) : null));
-                    }
                     // partial、正式staging以及8.7保留From副本的保守上界；不是空间预留。
                     required = checked(required + Files(release.Catalog).Sum(x => x.Length) * 2 + release.CatalogLength * 2 + release.CompleteLength * 2 + 16384);
                 }
@@ -56,9 +53,52 @@ namespace YLFramework.Services.Resource
             complete(new UpdatePlan(RootPath, entries, AvailableSpace(), required));
         }
 
+        internal IReadOnlyList<UpdateFile> CheckRemoteFilesForContent(ResourceLocalSnapshot current, ResourceRemoteRelease release, CancellationToken cancellation)
+        {
+            using var guard = Enter(false, cancellation, true, true);
+            RequireNoJournal();
+            return CheckRemoteFiles(current, release, cancellation);
+        }
+
+        private IReadOnlyList<UpdateFile> CheckRemoteFiles(ResourceLocalSnapshot current, ResourceRemoteRelease release, CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (release == null || current == null || current.Document.ProjectId != release.ProjectId ||
+                !mounts.TryGetValue(release.ProjectId, out var mount) || current.Document.Platform != mount.Platform ||
+                current.Document.UnityCompatibility != unityCompatibility || current.Document.AppContentCompatibilityId != mount.AppContentCompatibilityId)
+                throw new InvalidDataException("The remote check is outside this store's explicit compatible source closure.");
+            if (Exists(VersionPath(release.ProjectId, release.CatalogDigest)))
+            {
+                OpenRemoteVersion(release, true, cancellation);
+                cancellation.ThrowIfCancellationRequested();
+                return Array.Empty<UpdateFile>();
+            }
+            var files = new List<UpdateFile>();
+            foreach (var file in Files(release.Catalog))
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var reusable = Files(current.Document).Any(x => x.RelativeFile == file.RelativeFile && x.Length == file.Length && x.Sha256 == file.Sha256);
+                if (reusable) using (current.OpenVerified(file, cancellation)) { }
+                files.Add(new UpdateFile(file.RelativeFile, file.Length, reusable, reusable ? Path.Combine(current.DirectoryPath, file.RelativeFile) : null));
+            }
+            cancellation.ThrowIfCancellationRequested();
+            return files;
+        }
+
         private long AvailableSpace() => new DriveInfo(Path.GetPathRoot(RootPath)).AvailableFreeSpace;
 
-        internal IEnumerator PrepareRemote(UpdatePlan plan, Action<PreparedUpdate> complete, Action ensureAlive = null)
+        internal IEnumerator PrepareRemote(UpdatePlan plan, Action<PreparedUpdate> complete, Action ensureAlive = null, ResourceDecryptionOptions decryption = null)
+        {
+            yield return InstallRemotePreparation(plan, ensureAlive);
+            ensureAlive?.Invoke();
+            using var receipt = CapturePreparation(plan, decryption);
+            receipt.Validate();
+            ensureAlive?.Invoke();
+            complete(CompletePreparation(plan, receipt));
+        }
+
+        internal IEnumerator InstallRemotePreparation(UpdatePlan plan, Action ensureAlive = null,
+            Func<Action<CancellationToken>, IEnumerator> runIO = null)
         {
             if (plan == null || plan.Root != RootPath || !plan.IsRemote) throw new ArgumentException("A remote plan from this store is required.");
             ResourceRemoteSource.RequireSupportedRuntime();
@@ -72,20 +112,34 @@ namespace YLFramework.Services.Resource
                 ensureAlive?.Invoke();
                 entry.Remote?.RequireFresh(DateTimeOffset.UtcNow);
                 if (entry.Remote != null) CheckReleaseFloor(entry.Remote);
-                Install(entry.From, CancellationToken.None, ensureAlive: ensureAlive);
-                if (entry.Remote == null) Install(entry.Target, CancellationToken.None, entry.Files, ensureAlive);
-                else yield return InstallRemote(entry, ensureAlive);
+                yield return RemotePreparationIO(token =>
+                {
+                    var alive = runIO == null ? ensureAlive : null;
+                    Install(entry.From, token, ensureAlive: alive);
+                    if (entry.Remote == null) Install(entry.Target, token, entry.Files, alive);
+                }, runIO);
+                ensureAlive?.Invoke();
+                if (entry.Remote != null) yield return InstallRemote(entry, ensureAlive, runIO);
             }
             foreach (var entry in plan.Projects) entry.Remote?.RequireFresh(DateTimeOffset.UtcNow);
             ensureAlive?.Invoke();
-            complete(RecordPrepared(plan));
         }
 
-        private IEnumerator InstallRemote(UpdateProject entry, Action ensureAlive)
+        private static IEnumerator RemotePreparationIO(Action<CancellationToken> work, Func<Action<CancellationToken>, IEnumerator> runIO)
+        {
+            if (runIO == null) work(CancellationToken.None);
+            else yield return runIO(work);
+        }
+
+        private IEnumerator InstallRemote(UpdateProject entry, Action ensureAlive, Func<Action<CancellationToken>, IEnumerator> runIO)
         {
             ensureAlive?.Invoke();
             var release = entry.Remote;
-            if (Exists(VersionPath(entry.ProjectId, entry.ToDigest))) { OpenRemoteVersion(release); yield break; }
+            if (Exists(VersionPath(entry.ProjectId, entry.ToDigest)))
+            {
+                yield return RemotePreparationIO(token => OpenRemoteVersion(release, true, token), runIO);
+                yield break;
+            }
             var inputs = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var file in Files(release.Catalog).Concat(new[] { new ResourceCatalogFile(new JObject { ["RelativeFile"] = ".ylr-complete.json", ["Length"] = release.CompleteLength, ["Sha256"] = release.CompleteSha256 }) }))
             {
@@ -95,12 +149,36 @@ namespace YLFramework.Services.Resource
                 if (reusable != null) { inputs.Add(file.RelativeFile, reusable.Input); continue; }
                 var part = new DownloadPart(this, release, file.RelativeFile, file.Length, file.Sha256);
                 if (AvailableSpace() < Math.Max(0, file.Length - part.Length) + 16384) throw new IOException("Insufficient free disk space for release content.");
-                using var transfer = new ResourceTransfer(release.Source, release.Source.Resolve(release.CatalogDigest + "/" + file.RelativeFile), file.Length, file.Sha256, part: part);
+                var completePart = false;
+                if (part.Length == part.Expected)
+                    yield return RemotePreparationIO(token =>
+                    {
+                        try { part.Verify(token); completePart = true; }
+                        catch (InvalidDataException) { part.Reset(); }
+                    }, runIO);
+                ensureAlive?.Invoke();
+                if (completePart) { inputs.Add(file.RelativeFile, part.Path); continue; }
+                using var transfer = new ResourceTransfer(release.Source, release.Source.Resolve(release.CatalogDigest + "/" + file.RelativeFile), file.Length, file.Sha256,
+                    part: part, deferPartVerification: runIO != null);
                 yield return transfer;
                 ensureAlive?.Invoke();
-                part.Verify(); inputs.Add(file.RelativeFile, part.Path);
+                yield return RemotePreparationIO(token =>
+                {
+                    try { part.Verify(token); }
+                    catch (InvalidDataException) { part.Reset(); throw; }
+                }, runIO);
+                inputs.Add(file.RelativeFile, part.Path);
             }
             ensureAlive?.Invoke();
+            yield return RemotePreparationIO(token => InstallRemoteFiles(entry, inputs, token, runIO == null ? ensureAlive : null), runIO);
+        }
+
+        private void InstallRemoteFiles(UpdateProject entry, IReadOnlyDictionary<string, string> inputs, CancellationToken cancellation, Action ensureAlive = null)
+        {
+            var release = entry.Remote;
+            cancellation.ThrowIfCancellationRequested();
+            ensureAlive?.Invoke();
+            release.RequireFresh(DateTimeOffset.UtcNow);
             var stage = Path.Combine(ProjectRoot(entry.ProjectId), "staging", Guid.NewGuid().ToString("N"));
             ResourceLocalSnapshot.RejectLinks(stage); RequireOwner(); Directory.CreateDirectory(stage);
             var stageMarker = new JObject { ["Version"] = 1, ["OwnerId"] = ownerId, ["ProjectId"] = entry.ProjectId, ["Platform"] = entry.Platform,
@@ -109,36 +187,41 @@ namespace YLFramework.Services.Resource
             Write(Path.Combine(stage, ".ylr-stage.json"), stageMarker);
             foreach (var input in inputs)
             {
+                cancellation.ThrowIfCancellationRequested();
                 ensureAlive?.Invoke();
                 RequireOwner(); ResourceLocalSnapshot.RejectLinks(input.Value);
                 using var stream = new FileStream(input.Value, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using var output = new FileStream(Path.Combine(stage, input.Key), FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 var buffer = new byte[64 * 1024];
                 int count;
-                while ((count = stream.Read(buffer, 0, buffer.Length)) != 0) { ensureAlive?.Invoke(); output.Write(buffer, 0, count); }
+                while ((count = stream.Read(buffer, 0, buffer.Length)) != 0)
+                { cancellation.ThrowIfCancellationRequested(); ensureAlive?.Invoke(); output.Write(buffer, 0, count); }
                 output.Flush(true);
                 Checkpoint?.Invoke("RemoteFileCopied");
+                cancellation.ThrowIfCancellationRequested();
                 ensureAlive?.Invoke();
             }
             var bytes = ResourceCatalogCodec.Write(release.Catalog);
             using (var output = new FileStream(Path.Combine(stage, "resource-catalog.json"), FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { output.Write(bytes, 0, bytes.Length); output.Flush(true); }
             var mount = mounts[entry.ProjectId];
-            ResourceLocalSnapshot.OpenStaging(stage, entry.ProjectId, entry.ToDigest, entry.Platform, mount.AppContentCompatibilityId);
+            Checkpoint?.Invoke("StagingSnapshotValidationStarted");
+            try { ResourceLocalSnapshot.OpenStaging(stage, entry.ProjectId, entry.ToDigest, entry.Platform, mount.AppContentCompatibilityId, unityCompatibility, cancellation); }
+            finally { Checkpoint?.Invoke("StagingSnapshotValidationFinished"); }
             release.RequireFresh(DateTimeOffset.UtcNow);
-            ensureAlive?.Invoke();
-            PromoteStage(stage, stageMarker, release.Catalog, ensureAlive);
+            cancellation.ThrowIfCancellationRequested();
+            PromoteStage(stage, stageMarker, release.Catalog, ensureAlive, cancellation);
         }
 
-        private ResourceLocalSnapshot OpenRemoteVersion(ResourceRemoteRelease release)
+        private ResourceLocalSnapshot OpenRemoteVersion(ResourceRemoteRelease release, bool refresh = true, CancellationToken cancellation = default)
         {
-            var snapshot = Open(release.ProjectId, release.CatalogDigest, true);
+            var snapshot = Open(release.ProjectId, release.CatalogDigest, refresh, cancellation);
             // 既有Complete的结构有效不等于符合本次发布签名；8.7本地版本升级为可信远端版本时同样不能跳过。
             foreach (var file in new[]
             {
                 new ResourceCatalogFile(new JObject { ["RelativeFile"] = "resource-catalog.json", ["Length"] = release.CatalogLength, ["Sha256"] = release.CatalogDigest }),
                 new ResourceCatalogFile(new JObject { ["RelativeFile"] = ".ylr-complete.json", ["Length"] = release.CompleteLength, ["Sha256"] = release.CompleteSha256 })
-            }) using (snapshot.OpenVerified(file)) { }
+            }) using (snapshot.OpenVerified(file, cancellation)) { }
             return snapshot;
         }
 
@@ -157,7 +240,7 @@ namespace YLFramework.Services.Resource
                 ResourceCatalogCodec.Fields(item, "ProjectId,Envelope");
                 var project = ResourceCatalogCodec.Text(item, "ProjectId");
                 if (!mounts.TryGetValue(project, out var mount) || !seen.Add(project)) throw new InvalidDataException("Unknown or duplicate prepared release project.");
-                var release = new ResourceRemoteRelease(ResourceReleaseSignature.Base64(item, "Envelope", ResourceReleaseSignature.MaximumBytes), mount, Application.unityVersion,
+                var release = new ResourceRemoteRelease(ResourceReleaseSignature.Base64(item, "Envelope", ResourceReleaseSignature.MaximumBytes), mount, unityCompatibility,
                     DateTimeOffset.UtcNow, fresh);
                 if (ReadTransition(record["Transition"]).Cast<JObject>().Single(x => (string)x["ProjectId"] == project)["To"].Value<string>() != release.CatalogDigest)
                     throw new InvalidDataException("Prepared release does not authorize its target digest.");

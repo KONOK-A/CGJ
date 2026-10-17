@@ -56,6 +56,7 @@ namespace YLFramework.Services.Resource
                     if (descriptor == null) throw new ResourceException(ResourceError.AddressNotFound, "No Scene at this Catalog address.");
                     load.Path = descriptor.LoadName;
                     load.BundleId = descriptor.BundleId;
+                    RequireHealthyBundle(load.Catalog.Snapshot, load.BundleId);
                 }
                 else
                 {
@@ -117,7 +118,8 @@ namespace YLFramework.Services.Resource
                     if (load.Source != null) StartNativeScene(load);
                     else
                     {
-                        load.Preparing = AcquireBundleRequest(load.Address.ProjectId, load.BundleId, false, false);
+                        load.Preparing = AcquireBundleRequest(load.Address.ProjectId, load.BundleId, false, false,
+                            new BundleLeaseOrigin(load.Address, sceneSequence: load.Request.LoadSequence));
                         load.Preparing.Completed += result =>
                         {
                             try
@@ -149,6 +151,7 @@ namespace YLFramework.Services.Resource
         {
             try
             {
+                if (load.Retention != null) RequireHealthyBundle(load.Retention);
                 if (load.Request.IsDone || !IsSessionActive) { RemoveSceneLoad(load); return; }
                 for (var i = 0; i < SceneManager.sceneCount; i++) load.Before.Add(SceneManager.GetSceneAt(i).handle);
                 // 准备 Bundle 期间已完成的外部 Scene 属于 Before，不能残留为本次 native 的新身份候选。
@@ -234,7 +237,12 @@ namespace YLFramework.Services.Resource
                 "Concurrent external same-path Scene loads cannot be attributed uniquely; candidates remain pinned until real unload.", address: load.Address));
             else if (results.Count != 1 || !results[0].IsLoaded)
                 FailSceneLoad(load, new ResourceException(ResourceError.SceneUnloaded, "The native Scene completed without a surviving unique Scene.", address: load.Address));
-            else if (!load.Request.IsDone) load.Request.SetSuccess(new SceneLease(results[0]));
+            else if (!load.Request.IsDone)
+            {
+                try { if (load.Retention != null) RequireHealthyBundle(load.Retention); }
+                catch (Exception error) { FailSceneLoad(load, error); }
+                if (!load.Request.IsDone) load.Request.SetSuccess(new SceneLease(results[0]));
+            }
             var abandonedAdditive = load.Request.Status != ResourceRequestStatus.Succeeded && load.Request.Mode == LoadSceneMode.Additive && !ambiguous;
             load.Request.Native = null;
             RemoveSceneLoad(load);

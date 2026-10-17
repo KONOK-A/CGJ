@@ -21,8 +21,13 @@ namespace YLFramework.Services.Resource
         private readonly Dictionary<string, ResourceLocalSnapshot> verified = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> recoveryNotes = new(StringComparer.Ordinal);
         private string ownerId;
-        private bool operating;
+        private int operationState;
+        private bool operating => Volatile.Read(ref operationState) != 0;
         private bool creating;
+        private CancellationToken operationCancellation;
+        private readonly string unityCompatibility = Application.unityVersion;
+        // 仅用于使分段只读观测失效，不是版本索引；任一 Store 事务都保守地要求重试。
+        private static long activitySerial;
         private readonly int mainThreadId = Thread.CurrentThread.ManagedThreadId;
         internal Action<string> Checkpoint;
         public string RootPath { get; }
@@ -61,7 +66,7 @@ namespace YLFramework.Services.Resource
         }
 
         private string ProjectRoot(string project) => Path.Combine(RootPath, project, mounts[project].Platform);
-        private string VersionPath(string project, string digest)
+        internal string VersionPath(string project, string digest)
         {
             ResourceCatalogCodec.Hex(digest, 64);
             var path = Path.Combine(ProjectRoot(project), "versions", digest);
@@ -78,6 +83,7 @@ namespace YLFramework.Services.Resource
 
         private JObject Read(string path)
         {
+            operationCancellation.ThrowIfCancellationRequested();
             ResourceLocalSnapshot.RejectLinks(path);
             using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (input.Length > 1024 * 1024) throw new InvalidDataException("Store metadata exceeds its bound.");
@@ -144,13 +150,15 @@ namespace YLFramework.Services.Resource
 
         private JObject ProjectOwner(string project) => new() { ["Version"] = 1, ["OwnerId"] = ownerId, ["ProjectId"] = project, ["Platform"] = mounts[project].Platform };
 
-        private IDisposable Enter(bool create)
+        private IDisposable Enter(bool create, CancellationToken cancellation = default, bool contentIO = false, bool readOnly = false)
         {
-            CheckThread();
-            if (operating) throw new ResourceException(ResourceError.Busy, "ArtifactStore is already operating.");
-            operating = true;
+            if (!contentIO) CheckThread();
+            if (Interlocked.CompareExchange(ref operationState, 1, 0) != 0) throw new ResourceException(ResourceError.Busy, "ArtifactStore is already operating.");
+            operationCancellation = cancellation;
+            Interlocked.Increment(ref activitySerial);
             try
             {
+                cancellation.ThrowIfCancellationRequested();
                 if (!ValidateOwner())
                 {
                     if (!create) return new StoreLock(this, null);
@@ -171,11 +179,13 @@ namespace YLFramework.Services.Resource
                     }
                     finally { creating = false; }
                 }
+                // Check只取得进程内读责任；缺失的持久lock也不能由只读查询创建。
+                if (readOnly) return new StoreLock(this, null);
                 var lockPath = Path.Combine(RootPath, ".ylr-store.lock");
                 ResourceLocalSnapshot.RejectLinks(lockPath);
                 return new StoreLock(this, new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
             }
-            catch { operating = false; throw; }
+            catch { operationCancellation = default; Volatile.Write(ref operationState, 0); Interlocked.Increment(ref activitySerial); throw; }
         }
 
         private sealed class StoreLock : IDisposable
@@ -183,17 +193,22 @@ namespace YLFramework.Services.Resource
             private readonly ArtifactStore owner;
             private readonly FileStream stream;
             internal StoreLock(ArtifactStore owner, FileStream stream) { this.owner = owner; this.stream = stream; }
-            public void Dispose() { stream?.Dispose(); owner.operating = false; }
+            public void Dispose()
+            {
+                try { stream?.Dispose(); }
+                finally { owner.operationCancellation = default; Volatile.Write(ref owner.operationState, 0); Interlocked.Increment(ref activitySerial); }
+            }
         }
 
-        private ResourceLocalSnapshot Open(string project, string digest, bool refresh = false)
+        private ResourceLocalSnapshot Open(string project, string digest, bool refresh = false, CancellationToken cancellation = default)
         {
             var path = VersionPath(project, digest);
             var marker = Read(Path.Combine(path, VersionFile));
             ValidateVersionMarker(marker, project, digest);
             if (!refresh && verified.TryGetValue(path, out var cached)) return cached;
             var mount = mounts[project];
-            var snapshot = ResourceLocalSnapshot.OpenOwned(path, project, digest, mount.Platform, mount.AppContentCompatibilityId);
+            var snapshot = ResourceLocalSnapshot.OpenOwned(path, project, digest, mount.Platform, mount.AppContentCompatibilityId,
+                unityCompatibility, cancellation.CanBeCanceled ? cancellation : operationCancellation);
             verified[path] = snapshot;
             return snapshot;
         }
@@ -230,13 +245,14 @@ namespace YLFramework.Services.Resource
             ["Files"] = new JArray(Files(document).Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }))
         };
 
-        private ResourceLocalSnapshot Reopen(ResourceLocalSnapshot snapshot)
+        private ResourceLocalSnapshot Reopen(ResourceLocalSnapshot snapshot, CancellationToken cancellation = default)
         {
             var doc = snapshot.Document;
-            if (!mounts.TryGetValue(doc.ProjectId, out var mount) || doc.Platform != mount.Platform || doc.AppContentCompatibilityId != mount.AppContentCompatibilityId)
+            if (!mounts.TryGetValue(doc.ProjectId, out var mount) || doc.Platform != mount.Platform || doc.AppContentCompatibilityId != mount.AppContentCompatibilityId ||
+                doc.UnityCompatibility != unityCompatibility)
                 throw new InvalidDataException("The selected snapshot is outside the explicit compatible project closure.");
-            if (snapshot.DirectoryPath == VersionPath(doc.ProjectId, doc.CatalogDigest)) return Open(doc.ProjectId, doc.CatalogDigest, true);
-            return ResourceLocalSnapshot.Open(snapshot.DirectoryPath, doc.ProjectId, doc.CatalogDigest, mount.Platform, mount.AppContentCompatibilityId);
+            if (snapshot.DirectoryPath == VersionPath(doc.ProjectId, doc.CatalogDigest)) return Open(doc.ProjectId, doc.CatalogDigest, true, cancellation);
+            return snapshot.Reopen(cancellation.CanBeCanceled ? cancellation : operationCancellation);
         }
 
         private JObject Index(IEnumerable<ResourceLocalSnapshot> snapshots) => WithFloors(new JObject
@@ -271,13 +287,14 @@ namespace YLFramework.Services.Resource
         private ResourceLocalSnapshot[] OpenIndex(JObject index, bool refresh = true) => ReadArray(ValidateIndex(index), "Projects")
             .Cast<JObject>().Select(x => Open((string)x["ProjectId"], (string)x["CatalogDigest"], refresh)).ToArray();
 
-        private JObject ReadIndex(string name)
+        private JObject ReadIndex(string name, Action<string> observe = null)
         {
             JObject selected = null;
             var missing = 0;
             foreach (var project in Projects)
             {
                 var path = Path.Combine(ProjectRoot(project.ProjectId), name);
+                observe?.Invoke(path);
                 if (!Exists(path)) { missing++; continue; }
                 var index = ValidateIndex(Read(path));
                 if (selected != null && !JToken.DeepEquals(selected, index)) throw new InvalidDataException("Activation index mirrors disagree on the complete closure.");
@@ -287,26 +304,32 @@ namespace YLFramework.Services.Resource
             return selected;
         }
 
-        private JObject ValidIndex(string name)
+        private JObject ValidIndex(string name, bool refresh = true)
         {
-            try { var index = ReadIndex(name); if (index != null) OpenIndex(index); return index; }
+            try { var index = ReadIndex(name); if (index != null) OpenIndex(index, refresh); return index; }
             catch (Exception error) when (IsFileFailure(error)) { recoveryNotes[name] = name + ": " + error.Message; return null; }
         }
 
-        private ResourceLocalSnapshot[] Select()
+        private ResourceLocalSnapshot[] Select(bool refresh = true)
         {
             foreach (var name in new[] { "active.json", "last-known-good.json" })
             {
-                var index = ValidIndex(name);
+                var index = ValidIndex(name, refresh);
                 if (index != null) return OpenIndex(index, false);
             }
             if (Projects.Any(x => x.BuiltIn == null)) throw new InvalidDataException("No complete compatible active, last-known-good or explicitly bound built-in closure.");
-            return Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal).Select(x => Reopen(x.BuiltIn)).ToArray();
+            return Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal).Select(x => refresh ? Reopen(x.BuiltIn) : x.BuiltIn).ToArray();
         }
 
         internal IReadOnlyList<ResourceLocalSnapshot> Mount()
         {
-            using var guard = Enter(false);
+            CheckThread();
+            return MountForContent(CancellationToken.None);
+        }
+
+        internal IReadOnlyList<ResourceLocalSnapshot> MountForContent(CancellationToken cancellation)
+        {
+            using var guard = Enter(false, cancellation, true);
             recoveryNotes.Clear();
             if (Directory.Exists(RootPath)) RecoverLocked();
             var selected = Select();
@@ -324,6 +347,27 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             if (operating) throw new ResourceException(ResourceError.Busy, "ArtifactStore is already operating.");
+            return CheckCore(current, targetClosure, CancellationToken.None);
+        }
+
+        internal UpdatePlan CheckForContent(IEnumerable<ResourceLocalSnapshot> current, IEnumerable<ResourceLocalSnapshot> targetClosure, CancellationToken cancellation)
+        {
+            using var guard = Enter(false, cancellation, true, true);
+            return CheckCore(current, targetClosure, cancellation);
+        }
+
+        internal void RequireCheckedPlan(UpdatePlan plan)
+        {
+            CheckThread();
+            if (plan == null || plan.Root != RootPath) throw new ArgumentException("The checked plan belongs to another store.");
+            if (operating) throw new ResourceException(ResourceError.Busy, "ArtifactStore changed to an active operation before check handoff.");
+            ValidateOwner(); RequireNoJournal();
+            ReadTransition(Transition(plan.Projects));
+        }
+
+        private UpdatePlan CheckCore(IEnumerable<ResourceLocalSnapshot> current, IEnumerable<ResourceLocalSnapshot> targetClosure, CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
             ValidateOwner(); // Check 不创建 root/lock/staging，也不执行恢复写入。
             if (File.Exists(JournalPath)) throw new ResourceException(ResourceError.Busy, "Recover the pending commit before checking another update.");
             var from = Closure(current);
@@ -333,19 +377,21 @@ namespace YLFramework.Services.Resource
             var budgeted = new HashSet<string>(StringComparer.Ordinal);
             foreach (var project in mounts.Keys.OrderBy(x => x, StringComparer.Ordinal))
             {
-                var target = Reopen(targets[project]);
+                cancellation.ThrowIfCancellationRequested();
+                var target = Reopen(targets[project], cancellation);
                 var old = from[project];
                 var files = new List<UpdateFile>();
                 if (target.Document.CatalogDigest != old.Document.CatalogDigest && !Exists(VersionPath(project, target.Document.CatalogDigest)))
                 {
                     foreach (var file in Files(target.Document))
                     {
+                        cancellation.ThrowIfCancellationRequested();
                         var reusable = Files(old.Document).Any(x => x.RelativeFile == file.RelativeFile && x.Length == file.Length && x.Sha256 == file.Sha256);
-                        if (reusable) using (old.OpenVerified(file)) { }
+                        if (reusable) using (old.OpenVerified(file, cancellation)) { }
                         files.Add(new UpdateFile(file.RelativeFile, file.Length, reusable, Path.Combine(reusable ? old.DirectoryPath : target.DirectoryPath, file.RelativeFile)));
                     }
                 }
-                else if (Exists(VersionPath(project, target.Document.CatalogDigest))) Open(project, target.Document.CatalogDigest, true);
+                else if (Exists(VersionPath(project, target.Document.CatalogDigest))) Open(project, target.Document.CatalogDigest, true, cancellation);
                 foreach (var snapshot in new[] { old, target })
                     if (!Exists(VersionPath(project, snapshot.Document.CatalogDigest)) && budgeted.Add(project + ":" + snapshot.Document.CatalogDigest))
                         required = checked(required + Files(snapshot.Document).Sum(x => x.Length) +
@@ -361,6 +407,8 @@ namespace YLFramework.Services.Resource
                 ResourceCatalogCodec.CanonicalBytes(Transition(entries)).Length * 4L + ResourceCatalogCodec.CanonicalBytes(Owner()).Length +
                 Projects.Sum(x => ResourceCatalogCodec.CanonicalBytes(ProjectOwner(x.ProjectId)).Length + 32L) + 4096);
             var available = new DriveInfo(Path.GetPathRoot(RootPath)).AvailableFreeSpace;
+            ValidateOwner(); RequireNoJournal();
+            cancellation.ThrowIfCancellationRequested();
             return new UpdatePlan(RootPath, entries, available, required);
         }
 
@@ -379,26 +427,75 @@ namespace YLFramework.Services.Resource
 
         private static IEnumerable<ResourceCatalogFile> Files(ResourceCatalogDocument document) => document.Bundles.Cast<ResourceCatalogFile>().Concat(document.SupportFiles);
 
-        internal PreparedUpdate Prepare(UpdatePlan plan, CancellationToken cancellation)
+        internal PreparedUpdate Prepare(UpdatePlan plan, CancellationToken cancellation, ResourceDecryptionOptions decryption = null)
+        {
+            InstallPreparation(plan, cancellation);
+            using var receipt = CapturePreparation(plan, decryption);
+            receipt.Validate(cancellation);
+            return CompletePreparation(plan, receipt, cancellation);
+        }
+
+        internal void InstallPreparation(UpdatePlan plan, CancellationToken cancellation, Action ensureAlive = null)
+            => InstallPreparationCore(plan, cancellation, ensureAlive, false);
+
+        internal void InstallPreparationForContent(UpdatePlan plan, CancellationToken cancellation)
+            => InstallPreparationCore(plan, cancellation, null, true);
+
+        private void InstallPreparationCore(UpdatePlan plan, CancellationToken cancellation, Action ensureAlive, bool contentIO)
         {
             if (plan == null || plan.Root != RootPath) throw new ArgumentException("The plan belongs to another store.");
             if (plan.IsRemote) throw new ResourceException(ResourceError.Unsupported, "Remote plans require the ResourceSystem asynchronous download path.");
             cancellation.ThrowIfCancellationRequested();
-            using var guard = Enter(true);
+            using var guard = Enter(true, cancellation, contentIO);
             RecoverMetadata();
             RequireNoJournal();
             foreach (var entry in plan.Projects)
             {
                 cancellation.ThrowIfCancellationRequested();
-                Install(entry.From, cancellation);
-                Install(entry.Target, cancellation, entry.Files);
+                ensureAlive?.Invoke();
+                Install(entry.From, cancellation, ensureAlive: ensureAlive);
+                Install(entry.Target, cancellation, entry.Files, ensureAlive);
             }
             cancellation.ThrowIfCancellationRequested();
-            return RecordPrepared(plan);
+            ensureAlive?.Invoke();
         }
 
-        private PreparedUpdate RecordPrepared(UpdatePlan plan)
+        internal ValidationReceipt CapturePreparation(UpdatePlan plan, ResourceDecryptionOptions decryption = null, ResourceContentBudget budget = null)
         {
+            if (plan == null || plan.Root != RootPath) throw new ArgumentException("The plan belongs to another store.");
+            ResourceLocalSnapshot[] targets;
+            ResourceLocalSnapshot[] sources;
+            using (Enter(false))
+            {
+                RequireOwner(); RecoverMetadata(); RequireNoJournal();
+                ReadTransition(Transition(plan.Projects));
+                targets = plan.Projects.Select(x => x.Remote == null ? Open(x.ProjectId, x.ToDigest) : OpenRemoteVersion(x.Remote, false)).ToArray();
+                sources = plan.Projects.Select(x => Open(x.ProjectId, x.FromDigest)).ToArray();
+            }
+            // 任意应用provider只在排他锁释放后调用；收据在调用前已绑定本次事务代次。
+            return ValidationReceipt.Capture(this, plan, targets, sources, decryption, budget);
+        }
+
+        internal PreparedUpdate CompletePreparation(UpdatePlan plan, ValidationReceipt receipt, CancellationToken cancellation = default)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            receipt.Require(this, plan);
+            using var guard = Enter(false);
+            RequireOwner(); RecoverMetadata(); RequireNoJournal();
+            receipt.Consume();
+            RequireFrom(plan.Projects);
+            foreach (var entry in plan.Projects)
+            {
+                entry.Remote?.RequireFresh(DateTimeOffset.UtcNow);
+                if (entry.Remote != null) CheckReleaseFloor(entry.Remote);
+            }
+            cancellation.ThrowIfCancellationRequested();
+            return RecordPrepared(plan, receipt);
+        }
+
+        private PreparedUpdate RecordPrepared(UpdatePlan plan, ValidationReceipt receipt)
+        {
+            receipt.RequireStable();
             var transition = Transition(plan.Projects);
             var releases = plan.Projects.Where(x => x.Remote != null).Select(x => x.Remote).ToArray();
             var preparedPath = PreparedPath(transition);
@@ -423,9 +520,165 @@ namespace YLFramework.Services.Resource
             if (releases.Length != 0) record["Releases"] = ReleaseRecords(releases);
             if (!JToken.DeepEquals(previous, record)) Write(preparedPath, record, () =>
             {
+                receipt.RequireStable();
+                RequireFrom(plan.Projects);
                 if (previous != null && !JToken.DeepEquals(Read(preparedPath), previous)) throw new InvalidDataException("Prepared authorization changed during refresh.");
             });
             return new PreparedUpdate(RootPath, plan.Projects.Select(x => new UpdateProject(x.From, Open(x.ProjectId, x.ToDigest), Array.Empty<UpdateFile>())), releases: releases);
+        }
+
+        private void RequireFrom(IEnumerable<UpdateProject> projects)
+        {
+            var current = Select(false).ToDictionary(x => x.Document.ProjectId, StringComparer.Ordinal);
+            foreach (var project in projects)
+                if (current[project.ProjectId].Document.CatalogDigest != project.FromDigest)
+                    throw new ResourceException(ResourceError.StaleBase, "The persistent activation base changed: " + project.ProjectId);
+        }
+
+        // 这是一次事务的短期认证责任，不是第二份版本索引或可持久复用的解密标记。
+        internal sealed class ValidationReceipt : IDisposable
+        {
+            private readonly ArtifactStore store;
+            private readonly object operation;
+            private readonly string transition;
+            private readonly string owner;
+            private readonly long epoch;
+            private readonly List<(FileStream stream, ResourceCatalogFile file, long length)> files = new();
+            private ResourceContentValidation content;
+            private bool validated;
+            private bool consumed;
+            private bool disposing;
+            private bool disposed;
+            internal IReadOnlyList<ResourceLocalSnapshot> Targets { get; }
+            internal IReadOnlyList<ResourceLocalSnapshot> Snapshots { get; }
+
+            private ValidationReceipt(ArtifactStore store, object operation, ResourceLocalSnapshot[] targets, ResourceLocalSnapshot[] sources)
+            {
+                this.store = store; this.operation = operation;
+                owner = store.ownerId; epoch = Interlocked.Read(ref activitySerial);
+                transition = Identity(operation);
+                Targets = ResourceCatalog.Copy(targets);
+                Snapshots = ResourceCatalog.Copy(targets.Concat(sources).GroupBy(x => x.DirectoryPath, StringComparer.OrdinalIgnoreCase).Select(x => x.First()));
+            }
+
+            private static string Identity(object operation) => Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(
+                Transition(operation is UpdatePlan plan ? plan.Projects : ((PreparedUpdate)operation).Projects)));
+
+            internal static ValidationReceipt Capture(ArtifactStore store, object operation, ResourceLocalSnapshot[] targets, ResourceLocalSnapshot[] sources,
+                ResourceDecryptionOptions decryption, ResourceContentBudget budget)
+            {
+                var receipt = new ValidationReceipt(store, operation, targets, sources);
+                try
+                {
+                    foreach (var snapshot in receipt.Snapshots)
+                    {
+                        var document = snapshot.Document;
+                        var target = targets.Any(x => x.DirectoryPath == snapshot.DirectoryPath);
+                        var files = target ? document.SupportFiles.Where(x => x.RelativeFile != document.ManifestFile) : Files(document);
+                        foreach (var file in files.Append(
+                            new ResourceCatalogFile(new JObject { ["RelativeFile"] = "resource-catalog.json",
+                                ["Length"] = ResourceCatalogCodec.Write(document).LongLength, ["Sha256"] = document.CatalogDigest })))
+                        {
+                            var stream = snapshot.OpenContentFile(file);
+                            receipt.files.Add((stream, file, stream.Length));
+                        }
+                        foreach (var name in new[] { ".ylr-complete.json", VersionFile })
+                        {
+                            var path = Path.Combine(snapshot.DirectoryPath, name);
+                            ResourceLocalSnapshot.RejectLinks(path);
+                            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                            receipt.files.Add((stream, null, stream.Length));
+                        }
+                        receipt.RequireMetadata(snapshot);
+                    }
+                    receipt.content = ResourceContentValidation.Capture(targets, decryption, budget: budget);
+                    return receipt;
+                }
+                catch (Exception error)
+                {
+                    if (error is ResourceException { InnerException: ResourceContentCleanupException { Owner: ResourceContentValidation retained } } resource)
+                    {
+                        receipt.content = retained;
+                        throw new ResourceException(resource.Kind, "Update content capture failed; the unfinished validation and its protected snapshots remain owned.",
+                            new ResourceContentCleanupException(receipt, error));
+                    }
+                    try { receipt.Dispose(); }
+                    catch (Exception cleanup)
+                    {
+                        throw new ResourceException(error is ResourceException failure ? failure.Kind : ResourceError.UpdateFailed,
+                            "Update validation capture and cleanup failed; ownership remains in the cause.",
+                            new ResourceContentCleanupException(receipt, new AggregateException(error, cleanup)));
+                    }
+                    throw;
+                }
+            }
+
+            internal void Validate(CancellationToken cancellation = default)
+            {
+                if (disposing) throw new ObjectDisposedException(nameof(ValidationReceipt));
+                cancellation.ThrowIfCancellationRequested();
+                store.Checkpoint?.Invoke("ReceiptShaStarted");
+                try
+                {
+                    foreach (var file in files)
+                        if (file.file != null) ResourceLocalSnapshot.VerifyContentFile(file.stream, file.file, cancellation);
+                }
+                finally { store.Checkpoint?.Invoke("ReceiptShaFinished"); }
+                content.Validate(cancellation, store.Checkpoint);
+                cancellation.ThrowIfCancellationRequested();
+                validated = true;
+            }
+
+            internal void Require(ArtifactStore expectedStore, object expectedOperation)
+            {
+                store.CheckThread();
+                if (!ReferenceEquals(store, expectedStore) || !ReferenceEquals(operation, expectedOperation) || transition != Identity(expectedOperation) ||
+                    owner != store.ownerId || disposing || consumed || !validated)
+                    throw new InvalidOperationException("A completed, matching, unused update content receipt is required.");
+                if (epoch != Interlocked.Read(ref activitySerial)) throw new ResourceException(ResourceError.StaleBase, "The store changed during content validation; explicitly retry the operation.");
+                RequireStable();
+            }
+
+            internal void Consume() { RequireStable(); consumed = true; }
+
+            internal void RequireStable()
+            {
+                if (disposing || !validated) throw new InvalidOperationException("Update content validation has not completed or was released.");
+                content.RequireStable();
+                foreach (var file in files)
+                    if (!file.stream.CanRead || file.stream.Length != file.length)
+                        throw new InvalidDataException("A validated update file changed before commit.");
+                foreach (var snapshot in Snapshots) RequireMetadata(snapshot);
+            }
+
+            private void RequireMetadata(ResourceLocalSnapshot snapshot)
+            {
+                var document = snapshot.Document;
+                if (snapshot.DirectoryPath != store.VersionPath(document.ProjectId, document.CatalogDigest) ||
+                    !JToken.DeepEquals(store.Read(Path.Combine(snapshot.DirectoryPath, VersionFile)), store.VersionMarker(document)))
+                    throw new InvalidDataException("The validated update version ownership changed.");
+                ResourceLocalSnapshot.ValidateComplete(store.Read(Path.Combine(snapshot.DirectoryPath, ".ylr-complete.json")),
+                    document.ProjectId, document.Platform, document.CatalogDigest, document.BuildId);
+                var names = Files(document).Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json", VersionFile });
+                KnownDirectoryFiles(snapshot.DirectoryPath, new HashSet<string>(names, StringComparer.Ordinal)).ToArray();
+                if (Directory.GetFiles(snapshot.DirectoryPath).Length != names.Count()) throw new InvalidDataException("The validated update file closure changed.");
+            }
+
+            public void Dispose()
+            {
+                if (disposed) return;
+                disposing = true;
+                var failures = new List<Exception>();
+                if (content != null)
+                    try { content.Dispose(); content = null; }
+                    catch (Exception error) { failures.Add(error); }
+                for (var i = files.Count - 1; i >= 0; i--)
+                    try { files[i].stream.Dispose(); files.RemoveAt(i); }
+                    catch (Exception error) { failures.Add(error); }
+                if (failures.Count != 0)
+                    throw new ResourceContentCleanupException(this, new AggregateException("Update content cleanup failed; unresolved inputs remain owned.", failures));
+                disposed = true;
+            }
         }
 
         private ResourceLocalSnapshot Install(ResourceLocalSnapshot source, CancellationToken cancellation, IReadOnlyList<UpdateFile> reuse = null, Action ensureAlive = null)
@@ -436,9 +689,9 @@ namespace YLFramework.Services.Resource
             var target = VersionPath(project, digest);
             if (Exists(target))
             {
-                return Open(project, digest);
+                return Open(project, digest, cancellation: cancellation);
             }
-            source = Reopen(source);
+            source = Reopen(source, cancellation);
             var stage = Path.Combine(ProjectRoot(project), "staging", Guid.NewGuid().ToString("N"));
             ResourceLocalSnapshot.RejectLinks(stage);
             Directory.CreateDirectory(stage);
@@ -466,13 +719,14 @@ namespace YLFramework.Services.Resource
             }
             // 先验证普通发布文件，最后写 owned Complete。取消/失败留下的 staging 从不参与挂载。
             var mount = mounts[project];
-            ResourceLocalSnapshot.OpenStaging(stage, project, digest, mount.Platform, mount.AppContentCompatibilityId);
+            ResourceLocalSnapshot.OpenStaging(stage, project, digest, mount.Platform, mount.AppContentCompatibilityId, unityCompatibility, cancellation);
             cancellation.ThrowIfCancellationRequested();
             ensureAlive?.Invoke();
-            return PromoteStage(stage, stageMarker, source.Document, ensureAlive);
+            return PromoteStage(stage, stageMarker, source.Document, ensureAlive, cancellation);
         }
 
-        private ResourceLocalSnapshot PromoteStage(string stage, JObject stageMarker, ResourceCatalogDocument document, Action ensureAlive = null)
+        private ResourceLocalSnapshot PromoteStage(string stage, JObject stageMarker, ResourceCatalogDocument document, Action ensureAlive = null,
+            CancellationToken cancellation = default)
         {
             ensureAlive?.Invoke();
             var project = document.ProjectId; var digest = document.CatalogDigest;
@@ -488,7 +742,7 @@ namespace YLFramework.Services.Resource
             Directory.Move(stage, VersionPath(project, digest));
             Checkpoint?.Invoke("VersionInstalled");
             ensureAlive?.Invoke();
-            return Open(project, digest);
+            return Open(project, digest, cancellation: cancellation);
         }
 
         private static JArray Transition(IEnumerable<UpdateProject> projects) => new(projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal)
@@ -520,15 +774,20 @@ namespace YLFramework.Services.Resource
             return PreparedRecords().Select(x => RecoverPrepared(ReadTransition(x["Transition"]), ReadReleaseRecords(x))).ToArray();
         }
 
-        private JObject[] PreparedRecords()
+        private IEnumerable<JObject> PreparedRecords()
         {
             ResourceLocalSnapshot.RejectLinks(PreparedRoot);
-            return Directory.GetFiles(PreparedRoot, "*.json").Select(path =>
+            foreach (var path in Directory.EnumerateFiles(PreparedRoot, "*.json"))
             {
-                var record = Read(path);
-                ValidatePreparedRecord(record, path);
-                return record;
-            }).ToArray();
+                yield return ReadPreparedRecord(path);
+            }
+        }
+
+        private JObject ReadPreparedRecord(string path)
+        {
+            var record = Read(path);
+            ValidatePreparedRecord(record, path);
+            return record;
         }
 
         private PreparedUpdate RecoverPrepared(JArray transition, ResourceRemoteRelease[] releases)

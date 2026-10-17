@@ -22,16 +22,12 @@ namespace YLFramework.Core.Examples
     public class {ModuleName} : global::YLFramework.Core.SingletonModule<{ModuleName}>
     {
         // ProjectName 是正式 YL Resource ProjectId，不是 XFAB 项目名或 BundleName。
-        // 应用启动协程先持有显式 configuration，再完成以下装配，最后启动本 Module：
-        // using var initialize = global::YLFramework.Services.Resource.ResourceSystem.InitializeAsync(configuration);
-        // yield return initialize;
-        // var resources = initialize.TakeResult();
-        // resources.BindCoreResourceProvider();
-        // 命名 Audio 显式取得同一资源会话的领域 Provider：
-        // var audio = resources.GetAudioClipProvider({ProjectName});
-        // var clip = new global::YLFramework.Services.Audio.AudioClipAddress(audio, ""audio/theme"");
-        // yield return global::YLFramework.Core.ModuleManager.StartUpModule<{ModuleName}>();
-        // 应用退出先关闭 Module/Audio，归还显式 Clip 租约，再清理实例缓存和 Scene，最后 ShutdownAsync。
+        // 应用先通过 ResourceConfiguration.Create 和 ResourceStartup 显式启动，选择 bindCore:true，
+        // StartAsync 成功后再启动本 Module；Module 不自行初始化资源或覆盖全局 Provider。
+        // 完整配置、同一业务的 Simulation/Bundle 和 Core/Audio 可运行例见 Samples/ResourceStartup。
+        // Audio 需要时使用同一 startup.AudioProviders[{ProjectName}]，未选择Audio则不装配。
+        // 退出先关闭自己的 Module/播放并归还 Lease/Scene 等责任，再调用 startup.StopAsync。
+        // Busy 时保持原会话并在真实 owner 归还后重试，不关闭外部会话或强制释放他人责任。
         public override string ProjectName => {ProjectName};
         public override bool BaseModule => {BaseModule};
         public override string DefaultStartUpScene => {DefaultStartUpScene};

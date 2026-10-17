@@ -8,63 +8,94 @@ namespace YLFramework.Services.Resource
 {
     public sealed partial class ArtifactStore
     {
-        internal IReadOnlyList<ResourceLocalSnapshot> Commit(PreparedUpdate update)
+        internal IReadOnlyList<ResourceLocalSnapshot> Commit(PreparedUpdate update, ResourceDecryptionOptions decryption = null)
+        {
+            using var receipt = CaptureCommit(update, decryption);
+            receipt.Validate();
+            return CommitValidated(update, receipt);
+        }
+
+        internal ValidationReceipt CaptureCommit(PreparedUpdate update, ResourceDecryptionOptions decryption = null, ResourceContentBudget budget = null)
         {
             if (update == null || update.Root != RootPath) throw new ArgumentException("PreparedUpdate belongs to another store.");
+            ResourceLocalSnapshot[] targets;
+            ResourceLocalSnapshot[] sources;
+            using (Enter(false))
+            {
+                RequireOwner(); RecoverLocked();
+                ReadTransition(Transition(update.Projects));
+                var releases = CommitReleases(update);
+                RequireFrom(update.Projects);
+                targets = update.Projects.Select(x => releases.SingleOrDefault(y => y.ProjectId == x.ProjectId) is { } release
+                    ? OpenRemoteVersion(release, false) : Open(x.ProjectId, x.ToDigest)).ToArray();
+                sources = update.Projects.Select(x => Open(x.ProjectId, x.FromDigest)).ToArray();
+            }
+            return ValidationReceipt.Capture(this, update, targets, sources, decryption, budget);
+        }
+
+        private ResourceRemoteRelease[] CommitReleases(PreparedUpdate update)
+        {
+            if (update.IsRollback)
+            {
+                var good = ReadIndex("last-known-good.json") ?? throw new ResourceException(ResourceError.StaleBase, "The rollback closure is no longer available.");
+                var targets = ReadArray(good, "Projects").Cast<JObject>().ToDictionary(x => (string)x["ProjectId"], x => (string)x["CatalogDigest"], StringComparer.Ordinal);
+                if (update.Projects.Any(x => targets[x.ProjectId] != x.ToDigest))
+                    throw new ResourceException(ResourceError.StaleBase, "The last-known-good closure changed before rollback.");
+                return Array.Empty<ResourceRemoteRelease>();
+            }
+            var preparedPath = PreparedPath(Transition(update.Projects));
+            if (!File.Exists(preparedPath)) throw new InvalidDataException("PreparedUpdate was discarded or consumed; Check and Prepare again.");
+            var record = Read(preparedPath);
+            ValidatePreparedRecord(record, preparedPath);
+            var releases = ReadReleaseRecords(record, true);
+            foreach (var release in releases) CheckReleaseFloor(release);
+            return releases;
+        }
+
+        internal IReadOnlyList<ResourceLocalSnapshot> CommitValidated(PreparedUpdate update, ValidationReceipt receipt)
+        {
+            receipt.Require(this, update);
             using var guard = Enter(false);
             RequireOwner();
-            RecoverLocked();
+            RecoverMetadata(); RequireNoJournal();
+            receipt.Consume();
             var transition = Transition(update.Projects);
             ReadTransition(transition);
-            var releases = Array.Empty<ResourceRemoteRelease>();
-            if (!update.IsRollback)
-            {
-                var preparedPath = PreparedPath(transition);
-                if (!File.Exists(preparedPath)) throw new InvalidDataException("PreparedUpdate was discarded or consumed; Check and Prepare again.");
-                var record = Read(preparedPath);
-                ValidatePreparedRecord(record, preparedPath);
-                releases = ReadReleaseRecords(record, true);
-            }
-            foreach (var release in releases) CheckReleaseFloor(release);
+            var releases = CommitReleases(update);
             var floorsBefore = ReadReleaseFloors();
             var floorsAfter = MergeFloors(floorsBefore.Cast<JObject>().Concat(releases.Select(x => x.Floor())));
-            var current = Select().ToDictionary(x => x.Document.ProjectId, StringComparer.Ordinal);
-            foreach (var item in update.Projects)
-            {
-                if (current[item.ProjectId].Document.CatalogDigest != item.FromDigest)
-                    throw new ResourceException(ResourceError.StaleBase, "The persistent activation base changed: " + item.ProjectId);
-                var release = releases.SingleOrDefault(x => x.ProjectId == item.ProjectId);
-                if (release == null) Open(item.ProjectId, item.ToDigest, true);
-                else OpenRemoteVersion(release);
-            }
+            RequireFrom(update.Projects);
+            receipt.RequireStable();
             var journal = new JObject { ["Version"] = 1, ["OwnerId"] = ownerId, ["Phase"] = "Verified", ["Transition"] = transition,
-                ["ActiveBefore"] = ValidIndex("active.json"), ["GoodBefore"] = ValidIndex("last-known-good.json") };
+                ["ActiveBefore"] = ValidIndex("active.json", false), ["GoodBefore"] = ValidIndex("last-known-good.json", false) };
             if (floorsAfter.Count != 0)
             {
                 journal["Version"] = 2; journal["ReleaseFloorsBefore"] = floorsBefore; journal["ReleaseFloorsAfter"] = floorsAfter;
             }
-            Write(JournalPath, journal);
+            Write(JournalPath, journal, () => { receipt.RequireStable(); RequireFrom(update.Projects); });
             Checkpoint?.Invoke("JournalVerified");
             var from = WithFloors(TransitionIndex(transition, "From"), floorsAfter);
             var to = WithFloors(TransitionIndex(transition, "To"), floorsAfter);
             // LKG 是上一整个闭包，而不是各项目最近一次变化的版本。
             foreach (var item in update.Projects)
             {
+                receipt.RequireStable();
                 RequireJournal(journal);
-                Write(Path.Combine(ProjectRoot(item.ProjectId), "last-known-good.json"), from, () => RequireJournal(journal));
+                Write(Path.Combine(ProjectRoot(item.ProjectId), "last-known-good.json"), from, () => { receipt.RequireStable(); RequireJournal(journal); });
                 Checkpoint?.Invoke("LastGoodWritten:" + item.ProjectId);
                 RequireJournal(journal);
-                Write(Path.Combine(ProjectRoot(item.ProjectId), "active.json"), to, () => RequireJournal(journal));
+                Write(Path.Combine(ProjectRoot(item.ProjectId), "active.json"), to, () => { receipt.RequireStable(); RequireJournal(journal); });
                 Checkpoint?.Invoke("ActiveWritten:" + item.ProjectId);
             }
             RequireJournal(journal);
             var committed = (JObject)journal.DeepClone();
             committed["Phase"] = "Committed";
             Checkpoint?.Invoke("BeforeCommitDecision");
-            Write(JournalPath, committed, () => RequireJournal(journal));
+            Write(JournalPath, committed, () => { receipt.RequireStable(); RequireJournal(journal); });
             Checkpoint?.Invoke("CommitDecided");
-            RecoverLocked();
-            return Select();
+            receipt.RequireStable();
+            RecoverLocked(false);
+            return Select(false);
         }
 
         private JObject TransitionIndex(JArray transition, string field) => new()
@@ -108,7 +139,7 @@ namespace YLFramework.Services.Resource
             if (Exists(JournalPath)) throw new ResourceException(ResourceError.Busy, "A commit needs recovery at initialization or inside the activation barrier.");
         }
 
-        private void RecoverLocked()
+        private void RecoverLocked(bool refresh = true)
         {
             if (!ValidateOwner()) return;
             RecoverMetadata();
@@ -120,10 +151,10 @@ namespace YLFramework.Services.Resource
             var floorsAfter = (long)journal["Version"] == 2 ? ValidateFloors(journal["ReleaseFloorsAfter"]) : new JArray();
             var from = WithFloors(TransitionIndex(transition, "From"), floorsBefore);
             var to = WithFloors(TransitionIndex(transition, "To"), floorsAfter);
-            try { OpenIndex(committed ? to : from); }
+            try { OpenIndex(committed ? to : from, refresh); }
             catch (Exception error) when (committed && IsFileFailure(error))
             {
-                OpenIndex(from);
+                OpenIndex(from, refresh);
                 committed = false;
             }
             var active = committed ? to : journal["ActiveBefore"] as JObject;
@@ -135,8 +166,8 @@ namespace YLFramework.Services.Resource
                 active = WithFloors(active == null ? from : (JObject)active.DeepClone(), floorsBefore);
                 if (good != null) good = WithFloors((JObject)good.DeepClone(), floorsBefore);
             }
-            if (active != null) OpenIndex(active);
-            if (good != null) OpenIndex(good);
+            if (active != null) OpenIndex(active, refresh);
+            if (good != null) OpenIndex(good, refresh);
             // 全部验证完成后才恢复镜像。每个镜像自身也携带完整闭包，journal 收尾后仍能识别混代。
             foreach (var project in Projects)
             {
@@ -250,14 +281,10 @@ namespace YLFramework.Services.Resource
             RecoverMetadata(); RequireNoJournal();
             var protectedPaths = new HashSet<string>(held.Select(x => x.DirectoryPath), StringComparer.OrdinalIgnoreCase);
             var deleted = new List<string>(); var errors = new List<string>();
-            foreach (var name in new[] { "active.json", "last-known-good.json" })
-            {
-                var index = ReadIndex(name);
-                if (index != null) foreach (var snapshot in OpenIndex(index)) protectedPaths.Add(snapshot.DirectoryPath);
-            }
-            foreach (var prepared in PreparedRecords())
-                foreach (JObject entry in ReadTransition(prepared["Transition"]))
-                    foreach (var field in new[] { "From", "To" }) protectedPaths.Add(VersionPath((string)entry["ProjectId"], (string)entry[field]));
+            foreach (var record in IndexProtectionRecords(true))
+                foreach (var protection in ProtectionPaths(record.data, record.reason)) protectedPaths.Add(protection.path);
+            foreach (var record in PreparedRecords())
+                foreach (var protection in ProtectionPaths(record, ArtifactProtection.PreparedFrom | ArtifactProtection.PreparedTo)) protectedPaths.Add(protection.path);
             foreach (var mount in Projects)
             {
                 var root = ProjectRoot(mount.ProjectId);
@@ -308,10 +335,8 @@ namespace YLFramework.Services.Resource
         {
             RequireOwner(); ResourceLocalSnapshot.RejectLinks(path);
             var allowed = new HashSet<string>(files.Append(markerName), StringComparer.Ordinal);
-            var entries = Directory.GetFileSystemEntries(path);
-            if (entries.Any(x => !File.Exists(x) || !allowed.Contains(Path.GetFileName(x))))
-                throw new InvalidDataException("Owned cleanup encountered an unknown entry; nothing in this directory was removed.");
-            foreach (var entry in entries) ResourceLocalSnapshot.RejectLinks(entry);
+            // 两个调用方共享同一闭合文件集合判断；删除前仍完整预检，不边枚举边删。
+            KnownDirectoryFiles(path, allowed).ToArray();
             // marker 最后删除。文件占用造成中断后，不要求残余目录重新成为完整可加载版本才能续清。
             foreach (var name in allowed.Where(x => x != markerName).OrderBy(x => x, StringComparer.Ordinal).Append(markerName))
             {
@@ -322,6 +347,44 @@ namespace YLFramework.Services.Resource
                 if (File.Exists(file)) File.Delete(file);
             }
             Directory.Delete(path);
+        }
+
+        private static IEnumerable<string> KnownDirectoryFiles(string path, HashSet<string> allowed)
+        {
+            ResourceLocalSnapshot.RejectLinks(path);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+            {
+                ResourceLocalSnapshot.RejectLinks(entry);
+                if (!File.Exists(entry) || !allowed.Contains(Path.GetFileName(entry)))
+                    throw new InvalidDataException("Owned cleanup encountered an unknown entry; nothing in this directory was removed.");
+                yield return entry;
+            }
+        }
+
+        private IEnumerable<(JObject data, ArtifactProtection reason)> IndexProtectionRecords(bool verifyIndexes, Action<string> observe = null)
+        {
+            foreach (var name in new[] { "active.json", "last-known-good.json" })
+            {
+                var index = ReadIndex(name, observe);
+                if (index == null) continue;
+                if (verifyIndexes) OpenIndex(index);
+                yield return (index, name == "active.json" ? ArtifactProtection.Active : ArtifactProtection.LastKnownGood);
+            }
+        }
+
+        private IEnumerable<(string path, ArtifactProtection reason)> ProtectionPaths(JObject data, ArtifactProtection reason)
+        {
+            if ((reason & ArtifactProtection.PreparedFrom) == 0)
+            {
+                foreach (JObject item in ReadArray(data, "Projects"))
+                    yield return (VersionPath((string)item["ProjectId"], (string)item["CatalogDigest"]), reason);
+                yield break;
+            }
+            foreach (JObject item in ReadTransition(data["Transition"]))
+            {
+                yield return (VersionPath((string)item["ProjectId"], (string)item["From"]), ArtifactProtection.PreparedFrom);
+                yield return (VersionPath((string)item["ProjectId"], (string)item["To"]), ArtifactProtection.PreparedTo);
+            }
         }
     }
 }

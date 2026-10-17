@@ -129,8 +129,13 @@ namespace YLFramework.Services.Audio
         private AudioClipLease HandOff(Entry entry) => new AudioClipLease(entry.Resource.Clip, new Use(this, entry));
         private static void ValidateResource(Entry entry)
         {
-            if (entry.Error == null && (entry.Resource == null || entry.Resource.IsReleased || !entry.Resource.Clip))
-                entry.Error = new InvalidOperationException("The acquired AudioClip is no longer available: " + entry.Key.Address.Key);
+            if (entry.Error != null) return;
+            try
+            {
+                if (entry.Resource == null) throw new InvalidOperationException("The acquired AudioClip is no longer available: " + entry.Key.Address.Key);
+                entry.Resource.ValidateAcquisition();
+            }
+            catch (Exception error) { entry.Error = error; }
         }
         private void Return(Entry entry)
         {

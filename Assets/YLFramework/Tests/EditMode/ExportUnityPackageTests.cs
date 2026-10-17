@@ -27,6 +27,21 @@ namespace YLFramework.Tests
         private const string AnalyzerPath = FrameworkRoot + "/Runtime/Core/Analyzers/YLFramework.Analyzers.dll";
 
         [Test]
+        public void FormalExporterAcceptsAnExplicitDestinationWithoutChangingItsRoots()
+        {
+            Assert.That(typeof(YLFramework.Editor.ExportUnityPackage).GetMethod("Export", BindingFlags.Public | BindingFlags.Static,
+                null, new[] { typeof(string), typeof(bool) }, null), Is.Not.Null,
+                "Automated delivery must use the same formal exporter without saving unrelated assets or requiring the project-root output.");
+        }
+
+        [TestCase("\\\\127.0.0.1\\YLFrameworkNoShare\\framework.unitypackage")]
+        [TestCase("//127.0.0.1/YLFrameworkNoShare/framework.unitypackage")]
+        public void FormalExporterRejectsBothNetworkPathSpellingsBeforeDestinationAccess(string path)
+        {
+            Assert.Throws<ArgumentException>(() => YLFramework.Editor.ExportUnityPackage.Export(path));
+        }
+
+        [Test]
         public void DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab()
         {
             var rootsField = typeof(YLFramework.Editor.ExportUnityPackage).GetField("ExportRoots",
@@ -50,6 +65,10 @@ namespace YLFramework.Tests
             var projectRoot = Directory.GetParent(Application.dataPath).FullName;
             var sentinels = new[]
             {
+                FrameworkRoot + "/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll",
+                FrameworkRoot + "/Plugins/BouncyCastle/LICENSE.md",
+                FrameworkRoot + "/Plugins/BouncyCastle/SOURCE.txt",
+                FrameworkRoot + "/Plugins/BouncyCastle/TINK-LICENSE.txt",
                 FrameworkRoot + "/Runtime/Systems/Action/Core/ActionKit.cs",
                 FrameworkRoot + "/Runtime/Systems/Audio/AudioKit.cs",
                 FrameworkRoot + "/Runtime/Systems/Audio/Actions/PlaySoundAction.cs",
@@ -214,7 +233,9 @@ namespace YLFramework.Tests
             try
             {
                 Directory.CreateDirectory(tempDirectory);
-                AssetDatabase.ExportPackage(roots, packagePath, ExportPackageOptions.Recurse);
+                var export = typeof(YLFramework.Editor.ExportUnityPackage).GetMethod("Export", BindingFlags.Public | BindingFlags.Static);
+                Assert.That(export, Is.Not.Null);
+                export.Invoke(null, new object[] { packagePath, false });
                 Assert.That(File.Exists(packagePath), Is.True, packagePath);
                 Assert.That(new FileInfo(packagePath).Length, Is.GreaterThan(0L), packagePath);
 
@@ -302,6 +323,10 @@ namespace YLFramework.Tests
                     Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins"))));
                 Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "YLFramework.Analyzers.dll"), Is.EqualTo(new[] { AnalyzerPath }));
                 Assert.That(recordsByPath.Keys.Any(p => Path.GetFileName(p).StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)), Is.False);
+                Assert.That(recordsByPath.Keys.Any(p => new[] { "bcrypt.dll", "ncrypt.dll", "crypt32.dll" }.Contains(Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)), Is.False);
+                Assert.That(recordsByPath.Keys.Any(p => new[] { ".pfx", ".p12", ".key", ".pem" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)), Is.False);
+                Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(Path.Combine(projectRoot,
+                    FrameworkRoot + "/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll")), Is.True);
                 var analyzerMeta = Encoding.UTF8.GetString(recordsByPath[AnalyzerPath].Meta);
                 Assert.That(analyzerMeta, Does.Contain("guid: 471f81c4273ee66429677df44cbd6960"));
                 Assert.That(Regex.Matches(analyzerMeta, @"(?m)^- RoslynAnalyzer\s*$").Count, Is.EqualTo(1));
@@ -376,10 +401,14 @@ namespace YLFramework.Tests
                     Assert.That(uiScript.GetClass(), Is.EqualTo(uiTypes[i]), uiPath);
                     Assert.That(AssetDatabase.AssetPathToGUID(uiPath), Is.EqualTo(uiGuids[i]), uiPath);
                 }
+                Assert.That(() => YLFramework.Editor.ExportUnityPackage.Export(packagePath), Throws.TypeOf<IOException>(), "Existing packages are not overwritten by default.");
+                Assert.That(() => YLFramework.Editor.ExportUnityPackage.Export(Path.Combine(tempDirectory, "missing", "framework.unitypackage")), Throws.TypeOf<DirectoryNotFoundException>());
+                TestContext.Progress.WriteLine("G4 verified formal framework export " + packagePath + "; records=" + recordsByPath.Count + "; BC exact SHA/meta/license and Tink notices included.");
             }
             finally
             {
-                if (Directory.Exists(tempDirectory)) Directory.Delete(tempDirectory, true);
+                if (SessionState.GetBool("YL.E04.G4.KeepExport", false)) SessionState.SetString("YL.E04.G4.LastExport", packagePath);
+                else if (Directory.Exists(tempDirectory)) Directory.Delete(tempDirectory, true);
             }
         }
 

@@ -37,6 +37,8 @@ Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集�
 
 外部依赖：UGUI、Newtonsoft.Json（存档、HTTP、Catalog 与 Core 配表等）等既有依赖；排除 DOTween 不意味着框架零外部依赖。EventListener 的折叠、页签与 UnityEvent 编辑由普通 Editor 中的原生 CustomEditor 承担，Sirenix Odin 插件整树及其编译引用已退出，不提供 mini-Odin 或兼容空壳。ProjectSettings 的五个未使用 Odin 宏按原配置权限边界保留。
 
+E04内容编码在同一Resource主体内接入官方 `BouncyCastle.Cryptography 2.7.0` netstandard2.0，仅用于HKDF-SHA256；Runtime asmdef精确引用该DLL并允许已批准的CNG桥接unsafe代码。AES-256-GCM来自Windows CNG `Microsoft Primitive Provider`，不复制系统DLL、不提供软件GCM或临时明文fallback。64KiB/两明文槽与32KiB native读取缓冲、显式数据预算及owner沿原Bundle/事务图；应用拥有key provider，不新增key服务/加载权威。BC/Tink来源、精确SHA及完整适用许可随 `Plugins/BouncyCastle/` 交付，平台及风险见 [Resource](Modules/Resource.md#可选-bundle-内容加密)。
+
 ## Runtime 目录规则（Foundation / Core / Systems / Utilities）
 
 Runtime 按机制、领域所有权和使用方式组织为四个责任分区，不按模块大小或来源命名分类：
@@ -156,7 +158,7 @@ Resource Editor按Data/Build/Publishing/Service/CodeGeneration归组，使用正
 
 唯一核心配置 `Runtime/csc.rsp` 生成 `Library/YLFramework.Runtime.xml`，包含 Action、Observable、Audio 与桥接文档；DOTween 独立配置生成 `Library/YLFramework.Actions.DOTween.xml`。提供方按真实 Assembly 作为 `XmlPaths` 字典 key 去重，不把同一 Runtime 重复添加。`Library/` XML 是构建产物，不默认导出。
 
-`AudioSourceIndependenceTests` 使用 AssemblyBuilder 直接编译正式 Audio 全目录及其必要自有源码依赖，排除预编译 YL/XF/XFAB 实现 DLL，分别验证 Editor 和 Windows64 Development 非 Editor 条件分支。该源码闭包只允许 Unity/BCL 与精确的 UGUI/Json.NET 引用，不再允许 Sirenix DLL。`FrameworkAssemblyIndependenceTests` 进一步核对两主体的实际编译图、Editor 已编译 AssemblyRef 闭包，并使用真实 profile 的合法引用重新编译完整 Runtime/Editor 源码；Editor 使用本次独立构建的 Runtime，不借旧产品 DLL。这些不是干净工程导入或真正 Player 构建/运行的替代证据。
+`AudioSourceIndependenceTests` 使用 AssemblyBuilder 直接编译正式 Audio 全目录及其必要自有源码依赖，排除预编译 YL/XF/XFAB 实现 DLL，分别验证 Editor 和 Windows64 Development 非 Editor 条件分支。该源码闭包只允许Unity/BCL、精确UGUI/Json.NET及批准路径/官方SHA同时匹配的BC DLL，不允许同名替代、任意插件或Sirenix。`FrameworkAssemblyIndependenceTests`进一步核对两主体实际编译图、Editor已编译AssemblyRef闭包，并以合法profile引用重新编译完整Runtime/Editor；Editor使用本次独立构建的Runtime，不借旧产品DLL。这些不代替干净工程导入或真正Player构建/运行。
 
 Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干扰、Source/DSP 输出与实际 Windows64/Mono Player 的证据，不能以源码闭包或构建成功互相替代。验收场景和 PCM 属于 Tests 的显式夹具，不改变唯一 Runtime Audio 权威、游戏持久资产或默认分发；系统端点出声与人工听感仍需单独确认，阶段状态以 [Audio 专项](../../../.kilo/plans/xf-yl-4-audio.md)为准。
 

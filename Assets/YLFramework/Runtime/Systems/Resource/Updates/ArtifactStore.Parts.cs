@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Services.Resource
@@ -16,41 +16,13 @@ namespace YLFramework.Services.Resource
             ResourceLocalSnapshot.RejectLinks(root);
             if (File.Exists(root)) { errors.Add("Partial directory is occupied by an unknown file."); return; }
             if (!Directory.Exists(root)) return;
-            void Validate(JObject data, string path)
-            {
-                ResourceCatalogCodec.Fields(data, "Version,OwnerId,State,ProjectId,Platform,CatalogDigest,File,Length,Sha256,Source,ETag");
-                if (ResourceCatalogCodec.Integer(data, "Version") != 1 || ResourceCatalogCodec.Text(data, "OwnerId") != ownerId ||
-                    ResourceCatalogCodec.Text(data, "State") != "Partial" || ResourceCatalogCodec.Text(data, "ProjectId") != project.ProjectId ||
-                    ResourceCatalogCodec.Text(data, "Platform") != project.Platform || ResourceCatalogCodec.Integer(data, "Length") < 0)
-                    throw new InvalidDataException("Partial cleanup ownership mismatch.");
-                var digest = ResourceCatalogCodec.Text(data, "CatalogDigest"); var sha = ResourceCatalogCodec.Text(data, "Sha256");
-                ResourceCatalogCodec.Hex(digest, 64); ResourceCatalogCodec.Hex(sha, 64);
-                var etag = ResourceCatalogCodec.Text(data, "ETag", true);
-                if (etag != null && !ResourceDownloadResponse.StrongETag(etag)) throw new InvalidDataException("Invalid partial validator.");
-                var file = ResourceCatalogCodec.Text(data, "File");
-                if (data["Source"]?.Type != JTokenType.String || ((string)data["Source"]).Length > 4096) throw new InvalidDataException("Invalid partial source bound.");
-                var source = (string)data["Source"];
-                if (file == "." || file == ".." || file.Length > 128 || file.Any(x => !(x <= 127 && (char.IsLetterOrDigit(x) || x == '_' || x == '-' || x == '.'))) ||
-                    !Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) ||
-                    !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || source != uri.AbsoluteUri || source.IndexOf('%') >= 0 ||
-                    !uri.AbsolutePath.EndsWith("/" + digest + "/" + file, StringComparison.Ordinal)) throw new InvalidDataException("Invalid partial target identity.");
-                var token = ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(source + ":" + sha)).Substring(0, 32);
-                if (System.IO.Path.GetFileName(path) != token + ".json") throw new InvalidDataException("Partial record filename mismatch.");
-            }
             foreach (var metadata in Directory.GetFiles(root, "*.json"))
                 try
                 {
-                    var record = Read(metadata); Validate(record, metadata);
+                    var record = Read(metadata); ValidatePartial(record, metadata, project);
                     var part = System.IO.Path.ChangeExtension(metadata, ".part");
-                    ResourceLocalSnapshot.RejectLinks(part);
-                    if (Directory.Exists(part)) throw new InvalidDataException("Partial data path is occupied by an unknown directory.");
                     var next = metadata + ".next";
-                    if (Exists(next))
-                    {
-                        var candidate = Read(next); Validate(candidate, metadata);
-                        var current = (JObject)record.DeepClone(); current.Remove("ETag"); candidate.Remove("ETag");
-                        if (!JToken.DeepEquals(current, candidate)) throw new InvalidDataException("Partial candidate changed target ownership.");
-                    }
+                    ValidatePartialFiles(metadata, record, project);
                     RequireOwner();
                     if (!JToken.DeepEquals(Read(metadata), record)) throw new InvalidDataException("Partial record changed during cleanup.");
                     if (File.Exists(part)) File.Delete(part);
@@ -63,10 +35,44 @@ namespace YLFramework.Services.Resource
                 {
                     var metadata = next.Substring(0, next.Length - ".next".Length);
                     if (Exists(metadata) || Exists(System.IO.Path.ChangeExtension(metadata, ".part"))) continue;
-                    Validate(Read(next), metadata); RequireOwner(); File.Delete(next);
+                    ValidatePartial(Read(next), metadata, project); RequireOwner(); File.Delete(next);
                 }
                 catch (Exception error) when (IsFileFailure(error)) { errors.Add(System.IO.Path.GetFileName(next) + ": " + error.Message); }
             foreach (var unknown in Directory.GetFileSystemEntries(root)) errors.Add("Unknown download entry preserved: " + System.IO.Path.GetFileName(unknown));
+        }
+
+        private void ValidatePartial(JObject data, string path, ResourceProjectMount project)
+        {
+            ResourceCatalogCodec.Fields(data, "Version,OwnerId,State,ProjectId,Platform,CatalogDigest,File,Length,Sha256,Source,ETag");
+            if (ResourceCatalogCodec.Integer(data, "Version") != 1 || ResourceCatalogCodec.Text(data, "OwnerId") != ownerId ||
+                ResourceCatalogCodec.Text(data, "State") != "Partial" || ResourceCatalogCodec.Text(data, "ProjectId") != project.ProjectId ||
+                ResourceCatalogCodec.Text(data, "Platform") != project.Platform || ResourceCatalogCodec.Integer(data, "Length") < 0)
+                throw new InvalidDataException("Partial cleanup ownership mismatch.");
+            var digest = ResourceCatalogCodec.Text(data, "CatalogDigest"); var sha = ResourceCatalogCodec.Text(data, "Sha256");
+            ResourceCatalogCodec.Hex(digest, 64); ResourceCatalogCodec.Hex(sha, 64);
+            var etag = ResourceCatalogCodec.Text(data, "ETag", true);
+            if (etag != null && !ResourceDownloadResponse.StrongETag(etag)) throw new InvalidDataException("Invalid partial validator.");
+            var file = ResourceCatalogCodec.Text(data, "File");
+            if (data["Source"]?.Type != JTokenType.String || ((string)data["Source"]).Length > 4096) throw new InvalidDataException("Invalid partial source bound.");
+            var source = (string)data["Source"];
+            if (file == "." || file == ".." || file.Length > 128 || file.Any(x => !(x <= 127 && (char.IsLetterOrDigit(x) || x == '_' || x == '-' || x == '.'))) ||
+                !Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) ||
+                !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || source != uri.AbsoluteUri || source.IndexOf('%') >= 0 ||
+                !uri.AbsolutePath.EndsWith("/" + digest + "/" + file, StringComparison.Ordinal)) throw new InvalidDataException("Invalid partial target identity.");
+            var token = ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(source + ":" + sha)).Substring(0, 32);
+            if (System.IO.Path.GetFileName(path) != token + ".json") throw new InvalidDataException("Partial record filename mismatch.");
+        }
+
+        private void ValidatePartialFiles(string metadata, JObject record, ResourceProjectMount project)
+        {
+            var part = System.IO.Path.ChangeExtension(metadata, ".part");
+            ResourceLocalSnapshot.RejectLinks(part);
+            if (Directory.Exists(part)) throw new InvalidDataException("Partial data path is occupied by an unknown directory.");
+            var next = metadata + ".next";
+            if (!Exists(next)) return;
+            var candidate = Read(next); ValidatePartial(candidate, metadata, project);
+            var current = (JObject)record.DeepClone(); current.Remove("ETag"); candidate.Remove("ETag");
+            if (!JToken.DeepEquals(current, candidate)) throw new InvalidDataException("Partial candidate changed target ownership.");
         }
 
         /// <summary>parts只保存Partial记录。即使长度完整也必须实际hash；它从来不是可挂载版本或Complete凭据。</summary>
@@ -150,13 +156,17 @@ namespace YLFramework.Services.Resource
                 catch { output.Dispose(); throw; }
             }
 
-            internal void Verify()
+            internal void Verify(CancellationToken cancellation = default)
             {
                 Require();
                 using var input = new FileStream(Path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using var sha = SHA256.Create();
-                if (input.Length != Expected || BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "").ToLowerInvariant() != (string)identity["Sha256"])
-                    throw new InvalidDataException("Downloaded partial length/digest mismatch.");
+                store.Checkpoint?.Invoke("PartShaStarted");
+                try
+                {
+                    ResourceLocalSnapshot.VerifyContentFile(input, new ResourceCatalogFile(new JObject {
+                        ["RelativeFile"] = identity["File"], ["Length"] = Expected, ["Sha256"] = identity["Sha256"] }), cancellation);
+                }
+                finally { store.Checkpoint?.Invoke("PartShaFinished"); }
             }
         }
     }

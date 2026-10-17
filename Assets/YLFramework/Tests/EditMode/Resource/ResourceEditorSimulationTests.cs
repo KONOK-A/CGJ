@@ -13,6 +13,23 @@ namespace YLFramework.Tests.ResourceBuild
     public class ResourceEditorSimulationTests
     {
         [Test]
+        public void SimulationFactorySharesTheExplicitImagePolicyWithItsTextureSources()
+        {
+            var factory = typeof(ResourceEditorSimulation).GetMethod("CreateConfiguration", new[] { typeof(ResourceImageOptions) });
+            Assert.That(factory, Is.Not.Null, "Daily Editor simulation must accept the same image safety/concurrency policy as Bundle applications.");
+            using var fixture = new ResourceReleaseFixture();
+            var simulation = new ResourceEditorSimulation(new[] { fixture.Project });
+            var options = new ResourceImageOptions(maximumEncodedBytes: 24, maximumConcurrentLoads: 1);
+            var config = (ResourceConfiguration)factory.Invoke(simulation, new object[] { options });
+            Assert.That(config.Images, Is.SameAs(options));
+            var source = config.Sources.Single(value => value.Id.Equals(ResourceSourceId.LocalTexture));
+            var location = new YLFramework.Services.Resource.ResourceLocation(source.Id,
+                Path.GetFullPath(fixture.Folder + "/Content/Sprites.png"), typeof(Texture2D));
+            var entry = new ResourceCatalogEntry("direct-image", new ResourceAddress("simulation-image", "file"), location);
+            Assert.That(Assert.Throws<InvalidDataException>(() => source.Load(entry, typeof(Texture2D))).Message, Does.Contain("byte limit"));
+        }
+
+        [Test]
         public void CorePreviewUsesFormalIdentityAndNeverKeepsAStaleAssetOrProjectIndex()
         {
             using var fixture = new ResourceReleaseFixture();
@@ -58,7 +75,7 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new ResourceReleaseFixture();
             var simulation = new ResourceEditorSimulation(new[] { fixture.Project });
-            var factory = typeof(ResourceEditorSimulation).GetMethod("CreateConfiguration");
+            var factory = typeof(ResourceEditorSimulation).GetMethod("CreateConfiguration", Type.EmptyTypes);
             Assert.That(factory, Is.Not.Null, "Editor simulation must compose formal Source/Lease contracts, not another resource manager.");
             var config = (ResourceConfiguration)factory.Invoke(simulation, null);
             var entry = config.Catalogs[0].Resolve(new ResourceAddress(fixture.Project.ProjectId, "entry.txt"));

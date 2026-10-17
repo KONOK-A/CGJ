@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace YLFramework.Services.Resource
@@ -13,11 +15,13 @@ namespace YLFramework.Services.Resource
         public string DirectoryPath { get; }
         public ResourceCatalogDocument Document { get; }
         internal readonly Dictionary<string, ResourceCatalogBundle> Bundles;
+        private readonly string builtInWrapper;
 
-        private ResourceLocalSnapshot(string directory, ResourceCatalogDocument document)
+        private ResourceLocalSnapshot(string directory, ResourceCatalogDocument document, string wrapper = null)
         {
             DirectoryPath = directory;
             Document = document;
+            builtInWrapper = wrapper;
             Bundles = document.Bundles.ToDictionary(x => x.LogicalId, StringComparer.Ordinal);
         }
 
@@ -25,45 +29,90 @@ namespace YLFramework.Services.Resource
         public static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
             => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false);
 
-        internal static ResourceLocalSnapshot OpenOwned(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
-            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, true);
-
-        internal static ResourceLocalSnapshot OpenStaging(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId)
-            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false, true);
-
-        private static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId, bool owned, bool staging = false)
+        /// <summary>只读打开 YLFrameworkResources/project/platform/digest 内置目录；摘要仍须由应用明确绑定。</summary>
+        /// <param name="resourcesRoot">已部署的YLFrameworkResources绝对目录；默认位于Application.streamingAssetsPath下。不创建、复制或更新任何文件。</param>
+        /// <remarks>仅支持现有三桌面普通可读目录；自有部署外壳定位到不参与Unity导入的严格payload。不扫描版本，不提供jar/WebGL提取。</remarks>
+        public static ResourceLocalSnapshot OpenBuiltIn(string projectId, string catalogDigest, string platform, string appContentCompatibilityId,
+            string resourcesRoot = null)
         {
+            ResourceAddress.ValidateId(projectId, nameof(projectId));
+            ResourceCatalogCodec.Hex(catalogDigest, 64);
+            if (platform != "StandaloneWindows64" && platform != "StandaloneOSX" && platform != "StandaloneLinux64")
+                throw new ResourceException(ResourceError.Unsupported, "Built-in snapshots require a supported local desktop platform.");
+            resourcesRoot ??= Path.Combine(Application.streamingAssetsPath, "YLFrameworkResources");
+            if (string.IsNullOrWhiteSpace(resourcesRoot) || !Path.IsPathFullyQualified(resourcesRoot))
+                throw new ArgumentException("Built-in resources require an absolute readable local directory; jar/WebGL extraction is not supported.", nameof(resourcesRoot));
+            var directory = Path.Combine(resourcesRoot, projectId, platform, catalogDigest);
+            RejectLinks(directory);
+            // 已有完整导出布局仍走原Open；外壳任一特征出现即必须完整验证，不能失败后回退。
+            if (File.Exists(Path.Combine(directory, ResourceBuiltInLayout.ReceiptFile)) || Directory.Exists(Path.Combine(directory, ResourceBuiltInLayout.PayloadFolder)))
+                return ResourceBuiltInLayout.Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId);
+            return Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId);
+        }
+
+        internal static ResourceLocalSnapshot OpenOwned(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId,
+            string unityCompatibility = null, CancellationToken cancellation = default)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, true, unityCompatibility: unityCompatibility, cancellation: cancellation);
+
+        internal static ResourceLocalSnapshot OpenStaging(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId,
+            string unityCompatibility = null, CancellationToken cancellation = default)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false, true, unityCompatibility: unityCompatibility, cancellation: cancellation);
+
+        internal static ResourceLocalSnapshot OpenBuiltInPayload(string wrapper, string projectId, string catalogDigest, string platform, string appContentCompatibilityId,
+            string unityCompatibility = null, CancellationToken cancellation = default)
+            => Open(ResourceBuiltInLayout.Payload(wrapper), projectId, catalogDigest, platform, appContentCompatibilityId, false, builtInWrapper: wrapper,
+                unityCompatibility: unityCompatibility, cancellation: cancellation);
+
+        internal static ResourceLocalSnapshot OpenChecked(string directory, string projectId, string catalogDigest, string platform,
+            string appContentCompatibilityId, string unityCompatibility, CancellationToken cancellation = default)
+            => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false, unityCompatibility: unityCompatibility, cancellation: cancellation);
+
+        // Store重开快照时保留原来源边界，必须连外壳一起复验，不能仅放宽payload末级目录名。
+        internal ResourceLocalSnapshot Reopen(CancellationToken cancellation = default) => builtInWrapper == null
+            ? OpenChecked(DirectoryPath, Document.ProjectId, Document.CatalogDigest, Document.Platform, Document.AppContentCompatibilityId, Document.UnityCompatibility, cancellation)
+            : ResourceBuiltInLayout.Open(builtInWrapper, Document.ProjectId, Document.CatalogDigest, Document.Platform, Document.AppContentCompatibilityId, Document.UnityCompatibility, cancellation);
+
+        private static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId, bool owned,
+            bool staging = false, string builtInWrapper = null, string unityCompatibility = null, CancellationToken cancellation = default)
+        {
+            cancellation.ThrowIfCancellationRequested();
             ResourceCatalogCodec.Hex(catalogDigest, 64);
             if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathFullyQualified(directory)) throw new ArgumentException("An absolute local publication directory is required.");
             directory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             RejectLinks(directory);
-            if (!staging && Path.GetFileName(directory) != catalogDigest) throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
+            if (!staging && builtInWrapper == null && Path.GetFileName(directory) != catalogDigest) throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
             var bytes = ReadBounded(Path.Combine(directory, "resource-catalog.json"));
             if (ResourceCatalogCodec.Digest(bytes) != catalogDigest) throw new InvalidDataException("Explicit CatalogDigest mismatch.");
-            var document = ResourceCatalogCodec.Read(bytes, projectId, platform, Application.unityVersion, appContentCompatibilityId);
+            var document = ResourceCatalogCodec.Read(bytes, projectId, platform, unityCompatibility ?? Application.unityVersion, appContentCompatibilityId);
             var complete = ResourceCatalogCodec.ParseObject(ReadBounded(Path.Combine(directory, ".ylr-complete.json")));
-            ResourceCatalogCodec.Fields(complete, "Version,ProjectGuid,ProjectId,Platform,BuildId,CatalogDigest");
-            ResourceCatalogCodec.Hex(ResourceCatalogCodec.Text(complete, "ProjectGuid"), 32);
-            if (ResourceCatalogCodec.Integer(complete, "Version") != 1 || ResourceCatalogCodec.Text(complete, "ProjectId") != projectId ||
-                ResourceCatalogCodec.Text(complete, "Platform") != platform || ResourceCatalogCodec.Text(complete, "BuildId") != document.BuildId ||
-                ResourceCatalogCodec.Text(complete, "CatalogDigest") != catalogDigest)
-                throw new InvalidDataException("Publication Complete/Catalog identity mismatch.");
+            ValidateComplete(complete, projectId, platform, catalogDigest, document.BuildId);
             var files = document.Bundles.Cast<ResourceCatalogFile>().Concat(document.SupportFiles).ToArray();
             var expected = files.Select(x => x.RelativeFile).Concat(owned ? new[] { "resource-catalog.json", ".ylr-complete.json", ".ylr-version.json" } :
                 staging ? new[] { "resource-catalog.json", ".ylr-complete.json", ".ylr-stage.json" } :
                 new[] { "resource-catalog.json", ".ylr-complete.json" }).OrderBy(x => x, StringComparer.Ordinal);
             if (!Directory.GetFileSystemEntries(directory).All(File.Exists) || !Directory.GetFiles(directory).Select(Path.GetFileName).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(expected))
                 throw new InvalidDataException("Publication contains missing or unregistered content.");
-            var snapshot = new ResourceLocalSnapshot(directory, document);
-            foreach (var file in files) using (snapshot.OpenVerified(file)) { }
+            var snapshot = new ResourceLocalSnapshot(directory, document, builtInWrapper);
+            foreach (var file in files) using (snapshot.OpenVerified(file, cancellation)) { }
             return snapshot;
+        }
+
+        internal static void ValidateComplete(JObject complete, string projectId, string platform, string catalogDigest, string buildId = null)
+        {
+            ResourceCatalogCodec.Fields(complete, "Version,ProjectGuid,ProjectId,Platform,BuildId,CatalogDigest");
+            ResourceCatalogCodec.Hex(ResourceCatalogCodec.Text(complete, "ProjectGuid"), 32);
+            ResourceCatalogCodec.Hex(ResourceCatalogCodec.Text(complete, "BuildId"), 64);
+            if (ResourceCatalogCodec.Integer(complete, "Version") != 1 || ResourceCatalogCodec.Text(complete, "ProjectId") != projectId ||
+                ResourceCatalogCodec.Text(complete, "Platform") != platform || buildId != null && ResourceCatalogCodec.Text(complete, "BuildId") != buildId ||
+                ResourceCatalogCodec.Text(complete, "CatalogDigest") != catalogDigest)
+                throw new InvalidDataException("Publication Complete/Catalog identity mismatch.");
         }
 
         /// <summary>显式编译类型映射。默认包含常用 Unity 资产；自定义 ScriptableObject 等须提供 typeof，不反射扫描或从字符串创建类型。</summary>
         public ResourceCatalog CreateCatalog(IEnumerable<Type> assetTypes = null)
         {
             var types = new Dictionary<(string, string), Type>();
-            foreach (var type in new[] { typeof(TextAsset), typeof(GameObject), typeof(Texture2D), typeof(Sprite), typeof(Material), typeof(Shader),
+            foreach (var type in new[] { typeof(TextAsset), typeof(GameObject), typeof(Texture2D), typeof(Sprite), typeof(UnityEngine.U2D.SpriteAtlas), typeof(Material), typeof(Shader),
                 typeof(AudioClip), typeof(AnimationClip), typeof(Mesh), typeof(Font), typeof(RuntimeAnimatorController), typeof(PhysicMaterial), typeof(PhysicsMaterial2D) }
                 .Concat(assetTypes ?? Array.Empty<Type>()))
             {
@@ -87,20 +136,48 @@ namespace YLFramework.Services.Resource
         }
 
         // 文件首次进入 native 前复验并保持只读句柄至卸载，防止校验后被受控工具改写/替换。
-        internal FileStream OpenVerified(ResourceCatalogFile file)
+        internal FileStream OpenVerified(ResourceCatalogFile file, CancellationToken cancellation = default)
         {
-            var path = Path.Combine(DirectoryPath, file.RelativeFile);
-            RejectLinks(path);
-            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var stream = OpenContentFile(file);
             try
             {
-                using var sha = SHA256.Create();
-                if (stream.Length != file.Length || BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant() != file.Sha256)
-                    throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
-                stream.Position = 0;
+                VerifyContentFile(stream, file, cancellation);
                 return stream;
             }
             catch { stream.Dispose(); throw; }
+        }
+
+        internal FileStream OpenContentFile(ResourceCatalogFile file)
+        {
+            var path = Path.Combine(DirectoryPath, file.RelativeFile);
+            RejectLinks(path);
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+
+        internal static void VerifyContentFile(FileStream stream, ResourceCatalogFile file, CancellationToken cancellation = default)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            stream.Position = 0;
+            if (stream.Length != file.Length) throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+            using var sha = SHA256.Create();
+            byte[] digest;
+            if (!cancellation.CanBeCanceled) digest = sha.ComputeHash(stream);
+            else
+            {
+                var buffer = new byte[32768];
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    sha.TransformBlock(buffer, 0, read, buffer, 0);
+                }
+                sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                digest = sha.Hash;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if (stream.Length != file.Length || BitConverter.ToString(digest).Replace("-", "").ToLowerInvariant() != file.Sha256)
+                throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+            stream.Position = 0;
         }
 
         private static byte[] ReadBounded(string path)

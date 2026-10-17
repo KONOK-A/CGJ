@@ -8,7 +8,7 @@ using UnityEngine.Networking;
 namespace YLFramework.Services.Resource
 {
     /// <summary>单个有界GET。由ResourceSystem现有主线程tick驱动；Dispose同步撤销私有UWR和文件句柄。</summary>
-    internal sealed class ResourceTransfer : IEnumerator, IDisposable
+    internal sealed partial class ResourceTransfer : IEnumerator, IDisposable
     {
         private readonly ResourceRemoteSource source;
         private readonly Uri uri;
@@ -16,6 +16,7 @@ namespace YLFramework.Services.Resource
         private readonly string digest;
         private readonly long maximum;
         private readonly ArtifactStore.DownloadPart part;
+        private readonly bool deferPartVerification;
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly Random random = new();
         private UnityWebRequest request;
@@ -30,9 +31,10 @@ namespace YLFramework.Services.Resource
         public object Current => null;
 
         internal ResourceTransfer(ResourceRemoteSource source, Uri uri, long length = 0, string digest = null, long maximum = ResourceReleaseSignature.MaximumBytes,
-            ArtifactStore.DownloadPart part = null)
+            ArtifactStore.DownloadPart part = null, bool deferPartVerification = false)
         {
             this.source = source; this.uri = uri; this.length = length; this.digest = digest; this.maximum = length > 0 ? length : maximum; this.part = part;
+            this.deferPartVerification = deferPartVerification;
             if (uri.Scheme != "https" || !source.Endpoint.IsBaseOf(uri) || maximum < 1 || length < 0) throw new ArgumentException("An owned bounded HTTPS transfer is required.");
         }
 
@@ -44,6 +46,7 @@ namespace YLFramework.Services.Resource
                 if (clock.Elapsed.TotalSeconds < retryAt) return true;
                 if (part != null && part.Length == length)
                 {
+                    if (deferPartVerification) { done = true; return false; }
                     try { part.Verify(); done = true; return false; }
                     catch (InvalidDataException) { part.Reset(); }
                 }
@@ -68,7 +71,7 @@ namespace YLFramework.Services.Resource
                 sink.ValidateHeaders(); // 空body也不得绕过响应合同。
                 sink.Close();
                 if (length > 0 && sink.Written != length || sink.Written == 0) throw new IOException("Release GET ended with an incomplete length.");
-                if (part != null) part.Verify();
+                if (part != null) { if (!deferPartVerification) part.Verify(); }
                 else
                 {
                     Bytes = sink.Bytes();

@@ -174,15 +174,23 @@ namespace YLFramework.Tests.ResourceBuild
             var system = Initialize(store);
             using var checking = system.CheckRemoteUpdatesAsync();
             using var joined = system.CheckRemoteUpdatesAsync();
+            Assert.That(system.GetDiagnosticsReport().Updates.Single().Phase, Is.EqualTo("Checking"));
+            Assert.That(system.GetDiagnosticsReport().Updates.Single().WaiterCount, Is.EqualTo(2));
             checking.Cancel();
+            Assert.That(system.GetDiagnosticsReport().Updates.Single().WaiterCount, Is.EqualTo(1));
             yield return Wait(joined);
             var plan = Take(joined);
             Assert.That(checking.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
             using var preparing = system.PrepareUpdateAsync(plan);
             using var other = system.PrepareUpdateAsync(plan);
+            var pendingUpdate = system.GetDiagnosticsReport().Updates.Single();
+            Assert.That(pendingUpdate.Phase, Is.EqualTo("Preparing"));
+            Assert.That(pendingUpdate.WaiterCount, Is.EqualTo(2));
             preparing.Cancel();
             yield return Wait(other);
             var prepared = Take(other);
+            Assert.That(system.GetDiagnosticsReport().Updates, Is.Empty);
+            Assert.That(pendingUpdate.WaiterCount, Is.EqualTo(2), "Update diagnostics must be a copied snapshot, not another mutable job view.");
             using (var old = system.Acquire<TextAsset>(Address()))
             {
                 Busy(system.ActivatePreparedUpdateAsync(prepared));
@@ -244,6 +252,11 @@ namespace YLFramework.Tests.ResourceBuild
                 var deadline = Time.realtimeSinceStartup + 10;
                 while (!first.IsDone && first.Progress <= 0 && Time.realtimeSinceStartup < deadline) yield return null;
                 Assert.That(first.IsDone, Is.False, first.Error?.ToString()); Assert.That(first.Progress, Is.GreaterThan(0), mode);
+                var downloading = system.GetDiagnosticsReport().Updates.Single();
+                Assert.That(downloading.Phase, Is.EqualTo("Downloading"));
+                Assert.That(downloading.TransferredBytes, Is.GreaterThan(0));
+                Assert.That(downloading.ExpectedBytes, Is.GreaterThan(downloading.TransferredBytes));
+                Assert.That(downloading.RetryCount, Is.Zero);
                 first.Cancel();
                 Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
                 Assert.That(store.GetPreparedUpdates(), Is.Empty);

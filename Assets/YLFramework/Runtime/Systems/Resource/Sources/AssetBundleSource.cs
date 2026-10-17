@@ -17,12 +17,13 @@ namespace YLFramework.Services.Resource
         }
         public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type)
         {
-            using var request = system.AcquireBundleRequest(entry.Address.ProjectId, entry.Descriptor.BundleId, true, false);
+            using var request = system.AcquireBundleRequest(entry.Address.ProjectId, entry.Descriptor.BundleId, true, false, new BundleLeaseOrigin(entry.Address));
             var lease = request.TakeResult();
             try
             {
                 var result = entry.Descriptor.Kind == "SubAsset" ? Select(entry, type, lease.Bundle.LoadAssetWithSubAssets(entry.Descriptor.LoadName, type)) :
                     lease.Bundle.LoadAsset(entry.Descriptor.LoadName, type);
+                system.RequireHealthyBundle(lease);
                 return new ResourceSourceResult(result, lease);
             }
             catch { lease.Dispose(); throw; }
@@ -51,7 +52,7 @@ namespace YLFramework.Services.Resource
             {
                 this.entry = entry;
                 this.type = type;
-                bundleRequest = system.AcquireBundleRequest(entry.Address.ProjectId, entry.Descriptor.BundleId, false, false);
+                bundleRequest = system.AcquireBundleRequest(entry.Address.ProjectId, entry.Descriptor.BundleId, false, false, new BundleLeaseOrigin(entry.Address));
                 bundleRequest.Completed += OnBundle;
             }
             private void OnBundle(ResourceRequest<BundleLease> request)
@@ -61,6 +62,7 @@ namespace YLFramework.Services.Resource
                 try
                 {
                     retention = request.TakeResult();
+                    retention.Record.Owner.RequireHealthyBundle(retention);
                     native = entry.Descriptor.Kind == "SubAsset" ? retention.Bundle.LoadAssetWithSubAssetsAsync(entry.Descriptor.LoadName, type) :
                         retention.Bundle.LoadAssetAsync(entry.Descriptor.LoadName, type);
                     if (native == null) throw new InvalidOperationException("Unity did not return an AssetBundleRequest.");
@@ -77,7 +79,11 @@ namespace YLFramework.Services.Resource
                 native.completed -= OnAsset;
                 UnityEngine.Object asset = null;
                 Exception error = null;
-                try { asset = entry.Descriptor.Kind == "SubAsset" ? Select(entry, type, native.allAssets) : native.asset; }
+                try
+                {
+                    asset = entry.Descriptor.Kind == "SubAsset" ? Select(entry, type, native.allAssets) : native.asset;
+                    retention.Record.Owner.RequireHealthyBundle(retention);
+                }
                 catch (Exception cause) { error = cause; }
                 Finish(asset, error);
             }

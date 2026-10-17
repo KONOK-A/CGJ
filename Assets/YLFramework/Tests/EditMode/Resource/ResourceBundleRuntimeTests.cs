@@ -65,6 +65,8 @@ namespace YLFramework.Tests.ResourceBuild
                 AssetDatabase.SaveAssetIfDirty(project);
                 AddScene85Fixture(fixture);
                 AddCore86Fixture(fixture);
+                AddAtlas89Fixture(fixture);
+                AddAutomaticAtlasFixture(fixture);
                 var build = fixture.Build();
                 fixture.ReleaseRoot = ResourcePublisher.GetReleaseRoot(build);
                 var release = ResourcePublisher.Publish(build, "fixture-v1");

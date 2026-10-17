@@ -91,6 +91,7 @@ namespace YLFramework.Services.Resource
             CheckThread();
             if (!IsAvailable) throw new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
             if (prefab == null) throw new ArgumentNullException(nameof(prefab));
+            RequireContentAdmission(prefab.Record.Entry);
             if (IsProjectBlocked(prefab.Address.ProjectId)) throw new ResourceException(ResourceError.Busy, "The project is inside its activation barrier.");
             var asset = prefab.Asset;
             if (!ReferenceEquals(prefab.Record.Owner, this) || asset.scene.IsValid())
@@ -163,7 +164,9 @@ namespace YLFramework.Services.Resource
             try
             {
                 TickRemoteUpdates();
+                TickContentWork();
                 TickSceneCleanup();
+                authority?.TrimImageCache();
                 var count = Math.Min(8, instanceCleanup.Count);
                 for (var i = 0; i < count && instanceCleanup.Count != 0; i++)
                 {

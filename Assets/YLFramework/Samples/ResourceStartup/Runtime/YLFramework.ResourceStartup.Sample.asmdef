@@ -1,0 +1,8 @@
+{
+    "name": "YLFramework.ResourceStartup.Sample",
+    "rootNamespace": "YLFramework.Samples.Resource",
+    "references": ["YLFramework.Runtime"],
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": true
+}

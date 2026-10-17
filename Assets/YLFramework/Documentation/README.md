@@ -15,9 +15,9 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | [`Editor/`](../Editor/) | Editor-only主体；功能工具、模块帮助提供方与共享Help分区 |
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
 | [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
-| [`Plugins/`](../Plugins/) | 剩余第三方插件（Editor Enhancers）；Sirenix Odin 已整树退出 |
+| [`Plugins/`](../Plugins/) | Editor Enhancers与批准的官方BC 2.7.0 HKDF依赖及BC/Tink许可；Sirenix Odin已整树退出 |
 | [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
-| [`Samples/`](../Samples/) | 示例导出根保留；ColorSelector样例整树已退役 |
+| [`Samples/`](../Samples/) | ResourceStartup显式None/加密、Simulation/Bundle及内置用法；ColorSelector样例整树已退役 |
 | `Documentation/` | 本文档目录 |
 | [`LICENSE.md`](../LICENSE.md) | XF 承接源码的完整 MIT 上游版权与许可，集中保留一份并随默认包分发 |
 
@@ -56,7 +56,7 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 |---|---|---|---|
 | Action | 动作组合、命名执行、安全句柄、屏幕过渡与内建 BCL Observable | 已归入 Runtime | [Modules/Action.md](Modules/Action.md) |
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
-| Resource | 唯一 ResourceSystem、Catalog、资产/实例/Scene 租约、Core/Audio Provider 与正式构建发布工作台 | 正式加载链已接入；版本激活及生产安全更新另阶段实施 | [Modules/Resource.md](Modules/Resource.md) |
+| Resource | 唯一 ResourceSystem、显式启动接入、Catalog、资产/实例/Scene 租约、Core/Audio Provider、构建发布与版本事务 | 正式加载/更新及双模式最小示例已接入；远端当前限Windows Editor，阶段8 Player最终验收另行实施 | [Modules/Resource.md](Modules/Resource.md) |
 | Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
@@ -81,6 +81,7 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 - 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。Core 与 Foundation/Tools 只提供必要接入指南、精选 API 和详细文档导航，不执行示例或创建宿主。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
 - `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，加框架根级 `LICENSE.md`；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出，XF 完整 MIT 许可显式随包携带。
+- 自动化可调用 `YLFramework.Editor.ExportUnityPackage.Export(absolutePackagePath)`向已有本地父目录导出同一闭包，默认不覆盖、不保存其他资产。BC精确DLL/许可/来源和Tink适用声明随Plugins递归，系统CNG DLL不复制；Resource发布快照是另一类交付，见 [Resource](Modules/Resource.md#轮换与交付)。
 - `Plugins/` 完整递归，保留商业插件、Demo 与辅助工具，不裁剪或重配导入平台。这是内部交付决策，公开再分发许可仍需后续核查。
 - 包含Runtime/Editor正式功能分区及唯一 `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 与meta。七项分析器默认Warning，现为Runtime主体及真实引用消费者的编译器输入，不是Player运行引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。

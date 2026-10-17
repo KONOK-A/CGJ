@@ -32,7 +32,8 @@ namespace YLFramework.Tests.Audio
             {
                 "Systems/Audio", "Systems/Action", "Foundation", "Core/ResourceAccess",
                 "Systems/Resource/Catalog", "Systems/Resource/Loading", "Systems/Resource/Lifetime",
-                "Systems/Resource/Sources", "Systems/Resource/Instances", "Systems/Resource/Scenes", "Systems/Resource/Integration"
+                "Systems/Resource/Sources", "Systems/Resource/Instances", "Systems/Resource/Scenes", "Systems/Resource/Integration",
+                "Systems/Resource/Content", "Systems/Resource/Updates", "Systems/Resource/Diagnostics"
             };
             var files = new[]
             {
@@ -74,7 +75,11 @@ namespace YLFramework.Tests.Audio
                 };
                 var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
                 var profile = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player).Single(x => x.name == "YLFramework.Runtime");
+                builder.compilerOptions = new ScriptCompilerOptions { ApiCompatibilityLevel = profile.compilerOptions.ApiCompatibilityLevel,
+                    AllowUnsafeCode = profile.compilerOptions.AllowUnsafeCode };
                 var json = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "Newtonsoft.Json.dll");
+                var contentCrypto = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "BouncyCastle.Cryptography.dll");
+                Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(contentCrypto), Is.True);
                 Assert.That(File.Exists(json), Is.True);
                 Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
                 CollectionAssert.DoesNotContain(builder.defaultDefines, "YL_AUDIO_XFAB");
@@ -82,7 +87,7 @@ namespace YLFramework.Tests.Audio
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var references = builder.defaultReferences;
                 builder.excludeReferences = references.Where(path => !IsAllowedReference(path, contents, ui, editor, json)).ToArray();
-                builder.additionalReferences = new[] { ui, json };
+                builder.additionalReferences = new[] { ui, json, contentCrypto };
                 var effective = references.Except(builder.excludeReferences).Concat(builder.additionalReferences).Distinct().ToArray();
                 Assert.That(effective.All(path => IsAllowedReference(path, contents, ui, editor, json)), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
@@ -137,6 +142,7 @@ namespace YLFramework.Tests.Audio
         internal static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
         {
             var absolute = Path.GetFullPath(path);
+            if (Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(absolute)) return true;
             if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase)) return true;
             if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase)) return true;
             var name = Path.GetFileName(absolute);

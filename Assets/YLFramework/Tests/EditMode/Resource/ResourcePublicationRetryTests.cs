@@ -1,0 +1,285 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using NUnit.Framework;
+using YLFramework.Editor.Resource;
+
+namespace YLFramework.Tests.ResourceBuild
+{
+    /// <summary>准确HRESULT受控故障；只替换系统调用边界，不复制正式重试控制流。</summary>
+    public sealed class ResourcePublicationRetryTests
+    {
+        private const int Retryable = unchecked((int)0x80070497u);
+        private static readonly byte[] Old = Encoding.UTF8.GetBytes("{\"value\":\"old\"}");
+        private static readonly byte[] Next = Encoding.UTF8.GetBytes("{\"value\":\"next\"}");
+        private static readonly byte[] Competitor = Encoding.UTF8.GetBytes("{\"value\":\"competitor\"}");
+
+        [TestCase("cancel")]
+        [TestCase("from")]
+        [TestCase("to")]
+        public void CancellationOrMetadataChangeAfter1175IsRejectedBeforeTheNextReplacement(string action)
+        {
+            using var owned = new OwnedCase(action);
+            using var cancellation = new CancellationTokenSource();
+            using var entered = new ManualResetEventSlim();
+            using var changed = new ManualResetEventSlim();
+            using var abort = new ManualResetEventSlim();
+            owned.WorkerJoined = false;
+            var worker = Task.Run(() =>
+            {
+                if (!entered.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("The formal 1175 backoff was never entered.");
+                if (abort.IsSet) return;
+                try
+                {
+                    if (action == "cancel") cancellation.Cancel();
+                    else Write(action == "from" ? owned.Target : owned.Temporary, Competitor);
+                    owned.Record(action == "cancel" ? "CancellationApplied" : action == "from" ? "FromChanged" : "ToChanged");
+                }
+                finally { changed.Set(); }
+            });
+            Exception error;
+            try
+            {
+                error = owned.Invoke(owned.Replacement(_ => Retryable), delay =>
+                {
+                    owned.BeginBackoff(delay);
+                    entered.Set();
+                    if (!changed.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("The controlled change did not complete.");
+                    owned.Record("BackoffResumed");
+                }, cancellation.Token);
+            }
+            finally
+            {
+                abort.Set(); entered.Set(); changed.Set();
+                try { worker.GetAwaiter().GetResult(); }
+                finally { owned.WorkerJoined = worker.IsCompleted; }
+            }
+            if (action == "cancel") Assert.That(error, Is.InstanceOf<OperationCanceledException>());
+            else
+            {
+                Assert.That(error, Is.InstanceOf<InvalidOperationException>());
+                Assert.That(error.InnerException?.HResult, Is.EqualTo(Retryable));
+            }
+            Assert.That(owned.Attempts, Is.EqualTo(1), "No replacement may follow a changed/cancelled backoff.");
+            Assert.That(owned.RealReplacementCalls, Is.Zero);
+            CollectionAssert.AreEqual(new[] { 10 }, owned.RequestedWaits);
+            CollectionAssert.AreEqual(action == "from" ? Competitor : Old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(action == "to" ? Competitor : Next, File.ReadAllBytes(owned.Temporary));
+            CollectionAssert.AreEqual(new[] { "ReplaceAttempt", "ControlledFailure", "BackoffEntered",
+                action == "cancel" ? "CancellationApplied" : action == "from" ? "FromChanged" : "ToChanged", "BackoffResumed", "TerminalError" }, owned.Kinds);
+            owned.VerifyDefaultEntryAndMarkComplete();
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        public void Transient1175EventuallyExecutesExactlyOneRealReplacement(int failures)
+        {
+            using var owned = new OwnedCase("eventual-" + failures);
+            var error = owned.Invoke(owned.Replacement(attempt => attempt <= failures ? Retryable : (int?)null), owned.VirtualBackoff);
+            Assert.That(error, Is.Null, error?.ToString());
+            Assert.That(owned.Attempts, Is.EqualTo(failures + 1));
+            Assert.That(owned.RealReplacementCalls, Is.EqualTo(1));
+            Assert.That(owned.RealCommits, Is.EqualTo(1));
+            CollectionAssert.AreEqual(new[] { 10, 25 }.Take(failures), owned.RequestedWaits);
+            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Target));
+            Assert.That(File.Exists(owned.Temporary), Is.False);
+            var expected = Enumerable.Range(0, failures).SelectMany(_ => new[] {
+                "ReplaceAttempt", "ControlledFailure", "BackoffEntered", "BackoffResumed" }).Concat(new[] {
+                "ReplaceAttempt", "RealReplaceCalled", "RealReplaceCommitted", "ReturnedSuccess" });
+            CollectionAssert.AreEqual(expected, owned.Kinds);
+            owned.VerifyDefaultEntryAndMarkComplete();
+        }
+
+        [Test]
+        public void Persistent1175ExhaustsFiveRetriesWithoutSubmittingOrDeletingTheOldFile()
+        {
+            using var owned = new OwnedCase("exhausted");
+            var error = owned.Invoke(owned.Replacement(_ => Retryable), owned.VirtualBackoff);
+            Assert.That(error, Is.TypeOf<ControlledReplaceException>());
+            Assert.That(error.HResult, Is.EqualTo(Retryable));
+            Assert.That(owned.Attempts, Is.EqualTo(6), "One first attempt plus five retries.");
+            Assert.That(owned.RealReplacementCalls, Is.Zero);
+            CollectionAssert.AreEqual(new[] { 10, 25, 50, 100, 200 }, owned.RequestedWaits);
+            CollectionAssert.AreEqual(Old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Temporary));
+            var expected = Enumerable.Range(0, 5).SelectMany(_ => new[] {
+                "ReplaceAttempt", "ControlledFailure", "BackoffEntered", "BackoffResumed" }).Concat(new[] {
+                "ReplaceAttempt", "ControlledFailure", "TerminalError" });
+            CollectionAssert.AreEqual(expected, owned.Kinds);
+            owned.VerifyDefaultEntryAndMarkComplete();
+        }
+
+        [TestCase(32)]
+        [TestCase(1176)]
+        [TestCase(1177)]
+        public void OtherHResultsNeverEnterThe1175Backoff(int win32)
+        {
+            using var owned = new OwnedCase("classified-" + win32);
+            var hresult = unchecked((int)(0x80070000u | (uint)win32));
+            var error = owned.Invoke(owned.Replacement(_ => hresult), owned.VirtualBackoff);
+            Assert.That(error, Is.TypeOf<ControlledReplaceException>());
+            Assert.That(error.HResult, Is.EqualTo(hresult));
+            Assert.That(owned.Attempts, Is.EqualTo(1));
+            Assert.That(owned.RealReplacementCalls, Is.Zero);
+            Assert.That(owned.RequestedWaits, Is.Empty);
+            CollectionAssert.AreEqual(Old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Temporary));
+            CollectionAssert.AreEqual(new[] { "ReplaceAttempt", "ControlledFailure", "TerminalError" }, owned.Kinds);
+            owned.VerifyDefaultEntryAndMarkComplete();
+        }
+
+        private static void Write(string path, byte[] bytes)
+        {
+            using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
+            stream.Write(bytes, 0, bytes.Length); stream.Flush(true);
+        }
+
+        private sealed class ControlledReplaceException : IOException
+        {
+            internal ControlledReplaceException(int hresult) : base("Controlled failure at the File.Replace boundary.") => HResult = hresult;
+        }
+
+        private sealed class OrderedEvent
+        {
+            public int Sequence, Attempt, ThreadId;
+            public string Kind;
+            public int? HResult, RequestedWaitMilliseconds;
+        }
+
+        private sealed class OwnedCase : IDisposable
+        {
+            private const string Scope = "1175-followup-20261017-1215";
+            private readonly string id, root;
+            private readonly List<OrderedEvent> events = new();
+            private Exception terminal;
+            private bool complete, defaultEntryVerified;
+            internal bool WorkerJoined = true;
+            internal int Attempts, RealReplacementCalls, RealCommits;
+            internal readonly List<int> RequestedWaits = new();
+            internal string Target => Path.Combine(root, "release-index.json");
+            internal string Temporary => Target + ".next";
+            internal string[] Kinds { get { lock (events) return events.Select(x => x.Kind).ToArray(); } }
+
+            internal OwnedCase(string id)
+            {
+                this.id = id;
+                var run = ResourceCostEvidence.DirectoryPath;
+                var owner = JObject.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(run), "owner.json")));
+                Assert.That((string)owner["purpose"], Is.EqualTo(Scope));
+                root = Path.Combine(run, "files", id);
+                Assert.That(Directory.Exists(root), Is.False);
+                Directory.CreateDirectory(root);
+                File.WriteAllText(Path.Combine(root, "owner.txt"), Scope);
+                Write(Target, Old);
+            }
+
+            internal void Record(string kind, int? hresult = null, int? delay = null)
+            {
+                lock (events) events.Add(new OrderedEvent { Sequence = events.Count + 1, Kind = kind, Attempt = Attempts,
+                    HResult = hresult, RequestedWaitMilliseconds = delay, ThreadId = Thread.CurrentThread.ManagedThreadId });
+            }
+
+            internal Action<string, string> Replacement(Func<int, int?> fault) => (replacement, target) =>
+            {
+                Assert.That(replacement, Is.EqualTo(Temporary));
+                Assert.That(target, Is.EqualTo(Target));
+                Attempts++; Record("ReplaceAttempt");
+                var code = fault(Attempts);
+                if (code.HasValue) { Record("ControlledFailure", code); throw new ControlledReplaceException(code.Value); }
+                RealReplacementCalls++; Record("RealReplaceCalled");
+                try { File.Replace(replacement, target, null); }
+                catch (IOException error) { Record("ActualOsFailure", error.HResult); throw; }
+                RealCommits++; Record("RealReplaceCommitted");
+            };
+
+            internal void BeginBackoff(int milliseconds)
+            {
+                RequestedWaits.Add(milliseconds);
+                Record("BackoffEntered", delay: milliseconds);
+            }
+
+            internal void VirtualBackoff(int milliseconds) { BeginBackoff(milliseconds); Record("BackoffResumed"); }
+
+            internal Exception Invoke(Action<string, string> replace, Action<int> backoff, CancellationToken cancellation = default)
+            {
+                var method = typeof(ResourcePublisher).GetMethod("AtomicWriteCore", BindingFlags.Static | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null, "A scoped boundary seam is needed to prove the existing retry path deterministically; this is not a product-failure assertion.");
+                try
+                {
+                    method.Invoke(null, new object[] { root, "release-index.json", Next, cancellation, replace, backoff });
+                    Record("ReturnedSuccess"); return null;
+                }
+                catch (TargetInvocationException error) { terminal = error.InnerException; Record("TerminalError", terminal.HResult); return terminal; }
+            }
+
+            internal void VerifyDefaultEntryAndMarkComplete()
+            {
+                // 新文件上的原四参数入口；不回写竞争变化后的From/To，也不沿用本case替身。
+                var target = Path.Combine(root, "default-probe.json");
+                Write(target, Old);
+                var method = typeof(ResourcePublisher).GetMethod("AtomicWrite", BindingFlags.Static | BindingFlags.NonPublic);
+                method.Invoke(null, new object[] { root, "default-probe.json", Next, CancellationToken.None });
+                CollectionAssert.AreEqual(Next, File.ReadAllBytes(target));
+                Assert.That(File.Exists(target + ".next"), Is.False);
+                defaultEntryVerified = true; complete = true;
+            }
+
+            private static object State(string path)
+            {
+                if (!File.Exists(path)) return new { Exists = false, Bytes = (string)null, Sha256 = (string)null };
+                var bytes = File.ReadAllBytes(path);
+                using var sha = SHA256.Create();
+                return new { Exists = true, Bytes = Encoding.UTF8.GetString(bytes),
+                    Sha256 = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant() };
+            }
+
+            public void Dispose()
+            {
+                var from = State(Target); var to = State(Temporary);
+                Exception cleanupError = null;
+                var handlesClosed = false;
+                var removed = false;
+                try
+                {
+                    foreach (var file in Directory.GetFiles(root))
+                    {
+                        using var probe = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                    }
+                    handlesClosed = true;
+                    if (complete)
+                    {
+                        Assert.That(File.ReadAllText(Path.Combine(root, "owner.txt")), Is.EqualTo(Scope));
+                        var allowed = new HashSet<string>(new[] { "owner.txt", "release-index.json", "release-index.json.next", "default-probe.json", "default-probe.json.next" });
+                        Assert.That(Directory.GetDirectories(root), Is.Empty);
+                        foreach (var path in Directory.GetFiles(root))
+                        {
+                            Assert.That(allowed.Contains(Path.GetFileName(path)), Is.True, "Unknown cleanup file.");
+                            Assert.That((int)(File.GetAttributes(path) & FileAttributes.ReparsePoint), Is.Zero);
+                        }
+                        foreach (var path in Directory.GetFiles(root)) File.Delete(path);
+                        Directory.Delete(root); removed = true;
+                    }
+                }
+                catch (Exception error) { cleanupError = error; }
+                finally
+                {
+                    ResourceCostEvidence.Write("retry-" + id, new { Case = id, Root = root, Source = "Formal ResourcePublisher.AtomicWriteCore with per-call replace/backoff boundaries",
+                        Complete = complete, Attempts, Retries = Math.Max(0, Attempts - 1), RequestedWaitMilliseconds = RequestedWaits,
+                        RealReplacementCalls, RealCommits, ErrorType = terminal?.GetType().FullName, ErrorHResult = terminal?.HResult,
+                        FinalFromBeforeCleanup = from, FinalToBeforeCleanup = to, Events = events.ToArray(), WorkerJoined,
+                        DefaultEntryVerified = defaultEntryVerified, ExclusiveHandleProbesPassed = handlesClosed,
+                        OwnedFilesDeleted = removed, PreservedOnFailure = !removed, CleanupError = cleanupError?.ToString(),
+                        Boundary = "Controlled HRESULTs establish branch behavior, not unknown OS contention. Virtual waits record requested delays, not scheduler timing. 1176/1177 negative cases classify only; they do not simulate OS partial-commit effects." });
+                }
+                if (cleanupError != null) throw new InvalidOperationException("Owned retry fixture cleanup failed.", cleanupError);
+            }
+        }
+    }
+}

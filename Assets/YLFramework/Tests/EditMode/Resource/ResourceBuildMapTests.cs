@@ -62,6 +62,28 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         [Test]
+        public void BundleAnalysisSeparatesSourceBytesAndPlacementFromNativeSizesAndShowsReverseEdges()
+        {
+            var texture = new Texture2D(2, 2) { name = "Shared" };
+            AssetDatabase.CreateAsset(texture, folder + "/Content/Shared.asset");
+            var a = Prefab("A", Material("A", texture));
+            var b = Prefab("B", Material("B", texture));
+            var map = Map(Project(Group("a", Select(a)), Group("b", Select(b))));
+            var bundles = Items(map, "Bundles");
+            var shared = bundles.Single(value => (bool)Value(value, "IsShared"));
+            Assert.That(shared.GetType().GetProperty("SourceBytes"), Is.Not.Null, "Source estimates must be available as immutable data, not inferred from compressed file bytes.");
+            foreach (var bundle in bundles)
+            {
+                Assert.That(Value(bundle, "SourceBytes"), Is.EqualTo(((string[])Value(bundle, "AssetPaths")).Sum(path => new FileInfo(path).Length)));
+                Assert.That(Value(bundle, "Placement").ToString(), Is.EqualTo(ReferenceEquals(bundle, shared) ? "SharedDependencies" : "Group"));
+            }
+            var dependents = (string[])Value(shared, "Dependents");
+            CollectionAssert.AreEquivalent(bundles.Where(value => !ReferenceEquals(value, shared)).Select(value => Value(value, "Name")), dependents);
+            dependents[0] = "must not change the snapshot";
+            Assert.That((string[])Value(shared, "Dependents"), Does.Not.Contain("must not change the snapshot"));
+        }
+
+        [Test]
         public void SharedDependenciesAreAssignedOnceAndManifestGraphHasOneSharedNode()
         {
             var texture = new Texture2D(2, 2) { name = "Shared" };

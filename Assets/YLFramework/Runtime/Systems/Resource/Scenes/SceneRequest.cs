@@ -37,6 +37,7 @@ namespace YLFramework.Services.Resource
     // 只为 Editor 的真实场景加载提供窄接点，不建立另一份 Scene/Bundle authority。
     internal interface IResourceSceneSource
     {
+        bool IsScene(ResourceCatalogEntry entry);
         string ResolveScenePath(ResourceCatalogEntry entry);
         AsyncOperation LoadSceneAsync(string path, LoadSceneParameters parameters);
     }

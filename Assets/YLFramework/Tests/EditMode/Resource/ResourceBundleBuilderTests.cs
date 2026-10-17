@@ -70,6 +70,52 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         [Test]
+        [TestCase(0, BuildAssetBundleOptions.ChunkBasedCompression)]
+        [TestCase(1, BuildAssetBundleOptions.None)]
+        [TestCase(2, BuildAssetBundleOptions.UncompressedAssetBundle)]
+        public void CompressionChoicePartitionsWorkspaceAndReachesTheRealNativePipeline(int choice, BuildAssetBundleOptions compression)
+        {
+            var field = typeof(ResourceProject).GetField("Compression");
+            Assert.That(field, Is.Not.Null, "The saved project needs a safe compression choice, not raw BuildAssetBundleOptions.");
+            field.SetValue(project, Enum.ToObject(field.FieldType, choice));
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
+            otherWorkspace = ResourceBundleBuilder.GetWorkspacePath(project, target);
+            Assert.That(otherWorkspace == workspace, Is.EqualTo(choice == 0), "Compression is part of the compatible Workspace identity.");
+            var before = ProtectedSnapshot();
+            BuildAssetBundleOptions observed = 0;
+            var result = (ResourceBuildResult)Execute((output, builds, options, platform) =>
+            {
+                observed = options;
+                return Native(output, builds, options, platform);
+            });
+            Assert.That(observed & (BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.UncompressedAssetBundle), Is.EqualTo(compression));
+            Assert.That(observed.HasFlag(BuildAssetBundleOptions.StrictMode), Is.True);
+            Assert.That(observed & ~(compression | BuildAssetBundleOptions.StrictMode | BuildAssetBundleOptions.ForceRebuildAssetBundle), Is.EqualTo(BuildAssetBundleOptions.None));
+            var evidence = result.Bundles.Single();
+            Assert.That(evidence.FileBytes, Is.EqualTo(result.Files.Single(value => value.Name == evidence.Name).Length));
+            Assert.That(evidence.SourceBytes, Is.EqualTo(new FileInfo(text).Length));
+            Assert.That(evidence.SourceFileCount, Is.EqualTo(1));
+            Assert.That(evidence.Placement, Is.EqualTo(ResourceBundlePlacement.Group));
+            var bundle = AssetBundle.LoadFromFile(Path.Combine(result.WorkspacePath, result.Bundles.Single().Name));
+            Assert.That(bundle, Is.Not.Null);
+            try { Assert.That(bundle.LoadAsset<TextAsset>(text).text, Is.EqualTo("first owned content")); }
+            finally { bundle.Unload(true); }
+            CollectionAssert.AreEqual(before, ProtectedSnapshot());
+            UnityEngine.Debug.Log($"YL89 compression={choice}, BundleBytes={result.BundleFileBytes}, nativeMs={result.BuildPipelineMilliseconds:F2}");
+        }
+
+        [Test]
+        public void UnknownCompressionIsRejectedBeforeAnyWorkspaceWrite()
+        {
+            var field = typeof(ResourceProject).GetField("Compression");
+            Assert.That(field, Is.Not.Null);
+            field.SetValue(project, Enum.ToObject(field.FieldType, 99));
+            Assert.Throws<ArgumentOutOfRangeException>(() => ResourceBundleBuilder.GetWorkspacePath(project, target));
+            Assert.That(Directory.Exists(Path.GetDirectoryName(workspace)), Is.False);
+        }
+
+        [Test]
         public void CompiledBinaryAndAssemblyConfigurationBytesAreBuildInputs()
         {
             var temp = Path.Combine(Path.GetTempPath(), "kilo", "BuildInputs82-" + Guid.NewGuid().ToString("N"));

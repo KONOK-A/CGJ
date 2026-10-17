@@ -92,6 +92,8 @@ namespace YLFramework.Tests.Resource
             internal TimeSpan HeaderDelay { get; set; }
             /// <summary>Keep the connection open indefinitely after this many body bytes, until disposal.</summary>
             internal int? StallAfterBytes { get; set; }
+            /// <summary>Optional measurement of completed TLS body writes, not TLS wire bytes or client receipt.</summary>
+            internal Action<int> BodyBytesWritten { get; set; }
         }
 
         private async Task AcceptLoopAsync()
@@ -227,6 +229,7 @@ namespace YLFramework.Tests.Resource
                 var count = Math.Min(response.ChunkSize, limit - offset);
                 if (response.StallAfterBytes.HasValue) count = Math.Min(count, response.StallAfterBytes.Value - offset);
                 await stream.WriteAsync(body, offset, count, stopToken).ConfigureAwait(false);
+                response.BodyBytesWritten?.Invoke(count);
                 offset += count;
                 if (offset < limit) await Task.Delay(response.ChunkDelay, stopToken).ConfigureAwait(false);
             }

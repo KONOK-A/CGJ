@@ -86,9 +86,28 @@ namespace YLFramework.Editor.Resource
 
         public ResourceCatalog GetCatalog(string projectId) => Snapshot(projectId).Catalog;
 
+        /// <summary>Editor的显式模式选择接点。Bundles直接调用Runtime工厂，绝不因发布缺失或校验错误切到模拟。</summary>
+        public static ResourceConfiguration CreateConfiguration(ResourceLoadMode mode, ResourceProject[] projects,
+            IEnumerable<ResourceProjectMount> mounts = null, string cacheRoot = null, ResourceImageOptions images = null)
+        {
+            if (mode == ResourceLoadMode.Bundles) return ResourceConfiguration.Create(mode, mounts, cacheRoot, images);
+            if (mode != ResourceLoadMode.EditorSimulation) throw new ArgumentOutOfRangeException(nameof(mode));
+            if (cacheRoot != null) throw new ArgumentException("Editor simulation does not mount or write an artifact store.", nameof(cacheRoot));
+            var versions = mounts?.ToArray();
+            if (versions != null && (projects == null || versions.Length != projects.Length || versions.Any(x => x?.BuiltIn == null) ||
+                !versions.Select(x => x.ProjectId).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(
+                    projects.Select(x => x ? x.ProjectId : null).OrderBy(x => x, StringComparer.Ordinal))))
+                throw new ArgumentException("Explicit simulation versions must match the complete selected project set.", nameof(mounts));
+            if (versions != null) foreach (var version in versions) _ = version.BuiltIn.CreateCatalog(version.AssetTypes);
+            return new ResourceEditorSimulation(projects, versions?.Select(x => x.BuiltIn.Document).ToArray()).CreateConfiguration(images);
+        }
+
         /// <summary>显式装配 Editor borrowed Source。地址/类型身份在每次生产时重验，不根据旧 XF 设置自动启用。</summary>
-        public ResourceConfiguration CreateConfiguration() => new(projects.Keys.Select(id => Snapshot(id).Catalog),
-            new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true), new TextureResourceSource(false), new SimulationSource(this) });
+        public ResourceConfiguration CreateConfiguration() => CreateConfiguration(ResourceImageOptions.Default);
+
+        /// <summary>模拟与Bundle配置共用同一图片策略；不因使用Editor Source而绕过编码/像素/并发边界。</summary>
+        public ResourceConfiguration CreateConfiguration(ResourceImageOptions images) => new(projects.Keys.Select(id => Snapshot(id).Catalog),
+            new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true, images), new TextureResourceSource(false, images), new SimulationSource(this) }, images);
 
         private sealed class SimulationSource : IResourceSource, IResourceSceneSource
         {
@@ -96,6 +115,7 @@ namespace YLFramework.Editor.Resource
             internal SimulationSource(ResourceEditorSimulation simulation) => this.simulation = simulation;
             public ResourceSourceId Id => ResourceSourceId.Editor;
             public bool SupportsSynchronousLoad => true;
+            public bool IsScene(ResourceCatalogEntry entry) => entry.Location.AssetType == typeof(SceneAsset);
             public void Validate(ResourceCatalogEntry entry)
             {
                 var current = simulation.Resolve(entry.Address);
@@ -112,7 +132,7 @@ namespace YLFramework.Editor.Resource
             public string ResolveScenePath(ResourceCatalogEntry entry)
             {
                 Validate(entry);
-                if (entry.Location.AssetType != typeof(SceneAsset)) throw new ResourceException(ResourceError.TypeMismatch, "The Editor address is not a Scene.");
+                if (!IsScene(entry)) throw new ResourceException(ResourceError.TypeMismatch, "The Editor address is not a Scene.");
                 var path = AssetDatabase.GUIDToAssetPath(entry.AssetId.Substring(0, 32));
                 if (path != entry.Location.Locator) throw new ResourceException(ResourceError.AddressNotFound, "Editor Scene GUID/path changed.");
                 return path;

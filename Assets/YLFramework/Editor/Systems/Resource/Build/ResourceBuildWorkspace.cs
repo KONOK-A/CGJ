@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using UnityEngine;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Editor.Resource
 {
@@ -24,7 +27,7 @@ namespace YLFramework.Editor.Resource
         }
 
         [Serializable]
-        internal sealed class Ownership
+        internal class Ownership
         {
             public int Version = 1;
             public string ProjectRoot;
@@ -38,16 +41,51 @@ namespace YLFramework.Editor.Resource
             public FileDigest[] Files = Array.Empty<FileDigest>();
         }
 
+        [Serializable]
+        internal sealed class DeliveryRecord
+        {
+            public string RelativePath;
+            public string Name;
+            public long RawLength;
+            public string RawSha256;
+            public long Length;
+            public string Sha256;
+            public bool Complete;
+            internal FileDigest Digest() => new() { Name = Name, Length = Length, Sha256 = Sha256 };
+        }
+
+        // 独立派生类型使 None 继续写原 v1 字段，而不是给旧格式追加空 delivery 字段。
+        [Serializable]
+        internal sealed class EncryptedOwnership : Ownership
+        {
+            public string KeyId;
+            public string Platform;
+            public string UnityCompatibility;
+            public int ContentProtocolVersion = 1;
+            public string[] KnownDeliveryFiles = Array.Empty<string>();
+            public DeliveryRecord[] Deliveries = Array.Empty<DeliveryRecord>();
+            public string DeliveryDirectory;
+            public FileDigest[] DeliveryFiles = Array.Empty<FileDigest>();
+        }
+
         private readonly ResourceBuildMap map;
         private readonly string settings;
+        private readonly string platform;
+        private readonly string keyId;
+        private readonly bool encrypted;
         internal string Root { get; }
         internal string Output { get; }
         internal string Leaf { get; }
 
-        internal ResourceBuildWorkspace(ResourceBuildMap map, string settings, string platform)
+        internal ResourceBuildWorkspace(ResourceBuildMap map, string settings, string platform,
+            ResourceContentEncryption encryption = ResourceContentEncryption.None, string keyId = null)
         {
             this.map = map;
             this.settings = settings;
+            this.platform = platform;
+            this.keyId = keyId;
+            encrypted = encryption == ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            if (!encrypted && encryption != ResourceContentEncryption.None) throw new ArgumentOutOfRangeException(nameof(encryption));
             Leaf = "ylr_" + map.ProjectToken + "_" + platform;
             // Unity 禁止向 Library 构建。只管理 AssetBundles 下新 GUID 的独立根，不认领/清理共享父目录或历史产物。
             // 路径使用 128-bit token 缩短 Windows 路径；marker 仍比较完整配置 SHA-256，碰撞只能拒绝，不能复用。
@@ -64,9 +102,9 @@ namespace YLFramework.Editor.Resource
             if (!File.Exists(marker) || new FileInfo(marker).Length > 16 * 1024 * 1024)
                 throw new InvalidOperationException("Unknown or invalid workspace ownership; refusing adoption: " + Root);
             Ownership record;
-            try { record = JsonUtility.FromJson<Ownership>(File.ReadAllText(marker)); }
+            try { record = encrypted ? JsonUtility.FromJson<EncryptedOwnership>(File.ReadAllText(marker)) : JsonUtility.FromJson<Ownership>(File.ReadAllText(marker)); }
             catch (ArgumentException error) { throw new InvalidOperationException("Invalid workspace marker: " + marker, error); }
-            if (record == null || record.Version != 1 || record.ProjectRoot != ResourceBuildMap.Absolute(".") ||
+            if (record == null || record.Version != (encrypted ? 2 : 1) || record.ProjectRoot != ResourceBuildMap.Absolute(".") ||
                 record.ProjectGuid != map.ProjectGuid || record.ProjectId != map.ProjectId || record.Settings != settings ||
                 record.Leaf != Leaf || record.KnownFiles == null || record.Files == null || record.KnownFiles.Length > MaximumFiles ||
                 record.Files.Length > MaximumFiles)
@@ -79,8 +117,40 @@ namespace YLFramework.Editor.Resource
                 if (file == null || !known.Contains(file.Name) || !digests.Add(file.Name) || file.Length < 0 ||
                     file.Sha256 == null || file.Sha256.Length != 64 || file.Sha256.Any(x => !Uri.IsHexDigit(x)))
                     throw new InvalidOperationException("Invalid workspace digest record.");
+            if (record is EncryptedOwnership delivery)
+            {
+                if (delivery.KeyId != keyId || delivery.Platform != platform || delivery.UnityCompatibility != Application.unityVersion ||
+                    delivery.ContentProtocolVersion != 1 || delivery.KnownDeliveryFiles == null || delivery.Deliveries == null || delivery.DeliveryFiles == null ||
+                    delivery.KnownDeliveryFiles.Length > MaximumFiles || delivery.Deliveries.Length > MaximumFiles || delivery.DeliveryFiles.Length > MaximumFiles)
+                    throw new InvalidOperationException("Encrypted workspace policy/registration conflict.");
+                var registered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var path in delivery.KnownDeliveryFiles)
+                    if (!ValidDeliveryPath(path) || !registered.Add(path)) throw new InvalidOperationException("Invalid delivery file registration.");
+                var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var file in delivery.Deliveries)
+                    if (file == null || !registered.Contains(file.RelativePath) || !candidates.Add(file.RelativePath) ||
+                        file.Name != file.RelativePath.Split('/')[1] || file.RawLength < 0 || !ValidDigest(file.RawSha256) ||
+                        file.Complete && (file.Length < 0 || !ValidDigest(file.Sha256)))
+                        throw new InvalidOperationException("Invalid delivery candidate identity.");
+                if (!string.IsNullOrEmpty(delivery.DeliveryDirectory) && !ValidDeliveryDirectory(delivery.DeliveryDirectory))
+                    throw new InvalidOperationException("Invalid current delivery directory.");
+                var current = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var file in delivery.DeliveryFiles)
+                    if (file == null || !ValidFile(file.Name) || !current.Add(file.Name) || file.Length < 0 || !ValidDigest(file.Sha256) ||
+                        !registered.Contains(delivery.DeliveryDirectory + "/" + file.Name))
+                        throw new InvalidOperationException("Invalid current delivery snapshot.");
+            }
             ValidateContents(record);
             return record;
+        }
+
+        private static bool ValidDigest(string value) => value != null && value.Length == 64 && value.All(x => x >= '0' && x <= '9' || x >= 'a' && x <= 'f');
+        private static bool ValidDeliveryDirectory(string value) => value != null && value.Length == 34 && value.StartsWith("d_", StringComparison.Ordinal) &&
+            value.Substring(2).All(x => x >= '0' && x <= '9' || x >= 'a' && x <= 'f');
+        private bool ValidDeliveryPath(string value)
+        {
+            var parts = value?.Split('/');
+            return parts?.Length == 2 && ValidDeliveryDirectory(parts[0]) && ValidFile(parts[1]);
         }
 
         private bool ValidFile(string name)
@@ -95,10 +165,20 @@ namespace YLFramework.Editor.Resource
         {
             ResourceBuildOperation.RejectLinks(Root);
             var known = new HashSet<string>(record.KnownFiles, StringComparer.Ordinal);
+            var delivery = record as EncryptedOwnership;
+            var deliveryFiles = new HashSet<string>(delivery?.KnownDeliveryFiles ?? Array.Empty<string>(), StringComparer.Ordinal);
+            var deliveryDirectories = new HashSet<string>(deliveryFiles.Select(x => x.Split('/')[0]), StringComparer.Ordinal);
             foreach (var entry in Directory.GetFileSystemEntries(Root))
             {
                 var name = Path.GetFileName(entry);
                 if (name == Leaf && Directory.Exists(entry)) continue;
+                if (deliveryDirectories.Contains(name) && Directory.Exists(entry))
+                {
+                    foreach (var file in Directory.GetFileSystemEntries(entry))
+                        if (!File.Exists(file) || !deliveryFiles.Contains(name + "/" + Path.GetFileName(file)))
+                            throw new InvalidOperationException("Workspace contains unregistered delivery content: " + file);
+                    continue;
+                }
                 if ((name == Marker || name == Next || name == Lock) && File.Exists(entry)) continue;
                 throw new InvalidOperationException("Workspace contains unknown content: " + entry);
             }
@@ -119,11 +199,9 @@ namespace YLFramework.Editor.Resource
                 {
                     if (Directory.GetFileSystemEntries(Root).Any(x => Path.GetFileName(x) != Lock))
                         throw new InvalidOperationException("Concurrent unknown workspace content; refusing adoption.");
-                    record = new Ownership
-                    {
-                        ProjectRoot = ResourceBuildMap.Absolute("."), ProjectGuid = map.ProjectGuid,
-                        ProjectId = map.ProjectId, Settings = settings, Leaf = Leaf
-                    };
+                    record = encrypted ? new EncryptedOwnership { Version = 2, KeyId = keyId, Platform = platform, UnityCompatibility = Application.unityVersion } : new Ownership();
+                    record.ProjectRoot = ResourceBuildMap.Absolute("."); record.ProjectGuid = map.ProjectGuid;
+                    record.ProjectId = map.ProjectId; record.Settings = settings; record.Leaf = Leaf;
                     Write(record);
                 }
                 else record = Read();
@@ -160,6 +238,50 @@ namespace YLFramework.Editor.Resource
             var marker = Path.Combine(Root, Marker);
             if (File.Exists(marker)) File.Replace(next, marker, null);
             else File.Move(next, marker);
+        }
+
+        internal string RegisterDelivery(EncryptedOwnership record, FileDigest[] raw, out DeliveryRecord[] pending)
+        {
+            var directory = "d_" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(Root, directory);
+            if (Directory.Exists(path) || File.Exists(path)) throw new IOException("New delivery identity is already occupied.");
+            pending = raw.Select(file => new DeliveryRecord { RelativePath = directory + "/" + file.Name,
+                Name = file.Name, RawLength = file.Length, RawSha256 = file.Sha256 }).ToArray();
+            if (record.KnownDeliveryFiles.Length + pending.Length > MaximumFiles)
+                throw new InvalidOperationException("Delivery registration limit exceeded; use a new explicit configuration.");
+            if (Path.DirectorySeparatorChar == '\\' && pending.Any(x => Path.Combine(Root, x.RelativePath).Length >= 260))
+                throw new InvalidOperationException("Delivery paths exceed this Unity Mono Windows file API limit.");
+            record.KnownDeliveryFiles = record.KnownDeliveryFiles.Concat(pending.Select(x => x.RelativePath)).ToArray();
+            record.Deliveries = record.Deliveries.Concat(pending).ToArray();
+            record.Complete = false;
+            Write(record);
+            Directory.CreateDirectory(path);
+            return directory;
+        }
+
+        internal static FileStream OpenVerified(string path, long length, string digest, CancellationToken token = default)
+        {
+            ResourceBuildOperation.RejectLinks(path);
+            var input = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            try
+            {
+                using var sha = SHA256.Create();
+                var buffer = new byte[32768];
+                if (input.Length != length) throw new InvalidDataException("Artifact length mismatch: " + Path.GetFileName(path));
+                int count;
+                while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    sha.TransformBlock(buffer, 0, count, buffer, 0);
+                }
+                sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                token.ThrowIfCancellationRequested();
+                if (input.Length != length || ResourceBundleEnvelope.Digest(sha.Hash) != digest)
+                    throw new InvalidDataException("Artifact SHA-256 mismatch: " + Path.GetFileName(path));
+                input.Position = 0;
+                return input;
+            }
+            catch { input.Dispose(); throw; }
         }
     }
 }

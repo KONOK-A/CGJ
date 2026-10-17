@@ -38,20 +38,31 @@ namespace YLFramework.Services.Audio
     public sealed class AudioClipLease : IDisposable
     {
         private IDisposable mOwner;
+        private Action mValidateAcquisition;
         /// <summary>由租约保活的资产；归还后不得再使用。</summary>
         public AudioClip Clip { get; private set; }
         /// <summary>责任是否已归还。</summary>
         public bool IsReleased { get; private set; }
         public AudioClipLease(AudioClip clip, IDisposable owner)
+            : this(clip, owner, null) { }
+
+        internal AudioClipLease(AudioClip clip, IDisposable owner, Action validateAcquisition)
         {
             if (!clip) throw new ArgumentNullException(nameof(clip));
             Clip = clip; mOwner = owner ?? throw new ArgumentNullException(nameof(owner));
+            mValidateAcquisition = validateAcquisition;
+        }
+        internal void ValidateAcquisition()
+        {
+            if (IsReleased || !Clip) throw new InvalidOperationException("The acquired AudioClip is no longer available.");
+            mValidateAcquisition?.Invoke();
         }
         public void Dispose()
         {
             if (IsReleased) return;
             IsReleased = true;
             Clip = null;
+            mValidateAcquisition = null;
             var owner = mOwner; mOwner = null;
             owner.Dispose();
         }

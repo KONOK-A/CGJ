@@ -31,6 +31,19 @@ namespace YLFramework.Services.Resource
         public string Locator { get; }
         public Type AssetType { get; }
 
+        /// <summary>仅用于诊断显示；URL query/fragment 不进入日志，原始 Locator 和 ordinal 身份不受影响。</summary>
+        public string DisplayLocator
+        {
+            get
+            {
+                if (!Source.Equals(ResourceSourceId.UrlTexture)) return Locator;
+                if (!Uri.TryCreate(Locator, UriKind.Absolute, out var uri)) return "<invalid-url>";
+                var authority = uri.HostNameType == UriHostNameType.IPv6 ? "[" + uri.Host.Trim('[', ']') + "]" : uri.Host;
+                return uri.Scheme + "://" + authority + (uri.IsDefaultPort ? "" : ":" + uri.Port) + uri.AbsolutePath +
+                    (string.IsNullOrEmpty(uri.Query) ? "" : "?<redacted>");
+            }
+        }
+
         public ResourceLocation(ResourceSourceId source, string locator, Type assetType)
         {
             if (!source.IsValid) throw new ArgumentException("A valid source identity is required.", nameof(source));
@@ -48,6 +61,6 @@ namespace YLFramework.Services.Resource
         {
             unchecked { return (Source.GetHashCode() * 397 ^ Locator.GetHashCode()) * 397 ^ AssetType.GetHashCode(); }
         }
-        public override string ToString() => $"{Source}:{Locator} ({AssetType.FullName})";
+        public override string ToString() => $"{Source}:{DisplayLocator} ({AssetType.FullName})";
     }
 }

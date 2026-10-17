@@ -40,26 +40,37 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    public enum ResourceBundlePlacement { Group, PerAsset, SharedDependencies, SceneDependencies, CycleMerge }
+
     /// <summary>每个源文件恰好属于一个 Bundle；数组按 ordinal 排序并以副本公开。</summary>
     public sealed class ResourceBuildBundle
     {
         private readonly string[] paths;
         private readonly string[] dependencies;
+        private readonly string[] dependents;
         public string Name { get; }
         public bool IsScene { get; }
         public bool IsShared { get; }
+        public ResourceBundlePlacement Placement { get; }
+        /// <summary>源文件磁盘字节之和，不含meta，不是压缩Bundle大小或native内存。</summary>
+        public long SourceBytes { get; }
         public string[] AssetPaths => (string[])paths.Clone();
         public string[] Dependencies => (string[])dependencies.Clone();
+        public string[] Dependents => (string[])dependents.Clone();
 
-        internal ResourceBuildBundle(string name, IEnumerable<string> assets, IEnumerable<string> edges, bool shared)
+        internal ResourceBuildBundle(string name, IEnumerable<string> assets, IEnumerable<string> edges, IEnumerable<string> incoming,
+            bool shared, ResourceBundlePlacement placement)
         {
             Name = name;
             paths = assets.OrderBy(x => x, StringComparer.Ordinal).ToArray();
             dependencies = edges.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            dependents = incoming.OrderBy(x => x, StringComparer.Ordinal).ToArray();
             IsScene = paths.All(x => Path.GetExtension(x).Equals(".unity", StringComparison.OrdinalIgnoreCase));
             if (!IsScene && paths.Any(x => Path.GetExtension(x).Equals(".unity", StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("Scene and ordinary assets cannot share a Bundle: " + name);
             IsShared = shared;
+            Placement = placement;
+            SourceBytes = paths.Sum(path => new FileInfo(ResourceBuildMap.Absolute(path)).Length);
         }
     }
 
@@ -92,8 +103,20 @@ namespace YLFramework.Editor.Resource
             Groups = new ReadOnlyDictionary<string, IReadOnlyList<string>>(groups);
             FingerprintPaths = fingerprintPaths.OrderBy(x => x, StringComparer.Ordinal).ToList().AsReadOnly();
             var edges = BundleEdges(assignments, graph);
+            var incoming = edges.Keys.ToDictionary(name => name, _ => new List<string>(), StringComparer.Ordinal);
+            foreach (var edge in edges) foreach (var dependency in edge.Value) incoming[dependency].Add(edge.Key);
+            var prefixLength = ("ylr_" + ProjectToken + "_").Length;
+            ResourceBundlePlacement Placement(string name) => name.Substring(prefixLength, 2) switch
+            {
+                "g_" => ResourceBundlePlacement.Group,
+                "a_" => ResourceBundlePlacement.PerAsset,
+                "s_" => ResourceBundlePlacement.SharedDependencies,
+                "d_" => ResourceBundlePlacement.SceneDependencies,
+                "c_" => ResourceBundlePlacement.CycleMerge,
+                _ => throw new InvalidOperationException("Unknown Bundle placement: " + name)
+            };
             Bundles = assignments.GroupBy(x => x.Value).OrderBy(x => x.Key, StringComparer.Ordinal)
-                .Select(x => new ResourceBuildBundle(x.Key, x.Select(a => a.Key), edges[x.Key], shared.Contains(x.Key)))
+                .Select(x => new ResourceBuildBundle(x.Key, x.Select(a => a.Key), edges[x.Key], incoming[x.Key], shared.Contains(x.Key), Placement(x.Key)))
                 .ToList().AsReadOnly();
             foreach (var asset in assets) asset.BundleName = assignments[asset.SourcePath];
             AvoidedDuplicateSourceBytes = avoidedBytes;
@@ -116,6 +139,8 @@ namespace YLFramework.Editor.Resource
                 throw new InvalidOperationException("A dedicated Assets folder is required as the resource root.");
             ResourceBuildOperation.RejectLinks(Absolute(root));
             ValidateProjects(project, root);
+            var generatedAtlases = ResourceAtlasGenerator.CurrentOutputs(project);
+            var atlasDirectory = project.AutomaticAtlases ? Path.GetDirectoryName(AssetDatabase.GetAssetPath(project.AutomaticAtlases))?.Replace('\\', '/') : null;
             var assets = new List<ResourceBuildAsset>();
             var groups = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
             var assignments = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -131,14 +156,19 @@ namespace YLFramework.Editor.Resource
                 if (group == null) throw new InvalidOperationException("Null Group.");
                 ValidateId(group.Id);
                 if (!foldedGroups.Add(group.Id)) throw new InvalidOperationException("Duplicate/case-folded Group: " + group.Id);
-                if (!Enum.IsDefined(typeof(ResourcePacking), group.Packing) || group.Selections == null || group.Selections.Count == 0)
+                if (!Enum.IsDefined(typeof(ResourcePacking), group.Packing) || group.Selections == null)
                     throw new InvalidOperationException("Invalid Group packing or empty selection: " + group.Id);
                 var members = new List<string>();
-                foreach (var selection in group.Selections)
+                var selections = group.Selections.Concat(generatedAtlases.Where(x => x.GroupId == group.Id)
+                    .Select(x => new ResourceSelection { Guid = x.Guid, Address = x.Address }));
+                foreach (var selection in selections)
                 {
                     if (selection == null) throw new InvalidOperationException("Null resource selection.");
                     var selected = ResolveGuid(selection.Guid);
                     RequireWithin(root, selected);
+                    if (atlasDirectory != null && (selected == atlasDirectory || Within(atlasDirectory, selected)) &&
+                        !generatedAtlases.Any(x => x.Guid == selection.Guid && x.GroupId == group.Id && x.Address == selection.Address))
+                        throw new InvalidOperationException("Generated Atlas assets are selected by their rules, not manual selections: " + selected);
                     var folder = AssetDatabase.IsValidFolder(selected);
                     var aliases = selection.Aliases ?? Array.Empty<string>();
                     if (aliases.Length > Limit) throw new InvalidOperationException("Resource alias limit exceeded.");
@@ -148,7 +178,7 @@ namespace YLFramework.Editor.Resource
                     if (extensions.Any(x => string.IsNullOrEmpty(x) || x[0] != '.' || x.IndexOfAny(new[] { '/', '\\', '*' }) >= 0))
                         throw new InvalidOperationException("Selection extensions must be exact dotted extensions.");
                     var paths = folder ? AssetDatabase.FindAssets("", new[] { selected }).Select(AssetDatabase.GUIDToAssetPath)
-                        .Where(x => !AssetDatabase.IsValidFolder(x) && CanBundle(x, editorAssemblies)) : new[] { selected };
+                        .Where(x => !AssetDatabase.IsValidFolder(x) && (atlasDirectory == null || !Within(atlasDirectory, x)) && CanBundle(x, editorAssemblies)) : new[] { selected };
                     foreach (var path in paths.OrderBy(x => x, StringComparer.Ordinal))
                     {
                         if (extensions.Length != 0 && !extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)) continue;
@@ -179,7 +209,9 @@ namespace YLFramework.Editor.Resource
                 groups.Add(group.Id, members.OrderBy(x => x, StringComparer.Ordinal).ToList().AsReadOnly());
             }
             var fingerprints = new HashSet<string>(StringComparer.Ordinal) { projectPath };
+            if (project.AutomaticAtlases) fingerprints.Add(AssetDatabase.GetAssetPath(project.AutomaticAtlases));
             var graph = CollectDependencies(root, assignments.Keys, fingerprints, editorAssemblies);
+            ResourceAtlasRules.Validate(graph.Keys, assets);
             var original = new Dictionary<string, string>(assignments, StringComparer.Ordinal);
             var owners = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             foreach (var bundle in original.GroupBy(x => x.Value).OrderBy(x => x.Key, StringComparer.Ordinal))
@@ -236,7 +268,11 @@ namespace YLFramework.Editor.Resource
                 ResourceBuildOperation.RejectLinks(Absolute(path));
                 fingerprints.Add(path);
                 var dependencies = new List<string>();
-                foreach (var dependency in AssetDatabase.GetDependencies(path, false).Distinct().OrderBy(x => x, StringComparer.Ordinal))
+                var atlas = AssetDatabase.GetMainAssetTypeAtPath(path) == typeof(UnityEngine.U2D.SpriteAtlas) ?
+                    AssetDatabase.LoadAssetAtPath<UnityEngine.U2D.SpriteAtlas>(path) : null;
+                var inputs = AssetDatabase.GetDependencies(path, false).AsEnumerable();
+                if (atlas) inputs = inputs.Where(value => !AssetDatabase.IsValidFolder(value)).Concat(ResourceAtlasRules.SpritePaths(atlas));
+                foreach (var dependency in inputs.Distinct().OrderBy(x => x, StringComparer.Ordinal))
                 {
                     if (dependency == path || IsBuiltIn(dependency)) continue;
                     fingerprints.Add(dependency);
@@ -314,7 +350,7 @@ namespace YLFramework.Editor.Resource
             return merged;
         }
 
-        private static void ValidateProjects(ResourceProject project, string root)
+        internal static void ValidateProjects(ResourceProject project, string root)
         {
             foreach (var guid in AssetDatabase.FindAssets("t:ResourceProject"))
             {
