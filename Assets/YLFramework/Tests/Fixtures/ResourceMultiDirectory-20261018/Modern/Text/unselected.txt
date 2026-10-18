@@ -1,0 +1,1 @@
+未选择的自有文本，不应进入 Catalog 或 Bundle。

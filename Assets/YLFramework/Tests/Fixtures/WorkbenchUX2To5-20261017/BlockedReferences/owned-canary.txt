@@ -1,0 +1,1 @@
+Owned UX3 partial-success fixture. The original reference generator must reject this occupied directory without changing it.

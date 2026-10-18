@@ -45,7 +45,7 @@ namespace YLFramework.Tests.ResourceBuild
             AssetDatabase.ImportAsset(text, ImportAssetOptions.ForceSynchronousImport);
             project = ScriptableObject.CreateInstance<ResourceProject>();
             project.ProjectId = "yl-build-" + Guid.NewGuid().ToString("N");
-            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(folder + "/Content");
+            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
             project.Groups.Add(new ResourceGroup { Id = "text", Selections = new List<ResourceSelection> { Selection(text) } });
             AssetDatabase.CreateAsset(project, folder + "/Project.asset");
             Assert.That(Builder, Is.Not.Null, "The isolated 8.2a build kernel is missing.");
@@ -304,7 +304,7 @@ namespace YLFramework.Tests.ResourceBuild
             AssetDatabase.ImportAsset(otherText, ImportAssetOptions.ForceSynchronousImport);
             var other = ScriptableObject.CreateInstance<ResourceProject>();
             other.ProjectId = project.ProjectId + "-other";
-            other.AssetRootGuid = AssetDatabase.AssetPathToGUID(folder + "/OtherContent");
+            other.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/OtherContent") });
             other.Groups.Add(new ResourceGroup { Id = "text", Selections = new List<ResourceSelection> { Selection(otherText) } });
             AssetDatabase.CreateAsset(other, folder + "/OtherProject.asset");
             otherWorkspace = ResourceBundleBuilder.GetWorkspacePath(other, target);

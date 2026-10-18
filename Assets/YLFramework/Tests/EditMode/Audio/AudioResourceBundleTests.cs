@@ -35,7 +35,7 @@ namespace YLFramework.Tests.Audio
                 AssetDatabase.CreateFolder(folder, "Content");
                 var project = ScriptableObject.CreateInstance<ResourceProject>();
                 project.ProjectId = "yl-audio86b-" + Guid.NewGuid().ToString("N");
-                project.AssetRootGuid = AssetDatabase.AssetPathToGUID(folder + "/Content");
+                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
                 var shared = new Material(Shader.Find("Unlit/Color")) { name = "SharedAudioDependency" };
                 AssetDatabase.CreateAsset(shared, folder + "/Content/Shared.mat");
                 foreach (var name in new[] { "first", "second" })

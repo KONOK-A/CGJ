@@ -267,7 +267,7 @@ namespace YLFramework.Tests.ResourceBuild
                 AssetDatabase.ImportAsset(Folder + "/entry.txt", ImportAssetOptions.ForceSynchronousImport);
                 var project = ScriptableObject.CreateInstance<ResourceProject>();
                 project.ProjectId = "recipe-" + Guid.NewGuid().ToString("N");
-                project.AssetRootGuid = AssetDatabase.AssetPathToGUID(Folder);
+                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(Folder) });
                 project.Groups.Add(new ResourceGroup { Id = "text", Selections = new List<ResourceSelection> {
                     new() { Guid = AssetDatabase.AssetPathToGUID(Folder + "/entry.txt"), Address = "entry" } } });
                 AssetDatabase.CreateAsset(project, ProjectPath);

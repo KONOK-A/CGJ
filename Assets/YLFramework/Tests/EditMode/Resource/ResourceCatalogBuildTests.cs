@@ -123,7 +123,7 @@ namespace YLFramework.Tests.ResourceBuild
             finally { EditorSceneManager.RestoreSceneManagerSetup(setup); }
             var project = ScriptableObject.CreateInstance<ResourceProject>();
             project.ProjectId = "yl-release-" + Guid.NewGuid().ToString("N");
-            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(Folder + "/Content");
+            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(Folder + "/Content") });
             foreach (var path in new[] { TextPath }.Concat(prefabs).Concat(new[] { spritePath, scenePath }))
                 project.Groups.Add(new ResourceGroup { Id = Path.GetFileNameWithoutExtension(path),
                     Selections = new List<ResourceSelection> { new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(path) } } });

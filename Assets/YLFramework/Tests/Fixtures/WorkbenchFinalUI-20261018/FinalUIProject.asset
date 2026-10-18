@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7331c0230f1378c48bb33ed06489830c, type: 3}
+  m_Name: FinalUIProject
+  m_EditorClassIdentifier: 
+  ProjectId: yl-workbench-final-ui-20261018
+  DisplayName: "Workbench \u6700\u7EC8 UI \u6838\u5BF9"
+  SourceDirectories:
+  - Guid: 1dff41cb058803e4095407a75d2055b1
+    AddressPrefix: 
+  Compression: 0
+  ContentEncryption: 0
+  ContentKeyId: 
+  AutomaticAtlases: {fileID: 11400000, guid: ce277850e4ff294488317c3f4eefd553, type: 2}
+  AutomaticAtlasConfigurationGuid: ce277850e4ff294488317c3f4eefd553
+  Groups:
+  - Id: atlases
+    Packing: 0
+    Selections: []

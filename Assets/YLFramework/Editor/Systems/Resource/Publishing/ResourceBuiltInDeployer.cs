@@ -61,6 +61,15 @@ namespace YLFramework.Editor.Resource
         private static bool deploying;
         public static string ResourcesRoot => ResourceBuildMap.Absolute("Assets/StreamingAssets/YLFrameworkResources");
 
+        /// <summary>纯值定位独立恢复空间；不预检版本、不解析journal、不创建目录/锁或恢复。</summary>
+        public static string GetWorkspacePath(string projectGuid, string platform)
+        {
+            ResourceCatalogCodec.Hex(projectGuid, 32);
+            if (!new[] { "StandaloneWindows64", "StandaloneOSX", "StandaloneLinux64" }.Contains(platform, StringComparer.Ordinal))
+                throw new InvalidDataException("Unsupported built-in workspace platform.");
+            return WorkspaceFor(projectGuid, platform);
+        }
+
         private sealed class Attempt
         {
             internal ResourceCatalogDocument Catalog;

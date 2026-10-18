@@ -16,66 +16,117 @@ namespace YLFramework.Editor.Resource
     {
         private static bool generating;
 
-        /// <summary>显式新建自有直接子目录并绑定配置；已有目录（包括空目录）或孤立 meta 均不接管。</summary>
-        public static ResourceAtlasConfiguration CreateConfiguration(ResourceProject project, string folderName = "GeneratedAtlases")
+        /// <summary>在明确选择的 Assets 根目录或现有子目录中新建并登记自有子目录；不会接管父目录或已有内容。</summary>
+        public static ResourceAtlasConfiguration CreateConfiguration(ResourceProject project, string generationParentPath, string folderName)
         {
             ResourceEditorOperations.RequireEditableProject(project);
             ResourceBundleBuilder.ValidateEditor(EditorUserBuildSettings.activeBuildTarget);
             if (generating) throw new InvalidOperationException("Automatic Atlas generation is already running.");
             if (IsConfigured(project) || EditorUtility.IsDirty(project)) throw new InvalidOperationException("Save the Project and use its existing Atlas configuration, if registered.");
-            var root = AssetDatabase.GUIDToAssetPath(project.AssetRootGuid);
-            if (string.IsNullOrEmpty(root) || !root.StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsValidFolder(root) ||
-                root == "Assets/StreamingAssets" || ResourceAtlasPlan.Within("Assets/StreamingAssets", root))
-                throw new InvalidOperationException("Automatic Atlases require a dedicated Assets resource root, not StreamingAssets.");
-            // 复用正式根/项目冲突检查；登记时允许空 Group 草稿，不要求先有 Atlas。
-            ResourceBuildMap.ValidateProjects(project, root);
+            ResourceProjectPaths.Resolve(project);
+            if (string.IsNullOrEmpty(generationParentPath))
+                throw new InvalidOperationException("请明确选择 Assets 根目录或现有子目录作为图集生成父目录；不能使用 StreamingAssets 或 Packages。");
+            var parentGuid = AssetDatabase.AssetPathToGUID(generationParentPath);
+            var parent = ResourceAtlasPlan.ResolveGenerationParent(parentGuid);
+            if (parent != generationParentPath)
+                throw new InvalidOperationException("图集生成父目录与其登记 GUID 不一致。");
             if (string.IsNullOrEmpty(folderName) || folderName.Length > 64 || folderName.Any(c => !(char.IsLetterOrDigit(c) || c == '_' || c == '-')))
                 throw new InvalidOperationException("Atlas output folder must be a single explicit name (letters, digits, '_' or '-').");
-            var directory = root + "/" + folderName;
+            var directory = parent + "/" + folderName;
             ResourceBuildOperation.ValidateAssetPath(directory);
             ResourceBuildOperation.RejectLinks(directory + ".meta");
+            ResourceProjectPaths.ValidateProjects(project, directory);
             if (Directory.Exists(directory) || File.Exists(directory) || File.Exists(directory + ".meta"))
                 throw new InvalidOperationException("Refusing to adopt an existing Atlas output directory or meta: " + directory);
-            var configuration = ScriptableObject.CreateInstance<ResourceAtlasConfiguration>();
             var projectPath = AssetDatabase.GetAssetPath(project);
+            var projectGuid = AssetDatabase.AssetPathToGUID(projectPath);
+            if (!HasExpectedGuid(projectPath, projectGuid)) throw new InvalidOperationException("Resource Project meta identity was externally modified; not adopted.");
             var projectBytes = File.ReadAllBytes(projectPath);
+            var projectJson = EditorJsonUtility.ToJson(project);
+            var projectMetaHash = ResourceAtlasPlan.HashFile(projectPath + ".meta");
+            var configuration = ScriptableObject.CreateInstance<ResourceAtlasConfiguration>();
+            string boundProjectJson = null;
+            string directoryGuid = null;
+            string directoryMetaHash = null;
+            string configurationGuid = null;
+            string configurationMetaHash = null;
+            byte[] configurationBytes = null;
+            var createdDirectory = directory;
             var created = false;
             var createdConfiguration = false;
+            generating = true;
             try
             {
-                var guid = AssetDatabase.CreateFolder(root, folderName);
+                var guid = directoryGuid = AssetDatabase.CreateFolder(parent, folderName);
                 if (string.IsNullOrEmpty(guid)) throw new IOException("Cannot create Atlas directory: " + directory);
                 created = true;
                 configuration.DirectoryGuid = guid;
-                if (!HasExpectedGuid(directory, guid)) throw new InvalidOperationException("New Atlas directory meta was externally modified; not adopted.");
-                configuration.ProjectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-                configuration.RootGuid = project.AssetRootGuid;
-                configuration.DirectoryMetaHash = ResourceAtlasPlan.HashFile(directory + ".meta");
+                createdDirectory = AssetDatabase.GUIDToAssetPath(guid);
+                if (createdDirectory != directory || !HasExpectedGuid(directory, guid)) throw new InvalidOperationException("New Atlas directory identity was externally modified; not adopted.");
+                configuration.ProjectGuid = projectGuid;
+                configuration.GenerationParentGuid = parentGuid;
+                configuration.DirectoryMetaHash = directoryMetaHash = ResourceAtlasPlan.HashFile(directory + ".meta");
                 var path = directory + "/AutomaticAtlases.asset";
                 AssetDatabase.CreateAsset(configuration, path);
                 createdConfiguration = true;
-                configuration.ConfigurationGuid = AssetDatabase.AssetPathToGUID(path);
+                configuration.ConfigurationGuid = configurationGuid = AssetDatabase.AssetPathToGUID(path);
                 if (!HasExpectedGuid(path, configuration.ConfigurationGuid)) throw new InvalidOperationException("New Atlas configuration meta was externally modified; not adopted.");
-                configuration.ConfigurationMetaHash = ResourceAtlasPlan.HashFile(path + ".meta");
+                if (configuration.ProjectGuid != projectGuid || configuration.DirectoryGuid != guid ||
+                    configuration.GenerationParentGuid != parentGuid || configuration.Rules == null || configuration.Rules.Count != 0 ||
+                    configuration.Outputs == null || configuration.Outputs.Count != 0)
+                    throw new InvalidOperationException("New Atlas configuration ownership changed during creation; not adopted.");
+                configuration.ConfigurationMetaHash = configurationMetaHash = ResourceAtlasPlan.HashFile(path + ".meta");
+                RequireRegistrationInputs();
                 EditorUtility.SetDirty(configuration); AssetDatabase.SaveAssetIfDirty(configuration);
+                configurationBytes = File.ReadAllBytes(path);
+                RequireRegistrationInputs();
+                if (!HasExpectedGuid(directory, directoryGuid) || ResourceAtlasPlan.HashFile(directory + ".meta") != directoryMetaHash ||
+                    !HasExpectedGuid(path, configurationGuid) || ResourceAtlasPlan.HashFile(path + ".meta") != configurationMetaHash)
+                    throw new InvalidOperationException("New Atlas ownership/meta changed during registration; not adopted.");
+                ResourceProjectPaths.ValidateProjects(project, directory);
                 project.AutomaticAtlases = configuration;
-                project.AutomaticAtlasConfigurationGuid = configuration.ConfigurationGuid;
+                project.AutomaticAtlasConfigurationGuid = configurationGuid;
+                boundProjectJson = EditorJsonUtility.ToJson(project);
                 EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+                if (EditorUtility.IsDirty(project) || EditorJsonUtility.ToJson(project) != boundProjectJson)
+                    throw new InvalidOperationException("Resource Project changed during Atlas registration; changed content was preserved.");
                 return configuration;
             }
             catch
             {
-                project.AutomaticAtlases = null;
-                project.AutomaticAtlasConfigurationGuid = null;
-                File.WriteAllBytes(projectPath, projectBytes);
-                AssetDatabase.ImportAsset(projectPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-                if (createdConfiguration && AssetDatabase.AssetPathToGUID(directory + "/AutomaticAtlases.asset") == configuration.ConfigurationGuid &&
-                    HasExpectedGuid(directory + "/AutomaticAtlases.asset", configuration.ConfigurationGuid))
+                // 只撤销尚未落盘且仍精确等于本次绑定的内存改动；绝不恢复旧字节覆盖回调保存的 Project。
+                if (project && boundProjectJson != null && EditorJsonUtility.ToJson(project) == boundProjectJson &&
+                    File.Exists(projectPath) && File.ReadAllBytes(projectPath).SequenceEqual(projectBytes) &&
+                    File.Exists(projectPath + ".meta") &&
+                    ResourceAtlasPlan.HashFile(projectPath + ".meta") == projectMetaHash)
+                {
+                    EditorJsonUtility.FromJsonOverwrite(projectJson, project);
+                    EditorUtility.ClearDirty(project);
+                }
+                var referenced = project && (project.AutomaticAtlases == configuration || !string.IsNullOrEmpty(configurationGuid) &&
+                    project.AutomaticAtlasConfigurationGuid == configurationGuid);
+                if (!referenced && createdConfiguration && configurationBytes != null && File.Exists(directory + "/AutomaticAtlases.asset") &&
+                    File.ReadAllBytes(directory + "/AutomaticAtlases.asset").SequenceEqual(configurationBytes) &&
+                    AssetDatabase.AssetPathToGUID(directory + "/AutomaticAtlases.asset") == configurationGuid &&
+                    HasExpectedGuid(directory + "/AutomaticAtlases.asset", configurationGuid) &&
+                    ResourceAtlasPlan.HashFile(directory + "/AutomaticAtlases.asset.meta") == configurationMetaHash)
                     AssetDatabase.DeleteAsset(directory + "/AutomaticAtlases.asset");
-                if (created && AssetDatabase.AssetPathToGUID(directory) == configuration.DirectoryGuid && HasExpectedGuid(directory, configuration.DirectoryGuid) && !Directory.EnumerateFileSystemEntries(directory).Any())
-                    AssetDatabase.DeleteAsset(directory);
+                if (!referenced && created && Directory.Exists(createdDirectory) && AssetDatabase.AssetPathToGUID(createdDirectory) == directoryGuid &&
+                    HasExpectedGuid(createdDirectory, directoryGuid) && ResourceAtlasPlan.HashFile(createdDirectory + ".meta") == directoryMetaHash &&
+                    !Directory.EnumerateFileSystemEntries(createdDirectory).Any())
+                    AssetDatabase.DeleteAsset(createdDirectory);
                 if (!createdConfiguration && configuration) Object.DestroyImmediate(configuration);
                 throw;
+            }
+            finally { generating = false; }
+
+            void RequireRegistrationInputs()
+            {
+                if (!project || EditorUtility.IsDirty(project) || AssetDatabase.GetAssetPath(project) != projectPath ||
+                    AssetDatabase.AssetPathToGUID(projectPath) != projectGuid || EditorJsonUtility.ToJson(project) != projectJson ||
+                    !File.ReadAllBytes(projectPath).SequenceEqual(projectBytes) || ResourceAtlasPlan.HashFile(projectPath + ".meta") != projectMetaHash ||
+                    ResourceAtlasPlan.ResolveGenerationParent(parentGuid) != parent)
+                    throw new InvalidOperationException("Resource Project/output parent changed during Atlas registration; not overwritten.");
             }
         }
 
@@ -100,36 +151,62 @@ namespace YLFramework.Editor.Resource
                 var configPath = AssetDatabase.GetAssetPath(configuration);
                 var configBytes = File.ReadAllBytes(configPath);
                 var savedConfiguration = EditorJsonUtility.ToJson(configuration);
+                var configurationMetaHash = ResourceAtlasPlan.HashFile(configPath + ".meta");
+                var projectPath = AssetDatabase.GetAssetPath(project);
+                var projectGuid = AssetDatabase.AssetPathToGUID(projectPath);
+                var projectMetaHash = ResourceAtlasPlan.HashFile(projectPath + ".meta");
+                var savedProject = ResourceBundleBuilder.CanonicalDefinition(project);
+                var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+                long definitionBytes = 0;
+                var projectHash = ResourceBundleBuilder.ProjectFileHash(projectPath, ref definitionBytes);
+                void RequireDefinition()
+                {
+                    definitionBytes = 0;
+                    if (!project || !configuration || project.AutomaticAtlases != configuration ||
+                        AssetDatabase.GetAssetPath(project) != projectPath || AssetDatabase.AssetPathToGUID(projectPath) != projectGuid ||
+                        AssetDatabase.GetAssetPath(configuration) != configPath || !IsConfigured(project) ||
+                        ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity || EditorUtility.IsDirty(project) ||
+                        ResourceBundleBuilder.CanonicalDefinition(project) != savedProject ||
+                        ResourceBundleBuilder.ProjectFileHash(projectPath, ref definitionBytes) != projectHash ||
+                        ResourceAtlasPlan.HashFile(projectPath + ".meta") != projectMetaHash ||
+                        ResourceAtlasPlan.HashFile(configPath + ".meta") != configurationMetaHash ||
+                        EditorUtility.IsDirty(configuration) || EditorJsonUtility.ToJson(configuration) != savedConfiguration ||
+                        !File.ReadAllBytes(configPath).SequenceEqual(configBytes))
+                        throw new InvalidOperationException("Automatic Atlas Project/configuration/source directories changed during generation; not overwritten.");
+                }
                 if (configuration.Rules == null || configuration.Rules.Count > 256 || configuration.Rules.Any(x => x == null))
                     throw new InvalidOperationException("Invalid automatic Atlas rules.");
-                var root = AssetDatabase.GUIDToAssetPath(project.AssetRootGuid);
-                var candidates = configuration.Rules.SelectMany(rule => ResourceAtlasPlan.SourceCandidates(rule, root, directory)).Distinct(StringComparer.Ordinal).ToArray();
+                var directories = ResourceProjectPaths.Resolve(project, validateProjects: false);
+                var candidates = configuration.Rules.SelectMany(rule => ResourceAtlasPlan.SourceCandidates(rule, directories, directory)).Distinct(StringComparer.Ordinal).ToArray();
                 if (candidates.Length > 16384) throw new InvalidOperationException("Automatic Atlas source limit exceeded.");
                 // 仅同步明确来源的正常 Unity 导入，不设置或保存其 Importer。否则原始 PNG 已变而导入缓存未变时可能打出旧像素。
                 foreach (var path in candidates)
                 {
                     cancellation.ThrowIfCancellationRequested();
                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                    RequireDefinition();
                 }
-                if (EditorUtility.IsDirty(project) || EditorUtility.IsDirty(configuration) || EditorJsonUtility.ToJson(configuration) != savedConfiguration ||
-                    !File.ReadAllBytes(configPath).SequenceEqual(configBytes)) throw new InvalidOperationException("Automatic Atlas definition changed during source import; save and retry explicitly.");
+                RequireDefinition();
                 var plan = Preview(project);
                 if (!plan.NeedsGeneration) return plan;
                 var changes = plan.Changes.Where(x => x.Kind == ResourceAtlasChangeKind.Create || x.Kind == ResourceAtlasChangeKind.Update).ToArray();
                 var oldRecords = configuration.Outputs;
+                List<ResourceAtlasConfiguration.Output> writtenRecords = null;
                 var writes = new AtlasWrites();
                 try
                 {
                     foreach (var change in changes)
                     {
                         cancellation.ThrowIfCancellationRequested();
+                        RequireDefinition();
                         RequireExpectedOutput(change, oldRecords.SingleOrDefault(x => x.Key == change.Key));
                         writes.Begin(change.Path);
-                        WriteAtlas(change, () => writes.Checkpoint(change.Path));
+                        WriteAtlas(change, () => { writes.Checkpoint(change.Path); RequireDefinition(); });
                     }
                     cancellation.ThrowIfCancellationRequested();
                     var atlases = changes.Select(x => AssetDatabase.LoadAssetAtPath<SpriteAtlas>(x.Path)).ToArray();
                     SpriteAtlasUtility.PackAtlases(atlases, EditorUserBuildSettings.activeBuildTarget, false);
+                    RequireDefinition();
                     foreach (var change in changes)
                     {
                         cancellation.ThrowIfCancellationRequested();
@@ -138,25 +215,34 @@ namespace YLFramework.Editor.Resource
                         if (!atlas || atlas.spriteCount != change.Sources.Sum(path => AssetDatabase.LoadAllAssetsAtPath(path).OfType<Sprite>().Count()))
                             throw new InvalidOperationException("Automatic Atlas preparation failed: " + change.Path);
                     }
-                    if (EditorUtility.IsDirty(configuration) || EditorJsonUtility.ToJson(configuration) != savedConfiguration ||
-                        !File.ReadAllBytes(configPath).SequenceEqual(configBytes)) throw new InvalidOperationException("Automatic Atlas configuration changed during generation; not overwritten.");
+                    RequireDefinition();
                     var records = oldRecords.Where(record => changes.All(x => x.Key != record.Key)).ToList();
                     records.AddRange(changes.Select(x => new ResourceAtlasConfiguration.Output { Key = x.Key, FileName = Path.GetFileName(x.Path),
                         Guid = AssetDatabase.AssetPathToGUID(x.Path), InputHash = x.InputHash, AssetHash = ResourceAtlasPlan.HashFile(x.Path), MetaHash = ResourceAtlasPlan.HashFile(x.Path + ".meta") }));
                     writes.Begin(configPath);
-                    configuration.Outputs = records.OrderBy(x => x.Key, StringComparer.Ordinal).ToList();
+                    configuration.Outputs = writtenRecords = records.OrderBy(x => x.Key, StringComparer.Ordinal).ToList();
+                    var writtenConfiguration = EditorJsonUtility.ToJson(configuration);
                     EditorUtility.SetDirty(configuration); AssetDatabase.SaveAssetIfDirty(configuration);
+                    if (EditorUtility.IsDirty(configuration) || EditorJsonUtility.ToJson(configuration) != writtenConfiguration)
+                        throw new InvalidOperationException("Automatic Atlas configuration changed during output registration; not overwritten.");
+                    savedConfiguration = writtenConfiguration;
+                    configBytes = File.ReadAllBytes(configPath);
                     writes.Checkpoint(configPath);
+                    RequireDefinition();
                     cancellation.ThrowIfCancellationRequested();
                     var after = Preview(project);
+                    RequireDefinition();
                     if (after.NeedsGeneration) throw new InvalidOperationException("Automatic Atlas sources/rules changed during generation; outputs rolled back.");
                     foreach (var change in changes) change.Guid = AssetDatabase.AssetPathToGUID(change.Path);
                     return plan;
                 }
                 catch (Exception error)
                 {
-                    configuration.Outputs = oldRecords;
-                    try { writes.Restore(); }
+                    try
+                    {
+                        writes.Restore();
+                        if (configuration && ReferenceEquals(configuration.Outputs, writtenRecords)) configuration.Outputs = oldRecords;
+                    }
                     catch (Exception rollback) { throw new AggregateException("Atlas generation failed and rollback could not complete; changed/unknown content was preserved. Restore registered outputs before building.", error, rollback); }
                     throw;
                 }

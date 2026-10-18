@@ -55,7 +55,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.Throws<ArgumentException>(() => resolver(project.ProjectId, "entry.txt", null));
             var duplicate = ScriptableObject.CreateInstance<ResourceProject>();
             duplicate.ProjectId = project.ProjectId;
-            duplicate.AssetRootGuid = project.AssetRootGuid;
+            duplicate.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content") });
             duplicate.Groups = project.Groups;
             AssetDatabase.CreateAsset(duplicate, fixture.Folder + "/DuplicateProject.asset");
             Assert.Throws<InvalidOperationException>(() => resolver(project.ProjectId, "moved", null));

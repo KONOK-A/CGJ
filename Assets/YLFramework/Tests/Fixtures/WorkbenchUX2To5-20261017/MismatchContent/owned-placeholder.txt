@@ -1,0 +1,1 @@
+Owned fixture placeholder. This directory only represents an intentionally different source root for Recipe-ownership mismatch coverage; it is not built or published.

@@ -152,7 +152,7 @@ namespace YLFramework.Tests.ResourceEditor
         {
             var project = ScriptableObject.CreateInstance<ResourceProject>();
             project.ProjectId = "yl-editor-" + Guid.NewGuid().ToString("N");
-            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(root);
+            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(root) });
             project.Groups = new List<ResourceGroup> { new() { Id = "main", Selections = new List<ResourceSelection>
                 { new() { Guid = AssetDatabase.AssetPathToGUID(selection), Extensions = new[] { ".bytes" } } } } };
             AssetDatabase.CreateAsset(project, folder + "/" + name + ".asset");

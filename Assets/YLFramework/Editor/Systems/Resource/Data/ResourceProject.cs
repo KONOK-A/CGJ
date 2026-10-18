@@ -11,8 +11,9 @@ namespace YLFramework.Editor.Resource
     {
         public string ProjectId;
         public string DisplayName;
-        [Tooltip("资源根文件夹的 Unity GUID；依赖必须位于该根内，脚本与引擎内置资源除外。")]
-        public string AssetRootGuid;
+        [Tooltip("允许选择源资源的文件夹。登记目录不会自动选择其中的资源；由 Group 中的资源条目决定构建内容。")]
+        public List<ResourceSourceDirectory> SourceDirectories = new();
+
         [Tooltip("仅选择Bundle压缩方式；StrictMode及身份/完整性验证始终启用。Lz4适合日常加载，Lzma侧重交付体积，Uncompressed用于明确测量或调试。")]
         public ResourceCompression Compression;
         [Tooltip("None 保留原始交付；加密覆盖全部 Bundle 与二进制 root manifest，仅支持 Windows x64 Editor/Mono。密钥不保存于工程。")]
@@ -23,6 +24,14 @@ namespace YLFramework.Editor.Resource
         public ResourceAtlasConfiguration AutomaticAtlases;
         [SerializeField, HideInInspector] internal string AutomaticAtlasConfigurationGuid;
         public List<ResourceGroup> Groups = new();
+    }
+
+    [Serializable]
+    public sealed class ResourceSourceDirectory
+    {
+        public string Guid;
+        [Tooltip("默认加载地址的固定前缀。留空使用目录内相对路径；修改会影响下次构建，不会改写历史发布或自动增加别名。")]
+        public string AddressPrefix = "";
     }
 
     public enum ResourcePacking { Together, PerAsset }

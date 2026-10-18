@@ -67,7 +67,7 @@ namespace YLFramework.Core.Editor.Tests
                 project = ScriptableObject.CreateInstance<ResourceProject>();
                 project.ProjectId = YLCoreSmokeModule.Project;
                 project.DisplayName = "Core Resource Fixture";
-                project.AssetRootGuid = AssetDatabase.AssetPathToGUID(root);
+                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(root) });
                 AssetDatabase.CreateAsset(project, projectPath);
                 AddBundle(project, "views", viewPath);
                 AddBundle(project, "panels", panelPath);
@@ -77,7 +77,8 @@ namespace YLFramework.Core.Editor.Tests
                 AssetDatabase.SaveAssetIfDirty(project);
             }
 
-            Require(project.ProjectId == YLCoreSmokeModule.Project && project.AssetRootGuid == AssetDatabase.AssetPathToGUID(root),
+            Require(project.ProjectId == YLCoreSmokeModule.Project && project.SourceDirectories != null && project.SourceDirectories.Count == 1 &&
+                project.SourceDirectories.Any(x => x != null && x.Guid == AssetDatabase.AssetPathToGUID(root) && x.AddressPrefix == ""),
                 "Existing project identity does not match; it was not overwritten.");
             Require(project.Groups != null && project.Groups.Count == 4, "Unexpected fixture groups.");
             ValidateBundle(project, "views", viewPath);

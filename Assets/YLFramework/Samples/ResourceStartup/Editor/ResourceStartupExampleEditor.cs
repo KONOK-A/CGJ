@@ -125,7 +125,7 @@ namespace YLFramework.Samples.Resource.Editor
             var project = CreateInstance<ResourceProject>();
             project.ProjectId = "startup-example-" + Guid.NewGuid().ToString("N").Substring(0, 8);
             project.DisplayName = "Resource Startup Example";
-            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(content);
+            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(content) });
             project.Groups.Add(new ResourceGroup
             {
                 Id = "startup-content",

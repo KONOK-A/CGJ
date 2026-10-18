@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Services.Resource;
@@ -11,9 +12,37 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource
 {
+    public enum ResourcePreflightState { StaticBlocked, StaticReady, AtlasPreparationRequired, Complete, Failed }
+
+    /// <summary>同一正式预检流的只读结论；StaticReady不是完整输入、密钥或制品验证。</summary>
+    public sealed class ResourcePreflightResult
+    {
+        public ResourcePreflightState State { get; }
+        public string Summary { get; }
+        public Exception Error { get; }
+        public string ProjectGuid { get; }
+        public string ProjectId { get; }
+        public string Platform { get; }
+        public string AppContentCompatibilityId { get; }
+        internal ResourcePreflightResult(ResourcePreflightState state, string summary, Exception error,
+            ResourceProject project, BuildTarget target, string app)
+        {
+            State = state; Summary = summary; Error = error; Platform = target.ToString(); AppContentCompatibilityId = app;
+            ProjectGuid = project ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : null;
+            ProjectId = project ? project.ProjectId : null;
+        }
+    }
+
     /// <summary>构建、发布和生成的独立结果；失败首因不会被后续生成或 UI 操作覆盖。</summary>
     public sealed class ResourceEditorBuildReport
     {
+        public string ProjectGuid { get; internal set; }
+        public string ProjectId { get; internal set; }
+        public string Platform { get; internal set; }
+        public string AppContentCompatibilityId { get; internal set; }
+        public string Operation { get; internal set; }
+        public bool ForceRebuild { get; internal set; }
+        public string ReferenceDirectory { get; internal set; }
         public ResourceBuildInvocation Invocation { get; internal set; }
         public ResourceBuildResult Build { get; internal set; }
         public ResourceRelease Release { get; internal set; }
@@ -69,11 +98,19 @@ namespace YLFramework.Editor.Resource
             ResourceBuildInvocation input;
             try
             {
+                ResourceBuildProgress.RejectReentry();
                 cancellation.ThrowIfCancellationRequested();
-                input = ResolveRecipe(recipe);
-                if (EditorUtility.IsDirty(recipe)) throw new InvalidOperationException("请先显式保存 ResourceBuildRecipe，再执行。");
+                input = ResolveSavedRecipe(recipe);
             }
-            catch (Exception error) { return new ResourceEditorBuildReport { BuildError = error }; }
+            catch (Exception error)
+            {
+                var knownProject = recipe ? recipe.Project : null;
+                return Finish(new ResourceEditorBuildReport { BuildError = error, Operation = "ExecuteRecipe",
+                    ProjectGuid = knownProject ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(knownProject)) : null,
+                    ProjectId = knownProject ? knownProject.ProjectId : null, Platform = recipe ? recipe.Target.ToString() : null,
+                    AppContentCompatibilityId = recipe ? recipe.AppContentCompatibilityId : null, ForceRebuild = recipe && recipe.ForceRebuild,
+                    GenerationRequested = recipe && recipe.GenerateReferences, ReferenceDirectory = recipe ? recipe.ReferenceDirectory : null });
+            }
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(input.ProjectGuid));
             var report = BuildOnlyForTarget(project, input.Target, input.AppContentCompatibilityId, input.ForceRebuild,
                 cancellation, provider, input);
@@ -81,10 +118,17 @@ namespace YLFramework.Editor.Resource
             report.GenerationRequested = input.GenerateReferences;
             if (report.Build != null && input.Action == ResourceBuildAction.BuildAndPublish)
                 PublishReport(report, input.AppContentCompatibilityId, input.GenerateReferences, input.ReferenceDirectory, cancellation, provider);
-            return report;
+            return Finish(report);
         }
 
-        private static void RequireRecipe(ResourceBuildRecipe recipe)
+        private static ResourceBuildInvocation ResolveSavedRecipe(ResourceBuildRecipe recipe)
+        {
+            var input = ResolveRecipe(recipe);
+            if (EditorUtility.IsDirty(recipe)) throw new InvalidOperationException("请先显式保存 ResourceBuildRecipe，再执行。");
+            return input;
+        }
+
+        internal static void RequireRecipe(ResourceBuildRecipe recipe)
         {
             var path = recipe ? AssetDatabase.GetAssetPath(recipe) : "";
             if (!path.StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsOpenForEdit(recipe))
@@ -96,7 +140,27 @@ namespace YLFramework.Editor.Resource
         /// <summary>仅保存明确归属的 Assets 定义，不保存用户场景，不经过链接路径。</summary>
         public static void SaveProject(ResourceProject project)
         {
-            RequireEditableProject(project); AssetDatabase.SaveAssetIfDirty(project);
+            RequireEditableProject(project);
+            AssetDatabase.SaveAssetIfDirty(project);
+        }
+
+        /// <summary>编辑来源目录并支持Undo。允许保留待修正配置；统一解析/构建会报告失效范围，不删除条目或源文件。</summary>
+        public static void SetSourceDirectories(ResourceProject project, IEnumerable<ResourceSourceDirectory> directories)
+        {
+            RequireEditableProject(project);
+            var values = directories?.Select(x => new ResourceSourceDirectory { Guid = x?.Guid, AddressPrefix = x?.AddressPrefix ?? "" }).ToArray()
+                ?? throw new ArgumentNullException(nameof(directories));
+            if (values.Length > 256) throw new ArgumentException("资源目录不能超过256个。", nameof(directories));
+            BeginEdit("修改资源目录");
+            using var serialized = new SerializedObject(project);
+            var entries = serialized.FindProperty("SourceDirectories"); entries.arraySize = values.Length;
+            for (var index = 0; index < values.Length; index++)
+            {
+                var entry = entries.GetArrayElementAtIndex(index);
+                entry.FindPropertyRelative("Guid").stringValue = values[index].Guid ?? "";
+                entry.FindPropertyRelative("AddressPrefix").stringValue = values[index].AddressPrefix;
+            }
+            serialized.ApplyModifiedProperties();
         }
 
         /// <summary>显式准备本Project选择的Atlas。Unity会写回其打包缓存，须在正式构建冻结输入前调用；不处理全工程图集。</summary>
@@ -135,6 +199,41 @@ namespace YLFramework.Editor.Resource
 
         private static string PreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId, IResourceContentKeyProvider provider)
         {
+            var result = InspectPreflightForTarget(project, target, appContentCompatibilityId, provider, true);
+            if (result.Error != null) ExceptionDispatchInfo.Capture(result.Error).Throw();
+            return result.Summary;
+        }
+
+        public static ResourcePreflightResult InspectPreflight(ResourceProject project, string appContentCompatibilityId, IResourceContentKeyProvider provider = null) =>
+            InspectPreflightForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, provider, true);
+
+        /// <summary>只做低成本静态门禁；不取key、不建Map、不预览图集、不扫描Workspace/历史或做SHA。</summary>
+        public static ResourcePreflightResult CheckReadiness(ResourceProject project, string appContentCompatibilityId) =>
+            InspectPreflightForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, null, false);
+
+        public static ResourcePreflightResult InspectRecipePreflight(ResourceBuildRecipe recipe, bool full = false, IResourceContentKeyProvider provider = null)
+        {
+            try
+            {
+                var input = ResolveSavedRecipe(recipe);
+                return InspectPreflightForTarget(recipe.Project, input.Target, input.AppContentCompatibilityId, provider, full);
+            }
+            catch (Exception error) { return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
+                error.Message, error, recipe ? recipe.Project : null, recipe ? recipe.Target : EditorUserBuildSettings.activeBuildTarget,
+                recipe ? recipe.AppContentCompatibilityId : null); }
+        }
+
+        private static ResourcePreflightResult InspectPreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
+            IResourceContentKeyProvider provider, bool full)
+        {
+            try { return PreflightCore(project, target, appContentCompatibilityId, provider, full); }
+            catch (Exception error) { return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
+                error.Message, error, project, target, appContentCompatibilityId); }
+        }
+
+        private static ResourcePreflightResult PreflightCore(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
+            IResourceContentKeyProvider provider, bool full)
+        {
             ResourceBundleBuilder.ValidateEditor(target);
             ResourceBundleBuilder.RejectLoadedBundles();
             RequireEditableProject(project);
@@ -142,27 +241,37 @@ namespace YLFramework.Editor.Resource
             _ = new ResourceAddress(appContentCompatibilityId, "compatibility");
             if (appContentCompatibilityId.Length > 128) throw new ArgumentException("AppContentCompatibilityId exceeds its schema bound.");
             ResourceBundleBuilder.ValidateContentPolicy(project.ContentEncryption, project.ContentKeyId, target.ToString());
-            if (project.ContentEncryption != ResourceContentEncryption.None)
+            var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+            if (full && project.ContentEncryption != ResourceContentEncryption.None)
             {
                 var copy = ResourceBundleBuilder.CopyContentKey(ContentProvider(project.ContentEncryption, project.ProjectId, project.ContentKeyId, provider), project.ProjectId, project.ContentKeyId);
                 Array.Clear(copy, 0, copy.Length);
+                if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                    throw new InvalidOperationException("资源目录或生成配置在密钥检查期间发生变化。本次操作已停止，请检查并重新执行；已保存的配置修改未被撤销。");
             }
             if (ResourceAtlasGenerator.IsConfigured(project))
             {
                 if (EditorUtility.IsDirty(project.AutomaticAtlases)) throw new InvalidOperationException("请先保存自动图集规则，再预检。 ");
-                var atlasPlan = ResourceAtlasGenerator.Preview(project);
-                if (atlasPlan.NeedsGeneration) return "自动图集需要生成/更新；此预检未写入，尚未进行最终依赖/Workspace 检查。\n" + atlasPlan +
-                    "\n正式 Build 会先执行生成与准备，再冻结输入并进行完整依赖分析；生成失败不会继续构建。";
+                if (full)
+                {
+                    var atlasPlan = ResourceAtlasGenerator.Preview(project);
+                    if (atlasPlan.NeedsGeneration) return new ResourcePreflightResult(ResourcePreflightState.AtlasPreparationRequired,
+                        "自动图集需要生成/更新；此预检未写入，尚未进行最终依赖/Workspace 检查。\n" + atlasPlan +
+                        "\n正式 Build 会先执行生成与准备，再冻结输入并进行完整依赖分析；生成失败不会继续构建。", null, project, target, appContentCompatibilityId);
+                }
             }
+            if (!full) return new ResourcePreflightResult(ResourcePreflightState.StaticReady,
+                "配置基础检查通过，尚未检查资源依赖、图集或构建输出，也未读取密钥。正式执行时会继续检查当前输入。", null, project, target, appContentCompatibilityId);
             var map = ResourceBuildMap.Create(project);
             _ = ResourceBundleBuilder.DescribeSubAssets(map);
             var workspace = ResourceBundleBuilder.PreflightWorkspace(project, target);
             var root = ResourcePublisher.Preflight(project, target);
-            return "ProjectId=" + map.ProjectId + " / GUID=" + map.ProjectGuid + "\n" +
+            var summary = "ProjectId=" + map.ProjectId + " / GUID=" + map.ProjectGuid + "\n" +
                 "平台=" + target + " / Unity=" + Application.unityVersion + " / App=" + appContentCompatibilityId + "\n" +
                 "交付=" + project.ContentEncryption + (project.ContentEncryption == ResourceContentEncryption.None ? "" : " / KeyId=" + project.ContentKeyId) + "\n" +
                 "资产=" + map.Assets.Count + " / Group=" + map.Groups.Count + " / Bundle=" + map.Bundles.Count + "\nWorkspace=" + workspace + "\n发布根=" + root +
                 "\n仅本地/内部受控发布，不写 StreamingAssets，不执行 Runtime 激活；同步 native 构建期间不能中途取消。";
+            return new ResourcePreflightResult(ResourcePreflightState.Complete, summary, null, project, target, appContentCompatibilityId);
         }
 
         /// <summary>错误分阶段返回；生成失败不改变已成功的版本。取消仅影响本次构建/发布的提交前检查点。</summary>
@@ -170,28 +279,37 @@ namespace YLFramework.Editor.Resource
             bool generateReferences = false, string directory = "Assets/YLFrameworkData", bool forceRebuild = false, CancellationToken cancellation = default,
             IResourceContentKeyProvider provider = null)
         {
-            var report = BuildOnly(project, appContentCompatibilityId, forceRebuild, cancellation, provider);
+            var report = BuildOnlyForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, forceRebuild, cancellation, provider);
+            report.Operation = "BuildAndPublish"; report.ReferenceDirectory = directory;
             report.GenerationRequested = generateReferences;
             if (report.Build != null) PublishReport(report, appContentCompatibilityId, generateReferences, directory, cancellation, provider);
-            return report;
+            return Finish(report);
         }
 
         /// <summary>仅构建已验证 Workspace，不发布、不生成、不初始化 Runtime。</summary>
         public static ResourceEditorBuildReport BuildOnly(ResourceProject project, string appContentCompatibilityId,
             bool forceRebuild = false, CancellationToken cancellation = default, IResourceContentKeyProvider provider = null)
-            => BuildOnlyForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, forceRebuild, cancellation, provider);
+            => Finish(BuildOnlyForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, forceRebuild, cancellation, provider));
 
         private static ResourceEditorBuildReport BuildOnlyForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             bool forceRebuild, CancellationToken cancellation, IResourceContentKeyProvider provider, ResourceBuildInvocation invocation = null)
         {
-            var report = new ResourceEditorBuildReport();
+            var report = new ResourceEditorBuildReport { ProjectGuid = project ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : null,
+                ProjectId = project ? project.ProjectId : null, Platform = target.ToString(), AppContentCompatibilityId = appContentCompatibilityId,
+                Operation = invocation?.Action.ToString() ?? "BuildOnly", ForceRebuild = forceRebuild, ReferenceDirectory = invocation?.ReferenceDirectory };
             var elapsed = Stopwatch.StartNew();
             try
             {
+                ResourceBuildProgress.RejectReentry();
                 cancellation.ThrowIfCancellationRequested();
+                RequireEditableProject(project);
+                var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+                ResourceBuildProgress.Notify(ResourceBuildPhase.PreflightStarted, project, target);
                 var watch = Stopwatch.StartNew();
                 try { PreflightForTarget(project, target, appContentCompatibilityId, provider); }
                 finally { report.PreflightMilliseconds = watch.Elapsed.TotalMilliseconds; }
+                if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                    throw new InvalidOperationException("资源目录或生成配置在预检期间发生变化，未开始构建。请核对当前配置后重新执行。");
                 if (invocation != null && (project.ProjectId != invocation.ProjectId || project.Compression != invocation.Compression ||
                     project.ContentEncryption != invocation.ContentEncryption ||
                     project.ContentEncryption != ResourceContentEncryption.None && project.ContentKeyId != invocation.ContentKeyId))
@@ -213,9 +331,11 @@ namespace YLFramework.Editor.Resource
             bool generateReferences = false, string directory = "Assets/YLFrameworkData", CancellationToken cancellation = default, IResourceContentKeyProvider provider = null)
         {
             if (build == null) throw new ArgumentNullException(nameof(build));
-            var report = new ResourceEditorBuildReport { Build = build, GenerationRequested = generateReferences };
+            var report = new ResourceEditorBuildReport { Build = build, GenerationRequested = generateReferences, ProjectGuid = build.Map.ProjectGuid,
+                ProjectId = build.Map.ProjectId, Platform = build.Platform, AppContentCompatibilityId = appContentCompatibilityId,
+                Operation = "PublishVerifiedBuild", ReferenceDirectory = directory };
             PublishReport(report, appContentCompatibilityId, generateReferences, directory, cancellation, provider);
-            return report;
+            return Finish(report);
         }
 
         private static void PublishReport(ResourceEditorBuildReport report, string app, bool generate, string directory, CancellationToken cancellation, IResourceContentKeyProvider provider)
@@ -223,8 +343,12 @@ namespace YLFramework.Editor.Resource
             var elapsed = Stopwatch.StartNew();
             try
             {
+                ResourceBuildProgress.RejectReentry();
                 var watch = Stopwatch.StartNew();
-                try { report.Release = ResourcePublisher.PublishWithContentKey(report.Build, app,
+                try
+                {
+                    ResourceBuildProgress.Notify(ResourceBuildPhase.PublicationStarted, report.ProjectGuid, report.ProjectId, report.Platform);
+                    report.Release = ResourcePublisher.PublishWithContentKey(report.Build, app,
                     ContentProvider(report.Build.ContentEncryption, report.Build.Map.ProjectId, report.Build.ContentKeyId, provider), cancellation); }
                 catch (Exception error) { report.PublicationError = error; return; }
                 finally { report.PublicationMilliseconds = watch.Elapsed.TotalMilliseconds; }
@@ -232,6 +356,7 @@ namespace YLFramework.Editor.Resource
                 watch.Restart();
                 try
                 {
+                    ResourceBuildProgress.Notify(ResourceBuildPhase.ReferenceGenerationStarted, report.ProjectGuid, report.ProjectId, report.Platform);
                     var catalogs = PublishedCatalogs(app);
                     report.GeneratedProjects = catalogs.Select(x => x.ProjectId).ToList().AsReadOnly();
                     report.GenerationChanged = ResourceCodeGenerator.GenerateReferences(catalogs, directory);
@@ -240,6 +365,12 @@ namespace YLFramework.Editor.Resource
                 finally { report.GenerationMilliseconds = watch.Elapsed.TotalMilliseconds; }
             }
             finally { report.ElapsedMilliseconds += elapsed.Elapsed.TotalMilliseconds; }
+        }
+
+        private static ResourceEditorBuildReport Finish(ResourceEditorBuildReport report)
+        {
+            ResourceBuildProgress.Notify(ResourceBuildPhase.AttemptFinished, report.ProjectGuid, report.ProjectId, report.Platform);
+            return report;
         }
 
         public const string ContentKeyEnvironmentVariable = "YL_RESOURCE_CONTENT_KEY";
@@ -342,14 +473,15 @@ namespace YLFramework.Editor.Resource
         {
             RequireEditableProject(project);
             if (groupIndex < 0 || groupIndex >= project.Groups.Count || assets == null || assets.Length == 0) throw new ArgumentException("请选择 Group 和有效资产。");
-            var root = AssetDatabase.GUIDToAssetPath(project.AssetRootGuid);
-            if (!AssetDatabase.IsValidFolder(root)) throw new InvalidOperationException("请先选择项目资源根。");
+            var directories = ResourceProjectPaths.Resolve(project);
+            var generated = ResourceProjectPaths.GeneratedDirectory(project);
             var paths = assets.Select(AssetDatabase.GetAssetPath).ToArray();
             foreach (var path in paths)
             {
-                if (string.IsNullOrEmpty(path) || (path != root && !path.StartsWith(root + "/", StringComparison.Ordinal)) ||
-                    new[] { ".cs", ".dll", ".asmdef", ".asmref", ".meta" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("选择不属于本 Project 的可打包资源根：" + path);
+                directories.RequireSource(path);
+                if (ResourceProjectPaths.Contains(generated, path)) throw new InvalidOperationException("自动图集输出由规则加入Group，不能手工添加生成目录中的文件：" + path);
+                if (new[] { ".cs", ".dll", ".asmdef", ".asmref", ".meta" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("这个文件不能作为资源条目添加：" + path);
                 ResourceBuildOperation.ValidateAssetPath(path);
             }
             var guids = paths.Select(AssetDatabase.AssetPathToGUID).Distinct(StringComparer.Ordinal).ToArray();

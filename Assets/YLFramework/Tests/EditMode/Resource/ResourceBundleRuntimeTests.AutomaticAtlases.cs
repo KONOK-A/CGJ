@@ -30,7 +30,7 @@ namespace YLFramework.Tests.ResourceBuild
             var project = fixture.Project;
             project.Groups.Add(new ResourceGroup { Id = "automatic-atlas" });
             EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
-            var configuration = ResourceAtlasGenerator.CreateConfiguration(project, "GeneratedAtlases");
+            var configuration = ResourceAtlasGenerator.CreateConfiguration(project, fixture.Folder + "/Content", "GeneratedAtlases");
             configuration.Rules.Add(new ResourceAtlasRule { Id = "native", GroupId = "automatic-atlas", Address = "atlases/generated",
                 Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(source) } });
             EditorUtility.SetDirty(configuration); AssetDatabase.SaveAssetIfDirty(configuration);

@@ -42,9 +42,9 @@ namespace YLFramework.Editor.Resource
             DirectoryPath = ValidateOwnership(project);
             var changes = new List<ResourceAtlasChange>();
             var ruleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var addresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var addresses = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
             var allSources = new HashSet<string>(StringComparer.Ordinal);
-            var root = AssetDatabase.GUIDToAssetPath(configuration.RootGuid);
+            var directories = ResourceProjectPaths.Resolve(project, validateProjects: false);
             if (configuration.Rules == null || configuration.Rules.Count > 256) throw new InvalidOperationException("Automatic Atlas rules must be bounded (0..256).");
             foreach (var rule in configuration.Rules)
             {
@@ -58,7 +58,7 @@ namespace YLFramework.Editor.Resource
                     !Enum.IsDefined(typeof(TextureImporterCompression), rule.Compression) || !new[] { 2, 4, 8 }.Contains(rule.Padding) ||
                     rule.MaxTextureSize < 32 || rule.MaxTextureSize > 8192 || (rule.MaxTextureSize & (rule.MaxTextureSize - 1)) != 0)
                     throw new InvalidOperationException("Invalid automatic Atlas settings: " + rule.Id);
-                var sources = CollectSources(rule, root, DirectoryPath);
+                var sources = CollectSources(rule, directories, DirectoryPath);
                 foreach (var source in sources)
                     if (!allSources.Add(source)) throw new InvalidOperationException("A Sprite texture is selected by multiple automatic Atlas rules: " + source);
                 var buckets = sources.GroupBy(path => rule.Grouping == ResourceAtlasGrouping.Together ? "" :
@@ -68,10 +68,14 @@ namespace YLFramework.Editor.Resource
                     if (changes.Count >= 1024) throw new InvalidOperationException("Automatic Atlas output limit exceeded (1024).");
                     var key = rule.Id + (bucket.Key.Length == 0 ? "" : "/" + AssetDatabase.AssetPathToGUID(bucket.Key));
                     var fileName = key.Replace('/', '_') + ".spriteatlasv2";
-                    var address = rule.Address + (bucket.Key.Length == 0 || bucket.Key == root ? "" : "/" + bucket.Key.Substring(root.Length + 1));
+                    var folderAddress = bucket.Key.Length == 0 ? "" : directories.DefaultAddress(bucket.Key);
+                    var address = rule.Address + (folderAddress.Length == 0 ? "" : "/" + folderAddress);
                     _ = new ResourceAddress(project.ProjectId, address);
-                    if (!addresses.Add(address)) throw new InvalidOperationException("Automatic Atlas address conflict: " + address);
                     var paths = bucket.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    if (addresses.TryGetValue(address, out var previous)) throw new InvalidOperationException(
+                        "自动图集输出地址冲突 (Automatic Atlas address conflict)：" + address + "\n" + string.Join("\n", previous) + "\n" + string.Join("\n", paths) +
+                        "\n请为来源目录设置不同的地址前缀，或修改规则的输出地址。");
+                    addresses.Add(address, paths);
                     var sprites = paths.SelectMany(path => AssetDatabase.LoadAllAssetsAtPath(path).OfType<Sprite>()).ToArray();
                     if (sprites.Length == 0 || sprites.Any(x => string.IsNullOrEmpty(x.name)) || sprites.GroupBy(x => x.name, StringComparer.Ordinal).Any(x => x.Count() != 1))
                         throw new InvalidOperationException("Automatic Atlas requires nonempty sprites with unique names: " + rule.Id);
@@ -99,16 +103,16 @@ namespace YLFramework.Editor.Resource
             Changes = changes.AsReadOnly();
         }
 
-        private static string[] CollectSources(ResourceAtlasRule rule, string root, string output)
+        private static string[] CollectSources(ResourceAtlasRule rule, ResourceProjectPaths directories, string output)
         {
-            var candidates = SourceCandidates(rule, root, output);
+            var candidates = SourceCandidates(rule, directories, output);
             foreach (var source in rule.Sources.Where(x => x is Texture2D))
                 if (((TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(source))).textureType != TextureImporterType.Sprite)
                     throw new InvalidOperationException("Explicit automatic Atlas textures must already be imported as Sprite: " + AssetDatabase.GetAssetPath(source));
             return candidates.Where(path => AssetImporter.GetAtPath(path) is TextureImporter importer && importer.textureType == TextureImporterType.Sprite).ToArray();
         }
 
-        internal static string[] SourceCandidates(ResourceAtlasRule rule, string root, string output)
+        internal static string[] SourceCandidates(ResourceAtlasRule rule, ResourceProjectPaths directories, string output)
         {
             if (rule.Sources == null || rule.Sources.Length == 0 || rule.Sources.Length > 16384)
                 throw new InvalidOperationException("Atlas rule requires a bounded nonempty source collection: " + rule.Id);
@@ -117,9 +121,9 @@ namespace YLFramework.Editor.Resource
             {
                 if (!source) throw new InvalidOperationException("Missing automatic Atlas source: " + rule.Id);
                 var path = AssetDatabase.GetAssetPath(source);
-                if (!Within(root, path) || path == output || Within(output, path) || Within(path, output))
-                    throw new InvalidOperationException("Atlas source must be within the dedicated root and must not overlap its output: " + path);
-                ResourceBuildOperation.RejectLinks(path);
+                directories.RequireSource(path);
+                if (ResourceProjectPaths.Overlaps(path, output))
+                    throw new InvalidOperationException("Atlas source must not overlap its output: " + path);
                 if (AssetDatabase.IsValidFolder(path))
                 {
                     foreach (var candidate in AssetDatabase.FindAssets("t:Texture2D", new[] { path }).Select(AssetDatabase.GUIDToAssetPath))
@@ -132,11 +136,34 @@ namespace YLFramework.Editor.Resource
             // 必须在筛选 Sprite 之前拒绝未保存状态，否则内存 Importer 与磁盘输入指纹可能描述不同闭包。
             foreach (var path in paths)
             {
-                ResourceBuildOperation.RejectLinks(path);
+                directories.RequireSource(path);
                 if (EditorUtility.IsDirty(AssetImporter.GetAtPath(path)) || EditorUtility.IsDirty(AssetDatabase.LoadMainAssetAtPath(path)))
                     throw new InvalidOperationException("Unsaved automatic Atlas source/importer; save or revert it explicitly: " + path);
             }
             return paths.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }
+
+        internal static string ResolveGenerationParent(string guid)
+        {
+            if (string.IsNullOrEmpty(guid))
+                throw new InvalidOperationException("自动图集缺少明确登记的生成父目录 GUID；不会从来源目录推断或接管生成范围。");
+            if (guid.Length != 32 || guid.Any(x => !Uri.IsHexDigit(x)))
+                throw new InvalidOperationException("图集生成父目录需要有效的 Unity GUID：" + guid);
+            var path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(path) || path != "Assets" && !path.StartsWith("Assets/", StringComparison.Ordinal) ||
+                path.IndexOf('\\') >= 0 || path.Split('/').Any(x => x.Length == 0 || x == "." || x == "..") ||
+                !AssetDatabase.IsValidFolder(path) || AssetDatabase.AssetPathToGUID(path) != guid ||
+                ResourceProjectPaths.Contains("Assets/StreamingAssets", path))
+                throw new InvalidOperationException("图集生成父目录失效或路径不受支持；请选择 Assets 根目录或现有子目录，不能使用 StreamingAssets 或 Packages：" + guid);
+            if (path == "Assets")
+            {
+                // 固定根只检查路径及祖先，避免把生成父目录解析变为全工程内容扫描。
+                for (var directory = new DirectoryInfo(Application.dataPath); directory != null; directory = directory.Parent)
+                    if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+                        throw new InvalidOperationException("拒绝符号链接/junction 图集生成父目录：" + directory.FullName);
+            }
+            else ResourceBuildOperation.ValidateAssetPath(path);
+            return path;
         }
 
         internal static string ValidateOwnership(ResourceProject project)
@@ -144,21 +171,21 @@ namespace YLFramework.Editor.Resource
             ResourceEditorOperations.RequireEditableProject(project);
             var configuration = project.AutomaticAtlases;
             if (!ResourceAtlasGenerator.IsConfigured(project)) throw new InvalidOperationException("No registered automatic Atlas configuration.");
-            var root = AssetDatabase.GUIDToAssetPath(project.AssetRootGuid);
+            ResourceProjectPaths.Resolve(project);
+            var parent = ResolveGenerationParent(configuration.GenerationParentGuid);
             var configurationPath = AssetDatabase.GetAssetPath(configuration);
             var directory = System.IO.Path.GetDirectoryName(configurationPath)?.Replace('\\', '/');
             if (!File.Exists(configurationPath) || !File.Exists(configurationPath + ".meta") ||
                 configuration.ConfigurationMetaHash != HashFile(configurationPath + ".meta"))
                 throw new InvalidOperationException("Missing or externally modified automatic Atlas configuration/meta: " + configurationPath);
             if (configuration.ProjectGuid != AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) ||
-                configuration.RootGuid != project.AssetRootGuid || !AssetDatabase.IsValidFolder(root) ||
-                !Within(root, directory) || System.IO.Path.GetDirectoryName(directory)?.Replace('\\', '/') != root ||
+                !AssetDatabase.IsValidFolder(parent) || !ResourceProjectPaths.Contains(parent, directory) ||
+                System.IO.Path.GetDirectoryName(directory)?.Replace('\\', '/') != parent ||
                 configurationPath != directory + "/AutomaticAtlases.asset" || configuration.ConfigurationGuid != AssetDatabase.AssetPathToGUID(configurationPath) ||
                 configuration.DirectoryGuid != AssetDatabase.AssetPathToGUID(directory) || configuration.DirectoryMetaHash != HashFile(directory + ".meta"))
                 throw new InvalidOperationException("Automatic Atlas configuration/root ownership conflict: " + configurationPath);
             ResourceBuildOperation.ValidateAssetPath(directory);
             ResourceBuildOperation.RejectLinks(directory + ".meta");
-            ResourceBuildMap.ValidateProjects(project, root);
             if (!AssetDatabase.IsOpenForEdit(configuration)) throw new InvalidOperationException("Automatic Atlas configuration is not editable.");
             if (configuration.Outputs == null || configuration.Outputs.Count > 1024 || configuration.Outputs.Any(x => x == null) ||
                 configuration.Outputs.Select(x => x.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.Outputs.Count ||

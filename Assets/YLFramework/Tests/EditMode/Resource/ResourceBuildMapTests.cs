@@ -253,9 +253,9 @@ namespace YLFramework.Tests.ResourceBuild
             JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new
             {
                 ProjectId = "yl-test-" + Guid.NewGuid().ToString("N"),
-                AssetRootGuid = AssetDatabase.AssetPathToGUID(folder + "/Content"),
                 Groups = groups
             }), project);
+            ((ResourceProject)project).SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
             AssetDatabase.CreateAsset(project, folder + "/Project-" + Guid.NewGuid().ToString("N") + ".asset");
             return project;
         }

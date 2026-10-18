@@ -128,7 +128,7 @@ namespace YLFramework.Tests.ResourceBuild
             ChangeEntry(state, 0);
             var project = ScriptableObject.CreateInstance<ResourceProject>();
             project.ProjectId = state.ProjectId;
-            project.AssetRootGuid = AssetDatabase.AssetPathToGUID(Content(state));
+            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(Content(state)) });
             project.Compression = ResourceCompression.Uncompressed;
             project.Groups.Add(Group(state, "entry", "entry.txt", "entry"));
             AssetDatabase.CreateAsset(project, state.Folder + "/Project.asset");

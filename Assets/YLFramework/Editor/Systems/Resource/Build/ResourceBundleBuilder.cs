@@ -6,7 +6,10 @@ using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Compilation;
@@ -175,6 +178,7 @@ namespace YLFramework.Editor.Resource
             CancellationToken cancellation, Func<string, AssetBundleBuild[], BuildAssetBundleOptions, BuildTarget, AssetBundleManifest> pipeline,
             IResourceContentKeyProvider provider)
         {
+            ResourceBuildProgress.RejectReentry();
             if (building) throw new InvalidOperationException("An AssetBundle build is already running; reentrant builds are not allowed.");
             ValidateEditor(target);
             cancellation.ThrowIfCancellationRequested();
@@ -192,17 +196,30 @@ namespace YLFramework.Editor.Resource
                 var encryption = project.ContentEncryption;
                 var keyId = encryption == ResourceContentEncryption.None ? null : project.ContentKeyId;
                 var keyProject = project.ProjectId;
+                var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+                void RequireDirectoryIdentity()
+                {
+                    if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                        throw new InvalidOperationException("Resource source directories/Atlas configuration changed during key acquisition/preparation.");
+                }
                 if (encryption != ResourceContentEncryption.None)
                     contentKey = CopyContentKey(provider, keyProject, keyId);
+                RequireDirectoryIdentity();
                 RejectLoadedBundles();
+                ResourceBuildProgress.Notify(ResourceBuildPhase.AtlasPreparationStarted, project, target);
+                RequireDirectoryIdentity();
                 var atlasGeneration = ResourceAtlasGenerator.Generate(project, cancellation);
+                ResourceBuildProgress.Notify(ResourceBuildPhase.MapStarted, project, target);
                 var map = ResourceBuildMap.Create(project);
+                RequireDirectoryIdentity();
                 if (map.ProjectId != keyProject || project.ContentEncryption != encryption ||
                     encryption != ResourceContentEncryption.None && project.ContentKeyId != keyId)
                     throw new InvalidOperationException("Resource content identity changed during key acquisition/preparation.");
                 var mapMilliseconds = watch.Elapsed.TotalMilliseconds;
                 long sourceBytes = 0;
                 var inputWatch = Stopwatch.StartNew();
+                ResourceBuildProgress.Notify(ResourceBuildPhase.FingerprintStarted, map.ProjectGuid, map.ProjectId, target.ToString());
+                RequireDirectoryIdentity();
                 var settings = Settings(map, project, target, ref sourceBytes);
                 inputWatch.Stop();
                 var callbacks = UntrackedCallbacks();
@@ -211,6 +228,7 @@ namespace YLFramework.Editor.Resource
                 RejectLoadedBundles();
                 inputWatch.Start();
                 var fingerprint = Fingerprint(map, settings, ref sourceBytes);
+                RequireDirectoryIdentity();
                 inputWatch.Stop();
                 cancellation.ThrowIfCancellationRequested();
                 using var locked = workspace.AcquireLock(ref record);
@@ -257,6 +275,8 @@ namespace YLFramework.Editor.Resource
                     workspace.BeginAttempt(record);
                     cancellation.ThrowIfCancellationRequested();
                     result.UnityBuildInvoked = true;
+                    ResourceBuildProgress.Notify(ResourceBuildPhase.NativeBuildStarted, map.ProjectGuid, map.ProjectId, target.ToString());
+                    RequireDirectoryIdentity();
                     var pipelineWatch = Stopwatch.StartNew();
                     generated = pipeline(workspace.Output, map.UnityBuilds(), options |
                         (result.ForcedRebuild ? BuildAssetBundleOptions.ForceRebuildAssetBundle : BuildAssetBundleOptions.None), target);
@@ -269,6 +289,7 @@ namespace YLFramework.Editor.Resource
                 result.BuildMilliseconds = watch.Elapsed.TotalMilliseconds;
                 watch.Restart();
                 workspace.ValidateContents(record);
+                ResourceBuildProgress.Notify(ResourceBuildPhase.ReadbackStarted, map.ProjectGuid, map.ProjectId, target.ToString());
                 var readback = Stopwatch.StartNew();
                 var built = ReadBack(map, workspace, cancellation, out var subAssets);
                 result.ReadbackMilliseconds = readback.Elapsed.TotalMilliseconds;
@@ -304,6 +325,7 @@ namespace YLFramework.Editor.Resource
                 }
                 else
                 {
+                    ResourceBuildProgress.Notify(ResourceBuildPhase.ContentEncodingStarted, map.ProjectGuid, map.ProjectId, target.ToString());
                     var encoding = Stopwatch.StartNew();
                     if (record.Complete) { record.Complete = false; workspace.Write(record); }
                     BuildDelivery(result, workspace, (ResourceBuildWorkspace.EncryptedOwnership)record, files, contentKey, cancellation);
@@ -339,6 +361,7 @@ namespace YLFramework.Editor.Resource
                 result.InputFingerprintMilliseconds = inputWatch.Elapsed.TotalMilliseconds;
                 result.ArtifactHashMilliseconds = hashWatch.Elapsed.TotalMilliseconds;
                 result.ElapsedMilliseconds = elapsed.Elapsed.TotalMilliseconds;
+                ResourceBuildProgress.Notify(ResourceBuildPhase.WorkspaceVerified, map.ProjectGuid, map.ProjectId, target.ToString());
                 return result;
             }
             finally
@@ -611,7 +634,7 @@ namespace YLFramework.Editor.Resource
             Add(data, ((int)Options(project)).ToString());
             Add(data, map.ProjectGuid);
             Add(data, map.ProjectId);
-            Add(data, project.AssetRootGuid);
+            Add(data, ResourceProjectPaths.SemanticIdentity(project));
             foreach (var group in project.Groups.OrderBy(x => x.Id, StringComparer.Ordinal))
             {
                 Add(data, group.Id);
@@ -677,7 +700,8 @@ namespace YLFramework.Editor.Resource
         {
             var data = new StringBuilder();
             Add(data, settings);
-            Add(data, map.AssetRoot);
+            foreach (var directory in map.SourceDirectories.OrderBy(x => x.Guid, StringComparer.Ordinal).ThenBy(x => x.AddressPrefix, StringComparer.Ordinal))
+            { Add(data, directory.Guid); Add(data, directory.Path); Add(data, directory.AddressPrefix); }
             foreach (var asset in map.Assets)
             {
                 Add(data, asset.AssetId);
@@ -696,13 +720,53 @@ namespace YLFramework.Editor.Resource
             foreach (var path in map.FingerprintPaths)
             {
                 Add(data, path);
-                Add(data, AssetDatabase.GetAssetDependencyHash(path).ToString());
+                var definition = path == AssetDatabase.GUIDToAssetPath(map.ProjectGuid);
+                // Project 的依赖 hash 含目录展示顺序；其真实字段/引用仍由定向规范化字节及各输入单独冻结。
+                if (!definition) Add(data, AssetDatabase.GetAssetDependencyHash(path).ToString());
                 var full = ResourceBuildMap.Absolute(path);
                 ResourceBuildOperation.RejectLinks(full);
-                Add(data, HashFile(full, ref bytes).Sha256);
+                Add(data, definition ? ProjectFileHash(full, ref bytes) : HashFile(full, ref bytes).Sha256);
                 if (File.Exists(full + ".meta")) Add(data, HashFile(full + ".meta", ref bytes).Sha256);
             }
             return HashText(data.ToString());
+        }
+
+        internal static string CanonicalDefinition(ResourceProject project)
+        {
+            if (!project) throw new ArgumentNullException(nameof(project));
+            if (project.SourceDirectories == null || project.SourceDirectories.Count == 0 || project.SourceDirectories.Any(x => x == null))
+                throw new InvalidOperationException("资源目录列表缺失、为空或包含空条目。");
+            var serialized = JObject.Parse(EditorJsonUtility.ToJson(project));
+            // EditorJsonUtility 在当前Unity为 ScriptableObject 输出 MonoBehaviour 包装层。
+            var definition = serialized["MonoBehaviour"] as JObject ?? serialized;
+            definition["SourceDirectories"] = new JArray(project.SourceDirectories.OrderBy(x => x.Guid, StringComparer.Ordinal)
+                .ThenBy(x => x.AddressPrefix ?? "", StringComparer.Ordinal)
+                .Select(x => new JObject { ["Guid"] = x.Guid, ["AddressPrefix"] = x.AddressPrefix ?? "" }));
+            return serialized.ToString(Formatting.None);
+        }
+
+        internal static string ProjectFileHash(string path, ref long bytes)
+        {
+            ResourceBuildOperation.RejectLinks(path);
+            var raw = File.ReadAllBytes(path);
+            bytes += raw.LongLength;
+            var text = Encoding.UTF8.GetString(raw);
+            var fields = Regex.Matches(text, @"(?m)^  SourceDirectories:[^\r\n]*(?:\r?\n|$)(?:  -[^\r\n]*(?:\r?\n|$)(?:    [^\r\n]*(?:\r?\n|$))*)*");
+            if (raw.SequenceEqual(Encoding.UTF8.GetBytes(text)) && fields.Count == 1)
+            {
+                var sources = fields[0];
+                var header = Regex.Match(sources.Value, @"\A  SourceDirectories:\r?\n").Value;
+                var records = Regex.Matches(sources.Value, @"(?m)^  - Guid: [0-9a-fA-F]{32}\r?\n    AddressPrefix:(?: (?:""(?:[^""\\\r\n]|\\(?:[""\\/bfnrt]|u[0-9a-fA-F]{4}))*""|[A-Za-z0-9_./-]*))?\r?\n")
+                    .Cast<Match>().Select(x => x.Value).ToArray();
+                var end = sources.Index + sources.Length;
+                // 只排序完整识别的当前记录；未知记录布局回退原始字节，其余 YAML 字节不作删减或规范化。
+                if (header.Length != 0 && records.Length != 0 && sources.Value == header + string.Concat(records) &&
+                    (end == text.Length || Regex.IsMatch(text.Substring(end), @"\A  [A-Za-z_][A-Za-z0-9_]*:")))
+                    raw = Encoding.UTF8.GetBytes(text.Substring(0, sources.Index) + header +
+                        string.Concat(records.OrderBy(x => x, StringComparer.Ordinal)) + text.Substring(end));
+            }
+            using var hash = SHA256.Create();
+            return Hex(hash.ComputeHash(raw));
         }
 
         private static void Add(StringBuilder builder, string value) => builder.Append(value.Length).Append(':').Append(value).Append('\n');

@@ -10,7 +10,8 @@ namespace YLFramework.Editor.Resource
         public List<ResourceAtlasRule> Rules = new();
 
         [SerializeField, HideInInspector] internal string ProjectGuid;
-        [SerializeField, HideInInspector] internal string RootGuid;
+        // 生成范围归属独立于来源目录集合；父目录由显式登记入口指定。
+        [SerializeField, HideInInspector] internal string GenerationParentGuid;
         [SerializeField, HideInInspector] internal string DirectoryGuid;
         [SerializeField, HideInInspector] internal string ConfigurationGuid;
         [SerializeField, HideInInspector] internal string ConfigurationMetaHash;
@@ -40,9 +41,9 @@ namespace YLFramework.Editor.Resource
         [Tooltip("目标 ResourceGroup.Id；输出直接成为其正式主资产，不用手动再加入选择。")]
         public string GroupId;
         public ResourceAtlasGrouping Grouping;
-        [Tooltip("Together 的完整逻辑地址；PerFolder 在其后追加资源根相对文件夹路径。")]
+        [Tooltip("Together 的完整逻辑地址；PerFolder 在其后追加来源目录的固定地址前缀与目录内相对文件夹路径。")]
         public string Address = "atlases/ui";
-        [Tooltip("专用资源根内的目录或 Sprite 类型 Texture2D；目录递归收集已导入的 Sprite，不修改 Importer。不能包含生成范围。")]
+        [Tooltip("已登记来源目录内的文件夹或 Sprite 类型 Texture2D；可跨多个来源，目录递归收集已导入的 Sprite，不修改 Importer。不能包含生成范围。")]
         public UnityEngine.Object[] Sources = Array.Empty<UnityEngine.Object>();
         public bool AllowRotation;
         public bool TightPacking;

@@ -13,6 +13,37 @@ using YLFramework.Services.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>本次解析的有限来源副本；不持有可编辑Project/规则，也不进入Catalog或持久身份。</summary>
+    public sealed class ResourceBuildSource
+    {
+        public string ProjectGuid { get; }
+        public string ProjectId { get; }
+        public string GroupId { get; }
+        public ResourcePacking Packing { get; }
+        public string SelectionGuid { get; }
+        public string SelectionPath { get; }
+        public string SelectionAddress { get; }
+        public IReadOnlyList<string> Aliases { get; }
+        public IReadOnlyList<string> Extensions { get; }
+        public string AtlasConfigurationGuid { get; }
+        public string AtlasRuleId { get; }
+        internal string Definition { get; }
+        internal string DirectoryIdentity { get; }
+
+        internal ResourceBuildSource(ResourceProject project, string projectGuid, ResourceGroup group,
+            ResourceSelection selection, string path, ResourceAtlasChange generated)
+        {
+            ProjectGuid = projectGuid; ProjectId = project.ProjectId; GroupId = group.Id; Packing = group.Packing;
+            SelectionGuid = selection.Guid; SelectionPath = path; SelectionAddress = selection.Address ?? "";
+            Aliases = Array.AsReadOnly((string[])(selection.Aliases ?? Array.Empty<string>()).Clone());
+            Extensions = Array.AsReadOnly((string[])(selection.Extensions ?? Array.Empty<string>()).Clone());
+            AtlasConfigurationGuid = generated == null ? null : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project.AutomaticAtlases));
+            AtlasRuleId = generated?.Rule.Id;
+            Definition = generated == null ? JsonUtility.ToJson(selection) : JsonUtility.ToJson(generated.Rule);
+            DirectoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+        }
+    }
+
     /// <summary>Editor 主资产身份和加载描述。子资产的正式描述与持久化 Catalog 不在此定义。</summary>
     public sealed class ResourceBuildAsset
     {
@@ -24,10 +55,12 @@ namespace YLFramework.Editor.Resource
         public IReadOnlyList<ResourceAddress> Aliases { get; }
         public Type AssetType { get; }
         public string BundleName { get; internal set; }
+        public ResourceBuildSource Source { get; }
         public bool IsScene => AssetType == typeof(SceneAsset);
 
-        internal ResourceBuildAsset(string path, ResourceAddress address, IEnumerable<string> aliases)
+        internal ResourceBuildAsset(string path, ResourceAddress address, IEnumerable<string> aliases, ResourceBuildSource source)
         {
+            Source = source;
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
             if (!asset || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string guid, out long localId))
                 throw new InvalidOperationException("Cannot resolve Unity asset identity: " + path);
@@ -81,7 +114,11 @@ namespace YLFramework.Editor.Resource
         public string ProjectGuid { get; }
         public string ProjectId { get; }
         public string ProjectToken { get; }
-        public string AssetRoot { get; }
+        public IReadOnlyList<ResourceProjectPaths.DirectoryEntry> SourceDirectories { get; }
+        public IReadOnlyList<string> AssetRoots { get; }
+        public DateTime CreatedAtUtc { get; } = DateTime.UtcNow;
+        public bool ContainsUnsavedDefinitions { get; }
+        public string Platform { get; }
         public IReadOnlyList<ResourceBuildAsset> Assets { get; }
         public IReadOnlyList<ResourceBuildBundle> Bundles { get; }
         public IReadOnlyDictionary<string, IReadOnlyList<string>> Groups { get; }
@@ -90,7 +127,7 @@ namespace YLFramework.Editor.Resource
         public int MergedBundleCount { get; }
         internal IReadOnlyList<string> FingerprintPaths { get; }
 
-        private ResourceBuildMap(ResourceProject project, string guid, string root, List<ResourceBuildAsset> assets,
+        private ResourceBuildMap(ResourceProject project, string guid, ResourceProjectPaths paths, List<ResourceBuildAsset> assets,
             Dictionary<string, IReadOnlyList<string>> groups, Dictionary<string, string[]> graph,
             HashSet<string> fingerprintPaths, Dictionary<string, string> assignments, HashSet<string> shared,
             long avoidedBytes, int merged)
@@ -98,7 +135,10 @@ namespace YLFramework.Editor.Resource
             ProjectGuid = guid;
             ProjectId = project.ProjectId;
             ProjectToken = Token(ProjectId);
-            AssetRoot = root;
+            SourceDirectories = paths.Directories;
+            AssetRoots = Array.AsReadOnly(paths.Directories.Select(x => x.Path).OrderBy(x => x, StringComparer.Ordinal).ToArray());
+            ContainsUnsavedDefinitions = EditorUtility.IsDirty(project) || project.AutomaticAtlases && EditorUtility.IsDirty(project.AutomaticAtlases);
+            Platform = EditorUserBuildSettings.activeBuildTarget.ToString();
             Assets = assets.OrderBy(x => x.Address.Path, StringComparer.Ordinal).ToList().AsReadOnly();
             Groups = new ReadOnlyDictionary<string, IReadOnlyList<string>>(groups);
             FingerprintPaths = fingerprintPaths.OrderBy(x => x, StringComparer.Ordinal).ToList().AsReadOnly();
@@ -133,18 +173,13 @@ namespace YLFramework.Editor.Resource
             var projectPath = AssetDatabase.GetAssetPath(project);
             var guid = AssetDatabase.AssetPathToGUID(projectPath);
             if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("ResourceProject must be saved with its own Unity GUID.");
-            var root = ResolveGuid(project.AssetRootGuid);
-            if (!root.StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsValidFolder(root) ||
-                root == "Assets/StreamingAssets" || root.StartsWith("Assets/StreamingAssets/", StringComparison.Ordinal))
-                throw new InvalidOperationException("A dedicated Assets folder is required as the resource root.");
-            ResourceBuildOperation.RejectLinks(Absolute(root));
-            ValidateProjects(project, root);
+            var directories = ResourceProjectPaths.Resolve(project);
             var generatedAtlases = ResourceAtlasGenerator.CurrentOutputs(project);
             var atlasDirectory = project.AutomaticAtlases ? Path.GetDirectoryName(AssetDatabase.GetAssetPath(project.AutomaticAtlases))?.Replace('\\', '/') : null;
             var assets = new List<ResourceBuildAsset>();
             var groups = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
             var assignments = new Dictionary<string, string>(StringComparer.Ordinal);
-            var foldedAddresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var foldedAddresses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var foldedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var prefix = "ylr_" + Token(project.ProjectId) + "_";
             var editorAssemblies = new HashSet<string>(CompilationPipeline.GetAssemblies()
@@ -165,9 +200,10 @@ namespace YLFramework.Editor.Resource
                 {
                     if (selection == null) throw new InvalidOperationException("Null resource selection.");
                     var selected = ResolveGuid(selection.Guid);
-                    RequireWithin(root, selected);
+                    var generated = generatedAtlases.FirstOrDefault(x => x.Guid == selection.Guid && x.GroupId == group.Id && x.Address == selection.Address);
+                    if (generated == null) directories.RequireSource(selected);
                     if (atlasDirectory != null && (selected == atlasDirectory || Within(atlasDirectory, selected)) &&
-                        !generatedAtlases.Any(x => x.Guid == selection.Guid && x.GroupId == group.Id && x.Address == selection.Address))
+                        generated == null)
                         throw new InvalidOperationException("Generated Atlas assets are selected by their rules, not manual selections: " + selected);
                     var folder = AssetDatabase.IsValidFolder(selected);
                     var aliases = selection.Aliases ?? Array.Empty<string>();
@@ -177,6 +213,8 @@ namespace YLFramework.Editor.Resource
                     var extensions = selection.Extensions ?? Array.Empty<string>();
                     if (extensions.Any(x => string.IsNullOrEmpty(x) || x[0] != '.' || x.IndexOfAny(new[] { '/', '\\', '*' }) >= 0))
                         throw new InvalidOperationException("Selection extensions must be exact dotted extensions.");
+                    var source = new ResourceBuildSource(project, guid, group, selection, selected,
+                        generated);
                     var paths = folder ? AssetDatabase.FindAssets("", new[] { selected }).Select(AssetDatabase.GUIDToAssetPath)
                         .Where(x => !AssetDatabase.IsValidFolder(x) && (atlasDirectory == null || !Within(atlasDirectory, x)) && CanBundle(x, editorAssemblies)) : new[] { selected };
                     foreach (var path in paths.OrderBy(x => x, StringComparer.Ordinal))
@@ -186,7 +224,7 @@ namespace YLFramework.Editor.Resource
                         if (assignments.ContainsKey(path)) throw new InvalidOperationException("Asset selected more than once: " + path);
                         if (assets.Count == Limit) throw new InvalidOperationException("Resource selection limit exceeded.");
                         ResourceBuildOperation.RejectLinks(Absolute(path));
-                        var addressText = string.IsNullOrEmpty(selection.Address) ? path.Substring(root.Length + 1) : selection.Address;
+                        var addressText = string.IsNullOrEmpty(selection.Address) ? directories.DefaultAddress(path) : selection.Address;
                         ResourceAddress address;
                         try { address = new ResourceAddress(project.ProjectId, addressText); }
                         catch (ArgumentException error) { throw new InvalidOperationException("Invalid resource address: " + addressText, error); }
@@ -194,10 +232,13 @@ namespace YLFramework.Editor.Resource
                         {
                             try { _ = new ResourceAddress(project.ProjectId, key); }
                             catch (ArgumentException error) { throw new InvalidOperationException("Invalid resource alias/address: " + key, error); }
-                            if (foldedAddresses.Count == Limit || !foldedAddresses.Add(key))
-                                throw new InvalidOperationException("Duplicate/case-folded resource alias/address: " + key);
+                            if (foldedAddresses.TryGetValue(key, out var previous))
+                                throw new InvalidOperationException("两个资源使用了相同的加载地址或别名 (Duplicate/case-folded address)：" + key + "\n" + previous + "\n" + path +
+                                    "\n请为其中一个设置不同的地址或目录地址前缀。");
+                            if (foldedAddresses.Count == Limit) throw new InvalidOperationException("Resource address limit exceeded.");
+                            foldedAddresses.Add(key, path);
                         }
-                        var asset = new ResourceBuildAsset(path, address, aliases);
+                        var asset = new ResourceBuildAsset(path, address, aliases, source);
                         var bundle = prefix + (group.Packing == ResourcePacking.PerAsset ? "a_" + asset.Guid :
                             "g_" + Token(group.Id) + (asset.IsScene ? "_scenes" : "_assets"));
                         assets.Add(asset);
@@ -210,7 +251,7 @@ namespace YLFramework.Editor.Resource
             }
             var fingerprints = new HashSet<string>(StringComparer.Ordinal) { projectPath };
             if (project.AutomaticAtlases) fingerprints.Add(AssetDatabase.GetAssetPath(project.AutomaticAtlases));
-            var graph = CollectDependencies(root, assignments.Keys, fingerprints, editorAssemblies);
+            var graph = CollectDependencies(directories, generatedAtlases.Select(x => x.Path), atlasDirectory, assignments.Keys, fingerprints, editorAssemblies);
             ResourceAtlasRules.Validate(graph.Keys, assets);
             var original = new Dictionary<string, string>(assignments, StringComparer.Ordinal);
             var owners = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -250,11 +291,20 @@ namespace YLFramework.Editor.Resource
                 }
             }
             var merged = MergeCycles(prefix, assignments, graph, shared);
-            return new ResourceBuildMap(project, guid, root, assets, groups, graph, fingerprints, assignments, shared, avoided, merged);
+            return new ResourceBuildMap(project, guid, directories, assets, groups, graph, fingerprints, assignments, shared, avoided, merged);
         }
 
-        private static Dictionary<string, string[]> CollectDependencies(string root, IEnumerable<string> selected, HashSet<string> fingerprints, HashSet<string> editorAssemblies)
+        private static Dictionary<string, string[]> CollectDependencies(ResourceProjectPaths directories, IEnumerable<string> generatedPaths, string atlasDirectory,
+            IEnumerable<string> selected, HashSet<string> fingerprints, HashSet<string> editorAssemblies)
         {
+            var generated = new HashSet<string>(generatedPaths, StringComparer.Ordinal);
+            void RequirePath(string path)
+            {
+                if (generated.Contains(path)) return;
+                if (ResourceProjectPaths.Contains(atlasDirectory, path))
+                    throw new InvalidOperationException("不能将生成目录中的配置或失效输出作为依赖：" + path);
+                directories.RequireSource(path);
+            }
             var result = new Dictionary<string, string[]>(StringComparer.Ordinal);
             var queue = new Queue<string>(selected);
             var foldedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -264,7 +314,7 @@ namespace YLFramework.Editor.Resource
                 var path = queue.Dequeue();
                 if (result.ContainsKey(path)) continue;
                 if (result.Count == Limit || !foldedPaths.Add(path)) throw new InvalidOperationException("Asset graph limit or case-folded path conflict: " + path);
-                RequireWithin(root, path);
+                RequirePath(path);
                 ResourceBuildOperation.RejectLinks(Absolute(path));
                 fingerprints.Add(path);
                 var dependencies = new List<string>();
@@ -277,7 +327,7 @@ namespace YLFramework.Editor.Resource
                     if (dependency == path || IsBuiltIn(dependency)) continue;
                     fingerprints.Add(dependency);
                     if (IsCode(dependency)) continue;
-                    RequireWithin(root, dependency);
+                    RequirePath(dependency);
                     if (!CanBundle(dependency, editorAssemblies)) throw new InvalidOperationException("Unsupported asset dependency: " + path + " -> " + dependency);
                     if (++edgeCount > Limit * 4) throw new InvalidOperationException("Asset dependency edge limit exceeded.");
                     dependencies.Add(dependency);
@@ -350,22 +400,6 @@ namespace YLFramework.Editor.Resource
             return merged;
         }
 
-        internal static void ValidateProjects(ResourceProject project, string root)
-        {
-            foreach (var guid in AssetDatabase.FindAssets("t:ResourceProject"))
-            {
-                var other = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(guid));
-                if (!other || other == project) continue;
-                if (string.Equals(other.ProjectId, project.ProjectId, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(other.ProjectId) && Token(other.ProjectId) == Token(project.ProjectId)))
-                    throw new InvalidOperationException("Resource project identity/token conflict: " + other.ProjectId);
-                var otherRoot = AssetDatabase.GUIDToAssetPath(other.AssetRootGuid);
-                if (!string.IsNullOrEmpty(otherRoot) && (root.Equals(otherRoot, StringComparison.OrdinalIgnoreCase) ||
-                    Within(root, otherRoot) || Within(otherRoot, root)))
-                    throw new InvalidOperationException("Resource project roots overlap: " + root + " / " + otherRoot);
-            }
-        }
-
         private static void ValidateId(string id)
         {
             try { ResourceAddress.ValidateId(id, nameof(id)); }
@@ -382,10 +416,6 @@ namespace YLFramework.Editor.Resource
         }
 
         private static bool Within(string root, string path) => path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase);
-        private static void RequireWithin(string root, string path)
-        {
-            if (path != root && !Within(root, path)) throw new InvalidOperationException("Resource outside project root: " + path);
-        }
         private static bool IsBuiltIn(string path) => path == "Resources/unity_builtin_extra" || path == "Library/unity default resources";
         private static bool IsCode(string path) => new[] { ".cs", ".dll", ".asmdef", ".asmref" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
         private static bool CanBundle(string path, HashSet<string> editorAssemblies)

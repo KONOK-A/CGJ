@@ -1,10 +1,10 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级 Plan
 
-> **总体方案 APPROVED；8.1～8.8 已完成技术验收及 Git 收口；8.9 仍在分批交付。C02、E05、B06、C05 与 E04 G1～G3 已通过用户技术验收；E04 G1～G4正式交付及上轮技术审核结论沿用，保留原验收层级和限制。本批B02与F03技术完成，待用户验收，见28.11。2026-10-17 用户调整 Git 策略为两次提交：第一次已交付功能基线，第二次后续 Workbench UI/UX；见28.12。整体8.9与阶段8均未COMPLETE，8.10尚未实施。**
+> **总体方案 APPROVED；8.1～8.8 已完成技术验收及 Git 收口；8.9 全部已交付范围已通过用户验收，最终 Git 收口执行中。C02、E05、B06、C05、B02、F03 及 E04 G1～G4正式交付范围沿用既定用户验收/技术审核结论，原验收层级和限制保留。2026-10-17 两次提交策略：第一次功能基线 `8abaf2d`；第二次提交 Workbench UX、多资源目录及旧单根兼容清理，见29.31。旧单根Editor配置兼容已按用户决定移除，现有9个ResourceProject及4个Atlas配置已完成一次性转换；Catalog Schema v1、Runtime地址解释、签名与发布协议未变。第二次Commit及远端SHA校验完成即满足8.9收口条件；阶段8仍未COMPLETE，8.10尚未实施。**
 >
-> 当前分支 `fusion/8-resource`，基线 HEAD `ddf154cf2c72cd0b403cdd1547eee8ae06963547`。既有 8.9 与 C05 实现仍在工作区，第一次功能基线 Commit 前暂存区为空；C05 已通过用户技术验收，但技术验收不等于已提交或整体 8.9 已验收。
+> 当前分支 `fusion/8-resource`，功能基线为 `8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`（`feat(resource): complete stage 8.9 functional baseline`）。8.9 全部已交付范围已通过用户验收；第二次 Commit 与普通 Push 按本批正式授权执行。C05、E04、B02/F03 的既有验收、技术审核与证据边界分别沿用原记录。
 >
-> **E04 G1～G4正式交付及上轮技术审核结论沿用；本批仅联合实施B02与F03，见28.11。** 正式采用 Windows CNG `Microsoft Primitive Provider` AES-256-GCM + 官方 BC2.7.0 netstandard2.0 HKDF，64KiB/2slot/32KiB native read buffer、默认128MiB显式数据预算；平台限 Windows x64 Editor/Mono Player。历史 G0/Scene 风险见28.10.15～17，B1原型证据见28.10.18，G1～G3正式证据见28.10.19，G4交付见28.10.20。**Git当前有效策略（2026-10-17）为两次独立提交：第一次提交已交付并具备证据的8.9功能基线，第二次提交后续Resource Workbench UI/UX全面优化。本批只执行第一次功能基线Commit，不Push、不Merge、不Tag、不切换分支；Push仍待用户明确授权。第一次Commit不表示8.9 COMPLETE。** 保留原成果及资产，不进入Workbench重设计、远端Player开放、8.10或阶段9。
+> **Workbench UX1～UX5、视觉精修、多资源目录与中文文案已通过用户验收。** 最终证据与限制见§29.25～§29.31；§29.17～29.24保留反馈和历史检查点。旧单根兼容清理的最终模型见§29.30～§29.31。不标阶段8 COMPLETE；不进入8.10、阶段9或其他框架专题。第二次提交成功且远端SHA一致后，才在本批最终报告声明8.9 Git收口完成。
 
 本文保留稳定契约、阶段门禁、关键历史证据与当前待办；重复授权、已被后续状态覆盖的中间记录和一次性诊断过程已合并。保留原章节编号，尤其是 17.4、28.2.1～28.2.4 和 28.6，便于继续引用。
 
@@ -15,12 +15,12 @@
 | 项目 | 已确认状态 |
 |---|---|
 | 工程 | Unity `2022.3.62f3c1`；当前真实验证主环境为 Windows Editor / `StandaloneWindows64` |
-| 实施分支与 HEAD | `fusion/8-resource` / `ddf154cf2c72cd0b403cdd1547eee8ae06963547` |
+| 实施分支与 HEAD | `fusion/8-resource` / `8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`（8.9 功能基线） |
 | 总体架构 | 自有唯一 ResourceSystem；Runtime/Editor 两主体，Foundation/Core 保持实际编译边界 |
 | 8.1～8.8 | 已完成技术验收与 Git 收口；提交映射见第 10 节 |
-| 8.9 | Workbench、图片/预加载/诊断、功能补齐已交付；C02/E05/B06/C05 与 E04 G1～G3 已通过用户技术验收；E04 整体验收待用户确认，G4 技术完成；B02/F03 技术完成待用户验收；第一次功能基线 Commit 按28.12执行，8.9 整体仍未 COMPLETE |
-| 持久协议 | Catalog Schema v1 已冻结；签名授权与激活记录不塞入 Catalog 字段 |
-| 当前 Git 权限 | 第一次8.9功能基线Commit与后续Workbench UI/UX独立Commit；禁止Push/Merge/Tag/切换分支，Push待明确授权 |
+| 8.9 | 全部已交付范围通过用户验收；第二次Commit与普通Push按29.31执行；整体在远端SHA一致后收口 |
+| 持久协议 | Catalog Schema v1 已冻结；签名授权与激活记录不塞入 Catalog 字段；Editor配置模型调整不改变Runtime读取 |
+| 当前 Git 权限 | 本批明确授权第二次Commit与普通Push；只暂存已验收的8.9剩余成果，不接管用户/并行改动 |
 
 历史设计从 Tidy 集成 `fe1cd72`、方案批准 `0e71c8b` 开始。早期“当前为 integration 分支”“主体仍依赖 XFAB”“8.6b 待提交”等描述已被后续实施取代，不再作为现状。历史阶段 7/Tidy 细节分别见其专项 Plan，不在这里重复。
 
@@ -31,7 +31,7 @@
 - 不调用旧 `ProjectBuild.Build(MainModule)`，不清整个 AssetBundles、StreamingAssets、persistentDataPath、Library 或 Temp，不启动第二个同工程 Unity。
 - 只写明确登记的新 YL 配置、夹具和产物。未知文件/目录、未知 `.meta`、symlink/junction 不自动接管；删除仅限本批真正拥有的内容。
 - 新资源使用新 GUID；移动存续文件保留 `.meta`。类型/AQN、字段、地址、程序集和格式变化单独核对，不靠 `FormerlySerializedAs` 掩盖不适用的迁移。
-- 用户最新决定（2026-10-17）为**两次独立提交**：第一次提交已交付并具备证据的8.9功能基线，第二次提交后续Resource Workbench UI/UX全面优化；本次只执行第一次，不Push、不Merge、不Tag、不切换分支，也不得无差别接管用户/并行改动。
+- 用户Git决定（2026-10-17）为**两次独立提交**：第一次8.9功能基线 `8abaf2d` 已交付；第二次提交已验收的Workbench UX1～UX5、视觉/交互修正、多资源目录、旧单根兼容清理、直接配置转换、测试、正式样例及文档。2026-10-18用户正式授权第二次Commit与普通Push；只精确暂存本批已验收内容，不暂存/Commit并行NuGet、Packages、ProjectSettings、AGENTS、工具配置、其他Plan或用户资产，不Force Push、Merge、Rebase、Reset、Clean、Stash或切分支。
 
 ### 1.3 证据使用规则
 
@@ -96,9 +96,9 @@
 | 必需且已交付 | 唯一身份/图/租约，可靠构建发布，Core/Audio 正式接入，版本事务，Editor 安全链，图片/预加载/诊断及 C05 |
 | 已通过用户技术验收 | E05 Runtime store 只读枚举/预览；原证据见 28.7，不另建清理权威 |
 | 已通过用户技术验收 | C02 StreamingAssets 安全部署；仅连带 C03 部署/定位及必要 C05 启动衔接，门禁见 28.8 |
-| 本批明确授权 | B02 项目级/自动化构建配置与 F03 代表性性能基线联合实施，先B02必要门禁后F03，不等待中间确认或提交；见28.11 |
+| 已通过用户验收 | B02项目级/自动化构建配置与F03代表性性能基线，见28.11；B06自动Atlas及E04 G1～G4正式交付范围沿用原结论，历史G0/C1/B1与限制继续保留 |
 | 按实际需求 | E03 历史签名便利入口与用法；不为表面完整度造平台 |
-| 已验收 / 待整体验收 | B06自动Atlas及E04 G1～G3已通过用户技术验收；G4技术完成、E04具备整体验收条件，历史G0/C1/B1与限制继续保留 |
+| 已验收 | B06自动Atlas、E04 G1～G4正式交付范围、B02/F03及Workbench UX1～UX5均已通过用户验收或沿用既定技术审核结论；历史G0/C1/B1与限制继续保留 |
 | 不默认纳入 | archive、优先级/抢占调度、复杂跨项目去重、透明 late binding、native 多版本热共存、二进制差分、云发布后台 |
 
 FIFO 是现有事实，不是优先级调度。可选能力须有真实需求或同条件成本证据，不建立空接口和占位 Manager。
@@ -214,7 +214,7 @@ FIFO 是现有事实，不是优先级调度。可选能力须有真实需求或
 | 8.6c 旧栈退役/主体解耦 | 已验收并收口 | `be3dcb8` |
 | 8.7 本地版本事务 | 已验收并收口 | `05add9c` |
 | 8.8 远端安全链 | 已验收并收口，限已验后端 | `ddf154c` |
-| 8.9 功能/体验完善 | 多批已交付，C05 已通过用户技术验收，整体未 COMPLETE | 第 27～28 节；尚未 Git 收口 |
+| 8.9 功能/体验完善 | 用户验收通过；第二次提交含Workbench UX、多资源目录、旧兼容清理及直接配置 | 第27～29节；第二次Commit与Push见29.31 |
 | 8.10 总体验收 | 未实施、未授权自动开始 | Windows Player/持久重启、阶段整体流程与交接 |
 
 每个新批次先确认范围和工作区，建立最小失败/基线验证，再实现、定向回归、独立 Review、核对保护与文档。已完成门禁不机械重跑；总体批准不自动授权下一批或 Git 操作。
@@ -373,7 +373,7 @@ Core 文本/Prefab/实例/Scene、显式 Provider、fallback 与同步 InProgres
 
 ### 28.1 当前进度
 
-既有功能补齐与 C05 均保留在工作区，整体 8.9 未 COMPLETE。31 项审计已完成，不因维护文档重新审计或补功能。C05 的后续进展已回写下表，旧“Samples 为空、C05 仍缺正式入口、下一项先实施 C05”不再作为现状。
+既有功能补齐、Workbench UX1～UX5、多资源目录及旧单根兼容清理均已纳入8.9最终交付；全部已交付范围已通过用户验收。31项审计结论保留，不因最终收口重新审计或扩展功能。多资源目录的最终模型见29.29～29.30，Legacy名称的样例仅保留来源说明，不再是产品兼容入口。第二次Commit与Push见29.31。
 
 ### 28.2 31 项目标与处置
 
@@ -387,15 +387,15 @@ Core 文本/Prefab/实例/Scene、显式 Provider、fallback 与同步 InProgres
 
 | 编号 | 正式入口/证据 | 当前结论 | 真正限制与处置 |
 |---|---|---|---|
-| **A01** 项目与范围 | ResourceProject、BuildMap.ValidateProjects、CreateProject；15～17/28.4 | 完整 | 身份/根重叠拒绝；ID 变化不自动迁移旧发布，复用 |
-| **A02** Group/选择 | ResourceGroup/Selection、BuildMap.Create、EditorOperations；28.4 | 完整 | 文件夹/过滤/选择与物理包分离；无实际需求不增通用排除规则 |
+| **A01** 项目与范围 | ResourceProject.SourceDirectories、ResourceProjectPaths、BuildMap；15～17/28.4/29.29 | 完整（多目录） | 目录以GUID登记并保存地址前缀；空/无效/重复/嵌套拒绝；跨Project来源与生成范围保护；ID变化不自动迁移旧发布 |
+| **A02** Group/选择 | ResourceGroup/Selection、BuildMap.Create、EditorOperations；28.4/29.29 | 完整（多目录） | Group可跨已登记目录选择；目录登记不等于选择；文件夹/过滤/子资产与物理包分离 |
 | **A03** 地址/alias/子资产 | ResourceAddress/Catalog、DescribeSubAssets、Simulation；17～18 | 完整 | 显式地址可跨移动稳定，旧快照不漂移；歧义拒绝，不造第二身份表 |
 | **B01** 分包/共享依赖 | BuildMap.CollectDependencies/BundleEdges/MergeCycles、ReadBack | 完整 | Scene/私有/共享及环归并已解释；不恢复旧固定阈值 |
-| **B02** 构建配置 | ResourceBuildRecipe/Invocation、Inspector、Workbench接点及ExecuteRecipe；28.11 | 技术完成，待用户验收 | Project定义/压缩/加密唯一权威；同解析同正式服务、原调用/None保留，无batchmode/CI或部署/签发扩展 |
+| **B02** 构建配置 | ResourceBuildRecipe/Invocation、Inspector、Workbench接点及ExecuteRecipe；28.11 | 已通过用户验收 | Project定义/压缩/加密唯一权威；同解析同正式服务、原调用/None保留，无batchmode/CI或部署/签发扩展 |
 | **B03** 压缩 | ResourceCompression、Builder.Options/Settings；28.4 | 完整 | 三值白名单恒 StrictMode，其他组合拒绝；复用 |
 | **B04** 增量/重建 | Workspace、完整指纹/后验、force 与 blocked 原因 | 完整且保守 | 六回调阻止 skip 是正确性保护；无可靠闭包不优化命中率 |
 | **B05** 显式 Atlas | ResourceAtlasRules、PrepareAtlases、SetAtlasSprite；28.4 | 完整 | 非 Variant、Include in Build 关闭、名字唯一、修改后显式准备；非透明 late binding |
-| **B06** 自动图集 | ResourceAtlasConfiguration / Generator / Plan、Project Inspector、正式 Builder；28.9 | 已通过用户技术验收 | 稳定规则/文件夹身份，输出正式入 Group；保留 B05 的显式加载边界，不是透明晚绑定 |
+| **B06** 自动图集 | ResourceAtlasConfiguration / Generator / Plan、Project Inspector、正式 Builder；28.9/29.29～30 | 已通过用户技术验收 | 生成父目录显式登记并使用真实GUID；只新建自有子目录；规则来源可跨多目录；旧布局/隐式入口已移除，不自动取首源 |
 | **B07** 预检/自动化 | Preflight/BuildOnly/BuildAndPublish/PublishBuild 与公开 Builder/Publisher | 等价满足 | 同服务可无窗口调用；有 CI 交付需求才补薄调用方/取证，不另造构建器 |
 | **C01** 发布/导出 | Publisher.ReadVersion/ReadHistory/Recover、ExportRelease、Snapshot.Open | 完整 | 导出到工程外新目录并复验；不等于上传、内置部署或 Runtime 激活 |
 | **C02** 内置部署 | ResourceBuiltInDeployer.Preflight/Deploy/Recover、样例明确入口；28.8 | 已通过用户技术验收 | 仅受限自有根，外部stage/journal，真实导入与旧版保护已验；无自动GC或绝对断电原子承诺 |
@@ -410,19 +410,19 @@ Core 文本/Prefab/实例/Scene、显式 Provider、fallback 与同步 InProgres
 | **D06** 缓存/调度 | ResourceImageOptions、Images/Bundle FIFO、IsQueued；27～28 | 当前策略完整 | TTL/容量/并发有界，活跃 owner 不淘汰；FIFO 不宣称 priority |
 | **E01** 激活/回滚 | Updates、ArtifactStore.Check/Prepare/Commit/Recover；25～26 | 完整 | 唯一事务与整组恢复；真实进程崩溃未验，不扩成热共存 |
 | **E02** 可信更新 | RemoteSource、Signature/Transfer/Parts/ReleaseFloors；26 | Editor 链完整，Player 拒绝 | 非 WindowsEditor 是源码硬 gate，须在 8.10 验证后显式开放，不仅补测试 |
-| **E03** 签名交付 | ReadVersion + Signer.Create/CreateFromEnvironment/Export；26 | 正式 API 完整 | 不必手拼 JSON；GUI 仅当前版，历史签名便利入口/更广用法按需，不纳入 C05 重做 |
+| **E03** 签名交付 | ReadVersion + Signer.Create/CreateFromEnvironment/Export；26/29.25～26 | 正式 API 与当前版/所选历史版GUI已接入 | 历史签发绑定确切ReadVersion，当前索引入口独立；本轮精修展示，不重签或改变私钥/信任策略 |
 | **E04** 内容加密 | 正式ResourceProject/Builder/Publisher/Content/ResourceStartup；28.10.19～20 | G1～G4正式交付，上轮技术审核结论沿用 | Windows x64 Editor/Mono、CNG AES-GCM+BC HKDF、64KiB/2slot/32KiB、128MiB显式预算；Scene延迟坏Stream及已记观察限制保留，不重开专题 |
-| **E05** 磁盘查询 | QueryArtifactsAsync / ArtifactStore.QueryAsync、原 CleanupVersionsAsync/parts；28.7 | 已通过用户技术验收 | 只读枚举版本/临时量/保护原因；不另建版本索引，不接入整体 UI |
+| **E05** 磁盘查询 | QueryArtifactsAsync / ArtifactStore.QueryAsync、原 CleanupVersionsAsync/parts；28.7/29.25～26 | 原服务已通过用户技术验收，工作台只读表单已接入 | root及完整闭包显式输入，Ready非认证，候选非删除授权；不另建索引，UI不清理/恢复/挂载 |
 | **F01** 所有权诊断 | GetDiagnosticsReport、InstanceCache.Diagnostics、Workbench；27～28 | 完整 | 显示真实 pin/入边/owner/排队，未知明示，历史默认关闭 |
-| **F02** 构建分析 | Placement/SourceBytes/Dependents、BuildResult/FileBytes；27～28 | 完整 | 预估/制品/变化原因分开；更多可视化非数据缺口，不启动 UI 重设计 |
-| **F03** 成本基线 | G3正式Player历史数据+配方驱动A/回环HTTPS B/共享消费与峰值C；28.11 | 技术完成，待用户验收 | 约23.5MiB/18文件、3重复、真实4MiB partial，原始JSON/制品/源码身份完整；进程及分配计数Unavailable，不外推公网/Player |
+| **F02** 构建分析 | Placement/SourceBytes/Dependents、BuildResult/FileBytes；27～29 | 原数据完整，Workbench展示接入并精修 | 预估/确切制品/变化原因分开；友好用途和来源不替代完整Bundle身份，不推断逐文件因果 |
+| **F03** 成本基线 | G3正式Player历史数据+配方驱动A/回环HTTPS B/共享消费与峰值C；28.11 | 已通过用户验收 | 约23.5MiB/18文件、3重复、真实4MiB partial，原始JSON/制品/源码身份完整；进程及分配计数Unavailable，不外推公网/Player |
 | **F04** 用法/示例 | Resource 模块说明、首页、模板、Samples/ResourceStartup；28.6 | 本项最小例已交付 | 启动/双模式/Core/Audio/类型/退出不再占位；更多专项示例仅按实际需要扩充 |
 | **F05** 平台/Player | 主体与 Sample 图、Windows Development 编译；28.6 | 编译有据，Player 未验 | 8.10 全流程/持久重启未做，远端硬拒绝；其他平台不凭格式白名单宣称支持 |
 
 #### 28.2.3 剩余事项与优先级
 
-- C05 已通过用户技术验收，不重复实施；E05、C02、B06 已通过用户技术验收。E04 G1～G4正式交付及上轮技术审核结论沿用，既有证据与限制见28.10.19～20。
-- B02与F03已获2026-10-17联合实施授权，先B02必要门禁再固定负载补测F03，见28.11；原“按需/非本轮必做”不再适用于此两项。E03历史签名便利入口仍按需。
+- C05、E05、C02、B06、B02、F03及Workbench UX1～UX5已通过用户验收，不重复实施。E04 G1～G4正式交付及上轮技术审核结论沿用，既有证据与限制见28.10.19～20。
+- B02与F03已通过用户验收，见28.11；E03历史签名便利入口仍按需。
 - 不重开E04后端、编码、安全或31项总体审计；G0/B1不冒充正式性能，G3正式Player可按原环境范围沿用。
 - C03 的 C02 投放/定位与 Editor 启动衔接已闭合，完整首次启动/重启仍依赖 8.10；E02/F05 是生产交付前必须处理的后端/Player 门禁，不能写成只缺文档或一般测试。
 - 不因缺 GUI/CLI、采用等价 API、安全回退为重建而重复开发已有功能；不自动安排 archive、priority、native 热共存或整体 UI。
@@ -1479,4 +1479,726 @@ Ryzen7 9700X / Windows11 `10.0.26200` / Unity2022.3.62f3c1，非Development、Wi
 - 暂存只使用明确核对的文件路径，禁止`git add .`、`git add -A`、全仓库`git add -u`或无核对整目录暂存；提交前核对`--cached --name-status`、`--stat`、`--check`、具体差异与.meta/GUID关联、依赖闭包及敏感内容。
 - 第一次Commit建议信息为`feat(resource): complete stage 8.9 functional baseline`；不写“8.9 complete”“stage 8 complete”等会误示后续UI和8.10已完成的描述。提交后只读核对SHA、分支/HEAD、文件清单、未提交UI/并行修改、暂存区与其他成果保护情况。
 - **第一次Commit不代表8.9 COMPLETE**，也不表示8.10或阶段9已完成。提交后在最终报告给出实际SHA，不立即回写Plan制造新的待提交差异；后续UI收口再按实际状态维护Plan。
-��
+
+## 29. Workbench UI/UX 总体设计（2026-10-17）
+
+### 29.1 授权、依据与交付状态
+
+- **目标**：把已有正式资源能力组织成 Unity 原生、以数据列表和明确任务为中心的工作台，不是给四个旧页面换皮。此节是设计与后续实施依据，不是本轮 Code 授权。
+- 起点实读：分支 `fusion/8-resource`，HEAD `8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，提交标题与用户基线一致；暂存区为空。已有 `.gitignore`、`.kilo/kilo.jsonc`、NuGet/McpPlugin、Packages 及并行 UI Plan 等变更不接管、不回退；不要求工作区干净。
+- 工程版本来自 `ProjectSettings/ProjectVersion.txt`：Unity `2022.3.62f3c1`。读取了当前 AGENTS、`Documentation/IntegrationPlan.md` 的 XF × YL 协作/边界约定、本 Plan §27、能力表、§28.11 最终 F03/1175 记录、§28.12，以及 `Documentation/Modules/Resource.md`。不重开31项审计、不改其他批次验收。
+- 本节路径前缀为 `Assets/YLFramework/`：`Service/`、`Data/`、`Build/`、`Publishing/` 简写相对 `Editor/Systems/Resource/`；`Diagnostics/`、`Updates/` 相对 `Runtime/Systems/Resource/`，ResourceSystem/ResourceConfiguration位于该Runtime根，未写目录的同模块文件按符号定位。行号为本轮工作区读取位置，执行时重定位。Editor UI/Operations/Build/Publishing均在 `YLFramework.Editor`，保持Editor-only asmdef，不拆新前端程序集。
+- `.kilo/plans/1791960935353-ui-panel-redesign.md` 仅只读核对：它处理 Runtime UGUI `UISystem/UIPanel/Layer/Canvas`，不是本 Workbench；没有覆盖它，也不进入或扫描其他 worktree。
+- 四张截图作为现状视觉证据，源码作为行为证据。本轮没有实时测量 Editor 字号、显示器 DPI、停靠布局或进行 GUI 操作；现有只读 CLI 探测受权限限制后未尝试绕过，也未启动另一个 Unity。以下尺寸是 GUI point 的设计起点，不是截图像素测量或已完成 Unity 验收。
+- 本轮只修改原 Plan，不改源码、配置资产、样例、测试、Resource.md、AGENTS、依赖及工具配置，不运行构建、发布、部署、清理、Runtime 初始化、原游戏或历史技术测试。不 Commit/Push/Merge/Tag/切分支/Reset/Clean/Stash/Rebase。
+
+### 29.2 可见问题与源码对应
+
+| 可见问题 | 源码原因 / 已确认边界 | 设计处理 |
+|---|---|---|
+| 定义、Group、资源和详情挤在上半部；宽屏仍是窄列表 | `Service/ResourceDefinitionView.cs:68-108,117-143,180`：Project字段在前；Group宽145/160；侧详情模式下条目宽为38%并夹在290～440；列表高度为窗口28%并夹在125～280。窄窗已有详情下置，但列表未利用剩余高度 | 项目设置移入上下文面板；资源表占满剩余高度，Group与详情可调整/折叠，不重复发明已有窄窗能力 |
+| 勾选、高亮、构建包含关系不直观 | 同文件 `:18,29,229-249,284-331`：单条 `selected` 与批量 `checkedEntries` 是两套UI状态；真正纳入构建的是 `Project.Groups[].Selections`，不存在“未勾选就不构建”合同 | 去掉无标题勾选列，改原生Ctrl/Shift多选；单行详情、批量摘要与已定义/只读解析结果明确分开，不新增Enable字段 |
+| 分包页是横向长条与文本 | `Service/ResourceBuildView.cs:72-124`：包为横向Toggle，源文件为可定位链接，依赖/依赖者为文本；已有缓存筛选和可见行绘制，缺的是列、排序与更明确层级 | Bundle多列表格 + 选中详情/依赖树；逻辑Group是来源/过滤维度，不假定与物理Bundle一一对应 |
+| 配方、策略、所有执行/交付动作权重接近 | 同文件 `:127-237`：Recipe跳Inspector，Project策略与全部动作连续纵排；`ResourceBuildRecipeEditor.cs:12-29` 自身也带执行按钮 | 构建与版本交付分开；配方字段内联，Project策略只读显示来源；一个明确主操作，其余按任务分层 |
+| Diagnostics 未启动时只有说明 | `ResourceDiagnosticsView.cs:25,117-175` 已绘制 Projects/Assets/Bundles/Instances/Scenes/Updates/History 七区；`ResourceDiagnosticsReport.Content` 已有数据但尚未绘制。截图仅对应 `ResourceSystem.Current` 不可用，不是诊断功能不存在 | 正常空状态 + 三种数据来源选择；补齐已有内容字段的显示，不新增采样账本或自动 Start/Initialize |
+| “已更新预估分包”出现在其他页顶部 | `ResourceWorkbenchView.cs:17-19,28-35,54-75,140-168`：status为窗口级；切页不清，SetProject清空。成功提示未附项目/来源/时效；截图不能证明跨项目污染 | 成功提示回到所属页，操作结果带项目/操作/时间；全局仅显示确实在执行的任务或未读错误摘要 |
+| 放大/缩小文字似乎能解决拥挤 | `ResServiceEditorWindow.cs:28,42` 的实际 `minSize=620×440`，正文多用EditorStyles；截图经过缩放，不能推导真实字号 | 先调整区域分配、行密度和信息层级，再用真实主题/DPI验收字号 |
+
+### 29.3 明确推荐：一个项目上下文、五个任务入口
+
+推荐保留 `YLFramework/Resource/Workbench` 和现有 Project 资产入口，取消每页常驻的 PROJECTS 大侧栏，改为可搜索的 Project 选择器；不是新增概览/Dashboard。导航为 **资源 / 分包分析 / 构建 / 版本交付 / 诊断**。当前项目与保存状态始终可见。
+
+| 入口 | 职责与主要动作 | 既有能力映射 |
+|---|---|---|
+| 项目选择器 / 项目设置 | 搜索、创建、定位 Project；低频编辑名称、专用根、稳定 ProjectId、压缩与加密策略 | `ResServiceEditorWindow`、`ResourceEditorOperations.CreateProject/SaveProject`、`ResourceProject` |
+| 资源：条目 / 图集 | Group、选择定义、目录/子资产、地址/alias、拖放、批量操作；图集规则和计划 | `ResourceDefinitionView`、Operations 编辑接口、B05 `PrepareAtlases`、B06 Generator/Plan |
+| 分包分析 | 当前定义预估 / 确切构建；包、源文件、分包原因和双向 Bundle 依赖 | `ResourceBuildMap`、`ResourceBuildResult`，不计算第二套依赖图 |
+| 构建 | 可选 Recipe、有效输入、正式预检、构建/发布及本次分阶段结果 | B02 `ResolveRecipe/ExecuteRecipe`；无配方原 BuildOnly/BuildAndPublish/PublishBuild |
+| 版本交付 | 显式读取 owned 历史与当前 Index；选定版本后导出、签发、C02 内置部署/恢复 | Publisher、ExportRelease、Signer、BuiltInDeployer；常量生成仍走原完整发布集合 |
+| 诊断：运行会话 / Store 查询 / 报告与开始使用 | 会话只读快照；明确 root/闭包的 E05；已选构建报告、F03参考及样例文档定位 | GetDiagnosticsReport、QueryArtifactsAsync/QueryAsync；不创建会话、benchmark 或清理入口 |
+| 底部“任务与输出” | 当前操作、阶段、错误、复制详情；有界构建尝试选择与最近结果，可折叠 | 保留现最多32次尝试，改造原一次性 `EditorApplication.update` queue 的显示，不另建任务系统 |
+
+顶栏显示 `[Project 名称 v] [未保存] [保存 Project] [项目设置] [帮助]`。Project 选择器列显示名称 + ProjectId，展开详情可看 GUID/路径；同名项目不混淆。创建只请求新路径，后续逐步配置，不自动填入或接管既有根。
+
+项目设置在宽屏为限定宽度的上下文面板，窄屏为可返回的整页。根、ProjectId 与策略不常驻资源表上方；稳定身份附持续可见的影响说明和失效提示，不靠改名承诺迁移历史。修改仍只是原 SerializedObject/Undo，不建立草稿配置副本。
+
+### 29.4 资源与图集：浏览优先，编辑按上下文
+
+以下所有线框中的项目、数量、版本和结果均为**演示**，不是本轮运行结果；比例表示区域责任，不表示逐像素实现。
+
+```text
+资源（宽屏演示，Group约16% / 资源表约56% / 详情约28%）
++--------------------------------------------------------------------------------------+
+| Project [Demo Resources v]  未保存   [保存 Project] [项目设置]                  [帮助] |
+| [资源]  分包分析  构建  版本交付  诊断                                                 |
+| [条目] 图集     搜索[路径 / 地址 / alias................] [筛选 v] [添加 v]            |
++----------------+----------------------------------------------+----------------------+
+| GROUPS     [+] | 选择定义 [当前Group v]    [解析结果：只读]     | 当前：demo.prefab    |
+| all            | 名称             类型      地址      状态    | 来源 / Group         |
+| > ui           | > UI/            目录      自动地址  已定义  | 源路径 [复制][定位]  |
+|   audio        |   demo.prefab    Prefab    ui/demo   已定义  | 地址 [............]  |
+|   scenes       |   demo.png       Texture   icons     已定义  | alias (2) [展开]     |
+|                |                                              | 子资产 / 技术身份    |
+| [Group 设置]   | 表格占满剩余高度，可排序、滚动、多选           | 多选时改为批量摘要   |
++----------------+----------------------------------------------+----------------------+
+| 选中 3 项  [移动到 Group v] [从定义移除]        定义 24 项 / 匹配 8 项 / 清除筛选        |
+| > 任务与输出：Project / 操作 / 状态 / 时间                                            |
++--------------------------------------------------------------------------------------+
+```
+
+- 默认“选择定义”是可编辑的数据层，目录是一条定义，不展开成数千条可删除的伪定义。“解析结果”读取明确计算所得 BuildMap/子资产描述，只读，标注来自内存未保存定义或某次保存状态；提供“定位来源定义”。未计算时不扫描目录补数量。
+- 移除现有无标题批选 checkbox；单击选中，Ctrl/Shift批量，焦点项是键盘/详情上下文。单条显示字段，多条只显示计数、所属范围和移动/移除动作，不静默批改地址。切Group清多选；筛选保留未显示的选择时明确写“共选N，当前可见M”，可一键清除，批量摘要按真实完整集合。`全部Group`只读聚合检索/定位，进入具体Group才编辑/拖入/批量移动移除，复用原单sourceGroup原子操作，不新增跨Group批编辑能力。
+- 列默认名称、类型/目录、地址、定义状态；宽屏可加路径/Group，技术 GUID/localId 放详情或可选列。行高亮只代表 UI 选择；所有有效 Selection 都参与正式解析，添加/移除才改变定义，不新增“勾选参与构建”的底层行为。
+- 添加仅登记文件/目录GUID，目录可改Extensions，文件可改地址/alias；`ResourceSelection`没有Kind或独立子资产选择字段。子资产只在解析结果中按原 `DescribeSubAssets`/Catalog只读派生，显示name/localId/type并可定位；地址/alias继承主文件规则，源描述与真实构建验证结果分开。按单个Sprite挑选/改身份属于新数据能力，本专题不新增，也不做透明Atlas绑定。
+- 拖放文件/目录到明确Group的资源区；悬停显示目标与待加入的文件定义，非法来源显示原因。只调用现有 `AddSelections`，拖入子资产仍按原API归到主文件GUID，预览清楚写“加入主文件及其派生子资产”，不声称仅选一个Sprite。所有事件和快捷键同样遵循Play/编译/导入/执行门禁，不只禁用可见按钮。
+- Group 新增/改名/Packing/删除仍调用原 Operations；设置按上下文呈现。`从定义移除`可 Undo，不删除源文件，不逐次弹窗；`删除 Group`确认“删除该组及 N 条选择定义，不删源资产”；Workbench 不提供“删除真实源资产”。B06 失效输出的真实删除另列危险动作。
+- Ctrl+S 只保存当前明确编辑的 Project 或规则资产，按钮始终写明对象；多处 dirty 时分别显示，不调用 SaveAssets/SaveOpenScenes。Ctrl+F 聚焦当前表搜索，Alt+G 新建 Group，Esc 取消当前输入/清搜索或清多选（按焦点顺序），Undo/Redo 保持原原子编辑与调用合同。
+
+**图集子页**：不新增占满屏幕的独立向导。
+
+```text
+资源 > 图集（演示）
++--------------------------------------+-----------------------------------------------+
+| [自动规则] [显式 Atlas]               | 规则 / Atlas 详情                             |
+| 自动配置 [DemoAtlasRules] [定位]      | 自动：来源、分组、地址、打包设置（同一资产）   |
+| 状态       地址          Group       | 显式：资源路径、合同检查、[在 Inspector 编辑]  |
+| 待创建     atlases/menu   ui          | 输出路径 / 输入来源 / 完整身份                 |
+| 待更新     atlases/icons  ui          | 计划时间；已过期时不宣称当前有效               |
+| 当前有效   atlases/common ui         | [定位输出] [复制路径]                          |
+| 已失效     atlases/old    ui          | 失效输出：[检查并删除...]（危险、需确认）       |
++--------------------------------------+-----------------------------------------------+
+| [保存规则] [只读预览]   [生成 / 更新并准备]   显式：[准备本 Project 图集]                |
++--------------------------------------------------------------------------------------+
+```
+
+- 未登记时提供 `登记自动图集范围...`，调用原 CreateConfiguration，只新建不存在的自有子目录。配置缺失/归属损坏是错误，不降级成“未配置”。不允许 UI 直接改隐藏 owner/输出登记字段。
+- 自动规则在工作台内选择与编辑公开字段；使用同一 SerializedObject 小型字段绘制供工作台/Inspector 复用，执行按钮归各宿主，不能直接嵌入带执行副作用的完整 `OnInspectorGUI`。复杂 Unity SpriteAtlas Importer/平台打包设置仍用原生 Inspector，不重写其整套编辑器。
+- Create/Update/Current/Obsolete 对应“待创建/待更新/当前有效/已失效”，保留英文状态 tooltip。Preview 只读；Generate 实际生成并准备；显式 PrepareAtlases 也会先执行 B06 Generate，按钮旁清楚说明，不能误称只准备手工 Atlas。
+- Obsolete 保留可见，不自动删除；DeleteObsolete 继续复验归属、字节/meta 与引用，拒绝冲突。生成回滚失败显示主错误和恢复错误，不用旧 Atlas 假装新构建成功。不接管外部 Atlas/Importer，不 PackAll、不晚绑定。
+
+### 29.5 分包分析：先识别来源，再解释物理分包
+
+```text
+分包分析（演示，列表约60% / 详情约40%；需要时详情可切到底部）
++--------------------------------------------------------------------------------------+
+| 来源 [当前定义预估 v]  尚未计算/已过期/完成于...   [计算预估] [查看确切构建 v]          |
+| 搜索[包名 / Group / 源路径.......] [Placement v] [仅共享]                              |
++--------------------------------------------------+-----------------------------------+
+| Bundle（友好摘要 + 唯一后缀）  来源  源字节 依赖数 | ui / Together 的物理包           |
+| ui · Asset · ...ab12          Group  演示值  2    | Placement：Group                  |
+| shared · ...cd34              Shared 演示值  0    | 完整 BundleName [复制]            |
+| scenes · ...ef56              Scene  演示值  1    | [源文件] [依赖] [被依赖] [构建值] |
+|                                                  | Main / Dependency / Shared        |
+| 可排序；Group不是固定树父节点；共享包不重复列出   | > 依赖包...  [定位到包]           |
+|                                                  | 选择定义/图集规则来源 [定位]      |
++--------------------------------------------------+-----------------------------------+
+| 源文件大小 != 交付文件大小 != native memory；本次数据来源与身份始终可见                |
++--------------------------------------------------------------------------------------+
+```
+
+- 默认以物理 Bundle 为一行，按 Placement、Scene、Shared、Group 来源、源文件数与 SourceBytes 过滤/排序；友好摘要由结构化字段生成，完整技术名始终可复制，不依赖截断后的哈希猜身份。共享/环归并包可关联多个逻辑 Group，不伪造一个“唯一父 Group”。
+- 源文件 tab 列角色、路径、主资源地址、来源定义；主资源来自 Map.Assets，其他 AssetPaths 是依赖源，Shared 是包的共享归属属性，不假设每个文件都有可直接 Acquire 的地址。点击定位源资产或来源定义，不因选中反复 FindAssets/GetDependencies。
+- 依赖/被依赖用现有 Bundle DAG 按需展开树和列表；同节点多路径允许再次引用，标明重复节点并允许跳转。只解释当前正式图的层级，不上图编辑器、不新增依赖计算系统。没有正式逐文件因果边时写“此包依赖闭包的源文件”，不编造“由某一具体 Prefab 引入”的链路。
+- Placement 显示原 Group/PerAsset/SharedDependencies/SceneDependencies/CycleMerge 及简明说明；真实来源定义/自动规则追溯需要在原 BuildMap 构造中保留只读 provenance（见 §29.10），不能拿后来已修改的 Project 反推某次旧构建。缺少历史 provenance 时显示不可追溯，而不是按现配置补写。
+- 当前预估来自显式 `ResourceBuildMap.Create`；Map不拒绝内存dirty，故标签必须区分“含未保存定义”。自动图集待生成时显示计划与“最终分包尚不可用”，不能用旧输出表示新规则已完成。确切构建以 `ResourceEditorBuildReport` 为报告来源：时间/Invocation在report，Map/指纹/文件在report.Build；无配方Invocation可空，由操作上下文标注本次输入。定义改变只使报告“不代表当前定义”，不修改原事实。
+- 预估只显示 SourceBytes、避免重复源字节估计等已有量；实际 raw FileBytes/DeliveryFiles.Length、SHA、ContentChanged、native调用/缓存原因/阶段耗时只在确切构建数据中出现。无基线的 ContentChanged 显示“未知”，未测/不可用显示 `未计算`/`不可用`，不补0。
+- raw、delivery、manifest 旁车分别统计；`ResourceBuildResult.CopiedBytes` 恒0，不作为复制实测；本次发布复制量读 Release.CopiedBytes。历史 ReadHistory 重建的复制量/耗时不是历史实测，不能把其默认0显示成当时零成本。
+
+### 29.6 构建：有效输入、一个主动作、独立阶段结果
+
+```text
+构建（演示，输入区约55% / 检查与最近结果约45%，不用全页三栏）
++--------------------------------------------------------------------------------------+
+| 执行来源 [Demo Recipe v] [不使用配方] [新建配方] [定位]                               |
++-----------------------------------------------+--------------------------------------+
+| 本次有效输入                         来源     | 就绪检查 / 正式预检                  |
+| Project / 资源根 / Group             Project  | 未保存：Project（阻塞）[定位][保存]   |
+| 压缩 / 加密模式 / KeyId              Project  | 活动目标与Recipe目标不符（阻塞）     |
+| Target / App / Action / Force        Recipe   | key：尚未正式预检，不探测秘密         |
+| 常量生成选项 / 目标目录              Recipe   | 图集需生成：最终预检尚未完成          |
+| [内联编辑执行选项] [保存 Recipe]              | [正式预检]                           |
+| Project 策略只读 [编辑 Project 策略]          | > 查看完整检查/帮助                  |
++-----------------------------------------------+--------------------------------------+
+| [执行配方：构建并本地发布]（主） [更多 v]    不部署 / 不上传 / 不激活                  |
++--------------------------------------------------------------------------------------+
+| 本次结果：构建 成功 | 发布 成功 | 常量生成 失败（演示，不统称全部成功）                |
+| Project / Target / App / Recipe / 指纹 / 开始时间 / 总耗时                            |
+| [分析本次构建] [查看确切发布] [定位失败阶段]                                          |
+| > 任务与输出 [本窗口构建尝试 v]   排队时[取消排队]；开始后同步执行，不可交互取消        |
++--------------------------------------------------------------------------------------+
+```
+
+**配置与主操作规则**：
+
+- 无 Recipe 时保留原调用方式：目标只读为已活动 Editor 目标，App/Force/生成选项为本次非共享执行输入；默认主操作“构建并本地发布”，相邻次操作“仅构建”。Project 仍唯一持有定义/Compression/ContentEncryption/KeyId，不新增工作台执行配置资产。
+- 有 Recipe 时内联编辑其真实字段，主按钮明确随 `Action` 显示“执行配方：仅构建”或“执行配方：构建并本地发布”，只调用 ExecuteRecipe。不得用“仅构建”按钮临时覆盖 Recipe.Action；需要另一操作时显式改并保存 Recipe，或切换“不使用配方”。
+- Recipe引用其他Project时显示两个真实身份与“切换到配方Project / 清除配方”；执行阻塞，不改Recipe.Project凑当前页面。手动切Project时不匹配配方解除选择并提示，不修改资产。现窗口监听Selection只是Repaint，不新增隐式跟随任意选择；显式菜单/资产入口与SetProject统一经过排队取消/执行锁定门禁。
+- 有效输入表从 ResolveRecipe 或原 Project/本次参数投影；每项带来源，可定位而不复制政策。编辑 Project 策略会使 Project dirty；保存 Recipe 不保存 Project/图集/场景。普通查看、选配方、重绘不触发 ContentProvider。
+- 静态就绪检查只读非秘密配置/dirty/目标/Editor转换状态，不冒称完整 Preflight。明确点击“正式预检”才调用正式服务，且注明“加密项目会通过既有来源临时取 key 进行检查”；不保存/回显秘密。正式执行仍重新冻结、预检、校验与后验，UI 显示的上次绿色不是执行许可。
+- 图集待生成的预检提前返回必须显示“前置步骤待完成 / 尚未最终检查”，不是通过。缺 key、目标不支持、打开场景 dirty 分别给出下一步，不自动取环境值试错、不切平台、不保存场景。密钥仅说明来源名称与 KeyId，绝不提供 key 输入框。
+
+**辅助动作与结果**：
+
+- “发布已验证构建”仅针对当前明确选中的真实 BuildResult，显示 Project/平台/指纹/Workspace；输入已变时提示它是旧结果，服务仍复验并有权拒绝，不用预估替代构建。BuildResult 不持久化为可恢复任务，重载后不猜 raw 目录构造它。
+- BuildError / PublicationError / GenerationError 与阶段计时保持独立。生成失败后发布仍成立，结果为部分成功；提供原常量生成操作入口，不自动重复发布。发布异常若提交未确认，显示“发布结果未确认，请显式恢复确认”，不武断断言 Index 未变或自动重试。
+- 保留现有最多32次构建尝试的能力（`ResourceBuildView.cs:39,238-263`）：任务输出提供尝试选择器，含失败记录、操作时间、原Project与可用指纹/digest；选择某次report即可进分包分析/结果详情。新窗口内总量仍有界32，按Project身份过滤，不创建持久历史账本；关闭/重载后清空，不从raw目录伪恢复。
+- 正常明确按钮不反复弹模态确认；首次执行可展开的范围摘要说明 owned Workspace/Publisher 与是否生成常量。部署、签发导出、恢复和删除则各自需要其确切目标/范围确认，不能随主动作捆绑。
+- 阶段拟为“正式预检 → 图集前置 → 指纹/冻结 → native构建 → 读回/交付复验 → 本地发布 → 可选常量生成”；只在真实阶段接点记录。任务条仅在实际可重绘边界更新，同步段显示最后已确认的执行阶段和“不响应交互”，不承诺逐段实时动画/百分比/剩余时间。当前无完整阶段通知，需补小型观察接点（§29.10），不是重写native执行。
+- 耗时严格标来源：report.PreflightMilliseconds是正式服务预检；build.PreflightMilliseconds包含取key/图集生成/Map/设置指纹/旧产物验证等组合准备；build.MapMilliseconds也含图集/准备及后验，不冒称单一算法纯耗时。原有native/Hash/readback/编码/发布/生成字段照实展示；不同层级可重叠，不能相加凑总耗时或用组合值伪造缺少的阶段测量。
+- GUI仅允许开始前“取消排队”。排队时切Project先取消原callback并提示，再切换；操作开始后锁Project/Recipe与写入口，主线程同步执行期间没有可靠的窗口取消点击接点，按钮禁用并明示“本操作执行中不可交互取消”。脚本API原有token检查点保留，但不据此承诺GUI随时可取消；native不可抢占，Publisher/Deploy提交后须原Recover确认。E05分帧查询的取消是另一条已有可交互路径。
+- 不把 Unity API/native 构建放进 Task.Run，不做新异步任务引擎。只改反馈与解释，不删除指纹/后验、SHA/认证、StrictMode 或六项 callback 门禁；F03 的成本结论不是 UI 重写底层构建的理由。
+
+### 29.7 版本交付：先选确切版本，后选明确操作
+
+```text
+版本交付（演示，历史列表约45% / 选定版本详情约55%）
++--------------------------------------------------------------------------------------+
+| Project / Target   [读取已登记历史] [读取当前发布]   筛选 App / Unity / digest          |
++------------------------------------+-------------------------------------------------+
+| CatalogDigest     App   文件/字节   | 选定发布：完整digest [复制]                     |
+| > ab12...98ef   app-demo  演示值    | BuildId / Platform / Unity / App / 加密与KeyId   |
+|   cd34...76ab   app-demo  演示值    | 路径 / Catalog / Complete / 登记文件             |
+| “当前发布”只在读到Index后标记      | 当前Publisher Index：相同/不同/未读取            |
+| 无创建时间则不设“最近”或时间列    | Runtime active/LKG：此页不推断，[到诊断查看]     |
++------------------------------------+-------------------------------------------------+
+| [导出发布副本...] [签发此版本...] [内置部署...] [定位发布]                             |
+| > 高级：发布事务恢复 / 内置部署恢复 / 从完整已发布集合生成常量                          |
++--------------------------------------------------------------------------------------+
+```
+
+- ReadHistory 只取 owner.KnownVersions 的完整版本；调用逐版本验证/SHA，必须显式触发、显示成本/读取中，不在选页/绘制/排序时反复执行。现 API 遇一个坏版本会整次失败，保留明确错误，不把失败说成空历史；本设计不新增容错枚举/目录扫描。
+- 没有正式发布时间和序号历史时，按 digest/App 等可用字段排序；不拿目录 mtime、digest 顺序或本窗口打开时间冒充“最新发布”。本次操作时间可显示，但明确不是历史发布元数据。不同 App/Unity 可见且标为兼容不匹配，不静默隐藏成不存在。
+- `raw workspace` 是可变构建缓存；Publisher release 是 owned 不可变发布；导出是工程外新目录的副本；C02 是 StreamingAssets 的精确部署；Runtime active/LKG 属会话/Store。名称、路径和按钮始终使用这些概念，不用一个含混“发布/上线”串联。
+- 导出调用原 ExportRelease，先选择已有本地父目录，再明示即将新建的完整 digest 子目录；不覆盖、不同步 Runtime，不把框架 unitypackage 导出放进资源版本操作。
+- 签发为薄便利入口：让现 SigningWindow 接受一个明确 ResourceRelease/完整身份，执行前按原 ReadVersion 复验，不再悄悄 ReadCurrent 换版本。保留 channel/sequence/keyId/有效期与“渠道支持密文”确认；秘密仍只从原工程外来源获取。sequence 由操作者明确提供，不自增、不默认宣称1安全，不建设签名历史账本、渠道平台或私钥管理。
+- C02推荐纳入薄UI接点：先 `Preflight(selectedRelease)` 展示Source/DirectoryPath/WorkspacePath、完整身份、PayloadBytes与IsRepeat，再确认 `Deploy(plan)`；服务继续重新Preflight，不把旧Plan当授权。确认必须列完整自有写入集：`AssetBundles/YLBI_<token>/` 的owner、deploy.lock、journal/next与私有stage；`Assets/StreamingAssets/YLFrameworkResources` 下新增的root/Project/Platform/digest外壳、owner/布局控制文件、`payload~/`；以及原AssetDatabase.Refresh带来的对应文件夹.meta/导入副作用。不是只写payload，也不自动覆盖/删除旧版本或Activate（`ResourceBuiltInDeployer.cs:16-36,129-194,243-247,348-354,397-402`）。
+- 部署预览的PayloadBytes只是复制文件逻辑量，不是磁盘峰值或临时空间保证。新部署先有一份stage副本，源Publisher版本仍保留，提交是Directory.Move而非再复制一份；仅源+本次副本就约两份payload，外壳/meta/已有旧版本另计。分开显示“待复制payload / 临时workspace / 最终目标”，未测可用磁盘容量不画“空间足够”的绿勾；重复完整部署显示原IsRepeat复验语义。
+- “发布事务恢复”和“内置部署恢复”是不同动作，分别显示 ProjectGuid/ProjectId/目标与写入范围；现无通用 pending 状态查询，未查询时写“恢复状态未知”，按正式失败回执或 C02 预检错误给出恢复建议。不得解析异常文案猜 journal 阶段或自行读写控制文件；明确 Recover 由原 API 验证，不把它称作历史回滚。
+- 本设计不新增“把任意历史发布设为当前 Index”、列举全部部署或签名历史、磁盘清理、上传、Runtime 激活等不存在的 UI 能力。常量生成明确仍从匹配 App 的完整 owned 已发布集合读取，不声称只生成当前选中 digest。
+
+### 29.8 诊断：会话、磁盘与历史报告互不冒充
+
+```text
+诊断（演示；运行时为空不是错误）
++--------------------------------------------------------------------------------------+
+| [运行会话] [Store 只读查询] [报告与开始使用]                                          |
+| 来源：当前应用会话 / 窗口会话标签 / 采样时间 [采样] 自动采样[关闭 v]                   |
++--------------------------------------------------------------------------------------+
+| ResourceSystem 尚未初始化                                                           |
+| 本面板不会创建会话、加载资源或运行游戏。应用明确启动后再采样。                         |
+| [打开 Resource 文档] [定位 ResourceStartup 样例] [切换到 Store 只读查询]               |
++--------------------------------------------------------------------------------------+
+| 已启动时：责任摘要 / 资源与Bundle / 实例与Scene / 项目与版本事务 / 内容输入 / 请求历史   |
+| 可排序明细表：状态 / owner / producer / waiter / root pin / 入边 / 责任原因            |
+| 选中详情或依赖路径；无 Destroy/Unload/清理/激活按钮                                   |
++--------------------------------------------------------------------------------------+
+| Store页：来源 / 绝对root / Project+Platform闭包 / App(输入) / 扫描步骤上限 [查询]        |
+| Status / 起止时间 / 完整性 / observed逻辑字节下界 / 候选是否有效 / issues              |
+| Kind / State / Project / 路径 / 字节完整性 / Protection / 保护原因                     |
+| [取消本次只读查询] [复制报告]  无删除按钮                                             |
++--------------------------------------------------------------------------------------+
+```
+
+- 运行会话报告保留当前七区的完整能力：Projects 的挂载/兼容/身份，资源owner/producer/waiter/queued，Bundle root pin/入边，实例/Scene责任，Updates的阶段、传输/重试、激活项目与RecoveryNotes，请求历史。全会话数据标记为全局，可按当前 Project 过滤，但不能把全局计数误称为该项目。
+- 补显示已存在的 `report.Content` 预算/allocated/reserved/peak、live input/work、声明native read buffer及CNG分项；直接用同一次报告，不再另采一次内容快照。Bundle内容在途/故障/清理失败、Asset排队/图片缓存资格、Scene记录/native开始与完成等原字段在详情可见；这是显示缺口，不是新增Runtime账本（`Diagnostics/ResourceDiagnosticsReport.cs`、`ResourceContentDiagnosticsSnapshot.cs`）。
+- 未初始化为中性空状态；会话退出/替换则标记旧快照并停止自动采样，提示重新绑定，不自动初始化或强停资源。报告没有正式SessionId/Mode；沿现sampledSystem引用相等判断会话，窗口分配短标签仅供本地辨识并明示不是Runtime身份，不反射私有配置。正式资源版本身份仍用报告内SnapshotId/CatalogDigest。文档/样例按钮只打开文件或Ping，不执行样例、创建Scene或注入provider。
+- 自动采样默认关，用户显式选择后先提供原5s频率；页面不可见/窗口关闭/Play转换/编译导入时暂停，回来显示“已暂停，点击恢复”，不默默重开。请求历史默认关闭，但不覆盖应用已有设置；显示采样时HistoryCapacity与时效，提供明确“记录最近128条/关闭”操作。提示须说明ConfigureDiagnosticsHistory会清空旧缓冲、不回填，且切换前已在途请求的完成事件也不再记录；这是重新开始一段历史，不是无损开关。不是每次绘制按旧报告同步设置，关闭窗口不重置应用历史（`Diagnostics/ResourceSystem.Diagnostics.cs:47-74`）。
+- **Store默认入口只有一张显式表单**：初始root和闭包为空，由操作者输入绝对root、完整ProjectId/Platform集合及各项目App输入；应用显式传入的现有ResourceConfiguration/ArtifactStore仅作为同表单可选预填来源，确认后才查询。Workbench Project/活动构建目标不能推导应用Store配置，不扫描persistentDataPath、不采用ArtifactStore.DefaultRoot，不把查询输入变成Runtime配置权威。
+- ResourceSystem/ResourceStartup 都没有公开配置getter；不反射取私有字段、不为UI新增Runtime getter。可选预填需要小型Editor-only会话参数接点，由应用Editor代码显式转交其保留的配置，仅复制root/完整mount闭包；Runtime程序集不反向引用Editor。无接入也可用默认手工表单（`ResourceSystem.cs:45-59`、`Integration/ResourceStartup.cs:15-30`、`ResourceConfiguration.cs:15`）。
+- 输入只在窗口会话存留，关闭/重载丢弃，不新增SO、不写Project/Recipe、不保存provider。只复制root与ProjectId/Platform/App字符串，不保留传入的Store/配置/mount/BuiltIn/Remote对象；用纯值重新构造仅查询所需对象。root须符合原私有目录限制；owner验证的是完整ProjectId/Platform闭包，**不验证App**。App是mount必需输入，UI标“操作者输入/应用提供，未经Store owner校验”，Ready也不是App匹配或内容兼容认证；不为UI再读Catalog补成未经授权的新验证（`Updates/ArtifactStore.cs:38-55,110-151`）。
+- 查询不要求BuiltIn快照/digest，不能把Publisher目录当Store。临时ArtifactStore不是第二ResourceSystem authority，原Query仍按同root采集当前及排空旧会话的保护；不同root未见持有不等于全局无持有。界面始终显示保护观测的root与来源，不把App输入或空运行态保护当认证（`Updates/ResourceSystem.Artifacts.cs:20-44`）。
+- 查询用原 IEnumerator 的分段机制，在Editor主线程update驱动；只允许一个在途查询，显示“只读查询中”而无伪百分比。`maxEntries`标为扫描步骤上限（默认10000），不是最多返回多少行。取消/离页/关闭/切换来源或Project必须Dispose枚举器；直接中止可能无新报告，旧结果明确保留原身份。不创建MonoBehaviour/协程宿主、root/lock/目录，不读取key、不加pin、不自动重试；不能调用有恢复副作用的GetPreparedUpdates。
+- Ready/Missing/NotConfigured/RecoveryRequired/Busy/Changed/Incomplete/Canceled/Invalid/Unreadable 等保留不同空态/错误语义；RecoveryRequired 只提示应用通过既有恢复流程处理，本页不放恢复/清理按钮。CompleteRecord 不是 Bundle SHA/可挂载性/签名新鲜度认证。
+- `ObservedBytes` 为逻辑观测值；`IsSizeComplete=false` 显示“已观测至少...，不完整”。`CleanupCandidateBytes=null` 或非Ready显示“不适用/结论失效”；Ready下明确有效的0仍显示0，不混淆未知与真实零。Protection组合和每项issues保留，Changed/Busy清楚说明结论不能用于操作。此页不提供CleanupVersionsAsync，不把旧候选预览变成清理授权。
+- “报告与开始使用”可选本窗口某次确切构建；F03只提供已有Resource.md“代表性成本与复跑”和测试/准备脚本的精确路径式定位，不做外部证据浏览器，不读/扫描Temp或解析Plan。环境/负载/mode/n/资格限制由原文档呈现，性能数字不硬编码为实时指标，Unavailable不补0，不调用测量入口。Editor不引用Tests类型，缺少参考文件就显示不可用，不查找替代目录。
+
+### 29.9 视觉规范、窄屏与关键状态
+
+**视觉与密度**：使用 Unity 原生表格/表单语言，少量边框与一个选中强调色，无大卡片、渐变、装饰图表或商城式按钮。
+
+| 项目 | 具体规范（GUI point，真实GUI成形时允许按主题校准） |
+|---|---|
+| 文字层级 | 项目/页面标题约14、加粗；正文与可编辑字段沿原生 EditorStyles 字体/字号；辅助信息用同字号较低对比度，不靠极小字降权；GUID/digest/路径是可选择技术文本，不强制引入外部字体 |
+| 行与命中 | 数据行 `max(22, singleLineHeight+4)`，工具条26～28，主要按钮26，普通控件至少原生行高；图标命中至少20×20，拖动分隔命中6；不为窄屏压低字号/点击区 |
+| 间距 | 4为基础：字段间4、区域内8、区块间12、页面外边距8～12；标题后8；边框1，使用低对比度原生分隔 |
+| 表单 | 常规 label约110～140，字段随区宽；长表单可读宽约480～640，不无限伸到屏幕右端；详情默认320～400，可拖宽；窄区标签改上置 |
+| 表格 | 固定行高、原生列头、可调列宽/隐藏次要列、细交替底纹；不自动把所有列撑满，名称/地址吃剩余空间；数据表不套第二层无必要滚动条 |
+| 状态 | 选中用原生主题蓝，失焦选中用原生弱化态；hover只轻微提亮，不伪装选中；键盘焦点可见。状态必须有文字/图标，不只靠红绿 |
+| 操作权重 | 每任务区一个主动作，以位置/文案/少量强调区分；只读/定位/复制为次操作；危险删除/恢复单独组并列明范围，禁用时旁边可见原因，不仅tooltip |
+| 主题/DPI | 按 isProSkin 与原生样式构建窗口级副本，深浅主题都验；不修改全局 EditorStyles。按 pixelsPerPoint 使用 GUI point，不二次放大，换DPI后重建必要缓存 |
+| 长身份 | 默认保留路径尾段/地址关键段；digest可用首12+末8，但近似值碰撞时扩展或看完整值。详情、复制按钮/上下文菜单提供原值，复制不复制省略号；签发/部署确认必须可查看完整身份 |
+| 中文用词 | 统一“资源工作台、资源、选择定义、解析结果、分包预估、确切构建、本地发布、版本交付、只读查询、待恢复确认”；保留 Project/Group/Bundle/Recipe/KeyId 及正式API/错误名，不建设框架多语言系统 |
+| 帮助与告警 | 常规合同收进字段提示、折叠帮助或文档；阻塞错误、未保存、部分成功、未确认提交必须在对应区域持续可见。成功瞬时提示约6s，之后仍可查所属结果，不将全页顶端HelpBox当日志 |
+
+**尺寸与布局**：
+
+- 宽屏参考 `1440×900`，资源页三块；Project选择不常驻占一栏。分析/版本两块；构建左右输入/检查，诊断依数据一表加详情，不强迫所有页面三栏。
+- 普通停靠参考 `1080×720`：Group约160～190，详情约300～340，资源表优先；详情可折叠，次要列默认隐藏，工具条低频动作进入“更多”，主操作与错误仍可达。
+- 合理最小目标 `720×480`：Project工具条可两行，任务导航切紧凑下拉；Group改下拉，资源表与“详情”用同区域来回切换并有返回/所选名称；构建区按输入→检查→结果垂直排列，版本详情同样切换。输出默认折叠为约26高，可拖展开。详情有独立纵向滚动，不让主操作落到无出口的横向溢出区。
+- 现有minSize为620×440；720×480是本次密度设计目标，不把建议直接写成已验证下限。UX1也回归620×440的临时停靠/滚动可达性，若要提高minSize须在主要布局体验确认时明示影响；不靠缩字解决。最终下限以真实Unity结果为准，不以线框代替结论。
+
+| 关键状态 | 用户看见什么 / 可执行什么 |
+|---|---|
+| 未选 Project | Project选择/创建/文档；项目任务为空态，不扫描全部资产来填列表；会话诊断可独立查看并标明不依赖Project |
+| 空 Group | “尚无选择定义”，提供添加/拖放，不显示资源错误；正式预检仍可因原非空Group合同阻塞，UI不提前放宽 |
+| 未计算 | 无伪0计数/包；显示来源和显式计算入口 |
+| 结果过期 | 保留旧快照与原时间/身份，标明不代表当前定义；重算/重读需明确触发 |
+| 未保存 | 顶栏和实际资产各有dirty，分别保存；执行按原门禁拒绝，不保存场景或无关资产 |
+| 执行中 | 原项目/配方/操作身份与最近可显示阶段；同步段不承诺交互刷新或取消，禁止重入与改输入；只读查询分帧取消另列 |
+| 部分成功 | 按构建/发布/生成分列；已发布版本仍可定位，不一键重做全部 |
+| 失败 | 原阶段/错误码/非秘密因果与下一步；有旧结果也不冒称本次成功，不自动重试写入 |
+| 待恢复确认 | 区分Publisher或C02；保持不确定语义并提供范围明确的原Recover，不自动判回滚或清目录 |
+| Runtime未启动 | 中性空态，文档/样例定位和E05查询入口；无初始化/运行原游戏按钮 |
+
+### 29.10 技术选型、数据流与必要接入
+
+**推荐继续 IMGUI，但重组前端结构并采用原生多列表格/树，而不是保留当前 GUILayout 堆叠。**
+
+- 当前Views、Inspector、键盘/拖放、一次性queue均为IMGUI；`UnityEditor.IMGUI.Controls.TreeView + MultiColumnHeader + SearchField` 可提供可见行绘制、原生多选、列头排序接点、搜索与依赖树，直接满足任务。排序/过滤投影仍由工作台按正式数据实现，不声称控件自动理解业务。宽窄布局以明确Rect/最小宽度组织，解除现条目宽度上限440和列表高度上限280，而非继续GUILayout堆叠。
+- Unity 2022.3 官方推荐复杂 Editor 工具优先考虑 UI Toolkit，且该版已有 MultiColumnTreeView、固定高度虚拟化、SerializedProperty绑定及 IMGUIContainer；本建议不是认定它不可用。这里主要瓶颈是信息组织、来源/失效和执行入口，而非缺少 retained-mode能力；原生 TreeView 的可见行绘制已足够，切换框架不会让同步 BuildPipeline/历史SHA异步。
+- 相比之下，完整 UITK 迁移需重建壳/列表/拖放/快捷键/焦点/绑定/重载处理，并验证2022.3与已有CustomEditor边界；直接包现四页 IMGUIContainer 只会保留原问题，整窗两套交互也增加维护。本专题先用 IMGUI 统一完成结构重组，成本集中于真正有收益的表格、上下文和少量服务接点，不引入第三方依赖。
+- 唯一有实质取舍的备选是“UI Toolkit壳与虚拟列表 + 纯字段的局部IMGUI容器”，适合后续团队明确要用 UXML/USS 协同维护；业务/操作仍相同。它不是本次默认，不双轨实施、不新增MVVM/主题平台；若用户选它需在UX1前一次性裁定迁移范围，而不是页面逐个随意混用。
+- 版本资料：Context7工具本轮未提供可调用入口，改用已读取的官方2022.3文档：[UI systems comparison](https://docs.unity3d.com/2022.3/Documentation/Manual/UI-system-compare.html)、[TreeView API](https://docs.unity3d.com/2022.3/Documentation/Manual/TreeViewAPI.html)、[MultiColumnTreeView](https://docs.unity3d.com/2022.3/Documentation/Manual/UIE-uxml-element-MultiColumnTreeView.html)、[IMGUI migration](https://docs.unity3d.com/2022.3/Documentation/Manual/UIE-IMGUI-migration.html)、[pixelsPerPoint](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/EditorGUIUtility-pixelsPerPoint.html)。不拿Unity6资料当本工程能力证据。
+
+**已核对的复用位置**：
+
+| 位置 | 复用结论 |
+|---|---|
+| `Editor/Utilities/Windows/SplitWindow.cs` | 它是单水平分隔的EditorWindow基类，现Resource窗口直接继承EditorWindow，并未使用它。可参考现拖动/光标/比例逻辑，不为形式复用更换基类；Workbench嵌套/窄窗分隔在局部处理，不改所有Editor窗口 |
+| `Editor/Utilities/TreeViews/TreeViewStateGroup.cs:31-49` | 现成可序列化的hash→TreeViewState容器，可复用本地树选择/展开状态；它不负责列宽、EditorPrefs或完整布局持久化。按窗口/Project/视图隔离，不把整数hash当资源身份；不为此扩展通用状态框架 |
+| `Editor/Help/HelpStyle.cs`、`HelpWindow.cs` | 深浅色、可复制文本/消息及样式缓存可参考；HelpDraw/Palette多为internal、阅读页装饰不适合照搬数据台，不为此抽一个全框架主题系统。文档入口直接定位现Resource.md，不假设已有Resource帮助模块注册 |
+| `Editor/Systems/Audio/AudioInspectorUtility.cs` | 可参考SerializedProperty字段与混合值条件显示；它是Audio内部绘制，不是通用保存/执行门禁组件，不建立Resource对Audio工具的依赖 |
+| Resource现Views/Operations/Inspectors | 保留菜单、正式执行与序列化合同；按资源编辑/分析/构建/交付/诊断职责拆分当前BuildView和消息状态。小型共用字段绘制只服务真实重复点，不写通用MVVM或第二任务框架 |
+
+**数据流**：用户编辑同一 Project/Recipe/Atlas配置 → 原 SerializedObject/Operations 与 Undo/dirty → 本地视图失效标记 → 用户显式计算/预检/执行 → 原服务返回只读快照/真实结果 → 前端按操作上下文接收。UI缓存不是资源、发布、配置或会话的权威。
+
+| 接入类别 | 具体边界与必要性 |
+|---|---|
+| 现有能力，仅重排UI | Project/Group/Selection编辑、保存/Undo、BuildMap/BuildResult表、原构建发布、Publisher历史/导出/恢复、运行诊断；不新增底层语义 |
+| 小型UI适配 | Recipe/Atlas纯字段绘制与明确保存；选择/多选稳定映射；report及32次尝试表格投影；C02完整范围Preflight→确认→Deploy/Recover；签名窗接收选定历史发布；E05显式表单、纯值查询对象与Editor IEnumerator驱动 |
+| 可选Editor预填接点 | 应用Editor代码显式向当前窗口传入/清除root与ProjectId/Platform/App纯值，仅作同表单预填、不自动查询；不保留配置/provider/mount/BuiltIn/Remote引用，关闭/重载清除，Runtime不引用Editor。默认手工表单不依赖此接入 |
+| 必要新增只读报告接点 | 正式预检增加可供UI消费的结构化结果，至少区分“静态阻塞/图集前置待完成/完整预检完成”，支持Recipe的真实Target/App来源；复用原唯一预检控制流，保留旧string入口和原执行复检，不解析成功文案猜状态 |
+| 必要新增观察接点 | 在原Editor Operations/Builder的实际阶段边界增加只读阶段通知，复用原发布/部署阶段接点而非暴露测试故障注入。通知不改变执行、锁、校验、取消或提交结果；无接点的细分阶段不显示为已知，不为逐帧刷新重写native流程 |
+| 必要新增追溯数据 | 原BuildMap解析时保留有限的Selection/自动图集规则来源副本，供当前预估及该BuildResult定位来源；不持有另一Project配置、不改变Catalog/Bundle身份、不新增资源依赖计算系统 |
+| 明确不新增 | pending-journal查询平台、签名/部署历史账本、发布时间schema、发布索引历史回滚、清理、上传/渠道/密钥管理、benchmark、新配置权威或全框架UI系统 |
+
+上述新增接点是后续 Code 范围建议，尚未实施/授权；若实现时发现必须改变公开执行合同、Catalog/序列化身份或新增依赖，应停止该部分并重新确认，不能以UI适配名义扩大。
+
+**失效与异步归属**：
+
+- Project切换：只显示该Project缓存/报告，原消息不贴到新Project。**排队时切换即取消未开始的旧callback；开始后才锁定Project/Recipe与写入口**，所有显式菜单/资产入口一致。同步执行期间窗口可能不响应，不能承诺还能交互浏览其他页；有可重绘机会时可看已有结果，但不触发交叉重操作。应用外部修改仍由正式冻结/后验拒绝，而非假定UI锁能管住全工程。
+- Project/Group/选择/地址/alias/策略/图集规则编辑或Undo：当前Map/图集计划/预检变过期；本次Build报告保留原事实并标“与当前定义不同”。只改Recipe执行值使有效输入/预检过期，不无故把资源Map重新计算；Target/导入环境变化则标记相关分析环境改变。
+- 外部Inspector/API编辑、AssetDatabase导入/删除及projectChanged：记录廉价修订/保守失效，不扫描；用户明确刷新时重新解析。无事件可证明最新性时写“最近一次显式计算”，不靠UI哈希冒称已冻结。选择、排序、搜索、列宽不引发Map/SHA/native工作。
+- 每次排队/查询捕获Project GUID、Recipe身份及解析的非秘密来源、目标、定义修订、操作序号；Runtime以sampledSystem引用相等判会话，E05以root/完整ProjectId+Platform闭包/App输入及查询序号判上下文，不保留外部配置引用。回调只更新匹配视图，旧结果归原上下文，不用当前project重命名。开始仍调用正式冻结/复验，不把UI快照当Invocation。
+- 保持原一次性 EditorApplication.update queue；待执行时遇Play/编译/导入/关闭/切换则取消并解除订阅。正在执行的同步服务沿自身finally负责，关闭窗口不是native取消或回滚，不能释放服务拥有的输入。前端观察者失效只停止更新，不改变正式操作结果。
+- OnDisable/Domain Reload解除本窗口订阅、取消/Dispose查询、销毁自己创建的Editor/样式资源；不关闭业务startup，不改变历史设置/Session，不丢服务清理责任。重载后只恢复布局/选择，丢失的临时报告明确“需重新读取”，不自动续跑写操作。禁用Domain Reload时同样防重复订阅。
+- 布局、筛选、展开、列宽及上次选择放窗口序列化状态/有工程+Project+视图键的本地EditorPrefs；不写入Project/Recipe/图集配置。可共享值仍只在原SO。查询配置/凭据默认不持久化，UI不保存秘密。
+- 小数据不分页；TreeView仅绘制可见行。现Definition/Build/Diagnostics已做可见行与部分筛选缓存，重组须保留而非声称从零补虚拟化。行投影/搜索键在数据更新时缓存，较大缓存表可约150～250ms合并过滤输入；依赖树按展开投影。正式上限可达16384资产，不回退到每Repaint绘全部；历史全校验仍显式读一次，不用分页伪装已有增量API。
+
+### 29.11 常见任务的完整路径
+
+| 任务 | 正常操作路径及结果边界 |
+|---|---|
+| 首次配置并发布 | Project选择器→创建新Project→项目设置明确专用根/身份/策略→资源建Group并添加定义→按需登记图集→分别保存→构建选择可选Recipe或无配方→确认有效输入→正式预检→主构建发布→分别看构建/发布/生成结果→到版本交付选确切digest；不自动部署或启动Runtime |
+| 日常改资源后构建 | 资源表搜索/拖放/改地址→Undo可撤销→保存目标资产→旧预估/预检显示过期→可重算分析或直接执行原正式构建复检→结果中解释变化/强制重建原因；未变化SHA不等于跳过native |
+| 历史版本导出/部署 | 版本交付显式读历史→按App/完整身份选版本→导出到新digest目录，或C02只读预检→核对目标和范围→明确部署→定位结果；不改当前Index/active/LKG、不覆盖旧版本 |
+| 解释分包 | 分包分析选“当前定义预估”并计算，或选择某次确切构建→按资源路径/Group检索→选物理Bundle→看Main/依赖/共享、Placement和来源→依赖/被依赖树定位；源大小与交付大小分列 |
+| 缺key/构建失败 | 构建页可见阻塞/失败阶段→看非秘密错误与KeyId/来源说明→应用在既有provider/环境来源修正→显式再预检/执行；不在窗口输入key、不自动下载、降级或清旧版本 |
+| 查看运行占用 | 诊断→明确当前Session→手动采样或显式开启5s→按资源/Bundle/owner查看责任与内容预算；未启动就读文档/定位样例，或提供明确Store配置做只读查询，不运行原游戏展示 |
+
+### 29.12 后续实施批次与验收（本轮不执行）
+
+所有批次均须另获 Code 授权。保持原功能基线和现有正式服务；不逐批自动Commit，UI完成并验收后的第二次独立提交仍需明确授权。只补UI及直接受影响服务的测试，不把设计变成重新做阶段8技术认证。
+
+| 批次 | 完成范围与完成条件 | 必要验证 |
+|---|---|---|
+| UX1 壳与资源主工作区 | 五任务导航/项目上下文、资源原生表、Group/详情、项目设置、保存/多选/消息边界和宽窄切换形成主要布局；其他未迁移页临时复用原功能，不伪称全部完成 | 自有非空数据验证选择/多选/过滤/拖放/地址/Undo/保存、全部Group只读/具体Group编辑；深浅主题及1080/1440/720初验、620旧最小停靠可达性；**此时给用户真实Unity截图及交互结果确认方向，未确认不批量铺开全部页** |
+| UX2 分包与图集 | Map/确切BuildResult双来源表、双向Bundle树、追溯只读数据；B05/B06正常入口与规则编辑、状态/冲突/删除分层 | 预估/dirty/过期/空Group与真实构建差异；少量共享/Scene/环归并/子资产数据解释正确；现自动Atlas/显式准备直接回归，不重复完整Runtime Atlas矩阵 |
+| UX3 配方与构建结果 | Recipe内联/无配方同等可用、来源表、结构化预检、真实阶段观察、32次尝试选择、同一Operations执行与部分成功/待恢复反馈 | Recipe/Project dirty、Target不符、缺key、图集预检提前结束、真实构建/发布/生成失败；排队取消/切Project取消，开始后不可交互取消的文案；阶段通知不改结果，不重跑F03 |
+| UX4 版本交付 | owned历史/确切版本、当前Index标记、导出、选定历史签发、C02 Preflight/Deploy/Recover薄接点与独立恢复入口 | 自有版本真实UI→同一API；完整写入范围、目标/重复/恢复、排队取消与执行中取消不可用。token检查点取消仅复用/定向补自动化测试，不要求同步GUI点击中途取消；不上传/激活、不碰用户StreamingAssets |
+| UX5 诊断与整体收口 | Runtime完整字段表、E05明确配置/查询/Dispose、报告/快速开始、全窗口状态一致性和最终可达性 | 无隐式初始化/key调用/额外pin/目录创建；查询非Ready/不完整/保护原因，项目切换/旧异步结果/关闭/重载/转换不串状态；完整常见任务与主题/DPI最终GUI验收 |
+
+验收按证据分层，不以一种替代另一种：
+
+- **静态与定向测试**：核对实际diff/asmdef/meta与API调用边界；复用并按新交互调整 `ResourceWorkbenchTests`、`ResourceWorkbenchInteractionTests`，对结构化预检/阶段通知/追溯与E05适配补关键断言；直接受影响的Recipe/Atlas/Publisher/C02测试按实际改动选叶。不削弱原断言或依赖私有类名“创建成功”冒充操作通过。
+- **实际Unity编译**：当前主Unity完成导入/编译，记录真实结果；IDE/dotnet/反射创建Editor对象不替代。无新增依赖和Player代码时不为UI重跑Player/E04/F03，未变化证据按原资格沿用。
+- **真实GUI**：在同一主Unity、自有可识别的非空项目中，演示文件/目录/地址/alias/子资产、多Group与合理较大缓存行集；做鼠标、键盘、多选、过滤隐藏选择、拖放、上下文菜单与Undo/Redo。列出实际规模，不用只有一个空项目的截图验收。
+- **视觉矩阵**：深浅主题；普通停靠/宽屏/最小目标；现环境可用的100%、150%与适当高DPI条件（不可用项明确记录，不伪造缩放图）。无重叠、控件裁切或不可达操作，长路径/digest完整可查看复制；截图记录主题、GUI point窗口尺寸与pixelsPerPoint。
+- **操作/状态矩阵**：未选/空Group/未计算/过期/dirty/执行中/部分成功/失败/待恢复/未启动；排队后切页/外部Project选择、旧E05完成、窗口关闭、脚本重载、Play/编译/导入转换；确认原操作只执行一次、输入有身份、结果不贴错项目、没有自动写入或丢失Dispose/finally责任。
+- **正式流程**：通过真实UI进入同一Operations/Publisher/C02/Signer；实际写入仅限经授权的自有夹具范围。证明生成失败不抹去发布成功、旧Build发布仍复验、C02部署不激活、签发不换所选版本、查询不清理。正常应用会话只观察，不为了截图运行原游戏。
+- **最终交付**：真实Unity截图与交互结果、必要定向测试/编译结果、未验证限制及使用配置说明，增量维护此Plan和届时真正变化的Resource.md。UX1方向确认不能替代UX5完整验收，反之不等全部完成才第一次让用户看布局。
+
+### 29.13 定向设计 Review 与裁定
+
+- 已完成一次独立只读定向设计Review，并在同次Review内核对诊断段的研究增量；范围仅本节与关键源码的功能覆盖、复杂度、副作用、技术成本及可验收性。不重开31项审计，不运行测试，不再追加全面Review。
+
+| Review实质问题 | 设计修订与核对结果（不是产品修复或GUI验收） |
+|---|---|
+| C02确认只写payload，漏workspace/控制/导入副作用 | §29.7按Deployer源码补完整写入集、.meta/Refresh与stage逻辑成本；不把PayloadBytes当峰值/磁盘空间认证 |
+| 子资产选择API/字段不存在；现源码尺寸/继承/状态存储描述有误 | 回读Definition、ResourceSelection、Operations及公共工具；§29.2/29.4/29.10改为真实620×440、145/160、125～280与宽度夹值；只有AddSelections和只读派生子资产；不声称窗口已继承SplitWindow或TreeViewStateGroup自带EditorPrefs |
+| 排队切换策略矛盾，token能力误写成同步GUI可点击取消 | §29.6/29.10/UX3～4统一排队切换取消、开始后锁定且不可交互取消；分帧E05取消独立，检查点token仅脚本/自动化覆盖 |
+| 遗漏最多32次构建尝试，report/result与阶段耗时层级混淆 | §29.6保留有界32次选择；时间/Invocation属report、Map/指纹属Build；组合计时不冒称单阶段或相加为总耗时 |
+| 诊断七区/Content字段遗漏，Mode无来源，历史切换丢在途完成事件未说明 | §29.8保留Projects/Updates/RecoveryNotes，补同次report.Content与既有字段；移除Mode，窗口标签不冒充正式SessionId；明确历史generation切换语义 |
+| E05 App未由owner验证、可选预填无明确边界 | 回读ArtifactStore.Owner/ValidateOwner与CaptureArtifactState；§29.8区分ProjectId/Platform owner闭包和App输入来源，Ready不代表App兼容；§29.10列出可选纯值Editor预填接点，不保留外部配置/资源引用 |
+
+- 主代理按上述finding逐条回读原源码、修订并定向核对文档一致性；没有把“改了Plan”宣称为产品问题已修复，也没有声称修改后又完成了一轮独立审查。真实视觉/交互/编译/定向测试全部留到获授权的Code批次。
+- 提交审核时的明确推荐：IMGUI原生多列表格/树重组；五任务导航、图集归资源子页；无配方主操作为“构建并本地发布”，有配方严格服从Action；C02/历史签发/E05纳入薄UI接点。它们等待用户与ChatGPT整体审核，不视为Code授权。
+- 尚需审核裁定的实质取舍只有：是否采用上述IMGUI路线（备选UITK迁移成本见§29.10），以及是否同意UX4把C02与历史签发一起接入。推荐均按本节纳入；不要求用户重选多套风格。若只批核心UI，可保留这些API/Inspector原入口而不宣称已接入工作台，须同步缩小UX4验收范围。
+- 本轮停止点：**Workbench UI/UX设计完成，待用户与ChatGPT审核。** 不自动切Code、不实施UI、不进入8.10、阶段9或其他XF扩展融合，不执行第二次提交。
+
+### 29.14 UX1 审核裁定、授权与实施记录（2026-10-17）
+
+- 用户已审核并采用§29推荐方案：顶部Project上下文、资源/分包分析/构建/版本交付/诊断五入口，资源Group/原生多列表/按需详情及可折叠输出，IMGUI路线；图集归资源子页。上文设计阶段“不改产品/待审核”为历史边界，不阻止本次明确授权。
+- 本轮只实施UX1。C02/选定历史签发/E05已同意纳入整体专题，但分别留UX4/UX5；图集完整页/追溯留UX2，结构化预检/阶段通知留UX3，不提前建设。原未迁移功能继续可达，局部拆分现View而非复制整套旧页或伪按钮。
+- 初始实核：`fusion/8-resource`，HEAD仍为`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`；并行Plan、配置、AGENTS、插件/Packages/ProjectSettings等已有改动全部保护，不补交、不回退、不接管。本轮不暂存/提交/推送或执行其他Git写操作。
+- 当前唯一主Unity进程15324，工程路径/2022.3.62f3c1/StandaloneWindows64已实时核对；无Play/编译/导入/Test Runner在途任务，ResourceSystem未初始化；Main.unity已保存且不dirty。初始无Workbench窗口，深色主题，pixelsPerPoint=1.75。这是本批现场，不沿用旧PID/文件数。
+- 实施判断：沿用原Operations、SerializedObject、一次性update queue及构建结果；不改程序集、持久资源身份或执行协议。排序/筛选采用会话内稳定行ID到真实GUID/Group定义映射，操作时重新定位模型，不能把显示行号写回定义。全部Group只读；具体Group的原子编辑/Undo保持。
+- 测试先覆盖新增交互映射与门禁，使用原owned夹具；图形与鼠标/键盘验证单独记录，不以反射创建对象/直接Operations替代。只做直接影响回归，不重跑B02/F03/E04/Player矩阵；不为了形式RED破坏原功能或将新接点缺失描述成产品缺陷。
+- 保留原minSize=620×440，目标布局按1440×900、1080×720、720×480 GUI point验证，并检查620×440可达性。真实截图记录主题、窗口GUI尺寸与pixelsPerPoint；可用主题/DPI之外的矩阵明确未验证，不修改系统缩放/权限。
+- 本批结果：**UX1技术完成，待用户视觉与交互验收。** 以下记录实际范围与未验证限制；停止等待主要布局确认，不自动进入后续批次，不执行第二次Git提交。
+
+### 29.15 UX1 实现、Review与验证结果
+
+| 交付 | 已实现范围 |
+|---|---|
+| 项目上下文与五任务壳 | 搜索式Project选择器（名称/ProjectId/路径/GUID提示）、新建原入口、dirty/明确保存、项目设置与文档；保留菜单及Project资产入口；minSize仍620×440 |
+| 主资源区 | 原生TreeView/MultiColumnHeader、可调列宽/排序、Group折叠/分隔、单选详情/完整路径复制、Ctrl/Shift多选与隐藏选择计数；全部Group只读，原单Group批量协议不变 |
+| 真实编辑 | 文件/目录添加及拖放、地址/alias/Extensions、Group新增/改名/Packing/删除、移动/移除、上下文定位/复制、Undo/Redo与快捷键；子资产只读派生，不加选择协议 |
+| 设置与保存 | 同一SerializedObject/Operations，设置表单限定宽度、窄窗可返回；Ctrl+S先显式提交Group名称再仅SaveProject，不全局保存或改场景；根错误可清理/修正 |
+| 反馈与旧页承接 | 原update queue、Project/页面/时间消息、短提示+完整输出、最多32次尝试与历史选择门禁；分包分析/构建/交付/诊断原有效入口仍可达，BuildView局部分出交付绘制而未复制整份View |
+
+- 新增源码仅`ResourceEntryTable.cs`、`ResourceProjectPicker.cs`、`ResourceWorkbenchGUI.cs`，均位于原`Editor/Systems/Resource/Service/`且由Unity生成新.meta。修改原Window/WorkbenchView/DefinitionView/BuildView及3个直接相关测试文件；未改Runtime、Operations协议、asmdef、Catalog、Packages或ProjectSettings。Resource.md仅增量同步本批实际入口。
+- 一次独立实现Review已完成，未发现High。修复了Group输入Ctrl+S时序、同GUID重选丢状态、最新尝试误标历史、零Group引导、图集页Ctrl+F、旧设置错误滞留、完整多行结果压垮折叠区等问题。Group改名采用可显式提交的文本编辑，保存前提交原RenameGroup；不保留第二份Project配置。
+- Review中3项核心缺陷分别实测RED→GREEN：`CtrlSSavesTheGroupRenameStillBeingEdited`、`OperationMessageBelongsToItsOriginalProjectAndPage`、`SelectingTheLatestAttemptDoesNotClaimTheDefinitionChanged`。其余直接修正并并入定向回归；未安排第二次全面Review。真实GUI另发现长路径最小宽度挤出复制按钮、TreeView先消费拖放，分别修正约束/事件顺序；后者新增真实窗口回归并实测RED→GREEN。
+- 最终Unity EditMode定向运行：`ResourceWindowTests`、`ResourceWorkbenchTests`、`ResourceWorkbenchInteractionTests`，**15/15 Passed，0 Failed，约50.69s**。包括真实窗口鼠标事件入口、原子Undo、排序/过滤映射、隐藏多选、全部Group拒写、禁用快捷键/拖放、外部编辑刷新、消息归属、单次update与关闭取消；不是重跑B02/F03/E04或Player矩阵。
+- 当前主Unity实际编译已完成，`isCompiling=false`、`isUpdating=false`、`scriptCompilationFailed=false`；Test Runner无在途任务。IDE/dotnet不是本结论依据。过程中临时脚本探测有参数/动态类型/坐标错误，未生成产品源码，已改正；Console旧工具诊断未清除，不能把其历史计数当当前产品编译失败或冒称Console全空。
+- 真实GUI使用同一Unity及owned夹具，不运行原游戏。桌面鼠标/键盘已实测：Ctrl多选后过滤为2选/1可见、停靠状态Shift范围选中001～003、地址及alias编辑、Ctrl+S保存、Ctrl+Z/Ctrl+Y回退重做、窄窗列表/详情切换、搜索式选择器与同名Project区分。实测地址`ui/cards/gui_verified`、alias`menu/gui_verified`，保存后Project不dirty且Main场景仍不dirty。
+- 文件和目录拖放经当前真实Window的`DragUpdated/DragPerform`进入完整OnGUI/TreeView，而非直接调Operations：views从36增为38并回读登记的真实GUID；与桌面持续拖动不同，记录为实际GUI事件注入验证，不夸称完成所有原生桌面跨窗口拖动矩阵。自动化同时验证禁用/全部Group拒绝，未写Importer。
+
+### 29.16 UX1 体验夹具、截图与停止边界
+
+- 保留owned非空夹具：`Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/`，归属/目的在同目录`ux1-fixture-owner.json`登记。主配置`WorkbenchProject.asset`，另有同显示名`SameDisplayNameProject.asset`用于区分ProjectId；均不是原Core Fixture。Content实际**58个JSON，3个Group，47条选择定义（38/1/8）**，含目录、长名/路径及地址/alias；两个拖放来源也保留用于体验，不自动加入默认导出（原框架导出根本就排除Tests）。
+- 体验步骤：选主Project资产→`YLFramework/Resource/Workbench`；views表可滚动、列头排序、Ctrl/Shift多选后搜索，观察底栏隐藏选择计数；单选编辑地址/alias或选择目录编辑Extensions；窄窗用Group下拉和“查看详情/返回列表”；顶部项目设置、Ctrl+S与任务输出均为真入口。不需构建/运行游戏/初始化Runtime。
+- meta检查覆盖新增3脚本及夹具资产/目录共71路径：配套.meta/GUID齐全，无本批重复GUID，AssetDatabase GUID→路径往返一致；新脚本GUID分别`093e90ee4a6b46a4d9cd10a031d0e6d7`、`a53d00cbcf55ce24e89a2c8f933db971`、`ba25fd7560f43584da002b27c5d790db`。未移动存续脚本或修改旧GUID。
+- 截图均来自真实桌面主Unity，不是HTML/静态原型；仅临时置顶截取并立即恢复层级。**全部pixelsPerPoint=1.75**，GUI point与PNG物理像素不同，没有改系统DPI或后期缩放图冒充矩阵。部分高度因物理像素取整为`.14`point。证据位于`C:/Users/Kano/AppData/Local/Temp/kilo/`：
+
+| 文件 | 真实条件 / 可审阅内容 |
+|---|---|
+| `ux1-wide-final.png` | 深色1440×900（实际高约900.14），非空资源表、Group和详情 |
+| `ux1-1080-dark.png` | 深色1080×720（实际高约720.14），普通尺寸列表与详情 |
+| `ux1-docked-dark-main.png` | 实际停靠在主Unity SceneView同DockArea；Workbench约1091.71×800.71，主Unity整体截图，包含外围Editor面板 |
+| `ux1-settings-dark.png` | 深色1080×720，Project身份/根/策略与完整路径复制 |
+| `ux1-720-list-dark.png` / `ux1-720-detail-dark.png` | 深色720×480，真实点击切换列表/详情，所选资源保持 |
+| `ux1-620-minimum-dark.png` | 原620×440，Group下拉、保存、批量操作和滚动区可达，未提高最小尺寸 |
+| `ux1-1080-light.png` | 当前Unity真实浅色主题1080×720，之后已恢复原深色 |
+| `ux1-multiselect-hidden-final.png` | 深色1440×900，真实Ctrl多选后筛选，2选/1可见；该图为修正最终拖放前的同一实现阶段，不把当时36行说成最终38行 |
+| `ux1-output-dark.png` | 深色1080×720，真实Ctrl+S后的Project/页面/时间与完整可复制输出 |
+| `ux1-project-picker-docked.png` | 实际停靠窗口搜索UX1，显示同名项目不同ProjectId/配置路径 |
+
+- 已知限制/布局裁定：只实测现1.75DPI，100%/150%及其他显示器未验证；未重跑真实构建长任务或旧技术矩阵，阶段观察/结构化预检等仍留UX3。输出区当前折叠并按窗口比例定高，不增加通用可拖任务面板；Domain Reload恢复Project/列/布局但不持久化临时报告、Group子模式或行选择；同Group改名会清掉UI行选择但不误编辑其他资源。完整图集页、来源追溯、历史签发/C02/E05均仍留后续批次。以上不改变本批620×440与五入口布局，主要视觉/交互仍待用户确认。
+- 保护：原游戏/MainModule、正式Scene/Prefab/Canvas、Runtime、StreamingAssets、旧Bundle及稳定程序集无本批改动；测试沿owned夹具逐次AssertProtected。已有配置/AGENTS/插件/Package/并行Plan改动保留、不接管。本批不建立后台服务，不清用户Console，不保存用户场景；最后恢复主题、原Selection/焦点并关闭本批新Workbench/临时停靠tab，保留数据供菜单重新打开体验。
+- 最终实时复核：主Unity仍15324；正常AssetImportWorker子进程不是第二主Editor，未自行启动第二实例。主Editor非Play/编译/导入、`scriptCompilationFailed=false`，Workbench窗口0、关闭前pending0，原ProjectBrowser焦点/原空Selection与深色主题已恢复；夹具已保存、Main场景不dirty、ResourceSystem.Current为空、已加载AssetBundle数0。`git diff --check`通过、暂存区为空、HEAD仍`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，未执行Git写操作。
+- 终态：**UX1技术完成，待用户视觉与交互验收。** 不把UX1当整体UI或8.9 COMPLETE；不自动进入UX2～UX5/8.10/阶段9，不暂存、不提交、不推送。
+
+### 29.17 UX1 体验反馈：资源根单字段层级显示
+
+- 用户指出原ObjectField只显示`Content`等文件夹名，无法辨别层级；新增独立路径行与定位按钮又重复占空间。按反馈合并为同一行“专用资源根”：原生ObjectField继续处理目录选择/拖放/点击定位，仅在Repaint替换名称显示为从`Assets/`开始的真实路径，右侧同排复制完整原值；不重命名文件夹、不改AssetRootGuid或资源范围合同。
+- 样式为Workbench局部按主题缓存，不修改EditorStyles、不在每Repaint新建GUIStyle。未设置与失效GUID保留明确提示。Resource.md同步实际入口，不推进多资源根、UX2或其他能力。
+- 新增真实窗口测试`SettingsRootFieldCopiesTheCompleteHierarchyWithoutEditingTheProject`，在720×480设置页点击实际复制按钮，断言复制完整层级且Project JSON不变。相关`ResourceWindowTests`最终**3/3 Passed**，原窗口刷新/定位/关闭取消及真实TreeView拖放回归保持；Unity实际编译通过。
+- 当前用户已打开的Workbench保留，不新建第二工作台、不关闭用户窗口；真实深色1080×720、pixelsPerPoint=1.75截图：`C:/Users/Kano/AppData/Local/Temp/kilo/ux1-root-unified-feedback.png`。此图取代临时的双行资源根试稿，不把旧`ux1-settings-dark.png`当作本字段最新状态。未保存/修改Project、Scene或资源资产，未执行Git写操作，UX1仍待用户体验验收。
+
+### 29.18 UX1 体验反馈：空白点击释放输入焦点
+
+- 用户要求各页面点击空白可取消截图中的输入框蓝色选中态。统一在Workbench壳绘制结束处理未被控件消费且无hotControl的左键MouseDown，释放文本焦点/keyboardControl和editingTextField；先由原字段/按钮/表格处理输入，不抢事件，不清空资源表单选/多选，也不改变资源纳入定义。
+- 先实测复现KeyId焦点在空白点击后仍保留（RED），修正后同测GREEN。补充验证Group名称失焦后正常提交、Project仍dirty且未写盘、Undo可回退；搜索失焦不丢原表格选择、Project JSON不变。Resource.md同步用户交互说明。
+- 本次三类直接相关UI测试同次运行18项；MCP请求超时后未重新启动，读取该次`testResults`确认**18/18 Passed**，包括新增两个BlankClick测试和前次RootField复制测试。Unity实际编译通过、Test Runner无在途运行；不重跑资源内核/构建/Player矩阵。
+- 当前用户已打开的主Unity窗口中，桌面实际点击KeyId后再点右侧空白，蓝框/光标消失；截图`C:/Users/Kano/AppData/Local/Temp/kilo/ux1-blank-click-unfocused.png`，深色1080×720、pixelsPerPoint=1.75。未改系统缩放、Project策略/资源根/Runtime协议，不保存场景，不执行Git写操作；继续保持UX1待用户视觉与交互验收，不推进后续批次。
+
+### 29.19 UX1 体验反馈：顶栏信息层级与操作分组
+
+- 按用户确认的整理方向，删除重复`RESOURCE`标识；Project选择器只显示名称并限宽180～320 GUI point，完整名称/ProjectId/路径保留tooltip。宽度≥960时旁边用次要文字显示ProjectId；窄窗从选择器及更多菜单查看/复制，不扩大选择器或挤出操作。
+- dirty状态跟随项目上下文；右侧固定同排“保存 / 项目设置（或返回） / 更多”。删除原窄窗重复的第二行项目操作。新建迁入Project选择器底部，仍调用原CreateProject/路径对话框，忙/转换/执行门禁保持；帮助、配置定位、复制ProjectId/路径归更多菜单，不新增执行体系。
+- 新增实际GUILayout测试`HeaderBoundsLongProjectNamesAndKeepsActionsOnOneRightAlignedRow`：100字长项目名在旧620窗口占536 point，实测RED；修正后620/720/1080/1440均GREEN，断言选择器限宽、操作同排靠右且不越界，Project JSON与dirty不变。
+- 定向回归另复现UX1 Group改名缓冲对外部Undo的误判：旧已提交文本与撤销后的模型名不同，被当作新输入再次提交。加入仅在视图内使用的原输入基线，外部Undo/Inspector更新显示基线，真实未提交输入发生外部冲突时拒绝覆写。原Undo断言保持，并补5次重绘后仍不回写的断言；不改序列化协议或Operations。
+- 本批分别运行`ResourceWindowTests` 4/4、`ResourceWorkbenchTests` 8/8、`ResourceWorkbenchInteractionTests` 7/7 Passed；不是声称同次全量19项运行，也未重跑资源构建/Player技术矩阵。Unity实际编译通过。源码仍限Resource Editor与直接UI测试，Resource.md同步入口；无Git写操作。
+- 反馈修正：ProjectId原先跟在固定320宽选择器后，在宽窗中悬在中间；现选择器按名称`CalcSize+34`自适应（140～320 GUI point），ProjectId紧跟其后。点击帧`GUILayoutUtility.GetLastRect()`不是有效布局矩形，导致“更多”菜单弹到窗口左上；现仅在Repaint缓存项目选择器与更多按钮的真实矩形，点击时用缓存锚点打开Popup/GenericMenu。帮助项不使用`/`，避免被GenericMenu解析成无谓二级菜单。
+- 回归`HeaderBoundsLongProjectNamesAndKeepsActionsOnOneRightAlignedRow`新增锚点断言：PopupAnchor必须等于真实选择器矩形、MoreMenuAnchor必须等于右上更多按钮矩形，并在620/720/1080/1440下断言菜单锚点位于右半区且同行。真实截图`ux1-header-identity-adjacent.png`与`ux1-header-menu-feedback-cropped.png`（从同一次真实桌面抓取裁出工作台与完整弹出菜单，排除无关窗口）确认ProjectId紧邻、菜单在右上按钮下方。深色、pixelsPerPoint=1.75；未调整用户窗口大小以外的数据，未保存/修改Project或场景。
+- 复跑窗口测试时发现测试自身两个问题并修正：布局缓存遍历会命中用户同时打开的工作台按钮，现只接受本测试窗口边界内的控件；`ShowUtility`会恢复该窗口类型上次位置，窄窗尺寸必须在显示后设置并断言760宽。修正后`ResourceWindowTests` 4/4、`ResourceWorkbenchTests` 8/8、`ResourceWorkbenchInteractionTests` 7/7全部Passed；均为本批定向UI回归，不声称同次19项单次运行，也未重跑资源内核/构建/Player技术矩阵。Unity编译通过，无在途Test Runner。
+- 当前用户选择的Core Resource Fixture只作现有界面读取，没有为演示改其配置/资源；保留其已有工作区改动。真实深色截图：`C:/Users/Kano/AppData/Local/Temp/kilo/ux1-header-wide-feedback.png`（约1313.71×872.71）及`ux1-header-620-feedback.png`（620×440），pixelsPerPoint均1.75。未改系统缩放；用户在验证期间的新窗口调整不覆盖。仍为UX1体验修正，不进入UX2～UX5。
+
+### 29.20 UX1 体验反馈：文字基线与弹层向内对齐
+
+- 用户再次指出ProjectId位置不正。此前仅缩短横向距离并没有解决垂直偏差；本次GUILayout断言实测ProjectId行y=2、名称按钮y=0（RED），定位为Label与工具栏按钮的margin/padding/contentOffset不同。现共享垂直几何与字体指标，保留ID的普通字重/次要颜色，名称和ID的内容中心一致（GREEN），不再凭截图感觉判断。
+- 此前GenericMenu已锚到右上按钮，但原生系统菜单从锚点左侧向右展开，会超出工作台右边界，不符合本次体验反馈。现使用同一Editor层的局部`ResourceProjectActionsPopup`，已知宽220 point，右边缘与按钮相同并留4 point垂直间隙；不估算系统菜单文字宽度。只承接原配置定位/复制/文档操作，保留hover、方向键/Enter/Esc；没有新任务、配置或Runtime权威。
+- 新增Editor脚本.meta由Unity生成，GUID为`626245efc0417a649ad2953876c6657b`，不移动旧脚本、不改asmdef/依赖。旧`moreMenuAnchor`仍表示真实按钮，另用`morePopupAnchor`表示整个弹层占位，避免把按钮位置正确当成菜单不会越界。
+- `HeaderBoundsLongProjectNamesAndKeepsActionsOnOneRightAlignedRow`覆盖620/720/1080/1440、ID实际行和内容几何，以及弹层左右边界。新增`MorePopupFitsTheNarrowWorkbenchAndCopiesWithoutEditingProject`从实际窗口点击更多，验证真实PopupWindow在620窗口内，再点击菜单复制原ProjectId、确认Project JSON不变。测试明确聚焦自己的Utility窗口，不依赖用户当前活动窗口。
+- 本批最终`ResourceWindowTests` **5/5 Passed**，Unity编译通过；此前8/8、7/7非本次重跑，不将它们虚报成同次运行。额外单测用于GUI取证仍Passed，不跑B02/F03/E04/Player矩阵。未修改资源根/Project协议，不保存配置或场景，无Git写操作。
+- 取证：`C:/Users/Kano/AppData/Local/Temp/kilo/ux1-header-baseline-inward-popup.png`可查看当前Core界面的文字基线，但该图未保留打开的弹层，不作为弹层证据。完整右对齐弹层见`ux1-more-popup-owned-gui-logical.png`：在明确owned测试窗口实际点击更多后，用Unity屏幕API逻辑坐标直接抓取620×440 GUI；弹层位置`(494.29,110.29,220,133.14)`、owner`(100,80,620,440)`，右侧仍在owner内。主机pixelsPerPoint=1.75，但该API图片是逻辑分辨率，**不作为新的物理DPI验证或静态原型**。临时截图观察回调均解除，未加入产品/测试持久设施。
+- 工作台新窗口不另建，原Core资产和用户已有修改不接管；取证期间只临时恢复既有主Unity，结束恢复其原最小化状态。UX1继续待用户视觉与交互验收，不进入后续批次。
+
+### 29.21 UX2～UX5 连续实施联合授权（2026-10-17）
+
+- 最新用户授权："第一版视觉设计先到此，继续UX2～UX5夜间自动执行；UX5之后再集中优化UI设计。" 本次Code范围为UX2分包/图集 → UX3配方/构建结果 → UX4版本交付 → UX5诊断/功能整合，包含必要正式小接点、定向测试、当前唯一Unity真实编译/GUI、缺陷修复、一次独立实现Review及原Plan/Resource.md维护。每批必要门禁通过即进入下一批，不等待用户上线、视觉确认或Git提交；UX5完成后停止，统一交付待用户验收。
+- §29.1/29.10/29.12/29.14～29.20的“仅设计”“待授权”“UX1后等待”等保留历史含义；本节为当前有效授权。允许有限只读BuildMap/BuildResult来源副本、原唯一预检流的结构化结果、真实阶段边界的只读观察、选定确切版本签发、C02薄UI、E05手工完整闭包表单。不得改Catalog v1、持久协议、所有权、密码后端、Player远端门禁或公开执行语义。
+- 真实起点为`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`加本地未提交UX1成果及§29.17～29.20反馈修正，不把HEAD当完整源码身份。现场`fusion/8-resource`、暂存区为空；已有.gitignore/工具配置/AGENTS/NuGet与McpPlugin/Packages/ProjectSettings/并行Runtime UI Plan/Core Fixture改动不接管、不回退，不读其他worktree。**本轮不暂存、Commit、Push、Merge、Tag、切分支、Reset、Clean、Stash、Rebase或改既有提交。**
+- 当前唯一主Unity PID `15324`，工程路径与Unity `2022.3.62f3c1`/`StandaloneWindows64`实时一致；另两Unity进程是AssetImportWorker，不是第二主Editor。初检非Play/编译/导入、scriptCompilationFailed=false；Main场景不dirty，ResourceSystem.Current为空，已加载Bundle=0，当前没有Workbench窗口/窗口排队操作。本会话没有后台进程。旧Test Runner记录不冒充本轮结果，首次运行前另核实时态。
+- 初始主题深色、pixelsPerPoint=1.75；焦点Console，Selection GUID `52d3fa0622a3f3b428a754d82a63736c`。新页面检查1440/1080/720/620宽及真实停靠/深浅主题；不改系统缩放，不外推其他DPI。UX1旧证据及夹具`Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/ux1-fixture-owner.json`保留，默认只读复用，不覆盖其体验内容。
+- 新owned夹具预留根`Assets/YLFramework/Tests/Fixtures/WorkbenchUX2To5-20261017/`（创建前复核不存在）；证据预留`C:/Users/Kano/AppData/Local/Temp/kilo/workbench-ux2to5-20261017/`（新建且不覆盖旧证据）。仅本轮登记的Project/版本可进行图集删除、导出、非生产签发、C02写入/恢复和Store只读验证；C02限原Deployer owned workspace及StreamingAssets下本轮独立身份，不动MainModule/用户部署/既有父meta。凭据不入SO、源码、截图或文档。
+- 执行选择：延续IMGUI/TreeView和原update queue，按真实职责拆原BuildView，不另建Workbench/任务系统；E05默认完整手工纯值表单，无收益不足的Runtime getter/反射预填。保存按当前明确Project/Recipe/Atlas对象，执行重新冻结/复验；观察异常/重入不能改变服务finally/提交责任。临时报告会话有界32，不扫描raw/Temp恢复。
+- 门禁按用户本次清单及§29.4～29.10执行；保留None/provider/图集/提交未确认/部分成功/身份失效/查询Dispose等直接闭包。复用未变化E04/C05/B02/F03/Atlas/Publisher/C02历史证据，不重跑31项审计、176组Player或整套成本矩阵。产品GUI入口、真实OnGUI事件注入、桌面鼠键和服务测试分层记录。
+
+### 29.22 UX2～UX5 滚动检查点
+
+- 当前阶段：**UX2/UX3必要门禁已通过，直接进入UX4实施**；UX5未开始，横切1440宽/真实停靠与全部五页统一回归仍在UX5收尾，不提升整体或视觉验收等级。
+- 已实现：Map解析时共享不可变`ResourceBuildSource`有限来源副本；定位器按Project GUID/ProjectId、GroupId/Packing、Selection GUID/内容/原路径或Atlas配置GUID/RuleId/内容重新核对，不按旧index操作。分包改原生`ResourceBundleTable`物理行、缓存排序/筛选、双来源/可见源文件/双向依赖树与分层字节。旧Map过期保留；图集pending由正式Plan.NeedsGeneration明确状态，不解析错误文案。新`ResourceAtlasView`编辑同一配置、显式Save/Preview/Generate、全Project Prepare/显式读取、Obsolete确认删除；Inspector仅共享纯字段绘制。Ctrl+S在资源图集子页仅存规则，顶部保存仍明确存Project。
+- 新文件：Service/ResourceAnalysisView.cs、ResourceAtlasView.cs、ResourceBuildSourceLocator.cs、ResourceBundleTable.cs；Tests/EditMode/ResourceWorkbenchUX2Tests.cs与Resource/ResourceWorkbenchUXEvidence.cs；配套meta由Unity导入生成。已有修改：ResourceBuildMap、ResourceAtlasConfigurationEditor、ResourceDefinitionView、ResourceBuildView、ResourceWorkbenchView，仅本轮直接范围。后续独立Review尚未执行。
+- TDD与已取得门禁：来源/表身份2项RED→GREEN；失效Map保留、真实GUI规则保存/B06生成2项RED→GREEN；原Map加新项合跑15/15。真实截图额外发现BeginArea在Layout取得dummy Rect导致右侧空白，加入规则控件可视范围断言看RED，改用UX1横向布局+独立滚动详情后4/4 GREEN；同根因分包详情同步修正。测试助手一次误用不存在FinishedAtUtc导致编译失败，已改实际观察完成时间+原Elapsed（非产品错误）。
+- 组合回归终态已实读：同次MCP `_resultCollector`的RunFinished summary=Passed、35/35、Failed=0/Skipped=0，Runner.IsRunActive=false，完整真实结果保存`ux2-shell-regression-same-run.json`，没有重跑；不是仅凭35个leaf推断suite成功。
+- 构建同次run已完成：`ux2-build-run.json`=Passed、BuildError=null，实际None/StandaloneWindows64、7物理Bundle/14主资产/4Group，elapsed约37856ms、native pipeline约4027ms；Bundle raw=57945B、delivery全文件=67887B（含旁车，不能混为Bundle字节）。主Unity无Progress/已加载Bundle=0。未重新启动构建；通过静态原report接入测试窗口后，以真实导航/来源切换/原生表格点击/依赖页控件展示，**此构建本身为获授权的UX2直接正式API夹具调用，不冒称UX3 GUI构建闭环**。
+- owned夹具已创建：`Assets/YLFramework/Tests/Fixtures/WorkbenchUX2To5-20261017/`，owner为`ux2to5-fixture-owner.json`；ProjectId=`yl-workbench-ux2to5-20261017`，App=`workbench-ux-app-v1`，Recipe BuildAndPublish（未执行），None交付。含8个消息、2个共享依赖Prefab、独立Scene、手工Atlas、2条自动规则；全由本轮创建，不覆盖UX1。生成接口/控件已得2个Current自动Atlas各2个Sprite，手工Atlas由真实显式页“准备本Project图集”控件准备到spriteCount=2。
+- 证据根：`C:/Users/Kano/AppData/Local/Temp/kilo/workbench-ux2to5-20261017/`。保护before快照、真实生成与同次构建/回归JSON保留；新增`ux2-analysis-{exact,sources,dependencies,dependents}-dark-1080.png`、`ux2-analysis-ui.json`（真实被依赖树3节点）、`ux2-analysis-min-dark-620.png`、`ux2-estimate-min-detail-light-620.png`、`ux2-atlas-current-light-720.png`、`ux2-atlas-min-rules-light-620.png`。均当前主Unity非空真实GUI，1.75DPI物理抓屏，不外推其他DPI。早期两张Atlas空白/未读取图，以及`ux2-analysis-min-detail-light-620.png`（换肤后旧临时report已正常丢弃、当时预估未算）只保留为失败/空态证据，不列通过截图。换肤确实重新初始化窗口，未从raw或JSON猜测重建产品报告；后续实际点击重新计算预估。
+- UX2最后新增规则来源定向验证：真实Generate后Map保留配置GUID/RuleId，当前来源可定位；修改规则得到Update并拒绝旧来源，移除规则得到Obsolete且输出仍存在，旧Map不变；同窗Save按钮/Ctrl+S仅存规则、不存dirtyProject。`ResourceWorkbenchUX2Tests`最终5/5 Passed（20.51s，非原35项同次运行）。当前Unity编译通过；新测试夹具生成沿用当前工程的TextureImporter.spritesheet写法，存在原同类API过时warning，不作编译失败或实际运行错误。
+- 当前GUI环境：主Unity原本最小化，已临时Restore（主native HWND197584），本轮体验窗口`ResourceUX2GuiWindow`实例`-193210`/native HWND4522996，1080×720 logical、1.75DPI、深色；运行测试可能重载/改变临时选择，因此下一步必须实核，不复用HWND作为身份。结束须关自有窗口、恢复原Selection/Console及主最小化状态。Main最近实核不dirty，无业务会话/Bundle；不存在已授权外的写入。
+- UX3当前实现：新增`ResourcePreflightState/ResourcePreflightResult`（在Operations原文件），`CheckReadiness`只共享静态前缀、不key/Map/SHA/图集Preview/历史；`InspectPreflight/InspectRecipePreflight`复用原唯一控制流，原string Preflight保留相同摘要、原异常类型/语义与Atlas前置早返回。`ResolveSavedRecipe`抽原相同保存门禁供执行/预检共用。新增Service/`ResourceBuildProgress.cs`的只读实际阶段event，Builder原key/输入冻结/后验/finally不替换；观察异常仅通用Warning隔离、不输出异常秘密，observer内执行明确拒绝，未复用测试故障钩子。Report补原Project/平台/App/操作元数据；尝试Reset不再清全窗口32条列表，新增按原Guid投影，UI接入尚未完成。
+- UX3首批4项TDD RED→GREEN已确认同次suite完整收尾：Passed4/4、92.37s，Runner inactive，含一次真实native观察器异常/重入隔离与finally验证；持久结果`ux3-service-first-run.json`（实际枚举文字）。没有重跑。新GUI Recipe引用/保存测试已先RED后GREEN1/1（4.48s），证明真实Save按钮/Ctrl+S只存Recipe不存dirtyProject、Action不临时改变、OnDisable/OnEnable仍同一资产引用。
+- UX3 GUI代码已接：Window序列化持有`selectedRecipe`及GUID（丢失不静默回退无配方），同一纯字段绘制供Inspector/Workbench；原无配方App/force/生成/目录窗口选项保留。构建配置/结果宽窗双区、窄窗切换/滚动，正式预检明确三态，Recipe不匹配双方身份/显式切换或解除。主动作原ExecuteRecipe、不改Action；结果分BuildError/PublicationError/GenerationError、部分成功与未确认恢复说明；Project过滤后的32次有界尝试保留跨Project切换，结果投影/制品查找缓存，不在重绘做SHA。Workbench仅在自身同步操作作用域订阅阶段event，finally/关闭解绑，不编造实时百分比/可中止。
+- UX3额外自检发现新预估会误清确切报告失效标记：新增`RecalculatingAnEstimateCannotRevalidateAnEarlierExactBuildReport`看RED，再将预估stale与确切report的DefinitionChanged分开；完整构建成功才清自身报告失效，预估重算不复验raw。当前等下述run验证GREEN。旧失败尝试和选择历史不应本身污染定义状态的UX1回归一并覆盖。
+- UX3界面/失效性组合回归同次收尾：Passed11/11、78.61s，`ux3-ui-stale-combined-run.json`，没有重复native观察器。早期Recipe拒绝的已知身份新增RED→修复→GREEN1/1（4.00s），即使ResolveSavedRecipe拒绝dirtyRecipe，也保留已知Project GUID/Id、平台/App/force/生成请求而不伪造成功Invocation。
+- 无配方GUI同次已完成：`ux3-no-recipe-build-only-result.json`含原报告/阶段，BuildError/PublicationError/GenerationError全null，Operation=BuildOnly、未发布/生成，elapsed36729.84ms、原Preflight10909.29ms、7Bundle/raw Bundle57945B/delivery全文件67887B；原真实序列Preflight→AtlasPreparation→Map→Fingerprint→NativeBuild→Readback→WorkspaceVerified→AttemptFinished，未伪造Publication/Codegen阶段。已拍`ux3-no-recipe-result-dark-1080.png`，测试证据event已解绑。此为实际桌面按钮→原正式只读预检→保留确认框→原BuildOnly完整GUI闭环。
+- 原生确认框的body为owner-drawn，Win32 GetWindowText只返回占位`Static`，因此没有伪称程序读到了正文或放松`Confirm`身份校验；实际由PNG直接核对完整身份后点击正式正按钮。未移除/跳过产品确认。源码变化导致Workspace settings token与UX2旧run不同，确认中实际新路径仍为此Project的原Builder owned范围，不当作旧report恢复。
+- Recipe GUI发布R1已真完成：`ux3-recipe-publish-result.json`与`ux3-recipe-published-result-dark-1080.png`，Build/Publication/Generation error全null，Invocation.Action=BuildAndPublish、Generate=false，原Project/GUID/App一致；原Publisher新版本Digest=`1f3c2d0ce7f14a4f230afd146dcabe3cc5ec2bf10e4c9b5756a7f003673a9b56`、IsRepeat=false、CopiedBytes67887。elapsed34895.68ms（嵌套窗口不相加）；原Recipe.Action未改。证据event已解绑。
+- 长确认文本缺陷已正式修复：新增仅Editor的`ResourceOperationConfirmation`轻量可滚动只读Modal，不持有/执行操作回调，不截断身份/范围，关闭或Esc取消；只在确认后由原队列/正式服务继续复验。UX3新动作改用该确认，UX4可复用完整C02范围。`LongOperationConfirmationIsScrollableAndEscapeDoesNotAccept`先RED→实现→GREEN1/1（0.15s），真实滚轮使scroll.y增加、Esc不接受；后续当前部分成功流程会实测产品Modal正确认。
+- V2部分成功GUI已真完成：`ux3-partial-success-v2-result.json`，BuildError/PublicationError=null、GenerationError为原ResourceReferenceOutput第42行拒绝本根owned-canary.txt，未覆盖/接管。新R2Digest=`aba98175d0a545162043457fc181db53e1b142d6c61a01d8a8fcd089c4e353ee`、IsRepeat=false、CopiedBytes67930，发布未回滚、未自动重发。原序列实际包含PublicationStarted/ReferenceGenerationStarted/AttemptFinished。`ux3-partial-result-dark-1080.png`分项与部分成功提示真实非空；`ux3-partial-min-dark-620.png`结果滚动和主操作/输出可达。`ux3-partial-protection.json`记录canary SHA256=`5ff225cbbadaefc12f9c538e7369164d42e6680b529a4b815648c57c0f551f3a`、仅txt/meta两文件、已加载Bundle0/无Runtime会话；原txt逐字实读不变。测试stage event已解绑。
+- UX3进一步功能修正：底部失败brief原先只显示Recipe路径，而详细结果已正确；新增实际statusBrief断言看RED（测试最初误断言full VisibleStatus修正，不计为有效RED），现在按BuildError/PublicationError/GenerationError结构化分项给brief，BuildError用Error、发布未确认/生成部分失败用Warning，完整冻结选项/日志仍保留原文本；等待下述组合run验证GREEN。不存在按成功/错误文案猜状态。
+- 上述Recipe/provider组合**同次最终Passed18/18、216.30s、无Skipped**，`ux3-provider-regression-run.json`；active时collector曾以全测试树1964计Unknown/未提交leaf，最终实际只执行18项，不是重跑全库，未取消或启动第二run。包括原provider修改Project策略被拒绝、缺key/取消不创建输出，以及新brief/保存/结构化前置/容量/失效等。UI策略来源在mismatch时改为明确Recipe.Project，静态自身检查不冒充当前Workbench上下文已匹配；后续UI/确认/brief定向3/3通过。
+- 新增owned `MismatchProject.asset`及独立空`MismatchContent`（Id=`yl-workbench-ux2to5-mismatch`，未构建/发布），正常Recipe仍引用主Project，`ux3-recipe-mismatch-dark-1080.png`真实展示双方Id/路径/GUID及禁用主操作。native点击“切换到Recipe.Project”成功返回主Project，`ux3-mismatch-switch.json`证明Recipe.Project/Action未改、recipeDirty=false、无Runtime。随后native脱离/输入坐标尝试未成功（误落分析页、App未改），`ux3-static-rejection-dark-1080.png`只保留失败取证，不当输入通过；实核未Play/切换、Main不dirty。实际静态拒绝采用显式测试表单预置App=bad/app后真实OnGUI，`ux3-static-rejection-light-620.png`显示阻塞与所有写入控件禁用。已恢复有效App及原深色，其他DPI未测。
+- UX3最后门禁修复：底部历史选择原在pending时仍可选、会影响排队目标。`PendingOperationAlsoGuardsTheBottomHistorySelection`真实OnGUI先RED（测试样式名大小写修正后才计有效RED），加IsBusy禁用足部历史，GREEN；与原“选择最近尝试不污染定义状态”合跑2/2。确切BuildResult在点击时捕获进队列，服务执行仍复验，不读取可能变化的report选择。原Resource.md已增量维护配置/保存/预检/观察/结果/恢复合同。
+- 当前在途任务：无Test Runner/构建/发布/查询，测试stage capture已清；Runtime未启动、Bundle0、Main不dirty，主Unity仍原PID、临时Restore用于GUI。新的Scroll确认Modal与字段/来源变化只在Editor程序集，未改Catalog/持久协议/密码实现。UX3必要门禁通过，后续独立Review仍待最后一次统一检查。
+- 下一动作：UX4读取原SigningWindow、Publisher.ReadHistory/ReadCurrent/ReadVersion与BuiltinDeployer原API及合同；TDD接确切版本窗口、历史/Index独立实读、完整部署范围预检/确认/执行/独立恢复。只操作本轮R1/R2及owned身份，凭据临时工程外不入资产/日志；C02只本轮项目版本+原owned workspace和对应新meta。UI仍使用原Workbench并退出正式替代后的旧交付页。UX4门禁后直接UX5；不暂停授权、不Git写、不扩展8.10。
+
+### 29.23 UX4实施恢复检查点
+
+- 已实现（未宣布门禁完成）：Publishing/ResourceReleaseIdentity.cs只读完整身份（窗口可序列化纯值，不是新账本），执行用原ReadVersion重新核对GUID/Project/平台/Unity/App/BuildId/Digest/源目录；SigningWindow新增明确OpenSelected/SelectRelease，旧Open(Project,App)当前版入口仍保留，普通绘制不读取PFX/历史。Service/ResourceReleaseTable.cs与ResourceDeliveryView.cs替代旧BuildView交付页，原生排序筛选保留对象身份，历史/Index分开显式读，恢复/常量独立页；C02原服务未重写。新增ResourceBuiltInScope完整只读范围说明，以及原Deployer纯路径GetWorkspacePath(Guid,Platform)供独立恢复定位，无目录/锁/journal读取写入。
+- 当前定向测试：UX4 4项有效RED→GREEN，另GUI只浏览/1080/720/620不读取历史Index/建部署/启动Runtime通过；导出目录合同修复新增RED→GREEN。最近完整`ResourceWorkbenchUX4Tests` 6/6 Passed（15.16s），包括完整范围owner/lock/journal/next/stage/外壳/receipt/payload/meta/import/未查容量、确切签发拒绝未登记版本且不回退当前、原生表身份、只读恢复路径及只浏览不执行。最初测试Payload误加BuildId/未改项目Native命名，已改真实Schema派生再得到有效RED，不作产品故障。
+- 已实际GUI读owned历史2版本及单独ReadCurrent，R2有Index current标记；native选择R1，`ux4-history-index-dark-1080.png`、`ux4-selected-r1-index-r2-dark-1080.png`。全身份/Bundle delivery与支持字节分开，历史复制/耗时不把默认0作测量，不标“最新/发布时间”。
+- 导出现场中断已续接：当前唯一Unity仍PID15324，旧HWND3866700同次确认框核对完整R1与新Digest命名目录后native确认。`ux4-export-digest-confirm.png`、`ux4-export-r1-result.json`实证：原ExportRelease成功后ResourceLocalSnapshot.Open完整通过，18文件/80939B，R1Digest不变，Publisher当前Index仍R2，无Runtime。早期任意目录名`export-r1/`复制虽通过ExportRelease却不能按正式Snapshot.Open（要求目录名Digest）；已修UI为工程外现有父目录+/<CatalogDigest>并回归，保留旧失败副本/截图，不删除或冒作成功证据。当前无在途导出/测试/构建。
+- 签发GUI已真完成且scope已收尾：真实交付“签发此选定版本”控件→原SigningWindow→原按钮→完整确认（`ux4-sign-selected-r1.png`、`ux4-sign-r1-confirm.png`、`ux4-sign-r1-success.png`）。使用工程外自有RSA2048 PFX、channel=`ux-night-local`、keyId=`ux-night-sign-20261017`、sequence17/有效2天、None不要求加密渠道checkbox。`ux4-sign-r1-result.json`公钥实际Verify通过，Payload.Digest=R1，Index仍R2。临时进程YL_RESOURCE_SIGNING_PFX/PASSWORD已调用动态scope.End恢复（原值不输出）、回调解绑，自有PFX已删除，未安装证书/改信任；只保留公开`ux4-public-key.xml`/`signed-r1-release.json`及非秘密证据。签发窗口已关闭。
+- C02真实GUI已通过：预检R1时target/workspace均不存在（`ux4-c02-before.json`、`ux4-c02-preflight-r1.json`）；实际按钮进入原Preflight，完整scope页和可滚动确认顶部/底部PNG明确owner/lock/journal/next/stage、StreamingAssets根/Project/平台/版本/控制记录/payload~、新.meta/AssetDatabase、未查磁盘容量与非峰值、无Runtime切换。native核对完整owned身份后确认原Deploy；`ux4-c02-deploy-r1-result.json`IsRepeat=false/CopiedBytes80939、payload内meta0/版本外壳meta存在，Index仍R2、无Runtime。新owned workspace=`AssetBundles/YLBI_4d9276be6c8b39af`，新StreamingAssets仅本轮Project/R1层级及必要ResourcesRoot外壳。
+- C02重复/恢复/拒绝：服务API同一R1重复IsRepeat=true/CopiedBytes0且全部旧文件mtime未变；原internal测试checkpoint在自有R2 StagingCreated故障留下正式journal/stage（R2未安装、R1仍有效），未向产品暴露注入。随后实际“独立C02 Recover”GUI与完整确认（`ux4-independent-recovery.png`/`ux4-c02-recover-confirm.png`）经原Recover只清已登记私有stage；`ux4-c02-recover-result.json`journal/stage/next全无、R1有效/IndexR2/无Runtime。另只在本workspace创建自有unknown canary，原Preflight InvalidDataException拒绝且未删除，测试finally只核对并清此canary，`ux4-c02-unknown-refusal.json`。重复与故障注入/unknown拒绝是服务API验证，恢复和首次部署是实际GUI，不混称全为桌面操作。
+- UX4最小/主题：`ux4-history-min-light-620.png`真实非空2版本/Index标记，表格/详情/任务入口可达；深色1080的历史/完整身份/部署/恢复已实测，1.75DPI。已恢复原深色和1080×720；无签发私钥/环境scope、无在途测试/发布/部署/查询。C02 R1测试部署暂保留供后续整合，最后按owned清理/保留决策记录，不接管用户既有层级/meta。
+- 下一动作：UX4必要技术门禁通过，维护Resource.md/owner记录后直接UX5诊断/E05/报告与生命周期整合；最后补真实停靠/1440统一GUI与一次独立Review、最终保护快照/meta/Git终态及恢复主Unity最小化。原Branch/HEAD本轮未Git写，不把剩余整合/Review当已完成，也不提升用户验收层级。
+
+### 29.24 UX5 / 独立Review恢复检查点
+
+- 已实现UX5代码，尚缺真实运行会话/最终GUI闭环：原ResourceDiagnosticsView三子页为运行会话、E05只读Store、报告/开始使用；保留同次report全部原集合，并补Content/Counters、Assets queue/cache eligibility/RequestedAddress、Bundle content/cleanup、Scene native责任等字段。弱主体引用与窗口临时标签不作SessionId，无私有Mode/配置反射；默认auto关闭，离页/项目变化/来源切换/Play转换/重载/关闭暂停，返回不自启；历史仅显式设置128/关闭时按原语义清空，不在绘制或关闭改应用设置。
+- 新Service/ResourceStoreQueryView、ResourceArtifactTable、ResourceGuideView：完整手工root/ProjectId/Platform/App纯值表单，不以Workbench Project当应用配置；原QueryAsync主线程32步分段/单在途、取消先断身份并Dispose，无callback不假造Canceled。结果保留原root/closure/maxEntries身份；未知/不完整字节与有效0、Ready非App/解密/挂载认证、CompleteRecord非SHA/签名、候选非删除授权全部明示。无Recover/cleanup/mount/provider/key/pin按钮。Guide只指本窗口原report和已知文档/源码路径，不扫Temp/Plan、不执行样例或硬编码F03当前性能，不引用Tests类型。
+- 新UX5测试4项先RED→GREEN；独立Review补真实dock隐藏生命周期候选后，新增OnBecameInvisible仅暂停诊断/Dispose查询，Play OnEditorTransition才取消pending，未以失焦代替可见性。新增隐藏/保留原合法queue断言两次有效RED→GREEN，最新UX5 5/5 Passed（0.23s）。真实dock事件和620带运行report/展开Output仍待实测，不把方法调用当dock证据。
+- 本轮唯一独立Reviewer内部Task=`ses_eb3f2b962ffeycsMNBVuSf0IYS`，分段只读覆盖UX2～UX5。原5项P2已源码复核并新增6回归RED→修复→与UX5首4合跑10/10 GREEN：历史ExactReportStale合并IsHistoricalReport、共享App缓存失效但不重算Map、Atlas Inspector Save(expected)拒绝副本误存、Delivery history/index/selection各自stale且新receipt清旧表选择、Archive捕获原Release用原VerifyExportInput保留旧Unity字节归档（签发/C02仍ReadVersion）。Reviewer源码确认这5项闭环；新增第6项dock隐藏已由作者上项修复/回归，Reviewer没有重新执行Unity，最后实际dock待补。无P0/P1，未做第二Reviewer/全库审计。
+- E05真实自有Store：`ux5-owned-store`在证据根，使用原Store Mount/Check/Prepare/Commit（仅fixture setup通过已有内部正式服务，未改控制格式），真实Native R1/R2两个版本，activeR2/LKGR1及未提交反向Prepared叠加保护；没有ResourceSystem。`ux5-store-fixture.json`登记；UI手工表单输入App=`operator-supplied-not-authenticated`（与实际App不同，验证owner不认证App），真实native“开始只读查询”→Ready/8entries/SizeComplete=true/ObservedBytes165375/CandidateBytes0。`ux5-store-gui-result.json`含完整原report、Store前后字节快照相同、Runtime=false；`ux5-store-explicit-input.png`/`ux5-store-ready-real.png`非空实图。查询已完成Dispose，无在途查询，非从伪report填表。
+- 运行GUI同次已取证：Begin只新建/保存本根空UX5Runtime.unity并进入其Play，实态仅此Scene（没有原Main游戏Scene），原ResourceSystem显式装配R1；真实native“采样/刷新”得到Ready/1Project/2Assets/4Bundles/1Cache/HistoryCapacity16与4条History。`ux5-runtime-gui-report.json`是窗口同次原完整report，Content Budget134217728、ProcessCngKeyCount0（None；未测试新加密路径，不冒充native memory）。`ux5-runtime-{projects,assets,content}-real.png`及before-sample均真实1.75DPI；没有产品自动Initialize或反射私有Mode/配置。
+- **当前owned运行收尾在途：** 620×440+展开Output真实图`ux5-runtime-min-output-before.png`确认底部内容被挤出可视区域，不能作为通过。已主动调用同一RuntimeEvidence.End()，only own instance/cache/prefab/text已Dispose、等待原Shutdown/native drain后helper自动退出Play并在EnteredEditMode恢复SessionState记录的原SceneManagerSetup。**不得重复Begin或直接关未知会话/游戏；先读同次ux5-runtime-run.json直到ClosedAndOriginalScenesRestored，核对无Runtime/Bundle、Main不dirty后才改源。**
+- 下一动作：修复Runtime窄窗长头部+数据区的可滚动边界，保证展开Output不把主控件/底部挤出；先用回归复现/验证，再以新明确run身份复用已登记自有空Scene做必要重验（不是重启超时旧run）。当前wide运行证据保留有效；旧失败图不删。实际dock隐藏/1440/查询取消旧结果与最终文档保护/meta/Git收口仍待完成；独立Review原6项均已作者修复/回归，隐藏项修复不以失焦替代，实dock验收待补。
+- 完成上述运行GUI后：实际dock隐藏/宽屏1440/620展开Output/主题、Store取消旧结果/重载最终验收、必要定向合跑与文档/保护快照/meta/Git只读终态。新C02 R1层级/Workspace与Store/原Source夹具均own，最终清理/保留需明确，不改原未知内容；主Unity目前临时Restore，最终恢复原最小化/Console/Selection。UX5未完成，整体不得标8.9/Stage8 COMPLETE。
+- 运行窄窗缺陷续接：旧run已真实ClosedAndOriginalScenesRestored（Main不dirty、Runtime=false/Bundle0）。新增`MinimumRuntimeWithAReportAndExpandedOutputKeepsTheOutputReachable`以RootContentHeight实际527>440得到RED，Runtime窄窗改为自身完整滚动视口+列表/详情固定子区，主页不再挤出Output；GREEN，最新UX5 6/6 Passed（0.30s）。最初尝试textArea捕捉因无status走Label而未捕获，未算有效RED；改测真实root总高度后有效。
+- 新回归run实际Ready并完成真实采样：`ux5-runtime-min-output-fixed.png`/`ux5-runtime-min-output-regression.png`为620×440、非空report、展开Output完整可达，数据区在独立可滚动视口内，不挤出底部；`ux5-runtime-wide-1440.png`为实际1440×860宽屏，仍1.75DPI。第二次实际采样2Assets/4Bundles/HistoryCapacity16，`ux5-runtime-layout-result.json`记录真实尺寸/DPI/Theme。该次请求切浅色后实读isProSkin仍true，**不计作浅色Play数据通过**；此前UX2/4浅色实图有效，UX5浅色编辑态Store/指南还待最终覆盖，不伪称缩放/主题。
+- 真正dock生命周期已过：只关闭自有浮动Workbench，再将同一产品窗口GetWindow dock到SceneView现有tab，实际rect1091.71×800.71。原native采样/auto按钮得automatic=true；以原只读controller Begin一个真实查询后Focus同dock SceneView sibling（未直接调用隐藏方法）。`ux5-real-dock-hidden-result.json`验证before auto/query均true，隐藏后visible/auto/query均false、无伪造report，应用HistoryCapacity仍16；再次Focus Workbench auto未重开。`ux5-docked-runtime-active.png`/`ux5-dock-sibling-hidden.png`是真实主Unity全屏图。最初Console区高度251低于约定440最小，不据此外推支持，未更改用户split尺寸；转正常SceneView区验证，关闭新增tab已恢复其原层级。native坐标未命中auto的工具失败保留日志，不当产品缺陷。
+- **当前回归run收尾在途：** 已主动调用同类End，归还own leases/cache并请求Shutdown/native drain→自动退出own空Scene Play并恢复Main；下一次先读`ux5-runtime-layout-regression.json`确认ClosedAndOriginalScenesRestored/Runtime无/Bundle0/Main不dirty，禁止重复Begin或直接Shutdown未知主体。回归后只留一个自有浮动Workbench（当前HWND2231054，现场须重核），原签名环境/PFX已清。接下来仅余Store取消/旧报告/重载与Guide/主题补验、最终合跑和文档保护/meta/Git收口、owned清理/环境还原；不宣称UX5或整体完成。
+- 上述第二run已实核ClosedAndOriginalScenesRestored，Main不dirty/Playfalse/Runtime无/Bundle0；Editor此时浅色isProSkin=false，后续浅色Store/Guide均按此实际值取证，不外推Play内浅色。
+- Store真实GUI取消闭环：先原UI得Ready8，再只在本owned Store的prepared目录创建8192个自有单字节17 canary延长查询，原UI Start(maxEntries100000)→真实Cancel；`ux5-real-cancel-result.json`query=false、保留同一原Ready对象、oldReport=true、无假Canceled/Runtime；`ux5-store-canceled-old-light-620.png`标旧输入与旧身份。finally逐个核对长度/内容后只删8192个own canary，原Prepared JSON仍1个，`ux5-cancel-fixture-cleanup.json`。
+- Store展开Output也补同根因回归：新`MinimumStoreReportWithExpandedOutput...`先RED root452>440，结果在窄窗独立滚动视口+固定条目/详情区域后GREEN，UX5当时7/7。实际`ux5-store-min-output-fixed-light.png`为真实8条Ready、620×440、浅色、展开Output可达（不是空表或伪report）。
+- Guide真实缺失链接拒绝先验证：旧猜测ResourceCIExample路径缺失，点击只明确不可用、没有未知替代搜索/执行，`ux5-guide-min-light.png`是旧失败/空报告取证。工程实现按Resource.md已明载正式Samples/ResourceStartup/Editor/ResourceBuildRecipeExample.cs修正；标签明确“无窗口Editor样例/非通用CI”，新增References实际文件断言先RED待下次GREEN，产品仅定位/打开不调用Tests类型。下一次要真实点修复后入口并记录selection/无Play/无Runtime，不以旧失败图冒称通过。
+- **当前最终定向suite在途/未读终态：** 最后tests-run query为UX2全部、UX3除已验nativeObserver、UX4全部、UX5全部、原Window/Workbench/Interaction/Map、Recipe除2个已沿用native完整用例；工具MCP-32001等待超时。禁止重跑、active时不改产品或夹具源；按同次Tool_Tests._resultCollector summary/results/startTime与IsRunActive读取最终suite，保存`ux2to5-final-targeted-run.json`。RunStarted临时1964是全树计数，不等于实际运行全库；只能最终summary确认选定数量，不取消/重复启动。
+- 取最终suite终态后剩余：修复失败（若有）、修复后Guide点击/只读轻验证、Resource.md/owner/Plan记录、metadata与protected-before快照比对及只读Git终态。最终仅清理自有C02测试层级/workspace或明确保留不默认导出，原Source/Project/Recipe/Atlas/两正式发布与公开证据适量保留；所有清理须核对own身份与未知额外文件，不删除失败历史证据。关闭自有窗口、原Main/Console/Selection GUID52d3fa0622a3f3b428a754d82a63736c及主最小化/深色还原，确认无在途任务/查询/订阅/Bundle/CNG owner。之后一次最终报告，不新建重复计划，不Git写，不8.10。
+
+### 29.25 UX2～UX5技术交付与最终终态
+
+**UX2～UX5连续实施技术完成，待用户功能与交互验收；首版页面已完整接入，后续按用户决定集中优化UI设计。** 本节为当前有效结果，前节在途/待做文本均是已完成或已处置的历史检查点，不提升8.9、Stage8、E04/C05/B02/F03或用户视觉验收层级。
+
+- UX2交付：物理Bundle原生多列表、预估/确切BuildResult双来源、可见源文件/主地址/依赖闭包区分、正反向Bundle树、来源有限快照及身份复核定位；同一Atlas配置字段/明确Save与Ctrl+S/状态计划/原生成准备/Obsolete确认保护。原Catalog v1、Bundle身份、选择/依赖算法及Atlas/Publisher所有权不改变。
+- UX3交付：Recipe同资产内联与原无配方入口、不同Project双方身份/拒绝/显式切换、保存对象明确、原Action唯一执行。原同一Preflight共享结构化只读状态，旧string入口保持有效异常与早返回；真实阶段只观察且异常隔离、执行重入拒绝，不代替原provider冻结/后验/finally。构建/发布/生成分项、部分成功/提交未确认恢复说明、32条原Project有界尝试/旧报告失效；排队目标点击时捕获，各输入/历史同门禁，不从raw/证据复活临时报告。
+- UX4交付：owned历史与Index分开显式验证、原生版本身份不随排序筛选漂移；历史/Index/选定来源各自失效，新receipt不被旧表反向覆盖。工程外父目录/<Digest>原ExportRelease、精确历史签发ReadVersion与旧当前版入口、完整可滚动确认、C02 Preflight/Deploy/独立Recover和Publisher独立恢复；Archive保留原历史Unity/App字节复验，不借签发严格ReadVersion缩减旧导出合同。唯一Deployer新增接点只是纯GetWorkspacePath定位，不读写journal，不改原C02事务。
+- UX5交付：全会话同次report所有原分项与Content/Counters、弱主体/明确旧快照、5s显式auto、历史清空/不回填说明、实际dock不可见与转换/离页/关闭/重载收尾；手工完整root/closure/App的原E05单在途主线程分段查询、真实身份旧结果、取消Dispose无伪callback、各状态/保护/完整性/候选成本语义。无Runtime私有配置getter/反射预填、无Runtime→Editor依赖、无key/mount/pin/recover/cleanup/删除/激活按钮。报告/指南只指窗口原report和已知文档/正式样例，缺失明确不可用，无Temp/Plan扫描或样例自动执行。
+
+**验证与Review**
+
+- 当前唯一Unity 2022.3.62f3c1 / Windows Editor / StandaloneWindows64实际编译通过；最终同一次定向suite `ux2to5-final-targeted-run.json`为**75/75 Passed、Failed0/Skipped0、5分59.69秒**，工具超时后读取同次RunFinished，不重启。之后仅测试证据helper改为inactive时不挂永久Editor update，及正式指南路径，针对性2/2 Passed；不使75项产品验收失效，不把分别运行次数相加为唯一测试总数。Runtime/签发/部署等真实GUI证据与此前原服务证据分别列于§29.22～29.24；原176组Player/全审计/F03矩阵未重跑，密码后端/远端门禁未改。
+- 一名独立Reviewer（Task `ses_eb3f2b962ffeycsMNBVuSf0IYS`）分段只读审UX2～UX5，发现6项P2，无P0/P1。前5项经Reviewer源码再核对闭环；最后dock隐藏按其建议只暂停诊断，不改变原合法queue取消责任，作者TDD与真实dock验证闭环。新增6回归先有效RED后修复，与首批UX5合跑10/10；真实隐藏/窄窗作者回归不冒称Reviewer独立跑Unity，不额外循环审整个Resource。
+- 真实桌面鼠键、真实OnGUI事件和服务API证据分别记录。必需非空GUI覆盖Bundle双来源/依赖、Atlas规则与实际生成准备、无Recipe/Recipe、发布成功与生成失败分项、R1历史/IndexR2、导出/签发/C02完整范围、运行资源及E05结果/取消旧报告。代表图：`ux2-analysis-sources-dark-1080.png`、`ux2-atlas-rule-editor-fixed-dark-1080.png`、`ux3-partial-result-dark-1080.png`、`ux4-selected-r1-index-r2-dark-1080.png`、`ux4-c02-confirm-{top,bottom}.png`、`ux5-runtime-content-real.png`、`ux5-real-dock-hidden-result.json`、`ux5-store-ready-real.png`、`ux5-store-min-output-fixed-light.png`。均在同一owned证据根。宽屏1440、1080、720、620×440及正常SceneView dock1091.71×800.71有实际取证，**仅pixelsPerPoint1.75**，不外推其他DPI/全状态主题笛卡尔积。
+- 保留失败证据：Atlas初期dummy Rect空详情、导出任意目录不能Snapshot.Open、旧Guide猜测路径、native输入未命中、运行/Store展开Output超窗等，均明确失败或未计通过；相应功能错误已修复、回归/实际重验。旧Guide未自动找替代，后按Resource.md正式ResourceBuildRecipeExample改正；实际点击现已定位该脚本（`ux5-guide-fixed-locate-result.json`），Play=false/Runtime=false/Main不变，且明确非通用CI。
+
+**保留与清理**
+
+- 可体验源根：`Assets/YLFramework/Tests/Fixtures/WorkbenchUX2To5-20261017/`，owner JSON登记Project GUID/两Recipe/独立MismatchProject/Scene/Atlas/canary；默认框架ExportRoots只含Editor/Plugins/Prefabs/Runtime/Samples/Documentation/许可，**不含Tests**。原正常Recipe BuildAndPublish/Generate=false；PartialFailureRecipe为明确自有阻止接管目录，用户可重现部分成功；没有改原UX1夹具或用户配置。
+- 两版正式owned发布保留：R1=`1f3c2d0ce7f14a4f230afd146dcabe3cc5ec2bf10e4c9b5756a7f003673a9b56`，R2=`aba98175d0a545162043457fc181db53e1b142d6c61a01d8a8fcd089c4e353ee`，Publisher Index仍R2。位于`AssetBundles/YLFramework/yl-workbench-ux2to5-20261017/StandaloneWindows64/`，可在UI ReadHistory/ReadCurrent显式体验，不扫描猜测。
+- C02专用R1部署及idle `YLBI_4d9276be6c8b39af`已由原Preflight完整/归属复验，核对共享Root仅本Project/其meta/owner、workspace仅owner/lock且无journal/stage/next后，删除本轮Project及原本不存在的新外壳/meta、空闲workspace；`ux4-c02-owned-cleanup-result.json`证明StreamingAssets与部署前**完全一致**。不留测试内置数据进后续Player，不删除/覆盖用户原部署；所有旧失败证据仍在。8192个查询延时canary逐一核对后清理，原Prepared记录保留；Store只是本轮工程外数据，不在Runtime激活。
+- 证据根：`C:/Users/Kano/AppData/Local/Temp/kilo/workbench-ux2to5-20261017/`。保留Digest命名导出、公钥XML/已签R1元数据、Store及JSON/PNG；自有private PFX已删除，进程签名环境原值已恢复、不入SO/日志/截图。两次own空Scene Play都已由原Shutdown排空后退出并恢复Main，未加载或运行原游戏；最终ResourceSystem无、Bundle0、CNG provider/key/key-object bytes0、无本窗口stage观察/Editor update/查询/排队订阅，inactive证据helper不挂永久update。
+
+**工程与环境终态**
+
+- `ux2to5-protection-meta-final.json`：初始保护文件/树全部相同（.gitignore/工具配置/AGENTS/并行UI Plan/Core Fixture/StreamingAssets父meta，Games/Scenes/StreamingAssets/MainModule/Packages/ProjectSettings/NuGet/UX1体验夹具）；新fixture缺meta0，脚本meta齐全，Editor Resource代码不进Player，产品Editor程序集不引用Tests。没有改Packages/ProjectSettings/AGENTS或其他worktree；现有dirty插件/配置成果原样保留。
+- `ux2to5-source-manifest-final.json`记录54个相关脚本实际SHA与meta存在性，起点是8abaf2d加保留的未提交UX1及本轮源码，不以HEAD冒充完整源码固定。Git终核`fusion/8-resource`、HEAD仍`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区空、意图范围diff --check通过；工作区差异含原UX1和用户既有升级，本轮不暂存/Commit/Push/Merge/Tag/切分支/Reset/Clean/Stash/Rebase，等待用户最终验收后另行明确提交授权。
+- `ux2to5-final-unity-state.json`：唯一主Unity PID15324（另两AssetImportWorker），非Play/编译/导入、compileFailed=false、Main不dirty、Runtime无/Bundle0/CNG0、owned窗口/更新订阅/stage observer均0，原Selection GUID=`52d3fa0622a3f3b428a754d82a63736c`、Console焦点与深色已恢复。最后native Window实核主Unityminimized=true，HWND197584，无多余本轮窗口；无后台进程/在途测试/查询或待清临时secret。
+- 后续仅用户决定的视觉细化：整体比例/排版/文案密度、输出高度拖拽、跨Domain Reload行选择等UX1已记录的非阻塞差异；不把这些写成已完成最终视觉验收。没有保留已知阻断功能缺陷，不安排8.10/Stage9/跨Unity运行适配/新美化。完成后停止，待用户功能与交互验收。
+- 恢复规则：先读本节及相应批次最新证据/同一次run结果，不重复启动仍在执行的测试或构建；只有授权内无法安全解决的真实阻塞才停。原Plan为唯一进度记录，不新建重复Plan/日报/审计文档。
+
+### 29.26 Workbench易用性与视觉精修授权及实施（2026-10-18）
+
+- 用户已查看首版真实截图，授权一批连续完成局部设计、Resource Editor实施、直接测试、唯一主Unity真实GUI、缺陷修复、一次独立Review及本Plan/Resource.md维护。三项目标同时落实：控件可读可点、有效数据空间更充足、普通Unity开发者能沿现有入口完成None构建发布。保留IMGUI/TreeView、620×440最小尺寸和唯一原服务/队列；不重开Resource总体设计或另建向导/任务/主题平台。
+- 本次实核：`fusion/8-resource`，HEAD仍`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区为空。真实起点包含未提交UX1～UX5及其他用户/并行成果，全部保护，不以旧Commit或旧终态覆盖。主Unity PID15324由当前进程路径确认，另两为AssetImportWorker；Unity2022.3.62f3c1/StandaloneWindows64，非Play/编译/导入，compileFailed=false，Main不dirty，TestRunner inactive，Runtime无/Bundle0，无Workbench窗口。当前Selection GUID=`93723fc48dfe6e148b67ef1d7c985000`，焦点Console，深色、pixelsPerPoint1.75；不得用上轮Selection/句柄替换本次真实起点。
+- 简短改进清单：Workbench局部居中控件样式与24～28point数据行；削减重复标题/参数/常驻说明；输出可拖高度、紧凑空态、窄窗钳制且警告摘要不依赖展开；构建结果优先总体/分项/原因/下一步；确认框采用结构化只读摘要及同窗完整可复制技术范围；资源/图集/分析/交付/诊断统一渐进信息与准确术语；指南以一Project、多Group、None、无Recipe为入门叙事，不修改既有选项。延续§29.17～29.20根路径、基线、更多向内、失焦、Group提交/Undo合同。
+- 实施顺序：先记录当前真实GUI尺寸/控件几何和同条件修改前图，再共同绘制/输出/构建/确认；随后应用到各页/Inspector及纯UI状态，完成直接回归、代表性深浅主题/1080/1440/720/620/正常dock与任务走查，最后一次独立Review、修复及文档/保护/环境收口。新增交互先复现或测试RED，再验证GREEN；不以静态截图、反射造Editor或服务调用冒充桌面鼠键。
+- 验证边界：旧夹具与R1/R2默认只读；需要构建/失败注入时创建登记的新小型owned身份。只用主Unity，不运行原游戏、不保存dirty场景、不结束未知资源会话。工具超时先取同次leaf与suite终态，不重启；不重跑E04/F03/176组Player/Atlas全矩阵或31项审计。只1.75DPI有实证，不改系统缩放。部署确认仅展示改动可用原Preflight+复制/取消零写；若执行接入改变，补本轮owned成功路径与精确清理。
+- 追加反馈（2026-10-18 08:28Z）：用户要求继续解决按钮选中效果、界面层次、整体美观及工作流程不直观。不是再统一增高或换颜色；在同一IMGUI工作台中区分主任务导航、页内选择、checkbox选项、普通操作和蓝色主操作，Group选中行使用独立强调，不再把所有分类/开关画成同等灰按钮。主任务名称为“资源配置 / 分包分析 / 构建发布 / 版本交付 / 诊断”，指南与空状态明确“配置资源 → 保存 → 构建并本地发布 → 查看版本”，快捷入口只切页，不自动写入或执行。
+- 当前实施：局部字段26point、行26、工具条30；原生Popup实际仍18的差异已用真实布局及RED用例抓出并修到26。输出高度拖拽/钳制、原生完整确认复制、构建分项结果、图集/来源/交付/诊断渐进信息、稳定定义身份行选择均已接入。真实基线及本批对照位于`%TEMP%/kilo/workbench-polish-20261018/`；`before-*.png/json`为改前，`hierarchy-*.png`承接追加反馈，早期`after-*initial`等不冒充最终图。
+- 回归检查点：首次9类UI同次测试62项，60通过/2失败，终态已从原collector回收并保存`ui-regression-run-01.json`，未将超时当成功或重复启动。失效旧入口测试改为真实点击“解析预览→计算预览→选行”，保护断言不删；折叠输出失败原因被首行摘要截断的真实问题已修。随后定向2/2通过；新增下拉高度、设置页保存、选择身份/确认复制等组合13/13通过；追加导航选中态/disabled实际GUI事件用例RED→GREEN，现相关组合14/14通过。尚需最终分组回归与完整GUI收口，不将这些检查点合并冒称一轮全部通过。
+- 一次独立Review由`ses_eb20cb2e4ffe6EcnQe9Y2RQ4pw`完成只读源码/测试/已有GUI证据检查，发现2项P2、1项P3，无P0/P1：项目设置Ctrl+S误保存后台Recipe/Atlas、无Recipe确认完整复制漏force、窄窗下拉/结果切换实际高度不足。保存分支已显式排除Settings，原确认文本补冻结ForceRebuild，Popup/切换布局修正；保存用例先RED，14项组合GREEN，完整force复制另走本轮真实确认取消验证。Review未独立运行Unity，追加反馈关联的展示改动继续定向自检，不循环审查Resource内核。
+- 现场变化：等待回调未如预期恢复，用户催促后已继续实做；原62项终态有效，进程更换前另一次2项请求没有可靠终态，不计通过。期间主Unity由15324经8796更换为8296（外部现场变化，代理未启动/终止任何Unity）；每次重新核对PID/窗口，不复用旧句柄或恢复旧dirty资产。新owned夹具为`Assets/YLFramework/Tests/Fixtures/WorkbenchPolish-20261018/`，ProjectId=`yl-workbench-polish-20261018`、GUID=`1cfc301941c7da94abc035da6aecfed9`、App=`polish-app-v1`。旧UX夹具/R1/R2只读；重启前未保存添加不强制恢复，已通过真实菜单项和顶部保存重新显式完成，`walk-add-and-save-native-confirmed.json`确认messages两条登记、optional一条、dirty=false、额外GUID已落盘。较早`walk-add-and-save-final.json`的saved=false仅为失败尝试，不是成功证据。
+- 上述“进行中”是实施时点记录；以下收口记录为本批最终有效状态，不覆盖历史失败、工具超时或当时授权。
+
+#### 29.26.1 最终交付与验证
+
+- **Workbench易用性与视觉精修技术完成，待用户最终视觉、功能与交互验收。** 三项目标同时落实：原生字段/按钮/行命中舒适度，默认信息分层及有效内容空间，None无配方入门与清楚的任务路径；追加的选中态/层次/美观反馈以独立主导航、页内选择、checkbox、Group行高亮、蓝色主操作和构建双区分隔回应。不以代码/截图代替用户满意或最终UI验收，不标8.9或阶段8 COMPLETE。
+- 真实同条件对照：旧UX2～UX5夹具完整树与本轮起点相同，`final-comparison-fixture-unchanged.json`已验证后再生成`final-compare-build-dark-1080`、`final-compare-resources-dark-1080`、`final-compare-analysis-dark-1080`的PNG/JSON，与对应`before-*`匹配深色、1080×720、DPI1.75、数据和展开状态。`final-layout-comparison-metrics.json`记录实际GUILayout point：构建输入18→26，普通按钮25～29→30，构建两区滚动视口536→584。资源页保留三栏和原生表；资源详情视口538→518，明确接受较高字段/底栏带来的局部空间取舍，不谎称每页同屏数据均增加，也不靠缩字或提升minSize凑结果。少源文件列表按条数定高，单文件不占原固定145point空白。
+- 最终代表图：`native-partial-final-dark-1080`、`final-partial-output-dark-620`、`final-partial-output-dark-1440`、`final-cache-ready-dark-1440`、`final-cache-visible-row-light-620`、`final-guide-light-720`、`final-atlas-rules-dark-1080`、`final-workbench-docked-dark`。全部源于唯一主Unity实际渲染/桌面取证；GUI尺寸与DPI以相应JSON为准，不按PNG像素倒推。深浅主题、1080常用、1440宽屏、720/620窄窗及正常dock有代表证据，不扩成全主题×尺寸矩阵，不外推其他DPI。
+- 原生桌面流程：显式准备本轮源文件Selection后，通过真实添加菜单项和顶部保存完成定义落盘；None无Recipe原生主按钮/确认完成R1发布，新增文件后再次真实添加/保存/配方执行完成7资产发布和生成失败。原生Ctrl+V填写空App、点击空白提交后由StaticBlocked转StaticReady，未触发构建或保存资产，见`native-app-blocked-to-ready.json`。界面以原异常类型/参数名及空App值映射字段明确的提示，原始错误留高级信息，正式state/error不变；不解析日志猜原因。
+- 本轮发布仅自有身份`yl-workbench-polish-20261018`，三版保留且末次原ReadHistory/ReadCurrent复验有效，见`final-release-readback.json`及fixture owner：R1=`a15d15705c4f9c5d5c4a4bec23e5648be4bf2bd86948be3e2a10d3527fa927e3`；R2=`dabe96fcbd81c845e1790a0649ba78cff110a73ec54b8822f6070a25496b73e1`；R3/当前Index=`5ee1d92ef1b03559efbda7599b4da53ce4fedd78edc73408ea74a30f86589e04`。R3是文案编译后显式原生回归，并非产品自动重发。真实生成错误为`Published Project has different Unity/App compatibility: yl-workbench-ux2to5-20261017`；是原发布Catalog集合兼容门禁，不是本轮目录canary命中，不改旧项目/App/发布以强行通过。界面说明版本仍有效、按实际原因处理后可独立生成，不再一概要求修正目录。
+- 确认验证：无Recipe真实force确认复制包含冻结`ForceRebuild=True`，Esc关闭、BuildResult仍无、Workspace/Publisher未创建，见`native-none-force-copy-escape.json`。真实读取历史与索引并鼠标选旧R1，确认所选摘要不同于索引R3；原Deployer只读Preflight后默认三类写入影响可见，同窗展开/滚动/复制完整owner/lock/journal/next/stage、payload~及.meta，最后Esc取消。`native-c02-copy-cancel-zero-write.json`确认全标识与范围存在、StreamingAssets完全相同、部署workspace未创建、执行/队列结束、剪贴板恢复。未接受Deploy，故无本轮部署产物需清理；历史服务成功路径不因纯展示变化全量重跑。
+- 输出与状态：真实拖拽242.857147point，620×440显示钳制80，放大1440×860恢复原请求高度，未新增尝试/改版本/弄dirty项目，见`native-output-drag-wide`、`native-output-narrow-clamp`、`native-output-wide-restored`。`actual-reload-before/after`证明真实Domain Reload保持主任务、搜索、已有源GUID行、195/325分隔宽度及输出请求高度；不恢复BuildResult、历史读取、query/report或自动采样。表头对预置超出可用区的autoResize宽度重新适配，固定列和比例保持，见`actual-reload-column-adaptation.json`；不冒称固定像素完全相同。诊断子页和临时查询配置不作为跨重建执行状态。
+- 缓存与诊断：真实手工完整闭包→原生开始查询，原callback报告Ready/8条目/IsSizeComplete/165375B/候选0，旧Store字节一致，见`native-store-query-final.json`。浅色主题切换重建视图时没有恢复旧报告或自动查询，先将误命名图改为真实runtime空态，再显式重填参数并重新查询，未冒充旧callback。最小窗展开输出曾只剩表头，真实RED及新用例记录内容高4point；移除正常完成的重复结束提示后GREEN，保留停止/旧结果/错误状态，真实有可读数据行。原生滚轮表格y变60、外层/输出仍0，见`cache-visible-row-real`及`native-single-scroll-query`。
+- 正常停靠：通过现有SceneView的DockArea创建本轮唯一owned页，实际GUI区约1091.71×800.71、DPI1.75，PNG为真实主编辑器。与现有SceneView同dock互切，visible=false→true、自动false、query无，关闭只移除本轮页并恢复原选中pane。没有Runtime会话时自动采样checkbox保持禁用，未强设私有flag或初始化Runtime来伪造活跃采样；本轮空会话停靠显示与既有活跃生命周期直接测试/上一批真实证据分层解释，未重跑非空Play/Player。
+- 测试：五组基础定向run分别14/14、15/15、18/18、9/9、9/9，合计65个不同用例；UX2/3工具超时后取同次终态（2分18.60秒），未重启。后续文案5/5、缓存可视行及生命周期12/12、空App和相关交互8/8均通过且有重叠。`final-test-evidence-summary.json`汇总**67个唯一受影响行为的最近叶结果均Passed、每份对应suite也Passed，Failed/Skipped均0**；不是单轮67/67，不将分组次数相加。新增App/缓存病例均有实际RED→GREEN，不删安全/保存/身份断言。未重跑E04/F03/176组Player/Atlas全矩阵或31项审计。
+- 独立Review为同一线程一次审查及08:28追加范围补读，前述2项P2/1项P3已闭环；补读无新增实质finding。Reviewer只读源码/测试/PNG/JSON，没有独立运行Unity；后续真实走查发现的缓存可视行与空App指导由限定修复、定向测试和原生GUI直接复验，不循环全面审查内核。
+- 文档和产物：Resource.md同步普通None流程、当前真实入口/术语、上下文保存、完整确认范围和UI状态边界；fixture owner补充真实三版、实际生成失败原因及取消零写范围。未新建重复Plan/日报/教程；58个相关脚本的当前SHA/GUID、17个本轮fixture文件/目录及.meta已核对，缺失为0，见`final-source-meta-manifest.json`。临时取证脚本只在工程外本轮Temp，恢复临时置顶，未更改工具权限/系统缩放或安装依赖。
+- 保护：`protected-final.json`确认Games475、Scenes2、StreamingAssets450、MainModule448、旧UX1夹具128、旧UX2～5夹具61、旧发布38项逐文件hash与起点一致。Packages两文件、ProjectSettings.asset一文件、NuGet三文件出现现场并行差异（MCP版本/依赖符号及对应DLL），本轮未编辑这些路径，未回退或接管；不假称全工作区clean。Core/Runtime UI、AGENTS、工具配置、忽略规则和其他worktree未主动修改，保留所有已有/并行差异。
+- Unity收尾：`final-unity-state.json`主PID8296、Unity2022.3.62f3c1/StandaloneWindows64，Main已加载且不dirty；非Play/转换/编译/导入、compileFailed=false、无在途测试。Runtime无、Bundle0、CNG provider/key/key-object字节/释放失败均0、阶段观察0、自有窗口/确认框/自有update均0。深色、DPI1.75，Selection为空且未用旧进程快照覆盖；主编辑器保持该现场原本的正常窗口状态，未复原早期进程的最小化状态。Console中的历史工具Roslyn错误保留，不冒充当前Unity项目编译失败，也未清Console。
+- Git收尾：实际分支/HEAD仍`fusion/8-resource`/`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区为空，授权范围`git diff --check`无输出；无Git写。无本轮后台进程、wakeup或cron。用户最终视觉/功能/交互验收及第二次提交仍待明确决定；本批到此停止，不进入8.10、阶段9、远端Player或其他框架专题。
+
+### 29.27 执行选项折叠关系修正（2026-10-18 11:08用户反馈）
+
+- 用户截图确认：底部“高级选项与执行说明”实际上控制上方force/常量字段，展开后入口自身向下移动，控制关系和语义不直观。授权局部修正，不重开整体设计。
+- 选择：附加构建选项入口放在其编辑字段上方；只读执行/密钥说明独立折叠，不控制设置。无配方与同一真实Recipe均采用同一关系，收起仍保留有效非默认值摘要；不改保存对象、Action或正式预检/执行协议。
+- 当前现场：主Unity8296，非Play/编译/导入/测试，`UIAcceptance.unity`已保存且不dirty。此为用户最新场景，不能恢复上一批旧Main快照。新建测试窗口仅自有，保留现有选择及用户/并行差异，无Git写。
+- 修复：基本字段之后增加“附加构建选项”，其下面缩进绘制force、地址常量生成和目录；只读帮助独立为“执行说明与技术详情”。无配方和Recipe一致，Recipe基本/附加字段仍通过同一SerializedObject机制编辑原资产，Inspector默认全字段调用保持；收起保留非默认摘要。展开状态不参与字段change-check，未改变Action、保存/队列/预检/执行与所有权语义。
+- 回归：`AdditionalOptionsExpandBelowTheirAnchorAndStayIndependentOfHelp`先实际RED，旧版展开时字段插到入口上方（257→160的首个候选控件位置）；修复后无配方/配方双模式GREEN，入口位置稳定、字段在其下方、说明独立，force值/dirty状态/配方磁盘内容不变。Polish全组9/9 Passed（33.82s），UX3全组12/12 Passed（128.34s）；后者工具超时后回收同次suite和leaf终态，未重复启动。没有将21项计为无重叠新总数，不重跑整个Resource或Player矩阵。
+- 真实GUI：主Unity8296/深色/DPI1.75，新增自有窗口内用桌面鼠标展开/勾选/收起/只展开说明，`followup-options-closed/expanded/help-only/narrow/recipe`的PNG/JSON保留在原本轮Temp证据目录。无配方入口在y183，展开后仍y183；收起保留force=true、generate=true的摘要且项目不dirty，单独说明为advanced=false/help=true，未创建BuildResult。620×440与配方模式也已实际渲染。未点击检查/构建/发布或保存，未改变原体验资产、旧证据文件、用户场景或系统设置。
+- 状态：局部修复技术完成，待用户交互验收；Resource.md已同步。保留本轮用户实际`UIAcceptance.unity`及选择，不恢复上一批Main。无Git写，不提升整体UI/8.9/阶段8验收，不进入下一阶段；上一批未受影响证据沿用，此节为该反馈的最新修正记录。
+
+### 29.28 Workbench最终UI收尾授权与五项核对（2026-10-18 11:53）
+
+- 授权仅A～E及其直接回归，不重开整体设计，不统一换色/字号/高度，不改Runtime、Catalog、密码、Builder/Publisher/Deployer事务或平台门禁。当前分支/HEAD仍`fusion/8-resource`/`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区空；主Unity8296/2022.3.62f3c1/StandaloneWindows64，用户`UIAcceptance.unity`不dirty，非Play/编译/导入/测试，Runtime无/Bundle0、无Workbench窗口，Selection为`fe626f07e9a61a44c9547f9babfcd30f`，深色、DPI1.75。旧PID/句柄不作为后续事实。
+- A：仍为二级“自动图集”内含自动规则和手动SpriteAtlas；Sources仍Size/Element、Grouping英文未说明，需本轮修正。只整理同一SerializedObject及现有数组，不改规则/生成；原保存对象、Undo、一规则多输出和危险删除保护保持。
+- B：真实按钮先开GenericMenu，唯一添加动作读取Unity当前Selection.objects，另有禁用拖放提示；应明确“添加资源…”及真实菜单来源，不能伪装直接添加。资源/分析/版本/查询过滤输入均无空值提示，“Group”显示checkbox语义不明，需本轮局部修正；不扩展过滤能力。帮助弹层需在真实屏幕边界核实，未确认裁切前不重写tooltip。
+- C：默认确认摘要和三类影响已解决，保留不推翻；展开区仍单个Message长文，需结构化为身份/目录文件/执行恢复三段。数据由同次捕获的只读对象提供，不解析长文，不建立执行权威；原完整Message继续完整复制，ForceRebuild不得遗漏，确认队列目标与服务调用不改。
+- D：ReadCurrent结果仍写入底部完整digest成功提示，重复确实存在；改简短、依据已读/失败/过期/所选身份生成的状态，完整原文留输出和详情，不自动读取或标最新。
+- E：图集宽窗固定48%且没有本页拖拽偏好，确需左约33%/右约67%的首次默认及用户可拖；只本页请求值，窗口缩小只钳制显示，不覆盖原请求，不接管资源页分隔偏好。
+- 已解决无需重复改动：§29.27附加构建选项已在字段上方、说明独立，26point控件/原生表、身份与保存、输出拖拽、NoRecipe/Action及部分成功语义沿用。仅修五项，不继续搜寻无关审美建议。
+- 旧图只读核对：指定六张PNG及对应JSON均存在。最终对照build/resources/atlas为深色1080×720；partial为深色620×440和1440×860；cache-visible-row为浅色620×440，均实测DPI1.75。图内仍旧“高级选项与执行说明”属于其拍摄时点，不能覆盖§29.27当前代码。本次补附件不重建临时报告或重跑发布。
+- 新证据独立登记`%TEMP%/kilo/workbench-final-ui-20261018-1153/`，只追加新PNG/JSON，不覆盖上批目录；需要编辑时仅新建`Assets/YLFramework/Tests/Fixtures/WorkbenchFinalUI-20261018/`小夹具。旧Polish自有R1仅正式只读Preflight/确认/Esc，不Deploy、不签发、不生产发布。定向RED/GREEN、代表GUI及一次本批diff小补审后收口，原Plan/Resource.md增量维护，无Git写。
+- 实施与定向回归：A/E子任务先交4测试，实际3个预期RED/1个既有输出选择PASS；B/C/D新增3测试先实际RED。Sources原生数组增删/替换、Undo/Redo、Inspector、同资产保存/Project未保存修改保护，中文Grouping/真实父目录、原生搜索输入/清空、确认三分区/原始完整复制/Esc、Index独立状态均已实现。图集首次约33/67及本view拖动请求保持，不跨Domain Reload持久化、不改资源页Group/Detail。首次13/13 Passed（42.533s），不与历史合集相加。
+- 本批唯一独立小补审`ses_eb1000a21ffeN0QHN23tgI8WVN`按`source-before`逐文件比对10个生产文件、新测试与取证helper；未运行Unity/GUI。发现1项P2：无Summary但有Details的六类确认默认隐藏旧范围。新增真实绘制回归先RED（滚动期望>0，实际0），修复为无Summary时默认仍显示原Message。无其他独立P0/P1/P2，不再另派补审。
+- 作者真实GUI另发现右编辑器仅占MinWidth420、留下空白；补断言先RED（按钮右缘779，期望>1052），改为明确使用剩余detailWidth。先前分隔条stretch问题也以明确宽度修复。`atlas-default-dark-1080`是该发现时的中间图，不作最终图。修复后同一限定组合14/14 Passed（37.513s），suite与全部叶结果保存`post-review-tests-green.json`；本批未重跑完整UX/Player/Atlas矩阵。首次testClass全名返回0不计验证，正式均以RQL精确选中实际测试。
+- 五项最终处置：A已整理“图集 > 自动图集/手动图集”、共享Inspector的明确Sources数组和真实Grouping说明；来源非空移除经原生Ctrl+Z/Ctrl+Y/再撤销及本资产显式保存，17个自有夹具文件与编辑前哈希完全相同，源文件/meta无改动、生成图集0、无本项目发布目录。B已明确添加菜单/真实来源、“显示Group”和四页空搜索提示；帮助弹层经普通窗口真实点击及原生GetWindowRect确认在工作区内，无需重复修改既有对齐逻辑。C已实现只读三技术分区和原完整范围独立展开/完整复制，不改确认目标或执行服务；无Summary时仍默认保留原范围。D原生按钮显式读取旧Polish三版和Publisher Index，R1所选/R3当前关系正确，底部短状态，完整原Index结果仍含digest。E首次约33/67、真实GUI分隔拖动请求531.12，920宽显示钳制478，620窄模式不写请求，恢复1080显示531；本view会话内保持，不承诺跨主题/Domain Reload持久化，不影响资源页Group/Detail偏好。
+- 代表GUI：深/浅1080、620最小窗、长身份/目录、原生来源菜单、右屏幕边缘帮助、真实普通停靠与SceneView sibling切换。帮助弹层物理矩形`[3411,1322,3796,1555]`位于主屏工作区`[0,0,3840,2076]`内；立即创建时的临时`0,0`位置不是最终边界。普通停靠原图为3838×2074像素，Workbench自身354×789.3point，仅证明现场窄停靠/真实切tab，不冒称620宽窗布局验收。仅实测DPI1.75，不外推其他DPI。OS拖动曾未形成请求，未算成功证据；宽度值以实际Unity GUI MouseDown/Drag/Up与定向测试为据。
+- C02只读取证：正式ReadVersion/Preflight旧Polish R1（`a15d1570...927e3`），不附Deploy回调。第一次确认已取消但未复制，保留原失败事实；续接第二次真实展开身份/目录文件/执行恢复、原范围，原生“复制完整范围”1878/1878字符精确一致，Esc后Accepted=false，原workspace `AssetBundles/YLBI_23205b0d13632c6c`和目标均未创建，剪贴板在finally恢复。证据为`confirmation-native-copy-escape-02.json`及两张本轮技术区原图，不以首次未复制记录冒充通过。
+- 最终保护：`protected-final-comparison.json`中Games475、Scenes2、StreamingAssets450、MainModule448、Packages2、ProjectSettings33、NuGet91、旧UX1 128、旧UX2～5 61、旧Polish27、旧UX发布38、旧Polish发布26项全部与本批基线相同。13个生产/测试/helper脚本.meta齐全，10个原有meta内容不变，GUID与AssetDatabase一致；各脚本最后修改早于保存的14项终态证据，续接只做取证/文档/收尾，沿用14项结果而不伪称复跑。`final-owned-fixture-check.json`确认自有文件未变/meta无缺失、未生成/发布。
+- 环境恢复：已关闭所有本批自有窗口和确认框，普通浮窗容器也已不在原生窗口列表；恢复深色，清空本批OriginalDockPane槽，工作台update回调0、StageReached订阅0。主Unity8296非Play/编译/导入/测试，编译失败标志false；UIAcceptance.unity仍不dirty，Runtime未初始化/Bundle0。续接时用户选择已为空，保留该现场，不把更早fe626...选择或窗口位置回写。未清Console；取证脚本/查询的工具错误不冒称产品编译失败。HEAD仍`8abaf2d...`、暂存区空，无任何Git写。
+- `Resource.md`仅增量同步入口、来源数组/Grouping、三技术分区/完整复制、Index短状态、搜索提示及图集会话宽度边界。`final-image-index.json`逐张记录A6张上批原最终图、B12张本轮真实图、C4张历史改前图的阶段/主题用途、PNG真实尺寸、SHA和可用配套JSON；无配套JSON的旧图只按原PNG尺寸标注，不猜元数据。新图集夹具不冒充旧基线同数据对照；中间错误布局图、主题切换后错页图、父窗口裁剪菜单图均排除。附件交付完成后只标本批技术完成/待用户最终验收，不改变8.9或阶段8整体状态，不进入8.10/阶段9。
+- 2026-10-18 13:50交付：A6/B12/C4共22张均已用Read直接附图，并逐张标注来源阶段、真实尺寸、主题和用途；不是仅给本地Markdown链接。B8保留当时临时浮窗和工具日志，只证明停靠现场，不作洁净效果图或新增第二套工作台。末次`final-delivery-verification.json`再次确认13脚本SHA与收尾清单一致、12个保护根与本批基线一致，14个既有终态叶结果全部Passed。图片交付期间正式Workbench曾短时出现，保留不干预；后续`final-window-ownership.json`确认自有probe0、确认框0、正式窗口0、工作台update回调0，未把用户/并行窗口当作本批临时对象清理。仅文档和交付记录变化，不为此复跑已有效的技术回归。**Workbench最终UI收尾技术完成，待用户最终验收。** 不标整体8.9/阶段8 COMPLETE，不进入8.10、阶段9或其他专题；不提交、不暂存、不Push。
+
+### 29.29 ResourceProject多目录与中文文案联合实施（2026-10-18）
+
+- 当前授权：连续完成多资源目录、独立且按需登记的生成位置，以及工作台/直接Inspector/Help/Resource.md的自然中文整理。保留现有布局、配色、26point控件、导航与输出拖拽；不是纯视觉修改。不等待A完成后再次授权B，不进入8.10/阶段9，不标整体8.9或阶段8完成。禁止全部Git写操作。
+- 实核起点：分支`fusion/8-resource`，HEAD仍`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区为空；既有UX与用户/并行的工具、NuGet、Packages、ProjectSettings、Core等修改全部保留。唯一主Unity PID8296（另两为AssetImportWorker），2022.3.62f3c1/StandaloneWindows64，非Play/编译/导入，compileFailed=false、TestRunner inactive、Runtime无/Bundle0。用户当前`UIAcceptance.unity`不dirty，Selection为`8461416694b970e4b9f7aff9cb7c2775`，焦点ProjectBrowser，深色、pixelsPerPoint1.75；不能恢复早期Main或旧选择快照。
+- 源码事实：旧`AssetRootGuid`承担手工选择与自动依赖范围、默认地址基准、跨Project范围隔离、自动Atlas创建/归属锚点、Builder设置/Map指纹。Packages非代码资源仍依原规则拒绝，脚本和引擎内置依赖的既有例外保留。并非“根只存生成资产”或“根外可随意添加”。
+
+| 原职责 | 本批新规则 | 兼容方式 | 必要验证 |
+|---|---|---|---|
+| 单根源范围 | `SourceDirectories`保存GUID及可编辑的持久`AddressPrefix`；同/跨Project来源目录重复或嵌套拒绝；登记不等于选择 | 配置版本0只读解释旧字符串根；版本1即使空列表也不回退。显式保存时才迁移，不在getter/绘制/预检写资产 | 跨目录同组、共享依赖、根外/失效/重叠、移除保留条目阻塞、Undo/重载 |
+| 根相对默认地址 | 唯一所属目录的持久前缀加相对路径；排序无语义；冲突显示双方路径 | 旧根空前缀，原地址/显式地址/alias不变。跨目录移动可能改默认地址，需要长期稳定则显式填写 | 增根/重排/移动/同名冲突/子资产和Simulation一致 |
+| 旧单根API | 同类型旧序列化字段保留读取身份，统一有效解释入口；兼容单根属性在多根时明确拒绝，不取首项 | 旧公开赋值在单根模式有效；多根使用新列表设置入口 | 旧YAML、旧JSON/调用方、首次显式保存、清空不复活 |
+| 根内自动Atlas | 生成位置由明确新建且登记的配置目录决定；新三参入口显式给父目录，不接管已有目录 | 旧二参入口仍在唯一来源根下创建直接子目录；旧配置/图集保留原路径、GUID/meta/hash，不迁移 | 旧根内排除、旧图集Current/字节、独立输出、多来源规则、未知/其他Project保护 |
+| 构建设置与后验 | 规范化排序的目录GUID+前缀及生成登记语义进入原设置/输入冻结；配置回调变化拒绝 | 工具代码已参与Workspace指纹，合法失效如实记录；不为缓存跳过完整检查；旧owned分区不迁移/删除 | provider/导入回调增删目录、重排、正式Recipe和native readback |
+| 写权限 | 来源登记只有读取准入；生成/Workspace/Publisher仍按精确归属 | 不新增跨Project共享/依赖协议，不改Catalog v1、签名/加密/Runtime地址解释 | 源文件/meta与旧发布保护比对、旧v1严格读取 |
+
+**文案对照与写作决定**
+
+| 旧表达/技术概念 | 面向用户的新表达 |
+|---|---|
+| 专用资源根 | 资源目录；说明“可以添加多个文件夹，实际构建内容由Group中的资源条目决定” |
+| 自动图集范围/根 | 生成目录；说明“保存自动生成的SpriteAtlas，不使用自动图集可暂不设置” |
+| Together / PerAsset | 合并分包 / 逐资源分包，并说明共享依赖和Scene可影响最终Bundle |
+| Atlas Together / PerFolder | 合并为一个图集 / 按实际文件夹生成，避免与Bundle分包混淆 |
+| Failed/原英文异常 | 中文操作失败摘要、已知影响和下一步；原异常/路径/错误码保留在技术详情 |
+| 查询Ready | 查询已完成，仅显示缓存文件及空间占用，不代表加载校验通过 |
+| 发布成功+GenerationError | 资源已发布，但地址常量生成失败；已发布版本仍有效，处理具体原因后单独生成 |
+
+- 本轮owned资产根`Assets/YLFramework/Tests/Fixtures/ResourceMultiDirectory-20261018/`，证据根`%TEMP%/kilo/resource-multidirectory-20261018-a/`，均创建前确认不存在并登记owner。`Legacy/LegacyProject.asset`及根内GeneratedAtlases使用**本轮改产品前的原单根实现**创建并真实Generate；`legacy-project-before.asset`、`legacy-atlas-before.asset`、`legacy-before.json`保存原序列化、地址/alias/BuildMap、GUID与字节基线。不是历史发布，也不冒充旧v1兼容证据。真实旧UX/Polish/Final夹具和旧发布只读，保护哈希留于`protected-before.json`。
+- 首轮`ResourceMultiDirectoryTests`终态7项：旧单目录只读地址/alias基线1 Passed，新增功能6项按预期Failed（多根未生效、清空仍旧根、重复/嵌套未识别、冲突未含双方路径）。这是有效RED，不计通过；工具动态C#探测的编译错误不算Unity产品编译失败，未清Console。
+- 当前状态：设计已记录，正式实施中。后续按本批真实结果增量填写编译、GUI、None构建/发布、Recipe、native消费/归还、一次独立Review与修复、未验证限制和终态，不以设计代替交付。
+
+**实施与中间验证（不作最终验收）**
+
+- 模型落盘：版本0通过同类型`FormerlySerializedAs`读取旧YAML字符串根，版本1目录列表明确优先，空列表不回退。`AssetRootGuid`为兼容单目录属性，多目录get/set明确拒绝；单目录写回/替换保留持久前缀。`SetSourceDirectories`支持Undo并允许无效草稿，统一解析指出原因，保存不静默删条目。默认地址统一由唯一所属目录的持久前缀加相对路径计算；旧根空前缀。目录移动/失效按GUID解析。普通跨Project来源仍互斥，不新增共享依赖协议。
+- 自动图集采用明确`LayoutVersion`：0继续原`RootGuid`及根内直接子目录；1使用显式`GenerationParentGuid`，不重解释旧RootGuid。新三参只在明确父目录下新建登记此前不存在的子目录；旧两参只限单来源。现有owner、配置/输出GUID、meta/hash、未知内容、Obsolete删除、回滚检查保留。源外输出只有精确登记结果能经原Group/Map进入构建，不登记为普通来源，也不认领父目录。
+- Builder将有效目录GUID/前缀规范化排序，定向规范Project YAML目录记录与v0/v1等效表示，其他原始字节/meta仍进输入身份；Unity `EditorJsonUtility`的`MonoBehaviour`包装层已实测适配。原provider/StrictMode/native后验/加密后验不削弱。来源追溯保存目录语义，变更后要求重算，纯重排可继续定位。
+- 核心与图集首组终态`multi-core-atlas-green-02.json`：21/21 Passed，132.32s；冻结native/provider终态`multi-freeze-terminal-01.json`：11/11 Passed，201.11s。超时只读取同次collector终态，不重复启动活跃run。此前一次超时未留结果（Runner inactive/startTime0001/results0），明确未计验证。
+- 唯一独立Reviewer在同一线程指出5项：原图集错绑后范围保护、旧setter清前缀、正式Operations第一次预检取key前未冻结、GUI深层遍历重复、Atlas派生Sprite文案错误。5项对应RED全部保留`review-red-01.json`；修复后`review-green-01.json`7/7 Passed（含三正式入口、纯重排允许、显示缓存与旧setter）。显示缓存使用弱键、规范目录意义+ProjectId、ProjectChanged/UndoRedo失效，显示地址再拆为纯计算，正式准入仍做完整路径/链接检查。Reviewer在同线程最后核对：5项源码闭合，无该修复直接残留。原始技术异常对象保留，默认摘要中文。
+- 旧回归`old-core-terminal-01.json`：55叶、44Passed/11Failed，**该suite失败，不计通过**。选择器意外包含26个既有CoreDefaultResourceEditorTests，均Passed但不充作Resource专项数量。11个Map失败根因是旧测试夹具用`JsonUtility`写已演进为兼容属性的字段名，JsonUtility不通过属性赋值；只把夹具准备改为保留的`AssetRootGuid`公开单目录入口，原地址/依赖/跨Project/拒绝断言全部保留。随后旧Map11+显示缓存1同次12/12 Passed；真实旧YAML/旧图集仍按改前原始基线另行只读验证，不拿fixture修正冒充YAML兼容。
+- 中文覆盖已实施到五任务页/子页、目录与生成位置、Group/资源条目/配方/Atlas字段、Project/Atlas/Recipe/Image Inspector、确认框与原异常技术区、缓存只读查询、签发窗口、直接Help和Resource.md；不改API/枚举名，不建立全局本地化平台。图集待生成提示明确正式Build会先准备，不要求先手工准备才能构建。
+- 真实GUI区分：Modern最初6个来源由自有helper配置；第7个`ExtraSource`通过真实鼠标“添加资源目录”及IMGUI DragUpdated/DragPerform拖入完成（合成事件单独记，不冒充OS拖拽）。真实鼠标切换Group和添加来源菜单、真实键盘Down/Enter添加代表Scene，真实Ctrl+S保存；真实鼠标计算分包预估与请求/确认构建。未保存与取消确认框均有现场，初次Enter未选中菜单项未计成功；没有调用服务假装鼠标操作。
+- 首次正式GUI None构建/本地发布：7来源、3Group，未配置生成目录，无配方、无密钥、未生成常量；`modern-build-none-first-publish.json`显示UnityBuildInvoked=true、4主资产、4Bundle（含独立Scene与唯一共享Material/Texture包），38.57s，发布摘要`e15ded1fae85598cd3589b29aec147668fa514f1f84d148e31ae367ff105e81e`。一次取证写入回执重入提示文件已存在，读取同一已写完整report确认成功，未重复构建也未覆盖记录。
+- 首次原Runtime消费：`runtime-20261018T163545998-f0ac08b8bb274580aac44350588007a3/terminal.json`为Completed/Passed，精确消费上述Bundle发布。Prefab A/B共享同一Material/Texture，像素/16x8尺寸/UV、文本/alias、未选中文本拒绝、真实Scene标记位置与卸载全部通过。自有Startup正常Stop，native load/unload4/4，lease/record/Bundle归零，原UIAcceptance场景setup恢复且非dirty；未使用全局UnloadAll或关闭他人会话。
+- 当前仍在验证：旧Atlas/Builder回归同一次run、Atlas+Recipe实际构建发布/native、旧YAML/旧发布只读核对、代表性主题/最小窗口/停靠/错误与查询文案、终态保护比对。此处不声称本轮完成。
+
+**追加验证及工具恢复（2026-10-18，仍不作最终验收）**
+
+- 旧Atlas/Builder同次完整终态已落盘`old-atlas-builder-terminal-01.json`：48/48 Passed，16分56.558s，涵盖B05/B06与Workspace/Manifest/native回读。先前“仍在native回归”的判断随后由日志修正：suite结束后，代理的结果读取脚本错误地把JToken直接返回给MCP，工具反射沿Parent/Root循环，造成大量工具警告和主线程占用；不是48项失败或产品异常。原失败日志未清理、Packages/插件/权限配置未修改。今后本批取证只返回普通路径/JSON字符串，不直接返回JToken对象。
+- 主线程无法可靠重读dirty时，没有自行结束Unity。经用户明确回答“允许重启主Unity”（含可能丢失未保存编辑器内存改动的风险告知）后，重新核对主进程8296路径，仅结束该已授权主Unity；确认所有Unity.exe退出后才打开同一工程。新唯一主Unity PID32204，新日志单独写`unity-restarted-editor.log`，旧Editor.log保留。重开时编译/导入/Play均false、Runtime无/Bundle0，默认打开Main且不dirty；未运行原游戏。在确认无新dirty/额外场景后，重新打开磁盘最新UIAcceptance，不恢复旧场景内存快照。主Unity由persistent进程`bgp_14ff6b926001D1ir4nzS0NJJ4N`保持，交付时不停止用户编辑器。
+- `legacy-and-old-v1-read.json`：本轮改代码前原实现创建的旧YAML/根内Atlas共14个文件SHA全部相同、版本仍0且不dirty，原地址/alias/BuildMap相同，Atlas Current/GUID `596ce1eca1693db4785ffbac0c2a4f2d`未变。另按原Publisher和ResourceLocalSnapshot严格读取**真实旧Polish发布**`5ee1d92e…589e04`，Schema1、7资产/2Bundle，不重建、不写回旧发布。
+- 补充真实GUID移动、失效GUID/Assets本身/文件不能登记为目录、不同来源同名Icons文件夹行为。后者RED发现Atlas地址冲突只显示地址，未给双方来源；窄改为保留冲突拒绝并显示两组真实源路径，不改InputHash/身份/输出。三项后续3/3 Passed，新增专项行为共42个独立叶（复跑不重复累计）。
+- 首次GUI回归终态`tests-ui-first.json`：37叶29Passed/8Failed，**suite失败不计通过**。5项为原逐词断言不适用于中文摘要/中文恢复入口，1项断言提前失败又被未显示窗口Close清理异常遮蔽，另2项被代理在活跃run中请求终态记录所产生的工具异常污染。保留该失败回执；将终态记录活跃状态改为无副作用中文返回，不清日志、不忽略异常。仅按新中文契约更新旧文案断言，继续断言原始failure对象/Recipe技术详情、native回读、取消零写、索引未知/过期/运行版本区别、预算与原生/CNG不相加。未显示测试窗口按真实parent状态清理，不掩盖原断言。开始使用技术区仍明确无窗口样例不是通用CI工具。
+
+**本批最终技术交付**
+
+- `tests-ui-after-copyfix.json`：同一组37/37 Passed，2分38.536s，无跳过；没有加入LogAssert忽略或清Console。实际桌面鼠键、进程内IMGUI注入、直接服务/单测分别按上文记录，不相互冒充。
+- 最终专项统一run：`tests-final-multi42.json`，**42/42 Passed、0Failed/0Skipped，6分1.570s**，是完整suite终态，不是发现树/重复累加。包括多目录/默认地址/显式alias/移动/失效/非法/重叠/清空兼容、跨目录依赖与Simulation、保存Undo重载、源外及旧根内Atlas/未知输出/同名目录/原归属保护、三正式入口首次provider变更与纯重排、导入回调和native后验。旧Map11+显示缓存1已有12/12；旧Editor/Simulation各8通过，旧Atlas/Builder48/48证据沿用其受影响范围。未重跑G0、176组Player、完整E04矩阵、其他DPI/平台、CDN或生产key；None的两次native不冒充完整加密链复验。
+- 第二次真实Workbench入口为同一`ModernRecipe.asset`，ResourceProject仍7来源；正式Builder自动生成并准备两个分散Sprite来源的`multi-root.spriteatlasv2`，精确输出位于独立`Modern/Generated/OwnedAtlases/`，经main Group/Map/Catalog发布。`modern-build-recipe-atlas-partial.json`为UnityBuildInvoked=true、5主资产/4Bundle、25.91s，发布摘要`6e56775c5560252ce71fe27ec48c8b22ba3bd46c1a9ba274e5854a385ec91918`。
+- 该Recipe有意开启地址常量生成以走查部分成功。**实际失败原因**先于预设未知输出目录检查：原`PublishedCatalogs`发现既有Polish发布App不同；没有为了成功修改/筛掉旧发布或新增跨Project协议。Build/PublicationError均null、GenerationError保留原异常；GUI明确“资源已发布，地址常量生成失败”“发布版本仍有效，无需重发或回滚”。不能把这次结果宣称为未知目录拒绝的实际触发证据；未知内容保护另由直接回归证明。负例`BlockedReferences/do-not-overwrite.txt`保留未接管，体验Recipe已明确保存为GenerateReferences=false，避免默认体验重复触发全项目App不一致。
+- `runtime-20261018T173242214-38d3dd9246664464a4021b6506eae0dc/terminal.json`：第二次Completed/Passed，精确读取上述Bundle发布，包含两张Atlas Sprite（8x8与12x8、真实32x32纹理、正确像素），借用Atlas Lease及GetSprite克隆销毁按原责任处理；Prefab共享材质/纹理、文本/alias、Scene同样通过。两次均无AssetDatabase/Simulation回退，自有Startup Stop、native load/unload4/4、lease/record/Bundle0，原场景setup恢复。
+- GUI最终走查：深色1080、浅色620×440（真实1109×834像素）、原DPI1.75；目录表可滚动，完整路径可选/复制，GUID可复制。普通SceneView dock约1092点宽真实停靠，实际Project Inspector显示同一7目录字段与保存入口；开始使用/技术Help及原Resource.md对应。未为此重跑全排列。地址冲突由真实鼠标计算、展开技术区核对双来源；原始错误/调用信息保留，真实Ctrl+Z恢复并只保存自有Project。移除纹理来源目录后明确指出受影响Atlas规则，保留四条手工选择和源文件；真实Ctrl+Z恢复7目录。所有临时草稿最终已恢复并保存。
+- 磁盘只读查询使用本批明确不存在的缓存根，真实按钮执行后`gui-disk-query-readonly.json`显示Missing、IsSizeComplete=false、ObservedBytes0、候选字节null，根仍不存在、Runtime未启动、Bundle0；不把缺失当真实完整0、不声称Ready或加载校验。37项GUI回归另覆盖Ready显示、取消/停止及Unknown区别；本次桌面查询未建立真实磁盘缓存内容，不把它冒充缓存加载场景。
+- 最终6张附图由`final-image-index.json`登记用途、原始像素及SHA：七目录深色1080、目录浅色620、Current图集两来源、首次None发布、Recipe真实部分成功、普通停靠Help与真实Inspector。原“浏览器遮挡”图、错页图和在途故障图明确排除，不覆盖失败文件、不把文件名当画面事实。停靠现场保留Console历史工具错误，不称“无错误效果图”。
+- `final-protection-and-source-manifest.json`：17个保护范围/单文件与本批初始哈希一致，**0差异**，包括Games、Scenes、StreamingAssets、MainModule、Packages、ProjectSettings、NuGet、UX1/UX2～5/Polish/Final夹具及旧发布、AGENTS、忽略/工具配置和既有Core Project。68个自有夹具文件及目录meta无缺失。56个Resource产品/测试/文档现场快照，加`final-docs-help-manifest.json`明确维护最终Resource.md与两Help源码；这是交付现场范围，不将上轮未提交UX改动全部归为本批。
+- 最终`final-unity-state.json`及`final-ui-selection-restored.json`：唯一主Unity32204，2022.3.62f3c1/StandaloneWindows64，非编译/导入/Play/测试，compileFailed=false，Runtime无、Bundle0、Workbench0、确认框0、自有update回调0；Project/Atlas/Recipe及UIAcceptance均不dirty，深色/DPI1.75恢复。仅移除自己创建的浮窗、停靠页和已确认无parent的空测试确认对象，未覆盖整份布局。最终重新解析并恢复原Selection `UIAcceptanceEntry.cs`；源资产与当前场景内存不按旧快照回滚。授权重启的主Editor保持运行，不随本会话关闭。
+- Git仍`fusion/8-resource`、HEAD`8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`，暂存区空；本轮未暂存、Commit、Push、Merge、Tag、切分支、Reset、Clean、Stash或Rebase。全工作区`diff --check`仅报告初始已改的Core Project两行空序列化值尾空白，保护哈希证明未由本批改动，不顺手修。相关源码/文档差异检查及新增脚本/meta检查另行通过。
+- **ResourceProject多目录支持与工作台中文文案整理技术完成，待用户功能、兼容性与使用体验验收。** 到此停止；不标整体8.9或阶段8 COMPLETE，不进入8.10/阶段9，不提交，不继续一般性UI美化。
+
+### 29.30 按未发布状态移除Editor旧配置兼容（2026-10-18）
+
+- 用户先反馈资源目录说明缺乏条理，已将共享说明分为“选择范围”“地址前缀”和旧配置提示；随后明确“框架没有发布过，不需要旧配置兼容”。本条取代29.29中有关长期旧Editor配置/API兼容的要求，不删除或倒改上批历史结果；Runtime/Catalog/发布协议不在本次删除范围。
+- 现场核对9个ResourceProject，其中当前窗口为Core夹具且不dirty，4个关联Atlas配置。用户通过问题明确选择“转换全部现有配置（推荐）”，授权只转换这些Editor配置，保留源文件、GUID/meta、图集位置、选择、地址/alias及既有发布。一次性备份/授权/字段准备记录位于`%TEMP%/kilo/resource-current-model-20261018-1837/`，不是产品中的迁移服务。
+- `conversion-authority-before.json`及13个原资产/meta备份记录转换前字节。先用原正式Unity API把9个Project的有效目录写入SourceDirectories、4个Atlas写入真实GenerationParentGuid，再删除兼容字段后由Unity正常保存。`conversion-final-assets.json`逐项确认目录、Group、选择、地址/alias语义不变，13个GUID/meta不变，文件不再包含兼容字段。未手改YAML/GUID，不移动或生成源资源/Atlas，不改发布。
+- 唯一模型：ResourceProject只保留SourceDirectories，不再有AssetRootGuid属性、FormerlySerializedAs旧输入、legacyAssetRootGuid、DirectoryConfigurationVersion或DirectoryDefinitions；保存不做迁移。GUI无旧模式、ConvertLegacy或兼容提示。BuildMap移除单根AssetRoot和旧ValidateProjects包装。Atlas只用GenerationParentGuid及原精确owner/GUID/meta/hash/输出登记；删除RootGuid/LayoutVersion/legacyLayout及隐式1/2参入口，仅保留显式3参。
+- Builder仍对当前目录集合排序规范化，删除v0/v1等价解释；未知记录、注释、不完整布局和其他原始磁盘字节不得屏蔽。保留空/null来源拒绝、跨Project范围、精确生成输出准入、未知内容/孤立meta拒绝、回滚/Obsolete保护、provider与导入冻结、StrictMode及native后验。
+- 生成父目录的Assets根事实已由当前Unity读取：真实内置GUID`00000000000000001000000000000000`可双向解析。先前“根无GUID”的推断已纠正；当前显式父目录可以是Assets，存真实GUID，不用空值猜根、不加sentinel。来源目录仍禁止整个Assets。规则Sources与生成范围相交仍拒绝，不借清理兼容扩大收集范围。
+- 测试与直接Editor样例改用唯一列表/3参入口。旧兼容测试替换为当前模型只读、保存重载、排序/前缀/alias稳定及真实磁盘字节敏感性，原范围、源文件/meta、未知输出、回调冻结负例保留；补null/empty不回退、缺生成父GUID拒绝及移除依赖专用目录仍阻塞。反射契约RED为1Failed（AssetRootGuid仍暴露），非编译错误；删除后首组当前模型/Atlas/Integration **30/30 Passed**，完整终态`core-first-terminal.json`。
+- 当前正在复验冻结/native、现有入口、13配置转换及GUI终态；本条不沿用“旧配置兼容通过”作为新模型证明，也不为纯文案重跑完整Player/加密矩阵。不Git写，不进入后续阶段。
+
+- 后续完整终态`freeze-map-editor-terminal.json`：36/36 Passed，0Failed/0Skipped，6分28.084s；覆盖当前冻结/provider/导入/native后验以及原Map和Editor入口。与首组30/30分开记录，不重复累加旧兼容结果。真实Unity编译无错误，反射契约证明旧模型成员和旧创建重载不存在。
+- 额外以当前模型执行自有ModernRecipe的真实None native构建/发布，`current-recipe-native-build.json`为BuildSucceeded=true、Published=true、Native=true，构建/发布/生成错误均null；新摘要`5b60a60a00f6a7b494fbec9b77e3670c741a3f1bbc88c6f61b7c80a327a32b03`。同一次原Runtime消费终态位于上批证据根的新`runtime-20261018T191602555-c4617af6a8d44d5c8b1736449f2a7832/terminal.json`：Completed/Passed，Prefab共享引用/纹理像素尺寸、文本/alias、Scene、两个Atlas Sprite及克隆销毁通过；原Scene setup恢复，自有Startup正常停止，native load/unload4/4，record/lease/Bundle0。工具超时后仅读取同一次终态，没有重复启动活跃构建/加载。
+- 同一Reviewer线程定向核对本次删除：无直接缺陷发现，目录/Atlas模型已收敛，未知内容与跨Project保护、指纹原字节回退、冻结和后验未见弱化。其测试证据沿用主代理实际结果，不冒称Reviewer执行过测试。
+- `protected-and-atlas-byte-comparison-02.json`确认除明确授权的配置资产内容外，原保护范围0额外差异，源资源/既有发布及meta未变。4个Atlas剔除本次删除/新增的父目录模型字段后，其Rules、Outputs及其他YAML字节完全相同，4个meta相同。首份比较因子串AssetRootGuid误将Project识别为Atlas产生假阳性，保留原回执，并由锚定字段名的02回执明确纠正，不删历史失败。
+- 最终`final-state.json`：唯一Unity32204，非Play/编译/导入，compileFailed=false，Runtime无/Bundle0；9个Project及4个Atlas全部不dirty，原UIAcceptance场景不dirty。用户现有Workbench（ID -48136、Core配置）保留未关闭，未创建替代窗口、未恢复旧选择/布局快照。全部9个Project使用同一列表模型；Core、UX及原单来源样例仍保留一条来源，Modern保留7条。
+- Resource.md及当前UI已删除旧配置兼容、版本分支、首次保存迁移、旧API承诺；历史证据/文件夹名Legacy只保留来源说明，不再表示存在另一套产品模型。现有配置的一次性整理已经完成，产品不保留迁移器。Git无写，未提交/暂存/推送，也未进入8.10或阶段9。
+
+### 29.31 8.9最终验收、第二次提交与Git收口（2026-10-18）
+
+- **验收范围**：用户确认8.9本轮及剩余专项验收通过，覆盖ResourceProject多目录、中文文案、Workbench UX1～UX5与视觉/交互修正、B02 Build Recipe、F03成本基线及1175原子替换定向补验、E04 G1～G4已交付范围；C02、E05、B06、C05及必要的C04/F04继续沿用此前用户验收结论。以上仅对应各自真实代码、环境与证据范围。
+- **最终模型**：ResourceProject仅`SourceDirectories`（GUID+持久地址前缀），不再有旧单根字段、兼容属性、版本判断、保存迁移或旧API壳。默认地址为唯一所属目录的持久前缀+相对路径；目录排序无语义，同名冲突显示双方来源并拒绝。BuildMap、AddSelections、Workbench/Inspector、Simulation、Builder/Recipe冻结与后验、Atlas归属均使用同一解析。图集只保留显式三参创建和`GenerationParentGuid`，父目录使用真实GUID，可明确选Assets或其子目录；不从来源首项推断，不接管已有目录/未知内容。
+- **一次性配置转换**：用户明确选择转换全部现有配置。9个ResourceProject与4个Atlas配置已按原Unity API保存为当前模型；目录、Group、选择、显式地址、alias、ProjectId、配置/输出GUID、meta、图集位置及输出记录保持。逐项回执为`conversion-authority-before.json`与`conversion-final-assets.json`，原文件备份位于`%TEMP%/kilo/resource-current-model-20261018-1837/`。本轮不从外部再次批量保存Project。
+- **兼容边界**：当前Editor配置正式使用多目录及显式生成位置模型；以后从外部导入尚未转换的旧单根Project/Atlas，不承诺自动读取或迁移。这是Editor配置格式边界，不等于旧Catalog v1/Runtime发布不兼容；Catalog Schema v1、地址解释、签名与发布协议未改，旧正式发布继续按原冻结协议读取。
+- **最终验证**：反射契约RED有效（旧成员仍暴露），删除后当前模型/Atlas/Integration **30/30 Passed**（`core-first-terminal.json`）；冻结/native/原Map/Editor入口 **36/36 Passed**（`freeze-map-editor-terminal.json`）。同一Reviewer线程定向核对无直接缺陷，确认删除未弱化来源、生成归属、未知内容、冻结或后验。另以当前模型执行ModernRecipe真实None构建/发布，`current-recipe-native-build.json`四阶段成功、无错误，摘要`5b60a60a…32b03`；原Runtime消费`terminal.json`Completed/Passed，Prefab共享材质/纹理、文本/alias、Scene、两张Atlas Sprite及克隆销毁通过，native load/unload4/4，归零并恢复原场景。
+- **提交策略**：第一次功能基线`8abaf2d`不 Amend。第二次提交只含已验收的Workbench UX、多目录最终模型、旧兼容清理、直接配置差异、必要测试/`.meta`、正式样例/维护夹具、Plan与Resource.md。排除原游戏/Scene/Canvas、StreamingAssets、Packages/ProjectSettings、AGENTS/忽略/工具配置、NuGet/并行Agent Manager/UGUI改动、其他worktree、Library/Temp/构建制品、临时截图/原始证据JSON、秘密与凭据。
+- **收口条件**：第二次Commit成功、普通Push到已核实上游`origin/fusion/8-resource`、远端SHA与本地完全一致、用户/并行改动未覆盖，且无本批遗留编译失败或在途自有资源责任。此提交写入后，上述条件满足即在最终报告声明8.9 Git收口完成并可进入8.10；不在本篇预先声称远端已同步，也不增加仅为写SHA的第三次提交。
+- **保留限制**：E04 Scene在native接手后的延迟Stream读取失败崩溃风险、历史no-go结论、g36回滚失败确切根因未知、当前平台/密钥/内存预算及BCrypt系统释放未测边界、F03环境与样本外推限制、其他DPI/平台未验、地址常量受全发布集合/App兼容约束、外部未转换旧Editor配置不自动兼容，均继续有效。Windows Player首次启动、StreamingAssets打包读取、持久缓存重启、安装/激活/LKG/回滚流程及远端HTTPS硬门禁留待8.10，不用本批Editor/native证据冒充Player验收。
+- **8.10交接**：以本批最终远端Commit为基线；正式配置与可执行样例入口为`Assets/YLFramework/Tests/Fixtures/ResourceMultiDirectory-20261018/Modern/ModernProject.asset`、`ModernRecipe.asset`及`Samples/ResourceStartup`；先做Windows64 Mono Player首次启动与真实StreamingAssets内置读取，再做ArtifactStore持久目录/进程退出/重启恢复和正式安装、准备、激活、LKG/回滚与异常恢复，最后专项验证远端HTTPS硬门禁并决定是否开放。阶段8整体仍未完成，阶段9不启动。

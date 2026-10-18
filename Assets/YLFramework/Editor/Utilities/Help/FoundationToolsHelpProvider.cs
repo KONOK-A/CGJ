@@ -41,7 +41,7 @@ namespace YLFramework.Editor
                     HelpBlock.Paragraph("取色便利工具", "ColorSelector 的控件、渲染与窗口统一位于 Utilities/UI/ColorSelector，不是 Foundation 基础机制。" +
                         "窗口通过 Module/WindowCatalog 显式打开；控件直接读取最近 Panel 的 IsLoaded/IsInputBlocked，无 Panel 时沿默认输入行为。" +
                         "IUIInputGate 与自定义宿主门禁已退出，不新增 Manager 或要求控件脱离 Core 编译。"),
-                    HelpBlock.Paragraph("Editor 入口", "YLFramework/Resource/Workbench 提供正式 ResourceProject/Catalog 的编辑、构建和常量生成；" +
+                    HelpBlock.Paragraph("Editor 入口", "YLFramework/Resource/Workbench 用于配置资源项目、分析分包、构建与本地发布、版本交付和诊断。一个资源项目可登记多个已有来源目录及各自的地址前缀，无需把资源搬到统一专用根；组的选择项决定构建内容，图集生成目录按需单独登记。现有Editor配置已统一为此模型；从外部导入的旧单根配置不保证自动读取或迁移。" +
                         "YLFramework/Toolkit 下保留日志清理、打开目录与导出框架包。生成物与构建操作不从 Help 执行。" +
                         "Action/Audio 保持各自帮助和成熟工具，不在此复制其 API 文档。"),
                     HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六个目录及根级 LICENSE.md，Plugins 完整递归。" +

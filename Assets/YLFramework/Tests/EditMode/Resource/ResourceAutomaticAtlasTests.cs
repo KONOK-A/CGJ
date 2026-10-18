@@ -25,7 +25,7 @@ namespace YLFramework.Tests.ResourceBuild
         public void RegistrationCreatesANewOwnedScopeAndPreviewDoesNotWriteAssets()
         {
             using var fixture = new ResourceReleaseFixture();
-            var configuration = ResourceAtlasGenerator.CreateConfiguration(fixture.Project, "GeneratedAtlases");
+            var configuration = ResourceAtlasGenerator.CreateConfiguration(fixture.Project, fixture.Folder + "/Content", "GeneratedAtlases");
             Assert.That(configuration, Is.Not.Null);
             var directory = fixture.Folder + "/Content/GeneratedAtlases";
             Assert.That(AssetDatabase.IsValidFolder(directory), Is.True);
@@ -42,7 +42,7 @@ namespace YLFramework.Tests.ResourceBuild
             project.Groups.Clear();
             project.Groups.Add(new ResourceGroup { Id = "generated" });
             EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
-            var configuration = ResourceAtlasGenerator.CreateConfiguration(project, "GeneratedAtlases");
+            var configuration = ResourceAtlasGenerator.CreateConfiguration(project, fixture.Folder + "/Content", "GeneratedAtlases");
             var sourcePath = fixture.Folder + "/Content/Sprites.png";
             Object source = AssetDatabase.LoadAssetAtPath<Texture2D>(sourcePath);
             if (folder)
@@ -191,7 +191,7 @@ namespace YLFramework.Tests.ResourceBuild
             AssetDatabase.CreateFolder(fixture.Folder + "/Content", "Unknown");
             var unknown = fixture.Folder + "/Content/Unknown";
             var unknownMeta = File.ReadAllBytes(unknown + ".meta");
-            Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.CreateConfiguration(fixture.Project, "Unknown"));
+            Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.CreateConfiguration(fixture.Project, fixture.Folder + "/Content", "Unknown"));
             CollectionAssert.AreEqual(unknownMeta, File.ReadAllBytes(unknown + ".meta"));
             var configuration = Configure(fixture);
             configuration.Rules[0].Sources = new Object[] { AssetDatabase.LoadAssetAtPath<DefaultAsset>(fixture.Folder + "/Content") }; Save(configuration);
@@ -436,7 +436,7 @@ namespace YLFramework.Tests.ResourceBuild
             var output = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
             configuration.Rules.Clear(); Save(configuration);
             var project = fixture.Project;
-            project.Groups[0].Selections.Add(new ResourceSelection { Guid = project.AssetRootGuid, Extensions = new[] { ".txt", ".spriteatlasv2" } });
+            project.Groups[0].Selections.Add(new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content"), Extensions = new[] { ".txt", ".spriteatlasv2" } });
             EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
             Assert.That(ResourceBuildMap.Create(project).Assets.Any(x => x.Guid == output.Guid), Is.False);
             ResourceAtlasGenerator.DeleteObsolete(project, output.Key);

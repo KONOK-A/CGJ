@@ -111,7 +111,7 @@ Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`Use
 - `AcquireImage/AcquireImageAsync` 接受完整 HTTP(S) URL 或绝对本地 PNG/JPEG。冷 URL 同步 Unsupported，在途 InProgress，Ready 可同步取得；同步本地读取不占异步队列。
 - ResourceImageOptions 默认编码上限 32MiB、16M 像素；idle LRU 为 128 项/32MiB RGBA 估计/30s TTL；并发默认 4、可 1～32，按 FIFO 调度，不是 priority。活跃 owner 不淘汰，普通 Catalog Texture 不进入此 idle 缓存，归零按其 Source 归还。
 - ResourceImage 绑定 Image/RawImage，`SetImage(location/address)` 持自己的 Request/Lease，临时 Sprite 自毁、placeholder 借用；刷新/替换/停用/销毁按代次收尾。Refresh 不保证绕过同 URL 缓存，换代使用版本 URL；ClearImageCache 只清 idle。
-- 显式 Atlas 必须在专用根、非 Variant、Include in Build 关闭、Sprite 名唯一，并作为主资产入 Group。首次/修改 packables 后，保存配置并显式 `PrepareAtlases(project)`，再构建；准备会更新选中 Atlas 缓存，不在预检中偷偷写全工程。
+- 显式Atlas必须位于已登记资源目录中、非Variant、Include in Build关闭、Sprite名唯一，并作为主资产加入Group。首次或修改packables后，保存配置并显式`PrepareAtlases(project)`，再构建；准备只更新选中Atlas缓存，不在预检中偷偷写全工程。
 - Image 使用 `SetAtlasSprite(atlasAddress, name)`；非 UI 用 `AcquireAsync<SpriteAtlas>`。消费者销毁 GetSprite 克隆，再归还 Atlas Lease，不能销毁共享 Texture。默认编译类型表已含 SpriteAtlas，内部打包 Texture 不公开成子资产。
 - 自动生成见下节；Variant、全局 atlasRequested/Prefab Sprite 透明晚绑定仍未实现。显式 V1/V2 构建与自动 V2 图集的证据不外推其他引擎/平台；未知 native 布局拒绝。
 
@@ -119,17 +119,19 @@ Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`Use
 
 自动图集是 **Editor 规则 -> 自有 Atlas 主资产 -> 原 Group/BuildMap/Bundle/Catalog** 的正式生产流程，不是另一个 AtlasManager、Runtime 映射表或透明 Sprite 替换服务。输出为 `.spriteatlasv2`，只准备本配置拥有的图集，Include in Build 始终关闭；源 Texture/Sprite Importer、手工 Atlas、全局图集设置和 Scene/Prefab 不被修改。
 
-1. 在 `ResourceProject` 配置独立 `AssetRootGuid` 和目标 Group，例如资源根 `Assets/MyResources/`，来源放在 `Sprites/`。Group 可只由自动图集组成，不必添加虚假的手工条目。
-2. 选中 Project 资产，在 Inspector 显式保存定义，再用“登记自动图集范围”新建 `GeneratedAtlases` 直接子目录。已有目录（即使为空）、文件或孤立 `.meta` 均拒绝接管；该目录连同 `AutomaticAtlases.asset`、Atlas 和对应 meta 由该 Project 登记并维护，须一并保留。不要手工断开 `AutomaticAtlases` 引用，丢失/换绑原身份会阻止构建而非悄悄漏掉图集。
+1. 在ResourceProject中登记来源目录和目标Group。规则可以使用多个来源目录中的Sprite；Group也可只由自动图集组成，不必添加虚假的手工条目。
+2. 保存资源项目，在“资源配置 > 图集”或Project Inspector中明确选择Assets或其下已有的文件夹作为父目录，再用“新建并登记生成目录”创建此前不存在的子目录。父目录使用真实GUID登记，不从来源列表推断。建议放在所有资源目录之外；不使用自动图集时无需设置。已有目录（即使为空）、文件或孤立meta均不接管，选择父目录也不授予对其其他内容的管理权限。新目录连同`AutomaticAtlases.asset`、Atlas及meta须一并保留；丢失或换绑原登记身份会阻止构建，不会静默漏掉图集。
 3. 在配置 Inspector 的 `Rules` 添加规则：`Id` 为稳定技术键，`GroupId` 对应已有 Group，`Sources` 选目录或已按 Sprite 导入的 Texture2D。目录递归收集 Sprite 纹理（支持 Multiple Sprite），普通非 Sprite 纹理不自动改 Importer；空目录不会产生空 Atlas。同一纹理不能进入多个自动规则，每个图集的 Sprite 名必须非空且唯一。
-4. 选择 `Together` 将整条规则聚为一图，`Address` 即完整逻辑地址，例如 `atlases/ui`；`PerFolder` 按每张纹理所在文件夹分图，地址追加资源根相对目录，例如 `atlases/ui/Sprites/Icons`。PerFolder 身份以源文件夹 GUID 而非路径/成员摘要决定，移动或重命名该文件夹仍保持图集 GUID，但派生地址随目录变化。需要跨移动稳定的单一业务地址时用 Together。
+4. 选择“合并为一个图集（Together）”，本条规则的Sprite聚为一图，`Address`即完整逻辑地址，例如`atlases/ui`。选择“按实际文件夹生成（PerFolder）”，则按纹理真实父目录分图，地址由规则地址、所属资源目录的持久前缀及相对文件夹路径组成。PerFolder输出身份仍含源文件夹GUID，不会把两个同名末级文件夹当成同一来源；移动后图集GUID可以保持，但派生地址可能变化。需要跨移动稳定的单一业务地址时用Together。
 5. 配置 Padding（2/4/8）、MaxTextureSize（32..8192 二次幂）、旋转/紧密打包、Readable、MipMaps、sRGB、FilterMode 和压缩；默认不旋转、不紧密、无 mip、不可读、Bilinear、2048、Uncompressed。过大内容由 Unity 多页承载，不按不稳定成员 hash 重命名。Sources 不能与生成范围重叠，包括选择其祖先资源根；不要把输出或配置再当来源。
-6. “保存规则”后用“只读预览”查看 Create/Update/Current/Obsolete，再点“生成 / 更新并准备图集”。生成会仅对明确来源候选进行必要的正常同步导入，避免 PNG 已变但缓存仍旧；不改其 Importer 设置，不替用户保存未提交的 Importer 改动，遇 dirty 来源明确拒绝。也可直接执行正式 Workbench/API Build，Builder 会先生成/更新并准备自有图集，再冻结输入、分析依赖和构建；不需要再手动将输出加入 Group。
+6. 保存规则后预览待创建、待更新、当前有效及已失效的输出，再点击“生成、更新并准备”。生成只对明确来源候选做必要的正常同步导入，避免PNG已变但缓存仍旧；不改Importer设置，也不替用户保存未提交的Importer改动。正式Workbench/API Build会先生成并准备自有图集，再冻结输入、分析依赖和构建；无需手动把输出加入Group。
 7. 存续 Atlas 保留原 `.meta` 和 GUID，相同有效输入不改资产字节。改地址/设置不会改 GUID；改规则 Id 则是新身份，旧输出转为 Obsolete。失效输出退出正式选择但不自动删除；Inspector 的“检查引用并删除失效输出”或 `DeleteObsolete(project, key)` 会重新检查归属和当前资产/资源定义引用，仍被使用则拒绝。
 
-原始文件夹 Group 选择会排除已登记生成范围，避免重复收集配置、失效输出或自动 Atlas；自动输出只按规则明确进入目标 Group。手工直接选择该范围、生成文件或重复选择同一输出不是另一种合法登记方式。规则和生成配置均纳入原构建输入后验；只读 BuildMap/模拟索引遇待生成/更新会明确拒绝，不读取旧发布冒充新结果。
+文件夹Group选择会排除已登记生成范围，避免重复收集配置、失效输出或自动Atlas。生成目录不必登记成普通资源目录，有效Atlas主资产仍经原Group/BuildMap进入Bundle/Catalog；图集中的Sprite通过Atlas Lease与`GetSprite`或`SetAtlasSprite`查找，不会自动变成Catalog子资产条目。另行选择源纹理产生的普通Sprite子资产仍按原规则处理。手工再次选择生成目录中的配置或输出不是合法添加方式。规则和生成配置继续纳入构建后验；只读BuildMap/模拟索引遇待生成或更新会明确拒绝，不读取旧发布冒充新结果。
 
-自动化复用同一入口，下面方法的前置条件是 Project 已保存、`ui-atlases` Group 已存在、参数为该专用根内已导入的 Sprite Texture2D；登记不是对已有任意目录的认领授权：
+图集配置统一记录明确生成父目录。脚本只使用`CreateConfiguration(project, generationParentPath, folderName)`，不会根据来源列表第一项推断位置。生成目录可以位于某个来源目录内；Group文件夹递归选择会排除已登记生成范围，但Atlas规则来源仍不能与生成范围相交。
+
+脚本复用同一入口。下面要求资源项目已保存、`ui-atlases` Group已存在、Sprite已导入且位于任一已登记来源目录，`generationParentPath`为明确选择的现有Assets父目录。只新建子目录，不认领父目录或已有内容：
 
 ```csharp
 using UnityEditor;
@@ -138,9 +140,9 @@ using YLFramework.Editor.Resource;
 
 public static class ApplicationAtlases
 {
-    public static ResourceAtlasConfiguration Configure(ResourceProject project, Texture2D sprites)
+    public static ResourceAtlasConfiguration Configure(ResourceProject project, Texture2D sprites, string generationParentPath)
     {
-        var configuration = ResourceAtlasGenerator.CreateConfiguration(project, "GeneratedAtlases");
+        var configuration = ResourceAtlasGenerator.CreateConfiguration(project, generationParentPath, "GeneratedAtlases");
         configuration.Rules.Add(new ResourceAtlasRule
         {
             Id = "ui", GroupId = "ui-atlases", Address = "atlases/ui",
@@ -178,21 +180,100 @@ public static class ApplicationAtlases
 
 ## Resource Workbench
 
-1. 打开 `YLFramework/Resource/Workbench`，创建自有 ResourceProject，明确 ProjectId、独立根 GUID、Group 和 GUID 选择。预检检查地址/类型/子资产/根/依赖边界，不接管原 Importer 标记。
-2. 选择可 Undo，保存仅针对目标配置；构建前处理脏场景/配置。Together/PerAsset 是意图，最终包服从共享依赖、Scene 分离和环归并，报告提供原因。
-3. ResourceProject.Compression 仅 Lz4/Lzma/Uncompressed，恒 StrictMode；压缩进入 Workspace 身份，有显式 Force Rebuild，不接受任意 flags。只构建已激活、已安装、主机可 native 读回的桌面目标，不切平台。
-4. Publisher 输出正式 resource-catalog.json 与 release index；BuildId 标识 payload，CatalogDigest 标识最终 bytes，不自写 CatalogDigest 字段，摘要不等于签名。历史选择、构建、发布、生成分别报告，不以一个成功替代另一个。
+### 第一次构建与本地发布
+
+资源项目是Unity工程内的一份`ResourceProject`配置，不是Unity工程本身。一个资源项目可以登记多个资源目录、使用多个Group；Group用于组织资源和设置分包方式，不是磁盘目录。新增目录不会建立另一个独立发布版本。
+
+1. 打开 `YLFramework/Resource/Workbench`，在左上角选择已有资源项目，或使用选择器的“新建Project...”创建配置。
+2. 在“项目设置”逐项点击“添加资源目录”，选择这个资源项目会使用的文件夹。音频、图片、Prefab及Scene可以放在不同位置，无需移动、复制或把整个Assets登记为资源根。目录登记只决定允许从哪里选择，不自动选择其中所有文件；生成目录也不是普通构建的必填项。
+3. 在“资源配置 > 主资源”创建Group，从Unity Project窗口选中文件或文件夹后，通过“添加资源…”菜单添加选中项，或直接拖入当前Group的列表。同一个Group可以包含多个资源目录中的文件。文件夹会在解析、构建时递归展开；扩展名留空表示全部可打包类型，筛选示例为`.png`。文件地址留空使用所属目录的固定地址前缀和相对路径，地址别名是同一主资源的额外地址。
+4. 点击顶部“保存”保存当前资源项目。初次可先使用内容加密 `None`；它表示不加密，不表示不压缩，也不会替用户修改已有压缩或加密设置。
+5. 进入“构建发布”，不选择构建配方也可以执行。填写应用约定的“资源兼容标识（App）”，例如 `app-v1`（仅示例，不是游戏版本号），核对当前平台，再点击“构建并本地发布”。遇到未保存配置、脏场景或资源检查阻塞时先处理提示；工作台不会自动保存场景或切平台。
+6. 先看构建结果，再到“版本交付 > 发布版本”点击“读取已登记版本”。本地发布不等于导出、签发、内置部署或运行时激活。这些任务，以及图集、分包分析和缓存查询，均按需使用，不是第一次打包的前置步骤。
+
+“诊断 > 开始使用”和资源空状态提供同一路径及页面入口；“前往构建发布”等入口只切换原有页面，不执行构建或自动保存。
+
+### 多目录与加载地址
+
+普通Unity工程可以直接登记以下已有目录，不需要每种资源类型各建一个ResourceProject：
+
+```text
+Assets/Art/Textures/     地址前缀：textures
+Assets/Art/Materials/    地址前缀：materials
+Assets/Audio/            地址前缀：audio
+Assets/GamePrefabs/      地址前缀：prefabs
+Assets/GameScenes/       地址前缀：scenes
+```
+
+例如`Characters` Group可以同时选择`GamePrefabs/Hero.prefab`和`Audio/Hero.wav`。Prefab引用的Material及Texture可以位于其他已登记目录，仍由原BuildMap解析并处理共享依赖；没有选择的独立文件不会因登记目录而自动进入构建。
+
+- 目录以Unity GUID记录，显示和检查时重新解析真实Assets路径。来源只允许原策略支持的Assets真实子目录，不能是整个Assets、StreamingAssets、Packages、外部磁盘目录或链接目标。脚本、Unity内置依赖及Packages代码继续按原合法依赖规则处理。
+- 同一资源项目中的目录不能重复或互相包含；不同ResourceProject的普通来源范围也沿用原互斥规则，不能相同或嵌套。其他资源项目的生成范围继续受到保护，不新增跨Project依赖协议。来源登记只有读取准入，不授予删除、覆盖未知文件或meta的权限。
+- 默认地址为所属目录的持久前缀加相对路径，如`prefabs/Hero.prefab`；前缀留空则只使用相对路径。增加其他目录、重排列表或改变显示名称不会改已有地址。修改前缀或把文件移到另一目录可能改变下次构建地址，长期固定的加载地址应显式填写。历史发布不被重写，也不会自动追加alias。
+- 地址、alias及大小写冲突继续严格拒绝并显示两个实际来源，不自动添加索引或随机后缀。子资产仍由原主资源规则派生，没有第二套子资产选择协议。
+- 新增、移除、替换只修改配置，可Undo/Redo，不删除源文件或Group条目。允许保留待修正草稿；目录失效、重复、重叠及失去合法来源的条目或图集规则会明确阻止构建。先恢复登记或明确调整相关条目，再保存和重算，不会静默漏包或扩大到其他目录。
+
+ResourceProject只使用`SourceDirectories`目录列表。一个目录和多个目录采用相同模型；清空列表就表示没有登记来源，构建会明确拒绝，不回退到隐藏字段。浏览与解析不保存资产，保存也不执行格式迁移。脚本可以直接设置列表，或使用支持Undo的正式编辑入口：
+
+现有9个ResourceProject与4个Atlas配置已在本次升级中一次性转换为当前模型，原有目录、选择、地址/alias、GUID/meta及图集位置保持不变。以后从外部导入尚未转换的旧单根Editor配置，不承诺自动读取或迁移；该边界只涉及Editor配置格式，旧Catalog v1发布仍由原Runtime读取路径消费。
+
+```csharp
+ResourceEditorOperations.SetSourceDirectories(project, new[]
+{
+    new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID("Assets/Art/Textures"), AddressPrefix = "textures" },
+    new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID("Assets/GamePrefabs"), AddressPrefix = "prefabs" }
+});
+ResourceEditorOperations.SaveProject(project);
+```
+
+有效目录集合、前缀和生成登记进入原Builder设置冻结及后验，展示顺序不构成新构建语义；正式Recipe也读取同一资源项目配置。普通浏览、选中和排序不自动重算依赖或SHA。工具源码本身参与Workspace指纹，升级工具可能使旧缓存合法失效；新配置不迁移或删除旧owned缓存。Catalog Schema v1、Runtime地址解释和旧发布读取路径没有增加多目录协议，旧v1发布无需重写。
+
+体验夹具位于`Assets/YLFramework/Tests/Fixtures/ResourceMultiDirectory-20261018/Modern/ModernProject.asset`，包含分散的纹理、材质、文本、Prefab、Scene及两个图集来源。选择它可以查看跨目录Group和独立生成目录；`ModernRecipe.asset`默认使用None并关闭地址常量生成。`Generated/BlockedReferences`保留未知文件拒绝接管的负例，`Runs`内空场景只用于自有验证，不是游戏入口；这些文件位于Tests，不进入默认框架导出。旁边名称为`Legacy`的目录是早期单来源样例，现已统一为当前配置模型；名称、源文件和图集位置保留，不代表产品存在另一套配置读取方式。
+
+### 工作区与操作边界
+
+1. 打开 `YLFramework/Resource/Workbench`，从顶部选择器按显示名称、ProjectId或配置路径检索；选择器显示各自ProjectId以区分同名资源项目，并提供新建入口。保存、项目设置和更多操作位于右侧；完整配置路径及GUID可查看、复制。新建只创建配置，不移动源资源，也不接管已有输出。在“项目设置”编辑名称、资源目录、持久地址前缀及压缩、加密策略；每条目录使用原生文件夹选择器，可拖入或点击定位，并提供完整路径及GUID复制。生成目录单独显示，只在实际使用自动图集时明确新建登记。
+2. “资源配置”以Group、原生多列表格和按需详情为主。“主资源”编辑真实文件/目录定义；目录不展开成可单独删除的伪定义，子资产仍由主文件派生。高亮只代表UI选择，不控制是否参与构建。Ctrl/Shift多选，排序和搜索不改变数据顺序；筛选隐藏选择仍计入完整批量集合，底栏显示选中/可见选中数。“全部Group”只读聚合，进入具体Group才可添加、编辑、移动或移除。
+3. 可从Unity Project窗口选择文件/目录后打开“添加资源...”菜单，或拖入具体Group列表；子资产拖入按主文件GUID登记。“显示Group”只控制左侧分组列表是否显示，不改变Group或分包配置。单选详情编辑地址/alias或目录Extensions，多选只显示批量范围。“从定义移除”可Undo、不删源文件；“删除组”确认后仅删组及选择定义。Ctrl+F聚焦搜索，Alt+G新增组。顶栏“保存”只保存Project；项目设置中的Ctrl+S始终保存当前Project，不会保存后台页签的配方或图集。资源主资源/解析子页Ctrl+S也只保存当前Project，不保存其他Project/场景，Group名称在Enter、离开字段或保存前明确提交。“图集 > 自动图集”的Ctrl+S与“保存规则”只保存当前已登记的规则资产。关闭/切页不自动保存资产。
+4. “解析预览 > 计算预览”显式调用原Map/子资产解析，结果只读并显示计算时间/过期状态；不在重绘、排序或搜索时自动重算。“图集”分为“自动图集”和“手动图集”。自动图集内联编辑同一真实配置，区分规则、输入资源、打包/纹理设置和生成输出；“来源文件 / 目录”逐项使用原生对象字段，添加来源先增加空槽，移除只移除该来源项、不删除源资产，支持Undo/Redo，默认Inspector使用相同控件。Together将规则来源合并为一个图集；PerFolder按每个源纹理的真实父目录分别输出，不是按来源数组项分组。地址字段是输出地址前缀，不是模板替换协议；该分组方式与目标Group的Bundle分包方式不同。一条规则可以生成多个输出，选择输出不会静默切换正在编辑的规则。显式保存后用“预览生成计划”查看Create/Update/Current/Obsolete，再按原B06服务“生成 / 更新并准备”。低频纹理设置可展开，收起时仍显示有效设置摘要。移除规则与删除失效输出分开；失效输出保留，只有显式确认且原归属、内容/meta和引用复验通过才可删除，没有删除任意源资产入口。手动图集页可显式读取SpriteAtlas并复核身份后定位原生Inspector；“准备本Project图集”会先执行B06自动生成前置，再准备本Project图集，不是只读或仅手工Atlas操作。登记缺失/损坏明确报错，不当作未配置。
+5. 五任务入口为“资源配置、分包分析、构建发布、版本交付、诊断”。主任务和页内分类有独立选中态，checkbox表示可勾选设置，蓝色主操作与普通辅助操作分开。“构建发布”选择可选构建配方并内联编辑同一真实资产，或明确解除选择使用原无配方App/force/生成/目录窗口选项。“附加构建选项”位于它控制的字段上方，展开后在下方显示强制重建、地址常量生成及对应目录；收起仍提示有效非默认设置。独立的“执行说明与技术详情”只显示帮助、参数和原始检查信息，不控制编辑选项。配方模式遵循相同分组，基本字段和附加字段仍编辑同一资产，不会因展开/收起而保存或重置值。宽窗执行选项与结果并列，窄窗在两区切换。“版本交付”提供发布版本、导出/签发、内置部署和恢复；“诊断”提供运行诊断、磁盘缓存查询（只读）和开始使用。打开或浏览不会初始化Runtime。
+6. 底部“输出”可折叠，展开后拖动上沿调整高度；空输出首次展开紧凑，显式拖动的高度不会被每次重绘重置。缩小窗口时先钳制显示高度，放大后恢复保存的请求高度，主内容与操作仍可访问。输出标注原Project、页面与时间；成功提示约6秒后收起，完整文本按需展开。失败、发布未确认或部分成功的必要摘要不依赖输出展开。全窗口最多保留32次真实构建尝试，并按原Project GUID过滤；切项目不丢其他Project尝试，但清理原排队callback，开始后的同步构建/发布不可交互取消。阶段只表示实际已到达边界，只有Unity实际重绘时才可见，不提供百分比、剩余时间或随时取消。窗口重建/Domain Reload后临时报告丢弃，不能从raw目录猜测恢复。
+7. “分包分析”明确切换当前配置预估与本窗口所选尝试的确切BuildResult；物理Bundle为行，优先显示用途、来源Group、分包方式、源文件与依赖数量，可按分包方式（Placement）、共享、路径筛选和列排序。完整BundleName、来源GUID及路径保留在可复制详情；少量源文件不再占据固定的大块列表空白。详情区分可加载主地址与依赖闭包源文件，并提供Bundle依赖/被依赖树；没有逐文件因果边，不声称某Prefab精确引入某文件。Group只表示关联来源，不是物理Bundle固定父节点。dirty定义、未计算、图集前置待完成及过期各有状态；过期保留原事实，不用变化后的Project覆盖历史数据。源字节、raw、delivery、发布复制和native memory分开，未测/不可用不补0。
+8. “版本交付 > 发布版本”的“读取已登记版本”和“读取当前发布索引”分别调用原ReadHistory/ReadCurrent，不在选页、排序、搜索或重绘做SHA/目录扫描。历史、发布索引和所选版本分别保留读取时间与失效状态；所选旧版本、发布索引当前版本与正在运行的版本不等同。详情底部用简短说明区分索引尚未读取、读取失败、快照过期，以及所选版本是否为本次Publisher索引指向版本，不重复长digest成功提示；完整身份和原操作结果仍在详情与输出中保留。新发布receipt不会被旧表选择覆盖，单项刷新不复验另一快照。没有正式历史发布时间，不标“最新”。导出捕获所选完整Release，沿原VerifyExportInput/ExportRelease保留历史Unity/App字节归档语义，并向工程外现有父目录新增`<CatalogDigest>`，不覆盖/同步/上传。选定版签发仍执行严格ReadVersion；“恢复与其他”保留明确的发布索引当前版签发入口，两者不混用。
+9. “内置部署”先对所选版本执行只读预检。确认框默认显示项目、平台、版本、来源/目标、文件数、逻辑字节和预检结果，以及三类影响：内置版本目录和控制文件、Assets外工作目录的暂存/锁/恢复记录、新目录`.meta`与Unity导入。技术区按“身份与版本 / 目录与文件 / 执行与恢复”组织同次捕获的只读信息，不解析长文或成为新的执行依据；完整ProjectGuid/ProjectId/Unity/App/digest、准确目录、owner/lock/journal/next/stage、外壳和`payload~`均保留。原始完整范围可单独展开，“复制完整范围”始终复制原全文而非当前可见片段；无摘要的操作仍默认显示原目标与范围。关闭或Esc取消；确认之后原Deployer仍重新预检，不以旧预检作为永久许可。逻辑复制字节不是磁盘峰值，未检查容量不表示空间足够。发布恢复与内置部署恢复分开，不依赖成功的新版本预检，不解析错误文本猜journal阶段，不直接改控制记录、不覆盖旧部署、不切Runtime active/LKG。
+10. “运行诊断”只采样应用已显式创建的ResourceSystem，以分类选择器和指标表显示同次报告的Projects/Assets/Bundles/Instances/Scenes/Updates/Recovery/History/Content/Counters，原技术字段可查看。统计属于全会话，不冒充当前Workbench Project；窗口主体标签不是SessionId。数据预算的分配、预留、峰值、输入/内容作业，声明native读取buffer及进程CNG owner/key成本分别解释，不相加为进程总内存。未初始化时说明不可用，不当作运行故障。自动采样默认关闭，且没有可用会话时不可开启；显式开启后5s起点，离页、真实dock不可见、关闭、转换或重载暂停，返回不自启。只读查看/暂停不改应用历史设置；显式设置/关闭历史会清空buffer、不回填。
+11. “磁盘缓存查询（只读）”只查询YL ArtifactStore，不是全盘缓存。手工输入应用传给`ResourceConfiguration.Create(mode, mounts, cacheRoot)`的绝对cacheRoot，以及完整ResourceProjectMount列表中的ProjectId/Platform/App；不扫描persistentDataPath、不借Workbench Project或私有应用对象猜配置，不保存到Project/Recipe。App是操作者/应用输入，owner只校验ProjectId/Platform；Ready显示“查询完成”，不是App兼容/解密/签名/可挂载认证。首屏区分空间观测完整性、已观测逻辑字节、候选字节、时间和保护状态，候选字节不保证可释放空间。原QueryAsync在Editor主线程分段驱动、最多一个在途，maxEntries是扫描步骤上限而非行数。取消/输入变化/离页/隐藏/关闭/重载Dispose枚举器；没有新callback不伪造Canceled，旧报告标旧并保留原身份。“查询已停止，当前显示上次结果”等状态保留；正常完成不重复占用列表高度。未知/不完整与有效0分开，CompleteRecord不代替Bundle SHA/签名。此页不Recover、Cleanup、Mount、取key、创建root/锁或加pin，没有删除/激活按钮。
+12. “开始使用”说明普通None流程和按需功能，仅引用本窗口确切临时构建报告以及已知Resource.md/正式Editor样例路径。页面快捷入口只切页，文档/源码入口只打开或定位，不运行样例、不创建Scene、不注入key或启动benchmark。参考文件缺失明确不可用，不寻找未知替代；历史F03数字不作为当前项目性能。窄窗长运行/查询详情在独立滚动视口内，列表与详情按需切换，展开输出仍保留可读数据行；实际验证范围与DPI见原Plan，不外推其他缩放。
+
+`ResourceBuildAsset.Source`是在原Map解析时保留的有限只读Selection/自动规则来源副本，只用于该Map及对应BuildResult解释，不改变Bundle/Catalog身份、不保存第二份Project或持久来源索引。“复核身份并定位来源定义”重新核对Project GUID/ProjectId、GroupId/Packing、Selection GUID及内容/路径，或原图集配置GUID/规则Id及内容；来源删除/变化明确拒绝，不按旧列表index编辑另一条定义。
+
+宽窗可折叠/拖动Group与详情分隔，窄窗使用Group下拉和列表/详情切换；保持原`620×440`最小尺寸，不缩字补布局。主任务页、分隔宽度、输出高度、表头和可复核的资源行选择属于本地窗口状态，不写入Project/Recipe/Atlas。跨Domain Reload按已有Project GUID、Group、源GUID、定义内容及地址重新匹配资源行；不存在、重复或含义变化时清除并提示，不持久化TreeView整数行号。原生表头会随可用宽度适配，保存的是可适配列状态，不承诺固定像素宽度。诊断子页、查询参数和临时报告不作为跨重建恢复的执行状态；重载/主题切换不自动查询、读取历史或重执行。Group、条目等序列化编辑可Undo；构建前仍须处理脏场景/配置，UI提示不能替代正式复验。Together/PerAsset是意图，最终包服从共享依赖、Scene分离和环归并。
+
+图集页宽窗首次约左1/3列表、右2/3编辑器，分隔可拖动。缩窗仅钳制显示宽度，窄模式切换不覆盖请求，放大后恢复本view的请求；该请求仅在当前view会话内保留，窗口重建或主题/Domain Reload后重新使用默认值，不属于跨重载恢复的资源页Group/详情宽度偏好。
+
+资源、分包分析、版本和缓存查询的空搜索框仅显示各页既有过滤范围提示，提示不写入搜索值。输入、清空、Ctrl+F和选择语义不变，不因此扩大过滤范围或触发解析、历史读取、查询。
+
+工作台各页面点击空白处会释放输入框焦点，清除文本高亮/插入光标；仅处理未被控件接收的左键点击，不抢占按钮、字段或表格操作，不清空资源多选。正常失焦编辑仍提交并保留Undo，但不自动保存Project。
+
+顶栏项目名称与ProjectId共用垂直文字基线。“更多”使用工作台局部弹层，右边缘与按钮对齐、向窗口内展开；保留配置定位、完整身份/路径复制及文档入口，支持方向键、Enter和Esc，不执行构建或修改配置。
+
+ResourceProject.Compression仅Lz4/Lzma/Uncompressed，恒StrictMode；压缩进入Workspace身份，有显式Force Rebuild，不接受任意flags。只构建已激活、已安装、主机可native读回的桌面目标，不切平台。Publisher输出正式resource-catalog.json与release index；BuildId标识payload，CatalogDigest标识最终bytes，摘要不等于签名。构建、发布、生成分别报告，不以一个成功替代另一个。
 
 Workspace 按 Project GUID/设置隔离，不可变发布在 `AssetBundles/YLFramework/<ProjectId>/<Platform>/<CatalogDigest>/`。ReadHistory/ReadVersion 仅选 owned 完整版本；ExportRelease 只向工程外不存在的 digest 目录导出并复验。未知文件/归属、链接和篡改拒绝，不覆盖旧目录。旧 Service/ResService、BuildScript/AssetBundleExporter 与标记菜单已退役。
 
 ### 可共享构建配方
 
-`ResourceBuildRecipe` 是保存在 `Assets/` 的普通配置资产，可随工程共享。通过 `Create/YLFramework/Resource/Build Recipe` 创建，在 Inspector 选择明确 `Project`、`Target`、`AppContentCompatibilityId`、`Action`、`ForceRebuild` 及必要的常量生成选项，再点“保存所选配方”。Workbench 的“可共享构建配方”选择入口可打开同一 Inspector；不依赖窗口存活、Selection、EditorPrefs 或开发机临时路径。原不使用配方的工作台、`BuildOnly`、`BuildAndPublish`、Builder/Publisher 调用及默认行为保留。
+`ResourceBuildRecipe` 是保存在 `Assets/` 的普通配置资产，可随工程共享。通过 `Create/YLFramework/Resource/Build Recipe` 创建，在Workbench内联或原Inspector选择明确 `Project`、`Target`、`AppContentCompatibilityId`、`Action`、`ForceRebuild` 及必要的常量生成选项，再明确保存。Workbench持有同一资产引用/GUID，不复制为可编辑Project；所选资产丢失时保留错误而不静默切换无配方。在构建页编辑配方时，“保存配方”与Ctrl+S只存所选Recipe；进入项目设置后Ctrl+S改为保存可见的Project。顶栏“保存”始终只存Project，不SaveAssets或保存Scene。原不使用配方的工作台、`BuildOnly`、`BuildAndPublish`、Builder/Publisher 调用及默认行为保留。
 
 - 资源选择、Group、Compression、ContentEncryption/ContentKeyId 始终来自引用的 `ResourceProject`，配方不覆盖、不复制、不临时改写 Project，也没有多级继承。
 - `Target` 必须明确、已安装且已激活并匹配本机可读回的桌面目标；配置不会切平台。`Action=BuildOnly` 不发布/生成；`BuildAndPublish` 才可选择 `GenerateReferences` 和 `ReferenceDirectory`，常量仍由原生成器及原完整发布集合决定。
 - “查看有效执行选项”/`ResolveRecipe` 只解析非秘密值，不取 key、不构建/生成/发布/初始化。`ExecuteRecipe` 要求配方与 Project 已显式保存，开始时将执行选项复制为只读 `ResourceBuildInvocation`；配方后续编辑影响下一次。资源输入继续由原 Builder 冻结并做完整后验，无法冻结的回调继续阻止整体 skip。
 - Inspector 与无窗口入口都调用 `ResourceEditorOperations.ExecuteRecipe`。结果 `Invocation`/`Summary` 说明配方路径、实际 Project/GUID、目标、App、操作、force、压缩/交付和生成选项；配方名称/GUID不加入构建内容身份。不把发布成功等同于常量生成成功，应分别检查 `BuildError`、`PublicationError` 和 `GenerationError`。
+- Workbench主动作直接按Recipe.Action经同一ExecuteRecipe执行，不临时改Action。Recipe.Project与工作台上下文不符时显示双方Id/路径/GUID，阻止执行并提供显式切换/解除选择；不自动改Recipe.Project。开始执行仍重新冻结与正式复验，不把上一次绿色提示当许可。
+- 资源地址常量是当前平台已登记发布项目的Catalog集合，不仅是当前资源项目；集合要求Unity/App兼容标识一致。某个项目发布成功后，集合检查或代码生成仍可能失败，界面保留真实原因并说明版本仍有效。处理具体问题后可在“版本交付 > 恢复与其他”单独生成，不自动重发或回滚，也不一概归因为目标目录。
+- `CheckReadiness`及`InspectRecipePreflight(full:false)`只检查静态前缀，不取key、不建Map、不扫描Workspace/历史、不做SHA。显式`InspectPreflight`/`InspectRecipePreflight(full:true)`与原string `Preflight`共用唯一正式控制流，结构化区分StaticBlocked/StaticReady、AtlasPreparationRequired、Complete和Failed；图集待生成不是完整成功，原string的异常及有效早返回语义保留。
+- `ResourceBuildProgress.StageReached`是主线程只读实际边界通知，非执行控制或测试故障注入。订阅者须自行解绑，不应写入或重入执行；Builder/EditorOperations在observer回调内的执行重入明确拒绝，观察异常隔离且不输出其异常秘密，不替换原输入冻结、provider边界、提交或finally。Workbench只在自己的同步操作作用域订阅并在finally/关闭解绑。
+- 确认窗口完整文本可滚动/选择/复制，不受原生DisplayDialog长文本截断；关闭或Esc是未开始执行的取消，确认后仍由原服务复验。真实结果分开显示构建、发布和常量生成；发布成功而生成失败是部分成功，不自动重发或回滚。发布提交未确认须用独立Publisher恢复入口确认，不断言旧Index必然未变。发布已验证构建始终针对所选确切BuildResult，由Publisher重新验证源及Workspace。
 - 密钥与签名私钥不在配方中。加密继续传应用持有的 `IResourceContentKeyProvider`，或沿用原明确进程来源 `YL_RESOURCE_CONTENT_KEY`；查看/保存配方不读取环境值。配方不签发、不部署 StreamingAssets、不上传或激活 Runtime。缺 key、无效目标、取消与失败沿用原 owned 锁/路径/保旧合同。
 
 已实际编译并在自有 None 夹具执行的最小无窗口例为 [`ResourceBuildRecipeExample.Build`](../../Samples/ResourceStartup/Editor/ResourceBuildRecipeExample.cs)；同一 `ExecuteRecipe` 的外部provider加密发布另有直接门禁：
@@ -400,6 +481,12 @@ public static class ArtifactQueryExample
 | ContentKeyUnavailable | 向应用 provider 配齐当前项目/KeyId 后显式重试；不是文件损坏，不自动下载或切换版本 |
 | ContentAuthenticationFailed / ContentFormatUnsupported | 拒绝当前输入及其依赖闭包的新取得；核对确切交付、模式与 key，不回退明文/Simulation |
 | ContentBufferUnavailable | 释放本应用拥有的输入责任后显式重试，或在下次启动配置足够预算；不会自动扩容或驱逐活跃输入 |
+| 资源不在已登记目录中 | 在“项目设置”登记其真实来源目录，或改选范围内资源；不会自动扩大读取范围 |
+| 目录重复、重叠或失效 | 根据显示的路径/GUID保留唯一有效范围；修正配置不会自动删除源文件或Group条目 |
+| 地址或alias冲突 | 根据双方来源，为其中一个设置显式地址、不同持久目录前缀或别名，再重新计算 |
+| 配置尚未保存 | 保存资源项目及已修改图集规则；若有dirty场景需单独处理，顶部保存不代为保存全部内容 |
+| 已发布但地址常量生成失败 | 已发布版本仍有效。修正输出目录或生成配置后单独重试代码生成，不自动重发或回滚 |
+| 无法确认文件属于当前资源项目 | 不覆盖或删除。保留文件，按技术详情核对Project、配置、GUID/meta和登记记录，不通过来源登记取得写权限 |
 
 ## 可选 Bundle 内容加密
 
