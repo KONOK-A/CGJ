@@ -1,11 +1,11 @@
 {
   "dependencies": {
-    "com.ivanmurzak.unity.mcp": "0.93.4",
-    "com.ivanmurzak.unity.mcp.animation": "1.2.35",
-    "com.ivanmurzak.unity.mcp.cinemachine": "1.0.20",
-    "com.ivanmurzak.unity.mcp.inputsystem": "1.0.20",
-    "com.ivanmurzak.unity.mcp.tilemap": "1.0.19",
-    "com.ivanmurzak.unity.mcp.timeline": "1.0.20",
+    "com.ivanmurzak.unity.mcp": "1.2.0",
+    "com.ivanmurzak.unity.mcp.animation": "2.0.1",
+    "com.ivanmurzak.unity.mcp.cinemachine": "2.0.1",
+    "com.ivanmurzak.unity.mcp.inputsystem": "2.0.1",
+    "com.ivanmurzak.unity.mcp.probuilder": "2.0.1",
+    "com.ivanmurzak.unity.mcp.timeline": "2.0.1",
     "com.unity.cinemachine": "3.0.1",
     "com.unity.feature.2d": "2.0.1",
     "com.unity.ide.rider": "3.0.40",
@@ -61,9 +61,7 @@
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0",
-    "com.ivanmurzak.unity.mcp.particlesystem": "1.2.34",
-    "com.ivanmurzak.unity.mcp.navigation": "1.0.20",
-    "com.ivanmurzak.unity.mcp.probuilder": "1.2.34"
+    "com.ivanmurzak.unity.mcp.tilemap": "2.0.1"
   },
   "scopedRegistries": [
     {
