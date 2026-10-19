@@ -29,6 +29,14 @@ namespace YLFramework.Tests.Extensions.Domain
             public override string ToString() { Handler.LogFormat(LogType.Log, null, "nested-format"); return "formatted-value"; }
         }
 
+        private sealed class Forwarder : ILogHandler
+        {
+            private readonly ILogHandler _next;
+            internal Forwarder(ILogHandler next) => _next = next;
+            public void LogException(Exception error, UnityEngine.Object context) => _next.LogException(error, context);
+            public void LogFormat(LogType type, UnityEngine.Object context, string format, params object[] args) => _next.LogFormat(type, context, format, args);
+        }
+
         [SetUp] public void Setup() => _directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "logger-" + Guid.NewGuid().ToString("N"));
         [TearDown] public void Cleanup()
         {
@@ -38,7 +46,7 @@ namespace YLFramework.Tests.Extensions.Domain
             if (File.Exists(_directory)) File.Delete(_directory);
         }
 
-        private ILogHandler Create(Sink sink, bool file = true, Dictionary<LogType, bool> console = null, string directory = null)
+        private ILogHandler Create(ILogHandler sink, bool file = true, Dictionary<LogType, bool> console = null, string directory = null)
         {
             Assert.That(SessionType, Is.Not.Null, "YL LoggerSession must exist.");
             var optionsType = SessionType.Assembly.GetType("YLFramework.Logging.LoggerOptions");
@@ -130,6 +138,17 @@ namespace YLFramework.Tests.Extensions.Domain
             session.LogFormat(LogType.Log, null, "{0}", new LoggingValue { Handler = session });
             Assert.That(sink.Messages, Is.EqualTo(new[] { "formatted-value" }));
             Assert.That(Read(session, "SuppressedRecursiveCount"), Is.EqualTo(1));
+        }
+
+        [Test] public void LaterHandlerCanRetainClosedSessionAfterAnotherSessionEnables()
+        {
+            var sink = new Sink();
+            var old = Create(sink, false);
+            ((IDisposable)old).Dispose();
+            var current = Create(new Forwarder(old), false);
+            current.LogFormat(LogType.Log, null, "through-closed-session");
+            Assert.That(sink.Messages, Is.EqualTo(new[] { "through-closed-session" }));
+            Assert.That(Read(old, "SuppressedRecursiveCount"), Is.EqualTo(0));
         }
     }
 }

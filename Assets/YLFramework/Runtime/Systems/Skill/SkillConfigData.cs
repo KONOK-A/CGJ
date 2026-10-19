@@ -64,6 +64,7 @@ namespace YLFramework.SkillSystem
 
         [Tooltip("技能类脚本guid")]
         [HideInInspector]
+        [YLFramework.Excel.ExcelIgnore]
         public string skill_class_guid;
 
     }

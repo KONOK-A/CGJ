@@ -24,6 +24,9 @@ namespace YLFramework.BuffSystem
         private static IUnRegister _update, _fixed, _late;
         private static int _depth;
         private static bool _stopping;
+        public static int ConfigCount => Configs.Count;
+        public static int HostCount => Hosts.Count;
+        public static int EffectOwnerCount => Effects.Count;
 
         static BuffManager()
         {

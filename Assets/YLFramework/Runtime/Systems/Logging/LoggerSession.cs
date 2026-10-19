@@ -15,7 +15,7 @@ namespace YLFramework.Logging
     /// </summary>
     public sealed class LoggerSession : ILogHandler, IDisposable
     {
-        [ThreadStatic] private static int _depth;
+        [ThreadStatic] private static HashSet<LoggerSession> _activeSessions;
         private readonly object _gate = new();
         private readonly ILogHandler _destination;
         private readonly bool[] _console;
@@ -72,8 +72,8 @@ namespace YLFramework.Logging
 
         private void Dispatch(LogType type, UnityEngine.Object context, string format, object[] args, Exception exception)
         {
-            if (_depth != 0) { Interlocked.Increment(ref _recursiveCount); return; }
-            _depth++;
+            var active = _activeSessions ??= new HashSet<LoggerSession>();
+            if (!active.Add(this)) { Interlocked.Increment(ref _recursiveCount); return; }
             try
             {
                 lock (_gate)
@@ -109,7 +109,7 @@ namespace YLFramework.Logging
                     }
                 }
             }
-            finally { _depth--; }
+            finally { active.Remove(this); }
         }
 
         private void WriteToFile(LogType type, string message)

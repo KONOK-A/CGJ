@@ -15,8 +15,7 @@ namespace YLFramework.SkillSystem
             if (skillsConfig != null)
             {
 
-                string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
-                string dir = string.Format("Assets/YLFrameworkData/Skill/Skills/{0}", guid);
+                string dir = SkillsConfigController.GetSkillConfigDataPath(skillsConfig);
                 AssetDatabase.DeleteAsset(dir);
             }
 

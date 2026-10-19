@@ -452,6 +452,11 @@ namespace YLFramework.MissionSystem
             }
 
             MissionParameter param = missionsConfig.GetMissionParam( originalName);
+            if (param == null || string.IsNullOrWhiteSpace(newName)) return;
+            Undo.IncrementCurrentGroup();
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Rename mission parameter");
+            Undo.RecordObject(missionsConfig, "Rename mission parameter");
 
             for (int i = 0; i < missionsConfig.missions.Count; i++)
             {
@@ -462,6 +467,7 @@ namespace YLFramework.MissionSystem
                 {
                     if (mission.conditions[j].param_name == originalName)
                     {
+                        Undo.RecordObject(mission, "Rename mission parameter");
                         mission.conditions[j].param_name = newName;
                         EditorUtility.SetDirty(mission);
                     }
@@ -470,7 +476,10 @@ namespace YLFramework.MissionSystem
 
             param.name = newName;
             EditorUtility.SetDirty(missionsConfig);
-            AssetDatabase.SaveAssets();
+            Undo.FlushUndoRecordObjects();
+            Undo.CollapseUndoOperations(undoGroup);
+            AssetDatabase.SaveAssetIfDirty(missionsConfig);
+            foreach (var mission in missionsConfig.missions) if (mission) AssetDatabase.SaveAssetIfDirty(mission);
             missionsConfig.ClearCache();
 
             SetSelection(new int[] { MissionManager.StringToHash(newName) });

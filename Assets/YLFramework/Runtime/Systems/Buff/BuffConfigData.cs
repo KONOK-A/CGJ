@@ -67,6 +67,7 @@ namespace YLFramework.BuffSystem
         [Tooltip("Buff效果(当前Buff有哪些效果)")]
         [Header("Buff效果(当前Buff有哪些效果)")]
 
+        [BuffEffectExcel]
         public List<EffectData> effects = new List<EffectData>();
         [Tooltip("Buff脚本名称")]
 
@@ -74,6 +75,7 @@ namespace YLFramework.BuffSystem
 
         [Tooltip("Buff脚本guid")]
         [HideInInspector]
+        [ExcelIgnore]
         public string buff_class_guid;
 
     }

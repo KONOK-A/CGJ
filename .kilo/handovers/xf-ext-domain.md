@@ -20,9 +20,10 @@
 | Logger | 源码候选完成，引擎待验 | `c2e1a0f`；6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
 | Skill | 源码候选完成，引擎待验 | `10699e6`；4项Skill+前15项托管通过；Runtime/Editor/EditorTools辅助编译通过 |
 | Buff | 源码候选完成，引擎待验 | `2aa7c22`；5项Buff+前19项托管通过；普通Buff/Effect作者工具辅助编译通过 |
-| Mission | 源码候选完成，引擎待验 | 11项Mission+前24项托管通过，四项直接Bug红→绿；不改Save |
-| Excel接线 | 待核对B真实API | 开工时B交接文件不存在，不空等、不造接口 |
-| 整组Review | 待五项候选完成 | 仅一次独立Review及直接修复回归 |
+| Mission | 源码候选完成，引擎待验 | `9847078`；11项Mission+前24项托管通过，四项直接Bug红→绿；不改Save |
+| Excel接线 | 可选候选完成，有明确未实现范围 | 精确B `09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300`；3项真实xlsx通过 |
+| 引擎验收入口 | 已准备、辅助编译通过，未执行 | 13项普通原生用例、2项可选SO用例及公开Player消费者 |
+| 整组Review | 待本批候选提交后执行 | 仅一次独立Review及直接修复回归 |
 
 ## 来源与许可交接
 
@@ -55,6 +56,7 @@
 - `logger-red`：9通过/5缺能力失败；`logger-green`：14通过；新增格式化重入直接回归`logger-format-red`为14通过/1失败（多发nested-format），修复后`logger-format-green`为15通过/0失败/跳过。并发100条完整记录、两会话文件独占读回、文件错误、过滤/事件/递归均实际执行。Runtime辅助编译退出0/41个既有warning。
 - Context7没有提供精确2022.3 ILogHandler资料，补读Unity 2022.3官方Scripting API，接口/前任handler用法亦由实际程序集编译确认；不外推线程Unity行为。
 - `LoggerLifecycleTests.DefaultIsPassiveAndLaterHandlerKeepsOwnershipOnClose`已准备未运行。无XF独立Mono/IL2CPP Low消费者、五类真实Debug、同秒连续双Play、disable/destroy/quit释放、原Logger共存仍待引擎门，旧Logger阶段9证据不能替代。
+- 连续启用时发现合法handler链`新YL会话→后继handler→已关闭旧YL会话→原handler`被全局递归深度误吞。`logger-chain-red`真实35通过/1失败；改为线程内按会话身份判重后`logger-chain-green`36/36，既保留同会话递归保护，也允许关闭会话透明转发。此为附加直接修复，不归入未运行的Unity handler验收。
 
 ## Skill使用与验证
 
@@ -90,3 +92,39 @@
 - `mission-contract-red`24通过/6缺能力失败；承接原条件/Reset后`mission-bug-red`27通过/3实际失败，进度通知加直接回归后`mission-progress-red`27通过/4实际失败；修复后`mission-managed`35通过/0失败/跳过。新增覆盖解绑/重复Bind、回调内Dispose、参数配置克隆及真实hash碰撞。没有使用Unity行为stub或跳过失败。
 - 当前五模块Runtime辅助编译0/41 warning、Editor0/40、EditorTools0/10；`mission-prepared-tests`把已准备EditMode/PlayMode源码与真实程序集辅助编译成功，未运行Unity用例。`MissionOwnerTests`准备了配置/条件/奖励不变、Reset和完成回调内移除及旧参数失效用例。
 - 实际ResourceLease、Editor资产保存重开/剪贴板/Undo、关Domain Reload双Play、场景、无XF Mono/IL2CPP Low、多态类型裁剪、导出与原游戏非干扰仍待引擎，不能用35项托管结果替代。
+
+## 可选Excel与组合条件
+
+- B已提交Excel `09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300`，含前置DataAssets候选`53edd50`。使用`git archive`从本组共享对象库读取这一个精确提交的DataAssets Runtime/Editor及Excel，解入本组`Temp/Domain.Excel/<Run>/B`；不读取B在途Save、不复制后端到C产品、不改B文件。
+- C可选目录`Assets/YLFramework/Integrations/DomainExcel/`，新可选Editor/Test asmdef，不改主体asmdef。先集成B DataAssets+Excel，再集成C并显式定义`YL_DOMAIN_EXCEL`才启用；默认普通Editor不引用它，导出owner须另带B完整后端/许可并生成Editor-only插件meta。缺B的单分支只验证普通闭包，不宣称Unity已解析可选asmdef。
+- 菜单`Assets/YLFramework/Domain Excel/Preview Import Entries`、`Export Entries`支持Skill/Buff/Mission根或条目的选择、三行表头、实际派生数据类型、脚本类验证、显式差异确认、取消、缓存失效；分别使用`skills`/`buffs`/`missions`工作表。精确拥有目录由本组Controller决定；新空根可用B真实subasset模式，预览/取消不创建目录。
+- Buff effects恢复成熟的ID数组格式，引用真实EffectData资产，缺失/歧义拒绝；不把Unity对象写为脱离身份的JSON。GUID绑定字段不作为xlsx输入，parent由暂存初始化绑定。B的initialize先于ImportRow，因此脚本/条件检查在导入后差异执行，不在初始化时误拒绝新行。
+- 领域差异校验固定依赖该B候选的`ExcelChange.After = FullTypeName:JSON`格式；声明在`Dependencies.json`，未来B变更须重验，不猜通用接口。只借用真实API，不复制B解析器或建立空后端。
+- Mission参数用独立`params`工作表/`.params.xlsx`与独立确认事务；参数名标记为真实Excel ID，重复名称拒绝。参数预览提交前再检当前条件引用和资产清洁度，普通作者改名也补Undo。**未实现**任务条目+参数的跨sheet原子组合事务、全局共享Buff效果库xlsx导入；后者继续使用完整普通Effect作者窗口，不冒称全功能xlsx通过。
+- `Tools/Domain/Verify-DomainExcel.ps1 -Run pre-review-final -BCommit 09bec5a`：C普通Editor/EditorTools 0/40、0/10；精确组合Runtime468源/38warning、Editor147源/10warning、B完整可选Excel7源/0warning、C adapter1源/0warning、可选测试+runner3源/0warning全部辅助编译退出0；实际选定3项纯托管xlsx用例全部通过、0失败/跳过。
+- 三项xlsx覆盖实际参数往返/差异/取消后确认、重复名称错误、不允许工作簿过期后提交。两项SO资产用例一并编译但明确过滤未运行，覆盖新行在ImportRow后校验、取消不建资产、效果ID真实资产/缺失拒绝。后端DLL只在Temp输入，实测SHA256匹配B固定`0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`。
+- 早期`combined-1`因本组新Attribute缺限定名失败；`combined-2`定位为辅助工具混用了NetStandard Runtime与mscorlib Editor参考，统一真实Mono BCL后`combined-3/4/5/pre-review`完整通过。没有删源文件、排除Unity作者代码或关闭警告绕过编译。
+
+## 原生与Player验收入口
+
+- `Tools/Domain/Verify-Domain.ps1 -Mode Tests -Run pre-review-final-tests`已编译全部13项普通原生用例和公开消费者源，未运行；仅有真实TestRunner3.5参考对离线NUnit3.14的CS1701 warning，未抑制。辅助测试程序集使用真实friend名称`YLFramework.Tests.PlayMode`；另把Player模板单独按非friend `Assembly-CSharp`编译，防止误用internal接口。
+- 13项包括实际UGUI Image/Button与显式指示器、退订/重启、Logger默认静默/后继handler、Skill池跨owner与配置不变、Buff叠加/效果缓存/配置不变、Mission奖励/条件/Reset/回调内移除、真实ResourceSystem/AssetLease配可控输入来源、Inactive暂停与实际场景卸载、三个领域根正确删除范围/外部资产保留、参数同步改名Undo及关闭Domain Reload连续两Play。输入来源仅为可控IResourceSource，不模拟任何Unity原生行为；真正Resources后端另在Player消费者准备。
+- 提供`ConfigCount/HostCount/EffectOwnerCount`只读轻量诊断。原生用例拒绝接管已登记领域/Resource权威，生成资产/场景/日志均为自己命名的内容。双Play用例要求验收owner预先配置关闭Domain Reload，本测试不写ProjectSettings。
+- Player源与创建器在`Assets/YLFramework/Tests/Fixtures/Extensions/Domain/*.cs.txt`，专用`link.xml.txt`只保留接收夹具三个反射子类，不保整Runtime。`Tools/Domain/Prepare-DomainPlayerProbe.ps1 -Run <新名称>`只在本组Temp生成接收资产脚本，不打开工程/Editor。后续独立无XF接收工程启用`YL_DOMAIN_PLAYER_PROBE`并运行夹具菜单创建自己的Resources根/子资产，再分别做Mono和IL2CPP Low；类创建只来自配置FullName，无静态new/typeof子类。
+- 公开Player消费者覆盖默认Logger无副作用/五类日志/文件独占释放/handler归还、红点分段、真实Resources catalog显式根类型+域Lease、Skill释放冷却、定时Buff、Mission完成和归还；输出`YL_DOMAIN_PLAYER_PASS`才可算运行通过。本轮没有该输出，不计Player通过。
+- `DomainClosureRunner`读取当前Player profile及单独消费者程序集真实引用，确认均无XF、UnityEditor或可选Excel backend；这是**程序集引用检查**而不是Unity/Mono Player/IL2CPP构建结果。
+- 此前原生准备过程编译发现测试API命名空间、UI/CoreModule参考、friend override级别和领域树构造次序问题，已按实际Test Framework1.3.9源码/真实SDK修正后重跑，不通过stub补类型。
+
+## 完整引擎待验矩阵
+
+| 门 | 输入/操作 | 必须观察 | 本轮 |
+|---|---|---|---|
+| Unity导入/编译 | 先B后C，可选symbol按需开启，Unity生成全部新meta | 无丢失引用、循环依赖、Player的Editor泄漏；插件Editor-only | 未运行 |
+| Reddot真实UI | UGUI、嵌套业务节点、同路径两来源、禁用/缓存显示/销毁 | 只动指示器、精准释放、刷新与退订；原游戏UI不干扰 | 已备自动用例，缓存View人工补验 |
+| Logger独立/共存 | 五类Debug、连续启停、后台线程/递归、旧Logger或后继handler | 默认不创建/写盘/抢handler；每会话独立，最后writer可独占打开 | 托管部分已验，其余未运行 |
+| 作者资产/GUI | 创建/复制/删除/拖排、保存重开、脚本/GUID与图标、条件/奖励/参数、Undo | 类型/父引用/ID保持；只删拥有资产；窗口无陈旧缓存 | 自动与人工场景已备，未运行 |
+| xlsx原生 | 三根新旧/派生条目、效果ID、无效引用、差异/取消、脏/陈旧资产 | AssetDatabase事务与真实GUI正确；已知两项未实现不可计验收 | SO用例仅编译 |
+| Resource与宿主 | 三域根租约、外部独立租约、CLR关闭、Component inactive/destroy、场景卸载 | 不关Resource权威，计数归零，晚回调不写旧对象 | 已备未运行 |
+| 双Play | 外部配置Disable Domain Reload，连续两次Play | 旧path token不撤新来源、handler不串会话、writer释放、三域无旧句柄 | 已备未运行 |
+| 无XF Mono/IL2CPP Low | 独立接收工程、显式类型catalog、夹具专用反射保留 | 真实构建运行PASS，资源/池/回调关闭，含Logger无XF与旧Logger共存变体 | 消费者与引用闭包已编译；构建/运行未做 |
+| 分发/回归 | owner汇总MIT版权、保留GUID、正式导出/首导入、原场景回归 | 新能力不改变原XF与既有YL契约/存档/日志/游戏数据 | 未运行 |

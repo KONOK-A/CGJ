@@ -14,8 +14,7 @@ namespace YLFramework.BuffSystem
 
             if (skillsConfig != null)
             {
-                string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
-                string dir = string.Format("Assets/YLFrameworkData/Buff/Buffs/{0}", guid);
+                string dir = BuffsConfigController.GetBuffConfigDataPath(skillsConfig);
                 AssetDatabase.DeleteAsset(dir);
             }
 

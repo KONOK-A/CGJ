@@ -111,6 +111,7 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("任务类型文件对应的guid")]
         [HideInInspector]
+        [YLFramework.Excel.ExcelIgnore]
         public string mission_type_guid;
 
         /// <summary>

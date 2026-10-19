@@ -6,6 +6,7 @@ namespace YLFramework.Tests.Extensions.Domain
 {
     public class MissionOwnerTests
     {
+        [SetUp] public void Isolated() => Assert.That(MissionManager.ConfigCount, Is.Zero, "只在无既有领域配置的验收场景运行。");
         [Test] public void RuntimeConditionsRewardsResetAndReentrantRemovalDoNotModifyAssets()
         {
             var root = ScriptableObject.CreateInstance<MissionsConfig>();

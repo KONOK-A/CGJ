@@ -32,21 +32,43 @@ if ($Mode -eq 'Tests') {
     $sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\PlayMode\Extensions\Domain') -Recurse -Filter '*.cs' | ForEach-Object FullName)
     $references += Join-Path $root 'Temp\UI.Panel.Offline\EditorTools\YLFramework.Editor.dll'
     $references += @(Get-ChildItem -LiteralPath (Join-Path $UnityData 'Managed') -Filter 'UnityEditor*.dll' | ForEach-Object FullName)
+    $references += @(Get-ChildItem -LiteralPath (Join-Path $UnityData 'Managed\UnityEngine') -Filter 'UnityEditor*.dll' | ForEach-Object FullName)
+    $references += Join-Path $UnityData 'Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.2d-7.0.4\ScriptAssemblies\UnityEngine.UI.dll'
     $references += 'G:\Unity\Projects\CGJ2024\Library\ScriptAssemblies\UnityEngine.TestRunner.dll'
+    $references += 'G:\Unity\Projects\CGJ2024\Library\ScriptAssemblies\UnityEditor.TestRunner.dll'
+    $sources += Join-Path $root 'Assets\YLFramework\Tests\Fixtures\Extensions\Domain\DomainPlayerProbe.cs.txt'
+    $sources += Join-Path $root 'Assets\YLFramework\Tests\Fixtures\Extensions\Domain\DomainFixtureAuthoring.cs.txt'
 }
 $sources += Join-Path $root 'Tools\UIPanelOfflineRunner.cs'
 foreach ($path in @($mono, $dotnet, $compiler) + $references + $sources) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing real input: $path" }
 }
-$arguments = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:exe', "/out:$output\DomainTests.exe")
-if ($Mode -eq 'Tests') { $arguments += '/define:UNITY_EDITOR' }
+$assemblyName = if ($Mode -eq 'Tests') { 'YLFramework.Tests.PlayMode.exe' } else { 'DomainTests.exe' }
+$arguments = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:exe', "/out:$output\$assemblyName")
+if ($Mode -eq 'Tests') { $arguments += '/define:UNITY_EDITOR;YL_DOMAIN_PLAYER_PROBE' }
 $arguments += $references | ForEach-Object { "/reference:$_" }
 $arguments += $sources
 $response = Join-Path $output 'compile.rsp'
 [IO.File]::WriteAllLines($response, [string[]]@($arguments | ForEach-Object { '"' + $_ + '"' }), [Text.UTF8Encoding]::new($false))
 & $dotnet $compiler /noconfig "@$response"
 if ($LASTEXITCODE -ne 0) { throw 'Domain test source compilation failed.' }
-if ($Mode -eq 'Tests') { "Prepared Domain EditMode/PlayMode tests compile with real references; not executed. Output: $output"; return }
+if ($Mode -eq 'Tests') {
+    $player = Join-Path $root 'Temp\UI.Panel.Offline\Runtime\YLFramework.Runtime.dll'
+    $consumer = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:library', '/define:YL_DOMAIN_PLAYER_PROBE', "/out:$output\Assembly-CSharp.dll")
+    $consumer += $references | Where-Object { $_ -ne $runtime } | ForEach-Object { "/reference:$_" }
+    $consumer += @("/reference:$player", (Join-Path $root 'Assets\YLFramework\Tests\Fixtures\Extensions\Domain\DomainPlayerProbe.cs.txt'))
+    $consumerRsp = Join-Path $output 'consumer.rsp'
+    [IO.File]::WriteAllLines($consumerRsp, [string[]]@($consumer | ForEach-Object { '"' + $_ + '"' }), [Text.UTF8Encoding]::new($false))
+    & $dotnet $compiler /noconfig "@$consumerRsp"
+    if ($LASTEXITCODE -ne 0) { throw 'Standalone public consumer source compilation failed.' }
+    $closureArgs = @('/nologo', '/nostdlib+', '/target:exe', "/out:$output\DomainClosure.exe", "/reference:$framework\mscorlib.dll", (Join-Path $PSScriptRoot 'DomainClosureRunner.cs'))
+    & $dotnet $compiler /noconfig @closureArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Closure reader compilation failed.' }
+    & $mono (Join-Path $output 'DomainClosure.exe') $player (Join-Path $output 'Assembly-CSharp.dll')
+    if ($LASTEXITCODE -ne 0) { throw 'Player reference closure failed.' }
+    "Prepared Domain EditMode/PlayMode and standalone public Player consumer compile with real references; not executed. Output: $output"
+    return
+}
 foreach ($path in $references | Where-Object { $_ -notlike "$framework*" }) { Copy-Item -LiteralPath $path -Destination $output -Force }
 & $mono (Join-Path $output 'DomainTests.exe') @Classes
 $result = $LASTEXITCODE

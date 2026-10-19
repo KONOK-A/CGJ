@@ -25,6 +25,7 @@ namespace YLFramework.MissionSystem
         private static readonly Dictionary<int, string> Keys = new();
         private static readonly Dictionary<Type, ObjectPool<MissionBase>> Pools = new();
         private static bool _stopping;
+        public static int ConfigCount => Configs.Count;
         static MissionManager()
         {
             SingletonSessionState.RegisterSessionReset(Shutdown);

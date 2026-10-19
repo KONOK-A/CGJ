@@ -7,6 +7,7 @@ namespace YLFramework.Tests.Extensions.Domain
 {
     public class BuffOwnerTests
     {
+        [SetUp] public void Isolated() => Assert.That(BuffManager.ConfigCount, Is.Zero, "只在无既有领域配置的验收场景运行。");
         private sealed class Host : IAddableBuff
         {
             public List<BuffBase> Buffs { get; } = new();

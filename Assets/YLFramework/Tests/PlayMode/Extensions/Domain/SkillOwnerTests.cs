@@ -7,6 +7,7 @@ namespace YLFramework.Tests.Extensions.Domain
 {
     public class SkillOwnerTests
     {
+        [SetUp] public void Isolated() => Assert.That(SkillManager.ConfigCount, Is.Zero, "只在无既有领域配置的验收场景运行。");
         private sealed class Host : IEquippableSkill
         {
             public Dictionary<int, SkillBase> Skills { get; } = new();
@@ -15,7 +16,7 @@ namespace YLFramework.Tests.Extensions.Domain
         [UnityEngine.Scripting.Preserve]
         public sealed class ReentrantSkill : SkillBase
         {
-            protected override void OnRemove() => SkillManager.RemoveSkills(Releaser, SkillData.id);
+            protected internal override void OnRemove() => SkillManager.RemoveSkills(Releaser, SkillData.id);
         }
 
         [Test] public void ConfigIsCopiedAndClrHostCloseReturnsSkillAndCallbacks()

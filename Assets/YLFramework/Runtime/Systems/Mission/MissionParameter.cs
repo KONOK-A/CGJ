@@ -33,6 +33,7 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("参数名称")]
         [Header("参数名称")]
+        [YLFramework.Excel.ExcelScriptableObjectID]
         public string name;
 
         /// <summary>
