@@ -16,8 +16,8 @@
 
 | 模块 | 状态 | 候选提交/证据 |
 |---|---|---|
-| Reddot | 源码候选完成，引擎待验 | 首个候选提交见Git记录；9项托管红→绿，Runtime辅助编译退出0/41个既有warning |
-| Logger | 待实施 | 默认关闭，不碰原embedded Logger/Analyzer |
+| Reddot | 源码候选完成，引擎待验 | `5c04f2b`；9项托管红→绿，Runtime辅助编译退出0/41个既有warning |
+| Logger | 源码候选完成，引擎待验 | 6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
 | Skill | 待实施 | 保留释放/中断/冷却及普通作者流程 |
 | Buff | 待实施 | 保留叠加/效果及普通作者流程 |
 | Mission | 待实施 | 保留条件/进度/奖励及普通作者流程，不改Save |
@@ -45,3 +45,13 @@
 - `Tools/Domain/Verify-Domain.ps1 -Mode Runtime`使用真实Unity引用辅助编译，退出0、41个既有warning；`-Run reddot-red`实跑9失败（YL能力缺失）；`-Run reddot-green`实跑9通过、0失败/跳过，证据为各自`Temp/Domain.Offline/<Run>/results.xml`。
 - `ReddotLifecycleTests.OnlyExplicitIndicatorChangesAndDisabledHostUnsubscribes`已准备，未运行。覆盖嵌套UI业务子物体不变、停用退订、重新启用刷新、自指示器拒绝；后续补实际UGUI/缓存View/场景与双Play消费者。
 - 原缺陷由Plan及只读原源码确认，未运行原XF测试，不把YL缺能力红例冒称原XF引擎Bug复现。
+
+## Logger使用与验证
+
+- `YLFramework.Logging.LoggerManager.Enable(new LoggerOptions { WriteToFile = true })`为唯一Unity接管入口，只在有效Play主线程显式调用；默认只读`Current/IsEnabled`不创建宿主、不访问目录、不写盘、不抢handler。Enable默认也不写盘，必须显式`WriteToFile=true`。关闭调用`Disable()`，宿主disable/destroy/quit亦释放。
+- 默认目录为`Application.persistentDataPath/YLFramework/Logs`，可以配置独立目录。过滤字典在创建会话时复制，null全开、空表全关。事件始终触发，回调线程为日志原线程，不得访问非线程安全Unity API或等待会记录日志的其他线程。
+- 沿用原同步writer/立即Flush、五类过滤、格式化和事件职责；加UTC高精度+GUID与CreateNew防会话碰撞、串行锁、回调逐项异常隔离。嵌套日志明确丢弃并计数，格式化ToString也在递归门内；失败通过`LastError`及实际`LogFilePath`诊断，不递归Debug报错或静默冒称成功。
+- 只归还仍由自己拥有的handler；后续handler接管后不覆盖。已关闭会话若仍被后续handler串联，只透明转发原handler，不重开文件/监听。没有新后台线程、Analyzer、整Runtime AlwaysLinkAssembly或Debug批量替换。
+- `logger-red`：9通过/5缺能力失败；`logger-green`：14通过；新增格式化重入直接回归`logger-format-red`为14通过/1失败（多发nested-format），修复后`logger-format-green`为15通过/0失败/跳过。并发100条完整记录、两会话文件独占读回、文件错误、过滤/事件/递归均实际执行。Runtime辅助编译退出0/41个既有warning。
+- Context7没有提供精确2022.3 ILogHandler资料，补读Unity 2022.3官方Scripting API，接口/前任handler用法亦由实际程序集编译确认；不外推线程Unity行为。
+- `LoggerLifecycleTests.DefaultIsPassiveAndLaterHandlerKeepsOwnershipOnClose`已准备未运行。无XF独立Mono/IL2CPP Low消费者、五类真实Debug、同秒连续双Play、disable/destroy/quit释放、原Logger共存仍待引擎门，旧Logger阶段9证据不能替代。
