@@ -20,6 +20,11 @@ namespace YLFramework.Tests.Extensions.Data
         private string assetFolder;
         private string diskFolder;
         private Owner owner;
+        public sealed class ReferenceRow
+        {
+            [ExcelScriptableObjectID] public int Id;
+            public Object Reference;
+        }
         [SetUp] public void SetUp()
         {
             string name = "YLExcel-" + Guid.NewGuid().ToString("N");
@@ -37,6 +42,11 @@ namespace YLFramework.Tests.Extensions.Data
         [TearDown] public void TearDown()
         {
             foreach (var window in Resources.FindObjectsOfTypeAll<EditorWindow>().Where(w => w.GetType().FullName == "YLFramework.Excel.Editor.ExcelPreviewWindow" && w.titleContent.text == windowTitle)) window.Close();
+            if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
+            {
+                Console.WriteLine("Preserved failed Excel asset fixture: " + assetFolder + " | " + diskFolder);
+                return;
+            }
             if (!string.IsNullOrEmpty(assetFolder)) AssetDatabase.DeleteAsset(assetFolder);
         }
         private const string windowTitle = "YLExcel-Test-Preview";
@@ -257,6 +267,87 @@ namespace YLFramework.Tests.Extensions.Data
             }
             Assert.That(OwnerBytes(), Is.EqualTo(before));
             Assert.That(owner.Rows.Select(r => r.Id), Is.EqualTo(new[] { 1, 9 }));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void DeletingNewReferenceAfterPreviewRejectsCommitAndPreservesOriginalTarget(bool plainList)
+        {
+            string referencePath = assetFolder + "/NewReference.asset";
+            var reference = ScriptableObject.CreateInstance<AssetRow>();
+            reference.Id = 42;
+            AssetDatabase.CreateAsset(reference, referencePath);
+            string path = Path.Combine(diskFolder, "stale-reference.xlsx");
+            byte[] before = OwnerBytes();
+            var original = new ReferenceRow { Id = 1 };
+            var values = new List<ReferenceRow> { original };
+            object preview;
+            if (plainList)
+            {
+                ExcelAuthoringTests.Call("ListToExcel", typeof(ReferenceRow), new List<ReferenceRow> { new ReferenceRow { Id = 1, Reference = reference } }, path, "Sheet1");
+                preview = ExcelAuthoringTests.Call("PreviewList", typeof(ReferenceRow), path, values, null);
+            }
+            else
+            {
+                var changed = Object.Instantiate(owner.Rows[0]);
+                try
+                {
+                    changed.Reference = reference;
+                    Export(new List<AssetRow> { changed, owner.Rows[1] }, path);
+                }
+                finally { Object.DestroyImmediate(changed); }
+                preview = Preview(path, initialize: row => row.Parent = owner);
+            }
+            using (var plan = (IDisposable)preview)
+            {
+                Assert.That(ExcelAuthoringTests.Errors(plan), Is.Empty);
+                Assert.That(AssetDatabase.DeleteAsset(referencePath), Is.True);
+                Assert.That(OwnerBytes(), Is.EqualTo(before));
+                Assert.That(ExcelAuthoringTests.Commit(plan, true), Is.EqualTo("Failed"));
+                Assert.That(ExcelAuthoringTests.Errors(plan), Is.Not.Empty);
+            }
+            Assert.That(OwnerBytes(), Is.EqualTo(before));
+            Assert.That(owner.Rows.Select(r => r.Id), Is.EqualTo(new[] { 1, 9 }));
+            Assert.That(owner.Rows[0].Reference, Is.Null);
+            Assert.That(values[0], Is.SameAs(original));
+            Assert.That(values[0].Reference, Is.Null);
+        }
+
+        [Test]
+        public void InjectedFailureAfterCreatingAnAssetRestoresOriginalsAndRemovesOwnedNewAsset()
+        {
+            string folder = UseStandaloneRows();
+            var previous = owner.Rows.ToArray();
+            var originalFiles = new Dictionary<string, byte[]>();
+            foreach (var path in previous.Select(AssetDatabase.GetAssetPath).Concat(new[] { AssetDatabase.GetAssetPath(owner) }))
+            {
+                originalFiles.Add(path, File.ReadAllBytes(path));
+                originalFiles.Add(path + ".meta", File.ReadAllBytes(path + ".meta"));
+            }
+            var staged = new List<AssetRow> { Object.Instantiate(previous[0]), ScriptableObject.CreateInstance<AssetRow>(), ScriptableObject.CreateInstance<AssetRow>() };
+            try
+            {
+                staged[0].Text = "partially updated before failure";
+                staged[1].Id = 2;
+                staged[2].Id = 3;
+                foreach (var row in staged) { row.Parent = owner; row.hideFlags = HideFlags.HideAndDontSave; }
+                var existing = previous.ToDictionary(row => row.Id.ToString());
+                var destinations = new Dictionary<string, string> { ["1"] = folder + "/1.asset", ["2"] = folder + "/2.asset" };
+                // 受控缺键故障在更新1、实际创建2后触发；不把此测试冒称为真实Unity IO故障复现。
+                var api = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Excel.Editor.ExcelAuthoring")).Single(t => t != null);
+                var apply = api.GetMethod("ApplyAssets", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(typeof(AssetRow));
+                var failure = Assert.Throws<TargetInvocationException>(() => apply.Invoke(null, new object[]
+                {
+                    owner.Rows, owner, typeof(Owner).GetField("Rows"), AssetDatabase.GetAssetPath(owner), previous, staged, existing, destinations, originalFiles, folder
+                }));
+                Assert.That(failure.InnerException, Is.TypeOf<KeyNotFoundException>(), "A rollback failure must not be hidden by weakening this assertion.");
+                foreach (var file in originalFiles) Assert.That(File.ReadAllBytes(file.Key), Is.EqualTo(file.Value), file.Key);
+                Assert.That(File.Exists(folder + "/2.asset"), Is.False);
+                Assert.That(File.Exists(folder + "/2.asset.meta"), Is.False);
+                Assert.That(owner.Rows.Select(row => row.Id), Is.EqualTo(new[] { 1, 9 }));
+                Assert.That(AssetDatabase.LoadAssetAtPath<AssetRow>(folder + "/1.asset").Text, Is.EqualTo("old"));
+            }
+            finally { foreach (var row in staged) if (row != null) Object.DestroyImmediate(row); }
         }
     }
 }

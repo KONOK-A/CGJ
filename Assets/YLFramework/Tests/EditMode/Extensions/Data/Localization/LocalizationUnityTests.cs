@@ -14,6 +14,7 @@ namespace YLFramework.Tests.Extensions.Data
         [SetUp]
         public void SetUp()
         {
+            Assert.That(LocalizationManager.Configs, Is.Empty, "Do not close another localization owner.");
             LocalizationManager.Shutdown();
             root = ScriptableObject.CreateInstance<MultiLanguageConfigs>();
             root.name = "Localization-test-root";

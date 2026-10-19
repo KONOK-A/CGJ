@@ -23,6 +23,7 @@ namespace YLFramework.Tests.Extensions.Data
         public void SetUp()
         {
             Assert.That(ResourceSystem.Current, Is.Null, "Do not take over another Resource owner.");
+            Assert.That(LocalizationManager.Configs, Is.Empty, "Do not close another localization owner.");
             LocalizationManager.Shutdown();
             hadPreference = PlayerPrefs.HasKey(LocalizationManager.LanguagePreferenceKey);
             preference = PlayerPrefs.GetInt(LocalizationManager.LanguagePreferenceKey);
@@ -99,6 +100,94 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
+        public void ReentrantShutdownDuringSourceStart_DisposesRequestReturnedAfterOwnerClosed()
+        {
+            var root = Root("late");
+            var address = new ResourceAddress("localization-test", "root");
+            source = new ControlledSource { OnLoad = LocalizationManager.Shutdown };
+            using var initialize = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[]
+            {
+                new ResourceCatalog(address.ProjectId, new[] { new ResourceCatalogEntry("root", address, new ResourceLocation(source.Id, "root", typeof(MultiLanguageConfigs))) })
+            }, new IResourceSource[] { source }));
+            resources = initialize.TakeResult();
+            using var handle = LocalizationManager.LoadConfigAsync(resources, address);
+            Assert.That(handle.IsDisposed, Is.True);
+            Assert.That(handle.IsLoading, Is.False, "A closed owner must not retain a new pending consumer.");
+            source.Operations[0].Finish(root);
+            Assert.That(LocalizationManager.Configs.Count, Is.Zero);
+            Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
+            Assert.That(source.Releases, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ShutdownRejectsRegistrationAndLoadingFromRootReleaseAndClearsReentrantListeners()
+        {
+            var root = Root("first");
+            var other = Root("must not register");
+            other.Languages[0].languagesInfo[0].id = 2;
+            var address = new ResourceAddress("localization-test", "root");
+            source = new ControlledSource();
+            using var initialize = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[]
+            {
+                new ResourceCatalog(address.ProjectId, new[] { new ResourceCatalogEntry("root", address, new ResourceLocation(source.Id, "root", typeof(MultiLanguageConfigs))) })
+            }, new IResourceSource[] { source }));
+            resources = initialize.TakeResult();
+            using var handle = LocalizationManager.LoadConfigAsync(resources, address);
+            source.Operations[0].Finish(root);
+            Exception addError = null;
+            Exception loadError = null;
+            var calls = 0;
+            source.OnRelease = () =>
+            {
+                try { LocalizationManager.AddConfig(other); } catch (InvalidOperationException error) { addError = error; }
+                try { LocalizationManager.LoadConfigAsync(resources, address); } catch (InvalidOperationException error) { loadError = error; }
+                LocalizationManager.Changed.Register(() => calls++);
+            };
+            LocalizationManager.Shutdown();
+            Assert.That(addError, Is.TypeOf<InvalidOperationException>());
+            Assert.That(loadError, Is.TypeOf<InvalidOperationException>());
+            Assert.That(source.Operations.Count, Is.EqualTo(1), "Closing must reject before a second native producer starts.");
+            Assert.That(handle.IsDisposed, Is.True);
+            Assert.That(LocalizationManager.Configs, Is.Empty);
+            LocalizationManager.Refresh();
+            Assert.That(calls, Is.Zero, "Listeners added from closing callbacks must not escape the closing owner.");
+            Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
+        }
+
+        [Test]
+        public void ShutdownAttemptsEveryOwnerWhenNativeRetentionReleaseThrows()
+        {
+            var first = Root("first");
+            var second = Root("second");
+            second.Languages[0].languagesInfo[0].id = 2;
+            var firstAddress = new ResourceAddress("localization-test", "first");
+            var secondAddress = new ResourceAddress("localization-test", "second");
+            source = new ControlledSource();
+            using var initialize = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[]
+            {
+                new ResourceCatalog("localization-test", new[]
+                {
+                    new ResourceCatalogEntry("first", firstAddress, new ResourceLocation(source.Id, "first", typeof(MultiLanguageConfigs))),
+                    new ResourceCatalogEntry("second", secondAddress, new ResourceLocation(source.Id, "second", typeof(MultiLanguageConfigs)))
+                })
+            }, new IResourceSource[] { source }));
+            resources = initialize.TakeResult();
+            using var firstHandle = LocalizationManager.LoadConfigAsync(resources, firstAddress);
+            using var secondHandle = LocalizationManager.LoadConfigAsync(resources, secondAddress);
+            var released = 0;
+            source.Operations[0].Finish(first, retention: new CallbackRetention(() => { released++; throw new InvalidOperationException("first retention failed"); }));
+            source.Operations[1].Finish(second, retention: new CallbackRetention(() => { released++; throw new InvalidOperationException("second retention failed"); }));
+            var error = Assert.Throws<AggregateException>(LocalizationManager.Shutdown);
+            Assert.That(error.InnerExceptions.Count, Is.EqualTo(2));
+            Assert.That(released, Is.EqualTo(2));
+            Assert.That(firstHandle.IsDisposed && secondHandle.IsDisposed, Is.True);
+            Assert.That(LocalizationManager.Configs, Is.Empty);
+            Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
+            using var next = LocalizationManager.AddConfig(Root("new owner after close"));
+            Assert.That(next.Config, Is.Not.Null, "A failed release must not permanently poison the closing barrier.");
+        }
+
+        [Test]
         public void ImageLanguageSwitch_LateOldProducerCannotReplaceNewDisplay()
         {
             var root = Root("text");
@@ -149,7 +238,14 @@ namespace YLFramework.Tests.Extensions.Data
 
         private sealed class ControlledOperation : ResourceSourceOperation
         {
-            public void Finish(Object value, Exception error = null) => Complete(value, error);
+            public void Finish(Object value, Exception error = null, IDisposable retention = null) => Complete(value, error, retention);
+        }
+
+        private sealed class CallbackRetention : IDisposable
+        {
+            private Action close;
+            public CallbackRetention(Action close) => this.close = close;
+            public void Dispose() { var callback = close; close = null; callback?.Invoke(); }
         }
 
         private sealed class ControlledSource : IResourceSource
@@ -158,11 +254,13 @@ namespace YLFramework.Tests.Extensions.Data
             public bool SupportsSynchronousLoad => false;
             public readonly List<ControlledOperation> Operations = new();
             public int Releases;
+            public Action OnLoad;
+            public Action OnRelease;
             public void Validate(ResourceCatalogEntry entry) { }
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => throw new NotSupportedException();
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type)
-            { var operation = new ControlledOperation(); Operations.Add(operation); return operation; }
-            public void Release(Object value) => Releases++;
+            { OnLoad?.Invoke(); var operation = new ControlledOperation(); Operations.Add(operation); return operation; }
+            public void Release(Object value) { Releases++; OnRelease?.Invoke(); }
         }
     }
 

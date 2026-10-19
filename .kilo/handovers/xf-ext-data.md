@@ -11,8 +11,18 @@
 
 - Localization：产品、原布局作者工作流和测试已实现；离线纯逻辑12/12及组合辅助编译通过，尚非Unity验收。补确定性回退、同数量内容变更、重复ID、根/事件/图片资源责任、晚到隔离和直接刷新。
 - DataAssets/SO：保留根/子资产与类型绑定、CRUD/排序的候选已落齐，纯逻辑10/10及真实参考辅助编译通过；无新Catalog，资产/GUI/PlayMode仍未运行。
-- Excel：真实List/SO/JSON作者API、MiniExcel后端和已选SO根菜单已落盘；父独立真实xlsx18/18绿及完整可选Editor闭包编译通过；12项Unity资产/GUI用例作为待引擎执行的准备，不是GUI验收。接点见下节。
-- Save/Archive：单一`SaveStore`文件引擎与原`SaveManager`Unity门面已实现，父独立真实文件33/33、门面及既有纯Json回归39/39通过（包含前述33项），待组Review与Unity/Player验收；兼容策略见下节。
+- Excel：真实List/SO/JSON作者API、MiniExcel后端和已选SO根菜单已落盘；审查修复后真实xlsx19/19绿，完整可选Editor闭包编译通过；15项Unity资产/GUI用例仅准备/辅助编译，不是GUI验收。接点见下节。
+- Save/Archive：单一`SaveStore`文件引擎与原`SaveManager`Unity门面已实现并提交，父独立真实文件33/33、门面及既有纯Json回归39/39通过（包含前述33项）；组Review未发现额外可确认的Critical/Important，仍待Unity/Player验收；兼容策略见下节。
+
+## 组Review收口状态
+
+- 唯一一次新上下文整体Review已完成，范围为B0至全部四个候选以及Loc启动重入关闭保护、诊断context和证据冻结脚本。结果无Critical、3项Important；SO/Save未发现其他可确认的重要问题。没有再做逐模块独立Review或二次Review。
+- Important 1已代码修复并真实红绿：有损Export不再参与差异判定，Before/After展示实际字段状态；例如Scaled的21→20即使两边Export均为2也明确列Update。新xlsx回归`LossyConversionAlreadyPresentAtPreviewStillReportsActualFieldUpdate`从18通过/1失败到19/19通过，原红例在`Temp/Extensions.Data.Excel/red-review-lossy-diff`，绿及最终证据在`green-review-lossy-diff`、`group-final-review-fixes`。
+- Important 2已代码修复，原生回归未运行：提交前比对暂存原字段状态，并按GUID/localFileID/类型反解核验持久引用身份，删除/替换的新引用不得悄悄变Missing/null后Applied。List/SO各一项`DeletingNewReferenceAfterPreviewRejectsCommitAndPreservesOriginalTarget`已准备/编译；此处只核验身份/存活，不承诺冻结依赖资产内容。
+- Important 3已代码修复，原生回归未运行：Localization关闭期拒绝AddConfig/LoadConfigAsync及内部Register，`try/finally`重置静态/事件，所有旧owner逐一尝试释放，原生retention错误聚合后报告，不吞错。新增两项PlayMode测试覆盖释放中重入登记/加载、释放异常仍处理其他owner与收尾事件；与“启动时重入关闭”分别覆盖。
+- 额外补了真正`ApplyAssets`的受控部分失败回滚测试准备：先更新旧对象、创建新资产，再以缺失目标键故障验证原字节/引用恢复和仅清理本次新资产。没有产品测试钩子；这是明确的受控故障注入，不是已执行Unity真实IO故障证明。失败fixture保留。该测试仍须主Unity运行。
+- 裁定：保留普通List整体替换语义，不擅自复制忽略字段；差异状态包含会被替换的实际字段，不能用ExcelIgnore或有损显示掩盖它。SO仍从旧对象暂存副本并按身份更新。若消费者曾把Before/After当作xlsx显示文本，需改为将其视为实际字段状态文本。
+- 三项均已进入最终源修复；只有Important 1完成运行时红绿，Important 2/3及资产部分回滚的Unity运行证明仍是主线接收门，不能在此标为原生验收通过。必须连同最终修复提交接收，而非只取四个早期候选。
 
 ## Excel真实接点
 
@@ -26,7 +36,7 @@
 - 已选SO根入口`DataAssetsExcelCommands.PreviewImport(ScriptableObjectConfigs root, string path)`和`Export(root, path)`真实可用；菜单`Assets/YLFramework/Excel/Preview Import Selected Data Root`与`Export Selected Data Root`。自身可选asmdef引用`YLFramework.Editor`，普通Editor不反向引用。暂存条目设置`parent=root`，成功清缓存；取消不创建数据目录，空根也不依赖既有`excel_path`。
 - 通用UI入口`ExcelAuthoringCommands.ImportList/ExportList/ImportScriptableObjects/ExportScriptableObjects/ShowPreview`及`YLFramework/Excel/Workbook To JSON`。导入预览包含新增/更新/删除和坐标错误，保存主资产前必须干净，过期工作簿或目标变化拒绝提交；导出整工作簿覆盖须确认，不承诺保留原多sheet格式。
 - 后端MiniExcel `1.31.2`，Apache-2.0，netstandard2.0/无NuGet包依赖；来源上游tag`1.31.1-1.31.2` commit`f1498a2d162debca9a1e9153cf2249131a75eeb0`。固定nupkg SHA256：`f11a54c1bd5b3fb3332dc5d4e40ade59a3539cb8de6d087a245575457d66379a`。本组自有恢复脚本`Tools/Extensions/Data/Excel/Restore-MiniExcel.ps1`。
-- 父独立执行`Tools/Extensions/Data/Excel/Run-ExcelOffline.ps1 -Run parent-pre-review`：真实xlsx18/18、0失败/跳过；全Runtime458源39warning、全Editor102源4warning、完整可选Excel7源及测试5源0warning均辅助编译退出0；没有`YL_EXCEL_OFFLINE`条件排除。当前候选尚待模块提交和组Review，不是Unity/AssetDatabase/GUI结果。
+- 父独立执行`Tools/Extensions/Data/Excel/Run-ExcelOffline.ps1 -Run parent-pre-review`：真实xlsx18/18、0失败/跳过；全Runtime458源39warning、全Editor102源4warning、完整可选Excel7源及当时测试5源0warning均辅助编译退出0；没有`YL_EXCEL_OFFLINE`条件排除。子任务最终`green-delivery`另完整编译新增同名Fixture后的测试7源并再次18/18，12项Unity作者用例仅编译；候选已提交，正在组Review，不是Unity/AssetDatabase/GUI结果。
 - DLL实测SHA256 `0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`与固定清单一致。现有`Editor/Distribution/ExportUnityPackage.ExportRoots`不含`Integrations`，默认导出不会带入此后端；不是只靠`Dependencies.json`标记宣称隔离。可选分发应另带完整adapter与`Licenses`，Unity导入后还须核对PluginImporter为Editor-only并生成meta。
 
 ## Save设计与兼容策略（实施前确定）
@@ -37,7 +47,7 @@
 - 取消在单文件原子提交点前有效，提交后报告成功；同根排他owner、同槽串行、跨槽可并发，关闭取消排队并排空。磁盘失败不推进对象缓存。
 - Save独立收口实测：`Run-SaveSafety.ps1`为33/33；`-WithFacade`为39/39（33核心+2真实门面+4既有纯Json）；`-ReferenceOnly`真实Unity2022.3/.NETStandard2.1参考辅助编译退出0、2个CS1701（Json.NET/NUnit 2.0→2.1引用匹配）。不依赖虚拟Unity，不执行Unity原生API来冒充通过。
 - 已落盘的新读取入口`ReadObject<T>/ReadObjectAsync<T>/ReadGlobalSetting<T>`返回`SaveReadResult<T>`，携带主件/备份/缺失来源和缓存标志，缓存命中不隐藏备份来源；`IndexNeedsRecovery`显式报告索引恢复要求。`RestoreObjectBackup/RestoreSettingBackup/RestoreIndexBackup`为显式修盘入口，保留损坏原件而非读时自动改盘。
-- 现有`SerializedDictionarySaveTests`将按新门面owner调整必要测试隔离，保留原磁盘/Unity断言；实际数据保护验证只用自有临时目录。
+- 现有`SerializedDictionarySaveTests`已按新门面owner调整必要测试隔离，保留原磁盘/Unity断言；实际数据保护验证只用自有临时目录。
 - 已实际研究ArchiveSystem1.0.7 `ArchiveManager/IArchiveModel`与现有YL Save；复用成熟槽位/模型/当前项组织，统一至`SaveStore`而非复制旧Manager/DES。来源revision `8046fe56f8`，MIT2025由现有根许可保留，概念吸收及来源在此登记。
 - 兼容影响：损坏/IO/权限/版本错误不再静默变默认值；只在确实缺失时建立默认设置；禁止`TypeNameHandling`从JSON实例化CLR类型。删除改为`.deleted-*`软删除，不是安全擦除且不自动清理。保存异步先在调用线程序列化快照；反序列化/Converter异步在线程池，不得调用UnityAPI或重入同owner。缓存继续返回原实例，调用方负责该实例的并发修改。
 - 显式Archive导入现严格拒绝未映射字段，必要字段由目标DTO的`JsonProperty(Required=...)`声明；防止错误DTO静默丢字段后仍报成功。父新增回归真实红32/33→绿33/33，失败源及目标样本保留在`Temp/Extensions.Data.Save/cases/4a68331295a145d49b393b2e57d3196a`，不删原件制造通过。
@@ -52,6 +62,24 @@
 - Save仅在自有临时目录/复制样本验证；不自动读写或转换原Archive `.sav`，没有真实旧档样本不宣称兼容。
 - Localization保留UGUI/TextMesh、Other反射（可绑定TMP公开`text`成员）、资源/网络图片及参数/附加文本；不安装TMP，也不携带联网翻译凭据、Youdao认证或Steam外部作者窗口。后两类非本次离线配置工作流的必要能力，明确未迁入，不伪装为可用；Other反射成员的IL2CPP保留由实际应用配置并待Player验证。
 - Localization语言资产创建仍采用根引用的独立语言文件；显式移除语言只解除引用并可Undo，不删除可能共享的资产文件。作者窗口保留语言排序、搜索、全语言新增/复制/删除条目、类型/内容/备注编辑和保存，图片预览复用既有YL预览工具。
+
+## Localization真实接点
+
+- namespace `YLFramework.Localization`；`LocalizationManager.AddConfig(MultiLanguageConfigs)`或`LoadConfigAsync(ResourceSystem, ResourceAddress)`均返回`LocalizationConfigHandle`。owner保留句柄并在关闭时`Dispose()`；异步句柄提供`IsLoading/Config/Error/IsDisposed`，不会自动挂接未知根或扫描旧XF资产。`Shutdown()`清本域登记/在途等待和事件，不关闭Resource。
+- `RequestedLanguage/Language/Languages`区分请求与当前可用语言，偏好键为`YLFramework.Localization.Language`；`Changed`为YL `IEventSource`，订阅方持有并注销返回token。`GetLanguageInfo/GetString/Refresh`分别查询、格式化、直接刷新，无GameObject强制激活。
+- UI挂`LocalizeString`或`LocalizeImage`并设置ID，另显式登记根。后者复用同对象的`ResourceImage`；`ImageInfo.projectName/imageName/subAsset`解释为YL `ProjectId/Path/SubAsset`，原XF项目名不自动转换为构建地址。Other/TMP绑定完整组件名（如`TMPro.TextMeshProUGUI`）及公开string成员`text`，真实IL2CPP需保留该反射成员。
+- 创建根菜单`Assets/Create/YLFramework/Localization/Multi Language Configs`；作者窗口`YLFramework/Localization/多语言配置`可创建语言、增删复制条目和保存/验证。编辑原资产必须由用户明确选中YL根，不监听或自动保存全部旧配置。
+
+## 承接来源清单
+
+| 模块 | 只读上游 | 本轮承接与局部替换 |
+| --- | --- | --- |
+| Localization | 1.0.9，`743876d52c5fe636effc0b63c34bd261d6cad243`，MIT2024 | 保留根/语言/条目与UGUI/TextMesh/Other、参数/附加文本和语言作者流程；事件与资源加载改接YL，定向修复回退/缓存/重复/缺项/生命周期，不带Youdao/Steam旧外部工具。 |
+| ScriptableObjectConfigs | 1.1.4，`d7b6c171999e05a1840f413e1f3e2080e3853163`，MIT2024 | 保留根/条目字段、具体类型GUID绑定、查询和CRUD/排序；Resource Lease及E0树/预览局部适配，删除和登记碰撞安全加固。 |
+| ExcelSystem | 1.0.7，`725f94f23327de190111573870146af66e9484b6`，MIT2025 | 保留三行表头/转换语义及SO/List/JSON用途；EPPlus不复制，替为固定MiniExcel1.31.2，增加预检/预览/提交事务与已选根适配。 |
+| ArchiveSystem | 1.0.7，冻结包`com.xfkj.xfgameframework.archivesystem@8046fe56f8`，MIT2025 | 吸收模型、槽/当前项与异步/缓存用途，统一改入YL SaveStore；不搬第二Manager、`Assembly-CSharp`猜类型或DES，实现显式复制迁移/恢复和安全并发。 |
+
+上游包及XFAB EncryptTools均只读；没有修改原XF、embedded Logger、主工程或其他worktree。完整根许可/Notices/来源资产汇总仍由集成owner合并本清单。
 
 ## DataAssets真实接点
 
@@ -68,7 +96,10 @@
 - DataAssets：父会话独立执行`Tools/Extensions/Data/DataAssets/Verify-DataAssets.ps1 -Mode Pure`，10/10、0失败/跳过/警告。子任务最终完整辅助编译Player/Editor Runtime及Editor工具均退出0，warning为40/39/4；15个作者、9个PlayMode用例仅编译未执行（PlayMode辅助参考有1个CS1701 NUnit版本警告）。`RemoveConfig(hash)`按registry唯一解析后按根身份撤销，碰撞登记拒绝已纯逻辑实际验证。
 - DataAssets早期缺实现绑定、Save在途类型重复及PowerShell工具失败仅在原会话工具输出留存；其固定路径日志后来被green覆盖，不能冒称独立红例制品。最终10/10结果和当前输入仍真实可用，后续父组合探针改为唯一Run目录冻结原始log/rsp。
 - Save全部时间戳日志和失败case在`Temp/Extensions.Data.Save/{offline,facade,unity-references,cases}`；父严格迁移红例在`offline/tests-20261019-193701-304.log`，绿例在`offline/tests-20261019-193729-933.log`。未执行原Save/JsonUtility联合测试的Unity部分，原断言完整保留；自有`link.xml`仅为索引/槽元数据提供裁剪声明，不代表用户模型、Json.NET或IL2CPP已验收。
+- 未定位的迁移发布AccessDenied原始证据为`Temp/Extensions.Data.Save/offline/tests-20261019-191612-409.log`及`cases/e17ec4429130489dbac95dabbd41bf3e/new.importing-3770b66e78a84366aed0d1a209fc6c0b`。未添加重试或删除原件，后续通过不能替代此风险记录。
 - 首轮组合源码辅助编译：`Tools/Extensions/Data/Verify-DataProfiles.ps1 -Run combined-1`退出0；完整Runtime/Editor-profile/Editor工具分别42/41/4个warning，新增普通EditMode测试源码8文件/0warning、PlayMode测试源码2文件/1warning均编译成功。没有执行其中任何Unity测试。较早Save门面在途状态造成的重复声明编译失败保留在工具调用记录，没有删输入绕过；门面落齐后真实全目录通过。
+- 组Review前最终组合`Verify-DataProfiles.ps1 -Run group-before-review-fixes`同样退出0（42/41/4warning，当前普通EditMode测试9源0warning、PlayMode2源1warning）。产品日志/rsp已冻结于该唯一Run目录；包含后补的Loc重入关闭和格式context测试源码。Loc同名Run纯逻辑再次12/12绿。普通profile不声称编入可选Excel；后者由自身完整闭包单独验证。
+- 审查修复最终结果：`Verify-DataProfiles.ps1 -Run group-final-review-fixes`完整Runtime/Editor-profile/Editor工具均退出0，warnings42/41/4；普通EditMode9源0warning、PlayMode2源1warning。Excel同名Run真实xlsx19/19、Runtime458/Editor102/Excel7/测试7源全部辅助编译退出0（39/4/0/0warning），15项Unity作者/资产用例没有运行。Loc同名Run纯逻辑12/12、DataAssets Pure10/10再次实跑通过。Save源自`9626d9a`后未变，复用本会话已实跑33/39证据；不把重复包含的33项再加到39上。
 - 尚未执行：Unity编译、资产/GUI/PlayMode、Mono/IL2CPP Player、独立接收工程和原游戏非干扰门。完成后按证据更新。
 - 许可：原Localization/SO为MIT 2024弦风课堂，Excel/Archive为MIT 2025弦风课堂。实读发现既有根许可证只有2021/2025版权，未包含2024；因此Localization在自有目录补完整`LICENSE.txt`，SO同样独立保留。共享许可汇总/根版权由后续集成统一维护，不以既有MIT文本替代遗漏的适用版权。
 
@@ -77,4 +108,15 @@
 - Localization：`517f13f`，`feat(localization): 融合多语言配置作者流程与资源生命周期`。
 - DataAssets：`53edd50`，`feat(data-assets): 融合SO根子资产作者流程与安全资源登记`。
 - Excel：`09bec5a`，`feat(excel): 接入免费xlsx后端与可确认SO列表JSON作者流程`。DLL沿用仓库既有LFS规则，已核验真实工作区二进制；未上传LFS/未Push，后续跨机器集成须携带对应LFS对象或按固定恢复脚本取得同hash产物。
-- 后续模块仍按精确目录本地提交，不Push；新增meta必须由集成Unity真实生成，当前候选不是完整Unity接入包。
+- Save：`9626d9a`，`feat(save): 统一槽位模型异步存档与显式安全迁移恢复`。
+- 最终审查/生命周期/证据与交接收口的`fix(data)`候选和本文件同一提交，不预写自引用Hash。可只读运行`git log -1 --oneline fusion/xf-ext-data -- .kilo/handovers/xf-ext-data.md`取得实际Hash；交付回复也给出准确Hash。不Push，不合并。新增meta必须由集成Unity真实生成，当前候选不是完整Unity接入包。
+
+## 主线待验清单
+
+- 集成owner统一生成新增文件/目录`.meta`，保留既有Save脚本身份；核查MiniExcel PluginImporter仅Editor、可选assembly依赖和默认导出隔离。不要将只有LFS pointer的文本当DLL交付。
+- 实际Unity自然导入与编译，在无其他活跃owner的隔离测试会话运行`LocalizationUnityTests/LocalizationAuthoringTests`、DataAssets作者测试、Excel的15项资产/绑定用例以及原`SerializedDictionarySaveTests`的JsonUtility部分；涵盖保存重开、GUID/localFileID、Undo、取消、新引用失效、受控部分失败和回滚恢复目录。
+- 实际PlayMode运行Localization六项生命周期用例及DataAssets九项Resource用例；另外按相同Domain Reload设置连续两轮，检查Scene切换、事件重复订阅、静态owner归还、晚到图片与Resource诊断归零。以上目前只有源码辅助编译，尤其审查所指关闭重入/失败释放不算已运行通过。
+- 目标Mono/IL2CPP Player检查模型/具体SO子类/Other或TMP反射成员裁剪、AOT与新存档文件系统行为；验证MiniExcel及UnityEditor绝不进入Player。`link.xml`只保框架存档元数据，应用DTO和反射成员由实际应用补保留。
+- 取得真实历史YL v1及Archive的停止写入复制样本后，执行显式新目录/新槽迁移及失败保源核验；加密Archive不受支持，不自动解密/转换，不能据合成fixture宣称旧档兼容。
+- 重跑独立接收工程闭包（核心无Excel、显式选装Excel各一次）及原游戏非干扰门；本工作区全Runtime源码辅助编译不等于原游戏/接收工程实际编译或运行通过。
+- 按唯一正式Plan统一维护共享许可/来源汇总、RootAssetTypes/AssetMetadata与阶段验收记录；本组未修改这些共享文件。Localization/SO的2024版权全文在模块本地许可证，集成不得丢弃。

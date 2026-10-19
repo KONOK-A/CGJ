@@ -45,10 +45,12 @@ namespace YLFramework.Excel.Editor
                     staged.Add(target);
                 }
                 if (plan.Errors.Count == 0) plan.Diff(before, Snapshots(staged.Cast<object>()));
+                var stagedStates = staged.Select(item => ExcelValues.State(item)).ToArray();
                 plan.Prepare(() =>
                 {
                     table.AssertUnchanged();
                     if (!values.SequenceEqual(previous) || !values.Select(item => ExcelValues.State(item)).SequenceEqual(previousStates)) throw new InvalidOperationException("Target changed after preview; preview again.");
+                    if (!staged.Select(item => ExcelValues.State(item)).SequenceEqual(stagedStates)) throw new InvalidOperationException("Staged data or asset references changed after preview; preview again.");
                     if (values.Capacity < staged.Count) values.Capacity = staged.Count;
                     values.Clear();
                     values.AddRange(staged);
@@ -118,7 +120,7 @@ namespace YLFramework.Excel.Editor
             {
                 string key = ExcelValues.Key(value, index++, requireId);
                 if (snapshot.ContainsKey(key)) throw new InvalidOperationException("Duplicate target ID: " + key);
-                snapshot.Add(key, value.GetType().FullName + ":" + ExcelValues.Snapshot(value));
+                snapshot.Add(key, value.GetType().FullName + ":" + ExcelValues.State(value));
             }
             return snapshot;
         }

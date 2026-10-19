@@ -1,9 +1,11 @@
 [CmdletBinding()]
 param([string] $UnityData = 'C:\Program Files\Unity\Hub\Editor\2022.3.62f3c1\Editor\Data', [string] $Run = 'current')
 $ErrorActionPreference = 'Stop'
+if ($Run -notmatch '^[a-zA-Z0-9_-]+$') { throw 'Run must be a single safe path segment.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
 if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets/YLFramework/Runtime'))) { throw 'Not the B worktree.' }
 $output = Join-Path $root "Temp/Extensions.Data.Localization/$Run"
+if (Test-Path -LiteralPath $output) { throw 'Evidence already exists. Use a new Run name.' }
 $null = New-Item -ItemType Directory -Path $output -Force
 $framework = Join-Path $UnityData 'MonoBleedingEdge/lib/mono/4.8-api'
 $managed = Join-Path $UnityData 'Managed/UnityEngine'

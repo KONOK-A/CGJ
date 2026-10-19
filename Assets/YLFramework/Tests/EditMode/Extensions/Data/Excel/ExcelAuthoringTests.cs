@@ -60,6 +60,27 @@ namespace YLFramework.Tests.Extensions.Data
         private static List<Row> Original() => new List<Row> { new Row { Id = 1, Name = "old", Numbers = new List<int> { 8 }, State = Mode.Off, Count = 3, Rate = 0.5f, Scaled = 20 }, new Row { Id = 9, Name = "remove", Numbers = new List<int>() } };
         private void Export(IEnumerable<Row> rows, string path) => Call("ListToExcel", typeof(Row), rows, path, "Sheet1");
         private object Preview(string path, List<Row> target) => Call("PreviewList", typeof(Row), path, target, null);
+
+        [Test]
+        public void LossyConversionAlreadyPresentAtPreviewStillReportsActualFieldUpdate()
+        {
+            var rows = new List<Row> { new Row { Id = 1, Name = "same", Scaled = 21 } };
+            string path = FilePath("lossy-existing.xlsx");
+            Export(rows, path);
+            using (var plan = (IDisposable)Preview(path, rows))
+            {
+                Assert.That(Errors(plan), Is.Empty);
+                var changes = ((IEnumerable)Get(plan, "Changes")).Cast<object>().ToArray();
+                Assert.That(changes.Length, Is.EqualTo(1), "Export(21) and Export(20) both equal 2, but confirmation still overwrites the actual value.");
+                Assert.That(Get(changes[0], "Kind").ToString(), Is.EqualTo("Update"));
+                Assert.That((string)Get(changes[0], "Before"), Does.Contain("\"Scaled\":21"));
+                Assert.That((string)Get(changes[0], "After"), Does.Contain("\"Scaled\":20"));
+                Assert.That(rows[0].Scaled, Is.EqualTo(21));
+                Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            }
+            Assert.That(rows[0].Scaled, Is.EqualTo(20));
+        }
+
         internal static void WriteWorkbook(string path, string[] names, string[] types, params object[][] values)
         {
             var backend = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("MiniExcelLibs.MiniExcel")).FirstOrDefault(t => t != null)

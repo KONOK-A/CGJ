@@ -21,6 +21,7 @@ namespace YLFramework.Localization
         private static readonly EventChannel changed = new();
         private static SystemLanguage requested = SystemLanguage.Unknown;
         private static bool hasRequested;
+        private static bool closing;
         public static IEventSource Changed => changed;
 
         static LocalizationManager()
@@ -97,6 +98,7 @@ namespace YLFramework.Localization
 
         public static LocalizationConfigHandle AddConfig(MultiLanguageConfigs config)
         {
+            EnsureOpen();
             if (!config) throw new ArgumentNullException(nameof(config));
             var handle = new LocalizationConfigHandle();
             owned.Add(handle);
@@ -108,6 +110,7 @@ namespace YLFramework.Localization
         /// <summary>句柄拥有请求和根Lease；Dispose取消在途并移除自身登记，不影响共享根的其他owner。</summary>
         public static LocalizationConfigHandle LoadConfigAsync(ResourceSystem resources, ResourceAddress address)
         {
+            EnsureOpen();
             if (resources == null) throw new ArgumentNullException(nameof(resources));
             var handle = new LocalizationConfigHandle();
             owned.Add(handle);
@@ -118,6 +121,7 @@ namespace YLFramework.Localization
 
         internal static void Register(LocalizationConfigHandle handle)
         {
+            EnsureOpen();
             var roots = new List<MultiLanguageConfigs>(Configs);
             if (!roots.Contains(handle.Config)) roots.Add(handle.Config);
             Validate(roots);
@@ -215,12 +219,37 @@ namespace YLFramework.Localization
             catch (Exception error) { Debug.LogException(error); }
         }
 
+        /// <summary>关闭本域，拒绝释放回调中的新登记/加载；所有旧owner均尝试归还，收尾清事件。</summary>
+        /// <exception cref="AggregateException">原生retention归还失败，其他owner仍已逐一尝试释放。</exception>
         public static void Shutdown()
         {
-            changed.ResetOwner();
-            foreach (var handle in new List<LocalizationConfigHandle>(owned)) handle.Dispose();
-            hasRequested = false;
-            requested = SystemLanguage.Unknown;
+            if (closing) return;
+            closing = true;
+            List<Exception> errors = null;
+            try
+            {
+                changed.ResetOwner();
+                foreach (var handle in new List<LocalizationConfigHandle>(owned))
+                {
+                    try { handle.Dispose(); }
+                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                }
+            }
+            finally
+            {
+                owned.Clear();
+                registrations.Clear();
+                changed.ResetOwner();
+                hasRequested = false;
+                requested = SystemLanguage.Unknown;
+                closing = false;
+            }
+            if (errors != null) throw new AggregateException("Localization shutdown could not release every native retention cleanly.", errors);
+        }
+
+        private static void EnsureOpen()
+        {
+            if (closing) throw new InvalidOperationException("Localization is shutting down; new ownership is not accepted.");
         }
 
         private static List<SystemLanguage> RegisteredLanguages()
@@ -232,7 +261,7 @@ namespace YLFramework.Localization
             return result;
         }
 
-        private static string ConfigNames()
+        internal static string ConfigNames()
         {
             var names = new List<string>();
             foreach (var root in Configs) names.Add(root.name);

@@ -144,8 +144,7 @@ namespace YLFramework.Excel.Editor
             return key;
         }
 
-        internal static string Snapshot(object value) => JsonConvert.SerializeObject(Fields(value.GetType()).ToDictionary(f => f.Name, f => Export(value, f)));
-        // 差异展示使用作者导出值；并发保护必须比较原字段，不能让有损转换或Ignore掩盖用户编辑。
+        // 差异及并发保护都比较原字段，不能让有损导出或Ignore掩盖实际写入变化。
         internal static string State(object value) => JsonConvert.SerializeObject(Fields(value.GetType(), true).ToDictionary(f => f.Name,
             f => typeof(Object).IsAssignableFrom(f.FieldType) ? f.GetValue(value) == null ? string.Empty : Reference(f.GetValue(value) as Object) : f.GetValue(value)));
         internal static void ValidateReference(string text)
@@ -171,7 +170,9 @@ namespace YLFramework.Excel.Editor
         {
             if (value == null) return string.Empty;
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out string guid, out long local)) throw new FormatException("Object reference is not a persistent asset: " + value.name);
-            return AssetDatabase.IsSubAsset(value) ? guid + ":" + local.ToString(CultureInfo.InvariantCulture) : guid;
+            string reference = AssetDatabase.IsSubAsset(value) ? guid + ":" + local.ToString(CultureInfo.InvariantCulture) : guid;
+            if (ResolveReference(reference, value.GetType()) != value) throw new FormatException("Asset reference identity changed: " + reference);
+            return reference;
         }
     }
 }

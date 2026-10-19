@@ -48,7 +48,14 @@ namespace YLFramework.Localization
             throw new InvalidOperationException($"Localization ID={ID}: '{componentFullName}.{fieldName}' is not a writable public string member. Preserve reflected members in IL2CPP.");
         }
 
-        public string GetString() => LocalizationText.Compose(ID, id => LocalizationManager.GetString(id), args, appends);
+        public string GetString()
+        {
+            try { return LocalizationText.Compose(ID, id => LocalizationManager.GetString(id), args, appends); }
+            catch (FormatException error)
+            {
+                throw new FormatException($"Localization language={LocalizationManager.RequestedLanguage}, ID={ID}, configs={LocalizationManager.ConfigNames()}: invalid argument/append format.", error);
+            }
+        }
         public string[] GetArgs() => LocalizationText.GetArguments(id => LocalizationManager.GetString(id), args);
 
         public void SetArgs(IList<AppendData> data)

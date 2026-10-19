@@ -89,6 +89,7 @@ namespace YLFramework.Excel.Editor
                     if (reference != null && removed.Contains(reference)) plan.Error(table.Source + ": ID " + ExcelValues.Key(item, 0, true) + " field " + field.Name + " references an asset listed for deletion.");
                 }
                 if (plan.Errors.Count == 0) plan.Diff(before, Snapshots(staged.Cast<object>(), true));
+                var stagedStates = staged.Select(item => ExcelValues.State(item)).ToArray();
                 var destinations = new Dictionary<string, string>();
                 foreach (var item in staged)
                 {
@@ -103,6 +104,7 @@ namespace YLFramework.Excel.Editor
                     if (owner == null || !ReferenceEquals(listField.GetValue(owner), values) || !values.SequenceEqual(previous)
                         || ownerState != EditorJsonUtility.ToJson(owner) || previous.Any(item => item == null || originalStates[item] != EditorJsonUtility.ToJson(item)))
                         throw new InvalidOperationException("Assets changed after preview; preview again.");
+                    if (!staged.Select(item => ExcelValues.State(item)).SequenceEqual(stagedStates)) throw new InvalidOperationException("Staged data or asset references changed after preview; preview again.");
                     ValidateOwnedAssets(owner, ownerPath, previous, folder);
                     AssertAssetFilesUnchanged(files);
                     ValidateDestinations(staged, existing, destinations, folder);

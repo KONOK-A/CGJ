@@ -23,8 +23,10 @@ namespace YLFramework.Localization
 
         internal void Load(ResourceSystem resources, ResourceAddress address)
         {
-            request = resources.AcquireAsync<MultiLanguageConfigs>(address);
-            request.Completed += Complete;
+            var pending = resources.AcquireAsync<MultiLanguageConfigs>(address);
+            if (IsDisposed) { pending.Dispose(); return; }
+            request = pending;
+            pending.Completed += Complete;
         }
 
         private void Complete(ResourceRequest<AssetLease<MultiLanguageConfigs>> completed)

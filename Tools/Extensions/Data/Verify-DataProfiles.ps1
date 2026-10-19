@@ -5,14 +5,28 @@ param(
     [switch] $SkipProducts
 )
 $ErrorActionPreference = 'Stop'
+if ($Run -notmatch '^[a-zA-Z0-9_-]+$') { throw 'Run must be a single safe path segment.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets/YLFramework/Runtime'))) { throw 'Not the B worktree.' }
-if (-not $SkipProducts) {
-    & (Join-Path $root 'Tools/Verify-UIPanel.ps1') -Mode Runtime -UnityData $UnityData
-    & (Join-Path $root 'Tools/Verify-UIPanel.ps1') -Mode EditorTools -UnityData $UnityData
-}
 $output = Join-Path $root "Temp/Extensions.Data.Profiles/$Run"
+if (Test-Path -LiteralPath $output) { throw 'Evidence already exists. Use a new Run name.' }
 $null = New-Item -ItemType Directory -Path $output -Force
+if (-not $SkipProducts) {
+    $started = [DateTime]::UtcNow
+    try {
+        & (Join-Path $root 'Tools/Verify-UIPanel.ps1') -Mode Runtime -UnityData $UnityData
+        & (Join-Path $root 'Tools/Verify-UIPanel.ps1') -Mode EditorTools -UnityData $UnityData
+    } finally {
+        foreach ($profile in @('Runtime', 'Editor', 'EditorTools')) {
+            foreach ($name in @('compile.log', 'compile.rsp')) {
+                $source = Join-Path $root "Temp/UI.Panel.Offline/$profile/$name"
+                if ((Test-Path -LiteralPath $source) -and (Get-Item -LiteralPath $source).LastWriteTimeUtc -ge $started) {
+                    Copy-Item -LiteralPath $source -Destination (Join-Path $output "$profile-$name")
+                }
+            }
+        }
+    }
+}
 $framework = Join-Path $UnityData 'MonoBleedingEdge/lib/mono/4.5'
 $managed = Join-Path $UnityData 'Managed/UnityEngine'
 $templates = Join-Path $UnityData 'Resources/PackageManager/ProjectTemplates/libcache/com.unity.template.2d-7.0.4/ScriptAssemblies'
