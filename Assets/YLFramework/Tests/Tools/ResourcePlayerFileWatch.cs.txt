@@ -1,0 +1,65 @@
+using System;
+using System.IO;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+
+// 仅用于外部控制器的有界目录观察，不声称进程归因或捕获全部瞬时写入。
+public sealed class ResourcePlayerFileWatch : IDisposable
+{
+    private readonly FileSystemWatcher watcher;
+    private readonly StreamWriter output;
+    private readonly object gate = new();
+    private readonly string run;
+    private readonly string store;
+    private int errors;
+    private int plaintext;
+    private int misses;
+    private int controls;
+    private bool disposed;
+    public int Errors => Volatile.Read(ref errors);
+    public int Plaintext => Volatile.Read(ref plaintext);
+    public int Misses => Volatile.Read(ref misses);
+    public int ControlEntriesNotProbed => Volatile.Read(ref controls);
+    public ResourcePlayerFileWatch(string root, string run, string store)
+    {
+        this.run = run + Path.DirectorySeparatorChar; this.store = store + Path.DirectorySeparatorChar;
+        output = new StreamWriter(new FileStream(Path.Combine(run, "writes.jsonl"), FileMode.CreateNew, FileAccess.Write, FileShare.Read), new UTF8Encoding(false)) { AutoFlush = true };
+        watcher = new FileSystemWatcher(root) { IncludeSubdirectories = true, InternalBufferSize = 65536, NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite };
+        watcher.Created += (_, e) => Observe(e);
+        watcher.Changed += (_, e) => Observe(e);
+        watcher.Renamed += (_, e) => Observe(e);
+        watcher.Error += (_, _) => Interlocked.Increment(ref errors);
+        watcher.EnableRaisingEvents = true;
+    }
+    private void Observe(FileSystemEventArgs change)
+    {
+        var path = change.FullPath;
+        if ((!path.StartsWith(run, StringComparison.OrdinalIgnoreCase) && !path.StartsWith(store, StringComparison.OrdinalIgnoreCase)) || path.EndsWith("writes.jsonl", StringComparison.Ordinal)) return;
+        string header = null;
+        string failure = null;
+        // 即使FILE_SHARE_DELETE，打开ReplaceFile的短命旧文件也会造成ERROR_UNABLE_TO_REMOVE_REPLACED。
+        // 只记录Store控制JSON/next/系统替换临时槽，不读取；Bundle、partial和普通TEMP仍探测原始头。
+        var fileName = Path.GetFileName(path);
+        var control = path.StartsWith(store, StringComparison.OrdinalIgnoreCase) &&
+            (fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".json.next", StringComparison.OrdinalIgnoreCase) || fileName.Contains(".json~RF", StringComparison.OrdinalIgnoreCase));
+        if (control) { failure = "ControlEntryNotProbed"; Interlocked.Increment(ref controls); }
+        else if (!Directory.Exists(path))
+            try
+            {
+                using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var bytes = new byte[8]; var count = file.Read(bytes, 0, bytes.Length);
+                header = Convert.ToHexString(bytes.AsSpan(0, count));
+                if (count < 8) Interlocked.Increment(ref misses);
+                if (count == 8 && Encoding.ASCII.GetString(bytes) == "UnityFS\0") Interlocked.Increment(ref plaintext);
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException) { failure = error.GetType().Name; Interlocked.Increment(ref misses); }
+        lock (gate) if (!disposed) output.WriteLine(JsonSerializer.Serialize(new { Path=path, Kind=change.ChangeType.ToString(), Header=header, Failure=failure, Utc=DateTime.UtcNow }));
+    }
+    public void Dispose()
+    {
+        if (disposed) return;
+        watcher.EnableRaisingEvents = false; watcher.Dispose();
+        lock (gate) { disposed = true; output.Dispose(); }
+    }
+}

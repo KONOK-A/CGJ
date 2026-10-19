@@ -52,6 +52,8 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 
 ## 其他第三方组件
 
+- `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。
+- `Plugins/BouncyCastle/`随框架导出批准的BouncyCastle.Cryptography 2.7.0官方netstandard2.0二进制、完整MIT `LICENSE.md`与精确来源`SOURCE.txt`。Resource仅内部使用其HKDF-SHA256，Windows AES-GCM由系统CNG提供，不分发系统密码DLL。Tink仅作为framing参照，适用Apache-2.0全文随`TINK-LICENSE.txt`携带，不宣称依赖或分发Tink SDK；详见该目录来源声明。
 - `Runtime/Utilities/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。
 - `Runtime/Utilities/ZipTool/`：ICSharpCode.SharpZipLib（MIT），来源、署名与完整文本见 [`Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。内置源码与许可随默认 Runtime 导出一并分发。
 - `Plugins/` 下的第三方编辑器插件随附各自的说明材料，其许可与使用条件以插件自身提供为准。

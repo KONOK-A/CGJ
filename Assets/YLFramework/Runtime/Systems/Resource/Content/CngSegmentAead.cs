@@ -10,7 +10,7 @@ namespace YLFramework.Services.Resource
     /// <summary>只封装系统单段 AEAD ABI，不实现 AES/GHASH，也不提供软件回退。</summary>
     internal sealed class CngSegmentAead : IDisposable
     {
-#if (UNITY_EDITOR_WIN || (!UNITY_EDITOR && UNITY_STANDALONE_WIN && ENABLE_MONO)) && !ENABLE_IL2CPP
+#if UNITY_EDITOR_WIN || (!UNITY_EDITOR && UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP))
         private readonly object gate = new();
         private IntPtr algorithm;
         private IntPtr key;
@@ -21,7 +21,12 @@ namespace YLFramework.Services.Resource
         // 无法确认销毁的系统 owner 必须留存；不重试有歧义的 native 释放，也不关闭其 provider。
         private static readonly List<CngSegmentAead> RetainedOwners = new();
 
-        internal static bool IsSupported => Environment.OSVersion.Platform == PlatformID.Win32NT && IntPtr.Size == 8;
+        internal static bool IsSupported => Environment.OSVersion.Platform == PlatformID.Win32NT && IntPtr.Size == 8
+#if ENABLE_IL2CPP && !UNITY_EDITOR
+            // 该getter由Unity明确标记IsThreadSafe，可在认证worker中核对精确受测版本。
+            && UnityEngine.Application.unityVersion == "2022.3.62f3c1"
+#endif
+            ;
         internal static long ActiveAlgorithms => Interlocked.Read(ref activeAlgorithms);
         internal static long ActiveKeys => Interlocked.Read(ref activeKeys);
         internal static long ActiveKeyObjectBytes => Interlocked.Read(ref activeKeyObjectBytes);
@@ -192,6 +197,79 @@ namespace YLFramework.Services.Resource
             internal int Flags;
         }
 
+#if ENABLE_IL2CPP && !UNITY_EDITOR
+        // IL2CPP不传递DefaultDllImportSearchPaths，按确切System32模块句柄绑定，不走插件目录搜索。
+        // 与P/Invoke运行时缓存相同，此模块是进程期依赖；provider/key仍逐owner确定释放。
+        private static readonly IntPtr SystemModule = LoadSystemModule();
+        private static readonly OpenAlgorithm BCryptOpenAlgorithmProvider = Bind<OpenAlgorithm>("BCryptOpenAlgorithmProvider");
+        private static readonly SetProperty BCryptSetProperty = Bind<SetProperty>("BCryptSetProperty");
+        private static readonly GetProperty BCryptGetProperty = Bind<GetProperty>("BCryptGetProperty");
+        private static readonly GetTagLengths BCryptGetTagLengths = Bind<GetTagLengths>("BCryptGetProperty");
+        private static readonly GenerateSymmetricKey BCryptGenerateSymmetricKey = Bind<GenerateSymmetricKey>("BCryptGenerateSymmetricKey");
+        private static readonly TransformSegment BCryptEncrypt = Bind<TransformSegment>("BCryptEncrypt");
+        private static readonly TransformSegment BCryptDecrypt = Bind<TransformSegment>("BCryptDecrypt");
+        private static readonly DestroyKey BCryptDestroyKey = Bind<DestroyKey>("BCryptDestroyKey");
+        private static readonly CloseAlgorithm BCryptCloseAlgorithmProvider = Bind<CloseAlgorithm>("BCryptCloseAlgorithmProvider");
+
+        private static IntPtr LoadSystemModule()
+        {
+            var directory = new System.Text.StringBuilder(32768);
+            uint length = GetSystemDirectoryW(directory, (uint)directory.Capacity);
+            if (length == 0 || length >= directory.Capacity) throw new PlatformNotSupportedException("Cannot resolve the Windows system directory.");
+            string path = Path.GetFullPath(Path.Combine(directory.ToString(), "bcrypt.dll"));
+            var module = LoadLibraryExW(path, IntPtr.Zero, 0x00000800); // LOAD_LIBRARY_SEARCH_SYSTEM32
+            if (module == IntPtr.Zero) throw new PlatformNotSupportedException("Cannot load the System32 CNG dependency: " + Marshal.GetLastWin32Error());
+            try
+            {
+                var actual = new System.Text.StringBuilder(32768);
+                uint written = GetModuleFileNameW(module, actual, (uint)actual.Capacity);
+                if (written == 0 || written >= actual.Capacity || !Path.GetFullPath(actual.ToString()).Equals(path, StringComparison.OrdinalIgnoreCase))
+                    throw new PlatformNotSupportedException("The CNG dependency is not the exact System32 module.");
+                return module;
+            }
+            catch (Exception error)
+            {
+                if (!FreeLibrary(module)) throw new AggregateException("CNG dependency validation and module cleanup failed.", error,
+                    new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
+                throw;
+            }
+        }
+
+        private static T Bind<T>(string entry) where T : Delegate
+        {
+            var address = GetProcAddress(SystemModule, entry);
+            if (address == IntPtr.Zero) throw new EntryPointNotFoundException("System32 bcrypt.dll: " + entry);
+            return Marshal.GetDelegateForFunctionPointer<T>(address);
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        private delegate int OpenAlgorithm(out IntPtr algorithm, [MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string implementation, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        private delegate int SetProperty(IntPtr algorithm, [MarshalAs(UnmanagedType.LPWStr)] string property, [MarshalAs(UnmanagedType.LPWStr)] string input, int inputBytes, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        private delegate int GetProperty(IntPtr algorithm, [MarshalAs(UnmanagedType.LPWStr)] string property, out int value, int valueBytes, out int written, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        private delegate int GetTagLengths(IntPtr algorithm, [MarshalAs(UnmanagedType.LPWStr)] string property, out TagLengths value, int valueBytes, out int written, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int GenerateSymmetricKey(IntPtr algorithm, out IntPtr key, IntPtr keyObject, int keyObjectBytes, IntPtr secret, int secretBytes, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int TransformSegment(IntPtr key, IntPtr input, int inputBytes, ref AuthInfo auth, IntPtr iv, int ivBytes, IntPtr output, int outputBytes, out int written, int flags);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int DestroyKey(IntPtr key);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int CloseAlgorithm(IntPtr algorithm, int flags);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern uint GetSystemDirectoryW(System.Text.StringBuilder buffer, uint size);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder path, uint size);
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
+        private static extern IntPtr GetProcAddress(IntPtr module, string entry);
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool FreeLibrary(IntPtr module);
+#else
         [DllImport("bcrypt.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         private static extern int BCryptOpenAlgorithmProvider(out IntPtr algorithm, string id, string implementation, int flags);
@@ -219,6 +297,7 @@ namespace YLFramework.Services.Resource
         [DllImport("bcrypt.dll", ExactSpelling = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         private static extern int BCryptCloseAlgorithmProvider(IntPtr algorithm, int flags);
+#endif
 #else
         internal static bool IsSupported => false;
         internal static long ActiveAlgorithms => 0;
@@ -234,7 +313,7 @@ namespace YLFramework.Services.Resource
         public void Dispose() { }
 #endif
         private static PlatformNotSupportedException Unsupported() =>
-            new("Encrypted Resource content requires Windows x64 Editor or Mono Player.");
+            new("Encrypted Resource content requires Windows x64 Editor or a validated Windows64 Mono/IL2CPP Player backend.");
     }
 
     internal sealed class ResourceContentCleanupException : IOException

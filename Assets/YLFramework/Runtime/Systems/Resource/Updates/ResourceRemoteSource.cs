@@ -40,7 +40,7 @@ namespace YLFramework.Services.Resource
         public int IdleTimeoutSeconds { get; }
         public int Attempts { get; }
         internal IReadOnlyList<ResourceSigningKey> Keys { get; }
-#if UNITY_EDITOR
+#if UNITY_EDITOR || (UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP) && DEVELOPMENT_BUILD && YL_RESOURCE_ACCEPTANCE_TESTS)
         private byte[] loopbackCertificate;
 #endif
 
@@ -76,14 +76,17 @@ namespace YLFramework.Services.Resource
 
         internal static void RequireSupportedRuntime()
         {
-            // 8.8只实证此后端。Player/IL2CPP及其他平台须在8.10验证后显式开放，不能用Editor成功推断。
-            if (Application.platform != RuntimePlatform.WindowsEditor)
-                throw new ResourceException(ResourceError.Unsupported, "Release schema v1 transport/crypto is currently validated only in Windows Editor; this backend is not production-enabled.");
+            if (Application.platform == RuntimePlatform.WindowsEditor) return;
+#if UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP) && !UNITY_EDITOR
+            // 只开放8.10实际受测的引擎、架构及脚本后端，不由平台枚举推断其他组合。
+            if (Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && Application.unityVersion == "2022.3.62f3c1") return;
+#endif
+            throw new ResourceException(ResourceError.Unsupported, "Release schema v1 transport/crypto requires Windows Editor or the validated Unity 2022.3.62f3c1 Windows64 Mono/IL2CPP Player backend.");
         }
 
         internal CertificateHandler CreateCertificateHandler()
         {
-#if UNITY_EDITOR
+#if UNITY_EDITOR || (UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP) && DEVELOPMENT_BUILD && YL_RESOURCE_ACCEPTANCE_TESTS)
             if (loopbackCertificate != null)
             {
                 if (!Endpoint.IsLoopback) throw new InvalidOperationException("Isolated certificate trust is restricted to loopback.");
@@ -93,8 +96,8 @@ namespace YLFramework.Services.Resource
             return null; // Unity/平台正常证书链与主机名校验；生产没有允许未知证书的开关。
         }
 
-#if UNITY_EDITOR
-        /// <summary>仅Editor内部的隔离TLS夹具信任。精确证书pin，不修改系统信任，不支持远端主机。</summary>
+#if UNITY_EDITOR || (UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP) && DEVELOPMENT_BUILD && YL_RESOURCE_ACCEPTANCE_TESTS)
+        /// <summary>仅Editor或显式Development验收构建的隔离TLS夹具信任；不进入普通Player，不修改系统信任。</summary>
         internal void TrustLoopbackCertificate(byte[] certificate)
         {
             if (!Endpoint.IsLoopback || loopbackCertificate != null || certificate == null || certificate.Length == 0 || certificate.Length > 16384)

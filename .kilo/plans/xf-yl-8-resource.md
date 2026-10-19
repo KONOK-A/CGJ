@@ -1,12 +1,12 @@
 # XF × YL 阶段 8：Resource 深度融合与全面升级 Plan
 
-> **总体方案 APPROVED；8.1～8.8 已完成技术验收及 Git 收口；8.9 全部已交付范围已通过用户验收，最终 Git 收口执行中。C02、E05、B06、C05、B02、F03 及 E04 G1～G4正式交付范围沿用既定用户验收/技术审核结论，原验收层级和限制保留。2026-10-17 两次提交策略：第一次功能基线 `8abaf2d`；第二次提交 Workbench UX、多资源目录及旧单根兼容清理，见29.31。旧单根Editor配置兼容已按用户决定移除，现有9个ResourceProject及4个Atlas配置已完成一次性转换；Catalog Schema v1、Runtime地址解释、签名与发布协议未变。第二次Commit及远端SHA校验完成即满足8.9收口条件；阶段8仍未COMPLETE，8.10尚未实施。**
+> **总体方案 APPROVED；8.1～8.10 已通过用户验收，阶段8为 COMPLETE。8.9 最终 Resource 基线为 `9a88e6a4ec04209f60453b1e166de28b3034430d`；2026-10-19 用户正式确认阶段8总体验收通过，Windows64 Mono及Unity `2022.3.62f3c1` Windows64 IL2CPP（Low裁剪）正式支持成立，完整证据及限制见§30。既有专项证据、旧单根兼容已移除的最终模型继续有效；未重开UI、密码后端或31项审计。阶段9不启动；本轮按授权执行精确Commit、普通Push及`integration/xf-yl`集成。**
 >
-> 当前分支 `fusion/8-resource`，功能基线为 `8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`（`feat(resource): complete stage 8.9 functional baseline`）。8.9 全部已交付范围已通过用户验收；第二次 Commit 与普通 Push 按本批正式授权执行。C05、E04、B02/F03 的既有验收、技术审核与证据边界分别沿用原记录。
+> 当前分支 `fusion/8-resource`；本轮执行阶段8收口提交、普通Push至已核实`origin/fusion/8-resource`及`integration/xf-yl`集成。开工HEAD `5074595212b08bba45d95d48768a895258ea6f93`保留为历史检查点，其相对Resource基线的`Assets/YLFramework`差异为空。C05、E04、B02/F03的既有验收、技术审核与证据边界分别沿用原记录；实际Commit、远端SHA及合并方式以最终报告和远端历史为准。
 >
-> **Workbench UX1～UX5、视觉精修、多资源目录与中文文案已通过用户验收。** 最终证据与限制见§29.25～§29.31；§29.17～29.24保留反馈和历史检查点。旧单根兼容清理的最终模型见§29.30～§29.31。不标阶段8 COMPLETE；不进入8.10、阶段9或其他框架专题。第二次提交成功且远端SHA一致后，才在本批最终报告声明8.9 Git收口完成。
+> **Workbench UX1～UX5、视觉精修、多资源目录与中文文案已通过用户验收。** 最终证据与限制见§29.25～§29.31；§29.17～29.24保留反馈和历史检查点。旧单根兼容清理的最终模型见§29.30～§29.31，8.10不恢复旧模型。8.10及Windows64 IL2CPP增补已通过用户阶段8总体验收，阶段8 COMPLETE。
 
-本文保留稳定契约、阶段门禁、关键历史证据与当前待办；重复授权、已被后续状态覆盖的中间记录和一次性诊断过程已合并。保留原章节编号，尤其是 17.4、28.2.1～28.2.4 和 28.6，便于继续引用。
+本文保留稳定契约、阶段门禁、关键历史证据与遗留限制；重复授权、已被后续状态覆盖的中间记录和一次性诊断过程已合并。保留原章节编号，尤其是 17.4、28.2.1～28.2.4 和 28.6，便于继续引用。
 
 ## 1. 当前基线、授权与保护边界
 
@@ -14,13 +14,14 @@
 
 | 项目 | 已确认状态 |
 |---|---|
-| 工程 | Unity `2022.3.62f3c1`；当前真实验证主环境为 Windows Editor / `StandaloneWindows64` |
-| 实施分支与 HEAD | `fusion/8-resource` / `8abaf2d718ecf0f5d5c380dc2e2a63d73fa76d91`（8.9 功能基线） |
+| 工程 | Unity `2022.3.62f3c1`；Windows Editor / `StandaloneWindows64` Mono / 同版本Windows64 IL2CPP（Low裁剪） |
+| 实施分支与 HEAD | `fusion/8-resource`；阶段8收口提交实际SHA见最终报告及远端历史；Resource基线 `9a88e6a4ec04209f60453b1e166de28b3034430d` |
 | 总体架构 | 自有唯一 ResourceSystem；Runtime/Editor 两主体，Foundation/Core 保持实际编译边界 |
 | 8.1～8.8 | 已完成技术验收与 Git 收口；提交映射见第 10 节 |
-| 8.9 | 全部已交付范围通过用户验收；第二次Commit与普通Push按29.31执行；整体在远端SHA一致后收口 |
+| 8.9 | 全部已交付范围通过用户验收，第二次提交 `9a88e6a` 已在当前本地及远端历史中确认，Git已收口 |
+| 8.10 | Windows64 Mono全流程及同版本Windows64 IL2CPP（Low裁剪）增补通过用户阶段8总体验收；阶段8 COMPLETE |
 | 持久协议 | Catalog Schema v1 已冻结；签名授权与激活记录不塞入 Catalog 字段；Editor配置模型调整不改变Runtime读取 |
-| 当前 Git 权限 | 本批明确授权第二次Commit与普通Push；只暂存已验收的8.9剩余成果，不接管用户/并行改动 |
+| 当前 Git 权限 | 2026-10-19授权精确暂存本批、中文Commit、普通Push及`integration/xf-yl`集成；禁止Amend、Force、Rebase、Reset、Clean、Stash，不接管用户/并行改动，阶段9不启动 |
 
 历史设计从 Tidy 集成 `fe1cd72`、方案批准 `0e71c8b` 开始。早期“当前为 integration 分支”“主体仍依赖 XFAB”“8.6b 待提交”等描述已被后续实施取代，不再作为现状。历史阶段 7/Tidy 细节分别见其专项 Plan，不在这里重复。
 
@@ -175,7 +176,7 @@ FIFO 是现有事实，不是优先级调度。可选能力须有真实需求或
 - 强 ETag 才续传并发 If-Range；206 严格验证 Content-Range，200 忽略 Range 时重置，416 复验/重置而非直接成功。无 HEAD 不妨碍 GET，重试与 Retry-After 有界，取消不删除 active。
 - 每文件 length/SHA 与实际完整性校验不能由 sidecar/mtime 替代。最高成功激活序号不由只读 Check 落盘；低序号、同序不同 digest 拒绝，相同发布幂等，LKG 回滚不降低门槛。
 - 签名不证明最新。首次安装、本地状态丢失/恶意回滚、时钟篡改或服务器冻结旧合法发布没有强保护承诺；远端回滚须更高序号重新签发。
-- **正式远端后端当前只接受 WindowsEditor**；Windows Player 同样 Unsupported，不是仅缺测试。开放须按 8.10 验证后显式决定，不能直接删 gate。
+- **正式远端后端接受WindowsEditor及§30实际受测的Unity `2022.3.62f3c1` Windows64 Mono/IL2CPP Player**；各自原硬拒绝均先记录，真实HTTPS、签名/序号、partial续传、拒绝与恢复门禁通过后才明确开放，IL2CPP增补见30.7。其他平台、32位和其他Player引擎版本仍由源码拒绝；普通Player不含测试pin，不以删除gate或测试绕过代替支持。
 
 ### 8.4 缓存与诊断
 
@@ -214,8 +215,8 @@ FIFO 是现有事实，不是优先级调度。可选能力须有真实需求或
 | 8.6c 旧栈退役/主体解耦 | 已验收并收口 | `be3dcb8` |
 | 8.7 本地版本事务 | 已验收并收口 | `05add9c` |
 | 8.8 远端安全链 | 已验收并收口，限已验后端 | `ddf154c` |
-| 8.9 功能/体验完善 | 用户验收通过；第二次提交含Workbench UX、多资源目录、旧兼容清理及直接配置 | 第27～29节；第二次Commit与Push见29.31 |
-| 8.10 总体验收 | 未实施、未授权自动开始 | Windows Player/持久重启、阶段整体流程与交接 |
+| 8.9 功能/体验完善 | 用户验收与Git收口完成 | 第27～29节；最终Resource提交 `9a88e6a` |
+| 8.10 总体验收 | 用户验收通过，阶段8 COMPLETE；Git收口按本轮授权执行 | §30；Mono/IL2CPP真实Player、跨进程恢复、远端、Review修复与导出检查全部收齐；实际Commit/远端SHA以最终报告为准 |
 
 每个新批次先确认范围和工作区，建立最小失败/基线验证，再实现、定向回归、独立 Review、核对保护与文档。已完成门禁不机械重跑；总体批准不自动授权下一批或 Git 操作。
 
@@ -456,11 +457,12 @@ V1/V2 Atlas 的真实 BuildMap/manifest/render-data、Clone/Texture 生命周期
 | 环境 | 已有证据 | 未完成/拒绝边界 |
 |---|---|---|
 | Windows Editor / Win64 资源 | 正式构建、模拟/native 消费、版本事务、签名 HTTPS 与 C05 双模式 | 不代替实际 Player |
-| Windows64 Mono Player | Runtime/Sample Development 源码共同编译、实际 Player 图隔离 | 资源完整流程与持久重启未验；远端硬 gate 未开放 |
+| Unity 2022.3.62f3c1 Windows64 Mono Player | §30真实C02内置首启、None/加密与Core消费、持久整组事务及重启恢复、HTTPS签名/序号/续传/拒绝门禁 | 受测范围已明确开放；普通Player默认TLS，loopback pin仅隔离测试构建；未实测普通信任链CA正向联网，不外推其他平台或阶段9 |
+| Unity 2022.3.62f3c1 Windows64 IL2CPP Player | §30.7真实AOT/Low裁剪、None/E04内置与Core消费、持久整组事务/强停恢复、HTTPS签名/序号/partial门禁及无候选非Development构建 | 已在全部真实候选门禁及Review修复通过后开放；普通无pin、默认TLS拒绝实测，CA链正向未实测；不外推High裁剪、其他版本或其他平台 |
 | OSX/Linux 桌面 | 普通目录/平台格式分支存在 | 无本批跨主机真实验收；远端拒绝 |
-| IL2CPP/Android/iOS/WebGL | 仅部分平台映射或计划范围 | 没有相应最终闭包/运行；mount 仍受桌面范围限制，jar/WebGL 内置提取未实现，不只是缺设备 |
+| Android/iOS/WebGL及Windows64以外IL2CPP | 仅部分平台映射或计划范围 | 没有相应最终闭包/运行；mount仍受桌面范围限制，jar/WebGL内置提取未实现，不只是缺设备；其他Unity版本也未开放 |
 
-8.10 须单独授权后验阶段完整流程、必要 Player/重启、许可证/导出和交接；阶段 9 的干净工程导入另行实施。StreamingAssets 写入、加密、自动 Atlas、跨平台或协议变更均不随此表自动启动。
+8.10已按独立授权完成上述正式Player/重启、许可/导出与交接（§30）；阶段9干净工程导入另行授权，未实施。本表不自动授权其他平台或协议变更；§28.2的31项表及各历史子批中“Player未验/硬拒绝”保留为当时快照，当前结论以本节与§30为准，不重开或重计审计。
 
 ### 28.6 C05 统一启动与最小接入：已通过用户技术验收
 
@@ -2202,3 +2204,174 @@ Ryzen7 9700X / Windows11 `10.0.26200` / Unity2022.3.62f3c1，非Development、Wi
 - **收口条件**：第二次Commit成功、普通Push到已核实上游`origin/fusion/8-resource`、远端SHA与本地完全一致、用户/并行改动未覆盖，且无本批遗留编译失败或在途自有资源责任。此提交写入后，上述条件满足即在最终报告声明8.9 Git收口完成并可进入8.10；不在本篇预先声称远端已同步，也不增加仅为写SHA的第三次提交。
 - **保留限制**：E04 Scene在native接手后的延迟Stream读取失败崩溃风险、历史no-go结论、g36回滚失败确切根因未知、当前平台/密钥/内存预算及BCrypt系统释放未测边界、F03环境与样本外推限制、其他DPI/平台未验、地址常量受全发布集合/App兼容约束、外部未转换旧Editor配置不自动兼容，均继续有效。Windows Player首次启动、StreamingAssets打包读取、持久缓存重启、安装/激活/LKG/回滚流程及远端HTTPS硬门禁留待8.10，不用本批Editor/native证据冒充Player验收。
 - **8.10交接**：以本批最终远端Commit为基线；正式配置与可执行样例入口为`Assets/YLFramework/Tests/Fixtures/ResourceMultiDirectory-20261018/Modern/ModernProject.asset`、`ModernRecipe.asset`及`Samples/ResourceStartup`；先做Windows64 Mono Player首次启动与真实StreamingAssets内置读取，再做ArtifactStore持久目录/进程退出/重启恢复和正式安装、准备、激活、LKG/回滚与异常恢复，最后专项验证远端HTTPS硬门禁并决定是否开放。阶段8整体仍未完成，阶段9不启动。
+- **8.9收口事实补记（8.10开工实核）**：第二次提交为`9a88e6a4ec04209f60453b1e166de28b3034430d`（`feat(resource): finalize workbench and multi-directory authoring`），存在于当前本地与实时远端`origin/fusion/8-resource`共同历史；当前远端和HEAD均为其直接后继`5074595212b08bba45d95d48768a895258ea6f93`（`chore(mcp): upgrade Unity MCP integration`），`git diff 9a88e6a HEAD -- Assets/YLFramework`为空。故原待执行Commit/Push状态已被事实替代，8.9 Git收口完成；不为此补做Git写入。
+
+## 30. 8.10 正式Player全流程验收（2026-10-18）
+
+### 30.1 授权、已有证据与本轮缺口
+
+用户正式授权连续完成必要适配、真实Player测试、问题修复、一次独立Review及文档。限定Unity `2022.3.62f3c1`、Windows64 Mono；独立验证载体须使用核对身份的当前正式源码，不另写加载器，不对主工程开第二实例。允许自有夹具、精确C02部署、自有HTTPS/非生产凭据和本轮自有Player进程的受控终止。loopback pin不作为生产信任，不改系统信任。只有远端正向、拒绝与恢复门禁全部通过，才明确开放受测Windows64 Mono范围，其他平台继续拒绝。阶段9干净工程导入不在本轮，本轮禁止暂存、Commit与Push。
+
+| 范围 | 已有可沿用证据 | 本轮必须补齐 |
+|---|---|---|
+| Builder/Publisher/C02 | §8、§28.8、§29.31正式构建、部署外壳、payload严格校验及Editor/native消费 | 实际Player BuildReport、包内payload~/SHA、无缓存空Store离线首启及Core/Prefab/共享依赖/Atlas/Audio/Scene |
+| ArtifactStore | §8.2、8.7及E05的整组事务、故障注入与恢复 | 同一自有Store的多个独立Player进程，安装/Prepare/Activate/active/LKG/回滚/序号，事务检查点受控终止再恢复与无混代 |
+| E04 | §28.10.19～20既有provider、认证、预算及正式Player证据 | 代表性加密内置/更新/重启/缺错key拒绝；不重演已接受的延迟坏Stream Scene崩溃，不豁免正常输入新故障 |
+| Windows远端 | §8.3、§28.5的WindowsEditor HTTPS链；Windows Player源码硬拒绝 | 先记录原拒绝，必要Mono后端适配；TLS/签名/序号/强ETag/If-Range/真实partial跨进程续传/失败保旧全部门禁 |
+| 交付 | §12.2既有程序集边界、许可和导出规则 | 最新框架导出及源码/程序集依赖/Json.NET、BC、Tink等适用许可与排除项；实际运行用法及最终工程状态 |
+
+开工实核：`git status --short --branch`为`fusion/8-resource...origin/fusion/8-resource`；既有改动`.gitignore`、`.kilo/kilo.jsonc`、`AGENTS.md`、`ProjectSettings/Packages/com.unity.probuilder/Settings.json`及未跟踪UI Plan、`WorkbenchUX1-20261017/AlternateContent.meta`均保留，不认领。MCP RQL已实时响应；`isPlaying=false/isPaused=false/isCompiling=false`；唯一打开`Assets/YLFramework/Tests/Core/Acceptance/UIAcceptance.unity`、`isDirty=false`。ProjectVersion为规定版本；运行工具Shell实核为Windows PowerShell 5.1，后续命令按实际Shell边界执行。未发现根`.editorconfig`。后续每项证据须区分异常注入、正常退出和强停，不承诺断电原子性；长调用先回收同次结果，不重复启动。
+
+### 30.2 正式构建、离线首启与本地跨进程证据
+
+- 载体为本轮新建`Temp/r810d`，原主Unity进程32204未关闭或重开；实际载体Editor/Player均为`2022.3.62f3c1`、`StandaloneWindows64`、Mono2x。正式六导出根1390个文件及meta逐项SHA冻结，载体不复制主Library或原项目设置，仅使用正常解析的UGUI 1.0.0、Json.NET 3.2.1与内建modules；这不是阶段9的干净工程导入验收。
+- 通过当前正式ResourceProject多目录模型与原Builder/Publisher生成`r810-a`、`r810-b`（None）及`r810-e`（原E04加密）各两版，原C02 Preflight/Deploy部署六个明确版本。只创建载体自己的StreamingAssets父目录和owned根，主工程StreamingAssets不写入。签名、发布、部署身份及逐文件摘要保留在`%TEMP%/kilo/r810-1018d/publications.json`；BuildReport保留在`Temp/r810d/Builds/B1`与`B2`，实际包内`payload~`及全部StreamingAssets文件集合/length/SHA与C02来源完全一致。
+- `offline-none-02`和`offline-enc`均为真实独立Player、无服务、Store不存在的离线首启；只经`OpenBuiltIn`、`ResourceStartup`和原Provider消费，未读取开发机发布目录或使用AssetDatabase/Simulation。覆盖Core文本/Prefab实例、两个Prefab共享Material/Texture、Atlas Sprite与克隆销毁、Audio及其领域Provider、真实Additive Scene加载/卸载。首次消费不创建Store；有效正常退出检查authority/Core绑定/native Bundle、内容输入/作业/预算/CNG责任归零。
+- `Test-ResourcePlayerAcceptanceEvidence.ps1`首次本地回执`verification-local.json`实际核对**31个正常退出进程、4个受控强停进程**，其中5个明确拒绝进程（原远端Unsupported及加密首启/更新后缺错key）；计数是进程，不是测试叶/断言。同一None Store的安装/Prepare不激活、跨进程Prepared恢复、Busy保旧、幂等激活、active重启、整组LKG/回滚、取消均通过；加密同Store重复上述代表性更新/重启，缺错key拒绝后有效key仍可读取原active。
+- 异常注入单列：`BeforeCommitDecision`抛受控IOException后，正式实现恢复旧整组且内存/磁盘一致，下一进程验证通过。强停单列：自有Player分别停在`JournalVerified`、`ActiveWritten:r810-a`、`BeforeCommitDecision`、`CommitDecided`，检查PID与确切exe后仅Kill该子进程树；前3次下一进程恢复V1，提交决策后恢复V2。中间镜像写入点确实捕获a新/b旧的磁盘状态与Verified journal，重启后整组恢复，不宣称写入瞬间磁盘从不混镜像或断电保证。损坏一个owned active槽后，正式启动选择整个LKG并修复镜像，未混代或猜最新。逐进程result/Player/stdout/stderr及恢复前后控制快照保留于同根`Runs/`。
+- 加密写入观察限定本轮run/TEMP/Store，FileSystemWatcher零溢出错误、未观察到`UnityFS`明文文件；ProbeMisses及无法进程归因的限制逐次记录，不把有限事件观察冒充所有瞬时写入的证明。沿用原provider合同、CNG/BC实现、64KiB分段/2槽/32KiB读取与128MiB显式预算，无新密钥服务、内容key文件、整包解密落盘或后端替换；未重演延迟坏Stream Scene崩溃。
+- 失败原件保留：最初长路径载体触及Mono路径限制，后改用新建短路径载体；首次新载体未显式创建StreamingAssets父目录、部署刷新后复用失效Project SO引用的夹具错误均修正。`offline-none-01`为验证调度器提前Dispose CustomYieldInstruction，`none-corrupt-active-lkg`为证据采集器先解析故意损坏JSON，均未进入相应正式行为，修正调度/原始字节采集后真实重验通过，未修改产品逻辑或套用Scene豁免。原日志在`r810-1018`/`b`/`c`/`d`保留，不以失败/发现树计为通过。
+- 1110个保护文件SHA与开工一致。远端原硬拒绝已在`original-gate`中真实观察；随后正向`remote-positive-red`实际因Unsupported失败，作为候选适配的RED；此本地检查点时尚未开放，最终开放决定与证据见30.3。
+
+### 30.3 Windows Player远端开放决定与门禁
+
+本节为Mono主批交付时的原始开放记录；随后独立授权的Windows64 IL2CPP增补与当前最终矩阵见30.7及28.5，不据历史检查点恢复已移除门禁或改写原始证据。
+
+- **决定：仅开放Unity `2022.3.62f3c1`、Windows64 Mono Player。** 原UnityWebRequest、RSA签名、SHA、Range/Parts、ArtifactStore及原E04 provider实际可以在该后端工作，无需重写传输、密码或加载器。唯一产品行为改动在`ResourceRemoteSource.RequireSupportedRuntime`：保留WindowsEditor，Player同时检查Win目标、`ENABLE_MONO`、非Editor、64位及确切Unity版本；其他组合仍Unsupported。
+- 测试pin仅在Editor或同时具备`UNITY_STANDALONE_WIN && ENABLE_MONO && DEVELOPMENT_BUILD && YL_RESOURCE_ACCEPTANCE_TESTS`的隔离构建编译。C系列候选用精确loopback证书pin连接本轮自有HTTPS服务；D系列普通构建不带该符号，真实Player反射确认pin方法不存在，并实际拒绝同一自签证书。**正向HTTPS为自有loopback pin证据，普通默认信任链只有拒绝实测，没有生产CA信任链正向联网实测**；不把pin作为生产信任策略，不修改系统信任。
+
+| 门禁 | 实际Player结果与证据（相对`%TEMP%/kilo/r810-1018d`） |
+|---|---|
+| 正向签名HTTPS、两项目安装/激活/幂等 | `Runs/remote-positive-green-02`、`net-active-restart`、`net4-same-confirmed-release`；跨进程V2闭包与磁盘一致 |
+| TLS/错pin/签名/Catalog/HTTP拒绝 | `net2-untrusted-tls`、`net2-wrong-pin`、`net3-signature/catalog-hash/redirect/missing/stall`；核对实际原因及请求日志，旧active仍可消费；302未跳转，404未无界重试，503有限重试后成功在`net4-transient-retry` |
+| 合法非identity编码拒绝 | `review-green-encoding`：服务器实际gzip压缩、正确传输长度，Player内层明确`Encoded release responses are not accepted.`，仅发生release.json一次GET；原`net3-encoding`只证明坏gzip被curl拒绝，不作该协议门禁证据 |
+| 序号与回滚 | `net3-rollback/rollback-restart`、`net4-old-sequence/conflicting-sequence`、`net5-failed-confirmed-floor`；回滚保持已确认序号2，低序及同序异digest拒绝，相同已确认发布可幂等恢复 |
+| 损坏、失败保旧与恢复 | `net4-corrupt-body/corrupt-restart`、`net5-after-failed-valid`；真实损坏下载拒绝、旧Builtin V1可读，后续合法V2成功。只读Check及首次失败下载不确认序号，未改成observed冻结策略 |
+| 六种真实partial跨进程链 | `Runs/range-{range206,kill,ignore-range,changed-etag,bad-range,weak}-*`，每组partial/complete/active-restart；`resume-*-before.json`保留实际**1,048,576B**未完成文件SHA、目标length/SHA和ETag，`server-requests.jsonl`核对精确Range offset/If-Range及206/200。200/变ETag重头取，坏Content-Range拒绝后从零取，弱ETag不发Range；强停partial亦实际恢复 |
+| Prepare跨进程及远端journal | `recover-prepare-only/prepared-restart/prepared-activate/prepared-active-restart`；另在提交决策前/后各强停自有进程，下一进程分别恢复V1且无未提交floor、V2且两项目floor=2；成功激活后低序仍拒绝 |
+| 原E04密文远端衔接 | `encnet2-encrypted-online/restart/missing/wrong/valid`；同一失败原Store恢复后完成密文下载/认证/整组激活/重启，缺错key拒绝，有效key仍读V2；原认证、预算、内容所有权及CNG计数归还 |
+
+公开请求错误沿用原包装合同：上述传输/签名/摘要/序号通常为`UpdateFailed`，内层给出具体原因；初版夹具错误期望其他Kind的失败已保留并修正具体断言，未修改产品错误分类来迎合测试。未带验收符号的D1 Development构建真实离线None/加密与默认TLS拒绝也通过；D3补采正常Stop后完整Diagnostics，live图/Lease/Scene/Producer/Waiter/Running/Queued均空，native累计装卸14/14（两None项目）及7/7（加密项目）平衡，输入、作业、预算及进程CNG实值均归零。另真实构建`R1`（BuildReport `Options=None`、`Development=false`、Mono2x、Succeeded/0 errors），`release-offline/encrypted/persistent`三进程完成同样首启、持久V2与完整退出诊断，pin方法均不存在；不把Development与非Development混为一谈，远端正向仍按上述测试pin证据边界说明。
+
+### 30.4 唯一独立Review、修复与最终计数
+
+- 独立只读Review会话`ses_eaf0aa5cfffeUGAbdODFpzHHYP`完成一次；未发现Runtime范围放行或pin编译边界的实质缺陷，未重开密码、UI或31项审计。提出的两项P2证据问题及同步发现的终态统计错误均在同一修复批次闭合，不追加第二次Review。
+- **终态计数假阴性**：D2误把`NativeBundleLoadCount/UnloadCount`累计值当在途值要求各为0；保留`terminal-*`三份完整失败与真实Disposed/live空状态。改为累计装卸平衡及真实live/在途归零，D3 `terminal-none-02/encrypted-02/persistent-02`三进程实际GREEN；正式统计语义未改。
+- **编码假阳性缺口**：先加精确原因断言，`review-red-encoding`对旧坏gzip夹具实际RED；再只改server发送有效gzip及正确Content-Length，重启已登记的自有server，`review-green-encoding`实际GREEN。正式协议代码未改，不以curl解压失败冒充编码门禁。
+- **缺组仍通过的聚合器**：`coverage-probe-red/regression-result.json`实际证明旧聚合器在仅8正常/4强停且缺整个安全/远端恢复/密文远端组时错误输出Final通过（标为ProbeOnly，绝不是Player验收）。修复后先强制核对本批**98条固定必验映射**（含最后3条非Development Release）的文件存在、Unity/平台、命令、Mode、Store、PID/结果及关键拒绝原因；`coverage-probe-green-groups`保留其他证据而删上述组仍被`Required acceptance run missing: net-active-restart`拒绝。真实完整profile重新校验通过，不能从现有目录或数量反推覆盖率。
+- 自检另外发现并定位的观察器竞态：读取Store JSON/next及Windows `ReplaceFile`短命临时文件导致`ERROR_UNABLE_TO_REMOVE_REPLACED`；`watcher-probe-original02`第13次替换复现，`control02`无观察器10,000次通过。仅修观察器对这些mutable控制槽做元数据观察不打开文件；`watcher-probe-fixed`10,000次替换通过且真实8字节UnityFS阳性探针检出2次（不是解密内容文件）。原`encnet-encrypted-online`保留，**同一Store**在`encnet2-*`完成实际恢复并通过；未给产品加重试/吞异常，未套用Scene豁免。零明文观察仍有ProbeMisses、控制槽不读和不可进程归因限制，不声称完备捕获全部瞬时写入。
+- 最新`verification-release-final.json`实际结果：**98个必验映射；92个通过的正常退出进程（含23个明确拒绝场景）、7个受控强停进程**。此前95映射/89正常的检查点`verification-terminal.json`仍保留，不覆盖。以上是进程/场景口径，不是叶/断言数量。另有12份失败/RED及1次无可靠终态运行单列，完全不计通过；正常进程中旧坏gzip拒绝保留为额外负例，不充当合法编码证据。源码8份PowerShell解析、Node语法、12份新资产meta/GUID及1110保护文件SHA通过。
+- 无终态运行`remote-positive-green`的controller/Player/server均已实核消失，原Player日志停在bootstrap、无GET且Store不存在，`infrastructure-interruption.json`保留事实而不猜原因；先回收再启动新ID `remote-positive-green-02`，未重复同次长调用。所有失败原件、BuildReport、源码身份、程序集及发布身份、逐进程日志和恢复前后状态均保留。
+
+### 30.5 最新导出与依赖/许可
+
+- 使用原`YLFramework.Editor.ExportUnityPackage.Export`从正式六导出根及根LICENSE导出，根与Recurse、GUID均未改；研发Plan、Tests/runner、原游戏、StreamingAssets、Packages/Library/缓存、XFAB、外部DOTween、系统密码DLL、PFX/私钥均排除。`Test-ResourcePlayerAcceptanceExport.ps1`按原根精确读取tar，逐项验证**781条**路径/GUID/meta/资产length/SHA；共同父目录不是必导出的第七根，未为此扩大Exporter。
+- 交付包：`%TEMP%/kilo/r810-1018d/YLFramework-8.10.unitypackage`，**7,542,869B**，SHA256 **`17f77137b6f68e1267285a4e65841607a0e1f7ed242b32fd3bc613b17fb11022`**。原`export-verification.json`保留完整结论。D1与D3普通Player的`YLFramework.Runtime.dll`实际同SHA **`b4c776082e6b5f7756b1651a3838aca7fd2b2fee1b60327c53b5db5f269e4725`**；D3可执行文件SHA **`fa01ccdbaa5f74c777609235b99ba8988285b2bf0754445e85bba268b2e61eb7`**，其余Player/Unity/Mono/发布身份见各BuildReport与source-identity/source时间快照。
+- 实际Player Runtime PE引用有`Newtonsoft.Json`、`BouncyCastle.Cryptography`、UGUI与Unity modules，无UnityEditor/XFAB/Tests/Assembly-CSharp/Tink SDK反向依赖。原Runtime.asmdef、包依赖及插件导入约束不变；BC实际交付SHA仍为批准的`d61c1f2ba929a230a58e101ccd850e21f2675fa6b9814ec279633e8a089c3495`。
+- 非Development `R1`的相同导出、PE及许可检查另记`export-verification-release.json`，原包SHA不变；其`YLFramework.Runtime.dll`实际SHA为`4c1b3ff9637f652929ac4c4ecddcf0784866dd7103157fc7bfe3ca350fb40e2a`，不拿Development程序集身份替代Release。
+- BC完整MIT、SOURCE、Tink适用Apache-2.0参照声明、根XF许可、JSONObject/SharpZipLib与原第三方通知随框架导出。Json.NET来自原UPM `com.unity.nuget.newtonsoft-json 3.2.1`外部依赖，不把其DLL或PackageCache塞进框架包；实际包`LICENSE.md`为Unity Companion声明，`Third Party Notices.md`含四项MIT来源。新增/补齐既有Runtime通知，普通验收Player `Licenses/`实际携带这些适用原文，不用JSONObject许可替代Json.NET。原商业编辑器插件的再分发限制继续保留，不宣称新获许可。
+- `Resource.md`已更新受测平台、包内首启、同一持久Store、Check/Prepare/Activate/Stop及失败收尾、跨进程prepared、确认序号、TLS生产策略与限制；所示API顺序已由上述Player真实运行。**只做导出和源码/PE/许可核对，没有阶段9干净工程导入验收。**
+
+### 30.6 可复跑入口与工程终态
+
+永久入口在`Assets/YLFramework/Tests/Tools/`：`Prepare-ResourcePlayerAcceptance.ps1`、`Invoke-ResourcePlayerAcceptance.ps1`、`Run-ResourcePlayerAcceptanceLocal.ps1`（None/Encrypted）、`Run-ResourcePlayerAcceptanceRemote.ps1`（Security/Resume/Recovery/Encrypted/Encoding）、三个独立证据/导出/coverage检查及观察器竞态回归。Runner/Build两个载体模板`.cs.txt`只由隔离载体按身份复制成C#，观察器模板仅由外部PowerShell编译，不是主工程第二加载器。脚本要求实核已安装的PowerShell7.6，必须显式`pwsh`，不能在外层Windows PowerShell5.1直接执行。
+
+保留产物：载体`G:/Unity/Projects/CGJ2024/Temp/r810d`；非Development普通Player `Builds/R1/ResourceAcceptance.exe`、诊断Development `Builds/D3/ResourceAcceptance.exe`，隔离pin候选`Builds/C4/ResourceAcceptance.exe`；证据根`C:/Users/Kano/AppData/Local/Temp/kilo/r810-1018d`。单次复跑使用全新RunId和明确自有Store，不覆盖原件，例如：
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File "Assets/YLFramework/Tests/Tools/Invoke-ResourcePlayerAcceptance.ps1" -EvidenceRoot "C:/Users/Kano/AppData/Local/Temp/kilo/r810-1018d" -BuildName R1 -RunId replay-offline-001 -Command offline -StoreName replay-offline-001
+```
+
+完整重建先对**不存在**的证据根运行Prepare，`-CarrierRoot`选主工程Temp下新的短子目录；再按`-Operation Generate`、`-Operation Build -BuildName C1`生成六份原发布/C02部署及显式测试候选。自有server入口`node Assets/YLFramework/Tests/Tools/ResourcePlayerAcceptanceServer.cjs <证据根>`仅监听loopback18443，矩阵禁止并发改server-mode；先在remote-main做一次合法remote激活再跑Security组，Local组/Resume/Recovery/Encrypted/Encoding按脚本顺序运行。D前缀为无pin诊断Development，R前缀为`BuildOptions.None`，均不带验收符号。测试签名有效2天、证书3天；过期重建新自有夹具，不覆盖旧证据或放宽认证。新批完整聚合须明确维护等价必验映射，不把任意目录发现数自动当通过；原硬拒绝只作为已冻结B系列历史证据，不为复跑恢复旧gate。
+
+终态记录`main-editor-final.json`：仍为开工主Unity **32204**，规定版本，Play/Paused/Compiling/Updating均false、`CompilationFailed=false`；唯一UIAcceptance场景干净，authority/Core provider均空、native Bundle0。已通过正常AssetDatabase.Refresh生成本轮12份meta；没有保存用户Scene或改其资源。仅主Editor及其AssetImportWorker存续，所有本轮Player与载体Editor已退出，自有HTTPS服务7068已停止；未终止主Unity或未知进程。1110项保护SHA与开工一致，原6项用户/并行改动全部保留。
+
+Mono主批终态时HEAD/实时远端为`5074595212b08bba45d95d48768a895258ea6f93`，暂存区为空，产品/测试/文档/meta当时保留为未提交差异；后续IL2CPP增补及阶段8收口见§30.7～§30.8。历史E04/F03及176组Player证据按有效范围沿用，未机械重跑；普通CA正向联网、未受测平台、完备瞬时写入归因/进程总内存、断电保证及已接受的Scene延迟坏Stream风险均不冒充本轮通过。
+
+**8.10 COMPLETE／用户阶段8总体验收通过。**
+
+### 30.7 Windows64 IL2CPP正式支持增补专项（2026-10-19，COMPLETE／用户验收通过）
+
+用户正式授权在`fusion/8-resource`主工作区连续补齐Unity `2022.3.62f3c1` Windows64 IL2CPP，不扩展移动端、其他平台或其他Unity版本。沿用§30 Mono已成立证据，新增IL2CPP必须真实构建/裁剪/运行并独立验证。只有全部新增门禁通过后才开放对应正式源码支持判断；候选验证不得冒充普通正式构建。不得静默降级密码、跳过认证、修改系统信任、升级Unity/Packages或凭移除ENABLE_MONO就声称支持。该专项实施当时不Commit/Push/合并或进入阶段9；最终阶段8 Git收口见§30.8。
+
+| 已有证据 | 本专项缺口及门禁 |
+|---|---|
+| §30的Windows64 Mono None/E04、C02、持久Store、事务恢复、TLS/签名/序号/Range矩阵 | IL2CPP真实AOT与裁剪、P/Invoke/RSA/CNG/BC/认证Stream及native责任；不得用Mono结果替代 |
+| 正式多Project Builder/Publisher、C02、ResourceStartup及自有Player验证设施 | 新归属载体中的IL2CPP离线首启、Prefab/共享依赖/Atlas/Audio/Scene，及多进程Prepare/Activate/LKG/回滚/整组事务/强停恢复 |
+| 有界loopback测试pin与普通Player默认TLS拒绝 | IL2CPP HTTPS正向、签名/TLS/序号/摘要拒绝、强ETag/If-Range、真实partial跨进程206/200；非Development构建无pin及默认TLS拒绝 |
+| 已有源码/程序集/发布/许可身份设施 | IL2CPP GameAssembly、metadata、实际裁剪输入与生成物身份；仅出现真实裁剪缺陷才增加最小link.xml；一次独立Review及定向回归 |
+
+开工HEAD与实时远端均为`5074595212b08bba45d95d48768a895258ea6f93`。此前Mono源码、测试、Plan及许可差异均保留；本次新增发现`Packages/manifest.json`、`packages-lock.json`也已dirty，按开工并行现状保护，不认领或恢复。独立UI worktree为`.kilo/worktrees/fusion-ui-panel-redesign-a535884d76388bdd`、HEAD `7b7107f1c78c41c1c8861f7858a0254a35adde4f`，不写入。主MCP实时为Unity `2022.3.62f3c1`、PID32204，未Play/编译/更新、编译失败标记false、UIAcceptance干净、Resource authority空且native Bundle0。
+
+工具链预检：规定Editor目录包含win64 Development/nonDevelopment IL2CPP variations及il2cpp工具；vswhere精确VC.Tools.x86.x64查询命中完整VS Community 2022 `17.14.37027.9`，默认MSVC `14.44.35207`；Windows SDK Include存在`10.0.22621.0`与`10.0.26100.0`，C/G盘余量充分。VS BuildTools 2026另有incomplete/canceled实例，不作为有效工具链证明。以上仅为预检，能否工作仍以真实BuildReport/编译器日志为准。
+
+专项初始正式门禁仍关闭IL2CPP：`ResourceRemoteSource`仅明确开放既有Mono组合；`CngSegmentAead`本体也被`ENABLE_MONO`及`!ENABLE_IL2CPP`限制，不是仅缺Player测试。下一步先保留真实IL2CPP基线拒绝，再实施最小候选适配并完成所有门禁；不得将正常输入崩溃、损坏或责任泄漏归入原Mono延迟坏Stream Scene限定风险。
+
+**历史失败记录边界**：13条历史失败/RED及无终态记录已在阶段8收口中独立核销，不构成本阶段待办；本专项不重计、覆盖或以其成功改写原件，只读核对结论与限制继续保持。
+
+#### 30.7.1 基线与候选适配检查点
+
+- 新自有载体`Temp/ri19`，新证据`%TEMP%/kilo/r810i-1019`；原Mono载体/Store/失败原件未写入。六份None/E04正式Builder/Publisher/C02产物已生成，实际IL2CPP `I1`构建Succeeded、0 errors、Low裁剪、C++ Release，System MSVC 19.44实机可执行，使用VS2022实际编译链。`BuildEvidence/I1`在下一次构建前冻结1392个源码/meta/模板、94个实际ManagedStripped产物及327个生成C++，不把Editor编译图或不存在的Player Managed目录充当原生证据。
+- `I0`控制调用中断，原日志在C++编译124/362处停止；先核实同次controller及carrier/compiler进程均已不在，保留`build-I0-interruption.json`并以新ID `I1`独立完成，未重开同一运行或冒认I0成功。中断根因未知，不据此判工具链缺失。
+- 为IL2CPP验收替换其明确不支持的`Assembly.ManifestModule`/`System.Diagnostics.Process`：原生PID由Windows kernel32取得，Runtime记录AssemblyName+BuildGuid，实际身份以GameAssembly/metadata/裁剪程序集SHA为准；不在Player伪造Mono MVID。真实`baseline-none`已完成两Project None、Core、Prefab共享依赖、Atlas、Audio和Scene及14/14装卸平衡；`baseline-remote-gate`确切Unsupported，`baseline-encrypted-red`确切平台格式能力拒绝，原F/P均保留。
+- 默认正式IL2CPP仍关闭，只在`YL_RESOURCE_IL2CPP_CANDIDATE`显式候选启用真实实现和远端；pin仍另需Development及验收符号。IL2CPP不传递Mono的`DefaultDllImportSearchPaths`，候选CNG按绝对System32路径LoadLibraryEx及确切模块句柄GetProcAddress绑定，保留原ABI/provider/算法/认证/预算，无软件回退；系统模块为进程期依赖，provider/key逐owner释放。Mono保留原直接P/Invoke路径，不修改其已验密码实现。
+- `C1`候选真实加密失败：`BCryptOpenAlgorithmProvider NTSTATUS=0xC0000225`；实际生成C++显示委托的CharSet属性未使string成为宽字符，发出了`char*`。原`candidate-encrypted`及`BuildEvidence/C1`完整保留。仅对相关委托string显式`MarshalAs(LPWStr)`，由`C2`重新验证；未跳过认证或归入Scene风险。C1 None本身通过，实际CNG模块为`C:/WINDOWS/SYSTEM32/bcrypt.dll`。截至此检查点未新增link.xml，尚未出现真实裁剪故障。
+
+#### 30.7.2 候选实际门禁进展（正式默认支持仍关闭）
+
+- `candidate-encrypted-02`、`candidate-none-02`实际IL2CPP GREEN，CNG System32路径、ABI、UTF16委托、BC派生与Editor密文互操作及认证Stream已在真实Prefab/Atlas/Audio/Scene消费中成立，native装卸7/7、14/14及live/CNG/预算责任归还。`BuildEvidence/C2`保留修复后原生/裁剪/C++身份，无预添加link.xml。
+- `C2`的本地/远端更新又揭示该版本IL2CPP `DriveInfo`构造调用未实现icall `GetDriveFormat`。`none-cancel`、`encrypted-cancel`、`remote-positive`失败原件保留；不按Scene风险豁免。`C3`只在IL2CPP候选使用`GetDiskFreeSpaceExW`，保留调用者可用配额、64位字节计数和查询失败明确拒绝；本地/远端共用此查询，Mono路径仍原DriveInfo。实际`v3-none-*`与`v3-encrypted-*`完整通过：同Store安装/Prepare/Activate、Busy/取消/幂等、整组LKG/回滚、持久重启、缺错key、四事务检查点强停恢复、坏active整组回退。
+- `remote-positive-02`及`il-*`安全矩阵实际通过：IL2CPP原生UnityWebRequest回调、loopback pin、RSA签名、Catalog SHA、默认TLS/错pin、重定向/404/有效gzip/超时、有限503重试、确认序号回滚保持、同序异digest/旧序拒绝、损坏下载拒绝及后续合法恢复。`BuildEvidence/C3`完整冻结。
+- `range-*`六组真实partial链已运行：每份来自实际GET的1,048,576B未完成文件，206/强If-Range精确offset、强停partial恢复、忽略Range/ETag变更200重取、坏Content-Range从零重试、弱ETag不发Range；每组最终V2实际消费与再重启。一次`range-kill-complete`控制调用中断仅到bootstrap，先确认controller与Player32312均已不存在，保留原件/未知原因，不计通过或受控强停；新`range-kill-complete-02`复用原partial与不可变before快照完成同场景，后续`range-kill-active-restart`完成持久验证。长矩阵改为被跟踪的持续控制进程，不重复同次运行。
+- `R0`为`BuildOptions.None`非Development IL2CPP候选（仅能力验证符号，无pin符号），`ordinary-candidate-none/encrypted/persistent`已真实通过且pin方法不存在；`BuildEvidence/R0`冻结94个裁剪产物与322个生成C++。默认TLS拒绝及最后远端事务/密文组、独立Review和正式无候选构建仍须收齐，不能在此检查点宣布正式开放。
+
+#### 30.7.3 独立Review与正式开放
+
+唯一独立只读Review会话`ses_eadc31ae2ffeV4AB7sdxYydmLb`完成本专项一次审查。未发现候选Runtime的ABI、线程安全、System32绑定、认证降级或Mono回归实质缺陷；发现P1最终构建身份、P2场景语义、P2归档实物三项checker假阳性风险，均在同一修复批次闭合，不追加第二次Review：
+
+- `checker-regression-red/result.json`调用真实旧guard，实际接受了R0冒充最终构建、正常throw冒充强停、valid key冒充missing key，以及仅留identity的稀疏归档；明确ProbeOnly、非Player证据。修复后`checker-regression-green2`五项反例均被各自正确原因拒绝；最终四条run严格绑定`Builds/R1`，同时核对非Dev/无pin、CandidateValidation=false、ExtraDefines空，不再依赖可跳过的构建名条件。
+- 固定row绑定Key及具体错误、Expect/Target/初末digest、强停/普通终态、精确checkpoint与fault参数；7次强停不能由throw或普通退出替代，缺错key不能由valid key probe替代。原实际92条以强化语义重验通过（`il2cpp-candidate-reviewed.json`），无需重复已成立Player门禁。
+- 归档现在核对source-identity索引hash、Sources/ManagedStripped/GeneratedCpp的完整实物闭包及逐项length/SHA，以及实际native和BuildReport的一致性；不是只信保存回执。准确口径为**94个裁剪文件=52 DLL+40 PDB+2 JSON**，不是94程序集。旧不可变identity字段名称保留并解释，新归档已明确StrippedFiles/StrippedAssemblyCount。
+
+全部候选物理门禁及上述Review修复通过后，才移除CNG/remote/可用空间路径的候选编译限制，正式支持**Unity `2022.3.62f3c1` Windows64 IL2CPP**；Win平台/64位与remote精确版号保持，IL2CPP加密也核对精确版号。认证worker读`Application.unityVersion`依据官方2022.3绑定明确`IsThreadSafe`，不把非线程安全Unity API搬入worker。其他Unity版本、移动平台、32位及其他IL2CPP平台未开放。
+
+正式无候选非Development **R1**实际Succeeded、0 errors、Options=None、Backend=IL2CPP、Low、C++ Release、CandidateValidation=false、ExtraDefines=[]；`ordinary-final-none/encrypted/persistent/tls`四个真实进程分别覆盖包内首启/密文原CNG-BC与Stream/同Store V2 floor=2/默认CA拒绝，均pin方法不存在、正常资源与CNG责任归还。TLS日志为明确curl60证书链不受信任，不以服务不通冒充。全部实际输出、源码1392项和生成物在`BuildEvidence/R1`冻结。
+
+Mono主验收证据沿用，另以当前实现的非Development **RM**构建执行`mono-regression-none/encrypted`两个定向回归，仍走原Mono direct P/Invoke、None文件及E04路径，均通过；不把它们混进IL2CPP计数，也不机械重跑Mono旧矩阵或176叶。
+
+#### 30.7.4 最终证据、身份与边界
+
+- `il2cpp-final.json`强化门禁：**96条固定IL2CPP必验=89正常+7受控强停**，其中22个预期拒绝是正常子集。本轮全部IL2CPP成功运行口径为94正常+7强停（另5个成立的基线/早期额外正例，不增加固定覆盖）；另有Mono定向2进程单列。本专项5份失败/RED与1次无终态Player保留且不计成功，I0无BuildReport另列为构建中断；日志文本重复打印不重复计进程或警告。
+- 5份失败/RED分别是原加密门禁、首候选UTF16互操作错误、None/加密/远端3次DriveInfo未实现；对应后续真实成功及原件均在本新证据根。没有任何正常输入故障被套用原Mono坏Stream Scene风险。两次未知控制中断未猜原因，分别由I1和`range-kill-complete-02`独立补足同场景，并保留原件/不可变partial快照；不宣称中断根因已解决或断电保证。
+- 原生 **GameAssembly.dll SHA256=`26d4870bacf00b987111078c53a11c4c76ae0eb84824705f9792bc0128988ab1`**；实际 **global-metadata.dat SHA256=`12db9bc03087b4b4e13814358662c32d67f0e8901b235a0200eac31d4a0154fa`**。正式R1源码身份索引SHA=`acc83beb3f4dfac40cce38d7e8884f98447a13d9bee5a176600e654c13102f67`；其他程序集/文件/发布及各进程BuildGuid见BuildReport和BuildEvidence索引。IL2CPP记录AssemblyName与native身份，不伪造Mono MVID或不存在的Player Managed DLL。
+- 六份实际ManagedStripped Runtime PE均无UnityEditor/Tests/Assembly-CSharp/XFAB/Tink SDK反向引用；原BC批准输入SHA不变，**裁剪后BC的hash不要求等于未裁剪官方DLL**。实际Low裁剪与AOT均成立，没有新增Resource link.xml或全量Preserve；不声称High裁剪及应用动态反射类型已覆盖。
+- R0/R1实际BuildReport含1014警告（不是零警告），均为既有C#文档/成员告警：CS1591 995、CS1570 5、CS0114 1、CS1572 2、CS1573 9、CS1574 2。日志各重复输出3遍，不按3042个独立问题计；未关闭诊断或扩展成无关清理。C++编译错误为0，规定VS2022/MSVC/SDK真实可用。
+- 最新框架仍由原Exporter六根+LICENSE导出，不改Recurse/GUID，不含Tests/runner、游戏、Packages/Library、证书/私钥、系统CNG DLL。`export-verification.json`实核781项路径/meta/GUID/资产SHA及实际IL2CPP linker输入/native身份、BC/Json.NET/Tink等适用许可。
+- 新包`%TEMP%/kilo/r810i-1019/YLFramework-8.10.unitypackage`：**7,543,576B**、SHA256 **`41418a617bd0f849f63778c4d4678f3e21a973d75e965ffa03fea511d5d63c84`**；没有覆盖Mono根中的旧包，没有执行阶段9导入。Resource.md已更新Mono/IL2CPP矩阵、IL2CPP接入、Low范围、原生身份/配额查询、System32进程依赖与原逐owner责任说明。
+- HTTPS正向仍为隔离Development loopback精确pin；普通非Dev实际无pin且默认TLS拒绝，**普通CA链正向联网未实测，继续披露为缺口**。系统信任未改。有限写入观察的ProbeMisses/控制JSON不读/不可归因、进程总内存与声明数据预算区别、首次安装无确认历史的冻结限制、Mono已接受Scene限定风险均原样保留，不扩大风险豁免。
+
+#### 30.7.5 可复跑入口及停止状态
+
+证据根`C:/Users/Kano/AppData/Local/Temp/kilo/r810i-1019`，载体`G:/Unity/Projects/CGJ2024/Temp/ri19`；正式非Development二进制`Builds/R1/ResourceAcceptance.exe`，候选C3/R0及基线I1均保留。通用Invoke/Local/Remote设施显式传`-Backend IL2CPP`；R前缀无Dev，C前缀隔离验收符号，历史候选仅在明确`-CandidateValidation`时生成。正式路径现不需要候选符号；普通应用不得加`YL_RESOURCE_ACCEPTANCE_TESTS`。
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File "Assets/YLFramework/Tests/Tools/Invoke-ResourcePlayerAcceptance.ps1" -EvidenceRoot "C:/Users/Kano/AppData/Local/Temp/kilo/r810i-1019" -BuildName R1 -Backend IL2CPP -RunId replay-il2cpp-offline-001 -Command offline -StoreName replay-il2cpp-offline-001
+```
+
+复跑使用新RunId和明确自有Store，不覆盖原件；完整新批用不存在的新证据根与主工程Temp短子目录Prepare，再Generate/Build，server mode矩阵串行。`Save-ResourceIl2CppBuildEvidence.ps1`须在下一次构建覆盖Bee输出前冻结源码/实际linker/C++，不能事后用另一构建冒名；`Test-ResourceIl2CppAcceptance.ps1 -Final`核验本批固定必验语义、指定正式R1及实物闭包，`Test-ResourceIl2CppCheckerRegression.ps1`提供不跑Player的错误证据拒绝回归。新增/修改源码、模板、脚本及合法meta随本轮阶段8收口提交纳入；后续提交信息仍须中文。
+
+主工程/独立UI worktree不保存或重写用户Scene/资源。Packages两文件及开工并行改动保持；1110项保护SHA实际不变，独立UI树的并行新增成果仅只读记录、不接管。所有本轮Player/载体Editor已退出，自有HTTPS PID28708已停止，未终止主Unity或未知进程；主MCP当前仍原PID32204、UIAcceptance干净、无authority/Core绑定/native Bundle，最终编译与meta/状态证据另保留。IL2CPP专项当时不Commit/Push/合并或进入阶段9；阶段8收口授权与执行状态见§30.8。
+
+最终终态复核`il2cpp-terminal.json`与`main-editor-il2cpp-final.json`：96必验仍通过，11份PowerShell解析、Node语法、15个验收资产meta/GUID及1110保护SHA通过；主Editor Play/Paused/Compiling/Updating/CompilationFailed均false，Scene未dirty、Bundle0，未保存用户场景。仅主Unity及其原AssetImportWorker存续，无本轮Player、载体Editor或C++编译器；IL2CPP专项终态时HEAD/实时远端为`5074595212b08bba45d95d48768a895258ea6f93`、暂存区为空，阶段8最终Git结果见§30.8及最终报告。最新包身份未因纯Plan/Git收口而失效，不重复真实门禁制造数字。
+
+**阶段8 COMPLETE／用户验收通过；Windows64 Mono及Unity `2022.3.62f3c1` Windows64 IL2CPP（Low裁剪）正式支持成立；13条历史失败记录均已独立核销，不再列为待办。阶段9不启动。**
+
+### 30.8 阶段8最终验收与Git集成（2026-10-19）
+
+用户已正式确认阶段8总体验收通过，覆盖8.10 Mono Player全流程及Windows64 IL2CPP增补专项。阶段8标记为**COMPLETE／用户验收通过**，8.1～8.10全部纳入已验收范围。
+
+- **正式支持矩阵**：Unity `2022.3.62f3c1` WindowsEditor、同版本Windows64 Mono、同版本Windows64 IL2CPP（Low裁剪/C++ Release）。Windows64 IL2CPP正式路径不依赖候选符号；测试pin只存在于显式Development验收构建。
+- **未开放范围**：IL2CPP High裁剪、移动端、其他Player平台、32位及其他Unity版本；不据Low裁剪或Mono结果外推。未新增Resource `link.xml`，不声称覆盖应用动态反射/泛型。
+- **历史失败**：原Mono 13条失败/RED及无终态记录已独立核销，不再列为阶段8待办；原件、异常注入与正常退出分类保留。`remote-positive-green`等中断根因仍未知处按原记录披露，不改写为已解释。
+- **继续有效的限制**：普通CA信任链正向联网未实测，隔离loopback精确pin不能冒充生产CA策略；默认TLS拒绝已实测。Mono已接受的Scene延迟坏Stream风险及历史no-go结论继续有效；首次安装无确认历史、有限写入观察、进程总内存与声明数据预算区别、断电保证边界均原样保留。R0/R1的1014项既有C#警告未清零，不表述为零警告。
+- **Git边界**：只纳入8.10 Mono/IL2CPP必要产品源码、测试工具、合法meta、`Resource.md`及本Plan；排除`Packages`/`ProjectSettings`、`AGENTS.md`、工具配置、用户资产和独立UI worktree。Commit使用中文标题与正文；普通Push已核实上游。`integration/xf-yl`按实时祖先关系优先Fast-forward，否则正常Merge；实际Commit、远端SHA及合并方式以最终报告和远端历史为准。阶段9不启动。

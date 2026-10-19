@@ -406,7 +406,7 @@ namespace YLFramework.Services.Resource
             required = checked(required + (fromBytes + toBytes) * mounts.Count + Math.Max(fromBytes, toBytes) +
                 ResourceCatalogCodec.CanonicalBytes(Transition(entries)).Length * 4L + ResourceCatalogCodec.CanonicalBytes(Owner()).Length +
                 Projects.Sum(x => ResourceCatalogCodec.CanonicalBytes(ProjectOwner(x.ProjectId)).Length + 32L) + 4096);
-            var available = new DriveInfo(Path.GetPathRoot(RootPath)).AvailableFreeSpace;
+            var available = AvailableSpace();
             ValidateOwner(); RequireNoJournal();
             cancellation.ThrowIfCancellationRequested();
             return new UpdatePlan(RootPath, entries, available, required);

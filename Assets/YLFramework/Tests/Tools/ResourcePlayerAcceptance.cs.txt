@@ -1,0 +1,450 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.U2D;
+using YLFramework.Core;
+using YLFramework.Services.Resource;
+
+// 仅由独立Player验收载体编译。消费正式API，不复制加载器或事务实现。
+public sealed class ResourcePlayerAcceptance : MonoBehaviour
+{
+#if ENABLE_IL2CPP && !UNITY_EDITOR
+    private const string Backend = "IL2CPP";
+#else
+    private const string Backend = "Mono2x";
+#endif
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", ExactSpelling = true)]
+    private static extern uint GetCurrentProcessId();
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true)]
+    private static extern IntPtr GetModuleHandleW(string name);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true)]
+    private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder path, uint size);
+    private static int ProcessId => checked((int)GetCurrentProcessId());
+    private JObject config;
+    private JObject result;
+    private readonly Dictionary<string, string> args = new(StringComparer.Ordinal);
+    private ResourceStartup startup;
+    private ResourceSystem resources;
+    private ResourceConfiguration configuration;
+    private string output;
+    private string store;
+    private string command;
+    private string mode;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void Boot()
+    {
+        var host = new GameObject("Resource 8.10 Acceptance");
+        DontDestroyOnLoad(host);
+        host.AddComponent<ResourcePlayerAcceptance>();
+    }
+
+    private IEnumerator Start()
+    {
+        Application.runInBackground = true;
+        var cli = Environment.GetCommandLineArgs();
+        for (var i = 0; i + 1 < cli.Length; i++)
+            if (cli[i].StartsWith("--r810-", StringComparison.Ordinal)) args[cli[i].Substring(7)] = cli[++i];
+        output = args["out"];
+        store = args["store"];
+        command = args["command"];
+        mode = Get("mode", "none");
+        result = new JObject { ["Pid"] = ProcessId,
+            ["Unity"] = Application.unityVersion, ["Platform"] = Application.platform.ToString(),
+#if ENABLE_IL2CPP && !UNITY_EDITOR
+            ["RuntimeAssembly"] = typeof(ResourceSystem).Assembly.FullName,
+            ["RuntimeAssemblyIdentityKind"] = "AssemblyName-NativeBuildIdentityInBuildReport",
+#else
+            ["RuntimeAssembly"] = typeof(ResourceSystem).Assembly.ManifestModule.ModuleVersionId.ToString(),
+#endif
+            ["BuildGuid"] = Application.buildGUID, ["Development"] = Debug.isDebugBuild,
+            ["Backend"] = Backend,
+            ["LoopbackPinCompiled"] = typeof(ResourceRemoteSource).GetMethod("TrustLoopbackCertificate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) != null,
+            ["Command"] = command, ["Mode"] = mode, ["Store"] = store, ["Steps"] = new JArray() };
+        config = JObject.Parse(File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "r810-config.json")));
+        var stack = new Stack<IEnumerator>();
+        stack.Push(Run());
+        Exception failure = null;
+        while (stack.Count != 0)
+        {
+            object current = null;
+            bool more = false;
+            try { more = stack.Peek().MoveNext(); if (more) current = stack.Peek().Current; }
+            catch (Exception error) { failure = error; break; }
+            if (!more) { (stack.Pop() as IDisposable)?.Dispose(); continue; }
+            if (current is IEnumerator child && current is not CustomYieldInstruction) stack.Push(child);
+            else yield return current;
+        }
+        while (stack.Count != 0)
+            try { (stack.Pop() as IDisposable)?.Dispose(); }
+            catch (Exception cleanup) { failure = failure == null ? cleanup : new AggregateException(failure, cleanup); }
+        if (failure != null) { result["Failure"] = failure.ToString(); Debug.LogException(failure); }
+        result["Passed"] = failure == null;
+        result["EndedUtc"] = DateTime.UtcNow.ToString("O");
+        Save();
+        Application.Quit(failure == null ? 0 : 1);
+    }
+
+    private IEnumerator Run()
+    {
+        Require(Application.unityVersion == "2022.3.62f3c1" && Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8,
+            "The actual Player must be Unity 2022.3.62f3c1 / Windows64.");
+        Require(Get("backend", Backend) == Backend, "Actual compiled backend differs from the requested backend.");
+        result["BeforeStoreExists"] = Directory.Exists(store);
+        result["BeforeDisk"] = Disk();
+        var projects = Selected().ToArray();
+        var mounts = projects.Select(project =>
+        {
+            var id = (string)project["Id"];
+            var builtin = Snapshot(project, 1);
+            ResourceRemoteSource remote = null;
+            if (command.StartsWith("remote", StringComparison.Ordinal) || Get("remote", "false") == "true")
+            {
+                var key = config["SigningKey"];
+                remote = new ResourceRemoteSource(Get("endpoint", (string)config["Endpoint"]) + id + "/", "acceptance",
+                    new[] { new ResourceSigningKey("r810-test", (string)key["Modulus"], (string)key["Exponent"]) },
+                    timeoutSeconds: 15, idleTimeoutSeconds: 5, attempts: 2);
+                // 测试专用编译边界内的精确loopback pin，正常发布编译中不存在此方法。
+                if (Get("trust", "pin") is "pin" or "wrong")
+                {
+                    var pin = typeof(ResourceRemoteSource).GetMethod("TrustLoopbackCertificate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    Require(pin != null, "The isolated certificate test surface must be compiled explicitly.");
+                    var certificate = Convert.FromBase64String((string)config["Certificate"]);
+                    if (Get("trust", "pin") == "wrong") certificate[certificate.Length - 1] ^= 1;
+                    pin.Invoke(remote, new object[] { certificate });
+                }
+            }
+            return new ResourceProjectMount(id, "StandaloneWindows64", "r810-app", builtin, remote: remote);
+        }).ToArray();
+        ResourceDecryptionOptions decryption = mode == "encrypted" ? new ResourceDecryptionOptions(new Keys(Get("key", "valid")), 128L * 1024 * 1024) : null;
+        configuration = ResourceConfiguration.Create(ResourceLoadMode.Bundles, mounts, store, decryption: decryption);
+        startup = new ResourceStartup(configuration, bindCore: true, audioProjects: new[] { mounts[0].ProjectId });
+        using (var start = startup.StartAsync())
+        {
+            yield return start;
+            if (Get("key", "valid") is "missing" or "wrong")
+            {
+                var expected = Get("key", "valid") == "missing" ? ResourceError.ContentKeyUnavailable : ResourceError.ContentAuthenticationFailed;
+                Require(start.Error?.Kind == expected, "Missing/wrong key must be rejected without fallback: " + start.Error);
+                Step("key-rejected", new { Error = start.Error.Kind.ToString() });
+                yield return Stop();
+                yield break;
+            }
+            start.TakeResult();
+        }
+        resources = startup.Resources;
+        result["Mounted"] = Mounted();
+        if (args.TryGetValue("expect", out var expectedVersion)) AssertVersion(int.Parse(expectedVersion));
+        if (command == "offline")
+        {
+            Require(!(bool)result["BeforeStoreExists"], "Offline first launch requires a missing Store.");
+            yield return Consume();
+            Require(!Directory.Exists(store), "Built-in startup alone must not create a Store.");
+        }
+        else if (command == "probe") yield return Consume();
+        else if (command == "rollback")
+        {
+            using var rollback = resources.RollbackAsync();
+            yield return rollback;
+            rollback.TakeResult();
+            AssertVersion(int.Parse(Get("target", "1")));
+            yield return Consume();
+        }
+        else if (command == "activate")
+        {
+            var prepared = resources.GetPreparedUpdates().Single();
+            yield return Activate(prepared);
+        }
+        else if (command.StartsWith("remote", StringComparison.Ordinal)) yield return Remote();
+        else
+        {
+            var target = int.Parse(Get("target", "2"));
+            UpdatePlan plan;
+            using (var check = resources.CheckUpdatesAsync(projects.Select(x => Snapshot(x, target))))
+            { yield return check; plan = check.TakeResult(); }
+            var before = Mounted().ToString(Formatting.None);
+            if (command == "cancel")
+            {
+                using var canceled = new CancellationTokenSource();
+                canceled.Cancel();
+                using var prepare = resources.PrepareUpdateAsync(plan, canceled.Token);
+                yield return prepare;
+                Require(prepare.Error?.Kind == ResourceError.Canceled, "Canceled Prepare must be Canceled.");
+            }
+            else
+            {
+                PreparedUpdate prepared;
+                using (var prepare = resources.PrepareUpdateAsync(plan)) { yield return prepare; prepared = prepare.TakeResult(); }
+                Require(before == Mounted().ToString(Formatting.None), "Prepare must not activate.");
+                Step("prepared", new { Count = resources.GetPreparedUpdates().Count });
+                if (command != "prepare") yield return Activate(prepared);
+            }
+        }
+        result["AfterMounted"] = Mounted();
+        result["AfterDisk"] = Disk();
+        yield return Stop();
+    }
+
+    private IEnumerator Activate(PreparedUpdate prepared)
+    {
+        if (command == "busy")
+        {
+            using var load = resources.AcquireAsync<TextAsset>(new ResourceAddress((string)Selected().First()["Id"], "message"));
+            yield return load;
+            using (var held = load.TakeResult())
+            {
+                using var blocked = resources.ActivatePreparedUpdateAsync(prepared);
+                yield return blocked;
+                Require(blocked.Error?.Kind == ResourceError.Busy, "A live lease must block the whole transaction.");
+                using var old = resources.AcquireAsync<TextAsset>(held.Address);
+                yield return old;
+                using var oldLease = old.TakeResult();
+                Require(oldLease.Asset == held.Asset, "Busy must reopen old acquisition.");
+                Step("busy-keeps-old", null);
+            }
+        }
+        if (args.TryGetValue("checkpoint", out var checkpoint))
+        {
+            var field = typeof(ArtifactStore).GetField("Checkpoint", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            field.SetValue(configuration.ArtifactStore, (Action<string>)(point =>
+            {
+                if (point != checkpoint) return;
+                result["Checkpoint"] = point;
+                result["CheckpointDisk"] = Disk();
+                result["CheckpointMounted"] = Mounted();
+                Save();
+                if (Get("fault", "kill") == "throw") throw new IOException("r810 owned checkpoint exception");
+                File.WriteAllText(output + ".checkpoint", ProcessId.ToString());
+                using var gate = new ManualResetEvent(false);
+                gate.WaitOne(); // 外部控制器只强停此已登记的自有Player。
+            }));
+        }
+        using (var activate = resources.ActivatePreparedUpdateAsync(prepared))
+        {
+            yield return activate;
+            if (Get("fault", "") == "throw")
+            {
+                Require(activate.Error != null, "A pre-decision injected exception must not claim target activation.");
+                AssertVersion(int.Parse(Get("expect", "1")));
+                Step("injected-exception-recovered", new { Error = activate.Error.ToString() });
+                yield break;
+            }
+            activate.TakeResult();
+        }
+        AssertVersion(int.Parse(Get("target", "2")));
+        if (args.ContainsKey("checkpoint")) typeof(ArtifactStore).GetField("Checkpoint", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(configuration.ArtifactStore, null);
+        using (var repeat = resources.ActivatePreparedUpdateAsync(prepared)) { yield return repeat; repeat.TakeResult(); }
+        Step("activate-idempotent", null);
+        yield return Consume();
+    }
+
+    private IEnumerator Remote()
+    {
+        var before = Mounted().ToString(Formatting.None);
+        using var check = resources.CheckRemoteUpdatesAsync();
+        yield return check;
+        if (command is "remote-reject" or "remote-original-gate")
+        {
+            Require(check.Error != null, "The negative release must be rejected.");
+            if (args.TryGetValue("error", out var expectedError)) Require(check.Error.Kind.ToString() == expectedError, "Remote rejection kind mismatch: " + check.Error);
+            if (args.TryGetValue("reason", out var expectedReason)) Require(check.Error.ToString().Contains(expectedReason), "Remote rejection reason mismatch: " + check.Error);
+            if (command == "remote-original-gate") Require(check.Error.Kind == ResourceError.Unsupported, "The original backend must explicitly reject Player.");
+            result["Rejection"] = check.Error.ToString();
+            Require(before == Mounted().ToString(Formatting.None), "Remote check failure must keep old memory.");
+            yield return Consume();
+            yield break;
+        }
+        var plan = check.TakeResult();
+        using var prepare = resources.PrepareUpdateAsync(plan);
+        if (command is "remote-partial" or "remote-kill-partial")
+        {
+            var until = Time.realtimeSinceStartup + 60;
+            string part = null;
+            while (!prepare.IsDone)
+            {
+                part = Directory.Exists(store) ? Directory.GetFiles(store, "*.part", SearchOption.AllDirectories)
+                    .FirstOrDefault(x => new FileInfo(x).Length >= 1024 * 1024 && new FileInfo(x).Length < plan.MissingBytes) : null;
+                if (part != null) break;
+                Require(Time.realtimeSinceStartup < until, "A real download partial was not produced.");
+                yield return null;
+            }
+            Require(part != null && !prepare.IsDone, "Partial must be an incomplete real GET, not manufactured bytes.");
+            result["PartialAtCancel"] = new JObject { ["Path"] = part, ["Length"] = new FileInfo(part).Length };
+            if (command == "remote-kill-partial")
+            {
+                result["CheckpointDisk"] = Disk(); Save();
+                File.WriteAllText(output + ".checkpoint", ProcessId.ToString());
+                using var gate = new ManualResetEvent(false); gate.WaitOne();
+            }
+            prepare.Cancel();
+            yield return prepare;
+            Require(prepare.Error?.Kind == ResourceError.Canceled, "Partial cancellation must be Canceled.");
+            Require(before == Mounted().ToString(Formatting.None), "Partial must not activate.");
+            Step("actual-partial-canceled", null);
+            yield break;
+        }
+        yield return prepare;
+        if (command == "remote-corrupt")
+        {
+            Require(prepare.Error != null, "Corrupt body must not be prepared.");
+            if (args.TryGetValue("error", out var expectedError)) Require(prepare.Error.Kind.ToString() == expectedError, "Transfer rejection kind mismatch: " + prepare.Error);
+            result["Rejection"] = prepare.Error.ToString();
+            Require(before == Mounted().ToString(Formatting.None), "Corrupt transfer must keep old memory.");
+            yield return Consume();
+            yield break;
+        }
+        var prepared = prepare.TakeResult();
+        if (command == "remote-prepare") { Step("remote-prepared-without-activation", new { Count = resources.GetPreparedUpdates().Count }); yield break; }
+        yield return Activate(prepared);
+    }
+
+    private IEnumerator Consume()
+    {
+        foreach (var project in Selected())
+        {
+            var id = (string)project["Id"];
+            var digest = resources.GetActiveCatalogDigest(id);
+            var version = Enumerable.Range(1, 2).Single(x => (string)project["Digests"][x - 1] == digest);
+            using (var read = startup.CoreProvider.ReadTextAsync(id, "message"))
+            {
+                yield return read;
+                Require(read.TakeResult() == "r810-version-" + version, "Core must consume the selected exact generation.");
+            }
+            using (var prefab = resources.AcquireAsync<GameObject>(new ResourceAddress(id, "prefab")))
+            using (var other = resources.AcquireAsync<GameObject>(new ResourceAddress(id, "other")))
+            {
+                yield return prefab; yield return other;
+                using var first = prefab.TakeResult(); using var second = other.TakeResult();
+                var a = first.Asset.GetComponent<Renderer>().sharedMaterial;
+                var b = second.Asset.GetComponent<Renderer>().sharedMaterial;
+                Require(a && a == b && a.mainTexture, "Prefab shared material and texture must come from the same Bundle graph.");
+                using var request = startup.CoreProvider.AcquirePrefabAsync(id, "prefab");
+                yield return request;
+                using var core = request.TakeResult();
+                using var instance = core.Instantiate(null, SceneManager.GetActiveScene());
+                Require(instance.Instance && instance.Instance.GetComponent<Renderer>().sharedMaterial == a, "Core instance must share the official Prefab graph.");
+                instance.Discard();
+            }
+            using (var atlas = resources.AcquireAsync<SpriteAtlas>(new ResourceAddress(id, "atlas")))
+            {
+                yield return atlas;
+                using var lease = atlas.TakeResult();
+                var clone = lease.Asset.GetSprite("icon");
+                Require(clone && clone.texture && clone.rect.width == 16, "The packaged Atlas must materialize its Sprite and shared Texture.");
+                Destroy(clone);
+                yield return null;
+            }
+            using (var audio = resources.AcquireAsync<AudioClip>(new ResourceAddress(id, "audio")))
+            {
+                yield return audio;
+                using var lease = audio.TakeResult();
+                Require(lease.Asset.samples > 0 && lease.Asset.frequency == 22050, "Packaged Audio must have real samples.");
+                if (id == (string)Selected().First()["Id"])
+                {
+                    using var clip = startup.AudioProviders[id].Load("audio");
+                    Require(clip.Clip == lease.Asset, "Audio provider must share the same resource graph.");
+                }
+            }
+            using (var scene = resources.LoadSceneAsync(new ResourceAddress(id, "scene"), LoadSceneMode.Additive))
+            {
+                yield return scene;
+                using var lease = scene.TakeResult();
+                Require(lease.Scene.isLoaded && lease.Scene.GetRootGameObjects().Any(x => x.name == "r810-scene"), "Packaged Scene must actually load.");
+                using var unload = resources.UnloadSceneAsync(lease);
+                yield return unload;
+                unload.TakeResult();
+            }
+            yield return null;
+            Step("consume", new { Project = id, Version = version, Digest = digest, Content = resources.GetContentDiagnosticsSnapshot() });
+        }
+    }
+
+    private IEnumerator Stop()
+    {
+        if (startup == null) yield break;
+        if (resources != null)
+        {
+            resources.ClearInstanceCaches();
+            var until = Time.realtimeSinceStartup + 30;
+            while (resources.GetDiagnosticsReport().InstanceCaches.Count != 0 || resources.GetContentDiagnosticsSnapshot().WorkCount != 0)
+            { Require(Time.realtimeSinceStartup < until, "Owned responsibilities did not drain."); yield return null; }
+            result["BeforeStop"] = JObject.FromObject(resources.GetDiagnosticsReport());
+        }
+        using (var stop = startup.StopAsync()) { yield return stop; stop.TakeResult(); }
+        yield return null;
+        var content = resources?.GetContentDiagnosticsSnapshot() ?? default;
+        result["AfterStopContent"] = JObject.FromObject(content);
+        if (resources != null)
+        {
+            var terminal = resources.GetDiagnosticsReport();
+            result["AfterStopDiagnostics"] = JObject.FromObject(terminal);
+            Require(terminal.Summary.LeaseCount == 0 && terminal.Summary.ProducerCount == 0 && terminal.Summary.WaiterCount == 0 &&
+                terminal.Summary.RunningBundleCount == 0 && terminal.Summary.QueuedBundleCount == 0 &&
+                terminal.Summary.NativeBundleLoadCount == terminal.Summary.NativeBundleUnloadCount &&
+                terminal.Assets.Count == 0 && terminal.Bundles.Count == 0 && terminal.InstanceCaches.Count == 0 && terminal.Scenes.Count == 0,
+                "Terminal shutdown must drain real leases, graphs, scenes and native work.");
+        }
+        var cng = typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource.CngSegmentAead", true);
+        var counters = new JObject();
+        foreach (var name in new[] { "ActiveAlgorithms", "ActiveKeys", "ActiveKeyObjectBytes", "ReleaseFailures", "RetainedReleaseOwners" })
+            counters[name] = Convert.ToInt64(cng.GetProperty(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).GetValue(null));
+        result["AfterStopProcessCng"] = counters;
+        Require(counters.Properties().All(x => (long)x.Value == 0), "Process CNG counters must be real zero even after failed startup.");
+        var module = GetModuleHandleW("bcrypt.dll");
+        if (module != IntPtr.Zero)
+        {
+            var path = new System.Text.StringBuilder(32768);
+            Require(GetModuleFileNameW(module, path, (uint)path.Capacity) > 0, "The loaded CNG dependency must be identifiable.");
+            result["CngNativeModule"] = path.ToString();
+        }
+        result["AfterStopBundles"] = AssetBundle.GetAllLoadedAssetBundles().Count();
+        Require(ResourceSystem.Current == null && CoreResourceAccess.Provider == null && AssetBundle.GetAllLoadedAssetBundles().Count() == 0,
+            "Normal shutdown must return authority, Core binding and native Bundles.");
+        Require(content.LiveInputs == 0 && content.WorkCount == 0 && content.AllocatedBufferBytes == 0 && content.ReservedBufferBytes == 0 &&
+            content.RetainedCleanupOwners == 0 && content.ProcessCngProviderCount == 0 && content.ProcessCngKeyCount == 0 && content.ProcessCngReleaseFailures == 0,
+            "Normal shutdown must return all content, budget, in-flight and CNG responsibility.");
+        Step("normal-shutdown-clean", null);
+    }
+
+    private IEnumerable<JObject> Selected() => ((JArray)config[mode == "encrypted" ? "Encrypted" : "None"]).Cast<JObject>();
+    private ResourceLocalSnapshot Snapshot(JObject project, int version) => ResourceLocalSnapshot.OpenBuiltIn((string)project["Id"],
+        (string)project["Digests"][version - 1], "StandaloneWindows64", "r810-app");
+    private JArray Mounted() => new(Selected().Select(x => new JObject { ["ProjectId"] = (string)x["Id"], ["Digest"] = resources.GetActiveCatalogDigest((string)x["Id"]) }));
+    private void AssertVersion(int version)
+    {
+        foreach (var project in Selected()) Require(resources.GetActiveCatalogDigest((string)project["Id"]) == (string)project["Digests"][version - 1], "No mixed generation is allowed.");
+    }
+    private JObject Disk() => new(Directory.Exists(store) ? Directory.GetFiles(store, "*.json", SearchOption.AllDirectories)
+        .Where(x => new[] { "active.json", "last-known-good.json", "commit-journal.json", "release-floors.json" }.Contains(Path.GetFileName(x)))
+        .Select(x => new JProperty(x.Substring(store.Length + 1).Replace('\\', '/'), DiskRecord(x))) : Array.Empty<JProperty>());
+    private static JToken DiskRecord(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        try { return JObject.Parse(System.Text.Encoding.UTF8.GetString(bytes)); }
+        catch (JsonException error) { return new JObject { ["Malformed"] = error.GetType().Name, ["OriginalBase64"] = Convert.ToBase64String(bytes) }; }
+    }
+    private string Get(string key, string fallback) => args.TryGetValue(key, out var value) ? value : fallback;
+    private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+    private void Step(string name, object data) { ((JArray)result["Steps"]).Add(new JObject { ["Name"] = name, ["Data"] = data == null ? JValue.CreateNull() : JToken.FromObject(data) }); Debug.Log("R810 " + name); }
+    private void Save() => File.WriteAllText(output, result.ToString(Formatting.Indented));
+
+    private sealed class Keys : IResourceContentKeyProvider
+    {
+        private readonly string mode;
+        internal Keys(string mode) => this.mode = mode;
+        public bool TryCopyKey(string projectId, string keyId, byte[] destination)
+        {
+            if (mode == "missing") return false;
+            var key = Convert.FromBase64String(Environment.GetEnvironmentVariable("YL_RESOURCE_CONTENT_KEY"));
+            try { if (mode == "wrong") key[0] ^= 1; Buffer.BlockCopy(key, 0, destination, 0, 32); return true; }
+            finally { Array.Clear(key, 0, key.Length); }
+        }
+    }
+}

@@ -279,7 +279,7 @@ namespace YLFramework.Services.Resource
         private static void RequireSupported(ResourceBundleContext context)
         {
             if (!IsSupported || context.Platform != "StandaloneWindows64")
-                throw new PlatformNotSupportedException("Encrypted Resource content requires Windows x64 Editor or Mono Player.");
+                throw new PlatformNotSupportedException("Encrypted Resource content requires Windows x64 Editor or a validated Windows64 Mono/IL2CPP Player backend.");
         }
 
         private static void RequireInput(Stream input)

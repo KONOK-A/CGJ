@@ -2,7 +2,7 @@
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md) · [阶段 8 Plan](../../../../.kilo/plans/xf-yl-8-resource.md)
 >
-> C02、E05、B06 和 E04 G1～G3 已通过用户技术验收，E04 G1～G4正式交付及上轮技术审核结论沿用；C05 技术完成、待用户验收，整体8.9未COMPLETE。**B02与F03技术完成，待用户验收**；实际范围、样本、限制与保护检查见原Plan §28.11，不据此改变其他项目验收状态。**远端安全更新仅支持WindowsEditor，Windows Player当前明确拒绝，不是仅缺测试。** 平台边界见文末。
+> 本文说明当前正式Resource接入合同。Windows远端除原WindowsEditor外，仅开放实际受测的Unity `2022.3.62f3c1`、Windows64 Mono及IL2CPP Player；其他Player平台、32位及其他引擎版本仍由源码明确拒绝。IL2CPP受测Low裁剪，不以Mono或Editor结果代替AOT运行。验收记录、用户授权与阶段状态以原Plan为准，平台边界见文末。
 
 ## 正式入口
 
@@ -91,7 +91,7 @@ public static class ApplicationResources
 
 要交付内置资源，退出 Play 后保持已选的确切 `CatalogDigest`，先点 `Preflight Selected Built-In Release` 查看来源、目标和内容，再点 `Deploy Selected Release To Built-In`。成功仅将样例 `UseBuiltIn=true`，不启动服务、不代保存 Scene、不自动改为 Bundles。明确选择 `Mode=Bundles` 并保存自己的应用 Scene 后再运行；后续 Build 会选中新发布并重置 `UseBuiltIn=false`，须再次明确预检/部署。中断使用 `Recover Built-In Deployment`，再按结果重新预检。
 
-Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`UseBuiltIn=true` 时只使用 ProjectId/Platform/App/CatalogDigest 经过 `OpenBuiltIn` 定位，不使用开发机的 `SnapshotDirectory`。这是正式内置路径接入，不开放远端 gate，也不代表 Player 首次启动与持久重启已验收。
+Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`UseBuiltIn=true` 时只使用 ProjectId/Platform/App/CatalogDigest 经过 `OpenBuiltIn` 定位，不使用开发机的 `SnapshotDirectory`。None及加密的实际Player包内首启和同Store跨进程更新/重启已验证；不要将其外推到未受测平台或阶段9完整交付。
 
 ## 实例与场景
 
@@ -344,7 +344,69 @@ catch
 - 正式 payload 的闭合文件集合连 `.meta` 也不忽略。安全部署与 Unity 元数据边界见下节，不以工程外导出或导入前复制成功冒充真实 StreamingAssets 验证。
 - 更新要求已配置 ArtifactStore。顺序为 CheckUpdatesAsync（本地完整项目闭包）或 CheckRemoteUpdatesAsync -> PrepareUpdateAsync -> 应用归还责任 -> ActivatePreparedUpdateAsync；Prepared 可查询/续用，但 **Prepare 不等于激活**。
 - Check 纯读，Prepare/取消不写 active；激活 Busy 后旧版仍可用，from 变化返回 StaleBase。RollbackAsync 显式选 LKG 并走同一闸门，不是随意激活旧 prepared。CleanupVersionsAsync 安全清理 owned 内容；清理前查询见下节。
-- 远端须应用注入公钥/端点/channel/最低序号，由原签名、HTTPS、ETag/Range 和事务链处理。签名不证明最新，不防本地状态恶意回滚；历史导出不等于 Runtime 回滚。当前非 WindowsEditor 后端明确 Unsupported。
+- 远端须应用注入公钥/端点/channel/最低序号，由原签名、HTTPS、ETag/Range和事务链处理。签名不证明最新，不防本地状态恶意回滚；历史导出不等于Runtime回滚。除WindowsEditor及Unity `2022.3.62f3c1` Windows64 Mono/IL2CPP Player外，其他后端明确Unsupported。
+- 普通Player使用Unity默认TLS证书链校验，不提供生产忽略证书或测试pin配置。仅Editor和同时具备`UNITY_STANDALONE_WIN`、`ENABLE_MONO`或`ENABLE_IL2CPP`后端、`DEVELOPMENT_BUILD`、`YL_RESOURCE_ACCEPTANCE_TESTS`的隔离验收构建保留内部loopback精确pin，不修改系统信任；正常应用不得加入验收符号。正向HTTPS证据为隔离loopback pin，普通默认CA链正向联网未实测，不能外推为已测。
+- 已验证真实GET留下的partial在取消或强停后跨Player进程续传，强ETag/If-Range精确绑定实际offset；200忽略Range或ETag变化从零获取，失配Content-Range拒绝后重头重试，弱ETag不用于续传。目标最终仍须逐文件length/SHA和原内容认证，不能盲目追加后提交。
+- 公开请求错误沿用现有合同：元数据传输、签名/摘要及确认序号拒绝通常包装为`UpdateFailed`，内层异常保留具体原因；不能把“任意失败”当作某个特定拒绝门禁通过。
+
+### Player 持久流程
+
+首次包内版本由原Builder/Publisher和C02 `Preflight/Deploy`明确部署，再构建Player；运行时严格定位`StreamingAssets/YLFrameworkResources/<ProjectId>/<Platform>/<Digest>/payload~/`，不能读取开发机发布目录或用AssetDatabase/Simulation补缺。部署器只管理owned资源根，调用方先准备合法StreamingAssets父目录。Windows Mono仍有长路径约束，构建载体和最终包须选择足够短的路径。
+
+同一应用的后续进程复用同一个独占持久Store，不随机换cacheRoot。以下为已实际运行的协程主体顺序；`trustedRemoteSource`及内容key provider由应用提供，公钥不能取自待验发布本身。None的`applicationDecryptionOptions`可为null，加密沿用原`ResourceDecryptionOptions(provider, budget)`。错误收尾、Busy重试与业务责任仍由宿主管理；`TakeResult()`会抛出请求错误，统一失败路径也必须执行退出段，不能用`yield break`跳过回收。
+
+```csharp
+var builtIn = ResourceLocalSnapshot.OpenBuiltIn(
+    projectId, packagedDigest, "StandaloneWindows64", appContentCompatibilityId);
+var mount = new ResourceProjectMount(projectId, "StandaloneWindows64",
+    appContentCompatibilityId, builtIn, remote: trustedRemoteSource);
+var configuration = ResourceConfiguration.Create(ResourceLoadMode.Bundles,
+    new[] { mount }, System.IO.Path.Combine(Application.persistentDataPath, "ResourceStore"),
+    decryption: applicationDecryptionOptions);
+var startup = new ResourceStartup(configuration, bindCore: true,
+    audioProjects: new[] { projectId });
+using (var start = startup.StartAsync())
+{
+    yield return start;
+    start.TakeResult();
+}
+UpdatePlan plan;
+using (var check = startup.Resources.CheckRemoteUpdatesAsync())
+{
+    yield return check;
+    plan = check.TakeResult();
+}
+PreparedUpdate prepared;
+using (var prepare = startup.Resources.PrepareUpdateAsync(plan))
+{
+    yield return prepare;
+    prepared = prepare.TakeResult();
+}
+using (var activate = startup.Resources.ActivatePreparedUpdateAsync(prepared))
+{
+    yield return activate;
+    activate.TakeResult();
+}
+// 先归还本宿主的Lease、实例、Scene和Audio责任；统一失败路径同样执行此退出段。
+using (var stop = startup.StopAsync())
+{
+    yield return stop;
+    stop.TakeResult();
+}
+```
+
+重启后的Start自动恢复journal并选择active/LKG整组，不挑最新目录。Prepare持久化后可在下一进程用`GetPreparedUpdates()`取回再显式Activate；即使离线激活，也保持同一Project/平台/App及受信远端公钥配置。本地更新用`CheckUpdatesAsync(完整快照闭包)`接同一Prepare/Activate流程。
+
+显式Rollback不降低最高**成功激活**序号；只读Check、首次失败下载不确认新序号，不承诺首次安装或本地历史丢失后的抗旧发布冻结。异常注入、正常退出和外部强停分别解释，进程强停恢复不等同于断电保证。正常Stop后检查authority/Core绑定、Lease/Bundle/实例/Scene，以及内容输入、在途、预算和CNG责任归还；不要用全局清理或终止主Editor代替。
+
+### Windows64 IL2CPP
+
+- 受测引擎固定`2022.3.62f3c1`，StandaloneWindows64、IL2CPP、Managed Stripping Level Low、C++ Release；需要Unity Windows IL2CPP模块及可用MSVC/Windows SDK。须核对实际BuildReport和原生GameAssembly/metadata，不把Editor编译图或Mono运行当作IL2CPP支持。
+- Resource Startup、领域Provider及更新API沿用上文，不需要应用替换加载器、provider、算法或认证策略。None仍用文件输入；E04仍为原CNG/BC及认证Stream，不解密整包落盘、不静默软件回退。
+- IL2CPP不消费Mono的`DefaultDllImportSearchPaths`语义，CNG适配器按确切System32模块句柄绑定；字符串显式LPWStr，x64 ABI保持原合同。该系统模块是进程期依赖，不是每Bundle的provider/key owner；后两者、key-object及内容预算仍确定释放并分别诊断。系统DLL不随框架分发。
+- 该版本IL2CPP的DriveInfo构造会触发未实现的GetDriveFormat。ArtifactStore明确用Windows可用空间API保留调用者配额与64位字节数；查询失败拒绝，不以无限空间或略过检查降级。
+- 已实际验证所需闭包与AOT入口，未出现需要新增link.xml的裁剪故障，框架未加全量Preserve。Low以外裁剪等级或应用新增反射/动态泛型类型须按实际故障定向验证，不声称自动覆盖。
+- 实际Player输入、work、Lease/native图、CNG及预算按既有责任归还。Mono已批准的延迟坏Stream Scene限定风险不能用来豁免IL2CPP正常输入崩溃、损坏或泄漏。
 
 ## 安全内置部署
 
@@ -494,7 +556,7 @@ E04 G1～G3已完成正式接入及Windows Editor/Windows64 Mono Player代表性
 
 - Project 的 `ContentEncryption` 默认 `None`，旧明文发布不需重写。`None` 继续 `LoadFromFile`/`LoadFromFileAsync`，Editor Simulation、Resources 和直接图片来源不改变。新增默认字段不进入 None 的 build settings 身份；正常保存 SO/代码输入变化仍可能使旧 input fingerprint 自然失效一次。
 - 启用 `Aes256GcmHkdfSegmentedV1` 时，填写仅为标识的 `ContentKeyId`，覆盖该 Project 的内容包、共享依赖包和二进制 root manifest。`.manifest` 文本旁车不加密。正式后端固定为 Windows CNG `Microsoft Primitive Provider` AES-256-GCM，官方 BC 2.7.0 netstandard2.0 仅提供 HKDF-SHA256；不复制系统 DLL，不静默软件 GCM fallback。
-- 首批支持范围仅 Unity 2022.3.62f3c1、Windows x64 Editor/Mono Player。其他环境的加密明确拒绝，不能据 None 可编译推断加密受支持；IL2CPP、Unity 2023/Unity 6 等不在本轮支持范围。
+- 首批支持范围为Unity `2022.3.62f3c1` Windows x64 Editor/Mono Player；后续§30.7已补齐同版本Windows64 IL2CPP。其他环境不能据None可编译推断加密受支持；移动端及Unity 2023/Unity 6等不在本轮支持范围，IL2CPP加密也核对精确受测版号。
 
 Editor 使用显式进程 secret 名或调用方 provider，不在 SO、Inspector、EditorPrefs、指纹或日志中保存 key。工作台默认进程变量为 `YL_RESOURCE_CONTENT_KEY`，严格接受 Base64 编码的 32 字节；非秘密 KeyId 与环境变量名不是密钥材料。
 
@@ -545,7 +607,7 @@ using (var stop = startup.StopAsync())
 - 每个共享 BundleRecord 只有一个输入。输入与 CNG owner/预算保持到真实 native unload；SceneLease 归还不等于 Scene 卸载，实例 destroy-pending、Audio 尾轨及缓存仍沿原责任图结算。实例化、Ready 复用、Group、Scene、Audio 缓存的新借出均执行依赖闭包故障准入；旧已交付对象不因首 fault 被强销毁。
 - 64KiB 分段、两个明文缓存槽和 32KiB native read buffer；单输入固定数据缓冲为 196576B，默认 128MiB 预算不预分配整笔。新增闭包先原子预留，全部 live 输入与在途预留计量，共享不双计；不足明确失败后显式重试。`GetContentDiagnosticsSnapshot()` 与 `GetDiagnosticsReport().Content` 分列数据预算、native bridge 声明值及进程内该适配器的 CNG provider/key/key-object 成本，绝不是整个密码模块或进程总内存上限。
 - 初始化成功前只对当前所选项目/KeyId 集合做一次轻量认证，同配置 join 不重复；不要求未选历史 key，不以创建 native Bundle 代替探针，全 None 不执行额外密码工作。Prepare 全 To 闭包、激活/回滚在原提交边界前完整认证，持有稳定输入到提交结束。恢复、Mount、Check 和 E05 查询不取 key、不解密；缺 key 不隐式重下载或切 LKG。
-- 冻结 Catalog v1 不代表旧客户端支持密文。签发加密 release 必须显式确认渠道只投放支持 E04 的客户端；原签名 payload 不加字段，不能将同一渠道继续分发给不支持加密的旧客户端。Runtime 远端 Windows Player 硬门禁仍然关闭。
+- 冻结Catalog v1不代表旧客户端支持密文。签发加密release必须显式确认渠道只投放支持E04的客户端；原签名payload不加字段，不能继续投放给不支持加密的旧客户端。Player远端只开放上述精确受测的Windows64 Mono组合，不放宽其他平台或密码后端。
 
 ### 轮换与交付
 
@@ -565,9 +627,10 @@ using (var stop = startup.StopAsync())
 | 环境 | 当前结论 |
 |---|---|
 | Windows Editor / Win64 资源 | 有正式构建、Simulation/native、Core/Audio、事务和签名下载证据 |
-| Windows64 Mono Player | E04正式本地资源链已在自有载体代表性运行验证，远端硬拒绝；Player完整首启、同一持久Store重启等仍属8.10。Editor内置部署、实际导出也不替代阶段9独立工程完整验收 |
+| Unity 2022.3.62f3c1 Windows64 Mono Player | 真实C02包内None/加密离线首启、Core/Prefab/共享依赖/Atlas/Audio/Scene、同Store多进程更新/回滚/journal恢复，以及正式HTTPS签名/序号/partial续传/失败保旧已受测；不代替阶段9独立工程完整验收 |
+| Unity 2022.3.62f3c1 Windows64 IL2CPP Player | Low裁剪/C++ Release的真实原生构建；None/E04、Core/Prefab/Atlas/Audio/Scene、持久整组事务/强停恢复、HTTPS签名/序号/真实Range门禁受测。隔离pin正向与非Development默认TLS拒绝分别记录，不外推普通CA链正向、高裁剪等级或其他Unity版本 |
 | OSX / Linux 桌面 | 有普通目录/格式分支，无本批跨主机真实验收；远端拒绝 |
-| IL2CPP / Android / iOS / WebGL | 未有最终闭包/运行；mount 受桌面范围限制，jar/WebGL 提取未实现，不能概括为只缺设备测试 |
+| Android / iOS / WebGL及其他未受测Player | 未有最终闭包/运行；mount受桌面范围限制，jar/WebGL提取未实现，不能概括为只缺设备测试；Windows64以外IL2CPP同样未开放 |
 
 `Integrations/XFAB/Audio` 仅是可选 borrowed 叶子：YLFramework.Audio.XFAB、非 autoReferenced、受包版本与 YL_AUDIO_XFAB 条件约束，不自动注册/默认导出，主体不依赖它。原游戏、XF/XFAB/XFFSM、MainModule 与历史资产保持原链。
 

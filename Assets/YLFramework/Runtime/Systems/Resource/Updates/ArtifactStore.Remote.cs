@@ -85,7 +85,24 @@ namespace YLFramework.Services.Resource
             return files;
         }
 
-        private long AvailableSpace() => new DriveInfo(Path.GetPathRoot(RootPath)).AvailableFreeSpace;
+        private long AvailableSpace()
+        {
+#if !UNITY_EDITOR && UNITY_STANDALONE_WIN && ENABLE_IL2CPP
+            // 该Unity版本的IL2CPP连DriveInfo构造都会调用未实现的GetDriveFormat。
+            // 保留原调用者可用配额语义，查询失败明确拒绝，不能假报无限空间。
+            if (!GetDiskFreeSpaceExW(Path.GetPathRoot(RootPath), out var available, out _, out _))
+                throw new IOException("Cannot query available Resource volume space.", new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
+            return checked((long)available);
+#else
+            return new DriveInfo(Path.GetPathRoot(RootPath)).AvailableFreeSpace;
+#endif
+        }
+
+#if !UNITY_EDITOR && UNITY_STANDALONE_WIN && ENABLE_IL2CPP
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool GetDiskFreeSpaceExW(string directory, out ulong available, out ulong total, out ulong free);
+#endif
 
         internal IEnumerator PrepareRemote(UpdatePlan plan, Action<PreparedUpdate> complete, Action ensureAlive = null, ResourceDecryptionOptions decryption = null)
         {
