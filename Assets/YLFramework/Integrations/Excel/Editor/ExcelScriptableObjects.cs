@@ -215,6 +215,7 @@ namespace YLFramework.Excel.Editor
             var detached = new List<T>();
             var current = new List<T>();
             var createdFolders = new List<string>();
+            var originalObjects = previous.Cast<ScriptableObject>().Append(owner).Distinct().ToDictionary(item => item, item => EditorJsonUtility.ToJson(item));
             string recovery = CreateRecovery(files);
             bool keepRecovery = false;
             try
@@ -228,8 +229,10 @@ namespace YLFramework.Excel.Editor
                     {
                         target = old;
                         var flags = target.hideFlags;
+                        var name = target.name;
                         EditorUtility.CopySerialized(item, target);
                         target.hideFlags = flags;
+                        target.name = name;
                     }
                     else
                     {
@@ -283,9 +286,20 @@ namespace YLFramework.Excel.Editor
                     }
                     catch (Exception e) { rollbackErrors.Add(e); }
                 }
+                // 文件可能尚未写过；仅重导入不会覆盖Unity仍缓存的dirty实例，必须先恢复原始内存状态。
+                foreach (var original in originalObjects)
+                {
+                    try
+                    {
+                        if (original.Key == null) continue;
+                        EditorJsonUtility.FromJsonOverwrite(original.Value, original.Key);
+                        EditorUtility.ClearDirty(original.Key);
+                    }
+                    catch (Exception e) { rollbackErrors.Add(e); }
+                }
                 foreach (var path in files.Keys.Where(p => !p.EndsWith(".meta", StringComparison.Ordinal)))
                 {
-                    try { AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate); }
+                    try { AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport); }
                     catch (Exception e) { rollbackErrors.Add(e); }
                 }
                 foreach (var directory in createdFolders.AsEnumerable().Reverse())

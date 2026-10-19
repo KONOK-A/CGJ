@@ -34,6 +34,11 @@ namespace YLFramework.Tests.DataAssets
                 foreach (var item in root.configs) if (item) Undo.ClearUndo(item);
                 Undo.ClearUndo(root);
             }
+            if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
+            {
+                Console.WriteLine("Preserved failed DataAssets fixture: " + folder + " | " + childFolder);
+                return;
+            }
             AssetDatabase.DeleteAsset(folder);
             if (AssetDatabase.IsValidFolder(childFolder)) AssetDatabase.DeleteAsset(childFolder);
         }
@@ -185,6 +190,7 @@ namespace YLFramework.Tests.DataAssets
             child.id = 5;
             AssetDatabase.AddObjectToAsset(child, root);
             root.configs.Add(child);
+            Assert.That(ScriptableObjectConfigsController.IsOwned(root, child), Is.True, "Immediate sub-assets must be editable before their first save.");
             Assert.That(ScriptableObjectConfigsController.DeleteData(root, child, true), Is.True);
             Assert.That(AssetDatabase.LoadAssetAtPath<ScriptableObjectConfigs>(folder + "/Items.asset"), Is.SameAs(root));
             Undo.PerformUndo();

@@ -592,13 +592,35 @@ namespace YLFramework.Tests.Extensions.Data.Save
                     var previous = new StringPayload { Text = "old" }; store.SaveObject(previous, "player", 0);
                     var path = Path.Combine(root, "SaveData/0/player.json"); var before = File.ReadAllBytes(path);
                     var replacement = new StringPayload { Text = new string('x', 16 * 1024 * 1024) };
-                    using (var watcher = new FileSystemWatcher(Path.GetDirectoryName(path), "player.json.tmp-*") { NotifyFilter = NotifyFilters.FileName })
+                    using (var stop = new ManualResetEventSlim())
+                    using (var ready = new ManualResetEventSlim())
                     {
-                        watcher.Created += (_, __) => { cancellation.Cancel(); observed.Set(); };
-                        watcher.EnableRaisingEvents = true;
+                        // Unity Mono使用DefaultWatcher轮询后端，会漏掉快速创建并移动的tmp；直接观测真实文件而非依赖事件。
+                        Exception observerError = null;
+                        var observer = new Thread(() =>
+                        {
+                            ready.Set();
+                            try
+                            {
+                                while (!stop.IsSet)
+                                {
+                                    if (Directory.EnumerateFiles(Path.GetDirectoryName(path), "player.json.tmp-*").Any())
+                                    { cancellation.Cancel(); observed.Set(); return; }
+                                    Thread.Yield();
+                                }
+                            }
+                            catch (Exception error) { observerError = error; }
+                        }) { IsBackground = true, Name = "Save temporary-file cancellation observer" };
+                        observer.Start();
                         var committed = false;
-                        try { store.SaveObjectAsync(replacement, "player", 0, cancellation.Token).GetAwaiter().GetResult(); committed = true; }
-                        catch (OperationCanceledException) { }
+                        try
+                        {
+                            Assert.That(ready.Wait(5000), Is.True);
+                            try { store.SaveObjectAsync(replacement, "player", 0, cancellation.Token).GetAwaiter().GetResult(); committed = true; }
+                            catch (OperationCanceledException) { }
+                        }
+                        finally { stop.Set(); Assert.That(observer.Join(5000), Is.True); }
+                        Assert.That(observerError, Is.Null);
                         Assert.That(observed.Wait(3000), Is.True, "Cancellation must be triggered by a real temporary file, not just before dispatch.");
                         if (committed)
                         {

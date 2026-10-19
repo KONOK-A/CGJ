@@ -1,5 +1,56 @@
 # B组配置数据交接
 
+## T3-B真实Unity验收（最新）
+
+2026-10-19 20:14用户追加授权已覆盖本文件源码阶段的“不启动Editor/BatchMode”限制。仅在B独立worktree使用安装的Unity`2022.3.62f3c1`，每次显式`-projectPath`；没有调用Unity MCP、没有操作主Editor/A/C/Y9，没有复制主工程Library。以下是真实引擎证据；后面的旧“待Unity”记录保留为源码阶段历史，不覆盖本节。
+
+### 真实结果与证据
+
+所有外部证据统一在自有短目录`G:/Unity/BD26/`，`owner.json`固定B工程身份，每个run保留独立`run.json`（参数/PID/退出码）和日志。B独立Library由Unity正式生成。最后审计PID`43284`于`2026-10-19T21:12:07Z`退出0，随后按projectPath核验B无Editor残留；已通过Agent Manager明确通知A窗口释放，本轮不再启动B Unity/Player。
+
+| 门禁 | 真实结果 | 证据目录/文件 |
+| --- | --- | --- |
+| 首次导入/实际编译 | `import-01`退出0，全部B产品/可选Editor/测试真实编入程序集，无相关CS编译失败 | `import-01/editor.log` |
+| EditMode红例 | 实际111项，107通过、4失败、0跳过 | `edit-01/results.xml` |
+| EditMode修复复验 | 实际111/111、0失败/跳过 | `edit-02/results.xml` |
+| 最终EditMode | 实际112/112、0失败/跳过；新增1项是真实双轮Play测试 | `edit-final-01/results.xml`，PID35072 |
+| PlayMode | 实际15/15、0失败/跳过：Localization6、DataAssets9 | `play-03/results.xml`，PID16408 |
+| 禁Domain Reload连续两轮 | `domain-02`1个UnityTest中真实进入/退出两轮Play；同PID38400、同token`19099d4225b34da982f22b2b66c62bac`，每轮登记0、Lease0、Save关闭、Resource Invalidated | `domain-02/domain-round-{1,2}.json`；最终EditMode又重跑同一门，不重复加到112上 |
+| Windows64 Mono | 构建Succeeded/0error；实际NVIDIA RTX4070TiSUPER/D3D运行，PID41136退出0，全部数据探针true | `mono-build-01/build.json`、`mono-player-02/{run.json,player-result.json,player.log}` |
+| Windows64 IL2CPP Low | 实际il2cpp.exe与VS2022链接GameAssembly，构建Succeeded/0error；真实GPU运行PID26860退出0，全部数据探针true | `il2cpp-build-02/{build.json,editor.log}`、`il2cpp-player-01/{run.json,player-result.json,player.log}` |
+| 最终原生隔离审计 | 99个B相关资产meta与AssetDatabase一致、B跨路径GUID冲突0、旧SaveManager GUID不变 | `audit-final-01/audit.json` |
+| v1发布定向核查 | 短路径10次+原失败目录等长路径10次成功，源字节均保留；最长临时路径185/255字符 | `migration-stress-03/migration-stress.json` |
+
+最终EditMode分项：DataAsset作者15/身份10，Localization作者1/逻辑12/原生3，Excel资产11/转换19/绑定4，Save文件安全33/真实门面2，原SerializedDictionarySaveTests的磁盘+JsonUtility联合1，双轮Play1，总计112。测试筛选及所有实际叶节点见XML，不以未发现/未导入算绿。
+
+### 本轮修复与红绿关系
+
+- SO真实缺陷：`AddObjectToAsset`后尚未首次保存时，Unity报告同一root路径且parent/member正确，但`IsSubAsset=false`；`audit-02`明确记录保存后变true。所有权改以同文件、真实持久成员且非主对象判断；同root文件的删除走子资产分支。原`SubAssetDeletionOnlyDestroysChildAndCanUndo`红→绿，并增加即时IsOwned断言，没有删除原Undo断言。
+- Excel真实缺陷：部分应用失败时只恢复文件/ImportAsset，Unity保留dirty实例的`partially updated`字段，且CopySerialized带入`(Clone)`名称。现在保存原EditorJson内存快照、保留旧名称，恢复原字段并清除本事务dirty后同步导入原字节；原受控部分失败测试红→绿，原字节/GUID/旧内容/仅清理本次新资产断言完整保留。属于真正AssetDatabase执行，不再是只编译准备。
+- Save测试环境适配：Unity Mono实际为`System.IO.DefaultWatcher`轮询，会漏掉快速创建并移动的临时文件。取消用例改为有ready/stop/Join边界的专用线程直接观察真实tmp文件，再发取消；仍必须观察到真实临时文件，仍断言仅旧状态或完整提交、缓存/备份正确、tmp清理。原失败样本及XML保留，未弱化断言或加入产品测试钩子。
+- 非产品环境污染：首个EditMode有MCP插件自动连接共享服务的Authorization错误，后续用上游正式runtime-only参数`-UNITY_MCP_KEEP_CONNECTED=false`、`-UNITY_MCP_START_SERVER=false`及进程`CI=true`隔离连接/下载；未改权限/token/UserSettings磁盘配置/PackageCache，也未压制日志。另有该插件日志sequence写入的warning及既有Cinemachine asmref/构建shader warnings，分别保留，不归因YL Save。
+- 新双轮验收工具曾遇实际NUnit不含NonParallelizable、Complete需要error参数，以及重复关闭已Invalidated Resource/空SceneManagerSetup恢复错误；均修正验收工具契约，原失败日志在`play-01/play-02/domain-01`保留。双轮有效断言没有跳过，最终源码在真实Unity编译并运行通过。
+
+### 隔离与Player范围
+
+- Test profile只在B进程临时设置自有company/product，持久目录为`LocalLow/YLFrameworkTests/YL-BData-*`；`profile.json/profile-restored.json`证明还原原值，未读写原游戏存档。双轮使用自有空场景，不保存用户原场景，EditorSettings恢复。
+- MiniExcel实体SHA256仍为`0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`；Unity生成PluginImporter为Editor=true、Any=false、Windows64=false。普通YL Runtime/Editor无MiniExcel引用；Player编译图无YL Editor/Excel，两个实际Player的文件与已加载程序集无MiniExcel/UnityEditor。Runtime的Editor profile存在合法条件编译UnityEditor引用，不冒充Player泄漏。
+- SaveManager原GUID保持`ff5957d84032533449f21601f372570a`。所有新meta由B Unity生成，没有手写GUID。
+- 两个Player使用真实Resources来源/根Lease和真实Native SO资产，不是模拟Resource Source；验证模型同步异步磁盘往返、损坏保源/备份恢复、取消保旧、显式v1新根复制、具体SO反射、Other公开text反射和非中文English回退，退出Lease0。探针自身有定向link.xml，不能据此推断所有应用DTO/TMP反射均已AOT验收。
+- Mono初次以NullGfx运行虽数据通过但有URP不支持shader日志，另以实际GPU重跑干净的数据关口并正常退出；不把NullGfx当渲染验收。两个构建各有1264条现有全项目资源/包警告，结果0error，不宣称无警告或原游戏画面验收。
+- 本工程实际Player仍含原XF及其他包；这不是“无XF独立安装”或阶段9新交付包。干净接收工程和主集成组合回归仍待后续，Y9及既有交付未动。
+
+### 环境边界与工作区保护
+
+- 原.NET10迁移发布AccessDenied仍未稳定复现，不能称已根除；本轮20次成功仅覆盖列出的185/255字符路径。`migration-stress-02`故意更长的前缀在Mono文件创建阶段触发DirectoryNotFound/MAX_PATH边界，失败源/staging及原报告保留，未发布目标；它不是原Directory.Move AccessDenied的根因证明，不伪装20/20全路径支持。
+- 普通session生命周期的monitor曾使`il2cpp-build-01/migration-stress-01`包装进程与Editor一起中断，未有结束回执/结果；不计通过，也不判为产品构建失败。后改持久跟踪且阻塞等待已核实B PID，最终均自然结束。
+- Native构建自动填入`ProjectSettings.asset`的Standalone backend/stripping显式默认0、IDE改写`.vscode/settings.json`，以及两份`Assets/Atlas(AutoGenerate)/MainModule/*_Atlas.spriteatlas`写入packed缓存。本组已核对差异归属，未覆盖这些非B产品文件，也不会混入修复提交；保留并在最终状态报告。Packages/lock及共享Core/Resource/主体asmdef/正式Plan未改。
+- 失败Excel fixture、生成的Player场景/Resources、自有YLFrameworkData空父目录保留为未跟踪证据/可重建产物，不混进产品提交；修复源码、测试、工具和其必要正式meta精确暂存。
+- 原样保留Unity正式生成meta的空YAML字段格式，因此原始`git diff --cached --check`会报告这些字段的尾空格；不把该格式警告隐藏为全量check无警告，也不为通过检查手写/重造GUID。源码/工具/交接单独检查无空白错误。
+- 本轮修复及原生验收的中文本地提交与本节同提交，可用`git log -1 --oneline fusion/xf-ext-data -- .kilo/handovers/xf-ext-data.md`查实际SHA。此前五个候选历史保留；不Push、不Merge、不Rebase/Reset/Clean/Stash。
+
+以下为此前源码融合阶段的历史记录；与本节状态冲突时，以本次授权和本节真实证据为准。
+
 ## 授权与基线
 
 - 唯一正式Plan：`.kilo/plans/1792420261057-xf-ecosystem-integration.md`；2026-10-19本次用户追加授权覆盖其中旧T3、D2/D4/D6及Save只读/分批停止状态。

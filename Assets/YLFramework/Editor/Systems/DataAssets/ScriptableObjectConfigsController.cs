@@ -153,7 +153,8 @@ namespace YLFramework.DataAssets.Editor
             var rootPath = AssetDatabase.GetAssetPath(root);
             if (!IsWritableAssetPath(rootPath)) return false;
             var path = AssetDatabase.GetAssetPath(data);
-            if (path == rootPath) return AssetDatabase.IsSubAsset(data);
+            // AddObjectToAsset后、首次保存前IsSubAsset仍可能为false；同文件、真实持久成员且非主对象才归本根。
+            if (path == rootPath) return AssetDatabase.Contains(data) && !AssetDatabase.IsMainAsset(data);
             return AssetDatabase.IsMainAsset(data) &&
                 StringComparer.Ordinal.Equals(Path.GetDirectoryName(path)?.Replace('\\', '/'), GetDataPath(root));
         }
@@ -164,7 +165,7 @@ namespace YLFramework.DataAssets.Editor
             if (!confirmed) return false;
             RequireOwned(root, data);
             var path = AssetDatabase.GetAssetPath(data);
-            if (AssetDatabase.IsSubAsset(data))
+            if (path == AssetDatabase.GetAssetPath(root))
             {
                 Undo.IncrementCurrentGroup();
                 var group = Undo.GetCurrentGroup();
