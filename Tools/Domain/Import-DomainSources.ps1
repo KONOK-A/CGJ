@@ -29,6 +29,8 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
         $text = $text.Replace('base(buffsConfig, buffsConfig.buffs, state)', 'base(buffsConfig, () => buffsConfig.buffs, state)')
         $text = $text.Replace('base(buffsConfig,buffsConfig.buffs,state)', 'base(buffsConfig, () => buffsConfig.buffs, state)')
         $text = $text.Replace('base(missionsConfig, missionsConfig.missions, state)', 'base(missionsConfig, () => missionsConfig.missions, state)')
+        $text = $text.Replace('base(missionsConfig, missionsConfig.missions,state)', 'base(missionsConfig, () => missionsConfig.missions, state)')
+        $text = $text.Replace('base(missionsConfig, missionsConfig.param,state)', 'base(missionsConfig, () => missionsConfig.param, state)')
         if ($path -match 'ScriptBindController.cs$') {
             $text = $text.Replace('[InitializeOnLoadMethod]', '[MenuItem("Tools/YLFramework/' + $Module + '/Refresh Script Bindings")]')
         }
@@ -45,6 +47,14 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
         if ($Module -eq 'Buff' -and $path -match 'EffectConfigsWindow.cs$') {
             $lines = $text -split "`n"
             $text = (($lines | ForEach-Object -Begin { $i = 0 } -Process { $i++; if ($i -lt 127 -or $i -gt 170) { $_ } }) -join "`n")
+        }
+        if ($Module -eq 'Mission' -and $path -match 'MissionConfigInspector.cs$') {
+            $lines = $text -split "`n"
+            $text = (($lines | ForEach-Object -Begin { $i = 0 } -Process { $i++; if ($i -ne 58 -and ($i -lt 72 -or $i -gt 282)) { $_ } }) -join "`n")
+            $text = $text.Replace('using OfficeOpenXml;', '')
+        }
+        if ($Module -eq 'Mission' -and $path -match 'MissionParameterInspector.cs$') {
+            $text = $text.Replace('public class MissionParameterInspector', 'namespace YLFramework.MissionSystem { public class MissionParameterInspector') + "`n}"
         }
     } else {
         # Move GUI annotations and Editor methods out of Runtime data types.
@@ -67,7 +77,7 @@ $editorRoot = Join-Path $root "Assets\YLFramework\Editor\Systems\$Module"
 $runtimeNames = switch ($Module) {
     Skill { @('SkillBase.cs', 'SkillConfigData.cs', 'SkillsConfig.cs', 'IEquippableSkill.cs') }
     Buff { @('BuffBase.cs', 'BuffConfigData.cs', 'BuffsConfig.cs', 'IAddableBuff.cs', 'EffectData.cs', 'EffectName.cs') }
-    Mission { @('MissionBase.cs', 'MissionConfigData.cs', 'MissionsConfig.cs', 'MissionCondition.cs', 'MissionParameter.cs', 'MissionReward.cs') }
+    Mission { @('MissionBase.cs', 'MissionConfigData.cs', 'MissionsConfig.cs', 'MissionCondition.cs', 'MissionParameter.cs') }
 }
 foreach ($name in $runtimeNames) { Import-File (Join-Path $source "Runtime\$name") (Join-Path $runtime $name) $false }
 foreach ($file in Get-ChildItem -LiteralPath (Join-Path $source 'Editor') -Recurse -Filter '*.cs') {

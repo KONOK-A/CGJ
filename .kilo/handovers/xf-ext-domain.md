@@ -19,8 +19,8 @@
 | Reddot | 源码候选完成，引擎待验 | `5c04f2b`；9项托管红→绿，Runtime辅助编译退出0/41个既有warning |
 | Logger | 源码候选完成，引擎待验 | `c2e1a0f`；6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
 | Skill | 源码候选完成，引擎待验 | `10699e6`；4项Skill+前15项托管通过；Runtime/Editor/EditorTools辅助编译通过 |
-| Buff | 源码候选完成，引擎待验 | 5项Buff+前19项托管通过；普通Buff/Effect作者工具辅助编译通过 |
-| Mission | 待实施 | 保留条件/进度/奖励及普通作者流程，不改Save |
+| Buff | 源码候选完成，引擎待验 | `2aa7c22`；5项Buff+前19项托管通过；普通Buff/Effect作者工具辅助编译通过 |
+| Mission | 源码候选完成，引擎待验 | 11项Mission+前24项托管通过，四项直接Bug红→绿；不改Save |
 | Excel接线 | 待核对B真实API | 开工时B交接文件不存在，不空等、不造接口 |
 | 整组Review | 待五项候选完成 | 仅一次独立Review及直接修复回归 |
 
@@ -78,3 +78,15 @@
 - `buff-contract-red`为19通过/1缺能力失败；`buff-managed`为24通过/0失败/跳过，覆盖真实BuffBase永久/定时进度、池reset清owner/userData/时间。Runtime辅助编译0/41 warning，Editor0/40，EditorTools0/8。额外warning为迁移保留的未用字段，不关闭诊断、不把warning当阻塞。
 - `BuffOwnerTests.AdditiveSingleAndLastEffectCleanupKeepDefinitionsUnchanged`准备未运行：叠加/替换、深克隆、自身再次移除不重入、末效果索引清理、无效类型诊断。实际到期Update、inactive/destroy、跨宿主/场景/双Play、ResourceLease及Editor分组拖拽保存重开/Undo、AOT仍待引擎。
 - B交接在本模块期间出现，已读真实List/SO预览事务签名，但记录尚无候选Commit。继续Mission，不依赖未提交B代码，不修改B文件。
+
+## Mission使用与验证
+
+- namespace为`YLFramework.MissionSystem`，保留多配表、MissionBase状态/回调、参数Int/Float/Bool、仅进行中/仅更大值约束、条件组合进度、RewardInfo数据及完成后共享参数保护。奖励由业务在完成回调读取运行态`MissionConfig.rewards`发放，原包也没有第二个奖励发放后端，本轮不新增存档/经济权威。
+- `AddConfig`借用源根但建立参数/条件/奖励/任务配置克隆；`LoadConfig(ResourceSystem, ResourceAddress)`持根Lease。任务实例按实际类型接YL ObjectPool；移除/Reset先摘监听、静默归零，清回调/userData/运行克隆并归还参数EventChannel句柄；配置失败回滚部分登记。
+- 保留原string/int查询和Set/Get/Add入口。新YL身份使用Ordinal确定性FNV-1a和注册键碰撞诊断，不复用原Animator hash或持久化它；string入口额外验证原名，不因hash相同取到别的权威。已用`costarring/liquid`真实碰撞验证拒绝。这个身份变化只针对尚无旧YL消费者的新系统，历史XF资产/hash迁移不自动兼容。
+- 严格验证缺失类、抽象类、构造器、空条目、重复ID/参数和未知条件参数；错误带配表、ID、名称/类名，不静默降为MissionBase。`Reset`清业务监听；需重挂业务回调后再把任务设为InProgress。`RemoveConfig/Shutdown`使外部旧参数不再触发任务。
+- Float补Equals/NotEquals，先更新IsMeet再发进度；二值比较用0/1，递增阈值保留有界比例进度，Bool维持原作者工具的相等语义。状态/进度回调后检查代次，回调内移除不能继续完成处理或重置新会话参数。
+- 普通任务/参数双列表、创建/复制/剪贴板/删除/拖排、条件选择弹窗、参数改名同步条件、Reward列表、脚本选择/编辑/绑定、类型约束和ID改名均承接。两个平面树复用E0并补Dispose；参数Inspector归YL命名空间并释放SerializedObject。删除路径从原EquipmentSystem纠正为统一`MissionAuthoring.GeneratedDirectory`，只删除`Assets/YLFrameworkData/Mission/<rootGUID>`，不递归删外部引用。
+- `mission-contract-red`24通过/6缺能力失败；承接原条件/Reset后`mission-bug-red`27通过/3实际失败，进度通知加直接回归后`mission-progress-red`27通过/4实际失败；修复后`mission-managed`35通过/0失败/跳过。新增覆盖解绑/重复Bind、回调内Dispose、参数配置克隆及真实hash碰撞。没有使用Unity行为stub或跳过失败。
+- 当前五模块Runtime辅助编译0/41 warning、Editor0/40、EditorTools0/10；`mission-prepared-tests`把已准备EditMode/PlayMode源码与真实程序集辅助编译成功，未运行Unity用例。`MissionOwnerTests`准备了配置/条件/奖励不变、Reset和完成回调内移除及旧参数失效用例。
+- 实际ResourceLease、Editor资产保存重开/剪贴板/Undo、关Domain Reload双Play、场景、无XF Mono/IL2CPP Low、多态类型裁剪、导出与原游戏非干扰仍待引擎，不能用35项托管结果替代。
