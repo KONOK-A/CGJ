@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Excel.Editor",
+    "rootNamespace": "YLFramework.Excel.Editor",
+    "references": ["YLFramework.Runtime", "YLFramework.Editor"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["MiniExcel.dll", "Newtonsoft.Json.dll"],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

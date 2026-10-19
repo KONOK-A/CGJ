@@ -11,27 +11,32 @@
 
 - Localization：产品、原布局作者工作流和测试已实现；离线纯逻辑12/12及组合辅助编译通过，尚非Unity验收。补确定性回退、同数量内容变更、重复ID、根/事件/图片资源责任、晚到隔离和直接刷新。
 - DataAssets/SO：保留根/子资产与类型绑定、CRUD/排序的候选已落齐，纯逻辑10/10及真实参考辅助编译通过；无新Catalog，资产/GUI/PlayMode仍未运行。
-- Excel：真实List/JSON作者API及后端已落盘，首轮真实xlsx离线8/8绿；SO和GUI继续实施，不能把首轮结果视为所有作者流程完成。接点见下节。
+- Excel：真实List/SO/JSON作者API、MiniExcel后端和已选SO根菜单已落盘；父独立真实xlsx18/18绿及完整可选Editor闭包编译通过；12项Unity资产/GUI用例作为待引擎执行的准备，不是GUI验收。接点见下节。
 - Save/Archive：已基于实际源码确定单一`SaveStore`文件引擎与原`SaveManager`Unity门面，正在实施；兼容策略见下节。
 
-## Excel真实接点（首轮，仍在扩展）
+## Excel真实接点
 
 - 可选目录`Assets/YLFramework/Integrations/Excel/Editor/`；assembly及namespace均为`YLFramework.Excel.Editor`。普通Runtime/Editor不引用它，C组可在自己的可选Editor程序集接线，勿修改主体asmdef。
 - 已落盘入口`ExcelAuthoring.ListToExcel<T>(IEnumerable<T> values, string path, string sheetName = "Sheet1")`。
 - 已落盘预览`ExcelAuthoring.PreviewList<T>(string path, List<T> values, string sheetName = null) where T : class, new()`，以及`PreviewJson(string path, string jsonPath, string excludePrefix = "", string sheetName = null)`，均返回`ExcelImportPlan`。
-- SO入口已落盘并用真实Unity参考辅助编译：`ScriptableObjectToExcel<T>(IEnumerable<T> values, string path, string sheetName = "Sheet1") where T : ScriptableObject`；`PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner, string assetFolder = null, string sheetName = null, Action<T> initialize = null)`返回同一`ExcelImportPlan`。`initialize`仅用于暂存副本的领域字段绑定，不得改外来资产；SO事务/GUI尚未在Unity执行。
+- SO入口已落盘并用真实Unity参考辅助编译：`ScriptableObjectToExcel<T>(IEnumerable<T> values, string path, string sheetName = "Sheet1", Type dataType = null) where T : ScriptableObject`；`PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner, string assetFolder = null, string sheetName = null, Action<T> initialize = null, Type dataType = null)`返回同一`ExcelImportPlan`。`initialize`仅用于暂存副本的领域字段绑定，不得改外来资产；SO事务/GUI尚未在Unity执行。
 - `assetFolder = null`用于同root真正subasset；独立主资产模式须传已存在的独占目录。B组SO目录由`YLFramework.DataAssets.Editor.ScriptableObjectConfigsController.GetDataPath(root)`取得，条目`parent = root`；C组同样传自己的精确目录。旧条目必须属于该owner的真实序列化List，dirty资产拒绝导入，同ID/类型就地更新。
 - `ExcelImportPlan`提供`Errors`、`Changes`（Kind/Key/Before/After）、`CanCommit`、`Commit(bool confirmed)`及`Dispose()`；结果`Pending/Applied/Cancelled/Failed`。必须先检查错误和差异，再显式确认；取消不写入。
+- SO预览直接支持`List<BaseSO>`的派生条目，依据`DATA_TYPE_FULL_CLASS_NAME`解析实际类，不复制一个脱离owner的`List<Derived>`。`dataType`约束可用派生范围，提供空根模板字段及无类型列时的绑定类型；`type_script_guid`失败明确报错，不猜类名。
+- 已选SO根入口`DataAssetsExcelCommands.PreviewImport(ScriptableObjectConfigs root, string path)`和`Export(root, path)`真实可用；菜单`Assets/YLFramework/Excel/Preview Import Selected Data Root`与`Export Selected Data Root`。自身可选asmdef引用`YLFramework.Editor`，普通Editor不反向引用。暂存条目设置`parent=root`，成功清缓存；取消不创建数据目录，空根也不依赖既有`excel_path`。
+- 通用UI入口`ExcelAuthoringCommands.ImportList/ExportList/ImportScriptableObjects/ExportScriptableObjects/ShowPreview`及`YLFramework/Excel/Workbook To JSON`。导入预览包含新增/更新/删除和坐标错误，保存主资产前必须干净，过期工作簿或目标变化拒绝提交；导出整工作簿覆盖须确认，不承诺保留原多sheet格式。
 - 后端MiniExcel `1.31.2`，Apache-2.0，netstandard2.0/无NuGet包依赖；来源上游tag`1.31.1-1.31.2` commit`f1498a2d162debca9a1e9153cf2249131a75eeb0`。固定nupkg SHA256：`f11a54c1bd5b3fb3332dc5d4e40ade59a3539cb8de6d087a245575457d66379a`。本组自有恢复脚本`Tools/Extensions/Data/Excel/Restore-MiniExcel.ps1`。
-- 已执行首轮纯逻辑真实xlsx：`Temp/Extensions.Data.Excel/red-authoring`红0/8，`green-core-1`绿8/8。非Unity/AssetDatabase/GUI结果；SO接口后续补齐。本地候选Commit尚未形成，不依赖此时未提交内容接入主线。
+- 父独立执行`Tools/Extensions/Data/Excel/Run-ExcelOffline.ps1 -Run parent-pre-review`：真实xlsx18/18、0失败/跳过；全Runtime458源39warning、全Editor102源4warning、完整可选Excel7源及测试5源0warning均辅助编译退出0；没有`YL_EXCEL_OFFLINE`条件排除。当前候选尚待模块提交和组Review，不是Unity/AssetDatabase/GUI结果。
+- DLL实测SHA256 `0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`与固定清单一致。现有`Editor/Distribution/ExportUnityPackage.ExportRoots`不含`Integrations`，默认导出不会带入此后端；不是只靠`Dependencies.json`标记宣称隔离。可选分发应另带完整adapter与`Licenses`，Unity导入后还须核对PluginImporter为Editor-only并生成meta。
 
 ## Save设计与兼容策略（实施前确定）
 
 - 单一`SaveStore`负责BCL文件/索引/槽位/模型对象/设置/缓存/备份及同步异步；既有`SaveManager`仅负责主线程捕获Unity路径并暴露兼容门面，非第二存档权威。
 - 保留对象/设置裸JSON用途；索引升级v2并纳入当前槽。检测到v1拒绝原地写入，提供显式复制迁移到不同新目录，拒绝源目标相同和已有目标冲突。没有真实旧档样本，只能验证合成合同，不能宣称历史档兼容。
-- Archive仅提供显式选择的明文JSON导入到新槽，不扫描原目录、不自动转换、不接纳DES/零IV格式；旧`.sav`原件不修改。
+- Archive仅提供显式选择的明文JSON导入到新槽，不扫描原目录、不自动转换、不接纳DES/固定IV格式；旧`.sav`原件不修改。实际读到的XFAB旧EncryptTools用`string.Empty.PadRight(8)`产生8个空格字节IV，不是全零IV；该薄弱DES能力没有复制进新格式。
 - 取消在单文件原子提交点前有效，提交后报告成功；同根排他owner、同槽串行、跨槽可并发，关闭取消排队并排空。磁盘失败不推进对象缓存。
 - 当前Save首轮真实BCL文件验证10/10绿；保留红例涉及自动覆盖损坏主件/吞IO等。后续取消/并发/迁移/恢复回归继续执行，不将首轮数量当作最终结果。
+- 已落盘的新读取入口`ReadObject<T>/ReadObjectAsync<T>/ReadGlobalSetting<T>`返回`SaveReadResult<T>`，携带主件/备份/缺失来源和缓存标志，缓存命中不隐藏备份来源；`IndexNeedsRecovery`显式报告索引恢复要求。`RestoreObjectBackup/RestoreSettingBackup/RestoreIndexBackup`为显式修盘入口，保留损坏原件而非读时自动改盘。
 - 现有`SerializedDictionarySaveTests`将按新门面owner调整必要测试隔离，保留原磁盘/Unity断言；实际数据保护验证只用自有临时目录。
 
 ## 接口与边界决策
@@ -56,6 +61,7 @@
 - 已执行：路径、Git状态、B0祖先核验；读取实际Unity版本、manifest及正式Plan。PowerShell工具实际为5.1，脚本将按实际Shell或显式pwsh运行，不照搬7.x语法。
 - Localization已执行纯逻辑12/12（回退、等长替换/改ID、重复/空项、格式及richText），先红后绿保留在`Temp/Extensions.Data.Localization/`；其余模块结果按最终证据补齐。
 - DataAssets：父会话独立执行`Tools/Extensions/Data/DataAssets/Verify-DataAssets.ps1 -Mode Pure`，10/10、0失败/跳过/警告。子任务最终完整辅助编译Player/Editor Runtime及Editor工具均退出0，warning为40/39/4；15个作者、9个PlayMode用例仅编译未执行（PlayMode辅助参考有1个CS1701 NUnit版本警告）。`RemoveConfig(hash)`按registry唯一解析后按根身份撤销，碰撞登记拒绝已纯逻辑实际验证。
+- DataAssets早期缺实现绑定、Save在途类型重复及PowerShell工具失败仅在原会话工具输出留存；其固定路径日志后来被green覆盖，不能冒称独立红例制品。最终10/10结果和当前输入仍真实可用，后续父组合探针改为唯一Run目录冻结原始log/rsp。
 - 首轮组合源码辅助编译：`Tools/Extensions/Data/Verify-DataProfiles.ps1 -Run combined-1`退出0；完整Runtime/Editor-profile/Editor工具分别42/41/4个warning，新增普通EditMode测试源码8文件/0warning、PlayMode测试源码2文件/1warning均编译成功。没有执行其中任何Unity测试。较早Save门面在途状态造成的重复声明编译失败保留在工具调用记录，没有删输入绕过；门面落齐后真实全目录通过。
 - 尚未执行：Unity编译、资产/GUI/PlayMode、Mono/IL2CPP Player、独立接收工程和原游戏非干扰门。完成后按证据更新。
 - 许可：原Localization/SO为MIT 2024弦风课堂，Excel/Archive为MIT 2025弦风课堂。实读发现既有根许可证只有2021/2025版权，未包含2024；因此Localization在自有目录补完整`LICENSE.txt`，SO同样独立保留。共享许可汇总/根版权由后续集成统一维护，不以既有MIT文本替代遗漏的适用版权。
@@ -63,4 +69,5 @@
 ## 候选提交
 
 - Localization：`517f13f`，`feat(localization): 融合多语言配置作者流程与资源生命周期`。
+- DataAssets：`53edd50`，`feat(data-assets): 融合SO根子资产作者流程与安全资源登记`。
 - 后续模块仍按精确目录本地提交，不Push；新增meta必须由集成Unity真实生成，当前候选不是完整Unity接入包。

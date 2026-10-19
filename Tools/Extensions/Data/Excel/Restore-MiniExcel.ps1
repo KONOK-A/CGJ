@@ -1,0 +1,35 @@
+[CmdletBinding()]
+param([switch] $DownloadOnly)
+$ErrorActionPreference = 'Stop'
+$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
+if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets/YLFramework'))) { throw 'Not a YLFramework worktree.' }
+$output = Join-Path $root 'Temp/Extensions.Data.Excel/Dependency'
+$null = [IO.Directory]::CreateDirectory($output)
+$package = Join-Path $output 'miniexcel.1.31.2.nupkg'
+$url = 'https://api.nuget.org/v3-flatcontainer/miniexcel/1.31.2/miniexcel.1.31.2.nupkg'
+if (-not (Test-Path -LiteralPath $package)) { Invoke-WebRequest -Uri $url -OutFile $package -UseBasicParsing }
+$hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+"MiniExcel 1.31.2 package SHA256=$hash"
+$license = Join-Path $output 'MiniExcel-LICENSE.txt'
+$licenseUrl = 'https://raw.githubusercontent.com/mini-software/MiniExcel/f1498a2d162debca9a1e9153cf2249131a75eeb0/LICENSE'
+if (-not (Test-Path -LiteralPath $license)) { Invoke-WebRequest -Uri $licenseUrl -OutFile $license -UseBasicParsing }
+$licenseHash = (Get-FileHash -LiteralPath $license -Algorithm SHA256).Hash.ToLowerInvariant()
+"MiniExcel upstream LICENSE SHA256=$licenseHash"
+if ($DownloadOnly) { return }
+$expected = 'f11a54c1bd5b3fb3332dc5d4e40ade59a3539cb8de6d087a245575457d66379a'
+if ($hash -ne $expected) { throw 'MiniExcel package identity mismatch. Nothing installed.' }
+$expectedLicense = 'c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4'
+if ($licenseHash -ne $expectedLicense) { throw 'MiniExcel license identity mismatch. Nothing installed.' }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$destination = Join-Path $root 'Assets/YLFramework/Integrations/Excel/Editor/Plugins'
+$null = [IO.Directory]::CreateDirectory($destination)
+$zip = [IO.Compression.ZipFile]::OpenRead($package)
+try {
+    $entry = $zip.GetEntry('lib/netstandard2.0/MiniExcel.dll')
+    if ($null -eq $entry) { throw 'Pinned package has no expected netstandard2.0 assembly.' }
+    [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $destination 'MiniExcel.dll'), $true)
+} finally { $zip.Dispose() }
+$licenseDestination = Join-Path $root 'Assets/YLFramework/Integrations/Excel/Editor/Licenses'
+$null = [IO.Directory]::CreateDirectory($licenseDestination)
+Copy-Item -LiteralPath $license -Destination (Join-Path $licenseDestination 'MiniExcel-LICENSE.txt') -Force
+Get-FileHash -LiteralPath (Join-Path $destination 'MiniExcel.dll') -Algorithm SHA256
