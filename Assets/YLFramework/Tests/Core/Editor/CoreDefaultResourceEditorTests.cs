@@ -82,6 +82,73 @@ namespace YLFramework.Core.Editor.Tests
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MigrationSavePreservesLocalIdsAndRawAdaptationAcrossPrefabConversion(bool convert)
+        {
+            string folder = "Assets/YLFramework/Tests/Core/Editor/MigrationIdentity_" + Guid.NewGuid().ToString("N");
+            var preview = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Core/Editor", Path.GetFileName(folder));
+                var host = new GameObject("MigrationHost");
+                SceneManager.MoveGameObjectToScene(host, preview);
+                var canvas = new GameObject("UISystem", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+                canvas.transform.SetParent(host.transform, false);
+                var scaler = canvas.GetComponent<CanvasScaler>();
+                scaler.referenceResolution = new Vector2(1280, 720);
+                scaler.matchWidthOrHeight = 0.25f;
+                canvas.AddComponent<UIRootContext>();
+                var adaptation = new SerializedObject(canvas.AddComponent<AutomaticAdaptationCanvasScaler>());
+                adaptation.FindProperty("referenceResolution").vector2Value = Vector2.zero;
+                adaptation.FindProperty("automaticMatch").boolValue = false;
+                adaptation.FindProperty("manualMatch").floatValue = 0.37f;
+                adaptation.ApplyModifiedPropertiesWithoutUndo();
+                string path = folder + "/Host.prefab";
+                PrefabUtility.SaveAsPrefabAsset(host, path);
+                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                var identities = asset.GetComponentsInChildren<Transform>(true)
+                    .SelectMany(t => new UnityEngine.Object[] { t.gameObject }.Concat(t.GetComponents<Component>()))
+                    .ToDictionary(obj => { AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id); return id; }, obj => obj.GetType());
+                var capture = typeof(UIPanelAssetMigration).GetMethod("CaptureIdentity", BindingFlags.NonPublic | BindingFlags.Static);
+                var save = typeof(UIPanelAssetMigration).GetMethod("SaveChecked", BindingFlags.NonPublic | BindingFlags.Static);
+                for (int round = 0; round < 2; round++)
+                {
+                    var before = capture.Invoke(null, new object[] { path });
+                    var contents = PrefabUtility.LoadPrefabContents(path);
+                    try
+                    {
+                        if (convert && round == 0)
+                            PrefabUtility.ConvertToPrefabInstance(contents.transform.Find("UISystem").gameObject,
+                                AssetDatabase.LoadAssetAtPath<GameObject>(UIPanelAssetMigration.BaseRootPath), new ConvertToPrefabInstanceSettings
+                                {
+                                    objectMatchMode = ObjectMatchMode.ByHierarchy,
+                                    recordPropertyOverridesOfMatches = true,
+                                    componentsNotMatchedBecomesOverride = true,
+                                    gameObjectsNotMatchedBecomesOverride = true,
+                                    changeRootNameToAssetName = false
+                                }, InteractionMode.AutomatedAction);
+                        save.Invoke(null, new[] { contents, path, before });
+                    }
+                    finally { PrefabUtility.UnloadPrefabContents(contents); }
+                    asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    var actual = asset.GetComponentsInChildren<Transform>(true)
+                        .SelectMany(t => new UnityEngine.Object[] { t.gameObject }.Concat(t.GetComponents<Component>()))
+                        .ToDictionary(obj => { AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id); return id; }, obj => obj.GetType());
+                    foreach (var pair in identities) Assert.That(actual.TryGetValue(pair.Key, out var type) && type == pair.Value, Is.True, pair.Key.ToString());
+                    var saved = new SerializedObject(asset.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true));
+                    Assert.That(saved.FindProperty("referenceResolution").vector2Value, Is.EqualTo(Vector2.zero));
+                    Assert.That(saved.FindProperty("automaticMatch").boolValue, Is.False);
+                    Assert.That(saved.FindProperty("manualMatch").floatValue, Is.EqualTo(0.37f));
+                }
+            }
+            finally
+            {
+                EditorSceneManager.ClosePreviewScene(preview);
+                if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+            }
+        }
+
         [TestCase("Canvas", "CreateCanvas")]
         [TestCase("EventSystem", "CreateEventSystem")]
         public void DefaultFactoriesCreateOwnedInactivePreviewObjectsAndSaveIndependentPrefabs(string name, string factoryName)

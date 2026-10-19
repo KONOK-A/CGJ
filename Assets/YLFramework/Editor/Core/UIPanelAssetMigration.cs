@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -277,7 +280,9 @@ namespace YLFramework.Editor
         {
             internal string Guid;
             internal Dictionary<long, string> Objects;
+            internal Dictionary<string, long> Keys;
             internal float[] Scaler;
+            internal float[] Adaptation;
         }
         private static IEnumerable<Object> Objects(GameObject root)
         {
@@ -299,7 +304,34 @@ namespace YLFramework.Editor
         {
             var prefab = Required(path);
             var scaler = prefab.GetComponentInChildren<CanvasScaler>(true);
-            return new Identity { Guid = AssetDatabase.AssetPathToGUID(path), Objects = FileIds(prefab), Scaler = scaler ? ScaleValues(scaler) : null };
+            var adaptation = prefab.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true);
+            return new Identity { Guid = AssetDatabase.AssetPathToGUID(path), Objects = FileIds(prefab),
+                Keys = KeyedObjects(prefab).ToDictionary(pair => pair.Key, pair => LocalId(pair.Value)),
+                Scaler = scaler ? ScaleValues(scaler) : null, Adaptation = adaptation ? AdaptationValues(adaptation) : null };
+        }
+        private static IEnumerable<KeyValuePair<string, Object>> KeyedObjects(GameObject root)
+        {
+            foreach (var obj in Objects(root))
+            {
+                var component = obj as Component;
+                var transform = component ? component.transform : ((GameObject)obj).transform;
+                int index = component ? Array.IndexOf(component.GetComponents(component.GetType()), component) : 0;
+                yield return new KeyValuePair<string, Object>(AnimationUtility.CalculateTransformPath(transform, root.transform) +
+                    "|" + obj.GetType().FullName + "|" + index, obj);
+            }
+        }
+        private static long LocalId(Object obj)
+        {
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id) || id == 0)
+                throw new InvalidOperationException("无法读取资产对象身份：" + obj);
+            return id;
+        }
+        private static float[] AdaptationValues(AutomaticAdaptationCanvasScaler adaptation)
+        {
+            var serialized = new SerializedObject(adaptation);
+            var resolution = serialized.FindProperty("referenceResolution").vector2Value;
+            return new[] { resolution.x, resolution.y, serialized.FindProperty("automaticMatch").boolValue ? 1f : 0f,
+                serialized.FindProperty("manualMatch").floatValue };
         }
         private static float[] ScaleValues(CanvasScaler scaler) => new[] { (float)scaler.uiScaleMode, scaler.referencePixelsPerUnit,
             scaler.scaleFactor, scaler.referenceResolution.x, scaler.referenceResolution.y, (float)scaler.screenMatchMode,
@@ -319,10 +351,66 @@ namespace YLFramework.Editor
                 scaler.defaultSpriteDPI = values[9]; scaler.dynamicPixelsPerUnit = values[10];
                 if (!ScaleValues(scaler).SequenceEqual(values)) throw new InvalidOperationException("无法保留 CanvasScaler 配置。");
             }
+            if (before.Adaptation != null)
+            {
+                var adaptation = contents.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true);
+                if (!adaptation) throw new InvalidOperationException("迁移丢失既有适配组件：" + path);
+                var serialized = new SerializedObject(adaptation);
+                var values = before.Adaptation;
+                serialized.FindProperty("referenceResolution").vector2Value = new Vector2(values[0], values[1]);
+                serialized.FindProperty("automaticMatch").boolValue = values[2] != 0;
+                serialized.FindProperty("manualMatch").floatValue = values[3];
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
             if (!PrefabUtility.SaveAsPrefabAsset(contents, path)) throw new InvalidOperationException("Prefab 保存失败：" + path);
+            PreserveLocalIds(path, before);
             var after = FileIds(Required(path));
             if (AssetDatabase.AssetPathToGUID(path) != before.Guid || before.Objects.Any(pair => !after.TryGetValue(pair.Key, out var type) || type != pair.Value))
                 throw new InvalidOperationException("保存后 GUID/fileID 核验失败；迁移尚未验收，请检查该资产 diff，不要继续集成：" + path);
+        }
+
+        private static void PreserveLocalIds(string path, Identity before)
+        {
+            var objects = KeyedObjects(Required(path)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            var replacements = new Dictionary<long, long>();
+            var text = File.ReadAllText(path);
+            var declarations = new StringBuilder();
+            foreach (var pair in before.Keys)
+            {
+                if (!objects.TryGetValue(pair.Key, out var obj)) throw new InvalidOperationException("迁移丢失既有对象：" + pair.Key);
+                long current = LocalId(obj);
+                if (current == pair.Value) continue;
+                replacements.Add(current, pair.Value);
+                if (Regex.IsMatch(text, @"(?m)^--- !u!\d+ &" + current + @"(?: stripped)?\r?$")) continue;
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(obj);
+                var handle = PrefabUtility.GetPrefabInstanceHandle(obj);
+                if (!source || !handle) throw new InvalidOperationException("仅支持保留转换后的嵌套 Prefab 对象身份：" + pair.Key);
+                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long sourceId);
+                int classId = obj is GameObject ? 1 : obj is RectTransform ? 224 : obj is Transform ? 4 : obj is Canvas ? 223 : obj is MonoBehaviour ? 114 :
+                    throw new InvalidOperationException("不能安全恢复此类嵌套对象身份：" + obj.GetType());
+                declarations.Append("--- !u!").Append(classId).Append(" &").Append(current).Append(" stripped\n")
+                    .Append(classId == 114 ? "MonoBehaviour" : obj.GetType().Name).Append(":\n")
+                    .Append("  m_CorrespondingSourceObject: {fileID: ").Append(sourceId).Append(", guid: ").Append(guid).Append(", type: 3}\n")
+                    .Append("  m_PrefabInstance: {fileID: ").Append(LocalId(handle)).Append("}\n  m_PrefabAsset: {fileID: 0}\n");
+                if (obj is MonoBehaviour behaviour)
+                {
+                    AssetDatabase.TryGetGUIDAndLocalFileIdentifier(MonoScript.FromMonoBehaviour(behaviour), out string scriptGuid, out long scriptId);
+                    declarations.Append("  m_GameObject: {fileID: ").Append(LocalId(behaviour.gameObject)).Append("}\n")
+                        .Append("  m_Enabled: ").Append(behaviour.enabled ? 1 : 0).Append("\n  m_EditorHideFlags: 0\n")
+                        .Append("  m_Script: {fileID: ").Append(scriptId).Append(", guid: ").Append(scriptGuid).Append(", type: 3}\n")
+                        .Append("  m_Name: \n  m_EditorClassIdentifier: \n");
+                }
+            }
+            if (replacements.Count == 0) return;
+            if (!text.StartsWith("%YAML 1.1", StringComparison.Ordinal)) throw new InvalidOperationException("身份保留仅支持已核验的文本 Prefab：" + path);
+            // Unity 2022.3 会重新生成匹配组件的嵌套 fileID；显式 stripped 记录保留外部引用，不能改带 GUID 的来源引用。
+            text += declarations;
+            string Replace(Match match) => match.Groups[1].Value +
+                (replacements.TryGetValue(long.Parse(match.Groups[2].Value), out long old) ? old.ToString() : match.Groups[2].Value) + match.Groups[3].Value;
+            text = Regex.Replace(text, @"(?m)(^--- !u!\d+ &)(-?\d+)([^\r\n]*)", Replace);
+            text = Regex.Replace(text, @"(\{fileID:\s*)(-?\d+)(\s*\})", Replace);
+            File.WriteAllText(path, text, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
         }
     }
 }

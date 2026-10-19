@@ -398,6 +398,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4878c19ecf0794f45baa1869cc9513cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  settings:
+    Layer: 0
+    Priority: 0
+    Modal: 0
+    CoversRoot: 0
+    ParticipatesInTop: 1
+    InstanceMode: 0
+    CacheOnClose: 1
   selector: {fileID: 3265877842729904943}
   closeButton: {fileID: 4581110874883613210}
 --- !u!1 &5689308771819569600

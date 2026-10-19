@@ -1,6 +1,58 @@
 # YL UI Panel 重构实施计划
 
-状态：2026-10-19 原任务 1～6 与九项增量核查的源码、测试和文档补齐及可执行离线验证已完成。依据直接用户授权继续最小补齐，覆盖本文原先“本轮不实施”和因缺少 Editor 证据停止后续源码迁移的等待条件；不降低任何运行契约。仅在 fusion/ui-panel-redesign worktree 工作，未调用 MCP、未启动 Unity、未同步主工程、未修改共享缓存/依赖/设置，未暂存/提交/合并。Unity 输入、生命周期、资产和 IL2CPP 关口均待集成后执行，离线检查不标为引擎通过。
+状态：2026-10-19 已完整 merge 至主工作区 integration/xf-yl，真实 Unity 验收为 **Blocked，未完成、未正式收口**。当前 Editor 原生单 CanvasGroup 限制与已确认的同对象独立门禁方案冲突，结构调整尚未获得用户授权，按本文输入关口停止依赖它的后续验收。原任务 1～6 和九项增量核查不重做；下文来源 worktree 的禁令及未提交记录属于历史阶段，本轮依直接用户授权执行本地整合、MCP、资产迁移、验收修复与提交，不 Push、不改权限/忽略配置、不修改来源 worktree。
+
+## 主工作区集成验收
+
+- 工作区：`G:/Unity/Projects/CGJ2024`，分支 `integration/xf-yl`。整合前目标 `eb1ee7429ec316d5e1084278915e15b17ade6b84`；共同祖先 `5074595212b08bba45d95d48768a895258ea6f93`；来源 `09cc1df0116df1ed69ba43539e9f0cca01b9e9c5`，独有提交仅 `7b7107f` 和 `09cc1df`。
+- 整合：`git merge --no-ff fusion/ui-panel-redesign`，merge `43efb1ff5055da48f17e9cb657b4260437238240`，双父为上述目标/来源，无文本冲突。目标侧全部修改路径与来源 UI 改动不重叠；核对 Resource 正式实现、Packages、ProjectSettings、AGENTS 与既有配置相对整合前均无变化。共用 View/Module/provider/lease 交接继续按当前正式契约验证，不以 merge 成功代表验收通过。
+- 原有未跟踪 Plan 与 `7b7107f` 的 blob `9526b66da8b7610d84c672c7b60005697143be75` 完全相同，已原样隔离到 `C:/Users/Kano/AppData/Local/Temp/kilo/ui-panel-plan-premerge-9526b66da8b7610d84c672c7b60005697143be75.md.backup`，再次核验 blob 相同后纳入来源更新版。原有 `Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta` 保留未提交，不归入本任务。
+- MCP 实测 `Application.dataPath=G:/Unity/Projects/CGJ2024/Assets`，Editor `2022.3.62f3c1`，初始打开 `UIAcceptance.unity` 且无未保存更改。实际加载 UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`；部分 manifest/lock 声明不同，未修改依赖或共享缓存。原输入 Both，Standalone 后端 Mono2x/stripping Disabled，Win64 target supported。
+- 本轮正式 `build.ps1 -Deploy`：PowerShell `7.6.7`、SDK `9.0.312`，Analyzer `129 passed / 0 failed / 0 skipped`，build `0 warnings / 0 errors`；基于本主工作区源码生成并部署，原 meta 保留。DLL SHA256 `4E7B16ECF9BF7D8A42C753919BE7F67F40D04866F2090FE034A54D3EC7446BD7`，证据 `Temp/YLFramework.Analyzers/{build-info.json,TestResults/analyzers.trx}`，不是复制来源 DLL。
+- Unity 正常 Refresh 后 `isCompiling=false`、`scriptCompilationFailed=false`，新 PanelConfig/迁移类型已实际加载，八份新 C# meta 已由 Unity 生成；当前 Console 无本轮新增编译 Error/Exception/Assert。后续源码变更仍需重新验证。
+- 实际迁移首次在完整模板的身份校验处失败，前序资产已保存；不是原子回滚。确认 Unity `ConvertToPrefabInstance`/再次保存会改写六个匹配的嵌套对象 fileID，预览生命周期还会把 `AutomaticAdaptationCanvasScaler` 的待采用原始字段写回。新增两例真实 Editor 回归先 RED，修复迁移工具后 GREEN：保存原始适配字段，按原对象路径/类型匹配恢复明确的 stripped 身份记录，仅替换本地引用、不改带 GUID 的来源引用，强制 Import 后再逐 ID 校验。不伪造 GUID/meta，也不放松原断言。
+- 已恢复首次失败所改写的六个原 ID 和基础根原始适配字段，再成功执行 `MigrateAssets()`、`MigrateTestFixtures()` 及 `ValidateAssets()`。六份既有资产 GUID、全部原有 **139** 个 GameObject/Component fileID 和原 CanvasScaler JSON 保持；新 `UITipsOverlay.prefab` 由 Unity 生成 Variant 身份，直接来源为原 UITips，七字段中仅 `Layer=4` 覆盖。基础根 Layer0、通用 Tips Layer0/Multiple/非 Top、模板引用及两份测试夹具已保存；默认 true 和显式 false/0 的 Variant 保存、重载及实例化测试通过。运行时完整模板 Tips 排序仍失败，不能因此把资产/场景的全部实际行为标为通过。
+- 完整 Core EditMode + Core Editor 最终重跑 **188 passed / 0 failed / 0 skipped**。首次运行曾出现 Unity Search `LogProvider.LogToMessageSearchItem` 后台读旧 Editor.log 的 OutOfMemory，187/188；保存失败结果，目标用例独立重跑通过后再完整重跑 188/188，未关日志、跳过测试或改断言。
+- 完整 Core PlayMode 由真实 TestRunner 发现并执行 **232** 个叶用例，结果 **212 passed / 20 failed / 0 skipped**；MCP 等待响应超时不等于测试停止，已在结束、退出 Play 后读取完整实际结果。Both 下两类原生模块和关键用例确实进入并执行，不是被条件编译排除。普通 View、Module、资源、输入等逐项终态见完整 JSON，不能用通过总数代替失败项。
+- 输入方案阻塞的最小真实反例：当前 Unity `2022.3.62f3c1` 对同 GameObject 的第二次 `AddComponent<CanvasGroup>()` 和 `AddComponent(typeof(CanvasGroup))` 均返回 null，组件数保持 1，并记录 `Can't add component 'CanvasGroup' ... already added`。反例包含 `Button` 与普通业务组 `interactable=true/ignoreParentGroups=false`，不是仅 earlier ignoreParentGroups 的特殊负例。原方案要求同对象独立框架组、禁止写业务字段；该机制无法按原样覆盖此结构。没有扩大不支持范围或引入 wrapper、反射改业务状态来制造通过。问询未获结构调整选择/授权，正式门禁保持阻塞。
+- 相关证据集中在 `Temp/UI.Panel.Integration/`：`assets-before.txt`、`assets-identity-verification.txt`、`migration-regression-{red,green}.json`、`core-editmode-{initial.json,final.results.json}`、`core-architecture-retry.json`、`core-playmode-initial.results.json`、`{editmode,playmode}-discovered-cases.txt`、`unity-compiled-sources-before.txt`、`native-canvasgroup-capability.txt`。Console 全字段快照 `unity-console-last1000.json` 是有界采集，包含本轮测试日志和原生反例；默认 Editor.log 的增量文件实测为空，不把它当作日志证据；大范围 QuerySince 导出超时也不冒充完成。所有临时证据不入 Git。
+- 独立 General 回归：Help/Export 的 8 个测试方法实际展开 **11** 个用例，UI 使用文档更新后再跑 **11/11、0 skipped**。三个真实资源方法 `CoreNativeModuleTextSingleSceneCloseAndRestart`、`CoreNativePrefabJoinInProgressCancelAndPanelOwnership`、`CoreNativeWaitingAbortOwnerCloseAndPendingSessionExitDrainLateResults` 又分别单独执行，各 **1/1**，覆盖真实 bundle provider、Panel 实例责任、等待取消与退出归还。初次合并运行跨 Domain Reload 后 MCP 只保留末项叶记录，不拿该不完整集合宣布全体通过；后续独立记录见 `general-help-export-final.results.json` 与 `resource-core-{text-scene,prefab-owner,pending-exit}.results.json`。插件的跨重载 suite duration 异常不作为性能数据，未改测试框架或 PackageCache。
+- 一次聚焦独立审查仅覆盖三方整合保护、当前迁移修复、资产身份/Variant、meta 和正式 Analyzer 产物，无新增 Critical/Important/Minor。结论仅支持作为明确 Blocked 的 WIP 本地提交，不是 UI 阶段验收通过；不外推到任意自定义 Prefab/其他 Unity 版本，未扩展为整框架重复审查。
+- 最终已验产品输入清单：`Temp/UI.Panel.Integration/product-inputs.json`，记录 2676 份实际文件 SHA256、12 个加载程序集 SHA256/MVID、真实编译源数量/defines、包版本、场景与后端。清单 SHA256 为 `f4085e81888527ad3f38d039f06ea703393d000807fc4b39dd623f576ab0d574`。测试后的 `assets-identity-final.txt` 再次确认 6 资产/139 原 ID/Scaler 保留；当前场景 `UIAcceptance.unity dirty=False`，Editor 不在 Play、无编译失败，Standalone 仍 Mono2x/stripping Disabled，输入 Both 未改。最后产品源码/资产修改发生于上述 Core 188/232 回归前，之后仅更新说明并重跑受影响的 Help/Export；未使用来源旧 DLL 或中间版本替代当前结果。
+- 本批验收修复提交范围为迁移工具与两例回归、正式 Analyzer、新 meta、上述 Prefab/Variant 及本 Plan/UI 使用文档。完整最终提交 SHA/父关系与清单绑定由本次交付记录，不为写回自引用 Hash 另造 docs-only 提交；这是保留 Blocked 现场的 WIP 提交，不是正式完成提交。原来源分支仍为 `09cc1df`，原 worktree 仍只有原未提交 Analyzer DLL；初始无关 AlternateContent.meta 不纳入本批。
+
+| 必需门禁 | 状态 | 实际证据或待执行范围 |
+| --- | --- | --- |
+| 主工作区完整 merge / 保留 Resource 与工程升级 | Passed | merge 双父、目标保护路径 diff 为空 |
+| 正式 Analyzer 测试与部署 | Passed | 本轮 129/129，正式 build-info/TRX |
+| 真实 Unity 导入与脚本编译 | Passed | 当前 Editor 实际加载新类型、无编译失败；最终修改后复验 |
+| 资产预检/显式迁移/meta/身份与保存重载 | Passed | 两入口完成；6 既有资产/139 原 ID/Scaler 保留；8 新脚本 meta；Layer4 Variant 与 true/false/0 保存重载实例化 |
+| 完整模板运行时表现 | Failed | `MigratedRootTemplateHasLayersMasksAndBoundTipsWithoutLegacyComponents` 的 Tips SortingOrder 实际 0，必须继续修复并复验 |
+| Core EditMode 与 Core Editor | Passed | 完整两程序集最终 188/188，无跳过；新增迁移两例真实 RED/GREEN |
+| 完整 Core PlayMode | Failed | 完整程序集 232 实际执行，212 passed / 20 failed / 0 skipped，结果未掩盖 |
+| Both 下真实 Standalone/InputSystem 模块 | Failed | 两类实际进入；三键、导航等有通过项，但 ScrollRect、多触点/池、原生组能力及重入等存在失败 |
+| Legacy-only / New-only 分支 | Blocked | 未切换或重启，不以 Both 代替；同对象门禁结构决定未获授权 |
+| General 完整编译 | Passed | 实际 Unity General 程序集 151 源文件，含原离线排除的八份，编译无错误 |
+| General Help/导出/真实 Core Resource 集成 | Passed | Help/Export 11/11；三个 CoreNative 方法各独立 1/1，无跳过；完整逐项 JSON，不以跨重载丢失的 MCP 集合充数 |
+| UIAcceptance 连续运行/退出复位/原游戏共存/资源归还 | Blocked | 未运行该验收序列，不能以测试进入 Play 替代 READY/EXIT_PASS/GAME 证据 |
+| 代表性 Profiler | Blocked | 未测量窗口/控件负载、UI CPU 或 GC；不以静态成本或无预算阈值冒充 |
+| Windows64 IL2CPP 构建 | Not Run | 因上游输入关口失败未启动显式构建入口，未改后端/stripping |
+| IL2CPP Player 实际启动 | Not Run | 无本轮构建产物启动证据 |
+| IL2CPP Player 行为/退出 | Not Run | 无 PLAYER_PASS、QUIT_PENDING_PASS、退出状态或反射/裁剪行为验收证据 |
+| 最终约定范围回归 | Blocked | 不把 188/188 当作完整约定范围通过；232 的失败和未运行项保持开放 |
+| 已验产品输入身份 / 文档状态 | Passed | 2676 文件与 12 加载程序集清单、测试后身份复核、原 Plan/UI 文档真实标注 Blocked；本地提交的最终 SHA 以本次交付绑定为准 |
+
+### 尚未解决的实际失败
+
+- 原生组与旧门禁寿命/重入：`DeselectCloseDoesNotLetOldInputCoveragePolluteReusedPanel`、`EarlierIgnoreParentGroupUsesActualUguiCapabilityWithoutChangingBusinessFlags`、`FormalColorPrefabSupportsCameraCoordinatesCallbacksAndReuse`、`NativeDownOnSelectReuseCannotAuthorizeOldPressForNewSession`、`OldPointerPressCannotClickAReusedWindowSession`、`ReparentedControlsReleaseOldInputCoverageBeforeNewOwnerConfiguration`。既有业务组不能追加独立组；旧会话延迟 Destroy 的组也可能阻止同帧复用重装，尚未作方案调整。
+- 真实 ScrollRect 前置惯性：Standalone/InputSystem 两后端各自 Elastic/Clamped 四项及 `RemovedMouseEndsScrollDragAndInertiaAndAcceptsNewDevice`、`RemovedTouchscreenEndsScrollDragAndInertiaAndAcceptsNewDevice` 共六项，断言 velocity>0 实际 0。只读诊断指出测试协程可能在该帧 LateUpdate 采样前断言；未增等待、赋速度、改期望或重跑，不把静态推导当修复。
+- `InputSystemTouchIdentityAndPooledEventDataDoNotCancelExternalGestures`：外部 touch click 期望 1 实际 0。只读诊断指出两 Overlay 根排序与全屏模态遮罩可遮挡释放射线，且实际事件池回收延后一帧；尚未作动态射线/时序验证，不认定产品或 fixture 任一方已修复。
+- 排序/显示：`DirectPanelUsesInheritedViewPrefabContractAndInitializesCanvasOnlyOnce`、`InactivePanelAttachmentKeepsVisiblePanelUntilActivationAndRetainsOrderOnDisable`、`PanelPolicyConfiguredLayerWinsOverPriorityAndUsesRootSortingLayer`、`MigratedRootTemplateHasLayersMasksAndBoundTipsWithoutLegacyComponents`。启用前写 Canvas 排序、原生 Overlay 层读回和 Tips 排序仍需实测定位，未改算法或弱化断言。
+- `PanelActivationCallbackCannotRemoveAnotherPanelsSharedEventSubscription`：全局 Invisible 探针在停用另一对象时同步重入，身份断言抛错；只读定位到 fixture 的一次性探针安装范围，未用预期日志吞异常，也未声称订阅产品已坏/已修。
+- `PanelPolicyCustomSceneRootsEndLocallyAndPersistentRootIsIndependent`：场景卸载中的仍存活包装对象走健康 Return，被 pool 正确拒绝 unloaded scene；Core 退役分支是否应 Discard 仍待修复回归，未放宽 Foundation 验证。
+- `CoordinatorResetCannotReleaseDirectSourcePinBeforeCoreInstanceRetirement`：只读确认计数探针在同步 acquire 之后安装，租约未被观察包装，期望 1 实际 0；未移动探针或改变最新 Resource 实现，结果保持 Failed。
+
+以上合计 20 项，完整消息、堆栈及所有通过项以 `core-playmode-initial.results.json` 为准。只读诊断用于定位，不是新测试证据，也不将失败任意改为范围外后续事项。原离线 6/6、28/28、143 份辅助编译及 Acceptance 语法检查仅保留为历史证据，不替代任何本轮 Unity/Player 门禁。未满足正式完成条件；最终 HEAD 在本次 WIP 交付中记录，不宣称阶段收口。
 
 **目标：** 以一套 Module/Panel/View 管线提供简洁、配置驱动的独立界面能力，同时让轻量默认使用与完整预配置使用都低接线成本。
 **架构：** Module 是唯一业务 owner，Panel 继承 View 并复用会话、Model、事件和释放；现有 PanelManager 协调请求与 UI 策略，UIRootContext 仅承载根配置。资源沿当前 Core provider/lease 边界，输入在既有桥接中隔离业务状态，不另建资源后端、UI 对象池或全局输入系统。

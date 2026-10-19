@@ -2,6 +2,8 @@
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
+> 当前状态：已整合到 `integration/xf-yl`，但真实 Unity 输入门禁失败，阶段为 **Blocked，未验收完成**。当前 `2022.3.62f3c1` 不允许同 GameObject 的第二个 CanvasGroup，与下述已确认的独立门禁结构冲突；不得按已可用能力交付。未获结构调整授权前，不覆盖业务字段、不改变不支持范围，也不继续依赖该结论的场景、Profiler 和 IL2CPP 验收。逐项结果及剩余失败记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`。
+
 ## 职责与依赖
 
 - `Module` 是唯一业务 owner。`Panel : View` 只扩展独立 UI 会话，复用 Core 的 Model、事件、请求失效与实例归还协议。
@@ -117,7 +119,7 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 
 Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 CanvasScaler 与 `AutomaticAdaptationCanvasScaler`，根不再保存另一份配置。层 0 也必须明确配置，没有 UIRootContext、缺层、外根映射、损坏的必需组件或遮罩都不能运行时补齐。已有 Panel 的 Attach 只认真实祖先根，不搬去默认根，也不加入资源 Single 合流范围。
 
-资产写入本轮尚未执行，不能认为两个预设或 Variant 已可用。集成后显式调用：
+主工作区已显式迁移并保存以下资产；身份、配置默认及 Variant 保存重载/实例化检查通过，不代表完整模板的运行时排序和输入已通过。需要迁移时仍显式调用：
 
 1. `YLFramework.Editor.UIPanelAssetMigration.ValidateAssets()`，菜单 `YLFramework/Core/UI Panel/核验资产迁移`。
 2. `MigrateAssets()`，菜单 `YLFramework/Core/UI Panel/执行资产迁移`。
@@ -126,9 +128,13 @@ Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 Ca
 5. 通用 `Prefabs/UITips.prefab` 写 Layer0、Multiple、非 Modal、不覆盖、不参与 Top；创建 `Prefabs/UITipsOverlay.prefab` Variant，仅将 Layer 覆盖为 4，其余继承，并更新完整模板的 Presenter 引用。`ColorSelector.prefab` 显式写新默认配置；Unity 生成新 Variant meta。迁移检查旧 GUID/fileID，不手写嵌套 Prefab 关系或新 GUID。
 6. 仓库测试另执行 `UIPanelAssetMigration.MigrateTestFixtures()`，菜单 `迁移测试 Panel 夹具`，保存两个 Core 资源夹具 Panel 的七字段默认；该入口不成为正式导出包对 Tests 的依赖。
 
-入口先完整核验，再分阶段保存，可复跑但不是跨资产的原子事务。失败后先审查实际 diff 和报错；保存后的身份核验失败不等于成功，不能继续宣称验收。不会自动运行、保存用户场景、重写自定义 Tips 绑定或用 InitializeOnLoad 修复旧资产。新增 C# 的 meta 同样留待 Unity 正常导入，随后逐项核对。
+入口先完整核验，再分阶段保存，可复跑但不是跨资产的原子事务。失败后先审查实际 diff 和报错；保存后的身份核验失败不等于成功，不能继续宣称验收。不会自动运行、保存用户场景、重写自定义 Tips 绑定或用 InitializeOnLoad 修复旧资产。新增 C# 和 Variant 的 meta 已由 Unity 正常导入生成。
+
+当前 Unity 的 Prefab 转换/保存会重新生成部分匹配对象的嵌套 local fileID；迁移工具在 Unity API 建立继承关系后，按原对象身份恢复明确的 stripped 记录及本地引用，再强制导入、重新核验全部原 ID。不会改带 GUID 的来源引用或生成伪造 GUID。预览生命周期可能采用适配组件的待初始化字段，工具同样保存并恢复原始序列化配置，避免把预览状态写回正式资产。
 
 ## 输入边界
+
+本节为需要兑现的既定合同，不是当前引擎已通过的声明。实测普通业务 CanvasGroup（`ignoreParentGroups=false`）已占用组件位置时，第二个自有组也会添加失败；旧会话延迟销毁的组还会影响同帧复用重装。此问题超出仅 earlier ignoreParentGroups 的已允许安全失败组合，不能把它直接改称新的不支持范围来通过验收。
 
 标准 UGUI 有效阻挡与业务原始值相互独立：每个所属 Canvas 有框架 ICanvasRaycastFilter，每个所属 Selectable 有自有 CanvasGroup，始终按最近 Panel 划界。不会保存/恢复业务 `interactable/enabled/raycastTarget/blocksRaycasts`，同值写入也不会丢失。
 
@@ -162,9 +168,9 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 离线复跑：`pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`、`PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 Player/Editor 语法，不检查绑定。输出全部在当前 worktree `Temp/UI.Panel.Offline`，直接使用真实引用和产品源码。辅助编译不复现 Unity 导入、原生状态或精确包 API，不等于 Unity 编译、测试、Player 通过。
 
-当前磁盘 ProjectVersion 为 2022.3.62f3c1；UGUI manifest/lock 为 2.0.0、Input System lock 为 1.14.0（传递依赖），可读安装目录的 UGUI 源码为 1.0.0，模板 UI DLL 的 AssemblyVersion 为 1.0.0.0；后者不能证明其包版本等于声明版本。没有可用的 Input System DLL，未核对活跃 Editor 加载版本。URP manifest 16.0.6 与 lock 14.0.12 也不一致；未改包或锁。模板 TestRunner 缺少部分既有证据采集 API，全量 General EditMode 辅助编译不完整。这些不是放宽关口的理由。
+主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 声明不同，未修改依赖、锁或共享 PackageCache。原离线八份 General 排除仅属于模板 API 限制；真实 Unity 已编译完整 General 源码，没有沿用排除条件。
 
-集成后顺序：实际包/程序集版本 → Unity 导入及上述资产迁移/meta/实例化 → Core EditMode/PlayMode 与真实模块输入 → Windows64 IL2CPP 捕获门 → 完整 Core、Help/导出、真实 Resource 租约集成及 UIAcceptance。输入 Both/Legacy-only/New-only、生命周期、无 Domain Reload、原游戏非干扰、Editor/IL2CPP、完整资产验收均待执行，历史 3.3/3.4 记录不能替代此次重构证据。
+验收顺序仍为：实际包/程序集版本 → Unity 导入及上述资产迁移/meta/实例化 → Core EditMode/PlayMode 与真实模块输入 → Windows64 IL2CPP 捕获门 → 完整 Core、Help/导出、真实 Resource 租约集成及 UIAcceptance。当前 Core EditMode/Editor 已通过，完整 Core PlayMode 实际执行后存在失败；Both 下两类模块确实运行，但输入门禁未通过，Legacy-only/New-only 尚未切换验证。连续运行、退出复位、无 Domain Reload、原游戏共存、Profiler 和 Windows64 IL2CPP 尚无本轮通过证据。历史记录与较小通过子集均不能替代这些门禁。
 
 `UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收` 准备正式 UIAcceptance 场景的 IL2CPP/Medium stripping 构建，输出 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，恢复原设置且不自动运行。检查 `UI_PANEL_NATIVE_CAPTURE_GATE_REACHED`、完整 PLAYER_PASS/QUIT_PENDING_PASS 与无相关异常，不能只看退出码或单个标记。此入口本轮未运行；Scrollbar/InputField/多指的完整引擎套件也必须执行，不能由较小 Player 门替代。
 

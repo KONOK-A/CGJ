@@ -48,5 +48,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c16e979af7fe52c49a86053b7d335363, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  KeepInFront: 0
-  Modal: 0
+  settings:
+    Layer: 0
+    Priority: 0
+    Modal: 0
+    CoversRoot: 0
+    ParticipatesInTop: 1
+    InstanceMode: 0
+    CacheOnClose: 1
