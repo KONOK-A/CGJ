@@ -67,24 +67,70 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
-        public void CanvasPreservesOriginalSerializedDataExceptYLAdaptationBinding()
+        public void LightweightCanvasHasAnExplicitRootAndPreservesNativeScaleConfiguration()
         {
             string path = ResourceRoot + "YLFramework/Core/Canvas.prefab";
             string adaptationGuid = AssetDatabase.AssetPathToGUID(AdaptationPath);
             Assert.That(adaptationGuid, Is.Not.Empty.And.Not.EqualTo(OriginalAdaptationGuid));
-            string expected = File.ReadAllText(OriginalRoot + "Canvas.prefab").Replace(OriginalAdaptationGuid, adaptationGuid);
-            Assert.That(File.ReadAllText(path), Is.EqualTo(expected));
-
             var prefab = Resources.Load<GameObject>("YLFramework/Core/Canvas");
-            Assert.That(prefab.GetComponents<Component>().Select(c => c.GetType()), Is.EqualTo(new[]
+            Assert.That(AssetDatabase.GetAssetPath(prefab), Is.EqualTo(path));
+            Assert.That(prefab.GetComponents<Component>().Select(c => c.GetType()), Is.SupersetOf(new[]
             {
-                typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(AutomaticAdaptationCanvasScaler)
+                typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(AutomaticAdaptationCanvasScaler), typeof(UIRootContext)
             }));
+            var context = prefab.GetComponent<UIRootContext>();
+            Assert.That(prefab.GetComponents<UIRootContext>().Length, Is.EqualTo(1));
+            Assert.That(context.Canvas, Is.SameAs(prefab.GetComponent<Canvas>()));
+            var layers = new SerializedObject(context).FindProperty("uiLayers");
+            Assert.That(layers.arraySize, Is.EqualTo(1));
+            var layer = layers.GetArrayElementAtIndex(0);
+            var container = layer.FindPropertyRelative("root").objectReferenceValue as RectTransform;
+            Assert.That(container && container.parent == prefab.transform, Is.True);
+            Assert.That(container.anchorMin, Is.EqualTo(Vector2.zero));
+            Assert.That(container.anchorMax, Is.EqualTo(Vector2.one));
+            Assert.That(layer.FindPropertyRelative("enableMask").boolValue, Is.False);
             var adaptation = prefab.GetComponent<AutomaticAdaptationCanvasScaler>();
             Assert.That(adaptation.GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
             Assert.That(AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(adaptation)), Is.EqualTo(AdaptationPath));
             Assert.That(prefab.GetComponent<Canvas>().renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
             Assert.That(prefab.GetComponent<CanvasScaler>().referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));
+            var original = Resources.Load<GameObject>("XFGameFramework/Canvas").GetComponent<CanvasScaler>();
+            var scaler = prefab.GetComponent<CanvasScaler>();
+            Assert.That(scaler.uiScaleMode, Is.EqualTo(original.uiScaleMode));
+            Assert.That(scaler.scaleFactor, Is.EqualTo(original.scaleFactor));
+            Assert.That(scaler.screenMatchMode, Is.EqualTo(original.screenMatchMode));
+            Assert.That(scaler.matchWidthOrHeight, Is.EqualTo(original.matchWidthOrHeight));
+            Assert.That(scaler.referencePixelsPerUnit, Is.EqualTo(original.referencePixelsPerUnit));
+        }
+
+        [Test]
+        public void MigratedTemplateReferencesBaseAndTipsVariantOnlyOverridesLayerFour()
+        {
+            const string prefix = "Assets/YLFramework/Prefabs/";
+            var template = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "YLFramework.prefab");
+            var root = template.GetComponentsInChildren<UIRootContext>(true).Single();
+            var basic = Resources.Load<GameObject>("YLFramework/Core/Canvas");
+            Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(root.gameObject), Is.SameAs(basic));
+            Assert.That(new SerializedObject(template.GetComponent<YLFrameworkRoot>()).FindProperty("panelRoot").objectReferenceValue, Is.SameAs(root));
+            var tips = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "UITips.prefab");
+            var variant = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "UITipsOverlay.prefab");
+            Assert.That(variant, Is.Not.Null, "须先执行显式资产迁移并导入新 meta。");
+            Assert.That(PrefabUtility.GetPrefabAssetType(variant), Is.EqualTo(PrefabAssetType.Variant));
+            Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(variant), Is.SameAs(tips));
+            var defaults = new SerializedObject(tips.GetComponent<UITipsItem>()).FindProperty("settings");
+            Assert.That(defaults.FindPropertyRelative("Layer").intValue, Is.Zero);
+            Assert.That(defaults.FindPropertyRelative("InstanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Multiple));
+            Assert.That(defaults.FindPropertyRelative("Modal").boolValue || defaults.FindPropertyRelative("CoversRoot").boolValue || defaults.FindPropertyRelative("ParticipatesInTop").boolValue, Is.False);
+            Assert.That(defaults.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
+            var inherited = new SerializedObject(variant.GetComponent<UITipsItem>()).FindProperty("settings");
+            Assert.That(inherited.FindPropertyRelative("Layer").intValue, Is.EqualTo(4));
+            foreach (var field in new[] { "Priority", "Modal", "CoversRoot", "ParticipatesInTop", "InstanceMode", "CacheOnClose" })
+                Assert.That(inherited.FindPropertyRelative(field).prefabOverride, Is.False, field);
+            Assert.That(new SerializedObject(root.GetComponentInChildren<UITipsPresenter>(true)).FindProperty("uiTipItemPrefab").objectReferenceValue, Is.SameAs(variant));
+            Assert.That(variant.GetComponentsInChildren<Graphic>(true).All(graphic => !graphic.raycastTarget), Is.True);
+            var color = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "ColorSelector.prefab").GetComponent<ColorSelectorWindow>()).FindProperty("settings");
+            Assert.That(color.FindPropertyRelative("ParticipatesInTop").boolValue && color.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
+            Assert.That(color.FindPropertyRelative("InstanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Single));
         }
 
         [Test]

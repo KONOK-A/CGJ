@@ -17,6 +17,7 @@ namespace YLFramework.Analyzers
         internal readonly INamedTypeSymbol View;
         private readonly IFieldSymbol poolOwner;
         private readonly IFieldSymbol requestOwner;
+        private readonly IFieldSymbol panelConsumerOwner;
         private readonly bool[] inherited;
         private readonly ConcurrentDictionary<ISymbol, ImmutableArray<AttributeData>>[] attributes;
         private readonly ConcurrentDictionary<AttributeData, ImmutableArray<string>> strings = new ConcurrentDictionary<AttributeData, ImmutableArray<string>>();
@@ -43,6 +44,11 @@ namespace YLFramework.Analyzers
             field = candidates?.Length == 1 ? candidates[0] : null;
             if (request?.Arity == 1 && field != null && field.DeclaredAccessibility == Accessibility.Private && !field.IsStatic &&
                 SymbolEqualityComparer.Default.Equals(field.Type, args)) requestOwner = field;
+            var consumer = core.GetTypeByMetadataName("YLFramework.Core.PanelManager+PanelOperation");
+            candidates = consumer?.GetMembers("Args").OfType<IFieldSymbol>().ToArray();
+            field = candidates?.Length == 1 ? candidates[0] : null;
+            if (consumer?.Arity == 0 && field != null && field.DeclaredAccessibility == Accessibility.Internal && !field.IsStatic &&
+                SymbolEqualityComparer.Default.Equals(field.Type, args)) panelConsumerOwner = field;
         }
 
         internal static AnalyzerSymbols Create(Compilation compilation)
@@ -55,7 +61,8 @@ namespace YLFramework.Analyzers
         }
 
         internal bool IsOwner(ISymbol member) => member is IFieldSymbol field &&
-            (SymbolEqualityComparer.Default.Equals(field.OriginalDefinition, poolOwner) || SymbolEqualityComparer.Default.Equals(field.OriginalDefinition, requestOwner));
+            (SymbolEqualityComparer.Default.Equals(field.OriginalDefinition, poolOwner) || SymbolEqualityComparer.Default.Equals(field.OriginalDefinition, requestOwner) ||
+             SymbolEqualityComparer.Default.Equals(field.OriginalDefinition, panelConsumerOwner));
 
         internal (INamedTypeSymbol type, AttributeData attribute) Marked(ITypeSymbol type, int rule, CancellationToken token)
         {

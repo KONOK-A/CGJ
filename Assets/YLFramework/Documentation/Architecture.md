@@ -84,7 +84,7 @@ Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`Modu
 | Json / `YLFramework.Utilities.Json` | Runtime JSONObject 树处理，无框架内依赖；与 Json.NET 的强类型序列化、Save 文件策略、HTTP 传输职责分离 | 直接创建 / 解析节点，不建设全局 JSON 服务 |
 | Table / `YLFramework.Utilities.Table` | Runtime 通用表与多值索引；TableIndex 复用 Foundation 的 List / Dictionary 池，不接管正式Resource索引 | 调用方维护索引及 Clear / Dispose；不取得数据项 / 资源的释放权 |
 | ZipTool / `YLFramework.Utilities.ZipTool` | Runtime主体内的BCL-only源码闭包；原独立产品asmdef已退役，仍用全源码无Engine探针核验 | 常规使用ZipUtility/GZipUtility，多次读取以using管理ZipArchiveReader；不建设压缩Manager |
-| ColorSelector / `YLFramework.Core` | 四个取色类型统一归 Utilities/UI/ColorSelector，依赖 Core Panel 策略的便利工具，不是中立基础机制 | 窗口由 Module/WindowCatalog 按需打开；独立控件无 Panel 时不强制创建 owner；无自定义门禁接口或新 Manager |
+| ColorSelector / `YLFramework.Core` | 四个取色类型统一归 Utilities/UI/ColorSelector，依赖 Core Panel 策略的便利工具，不是中立基础机制 | 窗口由 Module.LoadPanel 按需打开；独立控件无 Panel 时不强制创建 owner；无自定义门禁接口或新 Manager |
 
 FSM/Grid/Json/Table/ZipTool 无需组件挂载或公共Root；ColorSelector 是 UGUI 工具，窗口按需复用 Core 的 Module/Panel。现有YLFramework.Core.Pool namespace不表示依赖Core领域，机制闭包见[Pool](Modules/Pool.md)。类型/namespace/GUID保持，五个产品程序集身份迁移是阶段 7 的明确成本；JSONObject/SharpZipLib来源与完整MIT随Runtime导出，分发限制见下文。
 
@@ -133,7 +133,7 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 | [`Runtime/YLFrameworkRoot.cs`](../Runtime/YLFrameworkRoot.cs) | 框架根单例（`MonoSingleton<YLFrameworkRoot>`，`DefaultExecutionOrder(-20)`），负责框架根对象的 DontDestroyOnLoad |
 | [`Runtime/Core/Modules/Module.cs`](../Runtime/Core/Modules/Module.cs) | 唯一业务 owner，保留模块启动/关闭、MVC 与 View 接入协议 |
 | [`Runtime/Core/MVC/Views/View.cs`](../Runtime/Core/MVC/Views/View.cs) | 正式 View 会话与表现生命周期 |
-| [`Runtime/Core/UI/Windows/WindowCatalog.cs`](../Runtime/Core/UI/Windows/WindowCatalog.cs) | 仅保存窗口定义；同步/异步入口复用 Module 的活跃会话与 pending 请求 |
+| [`Runtime/Core/UI/Windows/PanelManager.Requests.cs`](../Runtime/Core/UI/Windows/PanelManager.Requests.cs) | 每消费者一份 Module pending 记录，按实际根和来源协调 Single/Multiple；复用 View 生命周期与 Core 资源责任 |
 | [`Runtime/Core/UI/Roots/UIRootContext.cs`](../Runtime/Core/UI/Roots/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
 | [`Runtime/Systems/Resource/ResourceSystem.cs`](../Runtime/Systems/Resource/ResourceSystem.cs) | 唯一显式初始化/关闭的资源权威，统一资产/实例/Scene pin，供 Core/Audio 消费 |
 | [`Runtime/Foundation/Timing/Timer.cs`](../Runtime/Foundation/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |

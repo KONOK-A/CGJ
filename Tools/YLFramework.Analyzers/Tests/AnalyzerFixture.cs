@@ -72,7 +72,8 @@ namespace YLFramework.Core {
   private static readonly Pool.ObjectPool<LoadViewArgs> Pool = new Pool.ObjectPool<LoadViewArgs>(()=>new LoadViewArgs());
   public static LoadViewArgs New()=>Pool.Allocate();
  }
- public class LoadViewRequest<T> { private LoadViewArgs args; }
+  public class LoadViewRequest<T> { private LoadViewArgs args; }
+  public class PanelManager { internal sealed class PanelOperation { internal LoadViewArgs Args; } }
 }");
             return CSharpCompilation.Create("YLFramework.Runtime", sources.Select(s => CSharpSyntaxTree.ParseText(s, Parse)),
                 Platform, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));

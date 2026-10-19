@@ -24,6 +24,7 @@ namespace YLFramework.Core
         internal bool UsesBackend;
         internal GameObject BackendInstance;
         internal CoreInstanceLease BackendLease;
+        internal GameObject DirectSource;
         internal View BackendRoot;
         internal object BackendRootSession;
         internal int SceneHandle;
@@ -184,6 +185,8 @@ namespace YLFramework.Core
         /// </summary>
         public void Close()
         {
+            if (this is Panel panel && panel.OpeningSession != null && ReferenceEquals(panel.OpeningSession, Session))
+                throw new InvalidOperationException("OnOpen 期间不能关闭当前 Panel。");
             if (Session == null || Module == null) return;
             ViewManager.RemoveView(Module, this, Session);
         }
@@ -392,7 +395,7 @@ namespace YLFramework.Core
 
         private void RegisterEvents() 
         {
-            if (!loaded || IsRemoving || !isActiveAndEnabled || eventsRegistered) return;
+            if (!loaded || IsRemoving || !isActiveAndEnabled || eventsRegistered || (this is Panel panel && panel.DefersEvents)) return;
             var session = Session;
             long epoch = ++eventEpoch;
             eventsRegistered = true;

@@ -104,15 +104,17 @@ namespace YLFramework.Tests.ResourceBuild
                 first.Close();
                 Assert.That(consumer.LoadView<YLCoreSmokeView>("A.prefab", loadViewArgs: null), Is.SameAs(first));
                 Assert.That(texture == null, Is.False);
-                var parent = new GameObject("Core86.NativePanelParent", typeof(RectTransform), typeof(Canvas));
+                var parent = new GameObject("Core86.NativePanelParent", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
+                parent.SetActive(false);
+                var panelRoot = CorePanelTestRoots.Create(parent);
                 try
                 {
-                    var panelRequest = consumer.LoadPanelAsync<YLCoreSmokePanel>("Core86Panel.prefab", UIType.UI, parent.transform, loadViewArgs: null);
+                    var panelRequest = consumer.LoadPanelAsync<YLCoreSmokePanel>("Core86Panel.prefab", root: panelRoot);
                     yield return UntilScene85(() => panelRequest.isDone);
                     Assert.That(panelRequest.Status, Is.EqualTo(LoadViewStatus.Succeeded), panelRequest.error);
                     var panel = panelRequest.panel;
                     panel.Close();
-                    Assert.That(consumer.LoadPanel<YLCoreSmokePanel>("Core86Panel.prefab", UIType.UI, parent.transform, loadViewArgs: null), Is.SameAs(panel));
+                    Assert.That(consumer.LoadPanel<YLCoreSmokePanel>("Core86Panel.prefab", root: panelRoot), Is.SameAs(panel));
                     consumer.Close();
                     Assert.That(panel.Module, Is.Null);
                 }
@@ -155,6 +157,9 @@ namespace YLFramework.Tests.ResourceBuild
             var provider = system.BindCoreResourceProvider();
             var module = new Core86Module { ProjectName = snapshot.Document.ProjectId };
             var observed = new ObservedCoreProvider(provider);
+            var panelHost = new GameObject("Core86.WaitingPanelRoot", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
+            panelHost.SetActive(false);
+            module.PanelRoot = CorePanelTestRoots.Create(panelHost);
             try
             {
                 yield return YLFramework.Core.ModuleManager.StartUpModule(module);
@@ -178,19 +183,19 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(captured.IsDisposed, Is.True);
                 Assert.That(module.GetViews<View>(), Is.Empty);
                 yield return Scene85Drained(system);
-                LoadViewRequest<YLCoreSmokePanel> invalidated = null;
+                LoadPanelRequest<YLCoreSmokePanel> invalidated = null;
                 observed.OnRequest = request =>
                 {
                     captured = request;
                     Assert.That(request.Status, Is.EqualTo(CoreResourceStatus.Pending));
                     request.Completed += _ =>
                     {
-                        Assert.That(typeof(LoadViewRequest<YLCoreSmokePanel>).GetField("resourceRequest", BindingFlags.Instance | BindingFlags.NonPublic)
-                            .GetValue(invalidated), Is.SameAs(request));
+                        var operation = typeof(LoadPanelRequest<YLCoreSmokePanel>).GetField("operation", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(invalidated);
+                        Assert.That(operation.GetType().GetField("resource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(operation), Is.SameAs(request));
                         module.Close();
                     };
                 };
-                invalidated = module.LoadViewAsync<YLCoreSmokePanel>("Core86Panel.prefab", loadViewArgs: null);
+                invalidated = module.LoadPanelAsync<YLCoreSmokePanel>("Core86Panel.prefab");
                 yield return UntilScene85(() => invalidated.isDone);
                 Assert.That(invalidated.Status, Is.EqualTo(LoadViewStatus.Invalidated));
                 Assert.That(captured.IsDisposed, Is.True);
@@ -211,7 +216,7 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
                 Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
             }
-            finally { module.Close(); CoreResourceAccess.Unbind(observed); }
+            finally { module.Close(); CoreResourceAccess.Unbind(observed); Object.Destroy(panelHost); }
         }
 
         private sealed class ObservedCoreProvider : ICoreResourceProvider
