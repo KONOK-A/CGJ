@@ -22,7 +22,7 @@ namespace YLFramework.MissionSystem
 
     public class MissionListTree : ReorderableTreeView<MissionConfigData>
     {
-        private const string mission_copy_flag = "YLFramework.MissionSystem.CopyMission";
+        private const string mission_copy_flag = "YLFramework.Mission.Objects.v1:";
 
         private MissionsConfig missionsConfig;
 
@@ -187,24 +187,7 @@ namespace YLFramework.MissionSystem
                 AssetDatabase.Refresh();
             });
 
-            menu.AddItem(new GUIContent("Copy"), false, () =>
-            {
-                // --
-
-                List<string> guids = new List<string>();
-
-                foreach (var item in GetSelection())
-                {
-                    MissionConfigData data = missionsConfig.GetMissionConfigData(item);
-                    string asset_path = AssetDatabase.GetAssetPath(data);
-                    string guid = AssetDatabase.AssetPathToGUID(asset_path);
-                    if (string.IsNullOrEmpty(guid)) continue;
-                    guids.Add(guid);
-                }
-
-                // 写入数据
-                GUIUtility.systemCopyBuffer = string.Format("{0}{1}", mission_copy_flag, JsonConvert.SerializeObject(guids));
-            });
+            menu.AddItem(new GUIContent("Copy"), false, CopySelection);
 
 
 
@@ -226,30 +209,7 @@ namespace YLFramework.MissionSystem
 
             if (GUIUtility.systemCopyBuffer.StartsWith(mission_copy_flag))
             {
-                menu.AddItem(new GUIContent("Paste"), false, () =>
-                {
-                    //SetSelection(Array.Empty<int>());
-                    // 复制
-                    string content = GUIUtility.systemCopyBuffer.Substring(mission_copy_flag.Length, GUIUtility.systemCopyBuffer.Length - mission_copy_flag.Length);
-
-                    List<string> p = JsonConvert.DeserializeObject<List<string>>(content);
-
-                    List<int> new_ids = new List<int>();
-
-                    foreach (var guid in p)
-                    {
-                        string asset_path = AssetDatabase.GUIDToAssetPath(guid);
-                        MissionConfigData data = AssetDatabase.LoadAssetAtPath<MissionConfigData>(asset_path);
-                        int id = CopyMission(data);
-                        if (id == -1) continue;
-                        new_ids.Add(id);
-                    }
-
-                    SetSelection(new_ids);
-
-                    AssetDatabase.SaveAssets();
-                    AssetDatabase.Refresh();
-                });
+                menu.AddItem(new GUIContent("Paste"), false, PasteSelection);
             }
             else
             {
@@ -287,6 +247,38 @@ namespace YLFramework.MissionSystem
             menu.ShowAsContext();
         }
 
+        private void CopySelection()
+        {
+            var objects = new List<string>();
+            foreach (var id in GetSelection())
+            {
+                var data = missionsConfig.GetMissionConfigData(id);
+                if (data && AssetDatabase.Contains(data)) objects.Add(GlobalObjectId.GetGlobalObjectIdSlow(data).ToString());
+            }
+            GUIUtility.systemCopyBuffer = mission_copy_flag + JsonConvert.SerializeObject(objects);
+        }
+
+        private void PasteSelection()
+        {
+            var text = GUIUtility.systemCopyBuffer;
+            if (!text.StartsWith(mission_copy_flag, StringComparison.Ordinal)) return;
+            var identities = JsonConvert.DeserializeObject<List<string>>(text.Substring(mission_copy_flag.Length), new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None })
+                ?? throw new InvalidOperationException("任务剪贴板没有对象身份列表。");
+            var sources = new List<MissionConfigData>();
+            foreach (var identity in identities)
+            {
+                if (!GlobalObjectId.TryParse(identity, out var id) || !(GlobalObjectId.GlobalObjectIdentifierToObjectSlow(id) is MissionConfigData data))
+                    throw new InvalidOperationException("任务剪贴板对象已失效: " + identity);
+                sources.Add(data);
+            }
+            var selected = new List<int>();
+            foreach (var source in sources) selected.Add(CopyMission(source));
+            missionsConfig.ClearCache();
+            AssetDatabase.SaveAssetIfDirty(missionsConfig);
+            SetSelection(selected);
+            Reload();
+        }
+
         private void DeleteMission(int id)
         {
             if (missionsConfig == null)
@@ -295,10 +287,8 @@ namespace YLFramework.MissionSystem
             MissionConfigData data = missionsConfig.GetMissionConfigData(id);
             if (data == null) return;
 
-            AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(data));
-            missionsConfig.missions.Remove(data);
-            EditorUtility.SetDirty(missionsConfig);
-            AssetDatabase.SaveAssets();
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(missionsConfig, missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(missionsConfig));
+            missionsConfig.ClearCache();
             Reload();
         }
 

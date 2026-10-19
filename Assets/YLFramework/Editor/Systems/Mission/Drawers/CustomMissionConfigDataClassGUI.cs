@@ -22,6 +22,7 @@ namespace YLFramework.MissionSystem
 
         public override void OnPropertyGUI(SerializedProperty class_fullname_property)
         {
+            mission_type_guid_property = class_fullname_property.serializedObject.FindProperty("mission_type_guid");
             GUILayout.Space(10);
 
 
@@ -30,7 +31,6 @@ namespace YLFramework.MissionSystem
                 current_mission_type = AssemblyTool.GetType(class_fullname_property.stringValue);
                 current_mission_type_class_fullname = class_fullname_property.stringValue;
 
-                mission_type_guid_property = class_fullname_property.serializedObject.FindProperty("mission_type_guid");
             }
 
             string message = current_mission_type == null ? "无" : current_mission_type.Name;

@@ -19,6 +19,9 @@ namespace YLFramework.BuffSystem
         private static readonly Dictionary<IAddableBuff, HashSet<int>> Effects = new();
         private static readonly HashSet<IAddableBuff> Closing = new();
         private static readonly HashSet<(IAddableBuff, int)> Adding = new();
+        private static readonly HashSet<BuffsConfig> RemovingConfigs = new();
+        private static readonly Dictionary<IAddableBuff, int> AddingDepth = new();
+        private static readonly HashSet<IAddableBuff> CancelledAdds = new();
         private static readonly Dictionary<Type, ObjectPool<BuffBase>> Pools = new();
         private static readonly List<(BuffBase buff, ObjectPool<BuffBase> pool)> Pending = new();
         private static IUnRegister _update, _fixed, _late;
@@ -37,7 +40,7 @@ namespace YLFramework.BuffSystem
         public static void AddConfig(BuffsConfig config)
         {
             if (!config) throw new ArgumentNullException(nameof(config));
-            if (_stopping) throw new InvalidOperationException("Buff会话正在关闭。");
+            if (_stopping || RemovingConfigs.Contains(config)) throw new InvalidOperationException("Buff配表正在关闭。");
             if (Configs.Contains(config)) return;
             var ids = new HashSet<int>();
             foreach (var data in config.buffs)
@@ -60,10 +63,30 @@ namespace YLFramework.BuffSystem
         public static BuffsConfig GetConfig(string name) => Configs.Find(config => config && config.name == name);
         public static void RemoveConfig(BuffsConfig config)
         {
-            if (!Configs.Remove(config)) return;
-            foreach (var host in Hosts.ToArray())
-                foreach (var buff in host.Buffs.ToArray()) if (buff.BuffData && buff.BuffData.parent == config) RemoveBuff(host, buff);
-            if (Leases.TryGetValue(config, out var lease)) { Leases.Remove(config); lease.Dispose(); }
+            if (!config || !Configs.Contains(config) && !Leases.ContainsKey(config) || !RemovingConfigs.Add(config)) return;
+            Configs.Remove(config);
+            var errors = new List<Exception>();
+            _depth++;
+            try
+            {
+                foreach (var host in Hosts.ToArray())
+                    try { RemoveMatching(host, buff => buff.BuffData && buff.BuffData.parent == config); }
+                    catch (Exception error) { errors.Add(error); }
+            }
+            finally
+            {
+                try { if (--_depth == 0) FlushReturns(); }
+                finally
+                {
+                    if (Leases.TryGetValue(config, out var lease))
+                    {
+                        Leases.Remove(config);
+                        try { lease.Dispose(); } catch (Exception error) { errors.Add(error); }
+                    }
+                    RemovingConfigs.Remove(config);
+                }
+            }
+            if (errors.Count != 0) throw new AggregateException(errors);
         }
         private static BuffConfigData GetBuffData(int id)
         {
@@ -88,17 +111,19 @@ namespace YLFramework.BuffSystem
         {
             if (host == null) return null;
             if (host.Buffs == null) throw new ArgumentException("请初始化IAddableBuff.Buffs。", nameof(host));
-            if (_stopping || Closing.Contains(host)) throw new InvalidOperationException("Buff宿主正在退出。");
+            if (_stopping || Closing.Contains(host) || CancelledAdds.Contains(host)) throw new InvalidOperationException("Buff宿主正在退出。");
             if (host is UnityEngine.Object obj && !obj || host is Component component && !component.gameObject.activeInHierarchy) return null;
-            if (!host.IsCanAdd(id)) return null;
             if (!Adding.Add((host, id))) throw new InvalidOperationException($"Buff同宿主同ID重入添加: {id}");
+            BeginAdd(host);
             _depth++;
             BuffBase buff = null;
             ObjectPool<BuffBase> pool = null;
             try
             {
+                if (!host.IsCanAdd(id) || CancelledAdds.Contains(host)) return null;
                 var definition = GetBuffData(id);
                 if (!definition) throw new InvalidOperationException($"Buff配置不存在: {id}");
+                var owner = Configs.Find(config => config.buffs.Contains(definition));
                 var type = ResolveType(definition.buff_class_full_name, id, definition.parent ? definition.parent.name : "(unparented)");
                 if (!Pools.TryGetValue(type, out pool))
                 {
@@ -106,18 +131,20 @@ namespace YLFramework.BuffSystem
                     Pools.Add(type, pool);
                 }
                 buff = pool.Allocate();
+                if (_stopping || CancelledAdds.Contains(host) || !Configs.Contains(owner)) { Pending.Add((buff, pool)); return null; }
                 buff.BuffData = UnityEngine.Object.Instantiate(definition);
-                foreach (var config in Configs) if (config.buffs.Contains(definition)) { buff.BuffData.parent = config; break; }
+                buff.BuffData.parent = owner;
                 buff.BuffData.effects = new List<EffectData>();
                 foreach (var effect in definition.effects) buff.BuffData.effects.Add(UnityEngine.Object.Instantiate(effect));
                 buff.ResetData();
                 buff.Owner = host;
                 buff.Duration = duration;
                 buff.userData = userData;
+                if (_stopping || CancelledAdds.Contains(host) || !Configs.Contains(owner)) { Pending.Add((buff, pool)); return null; }
                 if (!buff.IsCanAdd()) { Pending.Add((buff, pool)); return null; }
                 if (definition.mode == BuffMode.Single)
-                    foreach (var old in host.Buffs.ToArray()) if (old.BuffData.buff_id == id) RemoveBuff(host, old);
-                if (_stopping || Closing.Contains(host)) { Pending.Add((buff, pool)); return null; }
+                    RemoveBuff(host, id);
+                if (_stopping || Closing.Contains(host) || CancelledAdds.Contains(host) || !Configs.Contains(owner)) { Pending.Add((buff, pool)); return null; }
                 host.Buffs.Add(buff);
                 if (!Hosts.Contains(host)) Hosts.Add(host);
                 UpdateEffects(host);
@@ -137,12 +164,27 @@ namespace YLFramework.BuffSystem
                 }
                 throw;
             }
-            finally { Adding.Remove((host, id)); if (--_depth == 0) FlushReturns(); }
+            finally { Adding.Remove((host, id)); EndAdd(host); if (--_depth == 0) FlushReturns(); }
         }
         public static void AddBuff(IAddableBuff host, IList<int> ids, object userData = null)
-        { foreach (var id in new List<int>(ids)) AddBuff(host, id, userData); }
+        { AddBatch(host, ids, id => AddBuff(host, id, userData)); }
         public static void AddBuff(IAddableBuff host, IList<int> ids, float duration, object userData = null)
-        { foreach (var id in new List<int>(ids)) AddBuff(host, id, duration, userData); }
+        { AddBatch(host, ids, id => AddBuff(host, id, duration, userData)); }
+
+        private static void BeginAdd(IAddableBuff host)
+        { AddingDepth.TryGetValue(host, out var depth); AddingDepth[host] = depth + 1; }
+        private static void EndAdd(IAddableBuff host)
+        {
+            if (AddingDepth[host] == 1) { AddingDepth.Remove(host); CancelledAdds.Remove(host); }
+            else AddingDepth[host]--;
+        }
+        private static void AddBatch(IAddableBuff host, IList<int> ids, Action<int> add)
+        {
+            if (host == null) return;
+            BeginAdd(host); _depth++;
+            try { foreach (var id in new List<int>(ids)) { if (CancelledAdds.Contains(host)) break; add(id); } }
+            finally { EndAdd(host); if (--_depth == 0) FlushReturns(); }
+        }
 
         public static void RemoveBuff(IAddableBuff host, BuffBase buff)
         {
@@ -154,21 +196,42 @@ namespace YLFramework.BuffSystem
             finally { Pending.Add((buff, Pools[buff.GetType()])); if (--_depth == 0) FlushReturns(); }
         }
         public static void RemoveBuff(IAddableBuff host, IList<BuffBase> buffs)
-        { foreach (var buff in new List<BuffBase>(buffs)) RemoveBuff(host, buff); }
+        {
+            var selected = new List<BuffBase>(buffs);
+            RemoveMatching(host, buff => selected.Exists(value => ReferenceEquals(value, buff)));
+        }
         public static void RemoveBuff(IAddableBuff host, int id)
-        { if (host?.Buffs != null) foreach (var buff in host.Buffs.ToArray()) if (buff.BuffData.buff_id == id) RemoveBuff(host, buff); }
+        { RemoveMatching(host, buff => buff.BuffData && buff.BuffData.buff_id == id); }
         public static void RemoveBuff(IAddableBuff host, Type type)
-        { if (host?.Buffs != null) foreach (var buff in host.Buffs.ToArray()) if (buff.GetType() == type) RemoveBuff(host, buff); }
+        { RemoveMatching(host, buff => buff.GetType() == type); }
         public static void RemoveBuff<T>(IAddableBuff host) where T : BuffBase
-        { if (host?.Buffs != null) foreach (var buff in host.Buffs.ToArray()) if (buff is T) RemoveBuff(host, buff); }
+        { RemoveMatching(host, buff => buff is T); }
+
+        private static void RemoveMatching(IAddableBuff host, Predicate<BuffBase> predicate)
+        {
+            if (host?.Buffs == null) return;
+            var snapshot = new List<(BuffBase buff, int version)>();
+            foreach (var buff in host.Buffs) snapshot.Add((buff, buff.Version));
+            var errors = new List<Exception>();
+            _depth++;
+            try
+            {
+                foreach (var entry in snapshot)
+                {
+                    if (entry.version != entry.buff.Version || !ReferenceEquals(entry.buff.Owner, host) || !host.Buffs.Contains(entry.buff)) continue;
+                    try { if (predicate(entry.buff)) RemoveBuff(host, entry.buff); } catch (Exception error) { errors.Add(error); }
+                }
+            }
+            finally { if (--_depth == 0) FlushReturns(); }
+            if (errors.Count != 0) throw new AggregateException(errors);
+        }
         public static void RemoveBuff(IAddableBuff host) => CloseHost(host);
         public static void CloseHost(IAddableBuff host)
         {
             if (host == null || !Closing.Add(host)) return;
-            var errors = new List<Exception>();
-            try { if (host.Buffs != null) foreach (var buff in host.Buffs.ToArray()) try { RemoveBuff(host, buff); } catch (Exception error) { errors.Add(error); } }
+            if (AddingDepth.ContainsKey(host)) CancelledAdds.Add(host);
+            try { RemoveMatching(host, _ => true); }
             finally { Effects.Remove(host); Hosts.Remove(host); Closing.Remove(host); ReleaseIdleUpdates(); }
-            if (errors.Count != 0) throw new AggregateException(errors);
         }
 
         public static bool IsContainEffect(IAddableBuff host, int id) => host != null && Effects.TryGetValue(host, out var effects) && effects.Contains(id);

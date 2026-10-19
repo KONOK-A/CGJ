@@ -68,18 +68,7 @@ namespace YLFramework.SkillSystem
         {
             if (data != null)
             {
-                if (currentSkillConfigData != data)
-                {
-                    currentSkillConfigData = data;
-                    currentSerializedObject = null;
-                }
-
-                if (currentSerializedObject == null)
-                {
-                    currentSerializedObject = new SerializedObject(currentSkillConfigData);
-                    //script = currentSerializedObject.FindProperty("m_Script");
-                    currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
-                }
+                BindSelection(data);
 
                 currentSerializedObject.Update();
 
@@ -132,6 +121,7 @@ namespace YLFramework.SkillSystem
             }
             else
             {
+                ReleaseSelection();
                 GUILayout.FlexibleSpace();
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.FlexibleSpace();
@@ -144,7 +134,8 @@ namespace YLFramework.SkillSystem
 
 
         private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
-        private readonly Dictionary<string, CustomPropertyGUI> drawers = new()
+        private Dictionary<string, CustomPropertyGUI> drawers = new();
+        private static Dictionary<string, CustomPropertyGUI> CreateDrawers() => new()
         {
             ["id"] = new CustomSkillConfigDataIDGUI(),
             ["parent"] = new CustomSkillConfigDataParentGUI(),
@@ -154,6 +145,17 @@ namespace YLFramework.SkillSystem
         };
         private CustomPropertyGUI GetDomainDrawer(string name) => drawers.TryGetValue(name, out var drawer) ? drawer : null;
 
+        internal void BindSelection(SkillConfigData data)
+        {
+            if (currentSkillConfigData == data && currentSerializedObject != null) return;
+            ReleaseSelection();
+            if (!data) return;
+            currentSkillConfigData = data;
+            currentSerializedObject = new SerializedObject(data);
+            currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
+            drawers = CreateDrawers();
+        }
+
         internal void ReleaseSelection()
         {
             currentSerializedObject?.Dispose();
@@ -161,6 +163,7 @@ namespace YLFramework.SkillSystem
             currentSkillConfigData = null;
             currentSerializeProperty = null;
             attributes.Clear();
+            drawers.Clear();
         }
         private void OnDisable() => ReleaseSelection();
 

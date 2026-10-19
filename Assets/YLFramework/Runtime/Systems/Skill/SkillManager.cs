@@ -17,6 +17,9 @@ namespace YLFramework.SkillSystem
         private static readonly Dictionary<SkillsConfig, IDisposable> Leases = new();
         private static readonly List<IEquippableSkill> Hosts = new();
         private static readonly HashSet<IEquippableSkill> Closing = new();
+        private static readonly HashSet<SkillsConfig> RemovingConfigs = new();
+        private static readonly Dictionary<IEquippableSkill, int> AddingDepth = new();
+        private static readonly HashSet<IEquippableSkill> CancelledAdds = new();
         private static readonly Dictionary<Type, ObjectPool<SkillBase>> Pools = new();
         private static readonly List<(SkillBase skill, ObjectPool<SkillBase> pool)> Pending = new();
         private static IUnRegister _update, _fixed, _late;
@@ -34,7 +37,7 @@ namespace YLFramework.SkillSystem
         public static void AddConfig(SkillsConfig config)
         {
             if (!config) throw new ArgumentNullException(nameof(config));
-            if (_stopping) throw new InvalidOperationException("技能会话正在关闭。");
+            if (_stopping || RemovingConfigs.Contains(config)) throw new InvalidOperationException("技能配表正在关闭。");
             if (Configs.TryGetValue(config.name, out var existing))
             {
                 if (existing == config) return;
@@ -67,11 +70,32 @@ namespace YLFramework.SkillSystem
         public static void RemoveConfig(SkillsConfig config)
         {
             if (!config) return;
-            foreach (var host in Hosts.ToArray())
-                foreach (var skill in new List<SkillBase>(host.Skills.Values))
-                    if (skill.SkillData && skill.SkillData.parent == config) RemoveSkills(host, skill.SkillData.id);
-            if (Configs.TryGetValue(config.name, out var registered) && registered == config) Configs.Remove(config.name);
-            if (Leases.TryGetValue(config, out var lease)) { Leases.Remove(config); lease.Dispose(); }
+            string key = null;
+            foreach (var pair in Configs) if (ReferenceEquals(pair.Value, config)) { key = pair.Key; break; }
+            if (key == null && !Leases.ContainsKey(config) || !RemovingConfigs.Add(config)) return;
+            if (key != null) Configs.Remove(key);
+            var errors = new List<Exception>();
+            _depth++;
+            try
+            {
+                foreach (var host in Hosts.ToArray())
+                    try { ForEachOwnedSkill(host, (id, skill) => { if (skill.SkillData && skill.SkillData.parent == config) RemoveSkills(host, id); }); }
+                    catch (Exception error) { errors.Add(error); }
+            }
+            finally
+            {
+                try { if (--_depth == 0) FlushReturns(); }
+                finally
+                {
+                    if (Leases.TryGetValue(config, out var lease))
+                    {
+                        Leases.Remove(config);
+                        try { lease.Dispose(); } catch (Exception error) { errors.Add(error); }
+                    }
+                    RemovingConfigs.Remove(config);
+                }
+            }
+            if (errors.Count != 0) throw new AggregateException(errors);
         }
 
         private static SkillConfigData GetSkillInfo(int id)
@@ -92,24 +116,30 @@ namespace YLFramework.SkillSystem
         public static SkillBase AddSkills(IEquippableSkill host, int skillId)
         {
             if (host == null || host.Skills == null) throw new ArgumentException("请初始化IEquippableSkill.Skills。", nameof(host));
-            if (_stopping || Closing.Contains(host)) throw new InvalidOperationException("技能宿主正在退出。");
+            if (_stopping || Closing.Contains(host) || CancelledAdds.Contains(host)) throw new InvalidOperationException("技能宿主正在退出。");
             if (host.Skills.ContainsKey(skillId)) throw new InvalidOperationException($"技能已装备: {skillId}");
             var definition = GetSkillInfo(skillId);
             if (!definition) throw new InvalidOperationException($"技能配置不存在: {skillId}");
+            SkillsConfig owner = null;
+            foreach (var config in Configs.Values) if (config.skills.Contains(definition)) { owner = config; break; }
             var type = ResolveType(definition.skill_class_full_name, skillId, definition.parent ? definition.parent.name : "(unparented)");
             if (!Pools.TryGetValue(type, out var pool))
             {
                 pool = new ObjectPool<SkillBase>(() => (SkillBase)Activator.CreateInstance(type), reset: skill => skill.ClearRuntime());
                 Pools.Add(type, pool);
             }
-            var skill = pool.Allocate();
+            BeginAdd(host);
+            SkillBase skill = null;
             _depth++;
             try
             {
+                skill = pool.Allocate();
+                if (CancelledAdds.Contains(host) || !Configs.ContainsValue(owner)) { Pending.Add((skill, pool)); return null; }
                 skill.SkillData = UnityEngine.Object.Instantiate(definition);
-                foreach (var config in Configs.Values) if (config.skills.Contains(definition)) { skill.SkillData.parent = config; break; }
+                skill.SkillData.parent = owner;
                 skill.Releaser = host;
                 skill.ResetData();
+                if (_stopping || CancelledAdds.Contains(host) || !Configs.ContainsValue(owner)) { Pending.Add((skill, pool)); return null; }
                 host.Skills.Add(skillId, skill);
                 if (!Hosts.Contains(host)) Hosts.Add(host);
                 EnsureUpdates();
@@ -118,18 +148,57 @@ namespace YLFramework.SkillSystem
             }
             catch
             {
-                if (host.Skills.TryGetValue(skillId, out var current) && ReferenceEquals(current, skill)) host.Skills.Remove(skillId);
-                if (!Pending.Exists(entry => ReferenceEquals(entry.skill, skill))) Pending.Add((skill, pool));
+                if (skill != null)
+                {
+                    if (host.Skills.TryGetValue(skillId, out var current) && ReferenceEquals(current, skill)) host.Skills.Remove(skillId);
+                    if (!Pending.Exists(entry => ReferenceEquals(entry.skill, skill))) Pending.Add((skill, pool));
+                }
                 if (host.Skills.Count == 0) Hosts.Remove(host);
                 throw;
             }
-            finally { if (--_depth == 0) FlushReturns(); }
+            finally { EndAdd(host); if (--_depth == 0) FlushReturns(); }
         }
 
         public static void AddSkills(IEquippableSkill host, IList<int> skills)
-        { foreach (var id in new List<int>(skills)) AddSkills(host, id); }
+        {
+            if (host == null) throw new ArgumentNullException(nameof(host));
+            BeginAdd(host); _depth++;
+            try { foreach (var id in new List<int>(skills)) { if (CancelledAdds.Contains(host)) break; AddSkills(host, id); } }
+            finally { EndAdd(host); if (--_depth == 0) FlushReturns(); }
+        }
         public static void RemoveSkills(IEquippableSkill host, IList<int> skills)
-        { foreach (var id in new List<int>(skills)) RemoveSkills(host, id); }
+        {
+            var selected = new HashSet<int>(skills);
+            ForEachOwnedSkill(host, (id, _) => { if (selected.Contains(id)) RemoveSkills(host, id); });
+        }
+
+        private static void BeginAdd(IEquippableSkill host)
+        { AddingDepth.TryGetValue(host, out var depth); AddingDepth[host] = depth + 1; }
+        private static void EndAdd(IEquippableSkill host)
+        {
+            if (AddingDepth[host] == 1) { AddingDepth.Remove(host); CancelledAdds.Remove(host); }
+            else AddingDepth[host]--;
+        }
+
+        private static void ForEachOwnedSkill(IEquippableSkill host, Action<int, SkillBase> action)
+        {
+            if (host?.Skills == null) return;
+            var snapshot = new List<(int id, SkillBase skill, int version)>();
+            foreach (var pair in host.Skills) snapshot.Add((pair.Key, pair.Value, pair.Value.Version));
+            var errors = new List<Exception>();
+            _depth++;
+            try
+            {
+                foreach (var entry in snapshot)
+                {
+                    if (entry.version != entry.skill.Version || !ReferenceEquals(entry.skill.Releaser, host) ||
+                        !host.Skills.TryGetValue(entry.id, out var current) || !ReferenceEquals(current, entry.skill)) continue;
+                    try { action(entry.id, entry.skill); } catch (Exception error) { errors.Add(error); }
+                }
+            }
+            finally { if (--_depth == 0) FlushReturns(); }
+            if (errors.Count != 0) throw new AggregateException(errors);
+        }
 
         public static void RemoveSkills(IEquippableSkill host, int id)
         {
@@ -154,19 +223,13 @@ namespace YLFramework.SkillSystem
         public static void CloseHost(IEquippableSkill host)
         {
             if (host == null || !Closing.Add(host)) return;
-            var errors = new List<Exception>();
-            try
-            {
-                if (host.Skills != null)
-                    foreach (var id in new List<int>(host.Skills.Keys))
-                        try { RemoveSkills(host, id); } catch (Exception error) { errors.Add(error); }
-            }
+            if (AddingDepth.ContainsKey(host)) CancelledAdds.Add(host);
+            try { ForEachOwnedSkill(host, (id, _) => RemoveSkills(host, id)); }
             finally { Hosts.Remove(host); Closing.Remove(host); ReleaseIdleUpdates(); }
-            if (errors.Count != 0) throw new AggregateException(errors);
         }
 
         public static void InterruptAllSkill(IEquippableSkill host)
-        { if (host?.Skills != null) foreach (var skill in new List<SkillBase>(host.Skills.Values)) skill.Interrupt(); }
+        { ForEachOwnedSkill(host, (_, skill) => skill.Interrupt()); }
         public static bool IsReleasingSkills(IEquippableSkill host)
         { if (host?.Skills != null) foreach (var skill in host.Skills.Values) if (skill.IsReleasing) return true; return false; }
 

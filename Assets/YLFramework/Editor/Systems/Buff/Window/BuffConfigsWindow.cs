@@ -24,7 +24,7 @@ namespace YLFramework.BuffSystem
 
         #region 字段
 
-        private const string SELECT_GUID_KEY = "SELECT_GUID_BUFF_KEY";
+        private const string SELECT_GUID_KEY = "YLFramework.Buff.SelectedConfig";
 
 
         private GUIContent currentBuffConfigContent;

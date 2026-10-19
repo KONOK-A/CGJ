@@ -78,5 +78,20 @@ namespace YLFramework.Tests.Extensions.Domain
             source.Dispose();
             Assert.That(Call("ShouldBeDisplay", "Mail"), Is.False);
         }
+
+        [Test] public void FailedRegistrationPublishesRollbackAndPreservesBothObserverErrors()
+        {
+            var visible = false;
+            var display = (IUnRegister)Call("RegisterChanged", (Action)(() => visible = (bool)Call("ShouldBeDisplay", "Mail")));
+            var throwing = (IUnRegister)Call("RegisterChanged", (Action)(() => throw new InvalidOperationException("observer-marker")));
+            try
+            {
+                var error = Assert.Throws<TargetInvocationException>(() => Call("RegisterPath", "Mail"));
+                Assert.That(Call("ShouldBeDisplay", "Mail"), Is.False);
+                Assert.That(visible, Is.False, "回滚后的状态也必须送给已经刷新过的观察者。");
+                Assert.That(error.InnerException, Is.InstanceOf<AggregateException>());
+            }
+            finally { display.UnRegister(); throwing.UnRegister(); }
+        }
     }
 }

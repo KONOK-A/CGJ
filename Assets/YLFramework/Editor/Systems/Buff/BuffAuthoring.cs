@@ -8,16 +8,17 @@ namespace YLFramework.BuffSystem
     {
         internal static Type GetDataType(this BuffsConfig config)
         {
+            if (string.IsNullOrEmpty(config.type_script_guid)) return typeof(BuffConfigData);
             var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(config.type_script_guid));
             var type = script ? script.GetClass() : null;
-            if (type == null) return typeof(BuffConfigData);
+            if (type == null) throw new InvalidOperationException($"Buff数据类型绑定失效: {config.name}, GUID={config.type_script_guid}");
             if (!typeof(BuffConfigData).IsAssignableFrom(type) || type.IsAbstract) throw new InvalidOperationException($"Buff数据类型无效: {config.name}, {type.FullName}");
             return type;
         }
         internal static void Rename(this BuffConfigData data)
         {
-            var path = AssetDatabase.GetAssetPath(data);
-            AssetDatabase.RenameAsset(path, AssetNameTools.GetName(data.buff_id.ToString(), System.IO.Path.GetDirectoryName(path)));
+            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.buff_id.ToString(), BuffsConfigController.GetBuffConfigDataPath(data.parent));
+            data.parent.ClearCache();
         }
     }
 }

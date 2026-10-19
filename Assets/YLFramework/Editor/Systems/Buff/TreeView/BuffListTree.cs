@@ -225,9 +225,9 @@ namespace YLFramework.BuffSystem
             BuffConfigData data = buffsConfig.GetBuffData(id);
             if (data == null) return;
 
-            AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(data));
-            buffsConfig.buffs.Remove(data);
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(buffsConfig, buffsConfig.buffs, data, BuffsConfigController.GetBuffConfigDataPath(buffsConfig));
             buffsConfig.ClearCache();
+            Reload();
 
         }
 

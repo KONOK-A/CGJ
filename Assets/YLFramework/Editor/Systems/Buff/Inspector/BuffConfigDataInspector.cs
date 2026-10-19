@@ -53,19 +53,7 @@ namespace YLFramework.BuffSystem
 
             if (data != null)
             {
-                if (currentBuffConfigData != data)
-                {
-                    currentSerializedObject?.Dispose();
-                    attributes.Clear();
-                    currentBuffConfigData = data;
-                    currentSerializedObject = null;
-                }
-
-                if (currentSerializedObject == null)
-                {
-                    currentSerializedObject = new SerializedObject(currentBuffConfigData);
-                    currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
-                }
+                BindSelection(data);
 
                 currentSerializedObject.Update();
 
@@ -116,6 +104,7 @@ namespace YLFramework.BuffSystem
             }
             else
             {
+                ReleaseSelection();
                 GUILayout.FlexibleSpace();
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.FlexibleSpace();
@@ -127,7 +116,8 @@ namespace YLFramework.BuffSystem
         }
 
 
-        private readonly Dictionary<string, CustomPropertyGUI> drawers = new()
+        private Dictionary<string, CustomPropertyGUI> drawers = new();
+        private static Dictionary<string, CustomPropertyGUI> CreateDrawers() => new()
         {
             ["buff_id"] = new CustomBuffConfigDataIDGUI(),
             ["parent"] = new CustomBuffConfigDataParentGUI(),
@@ -137,6 +127,16 @@ namespace YLFramework.BuffSystem
         };
 
         private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
+        internal void BindSelection(BuffConfigData data)
+        {
+            if (currentBuffConfigData == data && currentSerializedObject != null) return;
+            ReleaseSelection();
+            if (!data) return;
+            currentBuffConfigData = data;
+            currentSerializedObject = new SerializedObject(data);
+            currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
+            drawers = CreateDrawers();
+        }
         internal void ReleaseSelection()
         {
             currentSerializedObject?.Dispose();
@@ -144,6 +144,7 @@ namespace YLFramework.BuffSystem
             currentBuffConfigData = null;
             currentSerializeProperty = null;
             attributes.Clear();
+            drawers.Clear();
         }
         private void OnDisable() => ReleaseSelection();
 

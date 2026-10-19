@@ -420,14 +420,8 @@ namespace YLFramework.MissionSystem
 
         private void CopyMissionParam(MissionParameter source )
         {
-            MissionParameter data = new MissionParameter();
+            MissionParameter data = source.CloneConfiguration();
             data.name = GetCopyParamName( source.name);
-            data.type = source.type;
-            data.des = source.des;
-            data.only_can_set_in_progress = source.only_can_set_in_progress;
-            data.only_can_set_larger = source.only_can_set_larger;
-
-            data.Value = 0;
             missionsConfig.param.Add(data);
             EditorUtility.SetDirty(missionsConfig);
 

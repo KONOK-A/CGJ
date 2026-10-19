@@ -210,9 +210,9 @@ namespace YLFramework.SkillSystem
             SkillConfigData data = skillsConfig.GetSkillConfigData(id);
             if (data == null) return;
 
-            AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(data));
-            skillsConfig.skills.Remove(data);
-            EditorUtility.SetDirty(skillsConfig);
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(skillsConfig, skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(skillsConfig));
+            skillsConfig.ClearCache();
+            Reload();
         }
 
         private int CopySkill(int id)

@@ -22,8 +22,8 @@
 | Buff | 源码候选完成，引擎待验 | `2aa7c22`；5项Buff+前19项托管通过；普通Buff/Effect作者工具辅助编译通过 |
 | Mission | 源码候选完成，引擎待验 | `9847078`；11项Mission+前24项托管通过，四项直接Bug红→绿；不改Save |
 | Excel接线 | 可选候选完成，有明确未实现范围 | 精确B `09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300`；3项真实xlsx通过 |
-| 引擎验收入口 | 已准备、辅助编译通过，未执行 | 13项普通原生用例、2项可选SO用例及公开Player消费者 |
-| 整组Review | 待本批候选提交后执行 | 仅一次独立Review及直接修复回归 |
+| 引擎验收入口 | 已准备、辅助编译通过，未执行 | 初批13项+Review15项=28项普通原生用例、2项可选SO用例及公开Player消费者 |
+| 整组Review | 已完成一次独立审查与直接修复回归，不复审 | 审查范围B0..`a7cba4c`；41项领域托管与3项xlsx最终通过 |
 
 ## 来源与许可交接
 
@@ -128,3 +128,39 @@
 | 双Play | 外部配置Disable Domain Reload，连续两次Play | 旧path token不撤新来源、handler不串会话、writer释放、三域无旧句柄 | 已备未运行 |
 | 无XF Mono/IL2CPP Low | 独立接收工程、显式类型catalog、夹具专用反射保留 | 真实构建运行PASS，资源/池/回调关闭，含Logger无XF与旧Logger共存变体 | 消费者与引用闭包已编译；构建/运行未做 |
 | 分发/回归 | owner汇总MIT版权、保留GUID、正式导出/首导入、原场景回归 | 新能力不改变原XF与既有YL契约/存档/日志/游戏数据 | 未运行 |
+
+## 唯一Review与直接修复
+
+独立审查覆盖B0到`a7cba4cccb32229fd8b7640cd75cc61daa7b3e7d`全部六提交，返回1项Critical、9项Important、1项Minor。只做本次直接修复与验证，没有再次全库审查、再次派发Reviewer或修改共享区域。
+
+| 事项 | 实际修改 | 验证层级 |
+|---|---|---|
+| 单项删除误删根/外部文件（Critical） | 局部共用`DomainAssetOwnership`先解除根列表引用；自己根内subasset对象级Undo删除；只有自己GUID目录且文件内仅一主对象才删文件；借用资产只解引用 | 真实SDK编译；三域subasset/兄弟/外部文件用例已备未跑 |
+| Stateful Drawer串条目 | 三域Inspector按选择重建默认Drawer与SerializedObject/属性缓存，释放清空；Mission脚本GUID属性每次重新取得 | 真实SDK编译；三域选择切换/释放用例已备未跑 |
+| RemoveConfig回调抛错/再入 | 先从查询注册中摘除并标记正在移除，逐宿主/实例收集错误，批次末归还池；finally释放根Lease并禁止同配置再登记 | 真实SDK编译；两域双owner异常/Lease/回调内再装备用例已备未跑 |
+| 批量操作复用旧快照 | 外层操作深度、原宿主/成员身份/代次检查覆盖批量中断与移除，异常继续收尾后汇总 | 3项真实CLR技能竞态红→绿；Buff buddy移除用例已备未跑 |
+| Single Buff复活已关宿主 | 只为在途添加维护嵌套深度及取消标记；CloseHost使整个在途/批量添加失效，结束后释放owner引用 | 真实SDK编译；Single替换回调Close用例已备未跑 |
+| 红点注册回滚UI旧值 | 失败回滚也通知最终状态，原错误与回滚通知错误均保留 | 真实托管红→绿 |
+| 非空失效数据脚本GUID降级 | 仅空GUID允许基础数据类型，非空失效明确带根名/GUID报错 | 真实SDK编译；三域坏GUID用例已备未跑 |
+| subasset ID改名误改根 | 根内subasset只改对象名，文件级改名仅限独占目录单对象主资产；清根缓存 | 真实SDK编译；三域改名/根名/兄弟保留用例已备未跑 |
+| Mission Clipboard只识别文件 | 用GlobalObjectId保留GUID+local identity，协议版本独立；先解析全部有效对象再复制 | 真实SDK编译；同文件两任务不同奖励的复制用例已备未跑 |
+| 参数复制遗漏custom_data | 配置Clone公开给作者工具复用，私有自定义数据显式JSON配置；复制清运行值/回调并产生唯一名称 | 真实JSON往返+配置复制红→绿；Editor Duplicate用例已备未跑 |
+| Buff选择偏好键共享（Minor） | 改为独立`YLFramework.Buff.SelectedConfig`，不读取/迁移旧XF值 | 源码常量与辅助编译核对，实际Editor未运行 |
+
+- 裁定：偏好键虽被评为Minor，但与当前新YL身份/不干扰旧XF的范围直接相关，因此同批一行修正；无额外框架或迁移。代价是此前未发货C候选的选择记忆不迁移，不影响配置资产。
+- 对Reviewer明确不要求的四项逐一沿用授权：不新增旧XF身份兼容（旧资产/hash需独立迁移）；不增加Save或自动发奖权威（业务负责消费奖励数据）；不伪装Mission跨sheet/全局Effect库xlsx；`Changes.After`仅保证固定B提交，其他revision需重验。没有把这些已声明边界当作未修缺陷或引擎通过。
+- `review-observer-copy-red-2`真实36通过/2失败（亮灯回滚、custom_data丢失）；`review-skill-batch-red-2`真实0通过/3失败（跨owner中断、同ID替代误删、异常中止批次）；`review-fixes-green`及最终`final-domain`真实41通过/0失败/跳过。技能竞态夹具只安排真实CLR技能、真实ObjectPool和宿主状态，不创建伪Unity对象或原生行为stub。
+- 新增原生回归15项：资产/选择/GUID/Clipboard/Duplicate 11项，退出/Lease/Single/buddy移除4项；最终`final-native-prepared`整体辅助编译通过，未执行。不要把这15项或最初13项计入Passed。
+- 已核实原生测试SDK的friend override访问级别；准备阶段的`IUnRegister`非IDisposable用法、过期辅助程序集与Buff回调public访问级别错误已修正后重编，不通过改共享API或补空类型绕过。
+
+## 最终证据与交付
+
+- 模块候选：Reddot `5c04f2b`；Logger `c2e1a0f`；Skill `10699e6`；Buff `2aa7c22`；Mission `9847078`；可选Excel/验收入口 `a7cba4c`。本检查点随最后Review代码修复同批提交；最后Hash以本分支`git log`和最终回复为准，不为自引用Hash另建docs提交。
+- 领域实际执行：`Tools/Domain/Verify-Domain.ps1 -Run final-domain`，41 passed / 0 failed / 0 skipped。
+- 真xlsx实际执行：`Tools/Domain/Verify-DomainExcel.ps1 -Run final-review-fixed -BCommit 09bec5a`，3 passed / 0 failed / 0 skipped；28+2原生用例、Player构建/运行均不在此计数。
+- 额外复用既有只读工具：`Tools/Verify-UIPanel.ps1 -Mode Pure`实跑Panel配置6/6；`-Mode PureCore`实跑Core参数/集合池28/28，均0失败/跳过。不是全工程Unity套件；未因本组仅增量docs/Git收口而无效重跑。
+- 最终辅助编译：C Runtime 0error/41warning、Editor 0/40、EditorTools 0/10；精确B组合Runtime468源/38warning、Editor148源/10warning、B Excel7源/0warning、C adapter1源/0warning、可选测试3源/0warning全部退出0。测试准备保留CS1701版本提示，不关闭诊断。
+- 最终原生/公开消费者编译与引用证据：`Temp/Domain.Offline/final-native-prepared/`；领域XML：`Temp/Domain.Offline/final-domain/results.xml`；xlsx XML、编译日志和精确B快照：`Temp/Domain.Excel/final-review-fixed/`。这些全部为Temp证据，不进Git。
+- 最终接收夹具：`Temp/Domain.PlayerProbe/final/Assets/DomainFixture`，由专属工具从已编译模板机械生成。需要独立无XF验收工程及owner配置symbol/资产/Build；本轮没有打开接收工程、运行Editor或构建Player。
+- 已核对五模块完整MIT许可与作者年份：Reddot/Logger 2025，Skill/Buff/Mission 2024；中央许可汇总与meta仍由集成owner处理。无B后端、未核实DLL、缓存或Temp证据纳入产品提交。
+- 所有原生门依上表保持未运行：Unity编译/导入、真实UI与缓存View、作者保存重开/Undo、真实Resource后端、关闭Domain Reload双Play、Logger无XF与旧包共存、Mono/IL2CPP Low、正式导出/首导入及原游戏非干扰。源码候选及离线证据不等于这些门已通过。

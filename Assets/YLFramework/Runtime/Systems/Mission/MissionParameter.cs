@@ -74,6 +74,7 @@ namespace YLFramework.MissionSystem
         [SerializeField]
         [Tooltip("自定义数据")]
         [Header("自定义数据")]
+        [JsonProperty]
         private List<string> custom_data = new List<string>();
         #endregion
 
@@ -132,7 +133,8 @@ namespace YLFramework.MissionSystem
             value = 0;
         }
 
-        internal MissionParameter CloneConfiguration()
+        /// <summary>独立复制配置与自定义数据，不复制运行值、监听或通知状态。</summary>
+        public MissionParameter CloneConfiguration()
         {
             var clone = (MissionParameter)MemberwiseClone();
             clone.value = 0;

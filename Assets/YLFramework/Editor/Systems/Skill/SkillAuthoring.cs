@@ -9,17 +9,18 @@ namespace YLFramework.SkillSystem
     {
         internal static Type GetDataType(this SkillsConfig config)
         {
+            if (string.IsNullOrEmpty(config.type_script_guid)) return typeof(SkillConfigData);
             var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(config.type_script_guid));
             var type = script ? script.GetClass() : null;
-            if (type == null) return typeof(SkillConfigData);
+            if (type == null) throw new InvalidOperationException($"技能数据类型绑定失效: {config.name}, GUID={config.type_script_guid}");
             if (!typeof(SkillConfigData).IsAssignableFrom(type) || type.IsAbstract) throw new InvalidOperationException($"技能配表数据类型无效: {config.name}, {type.FullName}");
             return type;
         }
 
         internal static void Rename(this SkillConfigData data)
         {
-            var path = AssetDatabase.GetAssetPath(data);
-            AssetDatabase.RenameAsset(path, AssetNameTools.GetName(data.id.ToString(), System.IO.Path.GetDirectoryName(path)));
+            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), SkillsConfigController.GetSkillConfigDataPath(data.parent));
+            data.parent.ClearCache();
         }
     }
 

@@ -55,6 +55,7 @@ namespace YLFramework.MissionSystem
         {
             if (data == null)
             {
+                ReleaseSelection();
                 GUILayout.FlexibleSpace();
                 GUILayout.BeginHorizontal();
                 GUILayout.FlexibleSpace();
@@ -66,22 +67,9 @@ namespace YLFramework.MissionSystem
                 return;
             }
 
-            if (currentMissionConfigData != data)
-            {
-                missionConfigSerializedObject?.Dispose();
-                attributes.Clear();
-                currentMissionConfigData = data;
-                missionConfigSerializedObject = null;
-            }
+            BindSelection(data);
 
             currentPosition = GUILayout.BeginScrollView(currentPosition);
-
-            if (missionConfigSerializedObject == null)
-            {
-                missionConfigSerializedObject = new SerializedObject(currentMissionConfigData);
-                //m_Script = missionConfigSerializedObject.FindProperty("m_Script");
-                serializedProperties = missionConfigSerializedObject.GetAllSerializedProperty();
-            }
 
             missionConfigSerializedObject.Update();
 
@@ -133,7 +121,8 @@ namespace YLFramework.MissionSystem
             GUILayout.EndScrollView();
         }
 
-        private readonly Dictionary<string, CustomPropertyGUI> drawers = new()
+        private Dictionary<string, CustomPropertyGUI> drawers = new();
+        private static Dictionary<string, CustomPropertyGUI> CreateDrawers() => new()
         {
             ["id"] = new CustomMissionConfigDataIDGUI(),
             ["parent"] = new CustomMissionConfigDataParentGUI(),
@@ -142,12 +131,25 @@ namespace YLFramework.MissionSystem
             ["mission_type_class_fullname"] = new CustomMissionConfigDataClassGUI()
         };
 
+        internal void BindSelection(MissionConfigData data)
+        {
+            if (currentMissionConfigData == data && missionConfigSerializedObject != null) return;
+            ReleaseSelection();
+            if (!data) return;
+            currentMissionConfigData = data;
+            missionConfigSerializedObject = new SerializedObject(data);
+            serializedProperties = missionConfigSerializedObject.GetAllSerializedProperty();
+            drawers = CreateDrawers();
+        }
+
         internal void ReleaseSelection()
         {
             missionConfigSerializedObject?.Dispose();
             missionConfigSerializedObject = null;
             currentMissionConfigData = null;
+            serializedProperties = null;
             attributes.Clear();
+            drawers.Clear();
         }
         private void OnDisable() => ReleaseSelection();
 

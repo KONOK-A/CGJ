@@ -92,7 +92,7 @@ namespace YLFramework.Tests.Extensions.Domain
         {
             var source = new MissionParameter { name = "amount" };
             source.Value = 9;
-            var clone = (MissionParameter)typeof(MissionParameter).GetMethod("CloneConfiguration", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(source, null);
+            var clone = source.CloneConfiguration();
             clone.Value = 2;
             Assert.That(source.Value, Is.EqualTo(9));
             var custom = typeof(MissionParameter).GetField("custom_data", BindingFlags.Instance | BindingFlags.NonPublic);

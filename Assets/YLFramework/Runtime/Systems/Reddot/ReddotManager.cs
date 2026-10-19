@@ -81,10 +81,11 @@ namespace YLFramework.ReddotSystem
             Sources[path] = count + 1;
             var registration = new Registration(path, _generation);
             try { _changed.TriggerAll(); }
-            catch
+            catch (Exception error)
             {
                 // 登记未能交付给owner，不能遗留无法归还的来源。
-                registration.Release(false);
+                try { registration.Dispose(); }
+                catch (Exception correction) { throw new AggregateException("红点登记及回滚通知失败。", error, correction); }
                 throw;
             }
             return registration;
@@ -124,15 +125,14 @@ namespace YLFramework.ReddotSystem
             private string _path;
             private readonly long _generation;
             internal Registration(string path, long generation) { _path = path; _generation = generation; }
-            public void Dispose() => Release(true);
-            internal void Release(bool notify)
+            public void Dispose()
             {
                 var path = _path;
                 _path = null;
                 if (path == null || _generation != ReddotManager._generation) return;
                 if (Sources[path] == 1) Sources.Remove(path);
                 else Sources[path]--;
-                if (notify) _changed.TriggerAll();
+                _changed.TriggerAll();
             }
         }
     }
