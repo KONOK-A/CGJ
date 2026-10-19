@@ -18,8 +18,8 @@
 |---|---|---|
 | Reddot | 源码候选完成，引擎待验 | `5c04f2b`；9项托管红→绿，Runtime辅助编译退出0/41个既有warning |
 | Logger | 源码候选完成，引擎待验 | `c2e1a0f`；6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
-| Skill | 源码候选完成，引擎待验 | 4项Skill+前15项托管通过；Runtime/Editor/EditorTools辅助编译通过 |
-| Buff | 待实施 | 保留叠加/效果及普通作者流程 |
+| Skill | 源码候选完成，引擎待验 | `10699e6`；4项Skill+前15项托管通过；Runtime/Editor/EditorTools辅助编译通过 |
+| Buff | 源码候选完成，引擎待验 | 5项Buff+前19项托管通过；普通Buff/Effect作者工具辅助编译通过 |
 | Mission | 待实施 | 保留条件/进度/奖励及普通作者流程，不改Save |
 | Excel接线 | 待核对B真实API | 开工时B交接文件不存在，不空等、不造接口 |
 | 整组Review | 待五项候选完成 | 仅一次独立Review及直接修复回归 |
@@ -67,3 +67,14 @@
 - `skill-contract-red`实跑15通过/1缺能力失败；`skill-managed`实跑19通过/0失败/跳过，含释放→完成→冷却终点、取消/中断次数、释放回调内结束代次不继续旧回调。不是原XF引擎Bug复现。辅助Runtime通过/41 warning；Editor通过/40、EditorTools通过/4。迁移中出现Editor命名空间和Drawer原类名不一致的辅助编译错误，已直接修复后重跑。
 - `SkillOwnerTests.ConfigIsCopiedAndClrHostCloseReturnsSkillAndCallbacks`已准备未运行，覆盖原配置不变、回调内Close、重入移除和跨owner池复用。实际资源Lease、Inactive/Destroy、双Play、作者资产保存重开及无静态new的多态AOT仍待引擎门。
 - `Tools/Domain/Import-DomainSources.ps1`仅用于首次精确来源机械承接，拒绝覆盖任何已存在目标，不得重跑覆盖修复；不复制meta/asmdef/DLL。PowerShell5.1首次解析因含中文的无BOM脚本失败，改为ASCII脚本后成功；未写来源文件。
+
+## Buff使用与验证
+
+- namespace为`YLFramework.BuffSystem`，保留`IAddableBuff`、`BuffBase`、Single替换/Additive叠加、永久/定时、按效果类型/ID/分类查询、owner添加/移除回调；没有重写数值战斗系统，原包本身只维护效果列表。
+- `AddConfig`借用根、`LoadConfig(ResourceSystem, ResourceAddress)`持根Lease；空效果/重复Buff ID/类型缺失明确诊断，绝不回落BuffBase。`BuffData`及每个Effect均为本次实例克隆，原配表和跨owner效果不共享可变运行态。
+- `AddBuff`/`RemoveBuff`保留静态入口；CLR退出`CloseHost`，末个Buff移除即删除效果索引和owner引用；清userData/Owner/BuffData。回调前摘除、延迟YL池归还、快照+代次检查防自删/互删/复用继续执行；同owner同ID递归添加明确失败而非无限递归。`Shutdown`收三相位、池、缓存与根Lease。
+- 普通Buff与Effect窗口、数据子类创建/复制/删除/搜索/拖排、效果分组、多列表格、效果选择/编辑、脚本绑定、项目效果分类、ID/资产改名均承接。设置和Drawer全部在Editor程序集，复用YL项目设置基类；设置路径`YLFramework/Buff`，资产根`Assets/YLFrameworkData/Buff`。Buff列表用E0，Effect分组保留领域树并补owner payload、拒绝陈旧快照/跨窗口、Undo与窗口释放；原反射打开Effect/Settings改直接API。
+- 修复配置空条目查询NRE、重复扫描Effect追加缓存、末个Buff后效果owner残留。共用C组图标Drawer补YL ResourceProject选择与真实预览；未复用XFAB。删除只清自己GUID目录，不删外部Effect/配置引用。
+- `buff-contract-red`为19通过/1缺能力失败；`buff-managed`为24通过/0失败/跳过，覆盖真实BuffBase永久/定时进度、池reset清owner/userData/时间。Runtime辅助编译0/41 warning，Editor0/40，EditorTools0/8。额外warning为迁移保留的未用字段，不关闭诊断、不把warning当阻塞。
+- `BuffOwnerTests.AdditiveSingleAndLastEffectCleanupKeepDefinitionsUnchanged`准备未运行：叠加/替换、深克隆、自身再次移除不重入、末效果索引清理、无效类型诊断。实际到期Update、inactive/destroy、跨宿主/场景/双Play、ResourceLease及Editor分组拖拽保存重开/Undo、AOT仍待引擎。
+- B交接在本模块期间出现，已读真实List/SO预览事务签名，但记录尚无候选Commit。继续Mission，不依赖未提交B代码，不修改B文件。

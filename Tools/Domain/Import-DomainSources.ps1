@@ -27,6 +27,7 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
         $text = $text.Replace(': Editor', ': UnityEditor.Editor')
         $text = $text.Replace('base(skillsConfig, skillsConfig.skills,state)', 'base(skillsConfig, () => skillsConfig.skills, state)')
         $text = $text.Replace('base(buffsConfig, buffsConfig.buffs, state)', 'base(buffsConfig, () => buffsConfig.buffs, state)')
+        $text = $text.Replace('base(buffsConfig,buffsConfig.buffs,state)', 'base(buffsConfig, () => buffsConfig.buffs, state)')
         $text = $text.Replace('base(missionsConfig, missionsConfig.missions, state)', 'base(missionsConfig, () => missionsConfig.missions, state)')
         if ($path -match 'ScriptBindController.cs$') {
             $text = $text.Replace('[InitializeOnLoadMethod]', '[MenuItem("Tools/YLFramework/' + $Module + '/Refresh Script Bindings")]')
@@ -36,6 +37,14 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
             $lines = $text -split "`n"
             # Three using lines precede the exact approved source revision.
             $text = (($lines | ForEach-Object -Begin { $i = 0 } -Process { $i++; if ($i -ne 60 -and $i -ne 64 -and ($i -lt 76 -or $i -gt 229)) { $_ } }) -join "`n")
+        }
+        if ($Module -eq 'Buff' -and $path -match 'BuffsConfigInspector.cs$') {
+            $lines = $text -split "`n"
+            $text = (($lines | ForEach-Object -Begin { $i = 0 } -Process { $i++; if ($i -ne 54 -and ($i -lt 56 -or $i -gt 63) -and ($i -lt 79 -or $i -gt 234)) { $_ } }) -join "`n")
+        }
+        if ($Module -eq 'Buff' -and $path -match 'EffectConfigsWindow.cs$') {
+            $lines = $text -split "`n"
+            $text = (($lines | ForEach-Object -Begin { $i = 0 } -Process { $i++; if ($i -lt 127 -or $i -gt 170) { $_ } }) -join "`n")
         }
     } else {
         # Move GUI annotations and Editor methods out of Runtime data types.
@@ -71,5 +80,6 @@ foreach ($file in Get-ChildItem -LiteralPath (Join-Path $source $drawers) -Recur
     if ($file.Name -match 'IconGUI.cs$|Excel.cs$') { continue }
     Import-File $file.FullName (Join-Path $editorRoot ('Drawers\' + $file.Name)) $true
 }
+if ($Module -eq 'Buff') { Import-File (Join-Path $source 'Runtime\BuffSystemSettings.cs') (Join-Path $editorRoot 'Settings\BuffSystemSettings.cs') $true }
 Copy-Item -LiteralPath (Join-Path $source 'LICENSE') -Destination (Join-Path $runtime 'LICENSE.txt')
 "Imported $Module approved source snapshot. Manual adaptations and validation are still required."

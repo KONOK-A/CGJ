@@ -1,6 +1,7 @@
 using UnityEditor;
 using YLFramework.SkillSystem;
 using YLFramework.Logging;
+using YLFramework.BuffSystem;
 
 namespace YLFramework.Editor.Domain
 {
@@ -16,7 +17,7 @@ namespace YLFramework.Editor.Domain
         private static void OnStateChanged(PlayModeStateChange state)
         {
             if (state != PlayModeStateChange.ExitingPlayMode) return;
-            try { SkillManager.Shutdown(); }
+            try { try { SkillManager.Shutdown(); } finally { BuffManager.Shutdown(); } }
             finally { LoggerManager.Disable(); }
         }
     }

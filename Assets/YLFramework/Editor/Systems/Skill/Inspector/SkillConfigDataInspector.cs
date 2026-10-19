@@ -148,7 +148,7 @@ namespace YLFramework.SkillSystem
         {
             ["id"] = new CustomSkillConfigDataIDGUI(),
             ["parent"] = new CustomSkillConfigDataParentGUI(),
-            ["icon"] = new CustomSkillConfigDataIconGUI(),
+            ["icon"] = new YLFramework.Editor.Domain.DomainResourceIconGUI(),
             ["canbe_released_at_the_same_time"] = new CustomSkillConfigDataSkillGUI(),
             ["skill_class_full_name"] = new CustomSkillConfigDataSkillClassGUI()
         };
