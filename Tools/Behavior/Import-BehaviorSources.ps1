@@ -22,7 +22,7 @@ foreach ($parent in @($runtimeParent, $editorParent, $PSScriptRoot)) {
 $runtime = Join-Path $runtimeParent $Module
 $editor = Join-Path $editorParent $Module
 if ((Test-Path -LiteralPath $runtime) -or (Test-Path -LiteralPath $editor)) { throw 'Import refuses to overwrite existing implementation. Continue incrementally with patches.' }
-if ($Module -ne 'Overlap') { throw 'This module conversion has not been reviewed yet.' }
+if ($Module -notin @('Overlap', 'CharacterController2D')) { throw 'This module conversion has not been reviewed yet.' }
 $records = @()
 foreach ($side in @('Runtime', 'Editor')) {
     $destination = if ($side -eq 'Runtime') { $runtime } else { $editor }
@@ -31,7 +31,12 @@ foreach ($side in @('Runtime', 'Editor')) {
         $relative = $file.FullName.Substring((Join-Path $source $side).Length).TrimStart('\')
         $text = [IO.File]::ReadAllText($file.FullName)
         $records += [ordered]@{ path = "$side/$($relative.Replace('\','/'))"; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-        $text = $text.Replace('XFGameFramework.Overlap', 'YLFramework.Overlap').Replace('namespace XFGameFramework', 'namespace YLFramework.Overlap').Replace('using XFGameFramework;', 'using YLFramework.Core.Editor;')
+        if ($Module -eq 'Overlap') {
+            $text = $text.Replace('XFGameFramework.Overlap', 'YLFramework.Overlap').Replace('namespace XFGameFramework', 'namespace YLFramework.Overlap').Replace('using XFGameFramework;', 'using YLFramework.Core.Editor;')
+        } elseif ($Module -eq 'CharacterController2D') {
+            $text = $text.Replace('XFGameFramework.Character.Controller2D', 'YLFramework.Character.Controller2D')
+            $text = $text.Replace('CharacterController2D.hits', 'characher.hits')
+        }
         if ($side -eq 'Runtime') {
             $lines = [Collections.Generic.List[string]]::new()
             $depth = 0
@@ -48,6 +53,7 @@ foreach ($side in @('Runtime', 'Editor')) {
             $text = $lines -join "`n"
         } else {
             $text = 'using YLFramework.Core.Editor;' + "`n" + $text
+            $text = $text.Replace(' : Editor', ' : UnityEditor.Editor')
         }
         $target = Join-Path $destination $relative
         $null = New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force
