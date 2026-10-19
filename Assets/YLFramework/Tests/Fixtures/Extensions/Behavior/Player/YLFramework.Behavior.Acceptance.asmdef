@@ -1,0 +1,13 @@
+{
+    "name": "YLFramework.Behavior.Acceptance",
+    "rootNamespace": "YLFramework.Behavior.Acceptance",
+    "references": ["YLFramework.Runtime"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

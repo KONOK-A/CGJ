@@ -28,6 +28,7 @@ namespace YLFramework.Character.Controller2D
             this.wallAngle = wallAngle;
 
             this.contactsCount = count;
+            int version = characher.PhysicsVersion;
 
             int wallIndex = 0;
 
@@ -36,6 +37,8 @@ namespace YLFramework.Character.Controller2D
             // 检测墙面
             if (isWallByContacts != characher.IsTouchWall)
                 CheckWallTouch();
+
+            if (!characher.IsPhysicsCurrent(version)) return;
 
             if(isWallByContacts)
                 UpdateWallInfo(wallIndex);
@@ -108,6 +111,7 @@ namespace YLFramework.Character.Controller2D
         private void CheckWallTouch()
         {
             if (!characher.IsCheckWall) return;
+            int version = characher.PhysicsVersion;
 
             if (Time.time - lastCheckTime < timeInterval)
                 return;
@@ -143,6 +147,7 @@ namespace YLFramework.Character.Controller2D
 
             CaculateIsWallTouch(count);
 
+            if (!characher.IsPhysicsCurrent(version)) return;
             if (characher.IsTouchWall) return;
 
             dir = -characher.left.transform.right;

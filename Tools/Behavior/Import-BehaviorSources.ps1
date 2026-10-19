@@ -22,7 +22,6 @@ foreach ($parent in @($runtimeParent, $editorParent, $PSScriptRoot)) {
 $runtime = Join-Path $runtimeParent $Module
 $editor = Join-Path $editorParent $Module
 if ((Test-Path -LiteralPath $runtime) -or (Test-Path -LiteralPath $editor)) { throw 'Import refuses to overwrite existing implementation. Continue incrementally with patches.' }
-if ($Module -notin @('Overlap', 'CharacterController2D', 'MoveablePlatform')) { throw 'This module conversion has not been reviewed yet.' }
 $records = @()
 foreach ($side in @('Runtime', 'Editor')) {
     $destination = if ($side -eq 'Runtime') { $runtime } else { $editor }
@@ -31,6 +30,10 @@ foreach ($side in @('Runtime', 'Editor')) {
         $relative = $file.FullName.Substring((Join-Path $source $side).Length).TrimStart('\')
         $text = [IO.File]::ReadAllText($file.FullName)
         $records += [ordered]@{ path = "$side/$($relative.Replace('\','/'))"; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+        if ($Module -eq 'StateMachine' -and $file.Name -in @('FSMSelectionDragger.cs', 'FSMGridBackground.cs', 'FSMRectangleSelector.cs', 'AssemblyTools.cs', 'ApplicationTool.cs')) {
+            $records[-1]['action'] = 'Not copied; public GraphView replacement or existing Foundation utility.'
+            continue
+        }
         if ($Module -eq 'Overlap') {
             $text = $text.Replace('XFGameFramework.Overlap', 'YLFramework.Overlap').Replace('namespace XFGameFramework', 'namespace YLFramework.Overlap').Replace('using XFGameFramework;', 'using YLFramework.Core.Editor;')
         } elseif ($Module -eq 'CharacterController2D') {
@@ -38,8 +41,16 @@ foreach ($side in @('Runtime', 'Editor')) {
             $text = $text.Replace('CharacterController2D.hits', 'characher.hits')
         } elseif ($Module -eq 'MoveablePlatform') {
             $text = $text.Replace('XFGameFramework.Platform2D', 'YLFramework.Platform2D')
+        } elseif ($Module -eq 'StateMachine') {
+            $text = $text.Replace('namespace XFFSM', 'namespace YLFramework.StateMachine').Replace('using XFFSM;', 'using YLFramework.StateMachine;')
+            $text = $text.Replace('AssemblyTools.GetType', 'YLFramework.Foundation.AssemblyTool.GetType').Replace('AssemblyTools.GetAllStatesType', 'StateMachineEditorTools.GetAllStatesType')
+            $text = $text.Replace('ApplicationTool.isPlaying', 'YLFramework.Foundation.ApplicationTool.isPlaying')
+            $text = $text.Replace('PlayerPrefs.', 'EditorPrefs.').Replace('"XFFSM', '"YL.AssetFSM')
+            $text = $text.Replace('Assets/Create/XFKT/XFFSM/', 'Assets/Create/YLFramework/Asset FSM/').Replace('Window/XFKT/XFFSM/', 'Window/YLFramework/Asset FSM/')
+            $text = $text.Replace('class XFFSMMenu', 'class StateMachineMenu')
+            if ($file.Name -eq 'XFFSMMenu.cs') { $relative = 'StateMachineMenu.cs' }
         }
-        if ($side -eq 'Runtime') {
+        if ($side -eq 'Runtime' -and $Module -ne 'StateMachine') {
             $lines = [Collections.Generic.List[string]]::new()
             $depth = 0
             foreach ($line in ($text -split '\r?\n')) {
@@ -53,17 +64,19 @@ foreach ($side in @('Runtime', 'Editor')) {
                 $lines.Add($line)
             }
             $text = $lines -join "`n"
-        } else {
+        } elseif ($side -eq 'Editor') {
             $text = 'using YLFramework.Core.Editor;' + "`n" + $text
             $text = $text.Replace(' : Editor', ' : UnityEditor.Editor')
+        } else {
+            $text = [regex]::Replace($text, '(?m)^using UnityEditor;\r?\n', '')
         }
         $target = Join-Path $destination $relative
         $null = New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force
         [IO.File]::WriteAllText($target, ($text.TrimEnd() + "`n"), [Text.UTF8Encoding]::new($false))
     }
 }
-$license = Join-Path $source 'LICENSE'
-$records += [ordered]@{ path = 'LICENSE'; sha256 = (Get-FileHash -LiteralPath $license -Algorithm SHA256).Hash.ToLowerInvariant() }
+$license = Join-Path $source $(if ($Module -eq 'StateMachine') { 'LICENSE.md' } else { 'LICENSE' })
+$records += [ordered]@{ path = [IO.Path]::GetFileName($license); sha256 = (Get-FileHash -LiteralPath $license -Algorithm SHA256).Hash.ToLowerInvariant() }
 [IO.File]::WriteAllText((Join-Path $runtime 'ThirdPartyNotices.txt'), "Source: $($identity[0]); version $($identity[2]); revision $($identity[1])`nAdapted for YLFramework. Original algorithms retained; local changes tracked in git.`n`n" + [IO.File]::ReadAllText($license), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot "$Module.source.json"), ([ordered]@{ package = $identity[0]; version = $identity[2]; revision = $identity[1]; sourceRoot = $source; files = $records } | ConvertTo-Json -Depth 6) + "`n", [Text.UTF8Encoding]::new($false))
 "Imported $Module without original .meta, asmdef, logos, demos or binaries. Source manifest: Tools/Behavior/$Module.source.json"

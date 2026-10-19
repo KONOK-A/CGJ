@@ -22,7 +22,17 @@ namespace YLFramework.Character.Controller2D
 
         internal readonly ContactPoint2D[] contacts = new ContactPoint2D[10];
         private bool colliderReady;
-        private bool HasValidColliders => colliderReady && top && bottom && left && right;
+        private bool HasValidColliders => colliderReady && IsUsable(top) && IsUsable(bottom) && IsUsable(left) && IsUsable(right);
+        internal int PhysicsVersion { get; private set; }
+        internal bool IsPhysicsCurrent(int version) => this && isActiveAndEnabled && HasValidColliders && version == PhysicsVersion;
+        private static bool IsUsable(Collider2D collider) => collider && collider.enabled && !collider.isTrigger && collider.gameObject.activeInHierarchy;
+
+        private bool EnsureColliders()
+        {
+            if (HasValidColliders) return true;
+            if (colliderReady) { colliderReady = false; ReleaseGravityAndResetState(); }
+            return false;
+        }
 
         private int contactCount;
 
@@ -335,11 +345,12 @@ namespace YLFramework.Character.Controller2D
 
         private void FixedUpdate()
         {
-            if (!HasValidColliders) return;
+            if (!EnsureColliders()) return;
+            int version = PhysicsVersion;
             UpdateSpeedVertical();
-            if (!isActiveAndEnabled) return;
+            if (!IsPhysicsCurrent(version)) return;
             Move();
-            if (!isActiveAndEnabled) return;
+            if (!IsPhysicsCurrent(version)) return;
             JumpHeld();
         }
 
@@ -351,8 +362,12 @@ namespace YLFramework.Character.Controller2D
         }
 
         private void OnDisable()
+            => ReleaseGravityAndResetState();
+
+        private void ReleaseGravityAndResetState()
         {
-            Rigidbody.gravityScale = rigidbodyGravityScale;
+            PhysicsVersion++;
+            if (Rigidbody) Rigidbody.gravityScale = rigidbodyGravityScale;
             // 停用不发送额外业务事件，也不把上次输入或接触缓存带入下一次启用。
             moveDelta = Vector2.zero;
             velocity = Vector2.zero;
@@ -371,7 +386,7 @@ namespace YLFramework.Character.Controller2D
 
         private void Update()
         {
-            if (!HasValidColliders) return;
+            if (!EnsureColliders()) return;
             if (autoRotation)
                 // 修改当前人物旋转角度
                 AutoRotation();
@@ -426,9 +441,11 @@ namespace YLFramework.Character.Controller2D
 
         private void Move()
         {
+            int version = PhysicsVersion;
             if (Mathf.Abs(moveDelta.x) <= 0.01f && Mathf.Abs(moveDelta.y) <= 0.01f)
             {
                 Velocity = Vector2.zero;
+                if (!IsPhysicsCurrent(version)) return;
                 moveDelta = Vector2.zero;
                 lastPosition = Rigidbody.position;
                 return;
@@ -438,6 +455,7 @@ namespace YLFramework.Character.Controller2D
             Rigidbody.MovePosition(Rigidbody.position + moveDelta);
 
             Velocity = (Rigidbody.position - lastPosition) / Time.fixedDeltaTime;
+            if (!IsPhysicsCurrent(version)) return;
 
             lastPosition = Rigidbody.position;
             moveDelta = Vector2.zero;
@@ -454,6 +472,7 @@ namespace YLFramework.Character.Controller2D
 
                 int count = Rigidbody.GetContacts(contacts);
                 checkTop.Check(contacts, this, count,topAngle);
+                if (!IsPhysicsCurrent(version)) return;
 
                 if (checkTop.IsTopByContact && speedVertical > 0)
                     ResetSpeedVertical();
@@ -477,15 +496,18 @@ namespace YLFramework.Character.Controller2D
 
             if (CurrentJumpCount >= MaxJumpCount)
                 return;
+            int version = PhysicsVersion;
             CurrentJumpCount++;
-            if (!isActiveAndEnabled) return;
+            if (!IsPhysicsCurrent(version)) return;
 
             speedVertical = speed;
             if (speedVertical > 0)
                 IsGrounded = false;
+            if (!IsPhysicsCurrent(version)) return;
 
             // 重置速度
             Velocity = Vector2.zero;
+            if (!IsPhysicsCurrent(version)) return;
             moveDelta = Vector2.zero;
             lastPosition = Rigidbody.position;
         }
@@ -501,7 +523,9 @@ namespace YLFramework.Character.Controller2D
             if (CurrentJumpCount >= MaxJumpCount)
                 return;
 
+            int version = PhysicsVersion;
             Jump(speed);
+            if (!IsPhysicsCurrent(version)) return;
             jumping = true;
 
             if (jumpAbortSpeedReduction < 0)
@@ -573,6 +597,7 @@ namespace YLFramework.Character.Controller2D
         /// <summary>重新选择本刚体的四向碰撞体；运行时添加或移除碰撞体后显式调用。</summary>
         public bool RefreshColliders()
         {
+            PhysicsVersion++;
             top = bottom = left = right = null;
             List<Collider2D> colliders = new List<Collider2D>();
             Rigidbody.GetAttachedColliders(colliders);
@@ -580,8 +605,7 @@ namespace YLFramework.Character.Controller2D
             for (int i = 0; i < colliders.Count; i++)
             {
                 Collider2D collider = colliders[i];
-                if (collider == null) continue;
-                if (collider.isTrigger) continue;
+                if (!IsUsable(collider)) continue;
 
                 bool iscollider2d = !(collider is BoxCollider2D);
                 bool iscirclecollider2d = !(collider is CircleCollider2D);
@@ -627,13 +651,17 @@ namespace YLFramework.Character.Controller2D
 
             colliderReady = left && right && bottom && top;
             if (!colliderReady)
+            {
+                ReleaseGravityAndResetState();
                 Debug.LogError($"{nameof(CharacterController2D)} on '{name}': Rigidbody2D requires an attached, non-trigger BoxCollider2D, CircleCollider2D or CapsuleCollider2D. Add one and call RefreshColliders().", this);
+            }
             return colliderReady;
 
         }
 
         private void PhysicsCheck()
         {
+            int version = PhysicsVersion;
             // 获取与当前刚体接触的游戏物体
 
             if (IsCheckGround || IsCheckWall || IsCheckTop)
@@ -651,7 +679,7 @@ namespace YLFramework.Character.Controller2D
                     CurrentJumpCount = 0;
             }
 
-            if (!isActiveAndEnabled) return;
+            if (!IsPhysicsCurrent(version)) return;
 
 
             if (IsCheckWall)
@@ -662,7 +690,7 @@ namespace YLFramework.Character.Controller2D
                 checkWall.Check(contacts, this, contactCount, wallAngle);
             }
 
-            if (!isActiveAndEnabled) return;
+            if (!IsPhysicsCurrent(version)) return;
 
             if (IsCheckTop)
             {
@@ -711,7 +739,7 @@ namespace YLFramework.Character.Controller2D
         internal int Raycast(BoxCollider2D box, Vector2 dir)
         {
             Vector2 point = box.bounds.center;
-            Vector2 size = box.bounds.size;
+            Vector2 size = CharacterMotorMath.ScaledColliderSize(box.size, box.transform.lossyScale);
             float angle = box.transform.eulerAngles.z;
 
 #if UNITY_6000_0_OR_NEWER
@@ -726,7 +754,7 @@ namespace YLFramework.Character.Controller2D
         internal int Raycast(CapsuleCollider2D capsule, Vector2 dir)
         {
             Vector2 point = capsule.bounds.center;
-            Vector2 size = capsule.bounds.size;
+            Vector2 size = CharacterMotorMath.ScaledColliderSize(capsule.size, capsule.transform.lossyScale);
             float angle = capsule.transform.eulerAngles.z;
             CapsuleDirection2D d = capsule.direction;
 

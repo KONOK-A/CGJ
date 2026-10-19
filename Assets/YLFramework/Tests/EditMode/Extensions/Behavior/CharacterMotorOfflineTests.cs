@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
@@ -32,7 +33,9 @@ namespace YLFramework.Tests.Extensions.Behavior
         {
             var type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Character.Controller2D.CharacterMotorMath")).FirstOrDefault(t => t != null);
             Assert.That(type, Is.Not.Null, "Managed motor calculations are missing.");
-            return type.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).Invoke(null, args);
+            var method = type.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, name + " is missing.");
+            return method.Invoke(null, args);
         }
 
         [TestCase(0f, -9.81f, 1f, 0.02f, 20f, -0.1962f)]
@@ -51,6 +54,14 @@ namespace YLFramework.Tests.Extensions.Behavior
         public void WallOnlyBlocksMovementIntoItsNormal(float movement, float normal, bool expected)
         {
             Assert.That(MathCall("BlocksHorizontal", movement, normal), Is.EqualTo(expected));
+        }
+
+        [TestCase(1f, 2f, 1f, 1f, 1f, 2f)]
+        [TestCase(1f, 2f, -2f, 3f, 2f, 6f)]
+        [TestCase(2f, 1f, -1f, -1f, 2f, 1f)]
+        public void CastDimensionsUseLocalSizeAndAbsoluteScaleWithoutAabbRotation(float x, float y, float sx, float sy, float expectedX, float expectedY)
+        {
+            Assert.That(MathCall("ScaledColliderSize", new Vector2(x, y), new Vector2(sx, sy)), Is.EqualTo(new Vector2(expectedX, expectedY)));
         }
     }
 }

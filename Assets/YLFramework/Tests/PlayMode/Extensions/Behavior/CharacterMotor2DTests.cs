@@ -92,6 +92,86 @@ namespace YLFramework.Tests.Extensions.Behavior
             Assert.That(motor.RefreshColliders(), Is.True);
         }
 
+        [Test]
+        public void FailedColliderRefreshReturnsGravityAndDropsOldInputBeforeRecovery()
+        {
+            var motor = Motor(new Vector3(14000, 14500));
+            var fixedUpdate = typeof(CharacterController2D).GetMethod("FixedUpdate", BindingFlags.Instance | BindingFlags.NonPublic);
+            fixedUpdate.Invoke(motor, null);
+            Assert.That(motor.Rigidbody.gravityScale, Is.Zero);
+            motor.Move(Vector2.right);
+            var collider = motor.GetComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Rigidbody2D requires an attached"));
+            Assert.That(motor.RefreshColliders(), Is.False);
+            Assert.That(motor.Rigidbody.gravityScale, Is.EqualTo(2));
+            Assert.That(typeof(CharacterController2D).GetField("moveDelta", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(motor), Is.EqualTo(Vector2.zero));
+            Assert.That(motor.IsGrounded || motor.IsTop || motor.IsTouchWall, Is.False);
+            collider.isTrigger = false;
+            Assert.That(motor.RefreshColliders(), Is.True);
+            fixedUpdate.Invoke(motor, null);
+            Assert.That(motor.Rigidbody.gravityScale, Is.Zero);
+        }
+
+        [Test]
+        public void DisableFromRightWallCallbackDoesNotContinueIntoLeftWallQuery()
+        {
+            var center = new Vector3(14000, 14600);
+            var motor = Motor(center);
+            motor.IsCheckWall = true;
+            motor.checkLayerMask = 1;
+            foreach (float sign in new[] { -1f, 1f })
+                NewObject("Wall", center + Vector3.right * sign * 0.75f).AddComponent<BoxCollider2D>().size = new Vector2(0.5f, 6);
+            int notifications = 0;
+            motor.onTouchWallValueChange = new BoolUnityEvent();
+            motor.onTouchWallValueChange.AddListener(value => { if (value) { notifications++; motor.enabled = false; } });
+            var wall = new CheckWall();
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            typeof(CheckWall).GetField("characher", flags).SetValue(wall, motor);
+            typeof(CheckWall).GetField("wallAngle", flags).SetValue(wall, 60f);
+            typeof(CheckWall).GetField("lastCheckTime", flags).SetValue(wall, float.NegativeInfinity);
+            Physics2D.SyncTransforms();
+            typeof(CheckWall).GetMethod("CheckWallTouch", flags).Invoke(wall, null);
+            Assert.That(notifications, Is.EqualTo(1));
+            Assert.That(motor.IsTouchWall, Is.False);
+            Assert.That(motor.WallInfo.collider, Is.Null);
+        }
+
+        [TestCase(0f, false)]
+        [TestCase(30f, false)]
+        [TestCase(90f, false)]
+        [TestCase(0f, true)]
+        [TestCase(30f, true)]
+        [TestCase(90f, true)]
+        public void RotatedBoxAndCapsuleCastTheActualShapeRatherThanItsRotatedAabb(float angle, bool capsule)
+        {
+            var center = new Vector3(14000, 14700);
+            var obj = NewObject("RotatedMotor", center);
+            obj.SetActive(false);
+            var body = obj.AddComponent<Rigidbody2D>();
+            body.gravityScale = 0;
+            Collider2D shape;
+            if (capsule) { var c = obj.AddComponent<CapsuleCollider2D>(); c.size = new Vector2(1, 2); shape = c; }
+            else { var c = obj.AddComponent<BoxCollider2D>(); c.size = new Vector2(1, 2); shape = c; }
+            var motor = obj.AddComponent<CharacterController2D>();
+            obj.SetActive(true);
+            motor.checkLayerMask = 1;
+            body.rotation = angle;
+            Physics2D.SyncTransforms();
+            Vector2 surface = shape.ClosestPoint((Vector2)center + Vector2.up * 100);
+            var obstacle = NewObject("QueryObstacle", surface + Vector2.up * 0.04f).AddComponent<BoxCollider2D>();
+            obstacle.size = Vector2.one * 0.02f;
+            Physics2D.SyncTransforms();
+            int count = capsule ? motor.Raycast((CapsuleCollider2D)shape, Vector2.up) : motor.Raycast((BoxCollider2D)shape, Vector2.up);
+            bool found = false;
+            for (int i = 0; i < count; i++) found |= motor.hits[i].collider == obstacle;
+            Assert.That(found, Is.True, "near obstacle is within the original 0.1 query distance");
+            obstacle.transform.position = surface + Vector2.up * 0.25f;
+            Physics2D.SyncTransforms();
+            count = capsule ? motor.Raycast((CapsuleCollider2D)shape, Vector2.up) : motor.Raycast((BoxCollider2D)shape, Vector2.up);
+            for (int i = 0; i < count; i++) Assert.That(motor.hits[i].collider, Is.Not.SameAs(obstacle), "outside the true shape and query distance");
+        }
+
         [UnityTest]
         public IEnumerator GroundAndMultipleAttachedCollidersSurviveDisableEnable()
         {
