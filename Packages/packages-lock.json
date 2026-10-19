@@ -438,11 +438,10 @@
       "hash": "743876d52c5fe636effc0b63c34bd261d6cad243"
     },
     "com.xfkj.xfgameframework.loggersystem": {
-      "version": "https://gitee.com/xianfengkeji/xfgame-framework.logger-system.git",
+      "version": "file:com.xfkj.xfgameframework.loggersystem",
       "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "0ebbebeb4b961d6fb67670d22cad819856969c3a"
+      "source": "embedded",
+      "dependencies": {}
     },
     "com.xfkj.xfgameframework.missionsystem": {
       "version": "https://gitee.com/xianfengkeji/xfgame-framework.mission-system.git",

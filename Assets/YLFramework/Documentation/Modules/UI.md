@@ -2,7 +2,7 @@
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
-> 当前状态：已整合到 `integration/xf-yl`，但真实 Unity 输入门禁失败，阶段为 **Blocked，未验收完成**。当前 `2022.3.62f3c1` 不允许同 GameObject 的第二个 CanvasGroup，与下述已确认的独立门禁结构冲突；不得按已可用能力交付。未获结构调整授权前，不覆盖业务字段、不改变不支持范围，也不继续依赖该结论的场景、Profiler 和 IL2CPP 验收。逐项结果及剩余失败记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`。
+> 当前状态：已整合到 `integration/xf-yl`，完成约定的真实 Unity 编译、输入后端、资产迁移、场景退出及 Windows64 IL2CPP 验收。具体版本、稳定证据与未验证范围记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`；通过范围不外推到其他 Unity/包版本、平台或自定义输入处理。
 
 ## 职责与依赖
 
@@ -119,7 +119,7 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 
 Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 CanvasScaler 与 `AutomaticAdaptationCanvasScaler`，根不再保存另一份配置。层 0 也必须明确配置，没有 UIRootContext、缺层、外根映射、损坏的必需组件或遮罩都不能运行时补齐。已有 Panel 的 Attach 只认真实祖先根，不搬去默认根，也不加入资源 Single 合流范围。
 
-主工作区已显式迁移并保存以下资产；身份、配置默认及 Variant 保存重载/实例化检查通过，不代表完整模板的运行时排序和输入已通过。需要迁移时仍显式调用：
+主工作区已显式迁移并保存以下资产，完成身份、配置默认、Variant 保存重载/实例化及真实排序/输入回归。其他尚未迁移的项目需要显式调用：
 
 1. `YLFramework.Editor.UIPanelAssetMigration.ValidateAssets()`，菜单 `YLFramework/Core/UI Panel/核验资产迁移`。
 2. `MigrateAssets()`，菜单 `YLFramework/Core/UI Panel/执行资产迁移`。
@@ -134,13 +134,15 @@ Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 Ca
 
 ## 输入边界
 
-本节为需要兑现的既定合同，不是当前引擎已通过的声明。实测普通业务 CanvasGroup（`ignoreParentGroups=false`）已占用组件位置时，第二个自有组也会添加失败；旧会话延迟销毁的组还会影响同帧复用重装。此问题超出仅 earlier ignoreParentGroups 的已允许安全失败组合，不能把它直接改称新的不支持范围来通过验收。
+本节描述标准 UGUI 输入合同，已在实施计划列明的实际版本和关口回归，不能由字段或辅助编译外推兼容性。当前引擎一个 GameObject 只能有一个 CanvasGroup；不再尝试追加第二组，也不延迟销毁后同帧争用该组件槽。
 
-标准 UGUI 有效阻挡与业务原始值相互独立：每个所属 Canvas 有框架 ICanvasRaycastFilter，每个所属 Selectable 有自有 CanvasGroup，始终按最近 Panel 划界。不会保存/恢复业务 `interactable/enabled/raycastTarget/blocksRaycasts`，同值写入也不会丢失。
+标准 UGUI 有效阻挡与业务原始值相互独立：每个所属 Canvas 有框架 ICanvasRaycastFilter，每个所属 Selectable 使用独立自有门禁，始终按最近 Panel 划界。没有业务组时保留 self group，已有业务组时才使用自有祖先隔离节点。不会保存/恢复业务 `interactable/enabled/raycastTarget/blocksRaycasts`，同值写入也不会丢失。
 
-新增组和过滤组件是可观察的框架门禁，不改业务 CanvasGroup 的 alpha、交互、raycast 或 ignoreParentGroups。祖先 ignoreParentGroups、嵌套 overrideSorting Canvas 与独立子 Panel 分别校验；同对象更早的 ignoreParentGroups 按实际 UGUI 有效性判断，不一概拒绝可隔离的组合。若真实布局跳过自有门禁，明确诊断并丢弃该会话，绝不退回覆盖业务字段。
+新增组和过滤组件是可观察的框架门禁，不改业务 CanvasGroup 的 alpha、交互、raycast 或 ignoreParentGroups。自有组由物理实例上的绑定标记识别，旧会话不能中性化新会话接管的组；关闭只释放绑定，不同帧 Destroy/Add。祖先 ignoreParentGroups、嵌套 overrideSorting Canvas 与独立子 Panel 分别校验；若更近业务组确实跳过自有祖先门禁，明确诊断并丢弃该会话，绝不退回覆盖业务字段。
 
-业务 `GetComponents<CanvasGroup>()` 会观察到框架组；运行期新增业务组时，`GetComponent<CanvasGroup>()` 也可能先返回更早的框架组。业务应持有自己创建/序列化绑定的组引用，不把“第一个组”或组件总数当成业务所有权。框架不通过隐藏组件、禁止业务多组或修改业务组值消除这一可观察性。
+业务应持有自己创建/序列化绑定的组引用，不把“第一个组”或组件总数当成业务所有权。已有业务组的对象仍只有原来的那一组；引擎不能运行时 Add 第二组，业务组应在接管前配置，不能把框架自有组件当作业务数据。隔离节点不加 Canvas、Graphic 或输入 handler；坐标节点保留原父坐标系和控件局部参数。自动布局通过真实槽位及计算/控制接口桥接，保持文本、Fitter、缩放与重建顺序，不是复制一次尺寸或强制拉伸控件。Panel 根自身需要隔离时，换层移动自有外壳并同步坐标基准，仍先校验缺层和排序溢出。
+
+布局桥接按原生横纵计算/控制阶段处理 H/V/Grid（包括派生 H/V）、Text/ContentSizeFitter 和 ignoreLayout。只读访问 `RectTransform.drivenProperties`，`link.xml` 仅保留此 getter；不会写原生 driven flags 或完整 Preserve 引擎程序集。每次可能触发原生回调的写入后复核绑定代次与父级，清理也只处理本轮自有子节点快照，不把回调新挂入的业务子树连壳销毁。
 
 独立子 Panel 不能嵌在另一 Panel 的 Selectable 子树内：父 Selectable 的框架组会向下影响子控件，而隔离该组又会跳过业务祖先组。请将独立子 Panel 移到该控件外的同级容器；不通过临时改写子树或恢复旧业务快照伪造支持。
 
@@ -148,7 +150,7 @@ Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 Ca
 
 设备移除或原模块结束时，即使模块已清空/回收 eventData，也需按固定原设备与会话收尾原控件，不能只删除记录。此路径不再改写池化事件镜像，后来的主手势不会被旧设备收尾；仅 eventData 被复用成其他活动手势时直接丢弃旧记录。指针移除停止按压/拖选，不强行结束仍能由键盘继续的文本编辑；因 Modal/隐藏需要失焦时，仍由独立的合法 Deselect/EndEdit 路径完成。
 
-Input System 适配集中在 InputSystemBridge，验证私有字段布局并对值类型逐层写回，保留物理 isPressed/framePressState/pressTime。布局或 IL2CPP 元数据不匹配是明确失败，不假成功；不预先堆 link.xml。真实 Editor/Player 门通过后才可称其已验证。
+Input System 适配集中在 InputSystemBridge，验证私有字段布局并对值类型逐层写回，保留物理 isPressed/framePressState/pressTime。布局或 IL2CPP 元数据不匹配是明确失败，不假成功；不预先堆 link.xml。当前约定的真实 Editor/Player 门已通过，版本或裁剪方式变化后仍需重验。
 
 EventSystem 只借用已有有效外部系统；缺失时自建，Both 优先 Input System，Legacy-only 使用 Standalone，New-only 不静默退 Legacy；最后有效根退出释放自建对象。多系统/不可用模块有诊断，不改外部寿命。自定义 raw handler、业务 ActionMap、Physics/world-space 非 UI 输入仍由业务查询 Panel 状态或自行管理，不在标准 UGUI 取消承诺内。
 
@@ -168,10 +170,12 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 离线复跑：`pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`、`PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 Player/Editor 语法，不检查绑定。输出全部在当前 worktree `Temp/UI.Panel.Offline`，直接使用真实引用和产品源码。辅助编译不复现 Unity 导入、原生状态或精确包 API，不等于 Unity 编译、测试、Player 通过。
 
-主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 声明不同，未修改依赖、锁或共享 PackageCache。原离线八份 General 排除仅属于模板 API 限制；真实 Unity 已编译完整 General 源码，没有沿用排除条件。
+主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 既有声明不同，未顺手修正或升级；原离线八份 General 排除仅属于模板 API 限制，真实 Unity 已编译完整 General 源码，没有沿用排除条件。唯一依赖维护变化是将原 XF LoggerSystem `1.0.1` 官方 Embed，修复禁 Domain Reload 的自身 handler 归还和 static writer/instance 生命周期；版本、来源、许可证与原身份保留，lock 由 Unity 更新，不修改共享 PackageCache，也不增加 Core→XF 依赖。
 
-验收顺序仍为：实际包/程序集版本 → Unity 导入及上述资产迁移/meta/实例化 → Core EditMode/PlayMode 与真实模块输入 → Windows64 IL2CPP 捕获门 → 完整 Core、Help/导出、真实 Resource 租约集成及 UIAcceptance。当前 Core EditMode/Editor 已通过，完整 Core PlayMode 实际执行后存在失败；Both 下两类模块确实运行，但输入门禁未通过，Legacy-only/New-only 尚未切换验证。连续运行、退出复位、无 Domain Reload、原游戏共存、Profiler 和 Windows64 IL2CPP 尚无本轮通过证据。历史记录与较小通过子集均不能替代这些门禁。
+已完成的关口包括实际包/程序集版本、Unity 导入及资产迁移/meta/实例化、完整 Core EditMode/PlayMode、Both/Legacy-only/New-only 的真实编译宏与模块行为、Help/导出和三个分别执行的真实 Resource 租约集成、正常退出及连续 NoDomain 两轮、原游戏 Editor 共存、代表性 Profiler 测量和 Windows64 IL2CPP UIAcceptance。输入切换通过原生重启生效，最后恢复原 Both；Legacy-only 启动时若询问是否启用新后端，应选择 No，而不是将模式改回 Both。具体执行数和证据只在实施计划维护。
 
-`UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收` 准备正式 UIAcceptance 场景的 IL2CPP/Medium stripping 构建，输出 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，恢复原设置且不自动运行。检查 `UI_PANEL_NATIVE_CAPTURE_GATE_REACHED`、完整 PLAYER_PASS/QUIT_PENDING_PASS 与无相关异常，不能只看退出码或单个标记。此入口本轮未运行；Scrollbar/InputField/多指的完整引擎套件也必须执行，不能由较小 Player 门替代。
+`UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收` 准备正式 UIAcceptance 场景的 IL2CPP/Medium stripping 构建，输出 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，恢复原设置且不自动运行。本轮已正式构建并图形运行，检查完整 READY、PLAYER_READY_FOR_QUIT、PLAYER_PASS/QUIT_PENDING_PASS、退出码及相关异常；`UI_PANEL_NATIVE_CAPTURE_GATE_REACHED` 只是中间标记。Scrollbar/InputField/多指的完整矩阵由真实 Editor 套件验证，不由较小 Player 门替代；本轮不声称原游戏或单后端 Player 全矩阵已通过。
+
+Unity 原生重启会清理工程 Temp，不能依赖旧路径保留交付证据。本轮结果和完整 Player 已复制到实施计划列明的工程外稳定目录。构建的可选 MCP 空程序集警告与 Player 原生分配遥测均保留；未建立零原生泄漏或特定性能预算达标的结论。
 
 `Tests/Core/Acceptance/UIAcceptance.unity` 使用正式 Prefab。连续 Play 每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；不在两轮之间编译或重载。原 XF 游戏、Resource 8.10 实现与 Resource Workbench 不属于本重构；集成以真实共同祖先和其最终代码处理，不使用旧 Apply。

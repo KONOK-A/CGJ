@@ -52,11 +52,18 @@ namespace YLFramework.Core.Tests
         private IEnumerator Start()
         {
             Result = "RUNNING";
-            var routine = Run();
-            while (true)
+            var routines = new System.Collections.Generic.Stack<IEnumerator>();
+            routines.Push(Run());
+            while (routines.Count != 0)
             {
                 bool next;
-                try { next = routine.MoveNext(); }
+                object current;
+                try
+                {
+                    var routine = routines.Peek();
+                    next = routine.MoveNext();
+                    current = next ? routine.Current : null;
+                }
                 catch (Exception error)
                 {
                     Result = "FAILED: " + error;
@@ -65,8 +72,9 @@ namespace YLFramework.Core.Tests
                     if (!Application.isEditor) Application.Quit(1);
                     yield break;
                 }
-                if (!next) break;
-                yield return routine.Current;
+                if (!next) { routines.Pop(); continue; }
+                if (current is IEnumerator nested && !(current is CustomYieldInstruction)) routines.Push(nested);
+                else yield return current;
             }
         }
 
@@ -268,13 +276,26 @@ namespace YLFramework.Core.Tests
         // 同一个入口在 Editor 和 Windows64 IL2CPP 中运行；私有指针布局不匹配必须明确失败。
         private IEnumerator VerifyNativeCaptureGate()
         {
-            var control = new GameObject("UIAcceptance.NativeCapture", typeof(RectTransform), typeof(Image), typeof(Button), typeof(UIPanelAcceptancePointerProbe));
-            control.transform.SetParent(first.transform, false);
+            var container = new GameObject("UIAcceptance.NativeLayout", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            container.transform.SetParent(first.transform, false);
+            ((RectTransform)container.transform).sizeDelta = new Vector2(180, 90);
+            var layout = container.GetComponent<HorizontalLayoutGroup>();
+            layout.childControlWidth = layout.childControlHeight = false;
+            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+            layout.childScaleWidth = layout.childScaleHeight = true;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            var control = new GameObject("UIAcceptance.NativeCapture", typeof(RectTransform), typeof(Image), typeof(Button), typeof(CanvasGroup), typeof(UIPanelAcceptancePointerProbe));
+            control.transform.SetParent(container.transform, false);
             var rect = (RectTransform)control.transform;
             rect.sizeDelta = new Vector2(120, 70);
+            rect.localScale = new Vector3(.9f, 1.1f, 1);
+            var business = control.GetComponent<CanvasGroup>();
+            business.alpha = .65f;
             var probe = control.GetComponent<UIPanelAcceptancePointerProbe>();
             yield return null; yield return null;
             Canvas.ForceUpdateCanvases();
+            Check(rect.sizeDelta == new Vector2(120, 70) && control.GetComponents<CanvasGroup>().Length == 1,
+                "native layout and readonly driven getter preserve the business control");
             var point = RectTransformUtility.WorldToScreenPoint(EventCamera, rect.position);
             for (int button = 0; button < 3; button++)
             {
@@ -284,6 +305,8 @@ namespace YLFramework.Core.Tests
                     new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true, Layer = 1 });
                 yield return null;
                 Check(control.GetComponent<Button>().interactable && control.GetComponent<Button>().enabled, "gate preserves business control fields");
+                Check(business.interactable && business.blocksRaycasts && !business.ignoreParentGroups && business.alpha == .65f,
+                    "gate preserves the original business CanvasGroup");
                 Check(!control.GetComponent<Button>().IsInteractable(), "native selectable is blocked without disabling it");
                 modal.Close();
                 QueueNativeButton(point, (MouseButton)button, false); yield return null;
@@ -292,7 +315,7 @@ namespace YLFramework.Core.Tests
                 QueueNativeButton(point, (MouseButton)button, false); yield return null;
                 Check(probe.Clicks[button] == 1, "a fresh button gesture works: " + button);
             }
-            Destroy(control);
+            Destroy(container);
             yield return null;
             foreach (var movement in new[] { ScrollRect.MovementType.Elastic, ScrollRect.MovementType.Clamped })
             {
@@ -314,6 +337,7 @@ namespace YLFramework.Core.Tests
                 QueueNativeButton(point, MouseButton.Left, true); yield return null;
                 QueueNativeButton(point + new Vector2(-30, 30), MouseButton.Left, true); yield return null;
                 QueueNativeButton(point + new Vector2(-70, 70), MouseButton.Left, true); yield return null;
+                yield return null; // 由真实 LateUpdate 采样速度，不直接赋值或调用内部更新。
                 Check(contentRect.anchoredPosition.sqrMagnitude > 0 && scroll.velocity.sqrMagnitude > 0, "native drag and inertia are exercised");
                 if (movement == ScrollRect.MovementType.Elastic)
                 { QueueNativeButton(point + new Vector2(120, -120), MouseButton.Left, true); yield return null; }

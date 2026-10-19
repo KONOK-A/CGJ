@@ -14,7 +14,7 @@ namespace YLFramework.Core
         private bool applying;
         private GameObject pendingSelection;
         private EventSystem pendingSelectionSystem;
-        private readonly Dictionary<Selectable, CanvasGroup> groups = new Dictionary<Selectable, CanvasGroup>();
+        private readonly Dictionary<Selectable, PanelInputGate> groups = new Dictionary<Selectable, PanelInputGate>();
         private readonly List<Selectable> selectables = new List<Selectable>();
         private readonly List<Canvas> canvases = new List<Canvas>();
         private readonly List<PanelRaycastGate> gates = new List<PanelRaycastGate>();
@@ -27,6 +27,7 @@ namespace YLFramework.Core
         internal PanelInputState(Panel panel) { this.panel = panel; session = panel.Session; }
         private bool Current => panel && ReferenceEquals(panel.Session, session) && !panel.IsRemoving &&
             panel.Module != null && panel.Module.State != ModuleState.Closing;
+        internal bool IsCurrent => Current;
 
         internal static void ValidateHierarchy(Panel owner)
         {
@@ -86,8 +87,9 @@ namespace YLFramework.Core
                 }
                 foreach (var pair in groups)
                 {
-                    if (pair.Value) pair.Value.interactable = !blocked;
+                    bool bound = !pair.Value || pair.Value.Apply(this, blocked);
                     if (!Current || Blocked != blocked) return;
+                    if (!bound) continue;
                     if (blocked && pair.Key && pair.Key.isActiveAndEnabled && pair.Key.IsInteractable())
                         throw new InvalidOperationException("实际 UGUI 布局跳过了独立门禁（例如同对象更早的 CanvasGroup.ignoreParentGroups）。请调整控件层级；不会改写业务字段作为回退。");
                 }
@@ -120,6 +122,14 @@ namespace YLFramework.Core
                 gate.Bind(panel, session);
                 if (!gates.Contains(gate)) gates.Add(gate);
             }
+            panel.GetComponentsInChildren(true, targets);
+            foreach (var target in targets)
+            {
+                if (!target || (!(target is IDragHandler) && !(target is Selectable)) || target.GetComponentInParent<Panel>(true) != panel) continue;
+                if (!target.GetComponent<PanelInputCapture>()) target.gameObject.AddComponent<PanelInputCapture>();
+                if (target is IDragHandler && !target.GetComponent<PanelDragCapture>()) target.gameObject.AddComponent<PanelDragCapture>();
+                if (!Current) return;
+            }
             panel.GetComponentsInChildren(true, selectables);
             foreach (var selectable in selectables)
             {
@@ -127,17 +137,12 @@ namespace YLFramework.Core
                 groups.TryGetValue(selectable, out var owned);
                 if (!owned)
                 {
-                    owned = selectable.gameObject.AddComponent<CanvasGroup>();
-                    if (!Current) { if (owned) UnityEngine.Object.Destroy(owned); return; }
+                    owned = selectable.GetComponent<PanelInputGate>();
+                    if (!owned) owned = selectable.gameObject.AddComponent<PanelInputGate>();
+                    if (!Current) return;
                     groups[selectable] = owned;
                 }
-            }
-            panel.GetComponentsInChildren(true, targets);
-            foreach (var target in targets)
-            {
-                if (!target || (!(target is IDragHandler) && !(target is Selectable)) || target.GetComponentInParent<Panel>(true) != panel) continue;
-                if (!target.GetComponent<PanelInputCapture>()) target.gameObject.AddComponent<PanelInputCapture>();
-                if (target is IDragHandler && !target.GetComponent<PanelDragCapture>()) target.gameObject.AddComponent<PanelDragCapture>();
+                if (!owned.Bind(this, selectable) || !Current) return;
             }
         }
 
@@ -149,11 +154,10 @@ namespace YLFramework.Core
                 foreach (var capture in captures)
                     if (capture.GetComponentInParent<Panel>(true) == panel) capture.Invalidate();
             }
-            foreach (var group in new List<CanvasGroup>(groups.Values)) if (group) group.interactable = true;
+            foreach (var group in new List<PanelInputGate>(groups.Values)) if (group) group.Release(this);
             if (!endSession) return;
             pendingSelection = null;
             pendingSelectionSystem = null;
-            foreach (var group in groups.Values) if (group) UnityEngine.Object.Destroy(group);
             groups.Clear();
             foreach (var gate in gates) if (gate) gate.Release(session);
             gates.Clear();
@@ -169,7 +173,7 @@ namespace YLFramework.Core
             {
                 var group = groups[selectable];
                 groups.Remove(selectable);
-                if (group) { group.interactable = true; UnityEngine.Object.Destroy(group); }
+                if (group) group.Release(this);
             }
             foreach (var gate in gates)
                 if (gate && gate.GetComponentInParent<Panel>(true) != panel) gate.Release(session);

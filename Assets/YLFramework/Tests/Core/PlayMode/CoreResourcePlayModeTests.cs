@@ -1494,12 +1494,12 @@ namespace YLFramework.Core.Tests
             CoreResourceAccess.Bind(probe);
             try
             {
+                probe.BeforePrefabDispose = () => Assert.That(instance.IsValid, Is.False);
                 Assert.That(module.LoadPanel<YLCoreSmokePanel>(nameof(YLCoreSmokePanel)), Is.SameAs(direct));
                 typeof(PanelManager).GetMethod("ResetSession", StaticPrivate).Invoke(null, null);
                 Assert.That(instance.IsValid, Is.True);
                 Assert.That(probe.PrefabDisposals, Is.Zero, "协调器不是来源责任 owner，先 reset 不得先释放 pin。");
                 Assert.That(resources.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(baseline + 1));
-                probe.BeforePrefabDispose = () => Assert.That(instance.IsValid, Is.False);
                 direct.Close();
                 Assert.That(probe.PrefabDisposals, Is.EqualTo(1));
                 Assert.That(instance.IsValid, Is.False);

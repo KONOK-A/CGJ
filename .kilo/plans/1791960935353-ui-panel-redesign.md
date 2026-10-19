@@ -1,8 +1,39 @@
 # YL UI Panel 重构实施计划
 
-状态：2026-10-19 已完整 merge 至主工作区 integration/xf-yl，真实 Unity 验收为 **Blocked，未完成、未正式收口**。当前 Editor 原生单 CanvasGroup 限制与已确认的同对象独立门禁方案冲突，结构调整尚未获得用户授权，按本文输入关口停止依赖它的后续验收。原任务 1～6 和九项增量核查不重做；下文来源 worktree 的禁令及未提交记录属于历史阶段，本轮依直接用户授权执行本地整合、MCP、资产迁移、验收修复与提交，不 Push、不改权限/忽略配置、不修改来源 worktree。
+状态：2026-10-19 已完整 merge 至主工作区 integration/xf-yl，**本轮实施、显式迁移和约定的真实验收已完成**。最终结果以顶部稳定证据为准，下面首轮、第二轮及来源阶段记录保留为历史，不再代表开放阻塞。07:34、07:35 用户授权的推荐结构及后续取舍均已落实；仍不覆盖业务控件字段、不弱化有效断言，不扩大为框架重写。原任务 1～6 和九项增量核查不重做；原禁止 Push、权限/忽略配置、共享 PackageCache、可见会话及来源 worktree 写入等边界不变。最终本地提交、父关系和输入指纹以稳定目录 `delivery-binding.json` 绑定，不为自引用 Hash 另作 docs-only 提交。
 
-## 主工作区集成验收
+## 最终稳定验收（2026-10-19）
+
+- 稳定证据根：`C:/Users/Kano/AppData/Local/Temp/kilo/CGJ2024-UI-Panel-20261019`。此前工程 `Temp/UI.Panel.Integration` 在原生重启时被 Unity 清理，相关旧路径仅是历史记录，不作为现存交付证据。以下必要门禁已在最终源码输入上重新留存。
+- 本轮增量独立 Review 的三项 Important 均已实际 RED→GREEN：旧布局跨重开会话写回、清理回调挂入 foreign 子树后被连壳销毁、派生 HorizontalLayoutGroup 与 Text/ContentSizeFitter 的阶段偏差。相关五项边界合跑 5/5，随后完成下表全量回归，不继续循环审查。
+
+| 最终门禁 | 实际结果 | 稳定证据 |
+| --- | --- | --- |
+| Both Core PlayMode | 237/237，0 Failed/Skipped | `both-core-playmode.json`、对应 Console 和 Editor.log 增量 |
+| New-only Core PlayMode | 230/230，含专属 F1 诊断与真实模块输入 | `new-only-loaded.json`、`new-only-core-playmode.json`、`new-only-key-behaviors.json` |
+| Legacy-only Core PlayMode | 217/217，含三键、原生控件取消、选择锁、Elastic/Clamped、正式 Color 和默认根 | `legacy-only-loaded-final.json`、`legacy-only-core-playmode.json`、`legacy-only-key-behaviors.json` |
+| Core EditMode / Core Editor | 188/188 | `final-core-editmode-editor.json` |
+| General 编译与 Help/Export | Unity 实际编译全部 151 份源码，含原离线排除八份；Help/Export 展开 11/11 | `final-unity-compiled-sources.json`、`final-general-help-export.json` |
+| 真实 Resource 集成 | 文本/场景重启、Prefab 合流取消/owner、Waiting/Abort/退出排空分别 1/1 | `final-resource-text-scene.json`、`final-resource-prefab-owner.json`、`final-resource-pending-exit.json` |
+| Analyzer 正式构建部署 | 129/129，0 warnings/errors；主工作区 `build.ps1 -Deploy`，不是来源 worktree DLL | `analyzers.trx`、`analyzer-build-info.json`；DLL SHA256 `E125F5247C632277F26EDADFC1888E06760B9476DE11959C9813238D0E00C46F` |
+| 默认 Domain Reload 退出 | READY 后旧根/窗口/自建输入全部销毁，owner/hook 清空，日志 handler 归还 | `final-normal-play-ready.json`、`final-normal-play-exit.json` |
+| 禁 Domain Reload 连续两轮 | 正常轮为 1；连续 NoDomain 轮为 2、3，各自 READY→真实 Pending→自然停止→EXIT_PASS，无中间编译/重载 | `final-no-domain-round{2,3}-armed.json`、对应 `exit.json`、Console 与真实文件日志 |
+| 原游戏 Editor 共存 | GAME_EDITOR_PASS；Main/Start/BGM、设置绑定、借用 Legacy 输入、两轮 Game/Pause/Start；Prefs/TimeScale/帧率恢复 | `final-game-coexist-result.json`、`final-game-coexist-full.log` |
+| Windows64 IL2CPP 构建 | 正式入口，Development、Medium stripping；Succeeded，0 errors / 6 warnings | `final-il2cpp-build-result.json`、`final-il2cpp-build.log`、`final-il2cpp-product-inputs.json` |
+| 图形 IL2CPP Player | D3D11；READY、PLAYER_READY_FOR_QUIT、PLAYER_PASS、QUIT_PENDING_PASS，进程 exit 0，无约定相关异常 | `final-il2cpp-player.log`、`final-il2cpp-player-verdict.json`；完整产物已复制至稳定根 `Player/UIAcceptance.exe` |
+| 资产与设置收口 | 六 GUID、139 原 local fileID、22 原序列化缩放属性保留；六份资产与迁移提交 `0201916` 一致 | `final-assets-identity.json`、`final-restored-settings.json` |
+
+输入切换按真实原生重启验证，不手工伪造宏。InputSystem 1.14.2 的启动警告选择 Yes 会将 Legacy-only 改为 Both；明确要求 No 后实测 Legacy-only 为 0、两宏为 true/false，New-only 为 1、false/true，最终恢复 Both 2、true/true。前两次回 Both 的现场写入栈未捕获，不把源码候选路径冒充已证实触发者。原 Standalone Mono2x/Disabled、Enter Play false/options 3、pause false 已恢复；仅移除本批添加的 Standalone 默认 map 项，ProjectSettings 最终无 diff。
+
+Profiler 每阶段 30 次 warmup、120 次采样迭代，原生记录器实际各返回 121 样本，未裁剪。baseline 为 1 Panel/1 Selectable/0 slot；steady 和每十帧切 Modal 均为 13/37/24；仅关闭本次创建的 12 个 Panel 后恢复 1/1/0。`YL.UI.Reconcile` mean/P95/max（ms）分别为 baseline `0.05944/0.0825/0.1232`、steady `1.70480/1.8038/2.3957`、modal `1.31877/2.5884/2.6870`。整 Editor 帧 GC mean/P95/max（bytes）分别为 `8803/8859/11019`、`56052/56491/58809`、`61787/112623/115271`。原始单位/样本、规模和清理在 `final-profiler-measurement.json`，汇总在 `final-profiler-summary.json`。这不是 UI 专属 GC，也没有既定预算或与已丢失历史样本等价的基线，不宣称性能达标。
+
+NoDomain 日志修复使用 Unity Package Manager 官方 Embed，将原 LoggerSystem 1.0.1 同 revision `0ebbebeb4b961d6fb67670d22cad819856969c3a` 纳入项目维护；保留 MIT、版权、meta、原程序集与 Analyzer。只修复自身 handler 的接管/归还及 static writer/instance 释放，不关闭日志或改过滤语义。`manifest.json` 未改，lock 由 Unity 解析为 embedded；不修改共享 PackageCache，也不让 Core 依赖 XF。
+
+范围与剩余限制：原游戏共存为 Editor 证据，本轮单场景 Player 不包含原 Main，不能外推原游戏 Player 共存或单后端 Player 全矩阵。六条构建警告来自已安装 MCP 可选扩展空脚本程序集。Player 退出日志保留 Unity `MemoryLeaks` 原生分配遥测，未给出 UI 专属泄漏调用栈，也未另建空场景基线；不据本轮通过宣称零原生泄漏。保护路径与来源 worktree 已核对，无关 `AlternateContent.meta` 保留且不提交。提交后重新绑定最终 HEAD/tree/parents、源码/资产/程序集和证据指纹，不沿用旧 `0201916` 输入清单代替最终输入。
+
+## 首轮集成验收快照
+
+本节是 `020191688de191f5f6d60ff2948cc4baa52b572f` 的真实首轮快照，不是后续实质修复的最终证据。之后修改的输入、共用生命周期、场景退役、排序与夹具须重跑受影响范围并完成最终全量回归；不能沿用 188/232 的旧结果证明新版本通过。
 
 - 工作区：`G:/Unity/Projects/CGJ2024`，分支 `integration/xf-yl`。整合前目标 `eb1ee7429ec316d5e1084278915e15b17ade6b84`；共同祖先 `5074595212b08bba45d95d48768a895258ea6f93`；来源 `09cc1df0116df1ed69ba43539e9f0cca01b9e9c5`，独有提交仅 `7b7107f` 和 `09cc1df`。
 - 整合：`git merge --no-ff fusion/ui-panel-redesign`，merge `43efb1ff5055da48f17e9cb657b4260437238240`，双父为上述目标/来源，无文本冲突。目标侧全部修改路径与来源 UI 改动不重叠；核对 Resource 正式实现、Packages、ProjectSettings、AGENTS 与既有配置相对整合前均无变化。共用 View/Module/provider/lease 交接继续按当前正式契约验证，不以 merge 成功代表验收通过。
@@ -42,7 +73,7 @@
 | 最终约定范围回归 | Blocked | 不把 188/188 当作完整约定范围通过；232 的失败和未运行项保持开放 |
 | 已验产品输入身份 / 文档状态 | Passed | 2676 文件与 12 加载程序集清单、测试后身份复核、原 Plan/UI 文档真实标注 Blocked；本地提交的最终 SHA 以本次交付绑定为准 |
 
-### 尚未解决的实际失败
+### 首轮实际失败（后续已修复）
 
 - 原生组与旧门禁寿命/重入：`DeselectCloseDoesNotLetOldInputCoveragePolluteReusedPanel`、`EarlierIgnoreParentGroupUsesActualUguiCapabilityWithoutChangingBusinessFlags`、`FormalColorPrefabSupportsCameraCoordinatesCallbacksAndReuse`、`NativeDownOnSelectReuseCannotAuthorizeOldPressForNewSession`、`OldPointerPressCannotClickAReusedWindowSession`、`ReparentedControlsReleaseOldInputCoverageBeforeNewOwnerConfiguration`。既有业务组不能追加独立组；旧会话延迟 Destroy 的组也可能阻止同帧复用重装，尚未作方案调整。
 - 真实 ScrollRect 前置惯性：Standalone/InputSystem 两后端各自 Elastic/Clamped 四项及 `RemovedMouseEndsScrollDragAndInertiaAndAcceptsNewDevice`、`RemovedTouchscreenEndsScrollDragAndInertiaAndAcceptsNewDevice` 共六项，断言 velocity>0 实际 0。只读诊断指出测试协程可能在该帧 LateUpdate 采样前断言；未增等待、赋速度、改期望或重跑，不把静态推导当修复。
@@ -53,6 +84,49 @@
 - `CoordinatorResetCannotReleaseDirectSourcePinBeforeCoreInstanceRetirement`：只读确认计数探针在同步 acquire 之后安装，租约未被观察包装，期望 1 实际 0；未移动探针或改变最新 Resource 实现，结果保持 Failed。
 
 以上合计 20 项，完整消息、堆栈及所有通过项以 `core-playmode-initial.results.json` 为准。只读诊断用于定位，不是新测试证据，也不将失败任意改为范围外后续事项。原离线 6/6、28/28、143 份辅助编译及 Acceptance 语法检查仅保留为历史证据，不替代任何本轮 Unity/Player 门禁。未满足正式完成条件；最终 HEAD 在本次 WIP 交付中记录，不宣称阶段收口。
+
+## 第二轮修复阶段历史记录
+
+- 授权：用户已批准推荐的最小隔离结构适配；本任务内后续需要选择的实施与验收取舍按推荐执行并据实记录，不再把已批准的结构适配记为外部授权阻塞。
+- 不变量：Module 唯一业务 owner，Core Session/请求/来源 pin 与资源释放内核保留；不用控件 interactable/enabled/raycastTarget 或业务 CanvasGroup 字段兜底，不增加资源后端/池或第二套 pending。保留局部 RectTransform 布局、动态重挂、独立子 Panel、原生回调重入与同帧复用契约。原明确允许的 earlier ignoreParentGroups 不可隔离组合仍须诊断并安全失败，不能扩大不支持范围来通过测试。
+- 已有真实 RED 驱动的直接修复开始：卸载中但未 fake-null 的场景实例走已有 Discard；在同步取得租约前安装观察探针；真实 ScrollRect 跨 LateUpdate 采样及 touch 回池空闲帧；外部根释放射线显式保持在模态遮罩之上并新增首命中断言；一次性 Invisible 探针在同步重入前解除。保留所有原有效断言，统一由主工作区真实 Unity 复验。
+- 原生 Canvas 探针已确认：未激活的嵌套 Canvas 暂时被引擎视为 root，overrideSorting 写入不生效，首次启用还会把早写的 sortingOrder 重置为 0。另屏幕空间根本身的 SortingLayerID 不接纳 Map，而 WorldSpace 接纳；排序层继承测试应采用实际支持该属性的 WorldSpace 根并立即读回，不能把不生效的 fixture 输入当成产品排序比较错误。证据 `r2-native-{canvas-sorting,nested-canvas-sorting}.txt`。
+- 新一轮门禁当前均待修复后执行，不预先标 Passed；首轮的完整 JSON、绑定与输入清单保留，后续使用 `r2-*` 等独立证据名，不覆盖首轮失败或冒充最终通过。
+- 排序修复只改变原生提交时机：显示先启用再写排序，隐藏先保留排序再禁绘，所有原生写入后保留 Current/显示意图检查；四项真实目标回归已 4/4。WorldSpace fixture 先读回确认 Map 层输入被接受，原排序比较、Layer/Priority 断言均保留。
+- 门禁选择混合结构：无业务组时由独立标记保留自有 self group，有业务组时才使用自有 slot/frame；关闭只中性化该绑定，不同帧 Destroy/Add。新增 `BusinessCanvasGroupKeepsNativeLayoutAndSameFrameGateReuse` 真实 RED，覆盖横纵/Grid、Text/Fitter、非均匀缩放/旋转、父 pivot/尺寸、动态文本、停用重启及同帧重开，不弱化原布局/业务字段/身份断言。
+- 布局桥保留公开三类布局的真实横纵阶段写集；不能直接使用 internal `RectTransform.drivenProperties`。本轮实测 getter 为 `UnityEngine.CoreModule` 的 `UnityEngine.DrivenTransformProperties get_drivenProperties()`、非 public；采用缓存只读适配，不写原生 flags，也不把其他 LayoutGroup 一刀切改成不支持。最小 `link.xml` 仅保留该 property getter，已核对 2022.3 官方 Link XML 语法；新增反射路径必须由最终 IL2CPP/Medium 实际运行覆盖，未提前宣称 AOT 可用。
+- 自有 helper 的 OnDestroy 实测不能重挂仍 truthy、正在销毁的业务 Transform；不靠判空或吞日志掩盖。改为只中性化自有组，由仍存活自有 slot 下一帧收尾，保留其他业务子树；七项门禁/布局/原生重入/重挂/安全失败目标已 **7/7**，证据 `r2-gate-seven-green.results.json`。业务 ignoreParentGroups=true 的不可隔离组合同时验证首次准备原子拒绝和后续动态改变的诊断收尾，未加第二组或放宽契约。
+- 当前实质输入已真实重跑：**完整 Core PlayMode 233/233、0 skipped**（首轮全部 232 + 新布局用例），证据 `r2-core-playmode-233.results.json`；**完整 Core EditMode/Core Editor 188/188、0 skipped**，证据 `r2-core-editmode-editor-188.results.json`。正常 Unity 导入已生成 PanelInputGate.cs、PanelInputGateLayout.cs 与 link.xml 的三个新 meta。首次 MCP 响应超时后只读取真正完成的全体叶结果，不把等待超时当测试终止或通过。
+- 对新门禁/布局/AOT 差异作一次增量聚焦审查，未重审旧资产/整个框架。三项 Important 均经新增/加强真实用例确认 RED：回调同帧重开后的旧 AP 写回（211 被写成 178）、清理回调新挂入 foreign 被连带销毁、派生 HorizontalLayoutGroup 在窄宽 Text/CSF 下偏差约 44.89。修复绑定代次与 parent 快照、回调后中止旧同步、快照且只在无 foreign 时销毁自有壳、按标准布局类型族过滤阶段；分别 GREEN，再包含根 Panel 业务组换层/重开与 ignoreLayout 的五项 **5/5**。证据 `r2-review-three-red.results.json`、`r2-{derived-layout,foreign-cleanup,layout-reentry}-green.results.json`、`r2-review-five-green.results.json`。未追加循环 Review；旧 233/188 不证明这次 Runtime 修改，最终完整 PlayMode 预期发现数升为 237，仍待执行。
+- UIAcceptance 首次实际进入 Play：三鼠标键旧/新手势通过，随后真实 ScrollRect 在 LateUpdate 采样前断言失败；Unity 记录 Exception，但嵌套 IEnumerator 不在入口 MoveNext 的 try 内，Result 错留 RUNNING。完整 Console/状态保存 `r2-acceptance-first-{console.json,result.txt}`。已停止 Play，不保存场景；仅修复原生采样等待及嵌套枚举错误终态，并给现有实际鼠标模块驱动的 Button 预配业务组/原生布局父级，以便 Player 真正覆盖自有隔离与 readonly getter。不赋 velocity、不直接调用事件伪造通过，仍待场景复验。
+- 已添加唯一轻量 `YL.UI.Reconcile` ProfilerMarker 供实际 UI 协调 CPU 测量，不引入性能平台或猜预算。修复后 UIAcceptance 实际到达 `READY round=1`，业务组/布局 getter、三鼠标键、ScrollRect、Camera 渲染、Tips、owner 退出重启等顺序均执行，证据 `r2-acceptance-second-{result.txt,console.json}`；还不能代替连续退出/无 Domain Reload/原游戏或 Player 证据。
+- 已在同一真实 Editor 场景以 ProfilerRecorder 采集三阶段，每阶段 30 warmup+120 采样迭代，原生 recorder 边界实际各 **121 samples**。规模 baseline 1 Panel/1 Selectable/0 slot，负载为 13 Panel/37 Selectable/24 自有业务组隔离槽；模态阶段每 10 帧切换。`YL.UI.Reconcile` mean/P95/max(ms) 分别 baseline `0.0548/0.0615/0.0815`、steady `1.8677/2.6920/2.9677`、modal `1.3461/2.5792/3.3194`；原生 Canvas.BuildBatch steady 0、modal mean/P95/max `0.0389/0.0481/0.2627`。GC Allocated In Frame mean/P95/max(bytes) baseline `8784/8859/8859`、steady `13368/13476/15595`、modal `16610/40863/50894`，是整个 Editor 帧，不是 UI 专属。无既定预算，不宣布“性能达标”或将静态成本替代测量；原始样本、单位及摘要在 `r2-profiler-measurement.json`、`r2-profiler-summary.txt`，采样期间没有 Unity 工具调用。只关闭测试自建 12 个窗口，保留原 1 窗口/根，未销毁共享根或原游戏对象。
+- 默认 Domain Reload 的真实 Play 退出已逐原实例 ID 确认 runtime root/window/input 均销毁、owner 注册和 onCreateCanvas hook 清空，场景无保存，证据 `r2-normal-play-{before-exit.json,exit.txt}`。随后按原设置快照临时切为仅 DisableDomainReload，实际下一次入口因外部 XF 日志包原 handler 空引用而 FAILED，连错误日志也抛异常；不是 UI 逻辑失败或可忽略日志。保留 `r2-no-domain-{round1-console.json,logger-failure.txt}`，只为安全退出该失败会话临时恢复原生诊断 handler，不以该清理状态运行/宣称测试通过。
+- 依据用户本任务后续取舍授权，采用最小可维护依赖修复：通过官方 `Client.Embed` 将已安装 `com.xfkj.xfgameframework.loggersystem` **1.0.1**（源 Git `0ebbebeb4b961d6fb67670d22cad819856969c3a`）原样嵌入项目 `Packages/`；不是升级/降级、不写共享 PackageCache、不改原游戏源码、不让 Core 引用 XF。保留完整上游 MIT/LICENSE、版权、文档、程序集与 meta 身份，仅修复接管 handler 的停用/销毁归还、重启接管及释放 writer 后置空。过滤、文件输出与日志事件语义不关闭。Unity 自动更新的 packages-lock 差异仅该项 source=embedded，manifest 和其他已升级依赖不变；项目内 CHANGELOG 记录来源与修复。该新包输入须由后续无 Domain Reload、共存及 Player 实际验证，不复用旧结果。
+- 日志修复实际 GREEN：NoDomain 场景 `READY round=1`，当前全局 handler 确为 XF LoggerHandler，日志文件包含本轮 UI34 marker；退出后 logger instance/writer 均 null，全局回到原生 handler。不是恢复原生后绕过 XF。证据 `r2-no-domain-logger-green.json` 与 `r2-no-domain-exit-red.txt`。本次 `VerifyExit` 另真实发现 UI 静态 hook 未即时清除：原根/窗口已销毁，Pending=Invalidated、Tips=1/1、退出获取被拒绝，只有 hook retained。来源 ResetSession 原来只登记每次进入的 reset；新增协调器执行结束监听在退出屏障下重用同一 ResetSession，并对状态快照清理，避免原生回调修改遍历。未在验收脚本手动清 hook、未改变业务 owner 或来源 pin 责任，须重新完成真实退出/连续运行。
+- 退出修复已真实 GREEN：禁 Domain Reload、仍启用 Scene Reload 的连续 `READY round=1 -> EXIT_PASS round=1 -> READY round=2 -> EXIT_PASS round=2` 全序列执行。两次都先暂停再 `PrepareExit` 确认真正在途请求，停止 Play 后自然得到 Invalidated，Tips 完成次数精确、旧闭包/默认根 hook 无调用，退出回调新获取被拒绝，运行时根/窗口销毁、hook 与 owner 清空；第二轮完整 UI/输入检查再次通过。XF handler 两轮均正常重装/释放，writer/实例无静态残留。证据 `r2-no-domain-exitfix-round{1,2}-{armed.txt,pass.txt,*console.json}`。已按 `r2-enter-play-original.json` 恢复 Enabled=false/原 Options=3，pause=false，未保存用户场景。
+- 原游戏共存已在真实 Editor 完成 `GAME_EDITOR_PASS scene=Start`：全新 MainModule/FSM 前置检查、Main/Start/BGM、持久设置绑定和音量、独立 test-owned YL 根借用原 StandaloneInputModule/音频、关闭自建 UI 不影响原输入/BGM，以及两轮 Game->Pause->Start 和旧场景音乐句柄失效。流程按 finally 恢复 PlayerPrefs/TimeScale/targetFrameRate；未修改游戏实现或销毁已有共享根。仅在启动前关闭验收自身 owner/root，正常停止 Play 收尾。`r2-game-coexist-result.txt`、`r2-game-coexist-console.json`、`r2-game-coexist-full.log` 与 final-state 保留证据。场景输入 Main 在原 BuildSettings 中实际 enabled；业务链经真实持久 UnityEvent 执行，不把它冒充原生输入模块驱动（后者另有模块用例）。
+- Windows64 IL2CPP 已通过正式显式入口实际构建：Development、Medium stripping、StandaloneWindows64，BuildReport `Succeeded / 0 errors / 6 warnings / 1,250,488,935 bytes`。六警告均为已安装 MCP 可选扩展的空脚本程序集，不是 UI 编译失败，未关闭警告。finally 已恢复 Mono2x/stripping Disabled。先前 delayCall 仅留 REQUESTED、没有实际执行，不算构建；移除自身待执行回调后直接调用，MCP等待超时后从实际终态/BuildReport核实成功，未重复执行已在运行的构建。证据 `r2-il2cpp-build-{status.txt,result.json}`、完整 `r2-il2cpp-build.log` 和 restored-settings。
+- 已实际启动图形模式 Windows64 IL2CPP Player（Direct3D11，无 batchmode/nographics），进程 monitor `bgp_1539e5546001z9O09SBp8jG6A4` 真实退出 **0**。完整 `r2-il2cpp-player.log` 包含 native 业务 CanvasGroup/布局 readonly getter、三鼠标键旧/新手势、Elastic/Clamped 拖动与惯性、真实键盘/Camera渲染、Tips/owner退出重启、last owned root释放input、真正在途Quit失效，最终 `UI34 PLAYER_PASS` 与 `UI34 QUIT_PENDING_PASS`；没有相关 Exception/FAILED 匹配。中间 native gate不独立计成功。结果、exe/native GameAssembly/metadata/log SHA256 在 `r2-il2cpp-player-verdict.json`，449份相关实际源/资产输入在 `r2-il2cpp-product-inputs.json`，后续受影响实质修改必须重新构建运行；纯设置恢复/文档不能冒充新Player产品输入。
+
+| 第二轮必需关口 | 状态 | 当前证据或剩余动作 |
+| --- | --- | --- |
+| 新结构真实 Unity 编译/新 meta | Passed | 三新文件正常导入，两完整 Core 组实际执行，无编译错误 |
+| 原生排序/门禁/布局定向 | Passed | 排序 4/4，门禁 7/7，含真实布局与同帧复用 |
+| 完整 Core PlayMode | Not Run | 历史第二轮 233/233 已通过；增量审查修复后预期 237，全量待重跑，目标边界 5/5 |
+| 完整 Core EditMode/Core Editor | Not Run | 历史第二轮 188/188 已通过；后续 Runtime 改动后须最终重跑 |
+| 双模块 Both 下实际行为 | Not Run | 历史 233 中两类确实执行通过；增量 Runtime 修复后的完整范围待重跑 |
+| Legacy-only/New-only 编译与真实模块 | Not Run | 临时设置、发现列表与关键执行后恢复 Both；不得修改包/工具链 |
+| 新输入下 Help/导出/Resource 三集成 | Not Run | 须重跑，首轮 0201916 的通过结果只作历史 |
+| 连续 UIAcceptance/正常退出/无DomainReload复位 | Passed | 实际连续READY/EXIT_PASS round1和2，真实pending失效/Tips精确/静态hook与owner清空，原设置恢复 |
+| 原游戏共存 | Passed | 真实Editor GAME_EDITOR_PASS，Main/Start/BGM/原Legacy模块借用与两轮Game/Pause/Start，完整XF日志留证，不混充模块输入 |
+| 代表性 Profiler | Passed | 13 Panel/37 Selectable/24 slot，三阶段各实际121样本；CPU与全Editor GC raw数据及清理证据，无虚构阈值 |
+| Windows64 IL2CPP 构建 | Passed | 正式入口 Development/Medium、Succeeded/0 errors；Mono/Disabled已恢复，6可选MCP空程序集警告记录 |
+| Windows64 IL2CPP 实际启动 | Passed | 图形Player真实运行、monitor确认exit0、D3D11与WindowsPlayer日志 |
+| Windows64 IL2CPP 完整行为/退出 | Passed | PLAYER_PASS+QUIT_PENDING_PASS，业务组/layout反射/原生输入/渲染/资源退出全序列，相关异常0；输入sha绑定 |
+| 最后实质修改后的最终回归/Analyzer/输入绑定/提交 | Not Run | 当前 HEAD 仍 0201916，第二轮源代码未提交；不得把历史输入清单当新版本证明 |
+
+上表是第二轮修复过程中的历史阶段状态，最终剩余关口已按顶部稳定验收完成，不再据旧 Not Run 重复执行。完整测试曾先让 MCP 返回超时，均用 `testResults` 确认真正结束并立即保存 `Unity_MCP_Rql_TestResults` SessionState；等待超时没有被当成终止或通过。`TestRunnerApi.IsTestRunActive()` 的动态脚本路径曾持续超时，不作为产品证据。
 
 **目标：** 以一套 Module/Panel/View 管线提供简洁、配置驱动的独立界面能力，同时让轻量默认使用与完整预配置使用都低接线成本。
 **架构：** Module 是唯一业务 owner，Panel 继承 View 并复用会话、Model、事件和释放；现有 PanelManager 协调请求与 UI 策略，UIRootContext 仅承载根配置。资源沿当前 Core provider/lease 边界，输入在既有桥接中隔离业务状态，不另建资源后端、UI 对象池或全局输入系统。
@@ -407,7 +481,7 @@ Close / Module 退出 / 根永久失效
 
 ## 实施任务
 
-本次执行以顶部检查点区分源码完成与引擎验收。下面混合“实现并运行/验证”的条目未勾选代表运行关口仍待执行，不表示遗漏源码；已勾选的文档/API/用例迁移也不等于 Unity Passed。
+以下勾选状态保留来源实施阶段的历史执行清单，不重新运行已被替换实现的历史 RED 步骤，也不伪记为本轮新执行。集成后真实关口的最终完成范围以顶部稳定验收为准，原未勾选项不再代表本轮开放阻塞；较小 Player 门也不外推成全平台、全输入后端 Player 矩阵。
 
 每个批次先复核当前文件与工作区，补关键回归，再做最小实现并读取新结果。任务 3 的 API 切换和任务 4 的引用迁移属于同一编译闭包：不得把尚有失效调用/资产的中间态交付为完成。
 
@@ -492,8 +566,8 @@ Close / Module 退出 / 根永久失效
 **文件：** 增量更新已有 `Documentation/Modules/UI.md`，必要的 `Documentation/Architecture.md`/导航及相关 XML 注释；与并行文档差异合并，不覆盖。
 
 - [x] 写明默认零 UI 接线的调用、完整模板用法、资源 provider 前置、Prefab 默认/规则表/临时覆盖、生命周期和取消截止点、场景对象 Attach、允许的输入组合/版本限制；补已解析配置行到 BindPanelRules 的实际示例，不暗示框架自动读表。
-- [x] 检查 YL 范围旧入口/命名/序列化/字符串绑定及新增 .meta，保留来源许可证，不误改 XF 同名类型。新增 meta 生成是明确的集成后待办，未伪造。
-- [x] 检查最终 diff/新增文件、资源闭包与全部直接调用方；交付实际编译、EditMode、PlayMode、Player 结果和未验证项，不自动提交。本轮只执行离线范围，所有 Unity 运行结果明确未执行。
+- [x] 检查 YL 范围旧入口/命名/序列化/字符串绑定及新增 .meta，保留来源许可证，不误改 XF 同名类型。来源阶段未伪造 meta，集成后已由真实 Unity 导入生成并核查。
+- [x] 检查最终 diff/新增文件、资源闭包与全部直接调用方；交付实际编译、EditMode、PlayMode、Player 结果和未验证项。来源阶段仅离线，本轮集成按明确授权完成真实验收及本地提交，不 Push。
 - [x] 在最终自检/独立 Review 中按全局设计质量约束检查公开 API、命名、主流程、辅助类型和重复状态；不另建美学审查流程，也不以功能测试通过替代简洁性验收。
 
 ## 验收矩阵

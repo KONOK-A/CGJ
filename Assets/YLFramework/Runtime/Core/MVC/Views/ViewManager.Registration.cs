@@ -131,7 +131,9 @@ namespace YLFramework.Core
             bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
             GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
             var instanceLease = view.BackendLease;
-            if (backend && destroyed) damaged = true;
+            // 卸载中的场景实例可能尚未变为 fake-null，但已不能归还缓存。
+            if (backend && (destroyed || (instance && (!instance.scene.IsValid() || !instance.scene.isLoaded))))
+                damaged = true;
             if (backend)
                 foreach (var child in Snapshot(module))
                     if (!ReferenceEquals(child.Key, view) && ReferenceEquals(child.Key.BackendRoot, view) &&

@@ -6,6 +6,9 @@ using UnityEngine.EventSystems;
 using YLFramework.Events;
 using YLFramework.Core.Singleton;
 using UpdateManager = YLFramework.Foundation.UpdateManager;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace YLFramework.Core
 {
@@ -40,7 +43,25 @@ namespace YLFramework.Core
             internal List<CorePrefabLease> SourcePins => Panel.SourcePins;
         }
 
-        static PanelManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
+        static PanelManager()
+        {
+            SingletonSessionState.RegisterSessionReset(ResetSession);
+            Application.quitting += OnExecutionEnded;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+#endif
+        }
+        private static void OnExecutionEnded()
+        {
+            SingletonSessionState.StopExecution();
+            ResetSession();
+        }
+#if UNITY_EDITOR
+        private static void OnPlayModeChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode) OnExecutionEnded();
+        }
+#endif
         private PanelManager() { }
         internal static PanelManager Instance => _instance ?? (_instance = new PanelManager());
         private static void ResetSession()
@@ -53,7 +74,7 @@ namespace YLFramework.Core
                 manager.lateSubscription?.UnRegister();
                 manager.lateSubscription = null;
                 manager.ReleaseOwnedInput();
-                foreach (var state in manager.states.Values)
+                foreach (var state in new List<PanelState>(manager.states.Values))
                 {
                     state.Input.Restore(true);
                 }

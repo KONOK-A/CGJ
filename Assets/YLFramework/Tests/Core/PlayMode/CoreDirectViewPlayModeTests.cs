@@ -1544,6 +1544,7 @@ namespace YLFramework.Core.Tests
                     Assert.That(panel, Is.SameAs(first));
                     var activating = module.GetViews<YLCoreSmokePanel>().Find(item => item != first);
                     Assert.That(activating, Is.Not.Null);
+                    YLCoreSmokePanel.InvisibleProbe = null;
                     activating.gameObject.SetActive(false);
                 };
                 var second = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
@@ -3006,8 +3007,12 @@ namespace YLFramework.Core.Tests
         public IEnumerator DisplayLayerMovePreservesLocalRectParametersAcrossDifferentContainers() => MoveAcrossDifferentLayerLayouts(false);
         [UnityTest]
         public IEnumerator ReopenLayerMovePreservesLocalRectParametersAcrossDifferentContainers() => MoveAcrossDifferentLayerLayouts(true);
+        [UnityTest]
+        public IEnumerator BusinessGroupOnPanelRootPreservesLocalParametersDuringLayerMove() => MoveAcrossDifferentLayerLayouts(false, true);
+        [UnityTest]
+        public IEnumerator BusinessGroupOnPanelRootPreservesLocalParametersDuringLayerReopen() => MoveAcrossDifferentLayerLayouts(true, true);
 
-        private IEnumerator MoveAcrossDifferentLayerLayouts(bool reopen)
+        private IEnumerator MoveAcrossDifferentLayerLayouts(bool reopen, bool businessGate = false)
         {
             yield return StartModule();
             var root = PolicyRoot("YLPanel.DifferentLayerLayouts");
@@ -3018,6 +3023,7 @@ namespace YLFramework.Core.Tests
             target.anchoredPosition = new Vector2(50, -30);
             target.sizeDelta = new Vector2(-60, -40);
             var prefab = Template<YLCoreSmokePanel>("YLPanel.DifferentLayerPanel", true);
+            if (businessGate) { prefab.AddComponent<CanvasGroup>().alpha = .6f; prefab.AddComponent<UnityEngine.UI.Button>(); }
             var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             var rect = (RectTransform)panel.transform;
             rect.anchorMin = new Vector2(.1f, .3f);
@@ -3030,7 +3036,8 @@ namespace YLFramework.Core.Tests
             var changes = new PanelOverrides { Layer = 1, Priority = 23, Modal = true };
             if (reopen) Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: changes), Is.SameAs(panel));
             else panel.UpdateDisplay(changes);
-            Assert.That(panel.transform.parent, Is.SameAs(target));
+            var placement = businessGate ? panel.transform.parent.parent : panel.transform;
+            Assert.That(placement.parent, Is.SameAs(target));
             Assert.That(panel.Root, Is.SameAs(root));
             Assert.That(ViewSession(panel), Is.SameAs(session));
             Assert.That(panel.EffectiveSettings.Layer, Is.EqualTo(1));
@@ -3044,7 +3051,12 @@ namespace YLFramework.Core.Tests
             var before = panel.EffectiveSettings;
             Assert.Throws<ArgumentOutOfRangeException>(() => panel.UpdateDisplay(new PanelOverrides { Layer = 9, Modal = false }));
             Assert.That(panel.EffectiveSettings, Is.EqualTo(before));
-            Assert.That(panel.transform.parent, Is.SameAs(target));
+            Assert.That(placement.parent, Is.SameAs(target));
+            if (businessGate)
+            {
+                Assert.That(panel.GetComponents<CanvasGroup>(), Has.Length.EqualTo(1));
+                Assert.That(panel.GetComponent<CanvasGroup>().alpha, Is.EqualTo(.6f));
+            }
         }
 
         [UnityTest]
@@ -3150,7 +3162,9 @@ namespace YLFramework.Core.Tests
             var layer = SortingLayer.NameToID("Map");
             Assert.That(SortingLayer.GetLayerValueFromID(layer), Is.GreaterThan(SortingLayer.GetLayerValueFromID(0)),
                 "使用工程已有 SortingLayer，不修改 TagManager。");
+            root.Canvas.renderMode = RenderMode.WorldSpace;
             root.Canvas.sortingLayerID = layer;
+            Assert.That(root.Canvas.sortingLayerID, Is.EqualTo(layer), "先确认原生根接受 SortingLayer，不能用忽略该属性的屏幕空间根作输入。");
             layeredPrefab.AddComponent<Canvas>().sortingLayerID = 0;
             var high = Track(module.LoadPanel<YLCoreSmokePanel>(layeredPrefab, root: root,
                 overrides: new PanelOverrides { Layer = 1, Priority = int.MinValue, CoversRoot = true }));
@@ -3736,6 +3750,287 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator NativeLayoutCallbackCannotWriteAcrossAReopenedSession()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.LayoutReentryRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLInput.LayoutReentryPanel", true);
+            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var surfaceObject = new GameObject("LayoutSurface", typeof(RectTransform), typeof(UnityEngine.UI.HorizontalLayoutGroup));
+            surfaceObject.transform.SetParent(panel.transform, false);
+            var surface = (RectTransform)surfaceObject.transform;
+            surface.anchorMin = surface.anchorMax = new Vector2(.5f, .5f);
+            surface.sizeDelta = new Vector2(120, 80);
+            var layout = surfaceObject.GetComponent<UnityEngine.UI.HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(7, 11, 5, 9);
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var buttonObject = new GameObject("ReentrantButton", typeof(RectTransform), typeof(CanvasGroup),
+                typeof(UnityEngine.UI.Button), typeof(UnityEngine.UI.LayoutElement), typeof(YLCoreNativeLayoutReentryProbe));
+            buttonObject.transform.SetParent(surface, false);
+            var target = (RectTransform)buttonObject.transform;
+            target.sizeDelta = new Vector2(40, 20);
+            var element = buttonObject.GetComponent<UnityEngine.UI.LayoutElement>();
+            element.minWidth = element.preferredWidth = 40;
+            element.flexibleWidth = 1;
+            element.minHeight = element.preferredHeight = 20;
+            yield return null;
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(surface);
+            Assert.That(target.parent, Is.Not.SameAs(surface), "先确认业务组控件已生成真实隔离结构。");
+            Assert.That(target.parent.parent.parent, Is.SameAs(surface));
+            float oldWidth = target.sizeDelta.x;
+            Assert.That(oldWidth, Is.GreaterThan(0));
+            var originalSession = ViewSession(panel);
+            Assert.That(originalSession, Is.Not.Null);
+            var probe = buttonObject.GetComponent<YLCoreNativeLayoutReentryProbe>();
+            var expectedMin = new Vector2(.2f, .3f);
+            var expectedMax = new Vector2(.7f, .8f);
+            var expectedSize = new Vector2(137, 53);
+            var expectedPosition = new Vector2(211, -73);
+            YLCoreSmokePanel replacement = null;
+            object reopenedSession = null;
+            int callbacks = 0, opens = 0, callbackFrame = -1;
+            probe.DimensionsChanged = () =>
+            {
+                // 父尺寸通知不算触发；必须进入实际目标宽度写入后的原生回调。
+                if (target.sizeDelta.x <= oldWidth) return;
+                probe.DimensionsChanged = null;
+                callbacks++;
+                callbackFrame = Time.frameCount;
+                YLCoreSmokePanel.UpdateProbe = (opened, _) =>
+                {
+                    YLCoreSmokePanel.UpdateProbe = null;
+                    opens++;
+                    reopenedSession = ViewSession(opened);
+                    layout.enabled = false;
+                    target.anchorMin = expectedMin;
+                    target.anchorMax = expectedMax;
+                    target.sizeDelta = expectedSize;
+                    target.anchoredPosition = expectedPosition;
+                };
+                panel.Close();
+                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            };
+            void AssertReopenedLayout()
+            {
+                Assert.That(replacement, Is.SameAs(panel), "必须复用同一物理实例，而不是检查另一个新对象。");
+                Assert.That(replacement.IsLoaded, Is.True);
+                Assert.That(replacement.Root, Is.SameAs(root));
+                Assert.That(reopenedSession, Is.Not.Null.And.Not.SameAs(originalSession));
+                Assert.That(ViewSession(replacement), Is.SameAs(reopenedSession));
+                Assert.That(layout.enabled, Is.False);
+                Assert.That(target.anchorMin, Is.EqualTo(expectedMin));
+                Assert.That(target.anchorMax, Is.EqualTo(expectedMax));
+                Assert.That(target.sizeDelta, Is.EqualTo(expectedSize));
+                Assert.That(target.anchoredPosition, Is.EqualTo(expectedPosition));
+            }
+            try
+            {
+                int triggerFrame = Time.frameCount;
+                surface.sizeDelta = new Vector2(360, 80);
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(surface);
+                Assert.That(callbacks, Is.EqualTo(1), "真实布局写入必须触发一次重入。");
+                Assert.That(opens, Is.EqualTo(1));
+                Assert.That(callbackFrame, Is.EqualTo(triggerFrame));
+                AssertReopenedLayout();
+                yield return null;
+                AssertReopenedLayout();
+            }
+            finally
+            {
+                if (probe) probe.DimensionsChanged = null;
+                YLCoreSmokePanel.UpdateProbe = null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator OwnedGateCleanupKeepsForeignChildrenAcrossNativeReentry()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.GateCleanupRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLInput.GateCleanupPanel", true);
+            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            foreach (bool destroyButton in new[] { false, true })
+            {
+                string phase = destroyButton ? "Retire" : "ReleaseMount";
+                var parent = new GameObject(phase + "Parent", typeof(RectTransform));
+                parent.transform.SetParent(panel.transform, false);
+                var destination = new GameObject(phase + "Destination", typeof(RectTransform));
+                destination.transform.SetParent(panel.transform, false);
+                var button = new GameObject(phase + "Button", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
+                button.transform.SetParent(parent.transform, false);
+                yield return null;
+                var oldFrame = button.transform.parent;
+                Assert.That(oldFrame, Is.Not.SameAs(parent.transform), phase);
+                var oldSlot = oldFrame.parent;
+                Assert.That(oldSlot.parent, Is.SameAs(parent.transform), phase);
+                var foreign = new GameObject(phase + "Foreign", typeof(RectTransform), typeof(YLCoreNativeLayoutReentryProbe));
+                objects.Add(foreign);
+                foreign.transform.SetParent(oldFrame, false);
+                var probe = foreign.GetComponent<YLCoreNativeLayoutReentryProbe>();
+                GameObject replacement = null;
+                int callbacks = 0;
+                probe.ParentChanged = () =>
+                {
+                    if (foreign.transform.parent == oldFrame) return;
+                    probe.ParentChanged = null;
+                    callbacks++;
+                    replacement = new GameObject(phase + "Replacement", typeof(RectTransform));
+                    objects.Add(replacement);
+                    replacement.transform.SetParent(oldFrame, false);
+                };
+                void AssertForeignPreserved()
+                {
+                    Assert.That(foreign && replacement, Is.True, phase + " 不能随自有壳销毁 foreign 子树。");
+                    if (oldFrame)
+                    {
+                        Assert.That(foreign.transform.IsChildOf(oldFrame), Is.False, phase);
+                        Assert.That(replacement.transform.IsChildOf(oldFrame), Is.False, phase);
+                    }
+                }
+                try
+                {
+                    if (destroyButton) Object.Destroy(button);
+                    else button.transform.SetParent(destination.transform, false);
+                    for (int frame = 0; frame < 4; frame++)
+                    {
+                        yield return null;
+                        if (!oldSlot) AssertForeignPreserved();
+                    }
+                    Assert.That(callbacks, Is.EqualTo(1), phase + " 必须通过实际父级回调挂入替代节点。");
+                    AssertForeignPreserved();
+                    Assert.That(!oldSlot, Is.True, phase + " 应在有限帧内只清理自身结构。");
+                }
+                finally { if (probe) probe.ParentChanged = null; }
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator BusinessCanvasGroupKeepsNativeLayoutAndSameFrameGateReuse()
+        {
+            yield return StartModule();
+            var root = PolicyRoot("YLInput.BusinessLayoutRoot");
+            var prefab = Template<YLCoreSmokePanel>("YLInput.BusinessLayoutPanel", true);
+            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            foreach (var groupType in new[] { typeof(UnityEngine.UI.HorizontalLayoutGroup), typeof(UnityEngine.UI.VerticalLayoutGroup), typeof(UnityEngine.UI.GridLayoutGroup), typeof(YLCoreDerivedHorizontalLayoutGroup) })
+            {
+                RectTransform Surface(string name)
+                {
+                    var go = new GameObject(name, typeof(RectTransform));
+                    go.transform.SetParent(panel.transform, false);
+                    var rect = (RectTransform)go.transform;
+                    rect.anchorMin = rect.anchorMax = new Vector2(.5f, .5f);
+                    rect.pivot = new Vector2(.2f, .7f);
+                    rect.anchoredPosition = new Vector2(17, 29);
+                    rect.sizeDelta = new Vector2(420, 220);
+                    var layout = (UnityEngine.UI.LayoutGroup)go.AddComponent(groupType);
+                    layout.padding = new RectOffset(9, 11, 13, 15);
+                    if (layout is UnityEngine.UI.HorizontalOrVerticalLayoutGroup linear)
+                    {
+                        linear.spacing = 7;
+                        linear.childControlWidth = linear.childControlHeight = true;
+                        linear.childForceExpandWidth = linear.childForceExpandHeight = false;
+                        linear.childScaleWidth = linear.childScaleHeight = true;
+                    }
+                    if (layout is UnityEngine.UI.GridLayoutGroup grid)
+                    {
+                        grid.cellSize = new Vector2(83, 37);
+                        grid.spacing = new Vector2(4, 9);
+                        grid.constraint = UnityEngine.UI.GridLayoutGroup.Constraint.FixedColumnCount;
+                        grid.constraintCount = 2;
+                    }
+                    return rect;
+                }
+                UnityEngine.UI.Button Control(RectTransform parent, string name, bool business)
+                {
+                    var go = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Text), typeof(UnityEngine.UI.Button));
+                    go.transform.SetParent(parent, false);
+                    var rect = (RectTransform)go.transform;
+                    rect.pivot = new Vector2(.3f, .6f);
+                    rect.localScale = new Vector3(.8f, 1.2f, 1);
+                    rect.localRotation = Quaternion.Euler(0, 0, 17);
+                    var text = go.GetComponent<UnityEngine.UI.Text>();
+                    text.font = font;
+                    text.fontSize = 14;
+                    text.text = name;
+                    var fitter = go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+                    fitter.horizontalFit = fitter.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+                    if (business) { var group = go.AddComponent<CanvasGroup>(); group.alpha = .37f; group.blocksRaycasts = false; }
+                    return go.GetComponent<UnityEngine.UI.Button>();
+                }
+                var baseline = Surface("Baseline");
+                var actual = Surface("Business");
+                var controls = new[] { Control(baseline, "First", false), Control(baseline, "Second", false),
+                    Control(actual, "First", true), Control(actual, "Second", true) };
+                var businessGroup = controls[2].GetComponent<CanvasGroup>();
+                void Compare()
+                {
+                    UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(baseline);
+                    UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(actual);
+                    for (int i = 0; i < 2; i++)
+                    {
+                        var a = (RectTransform)controls[i].transform;
+                        var b = (RectTransform)controls[i + 2].transform;
+                        var expected = new Vector3[4]; var observed = new Vector3[4];
+                        a.GetWorldCorners(expected); b.GetWorldCorners(observed);
+                        for (int corner = 0; corner < 4; corner++) Assert.That(Vector3.Distance(observed[corner], expected[corner]), Is.LessThan(.01f), groupType.Name + " corner " + corner);
+                        Assert.That(b.anchorMin, Is.EqualTo(a.anchorMin));
+                        Assert.That(b.anchorMax, Is.EqualTo(a.anchorMax));
+                        Assert.That(b.anchoredPosition, Is.EqualTo(a.anchoredPosition));
+                        Assert.That(b.sizeDelta, Is.EqualTo(a.sizeDelta));
+                        Assert.That(b.pivot, Is.EqualTo(a.pivot));
+                        Assert.That(b.localScale, Is.EqualTo(a.localScale));
+                        Assert.That(b.localRotation, Is.EqualTo(a.localRotation));
+                    }
+                    Assert.That(businessGroup.interactable, Is.True);
+                    Assert.That(businessGroup.alpha, Is.EqualTo(.37f));
+                    Assert.That(businessGroup.blocksRaycasts || businessGroup.ignoreParentGroups, Is.False);
+                    Assert.That(controls[2].GetComponents<CanvasGroup>(), Has.Length.EqualTo(1));
+                }
+                yield return null;
+                Compare();
+                Assert.That(panel.IsLoaded, Is.True);
+                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.LayoutModal", true), root: root,
+                    overrides: new PanelOverrides { Modal = true }));
+                Assert.That(controls[2].IsInteractable(), Is.False);
+                Compare();
+                controls[0].GetComponent<UnityEngine.UI.Text>().text = controls[2].GetComponent<UnityEngine.UI.Text>().text = "A longer dynamic text sample";
+                baseline.sizeDelta = actual.sizeDelta = new Vector2(95, 280);
+                baseline.pivot = actual.pivot = new Vector2(.6f, .3f);
+                yield return null;
+                Compare();
+                var baselineIgnore = controls[0].gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+                var actualIgnore = controls[2].gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+                baselineIgnore.ignoreLayout = actualIgnore.ignoreLayout = true;
+                yield return null;
+                Compare();
+                baselineIgnore.ignoreLayout = actualIgnore.ignoreLayout = false;
+                yield return null;
+                Compare();
+                controls[0].gameObject.SetActive(false); controls[2].gameObject.SetActive(false);
+                yield return null;
+                Compare();
+                controls[0].gameObject.SetActive(true); controls[2].gameObject.SetActive(true);
+                modal.Close();
+                yield return null;
+                Compare();
+                Assert.That(controls[2].IsInteractable(), Is.True);
+                var retainedGate = controls[0].GetComponent<CanvasGroup>();
+                var previous = panel;
+                panel.Close();
+                panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                Assert.That(panel, Is.SameAs(previous));
+                Assert.That(controls[0].GetComponent<CanvasGroup>(), Is.SameAs(retainedGate));
+                Assert.That(panel.IsLoaded && controls[2].IsInteractable(), Is.True);
+                Compare();
+                Object.Destroy(baseline.gameObject); Object.Destroy(actual.gameObject);
+                yield return null;
+            }
+        }
+
+        [UnityTest]
         public IEnumerator EarlierIgnoreParentGroupUsesActualUguiCapabilityWithoutChangingBusinessFlags()
         {
             yield return StartModule();
@@ -3744,19 +4039,32 @@ namespace YLFramework.Core.Tests
             var child = new GameObject("ConflictingButton", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
             child.GetComponent<CanvasGroup>().ignoreParentGroups = true;
             child.transform.SetParent(prefab.transform, false);
-            var native = new GameObject("NativeGroupCapability", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
-            objects.Add(native);
-            native.transform.SetParent(root.GetLayer(0), false);
+            var nativeHost = new GameObject("NativeGroupCapability", typeof(RectTransform), typeof(CanvasGroup));
+            objects.Add(nativeHost);
+            nativeHost.transform.SetParent(root.GetLayer(0), false);
+            var native = new GameObject("NativeControl", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
+            native.transform.SetParent(nativeHost.transform, false);
             native.GetComponent<CanvasGroup>().ignoreParentGroups = true;
-            native.AddComponent<CanvasGroup>().interactable = false;
+            nativeHost.GetComponent<CanvasGroup>().interactable = false;
             yield return null;
             bool nativeCanGate = !native.GetComponent<UnityEngine.UI.Button>().IsInteractable();
-            native.SetActive(false);
+            nativeHost.SetActive(false);
+            if (!nativeCanGate)
+            {
+                Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty, "原生准备已不能隔离时，首次打开必须原子拒绝。");
+                Assert.That(child.GetComponent<CanvasGroup>().ignoreParentGroups, Is.True);
+                child.GetComponent<CanvasGroup>().ignoreParentGroups = false;
+            }
             var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             lower.gameObject.SetActive(true);
             yield return null;
+            var business = lower.GetComponentInChildren<UnityEngine.UI.Button>().GetComponent<CanvasGroup>();
             if (!nativeCanGate)
+            {
+                business.ignoreParentGroups = true;
                 LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: .*ignoreParentGroups"));
+            }
             var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.IgnoreGroupModal", true), root: root,
                 overrides: new PanelOverrides { Modal = true, Layer = 1 }));
             modal.gameObject.SetActive(true);
@@ -3770,7 +4078,8 @@ namespace YLFramework.Core.Tests
                 Assert.That(button.IsInteractable(), Is.True);
             }
             else Assert.That(lower.Module, Is.Null, "原生结构不能隔离时必须诊断并结束会话，不能假成功或写业务字段。");
-            Assert.That(child.GetComponent<CanvasGroup>().ignoreParentGroups, Is.True);
+            Assert.That(business.ignoreParentGroups, Is.True, "失败清理也不能回写业务组。");
+            Assert.That(child.GetComponent<CanvasGroup>().ignoreParentGroups, Is.EqualTo(nativeCanGate));
         }
 
         [UnityTest]
@@ -4079,6 +4388,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.TouchOwnedRoot");
             var externalRoot = PolicyRoot("YLInput.TouchExternalRoot");
+            externalRoot.Canvas.sortingOrder = 100;
             var source = Template<YLCoreSmokePanel>("YLInput.TouchOwnedPanel", true);
             var buttonObject = new GameObject("OwnedButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCorePointerClickProbe));
             buttonObject.transform.SetParent(source.transform, false);
@@ -4119,9 +4429,17 @@ namespace YLFramework.Core.Tests
                 var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.TouchModal", true), root: root,
                     overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
+                Canvas.ForceUpdateCanvases();
+                var system = UnityEngine.EventSystems.EventSystem.current;
+                var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+                system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system) { position = externalPoint }, hits);
+                Assert.That(hits, Is.Not.Empty);
+                Assert.That(hits[0].gameObject, Is.SameAs(external), "外部触点的释放射线必须仍首命中外部按钮，而非本根的模态遮罩。");
                 Queue(11, ownPoint, "Ended"); Queue(22, externalPoint, "Ended"); yield return null;
                 Assert.That(ownProbe.Clicks[0], Is.Zero);
                 Assert.That(externalProbe.Clicks[0], Is.EqualTo(1), "只能清理本 Panel 捕获，不能重置同一模块的外部触点。");
+                // Input System 1.14.2 在释放后的下一帧才将触点事件回池。
+                yield return null;
                 Queue(33, externalPoint, "Began"); Queue(44, externalPoint, "Began"); yield return null;
                 Assert.That(externalProbe.Downs.Exists(data => ReferenceEquals(data, originalData)), Is.True,
                     "本用例必须真正经历事件池复用，布局变化需更新明确版本适配而非把未覆盖报通过。");
@@ -4323,6 +4641,8 @@ namespace YLFramework.Core.Tests
                 pointer.Queue(point, 1); yield return null;
                 pointer.Queue(point + new Vector2(-40, 40), 1); yield return null;
                 pointer.Queue(point + new Vector2(-80, 80), 1); yield return null;
+                // 保持按压，跨过真实 LateUpdate 后再检查拖拽速度。
+                yield return null;
                 Assert.That(scroll.content.anchoredPosition.sqrMagnitude, Is.GreaterThan(0), "先证明真实拖拽实际移动内容。");
                 Assert.That(scroll.velocity.sqrMagnitude, Is.GreaterThan(0));
                 if (movement == UnityEngine.UI.ScrollRect.MovementType.Elastic)
@@ -4677,6 +4997,8 @@ namespace YLFramework.Core.Tests
                 {
                     Queue(point + new Vector2(-35, 35), true); yield return null;
                     Queue(point + new Vector2(-70, 70), true); yield return null;
+                    // 保持按压，跨过真实 LateUpdate 后再检查拖拽速度。
+                    yield return null;
                     Assert.That(scrollRect.GetComponent<YLCoreNativeDragProbe>().Drags, Is.GreaterThan(0));
                     Assert.That(scrollRect.velocity.sqrMagnitude, Is.GreaterThan(0));
                 }

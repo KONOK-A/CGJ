@@ -6,6 +6,7 @@ namespace YLFramework.Core
 {
     public partial class PanelManager
     {
+        private static readonly Unity.Profiling.ProfilerMarker ReconcileProfile = new Unity.Profiling.ProfilerMarker("YL.UI.Reconcile");
         private List<KeyValuePair<PanelState, int>> BuildOrders(Panel changed = null, PanelConfig? settings = null, long? accepted = null)
         {
             var list = new List<PanelState>();
@@ -96,7 +97,7 @@ namespace YLFramework.Core
             if (state.Panel.EffectiveSettings.Layer != settings.Layer)
             {
                 // SetParent(false) 保留局部布局，不把 CoversRoot 当作拉伸指令。
-                state.Panel.transform.SetParent(state.Root.GetLayer(settings.Layer), false);
+                PanelInputGate.Reparent(state.Panel, state.Root.GetLayer(settings.Layer));
                 if (!Current(state)) return false;
             }
             state.Panel.CommitSettings(settings);
@@ -107,6 +108,7 @@ namespace YLFramework.Core
 
         private void Reconcile(Panel preparing = null, Panel mutationTarget = null)
         {
+            using var profile = ReconcileProfile.Auto();
             if (released) return;
             var snapshot = new List<PanelState>(states.Values);
             foreach (var state in snapshot)
@@ -126,9 +128,6 @@ namespace YLFramework.Core
                 var state = pair.Key;
                 if (state.Order != pair.Value) sorting.Add(pair);
                 state.Order = pair.Value;
-                state.Panel.Canvas.overrideSorting = true;
-                state.Panel.Canvas.sortingLayerID = state.Root.Canvas.sortingLayerID;
-                state.Panel.Canvas.sortingOrder = pair.Value;
             }
             var visibility = new List<KeyValuePair<PanelState, bool>>();
             foreach (var state in snapshot)
@@ -145,7 +144,17 @@ namespace YLFramework.Core
                 state.Active = active;
                 state.Visible = visible;
                 state.Blocked = blocked || !visible;
-                state.Panel.Canvas.enabled = visible;
+                var canvas = state.Panel.Canvas;
+                // 首次启用会重建原生 Canvas 关系；显示时先启用再提交，隐藏时在禁绘前保留排序。
+                if (visible) canvas.enabled = true;
+                if (!Current(state) || state.Visible != visible) continue;
+                if (!canvas.overrideSorting) canvas.overrideSorting = true;
+                if (!Current(state) || state.Visible != visible) continue;
+                if (canvas.sortingLayerID != state.Root.Canvas.sortingLayerID) canvas.sortingLayerID = state.Root.Canvas.sortingLayerID;
+                if (!Current(state) || state.Visible != visible) continue;
+                if (canvas.sortingOrder != state.Order) canvas.sortingOrder = state.Order;
+                if (!Current(state) || state.Visible != visible) continue;
+                if (!visible) canvas.enabled = false;
             }
             foreach (var root in new List<UIRootContext>(registeredRoots)) if (root) root.RefreshMasks();
             RefreshInput();

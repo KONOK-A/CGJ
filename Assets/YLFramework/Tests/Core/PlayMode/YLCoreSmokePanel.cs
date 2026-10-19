@@ -1,5 +1,15 @@
 namespace YLFramework.Core.Tests
 {
+    public sealed class YLCoreDerivedHorizontalLayoutGroup : UnityEngine.UI.HorizontalLayoutGroup { }
+
+    public sealed class YLCoreNativeLayoutReentryProbe : UnityEngine.EventSystems.UIBehaviour
+    {
+        public System.Action DimensionsChanged;
+        public System.Action ParentChanged;
+        protected override void OnRectTransformDimensionsChange() { base.OnRectTransformDimensionsChange(); DimensionsChanged?.Invoke(); }
+        protected override void OnTransformParentChanged() { base.OnTransformParentChanged(); ParentChanged?.Invoke(); }
+    }
+
     public sealed class YLCoreSmokePanel : YLFramework.Core.Panel
     {
         public static System.Action<YLCoreSmokePanel> LoadingProbe;
