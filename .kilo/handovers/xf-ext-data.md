@@ -12,7 +12,7 @@
 - Localization：产品、原布局作者工作流和测试已实现；离线纯逻辑12/12及组合辅助编译通过，尚非Unity验收。补确定性回退、同数量内容变更、重复ID、根/事件/图片资源责任、晚到隔离和直接刷新。
 - DataAssets/SO：保留根/子资产与类型绑定、CRUD/排序的候选已落齐，纯逻辑10/10及真实参考辅助编译通过；无新Catalog，资产/GUI/PlayMode仍未运行。
 - Excel：真实List/SO/JSON作者API、MiniExcel后端和已选SO根菜单已落盘；父独立真实xlsx18/18绿及完整可选Editor闭包编译通过；12项Unity资产/GUI用例作为待引擎执行的准备，不是GUI验收。接点见下节。
-- Save/Archive：已基于实际源码确定单一`SaveStore`文件引擎与原`SaveManager`Unity门面，正在实施；兼容策略见下节。
+- Save/Archive：单一`SaveStore`文件引擎与原`SaveManager`Unity门面已实现，父独立真实文件33/33、门面及既有纯Json回归39/39通过（包含前述33项），待组Review与Unity/Player验收；兼容策略见下节。
 
 ## Excel真实接点
 
@@ -35,9 +35,14 @@
 - 保留对象/设置裸JSON用途；索引升级v2并纳入当前槽。检测到v1拒绝原地写入，提供显式复制迁移到不同新目录，拒绝源目标相同和已有目标冲突。没有真实旧档样本，只能验证合成合同，不能宣称历史档兼容。
 - Archive仅提供显式选择的明文JSON导入到新槽，不扫描原目录、不自动转换、不接纳DES/固定IV格式；旧`.sav`原件不修改。实际读到的XFAB旧EncryptTools用`string.Empty.PadRight(8)`产生8个空格字节IV，不是全零IV；该薄弱DES能力没有复制进新格式。
 - 取消在单文件原子提交点前有效，提交后报告成功；同根排他owner、同槽串行、跨槽可并发，关闭取消排队并排空。磁盘失败不推进对象缓存。
-- 当前Save首轮真实BCL文件验证10/10绿；保留红例涉及自动覆盖损坏主件/吞IO等。后续取消/并发/迁移/恢复回归继续执行，不将首轮数量当作最终结果。
+- Save独立收口实测：`Run-SaveSafety.ps1`为33/33；`-WithFacade`为39/39（33核心+2真实门面+4既有纯Json）；`-ReferenceOnly`真实Unity2022.3/.NETStandard2.1参考辅助编译退出0、2个CS1701（Json.NET/NUnit 2.0→2.1引用匹配）。不依赖虚拟Unity，不执行Unity原生API来冒充通过。
 - 已落盘的新读取入口`ReadObject<T>/ReadObjectAsync<T>/ReadGlobalSetting<T>`返回`SaveReadResult<T>`，携带主件/备份/缺失来源和缓存标志，缓存命中不隐藏备份来源；`IndexNeedsRecovery`显式报告索引恢复要求。`RestoreObjectBackup/RestoreSettingBackup/RestoreIndexBackup`为显式修盘入口，保留损坏原件而非读时自动改盘。
 - 现有`SerializedDictionarySaveTests`将按新门面owner调整必要测试隔离，保留原磁盘/Unity断言；实际数据保护验证只用自有临时目录。
+- 已实际研究ArchiveSystem1.0.7 `ArchiveManager/IArchiveModel`与现有YL Save；复用成熟槽位/模型/当前项组织，统一至`SaveStore`而非复制旧Manager/DES。来源revision `8046fe56f8`，MIT2025由现有根许可保留，概念吸收及来源在此登记。
+- 兼容影响：损坏/IO/权限/版本错误不再静默变默认值；只在确实缺失时建立默认设置；禁止`TypeNameHandling`从JSON实例化CLR类型。删除改为`.deleted-*`软删除，不是安全擦除且不自动清理。保存异步先在调用线程序列化快照；反序列化/Converter异步在线程池，不得调用UnityAPI或重入同owner。缓存继续返回原实例，调用方负责该实例的并发修改。
+- 显式Archive导入现严格拒绝未映射字段，必要字段由目标DTO的`JsonProperty(Required=...)`声明；防止错误DTO静默丢字段后仍报成功。父新增回归真实红32/33→绿33/33，失败源及目标样本保留在`Temp/Extensions.Data.Save/cases/4a68331295a145d49b393b2e57d3196a`，不删原件制造通过。
+- `SaveMigration.ImportVersion1(sourceRoot, destinationRoot)`要求不重叠且目标不存在，保留原索引/备份为`.legacy-v1`并保留文件时间；`ImportArchiveModel<T>(sourceFile, SaveStore destination, destinationId, token)`仅进入新槽。模型`Create/Save/Load/LoadAllModelsAsync`与对象槽、缓存、`CurrentSaveID`共用唯一引擎。
+- 文件提交点是已flush临时文件的`File.Replace/File.Move`；不支持原子替换的文件系统失败关闭，不删除原件降级。创建/删除跨索引与目录不是全根多文件掉电事务：失败staging/tomb和原件保留供显式恢复。一次迁移发布曾`AccessDenied`，原因未定位，后续单例及完整回归绿；没有吞错/添加重试，也不能称该环境问题已修复。
 
 ## 接口与边界决策
 
@@ -62,6 +67,7 @@
 - Localization已执行纯逻辑12/12（回退、等长替换/改ID、重复/空项、格式及richText），先红后绿保留在`Temp/Extensions.Data.Localization/`；其余模块结果按最终证据补齐。
 - DataAssets：父会话独立执行`Tools/Extensions/Data/DataAssets/Verify-DataAssets.ps1 -Mode Pure`，10/10、0失败/跳过/警告。子任务最终完整辅助编译Player/Editor Runtime及Editor工具均退出0，warning为40/39/4；15个作者、9个PlayMode用例仅编译未执行（PlayMode辅助参考有1个CS1701 NUnit版本警告）。`RemoveConfig(hash)`按registry唯一解析后按根身份撤销，碰撞登记拒绝已纯逻辑实际验证。
 - DataAssets早期缺实现绑定、Save在途类型重复及PowerShell工具失败仅在原会话工具输出留存；其固定路径日志后来被green覆盖，不能冒称独立红例制品。最终10/10结果和当前输入仍真实可用，后续父组合探针改为唯一Run目录冻结原始log/rsp。
+- Save全部时间戳日志和失败case在`Temp/Extensions.Data.Save/{offline,facade,unity-references,cases}`；父严格迁移红例在`offline/tests-20261019-193701-304.log`，绿例在`offline/tests-20261019-193729-933.log`。未执行原Save/JsonUtility联合测试的Unity部分，原断言完整保留；自有`link.xml`仅为索引/槽元数据提供裁剪声明，不代表用户模型、Json.NET或IL2CPP已验收。
 - 首轮组合源码辅助编译：`Tools/Extensions/Data/Verify-DataProfiles.ps1 -Run combined-1`退出0；完整Runtime/Editor-profile/Editor工具分别42/41/4个warning，新增普通EditMode测试源码8文件/0warning、PlayMode测试源码2文件/1warning均编译成功。没有执行其中任何Unity测试。较早Save门面在途状态造成的重复声明编译失败保留在工具调用记录，没有删输入绕过；门面落齐后真实全目录通过。
 - 尚未执行：Unity编译、资产/GUI/PlayMode、Mono/IL2CPP Player、独立接收工程和原游戏非干扰门。完成后按证据更新。
 - 许可：原Localization/SO为MIT 2024弦风课堂，Excel/Archive为MIT 2025弦风课堂。实读发现既有根许可证只有2021/2025版权，未包含2024；因此Localization在自有目录补完整`LICENSE.txt`，SO同样独立保留。共享许可汇总/根版权由后续集成统一维护，不以既有MIT文本替代遗漏的适用版权。
@@ -70,4 +76,5 @@
 
 - Localization：`517f13f`，`feat(localization): 融合多语言配置作者流程与资源生命周期`。
 - DataAssets：`53edd50`，`feat(data-assets): 融合SO根子资产作者流程与安全资源登记`。
+- Excel：`09bec5a`，`feat(excel): 接入免费xlsx后端与可确认SO列表JSON作者流程`。DLL沿用仓库既有LFS规则，已核验真实工作区二进制；未上传LFS/未Push，后续跨机器集成须携带对应LFS对象或按固定恢复脚本取得同hash产物。
 - 后续模块仍按精确目录本地提交，不Push；新增meta必须由集成Unity真实生成，当前候选不是完整Unity接入包。
