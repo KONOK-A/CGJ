@@ -73,6 +73,9 @@ Desktop.ini
 .kilocode/
 .opencode/
 
+//临时反编译的到的文件
+XFGameFrameworkCodeAnalyzer/
+
 # Hand-maintained analyzer SDK projects, not Unity-generated projects.
 !/Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj
 !/Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj

@@ -95,7 +95,14 @@
       "**/*.anim": "ask",
       "**/*.controller": "ask",
       "**/*.overrideController": "ask",
-      "**/*.playable": "ask"
+      "**/*.playable": "ask",
+      // 6.4：手工维护的两个 SDK 项目，不是 Unity 生成工程
+      "Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj": "allow",
+      "Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj": "allow",
+      // G0：独立临时验证程序，仅放行这三个输入文件
+      "Temp/YLAnalyzerG0/global.json": "allow",
+      "Temp/YLAnalyzerG0/G0.csproj": "allow",
+      "Temp/YLAnalyzerG0/Program.cs": "allow"
     },
 
     // --------------------------------------------------------
@@ -117,8 +124,25 @@
       "dotnet --info*": "allow",
       "dotnet --version*": "allow",
       "dotnet --list-sdks*": "allow",
-      "dotnet --list-runtimes*": "allow"
-    }
+      "dotnet --list-runtimes*": "allow",
+      "Test-Path -LiteralPath *": "allow",
+      "git ls-remote --heads origin fusion/6-editor integration/xf-yl": "allow",
+      "dotnet restore *Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj*": "allow",
+      "dotnet restore *Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj*": "allow",
+      "dotnet build *Tools/YLFramework.Analyzers/Analyzer/YLFramework.Analyzers.csproj*": "allow",
+      "dotnet build *Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj*": "allow",
+      "dotnet test *Tools/YLFramework.Analyzers/Tests/YLFramework.Analyzers.Tests.csproj*": "allow",
+      "dotnet restore *Temp/YLAnalyzerG0/G0.csproj*": "allow",
+      "dotnet run *Temp/YLAnalyzerG0/G0.csproj*": "allow",
+      "pwsh -NoLogo -NoProfile -NonInteractive -File *Tools/YLFramework.Analyzers/build.ps1*": "allow"
+    },
+    "ai-game-developer_script-execute": "allow",
+    "ai-game-developer_assets-refresh": "allow",
+    "ai-game-developer_tests-run": "allow",
+    "ai-game-developer_editor-application-get-state": "allow",
+    "ai-game-developer_editor-application-set-state": "allow",
+    "context7_resolve-library-id": "allow",
+    "context7_query-docs": "allow"
   },
 
   // ==========================================================
