@@ -61,14 +61,14 @@ namespace YLFramework.Foundation.Tests
         {
             Assert.That(typeof(ApplicationTool).Assembly.GetName().Name, Is.EqualTo("YLFramework.Runtime"));
             var root = Path.Combine(Application.dataPath, "YLFramework/Runtime/Foundation");
-            var entry = Path.GetFullPath(Path.Combine(root, "../YLFrameworkRoot.cs"));
-            // Root 是唯一根级基础入口；目录内所有源码都必须独立编译，不能附加上层实现。
+            // Root已消费Core.UIRootContext，由CoreArchitectureBoundaryTests连同全量Core覆盖；
+            // 中立探针仍收集完整Foundation，不能为上层入口附加Core实现或预编译产品。
             var sources = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)
-                .Append(entry).OrderBy(path => path, StringComparer.Ordinal).ToArray();
+                .OrderBy(path => path, StringComparer.Ordinal).ToArray();
             Assert.That(sources.Distinct(StringComparer.OrdinalIgnoreCase).Count(), Is.EqualTo(sources.Length));
             Assert.That(sources.Where(path => IsInsideFolder(path, root)), Is.EquivalentTo(
                 Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
-            Assert.That(sources.Where(path => !IsInsideFolder(path, root)), Is.EqualTo(new[] { entry }));
+            Assert.That(sources.Where(path => !IsInsideFolder(path, root)), Is.Empty);
             foreach (var source in sources) Assert.That(File.Exists(source), Is.True, source);
             var graph = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
             var uiAssembly = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "UnityEngine.UI");
@@ -248,7 +248,7 @@ namespace YLFramework.Foundation.Tests
             Assert.That(session.IsNotPublic, Is.True);
             Assert.That(foundation.GetCustomAttributes(typeof(InternalsVisibleToAttribute), false)
                 .Cast<InternalsVisibleToAttribute>().Select(attribute => attribute.AssemblyName),
-                Is.EquivalentTo(new[] { "YLFramework.Tests.EditMode", "YLFramework.Tests.PlayMode", "YLFramework.Editor",
+                Is.EquivalentTo(new[] { "YLFramework.Tests.EditMode", "YLFramework.Tests.PlayMode", "YLFramework.Core.Tests.EditMode", "YLFramework.Editor",
                     "YLFramework.Actions.DOTween", "YLFramework.Actions.DOTween.Tests.EditMode", "YLFramework.Actions.DOTween.Tests.PlayMode" }));
         }
 

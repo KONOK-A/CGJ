@@ -50,6 +50,12 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - `Runtime/Systems/Audio/AudioChannel.cs`、`AudioKit.Named.cs`、`AudioPlayRequest.cs`、`Config/AudioClipLibrary.cs`、`Components/AudioGroupPlayer.cs` 与 `Editor/Systems/Audio/` 对应素材组 Inspector：承接 XF revision `2182708aec` 的命名控制、素材组选曲/配置、借入 Source、变化观察和 Enable 播放用途，按唯一 YL 请求/资源内核重新实现，未整类搬移旧播放器。自有 `Runtime/XFMain/Manager/Audio*.cs` 与旧 AudioPlayerInspector 已退出；删除重复实现不撤销历史来源、署名或完整许可。原 XF Package 保持只读且独立存在。
 - 上述 XF 承接源码（含 Editor）适用 MIT License，版权声明为 `Copyright (c) 2021 弦小风`；完整上游许可集中于框架根目录 [`Assets/YLFramework/LICENSE.md`](../LICENSE.md)，默认导出显式携带该文件。不重复放置分区副本，也不以此覆盖其他来源的许可。
 
+## 拓展公共准备 E0
+
+- `Runtime/Systems/Excel/`：承接 `com.xfkj.xfgameframework.excelsystem` 1.0.7，revision `725f94f23327de190111573870146af66e9484b6` 的 `ExcelIgnore`、`ExcelScriptableObjectID`、`CustomExcelFieldImportAndExport` 与必要枚举 `ExcelFieldsType`。来源为 https://gitee.com/xianfengkeji/xfgame-framework.excel-system ，MIT，`Copyright (c) 2025 弦风课堂`；完整许可和版权行并入框架根 `LICENSE.md`。未迁入解析器内部DTO、EPPlus、任何xlsx后端或领域模块。
+- `Editor/Utilities/TreeViews/ReorderableTreeView.cs`：承接 XFABManager 1.24.0 revision `c35dc4058e` 的 `Editor/Other/TreeView/DragableTreeView.cs`，MIT，`Copyright (c) 2021 弦小风`。保留平面TreeView构建/重排与派生钩子，局部适配当前列表getter、Undo/Redo、索引槽位和每实例拖拽所有权；完整许可仍集中于根 `LICENSE.md`。不将此工具承接称为再次迁移XFAB资源系统。
+- 原XF包、Analyzer和游戏保持原归属，E0不表示13项系统已迁移；可选依赖与重大API/格式取舍仍须另行裁定。
+
 ## 其他第三方组件
 
 - `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。

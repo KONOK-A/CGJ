@@ -44,7 +44,7 @@ E04内容编码在同一Resource主体内接入官方 `BouncyCastle.Cryptography
 Runtime 按机制、领域所有权和使用方式组织为四个责任分区，不按模块大小或来源命名分类：
 
 - `Foundation/`：基础逻辑分类。Async/Attributes/Binding/Events/IOC/Pool/Serialization/Singleton/Timing/Update/Utilities按功能分组；Binding分Collections/Prefs/Unity，Events分Global/Internal/Subscriptions/Unity，Pool分Abstractions/Collections/Factories/GameObject/Object；
-- 原Shared/Kernel闭包并回这些唯一功能族。完整Foundation源码守卫递归收集该目录，且只额外包含根级 `YLFrameworkRoot.cs`，不锁定历史49文件数，不借正式Runtime DLL或附加Core/Systems/Utilities；原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
+- 原Shared/Kernel闭包并回这些唯一功能族。完整Foundation源码守卫只递归收集该目录全部源码，不锁定历史49文件数、不借正式Runtime DLL或附加Core/Systems/Utilities。根级 `YLFrameworkRoot.cs` 自既有UI集成起已使用Core.UIRootContext，由完整Foundation+Core+Root守卫覆盖，不再误纳入纯Foundation输入；这只是校正过时测试归属，未改Root或核心契约。原AssemblyTool/LayerMaskUtility位于Foundation/Utilities，字典和展示元数据各在Serialization/Attributes；
 - `Core/`：Modules/MVC/Events、View/Panel/UI、领域组件、marker/Analyzer 与正式默认资源；归 Runtime 主体，职责归位与partial保持唯一状态权威，不按来源建立第二产品程序集；
 - `Utilities/`：具有明确具体功能职责、按需直接使用的便利工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool、ColorSelector）；仓库根 `Tools/` 则承载 SDK 与开发工具；
 - `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
@@ -146,6 +146,10 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 Resource Editor按Data/Build/Publishing/Service/CodeGeneration归组，使用正式Project/Catalog/BuildMap与安全发布、代码生成。Help归Editor主体的独立功能分区，Core/Action/Audio/Foundation-Tools提供方及菜单/窗口/持久配置身份保持。Zip源码以全量BCL-only编译探针验证，不再以旧Zip产品DLL维持独立性。
 
+拓展融合公共准备E0只增加两项共享能力，不代表13项领域系统已迁入。`YLFramework.Excel`位于`Runtime/Systems/Excel/`，提供三类字段Attribute及来源数值不变的`ExcelFieldsType`；自定义转换器仍覆写`Import/Export/SetValue`，没有xlsx后端、文件IO、内部`ExcelFields` DTO或新DLL。原包仍在，消费者须明确使用新namespace，不扫描或转发原XF类型。
+
+`YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。来源与完整许可见根LICENSE及Notices。
+
 - `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 保持原默认资源、生成、设置与预览契约。
 - `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载 Serialization/Scene/Assets/TreeViews/Windows 通用支撑、菜单及 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
 - `Editor/Help/`：Editor主体中的共享帮助分区，额外Help asmdef已退役；保持提供方id、菜单与配置键，不机械拆入每个领域。
@@ -164,7 +168,7 @@ Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干
 
 自有YLFramework.Analyzers.dll仅一份，位于Runtime主体作用域的Runtime/Core/Analyzers；RoslynAnalyzer标签作用于主体及真实引用消费者，普通平台禁用，不作为Runtime precompiledReference或Player运行引用。最终Editor/Development Player的实际rsp已核对：Runtime/Editor、MainModule与自动引用主体的Assembly-CSharp-firstpass各一份输入；原XF/XFAB/XFFSM无自有分析器输入。七项Warning和真实正负见证见[Attributes](Modules/Attributes.md#core-使用诊断)。新Player仍含原MCP/NuGet的Microsoft.CodeAnalysis载荷，主体IL无其运行引用，不把它归因于本分析器或宣称整个工程无Roslyn。
 
-默认 ExportRoots 仍为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`。Plugins 完整递归，包括商业插件、Demo 和辅助工具；内部交付不代表公开再分发许可已核查。正式 Editor/Help、Analyzer DLL/meta、Runtime 与资源/说明进入包；Tests、根 Integrations、游戏资源、Examples/YLFrameworkData、SDK 项目、NuGet 缓存和中间产物排除。现有 UGUI/Json.NET 外部依赖不自动携带，主体不要求 XFAB。回归真实解包核验全部递归资产内容及 GUID/meta，不宣称干净工程 import。入口见 [文档首页](README.md#帮助与导出)。
+默认 ExportRoots 为 `Editor`、批准的 `Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`；阶段9已排除没有再分发授权的商业Editor Enhancers，不递归整个Plugins。正式Editor/Help、唯一Analyzer、Runtime源码/meta、资源/说明和根LICENSE进入包；Tests、根Integrations、游戏、SDK、NuGet缓存和中间产物排除。E0按已有Runtime/Editor递归规则进入闭包，无新总导出器或依赖白名单；现有UGUI/Json.NET外部依赖不自动携带，主体不要求XFAB。阶段9干净首导入证据仍只覆盖其冻结包，不冒充本批E0独立首导入结果。入口见 [文档首页](README.md#帮助与导出)。
 
 ## 测试
 
