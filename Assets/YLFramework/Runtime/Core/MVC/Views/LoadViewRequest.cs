@@ -16,7 +16,6 @@ namespace YLFramework.Core
     {
         void Invalidate();
         void PublishInvalidation();
-        bool MatchesWindow(string key, Canvas context);
     }
 
     /// <summary>主线程表现请求；Abort仅取消Core业务结果，不停止或卸载共享后端加载。</summary>
@@ -40,11 +39,8 @@ namespace YLFramework.Core
         private readonly List<KeyValuePair<View, object>> parentSessions = new List<KeyValuePair<View, object>>();
         private LoadViewArgs args;
         private object[] param;
-        private UIType? panelType;
         private GameObject directPrefab;
         private bool hasDirectPrefab;
-        private WindowDefinition window;
-        private Canvas windowContext;
         private bool executing;
         private bool closingOwner;
         private bool terminal;
@@ -52,7 +48,7 @@ namespace YLFramework.Core
         private LoadViewStatus interruptedStatus;
         private readonly int threadId = Thread.CurrentThread.ManagedThreadId;
 
-        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, UIType? uiType = null, GameObject prefab = null)
+        internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, GameObject prefab = null)
         {
             owner = module;
             lifecycle = module.ViewLifecycle;
@@ -68,12 +64,9 @@ namespace YLFramework.Core
             }
             args = claimedArgs;
             param = parameters;
-            panelType = uiType;
             directPrefab = prefab;
             hasDirectPrefab = !ReferenceEquals(prefab, null);
             provider = hasDirectPrefab ? null : CoreResourceAccess.Provider;
-            window = claimedArgs?.Window;
-            windowContext = claimedArgs?.WindowContext;
             Validate();
             owner.pendingViews.Add(this);
             Application.quitting += OnExecutionEnded;
@@ -93,17 +86,6 @@ namespace YLFramework.Core
         }
 #endif
 
-        bool IPendingViewRequest.MatchesWindow(string key, Canvas context)
-            => !terminal && window != null && window.Unique && window.Key == key && windowContext == context;
-
-        private LoadViewRequest() { }
-        internal static LoadViewRequest<T> FromResult(T result)
-        {
-            var request = new LoadViewRequest<T>();
-            request.Finish(result, null, LoadViewStatus.Succeeded);
-            return request;
-        }
-
         private void Validate()
         {
             if (interruption != null) throw interruption;
@@ -114,8 +96,6 @@ namespace YLFramework.Core
             if (hasParent)
             {
                 if (!parent) throw new InvalidOperationException("View parent has been destroyed.");
-                if (window != null && window.Unique && PanelManager.ResolveParentRoot(parent) != windowContext)
-                    throw new InvalidOperationException("Unique window request context has changed.");
                 foreach (var entry in parentSessions)
                     if (!entry.Key || !ReferenceEquals(entry.Key.Session, entry.Value))
                         throw new InvalidOperationException("View parent session has ended.");
@@ -177,10 +157,7 @@ namespace YLFramework.Core
             projects = null;
             assetName = null;
             param = null;
-            panelType = null;
             directPrefab = null;
-            window = null;
-            windowContext = null;
             targetScene = default;
             try { previousRequest?.Dispose(); }
             finally
@@ -283,7 +260,7 @@ namespace YLFramework.Core
             }
             if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
             ValidateWaiting();
-            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, panelType, prefabLease);
+            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, prefabLease);
             // 初始化已结束再提交；完成通知可以关闭或开启下一笔会话。
             executing = false;
             Finish(result, null, LoadViewStatus.Succeeded);

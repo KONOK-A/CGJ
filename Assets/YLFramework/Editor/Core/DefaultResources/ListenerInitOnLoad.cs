@@ -86,6 +86,23 @@ namespace YLFramework.Core.Editor
             scaler.matchWidthOrHeight = 1;
             canvas.AddComponent<GraphicRaycaster>();
             canvas.AddComponent<AutomaticAdaptationCanvasScaler>();
+            var context = canvas.AddComponent<UIRootContext>();
+            var layer = new GameObject("Layer0", typeof(RectTransform));
+            layer.transform.SetParent(canvas.transform, false);
+            var rect = (RectTransform)layer.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+            var configuration = new SerializedObject(context);
+            configuration.FindProperty("canvas").objectReferenceValue = component;
+            configuration.FindProperty("graphicRaycaster").objectReferenceValue = canvas.GetComponent<GraphicRaycaster>();
+            var layers = configuration.FindProperty("uiLayers");
+            layers.arraySize = 1;
+            var entry = layers.GetArrayElementAtIndex(0);
+            entry.FindPropertyRelative("root").objectReferenceValue = layer.transform;
+            entry.FindPropertyRelative("enableMask").boolValue = false;
+            entry.FindPropertyRelative("maskImage").objectReferenceValue = null;
+            configuration.ApplyModifiedPropertiesWithoutUndo();
             return canvas;
         }
 

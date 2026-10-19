@@ -19,8 +19,7 @@ namespace YLFramework.Core
             return args;
         }
 
-        public override void OnLoaded(LoadViewArgs args) => Configure(args);
-        public override void OnWindowUpdated(LoadViewArgs args) => Configure(args);
+        protected override void OnOpen(LoadViewArgs args) => Configure(args);
         private void Configure(LoadViewArgs args)
         {
             if (!selector || !closeButton) throw new InvalidOperationException("ColorSelectorWindow requires selector and close button bindings.");

@@ -90,7 +90,7 @@ namespace YLFramework.Tests.Help
         public void GuidesMakeAnalyzerAndAttributeBoundariesDiscoverable()
         {
             var core = Registration("core").Create();
-            foreach (var query in new[] { "Module MVC", "View OnLoaded", "WindowCatalog UIRootContext",
+            foreach (var query in new[] { "Module MVC", "View OnLoaded", "PanelRule UIRootContext",
                 "Assets/Create/YLFramework/Core/Module", "YLFramework.Generated.ResourceNames" })
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
             for (var id = 1; id <= 7; id++)

@@ -1,6 +1,6 @@
 # YL UI Panel 重构实施计划
 
-状态：2026-10-18 已完成实施前静态复查与计划修订，可按下述验证关口开始实施；本轮不实施。已确认的设计不重新访谈。输入隔离、实际版本与 IL2CPP 仍未获得运行证据，不能据此直接跳到全面迁移。未修改生产源码、资产或测试，未运行 Unity 编译、测试或 Player。
+状态：2026-10-19 原任务 1～6 与九项增量核查的源码、测试和文档补齐及可执行离线验证已完成。依据直接用户授权继续最小补齐，覆盖本文原先“本轮不实施”和因缺少 Editor 证据停止后续源码迁移的等待条件；不降低任何运行契约。仅在 fusion/ui-panel-redesign worktree 工作，未调用 MCP、未启动 Unity、未同步主工程、未修改共享缓存/依赖/设置，未暂存/提交/合并。Unity 输入、生命周期、资产和 IL2CPP 关口均待集成后执行，离线检查不标为引擎通过。
 
 **目标：** 以一套 Module/Panel/View 管线提供简洁、配置驱动的独立界面能力，同时让轻量默认使用与完整预配置使用都低接线成本。
 **架构：** Module 是唯一业务 owner，Panel 继承 View 并复用会话、Model、事件和释放；现有 PanelManager 协调请求与 UI 策略，UIRootContext 仅承载根配置。资源沿当前 Core provider/lease 边界，输入在既有桥接中隔离业务状态，不另建资源后端、UI 对象池或全局输入系统。
@@ -9,6 +9,70 @@
 **路径：** 下文 `Runtime/`、`Editor/`、`Tests/`、`Prefabs/`、`Documentation/` 均相对 `Assets/YLFramework/`；`.kilo/`、`Tools/`、`Packages/`、`ProjectSettings/` 相对仓库根。
 
 ## 全局约束
+
+### 2026-10-19 增量核查检查点
+
+- 授权与隔离：直接用户确认采用九项增量清单，原 Editor/MCP 禁令继续有效；不恢复错误模型任务，不创建可见会话/worktree/分支，不提交/推送/合并/Apply。前两条 peer 消息未产生修改；本轮从 HEAD `7b7107f`、原先全部未提交实施成果继续，无新增提交或暂存，保护已有差异。
+- 1 命名已修正：UI 配置值统一为 `PanelConfig`，直接 Runtime/Editor/Tests/导出/XML/离线入口同步；保留 `settings` 字段及七字段布局、EffectiveSettings 查询名和自然 bool，不留别名。原 PanelSettings.cs 是尚未导入的未跟踪新源码，没有 `.meta/GUID` 可迁移；不碰 `Assets/UI Toolkit/PanelSettings.asset`。原检查点的旧名属于当时事实，正文接口落点已改现名。观察到旧名不能编译新调用，改名后原五项纯用例通过，另补序列化值布局的托管元数据断言；不是 Prefab 序列化通过。
+- 2 默认根角色机制无需重写：宿主明确字段 + 按需创建 + 执行代次一次通知已实现；外部登记不抢默认。首次 inactive 的校验路径直接使用组件与层配置，不依赖 OnEnable 缓存。补“从未启用的 inactive 根”首开/恢复同 Session/必需 Raycaster 销毁终止且不自修复用例；非 UI 宿主层级访问不创建 UI 断言补入现有设施。复查该用例时另确认输入寿命缺口：旧 inputRoots 只看 Canvas.active，最后有效根必需组件损坏后仍保留自建输入。已最小复用现有 registeredRoots 的结构健康/IsAvailable 判断，Prepare 同样登记实际根，移除重复 Canvas 集合，不加 IsDefault 或新注册系统；补自建输入销毁断言。实际运行受禁令阻塞。
+- 3 门禁主体无需重写：不以多 CanvasGroup 不允许为前提；保留按实际有效性诊断、最近 Panel 与独立 Canvas 边界。补业务组 GetComponent 可观察性说明、重挂后的 IsInteractable 与原业务组属性保持、独立子 Panel 在父被挡时真实射线/点击用例。当前加载 UGUI/多组顺序实际结果仍未验证，不凭安装源码替代。
+- 4 已修一个确切缺口：设备移除/模块结束分支原来只丢弃捕获，漏标准控件收尾。现在检查固定原设备存活，定向收尾原控件，不再写可能已池化复用的 eventData；后来的主手势有独立引用保护，旧记录不能结束它，也不能删除回调里新建的记录。不 ResetPointers、不覆盖业务字段。新增 Mouse/Touchscreen 移除下的 Scrollbar 持续点击、ScrollRect 拖动/惯性及替代设备新手势入口。指针设备移除只结束原拖选/按压，不因移除指针强行结束仍可由键盘继续的文本编辑；Modal/隐藏的 Deselect/EndEdit 仍走既定路径。实际模块/IL2CPP 验证受阻。
+- 5 已补 XML/用例/文档：类型简写只传 typeof(T).Name，仍需 provider 精确登记该地址/显式别名；完整路径必须显式给出，未登记不得猜 basename。无 provider 的 direct/Attach 证据沿用既有用例，不增地址注册/扫描层；Ordinal 和 provider/lease 接口不变。
+- 6 Layer 主体无需修改：显式 Layer0、缺层拒绝、同根目标预校验、原生回调后 Session 复核均已具备。补不同容器尺寸/anchors/pivot 的 UpdateDisplay 与有效重开定向用例，以及局部参数保持不等于屏幕视觉不变的说明；不因缺引擎证据修改几何算法或强制容器一致。
+- 7 已增量补文档：Single 作用域、同源最新意图/独立终态、取消截止/晚到 Abort 三个短场景；区分成功引用/内容、Top/焦点/交互与 Hide/Close，普通 View object[] 和两个初始化钩子不改。
+- 8 已作轻量静态成本检查：每帧协调列表/排序、每 Panel 层级搜索、自有组状态传播、每控件捕获快照、按根/层查询模态均有成本。未调用 Profiler，无运行测量；不以 O(P²) 或“30–50 窗口”猜测做缓存/框架改造，未新增性能测试平台。
+- 9 已核对迁移覆盖：取消/失效/池复用/焦点/拖动/参数所有权和普通 View 两钩子原断言保留，未 Ignore/删断言。真实 Variant true 默认及显式 false/0 的导入保存重载/实例化用例已有，无需重复实现；实际证据仍受 Editor 禁令阻塞，不从字段初始化或托管元数据推导。
+- 本轮已执行：观察配置改名时 CS0103（新类型缺失），收口后纯配置/排序/托管元数据 `6/6`、普通 Core `28/28`，0 failed/0 skipped；Runtime Player/Editor（带正式分析器）、全 Editor、Core PlayMode/Editor Tests/改名后的 Core EditMode 辅助编译均 exit0。最后根输入寿命修复后已再次重编最终 Editor/EditorTools/CorePlayMode，未执行任何 Unity/Prefab API。警告保留，不以编译代替引擎。
+- 证据复用：普通 View object[]/两钩子回归和 Analyzer 的原源码未修改；129/129 为上轮已执行的分析器证据，不冒充本轮重跑。旧 ConsumersFinal 只对应旧输入，不用其结果代替本轮最终编译。
+- 本轮最终消费者已实际重编并核对：Foundation EditMode 18 源码（3 warnings）/PlayMode 8（1）、ResourceStartup Runtime/Editor 各2（0）、General EditMode 143（12）均 exit0、0 errors。实际命令、逐文件 source/input 指纹、响应文件及完整日志保存在 `Temp/UI.Panel.Offline/IncrementalConsumers`，最终汇总为 `verified-results.json`。确含最新 ExportUnityPackageTests、Help 和 Resource 集成源码；原8项模板 TestRunner API 排除完全不变，未重复全151已知失败，不把143辅助编译写成全151或Unity测试通过。
+- 最终输入核验：仅使用 `Inputs/Final`，最初快照保留为历史。Runtime/Editor/CorePlayMode 的最终 SHA256 分别为 `11B5A1438B51A6F321E10D2B19B680ABEAAD8208F94141E9743FD217FBADB3B3`、`FB6E547A0C60840075DED7E4DFF2C7E80BB18D99E875DF14E42D0E83DB881E95`、`A56AE7BCF8EACF1F8CAC33A0C0EFDF15E0573A79B6D9EC37426B1171C526156D`；副本均匹配当前 producer。General source/input/DLL 指纹与全部 source/input 编译前后零变化记录见汇总；主流程另核对五份消费者 DLL、三个 producer/副本、三个关键源码和 General 日志 hash，均匹配记录，未重编覆盖。
+- 最终隔离与闭包复查：HEAD 仍为 `7b7107f`，暂存区为空，`git diff --check` 无输出；YLFramework C# 无旧 PanelSettings 类型调用，序列化文本未找到该旧配置全名或两个退役目录类型 GUID 引用。Packages、ProjectSettings、AGENTS/权限/忽略规则/Agent Manager 设置、原游戏、Foundation/Resource 正式实现及 `.prefab/.asset/.unity` 无改动。九项源码核查与最小补齐已收口；Editor/Mono、EditMode/PlayMode、Prefab 导入保存重载/实例化、Profiler、Player/IL2CPP 仍受原禁令阻塞或未验证，待集成后执行。
+
+### 本次运行检查点
+
+- 基线实核：工作路径与授权一致；分支 `fusion/ui-panel-redesign`；HEAD `7b7107f`，父提交 `5074595`；祖先检查成功，开始时工作区/暂存区干净；基线后的唯一已有差异为本计划。
+- 版本证据：ProjectVersion `2022.3.62f3c1`；manifest 声明 UGUI `2.0.0`、URP `16.0.6`。未连接 Editor，未核实实际 loaded version。
+- 执行顺序：1 输入源码与回归入口 → 2 配置/快照 → 3 请求/生命周期 → 4 根/消费者/显式迁移工具 → 5 离线与引擎回归入口 → 6 文档/闭包 → 一次独立 Review 和直接离线复跑。
+- 验证裁定：无法在本轮观察 Unity 测试 RED/GREEN，先准备真实引擎用例；可独立执行的逻辑直接测试产品源码，不复制算法或模拟 Unity 对象。资产写入和新 meta 由集成后 Unity 导入/显式迁移负责。
+- 任务 1 源码批次：已以自有 CanvasGroup/ICanvasRaycastFilter 替换业务字段快照；捕获固定 Session/epoch/module/pointer/button/device/touch，集中适配 Input System 值类型状态逐层写回，保留物理按压状态；标准控件取消先于物理门禁。补业务同值/异值保持及特殊层级负例，旧结构断言改为有效阻挡与原字段保持。`git diff --check` 通过；未执行 Unity RED/GREEN、真实模块或 Player，任务 5 继续补齐/复跑入口。
+- 任务 1 证据限制：只查阅官方 Input System `1.14.0` tag 的 PointerModel/InlinedArray/模块源码来核对反射成员，不代表活跃 Editor 加载版本；反射布局不匹配明确失败，不回退 raw 字段覆盖，不预先加入盲目 link.xml。
+- 任务 2：已新增七字段 PanelSettings/PanelOverrides/PanelRule 与不可变规则快照。纯托管用例 4/4 通过，覆盖默认值、false/0、七字段分层合并、集合修改隔离、Ordinal 完整地址、重复/非法规则和显示字段限制。实际入口的原子重绑/在途快照及 Prefab 身份留在任务 3/5 测试。
+- 离线入口：`pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Verify-UIPanel.ps1 -Mode Pure`，实际使用安装的 Mono/Roslyn 与真实 NUnit/Unity 程序集；输出仅在本 worktree `Temp/UI.Panel.Offline`。项目权限禁止编辑 csproj，未绕过该限制，采用直接编译源码的入口，无 stub。首次缺产品类型为 RED（编译前缺文件），不是 Unity 行为失败；最终 4/4 PASS，无缺引用诊断。
+- 任务 3 源码批次：统一 named/direct API；每消费者一份 PanelOperation 进入 Module.pendingViews，固定规则/root/provider/projects/接受序号，异步 initial yield；解析到同 Prefab 后按模式/规则/类型/根预校验，Single 最新意图一次提交。复用 View 初始化/事件/Model/租约内核，Panel OnOpen 位于 loaded 后、事件恢复前。增加显示命令和原 Session 逐通知复核，direct 吸收 named lease 的 pin 由 instance discard 后释放。
+- 任务 3 实际验证：Roslyn 直接辅助编译全 Runtime 的 Player 符号和 UNITY_EDITOR 符号均退出 0（各 41/40 条已有/序列化字段警告，完整日志 `Temp/UI.Panel.Offline/{Runtime,Editor}/compile.log`）。这不是 Unity 编译。最初 Mono 所带旧 csc 缺少既有 C#9 target-typed conditional 支持，未改无关源码；改用已安装 SDK9 Roslyn、固定 C#9 和真实 Unity 引用后通过。新增核心生命周期用例尚未引擎执行。
+- 分工裁定：主流程继续独立实现；为大量调用方闭包，把两个不重叠测试文件组交内部子代理迁移，未创建 Agent Manager 会话/工作树。最终仍只进行一次独立整批 Review。测试迁移与主流程源码互不覆盖。
+- 任务 4 源码批次：UIRootContext 精简为原生组件/显式层/遮罩；宿主按需唯一默认根，已有坏根拒绝回退；完成 ColorSelector、Tips、Acceptance 和实际资源集成调用方迁移，普通 View 错型负例保留。两个测试子代理已实际完成（共 7 个文件），未移除原有效用例；主流程复核并补 fixed Session/fake-null/排序目标隔离/失败期 Abort 反例修复。
+- 任务 4 Editor 入口：`YLFramework.Editor.UIPanelAssetMigration.ValidateAssets()` / `MigrateAssets()`；菜单 `YLFramework/Core/UI Panel/核验资产迁移`、`执行资产迁移`。预检完整资产与用户自定义 Tips 绑定；Unity ConvertToPrefabInstance(ByHierarchy + property/addition overrides) 建立基础根引用；保留原缩放值并核对既有 GUID/fileID；原 UITips 写 Layer0 非 Top/Multiple，独立创建 `UITipsOverlay.prefab` Variant 仅覆盖 Layer4，取色源资产显式写新配置。没有运行迁移，没有创建新 GUID/meta，没有声称现有两份预设可用。执行失败可能已保存前序资产，入口按阶段可复跑，需审查 diff。
+- 任务 4 验证：全 Editor 源码含迁移入口已辅助编译退出 0，4 条基线过时/字段警告；Core PlayMode/EditMode 独立程序集辅助编译分别退出 0（4/2 条引用统一/既有警告）。Core Editor 测试首轮因辅助 BCL profile 混用报 mscorlib 引用，已按其 Editor 依赖改用同一 Unity Mono BCL，待复跑；不是 Unity 失败。没有执行任何 Prefab API 写操作。
+- 路径裁定：本基线不存在计划列举的 UIComponentEditor.cs 或独立 UI 配置资产，未为其创建兼容壳/第二套配置；实际默认工厂为 `Editor/Core/DefaultResources/ListenerInitOnLoad.cs`，只让其新建缺失基础根时写新结构，不自动迁移已存在资产。旧目录两个纯 C# 类型 meta 已连同源码移除，静态未找到资源 GUID 引用。
+- 任务 5 源码入口：保留原全部有效测试，CoreDirect 现补双后端三鼠标键旧/新手势、Scrollbar 持续点击、InputField 真实激活/EndEdit、Elastic/Clamped ScrollRect 收尾，以及 Input System 多触点/实际事件池复用断言。源程序还核验实际同对象 ignoreParentGroups 的可门禁能力：原生可隔离时必须支持，确实跳过门禁时明确诊断/丢弃该会话，不一概限制有效组合。独立子 Panel 嵌其他 Panel 的 Selectable 子树仍明确拒绝，以免隔离组跳过业务祖先 CanvasGroup。
+- 任务 5 可执行验证：真实 NUnit（Fixture/TestCase/清理，不是自造断言 runner）配置/排序 `5/5`；普通 Core 参数与集合池 `28/28`；现有分析器标准 dotnet 套件基线 `123/123`，0 skipped、构建 0 warning/error。NuGet 只从既有缓存只读恢复到 worktree 自有 Temp，不写共享 Unity 缓存。纯套件没有构造/模拟 Unity 原生对象行为。Core Editor/PlayMode/EditMode 三程序集辅助编译已实际退出 0。
+- 任务 5 额外调用闭包：独立依赖图辅助编译 Foundation EditMode/PlayMode、ResourceStartup Runtime/Editor 均成功；General EditMode 全 151 源码的 8 个错误均来自模板 TestRunner 不含既有静态 RegisterTestCallback/UnregisterTestCallback API，未改这些基线证据代码。仅将两份采集器和依赖它们的六份成本用例从辅助编译输入排除后，143 源码编译成功，包含实际资源集成 partial 与 Help 测试。完整源哈希/命令/诊断保留在 `Temp/UI.Panel.Offline/Consumers`；这是当时 Runtime/Editor/CorePlayMode 快照的证据，不冒充后续源码或完整 Unity 测试通过。
+- 任务 5 Player 入口：新增显式 `UIPanelAcceptanceBuild.BuildWindows64IL2CPP()`，菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收`；写当前工程 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，暂设 IL2CPP/Medium 后恢复原配置，不启动 Player。UIAcceptance 加入三鼠标键和 Elastic/Clamped 原生捕获回归，标记 `UI_PANEL_NATIVE_CAPTURE_GATE_REACHED` 不能单独作最终通过。未构建/运行。Acceptance 直接输入依赖本机不可获得，未作完整辅助编译。
+- 任务 5 修正：同 ButtonState 的共享 eventData 收尾使用固定 button；清理原生 press/raw/last/drag/raycast/click 镜像，保留物理按压状态；ScrollRect 仅结束拖拽/停止惯性，允许 Elastic/Clamped 自然回位，真实 drag spy 区分自然运动与旧手势续拖，不额外夹紧内容。来源 pin 随 Panel 的 Core 实例会话保存，即使协调器先 reset 也在 instance discard 后释放；已补真实租约回归源码。所有这些引擎行为仍待执行。
+- 任务 6：中文 XML/Help/UI/架构导航与参数诊断说明已同步，旧公开面搜索只剩退役类型负例字符串和 Unity 自带 isRootCanvas；正式 Rule/Request/输入/根代码无旧 UI 转发。新增实际 Core `PanelManager.PanelOperation.Args` 精确字段 owner 识别，不关闭诊断/豁免整个目录；同名伪类型、错成员/访问性/static/错误容器仍报警。先观察 3 个预期 RED，再 `129/129` GREEN（0 skipped，0 build warning/error），由现有显式 build.ps1 -Deploy 生成同版本 DLL，仅本 worktree，原 meta 保留。
+- 任务 6 最新编译：带正式 Analyzer 的完整 Runtime Player/Editor 均辅助编译通过，未见 AD0001/YL0005；Core PlayMode/EditMode/Editor Tests 再次独立编译退出 0，Editor 全源码含两项显式工具也通过。保留序列化字段、既有过时 API、NUnit/netstandard 统一等警告，未抑制。Acceptance 缺真实直接输入程序集，未称完整辅助编译通过。
+- 计划契约复核修正：严格按原方案，UITips 通用源写 Layer0 非 Top/Multiple，UITipsOverlay Variant 只覆盖 Layer4；测试夹具迁移另设 MigrateTestFixtures，避免正式导出依赖 Tests。Runtime55 从第一笔起统一 Multiple；原游戏共存段显式持有测试专用根，不删除默认根/共享宿主。新增真实 Variant 保存/重载/实例化 true 与 false/0 回归源码，尚未执行资产写入。
+- 当前动作：一次 fresh-context 独立 Review（Plan 契约、普通 Core、输入边界、资源责任、简洁性），随后必要修复和直接离线回归；不循环重审框架。
+- 补充静态证据：manifest/lock 的 URP 分别 16.0.6/14.0.12，未更新解析；InputSystem 是 lock1.14.0 的传递依赖。真实辅助引用 AssemblyVersion：UnityEngine.CoreModule0.0.0.0、模板UI1.0.0.0、模板Editor.TestRunner1.0.0.0、Newtonsoft13.0.0.0、重建Analyzer1.0.0.0；程序集版本不能替代包版本/loaded 证据。Acceptance 6 文件 C#9 Player/Editor 语法检查 0 errors，仅语法。独立Review期间纯5/5、Core28/28又直接复跑通过。
+- 独立 Review 已完成一次：4 Important（OnOpen 统一移除/祖先退役绕过、旧资源健康漏检、切层原生回调跨 Session 写回、选择锁同帧输入窗口）与 1 就绪通知契约问题。第 5 项原标 Minor，按实际两预设回调契约差异提升为需修复项，未作为美化搁置；没有再发起 Reviewer。
+- Review 修复源码与定向回归：统一移除和批量预检阻止正在 OnOpen 的当前 Panel/其有效 backend 祖先退役，真实 destroy 与内部 rollback 保留清理权限；重开数据回调前后校验现有实例/pin，失效只走既有 Core discard；SetParent 后复核原状态/Session，旧 UpdateDisplay 终止、旧重开不得提交 IntentSequence；选择锁期间仍立即应用自有组，原生 InputField 在合法状态结束，明确取消 m_ShouldActivateNextUpdate，真实选择清理留待解锁并逐回调核 Session；预绑定/懒建宿主默认根同一执行代次只通知一次，自定义注册不通知。
+- 已补 Review 要求的缺口：两类真实错源 checkout（存活错误源与销毁源标记）在初始化前拒绝；真实 provider 延迟别名在 Close 后才解析，原消费者 Invalidated，不倒灌复用对象的新 Session；真实 FieldInfo/Prefab/实例机制未被 stub。所有新 Unity 用例及产品均已再次辅助编译退出 0；无法执行 Unity RED/GREEN，不把编译错误当行为 RED，也不把准备好的用例标为已运行。
+- 当前动作：修复后的直接离线回归、最终 diff/资源/调用闭包复查和精确交付。所有引擎/资产/IL2CPP 待办保持未勾选。
+- 最终直接复跑已读取结果：配置/排序 `5/5`、普通 Core 参数/临时集合/集合池 `28/28`、分析器标准套件 `129/129`，均 0 failed/0 skipped。Runtime Player(41 warnings)/Editor(40)、全 Editor(4)、Core EditMode(2)/PlayMode(5)/Editor Tests(10) 辅助编译退出 0；警告是原有/序列化/近似引用统一项，未关闭诊断。Acceptance 六源码双配置语法检查 0 errors。
+- ConsumersFinal 已实际以最终 Runtime/Editor/CorePlayMode 输入重放五次编译并读取 `verified-results.json`：Foundation EditMode 18 源码(3 warnings)/PlayMode 8(1)、ResourceStartup Runtime/Editor 各2(0)、General 143(12) 均退出 0、0 errors，编译前后输入未变，确含最新 Export/Help/Resource 集成调用方。完整命令、逐文件/依赖指纹和全部诊断位于 `Temp/UI.Panel.Offline/ConsumersFinal`。沿用明确的八份不兼容证据采集依赖排除，不伪称全151通过；没有运行这些 Unity 测试/导出断言。
+- 最终隔离复核：HEAD 仍 `7b7107f`，父为 `5074595`；`git diff --check` 无输出；暂存区为空；Packages/ProjectSettings/原游戏/Resource实现/Unity资产/权限和 Agent Manager 设置均无改动。未提交、未合并、未推送。独立 Review 仅一次，五处问题均有必要源码修复和新增定向用例，无未解决源码阻塞；引擎行为验证不从离线结果推导。
+
+UI Panel源码实施及可执行离线验证完成；Unity资产迁移与完整引擎验收待集成后执行。
+
+### 集成后资产与入口清单
+
+- 本轮没有修改/保存任何 `.prefab/.unity/.asset`，没有生成新 GUID/meta；仅删除了已退役目录两个 C# 类型的原 meta，资源序列化 GUID/类型引用计数为 0。新增 C# 的八份 meta 待 Unity 正常导入：PanelConfig（增量更名前为 PanelSettings）、PanelOverrides、PanelRule、PanelManager.Requests、PanelRaycastGate、UIPanelAssetMigration、UIPanelAcceptanceBuild、PanelConfigurationTests。
+- 显式 `UIPanelAssetMigration.ValidateAssets()` → `MigrateAssets()`：基础 `Runtime/Core/Resources/YLFramework/Core/Canvas.prefab`、完整 `Prefabs/YLFramework.prefab`、通用 `Prefabs/UITips.prefab`、新 `Prefabs/UITipsOverlay.prefab`/meta、`Prefabs/ColorSelector.prefab`。核对 GUID/fileID、Layer4 继承关系、两份缩放值、Camera/Tips 和非 UI 内容，保存后重载/实例化测试均待。
+- 单独 `UIPanelAssetMigration.MigrateTestFixtures()`：`Tests/Core/Fixtures/YLCoreSmokeModule/YLCoreSmokePanel.prefab` 与 `YLCoreResourceModule/YLCoreSmokePanel.prefab` 的七字段默认。该入口不使正式导出依赖测试程序集。
+- 输入/完整 Core 使用正式 Core EditMode/PlayMode 程序集；构建入口 `UIPanelAcceptanceBuild.BuildWindows64IL2CPP()`，产物 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`。本轮未执行构建或运行。正式 UI 场景为 `Tests/Core/Acceptance/UIAcceptance.unity`，连续 Play/原游戏共存/旧后台手势/Field/Scrollbar/ScrollRect/多指均需真实模块验证。
+- 集成顺序固定：实际包/程序集版本核对 → Unity 导入与资产迁移、meta/重载/实例化 → 输入 Editor/IL2CPP 关口 → 完整 Core、Help/导出、真实 Resource 租约集成及 UIAcceptance。Manifest/lock/磁盘差异先核实，不基于辅助引用猜实际加载版本。
+- 与 8.10 可能重叠：Core `ViewManager.Loading/Registration`、`View`、`LoadViewRequest`、`LoadViewArgs`、Module 共用面、Core Help/默认资源工厂、Core Resource 测试和 `Tests/EditMode/Resource/ResourceBundleRuntimeTests.Core.cs`，以及导航/导出/Analyzer 产物。Resource 正式实现与原游戏、包/锁/设置未改。后续以真实共同祖先和 8.10 最终代码处理到 `integration/xf-yl`，不用旧 parentBranch/Apply；本轮未暂存/Commit/Push/合并。
 
 - 框架未发布、无外部消费者：可以破坏旧 UI API，不保留兼容壳；不能改变普通 View、Model、Controller、Foundation 的有效契约。
 - 不升级 Unity/包，不修改 PackageCache、原游戏 `Assets/Games/**`、`Assets/Resources/XFGameFramework/**`、XF/XFAB/XFFSM；不创建分支、提交、推送或改权限/忽略规则。
@@ -49,7 +113,7 @@ void BindPanelRules(IEnumerable<PanelRule> rules);
 - LoadPanelRequest 沿用当前结果、Status/异常、Abort、yield 与完成订阅观察面；等待期间转发实际资源解析进度，不继续维持包装器始终为零的旧缺口，也不编造多阶段权重。终态进度结束不等于成功，必须看 Status。
 - `PanelRoot = null` 清除 Module 绑定；已销毁的绑定不是“未绑定”。绑定变更只影响之后接受的请求，不移动已有窗口或重定向在途请求。
 - 业务参数只用现有 `LoadViewArgs`，不增加 DTO、泛型 Panel 或参数池；删除其内部 `Window`/`WindowContext` 字段。root 与规则快照由 UI 管线持有。
-- 新建可序列化值类型 `PanelSettings` 与运行时值类型 `PanelOverrides`。前者用于 Panel 的 Prefab/Variant 默认及有效配置副本；后者对应字段为 nullable，`default` 表示全部未指定，不混淆显式 false/0。覆盖类型不承担 Inspector 序列化。
+- 新建可序列化值类型 `PanelConfig` 与运行时值类型 `PanelOverrides`。前者用于 Panel 的 Prefab/Variant 默认及有效配置副本；后者对应字段为 nullable，`default` 表示全部未指定，不混淆显式 false/0。覆盖类型不承担 Inspector 序列化。
 
 | 配置字段          | 类型                                 | 框架默认值 |
 | ----------------- | ------------------------------------ | ---------- |
@@ -61,7 +125,7 @@ void BindPanelRules(IEnumerable<PanelRule> rules);
 | InstanceMode      | PanelInstanceMode（Single/Multiple） | Single     |
 | CacheOnClose      | bool                                 | true       |
 
-- `PanelSettings.Default` 明确提供上述默认值，不能把结构体零值误当默认配置。Panel Inspector 字段初始化为该默认值；有效设置按值只读返回。
+- `PanelConfig.Default` 明确提供上述默认值，不能把结构体零值误当默认配置。Panel Inspector 字段初始化为该默认值；有效设置按值只读返回。
 - `PanelRule` 是已解析规则数据，不是必注册的窗口定义：分别提供 `(string assetName, PanelOverrides overrides)` 与 `(GameObject prefab, PanelOverrides overrides)` 构造形式，身份二选一。
 - 合并顺序：本次覆盖 > Module 规则表 > Prefab/Variant 默认 > 框架默认。Bind 时复制规则和覆盖值；请求接受时固定规则版本/本次覆盖，资源解析后读取并固定其 Prefab 默认，不修改源数据。
 - Bind 完整复制、预校验成功后才替换快照；枚举或校验失败保留旧绑定。null/空规则集合清除可选规则，不改变当前会话或已接受请求。
@@ -90,7 +154,7 @@ void BindPanelRules(IEnumerable<PanelRule> rules);
 - 有效重开或 UpdateDisplay 显式改变 Layer 时，预校验同一 Root 的目标层、排序及受影响关系，再在同一提交管线移动到 Root.GetLayer(newLayer)，保留 RectTransform 的既有局部布局参数，不额外拉伸/清零。首次 Attach 本身仍原位；之后显式改 Layer 是调用方授权的层容器变更，不迁移 root/owner/source，不隐式更新接受序或重新打开。预校验失败不移动对象；不能只改排序字段而使实际层容器/遮罩/射线关系脱节。
 - OnOpen 执行期间，明确拒绝对当前 Panel 的上述四种显示命令，即使命令本来会是幂等无操作，也在任何修改或通知之前抛出 InvalidOperationException，不忽略、不排队；同步事件/辅助方法间接调用同样受当前会话的执行标记约束。初始显示规则通过 overrides 提供。
 - OnViewEnabled 中允许上述显示调整，沿统一预校验/提交管线生效；打开流程不得在其后重放旧配置、强制 Show 或再次置顶而覆盖它。允许显示调整不等于放松普通 View 的初始化、挂载、解绑或退出保护。
-- 暴露 `PanelSettings EffectiveSettings` 的值副本、实际 `UIRootContext Root`、自身 `Canvas`、只读生成 `SortingOrder`、`IsVisible`、`IsInputBlocked`；保留 `IsTop()` 和 `HasFocus` 的查询用途，并明确后者不是 EventSystem 实际选中。
+- 暴露 `PanelConfig EffectiveSettings` 的值副本、实际 `UIRootContext Root`、自身 `Canvas`、只读生成 `SortingOrder`、`IsVisible`、`IsInputBlocked`；保留 `IsTop()` 和 `HasFocus` 的查询用途，并明确后者不是 EventSystem 实际选中。
 - 已结束会话的 Show 不能复活对象；需要新 Load/Attach。显示操作须检查当前会话，不直接公开可写有效策略。Hide/Show 不重新初始化、重放参数或退订事件，不额外越级置顶。
 - Module 的 `GetView<T>`/`GetViews<T>`/ID 查询继续包含 Panel；单个查询多匹配仍报歧义，不暗取最上面。将现有 PanelManager 的 Canvas 查询迁为 `GetTopPanel(UIRootContext)`、`GetModalPanel(UIRootContext)`、`GetFocusedPanel(UIRootContext)`；`GetAllPanels(UIRootContext root, List<Panel> results)` 沿用清空/填充调用方列表的查询方式，包含该根有效的隐藏/停用会话，不承诺枚举排序。查询不创建默认根或 Manager，不保留旧 Canvas/UIType 重载。
 - 普通 LoadView/LoadViewAsync 的实际根 View 为 Panel 时在实例化前拒绝，提示 Panel 入口；泛型 T=View 不能绕过。不是扫描子树并禁止普通根 View 下的子 Panel；子 Panel 仍按下文独立会话/真实根约束纳管。普通资源的原类型不匹配错误与参数释放不改变，不能仅凭 T=Panel 就改写这些错误。
@@ -291,6 +355,8 @@ Close / Module 退出 / 根永久失效
 
 ## 实施任务
 
+本次执行以顶部检查点区分源码完成与引擎验收。下面混合“实现并运行/验证”的条目未勾选代表运行关口仍待执行，不表示遗漏源码；已勾选的文档/API/用例迁移也不等于 Unity Passed。
+
 每个批次先复核当前文件与工作区，补关键回归，再做最小实现并读取新结果。任务 3 的 API 切换和任务 4 的引用迁移属于同一编译闭包：不得把尚有失效调用/资产的中间态交付为完成。
 
 回调权限已明确：OnOpen 拒绝当前 Panel 的显示命令；OnViewEnabled 允许显示调整但不解除普通 Core 事务保护。实施不得重新把该边界当作未决选项，也不得偷偷改为暂存/排队执行。
@@ -313,7 +379,7 @@ Close / Module 退出 / 根永久失效
 
 ### 任务 2：配置值与规则快照
 
-**文件：** 新增 `Runtime/Core/UI/Windows/{PanelSettings,PanelOverrides,PanelRule}.cs`（PanelInstanceMode 放 PanelSettings 文件）；新增 `Tests/Core/EditMode/PanelConfigurationTests.cs`。保持类型位于 `YLFramework.Core`。
+**文件：** 新增 `Runtime/Core/UI/Windows/{PanelConfig,PanelOverrides,PanelRule}.cs`（PanelInstanceMode 放 PanelConfig 文件）；新增 `Tests/Core/EditMode/PanelConfigurationTests.cs`。保持类型位于 `YLFramework.Core`。
 **产物：** 本文七字段值模型、默认值、字段级合并和规则快照，供后续 Module/Panel 使用；不建立活跃窗口目录。
 
 - [ ] 测试 Defaults、未指定与 false/0、四级优先级、输入集合修改不污染快照、Ordinal 完整地址、同名不同 Prefab、重复规则与负 Layer/非法枚举值；根中层存在性留到任务 3/4。
@@ -333,7 +399,7 @@ Close / Module 退出 / 根永久失效
 - [ ] 补 OnLoaded 准备期显示调整不会被首开覆盖、普通 root-before-child 顺序及子 Panel 不共享根参数；Layer 有效改变保留局部布局并更新容器/排序/遮罩，缺层/溢出失败时原父级、配置、显示意图不变。
 - [ ] 验证 direct 错桶不交付旧来源实例、provider 实例独立 pin 与 named 并入 direct 的来源保持分别正确；不将必要 Session 来源责任留在已经完成的请求对象中。
 - [ ] 新加载只用根/Layer；已有 Attach 原位且幂等。实现 Hide/Show/UpdateDisplay、统一比较器、Top/模态/焦点恢复，使用任务 1 隔离机制，不以业务字段快照阻挡。
-- [ ] 按“旧公开面收口”表迁移全部旧 API，移除 Panel 专用旧 object[] 六重载及旧转发、WindowCatalog/WindowDefinition/OnWindowUpdated、PanelType、UIType 选择、AlwaysInFront、UIStartSortOrder 和借 Canvas 模式；保留普通 View 旧入口及共享必要参数链。删除资产型文件时处理 .meta 与引用。
+- [x] 按“旧公开面收口”表迁移全部旧 API，移除 Panel 专用旧 object[] 六重载及旧转发、WindowCatalog/WindowDefinition/OnWindowUpdated、PanelType、UIType 选择、AlwaysInFront、UIStartSortOrder 和借 Canvas 模式；保留普通 View 旧入口及共享必要参数链。删除资产型文件时处理 .meta 与引用。
 
 ### 任务 4：根、预设与全部调用方迁移
 
@@ -354,11 +420,11 @@ Close / Module 退出 / 根永久失效
 - [ ] 实现轻量根、默认宿主复用、根登记/临时不可用/永久失效与静态会话复位，保持 Audio/Action 懒创建边界；不公开可变默认根字典。
 - [ ] 根回归区分：裸 Canvas Panel Attach 拒绝、独立嵌套 Panel、默认根跨场景保留、自定义场景根销毁、登记不抢默认、重复宿主诊断；沿用相关 AudioSourceIndependence/Action 宿主用例证明仅用非 UI 功能不创建 UI。
 - [ ] 通过 Unity 资产 API 组合预设、迁移引用及配置；保留 GUID/Prefab 关系，不覆盖用户场景。根选择不存在时才创建默认根，缺层/显式目标销毁不回退。
-- [ ] 迁移 Tips、ColorSelector、帮助及上表 YL Runtime/Editor/Tests/Acceptance 范围的旧 API；原游戏 `Assets/Games/**` 的 XF 同名调用不改。多个同源实例须从第一笔起统一 Multiple；原普通 View 类型不匹配测试保持原语义。
-- [ ] 迁移 `CoreResourcePlayModeTests.PanelResourceAndGenericFailuresPublishChildTerminalWithoutResidue` 中两处 `new object[0]` Panel 调用为明确 `loadViewArgs:`，保留同步 InvalidCastException、异步 Failed、无残留断言；普通 View 的 `"new session"` payload 断言保留。
-- [ ] 更新 `YLCoreSmokePanel.cs` 初始化/打开探针及 Panel 专用断言，保留排序提交前初始化检查；Panel 初始化内 Abort 改验晚到取消无效，普通 View 的对应回滚测试不改。
+- [x] 迁移 Tips、ColorSelector、帮助及上表 YL Runtime/Editor/Tests/Acceptance 范围的旧 API；原游戏 `Assets/Games/**` 的 XF 同名调用不改。多个同源实例须从第一笔起统一 Multiple；原普通 View 类型不匹配测试保持原语义。
+- [x] 迁移 `CoreResourcePlayModeTests.PanelResourceAndGenericFailuresPublishChildTerminalWithoutResidue` 中两处 `new object[0]` Panel 调用为明确 `loadViewArgs:`，保留同步 InvalidCastException、异步 Failed、无残留断言；普通 View 的 `"new session"` payload 断言保留。
+- [x] 更新 `YLCoreSmokePanel.cs` 初始化/打开探针及 Panel 专用断言，保留排序提交前初始化检查；Panel 初始化内 Abort 改验晚到取消无效，普通 View 的对应回滚测试不改。
 - [ ] 完成 Unity 编译并检查 Help/导出/Core 边界。旧计划 `xf-yl-1.3-view.md` 的“保留全部 Panel 重载”以本计划为准，不扩散修改历史文档或原 XF 游戏。
-- [ ] 默认 Canvas 与旧 XF 资产的字节一致不再是新模板契约；将对应测试改为新结构、默认值、组件及引用关系验证，不仅删除字节对比而丢掉资产验收。
+- [x] 默认 Canvas 与旧 XF 资产的字节一致不再是新模板契约；将对应测试改为新结构、默认值、组件及引用关系验证，不仅删除字节对比而丢掉资产验收。
 - [ ] 显式迁移存续 Panel Prefab/Variant 的七字段默认；用 Unity 保存、重载/实例化验证 ParticipatesInTop/CacheOnClose 的 true 默认与显式 false/0 的 Variant override，不能只凭 C# 字段初始化认定旧资产已经正确迁移。
 
 ### 任务 5：契约与集成回归
@@ -373,10 +439,10 @@ Close / Module 退出 / 根永久失效
 
 **文件：** 增量更新已有 `Documentation/Modules/UI.md`，必要的 `Documentation/Architecture.md`/导航及相关 XML 注释；与并行文档差异合并，不覆盖。
 
-- [ ] 写明默认零 UI 接线的调用、完整模板用法、资源 provider 前置、Prefab 默认/规则表/临时覆盖、生命周期和取消截止点、场景对象 Attach、允许的输入组合/版本限制；补已解析配置行到 BindPanelRules 的实际示例，不暗示框架自动读表。
-- [ ] 检查 YL 范围旧入口/命名/序列化/字符串绑定及新增 .meta，保留来源许可证，不误改 XF 同名类型。
-- [ ] 检查最终 diff/新增文件、资源闭包与全部直接调用方；交付实际编译、EditMode、PlayMode、Player 结果和未验证项，不自动提交。
-- [ ] 在最终自检/独立 Review 中按全局设计质量约束检查公开 API、命名、主流程、辅助类型和重复状态；不另建美学审查流程，也不以功能测试通过替代简洁性验收。
+- [x] 写明默认零 UI 接线的调用、完整模板用法、资源 provider 前置、Prefab 默认/规则表/临时覆盖、生命周期和取消截止点、场景对象 Attach、允许的输入组合/版本限制；补已解析配置行到 BindPanelRules 的实际示例，不暗示框架自动读表。
+- [x] 检查 YL 范围旧入口/命名/序列化/字符串绑定及新增 .meta，保留来源许可证，不误改 XF 同名类型。新增 meta 生成是明确的集成后待办，未伪造。
+- [x] 检查最终 diff/新增文件、资源闭包与全部直接调用方；交付实际编译、EditMode、PlayMode、Player 结果和未验证项，不自动提交。本轮只执行离线范围，所有 Unity 运行结果明确未执行。
+- [x] 在最终自检/独立 Review 中按全局设计质量约束检查公开 API、命名、主流程、辅助类型和重复状态；不另建美学审查流程，也不以功能测试通过替代简洁性验收。
 
 ## 验收矩阵
 

@@ -120,12 +120,13 @@ namespace YLFramework.Core
             if (view.IsRemoving) return;
             if (view.IsInitializing || view.IsUnbinding || (view.IsAttaching && !rollback))
                 throw new InvalidOperationException("Cannot close a View during initialization, attachment or unbinding.");
+            if (!rollback && !destroyed) EnsureNoOpeningPanelRetired(module, view, session);
             bool notify = view.loaded;
             view.IsRemoving = true;
             view.loaded = false;
             module.viewTransactions++;
             var errors = new List<Exception>();
-            bool damaged = view.DiscardOnExit;
+            bool damaged = view.DiscardOnExit || (view is Panel policy && !policy.EffectiveSettings.CacheOnClose);
             bool backend = view.UsesBackend;
             bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
             GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
@@ -151,8 +152,9 @@ namespace YLFramework.Core
             catch (Exception error) { errors.Add(error); damaged = true; }
             try { view.DetachModel(); }
             catch (Exception error) { errors.Add(error); damaged = true; }
-            try { PanelManager.ReleaseView(view); }
-            catch (Exception error) { errors.Add(error); }
+            List<CorePrefabLease> panelSources = null;
+            try { PanelManager.ReleaseView(view, out panelSources, rollback); }
+            catch (Exception error) { errors.Add(error); damaged = true; }
             damaged |= view.DiscardOnExit;
             if (damaged && !backend && !ReferenceEquals(view.BackendRoot, null) &&
                 ReferenceEquals(view.BackendRoot.Session, view.BackendRootSession))
@@ -189,6 +191,8 @@ namespace YLFramework.Core
                     catch (Exception discardError) { errors.Add(discardError); }
                 }
             }
+            try { PanelManager.ReleaseSources(panelSources); }
+            catch (Exception error) { errors.Add(error); }
             view.IsRemoving = false;
             module.viewTransactions--;
             if (notify)
@@ -233,6 +237,7 @@ namespace YLFramework.Core
             view.DiscardOnExit = false;
             view.Module = null;
             view.Session = null;
+            if (view is Panel panel) panel.EndPanelSession();
             if (module.ownedViews.Count == 0)
             {
                 sceneOwners.Remove(module);
@@ -247,6 +252,25 @@ namespace YLFramework.Core
         {
             if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
             if (errors.Count > 1) throw new AggregateException("View cleanup failed.", errors).Flatten();
+        }
+
+        private static void EnsureNoOpeningPanelRetired(Module module, View root, object session)
+        {
+            foreach (var candidate in module.ownedViews.Values)
+            {
+                if (!(candidate is Panel panel) || panel.OpeningSession == null || !ReferenceEquals(panel.OpeningSession, panel.Session)) continue;
+                var current = candidate;
+                var currentSession = candidate.Session;
+                while (!ReferenceEquals(current, null))
+                {
+                    if (ReferenceEquals(current, root) && ReferenceEquals(currentSession, session))
+                        throw new InvalidOperationException("OnOpen 期间不能关闭当前 Panel 或退役其 backend 祖先。");
+                    var parent = current.BackendRoot;
+                    if (ReferenceEquals(parent, null) || !ReferenceEquals(parent.Session, current.BackendRootSession)) break;
+                    currentSession = current.BackendRootSession;
+                    current = parent;
+                }
+            }
         }
 
         #endregion
@@ -290,6 +314,9 @@ namespace YLFramework.Core
 
         private static void ClearSessions(Module module, List<KeyValuePair<View, object>> sessions)
         {
+            // 批量出口先完整预检，不能在后面的受保护会话报错前先归还前面的 checkout。
+            foreach (var session in sessions)
+                if (session.Key) EnsureNoOpeningPanelRetired(module, session.Key, session.Value);
             var errors = new List<Exception>();
             foreach (var session in sessions)
             {

@@ -97,8 +97,14 @@ namespace YLFramework.Core.Tests
                 adaptation.AutomaticMatch = false;
                 adaptation.ManualMatch = 0.6f;
                 Assert.That(scaler.matchWidthOrHeight, Is.EqualTo(0.6f));
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+                adaptation.Configure(new Vector2(640, 480), false, 0.4f);
+                adaptation.Refresh();
+                Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ConstantPixelSize),
+                    "Adaptation owns resolution/match, not the native CanvasScaler scale mode.");
                 Assert.Throws<ArgumentException>(() => adaptation.Configure(Vector2.zero, true, 0));
-                Assert.That(adaptation.ReferenceResolution, Is.EqualTo(new Vector2(10000, 1)));
+                Assert.That(adaptation.ReferenceResolution, Is.EqualTo(new Vector2(640, 480)));
+                Assert.That(adaptation.ManualMatch, Is.EqualTo(0.4f));
             }
             finally { Object.DestroyImmediate(go); }
         }

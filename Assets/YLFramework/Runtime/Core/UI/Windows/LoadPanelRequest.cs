@@ -3,37 +3,31 @@ using UnityEngine;
 
 namespace YLFramework.Core
 {
-    /// <summary>直接转接View事务结果；Abort仅取消Core业务请求，不物理取消共享资源加载。</summary>
+    /// <summary>独立 Panel 消费者的结果。进度转发真实资源解析，终态进度为 1 不等于成功，必须检查 Status。</summary>
     public sealed class LoadPanelRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadPanelRequest<T>> where T : Panel
     {
+        /// <summary>本次成功交付的引用；不延长 Session 寿命，关闭或复用后不会撤回已完成的终态。</summary>
         public T panel { get; private set; }
+        /// <summary>独立消费者终态，不能由进度或面板引用推断。</summary>
         public LoadViewStatus Status { get; private set; }
-        /// <summary>原始失败原因，附加清理错误沿用View请求的Data约定。</summary>
+        /// <summary>原始失败原因；清理错误附在既有 Core CleanupException Data 中。</summary>
         public Exception Exception { get; private set; }
-
-        private LoadViewRequest<T> child;
-
-        internal LoadPanelRequest(LoadViewRequest<T> request)
+        private PanelManager.PanelOperation operation;
+        internal LoadPanelRequest(PanelManager.PanelOperation operation)
         {
-            child = request;
-            request.AddCompleteEvent(Complete);
+            this.operation = operation;
+            operation.ProgressChanged = value => progress = value;
+            operation.Completed = Complete;
         }
-
-        public override void Abort()
+        /// <summary>仅提交前取消本消费者。进入首个业务初始化回调后不再接受主动取消。</summary>
+        public override void Abort() => operation?.Abort();
+        private void Complete(Panel result, Exception error, LoadViewStatus status)
         {
-            if (!isDone) child.Abort();
-        }
-
-        private void Complete(LoadViewRequest<T> request)
-        {
-            if (isDone) return;
-            // 必要UI准备已由子请求事务完成，不存在成功后再补登记的提交窗口。
-            panel = request.view;
-            Status = request.Status;
-            Exception = request.Exception;
-            request.RemoveCompleteEvent(Complete);
-            child = null;
-            try { Completed(request.error); }
+            panel = (T)result;
+            Status = status;
+            Exception = error;
+            operation = null;
+            try { Completed(error?.ToString()); }
             catch (Exception notificationError) { Debug.LogException(notificationError); }
         }
     }

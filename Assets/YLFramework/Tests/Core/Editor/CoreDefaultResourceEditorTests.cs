@@ -9,11 +9,79 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using YLFramework.Editor;
 
 namespace YLFramework.Core.Editor.Tests
 {
     public class CoreDefaultResourceEditorTests
     {
+        [Test]
+        public void PanelMigrationAndIl2CppBuildAreExplicitEntrypointsWithoutAutomaticMigrationHooks()
+        {
+            foreach (var type in new[] { typeof(UIPanelAssetMigration), typeof(UIPanelAcceptanceBuild) })
+            {
+                Assert.That(type.GetCustomAttributes(typeof(InitializeOnLoadAttribute), false), Is.Empty);
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                    Assert.That(method.GetCustomAttributes(typeof(InitializeOnLoadMethodAttribute), false), Is.Empty, method.Name);
+            }
+            Assert.That(typeof(UIPanelAssetMigration).GetMethod("ValidateAssets", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
+            Assert.That(typeof(UIPanelAssetMigration).GetMethod("MigrateAssets", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
+            Assert.That(typeof(UIPanelAcceptanceBuild).GetMethod("BuildWindows64IL2CPP", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
+            Assert.That(UIPanelAssetMigration.BaseRootPath, Is.EqualTo("Assets/YLFramework/Runtime/Core/Resources/YLFramework/Core/Canvas.prefab"));
+            Assert.That(UIPanelAssetMigration.TemplatePath, Is.EqualTo("Assets/YLFramework/Prefabs/YLFramework.prefab"));
+            Assert.That(AssetDatabase.AssetPathToGUID(UIPanelAssetMigration.BaseRootPath), Is.Not.Empty);
+            Assert.That(AssetDatabase.AssetPathToGUID(UIPanelAssetMigration.TemplatePath), Is.Not.Empty);
+        }
+
+        [Test]
+        public void PanelTrueDefaultsAndExplicitFalseZeroSurviveVariantSaveReloadAndInstantiation()
+        {
+            string folder = "Assets/YLFramework/Tests/Core/Editor/PanelVariant_" + Guid.NewGuid().ToString("N");
+            var preview = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Core/Editor", Path.GetFileName(folder)), Is.Not.Empty);
+                var source = AssetDatabase.LoadAssetAtPath<GameObject>(UIPanelAssetMigration.ColorPath);
+                Assert.That(source, Is.Not.Null);
+                var original = (GameObject)PrefabUtility.InstantiatePrefab(source, preview);
+                original.SetActive(false);
+                var configured = new SerializedObject(original.GetComponent<Panel>());
+                var defaults = configured.FindProperty("settings");
+                defaults.FindPropertyRelative("Layer").intValue = 0;
+                defaults.FindPropertyRelative("Priority").intValue = 11;
+                defaults.FindPropertyRelative("Modal").boolValue = true;
+                defaults.FindPropertyRelative("ParticipatesInTop").boolValue = true;
+                defaults.FindPropertyRelative("CacheOnClose").boolValue = true;
+                configured.ApplyModifiedPropertiesWithoutUndo();
+                string basePath = folder + "/Base.prefab", variantPath = folder + "/Variant.prefab";
+                Assert.That(PrefabUtility.SaveAsPrefabAsset(original, basePath), Is.Not.Null);
+                var baseAsset = AssetDatabase.LoadAssetAtPath<GameObject>(basePath);
+                var reloaded = new SerializedObject(baseAsset.GetComponent<Panel>()).FindProperty("settings");
+                Assert.That(reloaded.FindPropertyRelative("ParticipatesInTop").boolValue && reloaded.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(baseAsset, preview);
+                var changed = new SerializedObject(instance.GetComponent<Panel>());
+                var overrides = changed.FindProperty("settings");
+                overrides.FindPropertyRelative("Priority").intValue = 0;
+                foreach (var field in new[] { "Modal", "ParticipatesInTop", "CacheOnClose" }) overrides.FindPropertyRelative(field).boolValue = false;
+                changed.ApplyModifiedPropertiesWithoutUndo();
+                Assert.That(PrefabUtility.SaveAsPrefabAsset(instance, variantPath), Is.Not.Null);
+                var variant = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
+                Assert.That(PrefabUtility.GetPrefabAssetType(variant), Is.EqualTo(PrefabAssetType.Variant));
+                Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(variant), Is.SameAs(baseAsset));
+                var clone = (GameObject)PrefabUtility.InstantiatePrefab(variant, preview);
+                var values = new SerializedObject(clone.GetComponent<Panel>()).FindProperty("settings");
+                Assert.That(values.FindPropertyRelative("Priority").intValue, Is.Zero);
+                foreach (var field in new[] { "Modal", "ParticipatesInTop", "CacheOnClose" }) Assert.That(values.FindPropertyRelative(field).boolValue, Is.False, field);
+                var saved = new SerializedObject(variant.GetComponent<Panel>()).FindProperty("settings");
+                foreach (var field in new[] { "Priority", "Modal", "ParticipatesInTop", "CacheOnClose" }) Assert.That(saved.FindPropertyRelative(field).prefabOverride, Is.True, field);
+            }
+            finally
+            {
+                EditorSceneManager.ClosePreviewScene(preview);
+                if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+            }
+        }
+
         [TestCase("Canvas", "CreateCanvas")]
         [TestCase("EventSystem", "CreateEventSystem")]
         public void DefaultFactoriesCreateOwnedInactivePreviewObjectsAndSaveIndependentPrefabs(string name, string factoryName)
@@ -58,7 +126,7 @@ namespace YLFramework.Core.Editor.Tests
                     Assert.That(prefab.GetComponents<Component>().Select(c => c.GetType()), Is.EqualTo(new[]
                     {
                         typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster),
-                        typeof(AutomaticAdaptationCanvasScaler)
+                         typeof(AutomaticAdaptationCanvasScaler), typeof(UIRootContext)
                     }));
                     Assert.That(prefab.GetComponent<Canvas>().renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
                     Assert.That(prefab.GetComponent<Canvas>().additionalShaderChannels, Is.EqualTo(
@@ -68,7 +136,10 @@ namespace YLFramework.Core.Editor.Tests
                     Assert.That(scaler.referenceResolution, Is.EqualTo(new Vector2(1920, 1080)));
                     Assert.That(scaler.matchWidthOrHeight, Is.EqualTo(1));
                     Assert.That(prefab.GetComponent<AutomaticAdaptationCanvasScaler>().GetType().Assembly.GetName().Name,
-                        Is.EqualTo("YLFramework.Runtime"));
+                         Is.EqualTo("YLFramework.Runtime"));
+                    var layers = new SerializedObject(prefab.GetComponent<UIRootContext>()).FindProperty("uiLayers");
+                    Assert.That(layers.arraySize, Is.EqualTo(1));
+                    Assert.That(layers.GetArrayElementAtIndex(0).FindPropertyRelative("root").objectReferenceValue, Is.SameAs(prefab.transform.Find("Layer0")));
                 }
                 else
                 {

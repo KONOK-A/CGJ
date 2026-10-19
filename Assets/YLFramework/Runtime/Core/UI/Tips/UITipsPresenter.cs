@@ -57,15 +57,6 @@ namespace YLFramework.Core
             {
                 tip.transform.SetParent(parent, false);
                 var args = LoadViewArgs.New();
-                var canvas = PanelManager.ResolveParentRoot(parent);
-                var context = canvas ? canvas.GetComponent<UIRootContext>() : null;
-                // 只借用呈现配置，不为领域提示注册窗口 key。
-                args.Window = new WindowDefinition(null, uiTipItemPrefab)
-                {
-                    Unique = false,
-                    PanelType = PanelType.Overlay,
-                    Layer = context ? context.OverlayLayer : 1
-                };
                 args.SetObject("presenter", this);
                 args.SetObject("handle", handle);
                 args.SetString("content", content);

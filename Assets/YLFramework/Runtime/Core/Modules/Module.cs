@@ -62,7 +62,6 @@ namespace YLFramework.Core
         internal HashSet<Type> creatingControllers = new HashSet<Type>();
 
 
-        private int ui_start_sort_order = 0; // UI 初始的SortingOrder
         private string projectName;
 
         #endregion
@@ -104,25 +103,6 @@ namespace YLFramework.Core
         /// 默认启动的场景(在启动模块时自动加载的场景名称)
         /// </summary>
         public virtual string DefaultStartUpScene => string.Empty;
-
-        /// <summary>
-        /// 模块 UI 的逻辑排序偏移；实际层级同时受根内 SortingLayer、模态及前置优先级约束。
-        /// </summary>
-        public int UIStartSortOrder 
-        {
-            get 
-            {
-                return ui_start_sort_order;
-            }
-
-            set 
-            {
-                PanelManager.ValidateModuleOrder(this, value);
-                ui_start_sort_order = value;
-                PanelManager.Refresh(null);
-            }
-
-        }
 
         #endregion
          

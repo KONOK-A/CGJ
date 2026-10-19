@@ -1,306 +1,171 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-using YLFramework.Events;
-using YLFramework.Core.Singleton;
-using ApplicationTool = YLFramework.Foundation.ApplicationTool;
-using UpdateManager = YLFramework.Foundation.UpdateManager;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace YLFramework.Core
 {
     public partial class PanelManager
     {
-        internal static void BringToFront(Panel panel)
-        {
-            var manager = _instance;
-            if (manager == null) return;
-            manager.Reconcile();
-            if (!manager.states.TryGetValue(panel, out var state) || !manager.Current(state)) return;
-            int max = state.Order;
-            bool above = false;
-            foreach (var other in manager.states.Values)
-                if (manager.Current(other) && SameContext(state, other) && other.Panel.WindowLayer == panel.WindowLayer &&
-                    other.Panel.Canvas.sortingLayerID == panel.Canvas.sortingLayerID &&
-                    other.Panel.PolicyModal == panel.PolicyModal && other.Panel.AlwaysInFront == panel.AlwaysInFront &&
-                    Compare(other, state) > 0)
-                {
-                    above = true;
-                    max = Math.Max(max, other.Order);
-                }
-            if (above) SetOrder(panel, checked((int)((long)max + OrderDelta - panel.Module.UIStartSortOrder)));
-        }
-
-        private bool Current(PanelState state) => !released && state.Panel && state.Session != null &&
-            ReferenceEquals(state.Panel.Session, state.Session) && !state.Panel.IsRemoving &&
-            (!state.Panel.IsMyselfAddCanvas || state.Panel.Canvas) && state.Panel.Module != null && state.Panel.Module.State != ModuleState.Closing &&
-            states.TryGetValue(state.Panel, out var registered) && ReferenceEquals(registered, state);
-
-        private bool Active(PanelState state) => Current(state) && state.Panel.IsLoaded && state.Panel.gameObject.activeInHierarchy;
-        private static bool SameContext(PanelState a, PanelState b) => a.Root == b.Root && a.Scene == b.Scene;
-
-        private static int CheckedOrder(Panel panel, int requested, int? offset = null)
-        {
-            var value = (long)requested + (offset ?? panel.Module.UIStartSortOrder);
-            if (value < short.MinValue || value > short.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(requested), "Effective Canvas order must fit a signed 16-bit integer.");
-            return (int)value;
-        }
-
-        internal static void ValidateModuleOrder(Module module, int offset)
-        {
-            var manager = _instance;
-            if (manager == null) return;
-            manager.BuildOrders(null, 0, module, offset);
-        }
-
-        // 每个根/排序层稳定排序；原始有效值尽量保留，平手及前置组只做必要提升。
-        private List<KeyValuePair<PanelState, int>> BuildOrders(Panel changed = null, int requested = 0, Module module = null, int offset = 0)
+        private List<KeyValuePair<PanelState, int>> BuildOrders(Panel changed = null, PanelConfig? settings = null, long? accepted = null)
         {
             var list = new List<PanelState>();
-            foreach (var state in states.Values) if (Current(state) && state.Panel.IsMyselfAddCanvas) list.Add(state);
-            var roots = new Dictionary<PanelState, Canvas>();
-            foreach (var state in list) roots.Add(state, ResolveRoot(state.Panel));
-            int Raw(PanelState state) => CheckedOrder(state.Panel, state.Panel == changed ? requested : state.Panel.RequestedOrder,
-                state.Panel.Module == module ? (int?)offset : null);
-            foreach (var state in list) Raw(state);
-            list.Sort((a, b) =>
-            {
-                int comparison = roots[a].GetInstanceID().CompareTo(roots[b].GetInstanceID());
-                if (comparison != 0) return comparison;
-                comparison = a.Panel.gameObject.scene.handle.CompareTo(b.Panel.gameObject.scene.handle);
-                if (comparison != 0) return comparison;
-                comparison = SortingLayer.GetLayerValueFromID(a.Panel.Canvas.sortingLayerID).CompareTo(SortingLayer.GetLayerValueFromID(b.Panel.Canvas.sortingLayerID));
-                if (comparison != 0) return comparison;
-                comparison = a.Panel.WindowLayer.CompareTo(b.Panel.WindowLayer);
-                if (comparison != 0) return comparison;
-                comparison = (a.Panel.PolicyModal && a.Panel.PolicyType != PanelType.Overlay).CompareTo(b.Panel.PolicyModal && b.Panel.PolicyType != PanelType.Overlay);
-                if (comparison != 0) return comparison;
-                comparison = a.Panel.AlwaysInFront.CompareTo(b.Panel.AlwaysInFront);
-                if (comparison != 0) return comparison;
-                comparison = Raw(a).CompareTo(Raw(b));
-                return comparison != 0 ? comparison : a.Sequence.CompareTo(b.Sequence);
-            });
-            var result = new List<KeyValuePair<PanelState, int>>(list.Count);
-            PanelState previous = null;
-            int previousOrder = 0;
+            foreach (var state in states.Values) if (Current(state)) list.Add(state);
+            PanelConfig Settings(PanelState state) => state.Panel == changed && settings.HasValue ? settings.Value : state.Panel.EffectiveSettings;
+            long Sequence(PanelState state) => state.Panel == changed && accepted.HasValue ? accepted.Value : state.Sequence;
+            foreach (var state in list) { state.Root.ValidateRoot(); state.Root.GetLayer(Settings(state).Layer); }
+            list.Sort((a, b) => a.Root != b.Root ? a.Root.GetInstanceID().CompareTo(b.Root.GetInstanceID()) : PanelConfig.Compare(Settings(a), Sequence(a), Settings(b), Sequence(b)));
+            var orders = new List<KeyValuePair<PanelState, int>>(list.Count);
+            UIRootContext root = null;
+            long order = 0;
             foreach (var state in list)
             {
-                int order = Raw(state);
-                if (previous != null && roots[previous] == roots[state] &&
-                    previous.Panel.gameObject.scene == state.Panel.gameObject.scene &&
-                    previous.Panel.Canvas.sortingLayerID == state.Panel.Canvas.sortingLayerID)
-                    order = Math.Max(order, previousOrder + (state.Panel.PolicyModal ? 2 : 1));
-                if (order > short.MaxValue) throw new ArgumentOutOfRangeException(nameof(requested), "Panel priority exhausts the Canvas order range.");
-                var context = roots[state].GetComponent<UIRootContext>();
-                if (order == short.MinValue && state.Panel.PolicyModal && state.Panel.PolicyType != PanelType.Overlay &&
-                    context && context.HasMask(state.Panel.WindowLayer))
-                    throw new ArgumentOutOfRangeException(nameof(requested), "Modal window requires a Canvas order below it for the mask.");
-                result.Add(new KeyValuePair<PanelState, int>(state, order));
-                previous = state;
-                previousOrder = order;
+                if (state.Root != root) { root = state.Root; order = root.Canvas.sortingOrder; }
+                order += Settings(state).Modal ? 2 : 1;
+                if (order < short.MinValue || order > short.MaxValue)
+                    throw new ArgumentOutOfRangeException(nameof(settings), "该根的 Panel/模态遮罩耗尽 Canvas 排序空间。");
+                orders.Add(new KeyValuePair<PanelState, int>(state, (int)order));
             }
-            return result;
+            return orders;
+        }
+
+        private void ValidateOpen(UIRootContext root, PanelConfig settings, Panel existing = null)
+        {
+            settings.Validate();
+            root.ValidateRoot();
+            root.GetLayer(settings.Layer);
+            if (existing) { BuildOrders(existing, settings); return; }
+            long count = settings.Modal ? 2 : 1;
+            foreach (var state in states.Values)
+                if (Current(state) && state.Root == root) count += state.Panel.EffectiveSettings.Modal ? 2 : 1;
+            if (root.Canvas.sortingOrder + count > short.MaxValue || root.Canvas.sortingOrder < short.MinValue)
+                throw new ArgumentOutOfRangeException(nameof(settings), "该根的 Panel/模态遮罩耗尽 Canvas 排序空间。");
         }
 
         internal static void Prepare(Panel panel)
         {
             var manager = Instance;
-            var state = new PanelState { Panel = panel, Session = panel.Session, Root = ResolveRoot(panel), Input = new PanelInputState(panel),
-                Scene = panel.gameObject.scene.handle, Sequence = ++manager.sequence };
-            if (panel.IsMyselfAddCanvas)
-            {
-                int max = panel.UIType == UIType.UI ? UI_START_ORDER : DONTDESTROYUI_START_ORDER;
-                foreach (var existing in manager.states.Values)
-                    if (manager.Current(existing) && ResolveRoot(existing.Panel) == state.Root &&
-                        existing.Panel.gameObject.scene.handle == state.Scene && existing.Panel.IsMyselfAddCanvas &&
-                        existing.Panel.Canvas.sortingLayerID == panel.Canvas.sortingLayerID &&
-                        existing.Panel.WindowLayer == panel.WindowLayer &&
-                        existing.Panel.PolicyModal == panel.PolicyModal && existing.Panel.AlwaysInFront == panel.AlwaysInFront)
-                        max = Math.Max(max, existing.Panel.RequestedOrder);
-                panel.CommitOrder(checked(max + OrderDelta));
-                CheckedOrder(panel, panel.RequestedOrder);
-            }
-            manager.states[panel] = state;
-            if (state.Root) manager.inputRoots.Add(state.Root);
+            PanelInputState.ValidateHierarchy(panel);
+            manager.ValidateOpen(panel.Root, panel.EffectiveSettings);
+            var operation = panel.InitialOpen;
+            var state = new PanelState { Panel = panel, Session = panel.Session, Root = panel.Root,
+                Sequence = operation != null ? operation.Sequence : checked(++manager.sequence),
+                IntentSequence = operation?.Sequence ?? 0, Source = operation?.Prefab, Input = new PanelInputState(panel) };
+            if (operation?.Name != null) state.SourceNames.Add(operation.Name);
+            manager.states.Add(panel, state);
+            manager.registeredRoots.Add(state.Root);
             manager.Reconcile(panel);
-            manager.SyncLateSubscription();
-            // 当前窗口自身的准备通知仍在 View 初始化事务内，不能按无关观察异常处理。
-            if (manager.Current(state) && panel.IsMyselfAddCanvas) panel.NotifySortingOrder();
+            if (manager.Current(state)) panel.NotifySortingOrder();
         }
 
-        internal static void SetOrder(Panel panel, int value)
+        private static bool TryDisplay(Panel panel, out PanelManager manager, out PanelState state)
         {
-            var manager = _instance;
-            if (manager == null || !manager.states.TryGetValue(panel, out var state) || !manager.Current(state)) return;
-            CheckedOrder(panel, value);
-            manager.BuildOrders(panel, value);
-            panel.CommitOrder(value);
-            manager.Reconcile();
+            panel.EnsureDisplayAllowed();
+            manager = _instance;
+            state = null;
+            return manager != null && manager.states.TryGetValue(panel, out state) && manager.Current(state);
         }
-
-        internal static void Refresh(Panel panel)
+        internal static void SetVisible(Panel panel, bool value)
         {
-            var manager = _instance;
-            if (manager != null) manager.Reconcile();
+            if (!TryDisplay(panel, out var manager, out var state)) return;
+            manager.BuildOrders();
+            state.WantsVisible = value;
+            manager.Reconcile(mutationTarget: panel);
         }
-
-        internal static void RestoreCanvas(Panel panel)
+        internal static void BringToFront(Panel panel)
         {
-            if (_instance != null && _instance.states.TryGetValue(panel, out var state) && _instance.Current(state))
+            if (!TryDisplay(panel, out var manager, out var state)) return;
+            long next = checked(manager.sequence + 1);
+            manager.BuildOrders(panel, accepted: next);
+            manager.sequence = next;
+            state.Sequence = next;
+            manager.Reconcile(mutationTarget: panel);
+        }
+        internal static void UpdateDisplay(Panel panel, PanelOverrides changes)
+        {
+            panel.EnsureDisplayAllowed();
+            changes.ValidateDisplay();
+            if (!TryDisplay(panel, out var manager, out var state)) return;
+            var settings = changes.ApplyTo(panel.EffectiveSettings);
+            manager.BuildOrders(panel, settings);
+            if (!manager.CommitDisplay(state, settings, state.WantsVisible, null)) return;
+            manager.Reconcile(mutationTarget: panel);
+        }
+        private bool CommitDisplay(PanelState state, PanelConfig settings, bool visible, long? sequence)
+        {
+            if (!Current(state)) return false;
+            if (state.Panel.EffectiveSettings.Layer != settings.Layer)
             {
-                panel.Canvas.overrideSorting = true;
-                panel.Canvas.sortingOrder = state.Order;
+                // SetParent(false) 保留局部布局，不把 CoversRoot 当作拉伸指令。
+                state.Panel.transform.SetParent(state.Root.GetLayer(settings.Layer), false);
+                if (!Current(state)) return false;
             }
+            state.Panel.CommitSettings(settings);
+            state.WantsVisible = visible;
+            if (sequence.HasValue) state.Sequence = sequence.Value;
+            return true;
         }
 
-        private static int Compare(PanelState a, PanelState b)
-        {
-            int comparison = a.Layer.CompareTo(b.Layer);
-            if (comparison != 0) return comparison;
-            comparison = a.Order.CompareTo(b.Order);
-            return comparison != 0 ? comparison : a.Sequence.CompareTo(b.Sequence);
-        }
-
-        private void Reconcile(Panel preparing = null)
+        private void Reconcile(Panel preparing = null, Panel mutationTarget = null)
         {
             if (released) return;
-            var stale = new List<Panel>();
-            foreach (var state in states.Values)
+            var snapshot = new List<PanelState>(states.Values);
+            foreach (var state in snapshot)
             {
-                if (state.Panel)
+                if (!Current(state)) continue;
+                if (!state.Root || !state.Root.HasValidStructure || !state.Panel.Canvas ||
+                    state.Panel.GetComponentInParent<UIRootContext>(true) != state.Root || !ResourcesValid(state))
                 {
-                    state.Panel.RefreshBorrowedCanvas();
-                    state.Root = ResolveRoot(state.Panel);
-                    state.Scene = state.Panel.gameObject.scene.handle;
-                    if (state.Root) inputRoots.Add(state.Root);
+                    if (state.Panel.IsInitializing) throw new InvalidOperationException("Panel 准备期间根、Canvas 或资源责任失效。");
+                    Notify(state.Panel.Close);
                 }
-                if (!Current(state)) stale.Add(state.Panel);
-            }
-            foreach (var panel in stale)
-            {
-                var state = states[panel];
-                state.Input.Restore(true);
-                states.Remove(panel);
             }
             var orders = BuildOrders();
             var sorting = new List<KeyValuePair<PanelState, int>>();
-            foreach (var entry in orders)
+            foreach (var pair in orders)
             {
-                var state = entry.Key;
-                if (state.Order != entry.Value || state.Front != state.Panel.AlwaysInFront ||
-                    state.Layer != SortingLayer.GetLayerValueFromID(state.Panel.Canvas.sortingLayerID)) sorting.Add(entry);
-                state.Order = entry.Value;
-                state.Layer = SortingLayer.GetLayerValueFromID(state.Panel.Canvas.sortingLayerID);
-                state.Front = state.Panel.AlwaysInFront;
+                var state = pair.Key;
+                if (state.Order != pair.Value) sorting.Add(pair);
+                state.Order = pair.Value;
                 state.Panel.Canvas.overrideSorting = true;
-                state.Panel.Canvas.sortingOrder = state.Order;
+                state.Panel.Canvas.sortingLayerID = state.Root.Canvas.sortingLayerID;
+                state.Panel.Canvas.sortingOrder = pair.Value;
             }
-            var snapshot = new List<PanelState>(states.Values);
             var visibility = new List<KeyValuePair<PanelState, bool>>();
             foreach (var state in snapshot)
             {
-                if (!state.Panel.IsMyselfAddCanvas) continue;
-                bool active = Active(state);
-                bool visible = active;
-                bool blocked = !active;
-                state.Modal = state.Panel.PolicyModal && state.Panel.PolicyType != PanelType.Overlay && state.Panel.IsMyselfAddCanvas;
-                if (active)
+                if (!Current(state)) continue;
+                bool active = Active(state), visible = active && state.WantsVisible, blocked = !visible;
+                foreach (var upper in snapshot)
                 {
-                    foreach (var upper in snapshot)
-                    {
-                        if (ReferenceEquals(upper, state) || !Active(upper) || !SameContext(upper, state) ||
-                            !upper.Panel.IsMyselfAddCanvas || Compare(upper, state) <= 0) continue;
-                        if (multiPanelListener && state.Panel.PolicyType == PanelType.Panel && state.Panel.IsMyselfAddCanvas &&
-                            upper.Panel.PolicyType == PanelType.Panel) visible = false;
-                        if (upper.Panel.PolicyModal && upper.Panel.PolicyType != PanelType.Overlay) blocked = true;
-                    }
+                    if (!Active(upper) || !upper.WantsVisible || upper.Root != state.Root || Compare(upper, state) <= 0) continue;
+                    if (multiPanelListener && upper.Panel.EffectiveSettings.CoversRoot) visible = false;
+                    if (upper.Panel.EffectiveSettings.Modal) blocked = true;
                 }
-                if (active && (state.Active ? state.Visible != visible : !visible))
-                    visibility.Add(new KeyValuePair<PanelState, bool>(state, visible));
+                if (state.Visible != visible) visibility.Add(new KeyValuePair<PanelState, bool>(state, visible));
                 state.Active = active;
                 state.Visible = visible;
                 state.Blocked = blocked || !visible;
-                if (state.Panel.IsMyselfAddCanvas) state.Panel.Canvas.enabled = !active || visible;
+                state.Panel.Canvas.enabled = visible;
             }
-            // 所有独立窗口提交后再计算借用控件，不能依赖 Dictionary 枚举顺序或上轮状态。
-            foreach (var state in snapshot)
-            {
-                if (state.Panel.IsMyselfAddCanvas) continue;
-                PanelState owner = null;
-                for (var parent = state.Panel.transform.parent; parent; parent = parent.parent)
-                {
-                    var panel = parent.GetComponent<Panel>();
-                    if (panel && panel.IsMyselfAddCanvas && panel.Canvas == state.Panel.Canvas &&
-                        states.TryGetValue(panel, out var candidate) && Current(candidate)) { owner = candidate; break; }
-                }
-                bool active = Active(state);
-                bool visible = active && owner != null && owner.Visible;
-                if (active && (state.Active ? state.Visible != visible : !visible))
-                    visibility.Add(new KeyValuePair<PanelState, bool>(state, visible));
-                state.Active = active;
-                state.Visible = visible;
-                state.Blocked = !visible || owner == null || owner.Blocked;
-            }
-            SyncLateSubscription();
-            foreach (var root in new List<Canvas>(registeredRoots))
-                if (root && root.TryGetComponent<UIRootContext>(out var context)) context.RefreshMasks();
+            foreach (var root in new List<UIRootContext>(registeredRoots)) if (root) root.RefreshMasks();
             RefreshInput();
             RefreshPanelInput(snapshot);
-            // 结构、排序与 Canvas 先全部提交，业务重入后只通知仍匹配的旧记录。
-            var initializationErrors = new List<Exception>();
-            foreach (var entry in sorting)
-                if (entry.Key.Panel != preparing && Current(entry.Key) && entry.Key.Order == entry.Value)
+            SyncLateSubscription();
+            foreach (var pair in sorting)
+                if (pair.Key.Panel != preparing && Current(pair.Key) && pair.Key.Order == pair.Value)
                 {
-                    if (entry.Key.Panel.IsInitializing && ReferenceEquals(ViewManager.InitializingView.Key, entry.Key.Panel) &&
-                        ReferenceEquals(ViewManager.InitializingView.Value, entry.Key.Session))
-                    {
-                        try { entry.Key.Panel.NotifySortingOrder(); }
-                        catch (Exception error) { initializationErrors.Add(error); }
-                    }
-                    else Notify(() => entry.Key.Panel.NotifySortingOrder());
+                    if (pair.Key.Panel == mutationTarget && pair.Key.Panel.IsInitializing) pair.Key.Panel.NotifySortingOrder();
+                    else Notify(pair.Key.Panel.NotifySortingOrder);
                 }
-            foreach (var entry in visibility)
-                if (Active(entry.Key) && entry.Key.Visible == entry.Value)
-                    Notify(() => { if (entry.Value) entry.Key.Panel.Visible(); else entry.Key.Panel.Invisible(); });
-            ViewManager.ThrowCleanupErrors(initializationErrors);
-        }
-
-        private static void Notify(Action action)
-        {
-            try { action(); }
-            catch (Exception error) { Debug.LogException(error); }
-        }
-
-        internal static void ActivateView(View view)
-        {
-            if (view is Panel panel) { panel.RestoreCanvas(); _instance?.Reconcile(); }
-        }
-        internal static void DeactivateView(View view)
-        {
-            if (view is Panel panel && panel && !panel.gameObject.activeInHierarchy) _instance?.Reconcile();
-        }
-        internal static void LateUpdate() => _instance?.UpdatePanelQueueCore();
-        private void UpdatePanelQueueCore()
-        {
-            if (released) return;
-            RefreshInput();
-            inputSnapshot.Clear();
-            inputSnapshot.AddRange(states.Values);
-            RefreshPanelInput(inputSnapshot);
-            foreach (var state in states.Values)
-                if (!Current(state) || state.Active != Active(state) || state.Root != ResolveRoot(state.Panel) ||
-                    (!state.Panel.IsMyselfAddCanvas && state.Panel.Canvas != state.Panel.FindBorrowedCanvas()) ||
-                    state.Scene != state.Panel.gameObject.scene.handle)
+            foreach (var pair in visibility)
+                if (Current(pair.Key) && pair.Key.Visible == pair.Value)
                 {
-                    Reconcile();
-                    return;
+                    if (pair.Key.Panel == preparing || (pair.Key.Panel == mutationTarget && pair.Key.Panel.IsInitializing)) pair.Key.Panel.NotifyVisible(pair.Value);
+                    else Notify(() => pair.Key.Panel.NotifyVisible(pair.Value));
                 }
         }
+        internal static void ActivateView(View view) { if (view is Panel panel) _instance?.Reconcile(mutationTarget: panel); }
+        internal static void DeactivateView(View view) { if (view is Panel panel) _instance?.Reconcile(mutationTarget: panel); }
+        internal static void LateUpdate() => _instance?.Reconcile();
     }
 }

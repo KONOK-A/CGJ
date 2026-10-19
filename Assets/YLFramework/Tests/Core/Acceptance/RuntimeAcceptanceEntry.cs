@@ -42,7 +42,6 @@ namespace YLFramework.Core.Tests
         private UploadHandler upload;
         private SendWebRequest request;
         private readonly Owner module = new Owner();
-        private WindowCatalog catalog;
         private ColorSelectorWindow window;
         private AudioClip clip;
         private Provider provider;
@@ -181,19 +180,14 @@ namespace YLFramework.Core.Tests
             var startup = ModuleManager.StartUpModule(module);
             yield return startup;
             Check(startup.Exception == null && module.State == ModuleState.Running, "representative Core owner startup");
-            catalog = new WindowCatalog();
-            catalog.Register(new WindowDefinition("runtime55", ColorPrefab));
-            window = catalog.Open<ColorSelectorWindow>(module, "runtime55", null,
-                ColorSelectorWindow.Arguments(Color.green));
+            window = module.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.green), overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple });
             Check(window && window.Module == module && window.CurrentColor == Color.green, "formal View/Panel attaches to its owner");
             window.Close();
-            var canceled = catalog.OpenAsync<ColorSelectorWindow>(module, "runtime55");
+            var canceled = module.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab, overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple });
             Check(!canceled.isDone, "closed window creates genuinely pending Panel request");
             canceled.Abort();
             Check(canceled.Status == LoadViewStatus.Canceled, "Panel cancellation does not cancel shared producer");
-            window = catalog.Open<ColorSelectorWindow>(module, "runtime55", null,
-                ColorSelectorWindow.Arguments(Color.magenta));
-            catalog.Register(new WindowDefinition("pending55", ColorPrefab));
+            window = module.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.magenta), overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple });
 
             clip = AudioClip.Create("runtime55-owned", 44100, 1, 44100, false);
             // 验收只配置当前自有会话，不触发设置通知或写入游戏偏好键。
@@ -224,7 +218,7 @@ namespace YLFramework.Core.Tests
             previousWindow = window;
             request = HttpManager.PostBody(ServerUrl + "/hold", "{}", null);
             yield return new WaitForSecondsRealtime(.25f);
-            previousPanel = catalog.OpenAsync<ColorSelectorWindow>(module, "pending55");
+            previousPanel = module.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab, overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple });
             Check(!request.isDone && !previousPanel.isDone, "HTTP / Panel really pending before real exit");
             Check(window && window.Module == module && window.IsLoaded, "real exit begins with an active owned View");
             if (callbackFailure != null) throw new InvalidOperationException("HTTP observer assertion failed.", callbackFailure);

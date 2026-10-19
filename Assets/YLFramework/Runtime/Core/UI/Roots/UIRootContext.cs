@@ -4,133 +4,98 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
-    /// <summary>统一 UI 的配置宿主，不拥有 Module、窗口实例或加载请求。</summary>
+    /// <summary>实际 UI 根的身份、层映射和模态承载。不拥有业务、请求、Camera 或第二套缩放配置。</summary>
+    [DisallowMultipleComponent]
     public sealed class UIRootContext : MonoBehaviour
     {
         [Serializable]
         public sealed class Layer
         {
+            /// <summary>属于本根的明确层容器，不能自动回退到根 Transform。</summary>
             public Transform root;
+            /// <summary>是否为该层模态提供遮罩；开启时必须有有效 maskImage。</summary>
             public bool enableMask;
+            /// <summary>本层明确的遮罩，显隐与顺序由有效模态会话派生。</summary>
             public Image maskImage;
         }
-
-        [SerializeField] private Camera uiCamera;
         [SerializeField] private Canvas canvas;
-        [SerializeField] private CanvasScaler canvasScaler;
         [SerializeField] private GraphicRaycaster graphicRaycaster;
         [SerializeField] private Layer[] uiLayers = Array.Empty<Layer>();
-        [SerializeField] private RectTransform dragLayer;
 
-        public Canvas Canvas => canvas;
-        public Camera UICamera => uiCamera;
-        public RectTransform DragLayer => dragLayer;
-        internal int OverlayLayer => Math.Max(1, uiLayers.Length);
+        /// <summary>原生根 Canvas；相机、渲染模式和 SortingLayer 直接配置在该组件。</summary>
+        public Canvas Canvas => canvas ? canvas : GetComponent<Canvas>();
+        internal bool IsValid => this && Canvas && (graphicRaycaster ? graphicRaycaster : GetComponent<GraphicRaycaster>()) &&
+            gameObject.scene.IsValid() && gameObject.scene.isLoaded;
+        internal bool IsAvailable => IsValid && isActiveAndEnabled && Canvas.isActiveAndEnabled;
+        internal bool HasValidStructure
+        {
+            get
+            {
+                if (!IsValid || uiLayers == null || uiLayers.Length == 0) return false;
+                foreach (var layer in uiLayers)
+                    if (layer == null || !layer.root || !layer.root.IsChildOf(transform) ||
+                        layer.root.GetComponentInParent<UIRootContext>(true) != this ||
+                        (layer.enableMask && (!layer.maskImage || !layer.maskImage.transform.IsChildOf(layer.root)))) return false;
+                return true;
+            }
+        }
+        internal void ValidateStructure()
+        {
+            ValidateRoot();
+            if (!HasValidStructure) throw new InvalidOperationException("UIRootContext 层容器或必需遮罩丢失、跨根，根结构已失效。");
+        }
+        internal void ValidateRoot()
+        {
+            if (!IsValid) throw new InvalidOperationException("UIRootContext 必须有存活 Canvas/GraphicRaycaster 并属于已加载场景。");
+            if (uiLayers == null || uiLayers.Length == 0) throw new InvalidOperationException("UIRootContext 需要显式 Layer 0；请执行资产迁移或配置层容器。");
+        }
+        /// <summary>返回明确配置的层容器。缺层、已销毁层或跨根引用均报错，不补层也不回退。</summary>
+        public Transform GetLayer(int index)
+        {
+            ValidateRoot();
+            if (index < 0 || index >= uiLayers.Length || uiLayers[index] == null || !uiLayers[index].root ||
+                !uiLayers[index].root.IsChildOf(transform) || uiLayers[index].root.GetComponentInParent<UIRootContext>(true) != this)
+                throw new ArgumentOutOfRangeException(nameof(index), "Panel Layer 缺失、已销毁或不属于该根。");
+            return uiLayers[index].root;
+        }
+        internal bool HasMask(int index) => index >= 0 && index < uiLayers.Length && uiLayers[index] != null &&
+            uiLayers[index].enableMask && uiLayers[index].maskImage;
 
         private void OnEnable()
         {
+            if (!Application.isPlaying) return;
             if (!canvas) canvas = GetComponent<Canvas>();
-            if (!canvas) throw new InvalidOperationException("UIRootContext requires a root Canvas.");
-            if (!canvasScaler) canvasScaler = canvas.GetComponent<CanvasScaler>();
-            if (!graphicRaycaster) graphicRaycaster = canvas.GetComponent<GraphicRaycaster>();
-            // Unity 在 Camera 模式尚未绑定 Camera 时会暂时报告 Overlay，先恢复明确的 Camera 引用。
-            if (uiCamera) canvas.worldCamera = uiCamera;
-            if (canvas.renderMode == RenderMode.ScreenSpaceCamera)
-            {
-                if (!uiCamera) uiCamera = canvas.worldCamera;
-                if (!uiCamera) throw new InvalidOperationException("Camera UI root requires an explicitly configured Camera.");
-                canvas.worldCamera = uiCamera;
-                canvas.targetDisplay = uiCamera.targetDisplay;
-            }
-            PanelManager.RegisterRoot(canvas, PanelManager.GetUIType(canvas.transform));
+            if (!graphicRaycaster) graphicRaycaster = GetComponent<GraphicRaycaster>();
+            PanelManager.RegisterRoot(this);
         }
-
-        /// <summary>显式切换屏幕 UI 模式。不创建 Camera，也不修改 Camera 自身设置；WorldSpace 不在此配置入口内。</summary>
-        public void ConfigureCanvas(RenderMode mode, Camera camera = null, float planeDistance = 100)
+        private void OnDisable()
         {
-            if (!canvas) canvas = GetComponent<Canvas>();
-            if (!canvas) throw new InvalidOperationException("UIRootContext requires a root Canvas.");
-            if (mode != RenderMode.ScreenSpaceOverlay && mode != RenderMode.ScreenSpaceCamera)
-                throw new ArgumentOutOfRangeException(nameof(mode));
-            if (mode == RenderMode.ScreenSpaceCamera && (!camera || float.IsNaN(planeDistance) || float.IsInfinity(planeDistance) ||
-                planeDistance <= camera.nearClipPlane || planeDistance >= camera.farClipPlane))
-                throw new ArgumentException("Camera UI plane must lie between the configured Camera clipping planes.");
-            uiCamera = mode == RenderMode.ScreenSpaceCamera ? camera : null;
-            canvas.renderMode = mode;
-            canvas.worldCamera = uiCamera;
-            if (uiCamera)
-            {
-                canvas.planeDistance = planeDistance;
-                canvas.targetDisplay = uiCamera.targetDisplay;
-            }
-            MarkLayout();
+            if (uiLayers != null) foreach (var layer in uiLayers)
+                if (layer != null && layer.maskImage) layer.maskImage.gameObject.SetActive(false);
+            PanelManager.RootChanged();
         }
-
-        /// <summary>参考分辨率和自动/手动匹配由唯一适配组件持有。默认根没有第二份分辨率或每帧覆盖设置。</summary>
-        public void ConfigureResolution(Vector2 referenceResolution, bool automaticMatch = true, float manualMatch = 0.5f)
-        {
-            if (!canvas) canvas = GetComponent<Canvas>();
-            if (!canvasScaler && canvas) canvasScaler = canvas.GetComponent<CanvasScaler>();
-            if (!canvasScaler) throw new InvalidOperationException("Resolution configuration requires a CanvasScaler.");
-            if (!canvasScaler.TryGetComponent<AutomaticAdaptationCanvasScaler>(out var adaptation))
-            {
-                // 在增加配置组件前校验，非法调用不改变根的组件或缩放模式。
-                if (referenceResolution.x <= 0 || referenceResolution.y <= 0 || float.IsNaN(referenceResolution.x) ||
-                    float.IsNaN(referenceResolution.y) || float.IsInfinity(referenceResolution.x) || float.IsInfinity(referenceResolution.y) ||
-                    float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
-                    throw new ArgumentException("Reference resolution and match must be finite and valid.");
-                adaptation = canvasScaler.gameObject.AddComponent<AutomaticAdaptationCanvasScaler>();
-            }
-            adaptation.Configure(referenceResolution, automaticMatch, manualMatch);
-            canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            adaptation.Refresh();
-            MarkLayout();
-        }
-
-        private void MarkLayout()
-        {
-            if (canvas && canvas.transform is RectTransform rect) LayoutRebuilder.MarkLayoutForRebuild(rect);
-        }
-
-        public Transform GetLayer(int index)
-        {
-            if (uiLayers.Length == 0 && index == 0) return canvas.transform;
-            if (index < 0 || index >= uiLayers.Length || !uiLayers[index].root)
-                throw new ArgumentOutOfRangeException(nameof(index), "Window layer is not configured.");
-            return uiLayers[index].root;
-        }
-
-        internal bool HasMask(int index) => index >= 0 && index < uiLayers.Length &&
-            uiLayers[index].enableMask && uiLayers[index].maskImage;
+        private void OnDestroy() => PanelManager.UnregisterRoot(this);
 
         internal void RefreshMasks()
         {
-            if (!canvas) return;
+            if (uiLayers == null) return;
             for (int i = 0; i < uiLayers.Length; i++)
             {
                 var layer = uiLayers[i];
-                if (!layer.maskImage) continue;
-                var modal = PanelManager.GetLayerModal(canvas, i);
+                if (layer == null || !layer.maskImage) continue;
+                var modal = PanelManager.GetLayerModal(this, i);
                 var session = modal ? modal.Session : null;
-                bool show = isActiveAndEnabled && layer.enableMask && modal;
+                bool show = IsAvailable && layer.enableMask && modal;
                 layer.maskImage.gameObject.SetActive(show);
                 layer.maskImage.raycastTarget = show;
-                if (!show) continue;
-                if (!modal || !modal.IsLoaded || !ReferenceEquals(modal.Session, session)) continue;
+                if (!show || !modal || !modal.IsLoaded || !ReferenceEquals(modal.Session, session)) continue;
                 var maskCanvas = layer.maskImage.GetComponent<Canvas>();
                 if (!maskCanvas) maskCanvas = layer.maskImage.gameObject.AddComponent<Canvas>();
                 if (!layer.maskImage.GetComponent<GraphicRaycaster>()) layer.maskImage.gameObject.AddComponent<GraphicRaycaster>();
                 maskCanvas.overrideSorting = true;
-                maskCanvas.sortingLayerID = modal.Canvas.sortingLayerID;
-                maskCanvas.sortingOrder = modal.DisplaySortingOrder - 1;
+                maskCanvas.sortingLayerID = Canvas.sortingLayerID;
+                maskCanvas.sortingOrder = modal.SortingOrder - 1;
             }
-        }
-
-        private void OnDisable()
-        {
-            foreach (var layer in uiLayers)
-                if (layer.maskImage) layer.maskImage.gameObject.SetActive(false);
         }
     }
 }

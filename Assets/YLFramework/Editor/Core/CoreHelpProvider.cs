@@ -32,18 +32,22 @@ namespace YLFramework.Core.Editor
                         "Core 与 Audio 使用唯一正式 ResourceSystem，旧 Resource 运行栈已退出；主体不依赖 XFABManager，可选 XFAB Audio 适配独立且不自动装配。"),
                     HelpBlock.Paragraph("资源启动与退出", "应用持有 ResourceConfiguration，等待 ResourceSystem.InitializeAsync 完成并 TakeResult，调用 resources.BindCoreResourceProvider() 后再启动 Module。" +
                         "关闭业务 Module 后，按所有权归还实例、清理缓存、卸载 Scene，再等待 ShutdownAsync；成功关闭只解绑自身 Provider。SceneLease 释放不卸载场景，SceneRecord 持有依赖直到 native sceneUnloaded。")),
-                Guide("view-ui", "View 与 UI", "复用 Module/View 的唯一会话；WindowCatalog 是纯代码定义目录，不是另一套窗口宿主。",
-                    new[] { typeof(View), typeof(Panel), typeof(LoadViewArgs), typeof(LoadViewRequest<>), typeof(WindowCatalog), typeof(WindowDefinition), typeof(UIRootContext) },
+                Guide("view-ui", "View 与 UI", "Module 唯一拥有业务；Panel 继承 View，使用统一请求和可选配置快照，不需要窗口目录。",
+                    new[] { typeof(View), typeof(Panel), typeof(LoadViewArgs), typeof(LoadViewRequest<>), typeof(LoadPanelRequest<>), typeof(PanelConfig), typeof(PanelOverrides), typeof(PanelRule), typeof(UIRootContext) },
                     HelpBlock.Paragraph("加载与参数", "场景或动态对象使用 owner.AttachView(view) 显式纳管；Prefab/具名资产使用 Module.LoadView / LoadPanel 或异步入口。" +
-                        "异步请求检查 Status/error，必要时 Abort。LoadViewArgs.New() 的参数交给正式加载入口接管，只在 OnLoaded / OnWindowUpdated 借读，不存进字段、属性或容器。"),
+                        "普通根 View 使用 LoadView，根 Panel 使用 LoadPanel/LoadPanelAsync，支持完整地址、类型名和直接 Prefab。异步接受后先 Pending，最早下一帧回调；检查 Status/Exception，提交前可独立 Abort。" +
+                        "LoadViewArgs 由入口接管归还，普通 View 在 OnLoaded 借读；Panel 每次有效打开在 OnOpen 借读，不保存参数容器。"),
                     HelpBlock.Paragraph("生命周期", "在 Awake 的直接方法体使用 RegisterEvent 声明订阅，框架按有效启用轮次管理。覆写 Start 时直接调用 base.Start()。" +
                         "使用 OnViewEnabled、OnViewDisabled、OnClosed，不声明 OnEnable/OnDisable/OnDestroy 遮蔽框架消息。关闭走 View.Close，不能靠保存旧 lease 复用会话。"),
-                    HelpBlock.Paragraph("窗口与根", "WindowCatalog.Register(WindowDefinition) 保存定义；Open/OpenAsync 接受有效 owner、key 与实际 Canvas 根。" +
-                        "Unique 范围为 owner/key/根，目录不持有活跃窗口。UIRootContext 只配置 Canvas、Camera、层与模态遮罩，不拥有 Module；可复用 Prefabs/YLFramework.prefab。" +
-                        "Camera 由调用方管理；输入桥借用已有有效 EventSystem，缺失时按实际输入后端创建，不由 Help 创建。"),
+                    HelpBlock.Paragraph("配置与根", "Prefab 七字段默认 → Module.BindPanelRules 的不可变规则快照 → 本次 PanelOverrides。显式 false/0 会覆盖；规则按完整地址或 Prefab 精确匹配，不是注册门槛。" +
+                        "默认 Single/可缓存/参与 Top；Single 范围是 Module/实际根/已证明来源。根优先级为显式参数 → Module.PanelRoot → YLFrameworkRoot 宿主默认根，接受后固定。" +
+                        "UIRootContext 只保留 Canvas、GraphicRaycaster、显式层和可选遮罩；Camera/RenderMode 直接配置 Canvas，缩放只配置原生 CanvasScaler 与 AutomaticAdaptationCanvasScaler。根注册不改变对象寿命。"),
+                    HelpBlock.Paragraph("显示与输入", "Layer → 同层 Modal 分组 → Priority → 接受/前置序号生成顺序。CoversRoot 只声明覆盖，不改布局；ParticipatesInTop 独立于 Modal。" +
+                        "使用 Hide/Show/BringToFront/UpdateDisplay 五字段更新；OnOpen 中只读显示，不能 Close 当前 Panel/owner 或重入本 Module 的 Panel 打开。输入只门禁标准 UI，不关闭业务 ActionMap，不改写控件业务字段。"),
+                    HelpBlock.Notice("资产迁移", "已有资产不会运行时自修复。集成后显式执行 YLFramework/Core/UI Panel/核验资产迁移，再执行资产迁移，核对 GUID/fileID、CanvasScaler、Tips Variant 和 Unity 生成的 meta。完成源码或离线编译不等于两种预设已验收。"),
                     Document("UI 接入、Tips 与 ColorSelector", "Modules/UI.md")),
                 Guide("authoring", "创建与生成入口", "创建操作留在所属工具，帮助只提供导航，不执行生成器。",
-                    new[] { typeof(Module), typeof(WindowCatalog) },
+                    new[] { typeof(Module), typeof(PanelRule) },
                     HelpBlock.Paragraph("Module 模板", "Assets/Create/YLFramework/Core/Module 输出 Assets/YLFramework/Examples/Core/Modules 下的独立示例和 asmdef，拒绝覆盖已有目录。" +
                         "namespace 为 YLFramework.Core.Examples；不会生成完整 MVC/View/Panel 代码或改写 Assets/Games。"),
                     HelpBlock.Paragraph("默认资源与资源常量", "YLFramework/Core/Create Missing Default Resources 只补缺失的 Core Canvas/EventSystem，不替换已有身份。" +

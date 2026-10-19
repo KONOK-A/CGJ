@@ -1,196 +1,48 @@
-using System; 
-using System.Collections.Generic; 
-using UnityEngine; 
-using YLFramework.Foundation;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace YLFramework.Core
 {
     public abstract partial class Module
     {
-        #region 加载Panel
+        internal PanelRuleSnapshot PanelRules = PanelRuleSnapshot.Empty;
 
-        /// <summary>
-        /// 加载UI,从当前模块和基础模块中加载
-        /// </summary>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="param">参数</param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanel(string asset_name, UIType type, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public Panel LoadPanel(string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param)
-        {
-            return PanelManager.LoadPanel(this,asset_name, type, parent, param);
-        }
+        /// <summary>之后接受的 Panel 请求的默认根。null 清除绑定；已销毁的绑定不会回退到宿主默认根。</summary>
+        public UIRootContext PanelRoot { get; set; }
 
-        /// <summary>
-        /// 加载UI(泛型方式),从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="param">参数</param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanel<T>(string asset_name, UIType type,Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public T LoadPanel<T>(  string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-        {
-            return PanelManager.LoadPanelLegacy<T>(this, asset_name, type, parent, param);
-        }
+        /// <summary>完整复制并校验已解析规则后原子替换。枚举或校验失败保留旧快照；null/空集合清除可选规则。</summary>
+        public void BindPanelRules(IEnumerable<PanelRule> rules) => PanelRules = PanelRuleSnapshot.Capture(rules);
 
+        /// <summary>仅以 typeof(T).Name 作为地址打开 Panel。无需窗口目录，但 Core provider 的资源目录必须精确登记该地址或显式别名；不猜完整路径或文件名。</summary>
+        public T LoadPanel<T>(LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => LoadPanel<T>(typeof(T).Name, loadViewArgs, root, overrides);
+        /// <summary>按完整资源地址打开或有效重开 Panel，参数由本次请求接管并归还。</summary>
+        public T LoadPanel<T>(string assetName, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => PanelManager.Load<T>(this, assetName, null, loadViewArgs, root, overrides);
+        /// <summary>直接 Prefab 打开，不依赖资源 provider；与解析到同一 Prefab 的命名请求共享单实例范围。</summary>
+        public T LoadPanel<T>(GameObject prefab, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => PanelManager.Load<T>(this, null, prefab, loadViewArgs, root, overrides);
+        /// <summary>非泛型完整地址入口，返回实际根 Panel。</summary>
+        public Panel LoadPanel(string assetName, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default)
+            => LoadPanel<Panel>(assetName, loadViewArgs, root, overrides);
+        /// <summary>非泛型直接 Prefab 入口，返回实际根 Panel。</summary>
+        public Panel LoadPanel(GameObject prefab, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default)
+            => LoadPanel<Panel>(prefab, loadViewArgs, root, overrides);
 
-
-        /// <summary>
-        /// 加载UI(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="param">参数</param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanel<T>(UIType type, Transform parent ,LoadViewArgs loadViewArgs)代替!")]
-        public T LoadPanel<T>(UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-        {
-            return PanelManager.LoadPanelLegacy<T>(this, typeof(T).Name, type, parent, param);
-        }
-
-        /// <summary>
-        /// 异步加载UI,从当前模块和基础模块中加载
-        /// </summary>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="uiType">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="param">参数</param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanelAsync(string asset_name, UIType uiType, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public LoadPanelRequest<Panel> LoadPanelAsync(string asset_name, UIType uiType = UIType.UI, Transform parent = null, params object[] param)
-        {
-            return PanelManager.LoadPanelAsync<Panel>(this, asset_name, uiType, parent, param);
-        }
-
-        /// <summary>
-        /// 异步加载UI(泛型方式),从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="param">参数</param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanelAsync<T>( string asset_name,UIType type, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public LoadPanelRequest<T> LoadPanelAsync<T>( string asset_name, UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-        {
-            return PanelManager.LoadPanelAsync<T>(this,asset_name, type, parent, param);
-        }
-
-        /// <summary>
-        /// 异步加载UI(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent"></param>
-        /// <param name="param"></param>
-        /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadPanelAsync<T>(UIType type, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public LoadPanelRequest<T> LoadPanelAsync<T>(UIType type = UIType.UI, Transform parent = null, params object[] param) where T : Panel
-        {
-            return PanelManager.LoadPanelAsync<T>(this, typeof(T).Name, type, parent, param);
-        }
-
-
-        #endregion
-
-
-        #region 加载Panel(With LoadViewArgs)
-
-        /// <summary>
-        /// 加载UI,从当前模块和基础模块中加载
-        /// </summary>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public Panel LoadPanel(string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null)
-        {
-            return PanelManager.LoadPanel<Panel>(this, asset_name, type, parent, loadViewArgs);
-        }
-
-        /// <summary>
-        /// 加载UI(泛型方式),从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public T LoadPanel<T>(string asset_name, UIType type = UIType.UI, Transform parent = null,LoadViewArgs loadViewArgs = null) where T : Panel
-        {
-            return PanelManager.LoadPanel<T>(this,asset_name, type, parent, loadViewArgs);
-        }
-
-
-
-        /// <summary>
-        /// 加载UI(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public T LoadPanel<T>(UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
-        {
-            return LoadPanel<T>(typeof(T).Name, type, parent, loadViewArgs);
-        }
-
-        /// <summary>
-        /// 异步加载UI,从当前模块和基础模块中加载
-        /// </summary>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="uiType">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public LoadPanelRequest<Panel> LoadPanelAsync(string asset_name, UIType uiType = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null)
-        {
-            return PanelManager.LoadPanelAsync<Panel>(this, asset_name, uiType, parent, loadViewArgs);
-        }
-
-        /// <summary>
-        /// 异步加载UI(泛型方式),从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T">Panel类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent">父节点</param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public LoadPanelRequest<T> LoadPanelAsync<T>(string asset_name, UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
-        {
-            return PanelManager.LoadPanelAsync<T>(this, asset_name, type, parent, loadViewArgs);
-        }
-
-        /// <summary>
-        /// 异步加载UI(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
-        /// 从当前模块和基础模块中加载
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="asset_name">资源名称</param>
-        /// <param name="type">UI类型,"UI"普通UI，"DontDestroyUI"切换场景时不会销毁的UI</param>
-        /// <param name="parent"></param>
-        /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
-        /// <returns></returns>
-        public LoadPanelRequest<T> LoadPanelAsync<T>(UIType type = UIType.UI, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : Panel
-        {
-            return PanelManager.LoadPanelAsync<T>(this, typeof(T).Name, type, parent, loadViewArgs);
-        }
-
-        #endregion
+        /// <summary>仅以 typeof(T).Name 为资源地址异步打开，须由 provider 精确登记；接受后先 Pending，最早下一帧执行数据回调，不扫描或猜路径。</summary>
+        public LoadPanelRequest<T> LoadPanelAsync<T>(LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => LoadPanelAsync<T>(typeof(T).Name, loadViewArgs, root, overrides);
+        /// <summary>按完整地址异步打开；每次调用有独立终态、参数与提交前 Abort 权限。</summary>
+        public LoadPanelRequest<T> LoadPanelAsync<T>(string assetName, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => PanelManager.Start<T>(this, assetName, null, loadViewArgs, root, overrides);
+        /// <summary>直接 Prefab 异步打开，缓存/已有单实例也遵守下一帧协议。</summary>
+        public LoadPanelRequest<T> LoadPanelAsync<T>(GameObject prefab, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default) where T : Panel
+            => PanelManager.Start<T>(this, null, prefab, loadViewArgs, root, overrides);
+        /// <summary>非泛型命名异步入口。</summary>
+        public LoadPanelRequest<Panel> LoadPanelAsync(string assetName, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default)
+            => LoadPanelAsync<Panel>(assetName, loadViewArgs, root, overrides);
+        /// <summary>非泛型直接 Prefab 异步入口。</summary>
+        public LoadPanelRequest<Panel> LoadPanelAsync(GameObject prefab, LoadViewArgs loadViewArgs = null, UIRootContext root = null, PanelOverrides overrides = default)
+            => LoadPanelAsync<Panel>(prefab, loadViewArgs, root, overrides);
     }
 }

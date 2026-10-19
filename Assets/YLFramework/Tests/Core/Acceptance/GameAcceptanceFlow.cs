@@ -22,6 +22,8 @@ namespace YLFramework.Core.Tests
             for (int i = 0; i < intKeys.Length; i++) { int n = floatKeys.Length + i; exists[n] = PlayerPrefs.HasKey(intKeys[i]); values[n] = PlayerPrefs.GetInt(intKeys[i]); }
             float scale = Time.timeScale;
             int frameRate = Application.targetFrameRate;
+            OverlayModule uiOwner = null;
+            GameObject ownedRoot = null;
             Check(XFGameFramework.ModuleManager.GetModule<MainModule>() == null && XFFSM.FSMController.GetFSM("GameState") == null,
                 "owns fresh original game module and FSM session");
             try
@@ -51,15 +53,17 @@ namespace YLFramework.Core.Tests
                     Mathf.Abs(AudioKit.Settings.SoundVolume.Value - 0.61f) < 0.001f, "persistent setting sliders update framework audio");
                 Button(setting, "Close");
                 var music = AudioKit.Music;
-                var uiOwner = new OverlayModule();
+                uiOwner = new OverlayModule();
                 yield return ModuleManager.StartUpModule(uiOwner);
-                var catalog = new WindowCatalog();
-                catalog.Register(new WindowDefinition("coexist", colorPrefab));
-                var window = catalog.Open<ColorSelectorWindow>(uiOwner, "coexist", args: ColorSelectorWindow.Arguments(Color.cyan));
-                var ownedRoot = window.RootCanvas.gameObject;
+                var rootPrefab = Resources.Load<GameObject>("YLFramework/Core/Canvas");
+                Check(rootPrefab && rootPrefab.GetComponent<UIRootContext>(), "migrated lightweight root is available");
+                ownedRoot = Object.Instantiate(rootPrefab);
+                ownedRoot.name = "YLUI.Coexist.OwnedRoot";
+                var window = uiOwner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.cyan), ownedRoot.GetComponent<UIRootContext>());
                 Check(EventSystem.current == system && music.IsPlaying, "new YL UI borrows original EventSystem without disturbing BGM");
                 uiOwner.Close();
                 Object.Destroy(ownedRoot);
+                ownedRoot = null;
                 yield return null;
                 yield return null;
                 Check(EventSystem.current == system && system.currentInputModule is StandaloneInputModule && music.IsPlaying,
@@ -90,12 +94,17 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                XFFSM.FSMController.RemoveFSM("GameState");
-                AudioKit.Shutdown();
-                Time.timeScale = scale;
-                Application.targetFrameRate = frameRate;
-                for (int i = 0; i < floatKeys.Length; i++) { if (exists[i]) PlayerPrefs.SetFloat(floatKeys[i], values[i]); else PlayerPrefs.DeleteKey(floatKeys[i]); }
-                for (int i = 0; i < intKeys.Length; i++) { int n = floatKeys.Length + i; if (exists[n]) PlayerPrefs.SetInt(intKeys[i], (int)values[n]); else PlayerPrefs.DeleteKey(intKeys[i]); }
+                try { uiOwner?.Close(); }
+                finally
+                {
+                    if (ownedRoot) Object.Destroy(ownedRoot);
+                    XFFSM.FSMController.RemoveFSM("GameState");
+                    AudioKit.Shutdown();
+                    Time.timeScale = scale;
+                    Application.targetFrameRate = frameRate;
+                    for (int i = 0; i < floatKeys.Length; i++) { if (exists[i]) PlayerPrefs.SetFloat(floatKeys[i], values[i]); else PlayerPrefs.DeleteKey(floatKeys[i]); }
+                    for (int i = 0; i < intKeys.Length; i++) { int n = floatKeys.Length + i; if (exists[n]) PlayerPrefs.SetInt(intKeys[i], (int)values[n]); else PlayerPrefs.DeleteKey(intKeys[i]); }
+                }
             }
         }
 

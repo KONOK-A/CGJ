@@ -9,23 +9,18 @@ namespace YLFramework.Core.Tests
         public static System.Action<YLCoreSmokePanel> InvisibleProbe;
         public static System.Action<YLCoreSmokePanel> EnabledProbe;
         public static System.Action<YLCoreSmokePanel, LoadViewArgs> UpdateProbe;
-        public static PanelType ProbePanelType = PanelType.Window;
         public const string ProbeEvent = "YLCoreSmoke.PanelEvent";
         public static bool UseSharedHandler;
         public static int SharedEventCount;
-        public bool KeepInFront;
-        public override bool AlwaysInFront => KeepInFront;
-        public bool Modal;
-        public override bool IsModal => Modal;
-        public PanelType? TypeOverride;
-        public override PanelType PanelType => TypeOverride ?? ProbePanelType;
         public int LoadedCount { get; private set; }
         public int ArgsCount { get; private set; }
+        public int OpenCount { get; private set; }
         public int RemovedCount { get; private set; }
         public int ClosedCount { get; private set; }
         public int Token { get; private set; }
         public int EventCount { get; private set; }
         public System.Action RemoveAction;
+        public System.Action ClosedAction;
 
         protected override void Awake()
         {
@@ -50,11 +45,16 @@ namespace YLFramework.Core.Tests
         }
 
         protected override void OnSortingOrderChange(int sortingOrder) => SortingProbe?.Invoke(this, sortingOrder);
-        public override void Visible() => VisibleProbe?.Invoke(this);
-        public override void Invisible() => InvisibleProbe?.Invoke(this);
-        protected override void OnClosed() => ClosedCount++;
+        protected override void Visible() => VisibleProbe?.Invoke(this);
+        protected override void Invisible() => InvisibleProbe?.Invoke(this);
+        protected override void OnClosed() { ClosedCount++; ClosedAction?.Invoke(); }
         protected override void OnViewEnabled() => EnabledProbe?.Invoke(this);
-        public override void OnWindowUpdated(LoadViewArgs args) => UpdateProbe?.Invoke(this, args);
+        protected override void OnOpen(LoadViewArgs args)
+        {
+            OpenCount++;
+            Token = args.GetInt("token");
+            UpdateProbe?.Invoke(this, args);
+        }
 
         public override void OnRemove()
         {
@@ -71,9 +71,48 @@ namespace YLFramework.Core.Tests
             InvisibleProbe = null;
             EnabledProbe = null;
             UpdateProbe = null;
-            ProbePanelType = YLFramework.Core.PanelType.Window;
             UseSharedHandler = false;
             SharedEventCount = 0;
+        }
+    }
+
+    public static class CorePanelTestRoots
+    {
+        public static UIRootContext Create(UnityEngine.GameObject host, int layerCount = 2, bool activate = true)
+        {
+            if (!host) throw new System.ArgumentNullException(nameof(host));
+            if (host.activeSelf || !host.GetComponent<UnityEngine.Canvas>() ||
+                !host.GetComponent<UnityEngine.UI.GraphicRaycaster>())
+                throw new System.ArgumentException("测试根必须 inactive 且已有 Canvas/GraphicRaycaster。", nameof(host));
+            if (layerCount < 1) throw new System.ArgumentOutOfRangeException(nameof(layerCount));
+            if (host.GetComponent<UIRootContext>())
+                throw new System.ArgumentException("测试根不能已有 UIRootContext。", nameof(host));
+            var context = host.AddComponent<UIRootContext>();
+            var layers = new UIRootContext.Layer[layerCount];
+            for (int i = 0; i < layers.Length; i++)
+            {
+                var container = new UnityEngine.GameObject("Layer" + i, typeof(UnityEngine.RectTransform));
+                container.transform.SetParent(host.transform, false);
+                var rect = (UnityEngine.RectTransform)container.transform;
+                rect.anchorMin = UnityEngine.Vector2.zero;
+                rect.anchorMax = UnityEngine.Vector2.one;
+                rect.sizeDelta = UnityEngine.Vector2.zero;
+                var mask = new UnityEngine.GameObject("Mask", typeof(UnityEngine.RectTransform));
+                mask.SetActive(false);
+                mask.transform.SetParent(container.transform, false);
+                var maskRect = (UnityEngine.RectTransform)mask.transform;
+                maskRect.anchorMin = UnityEngine.Vector2.zero;
+                maskRect.anchorMax = UnityEngine.Vector2.one;
+                maskRect.sizeDelta = UnityEngine.Vector2.zero;
+                var image = mask.AddComponent<UnityEngine.UI.Image>();
+                image.color = new UnityEngine.Color(0, 0, 0, .5f);
+                image.raycastTarget = false;
+                layers[i] = new UIRootContext.Layer { root = rect, enableMask = true, maskImage = image };
+            }
+            typeof(UIRootContext).GetField("uiLayers", System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic).SetValue(context, layers);
+            if (activate) host.SetActive(true);
+            return context;
         }
     }
 }

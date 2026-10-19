@@ -34,9 +34,10 @@ namespace YLFramework.Core
         private void RefreshInput(bool discover = false)
         {
             if (released || !ApplicationTool.isPlaying) return;
-            inputRoots.RemoveWhere(root => !root);
+            registeredRoots.RemoveWhere(root => !root || !root.HasValidStructure);
             bool needed = false;
-            foreach (var root in inputRoots) if (root.isActiveAndEnabled) { needed = true; break; }
+            foreach (var root in registeredRoots)
+                if (root.IsAvailable) { needed = true; break; }
             if (!needed) { ReleaseOwnedInput(); SyncLateSubscription(); return; }
             var current = EventSystem.current;
             if (current && !current.isActiveAndEnabled) current = null;
@@ -130,7 +131,15 @@ namespace YLFramework.Core
                     input.Selection = system.currentSelectedGameObject;
                     input.SelectionSystem = system;
                 }
-                input.Apply(state.Blocked);
+                try { input.Apply(state.Blocked); }
+                catch (Exception error)
+                {
+                    if (state.Panel.IsInitializing) throw;
+                    // 动态业务层级使物理门禁失效时结束该会话，不能让标准控件在仅逻辑阻挡下继续接收输入。
+                    Debug.LogException(error);
+                    state.Panel.DiscardOnExit = true;
+                    if (Current(state)) Notify(state.Panel.Close);
+                }
             }
             if (!system || !system.isActiveAndEnabled || system.alreadySelecting) return;
             bool cleared = false;
@@ -143,6 +152,7 @@ namespace YLFramework.Core
                 }
             // Select/Deselect 可关闭、销毁或重开窗口。只允许仍匹配的会话恢复，且不覆盖外部或新选择。
             if (released || EventSystem.current != system || system.currentSelectedGameObject) return;
+            snapshot.Sort((a, b) => Compare(b, a));
             foreach (var state in snapshot)
             {
                 if (!Active(state) || state.Blocked || GetFocusedPanel(state.Root) != state.Panel) continue;
@@ -155,7 +165,7 @@ namespace YLFramework.Core
                     system.SetSelectedGameObject(selection);
                     return;
                 }
-                if ((cleared || state.Modal) && state.Modal)
+                if ((cleared || state.Panel.EffectiveSettings.Modal) && state.Panel.EffectiveSettings.Modal && state.Panel.EffectiveSettings.ParticipatesInTop)
                 {
                     selection = input.FirstSelection();
                     if (selection) { system.SetSelectedGameObject(selection); return; }
@@ -163,14 +173,25 @@ namespace YLFramework.Core
             }
         }
 
-        internal static void ReleaseView(View view)
+        internal static void ReleaseView(View view, out List<CorePrefabLease> sources, bool rollback)
         {
+            sources = null;
             var manager = _instance;
-            if (manager == null || !(view is Panel panel)) return;
+            if (!(view is Panel panel)) return;
+            // 来源责任随 Core 实例会话保存；协调器先 reset 也不能先于 instance discard 释放它。
+            sources = panel.SourcePins;
+            if (sources.Count != 0) view.DiscardOnExit = true;
+            if (manager == null) return;
             if (manager.states.TryGetValue(panel, out var state))
             {
-                state.Input.Restore(true);
                 manager.states.Remove(panel);
+                if (!rollback && state.Source && panel.EffectiveSettings.InstanceMode == PanelInstanceMode.Single)
+                {
+                    manager.sequence = checked(manager.sequence + 1);
+                    foreach (var pending in panel.Module.pendingViews)
+                        if (pending is PanelOperation operation && operation.Sequence < manager.sequence)
+                            operation.AddClosedScope(state.Source, state.Root);
+                }
                 var system = EventSystem.current;
                 if (system && state.Input.Owns(system.currentSelectedGameObject))
                 {
@@ -182,6 +203,7 @@ namespace YLFramework.Core
                     }
                     else system.SetSelectedGameObject(null);
                 }
+                state.Input.Restore(true);
             }
             manager.Reconcile();
         }
@@ -190,46 +212,47 @@ namespace YLFramework.Core
             _instance.states.TryGetValue(panel, out var state) && _instance.Active(state) && state.Visible;
         internal static bool IsInputBlocked(Panel panel) => !IsVisible(panel) || _instance.states[panel].Blocked;
 
-        private static Panel Query(Canvas root, bool modal, bool focus, UIType? type = null)
+        private static Panel Query(UIRootContext root, bool modal, bool focus)
         {
             var manager = _instance;
-            if (manager == null || (!root && !type.HasValue)) return null;
+            if (manager == null || !root) return null;
             PanelState top = null;
             foreach (var state in manager.states.Values)
             {
-                if (!manager.Active(state) || !state.Panel.IsMyselfAddCanvas || state.Panel.PolicyType == PanelType.Overlay ||
-                    !state.Visible || (root && state.Root != root) || (type.HasValue && state.Panel.UIType != type.Value) ||
-                    (modal && !state.Modal) || (focus && state.Blocked)) continue;
+                var settings = state.Panel.EffectiveSettings;
+                if (!manager.Active(state) || !state.Visible || state.Root != root ||
+                    (modal ? !settings.Modal : focus ? state.Blocked || (!settings.ParticipatesInTop && !settings.Modal) : !settings.ParticipatesInTop)) continue;
                 if (top == null || Compare(state, top) > 0) top = state;
             }
             return top?.Panel;
         }
 
         /// <summary>指定实际根的普通窗口 Top，不创建 Manager 或宿主。</summary>
-        public static Panel GetTopPanel(Canvas root) => Query(root, false, false);
-        /// <summary>兼容寿命分类查询；多根业务应使用明确根重载。</summary>
-        public static Panel GetTopPanel(UIType type) => Query(null, false, false, type);
-        public static Panel GetModalPanel(Canvas root) => Query(root, true, false);
-        public static Panel GetFocusedPanel(Canvas root) => Query(root, false, true);
+        public static Panel GetTopPanel(UIRootContext root) => Query(root, false, false);
+        /// <summary>指定根最高的有效可见模态 Panel，包含不参与 Top 的模态。</summary>
+        public static Panel GetModalPanel(UIRootContext root) => Query(root, true, false);
+        /// <summary>指定根当前的有效焦点候选，不创建根或 Manager。</summary>
+        public static Panel GetFocusedPanel(UIRootContext root) => Query(root, false, true);
 
-        internal static Panel GetLayerModal(Canvas root, int layer)
+        internal static Panel GetLayerModal(UIRootContext root, int layer)
         {
             if (_instance == null) return null;
             PanelState top = null;
             foreach (var state in _instance.states.Values)
-                if (_instance.Active(state) && state.Visible && state.Root == root && state.Modal &&
-                    state.Panel.WindowLayer == layer && (top == null || Compare(state, top) > 0)) top = state;
+                if (_instance.Active(state) && state.Visible && state.Root == root && state.Panel.EffectiveSettings.Modal &&
+                    state.Panel.EffectiveSettings.Layer == layer && (top == null || Compare(state, top) > 0)) top = state;
             return top?.Panel;
         }
 
-        public static void GetAllPanels(UIType type, List<Panel> results)
+        /// <summary>清空并填充指定根的全部有效会话，包含隐藏和停用会话；不承诺枚举排序。</summary>
+        public static void GetAllPanels(UIRootContext root, List<Panel> results)
         {
             if (results == null) throw new ArgumentNullException(nameof(results));
             results.Clear();
             var manager = _instance;
-            if (manager == null) return;
+            if (manager == null || !root || !root.HasValidStructure) return;
             foreach (var state in manager.states.Values)
-                if (manager.Current(state) && state.Panel.UIType == type && state.Panel.IsMyselfAddCanvas) results.Add(state.Panel);
+                if (manager.Current(state) && state.Root == root && ResourcesValid(state)) results.Add(state.Panel);
         }
 
     }

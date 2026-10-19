@@ -47,7 +47,6 @@ namespace YLFramework.Core
         private bool fade;
         private UITipHandle handle;
         private UITipsPresenter presenter;
-        public override PanelType PanelType => PanelType.Overlay;
 
         public override void OnLoaded(LoadViewArgs args)
         {

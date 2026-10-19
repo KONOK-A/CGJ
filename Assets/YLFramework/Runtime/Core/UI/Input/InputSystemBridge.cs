@@ -95,7 +95,121 @@ namespace YLFramework.Core
             return null;
         }
 
-        internal static bool PointerStillPressed(BaseInputModule module, object buttonControl, PointerEventData data, PointerEventData.InputButton button)
+        internal static object GetPointerDevice(PointerEventData data) => data.GetType().GetProperty("device")?.GetValue(data);
+        internal static int GetTouchId(PointerEventData data) => (int?)data.GetType().GetProperty("touchId")?.GetValue(data) ?? 0;
+
+        internal static bool IsPointerDeviceRemoved(object device)
+        {
+            if (device == null) return false; // Legacy PointerEventData 没有 InputDevice。
+            var added = device.GetType().GetProperty("added");
+            if (added == null || added.PropertyType != typeof(bool))
+                throw new InvalidOperationException("Input System 设备存活布局不匹配，不能确认旧捕获已结束。");
+            return !(bool)added.GetValue(device);
+        }
+
+        private sealed class PointerAdapter
+        {
+            internal readonly FieldInfo States, Length, First, Additional, EventData;
+            internal readonly FieldInfo[] Buttons, Objects;
+            internal readonly FieldInfo Dragging, IgnoreClick, ClickCount, ClickTime, SameObject, PressRaycast;
+            internal PointerAdapter(Type moduleType)
+            {
+                FieldInfo Field(Type type, string name) => type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) ??
+                    throw new MissingFieldException(type.FullName, name);
+                States = Field(moduleType, "m_PointerStates");
+                Length = Field(States.FieldType, "length");
+                First = Field(States.FieldType, "firstValue");
+                Additional = Field(States.FieldType, "additionalValues");
+                var pointer = First.FieldType;
+                EventData = Field(pointer, "eventData");
+                Buttons = new[] { Field(pointer, "leftButton"), Field(pointer, "rightButton"), Field(pointer, "middleButton") };
+                var button = Buttons[0].FieldType;
+                Objects = new[] { Field(button, "m_PressObject"), Field(button, "m_RawPressObject"), Field(button, "m_LastPressObject"), Field(button, "m_DragObject") };
+                Dragging = Field(button, "m_Dragging");
+                IgnoreClick = Field(button, "m_IgnoreNextClick");
+                ClickCount = Field(button, "m_ClickCount");
+                ClickTime = Field(button, "m_ClickTime");
+                SameObject = Field(button, "m_ClickedOnSameGameObject");
+                PressRaycast = Field(button, "m_PressRaycast");
+                if (!States.FieldType.IsValueType || !pointer.IsValueType || !button.IsValueType ||
+                    Additional.FieldType.GetElementType() != pointer || Length.FieldType != typeof(int) ||
+                    !typeof(PointerEventData).IsAssignableFrom(EventData.FieldType) || Array.Exists(Buttons, member => member.FieldType != button) ||
+                    Array.Exists(Objects, member => member.FieldType != typeof(GameObject)) || SameObject.FieldType != typeof(bool) ||
+                    ClickCount.FieldType != typeof(int) || ClickTime.FieldType != typeof(float) ||
+                    Dragging.FieldType != typeof(bool) || IgnoreClick.FieldType != typeof(bool) || PressRaycast.FieldType != typeof(RaycastResult))
+                    throw new InvalidOperationException("Input System 指针布局不匹配；需要核实实际包版本和 IL2CPP 保留结果，不能回退为业务字段覆盖。");
+            }
+        }
+        private static PointerAdapter pointerAdapter;
+        private static FieldInfo pendingInputFieldActivation;
+
+        internal static void CancelPendingInputFieldActivation(UnityEngine.UI.InputField input)
+        {
+            var field = pendingInputFieldActivation ?? (pendingInputFieldActivation = typeof(UnityEngine.UI.InputField).GetField("m_ShouldActivateNextUpdate", BindingFlags.NonPublic | BindingFlags.Instance));
+            if (field == null || field.FieldType != typeof(bool))
+                throw new InvalidOperationException("UGUI InputField 延迟激活布局不匹配，不能完成门禁收尾。");
+            field.SetValue(input, false);
+        }
+
+        // 对应 Input System 1.14.0 的 ButtonState。所有值类型逐层写回，物理 isPressed/framePressState/pressTime 保留。
+        internal static bool CancelPointer(BaseInputModule module, PointerEventData data, int pointerId,
+            PointerEventData.InputButton button, object device, int touchId, GameObject target, bool acceptingDown = false)
+        {
+            if (!module || data.pointerId != pointerId || !ReferenceEquals(GetPointerDevice(data), device) || GetTouchId(data) != touchId) return false;
+            bool matched = false;
+            if (module.GetType().FullName == "UnityEngine.InputSystem.UI.InputSystemUIInputModule")
+            {
+                var adapter = pointerAdapter ?? (pointerAdapter = new PointerAdapter(module.GetType()));
+                object states = adapter.States.GetValue(module);
+                int length = (int)adapter.Length.GetValue(states);
+                var additional = (Array)adapter.Additional.GetValue(states);
+                for (int i = 0; i < length; i++)
+                {
+                    object pointer = i == 0 ? adapter.First.GetValue(states) : additional.GetValue(i - 1);
+                    if (!ReferenceEquals(adapter.EventData.GetValue(pointer), data)) continue;
+                    var field = adapter.Buttons[(int)button];
+                    object state = field.GetValue(pointer);
+                    bool owns = acceptingDown;
+                    foreach (var member in adapter.Objects) owns |= (GameObject)member.GetValue(state) == target;
+                    if (!owns) continue;
+                    foreach (var member in adapter.Objects) member.SetValue(state, null);
+                    adapter.Dragging.SetValue(state, false);
+                    adapter.IgnoreClick.SetValue(state, true);
+                    adapter.SameObject.SetValue(state, false);
+                    adapter.ClickCount.SetValue(state, 0);
+                    adapter.ClickTime.SetValue(state, 0f);
+                    adapter.PressRaycast.SetValue(state, default(RaycastResult));
+                    field.SetValue(pointer, state);
+                    if (i == 0) adapter.First.SetValue(states, pointer);
+                    else additional.SetValue(pointer, i - 1);
+                    adapter.States.SetValue(module, states);
+                    matched = true;
+                    break;
+                }
+            }
+            else if (!(module is StandaloneInputModule))
+                throw new InvalidOperationException("Panel 捕获取消仅支持 StandaloneInputModule 和经版本校验的 InputSystemUIInputModule；请配置标准输入模块。");
+            if (data.button == button && (acceptingDown || data.pointerPress == target || data.rawPointerPress == target || data.pointerDrag == target))
+            {
+                data.eligibleForClick = false;
+                data.pointerPress = null;
+                data.rawPointerPress = null;
+                data.pointerClick = null;
+                data.pointerDrag = null;
+                data.dragging = false;
+                data.clickCount = 0;
+                data.clickTime = 0;
+                data.pointerPressRaycast = default;
+                var property = typeof(PointerEventData).GetProperty("lastPress");
+                var lastPress = property?.GetSetMethod(true);
+                if (lastPress == null || property.PropertyType != typeof(GameObject)) throw new InvalidOperationException("UGUI PointerEventData.lastPress 布局不匹配，不能完成捕获取消。");
+                lastPress.Invoke(data, new object[] { null });
+                matched = true;
+            }
+            return matched;
+        }
+
+        internal static bool PointerStillPressed(BaseInputModule module, object buttonControl, int pointerId, PointerEventData.InputButton button)
         {
             if (buttonControl != null)
             {
@@ -106,11 +220,11 @@ namespace YLFramework.Core
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (module is StandaloneInputModule)
             {
-                if (data.pointerId < 0) return module.input.GetMouseButton((int)button);
+                if (pointerId < 0) return module.input.GetMouseButton((int)button);
                 for (int i = 0; i < module.input.touchCount; i++)
                 {
                     var touch = module.input.GetTouch(i);
-                    if (touch.fingerId == data.pointerId) return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
+                    if (touch.fingerId == pointerId) return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
                 }
                 return false;
             }
@@ -122,6 +236,8 @@ namespace YLFramework.Core
         static InputSystemBridge() => SingletonSessionState.RegisterSessionReset(() =>
         {
             _inputModuleFallbackWarned = _mouseReflectionWarned = false;
+            pointerAdapter = null;
+            pendingInputFieldActivation = null;
 #if ENABLE_INPUT_SYSTEM
             _mouseReflectionInitialized = false;
             _mouseCurrentProperty = _mousePositionProperty = null;

@@ -16,7 +16,8 @@ namespace YLFramework.Core.Tests
             foreach (var path in new[] { "Modules/Module.cs", "Modules/ModuleManager.cs", "Modules/SingletonModule.cs",
                 "Modules/Requests/StartUpModuleRequest.cs", "MVC/Models/Model.cs", "MVC/Models/ModelManager.cs",
                 "MVC/Controllers/Controller.cs", "MVC/Controllers/ControllerManager.cs", "MVC/Views/View.cs",
-                "Events/EventManager.cs", "UI/Windows/Panel.cs", "UI/Windows/WindowCatalog.cs", "UI/Roots/UIRootContext.cs",
+                "Events/EventManager.cs", "UI/Windows/Panel.cs", "UI/Windows/PanelConfig.cs", "UI/Windows/PanelOverrides.cs",
+                "UI/Windows/PanelRule.cs", "UI/Windows/PanelManager.Requests.cs", "UI/Roots/UIRootContext.cs",
                 "UI/Input/InputSystemBridge.cs", "UI/Tips/UITipsPresenter.cs", "Attributes/MustCallBaseAttribute.cs" })
                 Assert.That(System.IO.File.Exists(root + path), Is.True, path);
 
@@ -34,6 +35,8 @@ namespace YLFramework.Core.Tests
                 }
             }
             Assert.That(System.IO.Directory.GetFiles(root, "*.asmdef", System.IO.SearchOption.AllDirectories), Is.Empty);
+            foreach (var retired in new[] { "WindowCatalog", "WindowDefinition", "UIType", "PanelType" })
+                Assert.That(typeof(Panel).Assembly.GetType("YLFramework.Core." + retired), Is.Null, retired);
         }
 
         [Test]
