@@ -1,0 +1,39 @@
+using NUnit.Framework;
+using UnityEngine;
+using YLFramework.ReddotSystem;
+
+namespace YLFramework.Tests.Extensions.Domain
+{
+    public class ReddotLifecycleTests
+    {
+        [Test] public void OnlyExplicitIndicatorChangesAndDisabledHostUnsubscribes()
+        {
+            var owner = new GameObject("Domain.Reddot.owner");
+            var indicator = new GameObject("Domain.Reddot.indicator");
+            var business = new GameObject("Domain.Reddot.business");
+            try
+            {
+                indicator.transform.SetParent(owner.transform);
+                business.transform.SetParent(owner.transform);
+                var reddot = owner.AddComponent<Reddot>();
+                reddot.Path = "Mail";
+                reddot.Indicator = indicator;
+                Assert.That(indicator.activeSelf, Is.False);
+                using (ReddotManager.RegisterPath("Mail/Gift"))
+                {
+                    Assert.That(indicator.activeSelf, Is.True);
+                    Assert.That(business.activeSelf, Is.True);
+                    reddot.enabled = false;
+                    ReddotManager.Reset();
+                    Assert.That(indicator.activeSelf, Is.True, "停用后不再接收路径回调。");
+                    reddot.enabled = true;
+                    Assert.That(indicator.activeSelf, Is.False);
+                }
+                reddot.Indicator = owner;
+                Assert.That(owner.activeSelf, Is.True);
+                Assert.That(business.activeSelf, Is.True);
+            }
+            finally { Object.DestroyImmediate(owner); ReddotManager.Reset(); }
+        }
+    }
+}
