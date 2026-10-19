@@ -16,7 +16,7 @@ namespace YLFramework.Tests.Extensions.Domain
             _folder = "Assets/DomainFixture-" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder("Assets", System.IO.Path.GetFileName(_folder));
         }
-        [TearDown] public void Cleanup() { if (AssetDatabase.IsValidFolder(_folder)) AssetDatabase.DeleteAsset(_folder); }
+        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder);
 
         [TestCase("Skill")]
         [TestCase("Buff")]
@@ -62,6 +62,7 @@ namespace YLFramework.Tests.Extensions.Domain
             data.conditions.Add(new MissionCondition { param_name = "old" });
             AssetDatabase.SaveAssetIfDirty(root);
             var tree = new ParamListTree(new UnityEditor.IMGUI.Controls.TreeViewState(), root);
+            tree.Reload();
             try
             {
                 tree.RenameParam("old", "new");
@@ -72,6 +73,22 @@ namespace YLFramework.Tests.Extensions.Domain
                 Assert.That(data.conditions[0].param_name, Is.EqualTo("old"));
             }
             finally { tree.Dispose(); }
+        }
+    }
+
+    internal static class DomainTestAssets
+    {
+        internal static void DeleteFolder(string folder)
+        {
+            if (!AssetDatabase.IsValidFolder(folder)) return;
+            // Unity删除父目录不会逐个调用子资产的OnWillDeleteAsset，先删除自己的配表根。
+            foreach (var guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { folder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var root = AssetDatabase.LoadMainAssetAtPath(path);
+                if (root is SkillsConfig || root is BuffsConfig || root is MissionsConfig) AssetDatabase.DeleteAsset(path);
+            }
+            AssetDatabase.DeleteAsset(folder);
         }
     }
 }

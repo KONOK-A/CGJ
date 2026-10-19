@@ -37,7 +37,7 @@ namespace YLFramework.Tests.Extensions.Domain
             public void LogFormat(LogType type, UnityEngine.Object context, string format, params object[] args) => _next.LogFormat(type, context, format, args);
         }
 
-        [SetUp] public void Setup() => _directory = Path.Combine(TestContext.CurrentContext.WorkDirectory, "logger-" + Guid.NewGuid().ToString("N"));
+        [SetUp] public void Setup() => _directory = Path.Combine(Path.GetTempPath(), "YLDomainC-Logger-" + Guid.NewGuid().ToString("N"));
         [TearDown] public void Cleanup()
         {
             foreach (var item in _owned) item.Dispose();

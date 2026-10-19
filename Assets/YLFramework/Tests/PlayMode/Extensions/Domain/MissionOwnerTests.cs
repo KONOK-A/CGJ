@@ -50,5 +50,41 @@ namespace YLFramework.Tests.Extensions.Domain
             }
             finally { MissionManager.Shutdown(); Object.DestroyImmediate(root); Object.DestroyImmediate(data); }
         }
+
+        [Test] public void IntFloatBoolAndOnlyInProgressConstraintsUseRuntimeCopies()
+        {
+            var root = ScriptableObject.CreateInstance<MissionsConfig>();
+            var entries = new System.Collections.Generic.List<MissionConfigData>();
+            try
+            {
+                root.name = "Domain.Typed.Parameters";
+                root.param.Add(new MissionParameter { name = "integer", type = MissionParamType.Int, only_can_set_in_progress = true, only_can_set_larger = true });
+                root.param.Add(new MissionParameter { name = "float", type = MissionParamType.Float });
+                root.param.Add(new MissionParameter { name = "boolean", type = MissionParamType.Bool });
+                for (var i = 0; i < root.param.Count; i++)
+                {
+                    var data = ScriptableObject.CreateInstance<MissionConfigData>(); entries.Add(data);
+                    data.id = 100 + i; data.mission_type_class_fullname = typeof(MissionBase).FullName; data.reset_param_on_completed = false;
+                    data.conditions.Add(new MissionCondition { param_name = root.param[i].name, target = i == 0 ? 3 : i == 1 ? 2 : 1, compareType = CompareType.Equals });
+                    root.missions.Add(data);
+                }
+                MissionManager.AddConfig(root);
+                MissionManager.SetInt(root.name, "integer", 2);
+                Assert.That(MissionManager.GetInt(root.name, "integer"), Is.Zero);
+                foreach (var mission in MissionManager.GetAllMissions(root.name)) mission.State = MissionState.InProgress;
+                MissionManager.SetInt(root.name, "integer", 2); MissionManager.SetInt(root.name, "integer", 1);
+                Assert.That(MissionManager.GetInt(root.name, "integer"), Is.EqualTo(2));
+                Assert.That(() => MissionManager.SetFloat(root.name, "integer", 3), Throws.InvalidOperationException);
+                MissionManager.AddInt(root.name, "integer", 1);
+                MissionManager.SetFloat(root.name, "float", 2);
+                MissionManager.SetBool(root.name, "boolean", true);
+                foreach (var mission in MissionManager.GetAllMissions(root.name)) Assert.That(mission.State, Is.EqualTo(MissionState.Completed));
+                foreach (var parameter in root.param) Assert.That(parameter.Value, Is.Zero);
+                MissionManager.Reset(root.name);
+                foreach (var mission in MissionManager.GetAllMissions(root.name)) Assert.That(mission.State, Is.EqualTo(MissionState.NotStarted));
+                Assert.That(MissionManager.GetBool(root.name, "boolean"), Is.False);
+            }
+            finally { MissionManager.Shutdown(); foreach (var data in entries) Object.DestroyImmediate(data); Object.DestroyImmediate(root); }
+        }
     }
 }

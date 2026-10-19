@@ -19,7 +19,7 @@ namespace YLFramework.Tests.Extensions.Domain
             _folder = "Assets/DomainReviewFixture-" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder("Assets", System.IO.Path.GetFileName(_folder));
         }
-        [TearDown] public void Cleanup() { if (AssetDatabase.IsValidFolder(_folder)) AssetDatabase.DeleteAsset(_folder); }
+        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder);
 
         [TestCase("Skill")]
         [TestCase("Buff")]
@@ -126,6 +126,7 @@ namespace YLFramework.Tests.Extensions.Domain
             }
             EditorUtility.SetDirty(root); AssetDatabase.SaveAssetIfDirty(root);
             var tree = new MissionListTree(new UnityEditor.IMGUI.Controls.TreeViewState(), root);
+            tree.Reload();
             var clipboard = GUIUtility.systemCopyBuffer;
             try
             {

@@ -12,7 +12,7 @@ namespace YLFramework.Domain.Excel.Tests
     public class DomainExcelTests
     {
         private string _path;
-        [SetUp] public void Setup() => _path = Path.Combine(TestContext.CurrentContext.WorkDirectory, "domain-params-" + Guid.NewGuid().ToString("N") + ".xlsx");
+        [SetUp] public void Setup() => _path = Path.Combine(Path.GetTempPath(), "YLDomainC-params-" + Guid.NewGuid().ToString("N") + ".xlsx");
         [TearDown] public void Cleanup() { if (File.Exists(_path)) File.Delete(_path); }
 
         [Test] public void MissionParametersRoundTripRequiresConfirmation()

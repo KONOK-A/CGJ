@@ -3,6 +3,56 @@
 唯一正式Plan：`.kilo/plans/1792420261057-xf-ecosystem-integration.md`。
 本轮用户明确授权五项连续源码融合、必要修复、离线验证及中文本地候选提交；覆盖Plan历史未授权/分批等待状态，不覆盖共享区域、许可和验证边界。
 
+## T3-C BatchMode追加授权
+
+- 2026-10-19后续用户已正式授权本C worktree使用Unity `2022.3.62f3c1` BatchMode进行真实导入、EditMode/PlayMode、定向修复复验和条件具备时的独立Windows64 Mono/IL2CPP Low验证，覆盖下文上一轮禁止启动Editor/batchmode的历史限制。
+- 本轮开工实核HEAD为`3dd320dc721398988111daa0f2b16ae0b1f6d7fc`，七个候选完整存在、分支`fusion/xf-ext-domain`、工作区/索引干净。主Unity仍在主工程；开工未发现A/B工作区的重型BatchMode，未操作或关闭它们。
+- 使用显式绝对projectPath，不连接主工程Unity MCP；C同路径仅一实例。共享区域、原包、Packages/ProjectSettings继续只读，不合并、不Push、不删除worktree。
+- 本轮证据独占`Logs/YLFramework.Domain/<Run>/`；`Tools/Domain/Invoke-DomainUnity.ps1`拒绝复用Run、已有同项目Editor或A/B重型任务占用。所有前轮通过数仍只是其原层级，真实Unity门以下续记。
+- `G1-Import-01`在编译前端处无正常退出记录，不计通过；改为显式同步WaitForExit后`G1-Import-02`真实完整编译/退出0，未删Library或复制任何主Library/PackageCache。
+- `G1-Audit-02`真实Unity CompilationPipeline/TestRunnerApi确认五模块源进入编译输入、C默认未定义YL_DOMAIN_EXCEL、Player编译图无XF/UnityEditor/可选Excel反向边；发现EditMode57与PlayMode12（含原准备28项原生）。140个本组资产/目录GUID实读、原始Assets meta唯一性通过。首次审计因既有超长路径meta读取失败，改用Win32扩展路径后通过，不跳过文件。
+- C `G1-EditMode-01`实际46/57通过、11失败、0跳过：7项NUnit WorkDirectory空导致夹具Setup失败，2项未先Reload树，1项只读双Play配置前置条件，1项第三方MCP自动连接错误日志干扰。修正夹具目录与按E0合同Reload，子进程仅使用插件已有、不落盘环境覆盖关闭自动连接/自动服务，不改插件/工具持久配置、不吞日志；`G1-EditMode-02`实际56/57通过，唯一失败保持双Play前置条件。
+- C ProjectSettings `m_EnterPlayModeOptionsEnabled: 0`保持不变。独立无XF `Logs/YLFramework.Domain/Carriers/R1`由实际当前Runtime/Editor/批准BouncyCastle及meta逐文件哈希快照建立，最小UPM依赖自然恢复，未复制原游戏、XF、MCP或Library/PackageCache。只配置载体自身EditorSettings；`R1-EditMode-01`真实57/57通过、0跳过，包含关闭Domain Reload连续两次真实Play。
+- C `G2-PlayMode-01`原12/12通过；增加五类真实Debug/handler证据及Mission Int/Float/Bool约束后`G2-PlayMode-02`14/14通过、0跳过。日志明确记录前任`XFGameFramework.LoggerSystem.LoggerHandler, XFGameFramework.LoggerSystem`，由CLI门强制确认真实旧Logger共存，不用假handler冒称共存。
+- 期间两次启动被A/B重型BatchMode占用保护拒绝，未生成测试结果、不计失败执行，也未停止或操作其进程；利用错峰准备本组载体后再运行。
+- Unity会自然删除项目Temp，前轮Temp证据不可当持久交付；本轮独立工程、快照与构建均改存C自有Logs/Carriers，C自然退出不会清理它们。所有C受保护文件的受管差异迄今为空。
+
+### T3-C最终实际结果
+
+本节为本轮最新技术证据，覆盖下文上一轮全部“未执行引擎门”的历史状态；没有改正式Plan或自动合并。结束结论：**C组独立Worktree BatchMode技术验收完成，待主线集成**。该结论限定以下已实际验证范围，不等于主integration、所有平台或所有人工GUI已验收。
+
+| 门 | 实际环境与证据目录（均在Logs/YLFramework.Domain） | 结果 |
+|---|---|---|
+| C真实导入/编译 | G1-Import-02；G1-Audit-Final | Unity2022.3.62f3c1退出0，实际Runtime/Editor/测试编译图已读 |
+| C主体EditMode | G1-EditMode-02 | 57发现、56通过、1双Play配置前置条件失败、0跳过；C ProjectSettings保持原样 |
+| 无XF独立载体EditMode | R1-EditMode-01 | 同源57/57通过，0失败/跳过；包含真正关闭Domain Reload连续两Play |
+| C主体PlayMode/旧Logger共存 | G2-PlayMode-02 | 14/14通过、0失败/跳过；旧XF handler身份强制校验 |
+| 无XF载体PlayMode | R1-PlayMode-01 | 原同次XML14/14通过，日志有Test run completed/Exiting code0；包装命令600秒超时，未取得OS退出码，保留差别、不覆写重跑 |
+| Review作者/资产/窗口/复制 | G1-AuthorCleanup-03 | 最后定向15/15通过、0失败/跳过；覆盖subasset/兄弟/借用资产、GUID、Drawer、Clipboard、custom_data、Undo与自己清理 |
+| 既有E0重排/Undo/窗口边界 | G1-E0-ReorderBoundary-02 | 实际图形设备BatchMode11/11通过；未修改E0 |
+| B+C真实可选Excel | B1-ExcelTests-02 | 固定B09bec5a + C当前代码，真实TestRunner API 5/5通过、0失败/跳过、Editor退出0 |
+| 独立Windows64 Mono | R1-MonoBuild-01；R1-MonoPlayer-01 | BuildSucceeded/0error/Options.None/Mono2x/Disabled；图形Player PASS且OS Exit0 |
+| 独立Windows64 IL2CPP Low | R1-IL2CPPBuild-01；R1-IL2CPPPlayer-01 | BuildSucceeded/0error/Options.None/IL2CPP/Low/Release；原生产物存在，图形Player PASS且OS Exit0 |
+
+- 原准备28项普通原生用例已全部被真实发现并运行；增加五类真实Debug与三参数类型后为30项原生行为用例，分布于57项EditMode中的16项与14项PlayMode。纯托管41项也已在真实Unity EditMode执行，不用离线数字替代发现数。
+- 最终`G1-Audit-Final`实际发现57 EditMode/14 PlayMode；140个C新资产/目录meta由本C Unity自然生成，Assets原始GUID唯一。对原五个XF包140个身份集合检查无碰撞；没有复制旧XF GUID。完整路径/GUID/真实编译源在`unity-input-guid-audit.json`。
+- Runtime Player图无UnityEditor/XF/可选Excel；Editor profile中受UNITY_EDITOR保护的UnityEditor API不是Player反向边。C默认不定义YL_DOMAIN_EXCEL，B缺席时主体独立编译成功，主体asmdef与共享E0/Core/Foundation/Resource/Save未改。
+- Mono Build GUID `e9bce70ca8984c05b6b6aca0854b7af9`；IL2CPP Build GUID `db6ad778085943c6b3e29b36d670d059`。两份BuildReport.json、真实exe SHA256与执行PID/Exit0/marker在R1各Builds与执行目录。两构建各1168条warning，主要是既有CS1591/XML注释及已声明警告，0error；未关闭或掩盖诊断。
+- 两个Player均未传batchmode/nographics，日志确认实际图形设备；故意发出的domain-error/domain-assert/domain-exception是Logger覆盖，不作为未处理程序失败隐藏。实际调用真实Resources后端、显式根类型catalog、三个仅靠字符串配置创建且有专用link.xml保留的领域子类、泛型Acquire、Pool/Update、冷却/到期/完成与资源归还。成功依赖PASS与OS Exit0，不仅BuildSucceeded。
+- 两个G3工程是真正无XF/无MCP、无原游戏、无商业增强DLL的独立接收载体；并非拿含旧XF的C Player冒充独立交付。产品源和meta1482个文件逐文件前后哈希核对，记录sourceHead与输入清单；测试增量同步也校验哈希。没有复制主Library/PackageCache或C Packages/ProjectSettings。
+- 真实旧Logger共存路径记录为`XFGameFramework.LoggerSystem.LoggerHandler, XFGameFramework.LoggerSystem`；无XF载体使用Unity原handler。五类真实Debug均经过C会话/原handler、事件与文件，退出后独占打开文件及归还handler通过。
+- B1仅为隔离验证载体，固定`09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300`源码以git archive读取；MiniExcel SHA256匹配批准值，Unity自然生成插件meta的Any=0、Editor=1。没有把B源码/DLL永久复制进C产品、没有等待B迁移或Merge；Mission跨sheet组合原子事务/全局Effect库xlsx仍是前轮已声明的未实现功能，不伪装通过。
+- B1首次5项为2通过/3 WorkDirectory空Setup失败；修正C可选测试夹具路径后5/5。R1 PlayMode与B1首次CLI在测试结果已保存后关闭阶段未回收到包装退出码；先读取同次XML/log/进程状态，确认进程已无，再用实际TestRunner API保存原始结果并延迟稳定退出，B1复验退出0；没有对同次结果盲目重复启动。
+- E0首次-nographics为0/11，全部因ShowUtility没有图形设备，原失败保留；只对该运行启用真实图形设备仍用BatchMode，11/11通过，不改E0源码、不忽略日志/断言。
+- 发现Unity删除测试父文件夹不会逐个调用根配置OnWillDeleteAsset，导致Mission Clipboard测试生成的102/103留在自己的GUID目录。定向核对其mission名称、奖励和已删除父GUID后用Unity API清理；TearDown改为先逐个删除自己配表根再删自己文件夹，15项复验通过，随后只清理本轮空生成父目录。未删除用户资产或改原场景。
+
+### T3-C Git与仍需补验
+
+- 本轮C改动为真实验收工具、测试夹具修正/增量、140个自然meta与本检查点；没有改五项Runtime算法、原Logger、主体asmdef、Packages、ProjectSettings、Core/Foundation/Resource/UI/Save或正式Plan。中文本地提交完整SHA见本轮最终回复及git log，不为Hash自引用另建提交。
+- **非C自动生成差异保留未暂存**：`.vscode/settings.json`被Unity IDE集成改成worktree解决方案；原游戏`Assets/Atlas(AutoGenerate)/MainModule/31dd0f6057ff73d89c56da5a46c4e39e_depend_on_res(auto).unity3d_Atlas.spriteatlas`与`9aa7ab4473730ba61a78819153f32058_depend_on_res(auto).unity3d_Atlas.spriteatlas`被自然填充packedSprite缓存。只读确认后未提交、未擅自回退。故最终工作区不能报全局clean；只保证C候选已提交、索引无额外内容。
+- 保留图形Editor/主线清单：人工观察全部窗口/图标预览与真实桌面拖拽、缓存View集成与原场景/图集非干扰、正式分发包导出首导入及中央许可汇总、主integration组合后复验、其他平台/更高裁剪级别。E0本次使用真实图形事件/设备的自动化11项，不等于已完成这些人工视觉验收。
+- C本体双Play配置前置条件未改成通过；已由同源独立载体实际57/57包括双Play建立技术证据。集成owner若要求本体原设置下该个案也绿，需要另授权或预配置C/主线EditorSettings，而不是修改测试条件或忽略它。
+
 ## 基线与边界
 
 - 实际工作区：`G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-domain-1c975de3e2f7676b`。
