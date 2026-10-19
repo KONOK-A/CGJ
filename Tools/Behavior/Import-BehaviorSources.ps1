@@ -22,7 +22,7 @@ foreach ($parent in @($runtimeParent, $editorParent, $PSScriptRoot)) {
 $runtime = Join-Path $runtimeParent $Module
 $editor = Join-Path $editorParent $Module
 if ((Test-Path -LiteralPath $runtime) -or (Test-Path -LiteralPath $editor)) { throw 'Import refuses to overwrite existing implementation. Continue incrementally with patches.' }
-if ($Module -notin @('Overlap', 'CharacterController2D')) { throw 'This module conversion has not been reviewed yet.' }
+if ($Module -notin @('Overlap', 'CharacterController2D', 'MoveablePlatform')) { throw 'This module conversion has not been reviewed yet.' }
 $records = @()
 foreach ($side in @('Runtime', 'Editor')) {
     $destination = if ($side -eq 'Runtime') { $runtime } else { $editor }
@@ -36,6 +36,8 @@ foreach ($side in @('Runtime', 'Editor')) {
         } elseif ($Module -eq 'CharacterController2D') {
             $text = $text.Replace('XFGameFramework.Character.Controller2D', 'YLFramework.Character.Controller2D')
             $text = $text.Replace('CharacterController2D.hits', 'characher.hits')
+        } elseif ($Module -eq 'MoveablePlatform') {
+            $text = $text.Replace('XFGameFramework.Platform2D', 'YLFramework.Platform2D')
         }
         if ($side -eq 'Runtime') {
             $lines = [Collections.Generic.List[string]]::new()

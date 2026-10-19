@@ -1,2 +1,3 @@
 Assets/YLFramework/Runtime/Systems/Overlap/OverlapQueryCycle.cs
 Assets/YLFramework/Runtime/Systems/CharacterController2D/CharacterMotorMath.cs
+Assets/YLFramework/Runtime/Systems/MoveablePlatform/MoveablePath.cs

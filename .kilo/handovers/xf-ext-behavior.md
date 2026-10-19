@@ -12,8 +12,9 @@
 
 ## 当前进度
 
-- 当前模块：CharacterController2D 离线候选已完成，自动推进 MoveablePlatform。
+- 当前模块：MoveablePlatform 离线候选已完成，自动推进资产FSM。
 - Overlap本地候选：`51e61da`，未Push。
+- CC2D本地候选：`a072bdd`，未Push。
 - 来源：主工程只读 `Library/PackageCache/com.xfkj.xfgameframework.overlap@4961d83581`，1.0.4，revision `4961d8358119485c94d6f0f74b6ca5d8b4163460`，MIT/2024 弦风课堂。逐文件 SHA 将由专属导入工具记录在 `Tools/Behavior/Overlap.source.json`。
 - 静态根因：静态结果缓冲跨实例污染、回调内查询重入、3D Reset 使用 2D 矩阵、销毁 Collider 比较与禁用结果残留、Area 无效节点提前返回不发退出。
 - 已保留：7种查询形状、Results/enter/exit、100容量、检测频率/时间模式、区域/Box/Capsule作者操作；Editor绘制与Runtime隔离。
@@ -33,6 +34,17 @@
 - 最终`cc2d-closure`：16/16（11托管逻辑+5静态契约），0失败/跳过；Runtime/Editor profile/EditorTools辅助编译退出0，41/40/9警告。本组EditMode/PlayMode夹具编译通过未执行，PlayMode测试引用另有1条NUnit3.5/3.14兼容警告，不计为引擎运行通过。
 - `cc2d-final`静态身份/保护区检查：31个C#、2个上游身份、保护区diff空、42个meta待生成。后续最终审计将覆盖调试计数恢复后的最终SHA。
 - 下一动作：精确本地提交CC2D，继续Moveable路径边界、接触快照和多Collider/刚体去重，不等待审批。
+
+## MoveablePlatform
+
+- 来源：1.0.6，revision `1e1265d8e6adb4ebab6febe8bc51288972e2b234`，身份`Tools/Behavior/MoveablePlatform.source.json`，完整MIT/2024弦风课堂随模块保留。
+- 保留：世界坐标/Transform路径快照、距离加权插值、PingPong/Loop/Once、delay/pause/stop、FixedUpdate、载人、UnityEvent和原路径/区域手柄。无CC2D编译依赖，不建更新引擎。
+- 修复：空/单点/零距离路径、NaN/无效Transform节点、同刚体多Collider/Area重复搬运、静态缓冲、fake-null接触、停用残留；Catcher手柄改SerializedProperty以保留Undo/Prefab；回调Stop/Pause/改路径/禁用不再提交旧目标；Scene选择失效不越界。
+- Ruling：单点/全重合路径按delay后定位并停止；Stop后Pause(false)不重新启动；运行时Transform沿用原初始化快照，删除源引用在下次初始化给索引诊断。避免原位置快照与实时距离混用导致时间漂移，改变只限原不完整边界，正常三种移动模式不变。
+- 小改进：公开PositionType/UpdateMode、ValidatePath及RefreshContacts便于自有调用方；初始化总距离从每节点扫描收敛为线性两次遍历，O(n²)→O(n)，未作Profiler性能主张。
+- 实际红例`moveable-red`：新增9项失败、旧16项通过。`moveable-green1`：累计25/25（19托管逻辑+6静态契约）通过，0失败/跳过；Runtime/Editor profile/EditorTools辅助编译退出0，41/40/11警告；准备的EditMode/PlayMode测试源码编译通过未执行，保留NUnit引用兼容警告。
+- 静态审计：42个C#、3个上游身份逐SHA核对、保护区diff空、56个meta待主Unity生成，路径见本次证据目录。
+- 下一动作：精确本地提交Moveable，定向查证XFFSM图工具来源与内部API，使用公共GraphView组件局部替换风险文件，保留完整轻量FSM，不等审批。
 
 ## 验证边界
 

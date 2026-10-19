@@ -23,6 +23,16 @@
 - 主 Unity 执行 `CharacterMotor2DTests`；另测左右墙/顶部、斜坡阈值、不同 fixedDeltaTime、重力正/零/负、多段跳/长按中断、autoRotation、层变更和停用回调重入。两对象不同 Collider 类型同时运行，确认不串数据。
 - Inspector 缺Collider/未命名Layer负例、正常移动、Scene法线标签，事件绑定保存重开须实测。Mono/IL2CPP消费者必须真实触发地面/墙/顶部及泛型 UnityEvent；尚未执行。
 
+## MoveablePlatform
+
+- Namespace：`YLFramework.Platform2D`。保留 `Moveable`、`MoveablePlatform2D`、`PlatformCatcher2D`，不引用CC2D。路径仍为世界坐标 Positions 或 Transform 快照，按总距离线性插值；PingPong/Loop/Once、delay、scaled/unscaled FixedUpdate、Run/Pause/Stop及UnityEvent保留。
+- 先在自有对象配置路径，再启用组件或调用 `Run()`。可用 `PositionType`/`UpdateMode` 属性明确模式；运行时添加/移除节点使用原方法重新初始化。空路径或失效Transform/NaN按节点索引诊断，不运行；单点/全重合路径在delay后定位并停止，不除零或永久空转。
+- Transform位置在初始化时冻结，运行中删除源Transform不访问已销毁对象；下次Run/节点编辑会验证引用。移动时间使用同一次快照总长，避免原位置快照与实时Distance混用。初始化由重复总长扫描O(n²)收敛为O(n)，不宣称实机Profiler收益。
+- Pause只暂停/恢复已启动路径，不把Stop后的对象隐式启动；回调中Stop/Pause/改路径/禁用会阻止旧目标继续写入。Catcher保留原接触变化/计时查询驱动，实例缓冲，停用清空；`RefreshContacts()`供显式刷新。
+- 载人按本次Contacts快照，每个Rigidbody2D仅搬运一次，排除平台自身和Trigger，不因多个Area/Collider重复位移。仍使用原刚体position位移方式，不重写为新motor。
+- 主Unity执行`MovingPlatformTests`；补验Loop端点、PingPong折返、Once一次Stop、delay/pause/resume、timeScale、不同fixedDeltaTime、多个刚体、CC2D联合载人和接触变化30Hz/10Hz流程。
+- Inspector保留路径列表和Scene手柄，增加非法路径定位；Catcher手柄通过SerializedProperty写入以保留Undo/Prefab。列表重排、删除节点后Scene选择不越界、Undo/Redo、事件及路径保存重开、Mono/IL2CPP真实载人均待主Unity验收。
+
 ## 离线命令
 
 从本 worktree 根运行 `pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Behavior/Invoke-BehaviorOffline.ps1 -Mode All -Evidence <唯一名称>`。
