@@ -56,7 +56,8 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - `Plugins/BouncyCastle/`随框架导出批准的BouncyCastle.Cryptography 2.7.0官方netstandard2.0二进制、完整MIT `LICENSE.md`与精确来源`SOURCE.txt`。Resource仅内部使用其HKDF-SHA256，Windows AES-GCM由系统CNG提供，不分发系统密码DLL。Tink仅作为framing参照，适用Apache-2.0全文随`TINK-LICENSE.txt`携带，不宣称依赖或分发Tink SDK；详见该目录来源声明。
 - `Runtime/Utilities/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。
 - `Runtime/Utilities/ZipTool/`：ICSharpCode.SharpZipLib（MIT），来源、署名与完整文本见 [`Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。内置源码与许可随默认 Runtime 导出一并分发。
-- `Plugins/` 下的第三方编辑器插件随附各自的说明材料，其许可与使用条件以插件自身提供为准。
+- 宿主`Plugins/Editor Enhancers Bundle/`下的商业编辑器插件未取得框架再分发授权，不随正式Exporter输出；不以购买、署名或本机安装代替再分发许可。主工程原文件及配置保持。
+- 可选`com.xfkj.xfgameframework.loggersystem` 1.0.1不在本框架UnityPackage中，也不是YL依赖。阶段9独立tarball保留其自身完整MIT `LICENSE`、`Copyright (c) 2025 弦风课堂`及原身份；来源revision `0ebbebeb4b961d6fb67670d22cad819856969c3a`，项目补丁含handler/writer所有权与独立IL2CPP自动初始化根修复。该包单独许可不能被上面2021弦小风MIT替代；交付补丁精确身份见可选制品SHA256和逐文件清单，不宣称迁移其他XF扩展。
 
 ## ColorSelector 的历史来源与替代
 

@@ -116,6 +116,23 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         [Test]
+        public void OverlongWindowsWorkspaceFilesAreRejectedBeforeWorkspaceOrNativeWrites()
+        {
+            if (Path.DirectorySeparatorChar != '\\') Assert.Ignore("Unity Mono Windows path boundary only.");
+            var type = typeof(ResourceProject).Assembly.GetType("YLFramework.Editor.Resource.ResourceBuildWorkspace", true);
+            var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic).Single();
+            var map = ResourceBuildMap.Create(project);
+            var error = Assert.Throws<TargetInvocationException>(() => constructor.Invoke(new object[]
+            {
+                map, new string('a', 64), new string('p', 160),
+                YLFramework.Services.Resource.ResourceContentEncryption.None, null
+            }));
+            Assert.That(error.InnerException, Is.TypeOf<PathTooLongException>());
+            Assert.That(error.InnerException.Message, Does.Contain("shorter Unity project path"));
+            Assert.That(Directory.Exists(Path.GetDirectoryName(workspace)), Is.False);
+        }
+
+        [Test]
         public void CompiledBinaryAndAssemblyConfigurationBytesAreBuildInputs()
         {
             var temp = Path.Combine(Path.GetTempPath(), "kilo", "BuildInputs82-" + Guid.NewGuid().ToString("N"));

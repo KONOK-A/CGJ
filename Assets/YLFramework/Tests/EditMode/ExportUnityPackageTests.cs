@@ -42,6 +42,25 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        public void DefaultExportDoesNotRedistributeUnlicensedEditorEnhancers()
+        {
+            var roots = (string[])typeof(YLFramework.Editor.ExportUnityPackage)
+                .GetField("ExportRoots", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            var commercial = FrameworkRoot + "/Plugins/Editor Enhancers Bundle";
+            Assert.That(roots.Any(root => IsAtOrBelow(commercial, root)), Is.False,
+                "The independent delivery must not recursively redistribute commercial Editor tools without a redistribution grant.");
+            Assert.That(roots, Does.Contain(FrameworkRoot + "/Plugins/BouncyCastle"));
+        }
+
+        [Test]
+        public void DefaultExportDoesNotContainTheRepositoryOnlyUiAcceptanceBuilder()
+        {
+            var path = AssetDatabase.GUIDToAssetPath("358ebd50e0ddc2d4b8c4f0266f11ff1e");
+            Assert.That(path, Does.StartWith(FrameworkRoot + "/Tests/"),
+                "The UI acceptance builder requires a non-delivered test scene and must remain in the repository test boundary.");
+        }
+
+        [Test]
         public void DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab()
         {
             var rootsField = typeof(YLFramework.Editor.ExportUnityPackage).GetField("ExportRoots",
@@ -53,7 +72,7 @@ namespace YLFramework.Tests
             Assert.That(roots, Is.EqualTo(new[]
             {
                 FrameworkRoot + "/Editor",
-                FrameworkRoot + "/Plugins",
+                FrameworkRoot + "/Plugins/BouncyCastle",
                 FrameworkRoot + "/Prefabs",
                 FrameworkRoot + "/Runtime",
                 FrameworkRoot + "/Samples",
@@ -212,6 +231,7 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Resource",
                 FrameworkRoot + "/Editor/Resource",
                 FrameworkRoot + "/Plugins/Sirenix",
+                FrameworkRoot + "/Plugins/Editor Enhancers Bundle",
                 FrameworkRoot + "/Runtime/Tools/AssemblyTool",
                 FrameworkRoot + "/Runtime/Tools/Attributes",
                 FrameworkRoot + "/Runtime/XFMain",
@@ -324,9 +344,9 @@ namespace YLFramework.Tests
                 }
 
                 foreach (var path in requiredPaths) Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing recursive asset: " + path);
-                // Plugins 全递归，包含二进制、Demo 与辅助资产，不只核验源码扩展名。
-                Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins")),
-                    Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins"))));
+                // 批准的插件根全递归，精确核验二进制、来源与适用许可。
+                Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle")),
+                    Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle"))));
                 Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "YLFramework.Analyzers.dll"), Is.EqualTo(new[] { AnalyzerPath }));
                 Assert.That(recordsByPath.Keys.Any(p => Path.GetFileName(p).StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)), Is.False);
                 Assert.That(recordsByPath.Keys.Any(p => new[] { "bcrypt.dll", "ncrypt.dll", "crypt32.dll" }.Contains(Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)), Is.False);

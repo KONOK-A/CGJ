@@ -1,5 +1,7 @@
 # XFGameFramework × YLFramework 长期融合蓝图
 
+**阶段9当前状态（2026-10-19）：独立工程交付技术验收与用户验收完成，已获精确提交及普通Push授权。** 受测源码由 `integration/xf-yl` / `586eebedaf900d926d2e30301b20ed3129decb27` 加冻结交付修复组成，不能将旧HEAD冒充已含修复的基线。以下阶段8/9“未启动”文字保留为历史快照，本轮范围、证据与边界以本文§9为准；本次只收口阶段9及另行验收的拓展公共准备E0，不自动迁移13项系统、不创建Worktree，不改既有失败、限制或历史制品。
+
 **新增阶段 7.5（2026-10-14）：技术实施与定向验证完成，已提交/推送（`63e152e`）。** ColorSelector 四个类型完整归 `Utilities/UI/ColorSelector`，作为依赖 Core 的上层便利工具；按用户选择删除公开 `IUIInputGate` 与自定义门禁，直接遵守 Panel 的加载/输入策略，不再要求脱离 Core 的源码闭包。XF 完整 MIT 许可集中为 `Assets/YLFramework/LICENSE.md` 一份，保留版权与全文并显式随默认导出分发；其他来源许可不变。两主体程序集、取色类型身份/字段/GUID与正式Prefab保持，引用退出接口的客户端需移除引用并重编译。取色18（含双profile消费源码编译）、完整许可1、Help7、正式窗口Play代表2及实际导出/解包1通过，不宣称新Player/全量测试/全平台验证。阶段 7 已有 Git 里程碑保持；后续仍为阶段 8 资源融合、阶段 9 独立交付。实施与验证见 [结构方案 §18](../../../.kilo/plans/xf-yl-7-structure-redesign.md#18-阶段-75-便利工具与-xf-许可集中2026-10-14)。
 
 **Tidy 架构分层治理：COMPLETE（Tidy-1～3 全部技术验收及 Git 收口，里程碑 `milestone/tidy-architecture`）。** Foundation 解除对上层 Utilities 扩展的依赖，改直接使用 Unity 原生 API 且不新增便利 helper；七个 Editor 通用支撑按职责归 Foundation/Utilities，原 `YLFramework.Core.Editor` 身份保持。完整 Foundation 及 Foundation+Core 源码守卫分别约束两主体内部层级，保留两主体程序集与 Systems/Utilities 合理协作，真实 Json.NET 及仍属**阶段 8 过渡**的 XFAB 引用显式核验、不误禁合法上层协作；只验证 Editor/Windows64 Development 两 profile，不宣称最终独立或 Player 重建。批次事实、导出门禁与已批准的环境例外见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)；**阶段 8 资源融合尚未实施**，阶段 8/9 不自动启动。
@@ -254,3 +256,83 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 - 本轮未新增 Player/IL2CPP 构建、完整人工游戏或性能测量；当前 Windows64/Mono 未引入新的 AOT/反射路径或 Player 依赖，沿用阶段 1 Player 历史证据及本轮 Editor 代表性非干扰。原 Logger/MCP 过渡问题、依赖恢复差异、XFAB/producer 物理取消和资源释放等既有限制保持对应专题归属，2.3 不承诺同时关闭 Scene Reload 的全领域恢复或驱动损坏自愈。
 
 **2.3 Update 已具备技术 COMPLETE 的全部条件，2.4 Timer 研究的技术前置已满足；C 等待用户验收与 Git 收口。到此停止，不自动提交、集成或进入 Timer。**
+
+## 9. 干净工程导入与独立交付验收
+
+### 9.1 授权与保护基线（2026-10-19）
+
+- 用户正式授权连续完成最终集成包导出、仓库/worktree外自有Unity `2022.3.62f3c1`接收工程、首次导入、实际使用、Windows64 Mono/IL2CPP非Development Player、直接交付缺陷修复、重新导出和一次交付定向Review；普通取舍自主执行，不逐批等待批准。
+- 已实核HEAD为`586eebedaf900d926d2e30301b20ed3129decb27`，暂存区与受管工作区无改动；原未跟踪`Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta`保留。独立UI worktree、其他worktree、原游戏、Packages及ProjectSettings不接管。
+- 主Editor路径`G:/Unity/Projects/CGJ2024`、PID`32168`；开工为EditMode、无编译失败/构建，`Assets/YLFramework/Tests/Core/Acceptance/UIAcceptance.unity`已保存。每次主MCP执行均须在代码内核对路径/PID；独立工程不安装MCP或原XF，用显式`-projectPath`入口，禁止同一工程双开。
+- 已读取当前AGENTS、本文、Resource方案§12.2和UI方案顶部最终稳定验收。Resource Low支持与UI原Development/Medium结果分别保留，不外推High/其他平台；历史Scene风险、普通CA正向联网未测及原生泄漏遥测边界保持。
+- Logger修复现归原XF embedded package，不预设为YL产品依赖或默认导出内容；本轮须核实实际调用与许可，不能安装原XF来补产品依赖。最终包须包含最新Resource/UI/Analyzer源码和正式部署产物，适用且可交付的Logger修复按真实归属明确报告。
+
+### 9.2 简短验收清单
+
+- [x] 原正式Exporter导出最新闭包；源码身份、SHA256、逐文件/meta/GUID、依赖与适用许可核对；无原游戏/旧XF/测试/秘密/系统DLL/无授权制品。
+- [x] 自有独立Assets/Library/Packages/ProjectSettings；按最小必要依赖安装并记录真实解析版本；测试设施介入前，最终框架包真实Unity导入和编译通过。
+- [x] 检查Missing Script、GUID/Prefab引用和反向原游戏依赖；Foundation/Core、Audio/Action/Logger、轻量根/完整模板/Panel复用/Tips/模态代表冒烟。
+- [x] 新工程自行生成两版资源；多目录/None/自动Atlas/C02/ResourceStartup、更新/回滚/重启/UI租约归还与E04正常/缺key拒绝通过。
+- [x] 独立Windows64 Mono及IL2CPP（Low，真实记录输入后端）非Development构建和图形Player首启/协作/正常退出；沿用既有详细矩阵，不重跑全部历史用例。
+- [x] 缺陷回写正式交付；首次导入受影响则另一个新空工程复验最终包；失败与复验绑定，定向Review及保护终态核验完成。
+- [x] 最终包、SHA、准确安装步骤、源码/包/接收工程映射、实际证据/截图和非Temp唯一复现入口交付；所有必要门禁已通过，结论见§9.5。
+
+### 9.3 执行结果
+
+必要技术门禁已通过，结果以§9.5最终绑定为准。首个证据根为`G:/Unity/YLFramework-Stage9-20261019`，后续短路径交付根为`G:/Unity/Y9`，owner记录保留二者对应关系。早期失败不改写为通过；本轮不自动执行提交或下一迁移阶段。
+
+- 原Exporter经许可边界修复后生成740条记录的候选包；两个直接NUnit回归先失败后通过，实际逐文件/meta/GUID/载荷SHA与正式根闭包核对通过。商业Editor Enhancers留在主工程但不再分发；UI仓库专用Acceptance构建器保留GUID迁入Tests/Core/Editor。
+- ReceiverA由真实Unity `-createProject`建立，最小依赖仅UGUI 1.0.0（builtin）、Json.NET 3.2.1（registry）及新工程自身内建模块；正式`-importPackage`真实编译生成四个YL程序集后才安装公开API消费者，无原XF/MCP/测试框架或主工程DLL。导入进程exit0后日志共享读取冲突通过回收同一结果解决，未重复启动。
+- 首次附加审计误将Unity跳过的无后代空目录和Editor-profile的条件UnityEditor引用判为失败；两份失败日志保留，修正审计后`ReceiverA-Audit-audit2`通过，所有实际产品载荷/meta、Prefab脚本/引用、Assets GUID、Player编译引用及真实Analyzer compiler inputs核对成立；没有通过补依赖改变产品。
+- ReceiverA自建资源首次native构建产生了超出260字符的`.manifest`，native写入成功而Unity Mono读回失败。失败日志/半成品保留；补原始Workspace写入前检查及回归，不改变既有工作区身份，不清历史目录；后续另建短路径ReceiverB从重新导出的正式包开始。
+
+### 9.4 独立运行证据与取舍
+
+| 门禁 | 当前实际结果 | 证据/范围 |
+|---|---|---|
+| 第二个真正空工程 | ReceiverB首次导入、真实Unity编译通过，测试设施之后才安装 | `ReceiverB-first-import-initial.json`，候选包SHA256 `83ece848d447ef089875538081c1e29f43c254030765400130b73f5cb5de18de`；不是复制ReceiverA |
+| 新资源与样例 | 本工程生成None/E04各两版，两个来源目录、自动Atlas、发布、C02及随包Create/Build/Deploy样例成立 | `ReceiverB-publications-initial.json`、`ReceiverB-configuration-initial.json`；生成退出crash及同产物校验记录均保留 |
+| 无XF Mono图形Player | 8项通过，均Windows64/Mono2x/非Development/Legacy Input，实际exit0及退出后日志核验 | `P/m-ugui1`；Runs：`smoke4`、`mono-update1`、`mono-restart2`、`mono-rollback1`、`mono-restart1`、`mono-encrypted`、`mono-missing-key`、`mono-sample`各自`verdict.json` |
+| UI与生命周期 | 轻量根、完整模板、Panel打开/关闭/复用、Tips、ColorSelector、模态标准Selectable、资源Panel和租约归还通过 | 实际Canvas raycast + UGUI pointer handlers；截图`Runs/ReceiverB-Mono-smoke4/ui-modal.png`；Model/Controller各退出1次，Lease/实例缓存/资产/Bundle/CNG清理责任归零 |
+| Audio/Action/Logger基础 | Action/Timer真实帧推进、Audio资源Clip加载和native AudioSource playing、Unity原生日志观察通过 | Audio输出采样Peak为0，未据此声称已验证可闻音频；不把原生日志当作XF Logger补丁共存证据 |
+| 可选Logger旧制品 | 单独MIT归档27文件，主产品无依赖；产品独立8项通过后才安装，Mono共存通过 | 旧SHA256 `ea7011b7594bed0ebb3d110ccf5b9077eadd9c76fed984e4a5ae146bf9b1ecef`；`coex-mono`验证事件、两代writer独占读回和后续handler所有权 |
+| IL2CPP Low旧制品 | 构建成功、Core/UI/Audio/Resource通过，但Logger程序集整棵缺席，组合失败 | `P/i-l1`、`ReceiverB-Il2Cpp-il2cpp-smoke`；不是通过，未运行后续该构建的8项 |
+| Logger直接修复 | 回写正式embedded源码的程序集级`AlwaysLinkAssembly`，不全量保留，不改版本/程序集/GUID；真实IL2CPP失败→通过 | 官方2022.3该Attribute文档明确要求未被场景类型引用的RuntimeInitialize包仍被UnityLinker处理；新制品`Optional/Final/` SHA256 `a156bfd07c687bebd28d0abec42e639c8e56f6217a75db4f77bf624db7542057`，独立Mono和IL2CPP Low已复验 |
+| 最新Logger Mono | 实际非Development/Mono2x/Disabled图形进程exit0，完整业务链与Logger自动初始化、事件、两代writer/handler归还通过 | `P/m-mf`，`Runs/ReceiverB-Mono-mono-final-logger/verdict.json` |
+| 最终IL2CPP组合 | Release/Low/非Development/Legacy Input，8项代表性图形进程全部exit0，晚退日志无错误 | `P/i-l2`，`il2cpp-final-smoke/update1/restart2/rollback1/restart1/encrypted/missing-key/sample`；每项都含最新Logger生命周期验证 |
+| Editor退出 | 早期Generate native退出crash；多个成功方法报告后退出停滞，已只停止明确自有进程；IL2CPP l1构建进程实际exit0 | 不将完成报告等同正常退出，不启动同工程第二Editor；每个PID/projectPath与原始日志保留 |
+| 主工程保护 | Main Editor仍为32168，未显式改其backend/stripping/input或用户场景；两个新增Standalone默认map项的具体本次落盘触发者未证实 | 日志有此前UI构建setter恢复记录，但getter+SaveAssets实验未复现，不把候选当事实。用户2026-10-19追加选择“移除两项默认记录 (Recommended)”，授权仅移除这两项表示，保留Android等其他映射与实际Mono2x/Disabled，收口时核验 |
+
+取舍记录：本阶段只补代表性模态路由，不扩大到原UI完整物理输入矩阵。首次OS点击尝试失败，后续严格foreground检查拒绝注入；最终消费者彻底移除全局桌面输入，使用实际raycast最上层命中对象的公开UGUI处理器，不绕过Mask直接点下层Button。该结果不称为OS物理输入验证，原UI Medium/Both/New/Legacy范围证据各按原记录保留。
+
+交付定向Review已完成一次独立只读审查。原全局输入保护和退出期误绿、导入包身份重绑定、Tools副本路径假设、Player同次结果回收问题均已在源码定向修复；`RecoverPlayer`已对同一次失败`smoke3`保持失败、对同一次成功`smoke4`保持通过，没有重启Player。最终包已通过第三个空工程真实导入、附加审计与同次`RecoverImport`核验，工具快照及保护终态见§9.5。
+
+可选Logger自带Analyzer使全工程编译产生既有XML/公开成员文档警告，最新Mono BuildReport为977 warning、IL2CPP为976 warning、errors均0；未以关闭诊断、补空文档、忽略失败或升级依赖消除，原始消息完整保留。该警告不冒充编译失败，也不宣称零警告。
+
+### 9.5 最终交付与停止
+
+**阶段9独立工程交付技术验收完成；用户于2026-10-19确认验收并授权本批Git收口。** 下表保留原技术交付身份，后续审批不回写已冻结包或独立工程。
+
+| 交付项 | 路径与身份 |
+|---|---|
+| 正式框架包 | `G:/Unity/Y9/YLFramework-Stage9-Final.unitypackage`，3,930,873 bytes；SHA256 `d1710ed15ac86048f1a479d04779a776a27520060c35aeb2e39c8b4fc5d2a91c` |
+| 可选独立Logger | `G:/Unity/Y9/Optional/Final/com.xfkj.xfgameframework.loggersystem-1.0.1.tgz`；SHA256 `a156bfd07c687bebd28d0abec42e639c8e56f6217a75db4f77bf624db7542057`；不是YL必需依赖，不携带其他XF总包 |
+| 精确产品闭包 | 最终包同名`.files.json`逐740条记录给出路径、GUID、payload/meta SHA；同名`.receipt.json`绑定原Exporter根、HEAD及实际导出时间；`export-final-green.json`记录5个直接NUnit方法验证，不冒充Test Runner计数 |
+| 最终空工程 | `G:/Unity/Y9/ReceiverC`，由真实`-createProject`建立；`ReceiverC-first-import-initial.json`证明测试设施介入前最终包真实Unity编译，原导入进程exit0；之后的`ReceiverC-audit-final.json`核对7份Prefab、0 Missing Script/0 GUID冲突、Player引用和已部署Analyzer的真实compiler inputs |
+| Player工程与产物 | `G:/Unity/Y9/ReceiverB`；`P/m-ugui1`为无XF八项Mono证据，`P/m-mf`为最新可选Logger Mono代表冒烟，`P/i-l2`为最新可选Logger IL2CPP Release/Low八项；均非Development、Legacy Input、Built-in Render Pipeline，Direct3D11图形进程和正常退出证据完整 |
+| 依赖与许可 | UGUI实际1.0.0/builtin、Json.NET实际3.2.1/registry、批准BC2.7.0随包；Tink仅framing参考和Apache-2.0文本，无SDK。包/Player适用MIT、Unity Companion及Third Party Notices均保留；可选Logger1.0.1实际来自local-tarball且无传递依赖，不使用AssemblyVersion代替包版本 |
+| 稳定复现入口 | `G:/Unity/Y9/Tools/Invoke-Stage9Delivery.ps1`及`Run-Stage9Representative.ps1`；安装与新空工程完整命令见随包`Documentation/README.md`，原源码模板与脚本位于`Assets/YLFramework/Tests/Tools/`；Tools快照历史保留，不依赖Temp作为唯一说明 |
+| 截图与失败映射 | `Runs/ReceiverB-Mono-smoke4/ui-modal.png`、`Runs/ReceiverB-Il2Cpp-il2cpp-final-smoke/ui-modal.png`；首轮长路径失败、native点击失败/安全拒绝、旧Logger IL2CPP整程序集裁剪失败及后续复验均保留原Run，不覆盖或重复启动同次任务 |
+| 机器可读绑定 | `G:/Unity/Y9/delivery-binding.json`、`.sha256`与`SHA256SUMS.txt`关联源码/最终包/独立工程/17份必要Player verdict/实际IL2CPP原生与生成C++/保护终态；`final-source.patch`与当前改动文件SHA记录未提交源码身份 |
+
+最终包与ReceiverB受测包的所有可执行源码、部署DLL、Prefab、GUID/meta均相同；最终阶段仅补安装、来源许可与验收文档。最终空工程C已对最终包再次编译和审计，未用补齐过依赖的工程代替首导入。本文本节是**最终导出后的验收日志**，不重写已被验证的包；包内本文保留导出时真实快照，`delivery-binding.json`以包内/当前文档SHA明确记录这个唯一事后日志差异，不假称包内已含后来结果。
+
+保护核验覆盖3481个文件，除两个回写正式源码的Logger修复文件和用户明确授权的两个Standalone默认记录表示清理外，无未授权差异。主`ProjectSettings/ProjectSettings.asset`最终`git diff`为空；实际Mono2x/Disabled、Both(2)、Enter Play false/options3、pause false保持。主Editor PID32168、原UIAcceptance场景已保存/无dirty、EditMode/无编译失败/无构建；独立UI worktree、主Packages其他内容、原游戏、用户场景、原未跟踪`AlternateContent.meta`未接管。自有接收Editor均已退出或按精确PID回收；退出停滞不称正常Editor退出，成功Player均另有真实exit0证据。
+
+必要门禁之外的边界不扩大：UI原Medium结果保留原范围，本轮仅IL2CPP Low，不声称High或其他平台；原Scene风险、普通CA正向联网未测继续保留；未建立零原生泄漏遥测结论。当前模态输入为实际Canvas/UGUI路由，不是OS物理输入；Audio播放资源和释放通过，不宣称已验证可闻音频；既有文档警告不隐藏。
+
+阶段9技术验收当轮未暂存、Commit、Push、合并、切换或删除分支，HEAD仍为`586eebedaf900d926d2e30301b20ed3129decb27`；这是原始验收时事实，不改写为当时已经提交。
+
+**2026-10-19后续用户验收与Git收口：** 用户确认修订版融合原则并授权阶段9精确提交/普通Push及独立的E0批次。收口前实时远端与本地均为上述旧HEAD、暂存区为空、无索引锁或可见活跃收口会话；只读核对`delivery-binding.json`的26份当前源码/meta（包括受保护用户文件）全部SHA匹配，最终框架包/可选Logger/绑定文件SHA与冻结记录一致。仅追加本次用户验收文字，不重跑完整交付矩阵、不重建或覆写`G:/Unity/Y9`；原用户`AlternateContent.meta`和新拓展Plan不纳入阶段9提交。实际B9完整SHA与推送核验结果在后续E0专项Plan记录，不通过自引用或额外空提交伪造当前提交身份。
+
+完整暂存`diff --check`另发现六份新工具meta的18处Unity空值行尾空格；本次仅移除这些行尾空白，GUID/Importer/字段值不变，工具不在正式包导出根内。不重新冻结或覆盖旧记录；原技术验收SHA仍指规范前字节，Git收口差异为本段所述文档审批与meta空白，不冒充重新执行的技术验收。

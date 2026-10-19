@@ -12,11 +12,11 @@ namespace YLFramework.Editor
         private const string FrameworkRoot = "Assets/YLFramework";
         private const string PackageVersion = "1.0.0";
 
-        // 六个目录递归导出，并显式携带根级 XF 许可；排除 Tests 与包外依赖。
+        // 只递归分发有适用许可的产品根；商业 Editor Enhancers 留在宿主工程，不随框架再分发。
         private static readonly string[] ExportRoots =
         {
             "Assets/YLFramework/Editor",
-            "Assets/YLFramework/Plugins",
+            "Assets/YLFramework/Plugins/BouncyCastle",
             "Assets/YLFramework/Prefabs",
             "Assets/YLFramework/Runtime",
             "Assets/YLFramework/Samples",

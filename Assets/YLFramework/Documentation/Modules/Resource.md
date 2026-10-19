@@ -531,6 +531,8 @@ public static class ArtifactQueryExample
 
 ## 常见错误
 
+Unity `2022.3.62f3c1`的Windows Mono文件API仍有260字符限制，原始Workspace和加密交付文件均须在该边界内。请使用短路径工程（本轮独立示例为`G:/Unity/Y9/ReceiverB`）；实际可用长度取决于Bundle名字，不是一个对所有工程通用的固定工程路径上限。构建器在认领Workspace/调用native管线前检查实际原始产物全路径并明确拒绝超限，不自动改名、迁移或清理已有产物。阶段9首个长路径接收工程的失败记录保留，不以另一个短路径结果抹去。
+
 | 结果 | 处理方式 |
 |---|---|
 | ConfigurationConflict | 重用同一配置对象；核对已有 Resource/Core 绑定，不强制重置外部会话 |

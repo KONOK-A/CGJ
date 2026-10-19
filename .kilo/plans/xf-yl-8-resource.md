@@ -246,6 +246,8 @@ FIFO 是现有事实，不是优先级调度。可选能力须有真实需求或
 
 ### 12.2 阶段 9 前
 
+阶段9已于2026-10-19完成独立工程交付技术验收，后续用户确认验收并授权精确提交及普通Push；执行记录、实际失败与复验绑定、最终包/SHA/Player及保护终态统一维护在`Assets/YLFramework/Documentation/IntegrationPlan.md`§9。阶段9提交与E0分批收口，不重建或覆写历史交付。以下保留原前置约束，不将本文件历史“未启动”状态冒充当前结论，不扩大Resource Low或UI历史Medium范围。
+
 - 通过 8.10 的阶段完整流程及必要 Windows64 Player/持久缓存重启，确认源码边界、真实资源释放和平台矩阵。
 - 明确 Json.NET 等实际依赖与许可，不能把当前工程已安装包当作独立工程必然具备；遵守 UPM 包壳及其 Third Party Notices 的不同许可。
 - 融合的 XFAB MIT 来源归属 `Copyright (c) 2021 弦小风` 与完整许可随附，来源 revision 集中维护，不批量复制不明 DLL。

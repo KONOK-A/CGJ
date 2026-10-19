@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor
 {
-    /// <summary>集成后显式构建 UIAcceptance 的 Windows64 IL2CPP 门，不自动启动 Editor 或 Player。</summary>
+    /// <summary>仓库测试专用的 UIAcceptance Windows64 IL2CPP 门，不随框架导出或自动运行。</summary>
     public static class UIPanelAcceptanceBuild
     {
         public const string ScenePath = "Assets/YLFramework/Tests/Core/Acceptance/UIAcceptance.unity";

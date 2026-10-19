@@ -6,6 +6,8 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+// 独立包没有业务类型引用时，仍须让UnityLinker处理其RuntimeInitializeOnLoadMethod入口。
+[assembly: UnityEngine.Scripting.AlwaysLinkAssembly]
 
 namespace XFGameFramework.LoggerSystem
 {

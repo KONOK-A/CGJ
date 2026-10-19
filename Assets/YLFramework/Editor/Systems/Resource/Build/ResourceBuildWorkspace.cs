@@ -91,6 +91,9 @@ namespace YLFramework.Editor.Resource
             // 路径使用 128-bit token 缩短 Windows 路径；marker 仍比较完整配置 SHA-256，碰撞只能拒绝，不能复用。
             Root = ResourceBuildMap.Absolute("AssetBundles/YLR_" + map.ProjectGuid + "_" + settings.Substring(0, 32));
             Output = Path.Combine(Root, Leaf);
+            // Native管线可写出Mono随后无法读回的长路径，必须在认领Workspace或调用构建前拒绝。
+            if (Path.DirectorySeparatorChar == '\\' && ExpectedFiles().Any(name => Path.Combine(Output, name).Length >= 260))
+                throw new PathTooLongException("Workspace paths exceed this Unity Mono Windows file API limit; use a shorter Unity project path before building.");
         }
 
         internal Ownership Read()
