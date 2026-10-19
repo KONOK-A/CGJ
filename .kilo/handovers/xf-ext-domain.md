@@ -17,8 +17,8 @@
 | 模块 | 状态 | 候选提交/证据 |
 |---|---|---|
 | Reddot | 源码候选完成，引擎待验 | `5c04f2b`；9项托管红→绿，Runtime辅助编译退出0/41个既有warning |
-| Logger | 源码候选完成，引擎待验 | 6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
-| Skill | 待实施 | 保留释放/中断/冷却及普通作者流程 |
+| Logger | 源码候选完成，引擎待验 | `c2e1a0f`；6项Logger+9项Reddot托管通过；默认关闭，原embedded只读 |
+| Skill | 源码候选完成，引擎待验 | 4项Skill+前15项托管通过；Runtime/Editor/EditorTools辅助编译通过 |
 | Buff | 待实施 | 保留叠加/效果及普通作者流程 |
 | Mission | 待实施 | 保留条件/进度/奖励及普通作者流程，不改Save |
 | Excel接线 | 待核对B真实API | 开工时B交接文件不存在，不空等、不造接口 |
@@ -55,3 +55,15 @@
 - `logger-red`：9通过/5缺能力失败；`logger-green`：14通过；新增格式化重入直接回归`logger-format-red`为14通过/1失败（多发nested-format），修复后`logger-format-green`为15通过/0失败/跳过。并发100条完整记录、两会话文件独占读回、文件错误、过滤/事件/递归均实际执行。Runtime辅助编译退出0/41个既有warning。
 - Context7没有提供精确2022.3 ILogHandler资料，补读Unity 2022.3官方Scripting API，接口/前任handler用法亦由实际程序集编译确认；不外推线程Unity行为。
 - `LoggerLifecycleTests.DefaultIsPassiveAndLaterHandlerKeepsOwnershipOnClose`已准备未运行。无XF独立Mono/IL2CPP Low消费者、五类真实Debug、同秒连续双Play、disable/destroy/quit释放、原Logger共存仍待引擎门，旧Logger阶段9证据不能替代。
+
+## Skill使用与验证
+
+- namespace为`YLFramework.SkillSystem`。保留`IEquippableSkill`、`SkillBase`虚方法、Release/Cancel/Interrupt/冷却及`SkillManager.AddSkills/RemoveSkills/InterruptAllSkill`流程；配置保留原字段/子类/脚本GUID与FullName用途，新YL身份无旧资产自动迁移。
+- `AddConfig(SkillsConfig)`借用调用方配置；`LoadConfig(ResourceSystem, ResourceAddress)`由Manager持根Lease。配置重复ID、空条目和无效/抽象/不可创建脚本明确失败，诊断带ID/配表/类名。不强制注册工厂；自定义子类需按真实IL2CPP保留策略验收。
+- 每次装备克隆配置为运行态`SkillData`，释放回收销毁克隆并清Releaser/回调；YL实例ObjectPool按实际类型复用。先从宿主集合摘除再调用移除逻辑，回收延迟到当前嵌套操作结束，代次检查阻止旧回调继续写复用对象。冷却完成进度保持1，不再归零。
+- CLR宿主关闭必须`CloseHost(host)`；Component inactive暂停，fake-null销毁后清理。`Shutdown()`归还全部宿主、三相位句柄、池及配置Lease；Player退出和Editor退出Play接本组局部清理，新Play复用Foundation会话复位，不改共享契约。
+- 普通作者工具从精确原revision机械承接：菜单`Window/YLFramework/SkillSystem`、双击配表、创建/复制/删除/搜索/选中/拖拽、数据类型限制、字段自定义GUI、脚本选择/编辑/选中、ID改名。复用E0 ReorderableTreeView，补实际索引、窗口Dispose和切换归还；生成目录改`Assets/YLFrameworkData/Skill`，删除只处理自己的GUID目录，不删任意外部引用。图标按YL Resource ProjectId/address输入并复用预览，不调用XFAB。
+- Runtime纯数据不依赖领域Editor Attribute；原Drawer迁至Editor，由本领域Inspector按字段分发，保留自定义Attribute扩展。脚本批量校正改为显式`Tools/YLFramework/Skill/Refresh Script Bindings`，不在导入时全工程改资产/SaveAssets。xlsx命令等待真实B API。
+- `skill-contract-red`实跑15通过/1缺能力失败；`skill-managed`实跑19通过/0失败/跳过，含释放→完成→冷却终点、取消/中断次数、释放回调内结束代次不继续旧回调。不是原XF引擎Bug复现。辅助Runtime通过/41 warning；Editor通过/40、EditorTools通过/4。迁移中出现Editor命名空间和Drawer原类名不一致的辅助编译错误，已直接修复后重跑。
+- `SkillOwnerTests.ConfigIsCopiedAndClrHostCloseReturnsSkillAndCallbacks`已准备未运行，覆盖原配置不变、回调内Close、重入移除和跨owner池复用。实际资源Lease、Inactive/Destroy、双Play、作者资产保存重开及无静态new的多态AOT仍待引擎门。
+- `Tools/Domain/Import-DomainSources.ps1`仅用于首次精确来源机械承接，拒绝覆盖任何已存在目标，不得重跑覆盖修复；不复制meta/asmdef/DLL。PowerShell5.1首次解析因含中文的无BOM脚本失败，改为ASCII脚本后成功；未写来源文件。
