@@ -3,6 +3,14 @@
 唯一正式Plan：`.kilo/plans/1792420261057-xf-ecosystem-integration.md`。
 本轮用户明确授权五项连续源码融合、必要修复、离线验证及中文本地候选提交；覆盖Plan历史未授权/分批等待状态，不覆盖共享区域、许可和验证边界。
 
+## 2026-10-20主工作区固定接收进度
+
+- 后续用户已明确授权主工程完整接收固定C `aadc11b5099b76f16667aa9818ca927104cd12be`及G0-G5/独立导出/Release Player验收；下方“C未获准接收”、旧PID4708、旧主HEAD及在途自动差异均为历史，不覆盖当前授权。
+- 主`integration/xf-yl`已以正常merge `53ebc2842f180fece5e3e87014524cd3b41c397e`接收B0后的全部10提交/257路径，未接来源后续修改；A/B不重复merge。主工程独占证据根为`G:/Unity/MC26-20261020T173208Z`，主PID16464，最新记录见主Plan §13，不覆盖本来源旧Plan。
+- 最终主工程普通C EditMode62/62、PlayMode14/14、显式专属保护8/8、边界36/36、选配Excel6/6、Resource/UI94/94、B资源9/9、Save5/5、A代表25/25，均0失败/跳过；包含主保存围栏、场景隔离、两轮三域/真实Lease退出、真实主XF Logger共存回归。原失败XML及调度后回执故障注入原件保留，主Editor未退出，选配宏已精确恢复。一次fresh review的3项Important已以先红后绿/真实故障注入修正，未恢复旧兼容或弱化断言。
+- 当前产品主Mono和IL2CPP Low/Release非Development构建及真实图形Player均通过，主Player PID19820/38984、OS0/Direct3D11/实际窗口/精确3日志探针与0未绑定错误。正式Exporter核心包SHA `62dbbb2629649fb7c4edeaa2547535acf5cef8ddc162aa015ec8c06a8fd8de55`及产品/meta/GUID/许可审计通过；全新无XF/MCP receiver先在无测试/可选时真实首次导入编译，后完成Mono/IL2CPP两图形Player（PID5996/28516，OS0）及独立选配Excel6/6。
+- 三作者真实GUI截图、OS鼠标选行及程序化完整作者roundtrip已分别记录；不冒称全人工CRUD/选择器签核。原游戏菜单/设置/进入/暂停返回/再入的两轮独立断言通过，未重建MainModule。开工原32个dirty对象及保护文件/设置/场景已实际复核保留，receipt自有生成物已归档，最终保存围栏解除；用户Plan §11/T2和FSM/Test/MCP/meta差异不带入提交。最终本地修正提交SHA/index见同证据根`git-final.json`及主Plan§13，不Push、不删除worktree，不据此宣称整个XF融合全部完成。
+
 ## 2026-10-20移除XF旧兼容
 
 本节是最新增量。用户明确YL仍在开发、未发布且没有使用项目，不需要XF旧代码/旧资产迁移兼容；历史“保留旧入口”的要求不再作为兼容理由。本轮在C分支`6a45e9b62692752ed925dd1575e92df6db9fb6a5`基础上修改，**旧9提交候选不包含本节清理**；本节清理作为C本地后续提交收口，不merge/Push，不操作主工作区、原XF包或其他组在途源码。

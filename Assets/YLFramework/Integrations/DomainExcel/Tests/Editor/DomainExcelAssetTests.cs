@@ -20,6 +20,9 @@ namespace YLFramework.Domain.Excel.Tests
         [SetUp] public void Setup()
         {
             _folder = "Assets/DomainExcelFixture-" + Guid.NewGuid().ToString("N");
+            if (SessionState.GetBool("YLFramework.Domain.MainAcceptance.Protection", false))
+                Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, Assembly-CSharp-Editor", true)
+                    .GetMethod("OwnPath").Invoke(null, new object[] { _folder });
             AssetDatabase.CreateFolder("Assets", Path.GetFileName(_folder));
             _path = Path.Combine(Path.GetTempPath(), "domain-excel-native-" + Guid.NewGuid().ToString("N") + ".xlsx");
         }

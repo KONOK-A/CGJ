@@ -75,6 +75,18 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - 可选MiniExcel 1.31.2，来源 https://github.com/mini-software/MiniExcel ，commit `f1498a2d162debca9a1e9153cf2249131a75eeb0`，Apache-2.0。未经修改的netstandard2.0 DLL SHA256为`0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`；完整Apache-2.0随`Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt`，具体nupkg/来源及许可指纹在`Dependencies.json`。该整目录须作为选装单元携带，不进入核心默认导出或Player，核心无需解析器引用。
 - `Runtime/Systems/Save/`：吸收ArchiveSystem 1.0.7（revision `8046fe56f82983e6081a5c110559915d94df9e3e`，来源 https://gitee.com/xianfengkeji/xfgame-framework.archive-system.git ，MIT / `Copyright (c) 2025 弦风课堂`）的模型/槽位/当前项用途，统一到唯一SaveStore。没有第二ArchiveManager、DES、XF旧档扫描或迁移；删除历史迁移能力不撤销来源署名。完整MIT与2025版权见根`LICENSE.md`。
 
+### C 组领域玩法来源
+
+- `Runtime/Systems/Skill/`及`Editor/Systems/Skill/`：SkillSystem 1.5.8，revision `4c9d8f5d3120cdf7333a9a040a85ee9583af072f`，来源 https://gitee.com/xianfengkeji/xfgame-framework.skill-system.git 。
+- `Runtime/Systems/Buff/`及`Editor/Systems/Buff/`：BuffSystem 1.7.3，revision `01d05626b01bcb01e0c27a1040119f41b534f902`，来源 https://gitee.com/xianfengkeji/xfgame-framework.buff-system.git 。
+- `Runtime/Systems/Mission/`及`Editor/Systems/Mission/`：MissionSystem 1.2.4，revision `a3da5d37ae61d24becd915281f2b676cb1210749`，来源 https://gitee.com/xianfengkeji/xfgame-framework.mission-system.git 。
+- 上述三项均为MIT / `Copyright (c) 2024 弦风课堂`；沿用领域算法和普通作者流程，局部接YL Pool/Update/Resource，配置与运行态隔离。各Runtime模块`LICENSE.txt`保留完整原文，覆盖相应Editor承接代码；不恢复已退役的XF旧事件、旧池接口或路径字段。
+- `Runtime/Systems/Reddot/`：ReddotSystem 1.0.4，revision `8e2c23e435a4ff1eb4dbc441a6d4fb389ee58c89`，来源 https://gitee.com/xianfengkeji/xfgame-framework.reddot-system.git ，MIT / `Copyright (c) 2025 弦风课堂`。
+- `Runtime/Systems/Logging/`：LoggerSystem 1.0.1，revision `0ebbebeb4b961d6fb67670d22cad819856969c3a`及主工程embedded来源的既有handler/writer所有权修复，来源 https://gitee.com/xianfengkeji/xfgame-framework.logger-system.git ，MIT / `Copyright (c) 2025 弦风课堂`。新YL日志默认不接管；没有复制旧Analyzer。上述两模块各附完整`LICENSE.txt`。
+- `Integrations/DomainExcel`只消费B的真实Editor后端，需显式`YL_DOMAIN_EXCEL`，不进入核心默认包或Player；选装单元需同时携带`Integrations/Excel/Editor`和其MIT/Apache-2.0许可。Mission跨sheet原子事务与全局Buff Effect库xlsx未实现，不以普通作者工具或单sheet测试冒称支持。
+
+### 共享依赖与排除
+
 - `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。
 - `Plugins/BouncyCastle/`随框架导出批准的BouncyCastle.Cryptography 2.7.0官方netstandard2.0二进制、完整MIT `LICENSE.md`与精确来源`SOURCE.txt`。Resource仅内部使用其HKDF-SHA256，Windows AES-GCM由系统CNG提供，不分发系统密码DLL。Tink仅作为framing参照，适用Apache-2.0全文随`TINK-LICENSE.txt`携带，不宣称依赖或分发Tink SDK；详见该目录来源声明。
 - `Runtime/Utilities/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。

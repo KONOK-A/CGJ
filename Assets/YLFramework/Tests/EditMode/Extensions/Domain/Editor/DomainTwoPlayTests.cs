@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using UnityEditor;
@@ -6,16 +7,23 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Logging;
 using YLFramework.ReddotSystem;
+using YLFramework.BuffSystem;
+using YLFramework.MissionSystem;
+using YLFramework.Services.Resource;
+using YLFramework.SkillSystem;
+using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
     public class DomainTwoPlayTests
     {
+        public sealed class SessionSkill : SkillBase { }
         private string _directory;
         private System.IDisposable _oldPath;
         [UnityTearDown] public IEnumerator Cleanup()
         {
             LoggerManager.Disable();
+            SkillManager.Shutdown(); BuffManager.Shutdown(); MissionManager.Shutdown();
             _oldPath?.Dispose();
             _oldPath = null;
             if (EditorApplication.isPlaying) yield return new ExitPlayMode();
@@ -58,6 +66,77 @@ namespace YLFramework.Tests.Extensions.Domain
             Directory.Delete(directory, true);
             // original仅记录第一Play前任，不能在第二Play/退出后强行安装旧引用。
             Assert.That(original, Is.Not.Null);
+        }
+
+        [UnityTest] public IEnumerator EachPlayReturnsAllThreeDomainHostsConfigurationsAndRealRootLeases()
+        {
+            Assert.That(EditorSettings.enterPlayModeOptionsEnabled && (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != 0, Is.True);
+            for (int round = 1; round <= 2; round++)
+            {
+                yield return new EnterPlayMode(false);
+                Assert.That(SkillManager.ConfigCount + BuffManager.ConfigCount + MissionManager.ConfigCount, Is.Zero, "Each entry starts a new domain session.");
+                Assert.That(SkillManager.HostCount + BuffManager.HostCount + BuffManager.EffectOwnerCount, Is.Zero);
+                Assert.That(ResourceSystem.Current, Is.Null);
+                var skills = ScriptableObject.CreateInstance<SkillsConfig>(); skills.name = "TwoPlay.Skills";
+                var skillData = ScriptableObject.CreateInstance<SkillConfigData>();
+                skillData.id = 100; skillData.parent = skills; skillData.skill_class_full_name = typeof(SessionSkill).FullName; skills.skills.Add(skillData);
+                var buffs = ScriptableObject.CreateInstance<BuffsConfig>(); buffs.name = "TwoPlay.Buffs";
+                var buffData = ScriptableObject.CreateInstance<BuffConfigData>();
+                buffData.buff_id = 100; buffData.parent = buffs; buffData.buff_class_full_name = typeof(BuffBase).FullName; buffs.buffs.Add(buffData);
+                var missions = ScriptableObject.CreateInstance<MissionsConfig>(); missions.name = "TwoPlay.Missions";
+                var missionData = ScriptableObject.CreateInstance<MissionConfigData>();
+                missionData.id = 100; missionData.parent = missions; missionData.mission_type_class_fullname = typeof(MissionBase).FullName; missions.missions.Add(missionData);
+                var source = new SessionSource();
+                source.Assets.Add("skills", skills); source.Assets.Add("buffs", buffs); source.Assets.Add("missions", missions);
+                var entries = new List<ResourceCatalogEntry>();
+                foreach (var pair in source.Assets) entries.Add(new ResourceCatalogEntry(pair.Key, new ResourceAddress("domain-two-play", pair.Key), new ResourceLocation(source.Id, pair.Key, pair.Value.GetType())));
+                using var initialized = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { new ResourceCatalog("domain-two-play", entries) }, new IResourceSource[] { source }));
+                var resources = initialized.TakeResult();
+                SkillManager.LoadConfig(resources, new ResourceAddress("domain-two-play", "skills"));
+                BuffManager.LoadConfig(resources, new ResourceAddress("domain-two-play", "buffs"));
+                MissionManager.LoadConfig(resources, new ResourceAddress("domain-two-play", "missions"));
+                var host = new SessionHost();
+                var skill = SkillManager.AddSkills(host, 100);
+                var buff = BuffManager.AddBuff(host, 100);
+                var mission = MissionManager.GetMission(missions.name, 100);
+                Assert.That(resources.GetDiagnosticsSnapshot().RecordCount, Is.EqualTo(3));
+                Assert.That(skill.SkillData, Is.Not.SameAs(skillData));
+                Assert.That(buff.BuffData, Is.Not.SameAs(buffData));
+                Assert.That(mission.MissionConfig, Is.Not.SameAs(missionData));
+                // 故意不手动Shutdown/Clear static；以下断言只接受真实退出钩子的清理结果。
+                yield return new ExitPlayMode();
+                Assert.That(SkillManager.ConfigCount + BuffManager.ConfigCount + MissionManager.ConfigCount, Is.Zero, "Every exit returns all configurations.");
+                Assert.That(SkillManager.HostCount + BuffManager.HostCount + BuffManager.EffectOwnerCount, Is.Zero);
+                Assert.That(host.Skills, Is.Empty); Assert.That(host.Buffs, Is.Empty);
+                Assert.That(skill.Releaser, Is.Null); Assert.That(buff.Owner, Is.Null);
+                Assert.That(source.Releases, Is.EqualTo(3), "Each round must return its own three real root leases.");
+                Assert.That(ResourceSystem.Current, Is.Null);
+                Debug.Log("MC26_DOMAIN_TWO_PLAY_ROUND_PASS round=" + round + "; releases=" + source.Releases);
+                foreach (var asset in new UnityEngine.Object[] { skills, skillData, buffs, buffData, missions, missionData })
+                    if (asset) UnityEngine.Object.DestroyImmediate(asset);
+            }
+        }
+
+        private sealed class SessionHost : IEquippableSkill, IAddableBuff
+        {
+            public Dictionary<int, SkillBase> Skills { get; } = new();
+            public List<BuffBase> Buffs { get; } = new();
+            public bool IsCanRelease() => true;
+            public bool IsCanAdd(int id) => true;
+            public void OnAddBuff(BuffBase buff) { }
+            public void OnRemoveBuff(BuffBase buff) { }
+        }
+
+        private sealed class SessionSource : IResourceSource
+        {
+            public ResourceSourceId Id => new("domain-two-play");
+            public bool SupportsSynchronousLoad => true;
+            internal readonly Dictionary<string, UnityEngine.Object> Assets = new();
+            internal int Releases;
+            public void Validate(ResourceCatalogEntry entry) { }
+            public ResourceSourceResult Load(ResourceCatalogEntry entry, System.Type type) => new(Assets[entry.Location.Locator]);
+            public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, System.Type type) => throw new System.NotSupportedException();
+            public void Release(UnityEngine.Object asset) => Releases++;
         }
     }
 }

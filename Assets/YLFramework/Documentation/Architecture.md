@@ -162,6 +162,16 @@ DataAssets保留`ScriptableObjectConfigs/ScriptableObjectData`与`SingletonScrip
 
 统一Save由`SaveStore`承担唯一文件/索引/槽位/模型/异步/缓存权威，`SaveManager`只提供Unity路径和门面。只支持当前v2，损坏/IO/版本失败不变成默认值；备份读取注明来源，显式恢复才修盘。没有SaveMigration、v1复制或XF Archive导入，普通删除重载保留。用法与并发/取消边界见[Save](Modules/Save.md)。
 
+### 领域玩法接入
+
+Skill/Buff/Mission分别位于`Runtime/Systems/`及对应`Editor/Systems/`，沿用各自Manager与配置类型，不依赖DataAssets基类，也不新增共享服务权威。`AddConfig`借用定义，`LoadConfig(ResourceSystem, ResourceAddress)`由Manager持有根Lease；应用显式登记`SkillsConfig`、`BuffsConfig`、`MissionsConfig`根类型。运行实例使用既有YL对象池并克隆配置，宿主关闭调用`CloseHost`，会话退出调用`Shutdown`归还Update句柄、池、回调和Lease；不能以关闭某个Module自动替代任意外部owner的清理。当前回调、`ResetData/ClearRuntime`和按ID/实例/类型移除保留，不提供XF旧事件/旧池方法/宿主旧名兼容。
+
+三套作者窗口位于`Window/YLFramework/SkillSystem`、`BuffSystem`、`MissionSystem`，复用共享平面重排、Undo与资源预览。条目只删除自己拥有的子资产或根GUID目录，外部引用仅解除关联。脚本绑定使用当前类型全名/GUID，实际派生CLR类型须由应用按IL2CPP路径定向保留；根类型登记不等于反射子类已自动保留。
+
+`YLFramework.ReddotSystem.ReddotManager.RegisterPath`返回独立来源token，owner退出时Dispose；普通`AddPath/RemovePath`保留集合语义，不能夺取独立来源。`Reddot`只切换显式`Indicator`，停用/销毁精确退订，不切换全部业务子节点。`YLFramework.Logging.LoggerManager`默认被动，仅在Play主线程显式`Enable(new LoggerOptions { WriteToFile = true })`才写盘/接管，`Disable`只归还仍由自己拥有的handler；与原embedded XF Logger共存，不修改或替换原包。
+
+可选`Integrations/DomainExcel`需完整B Excel Editor后端及显式`YL_DOMAIN_EXCEL`。`DomainExcelCommands.PreviewImport`使用显式工作簿路径，预览后明确取消或确认；根资产不保存本机绝对路径。当前没有最近工作簿/打开文件夹入口，不提供Mission条目+参数跨sheet原子事务或全局Buff Effect库xlsx导入。普通Effect/条件/奖励/参数作者工具继续存在；默认核心导出不含这两个可选Integrations目录。
+
 `YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。来源与完整许可见根LICENSE及Notices。
 
 - `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 保持原默认资源、生成、设置与预览契约。

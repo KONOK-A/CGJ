@@ -45,7 +45,11 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(LoggerManager.IsEnabled, Is.False);
             var previous = Debug.unityLogger.logHandler;
             TestContext.WriteLine("Previous handler=" + previous.GetType().FullName + ", assembly=" + previous.GetType().Assembly.GetName().Name);
-            if (Environment.GetCommandLineArgs().Contains("-domainRequireLegacyLogger"))
+            bool requireLegacy = Environment.GetCommandLineArgs().Contains("-domainRequireLegacyLogger");
+#if UNITY_EDITOR
+            requireLegacy |= UnityEditor.SessionState.GetBool("YLFramework.Domain.MainAcceptance.Protection", false);
+#endif
+            if (requireLegacy)
                 Assert.That(previous.GetType().FullName, Does.StartWith("XFGameFramework.LoggerSystem."), "共存门必须真正经过原XF handler。");
             var directory = Path.Combine(Path.GetTempPath(), "YLDomainC-RealDebug-" + Guid.NewGuid().ToString("N"));
             try

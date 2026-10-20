@@ -21,6 +21,10 @@ https://gitee.com/xianfengkeji/xfgame-framework.excel-system
 均为MIT / Copyright (c) 2024 弦风课堂，模块内完整许可继续保留。
 统一Save吸收ArchiveSystem 1.0.7 revision `8046fe56f82983e6081a5c110559915d94df9e3e`
 的模型/槽位用途，适用MIT / Copyright (c) 2025 弦风课堂；没有复制DES或历史档迁移链。
+`Runtime/Systems/{Skill,Buff,Mission,Reddot,Logging}/`及相应三套Editor承接C组五个MIT来源，
+Skill/Buff/Mission为Copyright (c) 2024 弦风课堂，Reddot/Logging为Copyright (c) 2025 弦风课堂。
+精确版本、revision和来源见`Runtime/THIRD-PARTY-NOTICES.md`；各模块`LICENSE.txt`保留完整原文。
+可选`Integrations/DomainExcel`不随核心导出，选装须同时携带B的Excel后端和完整许可。
 相关上游声明及完整 MIT 许可保留如下。
 
 Copyright (c) 2021 弦小风

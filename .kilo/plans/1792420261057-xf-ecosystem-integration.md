@@ -1,6 +1,6 @@
 # XF 生态拓展系统融合专项 Implementation Plan
 
-> **执行说明：** 本文件为唯一拓展融合专项方案，2026-10-19编制并增量修订。早期授权/未授权状态是历史记录；2026-10-20用户已明确授权T3-B主工程完整本地merge、必要修复、真实Unity/Release Player验收及中文本地提交，最新记录见§12。只接固定B tip，不接C、不Push、不重写历史；安全、许可、数据保护继续有效。A及T2既有成果保留，不按旧快照恢复主HEAD或重做无关实现。
+> **执行说明：** 本文件为唯一拓展融合专项方案，2026-10-19编制并增量修订。早期授权/未授权状态是历史记录；2026-10-20用户已另明确授权固定T3-C完整主线接收、G0-G5真实验收、正式导出/独立接收、Mono/IL2CPP Low图形Player及中文本地提交，最新进度见§13。A/B不重复merge，不接来源在途新修改，不Push、不重写历史；安全、许可、数据保护继续有效。A/B及T2既有成果保留，不按旧快照恢复主HEAD或重做无关实现。
 
 **Goal:** 对长期蓝图选定的13项剩余 XF 系统完成真实盘点，确定唯一能力归属、依赖次序、三个低耦合 Worktree 边界及独立交付门禁。
 
@@ -489,3 +489,57 @@ B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终�
 - 现场保护例外明确保留：新增归属未明的`.mcp.json`改动不暂存、不回退、不输出敏感值；原Shader仍脏。构建后另观察到`Assets/Settings/UniversalRP.asset`脏标记，未保存或ClearDirty，磁盘Git无差异；该资产不在开工原字节资产快照内，不宣称字节复原门覆盖它，其当前磁盘/内存观察另留证。原Editor保留，不操作任何其他工程Editor。
 - G4无XF干净接收/最终独立安装分发未执行；真实核心Export用例通过不等于G4，含XF等包的主Player也不等于干净分发。阶段9/Y9、BD26及A/C证据未覆盖。Inspector鼠标点击未执行；通用文件系统/超长路径风险未宣称消失。
 - 本地集成修复/文档/交接一次精确收口；本节所在提交即修复提交，完整SHA与最终index/保留现场记录写入MB26的`git-final.json`并在最终回复报告，避免为写自身Hash另造docs提交。只暂存本轮内容，Plan原T2增量保持未提交，不Push、不删除分支/worktree。
+
+## 13. T3-C 主工作区接收（2026-10-20）
+
+### 13.1 固定输入与保护
+
+- 本轮明确授权覆盖C交接中“未获准主线接收”的历史状态，只接固定`aadc11b5099b76f16667aa9818ca927104cd12be`。主`integration/xf-yl`接收前HEAD为`c7f2aaf3ff94ba4bc8d3ea48ce09c9da1f277248`，A `ce1898e`及B `5dce4f3`已在历史中，不重复接收；共同B0仍为`c88500aef6651f5b13ac933dd1f209ecb314e92d`。
+- 实核C来源干净，完整10提交/257路径，无staged内容或Git在途操作；当前HEAD重跑merge-tree退出0、无冲突。以固定SHA执行`--no-ff --no-commit`，逐项比对257个index blob与固定C完全一致后创建中文本地merge `53ebc2842f180fece5e3e87014524cd3b41c397e`，双父为上述主HEAD与固定C；新主入口及用户差异未带入merge。
+- 独占证据根`G:/Unity/MC26-20261020T173208Z`，`owner.json/preflight.json`绑定真实主路径、Unity2022.3.62f3c1/PID16464、输入SHA和本轮Run。冻结3886份文件SHA、89份原字节及内存设置/dirty对象；包含MainModule Bundle、原游戏/场景/图集、用户FSM/Test、Packages/ProjectSettings、已有YL与Plan。`.mcp.json`仅记录SHA，不输出敏感值。
+- 原UIAcceptance场景已保存、未Play/编译/构建，Shader及UniversalRP内存dirty保持。`DomainMainAcceptance`独占保存围栏在merge前已编译启用，跨导入/程序集重载持续有效；UTF使用TestRunnerApi调度，不调用会Exit的DomainBatchAcceptance/CarrierBootstrap，不另启同路径Unity。
+
+### 13.2 当前实际验收
+
+- `core-audit-01`：默认未定义`YL_DOMAIN_EXCEL`，实际Unity编译成功，93份当时C/主入口源码逐项进入正确程序集；140份固定C meta blob/GUID一致，在raw Assets唯一且不与原XF包冲突；14份真实rsp及sourceFiles/AssemblyRef留档，Player图无UnityEditor/XF/MiniExcel/Excel.Editor反向边。后续入口增量须按影响复核，不能把该93份当固定总数。
+- 保存围栏直接回归`protection-red-01`先复现对任意新路径误认所有权；限定精确自有fixture/UTF新场景及本轮根GUID生成目录后`protection-green-01`为2/2。实际SaveAssets下自有模拟外部脏Material字节不变、内存dirty/修改仍在，不仅检查过滤数组。红XML保留。
+- 首轮`domain-edit-01`实际60发现/59通过/1失败：双Play进入原UIAcceptance，触发其UI34自动流程错误。未改原UI源码/场景或屏蔽错误；补主入口空场景隔离，`scene-isolation-red-01`先确认缺隔离，再以自有保存场景运行完整C。
+- `domain-edit-02`为61发现/执行/通过，`domain-play-01`为14发现/执行/通过，均0失败/跳过/不确定；包含真实关闭Domain Reload的同进程双Play。`boundary-01`为Foundation/Core/Framework/CoreIdentity/核心导出36/36，未改白名单或删除失败。全部使用新XML和主PID16464；完成回执等待UTF inactive、退出Play、原场景/完整设置内存/稀疏map/原字节恢复后原子发布。
+- C兼容清理完整保留，未恢复旧事件、旧IReuseable方法、宿主remove-all旧名、Reddot旧门面或excel_path。中央MIT来源/完整许可及架构/索引已增量维护；普通领域能力与显式路径Excel作者工作流不裁剪。
+- `excel-audit-01/domain-excel-01`：临时启用选配宏后的主线B后端+C真实Excel suite为6发现/执行/通过，0失败/跳过；检查Editor-only MiniExcel 1.31.2、200192字节、批准SHA与Apache-2.0许可，验证pin仍保留B `6a9e250`、真实后端tip为`5dce4f3`，未机械改成混合HEAD。`excel-restore-01`经真实重载及稳定idle后精确恢复原define、稀疏map、内存/原字节/场景，选配未变成默认。
+- 加强`DomainTwoPlayTests.EachPlayReturnsAllThreeDomainHostsConfigurationsAndRealRootLeases`，每轮进入/退出独立断言Skill/Buff/Mission配置、宿主、池实例owner及三份真实Resource root Lease归还，故意不在两轮之间手动Shutdown/清static；`domain-edit-04`为62/62。新增夹具首轮误用抽象SkillBase的失败原件在`domain-edit-03`，改测试派生类后通过，未改产品校验。`domain-play-02`14/14强制真实主XF handler存在，确认YL默认被动及显式启用/归还共存。
+- 当前C组合代表回归：`resource-ui-combination-01`94/94，`data-resource-combination-01`9/9，`save-combination-01`5/5，`behavior-combination-01`25/25；均0失败/跳过，Save通过独占环境路径而非更改公司/产品或用户存档根，原环境值恢复。
+- `main-mono-02`使用当前合并后产品及新五模块消费者完成Windows64 Mono/Disabled、BuildOptions.None、非Development、0构建错误；首轮1664条当前源码/包警告未屏蔽（含C的未补齐XML文档/param声明），按原BuildReport分组保留，增量修正构建为6条包空程序集警告。`PlayerRuns/main-mono-02-01`实PID19820、真实窗口2231234、Direct3D11/RTX4070Ti SUPER、OS Exit0、唯一Run标记、五模块/池复用/冷却到期/Mission反射/资源归还/Logger旧handler共存通过；完整晚退日志同次后审计`postexit-log-audit.json`通过，只绑定三项精确Error/Assert/Exception探针，0其他错误。
+- 主首轮`main-mono-01`图形Player故意保留Exit1失败：Debug.LogAssertion被Release的UNITY_ASSERTIONS条件编译裁掉，改消费者为真实`Debug.unityLogger.Log(LogType.Assert,...)`后新建Run重建，不改Logger产品或减少日志种类。OS包装器的PS5.1编码/连续无空行日志解析缺陷单独诊断，保留原os-run，不能把消费者通过自动当包装器通过。消费者link.xml只定向保留三个Assembly-CSharp反射子类，保留生成GUID。
+- 全新外部`Receiver`已由真实2022.3.62f3c1创建；创建包装器先遇日志读取锁，保留两次原件，第二次有PID31800/OS0及完整退出日志。只读核实无receiver进程后以`mc26-receiver-create-03`回收该同次退出证据并完成modules+UGUI1.0.0/Newtonsoft3.2.1最小manifest，未复制任何主缓存/XF/MCP/原游戏；后续正式接收记录见§13.3，不把空工程创建当编译通过。
+
+### 13.3 当前源码构建、G4独立接收与图形Player
+
+| 输入/证据Run | 真实构建 | 图形Player/OS终态 | 范围与检查 |
+|---|---|---|---|
+| 主`main-mono-02` | Windows64 Mono/Disabled，非Development，0 errors/6 warnings | PID19820，OS0，窗口2231234，Direct3D11 | 实际旧XF handler存在，YL默认被动/显式启用归还；同次完整退出日志后审计通过 |
+| 主`main-il2cpp-01` | Windows64 IL2CPP Low/Release，非Development，0 errors/1664 warnings | PID38984，OS0，窗口2427738，Direct3D11 | 真实反射子类、池复用、冷却/到期、任务完成、独立Lease/资源归还、红点与Logger通过 |
+| 独立`mc26-receiver-mono-01` | 无XF/MCP、最小产品依赖，Mono/Disabled，0 errors/1649 warnings | PID5996，OS0，窗口1378952，Direct3D11 | 强制消费同一五模块源码与独占fixture，不用主Library/PackageCache或原游戏 |
+| 独立`mc26-receiver-il2cpp-01` | 无XF/MCP，IL2CPP Low/Release，0 errors/1649 warnings | PID28516，OS0，窗口1248240，Direct3D11 | 原生GameAssembly/metadata、实际managed输入/AssemblyRef、应用定向link.xml、相同反射消费者通过 |
+
+- 四个Player均真实窗口/RTX4070Ti SUPER，唯一`YL_C_ACCEPTANCE_PASS run=... backend=...`标记，5类日志只精确绑定3条预期Error/Assert/Exception；OS退出后的完整日志无未绑定错误。各自BuildReport、原生/托管文件SHA、源码/依赖/场景绑定及适用许可独立留档，主工程与receiver互不替代；无`-batchmode/-nographics`运行。警告保留并区分文档、原游戏API及包空程序集，不把0 errors冒称0 warnings。
+- 主IL2CPP实际于18:29:32Z已完成（约85秒），原等待器漏收原子文件事件导致迟报；19:00从同次`build.json/LastBuild.buildreport/settings-restored/gate-complete`回收，未重建或重启。改为预注册缓冲事件，终态等待不再丢事件；仅停止本轮失效等待包装进程，未停止用户Editor。
+- 正式调用`ExportUnityPackage.Export`，未走会SaveAssets的菜单。核心包`YLFramework-C.unitypackage`共4199994字节，SHA256 `62dbbb2629649fb7c4edeaa2547535acf5cef8ddc162aa015ec8c06a8fd8de55`。`Reception/AuditPackage.json`逐产品文件/meta/GUID/SHA、七个正式roots、许可及依赖闭包通过；Tests、Integrations/Excel/DomainExcel、原XF、MiniExcel、原游戏与敏感项未混入默认包。
+- 第一次导入严格在未安装测试、consumer/helper、可选后端时执行，真实receiver Unity PID12728/OS0，四个期望产品程序集实际编译并留DLL SHA、rsp、reload日志。汇总读日志锁及PS数组包装问题均保留原件；`mc26-receiver-import-03`仅回收该同次已退出的原始OS0/不可变日志及产品文件，没有重复导入或伪造退出。之后才安装消费者并构建上述独立双后端。
+- 独立核心两Player通过后，再正常UPM加入UTF1.3.9及单独的许可完整B Excel+C DomainExcel。`mc26-receiver-excel-tests-01`实际6发现/执行/通过、0失败/跳过、Unity PID38964/OS0；`mc26-receiver-excel-audit-01`核实实际Editor三程序集、MiniExcel SHA/Editor-only、Player排除、B真实后端与验证pin。选配不回填默认核心包。
+
+### 13.4 作者流程、原游戏与最终安全复核
+
+- `domain-edit-05`真实65/65包含3套新增作者roundtrip：真实controller创建/复制、TreeView IMGUI准备/放置排序、Undo/Redo、删除、保存/强制重导入重开、当前脚本数据类型GUID、图标字段、Buff外部Effect选择及Mission条件/参数/奖励保持。不是只调用空入口；未以手改配置绕过作者API。
+- `author-gui-01`真实打开三套自有作者utility窗口，截图已实际查看并确认各自列表及Inspector。OS鼠标分别命中第二条、实际TreeView selection均为2，原始HWND/PID/DPI/坐标记录在`*-physical-click.json`。`observed-gui.json`只认前台无遮挡截图，首张被VS Code遮挡的截图明确排除；完整CRUD/选择器操作主要由程序化Editor/IMGUI回归覆盖，不冒称逐项全人工鼠标流程。仅关闭本轮自有窗口，相关EditorPrefs及选择恢复。
+- `original-game-01`发现/执行/通过1项，内部两轮菜单/设置/进入/暂停返回/再入均逐轮独立断言（每轮2次进入、事件恰好一次、Settings恢复和ReturnCount正常），不以累计计数代替单轮。未改原游戏代码/资产、未重建MainModule；原FSM/Test/场景/图集/Bundle哈希保护成功。
+- 一次fresh只读review发现3项Important、0 Critical：主专属普通测试泄漏、非Standalone map恢复前缺冲突检查、已调度后异常路径提前恢复并丢owner。已一次修正，未要求第二轮review：普通场景`review-default-red-01`先2通过/1失败，主专属集合改为Explicit并精确testNames选入；`map-guard-red-01/recovery-guard-red-01`先红，四个模拟map用例验证字符串/整数、无关键拒绝且不变、Standalone键可创建，未修改真实Android设置。
+- 最终`domain-final-01`为普通C EditMode62发现/执行/通过，`domain-play-final-01`14/14，专属`protection-final-01`8/8，均0失败/跳过；不把opt-in标记当删测试或用旧65覆盖新发现。`scheduled-write-fault-01`真实在Execute后写回执故障时确认UTF仍active、Output/Settings保留且未提前发布恢复；完全inactive后才恢复，基础设施异常仍向包装器报失败，原件保留，不算绿色业务Run。最终选配`domain-excel-final-01`6/6，`excel-restore-final-01`经新预写冲突守卫精确恢复原define/map/原字节。
+- `archive-receipt/archive-complete`归档94份自有生成文件，后续review夹具另按`archived-review-assets-*`独立receipt归档；只用实际owner/GUID目录清理自己的根及出生于本轮且空的父目录，不清全局Temp/Library或其他载体。
+- `protection-complete.json`最终验证开工保护文件哈希、完整PlayerSettings内存/原字节/稀疏map、原场景UIAcceptance、Domain Reload选项和选择；原32个dirty对象（Shader、UniversalRP及EventSystem MonoScript）序列化内存与dirty标记全部保留。旧19:26初次恢复回执另存`protection-before-review.json`，最终围栏已解除，Editor16464仍在，非Play/编译/导入/构建、UTF inactive。
+
+### 13.5 本地Git收口与结论边界
+
+- 本节所在中文修正提交仅含本轮安全入口/测试/fixture/meta、必要许可/架构/交接及C验收记录；完整修正SHA与最终index/用户现场对照写入独占证据`git-final.json`，不为写自身Hash追加docs提交。Plan原§11/T2创建回执只留工作区，不整文件暂存；用户`.mcp.json`、3份FSM、Assets/Test及AlternateContent.meta继续保持开工原内容和未提交状态。
+- 本轮新验证绑定上述合并后实际源文件/程序集/产物哈希；A/B历史及C组内旧Player、旧14/14无包装OS退出码记录均未冒充本轮证据。Review后的修正仅在测试/验收Editor代码，不改变已构建的产品Runtime/Player消费者/正式包产品字节，按影响重验真实Unity测试、配置恢复与当前编译图，未无故重建四个Player。
+- C固定完整范围的主接收、自动化/代表GUI验收、正式无XF接收与双后端图形运行可本地收口；不等于宣布整个XF融合或逐项全人工GUI签核全部完成。Mission条目+参数跨sheet原子事务、全局Buff Effect库xlsx导入、最近工作簿/打开文件夹、已删除的XF兼容/迁移器仍明确不实现。未Push、未远程写入、未删分支/worktree、未改权限/ignore/MCP/工具配置，原用户现场保留。
