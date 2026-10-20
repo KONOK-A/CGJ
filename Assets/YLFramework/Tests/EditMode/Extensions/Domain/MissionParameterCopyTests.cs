@@ -1,0 +1,26 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Newtonsoft.Json;
+using NUnit.Framework;
+using YLFramework.MissionSystem;
+
+namespace YLFramework.Tests.Extensions.Domain
+{
+    public class MissionParameterCopyTests
+    {
+        [Test] public void ClipboardRoundTripRetainsCustomDataButCopyDropsRuntimeValueAndCallbacks()
+        {
+            var source = new MissionParameter { name = "parameter", type = MissionParamType.Int };
+            typeof(MissionParameter).GetField("custom_data", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(source, new List<string> { "category" });
+            source.Value = 9;
+            source.onValueChange = _ => throw new InvalidOperationException("source callback must not be copied");
+            var pasted = JsonConvert.DeserializeObject<List<MissionParameter>>(JsonConvert.SerializeObject(new[] { source }))[0];
+            var copy = (MissionParameter)typeof(MissionParameter).GetMethod("CloneConfiguration", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Invoke(pasted, null);
+            Assert.That(copy.ContainsCustomData("category"), Is.True);
+            Assert.That(copy.Value, Is.Zero);
+            Assert.That(copy.onValueChange, Is.Null);
+            Assert.That(source.Value, Is.EqualTo(9));
+        }
+    }
+}

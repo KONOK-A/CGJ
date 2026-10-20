@@ -1,0 +1,7 @@
+<linker>
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="YLFramework.DomainFixture.ReceiverSkill" preserve="all" />
+    <type fullname="YLFramework.DomainFixture.ReceiverBuff" preserve="all" />
+    <type fullname="YLFramework.DomainFixture.ReceiverMission" preserve="all" />
+  </assembly>
+</linker>
