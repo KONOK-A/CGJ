@@ -8,6 +8,7 @@ using UnityEngine;
 using YLFramework.BuffSystem;
 using YLFramework.Domain.Excel.Editor;
 using YLFramework.Excel.Editor;
+using YLFramework.MissionSystem;
 using YLFramework.SkillSystem;
 
 namespace YLFramework.Domain.Excel.Tests
@@ -90,6 +91,39 @@ namespace YLFramework.Domain.Excel.Tests
                 Assert.That(root.buffs[0].effects[0], Is.SameAs(effect));
             }
             finally { UnityEngine.Object.DestroyImmediate(data); UnityEngine.Object.DestroyImmediate(unknown); }
+        }
+
+        [Test] public void MissionImportReadsActualConditionArrayAndRejectsUnknownParameterWithoutChangingRoot()
+        {
+            var root = ScriptableObject.CreateInstance<MissionsConfig>();
+            root.param.Add(new MissionParameter { name = "amount", type = MissionParamType.Int });
+            AssetDatabase.CreateAsset(root, _folder + "/missions.asset");
+            var data = ScriptableObject.CreateInstance<MissionConfigData>();
+            try
+            {
+                data.id = 100; data.mission_name = "xlsx mission"; data.mission_type_class_fullname = typeof(MissionBase).FullName;
+                data.conditions.Add(new MissionCondition { param_name = "amount", compareType = CompareType.GreaterEqual, target = 2 });
+                ExcelAuthoring.ScriptableObjectToExcel(new[] { data }, _path, "missions");
+                using (var cancel = DomainExcelCommands.PreviewImport(root, _path))
+                {
+                    Assert.That(cancel.Errors, Is.Empty);
+                    Assert.That(cancel.Commit(false), Is.EqualTo(ExcelCommitResult.Cancelled));
+                    Assert.That(root.missions, Is.Empty);
+                }
+                using (var apply = DomainExcelCommands.PreviewImport(root, _path))
+                {
+                    Assert.That(apply.Errors, Is.Empty);
+                    Assert.That(apply.Commit(true), Is.EqualTo(ExcelCommitResult.Applied));
+                }
+                Assert.That(root.missions[0].conditions[0].param_name, Is.EqualTo("amount"));
+                Assert.That(root.missions[0].conditions[0].target, Is.EqualTo(2));
+                Assert.That(root.missions[0].parent, Is.SameAs(root));
+                data.conditions[0].param_name = "missing";
+                ExcelAuthoring.ScriptableObjectToExcel(new[] { data }, _path, "missions");
+                Assert.That(() => DomainExcelCommands.PreviewImport(root, _path), Throws.InvalidOperationException.With.Message.Contains("missing"));
+                Assert.That(root.missions[0].conditions[0].param_name, Is.EqualTo("amount"));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(data); }
         }
     }
 }

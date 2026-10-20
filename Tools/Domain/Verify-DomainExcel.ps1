@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string] $Run = 'combined-1', [string] $BCommit = '09bec5a')
+param([string] $Run = 'combined-1', [string] $BCommit = '6a9e2508a42333e55c82e6f29eea136643af4467')
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets\YLFramework'))) { throw 'Wrong worktree.' }

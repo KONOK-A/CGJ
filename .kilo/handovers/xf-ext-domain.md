@@ -3,6 +3,34 @@
 唯一正式Plan：`.kilo/plans/1792420261057-xf-ecosystem-integration.md`。
 本轮用户明确授权五项连续源码融合、必要修复、离线验证及中文本地候选提交；覆盖Plan历史未授权/分批等待状态，不覆盖共享区域、许可和验证边界。
 
+## 2026-10-20可合并前收口
+
+本节是最新交接，覆盖下文旧B版本、保留自动差异及尚无最终B绿例的历史状态。C组候选可供集成owner接收；**不等于主工作区已合并或组合验收完成**。
+
+- 本轮从C已提交`8d9d3031f84dee2ca366d99cb3071803f7c22762`继续，仅修正可选DomainExcel与B最终候选的真实协议差异，补直接回归并同步三个专属工具的版本固定；不改五模块Runtime算法、B源码、主工作区或正式Plan。
+- B固定升级为`6a9e2508a42333e55c82e6f29eea136643af4467`。只读比较确认`ExcelChange.After`由导出字段快照改为`FullTypeName:actual-field-state JSON`，Mission的`conditions`是JArray而非导出器JSON字符串。C按真实数组校验，不增加旧版本猜测或兼容框架；`Dependencies.json`记录该精确契约。
+- 隔离载体为`Logs/YLFramework.Domain/Carriers/PremergeBFinal`，`B-input-commit.txt`固定上述完整SHA。源及meta由专属准备/同步工具逐文件SHA256核对；B输入来自精确`git archive`，没有把B源码或MiniExcel复制进C产品，也没有复制原游戏、XF、MCP或主Library/PackageCache。
+
+| 真实Unity Run | 原始结果与退出码 | 直接证据 |
+|---|---|---|
+| `Premerge-BFinal-Configure` | 载体实际编译/配置，OS Exit 0 | 载体启用`YL_DOMAIN_EXCEL`，不改C ProjectSettings |
+| `Premerge-BFinal-Red` | 6发现/5通过/1失败/0跳过，OS Exit 2 | 新Mission用例在`ValidateRows`报`Can not convert Array to String.`，不是缺程序集或测试未运行 |
+| `Premerge-BFinal-Green` | 同一6项全部通过，0失败/跳过，OS Exit 0 | PID32732，2026-10-20T04:26:38Z启动、04:26:49Z正常退出；原始XML、Editor.log和invocation.json均保留 |
+
+- 新用例`MissionImportReadsActualConditionArrayAndRejectsUnknownParameterWithoutChangingRoot`实际覆盖持久化根、Int参数/条件target、预览取消不创建条目、确认后parent/条件正确、未知参数拒绝且已提交根不变。六项完整可选suite还包含原有Skill/Buff资产与三项真实xlsx用例，不以辅助编译替代Unity结果。
+- 本轮改动的两个PowerShell脚本已用实际PowerShell5.1解析，均0解析错误。真实Unity可选suite已覆盖组合编译与三项xlsx，不重复运行等价辅助xlsx；未修改Runtime/主体设置，因此沿用下文57项独立EditMode、14项PlayMode和两个真实Player的既有证据，不将其写成本轮重跑。
+- 已在本C工作区重新核对并定向恢复上一轮留下的三项自有运行副作用：`.vscode/settings.json`及`Assets/Atlas(AutoGenerate)/MainModule/31dd0f6057ff73d89c56da5a46c4e39e_depend_on_res(auto).unity3d_Atlas.spriteatlas`、`9aa7ab4473730ba61a78819153f32058_depend_on_res(auto).unity3d_Atlas.spriteatlas`。两图集只移除本轮packedSprite缓存，IDE设置回到原提交；无宽泛reset/clean/stash，不处理其他worktree。下文“保留三项未暂存”仅为当时历史事实。
+- 本轮无新增源码文件或meta；之前140个Unity自然meta及其GUID审计继续有效。完整候选必须接收B0`c88500aef6651f5b13ac933dd1f209ecb314e92d`之后的C全部提交，包括本次必要修正，不能只取最后测试/修正提交。实际最终完整SHA以本分支git log及最终回复为准，不为自引用Hash追加docs提交。
+- 本轮没有第二次整组Review、没有重建Player、没有merge/Push或删除worktree。Logs、Carriers、Library、Temp及B输入快照均不纳入Git候选；共享E0、Core/Foundation/Resource/UI/Save、主体asmdef、Packages、ProjectSettings、原包和主Plan保持无差异。
+
+### 主工作区接收注意
+
+- 主路径`G:/Unity/Projects/CGJ2024`、分支`integration/xf-yl`。本轮只读核实时主HEAD仍为B0，但**已经有A批次暂存整合和主验收入口在途**；不可再沿用“主工作区只有两项修改”的旧快照，也不能接管或清理该在途工作。A当前引用为`ce1898e466d81cda187440293e89e2b596a84a18`，不是旧`209bceb`。
+- 主工作区最新Plan另含未提交§11创建回执，原用户`Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta`仍须保护。接收owner先读取主最新Plan、三组最新交接和实际Git/merge状态，等既有A串行任务安全收口后再接B/C；不用C的旧Plan副本覆盖主Plan，不自动stash/reset/clean或暂存未知用户内容。
+- 主Unity PID4708仍属于主工程；本组没有连接或操作它。后续必须由主owner使用正确实例执行，不对同projectPath另开BatchMode、不强杀或覆盖未保存场景。每个独立接收工程及证据根使用新身份，禁止覆盖阶段9历史制品或其他组证据。
+- C五模块主体不依赖B。只有可选`Integrations/DomainExcel`需先接收固定B的DataAssets/Excel并显式启用`YL_DOMAIN_EXCEL`；主体/可选缺席、可选启用分别验证。Mission条目+参数跨sheet原子事务、全局共享Buff Effect库xlsx仍明确未实现，不扩大本轮范围或冒称支持。
+- 主线仍按正式Plan G0-G5及受影响阶段9代表链验收：实际组合编译/边界、关闭Domain Reload连续两Play、旧包共存、真实图形Editor作者工作流、原场景/图集保护、正式导出到全新无XF接收工程及Windows64 Mono/IL2CPP Low真实图形Player。已有组内57/57、14/14、6/6和Player结果不是合并后组合或正式Exporter首导入结果；人工视觉、桌面拖拽/图标预览等缺口仍需如实记录。
+
 ## T3-C BatchMode追加授权
 
 - 2026-10-19后续用户已正式授权本C worktree使用Unity `2022.3.62f3c1` BatchMode进行真实导入、EditMode/PlayMode、定向修复复验和条件具备时的独立Windows64 Mono/IL2CPP Low验证，覆盖下文上一轮禁止启动Editor/batchmode的历史限制。

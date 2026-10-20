@@ -44,11 +44,12 @@ namespace YLFramework.Domain.Excel.Editor
             {
                 foreach (var change in plan.Changes.Where(change => change.After != null))
                 {
-                    // B的initialize先于ImportRow，只能在那里绑定parent；领域校验读取真实导入后的差异。
+                    // B差异是原字段状态：conditions为JSON数组，不再是导出器生成的字符串。
                     var row = JObject.Parse(change.After.Substring(change.After.IndexOf(':') + 1));
                     RequireType<T>((string)row[classField], int.Parse(change.Key, System.Globalization.CultureInfo.InvariantCulture));
                     if (!missions) continue;
-                    foreach (var condition in JArray.Parse((string)row["conditions"] ?? "[]"))
+                    if (!(row["conditions"] is JArray conditions)) throw new InvalidOperationException($"任务 {change.Key} 的条件必须为数组。");
+                    foreach (var condition in conditions)
                     {
                         var name = (string)condition["param_name"];
                         if (!missions.param.Exists(parameter => parameter.name == name)) throw new InvalidOperationException($"任务 {change.Key} 的参数不存在: {name}，请先显式导入参数。");

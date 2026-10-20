@@ -42,7 +42,7 @@ namespace YLFramework.DomainFixture
         public static void ConfigureExcel()
         {
             Owned();
-            if (!File.Exists("B-input-commit.txt") || File.ReadAllText("B-input-commit.txt").Trim() != "09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300") throw new InvalidOperationException("Missing pinned B snapshot.");
+            if (!File.Exists("B-input-commit.txt") || File.ReadAllText("B-input-commit.txt").Trim() != "6a9e2508a42333e55c82e6f29eea136643af4467") throw new InvalidOperationException("Missing pinned B snapshot.");
             PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, new[] { "YL_DOMAIN_EXCEL" });
             SessionState.SetBool(ExitKey, true); ScheduleExit();
         }

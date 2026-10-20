@@ -38,7 +38,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'DomainCarrierBootstrap.cs.txt')
 if ($BCommit) {
     if ($BCommit -notmatch '^[0-9a-f]{7,40}$') { throw 'Unsafe B commit.' }
     $exact = & git -C $owner rev-parse $BCommit
-    if ($LASTEXITCODE -ne 0 -or $exact -ne '09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300') { throw 'This adapter validates only the pinned completed B candidate.' }
+    if ($LASTEXITCODE -ne 0 -or $exact -ne '6a9e2508a42333e55c82e6f29eea136643af4467') { throw 'This adapter validates only the pinned completed B candidate.' }
     $snapshot = Join-Path $owner "Logs\YLFramework.Domain\Snapshots\$Run"
     if (Test-Path -LiteralPath $snapshot) { throw 'Refusing to overwrite a B input snapshot.' }
     $null = New-Item -ItemType Directory -Path $snapshot -Force
