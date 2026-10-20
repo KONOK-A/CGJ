@@ -11,7 +11,7 @@ namespace YLFramework.DataAssets.Editor
         {
             var root = (ScriptableObjectConfigs)target;
             serializedObject.Update();
-            DrawPropertiesExcluding(serializedObject, "m_Script", "configs", "type_script_guid", "excel_path");
+            DrawPropertiesExcluding(serializedObject, "m_Script", "configs", "type_script_guid");
             serializedObject.ApplyModifiedProperties();
             var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(root.type_script_guid));
             EditorGUI.BeginChangeCheck();
@@ -28,7 +28,6 @@ namespace YLFramework.DataAssets.Editor
             DrawDiagnostics(root);
             if (GUILayout.Button("Edit Data Assets")) ConfigsWindow.Open(root);
             if (GUILayout.Button("Save Root And Owned Entries")) ScriptableObjectConfigsController.Save(root);
-            if (!string.IsNullOrEmpty(root.excel_path)) EditorGUILayout.SelectableLabel(root.excel_path, GUILayout.Height(EditorGUIUtility.singleLineHeight));
         }
 
         public static void DrawDiagnostics(ScriptableObjectConfigs root)

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using YLFramework.Localization;
@@ -51,6 +52,13 @@ namespace YLFramework.Tests.Extensions.Data
             second.Dispose();
             Assert.That(LocalizationManager.GetLanguageInfo(1, SystemLanguage.Japanese), Is.Null);
             token.UnRegister();
+        }
+
+        [Test]
+        public void RootLifetimeHasNoStaticNameBasedCompatibilityApi()
+        {
+            Assert.That(typeof(LocalizationManager).GetMethod("GetConfig"), Is.Null);
+            Assert.That(typeof(LocalizationManager).GetMethods().Any(method => method.Name == "RemoveConfig"), Is.False);
         }
 
         [Test]

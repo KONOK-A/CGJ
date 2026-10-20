@@ -18,7 +18,7 @@ namespace YLFramework.Tests.Extensions.Data.Save
         public class Payload { public int Number; }
 
         [Test]
-        public void ExistingObjectOverloadsAndSerializedDictionaryDiskContractUseOneOwner()
+        public void ObjectFacadeAndSerializedDictionaryDiskContractUseOneOwner()
         {
             WithRoot(root =>
             {
@@ -62,7 +62,7 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 Assert.That(SaveManager.LoadObjectAsync<Payload>("player", 6).GetAwaiter().GetResult().Number, Is.EqualTo(81));
                 SaveManager.SaveGlobalSettingAsync(new Payload { Number = 4 }, "options").GetAwaiter().GetResult();
                 Assert.That(SaveManager.LoadGlobalSetting<Payload>("options").Number, Is.EqualTo(4));
-                SaveManager.DeleteObject<Payload>("player", item);
+                Assert.That(SaveManager.DeleteObject("player", item), Is.True);
                 Assert.That(SaveManager.TryLoadObject(out Payload missing, "player", item), Is.False); Assert.That(missing, Is.Null);
                 SaveManager.DeleteSaveItemAsync(6).GetAwaiter().GetResult();
                 Assert.That(SaveManager.GetSaveItemCount(), Is.EqualTo(0));

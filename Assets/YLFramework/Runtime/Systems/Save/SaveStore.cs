@@ -351,13 +351,13 @@ namespace YLFramework.Services.Save
 
         public T CreateModel<T>(int id) where T : class, ISaveModel, new() => CreateModelAsync<T>(id).GetAwaiter().GetResult();
         public Task<T> CreateModelAsync<T>(int id, CancellationToken cancellationToken = default) where T : class, ISaveModel, new()
-        { cancellationToken.ThrowIfCancellationRequested(); return ImportModelAsync(new T { Id = id }, id, cancellationToken); }
-        internal Task<T> ImportModelAsync<T>(T model, int id, CancellationToken token) where T : class, ISaveModel
         {
-            if (model == null) throw new ArgumentNullException(nameof(model));
-            if (id < 0 || model.Id != id) throw new ArgumentException("Model Id must match a non-negative slot id.");
+            cancellationToken.ThrowIfCancellationRequested();
+            if (id < 0) throw new ArgumentOutOfRangeException(nameof(id));
+            var model = new T { Id = id };
+            if (model.Id != id) throw new ArgumentException("Model Id must match its slot id.");
             var json = Serialize(model);
-            return ExecuteAsync(id, cancellation => { CreateSlot(id, model, json, cancellation); return model; }, token);
+            return ExecuteAsync(id, cancellation => { CreateSlot(id, model, json, cancellation); return model; }, cancellationToken);
         }
         public void SaveModel<T>(T model) where T : class, ISaveModel
         { if (model == null) throw new ArgumentNullException(nameof(model)); SaveObject(model, ModelFileName, model.Id); }

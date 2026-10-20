@@ -67,38 +67,6 @@ namespace YLFramework.Tests.DataBatch
         public static void BuildMono() => BuildPlayer(ScriptingImplementation.Mono2x);
         public static void BuildIL2CPP() => BuildPlayer(ScriptingImplementation.IL2CPP);
 
-        public static void MigrationStress()
-        {
-            CheckProject();
-            var cases = new List<object>();
-            var receipt = new Dictionary<string, object> { ["cases"] = cases, ["unity"] = Application.unityVersion };
-            int exit = 1;
-            try
-            {
-                foreach (bool longPath in new[] { false, true })
-                {
-                    string parent = longPath ? Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/Extensions.Data.Save/cases")) : Path.Combine(Output(), "cases");
-                    for (int iteration = 0; iteration < 10; iteration++)
-                    {
-                        string folder = Path.Combine(parent, Guid.NewGuid().ToString("N"));
-                        string source = Path.Combine(folder, "old"), destination = Path.Combine(folder, "new");
-                        Directory.CreateDirectory(Path.Combine(source, "SaveData/4"));
-                        const string index = "{\"DataVersion\":1,\"SaveItemDict\":{\"4\":{\"SaveID\":4,\"CreateTime\":\"2026-01-01T00:00:00\",\"LastSaveTime\":\"2026-01-02T00:00:00\"}}}";
-                        string indexPath = Path.Combine(source, "SaveData/SaveSystemData.json");
-                        string dataPath = Path.Combine(source, "SaveData/4/player.json");
-                        File.WriteAllText(indexPath, index); File.WriteAllText(dataPath, "{\"Id\":4,\"Score\":12}");
-                        YLFramework.Services.Save.SaveMigration.ImportVersion1(source, destination);
-                        using (var store = new YLFramework.Services.Save.SaveStore(destination)) Require(store.LoadObject<DataPlayerProbe.Model>("player", 4).Score == 12, "Migrated content differs.");
-                        Require(File.ReadAllText(indexPath) == index && File.ReadAllText(dataPath) == "{\"Id\":4,\"Score\":12}", "Migration modified source files.");
-                        cases.Add(new { iteration, longPath, folder, maximumTemporaryPathLength = (destination + ".importing-" + new string('0', 32) + "/SaveData/SaveSystemData.json.tmp-" + new string('0', 32)).Length, sourcePreserved = true, published = true });
-                    }
-                }
-                receipt["passed"] = true; exit = 0;
-            }
-            catch (Exception error) { receipt["passed"] = false; receipt["error"] = error.ToString(); Debug.LogException(error); }
-            finally { File.WriteAllText(Path.Combine(Output(), "migration-stress.json"), JsonConvert.SerializeObject(receipt, Formatting.Indented)); EditorApplication.Exit(exit); }
-        }
-
         private static void BuildPlayer(ScriptingImplementation backend)
         {
             CheckProject();

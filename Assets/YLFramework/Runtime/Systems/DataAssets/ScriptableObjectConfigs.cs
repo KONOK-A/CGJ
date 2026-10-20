@@ -12,8 +12,6 @@ namespace YLFramework.DataAssets
         [HideInInspector]
         public List<ScriptableObjectData> configs = new List<ScriptableObjectData>();
         [HideInInspector]
-        public string excel_path;
-        [HideInInspector]
         public string type_script_guid;
 
         private DataAssetIdIndex index;

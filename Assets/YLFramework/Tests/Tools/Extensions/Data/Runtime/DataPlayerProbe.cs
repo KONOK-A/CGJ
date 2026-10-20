@@ -41,7 +41,6 @@ namespace YLFramework.Tests.DataBatch
             public bool saveRoundTrip;
             public bool backupRecovery;
             public bool canceledWritePreserved;
-            public bool versionOneCopy;
             public bool concreteSoReflection;
             public bool localizedReflectionText;
             public bool playerAssembliesExcluded;
@@ -148,16 +147,6 @@ namespace YLFramework.Tests.DataBatch
                 }
                 report.canceledWritePreserved = true;
             }
-            string source = Path.Combine(output, "legacy");
-            Directory.CreateDirectory(Path.Combine(source, "SaveData/4"));
-            const string index = "{\"DataVersion\":1,\"SaveItemDict\":{\"4\":{\"SaveID\":4,\"CreateTime\":\"2026-01-01T00:00:00\",\"LastSaveTime\":\"2026-01-02T00:00:00\"}}}";
-            File.WriteAllText(Path.Combine(source, "SaveData/SaveSystemData.json"), index);
-            File.WriteAllText(Path.Combine(source, "SaveData/4/player.json"), "{\"Id\":4,\"Score\":12}");
-            string destination = Path.Combine(output, "migrated");
-            SaveMigration.ImportVersion1(source, destination);
-            using (var migrated = new SaveStore(destination)) Require(migrated.LoadObject<Model>("player", 4).Score == 12, "Explicit v1 migration failed.");
-            Require(File.ReadAllText(Path.Combine(source, "SaveData/SaveSystemData.json")) == index, "Migration changed the source.");
-            report.versionOneCopy = true;
         }
 
         private void Finish(Exception error)

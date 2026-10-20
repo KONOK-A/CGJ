@@ -33,8 +33,7 @@ namespace YLFramework.Services.Save
     public sealed class SaveVersionException : IOException
     {
         public int Version { get; }
-        public SaveVersionException(int version) : base("Unsupported save index version " + version +
-            ". Version 1 requires SaveMigration.ImportVersion1 into a new directory; no automatic conversion is performed.")
+        public SaveVersionException(int version) : base("Unsupported save index version " + version + ". Expected " + SaveStore.FormatVersion + ". Historical formats are not supported.")
         { Version = version; }
     }
 

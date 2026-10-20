@@ -95,17 +95,16 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(menus, Is.EquivalentTo(new[] { "Assets/YLFramework/Excel/Preview Import Selected Data Root", "Assets/YLFramework/Excel/Export Selected Data Root" }));
             Assert.That(typeof(ScriptableObjectConfigsController).Assembly.GetReferencedAssemblies().Any(a => a.Name == "YLFramework.Excel.Editor" || a.Name == "MiniExcel"), Is.False);
         }
-        [Test] public void EmptySerializedWorkbookPathAllowsExplicitPreviewWithoutChangingRoot()
+        [Test] public void ExplicitPreviewDoesNotPersistWorkbookPathInRuntimeRoot()
         {
-            root.excel_path = string.Empty;
-            ScriptableObjectConfigsController.Save(root);
+            Assert.That(typeof(ScriptableObjectConfigs).GetField("excel_path"), Is.Null);
             byte[] before = File.ReadAllBytes(folder + "/Root.asset");
             using (var plan = (IDisposable)Adapter("PreviewImport", root, workbook))
             {
                 Assert.That(ExcelAuthoringTests.Errors(plan), Is.Empty);
                 Assert.That(ExcelAuthoringTests.Commit(plan, false), Is.EqualTo("Cancelled"));
             }
-            Assert.That(root.excel_path, Is.Empty);
+            Assert.That(EditorJsonUtility.ToJson(root), Does.Not.Contain("excel_path"));
             Assert.That(File.ReadAllBytes(folder + "/Root.asset"), Is.EqualTo(before));
             Assert.That(Directory.Exists(entries), Is.False);
         }

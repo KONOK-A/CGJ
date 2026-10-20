@@ -6,7 +6,7 @@ using YLFramework.Services.Resource;
 
 namespace YLFramework.DataAssets
 {
-    /// <summary>保留按根名称/hash查询的显式入口，不扫描资产、不自动加载、不接管其他系统配置。</summary>
+    /// <summary>按精确根名称查询的显式入口，不扫描资产、不自动加载、不接管其他系统配置。</summary>
     public static class ScriptableObjectManager
     {
         private static readonly DataAssetRegistry<ScriptableObjectConfigs> registry = new DataAssetRegistry<ScriptableObjectConfigs>(
@@ -25,8 +25,8 @@ namespace YLFramework.DataAssets
             PruneInvalid();
             config.TryGetIDRange(out _, out _);
             var key = config.name;
-            var entry = registry.Register(key, StringToHash(key), config);
-            var owner = new ScriptableObjectRegistration(config, key, entry, valid, release);
+            var entry = registry.Register(key, config);
+            var owner = new ScriptableObjectRegistration(config, entry, valid, release);
             try { DataAssetLifetime.Track(owner); registrations.Add(owner); }
             catch { entry.Dispose(); throw; }
             return owner;
@@ -63,36 +63,10 @@ namespace YLFramework.DataAssets
             return root ? root : null;
         }
 
-        public static ScriptableObjectConfigs GetConfig(int nameHash)
-        {
-            PruneInvalid();
-            var root = registry.Get(nameHash);
-            return root ? root : null;
-        }
-
-        public static int StringToHash(string value)
-        {
-            if (string.IsNullOrEmpty(value)) throw new ArgumentException("A root name is required.", nameof(value));
-            return Animator.StringToHash(value);
-        }
-
         public static void RemoveConfig(ScriptableObjectConfigs config)
         {
             foreach (var owner in new List<ScriptableObjectRegistration>(registrations))
                 if (ReferenceEquals(owner.Root, config)) owner.Dispose();
-        }
-
-        public static void RemoveConfig(string name)
-        {
-            foreach (var owner in new List<ScriptableObjectRegistration>(registrations))
-                if (StringComparer.Ordinal.Equals(owner.Name, name)) owner.Dispose();
-        }
-
-        public static void RemoveConfig(int nameHash)
-        {
-            PruneInvalid();
-            var root = registry.Get(nameHash);
-            if (root) RemoveConfig(root);
         }
 
         private static void PruneInvalid()
@@ -115,15 +89,13 @@ namespace YLFramework.DataAssets
         private Func<bool> valid;
         private Action release;
         internal ScriptableObjectConfigs Root { get; private set; }
-        internal string Name { get; }
         public bool IsDisposed => entry == null;
         public bool IsValid => !IsDisposed && Root && (valid == null || valid());
         public ScriptableObjectConfigs Config => IsValid ? Root : throw new InvalidOperationException("The DataAssets registration is no longer valid.");
 
-        internal ScriptableObjectRegistration(ScriptableObjectConfigs root, string name, IDisposable entry, Func<bool> valid, Action release)
+        internal ScriptableObjectRegistration(ScriptableObjectConfigs root, IDisposable entry, Func<bool> valid, Action release)
         {
             Root = root;
-            Name = name;
             this.entry = entry;
             this.valid = valid;
             this.release = release;

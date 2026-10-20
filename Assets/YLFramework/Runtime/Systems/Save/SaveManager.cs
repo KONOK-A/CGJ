@@ -10,7 +10,7 @@ namespace YLFramework.Services.Save
 {
     /// <summary>Unity 入口，仅负责主线程默认路径捕获和既有 API；所有存档、模型、设置及缓存均由 SaveStore 实现。</summary>
     /// <remarks>
-    /// 新索引版本 2，v1 只允许通过 SaveMigration 显式复制到新根，不原地升级、不自动清空损坏档。
+    /// 仅支持当前索引格式；不转换历史YL/XF存档，不自动清空损坏档。
     /// 对象/设置仍为裸 JSON。损坏无可用备份、版本、IO 和权限失败会抛异常；备份读取不修盘。
     /// 新异步接口在调用线程序列化快照后异步 IO；DTO/Converter 不得在线程池调用 Unity API。
     /// SetStorageRoot / Close 取消并排空旧 owner，不能把旧请求的缓存写入新根。
@@ -171,8 +171,6 @@ namespace YLFramework.Services.Save
         public static bool DeleteObject(string saveFileName, int saveID = 0)
         { SaveFileIO.ValidateFileName(saveFileName); return Store.DeleteObject(saveFileName, saveID); }
         public static bool DeleteObject(string saveFileName, SaveItem saveItem) => saveItem != null && DeleteObject(saveFileName, saveItem.SaveID);
-        public static void DeleteObject<T>(string saveFileName, int saveID) where T : class => DeleteObject(saveFileName, saveID);
-        public static void DeleteObject<T>(string saveFileName, SaveItem saveItem) where T : class { if (saveItem != null) DeleteObject(saveFileName, saveItem.SaveID); }
         public static void DeleteObject<T>(int saveID) where T : class => DeleteObject(typeof(T).Name, saveID);
         public static void DeleteObject<T>(SaveItem saveItem) where T : class { if (saveItem != null) DeleteObject<T>(saveItem.SaveID); }
         public static List<string> GetObjectNames(int saveID) => Store.GetObjectNames(saveID);
@@ -208,7 +206,5 @@ namespace YLFramework.Services.Save
         public static void SaveModel<T>(T model) where T : class, ISaveModel => Store.SaveModel(model);
         public static Task SaveModelAsync<T>(T model, CancellationToken cancellationToken = default) where T : class, ISaveModel => Store.SaveModelAsync(model, cancellationToken);
         public static Task<List<T>> LoadAllModelsAsync<T>(CancellationToken cancellationToken = default) where T : class, ISaveModel => Store.LoadAllModelsAsync<T>(cancellationToken);
-        public static T ImportArchiveModel<T>(string sourceFile, int saveID, CancellationToken cancellationToken = default) where T : class, ISaveModel
-            => SaveMigration.ImportArchiveModel<T>(sourceFile, Store, saveID, cancellationToken);
     }
 }

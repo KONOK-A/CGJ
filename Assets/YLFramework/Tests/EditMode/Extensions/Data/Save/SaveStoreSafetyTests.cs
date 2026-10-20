@@ -16,6 +16,15 @@ namespace YLFramework.Tests.Extensions.Data.Save
         public class Model : ISaveModel { public int Id { get; set; } public int Score; public string DateText; }
         public class StringPayload { public string Text; }
 
+        [Test]
+        public void SaveApiDoesNotExposeHistoricalFormatImport()
+        {
+            Assert.That(typeof(SaveStore).Assembly.GetType("YLFramework.Services.Save.SaveMigration"), Is.Null);
+            Assert.That(typeof(SaveManager).GetMethod("ImportArchiveModel"), Is.Null);
+            Assert.That(typeof(SaveManager).GetMethods().Any(method => method.Name == "DeleteObject" && method.IsGenericMethodDefinition
+                && method.GetParameters().Length == 2 && method.GetParameters()[0].ParameterType == typeof(string)), Is.False);
+        }
+
         private sealed class BlockingReadConverter : JsonConverter
         {
             public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
@@ -660,114 +669,22 @@ namespace YLFramework.Tests.Extensions.Data.Save
         }
 
         [Test]
-        public void ExplicitVersionOneMigrationCopiesIntoANewRootWithoutChangingItsSource()
+        public void CurrentModelsPreserveStringValuesAndRejectWrongIdsOnLoad()
         {
             Run(root =>
             {
-                var source = Path.Combine(root, "old"); var destination = Path.Combine(root, "new");
-                Directory.CreateDirectory(Path.Combine(source, "SaveData/4"));
-                Directory.CreateDirectory(Path.Combine(source, "Setting"));
-                const string index = "{\"DataVersion\":1,\"SaveItemDict\":{\"4\":{\"SaveID\":4,\"CreateTime\":\"2026-01-01T00:00:00\",\"LastSaveTime\":\"2026-01-02T00:00:00\",\"DisplayName\":\"legacy\"}}}";
-                var indexPath = Path.Combine(source, "SaveData/SaveSystemData.json"); File.WriteAllText(indexPath, index);
-                File.WriteAllText(Path.Combine(source, "SaveData/4/player.json"), "{\"Number\":12}");
-                var objectTime = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
-                File.SetLastWriteTimeUtc(Path.Combine(source, "SaveData/4/player.json"), objectTime);
-                File.WriteAllText(Path.Combine(source, "Setting/options.json"), "{\"Number\":9}");
-                Migrate(source, destination, CancellationToken.None);
-                Assert.That(File.ReadAllText(indexPath), Is.EqualTo(index));
-                Assert.That(File.GetLastWriteTimeUtc(Path.Combine(destination, "SaveData/4/player.json")), Is.EqualTo(objectTime));
-                using (var store = Open(destination))
+                using (var store = Open(root))
                 {
-                    Assert.That((int)store.LoadObject<Payload>("player", 4).Number, Is.EqualTo(12));
-                    Assert.That((string)store.GetSaveItem(4).DisplayName, Is.EqualTo("legacy"));
-                    Assert.That((int)store.LoadGlobalSetting<Payload>("options").Number, Is.EqualTo(9));
-                    Assert.That((int?)store.CurrentSaveID, Is.Null);
-                }
-                var destBefore = File.ReadAllBytes(Path.Combine(destination, "SaveData/SaveSystemData.json"));
-                Assert.Catch<IOException>(() => Migrate(source, destination, CancellationToken.None));
-                Assert.That(File.ReadAllBytes(Path.Combine(destination, "SaveData/SaveSystemData.json")), Is.EqualTo(destBefore));
-                Assert.Catch<ArgumentException>(() => Migrate(source, source, CancellationToken.None));
-                Assert.Catch<ArgumentException>(() => Migrate(source, Path.Combine(source, "nested"), CancellationToken.None));
-                Assert.That(File.ReadAllText(indexPath), Is.EqualTo(index));
-            });
-        }
-
-        [Test]
-        public void CanceledMigrationAndInvalidArchiveImportDoNotPublishOrOverwriteData()
-        {
-            Run(root =>
-            {
-                var source = Path.Combine(root, "old"); var destination = Path.Combine(root, "new");
-                Directory.CreateDirectory(Path.Combine(source, "SaveData"));
-                var path = Path.Combine(source, "SaveData/SaveSystemData.json");
-                File.WriteAllText(path, "{\"DataVersion\":1,\"SaveItemDict\":{}}");
-                using (var canceled = new CancellationTokenSource())
-                { canceled.Cancel(); Assert.Catch<OperationCanceledException>(() => Migrate(source, destination, canceled.Token)); }
-                Assert.That(Directory.Exists(destination), Is.False);
-                var archive = Path.Combine(root, "ArchiveModel8.sav"); File.WriteAllText(archive, "encrypted-or-invalid");
-                using (var store = Open(destination))
-                {
-                    Assert.Catch<InvalidDataException>(() => ImportArchive(archive, store, 8));
-                    Assert.That((int)store.GetAllSaveItems().Count, Is.EqualTo(0));
-                    File.WriteAllText(archive, "{\"Id\":8,\"Score\":41}");
-                    var model = ImportArchive(archive, store, 8);
-                    Assert.That(model.Id, Is.EqualTo(8)); Assert.That(model.Score, Is.EqualTo(41));
-                    Assert.That((object)store.LoadModel<Model>(8), Is.SameAs(model));
-                    Assert.Catch<IOException>(() => ImportArchive(archive, store, 8));
-                }
-                Assert.That(File.ReadAllText(archive), Is.EqualTo("{\"Id\":8,\"Score\":41}"));
-                Assert.That(File.ReadAllText(path), Is.EqualTo("{\"DataVersion\":1,\"SaveItemDict\":{}}"));
-            });
-        }
-
-        [Test]
-        public void ArchiveImportPreservesStringValuesAndRejectsWrongModelIdsOnLoad()
-        {
-            Run(root =>
-            {
-                var source = Path.Combine(root, "model7.sav");
-                const string text = "{\"Id\":7,\"Score\":1,\"DateText\":\"2026-01-02T03:04:05+03:00\"}";
-                File.WriteAllText(source, text);
-                using (var store = Open(Path.Combine(root, "new")))
-                {
-                    var model = SaveMigration.ImportArchiveModel<Model>(source, store, 3);
-                    Assert.That(model.Id, Is.EqualTo(3)); Assert.That(model.DateText, Is.EqualTo("2026-01-02T03:04:05+03:00"));
-                    Assert.That(File.ReadAllText(source), Is.EqualTo(text));
-                    File.WriteAllText(Path.Combine(root, "new/SaveData/3/ArchiveModel.json"), "{\"Id\":99,\"Score\":1}");
+                    var model = store.CreateModel<Model>(3);
+                    model.DateText = "2026-01-02T03:04:05+03:00";
+                    store.SaveModel(model);
+                    store.ClearCache();
+                    Assert.That(store.LoadModel<Model>(3).DateText, Is.EqualTo("2026-01-02T03:04:05+03:00"));
+                    File.WriteAllText(Path.Combine(root, "SaveData/3/" + SaveStore.ModelFileName + ".json"), "{\"Id\":99,\"Score\":1}");
                     store.ClearCache();
                     Assert.Catch<InvalidDataException>(() => store.LoadModel<Model>(3));
                 }
             });
-        }
-
-        [Test]
-        public void ArchiveImportRejectsUnmappedFieldsWithoutPublishingSlotOrChangingSource()
-        {
-            Run(root =>
-            {
-                var source = Path.Combine(root, "ArchiveModel-unmapped.sav");
-                var text = "{\"Id\":6,\"Score\":3,\"UnmappedLegacyGold\":900}";
-                File.WriteAllText(source, text);
-                using (var store = Open(Path.Combine(root, "new")))
-                {
-                    var error = Assert.Throws<InvalidDataException>(() => SaveMigration.ImportArchiveModel<Model>(source, store, 3));
-                    Assert.That(error.InnerException, Is.TypeOf<JsonSerializationException>());
-                    Assert.That(error.InnerException.Message, Does.Contain("UnmappedLegacyGold"));
-                    Assert.That(store.HasSaveItem(3), Is.False);
-                    Assert.That(Directory.Exists(Path.Combine(root, "new/SaveData/3")), Is.False);
-                    Assert.That(File.ReadAllText(source), Is.EqualTo(text));
-                }
-            });
-        }
-
-        private static void Migrate(string source, string destination, CancellationToken token)
-        {
-            SaveMigration.ImportVersion1(source, destination, token);
-        }
-
-        private static Model ImportArchive(string path, SaveStore store, int id)
-        {
-            return SaveMigration.ImportArchiveModel<Model>(path, store, id);
         }
 
         private static SaveStore Open(string root, JsonSerializerSettings settings = null)

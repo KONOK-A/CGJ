@@ -10,7 +10,6 @@ namespace YLFramework.Localization
     {
         public string displayName = string.Empty;
         [SerializeField] private List<LanguageConfig> languages = new();
-        [HideInInspector] public string excel_path;
         public List<LanguageConfig> Languages => languages;
 
         // 列表仍可由作者修改；不持有按数量失效的语言字典，也不在getter扫描/保存资产。

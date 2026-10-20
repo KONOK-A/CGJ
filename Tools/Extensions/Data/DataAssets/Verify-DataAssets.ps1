@@ -1,13 +1,15 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Pure', 'Compile')][string] $Mode = 'Pure',
-    [string] $UnityData = 'C:\Program Files\Unity\Hub\Editor\2022.3.62f3c1\Editor\Data'
+    [string] $UnityData = 'C:\Program Files\Unity\Hub\Editor\2022.3.62f3c1\Editor\Data',
+    [ValidatePattern('^[a-zA-Z0-9_-]+$')][string] $Run = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff')
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
 if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets/YLFramework/Runtime'))) { throw 'Not a YLFramework worktree.' }
-$output = Join-Path $root 'Temp/Extensions.Data.DataAssets'
+$output = Join-Path $root "Temp/Extensions.Data.DataAssets/$Run"
 if (-not (Test-Path -LiteralPath $root)) { throw 'Missing output parent.' }
+if (Test-Path -LiteralPath $output) { throw 'Evidence already exists. Choose a fresh Run name.' }
 $null = New-Item -ItemType Directory -Path $output -Force
 $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 $compiler = 'C:\Program Files\dotnet\sdk\9.0.312\Roslyn\bincore\csc.dll'

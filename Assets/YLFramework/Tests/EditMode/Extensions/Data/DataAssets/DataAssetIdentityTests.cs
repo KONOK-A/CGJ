@@ -57,14 +57,14 @@ namespace YLFramework.Tests.DataAssets
             var removed = 0;
             var registry = new DataAssetRegistry<object>(_ => removed++);
             var value = new object();
-            using var first = registry.Register("items", 41, value);
-            using var second = registry.Register("items", 41, value);
+            using var first = registry.Register("items", value);
+            using var second = registry.Register("items", value);
             first.Dispose();
             Assert.That(registry.Get("items"), Is.SameAs(value));
             Assert.That(removed, Is.Zero);
             second.Dispose();
             second.Dispose();
-            Assert.That(registry.Get(41), Is.Null);
+            Assert.That(registry.Get("items"), Is.Null);
             Assert.That(removed, Is.EqualTo(1));
         }
 
@@ -73,21 +73,30 @@ namespace YLFramework.Tests.DataAssets
         {
             var registry = new DataAssetRegistry<object>();
             var original = new object();
-            using var registration = registry.Register("items", 41, original);
-            Assert.Throws<InvalidOperationException>(() => registry.Register("items", 41, new object()));
+            using var registration = registry.Register("items", original);
+            Assert.Throws<InvalidOperationException>(() => registry.Register("items", new object()));
             Assert.That(registry.Get("items"), Is.SameAs(original));
         }
 
         [Test]
-        public void HashCollisionIsRejectedAndDoesNotAliasStringLookup()
+        public void DifferentRootNamesRemainIndependent()
         {
             var registry = new DataAssetRegistry<object>();
             var original = new object();
-            using var registration = registry.Register("first", 41, original);
-            var error = Assert.Throws<InvalidOperationException>(() => registry.Register("second", 41, new object()));
-            Assert.That(error.Message, Does.Contain("first").And.Contain("second"));
-            Assert.That(registry.Get("second"), Is.Null);
-            Assert.That(registry.Get(41), Is.SameAs(original));
+            var other = new object();
+            using var registration = registry.Register("first", original);
+            using var second = registry.Register("second", other);
+            Assert.That(registry.Get("second"), Is.SameAs(other));
+            registration.Dispose();
+            Assert.That(registry.Get("first"), Is.Null);
+            Assert.That(registry.Get("second"), Is.SameAs(other));
+        }
+
+        [Test]
+        public void RegistryIdentityDoesNotExposeIntegerHashLookup()
+        {
+            Assert.That(typeof(DataAssetRegistry<object>).GetMethod("Get", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                null, new[] { typeof(int) }, null), Is.Null);
         }
 
         [Test]
@@ -95,11 +104,11 @@ namespace YLFramework.Tests.DataAssets
         {
             var registry = new DataAssetRegistry<object>();
             var value = new object();
-            using var first = registry.Register("Items", 41, value);
+            using var first = registry.Register("Items", value);
             Assert.That(registry.Get("items"), Is.Null);
-            Assert.Throws<InvalidOperationException>(() => registry.Register("renamed", 42, value));
+            Assert.Throws<InvalidOperationException>(() => registry.Register("renamed", value));
             first.Dispose();
-            using var renamed = registry.Register("renamed", 42, value);
+            using var renamed = registry.Register("renamed", value);
             Assert.That(registry.Get("Items"), Is.Null);
             Assert.That(registry.Get("renamed"), Is.SameAs(value));
         }
@@ -108,10 +117,10 @@ namespace YLFramework.Tests.DataAssets
         public void OldRegistrationCannotRemoveReplacementAfterClear()
         {
             var registry = new DataAssetRegistry<object>();
-            var old = registry.Register("items", 41, new object());
+            var old = registry.Register("items", new object());
             registry.Clear();
             var value = new object();
-            using var replacement = registry.Register("items", 41, value);
+            using var replacement = registry.Register("items", value);
             old.Dispose();
             Assert.That(registry.Get("items"), Is.SameAs(value));
         }

@@ -41,8 +41,6 @@ namespace YLFramework.Excel.Editor
                 if (!names.Add(name)) throw new FormatException(path + "!" + item.Key + "1: duplicate field " + name);
                 rows[1].TryGetValue(item.Key, out var rawType);
                 string typeText = Text(rawType);
-                if (typeText.Equals("boolean", StringComparison.OrdinalIgnoreCase)) typeText = "Bool";
-                if (typeText.Equals("int64", StringComparison.OrdinalIgnoreCase)) typeText = "Long";
                 if (!Enum.TryParse(typeText, true, out ExcelFieldsType type) || type == ExcelFieldsType.None || !Enum.IsDefined(typeof(ExcelFieldsType), type))
                     throw new FormatException(path + "!" + item.Key + "2: invalid field type " + typeText);
                 rows[2].TryGetValue(item.Key, out var notes);
