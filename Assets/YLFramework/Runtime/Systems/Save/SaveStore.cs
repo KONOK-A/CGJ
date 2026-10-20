@@ -353,9 +353,8 @@ namespace YLFramework.Services.Save
         public Task<T> CreateModelAsync<T>(int id, CancellationToken cancellationToken = default) where T : class, ISaveModel, new()
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (id < 0) throw new ArgumentOutOfRangeException(nameof(id));
             var model = new T { Id = id };
-            if (model.Id != id) throw new ArgumentException("Model Id must match its slot id.");
+            if (id < 0 || model.Id != id) throw new ArgumentException("Model Id must match a non-negative slot id.");
             var json = Serialize(model);
             return ExecuteAsync(id, cancellation => { CreateSlot(id, model, json, cancellation); return model; }, cancellationToken);
         }
