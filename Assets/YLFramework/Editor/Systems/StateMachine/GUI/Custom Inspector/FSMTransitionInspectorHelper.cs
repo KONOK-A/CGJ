@@ -12,14 +12,14 @@ namespace YLFramework.StateMachine
 
         public void Inspect(RuntimeFSMController controller, FSMTransitionData transition)
         {
-            if (transition == null)
-            {
-                Selection.activeObject = null;
-                return;
-            }
-
+            if (transition != null && (!controller || !controller.transitions.Contains(transition))) transition = null;
             this.transition = transition;
             this.controller = controller;
+            if (transition == null)
+            {
+                if (Selection.activeObject == this) Selection.activeObject = null;
+                return;
+            }
 
             Selection.activeObject = this;
         }

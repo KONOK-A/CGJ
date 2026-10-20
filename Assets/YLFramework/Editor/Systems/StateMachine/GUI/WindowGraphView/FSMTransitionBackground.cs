@@ -243,6 +243,7 @@ namespace YLFramework.StateMachine
 
         public void OnTransitionSelection(FSMTransitionData transition)
         {
+            EditorApplication.delayCall -= DelayCallSelection;
             if (this.Selection != null && transition == null)
             {
                 FSMTransitionInspectorHelper.Instance.Inspect(Context.Instance.RuntimeFSMController, null);
@@ -254,7 +255,6 @@ namespace YLFramework.StateMachine
 
             if(Selection != null)
             {
-                EditorApplication.delayCall -= DelayCallSelection;
                 EditorApplication.delayCall += DelayCallSelection;
             }
 

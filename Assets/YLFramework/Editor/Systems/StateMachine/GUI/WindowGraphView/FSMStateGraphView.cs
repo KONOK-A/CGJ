@@ -1,5 +1,6 @@
 using YLFramework.Core.Editor;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
@@ -39,10 +40,12 @@ namespace YLFramework.StateMachine
             Insert(0, background);
 
             transition = new FSMTransitionBackground();
+            transition.pickingMode = PickingMode.Ignore;
             transition.StretchToParentSize();
             Insert(1, transition);
 
-            RegisterCallback<KeyDownEvent>(KeyDownControl);
+            deleteSelection = (operationName, askUser) => DeleteSelectedElements();
+            RegisterCallback<KeyDownEvent>(KeyDownControl, TrickleDown.TrickleDown);
             RegisterCallback<MouseDownEvent>(MouseDownControl);
             RegisterCallback<MouseMoveEvent>(UpdateHoverState);
 
@@ -183,18 +186,33 @@ namespace YLFramework.StateMachine
 
         private void KeyDownControl(KeyDownEvent evt)
         {
-            if (evt.keyCode == KeyCode.Delete)
-            {
-                RuntimeFSMController controller = Context.Instance.RuntimeFSMController;
+            if (evt.keyCode != KeyCode.Delete || evt.target is TextElement ||
+                (evt.target as VisualElement)?.GetFirstAncestorOfType<TextField>() != null || EditorGUIUtility.editingTextField) return;
+            DeleteSelectedElements();
+            evt.StopImmediatePropagation();
+        }
 
-                if (controller == null) return;
+        internal void DeleteSelectedElements()
+        {
+            var controller = Context.Instance.RuntimeFSMController;
+            if (!controller || EditorApplication.isPlaying) return;
+            var states = StateNodes.Values.Where(node => node.selected && !node.Data.IsAnyState && !node.Data.IsEntryState && !node.Data.IsUpState)
+                .Select(node => node.Data).Where(controller.states.Contains).ToList();
+            var edge = transition.Selection;
+            bool deleteEdge = edge != null && controller.transitions.Contains(edge);
+            if (states.Count == 0 && !deleteEdge) return;
 
-                // 删除选中的过渡
-                if (transition.Selection != null && controller != null)
-                    FSMTransitionFactory.DeleteTransition(controller, transition.Selection);
-
-                RefreshNodes();
-            }
+            Undo.IncrementCurrentGroup();
+            int undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Delete FSM Selection");
+            ClearSelection();
+            transition.OnTransitionSelection(null);
+            if (isMakeTransition) StopMakeTransition(null);
+            if (deleteEdge) FSMTransitionFactory.DeleteTransition(controller, edge);
+            foreach (var state in states)
+                if (controller.states.Contains(state)) FSMStateNodeFactory.DeleteState(controller, state);
+            Undo.CollapseUndoOperations(undoGroup);
+            RefreshNodes();
         }
 
         private void MouseDownControl(MouseDownEvent evt)
@@ -235,8 +253,8 @@ namespace YLFramework.StateMachine
 
                 //Debug.LogFormat("鼠标位置:{0}",Event.current.mousePosition);
 
-                evt.menu.AppendAction("Create State", CreateState, (d) => status, Event.current.mousePosition);
-                evt.menu.AppendAction("Create Sub-State Machine", CreateSubStateMachine, (d) => status, Event.current.mousePosition);
+                evt.menu.AppendAction("Create State", CreateState, (d) => status, evt.mousePosition);
+                evt.menu.AppendAction("Create Sub-State Machine", CreateSubStateMachine, (d) => status, evt.mousePosition);
             }
             else {
                 node.ShowMenu(evt);
@@ -250,15 +268,13 @@ namespace YLFramework.StateMachine
         public void CreateState(DropdownMenuAction action)
         {
             Vector2 mousePosition = (Vector2)(action.userData);
-            mousePosition.Set(mousePosition.x - parent.layout.x, mousePosition.y - layout.y - 20);
-            Vector2 position = contentViewContainer.Matrix().inverse.MultiplyPoint(mousePosition);
+            Vector2 position = contentViewContainer.WorldToLocal(mousePosition);
             CreateState(false, position);
         }
 
         public void CreateSubStateMachine(DropdownMenuAction action) {
             Vector2 mousePosition = (Vector2)(action.userData);
-            mousePosition.Set(mousePosition.x - parent.layout.x, mousePosition.y - layout.y - 20);
-            Vector2 position = contentViewContainer.Matrix().inverse.MultiplyPoint(mousePosition);
+            Vector2 position = contentViewContainer.WorldToLocal(mousePosition);
             CreateState(true, position);
         }
 

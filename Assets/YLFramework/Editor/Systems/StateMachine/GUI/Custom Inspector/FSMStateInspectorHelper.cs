@@ -23,15 +23,16 @@ namespace YLFramework.StateMachine
 
         public void Inspect(RuntimeFSMController controller, FSMStateNodeData node, FSMStateGraphView grap) {
 
+            if (node != null && (!controller || !controller.states.Contains(node))) node = null;
+            this.node = node;
+            this.controller = controller;
+            this.grap = node != null ? grap : null;
             if (node == null)
             {
-                Selection.activeObject = null;
+                if (Selection.activeObject == this) Selection.activeObject = null;
                 return;
             }
 
-            this.node = node;
-            this.controller = controller;
-            this.grap = grap;
             Selection.activeObject = this;
 
         }

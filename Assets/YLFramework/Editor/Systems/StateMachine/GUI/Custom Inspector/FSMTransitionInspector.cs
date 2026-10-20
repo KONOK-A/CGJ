@@ -25,6 +25,7 @@ namespace YLFramework.StateMachine
 
         private Dictionary<GroupCondition, ReorderableList> reorderables = new Dictionary<GroupCondition, ReorderableList>();
         private SerializedObject controllerObject;
+        private FSMTransitionData boundTransition;
 
         private bool autoSwitch;
 
@@ -65,6 +66,7 @@ namespace YLFramework.StateMachine
             FSMTransitionInspectorHelper helper = target as FSMTransitionInspectorHelper;
             reorderableList = null;
             reorderables.Clear();
+            boundTransition = helper ? helper.transition : null;
             if (helper == null || !helper.controller || helper.transition == null) return;
             if (controllerObject == null || controllerObject.targetObject != helper.controller)
             {
@@ -96,10 +98,20 @@ namespace YLFramework.StateMachine
         public override void OnInspectorGUI()
         {
             FSMTransitionInspectorHelper helper = target as FSMTransitionInspectorHelper;
-            if (helper == null || !helper.controller) return;
-            if (controllerObject == null || controllerObject.targetObject != helper.controller) BindLists();
-            if (reorderableList == null) { EditorGUILayout.HelpBox("Select the transition again after changing its endpoints.", MessageType.Info); return; }
+            if (helper == null || !helper.controller || helper.transition == null) { BindLists(); return; }
+            if (controllerObject == null || controllerObject.targetObject != helper.controller || boundTransition != helper.transition) BindLists();
             controllerObject.Update();
+            var transitionProperty = TransitionProperty(helper);
+            if (transitionProperty == null)
+            {
+                reorderableList = null;
+                reorderables.Clear();
+                EditorGUILayout.HelpBox("This transition has been removed.", MessageType.Info);
+                return;
+            }
+            if (reorderableList == null) BindLists();
+            // 数组删除/重排后重新取得句柄，保留列表本身的选中项和拖拽状态。
+            reorderableList.serializedProperty = transitionProperty.FindPropertyRelative("conditions");
 
             EditorGUI.BeginDisabledGroup(EditorApplication.isPlaying);
 
@@ -219,6 +231,7 @@ namespace YLFramework.StateMachine
             //Debug.Log("添加条件");
             FSMConditionFactory.CreateCondition(helper.controller, helper.transition);
             controllerObject.Update();
+            list.serializedProperty = TransitionProperty(helper).FindPropertyRelative("conditions");
         }
 
         private void OnRemoveCallback(ReorderableList list)
@@ -229,6 +242,7 @@ namespace YLFramework.StateMachine
 
             FSMConditionFactory.DeleteCondition(helper.controller, helper.transition,list.index);
             controllerObject.Update();
+            list.serializedProperty = TransitionProperty(helper).FindPropertyRelative("conditions");
         }
 
         private void DrawItem(Rect rect, int index, bool isActive, bool isFocused) {
@@ -294,15 +308,15 @@ namespace YLFramework.StateMachine
                 return null;
 
             FSMTransitionInspectorHelper helper = target as FSMTransitionInspectorHelper;
-            if (helper == null)
+            if (helper == null || !helper.controller || helper.transition == null)
                 return null;
 
+            int groupIndex = helper.transition.group_conditions.IndexOf(condition);
+            var transitionProperty = TransitionProperty(helper);
+            if (groupIndex < 0 || transitionProperty == null) return null;
+            var property = transitionProperty.FindPropertyRelative("group_conditions").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("conditions");
             if (!reorderables.ContainsKey(condition))
             {
-                int groupIndex = helper.transition.group_conditions.IndexOf(condition);
-                var transitionProperty = TransitionProperty(helper);
-                if (groupIndex < 0 || transitionProperty == null) return null;
-                var property = transitionProperty.FindPropertyRelative("group_conditions").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("conditions");
                 ReorderableList list = new ReorderableList(controllerObject, property, true, true, true, true);
                 list.drawHeaderCallback += (rect)=> {
 
@@ -320,12 +334,14 @@ namespace YLFramework.StateMachine
                 list.onAddCallback += (a) => {
                     FSMConditionFactory.AddGroupCondition(helper.controller, condition);
                     controllerObject.Update();
+                    GetReorderableList(condition);
                 };
 
                 list.onRemoveCallback += (a) =>
                 {
                     FSMConditionFactory.RemoveGroupCondition(helper.controller, condition, a.index);
                     controllerObject.Update();
+                    GetReorderableList(condition);
                 };
 
                 list.drawElementCallback += (rect,index,c,d) =>
@@ -336,6 +352,7 @@ namespace YLFramework.StateMachine
                 reorderables.Add(condition, list);
             }
 
+            reorderables[condition].serializedProperty = property;
             return reorderables[condition];
         }
 

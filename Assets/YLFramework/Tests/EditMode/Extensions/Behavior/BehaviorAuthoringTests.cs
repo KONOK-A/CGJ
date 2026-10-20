@@ -21,8 +21,20 @@ namespace YLFramework.Tests.Extensions.Behavior
     public class BehaviorAuthoringTests
     {
         private const string Root = "Assets/YLFramework/Tests/Fixtures/Extensions/Behavior";
+        private const string AcceptanceKey = "YLFramework.Behavior.MainAcceptance";
         private string folder;
         private readonly List<GameObject> owned = new List<GameObject>();
+        private Undo.UndoRedoCallback[] userUndoCallbacks;
+        private FSMStateInspectorHelper stateHelper;
+        private FSMStateNodeData previousNode;
+        private RuntimeFSMController previousStateController;
+        private FSMStateGraphView previousGraph;
+        private FSMTransitionInspectorHelper transitionHelper;
+        private FSMTransitionData previousTransition;
+        private RuntimeFSMController previousTransitionController;
+        private int[] previousSelection;
+        private bool previousBuildGuard;
+        private string previousBuildAssets, previousBuildOutput;
 
         [SetUp]
         public void Setup()
@@ -30,14 +42,40 @@ namespace YLFramework.Tests.Extensions.Behavior
             string name = "GeneratedTest_" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder(Root, name);
             folder = Root + "/" + name;
+            userUndoCallbacks = Resources.FindObjectsOfTypeAll<FSMEditorWindow>().Select(window => (Undo.UndoRedoCallback)Delegate.CreateDelegate(typeof(Undo.UndoRedoCallback), window, "OnUndoRedo")).ToArray();
+            foreach (var callback in userUndoCallbacks) Undo.undoRedoPerformed -= callback;
+            stateHelper = FSMStateInspectorHelper.Instance;
+            previousNode = stateHelper.node; previousStateController = stateHelper.controller; previousGraph = stateHelper.grap;
+            transitionHelper = FSMTransitionInspectorHelper.Instance;
+            previousTransition = transitionHelper.transition; previousTransitionController = transitionHelper.controller;
+            previousSelection = Selection.instanceIDs;
+            previousBuildGuard = SessionState.GetBool(AcceptanceKey + ".ProtectBuildSaves", false);
+            previousBuildAssets = SessionState.GetString(AcceptanceKey + ".BuildAssets", string.Empty);
+            previousBuildOutput = SessionState.GetString(AcceptanceKey + ".BuildOutput", string.Empty);
+            SessionState.SetString(AcceptanceKey + ".BuildAssets", folder);
+            SessionState.SetString(AcceptanceKey + ".BuildOutput", SessionState.GetString(AcceptanceKey + ".Tests", string.Empty));
+            SessionState.SetBool(AcceptanceKey + ".ProtectBuildSaves", true);
         }
 
         [TearDown]
         public void Cleanup()
         {
-            foreach (var obj in owned) if (obj) UnityEngine.Object.DestroyImmediate(obj);
-            owned.Clear();
-            if (!string.IsNullOrEmpty(folder) && folder.StartsWith(Root + "/GeneratedTest_", StringComparison.Ordinal)) AssetDatabase.DeleteAsset(folder);
+            try
+            {
+                foreach (var obj in owned) if (obj) UnityEngine.Object.DestroyImmediate(obj);
+                owned.Clear();
+                if (!string.IsNullOrEmpty(folder) && folder.StartsWith(Root + "/GeneratedTest_", StringComparison.Ordinal)) AssetDatabase.DeleteAsset(folder);
+            }
+            finally
+            {
+                if (stateHelper) { stateHelper.node = previousNode; stateHelper.controller = previousStateController; stateHelper.grap = previousGraph; }
+                if (transitionHelper) { transitionHelper.transition = previousTransition; transitionHelper.controller = previousTransitionController; }
+                Selection.instanceIDs = previousSelection;
+                foreach (var callback in userUndoCallbacks) Undo.undoRedoPerformed += callback;
+                SessionState.SetBool(AcceptanceKey + ".ProtectBuildSaves", previousBuildGuard);
+                if (string.IsNullOrEmpty(previousBuildAssets)) SessionState.EraseString(AcceptanceKey + ".BuildAssets"); else SessionState.SetString(AcceptanceKey + ".BuildAssets", previousBuildAssets);
+                if (string.IsNullOrEmpty(previousBuildOutput)) SessionState.EraseString(AcceptanceKey + ".BuildOutput"); else SessionState.SetString(AcceptanceKey + ".BuildOutput", previousBuildOutput);
+            }
         }
 
         private RuntimeFSMController CreateAsset()
@@ -45,6 +83,125 @@ namespace YLFramework.Tests.Extensions.Behavior
             var asset = ScriptableObject.CreateInstance<RuntimeFSMController>();
             AssetDatabase.CreateAsset(asset, AssetDatabase.GenerateUniqueAssetPath(folder + "/FSM.asset"));
             return asset;
+        }
+
+        [Test]
+        public void AssetFsmSerializesOnlyNamedControllerLayers()
+        {
+            var asset = CreateAsset();
+            var obj = new GameObject("OwnedNamedLayerHost"); owned.Add(obj);
+            var host = obj.AddComponent<FSMController>();
+            host.AddRuntimeFSMController(asset, "Gameplay");
+            using (var serialized = new SerializedObject(host))
+            {
+                var layers = serialized.FindProperty("_runtimeFSMControllerLayer");
+                Assert.That(layers.arraySize, Is.EqualTo(1));
+                Assert.That(layers.GetArrayElementAtIndex(0).FindPropertyRelative("name").stringValue, Is.EqualTo("Gameplay"));
+                Assert.That(layers.GetArrayElementAtIndex(0).FindPropertyRelative("controller").objectReferenceValue, Is.EqualTo(asset));
+                Assert.That(serialized.FindProperty("_runtimeFSMController"), Is.Null, "Unreleased YL assets must not retain the old XF flat-controller schema or its migration path.");
+            }
+            string path = folder + "/NamedLayerHost.prefab";
+            PrefabUtility.SaveAsPrefabAsset(obj, path);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var loaded = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var reloaded = loaded.GetComponent<FSMController>();
+                Assert.That(reloaded.RuntimeFSMControllerLayers.Count, Is.EqualTo(1));
+                Assert.That(reloaded.RuntimeFSMControllerLayers[0].name, Is.EqualTo("Gameplay"));
+                Assert.That(reloaded.RuntimeFSMControllerLayers[0].controller, Is.EqualTo(asset));
+                using (var serialized = new SerializedObject(reloaded))
+                    Assert.That(serialized.FindProperty("_runtimeFSMController"), Is.Null);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(loaded); }
+        }
+
+        [Test]
+        public void StateScriptRefreshUsesGuidWithoutMigratingClassNameOnlyBindings()
+        {
+            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(Root + "/Player/BehaviorAcceptanceState.cs");
+            Assert.That(script, Is.Not.Null);
+            Assert.That(script.GetClass(), Is.Not.Null);
+            string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(script));
+            string className = script.GetClass().FullName;
+            var asset = CreateAsset();
+            var node = new FSMStateNodeData { name = "BoundState", defaultState = true };
+            var bound = new FSMStateScriptInfo { guid = guid, className = "OldClassName" };
+            node.StateScripts.Add(bound); asset.states.Add(node);
+            node.RefreshStateScripts(asset);
+            Assert.That(bound.guid, Is.EqualTo(guid));
+            Assert.That(bound.className, Is.EqualTo(className), "An explicit GUID remains the current authoring binding identity.");
+            var classNameOnly = new FSMStateScriptInfo { guid = string.Empty, className = className };
+            node.StateScripts.Clear(); node.StateScripts.Add(classNameOnly);
+            EditorUtility.SetDirty(asset); AssetDatabase.SaveAssetIfDirty(asset);
+            string before = EditorJsonUtility.ToJson(asset);
+            node.RefreshStateScripts(asset);
+            Assert.That(classNameOnly.guid, Is.Empty, "Inspector refresh must not migrate old className-only data by scanning all state scripts.");
+            Assert.That(EditorJsonUtility.ToJson(asset), Is.EqualTo(before));
+            Assert.That(EditorUtility.IsDirty(asset), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator PendingBindingUsesGuidAndKeepsCanonicalBindingsUnique()
+        {
+            var pendingType = typeof(FSMStateCreator).Assembly.GetType("YLFramework.StateMachine.PendingFSMStateBindings", true);
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var load = pendingType.GetMethod("Load", flags);
+            var save = pendingType.GetMethod("Save", flags);
+            var schedule = pendingType.GetMethod("Schedule", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+            var pending = load.Invoke(null, null);
+            var itemsField = pending.GetType().GetField("items");
+            Assert.That(((IList)itemsField.GetValue(pending)).Count, Is.Zero, "Do not modify another user's pending script creation.");
+            string key = (string)pendingType.GetProperty("Key", flags).GetValue(null);
+            string previous = SessionState.GetString(key, "<absent>");
+            var asset = CreateAsset();
+            string assetGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
+            string scriptPath = Root + "/Player/BehaviorAcceptanceState.cs";
+            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+            Assert.That(script && script.GetClass() != null, Is.True);
+            string guid = AssetDatabase.AssetPathToGUID(scriptPath), className = script.GetClass().FullName;
+            var node = new FSMStateNodeData { name = "Pending", defaultState = true };
+            var classNameOnly = new FSMStateScriptInfo { guid = string.Empty, className = className };
+            node.StateScripts.Add(classNameOnly); asset.states.Add(node);
+            EditorUtility.SetDirty(asset); AssetDatabase.SaveAssetIfDirty(asset);
+            try
+            {
+                schedule.Invoke(null, new object[] { asset, node, scriptPath });
+                for (int i = 0; i < 30 && node.StateScripts.All(info => info.guid != guid); i++) yield return null;
+                Assert.That(node.StateScripts.Count(info => info.guid == guid), Is.EqualTo(1), "A className-only record must not masquerade as the imported script GUID.");
+                Assert.That(classNameOnly.guid, Is.Empty, "Auto-binding does not migrate unsupported old entries.");
+                Assert.That(node.StateScripts.Count, Is.EqualTo(2));
+
+                // 旧记录仅用于反例，不把无GUID数据当作有效的Editor配置保留到下一阶段。
+                node.StateScripts.Remove(classNameOnly);
+                EditorUtility.SetDirty(asset);
+                schedule.Invoke(null, new object[] { asset, node, scriptPath });
+                schedule.Invoke(null, new object[] { asset, node, scriptPath });
+                for (int i = 0; i < 4; i++) yield return null;
+                Assert.That(node.StateScripts.Count, Is.EqualTo(1));
+                Assert.That(node.StateScripts[0].guid, Is.EqualTo(guid));
+                Assert.That(node.StateScripts[0].className, Is.EqualTo(className));
+                Assert.That(((IList)itemsField.GetValue(load.Invoke(null, null))).Count, Is.Zero);
+                AssetDatabase.SaveAssetIfDirty(asset);
+                string path = AssetDatabase.GetAssetPath(asset);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                var reloaded = AssetDatabase.LoadAssetAtPath<RuntimeFSMController>(path);
+                reloaded.ClearCache();
+                Assert.That(reloaded.GetStateNodeData("Pending").StateScripts.Count, Is.EqualTo(1));
+                Assert.That(reloaded.GetStateNodeData("Pending").StateScripts[0].guid, Is.EqualTo(guid));
+            }
+            finally
+            {
+                pending = load.Invoke(null, null);
+                var items = (IList)itemsField.GetValue(pending);
+                bool removed = false;
+                for (int i = items.Count - 1; i >= 0; i--)
+                    if ((string)items[i].GetType().GetField("assetGuid").GetValue(items[i]) == assetGuid) { items.RemoveAt(i); removed = true; }
+                if (removed) save.Invoke(null, new[] { pending });
+                if (items.Count == 0)
+                    if (previous == "<absent>") SessionState.EraseString(key); else SessionState.SetString(key, previous);
+                Undo.ClearUndo(asset);
+            }
         }
 
         [Test]
@@ -224,11 +381,190 @@ namespace YLFramework.Tests.Extensions.Behavior
             }
         }
 
+        public sealed class TransitionInspectorWindow : EditorWindow
+        {
+            public FSMTransitionInspectorHelper Helper;
+            public FSMStateInspectorHelper NodeHelper;
+            public UnityEditor.Editor Inspector;
+            public Exception Failure;
+            public int DrawCount;
+            public void Initialize(RuntimeFSMController asset, FSMTransitionData edge)
+            {
+                Helper = ScriptableObject.CreateInstance<FSMTransitionInspectorHelper>();
+                Helper.controller = asset; Helper.transition = edge;
+                Inspector = UnityEditor.Editor.CreateEditor(Helper);
+            }
+            public void InitializeNode(RuntimeFSMController asset, FSMStateNodeData node)
+            {
+                NodeHelper = ScriptableObject.CreateInstance<FSMStateInspectorHelper>();
+                NodeHelper.controller = asset; NodeHelper.node = node;
+                Inspector = UnityEditor.Editor.CreateEditor(NodeHelper);
+            }
+            private void OnGUI()
+            {
+                if (!Inspector || Failure != null) return;
+                try { if (NodeHelper) Inspector.DrawHeader(); Inspector.OnInspectorGUI(); DrawCount++; }
+                catch (Exception error) { Failure = error; }
+            }
+            private void OnDisable()
+            {
+                if (Inspector) DestroyImmediate(Inspector);
+                if (Helper) DestroyImmediate(Helper);
+                if (NodeHelper) DestroyImmediate(NodeHelper);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ClearedStateInspectorStillDrawsHeaderWithoutException()
+        {
+            var asset = CreateAsset();
+            var node = new FSMStateNodeData { name = "OwnedNode" }; asset.states.Add(node);
+            var window = ScriptableObject.CreateInstance<TransitionInspectorWindow>();
+            try
+            {
+                window.InitializeNode(asset, node); window.ShowUtility();
+                for (int i = 0; i < 10 && window.DrawCount == 0; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.DrawCount, Is.GreaterThan(0)); Assert.That(window.Failure, Is.Null);
+                int before = window.DrawCount;
+                window.NodeHelper.Inspect(asset, null, null);
+                for (int i = 0; i < 10 && window.DrawCount == before && window.Failure == null; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.Failure, Is.Null, "A locked Inspector header must accept its cleared node selection.");
+                Assert.That(window.DrawCount, Is.GreaterThan(before));
+            }
+            finally { window.Close(); }
+        }
+
+        [UnityTest]
+        public IEnumerator SelectedTransitionInspectorSurvivesDeletionAndUndoRedo()
+        {
+            var asset = CreateAsset();
+            var edge = new FSMTransitionData { fromStateName = "A", toStateName = "B" };
+            edge.conditions.Add(new FSMConditionData()); asset.transitions.Add(edge);
+            var window = ScriptableObject.CreateInstance<TransitionInspectorWindow>();
+            try
+            {
+                window.Initialize(asset, edge); window.ShowUtility();
+                for (int i = 0; i < 10 && window.DrawCount == 0; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.DrawCount, Is.GreaterThan(0)); Assert.That(window.Failure, Is.Null);
+                int before = window.DrawCount;
+                Undo.IncrementCurrentGroup(); FSMTransitionFactory.DeleteTransition(asset, edge); Undo.FlushUndoRecordObjects();
+                for (int i = 0; i < 10 && window.DrawCount == before && window.Failure == null; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.Failure, Is.Null, "An open or locked Inspector must not draw a removed SerializedProperty.");
+                Assert.That(window.DrawCount, Is.GreaterThan(before));
+                Undo.PerformUndo(); asset.ClearCache();
+                Assert.That(asset.GetTransitionData("A", "B"), Is.Not.Null);
+                window.Repaint(); yield return null;
+                Assert.That(window.Failure, Is.Null);
+                Undo.PerformRedo(); window.Repaint(); yield return null;
+                Assert.That(window.Failure, Is.Null);
+            }
+            finally { window.Close(); Undo.ClearUndo(asset); }
+        }
+
+        [UnityTest]
+        public IEnumerator TransitionInspectorRebindsAfterEarlierEdgeRemovalAndSelectionChange()
+        {
+            var asset = CreateAsset();
+            var first = new FSMTransitionData { fromStateName = "A", toStateName = "B" };
+            var second = new FSMTransitionData { fromStateName = "B", toStateName = "C" };
+            second.group_conditions.Add(new GroupCondition());
+            second.group_conditions[0].conditions.Add(new FSMConditionData());
+            asset.transitions.Add(first); asset.transitions.Add(second);
+            var window = ScriptableObject.CreateInstance<TransitionInspectorWindow>();
+            try
+            {
+                window.Initialize(asset, second); window.ShowUtility();
+                for (int i = 0; i < 10 && window.DrawCount == 0; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.Failure, Is.Null);
+                int before = window.DrawCount;
+                FSMTransitionFactory.DeleteTransition(asset, first);
+                for (int i = 0; i < 10 && window.DrawCount == before && window.Failure == null; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.Failure, Is.Null);
+                var listField = typeof(FSMTransitionInspector).GetField("reorderableList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.That(((UnityEditorInternal.ReorderableList)listField.GetValue(window.Inspector)).serializedProperty.propertyPath, Is.EqualTo("transitions.Array.data[0].conditions"));
+                var group = ((FSMTransitionInspector)window.Inspector).GetReorderableList(second.group_conditions[0]);
+                Assert.That(group.serializedProperty.propertyPath, Is.EqualTo("transitions.Array.data[0].group_conditions.Array.data[0].conditions"));
+                asset.transitions.Add(first); asset.ClearCache();
+                window.Helper.transition = first; before = window.DrawCount;
+                for (int i = 0; i < 10 && window.DrawCount == before; i++) { window.Repaint(); yield return null; }
+                Assert.That(window.Failure, Is.Null);
+                Assert.That(((UnityEditorInternal.ReorderableList)listField.GetValue(window.Inspector)).serializedProperty.propertyPath, Is.EqualTo("transitions.Array.data[1].conditions"));
+            }
+            finally { window.Close(); Undo.ClearUndo(asset); }
+        }
+
+        [Test]
+        public void DeleteKeyRemovesSelectedStatesAndTheirTransitionsWithOneUndo()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            var selection = Selection.instanceIDs;
+            var nodes = new List<FSMNodeView>();
+            try
+            {
+                window.ShowUtility(); window.Initialize();
+                var graph = window.Graph; var asset = window.Source;
+                nodes.AddRange(graph.StateNodes.Values);
+                graph.AddToSelection(graph.GetNode("Idle")); graph.AddToSelection(graph.GetNode("Nested"));
+                graph.Focus();
+                var keyTarget = graph.GetNode("Idle").Q<IMGUIContainer>();
+                using (var key = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Delete })) keyTarget.SendEvent(key);
+                Undo.FlushUndoRecordObjects();
+                Assert.That(asset.states.Select(state => state.name), Is.EquivalentTo(new[] { "Entry", "Any State" }));
+                Assert.That(asset.transitions, Is.Empty);
+                Undo.PerformUndo(); asset.ClearCache();
+                Assert.That(asset.GetStateNodeData("Idle"), Is.Not.Null);
+                Assert.That(asset.GetStateNodeData("Nested"), Is.Not.Null);
+                Assert.That(asset.GetTransitionData("Any State", "Nested"), Is.Not.Null);
+                Undo.PerformRedo(); asset.ClearCache();
+                Assert.That(asset.GetStateNodeData("Idle"), Is.Null);
+                Assert.That(asset.GetStateNodeData("Nested"), Is.Null);
+                Undo.ClearUndo(asset);
+            }
+            finally
+            {
+                if (window.Graph != null) nodes.AddRange(window.Graph.StateNodes.Values);
+                foreach (var node in nodes.Distinct())
+                    EditorApplication.delayCall -= (EditorApplication.CallbackFunction)Delegate.CreateDelegate(typeof(EditorApplication.CallbackFunction), node, "DelayCallSelection");
+                window.Close(); Selection.instanceIDs = selection;
+            }
+        }
+
+        [Test]
+        public void DeleteCommandKeepsBuiltInStatesAndIgnoresTextFieldDelete()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            var selection = Selection.instanceIDs;
+            var nodes = new List<FSMNodeView>();
+            try
+            {
+                window.ShowUtility(); window.Initialize();
+                var graph = window.Graph; var asset = window.Source;
+                nodes.AddRange(graph.StateNodes.Values);
+                graph.AddToSelection(graph.GetNode("Entry")); graph.AddToSelection(graph.GetNode("Any State"));
+                Assert.That(graph.deleteSelection, Is.Not.Null);
+                graph.deleteSelection("Delete", GraphView.AskUser.DontAskUser);
+                Assert.That(asset.states.Count, Is.EqualTo(4));
+                graph.ClearSelection(); graph.AddToSelection(graph.GetNode("Idle"));
+                var text = new TextField { value = "Do not delete the selected state while typing" };
+                graph.Add(text); text.Focus();
+                using (var key = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Delete })) text.SendEvent(key);
+                Assert.That(asset.GetStateNodeData("Idle"), Is.Not.Null);
+            }
+            finally
+            {
+                if (window.Graph != null) nodes.AddRange(window.Graph.StateNodes.Values);
+                foreach (var node in nodes.Distinct())
+                    EditorApplication.delayCall -= (EditorApplication.CallbackFunction)Delegate.CreateDelegate(typeof(EditorApplication.CallbackFunction), node, "DelayCallSelection");
+                window.Close(); Selection.instanceIDs = selection;
+            }
+        }
+
         public sealed class GraphPreviewWindow : EditorWindow
         {
             public FSMStateGraphView Graph;
             public RuntimeFSMController Source => source;
             private Context previous;
+            private Context localContext;
             private RuntimeFSMController source;
             private System.Reflection.FieldInfo contextField;
             private readonly string[] integerKeys = { "YL.AssetFSMControllerInstanceID", "FSMControllerIndex" };
@@ -247,6 +583,7 @@ namespace YLFramework.Tests.Extensions.Behavior
                 contextField = typeof(Context).GetField("_instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
                 previous = (Context)contextField.GetValue(null);
                 var context = (Context)Activator.CreateInstance(typeof(Context), true);
+                localContext = context;
                 source = ScriptableObject.CreateInstance<RuntimeFSMController>();
                 source.states.Add(new FSMStateNodeData { name = "Entry", isBuildInState = true, buildInStateName = "Entry", rect = new Rect(80, 280, 200, 40) });
                 source.states.Add(new FSMStateNodeData { name = "Any State", isBuildInState = true, buildInStateName = "Any State", rect = new Rect(80, 80, 200, 40) });
@@ -260,16 +597,129 @@ namespace YLFramework.Tests.Extensions.Behavior
                 rootVisualElement.Add(Graph);
             }
 
-            private void OnDisable()
+            public void RestoreUserContextBetweenInputEvents()
             {
-                rootVisualElement.Clear();
-                if (contextField != null) contextField.SetValue(null, previous);
-                if (source) DestroyImmediate(source);
+                contextField.SetValue(null, previous);
+                RestorePreferences();
+            }
+
+            public bool SendNativeGraphEvent(Event input)
+            {
+                bool handled = false;
+                InGraphContext(() => handled = SendEvent(input));
+                return handled;
+            }
+
+            public void ExecuteGraphMenuAction(DropdownMenuAction action) => InGraphContext(action.Execute);
+
+            private void InGraphContext(Action operation)
+            {
+                var current = contextField.GetValue(null);
+                int host = EditorPrefs.GetInt(integerKeys[0]);
+                int index = EditorPrefs.GetInt(integerKeys[1]);
+                bool hadHost = EditorPrefs.HasKey(integerKeys[0]), hadIndex = EditorPrefs.HasKey(integerKeys[1]);
+                try
+                {
+                    EditorPrefs.SetInt(integerKeys[0], 0); EditorPrefs.SetInt(integerKeys[1], 0);
+                    contextField.SetValue(null, localContext);
+                    operation();
+                }
+                finally
+                {
+                    contextField.SetValue(null, current);
+                    if (hadHost) EditorPrefs.SetInt(integerKeys[0], host); else EditorPrefs.DeleteKey(integerKeys[0]);
+                    if (hadIndex) EditorPrefs.SetInt(integerKeys[1], index); else EditorPrefs.DeleteKey(integerKeys[1]);
+                }
+            }
+
+            private void RestorePreferences()
+            {
                 if (hadIntegerKeys == null) return;
                 for (int i = 0; i < integerKeys.Length; i++)
                     if (hadIntegerKeys[i]) EditorPrefs.SetInt(integerKeys[i], previousIntegers[i]); else EditorPrefs.DeleteKey(integerKeys[i]);
                 if (hadGuid) EditorPrefs.SetString("YL.AssetFSMRuntimeFSMControllerGUID", previousGuid); else EditorPrefs.DeleteKey("YL.AssetFSMRuntimeFSMControllerGUID");
             }
+
+            private void OnDisable()
+            {
+                rootVisualElement.Clear();
+                if (contextField != null) contextField.SetValue(null, previous);
+                if (source) DestroyImmediate(source);
+                RestorePreferences();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeWindowMouseSelectionRoutesDeleteToTheSelectedNode()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            try
+            {
+                window.Initialize(); window.ShowUtility(); window.position = new Rect(160, 120, 800, 500);
+                window.RestoreUserContextBetweenInputEvents();
+                for (int i = 0; i < 8; i++) { window.Repaint(); yield return null; }
+                var graph = window.Graph;
+                var node = graph.GetNode("Idle");
+                var point = node.worldBound.center;
+                var previousFocus = new TextField { value = "Focus starts outside the graph" };
+                previousFocus.style.height = 20; window.rootVisualElement.Add(previousFocus);
+                window.Focus(); previousFocus.Focus();
+                window.SendNativeGraphEvent(new Event { type = EventType.MouseDown, button = 0, clickCount = 1, mousePosition = point });
+                window.SendNativeGraphEvent(new Event { type = EventType.MouseUp, button = 0, clickCount = 1, mousePosition = point });
+                Assert.That(node.selected, Is.True, "A native window mouse click must actually select the node.");
+                var focused = window.rootVisualElement.focusController.focusedElement as VisualElement;
+                Assert.That(focused != null && (focused == graph || graph.Contains(focused)), Is.True, "Mouse selection must retain keyboard focus inside the graph, not in the IMGUI label or a sibling field.");
+                Assert.That(focused, Is.Not.InstanceOf<IMGUIContainer>());
+                window.SendNativeGraphEvent(new Event { type = EventType.KeyDown, keyCode = KeyCode.Delete });
+                window.SendNativeGraphEvent(new Event { type = EventType.KeyUp, keyCode = KeyCode.Delete });
+                Assert.That(window.Source.states.Any(state => state.name == "Idle"), Is.False, "Delete must arrive through the window dispatch/focus chain without graph.Focus or graph.SendEvent.");
+            }
+            finally
+            {
+                if (window.Source) Undo.ClearUndo(window.Source);
+                window.Close();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeBackgroundRightClickOffersStateAndSubStateCreation()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            try
+            {
+                window.Initialize(); window.ShowUtility(); window.position = new Rect(160, 120, 800, 500);
+                window.Graph.style.marginLeft = 120; window.Graph.style.marginTop = 50;
+                window.RestoreUserContextBetweenInputEvents();
+                for (int i = 0; i < 8; i++) { window.Repaint(); yield return null; }
+                var graph = window.Graph;
+                graph.UpdateViewTransform(new Vector3(65, 35), Vector3.one * 0.7f);
+                for (int i = 0; i < 3; i++) { window.Repaint(); yield return null; }
+                var point = new Vector2(graph.worldBound.xMax - 45, graph.worldBound.yMax - 45);
+                var expectedPosition = graph.contentViewContainer.WorldToLocal(point);
+                Assert.That(graph.panel.Pick(point), Is.SameAs(graph), "A full-viewport decorative element must not intercept background context clicks.");
+                List<DropdownMenuAction> actions = null;
+                graph.RegisterCallback<ContextualMenuPopulateEvent>(evt => {
+                    actions = evt.menu.MenuItems().OfType<DropdownMenuAction>().ToList();
+                    evt.PreventDefault();
+                });
+                window.Focus();
+                window.SendNativeGraphEvent(new Event { type = EventType.MouseDown, button = 1, clickCount = 1, mousePosition = point });
+                window.SendNativeGraphEvent(new Event { type = EventType.MouseUp, button = 1, clickCount = 1, mousePosition = point });
+                Assert.That(actions, Is.Not.Null, "Right mouse-up must invoke native ContextualMenuPopulateEvent, not a direct call to BuildContextualMenu.");
+                CollectionAssert.Contains(actions.Select(action => action.name), "Create State");
+                CollectionAssert.Contains(actions.Select(action => action.name), "Create Sub-State Machine");
+                var before = window.Source.states.ToArray();
+                window.ExecuteGraphMenuAction(actions.Single(action => action.name == "Create State"));
+                var created = window.Source.states.Single(state => !before.Contains(state));
+                Assert.That(created.isSubStateMachine, Is.False);
+                Assert.That(Mathf.Abs(created.rect.center.x - expectedPosition.x), Is.LessThan(20.01f), "State creation must convert the panel click position once, including the graph dock offset and zoom.");
+                Assert.That(Mathf.Abs(created.rect.center.y - expectedPosition.y), Is.LessThan(20.01f));
+                before = window.Source.states.ToArray();
+                window.ExecuteGraphMenuAction(actions.Single(action => action.name == "Create Sub-State Machine"));
+                var sub = window.Source.states.Single(state => !before.Contains(state) && state.isSubStateMachine);
+                Assert.That(window.Source.states.Count(state => !before.Contains(state) && state.isBuildInState && state.parents.Contains(sub.name)), Is.EqualTo(3));
+            }
+            finally { if (window.Source) Undo.ClearUndo(window.Source); window.Close(); }
         }
 
         [Test]
@@ -314,6 +764,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             try
             {
                 window.Initialize(); window.position = new Rect(120, 120, 760, 480); window.ShowUtility();
+                window.RestoreUserContextBetweenInputEvents();
                 for (int i = 0; i < 10; i++) { window.Repaint(); yield return null; }
                 var graph = window.Graph;
                 var grid = graph.Q<GridBackground>();
@@ -341,6 +792,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             try
             {
                 window.Initialize(); window.position = new Rect(120, 120, 760, 480); window.ShowUtility();
+                window.RestoreUserContextBetweenInputEvents();
                 for (int i = 0; i < 10; i++) { window.Repaint(); yield return null; }
                 var graph = window.Graph;
                 var overlay = graph.Q<FSMTransitionBackground>();
@@ -392,7 +844,9 @@ namespace YLFramework.Tests.Extensions.Behavior
             AssetDatabase.CreateAsset(material, path); AssetDatabase.SaveAssetIfDirty(material);
             byte[] before = File.ReadAllBytes(path);
             bool old = SessionState.GetBool(key, false);
+            bool oldBuildGuard = SessionState.GetBool(AcceptanceKey + ".ProtectBuildSaves", false);
             SessionState.SetBool(key, true);
+            SessionState.SetBool(AcceptanceKey + ".ProtectBuildSaves", false);
             try
             {
                 material.name = "UnsavedUserValue"; EditorUtility.SetDirty(material);
@@ -401,7 +855,7 @@ namespace YLFramework.Tests.Extensions.Behavior
                 Assert.That(material.name, Is.EqualTo("UnsavedUserValue"));
                 Assert.That(EditorUtility.IsDirty(material), Is.True);
             }
-            finally { SessionState.SetBool(key, old); }
+            finally { SessionState.SetBool(key, old); SessionState.SetBool(AcceptanceKey + ".ProtectBuildSaves", oldBuildGuard); }
         }
 
         [Test]

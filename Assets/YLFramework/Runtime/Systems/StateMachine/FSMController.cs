@@ -22,10 +22,6 @@ namespace YLFramework.StateMachine
 
         #region 字段
 
-        [HideInInspector]
-        [SerializeField]
-        private List<RuntimeFSMController> _runtimeFSMController = new List<RuntimeFSMController>();
-
         [SerializeField]
         private List<RuntimeFSMControllerLayer> _runtimeFSMControllerLayer = new List<RuntimeFSMControllerLayer>();
 
@@ -198,21 +194,6 @@ namespace YLFramework.StateMachine
         private void Init()
         {
             Instances.Clear();
-            //runtimeControllers.Clear();
-
-            // 兼容
-            if (_runtimeFSMControllerLayer.Count == 0 && _runtimeFSMController.Count > 0)
-            {
-                for (int i = 0; i < _runtimeFSMController.Count; i++)
-                {
-                    if(_runtimeFSMController[i] == null) continue;
-                    RuntimeFSMControllerLayer layer = new RuntimeFSMControllerLayer();
-                    layer.name = string.Format("Layer {0}",i);
-                    layer.controller = _runtimeFSMController[i];
-                    _runtimeFSMControllerLayer.Add(layer);
-                }
-            }
-
             runtimeFSMControllerLayer.Clear();
 
             initializing = true;

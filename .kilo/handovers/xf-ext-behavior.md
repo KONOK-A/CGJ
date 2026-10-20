@@ -157,3 +157,22 @@
 - 临时后端/Low通过Unity API设置，finally按原map键/顺序恢复Mono2x/Disabled，ProjectSettings前后SHA均`14f31285102890f82ddfa7f380190b30aacf8ac0c08fbec23922cd6463ae209c`。公司/产品名未改，场景及Reload false/3保持。精确新目录保存白名单保护其他脏资产；原01生成保护失败、02本轮dirty标记阻塞如实保留，03通过，不覆盖失败。
 - 原有用户Plan/T2、Assets/Test、旧游戏FSM和meta仍不纳入提交。三份用户FSM在GUI区间落盘，内容与初始内存相同，归因未知、不回滚；按已记录构建前状态保护，AOT前后未再变化。原游戏代表PlayMode51/51及原独立性19/19沿用上批有效证据，本轮不伪报重跑。
 - 本批只归档/删除receipt自有夹具，普通Push保留A六笔历史和merge，无force/amend/rebase或B/C接入。最终提交、远端实际SHA与工作区状态见本根`git-final.json`及最终交付。尚未完成G4/正式独立导出及其余人工GUI作者流，B由用户另行接收验收。
+
+## A组旧XF兼容清理（2026-10-20）
+
+- 本轮用户明确YL未发布、无外部项目消费者，不保留XF旧代码/旧序列化兼容。先删除`FSMController._runtimeFSMController`旧列表及Init迁移，以及`StateMachineEditorTools.RefreshNode`按className找脚本补缺失GUID的回退；后续按用户确认补删内置状态名称回退与pending-binding的className判重分支。现代命名层、当前API和显式GUID刷新继续使用，运行时按className构造不改。
+- 检索确认原游戏4份同名旧列表Prefab引用原XFFSM脚本GUID，非YL组件；不改原Prefab或迁移其数据。Overlap/CC2D/平台无同类XF迁移层；保留物理/生命周期、诊断和Unity版本适配，不顺手改拼写、静态领域入口、许可或原轻量FSM。
+- 两项新EditMode回归先失败再通过，完整EditMode74/74，含现代命名层Prefab保存重导入及GUID绑定不自动迁移；完整PlayMode51/51，含原游戏菜单/设置/暂停返回/再次进入与旧Overlap自然查询非干扰回归，均无失败/跳过/不确定。新证据根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T112500Z/`，主Unity仍为2022.3.62f3c1/PID4708；实际结果来自同根新XML，旧Player构建证据不冒充本次复验。
+- 补充删除的独占根为`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T120000Z/`。内置状态只认完整标记，pending-binding只认GUID；三项新增回归先红后绿，完整EditMode77/77、PlayMode51/51，均无失败/跳过/不确定，验证真实Editor update处理产品队列、重复请求仅一条当前GUID绑定及保存重导入。没有清理/迁移用户旧数据，也不把旧className-only记录与新Editor绑定混用算有效配置；正常运行时类名构造保留。
+- 补充删除的末次严格保护检查另观察到`PlatformCatcher2DInspector.cs`、`OverlapArea2DInspector.cs`、`OverlapBox2DInspector.cs`出现API Updater生成式Handles重载改动（含自动生成的`fmh_*`局部变量）。它们不是本批主动补丁，保持现场、不自动回退/清理/暂存；严格字节审计保留为发现，不宣称所有文件完全未变。四份用户FSM的内存内容/dirty状态、原游戏与其余保护输入保持快照，功能测试通过及该额外观察分别记录。
+- 本批保护既有未提交GUI/删线/Delete修复和用户工作区数据，不创建迁移资产、不重造meta/GUID，不合并B/C、不提交或Push。正式策略见Plan §10.7，使用说明同步到本组Usage。
+
+## A本地收口（2026-10-20）
+
+本节覆盖前述“修复仍未提交”与“暂保API Updater现场”的历史状态。用户授权只收口A、创建必要中文本地提交；不Push、不接B/C。
+
+- 基准`3e9727c6e26e1ac78a6feab0e6b25633fd433e44`，目标分支`integration/xf-yl`，新证据根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T130000Z/`。最终commit/parent/工作区状态在同根`git-final.json`及交付回复，避免提交自引用。
+- 收录已实际修复的过渡Inspector失效/索引前移、锁定Header、Helper与延迟回调生命周期、原生焦点/拾取、右键菜单及创建坐标、统一Delete/Undo/内置与输入框保护，以及四类旧XF兼容删除。既有77/77 EditMode、51/51 PlayMode及红绿原件位于`120000Z`；原生窗口/菜单证据位于`104500Z`，不由合成handler调用替代。
+- 三份Overlap/平台Inspector改动已获本次收口授权审查：采用实装2022.3已支持的非过时FreeMoveHandle签名，保留七次调用的参数，仅去无用生成变量/Quaternion计算/相同条件分支；无需回退成反复弹API Updater提示的旧重载。原生成差异归档，新Unity编译通过，`edit-closeout-01`完整EditMode77/77、0失败/跳过/不确定；物理手柄拖拽仍不计通过。
+- 一次定向只读审查确认当前StateMachine Runtime/Editor及测试增量无重要阻断；未对冻结A、B/C或原游戏做重复泛化Review。Runtime在本收口阶段不变，PlayMode51/51沿用最近有效XML；Player没有重建，旧IL2CPP结果不冒充去兼容后新构建。
+- 精确提交A源/测试/说明，用户3份原游戏FSM、Assets/Test、用户meta和原T2回执不暂存、不回退。原场景集合、Editor选项、配置、GUID保持；无新资产或迁移工具，临时夹具清理仅限各run自有内容。B随后必须按其纠正后的完整tip单独接收核验，本批不自动执行。

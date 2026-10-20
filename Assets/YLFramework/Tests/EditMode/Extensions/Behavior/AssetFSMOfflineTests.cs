@@ -154,6 +154,22 @@ namespace YLFramework.Tests.Extensions.Behavior
                 Assert.That(node.GetType().GetProperty(name).GetValue(node), Is.EqualTo(false));
         }
 
+        [TestCase("Any State", "IsAnyState")]
+        [TestCase("Entry", "IsEntryState")]
+        public void BuiltInIdentityRequiresExplicitMetadataInsteadOfReservedName(string builtInName, string propertyName)
+        {
+            var node = new FSMStateNodeData { name = builtInName };
+            var property = typeof(FSMStateNodeData).GetProperty(propertyName);
+            Assert.That(property.GetValue(node), Is.False, "A reserved name alone is not a current-format built-in identity.");
+            node.isBuildInState = true;
+            Assert.That(property.GetValue(node), Is.False, "The built-in kind is also required.");
+            node.isBuildInState = false; node.buildInStateName = builtInName;
+            Assert.That(property.GetValue(node), Is.False, "The explicit built-in flag is required.");
+            node.isBuildInState = true; node.name = "DifferentDisplayName";
+            Assert.That(property.GetValue(node), Is.True);
+            Assert.That(node.DisplayName, Is.EqualTo(builtInName));
+        }
+
         [Test]
         public void TriggerQueueConsumesOnceAndResetOrCloseDiscardPendingTokens()
         {

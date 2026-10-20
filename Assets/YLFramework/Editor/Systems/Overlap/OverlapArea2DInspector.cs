@@ -135,11 +135,7 @@ namespace YLFramework.Overlap
 
                 Vector3 world = transform.localToWorldMatrix.MultiplyPoint(property.vector3Value);
 
-#if UNITY_6000_0_OR_NEWER
-                world = Handles.FreeMoveHandle(world,size, Vector3.one * 0.1f, Handles.CubeHandleCap);
-#else
-                world = Handles.FreeMoveHandle(world, Quaternion.identity, size, Vector3.one * 0.1f, Handles.CubeHandleCap);
-#endif
+                world = Handles.FreeMoveHandle(world, size, Vector3.one * 0.1f, Handles.CubeHandleCap);
 
 
                 property.vector3Value = transform.worldToLocalMatrix.MultiplyPoint(world);

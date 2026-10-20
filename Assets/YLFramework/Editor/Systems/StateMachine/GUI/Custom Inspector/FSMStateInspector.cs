@@ -59,7 +59,7 @@ namespace YLFramework.StateMachine
             }
 
             FSMStateInspectorHelper helper = target as FSMStateInspectorHelper;
-            if (helper == null) return;
+            if (helper == null || !helper.controller || helper.node == null || !helper.controller.states.Contains(helper.node)) return;
 
             bool disabled = EditorApplication.isPlaying || helper.node.IsAnyState || helper.node.IsEntryState || helper.node.IsUpState;
 
@@ -177,7 +177,7 @@ namespace YLFramework.StateMachine
         {
             //base.OnHeaderGUI();
             FSMStateInspectorHelper helper = target as FSMStateInspectorHelper;
-            if (helper == null) return;
+            if (helper == null || !helper.controller || helper.node == null || !helper.controller.states.Contains(helper.node)) return;
 
 
             string name = null;

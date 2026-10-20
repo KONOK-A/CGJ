@@ -52,13 +52,7 @@ namespace YLFramework.Overlap
 
             float size = HandleUtility.GetHandleSize(top) * 0.1f;
             Handles.color = Color.green;
-            Quaternion rotation = Quaternion.Euler(0, 0, box2D.transform.eulerAngles.z);
-
-#if UNITY_6000_0_OR_NEWER
             Vector3 current_top = Handles.FreeMoveHandle(top, size, Vector3.one * size, Handles.CubeHandleCap);
-#else
-            Vector3 current_top = Handles.FreeMoveHandle(top, rotation, size, Vector3.one * size, Handles.CubeHandleCap);
-#endif
 
             SetTop(current_top.y - top.y);
 
@@ -66,13 +60,7 @@ namespace YLFramework.Overlap
 
             size = HandleUtility.GetHandleSize(down) * 0.1f;
             Handles.color = Color.green;
-            rotation = Quaternion.Euler(0, 0, box2D.transform.eulerAngles.z);
-
-#if UNITY_6000_0_OR_NEWER
             Vector3 current_down = Handles.FreeMoveHandle(down, size, Vector3.one * size, Handles.CubeHandleCap);
-#else
-            Vector3 current_down = Handles.FreeMoveHandle(down, rotation, size, Vector3.one * size, Handles.CubeHandleCap);
-#endif
 
             SetDown(current_down.y - down.y);
 
@@ -80,12 +68,7 @@ namespace YLFramework.Overlap
 
             size = HandleUtility.GetHandleSize(left) * 0.1f;
             Handles.color = Color.green;
-            rotation = Quaternion.Euler(0, 0, box2D.transform.eulerAngles.z);
-#if UNITY_6000_0_OR_NEWER
             Vector3 current_left = Handles.FreeMoveHandle(left, size, Vector3.one * size, Handles.CubeHandleCap);
-#else
-            Vector3 current_left = Handles.FreeMoveHandle(left, rotation, size, Vector3.one * size, Handles.CubeHandleCap);
-#endif
 
             SetLeft(current_left.x - left.x);
 
@@ -94,13 +77,7 @@ namespace YLFramework.Overlap
 
             size = HandleUtility.GetHandleSize(right) * 0.1f;
             Handles.color = Color.green;
-            rotation = Quaternion.Euler(0, 0, box2D.transform.eulerAngles.z);
-
-#if UNITY_6000_0_OR_NEWER
             Vector3 current_right = Handles.FreeMoveHandle(right, size, Vector3.one * size, Handles.CubeHandleCap);
-#else
-            Vector3 current_right = Handles.FreeMoveHandle(right, rotation, size, Vector3.one * size, Handles.CubeHandleCap);
-#endif
 
             SetRight(current_right.x - right.x);
         }

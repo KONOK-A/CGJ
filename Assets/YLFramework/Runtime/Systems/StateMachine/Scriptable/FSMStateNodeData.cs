@@ -69,9 +69,6 @@ namespace YLFramework.StateMachine
         {
             get
             {
-                if (name == FSMConst.anyState)
-                    return true;
-
                 if (isBuildInState && buildInStateName == FSMConst.anyState)
                     return true;
 
@@ -85,9 +82,6 @@ namespace YLFramework.StateMachine
         public bool IsEntryState
         {
             get {
-
-                if (name == FSMConst.entryState)
-                    return true;
 
                 if (isBuildInState && buildInStateName == FSMConst.entryState)
                     return true;

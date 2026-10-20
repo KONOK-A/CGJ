@@ -432,3 +432,26 @@ B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终�
 - 保留失败：首轮生成被过严保存保护阻止，未进入后端切换；第二轮因首轮finally无必要调用原设置setter留下dirty标记而拒绝构建。已修正精确目录回调/先写receipt、未切配置不调用恢复setter、恢复后只清本轮dirty标记；第三轮真实构建和运行通过。另修复了同gate attempt读取及测试Host偏好隔离，后者用自有假Host先复现断言失败再65/65；无用户原Host用于此红例。
 - 用户原有Plan/T2、Assets/Test、旧游戏FSM资产和用户meta不提交。GUI区间观察到EnemyState、GameStateManager、New FSMController落盘状态变化，序列化内容与开始时的内存快照一致；不猜保存来源、不回滚，另记构建前观察基线。AOT前后这些用户文件及其余保护区字节均保持该基线，不伪称全区间所有用户磁盘文件从未变化。
 - 技术收口只归档/清理本批receipt自有生成物；本批中文本地修复提交和普通Push不含用户内容。提交完整SHA、远端同步SHA及最终工作区状态记录于本根`git-final.json`，避免文档自引用。主工程A的IL2CPP Low未验项由本节真实结果解除；G4/正式独立导出及其余人工作者GUI仍未验，不声明整个XF完成。
+
+### 10.7 A组不承接XF旧兼容（2026-10-20）
+
+用户明确YL尚在开发、未对外发布且无外部项目消费者，本轮只清理A组继承的XF旧数据兼容，不为旧XF资产/API建立迁移层，也不将此解释为B/C授权或取消Unity版本支持。
+
+- 删除`FSMController`隐藏旧列表`_runtimeFSMController`及Init中向命名层转换的兼容块；保留当前`_runtimeFSMControllerLayer`和运行时层投影API。YL没有该旧组件格式的受管Scene/Prefab，无需迁移；原游戏4份含同名字段的Prefab属于原XFFSM脚本GUID，不修改。
+- 删除Editor刷新中按`className`扫描状态脚本并补写缺失GUID的旧数据回退。Add Script/Create And Add及显式GUID刷新仍保留，运行时按类名构造状态仍是当前能力，不要求程序化运行配置携带Editor GUID。
+- 用户随后确认再移除内置状态的`name == Any State/Entry`识别回退及pending-binding的className判重分支。内置身份只认`isBuildInState + buildInStateName`，自动绑定只按GUID去重；不自动删除、迁移或修复缺标记/缺GUID的旧Editor记录。现有YL创建器和自有资产使用完整元数据，现代配置的保护、显示与转换语义不变。
+- Overlap/CC2D/MoveablePlatform未发现XF旧API别名或旧字段迁移；其物理算法、资源生命周期、诊断、Unity2022现行路径和Unity版本条件适配不属于本次删除范围。原命名、静态FSM领域入口、原轻量FSM及许可/版权均保留，不扩展为改名或功能裁剪。
+- 两项自有回归先红后绿：仅序列化命名层并能保存重导入、不再自动迁移className-only绑定且显式GUID仍正常刷新；本轮完整EditMode74/74、PlayMode51/51（含原游戏非干扰代表链），均0失败/跳过/不确定。证据位于`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T112500Z/`的新XML及handover，不把此前Mono/IL2CPP构建当成本次清理后的重建证据。
+- 后续两处分支删除另有独占证据根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T120000Z/`：三项回归先红后绿，完整EditMode77/77、PlayMode51/51，均无失败/跳过/不确定；覆盖Any State/Entry仅凭名字不再识别、完整元数据仍正确识别、产品pending队列按GUID绑定且重复请求/保存重导入不重复添加有效脚本。与缺GUID的旧记录混用不属于有效新格式，测试只在自有夹具中构造并移除该反例，不增加迁移逻辑。
+- 保护此前未提交GUI/Inspector/Delete修复与用户原有改动，未接入B/C、不提交或Push，不改Packages/ProjectSettings、原XF包、原游戏资产或已存在GUID；仅更新当前Usage/交接约定，不另建迁移工具或重复计划。
+
+### 10.8 A组修复与去兼容本地收口（2026-10-20）
+
+用户明确授权先收口A。本批基准为`integration/xf-yl`的`3e9727c6e26e1ac78a6feab0e6b25633fd433e44`，只创建必要中文本地提交，不Push、不合并B/C。收口证据根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T130000Z/`，最终完整提交/父节点/工作区状态写同根`git-final.json`及最终交付，不把本提交SHA自引用写入本文件。
+
+- 收录此前未提交的A修复：删除过渡后Inspector失效句柄、数组前移/切换选择重绑、Helper/Header保护，原生点击后的焦点和装饰拾取、右键菜单/创建坐标、节点/连线统一Delete与Undo、内置状态及文本输入保护、延迟选择回调清理。真实窗口输入链与原生菜单证据在`095000Z/104500Z`各自旧根，不能用直接调用handler替代鼠标拾取/焦点证明。
+- 收录§10.7四类XF历史兼容清理及自有回归，不裁剪现用领域API、运行时类名构造或Unity版本支持。最新Runtime未在收口期间改动；沿用`120000Z`完整PlayMode51/51及原游戏代表链，读取原XML而不冒称本批重新执行。
+- 单独审查三份API Updater生成改动后，按Unity2022.3官方API及实装反射核对：不带Quaternion的`FreeMoveHandle(position,size,snap,cap)`已受支持且非过时。保留已更新的七个调用，去掉无用`fmh_*`/Quaternion计算及完全相同的版本分支；不更改位置、size、snap、cap或任何Runtime/资源数据。该签名也保留现有Unity6路径能力，不是删除引擎支持。原生成差异和来源核对留在本根`before-closeout.diff`、`api-review.json`。
+- 原StateMachine增量有一次定向只读收口审查，无当前重要正确性/资产保护阻断项；三份API文件由本会话另审，不重复冻结A全库Review。实际主Unity仍2022.3.62f3c1/PID4708，规范化Editor重新编译通过，完整EditMode77/77、0失败/跳过/不确定，新XML在`edit-closeout-01`。Scene手柄的物理鼠标拖拽/完整作者GUI与G4仍未全验，不把编译/用例通过冒充人工GUI通过。
+- 不重建Player；既有IL2CPP Low图形通过仅保留为§10.6对应源码快照的历史证据，不外推为去兼容Runtime本次重建。后续B接收的Player验证应绑定合并后新输入。
+- 精确排除用户3份原游戏FSM、`Assets/Test`及其meta、`AlternateContent.meta`和原§11/T2回执，全部保持现场与未提交状态；提交只包含A产品/回归/必要说明。原XF、Packages/ProjectSettings、共享Core/Foundation/Resource、轻量FSM及已有meta/GUID不变，不清理分支/worktree，不覆盖用户脏资产或场景。

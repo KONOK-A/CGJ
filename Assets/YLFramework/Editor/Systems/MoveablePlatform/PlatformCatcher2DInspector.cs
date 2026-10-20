@@ -39,11 +39,7 @@ namespace YLFramework.Platform2D
 
                 EditorGUI.BeginChangeCheck();
 
-#if UNITY_6000_0_OR_NEWER
                 from = Handles.FreeMoveHandle(from, size, snap, Handles.CubeHandleCap);
-#else
-                from = Handles.FreeMoveHandle(from, Quaternion.identity, size, snap, Handles.CubeHandleCap);
-#endif
 
 
                 if (EditorGUI.EndChangeCheck())
@@ -54,11 +50,7 @@ namespace YLFramework.Platform2D
 
                 EditorGUI.BeginChangeCheck();
 
-#if UNITY_6000_0_OR_NEWER
                 to = Handles.FreeMoveHandle(to, size, Vector3.one * 0.1f, Handles.CubeHandleCap);
-#else
-                to = Handles.FreeMoveHandle(to, Quaternion.identity, size, Vector3.one * 0.1f, Handles.CubeHandleCap);
-#endif
 
                 if (EditorGUI.EndChangeCheck())
                 {

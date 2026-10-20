@@ -26,11 +26,15 @@ namespace YLFramework.StateMachine
             this.Data = data;
             this.graphView = graphView;
             Clear();
+            focusable = true;
 
             VisualElement image = new VisualElement();
+            image.pickingMode = PickingMode.Ignore;
             image.style.width = 200;
             image.style.height = 40;
             IMGUIContainer container = new IMGUIContainer();
+            container.pickingMode = PickingMode.Ignore;
+            container.focusable = false;
             container.onGUIHandler += () =>
             {
 
@@ -63,6 +67,7 @@ namespace YLFramework.StateMachine
             Add(image);
 
             RegisterCallback<MouseDownEvent>(OnMouseDownEvent);
+            RegisterCallback<DetachFromPanelEvent>(evt => EditorApplication.delayCall -= DelayCallSelection);
         }
 
         public override void SetPosition(Rect newPos)
@@ -131,16 +136,7 @@ namespace YLFramework.StateMachine
         private void DeleteStates()
         {
 
-            RuntimeFSMController controller = Context.Instance.RuntimeFSMController;
-            if (controller == null)
-                return;
-            foreach (var item in graphView.StateNodes.Values)
-            {
-                if (item.selected)
-                    FSMStateNodeFactory.DeleteState(controller, item.Data);
-            }
-
-            graphView.RefreshNodes();
+            graphView.DeleteSelectedElements();
         }
 
         private void SetDefaultState()
@@ -206,11 +202,13 @@ namespace YLFramework.StateMachine
         }
 
         private void DelayCallSelection() {
+            if (panel == null || !Context.Instance.RuntimeFSMController || !Context.Instance.RuntimeFSMController.states.Contains(Data)) return;
             FSMStateInspectorHelper.Instance.Inspect(Context.Instance.RuntimeFSMController, Data, graphView);
         }
 
         public override void OnUnselected()
         {
+            EditorApplication.delayCall -= DelayCallSelection;
             base.OnUnselected();
             FSMStateInspectorHelper.Instance.Inspect(Context.Instance.RuntimeFSMController, null, graphView);
         }

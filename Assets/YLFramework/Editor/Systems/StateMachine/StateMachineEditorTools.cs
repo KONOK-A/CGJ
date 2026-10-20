@@ -49,8 +49,6 @@ namespace YLFramework.StateMachine
             foreach (var info in node.StateScripts)
             {
                 var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(info.guid));
-                if (!script && string.IsNullOrEmpty(info.guid) && !string.IsNullOrEmpty(info.className))
-                    script = GetAllStatesType().Find(item => item.GetClass().FullName == info.className);
                 // 编译中暂时失效的绑定不删除；运行前验证会报告状态和类型，保留可修复数据。
                 if (!script || !IsStateType(script.GetClass())) continue;
                 string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(script));

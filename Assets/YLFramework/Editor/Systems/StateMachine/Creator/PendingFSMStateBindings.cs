@@ -62,7 +62,7 @@ namespace YLFramework.StateMachine
                     continue;
                 }
                 string guid = AssetDatabase.AssetPathToGUID(item.scriptPath);
-                if (!node.StateScripts.Exists(info => info.guid == guid || info.className == type.FullName))
+                if (!node.StateScripts.Exists(info => info.guid == guid))
                 {
                     Undo.RecordObject(controller, "Attach Compiled FSM State Script");
                     node.AddStateScript(script);

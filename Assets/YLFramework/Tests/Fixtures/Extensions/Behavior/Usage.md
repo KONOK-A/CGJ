@@ -40,6 +40,9 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 - 资产FSM为 `YLFramework.StateMachine`，独立使用原XFFSM算法与API。`FSMController`按Start初始化、Update/Late/Fixed驱动；`RuntimeFSMController`保存层级/子状态机、状态脚本、参数和条件组；组内AND/组间OR、AnyState、Trigger及完整回调保留。Entry沿用作者工具的默认入口展示，不新增原包没有的条件边执行语义；空条件链只有显式`AutoSwtich=true`才自动切换。
 - 状态脚本所在asmdef引用`YLFramework.Runtime`。类继承此namespace的`FSMState`，保持public无参构造，使用原`controller`、`currentStateInfo`、`userData`字段；不要把旧包`XFFSM.FSMState`子类直接绑定给YL资产。原游戏、Scene、Prefab、旧包className/GUID完全不重绑。
 - 在自有GameObject添加`FSMController`，序列化配置层，或在Start前调用`AddRuntimeFSMController(source, layerName)`；新`UserData`属性支持直接挂载时的启动前数据注入。沿用`GetCurrentStateInfo(index/layerName, subStateName)`、Set/Get Bool/Float/Int/Trigger、ResetTrigger。相同参数名跨层保留原广播/任意非零读取语义，但读取按参数类型匹配。
+- YL尚未对外发布，不承接XF旧数据：宿主仅序列化带名称的`_runtimeFSMControllerLayer`，不保留旧`_runtimeFSMController`列表或启动迁移。Editor脚本绑定以显式GUID为准，刷新不再扫描状态类型并为缺GUID的旧`className`记录补写身份；使用Add Script/Create And Add建立当前绑定。运行时按`className`构造状态仍是现用能力，程序化消费者无需伪造Editor GUID。
+- 内置状态身份只由`isBuildInState`与`buildInStateName`共同决定，`name`不再作为Any State/Entry旧格式回退；自动绑定也只按GUID去重。缺标记或缺GUID的旧Editor记录不自动迁移、删除或修补，不应与当前有效绑定混用；当前创建器生成完整标记和GUID。
+- 图内选中普通状态或连线后可按Delete删除；多选共用一次Undo/Redo，Entry/Any State/Up与运行时仍受保护，文本输入中的Delete不删节点。背景右键保留Create State/Create Sub-State Machine；Inspector在删除或切换选择后重绑有效属性，不继续绘制已移除的节点/过渡。
 - 每个运行层克隆自己的配置，状态/过渡均引用克隆数据。`Close`退出并清活动/排队Trigger、参数与切换记录但保留克隆以便重启；移除层/销毁时幂等`Dispose`销毁自己拥有的克隆，不销毁源资产或他人实例。退出回调异常不吞掉，仍先尝试其余脚本/子状态/层清理，再重抛原异常。
 - 首次创建按脚本分别记录，回调重入不会消费尚未访问脚本的OnCreate；未创建脚本不发送退出。首次回调异常摘除失败运行层、释放克隆，恢复初始化标志并完成其余层后传播原异常；参数不永久排队。Start前或初始化期间可取消尚未启动的源层。
 - 同帧同状态访问上限32、整链256；超过后每帧最多一次资产/层/状态诊断，拒绝本帧后续切换，不依赖scaled Time、不抛循环检测异常。回调修改层列表用快照，常态驱动/预热后广播不按帧新建快照。未作Unity Profiler结论。
