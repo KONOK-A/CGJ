@@ -1,0 +1,178 @@
+// Adapted from XF ExcelSystem 1.0.7 (MIT, Copyright (c) 2025 弦风课堂).
+// YL: typed enum/GUID handling, invariant strict conversions, inherited fields.
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace YLFramework.Excel.Editor
+{
+    internal static class ExcelValues
+    {
+        internal static List<FieldInfo> Fields(Type type, bool includeIgnored = false)
+        {
+            var fields = new List<FieldInfo>();
+            for (var current = type; current != null && current != typeof(ScriptableObject) && current != typeof(Object); current = current.BaseType)
+            {
+                foreach (var field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    if (field.IsInitOnly || field.IsNotSerialized) continue;
+                    if (!includeIgnored && (field.GetCustomAttribute<ExcelIgnore>() != null || field.GetCustomAttribute<JsonIgnoreAttribute>() != null)) continue;
+                    if (!field.IsPublic && field.GetCustomAttribute<SerializeField>() == null && field.GetCustomAttribute<SerializeReference>() == null) continue;
+                    if (fields.Any(f => f.Name == field.Name)) throw new InvalidOperationException("Hidden duplicate field: " + type.FullName + "." + field.Name);
+                    fields.Add(field);
+                }
+            }
+            return fields;
+        }
+
+        internal static FieldInfo Id(Type type)
+        {
+            var fields = Fields(type);
+            var marked = fields.Where(f => f.GetCustomAttribute<ExcelScriptableObjectID>() != null).ToArray();
+            if (marked.Length > 1) throw new InvalidOperationException("Multiple Excel ID fields: " + type.FullName);
+            return marked.Length == 1 ? marked[0] : fields.FirstOrDefault(f => f.Name.Equals("id", StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static ExcelFieldsType FieldType(Type type)
+        {
+            if (type.IsEnum) return ExcelFieldsType.Enum;
+            if (typeof(Object).IsAssignableFrom(type)) return ExcelFieldsType.ObjectReference;
+            if (type == typeof(string)) return ExcelFieldsType.String;
+            if (type == typeof(bool)) return ExcelFieldsType.Bool;
+            if (type == typeof(float)) return ExcelFieldsType.Float;
+            if (type == typeof(double)) return ExcelFieldsType.Double;
+            if (type == typeof(long) || type == typeof(ulong)) return ExcelFieldsType.Long;
+            if (type == typeof(int) || type == typeof(uint) || type == typeof(short) || type == typeof(ushort) || type == typeof(byte) || type == typeof(sbyte)) return ExcelFieldsType.Int;
+            return ExcelFieldsType.Json;
+        }
+
+        internal static object Primitive(object raw, ExcelFieldsType type)
+        {
+            string text = ExcelTable.Text(raw);
+            switch (type)
+            {
+                case ExcelFieldsType.String: return text;
+                case ExcelFieldsType.Enum: return text;
+                case ExcelFieldsType.ObjectReference: ValidateReference(text); return text;
+                case ExcelFieldsType.Json: return string.IsNullOrWhiteSpace(text) ? JValue.CreateNull() : JToken.Parse(text);
+                case ExcelFieldsType.Bool: return text.Length == 0 ? false : bool.Parse(text);
+                case ExcelFieldsType.Int:
+                    long integer = text.Length == 0 ? 0 : long.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                    if (integer < int.MinValue || integer > uint.MaxValue) throw new OverflowException("Int cell exceeds the signed/unsigned 32-bit range.");
+                    return integer;
+                case ExcelFieldsType.Long:
+                    if (text.Length == 0) return 0L;
+                    if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long signed)) return signed;
+                    return ulong.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                case ExcelFieldsType.Float:
+                    float single = text.Length == 0 ? 0 : float.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
+                    if (float.IsNaN(single) || float.IsInfinity(single)) throw new FormatException("Non-finite float.");
+                    return single;
+                case ExcelFieldsType.Double:
+                    double number = text.Length == 0 ? 0 : double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
+                    if (double.IsNaN(number) || double.IsInfinity(number)) throw new FormatException("Non-finite double.");
+                    return number;
+                default: throw new FormatException("Unsupported Excel field type: " + type);
+            }
+        }
+
+        internal static void Import(object target, FieldInfo field, object raw, ExcelFieldsType type)
+        {
+            var custom = field.GetCustomAttribute<CustomExcelFieldImportAndExport>();
+            if (custom != null) { custom.SetValue(target, field, custom.Import(target, raw, type)); return; }
+            if (FieldType(field.FieldType) != type) throw new FormatException("Header type " + type + " does not match " + field.FieldType.FullName);
+            object value;
+            string text = ExcelTable.Text(raw);
+            if (type == ExcelFieldsType.Enum)
+            {
+                if (string.IsNullOrWhiteSpace(text)) text = "0";
+                value = Enum.Parse(field.FieldType, text, true);
+                if (field.FieldType.GetCustomAttribute<FlagsAttribute>() == null && !Enum.IsDefined(field.FieldType, value)) throw new FormatException("Undefined enum value: " + text);
+            }
+            else if (type == ExcelFieldsType.ObjectReference)
+            {
+                ValidateReference(text);
+                value = text.Length == 0 ? null : ResolveReference(text, field.FieldType);
+            }
+            else if (type == ExcelFieldsType.Json)
+            {
+                value = string.IsNullOrWhiteSpace(text) ? null : JsonConvert.DeserializeObject(text, field.FieldType, new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None, MissingMemberHandling = MissingMemberHandling.Error });
+            }
+            else if (type == ExcelFieldsType.Int || type == ExcelFieldsType.Long)
+            {
+                // 直接转目标整型，保留uint/ulong边界，不先损失为Int32/Double。
+                value = Convert.ChangeType(text.Length == 0 ? "0" : text, field.FieldType, CultureInfo.InvariantCulture);
+            }
+            else value = Convert.ChangeType(Primitive(raw, type), field.FieldType, CultureInfo.InvariantCulture);
+            field.SetValue(target, value);
+        }
+
+        internal static object Export(object target, FieldInfo field)
+        {
+            var value = field.GetValue(target);
+            var type = FieldType(field.FieldType);
+            var custom = field.GetCustomAttribute<CustomExcelFieldImportAndExport>();
+            if (custom != null) return custom.Export(target, value, type);
+            if (type == ExcelFieldsType.ObjectReference) return value == null ? string.Empty : Reference(value as Object);
+            if (type == ExcelFieldsType.Json) return JsonConvert.SerializeObject(value, Formatting.None);
+            if (type == ExcelFieldsType.Enum) return value.ToString();
+            if (type == ExcelFieldsType.Long) return ExcelTable.Text(value);
+            if (value is float single) return single.ToString("R", CultureInfo.InvariantCulture);
+            if (value is double number) return number.ToString("R", CultureInfo.InvariantCulture);
+            return value;
+        }
+
+        internal static string Key(object value, int index, bool requireId = false)
+        {
+            if (value == null) throw new InvalidOperationException("Null row at index " + index);
+            var id = Id(value.GetType());
+            if (id == null)
+            {
+                if (requireId) throw new InvalidOperationException("Missing ExcelScriptableObjectID or id field: " + value.GetType().FullName);
+                return "row:" + index;
+            }
+            string key = ExcelTable.Text(id.GetValue(value));
+            if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Empty ID at index " + index);
+            return key;
+        }
+
+        // 差异及并发保护都比较原字段，不能让有损导出或Ignore掩盖实际写入变化。
+        internal static string State(object value) => JsonConvert.SerializeObject(Fields(value.GetType(), true).ToDictionary(f => f.Name,
+            f => typeof(Object).IsAssignableFrom(f.FieldType) ? f.GetValue(value) == null ? string.Empty : Reference(f.GetValue(value) as Object) : f.GetValue(value)));
+        internal static void ValidateReference(string text)
+        {
+            if (text.Length > 0 && !Regex.IsMatch(text, @"\A[0-9a-fA-F]{32}(:-?[0-9]+)?\z")) throw new FormatException("Invalid asset GUID[:localFileID]: " + text);
+        }
+        private static Object ResolveReference(string text, Type type)
+        {
+            var parts = text.Split(':');
+            string path = AssetDatabase.GUIDToAssetPath(parts[0]);
+            if (string.IsNullOrEmpty(path)) throw new FormatException("Asset GUID not found: " + text);
+            Object value;
+            if (parts.Length == 1) value = AssetDatabase.LoadAssetAtPath(path, type);
+            else
+            {
+                long id = long.Parse(parts[1], CultureInfo.InvariantCulture);
+                value = AssetDatabase.LoadAllAssetsAtPath(path).FirstOrDefault(o => type.IsInstanceOfType(o) && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(o, out string guid, out long local) && local == id);
+            }
+            if (value == null || !type.IsInstanceOfType(value)) throw new FormatException("Asset GUID type/localFileID mismatch: " + text + " -> " + type.FullName);
+            return value;
+        }
+        private static string Reference(Object value)
+        {
+            if (value == null) return string.Empty;
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out string guid, out long local)) throw new FormatException("Object reference is not a persistent asset: " + value.name);
+            string reference = AssetDatabase.IsSubAsset(value) ? guid + ":" + local.ToString(CultureInfo.InvariantCulture) : guid;
+            if (ResolveReference(reference, value.GetType()) != value) throw new FormatException("Asset reference identity changed: " + reference);
+            return reference;
+        }
+    }
+}
