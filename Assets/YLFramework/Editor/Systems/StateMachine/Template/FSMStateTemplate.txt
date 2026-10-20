@@ -1,0 +1,14 @@
+using UnityEngine.Scripting;
+using YLFramework.StateMachine;
+
+[Preserve]
+public class {0} : FSMState
+{
+    public override void OnEnter()
+    {
+    }
+
+    public override void OnExit()
+    {
+    }
+}

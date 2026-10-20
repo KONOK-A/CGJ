@@ -58,6 +58,15 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 
 ## 其他第三方组件
 
+### A 组行为运动来源
+
+- `Runtime/Systems/Overlap/`及对应Editor：`com.xfkj.xfgameframework.overlap` 1.0.4，revision `4961d8358119485c94d6f0f74b6ca5d8b4163460`。
+- `Runtime/Systems/CharacterController2D/`及对应Editor：`com.xfkj.xfgameframework.charactercontroller2d` 1.1.6，revision `f0241054744ca0673ec370d5fad39c32b789d81c`。
+- `Runtime/Systems/MoveablePlatform/`及对应Editor：`com.xfkj.xfgameframework.moveableplatform` 1.0.6，revision `1e1265d8e6adb4ebab6febe8bc51288972e2b234`。
+- 上述三个来源均为 MIT / `Copyright (c) 2024 弦风课堂`；完整原文保留于各模块`ThirdPartyNotices.txt`并由根`LICENSE.md`携带适用版权。精确上游文件身份见`Tools/Behavior/*.source.json`，不是原包GUID复用。
+- `Runtime/Systems/StateMachine/`及对应Editor：XFFSM 1.5.4，revision `b06333c2cdc801fcc401f14c252853bf099aa1b7`，MIT / `Copyright (c) 2021 弦小风`。保留成熟资产FSM，与原轻量`YLFramework.FSM`独立共存。`FSMSelectionDragger.cs`、网格及框选实现未复制，调用Unity公共GraphView API；Unity Reference-Only来源判断与链接见模块`ThirdPartyNotices.txt`，不将该许可重标为MIT。
+- 主工程接收不改变原XF包、场景或Prefab身份；本轮没有正式Exporter/G4独立交付，也不以共存工程验证代替无旧包首导入。
+
 - `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。
 - `Plugins/BouncyCastle/`随框架导出批准的BouncyCastle.Cryptography 2.7.0官方netstandard2.0二进制、完整MIT `LICENSE.md`与精确来源`SOURCE.txt`。Resource仅内部使用其HKDF-SHA256，Windows AES-GCM由系统CNG提供，不分发系统密码DLL。Tink仅作为framing参照，适用Apache-2.0全文随`TINK-LICENSE.txt`携带，不宣称依赖或分发Tink SDK；详见该目录来源声明。
 - `Runtime/Utilities/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。

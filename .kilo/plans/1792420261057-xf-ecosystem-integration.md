@@ -388,3 +388,32 @@ E0实现提交为 **`a35783d8916f719a548c78b5d05ded3793da5049`**，标题`feat(e
 后置收据曾因本Plan与收据常量将绑定SHA误抄为`61db7f...`而拒绝。只读核查确认权威JSON和sidecar的最后写入分别为`2026-10-19T14:13:02.6753128Z`、`14:13:02.6773179Z`，均早于本轮`15:26:33Z`授权开始，且两者一致为上述`b85aad...`；没有证据支持“本轮外部改写”。这是本次记录抄录错误，不能归咎于历史制品或通过写Y9修平。保留错误核验事实，仅追加一次必要的本Plan指纹纠正提交；不amend/force、不改受测代码、不重跑未失效矩阵，也不为Git状态另造空提交。
 
 B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终集成基线。其自身完整SHA不能预填到同一提交形成自引用；普通Push后，真实本地/远端SHA、原E0实现SHA与纠正范围写入自有`git-receipt.json`及最终回复。两次主批次和额外必要纠正如实分列，不将后者藏成原来的29项实现提交或改写原提交身份。
+
+### 10.5 A组主工作区接收与BM26验收（2026-10-20）
+
+本节依据本次明确实施授权接收A，不批准整个XF阶段或B/C集成。主工作区为`G:/Unity/Projects/CGJ2024`、分支`integration/xf-yl`；集成前HEAD及共同基线均为`c88500aef6651f5b13ac933dd1f209ecb314e92d`。固定接收`ce1898e466d81cda187440293e89e2b596a84a18`，最后产品/测试/工具/meta变更为`209bceb87a76d8004db16c60d0899fcc6fc698b4`。已核对完整6提交、288个路径、151份正式meta，以固定SHA执行`--no-ff --no-commit`，无冲突、不复制A目录、不接分支后续提交。
+
+主工程独占证据根：`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T042500Z/`。`preflight.json`绑定实际主路径、集成前HEAD、候选集合、预存差异、3215个既有文件SHA及Unity进程；最终提交与工作区状态由同根`git-final.json`记录，避免提交SHA自引用。A的BA26及阶段9/E0证据未覆盖。
+
+| 门 | 本轮主工程实际结果 |
+|---|---|
+| Unity导入/编译 | 实装`2022.3.62f3c1`，现有主Editor PID4708，未启动第二实例。`audit-final-01/import-audit.json`：compileFailed=false，116份本组实际源码逐项进入正确六程序集，18份真实rsp归档；Player/Editor图分别检查，不以Editor profile的合法条件引用冒充Player泄漏 |
+| 程序集/边界 | 原Foundation/Core/框架独立性门`boundary-01`19/19，未放宽白名单。`player-assemblyref.json`被动读取实际Mono Player两个自有DLL，无UnityEditor/旧XF/EPPlus依赖，Player目录无Editor DLL |
+| GUID/meta/场景 | 151份A正式meta与冻结提交逐字节一致，在全Assets中相关GUID逐一唯一，AssetDatabase映射一致。新增主验收入口和原游戏回归的两份meta由主Unity正式生成。3份自有场景原生加载，Missing Script=0，Player序列化事件引用完整，原场景集合未变 |
+| EditMode | `edit-baseline-01`60/60、事件补例61/61；`save-fence-green-01`最终62/62=原60+持久事件保存/重导入1+未保存资产保护1，0失败/跳过/不确定。实际SaveAssets被过滤后自有脏Material字节不变、仍保留未保存值/dirty；逐例XML另存 |
+| PlayMode/原游戏 | `play-01`50/50；原游戏补例后51/51，`play-final-01`在保存保护和逐轮断言下复验。原菜单/设置Slider/进入/真实暂停返回/再次进入及退出清理全部执行；每轮须各自捕获原Overlap自然查询，不能只看两轮累计。仍走原XF/XFAB/XFFSM/Overlap，未重建MainModule/Bundle |
+| 同进程Reload/绑定 | `reload-01`三组合各连续两轮6/6，PID始终4708，双FSM各轮独立起步/转换，源资产SHA不变、退出无克隆；未手清static。`binding-01`真实源码创建、编译/程序集重载、产品pending-binding、保存重导入通过；原Reload选项false/3及UIAcceptance场景集合恢复 |
+| Windows64图形Mono | `mono-01/build-report.json`：Mono2x、Disabled stripping、BuildOptions.None、非Development、Succeeded，0 errors/1225 warnings。有窗口Direct3D11 Player PID28036退出0且唯一PASS，不传batchmode/nographics；BuildReport/窗口句柄/exe与log SHA均已绑定 |
+| Player事件 | 原生Prefab保存/重导入后消费十条持久绑定；实际计数hit2D=2、hit3D=2、CC2D Bool=3、ground=2、wall=1、top=1、Int=2、Vector2=26、平台Vector3=25；状态creates/enters/exits=2/2/2，不能只由类型引用或Preserve代替执行 |
+| GUI未验项 | 自动Graph/Inspector作用域、条件/参数Undo/Redo、保存重导入和真实脚本绑定已有测试证据；物理鼠标节点拖拽/框选/缩放/面包屑/子图连线、条件重排、脚本选择、Overlap/平台Inspector实际编辑及Scene手柄、亮暗主题完整作者流程未计通过，无伪造截图或handler代替鼠标 |
+| IL2CPP/G4 | `il2cpp-01/preflight.json`为BlockedBeforeBuild：当前Mono2x/Disabled，虽有IL2CPP Windows支持及VS2022 C++工具链，但未授权切换后端/Low，未构建/运行IL2CPP。无旧包接收工程、正式Exporter/G4独立交付未执行 |
+
+修复仅限本轮自有验收：Player真实事件消费者及保存重载回归、原游戏观察时机、主工程绑定入口/保护检查和集中许可说明。没有修改A产品算法、原轻量FSM、Core/Foundation/Resource产品、共享E0工具或原游戏资源。A历史离线53项、源码阶段独立Review及BA26真实证据仅沿用，不混入上述新主工程统计。
+
+失败原件保留：首次事件用例遇Runner自有untitled场景，改用自有Prefab生成；`events-red-02`明确消费者缺口后61/61；`play-game-01`观察窗口过早未见旧Overlap，改为等待自然查询后51/51，原断言未削弱。主入口一次错误引用不存在常量的编译失败已修正并经最终Unity编译复验；最初审计误把Editor profile引用当Player引用的失败也保留。Script Updating Consent仅对三个A旧Handles文件选No，未让API Updater改源码。
+
+首个Mono构建曾临时改公司/产品名；finally只恢复内存，定向Unity保存尝试仍未落盘。已仅精确逆转本轮造成的两行，并核对全部ProjectSettings与构建前SHA一致，没有用全局保存恢复配置；主构建入口已取消这些setter。实际已运行exe仍是该次隔离公司/产品名产物，BuildReport如实保留，不据后续工具修正伪造重建。
+
+一次只读Review仅审查本轮主入口/消费者增量，不重复A冻结产品Review，确认两个收口问题：UTF1.3.9在PlayMode bootstrap内部无条件SaveAssets、原游戏观察只有累计断言。之前既有文件SHA均未变化，但不宣称此前没有内部全局保存调用。现按Unity2022.3 OnWillSaveAssets契约，仅在本次测试保护期间放行UTF新InitTestScene，其他脏资产延后，正常状态不拦保存；`save-fence-red-01`先因缺保护失败，再以实际脏Material落盘保护62/62复验。原游戏补逐轮查询断言后用`play-final-01`复验，未弱化累计或原流程断言。
+
+`cleanup-01`逐文件SHA核验归档后，只删除本轮有receipt的4个GeneratedAcceptance目录；临时绑定源码随其删除并完成真实重新编译。保护快照核对原游戏、Packages/ProjectSettings、Foundation/Core/Resource、原轻量FSM及预存用户meta不变。主工作区原有§11/T2未提交回执保留为未暂存差异，本批只提交本节；用户`AlternateContent.meta`不纳入。A未提交的`.vscode/settings.json`和两份MainModule SpriteAtlas未携带、未清理；无Push、B/C合并、分支切换、新worktree或远端写入。

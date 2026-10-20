@@ -9,9 +9,14 @@ Editor平面列表承接XFABManager revision `c35dc4058e` 的TreeView行构建�
 revision `725f94f23327de190111573870146af66e9484b6`，来源：
 https://gitee.com/xianfengkeji/xfgame-framework.excel-system
 仅包含字段契约，不分发其EPPlus二进制或宣称提供xlsx后端。
+`Runtime/Systems/{Overlap,CharacterController2D,MoveablePlatform,StateMachine}/`及
+相应`Editor/Systems/`承接 A 组四个 MIT 来源，精确版本/revision 与局部替换说明见
+`Runtime/THIRD-PARTY-NOTICES.md`及各模块`ThirdPartyNotices.txt`。
+未复制 Unity Reference-Only 的拖拽/框选/网格实现、原包 Logo 或 GUID。
 相关上游声明及完整 MIT 许可保留如下。
 
 Copyright (c) 2021 弦小风
+Copyright (c) 2024 弦风课堂
 Copyright (c) 2025 弦风课堂
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

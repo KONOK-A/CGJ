@@ -1,0 +1,83 @@
+using UnityEditor;
+using UnityEngine;
+using YLFramework.Core.Editor;
+
+namespace YLFramework.Overlap
+{
+    internal static class OverlapGizmos
+    {
+        [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
+        private static void Draw2D(OverlapBase2D overlap, GizmoType gizmoType)
+        {
+            var oldMatrix = Handles.matrix;
+            var oldColor = Handles.color;
+            try
+            {
+                Handles.color = Color.green;
+                var transform = overlap.transform;
+                if (overlap is OverlapBox2D box)
+                {
+                    var center = transform.localToWorldMatrix.MultiplyPoint(box.Offset);
+                    Handles.matrix = Matrix4x4.TRS(center, Quaternion.Euler(0, 0, transform.eulerAngles.z), Vector3.one);
+                    var size = box.Size * (Vector2)transform.lossyScale;
+                    if (overlap is OverlapCapsule2D capsule)
+                        HandlesExtensions.DrawCapsule2D(Vector3.zero, size, capsule.Direction);
+                    else
+                        Handles.DrawWireCube(Vector3.zero, size);
+                }
+                else if (overlap is OverlapCircle2D circle)
+                {
+                    var scale = transform.lossyScale;
+                    Handles.DrawWireDisc(transform.position, Vector3.forward, circle.Radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y)));
+                }
+                else if (overlap is OverlapArea2D area)
+                {
+                    if (area.Mode == OverlapAreaMode.Position && area.Positions != null)
+                        for (int i = 0; i + 1 < area.Positions.Count; i++)
+                            Handles.DrawLine(transform.TransformPoint(area.Positions[i]), transform.TransformPoint(area.Positions[i + 1]));
+                    if (area.Mode == OverlapAreaMode.Transform && area.Transforms != null)
+                        for (int i = 0; i + 1 < area.Transforms.Count; i++)
+                            if (area.Transforms[i] && area.Transforms[i + 1])
+                                Handles.DrawLine(area.Transforms[i].position, area.Transforms[i + 1].position);
+                }
+            }
+            finally
+            {
+                Handles.matrix = oldMatrix;
+                Handles.color = oldColor;
+            }
+        }
+
+        [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
+        private static void Draw3D(OverlapBase3D overlap, GizmoType gizmoType)
+        {
+            var oldMatrix = Handles.matrix;
+            var oldColor = Handles.color;
+            try
+            {
+                Handles.color = Color.green;
+                var transform = overlap.transform;
+                var scale = transform.lossyScale;
+                if (overlap is OverlapBox3D box)
+                {
+                    Handles.matrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
+                    Handles.DrawWireCube(Vector3.zero, Vector3.Scale(box.Size, scale));
+                }
+                else if (overlap is OverlapSphere3D sphere)
+                {
+                    float radius = sphere.Radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+                    Handles.DrawWireDisc(transform.position, Vector3.up, radius);
+                    Handles.DrawWireDisc(transform.position, Vector3.forward, radius);
+                    Handles.DrawWireDisc(transform.position, Vector3.right, radius);
+                    Handles.DrawWireDisc(transform.position, Vector3.forward + Vector3.right, radius);
+                    Handles.DrawWireDisc(transform.position, Vector3.forward - Vector3.right, radius);
+                }
+            }
+            finally
+            {
+                Handles.matrix = oldMatrix;
+                Handles.color = oldColor;
+            }
+        }
+    }
+}
