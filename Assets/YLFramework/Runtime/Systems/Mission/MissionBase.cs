@@ -116,11 +116,6 @@ namespace YLFramework.MissionSystem
         /// 进度改变时触发
         /// </summary>
         [Tooltip("进度改变时触发")]
-        [Obsolete("已过时,请使用 onProgressValueChange 代替!")]
-        public Action<float> onProgressChange;
-
-
-        [Tooltip("进度改变时触发")]
         public Action<MissionBase, MissionCondition> onProgressValueChange;
 
         #endregion
@@ -164,12 +159,7 @@ namespace YLFramework.MissionSystem
             OnProgressChange();
             if (version != _version || State != MissionState.InProgress) return;
 
-#pragma warning disable CS0618 // 类型或成员已过时
-            onProgressChange?.Invoke(Progress);
-#pragma warning restore CS0618 // 类型或成员已过时
-
-
-            if (version == _version && State == MissionState.InProgress) onProgressValueChange?.Invoke(this, condition);
+            onProgressValueChange?.Invoke(this, condition);
         }
 
         internal void Init()
@@ -192,12 +182,6 @@ namespace YLFramework.MissionSystem
             }
             // 清理事件
             onStatusChange = null;
-
-
-#pragma warning disable CS0618 // 类型或成员已过时
-            onProgressChange = null;
-#pragma warning restore CS0618 // 类型或成员已过时
-
             onProgressValueChange = null;
 
             // 重置状态

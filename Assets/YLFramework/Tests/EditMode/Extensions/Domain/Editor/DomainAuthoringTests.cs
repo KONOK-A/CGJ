@@ -52,6 +52,16 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(AssetDatabase.LoadAssetAtPath<EffectData>(_folder + "/external.asset"), Is.SameAs(external));
         }
 
+        [Test] public void RootConfigsDoNotStoreWorkbookPaths()
+        {
+            Assert.That(typeof(SkillsConfig).GetField("excel_path"), Is.Null);
+            Assert.That(typeof(BuffsConfig).GetField("excel_path"), Is.Null);
+            Assert.That(typeof(MissionsConfig).GetField("excel_path"), Is.Null);
+            var root = ScriptableObject.CreateInstance<MissionsConfig>();
+            AssetDatabase.CreateAsset(root, _folder + "/missions.asset");
+            Assert.That(EditorJsonUtility.ToJson(root), Does.Not.Contain("excel_path"));
+        }
+
         [Test] public void MissionParameterRenameUpdatesOnlyItsConditionsAndCanUndo()
         {
             var root = ScriptableObject.CreateInstance<MissionsConfig>();

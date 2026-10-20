@@ -30,6 +30,8 @@ namespace YLFramework.DomainFixture
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
             EditorSettings.serializationMode = SerializationMode.ForceText;
             PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard);
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone,
+                PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone).Split(';').Where(symbol => symbol != "YL_DOMAIN_PLAYER_PROBE").ToArray());
             SessionState.SetBool(ExitKey, true); ScheduleExit();
         }
         public static void ConfigurePlayer()

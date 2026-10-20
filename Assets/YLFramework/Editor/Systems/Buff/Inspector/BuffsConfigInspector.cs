@@ -32,8 +32,6 @@ namespace YLFramework.BuffSystem
 
             foreach (var item in serializedProperties)
             {
-                if (item.name == "excel_path") continue;
-
                 if (item.name == "type_script_guid") continue;
 
                 EditorGUI.BeginDisabledGroup(item.name != "displayName");

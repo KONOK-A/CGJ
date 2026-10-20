@@ -24,9 +24,6 @@ namespace YLFramework.BuffSystem
         [Tooltip("Buff配表集合")]
         public List<BuffConfigData> buffs = new List<BuffConfigData>();
 
-        [HideInInspector]
-        public string excel_path;
-
         private Dictionary<int, BuffConfigData> buffs_dic = new Dictionary<int, BuffConfigData>();
 
 

@@ -124,16 +124,6 @@ namespace YLFramework.BuffSystem
         /// </summary>
         public virtual void OnLateUpdate() { }
 
-        public void OnLoaded()
-        {
-
-        }
-
-        public void OnUnloaded()
-        {
-            ResetData();
-        }
-
         internal void Detach() { _version++; }
         internal void ClearRuntime()
         {

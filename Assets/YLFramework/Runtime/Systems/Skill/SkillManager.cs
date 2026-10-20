@@ -219,7 +219,6 @@ namespace YLFramework.SkillSystem
             }
         }
 
-        public static void RemoveSkills(IEquippableSkill host) => CloseHost(host);
         public static void CloseHost(IEquippableSkill host)
         {
             if (host == null || !Closing.Add(host)) return;

@@ -3,7 +3,6 @@ using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Events;
 
 namespace YLFramework.SkillSystem
 {
@@ -80,9 +79,6 @@ namespace YLFramework.SkillSystem
 
                 if (isCooldown)
                 {
-#pragma warning disable CS0618 // 类型或成员已过时
-                    onCooldownCompleteEvent?.Invoke();
-#pragma warning restore CS0618 // 类型或成员已过时
                     var version = _version;
                     onCooldownCompleteCallback?.Invoke(this);
                     if (version == _version) OnCooldownComplete();
@@ -223,49 +219,6 @@ namespace YLFramework.SkillSystem
 
         #region 事件
 
-        [Tooltip("正在释放的事件回调")]
-        [Obsolete("已过时,请使用onCoolingEvent代替",true)]
-        public UnityEvent<float> onCooling;
-
-        [Tooltip("正在释放的事件回调")]
-        [Obsolete("已过时,请使用onReleasingEvent代替", true)]
-        public UnityEvent<float> onReleasing;
-
-        [Tooltip("冷却完成的事件回调")]
-        [Obsolete("已过时,请使用onCooldownCompleteEvent代替", true)]
-        public UnityEvent onCooldownComplete;
-
-        [Tooltip("释放完成的事件回调")]
-        [Obsolete("已过时,请使用onReleaseCompleteEvent代替", true)]
-        public UnityEvent onReleaseComplete;
-
-        [Tooltip("开始冷却的事件回调")]
-        [Obsolete("已过时,请使用onStartCooldownCallback代替", false)]
-        public Action onStartCooldown;
-
-        [Tooltip("正在冷却的事件回调")]
-        [Obsolete("已过时,请使用onCoolingCallback代替", false)]
-        public Action<float> onCoolingEvent;
-
-        [Tooltip("正在释放的事件回调")]
-        [Obsolete("已过时,请使用onReleasingCallback代替", false)]
-        public Action<float> onReleasingEvent;
-
-        [Tooltip("冷却完成的事件回调")]
-        [Obsolete("已过时,请使用onCooldownCompleteCallback代替", false)]
-        public Action onCooldownCompleteEvent;
-
-        [Tooltip("释放完成的事件回调")]
-        [Obsolete("已过时,请使用onReleaseCompleteCallback代替", false)]
-        public Action onReleaseCompleteEvent;
-
-        [Tooltip("中断的事件回调")]
-        [Obsolete("已过时,请使用onInterruptCallback代替", false)]
-        public Action onInterrupt;
-
-
-
-
         [Tooltip("开始冷却的事件回调")]
         public Action<SkillBase> onStartCooldownCallback;
 
@@ -304,10 +257,6 @@ namespace YLFramework.SkillSystem
                 // 释放
                 ReleasedTimer += deltaTime;
 
-#pragma warning disable CS0618 // 类型或成员已过时
-                onReleasingEvent?.Invoke(ReleasingProgress);
-#pragma warning restore CS0618 // 类型或成员已过时
-
                 onReleasingCallback?.Invoke(this, ReleasingProgress);
                 if (version != _version || !IsAttached) return;
                 OnUpdate();
@@ -316,9 +265,6 @@ namespace YLFramework.SkillSystem
                 {
                     ReleasedTimer = 0;
                     IsReleasing = false;
-#pragma warning disable CS0618 // 类型或成员已过时
-                    onReleaseCompleteEvent?.Invoke();
-#pragma warning restore CS0618 // 类型或成员已过时
                     onReleaseCompleteCallback?.Invoke(this);
                     if (version != _version || !IsAttached) return;
                     // 释放结束
@@ -334,17 +280,11 @@ namespace YLFramework.SkillSystem
                 {
                     if (CooldownTimer == 0)
                     {
-#pragma warning disable CS0618 // 类型或成员已过时
-                        onStartCooldown?.Invoke();
-#pragma warning restore CS0618 // 类型或成员已过时
                         onStartCooldownCallback?.Invoke(this);
                         if (version != _version || !IsAttached) return;
                     }
 
                     CooldownTimer += deltaTime;
-#pragma warning disable CS0618 // 类型或成员已过时
-                    onCoolingEvent?.Invoke(CooldownProgress);
-#pragma warning restore CS0618 // 类型或成员已过时
                     onCoolingCallback?.Invoke(this, CooldownProgress);
                     if (version != _version || !IsAttached) return;
                     // 冷却中
@@ -415,9 +355,6 @@ namespace YLFramework.SkillSystem
             ReleasedTimer = 0;
             var version = _version;
 
-#pragma warning disable CS0618 // 类型或成员已过时
-            onInterrupt?.Invoke();
-#pragma warning restore CS0618 // 类型或成员已过时
             onInterruptCallback?.Invoke(this);
             if (version != _version) return;
             OnInterrupt();
@@ -507,15 +444,6 @@ namespace YLFramework.SkillSystem
             ReleasedTimer = 0;
             fixedTimer = 0;
 
-#pragma warning disable CS0618 // 类型或成员已过时
-            onCoolingEvent = null;
-            onReleasingEvent = null;
-            onCooldownCompleteEvent = null;
-            onReleaseCompleteEvent = null;
-            onStartCooldown = null;
-            onInterrupt = null;
-#pragma warning restore CS0618 // 类型或成员已过时
-
             onStartCooldownCallback = null;
             onCoolingCallback = null;
             onCooldownCompleteCallback = null;
@@ -525,14 +453,6 @@ namespace YLFramework.SkillSystem
             onReleaseCompleteCallback = null;
 
             onInterruptCallback = null;
-        }
-
-        public void OnLoaded()
-        {
-        }
-
-        public void OnUnloaded()
-        {
         }
 
         internal void BeginRemove() { _removing = true; _version++; }
@@ -554,14 +474,6 @@ namespace YLFramework.SkillSystem
             onReleasingCallback = null;
             onReleaseCompleteCallback = null;
             onInterruptCallback = null;
-#pragma warning disable CS0618
-            onStartCooldown = null;
-            onCoolingEvent = null;
-            onReleasingEvent = null;
-            onCooldownCompleteEvent = null;
-            onReleaseCompleteEvent = null;
-            onInterrupt = null;
-#pragma warning restore CS0618
         }
 
         #endregion

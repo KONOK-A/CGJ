@@ -3,9 +3,59 @@
 唯一正式Plan：`.kilo/plans/1792420261057-xf-ecosystem-integration.md`。
 本轮用户明确授权五项连续源码融合、必要修复、离线验证及中文本地候选提交；覆盖Plan历史未授权/分批等待状态，不覆盖共享区域、许可和验证边界。
 
+## 2026-10-20移除XF旧兼容
+
+本节是最新增量。用户明确YL仍在开发、未发布且没有使用项目，不需要XF旧代码/旧资产迁移兼容；历史“保留旧入口”的要求不再作为兼容理由。本轮在C分支`6a45e9b62692752ed925dd1575e92df6db9fb6a5`基础上修改，**旧9提交候选不包含本节清理**；本节清理作为C本地后续提交收口，不merge/Push，不操作主工作区、原XF包或其他组在途源码。
+
+### 删除范围
+
+- Skill：删除10个`Obsolete`旧事件，包括旧`UnityEvent`及无技能实例参数的旧`Action`字段，并删除它们的派发、池清理和`CS0618`抑制；保留7个当前`*Callback`及真实释放/冷却/中断生命周期。
+- Mission：删除`MissionBase`、`MissionCondition`的旧`onProgressChange`字段及派发/清理；保留携带任务/条件实例的`onProgressValueChange`和任务状态事件。
+- Skill/Buff：删除旧`IReuseable`留下的`OnLoaded`/`OnUnloaded`方法。当前池仍直接使用`ResetData`/`ClearRuntime`，真实`OnAdd`/`OnRemove`不变；没有加入旧池桥接。
+- Skill/Buff：删除仅转发到`CloseHost`且没有当前调用方的宿主级旧名重载`RemoveSkills(host)`、`RemoveBuff(host)`，宿主退出统一使用`CloseHost(host)`；按ID/实例/类型移除的正常重载仍保留。
+- Skill/Buff/Mission：删除三个根配表的闲置`excel_path`序列化字段和三个Inspector排除特判。该字段不是运行时代码兼容层，而是XF用来记住根资产上次工作簿绝对路径的作者便利字段；YL DomainExcel每次由Editor文件面板显式传入路径，字段没有读写者，绝对路径也不可跨机器移植，因此删除是**作者工作流设计选择**，不是旧数据兼容清理。不写迁移器、不加`FormerlySerializedAs`，不批量重序列化旧XF资产。当前Assets中没有使用这些字段的YL领域资产；若未来要恢复“最近工作簿/在文件夹中打开”，应像B一样放Editor侧按资产GUID保存，不写回`.asset`。
+- Reddot：删除重复的旧`onReddotPathChange`事件门面，通知统一使用可归还订阅的`RegisterChanged`。普通集合`AddPath`/`RemovePath`与独立来源`RegisterPath`语义不同，作为正常产品能力保留；所有权测试仅从`LegacyRemove...`改名为`CollectionRemove...`，断言不减弱。
+- Logging无XF旧静态API或专用桥接可删。通用handler链的释放/共存能力不是迁移层；来源/MIT声明、当前脚本绑定、资产所有权安全删除、正常配置字段和当前Excel格式均保留。没有发现需要追加清理的旧JSON/Excel双读、旧类型映射、旧菜单/偏好键回退。
+
+#### 删除项复核证据
+
+- Skill 10项事件：原XF `skillsystem@4c9d8f5d31/Runtime/SkillBase.cs:223-260`均为`[Obsolete]`旧名；当前7项`*Callback`保留并由`NoXFCompat-EditMode02`实测触发。
+- Mission 2项进度事件：原XF `missionsystem@a3da5d37ae/Runtime/MissionBase.cs:116-117`、`MissionCondition.cs:164-165`均为`[Obsolete]`；当前`onProgressValueChange`保留。
+- `OnLoaded`/`OnUnloaded`：原XF `xfgameframework@2182708aec/Runtime/Manager/ClassObjectPoolManager.cs:17-20`定义`IReuseable`，SkillBase:514-520、BuffBase:121-128实现；YL已移除该接口，当前池使用`ClearRuntime`/`ResetData`，无调用方。
+- `excel_path`：原XF Skill/Buff/Mission根配表字段，仅被旧Inspector的ExcelSystem按钮使用（如`buffsystem.../Editor/Inspector/BuffsConfigInspector.cs:31,86-206`、`missionsystem.../Editor/Inspector/MissionConfigInspector.cs:36,79-239`）。YL只留下死字段和Inspector跳过，DomainExcel使用显式路径；当前仓库无资产写入该字段。B组已在`4f1c683`删除其`ScriptableObjectConfigs.excel_path`与`MultiLanguageConfigs.excel_path`并移除Inspector显示，明确将其定性为作者工作流设计选择而非旧数据兼容清理，并新增“字段不存在、预览不写入资产”的断言。B另在`2549397`以`DataAssetsWorkbookMemory`按资产GUID把最近导出路径存入EditorPrefs，保留“在文件夹中打开Excel”，不写回资产。C已完成字段/Inspector删除，并补`RootConfigsDoNotStoreWorkbookPaths`断言（三类根配表字段不存在、序列化JSON不含该字段）；C当前没有对应的“最近工作簿/在文件夹中打开”入口，不声称具备该便利功能。
+- Reddot `onReddotPathChange`：原XF `reddotsystem@8e2c23e435/Runtime/ReddotManager.cs:99-106`的旧通知入口；当前等价能力为可归还的`RegisterChanged`，无订阅方。
+- 宿主级`RemoveSkills(host)`/`RemoveBuff(host)`：原XF `SkillManager.cs:207`、`BuffManager.cs:352`的remove-all旧名；YL中仅是一行`CloseHost`转发，仓库无调用方。删除的是旧名入口，不是独立能力；按ID/实例/列表/类型移除和`CloseHost`均保留。
+
+### 本轮验证
+
+- 修改前Runtime/Editor/EditorTools辅助编译均Exit0，warning分别41/40/10；原托管suite41/41。先为现有Skill生命周期用例补当前7类回调的实例、次序、进度范围及仅触发一次的断言，清理前后均41/41；这是正常行为表征回归，不冒称新增缺陷红绿。
+- 清理后同三项辅助编译仍Exit0，warning仍41/40/10；托管suite`Temp/Domain.Offline/xf-compat-removed-20261020/results.xml`为41/41、0跳过。辅助编译/托管运行不替代下面真实Unity结果。
+- 真实Unity `NoXFCompat-EditMode-20261020`首次56/57、0跳过、OS Exit2，唯一失败为双Play时自动Player探针输出`domain-error`。证据确认复用R1仍有上轮`YL_DOMAIN_PLAYER_PROBE`，其`RuntimeInitializeOnLoadMethod`与测试一起启动；不是旧事件删除导致的产品缺陷。
+- 定向修正专属载体工具：`ConfigureTests`只移除`YL_DOMAIN_PLAYER_PROBE`并保留其他define；同步工具将已有载体的bootstrap从真实模板同步并校验SHA256，避免只同步产品源却继续运行旧入口。首个配置Run包装未回收OS退出码且实际仍是旧入口，不计成功。新`NoXFCompat-ConfigureTests02-20261020`正常Exit0，载体取消Player探针；未改C或主工程ProjectSettings，未屏蔽错误/削弱测试。
+
+| 真实Unity Run（Logs/YLFramework.Domain下） | 结果与层级 |
+|---|---|
+| `NoXFCompat-EditMode02-20261020` | 57/57、0失败/跳过、OS Exit0；真实图形设备，含关闭Domain Reload连续两次Play及作者/资产回归 |
+| `NoXFCompat-EditMode03-20261020` | 新增`RootConfigsDoNotStoreWorkbookPaths`后58/58、0失败/跳过、OS Exit0；PID38876，真实图形设备；原始XML含该用例`Passed` |
+| `NoXFCompat-PlayMode-20261020` | 同次原始XML14/14、0失败/跳过，日志已到Shutdown；包装调用中断，未回收OS退出码，不写成正常Exit0；PID37080确认已不存在，未盲目重跑 |
+| `NoXFCompat-Excel-20261020` | 固定B产品`6a9e2508a42333e55c82e6f29eea136643af4467`组合6/6、0失败/跳过、OS Exit0；真实xlsx/资产预览、取消、确认和Mission条件校验 |
+
+- R1与PremergeBFinal均为C自有载体，源和meta同步逐文件校验。C运行后没有遗留Unity/Player；只读仍见主PID4708及其导入worker，未操作它们，已通知B释放原生窗口。B在途清理没有纳入本轮输入，B公开接点的变更须另行固定并复验。
+- 本轮没有新增/删除/移动资产或meta、没有改DomainExcel产品代码/依赖pin、没有重建Mono/IL2CPP Player。旧Player结果仅作为旧候选历史证据，不能当作清理后本轮新构建。主线组合、正式导出和人工GUI验收仍由集成owner按实际接收增量执行。
+
+### 合并前准备检查
+
+- 只读核对主工作区：分支`integration/xf-yl`、HEAD`c7f2aaf`（已包含A合并与B合并及各自验收提交），A/B工作区已收口。C与主线共同祖先仍为B0`c88500a`，C尚未合并。
+- **主工作区当前不干净，实际merge必须先由用户/主线owner处理并授权**：`M .kilo/plans/...`、`M .mcp.json`、3个`Assets/Games/MainModule/FSM`资产、`?? Assets/Test/`及`?? AlternateContent.meta`。这些不是C的提交内容，本会话不暂存、不reset、不clean、不覆盖。
+- C待提交19文件全部在五模块、三套Editor、Domain测试、`Tools/Domain`和本交接内；无暂存、无未跟踪。C与主线自B0以来改动路径交集为0；主线共享`Runtime/Foundation`/`Core`/`Services`/`Editor`/`Runtime/Systems/Excel`自B0起只有138个新增文件、无修改，故C基于B0的共享API编译前提仍成立。
+- 已用`git merge-tree --write-tree --messages integration/xf-yl fusion/xf-ext-domain`在C提交前试算为无冲突；C提交后须对新HEAD重跑。实际合并不在本会话执行，主工作区脏状态是唯一已知前置阻塞。
+- 主线B最终tip为`5dce4f3`。C可选DomainExcel仍固定验证B产品`6a9e250`；只读比较`6a9e250..5dce4f3`的`Integrations/Excel`仅`DataAssetsExcelCommands.cs`增加一条最近工作簿记忆调用，**C使用的`ExcelAuthoring`/`ExcelImportPlan`公开路径未变**，B后修改不改变C 6/6证据的适用条件；若集成owner启用可选Excel后要改写pin，必须重新跑C的6项suite。
+- 主线已带B的`Assets/YLFramework/Integrations/Excel`、实际`MiniExcel.dll`（200192字节）和Newtonsoft 3.2.1；`YL_DOMAIN_EXCEL`未在主线Standalone定义。C的DomainExcel asmdef受该宏和B程序集约束，默认不会进入主线编译/Player；C核心五模块不依赖它。
+- 当前有效验证仍是C 58/58 EditMode（OS Exit0，含双Play）、41/41纯托管、固定B 6/6可选Excel（OS Exit0）；14/14 PlayMode为同次XML但包装未回收OS退出码。去兼容后未重建Player，旧Player证据不作本轮新结论。主线组合/正式导出/人工GUI仍待主线执行。
+
 ## 2026-10-20可合并前收口
 
-本节是最新交接，覆盖下文旧B版本、保留自动差异及尚无最终B绿例的历史状态。C组候选可供集成owner接收；**不等于主工作区已合并或组合验收完成**。
+本节记录上一轮收口，覆盖其之前旧B版本、保留自动差异及尚无最终B绿例的历史状态；不包含上方最新去兼容增量。**不等于主工作区已合并或组合验收完成**。
 
 - 本轮从C已提交`8d9d3031f84dee2ca366d99cb3071803f7c22762`继续，仅修正可选DomainExcel与B最终候选的真实协议差异，补直接回归并同步三个专属工具的版本固定；不改五模块Runtime算法、B源码、主工作区或正式Plan。
 - B固定升级为`6a9e2508a42333e55c82e6f29eea136643af4467`。只读比较确认`ExcelChange.After`由导出字段快照改为`FullTypeName:actual-field-state JSON`，Mission的`conditions`是JArray而非导出器JSON字符串。C按真实数组校验，不增加旧版本猜测或兼容框架；`Dependencies.json`记录该精确契约。
@@ -29,7 +79,7 @@
 - 主工作区最新Plan另含未提交§11创建回执，原用户`Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta`仍须保护。接收owner先读取主最新Plan、三组最新交接和实际Git/merge状态，等既有A串行任务安全收口后再接B/C；不用C的旧Plan副本覆盖主Plan，不自动stash/reset/clean或暂存未知用户内容。
 - 主Unity PID4708仍属于主工程；本组没有连接或操作它。后续必须由主owner使用正确实例执行，不对同projectPath另开BatchMode、不强杀或覆盖未保存场景。每个独立接收工程及证据根使用新身份，禁止覆盖阶段9历史制品或其他组证据。
 - C五模块主体不依赖B。只有可选`Integrations/DomainExcel`需先接收固定B的DataAssets/Excel并显式启用`YL_DOMAIN_EXCEL`；主体/可选缺席、可选启用分别验证。Mission条目+参数跨sheet原子事务、全局共享Buff Effect库xlsx仍明确未实现，不扩大本轮范围或冒称支持。
-- 主线仍按正式Plan G0-G5及受影响阶段9代表链验收：实际组合编译/边界、关闭Domain Reload连续两Play、旧包共存、真实图形Editor作者工作流、原场景/图集保护、正式导出到全新无XF接收工程及Windows64 Mono/IL2CPP Low真实图形Player。已有组内57/57、14/14、6/6和Player结果不是合并后组合或正式Exporter首导入结果；人工视觉、桌面拖拽/图标预览等缺口仍需如实记录。
+- 主线仍按正式Plan G0-G5及受影响阶段9代表链验收：实际组合编译/边界、关闭Domain Reload连续两Play、旧包共存、真实图形Editor作者工作流、原场景/图集保护、正式导出到全新无XF接收工程及Windows64 Mono/IL2CPP Low真实图形Player。已有组内57/57（清理前）、58/58（字段断言后）、14/14、6/6和Player结果不是合并后组合或正式Exporter首导入结果；人工视觉、桌面拖拽/图标预览等缺口仍需如实记录。
 
 ## T3-C BatchMode追加授权
 

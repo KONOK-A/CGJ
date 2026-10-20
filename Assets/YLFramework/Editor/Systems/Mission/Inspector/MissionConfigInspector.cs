@@ -37,7 +37,6 @@ namespace YLFramework.MissionSystem
             foreach (var item in serializedProperties)
             {
                 //if (item.displayName == "Script") continue;
-                if (item.name == "excel_path") continue;
                 if (item.name == "start_id") continue;
                 if (item.name == "type_script_guid") continue;
 

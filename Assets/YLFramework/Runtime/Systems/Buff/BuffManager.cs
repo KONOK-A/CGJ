@@ -225,7 +225,6 @@ namespace YLFramework.BuffSystem
             finally { if (--_depth == 0) FlushReturns(); }
             if (errors.Count != 0) throw new AggregateException(errors);
         }
-        public static void RemoveBuff(IAddableBuff host) => CloseHost(host);
         public static void CloseHost(IAddableBuff host)
         {
             if (host == null || !Closing.Add(host)) return;

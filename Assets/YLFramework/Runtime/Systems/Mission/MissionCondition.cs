@@ -167,11 +167,6 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [NonSerialized]
         [Tooltip("当进度改变时触发")]
-        [Obsolete("已过时,请使用 onProgressValueChange 代替! ")]
-        public Action<float> onProgressChange;
-
-        [NonSerialized]
-        [Tooltip("当进度改变时触发")]
         public Action<MissionCondition> onProgressValueChange;
 
         #endregion
@@ -203,9 +198,6 @@ namespace YLFramework.MissionSystem
             isMeet = false;
             onMeet = null;
             onProgressValueChange = null;
-#pragma warning disable CS0618
-            onProgressChange = null;
-#pragma warning restore CS0618
         }
 
 
@@ -276,10 +268,6 @@ namespace YLFramework.MissionSystem
                     break;
             }
             // 先计算当前满足状态，回调读取Progress/IsMeet时不再落后一拍。
-#pragma warning disable CS0618
-            onProgressChange?.Invoke(Progress);
-#pragma warning restore CS0618
-            if (version != _version || parameterVersion != p.Version) return;
             onProgressValueChange?.Invoke(this);
             if (version == _version && parameterVersion == p.Version && isMeet && !wasMeet) onMeet?.Invoke();
         }

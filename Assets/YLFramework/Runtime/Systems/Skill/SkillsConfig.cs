@@ -24,9 +24,6 @@ namespace YLFramework.SkillSystem
         public List<SkillConfigData> skills = new List<SkillConfigData>();
 
         [HideInInspector]
-        public string excel_path;
-
-        [HideInInspector]
         public string type_script_guid;
 
         private Dictionary<int,SkillConfigData> skills_dic = new Dictionary<int, SkillConfigData>();

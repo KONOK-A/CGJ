@@ -27,7 +27,13 @@ namespace YLFramework.Tests.Extensions.Domain
         {
             var skill = new Probe { Releaser = new Host(), Duration = 1, CoolingTime = 2 };
             var completed = 0;
-            skill.onCooldownCompleteCallback = _ => completed++;
+            var callbacks = new List<string>();
+            skill.onStartReleaseCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("release"); };
+            skill.onReleasingCallback = (current, progress) => { Assert.That(current, Is.SameAs(skill)); Assert.That(progress, Is.EqualTo(1)); callbacks.Add("releasing"); };
+            skill.onReleaseCompleteCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("released"); };
+            skill.onStartCooldownCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("cooldown"); };
+            skill.onCoolingCallback = (current, progress) => { Assert.That(current, Is.SameAs(skill)); Assert.That(progress, Is.InRange(0f, 1f)); callbacks.Add("cooling"); };
+            skill.onCooldownCompleteCallback = current => { Assert.That(current, Is.SameAs(skill)); completed++; callbacks.Add("ready"); };
             Assert.That(skill.Release(), Is.EqualTo(ReleaseSkillStatus.Success));
             Advance(skill, 1);
             Assert.That(skill.Completes, Is.EqualTo(1));
@@ -37,11 +43,14 @@ namespace YLFramework.Tests.Extensions.Domain
             Advance(skill, 10);
             Assert.That(skill.CooldownProgress, Is.EqualTo(1));
             Assert.That(completed, Is.EqualTo(1));
+            Assert.That(callbacks, Is.EqualTo(new[] { "release", "releasing", "released", "cooldown", "cooling", "cooling", "ready" }));
         }
 
         [Test] public void CancellationKeepsCooldownAndInterruptCompletesExactlyOnce()
         {
             var skill = new Probe { Releaser = new Host(), Duration = 5, CoolingTime = 2, ActiveCancellation = true };
+            var interrupted = 0;
+            skill.onInterruptCallback = current => { Assert.That(current, Is.SameAs(skill)); interrupted++; };
             skill.Release();
             skill.Cancel();
             skill.Interrupt();
@@ -49,6 +58,7 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(skill.IsCooldown, Is.False);
             Assert.That(skill.Interrupts, Is.EqualTo(1));
             Assert.That(skill.Completes, Is.EqualTo(1));
+            Assert.That(interrupted, Is.EqualTo(1));
         }
 
         [Test] public void RemovingDuringProgressDoesNotContinueOldLeaseCallbacks()

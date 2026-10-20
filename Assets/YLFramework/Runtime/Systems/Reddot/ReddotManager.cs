@@ -29,12 +29,6 @@ namespace YLFramework.ReddotSystem
             }
         }
 
-        public static event Action onReddotPathChange
-        {
-            add => _changed.Register(value);
-            remove => _changed.UnRegister(value);
-        }
-
         public static IUnRegister RegisterChanged(Action callback) => _changed.Register(callback);
 
         /// <summary>斜杠分段，忽略空段与段外空白；空路径不表示根节点。</summary>

@@ -42,9 +42,6 @@ namespace YLFramework.MissionSystem
         [Header("显示名")]
         public string display_name;
 
-
-        public string excel_path;
-
         public string type_script_guid;
 
 

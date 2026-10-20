@@ -40,8 +40,6 @@ namespace YLFramework.SkillSystem
             {
                 //if (item.name == "Script") continue;
 
-                if (item.name == "excel_path" ) continue;
-
                 if (item.name == "type_script_guid") continue;
 
                 EditorGUI.BeginDisabledGroup(item.name != "displayName");

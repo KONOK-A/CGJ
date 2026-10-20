@@ -68,7 +68,7 @@ namespace YLFramework.Tests.Extensions.Domain
             current.Dispose();
         }
 
-        [Test] public void LegacyRemoveDoesNotStealIndependentSource()
+        [Test] public void CollectionRemoveDoesNotStealIndependentSource()
         {
             var source = (IDisposable)Call("RegisterPath", "Mail");
             Call("AddPath", "Mail");

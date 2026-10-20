@@ -28,6 +28,16 @@ foreach ($entry in $marker.sourceFiles) {
     $entry.sha256 = $before
     $changes += $entry.path
 }
+$bootstrap = Join-Path $project 'Assets/DomainFixture/Editor/DomainCarrierBootstrap.cs'
+if (Test-Path -LiteralPath $bootstrap) {
+    $template = Join-Path $PSScriptRoot 'DomainCarrierBootstrap.cs.txt'
+    $before = (Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash
+    if ((Get-FileHash -LiteralPath $bootstrap -Algorithm SHA256).Hash -ne $before) {
+        Copy-Item -LiteralPath $template -Destination $bootstrap -Force
+        if ((Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash -ne $before -or (Get-FileHash -LiteralPath $bootstrap -Algorithm SHA256).Hash -ne $before) { throw 'Unstable bootstrap sync.' }
+        $changes += 'Assets/DomainFixture/Editor/DomainCarrierBootstrap.cs'
+    }
+}
 [IO.File]::WriteAllText($markerPath, ($marker | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 "Carrier=$project synchronized=$($changes.Count)"
 $changes
