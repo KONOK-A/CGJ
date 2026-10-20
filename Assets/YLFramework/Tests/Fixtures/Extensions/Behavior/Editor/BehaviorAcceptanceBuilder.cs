@@ -40,7 +40,8 @@ namespace YLFramework.Behavior.Acceptance
             AssetDatabase.CreateAsset(asset, assetPath);
             AssetDatabase.SaveAssetIfDirty(asset);
             string scenePath = folder + "/BehaviorAcceptance.unity";
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            bool onlyEmptyUntitled = SceneManager.sceneCount == 1 && string.IsNullOrEmpty(SceneManager.GetSceneAt(0).path) && SceneManager.GetSceneAt(0).rootCount == 0;
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, onlyEmptyUntitled ? NewSceneMode.Single : NewSceneMode.Additive);
             try
             {
                 var obj = new GameObject("YL.Behavior.Acceptance");
@@ -51,7 +52,11 @@ namespace YLFramework.Behavior.Acceptance
                 probe.expectedDevelopment = development;
                 if (!EditorSceneManager.SaveScene(scene, scenePath)) throw new InvalidOperationException("Acceptance scene save failed.");
             }
-            finally { EditorSceneManager.CloseScene(scene, true); }
+            finally
+            {
+                if (onlyEmptyUntitled) EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                else EditorSceneManager.CloseScene(scene, true);
+            }
             Debug.Log($"Owned fixture: {scenePath}; source GUID {AssetDatabase.AssetPathToGUID(assetPath)}. Generated, NOT run or Player-verified.");
             return scenePath;
         }
@@ -68,17 +73,20 @@ namespace YLFramework.Behavior.Acceptance
         [MenuItem("Tools/YLFramework/Behavior Acceptance/Build Development IL2CPP Windows64")]
         public static void BuildDevelopmentIL2CPP() => Build(ScriptingImplementation.IL2CPP, true);
 
-        private static void Build(ScriptingImplementation expected, bool development)
+        internal static BuildReport Build(ScriptingImplementation expected, bool development, string outputDirectory = null)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 || PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != expected)
                 throw new InvalidOperationException($"Select Windows64 and {expected} in the main Unity integration workspace first. This tool does not modify ProjectSettings.");
             string scene = Generate(development);
-            string directory = Path.GetFullPath("Temp/Behavior.Acceptance/" + expected + "/" + (development ? "Development/" : "Release/") + Guid.NewGuid().ToString("N"));
+            string directory = outputDirectory == null ? Path.GetFullPath("Temp/Behavior.Acceptance/" + expected + "/" + (development ? "Development/" : "Release/") + Guid.NewGuid().ToString("N")) : Path.GetFullPath(outputDirectory);
+            if (outputDirectory != null && (!directory.StartsWith("C:\\Users\\Kano\\AppData\\Local\\Temp\\kilo\\BA26\\", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(Path.GetDirectoryName(directory))))
+                throw new InvalidOperationException("CI output must be a new child of the dedicated A evidence directory.");
             if (!Directory.Exists(Path.GetFullPath("Temp"))) throw new InvalidOperationException("Missing project Temp parent.");
             Directory.CreateDirectory(directory);
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { scene }, target = BuildTarget.StandaloneWindows64, locationPathName = Path.Combine(directory, "BehaviorAcceptance.exe"), options = development ? BuildOptions.Development : BuildOptions.None });
             Debug.Log($"Behavior {expected} build: {report.summary.result}; development={development}; errors={report.summary.totalErrors}; output={directory}. Player runtime is not yet verified. Run with -batchmode -nographics -logFile <owned-log-path>, require exit 0 and YL_BEHAVIOR_ACCEPTANCE result=PASS.");
             if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Behavior acceptance Player build failed.");
+            return report;
         }
     }
 }

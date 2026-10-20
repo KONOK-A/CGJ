@@ -158,6 +158,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             motor.checkLayerMask = 1;
             body.rotation = angle;
             Physics2D.SyncTransforms();
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(CharacterController2D.GetColliderCastAngle(shape), angle)), Is.LessThan(0.001f));
             Vector2 surface = shape.ClosestPoint((Vector2)center + Vector2.up * 100);
             var obstacle = NewObject("QueryObstacle", surface + Vector2.up * 0.04f).AddComponent<BoxCollider2D>();
             obstacle.size = Vector2.one * 0.02f;
@@ -165,11 +166,12 @@ namespace YLFramework.Tests.Extensions.Behavior
             int count = capsule ? motor.Raycast((CapsuleCollider2D)shape, Vector2.up) : motor.Raycast((BoxCollider2D)shape, Vector2.up);
             bool found = false;
             for (int i = 0; i < count; i++) found |= motor.hits[i].collider == obstacle;
-            Assert.That(found, Is.True, "near obstacle is within the original 0.1 query distance");
+            string pose = $"requested={angle}; body={body.rotation}; transform={shape.transform.eulerAngles.z}; bounds={shape.bounds.size}; size={(capsule ? ((CapsuleCollider2D)shape).size : ((BoxCollider2D)shape).size)}; surface={surface}";
+            Assert.That(found, Is.True, "near obstacle is within the original 0.1 query distance; " + pose);
             obstacle.transform.position = surface + Vector2.up * 0.25f;
             Physics2D.SyncTransforms();
             count = capsule ? motor.Raycast((CapsuleCollider2D)shape, Vector2.up) : motor.Raycast((BoxCollider2D)shape, Vector2.up);
-            for (int i = 0; i < count; i++) Assert.That(motor.hits[i].collider, Is.Not.SameAs(obstacle), "outside the true shape and query distance");
+            for (int i = 0; i < count; i++) Assert.That(motor.hits[i].collider, Is.Not.SameAs(obstacle), "outside the true shape and query distance; " + pose + $"; realDistance={Vector2.Distance(shape.ClosestPoint(obstacle.transform.position), obstacle.transform.position)}");
         }
 
         [UnityTest]
@@ -191,6 +193,26 @@ namespace YLFramework.Tests.Extensions.Behavior
             motor.enabled = true;
             for (int i = 0; i < 10; i++) { yield return new WaitForFixedUpdate(); yield return null; }
             Assert.That(motor.IsGrounded, Is.True);
+        }
+
+        [TestCase(90f, 30f)]
+        [TestCase(180f, -30f)]
+        public void ChildColliderKeepsItsLocalAngleWhenBodyPosePrecedesTransform(float bodyAngle, float childAngle)
+        {
+            var center = new Vector3(14000, 14800);
+            var obj = NewObject("Body", center);
+            obj.SetActive(false);
+            var body = obj.AddComponent<Rigidbody2D>();
+            body.gravityScale = 0;
+            var child = NewObject("ChildShape", center);
+            child.transform.SetParent(obj.transform, true);
+            child.transform.localRotation = Quaternion.Euler(0, 0, childAngle);
+            var shape = child.AddComponent<BoxCollider2D>();
+            obj.AddComponent<CharacterController2D>();
+            obj.SetActive(true);
+            body.rotation = bodyAngle;
+            Physics2D.SyncTransforms();
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(CharacterController2D.GetColliderCastAngle(shape), bodyAngle + childAngle)), Is.LessThan(0.001f));
         }
     }
 }

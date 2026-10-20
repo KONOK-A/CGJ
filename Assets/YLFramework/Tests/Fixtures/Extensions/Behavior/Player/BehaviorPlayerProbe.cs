@@ -58,7 +58,7 @@ namespace YLFramework.Behavior.Acceptance
 #else
             const string backend = "Mono";
 #endif
-            string report = $"YL_BEHAVIOR_ACCEPTANCE result={result}; unity={Application.unityVersion}; backend={backend}; development={Debug.isDebugBuild}; sourceGuid={sourceGuid}; creates={stateCreates}; enters={stateEnters}; exits={stateExits}";
+            string report = $"YL_BEHAVIOR_ACCEPTANCE result={result}; unity={Application.unityVersion}; backend={backend}; development={Debug.isDebugBuild}; sourceGuid={sourceGuid}; creates={stateCreates}; enters={stateEnters}; exits={stateExits}; dataPath={Application.persistentDataPath}";
             if (failure == null) Debug.Log(report);
             else { Debug.LogError(report); Debug.LogException(failure); }
             if (!Application.isEditor) Application.Quit(failure == null ? 0 : 1);

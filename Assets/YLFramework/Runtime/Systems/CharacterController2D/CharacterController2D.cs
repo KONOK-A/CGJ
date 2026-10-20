@@ -740,7 +740,7 @@ namespace YLFramework.Character.Controller2D
         {
             Vector2 point = box.bounds.center;
             Vector2 size = CharacterMotorMath.ScaledColliderSize(box.size, box.transform.lossyScale);
-            float angle = box.transform.eulerAngles.z;
+            float angle = GetColliderCastAngle(box);
 
 #if UNITY_6000_0_OR_NEWER
             ContactFilter2D contactFilter = CreateLegacyFilter(checkLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
@@ -755,7 +755,7 @@ namespace YLFramework.Character.Controller2D
         {
             Vector2 point = capsule.bounds.center;
             Vector2 size = CharacterMotorMath.ScaledColliderSize(capsule.size, capsule.transform.lossyScale);
-            float angle = capsule.transform.eulerAngles.z;
+            float angle = GetColliderCastAngle(capsule);
             CapsuleDirection2D d = capsule.direction;
 
 #if UNITY_6000_0_OR_NEWER
@@ -764,6 +764,14 @@ namespace YLFramework.Character.Controller2D
 #else
             return Physics2D.CapsuleCastNonAlloc(point, size, d, angle, dir, hits, DISTANCE, checkLayerMask.value);
 #endif
+        }
+
+        internal static float GetColliderCastAngle(Collider2D collider)
+        {
+            float angle = collider.transform.eulerAngles.z;
+            var body = collider.attachedRigidbody;
+            // 刚体物理位姿可先于Transform更新；保留子Collider的相对旋转，不能只读旧Transform。
+            return body ? angle + Mathf.DeltaAngle(body.transform.eulerAngles.z, body.rotation) : angle;
         }
 
         private void AutoRotation()

@@ -6,17 +6,42 @@
 
 - 用户 2026-10-19 本轮授权连续完成 Overlap、CC2D、MoveablePlatform、XFFSM，含离线验证、本地中文候选提交及一次组内定向 Review。
 - 实核工作区：`G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-behavior-901d14f1ae336a53`；分支 `fusion/xf-ext-behavior`；开工 HEAD/B0 `c88500aef6651f5b13ac933dd1f209ecb314e92d`，祖先检查退出 0，开工工作区干净。
-- Unity `2022.3.62f3c1`。不调用 Unity MCP，不启动 Editor/batchmode。不修改共享区域、原包、主工程或其他 worktree；不 Push/合并/Rebase/Reset/Clean/Stash。
+- 源码阶段历史边界：Unity `2022.3.62f3c1`，当时不调用 Unity MCP、不启动 Editor/batchmode；后续 T3-A 已明确允许 A 独立 BatchMode，见下节。不修改共享区域、原包、主工程或其他 worktree；不 Push/合并/Rebase/Reset/Clean/Stash。
 - Ruling：本次授权覆盖 Plan 过时的未授权/首批停止状态；D1 采用双 FSM 独立共存、局部替换风险 Editor 实现，D6 将运动组件作为可选组件。唯一执行记录为本文件，不另建过程 Plan/ledger。
 - 原轻量 `Runtime/Utilities/FSM` 完整只读；共享产品/测试 asmdef、E0 工具、Core/Foundation/Resource、Packages/ProjectSettings 只读。仅新增本组验收夹具的两份专属asmdef，不改共享引用。
 
 ## 当前进度
 
-- 当前模块：四模块实现、唯一一次定向Review及修正后的离线门均已收口。最终候选以包含本检查点当前版本的`feat(fsm): 融合资产状态机并收口本组定向审查`提交为准；该HEAD且工作区干净即实施结束，不重复实现/提交。
-- Overlap本地候选：`51e61da`，未Push。
-- CC2D本地候选：`a072bdd`，未Push。
-- Moveable本地候选：`0067246`，未Push。
-- 下一动作：本轮在最终候选提交及Git范围复核后停止；后续仅由主Unity集成阶段执行meta/GUI/资产/Mono及IL2CPP门，不重复Review、不Push/合并。最终提交Hash由Git日志及交付回复给出，不另做文档提交。
+- 当前模块：2026-10-19T20:59:52Z用户正式授权T3-A独立Worktree BatchMode真实验收及本组定向修复，覆盖此前本文件禁止启动Unity的旧阶段限制；仍不操作主Editor/MCP、其他Worktree，不改共享源码/asmdef/Packages/ProjectSettings，不Push/合并或改写历史。
+- 源码候选HEAD实核`4b2803288f1c175cb4cb69f7291dc0f115d43649`，四候选均存在，本轮开工工作区干净。既有离线验收记录保持历史身份，不替代本轮Unity结果。
+- 首启动前快照：安装实核`C:/Program Files/Unity/Hub/Editor/2022.3.62f3c1/Editor/Unity.exe`，ProductVersion `2022.3.62f3c1_1623fc0bbb97`。当时A无Editor/工程锁、无Library/PackageCache，UTF1.3.9仅为manifest声明；实际安装已在后续UPM恢复及最终审计核实。
+- 错峰：初见B组重型IL2CPP PID4688，未启动A；安排3分钟调度。21:03:10Z检查B父进程已退出，仅主GUI PID32536及主导入Worker仍在；取消错峰调度，不干预这些进程。进程证据仅保留脱敏PID/工程路径/类型。
+- 本轮证据根：`C:/Users/Kano/AppData/Local/Temp/kilo/BA26/`，每运行独占子目录。专属`Tools/Behavior/Invoke-BehaviorUnity.ps1`启动前检查版本/分支/其他重型任务/本工程锁，记录自身Unity PID及受保护输入SHA，等待同一次运行退出，不自动杀进程或还原文件。
+- `import-01`：21:06:47Z启动A PID18120（wrapper35096），86包解析/注册完成，日志停于GfxDevice创建；会话级monitor返回stopping后已丢失跟踪，两个已记录PID均消失，退出码未知，无正常退出标记，不计导入/编译通过。保留job/editor.log；`-RecoverOnly`生成同一次recovery.json，受保护SHA变化0，残留锁经独占FileShare.None打开证明无持有者，未删除锁。后续使用persistent tracked进程与独立run目录，不重写import-01。
+- A自己的UPM恢复UTF1.3.9（`Library/PackageCache/com.unity.test-framework@1.3.9/package.json`，仓库revision `5c8a1448cee4d7607be0d60dceb66703b0cfe016`），不是主工程缓存复制。21:09见B短批次PID28996，当时继续错峰；向B现有会话发送非干预式空档协调请求，不操作其文件或进程。
+- B于21:12:07Z结束最后审计并回传本轮不再启动Unity/Player；A重新预检后启动persistent `import-02`（Unity44256）。本次21:14:53Z正常退出0、正常batch shutdown标记存在，Asset Pipeline首导入11323项，真实编译完成，保护区SHA变化0。A的Library/ScriptAssemblies实际包含YL Runtime/Editor/两组测试/两份验收程序集，未复制其他工程Library。
+- 首导入后实际Unity生成本组meta，数量/GUID由后续专属Audit确认。另观察`.vscode/settings.json`产生非本组变更，未接管/暂存/还原，最终单列工作区状态。编译日志含既有许可通道回退和原包无脚本程序集等警告，不把零退出码误写成零警告或GUI已通过。
+- 首导入后新增本组`BehaviorUnityBatch.AuditImport`，记录CompilationPipeline实际输入、包注册、meta/GUID、轻量FSM指纹及自有Prefab Missing Script。各门逐运行记录，不沿用离线53项计数。
+- Gate1收口：`audit-01`新增CI入口PackageInfo名称冲突编译失败，已限定类型；`audit-02`编译通过后因既有超长路径在Mono文件读取失败。拆分Unity实际归属/AssetDatabase审计与PowerShell7全Assets原始meta检查后，`audit-03` PID6984退出0，6程序集归属无误、compileFailed=false、MissingScript=0、轻量指纹不变。原146预期全部存在，实际147（额外为本轮BehaviorUnityBatch.cs.meta），全Assets原始GUID无与本组冲突、无孤立。原始预期已从import-01外部副本冻结，未用结果重造；Unity清理过工程Temp，不再依赖其历史临时证据。
+- Gate2：`edit-01` PID2256实际60项，58通过/2失败/0跳过。定位为EditMode持久事件默认RuntimeOnly不Invoke、同帧创建阶段未flush的Undo记录混入重命名事务；明确测试用EditorAndRuntime并验证保存状态，flush/隔离Undo事务，未改生产默认事件状态或削弱断言。
+- `edit-02` PID27668实际60/60通过，0失败/跳过/不确定，正常退出0，保护区变化0。原生资产/条件组保存重导入、Prefab持久事件、条件Undo/Redo、重命名Undo/Redo及自动GUI作用域检查实际执行；不代表人工鼠标拖拽/视觉呈现验收。下一门PlayMode。
+- Gate3首轮`play-01` PID25348实际33项，30通过/3失败，均为旋转Box/Capsule查询。`play-rotation-diag`保留同断言得到真实证据：body.rotation30/90已更新、物理bounds已旋转而Transform.eulerAngles仍为0；并非通过放宽几何断言解决。
+- 定点修复CC2D：原非分配Cast保留，本地size×绝对缩放保留；查询角度加attached Rigidbody物理角度相对其Transform的差量，支持子Collider局部旋转。新增2项子Collider回归，原6旋转参数断言保留。
+- `play-02` PID39432实际35/35通过，0失败/跳过/不确定、退出0、保护区变化0；基础真实命中/回调、CC2D碰撞/重力、载人与去重、资产FSM层级/条件/Trigger/异常释放以及轻量并行退出已执行。容量/七形状/移动模式与连续Reload矩阵继续补代表覆盖，未提前声明全部门完成。
+- 补覆盖委派仅修改本组Overlap/平台两个测试文件，子代理未运行Unity、改配置/meta或Git；主代理独占引擎。`play-coverage-01`被其他Worktree重型PID44612预检拦截，未启动A，不计执行。`play-coverage-02` PID31104实际**50/50通过**，0失败/跳过/不确定，退出0，保护区变化0。覆盖七种形状真实2D/3D命中、Trigger/Layer/范围过滤、负缩放/旋转/offset、重复Area、100/101容量与提示限频/停用清理；平台三种路径模式、单次Stop、fixed-clock delay、Pause/Stop/Run及真实FixedUpdate载人。原反射手动Tick改为真实FixedUpdate，不弱化原断言。
+- Reload：`reload-01`因单个空untitled场景不能Additive创建失败；生成器仅对`sceneCount=1/path为空/rootCount=0`改用Single，其他仍Additive，finally恢复。`reload-02` PID41844在**同一Editor进程**执行默认双Reload、禁Domain Reload、同时禁Domain/Scene Reload三种组合，每种连续两轮，**6/6通过**。每轮双FSM独立起步/转换、Trigger Set/Reset、源参数不变、实际克隆及退出无残留均验证；全部`afterExitNoClone=true`。原enabled=false/options=3由API恢复，退出0、ProjectSettings及其他保护区字节变化0，不手工清static制造通过。
+- Create And Add：`binding-01` PID25184通过产品`FSMStateCreator.CreateFSMState`及其pending-binding队列，真实创建源码、编译/导入/程序集重载后自动绑定，未由测试手工附加。验证GetClass、GUID/类型一致、保存重导入仍绑定及配置合法；`complete=true/passed=true/error为空`，退出0、保护区变化0。类型`T3ABoundStateac79d03a6e1c4f4c9d905e85f432836b`，资产GUID`836c88f48e2016947882341f66e313a5`，脚本GUID`ba8772970d871984c865da4025bb32f3`。
+- Mono构建：`build-mono-01`因新CI结果字段与Unity2022.3 BuildSummary的int类型不符出现CS0266，已定点修正；`build-mono-02` PID24044实际Windows64/Mono2x/非Development/stripping Disabled构建Succeeded，**0 errors、1226 warnings**，37.5088717秒，103985068 bytes，Build GUID`97c3c51661934a0d87de49de82275752`，退出0、保护区变化0。company/product仅临时隔离Player数据目录，finally恢复并核对字节。
+- Mono运行：上述同次exe实际PID42996退出0，唯一`YL_BEHAVIOR_ACCEPTANCE result=PASS`报告Unity2022.3.62f3c1/backend=Mono/development=False，creates/enters/exits均2，源GUID`ab27c9091baaec5429f47046ead9a152`，数据目录为`LocalLow/YLFramework_Behavior_Acceptance/A_build-mono-02`。首个回收器将company中的`.`未按Unity规则规范为`_`而误判；修正后`-VerifyExisting`核验**同一PID/log/exe**，未重跑/覆盖原证据，另存`player-validation.json`。exe SHA256`059c313352892718258a120b87bdc6fc7c23ce67181084abe14f86f204f5dddb`，log SHA256`93be1dcc365ec3096c1fd7d764261f6731563b1a93e61517200115582abecfd9`。使用`-batchmode -nographics`，不声称图形呈现已验。
+- IL2CPP Low：`build-il2cpp-preflight-01` PID33520只读getter得到Mono2x/Disabled，与请求不符，`status=BlockedBeforeBuild`、无Build GUID、未构建/运行Player。Unity2022.3没有独立BuildPlayerOptions/CLI后端与裁剪覆盖；setter恢复逻辑默认值可能新增Standalone字典键，不能保证ProjectSettings字节不变。未调用后端/裁剪setter或手工覆盖配置；退出0、保护区变化0仅为预检成功，**不计IL2CPP/AOT/Low通过**。该项须在另获配置授权或独立接收环境中验证。
+- 临时资产：`fixture-cleanup-01` PID41808将本组4个`GeneratedAcceptance_<32hex>`目录内及目录meta共20文件归档到同次`fixture-archive/`，记录原路径、GUID及SHA后才用AssetDatabase删除。退出0、保护区变化0；后置逐文件核对20个归档SHA一致、4个源目录及meta均无残留。真实脚本绑定与Mono场景资产仍可从归档追溯，不提交临时资产。
+- 最终导入身份：`audit-final-01` PID14452退出0、保护区变化0，`compileFailed=false`。冻结146预期全部存在，**实际151份meta=146+5个新增入口**（Binding/Player/Reload/Unity Batch及ReloadProbe）；无缺失、孤立、本组重复GUID或AssetDatabase映射差异。PowerShell7扫描raw Assets共1876个GUID，本组GUID全局唯一；轻量FSM6 C#与9 meta共15项SHA仍等于B0；自有Prefab Missing Script=0。
+- 最终实际编译图六程序集及输入数：Runtime484、Editor140、EditMode161、PlayMode45、Acceptance4、Acceptance.Editor5；本组每份源码均归属正确，rsp留于同次`assembly-inputs/`。实际注册UTF1.3.9/source Registry/resolvedPath为A自己的PackageCache，不以manifest声明替代。被动读取**本次Mono Player**的Runtime与Acceptance DLL，均无UnityEditor/XFFSM/XFGameFramework/XFAB AssemblyRef；SHA分别`8cb7d6709c8a8a326f59e780eddea613114bb62d71633e3d530f44458884c71b`与`2720875d71efd5c4c28cf50a94940e8cb34d962d5fc03b4ccc7ccc848ed50c4c`。本工程仍有旧包共存，不冒充无旧包独立接收工程。
+- 最终只读来源核对：4份manifest的89个上游文件SHA一致，4份完整MIT仍在；受保护路径相对源码候选HEAD无diff。观察到`.vscode/settings.json`及`Assets/Atlas(AutoGenerate)/MainModule/`下`31dd0f6057ff73d89c56da5a46c4e39e_depend_on_res(auto).unity3d_Atlas.spriteatlas`、`9aa7ab4473730ba61a78819153f32058_depend_on_res(auto).unity3d_Atlas.spriteatlas`三项非本组差异，未接管/暂存/还原，不把最终工作区称为全干净，不把该结果扩展为完整原游戏G5验收。
+- Git收口仅规范151份正式meta的453处空值行尾空白，忽略行尾空格后的差异为0，GUID/Importer/字段值不变。原始Unity/raw审计保留，不将其SHA回写；`audit-final-01/meta-submission-audit.json`另存各路径/GUID/原始SHA/提交版本SHA。独立比较89个上游GUID与151个本组GUID，复用数0；暂存排除二进制/缓存/临时资产/保护区及三项范围外差异，明显凭据字面量检查未检出。仅文档与空白收口不重跑已有效技术矩阵。
+- 四个本地源码候选完整历史保留：Overlap `51e61da4c0bf9a472007c383247bef51fd148c20`；CC2D `a072bdde296ea6f2beb2f4539d9b200e6c9706b3`；Moveable `00672464d04795ea8d496126612c690f913471c9`；资产FSM `4b2803288f1c175cb4cb69f7291dc0f115d43649`。本轮另作中文本地修复/meta提交，完整SHA由最终回复及Git提供，避免同提交自引用；无Push/合并/改写历史。
+
+以下模块及Review章节为源码候选阶段的历史记录；其中“未运行/待生成”只描述当时状态，T3-A实际结果以上节与末节为准。
 
 ## Overlap
 
@@ -83,5 +108,7 @@
 
 ## 验证边界
 
-- 本轮Passed仅为上述真实离线逻辑/静态契约。Unity/EditMode/PlayMode/GUI/资产保存/Mono Player/IL2CPP 均未运行。
-- 新脚本/目录/文本资产 `.meta` 由主 Unity 集成阶段生成，不复制原 GUID、不手工伪造。精确待生成清单将由专属静态工具输出。
+- T3-A已实际完成A独立Unity2022.3.62f3c1导入/编译、EditMode60/60、PlayMode50/50、同进程Reload6/6、Create And Add跨编译重载、Windows64 Release Mono构建及实际Player退出0/PASS。离线53项只沿用源码阶段证据，不混入Unity计数；Reload及绑定也不混入UTF用例数。
+- 新脚本/目录/文本资产meta均由A自己的Unity正式生成，共151份，原146冻结预期未重造；逐路径GUID/SHA见`BA26/audit-final-01/import-audit.json`和`meta-audit.json`。所有外部日志/XML/构建/归档留在`C:/Users/Kano/AppData/Local/Temp/kilo/BA26/`，不提交二进制、缓存或临时生成资产。
+- 未完成/不外推：IL2CPP Low构建与AOT/裁剪运行；人工鼠标拖拽/完整图形Editor与Player视觉呈现；全面时序/Profiler测量、所有平台/裁剪级别；无旧包独立接收工程G4；主工作区集成及原游戏组合G5。自动GUI作用域、Undo/Redo、保存重导入通过不能替代人工GUI/完整作者流程。
+- 本轮在授权边界内完成可执行门并保留上述阻塞，不宣布整个XF阶段、正式Exporter/独立交付或完整引擎矩阵完成。仅精确提交本组修复/验收入口/测试/说明及正式meta，三项范围外差异保持原状。

@@ -76,7 +76,9 @@ namespace YLFramework.Tests.Extensions.Behavior
             var idle = FSMStateNodeFactory.CreateStateNode(asset, "Idle", new Rect(0, 0, 200, 40), true);
             FSMStateNodeFactory.CreateStateNode(asset, "Run", new Rect(200, 0, 200, 40), false);
             FSMTransitionFactory.CreateTransition(asset, "Idle", "Run");
+            Undo.FlushUndoRecordObjects();
             Undo.ClearUndo(asset);
+            Undo.IncrementCurrentGroup();
             Assert.That(FSMStateNodeFactory.Rename(asset, idle, "Rest"), Is.True);
             Undo.FlushUndoRecordObjects();
             Undo.PerformUndo();
@@ -91,7 +93,9 @@ namespace YLFramework.Tests.Extensions.Behavior
 
         private static void CheckUndoRedo(RuntimeFSMController asset, Action change, Action before, Action after)
         {
+            Undo.FlushUndoRecordObjects();
             Undo.ClearUndo(asset);
+            Undo.IncrementCurrentGroup();
             before();
             change();
             Undo.FlushUndoRecordObjects();
@@ -252,6 +256,10 @@ namespace YLFramework.Tests.Extensions.Behavior
             var hit = (UnityAction<OverlapHit<Collider2D>>)Delegate.CreateDelegate(typeof(UnityAction<OverlapHit<Collider2D>>), receiver, "ReceiveHit");
             UnityEventTools.AddPersistentListener(overlap.onColliderEnter, hit);
             UnityEventTools.AddPersistentListener(overlap.onColliderExit, hit);
+            Assert.That(overlap.onColliderEnter.GetPersistentListenerState(0), Is.EqualTo(UnityEventCallState.RuntimeOnly));
+            // 本用例在EditMode实际Invoke；明确序列化为EditorAndRuntime，不把RuntimeOnly的未调用误判为丢失绑定。
+            overlap.onColliderEnter.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+            overlap.onColliderExit.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
             obj.AddComponent<BoxCollider2D>();
             var motor = obj.AddComponent<CharacterController2D>();
             motor.onGroundValueChange = new YLFramework.Character.Controller2D.BoolUnityEvent();
@@ -260,11 +268,15 @@ namespace YLFramework.Tests.Extensions.Behavior
             UnityEventTools.AddPersistentListener(motor.onGroundValueChange, (UnityAction<bool>)Delegate.CreateDelegate(typeof(UnityAction<bool>), receiver, "ReceiveBool"));
             UnityEventTools.AddPersistentListener(motor.onJumpCountValueChange, (UnityAction<int>)Delegate.CreateDelegate(typeof(UnityAction<int>), receiver, "ReceiveInt"));
             UnityEventTools.AddPersistentListener(motor.onVelocityValueChange, (UnityAction<Vector2>)Delegate.CreateDelegate(typeof(UnityAction<Vector2>), receiver, "ReceiveVector2"));
+            motor.onGroundValueChange.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+            motor.onJumpCountValueChange.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+            motor.onVelocityValueChange.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
             var moveable = obj.AddComponent<Moveable>();
             moveable.Positions.Add(Vector3.zero);
             moveable.Positions.Add(Vector3.right);
             moveable.onMove = new Vector3UnityEvent();
             UnityEventTools.AddPersistentListener(moveable.onMove, (UnityAction<Vector3>)Delegate.CreateDelegate(typeof(UnityAction<Vector3>), receiver, "ReceiveVector3"));
+            moveable.onMove.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
             string path = folder + "/Events.prefab";
             Assert.That(PrefabUtility.SaveAsPrefabAsset(obj, path), Is.Not.Null);
             var loaded = PrefabUtility.LoadPrefabContents(path);
@@ -273,6 +285,7 @@ namespace YLFramework.Tests.Extensions.Behavior
                 var loadedReceiver = loaded.GetComponent(receiverType);
                 var loadedOverlap = loaded.GetComponent<OverlapCircle2D>();
                 Assert.That(loadedOverlap.onColliderEnter.GetPersistentEventCount(), Is.EqualTo(1));
+                Assert.That(loadedOverlap.onColliderEnter.GetPersistentListenerState(0), Is.EqualTo(UnityEventCallState.EditorAndRuntime));
                 loadedOverlap.onColliderEnter.Invoke(default);
                 loadedOverlap.onColliderExit.Invoke(default);
                 var loadedMotor = loaded.GetComponent<CharacterController2D>();
