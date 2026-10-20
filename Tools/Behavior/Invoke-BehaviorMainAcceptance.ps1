@@ -1,10 +1,11 @@
 #requires -Version 7.6
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Snapshot', 'Verify', 'Metas', 'Player', 'Xml', 'Archive', 'Wait', 'Binary')][string] $Mode,
+    [Parameter(Mandatory)][ValidateSet('Snapshot', 'Verify', 'VerifyFollowup', 'Metas', 'Player', 'Xml', 'Archive', 'Wait', 'Binary')][string] $Mode,
     [Parameter(Mandatory)][string] $RunDirectory,
     [string] $Gate = '',
-    [ValidateSet('summary.json', 'results.json', 'build-report.json')][string] $ResultFile = 'summary.json'
+    [ValidateSet('summary.json', 'results.json', 'build-report.json', 'attempt-result.json')][string] $ResultFile = 'summary.json',
+    [ValidateSet('Mono', 'IL2CPP')][string] $Backend = 'Mono'
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
@@ -62,6 +63,27 @@ if ($Mode -eq 'Verify') {
     "Existing changed paths: $($changed -join ', '); protected changes=$($protected.Count); user meta unchanged=$userUnchanged"
     if ($protected.Count -or -not $userUnchanged) { throw 'Protected pre-existing content changed.' }
 }
+if ($Mode -eq 'VerifyFollowup') {
+    if ($RunDirectory -ne 'C:\Users\Kano\AppData\Local\Temp\kilo\BM26-20261020T065000Z') { throw 'Follow-up protection requires its own frozen root.' }
+    $allowed = @('.kilo/plans/1792420261057-xf-ecosystem-integration.md', '.kilo/handovers/xf-ext-behavior.md',
+        'Assets/YLFramework/Editor/Systems/StateMachine/GUI/WindowGraphView/FSMStateGraphView.cs',
+        'Assets/YLFramework/Editor/Systems/StateMachine/GUI/WindowGraphView/FSMTransitionBackground.cs',
+        'Assets/YLFramework/Tests/EditMode/Extensions/Behavior/BehaviorAuthoringTests.cs',
+        'Assets/YLFramework/Tests/Fixtures/Extensions/Behavior/Editor/BehaviorMainAcceptance.cs',
+        'Assets/YLFramework/Tests/Fixtures/Extensions/Behavior/Editor/BehaviorAcceptanceBuilder.cs',
+        'Assets/YLFramework/Tests/Fixtures/Extensions/Behavior/Usage.md', 'Tools/Behavior/Invoke-BehaviorMainAcceptance.ps1')
+    $user = Read-Record 'user-state-before.json'
+    $observed = Read-Record 'observed-user-disk-before-build.json'
+    $changed = @(@(foreach ($file in @($preflight.files) + @($user.files)) {
+        $path = $file.path.Replace('\', '/')
+        $userRecord = @($observed.files | Where-Object { $_.path -eq $path })
+        $expected = $(if ($userRecord.Count -eq 1 -and $userRecord[0].userSerializedContentUnchanged) { $userRecord[0].sha256 } else { $file.sha256 })
+        if ($path -notin $allowed -and (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Hash $path) -ne $expected)) { $path }
+    }) | Sort-Object -Unique)
+    Write-Record ('followup-protection-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json') ([ordered]@{ changed = $changed; preservedObservedUserFiles = @($observed.files.path) })
+    "Paths changed outside the follow-up implementation: $($changed -join ', ')"
+    if ($changed.Count) { throw 'Preserve observed user changes; do not automatically restore or stage them.' }
+}
 if ($Mode -eq 'Metas') {
     $expected = @(Read-Record 'candidate-metas.json')
     $guids = [Collections.Generic.Dictionary[string, Collections.Generic.List[string]]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -93,8 +115,8 @@ if ($Mode -eq 'Xml') {
 }
 if ($Mode -eq 'Binary') {
     Add-Type -AssemblyName System.Reflection.Metadata
-    $build = Read-Record 'build-mono.json'
-    $managed = Join-Path ([IO.Path]::GetDirectoryName($build.output)) 'BehaviorMainAcceptance_Data/Managed'
+    $build = Read-Record $(if ($Backend -eq 'IL2CPP') { 'build-il2cpp.json' } else { 'build-mono.json' })
+    $managed = $(if ($Backend -eq 'IL2CPP') { Join-Path ([IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($build.output))) 'managed-stripped' } else { Join-Path ([IO.Path]::GetDirectoryName($build.output)) 'BehaviorMainAcceptance_Data/Managed' })
     if (-not $managed.StartsWith($RunDirectory + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unowned build path.' }
     $records = @(foreach ($name in @('YLFramework.Runtime', 'YLFramework.Behavior.Acceptance')) {
         $path = Join-Path $managed ($name + '.dll')
@@ -107,8 +129,9 @@ if ($Mode -eq 'Binary') {
         } finally { $pe.Dispose(); $stream.Dispose() }
     })
     $forbidden = @($records | ForEach-Object { $_.references } | Where-Object { $_.name -match 'UnityEditor|^XF|EPPlus' })
-    $editorAssemblies = @([IO.Directory]::EnumerateFiles($managed, '*Editor*.dll'))
-    Write-Record 'player-assemblyref.json' ([ordered]@{ project = $root; candidate = $candidate; build = $build.output; records = $records; forbidden = $forbidden; editorAssemblies = $editorAssemblies })
+    $shipping = $(if ($Backend -eq 'IL2CPP') { [IO.Path]::GetDirectoryName($build.output) } else { $managed })
+    $editorAssemblies = @([IO.Directory]::EnumerateFiles($shipping, '*Editor*.dll', [IO.SearchOption]::AllDirectories))
+    Write-Record $(if ($Backend -eq 'IL2CPP') { 'player-il2cpp-assemblyref.json' } else { 'player-assemblyref.json' }) ([ordered]@{ project = $root; candidate = $candidate; build = $build.output; backend = $Backend; records = $records; forbidden = $forbidden; editorAssemblies = $editorAssemblies })
     "Player binary AssemblyRef: $($records.Count) owned assemblies; forbidden=$($forbidden.Count); shipped Editor DLLs=$($editorAssemblies.Count)"
     if ($forbidden.Count -or $editorAssemblies.Count) { throw 'Player binary isolation failed.' }
 }
@@ -138,10 +161,13 @@ if ($Mode -eq 'Archive') {
     "Archived main Editor log and $($files.Count) current file identities."
 }
 if ($Mode -eq 'Player') {
-    $build = Read-Record 'build-mono.json'
-    if ($build.actualBackend -ne 'Mono2x' -or $build.development -or $build.status -ne 'Succeeded') { throw 'Require successful Release Mono build.' }
+    $build = Read-Record $(if ($Backend -eq 'IL2CPP') { 'build-il2cpp.json' } else { 'build-mono.json' })
     $exe = $build.output
     if (-not $exe.StartsWith($RunDirectory + '\', [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $exe)) { throw 'Wrong executable path.' }
+    $attempt = $(if ($Backend -eq 'IL2CPP') { Read-Record ([IO.Path]::GetRelativePath($RunDirectory, (Join-Path ([IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($exe))) 'attempt-result.json'))) } else { $null })
+    $expectedBackend = $(if ($Backend -eq 'IL2CPP') { 'IL2CPP' } else { 'Mono2x' })
+    if ($build.actualBackend -ne $expectedBackend -or $build.development -or $build.status -ne 'Succeeded') { throw 'Require a successful non-Development build of the selected backend.' }
+    if ($Backend -eq 'IL2CPP' -and ($build.stripping -ne 'Low' -or $build.compiler -ne 'Release' -or -not $attempt.complete -or -not $attempt.restored)) { throw 'Require real IL2CPP Low/Release build and restored settings.' }
     $log = Join-Path $RunDirectory 'player-graphics.log'
     if (Test-Path -LiteralPath $log) { throw 'Player evidence already exists.' }
     $start = [Diagnostics.ProcessStartInfo]::new($exe)
@@ -158,8 +184,9 @@ if ($Mode -eq 'Player') {
     $process.WaitForExit()
     $text = [IO.File]::ReadAllText($log)
     $passes = [regex]::Matches($text, '(?m)^YL_BEHAVIOR_ACCEPTANCE result=PASS[^\r\n]*')
-    $valid = $process.ExitCode -eq 0 -and $window -ne 0 -and $passes.Count -eq 1 -and $passes[0].Value -match 'backend=Mono' -and $passes[0].Value -match 'development=False' -and $passes[0].Value -match 'graphics=Direct3D' -and $text -notmatch 'YL_BEHAVIOR_ACCEPTANCE result=FAIL|NullReferenceException|MissingMethodException|TypeLoadException'
-    Write-Record 'player-result.json' ([ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); pid = $process.Id; exitCode = $process.ExitCode; graphics = $true; exe = $exe; exeSha256 = (Hash $exe); log = $log; logSha256 = (Hash $log); passCount = $passes.Count; passLine = $(if ($passes.Count) { $passes[0].Value } else { '' }); passed = $valid })
+    $valid = $process.ExitCode -eq 0 -and $window -ne 0 -and $passes.Count -eq 1 -and $passes[0].Value -match "backend=$Backend;" -and $passes[0].Value -match 'development=False' -and $passes[0].Value -match 'graphics=Direct3D' -and $text -notmatch 'YL_BEHAVIOR_ACCEPTANCE result=FAIL|NullReferenceException|MissingMethodException|TypeLoadException|ExecutionEngineException'
+    $native = Join-Path ([IO.Path]::GetDirectoryName($exe)) 'GameAssembly.dll'
+    Write-Record 'player-result.json' ([ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); pid = $process.Id; exitCode = $process.ExitCode; graphics = $true; backend = $Backend; exe = $exe; exeSha256 = (Hash $exe); nativeSha256 = $(if ($Backend -eq 'IL2CPP') { Hash $native } else { '' }); log = $log; logSha256 = (Hash $log); passCount = $passes.Count; passLine = $(if ($passes.Count) { $passes[0].Value } else { '' }); passed = $valid })
     "Graphics Player PID=$($process.Id), exit=$($process.ExitCode), PASS count=$($passes.Count), valid=$valid"
     if (-not $valid) { throw 'Graphical Player failed. Preserve this run.' }
 }

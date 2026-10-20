@@ -20,13 +20,14 @@ namespace YLFramework.Behavior.Acceptance
         [MenuItem("Tools/YLFramework/Behavior Acceptance/Generate Owned Fixture")]
         public static void GenerateMenu() => Generate();
 
-        public static string Generate(bool development = false)
+        public static string Generate(bool development = false, Action<string> folderCreated = null)
         {
             for (int i = 0; i < SceneManager.sceneCount; i++)
                 if (SceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("Save open scenes before generating the owned fixture. No scene was overwritten.");
             string folder = "GeneratedAcceptance_" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder(Root, folder);
             folder = Root + "/" + folder;
+            folderCreated?.Invoke(folder);
             var asset = ScriptableObject.CreateInstance<RuntimeFSMController>();
             asset.name = "BehaviorAcceptanceFSM";
             foreach (string name in new[] { "Idle", "Active" })

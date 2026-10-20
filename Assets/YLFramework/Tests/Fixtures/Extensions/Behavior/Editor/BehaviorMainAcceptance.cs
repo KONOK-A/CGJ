@@ -21,10 +21,14 @@ namespace YLFramework.Behavior.Acceptance
     public static class BehaviorMainAcceptance
     {
         public const string Evidence = "C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T042500Z";
+        public const string FollowupEvidence = "C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T065000Z";
         private const string Project = "G:/Unity/Projects/CGJ2024";
         private const string Key = "YLFramework.Behavior.MainAcceptance";
         private const string TestKey = Key + ".Tests";
         private const string TestSaveGuardKey = Key + ".ProtectTestSaves";
+        private const string BuildSaveGuardKey = Key + ".ProtectBuildSaves";
+        private const string BuildOutputKey = Key + ".BuildOutput";
+        private const string BuildAssetsKey = Key + ".BuildAssets";
         private const string Host = "YL.Behavior.MainReloadHost";
         private static readonly Results TestResults = new Results();
         private static Progress progress;
@@ -68,7 +72,7 @@ namespace YLFramework.Behavior.Acceptance
                 building = BuildPipeline.isBuildingPlayer,
                 compileFailed = EditorUtility.scriptCompilationFailed, scenes = EditorSceneManager.GetSceneManagerSetup(),
                 reloadEnabled = EditorSettings.enterPlayModeOptionsEnabled, reloadOptions = (int)EditorSettings.enterPlayModeOptions,
-                saveProtection = SessionState.GetBool(TestSaveGuardKey, false),
+                saveProtection = SessionState.GetBool(TestSaveGuardKey, false) || SessionState.GetBool(BuildSaveGuardKey, false),
                 pendingTests = SessionState.GetString(TestKey, string.Empty), pendingOperation = SessionState.GetString(Key, string.Empty) };
         }
 
@@ -83,11 +87,13 @@ namespace YLFramework.Behavior.Acceptance
             if (PrefabStageUtility.GetCurrentPrefabStage() != null) throw new InvalidOperationException("Leave the user's prefab stage untouched.");
         }
 
-        private static string Gate(string name)
+        private static string Gate(string name, bool followup = false)
         {
             Guard();
             if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z0-9-]+$")) throw new ArgumentException("Invalid gate name.");
-            string path = Evidence + "/" + name;
+            string root = followup ? FollowupEvidence : Evidence;
+            if (followup && !File.Exists(root + "/preflight.json")) throw new InvalidOperationException("Missing follow-up identity snapshot.");
+            string path = root + "/" + name;
             if (Directory.Exists(path)) throw new InvalidOperationException("Never overwrite an earlier gate: " + path);
             Directory.CreateDirectory(path);
             Write(path + "/editor-before.json", Status());
@@ -161,9 +167,15 @@ namespace YLFramework.Behavior.Acceptance
         }
 
         public static void RunTests(string mode, string name, bool boundary = false)
+            => StartTests(mode, name, boundary, false);
+
+        public static void RunFollowupTests(string mode, string name)
+            => StartTests(mode, name, false, true);
+
+        private static void StartTests(string mode, string name, bool boundary, bool followup)
         {
             if (!string.IsNullOrEmpty(SessionState.GetString(TestKey, string.Empty))) throw new InvalidOperationException("A main test run is active.");
-            string output = Gate(name);
+            string output = Gate(name, followup);
             SessionState.SetString(TestKey, output);
             SessionState.SetBool(TestSaveGuardKey, mode == "PlayMode");
             var filter = new Filter { testMode = mode == "PlayMode" ? TestMode.PlayMode : TestMode.EditMode,
@@ -181,12 +193,15 @@ namespace YLFramework.Behavior.Acceptance
 
         internal static string[] FilterTestSaves(string[] paths)
         {
-            if (!SessionState.GetBool(TestSaveGuardKey, false)) return paths;
+            bool building = SessionState.GetBool(BuildSaveGuardKey, false);
+            if (!SessionState.GetBool(TestSaveGuardKey, false) && !building) return paths;
             Identity();
             // UTF 1.3.9创建bootstrap时会SaveAssets，仅放行其新场景，不落盘其他用户脏资产。
-            var allowed = paths.Where(path => System.Text.RegularExpressions.Regex.IsMatch(path, "^Assets/InitTestScene[0-9]+[.]unity$")).ToArray();
+            string ownedFolder = SessionState.GetString(BuildAssetsKey, string.Empty);
+            var allowed = paths.Where(path => building ? !string.IsNullOrEmpty(ownedFolder) && path.StartsWith(ownedFolder + "/", StringComparison.Ordinal) :
+                System.Text.RegularExpressions.Regex.IsMatch(path, "^Assets/InitTestScene[0-9]+[.]unity$")).ToArray();
             var deferred = paths.Except(allowed).ToArray();
-            string output = SessionState.GetString(TestKey, string.Empty);
+            string output = SessionState.GetString(building ? BuildOutputKey : TestKey, string.Empty);
             if (deferred.Length != 0 && !string.IsNullOrEmpty(output))
                 File.AppendAllText(output + "/deferred-asset-saves.jsonl", JsonConvert.SerializeObject(new { utc = DateTime.UtcNow, deferred }) + Environment.NewLine);
             return allowed;
@@ -214,9 +229,11 @@ namespace YLFramework.Behavior.Acceptance
 
         private static string Generate(string output)
         {
-            string scene = BehaviorAcceptanceBuilder.Generate();
-            Write(output + "/owned-fixture.json", new { scene, folder = Path.GetDirectoryName(scene).Replace('\\', '/') });
-            return scene;
+            return BehaviorAcceptanceBuilder.Generate(false, folder => {
+                Require(System.Text.RegularExpressions.Regex.IsMatch(folder, "^Assets/YLFramework/Tests/Fixtures/Extensions/Behavior/GeneratedAcceptance_[0-9a-f]{32}$"), "Unowned fixture folder.");
+                if (SessionState.GetBool(BuildSaveGuardKey, false)) SessionState.SetString(BuildAssetsKey, folder);
+                Write(output + "/owned-fixture.json", new { scene = folder + "/BehaviorAcceptance.unity", folder });
+            });
         }
 
         private static void SaveProgress() => SessionState.SetString(Key, JsonUtility.ToJson(progress));
@@ -414,11 +431,129 @@ namespace YLFramework.Behavior.Acceptance
                 windowsSupport = Directory.Exists(EditorApplication.applicationContentsPath + "/PlaybackEngines/windowsstandalonesupport"), state = Status() });
         }
 
-        public static void Cleanup(string name)
+        public static void BuildIL2CPP(string name)
         {
-            string output = Gate(name);
+            string output = Gate(name, true);
+            Require(EditorUserBuildSettings.activeBuildTarget == BuildTarget.StandaloneWindows64, "Do not switch the active platform.");
+            var settings = (UnityEngine.Object)typeof(PlayerSettings).GetMethod("InternalGetPlayerSettingsObject", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+            Require(!EditorUtility.IsDirty(settings), "Do not overwrite unsaved user PlayerSettings.");
+            const string settingsPath = "ProjectSettings/ProjectSettings.asset";
+            string originalHash = Hash(settingsPath);
+            File.Copy(settingsPath, output + "/ProjectSettings.before.asset");
+            var maps = new Dictionary<string, KeyValuePair<string, int>[]>();
+            using (var serialized = new SerializedObject(settings))
+            {
+                serialized.Update();
+                foreach (string field in new[] { "scriptingBackend", "managedStrippingLevel" })
+                {
+                    var property = serialized.FindProperty(field);
+                    maps.Add(field, Enumerable.Range(0, property.arraySize).Select(i => {
+                        var item = property.GetArrayElementAtIndex(i);
+                        return new KeyValuePair<string, int>(item.FindPropertyRelative("first").stringValue, item.FindPropertyRelative("second").intValue);
+                    }).ToArray());
+                }
+            }
+            var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone);
+            var stripping = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone);
+            var setup = EditorSceneManager.GetSceneManagerSetup();
+            bool complete = false, restored = false, settingsChanged = false;
+            string failure = null;
+            SessionState.SetString(BuildOutputKey, output);
+            SessionState.SetBool(BuildSaveGuardKey, true);
+            try
+            {
+                string scene = Generate(output);
+                Write(output + "/source-binding.json", Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories)
+                    .Select(path => path.Replace('\\', '/')).Where(Owned).Select(path => new { path, sha256 = Hash(path) }));
+                settingsChanged = true;
+                PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, ManagedStrippingLevel.Low);
+                Require(PlayerSettings.GetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone) == Il2CppCompilerConfiguration.Release, "Existing IL2CPP compiler configuration must be Release.");
+                Write(output + "/build-start.json", new { project = Project, pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                    utc = DateTime.UtcNow, sourceHead = "ece074b2561454b6a3c70ae4079deb5c0bfc4ea2", scene,
+                    actualBackend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone).ToString(),
+                    stripping = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(), options = BuildOptions.None.ToString(), originalHash, maps });
+                Directory.CreateDirectory(output + "/player");
+                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { scene }, target = BuildTarget.StandaloneWindows64,
+                    locationPathName = output + "/player/BehaviorMainAcceptance.exe", options = BuildOptions.None });
+                var summary = report.summary;
+                var data = new { actualBackend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone).ToString(),
+                    stripping = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(),
+                    compiler = PlayerSettings.GetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone).ToString(),
+                    development = (summary.options & BuildOptions.Development) != 0, options = summary.options.ToString(), status = summary.result.ToString(),
+                    output = Path.GetFullPath(summary.outputPath), guid = summary.guid.ToString(), errors = summary.totalErrors, warnings = summary.totalWarnings,
+                    PlayerSettings.companyName, PlayerSettings.productName, size = summary.totalSize, seconds = summary.totalTime.TotalSeconds,
+                    unity = Application.unityVersion, pid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                    steps = report.steps.Select(step => new { step.name, seconds = step.duration.TotalSeconds, messages = step.messages.Select(message => new { message.content, type = message.type.ToString() }) }) };
+                Write(output + "/build-report.json", data);
+                Write(FollowupEvidence + "/build-il2cpp.json", data);
+                Require(summary.result == BuildResult.Succeeded && !data.development && data.actualBackend == "IL2CPP" && data.stripping == "Low", "Release IL2CPP Low build failed.");
+                string stripped = "Library/Bee/artifacts/WinPlayerBuildProgram/ManagedStripped";
+                Directory.CreateDirectory(output + "/managed-stripped");
+                foreach (string assembly in new[] { "YLFramework.Runtime", "YLFramework.Behavior.Acceptance" })
+                {
+                    string path = stripped + "/" + assembly + ".dll";
+                    Require(File.Exists(path), "Missing actual stripped assembly: " + path);
+                    File.Copy(path, output + "/managed-stripped/" + assembly + ".dll");
+                }
+                Require(File.Exists(output + "/player/GameAssembly.dll"), "No native GameAssembly.dll was produced.");
+                complete = true;
+            }
+            catch (Exception error) { failure = error.ToString(); throw; }
+            finally
+            {
+                try
+                {
+                    if (settingsChanged)
+                    {
+                        PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, backend);
+                        PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, stripping);
+                        using (var serialized = new SerializedObject(settings))
+                        {
+                            serialized.Update();
+                            foreach (var map in maps)
+                            {
+                                var property = serialized.FindProperty(map.Key);
+                                // 恢复稀疏字典的键存在性和顺序，不遗留Set API插入的Standalone默认键。
+                                property.arraySize = map.Value.Length;
+                                for (int i = 0; i < map.Value.Length; i++)
+                                {
+                                    var item = property.GetArrayElementAtIndex(i);
+                                    item.FindPropertyRelative("first").stringValue = map.Value[i].Key;
+                                    item.FindPropertyRelative("second").intValue = map.Value[i].Value;
+                                }
+                            }
+                            serialized.ApplyModifiedPropertiesWithoutUndo();
+                        }
+                        UnityEditorInternal.InternalEditorUtility.SaveToSerializedFileAndForget(new[] { settings }, settingsPath, true);
+                    }
+                    restored = Hash(settingsPath) == originalHash && PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) == backend &&
+                        PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone) == stripping &&
+                        JsonConvert.SerializeObject(setup) == JsonConvert.SerializeObject(EditorSceneManager.GetSceneManagerSetup());
+                    if (restored && settingsChanged) EditorUtility.ClearDirty(settings);
+                    Write(output + "/settings-restored.json", new { restored, originalHash, actualHash = Hash(settingsPath),
+                        backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone).ToString(), stripping = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(), state = Status() });
+                }
+                finally
+                {
+                    SessionState.EraseBool(BuildSaveGuardKey); SessionState.EraseString(BuildOutputKey); SessionState.EraseString(BuildAssetsKey);
+                    Write(output + "/attempt-result.json", new { complete, restored, failure, utc = DateTime.UtcNow });
+                }
+                Require(restored, "PlayerSettings or scene setup did not return to exact pre-build state.");
+            }
+        }
+
+        public static void Cleanup(string name)
+            => CleanupRun(name, false);
+
+        public static void CleanupFollowup(string name)
+            => CleanupRun(name, true);
+
+        private static void CleanupRun(string name, bool followup)
+        {
+            string output = Gate(name, followup);
             var records = new List<object>();
-            foreach (string receipt in Directory.GetFiles(Evidence, "owned-fixture.json", SearchOption.AllDirectories))
+            foreach (string receipt in Directory.GetFiles(followup ? FollowupEvidence : Evidence, "owned-fixture.json", SearchOption.AllDirectories))
             {
                 var item = JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(receipt));
                 string folder = item["folder"];

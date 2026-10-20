@@ -417,3 +417,18 @@ B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终�
 一次只读Review仅审查本轮主入口/消费者增量，不重复A冻结产品Review，确认两个收口问题：UTF1.3.9在PlayMode bootstrap内部无条件SaveAssets、原游戏观察只有累计断言。之前既有文件SHA均未变化，但不宣称此前没有内部全局保存调用。现按Unity2022.3 OnWillSaveAssets契约，仅在本次测试保护期间放行UTF新InitTestScene，其他脏资产延后，正常状态不拦保存；`save-fence-red-01`先因缺保护失败，再以实际脏Material落盘保护62/62复验。原游戏补逐轮查询断言后用`play-final-01`复验，未弱化累计或原流程断言。
 
 `cleanup-01`逐文件SHA核验归档后，只删除本轮有receipt的4个GeneratedAcceptance目录；临时绑定源码随其删除并完成真实重新编译。保护快照核对原游戏、Packages/ProjectSettings、Foundation/Core/Resource、原轻量FSM及预存用户meta不变。主工作区原有§11/T2未提交回执保留为未暂存差异，本批只提交本节；用户`AlternateContent.meta`不纳入。A未提交的`.vscode/settings.json`和两份MainModule SpriteAtlas未携带、未清理；无Push、B/C合并、分支切换、新worktree或远端写入。
+
+### 10.6 A组GUI修复与IL2CPP Low补验（2026-10-20）
+
+在A合并HEAD `ece074b2561454b6a3c70ae4079deb5c0bfc4ea2`上，用户追加授权：修复实际编辑器网格/连线显示，完成主工程IL2CPP验证，通过后普通Push。未扩展到B/C或G4。本批独占根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T065000Z/`，不覆盖§10.5及A旧证据。
+
+- GUI根因：Unity GraphView继承样式将GridBackground间距设为750，细线/粗线/背景同色；自有过渡使用10倍缩放宽度的AAPolyLine形成宽羽化。本批只新增局部`FSMGraph.uss`暗/亮配色和25单位间距，将过渡层铺满视口，三处正常/运行高亮绘制统一为有最小宽度的1–2点细线，箭头与选择语义不变；继续调用Unity公共GridBackground，不复制Reference-Only代码。USS meta由主Unity生成，GUID `182916d1698abe740874ab8495e1b2b8`。
+- 真窗口回归先红后绿，`gui-final-01` EditMode **65/65**=上批62+网格视口/缩放1+连线宽度/视口1+已有Host/偏好隔离1，0失败/跳过/不确定。新增测试窗口只用自有源资产，隔离并精确恢复Context及Host/index/GUID偏好键。实际屏幕读取的`gui-before.png`、`gui-after-dark.png`、`gui-after-light.png`确认网格及清晰连线；亮图仅局部亮主题样式预览，不夸大为全Editor主题作者流。完整物理鼠标拖拽等剩余GUI门仍不由这三例替代。
+- 主Unity仍为`2022.3.62f3c1`、PID4708、Windows64，未启动第二Editor。已安装VS2022 C++及Windows IL2CPP支持；当前IL2CPP compiler原值为Release。本批允许临时切后端/裁剪，但不改公司/产品名、不重建原Bundle、不安装依赖。
+- `il2cpp-release-03/build-report.json`：**Succeeded，IL2CPP / Low / Release / 非Development / BuildOptions.None**，113.5513664秒，0 errors/1225 warnings。保存实际BuildReport步骤、原始配置/稀疏map、源码SHA及裁剪后的Runtime/Acceptance DLL；DLL元数据禁依赖0、Editor DLL0，真实Native `GameAssembly.dll`存在。主工程仍有旧包和原StreamingAssets，不当作无旧包G4。
+- 图形Player PID4880、窗口句柄1118390、Direct3D11/NVIDIA RTX4070Ti SUPER，传窗口大小和独占logFile，未传batchmode/nographics；退出0且唯一PASS，实际`backend=IL2CPP; development=False`。十条序列化事件实测hit2D/3D各2、Bool3、ground2、wall/top各1、Int2、Vector2=26、Vector3=25；反射状态creates/enters/exits各2，双FSM/物理载人与重力归还等沿自有消费者全部执行。
+- exe SHA256 `5b7d85f7d69a1be92841e7a6b630827c079f3bf6c3cfd06e75149cb09e043d7a`；GameAssembly SHA256 `05b25c0e959d82c56fd4bc267892d3fdab3f635ba12a89a62c1213c8fecbb7ae`；图形log SHA256 `f4c32cb7c5409507cf3012b8edb00de5bae88712a2d84728864aa52761ca4730`。详见`player-start.json`、`player-result.json`及`player-il2cpp-assemblyref.json`。
+- finally按原有map键存在性和顺序恢复配置，未留下Standalone默认键；恢复Mono2x/Disabled、原场景集合和Reload false/3。ProjectSettings SHA256前后均`14f31285102890f82ddfa7f380190b30aacf8ac0c08fbec23922cd6463ae209c`，没有手工覆盖ProjectSettings。Build保存过滤仅放行receipt精确绑定的新夹具目录，其他脏资产延后；导入重载期间也启用保存保护，正常退出解除。
+- 保留失败：首轮生成被过严保存保护阻止，未进入后端切换；第二轮因首轮finally无必要调用原设置setter留下dirty标记而拒绝构建。已修正精确目录回调/先写receipt、未切配置不调用恢复setter、恢复后只清本轮dirty标记；第三轮真实构建和运行通过。另修复了同gate attempt读取及测试Host偏好隔离，后者用自有假Host先复现断言失败再65/65；无用户原Host用于此红例。
+- 用户原有Plan/T2、Assets/Test、旧游戏FSM资产和用户meta不提交。GUI区间观察到EnemyState、GameStateManager、New FSMController落盘状态变化，序列化内容与开始时的内存快照一致；不猜保存来源、不回滚，另记构建前观察基线。AOT前后这些用户文件及其余保护区字节均保持该基线，不伪称全区间所有用户磁盘文件从未变化。
+- 技术收口只归档/清理本批receipt自有生成物；本批中文本地修复提交和普通Push不含用户内容。提交完整SHA、远端同步SHA及最终工作区状态记录于本根`git-final.json`，避免文档自引用。主工程A的IL2CPP Low未验项由本节真实结果解除；G4/正式独立导出及其余人工作者GUI仍未验，不声明整个XF完成。

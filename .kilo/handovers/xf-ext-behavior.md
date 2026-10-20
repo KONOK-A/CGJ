@@ -144,3 +144,16 @@
 - 一次本轮增量Review发现UTF1.3.9 bootstrap会内部全局SaveAssets，以及原游戏累计断言未逐轮拒绝失效。此前保护区SHA未变，但不把它说成从未内部保存。现用本轮测试期间的OnWillSaveAssets仅放行UTF新场景，其他脏资产保持待保存；新增用例先红后以实际自有Material验证字节/dirty/内存值保留，最终62/62。原游戏每轮均须自然查询，最终复验而不再发起重复全库Review。
 - `cleanup-01`归档核SHA后仅清理4个receipt自有生成目录（含临时绑定脚本）；最终编译及保护检查通过。Packages/ProjectSettings、原游戏资产/Bundle、Core/Foundation/Resource、轻量FSM及预存用户meta保持原字节；原有Plan §11/T2仍未暂存。
 - 未验收：完整鼠标节点拖拽/框选/缩放/子图/连线/条件重排/脚本选择、Overlap/平台Inspector实际编辑及Scene手柄、亮暗主题作者流。自动窗口作用域/Undo/保存重导入不等于鼠标操作。`il2cpp-01`仍为Mono2x/Disabled下BlockedBeforeBuild，虽工具链存在也未切IL2CPP/Low、构建或运行；G4无旧包接收和正式Exporter/独立交付未执行。只沿用A源码Review、离线53项及BA26历史证据，不重命名为本轮新通过。
+
+## GUI与IL2CPP补验及Push收口（2026-10-20）
+
+本节覆盖上节IL2CPP未执行的历史结论，不扩大到B/C或G4。基准HEAD `ece074b2561454b6a3c70ae4079deb5c0bfc4ea2`，用户明确授权IL2CPP验证通过后普通Push，并追加网格缺失/连线模糊缺陷修复。
+
+- 独占根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T065000Z/`。主Unity2022.3.62f3c1/PID4708/Windows64，未启动第二实例。GUI局部USS覆盖Unity默认750间距/同色隐藏网格，间距25、亮暗配色；过渡改为1–2点细线并铺满视口，三处运行/静态路径一致。新USS正式GUID `182916d1698abe740874ab8495e1b2b8`，未复制Unity Reference-Only实现。
+- 新GUI回归红绿完整保留，最终`gui-final-01` EditMode65/65（上批62+3），0跳过/不确定。测试窗口隔离Context及已有Host/index/GUID偏好，并用自有假Host证明不误改真实节点；实际屏幕截图before/dark/light确认局部样式与连线，不当作完整鼠标作者流。
+- `il2cpp-release-03`实际构建Succeeded，IL2CPP/Low/Release/BuildOptions.None/非Development，113.551秒，0 errors/1225 warnings。实际裁剪后两个自有DLL AssemblyRef禁依赖0、Editor DLL0；存在并记录Native GameAssembly。
+- 图形Player PID4880、窗口1118390、Direct3D11，退出0/唯一PASS，backend=IL2CPP/development=False。Overlap2D/3D各2、CC2D Bool3、ground2、wall/top各1、Int2、Vector2 26、平台Vector3 25；状态creates/enters/exits各2，双FSM及物理消费者实际执行，不只靠Preserve或Mono外推。
+- exe SHA `5b7d85f7d69a1be92841e7a6b630827c079f3bf6c3cfd06e75149cb09e043d7a`；GameAssembly SHA `05b25c0e959d82c56fd4bc267892d3fdab3f635ba12a89a62c1213c8fecbb7ae`；log SHA `f4c32cb7c5409507cf3012b8edb00de5bae88712a2d84728864aa52761ca4730`。BuildReport、attempt、配置恢复、实际窗口/命令、裁剪后DLL、主Editor日志及源码指纹均在独占根。
+- 临时后端/Low通过Unity API设置，finally按原map键/顺序恢复Mono2x/Disabled，ProjectSettings前后SHA均`14f31285102890f82ddfa7f380190b30aacf8ac0c08fbec23922cd6463ae209c`。公司/产品名未改，场景及Reload false/3保持。精确新目录保存白名单保护其他脏资产；原01生成保护失败、02本轮dirty标记阻塞如实保留，03通过，不覆盖失败。
+- 原有用户Plan/T2、Assets/Test、旧游戏FSM和meta仍不纳入提交。三份用户FSM在GUI区间落盘，内容与初始内存相同，归因未知、不回滚；按已记录构建前状态保护，AOT前后未再变化。原游戏代表PlayMode51/51及原独立性19/19沿用上批有效证据，本轮不伪报重跑。
+- 本批只归档/删除receipt自有夹具，普通Push保留A六笔历史和merge，无force/amend/rebase或B/C接入。最终提交、远端实际SHA与工作区状态见本根`git-final.json`及最终交付。尚未完成G4/正式独立导出及其余人工GUI作者流，B由用户另行接收验收。

@@ -105,3 +105,15 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 - 原游戏复用既有真实菜单/设置/暂停返回/两轮进入及退出清理流程，并在原Update中捕获4个旧Overlap组件/4自然查询周期，仍走原XF/XFAB/XFFSM/Overlap；不重绑原资源或重建Bundle。`cleanup-01`归档核SHA后仅删除4个本轮自有生成目录，真实移除临时绑定源码并重新编译。
 - 失败XML/审计/编译日志保留，定向修复后的最终证据另存，不删除失败或弱化断言。原有Plan/T2及用户meta未提交；完整接收与授权范围见正式Plan §10.5和handover本轮节。
 - 仍未验收：实际鼠标图节点拖拽/框选/缩放/层级导航/连线、条件重排/脚本选择、Overlap/平台Inspector编辑和Scene手柄、完整主题作者流；IL2CPP/AOT/Low（当前Mono2x/Disabled，BlockedBeforeBuild，未切配置）、无旧包G4和正式独立导出。A历史源码Review/离线53项/BA26不计作本轮新结果。
+
+## GUI及IL2CPP Low追加验收
+
+2026-10-20追加授权在主工程修复网格/连线，实际验证IL2CPP后普通Push；本节覆盖上一节IL2CPP未执行状态，不涉及B/C及G4。新根`C:/Users/Kano/AppData/Local/Temp/kilo/BM26-20261020T065000Z/`，基准HEAD `ece074b2561454b6a3c70ae4079deb5c0bfc4ea2`，主Editor PID4708。
+
+- `FSMGraph.uss`为本图提供25单位网格和局部亮暗主题，避免GraphView默认隐藏样式；正常/运行高亮过渡统一为1–2点细线，保留箭头及选择行为。真窗口布局/缩放/线宽和已有Host偏好隔离新增3项，最终EditMode65/65，失败与绿例分别保存。before/dark/light均为实际屏幕读取；light只预览局部样式，不声称完整主题作者流。
+- 主入口增加`RunFollowupTests`、`BuildIL2CPP`、`CleanupFollowup`，硬绑定新根/既有主工程身份。`BuildIL2CPP`临时设置IL2CPP/Low，要求既有Release/Windows64，不改公司产品名/原场景/Bundle，不安装工具链。仅在实际切配置后执行finally恢复，精确还原稀疏map的键及顺序；保存过滤只放行本次receipt新目录，不为其他Generated或用户资产放行。生成器先报告新目录，失败也能归档清理。
+- 成功gate为`il2cpp-release-03`：IL2CPP/Low/Release/BuildOptions.None/非Development，113.551秒，0 errors/1225 warnings。配置恢复为Mono2x/Disabled，ProjectSettings原始SHA不变。前两次前置失败保留，不当作产品或AOT通过。
+- 终端仍用现有脚本，`-Mode Player -Backend IL2CPP`根据实际build输出读取同gate attempt并检查构建/恢复成功；不得拿旧gate通过替换新失败。`-Mode Binary -Backend IL2CPP`读取该构建归档的真实managed-stripped DLL；`-Mode VerifyFollowup`保护新快照及明确记录的用户观察状态，不放宽A禁依赖白名单。
+- 真实有窗口Direct3D11 PID4880退出0、唯一PASS；十条持久泛型事件和反射状态生命周期均执行，完整计数见`player-result.json`。真实exe、Native GameAssembly及log SHA、命令/窗口句柄在同根，未用nographics、类型存在或Mono代替。两个裁剪后自有DLL禁依赖0。
+- 原有用户Plan/T2、Assets/Test、旧游戏FSM与meta未提交；三份用户FSM的GUI期间落盘观察单列，数据与原内存一致，不猜归因、不自动回退。技术验证期间保持AOT前状态，未重绑原资源或重建MainModule。新增工具最后通过自有receipt归档清理并恢复保存过滤状态。
+- A的主工程IL2CPP Low门现已有真实通过证据；G4无旧包接收、正式Exporter和完整物理作者GUI仍未完成。本轮普通Push与完整SHA见正式Plan §10.6及handover，不宣布整个XF阶段完成。

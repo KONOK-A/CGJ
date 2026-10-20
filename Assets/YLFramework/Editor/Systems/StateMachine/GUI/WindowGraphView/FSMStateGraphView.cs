@@ -31,11 +31,15 @@ namespace YLFramework.StateMachine
 
         public FSMStateGraphView()
         {
+            styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/YLFramework/Editor/Systems/StateMachine/Styles/FSMGraph.uss"));
             var background = new GridBackground();
+            background.AddToClassList("yl-fsm-grid");
+            background.AddToClassList(EditorGUIUtility.isProSkin ? "dark" : "light");
             background.StretchToParentSize();
             Insert(0, background);
 
             transition = new FSMTransitionBackground();
+            transition.StretchToParentSize();
             Insert(1, transition);
 
             RegisterCallback<KeyDownEvent>(KeyDownControl);

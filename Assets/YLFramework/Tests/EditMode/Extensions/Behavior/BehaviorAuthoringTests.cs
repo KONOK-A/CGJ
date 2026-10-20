@@ -2,12 +2,15 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Events;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.TestTools;
+using UnityEngine.UIElements;
 using YLFramework.Character.Controller2D;
 using YLFramework.Overlap;
 using YLFramework.Platform2D;
@@ -219,6 +222,141 @@ namespace YLFramework.Tests.Extensions.Behavior
                 catch (Exception error) { Failure = error; }
                 Complete = true;
             }
+        }
+
+        public sealed class GraphPreviewWindow : EditorWindow
+        {
+            public FSMStateGraphView Graph;
+            public RuntimeFSMController Source => source;
+            private Context previous;
+            private RuntimeFSMController source;
+            private System.Reflection.FieldInfo contextField;
+            private readonly string[] integerKeys = { "YL.AssetFSMControllerInstanceID", "FSMControllerIndex" };
+            private bool[] hadIntegerKeys;
+            private int[] previousIntegers;
+            private bool hadGuid;
+            private string previousGuid;
+
+            public void Initialize()
+            {
+                hadIntegerKeys = integerKeys.Select(EditorPrefs.HasKey).ToArray();
+                previousIntegers = integerKeys.Select(key => EditorPrefs.GetInt(key)).ToArray();
+                hadGuid = EditorPrefs.HasKey("YL.AssetFSMRuntimeFSMControllerGUID");
+                previousGuid = EditorPrefs.GetString("YL.AssetFSMRuntimeFSMControllerGUID");
+                foreach (string key in integerKeys) EditorPrefs.SetInt(key, 0);
+                contextField = typeof(Context).GetField("_instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                previous = (Context)contextField.GetValue(null);
+                var context = (Context)Activator.CreateInstance(typeof(Context), true);
+                source = ScriptableObject.CreateInstance<RuntimeFSMController>();
+                source.states.Add(new FSMStateNodeData { name = "Entry", isBuildInState = true, buildInStateName = "Entry", rect = new Rect(80, 280, 200, 40) });
+                source.states.Add(new FSMStateNodeData { name = "Any State", isBuildInState = true, buildInStateName = "Any State", rect = new Rect(80, 80, 200, 40) });
+                source.states.Add(new FSMStateNodeData { name = "Idle", defaultState = true, rect = new Rect(440, 280, 200, 40) });
+                source.states.Add(new FSMStateNodeData { name = "Nested", isSubStateMachine = true, rect = new Rect(440, 80, 200, 40) });
+                source.transitions.Add(new FSMTransitionData { fromStateName = "Any State", toStateName = "Nested" });
+                typeof(Context).GetField("_runtimeFSMController", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(context, source);
+                contextField.SetValue(null, context);
+                Graph = new FSMStateGraphView();
+                Graph.style.flexGrow = 1;
+                rootVisualElement.Add(Graph);
+            }
+
+            private void OnDisable()
+            {
+                rootVisualElement.Clear();
+                if (contextField != null) contextField.SetValue(null, previous);
+                if (source) DestroyImmediate(source);
+                if (hadIntegerKeys == null) return;
+                for (int i = 0; i < integerKeys.Length; i++)
+                    if (hadIntegerKeys[i]) EditorPrefs.SetInt(integerKeys[i], previousIntegers[i]); else EditorPrefs.DeleteKey(integerKeys[i]);
+                if (hadGuid) EditorPrefs.SetString("YL.AssetFSMRuntimeFSMControllerGUID", previousGuid); else EditorPrefs.DeleteKey("YL.AssetFSMRuntimeFSMControllerGUID");
+            }
+        }
+
+        [Test]
+        public void GraphPreviewDoesNotResolveThePreviouslySelectedUserHost()
+        {
+            string[] keys = { "YL.AssetFSMControllerInstanceID", "FSMControllerIndex" };
+            var had = keys.Select(EditorPrefs.HasKey).ToArray();
+            var values = keys.Select(key => EditorPrefs.GetInt(key)).ToArray();
+            string guidKey = "YL.AssetFSMRuntimeFSMControllerGUID";
+            bool hadGuid = EditorPrefs.HasKey(guidKey);
+            string guid = EditorPrefs.GetString(guidKey);
+            var hostObject = new GameObject("OwnedPreviousGraphHost"); owned.Add(hostObject);
+            var asset = CreateAsset();
+            asset.states.Add(new FSMStateNodeData { name = "DoNotSnap", defaultState = true, rect = new Rect(3, 7, 173, 37) });
+            var host = hostObject.AddComponent<FSMController>(); host.AddRuntimeFSMController(asset, "Previous");
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            try
+            {
+                EditorPrefs.SetInt(keys[0], hostObject.GetInstanceID()); EditorPrefs.SetInt(keys[1], 3);
+                window.ShowUtility();
+                window.Initialize();
+                Assert.That(Context.Instance.RuntimeFSMController, Is.SameAs(window.Source));
+                Assert.That(window.Graph.StateNodes.ContainsKey("DoNotSnap"), Is.False);
+                window.Close();
+                Assert.That(EditorPrefs.GetInt(keys[0]), Is.EqualTo(hostObject.GetInstanceID()));
+                Assert.That(EditorPrefs.GetInt(keys[1]), Is.EqualTo(3));
+                Assert.That(asset.states[0].rect, Is.EqualTo(new Rect(3, 7, 173, 37)));
+            }
+            finally
+            {
+                if (window) window.Close();
+                for (int i = 0; i < keys.Length; i++)
+                    if (had[i]) EditorPrefs.SetInt(keys[i], values[i]); else EditorPrefs.DeleteKey(keys[i]);
+                if (hadGuid) EditorPrefs.SetString(guidKey, guid); else EditorPrefs.DeleteKey(guidKey);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator GraphGridFillsViewportBehindContentAtDifferentZooms()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            try
+            {
+                window.Initialize(); window.position = new Rect(120, 120, 760, 480); window.ShowUtility();
+                for (int i = 0; i < 10; i++) { window.Repaint(); yield return null; }
+                var graph = window.Graph;
+                var grid = graph.Q<GridBackground>();
+                Assert.That(grid, Is.Not.Null);
+                Assert.That(grid.parent, Is.SameAs(graph), "Grid must be an unscaled GraphView background, not a content child.");
+                foreach (float zoom in new[] { 0.5f, 1f, 2f })
+                {
+                    graph.UpdateViewTransform(new Vector3(30, 20), Vector3.one * zoom);
+                    for (int i = 0; i < 4; i++) { window.Repaint(); yield return null; }
+                    Assert.That(grid.layout.width, Is.EqualTo(graph.layout.width).Within(1));
+                    Assert.That(grid.layout.height, Is.EqualTo(graph.layout.height).Within(1));
+                    Assert.That(grid.worldBound.size, Is.EqualTo(graph.worldBound.size));
+                    Assert.That(grid.customStyle.TryGetValue(new CustomStyleProperty<Color>("--line-color"), out var minor), Is.True, "The dark/light theme must define visible grid lines.");
+                    Assert.That(grid.customStyle.TryGetValue(new CustomStyleProperty<Color>("--grid-background-color"), out var background), Is.True);
+                    Assert.That(Mathf.Abs(minor.grayscale - background.grayscale) * minor.a, Is.GreaterThan(0.035f));
+                }
+            }
+            finally { window.Close(); }
+        }
+
+        [UnityTest]
+        public IEnumerator GraphTransitionOverlayUsesCrispWidthsAcrossZoomLevels()
+        {
+            var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
+            try
+            {
+                window.Initialize(); window.position = new Rect(120, 120, 760, 480); window.ShowUtility();
+                for (int i = 0; i < 10; i++) { window.Repaint(); yield return null; }
+                var graph = window.Graph;
+                var overlay = graph.Q<FSMTransitionBackground>();
+                Assert.That(overlay.parent, Is.SameAs(graph));
+                var width = typeof(FSMTransitionBackground).GetProperty("lineWidth", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.That(width, Is.Not.Null, "Transition widths need a bounded screen-space stroke instead of a wide feathered band.");
+                foreach (float zoom in new[] { 0.1f, 0.5f, 1f, 3f })
+                {
+                    graph.UpdateViewTransform(new Vector3(20, 10), Vector3.one * zoom);
+                    for (int i = 0; i < 4; i++) { window.Repaint(); yield return null; }
+                    Assert.That(overlay.layout.width, Is.EqualTo(graph.layout.width).Within(1));
+                    Assert.That(overlay.layout.height, Is.EqualTo(graph.layout.height).Within(1));
+                    Assert.That((float)width.GetValue(overlay), Is.InRange(1f, 2.5f));
+                }
+            }
+            finally { window.Close(); }
         }
 
         [UnityTest]

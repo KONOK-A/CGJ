@@ -13,6 +13,8 @@ namespace YLFramework.StateMachine
 
         private float edgeSizeMultiplier => Mathf.Clamp( graphView.scale,0.1f,1);
 
+        private float lineWidth => Mathf.Max(1f, 2f * edgeSizeMultiplier);
+
 
         private FSMStateGraphView graphView;
 
@@ -128,7 +130,7 @@ namespace YLFramework.StateMachine
             float outlineWidth = 2f * edgeSizeMultiplier;
             float arrowLength = 13f * edgeSizeMultiplier;
             Handles.color = color;
-            float width = 10f * edgeSizeMultiplier;
+            float width = lineWidth;
 
             if (bold)
             {
@@ -292,7 +294,7 @@ namespace YLFramework.StateMachine
             if (Context.Instance.RuntimeFSMController == null)
                 return;
 
-            float width = 10f * edgeSizeMultiplier;
+            float width = lineWidth;
 
             if (CloseTransition == transition)
                 width *= 1.5f;
@@ -355,7 +357,7 @@ namespace YLFramework.StateMachine
             if (Context.Instance.RuntimeFSMController == null)
                 return;
 
-            float width = 10f * edgeSizeMultiplier;
+            float width = lineWidth;
 
             int index = Context.Instance.FSMController.RuntimeFSMController.IndexOf(Context.Instance.RuntimeFSMController);
             FSMStateNode stateNode = Context.Instance.FSMController.GetCurrentStateInfo(index, Context.Instance.LayerParent);
