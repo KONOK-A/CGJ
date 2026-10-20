@@ -1,6 +1,7 @@
 // Adapted from ScriptableObjectSystem 1.1.4 (MIT). Copyright (c) 2024 弦风课堂.
 using UnityEditor;
 using UnityEngine;
+using System.IO;
 
 namespace YLFramework.DataAssets.Editor
 {
@@ -28,6 +29,15 @@ namespace YLFramework.DataAssets.Editor
             DrawDiagnostics(root);
             if (GUILayout.Button("Edit Data Assets")) ConfigsWindow.Open(root);
             if (GUILayout.Button("Save Root And Owned Entries")) ScriptableObjectConfigsController.Save(root);
+            // 路径只记在本机EditorPrefs，按资产GUID关联；不写入配置资产，也不随仓库分发。
+            var remembered = DataAssetsWorkbookMemory.TryGetPath(root, out var workbook);
+            var exists = remembered && File.Exists(workbook);
+            using (new EditorGUI.DisabledScope(!exists))
+            {
+                var content = new GUIContent("在文件夹中打开Excel",
+                    !remembered ? "尚未导出过Excel" : exists ? workbook : "最近导出的文件不存在: " + workbook);
+                if (GUILayout.Button(content) && exists) DataAssetsWorkbookMemory.Reveal(root);
+            }
         }
 
         public static void DrawDiagnostics(ScriptableObjectConfigs root)

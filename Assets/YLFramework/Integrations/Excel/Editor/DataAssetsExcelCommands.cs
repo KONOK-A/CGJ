@@ -31,6 +31,7 @@ namespace YLFramework.Excel.Editor
         {
             var type = RequireValidRoot(root);
             ExcelAuthoring.ScriptableObjectToExcel(root.configs, path, dataType: type);
+            DataAssetsWorkbookMemory.Remember(root, path);
         }
 
         private static Type RequireValidRoot(ScriptableObjectConfigs root)

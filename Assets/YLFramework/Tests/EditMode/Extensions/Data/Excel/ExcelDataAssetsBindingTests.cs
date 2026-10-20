@@ -108,5 +108,25 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(File.ReadAllBytes(folder + "/Root.asset"), Is.EqualTo(before));
             Assert.That(Directory.Exists(entries), Is.False);
         }
+        [Test] public void ExportRemembersWorkbookForRevealByAssetGuid()
+        {
+            string output = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Temp/Extensions.Data.Excel/Unity",
+                Path.GetFileName(folder), "exported.xlsx");
+            Directory.CreateDirectory(Path.GetDirectoryName(output));
+            try
+            {
+                Adapter("Export", root, output);
+                Assert.That(File.Exists(output), Is.True);
+                Assert.That(DataAssetsWorkbookMemory.TryGetPath(root, out var remembered), Is.True);
+                Assert.That(remembered, Is.EqualTo(Path.GetFullPath(output)));
+                Assert.That(DataAssetsWorkbookMemory.CanReveal(root), Is.True);
+                string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
+                Assert.That(AssetDatabase.MoveAsset(AssetDatabase.GetAssetPath(root), folder + "/Renamed.asset"), Is.Empty);
+                Assert.That(AssetDatabase.AssetPathToGUID(folder + "/Renamed.asset"), Is.EqualTo(guid));
+                Assert.That(DataAssetsWorkbookMemory.TryGetPath(root, out var afterMove), Is.True);
+                Assert.That(afterMove, Is.EqualTo(Path.GetFullPath(output)));
+            }
+            finally { DataAssetsWorkbookMemory.Forget(root); }
+        }
     }
 }

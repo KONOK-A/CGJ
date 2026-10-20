@@ -16,7 +16,9 @@
 - DataAssets：`StringToHash/GetConfig(int)/RemoveConfig(int|string)`及其hash索引、碰撞拒绝、多owner、Ordinal名称身份全部保留，本次没有删除。只删除根上闲置的`excel_path`及Inspector显示；Excel路径由Editor显式传入。
 - Localization：静态`GetConfig(string)/RemoveConfig(root|string)`与句柄生命周期并存，本次没有删除。只删除闲置`excel_path`。
 - Excel：`boolean`→`Bool`、`int64`→`Long`的兼容同义词解析保留（原XF`ParseFieldType`本就支持）。`ExcelAuthoring/ExcelImportPlan`公开签名、三行表头/第4行数据、E0自定义转换、GUID/localFileID及SO/List/JSON工作流均不变。
-- `excel_path`的性质：原XF用它记住根资产上次使用的绝对工作簿路径，供导入/导出预填。YL作者流程改为每次调用显式传入路径，字段没有任何读写者，且绝对路径不可跨机器移植，因此删除是**作者工作流设计选择**，不是旧数据兼容清理。若未来要恢复“记住上次路径”的便利，应使用Editor侧状态并提供显式更改/清除，而不是把本机路径写进资产。
+- `excel_path`的性质：原XF用它记住根资产上次使用的绝对工作簿路径，供导入/导出预填。YL作者流程改为每次调用显式传入路径，字段没有任何读写者，且绝对路径不可跨机器移植，因此删除是**作者工作流设计选择**，不是旧数据兼容清理。
+- 已保留用户要求的“在文件夹中打开Excel”能力，但状态放在Editor侧：`DataAssetsWorkbookMemory`按资产GUID把最近成功导出的工作簿写入`EditorPrefs`，不进入`.asset`。DataAssets Inspector提供按钮，文件存在时调用`EditorUtility.RevealInFinder`，缺失时禁用并显示提示；资产改名/移动沿用同一GUID。路径失效不会静默清空，需重新导出或后续显式清除。
+- Localization当前没有Excel导入/导出作者流程，因此没有对应“打开导出文件”按钮；以后接入时可按同一GUID键机制实现，而不是恢复`MultiLanguageConfigs.excel_path`。
 - 复用的成熟功能、公开数据布局（除上述字段）、TypeCache类型绑定、Other/TMP反射、中文适用变体回退与Resource Lease不是兼容层，继续保留。原XF许可证/版权与来源声明必须保留。
 
 ### 本轮验证与接收影响
@@ -25,9 +27,10 @@
 - 纠正后离线：Save核心/门面/既有纯Json共37/37；SO Pure 10/10（hash碰撞用例恢复并通过）；真实xlsx 20/20（含`excel_path`不存在断言，类型别名用例已恢复为支持）。Runtime457源、Editor102源、可选Excel7源辅助编译成功，既有39/4个产品warning。
 - 纠正后原生EditMode：`G:/Unity/BD26/compat-correction-edit-01`，PID4768、OS Exit0，111/111、0失败/跳过；含禁Domain Reload双轮（同域token`ac870e522d984bc4b78e1e93e461bb35`，每轮登记0、Lease0、Save关闭）。较删除前112精确变化：移除5项（4个迁移专用、1个旧`excel_path`字段用例），新增4项（当前模型字符串/错误ID、迁移API不存在、SO根不存路径、显式预览不持久化路径），净-1。
 - 纠正后原生PlayMode：`G:/Unity/BD26/compat-correction-play-01`，PID38592、OS Exit0，15/15、0失败/跳过。本轮未重建/运行Player；旧Development与Release证据不自动作为本次删除后的新运行证明。
+- 工作簿定位功能原生复验：`G:/Unity/BD26/workbook-reveal-edit-01`，PID39120、OS Exit0，EditMode 114/114、0失败/跳过（新增2项记忆逻辑、1项导出记忆+改名保GUID）。该轮只改Editor作者层和EditMode测试，Runtime源未变，PlayMode 15/15既有证据仍对应同一Runtime快照；未打开Explorer窗口做GUI人工验证，`RevealInFinder`本身只由源码路径调用。
 - 未启动主工程Editor/MCP或修改主Git；主会话必须接纠正后最终tip。若主已接收`4f1c683`，再接本纠正提交即可，不需重做整轮融合；不能把`4f1c683`当作最终去兼容成果。
 - 原生前冻结的61个B配置/Packages/IDE文件字节与SHA在`G:/Unity/BD26/no-compat-protected`，纠正轮结束再次逐字节一致；IDE改写已恢复，测试meta/空目录原件在`G:/Unity/BD26/compat-correction-closeout`。无其他未跟踪产物。
-- 本轮新增一个中文纠正提交（`4f1c683`保留不改写），与本节同提交。共享Core/Resource/主体asmdef、Packages/ProjectSettings、原XF及主工程均未改。
+- 纠正提交及“在文件夹中打开Excel”提交均为中文本地提交，原历史不重写（`4f1c683`保留）；最终tip通过`git log -1 --oneline -- .kilo/handovers/xf-ext-data.md`取得。共享Core/Resource/主体asmdef、Packages/ProjectSettings、原XF及主工程均未改。
 
 ## 此前主工作区接收准备（历史）
 
