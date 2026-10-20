@@ -18,11 +18,11 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.DataBatch
 {
-    // 仅供B独立工程批处理验收；不进入产品默认导出或主工程MCP。
+    // 主工程B接收验收；不进入产品默认导出，输出由主工程独占入口绑定。
     [InitializeOnLoad]
     public static class DataUnityAcceptance
     {
-        private const string Project = "G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-data-14669bf18d117ed8";
+        private const string Project = "G:/Unity/Projects/CGJ2024";
         private const string Plugin = "Assets/YLFramework/Integrations/Excel/Editor/Plugins/MiniExcel.dll";
         private const string ProfileKey = "YLFramework.BDataBatch.Profile";
 
@@ -42,7 +42,7 @@ namespace YLFramework.Tests.DataBatch
             var profile = string.IsNullOrEmpty(saved) ? new ProfileState
             {
                 company = PlayerSettings.companyName, product = PlayerSettings.productName,
-                testProduct = "YL-BData-" + Path.GetFileName(Output())
+                testProduct = "YL-MainBData-" + Path.GetFileName(Output())
             } : JsonConvert.DeserializeObject<ProfileState>(saved);
             SessionState.SetString(ProfileKey, JsonConvert.SerializeObject(profile));
             PlayerSettings.companyName = "YLFrameworkTests";
@@ -82,13 +82,14 @@ namespace YLFramework.Tests.DataBatch
                 for (int i = 0; i < EditorSceneManager.sceneCount; i++) Require(!EditorSceneManager.GetSceneAt(i).isDirty, "Refuse to replace an unsaved scene.");
                 Require(BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64), "Windows64 support unavailable.");
                 PlayerSettings.companyName = "YLFrameworkTests";
-                PlayerSettings.productName = "YL-BData-Player-" + backend;
+                PlayerSettings.productName = "YL-MainBData-Player-" + backend;
                 PlayerSettings.SetScriptingBackend(target, backend);
                 PlayerSettings.SetManagedStrippingLevel(target, backend == ScriptingImplementation.IL2CPP ? ManagedStrippingLevel.Low : ManagedStrippingLevel.Disabled);
                 string parent = "Assets/YLFramework/Tests/Fixtures/Extensions/Data";
                 EnsureFolder(parent);
                 string folder = parent + "/Player-" + Guid.NewGuid().ToString("N");
                 AssetDatabase.CreateFolder(parent, Path.GetFileName(folder));
+                if (!Application.isBatchMode) DataMainAcceptance.OwnBuildFolder(folder);
                 string prefix = "BData_" + Guid.NewGuid().ToString("N");
                 EnsureFolder(folder + "/Resources/" + prefix);
                 var languages = ScriptableObject.CreateInstance<YLFramework.Localization.MultiLanguageConfigs>();
@@ -128,26 +129,52 @@ namespace YLFramework.Tests.DataBatch
                 Require(EditorSceneManager.SaveScene(scene, scenePath), "Could not save the owned probe scene.");
                 string output = Path.Combine(Output(), "Player/BData.exe");
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
-                receipt["scene"] = scenePath; receipt["stripping"] = PlayerSettings.GetManagedStrippingLevel(target).ToString();
-                var built = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { scenePath }, target = BuildTarget.StandaloneWindows64, locationPathName = output, options = BuildOptions.Development });
+                receipt["scene"] = scenePath; receipt["output"] = output; receipt["stripping"] = PlayerSettings.GetManagedStrippingLevel(target).ToString();
+                receipt["development"] = false; receipt["options"] = BuildOptions.None.ToString();
+                receipt["compiler"] = PlayerSettings.GetIl2CppCompilerConfiguration(target).ToString();
+                receipt["projectPath"] = Project; receipt["pid"] = System.Diagnostics.Process.GetCurrentProcess().Id;
+                DataMainAcceptance.Write(Path.Combine(Output(), "source-binding.json"), Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories).Where(IsBPath).Select(p => new { path = p, sha256 = DataMainAcceptance.Hash(p) }));
+                var built = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { scenePath }, target = BuildTarget.StandaloneWindows64, locationPathName = output, options = BuildOptions.None });
                 receipt["result"] = built.summary.result.ToString(); receipt["errors"] = built.summary.totalErrors; receipt["warnings"] = built.summary.totalWarnings;
+                receipt["development"] = (built.summary.options & BuildOptions.Development) != 0;
+                receipt["options"] = built.summary.options.ToString();
                 Require(built.summary.result == BuildResult.Succeeded, "Player build failed: " + built.summary.result);
+                Require((built.summary.options & BuildOptions.Development) == 0, "Release build required.");
+                receipt["steps"] = built.steps.Select(s => new { s.name, seconds = s.duration.TotalSeconds, messages = s.messages.Select(m => new { m.content, type = m.type.ToString() }) }).ToArray();
+                string stripped = "Library/Bee/artifacts/WinPlayerBuildProgram/ManagedStripped";
+                if (backend == ScriptingImplementation.IL2CPP)
+                {
+                    Require(File.Exists(Path.Combine(Path.GetDirectoryName(output), "GameAssembly.dll")), "Missing native IL2CPP output.");
+                    Directory.CreateDirectory(Path.Combine(Output(), "managed-stripped"));
+                    foreach (string assembly in new[] { "YLFramework.Runtime", "Assembly-CSharp" })
+                        File.Copy(Path.Combine(stripped, assembly + ".dll"), Path.Combine(Output(), "managed-stripped", assembly + ".dll"));
+                }
                 var excluded = Directory.GetFiles(Path.GetDirectoryName(output), "MiniExcel*", SearchOption.AllDirectories).Concat(Directory.GetFiles(Path.GetDirectoryName(output), "UnityEditor*.dll", SearchOption.AllDirectories)).ToArray();
                 receipt["forbiddenPlayerFiles"] = excluded;
                 Require(excluded.Length == 0, "Editor/backend artifact entered build output.");
+                receipt["executableSha256"] = DataMainAcceptance.Hash(output);
                 exit = 0;
             }
             catch (Exception error) { receipt["error"] = error.ToString(); Debug.LogException(error); }
             finally
             {
-                PlayerSettings.SetScriptingBackend(target, previousBackend); PlayerSettings.SetManagedStrippingLevel(target, previousStripping);
-                PlayerSettings.companyName = company; PlayerSettings.productName = product;
-                if (scenes.Length > 0 && scenes.Any(s => s.isLoaded) && scenes.Any(s => s.isActive) && scenes.All(s => !string.IsNullOrEmpty(s.path))) EditorSceneManager.RestoreSceneManagerSetup(scenes);
-                else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                receipt["settingsRestored"] = PlayerSettings.GetScriptingBackend(target) == previousBackend && PlayerSettings.GetManagedStrippingLevel(target) == previousStripping && PlayerSettings.companyName == company && PlayerSettings.productName == product;
+                try
+                {
+                    PlayerSettings.SetScriptingBackend(target, previousBackend); PlayerSettings.SetManagedStrippingLevel(target, previousStripping);
+                    PlayerSettings.companyName = company; PlayerSettings.productName = product;
+                    if (scenes.Length > 0 && scenes.Any(s => s.isLoaded) && scenes.Any(s => s.isActive) && scenes.All(s => !string.IsNullOrEmpty(s.path))) EditorSceneManager.RestoreSceneManagerSetup(scenes);
+                    else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                    bool restored = PlayerSettings.GetScriptingBackend(target) == previousBackend && PlayerSettings.GetManagedStrippingLevel(target) == previousStripping && PlayerSettings.companyName == company && PlayerSettings.productName == product;
+                    receipt["settingsRestored"] = restored;
+                    if (!restored) exit = 3;
+                }
+                catch (Exception error) { receipt["restoreError"] = error.ToString(); receipt["settingsRestored"] = false; exit = 3; }
+                receipt["passed"] = exit == 0;
+                receipt["exitCode"] = exit;
                 File.WriteAllText(Path.Combine(Output(), "build.json"), JsonConvert.SerializeObject(receipt, Formatting.Indented));
-                EditorApplication.Exit(exit);
+                if (Application.isBatchMode) EditorApplication.Exit(exit);
             }
+            if (exit != 0) throw new InvalidOperationException("Main data Player build failed; inspect build.json.");
         }
 
         public static void Audit()
@@ -203,7 +230,8 @@ namespace YLFramework.Tests.DataBatch
                 report["passed"] = true;
             }
             catch (Exception error) { report["passed"] = false; report["error"] = error.ToString(); exit = 1; Debug.LogException(error); }
-            finally { File.WriteAllText(Path.Combine(Output(), "audit.json"), JsonConvert.SerializeObject(report, Formatting.Indented)); EditorApplication.Exit(exit); }
+            finally { File.WriteAllText(Path.Combine(Output(), "audit.json"), JsonConvert.SerializeObject(report, Formatting.Indented)); if (Application.isBatchMode) EditorApplication.Exit(exit); }
+            if (exit != 0) throw new InvalidOperationException("Main data audit failed; inspect audit.json.");
         }
 
         private static object ProbeSubAsset()
@@ -237,20 +265,29 @@ namespace YLFramework.Tests.DataBatch
             parentMatches = child.parent == root, member = root.configs.Contains(child), owned = ScriptableObjectConfigsController.IsOwned(root, child)
         };
 
-        private static bool IsBPath(string path) => path.Contains("/Systems/DataAssets/") || path.Contains("/Systems/Localization/") || path.Contains("/Systems/Save/") || path.Contains("/Integrations/Excel/") || path.Contains("/Extensions/Data/");
+        private static bool IsBPath(string path)
+        {
+            path = path.Replace('\\', '/');
+            return path.Contains("/Systems/DataAssets/") || path.Contains("/Systems/Localization/") || path.Contains("/Systems/Save/") || path.Contains("/Integrations/Excel/") || path.Contains("/Extensions/Data/");
+        }
         private static void EnsureFolder(string path)
         {
             if (AssetDatabase.IsValidFolder(path)) return;
             var parent = Path.GetDirectoryName(path).Replace('\\', '/'); EnsureFolder(parent);
             AssetDatabase.CreateFolder(parent, Path.GetFileName(path));
         }
-        private static void CheckProject() => Require(Application.isBatchMode && Path.GetDirectoryName(Application.dataPath).Replace('\\', '/') == Project, "Wrong project or non-batch execution.");
+        private static void CheckProject()
+        {
+            Require(DataMainAcceptance.Canonical(Path.GetDirectoryName(Application.dataPath)) == Project, "Wrong main project.");
+            DataMainAcceptance.Identity();
+        }
         private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
         private static string Output()
         {
             var args = Environment.GetCommandLineArgs();
+            if (!Application.isBatchMode) return DataMainAcceptance.Output();
             int index = Array.IndexOf(args, "-dataAcceptanceOutput");
-            if (index < 0 || index + 1 >= args.Length || !Path.GetFullPath(args[index + 1]).StartsWith("G:\\Unity\\BD26\\", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Missing dedicated B output.");
+            if (index < 0 || index + 1 >= args.Length || !DataMainAcceptance.Canonical(args[index + 1]).StartsWith("G:/Unity/MB26/", StringComparison.Ordinal)) throw new InvalidOperationException("Missing dedicated main B output.");
             return args[index + 1];
         }
     }

@@ -53,7 +53,7 @@ namespace YLFramework.Tests.Resource
                 string.Join(", ", visited.OrderBy(x => x, StringComparer.Ordinal)));
         }
 
-        private static bool IsXfab(string name) => new[] { "xfab", "xfgameframework", "xffsm", "ICSharpCode.SharpZipLib", "EPPlus" }
+        private static bool IsXfab(string name) => new[] { "xfab", "xfgameframework", "xffsm", "ICSharpCode.SharpZipLib", "EPPlus", "MiniExcel" }
             .Any(part => name.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0);
 
         internal static bool IsApprovedBouncyCastleReference(string path)

@@ -57,7 +57,9 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 | Action | 动作组合、命名执行、安全句柄、屏幕过渡与内建 BCL Observable | 已归入 Runtime | [Modules/Action.md](Modules/Action.md) |
 | Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
 | Resource | 唯一 ResourceSystem、显式启动接入、Catalog、资产/实例/Scene 租约、Core/Audio Provider、构建发布与版本事务 | 正式加载/更新及双模式最小示例已接入；远端当前限Windows Editor，阶段8 Player最终验收另行实施 | [Modules/Resource.md](Modules/Resource.md) |
-| Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
+| Save | 唯一SaveStore的当前模型/槽位、同步异步、取消并发、缓存来源和显式备份恢复 | B已接入；仅当前v2，不迁移旧档 | [Modules/Save.md](Modules/Save.md) |
+| Localization / DataAssets | 多语言文本图片与SO根/子资产作者流程、显式owner与Resource Lease | B已接入；验证范围见正式Plan | [配置数据接入](Architecture.md#配置数据接入) |
+| Excel（可选） | MiniExcel Editor-only，真实xlsx SO/List/JSON预览确认、失败回滚与工作簿定位 | 不进入核心默认包或Player | [配置数据接入](Architecture.md#配置数据接入) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 

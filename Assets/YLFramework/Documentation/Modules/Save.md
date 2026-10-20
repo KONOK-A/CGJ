@@ -4,15 +4,15 @@
 
 ## 作用
 
-提供本地存档能力：管理多个存档槽（创建 / 删除 / 排序 / 命名 / 查询），按“存档槽 + 文件名”保存和读取任意可序列化对象，并提供全局设置（Setting）的读写。
+提供本地存档能力：管理多个存档槽（创建 / 删除 / 排序 / 命名 / 查询）、当前槽与`ISaveModel`，按“存档槽 + 文件名”保存和读取可序列化对象，并提供全局设置（Setting）、同步/异步与明确的读取来源。
 
-写入采用“临时文件 → 原子替换 → 保留上一份备份”的流程，单次异常写入不会损坏整份存档；JSON 损坏时自动尝试备份恢复。
+单文件写入采用“flush临时文件 → 原子替换 → 保留上一份备份”。读取损坏主件可采用有效备份，但不修改原件；只有显式恢复才修盘。跨索引/目录操作不是全根多文件掉电事务，失败证据与staging/tomb保留，不承诺通用文件系统或超长路径问题已根除。
 
 ## 位置
 
 - 运行时：[`Runtime/Systems/Save/`](../../Runtime/Systems/Save/)
-  - 文件读写辅助：`SaveFileIO.cs`（原子写入 / 备份恢复）
-  - 序列化辅助：[`Serialization/`](../../Runtime/Systems/Save/Serialization/)
+- 唯一存储引擎：`SaveStore.cs`；Unity门面：`SaveManager.cs`；模型/来源/版本合同：`SaveContracts.cs`。
+- 文件读写辅助：`SaveFileIO.cs`（原子写入 / 备份恢复）；序列化辅助：[`Serialization/`](../../Runtime/Systems/Save/Serialization/)。
 - 通用字典：[`Runtime/Foundation/Serialization/SerializedDictionary.cs`](../../Runtime/Foundation/Serialization/SerializedDictionary.cs)，归 Runtime 主体的 Foundation 职责，不是 Save 专属类型。
 - 原生 Inspector：[`Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs`](../../Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs)，归 Editor-only 的 `YLFramework.Editor`。
 
@@ -22,15 +22,18 @@
 - 槽位信息：`DisplayName` / `Note`（可选）、`CreateTime` / `LastSaveTime`，`RenameSaveItem` / `SetSaveItemNote`。
 - 对象存取：`SaveObject` / `LoadObject<T>` / `TryLoadObject<T>` / `LoadObjectOrDefault<T>` / `DeleteObject` / `HasObject` / `GetObjectNames`（按文件名与存档 ID 重载）。
 - 全局设置：`LoadGlobalSetting<T>` / `TryLoadGlobalSetting<T>` / `SaveGlobalSetting` / `DeleteAllSetting`。
-- 可靠性：原子写入（`.tmp` + `File.Replace`）、上一版本 `.bak` 备份（旧主文件缺失时自动提升备份）、损坏文件保留为 `.corrupt-时间戳`、`SaveSystemData.json` 损坏时优先备份恢复、文件名合法性校验（拒绝路径分隔符、`..`、末尾点 / 空格、Windows 保留设备名、超长名称）。
+- 模型：`CreateModel<T>` / `LoadModel<T>` / `SaveModel<T>`及对应Async、`LoadAllModelsAsync<T>`，`CurrentSaveID`与普通对象槽共用索引和缓存。模型`Id`必须与非负槽号一致，创建参数错误保持`ArgumentException`。
+- 可靠性：单文件原子写入、`.bak`备份、损坏/IO/权限失败明确抛出且保源；`ReadObject<T>/ReadObjectAsync<T>/ReadGlobalSetting<T>`返回`SaveReadResult<T>`，`Status/IsCached`保留来源。`RestoreObjectBackup/RestoreSettingBackup/RestoreIndexBackup`为显式修盘入口，保留`.corrupt-*`原件；`IndexNeedsRecovery`不允许静默覆盖坏索引。
 - 可测试 / 可替换存储：`StorageRoot` + `SetStorageRoot(path)`（默认 `Application.persistentDataPath`），存档数据懒加载。
 - 序列化扩展：`SerializerSettings`（可添加 `JsonConverter`，仅作用于业务对象与全局设置）与 `SerializationFormat`，默认行为与旧存档一致；存档索引（SaveSystemData）使用内部固定设置序列化，不受用户 converter 影响。
-- 版本扩展点：`CurrentDataVersion` 与 `MigrateSaveSystemData`（当前无实际迁移逻辑）；文件版本高于当前支持版本时拒绝读写并抛 `InvalidOperationException`，避免覆盖未来版本数据。
+- 当前索引版本固定为2；所有不支持版本均抛`SaveVersionException`并保留原件。没有`SaveMigration`、v1复制、XF Archive导入或自动转换，不扫描旧档、不清空坏档。普通`DeleteObject<T>`重载保留，不是历史迁移能力。
 - 序列化辅助类型：Foundation 的统一 `SerializedDictionary<TKey,TValue>`（标准字典接口及 Unity 回调）；Save 自有 `SerializedVector3` / `SerializedVector2`、`SerializedColor` 及对应扩展。
 
 ## 主要类型
 
 - `SaveManager`：存档静态入口（含 `SaveItem`、`SaveOrder`）。
+- `SaveStore`：BCL文件引擎，显式构造独占root并`Dispose()`；没有第二ArchiveManager。
+- `ISaveModel`：当前模型的`Id`合同；`SaveReadResult<T>`、`SaveReadStatus`、`SaveVersionException`、`SaveRecoveryRequiredException`：来源与错误合同。
 - `SaveManager.SaveItem`：存档槽数据（编号、创建 / 最后保存时间、显示名、备注）。
 - `SaveFileIO`（internal）：原子写入、备份恢复与 JSON 读写。
 - `YLFramework.Foundation.SerializedDictionary<TKey,TValue>`：唯一通用字典；`YLFramework.Services.Save` 不再定义另一份字典。
@@ -76,16 +79,14 @@ public class ExampleConfig : MonoBehaviour
 
 ## 当前状态
 
-已完成，测试：`Tests/EditMode/SaveManagerTests.cs` 共 55 项（根目录切换、槽位管理、排序、对象存取、缓存语义、磁盘状态组合与备份恢复、旧格式兼容、未来版本拒绝、全局设置、序列化配置、文件名平台风险）。
-
-未提供异步 API（见备注）。
+B接收已替换唯一引擎，当前测试位于`Tests/EditMode/Extensions/Data/Save/`及`SerializedDictionarySaveTests.cs`，覆盖当前模型/槽位/版本拒绝、文件安全、取消并发、缓存来源/显式恢复与JsonUtility联合回归。实际Unity、双轮Play及Release Player结果以正式拓展Plan本轮接收记录为准；旧55项及迁移证据不作为当前合同或新运行证明。
 
 ## 备注
 
-- 存档与设置默认写入 `Application.persistentDataPath/SaveData` 与 `/Setting`；内部数据文件为 `SaveData/SaveSystemData.json`（名称与 JSON 成员名保持不变以兼容旧存档）；每次覆盖写入会保留同目录 `.bak` 备份。
-- 兼容性：旧版 `SaveSystemData.json`（`SaveItemDict` + `SaveID` / `CreateTime` / `LastSaveTime`）可直接加载；旧数据缺少 `DisplayName` / `Note` / `DataVersion` 时按默认值处理，首次加载会补写 `DataVersion`。修复了旧实现中 `LastSaveTime` 重载后丢失的问题。
+- 存档与设置默认写入 `Application.persistentDataPath/SaveData` 与 `/Setting`；当前索引为`SaveData/SaveSystemData.json`。没有路径回退或旧格式猜测；应用应明确选择自己的profile/root，不将测试写入原游戏目录。
+- 对象和设置仍为裸JSON；不支持`TypeNameHandling`从JSON实例化CLR类型。DTO/Converter异步反序列化在线程池执行，不能调用Unity API或重入同owner；应用负责实际DTO与反射成员的IL2CPP保留。
 - 文件名（`saveFileName` / 全局设置 `fileName`）不允许包含路径分隔符、`..`、非法字符、末尾点 / 空格、Windows 保留设备名（CON / PRN / AUX / NUL / COMx / LPTx）或超过 200 字符，非法时抛 `ArgumentException`；不支持子目录。
-- 不支持多线程 / 多进程并发写同一文件；内存缓存使 `LoadObject` 返回同一实例，直到 `DeleteObject` / `SetStorageRoot` / 重载。
+- 同root排他owner、同槽串行、跨槽可并发；`Dispose/Close/SetStorageRoot`取消排队并排空旧owner。缓存继续返回原实例，调用方负责该对象的并发修改。删除为`.deleted-*`软删除，不是安全擦除，也不自动清理。
 - `RenameSaveItem` / `SetSaveItemNote` 写盘失败会回滚内存中的显示名 / 备注，保持与磁盘一致；`SaveObject` 的“保存时间”更新在对象文件写入成功之后进行。
-- 异步 API 本轮未实现：存档对象是任意用户对象图，无法保证在后台线程上安全（可能包含 Unity 主线程对象）；`JsonConvert` + 共享缓存也没有清晰的多线程语义，保持同步实现更可靠。
+- 异步保存先在调用线程序列化快照，再异步IO；取消在单文件原子提交点前有效，提交后报告成功，不把已提交写入改报取消。默认Unity路径先在主线程捕获，工作线程可用显式root。
 - 编辑器下不再于静态构造中自动初始化（改为首次 API 调用懒加载），避免 EditMode / 编辑器工具意外读写真实存档目录。

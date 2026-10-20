@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -35,6 +36,11 @@ namespace YLFramework.Tests.DataBatch
         {
             public bool passed;
             public string backend;
+            public string actualBackend;
+            public bool development;
+            public string graphics;
+            public int pid;
+            public List<string> errorLogs = new List<string>();
             public string unityVersion;
             public string persistentDataPath;
             public string error;
@@ -50,8 +56,9 @@ namespace YLFramework.Tests.DataBatch
 
         private IEnumerator Start()
         {
+            Application.logMessageReceived += OnLog;
             output = Argument("-dataProbeOutput");
-            if (string.IsNullOrEmpty(output) || !Path.GetFullPath(output).StartsWith("G:\\Unity\\BD26\\", StringComparison.OrdinalIgnoreCase)) { Application.Quit(21); yield break; }
+            if (string.IsNullOrEmpty(output) || !Path.GetFullPath(output).Replace('\\', '/').StartsWith("G:/Unity/MB26/", StringComparison.Ordinal) || !File.Exists("G:/Unity/MB26/owner.json")) { Application.Quit(21); yield break; }
             var checks = Checks();
             while (true)
             {
@@ -69,9 +76,18 @@ namespace YLFramework.Tests.DataBatch
         private IEnumerator Checks()
         {
             report.backend = backend;
+#if ENABLE_IL2CPP
+            report.actualBackend = "IL2CPP";
+#else
+            report.actualBackend = "Mono2x";
+#endif
+            report.development = Debug.isDebugBuild;
+            report.graphics = SystemInfo.graphicsDeviceType + "/" + SystemInfo.graphicsDeviceName;
+            report.pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+            Require(!report.development && report.actualBackend == backend, "A new non-Development Player with the requested backend is required.");
             report.unityVersion = Application.unityVersion;
             report.persistentDataPath = Application.persistentDataPath;
-            Require(report.persistentDataPath.Contains("YL-BData-Player"), "Player persistent data is not isolated.");
+            Require(report.persistentDataPath.Contains("YL-MainBData-Player"), "Player persistent data is not isolated.");
             report.assemblies = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName().Name).ToArray();
             Require(!report.assemblies.Any(n => n.StartsWith("UnityEditor", StringComparison.Ordinal) || n.Contains("MiniExcel")), "Editor/backend assembly entered Player.");
             report.playerAssembliesExcluded = true;
@@ -152,6 +168,7 @@ namespace YLFramework.Tests.DataBatch
         private void Finish(Exception error)
         {
             localization?.Dispose(); data?.Dispose();
+            if (error == null && report.errorLogs.Count != 0) error = new InvalidOperationException("Player emitted Error/Assert/Exception logs.");
             report.passed = error == null;
             report.error = error?.ToString();
             File.WriteAllText(Path.Combine(output, "player-result.json"), JsonUtility.ToJson(report, true));
@@ -159,6 +176,11 @@ namespace YLFramework.Tests.DataBatch
             else Debug.LogException(error);
             Application.Quit(error == null ? 0 : 20);
         }
+        private void OnLog(string condition, string stack, LogType type)
+        {
+            if (type == LogType.Error || type == LogType.Exception || type == LogType.Assert) report.errorLogs.Add(type + ": " + condition + Environment.NewLine + stack);
+        }
+        private void OnDestroy() => Application.logMessageReceived -= OnLog;
         private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message ?? "B data probe failed."); }
         private static string Argument(string name) { var args = Environment.GetCommandLineArgs(); int i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
     }

@@ -326,12 +326,13 @@ namespace YLFramework.Tests.Resource
         [Test]
         public void ArtifactStoreApplicationsCanConfigureTheSameImageSafetyAndCachePolicy()
         {
-            Assert.That(typeof(ResourceConfiguration).GetConstructors().Any(constructor =>
-            {
-                var parameters = constructor.GetParameters();
-                return parameters.Length == 3 && parameters[0].ParameterType == typeof(ArtifactStore) &&
-                    parameters[2].ParameterType == typeof(ResourceImageOptions);
-            }), Is.True, "Versioned applications must not lose the formal image configuration surface.");
+            string root = Path.Combine(Application.temporaryCachePath, "YL89-Policy-" + Guid.NewGuid().ToString("N"));
+            var store = new ArtifactStore(root, new[] { new ResourceProjectMount("policy", "StandaloneWindows64", "v1") });
+            var images = new ResourceImageOptions(idleCapacityBytes: 0);
+            var configuration = new ResourceConfiguration(store, images: images);
+            Assert.That(configuration.ArtifactStore, Is.SameAs(store));
+            Assert.That(configuration.Images, Is.SameAs(images), "Versioned applications retain the actual image policy, including optional decryption support.");
+            Assert.That(Directory.Exists(root), Is.False, "Configuring image policy must not initialize or write the store.");
         }
 
         [UnityTest]

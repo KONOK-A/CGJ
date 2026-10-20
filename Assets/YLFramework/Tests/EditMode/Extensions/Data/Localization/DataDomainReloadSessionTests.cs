@@ -36,7 +36,11 @@ namespace YLFramework.Tests.Extensions.Data
         [UnitySetUp]
         public IEnumerator SetUp()
         {
-            Assert.That(Application.isBatchMode && Application.persistentDataPath.Contains("YL-BData-"), Is.True, "Use the dedicated B batch profile, never an original game profile.");
+            Assert.That(Application.persistentDataPath.Contains("YL-MainBData-"), Is.True, "Use the dedicated main B profile, never an original game profile.");
+            Assert.That(Path.GetFullPath(Path.GetDirectoryName(Application.dataPath)).Replace('\\', '/'), Is.EqualTo("G:/Unity/Projects/CGJ2024"));
+            var owner = JsonConvert.DeserializeObject<Dictionary<string, object>>(File.ReadAllText("G:/Unity/MB26/owner.json"));
+            Assert.That(Convert.ToInt32(owner["pid"]), Is.EqualTo(System.Diagnostics.Process.GetCurrentProcess().Id));
+            Assert.That((string)owner["sourceTip"], Is.EqualTo("5dce4f3e39e2f4bd11602e65cabace5f56108cf8"));
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.That(LocalizationManager.Configs, Is.Empty);
             Assert.That(ScriptableObjectManager.RegistrationCount, Is.Zero);
@@ -59,7 +63,7 @@ namespace YLFramework.Tests.Extensions.Data
         {
             string token = DomainToken;
             string output = Environment.GetEnvironmentVariable("YL_DATA_UNITY_OUTPUT");
-            Assert.That(output, Does.StartWith("G:\\Unity\\BD26\\"));
+            Assert.That(Path.GetFullPath(output).Replace('\\', '/'), Does.StartWith("G:/Unity/MB26/"));
             for (int round = 1; round <= 2; round++)
             {
                 yield return new EnterPlayMode(expectDomainReload: false);

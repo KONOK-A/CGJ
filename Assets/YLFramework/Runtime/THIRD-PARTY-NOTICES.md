@@ -67,6 +67,14 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - `Runtime/Systems/StateMachine/`及对应Editor：XFFSM 1.5.4，revision `b06333c2cdc801fcc401f14c252853bf099aa1b7`，MIT / `Copyright (c) 2021 弦小风`。保留成熟资产FSM，与原轻量`YLFramework.FSM`独立共存。`FSMSelectionDragger.cs`、网格及框选实现未复制，调用Unity公共GraphView API；Unity Reference-Only来源判断与链接见模块`ThirdPartyNotices.txt`，不将该许可重标为MIT。
 - 主工程接收不改变原XF包、场景或Prefab身份；本轮没有正式Exporter/G4独立交付，也不以共存工程验证代替无旧包首导入。
 
+### B 组配置数据来源
+
+- `Runtime/Systems/Localization/`与`Editor/Systems/Localization/`：Localization 1.0.9，revision `743876d52c5fe636effc0b63c34bd261d6cad243`，来源 https://gitee.com/xianfengkeji/xfgame-framework.localization.git ，MIT / `Copyright (c) 2024 弦风课堂`。保留语言/条目布局与作者流程，资源/事件接YL；不承接Youdao凭据、联网翻译或Steam窗口。完整MIT在模块`LICENSE.txt`及根`LICENSE.md`。
+- `Runtime/Systems/DataAssets/`及对应Editor：ScriptableObjectConfigs 1.1.4，revision `d7b6c171999e05a1840f413e1f3e2080e3853163`，来源 https://gitee.com/xianfengkeji/xfgameframework.scriptableobjectconfigs.git ，MIT / `Copyright (c) 2024 弦风课堂`。保留根/子资产、类型绑定、ID/名称/hash及CRUD；Runtime与Editor目录各保留完整`LICENSE.txt`。
+- `Integrations/Excel/Editor/`：ExcelSystem 1.0.7，revision `725f94f23327de190111573870146af66e9484b6`，MIT / `Copyright (c) 2025 弦风课堂`。三行表头、转换与SO/List/JSON作者用途继续保留，EPPlus未复制；完整MIT见`Licenses/XF-ExcelSystem-LICENSE.txt`。
+- 可选MiniExcel 1.31.2，来源 https://github.com/mini-software/MiniExcel ，commit `f1498a2d162debca9a1e9153cf2249131a75eeb0`，Apache-2.0。未经修改的netstandard2.0 DLL SHA256为`0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`；完整Apache-2.0随`Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt`，具体nupkg/来源及许可指纹在`Dependencies.json`。该整目录须作为选装单元携带，不进入核心默认导出或Player，核心无需解析器引用。
+- `Runtime/Systems/Save/`：吸收ArchiveSystem 1.0.7（revision `8046fe56f82983e6081a5c110559915d94df9e3e`，来源 https://gitee.com/xianfengkeji/xfgame-framework.archive-system.git ，MIT / `Copyright (c) 2025 弦风课堂`）的模型/槽位/当前项用途，统一到唯一SaveStore。没有第二ArchiveManager、DES、XF旧档扫描或迁移；删除历史迁移能力不撤销来源署名。完整MIT与2025版权见根`LICENSE.md`。
+
 - `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。
 - `Plugins/BouncyCastle/`随框架导出批准的BouncyCastle.Cryptography 2.7.0官方netstandard2.0二进制、完整MIT `LICENSE.md`与精确来源`SOURCE.txt`。Resource仅内部使用其HKDF-SHA256，Windows AES-GCM由系统CNG提供，不分发系统密码DLL。Tink仅作为framing参照，适用Apache-2.0全文随`TINK-LICENSE.txt`携带，不宣称依赖或分发Tink SDK；详见该目录来源声明。
 - `Runtime/Utilities/Json/`：JSONObject（Matt Schoen / Defective Studios，MIT），完整文本见该目录 `LICENSE.md`。

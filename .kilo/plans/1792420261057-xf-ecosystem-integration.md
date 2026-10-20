@@ -1,6 +1,6 @@
 # XF 生态拓展系统融合专项 Implementation Plan
 
-> **执行说明：** 本文件为唯一拓展融合专项方案，2026-10-19 编制并按审核意见增量修订。用户后续仅授权B9 Git收口及E0最小公共准备，当前执行记录见§10；13项系统迁移、三个Worktree和D1-D6仍未获实施/裁定授权。已有盘点、分组及主要顺序沿用，不重新全库研究。未勾选项不是已实现成果，不以批准局部改进原则代替重大API、依赖、Git或后续Worktree授权。
+> **执行说明：** 本文件为唯一拓展融合专项方案，2026-10-19编制并增量修订。早期授权/未授权状态是历史记录；2026-10-20用户已明确授权T3-B主工程完整本地merge、必要修复、真实Unity/Release Player验收及中文本地提交，最新记录见§12。只接固定B tip，不接C、不Push、不重写历史；安全、许可、数据保护继续有效。A及T2既有成果保留，不按旧快照恢复主HEAD或重做无关实现。
 
 **Goal:** 对长期蓝图选定的13项剩余 XF 系统完成真实盘点，确定唯一能力归属、依赖次序、三个低耦合 Worktree 边界及独立交付门禁。
 
@@ -455,3 +455,37 @@ B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终�
 - 原StateMachine增量有一次定向只读收口审查，无当前重要正确性/资产保护阻断项；三份API文件由本会话另审，不重复冻结A全库Review。实际主Unity仍2022.3.62f3c1/PID4708，规范化Editor重新编译通过，完整EditMode77/77、0失败/跳过/不确定，新XML在`edit-closeout-01`。Scene手柄的物理鼠标拖拽/完整作者GUI与G4仍未全验，不把编译/用例通过冒充人工GUI通过。
 - 不重建Player；既有IL2CPP Low图形通过仅保留为§10.6对应源码快照的历史证据，不外推为去兼容Runtime本次重建。后续B接收的Player验证应绑定合并后新输入。
 - 精确排除用户3份原游戏FSM、`Assets/Test`及其meta、`AlternateContent.meta`和原§11/T2回执，全部保持现场与未提交状态；提交只包含A产品/回归/必要说明。原XF、Packages/ProjectSettings、共享Core/Foundation/Resource、轻量FSM及已有meta/GUID不变，不清理分支/worktree，不覆盖用户脏资产或场景。
+
+## 12. T3-B 主工作区接收（2026-10-20）
+
+### 12.1 冻结与完整合并
+
+- 本轮授权覆盖旧“未授权/不得合并/Save只读”状态，不扩大到C、Push、rebase/reset/clean/stash、删除分支/worktree或全局工具配置。
+- 接收前主`integration/xf-yl` HEAD为`753172edd8896e4cd475a543a9fdf9085ef74e5b`；index空，无Git在途操作。固定B tip为`5dce4f3e39e2f4bd11602e65cabace5f56108cf8`，B0`c88500aef6651f5b13ac933dd1f209ecb314e92d`是实际merge-base，之后11条B提交均未接收。
+- 完整`--no-ff --no-commit`合并后的中文本地merge为`35f21bd54c3fc0a054d290936c5b09bfaf0906e4`，parent为上述主HEAD和固定B tip；未cherry-pick、squash或停在`4f1c683`。
+- 用户现场为本Plan的T2回执、3份`Assets/Games/MainModule/FSM/`资产、`Assets/Test`及`AlternateContent.meta`，均与B不重叠，保留且不纳入本轮提交。B净差异无Packages/lock、ProjectSettings、原游戏/图集、Core/Resource主体或安全配置。
+- 主Unity`2022.3.62f3c1` PID`16464`的MCP/projectPath绑定准确，`UIAcceptance.unity`已保存，未在Play/构建/测试。因另有未保存Shader而保留原Editor，不关闭、不另启Unity。新证据根`G:/Unity/MB26`的owner绑定主路径/PID/B tip/接收前SHA，开工冻结1663份文件SHA及配置/现场原字节；MainModule Bundle在G5前另冻结。
+
+### 12.2 合同与实际修复
+
+- 仅删除Save迁移链和两处`excel_path`；普通hash/名称身份/查询删除、多owner、Excel boolean/int64、Save当前模型/槽位/异步及创建参数原`ArgumentException`均保留。索引仅当前v2，不支持版本保源拒绝，不恢复旧档兼容。
+- 新`DataMainAcceptance`独占主工程入口复用A保存围栏/稀疏map算法，但不借用A/B旧PID或证据。自有测试profile、精确夹具登记、场景保护、source归属/真实编译图和Release BuildOptions.None独立绑定；B独立Batch脚本不直接用于主工程。
+- 首轮114项中11红是新围栏误拒自有Excel/SO夹具保存；改为创建前登记精确路径并验证数据目录GUID归属后114/114，不放宽用户资产保存。原红XML、日志和失败资产保留，逐文件归档后才清理。
+- Resource/UI首轮94项中1红：旧测试写死3参数构造，正式ResourceConfiguration早已有可选decryption第4参数。仅改成真实构造并断言同一ArtifactStore/图片策略及无IO，未改Resource产品或恢复旧API；复验94/94。
+- 独立只读Review的3项Important：UTF回调过早恢复、BuildReport后置失败可能漏判、Player普通Error日志漏检；以及JSON发布竞态。已改为UTF inactive/退出Play后恢复完整内存、仅接纳本轮设置差异并恢复原字节，再原子发布完成标记；构建最终passed/exitCode和原字节闭环作为Player前置；探针收集Error/Assert/Exception并扫描原生ERROR。专用合成负回执只用于拒绝回归，明确不是真实构建证明。
+- 已证实的晚到UTF profile副作用只涉及company/product两行，比较完整原始文本后恢复开工原字节，内存中只改对应字段；失败/恢复前后记录保留。后续门以真正UTF终态回执验证，不沿用旧即时回执证明终态。
+- 根LICENSE/Notices及Architecture/Save/Resource/README增量维护，保留2024 MIT和可选MiniExcel完整Apache-2.0。RootAssetTypes为应用显式Resource编译类型清单，AssetMetadata沿用根/条目字段，不新增全局注册器；可选Excel默认不导出、不进Player。
+
+### 12.3 验收与收口进度
+
+- 新源码经唯一主Editor自然导入和实际Unity编译，不以固定文件清单辅助编译替代。最终B EditMode `data-edit-final` 114/114、PlayMode `data-play-final` 15/15；本轮Foundation/Core/Framework/CoreIdentity/真实核心导出`boundary-01` 36/36；ResourceSystem/ResourceImage/CoreResource `resource-ui-final` 94/94；A四模块与原游戏双轮代表`behavior-play-final` 51/51。另实际发现并执行`SerializedDictionaryJsonTests` 6/6（`save-json-extra`），而非预估3项；不混入用户原B筛选数。Save相关原生用例为31 Safety + 2 Facade + 1原联合Save + 6 JSON，共40；SO Pure10和真实xlsx20均在114项内。以上发现数=执行数=通过数，均0失败/跳过，不宣称跑过全仓所有测试。
+- `boundary-01`后仅验收工具与Resource旧测试合同适配变化，不影响已测产品闭包/断言，沿用其36项实际结果；旧即时设置回执不作UTF终态证明。最终测试/构建在UTF inactive后核完整内存和原字节，`gate-complete.json`原子发布才算收束；最终保护快照再核全体配置。
+- 禁Domain Reload同域两轮真实EnterPlayMode/ExitPlayMode的token相同，每轮Localization/DataAssets登记及Lease均0、Save owner关闭，没有手动清static伪造退出。
+- 真实xlsx导出后根改名保持GUID/EditorPrefs记录，实际调用RevealInFinder；Explorer已选中`MB26/workbook-reveal-01/Exported.xlsx`并留GUI回执。未执行Inspector鼠标点击，不把方法调用冒充点击；临时根已归档后删除。
+- 新Windows64 Release Mono（`release-mono-final`，stripping Disabled）及IL2CPP Low（`release-il2cpp-final`，compiler Release）均实际BuildOptions.None构建成功，各0 error / 1495 warning。完整steps/messages保留；包括原有Core XML文档及包空程序集warning，未关闭诊断或扩改Core。旧B Development/A Release证据均未冒充本轮结果。
+- 两个新exe均图形启动并由独占wrapper校验：Mono PID30980、IL2CPP PID31304，实际后端匹配、development=false、Direct3D11/RTX4070TiSUPER、真实窗口、exit0、唯一成功marker、Error/Assert/Exception空且原生日志扫描通过。Save模型IO/备份来源及显式恢复/取消、SO反射AOT、Localization刷新、最终Lease0全部通过。Player文件/编译图/已加载程序集无MiniExcel/UnityEditor，4份实际DLL（Mono Runtime/Assembly-CSharp、IL2CPP stripped对应DLL）经Unity.Cecil查AssemblyRef，两个构建source-binding与最终C#一致。
+- MiniExcel为真实200192字节LFS实体，SHA256 `0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e`，PluginImporter Editor=true / Any=false / Windows64=false；普通YL Runtime/Editor无解析器必需引用。按固定tip真实Git集合核91份B新增meta及1份主适配meta，全部有资产、GUID一致、在原始Assets唯一；不套用历史交接的其他计数口径。SaveManager GUID保持`ff5957d84032533449f21601f372570a`；MIT2024及完整Apache-2.0均校验保留。
+- 1663项开工保护记录中1662项逐SHA相同，仅本Plan授权增量变化；ProjectSettings/Packages/原游戏/共享CoreResource/图集/用户FSM与测试文件保持开工字节，配置无新增文件，另448份MainModule Bundle相同。Standalone backend/stripping稀疏键及完整内存恢复，ProjectSettings SHA仍`b9fd68a9d8f52db81dd9f9c651e954d44d953359ee16f37478f842e8dea7596b`。59个可证自有夹具/临时输出/空父目录已逐文件复制、SHA核验后删除，源失败日志/XML、Player原件/存档及清理回执均在MB26；没有清整个Temp/Library。
+- 现场保护例外明确保留：新增归属未明的`.mcp.json`改动不暂存、不回退、不输出敏感值；原Shader仍脏。构建后另观察到`Assets/Settings/UniversalRP.asset`脏标记，未保存或ClearDirty，磁盘Git无差异；该资产不在开工原字节资产快照内，不宣称字节复原门覆盖它，其当前磁盘/内存观察另留证。原Editor保留，不操作任何其他工程Editor。
+- G4无XF干净接收/最终独立安装分发未执行；真实核心Export用例通过不等于G4，含XF等包的主Player也不等于干净分发。阶段9/Y9、BD26及A/C证据未覆盖。Inspector鼠标点击未执行；通用文件系统/超长路径风险未宣称消失。
+- 本地集成修复/文档/交接一次精确收口；本节所在提交即修复提交，完整SHA与最终index/保留现场记录写入MB26的`git-final.json`并在最终回复报告，避免为写自身Hash另造docs提交。只暂存本轮内容，Plan原T2增量保持未提交，不Push、不删除分支/worktree。

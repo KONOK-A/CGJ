@@ -21,9 +21,11 @@ namespace YLFramework.Tests.Extensions.Data
             const string parent = "Assets/YLFramework/Tests/Fixtures/Extensions/Data/Localization";
             EnsureFolder(parent);
             path = parent + "/Run-" + Guid.NewGuid().ToString("N") + ".asset";
+            YLFramework.Tests.DataAssets.DataAcceptanceOwnership.Own(path);
             root = ScriptableObject.CreateInstance<MultiLanguageConfigs>();
             AssetDatabase.CreateAsset(root, path);
             languagesPath = LocalizationAuthoring.GetLanguageFolder(root);
+            YLFramework.Tests.DataAssets.DataAcceptanceOwnership.Own(languagesPath);
         }
 
         [TearDown]

@@ -146,7 +146,21 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 
 Resource Editor按Data/Build/Publishing/Service/CodeGeneration归组，使用正式Project/Catalog/BuildMap与安全发布、代码生成。Help归Editor主体的独立功能分区，Core/Action/Audio/Foundation-Tools提供方及菜单/窗口/持久配置身份保持。Zip源码以全量BCL-only编译探针验证，不再以旧Zip产品DLL维持独立性。
 
-拓展融合公共准备E0只增加两项共享能力，不代表13项领域系统已迁入。`YLFramework.Excel`位于`Runtime/Systems/Excel/`，提供三类字段Attribute及来源数值不变的`ExcelFieldsType`；自定义转换器仍覆写`Import/Export/SetValue`，没有xlsx后端、文件IO、内部`ExcelFields` DTO或新DLL。原包仍在，消费者须明确使用新namespace，不扫描或转发原XF类型。
+拓展融合公共准备E0只增加两项共享能力，不代表13项领域系统已迁入。`YLFramework.Excel`位于`Runtime/Systems/Excel/`，提供三类字段Attribute及来源数值不变的`ExcelFieldsType`；自定义转换器仍覆写`Import/Export/SetValue`，Runtime无xlsx后端或文件IO。B接收的可选后端只在`Integrations/Excel/Editor/`，不成为普通Runtime/Editor依赖。原包仍在，消费者须明确使用新namespace，不扫描或转发原XF类型。
+
+### 配置数据接入
+
+Localization保持`MultiLanguageConfigs -> LanguageConfig -> LanguageInfo`布局。显式`AddConfig`或`LoadConfigAsync`返回owner句柄；关闭归还句柄，`GetConfig(string)`及按根/名称`RemoveConfig`仍可用。`LocalizeString/LocalizeImage`直接刷新并消费既有ResourceImage，不重启业务物体。请求语言、中文适用变体、English、显式登记顺序构成确定回退；Other公开text反射由应用为IL2CPP保留实际成员。
+
+DataAssets保留`ScriptableObjectConfigs/ScriptableObjectData`与`SingletonScriptableObjectConfigs<T>`、类型脚本GUID、根/子资产、名称身份和hash查询。多owner共享登记，每个owner归还自己的Registration/异步Asset；hash碰撞明确拒绝，不以“无调用方”删除`StringToHash/GetConfig(int)/RemoveConfig(int|string)`。Editor入口`Window/YLFramework/Data Assets`，只编辑显式选择的YL根，不扫描或删除旧XF资产。
+
+**RootAssetTypes**是应用传给`ResourceProjectMount.assetTypes`或`ResourceLocalSnapshot.CreateCatalog`的显式编译类型清单，不是新增全局注册器。B根类型为`typeof(YLFramework.Localization.MultiLanguageConfigs)`和`typeof(YLFramework.DataAssets.ScriptableObjectConfigs)`；闭合的自定义根/直接加载的具体子资产类型由应用同时登记，不能把开放泛型当运行时根。不改Resource默认类型表或Core合同。
+
+**AssetMetadata**沿用实际字段：SO根`displayName/configs/type_script_guid`、条目`parent/id/config_name/icon/des`；语言根`displayName/languages`（公开`Languages`列表）、语言`language/displayName/languagesInfo`、条目`id/type/str/image/url/notes`。资源地址中的`projectName/imageName/subAsset`仍是YL ProjectId/Path/SubAsset，不自动转换XF地址。两处`excel_path`已删除，且不以隐藏字段、迁移器或别名恢复。
+
+可选Excel提供`ExcelAuthoring`的SO/List/JSON导出及预览，`ExcelImportPlan`先核`Errors/Changes/CanCommit`再`Commit(true)`，取消不写；过期输入、新引用失效和部分应用失败均拒交或回滚。保留`boolean -> Bool`、`int64 -> Long`。已选SO根菜单位于`Assets/YLFramework/Excel/`；导出成功后EditorPrefs按资产GUID记忆工作簿，Inspector的“在文件夹中打开Excel”仅在文件存在时启用，改名/移动不丢记录，不把绝对路径写回.asset。Localization尚无Excel作者流程。选装时完整携带`Integrations/Excel/Editor`及Licenses；默认包不包含它。
+
+统一Save由`SaveStore`承担唯一文件/索引/槽位/模型/异步/缓存权威，`SaveManager`只提供Unity路径和门面。只支持当前v2，损坏/IO/版本失败不变成默认值；备份读取注明来源，显式恢复才修盘。没有SaveMigration、v1复制或XF Archive导入，普通删除重载保留。用法与并发/取消边界见[Save](Modules/Save.md)。
 
 `YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。来源与完整许可见根LICENSE及Notices。
 

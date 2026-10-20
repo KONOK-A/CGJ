@@ -1,5 +1,18 @@
 # B组配置数据交接
 
+## 主工作区T3-B接收纠正（2026-10-20最新）
+
+本节是主工程接收实绩，覆盖下文历史“仅B独立/主工程尚未接收”状态，不撤销普通功能保留及去迁移合同。B来源工作区没有继续改代码；本轮没有接C、Push或重写历史。
+
+- 接收前主`753172edd8896e4cd475a543a9fdf9085ef74e5b`，固定B最终`5dce4f3e39e2f4bd11602e65cabace5f56108cf8`；B0是实际merge-base，完整11提交经非squash merge为`35f21bd54c3fc0a054d290936c5b09bfaf0906e4`。后续修复完整SHA见本节所在提交、`G:/Unity/MB26/git-final.json`和最终回复。
+- 独占主入口为`Tests/Tools/Extensions/Data/Editor/DataMainAcceptance.cs`，绑定主路径、Unity2022.3.62f3c1、原Editor PID16464及MB26 owner。保留脏Shader和原场景，不另启同工程Unity；B原Batch脚本仍不直接用于主工程。主入口记录source归属、真实编译图、每轮自有profile/精确资产所有权、全内存/稀疏键/原字节恢复，再原子发布结束标记。
+- 真实主EditMode114/114、PlayMode15/15；补原JsonUtility/JSON6/6，Save相关原生总40（31+2+1+6），不是把离线37改标签。SO Pure10及xlsx20在114项中。禁Domain Reload同域两轮token相同，每轮登记/Lease0且Save关闭。边界/身份/核心Export36/36、Resource/UI94/94、A模块及原游戏双轮代表51/51；各发现=执行=通过，0失败/跳过。实际结果分目录见MB26，旧BD26不是主通过证明。
+- 两个新Windows64非Development Player实际构建、图形启动及exit0：Mono PID30980；IL2CPP Low/Release PID31304。各Build0error/1495warning均保留，未抑制诊断。Save文件IO/模型/备份恢复/取消、SO反射AOT、Localization及Lease0通过；编译图/实际文件/加载程序集均无MiniExcel或UnityEditor，另以Cecil核4份实际DLL的AssemblyRef及本次源码绑定。
+- 集成红→绿：过严保存围栏导致11个自有作者用例红，逐路径创建前登记后114绿；Resource旧测试固化3参数构造而正式API已支持可选decryption，仅修行为断言后94绿。只读Review的3项Important（UTF过早恢复、BuildReport后置失败漏判、普通Error漏检）及原子发布竞态已修，负回执/错误分类与最终Unity/Player闭环验证；全部原红保留。
+- MiniExcel真实实体SHA256不变，Editor-only、Any/Windows64禁用；91份固定B新增meta+1份主适配meta完整唯一，SaveManager GUID不变，MIT2024及Apache-2.0完整保留。来源/许可证、RootAssetTypes/AssetMetadata及Save当前格式使用说明已在主共享文档增量维护。只有迁移链与两处excel_path删除，未因无人调用裁掉普通框架功能。
+- 工作簿定位做了真实导出、根改名/同GUID记忆与RevealInFinder调用，Explorer已选中本轮xlsx；没有执行Inspector鼠标点击。59个自有资产/临时输出/空父目录逐文件SHA归档后移出工程。配置原字节、稀疏键、1662份非Plan保护文件及448份原Bundle一致；主Plan另含用户原T2增量，精确index不混入它。
+- 归属未明`.mcp.json`新增改动、原用户FSM/Test/meta不暂存或回退；原Shader脏态保留，另保留构建后出现的URP.asset脏标记（未纳入开工原字节资产快照，不冒称它已字节复原）。未执行G4无XF独立接收/最终分发，未覆盖阶段9/Y9或A/C证据；含XF主Player不等于G4。通用文件系统/超长路径风险未根除。
+
 ## 去除历史兼容（2026-10-20 11:21最新授权）
 
 用户已确认YL尚未发布、没有下游项目，不需要兼容或迁移XF旧代码。本节覆盖前文中旧的“保留旧重载/迁移入口/旧数据字段”交付要求；旧验收结果与证据仍保留为历史，不据此继续维护已删除能力。本轮只修改B分支，不替主工程合并或修改C代码，不Push。

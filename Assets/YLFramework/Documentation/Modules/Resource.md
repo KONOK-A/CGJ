@@ -75,6 +75,8 @@ public static class ApplicationResources
 
 `yield return request` 只等待；拥有型结果由 `TakeResult()` 恰一次交割。未领取 Dispose 释放结果，领取后 Dispose 请求不释放 lease。Scope 聚合自己的请求/租约，不维护第二缓存；取消不误杀他人，迟到 native 仍有清理 owner。Resources/AssetDatabase 是 borrowed，归零只 drop 记录；只销毁系统自建对象。
 
+配置数据接入的RootAssetTypes显式包含`typeof(YLFramework.Localization.MultiLanguageConfigs)`、`typeof(YLFramework.DataAssets.ScriptableObjectConfigs)`及应用真实闭合的具体根/直接加载条目类型，通过`ResourceProjectMount(..., assetTypes: compiledTypes)`传入；不靠全资产扫描或给Resource默认表写入领域依赖。Localization/DataAssets返回的登记句柄持根Lease，业务先停UI再归还句柄；条目借用不得超过根生命周期。字段身份与可选xlsx作者接线见[配置数据接入](../Architecture.md#配置数据接入)。
+
 ## 可运行最小接入
 
 [`Samples/ResourceStartup/`](../../Samples/ResourceStartup/) 的 Runtime/Editor 分 asmdef，不引用 MainModule、XFAB、测试或机器临时路径；默认框架导出包含样例源码，生成的应用数据不在导出根。

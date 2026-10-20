@@ -20,10 +20,12 @@ namespace YLFramework.Tests.DataAssets
         public void SetUp()
         {
             folder = "Assets/__YLDataAssets_" + Guid.NewGuid().ToString("N");
+            DataAcceptanceOwnership.Own(folder);
             AssetDatabase.CreateFolder("Assets", folder.Substring("Assets/".Length));
             root = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
             AssetDatabase.CreateAsset(root, folder + "/Items.asset");
             childFolder = ScriptableObjectConfigsController.GetDataPath(root);
+            DataAcceptanceOwnership.Own(childFolder);
         }
 
         [TearDown]
