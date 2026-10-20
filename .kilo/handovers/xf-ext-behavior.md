@@ -112,3 +112,17 @@
 - 新脚本/目录/文本资产meta均由A自己的Unity正式生成，共151份，原146冻结预期未重造；逐路径GUID/SHA见`BA26/audit-final-01/import-audit.json`和`meta-audit.json`。所有外部日志/XML/构建/归档留在`C:/Users/Kano/AppData/Local/Temp/kilo/BA26/`，不提交二进制、缓存或临时生成资产。
 - 未完成/不外推：IL2CPP Low构建与AOT/裁剪运行；人工鼠标拖拽/完整图形Editor与Player视觉呈现；全面时序/Profiler测量、所有平台/裁剪级别；无旧包独立接收工程G4；主工作区集成及原游戏组合G5。自动GUI作用域、Undo/Redo、保存重导入通过不能替代人工GUI/完整作者流程。
 - 本轮在授权边界内完成可执行门并保留上述阻塞，不宣布整个XF阶段、正式Exporter/独立交付或完整引擎矩阵完成。仅精确提交本组修复/验收入口/测试/说明及正式meta，三项范围外差异保持原状。
+
+## 主工作区接收交接
+
+- 用户2026-10-20要求完成可合并前的A组收口，并提供主工作区执行merge及验收的提示词。本次仅操作A工作区；未操作主Editor、修改主工作区、执行merge/Push或创建独立接收工程。
+- 产品/测试/工具/meta冻结输入为`209bceb87a76d8004db16c60d0899fcc6fc698b4`，它在B0之后包含上述4个源码候选及1个真实验收修复提交。本节是其后的交接说明，不改变受测产品字节；主工作区应接收包含本节的最终A提交，不只cherry-pick最后一笔或复制整个工作目录。
+- 合并前实际核验：B0是产品冻结输入的祖先，完整5提交共288个受管路径、151份meta；全部在A独占目录/工具/本handover内，完整B0到产品输入的`git diff --check`通过。索引初始为空，未发现需再修改产品源码的合并前问题。
+- 本次只读复核1215项首导入保护快照、轻量FSM15项及151份提交版本meta SHA全部匹配；现存EditMode60/60、PlayMode50/50 XML、Reload6轮、真实绑定、Mono同次exe/log SHA及IL2CPP BlockedBeforeBuild回执均可读取且一致。属于既有真实验收证据复核，未重跑Unity/测试/构建，也未把它们改称主工程通过。
+- 主工作区先核对真实目标分支、HEAD、预存暂存/未提交/未跟踪文件及其他集成活动；记录并保护现有成果。主工程分支可能已包含B/C提交，不能按A的B0状态覆盖，也不能只因某测试总数不同就失败或强凑旧数。合并前后逐项核对A正式GUID及既有主工程资源，不能以删冲突meta或重生GUID解决接入问题。
+- `.vscode/settings.json`与上文两份MainModule SpriteAtlas差异仍未暂存/提交/还原，不属于待合并内容。任何接入应来自Git提交链，不携带A的Library/Temp/构建/原始日志、未提交修改或主工程外部缓存。
+- `Invoke-BehaviorUnity.ps1`、`Test-BehaviorUnityMetas.ps1`及`BehaviorUnityBatch.Output/AuditImport`绑定A路径、BA26证据根与冻结146清单；Reload/Binding/Player Batch入口依赖这些约束，不能在主工程直接调用，也不能通过删除路径/锁/保护校验使其跨工程运行。主owner可复用算法，另设明确绑定主工程的最小入口与独占证据根，保持共享E0工具与既有证据不变。
+- 主工程验收重点：实际Unity编译图/AssemblyRef与程序集边界、A组EditMode/PlayMode、同进程三组合各连续两轮Reload与源资产/克隆释放、Create And Add实际编译绑定、Inspector/GraphView作者操作、Windows64非Development Mono图形Player及原游戏代表非干扰回归。原A总源码数、raw GUID总数不适合作为主工程固定阈值；只要求新源码不漏收、身份与依赖边界正确。
+- Player覆盖边界补充：当前`BehaviorPlayerProbe`实际执行Overlap2D/3D、CC2D地面/重力归还、平台载人/刚体去重、双FSM及状态生命周期，使用Overlap事件与平台Vector3事件。`BehaviorEventReceiver`虽存在且泛型持久事件已在EditMode Prefab用例验证，但Player Probe未实际接入该receiver，也未逐一断言CC2D Bool/Int/Vector2事件；不得据现有Mono PASS宣称这些Player事件或完整wall/top/jump矩阵已通过。主owner按本轮门禁需要在自有验收消费者补实际触发/保存重载/计数，不以Preserve或源码引用替代执行。
+- 人工GUI及图形呈现未验状态保留。只有现成工具能真实覆盖相应交互时才记录通过；程序化修改数据/调用内部handler不等于鼠标拖拽。遇缺少可用GUI操作能力应准确列出未验操作，不伪造截图、事件或通过结论。
+- 本轮交给主工作区的是可接收候选，不是G4/全XF完成证明。主工程Packages/ProjectSettings、原包/原场景及轻量FSM默认保持既有保护；IL2CPP Low仅在实际配置与授权允许时执行，否则继续保留环境阻塞。正式Exporter、无旧包独立接收、配置切换/安装依赖、B/C继续实施及远端Push不因本交接自动获得授权。
