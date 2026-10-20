@@ -146,23 +146,6 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(target[0].Numbers, Is.EqualTo(new[] { 8 }));
         }
 
-        [TestCase("boolean")]
-        [TestCase("int64")]
-        public void HeaderTypeAliasesAreRejectedWithoutReplacingTarget(string alias)
-        {
-            string path = FilePath("noncanonical-" + alias + ".xlsx");
-            WriteWorkbook(path, new[] { "Id", "Name" }, new[] { "int", alias }, new object[] { 1, 1 });
-            var target = Original();
-            var before = target.ToArray();
-            using (var plan = (IDisposable)Preview(path, target))
-            {
-                Assert.That(Errors(plan).Any(error => error.Contains("B2") && error.Contains(alias)), Is.True);
-                Assert.That(Commit(plan, true), Is.EqualTo("Failed"));
-            }
-            Assert.That(target, Is.EqualTo(before));
-            Assert.That(target[0].Name, Is.EqualTo("old"));
-        }
-
         [Test]
         public void RuntimeRootsDoNotStoreUnusedWorkbookPaths()
         {

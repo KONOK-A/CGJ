@@ -171,6 +171,8 @@ namespace YLFramework.Services.Save
         public static bool DeleteObject(string saveFileName, int saveID = 0)
         { SaveFileIO.ValidateFileName(saveFileName); return Store.DeleteObject(saveFileName, saveID); }
         public static bool DeleteObject(string saveFileName, SaveItem saveItem) => saveItem != null && DeleteObject(saveFileName, saveItem.SaveID);
+        public static void DeleteObject<T>(string saveFileName, int saveID) where T : class => DeleteObject(saveFileName, saveID);
+        public static void DeleteObject<T>(string saveFileName, SaveItem saveItem) where T : class { if (saveItem != null) DeleteObject(saveFileName, saveItem.SaveID); }
         public static void DeleteObject<T>(int saveID) where T : class => DeleteObject(typeof(T).Name, saveID);
         public static void DeleteObject<T>(SaveItem saveItem) where T : class { if (saveItem != null) DeleteObject<T>(saveItem.SaveID); }
         public static List<string> GetObjectNames(int saveID) => Store.GetObjectNames(saveID);

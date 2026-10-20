@@ -4,24 +4,30 @@
 
 用户已确认YL尚未发布、没有下游项目，不需要兼容或迁移XF旧代码。本节覆盖前文中旧的“保留旧重载/迁移入口/旧数据字段”交付要求；旧验收结果与证据仍保留为历史，不据此继续维护已删除能力。本轮只修改B分支，不替主工程合并或修改C代码，不Push。
 
+### 纠正记录（2026-10-20 12:24）
+
+- 提交`4f1c683`把“没有当前调用方”误当成“旧兼容”，同时删除了DataAssets hash查询/移除、Localization静态查询/移除、Excel`boolean/int64`别名及两个既有Save删除重载。用户指出这些是普通功能或既有API，不是旧格式适配；本提交已全部恢复，相关测试也恢复原断言。
+- 当前只保留两类删除：**Save旧格式迁移/导入链**，以及用户明确不要的两处`excel_path`。`4f1c683`历史保留，不回写、不amend。
+
 ### 删除范围与当前合同
 
-- Save：删除整个`SaveMigration`及meta、`SaveManager.ImportArchiveModel`、迁移专用`ImportModelAsync`、两个泛型参数没有实际用途的命名删除转发重载；删除v1复制/XF明文`.sav`导入测试及`MigrationStress`/Player迁移探针。不再提供旧档迁移服务，也不保留Obsolete、空实现或兼容别名。当前`CreateModel`直接创建并校验模型ID。
-- 保留唯一`SaveStore`/`SaveManager`、模型/槽位/当前项、同步异步、对象/设置缓存、取消、同槽并发、备份来源/显式恢复及安全错误处理。当前索引仍为版本2，不为删除迁移而重编号；不支持版本明确抛`SaveVersionException`且保留原件。`ModelFileName`是当前模型文件约定，不包含XF目录扫描或旧文件回退解析。
-- DataAssets：删除`StringToHash/GetConfig(int)/RemoveConfig(int|string)`及registry整个hash索引/碰撞分支、登记中的冗余name副本；只按Ordinal名称查询，按具体根或owner句柄归还。多owner、重复名称拒绝、旧登记不能误撤新owner等有效契约继续测试。删除根的闲置`excel_path`及对应Inspector显示。
-- Localization：删除闲置`excel_path`、未使用的静态`GetConfig(string)/RemoveConfig(root|string)`。根生命周期统一使用`AddConfig/LoadConfigAsync`返回句柄，查询使用现有`Configs/GetLanguageInfo/GetString`，关闭用句柄Dispose或本域Shutdown。
-- Excel：删除表头`boolean`和`int64`的额外别名映射，规范工作簿仍使用`ExcelFieldsType`的`bool/long`等标记，其余现有解析规则不变。`ExcelAuthoring/ExcelImportPlan`公开签名、实际字段State差异、三行表头/第4行数据、E0自定义转换、GUID/localFileID及SO/List/JSON工作流均不变；根不再保存工作簿路径，路径由Editor显式传入。
-- 复用的成熟功能、当前公开数据布局（除上述死字段）、TypeCache类型绑定、Other/TMP反射、中文适用变体回退与Resource Lease不是兼容层，继续保留。原XF许可证/版权与来源声明必须保留；删除兼容不等于删除许可。没有新增`FormerlySerializedAs`或其他迁移包袱。
+- Save：删除整个`SaveMigration`及meta、`SaveManager.ImportArchiveModel`、仅供迁移使用的`ImportModelAsync`；删除v1复制/XF明文`.sav`导入测试及`MigrationStress`/Player迁移探针。不再提供旧档迁移服务，也不保留Obsolete、空实现或兼容别名。既有对象删除重载、门面、模型/槽位/当前项/异步/缓存/取消/并发/备份恢复均保留。
+- 保留唯一`SaveStore`/`SaveManager`，当前索引仍为版本2，不为删除迁移而重编号；不支持版本明确抛`SaveVersionException`且保留原件。`ModelFileName`是当前模型文件约定，不包含XF目录扫描或旧文件回退解析。
+- DataAssets：`StringToHash/GetConfig(int)/RemoveConfig(int|string)`及其hash索引、碰撞拒绝、多owner、Ordinal名称身份全部保留，本次没有删除。只删除根上闲置的`excel_path`及Inspector显示；Excel路径由Editor显式传入。
+- Localization：静态`GetConfig(string)/RemoveConfig(root|string)`与句柄生命周期并存，本次没有删除。只删除闲置`excel_path`。
+- Excel：`boolean`→`Bool`、`int64`→`Long`的兼容同义词解析保留（原XF`ParseFieldType`本就支持）。`ExcelAuthoring/ExcelImportPlan`公开签名、三行表头/第4行数据、E0自定义转换、GUID/localFileID及SO/List/JSON工作流均不变。
+- `excel_path`的性质：原XF用它记住根资产上次使用的绝对工作簿路径，供导入/导出预填。YL作者流程改为每次调用显式传入路径，字段没有任何读写者，且绝对路径不可跨机器移植，因此删除是**作者工作流设计选择**，不是旧数据兼容清理。若未来要恢复“记住上次路径”的便利，应使用Editor侧状态并提供显式更改/清除，而不是把本机路径写进资产。
+- 复用的成熟功能、公开数据布局（除上述字段）、TypeCache类型绑定、Other/TMP反射、中文适用变体回退与Resource Lease不是兼容层，继续保留。原XF许可证/版权与来源声明必须保留。
 
 ### 本轮验证与接收影响
 
-- 新合同先红：Save旧导入API存在导致33通过/1失败；SO整数hash入口存在导致10通过/1失败；真实xlsx别名及死字段存在导致19通过/3失败。离线原件在`Temp/Extensions.Data.{Save,DataAssets,Excel}`的时间戳或`no-compat-red`目录。
-- 改后离线：Save核心31项，加2个真实门面与4个既有纯Json回归共37/37；SO纯逻辑11/11；真实xlsx22/22。完整Runtime457源、Editor102源、可选Excel7源及测试闭包辅助编译成功，既有39/4个产品warning不冒充Unity证据。
-- 已执行B独立原生EditMode：`G:/Unity/BD26/no-compat-edit-01`，PID35808、OS Exit0，实际115/115、0失败/跳过，包含禁Domain Reload双轮及原JsonUtility联合用例。数量由112变115：新增6项删除/拒绝合同、删除3项纯迁移用例；保留模型日期字符串/错误ID检查及全部文件恢复/取消/并发断言。
-- PlayMode原生复验：`G:/Unity/BD26/no-compat-play-01`，PID35932、OS Exit0，15/15、0失败/跳过；双轮同域token`6706e02bcada461998f88db926a9e7e4`的实际记录在EditMode目录，每轮Localization/SO登记0、Lease0、Save关闭。本轮没有重建或运行Player，旧Development/主接收Release证据不自动作为此次破坏式API删除后的新运行证明。相关探针已同步移除迁移调用并由真实Unity导入编译。
-- 未启动主工程Editor/MCP或修改主Git，当前主集成已接收过旧B历史；主会话后续必须接本轮新提交而非再次使用e4ef28b/6a9e250为最终输入，保留主已有改动，核查其自有验收器是否仍调用删除API并做直接同步，不能为旧测试重新补回兼容层。C已收到准确边界并继续固定自己的已验证输入，不能把peer通知当作C已合并/新B接点已验收。
-- 本轮原生前将61个B配置/Packages/IDE文件字节与SHA冻结到`G:/Unity/BD26/no-compat-protected`；验收后61项逐字节一致，自身IDE变化已恢复，5个测试meta/空目录原件与备份移到`G:/Unity/BD26/no-compat-closeout`，回执`ClosedProtectedBytesVerified`。无其他未跟踪产物，不影响原游戏档或主工作区。既有迁移Directory.Move的AccessDenied专属路径随迁移功能删除不再是产品执行路径，但原失败证据不删；通用文件系统/超长路径风险未据此宣称根除。
-- 本轮仅一个中文本地候选提交（与本节同提交，通过`git log -1 --oneline -- .kilo/handovers/xf-ext-data.md`可取得完整tip），原历史不重写。当前共享Core/Resource/主体asmdef、Packages/ProjectSettings、原XF及主工程均未改；原删除脚本meta随源码成对移除，其他既有资产身份不变。
+- 新合同先红：Save旧导入API存在导致33通过/1失败；`excel_path`存在导致真实xlsx19通过/3失败。离线原件在`Temp/Extensions.Data.{Save,Excel}`的`no-compat-red`目录。
+- 纠正后离线：Save核心/门面/既有纯Json共37/37；SO Pure 10/10（hash碰撞用例恢复并通过）；真实xlsx 20/20（含`excel_path`不存在断言，类型别名用例已恢复为支持）。Runtime457源、Editor102源、可选Excel7源辅助编译成功，既有39/4个产品warning。
+- 纠正后原生EditMode：`G:/Unity/BD26/compat-correction-edit-01`，PID4768、OS Exit0，111/111、0失败/跳过；含禁Domain Reload双轮（同域token`ac870e522d984bc4b78e1e93e461bb35`，每轮登记0、Lease0、Save关闭）。较删除前112精确变化：移除5项（4个迁移专用、1个旧`excel_path`字段用例），新增4项（当前模型字符串/错误ID、迁移API不存在、SO根不存路径、显式预览不持久化路径），净-1。
+- 纠正后原生PlayMode：`G:/Unity/BD26/compat-correction-play-01`，PID38592、OS Exit0，15/15、0失败/跳过。本轮未重建/运行Player；旧Development与Release证据不自动作为本次删除后的新运行证明。
+- 未启动主工程Editor/MCP或修改主Git；主会话必须接纠正后最终tip。若主已接收`4f1c683`，再接本纠正提交即可，不需重做整轮融合；不能把`4f1c683`当作最终去兼容成果。
+- 原生前冻结的61个B配置/Packages/IDE文件字节与SHA在`G:/Unity/BD26/no-compat-protected`，纠正轮结束再次逐字节一致；IDE改写已恢复，测试meta/空目录原件在`G:/Unity/BD26/compat-correction-closeout`。无其他未跟踪产物。
+- 本轮新增一个中文纠正提交（`4f1c683`保留不改写），与本节同提交。共享Core/Resource/主体asmdef、Packages/ProjectSettings、原XF及主工程均未改。
 
 ## 此前主工作区接收准备（历史）
 

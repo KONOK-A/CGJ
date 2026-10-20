@@ -135,6 +135,19 @@ namespace YLFramework.Localization
             if (registrations.Remove(handle)) Refresh();
         }
 
+        public static MultiLanguageConfigs GetConfig(string name)
+        {
+            foreach (var root in Configs) if (root.name == name) return root;
+            return null;
+        }
+
+        public static void RemoveConfig(MultiLanguageConfigs config)
+        {
+            foreach (var handle in registrations.ToArray()) if (handle.Config == config) handle.Dispose();
+        }
+
+        public static void RemoveConfig(string name) => RemoveConfig(GetConfig(name));
+
         public static LanguageInfo GetLanguageInfo(int id) => GetLanguageInfo(id, RequestedLanguage);
 
         public static LanguageInfo GetLanguageInfo(int id, SystemLanguage language)

@@ -21,8 +21,6 @@ namespace YLFramework.Tests.Extensions.Data.Save
         {
             Assert.That(typeof(SaveStore).Assembly.GetType("YLFramework.Services.Save.SaveMigration"), Is.Null);
             Assert.That(typeof(SaveManager).GetMethod("ImportArchiveModel"), Is.Null);
-            Assert.That(typeof(SaveManager).GetMethods().Any(method => method.Name == "DeleteObject" && method.IsGenericMethodDefinition
-                && method.GetParameters().Length == 2 && method.GetParameters()[0].ParameterType == typeof(string)), Is.False);
         }
 
         private sealed class BlockingReadConverter : JsonConverter

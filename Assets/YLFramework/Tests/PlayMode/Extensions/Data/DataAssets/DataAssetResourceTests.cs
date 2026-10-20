@@ -190,7 +190,7 @@ namespace YLFramework.Tests.DataAssets
         }
 
         [Test]
-        public void RootRemovalClosesBothOwnersButNotOtherRoots()
+        public void HashRemovalClosesBothOwnersOfResolvedRootButNotOtherRoots()
         {
             var otherRoot = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
             otherRoot.name = "DataAssets-Owned-Other";
@@ -199,9 +199,9 @@ namespace YLFramework.Tests.DataAssets
                 var first = Own(ScriptableObjectManager.AddConfig(root));
                 var second = Own(ScriptableObjectManager.AddConfig(root));
                 using var other = ScriptableObjectManager.AddConfig(otherRoot);
-                Assert.That(typeof(ScriptableObjectManager).GetMethod("StringToHash"), Is.Null);
-                Assert.That(typeof(ScriptableObjectManager).GetMethod("GetConfig", new[] { typeof(int) }), Is.Null);
-                ScriptableObjectManager.RemoveConfig(root);
+                var hash = ScriptableObjectManager.StringToHash(root.name);
+                Assert.That(hash, Is.Not.EqualTo(ScriptableObjectManager.StringToHash(otherRoot.name)), "Fixture roots must have distinct hashes.");
+                ScriptableObjectManager.RemoveConfig(hash);
                 Assert.That(first.IsDisposed && second.IsDisposed, Is.True);
                 Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
                 Assert.That(other.Config, Is.SameAs(otherRoot));
