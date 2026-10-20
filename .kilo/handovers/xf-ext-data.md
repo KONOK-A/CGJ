@@ -1,6 +1,33 @@
 # B组配置数据交接
 
-## T3-B真实Unity验收（最新）
+## 主工作区接收准备（2026-10-20最新）
+
+本节是B合并输入与后续验收边界的最新交接。用户本次要求仅在B完成合并前准备并提供主会话提示词；本会话不merge、不Push、不操作主Editor，不修改主工作区或其他worktree。
+
+- 主接收目录`G:/Unity/Projects/CGJ2024`，目标分支`integration/xf-yl`；B来源分支`fusion/xf-ext-data`，共同起点`c88500aef6651f5b13ac933dd1f209ecb314e92d`。本交接所属的新提交应随整个B历史一起接收，不能只取末尾文档或单独的原生修复补丁。
+- 已完成的产品/原生修复输入固定为`6a9e2508a42333e55c82e6f29eea136643af4467`。在其上本次只补实质交接，不修改产品、测试、Importer或工具；112/112、15/15等既有证据按原源快照沿用，不伪装为合并后验证。
+- 完整六条实现历史依次为`517f13fa3928b869ac34854cf0474173c6137fe7`、`53edd50a5c869cfb89f0879157cb85312b68ee26`、`09bec5a675d4f920f5fc0e4fa65aaafb3fd8a300`、`9626d9a0bd7d32ed717d2953762a0b4c31d73809`、`73025d1fb83abc3cdc83dd2587332093a3bbaca1`、`6a9e2508a42333e55c82e6f29eea136643af4467`；没有squash/rebase/amend。
+- 2026-10-20用户授权后，四项运行副作用已精确恢复为6a9e250对应HEAD的原始字节，包括删除稀疏字典两处Standalone键；31个自有未跟踪文件及13个目录连同meta原件已移出工作区。35个现场文件逐一SHA256归档/核验，回执`G:/Unity/BD26/closeout-20261020-0359/manifest.json`状态`ClosedVerifiedClean`。原件在该目录`moved-originals/`，现场副本在`before/`，原HEAD字节在`head/`。此前“保留脏文件”的文字仅是原生验收结束时历史状态。
+- 本次合并前只读检查：159条新增Assets记录的资产/meta/祖先目录配对完整，无孤立meta；必要模块许可证均受管；B完整提交不含Packages、ProjectSettings、原游戏/图集、共享Core/Resource、主体asmdef、正式总Plan或工具配置变化。实际DLL SHA256仍与Dependencies.json一致，LFS指针不是最终二进制。
+- 主工作区只读观察曾为B0，存在主Plan未提交改动、用户`AlternateContent.meta`及`Tools/Behavior/`。这是时点事实，不是可覆盖名单；主会话执行前必须重新冻结其真实HEAD/index/dirty/untracked/场景状态。当前另有A接收协调上下文，必须等现有同工程Git/Unity任务自然完成，再由主会话处理B；不并发、不替A/C收尾、不以本节猜测其最终状态。
+
+### 接收时不能直接照搬的工具约束
+
+- `Tools/Extensions/Data/Unity/Run-DataUnity.ps1`、`Run-DataPlayer.ps1`、`Tests/Tools/Extensions/Data/Editor/DataUnityAcceptance.cs`、`Tests/Tools/Extensions/Data/Runtime/DataPlayerProbe.cs`及`DataDomainReloadSessionTests.cs`明确锁定B项目/`G:/Unity/BD26`。主会话应做最小的主工程入口/自有输出owner适配，继续核对规范projectPath、PID、项目锁、输出marker和真实测试发现，不能删掉身份保护或伪造B marker复用B证据。
+- 主验收另选自有短根（例如`G:/Unity/MB26`，需先核验不存在/归属），不覆盖BD26、清理归档、A/C或Y9；导入后生成自己的run/PID/XML/日志、profile及退出结果。
+- B的两个原生Player使用`BuildOptions.Development`。它们是真实构建/运行证据，但不是正式Plan G3的非Development最终结果。主接收须另设显式非Development/Release入口，实际构建和运行Mono及IL2CPP Low；不得把旧exe复制、改标签或只构建算运行通过。
+- PlayerSettings原API恢复逻辑值会在无Standalone键的稀疏字典插入`Standalone: 0`。主会话运行前要保存其当时实际原字节/键存在性及SHA，退出后验证全部受测设置；不能把Get/Set返回相等当作逐字节还原。只处理可证的自身副作用，不恢复成B的HEAD或覆盖主会话原有用户改动。用户原场景不保存/覆盖，数据测试不访问原游戏存档。
+- Batch使用实际2022.3.62f3c1，同一projectPath一次仅一个Editor。主项目已有Editor时，须先确认其PID/绑定/未保存状态；可复用被核实的现有主Editor，或在安全退出后串行Batch，不能并开。保留插件官方process-only opt-out，不改权限/token/磁盘MCP配置，不通过忽略错误日志造绿。
+
+### 主接收必要工作
+
+- 在用户向主会话明确发出B合并授权后，以本文件所属完整B tip作固定输入；先检查祖先、重叠及冲突，已接收则避免重复。保留全部B历史，保留A已接收结果与用户现场；不自动接C/其他分支，不Push，不删除分支/worktree。
+- 主协调统一补来源/版权（含2024 MIT）、RootAssetTypes/AssetMetadata/正式Plan与必要架构/使用说明。先读主文件现有改动，增量维护，不整文件采用B版本覆盖，也不扩大共享Core/Resource公共接口。
+- 主原生门应重跑B相关112项EditMode（含双轮Play）与15项PlayMode并核实际发现/执行/失败/跳过，补Foundation/Core/程序集边界以及合并影响到的Resource/UI或已接A/C最小回归。引用失效拒交、Excel部分失败回滚、即时子资产Undo、同域两轮旧owner归零、Save/JsonUtility必须保留。数量变化须解释，不能少发现也报全绿。
+- 重验MiniExcel正式Editor-only、LFS实体、GUID/旧Save身份、Player实际AssemblyRef及输出排除；核心默认导出不带可选backend，选装与未装分开。主工程绿不等于无XF独立接收工程G4或原游戏代表链G5全部完成，应明确实际执行范围，不能覆盖阶段9历史制品。
+- Save v2/显式复制迁移与普通文件错误契约保留，不自动转换旧档；真实旧样本兼容、原AccessDenied和超长路径边界仍不能因后续绿例关闭。
+
+## T3-B真实Unity验收（既有证据）
 
 2026-10-19 20:14用户追加授权已覆盖本文件源码阶段的“不启动Editor/BatchMode”限制。仅在B独立worktree使用安装的Unity`2022.3.62f3c1`，每次显式`-projectPath`；没有调用Unity MCP、没有操作主Editor/A/C/Y9，没有复制主工程Library。以下是真实引擎证据；后面的旧“待Unity”记录保留为源码阶段历史，不覆盖本节。
 
@@ -16,8 +43,8 @@
 | 最终EditMode | 实际112/112、0失败/跳过；新增1项是真实双轮Play测试 | `edit-final-01/results.xml`，PID35072 |
 | PlayMode | 实际15/15、0失败/跳过：Localization6、DataAssets9 | `play-03/results.xml`，PID16408 |
 | 禁Domain Reload连续两轮 | `domain-02`1个UnityTest中真实进入/退出两轮Play；同PID38400、同token`19099d4225b34da982f22b2b66c62bac`，每轮登记0、Lease0、Save关闭、Resource Invalidated | `domain-02/domain-round-{1,2}.json`；最终EditMode又重跑同一门，不重复加到112上 |
-| Windows64 Mono | 构建Succeeded/0error；实际NVIDIA RTX4070TiSUPER/D3D运行，PID41136退出0，全部数据探针true | `mono-build-01/build.json`、`mono-player-02/{run.json,player-result.json,player.log}` |
-| Windows64 IL2CPP Low | 实际il2cpp.exe与VS2022链接GameAssembly，构建Succeeded/0error；真实GPU运行PID26860退出0，全部数据探针true | `il2cpp-build-02/{build.json,editor.log}`、`il2cpp-player-01/{run.json,player-result.json,player.log}` |
+| Windows64 Mono（Development） | 构建Succeeded/0error；实际NVIDIA RTX4070TiSUPER/D3D运行，PID41136退出0，全部数据探针true；非正式Release门 | `mono-build-01/build.json`、`mono-player-02/{run.json,player-result.json,player.log}` |
+| Windows64 IL2CPP Low（Development） | 实际il2cpp.exe与VS2022链接GameAssembly，构建Succeeded/0error；真实GPU运行PID26860退出0，全部数据探针true；非正式Release门 | `il2cpp-build-02/{build.json,editor.log}`、`il2cpp-player-01/{run.json,player-result.json,player.log}` |
 | 最终原生隔离审计 | 99个B相关资产meta与AssetDatabase一致、B跨路径GUID冲突0、旧SaveManager GUID不变 | `audit-final-01/audit.json` |
 | v1发布定向核查 | 短路径10次+原失败目录等长路径10次成功，源字节均保留；最长临时路径185/255字符 | `migration-stress-03/migration-stress.json` |
 
