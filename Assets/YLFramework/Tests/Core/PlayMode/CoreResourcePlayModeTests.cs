@@ -2124,6 +2124,29 @@ namespace YLFramework.Core.Tests
         }
 
         [UnityTest]
+        public IEnumerator SceneControllerSingleUsesTheProviderAndDoesNotOwnTheLoadedScene()
+        {
+            yield return PrepareDefaultSceneTest();
+            yield return StartModule();
+            var controller = module.LoadController<YLFramework.Core.SceneController>();
+            using var request = controller.LoadSceneAsync(YLCoreSmokeModule.SceneName, LoadSceneMode.Single);
+            yield return Await(() => !request.keepWaiting, "SceneController Single scene");
+            Assert.That(request.Status, Is.EqualTo(CoreResourceStatus.Succeeded), request.Error?.ToString());
+            Assert.That(request.Progress, Is.EqualTo(1));
+            var scene = request.TakeResult().Scene;
+            Assert.That(scene.path, Is.EqualTo(YLCoreSmokeModule.ScenePath));
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(scene));
+            var entry = scene.GetRootGameObjects().Single().GetComponent<YLCoreSmokeSceneEntry>();
+            Assert.That(entry.ModuleAtAwake, Is.SameAs(module));
+            Assert.That(entry.StateAtAwake, Is.EqualTo(ModuleState.Running));
+            yield return Await(() => entry.StartCount == 1, "SceneController scene entry Start");
+            Assert.That(entry.ModuleAtStart, Is.SameAs(module));
+            module.Close();
+            Assert.That(scene.isLoaded, Is.True, "Closing the Controller is not scene unload authority.");
+            Assert.That(request.IsDisposed, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator IncompatibleExistingPrefabCompletesViewFailureCallbackWithoutRegisteringView()
         {
             yield return StartModule();

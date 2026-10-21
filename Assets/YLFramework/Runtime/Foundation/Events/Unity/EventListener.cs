@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using YLFramework.Core.Singleton;
+using YLFramework.Foundation;
 
 namespace YLFramework.Events
 {
@@ -291,6 +292,13 @@ namespace YLFramework.Events
 
         #endregion
 
+        [SerializeField]
+        [Tooltip("仅过滤 Collision/Trigger 的对方层，同时作用于代码和 Inspector；3D/2D 共用，None 不接收物理事件。")]
+        private LayerMask physicsLayerMask = Physics.AllLayers;
+
+        /// <summary>物理消息的对方层过滤；不影响指针消息或 Unity 原生物理判定。</summary>
+        public LayerMask PhysicsLayerMask { get => physicsLayerMask; set => physicsLayerMask = value; }
+
         private void OnDestroy()
         {
             _destroyed = true;
@@ -372,36 +380,42 @@ namespace YLFramework.Events
 
         private void OnCollisionEnter(Collision collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionEnter, collision);
             collisionEnter?.Invoke(collision);
         }
 
         private void OnCollisionStay(Collision collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionStay, collision);
             collisionStay?.Invoke(collision);
         }
 
         private void OnCollisionExit(Collision collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionExit, collision);
             collisionExit?.Invoke(collision);
         }
 
         private void OnCollisionEnter2D(Collision2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionEnter2D, collision);
             collisionEnter2D?.Invoke(collision);
         }
 
         private void OnCollisionStay2D(Collision2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionStay2D, collision);
             collisionStay2D?.Invoke(collision);
         }
 
         private void OnCollisionExit2D(Collision2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnCollisionExit2D, collision);
             collisionExit2D?.Invoke(collision);
         }
@@ -412,36 +426,42 @@ namespace YLFramework.Events
 
         private void OnTriggerEnter(Collider other)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerEnter, other);
             triggerEnter?.Invoke(other);
         }
 
         private void OnTriggerStay(Collider other)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerStay, other);
             triggerStay?.Invoke(other);
         }
 
         private void OnTriggerExit(Collider other)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerExit, other);
             triggerExit?.Invoke(other);
         }
 
         private void OnTriggerEnter2D(Collider2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerEnter2D, collision);
             triggerEnter2D?.Invoke(collision);
         }
 
         private void OnTriggerStay2D(Collider2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerStay2D, collision);
             triggerStay2D?.Invoke(collision);
         }
 
         private void OnTriggerExit2D(Collider2D collision)
         {
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
             TriggerEvent(EventType.OnTriggerExit2D, collision);
             triggerExit2D?.Invoke(collision);
         }

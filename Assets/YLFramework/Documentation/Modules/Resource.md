@@ -108,6 +108,29 @@ Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`Use
 - Audio 使用 `AudioClipAddress(resources.GetAudioClipProvider(projectId), logicalAddress)`；每次成功交付独立 clip lease，播放/尾轨/缓存负责消费期持有。直 Clip 是 borrowed，不由 Resource 或 Audio 擅自卸载。
 - AudioClipLibrary 的旧枚举及隐藏 BundleName 仅供持久化迁移，不是旧后端。显式迁移要求地址映射，只创建新 GUID 副本、不改原资产；详见 [Audio 素材组](Audio.md#素材组与组件)。
 
+### Core SceneController
+
+`YLFramework.Core.SceneController` 是 Module 的轻量加载便利Controller，不是第二个SceneManager。先通过ResourceStartup的Core装配，或显式InitializeAsync后BindCoreResourceProvider；Root、添加监听组件或读取Controller不会代为启动资源。
+
+在业务协程中使用：
+
+```csharp
+var controller = module.LoadController<YLFramework.Core.SceneController>();
+using var request = controller.LoadSceneAsync("world/main", UnityEngine.SceneManagement.LoadSceneMode.Single);
+yield return request;
+if (request.Status != YLFramework.Core.CoreResourceStatus.Succeeded)
+    throw (System.Exception)request.Error ?? new System.InvalidOperationException("Scene load ended: " + request.Status);
+var scene = request.TakeResult().Scene;
+UnityEngine.Debug.Log(scene.path);
+```
+
+- 默认项目为owner的`Module.ProjectName`；另有`LoadSceneAsync(projectId, address, mode)`。地址是目录登记的逻辑地址/alias，不自动把XF短名映射为地址；无同步入口、force_loading、隐式已加载复用或内置LoadingPanel。业务UI读取场景请求Progress，不使用Panel资源进度代替。
+- 相同Controller的Ordinal `(projectId,address)` 在途键不区分mode，重复抛`CoreResourceException(InProgress)`且不再调用后端；终态后可再次提交，重复Additive会产生新的场景意图。不同Controller/项目/地址互不合并；别名按提交字符串判定，不声称解析到同一资产的不同alias也会合并。
+- 直接返回后端原`CoreResourceRequest<CoreSceneResult>`，状态、进度、错误、Completed与单次TakeResult规则不变；终态后订阅Completed可能同步通知。完成仅摘Controller的tracking，不Dispose或提前领取调用方结果；成功/终态请求由调用方释放。
+- `CancelPendingLoads()`先分离调用时在途快照，再逐项Cancel/Dispose；正常取消回调里新提交的请求属于下一轮。OnExit先拒绝新投递再清理快照；同实例重新注册属于新代次，旧回调不取消/摘除新责任。清理失败会聚合报告，不宣称已全部释放或自动重试；原后端异常保留，交付失败上下文位于Exception.Data的`YLFramework.SceneController.Context`。
+- 关闭Module/Controller仅结束仍在途请求，不卸载已成功Scene、不清其他owner；Single开始后的取消不保证回滚。CoreSceneResult没有卸载权，需要显式卸载时由Resource/应用owner使用SceneRecord/SceneLease调用UnloadSceneAsync，而不是在Core反向引用具体ResourceSystem。
+- Controller经Module正式注册、且仅在注册主线程使用。未绑定provider明确报Unavailable，关闭中的Module或旧Controller拒绝新请求；不因失败回退XFAB或另一配置。原游戏的全局同名SceneController保持不变，消费者按需使用完整YL类型名。
+
 ## 图片与图集
 
 - `AcquireImage/AcquireImageAsync` 接受完整 HTTP(S) URL 或绝对本地 PNG/JPEG。冷 URL 同步 Unsupported，在途 InProgress，Ready 可同步取得；同步本地读取不占异步队列。

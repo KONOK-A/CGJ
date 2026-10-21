@@ -16,7 +16,7 @@ Or 首次连接尚未完成时的同步注册属于该轮临时责任：连接�
 
 - 共享机制与注销族：[`Runtime/Foundation/Events/Subscriptions/`](../../Runtime/Foundation/Events/Subscriptions/)，归 `YLFramework.Runtime`：Channel/Bus/Key/OrEvent、IUnRegister/Scope、EasyEvent 与原生命周期触发器；逻辑仍为唯一注册算法，不因目录合并改变协议。
 - `Global/`：四个全局事件系统。
-- `Unity/`：EventListener 与便捷扩展，以及保持 `YLFramework.Core` 身份的物理/动画 Listener；不把各用途合并为同一组件。
+- `Unity/`：EventListener 与便捷扩展、`YLFramework.Events.MonoEventListener`，以及保持 `YLFramework.Core` 身份的物理/动画 Listener；不把各用途合并为同一组件。
 - `Internal/`：EasyEvent 池化入口。Core 的领域 `CoreEvents/EventManager` 另在 [`Runtime/Core/Events/`](../../Runtime/Core/Events/)，不移成第二份 Foundation 总线。
 
 ## 主要功能
@@ -101,9 +101,18 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - 指针 / 拖拽使用 `PointerEventData`；3D / 2D 碰撞使用 `Collision` / `Collision2D`；3D / 2D Trigger 使用 `Collider` / `Collider2D`。`OnMouseEnter/Exit` 是 EventSystem 指针入口，不是 Unity 无参鼠标消息。
 - `Register<T>` 在分配通道前精确校验原生 payload；错误类型抛 `ArgumentException`，非法 EventType 抛 `ArgumentOutOfRangeException`，不再返回 null 或用首次错误类型锁住通道。正确类型的 null 回调返回空 token；已销毁组件不能重新注册。
 - 代码监听由组件私有 `EventChannel<T>` 承载，直接复用共享精确 token，不依赖全局 EasyEvent 池寿命；公共 EasyEvent 池化能力不变。组件 Disable 不自动清代码，需要停用边界时绑定返回 token。销毁 / 清指定类型 / 清全部代码永久关闭对应通道，旧 token 和旧在途代码快照不能进入新通道。
-- 始终先代码监听、后 Inspector UnityEvent；代码异常仍阻断后续 UnityEvent。默认 `UnRegisterAll()` 不动 Inspector 通道；显式 `UnRegisterAll(true)` 把全部 20 个字段置 null，仅断开组件的运行时通道，不改资产，也不清外部持有的旧 UnityEvent 对象。
+- 始终先代码监听、后 Inspector UnityEvent；代码异常仍阻断后续 UnityEvent。默认 `UnRegisterAll()` 不动 Inspector 通道；显式 `UnRegisterAll(true)` 把全部 20 个 UnityEvent 字段置 null，不重置物理掩码，仅断开组件的运行时通道，不改资产，也不清外部持有的旧 UnityEvent 对象。
+- `PhysicsLayerMask`（序列化字段 `physicsLayerMask`）仅过滤12个Collision/Trigger消息的**对方 GameObject 层**，3D/2D共用，同时约束代码和Inspector；八种指针/拖拽消息不受影响。默认AllLayers，显式None/0不接收物理通知；不修改Unity碰撞矩阵。一次回调入口只过滤一次，代码回调内改掩码只影响下一次消息，不承诺层变化后的Enter/Exit配对或对Stay去重。
 - Core 的 LayerMask 物理监听、`OnAnimationEvent(string)` 和覆盖完整 EventTriggerType 的 UGUI 扩展仍独立保留；它们不是 EventListener 的冗余替代品，不把 UnityEvent 持久化算法搬进 bus。
-- 原生 Inspector 位于 [`Editor/Foundation/Events/EventListenerEditor.cs`](../../Editor/Foundation/Events/EventListenerEditor.cs)，属于 `YLFramework.Editor`。隐藏 Script 字段，默认展开“Unity事件中心”，按鼠标事件、碰撞事件、Trigger事件展示原 20 个中文标签；折叠和页签只保存在 Editor 会话，不写入组件。派生类额外序列化字段仍按原生方式显示。UnityEvent 使用 Unity 原生 Drawer，保留多对象编辑、Undo/Redo 和 Prefab override/apply/revert，不依赖 Odin 或 Runtime 展示标注框架。
+- 原生 Inspector 位于 [`Editor/Foundation/Events/EventListenerEditor.cs`](../../Editor/Foundation/Events/EventListenerEditor.cs)，属于 `YLFramework.Editor`。隐藏 Script 字段，默认展开“Unity事件中心”，按鼠标事件、碰撞事件、Trigger事件展示原 20 个中文标签；新增物理掩码与派生类额外字段通过原生附加属性显示，不计入20个事件字段。折叠和页签只保存在Editor会话，不写入组件。UnityEvent使用原生Drawer，保留多对象编辑、Undo/Redo和Prefab override/apply/revert，不依赖Odin或Runtime展示标注框架。
+
+### 局部 Unity 监听组件
+
+- `YLFramework.Core.AnimationEventListener` 接收 AnimationClip 的 `OnAnimationEvent(string)`，转发至公开 `animationEvent`；不是 Animator 状态变化监听器。方法名、字段、namespace及脚本GUID保持，不把字段改成来源包的 `onAnimationEvent`。
+- `YLFramework.Core.CollisionEventListener/TriggerEventListener` 保留各自六个3D/2D UnityEvent和原`layerMask`字段；`PhysicsLayerMask`可在运行时直接配置。新组件与Reset默认AllLayers，持久化的显式0仍是None；去掉指向未接入CommonSystem的过时提示，事件默认初始化，可直接AddListener。
+- 新 `YLFramework.Events.MonoEventListener` 提供默认初始化的 `onAwake/onStart/onEnable/onDisable/onDestroy` 五个UnityEvent，直接对应本对象的原生生命周期；没有Update、全局宿主、事件总线或Root初始化。组件在“YLFramework/Events/”菜单中可添加。
+- 需要观察首次Awake/OnEnable时，在Prefab或尚未激活的对象上预先配置；对active对象AddComponent后再AddListener不会补发已发生的回调。从未active对象的OnDestroy遵守Unity原生限制，不强制激活来补事件。
+- 需要精确token和代码/Inspector共同物理过滤时使用EventListener；只需专用Inspector事件时使用旧身份组件。二者保持独立用途，不自动在同一对象挂两套来“兼容”，以免业务重复执行。
 
 ## Domain Reload 行为
 
@@ -130,5 +139,6 @@ changed.ResetOwner(); // 截断旧 owner 的在途快照；实例仍可重新注
 - `Tests/PlayMode/EventsLifecyclePlayModeTests.cs`：GameObject Destroy/Disable、指定 Scene 与 AnyScene、失败责任 / 重入及 Listener 通道生命周期。
 - `Tests/EditMode/UnityEventListenerContractTests.cs`：20 种原生 payload 映射、真实 persistent UnityEvent 通道、便捷扩展及旧代码快照截断。物理消息映射通过直接调用验证，不等同于物理引擎全流程测试。
 - `Tests/EditMode/Editor/Events/EventListenerEditorTests.cs`：原生 CustomEditor 选择、20 字段真实覆盖与标签/顺序、多对象、派生字段、Undo/Redo 及自有临时 Prefab 的持久目标与覆盖语义；视觉页签和实际 GUI 交互另行验收，不以映射反射测试代替。
+- `Tests/PlayMode/CommonSystem/`：原生Mono生命周期、实际Animator Clip到持久事件目标、局部2D/3D Collision/Trigger的Enter/Stay/Exit与掩码过滤；旧schema Prefab重导入、显式None及掩码Prefab/Undo操作另由上述Inspector测试覆盖。实际范围和未执行的独立Player门禁见[CommonSystem专项](../../../../.kilo/plans/1792570662859-xf-common-system-migration.md)。
 - E 专题验收：`CoreDirectViewPlayModeTests` 49/49（含 `CoreEvents.ON_REMOVE_VIEW` 广播消费者）、`EventsLifecyclePlayModeTests` 14/14、Action/Audio 各一项代表性方法、`CoreEventsContractTests` 7/7、`BindingContractTests` 15/15，合计 87 项通过；真实关闭 Domain Reload 两轮 Play 门禁通过。
 - 各批实际验证结果及剩余边界见 [2.2 专项方案](../../../../.kilo/plans/xf-yl-2.2-events.md)。

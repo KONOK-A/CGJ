@@ -101,8 +101,11 @@ namespace YLFramework.Tests.Editor
             var editor = Inspector(listener);
             var map = ((ValueTuple<string, GUIContent>[][])editor.GetType()
                 .GetField("EventFields", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
-            var fields = typeof(EventListener).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            var serializedFields = typeof(EventListener).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
                 .Where(field => field.IsDefined(typeof(SerializeField), false)).OrderBy(field => field.MetadataToken).ToArray();
+            var fields = serializedFields.Where(field => typeof(UnityEventBase).IsAssignableFrom(field.FieldType)).ToArray();
+            CollectionAssert.AreEqual(new[] { "physicsLayerMask" }, serializedFields.Except(fields).Select(field => field.Name));
+            Assert.That(editor.serializedObject.FindProperty("physicsLayerMask").propertyType, Is.EqualTo(SerializedPropertyType.LayerMask));
             Assert.That(fields.Length, Is.EqualTo(20));
             CollectionAssert.AreEqual(fields.Select(field => field.Name), map.SelectMany(group => group).Select(entry => entry.Item1));
             Assert.That(map.SelectMany(group => group).Select(entry => entry.Item1).Distinct().Count(), Is.EqualTo(20));
@@ -135,9 +138,9 @@ namespace YLFramework.Tests.Editor
             var properties = extra.ToArray();
             try
             {
-                CollectionAssert.AreEqual(new[] { "extraValue" }, properties.Select(property => property.propertyPath));
+                CollectionAssert.AreEquivalent(new[] { "physicsLayerMask", "extraValue" }, properties.Select(property => property.propertyPath));
                 Undo.IncrementCurrentGroup();
-                properties[0].intValue = 42;
+                properties.Single(property => property.propertyPath == "extraValue").intValue = 42;
                 Assert.That(editor.serializedObject.ApplyModifiedProperties(), Is.True);
                 Undo.FlushUndoRecordObjects();
                 Assert.That(listener.ExtraValue, Is.EqualTo(42));
@@ -147,6 +150,65 @@ namespace YLFramework.Tests.Editor
                 Assert.That(listener.ExtraValue, Is.EqualTo(42));
             }
             finally { foreach (var property in properties) property.Dispose(); }
+        }
+
+        [Test]
+        public void PhysicalMaskSupportsMultiEditUndoAndRedo()
+        {
+            var first = Create<EventListener>();
+            var second = Create<EventListener>();
+            var editor = Inspector(first, second);
+            var property = editor.serializedObject.FindProperty("physicsLayerMask");
+            Assert.That(property, Is.Not.Null);
+            Assert.That(property.intValue, Is.EqualTo(Physics.AllLayers));
+            Undo.IncrementCurrentGroup();
+            property.intValue = 0;
+            Assert.That(editor.serializedObject.ApplyModifiedProperties(), Is.True);
+            Undo.FlushUndoRecordObjects();
+            using var observed = new SerializedObject(new Object[] { first, second });
+            Assert.That(observed.FindProperty("physicsLayerMask").hasMultipleDifferentValues, Is.False);
+            Assert.That(observed.FindProperty("physicsLayerMask").intValue, Is.Zero);
+            Undo.PerformUndo();
+            observed.Update();
+            Assert.That(observed.FindProperty("physicsLayerMask").intValue, Is.EqualTo(Physics.AllLayers));
+            Undo.PerformRedo();
+            observed.Update();
+            Assert.That(observed.FindProperty("physicsLayerMask").intValue, Is.Zero);
+        }
+
+        [Test]
+        public void OldPrefabWithoutTheFilterKeepsAllLayersAndPersistentTargets()
+        {
+            const string legacy = "Assets/YLFramework/Tests/Fixtures/CommonSystem/EventListener.Legacy.prefab";
+            AssetDatabase.ImportAsset(legacy, ImportAssetOptions.ForceUpdate);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(legacy);
+            Assert.That(prefab, Is.Not.Null);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, mScene);
+            mRoots.Add(instance);
+            var listener = instance.GetComponent<EventListener>();
+            var editor = Inspector(listener);
+            var mask = editor.serializedObject.FindProperty("physicsLayerMask");
+            Assert.That(mask, Is.Not.Null);
+            Assert.That(mask.intValue, Is.EqualTo(Physics.AllLayers));
+            var click = Click(listener);
+            Assert.That(click.GetPersistentEventCount(), Is.EqualTo(1));
+            Assert.That(click.GetPersistentMethodName(0), Is.EqualTo("SetActive"));
+            var target = instance.transform.Find("Persistent target").gameObject;
+            Assert.That(click.GetPersistentTarget(0), Is.SameAs(target));
+            click.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+            listener.OnPointerClick(null);
+            Assert.That(target.activeSelf, Is.False);
+
+            mask.intValue = 0;
+            Assert.That(editor.serializedObject.ApplyModifiedProperties(), Is.True);
+            PrefabUtility.UnpackPrefabInstance(instance, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            mFolder = "Assets/YLFramework/Tests/EventListenerEditor-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets/YLFramework/Tests", System.IO.Path.GetFileName(mFolder));
+            var saved = mFolder + "/ExplicitNone.prefab";
+            Assert.That(PrefabUtility.SaveAsPrefabAsset(instance, saved), Is.Not.Null);
+            AssetDatabase.ImportAsset(saved, ImportAssetOptions.ForceUpdate);
+            using var reloaded = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(saved).GetComponent<EventListener>());
+            Assert.That(reloaded.FindProperty("physicsLayerMask").intValue, Is.Zero);
         }
 
         [Test]
@@ -200,6 +262,22 @@ namespace YLFramework.Tests.Editor
             instanceEditor.serializedObject.Update();
             PrefabUtility.RevertPropertyOverride(instanceEditor.serializedObject.FindProperty("pointerClick"), InteractionMode.AutomatedAction);
             Assert.That(Click(component).GetPersistentMethodName(0), Is.EqualTo(nameof(EventListener.OnPointerExit)));
+            instanceEditor.serializedObject.Update();
+            var mask = instanceEditor.serializedObject.FindProperty("physicsLayerMask");
+            mask.intValue = 0;
+            Assert.That(instanceEditor.serializedObject.ApplyModifiedProperties(), Is.True);
+            instanceEditor.serializedObject.Update();
+            mask = instanceEditor.serializedObject.FindProperty("physicsLayerMask");
+            Assert.That(mask.prefabOverride, Is.True);
+            PrefabUtility.ApplyPropertyOverride(mask, path, InteractionMode.AutomatedAction);
+            Assert.That(prefab.GetComponent<EventListener>().PhysicsLayerMask.value, Is.Zero);
+            instanceEditor.serializedObject.Update();
+            mask.intValue = 1 << 31;
+            Assert.That(instanceEditor.serializedObject.ApplyModifiedProperties(), Is.True);
+            instanceEditor.serializedObject.Update();
+            mask = instanceEditor.serializedObject.FindProperty("physicsLayerMask");
+            PrefabUtility.RevertPropertyOverride(mask, InteractionMode.AutomatedAction);
+            Assert.That(component.PhysicsLayerMask.value, Is.Zero);
             Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(prefab), Is.Zero);
         }
     }

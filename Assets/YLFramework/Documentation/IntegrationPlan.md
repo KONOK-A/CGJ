@@ -348,3 +348,11 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 正式交付继续使用原Exporter的7个根，不导出Tests/Integrations/原游戏或MCP。可选Excel/DomainExcel须完整另装，首次核心导入先不装测试设施。新增复现工具位于`Tools/Equipment/`，只创建独占临时接收目录、保留同次进程/包/结果身份；具体制品SHA、独立门禁和保护终态以专项Plan实际记录为准，不复用或覆盖旧`G:/Unity/Y9`、`MC26`证据。
 
 最终长期交付入口为`G:/Unity/Deliveries/Equipment-20261021/`，原Temp交付原样持久化；核心包SHA256为`984e66ae6d5bc8401c78022f1803d6d49b339e49289f4366cad1f5a26133c4fe`。原始binding不修改，`archive-receipt.json`记录稳定映射与逐文件SHA/大小；实际Git提交/远端同步结果在外部收据及专项交接记录中，不为Hash自引用增加文档提交。冻结包仍为审批前的真实导出快照，未重新Export。
+
+## 11. CommonSystem 补充专项
+
+本专项承接CommonSystem 1.0.3的五项用途，不并入或改写先前13项、Equipment及阶段9历史验收。范围、两项用户决定与实际状态见[CommonSystem专项Plan](../../../.kilo/plans/1792570662859-xf-common-system-migration.md)；用法见[局部Unity监听](Modules/Events.md#局部-unity-监听组件)及[Core场景Controller](Modules/Resource.md#core-scenecontroller)。
+
+复用现有动画/物理组件并保持其字段/namespace/GUID，补齐默认值和局部Mono生命周期组件；现有EventListener增加同时作用于代码/Inspector的物理层过滤。新增Core.SceneController只管理自己的在途请求，完成后允许新的Additive意图，不做已加载短名复用、不持成功Scene卸载权，不改Root、资源内核或原游戏。
+
+2026-10-21 CommonSystem主工程技术验收完成，用户已确认通过并完成Git远端收口：最终定向EditMode28/28、PlayMode59/59通过，包含边界闭包、真实动画/物理/场景、原游戏非干扰代表检查；独立Review实质问题已以失败回归修复，Inspector视觉与自动化编辑操作分别验证。完整证据和保护终态在专项Plan，非全量套件或全量人工验收。无XF独立首导入、Mono/IL2CPP Player未执行，不借用旧Player/独立包冒充本次交付；本次仅执行CommonSystem精确暂存与普通Push。

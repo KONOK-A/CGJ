@@ -63,6 +63,91 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        public void LayerFilteringControlsBothTriggerChannelsButNotPointerMessages()
+        {
+            var root = new GameObject("Events.Listener.FilterTest");
+            var other = new GameObject("Events.Listener.FilterCollider");
+            var other2D = new GameObject("Events.Listener.FilterCollider2D");
+            var flag = new GameObject("Events.Listener.PersistentFlag");
+            try
+            {
+                var listener = root.AddComponent<EventListener>();
+                var property = typeof(EventListener).GetProperty("PhysicsLayerMask");
+                Assert.That(property, Is.Not.Null);
+                Assert.That(((LayerMask)property.GetValue(listener)).value, Is.EqualTo(Physics.AllLayers));
+                Collider collider = other.AddComponent<BoxCollider>();
+                Collider2D collider2D = other2D.AddComponent<BoxCollider2D>();
+                Assert.That(collider && collider2D, Is.True);
+                CheckFilter(listener, property, EventType.OnTriggerEnter, "triggerEnter", collider, other, flag);
+                CheckFilter(listener, property, EventType.OnTriggerStay, "triggerStay", collider, other, flag);
+                CheckFilter(listener, property, EventType.OnTriggerExit, "triggerExit", collider, other, flag);
+                CheckFilter(listener, property, EventType.OnTriggerEnter2D, "triggerEnter2D", collider2D, other2D, flag);
+                CheckFilter(listener, property, EventType.OnTriggerStay2D, "triggerStay2D", collider2D, other2D, flag);
+                CheckFilter(listener, property, EventType.OnTriggerExit2D, "triggerExit2D", collider2D, other2D, flag);
+
+                property.SetValue(listener, (LayerMask)0);
+                var clicks = 0;
+                listener.Register<PointerEventData>(EventType.OnClick, _ => clicks++);
+                var click = new UnityEvent<PointerEventData>();
+                UnityEventTools.AddBoolPersistentListener(click, flag.SetActive, false);
+                click.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+                typeof(EventListener).GetField("pointerClick", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(listener, click);
+                flag.SetActive(true);
+                listener.OnPointerClick(null);
+                Assert.That(clicks, Is.EqualTo(1));
+                Assert.That(flag.activeSelf, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+                Object.DestroyImmediate(other);
+                Object.DestroyImmediate(other2D);
+                Object.DestroyImmediate(flag);
+            }
+        }
+
+        private static void CheckFilter<T>(EventListener listener, PropertyInfo property, EventType type,
+            string fieldName, T payload, GameObject other, GameObject flag)
+        {
+            var calls = 0;
+            var unityEvent = new UnityEvent<T>();
+            UnityEventTools.AddBoolPersistentListener(unityEvent, flag.SetActive, false);
+            unityEvent.SetPersistentListenerState(0, UnityEventCallState.EditorAndRuntime);
+            typeof(EventListener).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(listener, unityEvent);
+            var method = typeof(EventListener).GetMethod(type.ToString(), BindingFlags.Instance | BindingFlags.NonPublic);
+            var token = listener.Register<T>(type, _ =>
+            {
+                Assert.That(flag.activeSelf, Is.True, "Code must precede the same callback's Inspector event.");
+                calls++;
+            });
+            foreach (var item in new[] { (Physics.AllLayers, 0, true), (0, 0, false), (1 << 31, 0, false), (1 << 31, 31, true) })
+            {
+                property.SetValue(listener, (LayerMask)item.Item1);
+                other.layer = item.Item2;
+                flag.SetActive(true);
+                var before = calls;
+                method.Invoke(listener, new object[] { payload });
+                Assert.That(calls - before, Is.EqualTo(item.Item3 ? 1 : 0), type.ToString());
+                Assert.That(flag.activeSelf, Is.EqualTo(!item.Item3), type.ToString());
+            }
+            var changeMask = listener.Register<T>(type, _ => property.SetValue(listener, (LayerMask)0));
+            property.SetValue(listener, (LayerMask)Physics.AllLayers);
+            flag.SetActive(true);
+            var previous = calls;
+            method.Invoke(listener, new object[] { payload });
+            Assert.That(calls, Is.EqualTo(previous + 1));
+            Assert.That(flag.activeSelf, Is.False, "A code callback changes only the next message's filter.");
+            flag.SetActive(true);
+            method.Invoke(listener, new object[] { payload });
+            Assert.That(calls, Is.EqualTo(previous + 1));
+            Assert.That(flag.activeSelf, Is.True);
+            changeMask.UnRegister();
+            token.UnRegister();
+        }
+
+        [Test]
         public void PersistentUnityEventSurvivesDefaultCleanupAndExplicitTrueOnlyDisconnectsTheField()
         {
             var root = new GameObject("Events.Listener.PersistentTest");

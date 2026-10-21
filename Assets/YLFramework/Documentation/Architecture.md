@@ -63,6 +63,7 @@ Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层G
 |---|---|
 | `Modules/` | Module / SingletonModule / ModuleManager；原主文件集中状态和生命周期，Models/Controllers/Views/Panels partial 仅组织入口，`Requests/` 为启动请求 |
 | `MVC/Models/`、`Controllers/`、`Views/` | 各自的正式类型及唯一索引 Manager；ViewManager 的 Registration/Loading/Queries partial 保持同一会话，`Views/Parameters/` 为 LoadViewArgs |
+| `MVC/Controllers/SceneController.cs` | 只通过ICoreResourceProvider提交场景请求；本Controller在途责任按注册代次管理，完成后不缓存/卸载Scene，不依赖Systems.Resource |
 | `Events/` | CoreEvents / EventManager 领域事件入口，不增加另一份总线 |
 | `UI/Windows/`、`Roots/`、`Input/`、`Tips/` | 窗口/加载请求、根配置、输入策略与Tips；PanelManager Loading/Sorting/Input partial共用原状态。取色便利工具完整归 Utilities/UI/ColorSelector，原namespace不改 |
 | `MVC/Views/Components/` | CloseView；TimerObject转Foundation/Timing/Components，物理/动画Listener转Foundation/Events/Unity，原namespace/GUID/字段保持 |
@@ -70,6 +71,8 @@ Foundation的Unity挂载/销毁适配直接使用原生API，不为复用上层G
 | `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
 
 Core Editor 的 `DefaultResources/` 成对保留生成器与删除保护；`ModuleGeneration/` 为 Module 模板；`Settings/` 为项目设置；`Extensions/ScriptableObjectExtensions` 和 `Utilities/Preview` 保留当前资产生成/定位契约。通用序列化、Handles、资产命名、TreeView 状态与 SplitWindow 已分别归 `Editor/Utilities/{Serialization,Scene,Assets,TreeViews,Windows}/`，DisableEdit Drawer 归 `Editor/Foundation/Attributes/`。七文件仍使用 `YLFramework.Core.Editor` namespace、原 GUID 和同一 Editor 程序集；生成配置资产、ProjectSettings 持久路径及 Examples 输出不变。
+
+CommonSystem的局部Unity适配融入`Foundation/Events/Unity`：现有Core namespace动画/物理组件保持类型、字段和GUID，新增`YLFramework.Events.MonoEventListener`只转发五个原生生命周期事件。通用EventListener新增物理LayerMask，默认全层、None明确禁用，只过滤12个物理入口且同时约束代码/Inspector，不改变指针消息或另建总线。SceneController归Core消费窄资源合同；资源初始化、SceneRecord/Lease与显式卸载仍归Resource/应用，不在YLFrameworkRoot增加bootstrap或挂载管理器。用途、组件选择见[Events](Modules/Events.md#局部-unity-监听组件)及[Resource](Modules/Resource.md#core-scenecontroller)。
 
 上述目录承接既有结构整理成果，不重复历史迁移。五类产品程序集归属迁移时保留原脚本/存续资源GUID、namespace、公开API和序列化字段；该结构整理批未改Core资源后端。随后8.6a将ProjectName解释为正式Resource ProjectId并保留Prefab/Resources fallback与生命周期，8.6c解除主体XFAB依赖，详见阶段8 Plan。UI Toolkit测试用有上限的真实绑定状态等待，Drawer/容器实现不变；不把结构整理证据扩大为全量套件/全平台或阶段8、9交付。
 
@@ -132,6 +135,7 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 | [`Runtime/Systems/Audio/AudioKit.cs`](../Runtime/Systems/Audio/AudioKit.cs) | 直接 Clip / 显式命名音频播放、安全句柄、请求取消与资源租约、设置、查询及可选 Mixer；显式参数/Snapshot 控制见 `Mixer/AudioMixerControl`，详见 [Audio](Modules/Audio.md) |
 | [`Runtime/YLFrameworkRoot.cs`](../Runtime/YLFrameworkRoot.cs) | 框架根单例（`MonoSingleton<YLFrameworkRoot>`，`DefaultExecutionOrder(-20)`），负责框架根对象的 DontDestroyOnLoad |
 | [`Runtime/Core/Modules/Module.cs`](../Runtime/Core/Modules/Module.cs) | 唯一业务 owner，保留模块启动/关闭、MVC 与 View 接入协议 |
+| [`Runtime/Core/MVC/Controllers/SceneController.cs`](../Runtime/Core/MVC/Controllers/SceneController.cs) | Module场景加载便利入口，直接返回Core原请求，只清自己的在途责任，不持成功Scene卸载权 |
 | [`Runtime/Core/MVC/Views/View.cs`](../Runtime/Core/MVC/Views/View.cs) | 正式 View 会话与表现生命周期 |
 | [`Runtime/Core/UI/Windows/PanelManager.Requests.cs`](../Runtime/Core/UI/Windows/PanelManager.Requests.cs) | 每消费者一份 Module pending 记录，按实际根和来源协调 Single/Multiple；复用 View 生命周期与 Core 资源责任 |
 | [`Runtime/Core/UI/Roots/UIRootContext.cs`](../Runtime/Core/UI/Roots/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |

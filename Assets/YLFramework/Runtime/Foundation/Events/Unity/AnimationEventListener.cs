@@ -8,18 +8,14 @@ namespace YLFramework.Core
     [Serializable]
     public class AnimationEvent : UnityEvent<string> { }
 
+    [AddComponentMenu("YLFramework/Events/Animation Event Listener")]
     public class AnimationEventListener : MonoBehaviour
     {
-        // Fix编码
-        [Obsolete("已过时,使用CommonSystem中的AnimationEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的AnimationEventListener代替!")]
-        public AnimationEvent animationEvent;
+        [Tooltip("由 AnimationClip 的 OnAnimationEvent(string) 事件传入名称；不监听 Animator 状态变化。")]
+        public AnimationEvent animationEvent = new AnimationEvent();
 
         public void OnAnimationEvent(string name) {
-#pragma warning disable CS0618 // 类型或成员已过时
             animationEvent?.Invoke(name);
-#pragma warning restore CS0618 // 类型或成员已过时
         } 
     }
 }
-

@@ -17,15 +17,10 @@ namespace YLFramework.Core.Tests
                 var listener = host.AddComponent<AnimationEventListener>();
                 string observed = null;
                 UnityEngine.Events.UnityAction<string> callback = value => observed = value;
-#pragma warning disable CS0618
-                listener.animationEvent = new AnimationEvent();
                 listener.animationEvent.AddListener(callback);
-#pragma warning restore CS0618
                 listener.OnAnimationEvent("walk");
                 Assert.That(observed, Is.EqualTo("walk"));
-#pragma warning disable CS0618
                 listener.animationEvent.RemoveListener(callback);
-#pragma warning restore CS0618
                 listener.OnAnimationEvent("idle");
                 Assert.That(observed, Is.EqualTo("walk"));
                 Assert.That(typeof(AnimationEventListener).GetField("animationEvent").FieldType,
@@ -74,22 +69,15 @@ namespace YLFramework.Core.Tests
                 var collider2D = other2D.AddComponent<BoxCollider2D>();
                 Assert.That(collider && collider2D, Is.True);
                 int calls = 0;
-#pragma warning disable CS0618
-                listener.onTriggerEnter = new TriggerEvent();
-                listener.onTriggerStay = new TriggerEvent();
-                listener.onTriggerExit = new TriggerEvent();
-                listener.onTriggerEnter2D = new TriggerEvent2D();
-                listener.onTriggerStay2D = new TriggerEvent2D();
-                listener.onTriggerExit2D = new TriggerEvent2D();
                 listener.onTriggerEnter.AddListener(_ => calls++);
                 listener.onTriggerStay.AddListener(_ => calls++);
                 listener.onTriggerExit.AddListener(_ => calls++);
                 listener.onTriggerEnter2D.AddListener(_ => calls++);
                 listener.onTriggerStay2D.AddListener(_ => calls++);
                 listener.onTriggerExit2D.AddListener(_ => calls++);
-#pragma warning restore CS0618
                 var mask = typeof(TriggerEventListener).GetField("layerMask", BindingFlags.Instance | BindingFlags.NonPublic);
-                mask.SetValue(listener, (LayerMask)(1 << 31));
+                listener.PhysicsLayerMask = 1 << 31;
+                Assert.That(((LayerMask)mask.GetValue(listener)).value, Is.EqualTo(1 << 31));
                 foreach (int layer in new[] { 0, 31 })
                 {
                     other.layer = layer;
@@ -111,6 +99,28 @@ namespace YLFramework.Core.Tests
                 UnityEngine.Object.DestroyImmediate(other);
                 UnityEngine.Object.DestroyImmediate(other2D);
             }
+        }
+
+        [Test]
+        public void ExplicitSerializedNoneIsNotReplacedByTheNewDefault()
+        {
+            var host = new GameObject("LayerMask serialized None");
+            try
+            {
+                var trigger = host.AddComponent<TriggerEventListener>();
+                var collision = host.AddComponent<CollisionEventListener>();
+                trigger.PhysicsLayerMask = 0;
+                collision.PhysicsLayerMask = 0;
+                var triggerJson = JsonUtility.ToJson(trigger);
+                var collisionJson = JsonUtility.ToJson(collision);
+                trigger.PhysicsLayerMask = Physics.AllLayers;
+                collision.PhysicsLayerMask = Physics.AllLayers;
+                JsonUtility.FromJsonOverwrite(triggerJson, trigger);
+                JsonUtility.FromJsonOverwrite(collisionJson, collision);
+                Assert.That(trigger.PhysicsLayerMask.value, Is.Zero);
+                Assert.That(collision.PhysicsLayerMask.value, Is.Zero);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(host); }
         }
     }
 }

@@ -12,29 +12,21 @@ namespace YLFramework.Core
     [Serializable]
     public class CollisionEvent2D : UnityEvent<Collision2D> { }
 
+    [AddComponentMenu("YLFramework/Events/Collision Event Listener")]
     public class CollisionEventListener : MonoBehaviour
     {
         [SerializeField]
-        private LayerMask layerMask;
-        // Fix编码  
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent onCollisionEnter;
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent onCollisionStay;
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent onCollisionExit;
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent2D onCollision2DEnter;
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent2D onCollision2DStay;
-        [Obsolete("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        [Header("已过时,使用CommonSystem中的CollisionEventListener代替!")]
-        public CollisionEvent2D onCollision2DExit;
+        [Tooltip("过滤对方 GameObject 的层；3D/2D 共用，None 不接收任何碰撞。")]
+        private LayerMask layerMask = Physics.AllLayers;
+        public CollisionEvent onCollisionEnter = new CollisionEvent();
+        public CollisionEvent onCollisionStay = new CollisionEvent();
+        public CollisionEvent onCollisionExit = new CollisionEvent();
+        public CollisionEvent2D onCollision2DEnter = new CollisionEvent2D();
+        public CollisionEvent2D onCollision2DStay = new CollisionEvent2D();
+        public CollisionEvent2D onCollision2DExit = new CollisionEvent2D();
+
+        /// <summary>对方物理对象的层过滤；不影响 Unity 原生碰撞判定。</summary>
+        public LayerMask PhysicsLayerMask { get => layerMask; set => layerMask = value; }
 
 
 
@@ -49,9 +41,7 @@ namespace YLFramework.Core
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollisionEnter?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
 
 
@@ -59,45 +49,35 @@ namespace YLFramework.Core
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollisionStay?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
 
         private void OnCollisionExit(Collision collision)
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollisionExit?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
 
         private void OnCollisionEnter2D(Collision2D collision)
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollision2DEnter?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
 
         private void OnCollisionStay2D(Collision2D collision)
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollision2DStay?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
 
         private void OnCollisionExit2D(Collision2D collision)
         {
             if (!layerMask.Contains(collision.gameObject.layer))
                 return;
-#pragma warning disable CS0618 // 类型或成员已过时
             onCollision2DExit?.Invoke(collision);
-#pragma warning restore CS0618 // 类型或成员已过时
         }
          
     }
