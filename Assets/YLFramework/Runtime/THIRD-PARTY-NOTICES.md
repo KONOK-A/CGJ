@@ -85,6 +85,11 @@ YLFramework 承接上述代码时进行了命名空间统一、程序集隔离�
 - `Runtime/Systems/Logging/`：LoggerSystem 1.0.1，revision `0ebbebeb4b961d6fb67670d22cad819856969c3a`及主工程embedded来源的既有handler/writer所有权修复，来源 https://gitee.com/xianfengkeji/xfgame-framework.logger-system.git ，MIT / `Copyright (c) 2025 弦风课堂`。新YL日志默认不接管；没有复制旧Analyzer。上述两模块各附完整`LICENSE.txt`。
 - `Integrations/DomainExcel`只消费B的真实Editor后端，需显式`YL_DOMAIN_EXCEL`，不进入核心默认包或Player；选装单元需同时携带`Integrations/Excel/Editor`和其MIT/Apache-2.0许可。Mission跨sheet原子事务与全局Buff Effect库xlsx未实现，不以普通作者工具或单sheet测试冒称支持。
 
+### Equipment 新增领域来源
+
+- `Runtime/Systems/Equipment/`及`Editor/Systems/Equipment/`承接EquipmentSystem 1.1.9，revision `48952da775e2fc2c8459c404ad80b3eab8a1c205`，来源 https://gitee.com/xianfengkeji/xfgame-framework.equipment-system.git ，MIT / `Copyright (c) 2024 弦风课堂`。完整原文在Runtime模块`LICENSE.txt`，覆盖相应Editor承接代码。
+- 保留Asset/Script双创建、装备宿主和配置作者流程；替换为YL Resource实例租约及CLR对象池，定义只读共享，按来源区分自有/借用实例。没有复制旧XF池/资源/Editor依赖、EPPlus、原meta或Logo。装备xlsx由现有可选Excel/DomainExcel承接，默认核心与Player不依赖后端。
+
 ### 共享依赖与排除
 
 - `Newtonsoft.Json.dll`由外部UPM依赖`com.unity.nuget.newtonsoft-json`提供，不复制到本框架导出根。受测3.2.1包的`LICENSE.md`声明Unity Companion License；其`Third Party Notices.md`分别保留Newtonsoft.Json（James Newton-King）、Json.Net.Unity3D（SaladLab）、Newtonsoft.Json-for-Unity（Kalle Jillheden）及com.newtonsoft.json（Mike Wuetherick）的完整MIT声明。应用重新分发该二进制时须携带对应包的适用许可与通知，不能用下述JSONObject许可替代。

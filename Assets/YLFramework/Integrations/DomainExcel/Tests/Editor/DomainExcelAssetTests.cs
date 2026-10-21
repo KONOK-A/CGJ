@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -20,6 +21,9 @@ namespace YLFramework.Domain.Excel.Tests
         [SetUp] public void Setup()
         {
             _folder = "Assets/DomainExcelFixture-" + Guid.NewGuid().ToString("N");
+            // 同一组回归可由不同验收 owner 运行，只登记本用例新建的独占目录。
+            var equipmentOwner = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Tests.EquipmentAcceptance.EquipmentSettings")).FirstOrDefault(t => t != null);
+            equipmentOwner?.GetMethod("OwnPath").Invoke(null, new object[] { _folder });
             if (SessionState.GetBool("YLFramework.Domain.MainAcceptance.Protection", false))
                 Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, Assembly-CSharp-Editor", true)
                     .GetMethod("OwnPath").Invoke(null, new object[] { _folder });

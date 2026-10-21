@@ -336,3 +336,15 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 **2026-10-19后续用户验收与Git收口：** 用户确认修订版融合原则并授权阶段9精确提交/普通Push及独立的E0批次。收口前实时远端与本地均为上述旧HEAD、暂存区为空、无索引锁或可见活跃收口会话；只读核对`delivery-binding.json`的26份当前源码/meta（包括受保护用户文件）全部SHA匹配，最终框架包/可选Logger/绑定文件SHA与冻结记录一致。仅追加本次用户验收文字，不重跑完整交付矩阵、不重建或覆写`G:/Unity/Y9`；原用户`AlternateContent.meta`和新拓展Plan不纳入阶段9提交。实际B9完整SHA与推送核验结果在后续E0专项Plan记录，不通过自引用或额外空提交伪造当前提交身份。
 
 完整暂存`diff --check`另发现六份新工具meta的18处Unity空值行尾空格；本次仅移除这些行尾空白，GUID/Importer/字段值不变，工具不在正式包导出根内。不重新冻结或覆盖旧记录；原技术验收SHA仍指规范前字节，Git收口差异为本段所述文档审批与meta空白，不冒充重新执行的技术验收。
+
+## 10. Equipment 独立专项
+
+本专项追加EquipmentSystem 1.1.9，不改写前述13项/C组或阶段9历史交付。合同、用户六项决定、失败复现与实际门禁记录集中在[Equipment专项Plan](../../../.kilo/plans/1792527533833-xf-equipment-migration.md)。运行时/作者入口及配置、所有权、IL2CPP和选配xlsx接入见[Equipment接入](Architecture.md#equipment-接入)。
+
+**2026-10-21 Equipment技术验收及用户验收均已通过，按用户授权进行最终Git收口。** 主工程及无XF独立工程Mono/Disabled、IL2CPP Low/Release四个非Development图形Player均各15项通过、exit0；独立首次导入和两工程Excel各15/15已有实际证据，不重复计数。完整限制仍按专项Plan保留，不宣称完整人工图形操作、High/移动平台或原生零泄漏。
+
+实现保留静态Manager、双创建与宿主模型，直接消费既有Resource/Pool；不新增产品程序集或旧XF兼容链，不替换原游戏。独立Review发现的8项行为问题已补失败回归并修复；主Unity当前EditMode75/75、Resource PlayMode9/9、DomainExcel15/15，原游戏代表回归1/1。主工程Mono/Disabled和IL2CPP Low/Release的非Development图形Player各15项通过并exit0；这些结果不替代新空工程首导入和独立Player结果。
+
+正式交付继续使用原Exporter的7个根，不导出Tests/Integrations/原游戏或MCP。可选Excel/DomainExcel须完整另装，首次核心导入先不装测试设施。新增复现工具位于`Tools/Equipment/`，只创建独占临时接收目录、保留同次进程/包/结果身份；具体制品SHA、独立门禁和保护终态以专项Plan实际记录为准，不复用或覆盖旧`G:/Unity/Y9`、`MC26`证据。
+
+最终长期交付入口为`G:/Unity/Deliveries/Equipment-20261021/`，原Temp交付原样持久化；核心包SHA256为`984e66ae6d5bc8401c78022f1803d6d49b339e49289f4366cad1f5a26133c4fe`。原始binding不修改，`archive-receipt.json`记录稳定映射与逐文件SHA/大小；实际Git提交/远端同步结果在外部收据及专项交接记录中，不为Hash自引用增加文档提交。冻结包仍为审批前的真实导出快照，未重新Export。

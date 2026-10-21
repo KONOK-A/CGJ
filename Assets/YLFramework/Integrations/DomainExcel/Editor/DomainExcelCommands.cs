@@ -2,14 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.BuffSystem;
+using YLFramework.EquipmentSystem;
 using YLFramework.Excel.Editor;
 using YLFramework.Foundation;
 using YLFramework.MissionSystem;
 using YLFramework.SkillSystem;
+using YLFramework.Services.Resource;
 using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Domain.Excel.Editor
@@ -37,6 +40,74 @@ namespace YLFramework.Domain.Excel.Editor
             var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.missions, root, Folder(folder), "missions", data => data.parent = root, DataType<MissionConfigData>(root.type_script_guid));
             return ValidateRows<MissionBase>(plan, "mission_type_class_fullname", root);
         }
+
+        public static ExcelImportPlan PreviewImport(EquipmentsConfig root, string path)
+        {
+            Clean(root);
+            // 即使目录尚不存在，也明确选择本根的独占条目目录；预览/取消不创建目录。
+            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.Equipments, root,
+                EquipmentsConfigController.GetEquipmentConfigDataPath(root), "equipments", data => data.parent = root,
+                DataType<EquipmentConfigData>(root.type_script_guid), data =>
+                {
+                    var type = data.equipmentType == EquipmentType.Script ? AssemblyTool.GetType(data.equipment_class_full_name) : null;
+                    data.equipment_class_guid = YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(type) ? YLFramework.EquipmentSystem.ScriptBindController.GetScriptGuid(type) : "";
+                });
+            try
+            {
+                foreach (var change in plan.Changes.Where(change => change.After != null))
+                {
+                    var row = JObject.Parse(change.After.Substring(change.After.IndexOf(':') + 1));
+                    var mode = row["equipmentType"].ToObject<EquipmentType>();
+                    if (mode == EquipmentType.Script)
+                    {
+                        var name = (string)row["equipment_class_full_name"];
+                        if (!YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(AssemblyTool.GetType(name)))
+                            throw new InvalidOperationException($"装备 {change.Key} 脚本类型无效: {name}");
+                    }
+                    else if (mode == EquipmentType.Asset)
+                    {
+                        try { _ = new ResourceAddress((string)row["projectName"], (string)row["assetName"]); }
+                        catch (ArgumentException error) { throw new InvalidOperationException($"装备 {change.Key} 资源地址无效。", error); }
+                    }
+                    else throw new InvalidOperationException($"装备 {change.Key} equipmentType 无效: {mode}");
+                }
+                if (plan.CanCommit)
+                {
+                    var ids = new HashSet<int>(root.Equipments.Where(data => data).Select(data => data.id));
+                    foreach (var change in plan.Changes)
+                    {
+                        var id = int.Parse(change.Key, CultureInfo.InvariantCulture);
+                        if (change.Kind == ExcelChangeKind.Delete) ids.Remove(id); else ids.Add(id);
+                    }
+                    plan.AddValidation(() =>
+                    {
+                        foreach (var other in EquipmentsConfigController.GetAllEquipmentsConfig().Where(config => config != root))
+                        foreach (var data in other.Equipments.Where(data => data))
+                            if (ids.Contains(data.id)) throw new InvalidOperationException($"装备 ID {data.id} 与配表 '{other.name}' 冲突。");
+                    });
+                }
+                return plan;
+            }
+            catch { plan.Dispose(); throw; }
+        }
+
+        private static string EquipmentWorkbookKey(EquipmentsConfig root)
+        {
+            if (!root || !AssetDatabase.IsMainAsset(root)) throw new InvalidOperationException("装备配表必须是已保存的主资产。");
+            return "YLFramework.Equipment.Excel." + AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
+        }
+        public static string GetEquipmentWorkbook(EquipmentsConfig root) => EditorPrefs.GetString(EquipmentWorkbookKey(root), "");
+        private static void RememberEquipmentWorkbook(EquipmentsConfig root, string path) => EditorPrefs.SetString(EquipmentWorkbookKey(root), Path.GetFullPath(path));
+        public static void ExportEquipment(EquipmentsConfig root, string path)
+        {
+            Clean(root);
+            ExcelAuthoring.ScriptableObjectToExcel(root.Equipments, path, "equipments", DataType<EquipmentConfigData>(root.type_script_guid));
+            RememberEquipmentWorkbook(root, path);
+        }
+        [MenuItem("Assets/YLFramework/Domain Excel/Open Equipment Workbook Folder")]
+        private static void OpenEquipmentWorkbook() => EditorUtility.RevealInFinder(GetEquipmentWorkbook((EquipmentsConfig)SelectedRoot()));
+        [MenuItem("Assets/YLFramework/Domain Excel/Open Equipment Workbook Folder", true)]
+        private static bool HasEquipmentWorkbook() => SelectedRoot() is EquipmentsConfig root && File.Exists(GetEquipmentWorkbook(root));
 
         private static ExcelImportPlan ValidateRows<T>(ExcelImportPlan plan, string classField, MissionsConfig missions = null)
         {
@@ -91,23 +162,24 @@ namespace YLFramework.Domain.Excel.Editor
         private static void ImportSelected()
         {
             var root = SelectedRoot();
-            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission配表或条目。");
+            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
             var path = EditorUtility.OpenFilePanel("预览领域Excel导入", string.Empty, "xlsx");
             if (path.Length == 0) return;
-            var plan = root is SkillsConfig skill ? PreviewImport(skill, path) : root is BuffsConfig buff ? PreviewImport(buff, path) : PreviewImport((MissionsConfig)root, path);
+            var plan = root is SkillsConfig skill ? PreviewImport(skill, path) : root is BuffsConfig buff ? PreviewImport(buff, path) : root is EquipmentsConfig equipment ? PreviewImport(equipment, path) : PreviewImport((MissionsConfig)root, path);
             var window = ExcelAuthoringCommands.ShowPreview(plan);
-            window.Applied += () => Invalidate(root);
+            window.Applied += () => { Invalidate(root); if (root is EquipmentsConfig applied) RememberEquipmentWorkbook(applied, path); };
         }
         [MenuItem("Assets/YLFramework/Domain Excel/Export Entries")]
         private static void ExportSelected()
         {
             var root = SelectedRoot();
-            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission配表或条目。");
+            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
             var path = SavePath(root.name);
             if (path.Length == 0) return;
             if (root is SkillsConfig skill) ExcelAuthoring.ScriptableObjectToExcel(skill.skills, path, "skills", DataType<SkillConfigData>(skill.type_script_guid));
             else if (root is BuffsConfig buff) ExcelAuthoring.ScriptableObjectToExcel(buff.buffs, path, "buffs", DataType<BuffConfigData>(buff.type_script_guid));
             else if (root is MissionsConfig mission) ExcelAuthoring.ScriptableObjectToExcel(mission.missions, path, "missions", DataType<MissionConfigData>(mission.type_script_guid));
+            else if (root is EquipmentsConfig equipment) ExportEquipment(equipment, path);
         }
         [MenuItem("Assets/YLFramework/Domain Excel/Preview Import Mission Parameters")]
         private static void ImportParameters()
@@ -136,9 +208,11 @@ namespace YLFramework.Domain.Excel.Editor
             SkillsConfig root => root,
             BuffsConfig root => root,
             MissionsConfig root => root,
+            EquipmentsConfig root => root,
             SkillConfigData data => data.parent,
             BuffConfigData data => data.parent,
             MissionConfigData data => data.parent,
+            EquipmentConfigData data => data.parent,
             _ => null
         };
         private static void Clean(ScriptableObject root)
@@ -172,6 +246,7 @@ namespace YLFramework.Domain.Excel.Editor
             if (root is SkillsConfig skill) skill.ClearCache();
             else if (root is BuffsConfig buff) buff.ClearCache();
             else if (root is MissionsConfig mission) mission.ClearCache();
+            else if (root is EquipmentsConfig equipment) equipment.ClearCache();
         }
 
         private sealed class ParameterPreview : EditorWindow

@@ -32,6 +32,11 @@ namespace YLFramework.Excel.Editor
         /// </summary>
         public static ExcelImportPlan PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner,
             string assetFolder = null, string sheetName = null, Action<T> initialize = null, Type dataType = null) where T : ScriptableObject
+            => PreviewScriptableObjects(path, values, owner, assetFolder, sheetName, initialize, dataType, null);
+
+        /// <summary>afterImport在转换完成后、生成差异和提交快照前，仅调整暂存对象的派生元数据。</summary>
+        public static ExcelImportPlan PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner,
+            string assetFolder, string sheetName, Action<T> initialize, Type dataType, Action<T> afterImport) where T : ScriptableObject
         {
             var plan = new ExcelImportPlan();
             var staged = new List<T>();
@@ -77,6 +82,7 @@ namespace YLFramework.Excel.Editor
                         target.hideFlags = HideFlags.HideAndDontSave;
                         initialize?.Invoke(target);
                         ImportRow(table, row, target, plan);
+                        afterImport?.Invoke(target);
                         if (ExcelValues.Key(target, 0, true) != key) throw new InvalidOperationException("ID converter changed identity: " + key);
                     }
                     catch (Exception e) { plan.Error(table.Source + ": row " + row.Key + ": " + e.Message); }

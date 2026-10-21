@@ -29,6 +29,7 @@ namespace YLFramework.Excel.Editor
         private readonly List<ExcelChange> changes = new List<ExcelChange>();
         private Action apply;
         private Action release;
+        private Action validation;
         public IReadOnlyList<string> Errors => errors.AsReadOnly();
         public IReadOnlyList<ExcelChange> Changes => changes.AsReadOnly();
         public ExcelCommitResult Result { get; private set; }
@@ -36,6 +37,14 @@ namespace YLFramework.Excel.Editor
 
         internal void Error(string error) => errors.Add(error);
         internal void Prepare(Action commit, Action cleanup = null) { apply = commit; release = cleanup; }
+        /// <summary>只读检查领域外部约束，在预览及真正写入前各执行一次；失败不提交。</summary>
+        public void AddValidation(Action check)
+        {
+            if (check == null) throw new ArgumentNullException(nameof(check));
+            if (Result != ExcelCommitResult.Pending) throw new InvalidOperationException("The import plan is already resolved.");
+            check();
+            validation += check;
+        }
         internal void Diff(IDictionary<string, string> before, IDictionary<string, string> after)
         {
             foreach (var item in after)
@@ -53,10 +62,11 @@ namespace YLFramework.Excel.Editor
             else if (!CanCommit) Result = ExcelCommitResult.Failed;
             else
             {
-                try { apply(); Result = ExcelCommitResult.Applied; }
+                try { validation?.Invoke(); apply(); Result = ExcelCommitResult.Applied; }
                 catch (Exception e) { errors.Add(e.ToString()); Result = ExcelCommitResult.Failed; }
             }
             apply = null;
+            validation = null;
             release?.Invoke();
             release = null;
             return Result;

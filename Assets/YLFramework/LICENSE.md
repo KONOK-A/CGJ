@@ -25,6 +25,9 @@ https://gitee.com/xianfengkeji/xfgame-framework.excel-system
 Skill/Buff/Mission为Copyright (c) 2024 弦风课堂，Reddot/Logging为Copyright (c) 2025 弦风课堂。
 精确版本、revision和来源见`Runtime/THIRD-PARTY-NOTICES.md`；各模块`LICENSE.txt`保留完整原文。
 可选`Integrations/DomainExcel`不随核心导出，选装须同时携带B的Excel后端和完整许可。
+新增`Runtime/Systems/Equipment/`及对应Editor承接EquipmentSystem 1.1.9 revision
+`48952da775e2fc2c8459c404ad80b3eab8a1c205`，MIT / Copyright (c) 2024 弦风课堂；
+完整原文在模块`LICENSE.txt`，具体来源和局部替换见`Runtime/THIRD-PARTY-NOTICES.md`。
 相关上游声明及完整 MIT 许可保留如下。
 
 Copyright (c) 2021 弦小风

@@ -61,6 +61,7 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 | Localization / DataAssets | 多语言文本图片与SO根/子资产作者流程、显式owner与Resource Lease | B已接入；验证范围见正式Plan | [配置数据接入](Architecture.md#配置数据接入) |
 | Excel（可选） | MiniExcel Editor-only，真实xlsx SO/List/JSON预览确认、失败回滚与工作簿定位 | 不进入核心默认包或Player | [配置数据接入](Architecture.md#配置数据接入) |
 | Skill / Buff / Mission / Reddot / Logging | 配置运行态隔离、领域池/宿主关闭、普通作者工具、独立红点来源与默认被动Logger | C完整候选已接入；真实门禁以专项Plan记录为准，DomainExcel为选装 | [领域玩法接入](Architecture.md#领域玩法接入) |
+| Equipment | Asset/Script双创建、单一实例归属、自有/借用责任、装备配置窗口和可选xlsx | 技术及用户验收通过；主/独立工程Mono与IL2CPP Low代表性运行已验证，Git交接见专项Plan | [Equipment 接入](Architecture.md#equipment-接入) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 

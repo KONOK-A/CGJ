@@ -136,6 +136,7 @@ Audio 的可选 Mixer 不新增程序集或宿主：`AudioOutputRoute` 表达继
 | [`Runtime/Core/UI/Windows/PanelManager.Requests.cs`](../Runtime/Core/UI/Windows/PanelManager.Requests.cs) | 每消费者一份 Module pending 记录，按实际根和来源协调 Single/Multiple；复用 View 生命周期与 Core 资源责任 |
 | [`Runtime/Core/UI/Roots/UIRootContext.cs`](../Runtime/Core/UI/Roots/UIRootContext.cs) | 根/层/遮罩配置，无独立窗口 owner 或加载缓存 |
 | [`Runtime/Systems/Resource/ResourceSystem.cs`](../Runtime/Systems/Resource/ResourceSystem.cs) | 唯一显式初始化/关闭的资源权威，统一资产/实例/Scene pin，供 Core/Audio 消费 |
+| [`Runtime/Systems/Equipment/EquipmentManager.cs`](../Runtime/Systems/Equipment/EquipmentManager.cs) | 装备双创建、挂载与精确归还；不管理背包、存档或Skill/Buff联动 |
 | [`Runtime/Foundation/Timing/Timer.cs`](../Runtime/Foundation/Timing/Timer.cs) | 静态默认计时入口，秒/帧/日期投递；控制与清理不创建宿主 |
 | [`Runtime/Foundation/Timing/TimerScope.cs`](../Runtime/Foundation/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
 | [`Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs`](../Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs) | 为 Mono 单例指定运行时层级路径（如 `GameObjectPool`）；正式 UI 根不是 Mono 单例 |
@@ -170,7 +171,21 @@ Skill/Buff/Mission分别位于`Runtime/Systems/`及对应`Editor/Systems/`，沿
 
 `YLFramework.ReddotSystem.ReddotManager.RegisterPath`返回独立来源token，owner退出时Dispose；普通`AddPath/RemovePath`保留集合语义，不能夺取独立来源。`Reddot`只切换显式`Indicator`，停用/销毁精确退订，不切换全部业务子节点。`YLFramework.Logging.LoggerManager`默认被动，仅在Play主线程显式`Enable(new LoggerOptions { WriteToFile = true })`才写盘/接管，`Disable`只归还仍由自己拥有的handler；与原embedded XF Logger共存，不修改或替换原包。
 
-可选`Integrations/DomainExcel`需完整B Excel Editor后端及显式`YL_DOMAIN_EXCEL`。`DomainExcelCommands.PreviewImport`使用显式工作簿路径，预览后明确取消或确认；根资产不保存本机绝对路径。当前没有最近工作簿/打开文件夹入口，不提供Mission条目+参数跨sheet原子事务或全局Buff Effect库xlsx导入。普通Effect/条件/奖励/参数作者工具继续存在；默认核心导出不含这两个可选Integrations目录。
+可选`Integrations/DomainExcel`需完整B Excel Editor后端及显式`YL_DOMAIN_EXCEL`。`DomainExcelCommands.PreviewImport`使用显式工作簿路径，预览后明确取消或确认；根资产不保存本机绝对路径。Skill/Buff/Mission当前没有最近工作簿/打开文件夹入口，不提供Mission条目+参数跨sheet原子事务或全局Buff Effect库xlsx导入。普通Effect/条件/奖励/参数作者工具继续存在；默认核心导出不含这两个可选Integrations目录。
+
+### Equipment 接入
+
+Equipment已融合至YLFramework并通过技术及用户验收；主工程与无XF独立工程Mono、IL2CPP Low均有真实代表性图形运行证据。长期交付入口见[总体蓝图Equipment专项](IntegrationPlan.md#10-equipment-独立专项)。这不代表完整人工图形操作、IL2CPP High、移动平台或原生零泄漏已经验证；功能和原始引用使用权边界不变。
+
+`YLFramework.EquipmentSystem`保留`EquipmentManager`静态主入口、`IEquipment/IEquippable`及Asset/Script双模式。应用先初始化Resource；通过`ResourceProjectMount.assetTypes`或`ResourceLocalSnapshot.CreateCatalog`显式提供`typeof(EquipmentsConfig)`及直接加载的具体派生类型，再调用`LoadConfig(resources,address)`或借用`AddConfig(root)`。`projectName/assetName`和图标字段采用YL ProjectId/Path，不读取旧XF配置。
+
+`CreateEquipment(id)`先设置共享只读`EquipmentData`与空`Equiper`再触发领域`OnLoaded`，不承诺早于Prefab原生Awake/OnEnable。Prefab根须有且仅有一个IEquipment；Script须为具体普通类、public无参构造，字符串类型由应用按IL2CPP路径定向保留。运行态字段放实例，不能修改登记中的定义。同一实例跨宿主返回AlreadyEquipped，同ID的不同实例可同时装备；回调抛错撤销本域挂载并清理，不承诺回滚外部业务副作用。
+
+Manager创建的实例由其持有既有InstanceLease或CLR池责任，直接`Equip`的外部对象只借用。外部owner自行保活配置/资源；卸下或关闭不替其调用OnLoaded/OnUnloaded、销毁或回池。宿主结束显式`CloseHost`；`UnEquip(equipment,false)`留下可重装的自有实例，最终由DestroyEquipment、RemoveConfig或Shutdown归还。应用退出与Editor会话退出清理全部自有结果，包含未装备者；只归还自身根Lease，不关闭ResourceSystem或清共享缓存。归还后的原始IEquipment引用不得继续使用，不提供跨checkout的公开Handle保护。
+
+作者入口为`Window/YLFramework/EquipmentSystem`，新建根位于`YLFramework/EquipmentSystem(装备配置)`。独立条目放`Assets/YLFrameworkData/Equipment/<根GUID>/`，显式刷新补入本根条目，getter不扫描/写盘。派生配置、Script绑定、资源选择/预览、复制/删除、重排及独立窗口选择保留；对自有独立文件的Undo/Redo保留原始资产/meta身份，冲突不覆盖外来文件。外部引用只解除，所有者结束与配置删除有完整回调关闭屏障。
+
+装备选配xlsx使用`DomainExcelCommands.PreviewImport(EquipmentsConfig,path)`；导出、预览/确认/取消及打开最近工作簿目录位于`Assets/YLFramework/Domain Excel/`。路径按根GUID存EditorPrefs，不进.asset；暂存阶段同步最终Script类/GUID，跨根ID在预览及提交前复核，失败不部分写入。Excel后端保留原7参PreviewScriptableObjects，新增8参afterImport重载仅调整暂存派生元数据；ExcelImportPlan.AddValidation执行只读的预览/提交前约束，不用于提交后修补。
 
 `YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。来源与完整许可见根LICENSE及Notices。
 
