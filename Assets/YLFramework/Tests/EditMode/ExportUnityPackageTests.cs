@@ -42,7 +42,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
-        public void DefaultExportDoesNotRedistributeUnlicensedEditorEnhancers()
+        public void DefaultExportDoesNotRedistributeEditorEnhancers()
         {
             var roots = (string[])typeof(YLFramework.Editor.ExportUnityPackage)
                 .GetField("ExportRoots", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
@@ -85,19 +85,14 @@ namespace YLFramework.Tests
             var sentinels = new[]
             {
                 FrameworkRoot + "/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll",
-                FrameworkRoot + "/Plugins/BouncyCastle/LICENSE.md",
                 FrameworkRoot + "/Plugins/BouncyCastle/SOURCE.txt",
-                FrameworkRoot + "/Plugins/BouncyCastle/TINK-LICENSE.txt",
                 FrameworkRoot + "/Runtime/Systems/Action/Core/ActionKit.cs",
                 FrameworkRoot + "/Runtime/Systems/Audio/AudioKit.cs",
                 FrameworkRoot + "/Runtime/Systems/Audio/Actions/PlaySoundAction.cs",
                 FrameworkRoot + "/Runtime/Systems/Save/SaveManager.cs",
                 FrameworkRoot + "/Runtime/Systems/Save/SaveStore.cs",
-                FrameworkRoot + "/Runtime/Systems/Localization/LICENSE.txt",
                 FrameworkRoot + "/Runtime/Systems/Localization/MultiLanguageConfigs.cs",
-                FrameworkRoot + "/Runtime/Systems/DataAssets/LICENSE.txt",
                 FrameworkRoot + "/Runtime/Systems/DataAssets/ScriptableObjectConfigs.cs",
-                FrameworkRoot + "/Editor/Systems/DataAssets/LICENSE.txt",
                 FrameworkRoot + "/Editor/Systems/DataAssets/DataAssetsWorkbookMemory.cs",
                 FrameworkRoot + "/Editor/Help/HelpRegistry.cs",
                 FrameworkRoot + "/Editor/Help/HelpWindow.cs",
@@ -163,7 +158,6 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Core/Resources/YLFramework/Core/Canvas.prefab",
                 FrameworkRoot + "/Runtime/Core/Resources/YLFramework/Core/EventSystem.prefab",
                 FrameworkRoot + "/Editor/Core/DefaultResources/ListenerInitOnLoad.cs",
-                FrameworkRoot + "/Runtime/THIRD-PARTY-NOTICES.md",
                 FrameworkRoot + "/Runtime/Systems/Http/HttpManager.cs",
                 FrameworkRoot + "/Runtime/Systems/Http/SendWebRequest.cs",
                 FrameworkRoot + "/Runtime/Foundation/Pool/Object/ObjectPool.cs",
@@ -196,11 +190,9 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Utilities/Grid/NormalGrid.cs",
                 FrameworkRoot + "/Runtime/Utilities/Grid/DynamicGrid.cs",
                 FrameworkRoot + "/Runtime/Utilities/Json/JSONObject.cs",
-                FrameworkRoot + "/Runtime/Utilities/Json/LICENSE.md",
                 FrameworkRoot + "/Runtime/Utilities/Table/Table.cs",
                 FrameworkRoot + "/Runtime/Utilities/Table/TableIndex.cs",
                 FrameworkRoot + "/Runtime/Utilities/ZipTool/Utilities/ZipUtility.cs",
-                FrameworkRoot + "/Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md",
                 FrameworkRoot + "/Documentation/Modules/FSM.md",
                 FrameworkRoot + "/Documentation/Modules/Grid.md",
                 FrameworkRoot + "/Documentation/Modules/Json.md",
@@ -247,9 +239,6 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Core/Tools",
                 FrameworkRoot + "/Runtime/Core/UI/Windows/Tools",
                 FrameworkRoot + "/Runtime/Utilities/UI/Input",
-                FrameworkRoot + "/Runtime/Core/LICENSE.md",
-                FrameworkRoot + "/Runtime/Foundation/LICENSE.md",
-                FrameworkRoot + "/Editor/Core/LICENSE.md",
                 FrameworkRoot + "/Samples/ColorSelector",
                 "Assets/Plugins/Demigiant/DOTween",
                 FrameworkRoot + "/Runtime/Systems/Resource/Framework",
@@ -351,7 +340,7 @@ namespace YLFramework.Tests
                 }
 
                 foreach (var path in requiredPaths) Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing recursive asset: " + path);
-                // 批准的插件根全递归，精确核验二进制、来源与适用许可。
+                // 批准的插件根全递归，精确核验二进制与来源。
                 Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle")),
                     Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle"))));
                 Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "YLFramework.Analyzers.dll"), Is.EqualTo(new[] { AnalyzerPath }));
@@ -436,7 +425,7 @@ namespace YLFramework.Tests
                 }
                 Assert.That(() => YLFramework.Editor.ExportUnityPackage.Export(packagePath), Throws.TypeOf<IOException>(), "Existing packages are not overwritten by default.");
                 Assert.That(() => YLFramework.Editor.ExportUnityPackage.Export(Path.Combine(tempDirectory, "missing", "framework.unitypackage")), Throws.TypeOf<DirectoryNotFoundException>());
-                TestContext.Progress.WriteLine("G4 verified formal framework export " + packagePath + "; records=" + recordsByPath.Count + "; BC exact SHA/meta/license and Tink notices included.");
+                TestContext.Progress.WriteLine("G4 verified formal framework export " + packagePath + "; records=" + recordsByPath.Count + "; BC exact SHA/meta included.");
             }
             finally
             {

@@ -1,4 +1,3 @@
-// Copyright (c) 2025 弦风课堂. MIT License, see LICENSE.txt.
 using System.Collections.Generic;
 using UnityEngine;
 

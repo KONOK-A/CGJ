@@ -11,7 +11,7 @@ namespace YLFramework.Editor.Help
     {
         /// <summary>按展示顺序排列的使用指南。</summary>
         public HelpPage[] Guides = Array.Empty<HelpPage>();
-        /// <summary>可选的模块介绍与许可页面。</summary>
+        /// <summary>可选的模块介绍页面。</summary>
         public HelpPage[] About = Array.Empty<HelpPage>();
         /// <summary>明确属于本模块的 API 类型，不自动收集依赖程序集。</summary>
         public HelpApiTypeDefinition[] ApiTypes = Array.Empty<HelpApiTypeDefinition>();

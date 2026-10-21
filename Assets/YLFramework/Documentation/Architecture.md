@@ -37,7 +37,7 @@ Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集�
 
 外部依赖：UGUI、Newtonsoft.Json（存档、HTTP、Catalog 与 Core 配表等）等既有依赖；排除 DOTween 不意味着框架零外部依赖。EventListener 的折叠、页签与 UnityEvent 编辑由普通 Editor 中的原生 CustomEditor 承担，Sirenix Odin 插件整树及其编译引用已退出，不提供 mini-Odin 或兼容空壳。ProjectSettings 的五个未使用 Odin 宏按原配置权限边界保留。
 
-E04内容编码在同一Resource主体内接入官方 `BouncyCastle.Cryptography 2.7.0` netstandard2.0，仅用于HKDF-SHA256；Runtime asmdef精确引用该DLL并允许已批准的CNG桥接unsafe代码。AES-256-GCM来自Windows CNG `Microsoft Primitive Provider`，不复制系统DLL、不提供软件GCM或临时明文fallback。64KiB/两明文槽与32KiB native读取缓冲、显式数据预算及owner沿原Bundle/事务图；应用拥有key provider，不新增key服务/加载权威。BC/Tink来源、精确SHA及完整适用许可随 `Plugins/BouncyCastle/` 交付，平台及风险见 [Resource](Modules/Resource.md#可选-bundle-内容加密)。
+E04内容编码在同一Resource主体内接入官方 `BouncyCastle.Cryptography 2.7.0` netstandard2.0，仅用于HKDF-SHA256；Runtime asmdef精确引用该DLL并允许已批准的CNG桥接unsafe代码。AES-256-GCM来自Windows CNG `Microsoft Primitive Provider`，不复制系统DLL、不提供软件GCM或临时明文fallback。64KiB/两明文槽与32KiB native读取缓冲、显式数据预算及owner沿原Bundle/事务图；应用拥有key provider，不新增key服务/加载权威。BC 精确 SHA 与来源随 `Plugins/BouncyCastle/` 交付，平台及风险见 [Resource](Modules/Resource.md#可选-bundle-内容加密)。
 
 ## Runtime 目录规则（Foundation / Core / Systems / Utilities）
 
@@ -49,7 +49,7 @@ Runtime 按机制、领域所有权和使用方式组织为四个责任分区，
 - `Utilities/`：具有明确具体功能职责、按需直接使用的便利工具（多数 Extensions、FSM、Grid、Json、Table、ZipTool、ColorSelector）；仓库根 `Tools/` 则承载 SDK 与开发工具；
 - `Systems/`：Action、Audio、Save、Http 与 Resource 按领域归口，共用整体 Runtime，不新增系统程序集；Resource 仅归口外边界，内部结构与生命周期契约不变；
 
-`Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 和许可汇总属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
+`Systems/Http/` 仍使用公开 namespace `YLFramework.Services.Http`；目录名变化不改公开身份。`YLFrameworkRoot.cs`、主 asmdef、`csc.rsp` 属于根级身份或装配入口，可留在 Runtime 根部。通用工具只按用途直接消费，不新建系统管理器或中立内核副本。
 
 Tidy守卫分别验证完整Foundation和Foundation+Core闭包：Core递归包含自身全部C#文件，允许Foundation与真实UGUI、Json.NET，不再放行XFABManager。两闭包在Editor和Windows64 Development profile先验证合法消费者，再以相同参考/define验证Foundation→Core、Core→Audio的限定名/别名等违规符号不可解析。参考按真实程序集身份及编译图选择，Json.NET分别使用Editor/AOT插件，固定产品当前两类输入宏；伪路径、预编译YLFramework/测试/optional DLL及错profile插件被拒绝。
 
@@ -91,7 +91,6 @@ CommonSystem的局部Unity适配融入`Foundation/Events/Unity`：现有Core nam
 
 FSM/Grid/Json/Table/ZipTool 无需组件挂载或公共Root；ColorSelector 是 UGUI 工具，窗口按需复用 Core 的 Module/Panel。现有YLFramework.Core.Pool namespace不表示依赖Core领域，机制闭包见[Pool](Modules/Pool.md)。类型/namespace/GUID保持，五个产品程序集身份迁移是阶段 7 的明确成本；JSONObject/SharpZipLib来源与完整MIT随Runtime导出，分发限制见下文。
 
-XF 承接源码的完整 MIT 许可只保留于 [`Assets/YLFramework/LICENSE.md`](../LICENSE.md)，保留上游版权与全文；默认导出在六个目录之外显式加入该文件。其他来源的完整许可和 Runtime/THIRD-PARTY-NOTICES.md 的来源说明保持。
 
 Core 中非领域扩展已退出，通用能力统一归 `YLFramework.Utilities.Extensions` / Runtime；`StringTools` 归 `YLFramework.Utilities`。只有两份相同的 Unity fake-null 算法收敛为 Object 入口，递归 `SetLayer` 并入现有 GameObject 工具；单对象设层、不同概率离散化、逆插值与分量 / 方向算法仍按实际契约保留，不机械改名或合并。详见 [Extensions](Modules/Extensions.md)。展示元数据与必要 Drawer 保持 5.1 的 Foundation / Editor 边界。
 
@@ -163,7 +162,7 @@ DataAssets保留`ScriptableObjectConfigs/ScriptableObjectData`与`SingletonScrip
 
 **AssetMetadata**沿用实际字段：SO根`displayName/configs/type_script_guid`、条目`parent/id/config_name/icon/des`；语言根`displayName/languages`（公开`Languages`列表）、语言`language/displayName/languagesInfo`、条目`id/type/str/image/url/notes`。资源地址中的`projectName/imageName/subAsset`仍是YL ProjectId/Path/SubAsset，不自动转换XF地址。两处`excel_path`已删除，且不以隐藏字段、迁移器或别名恢复。
 
-可选Excel提供`ExcelAuthoring`的SO/List/JSON导出及预览，`ExcelImportPlan`先核`Errors/Changes/CanCommit`再`Commit(true)`，取消不写；过期输入、新引用失效和部分应用失败均拒交或回滚。保留`boolean -> Bool`、`int64 -> Long`。已选SO根菜单位于`Assets/YLFramework/Excel/`；导出成功后EditorPrefs按资产GUID记忆工作簿，Inspector的“在文件夹中打开Excel”仅在文件存在时启用，改名/移动不丢记录，不把绝对路径写回.asset。Localization尚无Excel作者流程。选装时完整携带`Integrations/Excel/Editor`及Licenses；默认包不包含它。
+可选Excel提供`ExcelAuthoring`的SO/List/JSON导出及预览，`ExcelImportPlan`先核`Errors/Changes/CanCommit`再`Commit(true)`，取消不写；过期输入、新引用失效和部分应用失败均拒交或回滚。保留`boolean -> Bool`、`int64 -> Long`。已选SO根菜单位于`Assets/YLFramework/Excel/`；导出成功后EditorPrefs按资产GUID记忆工作簿，Inspector的“在文件夹中打开Excel”仅在文件存在时启用，改名/移动不丢记录，不把绝对路径写回.asset。Localization尚无Excel作者流程。选装时完整携带`Integrations/Excel/Editor`；默认包不包含它。
 
 统一Save由`SaveStore`承担唯一文件/索引/槽位/模型/异步/缓存权威，`SaveManager`只提供Unity路径和门面。只支持当前v2，损坏/IO/版本失败不变成默认值；备份读取注明来源，显式恢复才修盘。没有SaveMigration、v1复制或XF Archive导入，普通删除重载保留。用法与并发/取消边界见[Save](Modules/Save.md)。
 
@@ -191,7 +190,7 @@ Manager创建的实例由其持有既有InstanceLease或CLR池责任，直接`Eq
 
 装备选配xlsx使用`DomainExcelCommands.PreviewImport(EquipmentsConfig,path)`；导出、预览/确认/取消及打开最近工作簿目录位于`Assets/YLFramework/Domain Excel/`。路径按根GUID存EditorPrefs，不进.asset；暂存阶段同步最终Script类/GUID，跨根ID在预览及提交前复核，失败不部分写入。Excel后端保留原7参PreviewScriptableObjects，新增8参afterImport重载仅调整暂存派生元数据；ExcelImportPlan.AddValidation执行只读的预览/提交前约束，不用于提交后修补。
 
-`YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。来源与完整许可见根LICENSE及Notices。
+`YLFramework.Core.Editor.ReorderableTreeView<T>`位于`Editor/Utilities/TreeViews/`，构造为`(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter须返回owner当前的序列化列表，不能固定捕获Undo前的List；窗口初始化后`Reload`，停用时`Dispose`归还Undo订阅/本实例拖拽。保留`OnBuildRoot`、`OnDragEnd`、`RefreshDatas`派生方式；默认一槽位一行，含空项与重复引用；过滤行/业务ID须覆盖`GetItemIndex(int)`返回真实数据索引。行引用快照识别另窗等长重排/替换，陈旧节点首次起拖被拒绝并刷新；相同对象内展示字段的编辑由所属Inspector显式Reload。工具只重排并标脏当前owner，不自动去重/删空项/保存资产，不修改资源预览或Core/Resource合同。
 
 - `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 保持原默认资源、生成、设置与预览契约。
 - `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Editor/Utilities/` 承载 Serialization/Scene/Assets/TreeViews/Windows 通用支撑、菜单及 Foundation-Tools Help provider；`Editor/Distribution/` 承载框架导出入口。
@@ -211,7 +210,7 @@ Audio 的最终门禁分别保留真实同域双 Play、原游戏资源链非干
 
 自有YLFramework.Analyzers.dll仅一份，位于Runtime主体作用域的Runtime/Core/Analyzers；RoslynAnalyzer标签作用于主体及真实引用消费者，普通平台禁用，不作为Runtime precompiledReference或Player运行引用。最终Editor/Development Player的实际rsp已核对：Runtime/Editor、MainModule与自动引用主体的Assembly-CSharp-firstpass各一份输入；原XF/XFAB/XFFSM无自有分析器输入。七项Warning和真实正负见证见[Attributes](Modules/Attributes.md#core-使用诊断)。新Player仍含原MCP/NuGet的Microsoft.CodeAnalysis载荷，主体IL无其运行引用，不把它归因于本分析器或宣称整个工程无Roslyn。
 
-默认 ExportRoots 为 `Editor`、批准的 `Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`；阶段9已排除没有再分发授权的商业Editor Enhancers，不递归整个Plugins。正式Editor/Help、唯一Analyzer、Runtime源码/meta、资源/说明和根LICENSE进入包；Tests、根Integrations、游戏、SDK、NuGet缓存和中间产物排除。E0按已有Runtime/Editor递归规则进入闭包，无新总导出器或依赖白名单；现有UGUI/Json.NET外部依赖不自动携带，主体不要求XFAB。阶段9干净首导入证据仍只覆盖其冻结包，不冒充本批E0独立首导入结果。入口见 [文档首页](README.md#帮助与导出)。
+默认 ExportRoots 为 `Editor`、批准的 `Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，`ExportPackage` 使用 `Recurse` 而非 `IncludeDependencies`；阶段9已排除没有再分发授权的商业Editor Enhancers，不递归整个Plugins。正式Editor/Help、唯一Analyzer、Runtime源码/meta、资源与说明进入包；Tests、根Integrations、游戏、SDK、NuGet缓存和中间产物排除。E0按已有Runtime/Editor递归规则进入闭包，无新总导出器或依赖白名单；现有UGUI/Json.NET外部依赖不自动携带，主体不要求XFAB。阶段9干净首导入证据仍只覆盖其冻结包，不冒充本批E0独立首导入结果。入口见 [文档首页](README.md#帮助与导出)。
 
 ## 测试
 

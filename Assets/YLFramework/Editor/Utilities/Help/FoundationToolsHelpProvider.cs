@@ -44,9 +44,9 @@ namespace YLFramework.Editor
                     HelpBlock.Paragraph("Editor 入口", "YLFramework/Resource/Workbench 用于配置资源项目、分析分包、构建与本地发布、版本交付和诊断。一个资源项目可登记多个已有来源目录及各自的地址前缀，无需把资源搬到统一专用根；组的选择项决定构建内容，图集生成目录按需单独登记。现有Editor配置已统一为此模型；从外部导入的旧单根配置不保证自动读取或迁移。" +
                         "YLFramework/Toolkit 下保留日志清理、打开目录与导出框架包。生成物与构建操作不从 Help 执行。" +
                         "Action/Audio 保持各自帮助和成熟工具，不在此复制其 API 文档。"),
-                    HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六个目录及根级 LICENSE.md，Plugins 完整递归。" +
+                    HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins、Prefabs、Runtime、Samples、Documentation 六个目录及框架根级文件，Plugins 完整递归。" +
                         "不含 Tests、根 Integrations、SDK 工具项目、NuGet/中间产物、游戏资源或 Assets/YLFrameworkData。" +
-                        "框架仍需 UGUI、Newtonsoft 等既有依赖，主体不引用 XFAB 或可选适配；原游戏仍使用原包资源链。EventListener 使用原生 Inspector，Sirenix 插件已退出。剩余 Plugins 是内部交付决策，不表示已取得公开再分发许可。"),
+                        "框架仍需 UGUI、Newtonsoft 等既有依赖，主体不引用 XFAB 或可选适配；原游戏仍使用原包资源链。EventListener 使用原生 Inspector，Sirenix 插件已退出。剩余 Plugins 是内部交付决策。"),
                     Document("工具导航与导出说明", "README.md"),
                     Document("取色工具接入", "Modules/UI.md")),
                 Guide("attributes", "Attributes 与显示边界", "Foundation 展示元数据与 Core 编译器诊断是不同机制。",

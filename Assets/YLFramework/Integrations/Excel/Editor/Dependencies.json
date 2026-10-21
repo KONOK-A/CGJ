@@ -4,9 +4,6 @@
     "backend": {
         "name": "MiniExcel",
         "version": "1.31.2",
-        "license": "Apache-2.0",
-        "copyright": "LIN,WEI-HAN, 2021 onwards",
-        "authors": "LIN,WEI-HAN, Mini-Software team, eynarhaji",
         "upstream": "https://github.com/mini-software/MiniExcel",
         "tag": "1.31.1-1.31.2",
         "commit": "f1498a2d162debca9a1e9153cf2249131a75eeb0",
@@ -14,8 +11,6 @@
         "packageSha256": "f11a54c1bd5b3fb3332dc5d4e40ade59a3539cb8de6d087a245575457d66379a",
         "assemblyEntry": "lib/netstandard2.0/MiniExcel.dll",
         "assemblySha256": "0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e",
-        "licenseUrl": "https://raw.githubusercontent.com/mini-software/MiniExcel/f1498a2d162debca9a1e9153cf2249131a75eeb0/LICENSE",
-        "licenseSha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
         "packageDependencies": [],
         "binaryModified": false
     },
@@ -26,9 +21,6 @@
         "upstream": "https://gitee.com/xianfengkeji/xfgame-framework.excel-system.git",
         "file": "Editor/ExcelManager.cs",
         "sha256": "ebe70a2ed0484d4f967af189be17fac8b134da19ea3adcab8b6c265f27a9e496",
-        "license": "MIT",
-        "copyright": "Copyright (c) 2025 弦风课堂",
-        "originalLicenseSha256": "3ccf19f0871bee48152e22cd91fe237043653179eb944e58291bc8cb86bcfd3a",
         "excluded": ["EPPlus.dll", "old XF identity", "installation tooling", "logos", "old metadata"]
     }
 }

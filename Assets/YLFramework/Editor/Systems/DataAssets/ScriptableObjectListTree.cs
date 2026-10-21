@@ -1,4 +1,3 @@
-// Adapted from ScriptableObjectSystem 1.1.4 (MIT). Copyright (c) 2024 弦风课堂.
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -288,9 +288,8 @@ public static class Stage9DeliveryEditor
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { Root + "/Bootstrap.unity" },
             locationPathName = Path.Combine(output, "Stage9Delivery.exe"), target = BuildTarget.StandaloneWindows64, options = BuildOptions.None });
         var licenses = Path.Combine(output, "Licenses"); Directory.CreateDirectory(licenses);
-        foreach (var path in new[] { "Assets/YLFramework/LICENSE.md", "Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md",
-            "Assets/YLFramework/Runtime/Utilities/Json/LICENSE.md", "Assets/YLFramework/Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md",
-            "Assets/YLFramework/Plugins/BouncyCastle/LICENSE.md", "Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt", "Assets/YLFramework/Plugins/BouncyCastle/TINK-LICENSE.txt" })
+        foreach (var path in new[] { "Assets/YLFramework/LICENSE.md",
+            "Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt" })
             File.Copy(path, Path.Combine(licenses, path.Replace("Assets/YLFramework/", "").Replace('/', '-')));
         foreach (var assembly in new[] { typeof(JsonConvert).Assembly, typeof(Button).Assembly })
         {

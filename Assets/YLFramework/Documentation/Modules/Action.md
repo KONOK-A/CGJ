@@ -8,7 +8,7 @@ ActionKit 是 Unity 动作编排模块：把回调、等待、条件、插值等
 
 - 主要能力：动作创建与组合、逐帧推进、暂停/取消、池化复用、屏幕过渡、全局 Unity 消息转发、内建 BCL Observable，以及可选 DOTween 扩展。
 - 运行时位于 `Runtime/Systems/Action/`，namespace 为 `YLFramework.Actions`，公共入口 `ActionKit` 不改名；归属共享 `YLFramework.Runtime`，不是 Foundation 或 Timing 的子模块。
-- 不负责业务资源管线、依赖注入或统一对象生命周期；状态机使用独立的 [FSM 模块](FSM.md)。动作统一使用 `IAction` 契约，不提供旧版 ActionKit 兼容 API。源自 QFramework / liangxiegame 的代码保留 MIT 版权与来源，不依赖 QFramework 运行时。
+- 不负责业务资源管线、依赖注入或统一对象生命周期；状态机使用独立的 [FSM 模块](FSM.md)。动作统一使用 `IAction` 契约，不提供旧版 ActionKit 兼容 API。
 - API 浏览：`YLFramework/Action/帮助`，由 [Help 核心](Help.md) 承载。
 
 ## 目录与依赖
@@ -25,7 +25,7 @@ ActionKit 是 Unity 动作编排模块：把回调、等待、条件、插值等
 
 Runtime 引用既有 ZipTool 与 `UnityEngine.UI`；普通 Editor 引用 Runtime、Help、UI。二者不静态引用 DOTween wrapper 或供应商 DLL。Runtime / 普通 Editor / ZipTool 的 `autoReferenced` 为 true，Help / optional / tests 为 false；完整程序集契约见 [架构总览](../Architecture.md)。
 
-DOTween wrapper 显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应商 DLL 位于包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`，适用 Demigiant 自身许可，不是 MIT。可选源码另行引入其依赖，不复制 Core / Vendor；默认导出不包含该扩展或 DLL。
+DOTween wrapper 显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应商 DLL 位于包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`。可选源码另行引入其依赖，不复制 Core / Vendor；默认导出不包含该扩展或 DLL。
 
 ## Core Concepts
 
@@ -133,3 +133,4 @@ private void OnDisable() => mBackground.Cancel();
 - API 筛选所属 namespace 的精确或点分边界，包含内建 Observable 及可用 DOTween 类型，不展示整个共享 Runtime。只有 DOTween 指南保留可选程序集门控。
 - XML 来自唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 的 `Library/YLFramework.Runtime.xml`；optional 使用 `Library/YLFramework.Actions.DOTween.xml`，按真实 Assembly 去重。XML 是构建产物，不默认导出。
 - 单文件导出功能及专用菜单 / 测试已退出；分发使用 `YLFramework/Toolkit/导出框架包`，边界见 [文档首页](../README.md#帮助与导出)，不承诺另一工程的独立替代安装。
+��承诺另一工程的独立替代安装。

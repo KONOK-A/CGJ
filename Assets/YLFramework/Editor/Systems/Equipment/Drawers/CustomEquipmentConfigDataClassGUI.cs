@@ -1,4 +1,3 @@
-// Adapted from XF EquipmentSystem (MIT). See Runtime/Systems/Equipment/LICENSE.txt.
 using System.Linq;
 using UnityEditor;
 using UnityEngine;

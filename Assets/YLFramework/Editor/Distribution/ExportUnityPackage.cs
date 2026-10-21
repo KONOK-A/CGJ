@@ -12,7 +12,7 @@ namespace YLFramework.Editor
         private const string FrameworkRoot = "Assets/YLFramework";
         private const string PackageVersion = "1.0.0";
 
-        // 只递归分发有适用许可的产品根；商业 Editor Enhancers 留在宿主工程，不随框架再分发。
+        // 只递归分发产品根；商业 Editor Enhancers 留在宿主工程，不随框架再分发。
         private static readonly string[] ExportRoots =
         {
             "Assets/YLFramework/Editor",

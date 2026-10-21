@@ -44,7 +44,7 @@ namespace YLFramework.Tests.Audio
                 StringAssert.Contains(contract, overview.SearchText);
             CollectionAssert.AreEqual(new[] { "overview", "control", "settings", "spatial", "mixer", "components", "action", "timer", "diagnostics" },
                 module.Guides.Select(page => page.Id));
-            Assert.AreEqual(3, module.About.Length);
+            Assert.AreEqual(1, module.About.Length);
             var runtime = typeof(AudioKit).Assembly;
             Assert.AreEqual("YLFramework.Runtime", runtime.GetName().Name);
             Assert.AreSame(runtime, typeof(PlaySoundAction).Assembly);

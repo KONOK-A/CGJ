@@ -399,36 +399,12 @@ namespace YLFramework.Editor.Audio
 
         private static HelpPage[] CreateAbout() => new[]
         {
-            new HelpPage("usage", "使用与版本", "关于与许可", "",
+            new HelpPage("usage", "使用与版本", "关于", "",
                 HelpBlock.Paragraph("", "AudioKit 是 YLFramework 的 Clip 与显式具名资源音频服务，命名空间 YLFramework.Services.Audio，属于共享程序集 YLFramework.Runtime；" +
                     "音效动作桥接内建于同一程序集。帮助复用Editor主体中的YLFramework.Editor.Help命名空间。\n\n" +
                     "Unity 版本：" + Application.unityVersion + "\nRuntime 程序集版本：" + typeof(AudioKit).Assembly.GetName().Version +
                     "\n程序集版本来自编译元数据，不代表模块单独发布版本。\n\n" +
-                    "源码 XML 由共享 Runtime 的 csc.rsp 生成唯一 Library/YLFramework.Runtime.xml，HelpKit 解析；不扫描业务程序集或伪造类型说明。")),
-            new HelpPage("source", "来源与版权", "关于与许可", "",
-                HelpBlock.Paragraph("", "音频核心、原 Fluent、Action 接入与诊断来源于本地 QFramework AudioKit 的正式源码。\n" +
-                    "Copyright (c) 2015 - 2025 liangxiegame UNDER MIT LICENSE\n" +
-                    "已移交 YLFramework 的 Timing 工具源保留 Copyright (c) 2017 snowcold 与 Copyright (c) 2017 liangxie，" +
-                    "原文件标注 https://github.com/akbiggs/UnityTimer。Disposable 源保留 liangxie 的原始版权及 MIT 许可。\n" +
-                    "各源文件中的原始作者、年份和许可声明为准；迁移与删除旧包装不改变保留代码的上游版权。"),
-                HelpBlock.Link("QFramework 原项目", "https://github.com/liangxiegame/QFramework"),
-                HelpBlock.Link("Timer 原文件注明的来源", "https://github.com/akbiggs/UnityTimer")),
-            new HelpPage("license", "MIT 许可证", "关于与许可", "分发时保留原版权与许可声明。",
-                HelpBlock.Paragraph("", "Permission is hereby granted, free of charge, to any person obtaining a copy\n" +
-                    "of this software and associated documentation files (the \"Software\"), to deal\n" +
-                    "in the Software without restriction, including without limitation the rights\n" +
-                    "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n" +
-                    "copies of the Software, and to permit persons to whom the Software is\n" +
-                    "furnished to do so, subject to the following conditions:\n\n" +
-                    "The above copyright notice and this permission notice shall be included in\n" +
-                    "all copies or substantial portions of the Software.\n\n" +
-                    "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n" +
-                    "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n" +
-                    "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n" +
-                    "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n" +
-                    "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n" +
-                    "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n" +
-                    "THE SOFTWARE."))
+                    "源码 XML 由共享 Runtime 的 csc.rsp 生成唯一 Library/YLFramework.Runtime.xml，HelpKit 解析；不扫描业务程序集或伪造类型说明。"))
         };
     }
 }

@@ -1,4 +1,3 @@
-// Adapted from XF Localization multi-language authoring workflow. Copyright (c) 2024 弦风课堂. MIT; see Runtime/Systems/Localization/LICENSE.txt.
 using System;
 using System.Collections.Generic;
 using UnityEditor;

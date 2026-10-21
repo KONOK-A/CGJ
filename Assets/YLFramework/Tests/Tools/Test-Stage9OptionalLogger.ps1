@@ -45,6 +45,6 @@ $receipt=Join-Path $root $(if ($Final) { 'Optional/logger-final-receipt.json' } 
 if (Test-Path -LiteralPath $receipt) { throw 'Preserve optional artifact audit evidence.' }
 $value=@{ Passed=$true; Artifact=$package; Sha256=Hash $package; Source=$source; SourceHead=(& git -C $owner.repository rev-parse HEAD);
     Package=$metadata.name; PackageVersion=$metadata.version; Dependencies=$metadata.dependencies; RequiredByYLFramework=$false;
-    License='MIT, Copyright (c) 2025 弦风课堂'; Files=@($rows | Sort-Object Path -CaseSensitive); CoexistenceVerified=$false }
+    Files=@($rows | Sort-Object Path -CaseSensitive); CoexistenceVerified=$false }
 [IO.File]::WriteAllText($receipt,($value | ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
 "Optional standalone Logger archive/license/source closure verified: $($rows.Count) files, $(Hash $package). Runtime coexistence remains a separate gate."

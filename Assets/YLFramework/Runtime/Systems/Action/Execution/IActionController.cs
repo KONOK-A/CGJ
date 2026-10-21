@@ -1,11 +1,3 @@
-/****************************************************************************
- * Copyright (c) 2015 - 2022 liangxiegame UNDER MIT License
- *
- * https://qframework.cn
- * https://github.com/liangxiegame/QFramework
- * https://gitee.com/liangxiegame/QFramework
- ****************************************************************************/
-
 namespace YLFramework.Actions
 {
     /// <summary>控制一次动作执行的进度和更新时间源，通常由 Start 返回。</summary>

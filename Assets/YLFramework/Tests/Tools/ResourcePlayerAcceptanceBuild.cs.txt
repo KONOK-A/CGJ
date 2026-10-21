@@ -173,12 +173,7 @@ public static class ResourcePlayerAcceptanceBuild
         if (!JToken.DeepEquals(new JArray(expected), new JArray(actual))) throw new InvalidDataException("Packaged StreamingAssets bytes/path closure differ from C02 deployment.");
         var licenses = Path.Combine(output, "Licenses"); Directory.CreateDirectory(licenses);
         foreach (var item in new[] {
-            ("Assets/YLFramework/LICENSE.md", "YLFramework-XF-MIT.md"),
-            ("Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md", "YLFramework-THIRD-PARTY-NOTICES.md"),
-            ("Assets/YLFramework/Runtime/Utilities/Json/LICENSE.md", "JSONObject-MIT.md"),
-            ("Assets/YLFramework/Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md", "SharpZipLib-NOTICES.md"),
-            ("Assets/YLFramework/Plugins/BouncyCastle/LICENSE.md", "BouncyCastle-MIT.md"),
-            ("Assets/YLFramework/Plugins/BouncyCastle/TINK-LICENSE.txt", "Tink-Apache-2.0.txt"),
+            ("Assets/YLFramework/LICENSE.md", "YLFramework-MIT.md"),
             ("Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt", "BouncyCastle-SOURCE.txt") })
             File.Copy(item.Item1, Path.Combine(licenses, item.Item2));
         var jsonPackage = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(JsonConvert).Assembly);

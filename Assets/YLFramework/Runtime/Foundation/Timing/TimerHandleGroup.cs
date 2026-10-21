@@ -1,7 +1,3 @@
-/****************************************************************************
- * Copyright (c) 2017 snowcold
- * Copyright (c) 2017 liangxie
- ****************************************************************************/
 using System;
 using System.Collections.Generic;
 using System.Runtime.ExceptionServices;

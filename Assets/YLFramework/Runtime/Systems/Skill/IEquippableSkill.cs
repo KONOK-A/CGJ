@@ -1,4 +1,3 @@
-// Adapted from XF Skill. Original copyright and MIT License: Runtime/Systems/Skill/LICENSE.txt.
 using YLFramework.Foundation;
 using System.Collections.Generic;
 

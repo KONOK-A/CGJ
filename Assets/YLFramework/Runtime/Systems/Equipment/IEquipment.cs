@@ -1,4 +1,3 @@
-// Adapted from XF EquipmentSystem 1.1.9 (MIT). See LICENSE.txt.
 namespace YLFramework.EquipmentSystem
 {
     public enum EquipState { Success = 0, CannotEquip = 1, AlreadyEquipped = 2 }

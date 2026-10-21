@@ -308,32 +308,31 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
-        public void FrameworkRootCarriesTheOnlyCompleteXfLicense()
+        public void FrameworkRootCarriesTheConsolidatedLicenseSet()
         {
-            var package = PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.xfkj.xfgameframework");
-            string upstreamLicense = Path.Combine(package.resolvedPath, "LICENSE.md");
-            if (!File.Exists(upstreamLicense))
-                upstreamLicense = Path.Combine(package.resolvedPath, "LICENSE");
-            Assert.That(File.Exists(upstreamLicense), Is.True, "Upstream license must be available for comparison.");
             const string licensePath = "Assets/YLFramework/LICENSE.md";
-            Assert.That(File.Exists(licensePath), Is.True, "The shared XF license must be distributed at the framework root.");
+            Assert.That(File.Exists(licensePath), Is.True, "The consolidated license must be distributed at the framework root.");
             string license = File.ReadAllText(licensePath);
-            string normalized = license.Replace("\r\n", "\n").Trim();
-            string upstream = File.ReadAllText(upstreamLicense).Replace("\r\n", "\n").Trim();
-            const string copyright = "Copyright (c) 2021 \u5f26\u5c0f\u98ce";
-            int actualBody = normalized.IndexOf(copyright, StringComparison.Ordinal);
-            int expectedBody = upstream.IndexOf(copyright, StringComparison.Ordinal);
-            Assert.That(actualBody, Is.GreaterThan(0));
-            Assert.That(expectedBody, Is.GreaterThan(0));
-            // 共享标题下允许已有的来源前言，完整版权、许可及免责声明仍须逐字保留。
-            Assert.That(normalized, Does.StartWith(upstream.Substring(0, expectedBody)));
-            Assert.That(normalized.Substring(actualBody), Is.EqualTo(upstream.Substring(expectedBody)));
-            Assert.That(license, Does.Contain("Copyright (c) 2021 \u5f26\u5c0f\u98ce"));
-            foreach (var oldPath in new[] { "Runtime/Core/LICENSE.md", "Runtime/Foundation/LICENSE.md", "Editor/Core/LICENSE.md" })
+            Assert.That(license, Is.Not.Empty);
+            Assert.That(File.Exists("Assets/YLFramework/Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt"), Is.True);
+            var remaining = Directory.GetFiles("Assets/YLFramework", "*", SearchOption.AllDirectories)
+                .Where(file => !file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                .Where(file =>
+                {
+                    string name = Path.GetFileName(file).ToLowerInvariant();
+                    return name.Contains("license", StringComparison.Ordinal) ||
+                           name.Contains("licence", StringComparison.Ordinal) ||
+                           name.Contains("thirdpartynotice", StringComparison.Ordinal) ||
+                           name.Contains("third-party-notice", StringComparison.Ordinal);
+                })
+                .Select(file => file.Replace('\\', '/'))
+                .OrderBy(file => file, StringComparer.Ordinal)
+                .ToArray();
+            CollectionAssert.AreEquivalent(new[]
             {
-                Assert.That(File.Exists("Assets/YLFramework/" + oldPath), Is.False, oldPath);
-                Assert.That(File.Exists("Assets/YLFramework/" + oldPath + ".meta"), Is.False, oldPath + ".meta");
-            }
+                "Assets/YLFramework/LICENSE.md",
+                "Assets/YLFramework/Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt"
+            }, remaining);
         }
 
         internal static CoreEditorAssemblyDefinition ReadDefinition(string path)

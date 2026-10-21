@@ -1,5 +1,3 @@
-// Adapted from XF ExcelSystem 1.0.7 (MIT, Copyright (c) 2025 弦风课堂).
-// YL: preflight, explicit ownership, staged conversion and file-backed rollback.
 using System;
 using System.Collections;
 using System.Collections.Generic;

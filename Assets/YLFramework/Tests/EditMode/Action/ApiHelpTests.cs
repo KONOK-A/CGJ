@@ -451,22 +451,14 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void ProviderAboutRetainsVersionAttributionMitAndTheSeparateDotweenLicense()
+        public void ProviderAboutRetainsVersionAndUsageBoundary()
         {
             var about = ActionKitHelpProvider.CreateModule().About;
-            CollectionAssert.AreEqual(new[] { "usage", "source", "license" }, about.Select(page => page.Id));
+            CollectionAssert.AreEqual(new[] { "usage" }, about.Select(page => page.Id));
             var usage = about.Single(page => page.Id == "usage").SearchText;
             StringAssert.Contains(Application.unityVersion, usage);
             StringAssert.Contains(typeof(ActionKit).Assembly.GetName().Version.ToString(), usage);
             StringAssert.Contains("不执行示例、不创建动作宿主", usage);
-            var source = about.Single(page => page.Id == "source");
-            StringAssert.Contains(ActionKitApiHelpContent.Attribution, source.SearchText);
-            StringAssert.Contains("Copyright (c) 2014-2018 Daniele Giardini - Demigiant", source.SearchText);
-            StringAssert.Contains("独立 Artistic 许可，并非 MIT", source.SearchText);
-            StringAssert.Contains("readme.txt", source.SearchText);
-            CollectionAssert.AreEquivalent(new[] { "https://github.com/liangxiegame/QFramework", ActionKitApiHelpContent.DOTweenLicenseUrl },
-                source.Blocks.Where(block => block.Kind == HelpBlockKind.Link).Select(block => block.Url));
-            StringAssert.Contains(ActionKitApiHelpContent.LicenseText, about.Single(page => page.Id == "license").SearchText);
         }
 
         private static ActionKitApiHelpContent.Topic Topic(string id) => ActionKitApiHelpContent.Topics.Single(topic => topic.Id == id);
@@ -591,7 +583,7 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void DOTweenChineseHelpDocumentsOwnedTweenLifecycleAndSeparateLicense()
+        public void DOTweenChineseHelpDocumentsOwnedTweenLifecycleAndOptionalDependency()
         {
             var topic = Topic("dotween");
             Assert.That(topic.Group, Is.EqualTo("扩展与工具"));
@@ -600,7 +592,7 @@ namespace YLFramework.Tests.Actions
                 "SetUpdate(Manual/independent)", "IgnoreTimeScale 不自动改变 Tween clock", "onComplete/onKill", "onKill marker",
                 "ownership 无法证实", "onPause 不清理", "safeMode", "multicast", "不能承诺逐 callback 异常隔离",
                 "独立根 Tween", "DG.Tweening.Sequence 本身", "内部子 Tween", "isSequenced", "YLFramework.Actions.Sequence",
-                "1.2.825", "Demigiant", "Artistic", "不是 MIT", "standard", "readme", "不打包修改版供应商",
+                "1.2.825",
                 "Pause 前预绑定", "ToAction 是单次绑定", "首次启动前 Reset 保留同一预绑定", "Reset 结束原绑定，再 Start 会取消", "不重新认领",
                 "原始 UnitySynchronizationContext", "完整类型名", "程序集身份", "sealed", "主线程 ID",
                 "不调用 factory、不 Pause Tween", "不支持自定义同步 Post 或人工 pump", "UnitySynchronizationContext.Post 延后",
@@ -608,9 +600,6 @@ namespace YLFramework.Tests.Actions
                 "Shutdown 不保证同步物理 Kill", "Domain Reload", "Post 未执行", "可能没有物理清理",
                 "不保证物理清理", "不能完全区分", "漏掉完成或取消信号" })
                 StringAssert.Contains(text, topic.SearchText);
-            StringAssert.Contains("wrapper 使用 MIT", ActionKitApiHelpContent.DOTweenLicenseNotice);
-            StringAssert.Contains(ActionKitApiHelpContent.DOTweenLicenseUrl, ActionKitApiHelpContent.DOTweenLicenseNotice);
-            Assert.That(ActionKitApiHelpContent.DOTweenLicenseUrl, Is.EqualTo("https://dotween.demigiant.com/license.php"));
             foreach (var type in ActionKitApiHelpContent.BuildIndex().Where(entry => entry.Type.Assembly.GetName().Name == topic.RequiredAssembly))
             {
                 StringAssert.DoesNotContain("尚未核实", type.Summary);

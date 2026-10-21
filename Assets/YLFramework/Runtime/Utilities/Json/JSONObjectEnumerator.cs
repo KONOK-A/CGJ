@@ -1,8 +1,3 @@
-/*
-Derived from JSONObject by Matt Schoen (Defective Studios) — MIT License.
-See LICENSE.md in this directory for the full license text.
-*/
-
 using System;
 using System.Collections;
 

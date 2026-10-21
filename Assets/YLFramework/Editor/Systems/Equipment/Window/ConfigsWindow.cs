@@ -1,4 +1,3 @@
-// Adapted from XF EquipmentSystem 1.1.9 (MIT). See Runtime/Systems/Equipment/LICENSE.txt.
 using System;
 using System.IO;
 using System.Linq;

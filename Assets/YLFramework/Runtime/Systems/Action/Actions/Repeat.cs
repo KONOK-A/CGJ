@@ -1,11 +1,3 @@
-/****************************************************************************
- * Copyright (c) 2015 - 2024 liangxiegame UNDER MIT License
- * 
- * https://qframework.cn
- * https://github.com/liangxiegame/QFramework
- * https://gitee.com/liangxiegame/QFramework
- ****************************************************************************/
-
 using System;
 
 namespace YLFramework.Actions

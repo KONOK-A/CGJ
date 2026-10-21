@@ -1,4 +1,3 @@
-// Derived from XF Localization 1.0.9. Copyright (c) 2024 弦风课堂. MIT; see LICENSE.txt in this directory.
 using System;
 using System.Collections.Generic;
 using UnityEngine;

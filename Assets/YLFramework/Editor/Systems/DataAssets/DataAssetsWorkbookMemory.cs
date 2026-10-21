@@ -1,4 +1,3 @@
-// Adapted from ScriptableObjectSystem authoring workflow. Copyright (c) 2024 弦风课堂. MIT.
 using System;
 using System.IO;
 using UnityEditor;

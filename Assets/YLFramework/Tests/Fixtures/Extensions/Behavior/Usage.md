@@ -49,7 +49,7 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 - 作者入口：`Assets/Create/YLFramework/Asset FSM/FSMController`、`Assets/Create/YLFramework/Asset FSM/FSMState`、`Window/YLFramework/Asset FSM/StateMachineWindow`。图保留节点/层级/连线/参数/脚本选择/预览；拖拽、框选和网格用Unity公共GraphView组件。旧内部`UnityEditor.Graphs`已移除，重点样式查找有公共Editor样式fallback，模板附`[Preserve]`。
 - 保存/绑定只操作当前资产，不在Editor加载时扫描和重写所有配置；缺类型/参数/父节点或循环配置给资产/状态/字段诊断，暂时失效的脚本绑定不自动删除。严重损坏的重复/null节点可在Unity Debug Inspector按字段修复。脚本只按此FSMState基类筛选，不吸入旧包状态类型。
 - New Scripts用独立文件存在检查及CreateNew拒绝覆盖已存在源码；Create And Add在刷新前保存项目作用域SessionState待绑定记录，等待编译/导入及程序集重载完成再绑定，不假设下一次delayCall已有GetClass。该流程已在A通过真实产品入口、编译重载及保存重导入验证，不由测试手工附加。条件阈值/比较/参数/AutoSwitch/组增删登记Undo，主组和附加组重排使用SerializedProperty；Undo后重新绑定Inspector。缺参数等错误保留合法端点连线，允许在图内修复，不隐藏整张图。
-- 许可：XFFSM 1.5.4/MIT/2021弦小风全文随模块附带；`FSMSelectionDragger.cs`与Unity Reference-Only源码近似，未复制；网格/框选也未复制，分别调用公共`SelectionDragger`/`GridBackground`/`RectangleSelector`。来源与许可链接在模块`ThirdPartyNotices.txt`，未复制Logo或原GUID。
+- 实现说明：`FSMSelectionDragger.cs`与Unity Reference-Only源码近似，未复制；网格/框选也未复制，分别调用公共`SelectionDragger`/`GridBackground`/`RectangleSelector`。未复制Logo或原GUID。
 - `AssetFSMRuntimeTests`已执行双实例/资产隔离、嵌套默认状态、组条件、Entry/Any、Trigger消费/重启清队列、回调增删层、退出异常清理、零timeScale循环和双FSM退出。`BehaviorAuthoringTests`已执行原生资产/条件组、Prefab持久事件保存重导入及Undo/Redo；默认RuntimeOnly不在EditMode Invoke，测试显式验证并序列化EditorAndRuntime，不改产品默认。
 - Play退出/再进入已在同一Editor进程按默认双Reload、禁Domain、同时禁Domain/Scene三种组合各连续两轮，验证双FSM独立起步/转换及退出无克隆。静态StartupFSM/RemoveFSM所有组合、源资产卸载和完整场景链仍不据此外推。轻量FSM的真实Unity时间/三相位由引擎用例及探针驱动，离线不做Time stub。
 

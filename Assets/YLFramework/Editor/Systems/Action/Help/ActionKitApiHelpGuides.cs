@@ -247,8 +247,7 @@ namespace YLFramework.Editor.Actions
                 "待清理期间保留 pending marker，阻止其他动作重复认领；执行时复核实际主线程、active、原 marker 及其他 owner，仅清理仍 owned 的 Tween。" +
                 "OnFinish 仅 detach hooks，不 kill 已完成且 autoKill=false 的 Tween；source owner 负责该 Tween 之后的生命周期。",
                 "复制完整 Integrations/DOTween 文件夹；消费者 asmdef 引用 YLFramework.Runtime、YLFramework.Actions.DOTween " +
-                "及实际 DG.Tweening.Tween 所在的 DOTween.dll。核心和 Observable-only 不要求此 DLL。" +
-                ActionKitApiHelpContent.DOTweenLicenseNotice + "\n" +
+                "及实际 DG.Tweening.Tween 所在的 DOTween.dll。核心和 Observable-only 不要求此 DLL。当前核对版本为 1.2.825。" +
                 "必须传独立根 Tween 或 DG.Tweening.Sequence 本身，不能传 nested Sequence 的内部子 Tween：" +
                 "库没有公开 isSequenced 查询，且忽略子 Tween 的独立控制。YLFramework.Actions.Sequence 与 DG.Tweening.Sequence 不是同一类型。\n" +
                 "时间由 Tween 自己的 SetUpdate(Manual/independent) 配置管理；Manual 需调用方推进 DOTween.ManualUpdate，" +
@@ -422,7 +421,6 @@ namespace YLFramework.Editor.Actions
                 "沿用 YLFramework 的 UGUI 等既有依赖契约，不承诺零外部依赖；不要同时安装两份 Runtime。\n" +
                 "当前可选 DOTween 动作集成已可用，提供 DOTweenAction 与 ActionKitDOTweenExtension；" +
                 "消费者还需引用 YLFramework.Actions.DOTween 与实际 DOTween.dll。帮助仅索引已加载的精确可选程序集，不把供应商 API 当作 ActionKit API。" +
-                ActionKitApiHelpContent.DOTweenLicenseNotice +
                 "内建 Observable BCL 适配提供 UniRxAction<T> 与 ActionKitUniRxExtension，不依赖第三方 UniRx SDK。" +
                 "导入另一工程后仍需检查目标平台编译及实际资源效果。",
                 "此页不需要运行时调用示例。请使用正式框架安装或框架包导出流程，按需另行引入可选 DOTween 源码及供应商依赖。",

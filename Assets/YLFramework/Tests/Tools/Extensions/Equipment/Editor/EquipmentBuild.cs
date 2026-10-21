@@ -130,8 +130,6 @@ namespace YLFramework.Tests.EquipmentAcceptance
                 Require(summary.result == BuildResult.Succeeded && summary.totalErrors == 0 && summary.options == BuildOptions.None, "Actual Player build did not satisfy the gate.");
                 var notices = job.output + "/ThirdPartyNotices"; Directory.CreateDirectory(notices);
                 File.Copy("Assets/YLFramework/LICENSE.md", notices + "/LICENSE.md");
-                File.Copy("Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md", notices + "/THIRD-PARTY-NOTICES.md");
-                File.Copy("Assets/YLFramework/Runtime/Systems/Equipment/LICENSE.txt", notices + "/Equipment-MIT.txt");
                 succeeded = true;
 #else
                 throw new InvalidOperationException("Acceptance consumer is not compiled.");

@@ -166,7 +166,8 @@ if ($Operation -eq 'Finalize') {
         $prior=$tested[$file.Path]
         if ($file.Guid -cne $prior.Guid -or $file.MetaSha256 -cne $prior.MetaSha256) { throw 'Final product identity/meta changed after Player verification.' }
         if ($file.Sha256 -cne $prior.Sha256) {
-            if ($file.Path -notlike 'Assets/YLFramework/Documentation/*' -and $file.Path -cne 'Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md') {
+            if ($file.Path -notlike 'Assets/YLFramework/Documentation/*' -and $file.Path -cne 'Assets/YLFramework/LICENSE.md' -and
+                $file.Path -cne 'Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt') {
                 throw "Final product code/binary/resource changed after Player tests: $($file.Path)"
             }
             @{ Path=$file.Path; TestedSha256=$prior.Sha256; FinalSha256=$file.Sha256; Kind='Documentation/license-only finalization; no executable payload changes' }

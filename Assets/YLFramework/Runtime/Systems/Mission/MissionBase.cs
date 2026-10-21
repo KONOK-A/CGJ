@@ -1,4 +1,3 @@
-// Adapted from XF Mission. Original copyright and MIT License: Runtime/Systems/Mission/LICENSE.txt.
 using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;

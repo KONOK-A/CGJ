@@ -162,7 +162,7 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 `UITipsPresenter.Show(owner, ...)` 保留 unscaled 时间、位置、淡入淡出、句柄和普通呈现池协议；每次借用仍通过 Module.AttachView，完成/取消/owner 结束沿 View 收尾。不再编码 Overlay 类型或占业务 key；通用 Tips 默认 Layer0、Multiple、非 Modal、不覆盖、不参与 Top，完整模板引用仅覆盖 Layer4 的 UITipsOverlay Variant，Graphics 不拦截射线。
 
-正式 `Prefabs/ColorSelector.prefab` 的窗口通过 `owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(initial, changed), root)` 打开；`CurrentColor` 可读，重开替换值和回调，不重放旧通知。独立 `ColorSelector.BeginSession/EndSession`、SDR RGB、Alpha 保持、色环/三角网格和自有 UI 用法不变，无 Panel 时不强制创建 owner。原来源与许可证继续在 `Runtime/THIRD-PARTY-NOTICES.md` 保留。
+正式 `Prefabs/ColorSelector.prefab` 的窗口通过 `owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(initial, changed), root)` 打开；`CurrentColor` 可读，重开替换值和回调，不重放旧通知。独立 `ColorSelector.BeginSession/EndSession`、SDR RGB、Alpha 保持、色环/三角网格和自有 UI 用法不变，无 Panel 时不强制创建 owner。当前实现为 YL 自有代码。
 
 `UIPointer.CheckPositionOnUI/CheckMouseOnUI` 读取实际 EventSystem 的 UGUI 命中，包含真实模态遮罩；没有系统时返回 false，不创建宿主。
 
@@ -170,7 +170,7 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 离线复跑：`pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`、`PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 Player/Editor 语法，不检查绑定。输出全部在当前 worktree `Temp/UI.Panel.Offline`，直接使用真实引用和产品源码。辅助编译不复现 Unity 导入、原生状态或精确包 API，不等于 Unity 编译、测试、Player 通过。
 
-主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 既有声明不同，未顺手修正或升级；原离线八份 General 排除仅属于模板 API 限制，真实 Unity 已编译完整 General 源码，没有沿用排除条件。唯一依赖维护变化是将原 XF LoggerSystem `1.0.1` 官方 Embed，修复禁 Domain Reload 的自身 handler 归还和 static writer/instance 生命周期；版本、来源、许可证与原身份保留，lock 由 Unity 更新，不修改共享 PackageCache，也不增加 Core→XF 依赖。
+主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 既有声明不同，未顺手修正或升级；原离线八份 General 排除仅属于模板 API 限制，真实 Unity 已编译完整 General 源码，没有沿用排除条件。唯一依赖维护变化是将原 XF LoggerSystem `1.0.1` 官方 Embed，修复禁 Domain Reload 的自身 handler 归还和 static writer/instance 生命周期；版本与原身份保留，lock 由 Unity 更新，不修改共享 PackageCache，也不增加 Core→XF 依赖。
 
 已完成的关口包括实际包/程序集版本、Unity 导入及资产迁移/meta/实例化、完整 Core EditMode/PlayMode、Both/Legacy-only/New-only 的真实编译宏与模块行为、Help/导出和三个分别执行的真实 Resource 租约集成、正常退出及连续 NoDomain 两轮、原游戏 Editor 共存、代表性 Profiler 测量和 Windows64 IL2CPP UIAcceptance。输入切换通过原生重启生效，最后恢复原 Both；Legacy-only 启动时若询问是否启用新后端，应选择 No，而不是将模式改回 Both。具体执行数和证据只在实施计划维护。
 

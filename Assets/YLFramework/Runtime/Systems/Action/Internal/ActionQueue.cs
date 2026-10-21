@@ -1,9 +1,3 @@
-/****************************************************************************
- * 动作回收逻辑提取自本地 ActionKit MonoActionQueue。
- * Copyright (c) liangxiegame UNDER MIT License
- * https://github.com/liangxiegame/QFramework
- ****************************************************************************/
-
 using System.Collections.Generic;
 using UnityEngine;
 

@@ -135,4 +135,4 @@ pool.Clear("Projectile");
 
 实际测试入口为 `Tests/Foundation/EditMode/ObjectPoolTests`、`FoundationBoundaryTests`，`Tests/EditMode/PoolContractTests`、`CollectionPoolTests`，正式 `ResourceSystemTests`/`ResourceBundleRuntimeTests` 及 Action/Events/Binding/Audio 定向契约，Core 的参数/临时集合/身份及代表性 PlayMode 用例。GO 专项为 `Tests/PlayMode/GameObjectPoolPlayModeTests`，覆盖真实 Unity 生命周期、场景卸载及关键回归。已退役的 `ResourcePoolTests` 和不存在的旧套件名称不作为覆盖依据。
 
-领域限制不由普通缓存统一自动解决。旧Resource的ReleaseAllRes与嵌套加载器已退出，正式Scope清理错误聚合、消费者生命周期与失效会话排空由Resource门禁负责；Events、FSM、Action等仍按各自契约处理。许可证和来源声明继续保留；主体XFAB解耦不等同最终独立载体验收，也不宣称已验证IL2CPP/全平台。
+领域限制不由普通缓存统一自动解决。旧Resource的ReleaseAllRes与嵌套加载器已退出，正式Scope清理错误聚合、消费者生命周期与失效会话排空由Resource门禁负责；Events、FSM、Action等仍按各自契约处理。主体XFAB解耦不等同最终独立载体验收，也不宣称已验证IL2CPP/全平台。

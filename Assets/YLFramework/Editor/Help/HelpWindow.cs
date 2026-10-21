@@ -15,7 +15,7 @@ namespace YLFramework.Editor.Help
     public sealed class HelpWindow : EditorWindow
     {
         internal const string MenuPath = "YLFramework/帮助";
-        private static readonly string[] Tabs = { "使用指南", "API 参考", "关于与许可" };
+        private static readonly string[] Tabs = { "使用指南", "API 参考", "关于" };
         private static readonly string[] MemberGroups = { "构造函数", "属性", "事件", "字段与常量", "枚举值", "方法", "扩展方法" };
         [SerializeField] private string mModuleId = "", mSearch = "", mGuideId = "", mApiId = "", mAboutId = "";
         [SerializeField] private string mMemberSearch = "", mApiCategory = "";
@@ -337,7 +337,7 @@ namespace YLFramework.Editor.Help
                 Repaint(); GUIUtility.ExitGUI();
             }
             var scope = mTab == 0 ? "搜索全部指南：标题、分组与正文；标题命中优先。" :
-                mTab == 1 ? "搜索类型与成员：名称命中优先，支持 ActionKit.Sequence 限定名。" : "搜索关于信息、来源与许可。";
+                mTab == 1 ? "搜索类型与成员：名称命中优先，支持 ActionKit.Sequence 限定名。" : "搜索关于信息、来源与说明。";
             GUI.Label(layout.Scope, new GUIContent(scope + " 空格分词同时匹配。"), mSmall);
         }
 
@@ -629,7 +629,7 @@ namespace YLFramework.Editor.Help
                 if (page != null) DrawPage(page); else DrawEmpty();
             }
             GUILayout.Space(20);
-            if (mTab != 2 && mModule != null && mModule.About.Length != 0 && DrawLink("关于与许可", "查看模块信息与许可", false))
+            if (mTab != 2 && mModule != null && mModule.About.Length != 0 && DrawLink("关于", "查看模块信息", false))
                 Navigate(2, mModule.About[0].Id, true);
             EditorGUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -647,7 +647,7 @@ namespace YLFramework.Editor.Help
 
         private void DrawPage(HelpPage page)
         {
-            DrawText(mTab == 0 ? "使用指南  ›  " + page.Group : "关于与许可", mSmall);
+            DrawText(mTab == 0 ? "使用指南  ›  " + page.Group : "关于", mSmall);
             DrawText(page.Title, mTitle);
             DrawText(page.Summary, mBody);
             if (!string.IsNullOrWhiteSpace(page.Summary)) GUILayout.Space(4);

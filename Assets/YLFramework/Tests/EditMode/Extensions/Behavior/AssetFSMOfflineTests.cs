@@ -34,7 +34,7 @@ namespace YLFramework.Tests.Extensions.Behavior
         }
 
         [Test]
-        public void GraphUsesLicensedPublicManipulatorsAndNoGraphsInternalAPI()
+        public void GraphUsesPublicManipulatorsAndNoGraphsInternalAPI()
         {
             var path = Path.Combine(Root, "Assets/YLFramework/Editor/Systems/StateMachine");
             Assert.That(Directory.Exists(path), Is.True);

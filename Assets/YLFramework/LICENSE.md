@@ -1,38 +1,28 @@
 MIT License
 
-YLFramework 的资源构建内核参考 XFABManager 1.24.0 的显式 BuildMap 与依赖者集合分包机制，
-按自有资源定义、隔离 Workspace 和实际 Unity 约束重新实现，不调用原 XFAB 构建流程。
-XFABManager 来源：https://gitee.com/xianfengkeji/xfabmanager
-Editor平面列表承接XFABManager revision `c35dc4058e` 的TreeView行构建及索引重排流程，
-局部修复空项/重复项、Undo与窗口隔离，不引入原资源系统。
-`Runtime/Systems/Excel/`的字段标记/枚举及自定义转换边界承接XF ExcelSystem 1.0.7，
-revision `725f94f23327de190111573870146af66e9484b6`，来源：
-https://gitee.com/xianfengkeji/xfgame-framework.excel-system
-该Runtime目录仅包含字段契约，不分发其EPPlus二进制。可选xlsx后端位于
-`Integrations/Excel/Editor/`，MiniExcel 1.31.2适用独立Apache-2.0，完整许可见其Licenses目录，
-不随核心默认导出；XF Excel作者流程仍适用下列MIT。
-`Runtime/Systems/{Overlap,CharacterController2D,MoveablePlatform,StateMachine}/`及
-相应`Editor/Systems/`承接 A 组四个 MIT 来源，精确版本/revision 与局部替换说明见
-`Runtime/THIRD-PARTY-NOTICES.md`及各模块`ThirdPartyNotices.txt`。
-未复制 Unity Reference-Only 的拖拽/框选/网格实现、原包 Logo 或 GUID。
-`Runtime/Systems/Localization/`与对应Editor承接Localization 1.0.9 revision
-`743876d52c5fe636effc0b63c34bd261d6cad243`；`Runtime/Systems/DataAssets/`及对应Editor
-承接ScriptableObjectConfigs 1.1.4 revision `d7b6c171999e05a1840f413e1f3e2080e3853163`，
-均为MIT / Copyright (c) 2024 弦风课堂，模块内完整许可继续保留。
-统一Save吸收ArchiveSystem 1.0.7 revision `8046fe56f82983e6081a5c110559915d94df9e3e`
-的模型/槽位用途，适用MIT / Copyright (c) 2025 弦风课堂；没有复制DES或历史档迁移链。
-`Runtime/Systems/{Skill,Buff,Mission,Reddot,Logging}/`及相应三套Editor承接C组五个MIT来源，
-Skill/Buff/Mission为Copyright (c) 2024 弦风课堂，Reddot/Logging为Copyright (c) 2025 弦风课堂。
-精确版本、revision和来源见`Runtime/THIRD-PARTY-NOTICES.md`；各模块`LICENSE.txt`保留完整原文。
-可选`Integrations/DomainExcel`不随核心导出，选装须同时携带B的Excel后端和完整许可。
-新增`Runtime/Systems/Equipment/`及对应Editor承接EquipmentSystem 1.1.9 revision
-`48952da775e2fc2c8459c404ad80b3eab8a1c205`，MIT / Copyright (c) 2024 弦风课堂；
-完整原文在模块`LICENSE.txt`，具体来源和局部替换见`Runtime/THIRD-PARTY-NOTICES.md`。
-相关上游声明及完整 MIT 许可保留如下。
+Copyright (c) 2026 KONOK-A
 
-Copyright (c) 2021 弦小风
-Copyright (c) 2024 弦风课堂
-Copyright (c) 2025 弦风课堂
+YLFramework is released under the MIT License. The following third-party
+components are included or adapted under the same MIT terms, with their
+copyright notices retained:
+
+- QFramework / ActionKit / AudioKit / Timing / DOTween adapter:
+  Copyright (c) 2015-2025 liangxiegame;
+  Copyright (c) 2017 snowcold;
+  Copyright (c) 2017 liangxie.
+- XFGameFramework, XFABManager and XF ecosystem modules (Overlap,
+  CharacterController2D, MoveablePlatform, StateMachine, Localization,
+  DataAssets, Save, Skill, Buff, Mission, Reddot, Logging, Equipment,
+  CommonSystem and Excel):
+  Copyright (c) 2021 弦小风;
+  Copyright (c) 2024-2025 弦风课堂.
+- JSONObject: Copyright (c) 2010-2019 Matt Schoen.
+- SharpZipLib: Copyright (c) 2000-2018 SharpZipLib Contributors.
+- BouncyCastle.Cryptography: Copyright (c) 2000-2026 The Legion of the
+  Bouncy Castle Inc.
+
+The MIT permission text below applies to YLFramework and the MIT components
+listed above.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -51,3 +41,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Non-MIT components:
+
+- MiniExcel 1.31.2 (optional Excel integration): Apache-2.0,
+  Copyright (c) 2021 LIN, WEI-HAN. Full text:
+  Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt.
+
+External packages are not included in this license: Newtonsoft.Json is
+provided by the Unity UPM package, DOTween is licensed separately by
+Demigiant, the optional Logger package is distributed separately, and the
+commercial Editor Enhancers Bundle is not redistributed by YLFramework.
+Unity GraphView APIs used by the State Machine editor remain subject to
+Unity's applicable terms; no Unity Reference-Only source is copied.

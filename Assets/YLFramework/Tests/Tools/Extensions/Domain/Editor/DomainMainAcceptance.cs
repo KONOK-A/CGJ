@@ -463,9 +463,6 @@ namespace YLFramework.Tests.DomainMain
                 }
                 string licenses = output + "/Player/Licenses"; Directory.CreateDirectory(licenses);
                 File.Copy("Assets/YLFramework/LICENSE.md", licenses + "/YLFramework-MIT.md");
-                File.Copy("Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md", licenses + "/YLFramework-Notices.md");
-                foreach (string module in new[] { "Skill", "Buff", "Mission", "Reddot", "Logging" })
-                    File.Copy("Assets/YLFramework/Runtime/Systems/" + module + "/LICENSE.txt", licenses + "/" + module + "-MIT.txt");
                 foreach (var package in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Where(p => p.name == "com.unity.nuget.newtonsoft-json" || p.name == "com.unity.ugui"))
                     foreach (string file in Directory.GetFiles(package.resolvedPath).Where(p => Regex.IsMatch(Path.GetFileName(p), "(?i)license|third.?party.*notices")))
                         File.Copy(file, licenses + "/" + package.name + "-" + Path.GetFileName(file));
@@ -664,7 +661,7 @@ namespace YLFramework.Tests.DomainMain
             for (int i = 0; i < SceneManager.sceneCount; i++) Require(!SceneManager.GetSceneAt(i).isDirty, "Unexpected dirty scene.");
             Require(JToken.DeepEquals(JObject.Parse((string)baseline["playerSettings"]), JObject.Parse(EditorJsonUtility.ToJson(PlayerSettingsObject()))), "Original PlayerSettings memory changed.");
             Require(EditorSettings.enterPlayModeOptionsEnabled == (bool)baseline["enterPlayModeOptionsEnabled"] && (int)EditorSettings.enterPlayModeOptions == (int)baseline["reload"], "Domain Reload settings not restored.");
-            string[] intentional = { "Assets/YLFramework/LICENSE.md", "Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md", "Assets/YLFramework/Documentation/README.md", "Assets/YLFramework/Documentation/Architecture.md" };
+            string[] intentional = { "Assets/YLFramework/LICENSE.md", "Assets/YLFramework/Documentation/README.md", "Assets/YLFramework/Documentation/Architecture.md" };
             var changed = JArray.Parse(File.ReadAllText(Evidence + "/protected-files.json")).Where(row =>
                 !intentional.Contains((string)row["path"]) && !((string)row["path"]).StartsWith(".kilo/plans/", StringComparison.Ordinal))
                 .Where(row => !File.Exists((string)row["path"]) || Hash((string)row["path"]) != (string)row["sha256"]).Select(row => (string)row["path"]).ToArray();

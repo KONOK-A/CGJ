@@ -33,29 +33,6 @@ namespace YLFramework.Editor.Actions
         }
 
         internal static Topic[] Topics => ActionKitApiHelpGuides.Topics;
-        internal const string Attribution = "来源：本地 QFramework ActionKit API 说明及使用指南。\n" +
-            "Copyright liangxiegame and contributors, MIT License.\nhttps://github.com/liangxiegame/QFramework\n" +
-            "帮助内容依据 YLFramework.Actions 的实现整理；声明来自核心 Runtime 与当前已加载的明确可选程序集。原始作者与年份声明保留在各源码文件中。";
-        internal const string DOTweenLicenseUrl = "https://dotween.demigiant.com/license.php";
-        internal const string DOTweenLicenseNotice = "ActionKit DOTween wrapper 使用 MIT License；DOTween 本体不是 MIT，" +
-            "使用 Demigiant 的 Artistic License（https://dotween.demigiant.com/license.php）。当前安装版本为 1.2.825。" +
-            "默认使用 standard 供应商版本并保留其 readme；本模块不打包修改版供应商。";
-        internal const string LicenseText =
-            "Permission is hereby granted, free of charge, to any person obtaining a copy\n" +
-            "of this software and associated documentation files (the Software), to deal\n" +
-            "in the Software without restriction, including without limitation the rights\n" +
-            "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n" +
-            "copies of the Software, and to permit persons to whom the Software is\n" +
-            "furnished to do so, subject to the following conditions:\n\n" +
-            "The above copyright notice and this permission notice shall be included in\n" +
-            "all copies or substantial portions of the Software.\n\n" +
-            "THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n" +
-            "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n" +
-            "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n" +
-            "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n" +
-            "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n" +
-            "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n" +
-            "THE SOFTWARE.";
 
         internal static IEnumerable<Assembly> ApiAssemblies() => new[] { typeof(ActionKit).Assembly }
             .Concat(AppDomain.CurrentDomain.GetAssemblies().Where(assembly =>

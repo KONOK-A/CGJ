@@ -1,8 +1,3 @@
-/****************************************************************************
- * Copyright (c) 2015 - 2024 liangxiegame UNDER MIT License
- * https://github.com/liangxiegame/QFramework
- ****************************************************************************/
-
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;

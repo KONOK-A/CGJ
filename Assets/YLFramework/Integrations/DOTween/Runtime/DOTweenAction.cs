@@ -1,13 +1,3 @@
-/****************************************************************************
- * 适配自本地 ActionKit DOTween 集成。
- * Copyright (c) 2016 - 2023 liangxiegame UNDER MIT License
- *
- * https://qframework.cn
- * https://github.com/liangxiegame/QFramework
- * https://gitee.com/liangxiegame/QFramework
- * DOTween itself is separately licensed by Demigiant: https://dotween.demigiant.com/license.php
- ****************************************************************************/
-
 using System;
 using System.Threading;
 using DG.Tweening;

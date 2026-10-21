@@ -16,7 +16,7 @@ JSONObject 用于直接遍历 / 修改 JSON 树；Json.NET 用于强类型对象
   - `JSONObject.cs`：核心节点与 Parser / Builder / 字段 API。
   - `JSONObjectEnumerator.cs`：容器枚举器。
   - `JSONTemplates.cs`：Unity 类型互转扩展。
-  - `LICENSE.md`、`readme.md`：上游第三方许可与说明。
+  - `readme.md`：上游说明。
 - namespace：`YLFramework.Utilities.Json`；程序集：`YLFramework.Runtime`。使用 `JSONObject.Create(...)` / `EmptyObject` 等直接入口，无需 Module、组件挂载或公共 Root。
 
 ## 核心数据模型
@@ -104,6 +104,6 @@ JSONObject 用于直接遍历 / 修改 JSON 树；Json.NET 用于强类型对象
 
 ## 备注
 
-- 来源：Matt Schoen（Defective Studios）的 JSONObject 库，MIT 许可，保留原始 LICENSE 与 readme（见目录内 `LICENSE.md`、`readme.md`）。类型名保持上游风格（如全大写 `JSONObject`）。
-- 默认 Runtime 递归导出包含 JSONObject 源码及完整 `LICENSE.md`。上游 readme 中的 JSONChecker / 可选池化等说明不代表当前框架已提供对应编辑器或默认池化功能。
+- 来源：Matt Schoen（Defective Studios）的 JSONObject 库；上游说明保留 `readme.md`。类型名保持上游风格（如全大写 `JSONObject`）。
+- 默认 Runtime 递归导出包含 JSONObject 源码。上游 readme 中的 JSONChecker / 可选池化等说明不代表当前框架已提供对应编辑器或默认池化功能。
 - 已知限制：非完整 JSON 序列化框架；宽松解析会容忍部分非法 JSON（括号不匹配、未闭合、尾随垃圾、非法 escape、`NaN` / `Infinity` 非标准输出等，具体策略见上文）；`Merge` 与 `Absorb` 为浅合并（引用共享），需要独立副本时使用 `Copy()`；不做线程安全保证。

@@ -4,7 +4,7 @@
 
 ## 模块定位
 
-HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显式注册帮助内容，窗口统一提供"使用指南 / API 参考 / 关于与许可"三个页签；API 声明来自编译元数据，中文摘要来自模块覆盖与 XML 文档。
+HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显式注册帮助内容，窗口统一提供"使用指南 / API 参考 / 关于"三个页签；API 声明来自编译元数据，中文摘要来自模块覆盖与 XML 文档。
 
 - 主要能力：模块注册表、帮助内容模型、API 索引与签名格式化、XML 文档读取与合并、搜索与导航。
 - 不负责：运行时帮助、自动扫描程序集/模块、执行示例代码、代码生成。
@@ -33,7 +33,7 @@ Runtime/Editor主体autoReferenced为true，optional/tests保留其独立配置�
 - `HelpApiIndex.Build(module)`：一次索引构建；只处理显式选择的类型；成员仅 public / protected（含 protected internal）且 declared-only。
 - `HelpXmlDocumentation`：编译器成员 ID 映射 Reflection；支持 `inheritdoc`；模块 `Documentation` 的非空白字段优先于 XML。
 - `HelpSearch`：空白分词 AND、大小写不敏感；空查询匹配全部。
-- `HelpWindow`：三页签（使用指南 / API 参考 / 关于与许可）、模块下拉、搜索高亮、返回历史；窗口状态经 `SerializeField` 持久化。
+- `HelpWindow`：三页签（使用指南 / API 参考 / 关于）、模块下拉、搜索高亮、返回历史；窗口状态经 `SerializeField` 持久化。
 
 ## Main Entry Points
 

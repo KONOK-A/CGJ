@@ -1,12 +1,3 @@
-/*
-Derived from JSONObject by Matt Schoen (Defective Studios) — MIT License.
-See LICENSE.md in this directory for the full license text.
-
-Unity 常用类型与 JSONObject 的互转扩展。
-约定：From* 会省略值为 0 的分量（FromLayerMask 例外，始终写出 value）；
-To* 在字段缺失或 jsonObject 为 null 时使用默认值 0。
-*/
-
 using UnityEngine;
 
 namespace YLFramework.Utilities.Json {

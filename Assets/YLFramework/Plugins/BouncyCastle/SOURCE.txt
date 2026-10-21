@@ -7,7 +7,6 @@ Official binary: https://downloads.bouncycastle.org/csharp/2.7.0/netstandard2.0/
 Official checksums: https://downloads.bouncycastle.org/csharp/docs/CHECKSUMS.csv
 Binary SHA-256: d61c1f2ba929a230a58e101ccd850e21f2675fa6b9814ec279633e8a089c3495
 Assembly version: 2.0.0.0
-License: accompanying complete upstream LICENSE.md (MIT).
 
 YL Resource uses this assembly internally for HKDF-SHA256 only. AES-256-GCM
 is provided by Windows CNG Microsoft Primitive Provider on the explicitly
@@ -17,14 +16,3 @@ redistributed, and this dependency does not add other encrypted platforms.
 Official artifact provenance and upstream checksums were verified in E04 G0
 and B1. This file records the exact product binary identity, not an assertion
 of FIPS certification or support for every Unity platform/profile.
-
-Framing reference (not a runtime Tink SDK dependency):
-https://developers.google.com/tink/streaming-aead/aes_gcm_hkdf_streaming
-Google Tink Java reference snapshot: 18b32f1c63f0520d05bed1ba8bc6bd401b50169d
-AesGcmHkdfStreaming.java source SHA-256:
-19c5ff90c450b4d923dd036ec6c8b54addc5d6fe17fd87a84ac79dfcffbca520
-Copyright 2017 Google Inc.; applicable Apache-2.0 terms accompany this
-distribution in TINK-LICENSE.txt. YL's C# framing/Stream adaptation adds the
-canonical YL context envelope, fixed bounds, cancellation, sticky faults,
-input ownership, and Windows CNG binding. It is not the audited Tink C# SDK.
-Independent official Tink 1.24.0 interop tests do not redistribute the Java SDK.

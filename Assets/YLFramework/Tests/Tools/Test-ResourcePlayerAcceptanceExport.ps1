@@ -51,9 +51,8 @@ foreach ($pair in $records.GetEnumerator()) {
 $required = [Collections.Generic.HashSet[string]]::new($expected,[StringComparer]::Ordinal)
 $null = $required.Remove('Assets/YLFramework')
 if (-not $required.IsSubsetOf($paths)) { throw ('The exact export-root/meta closure is incomplete: ' + (($required | Where-Object { -not $paths.Contains($_) }) -join ', ')) }
-foreach ($required in @('Assets/YLFramework/LICENSE.md','Assets/YLFramework/Runtime/THIRD-PARTY-NOTICES.md','Assets/YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll',
-    'Assets/YLFramework/Plugins/BouncyCastle/LICENSE.md','Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt','Assets/YLFramework/Plugins/BouncyCastle/TINK-LICENSE.txt',
-    'Assets/YLFramework/Runtime/Utilities/Json/LICENSE.md','Assets/YLFramework/Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md')) {
+foreach ($required in @('Assets/YLFramework/LICENSE.md','Assets/YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll',
+    'Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt')) {
     if (-not $paths.Contains($required)) { throw "Applicable notice missing: $required" }
 }
 $build = Join-Path $carrier ('Builds/' + $BuildName)
@@ -67,7 +66,7 @@ try {
     $references = @($metadata.AssemblyReferences | ForEach-Object { $metadata.GetString($metadata.GetAssemblyReference($_).Name) })
     if ($references -notcontains 'Newtonsoft.Json' -or $references -notcontains 'BouncyCastle.Cryptography' -or @($references | Where-Object { $_ -match 'UnityEditor|XFAB|Assembly-CSharp|Tests|Tink' }).Count) { throw 'Player Runtime assembly dependency boundary changed.' }
 } finally { $pe.Dispose(); $input.Dispose() }
-foreach ($notice in @('YLFramework-XF-MIT.md','YLFramework-THIRD-PARTY-NOTICES.md','JSONObject-MIT.md','SharpZipLib-NOTICES.md','BouncyCastle-MIT.md','Tink-Apache-2.0.txt','BouncyCastle-SOURCE.txt','Json.NET-UPM-LICENSE.md','Json.NET-UPM-THIRD-PARTY-NOTICES.md')) {
+foreach ($notice in @('YLFramework-MIT.md','BouncyCastle-SOURCE.txt','Json.NET-UPM-LICENSE.md','Json.NET-UPM-THIRD-PARTY-NOTICES.md')) {
     if (-not (Test-Path -LiteralPath (Join-Path $build ('Licenses/' + $notice)) -PathType Leaf)) { throw "Player applicable notice missing: $notice" }
 }
 $bcPath=if ($Backend -eq 'IL2CPP') { Join-Path $root ('BuildEvidence/' + $BuildName + '/Sources/Assets/YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll') } else { Join-Path $build 'ResourceAcceptance_Data/Managed/BouncyCastle.Cryptography.dll' }

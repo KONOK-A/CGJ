@@ -1,4 +1,3 @@
-// Adapted from XF EquipmentSystem 1.1.9 (MIT). See LICENSE.txt.
 using System;
 using UnityEngine;
 using YLFramework.Excel;

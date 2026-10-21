@@ -1,4 +1,3 @@
-// 共享依赖按依赖者集合聚合的机制参考 XFABManager 1.24.0；MIT 归属及完整许可见 YLFramework/LICENSE.md。
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

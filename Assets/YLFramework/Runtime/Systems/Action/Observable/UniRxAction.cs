@@ -1,12 +1,3 @@
-/****************************************************************************
- * 使用 BCL 观察者适配本地 ActionKit UniRx 集成。
- * Copyright (c) 2015 - 2022 liangxiegame UNDER MIT License
- *
- * https://qframework.cn
- * https://github.com/liangxiegame/QFramework
- * https://gitee.com/liangxiegame/QFramework
- ****************************************************************************/
-
 using System;
 using System.Threading;
 

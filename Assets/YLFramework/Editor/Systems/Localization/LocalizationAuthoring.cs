@@ -1,4 +1,3 @@
-// Adapted from XF Localization authoring. Copyright (c) 2024 弦风课堂. MIT; see Runtime/Systems/Localization/LICENSE.txt.
 using System;
 using System.Collections.Generic;
 using System.IO;

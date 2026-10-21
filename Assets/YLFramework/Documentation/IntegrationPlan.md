@@ -2,7 +2,7 @@
 
 **阶段9当前状态（2026-10-19）：独立工程交付技术验收与用户验收完成，已获精确提交及普通Push授权。** 受测源码由 `integration/xf-yl` / `586eebedaf900d926d2e30301b20ed3129decb27` 加冻结交付修复组成，不能将旧HEAD冒充已含修复的基线。以下阶段8/9“未启动”文字保留为历史快照，本轮范围、证据与边界以本文§9为准；本次只收口阶段9及另行验收的拓展公共准备E0，不自动迁移13项系统、不创建Worktree，不改既有失败、限制或历史制品。
 
-**新增阶段 7.5（2026-10-14）：技术实施与定向验证完成，已提交/推送（`63e152e`）。** ColorSelector 四个类型完整归 `Utilities/UI/ColorSelector`，作为依赖 Core 的上层便利工具；按用户选择删除公开 `IUIInputGate` 与自定义门禁，直接遵守 Panel 的加载/输入策略，不再要求脱离 Core 的源码闭包。XF 完整 MIT 许可集中为 `Assets/YLFramework/LICENSE.md` 一份，保留版权与全文并显式随默认导出分发；其他来源许可不变。两主体程序集、取色类型身份/字段/GUID与正式Prefab保持，引用退出接口的客户端需移除引用并重编译。取色18（含双profile消费源码编译）、完整许可1、Help7、正式窗口Play代表2及实际导出/解包1通过，不宣称新Player/全量测试/全平台验证。阶段 7 已有 Git 里程碑保持；后续仍为阶段 8 资源融合、阶段 9 独立交付。实施与验证见 [结构方案 §18](../../../.kilo/plans/xf-yl-7-structure-redesign.md#18-阶段-75-便利工具与-xf-许可集中2026-10-14)。
+**新增阶段 7.5（2026-10-14）：技术实施与定向验证完成，已提交/推送（`63e152e`）。** ColorSelector 四个类型完整归 `Utilities/UI/ColorSelector`，作为依赖 Core 的上层便利工具；按用户选择删除公开 `IUIInputGate` 与自定义门禁，直接遵守 Panel 的加载/输入策略，不再要求脱离 Core 的源码闭包。两主体程序集、取色类型身份/字段/GUID与正式Prefab保持，引用退出接口的客户端需移除引用并重编译。取色18（含双profile消费源码编译）、完整许可1、Help7、正式窗口Play代表2及实际导出/解包1通过，不宣称新Player/全量测试/全平台验证。阶段 7 已有 Git 里程碑保持；后续仍为阶段 8 资源融合、阶段 9 独立交付。实施与验证见 [结构方案 §18](../../../.kilo/plans/xf-yl-7-structure-redesign.md#18-阶段-75-便利工具与-xf-许可集中2026-10-14)。
 
 **Tidy 架构分层治理：COMPLETE（Tidy-1～3 全部技术验收及 Git 收口，里程碑 `milestone/tidy-architecture`）。** Foundation 解除对上层 Utilities 扩展的依赖，改直接使用 Unity 原生 API 且不新增便利 helper；七个 Editor 通用支撑按职责归 Foundation/Utilities，原 `YLFramework.Core.Editor` 身份保持。完整 Foundation 及 Foundation+Core 源码守卫分别约束两主体内部层级，保留两主体程序集与 Systems/Utilities 合理协作，真实 Json.NET 及仍属**阶段 8 过渡**的 XFAB 引用显式核验、不误禁合法上层协作；只验证 Editor/Windows64 Development 两 profile，不宣称最终独立或 Player 重建。批次事实、导出门禁与已批准的环境例外见 [Tidy方案](../../../.kilo/plans/xf-yl-tidy-architecture.md)；**阶段 8 资源融合尚未实施**，阶段 8/9 不自动启动。
 
@@ -320,7 +320,7 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 | 精确产品闭包 | 最终包同名`.files.json`逐740条记录给出路径、GUID、payload/meta SHA；同名`.receipt.json`绑定原Exporter根、HEAD及实际导出时间；`export-final-green.json`记录5个直接NUnit方法验证，不冒充Test Runner计数 |
 | 最终空工程 | `G:/Unity/Y9/ReceiverC`，由真实`-createProject`建立；`ReceiverC-first-import-initial.json`证明测试设施介入前最终包真实Unity编译，原导入进程exit0；之后的`ReceiverC-audit-final.json`核对7份Prefab、0 Missing Script/0 GUID冲突、Player引用和已部署Analyzer的真实compiler inputs |
 | Player工程与产物 | `G:/Unity/Y9/ReceiverB`；`P/m-ugui1`为无XF八项Mono证据，`P/m-mf`为最新可选Logger Mono代表冒烟，`P/i-l2`为最新可选Logger IL2CPP Release/Low八项；均非Development、Legacy Input、Built-in Render Pipeline，Direct3D11图形进程和正常退出证据完整 |
-| 依赖与许可 | UGUI实际1.0.0/builtin、Json.NET实际3.2.1/registry、批准BC2.7.0随包；Tink仅framing参考和Apache-2.0文本，无SDK。包/Player适用MIT、Unity Companion及Third Party Notices均保留；可选Logger1.0.1实际来自local-tarball且无传递依赖，不使用AssemblyVersion代替包版本 |
+| 依赖与许可 | UGUI实际1.0.0/builtin、Json.NET实际3.2.1/registry、批准BC2.7.0随包；可选Logger1.0.1实际来自local-tarball且无传递依赖，不使用AssemblyVersion代替包版本 |
 | 稳定复现入口 | `G:/Unity/Y9/Tools/Invoke-Stage9Delivery.ps1`及`Run-Stage9Representative.ps1`；安装与新空工程完整命令见随包`Documentation/README.md`，原源码模板与脚本位于`Assets/YLFramework/Tests/Tools/`；Tools快照历史保留，不依赖Temp作为唯一说明 |
 | 截图与失败映射 | `Runs/ReceiverB-Mono-smoke4/ui-modal.png`、`Runs/ReceiverB-Il2Cpp-il2cpp-final-smoke/ui-modal.png`；首轮长路径失败、native点击失败/安全拒绝、旧Logger IL2CPP整程序集裁剪失败及后续复验均保留原Run，不覆盖或重复启动同次任务 |
 | 机器可读绑定 | `G:/Unity/Y9/delivery-binding.json`、`.sha256`与`SHA256SUMS.txt`关联源码/最终包/独立工程/17份必要Player verdict/实际IL2CPP原生与生成C++/保护终态；`final-source.patch`与当前改动文件SHA记录未提交源码身份 |

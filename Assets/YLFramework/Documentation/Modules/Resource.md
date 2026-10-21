@@ -642,8 +642,8 @@ using (var stop = startup.StopAsync())
 - 远端length、SHA、Range、ETag描述**同一份固定密文**。续传须有实际partial、强ETag与If-Range，并按确切offset追加；服务器200忽略Range要重置，实体变化要重新获取，错误/损坏不能提交半成品。最终还须通过内容认证和原Prepare/激活，不能把HTTPS或SHA成功当作解密成功。缺/错key不是网络重试理由。
 - C02 `Preflight/Deploy/Recover`复制/验证交付字节，不需要内容key，不改Catalog/Complete/密文；真实导入后通过 `OpenBuiltIn` 严格定位到 `payload~`。应用运行时仍须提供key。E05原查询入口无需key、初始化、恢复或解密；统计实际密文与控制文件的逻辑字节，预览不授权删除，清理仍复查最新保护状态。
 - **Resource发布快照**使用 `ResourceEditorOperations.ExportRelease(release, destination)`，目标为工程外已有本地父目录下**不存在且等于CatalogDigest的子目录**；精确交付Catalog、Complete和登记文件，不包含raw缓存或内容key。
-- **YLFramework框架包**使用原菜单，或 `YLFramework.Editor.ExportUnityPackage.Export(absolutePackagePath)`向现有本地父目录导出。默认拒绝覆盖，不保存其他资产；菜单保留原显式保存/覆盖流程。导出根与Recurse不变，包含源码、必要meta、样例、批准的BC DLL及完整BC/Tink许可；不含Tests、原游戏、XFAB、临时runner/缓存/私钥/证书或系统CNG DLL。
-- BC确切来源、官方2.7.0 netstandard2.0二进制SHA及Tink参照声明见 `Plugins/BouncyCastle/SOURCE.txt`，完整许可在同目录。现有UGUI/Json.NET等依赖不因导出而消失；商业插件既有公开再分发限制保留。实际导出和源码/二进制闭包不代替阶段9干净工程完整验收。
+- **YLFramework框架包**使用原菜单，或 `YLFramework.Editor.ExportUnityPackage.Export(absolutePackagePath)`向现有本地父目录导出。默认拒绝覆盖，不保存其他资产；菜单保留原显式保存/覆盖流程。导出根与Recurse不变，包含源码、必要meta、样例、批准的BC DLL；不含Tests、原游戏、XFAB、临时runner/缓存/私钥/证书或系统CNG DLL。
+- BC确切来源、官方2.7.0 netstandard2.0二进制SHA见 `Plugins/BouncyCastle/SOURCE.txt`。现有UGUI/Json.NET等依赖不因导出而消失；商业插件既有公开再分发限制保留。实际导出和源码/二进制闭包不代替阶段9干净工程完整验收。
 
 **保留限制**：Unity Scene native 接手后发生延迟 Stream 读取失败可能引发 native 崩溃，既有 G0/C1 证据仍保留，未被本轮修复或记为受控失败通过。不重新演示该崩溃，也不将合法输入、定位/竞争/提前释放或取消/退出/预算的新缺陷归入该豁免。native 前完整密文 length/SHA、首末认证、读取时每段认证后交付，以及发布/Prepare/激活/回滚的完整认证均不降低。不输出完整明文文件或整包内存 fallback；运行期写入观察的实际范围另按证据说明。
 

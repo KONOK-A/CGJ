@@ -39,7 +39,7 @@ namespace YLFramework.Editor.Actions
             { "UniRxAction", "内建 BCL IObservable<T> 订阅动作，首个 OnNext 成功，空 OnCompleted 取消，OnError 记录异常后取消。只释放 subscription，不 Dispose source 本体；UniRx 是兼容名称，不要求第三方 SDK。" },
             { "ActionKitUniRxExtension", "内建 Observable 接入扩展：ToAction 包装已有 source，UniRx 向 ISequence 追加 source 工厂；动作未启动时不订阅。" },
             { "DOTweenAction", "可选独立根 Tween 所有权动作，要求真实 Unity 主线程及原始 UnitySynchronizationContext。工厂每次执行取得一个新 Tween；ToAction 仅复用一次预绑定生命周期。取消/重置逻辑立即生效，物理 Kill(false) 通过 Post 延后且复核 ownership，正常完成仅解除自身 hooks。" },
-            { "ActionKitDOTweenExtension", "可选 DOTween 接入扩展：ToAction 在 Pause 前预绑定已有独立根 Tween 的原生命周期，Reset 后不可重新认领；DOTween 向 ISequence 追加每次执行创建新 Tween 的工厂。wrapper 是 MIT，DOTween 本体单独采用 Demigiant Artistic License。" },
+            { "ActionKitDOTweenExtension", "可选 DOTween 接入扩展：ToAction 在 Pause 前预绑定已有独立根 Tween 的原生命周期，Reset 后不可重新认领；DOTween 向 ISequence 追加每次执行创建新 Tween 的工厂。" },
             { "DelayExtension", "向现代 ISequence 追加定时等待，可直接给秒数或在动作启动时求值一次的时间工厂。" },
             { "DelayFrameExtension", "向现代 ISequence 追加基于 Unity 全局帧计数的等待，NextFrame 等价于等待一帧。" },
             { "CallbackExtension", "向现代 ISequence 追加在子动作启动时执行的即时回调。" },

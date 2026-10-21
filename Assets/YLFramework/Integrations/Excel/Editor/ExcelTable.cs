@@ -1,5 +1,3 @@
-// Adapted from XF ExcelSystem 1.0.7 (MIT, Copyright (c) 2025 弦风课堂).
-// YL: MiniExcel backend, strict diagnostics and atomic file replacement.
 using System;
 using System.Collections.Generic;
 using System.Globalization;

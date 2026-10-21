@@ -1,4 +1,3 @@
-// Adapted from XF Buff. Original copyright and MIT License: Runtime/Systems/Buff/LICENSE.txt.
 using YLFramework.Foundation;
 using System;
 

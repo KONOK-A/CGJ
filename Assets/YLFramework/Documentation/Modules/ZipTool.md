@@ -19,7 +19,7 @@
 - `ZipArchiveReader`：会话式读取 zip（一次打开多次读取，`IDisposable`），解压前预扫描配额与 Zip Slip 路径。
 - `UnzipOptions`：解压配额（总大小 / 单条目大小 / 条目数量，`ForNetworkDownloads` 预设）；0 = 不限制。
 - `GZipUtility`：字节数组 / 流的 GZip 压缩与解压（永不关闭调用方流，支持 0 字节数据）。
-- 内置 `ICSharpCode.SharpZipLib`：命名空间统一为 `YLFramework.Utilities.ZipTool.*`，随源码维护；来源与 MIT 许可见 [`THIRD-PARTY-NOTICES.md`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)。
+- 内置 `ICSharpCode.SharpZipLib`：命名空间统一为 `YLFramework.Utilities.ZipTool.*`，随源码维护。
 
 ## 主要类型
 
@@ -46,9 +46,9 @@
 - 旧Resource的ZipFileHelper随旧栈退役，不再通过它读取旧二进制表或APK内配置；内置ZipFile等低层接口仍可供明确调用方使用，不因此改变通用解压门面的职责，也不宣称已验证所有平台的资源交付。
 - `Tests/EditMode/ExportUnityPackageTests.cs` 直接使用内置 GZip / Tar 读取 Unity 导出包。内置低层类型继续保留，避免破坏现有消费者。
 
-## 分发与许可
+## 分发
 
-默认导出递归包含 `Runtime/`，因此 ZipTool 的封装、内置库、asmdef / meta 与完整 MIT 许可一并随包分发；不需要额外安装 SharpZipLib Package 或供应商 DLL。源码来源与完整许可保留在 [`ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md`](../../Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/THIRD-PARTY-NOTICES.md)，不可只导出封装而漏掉内置实现或许可。此结论仅针对 ZipTool，不表示整个框架已完成独立分发验收。
+默认导出递归包含 `Runtime/`，因此 ZipTool 的封装、内置库、asmdef / meta 一并随包分发；不需要额外安装 SharpZipLib Package 或供应商 DLL。不可只导出封装而漏掉内置实现。此结论仅针对 ZipTool，不表示整个框架已完成独立分发验收。
 
 ## 当前状态
 

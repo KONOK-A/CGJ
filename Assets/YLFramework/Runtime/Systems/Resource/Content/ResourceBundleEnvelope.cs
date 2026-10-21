@@ -13,9 +13,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 
 namespace YLFramework.Services.Resource
 {
-    // Tink RAW framing reference: Copyright 2017 Google Inc., Apache-2.0.
     // YL C# adaptation adds the outer context envelope and ownership/failure contracts.
-    // Applicable notices and complete license: Plugins/BouncyCastle/SOURCE.txt, TINK-LICENSE.txt.
     internal sealed class ResourceBundleEnvelopeHeader
     {
         internal string KeyId { get; }
