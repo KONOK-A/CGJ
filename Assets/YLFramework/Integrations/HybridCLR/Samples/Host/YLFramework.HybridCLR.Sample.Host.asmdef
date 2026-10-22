@@ -1,0 +1,10 @@
+{
+    "name": "YLFramework.HybridCLR.Sample.Host",
+    "rootNamespace": "YLFramework.Samples.HybridCLR",
+    "references": ["YLFramework.Runtime", "YLFramework.HybridCLR"],
+    "includePlatforms": [], "excludePlatforms": [], "allowUnsafeCode": false,
+    "overrideReferences": true, "precompiledReferences": [], "autoReferenced": false,
+    "defineConstraints": ["YL_HYBRIDCLR_9_0_3"],
+    "versionDefines": [{ "name": "com.code-philosophy.hybridclr", "expression": "[9.0.3,9.0.4)", "define": "YL_HYBRIDCLR_9_0_3" }],
+    "noEngineReferences": false
+}

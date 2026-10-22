@@ -1,0 +1,25 @@
+{
+    "optional": true,
+    "defaultExport": false,
+    "package": {
+        "name": "com.code-philosophy.hybridclr",
+        "version": "9.0.3",
+        "url": "https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3",
+        "commit": "6cadd24d101f4cbd00cd80190106f6621132d24d",
+        "bundled": false
+    },
+    "sourceReference": {
+        "name": "XFGameFramework.HybridCLR",
+        "version": "1.1.3",
+        "url": "https://gitee.com/xianfengkeji/xfgame-framework.hybrid-clr.git",
+        "commit": "7af0ba2299cfb2f17bb7442aa50b72c29980e0dd",
+        "required": false
+    },
+    "scope": {
+        "unityVersion": "2022.3.62f3c1",
+        "target": "StandaloneWindows64",
+        "backend": "IL2CPP",
+        "nativeValidated": false,
+        "sameProcessCodeReplacement": false
+    }
+}

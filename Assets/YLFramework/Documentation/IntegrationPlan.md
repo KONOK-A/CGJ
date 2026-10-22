@@ -356,3 +356,13 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 复用现有动画/物理组件并保持其字段/namespace/GUID，补齐默认值和局部Mono生命周期组件；现有EventListener增加同时作用于代码/Inspector的物理层过滤。新增Core.SceneController只管理自己的在途请求，完成后允许新的Additive意图，不做已加载短名复用、不持成功Scene卸载权，不改Root、资源内核或原游戏。
 
 2026-10-21 CommonSystem主工程技术验收完成，用户已确认通过并完成Git远端收口：最终定向EditMode28/28、PlayMode59/59通过，包含边界闭包、真实动画/物理/场景、原游戏非干扰代表检查；独立Review实质问题已以失败回归修复，Inspector视觉与自动化编辑操作分别验证。完整证据和保护终态在专项Plan，非全量套件或全量人工验收。无XF独立首导入、Mono/IL2CPP Player未执行，不借用旧Player/独立包冒充本次交付；本次仅执行CommonSystem精确暂存与普通Push。
+
+## 12. HybridCLR 可选专项
+
+本专项从旧 XFGameFramework.HybridCLR 1.1.3 切换至精确官方 HybridCLR Unity package 9.0.3，退役旧扩展，不把整个官方 native 工具链重写进 YL。范围、权衡和真实进度集中在 [HybridCLR 专项 Plan](../../../.kilo/plans/1792591409867-xf-hybridclr-migration.md)，使用与所有权见 [可选架构边界](Architecture.md#hybridclr-可选接入)。
+
+实现为独立 Runtime/Editor 叶子，主体、Core/Foundation 公共契约、默认七根导出及原游戏均不接入。统一使用正式 Resource Recipe/Publisher/BuiltInDeployer、签名更新和 Core Module 生命周期。基座与补丁明确分离；基线固定最终真实 Player 的 AOT，进程内不允许不同内容换版，关闭 Module/释放 manifest 屏障后仍需新进程执行新代码。Editor 仅 Simulation。
+
+当前已完成可选格式、构建/加载编排、工具、显式导出及独立样例；取得定向单元/PlayMode、真实无 Domain Reload 双会话、干净接收工程的无包首导入和有包独立编译证据。Windows64 IL2CPP Development/Release Low 原生基座与运行、同 Player 签名 HTTPS v2、运行中 Busy/关闭后激活/重启换版及负向门禁已实际通过；独立审查的实质问题有失败回归修复。不外推其他平台、High stripping 或任意动态泛型。主工程 Mono/.NET Standard 设置保持；所有 IL2CPP 与特别验收宏只在自有接收工程配置。
+
+2026-10-22 用户明确授权本模块 Git 收口与普通 Push，仅纳入本专项产品、测试、工具、直接文档及官方依赖增量，保留无关工作区改动。精确范围和证据沿用边界见专项 Plan §8；源码收口不代表重新生成已冻结的旧交付包，修正后的可选包与旧交付状态见 §7。

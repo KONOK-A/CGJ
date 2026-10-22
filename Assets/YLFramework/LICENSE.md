@@ -13,7 +13,7 @@ copyright notices retained:
 - XFGameFramework, XFABManager and XF ecosystem modules (Overlap,
   CharacterController2D, MoveablePlatform, StateMachine, Localization,
   DataAssets, Save, Skill, Buff, Mission, Reddot, Logging, Equipment,
-  CommonSystem and Excel):
+  CommonSystem, Excel and the optional HybridCLR workflow reference):
   Copyright (c) 2021 弦小风;
   Copyright (c) 2024-2025 弦风课堂.
 - JSONObject: Copyright (c) 2010-2019 Matt Schoen.
@@ -52,5 +52,9 @@ External packages are not included in this license: Newtonsoft.Json is
 provided by the Unity UPM package, DOTween is licensed separately by
 Demigiant, the optional Logger package is distributed separately, and the
 commercial Editor Enhancers Bundle is not redistributed by YLFramework.
+The optional HybridCLR integration requires the separately installed official
+HybridCLR Unity package (Code Philosophy Technology Ltd.) and its native
+runtime; those packages and dnlib are not redistributed by YLFramework and
+remain under their own licenses.
 Unity GraphView APIs used by the State Machine editor remain subject to
 Unity's applicable terms; no Unity Reference-Only source is copied.

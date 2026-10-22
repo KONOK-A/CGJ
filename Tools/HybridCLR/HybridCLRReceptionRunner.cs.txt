@@ -1,0 +1,175 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+using YLFramework.Integrations.HybridCLR;
+using YLFramework.Samples.HybridCLR;
+using YLFramework.Services.Resource;
+
+namespace YLFramework.Tests.HybridCLRReception
+{
+    // Real acceptance consumer, not a dependency shim. Its explicit Development-only TLS pin uses the existing test friend.
+    public sealed class HybridCLRReceptionRunner : MonoBehaviour
+    {
+        public string ProjectId;
+        public string CompatibilityId;
+        private JObject evidence;
+        private string root;
+        private string action;
+        private string run;
+        private HybridCLRExample sample;
+
+        private string Argument(string name)
+        {
+            var args = Environment.GetCommandLineArgs(); var index = Array.IndexOf(args, name);
+            if (index < 0 || index + 1 == args.Length || index != Array.LastIndexOf(args, name)) throw new ArgumentException("One explicit " + name + " is required.");
+            return args[index + 1];
+        }
+        private IEnumerator Start()
+        {
+            Application.runInBackground = true;
+            var stack = new Stack<IEnumerator>(); stack.Push(Run());
+            Exception failure = null;
+            while (stack.Count != 0)
+            {
+                bool next = false; object current = null;
+                try { next = stack.Peek().MoveNext(); if (next) current = stack.Peek().Current; }
+                catch (Exception error) { failure = error; }
+                if (failure != null) break;
+                if (!next) { (stack.Pop() as IDisposable)?.Dispose(); continue; }
+                if (current is IEnumerator nested && !(current is CustomYieldInstruction)) { stack.Push(nested); continue; }
+                yield return current;
+            }
+            foreach (var remaining in stack) try { (remaining as IDisposable)?.Dispose(); } catch (Exception error) { Debug.LogException(error); }
+            evidence = evidence ?? new JObject(); evidence["passed"] = failure == null;
+            if (failure != null) { evidence["error"] = failure.ToString(); Debug.LogException(failure); }
+            try
+            {
+                var output = root + "/" + run + ".json";
+                using var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(evidence.ToString(Formatting.Indented)); file.Write(bytes, 0, bytes.Length);
+                Debug.Log("HYBRIDCLR_ACCEPTANCE " + evidence.ToString(Formatting.None));
+            }
+            catch (Exception error) { Debug.LogException(error); failure = failure ?? error; }
+            Application.Quit(failure == null ? 0 : 21);
+        }
+        private IEnumerator Run()
+        {
+            root = Path.GetFullPath(Argument("-hclr-root")); action = Argument("-hclr-action"); run = Argument("-hclr-run");
+            if (action != "V1" && action != "Update" && action != "V2" && action != "BadPayload" && action != "BadMetadata") throw new ArgumentException("Unknown explicit acceptance action.");
+            if (Application.platform != RuntimePlatform.WindowsPlayer || IntPtr.Size != 8 || Application.unityVersion != "2022.3.62f3c1")
+                throw new InvalidOperationException("The acceptance receiver requires its actual Windows64 IL2CPP Player.");
+            var baseline = JObject.Parse(File.ReadAllText(Argument("-hclr-base-receipt")));
+            if (baseline.Value<string>("ProjectId") != ProjectId || baseline.Value<string>("CompatibilityId") != CompatibilityId) throw new InvalidDataException("Player/base receipt mismatch.");
+            Require(baseline.Value<bool>("Development") == Debug.isDebugBuild, "The actual Player Development flag differs from its base receipt.");
+            evidence = new JObject { ["action"] = action, ["unityVersion"] = Application.unityVersion, ["projectId"] = ProjectId, ["simulation"] = false };
+            var snapshot = ResourceLocalSnapshot.OpenBuiltIn(ProjectId, baseline.Value<string>("CatalogDigest"), "StandaloneWindows64", CompatibilityId);
+            ResourceRemoteSource remote = null;
+            if (action == "Update" || action == "BadPayload")
+            {
+                var trust = JObject.Parse(File.ReadAllText(Argument("-hclr-trust")));
+                remote = new ResourceRemoteSource(trust.Value<string>("endpoint"), "hybridclr-test", new[] { new ResourceSigningKey("hclr-test", trust.Value<string>("modulus"), trust.Value<string>("exponent")) },
+                    maximumFileBytes: 128L * 1024 * 1024, maximumDownloadBytes: 512L * 1024 * 1024, timeoutSeconds: 60, attempts: 1);
+#if UNITY_EDITOR || (DEVELOPMENT_BUILD && YL_RESOURCE_ACCEPTANCE_TESTS)
+                remote.TrustLoopbackCertificate(Convert.FromBase64String(trust.Value<string>("certificate")));
+#else
+                throw new PlatformNotSupportedException("Isolated loopback trust is deliberately unavailable in ordinary Release Players.");
+#endif
+            }
+            var cacheRoot = JObject.Parse(File.ReadAllText(root + "/owner.json")).Value<string>("runtimeCacheRoot");
+            if (string.IsNullOrEmpty(cacheRoot) || !Path.IsPathRooted(cacheRoot)) throw new InvalidDataException("An explicit owned short runtime cache root is required.");
+            var cache = cacheRoot + (action == "BadMetadata" ? "/bad-metadata" : action == "BadPayload" ? "/bad" : Debug.isDebugBuild ? "/normal" : "/release");
+            var store = new ArtifactStore(cache, new[] { new ResourceProjectMount(ProjectId, "StandaloneWindows64", CompatibilityId, snapshot, remote: remote) });
+            var config = new ResourceConfiguration(store);
+            if (action == "BadMetadata")
+            {
+                var candidate = JObject.Parse(File.ReadAllText(Argument("-hclr-candidate")));
+                var local = ResourceLocalSnapshot.Open(candidate.Value<string>("DirectoryPath"), ProjectId, candidate.Value<string>("CatalogDigest"), "StandaloneWindows64", CompatibilityId);
+                var prepared = store.Prepare(store.Check(store.Mount(), new[] { local }), System.Threading.CancellationToken.None);
+                var startup = new ResourceStartup(config);
+                using (var init = startup.StartAsync()) { yield return init; init.TakeResult(); }
+                using (var activate = startup.Resources.ActivatePreparedUpdateAsync(prepared)) { yield return activate; Require(activate.TakeResult(), "The local negative metadata fixture did not activate."); }
+                using var loader = new HybridCLRLoader(startup.Resources, CompatibilityId);
+                var failed = loader.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return failed;
+                Require(failed.Exception != null && failed.RequiresRestart && failed.Stage == "Metadata" && failed.AssemblyName == "zzAbsentAot" && failed.NativeErrorCode.HasValue && failed.NativeErrorCode.Value != 0,
+                    "The real native metadata rejection did not retain partial-load restart semantics and its exact error code.");
+                using (var another = new HybridCLRLoader(startup.Resources, CompatibilityId))
+                {
+                    var blocked = another.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return blocked;
+                    Require(blocked.Exception != null && blocked.RequiresRestart, "A new loader improperly reset the native partial-load requirement.");
+                }
+                evidence["partialMetadataRestartRequired"] = true; evidence["nativeErrorCode"] = failed.NativeErrorCode.Value; evidence["assembly"] = failed.AssemblyName;
+                loader.Dispose(); using var stop = startup.StopAsync(); yield return stop; stop.TakeResult(); yield break;
+            }
+            if (action == "BadPayload")
+            {
+                var startup = new ResourceStartup(config, bindCore: true);
+                using (var init = startup.StartAsync()) { yield return init; init.TakeResult(); }
+                using var check = startup.Resources.CheckRemoteUpdatesAsync(); yield return check;
+                using var prepare = startup.Resources.PrepareUpdateAsync(check.TakeResult()); yield return prepare;
+                using var activate = startup.Resources.ActivatePreparedUpdateAsync(prepare.TakeResult()); yield return activate; Require(activate.TakeResult(), "Bad fixture did not activate before code loading.");
+                using var loader = new HybridCLRLoader(startup.Resources, CompatibilityId);
+                var bad = loader.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return bad;
+                Require(bad.Exception != null && !bad.RequiresRestart && bad.Stage == "Payloads", "Corrupt code was not rejected before native loading.");
+                evidence["badPayloadRejectedBeforeNative"] = true; evidence["exception"] = bad.Exception.ToString();
+                loader.Dispose(); using var stop = startup.StopAsync(); yield return stop; stop.TakeResult(); yield break;
+            }
+            sample = new HybridCLRExample(); yield return sample.Run(config, ProjectId, CompatibilityId);
+            Require(!sample.ModuleRequest.Code.Simulation, "Editor Simulation is not native acceptance.");
+            var expectedVersion = action == "V2" ? "v2:" : "v1:";
+            Require(HybridCLRExampleState.Message != null && HybridCLRExampleState.Message.StartsWith(expectedVersion, StringComparison.Ordinal) &&
+                HybridCLRExampleState.Message.Contains("YL Resource configuration") && sample.ModuleRequest.Module.State == YLFramework.Core.ModuleState.Running,
+                "Actual interpreted version or Core configuration/Module state mismatch: " + sample.Result);
+            Require(sample.Result.Contains(expectedVersion.TrimEnd(':') + "-async") && sample.PrefabMarker == expectedVersion.TrimEnd(':') + "-prefab", "Actual hot async continuation or prefab MonoBehaviour result mismatch.");
+            evidence["message"] = sample.Result; evidence["codePackageId"] = sample.ModuleRequest.Code.CodePackageId;
+            evidence["catalogDigest"] = sample.Startup.Resources.GetActiveCatalogDigest(ProjectId);
+            evidence["entryIdentity"] = sample.ModuleRequest.Code.Assemblies[HybridCLRExample.EntryAssembly].FullName;
+            evidence["mvidEvidence"] = "Verified from PE bytes before native load; CLR module GUID reflection is not supported by this IL2CPP.";
+            var repeat = sample.Loader.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return repeat;
+            Require(ReferenceEquals(repeat.Result, sample.ModuleRequest.Code), "Repeated code request was not idempotent.");
+            using (var wrongBase = new HybridCLRLoader(sample.Startup.Resources, "wrong-base"))
+            {
+                var wrong = wrongBase.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return wrong;
+                Require(wrong.Exception != null && wrong.Stage == "Manifest" && !wrong.RequiresRestart, "Wrong base was not rejected before native load.");
+                evidence["wrongBaseRejected"] = true;
+            }
+            if (action == "Update")
+            {
+                using var check = sample.Startup.Resources.CheckRemoteUpdatesAsync(); yield return check;
+                var plan = check.TakeResult();
+                using var prepare = sample.Startup.Resources.PrepareUpdateAsync(plan); yield return prepare;
+                var prepared = prepare.TakeResult(); evidence["checkAndPrepareWhileRunning"] = true;
+                using (var busy = sample.Startup.Resources.ActivatePreparedUpdateAsync(prepared))
+                {
+                    yield return busy; Require(busy.Error != null && busy.Error.Kind == ResourceError.Busy, "Live manifest lease did not block Activate.");
+                    evidence["activateBusy"] = true;
+                }
+                Require(HybridCLRExampleState.Message.StartsWith("v1:", StringComparison.Ordinal), "Busy changed the running code.");
+                sample.CloseCode();
+                var committed = false;
+                for (var frame = 0; frame < 240 && !committed; frame++)
+                {
+                    using var activated = sample.Startup.Resources.ActivatePreparedUpdateAsync(prepared); yield return activated;
+                    if (activated.Status == ResourceRequestStatus.Succeeded) committed = activated.TakeResult();
+                    else Require(activated.Error != null && activated.Error.Kind == ResourceError.Busy, "Activation failed instead of draining owned native instance destruction.");
+                    if (!committed) yield return null;
+                }
+                Require(committed, "Closed code/instance responsibilities did not drain before activation.");
+                using (var another = new HybridCLRLoader(sample.Startup.Resources, CompatibilityId))
+                {
+                    var conflict = another.LoadAsync(new ResourceAddress(ProjectId, HybridCLRManifest.ManifestPath)); yield return conflict;
+                    Require(conflict.Exception != null && conflict.RequiresRestart, "Dispose/new loader incorrectly allowed same-process code replacement.");
+                    evidence["sameProcessReplacementRejected"] = true;
+                }
+                evidence["activatedCatalogDigest"] = sample.Startup.Resources.GetActiveCatalogDigest(ProjectId);
+            }
+            using var shutdown = sample.CloseAsync(); yield return shutdown; shutdown.TakeResult();
+            Require(ResourceSystem.Current == null, "Owned ResourceStartup did not close cleanly.");
+        }
+        private static void Require(bool condition, string error) { if (!condition) throw new InvalidOperationException(error); }
+    }
+}

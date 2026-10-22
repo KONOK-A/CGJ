@@ -14,6 +14,7 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 | [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
 | [`Editor/`](../Editor/) | Editor-only主体；功能工具、模块帮助提供方与共享Help分区 |
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
+| [`Integrations/HybridCLR/`](../Integrations/HybridCLR/) | 可选官方 HybridCLR 9.0.3 接入，独立导出；不自动接入原游戏 |
 | [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
 | [`Plugins/`](../Plugins/) | 批准的官方BC 2.7.0 HKDF依赖及SOURCE来源；宿主商业Editor Enhancers不随框架导出，Sirenix Odin已整树退出 |
 | [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
@@ -61,6 +62,7 @@ Runtime按Foundation/Core/Systems/Utilities组织，Editor按同类功能及Dist
 | Excel（可选） | MiniExcel Editor-only，真实xlsx SO/List/JSON预览确认、失败回滚与工作簿定位 | 不进入核心默认包或Player | [配置数据接入](Architecture.md#配置数据接入) |
 | Skill / Buff / Mission / Reddot / Logging | 配置运行态隔离、领域池/宿主关闭、普通作者工具、独立红点来源与默认被动Logger | C完整候选已接入；真实门禁以专项Plan记录为准，DomainExcel为选装 | [领域玩法接入](Architecture.md#领域玩法接入) |
 | Equipment | Asset/Script双创建、单一实例归属、自有/借用责任、装备配置窗口和可选xlsx | 技术及用户验收通过；主/独立工程Mono与IL2CPP Low代表性运行已验证，Git交接见专项Plan | [Equipment 接入](Architecture.md#equipment-接入) |
+| HybridCLR（可选） | 受检基座/补丁构建、完整 metadata、Resource 交付、进程代码屏障与 Core Module 组合 | Windows64 IL2CPP Dev/Release Low 与同 Player 签名 v2 已验证；精确范围以专项 Plan 为准 | [可选安装与用法](../Integrations/HybridCLR/README.md) · [架构边界](Architecture.md#hybridclr-可选接入) |
 | HTTP | 轻量 GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | 正式归 Runtime，复用 Foundation 等待 / 通知 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
 | UI | Core Panel/View、窗口目录、根/层/模态、适配/输入、Tips；取色便利工具见 Utilities | 阶段 3 技术门禁完成，待用户最终验收与 Git 收口 | [Modules/UI.md](Modules/UI.md) |
 
@@ -96,6 +98,9 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 - EditMode：`Tests/EditMode/`，覆盖 Foundation / Tools / Resource，以及 `Action/`、`Audio/`、`Help/` 的行为、API、XML 与帮助边界。
 - PlayMode：`Tests/PlayMode/`，覆盖 MonoBehaviour 单例、Timing 时钟与宿主，以及 `Action/`、`Audio/` 的真实帧执行和播放生命周期。
 - DOTween：`Tests/Integrations/DOTween/` 下两个独立测试程序集，受 `DOTWEEN` + `UNITY_INCLUDE_TESTS` 约束。
+- HybridCLR：`Tests/Integrations/HybridCLR/` 的独立 EditMode/PlayMode 叶子，精确约束 9.0.3；Editor Simulation、替身与真实 IL2CPP 证据分别记录，不把单元测试冒充原生热更。
+
+HybridCLR 源码仓库首次检出或相关程序集重新编译后，先在非 Play 的 Editor 主线程调用 `YLFramework.Tests.Integrations.HybridCLR.HybridCLRTestFixtures.Prepare()`，再运行 loader/Module PlayMode 测试。该步骤从当前已编译程序集生成 `PlayMode/Resources/YLHybridCLRTests` 下的 `.bytes` 和 manifest JSON；这些本机输入及其 meta 不纳入 Git，不能复用其他机器或旧程序集的快照。
 
 导出的框架包不包含 `Tests/`，测试仅在源码仓库内运行。
 

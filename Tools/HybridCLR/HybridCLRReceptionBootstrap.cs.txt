@@ -1,0 +1,454 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEditor.Build.Reporting;
+using UnityEditor.Compilation;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using YLFramework.Editor.Resource;
+using YLFramework.Integrations.HybridCLR.Editor;
+using YLFramework.Samples.HybridCLR.Editor;
+
+namespace YLFramework.Tests.HybridCLRReception.Editor
+{
+    // Receiver-only acceptance consumer. Installed only after both product-only import receipts.
+    public static class HybridCLRReceptionBootstrap
+    {
+        private const string AssetsRoot = "Assets/HCLRExample";
+        private const string SampleRoot = "Assets/YLFramework/Integrations/HybridCLR/Samples";
+        private const string SupportName = "YLFramework.HybridCLR.Sample.Support";
+        private const string EntryName = "YLFramework.HybridCLR.Sample.Entry";
+        private static string Project => Directory.GetParent(Application.dataPath).FullName;
+        private static string Root => Path.GetFullPath(Argument("-hclr-root"));
+        private static string Run => Argument("-hclr-run");
+        private static string Argument(string name)
+        {
+            var args = Environment.GetCommandLineArgs(); var at = Array.IndexOf(args, name);
+            if (at < 0 || at + 1 == args.Length || at != Array.LastIndexOf(args, name)) throw new ArgumentException("One explicit " + name + " is required.");
+            return args[at + 1];
+        }
+        private static JObject Owned()
+        {
+            var owner = JObject.Parse(File.ReadAllText(Root + "/owner.json"));
+            if (!Application.isBatchMode || Application.unityVersion != "2022.3.62f3c1" ||
+                owner.Value<string>("purpose") != "YLFramework-HybridCLR-9.0.3-independent-reception" ||
+                Path.GetFullPath(owner.Value<string>("project")) != Path.GetFullPath(Project) || Directory.Exists(Project + "/.git") ||
+                !JObject.Parse(File.ReadAllText(Root + "/base-no-package-import.receipt.json")).Value<bool>("passed") ||
+                !JObject.Parse(File.ReadAllText(Root + "/optional-no-package-import.receipt.json")).Value<bool>("passed"))
+                throw new InvalidOperationException("Never run this acceptance consumer on the source project or before product-only imports.");
+            return owner;
+        }
+        private static string Sha(string path)
+        {
+            using var sha = SHA256.Create(); using var stream = File.OpenRead(path);
+            return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
+        }
+        private static void Receipt(string name, object value)
+        {
+            var path = Root + "/" + name + ".json";
+            if (File.Exists(path)) throw new IOException("Preserve the prior acceptance receipt.");
+            var pending = path + ".pending-" + Guid.NewGuid().ToString("N");
+            using (var stream = new FileStream(pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(value, Formatting.Indented)); stream.Write(bytes, 0, bytes.Length); stream.Flush(true);
+            }
+            File.Move(pending, path);
+        }
+        public static void Install()
+        {
+            Owned();
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
+            var locked = JObject.Parse(File.ReadAllText("Packages/packages-lock.json"))["dependencies"]["com.code-philosophy.hybridclr"];
+            if (package.version != "9.0.3" || package.source != UnityEditor.PackageManager.PackageSource.Git ||
+                locked.Value<string>("version") != "https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3" ||
+                locked.Value<string>("hash") != "6cadd24d101f4cbd00cd80190106f6621132d24d") throw new InvalidDataException("Wrong official release.");
+            new global::HybridCLR.Installer.InstallerController().InstallDefaultHybridCLR();
+            var installed = new global::HybridCLR.Installer.InstallerController();
+            if (!installed.HasInstalledHybridCLR() || installed.PackageVersion != "9.0.3" || installed.InstalledLibil2cppVersion != "9.0.3") throw new InvalidOperationException("Explicit official runtime installation failed.");
+            Receipt(Run, new { passed = true, package.version, hash = locked.Value<string>("hash"), installed.PackageVersion, installed.InstalledLibil2cppVersion });
+        }
+        public static void Inspect()
+        {
+            Owned();
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
+            Receipt(Run, new { package.name, package.version, source = package.source.ToString(), package.resolvedPath,
+                revision = package.git?.revision, hash = package.git?.hash, packageJsonVersion = JObject.Parse(File.ReadAllText(package.resolvedPath + "/package.json")).Value<string>("version") });
+        }
+        public static void CompileExternal() => CompileSupport(false);
+        public static void CompileExternalVTwo() => CompileSupport(true);
+        public static void CompileExternalRelease() => CompileSupport(false, true);
+        public static void CompileExternalNewRequirement()
+        {
+            Owned(); var path = Root + "/ExternalSource/VersionInfo.cs"; var backup = path + ".v2-owned-backup";
+            if (File.Exists(backup)) throw new IOException("Preserve the existing v2 source backup.");
+            var text = File.ReadAllText(path);
+            if (!text.Contains("\"v2\"")) throw new InvalidDataException("Run the verified v2 patch before the new-native-requirement rejection fixture.");
+            File.Copy(path, backup, false);
+            text = text.Replace("public static string Version", "[System.Runtime.InteropServices.DllImport(\"hclr-new-native-requirement-fixture\")] public static extern void NewNativeRequirement();\n        public static string Version");
+            File.WriteAllText(path, text, new UTF8Encoding(false)); CompileSupport(false);
+        }
+        public static void RestoreExternalRelease()
+        {
+            Owned(); var path = Root + "/ExternalSource/VersionInfo.cs";
+            File.Copy(path + ".v2-owned-backup", path, true); CompileSupport(false, true);
+        }
+        private static void CompileSupport(bool patch, bool release = false)
+        {
+            Owned();
+            var source = Root + "/ExternalSource/VersionInfo.cs";
+            if (!File.Exists(source))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(source));
+                File.Copy(SampleRoot + "/HotSupport/VersionInfo.cs", source, false);
+            }
+            if (patch)
+            {
+                var text = File.ReadAllText(source);
+                if (!text.Contains("\"v1\"")) throw new InvalidDataException("Expected the owned v1 external source.");
+                File.WriteAllText(source, text.Replace("\"v1\"", "\"v2\""), new UTF8Encoding(false));
+            }
+            var directory = Root + "/ExternalHotUpdate/StandaloneWindows64"; Directory.CreateDirectory(directory);
+            var output = directory + "/" + SupportName + ".dll";
+            var builder = new AssemblyBuilder(output, new[] { source })
+            { buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone, flags = release ? AssemblyBuilderFlags.None : AssemblyBuilderFlags.DevelopmentBuild,
+                compilerOptions = new ScriptCompilerOptions { ApiCompatibilityLevel = ApiCompatibilityLevel.NET_4_6 } };
+            builder.buildFinished += (path, messages) =>
+            {
+                try
+                {
+                    var errors = messages.Where(m => m.type == CompilerMessageType.Error).Select(m => m.message).ToArray();
+                    Receipt(Run, new { passed = errors.Length == 0 && File.Exists(path), sourceSha256 = Sha(source), dllSha256 = File.Exists(path) ? Sha(path) : null, errors });
+                    if (errors.Length != 0 || !File.Exists(path)) throw new InvalidOperationException(string.Join("\n", errors));
+                    EditorApplication.delayCall += () => EditorApplication.Exit(0);
+                }
+                catch (Exception error) { Debug.LogException(error); EditorApplication.delayCall += () => EditorApplication.Exit(1); }
+            };
+            if (!builder.Build()) throw new InvalidOperationException("The explicit external DLL compiler could not start.");
+        }
+        public static void RefreshExternal()
+        {
+            Owned();
+            File.Copy(Root + "/ExternalHotUpdate/StandaloneWindows64/" + SupportName + ".dll", "Assets/HCLRExternal/" + SupportName + ".dll", true);
+            AssetDatabase.ImportAsset("Assets/HCLRExternal/" + SupportName + ".dll", ImportAssetOptions.ForceSynchronousImport);
+            Receipt(Run, new { passed = true, sha256 = Sha("Assets/HCLRExternal/" + SupportName + ".dll") });
+        }
+        public static void Configure()
+        {
+            Owned();
+            EditorUserBuildSettings.development = true;
+            EditorUserBuildSettings.buildScriptsOnly = false;
+            UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
+            PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_4_6);
+            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, ManagedStrippingLevel.Low);
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, "YL_RESOURCE_ACCEPTANCE_TESTS");
+            var settings = global::HybridCLR.Settings.HybridCLRSettings.instance;
+            settings.enable = true; settings.useGlobalIl2cpp = false;
+            settings.hotUpdateAssemblyDefinitions = Array.Empty<UnityEditorInternal.AssemblyDefinitionAsset>();
+            settings.hotUpdateAssemblies = new[] { EntryName, SupportName };
+            settings.preserveHotUpdateAssemblies = Array.Empty<string>();
+            settings.externalHotUpdateAssembliyDirs = new[] { Root + "/ExternalHotUpdate" };
+            global::HybridCLR.Settings.HybridCLRSettings.Save();
+            Receipt(Run, new { passed = true, backend = "IL2CPP", api = "NET_4_6", development = true });
+        }
+        public static void Setup()
+        {
+            var owner = Owned();
+            if (Directory.Exists(AssetsRoot)) throw new IOException("Never replace an existing sample setup.");
+            if (PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != ScriptingImplementation.IL2CPP || !EditorUserBuildSettings.development)
+                throw new InvalidOperationException("Run Configure as a separate invocation before authoring settled assets.");
+            var profile = HybridCLRExampleAssets.Create(AssetsRoot, owner.Value<string>("baseline"));
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var runner = new GameObject("HybridCLR Native Acceptance").AddComponent<HybridCLRReceptionRunner>();
+            runner.ProjectId = profile.Recipe.Project.ProjectId; runner.CompatibilityId = profile.Recipe.AppContentCompatibilityId;
+            if (!EditorSceneManager.SaveScene(scene, AssetsRoot + "/Acceptance.unity")) throw new IOException("Acceptance scene was not saved.");
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(AssetsRoot + "/Acceptance.unity", true) };
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                var entryPath = SampleRoot + "/HotEntry/" + EntryName + ".asmdef";
+                var entry = JObject.Parse(File.ReadAllText(entryPath));
+                entry["references"] = new JArray(entry["references"].Values<string>().Where(n => n != SupportName));
+                entry["precompiledReferences"] = new JArray(SupportName + ".dll");
+                File.WriteAllText(entryPath, entry.ToString(Formatting.Indented), new UTF8Encoding(false));
+                var archive = Root + "/SourceSupportArchive";
+                if (Directory.Exists(archive)) throw new IOException("Preserve the original sample source archive.");
+                Directory.Move(SampleRoot + "/HotSupport", archive);
+                File.Move(SampleRoot + "/HotSupport.meta", archive + ".meta");
+                Directory.CreateDirectory("Assets/HCLRExternal");
+                File.Copy(Root + "/ExternalHotUpdate/StandaloneWindows64/" + SupportName + ".dll", "Assets/HCLRExternal/" + SupportName + ".dll", false);
+            }
+            finally { AssetDatabase.StopAssetEditing(); }
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            Receipt(Run, new { passed = true, ProjectId = runner.ProjectId, CompatibilityId = runner.CompatibilityId, Baseline = profile.BaselineDirectory,
+                development = true, backend = "IL2CPP", api = "NET_4_6", externalSupport = true, specialTlsSymbol = "YL_RESOURCE_ACCEPTANCE_TESTS" });
+        }
+        public static void Validate()
+        {
+            Owned(); var report = HybridCLRBuildPipeline.Validate(Profile()); WriteReport(report);
+        }
+        public static void RecoverPending()
+        {
+            Owned(); var profile = Profile(); var root = Path.GetFullPath(profile.GeneratedAssetDirectory);
+            var owner = JObject.Parse(File.ReadAllText(root + "/hybridclr-owner.json"));
+            if (owner.Value<string>("ProfileGuid") != AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile))) throw new InvalidDataException("Wrong generated owner.");
+            var files = owner["Files"].ToDictionary(f => f.Value<string>("Path"), StringComparer.Ordinal);
+            foreach (var file in files)
+                if (Sha(root + "/" + file.Key) != file.Value.Value<string>("Sha256")) throw new InvalidDataException("A prior owned payload changed; recovery refused: " + file.Key);
+            var removed = new List<object>();
+            foreach (var path in Directory.GetFiles(root, "*.pending-*", SearchOption.AllDirectories))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(path, @"^(.*)\.pending-[a-f0-9]{32}$");
+                if (!match.Success) throw new InvalidDataException("Unknown pending path.");
+                var target = match.Groups[1].Value;
+                var relative = target.Substring(root.Length + 1).Replace('\\', '/');
+                if (!files.ContainsKey(relative)) throw new InvalidDataException("Pending target is outside the ownership record.");
+                var digest = Sha(path);
+                var assemblyName = Path.GetFileName(target).Replace(".dll.bytes", "");
+                var candidates = Directory.GetFiles(Project + "/Temp/YLHybridCLR", assemblyName + ".dll", SearchOption.AllDirectories)
+                    .Concat(Directory.GetFiles(Root + "/ExternalHotUpdate", assemblyName + ".dll", SearchOption.AllDirectories));
+                var aot = Project + "/Library/HybridCLR/AssembliesPostIl2CppStrip/StandaloneWindows64/" + assemblyName + ".dll";
+                if (File.Exists(aot)) candidates = candidates.Append(aot);
+                if (!candidates.Any(p => Sha(p) == digest)) throw new InvalidDataException("Pending bytes do not match an explicit prior compilation input.");
+                var asset = profile.GeneratedAssetDirectory + "/" + path.Substring(root.Length + 1).Replace('\\', '/');
+                removed.Add(new { path = relative, pendingSha256 = digest, priorSha256 = Sha(target), attributes = File.GetAttributes(target).ToString() });
+                if (!AssetDatabase.DeleteAsset(asset)) throw new IOException("Could not remove the verified self-owned pending artifact.");
+            }
+            Receipt(Run, new { passed = true, removed });
+        }
+        public static void UseFreshGenerated()
+        {
+            Owned(); var profile = Profile(); var project = profile.Recipe.Project;
+            var prior = profile.GeneratedAssetDirectory; var next = AssetsRoot + "/GeneratedFresh";
+            if (Directory.Exists(next) || File.Exists(next)) throw new IOException("A fresh generation root must be unused.");
+            var priorGuid = AssetDatabase.AssetPathToGUID(prior);
+            var priorSelection = AssetDatabase.AssetPathToGUID(prior + "/hybridclr");
+            AssetDatabase.CreateFolder(AssetsRoot, "GeneratedFresh"); AssetDatabase.CreateFolder(next, "hybridclr");
+            project.SourceDirectories.Single(d => d.Guid == priorGuid).Guid = AssetDatabase.AssetPathToGUID(next);
+            project.Groups.Single(g => g.Id == "code").Selections.Single(s => s.Guid == priorSelection).Guid = AssetDatabase.AssetPathToGUID(next + "/hybridclr");
+            profile.GeneratedAssetDirectory = next;
+            EditorUtility.SetDirty(project); EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssetIfDirty(project); AssetDatabase.SaveAssetIfDirty(profile);
+            Receipt(Run, new { passed = true, prior, next, priorPreserved = true, reason = "An interrupted multi-file generation is not silently adopted or repaired." });
+        }
+        public static void PrepareDeployment()
+        {
+            Owned(); var profile = Profile();
+            var recovered = ResourceBuiltInDeployer.Recover(profile.Recipe.Project, profile.Recipe.Target);
+            var created = false;
+            if (!AssetDatabase.IsValidFolder("Assets/StreamingAssets"))
+            {
+                if (File.Exists("Assets/StreamingAssets") || File.Exists("Assets/StreamingAssets.meta")) throw new IOException("Do not adopt an orphan StreamingAssets entry.");
+                AssetDatabase.CreateFolder("Assets", "StreamingAssets"); created = true;
+            }
+            Receipt(Run, new { passed = true, createdStandardParent = created, previouslyInstalled = recovered != null });
+        }
+        public static void DiagnoseResource()
+        {
+            Owned(); var profile = Profile(); var projectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile.Recipe.Project));
+            var projectId = profile.Recipe.Project.ProjectId;
+            Dictionary<string, string> before = null; Dictionary<string, string> after = null;
+            Dictionary<string, string> Capture()
+            {
+                var values = new Dictionary<string, string>(StringComparer.Ordinal);
+                var assemblies = CompilationPipeline.GetAssemblies();
+                foreach (var assembly in assemblies)
+                    values["assembly:" + assembly.name] = assembly.flags + "|" + string.Join(";", assembly.defines.OrderBy(s => s, StringComparer.Ordinal));
+                var paths = Directory.GetFiles(Project + "/ProjectSettings", "*", SearchOption.AllDirectories)
+                    .Concat(new[] { Project + "/Packages/manifest.json", Project + "/Packages/packages-lock.json" })
+                    .Concat(assemblies.SelectMany(a => a.sourceFiles)).Concat(assemblies.SelectMany(a => a.compiledAssemblyReferences))
+                    .Concat(assemblies.Select(a => CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(a.name)).Where(p => !string.IsNullOrEmpty(p)));
+                foreach (var path in paths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (File.Exists(path)) { values["file:" + path] = Sha(path); if (File.Exists(path + ".meta")) values["file:" + path + ".meta"] = Sha(path + ".meta"); }
+                var map = ResourceBuildMap.Create(AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(projectGuid)));
+                var fingerprintPaths = (IEnumerable<string>)typeof(ResourceBuildMap).GetProperty("FingerprintPaths", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(map);
+                foreach (var path in fingerprintPaths)
+                {
+                    values["asset-hash:" + path] = AssetDatabase.GetAssetDependencyHash(path).ToString();
+                    if (File.Exists(path)) values["asset-file:" + path] = Sha(path);
+                }
+                return values;
+            }
+            void Observe(ResourceBuildStage stage)
+            {
+                if (stage.ProjectId != projectId) return;
+                if (stage.Phase == ResourceBuildPhase.NativeBuildStarted) before = Capture();
+                if (stage.Phase == ResourceBuildPhase.ReadbackStarted) after = Capture();
+            }
+            Exception failure = null;
+            ResourceBuildProgress.StageReached += Observe;
+            try { ResourceBundleBuilder.Build(profile.Recipe.Project, profile.Recipe.Target, true); }
+            catch (Exception error) { failure = error; }
+            finally { ResourceBuildProgress.StageReached -= Observe; }
+            var changed = before == null || after == null ? null : before.Keys.Union(after.Keys).Where(k => !before.TryGetValue(k, out var prior) || !after.TryGetValue(k, out var current) || prior != current)
+                .Select(k => new { key = k, before = before.TryGetValue(k, out var prior) ? prior : null, after = after.TryGetValue(k, out var current) ? current : null }).ToArray();
+            Receipt(Run, new { passed = failure == null, error = failure?.ToString(), changed });
+            if (failure != null) throw failure;
+        }
+        public static void Build()
+        {
+            Owned(); var profile = Profile();
+            var report = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
+            {
+                target = BuildTarget.StandaloneWindows64, targetGroup = BuildTargetGroup.Standalone, subtarget = (int)StandaloneBuildSubtarget.Player,
+                scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(), options = profile.Development ? BuildOptions.Development : BuildOptions.None,
+                locationPathName = JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>(profile.Development ? "playerRoot" : "releasePlayerRoot") + "/HybridCLR.exe"
+            });
+            WriteReport(report);
+            Receipt(profile.Development ? JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>("baseReceiptStem") : "base-release-receipt", new { passed = true, ProjectId = profile.Recipe.Project.ProjectId, CompatibilityId = profile.Recipe.AppContentCompatibilityId,
+                CatalogDigest = report.Release.Catalog.CatalogDigest, CodePackageId = report.Manifest.CodePackageId, Baseline = report.BaselineDirectory,
+                PlayerFingerprint = PlayerFingerprint(profile.Development ? "PlayerDev" : "PlayerRelease"), NativeBaselineSha256 = Sha(report.BaselineDirectory + "/baseline.json"),
+                Development = profile.Development, PackageSha256 = Sha(Root + "/YLFramework.unitypackage"),
+                OptionalPackageSha256 = JObject.Parse(File.ReadAllText(Root + "/product-selection.json")).Value<string>("packageSha256") });
+        }
+        public static void ConfigureBaseIdentity()
+        {
+            var owner = Owned(); var profile = Profile();
+            profile.Recipe.AppContentCompatibilityId = owner.Value<string>("compatibilityId");
+            profile.BaselineDirectory = owner.Value<string>("baseline");
+            EditorUtility.SetDirty(profile); EditorUtility.SetDirty(profile.Recipe);
+            AssetDatabase.SaveAssetIfDirty(profile); AssetDatabase.SaveAssetIfDirty(profile.Recipe);
+            var scene = EditorSceneManager.OpenScene(AssetsRoot + "/Acceptance.unity", OpenSceneMode.Single);
+            var runner = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<HybridCLRReceptionRunner>()).Single();
+            runner.CompatibilityId = profile.Recipe.AppContentCompatibilityId;
+            EditorSceneManager.MarkSceneDirty(scene); if (!EditorSceneManager.SaveScene(scene)) throw new IOException("The corrected consumer scene was not saved.");
+            Receipt(Run, new { passed = true, profile.Recipe.AppContentCompatibilityId, profile.BaselineDirectory, priorArtifactsPreserved = true });
+        }
+        public static void ConfigureRelease()
+        {
+            var owner = Owned(); var profile = Profile();
+            EditorUserBuildSettings.development = false;
+            EditorUserBuildSettings.buildScriptsOnly = false;
+            UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
+            profile.Development = false; profile.Recipe.AppContentCompatibilityId = "hybridclr-base-release";
+            profile.BaselineDirectory = owner.Value<string>("baseline") + "-Release";
+            EditorUtility.SetDirty(profile); EditorUtility.SetDirty(profile.Recipe);
+            AssetDatabase.SaveAssetIfDirty(profile); AssetDatabase.SaveAssetIfDirty(profile.Recipe);
+            var scene = EditorSceneManager.OpenScene(AssetsRoot + "/Acceptance.unity", OpenSceneMode.Single);
+            var runner = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<HybridCLRReceptionRunner>()).Single();
+            runner.CompatibilityId = profile.Recipe.AppContentCompatibilityId;
+            EditorSceneManager.MarkSceneDirty(scene); if (!EditorSceneManager.SaveScene(scene)) throw new IOException("Release acceptance scene was not saved.");
+            Receipt(Run, new { passed = true, development = false, profile.BaselineDirectory, profile.Recipe.AppContentCompatibilityId });
+        }
+        public static void Patch()
+        {
+            var owner = Owned(); var baseline = JObject.Parse(File.ReadAllText(Root + "/" + owner.Value<string>("baseReceiptStem") + ".json"));
+            var profile = Profile(); var oldPlayer = PlayerFingerprint(); var oldBaseline = Sha(profile.BaselineDirectory + "/baseline.json");
+            var report = HybridCLRBuildPipeline.PublishPatch(profile); WriteReport(report);
+            if (oldPlayer != PlayerFingerprint() || oldPlayer != baseline.Value<string>("PlayerFingerprint") || oldBaseline != Sha(profile.BaselineDirectory + "/baseline.json"))
+                throw new InvalidDataException("Patch publication modified the frozen Player or baseline.");
+            Sign(report.Release, "ServerV2", 2);
+            Receipt("patch-receipt", new { passed = true, report.Release.DirectoryPath, CatalogDigest = report.Release.Catalog.CatalogDigest,
+                CodePackageId = report.Manifest.CodePackageId, PlayerFingerprint = oldPlayer, BaselineSha256 = oldBaseline });
+        }
+        public static void RejectNewRequirement()
+        {
+            Owned(); var profile = Profile(); var priorPlayer = PlayerFingerprint(); var priorBaseline = Sha(profile.BaselineDirectory + "/baseline.json");
+            var report = HybridCLRBuildPipeline.PublishPatch(profile);
+            var rejected = !report.Succeeded && report.Stages.Last().Name == "PatchCompatibility" &&
+                report.Stages.Last().Error != null && report.Stages.Last().Error.Message.Contains("New AOT generic/native bridge requirements");
+            if (!rejected || report.Release != null || priorPlayer != PlayerFingerprint() || priorBaseline != Sha(profile.BaselineDirectory + "/baseline.json"))
+                throw new InvalidOperationException("The new native requirement was not rejected against an unchanged frozen base: " + report.Summary);
+            Receipt(Run, new { passed = true, newRequirementRejected = true, unchangedPlayer = priorPlayer, unchangedBaseline = priorBaseline, report.Summary });
+        }
+        public static void PublishBadPayload()
+        {
+            Owned(); var profile = Profile(); var payload = profile.GeneratedAssetDirectory + "/hybridclr/assemblies/" + SupportName + ".dll.bytes";
+            var original = File.ReadAllBytes(payload);
+            try
+            {
+                File.WriteAllBytes(payload, new byte[] { 1, 2, 3, 4 }); AssetDatabase.ImportAsset(payload, ImportAssetOptions.ForceSynchronousImport);
+                var report = ResourceEditorOperations.ExecuteRecipe(profile.Recipe);
+                if (report.Release == null || report.BuildError != null || report.PublicationError != null) throw new InvalidOperationException(report.Summary);
+                Sign(report.Release, "ServerBad", 3);
+                Receipt(Run, new { passed = true, negativeFixtureOnly = true, CatalogDigest = report.Release.Catalog.CatalogDigest, report.Release.DirectoryPath });
+            }
+            finally { File.WriteAllBytes(payload, original); AssetDatabase.ImportAsset(payload, ImportAssetOptions.ForceSynchronousImport); }
+        }
+        public static void PublishMissingDll()
+        {
+            Owned(); var profile = Profile();
+            var original = profile.GeneratedAssetDirectory + "/hybridclr/assemblies/" + EntryName + ".dll.bytes";
+            var held = AssetsRoot + "/EntryHold.bytes";
+            if (File.Exists(held)) throw new IOException("Do not adopt an existing negative-fixture hold file.");
+            var moved = AssetDatabase.MoveAsset(original, held); if (!string.IsNullOrEmpty(moved)) throw new IOException(moved);
+            try
+            {
+                var report = ResourceEditorOperations.ExecuteRecipe(profile.Recipe);
+                if (report.Release == null || report.BuildError != null || report.PublicationError != null) throw new InvalidOperationException(report.Summary);
+                Sign(report.Release, "ServerMissing", 4);
+                Receipt(Run, new { passed = true, negativeFixtureOnly = true, CatalogDigest = report.Release.Catalog.CatalogDigest, report.Release.DirectoryPath });
+            }
+            finally { var restored = AssetDatabase.MoveAsset(held, original); if (!string.IsNullOrEmpty(restored)) throw new IOException(restored); }
+        }
+        public static void PublishBadMetadata()
+        {
+            Owned(); var profile = Profile();
+            var manifestPath = profile.GeneratedAssetDirectory + "/hybridclr/manifest.json";
+            var original = File.ReadAllBytes(manifestPath);
+            var path = profile.GeneratedAssetDirectory + "/hybridclr/metadata/zzAbsentAot.dll.bytes";
+            if (File.Exists(path) || File.Exists(path + ".meta")) throw new IOException("Do not replace a pre-existing metadata fixture.");
+            try
+            {
+                var support = HybridCLRAssemblyAnalysis.Read(Root + "/ExternalHotUpdate/StandaloneWindows64/" + SupportName + ".dll");
+                var bytes = File.ReadAllBytes(support.Path);
+                var manifest = YLFramework.Integrations.HybridCLR.HybridCLRManifest.Parse(Encoding.UTF8.GetString(original));
+                var bad = new YLFramework.Integrations.HybridCLR.HybridCLRPayload
+                {
+                    Name = "zzAbsentAot", Identity = "zzAbsentAot, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", Mvid = support.Mvid,
+                    Address = "hybridclr/metadata/zzAbsentAot.dll.bytes", Length = bytes.Length, Sha256 = YLFramework.Integrations.HybridCLR.HybridCLRManifest.Hash(bytes)
+                };
+                manifest.AotMetadata = manifest.AotMetadata.Append(bad).ToArray(); manifest.Seal();
+                File.WriteAllBytes(path, bytes); File.WriteAllText(manifestPath, manifest.ToJson(), new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport); AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
+                var report = ResourceEditorOperations.ExecuteRecipe(profile.Recipe);
+                if (report.Release == null || report.BuildError != null || report.PublicationError != null) throw new InvalidOperationException(report.Summary);
+                Receipt("bad-metadata-fixture", new { passed = true, negativeFixtureOnly = true, CatalogDigest = report.Release.Catalog.CatalogDigest, report.Release.DirectoryPath,
+                    ProjectId = profile.Recipe.Project.ProjectId, CompatibilityId = profile.Recipe.AppContentCompatibilityId });
+            }
+            finally
+            {
+                File.WriteAllBytes(manifestPath, original); AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
+                if (File.Exists(path)) AssetDatabase.DeleteAsset(path);
+            }
+        }
+        private static HybridCLRBuildProfile Profile() => AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(AssetsRoot + "/Profile.asset") ?? throw new InvalidOperationException("Run explicit receiver Setup first.");
+        private static void WriteReport(HybridCLRBuildReport report)
+        {
+            Receipt(Run, new { passed = report.Succeeded, summary = report.Summary,
+                stages = report.Stages.Select(s => new { s.Name, s.Succeeded, error = s.Error?.ToString(), s.Diagnostics }).ToArray(),
+                CodePackageId = report.Manifest?.CodePackageId, CatalogDigest = report.Release?.Catalog.CatalogDigest, report.BaselineDirectory });
+            if (!report.Succeeded) throw new InvalidOperationException(report.Summary);
+        }
+        private static string PlayerFingerprint(string variant = "PlayerDev")
+        {
+            var directory = JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>(variant == "PlayerRelease" ? "releasePlayerRoot" : "playerRoot");
+            if (string.IsNullOrEmpty(directory) || !Path.IsPathRooted(directory)) throw new InvalidDataException("An explicit owned short Player root is required.");
+            return YLFramework.Integrations.HybridCLR.HybridCLRManifest.Hash(Encoding.UTF8.GetBytes(string.Join("\n", Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+                .OrderBy(p => p, StringComparer.Ordinal).Select(p => p.Substring(directory.Length + 1).Replace('\\', '/') + ":" + Sha(p)))));
+        }
+        private static void Sign(ResourceRelease release, string destination, long sequence)
+        {
+            using var certificate = new X509Certificate2(Root + "/TestCredentials/local-only.pfx", "hclr-local-fixture", X509KeyStorageFlags.EphemeralKeySet);
+            using var key = certificate.GetRSAPrivateKey();
+            var directory = Root + "/" + destination;
+            if (Directory.Exists(directory)) throw new IOException("Do not replace a signed server fixture.");
+            Directory.CreateDirectory(directory + "/" + release.Catalog.CatalogDigest);
+            var envelope = ResourceReleaseSigner.Create(release, "hybridclr-test", sequence, "hclr-test", key, DateTimeOffset.UtcNow.AddDays(1));
+            File.WriteAllBytes(directory + "/release.json", envelope);
+            foreach (var path in Directory.GetFiles(release.DirectoryPath, "*", SearchOption.AllDirectories))
+            {
+                var relative = path.Substring(release.DirectoryPath.Length + 1);
+                var target = directory + "/" + release.Catalog.CatalogDigest + "/" + relative;
+                Directory.CreateDirectory(Path.GetDirectoryName(target)); File.Copy(path, target, false);
+            }
+        }
+    }
+}
