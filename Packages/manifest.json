@@ -25,6 +25,8 @@
     "com.xfkj.xfgameframework.archivesystem": "https://gitee.com/xianfengkeji/xfgame-framework.archive-system.git",
     "com.xfkj.xfgameframework.buffsystem": "https://gitee.com/xianfengkeji/xfgame-framework.buff-system.git",
     "com.xfkj.xfgameframework.charactercontroller2d": "https://gitee.com/xianfengkeji/xfgame-framework.character-controller2d.git",
+    "com.xfkj.xfgameframework.commonsystem": "https://gitee.com/xianfengkeji/xfgame-framework.common-system.git",
+    "com.xfkj.xfgameframework.equipmentsystem": "https://gitee.com/xianfengkeji/xfgame-framework.equipment-system.git",
     "com.xfkj.xfgameframework.excelsystem": "https://gitee.com/xianfengkeji/xfgame-framework.excel-system.git",
     "com.xfkj.xfgameframework.localization": "https://gitee.com/xianfengkeji/xfgame-framework.localization.git",
     "com.xfkj.xfgameframework.loggersystem": "https://gitee.com/xianfengkeji/xfgame-framework.logger-system.git",

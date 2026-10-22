@@ -430,6 +430,20 @@
       "dependencies": {},
       "hash": "f0241054744ca0673ec370d5fad39c32b789d81c"
     },
+    "com.xfkj.xfgameframework.commonsystem": {
+      "version": "https://gitee.com/xianfengkeji/xfgame-framework.common-system.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "fee858a64b73de70cea54d773970d9691c5f376c"
+    },
+    "com.xfkj.xfgameframework.equipmentsystem": {
+      "version": "https://gitee.com/xianfengkeji/xfgame-framework.equipment-system.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "48952da775e2fc2c8459c404ad80b3eab8a1c205"
+    },
     "com.xfkj.xfgameframework.excelsystem": {
       "version": "https://gitee.com/xianfengkeji/xfgame-framework.excel-system.git",
       "depth": 0,
