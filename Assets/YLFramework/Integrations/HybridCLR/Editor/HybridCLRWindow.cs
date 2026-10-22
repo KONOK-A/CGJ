@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -13,20 +14,86 @@ namespace YLFramework.Integrations.HybridCLR.Editor
         [SerializeField] private string playerPath;
         [SerializeField] private string packagePath;
         [SerializeField] private bool includeSample;
-        private string summary = "Select a saved profile. No operation has run.";
+        [SerializeField] private int page;
+        private static readonly string[] Pages = { "配置", "构建发布", "诊断", "导出" };
         private Vector2 scroll;
         private string officialStatus;
+        private string officialError;
+        private string[] configuredNames = Array.Empty<string>();
+        private string assemblyError;
+        private bool showGlobalAssemblies;
+        private UnityEngine.Object assemblyAsset;
+        private HybridCLRProfileInspection inspection;
+        private bool inspectionStale;
+        private string inspectionTime;
+        private HybridCLRBuildReport report;
+        private string reportTitle;
+        private string reportContext;
+        private bool[] expandedStages = Array.Empty<bool>();
+        private string notice;
+        private MessageType noticeType;
+        private Exception failure;
+        private bool showFailure;
+        private Action pendingAction;
+        private bool restartLayout;
+        private GUIStyle titleStyle;
+        private GUIStyle secondaryStyle;
+        private GUIStyle bodyStyle;
+        private GUIStyle buttonStyle;
+        private GUIStyle cardStyle;
+        private GUIStyle rawStyle;
+        private GUIStyle navigationStyle;
+        private Rect navigationBounds;
+        private bool darkStyle;
 
-        private void OnEnable() => ReadOfficialStatus();
+        private static bool EditorBusy => EditorApplication.isCompiling || EditorApplication.isUpdating ||
+            EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer;
+
+        private void OnEnable()
+        {
+            minSize = new Vector2(540, 440);
+            ReadOfficialStatus();
+            Undo.undoRedoPerformed += ConfigurationChanged;
+        }
+
+        private void OnDisable()
+        {
+            Undo.undoRedoPerformed -= ConfigurationChanged;
+            pendingAction = null;
+        }
+
+        private void OnProjectChange() => ConfigurationChanged();
+
+        private void ConfigurationChanged()
+        {
+            if (inspection != null) inspectionStale = true;
+            Repaint();
+        }
 
         private void ReadOfficialStatus()
         {
             try
             {
                 var installer = new global::HybridCLR.Installer.InstallerController();
-                officialStatus = "Package=" + installer.PackageVersion + "; installed=" + (installer.InstalledLibil2cppVersion ?? "Not installed");
+                officialStatus = "官方包 " + installer.PackageVersion + "  /  本地运行时 " +
+                    (installer.HasInstalledHybridCLR() ? installer.InstalledLibil2cppVersion : "未安装");
+                officialError = null;
             }
-            catch (Exception error) { officialStatus = "Official status unavailable: " + error; }
+            catch (Exception error) when (!IsExitGUI(error))
+            {
+                officialStatus = "官方安装状态暂不可用";
+                officialError = error.ToString();
+            }
+            try
+            {
+                configuredNames = HybridCLRBuildPipeline.ConfiguredNames();
+                assemblyError = null;
+            }
+            catch (Exception error) when (!IsExitGUI(error))
+            {
+                configuredNames = Array.Empty<string>();
+                assemblyError = error.Message;
+            }
         }
 
         [MenuItem("YLFramework/Integrations/HybridCLR")]
@@ -34,52 +101,764 @@ namespace YLFramework.Integrations.HybridCLR.Editor
 
         private void OnGUI()
         {
-            profile = (HybridCLRBuildProfile)EditorGUILayout.ObjectField("Build Profile", profile, typeof(HybridCLRBuildProfile), false);
-            using (new EditorGUI.DisabledScope(true))
-                EditorGUILayout.ObjectField("Resource Recipe", profile ? profile.Recipe : null, typeof(YLFramework.Editor.Resource.ResourceBuildRecipe), false);
-            EditorGUILayout.HelpBox("Official 9.0.3, Windows64 IL2CPP, .NET Framework. Configure and save assets explicitly. Patch never regenerates the native base. Signing/decryption keys are supplied by the application to the headless API, not stored here.", MessageType.Info);
-            EditorGUILayout.LabelField(officialStatus ?? "Official status not read.", EditorStyles.wordWrappedLabel);
+            EnsureStyles();
+            pendingAction = null;
+            restartLayout = false;
+            var previousLabelWidth = EditorGUIUtility.labelWidth;
+            var previousWideMode = EditorGUIUtility.wideMode;
+            try
+            {
+                EditorGUIUtility.labelWidth = 128;
+                EditorGUIUtility.wideMode = true;
+                using (var scrolling = new EditorGUILayout.ScrollViewScope(scroll))
+                {
+                    scroll = scrolling.scrollPosition;
+                    using (new EditorGUILayout.VerticalScope(GUILayout.MinWidth(0)))
+                    {
+                        GUILayout.Space(6);
+                        DrawHeader();
+                        DrawProfileBar();
+                        DrawNavigation();
+                        if (!string.IsNullOrEmpty(notice))
+                        {
+                            EditorGUILayout.HelpBox(notice, noticeType);
+                            if (page != 2) ActionButton("查看诊断", () => ChangePage(2), 90);
+                        }
+                        switch (page)
+                        {
+                            case 0: DrawConfiguration(); break;
+                            case 1: DrawBuild(); break;
+                            case 2: DrawDiagnostics(); break;
+                            case 3: DrawExport(); break;
+                        }
+                        GUILayout.Space(8);
+                    }
+                }
+            }
+            finally
+            {
+                EditorGUIUtility.labelWidth = previousLabelWidth;
+                EditorGUIUtility.wideMode = previousWideMode;
+            }
+
+            // 操作在所有 layout scope 与 SerializedObject 释放后执行，避免导入或切页打断布局。
+            var action = pendingAction;
+            pendingAction = null;
+            if (action != null) Run(action);
+            if (action != null || restartLayout) GUIUtility.ExitGUI();
+        }
+
+        private void DrawHeader()
+        {
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Open Official Settings")) SettingsService.OpenProjectSettings("Project/HybridCLR Settings");
-                if (GUILayout.Button("Open Official Installer")) Run(() =>
+                GUILayout.Label("HybridCLR", titleStyle, GUILayout.MinWidth(0));
+                GUILayout.FlexibleSpace();
+                ActionButton("官方设置", () => SettingsService.OpenProjectSettings("Project/HybridCLR Settings"), 76);
+                using (new EditorGUI.DisabledScope(EditorBusy))
                 {
-                    if (!EditorApplication.ExecuteMenuItem("HybridCLR/Installer...")) throw new InvalidOperationException("The official Installer menu is unavailable.");
-                });
+                    ActionButton("安装器", OpenInstaller, 62);
+                    ActionButton("刷新状态", ReadOfficialStatus, 76);
+                }
             }
-            playerPath = EditorGUILayout.TextField("New Player .exe", playerPath);
-            using (new EditorGUI.DisabledScope(!profile || EditorApplication.isCompiling || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer))
+            GUILayout.Label(new GUIContent(officialStatus ?? "尚未读取官方状态", officialError), secondaryStyle, GUILayout.MinWidth(0));
+            if (officialError != null)
+                EditorGUILayout.HelpBox("读取安装状态失败。可通过官方设置或安装器手动检查，窗口不会自动安装。", MessageType.Warning);
+        }
+
+        private void DrawProfileBar()
+        {
+            using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Validate Only")) Run(() => { summary = HybridCLRBuildPipeline.Validate(profile).Summary; ReadOfficialStatus(); });
-                if (GUILayout.Button("Generate, Publish And Build New Base")) Run(() => summary = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
+                var next = (HybridCLRBuildProfile)EditorGUILayout.ObjectField("构建配置", profile, typeof(HybridCLRBuildProfile), false, GUILayout.MinWidth(0));
+                if (next != profile) pendingAction = () => SelectProfile(next);
+                using (new EditorGUI.DisabledScope(EditorBusy))
                 {
-                    target = profile.Recipe.Target, targetGroup = BuildTargetGroup.Standalone, subtarget = (int)StandaloneBuildSubtarget.Player,
-                    locationPathName = playerPath, scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(),
-                    options = profile.Development ? BuildOptions.Development : BuildOptions.None
-                }).Summary);
-                if (GUILayout.Button("Publish Patch Against Frozen Base")) Run(() => summary = HybridCLRBuildPipeline.PublishPatch(profile).Summary);
-                if (GUILayout.Button("Deploy Current Published Release Explicitly")) Run(() =>
-                {
-                    var validation = HybridCLRBuildPipeline.Validate(profile);
-                    if (!validation.Succeeded) { summary = validation.Summary; return; }
-                    var release = ResourcePublisher.ReadCurrent(profile.Recipe.Project, profile.Recipe.Target, profile.Recipe.AppContentCompatibilityId);
-                    if (release == null) throw new InvalidOperationException("Publish a release through the selected saved recipe first.");
-                    var deployed = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(release));
-                    summary = "Deploy: " + deployed.DirectoryPath + "\nCatalogDigest=" + release.Catalog.CatalogDigest;
-                });
+                    ActionButton("新建", CreateProfile, 50);
+                    using (new EditorGUI.DisabledScope(!profile)) ActionButton("保存", SaveProfile, 50);
+                }
             }
-            packagePath = EditorGUILayout.TextField("Optional .unitypackage", packagePath);
-            includeSample = EditorGUILayout.Toggle("Include Isolated Sample", includeSample);
-            if (GUILayout.Button("Export Optional Integration Only")) Run(() => { HybridCLRIntegrationExporter.Export(packagePath, includeSample); summary = "Optional export: " + packagePath; });
-            scroll = EditorGUILayout.BeginScrollView(scroll);
-            EditorGUILayout.SelectableLabel(summary, EditorStyles.textArea, GUILayout.ExpandHeight(true), GUILayout.MinHeight(180));
-            EditorGUILayout.EndScrollView();
+            if (profile)
+            {
+                var recipe = profile.Recipe;
+                var project = recipe ? recipe.Project : null;
+                GUILayout.Label("Profile：" + AssetState(profile) + "  /  Recipe：" + AssetState(recipe) + "  /  Project：" + AssetState(project), secondaryStyle, GUILayout.MinWidth(0));
+            }
+            GUILayout.Space(6);
+        }
+
+        private void DrawNavigation()
+        {
+            page = Mathf.Clamp(page, 0, Pages.Length - 1);
+            var next = page;
+            if (position.width < 680) next = EditorGUILayout.Popup("任务", page, Pages, GUILayout.Height(26));
+            else
+            {
+                navigationBounds = GUILayoutUtility.GetRect(GUIContent.none, navigationStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
+                const float gap = 4;
+                var width = (navigationBounds.width - gap * (Pages.Length - 1)) / Pages.Length;
+                for (var index = 0; index < Pages.Length; index++)
+                {
+                    var rect = new Rect(navigationBounds.x + index * (width + gap), navigationBounds.y, width, navigationBounds.height);
+                    var selected = page == index;
+                    if (GUI.Toggle(rect, selected, Pages[index], navigationStyle) && !selected) next = index;
+                    if (selected && Event.current.type == EventType.Repaint)
+                        EditorGUI.DrawRect(new Rect(rect.x + 4, rect.yMax - 3, rect.width - 8, 2), new Color(.2f, .6f, .85f));
+                }
+            }
+            if (next != page) pendingAction = () => ChangePage(next);
+            GUILayout.Space(8);
+        }
+
+        private bool DrawProfileGuide()
+        {
+            if (profile) return false;
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("从构建配置开始", "选择已有 Profile，或新建一组自有 Profile、Resource Recipe 与 Resource Project。不会创建演示内容，也不会改写官方程序集设置。");
+                using (new EditorGUI.DisabledScope(EditorBusy)) ActionButton("新建构建配置", CreateProfile, 140);
+            }
+            return true;
+        }
+
+        private void DrawConfiguration()
+        {
+            if (DrawProfileGuide()) return;
+            var displayedRecipe = profile.Recipe;
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("构建配置", "编辑只产生可撤销的资产修改；顶部“保存”只保存当前 Profile、Recipe 与 Project，不保存其他资产。");
+                using (new EditorGUI.DisabledScope(EditorBusy))
+                using (var serialized = new SerializedObject(profile))
+                {
+                    serialized.Update();
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.PropertyField(serialized.FindProperty("Recipe"), new GUIContent("Resource Recipe"), GUILayout.MinWidth(0));
+                        var recipe = serialized.FindProperty("Recipe").objectReferenceValue;
+                        using (new EditorGUI.DisabledScope(!recipe))
+                            ActionButton("Inspector", () => EditorUtility.OpenPropertyEditor(recipe), 76);
+                    }
+                    EditorGUILayout.PropertyField(serialized.FindProperty("Development"), new GUIContent("Development 构建"));
+                    DrawDirectoryProperty(serialized, "GeneratedAssetDirectory", "生成资源目录", true);
+                    DrawDirectoryProperty(serialized, "BaselineDirectory", "不可变基座目录", false);
+                    EditorGUILayout.PropertyField(serialized.FindProperty("BaseProfile"), new GUIContent("共享基座 Profile", "留空由本配置构建新基座；只允许一层绑定，目录与兼容身份需和基座拥有者一致，不会自动覆盖。绑定后仅发布项目补丁，不重新生成原生代码。"));
+                    if (serialized.ApplyModifiedProperties())
+                    {
+                        ConfigurationChanged();
+                        restartLayout = profile.Recipe != displayedRecipe;
+                    }
+                }
+                GUILayout.Label("生成目录使用 Assets 下的自有路径。新建基座必须填写尚不存在的目录；选择已有目录适用于读取冻结基座。", secondaryStyle, GUILayout.MinWidth(0));
+                DrawResourceIdentity(displayedRecipe);
+            }
+            GUILayout.Space(6);
+            DrawAssemblies();
+            GUILayout.Space(6);
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("资源关联与检查", "生成目录变更后需显式重新关联。关联只修改当前 Resource Project，可撤销，不生成 DLL、不安装运行时，也不隐式保存。");
+                using (new EditorGUI.DisabledScope(EditorBusy || !displayedRecipe || !displayedRecipe.Project))
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    ActionButton("关联生成资源", MapGeneratedResources, 126);
+                    ActionButton("检查配置", InspectProfile, 100);
+                }
+                GUILayout.Label("“检查配置”解析项目入口与依赖闭包，不要求当前工程使用 IL2CPP。原生环境检查在“构建发布”页。", secondaryStyle, GUILayout.MinWidth(0));
+                DrawInspection();
+            }
+        }
+
+        private void DrawResourceIdentity(ResourceBuildRecipe recipe)
+        {
+            GUILayout.Space(6);
+            if (!recipe)
+            {
+                EditorGUILayout.HelpBox("请为当前 Profile 选择 Resource Recipe。", MessageType.Warning);
+                return;
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.ObjectField("Resource Project", recipe.Project, typeof(ResourceProject), false, GUILayout.MinWidth(0));
+                using (new EditorGUI.DisabledScope(!recipe.Project))
+                    ActionButton("Inspector", () => EditorUtility.OpenPropertyEditor(recipe.Project), 76);
+            }
+            if (!recipe.Project) EditorGUILayout.HelpBox("Recipe 尚未引用 Resource Project，请在其 Inspector 中配置。", MessageType.Warning);
+            else Metric("项目身份", recipe.Project.ProjectId);
+            Metric("目标平台", recipe.Target.ToString());
+            Metric("兼容身份", recipe.AppContentCompatibilityId);
+            GUILayout.Label("兼容身份来自 Recipe；修改冻结基座的身份或原生要求后，应新建基座，不能作为普通补丁发布。", secondaryStyle, GUILayout.MinWidth(0));
+        }
+
+        private void DrawDirectoryProperty(SerializedObject serialized, string propertyName, string label, bool assetsOnly)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var property = serialized.FindProperty(propertyName);
+                EditorGUILayout.PropertyField(property, new GUIContent(label), GUILayout.MinWidth(0));
+                var current = property.stringValue;
+                ActionButton("选择", () => PickDirectory(propertyName, current, label, assetsOnly), 50);
+            }
+        }
+
+        private void DrawAssemblies()
+        {
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("项目程序集", "官方集合决定全局热更登记；本项目只选择入口，依赖由检查与构建自动包含。这里从不写入 HybridCLRSettings。");
+                showGlobalAssemblies = EditorGUILayout.Foldout(showGlobalAssemblies, "官方登记集合（" + configuredNames.Length + "，只读）", true);
+                if (!string.IsNullOrEmpty(assemblyError))
+                    EditorGUILayout.HelpBox("官方集合尚不可用，请在官方设置中登记后刷新状态。\n" + assemblyError, MessageType.Warning);
+                if (showGlobalAssemblies)
+                {
+                    foreach (var name in configuredNames) GUILayout.Label(name, bodyStyle, GUILayout.MinWidth(0));
+                    GUILayout.Label("此处为上次读取的全局名单；修改官方设置后，点击顶部“刷新状态”。", secondaryStyle, GUILayout.MinWidth(0));
+                }
+                var roots = profile.HotUpdateAssemblies ?? Array.Empty<string>();
+                var singleRoot = roots.Distinct(StringComparer.Ordinal).Count() <= 1;
+                using (new EditorGUI.DisabledScope(EditorBusy))
+                {
+                    if (roots.Length == 0)
+                    {
+                        EditorGUILayout.HelpBox("当前使用官方全部程序集。空入口数组表示“全部”，不是“未选择”。", MessageType.Info);
+                        using (new EditorGUI.DisabledScope(configuredNames.Length == 0))
+                            ActionButton("选择项目入口", () => WriteRoots(new[] { configuredNames[0] }), 126);
+                    }
+                    else
+                    {
+                        using (new EditorGUILayout.HorizontalScope())
+                        {
+                            GUILayout.Label("项目入口（" + roots.Length + "）", EditorStyles.boldLabel, GUILayout.MinWidth(0));
+                            GUILayout.FlexibleSpace();
+                            ActionButton("使用全部", () => WriteRoots(Array.Empty<string>()), 90);
+                        }
+                        foreach (var name in configuredNames)
+                        {
+                            var selected = roots.Contains(name, StringComparer.Ordinal);
+                            using (new EditorGUI.DisabledScope(selected && singleRoot))
+                            {
+                                var next = EditorGUILayout.ToggleLeft(new GUIContent(name, name), selected, bodyStyle, GUILayout.MinHeight(22), GUILayout.MinWidth(0));
+                                if (next != selected) pendingAction = () => ToggleRoot(name, next);
+                            }
+                        }
+                        foreach (var name in roots.Where(name => !configuredNames.Contains(name, StringComparer.Ordinal)))
+                        {
+                            using (new EditorGUILayout.HorizontalScope())
+                            {
+                                GUILayout.Label((string.IsNullOrEmpty(name) ? "（空入口）" : name) + "  [未在官方登记]", bodyStyle, GUILayout.MinWidth(0));
+                                using (new EditorGUI.DisabledScope(singleRoot))
+                                    ActionButton("移除", () => ToggleRoot(name, false), 50);
+                            }
+                        }
+                        GUILayout.Label("可多选入口。最后一个入口不能直接取消；如需恢复全局集合，请明确点击“使用全部”。", secondaryStyle, GUILayout.MinWidth(0));
+                        if (roots.Any(name => !configuredNames.Contains(name, StringComparer.Ordinal)))
+                            EditorGUILayout.HelpBox("存在尚未登记的项目入口。请在官方设置中自行登记，再刷新并检查配置；窗口不会代为登记。", MessageType.Warning);
+                    }
+                    GUILayout.Space(6);
+                    assemblyAsset = EditorGUILayout.ObjectField("asmdef / DLL 资产", assemblyAsset, typeof(UnityEngine.Object), false, GUILayout.MinWidth(0));
+                    using (new EditorGUI.DisabledScope(!assemblyAsset)) ActionButton("添加为项目入口", AddAssemblyAsset, 140);
+                }
+            }
+        }
+
+        private void DrawBuild()
+        {
+            if (DrawProfileGuide()) return;
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("构建前检查", "仅支持已激活的 Windows64、IL2CPP 与 .NET Framework，官方包和本地运行时须匹配 9.0.3。窗口不切换后端、平台或安装工具链。");
+                DrawReadiness();
+                using (new EditorGUI.DisabledScope(EditorBusy || !profile.Recipe || !profile.Recipe.Project))
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    ActionButton("检查配置", InspectProfile, 100);
+                    ActionButton("检查原生构建环境", ValidateNative, 158);
+                }
+            }
+            GUILayout.Space(6);
+            var sharedBase = HasSharedBase();
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("新基座", "依次生成、发布、部署并构建原生 Player，成功后冻结基座。需要启用的构建场景、全新的 Player 输出目录与尚不存在的基座目录，不覆盖已有 Player。");
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    playerPath = EditorGUILayout.TextField("Player (.exe)", playerPath ?? "", GUILayout.MinWidth(0));
+                    ActionButton("选择", PickPlayerPath, 50);
+                }
+                if (sharedBase) EditorGUILayout.HelpBox("当前 Profile 引用了共享基座，只能基于它发布项目补丁。新基座需使用未引用 BaseProfile 的配置。", MessageType.Info);
+                using (new EditorGUI.DisabledScope(!CanRunNative() || sharedBase || string.IsNullOrWhiteSpace(playerPath)))
+                    ActionButton("构建新基座", BuildBase, 126);
+            }
+            GUILayout.Space(6);
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("发布补丁", "针对已冻结基座发布当前项目的程序集和资源，不重新生成原生基座。新增程序集、AOT 元数据或原生桥接要求可能需要新基座，最终以兼容检查为准。");
+                using (new EditorGUI.DisabledScope(!CanRunNative())) ActionButton("发布项目补丁", PublishPatch, 126);
+            }
+            GUILayout.Space(6);
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("部署内置资源", "把当前 Recipe 对应的已发布版本部署到 StreamingAssets。此操作会改变工程内置内容，不会替你发布新版本，也不会自动构建 Player。");
+                using (new EditorGUI.DisabledScope(!CanRunNative())) ActionButton("部署当前发布版本", Deploy, 158);
+            }
+            GUILayout.Label("签名与解密密钥由应用通过 headless API 提供，不在窗口或资产中保存。", secondaryStyle, GUILayout.MinWidth(0));
+        }
+
+        private void DrawReadiness()
+        {
+            if (EditorBusy) EditorGUILayout.HelpBox("编辑器正在编译、导入、进入/运行 Play Mode 或构建 Player，原生操作暂不可用。", MessageType.Warning);
+            else if (EditorUtility.scriptCompilationFailed) EditorGUILayout.HelpBox("请先修复现有脚本编译错误，再执行原生操作。", MessageType.Warning);
+            if (!profile.Recipe || !profile.Recipe.Project)
+                EditorGUILayout.HelpBox("请先在配置页引用完整的 Resource Recipe 与 Project。", MessageType.Warning);
+            else if (!AssetsSaved())
+                EditorGUILayout.HelpBox("当前 Profile、Recipe 或 Project 尚未保存。请先点击顶部“保存”，构建操作不会隐式保存。", MessageType.Warning);
+            else GUILayout.Label("Profile、Recipe 与 Project 已保存；环境与基座兼容性仍需显式检查。", secondaryStyle, GUILayout.MinWidth(0));
+        }
+
+        private void DrawDiagnostics()
+        {
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("配置诊断", "显示最近一次显式检查的结果。修改配置、官方登记或程序集后请重新检查；配置通过不代表原生环境或补丁兼容性通过。");
+                using (new EditorGUI.DisabledScope(EditorBusy || !profile || !profile.Recipe || !profile.Recipe.Project))
+                    ActionButton("检查配置", InspectProfile, 100);
+                DrawInspection();
+            }
+            if (failure != null)
+            {
+                GUILayout.Space(6);
+                using (new EditorGUILayout.VerticalScope(cardStyle))
+                {
+                    EditorGUILayout.HelpBox("操作失败：" + failure.Message, MessageType.Error);
+                    showFailure = EditorGUILayout.Foldout(showFailure, "原始异常", true);
+                    if (showFailure) Copyable("异常详情", failure.ToString(), true);
+                }
+            }
+            GUILayout.Space(6);
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("构建与发布记录", "仅显示实际返回的阶段；同步操作不展示估算进度。未出现的后续阶段未执行，不表示成功。");
+                if (report == null)
+                {
+                    GUILayout.Label("尚无原生检查、构建、发布或部署报告。", secondaryStyle, GUILayout.MinWidth(0));
+                    return;
+                }
+                GUILayout.Label(reportTitle, EditorStyles.boldLabel);
+                GUILayout.Label(reportContext, secondaryStyle, GUILayout.MinWidth(0));
+                var failed = report.Stages.FirstOrDefault(stage => !stage.Succeeded);
+                if (failed != null) EditorGUILayout.HelpBox("失败阶段：" + StageName(failed.Name) + "\n" + failed.Error.Message, MessageType.Error);
+                else EditorGUILayout.HelpBox(report.Succeeded ? "所有已执行阶段通过。" : "没有已完成的阶段。", report.Succeeded ? MessageType.Info : MessageType.Warning);
+                ActionButton("复制完整报告", () => EditorGUIUtility.systemCopyBuffer = report.Summary, 126);
+                for (var index = 0; index < report.Stages.Count; index++)
+                {
+                    var stage = report.Stages[index];
+                    expandedStages[index] = EditorGUILayout.Foldout(expandedStages[index], (stage.Succeeded ? "通过  " : "失败  ") + StageName(stage.Name), true);
+                    if (!expandedStages[index]) continue;
+                    using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                    {
+                        GUILayout.Label("阶段标识：" + stage.Name, secondaryStyle, GUILayout.MinWidth(0));
+                        if (stage.Error != null) Copyable("原始异常", stage.Error.ToString(), true);
+                        foreach (var diagnostic in stage.Diagnostics) Copyable("阶段诊断", diagnostic, true);
+                        if (stage.Succeeded && stage.Diagnostics.Count == 0) GUILayout.Label("该阶段已完成，无额外诊断。", secondaryStyle);
+                    }
+                }
+                if (!string.IsNullOrEmpty(report.BaselineDirectory)) Copyable("冻结基座", report.BaselineDirectory);
+                if (report.Manifest != null) Copyable("代码包身份", report.Manifest.CodePackageId);
+                if (report.Release != null) Copyable("资源目录摘要", report.Release.Catalog.CatalogDigest);
+                if (report.Deployment != null) Copyable("部署目录", report.Deployment.DirectoryPath);
+            }
+        }
+
+        private void DrawInspection()
+        {
+            if (inspection == null)
+            {
+                GUILayout.Label("尚未检查配置。检查后在此展示项目程序集、自动依赖和错误警告。", secondaryStyle, GUILayout.MinWidth(0));
+                return;
+            }
+            GUILayout.Space(6);
+            GUILayout.Label("上次检查 " + inspectionTime + (inspectionStale ? "，配置已变化，请重新检查。" : "（配置快照）"), secondaryStyle, GUILayout.MinWidth(0));
+            if (inspection.Succeeded)
+                EditorGUILayout.HelpBox(inspectionStale ? "上次配置检查通过，当前配置需重新检查。" : "配置检查通过，不要求 IL2CPP。", inspectionStale ? MessageType.Warning : MessageType.Info);
+            foreach (var error in inspection.Errors) EditorGUILayout.HelpBox(error, MessageType.Error);
+            foreach (var warning in inspection.Warnings) EditorGUILayout.HelpBox(warning, MessageType.Warning);
+            Copyable("解析后的项目程序集（含依赖）", inspection.Assemblies.Length == 0 ? "无" : string.Join("\n", inspection.Assemblies));
+            Copyable("自动包含的依赖", inspection.Dependencies.Length == 0 ? "无" : string.Join("\n", inspection.Dependencies));
+        }
+
+        private void DrawExport()
+        {
+            using (new EditorGUILayout.VerticalScope(cardStyle))
+            {
+                CardHeading("导出可选集成", "仅导出此 HybridCLR 集成的源码、程序集定义、说明与许可证，不包含官方包、本地运行时或生成制品。无需选择 Profile。");
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    packagePath = EditorGUILayout.TextField("unitypackage 路径", packagePath ?? "", GUILayout.MinWidth(0));
+                    ActionButton("选择", PickPackagePath, 50);
+                }
+                includeSample = EditorGUILayout.Toggle("包含隔离示例源码", includeSample);
+                GUILayout.Label("示例选项只影响导出的源码，不在当前工程创建演示资产。目标文件必须尚不存在。", secondaryStyle, GUILayout.MinWidth(0));
+                using (new EditorGUI.DisabledScope(EditorBusy || EditorUtility.scriptCompilationFailed || string.IsNullOrWhiteSpace(packagePath)))
+                    ActionButton("导出集成包", Export, 126);
+            }
+        }
+
+        private void SelectProfile(HybridCLRBuildProfile value)
+        {
+            profile = value;
+            assemblyAsset = null;
+            inspection = null;
+            report = null;
+            failure = null;
+            notice = null;
+            scroll = Vector2.zero;
+        }
+
+        private void ChangePage(int value)
+        {
+            page = value;
+            scroll = Vector2.zero;
+        }
+
+        private void CreateProfile()
+        {
+            RequireIdleEditor();
+            var path = EditorUtility.SaveFilePanelInProject("新建 HybridCLR 构建配置", "HybridCLRBuildProfile", "asset", "创建独立的 Profile、Recipe、Project 与自有生成目录，不创建示例。");
+            if (string.IsNullOrEmpty(path)) return;
+            SelectProfile(HybridCLRProfileTools.Create(path));
+            page = 0;
+            Notify("已创建并保存 Profile、Recipe 与 Project，已关联其自有生成目录。请按项目需求选择程序集入口并检查配置。");
+        }
+
+        private void SaveProfile()
+        {
+            RequireIdleEditor();
+            RequireProfile(false);
+            AssetDatabase.SaveAssetIfDirty(profile.Recipe.Project);
+            AssetDatabase.SaveAssetIfDirty(profile.Recipe);
+            AssetDatabase.SaveAssetIfDirty(profile);
+            if (!AssetsSaved()) throw new IOException("部分资产仍有未保存修改，请检查文件写入权限与 Unity Console。");
+            Notify("已逐一保存当前 Project、Recipe 与 Profile，未保存其他资产。");
+        }
+
+        private void MapGeneratedResources()
+        {
+            RequireIdleEditor();
+            RequireProfile(false);
+            HybridCLRProfileTools.MapGeneratedResources(profile);
+            ConfigurationChanged();
+            Notify("已关联生成资源，仅修改 Resource Project，可撤销。请点击顶部“保存”保存修改。", MessageType.Warning);
+        }
+
+        private void InspectProfile()
+        {
+            RequireIdleEditor();
+            RequireProfile(false);
+            ReadOfficialStatus();
+            inspection = HybridCLRProfileTools.Inspect(profile);
+            inspectionStale = false;
+            inspectionTime = DateTime.Now.ToString("HH:mm:ss");
+            Notify(inspection.Succeeded ? "配置检查通过；未执行原生环境验证或构建。" : "配置检查未通过，请处理下方错误。", inspection.Succeeded ? MessageType.Info : MessageType.Error);
+            ChangePage(2);
+        }
+
+        private void ValidateNative()
+        {
+            RequireProfile(true);
+            SetReport("原生构建环境检查", HybridCLRBuildPipeline.Validate(profile));
+            ReadOfficialStatus();
+        }
+
+        private void BuildBase()
+        {
+            RequireProfile(true);
+            if (HasSharedBase()) throw new InvalidOperationException("引用共享基座的 Profile 不能构建新基座。");
+            if (string.IsNullOrWhiteSpace(playerPath)) throw new InvalidOperationException("请先选择新的 Player .exe 输出位置。");
+            if (!EditorUtility.DisplayDialog("构建新基座", "将生成原生桥接和热更资源、发布并部署资源、构建 Windows Player，最后冻结不可变基座。\n\nPlayer：" + playerPath + "\n基座：" + profile.BaselineDirectory + "\n\n不会隐式保存资产或覆盖已有 Player；失败可能留下已完成阶段的产物。", "构建新基座", "取消")) return;
+            SetReport("构建新基座", HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
+            {
+                target = profile.Recipe.Target,
+                targetGroup = BuildTargetGroup.Standalone,
+                subtarget = (int)StandaloneBuildSubtarget.Player,
+                locationPathName = playerPath,
+                scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
+                options = profile.Development ? BuildOptions.Development : BuildOptions.None
+            }));
+        }
+
+        private void PublishPatch()
+        {
+            RequireProfile(true);
+            if (!EditorUtility.DisplayDialog("发布项目补丁", "将以冻结基座检查兼容性，并更新当前 Resource Project 的发布版本。不重新生成或构建原生基座，不自动部署。\n\n项目：" + profile.Recipe.Project.ProjectId + "\n兼容身份：" + profile.Recipe.AppContentCompatibilityId, "发布补丁", "取消")) return;
+            SetReport("发布项目补丁", HybridCLRBuildPipeline.PublishPatch(profile));
+        }
+
+        private void Deploy()
+        {
+            RequireProfile(true);
+            if (!EditorUtility.DisplayDialog("部署当前发布版本", "将修改 StreamingAssets 中该项目的内置资源。请确认使用当前 Recipe、平台与兼容身份对应的已发布版本。\n\n项目：" + profile.Recipe.Project.ProjectId + "\n平台：" + profile.Recipe.Target + "\n兼容身份：" + profile.Recipe.AppContentCompatibilityId, "部署内置资源", "取消")) return;
+            var result = HybridCLRBuildPipeline.Validate(profile);
+            if (result.Succeeded)
+            {
+                try
+                {
+                    var release = ResourcePublisher.ReadCurrent(profile.Recipe.Project, profile.Recipe.Target, profile.Recipe.AppContentCompatibilityId);
+                    if (release == null) throw new InvalidOperationException("当前 Recipe 尚无对应的已发布版本，请先发布。");
+                    result.Release = release;
+                    result.Deployment = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(release));
+                    result.Add("Deploy");
+                }
+                catch (Exception error) when (!IsExitGUI(error)) { result.Add("Deploy", error); }
+            }
+            SetReport("部署内置资源", result);
+        }
+
+        private void Export()
+        {
+            RequireIdleEditor();
+            HybridCLRIntegrationExporter.Export(packagePath, includeSample);
+            Notify("已导出可选集成包：" + packagePath);
+        }
+
+        private void OpenInstaller()
+        {
+            RequireIdleEditor();
+            if (!EditorApplication.ExecuteMenuItem("HybridCLR/Installer...")) throw new InvalidOperationException("官方 Installer 菜单不可用，请检查官方包是否已导入。");
+        }
+
+        private void ToggleRoot(string name, bool selected)
+        {
+            var roots = profile.HotUpdateAssemblies ?? Array.Empty<string>();
+            var next = selected ? roots.Append(name).Distinct(StringComparer.Ordinal).ToArray() : roots.Where(root => root != name).ToArray();
+            if (!selected && next.Length == 0) throw new InvalidOperationException("不能移除最后一个入口。请点击“使用全部”明确恢复官方全部集合。");
+            WriteRoots(next);
+        }
+
+        private void WriteRoots(string[] roots)
+        {
+            RequireIdleEditor();
+            using (var serialized = new SerializedObject(profile))
+            {
+                serialized.Update();
+                var property = serialized.FindProperty("HotUpdateAssemblies");
+                property.arraySize = roots.Length;
+                for (var index = 0; index < roots.Length; index++) property.GetArrayElementAtIndex(index).stringValue = roots[index];
+                if (serialized.ApplyModifiedProperties()) ConfigurationChanged();
+            }
+        }
+
+        [Serializable]
+        private sealed class AssemblyDefinition
+        {
+            public string name = "";
+        }
+
+        private void AddAssemblyAsset()
+        {
+            RequireIdleEditor();
+            var path = AssetDatabase.GetAssetPath(assemblyAsset);
+            string name;
+            if (string.Equals(Path.GetExtension(path), ".asmdef", StringComparison.OrdinalIgnoreCase))
+                name = JsonUtility.FromJson<AssemblyDefinition>(File.ReadAllText(path))?.name;
+            else if (string.Equals(Path.GetExtension(path), ".dll", StringComparison.OrdinalIgnoreCase))
+                name = System.Reflection.AssemblyName.GetAssemblyName(Path.GetFullPath(path)).Name;
+            else throw new InvalidOperationException("请选择现有的 .asmdef 或托管 .dll 资产。");
+            if (string.IsNullOrWhiteSpace(name)) throw new InvalidDataException("所选资产没有有效的程序集名称。");
+            WriteRoots((profile.HotUpdateAssemblies ?? Array.Empty<string>()).Append(name).Distinct(StringComparer.Ordinal).ToArray());
+            assemblyAsset = null;
+            var registered = configuredNames.Contains(name, StringComparer.Ordinal);
+            Notify(registered ? "已添加项目入口：" + name + "。请保存并检查配置以解析依赖。" : "已添加项目入口：" + name + "，但尚未在官方集合登记。请自行登记后刷新并检查配置，窗口未修改官方设置。", registered ? MessageType.Info : MessageType.Warning);
+        }
+
+        private void PickDirectory(string propertyName, string current, string label, bool assetsOnly)
+        {
+            RequireIdleEditor();
+            var path = EditorUtility.OpenFolderPanel("选择" + label, DialogDirectory(current), "");
+            if (string.IsNullOrEmpty(path)) return;
+            if (assetsOnly)
+            {
+                path = FileUtil.GetProjectRelativePath(path).Replace('\\', '/');
+                if (!path.StartsWith("Assets/", StringComparison.Ordinal)) throw new InvalidOperationException("生成资源目录必须是当前工程 Assets 下的自有子目录。");
+            }
+            using (var serialized = new SerializedObject(profile))
+            {
+                serialized.Update();
+                serialized.FindProperty(propertyName).stringValue = path;
+                if (serialized.ApplyModifiedProperties()) ConfigurationChanged();
+            }
+        }
+
+        private void PickPlayerPath()
+        {
+            var path = EditorUtility.SaveFilePanel("选择新的 Windows Player", DialogDirectory(playerPath), string.IsNullOrWhiteSpace(playerPath) ? "Game" : Path.GetFileNameWithoutExtension(playerPath), "exe");
+            if (!string.IsNullOrEmpty(path)) playerPath = path;
+        }
+
+        private void PickPackagePath()
+        {
+            var path = EditorUtility.SaveFilePanel("导出可选 HybridCLR 集成", DialogDirectory(packagePath), "YLFramework.HybridCLR", "unitypackage");
+            if (!string.IsNullOrEmpty(path)) packagePath = path;
+        }
+
+        private static string DialogDirectory(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                var directory = Path.GetFullPath(path);
+                while (!string.IsNullOrEmpty(directory))
+                {
+                    if (Directory.Exists(directory)) return directory;
+                    directory = Path.GetDirectoryName(directory);
+                }
+            }
+            return Path.GetDirectoryName(Application.dataPath);
+        }
+
+        private bool HasSharedBase() => profile && profile.BaseProfile;
+
+        private bool CanRunNative() => !EditorBusy && !EditorUtility.scriptCompilationFailed && AssetsSaved();
+
+        private bool AssetsSaved() => profile && profile.Recipe && profile.Recipe.Project &&
+            IsSaved(profile) && IsSaved(profile.Recipe) && IsSaved(profile.Recipe.Project);
+
+        private static bool IsSaved(UnityEngine.Object asset) => asset && !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(asset)) && !EditorUtility.IsDirty(asset);
+
+        private static string AssetState(UnityEngine.Object asset) => !asset ? "未引用" :
+            string.IsNullOrEmpty(AssetDatabase.GetAssetPath(asset)) ? "未保存为资产" : EditorUtility.IsDirty(asset) ? "有未保存修改" : "已保存";
+
+        private void RequireProfile(bool requireClean)
+        {
+            if (!profile) throw new InvalidOperationException("请先选择或新建构建配置。");
+            if (!profile.Recipe) throw new InvalidOperationException("当前 Profile 尚未引用 Resource Recipe。");
+            if (!profile.Recipe.Project) throw new InvalidOperationException("当前 Recipe 尚未引用 Resource Project。");
+            if (new UnityEngine.Object[] { profile, profile.Recipe, profile.Recipe.Project }.Any(asset => string.IsNullOrEmpty(AssetDatabase.GetAssetPath(asset))))
+                throw new InvalidOperationException("Profile、Recipe 与 Project 都必须先保存为工程资产。");
+            if (!requireClean) return;
+            RequireIdleEditor();
+            if (EditorUtility.scriptCompilationFailed) throw new InvalidOperationException("请先修复现有脚本编译错误。");
+            if (!AssetsSaved()) throw new InvalidOperationException("Profile、Recipe 或 Project 有未保存修改。请先点击顶部“保存”。");
+        }
+
+        private static void RequireIdleEditor()
+        {
+            if (EditorBusy) throw new InvalidOperationException("请等待编译、导入、Play Mode 或 Player 构建结束后再执行此操作。");
+        }
+
+        private void SetReport(string operation, HybridCLRBuildReport value)
+        {
+            report = value;
+            reportTitle = operation;
+            reportContext = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  /  " + AssetDatabase.GetAssetPath(profile);
+            expandedStages = value.Stages.Select(stage => !stage.Succeeded).ToArray();
+            var failed = value.Stages.FirstOrDefault(stage => !stage.Succeeded);
+            Notify(value.Succeeded ? operation + "完成，共 " + value.Stages.Count + " 个已执行阶段。" : operation + "未完成" + (failed == null ? "。" : "，失败阶段：" + StageName(failed.Name) + "。"), value.Succeeded ? MessageType.Info : MessageType.Error);
+            ChangePage(2);
+        }
+
+        private void Notify(string text, MessageType type = MessageType.Info)
+        {
+            notice = text;
+            noticeType = type;
+            failure = null;
+            showFailure = false;
+        }
+
+        private void CardHeading(string title, string description)
+        {
+            GUILayout.Label(title, EditorStyles.boldLabel);
+            GUILayout.Label(description, secondaryStyle, GUILayout.MinWidth(0));
+            GUILayout.Space(6);
+        }
+
+        private void Metric(string label, string value)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(label, GUILayout.Width(124));
+                GUILayout.Label(string.IsNullOrEmpty(value) ? "未设置" : value, bodyStyle, GUILayout.MinWidth(0));
+            }
+        }
+
+        private void Copyable(string label, string value, bool raw = false)
+        {
+            value = value ?? "";
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(label, EditorStyles.boldLabel, GUILayout.MinWidth(0));
+                GUILayout.FlexibleSpace();
+                var text = value;
+                ActionButton("复制", () => EditorGUIUtility.systemCopyBuffer = text, 50);
+            }
+            var style = raw ? rawStyle : bodyStyle;
+            EditorGUILayout.SelectableLabel(value, style, GUILayout.MinWidth(0), GUILayout.Height(Mathf.Max(22, style.CalcHeight(new GUIContent(value), Mathf.Max(180, position.width - 70)))));
+        }
+
+        private void ActionButton(string label, Action action, float width)
+        {
+            if (GUILayout.Button(label, buttonStyle, GUILayout.Width(width))) pendingAction = action;
+        }
+
+        private void EnsureStyles()
+        {
+            if (titleStyle != null && darkStyle == EditorGUIUtility.isProSkin) return;
+            darkStyle = EditorGUIUtility.isProSkin;
+            titleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 15, alignment = TextAnchor.MiddleLeft, fixedHeight = 28 };
+            bodyStyle = new GUIStyle(EditorStyles.wordWrappedLabel) { stretchWidth = true };
+            secondaryStyle = new GUIStyle(bodyStyle);
+            secondaryStyle.normal.textColor = darkStyle ? new Color(.70f, .72f, .74f) : new Color(.34f, .36f, .38f);
+            buttonStyle = new GUIStyle(GUI.skin.button) { fixedHeight = 26, alignment = TextAnchor.MiddleCenter };
+            cardStyle = new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(12, 12, 10, 10) };
+            rawStyle = new GUIStyle(EditorStyles.textArea) { wordWrap = true };
+            navigationStyle = new GUIStyle(GUI.skin.button) { fixedHeight = 30, fixedWidth = 0,
+                alignment = TextAnchor.MiddleCenter, fontSize = 12, fontStyle = FontStyle.Bold };
+        }
+
+        private static string StageName(string name)
+        {
+            switch (name)
+            {
+                case "Preflight": return "原生环境与输入检查";
+                case "PlayerPreflight": return "Player 输出与场景检查";
+                case "Compile": return "编译热更程序集";
+                case "Il2CppDef": return "生成 IL2CPP 定义";
+                case "LinkXml": return "生成裁剪保留配置";
+                case "EmptyMethodBridge": return "生成初始原生桥接";
+                case "StripAot": return "裁剪基座 AOT 程序集";
+                case "FullMethodBridge": return "生成完整原生桥接";
+                case "Manifest": return "生成热更清单";
+                case "PayloadCommit": return "写入自有生成资源";
+                case "ResourcePublish": return "构建并发布资源";
+                case "Deploy": return "部署内置资源";
+                case "Player": return "构建原生 Player";
+                case "Baseline": return "冻结不可变基座";
+                case "ReadBaseline": return "读取冻结基座";
+                case "PatchCompatibility": return "检查补丁兼容性";
+                default: return name;
+            }
+        }
+
+        private static bool IsExitGUI(Exception error)
+        {
+            while (error != null)
+            {
+                if (error is ExitGUIException) return true;
+                error = error.InnerException;
+            }
+            return false;
         }
 
         private void Run(Action operation)
         {
             try { operation(); }
-            catch (Exception error) { summary = error.ToString(); }
+            catch (Exception error) when (!IsExitGUI(error))
+            {
+                failure = error;
+                showFailure = true;
+                notice = "操作未完成：" + error.Message;
+                noticeType = MessageType.Error;
+                ChangePage(2);
+            }
             Repaint();
         }
     }

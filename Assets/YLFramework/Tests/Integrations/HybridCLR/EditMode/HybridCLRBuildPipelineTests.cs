@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using dnlib.DotNet;
 using Newtonsoft.Json;
@@ -279,6 +281,200 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(baseline, inputs));
             var renamed = HybridCLRAssemblyAnalysis.Analyze(new[] { WriteAssembly("Hot.Other") }, new[] { temporary + "/Aot/Base.dll" });
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(baseline, renamed));
+        }
+
+        [Test]
+        public void ProjectManifestIncludesItsDependencyClosureButNotAnotherProject()
+        {
+            var inputs = ProjectInputs();
+            SelectProjectAssemblies(profile, "Project.A");
+            var manifest = ProjectManifest(profile, inputs);
+            Assert.That(manifest.HotUpdateAssemblies.Select(a => a.Name), Is.EqualTo(new[] { "Shared", "Project.A" }));
+            Assert.That(manifest.HotUpdateAssemblies.Single(a => a.Name == "Project.A").Dependencies, Is.EqualTo(new[] { "Shared" }));
+            Assert.That(inputs.HotUpdate.Select(a => a.Name), Does.Contain("Project.B"), "Selecting a project must not change the native registration input.");
+        }
+
+        [Test]
+        public void ProjectMetadataDoesNotIncludeAnUnselectedProjectsAotDependency()
+        {
+            var inputs = HybridCLRAssemblyAnalysis.Analyze(new[] { WriteAssembly("Project.A"), WriteAssembly("Project.B", "Base") },
+                new[] { WriteAssembly("Base") });
+            SelectProjectAssemblies(profile, "Project.A");
+            Assert.That(ProjectManifest(profile, inputs).AotMetadata, Is.Empty);
+            SelectProjectAssemblies(profile, "Project.B");
+            Assert.That(ProjectManifest(profile, inputs).AotMetadata.Select(a => a.Name), Is.EqualTo(new[] { "Base" }));
+        }
+
+        [TestCase("unknown")]
+        [TestCase("duplicate")]
+        [TestCase("case-collision")]
+        public void InvalidProjectAssemblyRootsAreNotSilentlyPublishedAsTheGlobalSet(string invalid)
+        {
+            SelectProjectAssemblies(profile, invalid == "unknown" ? new[] { "Not.Registered" } :
+                invalid == "duplicate" ? new[] { "Project.A", "Project.A" } : new[] { "Project.A", "project.a" });
+            Assert.Throws<InvalidDataException>(() => ProjectManifest(profile, ProjectInputs()));
+        }
+
+        [Test]
+        public void IndependentProjectsCommitOnlyTheirCodeAndPreserveSharedAssemblyBytes()
+        {
+            var inputs = ProjectInputs();
+            SelectProjectAssemblies(profile, "Project.A");
+            var first = ProjectManifest(profile, inputs);
+            HybridCLRBuildPipeline.CommitPayloads(profile, first, inputs);
+            var sharedPath = profile.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false);
+            var sharedBytes = File.ReadAllBytes(sharedPath);
+            var sharedGuid = AssetDatabase.AssetPathToGUID(sharedPath);
+
+            var otherProject = ScriptableObject.CreateInstance<ResourceProject>(); otherProject.ProjectId = "second-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateAsset(otherProject, root + "/OtherProject.asset");
+            var otherRecipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>(); otherRecipe.Project = otherProject;
+            otherRecipe.Action = ResourceBuildAction.BuildAndPublish; otherRecipe.AppContentCompatibilityId = "base-v1";
+            AssetDatabase.CreateAsset(otherRecipe, root + "/OtherRecipe.asset");
+            var other = ScriptableObject.CreateInstance<HybridCLRBuildProfile>(); other.Recipe = otherRecipe;
+            other.GeneratedAssetDirectory = root + "/OtherGenerated"; other.BaselineDirectory = profile.BaselineDirectory;
+            AssetDatabase.CreateAsset(other, root + "/OtherProfile.asset");
+            SelectProjectAssemblies(other, "Project.B");
+            AssetDatabase.SaveAssetIfDirty(otherProject); AssetDatabase.SaveAssetIfDirty(otherRecipe); AssetDatabase.SaveAssetIfDirty(other);
+            HybridCLRBuildPipeline.CommitPayloads(other, ProjectManifest(other, inputs), inputs);
+
+            Assert.That(File.Exists(profile.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.B", false)), Is.False);
+            Assert.That(File.Exists(other.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.A", false)), Is.False);
+            CollectionAssert.AreEqual(sharedBytes, File.ReadAllBytes(other.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false)));
+            Assert.That(AssetDatabase.AssetPathToGUID(sharedPath), Is.EqualTo(sharedGuid));
+            CollectionAssert.AreEqual(sharedBytes, File.ReadAllBytes(sharedPath));
+        }
+
+        [Test]
+        public void SharedBaseBindingRetainsOwnerIdentityWhileChildKeepsItsOwnProject()
+        {
+            CreateFormatFixture();
+            var baseline = HybridCLRBuildBaseline.Read(temporary);
+            profile.BaselineDirectory = temporary;
+            var child = ChildProfile();
+            SetBaseProfile(child, profile);
+            var original = File.ReadAllBytes(temporary + "/baseline.json");
+            Assert.DoesNotThrow(() => ValidateBinding(child, baseline));
+            Assert.That(child.Recipe.Project.ProjectId, Is.Not.EqualTo(baseline.InitialManifest.ProjectId));
+            Assert.That(baseline.ProfileGuid, Is.EqualTo(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile))));
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(temporary + "/baseline.json"));
+        }
+
+        [TestCase("unbound")]
+        [TestCase("self")]
+        [TestCase("chain")]
+        [TestCase("directory")]
+        [TestCase("compatibility")]
+        [TestCase("development")]
+        public void ASharedBaseRequiresExplicitUnambiguousMatchingBinding(string invalid)
+        {
+            CreateFormatFixture();
+            var baseline = HybridCLRBuildBaseline.Read(temporary);
+            profile.BaselineDirectory = temporary;
+            var child = ChildProfile();
+            SetBaseProfile(child, profile);
+            switch (invalid)
+            {
+                case "unbound": SetBaseProfile(child, null); break;
+                case "self": SetBaseProfile(child, child); break;
+                case "chain": SetBaseProfile(profile, child); break;
+                case "directory": child.BaselineDirectory += "-different"; break;
+                case "compatibility": child.Recipe.AppContentCompatibilityId = "other-base"; break;
+                default: child.Development = !profile.Development; break;
+            }
+            Assert.Throws<InvalidDataException>(() => ValidateBinding(child, baseline));
+        }
+
+        [Test]
+        public void FrozenHotFilesWithoutGlobalRegistrationCannotAuthorizeAnotherProject()
+        {
+            var baseline = CreateFormatFixture();
+            var other = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Hot.Unregistered"));
+            File.Move(other.Path, temporary + "/HotUpdate/Hot.Unregistered.dll");
+            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile { Path = "HotUpdate/Hot.Unregistered.dll",
+                Identity = other.Identity, Mvid = other.Mvid, Length = other.Length, Sha256 = other.Sha256 }).ToArray();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(baseline));
+            File.WriteAllBytes(temporary + "/baseline.json", bytes);
+            File.WriteAllText(temporary + "/complete.json", JsonConvert.SerializeObject(new { schemaVersion = 1, baselineSha256 = HybridCLRManifest.Hash(bytes) }));
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildBaseline.Read(temporary));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void ProjectSubsetNeedsGlobalMetadataRegistrationNotJustAFrozenAotFile(bool registered)
+        {
+            var baseline = CreateFormatFixture();
+            var other = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Hot.Other", "Base"));
+            var otherPath = temporary + "/HotUpdate/Hot.Other.dll"; File.Move(other.Path, otherPath);
+            var aot = HybridCLRAssemblyAnalysis.Read(temporary + "/Aot/Base.dll");
+            HybridCLRPayload Payload(HybridCLRAssemblyRecord value, bool metadata) => new HybridCLRPayload
+            {
+                Name = value.Name, Identity = value.Identity, Mvid = value.Mvid, Length = value.Length, Sha256 = value.Sha256,
+                Address = HybridCLRManifest.PayloadAddress(value.Name, metadata), References = value.References
+            };
+            baseline.InitialManifest.HotUpdateAssemblies = baseline.InitialManifest.HotUpdateAssemblies.Append(Payload(other, false)).ToArray();
+            baseline.InitialManifest.AotMetadata = registered ? new[] { Payload(aot, true) } : Array.Empty<HybridCLRPayload>();
+            baseline.InitialManifest.Seal();
+            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile { Path = "HotUpdate/Hot.Other.dll", Identity = other.Identity,
+                Mvid = other.Mvid, Length = other.Length, Sha256 = other.Sha256 }).ToArray();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(baseline));
+            File.WriteAllBytes(temporary + "/baseline.json", bytes);
+            File.WriteAllText(temporary + "/complete.json", JsonConvert.SerializeObject(new { schemaVersion = 1, baselineSha256 = HybridCLRManifest.Hash(bytes) }));
+            var frozen = HybridCLRBuildBaseline.Read(temporary);
+            var patch = HybridCLRAssemblyAnalysis.Analyze(new[] { otherPath }, new[] { aot.Path });
+            if (registered) Assert.DoesNotThrow(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
+            else Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
+        }
+
+        private HybridCLRBuildProfile ChildProfile()
+        {
+            var project = ScriptableObject.CreateInstance<ResourceProject>(); project.ProjectId = "child-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateAsset(project, root + "/ChildProject.asset");
+            var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>(); recipe.Project = project;
+            recipe.Target = profile.Recipe.Target; recipe.AppContentCompatibilityId = profile.Recipe.AppContentCompatibilityId;
+            AssetDatabase.CreateAsset(recipe, root + "/ChildRecipe.asset");
+            var child = ScriptableObject.CreateInstance<HybridCLRBuildProfile>(); child.Recipe = recipe;
+            child.GeneratedAssetDirectory = root + "/ChildGenerated"; child.BaselineDirectory = profile.BaselineDirectory; child.Development = profile.Development;
+            AssetDatabase.CreateAsset(child, root + "/ChildProfile.asset");
+            AssetDatabase.SaveAssetIfDirty(project); AssetDatabase.SaveAssetIfDirty(recipe); AssetDatabase.SaveAssetIfDirty(child);
+            return child;
+        }
+
+        private static void SetBaseProfile(HybridCLRBuildProfile selected, HybridCLRBuildProfile owner)
+        {
+            var field = typeof(HybridCLRBuildProfile).GetField("BaseProfile");
+            Assert.That(field, Is.Not.Null, "A different resource project needs an explicit binding to the native base owner.");
+            field.SetValue(selected, owner);
+        }
+
+        private static void ValidateBinding(HybridCLRBuildProfile selected, HybridCLRBuildBaseline baseline)
+        {
+            var method = typeof(HybridCLRBuildPipeline).GetMethod("ValidateBaselineBinding", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            try { method.Invoke(null, new object[] { selected, baseline, baseline.SettingsFingerprint }); }
+            catch (TargetInvocationException error) when (error.InnerException != null)
+            { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+        }
+
+        private HybridCLRAssemblySet ProjectInputs() => HybridCLRAssemblyAnalysis.Analyze(new[]
+            { WriteAssembly("Shared"), WriteAssembly("Project.A", "Shared"), WriteAssembly("Project.B", "Shared") }, Array.Empty<string>());
+
+        private static void SelectProjectAssemblies(HybridCLRBuildProfile selected, params string[] roots)
+        {
+            var field = typeof(HybridCLRBuildProfile).GetField("HotUpdateAssemblies");
+            Assert.That(field, Is.Not.Null, "A profile must be able to select its own roots from the registered global set.");
+            field.SetValue(selected, roots);
+        }
+
+        private static HybridCLRManifest ProjectManifest(HybridCLRBuildProfile selected, HybridCLRAssemblySet inputs)
+        {
+            try
+            {
+                return (HybridCLRManifest)typeof(HybridCLRBuildPipeline).GetMethod("CreateManifest", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, new object[] { selected, inputs });
+            }
+            catch (TargetInvocationException error) when (error.InnerException != null)
+            { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
         }
 
         private HybridCLRAssemblySet FixtureInputs() => HybridCLRAssemblyAnalysis.Analyze(new[] { temporary + "/HotUpdate/Hot.Entry.dll" }, new[] { temporary + "/Aot/Base.dll" });

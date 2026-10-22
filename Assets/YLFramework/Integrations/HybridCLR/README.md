@@ -9,24 +9,51 @@
 ## Build
 
 1. 在官方 HybridCLRSettings 配置明确的热更 asmdef/外部 DLL 名单。AOT 不可静态引用热更类型，不使用 Assembly-CSharp 或手写加载顺序。
-2. 创建并保存 ResourceProject、BuildAndPublish ResourceBuildRecipe 和 HybridCLRBuildProfile。Profile 只引用 Recipe，并配置 Development、自有 Assets 生成目录及持久基线目录；身份、平台和兼容号从 Recipe 读取。基线必须在 Assets/Packages/Library/Temp 之外。
+2. 在 `YLFramework/Integrations/HybridCLR` 窗口选择或新建配置。新建动作创建自有 ResourceProject、BuildAndPublish Recipe、Profile 和代码目录映射，不创建样例内容或修改官方设置。Profile 配置 Development、自有 Assets 生成目录、持久基线目录及项目入口程序集；身份、平台和兼容号从 Recipe 读取。基线必须在 Assets/Packages/Library/Temp 之外。
 3. 用独立接收工程显式配置 Windows64、IL2CPP、.NET Framework、C++ 工具链和 Windows SDK；生成可运行基座时 `Build Scripts Only` 与 Windows `Create Solution` 都须为 false，导出 Visual Studio 工程不是 Player 成功。Validate 不自动安装或切换设置。当前目标和 Development 必须完全匹配，所有输入资产须显式保存。CI 的资源构建沿用正式 Resource 指纹检查；未验证的 `-nographics` 环境不能据成功日志跳过该检查。
 4. 应用显式准备标准 `Assets/StreamingAssets` 父目录（不手建或认领其下的 YL 受管根），再在 `YLFramework/Integrations/HybridCLR` 窗口或 `HybridCLRBuildPipeline.BuildBasePlayer` 提交新 Player 路径和与 enabled scenes 相同的场景列表。流程依次检查编译、生成、剥离、完整桥、metadata/manifest、正式 Resource 发布、显式内置部署、真实 Player 和最终 AOT 基线。任一步失败都不是基座成功，读取报告的首因及已完成阶段；部署失败按正式 Resource Recover 验证 journal，不手工补拷或删除旧发布。
-5. 更改热更代码后，只调用 `PublishPatch`。它读取持久冻结 AOT 和完成标记；不调用 Strip/GenerateAll、不构建 Player、不改变基座。新 AOT/原生需求、程序集集合变化、损坏基线或身份不符需新兼容号和新基座。静态 analyzer 不能承诺任意反射/动态泛型均安全。
+5. 更改热更代码后，只调用 `PublishPatch`。它读取持久冻结 AOT 和完成标记；不调用 Strip/GenerateAll、不构建 Player、不改变基座。新增全局登记、未预登记的 AOT/原生需求、损坏基线或身份不符需新兼容号和新基座；项目入口可在既有基座已登记集合内重新选择。静态 analyzer 不能承诺任意反射/动态泛型均安全。
 
 Recipe.Project 必须明确选择 `Generated/hybridclr` 下的 `.bytes`/`.json`，以生成根为 SourceDirectory，得到规范地址 `hybridclr/manifest.json`、`hybridclr/assemblies/*.dll.bytes`、`hybridclr/metadata/*.dll.bytes`。不要选择 owner 记录、原生生成目录或原始 `.dll`。不要修改受管生成文件、遗留未知文件、链接或认领已有用户目录；写入保留 GUID、manifest 最后提交，中断时保留诊断而不冒充可恢复成功。
 
 `BuildBasePlayer`、`PublishPatch` 接受应用注入的 `IResourceContentKeyProvider`；保密密钥不存 profile。签名更新继续使用既有 Resource 签名、Check/Prepare/Activate、发布版本与下载验证，不建立第二套下载器或密钥系统。
 
+## Project Selection And Shared Base
+
+`Profile.HotUpdateAssemblies` 是项目入口的精确程序集名，不是第二份编译登记。空数组保持已有配置的“官方全量”语义；非空时从实际编译 DLL 的引用求热更依赖闭包，只发布该闭包和它需要的 metadata。动态反射入口无法由静态引用推断，应显式选择。原生编译、裁剪、桥接和冻结登记始终覆盖官方全局并集；baseline 的 `InitialManifest` 表示全局登记，不等于某个项目实际发布的 manifest。
+
+项目 B 可显式将 `BaseProfile` 指向未绑定其他配置的基座拥有者 A。两者必须使用同一个规范化基线目录、目标平台、Development 和兼容号；各自保留自己的 ProjectId、Recipe、生成目录及文件归属。只允许一层绑定，拒绝自引用、链式绑定和错误拥有者。B 首发使用 `PublishPatch`，不再构建 Player；热更集合、metadata 和 native 需求均须是 A 冻结登记的子集。目录里存在 AOT 文件不等于该 metadata 已登记。原 schema1 和未指定新字段的已有 Profile 继续按原来的全量/自有基座方式工作。
+
+共享 DLL 保留完整 identity/MVID/hash/length。相同编译快照的 A/B 投影使用相同字节；不同时间发布若改变共享 DLL，不保证任意历史版本可以混用，需由应用协调版本。Runtime 仍在不可逆加载前拒绝共享 DLL 冲突，不通过项目名前缀绕过程序集身份。
+
+## Editor Workflow
+
+窗口分为“配置 / 构建发布 / 诊断 / 导出”，窄窗口使用任务下拉和滚动布局。资产字段通过 SerializedObject/Undo 编辑，顶部“保存”仅保存当前 Profile、Recipe 与 Project；打开、绘制、切换配置不安装、不生成、不保存。
+
+“检查配置”可在 Mono Editor 检查项目入口、当前 Player 脚本图/外部 DLL、目录与资源映射；它不是正式编译或原生可用性证明。“检查原生构建环境”执行严格 Validate。程序集资产选择用于编辑项目入口；未在官方集合登记的项会明确提示，正式预检拒绝，不自动写回全局设置。路径提供选择器，构建阶段与原始错误在诊断页分别显示。
+
+“关联生成资源”显式创建规范目录选择，保留其他 Group，支持 Undo，重复调用不追加重复项。更换生成目录后若仍有旧的规范代码映射，会先拒绝并提示显式调整旧来源/选择，不删除旧文件、不静默合并两套 `hybridclr/*` 地址。
+
 ## Runtime
 
-先启动并挂载 ResourceSystem，再构造 `new HybridCLRLoader(resources, appContentCompatibilityId)`。调用 `LoadAsync` 或 `StartModuleAsync(manifestAddress, entryAssemblyName, moduleTypeFullName)`；请求可 yield，提供 `isDone/progress/error`、原始 Exception、阶段/程序集/native 错误码和 RequiresRestart。类型只在精确入口程序集内解析。`Abort` 总在改变状态前拒绝。
+先启动并挂载 ResourceSystem，再构造 `new HybridCLRLoader(resources, appContentCompatibilityId)`。调用 `LoadAsync` 或 `StartModuleAsync(manifestAddress, entryAssemblyName, moduleTypeFullName)`；请求可 yield，提供 `isDone/progress/error`、原始 Exception、阶段/程序集/native 错误码和 RequiresRestart。类型只在精确入口程序集内解析。启动进度单调映射代码读取 0–0.8 与 Core 启动 0.8–1，终态为 1；Stage 区分读取、metadata/native 和具体 Core 阶段，不为同步 native 调用伪造时间平滑。`Abort` 总在改变状态前拒绝。
 
 加载器借用 ResourceSystem。先验证全部 bytes，再在主线程加载 SuperSet metadata 和依赖优先程序集；只保留一个小 manifest lease 作为活动代码版本屏障，不保留大 DLL 资源租约。可以 Check/Prepare，但活动闭包 Activate 返回 Resource Busy。先关闭本入口启动的 Module，再 Dispose loader，最后由应用关闭自己拥有的 ResourceStartup。Dispose 不关闭外部服务、不卸载 DLL，也不允许同进程换版；同名不同内容、未知来源已加载或部分 native 失败需要重启进程。
 
 MVID 从已校验 bytes 的 PE/CLR Module metadata 在不可逆调用前读取，使用范围检查的最小读取器，不依赖运行时 dnlib；当前 IL2CPP 未实现 CLR ManifestModule/GUID 反射，不能用它的空值表示验证通过。对 IL2CPP 显式 neutral culture 解析差异只做 invariant culture 规范化，其余完整身份、版本、公钥、hash、MVID 与 CodePackageId 比较保持严格。
 
-Editor 始终标为 **Simulation**，仅复用 AppDomain 中已经加载的精确程序集，不重复 Assembly.Load。外部独立 DLL 在 Editor 不能模拟；Editor metadata 返回 OK 不等于 IL2CPP 验收。关闭 Domain Reload 也不会卸载程序集。
+`HybridCLRLoadResult.Mode` 明确区分 `Native`、`EditorSimulation`、`EditorFast`。已有 `Simulation` 读取语义保留，两个 Editor 模式均为 true。普通 Editor Simulation 仍验证 manifest 和全部代码 bytes，再复用 AppDomain 已加载的精确程序集；外部独立 DLL 不因此变成可模拟。Editor metadata 返回 OK 不等于 IL2CPP 验收，关闭 Domain Reload 也不会卸载程序集。
+
+需要跳过代码产物、直接调试 Module 时，由应用主动选择仅在 `UNITY_EDITOR` 存在的 API：
+
+```csharp
+#if UNITY_EDITOR
+var request = loader.StartEditorModuleAsync(projectId, entryAssemblyName, moduleTypeFullName);
+yield return request;
+#endif
+```
+
+EditorFast 要求已有 ResourceSystem 与 Core provider 绑定，仅使用 AppDomain 中唯一且精确的入口程序集和类型，不读取 manifest/DLL/metadata、不调用 native、不登记进程代码身份，`CodePackageId` 为空。它不会在正式加载失败后自动启用，也不能证明发布产物可用。仍由 loader 持有 Module 所有权：需先关闭 Module 再 Dispose；单纯关闭借用的 ResourceSystem 不能绕过这个门禁。
 
 ## Sample And Export
 
@@ -38,4 +65,6 @@ Editor 始终标为 **Simulation**，仅复用 AppDomain 中已经加载的精�
 
 `HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架导出的七个根保持不变。
 
-当前已实际验证 Windows64 IL2CPP Development 与 Release Low 基座/运行，以及不改同一 Player 的签名 HTTPS v1→v2、重启屏障、坏 hash/签名/缺 DLL、真实部分 metadata 失败与新原生需求拒绝。该结论不覆盖 High stripping、其他平台或任意动态泛型。一次性执行证据、环境故障与精确验收范围保存在专项 Plan，不以本说明替代实际结果。
+首版迁移已实际验证 Windows64 IL2CPP Development 与 Release Low 基座/运行，以及不改同一 Player 的签名 HTTPS v1→v2、重启屏障、坏 hash/签名/缺 DLL、真实部分 metadata 失败与新原生需求拒绝；这些是专项 Plan §7 的历史证据，不冒充本轮全部重验。
+
+本轮项目子集/EditorFast/进度与窗口增量及最终 review 修正通过 EditMode 121/121、HybridCLR PlayMode 25/25 和 CoroutineStarter 15/15；后两者在 Runtime 未再变化时沿用有效结果。新 Development IL2CPP Player 实际验证 A/B 共用基座、项目闭包发布、共享 DLL 仅加载一份及真实 async 输出；使用可信本地发布快照，不代替 HTTPS 更新验收，也未启动旧样例固定项目的 Module。当前不外推新 Release、High stripping、其他平台或任意动态泛型。执行证据、环境故障与精确范围保存在专项 Plan §9/§10，不以本说明替代实际结果。

@@ -13,8 +13,10 @@ using UnityEditor.Compilation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using YLFramework.Editor.Resource;
+using YLFramework.Integrations.HybridCLR;
 using YLFramework.Integrations.HybridCLR.Editor;
 using YLFramework.Samples.HybridCLR.Editor;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Tests.HybridCLRReception.Editor
 {
@@ -25,6 +27,11 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         private const string SampleRoot = "Assets/YLFramework/Integrations/HybridCLR/Samples";
         private const string SupportName = "YLFramework.HybridCLR.Sample.Support";
         private const string EntryName = "YLFramework.HybridCLR.Sample.Entry";
+        private const string SubsetAssets = "Assets/HS";
+        private const string SubsetScene = SubsetAssets + "/Probe.unity";
+        private const string SubsetPlayer = "G:/Unity/H26S";
+        private const string SubsetCache = "G:/Unity/HC26S";
+        private const string SubsetCompatibility = "hybridclr-project-subsets-v1";
         private static string Project => Directory.GetParent(Application.dataPath).FullName;
         private static string Root => Path.GetFullPath(Argument("-hclr-root"));
         private static string Run => Argument("-hclr-run");
@@ -348,6 +355,304 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             Receipt("patch-receipt", new { passed = true, report.Release.DirectoryPath, CatalogDigest = report.Release.Catalog.CatalogDigest,
                 CodePackageId = report.Manifest.CodePackageId, PlayerFingerprint = oldPlayer, BaselineSha256 = oldBaseline });
         }
+        public static void PrepareProjectSubsets()
+        {
+            var owner = Owned(); RequireSubsetRun();
+            var baseline = SubsetBaseline(owner);
+            foreach (var path in new[] { SubsetAssets, SubsetPlayer, SubsetCache, baseline,
+                Root + "/project-subsets-base.json", Root + "/project-subsets-patch.json",
+                Project + "/AssetBundles/YLFramework/hclr-sub-a", Project + "/AssetBundles/YLFramework/hclr-sub-b" }) RequireNewSubsetPath(path);
+            for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+                if (UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("Do not replace an unsaved receiver scene.");
+            EditorUserBuildSettings.development = true;
+            EditorUserBuildSettings.buildScriptsOnly = false;
+            UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
+            RequireSubsetEnvironment();
+            if (string.IsNullOrEmpty(AssetDatabase.CreateFolder("Assets", "HS"))) throw new IOException("Cannot create the unused subset Assets root.");
+            var profiles = new HybridCLRBuildProfile[2];
+            for (var i = 0; i < profiles.Length; i++)
+            {
+                var suffix = i == 0 ? "A" : "B"; var generated = SubsetAssets + "/G" + suffix;
+                if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(SubsetAssets, "G" + suffix)) ||
+                    string.IsNullOrEmpty(AssetDatabase.CreateFolder(generated, "hybridclr"))) throw new IOException("Cannot create new generated folders.");
+                var project = ScriptableObject.CreateInstance<ResourceProject>();
+                project.ProjectId = i == 0 ? "hclr-sub-a" : "hclr-sub-b"; project.DisplayName = "HybridCLR Subset " + suffix;
+                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(generated) });
+                project.Groups.Add(new ResourceGroup { Id = "code", Selections = new List<ResourceSelection>
+                    { new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(generated + "/hybridclr"), Extensions = new[] { ".bytes", ".json" } } } });
+                AssetDatabase.CreateAsset(project, SubsetAssets + "/P" + suffix + ".asset");
+                var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
+                recipe.Project = project; recipe.Target = BuildTarget.StandaloneWindows64; recipe.Action = ResourceBuildAction.BuildAndPublish;
+                recipe.AppContentCompatibilityId = SubsetCompatibility;
+                AssetDatabase.CreateAsset(recipe, SubsetAssets + "/R" + suffix + ".asset");
+                var profile = ScriptableObject.CreateInstance<HybridCLRBuildProfile>();
+                profile.Recipe = recipe; profile.Development = true; profile.GeneratedAssetDirectory = generated; profile.BaselineDirectory = baseline;
+                profile.HotUpdateAssemblies = new[] { i == 0 ? SupportName : EntryName };
+                if (i == 1) profile.BaseProfile = profiles[0];
+                AssetDatabase.CreateAsset(profile, SubsetAssets + "/Profile" + suffix + ".asset"); profiles[i] = profile;
+                EditorUtility.SetDirty(project); EditorUtility.SetDirty(recipe); EditorUtility.SetDirty(profile);
+                AssetDatabase.SaveAssetIfDirty(project); AssetDatabase.SaveAssetIfDirty(recipe); AssetDatabase.SaveAssetIfDirty(profile);
+            }
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            new GameObject("HybridCLR Project Subsets Native Probe").AddComponent<HybridCLRProjectSubsetProbe>();
+            if (!EditorSceneManager.SaveScene(scene, SubsetScene)) throw new IOException("The owned subset probe scene was not saved.");
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(SubsetScene, true) };
+            SubsetProfiles(owner);
+            Receipt(Run, new { passed = true, ProfileA = AssetDatabase.GetAssetPath(profiles[0]), ProfileB = AssetDatabase.GetAssetPath(profiles[1]),
+                Scene = SubsetScene, PlayerDirectory = Path.GetFullPath(SubsetPlayer), RuntimeCacheDirectory = Path.GetFullPath(SubsetCache), Baseline = baseline,
+                CompatibilityId = SubsetCompatibility, Development = EditorUserBuildSettings.development,
+                buildScriptsOnly = EditorUserBuildSettings.buildScriptsOnly, createSolution = UnityEditor.WindowsStandalone.UserBuildSettings.createSolution,
+                rootsA = profiles[0].HotUpdateAssemblies, rootsB = profiles[1].HotUpdateAssemblies,
+                baseProfileGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profiles[1].BaseProfile)), globalRegistration = new[] { EntryName, SupportName } });
+        }
+        public static void BuildProjectSubsetBase()
+        {
+            var owner = Owned(); RequireSubsetRun();
+            foreach (var path in new[] { SubsetPlayer, SubsetCache, SubsetBaseline(owner), Root + "/project-subsets-base.json", Root + "/project-subsets-patch.json",
+                Project + "/AssetBundles/YLFramework/hclr-sub-a", Project + "/AssetBundles/YLFramework/hclr-sub-b" }) RequireNewSubsetPath(path);
+            RequireUnusedSubsetGenerated("A"); RequireUnusedSubsetGenerated("B");
+            HybridCLRBuildReport report = null; Exception failure = null;
+            try
+            {
+                RequireSubsetEnvironment(); var profiles = SubsetProfiles(owner); var profile = profiles[0];
+                report = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
+                {
+                    target = BuildTarget.StandaloneWindows64, targetGroup = BuildTargetGroup.Standalone, subtarget = (int)StandaloneBuildSubtarget.Player,
+                    scenes = new[] { SubsetScene }, options = BuildOptions.Development, locationPathName = SubsetPlayer + "/HybridCLR.exe"
+                });
+                RequireSubset(report.Succeeded, report.Summary);
+                RequireSubset(report.PlayerBuild != null && report.PlayerBuild.summary.result == BuildResult.Succeeded &&
+                    (report.PlayerBuild.summary.options & BuildOptions.Development) != 0 && File.Exists(SubsetPlayer + "/HybridCLR.exe") &&
+                    File.Exists(SubsetPlayer + "/GameAssembly.dll"), "A successful native Development executable build is required.");
+                RequireSubset(new[] { "Il2CppDef", "LinkXml", "EmptyMethodBridge", "StripAot", "FullMethodBridge", "Player" }.All(SubsetNativeStages(report).Contains),
+                    "The base must report its actual native generation, strip and Player stages.");
+                RequireSubsetManifest(report.Manifest, "hclr-sub-a", SupportName);
+                var published = ReadSubsetRelease(profile, report.Release);
+                RequireSubset(published.ToJson() == report.Manifest.ToJson(), "A's actual published manifest differs from the build report.");
+                var registration = ReadSubsetRegistration(profile);
+                var support = published.HotUpdateAssemblies.Single();
+                RequireSameSubsetSupport(support, registration.HotUpdateAssemblies.Single(p => p.Name == SupportName));
+                var external = HybridCLRAssemblyAnalysis.Read(Root + "/ExternalHotUpdate/StandaloneWindows64/" + SupportName + ".dll");
+                RequireSubset(support.Identity == external.Identity && support.Mvid == external.Mvid && support.Sha256 == external.Sha256 && support.Length == external.Length,
+                    "A must publish the exact already-registered external Support bytes.");
+                RequireSubset(SameSubsetPath(report.BaselineDirectory, profile.BaselineDirectory), "The report returned a different baseline root.");
+                Receipt("project-subsets-base", new { passed = true, ProfileA = AssetDatabase.GetAssetPath(profile), ProfileB = AssetDatabase.GetAssetPath(profiles[1]),
+                    Scene = SubsetScene, PlayerDirectory = Path.GetFullPath(SubsetPlayer), RuntimeCacheDirectory = Path.GetFullPath(SubsetCache), Baseline = report.BaselineDirectory,
+                    BaselineSha256 = Sha(report.BaselineDirectory + "/baseline.json"), BaselineFingerprint = SubsetFingerprint(report.BaselineDirectory),
+                    PlayerFingerprint = SubsetFingerprint(SubsetPlayer), CompatibilityId = SubsetCompatibility, Development = profile.Development,
+                    ReleaseA = SubsetReleaseIdentity(report.Release, published), ManifestA = JObject.Parse(published.ToJson()), SharedSupport = support,
+                    registeredAssemblies = registration.HotUpdateAssemblies.Select(p => p.Name).ToArray(), nativeStages = SubsetNativeStages(report) });
+            }
+            catch (Exception error) { failure = error; throw; }
+            finally { WriteSubsetReport(report, failure); }
+        }
+        public static void PublishProjectSubset()
+        {
+            var owner = Owned(); RequireSubsetRun();
+            foreach (var path in new[] { SubsetCache, Root + "/project-subsets-patch.json", Project + "/AssetBundles/YLFramework/hclr-sub-b" }) RequireNewSubsetPath(path);
+            RequireUnusedSubsetGenerated("B");
+            HybridCLRBuildReport report = null; Exception failure = null;
+            try
+            {
+                RequireSubsetEnvironment(); var profiles = SubsetProfiles(owner); var profile = profiles[1];
+                var baseline = JObject.Parse(File.ReadAllText(Root + "/project-subsets-base.json"));
+                RequireSubset(baseline.Value<bool>("passed") && baseline.Value<bool>("Development") && baseline.Value<string>("CompatibilityId") == SubsetCompatibility &&
+                    SameSubsetPath(baseline.Value<string>("PlayerDirectory"), SubsetPlayer) && SameSubsetPath(baseline.Value<string>("Baseline"), profile.BaselineDirectory) &&
+                    baseline.Value<string>("ProfileA") == AssetDatabase.GetAssetPath(profiles[0]) && baseline.Value<string>("ProfileB") == AssetDatabase.GetAssetPath(profile),
+                    "Use this round's exact successful base receipt and explicit owner binding.");
+                var beforePlayer = SubsetFingerprint(SubsetPlayer); var beforeBaseline = SubsetFingerprint(profile.BaselineDirectory);
+                var baselineSha = Sha(profile.BaselineDirectory + "/baseline.json");
+                RequireSubset(beforePlayer == baseline.Value<string>("PlayerFingerprint") && beforeBaseline == baseline.Value<string>("BaselineFingerprint") &&
+                    baselineSha == baseline.Value<string>("BaselineSha256"), "The frozen Player or baseline changed before publication.");
+                var releaseA = ResourcePublisher.ReadVersion(profiles[0].Recipe.Project, BuildTarget.StandaloneWindows64, SubsetCompatibility, baseline["ReleaseA"].Value<string>("CatalogDigest"));
+                var publishedA = ReadSubsetRelease(profiles[0], releaseA);
+                RequireSubset(JToken.DeepEquals(SubsetReleaseIdentity(releaseA, publishedA), baseline["ReleaseA"]) &&
+                    publishedA.ToJson() == HybridCLRManifest.Parse(baseline["ManifestA"].ToString(Formatting.None)).ToJson(), "A's actual release or source manifest changed.");
+                RequireSubsetManifest(publishedA, "hclr-sub-a", SupportName); ReadSubsetRegistration(profiles[0]);
+                string afterPlayer = null; string afterBaseline = null;
+                try { report = HybridCLRBuildPipeline.PublishPatch(profile); }
+                finally
+                {
+                    afterPlayer = SubsetFingerprint(SubsetPlayer); afterBaseline = SubsetFingerprint(profile.BaselineDirectory);
+                    RequireSubset(beforePlayer == afterPlayer && beforeBaseline == afterBaseline &&
+                        baselineSha == Sha(profile.BaselineDirectory + "/baseline.json"), "Patch publication modified the frozen Player or any baseline file.");
+                }
+                RequireSubset(report.Succeeded, report.Summary);
+                var allowed = new[] { "Preflight", "ReadBaseline", "Compile", "PatchCompatibility", "PayloadCommit", "ResourcePublish" };
+                RequireSubset(report.PlayerBuild == null && report.Deployment == null && SubsetNativeStages(report).Length == 0 && report.Stages.All(s => allowed.Contains(s.Name)),
+                    "A subset patch must not build/strip a Player, regenerate native bridges/link data or deploy built-ins.");
+                RequireSubsetManifest(report.Manifest, "hclr-sub-b", EntryName, SupportName);
+                RequireSubset(report.Manifest.HotUpdateAssemblies.Single(p => p.Name == EntryName).Dependencies.SequenceEqual(new[] { SupportName }), "Entry's Support dependency must be in B's closure.");
+                var publishedB = ReadSubsetRelease(profile, report.Release);
+                RequireSubset(publishedB.ToJson() == report.Manifest.ToJson(), "B's actual published manifest differs from the patch report.");
+                var support = publishedB.HotUpdateAssemblies.Single(p => p.Name == SupportName);
+                RequireSameSubsetSupport(publishedA.HotUpdateAssemblies.Single(), support);
+                RequireSameSubsetSupport(baseline["SharedSupport"].ToObject<HybridCLRPayload>(), support);
+                RequireSubset(SameSubsetPath(report.BaselineDirectory, profile.BaselineDirectory), "The patch did not use A's exact frozen baseline.");
+                Receipt("project-subsets-patch", new { passed = true, ProfileA = AssetDatabase.GetAssetPath(profiles[0]), ProfileB = AssetDatabase.GetAssetPath(profile),
+                    Scene = SubsetScene, PlayerDirectory = Path.GetFullPath(SubsetPlayer), RuntimeCacheDirectory = Path.GetFullPath(SubsetCache), Baseline = report.BaselineDirectory,
+                    BaselineSha256 = baselineSha, BaselineFingerprint = afterBaseline, PlayerFingerprint = afterPlayer,
+                    PlayerFingerprintBefore = beforePlayer, BaselineFingerprintBefore = beforeBaseline, CompatibilityId = SubsetCompatibility, Development = profile.Development,
+                    ReleaseA = SubsetReleaseIdentity(releaseA, publishedA), ReleaseB = SubsetReleaseIdentity(report.Release, publishedB),
+                    ManifestB = JObject.Parse(publishedB.ToJson()), SharedSupport = support, nativeStages = SubsetNativeStages(report),
+                    unchangedPlayer = beforePlayer == afterPlayer, unchangedBaseline = beforeBaseline == afterBaseline });
+            }
+            catch (Exception error) { failure = error; throw; }
+            finally { WriteSubsetReport(report, failure); }
+        }
+        private static string SubsetBaseline(JObject owner)
+        {
+            var repository = owner.Value<string>("repository");
+            RequireSubset(!string.IsNullOrEmpty(repository) && Path.IsPathRooted(repository) && Directory.Exists(repository) && !SameSubsetPath(repository, Project), "An explicit source repository outside the receiver is required.");
+            return Path.GetFullPath(Path.Combine(repository, "Build/HybridCLR/Reception-20261022/ProjectSubsets"));
+        }
+        private static void RequireSubsetRun()
+        {
+            RequireSubset(System.Text.RegularExpressions.Regex.IsMatch(Run, "^[A-Za-z0-9-]+$") && Run != "project-subsets-base" && Run != "project-subsets-patch", "Use an unused distinct invocation receipt name.");
+            RequireNewSubsetPath(Root + "/" + Run + ".json");
+        }
+        private static void RequireNewSubsetPath(string path)
+        {
+            RejectSubsetLinks(path);
+            if (File.Exists(path) || Directory.Exists(path) || File.Exists(path + ".meta") || Directory.Exists(path + ".meta"))
+                throw new IOException("Never adopt or overwrite an existing project-subset output: " + path);
+        }
+        private static void RequireUnusedSubsetGenerated(string suffix)
+        {
+            foreach (var relative in new[] { "hybridclr-owner.json", "hybridclr/manifest.json", "hybridclr/assemblies", "hybridclr/metadata" })
+                RequireNewSubsetPath(SubsetAssets + "/G" + suffix + "/" + relative);
+        }
+        private static void RejectSubsetLinks(string path)
+        {
+            for (var cursor = Path.GetFullPath(path); cursor != null; cursor = Path.GetDirectoryName(cursor))
+                if ((File.Exists(cursor) || Directory.Exists(cursor)) && (File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("Linked project-subset inputs/outputs are not supported: " + cursor);
+        }
+        private static bool SameSubsetPath(string first, string second) => !string.IsNullOrEmpty(first) && !string.IsNullOrEmpty(second) &&
+            Path.GetFullPath(first).TrimEnd('/', '\\').Equals(Path.GetFullPath(second).TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+        private static void RequireSubsetEnvironment()
+        {
+            RequireSubset(Application.platform == RuntimePlatform.WindowsEditor && EditorUserBuildSettings.activeBuildTarget == BuildTarget.StandaloneWindows64 &&
+                EditorUserBuildSettings.development && !EditorUserBuildSettings.buildScriptsOnly && !UnityEditor.WindowsStandalone.UserBuildSettings.createSolution &&
+                PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) == ScriptingImplementation.IL2CPP &&
+                PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone) == ApiCompatibilityLevel.NET_4_6, "Explicitly prepared Windows64 IL2CPP/.NET Framework Development receiver required.");
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
+            var installer = new global::HybridCLR.Installer.InstallerController();
+            RequireSubset(package.version == "9.0.3" && package.source == UnityEditor.PackageManager.PackageSource.Git && installer.HasInstalledHybridCLR() &&
+                installer.PackageVersion == "9.0.3" && installer.InstalledLibil2cppVersion == "9.0.3", "The exact official 9.0.3 runtime must already be installed; this consumer never installs an SDK.");
+            var settings = global::HybridCLR.Settings.HybridCLRSettings.instance;
+            RequireSubset(settings.enable && !settings.useGlobalIl2cpp && (settings.hotUpdateAssemblyDefinitions == null || settings.hotUpdateAssemblyDefinitions.Length == 0) &&
+                settings.hotUpdateAssemblies != null && settings.hotUpdateAssemblies.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(new[] { EntryName, SupportName }) &&
+                (settings.preserveHotUpdateAssemblies == null || settings.preserveHotUpdateAssemblies.Length == 0) && settings.externalHotUpdateAssembliyDirs != null &&
+                settings.externalHotUpdateAssembliyDirs.Length == 1 && SameSubsetPath(settings.externalHotUpdateAssembliyDirs[0], Root + "/ExternalHotUpdate"),
+                "Preserve the existing global Entry + Support registration and original external directory.");
+            var entry = JObject.Parse(File.ReadAllText(SampleRoot + "/HotEntry/" + EntryName + ".asmdef"));
+            RequireSubset(entry.Value<bool>("overrideReferences") && !entry["references"].Values<string>().Contains(SupportName) &&
+                entry["precompiledReferences"].Values<string>().Contains(SupportName + ".dll") && !Directory.Exists(SampleRoot + "/HotSupport") &&
+                Sha("Assets/HCLRExternal/" + SupportName + ".dll") == Sha(Root + "/ExternalHotUpdate/StandaloneWindows64/" + SupportName + ".dll"),
+                "Keep the receiver's real external Support DLL reference; do not restore or recompile the old sample source.");
+        }
+        private static HybridCLRBuildProfile[] SubsetProfiles(JObject owner)
+        {
+            var profiles = new[] { "A", "B" }.Select(s => AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(SubsetAssets + "/Profile" + s + ".asset")).ToArray();
+            for (var i = 0; i < profiles.Length; i++)
+            {
+                var profile = profiles[i]; var suffix = i == 0 ? "A" : "B"; var generated = SubsetAssets + "/G" + suffix;
+                RequireSubset(profile && profile.Recipe && profile.Recipe.Project, "Run PrepareProjectSubsets before building the dedicated assets.");
+                var recipe = profile.Recipe; var project = recipe.Project;
+                RequireSubset(AssetDatabase.GetAssetPath(recipe) == SubsetAssets + "/R" + suffix + ".asset" && AssetDatabase.GetAssetPath(project) == SubsetAssets + "/P" + suffix + ".asset" &&
+                    project.ProjectId == (i == 0 ? "hclr-sub-a" : "hclr-sub-b") && profile.Development && profile.GeneratedAssetDirectory == generated &&
+                    SameSubsetPath(profile.BaselineDirectory, SubsetBaseline(owner)) && profile.HotUpdateAssemblies != null &&
+                    profile.HotUpdateAssemblies.SequenceEqual(new[] { i == 0 ? SupportName : EntryName }) && recipe.Target == BuildTarget.StandaloneWindows64 &&
+                    recipe.Action == ResourceBuildAction.BuildAndPublish && recipe.AppContentCompatibilityId == SubsetCompatibility && !recipe.GenerateReferences &&
+                    !EditorUtility.IsDirty(profile) && !EditorUtility.IsDirty(recipe) && !EditorUtility.IsDirty(project), "The saved subset profile/recipe/project contract changed.");
+                RequireSubset(project.SourceDirectories.Count == 1 && project.SourceDirectories[0].Guid == AssetDatabase.AssetPathToGUID(generated) &&
+                    !string.IsNullOrEmpty(project.SourceDirectories[0].Guid) && string.IsNullOrEmpty(project.SourceDirectories[0].AddressPrefix) &&
+                    project.Groups.Count == 1 && project.Groups[0].Id == "code" && project.Groups[0].Selections.Count == 1 &&
+                    project.Groups[0].Selections[0].Guid == AssetDatabase.AssetPathToGUID(generated + "/hybridclr") &&
+                    !string.IsNullOrEmpty(project.Groups[0].Selections[0].Guid) && string.IsNullOrEmpty(project.Groups[0].Selections[0].Address) &&
+                    project.Groups[0].Selections[0].Extensions.SequenceEqual(new[] { ".bytes", ".json" }), "Keep the explicit generated source + hybridclr code selection mapping.");
+            }
+            RequireSubset(!profiles[0].BaseProfile && profiles[1].BaseProfile == profiles[0] && EditorBuildSettings.scenes.Length == 1 &&
+                EditorBuildSettings.scenes[0].enabled && EditorBuildSettings.scenes[0].path == SubsetScene && File.Exists(SubsetScene), "Only the new Probe scene and one-hop B -> A base binding are allowed.");
+            return profiles;
+        }
+        private static void RequireSubsetManifest(HybridCLRManifest manifest, string projectId, params string[] names)
+        {
+            RequireSubset(manifest != null, "Missing project-subset manifest."); manifest.Validate(projectId, SubsetCompatibility, Application.unityVersion, true);
+            RequireSubset(manifest.HotUpdateAssemblies.Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(names.OrderBy(n => n, StringComparer.Ordinal)), "Unexpected project/global hot-update assembly set.");
+        }
+        private static HybridCLRManifest ReadSubsetRegistration(HybridCLRBuildProfile profile)
+        {
+            var path = profile.BaselineDirectory + "/baseline.json"; var descriptor = JObject.Parse(File.ReadAllText(path));
+            RequireSubset(JObject.Parse(File.ReadAllText(profile.BaselineDirectory + "/complete.json")).Value<string>("baselineSha256") == Sha(path) &&
+                descriptor.Value<string>("ProfileGuid") == AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile)), "The frozen baseline completion/owner identity changed.");
+            var manifest = HybridCLRManifest.Parse(descriptor["InitialManifest"].ToObject<HybridCLRManifest>().ToJson());
+            RequireSubsetManifest(manifest, "hclr-sub-a", EntryName, SupportName);
+            foreach (var payload in manifest.HotUpdateAssemblies)
+                HybridCLRManifest.ValidatePayload(payload, File.ReadAllBytes(profile.BaselineDirectory + "/HotUpdate/" + payload.Name + ".dll"));
+            return manifest;
+        }
+        private static HybridCLRManifest ReadSubsetRelease(HybridCLRBuildProfile profile, ResourceRelease release)
+        {
+            RequireSubset(release != null, "Missing actual project-subset release.");
+            var source = HybridCLRManifest.Parse(File.ReadAllText(profile.GeneratedAssetDirectory + "/hybridclr/manifest.json"));
+            source.Validate(profile.Recipe.Project.ProjectId, SubsetCompatibility, Application.unityVersion, true);
+            var snapshot = ResourceLocalSnapshot.Open(release.DirectoryPath, source.ProjectId, release.Catalog.CatalogDigest, "StandaloneWindows64", SubsetCompatibility);
+            var bundles = new Dictionary<string, AssetBundle>(StringComparer.Ordinal);
+            byte[] Read(string address)
+            {
+                var asset = snapshot.Document.Assets.Single(a => a.Address == address);
+                RequireSubset(asset.AssetType == typeof(TextAsset).FullName, "The code-only fixture must contain TextAssets.");
+                if (!bundles.TryGetValue(asset.BundleId, out var loaded))
+                {
+                    var bundle = snapshot.Document.Bundles.Single(b => b.LogicalId == asset.BundleId);
+                    RequireSubset(bundle.Dependencies.Count == 0, "The code-only fixture must not acquire unrelated native Bundle dependencies.");
+                    loaded = AssetBundle.LoadFromFile(Path.Combine(release.DirectoryPath, bundle.RelativeFile));
+                    RequireSubset(loaded, "Cannot read the actual published code Bundle."); bundles.Add(asset.BundleId, loaded);
+                }
+                var text = loaded.LoadAsset<TextAsset>(asset.LoadName); RequireSubset(text, "Missing actual published code TextAsset: " + address); return text.bytes;
+            }
+            try
+            {
+                var manifest = HybridCLRManifest.Parse(Encoding.UTF8.GetString(Read(HybridCLRManifest.ManifestPath)));
+                RequireSubset(manifest.ToJson() == source.ToJson(), "The actual published manifest differs from its generated source manifest.");
+                foreach (var payload in manifest.HotUpdateAssemblies.Concat(manifest.AotMetadata)) HybridCLRManifest.ValidatePayload(payload, Read(payload.Address));
+                return manifest;
+            }
+            finally { foreach (var bundle in bundles.Values) bundle.Unload(true); }
+        }
+        private static JObject SubsetReleaseIdentity(ResourceRelease release, HybridCLRManifest manifest) => JObject.FromObject(new
+        {
+            DirectoryPath = Path.GetFullPath(release.DirectoryPath), ProjectId = manifest.ProjectId, CatalogDigest = release.Catalog.CatalogDigest, manifest.CodePackageId
+        });
+        private static void RequireSameSubsetSupport(HybridCLRPayload first, HybridCLRPayload second) => RequireSubset(first != null && second != null &&
+            first.Name == SupportName && second.Name == SupportName && first.Identity == second.Identity && first.Mvid == second.Mvid && first.Sha256 == second.Sha256 && first.Length == second.Length,
+            "Shared Support Identity/MVID/SHA256/Length must exactly match A's actual published/source manifest.");
+        private static string SubsetFingerprint(string directory)
+        {
+            directory = Path.GetFullPath(directory).TrimEnd('/', '\\');
+            RequireSubset(SameSubsetPath(directory, SubsetPlayer) || SameSubsetPath(directory, SubsetBaseline(Owned())), "Fingerprint only this round's explicit Player or baseline.");
+            RejectSubsetLinks(directory); if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);
+            var files = new List<string>(); var pending = new Stack<string>(new[] { directory });
+            while (pending.Count != 0)
+                foreach (var path in Directory.GetFileSystemEntries(pending.Pop()))
+                {
+                    RejectSubsetLinks(path); if (Directory.Exists(path)) pending.Push(path); else files.Add(path);
+                }
+            RequireSubset(files.Count != 0, "Cannot fingerprint an empty acceptance output.");
+            return HybridCLRManifest.Hash(Encoding.UTF8.GetBytes(string.Join("\n", files.OrderBy(p => p, StringComparer.Ordinal)
+                .Select(p => p.Substring(directory.Length + 1).Replace('\\', '/') + ":" + Sha(p)))));
+        }
+        private static string[] SubsetNativeStages(HybridCLRBuildReport report) => report == null ? Array.Empty<string>() : report.Stages
+            .Where(s => new[] { "Il2CppDef", "LinkXml", "EmptyMethodBridge", "StripAot", "FullMethodBridge", "Player" }.Contains(s.Name)).Select(s => s.Name).ToArray();
+        private static void WriteSubsetReport(HybridCLRBuildReport report, Exception failure) => Receipt(Run, new
+        {
+            passed = report != null && report.Succeeded && failure == null, summary = report?.Summary, error = failure?.ToString(), nativeStages = SubsetNativeStages(report),
+            stages = report?.Stages.Select(s => new { s.Name, s.Succeeded, error = s.Error?.ToString(), s.Diagnostics }).ToArray(),
+            CodePackageId = report?.Manifest?.CodePackageId, CatalogDigest = report?.Release?.Catalog.CatalogDigest, Baseline = report?.BaselineDirectory
+        });
+        private static void RequireSubset(bool condition, string error) { if (!condition) throw new InvalidOperationException(error); }
         public static void RejectNewRequirement()
         {
             Owned(); var profile = Profile(); var priorPlayer = PlayerFingerprint(); var priorBaseline = Sha(profile.BaselineDirectory + "/baseline.json");

@@ -12,4 +12,5 @@ $destination = Join-Path $project 'Assets/HCLRReceptionHarness'
 if (-not (Test-Path -LiteralPath (Join-Path $destination 'Editor')) -or -not (Test-Path -LiteralPath (Join-Path $destination 'Runtime'))) { throw 'Install the real consumer after product proof first.' }
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionBootstrap.cs.txt'),(Join-Path $destination 'Editor/HybridCLRReceptionBootstrap.cs'),$true)
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionRunner.cs.txt'),(Join-Path $destination 'Runtime/HybridCLRReceptionRunner.cs'),$true)
+[IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRProjectSubsetProbe.cs.txt'),(Join-Path $destination 'Runtime/HybridCLRProjectSubsetProbe.cs'),$true)
 'Synchronized only the owned test consumer scripts; existing meta and product sources were preserved.'

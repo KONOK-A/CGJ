@@ -18,6 +18,7 @@ if ([IO.Path]::Exists($destination)) { throw 'Never overwrite an existing accept
 [IO.Directory]::CreateDirectory((Join-Path $destination 'Runtime')) | Out-Null
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionBootstrap.cs.txt'), (Join-Path $destination 'Editor/HybridCLRReceptionBootstrap.cs'))
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionRunner.cs.txt'), (Join-Path $destination 'Runtime/HybridCLRReceptionRunner.cs'))
+[IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRProjectSubsetProbe.cs.txt'), (Join-Path $destination 'Runtime/HybridCLRProjectSubsetProbe.cs'))
 $runtime = @{ name='YLFramework.Tests.PlayMode'; references=@('YLFramework.Runtime','YLFramework.HybridCLR','YLFramework.HybridCLR.Sample.Host'); overrideReferences=$true; precompiledReferences=@('Newtonsoft.Json.dll'); autoReferenced=$false; noEngineReferences=$false }
 $editor = @{ name='YLFramework.HybridCLR.Receiver.Editor'; references=@('YLFramework.Runtime','YLFramework.Editor','YLFramework.HybridCLR','YLFramework.HybridCLR.Editor','YLFramework.HybridCLR.Sample.Editor','YLFramework.Tests.PlayMode','HybridCLR.Runtime','HybridCLR.Editor'); includePlatforms=@('Editor'); overrideReferences=$true; precompiledReferences=@('Newtonsoft.Json.dll'); autoReferenced=$false; noEngineReferences=$false }
 [IO.File]::WriteAllText((Join-Path $destination 'Runtime/YLFramework.Tests.PlayMode.asmdef'), ($runtime | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))

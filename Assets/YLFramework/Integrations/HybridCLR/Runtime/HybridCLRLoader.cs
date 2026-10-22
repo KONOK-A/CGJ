@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Text;
 using System.Threading;
 using UnityEngine;
 using YLFramework.Core;
+using YLFramework.Foundation;
 using YLFramework.Services.Resource;
 using Module = YLFramework.Core.Module;
 
@@ -49,6 +51,9 @@ namespace YLFramework.Integrations.HybridCLR
         private readonly int session;
         private readonly Dictionary<ResourceAddress, Session> sessions = new Dictionary<ResourceAddress, Session>();
         private readonly Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest> moduleRequests = new Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest>();
+#if UNITY_EDITOR
+        private readonly Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest> editorModuleRequests = new Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest>();
+#endif
         private readonly HashSet<Module> modules = new HashSet<Module>();
         private Job active;
         private bool disposed;
@@ -72,7 +77,15 @@ namespace YLFramework.Integrations.HybridCLR
             internal int Index;
             internal bool Irreversible;
             internal bool Restart;
+            internal Coroutine ProgressRoutine;
         }
+
+        private IEnumerable<HybridCLRModuleRequest> PendingModuleRequests =>
+#if UNITY_EDITOR
+            moduleRequests.Values.Concat(editorModuleRequests.Values);
+#else
+            moduleRequests.Values;
+#endif
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void BeginSession()
@@ -113,7 +126,7 @@ namespace YLFramework.Integrations.HybridCLR
             {
                 var error = new InvalidOperationException("The accepted HybridCLR request's Play/Resource session ended before completion.");
                 if (loader.active != null) loader.Finish(loader.active, null, error);
-                foreach (var request in loader.moduleRequests.Values.ToArray())
+                foreach (var request in loader.PendingModuleRequests.ToArray())
                 {
                     request.Stage = "SessionUnavailable";
                     request.Invalidate?.Invoke(error);
@@ -126,7 +139,7 @@ namespace YLFramework.Integrations.HybridCLR
 
         private void UpdatePendingRegistration()
         {
-            if (active == null && moduleRequests.Count == 0) pendingLoaders.Remove(this);
+            if (active == null && !PendingModuleRequests.Any()) pendingLoaders.Remove(this);
             else pendingLoaders.Add(this);
         }
 
@@ -193,9 +206,33 @@ namespace YLFramework.Integrations.HybridCLR
                 var pending = resources.AcquireAsync<TextAsset>(manifestAddress);
                 job.Pending = pending;
                 pending.Completed += r => ReadManifest(job, r);
+                if (!request.isDone)
+                {
+                    var routine = CoroutineStarter.Start(ObserveLoad(job));
+                    if (request.isDone) CoroutineStarter.Stop(routine);
+                    else if (routine == null) Finish(job, null, new InvalidOperationException("Code loading requires an active coroutine host."));
+                    else job.ProgressRoutine = routine;
+                }
             }
             catch (Exception exception) { Finish(job, null, exception); }
             return request;
+        }
+
+        private IEnumerator ObserveLoad(Job job)
+        {
+            while (!job.Request.isDone)
+            {
+                try
+                {
+                    RequireAvailable(job.Address);
+                    var pending = job.Pending?.Progress ?? 0;
+                    job.Request.Progress(job.Payloads == null ? 0.1f * pending :
+                        0.1f + 0.6f * (job.Index + pending) / job.Payloads.Length);
+                }
+                catch (Exception error) { Finish(job, null, error); }
+                if (job.Request.isDone) yield break;
+                yield return null;
+            }
         }
 
         private void ReadManifest(Job job, ResourceRequest<AssetLease<TextAsset>> pending)
@@ -213,6 +250,7 @@ namespace YLFramework.Integrations.HybridCLR
                 job.Payloads = job.Manifest.AotMetadata.Concat(job.Manifest.HotUpdateAssemblies).ToArray();
                 pending.Dispose();
                 job.Request.Stage = "Payloads";
+                job.Request.Progress(0.1f);
                 Pump(job);
             }
             catch (Exception exception) { pending.Dispose(); Finish(job, null, exception); }
@@ -226,6 +264,7 @@ namespace YLFramework.Integrations.HybridCLR
                 while (job.Index < job.Payloads.Length)
                 {
                     var payload = job.Payloads[job.Index]; job.Request.AssemblyName = payload.Name;
+                    job.Request.Progress(0.1f + 0.6f * job.Index / job.Payloads.Length);
                     var pending = resources.AcquireAsync<TextAsset>(new ResourceAddress(job.Manifest.ProjectId, payload.Address));
                     job.Pending = pending;
                     if (pending.IsDone) { ReadPayload(job, pending); continue; }
@@ -265,6 +304,7 @@ namespace YLFramework.Integrations.HybridCLR
             RequireAvailable(job.Address);
             var manifest = job.Manifest;
             job.Request.Stage = calls.Simulation ? "Simulation" : "NativePreflight";
+            job.Request.Progress(0.7f);
             if (process.Projects.TryGetValue(manifest.ProjectId, out var existingPackage) && existingPackage != manifest.CodePackageId)
             { job.Restart = true; throw new InvalidOperationException("Different code bytes/descriptors are already registered for this project. Restart to change code packages."); }
             var domain = calls.LoadedAssemblies();
@@ -287,36 +327,49 @@ namespace YLFramework.Integrations.HybridCLR
                     var matches = domain.Where(a => HybridCLRManifest.CanonicalIdentity(a.GetName()) == payload.Identity).ToArray();
                     if (matches.Length != 1) throw new NotSupportedException("Editor Simulation requires exactly one already-loaded assembly; external-only DLLs need native Player validation: " + payload.Name);
                     loaded.Add(payload.Name, matches[0]);
+                    job.Request.AssemblyName = payload.Name;
+                    job.Request.Progress(0.7f + 0.3f * loaded.Count / manifest.HotUpdateAssemblies.Length);
                 }
             }
             else
             {
+                var completedCount = 0;
                 foreach (var payload in manifest.AotMetadata)
                 {
                     job.Request.Stage = "Metadata"; job.Request.AssemblyName = payload.Name;
-                    if (process.Assemblies.ContainsKey(payload.Name)) continue;
-                    job.Irreversible = true;
-                    var code = calls.LoadMetadata(job.Bytes[payload.Name]);
-                    if (code != (int)global::HybridCLR.LoadImageErrorCode.OK)
+                    job.Request.Progress(0.7f + 0.3f * completedCount / job.Payloads.Length);
+                    if (!process.Assemblies.ContainsKey(payload.Name))
                     {
-                        job.Request.NativeErrorCode = code;
-                        throw new InvalidOperationException("LoadMetadataForAOTAssembly failed for " + payload.Name + ": " + code + ". Unknown-owner already-loaded codes are not success.");
+                        job.Irreversible = true;
+                        var code = calls.LoadMetadata(job.Bytes[payload.Name]);
+                        if (code != (int)global::HybridCLR.LoadImageErrorCode.OK)
+                        {
+                            job.Request.NativeErrorCode = code;
+                            throw new InvalidOperationException("LoadMetadataForAOTAssembly failed for " + payload.Name + ": " + code + ". Unknown-owner already-loaded codes are not success.");
+                        }
+                        process.Assemblies.Add(payload.Name, Record(payload, true, null));
                     }
-                    process.Assemblies.Add(payload.Name, Record(payload, true, null));
+                    job.Request.Progress(0.7f + 0.3f * ++completedCount / job.Payloads.Length);
                 }
                 foreach (var payload in manifest.HotUpdateAssemblies)
                 {
                     job.Request.Stage = "AssemblyLoad"; job.Request.AssemblyName = payload.Name;
-                    if (process.Assemblies.TryGetValue(payload.Name, out var existing)) { loaded.Add(payload.Name, existing.Assembly); continue; }
-                    job.Irreversible = true;
-                    var assembly = calls.LoadAssembly(job.Bytes[payload.Name]);
-                    if (assembly == null || HybridCLRManifest.CanonicalIdentity(assembly.GetName()) != payload.Identity)
-                        throw new InvalidDataException("Loaded assembly identity did not match its checked PE/manifest: " + payload.Name);
-                    process.Assemblies.Add(payload.Name, Record(payload, false, assembly)); loaded.Add(payload.Name, assembly);
+                    job.Request.Progress(0.7f + 0.3f * completedCount / job.Payloads.Length);
+                    if (process.Assemblies.TryGetValue(payload.Name, out var existing)) loaded.Add(payload.Name, existing.Assembly);
+                    else
+                    {
+                        job.Irreversible = true;
+                        var assembly = calls.LoadAssembly(job.Bytes[payload.Name]);
+                        if (assembly == null || HybridCLRManifest.CanonicalIdentity(assembly.GetName()) != payload.Identity)
+                            throw new InvalidDataException("Loaded assembly identity did not match its checked PE/manifest: " + payload.Name);
+                        process.Assemblies.Add(payload.Name, Record(payload, false, assembly)); loaded.Add(payload.Name, assembly);
+                    }
+                    job.Request.Progress(0.7f + 0.3f * ++completedCount / job.Payloads.Length);
                 }
             }
             process.Projects[manifest.ProjectId] = manifest.CodePackageId;
-            var result = new HybridCLRLoadResult { ProjectId = manifest.ProjectId, CodePackageId = manifest.CodePackageId, Simulation = calls.Simulation,
+            var result = new HybridCLRLoadResult { ProjectId = manifest.ProjectId, CodePackageId = manifest.CodePackageId,
+                Mode = calls.Simulation ? HybridCLRLoadMode.EditorSimulation : HybridCLRLoadMode.Native,
                 Assemblies = new ReadOnlyDictionary<string, Assembly>(loaded) };
             sessions.Add(job.Address, new Session { Manifest = job.ManifestLease, Result = result });
             job.ManifestLease = null;
@@ -331,7 +384,10 @@ namespace YLFramework.Integrations.HybridCLR
         {
             if (job.Request.isDone) return;
             if (error != null && job.Irreversible) process.RequiresRestart = true;
-            job.Pending?.Dispose(); job.Pending = null;
+            var routine = job.ProgressRoutine; job.ProgressRoutine = null;
+            CoroutineStarter.Stop(routine);
+            var pending = job.Pending; job.Pending = null;
+            pending?.Dispose();
             job.ManifestLease?.Dispose(); job.ManifestLease = null;
             job.Bytes.Clear();
             if (ReferenceEquals(active, job)) active = null;
@@ -344,29 +400,85 @@ namespace YLFramework.Integrations.HybridCLR
         public HybridCLRModuleRequest StartModuleAsync(ResourceAddress manifestAddress, string entryAssemblyName, string moduleTypeFullName)
         {
             RequireAvailable(manifestAddress);
+            RequireModuleArguments(entryAssemblyName, moduleTypeFullName);
+            return StartModuleRequest(moduleRequests, manifestAddress, entryAssemblyName, moduleTypeFullName, false);
+        }
+
+#if UNITY_EDITOR
+        /// <summary>显式使用 Editor 已加载的程序集启动 Module；不校验代码包，也不读取或回退到代码资源。</summary>
+        public HybridCLRModuleRequest StartEditorModuleAsync(string projectId, string entryAssemblyName, string moduleTypeFullName)
+        {
+            AssertThread();
+            var address = new ResourceAddress(projectId, HybridCLRManifest.ManifestPath);
+            RequireAvailable(address);
+            RequireModuleArguments(entryAssemblyName, moduleTypeFullName);
+            if (CoreResourceAccess.Provider == null)
+                throw new InvalidOperationException("Bind the Core resource provider before starting an EditorFast Module.");
+            return StartModuleRequest(editorModuleRequests, address, entryAssemblyName, moduleTypeFullName, true);
+        }
+#endif
+
+        private static void RequireModuleArguments(string entryAssemblyName, string moduleTypeFullName)
+        {
             if (string.IsNullOrWhiteSpace(entryAssemblyName)) throw new ArgumentException("An exact entry assembly is required.", nameof(entryAssemblyName));
             if (string.IsNullOrWhiteSpace(moduleTypeFullName)) throw new ArgumentException("An exact Module type name is required.", nameof(moduleTypeFullName));
+        }
+
+        private HybridCLRModuleRequest StartModuleRequest(Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest> requests,
+            ResourceAddress manifestAddress, string entryAssemblyName, string moduleTypeFullName, bool editorFast)
+        {
             var key = (manifestAddress, entryAssemblyName, moduleTypeFullName);
-            if (moduleRequests.TryGetValue(key, out var existing) && !existing.isDone) return existing;
+            if (requests.TryGetValue(key, out var existing) && !existing.isDone) return existing;
             var request = new HybridCLRModuleRequest { ProjectId = manifestAddress.ProjectId, AssemblyName = entryAssemblyName };
-            moduleRequests[key] = request;
+            requests[key] = request;
             UpdatePendingRegistration();
             void FinishModule(Exception error, bool restart = false)
             {
                 if (request.isDone) return;
                 var detach = request.Detach; request.Detach = null; request.Invalidate = null;
+                var routine = request.ProgressRoutine; request.ProgressRoutine = null;
+                CoroutineStarter.Stop(routine);
                 detach?.Invoke();
-                if (moduleRequests.TryGetValue(key, out var current) && ReferenceEquals(current, request)) moduleRequests.Remove(key);
+                if (requests.TryGetValue(key, out var current) && ReferenceEquals(current, request)) requests.Remove(key);
                 UpdatePendingRegistration();
                 request.Finish(error, restart);
             }
-            request.Invalidate = error => FinishModule(error, process.RequiresRestart);
+            request.Invalidate = error =>
+            {
+                request.Stage = "SessionUnavailable";
+                FinishModule(error, !editorFast && process.RequiresRestart);
+            };
             try
             {
+#if UNITY_EDITOR
+                if (editorFast)
+                {
+                    request.Stage = "EditorFast";
+                    var matches = AppDomain.CurrentDomain.GetAssemblies().Where(a => a.GetName().Name == entryAssemblyName).ToArray();
+                    if (matches.Length != 1)
+                        throw new TypeLoadException("EditorFast requires exactly one already-loaded entry assembly: " + entryAssemblyName + "; matches=" + matches.Length);
+                    request.Code = new HybridCLRLoadResult
+                    {
+                        ProjectId = manifestAddress.ProjectId, Mode = HybridCLRLoadMode.EditorFast,
+                        Assemblies = new ReadOnlyDictionary<string, Assembly>(new Dictionary<string, Assembly>(StringComparer.Ordinal)
+                            { { entryAssemblyName, matches[0] } })
+                    };
+                    StartCoreModule(manifestAddress, entryAssemblyName, moduleTypeFullName, request, FinishModule);
+                    return request;
+                }
+#endif
                 var load = LoadAsync(manifestAddress);
+                void Progressed(HybridCLRLoadRequest source)
+                {
+                    if (request.isDone) return;
+                    request.Stage = source.Stage; request.AssemblyName = source.AssemblyName;
+                    request.Progress(source.progress * 0.8f);
+                }
                 Action<HybridCLRLoadRequest> continuation = completed =>
                 {
                     if (request.isDone) return;
+                    var detach = request.Detach; request.Detach = null;
+                    detach?.Invoke();
                     request.Code = completed.Result;
                     if (completed.Exception != null)
                     {
@@ -375,38 +487,76 @@ namespace YLFramework.Integrations.HybridCLR
                     }
                     try
                     {
-                        RequireAvailable(manifestAddress); request.Stage = "Module";
-                        if (!completed.Result.Assemblies.TryGetValue(entryAssemblyName, out var entry)) throw new TypeLoadException("Entry assembly is not registered in this code package: " + entryAssemblyName);
-                        var type = entry.GetType(moduleTypeFullName, true, false);
-                        if (!typeof(Module).IsAssignableFrom(type) || type.IsAbstract || type.ContainsGenericParameters) throw new TypeLoadException("A concrete YL Module type in the exact entry assembly is required.");
-                        var registered = ModuleManager.GetModule(type);
-                        if (registered != null && !modules.Contains(registered)) throw new InvalidOperationException("This Module is already owned by another startup entry.");
-                        var startup = ModuleManager.StartUpModule(type);
-                        request.Module = startup.Module; modules.Add(startup.Module);
-                        Action<YLFramework.Core.StartUpModuleRequest> onStarted = done =>
-                        {
-                            if (request.isDone) return;
-                            if (done.Exception != null) modules.Remove(done.Module);
-                            request.Stage = done.Exception == null ? "Complete" : "Module";
-                            FinishModule(done.Exception);
-                        };
-                        request.Detach = () => startup.RemoveCompleteEvent(onStarted);
-                        startup.AddCompleteEvent(onStarted);
+                        StartCoreModule(manifestAddress, entryAssemblyName, moduleTypeFullName, request, FinishModule);
                     }
                     catch (Exception exception) { FinishModule(exception); }
                 };
-                request.Detach = () => load.RemoveContinuation(continuation);
+                request.Detach = () => { load.ProgressChanged -= Progressed; load.RemoveContinuation(continuation); };
+                load.ProgressChanged += Progressed;
+                Progressed(load);
                 load.ContinueWith(continuation);
             }
             catch (Exception exception) { FinishModule(exception); }
             return request;
         }
 
+        private void StartCoreModule(ResourceAddress address, string entryAssemblyName, string moduleTypeFullName,
+            HybridCLRModuleRequest request, Action<Exception, bool> finish)
+        {
+            RequireAvailable(address);
+            request.Stage = "Module"; request.AssemblyName = entryAssemblyName;
+            var codeWeight = request.Code.Mode == HybridCLRLoadMode.EditorFast ? 0 : 0.8f;
+            request.Progress(codeWeight);
+            if (!request.Code.Assemblies.TryGetValue(entryAssemblyName, out var entry))
+                throw new TypeLoadException("Entry assembly is not registered in this code package: " + entryAssemblyName);
+            var type = entry.GetType(moduleTypeFullName, true, false);
+            if (type.Assembly != entry || !typeof(Module).IsAssignableFrom(type) || type.IsAbstract || type.ContainsGenericParameters)
+                throw new TypeLoadException("A concrete YL Module type in the exact entry assembly is required: " + moduleTypeFullName);
+            var registered = ModuleManager.GetModule(type);
+            if (registered != null && !modules.Contains(registered)) throw new InvalidOperationException("This Module is already owned by another startup entry.");
+            var startup = ModuleManager.StartUpModule(type);
+            request.Module = startup.Module; modules.Add(startup.Module);
+            void Started(StartUpModuleRequest done)
+            {
+                if (request.isDone) return;
+                if (done.Exception != null) modules.Remove(done.Module);
+                request.Stage = done.Exception == null ? "Complete" : "Module/" + done.Step;
+                finish(done.Exception, false);
+            }
+            IEnumerator ObserveCore()
+            {
+                while (!request.isDone)
+                {
+                    try
+                    {
+                        RequireAvailable(address);
+                        // 轮询真实 Core 请求并写入基类属性，不依赖调用方 yield/keepWaiting。
+                        if (startup.isDone) Started(startup);
+                        else
+                        {
+                            request.Stage = "Module/" + startup.Step;
+                            request.Progress(codeWeight + (1 - codeWeight) * startup.progress);
+                        }
+                    }
+                    catch (Exception error) { request.Invalidate?.Invoke(error); }
+                    if (request.isDone) yield break;
+                    yield return null;
+                }
+            }
+            request.Detach = () => startup.RemoveCompleteEvent(Started);
+            startup.AddCompleteEvent(Started);
+            if (request.isDone) return;
+            var routine = CoroutineStarter.Start(ObserveCore());
+            if (request.isDone) CoroutineStarter.Stop(routine);
+            else if (routine == null) finish(new InvalidOperationException("Module startup requires an active coroutine host."), false);
+            else request.ProgressRoutine = routine;
+        }
+
         public void Dispose()
         {
             AssertThread();
             if (disposed) return;
-            if (active != null || moduleRequests.Values.Any(r => !r.isDone) || !sessionEnded && session == generation && resources.IsAvailable && modules.Any(m =>
+            if (active != null || PendingModuleRequests.Any(r => !r.isDone) || !executionStopping && !sessionEnded && session == generation && modules.Any(m =>
                 m.State == ModuleState.Starting || m.State == ModuleState.Running || m.State == ModuleState.Closing))
                 throw new InvalidOperationException("Finish pending code/Module startup and close this entry's Modules before disposing its manifest barrier.");
             foreach (var owned in sessions.Values) owned.Manifest.Dispose();

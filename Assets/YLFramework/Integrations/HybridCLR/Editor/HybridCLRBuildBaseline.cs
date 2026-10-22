@@ -88,6 +88,9 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 RequirePayload(baseline.Files, payload, "HotUpdate/");
             foreach (var payload in baseline.InitialManifest.AotMetadata)
                 RequirePayload(baseline.Files, payload, "Aot/");
+            var registered = baseline.InitialManifest.HotUpdateAssemblies.Select(a => "HotUpdate/" + a.Name + ".dll").OrderBy(p => p, StringComparer.Ordinal);
+            var frozen = baseline.Files.Where(f => f.Path.StartsWith("HotUpdate/", StringComparison.Ordinal)).Select(f => f.Path).OrderBy(p => p, StringComparer.Ordinal);
+            if (!registered.SequenceEqual(frozen)) throw new InvalidDataException("Frozen hot-update inputs must exactly match the global native registration.");
             foreach (var file in SafeFiles(root))
                 if (!expected.Contains(file)) throw new InvalidDataException("Unrecorded file in the frozen baseline: " + file);
             baseline.Root = root;

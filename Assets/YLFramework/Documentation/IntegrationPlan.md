@@ -366,3 +366,5 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 当前已完成可选格式、构建/加载编排、工具、显式导出及独立样例；取得定向单元/PlayMode、真实无 Domain Reload 双会话、干净接收工程的无包首导入和有包独立编译证据。Windows64 IL2CPP Development/Release Low 原生基座与运行、同 Player 签名 HTTPS v2、运行中 Busy/关闭后激活/重启换版及负向门禁已实际通过；独立审查的实质问题有失败回归修复。不外推其他平台、High stripping 或任意动态泛型。主工程 Mono/.NET Standard 设置保持；所有 IL2CPP 与特别验收宏只在自有接收工程配置。
 
 2026-10-22 用户明确授权本模块 Git 收口与普通 Push，仅纳入本专项产品、测试、工具、直接文档及官方依赖增量，保留无关工作区改动。精确范围和证据沿用边界见专项 Plan §8；源码收口不代表重新生成已冻结的旧交付包，修正后的可选包与旧交付状态见 §7。
+
+后续功能与 UI 增量已按用户授权补齐：项目入口/依赖闭包发布与全局原生登记分离、显式一跳共享基座、真实启动进度、区别于产物校验 Simulation 的 EditorFast，以及中文分区窗口和显式配置/资源预检。最终 review 修复配置预检与首次验收安装问题，EditMode 121/121；PlayMode 与 CoroutineStarter 40/40 沿用有效证据。新 Windows64 IL2CPP Development Player 已验证 A/B 首发共用同一基座、共享 Assembly 仅一份及实际 async 执行，B 发布和运行不改 Player/基座。技术边界见专项 Plan §9，最终 review/Git 收口见 §10；旧 Release/HTTPS/场景/Prefab 结论保留为历史，不冒充本轮全部重验。

@@ -1,5 +1,7 @@
 # XF HybridCLR 迁入 YL Implementation Plan
 
+> **2026-10-22 增量：项目子集、共享基座、启动进度、EditorFast 与窗口优化技术实施完成，结果见 §9；最终 review 与 Git 收口按用户新授权纳入本提交，范围与更新证据见 §10。** 下方 T1-T6/G0-G4 和 §7/§8 为上一版迁移及 Git 收口事实，不代替本轮结果。
+
 > **状态：T1-T6 实施及 G0-G4 实际门禁完成，Git 收口按 2026-10-22 用户明确授权纳入本批，范围见 §8。** 最终技术结果及交付边界见 §7；§6 的早期“当前工作点/待验证”与未提交记录是当时事实，不代表最终状态。Windows64 IL2CPP Development/Release Low 已运行，同一 Player 的签名 v2 与拒绝/重启门禁已验证；不外推 High stripping、其他平台或任意动态泛型。
 >
 > **For agentic workers:** 按任务使用 `executing-plans` 或 `subagent-driven-development`；先读本文件及相关源码，逐项勾选验收。不得把规划批准自动扩大为 Git 提交、Push、平台扩展或业务迁移授权。
@@ -338,3 +340,48 @@ public static HybridCLRBuildReport PublishPatch(HybridCLRBuildProfile profile,
 - 版权仍只集中于根 `Assets/YLFramework/LICENSE.md`，不重新加入集成内独立声明。修正后的可选包路径及旧 `G:/Unity/H26Delivery` 尚未更新的边界保持 §7 记录；构建包、Player、基线、私钥和本机验收日志不进入 Git。
 - 提交前检查完整暂存 diff、meta、凭据与范围，并在提交和 Push 后核对实际 Hash、远端 ref、index 与无关改动保护指纹；最终 Hash 和同步结果随完成回复报告，不为写入本提交自身 Hash 追加文档提交。
 - 源码、文档、脚本的暂存空白检查通过；完整 `git diff --cached --check` 仅报告 Unity 自动生成 `.meta` 的空 `userData`/`assetBundleName`/`assetBundleVariant` 值后尾空格。保留这些原生 meta 的字节与 GUID，不批量格式化或重写已验收的资产身份。
+
+## 9. 功能补齐与编辑器体验（2026-10-22）
+
+用户已授权补齐项目级程序集子集、启动进度、显式 Editor 快速模式及配置预检，并优化现有 HybridCLR 窗口。§7 是上一版 Windows64 闭环的历史验收，不代表旧扩展所有用户能力已等价覆盖，也不能替代本节新行为验证。
+
+### 设计边界
+
+- 继续复用官方 9.0.3 全局登记、现有 Resource Recipe/Project、Core Module 和 Foundation async；不引入新包，不修改 Core/Foundation 公共 API，不扩大平台或修改主工程 Mono/.NET Standard 设置。
+- `HybridCLRBuildProfile.HotUpdateAssemblies` 选择本项目入口，依赖闭包自动包含；空数组保留现有已保存 Profile 的“全部登记程序集”语义。原生生成仍基于全局登记并集，项目发布只输出其闭包。A/B 项目共用同一冻结原生基座必须有明确绑定与登记证据，不能简单删除 ProfileGuid/ProjectId/兼容身份检查，也不能要求每个资源项目重建一份 Player 来冒充共享基座。
+- `StartModuleAsync` 保持原调用方式，补齐真实读取/Core 启动进度与阶段；同步 native 阶段不伪造平滑进度。新增仅 Editor 的 `StartEditorModuleAsync(projectId, entryAssemblyName, moduleTypeFullName)`，不读取代码资源、不调用 native、不生成虚假 CodePackageId，结果模式与发布产物 Simulation 明确区分，不作为正式加载失败后的自动回退。
+- 窗口继续使用 IMGUI，中文分区“配置/构建发布/诊断/导出”、显式新建/保存、可编辑 Profile、项目程序集选择、路径选择器、资源映射、配置与原生环境分开预检、阶段诊断；窄窗口退化为下拉导航和滚动内容。打开、绘制、选择配置不保存/安装/生成；既有官方 Settings/Installer、Validate、Base/Patch/Deploy/Export 入口均保留。
+- 新建 Profile 显式创建自有 Recipe/Project 与代码目录映射，不创建样例玩法内容；编辑走 SerializedObject/Undo，仅显式保存所选配置。资源映射幂等、保留其他 Group，遇到归属冲突拒绝，不清理用户数据。
+- 旧冻结基线、Player、交付目录不覆盖；新增真实验收使用新目录。版权声明只在根 LICENSE，不新增独立声明。当前任务未授权新的 Git 提交/Push。
+
+### 实施与验收
+
+- [x] 读取现有源码、程序集边界与 Resource 工作台模式；旧功能差异已逐项核实。
+- [x] 项目子集与工具动作先写 9 个可编译回归，Unity EditMode 实际 RED 9/9，失败原因为缺少 Profile 子集字段和显式 Profile 工具，而非编译错误。
+- [x] 实现项目闭包、A/B 子集输出、共享基座绑定与冻结元数据/native 约束；验证非法入口、跨项目共享 DLL 和旧 baseline 行为。
+- [x] 实现显式新建配置、幂等资源映射、配置检查与 Undo；9 个 RED 变 GREEN，补共享基座关键回归。
+- [x] Runtime 3 项实际 RED 后实现进度/EditorFast；observer、Dispose、失败重试及无 Domain Reload 会话终态回归通过。
+- [x] 完成窗口布局与交互，实际检查 1040px 宽窗、540px 窄窗及 940px 构建页，保留四任务页和全部旧操作入口；打开无隐式副作用门禁通过。
+- [x] 完成下述定向/原生验证并更新 README/架构；当前不重建旧冻结交付、不扩大平台，不自动 Git 提交/Push。
+
+### 实际结果与边界
+
+- 最终 HybridCLR EditMode **116/116**，无 failed/skipped；包括真实跨 Play/禁用 Domain Reload 会话测试。长调用超过 MCP 响应时限后读取 Editor 的实际完整结果缓存确认 total=passed=116、其他结果为 0、Editor 非 Play/编译/导入状态，没有把传输超时写成测试失败或自行重跑制造通过。
+- HybridCLR loader/Module PlayMode **25/25**，连同既有 CoroutineStarter **15/15** 合计 **40/40**。代码资源 pending、Core scene pending 的实际中间进度、EditorFast 零代码读取/零 native/无虚假 CodePackageId、缺入口失败及活动 Module 生命周期均实际验证；没有修改 Core/Foundation API。
+- 独立只读审查发现 **3 Important、0 已确认 Critical**；已补 4 项真实 RED 并修复：ResourceSystem 先关闭不能绕过 EditorFast 活动 Module 的 Dispose 门禁；生成目录切换遇旧规范代码选择先拒绝且预检报告，不追加冲突映射；Group ID 及数字后缀按 OrdinalIgnoreCase 避重。原有 observer、共享宿主和跨 Play 用例保持。
+- 实际窗口截图仅针对 Unity 进程的准确 HybridCLR 窗口，宽/窄配置及构建页可读、任务导航窄窗退化、长路径与说明滚动；图片位于 `C:/Users/Kano/AppData/Local/Temp/kilo/H26UI-20261022/{empty-wide,profile-wide,profile-narrow,build-wide}.png`。自有可视夹具资产已删除，不遗留 Profile/Recipe/Project 到源码工程；本轮未声称浅色主题实测。
+- 最新产品-only 可选包 `C:/Users/Kano/AppData/Local/Temp/kilo/H26-20261021/YLFramework-HybridCLR-projects.unitypackage` 导入自有 `G:/Unity/H26` 后正常 exit0。仅更新本叶子的 Runtime/Editor 与集中声明，不恢复接收端已替换为外部 DLL 的 Sample.Support 源码，原游戏/主工程 Mono 配置不动。
+- 新原生 Player `G:/Unity/H26S/HybridCLR.exe`、新基线 `Build/HybridCLR/Reception-20261022/ProjectSubsets`，Windows64 IL2CPP Development，兼容号 `hybridclr-project-subsets-v1`。真实基座构建 exit0：A manifest 只有 Support，但冻结 InitialManifest 全局登记 Entry+Support；B 不同 ProjectId/ProfileGuid 显式绑定 A，正式 PublishPatch 首发 Entry+Support 依赖闭包，实际阶段没有 Player/Strip/原生生成，exit0。
+- `project-subsets-base.json` / `project-subsets-patch.json` 的全部 Player 指纹均为 `36137ae637edcc949b3d6cc230e2ce4d93592d25a85539f6edba028fe6e1d72d`；基线 JSON SHA256 `d614e72b49d498eeb54d27621225a403e7c9cc21c1ec048c299bbb935c6ec82d`、全基线指纹 `88e439eb97ac1602983e2345d76879b24dabf26ea6cc0a651219c74f1fb5e26a` 前后不变。旧 H26D4/H26R、旧基线与交付未覆盖。
+- `native-project-subsets.json` 真实 exit0、`passed=true`、两次 `Mode=Native/Simulation=false`：A 只加载 Support，B 加载 Entry+Support，两个 Loader 的 Support 为同一 Assembly、AppDomain 中仅 1 份，执行结果 `v2-async`，两个 barrier 均释放且 ResourceStartup 正常停止。证据同在 `C:/Users/Kano/AppData/Local/Temp/kilo/H26-20261021`。这次使用明确的可信本地 A/B 发布快照，不冒充重验 HTTPS 签名更新，也没有启动固定旧 ProjectName 的示例 Module；原生 Core 场景/Prefab及 Release/HTTPS 是 §7 的历史证据，不外推为本轮全部重验。
+- 窗口新动作、模式与共享基座用法见本叶子 README；不同历史项目版本的共享 DLL 组合仍需应用协调，不能仅凭同一 native 基座宣称任意组合一致。所有补丁继续拒绝未登记程序集、新 metadata/native 需求，平台仍不扩展至 Windows64 之外。
+- 导航反馈追加修正：旧 Toolbar 自动套用首尾 18px 样式；仅改名虽然统一尺寸，却丢失原生 Skin 的选中态绘制，先前尺寸门禁不足以覆盖交互。最终改用保留原生 Skin 的四个显式等宽 30px Toggle，选中项加下划线，窄窗仍使用 Popup。新增实际 MouseDown/MouseUp 的 `2→3→4→1` 往返点击回归，并保留尺寸/字体门禁；工具测试最终 12/12。本追加仅涉及窗口和测试，不冒充重跑原生 Player。
+
+## 10. 本批 Review 与 Git 收口（2026-10-22）
+
+- 用户明确要求 review 本批增量并完成提交/远端推送。本地与 `origin/integration/xf-yl` 在收口前均为 `508a32519ecbbedfffeaca8663d37d53d029f327`；只在当前分支创建一次本批提交并普通 Push，不改写历史、不新建分支/PR。
+- Runtime/共享基座和 Editor/配置交互分别由独立只读审查覆盖。Runtime 侧无阻断发现；Editor 侧确认 2 项 P2：canonical 代码目录的文件夹别名/重复选择可误判、已删除目录可因历史 GUID 被接受。3 个 Unity 回归先实际 RED，再共用 `ReadCodeSelection` 验证唯一/无别名/标准选择，并先确认真实文件夹存在；工具测试 15/15，原审查者复核原发现已解决，无新增阻断。
+- 工具审查另确认首次 `Install-HybridCLRReceptionHarness.ps1` 漏拷新增 Probe、只有 Sync 拷贝，会令首次接收缺少编译类型。补齐首次安装复制项。自有临时文件复制夹具先因缺 Probe 失败，再验证 Runner/Probe 两份实际源文件均精确复制；夹具只复用历史真实导入 receipt 作为输入门禁，不冒充一次新的 Unity 导入/编译/native 验收。
+- 最终完整 HybridCLR EditMode **121/121**，0 failed/skipped；包括实际导航 MouseDown/MouseUp 与跨 Play/no-Domain-Reload 回归。MCP 长调用超时后以完整实际结果缓存核实 total=passed=121、其余 0，Editor 已退出 Play/编译/导入。Runtime 未再变动，沿用 §9 的 HybridCLR PlayMode 25/25、CoroutineStarter 15/15及真实 Native A/B 证据；本轮不重复原生基座构建或声称重验 Release/HTTPS。
+- 本提交范围为本叶子产品/README、3 个受影响测试文件、新 ProfileTools 及原生 meta、4 个受影响验收工具脚本、新 Probe、现有 Architecture/IntegrationPlan 与本 Plan。`Packages`、`ProjectSettings`、主体 Runtime/Editor、其他 Plan、`.mcp.json`、原游戏、`Assets/Test`、孤立 meta 和本机生成的 PlayMode Resources 均不提交，也不删除本地文件。
+- `8865e4731e16cf73e3bf957bf3a66a0d7f670204` 为其他受管改动保护指纹；无关未跟踪内容保护指纹为 `d02a336a8fdcca47e13306fc48ae91c3ac348003`。提交/推送后核对保护指纹、远端 ref 和暂存区；最终 Hash 在完成回复中报告，不为记录本提交自身 Hash 追加 docs 提交。旧冻结交付继续保持 §7/§9 边界，不随 Git 收口冒充已重新导出。

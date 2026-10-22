@@ -41,9 +41,11 @@ Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集�
 
 `Integrations/HybridCLR` 不属于默认框架导出闭包，使用明确的 `HybridCLRIntegrationExporter` 另行交付，默认也不带其 Samples。样例留在可选根内，避免默认递归主体 Samples 时混入；Host 不静态引用热更类型。默认两主体及现有游戏不自动接入，旧 XF HybridCLR 扩展已退出，新接入不保留旧 API 或 AssetBundleName/下载链。
 
-程序集配置以官方 HybridCLRSettings 为准；YL BuildProfile 引用 Resource Recipe，并只保存 Development 与两个显式输出目录。基座流程受检编译、官方生成/剥离、完整 metadata、正式 Resource 发布/部署和真实 Player 分阶段报告；最终 AOT 与发布输入一致且成功 Player 返回后才写持久完成基线。补丁只读此基线，不能借再次剥离或改基座让检查通过。运行时借用唯一 ResourceSystem，全部输入检查后加载 metadata/程序集；manifest lease 阻止活动代码闭包 Activate。进程级不同内容或部分不可逆失败需要重启，Dispose 不卸载程序集，也不关闭外部资源系统。
+程序集登记以官方 HybridCLRSettings 为准；YL BuildProfile 引用 Resource Recipe，保存 Development、两个显式输出目录、项目入口及可选的一跳 BaseProfile 绑定。原生编译/生成/冻结覆盖全局并集，项目 manifest 只投影所选入口的热更依赖闭包；已有配置的空入口保留全量语义。不同 ResourceProject 通过明确的拥有者 GUID、目录和兼容身份复用同一基座，全局热更、metadata、native 登记仍是不可越过的能力上限。schema1 的 InitialManifest 保留全局登记，不冒充某个项目实际发布内容。
 
-Module 请求在精确 entry assembly 中解析类型并组合既有 Core 生命周期，不增加 Module/Core/Resource/Root 公共 API。先关闭本入口 Module，再 Dispose loader，最后关闭应用自己拥有的 ResourceStartup。Editor 明确为 Simulation，不能作为原生能力证明。边界、安装与用法见可选包内 `Integrations/HybridCLR/README.md`；当前原生与接收门禁状态以 [HybridCLR 专项 Plan](../../../.kilo/plans/1792591409867-xf-hybridclr-migration.md) 为准，不沿用旧 Mono 或旧 HybridCLR 结果。
+基座流程受检编译、官方生成/剥离、完整 metadata、正式 Resource 发布/部署和真实 Player 分阶段报告；最终全局 AOT 与登记输入一致且成功 Player 返回后才写持久完成基线。补丁只读此基线，不能借再次剥离或改基座让检查通过。运行时借用唯一 ResourceSystem，全部输入检查后加载 metadata/程序集；manifest lease 阻止活动代码闭包 Activate。进程级不同内容或部分不可逆失败需要重启，Dispose 不卸载程序集，也不关闭外部资源系统。
+
+Module 请求在精确 entry assembly 中解析类型并组合既有 Core 生命周期，分段透传代码读取与 Core 启动的真实单调进度，不增加 Module/Core/Resource/Root 公共 API。先关闭本入口 Module，再 Dispose loader；即使借用服务先关闭，也不丢弃活动 Module 所有权。Native、验证发布产物的 EditorSimulation、显式跳过代码资源的 EditorFast 分开标识；快路径不写 native 身份、没有 CodePackageId，不是失败回退或原生证明。窗口提供显式创建/保存、项目选择、幂等资源关联、配置与原生环境分开预检及阶段诊断。边界、安装与用法见可选包内 `Integrations/HybridCLR/README.md`；当前原生与接收门禁状态以 [HybridCLR 专项 Plan](../../../.kilo/plans/1792591409867-xf-hybridclr-migration.md) 为准，不沿用旧 Mono 或旧 HybridCLR 结果。
 
 外部依赖：UGUI、Newtonsoft.Json（存档、HTTP、Catalog 与 Core 配表等）等既有依赖；排除 DOTween 不意味着框架零外部依赖。EventListener 的折叠、页签与 UnityEvent 编辑由普通 Editor 中的原生 CustomEditor 承担，Sirenix Odin 插件整树及其编译引用已退出，不提供 mini-Odin 或兼容空壳。ProjectSettings 的五个未使用 Odin 宏按原配置权限边界保留。
 

@@ -1,0 +1,213 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+using YLFramework.Integrations.HybridCLR;
+using YLFramework.Services.Resource;
+
+namespace YLFramework.Tests.HybridCLRReception
+{
+    public sealed class HybridCLRProjectSubsetProbe : MonoBehaviour
+    {
+        private const string SupportName = "YLFramework.HybridCLR.Sample.Support";
+        private const string EntryName = "YLFramework.HybridCLR.Sample.Entry";
+        private const string Compatibility = "hybridclr-project-subsets-v1";
+        private const string PlayerDirectory = "G:/Unity/H26S";
+        private const string CacheDirectory = "G:/Unity/HC26S";
+        private readonly JObject evidence = new JObject
+        {
+            ["action"] = "ProjectSubsets", ["simulation"] = JValue.CreateNull(), ["loads"] = new JArray(),
+            ["sharedSupportAssembly"] = JValue.CreateNull(), ["barrierAReleased"] = false,
+            ["barrierBReleased"] = false, ["stopped"] = false, ["asyncOutput"] = JValue.CreateNull()
+        };
+        private string root;
+        private string run;
+        private ResourceStartup startup;
+        private HybridCLRLoader loaderA;
+        private HybridCLRLoader loaderB;
+        private HybridCLRLoadResult loadedA;
+        private HybridCLRLoadResult loadedB;
+
+        private static string Argument(string name)
+        {
+            var args = Environment.GetCommandLineArgs(); var index = Array.IndexOf(args, name);
+            if (index < 0 || index + 1 == args.Length || index != Array.LastIndexOf(args, name))
+                throw new ArgumentException("One explicit " + name + " is required.");
+            return args[index + 1];
+        }
+
+        private IEnumerator Start()
+        {
+            Application.runInBackground = true;
+            var failures = new List<Exception>();
+            yield return Observe(Run(), failures);
+            // Release both manifest barriers and the owned Resource startup even after a load/assertion failure.
+            yield return Observe(Close(failures), failures);
+            evidence["passed"] = failures.Count == 0;
+            if (failures.Count != 0) evidence["error"] = string.Join("\n", failures.Select(e => e.ToString()));
+            try
+            {
+                if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(run)) throw new InvalidOperationException("Missing receipt destination.");
+                using var file = new FileStream(Path.Combine(root, run + ".json"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+                var bytes = Encoding.UTF8.GetBytes(evidence.ToString(Formatting.Indented));
+                file.Write(bytes, 0, bytes.Length); file.Flush(true);
+                Debug.Log("HYBRIDCLR_PROJECT_SUBSETS " + evidence.ToString(Formatting.None));
+            }
+            catch (Exception error) { failures.Add(error); Debug.LogException(error); }
+            Application.Quit(failures.Count == 0 ? 0 : 21);
+        }
+
+        private static IEnumerator Observe(IEnumerator routine, List<Exception> failures)
+        {
+            var stack = new Stack<IEnumerator>(); stack.Push(routine);
+            var failed = false;
+            while (stack.Count != 0 && !failed)
+            {
+                var next = false; object current = null;
+                try { next = stack.Peek().MoveNext(); if (next) current = stack.Peek().Current; }
+                catch (Exception error) { failures.Add(error); Debug.LogException(error); failed = true; }
+                if (failed) break;
+                if (!next)
+                {
+                    try { (stack.Pop() as IDisposable)?.Dispose(); }
+                    catch (Exception error) { failures.Add(error); Debug.LogException(error); failed = true; }
+                    continue;
+                }
+                if (current is IEnumerator nested && !(current is CustomYieldInstruction)) { stack.Push(nested); continue; }
+                yield return current;
+            }
+            while (stack.Count != 0)
+                try { (stack.Pop() as IDisposable)?.Dispose(); }
+                catch (Exception error) { failures.Add(error); Debug.LogException(error); }
+        }
+
+        private IEnumerator Run()
+        {
+            root = Path.GetFullPath(Argument("-hclr-root")); var requestedRun = Argument("-hclr-run");
+            Require(System.Text.RegularExpressions.Regex.IsMatch(requestedRun, "^[A-Za-z0-9-]+$") &&
+                requestedRun != "project-subsets-base" && requestedRun != "project-subsets-patch", "Use a new explicit Player run id.");
+            run = requestedRun;
+            Require(!File.Exists(Path.Combine(root, run + ".json")) && !Directory.Exists(Path.Combine(root, run + ".json")), "Preserve the earlier Player receipt.");
+            Require(Argument("-hclr-action") == "ProjectSubsets", "This scene accepts only ProjectSubsets.");
+            Require(Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && Application.unityVersion == "2022.3.62f3c1",
+                "The probe requires its actual Windows64 IL2CPP Player and exact Unity version.");
+#if !ENABLE_IL2CPP
+            throw new PlatformNotSupportedException("The project-subset probe must run in an IL2CPP Player.");
+#endif
+            var basePath = Path.Combine(root, "project-subsets-base.json");
+            Require(Path.GetFullPath(Argument("-hclr-base-receipt")) == Path.GetFullPath(basePath), "Wrong explicit base receipt.");
+            var baseline = JObject.Parse(File.ReadAllText(basePath));
+            var patch = JObject.Parse(File.ReadAllText(Path.Combine(root, "project-subsets-patch.json")));
+            Require(baseline.Value<bool>("passed") && patch.Value<bool>("passed") &&
+                baseline.Value<string>("CompatibilityId") == Compatibility && patch.Value<string>("CompatibilityId") == Compatibility &&
+                baseline.Value<bool>("Development") == Debug.isDebugBuild && Debug.isDebugBuild && patch.Value<bool>("Development"),
+                "The explicit base/patch identity or actual Development flag does not match.");
+            Require(Path.GetFullPath(baseline.Value<string>("PlayerDirectory")) == Path.GetFullPath(PlayerDirectory) &&
+                Path.GetFullPath(Path.GetDirectoryName(Application.dataPath)) == Path.GetFullPath(PlayerDirectory) &&
+                Path.GetFullPath(baseline.Value<string>("RuntimeCacheDirectory")) == Path.GetFullPath(CacheDirectory) &&
+                baseline.Value<string>("PlayerFingerprint") == patch.Value<string>("PlayerFingerprint") &&
+                baseline.Value<string>("BaselineFingerprint") == patch.Value<string>("BaselineFingerprint") &&
+                baseline.Value<string>("BaselineSha256") == patch.Value<string>("BaselineSha256"), "Wrong Player, cache or frozen base binding.");
+            Require(JToken.DeepEquals(baseline["ReleaseA"], patch["ReleaseA"]) && JToken.DeepEquals(baseline["SharedSupport"], patch["SharedSupport"]),
+                "Patch evidence changed A's published release or shared Support descriptor.");
+            var releaseA = (JObject)baseline["ReleaseA"]; var releaseB = (JObject)patch["ReleaseB"];
+            Require(releaseA.Value<string>("ProjectId") == "hclr-sub-a" && releaseB.Value<string>("ProjectId") == "hclr-sub-b", "Wrong project subset ids.");
+            var snapshotA = ResourceLocalSnapshot.Open(releaseA.Value<string>("DirectoryPath"), "hclr-sub-a", releaseA.Value<string>("CatalogDigest"), "StandaloneWindows64", Compatibility);
+            var snapshotB = ResourceLocalSnapshot.Open(releaseB.Value<string>("DirectoryPath"), "hclr-sub-b", releaseB.Value<string>("CatalogDigest"), "StandaloneWindows64", Compatibility);
+            Require(!Directory.Exists(CacheDirectory) && !File.Exists(CacheDirectory) && !File.Exists(CacheDirectory + ".meta"), "Never adopt an earlier runtime cache.");
+            evidence["unityVersion"] = Application.unityVersion; evidence["development"] = Debug.isDebugBuild;
+            evidence["source"] = "explicit-trusted-local-snapshots";
+            evidence["releaseA"] = releaseA.DeepClone(); evidence["releaseB"] = releaseB.DeepClone();
+            evidence["cacheDirectory"] = CacheDirectory;
+            var store = new ArtifactStore(CacheDirectory, new[]
+            {
+                new ResourceProjectMount("hclr-sub-a", "StandaloneWindows64", Compatibility, snapshotA),
+                new ResourceProjectMount("hclr-sub-b", "StandaloneWindows64", Compatibility, snapshotB)
+            });
+            startup = new ResourceStartup(new ResourceConfiguration(store), bindCore: false);
+            using (var init = startup.StartAsync()) { yield return init; init.TakeResult(); }
+            Require(startup.OwnsResourceSystem && startup.CoreProvider == null, "The probe must own an unbound Resource startup.");
+
+            loaderA = new HybridCLRLoader(startup.Resources, Compatibility);
+            var requestA = loaderA.LoadAsync(new ResourceAddress("hclr-sub-a", HybridCLRManifest.ManifestPath)); yield return requestA;
+            loadedA = requestA.Result; Record("A", requestA);
+            if (requestA.Exception != null) throw new InvalidOperationException("Project A native loading failed at " + requestA.Stage, requestA.Exception);
+            Require(loadedA != null && loadedA.Mode == HybridCLRLoadMode.Native && !loadedA.Simulation &&
+                loadedA.ProjectId == "hclr-sub-a" && loadedA.CodePackageId == releaseA.Value<string>("CodePackageId") &&
+                loadedA.Assemblies.Keys.SequenceEqual(new[] { SupportName }), "A must natively load exactly Support.");
+
+            loaderB = new HybridCLRLoader(startup.Resources, Compatibility);
+            var requestB = loaderB.LoadAsync(new ResourceAddress("hclr-sub-b", HybridCLRManifest.ManifestPath)); yield return requestB;
+            loadedB = requestB.Result; Record("B", requestB);
+            if (requestB.Exception != null) throw new InvalidOperationException("Project B native loading failed at " + requestB.Stage, requestB.Exception);
+            Require(loadedB != null && loadedB.Mode == HybridCLRLoadMode.Native && !loadedB.Simulation &&
+                loadedB.ProjectId == "hclr-sub-b" && loadedB.CodePackageId == releaseB.Value<string>("CodePackageId") &&
+                loadedB.Assemblies.Keys.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(new[] { EntryName, SupportName }),
+                "B must natively load the Entry + Support dependency closure.");
+            var shared = ReferenceEquals(loadedA.Assemblies[SupportName], loadedB.Assemblies[SupportName]);
+            evidence["sharedSupportAssembly"] = shared;
+            var supportCount = AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name == SupportName);
+            evidence["supportAssemblyCount"] = supportCount;
+            Require(shared && supportCount == 1, "The same Support must be reused across both native loaders without a duplicate assembly.");
+
+            var versionInfo = loadedA.Assemblies[SupportName].GetType("YLFramework.Samples.HybridCLR.HotUpdate.VersionInfo", true, false);
+            var version = (string)versionInfo.GetProperty("Version", BindingFlags.Public | BindingFlags.Static).GetValue(null);
+            var method = versionInfo.GetMethod("DescribeAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            Require(method != null && method.ReturnType == typeof(Task<string>), "Missing actual Support DescribeAsync contract.");
+            var task = method.Invoke(null, null) as Task<string>;
+            Require(task != null && !string.IsNullOrEmpty(version), "Actual Support did not return its version and Task<string>.");
+            var deadline = Time.realtimeSinceStartup + 60;
+            while (!task.IsCompleted)
+            {
+                Require(Time.realtimeSinceStartup < deadline, "Actual hot async continuation timed out.");
+                yield return null;
+            }
+            var output = task.GetAwaiter().GetResult();
+            evidence["supportVersion"] = version; evidence["asyncOutput"] = output;
+            Require(output == version + "-async", "Actual hot async output did not match the loaded Support version.");
+            var entry = loadedB.Assemblies[EntryName];
+            var moduleType = entry.GetType("YLFramework.Samples.HybridCLR.HotUpdate.ExampleModule", true, false);
+            Require(moduleType.Assembly == entry && typeof(YLFramework.Core.Module).IsAssignableFrom(moduleType) &&
+                !moduleType.IsAbstract && !moduleType.ContainsGenericParameters, "Entry must expose the concrete sample Module type.");
+            var started = YLFramework.Core.ModuleManager.GetModule(moduleType) != null;
+            evidence["entryModuleType"] = moduleType.FullName; evidence["entryModuleStarted"] = started;
+            Require(!started, "Do not start the old sample Module against these new code-only data projects.");
+        }
+
+        private void Record(string project, HybridCLRLoadRequest request)
+        {
+            ((JArray)evidence["loads"]).Add(new JObject
+            {
+                ["subset"] = project, ["projectId"] = request.ProjectId, ["stage"] = request.Stage,
+                ["requiresRestart"] = request.RequiresRestart, ["error"] = request.Exception?.ToString(),
+                ["mode"] = request.Result == null ? JValue.CreateNull() : new JValue(request.Result.Mode.ToString()),
+                ["simulation"] = request.Result == null ? JValue.CreateNull() : new JValue(request.Result.Simulation),
+                ["codePackageId"] = request.Result?.CodePackageId,
+                ["assemblies"] = new JArray(request.Result?.Assemblies.Keys.OrderBy(n => n, StringComparer.Ordinal) ?? Enumerable.Empty<string>())
+            });
+            var results = new[] { loadedA, loadedB }.Where(result => result != null).ToArray();
+            if (results.Length != 0) evidence["simulation"] = results.Any(result => result.Simulation);
+        }
+
+        private IEnumerator Close(List<Exception> failures)
+        {
+            try { if (loaderB != null) { loaderB.Dispose(); loaderB = null; evidence["barrierBReleased"] = true; } }
+            catch (Exception error) { failures.Add(error); Debug.LogException(error); }
+            try { if (loaderA != null) { loaderA.Dispose(); loaderA = null; evidence["barrierAReleased"] = true; } }
+            catch (Exception error) { failures.Add(error); Debug.LogException(error); }
+            if (startup == null) yield break;
+            using var stop = startup.StopAsync(); yield return stop;
+            Require(stop.TakeResult() && ResourceSystem.Current == null, "The owned Resource startup did not stop after both barriers were released.");
+            startup = null; evidence["stopped"] = true;
+        }
+
+        private static void Require(bool condition, string error) { if (!condition) throw new InvalidOperationException(error); }
+    }
+}

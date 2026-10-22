@@ -8,11 +8,14 @@ using Module = YLFramework.Core.Module;
 
 namespace YLFramework.Integrations.HybridCLR
 {
+    public enum HybridCLRLoadMode { Native, EditorSimulation, EditorFast }
+
     public sealed class HybridCLRLoadResult
     {
         public string ProjectId { get; internal set; }
         public string CodePackageId { get; internal set; }
-        public bool Simulation { get; internal set; }
+        public HybridCLRLoadMode Mode { get; internal set; }
+        public bool Simulation => Mode != HybridCLRLoadMode.Native;
         public IReadOnlyDictionary<string, Assembly> Assemblies { get; internal set; }
     }
 
@@ -26,11 +29,21 @@ namespace YLFramework.Integrations.HybridCLR
         public string Stage { get; internal set; } = "Manifest";
         public string AssemblyName { get; internal set; }
         public int? NativeErrorCode { get; internal set; }
-        internal void Progress(float value) => progress = value;
+        internal event Action<HybridCLRLoadRequest> ProgressChanged;
+        internal void Progress(float value)
+        {
+            if (isDone) return;
+            if (!float.IsNaN(value)) progress = Mathf.Max(progress, Mathf.Clamp01(value));
+            var observers = ProgressChanged;
+            if (observers == null) return;
+            foreach (Action<HybridCLRLoadRequest> observer in observers.GetInvocationList())
+                try { observer(this); } catch (Exception notificationError) { Debug.LogException(notificationError); }
+        }
         internal void Finish(HybridCLRLoadResult result, Exception exception = null, bool restart = false)
         {
             if (isDone) return;
             Result = result; Exception = exception; RequiresRestart = restart;
+            ProgressChanged = null;
             try { Completed(exception?.ToString()); }
             catch (Exception notificationError) { Debug.LogException(notificationError); }
             finally
@@ -52,6 +65,7 @@ namespace YLFramework.Integrations.HybridCLR
     {
         internal Action Detach;
         internal Action<Exception> Invalidate;
+        internal Coroutine ProgressRoutine;
         public Module Module { get; internal set; }
         public HybridCLRLoadResult Code { get; internal set; }
         public Exception Exception { get; private set; }
@@ -60,6 +74,10 @@ namespace YLFramework.Integrations.HybridCLR
         public string Stage { get; internal set; } = "LoadCode";
         public string AssemblyName { get; internal set; }
         public int? NativeErrorCode { get; internal set; }
+        internal void Progress(float value)
+        {
+            if (!isDone && !float.IsNaN(value)) progress = Mathf.Max(progress, Mathf.Clamp01(value));
+        }
         internal void Finish(Exception exception = null, bool restart = false)
         {
             if (isDone) return;

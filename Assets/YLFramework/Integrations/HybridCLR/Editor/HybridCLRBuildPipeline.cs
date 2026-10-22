@@ -73,10 +73,15 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             busy = true;
             try
             {
-                if (!Run(report, "PlayerPreflight", () => ValidatePlayerOptions(profile, options), cancellation)) return report;
+                if (!Run(report, "PlayerPreflight", () =>
+                {
+                    if (profile.BaseProfile) throw new InvalidDataException("Build the native Player through its base owner; a bound project may publish patches only.");
+                    ValidatePlayerOptions(profile, options);
+                }, cancellation)) return report;
                 var workspace = Path.GetFullPath("Temp/YLHybridCLR/" + Guid.NewGuid().ToString("N"));
                 HybridCLRAssemblySet compiled = null;
                 HybridCLRAssemblySet prepared = null;
+                HybridCLRManifest registration = null;
                 if (!Run(report, "Compile", () => compiled = Compile(profile, workspace), cancellation)) return report;
                 if (!Run(report, "Il2CppDef", global::HybridCLR.Commands.Il2CppDefGeneratorCommand.GenerateIl2CppDef, cancellation)) return report;
                 if (!Run(report, "LinkXml", () => GenerateLink(compiled), cancellation)) return report;
@@ -88,7 +93,12 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                     prepared = AnalyzeStripped(profile, compiled.HotUpdate);
                     GenerateBridge(prepared, profile.Development, SettingsUtil.GeneratedCppDir + "/MethodBridge.inc");
                 }, cancellation)) return report;
-                if (!Run(report, "Manifest", () => report.Manifest = CreateManifest(profile, prepared), cancellation)) return report;
+                if (!Run(report, "Manifest", () =>
+                {
+                    // 基座冻结全局登记，资源交付只投影当前项目，不裁掉其他项目的原生能力证据。
+                    registration = CreateManifestForSet(profile, prepared);
+                    report.Manifest = CreateManifest(profile, prepared);
+                }, cancellation)) return report;
                 if (!Run(report, "PayloadCommit", () => CommitPayloads(profile, report.Manifest, prepared), cancellation)) return report;
                 if (!Run(report, "ResourcePublish", () => PublishResources(report, profile, cancellation, provider), cancellation)) return report;
                 if (!Run(report, "Deploy", () => report.Deployment = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(report.Release), cancellation), cancellation)) return report;
@@ -103,11 +113,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 Run(report, "Baseline", () =>
                 {
                     var final = AnalyzeStripped(profile, compiled.HotUpdate);
-                    VerifyFinalAot(prepared, final, report.Manifest);
+                    VerifyFinalAot(prepared, final, registration);
                     var baseline = new HybridCLRBuildBaseline
                     {
                         ProfileGuid = ProfileGuid(profile), SettingsFingerprint = SettingsFingerprint(profile),
-                        PlayerBuildHash = PlayerFingerprint(options.locationPathName), NativeRequirements = NativeRequirements(final), InitialManifest = report.Manifest
+                        PlayerBuildHash = PlayerFingerprint(options.locationPathName), NativeRequirements = NativeRequirements(final), InitialManifest = registration
                     };
                     var sources = final.Aot.Select(a => new KeyValuePair<string, string>("Aot/" + a.Name + ".dll", a.Path))
                         .Concat(final.HotUpdate.Select(a => new KeyValuePair<string, string>("HotUpdate/" + a.Name + ".dll", a.Path)))
@@ -135,15 +145,14 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 if (!Run(report, "ReadBaseline", () =>
                 {
                     baseline = HybridCLRBuildBaseline.Read(profile.BaselineDirectory);
-                    baseline.InitialManifest.Validate(profile.Recipe.Project.ProjectId, profile.Recipe.AppContentCompatibilityId, Application.unityVersion, profile.Development);
-                    if (baseline.ProfileGuid != ProfileGuid(profile) || baseline.SettingsFingerprint != SettingsFingerprint(profile))
-                        throw new InvalidDataException("The base tool/profile/settings identity changed; build a new base with a new compatibility id.");
+                    ValidateBaselineBinding(profile, baseline, SettingsFingerprint(profile));
                     report.BaselineDirectory = baseline.Root;
                 }, cancellation)) return report;
                 if (!Run(report, "Compile", () => compiled = Compile(profile, Path.GetFullPath("Temp/YLHybridCLR/" + Guid.NewGuid().ToString("N"))), cancellation)) return report;
                 if (!Run(report, "PatchCompatibility", () =>
                 {
-                    patch = HybridCLRAssemblyAnalysis.Analyze(compiled.HotUpdate.Select(a => a.Path),
+                    var selected = SelectAssemblies(profile, compiled);
+                    patch = HybridCLRAssemblyAnalysis.Analyze(selected.HotUpdate.Select(a => a.Path),
                         baseline.Files.Where(f => f.Path.StartsWith("Aot/", StringComparison.Ordinal)).Select(f => HybridCLRBuildBaseline.Child(baseline.Root, f.Path)), UnityAotAliases());
                     ValidatePatchSet(baseline, patch);
                     var checker = new global::HybridCLR.HotUpdate.MissingMetadataChecker(baseline.Root + "/Aot", patch.HotUpdate.Select(a => a.Name));
@@ -189,8 +198,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             if (EditorUtility.IsDirty(profile.Recipe) || EditorUtility.IsDirty(profile.Recipe.Project)) throw new InvalidOperationException("Save the selected Resource recipe and project first.");
             if (input.Action != ResourceBuildAction.BuildAndPublish || input.GenerateReferences) throw new InvalidDataException("Use BuildAndPublish without generated C# address references.");
             ValidateInputPaths(profile);
+            var owner = ResolveBaseProfile(profile);
+            if (EditorUtility.IsDirty(owner) || EditorUtility.IsDirty(owner.Recipe) || EditorUtility.IsDirty(owner.Recipe.Project))
+                throw new InvalidOperationException("Save the explicitly bound native base configuration first.");
             ValidateEnvironment(profile);
-            ConfiguredNames();
+            ValidateRoots(profile.HotUpdateAssemblies, ConfiguredNames());
             LinkPath();
         }
 
@@ -255,7 +267,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 throw new InvalidOperationException("No supported x64 Visual Studio C++ toolchain was found.");
         }
 
-        private static string[] ConfiguredNames()
+        internal static string[] ConfiguredNames()
         {
             var names = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved.ToArray();
             if (names.Length == 0 || names.Length > HybridCLRManifest.MaximumAssemblyCount || names.Any(string.IsNullOrWhiteSpace) ||
@@ -326,7 +338,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return output.AsReadOnly();
         }
 
-        private static IEnumerable<HybridCLRAssemblyRecord> ExternalCandidates(string[] names)
+        internal static IEnumerable<HybridCLRAssemblyRecord> ExternalCandidates(string[] names)
         {
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -418,6 +430,9 @@ namespace YLFramework.Integrations.HybridCLR.Editor
         }
 
         private static HybridCLRManifest CreateManifest(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
+            => CreateManifestForSet(profile, SelectAssemblies(profile, assemblies));
+
+        private static HybridCLRManifest CreateManifestForSet(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
         {
             var hotNames = new HashSet<string>(assemblies.HotUpdate.Select(a => a.Name), StringComparer.Ordinal);
             HybridCLRPayload Payload(HybridCLRAssemblyRecord record, bool aot) => new HybridCLRPayload
@@ -455,14 +470,69 @@ namespace YLFramework.Integrations.HybridCLR.Editor
 
         internal static void ValidatePatchSet(HybridCLRBuildBaseline baseline, HybridCLRAssemblySet patch)
         {
-            if (!baseline.InitialManifest.HotUpdateAssemblies.Select(a => a.Name).OrderBy(n => n, StringComparer.Ordinal)
-                .SequenceEqual(patch.HotUpdate.Select(a => a.Name).OrderBy(n => n, StringComparer.Ordinal)))
-                throw new InvalidDataException("Adding, removing or renaming a hot-update assembly requires a new base.");
+            var registered = new HashSet<string>(baseline.InitialManifest.HotUpdateAssemblies.Select(a => a.Name), StringComparer.Ordinal);
+            if (patch.HotUpdate.Any(a => !registered.Contains(a.Name)))
+                throw new InvalidDataException("An assembly outside the frozen global registration requires a new base.");
             var required = HybridCLRAssemblyAnalysis.CollectRequiredAotMetadata(patch, Math.Min(20, Settings.instance.maxGenericReferenceIteration));
             if (required.Any(a => !baseline.InitialManifest.AotMetadata.Any(m => m.Name == a.Name)))
                 throw new InvalidDataException("New AOT metadata dependencies require a new base.");
             var allowed = new HashSet<string>(baseline.NativeRequirements, StringComparer.Ordinal);
             if (NativeRequirements(patch).Any(r => !allowed.Contains(r))) throw new InvalidDataException("New AOT generic/native bridge requirements need a new base; this static check does not certify arbitrary dynamic generic use.");
+        }
+
+        internal static string[] ValidateRoots(string[] roots, IEnumerable<string> configured)
+        {
+            var all = new HashSet<string>(configured, StringComparer.Ordinal);
+            if (roots == null || roots.Length == 0) return all.OrderBy(n => n, StringComparer.Ordinal).ToArray();
+            var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in roots)
+                if (string.IsNullOrEmpty(name) || !all.Contains(name) || !unique.Add(name))
+                    throw new InvalidDataException("Project assembly roots must be unique exact names from the official registration: " + name);
+            return roots.ToArray();
+        }
+
+        internal static HybridCLRAssemblySet SelectAssemblies(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
+        {
+            if (!profile) throw new ArgumentNullException(nameof(profile));
+            if (assemblies == null) throw new ArgumentNullException(nameof(assemblies));
+            var all = assemblies.HotUpdate.ToDictionary(a => a.Name, StringComparer.Ordinal);
+            var pending = new Stack<string>(ValidateRoots(profile.HotUpdateAssemblies, all.Keys));
+            var selected = new HashSet<string>(StringComparer.Ordinal);
+            while (pending.Count != 0)
+            {
+                var name = pending.Pop();
+                if (!selected.Add(name)) continue;
+                foreach (var reference in all[name].References)
+                {
+                    var dependency = new AssemblyName(reference).Name;
+                    if (all.ContainsKey(dependency)) pending.Push(dependency);
+                }
+            }
+            return new HybridCLRAssemblySet { HotUpdate = Array.AsReadOnly(assemblies.HotUpdate.Where(a => selected.Contains(a.Name)).ToArray()), Aot = assemblies.Aot };
+        }
+
+        internal static HybridCLRBuildProfile ResolveBaseProfile(HybridCLRBuildProfile profile)
+        {
+            if (!profile || !profile.Recipe || !profile.Recipe.Project) throw new InvalidDataException("Select a profile with a Resource recipe and project.");
+            if (!profile.BaseProfile) return profile;
+            var owner = profile.BaseProfile;
+            if (owner == profile || owner.BaseProfile || !owner.Recipe || !owner.Recipe.Project)
+                throw new InvalidDataException("A native base binding must point directly to a different, unbound owner profile.");
+            if (owner.Development != profile.Development || owner.Recipe.Target != profile.Recipe.Target ||
+                owner.Recipe.AppContentCompatibilityId != profile.Recipe.AppContentCompatibilityId ||
+                string.IsNullOrWhiteSpace(owner.BaselineDirectory) || string.IsNullOrWhiteSpace(profile.BaselineDirectory) ||
+                !Path.GetFullPath(owner.BaselineDirectory).TrimEnd('\\', '/').Equals(Path.GetFullPath(profile.BaselineDirectory).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Bound projects must use the owner's exact target, Development, compatibility id and native baseline directory.");
+            ProfileGuid(owner);
+            return owner;
+        }
+
+        internal static void ValidateBaselineBinding(HybridCLRBuildProfile profile, HybridCLRBuildBaseline baseline, string fingerprint)
+        {
+            var owner = ResolveBaseProfile(profile);
+            baseline.InitialManifest.Validate(owner.Recipe.Project.ProjectId, profile.Recipe.AppContentCompatibilityId, Application.unityVersion, profile.Development);
+            if (baseline.ProfileGuid != ProfileGuid(owner) || baseline.SettingsFingerprint != fingerprint)
+                throw new InvalidDataException("The explicit base owner/tool/settings identity changed; build a new base with a new compatibility id.");
         }
 
         private static string[] NativeRequirements(HybridCLRAssemblySet assemblies)
