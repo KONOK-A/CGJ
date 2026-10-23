@@ -36,9 +36,19 @@ namespace YLFramework.Foundation.Tests
             using var scheduler = new TimerScheduler(0, 0, 0);
             var handle = scheduler.Delay(0, () => throw new InvalidOperationException("wait fault"));
             var wait = handle.WaitForTermination();
-            if (terminal == TimerState.Cancelled) handle.Cancel();
-            else if (terminal == TimerState.Invalidated) scheduler.Dispose();
-            else Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
+            if (terminal == TimerState.Cancelled)
+            {
+                handle.Cancel();
+            }
+            else if (terminal == TimerState.Invalidated)
+            {
+                scheduler.Dispose();
+            }
+            else
+            {
+                Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
+            }
+
             Assert.That(wait.keepWaiting, Is.False);
             Assert.That(wait.Status, Is.EqualTo(terminal));
             Assert.That(wait.IsCompleted, Is.False);

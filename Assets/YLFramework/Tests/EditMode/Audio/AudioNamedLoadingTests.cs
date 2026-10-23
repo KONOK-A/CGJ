@@ -10,88 +10,122 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioNamedLoadingTests
     {
-        private AudioTestSettings mSettings;
-        private AudioClip mClip;
-        private Provider mProvider;
-        private string mBackgroundPath;
+        private AudioTestSettings _settings;
+        private AudioClip _clip;
+        private Provider _provider;
+        private string _backgroundPath;
 
         [SetUp]
         public void SetUp()
         {
-            mSettings = new AudioTestSettings();
-            mClip = AudioClip.Create("named", 44100, 1, 44100, false);
-            mProvider = new Provider(mClip);
+            _settings = new AudioTestSettings();
+            _clip = AudioClip.Create("named", 44100, 1, 44100, false);
+            _provider = new Provider(_clip);
         }
         [TearDown]
         public void TearDown()
         {
-            mSettings.Dispose();
-            if (mBackgroundPath != null) AssetDatabase.DeleteAsset(mBackgroundPath);
-            UnityEngine.Object.DestroyImmediate(mClip);
+            _settings.Dispose();
+            if (_backgroundPath != null)
+            {
+                AssetDatabase.DeleteAsset(_backgroundPath);
+            }
+
+            UnityEngine.Object.DestroyImmediate(_clip);
         }
 
         private sealed class Owner : IDisposable
         {
             internal int Releases;
             internal Action Release;
-            public void Dispose() { Releases++; Release?.Invoke(); }
+            public void Dispose()
+            {
+                Releases++;
+                Release?.Invoke();
+            }
         }
         private sealed class Provider : IAudioClipProvider
         {
             internal readonly Dictionary<string, Action<AudioClipLease, Exception>> Pending = new Dictionary<string, Action<AudioClipLease, Exception>>();
             internal readonly List<Owner> Owners = new List<Owner>();
-            private readonly AudioClip mClip;
+            private readonly AudioClip _clip;
             internal int Loads;
             internal bool Immediate;
             internal Action OnLoad;
             public bool CanCache => true;
-            internal Provider(AudioClip clip) { mClip = clip; }
+            internal Provider(AudioClip clip)
+            {
+                _clip = clip;
+            }
             public AudioClipLease Load(string key)
             {
                 Loads++;
                 OnLoad?.Invoke();
-                var owner = new Owner(); Owners.Add(owner);
-                return new AudioClipLease(mClip, owner);
+                var owner = new Owner();
+                Owners.Add(owner);
+                return new AudioClipLease(_clip, owner);
             }
             public void LoadAsync(string key, Action<AudioClipLease, Exception> completed, Action<float> progress)
             {
-                if (Immediate) { completed(Load(key), null); return; }
-                Loads++; Pending.Add(key, completed); progress(.4f);
+                if (Immediate)
+                {
+                    completed(Load(key), null);
+                    return;
+                }
+                Loads++;
+                Pending.Add(key, completed);
+                progress(.4f);
             }
             internal AudioClipLease Complete(string key, Exception error = null)
             {
-                var owner = new Owner(); Owners.Add(owner);
-                var lease = error == null ? new AudioClipLease(mClip, owner) : null;
+                var owner = new Owner();
+                Owners.Add(owner);
+                var lease = error == null ? new AudioClipLease(_clip, owner) : null;
                 Pending[key](lease, error);
                 return lease;
             }
         }
-        private AudioClipAddress Address(string key) => new AudioClipAddress(mProvider, key);
+        private AudioClipAddress Address(string key) => new AudioClipAddress(_provider, key);
 
         private AudioPlayRequest Waiting(AudioCategory category, AudioChannel channel = null)
         {
-            mBackgroundPath = "Assets/YLFramework/Tests/Fixtures/Audio/ReentryData-" + Guid.NewGuid().ToString("N") + ".wav";
-            const int samples = 44100 * 120;
-            using (var writer = new BinaryWriter(File.Create(mBackgroundPath)))
+            _backgroundPath = "Assets/YLFramework/Tests/Fixtures/Audio/ReentryData-" + Guid.NewGuid().ToString("N") + ".wav";
+            const int Samples = 44100 * 120;
+            using (var writer = new BinaryWriter(File.Create(_backgroundPath)))
             {
-                writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + samples * 2);
-                writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); writer.Write(16);
-                writer.Write((short)1); writer.Write((short)1); writer.Write(44100); writer.Write(88200);
-                writer.Write((short)2); writer.Write((short)16); writer.Write(System.Text.Encoding.ASCII.GetBytes("data")); writer.Write(samples * 2);
-                writer.Write(new byte[samples * 2]);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                writer.Write(36 + Samples * 2);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
+                writer.Write(16);
+                writer.Write((short)1);
+                writer.Write((short)1);
+                writer.Write(44100);
+                writer.Write(88200);
+                writer.Write((short)2);
+                writer.Write((short)16);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+                writer.Write(Samples * 2);
+                writer.Write(new byte[Samples * 2]);
             }
-            AssetDatabase.ImportAsset(mBackgroundPath, ImportAssetOptions.ForceSynchronousImport);
-            var importer = (AudioImporter)AssetImporter.GetAtPath(mBackgroundPath);
+            AssetDatabase.ImportAsset(_backgroundPath, ImportAssetOptions.ForceSynchronousImport);
+            var importer = (AudioImporter)AssetImporter.GetAtPath(_backgroundPath);
             importer.loadInBackground = true;
-            var settings = importer.defaultSampleSettings; settings.preloadAudioData = false;
-            settings.loadType = AudioClipLoadType.DecompressOnLoad; settings.compressionFormat = AudioCompressionFormat.PCM;
-            importer.defaultSampleSettings = settings; importer.SaveAndReimport();
-            var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(mBackgroundPath);
-            if (clip.loadState == AudioDataLoadState.Loaded) Assert.IsTrue(clip.UnloadAudioData());
-            mProvider = new Provider(clip);
+            var settings = importer.defaultSampleSettings;
+            settings.preloadAudioData = false;
+            settings.loadType = AudioClipLoadType.DecompressOnLoad;
+            settings.compressionFormat = AudioCompressionFormat.PCM;
+            importer.defaultSampleSettings = settings;
+            importer.SaveAndReimport();
+            var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(_backgroundPath);
+            if (clip.loadState == AudioDataLoadState.Loaded)
+            {
+                Assert.IsTrue(clip.UnloadAudioData());
+            }
+
+            _provider = new Provider(clip);
             var request = channel != null ? channel.PlayAsync(Address("waiting")) : category == AudioCategory.Sound ?
                 AudioKit.PlaySoundAsync(Address("waiting")) : AudioKit.PlayMusicAsync(Address("waiting"));
-            mProvider.Complete("waiting");
+            _provider.Complete("waiting");
             Assert.AreEqual(AudioPlayState.Ready, request.State, "Real background audio must remain in the data-wait phase for this synchronous reentry test.");
             return request;
         }
@@ -101,7 +135,7 @@ namespace YLFramework.Tests.Audio
         {
             var pending = Waiting(AudioCategory.Sound);
             AudioHandle created = default;
-            mProvider.Owners[0].Release = () => created = AudioKit.PlaySound(mClip, AudioSoundOptions.MusicDefaults);
+            _provider.Owners[0].Release = () => created = AudioKit.PlaySound(_clip, AudioSoundOptions.MusicDefaults);
             AudioKit.StopAllSound();
             Assert.AreEqual(AudioPlayEnd.Stopped, pending.EndReason);
             Assert.IsTrue(created.IsValid);
@@ -112,7 +146,11 @@ namespace YLFramework.Tests.Audio
         {
             var pending = Waiting(AudioCategory.Music);
             AudioHandle current = default;
-            mProvider.Owners[0].Release = () => { AudioKit.Shutdown(); current = AudioKit.PlayMusic(mClip); };
+            _provider.Owners[0].Release = () =>
+            {
+                AudioKit.Shutdown();
+                current = AudioKit.PlayMusic(_clip);
+            };
             AudioKit.StopMusic();
             Assert.IsTrue(current.IsValid);
             Assert.AreEqual(AudioPlayEnd.Stopped, pending.EndReason);
@@ -125,30 +163,38 @@ namespace YLFramework.Tests.Audio
             var channel = AudioKit.RegisterChannel("pending-stop");
             var pending = Waiting(AudioCategory.Music, channel);
             AudioHandle created = default;
-            mProvider.Owners[0].Release = () => created = channel.Play(mClip);
-            if (replace) Assert.IsFalse(channel.Play(mClip).IsValid);
-            else channel.Stop();
-            Assert.AreEqual(replace ? AudioPlayEnd.Replaced : AudioPlayEnd.Stopped, pending.EndReason); Assert.IsTrue(created.IsValid);
+            _provider.Owners[0].Release = () => created = channel.Play(_clip);
+            if (replace)
+            {
+                Assert.IsFalse(channel.Play(_clip).IsValid);
+            }
+            else
+            {
+                channel.Stop();
+            }
+
+            Assert.AreEqual(replace ? AudioPlayEnd.Replaced : AudioPlayEnd.Stopped, pending.EndReason);
+            Assert.IsTrue(created.IsValid);
         }
 
         [Test]
         public void UnrelatedVoiceStopCannotInvalidateNewMusicLoading()
         {
             Waiting(AudioCategory.Music);
-            mProvider.Owners[0].Release = AudioKit.StopVoice;
+            _provider.Owners[0].Release = AudioKit.StopVoice;
             var next = AudioKit.PlayMusicAsync(Address("next"));
             Assert.AreEqual(AudioPlayState.Loading, next.State);
-            Assert.IsTrue(mProvider.Pending.ContainsKey("next"));
+            Assert.IsTrue(_provider.Pending.ContainsKey("next"));
         }
 
         [Test]
         public void SameTopologyStopDuringReplacementCleanupInvalidatesOuterPending()
         {
             Waiting(AudioCategory.Music);
-            mProvider.Owners[0].Release = AudioKit.StopMusic;
+            _provider.Owners[0].Release = AudioKit.StopMusic;
             var next = AudioKit.PlayMusicAsync(Address("stopped-during-admission"));
             Assert.IsTrue(next.IsDone);
-            Assert.IsFalse(mProvider.Pending.ContainsKey("stopped-during-admission"));
+            Assert.IsFalse(_provider.Pending.ContainsKey("stopped-during-admission"));
         }
 
         [Test]
@@ -156,9 +202,14 @@ namespace YLFramework.Tests.Audio
         {
             AudioPlayRequest inner = null;
             var failure = new InvalidOperationException("sync producer failure");
-            mProvider.OnLoad = () => { inner = AudioKit.PlaySoundAsync(Address("sync-failure")); throw failure; };
+            _provider.OnLoad = () =>
+            {
+                inner = AudioKit.PlaySoundAsync(Address("sync-failure"));
+                throw failure;
+            };
             Assert.AreSame(failure, Assert.Throws<InvalidOperationException>(() => AudioKit.AcquireClip(Address("sync-failure"))));
-            Assert.AreEqual(AudioPlayEnd.Failed, inner.EndReason); Assert.AreSame(failure, inner.Error);
+            Assert.AreEqual(AudioPlayEnd.Failed, inner.EndReason);
+            Assert.AreSame(failure, inner.Error);
             Assert.IsFalse(inner.Handle.IsValid);
         }
 
@@ -167,41 +218,42 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.PlayMusicNamed(Address("old"));
             var next = AudioKit.PlayMusicAsync(Address("new"));
-            mProvider.Owners[0].Release = next.Cancel;
-            mProvider.Complete("new");
+            _provider.Owners[0].Release = next.Cancel;
+            _provider.Complete("new");
             Assert.AreEqual(AudioPlayEnd.Canceled, next.EndReason);
             Assert.IsFalse(next.Handle.IsValid);
             Assert.IsFalse(next.HasStarted);
-            Assert.AreEqual(1, mProvider.Owners[1].Releases);
+            Assert.AreEqual(1, _provider.Owners[1].Releases);
         }
 
         [Test]
         public void IdleEvictionCannotUnloadResourceReacquiredByEarlierRelease()
         {
-            AudioKit.ClipCacheCapacity = 2; AudioKit.ClipCacheIdleSeconds = 100;
+            AudioKit.ClipCacheCapacity = 2;
+            AudioKit.ClipCacheIdleSeconds = 100;
             AudioKit.AcquireClip(Address("one")).Dispose();
             AudioKit.AcquireClip(Address("two")).Dispose();
             AudioClipLease reentered = null;
-            mProvider.Owners[0].Release = () => reentered = AudioKit.AcquireClip(Address("two"));
+            _provider.Owners[0].Release = () => reentered = AudioKit.AcquireClip(Address("two"));
             AudioKit.ClipCacheCapacity = 0;
             Assert.NotNull(reentered);
-            Assert.AreEqual(0, mProvider.Owners[1].Releases);
+            Assert.AreEqual(0, _provider.Owners[1].Releases);
             reentered.Dispose();
-            Assert.AreEqual(1, mProvider.Owners[1].Releases);
+            Assert.AreEqual(1, _provider.Owners[1].Releases);
         }
 
         [Test]
         public void SynchronousProducerNotifiesReenteredAsynchronousWaiter()
         {
             AudioPlayRequest inner = null;
-            mProvider.OnLoad = () => inner = AudioKit.PlaySoundAsync(Address("sync"), AudioSoundOptions.MusicDefaults);
+            _provider.OnLoad = () => inner = AudioKit.PlaySoundAsync(Address("sync"), AudioSoundOptions.MusicDefaults);
             var acquired = AudioKit.AcquireClip(Address("sync"));
-            Assert.AreEqual(1, mProvider.Loads);
+            Assert.AreEqual(1, _provider.Loads);
             Assert.IsTrue(inner.Handle.IsValid);
             acquired.Dispose();
-            Assert.AreEqual(0, mProvider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
             inner.Cancel();
-            Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
@@ -210,10 +262,13 @@ namespace YLFramework.Tests.Audio
             var expected = new InvalidOperationException("started failure");
             var failed = AudioKit.PlaySoundAsync(Address("shared-failure"), onStarted: (_, __) => throw expected);
             var peer = AudioKit.PlaySoundAsync(Address("shared-failure"), AudioSoundOptions.MusicDefaults);
-            mProvider.Complete("shared-failure");
-            Assert.AreEqual(AudioPlayEnd.Failed, failed.EndReason); Assert.AreSame(expected, failed.Error);
-            Assert.IsTrue(peer.Handle.IsValid); Assert.AreEqual(0, mProvider.Owners[0].Releases);
-            peer.Cancel(); Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            _provider.Complete("shared-failure");
+            Assert.AreEqual(AudioPlayEnd.Failed, failed.EndReason);
+            Assert.AreSame(expected, failed.Error);
+            Assert.IsTrue(peer.Handle.IsValid);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
+            peer.Cancel();
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
@@ -224,22 +279,28 @@ namespace YLFramework.Tests.Audio
             old.Dispose();
             Assert.AreEqual(AudioPlayEnd.Stopped, pending.EndReason);
             var current = AudioKit.RegisterChannel("owner");
-            var handle = current.Play(mClip);
-            mProvider.Complete("permanent");
-            Assert.IsTrue(handle.IsValid); Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            var handle = current.Play(_clip);
+            _provider.Complete("permanent");
+            Assert.IsTrue(handle.IsValid);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
         public void ProviderAndFullKeyKeepSameClipOwnershipSeparate()
         {
-            var other = new Provider(mClip);
+            var other = new Provider(_clip);
             var first = AudioKit.PlaySoundNamed(Address("one"), AudioSoundOptions.MusicDefaults);
             var second = AudioKit.PlaySoundNamed(Address("two"), AudioSoundOptions.MusicDefaults);
             var third = AudioKit.PlaySoundNamed(new AudioClipAddress(other, "one"), AudioSoundOptions.MusicDefaults);
             first.Stop();
-            Assert.AreEqual(1, mProvider.Owners[0].Releases); Assert.AreEqual(0, mProvider.Owners[1].Releases);
-            Assert.AreEqual(0, other.Owners[0].Releases); Assert.IsTrue(second.IsValid); Assert.IsTrue(third.IsValid);
-            second.Stop(); third.Stop(); Assert.AreEqual(1, other.Owners[0].Releases);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[1].Releases);
+            Assert.AreEqual(0, other.Owners[0].Releases);
+            Assert.IsTrue(second.IsValid);
+            Assert.IsTrue(third.IsValid);
+            second.Stop();
+            third.Stop();
+            Assert.AreEqual(1, other.Owners[0].Releases);
         }
 
         [Test]
@@ -249,14 +310,14 @@ namespace YLFramework.Tests.Audio
             var a = channel.PlayAsync(Address("a"));
             var b = channel.PlayAsync(Address("b"));
             Assert.AreEqual(AudioPlayEnd.Replaced, a.EndReason);
-            mProvider.Complete("b");
+            _provider.Complete("b");
             Assert.IsTrue(b.Handle.IsValid);
-            mProvider.Complete("a");
-            Assert.AreEqual(1, mProvider.Owners[1].Releases);
+            _provider.Complete("a");
+            Assert.AreEqual(1, _provider.Owners[1].Releases);
             Assert.IsTrue(b.Handle.IsValid);
             var c = channel.PlayAsync(Address("c"));
-            var direct = channel.Play(mClip);
-            mProvider.Complete("c");
+            var direct = channel.Play(_clip);
+            _provider.Complete("c");
             Assert.AreEqual(AudioPlayEnd.Replaced, c.EndReason);
             Assert.IsTrue(direct.IsValid);
         }
@@ -266,16 +327,16 @@ namespace YLFramework.Tests.Audio
         {
             var a = AudioKit.PlaySoundAsync(Address("shared"));
             var b = AudioKit.PlaySoundAsync(Address("shared"));
-            Assert.AreEqual(1, mProvider.Loads);
+            Assert.AreEqual(1, _provider.Loads);
             a.Cancel();
             Assert.AreEqual(AudioPlayEnd.Canceled, a.EndReason);
             Assert.IsFalse(a.Handle.IsValid);
-            mProvider.Complete("shared");
+            _provider.Complete("shared");
             Assert.IsTrue(b.Handle.IsValid);
-            Assert.AreEqual(0, mProvider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
             b.Handle.Stop();
             Assert.AreEqual(AudioPlayEnd.Stopped, b.EndReason);
-            Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
@@ -284,10 +345,10 @@ namespace YLFramework.Tests.Audio
             var old = AudioKit.PlayMusicAsync(Address("old"));
             AudioKit.Shutdown();
             Assert.AreEqual(AudioPlayEnd.Shutdown, old.EndReason);
-            var current = AudioKit.PlayMusic(mClip);
-            var lease = mProvider.Complete("old");
-            mProvider.Pending["old"](lease, null);
-            Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            var current = AudioKit.PlayMusic(_clip);
+            var lease = _provider.Complete("old");
+            _provider.Pending["old"](lease, null);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
             Assert.IsTrue(current.IsValid);
             Assert.IsFalse(old.Handle.IsValid);
         }
@@ -295,10 +356,10 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void FailureDoesNotStopOldMusicAndPermanentPendingCanLogicallyExit()
         {
-            var original = AudioKit.PlayMusic(mClip);
+            var original = AudioKit.PlayMusic(_clip);
             var failed = AudioKit.PlayMusicAsync(Address("fail"));
             var error = new InvalidOperationException("load failure");
-            mProvider.Complete("fail", error);
+            _provider.Complete("fail", error);
             Assert.AreEqual(AudioPlayEnd.Failed, failed.EndReason);
             Assert.AreSame(error, failed.Error);
             Assert.IsTrue(original.IsValid);
@@ -311,7 +372,7 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void ImmediateCompletionBindsBeforeStartedStopAndPreservesOriginalIdentity()
         {
-            mProvider.Immediate = true;
+            _provider.Immediate = true;
             AudioHandle started = default;
             var request = AudioKit.PlaySoundAsync(Address("immediate"), onStarted: (clip, handle) =>
             {
@@ -321,38 +382,42 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(started, request.Handle);
             Assert.IsTrue(request.HasStarted);
             Assert.AreEqual(AudioPlayEnd.Stopped, request.EndReason);
-            Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
         public void CacheHoldsOnlyIdleOwnedEntriesAndNeverExpiresActiveLease()
         {
-            AudioKit.ClipCacheCapacity = 1; AudioKit.ClipCacheIdleSeconds = 2;
+            AudioKit.ClipCacheCapacity = 1;
+            AudioKit.ClipCacheIdleSeconds = 2;
             var handle = AudioKit.PlayMusicNamed(Address("cache"));
             AudioKit.Settings.IsMusicOn.Value = false;
             AudioManager.Instance.ClipCache.Tick(double.MaxValue);
-            Assert.AreEqual(0, mProvider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
             handle.Stop();
-            Assert.AreEqual(0, mProvider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
             var next = AudioKit.PlayMusicNamed(Address("cache"));
-            Assert.AreEqual(1, mProvider.Loads);
+            Assert.AreEqual(1, _provider.Loads);
             AudioKit.ClearClipCache();
-            Assert.AreEqual(0, mProvider.Owners[0].Releases);
+            Assert.AreEqual(0, _provider.Owners[0].Releases);
             next.Stop();
             AudioManager.Instance.ClipCache.Tick(double.MaxValue);
-            Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]
         public void ExternallyDestroyedCachedAssetFailsRequestAndReturnsItsReservation()
         {
-            AudioKit.ClipCacheCapacity = 1; AudioKit.ClipCacheIdleSeconds = 10;
+            AudioKit.ClipCacheCapacity = 1;
+            AudioKit.ClipCacheIdleSeconds = 10;
             AudioKit.AcquireClip(Address("destroyed")).Dispose();
-            UnityEngine.Object.DestroyImmediate(mClip);
+            UnityEngine.Object.DestroyImmediate(_clip);
             AudioPlayRequest request = null;
             Assert.DoesNotThrow(() => request = AudioKit.PlaySoundAsync(Address("destroyed")));
-            Assert.AreEqual(AudioPlayEnd.Failed, request.EndReason); Assert.NotNull(request.Error);
-            Assert.IsFalse(request.Handle.IsValid); Assert.AreEqual(1, mProvider.Owners[0].Releases);
+            Assert.AreEqual(AudioPlayEnd.Failed, request.EndReason);
+            Assert.NotNull(request.Error);
+            Assert.IsFalse(request.Handle.IsValid);
+            Assert.AreEqual(1, _provider.Owners[0].Releases);
         }
 
         [Test]

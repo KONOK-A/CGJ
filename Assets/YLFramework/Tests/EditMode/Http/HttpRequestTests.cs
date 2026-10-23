@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine.Networking;
 using YLFramework.Services.Http;
@@ -31,7 +31,9 @@ namespace YLFramework.Tests.Http
             }
         }
 
-        private sealed class OwnedCertificate : CertificateHandler { }
+        private sealed class OwnedCertificate : CertificateHandler
+        {
+        }
         private sealed class BadParameter
         {
             public override string ToString() => throw new UnprintableException();
@@ -44,36 +46,41 @@ namespace YLFramework.Tests.Http
         public void RefusedStartCompletesInsteadOfLeavingUnownedTransportPending()
         {
             var request = HttpManager.PostBody("http://127.0.0.1:1/", "{}", null);
-            Assert.That(request.isDone, Is.True, "Non-Play execution must reject and release its request.");
-            Assert.That(request.error, Is.Not.Null.And.Not.Empty);
+            Assert.That(request.IsDone, Is.True, "Non-Play execution must reject and release its request.");
+            Assert.That(request.Error, Is.Not.Null.And.Not.Empty);
             Assert.That(request.Status, Is.EqualTo(HttpRequestStatus.Invalidated));
-            var error = request.error;
+            var error = request.Error;
             request.Abort();
             Assert.That(request.Status, Is.EqualTo(HttpRequestStatus.Invalidated));
-            Assert.That(request.error, Is.EqualTo(error));
+            Assert.That(request.Error, Is.EqualTo(error));
         }
 
         [Test]
         public void ExceptionFormattingFailureCannotLeaveConstructionPendingOrEscapeTheFactory()
         {
             var pending = (HashSet<SendWebRequest>)typeof(HttpManager)
-                .GetField("pendingRequests", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                .GetField("_pendingRequests", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             var previous = new HashSet<SendWebRequest>(pending);
             try
             {
                 SendWebRequest request = null;
                 Assert.DoesNotThrow(() => request = HttpManager.Get("http://127.0.0.1:1/",
                     new Dictionary<string, object> { { "q", new BadParameter() } }, null));
-                Assert.That(request.isDone, Is.True);
+                Assert.That(request.IsDone, Is.True);
                 Assert.That(request.Status, Is.EqualTo(HttpRequestStatus.Failed));
                 Assert.That(request.Exception, Is.TypeOf<UnprintableException>());
-                Assert.That(request.error, Is.Not.Empty);
+                Assert.That(request.Error, Is.Not.Empty);
                 Assert.That(pending.Contains(request), Is.False);
             }
             finally
             {
                 foreach (var request in new List<SendWebRequest>(pending))
-                    if (!previous.Contains(request)) request.Abort();
+                {
+                    if (!previous.Contains(request))
+                    {
+                        request.Abort();
+                    }
+                }
             }
         }
 
@@ -98,7 +105,7 @@ namespace YLFramework.Tests.Http
                 Assert.That(Pointer(certificate), Is.Not.EqualTo(IntPtr.Zero));
                 var operation = (SendWebRequest)typeof(HttpManager).GetMethod("SendWebRequest", BindingFlags.Static | BindingFlags.NonPublic)
                     .Invoke(null, new object[] { native });
-                Assert.That(operation.isDone, Is.True);
+                Assert.That(operation.IsDone, Is.True);
                 Assert.That(operation.Status, Is.EqualTo(HttpRequestStatus.Invalidated));
                 Assert.That(Pointer(native), Is.EqualTo(IntPtr.Zero));
                 Assert.That(Pointer(download), Is.EqualTo(IntPtr.Zero));
@@ -125,12 +132,12 @@ namespace YLFramework.Tests.Http
             foreach (var request in new[] { invalidUri, nullJson })
             {
                 Assert.That(request.Status, Is.EqualTo(HttpRequestStatus.Failed));
-                Assert.That(request.isDone, Is.True);
+                Assert.That(request.IsDone, Is.True);
                 Assert.That(request.Exception, Is.InstanceOf<ArgumentException>());
-                var error = request.error;
+                var error = request.Error;
                 request.Abort();
                 Assert.That(request.Status, Is.EqualTo(HttpRequestStatus.Failed));
-                Assert.That(request.error, Is.EqualTo(error));
+                Assert.That(request.Error, Is.EqualTo(error));
             }
         }
 
@@ -139,7 +146,10 @@ namespace YLFramework.Tests.Http
             for (var type = target.GetType(); type != null; type = type.BaseType)
             {
                 var field = type.GetField("m_Ptr", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-                if (field != null) return (IntPtr)field.GetValue(target);
+                if (field != null)
+                {
+                    return (IntPtr)field.GetValue(target);
+                }
             }
             throw new InvalidOperationException("Native pointer evidence is unavailable for " + target.GetType());
         }

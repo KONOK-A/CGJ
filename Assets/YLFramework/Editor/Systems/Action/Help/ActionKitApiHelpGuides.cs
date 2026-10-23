@@ -37,7 +37,7 @@ namespace YLFramework.Editor.Actions
                 "Initialize 与 InitArchitecture 在同一轮初始化中不会重复创建实例。OnRegisterPatch 对每个新初始化的实例执行一次，" +
                 "Interface 返回本模块的 ActionKit 实例，并在需要时初始化。\n" +
                 "Shutdown 取消模块管理的执行，释放模块自己的执行器、宿主、资源和全局事件监听；" +
-                "保留用户 GameObject 及不属于模块的协程。ID_GENERATOR 和 OnRegisterPatch 不会因此重置。" +
+                "保留用户 GameObject 及不属于模块的协程。IdGenerator 和 OnRegisterPatch 不会因此重置。" +
                 "若动作回调中请求关闭，实际收尾会等执行栈退出后完成。",
                 "只在应用级边界调用 Shutdown，不要把它作为每个动作使用者的停用处理。清理错误会向调用方报告。" +
                 "关闭回调或初始化补丁中不能立即重新初始化；需要等当前动作调用及其关闭收尾全部返回。\n" +
@@ -147,7 +147,7 @@ namespace YLFramework.Editor.Actions
             },
             new Topic("custom", "用回调定义动作", "扩展与工具",
                 "配置开始、更新和完成行为，用泛型数据保存本次动作的状态。",
-                "ActionKit.Custom<TData> 的配置委托接收 ICustomAPI<TData>，工厂本身返回 IAction。" +
+                "ActionKit.Custom<TData> 的配置委托接收 ICustomApi<TData>，工厂本身返回 IAction。" +
                 "OnStart 设置开始回调，OnExecute 的 dt 来自执行器选定的时间步长；调用 Finish 才把动作标记为成功完成。\n" +
                 "OnFinish 设置成功完成回调。取消时清空数据及委托，但不会替用户调用数据对象的 Dispose。" +
                 "对同一回调位置多次调用设置方法会替换原委托。",
@@ -159,9 +159,9 @@ namespace YLFramework.Editor.Actions
                 "    ActionKit.Custom<float>(a => a.OnStart(() => a.Data = 0f)\n" +
                 "        .OnExecute(dt => { a.Data += dt; if (a.Data >= 1f) a.Finish(); })\n" +
                 "        .OnFinish(() => Debug.Log(\"自定义动作结束\"))).Start(owner);\n}",
-                "ActionKit", "ICustomAPI", "CustomExtension")
+                "ActionKit", "ICustomApi", "CustomExtension")
             {
-                FeaturedTypeNames = new[] { "ActionKit", "ICustomAPI" }
+                FeaturedTypeNames = new[] { "ActionKit", "ICustomApi" }
             },
             new Topic("coroutine", "把协程接入动作", "组合与执行",
                 "等待协程枚举器结束，再让动作序列继续执行。",
@@ -243,7 +243,7 @@ namespace YLFramework.Editor.Actions
                 "执行开始后，Reset 结束原绑定，再 Start 会取消，不重新认领。\n" +
                 "首个有效完成标记成功，包括 Complete() 和 Kill(true) 触发的完成；外部 Pause 只是等待，不视为完成。" +
                 "Kill(false) 取消，不通知成功。动作 Pause 转发给所管理且正在播放的 Tween，Resume 只恢复由动作暂停的 Tween。\n" +
-                "Deinit 立即标记 Deinited，Reset 立即恢复 NotStart 和非暂停状态；物理 Kill(false) 通过捕获的 UnitySynchronizationContext.Post 延后执行，包含 paused Tween。" +
+                "Deinit 立即标记 IsDeinitialized，Reset 立即恢复 NotStart 和非暂停状态；物理 Kill(false) 通过捕获的 UnitySynchronizationContext.Post 延后执行，包含 paused Tween。" +
                 "待清理期间保留 pending marker，阻止其他动作重复认领；执行时复核实际主线程、active、原 marker 及其他 owner，仅清理仍 owned 的 Tween。" +
                 "OnFinish 仅 detach hooks，不 kill 已完成且 autoKill=false 的 Tween；source owner 负责该 Tween 之后的生命周期。",
                 "复制完整 Integrations/DOTween 文件夹；消费者 asmdef 引用 YLFramework.Runtime、YLFramework.Actions.DOTween " +
@@ -291,10 +291,10 @@ namespace YLFramework.Editor.Actions
                 "Repeat 子节点每轮回调不等于根完成，仍占用名字，最终根完成才释放。",
                 "控制器和动作都是池中的原始引用，完成或回收后不能作为永久句柄保存。立即完成的动作可能在 Start 返回前已释放控制器。" +
                 "同一活动租约的重复启动会被拒绝。\n" +
-                "IgnoreTimeScale 不改变 Task、协程或 DOTween 自己的时钟。Recycle、Reset 和修改 ActionID 属于基础设施操作，" +
+                "IgnoreTimeScale 不改变 Task、协程或 DOTween 自己的时钟。Recycle、Reset 和修改 ActionId 属于基础设施操作，" +
                 "不是日常取消方式。\n" +
                 "ActionHandle 的 IsActive/Pause/Resume/Cancel/SetUpdateMode 每次验证原执行租约，默认值和已结束句柄返回 false；" +
-                "ActionID=0 也可有效，运行中 Reset 不换租约。Start 返回的原始 IActionController 仍不是安全长期句柄。" +
+                "ActionId=0 也可有效，运行中 Reset 不换租约。Start 返回的原始 IActionController 仍不是安全长期句柄。" +
                 "对象作用域是 GameObject，不是单独组件；不同对象、场景/全局执行器及 Timer 的名字索引互不共享。",
                 MethodContext + "\n示例用较长等待确保获取控制器后仍有活动动作，立即演示暂停、恢复和取消；" +
                 "因此该等待的完成日志不应出现。另两项日志来自独立的场景和全局动作。",
@@ -318,7 +318,7 @@ namespace YLFramework.Editor.Actions
                 "通过模块事件监听更新、界面绘制、应用退出、暂停和焦点消息。",
                 "OnUpdate、OnFixedUpdate、OnLateUpdate、OnGUI 和 OnApplicationQuit 使用无参数 EasyEvent。" +
                 "OnApplicationPause 与 OnApplicationFocus 使用带 bool 参数的事件，分别表示暂停和焦点状态。\n" +
-                "运行时访问这些事件属性可能创建全局宿主。Register 返回注销句柄（IUnRegister），" +
+                "运行时访问这些事件属性可能创建全局宿主。Register 返回注销句柄（IUnregister），" +
                 "可绑定到对象销毁时注销，也可以由调用方自行注销。",
                 "这些是本模块的消息事件，不是旧 QFramework 事件总线。每个监听都要有明确生命周期，" +
                 "不能只注册而忽略注销。OnGUI 等消息由 Unity 的相应阶段触发，不等同于每帧一次普通 Update。",
@@ -326,30 +326,30 @@ namespace YLFramework.Editor.Actions
                 "只禁用 owner 组件不会触发这里的销毁注销。更新监听在示例中不执行额外操作，焦点变化输出中文消息。" +
                 "另需添加 using YLFramework.Events;。",
                 "public static void SubscribeToMessages(MonoBehaviour owner)\n{\n" +
-                "    ActionKit.OnUpdate.Register(() => { }).UnRegisterWhenGameObjectDestroyed(owner.gameObject);\n" +
+                "    ActionKit.OnUpdate.Register(() => { }).UnregisterWhenGameObjectDestroyed(owner.gameObject);\n" +
                 "    ActionKit.OnApplicationFocus.Register(focused => Debug.Log(focused ? \"获得焦点\" : \"失去焦点\"))\n" +
-                "        .UnRegisterWhenGameObjectDestroyed(owner);\n}",
-                "ActionKit", "EasyEvent", "IUnRegister")
+                "        .UnregisterWhenGameObjectDestroyed(owner);\n}",
+                "ActionKit", "EasyEvent", "IUnregister")
             {
                 FeaturedTypeNames = new[] { "ActionKit" }
             },
             new Topic("subscriptions", "管理监听与注销", "扩展与工具",
-                "Action 消息的订阅与注销由 YLFramework.Events 提供：注册返回注销句柄（IUnRegister），在对象或场景生命周期结束时解除监听。",
-                "ActionKit 的 7 个全局消息返回 YLFramework.Events.EasyEvent；Register 返回注销句柄（IUnRegister），调用 UnRegister 移除监听。" +
+                "Action 消息的订阅与注销由 YLFramework.Events 提供：注册返回注销句柄（IUnregister），在对象或场景生命周期结束时解除监听。",
+                "ActionKit 的 7 个全局消息返回 YLFramework.Events.EasyEvent；Register 返回注销句柄（IUnregister），调用 Unregister 移除监听。" +
                 "注销句柄重复注销是安全的（幂等），不需要额外的判重或包装。" +
                 "RegisterWithACall 在返回句柄前先同步调用一次回调。\n" +
-                "注销列表可集中保存句柄；RegisterListExtension.UnRegisterAll 先对列表做快照，再清空列表，最后逐个注销快照中的句柄。" +
+                "注销列表可集中保存句柄；RegisterListExtension.UnregisterAll 先对列表做快照，再清空列表，最后逐个注销快照中的句柄。" +
                 "生命周期扩展可在 GameObject 销毁、停用或收到场景卸载通知时注销；OrEvent 用于合并事件订阅，不用于合并动作执行。\n" +
                 "ActionKit.Shutdown 只清空模块自有的事件监听，不处置用户创建的触发器与注销句柄。",
                 "句柄与生命周期触发器都来自 YLFramework.Events；绑定到生命周期后，应让该绑定负责释放，避免手工再释放同一句柄。" +
                 "不要把同一个句柄同时交给多个生命周期触发器反复处置。\n" +
-                "UnRegisterWhenAnySceneUnloaded 响应任意场景卸载；UnRegisterWhenSceneUnloaded(Scene) 只绑定显式指定的场景。",
+                "UnregisterWhenAnySceneUnloaded 响应任意场景卸载；UnregisterWhenSceneUnloaded(Scene) 只绑定显式指定的场景。",
                 MethodContext + "\nLocalEvent() 不需要 owner：创建独立事件，触发一次后手工注销一次；" +
                 "实际对象上的长期监听应选择与拥有者一致的生命周期。另需添加 using YLFramework.Events;。",
                 "public static void LocalEvent()\n{\n    var signal = new EasyEvent();\n" +
-                "    IUnRegister unregister = signal.Register(() => Debug.Log(\"收到本地事件\"));\n" +
-                "    signal.Trigger();\n    unregister.UnRegister();\n}",
-                "ActionKit", "EasyEvent", "IUnRegister")
+                "    IUnregister unregister = signal.Register(() => Debug.Log(\"收到本地事件\"));\n" +
+                "    signal.Trigger();\n    unregister.Unregister();\n}",
+                "ActionKit", "EasyEvent", "IUnregister")
             {
                 FeaturedTypeNames = new[] { "ActionKit" }
             },

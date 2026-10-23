@@ -5,7 +5,7 @@ using UnityEngine;
 namespace YLFramework.Utilities.Extensions
 {
 
-    public class Vector2Extensions  
+    public class Vector2Extensions
     {
 
         /// <summary>
@@ -22,7 +22,9 @@ namespace YLFramework.Utilities.Extensions
             if (lerp > 0 && lerp <= 1)
             {
                 if (Vector2.Distance(current, Vector2.Lerp(from, to, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
 
             lerp = Mathf.InverseLerp(from.y, to.y, current.y);
@@ -30,9 +32,11 @@ namespace YLFramework.Utilities.Extensions
             if (lerp > 0 && lerp <= 1)
             {
                 if (Vector2.Distance(current, Vector2.Lerp(from, to, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
-              
+
             return 0;
         }
 

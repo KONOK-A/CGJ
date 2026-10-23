@@ -28,8 +28,10 @@ namespace YLFramework.Tests.ResourceBuild
             foreach (var version in new[] { 1, 2, 3 })
             {
                 server.Responder = Serve(version == 1 ? replay : Signed(version, version + 4, signing), Snapshot("a", version));
-                UpdatePlan plan = null; yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
-                PreparedUpdate prepared = null; yield return Steps(store.PrepareRemote(plan, value => prepared = value));
+                UpdatePlan plan = null;
+                yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
+                PreparedUpdate prepared = null;
+                yield return Steps(store.PrepareRemote(plan, value => prepared = value));
                 store.Commit(prepared);
             }
             foreach (var version in new[] { 2, 3 })
@@ -42,9 +44,17 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(store.Mount()[0].Document.CatalogDigest, Is.EqualTo(Snapshot().Document.CatalogDigest));
             Assert.That((long)ResourceCatalogCodec.ParseObject(File.ReadAllBytes(ProjectPath(store)))["ReleaseFloors"][0]["Sequence"], Is.EqualTo(7));
             server.Responder = Serve(Signed(1, 8, signing), Snapshot());
-            UpdatePlan repair = null; yield return Steps(store.CheckRemote(store.Mount(), value => repair = value));
-            PreparedUpdate pending = null; yield return Steps(store.PrepareRemote(repair, value => pending = value));
-            store.Checkpoint = point => { if (point == "JournalVerified") throw new IOException("injected verified-phase repair failure"); };
+            UpdatePlan repair = null;
+            yield return Steps(store.CheckRemote(store.Mount(), value => repair = value));
+            PreparedUpdate pending = null;
+            yield return Steps(store.PrepareRemote(repair, value => pending = value));
+            store.Checkpoint = point =>
+            {
+                if (point == "JournalVerified")
+                {
+                    throw new IOException("injected verified-phase repair failure");
+                }
+            };
             Assert.Throws<IOException>(() => store.Commit(pending));
             store = RemoteStore(source, store.RootPath);
             var selected = store.Mount();
@@ -69,9 +79,11 @@ namespace YLFramework.Tests.ResourceBuild
             foreach (var metadata in new[] { envelope, Resign(envelope, signing, data => data["ExpiresUnixSeconds"] = DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeSeconds()), Signed(2, 8, signing) })
             {
                 server.Responder = Serve(metadata, Snapshot("a", 2));
-                UpdatePlan plan = null; yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
+                UpdatePlan plan = null;
+                yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
                 var before = server.RequestCount;
-                PreparedUpdate refreshed = null; yield return Steps(store.PrepareRemote(plan, value => refreshed = value));
+                PreparedUpdate refreshed = null;
+                yield return Steps(store.PrepareRemote(plan, value => refreshed = value));
                 CollectionAssert.AreEqual(metadata, refreshed.Releases.Single().Envelope);
                 Assert.That(server.RequestCount, Is.EqualTo(before), "Same complete target is not redownloaded for an authorization refresh.");
             }
@@ -97,17 +109,32 @@ namespace YLFramework.Tests.ResourceBuild
             server.Responder = Serve(Signed(1, 7, signing), Snapshot());
             var store = RemoteStore(ResourceDownloadTests.Source(server, certificate));
             var system = Initialize(store);
-            using var check = system.CheckRemoteUpdatesAsync(); yield return Wait(check); var plan = Take(check);
+            using var check = system.CheckRemoteUpdatesAsync();
+            yield return Wait(check);
+            var plan = Take(check);
             using (var cancellation = new CancellationTokenSource())
             {
-                store.Checkpoint = point => { if (point == "FileCopied") cancellation.Cancel(); };
-                using var only = system.PrepareUpdateAsync(plan, cancellation.Token); yield return Wait(only);
+                store.Checkpoint = point =>
+                {
+                    if (point == "FileCopied")
+                    {
+                        cancellation.Cancel();
+                    }
+                };
+                using var only = system.PrepareUpdateAsync(plan, cancellation.Token);
+                yield return Wait(only);
                 Assert.That(only.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
                 Assert.That(store.GetPreparedUpdates(), Is.Empty, "Canceled synchronous copy must not publish Prepared.");
             }
             using (var cancellation = new CancellationTokenSource())
             {
-                store.Checkpoint = point => { if (point == "FileCopied") cancellation.Cancel(); };
+                store.Checkpoint = point =>
+                {
+                    if (point == "FileCopied")
+                    {
+                        cancellation.Cancel();
+                    }
+                };
                 using var canceled = system.PrepareUpdateAsync(plan, cancellation.Token);
                 using var remaining = system.PrepareUpdateAsync(plan);
                 yield return Wait(remaining);
@@ -117,19 +144,33 @@ namespace YLFramework.Tests.ResourceBuild
             store.Checkpoint = null;
             var metadata = Signed(2, 8, signing);
             server.Responder = Serve(metadata, Snapshot("a", 2));
-            using var checking = system.CheckRemoteUpdatesAsync(); yield return Wait(checking); var next = Take(checking);
-            var file = next.Projects[0].Files.First(x => !x.Reusable && x.Length > 32).RelativeFile;
+            using var checking = system.CheckRemoteUpdatesAsync();
+            yield return Wait(checking);
+            var next = Take(checking);
+            var file = next.Projects[0].Files.First(x => !x.IsReusable && x.Length > 32).RelativeFile;
             server.Responder = Serve(metadata, Snapshot("a", 2), (request, response) =>
             {
-                if (request.Path.EndsWith("/" + file, StringComparison.Ordinal)) { response.StallAfterBytes = 128; response.ChunkSize = 32; }
+                if (request.Path.EndsWith("/" + file, StringComparison.Ordinal))
+                {
+                    response.StallAfterBytes = 128;
+                    response.ChunkSize = 32;
+                }
             });
             using var late = system.PrepareUpdateAsync(next);
             var deadline = Time.realtimeSinceStartup + 10;
-            while (!late.IsDone && late.Progress <= 0 && Time.realtimeSinceStartup < deadline) yield return null;
+            while (!late.IsDone && late.Progress <= 0 && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(late.Progress, Is.GreaterThan(0));
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
             Assert.That(late.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
-            for (var i = 0; i < 10; i++) yield return null;
+            for (var i = 0; i < 10; i++)
+            {
+                yield return null;
+            }
+
             Assert.That(store.GetPreparedUpdates().All(x => x.Projects[0].ToDigest != Snapshot("a", 2).Document.CatalogDigest), Is.True);
             Assert.That(File.Exists(ProjectPath(store)), Is.False);
         }

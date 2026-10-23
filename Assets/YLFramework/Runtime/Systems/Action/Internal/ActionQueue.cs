@@ -14,24 +14,30 @@ namespace YLFramework.Actions
     {
         public ActionPool<T> Pool;
         public T Action;
-        private readonly bool mDiscard;
-        private readonly System.Func<T, bool> mDiscardWhen;
+        private readonly bool _discard;
+        private readonly System.Func<T, bool> _discardWhen;
 
         public ActionQueueRecycleCallback(ActionPool<T> pool, T action, bool discard = false,
             System.Func<T, bool> discardWhen = null)
         {
             Pool = pool;
             Action = action;
-            mDiscard = discard;
-            mDiscardWhen = discardWhen;
+            _discard = discard;
+            _discardWhen = discardWhen;
         }
 
         public void Call()
         {
             try
             {
-                if (mDiscard || (mDiscardWhen != null && mDiscardWhen(Action))) Pool.Discard(Action);
-                else Pool.Recycle(Action);
+                if (_discard || (_discardWhen != null && _discardWhen(Action)))
+                {
+                    Pool.Discard(Action);
+                }
+                else
+                {
+                    Pool.Recycle(Action);
+                }
             }
             finally
             {
@@ -44,15 +50,15 @@ namespace YLFramework.Actions
     // 延迟回收队列：动作清理时只入队，等执行栈完全退出后再真正还池，避免回调中立即复用同一个池对象。
     internal static class ActionQueue
     {
-        private static readonly Queue<IActionQueueCallback> Callbacks = new Queue<IActionQueueCallback>();
-        private static bool mDraining;
+        private static readonly Queue<IActionQueueCallback> _callbacks = new Queue<IActionQueueCallback>();
+        private static bool _isDraining;
 
-        internal static int PendingCount => Callbacks.Count;
+        internal static int PendingCount => _callbacks.Count;
 
         // 播放模式下确保回收驱动器存在（实际清空在其 Update 中执行）；编辑模式只入队，由测试或显式 Drain 清空。
         public static void AddCallback(IActionQueueCallback callback)
         {
-            Callbacks.Enqueue(callback);
+            _callbacks.Enqueue(callback);
             if (Application.isPlaying)
             {
                 ActionRecycleDriver.EnsureCreated();
@@ -61,20 +67,23 @@ namespace YLFramework.Actions
 
         internal static void Drain()
         {
-            if (mDraining) return;
+            if (_isDraining)
+            {
+                return;
+            }
             // 清空过程中加入的回收项留到下一轮，避免同一执行栈内立即复用对象。
-            var count = Callbacks.Count;
-            mDraining = true;
+            var count = _callbacks.Count;
+            _isDraining = true;
             try
             {
                 for (var index = 0; index < count; index++)
                 {
-                    Callbacks.Dequeue().Call();
+                    _callbacks.Dequeue().Call();
                 }
             }
             finally
             {
-                mDraining = false;
+                _isDraining = false;
             }
         }
     }

@@ -59,8 +59,11 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new ContentFixture();
             using var keys = new TestKeys { Missing = !wrong, Wrong = wrong };
             ResourceException error;
-            if (!wrong) error = Assert.Throws<ResourceException>(() => ResourceContentValidation.Capture(
+            if (!wrong)
+            {
+                error = Assert.Throws<ResourceException>(() => ResourceContentValidation.Capture(
                 new[] { fixture.Snapshot }, new ResourceDecryptionOptions(keys), true));
+            }
             else
             {
                 using var validation = ResourceContentValidation.Capture(new[] { fixture.Snapshot }, new ResourceDecryptionOptions(keys), true);
@@ -127,7 +130,10 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 validation.Validate();
                 validation.RequireStable();
-                Assert.Throws<IOException>(() => { using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite); });
+                Assert.Throws<IOException>(() =>
+                {
+                    using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+                });
             }
             using var writable = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
         }
@@ -139,10 +145,10 @@ namespace YLFramework.Tests.ResourceBuild
             using var keys = new TestKeys();
             var budget = new ResourceContentBudget(ResourceDecryptStream.DataBufferBytes);
             var validation = ResourceContentValidation.Capture(new[] { fixture.Snapshot }, new ResourceDecryptionOptions(keys), budget: budget);
-            const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
-            var inputs = (IList)typeof(ResourceContentValidation).GetField("inputs", hidden).GetValue(validation);
+            const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
+            var inputs = (IList)typeof(ResourceContentValidation).GetField("_inputs", Hidden).GetValue(validation);
             Assert.That(inputs.Count, Is.GreaterThanOrEqualTo(2));
-            var field = inputs[0].GetType().GetField("Stream", hidden);
+            var field = inputs[0].GetType().GetField("Stream", Hidden);
             var original = (FileStream)field.GetValue(inputs[0]);
             var path = original.Name;
             original.Dispose();
@@ -160,8 +166,10 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 // RED也只清理由本测试持有的输入和票据，不遗留锁阻碍夹具收尾。
                 foreach (var input in inputs)
-                    ((FileStream)input.GetType().GetField("Stream", hidden).GetValue(input))?.Dispose();
-                ((IDisposable)typeof(ResourceContentValidation).GetField("reservation", hidden).GetValue(validation))?.Dispose();
+                {
+                    ((FileStream)input.GetType().GetField("Stream", Hidden).GetValue(input))?.Dispose();
+                }
+((IDisposable)typeof(ResourceContentValidation).GetField("_reservation", Hidden).GetValue(validation))?.Dispose();
                 validation.Dispose();
             }
         }
@@ -173,7 +181,7 @@ namespace YLFramework.Tests.ResourceBuild
             using var keys = new TestKeys();
             var key = ResourceContentValidation.CopyKey(new ResourceDecryptionOptions(keys), "catalog", "test-only-v1");
             var inputs = new List<ResourceBundleInput>();
-            const BindingFlags hidden = BindingFlags.Instance | BindingFlags.NonPublic;
+            const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
             var ownerType = typeof(ResourcePublisher).GetNestedType("NativeReadback", BindingFlags.NonPublic);
             var owners = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(ownerType));
             try
@@ -183,12 +191,12 @@ namespace YLFramework.Tests.ResourceBuild
                     var input = ResourceBundleInput.Open(fixture.Snapshot.OpenVerified(file), ResourceContentValidation.Context(fixture.Snapshot, file), key);
                     inputs.Add(input);
                     var owner = Activator.CreateInstance(ownerType, true);
-                    ownerType.GetField("Input", hidden).SetValue(owner, input);
+                    ownerType.GetField("Input", Hidden).SetValue(owner, input);
                     owners.Add(owner);
                 }
                 Assert.That(inputs.Count, Is.EqualTo(2));
                 // 模拟S在自身检查完成后、A消费依赖时已锁存的故障，不执行失败native读/Scene实验。
-                typeof(ResourceDecryptStream).GetMethod("Latch", hidden).Invoke(inputs[0].Stream,
+                typeof(ResourceDecryptStream).GetMethod("Latch", Hidden).Invoke(inputs[0].Stream,
                     new object[] { new System.Security.Cryptography.CryptographicException("owned late dependency fault") });
                 Assert.That(inputs[1].Fault, Is.Null);
                 var release = typeof(ResourcePublisher).GetMethod("ReleaseNativeReadbacks", BindingFlags.Static | BindingFlags.NonPublic);
@@ -199,18 +207,26 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                foreach (var input in inputs) input.Dispose();
+                foreach (var input in inputs)
+                {
+                    input.Dispose();
+                }
+
                 Array.Clear(key, 0, key.Length);
             }
         }
 
         private sealed class FailOnceFileStream : FileStream
         {
-            private bool failed;
+            private bool _hasFailed;
             internal FailOnceFileStream(string path) : base(path, FileMode.Open, FileAccess.Read, FileShare.Read) { }
             protected override void Dispose(bool disposing)
             {
-                if (disposing && !failed) { failed = true; throw new IOException("owned first close failure"); }
+                if (disposing && !_hasFailed)
+                {
+                    _hasFailed = true;
+                    throw new IOException("owned first close failure");
+                }
                 base.Dispose(disposing);
             }
         }
@@ -220,8 +236,12 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new ContentFixture();
             var original = fixture.Snapshot.Document.Bundles[0];
-            var mismatch = new ResourceCatalogFile(new JObject { ["RelativeFile"] = original.RelativeFile,
-                ["Length"] = original.Length + 1, ["Sha256"] = original.Sha256 });
+            var mismatch = new ResourceCatalogFile(new JObject
+            {
+                ["RelativeFile"] = original.RelativeFile,
+                ["Length"] = original.Length + 1,
+                ["Sha256"] = original.Sha256
+            });
             using var stream = new CountingFileStream(Path.Combine(fixture.Snapshot.DirectoryPath, original.RelativeFile));
             Assert.Throws<InvalidDataException>(() => ResourceLocalSnapshot.VerifyContentFile(stream, mismatch));
             Assert.That(stream.ReadCalls, Is.Zero, "Catalog length is already known; a mismatch must not cause a whole-file SHA scan.");
@@ -231,7 +251,11 @@ namespace YLFramework.Tests.ResourceBuild
         {
             internal int ReadCalls;
             internal CountingFileStream(string path) : base(path, FileMode.Open, FileAccess.Read, FileShare.Read) { }
-            public override int Read(byte[] buffer, int offset, int count) { ReadCalls++; return base.Read(buffer, offset, count); }
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                ReadCalls++;
+                return base.Read(buffer, offset, count);
+            }
         }
 
         [Test]
@@ -252,7 +276,11 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(held.Clip, Is.SameAs(clip));
                 Exception asyncError = null;
                 AudioClipLease asyncLease = null;
-                using var waiter = cache.LoadAsync(address, (lease, failure) => { asyncLease = lease; asyncError = failure; }, null);
+                using var waiter = cache.LoadAsync(address, (lease, failure) =>
+                {
+                    asyncLease = lease;
+                    asyncError = failure;
+                }, null);
                 Assert.That(asyncLease, Is.Null);
                 Assert.That(asyncError, Is.SameAs(error));
                 Assert.That(provider.Loads, Is.EqualTo(1), "The cached path must reject admission without opening a second backend.");
@@ -270,18 +298,21 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class CacheAdmissionProvider : IAudioClipProvider, IDisposable
         {
-            private readonly AudioClip clip;
+            private readonly AudioClip _clip;
             internal bool Faulted;
             internal int Loads;
             internal int Releases;
-            internal CacheAdmissionProvider(AudioClip clip) => this.clip = clip;
+            internal CacheAdmissionProvider(AudioClip clip) => this._clip = clip;
             public bool CanCache => true;
             public AudioClipLease Load(string key)
             {
                 Loads++;
-                return new AudioClipLease(clip, this, () =>
+                return new AudioClipLease(_clip, this, () =>
                 {
-                    if (Faulted) throw new ResourceException(ResourceError.ContentAuthenticationFailed, "owned cached backend fault");
+                    if (Faulted)
+                    {
+                        throw new ResourceException(ResourceError.ContentAuthenticationFailed, "owned cached backend fault");
+                    }
                 });
             }
             public void LoadAsync(string key, Action<AudioClipLease, Exception> completed, Action<float> progress) => completed(Load(key), null);
@@ -303,9 +334,21 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(projectId, Is.EqualTo("catalog"));
                 Assert.That(keyId, Is.EqualTo("test-only-v1"));
                 Assert.That(destination.Length, Is.EqualTo(32));
-                if (Throw) throw new InvalidOperationException("test-sensitive-provider-material");
-                if (Missing) return false;
-                for (var i = 0; i < destination.Length; i++) destination[i] = Wrong ? (byte)0 : (byte)(i + 1);
+                if (Throw)
+                {
+                    throw new InvalidOperationException("test-sensitive-provider-material");
+                }
+
+                if (Missing)
+                {
+                    return false;
+                }
+
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = Wrong ? (byte)0 : (byte)(i + 1);
+                }
+
                 return true;
             }
             public void Dispose() => Disposed = true;
@@ -313,8 +356,11 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class ContentFixture : IDisposable
         {
-            private readonly string root = Path.Combine(Path.GetTempPath(), "kilo", "cv-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-            internal ResourceLocalSnapshot Snapshot { get; }
+            private readonly string _root = Path.Combine(Path.GetTempPath(), "kilo", "cv-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            internal ResourceLocalSnapshot Snapshot
+            {
+                get;
+            }
             internal ContentFixture()
             {
                 var payload = ResourceCatalogCodecTests.Payload();
@@ -342,20 +388,39 @@ namespace YLFramework.Tests.ResourceBuild
                         files.Add(name, bytes);
                     }
                 }
-                finally { Array.Clear(key, 0, key.Length); }
+                finally
+                {
+                    Array.Clear(key, 0, key.Length);
+                }
                 var catalog = ResourceCatalogCodec.Seal(ResourceCatalogCodec.CanonicalBytes(payload));
                 var digest = ResourceCatalogCodec.Digest(catalog);
                 var document = ResourceCatalogCodec.Read(catalog, "catalog", "StandaloneWindows64", Application.unityVersion, "app-v1");
-                var path = Path.Combine(root, digest);
+                var path = Path.Combine(_root, digest);
                 Directory.CreateDirectory(path);
-                foreach (var file in files) File.WriteAllBytes(Path.Combine(path, file.Key), file.Value);
+                foreach (var file in files)
+                {
+                    File.WriteAllBytes(Path.Combine(path, file.Key), file.Value);
+                }
+
                 File.WriteAllBytes(Path.Combine(path, "resource-catalog.json"), catalog);
-                File.WriteAllBytes(Path.Combine(path, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject {
-                    ["Version"] = 1, ["ProjectGuid"] = new string('1', 32), ["ProjectId"] = "catalog", ["Platform"] = "StandaloneWindows64",
-                    ["BuildId"] = document.BuildId, ["CatalogDigest"] = digest }));
+                File.WriteAllBytes(Path.Combine(path, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject
+                {
+                    ["Version"] = 1,
+                    ["ProjectGuid"] = new string('1', 32),
+                    ["ProjectId"] = "catalog",
+                    ["Platform"] = "StandaloneWindows64",
+                    ["BuildId"] = document.BuildId,
+                    ["CatalogDigest"] = digest
+                }));
                 Snapshot = ResourceLocalSnapshot.Open(path, "catalog", digest, "StandaloneWindows64", "app-v1");
             }
-            public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            public void Dispose()
+            {
+                if (Directory.Exists(_root))
+                {
+                    Directory.Delete(_root, true);
+                }
+            }
         }
     }
 }

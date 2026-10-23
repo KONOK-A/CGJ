@@ -43,7 +43,11 @@ namespace YLFramework.Core.Tests
             finally
             {
                 var context = go.GetComponent<UIRootContext>();
-                if (context) typeof(UIRootContext).GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(context, null);
+                if (context)
+                {
+                    typeof(UIRootContext).GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(context, null);
+                }
+
                 UnityEngine.Object.DestroyImmediate(go);
                 UnityEngine.Object.DestroyImmediate(cameraObject);
             }
@@ -73,7 +77,11 @@ namespace YLFramework.Core.Tests
                 Assert.Throws<ArgumentOutOfRangeException>(() => context.GetLayer(0));
                 Assert.That(go.transform.childCount, Is.Zero);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); UnityEngine.Object.DestroyImmediate(other); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+                UnityEngine.Object.DestroyImmediate(other);
+            }
         }
 
         [Test]
@@ -90,7 +98,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(go.GetComponent<CanvasScaler>(), Is.Null);
                 Assert.That(go.GetComponent<AutomaticAdaptationCanvasScaler>(), Is.Null);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         private static UIRootContext ConfigureRoot(GameObject host, out Transform layer)

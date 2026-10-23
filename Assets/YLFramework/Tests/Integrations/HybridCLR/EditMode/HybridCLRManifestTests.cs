@@ -20,17 +20,19 @@ namespace YLFramework.Tests.Integrations.HybridCLR
 
         private static HybridCLRManifest Manifest() => new HybridCLRManifest
         {
-            ProjectId = "hotupdate-test", UnityVersion = "2022.3.62f3c1",
-            AppContentCompatibilityId = "base-v1", HotUpdateAssemblies = new[] { Payload("Hot.Entry") }
+            ProjectId = "hotupdate-test",
+            UnityVersion = "2022.3.62f3c1",
+            AppContentCompatibilityId = "base-v1",
+            HotUpdateAssemblies = new[] { Payload("Hot.Entry") }
         };
 
         [Test]
         public void ExplicitNeutralCultureHasOneCanonicalIdentityWhenIl2CppRepresentsCultureAsNull()
         {
-            const string expected = "Hot.Entry, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null";
-            var identity = new System.Reflection.AssemblyName(expected) { CultureInfo = null };
-            Assert.That(identity.FullName, Is.Not.EqualTo(expected), "The actual CLR object must reproduce the native omitted-culture representation.");
-            Assert.That(HybridCLRManifest.CanonicalIdentity(identity), Is.EqualTo(expected));
+            const string Expected = "Hot.Entry, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null";
+            var identity = new System.Reflection.AssemblyName(Expected) { CultureInfo = null };
+            Assert.That(identity.FullName, Is.Not.EqualTo(Expected), "The actual CLR object must reproduce the native omitted-culture representation.");
+            Assert.That(HybridCLRManifest.CanonicalIdentity(identity), Is.EqualTo(Expected));
         }
 
         [Test]
@@ -62,7 +64,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
                 Length = entry.Length, Sha256 = entry.Sha256, Dependencies = new[] { "Hot.A", "Hot.Z" },
                 References = entry.References.Reverse().ToArray()
             } };
-            first.Seal(); second.Seal();
+            first.Seal();
+            second.Seal();
             CollectionAssert.AreEqual(new[] { "Hot.A", "Hot.Z", "Hot.Entry" }, first.HotUpdateAssemblies.Select(p => p.Name));
             Assert.That(second.ToJson(), Is.EqualTo(first.ToJson()));
         }
@@ -73,7 +76,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [TestCase("development")]
         public void LoadingAnotherBaseOrBuildContextIsRejected(string mismatch)
         {
-            var manifest = Manifest(); manifest.Seal();
+            var manifest = Manifest();
+            manifest.Seal();
             Assert.Throws<InvalidDataException>(() => manifest.Validate(mismatch == "project" ? "other" : "hotupdate-test",
                 mismatch == "base" ? "base-v2" : "base-v1", mismatch == "unity" ? "2022.3.61f1" : "2022.3.62f3c1",
                 mismatch == "development"));
@@ -97,21 +101,47 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var entry = manifest.HotUpdateAssemblies[0];
             switch (invalid)
             {
-                case "schema": manifest.SchemaVersion = 2; break;
-                case "version": manifest.HybridCLRVersion = "9.0.4"; break;
-                case "platform": manifest.Platform = "Android"; break;
-                case "empty": manifest.HotUpdateAssemblies = Array.Empty<HybridCLRPayload>(); break;
-                case "duplicate": manifest.HotUpdateAssemblies = new[] { entry, Payload(entry.Name) }; break;
-                case "case": manifest.HotUpdateAssemblies = new[] { entry, Payload("hot.entry") }; break;
-                case "address": entry.Address = "hybridclr/assemblies/../Hot.Entry.dll.bytes"; break;
-                case "identity": entry.Identity = Payload("Other").Identity; break;
-                case "mvid": entry.Mvid = "not-a-module-id"; break;
-                case "size": entry.Length = 64L * 1024 * 1024 + 1; break;
-                case "missing-dependency": entry.Dependencies = new[] { "Absent" }; break;
+                case "schema":
+                    manifest.SchemaVersion = 2;
+                    break;
+                case "version":
+                    manifest.HybridCLRVersion = "9.0.4";
+                    break;
+                case "platform":
+                    manifest.Platform = "Android";
+                    break;
+                case "empty":
+                    manifest.HotUpdateAssemblies = Array.Empty<HybridCLRPayload>();
+                    break;
+                case "duplicate":
+                    manifest.HotUpdateAssemblies = new[] { entry, Payload(entry.Name) };
+                    break;
+                case "case":
+                    manifest.HotUpdateAssemblies = new[] { entry, Payload("hot.entry") };
+                    break;
+                case "address":
+                    entry.Address = "hybridclr/assemblies/../Hot.Entry.dll.bytes";
+                    break;
+                case "identity":
+                    entry.Identity = Payload("Other").Identity;
+                    break;
+                case "mvid":
+                    entry.Mvid = "not-a-module-id";
+                    break;
+                case "size":
+                    entry.Length = 64L * 1024 * 1024 + 1;
+                    break;
+                case "missing-dependency":
+                    entry.Dependencies = new[] { "Absent" };
+                    break;
                 case "cycle":
-                    entry.Dependencies = new[] { "Hot.Other" }; entry.References = new[] { Payload("Hot.Other").Identity };
-                    var other = Payload("Hot.Other"); other.Dependencies = new[] { entry.Name }; other.References = new[] { entry.Identity };
-                    manifest.HotUpdateAssemblies = new[] { entry, other }; break;
+                    entry.Dependencies = new[] { "Hot.Other" };
+                    entry.References = new[] { Payload("Hot.Other").Identity };
+                    var other = Payload("Hot.Other");
+                    other.Dependencies = new[] { entry.Name };
+                    other.References = new[] { entry.Identity };
+                    manifest.HotUpdateAssemblies = new[] { entry, other };
+                    break;
             }
             Assert.Throws<InvalidDataException>(() => manifest.Seal());
         }
@@ -119,7 +149,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void HashAndLengthAreCheckedAgainstRealBytes()
         {
-            var manifest = Manifest(); manifest.Seal();
+            var manifest = Manifest();
+            manifest.Seal();
             Assert.Throws<InvalidDataException>(() => HybridCLRManifest.ValidatePayload(manifest.HotUpdateAssemblies[0], new byte[] { 1, 2, 4 }));
             Assert.Throws<InvalidDataException>(() => HybridCLRManifest.ValidatePayload(manifest.HotUpdateAssemblies[0], new byte[] { 1, 2 }));
             Assert.That(HybridCLRManifest.Hash(new byte[] { 1, 2, 3 }), Is.EqualTo(manifest.HotUpdateAssemblies[0].Sha256));
@@ -128,7 +159,9 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void UnknownDuplicateOrTrailingJsonMembersAreRejected()
         {
-            var manifest = Manifest(); manifest.Seal(); var json = manifest.ToJson();
+            var manifest = Manifest();
+            manifest.Seal();
+            var json = manifest.ToJson();
             Assert.Throws<InvalidDataException>(() => HybridCLRManifest.Parse(json.Insert(1, "\"unknown\":1,")));
             Assert.Throws<InvalidDataException>(() => HybridCLRManifest.Parse(json.Insert(1, "\"schemaVersion\":1,")));
             Assert.Throws<InvalidDataException>(() => HybridCLRManifest.Parse(json + "{}"));
@@ -137,7 +170,9 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void ModifiedDescriptorDoesNotRetainAValidCodePackageIdentity()
         {
-            var manifest = Manifest(); manifest.Seal(); manifest.HotUpdateAssemblies[0].Sha256 = new string('a', 64);
+            var manifest = Manifest();
+            manifest.Seal();
+            manifest.HotUpdateAssemblies[0].Sha256 = new string('a', 64);
             Assert.Throws<InvalidDataException>(() => manifest.Validate("hotupdate-test", "base-v1", "2022.3.62f3c1", false));
         }
     }

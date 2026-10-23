@@ -1,16 +1,16 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Collections;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Compilation;
+using UnityEngine;
 using UnityEngine.TestTools;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
-using UnityEngine;
 
 namespace YLFramework.Core.Editor.Tests
 {
@@ -36,7 +36,7 @@ namespace YLFramework.Core.Editor.Tests
         [Test]
         public void NeutralEditorHelpersKeepTheirGuidsAndSingleEditorOwnerAtTheDeclaredPaths()
         {
-            const string root = "Assets/YLFramework/Editor/";
+            const string Root = "Assets/YLFramework/Editor/";
             var moves = new[]
             {
                 (type: typeof(DisableEditDrawer), oldPath: "Core/Inspectors/DisableEditDrawer.cs", newPath: "Foundation/Attributes/DisableEditDrawer.cs", guid: "fac117eb3216be84e9e4f3089011b84b"),
@@ -54,18 +54,18 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(player.Single(a => a.name == "YLFramework.Runtime").assemblyReferences.Any(a => a.name == EditorAssemblyName), Is.False);
             foreach (var move in moves)
             {
-                string path = root + move.newPath;
+                string path = Root + move.newPath;
                 Assert.That(File.Exists(path), Is.True, path);
                 Assert.That(File.Exists(path + ".meta"), Is.True, path);
-                Assert.That(File.Exists(root + move.oldPath), Is.False, move.oldPath);
-                Assert.That(File.Exists(root + move.oldPath + ".meta"), Is.False, move.oldPath);
+                Assert.That(File.Exists(Root + move.oldPath), Is.False, move.oldPath);
+                Assert.That(File.Exists(Root + move.oldPath + ".meta"), Is.False, move.oldPath);
                 Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(move.guid), path);
                 Assert.That(AssetDatabase.GUIDToAssetPath(move.guid), Is.EqualTo(path));
                 Assert.That(AssetDatabase.LoadAssetAtPath<MonoScript>(path).GetClass(), Is.SameAs(move.type));
                 Assert.That(move.type.FullName, Is.EqualTo("YLFramework.Core.Editor." + move.type.Name));
                 Assert.That(move.type.Assembly, Is.SameAs(assembly));
                 Assert.That(AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetType(move.type.FullName) != null), Is.EqualTo(1));
-                Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(path), Is.EqualTo(root + "YLFramework.Editor.asmdef"));
+                Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(path), Is.EqualTo(Root + "YLFramework.Editor.asmdef"));
                 Assert.That(playerSources.Contains(Path.GetFullPath(path), StringComparer.OrdinalIgnoreCase), Is.False);
             }
             Assert.That(typeof(TreeViewStateInfo).Assembly, Is.SameAs(assembly));
@@ -114,7 +114,11 @@ namespace YLFramework.Core.Editor.Tests
                     CompilerMessage[] messages = null;
                     builder.buildFinished += (_, result) => messages = result;
                     Assert.That(builder.Build(), Is.True);
-                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(messages, Is.Not.Null);
                     var errors = messages.Where(message => message.type == CompilerMessageType.Error).ToArray();
                     // 故意违规同时触发原 XF 全局分析器；保留其 Error，不用关闭它来验收自有 Warning。
@@ -130,7 +134,10 @@ namespace YLFramework.Core.Editor.Tests
                     Assert.That(File.Exists(output), Is.EqualTo(!negative));
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         [Test]
@@ -211,14 +218,22 @@ namespace YLFramework.Core.Editor.Tests
             {
                 var root = type;
                 while (root.DeclaringType != null)
+                {
                     root = root.DeclaringType;
+                }
+
                 if (root.IsDefined(typeof(CompilerGeneratedAttribute), false))
+                {
                     continue;
+                }
+
                 Assert.That(type.Namespace == "YLFramework.Core.Editor" ||
                     (type.Namespace != null && type.Namespace.StartsWith("YLFramework.Core.Editor.", StringComparison.Ordinal)), Is.True, type.FullName);
                 foreach (var other in AppDomain.CurrentDomain.GetAssemblies().Where(a => a != assembly))
+                {
                     Assert.That(other.GetType(type.FullName), Is.Null,
                         type.FullName + " also exists in " + other.GetName().Name);
+                }
             }
         }
 
@@ -263,10 +278,16 @@ namespace YLFramework.Core.Editor.Tests
             var original = assemblies.Single(a => a.GetName().Name == "XFGameFramework");
             foreach (var name in new[] { "AudioData", "AudioController", "AudioPlayer", "AudioPlayerExtension", "AudioPlayerAutoPause",
                 "AudioAssetType", "AudioPlayType", "StopType", "ClipAssetNameInfo", "ClipAssetInfo" })
+            {
                 Assert.IsNull(core.GetType("YLFramework.Core." + name), name);
+            }
+
             Assert.IsNull(typeof(CreateModuleCommand).Assembly.GetType("YLFramework.Core.Editor.AudioPlayerInspector"));
             foreach (var name in new[] { "AudioKit", "AudioHandle", "AudioEmitter", "AudioMusicPlayer", "AudioClipLibrary", "AudioGroupPlayer" })
+            {
                 Assert.IsNotNull(formal.GetType("YLFramework.Services.Audio." + name), name);
+            }
+
             Assert.IsNotNull(original.GetType("XFGameFramework.AudioPlayer"));
             CollectionAssert.DoesNotContain(core.GetReferencedAssemblies().Select(a => a.Name).ToArray(), formal.GetName().Name);
             CollectionAssert.DoesNotContain(formal.GetReferencedAssemblies().Select(a => a.Name).ToArray(), core.GetName().Name);
@@ -284,7 +305,10 @@ namespace YLFramework.Core.Editor.Tests
                 .Where(p => !p.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)).ToArray();
             Assert.That(files, Is.Not.Empty);
             foreach (string path in files)
+            {
                 Assert.That(File.Exists(path + ".meta"), Is.True, "Not imported: " + path);
+            }
+
             Assert.That(File.Exists(EditorRoot + ".meta"), Is.True, "Editor root must also have an independent GUID.");
             var guids = Directory.GetFiles(EditorRoot, "*.meta", SearchOption.AllDirectories)
                 .Concat(new[] { EditorRoot + ".meta" }).Select(ReadGuid).ToArray();
@@ -297,7 +321,10 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(relative.Split('/').Any(part => part.Equals("About", StringComparison.OrdinalIgnoreCase) ||
                     part.StartsWith("Expansion", StringComparison.OrdinalIgnoreCase)), Is.False, relative);
                 if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
+
                 string source = File.ReadAllText(file);
                 Assert.That(source, Does.Not.Contain("XFGameFrameworkCodeAnalyzer"), relative);
                 Assert.That(source, Does.Not.Contain("ExpansionWindow"), relative);
@@ -310,9 +337,9 @@ namespace YLFramework.Core.Editor.Tests
         [Test]
         public void FrameworkRootCarriesTheConsolidatedLicenseSet()
         {
-            const string licensePath = "Assets/YLFramework/LICENSE.md";
-            Assert.That(File.Exists(licensePath), Is.True, "The consolidated license must be distributed at the framework root.");
-            string license = File.ReadAllText(licensePath);
+            const string LicensePath = "Assets/YLFramework/LICENSE.md";
+            Assert.That(File.Exists(LicensePath), Is.True, "The consolidated license must be distributed at the framework root.");
+            string license = File.ReadAllText(LicensePath);
             Assert.That(license, Is.Not.Empty);
             Assert.That(File.Exists("Assets/YLFramework/Integrations/Excel/Editor/Licenses/MiniExcel-LICENSE.txt"), Is.True);
             var remaining = Directory.GetFiles("Assets/YLFramework", "*", SearchOption.AllDirectories)
@@ -343,7 +370,10 @@ namespace YLFramework.Core.Editor.Tests
         private static string ResolveReference(string reference)
         {
             if (!reference.StartsWith("GUID:", StringComparison.Ordinal))
+            {
                 return reference;
+            }
+
             return ReadDefinition(AssetDatabase.GUIDToAssetPath(reference.Substring(5))).name;
         }
 

@@ -5,58 +5,100 @@ namespace YLFramework.Services.Audio
 {
     public static partial class AudioKit
     {
-        private static int sClipCacheCapacity;
-        private static double sClipCacheIdleSeconds;
+        private static int _clipCacheCapacity;
+        private static double _clipCacheIdleSeconds;
         /// <summary>最大闲置 Clip 条目数，默认 0 禁缓存；不包含等待者、播放或 Source 池。</summary>
         public static int ClipCacheCapacity
         {
-            get => sClipCacheCapacity;
+            get => _clipCacheCapacity;
             set
             {
-                if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
-                if (IsClosing) throw new InvalidOperationException("AudioKit is shutting down.");
-                sClipCacheCapacity = value;
-                if (AudioManager.TryGetInstance(out var host)) host.ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
+                if (value < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+
+                if (IsClosing)
+                {
+                    throw new InvalidOperationException("AudioKit is shutting down.");
+                }
+
+                _clipCacheCapacity = value;
+                if (AudioManager.TryGetInstance(out var host))
+                {
+                    host.ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
+                }
             }
         }
         /// <summary>闲置资源的 unscaled 存活秒数，默认 0 禁缓存。重新取得取消闲置到期；活跃责任不受影响。</summary>
         public static double ClipCacheIdleSeconds
         {
-            get => sClipCacheIdleSeconds;
+            get => _clipCacheIdleSeconds;
             set
             {
-                if (double.IsNaN(value) || double.IsInfinity(value) || value < 0) throw new ArgumentOutOfRangeException(nameof(value));
-                if (IsClosing) throw new InvalidOperationException("AudioKit is shutting down.");
-                sClipCacheIdleSeconds = value;
-                if (AudioManager.TryGetInstance(out var host)) host.ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
+                if (double.IsNaN(value) || double.IsInfinity(value) || value < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+
+                if (IsClosing)
+                {
+                    throw new InvalidOperationException("AudioKit is shutting down.");
+                }
+
+                _clipCacheIdleSeconds = value;
+                if (AudioManager.TryGetInstance(out var host))
+                {
+                    host.ClipCache.Tick(Time.realtimeSinceStartupAsDouble);
+                }
             }
         }
         /// <summary>只释放本 Audio 会话的闲置 Clip 缓存，不释放仍有等待者/播放/显式租约的资源。</summary>
-        public static void ClearClipCache() { if (AudioManager.TryGetInstance(out var host)) host.ClipCache.ClearIdle(); }
+        public static void ClearClipCache()
+        {
+            if (AudioManager.TryGetInstance(out var host))
+            {
+                host.ClipCache.ClearIdle();
+            }
+        }
         /// <summary>显式同步预加载/保活；调用方必须 Dispose 返回租约。不同后端不合并所有权。</summary>
         public static AudioClipLease AcquireClip(AudioClipAddress address)
         {
-            address.Validate(); return AudioManager.Instance.ClipCache.Load(address);
+            address.Validate();
+            return AudioManager.Instance.ClipCache.Load(address);
         }
         internal static bool InvalidateNamed(AudioCategory category, AudioPlayEnd reason = AudioPlayEnd.Replaced)
         {
-            if (!AudioManager.TryGetInstance(out var host)) return true;
+            if (!AudioManager.TryGetInstance(out var host))
+            {
+                return true;
+            }
+
             var version = host.PendingVersion(category, null);
             host.CancelPending(category, null, reason);
-            return host && host.Available && host.PendingVersion(category, null) == version + 1;
+            return host && host.IsAvailable && host.PendingVersion(category, null) == version + 1;
         }
         private static AudioPlayRequest PlayNamed(AudioClipAddress address, AudioCategory category, AudioChannel channel,
             AudioSoundOptions options, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             bool asynchronous, float crossfade = -1f, AudioSource source = null, bool borrowed = false)
         {
-            address.Validate(); channel?.RequireValid();
+            address.Validate();
+            channel?.RequireValid();
             var snapshot = AudioPlaybackOptions.Capture(options, channel == null && category == AudioCategory.Music);
-            if (category != AudioCategory.Sound) { snapshot.Priority = 0; snapshot.PlaySoundMode = null; }
+            if (category != AudioCategory.Sound)
+            {
+                snapshot.Priority = 0;
+                snapshot.PlaySoundMode = null;
+            }
             snapshot.Validate(false);
             var host = channel?.Owner ?? AudioManager.Instance;
             if (borrowed)
             {
-                if (channel == null || channel.Mode != AudioChannelMode.Exclusive) throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                if (channel == null || channel.Mode != AudioChannelMode.Exclusive)
+                {
+                    throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                }
+
                 host.ValidateBorrowedSource(source);
             }
             var request = new AudioPlayRequest(host, address, category, channel, snapshot, started, finished, asynchronous, crossfade, source, borrowed);
@@ -104,7 +146,10 @@ namespace YLFramework.Services.Audio
         }
         private static void ValidateNamedCrossfade(float duration)
         {
-            if (!AudioSoundOptions.IsFinite(duration) || duration < 0) throw new ArgumentOutOfRangeException(nameof(duration));
+            if (!AudioSoundOptions.IsFinite(duration) || duration < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(duration));
+            }
         }
         internal static AudioPlayRequest PlayChannelNamed(AudioChannel channel, AudioClipAddress address, AudioSoundOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, bool asynchronous,

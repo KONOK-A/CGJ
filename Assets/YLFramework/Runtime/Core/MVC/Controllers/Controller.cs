@@ -1,10 +1,10 @@
-using System; 
+using System;
 
 namespace YLFramework.Core
 {
 
-    [Obsolete("已过时",true)]
-    public enum ControllerType 
+    [Obsolete("已过时", true)]
+    public enum ControllerType
     {
         /// <summary>
         /// 普通类型
@@ -15,7 +15,7 @@ namespace YLFramework.Core
         /// </summary>
         CannotRemove
     }
-     
+
     public abstract class Controller
     {
         internal bool IsInitializing;
@@ -23,13 +23,16 @@ namespace YLFramework.Core
 
         #region 属性
 
-        [Obsolete("已过时",true)]
+        [Obsolete("已过时", true)]
         public virtual ControllerType Type => ControllerType.Normal;
 
         /// <summary>
         /// 拥有者；初始化及退出回调期间有效，移除或初始化失败后为null。
         /// </summary>
-        public Module Module { get; internal set; } 
+        public Module Module
+        {
+            get; internal set;
+        }
 
         #endregion
 
@@ -37,12 +40,16 @@ namespace YLFramework.Core
         /// <summary>
         /// 每次有效注册时触发一次；期间可查询自身，但注册尚未提交完成。
         /// </summary>
-        public virtual void OnInit() { }
+        public virtual void OnInit()
+        {
+        }
 
         /// <summary>
         /// 移除Controller时触发
         /// </summary>
-        public virtual void OnExit() { }
+        public virtual void OnExit()
+        {
+        }
 
         #endregion
 

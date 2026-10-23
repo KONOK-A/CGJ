@@ -5,13 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
-using YLFramework.Actions;
-using YLFramework.Editor.Actions;
-using YLFramework.Editor.Help;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
+using YLFramework.Editor.Actions;
+using YLFramework.Editor.Help;
 
 namespace YLFramework.Tests.Actions
 {
@@ -19,10 +19,13 @@ namespace YLFramework.Tests.Actions
     {
         private class ProtectedSetterExample
         {
-            public int Value { get; protected set; }
+            public int Value
+            {
+                get; protected set;
+            }
         }
         // Independently mapped from the Runtime and Observable public API inventory.
-        private static readonly string[] ExpectedCoreTypeNames =
+        private static readonly string[] _expectedCoreTypeNames =
         {
             "YLFramework.Actions.AbstractAction`1", "YLFramework.Actions.ActionController", "YLFramework.Actions.ActionHandle",
             "YLFramework.Actions.ActionKit", "YLFramework.Actions.ActionKit+ScreenTransition", "YLFramework.Actions.ActionKitCurrentScene",
@@ -34,7 +37,7 @@ namespace YLFramework.Tests.Actions
             "YLFramework.Actions.EaseType", "YLFramework.Actions.EaseUtility",
             "YLFramework.Actions.IAction", "YLFramework.Actions.IActionController", "YLFramework.Actions.IActionControllerExtensions",
             "YLFramework.Actions.IActionExecutor", "YLFramework.Actions.IActionExecutorExtensions",
-            "YLFramework.Actions.IActionExtensions", "YLFramework.Actions.IAction`1", "YLFramework.Actions.ICustomAPI`1",
+            "YLFramework.Actions.IActionExtensions", "YLFramework.Actions.IAction`1", "YLFramework.Actions.ICustomApi`1",
             "YLFramework.Actions.IParallel", "YLFramework.Actions.IRepeat",
             "YLFramework.Actions.ISequence", "YLFramework.Actions.Lerp", "YLFramework.Actions.LerpExtension",
             "YLFramework.Actions.MonoUpdateActionExecutorExtension",
@@ -49,7 +52,7 @@ namespace YLFramework.Tests.Actions
         public void IndexContainsEveryExportedApiTypeExactlyOnceAndRetainsAllCoreTypes()
         {
             var index = ActionKitApiHelpContent.BuildIndex();
-            var core = ExpectedCoreTypeNames.Select(name => typeof(ActionKit).Assembly.GetType(name, true)).ToArray();
+            var core = _expectedCoreTypeNames.Select(name => typeof(ActionKit).Assembly.GetType(name, true)).ToArray();
             var optional = AppDomain.CurrentDomain.GetAssemblies().SingleOrDefault(assembly => assembly.GetName().Name == "YLFramework.Actions.DOTween");
             var expected = core.Concat(optional == null ? Array.Empty<Type>() : new[]
             {
@@ -95,7 +98,10 @@ namespace YLFramework.Tests.Actions
             }
             CollectionAssert.AreEquivalent(expectedReferences.Distinct(), ActionKitApiHelpContent.GetReferenceAssemblies());
             if (wrapper == null)
+            {
                 Assert.That(ActionKitApiHelpContent.GetReferenceAssemblies().Any(path => Path.GetFileName(path) == "DOTween.dll"), Is.False);
+            }
+
             foreach (var name in new[] { "YLFramework.Actions.DOTween", "DOTween" })
             {
                 Assert.That(typeof(ActionKitApiHelpContent).Assembly.GetReferencedAssemblies().Any(assembly => assembly.Name == name), Is.False);
@@ -121,15 +127,19 @@ namespace YLFramework.Tests.Actions
         [Test]
         public void AllDeclaredPublicAndProtectedMembersAreShownWithoutInheritedNoise()
         {
-            const BindingFlags flags = BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            const BindingFlags Flags = BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
             foreach (var entry in ActionKitApiHelpContent.BuildIndex())
             {
-                if (typeof(Delegate).IsAssignableFrom(entry.Type)) continue;
-                var expected = entry.Type.GetMethods(flags).Where(method => !method.IsSpecialName && Visible(method)).Cast<MemberInfo>()
-                    .Concat(entry.Type.GetConstructors(flags).Where(Visible))
-                    .Concat(entry.Type.GetFields(flags).Where(field => !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly)))
-                    .Concat(entry.Type.GetProperties(flags).Where(property => property.GetAccessors(true).Any(Visible)))
-                    .Concat(entry.Type.GetEvents(flags).Where(signal => Visible(signal.GetAddMethod(true)))).ToArray();
+                if (typeof(Delegate).IsAssignableFrom(entry.Type))
+                {
+                    continue;
+                }
+
+                var expected = entry.Type.GetMethods(Flags).Where(method => !method.IsSpecialName && Visible(method)).Cast<MemberInfo>()
+                    .Concat(entry.Type.GetConstructors(Flags).Where(Visible))
+                    .Concat(entry.Type.GetFields(Flags).Where(field => !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly)))
+                    .Concat(entry.Type.GetProperties(Flags).Where(property => property.GetAccessors(true).Any(Visible)))
+                    .Concat(entry.Type.GetEvents(Flags).Where(signal => Visible(signal.GetAddMethod(true)))).ToArray();
                 CollectionAssert.AreEquivalent(expected, entry.Members, entry.Type.FullName);
                 Assert.That(entry.Members.All(member => member.DeclaringType == entry.Type), Is.True);
                 Assert.That(entry.Members.Select(ActionKitApiHelpContent.FormatSignature).Distinct().Count(), Is.EqualTo(entry.Members.Length), entry.Type.FullName);
@@ -143,10 +153,15 @@ namespace YLFramework.Tests.Actions
         {
             var entry = ActionKitApiHelpContent.BuildIndex().Single(type => type.Type == typeof(ActionKit));
             foreach (var name in new[] { "Delay", "Sequence", "DelayFrame", "NextFrame", "Lerp", "Callback", "Condition", "Repeat", "Parallel", "Custom", "Coroutine", "Task" })
+            {
                 Assert.That(entry.Members.Any(member => member.Name == name), Is.True, name);
+            }
+
             Assert.That(entry.Members.OfType<MethodInfo>().Count(method => method.Name == "Custom"), Is.EqualTo(2));
             foreach (var name in new[] { "OnUpdate", "OnFixedUpdate", "OnLateUpdate", "OnGUI", "OnApplicationQuit", "OnApplicationPause", "OnApplicationFocus" })
+            {
                 Assert.That(entry.Members.OfType<PropertyInfo>().Any(property => property.Name == name), Is.True, name);
+            }
         }
 
         [Test]
@@ -210,8 +225,11 @@ namespace YLFramework.Tests.Actions
                 }
             }
             Assert.That(typeof(IAction<>).GetProperties().Any(property => property.Name == "Flag"), Is.False);
-            foreach (var text in new[] { "ordinal", "不消费新动作", "失败不恢复旧任务", "不初始化或创建", "ActionID=0", "Reset 不换租约", "Repeat" })
+            foreach (var text in new[] { "ordinal", "不消费新动作", "失败不恢复旧任务", "不初始化或创建", "ActionId=0", "Reset 不换租约", "Repeat" })
+            {
                 StringAssert.Contains(text, Topic("control").SearchText);
+            }
+
             Assert.That(ActionKitApiHelpContent.RelatedTopics(typeof(ActionHandle)).Single().Id, Is.EqualTo("control"));
             StringAssert.Contains("安全", handle.Summary);
             StringAssert.Contains("失效句柄不取消后来同名任务", handle.Entries.Single(entry => entry.Name == "Cancel").Help.Returns);
@@ -224,7 +242,7 @@ namespace YLFramework.Tests.Actions
             StringAssert.Contains("int repeatCount = -1", Signature(typeof(ActionKit), "Repeat"));
             StringAssert.Contains("Action onLerpFinish = null", Signature(typeof(ActionKit), "Lerp"));
             var custom = typeof(ActionKit).GetMethods().Single(method => method.Name == "Custom" && method.IsGenericMethod);
-            StringAssert.Contains("Custom<TData>(Action<ICustomAPI<TData>> customSetting)", ActionKitApiHelpContent.FormatSignature(custom));
+            StringAssert.Contains("Custom<TData>(Action<ICustomApi<TData>> customSetting)", ActionKitApiHelpContent.FormatSignature(custom));
         }
 
         [Test]
@@ -242,7 +260,7 @@ namespace YLFramework.Tests.Actions
         [Test]
         public void PropertiesRetainPrivateProtectedAndPublicSetterVisibility()
         {
-            StringAssert.Contains("{ get; private set; }", ActionKitApiHelpContent.FormatSignature(typeof(ActionKit).GetProperty("Initialized")));
+            StringAssert.Contains("{ get; private set; }", ActionKitApiHelpContent.FormatSignature(typeof(ActionKit).GetProperty("IsInitialized")));
             StringAssert.Contains("{ get; protected set; }", ActionKitApiHelpContent.FormatSignature(
                 typeof(ProtectedSetterExample).GetProperty("Value")));
             StringAssert.Contains("{ get; set; }", ActionKitApiHelpContent.FormatSignature(typeof(AbstractAction<>).GetProperty("Status")));
@@ -252,7 +270,9 @@ namespace YLFramework.Tests.Actions
         public void PublicDeclarationsDoNotExposeInternalCleanupInterfaces()
         {
             foreach (var entry in ActionKitApiHelpContent.BuildIndex())
+            {
                 StringAssert.DoesNotContain("IActionExecutionVersion", entry.Declaration + entry.Signatures);
+            }
         }
 
         [Test]
@@ -303,9 +323,9 @@ namespace YLFramework.Tests.Actions
             var entry = ActionKitApiHelpContent.BuildIndex().Single(type => type.Type == typeof(AbstractAction<>));
             StringAssert.Contains("protected virtual void OnReset()", entry.Signatures);
             StringAssert.Contains("protected virtual void OnDeinit()", entry.Signatures);
-            StringAssert.Contains("protected static ActionKit mArchitecture", ActionKitApiHelpContent.FormatSignature(
-                typeof(ActionKit).GetField("mArchitecture", BindingFlags.NonPublic | BindingFlags.Static)));
-            StringAssert.DoesNotContain("mPool", entry.Signatures);
+            StringAssert.Contains("protected static ActionKit Architecture", ActionKitApiHelpContent.FormatSignature(
+                typeof(ActionKit).GetField("Architecture", BindingFlags.NonPublic | BindingFlags.Static)));
+            StringAssert.DoesNotContain("_pool", entry.Signatures);
             Assert.That(ActionKitApiHelpContent.BuildIndex().Any(type => type.Type.Name == "ScreenTransitionCanvas" || type.Type.Name.StartsWith("ActionPool")), Is.False);
         }
 
@@ -357,15 +377,15 @@ namespace YLFramework.Tests.Actions
         [Test]
         public void BrowsingContentDoesNotInitializeRuntimeOrCreateGameObjects()
         {
-            var initialized = ActionKit.Initialized;
-            var nextId = ActionKit.ID_GENERATOR;
-            var sceneHost = ActionKitCurrentScene.mSceneComponent;
+            var initialized = ActionKit.IsInitialized;
+            var nextId = ActionKit.IdGenerator;
+            var sceneHost = ActionKitCurrentScene.CachedSceneComponent;
             var objects = Resources.FindObjectsOfTypeAll<GameObject>().Select(item => item.GetInstanceID()).OrderBy(id => id).ToArray();
             ActionKitApiHelpContent.BuildIndex();
             ActionKitApiHelpContent.ExampleCompilationSource();
-            Assert.That(ActionKit.Initialized, Is.EqualTo(initialized));
-            Assert.That(ActionKit.ID_GENERATOR, Is.EqualTo(nextId));
-            Assert.That(ActionKitCurrentScene.mSceneComponent, Is.SameAs(sceneHost));
+            Assert.That(ActionKit.IsInitialized, Is.EqualTo(initialized));
+            Assert.That(ActionKit.IdGenerator, Is.EqualTo(nextId));
+            Assert.That(ActionKitCurrentScene.CachedSceneComponent, Is.SameAs(sceneHost));
             CollectionAssert.AreEqual(objects, Resources.FindObjectsOfTypeAll<GameObject>().Select(item => item.GetInstanceID()).OrderBy(id => id));
         }
 
@@ -444,7 +464,10 @@ namespace YLFramework.Tests.Actions
                 CollectionAssert.AreEquivalent(ActionKitApiHelpContent.FeaturedTypes(topic, index).Select(type => type.Type), page.FeaturedTypes);
             }
             foreach (var type in index)
+            {
                 CollectionAssert.AreEquivalent(ActionKitApiHelpContent.RelatedTopics(type.Type).Select(topic => topic.Id), type.RelatedPages.Select(page => page.Id));
+            }
+
             Assert.That(module.Guides.Single(page => page.Id == "screen").FeaturedTypes, Does.Contain(typeof(ActionKit.ScreenTransition)));
             Assert.That(module.CollapsedGuideGroups, Is.Empty);
             Assert.That(module.CollapsedApiGroups, Is.Empty);
@@ -472,7 +495,7 @@ namespace YLFramework.Tests.Actions
             StringAssert.Contains("取消后再标记 Finished", help.Summary);
             StringAssert.Contains("不一定表示成功", help.Returns);
             StringAssert.Contains("不调用结束钩子", help.Remarks);
-            StringAssert.Contains("Deinited", help.Returns);
+            StringAssert.Contains("IsDeinitialized", help.Returns);
         }
 
         [Test]
@@ -541,7 +564,11 @@ namespace YLFramework.Tests.Actions
                 foreach (var name in topic.FeaturedTypeNames)
                 {
                     if (topic.RequiredAssembly == "YLFramework.Actions.DOTween" && !topic.IsAvailable &&
-                        (name == "DOTweenAction" || name == "ActionKitDOTweenExtension")) continue;
+                        (name == "DOTweenAction" || name == "ActionKitDOTweenExtension"))
+                    {
+                        continue;
+                    }
+
                     Assert.That(links.Any(entry => entry.Name == name || entry.Type.Name.Split('`')[0] == name), Is.True, topic.Id + ": " + name);
                 }
             }
@@ -568,7 +595,10 @@ namespace YLFramework.Tests.Actions
             CollectionAssert.AreEquivalent(observable.TypeNames, observable.FeaturedTypeNames);
             var source = ActionKitApiHelpContent.ExampleCompilationSource();
             foreach (var topic in ActionKitApiHelpContent.Topics.Where(topic => !topic.IsCompleteExample && topic.Example.Length != 0))
+            {
                 Assert.That(source.Contains(topic.Example), Is.EqualTo(topic.IsAvailable), topic.Id);
+            }
+
             StringAssert.Contains("IObservable<int>", observable.Example);
             StringAssert.Contains("IDisposable", observable.Example);
             StringAssert.Contains("mSource.mObserver = null", observable.Example);
@@ -596,10 +626,13 @@ namespace YLFramework.Tests.Actions
                 "Pause 前预绑定", "ToAction 是单次绑定", "首次启动前 Reset 保留同一预绑定", "Reset 结束原绑定，再 Start 会取消", "不重新认领",
                 "原始 UnitySynchronizationContext", "完整类型名", "程序集身份", "sealed", "主线程 ID",
                 "不调用 factory、不 Pause Tween", "不支持自定义同步 Post 或人工 pump", "UnitySynchronizationContext.Post 延后",
-                "Deinit 立即标记 Deinited", "Reset 立即恢复 NotStart", "pending marker", "实际主线程", "其他 owner",
+                "Deinit 立即标记 IsDeinitialized", "Reset 立即恢复 NotStart", "pending marker", "实际主线程", "其他 owner",
                 "Shutdown 不保证同步物理 Kill", "Domain Reload", "Post 未执行", "可能没有物理清理",
                 "不保证物理清理", "不能完全区分", "漏掉完成或取消信号" })
+            {
                 StringAssert.Contains(text, topic.SearchText);
+            }
+
             foreach (var type in ActionKitApiHelpContent.BuildIndex().Where(entry => entry.Type.Assembly.GetName().Name == topic.RequiredAssembly))
             {
                 StringAssert.DoesNotContain("尚未核实", type.Summary);
@@ -608,12 +641,17 @@ namespace YLFramework.Tests.Actions
                 {
                     Assert.That(HasChinese(entry.Help.Summary) && HasChinese(entry.Help.Remarks), Is.True, entry.Signature);
                     if (entry.Member is MethodInfo method && method.ReturnType != typeof(void))
+                    {
                         Assert.That(HasChinese(entry.Help.Returns), Is.True, entry.Signature);
+                    }
+
                     StringAssert.DoesNotContain("尚未核实", entry.SearchText);
                     foreach (var text in new[] { "原始 UnitySynchronizationContext", "不支持自定义同步 Post 或人工 pump",
                         "不调用 factory、不 Pause Tween", "pending marker", "Post 延后", "Shutdown 不保证同步物理 Kill",
                         "Domain Reload", "不保证物理清理", "不能完全区分", "漏掉完成或取消信号" })
+                    {
                         StringAssert.Contains(text, entry.Help.Remarks, entry.Signature);
+                    }
                 }
                 if (type.Type.Name == "ActionKitDOTweenExtension")
                 {
@@ -622,20 +660,24 @@ namespace YLFramework.Tests.Actions
                     StringAssert.Contains("Reset 后再 Start 取消", bound.Help.Returns);
                     StringAssert.Contains("Reset 后不可重新认领", bound.Help.Parameters.Single().Description);
                 }
-                if (type.Type.Name != "DOTweenAction") continue;
+                if (type.Type.Name != "DOTweenAction")
+                {
+                    continue;
+                }
+
                 Assert.That(type.Members.Length, Is.EqualTo(10));
                 Assert.That(type.Members.OfType<MethodInfo>().Count(), Is.EqualTo(6));
                 Assert.That(type.Members.OfType<PropertyInfo>().Count(), Is.EqualTo(4));
                 StringAssert.Contains("不 Kill", type.Entries.Single(entry => entry.Name == "OnFinish").Help.Summary);
                 StringAssert.Contains("保留 getter", type.Entries.Single(entry => entry.Name == "Reset").Help.Summary);
                 StringAssert.Contains("清空 getter", type.Entries.Single(entry => entry.Name == "Deinit").Help.Summary);
-                StringAssert.Contains("只恢复由此动作暂停", type.Entries.Single(entry => entry.Name == "Paused").Help.Summary);
+                StringAssert.Contains("只恢复由此动作暂停", type.Entries.Single(entry => entry.Name == "IsPaused").Help.Summary);
                 StringAssert.Contains("执行与取消", type.Entries.Single(entry => entry.Name == "Allocate").Help.Parameters.Single().Description);
                 StringAssert.Contains("首先校验", type.Entries.Single(entry => entry.Name == "OnStart").Help.Summary);
                 StringAssert.Contains("只复用预绑定", type.Entries.Single(entry => entry.Name == "OnStart").Help.Summary);
                 StringAssert.Contains("再 Start 会取消", type.Entries.Single(entry => entry.Name == "Reset").Help.Summary);
                 StringAssert.Contains("Post 延后", type.Entries.Single(entry => entry.Name == "Reset").Help.Summary);
-                StringAssert.Contains("立即标记 Deinited", type.Entries.Single(entry => entry.Name == "Deinit").Help.Summary);
+                StringAssert.Contains("立即标记 IsDeinitialized", type.Entries.Single(entry => entry.Name == "Deinit").Help.Summary);
                 StringAssert.Contains("Post 延后", type.Entries.Single(entry => entry.Name == "Deinit").Help.Summary);
             }
         }
@@ -650,7 +692,10 @@ namespace YLFramework.Tests.Actions
                 "同步 Subscribe 返回前", "只释放一次", "旧订阅通知", "Dispose 错误可见", "Deinit 仍安排回池",
                 "Unity 主线程", "SynchronizationContext", "OnExecute 消费", "Pause 不暂停 source",
                 "YLFramework.Runtime", "内建" })
+            {
                 StringAssert.Contains(text, topic.SearchText);
+            }
+
             var observableTypes = new[] { typeof(UniRxAction<>), typeof(ActionKitUniRxExtension) };
             var observableEntries = ActionKitApiHelpContent.BuildIndex().Where(entry => observableTypes.Contains(entry.Type)).ToArray();
             CollectionAssert.AreEquivalent(observableTypes, observableEntries.Select(entry => entry.Type));
@@ -663,10 +708,17 @@ namespace YLFramework.Tests.Actions
                 {
                     Assert.That(HasChinese(entry.Help.Summary) && HasChinese(entry.Help.Remarks), Is.True, entry.Signature);
                     if (entry.Member is MethodInfo method && method.ReturnType != typeof(void))
+                    {
                         Assert.That(HasChinese(entry.Help.Returns), Is.True, entry.Signature);
+                    }
+
                     StringAssert.DoesNotContain("尚未核实", entry.SearchText);
                 }
-                if (type.Type.Name.Split('`')[0] != "UniRxAction") continue;
+                if (type.Type.Name.Split('`')[0] != "UniRxAction")
+                {
+                    continue;
+                }
+
                 StringAssert.Contains("保留 factory 到 Deinit", type.Entries.Single(entry => entry.Name == "OnFinish").Help.Summary);
                 StringAssert.Contains("释放旧 subscription", type.Entries.Single(entry => entry.Name == "Reset").Help.Summary);
                 StringAssert.Contains("清空 factory 引用", type.Entries.Single(entry => entry.Name == "Deinit").Help.Summary);
@@ -738,7 +790,7 @@ namespace YLFramework.Tests.Actions
             var constructor = typeof(CallbackAction).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, null, Type.EmptyTypes, null);
             Assert.That(constructor, Is.Not.Null);
             Assert.That(ActionKitApiHelpReference.Describe(constructor).Summary, Is.Empty);
-            Assert.That(ActionKitApiHelpReference.Describe(typeof(IAction<>).GetProperty("ActionID")).Returns, Is.Empty);
+            Assert.That(ActionKitApiHelpReference.Describe(typeof(IAction<>).GetProperty("ActionId")).Returns, Is.Empty);
             Assert.That(ActionKitApiHelpReference.Describe(typeof(IAction<>).GetMethod("OnStart")).Returns, Is.Empty);
         }
 
@@ -800,8 +852,11 @@ namespace YLFramework.Tests.Actions
         public void UserFacingHelpUsesTypedChineseHandlesInsteadOfGenericTokenTerminology()
         {
             foreach (var topic in ActionKitApiHelpContent.Topics)
+            {
                 Assert.That(System.Text.RegularExpressions.Regex.IsMatch(topic.SearchText, @"\btoken\b",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase), Is.False, topic.Id);
+            }
+
             foreach (var type in ActionKitApiHelpContent.BuildIndex())
             {
                 var descriptions = type.Summary + "\n" + string.Join("\n", type.Entries.Select(entry =>
@@ -810,8 +865,8 @@ namespace YLFramework.Tests.Actions
                 Assert.That(System.Text.RegularExpressions.Regex.IsMatch(descriptions, @"\btoken\b",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase), Is.False, type.Name);
             }
-            StringAssert.Contains("注销句柄（IUnRegister）", Topic("subscriptions").Summary);
-            StringAssert.Contains("IUnRegister unregister", Topic("subscriptions").Example);
+            StringAssert.Contains("注销句柄（IUnregister）", Topic("subscriptions").Summary);
+            StringAssert.Contains("IUnregister unregister", Topic("subscriptions").Example);
             StringAssert.Contains("幂等", Topic("subscriptions").SearchText);
             StringAssert.Contains("YLFramework.Events", Topic("subscriptions").SearchText);
         }
@@ -852,7 +907,9 @@ namespace YLFramework.Tests.Actions
                 File.WriteAllText(gettingStarted, ActionKitApiHelpContent.GettingStartedSource);
                 var output = Path.Combine(folder, "ActionKit.HelpExamples.dll");
                 var builder = new AssemblyBuilder(output, new[] { source, gettingStarted })
-                { referencesOptions = ReferencesOptions.UseEngineModules };
+                {
+                    referencesOptions = ReferencesOptions.UseEngineModules
+                };
                 var contents = EditorApplication.applicationContentsPath;
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var allowed = builder.defaultReferences.Where(path => IsEngineOrFrameworkReference(path, contents, ui)).ToArray();
@@ -865,14 +922,21 @@ namespace YLFramework.Tests.Actions
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(message => message.type == CompilerMessageType.Error).Select(message => message.message), Is.Empty);
                 Assert.That(File.Exists(output), Is.True);
             }
             finally
             {
-                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                }
             }
         }
 
@@ -935,7 +999,9 @@ namespace YLFramework.Tests.Actions
         {
             var folder = Path.Combine(Path.GetTempPath(), "YLFramework.Actions.ReferenceProbe-" + Guid.NewGuid().ToString("N"));
             var builder = new AssemblyBuilder(Path.Combine(folder, "ReferenceProbe.dll"), new[] { "ReferenceProbe.cs" })
-            { referencesOptions = ReferencesOptions.UseEngineModules };
+            {
+                referencesOptions = ReferencesOptions.UseEngineModules
+            };
             var references = builder.defaultReferences;
             Assert.That(builder.flags, Is.EqualTo(AssemblyBuilderFlags.None));
             Assert.That(references.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
@@ -943,25 +1009,45 @@ namespace YLFramework.Tests.Actions
                 Path.GetFileName(path) != "UnityEngine.TestRunner.dll").ToArray();
             Assert.That(modules, Is.Not.Empty);
             foreach (var reference in modules)
+            {
                 Assert.That(IsEngineOrFrameworkReference(reference, EditorApplication.applicationContentsPath,
                     typeof(UnityEngine.UI.Image).Assembly.Location), Is.True, reference);
+            }
         }
 
         internal static bool IsEngineOrFrameworkReference(string path, string unityContents, string uiAssembly)
         {
             var absolute = Path.GetFullPath(path);
-            if (string.Equals(absolute, Path.GetFullPath(uiAssembly), StringComparison.OrdinalIgnoreCase)) return true;
-            if (string.Equals(absolute, Path.GetFullPath(typeof(ActionKit).Assembly.Location), StringComparison.OrdinalIgnoreCase)) return true;
-            if (string.Equals(absolute, Path.GetFullPath(typeof(YLFramework.Events.EventChannel).Assembly.Location), StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(absolute, Path.GetFullPath(uiAssembly), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(absolute, Path.GetFullPath(typeof(ActionKit).Assembly.Location), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(absolute, Path.GetFullPath(typeof(YLFramework.Events.EventChannel).Assembly.Location), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             var name = Path.GetFileName(absolute);
             if ((name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal)) && name != "UnityEngine.TestRunner.dll")
+            {
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
                        IsInsideFolder(absolute, Path.Combine(unityContents, "PlaybackEngines")) ||
                        string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEngine.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "NetStandard")) ||
                        IsInsideFolder(absolute, Path.Combine(unityContents, "UnityReferenceAssemblies")) ||
                        IsInsideFolder(absolute, Path.Combine(unityContents, "MonoBleedingEdge/lib/mono"));
+            }
+
             return false;
         }
 
@@ -1005,7 +1091,9 @@ namespace YLFramework.Tests.Actions
                 File.WriteAllText(quickStart, ActionKitApiHelpContent.GettingStartedSource);
                 var output = Path.Combine(folder, "ActionKit.CoreHelpExamples.dll");
                 var builder = new AssemblyBuilder(output, new[] { source, quickStart })
-                { referencesOptions = ReferencesOptions.UseEngineModules };
+                {
+                    referencesOptions = ReferencesOptions.UseEngineModules
+                };
                 var contents = EditorApplication.applicationContentsPath;
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var allowed = builder.defaultReferences.Where(path => IsEngineOrFrameworkReference(path, contents, ui)).ToArray();
@@ -1015,21 +1103,34 @@ namespace YLFramework.Tests.Actions
                 Assert.That(effective.All(path => IsEngineOrFrameworkReference(path, contents, ui)), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
                 foreach (var assembly in new[] { typeof(string).Assembly, typeof(StringComparer).Assembly, typeof(Dictionary<,>).Assembly, typeof(HashSet<>).Assembly })
+                {
                     Assert.That(IsEngineOrFrameworkReference(assembly.Location, contents, ui), Is.True, assembly.Location);
+                }
+
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "mscorlib.dll" || Path.GetFileName(path) == "netstandard.dll"), Is.True);
                 foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(assembly => assembly.GetName().Name == "YLFramework.Actions.DOTween" || assembly.GetName().Name == "DOTween"))
+                {
                     CollectionAssert.DoesNotContain(effective, assembly.Location);
+                }
+
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(message => message.type == CompilerMessageType.Error).Select(message => message.message), Is.Empty);
                 Assert.That(File.Exists(output), Is.True);
             }
             finally
             {
-                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                }
             }
         }
     }

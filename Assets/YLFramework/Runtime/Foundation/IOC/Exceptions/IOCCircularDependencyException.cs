@@ -8,7 +8,10 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 循环链，例如 "A -> B -> A"。
         /// </summary>
-        public string CyclePath { get; }
+        public string CyclePath
+        {
+            get;
+        }
 
         /// <summary>
         /// 使用循环链创建异常，消息中包含完整依赖链。

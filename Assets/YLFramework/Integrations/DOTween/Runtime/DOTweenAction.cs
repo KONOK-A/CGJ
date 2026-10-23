@@ -12,18 +12,18 @@ namespace YLFramework.Actions
     /// </remarks>
     public class DOTweenAction : IAction, IActionExecutionVersion
     {
-        private static readonly ActionPool<DOTweenAction> mPool = new ActionPool<DOTweenAction>(() => new DOTweenAction(), null, 10);
-        private Func<Tween> mTweenGetter;
-        private TweenLease mLease;
-        private ulong mExecutionVersion;
-        private bool mPaused;
-        private bool mBound;
-        private bool mBoundStarted;
-        private static int mMainThread;
-        ulong IActionExecutionVersion.ExecutionVersion => mExecutionVersion;
+        private static readonly ActionPool<DOTweenAction> _pool = new ActionPool<DOTweenAction>(() => new DOTweenAction(), null, 10);
+        private Func<Tween> _tweenGetter;
+        private TweenLease _lease;
+        private ulong _executionVersion;
+        private bool _isPaused;
+        private bool _isBound;
+        private bool _hasBoundStarted;
+        private static int _mainThread;
+        ulong IActionExecutionVersion.ExecutionVersion => _executionVersion;
 
         [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void CaptureMainThread() => mMainThread = Thread.CurrentThread.ManagedThreadId;
+        private static void CaptureMainThread() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 #if UNITY_EDITOR
         [UnityEditor.InitializeOnLoadMethod]
         private static void CaptureEditorThread() => CaptureMainThread();
@@ -33,55 +33,77 @@ namespace YLFramework.Actions
         {
             var context = SynchronizationContext.Current;
             var type = context?.GetType();
-            if (Thread.CurrentThread.ManagedThreadId != mMainThread || type == null ||
+            if (Thread.CurrentThread.ManagedThreadId != _mainThread || type == null ||
                 type.FullName != "UnityEngine.UnitySynchronizationContext" ||
                 type.Assembly != typeof(UnityEngine.Object).Assembly || !type.IsSealed)
+            {
                 throw new InvalidOperationException("DOTween actions require the Unity main thread and its original UnitySynchronizationContext.");
+            }
+
             return context;
         }
 
-        private DOTweenAction() { }
+        private DOTweenAction()
+        {
+        }
 
         /// <summary>分配动作，启动时才调用 Tween 工厂。</summary>
         /// <remarks>每次重新执行应提供新的有效 Tween，不要复用已被 Kill 的实例。</remarks>
         public static DOTweenAction Allocate(Func<Tween> tweenGetter)
         {
-            if (tweenGetter == null) throw new ArgumentNullException(nameof(tweenGetter));
-            var action = mPool.Allocate();
-            action.ActionID = ActionKit.ID_GENERATOR++;
-            action.Deinited = false;
+            if (tweenGetter == null)
+            {
+                throw new ArgumentNullException(nameof(tweenGetter));
+            }
+
+            var action = _pool.Allocate();
+            action.ActionId = ActionKit.IdGenerator++;
+            action.IsDeinitialized = false;
             action.Reset();
-            action.mBound = false;
-            action.mBoundStarted = false;
-            action.mTweenGetter = tweenGetter;
+            action._isBound = false;
+            action._hasBoundStarted = false;
+            action._tweenGetter = tweenGetter;
             return action;
         }
 
         /// <summary>读取或设置暂停标记，并同步到仍由动作持有的 Tween。</summary>
         /// <remarks>恢复只撤销动作发起的暂停，不接管外部暂停。</remarks>
-        public bool Paused
+        public bool IsPaused
         {
-            get => mPaused;
-            set { mPaused = value; mLease?.SetPaused(value); }
+            get => _isPaused;
+            set
+            {
+                _isPaused = value;
+                _lease?.SetPaused(value);
+            }
         }
         /// <summary>读取或设置动作已释放的标记。</summary>
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
         /// <summary>读取或设置当前分配的动作标识，用于隔离旧 Tween 回调。</summary>
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <summary>读取或设置动作执行状态。</summary>
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
         /// <summary>重置执行状态，按启动阶段保留或关闭 Tween 持有关系。</summary>
         /// <remarks>首次启动前保留 ToAction 的原绑定；启动后重置会安排 Kill(false)，重放应使用工厂创建新 Tween。</remarks>
         public void Reset()
         {
-            mExecutionVersion++;
+            _executionVersion++;
             Status = ActionStatus.NotStart;
-            mPaused = false;
+            _isPaused = false;
             // 组合动作在首次启动前会重置子动作；保留原绑定，不重新占用 Tween。
-            if (mBound && !mBoundStarted && mLease != null)
+            if (_isBound && !_hasBoundStarted && _lease != null)
             {
-                mLease.RebaseVersion(mExecutionVersion);
+                _lease.RebaseVersion(_executionVersion);
                 return;
             }
             Release(true);
@@ -91,17 +113,27 @@ namespace YLFramework.Actions
         /// <remarks>对仍持有的 Tween 安排延迟 Kill(false)；返回时不保证 Tween 已停止。</remarks>
         public void Deinit()
         {
-            if (Deinited) return;
-            Deinited = true;
-            mTweenGetter = null;
-            try { Release(true); }
-            finally { ActionQueue.AddCallback(new ActionQueueRecycleCallback<DOTweenAction>(mPool, this)); }
+            if (IsDeinitialized)
+            {
+                return;
+            }
+
+            IsDeinitialized = true;
+            _tweenGetter = null;
+            try
+            {
+                Release(true);
+            }
+            finally
+            {
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<DOTweenAction>(_pool, this));
+            }
         }
 
         private void Release(bool kill)
         {
-            var lease = mLease;
-            mLease = null;
+            var lease = _lease;
+            _lease = null;
             lease?.Close(kill);
         }
 
@@ -109,98 +141,155 @@ namespace YLFramework.Actions
         public void OnStart()
         {
             var context = RequireContext();
-            if (mBound)
+            if (_isBound)
             {
-                var bound = mLease;
-                if (bound == null || !IsCurrent(bound)) { Deinit(); return; }
-                mBoundStarted = true;
+                var bound = _lease;
+                if (bound == null || !IsCurrent(bound))
+                {
+                    Deinit();
+                    return;
+                }
+                _hasBoundStarted = true;
                 try
                 {
                     bound.Restart();
-                    if (IsCurrent(bound)) bound.SetPaused(mPaused);
+                    if (IsCurrent(bound))
+                    {
+                        bound.SetPaused(_isPaused);
+                    }
                 }
                 catch (Exception original)
                 {
                     if (IsCurrent(bound))
                     {
-                        try { Deinit(); }
-                        catch (Exception cleanup) { throw new AggregateException(original, cleanup); }
+                        try
+                        {
+                            Deinit();
+                        }
+                        catch (Exception cleanup)
+                        {
+                            throw new AggregateException(original, cleanup);
+                        }
                     }
                     throw;
                 }
                 return;
             }
             var lease = new TweenLease(this, context);
-            mLease = lease;
+            _lease = lease;
             try
             {
                 // 每次执行只持有工厂返回的一个 Tween；Reset 后应为新执行提供新 Tween。
-                lease.Attach(mTweenGetter());
-                if (!IsCurrent(lease)) return;
+                lease.Attach(_tweenGetter());
+                if (!IsCurrent(lease))
+                {
+                    return;
+                }
+
                 lease.Restart();
-                if (IsCurrent(lease)) lease.SetPaused(mPaused);
+                if (IsCurrent(lease))
+                {
+                    lease.SetPaused(_isPaused);
+                }
             }
             catch (Exception original)
             {
                 if (IsCurrent(lease))
                 {
-                    try { Deinit(); }
-                    catch (Exception cleanup) { throw new AggregateException(original, cleanup); }
+                    try
+                    {
+                        Deinit();
+                    }
+                    catch (Exception cleanup)
+                    {
+                        throw new AggregateException(original, cleanup);
+                    }
                 }
                 throw;
             }
         }
 
         /// <summary>检查 Tween 的完成或取消状态，不用 dt 推进播放。</summary>
-        public void OnExecute(float dt) => mLease?.Poll();
+        public void OnExecute(float dt) => _lease?.Poll();
         /// <summary>正常完成时只解除桥接回调，不主动 Kill Tween。</summary>
         public void OnFinish() => Release(false);
 
-        private bool IsCurrent(TweenLease lease) => !Deinited && ActionID == lease.ActionId &&
-            mExecutionVersion == lease.Version && ReferenceEquals(mLease, lease);
+        private bool IsCurrent(TweenLease lease) => !IsDeinitialized && ActionId == lease.ActionId &&
+            _executionVersion == lease.Version && ReferenceEquals(_lease, lease);
 
         internal static DOTweenAction Bind(Tween tween)
         {
             var context = RequireContext();
             ValidateTween(tween);
             var action = Allocate(() => tween);
-            action.mBound = true;
+            action._isBound = true;
             var lease = new TweenLease(action, context);
-            action.mLease = lease;
-            try { lease.Attach(tween); tween.Pause(); }
-            catch { action.Deinit(); throw; }
+            action._lease = lease;
+            try
+            {
+                lease.Attach(tween);
+                tween.Pause();
+            }
+            catch
+            {
+                action.Deinit();
+                throw;
+            }
             return action;
         }
 
         internal static void ValidateTween(Tween tween)
         {
-            if (tween == null) throw new ArgumentNullException(nameof(tween));
-            if (!tween.IsActive()) throw new InvalidOperationException("A killed tween cannot be wrapped; create a new tween in the factory.");
-            if (tween.onKill == null) return;
+            if (tween == null)
+            {
+                throw new ArgumentNullException(nameof(tween));
+            }
+
+            if (!tween.IsActive())
+            {
+                throw new InvalidOperationException("A killed tween cannot be wrapped; create a new tween in the factory.");
+            }
+
+            if (tween.onKill == null)
+            {
+                return;
+            }
+
             foreach (var callback in tween.onKill.GetInvocationList())
             {
                 if (callback.Target is TweenLease)
+                {
                     throw new InvalidOperationException("The tween is already owned by an active ActionKit execution.");
+                }
             }
         }
 
         private sealed class TweenLease
         {
             internal readonly ulong ActionId;
-            internal ulong Version { get; private set; }
-            internal bool mClosed;
-            private DOTweenAction mTarget;
-            private Tween mTween;
-            private readonly TweenCallback mCompletedCallback, mKilledCallback;
-            private TweenCallback mVerifiedKillCallback;
-            private bool mCompleted, mKilled, mPausedByAction;
-            private readonly SynchronizationContext mContext;
+            internal ulong Version
+            {
+                get; private set;
+            }
+            internal bool IsClosed;
+            private DOTweenAction _target;
+            private Tween _tween;
+            private readonly TweenCallback _completedCallback;
+            private readonly TweenCallback _killedCallback;
+            private TweenCallback _verifiedKillCallback;
+            private bool _isCompleted;
+            private bool _isKilled;
+            private bool _isPausedByAction;
+            private readonly SynchronizationContext _context;
 
             internal TweenLease(DOTweenAction target, SynchronizationContext context)
             {
-                mTarget = target; ActionId = target.ActionID; Version = target.mExecutionVersion;
-                mCompletedCallback = Completed; mKilledCallback = Killed;
-                mContext = context;
+                _target = target;
+                ActionId = target.ActionId;
+                Version = target._executionVersion;
+                _completedCallback = Completed;
+                _killedCallback = Killed;
+                _context = context;
             }
 
             internal void RebaseVersion(ulong version) => Version = version;
@@ -208,114 +297,200 @@ namespace YLFramework.Actions
             internal void Attach(Tween tween)
             {
                 ValidateTween(tween);
-                mTween = tween;
-                tween.onComplete += mCompletedCallback;
-                tween.onKill += mKilledCallback;
-                if (mClosed) { mTween = null; ScheduleKill(tween); }
+                _tween = tween;
+                tween.onComplete += _completedCallback;
+                tween.onKill += _killedCallback;
+                if (IsClosed)
+                {
+                    _tween = null;
+                    ScheduleKill(tween);
+                }
             }
 
             private bool HasMarker(Tween tween)
             {
-                if (tween == null || !tween.IsActive() || tween.onKill == null) return false;
+                if (tween == null || !tween.IsActive() || tween.onKill == null)
+                {
+                    return false;
+                }
                 // 缓存已验证的委托引用，避免每帧分配调用列表。
-                if (ReferenceEquals(tween.onKill, mVerifiedKillCallback)) return true;
-                if (Array.IndexOf(tween.onKill.GetInvocationList(), mKilledCallback) < 0) return false;
-                mVerifiedKillCallback = tween.onKill;
+                if (ReferenceEquals(tween.onKill, _verifiedKillCallback))
+                {
+                    return true;
+                }
+
+                if (Array.IndexOf(tween.onKill.GetInvocationList(), _killedCallback) < 0)
+                {
+                    return false;
+                }
+
+                _verifiedKillCallback = tween.onKill;
                 return true;
             }
-            private bool Owns(Tween tween) => !mClosed && HasMarker(tween);
+            private bool Owns(Tween tween) => !IsClosed && HasMarker(tween);
 
             internal void Restart()
             {
-                if (Owns(mTween))
+                if (Owns(_tween))
                 {
-                    mCompleted = false;
-                    mTween.Restart();
+                    _isCompleted = false;
+                    _tween.Restart();
                 }
                 Poll();
             }
 
             internal void SetPaused(bool paused)
             {
-                var tween = mTween;
-                if (!Owns(tween)) return;
+                var tween = _tween;
+                if (!Owns(tween))
+                {
+                    return;
+                }
+
                 if (paused)
                 {
-                    if (!tween.IsPlaying()) return;
-                    mPausedByAction = true;
+                    if (!tween.IsPlaying())
+                    {
+                        return;
+                    }
+
+                    _isPausedByAction = true;
                     tween.Pause();
                 }
-                else if (mPausedByAction)
+                else if (_isPausedByAction)
                 {
-                    mPausedByAction = false;
+                    _isPausedByAction = false;
                     tween.Play();
                 }
             }
 
             private void Completed()
             {
-                if (mClosed) return;
-                mCompleted = true;
+                if (IsClosed)
+                {
+                    return;
+                }
+
+                _isCompleted = true;
                 Deliver();
             }
 
             private void Killed()
             {
-                if (mClosed) return;
-                var tween = mTween;
+                if (IsClosed)
+                {
+                    return;
+                }
+
+                var tween = _tween;
                 // DOTween 1.2.825 在仍活跃时调用 onKill，随后重置完成状态与回调字段。
-                if (Owns(tween) && tween.IsComplete()) mCompleted = true;
-                mTween = null;
-                mKilled = true;
+                if (Owns(tween) && tween.IsComplete())
+                {
+                    _isCompleted = true;
+                }
+
+                _tween = null;
+                _isKilled = true;
                 Deliver();
             }
 
             private void Deliver()
             {
-                var target = mTarget;
-                if (target == null || !target.IsCurrent(this)) return;
-                if (target.mBound && !target.mBoundStarted)
+                var target = _target;
+                if (target == null || !target.IsCurrent(this))
                 {
-                    if (mKilled) target.Deinit();
                     return;
                 }
-                if (mCompleted) target.Finish();
-                else if (mKilled) target.Deinit();
+
+                if (target._isBound && !target._hasBoundStarted)
+                {
+                    if (_isKilled)
+                    {
+                        target.Deinit();
+                    }
+
+                    return;
+                }
+                if (_isCompleted)
+                {
+                    target.Finish();
+                }
+                else if (_isKilled)
+                {
+                    target.Deinit();
+                }
             }
 
             internal void Poll()
             {
-                if (mClosed) return;
-                if (!mCompleted && !mKilled)
+                if (IsClosed)
                 {
-                    var tween = mTween;
-                    if (!Owns(tween)) mKilled = true;
-                    else if (tween.IsComplete()) mCompleted = true;
+                    return;
+                }
+
+                if (!_isCompleted && !_isKilled)
+                {
+                    var tween = _tween;
+                    if (!Owns(tween))
+                    {
+                        _isKilled = true;
+                    }
+                    else if (tween.IsComplete())
+                    {
+                        _isCompleted = true;
+                    }
                 }
                 Deliver();
             }
 
             internal void Close(bool kill)
             {
-                if (mClosed) return;
-                var tween = mTween;
+                if (IsClosed)
+                {
+                    return;
+                }
+
+                var tween = _tween;
                 var owned = Owns(tween);
-                mClosed = true; mTarget = null; mTween = null;
-                if (!owned) return; // 归属标记丢失时，对象可能已被回收并交给其他持有者。
-                if (kill) ScheduleKill(tween);
-                else { tween.onComplete -= mCompletedCallback; tween.onKill -= mKilledCallback; }
+                IsClosed = true;
+                _target = null;
+                _tween = null;
+                if (!owned)
+                {
+                    return; // 归属标记丢失时，对象可能已被回收并交给其他持有者。
+                }
+
+                if (kill)
+                {
+                    ScheduleKill(tween);
+                }
+                else
+                {
+                    tween.onComplete -= _completedCallback;
+                    tween.onKill -= _killedCallback;
+                }
             }
 
             private void ScheduleKill(Tween tween)
             {
                 // 保留占用标记，等 Unity 离开当前 DOTween 回调栈后再清理。
-                mContext.Post(_ =>
+                _context.Post(_ =>
                 {
-                    if (Thread.CurrentThread.ManagedThreadId != mMainThread || !HasMarker(tween)) return;
+                    if (Thread.CurrentThread.ManagedThreadId != _mainThread || !HasMarker(tween))
+                    {
+                        return;
+                    }
+
                     foreach (var callback in tween.onKill.GetInvocationList())
-                        if (callback.Target is TweenLease other && !ReferenceEquals(other, this)) return;
-                    tween.onComplete -= mCompletedCallback;
-                    tween.onKill -= mKilledCallback;
+                    {
+                        if (callback.Target is TweenLease other && !ReferenceEquals(other, this))
+                        {
+                            return;
+                        }
+                    }
+
+                    tween.onComplete -= _completedCallback;
+                    tween.onKill -= _killedCallback;
                     tween.Kill(false);
                 }, null);
             }
@@ -336,7 +511,11 @@ namespace YLFramework.Actions
         /// <remarks>工厂每次执行应创建新的有效 Tween；播放的时间模式仍由 DOTween 控制。</remarks>
         public static ISequence DOTween(this ISequence self, Func<Tween> tweenGetter)
         {
-            if (self == null) throw new ArgumentNullException(nameof(self));
+            if (self == null)
+            {
+                throw new ArgumentNullException(nameof(self));
+            }
+
             return self.Append(DOTweenAction.Allocate(tweenGetter));
         }
     }

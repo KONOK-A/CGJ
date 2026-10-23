@@ -9,29 +9,33 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioFadePlaybackTests
     {
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private AudioClip mClip;
-        private GameObject mListener;
-        private float mTimeScale;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private AudioClip _clip;
+        private GameObject _listener;
+        private float _timeScale;
 
         [UnitySetUp]
         public IEnumerator SetUp()
         {
             AudioKit.Shutdown();
-            mTimeScale = Time.timeScale;
+            _timeScale = Time.timeScale;
             Time.timeScale = 1f;
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             var settings = AudioKit.Settings;
             settings.IsSoundOn.SetValueWithoutCallback(true);
@@ -41,9 +45,9 @@ namespace YLFramework.Tests.Audio
             settings.MusicVolume.SetValueWithoutCallback(1f);
             settings.VoiceVolume.SetValueWithoutCallback(1f);
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
-            mClip = AudioClip.Create("fade-live", 441000, 1, 44100, false);
-            mListener = new GameObject("fade-test-listener");
-            mListener.AddComponent<AudioListener>();
+            _clip = AudioClip.Create("fade-live", 441000, 1, 44100, false);
+            _listener = new GameObject("fade-test-listener");
+            _listener.AddComponent<AudioListener>();
             yield return null;
         }
 
@@ -51,16 +55,29 @@ namespace YLFramework.Tests.Audio
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            Time.timeScale = mTimeScale;
+            Time.timeScale = _timeScale;
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
-            Object.Destroy(mClip);
-            Object.Destroy(mListener);
+            Object.Destroy(_clip);
+            Object.Destroy(_listener);
             yield return null;
         }
 
@@ -68,14 +85,17 @@ namespace YLFramework.Tests.Audio
         {
             var options = AudioSoundOptions.Defaults;
             options.Loop = true;
-            return AudioKit.PlaySound(mClip, options);
+            return AudioKit.PlaySound(_clip, options);
         }
 
         private static IEnumerator WaitForVolume(AudioHandle handle, float volume)
         {
             var end = Time.realtimeSinceStartup + 2f;
             while (handle.IsValid && Mathf.Abs(handle.Voice.Source.volume - volume) > .0001f && Time.realtimeSinceStartup < end)
+            {
                 yield return null;
+            }
+
             Assert.IsTrue(handle.IsValid);
             Assert.AreEqual(volume, handle.Voice.Source.volume, .0001f);
         }
@@ -83,7 +103,11 @@ namespace YLFramework.Tests.Audio
         private static IEnumerator WaitForStop(AudioHandle handle)
         {
             var end = Time.realtimeSinceStartup + 2f;
-            while (handle.IsValid && Time.realtimeSinceStartup < end) yield return null;
+            while (handle.IsValid && Time.realtimeSinceStartup < end)
+            {
+                yield return null;
+            }
+
             Assert.IsFalse(handle.IsValid, "Fade must release its request through the normal AudioManager update.");
         }
 
@@ -95,9 +119,9 @@ namespace YLFramework.Tests.Audio
             options.Loop = true;
             var handles = new[]
             {
-                AudioKit.PlaySound(mClip, options, (_, __) => callbacks++),
-                AudioKit.PlayMusic(mClip, onFinished: (_, __) => callbacks++),
-                AudioKit.PlayVoice(mClip, loop: true, onFinished: (_, __) => callbacks++)
+                AudioKit.PlaySound(_clip, options, (_, __) => callbacks++),
+                AudioKit.PlayMusic(_clip, onFinished: (_, __) => callbacks++),
+                AudioKit.PlayVoice(_clip, loop: true, onFinished: (_, __) => callbacks++)
             };
             foreach (var handle in handles)
             {
@@ -147,7 +171,7 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.Settings.IsMusicOn.Value = false;
             var starts = 0;
-            var handle = AudioKit.PlayMusic(mClip, onStarted: (_, __) => starts++);
+            var handle = AudioKit.PlayMusic(_clip, onStarted: (_, __) => starts++);
             handle.FadeIn(.05f);
             yield return new WaitForSecondsRealtime(.1f);
             Assert.AreEqual(0, starts);
@@ -194,9 +218,9 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator OldSlotFadeCannotStopOrSilenceReplacementMusic()
         {
-            var old = AudioKit.PlayMusic(mClip);
+            var old = AudioKit.PlayMusic(_clip);
             old.FadeOut(.03f);
-            var current = AudioKit.PlayMusic(mClip, volume: .6f);
+            var current = AudioKit.PlayMusic(_clip, volume: .6f);
             old.FadeIn(10f);
             old.FadeOut(0f);
             yield return new WaitForSecondsRealtime(.1f);
@@ -249,14 +273,17 @@ namespace YLFramework.Tests.Audio
                 Assert.AreSame(shortClip, callbackClip);
                 Assert.IsTrue(wasValidInCallback);
             }
-            finally { Object.Destroy(shortClip); }
+            finally
+            {
+                Object.Destroy(shortClip);
+            }
         }
 
         [UnityTest]
         public IEnumerator StartCallbackCanBeginFadeAndSoundSwitchCancelsPendingStop()
         {
             AudioHandle callbackHandle = default;
-            var music = AudioKit.PlayMusic(mClip, onStarted: (_, handle) =>
+            var music = AudioKit.PlayMusic(_clip, onStarted: (_, handle) =>
             {
                 callbackHandle = handle;
                 handle.FadeIn(.05f);

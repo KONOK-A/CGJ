@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Singleton
+namespace YLFramework.Core.Singleton
 {
     /// <summary>
     /// 单例标记接口：配合 SingletonProperty / MonoSingletonProperty / MonoSingleton 等入口使用，

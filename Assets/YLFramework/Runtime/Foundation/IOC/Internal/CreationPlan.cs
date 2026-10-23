@@ -8,13 +8,25 @@ namespace YLFramework.Core.IOC
     /// </summary>
     internal sealed class CreationPlan
     {
-        internal CreationPlanKind Kind { get; }
+        internal CreationPlanKind Kind
+        {
+            get;
+        }
 
-        internal ConstructorInfo Constructor { get; }
+        internal ConstructorInfo Constructor
+        {
+            get;
+        }
 
-        internal ParameterInfo[] Parameters { get; }
+        internal ParameterInfo[] Parameters
+        {
+            get;
+        }
 
-        internal string ErrorMessage { get; }
+        internal string ErrorMessage
+        {
+            get;
+        }
 
         private CreationPlan(CreationPlanKind kind, ConstructorInfo constructor, ParameterInfo[] parameters, string errorMessage)
         {

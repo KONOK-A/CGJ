@@ -2,7 +2,7 @@ using UnityEngine.Scripting;
 using YLFramework.StateMachine;
 
 [Preserve]
-public class {0} : FSMState
+public class {0} : FsmState
 {
     public override void OnEnter()
     {

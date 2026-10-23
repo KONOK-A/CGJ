@@ -9,7 +9,7 @@ namespace YLFramework.Editor.Audio
     [CustomEditor(typeof(AudioEmitter)), CanEditMultipleObjects]
     public sealed class AudioEmitterEditor : UnityEditor.Editor
     {
-        private bool _advanced;
+        private bool _showAdvanced;
         private ReorderableList _weightedClips;
 
         private void OnEnable()
@@ -24,8 +24,8 @@ namespace YLFramework.Editor.Audio
                 rect.height = EditorGUIUtility.singleLineHeight;
                 var clipRect = new Rect(rect.x, rect.y, rect.width * .65f, rect.height);
                 var weightRect = new Rect(clipRect.xMax + 4f, rect.y, rect.width - clipRect.width - 4f, rect.height);
-                EditorGUI.PropertyField(clipRect, entry.FindPropertyRelative("Clip"), GUIContent.none);
-                EditorGUI.PropertyField(weightRect, entry.FindPropertyRelative("Weight"), GUIContent.none);
+                EditorGUI.PropertyField(clipRect, entry.FindPropertyRelative("clip"), GUIContent.none);
+                EditorGUI.PropertyField(weightRect, entry.FindPropertyRelative("weight"), GUIContent.none);
             };
             _weightedClips.onAddCallback = list => AudioInspectorUtility.AddWeightedClip(serializedObject);
             _weightedClips.onRemoveCallback = list =>
@@ -46,16 +46,25 @@ namespace YLFramework.Editor.Audio
             {
                 _weightedClips.DoLayoutList();
                 EditorGUILayout.HelpBox("New entries start at weight 1. Weight 0 excludes an entry; switching selection mode preserves both lists.", MessageType.Info);
-                if (targets.Length > 1) EditorGUILayout.HelpBox("Multi-selection supports editing, adding and removing entries. Reorder one object at a time to preserve mixed-length lists.", MessageType.Info);
+                if (targets.Length > 1)
+                {
+                    EditorGUILayout.HelpBox("Multi-selection supports editing, adding and removing entries. Reorder one object at a time to preserve mixed-length lists.", MessageType.Info);
+                }
             }
-            if (weighted.hasMultipleDifferentValues || !weighted.boolValue) AudioInspectorUtility.Field(serializedObject, "clips");
+            if (weighted.hasMultipleDifferentValues || !weighted.boolValue)
+            {
+                AudioInspectorUtility.Field(serializedObject, "clips");
+            }
+
             AudioInspectorUtility.Field(serializedObject, "volume", "Volume Multiplier");
             AudioInspectorUtility.Field(serializedObject, "loop");
             AudioInspectorUtility.Field(serializedObject, "playOnAwake", "Play On First Start");
             AudioInspectorUtility.Field(serializedObject, "positionMode");
             var mode = serializedObject.FindProperty("positionMode");
             if (AudioInspectorUtility.ShowWhen(mode, (int)AudioEmitter.PositionMode.FollowTransform))
+            {
                 AudioInspectorUtility.Field(serializedObject, "followTarget");
+            }
 
             var configured = false;
             foreach (var selected in targets)
@@ -68,15 +77,23 @@ namespace YLFramework.Editor.Audio
                         options.RolloffMode != AudioRolloffMode.Linear || serialized.FindProperty("onStarted").FindPropertyRelative("m_PersistentCalls.m_Calls").arraySize > 0;
                 }
             }
-            _advanced = EditorGUILayout.Foldout(_advanced, configured ? "Advanced (Configured)" : "Advanced", true);
-            if (configured && !_advanced) EditorGUILayout.HelpBox("Advanced values or events are configured. Expand Advanced to inspect them; folding does not reset values.", MessageType.Info);
-            if (_advanced)
+            _showAdvanced = EditorGUILayout.Foldout(_showAdvanced, configured ? "Advanced (Configured)" : "Advanced", true);
+            if (configured && !_showAdvanced)
+            {
+                EditorGUILayout.HelpBox("Advanced values or events are configured. Expand Advanced to inspect them; folding does not reset values.", MessageType.Info);
+            }
+
+            if (_showAdvanced)
             {
                 AudioInspectorUtility.Field(serializedObject, "pitch");
                 AudioInspectorUtility.Field(serializedObject, "priority", "Admission Priority (0 = Ordinary)");
                 AudioInspectorUtility.Field(serializedObject, "useGlobalPlaySoundMode", "Use Global Sound Policy");
                 var inherit = serializedObject.FindProperty("useGlobalPlaySoundMode");
-                if (inherit.hasMultipleDifferentValues || !inherit.boolValue) AudioInspectorUtility.Field(serializedObject, "playSoundMode");
+                if (inherit.hasMultipleDifferentValues || !inherit.boolValue)
+                {
+                    AudioInspectorUtility.Field(serializedObject, "playSoundMode");
+                }
+
                 if (mode.hasMultipleDifferentValues || mode.intValue != (int)AudioEmitter.PositionMode.TwoDimensional)
                 {
                     EditorGUILayout.LabelField("Spatial Distances (World Units)", EditorStyles.boldLabel);
@@ -91,7 +108,10 @@ namespace YLFramework.Editor.Audio
             serializedObject.ApplyModifiedProperties();
             foreach (var selected in targets)
             {
-                using (var serialized = new SerializedObject(selected)) DrawWarnings(serialized);
+                using (var serialized = new SerializedObject(selected))
+                {
+                    DrawWarnings(serialized);
+                }
             }
         }
 
@@ -102,7 +122,11 @@ namespace YLFramework.Editor.Audio
             var options = AudioInspectorUtility.Options(serialized);
             AudioInspectorUtility.Validate(serialized, () =>
             {
-                if ((uint)mode > (uint)AudioEmitter.PositionMode.FollowTransform) throw new ArgumentOutOfRangeException("positionMode");
+                if ((uint)mode > (uint)AudioEmitter.PositionMode.FollowTransform)
+                {
+                    throw new ArgumentOutOfRangeException("positionMode");
+                }
+
                 options.Validate(mode != AudioEmitter.PositionMode.TwoDimensional);
             });
             var weighted = serialized.FindProperty("useWeightedRandom").boolValue;
@@ -111,23 +135,42 @@ namespace YLFramework.Editor.Audio
             for (var i = 0; i < list.arraySize; i++)
             {
                 var entry = list.GetArrayElementAtIndex(i);
-                var clip = (weighted ? entry.FindPropertyRelative("Clip") : entry).objectReferenceValue as AudioClip;
-                var weight = weighted ? entry.FindPropertyRelative("Weight").floatValue : 1f;
+                var clip = (weighted ? entry.FindPropertyRelative("clip") : entry).objectReferenceValue as AudioClip;
+                var weight = weighted ? entry.FindPropertyRelative("weight").floatValue : 1f;
                 if (!AudioSoundOptions.IsFinite(weight) || weight < 0f)
+                {
                     AudioInspectorUtility.Message(serialized, "Every weight must be finite and nonnegative (entry " + i + ").", MessageType.Error);
-                if (!clip || weight <= 0f || !AudioSoundOptions.IsFinite(weight)) continue;
+                }
+
+                if (!clip || weight <= 0f || !AudioSoundOptions.IsFinite(weight))
+                {
+                    continue;
+                }
+
                 candidate = true;
                 AudioInspectorUtility.Validate(serialized, () => options.ValidateClip(clip));
             }
-            if (!candidate) AudioInspectorUtility.Message(serialized, "No live clip candidates with a positive weight. Play leaves existing playback unchanged.", MessageType.Warning);
+            if (!candidate)
+            {
+                AudioInspectorUtility.Message(serialized, "No live clip candidates with a positive weight. Play leaves existing playback unchanged.", MessageType.Warning);
+            }
+
             var emitter = (AudioEmitter)serialized.targetObject;
             var target = serialized.FindProperty("followTarget").objectReferenceValue as Transform;
-            if (!AudioOutputRoute.HasReference(target)) target = emitter.transform;
+            if (!AudioOutputRoute.HasReference(target))
+            {
+                target = emitter.transform;
+            }
+
             if (mode == AudioEmitter.PositionMode.FollowTransform && (!target || !target.gameObject.activeInHierarchy))
+            {
                 AudioInspectorUtility.Message(serialized, "The follow target must be live and active. Play leaves existing playback unchanged.", MessageType.Warning);
+            }
             else if (mode != AudioEmitter.PositionMode.TwoDimensional &&
                 !AudioInspectorUtility.FinitePosition(mode == AudioEmitter.PositionMode.FollowTransform ? target.position : emitter.transform.position))
+            {
                 AudioInspectorUtility.Message(serialized, "Spatial playback requires a finite world position.", MessageType.Error);
+            }
         }
     }
 }

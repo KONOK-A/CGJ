@@ -13,8 +13,8 @@ namespace YLFramework.Editor
     {
         private const string ExpandedKey = "YLFramework.EventListenerEditor.Expanded";
         private const string TabKey = "YLFramework.EventListenerEditor.Tab";
-        private static readonly string[] Tabs = { "鼠标事件", "碰撞事件", "Trigger事件" };
-        private static readonly (string Name, GUIContent Label)[][] EventFields =
+        private static readonly string[] _tabs = { "鼠标事件", "碰撞事件", "Trigger事件" };
+        private static readonly (string Name, GUIContent Label)[][] _eventFields =
         {
             new[]
             {
@@ -36,32 +36,37 @@ namespace YLFramework.Editor
                 ("triggerStay2D", new GUIContent("Trigger保持2D")), ("triggerExit2D", new GUIContent("Trigger离开2D"))
             }
         };
-        private static readonly HashSet<string> EventPropertyPaths = new HashSet<string>(
-            EventFields.SelectMany(group => group).Select(entry => entry.Name));
-        private bool mExpanded;
-        private int mTab;
+        private static readonly HashSet<string> _eventPropertyPaths = new HashSet<string>(
+            _eventFields.SelectMany(group => group).Select(entry => entry.Name));
+        private bool _isExpanded;
+        private int _tab;
 
         private void OnEnable()
         {
-            mExpanded = SessionState.GetBool(ExpandedKey, true);
-            mTab = Mathf.Clamp(SessionState.GetInt(TabKey, 0), 0, Tabs.Length - 1);
+            _isExpanded = SessionState.GetBool(ExpandedKey, true);
+            _tab = Mathf.Clamp(SessionState.GetInt(TabKey, 0), 0, _tabs.Length - 1);
         }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            mExpanded = EditorGUILayout.Foldout(mExpanded, "Unity事件中心", true);
-            SessionState.SetBool(ExpandedKey, mExpanded);
-            if (mExpanded)
+            _isExpanded = EditorGUILayout.Foldout(_isExpanded, "Unity事件中心", true);
+            SessionState.SetBool(ExpandedKey, _isExpanded);
+            if (_isExpanded)
             {
-                mTab = GUILayout.Toolbar(mTab, Tabs);
-                SessionState.SetInt(TabKey, mTab);
-                foreach (var entry in EventFields[mTab])
+                _tab = GUILayout.Toolbar(_tab, _tabs);
+                SessionState.SetInt(TabKey, _tab);
+                foreach (var entry in _eventFields[_tab])
+                {
                     EditorGUILayout.PropertyField(serializedObject.FindProperty(entry.Name), entry.Label, true);
+                }
             }
             foreach (var property in AdditionalProperties())
             {
-                using (property) EditorGUILayout.PropertyField(property, true);
+                using (property)
+                {
+                    EditorGUILayout.PropertyField(property, true);
+                }
             }
             serializedObject.ApplyModifiedProperties();
         }
@@ -70,11 +75,17 @@ namespace YLFramework.Editor
         {
             using (var iterator = serializedObject.GetIterator())
             {
-                if (!iterator.NextVisible(true)) yield break;
+                if (!iterator.NextVisible(true))
+                {
+                    yield break;
+                }
+
                 do
                 {
-                    if (iterator.propertyPath != "m_Script" && !EventPropertyPaths.Contains(iterator.propertyPath))
+                    if (iterator.propertyPath != "m_Script" && !_eventPropertyPaths.Contains(iterator.propertyPath))
+                    {
                         yield return iterator.Copy();
+                    }
                 } while (iterator.NextVisible(false));
             }
         }

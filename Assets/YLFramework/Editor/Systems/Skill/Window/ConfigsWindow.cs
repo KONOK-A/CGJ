@@ -1,11 +1,11 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.SkillSystem
 {
@@ -20,57 +20,57 @@ namespace YLFramework.SkillSystem
 
         #region 字段
 
-        private const string SELECT_GUID_KEY = "YLFramework.Skill.SelectedConfig";
+        private const string SelectGuidKey = "YLFramework.Skill.SelectedConfig";
 
         //private Rect left;
 
-        private GUIContent currentSkillConfigContent;
+        private GUIContent _currentSkillConfigContent;
 
-        private string searchStr;
+        private string _searchStr;
 
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewState<int> skillListState => treeViewStateGroup.Get(currentSkillConfig.GetHashCode());
+        private TreeViewState<int> SkillListState => treeViewStateGroup.Get(CurrentSkillConfig.GetHashCode());
 
 #else
-        private TreeViewState skillListState => treeViewStateGroup.Get(currentSkillConfig.GetHashCode());
+        private TreeViewState SkillListState => treeViewStateGroup.Get(CurrentSkillConfig.GetHashCode());
 #endif
 
 
         [SerializeField]
         private TreeViewStateGroup treeViewStateGroup = new TreeViewStateGroup();
 
-        internal SkillListTree skillListTree;
+        internal SkillListTree SkillListTree;
 
-        internal SkillsConfig currentSkillConfig;
+        internal SkillsConfig CurrentSkillConfig;
 
-        private float timer = 0;
+        private float _timer = 0;
 
-        internal int currentShowSkillId = 0;
+        internal int CurrentShowSkillId = 0;
 
         internal static int DefaultSelectSkillId = -1;
 
-        private Vector2 rightScrollPosition;
+        private Vector2 _rightScrollPosition;
 
-        private float lastRepaintCount;
+        private float _lastRepaintCount;
 
 
-        private int currentID;
+        private int _currentId;
         public int idChangeCount;
 
-#endregion
+        #endregion
 
 
         #region 属性
 
-        internal static string SelectGUID
+        internal static string SelectGuid
         {
             get
             {
-                return EditorPrefs.GetString(SELECT_GUID_KEY);
+                return EditorPrefs.GetString(SelectGuidKey);
             }
             set
             {
-                EditorPrefs.SetString(SELECT_GUID_KEY, value);
+                EditorPrefs.SetString(SelectGuidKey, value);
             }
 
         }
@@ -87,25 +87,25 @@ namespace YLFramework.SkillSystem
 
         private void Update()
         {
-            lastRepaintCount++;
-            if (lastRepaintCount > 15)
+            _lastRepaintCount++;
+            if (_lastRepaintCount > 15)
             {
                 Repaint();
-                lastRepaintCount = 0;
+                _lastRepaintCount = 0;
             }
         }
 
         protected override void OnGUI()
         {
-            if (Time.realtimeSinceStartup - timer > 1 && currentSkillConfig == null)
+            if (Time.realtimeSinceStartup - _timer > 1 && CurrentSkillConfig == null)
             {
-                currentSkillConfig = GetCurrentConfig();
-                timer = Time.realtimeSinceStartup;
+                CurrentSkillConfig = GetCurrentConfig();
+                _timer = Time.realtimeSinceStartup;
             }
 
-            if (currentSkillConfig == null)
+            if (CurrentSkillConfig == null)
             {
-                EmptyGUI();
+                EmptyGui();
             }
             else
             {
@@ -121,37 +121,41 @@ namespace YLFramework.SkillSystem
 
         internal SkillsConfig GetCurrentConfig()
         {
-            if (!string.IsNullOrEmpty(SelectGUID))
+            if (!string.IsNullOrEmpty(SelectGuid))
             {
-                string assets_path = AssetDatabase.GUIDToAssetPath(SelectGUID);
-                SkillsConfig config = AssetDatabase.LoadAssetAtPath<SkillsConfig>(assets_path);
+                string assetsPath = AssetDatabase.GUIDToAssetPath(SelectGuid);
+                SkillsConfig config = AssetDatabase.LoadAssetAtPath<SkillsConfig>(assetsPath);
 
                 if (config != null)
+                {
                     return config;
+                }
             }
 
             List<SkillsConfig> configs = SkillsConfigController.GetAllConfigs();
 
             if (configs == null || configs.Count == 0)
+            {
                 return null;
+            }
 
-            SelectGUID = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(configs[0]));
+            SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(configs[0]));
             return configs[0];
         }
 
 
-        protected override void DrawGUILeft(Rect rect)
+        protected override void DrawGuiLeft(Rect rect)
         {
-            base.DrawGUILeft(rect);
+            base.DrawGuiLeft(rect);
 
             GUILayout.BeginArea(rect);
             DrawLeft(rect);
             GUILayout.EndArea();
         }
 
-        protected override void DrawGUIRight(Rect rect)
+        protected override void DrawGuiRight(Rect rect)
         {
-            base.DrawGUIRight(rect);
+            base.DrawGuiRight(rect);
 
             GUILayout.BeginArea(rect);
 
@@ -161,7 +165,7 @@ namespace YLFramework.SkillSystem
         }
 
 
-        private void EmptyGUI()
+        private void EmptyGui()
         {
 
             GUILayout.BeginHorizontal();
@@ -184,45 +188,49 @@ namespace YLFramework.SkillSystem
 
         private void DrawLeft(Rect rect)
         {
-            if (currentSkillConfigContent == null)
-                currentSkillConfigContent = new GUIContent();
+            if (_currentSkillConfigContent == null)
+            {
+                _currentSkillConfigContent = new GUIContent();
+            }
 
-            if (currentSkillConfig == null)
+            if (CurrentSkillConfig == null)
+            {
                 return;
+            }
 
-            currentSkillConfigContent.text = currentSkillConfig.name;
-            currentSkillConfigContent.tooltip = AssetDatabase.GetAssetPath(currentSkillConfig);
+            _currentSkillConfigContent.text = CurrentSkillConfig.name;
+            _currentSkillConfigContent.tooltip = AssetDatabase.GetAssetPath(CurrentSkillConfig);
 
             GUILayout.BeginHorizontal();
             //
 
             EditorGUI.BeginChangeCheck();
 
-            searchStr = EditorGUILayout.TextField(string.Empty, searchStr, "SearchTextField", GUILayout.MinWidth(0));
+            _searchStr = EditorGUILayout.TextField(string.Empty, _searchStr, "SearchTextField", GUILayout.MinWidth(0));
 
             if (EditorGUI.EndChangeCheck())
             {
-                if (string.IsNullOrEmpty(searchStr) && skillListTree.state.selectedIDs.Count > 0)
+                if (string.IsNullOrEmpty(_searchStr) && SkillListTree.state.selectedIDs.Count > 0)
                 {
                     EditorApplication.delayCall += () =>
                     {
-                        skillListTree.FrameItem(skillListTree.state.selectedIDs[0]);
+                        SkillListTree.FrameItem(SkillListTree.state.selectedIDs[0]);
                     };
                 }
             }
 
-            if (EditorGUILayout.DropdownButton(currentSkillConfigContent, FocusType.Passive, EditorStyles.toolbarDropDown, GUILayout.Width(this.position.width * 0.35f * 0.3f)))
+            if (EditorGUILayout.DropdownButton(_currentSkillConfigContent, FocusType.Passive, EditorStyles.toolbarDropDown, GUILayout.Width(this.position.width * 0.35f * 0.3f)))
             {
                 GenericMenu menu = new GenericMenu();
                 List<SkillsConfig> configs = SkillsConfigController.GetAllConfigs();
                 foreach (var item in configs)
                 {
                     string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
-                    bool isOn = SelectGUID == guid;
+                    bool isOn = SelectGuid == guid;
 
                     menu.AddItem(new GUIContent(item.name), isOn, () =>
                     {
-                        SelectGUID = guid;
+                        SelectGuid = guid;
 
                         EditorApplication.delayCall += () =>
                         {
@@ -250,24 +258,24 @@ namespace YLFramework.SkillSystem
 
 
 
-            if (skillListTree == null)
+            if (SkillListTree == null)
             {
-                skillListTree = new SkillListTree(skillListState, currentSkillConfig);
-                skillListTree.Reload();
+                SkillListTree = new SkillListTree(SkillListState, CurrentSkillConfig);
+                SkillListTree.Reload();
             }
 
-            skillListTree.searchString = searchStr;
+            SkillListTree.searchString = _searchStr;
 
             rect.Set(rect.x, rect.y + 20, rect.width, rect.height - 20);
 
 
-            skillListTree.OnGUI(rect);
+            SkillListTree.OnGUI(rect);
 
 
-            if (skillListTree != null && skillListTree.SkillsConfig != currentSkillConfig)
+            if (SkillListTree != null && SkillListTree.SkillsConfig != CurrentSkillConfig)
             {
-                skillListTree.Dispose();
-                skillListTree = null;
+                SkillListTree.Dispose();
+                SkillListTree = null;
             }
         }
 
@@ -288,11 +296,11 @@ namespace YLFramework.SkillSystem
                 return;
             }
 
-            if (skillListState.selectedIDs.Count == 1)
+            if (SkillListState.selectedIDs.Count == 1)
             {
                 DrawData();
             }
-            else if (skillListState.selectedIDs.Count == 0)
+            else if (SkillListState.selectedIDs.Count == 0)
             {
                 GUILayout.FlexibleSpace();
                 GUILayout.BeginHorizontal();
@@ -321,9 +329,9 @@ namespace YLFramework.SkillSystem
 
         private void DrawData()
         {
-            int id = skillListState.selectedIDs[0];
+            int id = SkillListState.selectedIDs[0];
 
-            if (currentID != id)
+            if (_currentId != id)
             {
                 idChangeCount++;
                 if (idChangeCount > 1)
@@ -332,7 +340,7 @@ namespace YLFramework.SkillSystem
                     // 如果当前帧被return , 下一帧repaint 会报错，因为没有位置数据
                     if (Event.current.type != EventType.Layout)
                     {
-                        currentID = id;
+                        _currentId = id;
                         idChangeCount = 0;
                     }
                 }
@@ -342,23 +350,26 @@ namespace YLFramework.SkillSystem
             }
 
 
-            rightScrollPosition = GUILayout.BeginScrollView(rightScrollPosition);
-            SkillConfigData data = currentSkillConfig.GetSkillConfigData(id);
-            SkillConfigDataInspector.Instance.OnInspectorGUI(data, this, currentSkillConfig);
+            _rightScrollPosition = GUILayout.BeginScrollView(_rightScrollPosition);
+            SkillConfigData data = CurrentSkillConfig.GetSkillConfigData(id);
+            SkillConfigDataInspector.Instance.OnInspectorGUI(data, this, CurrentSkillConfig);
 
             GUILayout.EndScrollView();
         }
 
         internal bool IsEmpty()
         {
-            if (currentSkillConfig == null)
-                return true;
-
-
-            for (int i = 0; i < currentSkillConfig.skills.Count; i++)
+            if (CurrentSkillConfig == null)
             {
-                if (currentSkillConfig.skills[i] != null)
+                return true;
+            }
+
+            for (int i = 0; i < CurrentSkillConfig.skills.Count; i++)
+            {
+                if (CurrentSkillConfig.skills[i] != null)
+                {
                     return false;
+                }
             }
 
 
@@ -368,36 +379,40 @@ namespace YLFramework.SkillSystem
 
         public void SetSelection(int id)
         {
-            if (skillListTree != null)
-                skillListTree.SetSelection(new int[] { id });
+            if (SkillListTree != null)
+            {
+                SkillListTree.SetSelection(new int[] { id });
+            }
             else
             {
                 EditorApplication.delayCall += () =>
                 {
-                    if (skillListTree != null)
-                        skillListTree.SetSelection(new int[] { id });
+                    if (SkillListTree != null)
+                    {
+                        SkillListTree.SetSelection(new int[] { id });
+                    }
                 };
             }
         }
 
         public void SetCurrentConfigs(SkillsConfig item)
         {
-            skillListTree?.Dispose();
-            skillListTree = null;
-            currentID = -1; // 重置当前选中的id
-            currentSkillConfig = item;
+            SkillListTree?.Dispose();
+            SkillListTree = null;
+            _currentId = -1; // 重置当前选中的id
+            CurrentSkillConfig = item;
             GUI.FocusControl(null);
-            if (skillListTree != null)
+            if (SkillListTree != null)
             {
-                skillListTree.Reload();
+                SkillListTree.Reload();
             }
-            SelectGUID = AssetDatabase.AssetPathToGUID( AssetDatabase.GetAssetPath(item));
+            SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
         }
 
         private void OnDisable()
         {
-            skillListTree?.Dispose();
-            skillListTree = null;
+            SkillListTree?.Dispose();
+            SkillListTree = null;
             SkillConfigDataInspector.Instance.ReleaseSelection();
         }
 
@@ -410,7 +425,10 @@ namespace YLFramework.SkillSystem
         {
             string path = EditorUtility.OpenFolderPanel("请选择文件夹", Application.dataPath, string.Empty);
 
-            if (string.IsNullOrEmpty(path)) return;
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
 
             if (path.StartsWith(Application.dataPath))
             {
@@ -418,14 +436,16 @@ namespace YLFramework.SkillSystem
                 path = string.Format("Assets{0}", path);
                 //Debug.LogFormat("path:{0}", path);
                 SkillsConfig skillsConfig = CreateInstance<SkillsConfig>();
-                skillsConfig.start_id = InitIDStart();
+                skillsConfig.startId = InitIdStart();
 
                 SkillsConfigController.CreateAsset(skillsConfig, path);
 
-                SelectGUID = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
+                SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
 
-                if (skillListTree != null)
-                    skillListTree.Reload();
+                if (SkillListTree != null)
+                {
+                    SkillListTree.Reload();
+                }
             }
             else
             {
@@ -433,17 +453,19 @@ namespace YLFramework.SkillSystem
             }
         }
 
-        private int InitIDStart()
+        private int InitIdStart()
         {
-            int max_id_start = 0;
+            int maxIdStart = 0;
 
             foreach (var item in SkillsConfigController.GetAllConfigs())
             {
-                if (item.start_id > max_id_start)
-                    max_id_start = item.start_id;
+                if (item.startId > maxIdStart)
+                {
+                    maxIdStart = item.startId;
+                }
             }
 
-            return max_id_start + 1000;
+            return maxIdStart + 1000;
         }
 
         #endregion

@@ -26,7 +26,9 @@ internal static class UIPanelOfflineRunner
     }
     private static void Print(ITestResult result)
     {
-        if (!result.HasChildren) Console.WriteLine(result.ResultState + " " + result.FullName + (result.Message == null ? "" : ": " + result.Message));
-        foreach (var child in result.Children) Print(child);
+        if (!result.HasChildren)
+            Console.WriteLine(result.ResultState + " " + result.FullName + (result.Message == null ? "" : ": " + result.Message));
+        foreach (var child in result.Children)
+            Print(child);
     }
 }

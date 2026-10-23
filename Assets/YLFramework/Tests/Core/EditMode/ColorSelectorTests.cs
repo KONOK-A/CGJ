@@ -2,13 +2,13 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
+using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Compilation;
-using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 
 namespace YLFramework.Core.Tests
 {
@@ -45,9 +45,14 @@ public static class ColorToolConsumer
                 var runtime = typeof(Panel).Assembly.Location;
                 var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
                 var trusted = Path.GetFullPath(EditorApplication.applicationContentsPath) + Path.DirectorySeparatorChar;
-                var builder = new AssemblyBuilder(output, new[] { source }) { flags = flags,
-                    buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
-                    referencesOptions = ReferencesOptions.UseEngineModules, additionalReferences = new[] { ui, runtime } };
+                var builder = new AssemblyBuilder(output, new[] { source })
+                {
+                    flags = flags,
+                    buildTarget = BuildTarget.StandaloneWindows64,
+                    buildTargetGroup = BuildTargetGroup.Standalone,
+                    referencesOptions = ReferencesOptions.UseEngineModules,
+                    additionalReferences = new[] { ui, runtime }
+                };
                 builder.excludeReferences = builder.defaultReferences.Where(path =>
                     !Path.GetFullPath(path).StartsWith(trusted, StringComparison.OrdinalIgnoreCase) ||
                     Path.GetFileName(path).Contains("TestRunner") ||
@@ -60,12 +65,19 @@ public static class ColorToolConsumer
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(message => message.type == CompilerMessageType.Error).Select(message => message.message), Is.Empty);
                 Assert.That(File.Exists(output), Is.True);
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         [Test]
@@ -77,7 +89,7 @@ public static class ColorToolConsumer
             {
                 go.transform.SetParent(root.transform);
                 var gate = go.AddComponent<ColorInputGateProbe>();
-                gate.Allowed = true;
+                gate.isAllowed = true;
                 var selector = go.AddComponent<ColorSelector>();
                 var rect = go.GetComponent<RectTransform>();
                 rect.sizeDelta = new Vector2(300, 300);
@@ -87,9 +99,12 @@ public static class ColorToolConsumer
                 Assert.That(root.GetComponent<Panel>().IsLoaded, Is.False);
                 AssertColor(selector.CurrentColor, Color.red);
                 Assert.That(changes, Is.Zero);
-                Assert.That(gate.Reads, Is.Zero);
+                Assert.That(gate.reads, Is.Zero);
             }
-            finally { UnityEngine.Object.DestroyImmediate(root); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
@@ -99,25 +114,28 @@ public static class ColorToolConsumer
             try
             {
                 var gate = go.AddComponent<ColorInputGateProbe>();
-                gate.Allowed = false;
+                gate.isAllowed = false;
                 var selector = go.AddComponent<ColorSelector>();
                 var rect = go.GetComponent<RectTransform>();
                 rect.sizeDelta = new Vector2(300, 300);
                 selector.BeginSession(Color.red, null);
                 selector.OnPointerDown(Pointer(rect, new Vector2(-0.44f, 0.7621024f), 1));
                 AssertColor(selector.CurrentColor, Color.green);
-                Assert.That(gate.Reads, Is.Zero);
+                Assert.That(gate.reads, Is.Zero);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
         public void ConvenienceToolKeepsItsScriptIdentityWithoutASharedInputGate()
         {
             Assert.That(typeof(ColorSelector).Assembly.GetType("YLFramework.UI.IUIInputGate"), Is.Null);
-            const string windowPath = "Assets/YLFramework/Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs";
-            Assert.That(AssetDatabase.AssetPathToGUID(windowPath), Is.EqualTo("4878c19ecf0794f45baa1869cc9513cb"));
-            Assert.That(AssetDatabase.LoadAssetAtPath<MonoScript>(windowPath).GetClass(), Is.EqualTo(typeof(ColorSelectorWindow)));
+            const string WindowPath = "Assets/YLFramework/Runtime/Utilities/UI/ColorSelector/ColorSelectorWindow.cs";
+            Assert.That(AssetDatabase.AssetPathToGUID(WindowPath), Is.EqualTo("4878c19ecf0794f45baa1869cc9513cb"));
+            Assert.That(AssetDatabase.LoadAssetAtPath<MonoScript>(WindowPath).GetClass(), Is.EqualTo(typeof(ColorSelectorWindow)));
         }
 
         [Test]
@@ -145,7 +163,10 @@ public static class ColorToolConsumer
                 selector.OnPointerDown(data);
                 AssertColor(selector.CurrentColor, Color.red);
             }
-            finally { UnityEngine.Object.DestroyImmediate(root); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
@@ -175,7 +196,10 @@ public static class ColorToolConsumer
                 selector.OnPointerDown(data);
                 AssertColor(selector.CurrentColor, Color.red, "Disabled Panel components remain eligible hosts under Unity's ancestor lookup.");
             }
-            finally { UnityEngine.Object.DestroyImmediate(root); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
@@ -191,7 +215,10 @@ public static class ColorToolConsumer
                 Assert.That(selector.CurrentColor, Is.EqualTo(initial));
                 Assert.That(changes, Is.Zero);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -224,7 +251,10 @@ public static class ColorToolConsumer
                 AssertColor(selector.CurrentColor, new Color(0.5f, 0.5f, 0.5f, 0.4f));
                 selector.OnPointerUp(data);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -265,7 +295,10 @@ public static class ColorToolConsumer
                 selector.OnPointerDown(Pointer(rect, new Vector2(0.88f, 0), 9));
                 AssertColor(selector.CurrentColor, Color.green);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -327,7 +360,10 @@ public static class ColorToolConsumer
                 selector.OnPointerDown(Pointer(go.GetComponent<RectTransform>(), new Vector2(-0.44f, 0.7621024f), 2));
                 AssertColor(selector.CurrentColor, r == g && g == b ? initial : new Color(0, 1, 0, 0.4f));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -344,7 +380,10 @@ public static class ColorToolConsumer
                 go.GetComponent<RectTransform>().sizeDelta = Vector2.zero;
                 Assert.Throws<InvalidOperationException>(() => selector.OnPointerDown(new PointerEventData(null)));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         private static PointerEventData Pointer(RectTransform rect, Vector2 normalized, int id)
@@ -362,8 +401,17 @@ public static class ColorToolConsumer
 
     public sealed class ColorInputGateProbe : MonoBehaviour
     {
-        public bool Allowed;
-        public int Reads;
-        public bool IsInputAllowed { get { Reads++; return Allowed; } }
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Allowed")]
+        public bool isAllowed;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Reads")]
+        public int reads;
+        public bool IsInputAllowed
+        {
+            get
+            {
+                reads++;
+                return isAllowed;
+            }
+        }
     }
 }

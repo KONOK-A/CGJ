@@ -29,20 +29,34 @@ namespace YLFramework.Tests.Resource
             while (pending.Count != 0)
             {
                 var assembly = pending.Pop();
-                if (!visited.Add(assembly.name)) continue;
+                if (!visited.Add(assembly.name))
+                {
+                    continue;
+                }
+
                 Assert.That(IsXfab(assembly.name), Is.False, assembly.name);
-                foreach (var reference in assembly.assemblyReferences) pending.Push(reference);
+                foreach (var reference in assembly.assemblyReferences)
+                {
+                    pending.Push(reference);
+                }
             }
             // UGUI 自身也会收到工程全局自动插件输入；主体必须白名单隔离这些输入，
             // 第三方程序集的真实必要依赖则由下面的已编译 AssemblyRef 闭包核对。
             foreach (var reference in graph.compiledAssemblyReferences)
+            {
                 Assert.That(IsXfab(reference), Is.False, reference);
+            }
+
             var binaries = new Stack<System.Reflection.Assembly>(new[] { System.Reflection.Assembly.Load(name) });
             visited.Clear();
             while (binaries.Count != 0)
             {
                 var assembly = binaries.Pop();
-                if (!visited.Add(assembly.FullName)) continue;
+                if (!visited.Add(assembly.FullName))
+                {
+                    continue;
+                }
+
                 foreach (var reference in assembly.GetReferencedAssemblies())
                 {
                     Assert.That(IsXfab(reference.Name), Is.False, assembly.GetName().Name + " -> " + reference);
@@ -60,7 +74,10 @@ namespace YLFramework.Tests.Resource
         {
             var approved = Path.Combine(Application.dataPath, "YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll");
             if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(approved), StringComparison.OrdinalIgnoreCase) || !File.Exists(approved))
+            {
                 return false;
+            }
+
             using var stream = File.OpenRead(approved);
             using var sha = SHA256.Create();
             return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant() ==
@@ -100,7 +117,10 @@ namespace YLFramework.Tests.Resource
             foreach (var name in new[] { "ResManager", "ServiceManager", "ResLoader", "IResLoader", "ResFactory", "IResCreator",
                 "IRes", "Res", "ResKey", "ResTable", "GameObjectLoader", "SubProject", "ResData", "AssetBundleSetting",
                 "AssetBundleHelper", "HotUpdateManager", "FakeResServer", "BinarySerializer", "ZipFileHelper" })
+            {
                 Assert.That(typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource." + name), Is.Null, name);
+            }
+
             Assert.That(typeof(YLFramework.Editor.Resource.ResourceProject).Assembly
                 .GetType("YLFramework.Editor.Resource.SubProjectData"), Is.Null);
         }
@@ -139,8 +159,11 @@ namespace YLFramework.Tests.Resource
                         buildTarget = BuildTarget.StandaloneWindows64,
                         buildTargetGroup = BuildTargetGroup.Standalone,
                         referencesOptions = ReferencesOptions.UseEngineModules,
-                        compilerOptions = new ScriptCompilerOptions { ApiCompatibilityLevel = graph.compilerOptions.ApiCompatibilityLevel,
-                            AllowUnsafeCode = graph.compilerOptions.AllowUnsafeCode },
+                        compilerOptions = new ScriptCompilerOptions
+                        {
+                            ApiCompatibilityLevel = graph.compilerOptions.ApiCompatibilityLevel,
+                            AllowUnsafeCode = graph.compilerOptions.AllowUnsafeCode
+                        },
                         additionalDefines = Array.Empty<string>()
                     };
                     var json = graph.compiledAssemblyReferences.Single(p => Path.GetFileName(p) == "Newtonsoft.Json.dll");
@@ -162,12 +185,19 @@ namespace YLFramework.Tests.Resource
                     Assert.That(effective.Count(p => Path.GetFileName(p) == "UnityEngine.UI.dll"), Is.EqualTo(1));
                     Assert.That(effective.Count(p => Path.GetFileName(p) == "Newtonsoft.Json.dll"), Is.EqualTo(1));
                     if (name == "YLFramework.Runtime")
+                    {
                         Assert.That(effective.Count(IsApprovedBouncyCastleReference), Is.EqualTo(1));
+                    }
+
                     Assert.That(effective.Any(p => Path.GetFileName(p) == "mscorlib.dll"), Is.True);
                     CompilerMessage[] messages = null;
                     builder.buildFinished += (_, result) => messages = result;
                     Assert.That(builder.Build(), Is.True);
-                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(messages, Is.Not.Null);
                     Assert.That(messages.Where(m => m.type == CompilerMessageType.Error)
                         .Select(m => m.file + ":" + m.line + ": " + m.message), Is.Empty);
@@ -177,7 +207,10 @@ namespace YLFramework.Tests.Resource
                     runtimeOutput = output;
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
     }
 }

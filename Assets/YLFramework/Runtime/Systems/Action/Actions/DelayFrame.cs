@@ -6,41 +6,53 @@ namespace YLFramework.Actions
     // 以 Time.frameCount 的全局帧号计时，而不是累计 dt 或执行器更新次数；暂停期间帧号仍在推进。
     internal class DelayFrame : IAction
     {
-        public bool Paused { get; set; }
-        public bool Deinited { get; set; }
-        public ulong ActionID { get; set; }
-        public ActionStatus Status { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
+        public ulong ActionId
+        {
+            get; set;
+        }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
-        private static ActionPool<DelayFrame> mPool =
+        private static ActionPool<DelayFrame> _pool =
             new ActionPool<DelayFrame>(() => new DelayFrame(), null, 10);
 
-        private Action mOnDelayFinish;
+        private Action _onDelayFinish;
 
         public static DelayFrame Allocate(int frameCount, Action onDelayFinish = null)
         {
-            var delayFrame = mPool.Allocate();
-            delayFrame.ActionID = ActionKit.ID_GENERATOR++;
+            var delayFrame = _pool.Allocate();
+            delayFrame.ActionId = ActionKit.IdGenerator++;
             delayFrame.Reset();
-            delayFrame.Deinited = false;
-            delayFrame.mDelayedFrameCount = frameCount;
-            delayFrame.mOnDelayFinish = onDelayFinish;
+            delayFrame.IsDeinitialized = false;
+            delayFrame._delayedFrameCount = frameCount;
+            delayFrame._onDelayFinish = onDelayFinish;
 
             return delayFrame;
         }
 
-        private int mStartFrameCount;
-        private int mDelayedFrameCount;
+        private int _startFrameCount;
+        private int _delayedFrameCount;
 
         public void OnStart()
         {
-            mStartFrameCount = Time.frameCount;
+            _startFrameCount = Time.frameCount;
         }
 
         public void OnExecute(float dt)
         {
-            if (Time.frameCount >= mStartFrameCount + mDelayedFrameCount)
+            if (Time.frameCount >= _startFrameCount + _delayedFrameCount)
             {
-                mOnDelayFinish?.Invoke();
+                _onDelayFinish?.Invoke();
                 this.Finish();
             }
         }
@@ -51,19 +63,19 @@ namespace YLFramework.Actions
 
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
-                mOnDelayFinish = null;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<DelayFrame>(mPool, this));
+                IsDeinitialized = true;
+                _onDelayFinish = null;
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<DelayFrame>(_pool, this));
             }
         }
 
         public void Reset()
         {
             Status = ActionStatus.NotStart;
-            Paused = false;
-            mStartFrameCount = 0;
+            IsPaused = false;
+            _startFrameCount = 0;
         }
     }
 

@@ -9,43 +9,63 @@ namespace YLFramework.Services.Resource
     public sealed partial class ResourceSystem
     {
         // 仅作为直接图片请求的会话身份；不注册、修改或发布 Catalog v1。
-        private readonly ResourceCatalog imageCatalog = new("runtime-images", Array.Empty<ResourceCatalogEntry>());
-        private readonly LinkedList<AssetRecord> idleImages = new();
-        private long idleImageBytes;
-        private readonly LinkedList<AssetRecord> imageLoadQueue = new();
-        private int runningImageLoads;
-        private bool pumpingImageLoads;
+        private readonly ResourceCatalog _imageCatalog = new("runtime-images", Array.Empty<ResourceCatalogEntry>());
+        private readonly LinkedList<AssetRecord> _idleImages = new();
+        private long _idleImageBytes;
+        private readonly LinkedList<AssetRecord> _imageLoadQueue = new();
+        private int _runningImageLoads;
+        private bool _isPumpingImageLoads;
 
         private void PumpImageLoads()
         {
-            if (pumpingImageLoads) return;
-            pumpingImageLoads = true;
+            if (_isPumpingImageLoads)
+            {
+                return;
+            }
+
+            _isPumpingImageLoads = true;
             try
             {
-                while (IsAvailable && imageLoadQueue.First != null && runningImageLoads < configuration.Images.MaximumConcurrentLoads)
+                while (IsAvailable && _imageLoadQueue.First != null && _runningImageLoads < _configuration.Images.MaximumConcurrentLoads)
                 {
-                    var record = imageLoadQueue.First.Value;
-                    imageLoadQueue.RemoveFirst();
+                    var record = _imageLoadQueue.First.Value;
+                    _imageLoadQueue.RemoveFirst();
                     record.ImageQueueNode = null;
-                    record.ImageLoadRunning = true;
-                    runningImageLoads++;
-                    try { StartSourceOperation(record); }
+                    record.IsImageLoadRunning = true;
+                    _runningImageLoads++;
+                    try
+                    {
+                        StartSourceOperation(record);
+                    }
                     catch (Exception error)
                     {
                         ReleaseImageLoadSlot(record);
-                        if (record.Loading) CompleteRecord(record, default, error);
-                        else throw;
+                        if (record.IsLoading)
+                        {
+                            CompleteRecord(record, default, error);
+                        }
+                        else
+                        {
+                            throw;
+                        }
                     }
                 }
             }
-            finally { pumpingImageLoads = false; }
+            finally
+            {
+                _isPumpingImageLoads = false;
+            }
         }
 
         private void ReleaseImageLoadSlot(AssetRecord record)
         {
-            if (!record.ImageLoadRunning) return;
-            record.ImageLoadRunning = false;
-            runningImageLoads--;
+            if (!record.IsImageLoadRunning)
+            {
+                return;
+            }
+
+            record.IsImageLoadRunning = false;
+            _runningImageLoads--;
         }
 
         /// <summary>按完整 HTTP(S) URL 或绝对本地路径取得图片。每人独立请求/租约，同一原始定位共享生产。</summary>
@@ -56,7 +76,11 @@ namespace YLFramework.Services.Resource
         public AssetLease<Texture2D> AcquireImage(string location)
         {
             using var request = AcquireImageRequest(location, true);
-            if (request.Status != ResourceRequestStatus.Succeeded) throw request.Error;
+            if (request.Status != ResourceRequestStatus.Succeeded)
+            {
+                throw request.Error;
+            }
+
             return request.TakeResult();
         }
 
@@ -64,42 +88,63 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<AssetLease<Texture2D>>(lease => lease.Dispose());
-            if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (!IsAvailable)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
             ResourceCatalogEntry entry;
             try
             {
-                if (string.IsNullOrWhiteSpace(location)) throw new ArgumentException("An exact URL or fully qualified image file is required.");
+                if (string.IsNullOrWhiteSpace(location))
+                {
+                    throw new ArgumentException("An exact URL or fully qualified image file is required.");
+                }
+
                 var source = Path.IsPathFullyQualified(location) ? ResourceSourceId.LocalTexture : ResourceSourceId.UrlTexture;
                 var id = ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(source + "\n" + location));
-                var address = new ResourceAddress(imageCatalog.ProjectId, id);
+                var address = new ResourceAddress(_imageCatalog.ProjectId, id);
                 entry = new ResourceCatalogEntry(id, address, new ResourceLocation(source, location, typeof(Texture2D)));
-                sources[source].Validate(entry);
+                _sources[source].Validate(entry);
             }
             catch (Exception error) when (error is ArgumentException || error is IOException || error is NotSupportedException)
-            { return Fail(request, ResourceError.InvalidAddress, "Invalid image location.", cause: error); }
+            {
+                return Fail(request, ResourceError.InvalidAddress, "Invalid image location.", cause: error);
+            }
             TrimImageCache();
-            return AcquireEntry<Texture2D>(imageCatalog, entry, entry.Address, synchronous, request, true);
+            return AcquireEntry<Texture2D>(_imageCatalog, entry, entry.Address, synchronous, request, true);
         }
 
         /// <summary>只释放闲置图片。活跃 Lease、其他来源、外部 Texture 均不受影响。</summary>
         public void ClearImageCache()
         {
             CheckThread();
-            while (idleImages.First != null) ReleaseRecord(idleImages.First.Value);
+            while (_idleImages.First != null)
+            {
+                ReleaseRecord(_idleImages.First.Value);
+            }
+
             CheckDrain();
         }
 
         private bool TryCacheImage(AssetRecord record)
         {
-            var options = configuration.Images;
-            if (!record.ImageCacheEligible || !IsAvailable || !record.Asset || options.IdleCapacityBytes == 0 || options.IdleCapacity == 0 || options.IdleTimeToLive == TimeSpan.Zero)
+            var options = _configuration.Images;
+            if (!record.IsImageCacheEligible || !IsAvailable || !record.Asset || options.IdleCapacityBytes == 0 || options.IdleCapacity == 0 || options.IdleTimeToLive == TimeSpan.Zero)
+            {
                 return false;
+            }
+
             var texture = (Texture2D)record.Asset;
             record.ImageBytes = (long)texture.width * texture.height * 4;
-            if (record.ImageBytes > options.IdleCapacityBytes) return false;
+            if (record.ImageBytes > options.IdleCapacityBytes)
+            {
+                return false;
+            }
+
             record.IdleSince = Time.realtimeSinceStartupAsDouble;
-            record.ImageCacheNode = idleImages.AddLast(record);
-            idleImageBytes += record.ImageBytes;
+            record.ImageCacheNode = _idleImages.AddLast(record);
+            _idleImageBytes += record.ImageBytes;
             InstallInstanceCleanup();
             TrimImageCache();
             return true;
@@ -107,20 +152,28 @@ namespace YLFramework.Services.Resource
 
         private void RemoveIdleImage(AssetRecord record)
         {
-            if (record.ImageCacheNode == null) return;
-            idleImages.Remove(record.ImageCacheNode);
+            if (record.ImageCacheNode == null)
+            {
+                return;
+            }
+
+            _idleImages.Remove(record.ImageCacheNode);
             record.ImageCacheNode = null;
-            idleImageBytes -= record.ImageBytes;
+            _idleImageBytes -= record.ImageBytes;
         }
 
         private void TrimImageCache()
         {
             var now = Time.realtimeSinceStartupAsDouble;
-            while (idleImages.First != null)
+            while (_idleImages.First != null)
             {
-                var record = idleImages.First.Value;
-                if (record.Asset && idleImages.Count <= configuration.Images.IdleCapacity && idleImageBytes <= configuration.Images.IdleCapacityBytes &&
-                    now - record.IdleSince < configuration.Images.IdleTimeToLive.TotalSeconds) break;
+                var record = _idleImages.First.Value;
+                if (record.Asset && _idleImages.Count <= _configuration.Images.IdleCapacity && _idleImageBytes <= _configuration.Images.IdleCapacityBytes &&
+                    now - record.IdleSince < _configuration.Images.IdleTimeToLive.TotalSeconds)
+                {
+                    break;
+                }
+
                 ReleaseRecord(record);
             }
         }

@@ -11,14 +11,19 @@ namespace YLFramework.Actions
     {
         internal const string ResourcePath = "ActionKit/ScreenTransitionCanvas";
         // Prefab 中的全屏遮罩 Image，透明度由过渡动作直接写入。
-        public Image ColorImage;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("ColorImage")]
+        public Image colorImage;
 
         // 关停期间禁止再创建画布；includeInactive 为 false，只收养激活中的现有实例。
         internal new static ScreenTransitionCanvas Instance
         {
             get
             {
-                if (ActionKit.IsShuttingDown) throw new InvalidOperationException("ActionKit is shutting down.");
+                if (ActionKit.IsShuttingDown)
+                {
+                    throw new InvalidOperationException("ActionKit is shutting down.");
+                }
+
                 return GetInstance(true, CreateCanvas, false);
             }
         }
@@ -33,9 +38,13 @@ namespace YLFramework.Actions
             }
             var root = Instantiate(prefab);
             var canvas = root.GetComponent<ScreenTransitionCanvas>();
-            if (!canvas || !canvas.ColorImage)
+            if (!canvas || !canvas.colorImage)
             {
-                if (canvas) canvas.ReleaseHost();
+                if (canvas)
+                {
+                    canvas.ReleaseHost();
+                }
+
                 Destroy(root);
                 throw new InvalidOperationException("ActionKit ScreenTransition resource must contain ScreenTransitionCanvas and its ColorImage reference.");
             }
@@ -45,7 +54,11 @@ namespace YLFramework.Actions
         internal static void ReleaseOwnedInstance()
         {
             // 只销毁模块自行实例化的画布，保留场景中用户提供的对象。
-            foreach (var canvas in FindObjectsOfType<ScreenTransitionCanvas>(true)) canvas.ReleaseHost(true);
+            foreach (var canvas in FindObjectsOfType<ScreenTransitionCanvas>(true))
+            {
+                canvas.ReleaseHost(true);
+            }
+
             ResetHostReference();
         }
     }

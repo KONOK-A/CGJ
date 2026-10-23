@@ -102,7 +102,7 @@ if ($Mode -in @('Legacy', 'All')) {
     $references += @($runtime, (Join-Path $managed 'UnityEngine.CoreModule.dll'), (Join-Path $env:USERPROFILE '.nuget\packages\nunit\3.14.0\lib\net45\nunit.framework.dll'))
     $arguments = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:exe', "/out:$output\LegacyTests.exe")
     $arguments += $references | ForEach-Object { "/reference:$_" }
-    $arguments += @((Join-Path $root 'Tools\UIPanelOfflineRunner.cs'), (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Extensions\Behavior\DualFSMLegacyTests.cs'))
+    $arguments += @((Join-Path $root 'Tools\UIPanelOfflineRunner.cs'), (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Extensions\Behavior\DualFsmLegacyTests.cs'))
     $response = Join-Path $output 'legacy.rsp'
     [IO.File]::WriteAllLines($response, [string[]]@($arguments | ForEach-Object { '"' + $_ + '"' }), [Text.UTF8Encoding]::new($false))
     & dotnet $compiler /noconfig "@$response"

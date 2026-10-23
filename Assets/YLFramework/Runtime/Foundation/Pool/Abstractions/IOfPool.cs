@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Pool
+namespace YLFramework.Core.Pool
 {
     /// <summary>
     /// Runtime 领域对象的生命周期接口，实现该接口不等于实例必定进入缓存。
@@ -24,6 +24,9 @@
         /// <summary>
         /// 领域可观察的回收状态，不表示真实池所有权或租用代次。
         /// </summary>
-        bool IsRecycled { get; set; }
+        bool IsRecycled
+        {
+            get; set;
+        }
     }
 }

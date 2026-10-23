@@ -26,15 +26,31 @@ namespace YLFramework.Analyzers
             context.RegisterCompilationStartAction(start =>
             {
                 var symbols = AnalyzerSymbols.Create(start.Compilation);
-                if (symbols == null) return;
+                if (symbols == null)
+                {
+                    return;
+                }
+
                 if (symbols.View != null)
+                {
                     start.RegisterSymbolAction(c => ViewLifecycleRules.Message(c, symbols), SymbolKind.Method);
+                }
+
                 if (symbols.Markers[0] != null)
+                {
                     start.RegisterSyntaxNodeAction(c => CallRules.MustCallBase(c, symbols), SyntaxKind.MethodDeclaration);
+                }
+
                 if (symbols.Markers[1] != null || symbols.Markers[2] != null)
+                {
                     start.RegisterOperationAction(c => CallRules.Invocation(c, symbols), OperationKind.Invocation);
+                }
+
                 if (symbols.Markers[3] != null)
+                {
                     start.RegisterOperationAction(c => OwnershipRules.Creation(c, symbols), OperationKind.ObjectCreation, OperationKind.TypeParameterObjectCreation);
+                }
+
                 if (symbols.Markers[4] != null)
                 {
                     var storage = new StorageModel(symbols);

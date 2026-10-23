@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using YLFramework.Core.Singleton;
 
@@ -14,7 +14,7 @@ namespace YLFramework.Core.Pool
     public static class DictionaryPool<TKey, TValue>
     {
         private static int _createCapacity;
-        private static readonly ObjectPool<Dictionary<TKey, TValue>> Pool = new(
+        private static readonly ObjectPool<Dictionary<TKey, TValue>> _pool = new(
             Create, reset: dictionary => dictionary.Clear(), cacheOrder: PoolCacheOrder.Lifo);
 
         static DictionaryPool()
@@ -27,8 +27,8 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public static int MaxPoolSize
         {
-            get => Pool.MaxPoolSize;
-            set => Pool.MaxPoolSize = value;
+            get => _pool.MaxPoolSize;
+            set => _pool.MaxPoolSize = value;
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace YLFramework.Core.Pool
             _createCapacity = capacity;
             try
             {
-                return Pool.Allocate();
+                return _pool.Allocate();
             }
             finally
             {
@@ -73,7 +73,7 @@ namespace YLFramework.Core.Pool
         /// <exception cref="InvalidOperationException">字典不是从本池取得的。</exception>
         public static void Recycle(Dictionary<TKey, TValue> toRecycle)
         {
-            Pool.Recycle(toRecycle);
+            _pool.Recycle(toRecycle);
         }
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public static void Clear()
         {
-            Pool.Clear();
+            _pool.Clear();
         }
 
         private static Dictionary<TKey, TValue> Create() => new(_createCapacity);

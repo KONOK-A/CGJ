@@ -18,52 +18,67 @@ namespace YLFramework.Core.Tests
     {
         private const BindingFlags PrivateStatic = BindingFlags.NonPublic | BindingFlags.Static;
         private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
-        private readonly List<Component> hosts = new();
-        private readonly List<TimerObject> probes = new();
-        private bool isolated;
-        private float previousTimeScale;
+        private readonly List<Component> _hosts = new();
+        private readonly List<TimerObject> _probes = new();
+        private bool _isIsolated;
+        private float _previousTimeScale;
         private static Type DriverType => typeof(Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
         private static Type SessionType => typeof(Timer).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState", true);
         private static Component[] FindHosts() => Object.FindObjectsByType(DriverType,
             FindObjectsInactive.Include, FindObjectsSortMode.None).Cast<Component>().ToArray();
         private static TimerHandle Current(TimerObject probe) =>
-            (TimerHandle)typeof(TimerObject).GetField("current", PrivateInstance).GetValue(probe);
+            (TimerHandle)typeof(TimerObject).GetField("_current", PrivateInstance).GetValue(probe);
 
         [SetUp]
         public void SetUp()
         {
-            isolated = false;
+            _isIsolated = false;
             Assert.That(FindHosts(), Is.Empty, "Do not take over an existing TimerDriver, including inactive hosts.");
             Assert.That(DriverType.GetField("_instance", PrivateStatic).GetValue(null), Is.Null,
                 "Do not take over an unreleased static owner.");
             Assert.That(SessionType.GetProperty("CanRunExecution", PrivateStatic).GetValue(null), Is.True,
                 "Do not reopen the execution gate.");
-            previousTimeScale = Time.timeScale;
-            isolated = true;
+            _previousTimeScale = Time.timeScale;
+            _isIsolated = true;
             Time.timeScale = 1;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!isolated) yield break;
+            if (!_isIsolated)
+            {
+                yield break;
+            }
+
             try
             {
-                foreach (var probe in probes)
+                foreach (var probe in _probes)
                 {
-                    if (!probe) continue;
-                    probe.Action.RemoveAllListeners();
-                    probe.Abort.RemoveAllListeners();
+                    if (!probe)
+                    {
+                        continue;
+                    }
+
+                    probe.onCompleted.RemoveAllListeners();
+                    probe.onAborted.RemoveAllListeners();
                     Object.Destroy(probe.gameObject);
                 }
-                probes.Clear();
+                _probes.Clear();
                 yield return null;
             }
             finally
             {
-                Time.timeScale = previousTimeScale;
-                foreach (var host in hosts) if (host) Object.Destroy(host.gameObject);
-                hosts.Clear();
+                Time.timeScale = _previousTimeScale;
+                foreach (var host in _hosts)
+                {
+                    if (host)
+                    {
+                        Object.Destroy(host.gameObject);
+                    }
+                }
+
+                _hosts.Clear();
             }
             yield return null;
         }
@@ -73,35 +88,47 @@ namespace YLFramework.Core.Tests
             var obj = new GameObject("YLCoreTimer.TestProbe");
             obj.SetActive(false);
             var probe = obj.AddComponent<TimerObject>();
-            probes.Add(probe);
+            _probes.Add(probe);
             probe.delay = delay;
             probe.ignoreTimeScale = ignoreTimeScale;
-            probe.Action = new UnityEvent();
-            probe.Abort = new UnityEvent();
+            probe.onCompleted = new UnityEvent();
+            probe.onAborted = new UnityEvent();
             return probe;
         }
 
         private void Activate(TimerObject probe)
         {
             var before = FindHosts();
-            Assert.That(before.All(hosts.Contains), Is.True, "Do not adopt a foreign host created during the test.");
-            try { probe.gameObject.SetActive(true); }
+            Assert.That(before.All(_hosts.Contains), Is.True, "Do not adopt a foreign host created during the test.");
+            try
+            {
+                probe.gameObject.SetActive(true);
+            }
             finally
             {
                 foreach (var host in FindHosts())
-                    if (!before.Contains(host) && !hosts.Contains(host)) hosts.Add(host);
+                {
+                    if (!before.Contains(host) && !_hosts.Contains(host))
+                    {
+                        _hosts.Add(host);
+                    }
+                }
             }
         }
 
         private static IEnumerator Until(Func<bool> condition)
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 3;
-            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "Real Unity frames did not complete the expected operation before the deadline.");
         }
 
         [Test]
-        public void CoreIdentityAndSerializedEventFieldsRemainUnchanged()
+        public void CoreIdentityAndSerializedEventLayoutRemainValid()
         {
             var type = typeof(TimerObject);
             Assert.That(type.FullName, Is.EqualTo("YLFramework.Core.TimerObject"));
@@ -110,7 +137,7 @@ namespace YLFramework.Core.Tests
             foreach (var expected in new[]
             {
                 ("delay", typeof(float)), ("ignoreTimeScale", typeof(bool)),
-                ("Action", typeof(UnityEvent)), ("Abort", typeof(UnityEvent))
+                ("onCompleted", typeof(UnityEvent)), ("onAborted", typeof(UnityEvent))
             })
             {
                 var field = type.GetField(expected.Item1, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
@@ -126,8 +153,8 @@ namespace YLFramework.Core.Tests
             var probe = Create(60);
             var actions = 0;
             var aborts = 0;
-            probe.Action.AddListener(() => actions++);
-            probe.Abort.AddListener(() => aborts++);
+            probe.onCompleted.AddListener(() => actions++);
+            probe.onAborted.AddListener(() => aborts++);
             Activate(probe);
             var first = Current(probe);
 
@@ -163,7 +190,7 @@ namespace YLFramework.Core.Tests
             probe.gameObject.SetActive(false);
             Assert.That(aborts, Is.EqualTo(2));
 
-            var slot = (ReusableTimer)typeof(TimerObject).GetField("timer", PrivateInstance).GetValue(probe);
+            var slot = (ReusableTimer)typeof(TimerObject).GetField("_timer", PrivateInstance).GetValue(probe);
             Object.Destroy(probe.gameObject);
             yield return null;
             Assert.That(slot.IsDisposed, Is.True);
@@ -177,12 +204,16 @@ namespace YLFramework.Core.Tests
             var actions = 0;
             var aborts = 0;
             TimerHandle restarted = default;
-            probe.Abort.AddListener(() => aborts++);
-            probe.Action.AddListener(() =>
+            probe.onAborted.AddListener(() => aborts++);
+            probe.onCompleted.AddListener(() =>
             {
                 actions++;
                 probe.gameObject.SetActive(false);
-                if (actions != 2) return;
+                if (actions != 2)
+                {
+                    return;
+                }
+
                 probe.gameObject.SetActive(true);
                 restarted = Current(probe);
             });
@@ -214,8 +245,8 @@ namespace YLFramework.Core.Tests
             var actions = 0;
             var aborts = 0;
             TimerHandle restarted = default;
-            probe.Action.AddListener(() => actions++);
-            probe.Abort.AddListener(() =>
+            probe.onCompleted.AddListener(() => actions++);
+            probe.onAborted.AddListener(() =>
             {
                 aborts++;
                 probe.delay = 0;
@@ -247,8 +278,8 @@ namespace YLFramework.Core.Tests
             var probe = Create();
             var failures = 0;
             var aborts = 0;
-            probe.Abort.AddListener(() => aborts++);
-            probe.Action.AddListener(() =>
+            probe.onAborted.AddListener(() => aborts++);
+            probe.onCompleted.AddListener(() =>
             {
                 failures++;
                 throw new InvalidOperationException("YLCoreTimer.ExpectedFailure");
@@ -264,8 +295,8 @@ namespace YLFramework.Core.Tests
             Assert.That(aborts, Is.Zero, "Fault and subsequent disable must not invoke Abort.");
 
             var actions = 0;
-            probe.Action.RemoveAllListeners();
-            probe.Action.AddListener(() => actions++);
+            probe.onCompleted.RemoveAllListeners();
+            probe.onCompleted.AddListener(() => actions++);
             Activate(probe);
             var next = Current(probe);
             yield return Until(() => next.IsFinished);
@@ -284,10 +315,10 @@ namespace YLFramework.Core.Tests
             var scaledActions = 0;
             var unscaledActions = 0;
             var aborts = 0;
-            scaled.Action.AddListener(() => scaledActions++);
-            unscaled.Action.AddListener(() => unscaledActions++);
-            scaled.Abort.AddListener(() => aborts++);
-            unscaled.Abort.AddListener(() => aborts++);
+            scaled.onCompleted.AddListener(() => scaledActions++);
+            unscaled.onCompleted.AddListener(() => unscaledActions++);
+            scaled.onAborted.AddListener(() => aborts++);
+            unscaled.onAborted.AddListener(() => aborts++);
             Activate(scaled);
             Activate(unscaled);
             var scaledRun = Current(scaled);

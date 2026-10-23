@@ -10,25 +10,32 @@ namespace YLFramework.Tests.Extensions.Data
 {
     public class DataAssetsWorkbookMemoryTests
     {
-        private ScriptableObjectConfigs root;
-        private string folder;
+        private ScriptableObjectConfigs _root;
+        private string _folder;
 
         [SetUp]
         public void SetUp()
         {
             string name = "YLWorkbookMemory-" + Guid.NewGuid().ToString("N");
-            folder = "Assets/" + name;
-            YLFramework.Tests.DataAssets.DataAcceptanceOwnership.Own(folder);
+            _folder = "Assets/" + name;
+            YLFramework.Tests.DataAssets.DataAcceptanceOwnership.Own(_folder);
             AssetDatabase.CreateFolder("Assets", name);
-            root = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
-            AssetDatabase.CreateAsset(root, folder + "/Root.asset");
+            _root = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
+            AssetDatabase.CreateAsset(_root, _folder + "/Root.asset");
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (root) DataAssetsWorkbookMemory.Forget(root);
-            if (!string.IsNullOrEmpty(folder)) AssetDatabase.DeleteAsset(folder);
+            if (_root)
+            {
+                DataAssetsWorkbookMemory.Forget(_root);
+            }
+
+            if (!string.IsNullOrEmpty(_folder))
+            {
+                AssetDatabase.DeleteAsset(_folder);
+            }
         }
 
         [Test]
@@ -38,25 +45,37 @@ namespace YLFramework.Tests.Extensions.Data
             File.WriteAllBytes(path, new byte[] { 1 });
             try
             {
-                Assert.That(DataAssetsWorkbookMemory.CanReveal(root), Is.False);
-                Assert.That(DataAssetsWorkbookMemory.Remember(root, path), Is.True);
-                Assert.That(DataAssetsWorkbookMemory.TryGetPath(root, out var stored), Is.True);
+                Assert.That(DataAssetsWorkbookMemory.CanReveal(_root), Is.False);
+                Assert.That(DataAssetsWorkbookMemory.Remember(_root, path), Is.True);
+                Assert.That(DataAssetsWorkbookMemory.TryGetPath(_root, out var stored), Is.True);
                 Assert.That(stored, Is.EqualTo(Path.GetFullPath(path)));
-                Assert.That(DataAssetsWorkbookMemory.CanReveal(root), Is.True);
+                Assert.That(DataAssetsWorkbookMemory.CanReveal(_root), Is.True);
                 File.Delete(path);
-                Assert.That(DataAssetsWorkbookMemory.CanReveal(root), Is.False);
+                Assert.That(DataAssetsWorkbookMemory.CanReveal(_root), Is.False);
             }
-            finally { if (File.Exists(path)) File.Delete(path); }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
         }
 
         [Test]
         public void RejectsNonWorkbookAndUnsavedAsset()
         {
-            Assert.That(DataAssetsWorkbookMemory.Remember(root, "not-a-workbook.txt"), Is.False);
-            Assert.That(DataAssetsWorkbookMemory.TryGetPath(root, out _), Is.False);
+            Assert.That(DataAssetsWorkbookMemory.Remember(_root, "not-a-workbook.txt"), Is.False);
+            Assert.That(DataAssetsWorkbookMemory.TryGetPath(_root, out _), Is.False);
             var unsaved = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
-            try { Assert.That(DataAssetsWorkbookMemory.Remember(unsaved, "somewhere.xlsx"), Is.False); }
-            finally { UnityEngine.Object.DestroyImmediate(unsaved); }
+            try
+            {
+                Assert.That(DataAssetsWorkbookMemory.Remember(unsaved, "somewhere.xlsx"), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(unsaved);
+            }
         }
     }
 }

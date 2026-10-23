@@ -1,14 +1,14 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.PackageManager.UI;
-using UnityEditor;
-using UnityEngine;
-using System;
 using System.IO;
 using System.Text.RegularExpressions;
+using UnityEditor;
+using UnityEditor.PackageManager.UI;
+using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.SkillSystem
 {
@@ -16,38 +16,53 @@ namespace YLFramework.SkillSystem
     public class SkillsConfigController
     {
 
-        private const string SKILL_CONFIG_DATA_PATH = "Assets/YLFrameworkData/Skill/Skills/{0}";
+        private const string SkillConfigDataPath = "Assets/YLFrameworkData/Skill/Skills/{0}";
 
-        private static List<SkillsConfig> allConfigs ;
+        private static List<SkillsConfig> _allConfigs;
 
 
         public static List<SkillsConfig> GetAllConfigs()
         {
-            if(allConfigs == null)
-                allConfigs = new List<SkillsConfig>();
+            if (_allConfigs == null)
+            {
+                _allConfigs = new List<SkillsConfig>();
+            }
 
-            allConfigs.Clear();
+            _allConfigs.Clear();
 
             string[] guids = AssetDatabase.FindAssets(string.Format("t:{0}", typeof(SkillsConfig).FullName));
             if (guids == null || guids.Length == 0)
-                return allConfigs;
+            {
+                return _allConfigs;
+            }
 
             foreach (var item in guids)
             {
                 string assetpath = AssetDatabase.GUIDToAssetPath(item);
                 if (string.IsNullOrEmpty(assetpath))
+                {
                     continue;
+                }
+
                 SkillsConfig config = AssetDatabase.LoadAssetAtPath<SkillsConfig>(assetpath);
-                if (config == null) continue;
-                allConfigs.Add(config);
+                if (config == null)
+                {
+                    continue;
+                }
+
+                _allConfigs.Add(config);
             }
 
-            return allConfigs ;
+            return _allConfigs;
         }
 
-        public static int CreateSkillConfigData(Type type,SkillsConfig skillsConfig)
+        public static int CreateSkillConfigData(Type type, SkillsConfig skillsConfig)
         {
-            if (skillsConfig == null) return -1;
+            if (skillsConfig == null)
+            {
+                return -1;
+            }
+
             SkillConfigData skill = ScriptableObject.CreateInstance(type) as SkillConfigData;
             return CreateSkillConfigData(skill, skillsConfig);
         }
@@ -62,9 +77,9 @@ namespace YLFramework.SkillSystem
                 return -1;
             }
 
-            int id = GenerateID(skillsConfig);
+            int id = GenerateId(skillsConfig);
             skillConfigData.id = id;
-            skillConfigData.skill_name = string.Format("技能:{0}", id);
+            skillConfigData.skillName = string.Format("技能:{0}", id);
             skillConfigData.parent = skillsConfig;
 
             CreateAsset(skillConfigData, path, false);
@@ -79,33 +94,38 @@ namespace YLFramework.SkillSystem
             return id;
         }
 
-        public static int GenerateID(SkillsConfig config)
+        public static int GenerateId(SkillsConfig config)
         {
-            int max_id = config.start_id;
+            int maxId = config.startId;
 
             foreach (var item in config.skills)
             {
-                if (item.id > max_id)
-                    max_id = item.id;
+                if (item.id > maxId)
+                {
+                    maxId = item.id;
+                }
             }
 
-            max_id++;
+            maxId++;
 
-            return max_id;
+            return maxId;
         }
 
         public static string GetSkillConfigDataPath(SkillsConfig skillsConfig)
         {
-            string asset_path = AssetDatabase.GetAssetPath(skillsConfig);
-            string guid = AssetDatabase.AssetPathToGUID(asset_path);
+            string assetPath = AssetDatabase.GetAssetPath(skillsConfig);
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
             return GetSkillConfigDataPath(guid);
         }
 
         public static string GetSkillConfigDataPath(string guid)
         {
-            if (string.IsNullOrEmpty(guid)) return string.Empty;
+            if (string.IsNullOrEmpty(guid))
+            {
+                return string.Empty;
+            }
 
-            return string.Format(SKILL_CONFIG_DATA_PATH,guid);
+            return string.Format(SkillConfigDataPath, guid);
         }
 
         public static void CreateAsset(ScriptableObject scriptableObject, string path, bool ping = true)
@@ -125,46 +145,48 @@ namespace YLFramework.SkillSystem
             }
         }
 
-        public static string GetCopyName(string skill_name, SkillsConfig skillsConfig)
+        public static string GetCopyName(string skillName, SkillsConfig skillsConfig)
         {
 
             int count = 1;
 
-            if (Regex.IsMatch(skill_name, "\\([0-9]+\\)$"))
+            if (Regex.IsMatch(skillName, "\\([0-9]+\\)$"))
             {
-                for (int i = skill_name.Length - 1; i >= 0; i--)
+                for (int i = skillName.Length - 1; i >= 0; i--)
                 {
-                    if (skill_name[i] == '(')
+                    if (skillName[i] == '(')
                     {
-                        string c = skill_name.Substring(i + 1, skill_name.Length - i - 2);
+                        string c = skillName.Substring(i + 1, skillName.Length - i - 2);
                         count = int.Parse(c);
 
-                        skill_name = skill_name.Substring(0, i);
+                        skillName = skillName.Substring(0, i);
                         break;
                     }
                 }
             }
 
-            skill_name = skill_name.TrimEnd();
+            skillName = skillName.TrimEnd();
 
             string name = string.Empty;
 
             do
             {
-                name = string.Format("{0} ({1})", skill_name, count);
+                name = string.Format("{0} ({1})", skillName, count);
                 count++;
             } while (IsContainsBuffName(name, skillsConfig));
 
             return name;
         }
 
-        private static bool IsContainsBuffName(string skill_name, SkillsConfig skillsConfig)
+        private static bool IsContainsBuffName(string skillName, SkillsConfig skillsConfig)
         {
 
             foreach (var item in skillsConfig.skills)
             {
-                if (item.skill_name == skill_name)
+                if (item.skillName == skillName)
+                {
                     return true;
+                }
             }
 
             return false;

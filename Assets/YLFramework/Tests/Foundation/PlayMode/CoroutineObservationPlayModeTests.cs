@@ -26,11 +26,29 @@ namespace YLFramework.Foundation.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            foreach (var observation in _observations) observation.Dispose();
+            foreach (var observation in _observations)
+            {
+                observation.Dispose();
+            }
+
             _observations.Clear();
-            foreach (var obj in _objects) if (obj) Object.Destroy(obj);
+            foreach (var obj in _objects)
+            {
+                if (obj)
+                {
+                    Object.Destroy(obj);
+                }
+            }
+
             _objects.Clear();
-            foreach (var host in _ownedHosts) if (host) Object.Destroy(host.gameObject);
+            foreach (var host in _ownedHosts)
+            {
+                if (host)
+                {
+                    Object.Destroy(host.gameObject);
+                }
+            }
+
             _ownedHosts.Clear();
             yield return null;
         }
@@ -78,7 +96,11 @@ namespace YLFramework.Foundation.Tests
             CoroutineStarter.Stop(producer);
             CoroutineStarter.Stop(nativeProducer);
             var ticksAtStop = ticks;
-            for (var i = 0; i < 6; i++) yield return null;
+            for (var i = 0; i < 6; i++)
+            {
+                yield return null;
+            }
+
             Assert.That(ticks, Is.EqualTo(ticksAtStop));
             Assert.That(naturalEnd, Is.False);
             Assert.That(nativeEnded, Is.False, "当前 Unity 2022.3 的停止操作不会恢复借用 Coroutine 的原生等待。");
@@ -105,7 +127,11 @@ namespace YLFramework.Foundation.Tests
             Object.Destroy(owner.gameObject);
             yield return null;
             var ticksAfterDestroy = ticks;
-            for (var i = 0; i < 6; i++) yield return null;
+            for (var i = 0; i < 6; i++)
+            {
+                yield return null;
+            }
+
             Assert.That(owner == null, Is.True);
             Assert.That(ticks, Is.EqualTo(ticksAfterDestroy));
             Assert.That(naturalEnd, Is.False);
@@ -197,7 +223,10 @@ namespace YLFramework.Foundation.Tests
                 _observations.Add(observation);
                 return observation;
             }
-            finally { TrackNewHosts(before); }
+            finally
+            {
+                TrackNewHosts(before);
+            }
         }
 
         private Coroutine StartProducer(IEnumerator producer)
@@ -210,13 +239,21 @@ namespace YLFramework.Foundation.Tests
                 Assert.That(coroutine, Is.Not.Null, "不擅自打开已经关闭的执行 gate。");
                 return coroutine;
             }
-            finally { TrackNewHosts(before); }
+            finally
+            {
+                TrackNewHosts(before);
+            }
         }
 
         private void TrackNewHosts(CoroutineStarter[] before)
         {
             foreach (var host in FindHosts())
-                if (Array.IndexOf(before, host) < 0 && !_ownedHosts.Contains(host)) _ownedHosts.Add(host);
+            {
+                if (Array.IndexOf(before, host) < 0 && !_ownedHosts.Contains(host))
+                {
+                    _ownedHosts.Add(host);
+                }
+            }
         }
 
         private static CoroutineStarter[] FindHosts() => Object.FindObjectsByType<CoroutineStarter>(
@@ -224,7 +261,11 @@ namespace YLFramework.Foundation.Tests
 
         private static IEnumerator Produce(Func<bool> canFinish, Action tick, Action naturalEnd)
         {
-            while (!canFinish()) { tick(); yield return null; }
+            while (!canFinish())
+            {
+                tick();
+                yield return null;
+            }
             naturalEnd();
         }
 
@@ -237,10 +278,16 @@ namespace YLFramework.Foundation.Tests
         private static IEnumerator Until(Func<bool> condition)
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 3;
-            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "真实 Unity 等待未在期限内结束。");
         }
     }
 
-    public sealed class CoroutineObservationOwner : MonoBehaviour { }
+    public sealed class CoroutineObservationOwner : MonoBehaviour
+    {
+    }
 }

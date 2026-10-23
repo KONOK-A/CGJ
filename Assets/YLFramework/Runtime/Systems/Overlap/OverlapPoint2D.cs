@@ -11,27 +11,38 @@ namespace YLFramework.Overlap
         // Fix编码
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 ClearResults();
 
-    #if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                 ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-                int count = Physics2D.defaultPhysicsScene.OverlapPoint(transform.position, contactFilter, results);
-    #else
-                int count = Physics2D.OverlapPointNonAlloc(transform.position, results, layerMask.value);
-    #endif
+                int count = Physics2D.defaultPhysicsScene.OverlapPoint(transform.position, contactFilter, ResultBuffer);
+#else
+                int count = Physics2D.OverlapPointNonAlloc(transform.position, ResultBuffer, layerMask.value);
+#endif
                 CheckCapacity(count);
-                for (int i = 0; i < count && !CheckInvalidated; i++)
+                for (int i = 0; i < count && !IsCheckInvalidated; i++)
                 {
-                    if (!results[i] || results[i].isTrigger) continue;
-                    AddResults(results[i],transform.position);
+                    if (!ResultBuffer[i] || ResultBuffer[i].isTrigger)
+                    {
+                        continue;
+                    }
+
+                    AddResults(ResultBuffer[i], transform.position);
                 }
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
         }
     }
 

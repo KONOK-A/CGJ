@@ -20,20 +20,32 @@ namespace YLFramework.Tests.Audio
             var clip = AudioClip.Create("borrowed86b", 4410, 1, 44100, false);
             try
             {
-                library.Groups.Add(new AudioClipGroup { Name = "legacy", Entries = new()
+                library.groups.Add(new AudioClipGroup
                 {
-                    new AudioClipEntry { Source = AudioClipSource.Resources, Key = "resources://old-clip" }
-                } });
-                library.Groups.Add(new AudioClipGroup { Name = "direct", Entries = new()
+                    name = "legacy",
+                    entries = new()
                 {
-                    new AudioClipEntry { Clip = clip }
-                } });
+                    new AudioClipEntry { source = AudioClipSource.Resources, key = "resources://old-clip" }
+                }
+                });
+                library.groups.Add(new AudioClipGroup
+                {
+                    name = "direct",
+                    entries = new()
+                {
+                    new AudioClipEntry { clip = clip }
+                }
+                });
                 Assert.That(library.TrySelect("legacy", out _), Is.False, "Old keys must not start the legacy resource authority or guess a project.");
                 Assert.That(library.TrySelect("direct", out var selected), Is.True);
                 Assert.That(selected.Clip, Is.SameAs(clip));
                 Assert.That(ResourceSystem.Current, Is.Null);
             }
-            finally { UnityEngine.Object.DestroyImmediate(library); UnityEngine.Object.DestroyImmediate(clip); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(library);
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
         }
 
         [UnityTest]
@@ -61,17 +73,24 @@ namespace YLFramework.Tests.Audio
             var library = ScriptableObject.CreateInstance<AudioClipLibrary>();
             try
             {
-                library.Groups.Add(new AudioClipGroup { Name = "formal", Entries = new()
+                library.groups.Add(new AudioClipGroup
                 {
-                    new AudioClipEntry { Source = AudioClipSource.Resource, ProjectId = "audio86b", Key = "wrong-type" }
-                } });
+                    name = "formal",
+                    entries = new()
+                {
+                    new AudioClipEntry { source = AudioClipSource.Resource, projectId = "audio86b", key = "wrong-type" }
+                }
+                });
                 Assert.That(library.TrySelect("formal", out var first), Is.True);
                 Assert.That(library.TrySelect("formal", out var second), Is.True);
                 Assert.That(first.Address.Provider, Is.SameAs(provider));
                 Assert.That(second.Address.Provider, Is.SameAs(provider));
                 Assert.That(first.Address.Key, Is.EqualTo("wrong-type"));
             }
-            finally { UnityEngine.Object.Destroy(library); }
+            finally
+            {
+                UnityEngine.Object.Destroy(library);
+            }
             Assert.That(Assert.Throws<ResourceException>(() => provider.Load("wrong-type")).Kind, Is.EqualTo(ResourceError.TypeMismatch));
             var calls = 0;
             provider.LoadAsync("absent", (lease, error) =>
@@ -112,23 +131,34 @@ namespace YLFramework.Tests.Audio
             try
             {
                 var values = new List<float>();
-                provider.LoadAsync("signal", (lease, error) => { Assert.That(error, Is.Null); delivered = lease; }, values.Add);
+                provider.LoadAsync("signal", (lease, error) =>
+                {
+                    Assert.That(error, Is.Null);
+                    delivered = lease;
+                }, values.Add);
                 source.Pending.Value = .65f;
-                for (var i = 0; i < 3; i++) yield return null;
+                for (var i = 0; i < 3; i++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(values.Any(x => x > 0 && x < 1), Is.True, "Audio request progress must not remain at zero until physical completion.");
                 Assert.That(values.Last(), Is.EqualTo(.65f), "Progress must continue observing the producer after initial submission.");
                 Assert.That(delivered, Is.Null);
                 source.Pending.Finish(clip);
                 Assert.IsTrue(delivered.Clip);
                 Assert.That(values.Last(), Is.EqualTo(1));
-                delivered.Dispose(); delivered = null;
+                delivered.Dispose();
+                delivered = null;
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
 
                 var callbacks = 0;
                 LogAssert.Expect(LogType.Exception, "InvalidOperationException: audio86b-progress-observer");
                 provider.LoadAsync("signal", (lease, error) =>
                 {
-                    Assert.That(error, Is.Null); Assert.IsTrue(lease.Clip); callbacks++;
+                    Assert.That(error, Is.Null);
+                    Assert.IsTrue(lease.Clip);
+                    callbacks++;
                     throw new InvalidOperationException("audio86b-completion-observer");
                 }, _ => throw new InvalidOperationException("audio86b-progress-observer"));
                 yield return null;
@@ -142,7 +172,11 @@ namespace YLFramework.Tests.Audio
             }
             finally
             {
-                if (source.Pending != null && !source.Pending.IsDone) source.Pending.Finish(clip);
+                if (source.Pending != null && !source.Pending.IsDone)
+                {
+                    source.Pending.Finish(clip);
+                }
+
                 delivered?.Dispose();
                 UnityEngine.Object.Destroy(clip);
             }
@@ -159,17 +193,24 @@ namespace YLFramework.Tests.Audio
             public ResourceSourceId Id => ResourceSourceId.Resources;
             public bool SupportsSynchronousLoad => true;
             internal ProgressOperation Pending;
-            public void Validate(ResourceCatalogEntry entry) { }
+            public void Validate(ResourceCatalogEntry entry)
+            {
+            }
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => throw new InvalidOperationException("Async-only fixture.");
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => Pending = new ProgressOperation();
-            public void Release(UnityEngine.Object asset) { }
+            public void Release(UnityEngine.Object asset)
+            {
+            }
         }
 
         [UnityTearDown]
         public IEnumerator RestoreSession()
         {
             var cleanup = new ResourceSessionTests().TearDown();
-            while (cleanup.MoveNext()) yield return cleanup.Current;
+            while (cleanup.MoveNext())
+            {
+                yield return cleanup.Current;
+            }
         }
     }
 }

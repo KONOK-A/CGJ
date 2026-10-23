@@ -64,18 +64,18 @@ namespace YLFramework.Foundation.Tests
         [Test]
         public void FrameDelayCountsFutureRenderedFramesAndUsesLongPrecision()
         {
-            const long start = 9007199254740992;
-            using var scheduler = new TimerScheduler(0, 0, start);
+            const long Start = 9007199254740992;
+            using var scheduler = new TimerScheduler(0, 0, Start);
             var calls = new List<int>();
             scheduler.DelayFrames(0, () => calls.Add(0));
             scheduler.DelayFrames(1, () => calls.Add(1));
             var two = scheduler.DelayFrames(2, () => calls.Add(2));
-            scheduler.Advance(100, 100, start);
+            scheduler.Advance(100, 100, Start);
             Assert.That(calls, Is.Empty);
-            scheduler.Advance(100, 100, start + 1);
+            scheduler.Advance(100, 100, Start + 1);
             CollectionAssert.AreEqual(new[] { 0, 1 }, calls);
             Assert.That(two.RemainingFrames, Is.EqualTo(1));
-            scheduler.Advance(100, 100, start + 2);
+            scheduler.Advance(100, 100, Start + 2);
             CollectionAssert.AreEqual(new[] { 0, 1, 2 }, calls);
         }
 
@@ -161,7 +161,11 @@ namespace YLFramework.Foundation.Tests
             using var scheduler = new TimerScheduler(0, 0, 0);
             TimerHandle repeat = default;
             TimerHandle other = default;
-            repeat = scheduler.Repeat(0, 1, _ => { repeat.Cancel(); other.Cancel(); });
+            repeat = scheduler.Repeat(0, 1, _ =>
+            {
+                repeat.Cancel();
+                other.Cancel();
+            });
             other = scheduler.Delay(0, () => Assert.Fail("Cancelled due task ran"));
             scheduler.Advance(0, 1, 1);
             scheduler.Advance(0, 100, 2);
@@ -177,7 +181,11 @@ namespace YLFramework.Foundation.Tests
             TimerHandle handle = default;
             handle = scheduler.Repeat(1, 5, tick =>
             {
-                if (tick != 1) return;
+                if (tick != 1)
+                {
+                    return;
+                }
+
                 Assert.That(handle.Pause(), Is.True);
                 Assert.That(handle.Pause(), Is.True);
                 Assert.That(handle.Status, Is.EqualTo(TimerState.Executing));
@@ -198,7 +206,12 @@ namespace YLFramework.Foundation.Tests
         {
             using var scheduler = new TimerScheduler(0, 0, 0);
             TimerHandle handle = default;
-            handle = scheduler.Repeat(0, 1, _ => { handle.Pause(); handle.Resume(); handle.Resume(); }, count: 2);
+            handle = scheduler.Repeat(0, 1, _ =>
+            {
+                handle.Pause();
+                handle.Resume();
+                handle.Resume();
+            }, count: 2);
             scheduler.Advance(0, 0, 1);
             Assert.That(handle.Status, Is.EqualTo(TimerState.Scheduled));
             scheduler.Advance(0, 1, 2);
@@ -253,7 +266,11 @@ namespace YLFramework.Foundation.Tests
             using var scheduler = new TimerScheduler(0, 0, 0);
             TimerHandle resumed = default;
             var calls = new List<int>();
-            scheduler.Delay(0, () => { calls.Add(1); resumed.Resume(); });
+            scheduler.Delay(0, () =>
+            {
+                calls.Add(1);
+                resumed.Resume();
+            });
             resumed = scheduler.Delay(0, () => calls.Add(2));
             resumed.Pause();
             scheduler.Delay(0, () => calls.Add(3));
@@ -287,7 +304,11 @@ namespace YLFramework.Foundation.Tests
             var first = new InvalidOperationException("first");
             var second = new ArgumentException("second");
             TimerHandle cancelled = default;
-            cancelled = scheduler.Repeat(0, 1, _ => { cancelled.Cancel(); throw first; });
+            cancelled = scheduler.Repeat(0, 1, _ =>
+            {
+                cancelled.Cancel();
+                throw first;
+            });
             var faulted = scheduler.Delay(0, () => throw second);
             var thrown = Assert.Throws<AggregateException>(() => scheduler.Advance(0, 0, 1));
             CollectionAssert.AreEqual(new Exception[] { first, second }, thrown.InnerExceptions);
@@ -349,7 +370,9 @@ namespace YLFramework.Foundation.Tests
                 handles[i] = scheduler.Delay(2, () => calls.Add(captured));
             }
             scheduler.Advance(0, 1, 1);
-            handles[4].Cancel(); handles[8].Pause(); handles[0].Cancel();
+            handles[4].Cancel();
+            handles[8].Pause();
+            handles[0].Cancel();
             scheduler.Advance(0, 2, 2);
             CollectionAssert.AreEqual(new[] { 1, 2, 3, 5, 6, 7, 9, 10, 11 }, calls);
             handles[8].Resume();
@@ -410,7 +433,11 @@ namespace YLFramework.Foundation.Tests
                 Assert.That(reason, Is.EqualTo(TimerCancellationReason.SchedulerDisposed));
                 notifications++;
             };
-            for (var i = 0; i < handles.Length; i++) handles[i] = scheduler.Delay(0, onCancelled: notify);
+            for (var i = 0; i < handles.Length; i++)
+            {
+                handles[i] = scheduler.Delay(0, onCancelled: notify);
+            }
+
             scheduler.Dispose();
             Assert.That(notifications, Is.EqualTo(3));
         }
@@ -423,10 +450,23 @@ namespace YLFramework.Foundation.Tests
         {
             using var scheduler = new TimerScheduler(0, 0, 0);
             var handle = ScheduleCallbackTarget(scheduler, terminal == TimerState.Faulted, out var target);
-            if (terminal == TimerState.Cancelled) handle.Cancel();
-            else if (terminal == TimerState.Invalidated) scheduler.Dispose();
-            else if (terminal == TimerState.Faulted) Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
-            else scheduler.Advance(0, 0, 1);
+            if (terminal == TimerState.Cancelled)
+            {
+                handle.Cancel();
+            }
+            else if (terminal == TimerState.Invalidated)
+            {
+                scheduler.Dispose();
+            }
+            else if (terminal == TimerState.Faulted)
+            {
+                Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
+            }
+            else
+            {
+                scheduler.Advance(0, 0, 1);
+            }
+
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
@@ -446,8 +486,16 @@ namespace YLFramework.Foundation.Tests
         private sealed class CallbackTarget
         {
             internal bool Fail;
-            internal void Tick(long tick) { if (Fail) throw new InvalidOperationException("callback target failure"); }
-            internal void Cancelled(TimerCancellationReason reason) { }
+            internal void Tick(long tick)
+            {
+                if (Fail)
+                {
+                    throw new InvalidOperationException("callback target failure");
+                }
+            }
+            internal void Cancelled(TimerCancellationReason reason)
+            {
+            }
         }
     }
 }

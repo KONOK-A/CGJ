@@ -20,17 +20,34 @@ namespace YLFramework.Tests.ResourceBuild
     public partial class ResourceUpdateTests
     {
         private const string Key = "YL.Resource87.";
-        [Serializable] private sealed class SavedScenes { public SavedScene[] Items; }
-        [Serializable] private sealed class SavedScene { public string Path; public bool Loaded; public bool Active; }
+        [Serializable]
+        private sealed class SavedScenes
+        {
+            public SavedScene[] Items;
+        }
+        [Serializable]
+        private sealed class SavedScene
+        {
+            public string Path;
+            public bool Loaded;
+            public bool Active;
+        }
 
         [OneTimeSetUp]
         public void BuildVersions()
         {
-            if (SessionState.GetBool(Key + "owned", false)) return;
+            if (SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             YLFramework.Tests.Resource.ResourceSessionTests.EnsureRestorableScenes();
             var setup = EditorSceneManager.GetSceneManagerSetup();
-            SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new SavedScenes { Items = setup.Where(x => !string.IsNullOrEmpty(x.path))
-                .Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray() }));
+            SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new SavedScenes
+            {
+                Items = setup.Where(x => !string.IsNullOrEmpty(x.path))
+                .Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray()
+            }));
             foreach (var project in new[] { "a", "b" })
             {
                 var fixture = new ResourceReleaseFixture();
@@ -73,7 +90,8 @@ namespace YLFramework.Tests.ResourceBuild
         private static ArtifactStore NewStore(bool multi = false)
         {
             var path = Path.Combine(Path.GetTempPath(), "kilo", "r87-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-            var paths = JArray.Parse(SessionState.GetString(Key + "stores", "[]")); paths.Add(path);
+            var paths = JArray.Parse(SessionState.GetString(Key + "stores", "[]"));
+            paths.Add(path);
             SessionState.SetString(Key + "stores", paths.ToString());
             return Store(path, multi);
         }
@@ -89,13 +107,27 @@ namespace YLFramework.Tests.ResourceBuild
         [OneTimeTearDown]
         public void CleanupVersions()
         {
-            if (!SessionState.GetBool(Key + "owned", false)) return;
+            if (!SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             Assert.That(EditorApplication.isPlaying, Is.False);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
             Assert.That(ProtectedDigest(), Is.EqualTo(SessionState.GetString(Key + "protected", "")));
-            if (SessionState.GetBool(Key + "retain", false)) return;
+            if (SessionState.GetBool(Key + "retain", false))
+            {
+                return;
+            }
+
             foreach (var path in JArray.Parse(SessionState.GetString(Key + "stores", "[]")).Values<string>())
-                if (Directory.Exists(path)) Directory.Delete(path, true);
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
+            }
+
             foreach (var project in new[] { "a", "b" })
             {
                 Directory.Delete(SessionState.GetString(Key + project + "root", ""), true);
@@ -103,28 +135,45 @@ namespace YLFramework.Tests.ResourceBuild
                 var folder = SessionState.GetString(Key + project + "folder", "");
                 Assert.That(AssetDatabase.AssetPathToGUID(folder), Is.EqualTo(SessionState.GetString(Key + project + "guid", "")));
                 AssetDatabase.DeleteAsset(folder);
-                foreach (var suffix in new[] { "folder", "guid", "workspace", "root", "project", "1", "2", "3" }) SessionState.EraseString(Key + project + suffix);
+                foreach (var suffix in new[] { "folder", "guid", "workspace", "root", "project", "1", "2", "3" })
+                {
+                    SessionState.EraseString(Key + project + suffix);
+                }
             }
             var scenes = JsonUtility.FromJson<SavedScenes>(SessionState.GetString(Key + "scenes", ""));
             EditorSceneManager.RestoreSceneManagerSetup(scenes.Items.Select(x => new SceneSetup { path = x.Path, isLoaded = x.Loaded, isActive = x.Active }).ToArray());
             File.Delete(SessionState.GetString(Key + "neutral", ""));
-            foreach (var suffix in new[] { "scenes", "protected", "neutral", "stores", "restart" }) SessionState.EraseString(Key + suffix);
+            foreach (var suffix in new[] { "scenes", "protected", "neutral", "stores", "restart" })
+            {
+                SessionState.EraseString(Key + suffix);
+            }
+
             SessionState.EraseBool(Key + "owned");
         }
 
         [UnityTearDown]
         public IEnumerator ExitSession()
         {
-            if (!EditorApplication.isPlaying) yield break;
+            if (!EditorApplication.isPlaying)
+            {
+                yield break;
+            }
+
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
             for (var i = SceneManager.sceneCount - 1; i >= 0; i--)
             {
                 var scene = SceneManager.GetSceneAt(i);
                 if (new[] { "a", "b" }.Any(x => scene.path.StartsWith(SessionState.GetString(Key + x + "folder", "!"), StringComparison.Ordinal)))
+                {
                     yield return SceneManager.UnloadSceneAsync(scene);
+                }
             }
             var deadline = Time.realtimeSinceStartup + 10;
-            while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < deadline) yield return null;
+            while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
             yield return new ExitPlayMode();
         }
@@ -135,7 +184,9 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource.ArtifactStore"), Is.Not.Null,
                 "8.7 requires an owned persistent store, not a mutable release directory or a guessed latest folder.");
             foreach (var name in new[] { "CheckUpdatesAsync", "PrepareUpdateAsync", "ActivatePreparedUpdateAsync", "RollbackAsync" })
+            {
                 Assert.That(typeof(ResourceSystem).GetMethods(), Has.Some.Matches<System.Reflection.MethodInfo>(x => x.Name == name), name);
+            }
         }
 
         [Test]
@@ -188,9 +239,21 @@ namespace YLFramework.Tests.ResourceBuild
             var old = ResourceReleaseFixture.Snapshot(VersionPath(store, 1));
             var plan = store.Check(store.Mount(), new[] { Snapshot("a", 3) });
             using var cancellation = new CancellationTokenSource();
-            store.Checkpoint = stage => { if (stage == "FileCopied") cancellation.Cancel(); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "FileCopied")
+                {
+                    cancellation.Cancel();
+                }
+            };
             Assert.Throws<OperationCanceledException>(() => store.Prepare(plan, cancellation.Token));
-            store.Checkpoint = stage => { if (stage == "CompleteWritten") throw new IOException("injected prepare failure"); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "CompleteWritten")
+                {
+                    throw new IOException("injected prepare failure");
+                }
+            };
             Assert.Throws<IOException>(() => store.Prepare(plan, CancellationToken.None));
             CollectionAssert.AreEqual(active, File.ReadAllBytes(ProjectPath(store)));
             CollectionAssert.AreEqual(old, ResourceReleaseFixture.Snapshot(VersionPath(store, 1)));
@@ -206,15 +269,25 @@ namespace YLFramework.Tests.ResourceBuild
                 var store = NewStore(true);
                 var prepared = Prepare(store, 2, true);
                 var hit = false;
-                store.Checkpoint = stage => { if (!hit && stage.StartsWith(point, StringComparison.Ordinal)) { hit = true; throw new IOException("interrupted at " + stage); } };
+                store.Checkpoint = stage =>
+                {
+                    if (!hit && stage.StartsWith(point, StringComparison.Ordinal))
+                    {
+                        hit = true;
+                        throw new IOException("interrupted at " + stage);
+                    }
+                };
                 Assert.Throws<IOException>(() => store.Commit(prepared), point);
                 Assert.That(hit, Is.True, point);
                 var restarted = Store(store.RootPath, true);
                 var selected = restarted.Mount();
                 var expected = point == "CommitDecided" ? 2 : 1;
                 foreach (var project in new[] { "a", "b" })
+                {
                     Assert.That(selected.Single(x => x.Document.ProjectId == Snapshot(project).Document.ProjectId).Document.CatalogDigest,
                         Is.EqualTo(Snapshot(project, expected).Document.CatalogDigest), point + ":" + project);
+                }
+
                 Assert.That(File.Exists(ProjectPath(store, "commit-journal.json", string.CompareOrdinal(Snapshot().Document.ProjectId, Snapshot("b").Document.ProjectId) < 0 ? "a" : "b")), Is.False);
                 Assert.That(restarted.Mount().Select(x => x.Document.CatalogDigest), Is.EqualTo(selected.Select(x => x.Document.CatalogDigest)));
             }
@@ -232,7 +305,8 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Store(store.RootPath).Mount().Single().Document.CatalogDigest, Is.EqualTo(Snapshot().Document.CatalogDigest));
             Assert.Throws<InvalidDataException>(() => new ArtifactStore(store.RootPath, new[] {
                 new ResourceProjectMount(Snapshot().Document.ProjectId, "StandaloneWindows64", "wrong-app") }).Mount());
-            var unknown = NewStore(); Directory.CreateDirectory(unknown.RootPath);
+            var unknown = NewStore();
+            Directory.CreateDirectory(unknown.RootPath);
             Assert.Throws<InvalidDataException>(() => unknown.Mount());
             Assert.That(Directory.GetFileSystemEntries(unknown.RootPath), Is.Empty);
         }
@@ -244,7 +318,8 @@ namespace YLFramework.Tests.ResourceBuild
             var first = Prepare(store);
             store.Commit(first);
             var third = Prepare(store, 3);
-            var unknown = Path.Combine(ProjectPath(store, "versions"), "foreign"); Directory.CreateDirectory(unknown);
+            var unknown = Path.Combine(ProjectPath(store, "versions"), "foreign");
+            Directory.CreateDirectory(unknown);
             File.WriteAllText(Path.Combine(unknown, "mine"), "must survive");
             Assert.That(store.Cleanup(store.Mount()).DeletedPaths, Is.Empty);
             store.Commit(third);
@@ -252,7 +327,7 @@ namespace YLFramework.Tests.ResourceBuild
             using (var locked = new FileStream(obsolete, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 var failed = store.Cleanup(store.Mount());
-                Assert.That(failed.Succeeded, Is.False);
+                Assert.That(failed.HasSucceeded, Is.False);
                 Assert.That(failed.Errors, Is.Not.Empty);
             }
             Assert.That(File.ReadAllText(Path.Combine(unknown, "mine")), Is.EqualTo("must survive"));

@@ -29,7 +29,10 @@ namespace YLFramework.Services.Audio
         internal void Validate()
         {
             if (AudioOutputRoute.HasReference(mixer) && !mixer)
+            {
                 throw new ArgumentException("The configured Mixer has been destroyed.", nameof(mixer));
+            }
+
             ValidateGroup(musicGroup, nameof(musicGroup));
             ValidateGroup(voiceGroup, nameof(voiceGroup));
             ValidateGroup(soundGroup, nameof(soundGroup));
@@ -37,11 +40,25 @@ namespace YLFramework.Services.Audio
 
         private void ValidateGroup(AudioMixerGroup group, string parameterName)
         {
-            if (!AudioOutputRoute.HasReference(group)) return;
-            if (!group) throw new ArgumentException("The configured output group has been destroyed.", parameterName);
-            if (!mixer) throw new ArgumentException("An output group requires a configured Mixer.", parameterName);
+            if (!AudioOutputRoute.HasReference(group))
+            {
+                return;
+            }
+
+            if (!group)
+            {
+                throw new ArgumentException("The configured output group has been destroyed.", parameterName);
+            }
+
+            if (!mixer)
+            {
+                throw new ArgumentException("An output group requires a configured Mixer.", parameterName);
+            }
+
             if (group.audioMixer != mixer)
+            {
                 throw new ArgumentException("The output group must belong to the configured Mixer.", parameterName);
+            }
         }
     }
 }

@@ -20,41 +20,57 @@ namespace YLFramework.Actions
     // 子动作取消或租约失效视为整个组合取消，组合取消时释放所有仍匹配的子动作。
     internal class Sequence : ISequence
     {
-        private IAction mCurrentAction = null;
-        private int mCurrentActionIndex = 0;
-        private List<ActionLease> mActions = new List<ActionLease>();
+        private IAction _currentAction = null;
+        private int _currentActionIndex = 0;
+        private List<ActionLease> _actions = new List<ActionLease>();
 
         private Sequence()
         {
         }
 
-        private static ActionPool<Sequence> mPool =
+        private static ActionPool<Sequence> _pool =
             new ActionPool<Sequence>(() => new Sequence(), null, 10);
 
         public static Sequence Allocate()
         {
-            var sequence = mPool.Allocate();
-            sequence.ActionID = ActionKit.ID_GENERATOR++;
+            var sequence = _pool.Allocate();
+            sequence.ActionId = ActionKit.IdGenerator++;
             sequence.Reset();
-            sequence.Deinited = false;
+            sequence.IsDeinitialized = false;
             return sequence;
         }
 
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
 
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
 
-        public ulong ActionID { get; set; }
-        public ActionStatus Status { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
         public void OnStart()
         {
-            if (TryCancelIfChildDeinited()) return;
-            if (mActions.Count > 0)
+            if (TryCancelIfChildDeinited())
             {
-                mCurrentActionIndex = 0;
-                mCurrentAction = mActions[mCurrentActionIndex].Action;
-                mCurrentAction.Reset();
+                return;
+            }
+
+            if (_actions.Count > 0)
+            {
+                _currentActionIndex = 0;
+                _currentAction = _actions[_currentActionIndex].Action;
+                _currentAction.Reset();
                 TryExecuteUntilNextNotFinished();
             }
             else
@@ -66,22 +82,34 @@ namespace YLFramework.Actions
         void TryExecuteUntilNextNotFinished()
         {
             // 同步完成的子动作在同次调用中连续推进；后续动作以 dt=0 启动，不传递剩余时间。
-            while (mCurrentAction != null)
+            while (_currentAction != null)
             {
-                if (TryCancelIfChildDeinited()) return;
-                var finished = ExecuteChild(mCurrentAction, 0);
-                if (TryCancelIfChildDeinited()) return;
-                if (!finished) return;
-                mCurrentActionIndex++;
-
-                if (mCurrentActionIndex < mActions.Count)
+                if (TryCancelIfChildDeinited())
                 {
-                    mCurrentAction = mActions[mCurrentActionIndex].Action;
-                    mCurrentAction.Reset();
+                    return;
+                }
+
+                var finished = ExecuteChild(_currentAction, 0);
+                if (TryCancelIfChildDeinited())
+                {
+                    return;
+                }
+
+                if (!finished)
+                {
+                    return;
+                }
+
+                _currentActionIndex++;
+
+                if (_currentActionIndex < _actions.Count)
+                {
+                    _currentAction = _actions[_currentActionIndex].Action;
+                    _currentAction.Reset();
                 }
                 else
                 {
-                    mCurrentAction = null;
+                    _currentAction = null;
                     this.Finish();
                 }
             }
@@ -89,19 +117,27 @@ namespace YLFramework.Actions
 
         public void OnExecute(float dt)
         {
-            if (TryCancelIfChildDeinited()) return;
-            if (mCurrentAction != null)
+            if (TryCancelIfChildDeinited())
             {
-                var finished = ExecuteChild(mCurrentAction, dt);
-                if (TryCancelIfChildDeinited()) return;
+                return;
+            }
+
+            if (_currentAction != null)
+            {
+                var finished = ExecuteChild(_currentAction, dt);
+                if (TryCancelIfChildDeinited())
+                {
+                    return;
+                }
+
                 if (finished)
                 {
-                    mCurrentActionIndex++;
+                    _currentActionIndex++;
 
-                    if (mCurrentActionIndex < mActions.Count)
+                    if (_currentActionIndex < _actions.Count)
                     {
-                        mCurrentAction = mActions[mCurrentActionIndex].Action;
-                        mCurrentAction.Reset();
+                        _currentAction = _actions[_currentActionIndex].Action;
+                        _currentAction.Reset();
 
                         TryExecuteUntilNextNotFinished();
                     }
@@ -123,17 +159,25 @@ namespace YLFramework.Actions
 
         public ISequence Append(IAction action)
         {
-            mActions.Add(new ActionLease(action));
+            _actions.Add(new ActionLease(action));
             return this;
         }
 
         internal bool TryCancelIfChildDeinited()
         {
             // 子动作取消或租约失效时取消整个组合，不能视为正常完成。
-            if (Deinited) return true;
-            foreach (var lease in mActions)
+            if (IsDeinitialized)
             {
-                if (lease.Matches && !lease.Action.Deinited) continue;
+                return true;
+            }
+
+            foreach (var lease in _actions)
+            {
+                if (lease.Matches && !lease.Action.IsDeinitialized)
+                {
+                    continue;
+                }
+
                 Deinit();
                 return true;
             }
@@ -162,14 +206,14 @@ namespace YLFramework.Actions
 
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
+                IsDeinitialized = true;
                 // 先快照并清空容器，避免清理回调改变本次迭代；只释放仍匹配的租约。
-                var actions = mActions.ToArray();
-                mActions.Clear();
-                mCurrentAction = null;
-                mCurrentActionIndex = 0;
+                var actions = _actions.ToArray();
+                _actions.Clear();
+                _currentAction = null;
+                _currentActionIndex = 0;
                 List<Exception> exceptions = null;
                 try
                 {
@@ -177,13 +221,24 @@ namespace YLFramework.Actions
                     {
                         try
                         {
-                            if (!lease.Matches) continue;
+                            if (!lease.Matches)
+                            {
+                                continue;
+                            }
+
                             var action = lease.Action;
-                            if (!ReferenceEquals(action, this) && !action.Deinited) action.Deinit();
+                            if (!ReferenceEquals(action, this) && !action.IsDeinitialized)
+                            {
+                                action.Deinit();
+                            }
                         }
                         catch (Exception exception)
                         {
-                            if (exceptions == null) exceptions = new List<Exception>();
+                            if (exceptions == null)
+                            {
+                                exceptions = new List<Exception>();
+                            }
+
                             exceptions.Add(exception);
                         }
                     }
@@ -191,28 +246,51 @@ namespace YLFramework.Actions
                 finally
                 {
                     // 回收入队后延迟执行，不在此处立即复用对象。
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Sequence>(mPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Sequence>(_pool, this));
                 }
-                if (exceptions != null) throw new AggregateException(exceptions);
+                if (exceptions != null)
+                {
+                    throw new AggregateException(exceptions);
+                }
             }
         }
 
         public void Reset()
         {
-            mCurrentActionIndex = 0;
+            _currentActionIndex = 0;
             Status = ActionStatus.NotStart;
-            Paused = false;
-            if (TryCancelIfChildDeinited()) return;
-            var actionId = ActionID;
+            IsPaused = false;
+            if (TryCancelIfChildDeinited())
+            {
+                return;
+            }
+
+            var actionId = ActionId;
             // 子动作 Reset 的清理回调可能追加或回收其他子动作，快照与租约检查保护本次迭代。
-            var actions = mActions.ToArray();
+            var actions = _actions.ToArray();
             foreach (var lease in actions)
             {
-                if (Deinited || ActionID != actionId) return;
-                if (!lease.Matches || lease.Action.Deinited) { Deinit(); return; }
+                if (IsDeinitialized || ActionId != actionId)
+                {
+                    return;
+                }
+
+                if (!lease.Matches || lease.Action.IsDeinitialized)
+                {
+                    Deinit();
+                    return;
+                }
                 lease.Action.Reset();
-                if (Deinited || ActionID != actionId) return;
-                if (!lease.Matches || lease.Action.Deinited) { Deinit(); return; }
+                if (IsDeinitialized || ActionId != actionId)
+                {
+                    return;
+                }
+
+                if (!lease.Matches || lease.Action.IsDeinitialized)
+                {
+                    Deinit();
+                    return;
+                }
             }
         }
     }

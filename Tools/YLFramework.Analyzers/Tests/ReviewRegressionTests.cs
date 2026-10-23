@@ -21,14 +21,14 @@ namespace YLFramework.Analyzers.Tests
         public Task ReadonlyRefRebindingDoesNotExposeMutableState()
             => AnalyzerFixture.Check("[ProtectedHierarchy(typeof(C))]class A{public int x;}class C{void M(A a){ref readonly int read=ref a.x;read=ref a.x;ref int write=ref {|YL0006:a.x|};write=ref {|YL0006:a.x|};}}");
 
-        [TestCase("namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{private LoadViewArgs Pool;private LoadViewArgs Pool;}}")]
-        [TestCase("namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{}public class LoadViewRequest<T>{private LoadViewArgs args;private LoadViewArgs args;}}")]
+        [TestCase("namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{private LoadViewArgs _pool;private LoadViewArgs _pool;}}")]
+        [TestCase("namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{}public class LoadViewRequest<T>{private LoadViewArgs _args;private LoadViewArgs _args;}}")]
         public async Task DuplicateCoreOwnerDeclarationsAreCompilerErrorsNotAnalyzerFailures(string source)
         {
             var compilation = AnalyzerFixture.CoreCompilation(source);
-            Assert.That(compilation.GetDiagnostics().Any(d=>d.Id=="CS0102"), Is.True);
+            Assert.That(compilation.GetDiagnostics().Any(d => d.Id == "CS0102"), Is.True);
             var diagnostics = await compilation.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new CoreUsageAnalyzer())).GetAnalyzerDiagnosticsAsync();
-            Assert.That(diagnostics.Where(d=>d.Id=="AD0001"), Is.Empty, string.Join("\n",diagnostics));
+            Assert.That(diagnostics.Where(d => d.Id == "AD0001"), Is.Empty, string.Join("\n", diagnostics));
         }
 
         [Test]

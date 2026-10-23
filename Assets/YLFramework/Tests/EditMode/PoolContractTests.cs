@@ -11,16 +11,23 @@ namespace YLFramework.Tests
     {
         public sealed class SessionItem : IOfPool
         {
-            public bool IsRecycled { get; set; }
+            public bool IsRecycled
+            {
+                get; set;
+            }
             public int Recycles;
-            public void OnAllocate() { }
+            public void OnAllocate()
+            {
+            }
             public void OnRecycle() => Recycles++;
         }
 
         private sealed class PrivateItem
         {
             internal int Value = 7;
-            private PrivateItem() { }
+            private PrivateItem()
+            {
+            }
         }
 
         private sealed class ThrowingPrivateItem
@@ -34,7 +41,10 @@ namespace YLFramework.Tests
         {
             var runtime = typeof(SafeObjectPool<>).Assembly;
             foreach (var name in new[] { "ClassObjectPool", "IndependentObjectPool`1", "Pool`1", "SimpleObjectPool`1" })
+            {
                 Assert.That(runtime.GetType("YLFramework.Core.Pool." + name), Is.Null, name);
+            }
+
             Assert.That(typeof(SafeObjectPool<SessionItem>).BaseType, Is.EqualTo(typeof(object)));
             Assert.That(typeof(SafeObjectPool<SessionItem>).GetField("_pool", BindingFlags.Instance | BindingFlags.NonPublic)
                 .FieldType, Is.EqualTo(typeof(ObjectPool<SessionItem>)));
@@ -70,37 +80,49 @@ namespace YLFramework.Tests
             try
             {
                 var stateType = typeof(ObjectPool<>).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
-                var resets = (List<Action>)stateType.GetField("SessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                var resets = (List<Action>)stateType.GetField("_sessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
                 // 按真实注册顺序只执行本测试类型的两项会话回调，不重置其他模块。
                 foreach (var reset in new List<Action>(resets))
                 {
                     var type = reset.Method.DeclaringType;
                     if (type == typeof(SingletonProperty<SafeObjectPool<SessionItem>>) || type == typeof(SafeObjectPool<SessionItem>))
+                    {
                         reset();
+                    }
                 }
                 Assert.Throws<ObjectDisposedException>(() => original.Allocate());
                 Assert.That(original.Recycle(item), Is.False);
                 Assert.That(item.Recycles, Is.EqualTo(1));
                 Assert.That(SafeObjectPool<SessionItem>.Instance, Is.Not.SameAs(original));
             }
-            finally { original.Dispose(); SafeObjectPool<SessionItem>.Instance.Dispose(); }
+            finally
+            {
+                original.Dispose();
+                SafeObjectPool<SessionItem>.Instance.Dispose();
+            }
         }
 
-        private enum FsmStateId { Active }
+        private enum FsmStateId
+        {
+            Active
+        }
 
         [TestCase(false)]
         [TestCase(true)]
         public void FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried(bool failExit)
         {
-            var fsm = YLFramework.FSM.FSM<FsmStateId>.Allocate();
-            var pool = SafeObjectPool<YLFramework.FSM.FSM<FsmStateId>>.Instance;
+            var fsm = YLFramework.FSM.Fsm<FsmStateId>.Allocate();
+            var pool = SafeObjectPool<YLFramework.FSM.Fsm<FsmStateId>>.Instance;
             var exits = 0;
             var state = new YLFramework.FSM.CustomState()
                 .OnUpdate(() => Assert.Throws<InvalidOperationException>(fsm.RecycleToCache))
                 .OnExit(() =>
                 {
                     exits++;
-                    if (failExit) throw new InvalidOperationException("exit");
+                    if (failExit)
+                    {
+                        throw new InvalidOperationException("exit");
+                    }
                 });
             try
             {
@@ -122,20 +144,31 @@ namespace YLFramework.Tests
                 Assert.That(fsm.IsRecycled, Is.True);
                 fsm.RecycleToCache();
                 Assert.That(exits, Is.EqualTo(1));
-                var next = YLFramework.FSM.FSM<FsmStateId>.Allocate();
+                var next = YLFramework.FSM.Fsm<FsmStateId>.Allocate();
                 Assert.That(ReferenceEquals(next, fsm), Is.EqualTo(!failExit));
                 next.RecycleToCache();
             }
-            finally { state.DeInit(); pool.Dispose(); }
+            finally
+            {
+                state.DeInit();
+                pool.Dispose();
+            }
         }
 
         public sealed class SafeItem : IOfPool
         {
-            public bool IsRecycled { get; set; }
+            public bool IsRecycled
+            {
+                get; set;
+            }
             internal Action Recycled;
             internal Action Allocated;
             internal int Hooks;
-            public void OnRecycle() { Hooks++; Recycled?.Invoke(); }
+            public void OnRecycle()
+            {
+                Hooks++;
+                Recycled?.Invoke();
+            }
             public void OnAllocate() => Allocated?.Invoke();
         }
 
@@ -179,7 +212,10 @@ namespace YLFramework.Tests
             var fail = false;
             using var pool = new ObjectPool<object>(() => new object(), reset: item =>
             {
-                if (fail) throw new InvalidOperationException();
+                if (fail)
+                {
+                    throw new InvalidOperationException();
+                }
             });
             var value = pool.Allocate();
             Assert.That(pool.Recycle(value), Is.True);
@@ -231,7 +267,11 @@ namespace YLFramework.Tests
         public void RawPrewarmSkipsNullWithoutResetAndRespectsTargetAndCapacity()
         {
             var calls = 0;
-            using var pool = new ObjectPool<object>(() => { calls++; return null; },
+            using var pool = new ObjectPool<object>(() =>
+            {
+                calls++;
+                return null;
+            },
                 reset: item => throw new InvalidOperationException(), maxPoolSize: 2, cacheOrder: PoolCacheOrder.Lifo);
             Assert.That(pool.Prewarm(-1, PoolPrewarmMode.Raw), Is.Zero);
             Assert.That(pool.Prewarm(int.MinValue, PoolPrewarmMode.Raw), Is.Zero);
@@ -248,7 +288,11 @@ namespace YLFramework.Tests
         public void PrewarmUsesFiniteNullFactoryCallsAndFailuresPropagate()
         {
             var calls = 0;
-            using var pool = new ObjectPool<object>(() => { calls++; return null; });
+            using var pool = new ObjectPool<object>(() =>
+            {
+                calls++;
+                return null;
+            });
             Assert.That(pool.Prewarm(3), Is.Zero);
             Assert.That(calls, Is.EqualTo(3));
             pool.SetFactoryMethod(() => throw new InvalidOperationException());
@@ -325,7 +369,11 @@ namespace YLFramework.Tests
         {
             _safe.MaxPoolSize = 1;
             var item = _safe.Allocate();
-            if (full) _safe.Recycle(_safe.Allocate());
+            if (full)
+            {
+                _safe.Recycle(_safe.Allocate());
+            }
+
             item.Recycled = () => throw new InvalidOperationException();
             Assert.Throws<InvalidOperationException>(() => _safe.Recycle(item));
             Assert.That(item.IsRecycled, Is.True);

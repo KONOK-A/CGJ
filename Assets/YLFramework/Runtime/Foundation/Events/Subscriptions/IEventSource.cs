@@ -6,13 +6,17 @@ namespace YLFramework.Events
     public interface IEventSource
     {
         /// <summary>注册观察者，返回本次注册的精确注销身份；null 返回空句柄。</summary>
-        IUnRegister Register(Action callback);
+        IUnregister Register(Action callback);
     }
 
-    internal sealed class EmptyUnRegister : IUnRegister
+    internal sealed class EmptyUnregister : IUnregister
     {
-        internal static readonly EmptyUnRegister Instance = new();
-        private EmptyUnRegister() { }
-        public void UnRegister() { }
+        internal static readonly EmptyUnregister Instance = new();
+        private EmptyUnregister()
+        {
+        }
+        public void Unregister()
+        {
+        }
     }
 }

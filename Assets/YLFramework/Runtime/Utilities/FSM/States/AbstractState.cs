@@ -11,7 +11,7 @@ namespace YLFramework.FSM
     public abstract class AbstractState<TStateId> : IState
     {
         /// <summary>所属状态机；注册后可用，回收后为 null。</summary>
-        protected FSM<TStateId> MFsm;
+        protected Fsm<TStateId> StateMachine;
 
         /// <summary>本状态注册时的状态 ID。</summary>
         protected TStateId StateId;
@@ -29,7 +29,7 @@ namespace YLFramework.FSM
 
             if (args.Length > 0)
             {
-                MFsm = args[0] as FSM<TStateId>;
+                StateMachine = args[0] as Fsm<TStateId>;
             }
 
             if (args.Length > 1)
@@ -46,7 +46,7 @@ namespace YLFramework.FSM
         /// <inheritdoc />
         public virtual void DeInit()
         {
-            MFsm = null;
+            StateMachine = null;
             StateId = default;
             Owner = null;
         }
@@ -119,31 +119,31 @@ namespace YLFramework.FSM
         }
 
         /// <summary>
-        /// 切换到指定状态，等价于 MFsm.ChangeState(stateId)。
+        /// 切换到指定状态，等价于 StateMachine.ChangeState(stateId)。
         /// </summary>
         /// <param name="stateId">目标状态 ID。</param>
         /// <returns>切换是否成功；FSM 未注册、未启动、暂停中、切换中或条件不满足时返回 false。</returns>
         protected bool ChangeState(TStateId stateId)
         {
-            return MFsm != null && MFsm.ChangeState(stateId);
+            return StateMachine != null && StateMachine.ChangeState(stateId);
         }
 
         /// <summary>
         /// 切换到指定状态；reCurrentState 为 true 时允许对当前状态重新执行 Exit/Enter。
         /// </summary>
         /// <param name="stateId">目标状态 ID。</param>
-        /// <param name="reCurrentState">目标与当前相同时是否重新执行 Exit/Enter。</param>
+        /// <param name="reenterCurrentState">目标与当前相同时是否重新执行 Exit/Enter。</param>
         /// <returns>切换是否成功。</returns>
-        protected bool ChangeState(TStateId stateId, bool reCurrentState)
+        protected bool ChangeState(TStateId stateId, bool reenterCurrentState)
         {
-            return MFsm != null && MFsm.ChangeState(stateId, reCurrentState);
+            return StateMachine != null && StateMachine.ChangeState(stateId, reenterCurrentState);
         }
 
         /// <summary>当前状态已持续的秒数（口径与 FSM.SecondsOfCurrentState 一致）；不在状态机中时为 0。</summary>
-        protected float SecondsInState => MFsm != null ? MFsm.SecondsOfCurrentState : 0f;
+        protected float SecondsInState => StateMachine != null ? StateMachine.SecondsOfCurrentState : 0f;
 
         /// <summary>当前状态已经历的 Update 帧数（口径与 FSM.FrameCountOfCurrentState 一致）；不在状态机中时为 0。</summary>
-        protected long FramesInState => MFsm != null ? MFsm.FrameCountOfCurrentState : 0;
+        protected long FramesInState => StateMachine != null ? StateMachine.FrameCountOfCurrentState : 0;
 
         /// <summary>
         /// 以强类型读取宿主；宿主为 null 或不是 TOwner 时返回 null。

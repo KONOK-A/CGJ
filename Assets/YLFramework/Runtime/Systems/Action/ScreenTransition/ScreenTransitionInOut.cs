@@ -13,11 +13,11 @@ namespace YLFramework.Actions
         where TIn : IAction
         where TOut : IAction
     {
-        private Action<TIn> mOnSetIn;
-        private Action<TOut> mOnSetOut;
-        private TIn mIn;
-        private TOut mOut;
-        private Action mOnInFinish;
+        private Action<TIn> _onSetIn;
+        private Action<TOut> _onSetOut;
+        private TIn _in;
+        private TOut _out;
+        private Action _onInFinish;
 
         /// <summary>从池分配组合，并保存传入的入场、出场动作。</summary>
         /// <param name="transitionIn">入场动作，由启动时另建的全局序列执行。</param>
@@ -26,38 +26,38 @@ namespace YLFramework.Actions
         public static ScreenTransitionInOut<TIn, TOut> Allocate(TIn transitionIn, TOut transitionOut)
         {
             var transitionInOut = Allocate();
-            transitionInOut.mIn = transitionIn;
-            transitionInOut.mOut = transitionOut;
+            transitionInOut._in = transitionIn;
+            transitionInOut._out = transitionOut;
             return transitionInOut;
         }
 
         /// <summary>设置入场完成、出场开始前调用的回调，并返回当前组合。</summary>
         public ScreenTransitionInOut<TIn, TOut> OnInFinish(Action onInFinish)
         {
-            mOnInFinish = onInFinish;
+            _onInFinish = onInFinish;
             return this;
         }
 
         /// <summary>设置启动时配置入场动作的回调，并返回当前组合。</summary>
         public ScreenTransitionInOut<TIn, TOut> In(Action<TIn> onSetIn)
         {
-            mOnSetIn = onSetIn;
+            _onSetIn = onSetIn;
             return this;
         }
 
         /// <summary>设置启动时配置出场动作的回调，并返回当前组合。</summary>
         public ScreenTransitionInOut<TIn, TOut> Out(Action<TOut> onSetOut)
         {
-            mOnSetOut = onSetOut;
+            _onSetOut = onSetOut;
             return this;
         }
 
         /// <summary>依次应用两个配置回调，并在全局宿主上启动独立子序列。</summary>
         public override void OnStart()
         {
-            mOnSetIn?.Invoke(mIn);
-            mOnSetOut?.Invoke(mOut);
-            ActionKit.Sequence().Append(mIn).Callback(() => mOnInFinish?.Invoke()).Append(mOut).StartGlobal();
+            _onSetIn?.Invoke(_in);
+            _onSetOut?.Invoke(_out);
+            ActionKit.Sequence().Append(_in).Callback(() => _onInFinish?.Invoke()).Append(_out).StartGlobal();
         }
     }
 }

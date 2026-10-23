@@ -8,24 +8,30 @@ namespace YLFramework.Core.Editor.Tests
 {
     public class CoreModuleGenerationTests
     {
-        private string[] absentParents;
+        private string[] _absentParents;
 
         [SetUp]
         public void CaptureUnownedOutputParents()
         {
-            absentParents = new[] { CreateModuleCommand.OutputRoot, "Assets/YLFramework/Examples/Core", "Assets/YLFramework/Examples" }
+            _absentParents = new[] { CreateModuleCommand.OutputRoot, "Assets/YLFramework/Examples/Core", "Assets/YLFramework/Examples" }
                 .Where(path => !Directory.Exists(path) && !File.Exists(path) && !File.Exists(path + ".meta")).ToArray();
         }
 
         [TearDown]
         public void RemoveOnlyNewEmptyOutputParents()
         {
-            foreach (string path in absentParents)
+            foreach (string path in _absentParents)
             {
                 if (!Directory.Exists(path) || Directory.GetFileSystemEntries(path).Length != 0)
+                {
                     continue;
+                }
+
                 Directory.Delete(path);
-                if (File.Exists(path + ".meta")) File.Delete(path + ".meta");
+                if (File.Exists(path + ".meta"))
+                {
+                    File.Delete(path + ".meta");
+                }
             }
         }
 
@@ -47,12 +53,12 @@ namespace YLFramework.Core.Editor.Tests
         {
             string name = "YLCoreEditorTest_" + Guid.NewGuid().ToString("N");
             string directory = CreateModuleCommand.OutputRoot + "/" + name;
-            const string project = "quote\" slash\\\r\n\t\0{BaseModule}{ModuleName}{ProjectName}{DefaultStartUpScene}";
-            const string scene = "scene\"; injected(); //\\\n{ModuleName}{BaseModule}{DefaultStartUpScene}{ProjectName}";
+            const string Project = "quote\" slash\\\r\n\t\0{BaseModule}{ModuleName}{ProjectName}{DefaultStartUpScene}";
+            const string Scene = "scene\"; injected(); //\\\n{ModuleName}{BaseModule}{DefaultStartUpScene}{ProjectName}";
             try
             {
                 Assert.That(CreateModuleCommand.OutputRoot, Is.EqualTo("Assets/YLFramework/Examples/Core/Modules"));
-                CreateModuleCommand.CreateModule(name, project, baseModule, scene);
+                CreateModuleCommand.CreateModule(name, Project, baseModule, Scene);
                 Assert.That(Directory.GetFiles(directory).Select(Path.GetFileName), Is.EquivalentTo(new[]
                 {
                     name + ".cs", name + ".asmdef"
@@ -64,7 +70,7 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(source, Does.Contain("global::UnityEngine.Debug.Log"));
                 Assert.That(source, Does.Contain("ProjectName => \"quote\\\" slash\\\\\\r\\n\\t\\u0000{BaseModule}{ModuleName}{ProjectName}{DefaultStartUpScene}\";"));
                 Assert.That(source, Does.Contain("DefaultStartUpScene => \"scene\\\"; injected(); //\\\\\\n{ModuleName}{BaseModule}{DefaultStartUpScene}{ProjectName}\";"));
-                Assert.That(source, Does.Contain("BaseModule => " + (baseModule ? "true" : "false") + ";"));
+                Assert.That(source, Does.Contain("IsBaseModule => " + (baseModule ? "true" : "false") + ";"));
                 Assert.That(source, Does.Not.Contain("using XFGameFramework"));
                 Assert.That(source, Does.Not.Contain("namespace Project.Game"));
                 Assert.That(source, Does.Not.Contain("OnExit"));
@@ -120,7 +126,7 @@ namespace YLFramework.Core.Editor.Tests
         [TestCase("Module\n")]
         [TestCase("OnStart")]
         [TestCase("ProjectName")]
-        [TestCase("BaseModule")]
+        [TestCase("IsBaseModule")]
         [TestCase("DefaultStartUpScene")]
         public void IllegalNamesPathsAndGeneratedMemberNamesAreRejectedWithoutWriting(string name)
         {
@@ -223,11 +229,19 @@ namespace YLFramework.Core.Editor.Tests
         {
             // These synchronous tests never refresh/import, so generated scripts cannot compile before cleanup.
             if (Directory.Exists(directory))
+            {
                 Directory.Delete(directory, true);
+            }
+
             if (File.Exists(directory))
+            {
                 File.Delete(directory);
+            }
+
             if (File.Exists(directory + ".meta"))
+            {
                 File.Delete(directory + ".meta");
+            }
         }
     }
 }

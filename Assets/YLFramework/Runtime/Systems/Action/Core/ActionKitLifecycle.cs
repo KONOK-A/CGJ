@@ -7,17 +7,23 @@ namespace YLFramework.Actions
     public partial class ActionKit
     {
         /// <summary>当前模块实例，由 Initialize 创建、Shutdown 释放。</summary>
-        protected static ActionKit mArchitecture;
+        protected static ActionKit Architecture;
         /// <summary>每个新模块实例完成 Init 后执行的补充配置回调；回调中不能调用 Shutdown。</summary>
         public static Action<ActionKit> OnRegisterPatch = _ => { };
         /// <summary>本轮模块初始化及补充配置是否已成功完成。</summary>
-        public static bool Initialized { get; private set; }
+        public static bool IsInitialized
+        {
+            get; private set;
+        }
         // 关停标记：置位后拒绝新的初始化、启动和获取宿主，已推进中的动作也会停止触发后续回调。
-        internal static bool IsShuttingDown { get; private set; }
+        internal static bool IsShuttingDown
+        {
+            get; private set;
+        }
         // 在业务回调栈内请求的关停：等待最外层执行退出后再做实际释放。
-        private static bool mPendingShutdown;
+        private static bool _isShutdownPending;
         // Initialize 执行期间为 true，用于阻止在 OnRegisterPatch 内调用 Shutdown。
-        private static bool mInitializing;
+        private static bool _isInitializing;
 
         // 关闭域重载时静态状态会跨 Play 会话保留：启动注册阶段先 Shutdown，清理上一轮的宿主、队列与模块引用。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -30,7 +36,7 @@ namespace YLFramework.Actions
             get
             {
                 Initialize();
-                return mArchitecture;
+                return Architecture;
             }
         }
 
@@ -39,27 +45,38 @@ namespace YLFramework.Actions
         /// <exception cref="System.InvalidOperationException">模块正在关停时不能重新初始化。</exception>
         public static void Initialize()
         {
-            if (IsShuttingDown) throw new InvalidOperationException("ActionKit is shutting down.");
-            if (mArchitecture != null) return;
-            mArchitecture = new ActionKit();
-            mInitializing = true;
+            if (IsShuttingDown)
+            {
+                throw new InvalidOperationException("ActionKit is shutting down.");
+            }
+
+            if (Architecture != null)
+            {
+                return;
+            }
+
+            Architecture = new ActionKit();
+            _isInitializing = true;
             try
             {
-                mArchitecture.Init();
-                OnRegisterPatch?.Invoke(mArchitecture);
-                Initialized = true;
+                Architecture.Init();
+                OnRegisterPatch?.Invoke(Architecture);
+                IsInitialized = true;
                 // 不创建宿主；连接补丁期间已取得的宿主，失败时由桥接回滚本轮 token。
-                if (ActionGlobalHost.TryGetInstance(out var host)) host.RefreshUpdateBridge();
+                if (ActionGlobalHost.TryGetInstance(out var host))
+                {
+                    host.RefreshUpdateBridge();
+                }
             }
             catch
             {
-                mArchitecture = null;
-                Initialized = false;
+                Architecture = null;
+                IsInitialized = false;
                 throw;
             }
             finally
             {
-                mInitializing = false;
+                _isInitializing = false;
             }
         }
 
@@ -79,7 +96,10 @@ namespace YLFramework.Actions
         /// <summary>仅当当前对象是模块实例时请求 Shutdown。</summary>
         public void Deinit()
         {
-            if (ReferenceEquals(mArchitecture, this)) Shutdown();
+            if (ReferenceEquals(Architecture, this))
+            {
+                Shutdown();
+            }
         }
 
         /// <summary>停止模块动作，解除模块订阅并释放自有宿主和资源，之后允许重新初始化。</summary>
@@ -88,14 +108,26 @@ namespace YLFramework.Actions
         /// <exception cref="System.AggregateException">清理步骤失败时会聚合抛出；从回调栈内请求的清理延后执行。</exception>
         public static void Shutdown()
         {
-            if (IsShuttingDown) return;
-            if (mInitializing) throw new InvalidOperationException("Cannot shut down ActionKit from its initialization patch.");
+            if (IsShuttingDown)
+            {
+                return;
+            }
+
+            if (_isInitializing)
+            {
+                throw new InvalidOperationException("Cannot shut down ActionKit from its initialization patch.");
+            }
+
             IsShuttingDown = true;
             if (MonoUpdateActionExecutor.ExecutionScopes > 0)
             {
                 // 不在业务回调栈内回收宿主，避免当前栈访问刚复用的动作或控制器。
-                mPendingShutdown = true;
-                foreach (var executor in UnityEngine.Object.FindObjectsOfType<MonoUpdateActionExecutor>(true)) executor.StopAll();
+                _isShutdownPending = true;
+                foreach (var executor in UnityEngine.Object.FindObjectsOfType<MonoUpdateActionExecutor>(true))
+                {
+                    executor.StopAll();
+                }
+
                 return;
             }
             FinishShutdown();
@@ -103,8 +135,12 @@ namespace YLFramework.Actions
 
         internal static void CompletePendingShutdown()
         {
-            if (!mPendingShutdown) return;
-            mPendingShutdown = false;
+            if (!_isShutdownPending)
+            {
+                return;
+            }
+
+            _isShutdownPending = false;
             FinishShutdown();
         }
 
@@ -114,10 +150,17 @@ namespace YLFramework.Actions
             List<Exception> errors = null;
             void Cleanup(Action operation)
             {
-                try { operation(); }
+                try
+                {
+                    operation();
+                }
                 catch (Exception exception)
                 {
-                    if (errors == null) errors = new List<Exception>();
+                    if (errors == null)
+                    {
+                        errors = new List<Exception>();
+                    }
+
                     errors.Add(exception);
                 }
             }
@@ -125,7 +168,11 @@ namespace YLFramework.Actions
             try
             {
                 // 顺序：先通知模块清理，再停止并销毁执行器（取消所有在跑任务），随后释放各宿主与延迟回收队列。
-                if (mArchitecture != null) Cleanup(mArchitecture.OnDeinit);
+                if (Architecture != null)
+                {
+                    Cleanup(Architecture.OnDeinit);
+                }
+
                 foreach (var executor in UnityEngine.Object.FindObjectsOfType<MonoUpdateActionExecutor>(true))
                 {
                     Cleanup(executor.StopAll);
@@ -140,19 +187,32 @@ namespace YLFramework.Actions
             }
             finally
             {
-                mArchitecture = null;
-                Initialized = false;
+                Architecture = null;
+                IsInitialized = false;
                 IsShuttingDown = false;
-                mPendingShutdown = false;
+                _isShutdownPending = false;
             }
-            if (errors != null) throw new AggregateException("ActionKit shutdown cleanup failed.", errors);
+            if (errors != null)
+            {
+                throw new AggregateException("ActionKit shutdown cleanup failed.", errors);
+            }
         }
 
         internal static void DestroyModuleObject(UnityEngine.Object target)
         {
-            if (!target) return;
-            if (Application.isPlaying) UnityEngine.Object.Destroy(target);
-            else UnityEngine.Object.DestroyImmediate(target);
+            if (!target)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(target);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
         }
     }
 }

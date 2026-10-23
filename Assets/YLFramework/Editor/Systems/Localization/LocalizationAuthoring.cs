@@ -13,16 +13,27 @@ namespace YLFramework.Editor.Localization
         public static string GetLanguageFolder(MultiLanguageConfigs root)
         {
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("Save the YL localization root asset before authoring languages.");
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("Save the YL localization root asset before authoring languages.");
+            }
+
             return "Assets/YLFrameworkData/Localization/" + guid;
         }
 
         public static LanguageConfig CreateLanguage(MultiLanguageConfigs root, SystemLanguage language)
         {
-            if (!root) throw new ArgumentNullException(nameof(root));
+            if (!root)
+            {
+                throw new ArgumentNullException(nameof(root));
+            }
+
             RequireValid(root);
             if (!Enum.IsDefined(typeof(SystemLanguage), language) || language == SystemLanguage.Unknown || root.GetLanguageConfigData(language))
+            {
                 throw new InvalidOperationException("Unknown or duplicate language: " + language);
+            }
+
             var folder = GetLanguageFolder(root);
             EnsureFolder(folder);
             var asset = ScriptableObject.CreateInstance<LanguageConfig>();
@@ -31,8 +42,16 @@ namespace YLFramework.Editor.Localization
             // 新语言沿用现有所有ID/类型，不拷贝另一语言的内容冒充翻译。
             var ids = new HashSet<int>();
             foreach (var source in root.Languages)
+            {
                 foreach (var entry in source.languagesInfo)
-                    if (ids.Add(entry.id)) asset.languagesInfo.Add(new LanguageInfo { id = entry.id, type = entry.type, notes = entry.notes });
+                {
+                    if (ids.Add(entry.id))
+                    {
+                        asset.languagesInfo.Add(new LanguageInfo { id = entry.id, type = entry.type, notes = entry.notes });
+                    }
+                }
+            }
+
             var path = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + language + ".asset");
             AssetDatabase.CreateAsset(asset, path);
             Undo.RegisterCreatedObjectUndo(asset, "Create YL language");
@@ -45,9 +64,19 @@ namespace YLFramework.Editor.Localization
         public static void AddEntry(MultiLanguageConfigs root, int id, MultiLanguageType type, string notes = null)
         {
             RequireValid(root);
-            if (root.Languages.Count == 0) throw new InvalidOperationException("Create a language first.");
+            if (root.Languages.Count == 0)
+            {
+                throw new InvalidOperationException("Create a language first.");
+            }
+
             foreach (var language in root.Languages)
-                if (language.GetLanguageInfo(id) != null) throw new InvalidOperationException($"Localization '{root.name}': ID {id} already exists in {language.language}.");
+            {
+                if (language.GetLanguageInfo(id) != null)
+                {
+                    throw new InvalidOperationException($"Localization '{root.name}': ID {id} already exists in {language.language}.");
+                }
+            }
+
             foreach (var language in root.Languages)
             {
                 Undo.RecordObject(language, "Add YL localization entry");
@@ -63,14 +92,26 @@ namespace YLFramework.Editor.Localization
             var copies = new Dictionary<LanguageConfig, LanguageInfo>();
             foreach (var language in root.Languages)
             {
-                if (language.GetLanguageInfo(newId) != null) throw new InvalidOperationException("Duplicate destination ID: " + newId);
+                if (language.GetLanguageInfo(newId) != null)
+                {
+                    throw new InvalidOperationException("Duplicate destination ID: " + newId);
+                }
+
                 var source = language.GetLanguageInfo(sourceId);
-                if (source == null) continue;
+                if (source == null)
+                {
+                    continue;
+                }
+
                 var copy = JsonUtility.FromJson<LanguageInfo>(JsonUtility.ToJson(source));
                 copy.id = newId;
                 copies.Add(language, copy);
             }
-            if (copies.Count == 0) throw new InvalidOperationException("Missing source ID: " + sourceId);
+            if (copies.Count == 0)
+            {
+                throw new InvalidOperationException("Missing source ID: " + sourceId);
+            }
+
             foreach (var pair in copies)
             {
                 Undo.RecordObject(pair.Key, "Duplicate YL localization entry");
@@ -85,7 +126,11 @@ namespace YLFramework.Editor.Localization
             RequireValid(root);
             foreach (var language in root.Languages)
             {
-                if (language.GetLanguageInfo(id) == null) continue;
+                if (language.GetLanguageInfo(id) == null)
+                {
+                    continue;
+                }
+
                 Undo.RecordObject(language, "Remove YL localization entry");
                 language.languagesInfo.RemoveAll(entry => entry.id == id);
                 language.ClearCache();
@@ -95,7 +140,11 @@ namespace YLFramework.Editor.Localization
 
         public static void RemoveLanguageReference(MultiLanguageConfigs root, LanguageConfig language)
         {
-            if (!root || !root.Languages.Contains(language)) return;
+            if (!root || !root.Languages.Contains(language))
+            {
+                return;
+            }
+
             Undo.RecordObject(root, "Remove YL language reference");
             root.Languages.Remove(language);
             root.ClearCache();
@@ -108,8 +157,15 @@ namespace YLFramework.Editor.Localization
         private static void EnsureFolder(string path)
         {
             var parent = Path.GetDirectoryName(path).Replace('\\', '/');
-            if (!AssetDatabase.IsValidFolder(parent)) EnsureFolder(parent);
-            if (!AssetDatabase.IsValidFolder(path)) AssetDatabase.CreateFolder(parent, Path.GetFileName(path));
+            if (!AssetDatabase.IsValidFolder(parent))
+            {
+                EnsureFolder(parent);
+            }
+
+            if (!AssetDatabase.IsValidFolder(path))
+            {
+                AssetDatabase.CreateFolder(parent, Path.GetFileName(path));
+            }
         }
     }
 }

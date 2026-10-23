@@ -5,10 +5,16 @@ using YLFramework.Foundation;
 
 namespace YLFramework.Tests
 {
-    public enum DictionaryEditorKey { First, Second }
+    public enum DictionaryEditorKey
+    {
+        First,
+        Second
+    }
 
     [Serializable]
-    public class EditorStringIntDictionary : SerializedDictionary<string, int> { }
+    public class EditorStringIntDictionary : SerializedDictionary<string, int>
+    {
+    }
 
     public class SerializedDictionaryEditorComponent : MonoBehaviour
     {

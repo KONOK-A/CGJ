@@ -1,14 +1,13 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
 using YLFramework.Excel;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.MissionSystem
 {
@@ -17,13 +16,13 @@ namespace YLFramework.MissionSystem
     public class MissionConfigInspector : UnityEditor.Editor
     {
 
-        private List<SerializedProperty> serializedProperties = null;
+        private List<SerializedProperty> _serializedProperties = null;
 
         //private SerializedProperty m_Script = null;
 
         private void OnEnable()
         {
-            serializedProperties = serializedObject.GetAllSerializedProperty();
+            _serializedProperties = serializedObject.GetAllSerializedProperty();
             //m_Script = serializedObject.FindProperty("m_Script");
         }
 
@@ -33,18 +32,25 @@ namespace YLFramework.MissionSystem
             serializedObject.Update();
 
 
-            foreach (var item in serializedProperties)
+            foreach (var item in _serializedProperties)
             {
                 //if (item.displayName == "Script") continue;
-                if (item.name == "start_id") continue;
-                if (item.name == "type_script_guid") continue;
+                if (item.name == "startId")
+                {
+                    continue;
+                }
 
-                EditorGUI.BeginDisabledGroup(item.name != "display_name");
+                if (item.name == "typeScriptGuid")
+                {
+                    continue;
+                }
+
+                EditorGUI.BeginDisabledGroup(item.name != "displayName");
                 EditorGUILayout.PropertyField(item);
                 EditorGUI.EndDisabledGroup();
             }
 
-            OnGUIDataType();
+            OnGuiDataType();
 
             serializedObject.ApplyModifiedProperties();
 
@@ -59,7 +65,10 @@ namespace YLFramework.MissionSystem
 
         public static void OpenMissionsConfig(MissionsConfig missionsConfig)
         {
-            if (missionsConfig == null) return;
+            if (missionsConfig == null)
+            {
+                return;
+            }
 
             ConfigsWindow window = EditorWindow.GetWindow<ConfigsWindow>();
             window.Show();
@@ -70,40 +79,47 @@ namespace YLFramework.MissionSystem
 
         #region 配置类型
 
-        private GUIContent classTypeContent;
+        private GUIContent _classTypeContent;
 
-        private List<MonoScript> configDatas;
+        private List<MonoScript> _configDatas;
 
-        private GUIStyle dropdown_style;
+        private GUIStyle _dropdownStyle;
 
-        private GUIStyle labelStyle;
+        private GUIStyle _labelStyle;
 
         // 绘制数据类型
-        private void OnGUIDataType()
+        private void OnGuiDataType()
         {
             MissionsConfig skillsConfig = target as MissionsConfig;
 
-            if (skillsConfig == null) return;
+            if (skillsConfig == null)
+            {
+                return;
+            }
 
             GUILayout.Space(10);
 
             Type type = null;
 
-            if (!string.IsNullOrEmpty(skillsConfig.type_script_guid))
+            if (!string.IsNullOrEmpty(skillsConfig.typeScriptGuid))
             {
-                string asset_path = AssetDatabase.GUIDToAssetPath(skillsConfig.type_script_guid);
-                MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(asset_path);
+                string assetPath = AssetDatabase.GUIDToAssetPath(skillsConfig.typeScriptGuid);
+                MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(assetPath);
                 Type t = script ? script.GetClass() : null;
                 if (t != null && (t.IsSubclassOf(typeof(MissionConfigData)) || t == typeof(MissionConfigData)))
+                {
                     type = t;
+                }
             }
 
             string message = type == null ? "空" : GetDisplayName(type);
 
-            if (classTypeContent == null)
-                classTypeContent = new GUIContent(EditorGUIUtility.IconContent("d_cs Script Icon"));
+            if (_classTypeContent == null)
+            {
+                _classTypeContent = new GUIContent(EditorGUIUtility.IconContent("d_cs Script Icon"));
+            }
 
-            classTypeContent.text = message;
+            _classTypeContent.text = message;
 
             GUILayout.BeginHorizontal();
 
@@ -111,13 +127,13 @@ namespace YLFramework.MissionSystem
 
             GUILayout.Space(50);
 
-            if (dropdown_style == null)
+            if (_dropdownStyle == null)
             {
-                dropdown_style = new GUIStyle("DropDown");
-                dropdown_style.richText = true;
+                _dropdownStyle = new GUIStyle("DropDown");
+                _dropdownStyle.richText = true;
             }
 
-            if (EditorGUILayout.DropdownButton(classTypeContent, FocusType.Passive, dropdown_style, GUILayout.MinWidth(0)))
+            if (EditorGUILayout.DropdownButton(_classTypeContent, FocusType.Passive, _dropdownStyle, GUILayout.MinWidth(0)))
             {
                 List<MonoScript> scripts = GetAllConfigDatas();
 
@@ -125,7 +141,7 @@ namespace YLFramework.MissionSystem
 
                 generic.AddItem(new GUIContent("空"), false, () =>
                 {
-                    skillsConfig.type_script_guid = string.Empty;
+                    skillsConfig.typeScriptGuid = string.Empty;
                     EditorUtility.SetDirty(skillsConfig);
                     AssetDatabase.SaveAssets();
                 });
@@ -137,15 +153,17 @@ namespace YLFramework.MissionSystem
                     GUIContent content = new GUIContent(EditorGUIUtility.IconContent("d_cs Script Icon"));
                     content.text = item.GetClass().Name;
                     if (!string.IsNullOrEmpty(item.GetClass().Namespace))
+                    {
                         content.text = string.Format("{0}({1})", content.text, item.GetClass().Namespace);
+                    }
 
                     string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
 
-                    bool isOn = skillsConfig.type_script_guid == guid;
+                    bool isOn = skillsConfig.typeScriptGuid == guid;
 
                     generic.AddItem(content, isOn, () =>
                     {
-                        skillsConfig.type_script_guid = guid;
+                        skillsConfig.typeScriptGuid = guid;
                         EditorUtility.SetDirty(skillsConfig);
                         AssetDatabase.SaveAssets();
                     });
@@ -158,14 +176,14 @@ namespace YLFramework.MissionSystem
             GUILayout.EndHorizontal();
 
 
-            if (labelStyle == null)
+            if (_labelStyle == null)
             {
-                labelStyle = new GUIStyle("WordWrappedLabel");
-                labelStyle.normal.textColor = Color.grey;
-                labelStyle.fontSize = 11;
+                _labelStyle = new GUIStyle("WordWrappedLabel");
+                _labelStyle.normal.textColor = Color.grey;
+                _labelStyle.fontSize = 11;
             }
 
-            GUILayout.Label("说明:如果数据类型为空,则表示该配表中可以创建任意类型的数据。如果不为空,该配表则仅能创建您指定的类型及其子类型的数据!", labelStyle);
+            GUILayout.Label("说明:如果数据类型为空,则表示该配表中可以创建任意类型的数据。如果不为空,该配表则仅能创建您指定的类型及其子类型的数据!", _labelStyle);
 
 
             GUILayout.BeginHorizontal();
@@ -177,12 +195,12 @@ namespace YLFramework.MissionSystem
 
             if (GUILayout.Button("编辑", GUILayout.Width(50)))
             {
-                OpenAsset(skillsConfig.type_script_guid);
+                OpenAsset(skillsConfig.typeScriptGuid);
             }
 
             if (GUILayout.Button("选中", GUILayout.Width(50)))
             {
-                SelectAsset(skillsConfig.type_script_guid);
+                SelectAsset(skillsConfig.typeScriptGuid);
             }
 
             EditorGUI.EndDisabledGroup();
@@ -197,17 +215,21 @@ namespace YLFramework.MissionSystem
         {
 
             if (string.IsNullOrEmpty(type.Namespace))
+            {
                 return type.Name;
+            }
 
             return string.Format("{0}<color=grey>({1})</color>", type.Name, type.Namespace);
         }
 
         private List<MonoScript> GetAllConfigDatas()
         {
-            if (configDatas == null)
-                configDatas = new List<MonoScript>();
+            if (_configDatas == null)
+            {
+                _configDatas = new List<MonoScript>();
+            }
 
-            configDatas.Clear();
+            _configDatas.Clear();
 
             string[] scripts = AssetDatabase.FindAssets("t:Script");
 
@@ -216,36 +238,57 @@ namespace YLFramework.MissionSystem
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
 
-                if (script == null) continue;
+                if (script == null)
+                {
+                    continue;
+                }
 
                 Type type = script.GetClass();
 
-                if (type == null) continue;
+                if (type == null)
+                {
+                    continue;
+                }
 
                 if (type.IsSubclassOf(typeof(MissionConfigData)))
                 {
-                    configDatas.Add(script);
+                    _configDatas.Add(script);
                 }
             }
 
-            return configDatas;
+            return _configDatas;
         }
 
         public static void OpenAsset(string guid)
         {
-            if (string.IsNullOrEmpty(guid)) return;
-            string asset_path = AssetDatabase.GUIDToAssetPath(guid);
-            if (string.IsNullOrEmpty(asset_path)) return;
-            AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath(asset_path, typeof(UnityEngine.Object)));
+            if (string.IsNullOrEmpty(guid))
+            {
+                return;
+            }
+
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                return;
+            }
+
+            AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
         }
 
         public static void SelectAsset(string guid)
         {
-            if (string.IsNullOrEmpty(guid)) return;
-            string asset_path = AssetDatabase.GUIDToAssetPath(guid);
-            if (string.IsNullOrEmpty(asset_path)) return;
+            if (string.IsNullOrEmpty(guid))
+            {
+                return;
+            }
 
-            UnityEngine.Object obj = AssetDatabase.LoadAssetAtPath(asset_path, typeof(UnityEngine.Object));
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                return;
+            }
+
+            UnityEngine.Object obj = AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object));
             Selection.activeObject = obj;
             EditorGUIUtility.PingObject(obj);
         }

@@ -45,7 +45,7 @@ namespace YLFramework.Tests
         public void DefaultExportDoesNotRedistributeEditorEnhancers()
         {
             var roots = (string[])typeof(YLFramework.Editor.ExportUnityPackage)
-                .GetField("ExportRoots", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+                .GetField("_exportRoots", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
             var commercial = FrameworkRoot + "/Plugins/Editor Enhancers Bundle";
             Assert.That(roots.Any(root => IsAtOrBelow(commercial, root)), Is.False,
                 "The independent delivery must not recursively redistribute commercial Editor tools without a redistribution grant.");
@@ -63,7 +63,7 @@ namespace YLFramework.Tests
         [Test]
         public void DefaultExportContainsTheIntegratedSourcesAndPreservesTheScreenPrefab()
         {
-            var rootsField = typeof(YLFramework.Editor.ExportUnityPackage).GetField("ExportRoots",
+            var rootsField = typeof(YLFramework.Editor.ExportUnityPackage).GetField("_exportRoots",
                 BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(rootsField, Is.Not.Null);
             var configuredRoots = rootsField.GetValue(null) as string[];
@@ -77,9 +77,14 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime",
                 FrameworkRoot + "/Samples",
                 FrameworkRoot + "/Documentation",
-                FrameworkRoot + "/LICENSE.md"
+                FrameworkRoot + "/LICENSE.md",
+                FrameworkRoot + "/CodingStyle.md",
+                FrameworkRoot + "/AGENTS.md"
             }));
-            foreach (var root in roots) Assert.That(AssetDatabase.LoadMainAssetAtPath(root), Is.Not.Null, root);
+            foreach (var root in roots)
+            {
+                Assert.That(AssetDatabase.LoadMainAssetAtPath(root), Is.Not.Null, root);
+            }
 
             var projectRoot = Directory.GetParent(Application.dataPath).FullName;
             var sentinels = new[]
@@ -132,6 +137,8 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Systems/Audio/ResourceAudioClipProvider.cs",
                 FrameworkRoot + "/Editor/Systems/Audio/AudioClipLibraryMigration.cs",
                 FrameworkRoot + "/Documentation/Modules/Attributes.md",
+                FrameworkRoot + "/CodingStyle.md",
+                FrameworkRoot + "/AGENTS.md",
                 AnalyzerPath,
                 FrameworkRoot + "/Runtime/csc.rsp",
                 FrameworkRoot + "/Documentation/Modules/Action.md",
@@ -165,7 +172,7 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Foundation/Update/UpdateManager.cs",
                 FrameworkRoot + "/Runtime/Foundation/Timing/Timer.cs",
                 FrameworkRoot + "/Runtime/Foundation/Serialization/SerializedDictionary.cs",
-                FrameworkRoot + "/Runtime/Foundation/Attributes/CustomPropertyGUI.cs",
+                FrameworkRoot + "/Runtime/Foundation/Attributes/CustomPropertyGui.cs",
                 FrameworkRoot + "/Runtime/Foundation/Utilities/AssemblyTool.cs",
                 FrameworkRoot + "/Runtime/Foundation/Internal/AssemblyInfo.cs",
                 FrameworkRoot + "/Runtime/YLFramework.Runtime.asmdef",
@@ -186,7 +193,7 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Utilities/Extensions/Math/Vector3Extensions.cs",
                 FrameworkRoot + "/Runtime/Utilities/Extensions/System/TypeExtensions.cs",
                 FrameworkRoot + "/Runtime/Utilities/Extensions/Utilities/RandomExtensions.cs",
-                FrameworkRoot + "/Runtime/Utilities/FSM/Core/FSM.cs",
+                FrameworkRoot + "/Runtime/Utilities/FSM/Core/Fsm.cs",
                 FrameworkRoot + "/Runtime/Utilities/Grid/NormalGrid.cs",
                 FrameworkRoot + "/Runtime/Utilities/Grid/DynamicGrid.cs",
                 FrameworkRoot + "/Runtime/Utilities/Json/JSONObject.cs",
@@ -269,7 +276,11 @@ namespace YLFramework.Tests
                     TarEntry entry;
                     while ((entry = tar.GetNextEntry()) != null)
                     {
-                        if (entry.IsDirectory) continue;
+                        if (entry.IsDirectory)
+                        {
+                            continue;
+                        }
+
                         var name = entry.Name.StartsWith("./", StringComparison.Ordinal) ? entry.Name.Substring(2) : entry.Name;
                         var parts = name.Split('/');
                         Assert.That(parts.Length, Is.EqualTo(2), "Unexpected package member: " + entry.Name);
@@ -286,13 +297,26 @@ namespace YLFramework.Tests
                         Assert.That(record.MemberSizes.ContainsKey(member), Is.False, "Duplicate GUID member: " + entry.Name);
                         record.MemberSizes.Add(member, entry.Size);
                         // Select by GUID before pathname arrives; archive order is not a contract.
-                        if (member == "pathname") record.Pathname = Encoding.UTF8.GetString(ReadEntry(tar, entry)).TrimEnd('\r', '\n', '\0');
-                        else if (member == "asset.meta") record.Meta = ReadEntry(tar, entry);
+                        if (member == "pathname")
+                        {
+                            record.Pathname = Encoding.UTF8.GetString(ReadEntry(tar, entry)).TrimEnd('\r', '\n', '\0');
+                        }
+                        else if (member == "asset.meta")
+                        {
+                            record.Meta = ReadEntry(tar, entry);
+                        }
                         else if (member == "asset")
                         {
                             var payload = ReadEntry(tar, entry);
-                            using (var sha = new SHA256Managed()) record.PayloadHash = sha.ComputeHash(payload);
-                            if (payloadGuids.Contains(guid)) record.Payload = payload;
+                            using (var sha = new SHA256Managed())
+                            {
+                                record.PayloadHash = sha.ComputeHash(payload);
+                            }
+
+                            if (payloadGuids.Contains(guid))
+                            {
+                                record.Payload = payload;
+                            }
                         }
                     }
                 }
@@ -319,10 +343,16 @@ namespace YLFramework.Tests
                     Assert.That(Directory.Exists(Path.Combine(projectRoot, record.Pathname)), Is.EqualTo(isFolder), record.Pathname);
                     // Existing folder metadata can predate the folderAsset marker; do not rewrite it during export.
                     if (Regex.IsMatch(meta, @"^folderAsset:[ \t]*yes[ \t]*\r?$", RegexOptions.Multiline))
+                    {
                         Assert.That(isFolder, Is.True, record.Pathname);
+                    }
+
                     if (isFolder)
                     {
-                        if (record.MemberSizes.TryGetValue("asset", out var size)) Assert.That(size, Is.Zero, "Unexpected folder payload: " + record.Pathname);
+                        if (record.MemberSizes.TryGetValue("asset", out var size))
+                        {
+                            Assert.That(size, Is.Zero, "Unexpected folder payload: " + record.Pathname);
+                        }
                     }
                     else
                     {
@@ -330,7 +360,9 @@ namespace YLFramework.Tests
                         var source = File.ReadAllBytes(Path.Combine(projectRoot, record.Pathname));
                         Assert.That(record.MemberSizes["asset"], Is.EqualTo(source.LongLength), record.Pathname);
                         using (var sha = new SHA256Managed())
+                        {
                             Assert.That(record.PayloadHash, Is.EqualTo(sha.ComputeHash(source)), record.Pathname);
+                        }
                     }
                     Assert.That(excludedRoots.Any(root => IsAtOrBelow(record.Pathname, root)), Is.False, "Excluded export path: " + record.Pathname);
                     Assert.That(Path.GetFileName(record.Pathname), Is.Not.EqualTo("DOTween.dll").IgnoreCase, "External DOTween must not be exported: " + record.Pathname);
@@ -339,7 +371,10 @@ namespace YLFramework.Tests
                         Is.True, "Unexpected path outside export roots: " + record.Pathname);
                 }
 
-                foreach (var path in requiredPaths) Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing recursive asset: " + path);
+                foreach (var path in requiredPaths)
+                {
+                    Assert.That(recordsByPath.ContainsKey(path), Is.True, "Missing recursive asset: " + path);
+                }
                 // 批准的插件根全递归，精确核验二进制与来源。
                 Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle")),
                     Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle"))));
@@ -381,7 +416,11 @@ namespace YLFramework.Tests
                     "d33818ff6e2077b489a7329d47d3e566", "f9840bdb773148b4d9eddbd2b90046f1",
                     "a6a803ed92acefd45859058b9d3f9948", "ff117a6c8f0101e408f313e4f6c48634",
                     "151b6b54d6304454880ee84ff559511b", "e4d725362ffe3074e9be3b81105a75bc"
-                }) Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired UI identity must not be distributed: " + retiredGuid);
+                })
+                {
+                    Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired UI identity must not be distributed: " + retiredGuid);
+                }
+
                 foreach (var retiredGuid in new[] { "6b5d25785704e1d488a8656928450940", "0b536a55a19ee624189b83d3c308893e", "3b3ac1c2986230d43a7e7cee1e54d130" })
                 {
                     Assert.That(recordsByGuid.ContainsKey(retiredGuid), Is.False, "Retired utility identity must not be distributed: " + retiredGuid);
@@ -395,7 +434,10 @@ namespace YLFramework.Tests
                     }
                 }
                 foreach (var oldPath in new[] { "/Runtime/XFMain/Manager/HttpManager.cs", "/Runtime/XFMain/AsyncOperation/SendWebRequest.cs" })
+                {
                     Assert.That(recordsByPath.ContainsKey(FrameworkRoot + oldPath), Is.False, oldPath);
+                }
+
                 var prefabYaml = Encoding.UTF8.GetString(recordsByPath[PrefabPath].Payload);
                 Assert.That(prefabYaml, Does.Match(@"m_Script:[ \t]*\{[^}\r\n]*\bguid:[ \t]*" + CanvasGuid + @"\b"));
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
@@ -403,7 +445,10 @@ namespace YLFramework.Tests
                 foreach (var child in prefab.GetComponentsInChildren<Transform>(true))
                 {
                     Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject), Is.Zero, child.name);
-                    foreach (Object component in child.GetComponents<Component>()) Assert.That(component, Is.Not.Null, child.name);
+                    foreach (Object component in child.GetComponents<Component>())
+                    {
+                        Assert.That(component, Is.Not.Null, child.name);
+                    }
                 }
                 var canvas = prefab.GetComponent<ScreenTransitionCanvas>();
                 Assert.That(canvas, Is.Not.Null);
@@ -429,8 +474,14 @@ namespace YLFramework.Tests
             }
             finally
             {
-                if (SessionState.GetBool("YL.E04.G4.KeepExport", false)) SessionState.SetString("YL.E04.G4.LastExport", packagePath);
-                else if (Directory.Exists(tempDirectory)) Directory.Delete(tempDirectory, true);
+                if (SessionState.GetBool("YL.E04.G4.KeepExport", false))
+                {
+                    SessionState.SetString("YL.E04.G4.LastExport", packagePath);
+                }
+                else if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, true);
+                }
             }
         }
 

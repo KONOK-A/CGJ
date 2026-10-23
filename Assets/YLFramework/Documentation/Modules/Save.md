@@ -22,7 +22,7 @@
 - 槽位信息：`DisplayName` / `Note`（可选）、`CreateTime` / `LastSaveTime`，`RenameSaveItem` / `SetSaveItemNote`。
 - 对象存取：`SaveObject` / `LoadObject<T>` / `TryLoadObject<T>` / `LoadObjectOrDefault<T>` / `DeleteObject` / `HasObject` / `GetObjectNames`（按文件名与存档 ID 重载）。
 - 全局设置：`LoadGlobalSetting<T>` / `TryLoadGlobalSetting<T>` / `SaveGlobalSetting` / `DeleteAllSetting`。
-- 模型：`CreateModel<T>` / `LoadModel<T>` / `SaveModel<T>`及对应Async、`LoadAllModelsAsync<T>`，`CurrentSaveID`与普通对象槽共用索引和缓存。模型`Id`必须与非负槽号一致，创建参数错误保持`ArgumentException`。
+- 模型：`CreateModel<T>` / `LoadModel<T>` / `SaveModel<T>`及对应Async、`LoadAllModelsAsync<T>`，`CurrentSaveId`与普通对象槽共用索引和缓存。模型`Id`必须与非负槽号一致，创建参数错误保持`ArgumentException`。C# 使用 `SaveId`，磁盘 JSON 仍保留原 `SaveID/CurrentSaveID` 键，不改变存档格式。
 - 可靠性：单文件原子写入、`.bak`备份、损坏/IO/权限失败明确抛出且保源；`ReadObject<T>/ReadObjectAsync<T>/ReadGlobalSetting<T>`返回`SaveReadResult<T>`，`Status/IsCached`保留来源。`RestoreObjectBackup/RestoreSettingBackup/RestoreIndexBackup`为显式修盘入口，保留`.corrupt-*`原件；`IndexNeedsRecovery`不允许静默覆盖坏索引。
 - 可测试 / 可替换存储：`StorageRoot` + `SetStorageRoot(path)`（默认 `Application.persistentDataPath`），存档数据懒加载。
 - 序列化扩展：`SerializerSettings`（可添加 `JsonConverter`，仅作用于业务对象与全局设置）与 `SerializationFormat`，默认行为与旧存档一致；存档索引（SaveSystemData）使用内部固定设置序列化，不受用户 converter 影响。
@@ -72,7 +72,7 @@ public class ExampleConfig : MonoBehaviour
 - 对象键：不把 Unity fake-null 当 CLR null 自动清除。原生 `SerializedProperty` 的 None/Missing 无法可靠区分二者，Inspector 标为“待确认”，不虚报精确有效数；跨会话持久化建议使用稳定 ID，不以 Unity 对象引用作 JSON 键。
 - UI：同时提供 UI Toolkit `PropertyField`/binding 和 IMGUI 实现；IMGUI 的长诊断可在固定高区域内滚动，避免窄列覆盖后续字段。已验证 Unity 2022.3 原生 GenericInspector 与 IMGUI 自定义 Inspector；不依赖第三方 Inspector，也不承诺第三方抢占的 Editor 会转发原生 Drawer。Sirenix 全局 Inspector 已退出，其他组件回落 Unity 原生或既有 CustomEditor。
 - JSON：当前 SaveManager/Json.NET 输出裸对象，例如 `{"a":2,"b":4}`，只保存有效字典投影；不导出 Unity 原始无效行。支持该后端可往返的 string/int/enum 键及相应值，复杂键的 ToString 不代表可逆编码。自定义 converter/resolver、元数据保留名称（`$type/$id/$ref`）、Unity 对象引用与任意保引用设置需调用方另验实际磁盘往返。
-- 缓存：`SaveObject(dictionary, "scores", slot.SaveID)` 可直接写盘；随后 `LoadObject<SerializedDictionary<string,int>>("scores", slot.SaveID)` 可能命中同一内存对象，不是磁盘验证。隔离测试才使用独占 root、清缓存及重新读盘，不在真实用户目录为测试切换或清除存档状态。
+- 缓存：`SaveObject(dictionary, "scores", slot.SaveId)` 可直接写盘；随后 `LoadObject<SerializedDictionary<string,int>>("scores", slot.SaveId)` 可能命中同一内存对象，不是磁盘验证。隔离测试才使用独占 root、清缓存及重新读盘，不在真实用户目录为测试切换或清除存档状态。
 - 兼容变化：旧 `YLFramework.Core.SerializedDictionary/DictionaryItem` 与 `YLFramework.Services.Save.SerializedDictionary` 已退出，没有 facade 或旧双列表 reader。正式容器保留自有脚本 GUID 与 `datas/Key/Value`，但 namespace/程序集身份改变；不保证旧 assembly-qualified name、SerializeReference 或旧 JSON 包装自动兼容。没有已查实待迁移的真实 YL 资产/存档，发现历史数据时应基于样本另做定向迁移。
 
 2.5-C 的 `SerializedDictionaryEditorTests` 与 `SerializedDictionarySaveTests` 覆盖原生编辑、Prefab 临时资产保存重开及现有 SaveManager 的隔离写盘/清缓存/新实例读回；这些是字典专题证据，不是 Save 全系统故障恢复验收。

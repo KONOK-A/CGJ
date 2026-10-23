@@ -26,7 +26,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(typeof(AnimationEventListener).GetField("animationEvent").FieldType,
                     Is.EqualTo(typeof(AnimationEvent)));
             }
-            finally { UnityEngine.Object.DestroyImmediate(host); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
         }
 
         [Test]
@@ -53,7 +56,13 @@ namespace YLFramework.Core.Tests
                 UnityEngine.Object.DestroyImmediate(target);
                 Assert.That(LayerMaskUtility.IsInLayerMask(target, -1), Is.False);
             }
-            finally { if (target) UnityEngine.Object.DestroyImmediate(target); }
+            finally
+            {
+                if (target)
+                {
+                    UnityEngine.Object.DestroyImmediate(target);
+                }
+            }
         }
 
         [Test]
@@ -120,7 +129,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(trigger.PhysicsLayerMask.value, Is.Zero);
                 Assert.That(collision.PhysicsLayerMask.value, Is.Zero);
             }
-            finally { UnityEngine.Object.DestroyImmediate(host); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
         }
     }
 }

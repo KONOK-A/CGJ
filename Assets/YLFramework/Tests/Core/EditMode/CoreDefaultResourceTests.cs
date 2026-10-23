@@ -58,7 +58,9 @@ namespace YLFramework.Core.Tests
                         while (property.Next(true))
                         {
                             if (property.propertyType == SerializedPropertyType.ObjectReference && property.objectReferenceValue == null)
+                            {
                                 Assert.That(property.objectReferenceInstanceIDValue, Is.Zero, component.GetType() + ": " + property.propertyPath);
+                            }
                         }
                     }
                 }
@@ -106,31 +108,34 @@ namespace YLFramework.Core.Tests
         [Test]
         public void MigratedTemplateReferencesBaseAndTipsVariantOnlyOverridesLayerFour()
         {
-            const string prefix = "Assets/YLFramework/Prefabs/";
-            var template = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "YLFramework.prefab");
+            const string Prefix = "Assets/YLFramework/Prefabs/";
+            var template = AssetDatabase.LoadAssetAtPath<GameObject>(Prefix + "YLFramework.prefab");
             var root = template.GetComponentsInChildren<UIRootContext>(true).Single();
             var basic = Resources.Load<GameObject>("YLFramework/Core/Canvas");
             Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(root.gameObject), Is.SameAs(basic));
             Assert.That(new SerializedObject(template.GetComponent<YLFrameworkRoot>()).FindProperty("panelRoot").objectReferenceValue, Is.SameAs(root));
-            var tips = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "UITips.prefab");
-            var variant = AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "UITipsOverlay.prefab");
+            var tips = AssetDatabase.LoadAssetAtPath<GameObject>(Prefix + "UITips.prefab");
+            var variant = AssetDatabase.LoadAssetAtPath<GameObject>(Prefix + "UITipsOverlay.prefab");
             Assert.That(variant, Is.Not.Null, "须先执行显式资产迁移并导入新 meta。");
             Assert.That(PrefabUtility.GetPrefabAssetType(variant), Is.EqualTo(PrefabAssetType.Variant));
             Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(variant), Is.SameAs(tips));
             var defaults = new SerializedObject(tips.GetComponent<UITipsItem>()).FindProperty("settings");
-            Assert.That(defaults.FindPropertyRelative("Layer").intValue, Is.Zero);
-            Assert.That(defaults.FindPropertyRelative("InstanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Multiple));
-            Assert.That(defaults.FindPropertyRelative("Modal").boolValue || defaults.FindPropertyRelative("CoversRoot").boolValue || defaults.FindPropertyRelative("ParticipatesInTop").boolValue, Is.False);
-            Assert.That(defaults.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
+            Assert.That(defaults.FindPropertyRelative("layer").intValue, Is.Zero);
+            Assert.That(defaults.FindPropertyRelative("instanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Multiple));
+            Assert.That(defaults.FindPropertyRelative("modal").boolValue || defaults.FindPropertyRelative("coversRoot").boolValue || defaults.FindPropertyRelative("participatesInTop").boolValue, Is.False);
+            Assert.That(defaults.FindPropertyRelative("cacheOnClose").boolValue, Is.True);
             var inherited = new SerializedObject(variant.GetComponent<UITipsItem>()).FindProperty("settings");
-            Assert.That(inherited.FindPropertyRelative("Layer").intValue, Is.EqualTo(4));
-            foreach (var field in new[] { "Priority", "Modal", "CoversRoot", "ParticipatesInTop", "InstanceMode", "CacheOnClose" })
+            Assert.That(inherited.FindPropertyRelative("layer").intValue, Is.EqualTo(4));
+            foreach (var field in new[] { "priority", "modal", "coversRoot", "participatesInTop", "instanceMode", "cacheOnClose" })
+            {
                 Assert.That(inherited.FindPropertyRelative(field).prefabOverride, Is.False, field);
+            }
+
             Assert.That(new SerializedObject(root.GetComponentInChildren<UITipsPresenter>(true)).FindProperty("uiTipItemPrefab").objectReferenceValue, Is.SameAs(variant));
             Assert.That(variant.GetComponentsInChildren<Graphic>(true).All(graphic => !graphic.raycastTarget), Is.True);
-            var color = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(prefix + "ColorSelector.prefab").GetComponent<ColorSelectorWindow>()).FindProperty("settings");
-            Assert.That(color.FindPropertyRelative("ParticipatesInTop").boolValue && color.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
-            Assert.That(color.FindPropertyRelative("InstanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Single));
+            var color = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(Prefix + "ColorSelector.prefab").GetComponent<ColorSelectorWindow>()).FindProperty("settings");
+            Assert.That(color.FindPropertyRelative("participatesInTop").boolValue && color.FindPropertyRelative("cacheOnClose").boolValue, Is.True);
+            Assert.That(color.FindPropertyRelative("instanceMode").enumValueIndex, Is.EqualTo((int)PanelInstanceMode.Single));
         }
 
         [Test]

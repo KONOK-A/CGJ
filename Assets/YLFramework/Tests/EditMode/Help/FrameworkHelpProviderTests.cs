@@ -22,13 +22,20 @@ namespace YLFramework.Tests.Help
             var module = Registration("foundation-tools").Create();
             var index = HelpApiIndex.Build(module);
             foreach (var guide in module.Guides)
+            {
                 foreach (var type in guide.FeaturedTypes)
+                {
                     Assert.That(index.Single(entry => entry.Type == type).Group,
                         Is.EqualTo(guide.Id == "tools" ? "Tools 精选 API" : "Foundation 精选 API"), type.FullName);
+                }
+            }
+
             Assert.That(index.Select(entry => entry.Group).Distinct(),
                 Is.EquivalentTo(new[] { "Tools 精选 API", "Foundation 精选 API" }));
             foreach (var type in new[] { typeof(YLFramework.Core.ColorSelector), typeof(YLFramework.Core.ColorSelectorWindow) })
+            {
                 Assert.That(module.Guides.Single(guide => guide.Id == "tools").FeaturedTypes, Does.Contain(type), type.FullName);
+            }
         }
 
         [TestCase("core", "YLFramework.Editor", "YLFramework/Core/帮助")]
@@ -92,15 +99,26 @@ namespace YLFramework.Tests.Help
             var core = Registration("core").Create();
             foreach (var query in new[] { "Module MVC", "View OnLoaded", "PanelRule UIRootContext",
                 "Assets/Create/YLFramework/Core/Module", "YLFramework.Generated.ResourceNames" })
+            {
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
+            }
+
             for (var id = 1; id <= 7; id++)
+            {
                 Assert.That(core.Guides.Any(p => p.Matches("YL000" + id + " Warning")), Is.True);
+            }
+
             foreach (var query in new[] { "RoslynAnalyzer YLFramework.Runtime", "ruleset editorconfig", "build.ps1 -Deploy", "SDK 9.0.312" })
+            {
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
+            }
+
             var tools = Registration("foundation-tools").Create();
             foreach (var query in new[] { "ObjectPool", "EventBus", "Timer", "FSM", "ZipTool",
-                "CustomClassNameGUI 元数据", "CustomPropertyGUI 内置", "DisableEdit Drawer" })
+                "CustomClassNameGui 元数据", "CustomPropertyGui 内置", "DisableEdit Drawer" })
+            {
                 Assert.That(tools.Guides.Any(p => p.Matches(query)), Is.True, query);
+            }
         }
 
         [UnityTest]
@@ -119,27 +137,31 @@ namespace YLFramework.Tests.Help
                 foreach (var registration in registrations)
                 {
                     window.SelectModule(registration.Id);
-                    var query = registration.Id == "core" ? "YL0007" : "CustomPropertyGUI";
-                    Set(window, "mSearch", query);
+                    var query = registration.Id == "core" ? "YL0007" : "CustomPropertyGui";
+                    Set(window, "search", query);
                     window.Repaint();
-                    for (var frame = 0; frame < 60 && (Get<bool>(window, "mNeedsReload") ||
-                        Get<HelpPage[]>(window, "mVisibleTopics").All(p => !p.Matches(query))); frame++) yield return null;
-                    Assert.That(Get<string>(window, "mModuleId"), Is.EqualTo(registration.Id));
-                    Assert.That(Get<HelpPage[]>(window, "mVisibleTopics").Any(p => p.Matches(query)), Is.True);
-                    var highlights = Get<HelpSearchHighlight>(window, "mHighlights");
-                    var ranges = Get<System.Collections.Generic.Dictionary<string, HelpSearchHighlight.Range[]>>(highlights, "mRanges");
+                    for (var frame = 0; frame < 60 && (Get<bool>(window, "_needsReload") ||
+                        Get<HelpPage[]>(window, "_visibleTopics").All(p => !p.Matches(query))); frame++)
+                    {
+                        yield return null;
+                    }
+
+                    Assert.That(Get<string>(window, "moduleId"), Is.EqualTo(registration.Id));
+                    Assert.That(Get<HelpPage[]>(window, "_visibleTopics").Any(p => p.Matches(query)), Is.True);
+                    var highlights = Get<HelpSearchHighlight>(window, "_highlights");
+                    var ranges = Get<System.Collections.Generic.Dictionary<string, HelpSearchHighlight.Range[]>>(highlights, "_ranges");
                     Assert.That(ranges.Keys.Any(text => text.Contains(query)), Is.True, "The actual reader must render the guide.");
                     Click(window, new HelpHeaderLayout(window.position.width).Clear.center);
                     Click(window, new HelpHeaderLayout(window.position.width).Tab(1).center);
-                    Assert.That(Get<int>(window, "mTab"), Is.EqualTo(1));
-                    Set(window, "mSearch", registration.Id == "core" ? "View.RegisterEvent" : "EventBus.Register");
-                    Set(window, "mFilterKey", null);
+                    Assert.That(Get<int>(window, "tab"), Is.EqualTo(1));
+                    Set(window, "search", registration.Id == "core" ? "View.RegisterEvent" : "EventBus.Register");
+                    Set(window, "_filterKey", null);
                     window.Repaint();
                     yield return null;
                     yield return null;
-                    Assert.That(Get<HelpApiType[]>(window, "mVisibleTypes"), Is.Not.Empty);
+                    Assert.That(Get<HelpApiType[]>(window, "_visibleTypes"), Is.Not.Empty);
                     window.SelectModule(registration.Id == "core" ? "foundation-tools" : "core");
-                    Assert.That(Get<string>(window, "mSearch"), Is.Empty);
+                    Assert.That(Get<string>(window, "search"), Is.Empty);
                 }
 
                 // 临时 id 验证替换，不改正式工厂，也不重置用户已打开窗口的阅读状态。
@@ -151,29 +173,48 @@ namespace YLFramework.Tests.Help
                     Guides = new[] { new HelpPage("replacement", "替换后的指南", "临时验证", "replacement-v2") }
                 };
                 var moduleCount = HelpRegistry.GetModules().Length;
-                HelpRegistry.Register(temporaryId, "临时帮助", () => { firstCalls++; return registrations[0].Create(); });
+                HelpRegistry.Register(temporaryId, "临时帮助", () =>
+                {
+                    firstCalls++;
+                    return registrations[0].Create();
+                });
                 Assert.That(firstCalls, Is.Zero, "Registration is lazy.");
                 window.SelectModule(temporaryId);
                 Assert.That(firstCalls, Is.EqualTo(1));
-                HelpRegistry.Register(temporaryId, "中间版本", () => { intermediateCalls++; return registrations[1].Create(); });
-                HelpRegistry.Register(temporaryId, "替换版本", () => { replacementCalls++; return replacement; });
+                HelpRegistry.Register(temporaryId, "中间版本", () =>
+                {
+                    intermediateCalls++;
+                    return registrations[1].Create();
+                });
+                HelpRegistry.Register(temporaryId, "替换版本", () =>
+                {
+                    replacementCalls++;
+                    return replacement;
+                });
                 Assert.That(replacementCalls, Is.Zero);
                 Assert.That(HelpRegistry.GetModules().Length, Is.EqualTo(moduleCount + 1));
                 window.Repaint();
-                for (var frame = 0; frame < 60 && (replacementCalls == 0 || Get<bool>(window, "mNeedsReload")); frame++) yield return null;
-                Assert.That(Get<bool>(window, "mNeedsReload"), Is.False);
+                for (var frame = 0; frame < 60 && (replacementCalls == 0 || Get<bool>(window, "_needsReload")); frame++)
+                {
+                    yield return null;
+                }
+
+                Assert.That(Get<bool>(window, "_needsReload"), Is.False);
                 Assert.That(firstCalls, Is.EqualTo(1));
                 Assert.That(intermediateCalls, Is.Zero);
                 Assert.That(replacementCalls, Is.EqualTo(1), "The Changed event must load the newest factory, not cached content.");
-                Assert.That(Get<HelpModule>(window, "mModule"), Is.SameAs(replacement));
-                Assert.That(Get<HelpPage[]>(window, "mVisibleTopics").Single().Id, Is.EqualTo("replacement"));
+                Assert.That(Get<HelpModule>(window, "_module"), Is.SameAs(replacement));
+                Assert.That(Get<HelpPage[]>(window, "_visibleTopics").Single().Id, Is.EqualTo("replacement"));
                 Assert.That(window.titleContent.text, Is.EqualTo("替换版本 帮助"));
             }
             finally
             {
                 window.Close();
                 HelpRegistry.Unregister(temporaryId);
-                if (focus) focus.Focus();
+                if (focus)
+                {
+                    focus.Focus();
+                }
             }
             Assert.That(RegistrySubscribers(), Is.EqualTo(subscriptions), "Closed windows must release their registry subscription.");
             Assert.That(ReadOnlyState(), Is.EqualTo(before));

@@ -19,8 +19,16 @@ namespace YLFramework.Services.Resource
         {
             ResourceSystem.AssertThread();
             store?.CheckThread();
-            if (completed == null) throw new ArgumentNullException(nameof(completed));
-            if (maxEntries < 1 || maxEntries > 100000) throw new ArgumentOutOfRangeException(nameof(maxEntries));
+            if (completed == null)
+            {
+                throw new ArgumentNullException(nameof(completed));
+            }
+
+            if (maxEntries < 1 || maxEntries > 100000)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxEntries));
+            }
+
             return RunQuery(store, completed, maxEntries, cancellation);
         }
 
@@ -28,39 +36,91 @@ namespace YLFramework.Services.Resource
         {
             ResourceSystem.AssertThread();
             var scan = new ArtifactScan(store);
-            if (store == null) { completed(scan.Report(ArtifactQueryStatus.NotConfigured)); yield break; }
+            if (store == null)
+            {
+                completed(scan.Report(ArtifactQueryStatus.NotConfigured));
+                yield break;
+            }
             var runtime = ResourceSystem.CaptureArtifactState(store);
-            foreach (var item in runtime.Protections) scan.Protect(item.Key, item.Value);
+            foreach (var item in runtime.Protections)
+            {
+                scan.Protect(item.Key, item.Value);
+            }
+
             scan.Operations.AddRange(runtime.Operations);
-            var serial = activitySerial;
+            var serial = _activitySerial;
             var steps = 0;
             using var work = scan.Scan().Concat(scan.VerifyObservations()).GetEnumerator();
             var done = false;
             while (!done)
             {
-                ResourceSystem.AssertThread(); store.CheckThread();
-                if (cancellation.IsCancellationRequested) { scan.Status = ArtifactQueryStatus.Canceled; break; }
+                ResourceSystem.AssertThread();
+                store.CheckThread();
+                if (cancellation.IsCancellationRequested)
+                {
+                    scan.Status = ArtifactQueryStatus.Canceled;
+                    break;
+                }
                 var current = ResourceSystem.CaptureArtifactState(store);
-                if (store.operating || current.Operations.Count != 0)
-                { scan.Status = steps == 0 ? ArtifactQueryStatus.Busy : ArtifactQueryStatus.Changed; scan.Issues.Add("A version operation is in progress; retry after it settles."); break; }
-                if (activitySerial != serial || current.Identity != runtime.Identity)
-                { scan.Status = ArtifactQueryStatus.Changed; scan.Issues.Add("Store activity, session or version retention changed during observation; retry."); break; }
+                if (store.IsOperating || current.Operations.Count != 0)
+                {
+                    scan.Status = steps == 0 ? ArtifactQueryStatus.Busy : ArtifactQueryStatus.Changed;
+                    scan.Issues.Add("A version operation is in progress; retry after it settles.");
+                    break;
+                }
+                if (_activitySerial != serial || current.Identity != runtime.Identity)
+                {
+                    scan.Status = ArtifactQueryStatus.Changed;
+                    scan.Issues.Add("Store activity, session or version retention changed during observation; retry.");
+                    break;
+                }
                 try
                 {
                     store.ProbeQueryLock();
                     for (var i = 0; i < 32; i++)
                     {
-                        if (++steps > maxEntries) { scan.Status = ArtifactQueryStatus.Incomplete; scan.Issues.Add("The scan step limit was reached; increase maxEntries explicitly or retry with a smaller Store closure."); done = true; break; }
-                        if (!work.MoveNext()) { done = true; break; }
-                        if (cancellation.IsCancellationRequested) { scan.Status = ArtifactQueryStatus.Canceled; done = true; break; }
+                        if (++steps > maxEntries)
+                        {
+                            scan.Status = ArtifactQueryStatus.Incomplete;
+                            scan.Issues.Add("The scan step limit was reached; increase maxEntries explicitly or retry with a smaller Store closure.");
+                            done = true;
+                            break;
+                        }
+                        if (!work.MoveNext())
+                        {
+                            done = true;
+                            break;
+                        }
+                        if (cancellation.IsCancellationRequested)
+                        {
+                            scan.Status = ArtifactQueryStatus.Canceled;
+                            done = true;
+                            break;
+                        }
                     }
                 }
-                catch (ObservationChanged error) { scan.Status = ArtifactQueryStatus.Changed; scan.Issues.Add(error.Message); done = true; }
+                catch (ObservationChanged error)
+                {
+                    scan.Status = ArtifactQueryStatus.Changed;
+                    scan.Issues.Add(error.Message);
+                    done = true;
+                }
                 catch (ResourceException error) when (error.Kind == ResourceError.Busy)
-                { scan.Status = ArtifactQueryStatus.Busy; scan.Issues.Add(error.Message); done = true; }
+                {
+                    scan.Status = ArtifactQueryStatus.Busy;
+                    scan.Issues.Add(error.Message);
+                    done = true;
+                }
                 catch (Exception error) when (IsFileFailure(error) || error is OverflowException)
-                { scan.Status = error is InvalidDataException || error is ArgumentException ? ArtifactQueryStatus.Invalid : ArtifactQueryStatus.Unreadable; scan.Issues.Add(error.Message); done = true; }
-                if (!done) yield return null;
+                {
+                    scan.Status = error is InvalidDataException || error is ArgumentException ? ArtifactQueryStatus.Invalid : ArtifactQueryStatus.Unreadable;
+                    scan.Issues.Add(error.Message);
+                    done = true;
+                }
+                if (!done)
+                {
+                    yield return null;
+                }
             }
             completed(scan.Report(scan.Status));
         }
@@ -69,27 +129,39 @@ namespace YLFramework.Services.Resource
         {
             var path = Path.Combine(RootPath, ".ylr-store.lock");
             ResourceLocalSnapshot.RejectLinks(path);
-            if (!Exists(path)) return;
-            try { using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }
-            catch (IOException error) { throw new ResourceException(ResourceError.Busy, "The existing Store lock is unavailable; no lock was created or retained.", error); }
+            if (!Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            }
+            catch (IOException error)
+            {
+                throw new ResourceException(ResourceError.Busy, "The existing Store lock is unavailable; no lock was created or retained.", error);
+            }
         }
 
         private sealed class ObservationChanged : IOException
-        { internal ObservationChanged(string path) : base("An observed filesystem entry changed; retry: " + path) { } }
+        {
+            internal ObservationChanged(string path) : base("An observed filesystem entry changed; retry: " + path) { }
+        }
 
         private sealed class ArtifactScan
         {
-            private readonly ArtifactStore store;
-            private readonly DateTimeOffset started = DateTimeOffset.UtcNow;
-            private readonly List<Entry> entries = new();
-            private readonly List<ArtifactPreparedInfo> prepared = new();
-            private readonly Dictionary<string, ArtifactProtection> protections = new(StringComparer.OrdinalIgnoreCase);
-            private readonly HashSet<string> completeVersions = new(StringComparer.OrdinalIgnoreCase);
-            private readonly Dictionary<string, (bool exists, FileAttributes attributes, long length, long ticks)> observations = new(StringComparer.OrdinalIgnoreCase);
+            private readonly ArtifactStore _store;
+            private readonly DateTimeOffset _started = DateTimeOffset.UtcNow;
+            private readonly List<Entry> _entries = new();
+            private readonly List<ArtifactPreparedInfo> _prepared = new();
+            private readonly Dictionary<string, ArtifactProtection> _protections = new(StringComparer.OrdinalIgnoreCase);
+            private readonly HashSet<string> _completeVersions = new(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, (bool exists, FileAttributes attributes, long length, long ticks)> _observations = new(StringComparer.OrdinalIgnoreCase);
             internal readonly List<string> Operations = new();
             internal readonly List<string> Issues = new();
             internal ArtifactQueryStatus Status = ArtifactQueryStatus.Ready;
-            internal ArtifactScan(ArtifactStore store) => this.store = store;
+            internal ArtifactScan(ArtifactStore store) => this._store = store;
 
             private sealed class Entry
             {
@@ -99,13 +171,16 @@ namespace YLFramework.Services.Resource
                 internal ArtifactKind Kind;
                 internal ArtifactState State;
                 internal long Bytes;
-                internal bool SizeComplete = true;
-                internal bool Eligible;
+                internal bool IsSizeComplete = true;
+                internal bool IsEligible;
                 internal readonly List<string> Issues = new();
             }
 
             internal void Protect(string path, ArtifactProtection reason)
-            { protections.TryGetValue(path, out var current); protections[path] = current | reason; }
+            {
+                _protections.TryGetValue(path, out var current);
+                _protections[path] = current | reason;
+            }
 
             private static (bool exists, FileAttributes attributes, long length, long ticks) Observe(string path)
             {
@@ -116,80 +191,149 @@ namespace YLFramework.Services.Resource
                     return (true, attributes, (attributes & FileAttributes.Directory) != 0 ? 0 : new FileInfo(path).Length,
                         (attributes & FileAttributes.Directory) != 0 ? Directory.GetLastWriteTimeUtc(path).Ticks : File.GetLastWriteTimeUtc(path).Ticks);
                 }
-                catch (FileNotFoundException) { return default; }
-                catch (DirectoryNotFoundException) { return default; }
+                catch (FileNotFoundException)
+                {
+                    return default;
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    return default;
+                }
             }
 
             private void Remember(string path)
             {
                 var value = Observe(path);
-                if (observations.TryGetValue(path, out var previous) && previous != value) throw new ObservationChanged(path);
-                observations[path] = value;
+                if (_observations.TryGetValue(path, out var previous) && previous != value)
+                {
+                    throw new ObservationChanged(path);
+                }
+
+                _observations[path] = value;
             }
 
             internal IEnumerable<object> VerifyObservations()
             {
-                if (Status != ArtifactQueryStatus.Ready) yield break;
-                foreach (var pair in observations)
+                if (Status != ArtifactQueryStatus.Ready)
                 {
-                    if (Observe(pair.Key) != pair.Value) throw new ObservationChanged(pair.Key);
+                    yield break;
+                }
+
+                foreach (var pair in _observations)
+                {
+                    if (Observe(pair.Key) != pair.Value)
+                    {
+                        throw new ObservationChanged(pair.Key);
+                    }
+
                     yield return null;
                 }
-                foreach (var pair in protections.Where(x => (x.Value & (ArtifactProtection.Active | ArtifactProtection.LastKnownGood | ArtifactProtection.PreparedFrom | ArtifactProtection.PreparedTo)) != 0))
+                foreach (var pair in _protections.Where(x => (x.Value & (ArtifactProtection.Active | ArtifactProtection.LastKnownGood | ArtifactProtection.PreparedFrom | ArtifactProtection.PreparedTo)) != 0))
                 {
-                    if (!completeVersions.Contains(pair.Key))
-                    { Status = ArtifactQueryStatus.Invalid; Issues.Add("A protected version has missing, unknown or invalid records/files: " + pair.Key); }
+                    if (!_completeVersions.Contains(pair.Key))
+                    {
+                        Status = ArtifactQueryStatus.Invalid;
+                        Issues.Add("A protected version has missing, unknown or invalid records/files: " + pair.Key);
+                    }
                     yield return null;
                 }
             }
 
             internal IEnumerable<object> Scan()
             {
-                Remember(store.RootPath);
-                if (!observations[store.RootPath].exists) { Status = ArtifactQueryStatus.Missing; yield break; }
-                Remember(store.OwnerPath);
-                foreach (var mount in store.Projects) Remember(Path.Combine(store.ProjectRoot(mount.ProjectId), OwnerFile));
-                store.RequireOwner();
-                foreach (var path in store.ControlFiles().SelectMany(x => new[] { x, x + ".next" }))
+                Remember(_store.RootPath);
+                if (!_observations[_store.RootPath].exists)
+                {
+                    Status = ArtifactQueryStatus.Missing;
+                    yield break;
+                }
+                Remember(_store.OwnerPath);
+                foreach (var mount in _store.Projects)
+                {
+                    Remember(Path.Combine(_store.ProjectRoot(mount.ProjectId), OwnerFile));
+                }
+
+                _store.RequireOwner();
+                foreach (var path in _store.ControlFiles().SelectMany(x => new[] { x, x + ".next" }))
                 {
                     Remember(path);
-                    if (observations[path].exists && (path == store.JournalPath || path.EndsWith(".next", StringComparison.Ordinal)))
-                    { AddFile(path, null, ArtifactKind.Metadata); Status = ArtifactQueryStatus.RecoveryRequired; Issues.Add("Recovery is required; query did not recover or remove: " + path); yield break; }
+                    if (_observations[path].exists && (path == _store.JournalPath || path.EndsWith(".next", StringComparison.Ordinal)))
+                    {
+                        AddFile(path, null, ArtifactKind.Metadata);
+                        Status = ArtifactQueryStatus.RecoveryRequired;
+                        Issues.Add("Recovery is required; query did not recover or remove: " + path);
+                        yield break;
+                    }
                     yield return null;
                 }
-                foreach (var record in store.IndexProtectionRecords(false, Remember))
+                foreach (var record in _store.IndexProtectionRecords(false, Remember))
                 {
-                    foreach (var item in store.ProtectionPaths(record.data, record.reason)) Protect(item.path, item.reason);
+                    foreach (var item in _store.ProtectionPaths(record.data, record.reason))
+                    {
+                        Protect(item.path, item.reason);
+                    }
+
                     yield return null;
                 }
-                foreach (var step in Prepared()) yield return step;
-                foreach (var step in Layout(store.RootPath, store.Projects.Select(x => x.ProjectId), new[] { OwnerFile, ".ylr-store.lock" }, null)) yield return step;
-                foreach (var mount in store.Projects)
+                foreach (var step in Prepared())
                 {
-                    var root = store.ProjectRoot(mount.ProjectId);
-                    foreach (var step in Layout(Path.GetDirectoryName(root), new[] { mount.Platform }, Array.Empty<string>(), mount)) yield return step;
-                    var coordinator = root == store.CoordinatorRoot;
+                    yield return step;
+                }
+
+                foreach (var step in Layout(_store.RootPath, _store.Projects.Select(x => x.ProjectId), new[] { OwnerFile, ".ylr-store.lock" }, null))
+                {
+                    yield return step;
+                }
+
+                foreach (var mount in _store.Projects)
+                {
+                    var root = _store.ProjectRoot(mount.ProjectId);
+                    foreach (var step in Layout(Path.GetDirectoryName(root), new[] { mount.Platform }, Array.Empty<string>(), mount))
+                    {
+                        yield return step;
+                    }
+
+                    var coordinator = root == _store.CoordinatorRoot;
                     foreach (var step in Layout(root, coordinator ? new[] { "versions", "staging", "parts", "prepared" } : new[] { "versions", "staging", "parts" },
-                        coordinator ? new[] { OwnerFile, "active.json", "last-known-good.json", JournalFile } : new[] { OwnerFile, "active.json", "last-known-good.json" }, mount)) yield return step;
-                    foreach (var step in Versions(mount, "versions", ArtifactKind.Version)) yield return step;
-                    foreach (var step in Versions(mount, "staging", ArtifactKind.Staging)) yield return step;
-                    foreach (var step in Parts(mount)) yield return step;
+                        coordinator ? new[] { OwnerFile, "active.json", "last-known-good.json", JournalFile } : new[] { OwnerFile, "active.json", "last-known-good.json" }, mount))
+                    {
+                        yield return step;
+                    }
+
+                    foreach (var step in Versions(mount, "versions", ArtifactKind.Version))
+                    {
+                        yield return step;
+                    }
+
+                    foreach (var step in Versions(mount, "staging", ArtifactKind.Staging))
+                    {
+                        yield return step;
+                    }
+
+                    foreach (var step in Parts(mount))
+                    {
+                        yield return step;
+                    }
                 }
             }
 
             private IEnumerable<object> Prepared()
             {
-                Remember(store.PreparedRoot);
-                foreach (var path in Directory.EnumerateFileSystemEntries(store.PreparedRoot))
+                Remember(_store.PreparedRoot);
+                foreach (var path in Directory.EnumerateFileSystemEntries(_store.PreparedRoot))
                 {
                     var attributes = File.GetAttributes(path);
                     var ordinaryFile = (attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == 0;
                     if (ordinaryFile && path.EndsWith(".json", StringComparison.Ordinal))
                     {
                         Remember(path);
-                        var record = store.ReadPreparedRecord(path);
-                        foreach (var item in store.ProtectionPaths(record, ArtifactProtection.PreparedFrom | ArtifactProtection.PreparedTo)) Protect(item.path, item.reason);
-                        prepared.Add(new ArtifactPreparedInfo(path, store.ReadTransition(record["Transition"]).Cast<JObject>()
+                        var record = _store.ReadPreparedRecord(path);
+                        foreach (var item in _store.ProtectionPaths(record, ArtifactProtection.PreparedFrom | ArtifactProtection.PreparedTo))
+                        {
+                            Protect(item.path, item.reason);
+                        }
+
+                        _prepared.Add(new ArtifactPreparedInfo(path, _store.ReadTransition(record["Transition"]).Cast<JObject>()
                             .Select(x => new ArtifactTransition((string)x["ProjectId"], (string)x["Platform"], (string)x["From"], (string)x["To"]))));
                         AddFile(path, null, ArtifactKind.Metadata);
                     }
@@ -197,9 +341,15 @@ namespace YLFramework.Services.Resource
                     {
                         AddUnknown(path, null);
                         if (ordinaryFile && path.EndsWith(".json.next", StringComparison.Ordinal))
-                        { Status = ArtifactQueryStatus.RecoveryRequired; Issues.Add("A Prepared replacement requires an explicit recovery/preparation operation: " + path); }
+                        {
+                            Status = ArtifactQueryStatus.RecoveryRequired;
+                            Issues.Add("A Prepared replacement requires an explicit recovery/preparation operation: " + path);
+                        }
                         else if ((attributes & FileAttributes.ReparsePoint) != 0 && path.EndsWith(".json", StringComparison.Ordinal))
-                        { Status = ArtifactQueryStatus.Invalid; Issues.Add("A linked Prepared record has unconfirmed protection; its target was not followed: " + path); }
+                        {
+                            Status = ArtifactQueryStatus.Invalid;
+                            Issues.Add("A linked Prepared record has unconfirmed protection; its target was not followed: " + path);
+                        }
                     }
                     yield return null;
                 }
@@ -213,9 +363,24 @@ namespace YLFramework.Services.Resource
                 foreach (var path in Directory.EnumerateFileSystemEntries(root))
                 {
                     var name = Path.GetFileName(path);
-                    if (dirs.Contains(name)) { ResourceLocalSnapshot.RejectLinks(path); if (!Directory.Exists(path)) throw new InvalidDataException("Expected a managed directory: " + path); Remember(path); }
-                    else if (names.Contains(name)) AddFile(path, project, ArtifactKind.Metadata);
-                    else AddUnknown(path, project);
+                    if (dirs.Contains(name))
+                    {
+                        ResourceLocalSnapshot.RejectLinks(path);
+                        if (!Directory.Exists(path))
+                        {
+                            throw new InvalidDataException("Expected a managed directory: " + path);
+                        }
+                        Remember(path);
+                    }
+                    else if (names.Contains(name))
+                    {
+                        AddFile(path, project, ArtifactKind.Metadata);
+                    }
+                    else
+                    {
+                        AddUnknown(path, project);
+                    }
+
                     yield return null;
                 }
             }
@@ -223,14 +388,19 @@ namespace YLFramework.Services.Resource
             private Entry NewEntry(string path, ResourceProjectMount project, ArtifactKind kind, ArtifactState state)
             {
                 var entry = new Entry { Path = path, Project = project, Kind = kind, State = state };
-                entries.Add(entry); return entry;
+                _entries.Add(entry);
+                return entry;
             }
 
             private void AddBytes(Entry entry, string path)
             {
                 Remember(path);
-                var value = observations[path];
-                if (!value.exists || (value.attributes & FileAttributes.Directory) != 0) throw new ObservationChanged(path);
+                var value = _observations[path];
+                if (!value.exists || (value.attributes & FileAttributes.Directory) != 0)
+                {
+                    throw new ObservationChanged(path);
+                }
+
                 entry.Bytes = checked(entry.Bytes + value.length);
             }
 
@@ -246,25 +416,51 @@ namespace YLFramework.Services.Resource
                 Attempt(entry, () =>
                 {
                     var attributes = File.GetAttributes(path);
-                    if ((attributes & FileAttributes.ReparsePoint) != 0) { entry.State = ArtifactState.Linked; entry.SizeComplete = false; entry.Issues.Add("Link target was not followed."); return; }
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    {
+                        entry.State = ArtifactState.Linked;
+                        entry.IsSizeComplete = false;
+                        entry.Issues.Add("Link target was not followed.");
+                        return;
+                    }
                     Remember(path);
-                    if ((attributes & FileAttributes.Directory) != 0) { entry.SizeComplete = false; entry.Issues.Add("Unknown ownership; directory contents were not traversed."); }
-                    else AddBytes(entry, path);
+                    if ((attributes & FileAttributes.Directory) != 0)
+                    {
+                        entry.IsSizeComplete = false;
+                        entry.Issues.Add("Unknown ownership; directory contents were not traversed.");
+                    }
+                    else
+                    {
+                        AddBytes(entry, path);
+                    }
                 });
                 entry.Issues.Add("Not a registered cleanup target; preserved.");
             }
 
             private static bool Attempt(Entry entry, Action action)
             {
-                try { action(); return true; }
-                catch (ObservationChanged) { throw; }
+                try
+                {
+                    action();
+                    return true;
+                }
+                catch (ObservationChanged)
+                {
+                    throw;
+                }
                 catch (Exception error) when (IsFileFailure(error))
-                { entry.State = error is InvalidDataException || error is ArgumentException ? ArtifactState.Invalid : ArtifactState.Unreadable; entry.SizeComplete = false; entry.Eligible = false; entry.Issues.Add(error.Message); return false; }
+                {
+                    entry.State = error is InvalidDataException || error is ArgumentException ? ArtifactState.Invalid : ArtifactState.Unreadable;
+                    entry.IsSizeComplete = false;
+                    entry.IsEligible = false;
+                    entry.Issues.Add(error.Message);
+                    return false;
+                }
             }
 
             private IEnumerable<object> Versions(ResourceProjectMount project, string folder, ArtifactKind kind)
             {
-                var root = Path.Combine(store.ProjectRoot(project.ProjectId), folder);
+                var root = Path.Combine(_store.ProjectRoot(project.ProjectId), folder);
                 Remember(root);
                 foreach (var path in Directory.EnumerateFileSystemEntries(root))
                 {
@@ -272,42 +468,90 @@ namespace YLFramework.Services.Resource
                     var markerPath = Path.Combine(path, markerName);
                     var attributes = File.GetAttributes(path);
                     if ((attributes & FileAttributes.ReparsePoint) != 0 || (attributes & FileAttributes.Directory) == 0 || !File.Exists(markerPath))
-                    { AddUnknown(path, project); yield return null; continue; }
+                    {
+                        AddUnknown(path, project);
+                        yield return null;
+                        continue;
+                    }
                     var entry = NewEntry(path, project, kind, kind == ArtifactKind.Version ? ArtifactState.CompleteRecord : ArtifactState.Staging);
                     JObject marker = null;
                     HashSet<string> registered = null;
                     if (!Attempt(entry, () =>
                     {
-                        Remember(path); Remember(markerPath); marker = store.Read(markerPath);
-                        if (kind == ArtifactKind.Version) store.ValidateVersionMarker(marker, project.ProjectId, Path.GetFileName(path));
-                        else store.ValidateStage(marker, project.ProjectId, Path.GetFileName(path));
+                        Remember(path);
+                        Remember(markerPath);
+                        marker = _store.Read(markerPath);
+                        if (kind == ArtifactKind.Version)
+                        {
+                            _store.ValidateVersionMarker(marker, project.ProjectId, Path.GetFileName(path));
+                        }
+                        else
+                        {
+                            _store.ValidateStage(marker, project.ProjectId, Path.GetFileName(path));
+                        }
+
                         entry.Digest = (string)marker["CatalogDigest"];
                         registered = new HashSet<string>(RegisteredFiles(marker), StringComparer.Ordinal);
-                    })) { yield return null; continue; }
+                    }))
+                    {
+                        yield return null;
+                        continue;
+                    }
                     var allowed = new HashSet<string>(registered, StringComparer.Ordinal) { markerName };
-                    if (kind == ArtifactKind.Staging) allowed.UnionWith(new[] { VersionFile, VersionFile + ".next", markerName + ".next" });
+                    if (kind == ArtifactKind.Staging)
+                    {
+                        allowed.UnionWith(new[] { VersionFile, VersionFile + ".next", markerName + ".next" });
+                    }
                     // 正式版本 next 必须由原 RecoverMetadata 处理，查询不顺手收尾。
                     if (kind == ArtifactKind.Version && Exists(Path.Combine(path, VersionFile + ".next")))
-                    { Status = ArtifactQueryStatus.RecoveryRequired; entry.Issues.Add("Version metadata replacement is pending."); }
+                    {
+                        Status = ArtifactQueryStatus.RecoveryRequired;
+                        entry.Issues.Add("Version metadata replacement is pending.");
+                    }
                     var seen = new HashSet<string>(StringComparer.Ordinal);
                     using var files = KnownDirectoryFiles(path, allowed).GetEnumerator();
                     var valid = true;
                     while (true)
                     {
                         var more = false;
-                        if (!Attempt(entry, () => more = files.MoveNext())) { valid = false; break; }
-                        if (!more) break;
-                        if (!Attempt(entry, () => { AddBytes(entry, files.Current); seen.Add(Path.GetFileName(files.Current)); })) { valid = false; break; }
+                        if (!Attempt(entry, () => more = files.MoveNext()))
+                        {
+                            valid = false;
+                            break;
+                        }
+                        if (!more)
+                        {
+                            break;
+                        }
+
+                        if (!Attempt(entry, () =>
+                        {
+                            AddBytes(entry, files.Current);
+                            seen.Add(Path.GetFileName(files.Current));
+                        }))
+                        {
+                            valid = false;
+                            break;
+                        }
                         yield return null;
                     }
                     if (valid)
                     {
                         var completePath = Path.Combine(path, ".ylr-complete.json");
-                        entry.Eligible = !seen.Contains(".ylr-complete.json") || Attempt(entry, () =>
-                            ResourceLocalSnapshot.ValidateComplete(store.Read(completePath), project.ProjectId, project.Platform, entry.Digest));
+                        entry.IsEligible = !seen.Contains(".ylr-complete.json") || Attempt(entry, () =>
+                            ResourceLocalSnapshot.ValidateComplete(_store.Read(completePath), project.ProjectId, project.Platform, entry.Digest));
                         if (kind == ArtifactKind.Version && !registered.IsSubsetOf(seen))
-                        { if (entry.Eligible) entry.State = ArtifactState.Incomplete; entry.Issues.Add("Owned remainder has missing registered files; it is not mountable. Original cleanup can reclaim it."); }
-                        if (entry.State == ArtifactState.CompleteRecord) completeVersions.Add(path);
+                        {
+                            if (entry.IsEligible)
+                            {
+                                entry.State = ArtifactState.Incomplete;
+                            }
+                            entry.Issues.Add("Owned remainder has missing registered files; it is not mountable. Original cleanup can reclaim it.");
+                        }
+                        if (entry.State == ArtifactState.CompleteRecord)
+                        {
+                            _completeVersions.Add(path);
+                        }
                     }
                     yield return null;
                 }
@@ -315,43 +559,79 @@ namespace YLFramework.Services.Resource
 
             private IEnumerable<object> Parts(ResourceProjectMount project)
             {
-                var root = Path.Combine(store.ProjectRoot(project.ProjectId), "parts");
+                var root = Path.Combine(_store.ProjectRoot(project.ProjectId), "parts");
                 Remember(root);
                 var paths = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var path in Directory.EnumerateFileSystemEntries(root)) { paths.Add(path); yield return null; }
+                foreach (var path in Directory.EnumerateFileSystemEntries(root))
+                {
+                    paths.Add(path);
+                    yield return null;
+                }
                 var claimed = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var path in paths)
                 {
                     if (claimed.Contains(path) || !path.EndsWith(".json", StringComparison.Ordinal) && !path.EndsWith(".json.next", StringComparison.Ordinal))
-                    { yield return null; continue; }
+                    {
+                        yield return null;
+                        continue;
+                    }
                     var candidateOnly = path.EndsWith(".next", StringComparison.Ordinal);
                     var metadata = candidateOnly ? path.Substring(0, path.Length - 5) : path;
                     var part = Path.ChangeExtension(metadata, ".part");
-                    if (candidateOnly && (paths.Contains(metadata) || paths.Contains(part))) { yield return null; continue; }
+                    if (candidateOnly && (paths.Contains(metadata) || paths.Contains(part)))
+                    {
+                        yield return null;
+                        continue;
+                    }
                     var entry = NewEntry(path, project, ArtifactKind.Partial, ArtifactState.Partial);
                     var files = candidateOnly ? new[] { path } : new[] { metadata, part, metadata + ".next" }.Where(paths.Contains).ToArray();
-                    foreach (var file in files) claimed.Add(file);
+                    foreach (var file in files)
+                    {
+                        claimed.Add(file);
+                    }
+
                     var valid = Attempt(entry, () =>
                     {
                         // 先记录验证输入，再读取；统计跨段时不得把后来替换的 next 当作已验证输入。
-                        Remember(metadata); Remember(part); Remember(metadata + ".next");
-                        var record = store.Read(path); store.ValidatePartial(record, metadata, project);
-                        if (!candidateOnly) store.ValidatePartialFiles(metadata, record, project);
+                        Remember(metadata);
+                        Remember(part);
+                        Remember(metadata + ".next");
+                        var record = _store.Read(path);
+                        _store.ValidatePartial(record, metadata, project);
+                        if (!candidateOnly)
+                        {
+                            _store.ValidatePartialFiles(metadata, record, project);
+                        }
+
                         entry.Digest = (string)record["CatalogDigest"];
                     });
-                    foreach (var file in files) { if (!Attempt(entry, () => AddBytes(entry, file))) valid = false; yield return null; }
-                    entry.Eligible = valid;
+                    foreach (var file in files)
+                    {
+                        if (!Attempt(entry, () => AddBytes(entry, file)))
+                        {
+                            valid = false;
+                        }
+                        yield return null;
+                    }
+                    entry.IsEligible = valid;
                 }
-                foreach (var path in paths) { if (!claimed.Contains(path)) AddUnknown(path, project); yield return null; }
+                foreach (var path in paths)
+                {
+                    if (!claimed.Contains(path))
+                    {
+                        AddUnknown(path, project);
+                    }
+                    yield return null;
+                }
             }
 
-            internal ArtifactStoreReport Report(ArtifactQueryStatus status) => new(store, started, status,
-                entries.Select(x =>
+            internal ArtifactStoreReport Report(ArtifactQueryStatus status) => new(_store, _started, status,
+                _entries.Select(x =>
                 {
-                    protections.TryGetValue(x.Path, out var protection);
-                    return new ArtifactEntry(x.Path, x.Project, x.Digest, x.Kind, x.State, protection, x.Bytes, x.SizeComplete,
-                        status == ArtifactQueryStatus.Ready && x.Eligible && x.SizeComplete && protection == ArtifactProtection.None, x.Issues);
-                }), prepared, protections.Select(x => new ArtifactVersionProtection(x.Key, x.Value)), Operations, Issues);
+                    _protections.TryGetValue(x.Path, out var protection);
+                    return new ArtifactEntry(x.Path, x.Project, x.Digest, x.Kind, x.State, protection, x.Bytes, x.IsSizeComplete,
+                        status == ArtifactQueryStatus.Ready && x.IsEligible && x.IsSizeComplete && protection == ArtifactProtection.None, x.Issues);
+                }), _prepared, _protections.Select(x => new ArtifactVersionProtection(x.Key, x.Value)), Operations, Issues);
         }
     }
 }

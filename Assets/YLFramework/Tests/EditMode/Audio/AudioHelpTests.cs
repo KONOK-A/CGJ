@@ -6,13 +6,13 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using NUnit.Framework;
-using YLFramework.Editor.Help;
-using YLFramework.Services.Audio;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.Events;
 using UnityEngine.Scripting.APIUpdating;
+using YLFramework.Editor.Help;
+using YLFramework.Services.Audio;
 
 namespace YLFramework.Tests.Audio
 {
@@ -41,7 +41,10 @@ namespace YLFramework.Tests.Audio
                          "统一初始默认值", "全局 / 每 Clip 窗口 | 5 / 5 帧", "EveryOne 才关闭去重", "0 不是关闭去重",
                          "CrossFadeMusic API | EqualPower", "applyOnAwake=false、transitionDuration=0.5", "已有序列化选择不自动改写",
                          "1/50、Linear、doppler=0", "缓存 / 预热 | 10 / 无自动预热", "Limit=0、DefaultClipLimit=0 无限" })
+            {
                 StringAssert.Contains(contract, overview.SearchText);
+            }
+
             CollectionAssert.AreEqual(new[] { "overview", "control", "settings", "spatial", "mixer", "components", "action", "timer", "diagnostics" },
                 module.Guides.Select(page => page.Id));
             Assert.AreEqual(1, module.About.Length);
@@ -62,7 +65,11 @@ namespace YLFramework.Tests.Audio
                 typeof(AudioClipEntry), typeof(AudioClipSource), typeof(AudioClipSelectionMode), typeof(AudioClipSelection), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay)
             };
             var apiTypes = module.ApiTypes.Select(definition => definition.Type).ToArray();
-            foreach (var type in requiredTypes) CollectionAssert.Contains(apiTypes, type);
+            foreach (var type in requiredTypes)
+            {
+                CollectionAssert.Contains(apiTypes, type);
+            }
+
             CollectionAssert.AreEquivalent(runtime.GetExportedTypes().Where(type =>
                 type.Namespace == "YLFramework.Services.Audio" ||
                 type.Namespace != null && type.Namespace.StartsWith("YLFramework.Services.Audio.", StringComparison.Ordinal)), apiTypes);
@@ -112,7 +119,10 @@ namespace YLFramework.Tests.Audio
                          "未配置", "Awake 安静跳过", "显式 Apply", "已配置但非法仍报错", "Group=null", "保持自动 Apply 关闭",
                          "applyOnAwake 字段初始值 true", "Reset 设置 applyOnAwake=false、transitionDuration=0.5",
                          "只绑定 Config 不自动应用或清全局路由", "Apply Routing On Awake", "运行时 AddComponent 不承诺 Reset" })
+            {
                 StringAssert.Contains(contract, mixer.SearchText);
+            }
+
             StringAssert.Contains("OutputRoute", module.Guides.Single(page => page.Id == "components").SearchText);
             StringAssert.Contains("outputRoute=default", module.Guides.Single(page => page.Id == "action").SearchText);
             Assert.IsFalse(AudioManager.HasInstance);
@@ -132,7 +142,10 @@ namespace YLFramework.Tests.Audio
                          "AudioManager Update", "unscaled", "scaled", "Pause", "off", "Mute 仍推进", "剩余淡变",
                          "Sound off", "target 丢失", "池回收", "短 Clip 自然结束优先", "不调用自然结束 callback",
                          "Play 返回后同帧", "onStarted", "Crossfade", "独立 transitionGain", "Tween", "首采样", "DSP" })
+            {
                 StringAssert.Contains(contract, control.SearchText);
+            }
+
             foreach (var contract in new[] { "PlaySound/PlaySoundAt/PlaySoundFollowing/PlayRandomSound/PlayWeightedRandomSound",
                          "onFinished 之后追加 onStarted=null", "固定签名反射", "委托绑定", "预编译 ABI", "无效 Clip/目标",
                          "Source.Play 之后", "SoundCount 包含自身", "去重已提交", "同 Clip 嵌套", "可能已失效的原 lease",
@@ -145,7 +158,10 @@ namespace YLFramework.Tests.Audio
                          "A->B->C", "同 Clip 也重开", "硬替换", "StopMusic 停止两条",
                          "任一有效参与者暂停", "共同过渡时钟", "ResumeMusic 才首次启播", "Music off", "transitionGain=1",
                          "on 从头重播", "Mute 不冻结", "旧 outgoing", "新目标提前自然结束", "不复活旧曲", "epoch 与 lease 隔离" })
+            {
                 StringAssert.Contains(contract, control.SearchText);
+            }
+
             var settings = module.Guides.Single(page => page.Id == "settings");
             foreach (var id in new[] { "overview", "control", "settings", "components" })
             {
@@ -161,11 +177,17 @@ namespace YLFramework.Tests.Audio
                          "负 Limit", "未知策略", "原配置/请求不变", "不创建宿主、Source 或 Listener", "Shutdown/新会话恢复默认",
                          "暂停、Mute 与 Loop", "不包含 Music/Voice", "无 Source 分配、无去重提交、无回调", "接纳序号",
                           "待 Update 清理", "保留较早请求", "保留较新请求", "StopLowestPriority=2", "DefaultClipLimit", "Priority", "EveryOne", "不重抽" })
+            {
                 StringAssert.Contains(contract, settings.SearchText);
+            }
+
             foreach (var contract in new[] { "已有合法存档优先", "内存回退 1", "不自动重写坏存档", "Delete", "TrySetValue", "SetValueWithoutCallback",
                          "ArgumentOutOfRangeException", "内存、存档、通知和播放状态不变", "两个窗口默认 5 帧",
                          "仅同帧去重", "EveryOne 才关闭去重", "边界包含最后一帧", "10 帧是显式业务冷却" })
+            {
                 StringAssert.Contains(contract, settings.SearchText);
+            }
+
             var spatial = module.Guides.Single(page => page.Id == "spatial");
             CollectionAssert.Contains(spatial.RelatedTypes, typeof(AudioWeightedClip));
             CollectionAssert.Contains(spatial.FeaturedTypes, typeof(AudioWeightedClip));
@@ -173,7 +195,10 @@ namespace YLFramework.Tests.Audio
                          "PlayWeightedRandomSound", "TrySelectWeightedRandomClip", "options=null", "onFinished=null",
                          "out AudioClip clip", "finite", "包括无效 Clip", "Weight>0", "null/空/all0", "out clip=null",
                          "double", "一次抽选", "去重拒播不重抽", "不防重复", "均匀随机模式完全不变", "不初始化 Settings 或宿主" })
+            {
                 StringAssert.Contains(contract, spatial.SearchText);
+            }
+
             var components = module.Guides.Single(page => page.Id == "components");
             foreach (var contract in new[] { "useWeightedRandom 默认 false", "weightedClips", "Clip/Weight", "三种位置模式",
                          "旧 clips", "去重拒播不重抽", "UnityEvent onStarted 默认空事件", "只读 Started", "无参事件",
@@ -184,7 +209,10 @@ namespace YLFramework.Tests.Audio
                           "useGlobalPlaySoundMode", "字段缺省 false", "playSoundMode=EveryOne", "Reset", "AddComponent",
                           "options.PlaySoundMode=null", "空候选", "旧循环", "空 Clip", "旧音乐", "duration/curve",
                           "Advanced 默认折叠", "隐藏字段不静默清空", "新增项 Weight=1", "旧 Weight=0" })
+            {
                 StringAssert.Contains(contract, components.SearchText);
+            }
+
             foreach (var type in new[] { typeof(AudioClipLibrary), typeof(AudioClipGroup), typeof(AudioClipEntry), typeof(AudioClipSource),
                          typeof(AudioClipSelectionMode), typeof(AudioGroupPlayer), typeof(AudioGroupAutoPlay) })
             {
@@ -194,7 +222,10 @@ namespace YLFramework.Tests.Audio
             foreach (var contract in new[] { "AudioClipLibrary", "素材组与控制通道是两种身份", "Uniform/Weighted", "ProjectId", "逻辑地址", "显式迁移",
                          "ExternalProvider", "SetProvider", "空 persistenceId 不持久化", "Manual", "FirstStart", "EveryEnable", "PlayGroup(string)",
                          "停用停止所有自有播放与 pending", "nullable PlaySoundMode 不被 Unity 序列化", "不随机抽选", "Prefab Override" })
+            {
                 StringAssert.Contains(contract, components.SearchText);
+            }
+
             Assert.IsFalse(AudioManager.HasInstance);
             Assert.IsNull(AudioKit.CurrentSettings);
         }
@@ -213,13 +244,21 @@ namespace YLFramework.Tests.Audio
             {
                 Assert.AreEqual(i >= required, parameters[i].IsOptional, name + "." + parameters[i].Name);
                 Assert.AreEqual(i >= required, parameters[i].HasDefaultValue, name + "." + parameters[i].Name);
-                if (i < required) continue;
+                if (i < required)
+                {
+                    continue;
+                }
                 // Reflection can represent a default value-type argument as null or as its zero value.
                 var actual = parameters[i].DefaultValue;
                 if (actual == null && parameters[i].ParameterType.IsValueType)
+                {
                     actual = Activator.CreateInstance(parameters[i].ParameterType);
+                }
                 else if (actual != null && parameters[i].ParameterType.IsEnum && actual.GetType() != parameters[i].ParameterType)
+                {
                     actual = Enum.ToObject(parameters[i].ParameterType, actual);
+                }
+
                 Assert.AreEqual(optionalDefaults[i - required], actual, name + "." + parameters[i].Name);
             }
         }
@@ -255,16 +294,25 @@ namespace YLFramework.Tests.Audio
                            "公开入口只捕获一次", "提交与请求存储按值传递", "不复制配置类",
                            "default(AudioPlaybackOptions) 仅用于失效清理", "释放快照中的 Group 引用",
                           "句柄修改不反写原对象", "普通引用赋值不是值复制", "FromJsonOverwrite", "缺 Pitch 得到非法 0" })
+            {
                 StringAssert.Contains(contract, control.SearchText);
+            }
+
             var spatial = module.Guides.Single(page => page.Id == "spatial");
             foreach (var contract in new[] { "options.AutoFade", "等权/加权随机", "只选择一次", "实际选中 Clip 长度归一化", "拒播不重抽" })
+            {
                 StringAssert.Contains(contract, spatial.SearchText);
+            }
+
             var components = module.Guides.Single(page => page.Id == "components");
             foreach (var contract in new[] { "private serialized autoFade 默认全零", "等权/加权与三种位置模式全部透传",
                             "Stop 旧循环前拒绝", "与 PlayMusicWithOptions 相同的内部值提交链", "autoFade 全零保持原无包络行为",
                           "直接构造内部 AudioPlaybackOptions", "按值提交", "不在每次 Play 创建公开配置类",
                          "Stop 自有旧句柄前拒绝", "片段秒", "短片段同比缩短", "循环不可尾淡出", "旧数据无需迁移" })
+            {
                 StringAssert.Contains(contract, components.SearchText);
+            }
+
             var action = module.Guides.Single(page => page.Id == "action");
             foreach (var contract in new[] { "AllocateWithOptions(clip, options, onFinish=null, onStarted=null)",
                          "PlaySoundWithOptions(clip, options, onStarted=null)",
@@ -272,11 +320,14 @@ namespace YLFramework.Tests.Audio
                          "sequence.PlaySound(clip, outputRoute=default, onStarted=null)", "typed Action<AudioClip, AudioHandle>",
                            "options 必填", "内部使用值默认并覆盖 OutputRoute", "完整 AudioPlaybackOptions 值快照", "Reset",
                            "Deinit 将模板清为 default(AudioPlaybackOptions)", "释放借用的 OutputRoute.Group 引用", "执行代次与取消契约不变",
-                          "用户 onStarted 之前写入实际 lease", "ActionID/执行版本/Deinited", "不覆盖重入新执行", "不把 onFinish 改为自然完成通知",
+                          "用户 onStarted 之前写入实际 lease", "ActionId/执行版本/IsDeinitialized", "不覆盖重入新执行", "不把 onFinish 改为自然完成通知",
                            "Allocate 时捕获并校验", "Start 将模板按值提交内部播放链", "句柄修改不反写动作模板或其他请求",
                            "分配后修改原对象不影响动作", "等待请求结束，不保证自然播放成功",
                           "暂停动作或序列不自动暂停音频" })
+            {
                 StringAssert.Contains(contract, action.SearchText);
+            }
+
             Assert.IsFalse(AudioManager.HasInstance);
             Assert.IsNull(AudioKit.CurrentSettings);
         }
@@ -288,10 +339,13 @@ namespace YLFramework.Tests.Audio
             var callback = typeof(Action<AudioClip, AudioHandle>);
             var options = typeof(AudioSoundOptions);
             foreach (var name in new[] { "PlayMusic", "PlayVoice" })
+            {
                 AssertPublicMethod(kit, name, true, typeof(AudioHandle),
                     new[] { typeof(AudioClip), typeof(bool), typeof(float), callback, callback, typeof(AudioOutputRoute) },
                     new[] { "clip", "loop", "volume", "onStarted", "onFinished", "outputRoute" },
                     name == "PlayMusic", 1f, null, null, default(AudioOutputRoute));
+            }
+
             AssertPublicMethod(kit, "PlaySound", true, typeof(AudioHandle),
                 new[] { typeof(AudioClip), options, callback, callback }, new[] { "clip", "options", "onFinished", "onStarted" }, null, null, null);
             AssertPublicMethod(kit, "PlayRandomSound", true, typeof(AudioHandle),
@@ -309,7 +363,10 @@ namespace YLFramework.Tests.Audio
             }
             foreach (var name in new[] { "Initialize", "Shutdown", "ClearMixerRouting", "StopMusic", "PauseMusic", "ResumeMusic",
                          "StopVoice", "PauseVoice", "ResumeVoice", "StopAllSound" })
+            {
                 AssertPublicMethod(kit, name, true, typeof(void), Type.EmptyTypes, Array.Empty<string>());
+            }
+
             AssertPublicMethod(kit, "ApplyMixerConfig", true, typeof(void), new[] { typeof(AudioMixerConfig) }, new[] { "config" });
             AssertPublicMethod(kit, "GetPlayingSounds", true, typeof(AudioHandle[]), Type.EmptyTypes, Array.Empty<string>());
             AssertPublicMethod(kit, "CopyPlayingSounds", true, typeof(void), new[] { typeof(List<AudioHandle>) }, new[] { "destination" });
@@ -370,7 +427,10 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(SoundOverflowPolicy.RejectNew, default(AudioSoundConcurrency).OverflowPolicy);
 
             foreach (var name in new[] { "Pause", "Resume", "Stop" })
+            {
                 AssertPublicMethod(typeof(AudioHandle), name, false, typeof(void), Type.EmptyTypes, Array.Empty<string>());
+            }
+
             AssertPublicMethod(typeof(AudioHandle), "SetVolumeScale", false, typeof(void), new[] { typeof(float) }, new[] { "volumeScale" });
             AssertPublicMethod(typeof(AudioHandle), "SetPitch", false, typeof(void), new[] { typeof(float) }, new[] { "pitch" });
             CollectionAssert.AreEquivalent(new[] { "Pause", "Resume", "Stop", "SetVolumeScale", "SetPitch", "FadeIn", "FadeOut" },
@@ -400,12 +460,12 @@ namespace YLFramework.Tests.Audio
             var weighted = typeof(AudioWeightedClip);
             Assert.IsTrue(weighted.IsValueType && !weighted.IsEnum);
             Assert.IsTrue(weighted.IsDefined(typeof(SerializableAttribute), false));
-            CollectionAssert.AreEquivalent(new[] { "Clip", "Weight" },
+            CollectionAssert.AreEquivalent(new[] { "clip", "weight" },
                 weighted.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(field => field.Name));
-            Assert.AreEqual(typeof(AudioClip), weighted.GetField("Clip").FieldType);
-            Assert.AreEqual(typeof(float), weighted.GetField("Weight").FieldType);
-            Assert.IsFalse(weighted.GetField("Clip").IsInitOnly);
-            Assert.IsFalse(weighted.GetField("Weight").IsInitOnly);
+            Assert.AreEqual(typeof(AudioClip), weighted.GetField("clip").FieldType);
+            Assert.AreEqual(typeof(float), weighted.GetField("weight").FieldType);
+            Assert.IsFalse(weighted.GetField("clip").IsInitOnly);
+            Assert.IsFalse(weighted.GetField("weight").IsInitOnly);
             var constructor = weighted.GetConstructor(new[] { typeof(AudioClip), typeof(float) });
             Assert.IsNotNull(constructor);
             CollectionAssert.AreEqual(new[] { "clip", "weight" }, constructor.GetParameters().Select(parameter => parameter.Name));
@@ -486,8 +546,11 @@ namespace YLFramework.Tests.Audio
                 new[] { "self", "clip", "options", "onStarted" }, (object)null);
             Assert.IsTrue(typeof(PlaySoundExtension).GetMethod("PlaySoundWithOptions").IsDefined(typeof(ExtensionAttribute), false));
             foreach (var name in new[] { "Allocate", "AllocateWithOptions" })
+            {
                 Assert.AreEqual(1, typeof(PlaySoundAction).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                     .Count(method => method.Name == name), "Do not add Action allocation overloads: " + name);
+            }
+
             CollectionAssert.AreEquivalent(new[] { "PlaySound", "PlaySoundWithOptions" },
                 typeof(PlaySoundExtension).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly).Select(method => method.Name));
             foreach (var type in new[] { typeof(AudioEmitter), typeof(AudioMusicPlayer) })
@@ -519,7 +582,10 @@ namespace YLFramework.Tests.Audio
             var optionTypes = new[] { typeof(bool), typeof(float), typeof(float), typeof(AudioKit.PlaySoundModes?), typeof(float),
                 typeof(float), typeof(AudioRolloffMode), typeof(AudioOutputRoute), typeof(AudioAutoFade), typeof(int), typeof(bool) };
             for (var i = 0; i < optionFields.Length; i++)
+            {
                 Assert.AreEqual(optionTypes[i], typeof(AudioSoundOptions).GetField(optionFields[i]).FieldType, optionFields[i]);
+            }
+
             var defaults = AudioSoundOptions.Defaults;
             Assert.IsFalse(defaults.Loop);
             Assert.AreEqual(1f, defaults.Volume);
@@ -562,11 +628,16 @@ namespace YLFramework.Tests.Audio
             CollectionAssert.AreEqual(new[] { "Inherit", "MixerGroup", "Direct" }, Enum.GetNames(typeof(AudioOutputRoute.RouteMode)));
             Assert.AreEqual(0, (int)AudioOutputRoute.RouteMode.Inherit);
             foreach (var name in new[] { "Inherit", "Direct" })
+            {
                 Assert.AreEqual(typeof(AudioOutputRoute), typeof(AudioOutputRoute).GetProperty(name, BindingFlags.Public | BindingFlags.Static).PropertyType);
+            }
+
             Assert.AreEqual(typeof(AudioOutputRoute), typeof(AudioOutputRoute).GetMethod("ToMixer", new[] { typeof(AudioMixerGroup) }).ReturnType);
             Assert.AreEqual(typeof(AudioOutputRoute), typeof(AudioSoundOptions).GetField("OutputRoute").FieldType);
             foreach (var name in new[] { "MusicOutputGroup", "VoiceOutputGroup", "SoundOutputGroup" })
+            {
                 Assert.AreEqual(typeof(YLFramework.Binding.BindableProperty<AudioMixerGroup>), typeof(AudioKitSettings).GetProperty(name).PropertyType);
+            }
 
             foreach (var name in new[] { "PlayMusic", "PlayVoice" })
             {
@@ -607,19 +678,33 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(typeof(void), typeof(AudioKit).GetMethod("ClearMixerRouting", Type.EmptyTypes).ReturnType);
             Assert.IsTrue(typeof(AudioMixerControl).IsAbstract && typeof(AudioMixerControl).IsSealed);
             foreach (var name in new[] { "TrySetFloat", "TrySetVolume" })
+            {
                 Assert.AreEqual(typeof(bool), typeof(AudioMixerControl).GetMethod(name, new[] { typeof(AudioMixer), typeof(string), typeof(float) }).ReturnType);
+            }
+
             foreach (var name in new[] { "TryGetFloat", "TryGetVolume" })
+            {
                 Assert.AreEqual(typeof(bool), typeof(AudioMixerControl).GetMethod(name, new[] { typeof(AudioMixer), typeof(string), typeof(float).MakeByRefType() }).ReturnType);
+            }
+
             Assert.AreEqual(typeof(bool), typeof(AudioMixerControl).GetMethod("TryClearFloat", new[] { typeof(AudioMixer), typeof(string) }).ReturnType);
             foreach (var name in new[] { "LinearVolumeToDecibels", "DecibelsToLinearVolume" })
+            {
                 Assert.AreEqual(typeof(float), typeof(AudioMixerControl).GetMethod(name, new[] { typeof(float) }).ReturnType);
+            }
+
             Assert.AreEqual(typeof(void), typeof(AudioMixerControl).GetMethod("TransitionToSnapshot", new[] { typeof(AudioMixerSnapshot), typeof(float) }).ReturnType);
             Assert.AreEqual(typeof(void), typeof(AudioMixerControl).GetMethod("TransitionToSnapshots", new[] { typeof(AudioMixer), typeof(AudioMixerSnapshot[]), typeof(float[]), typeof(float) }).ReturnType);
             Assert.IsTrue(typeof(AudioMixerController).IsSubclassOf(typeof(MonoBehaviour)));
             foreach (var name in new[] { "Apply", "ClearRouting", "ClearParameter", "TransitionToSnapshot", "TransitionToSnapshots" })
+            {
                 Assert.AreEqual(typeof(void), typeof(AudioMixerController).GetMethod(name, Type.EmptyTypes).ReturnType);
+            }
+
             foreach (var name in new[] { "SetParameter", "SetVolume" })
+            {
                 Assert.AreEqual(typeof(void), typeof(AudioMixerController).GetMethod(name, new[] { typeof(float) }).ReturnType);
+            }
         }
 
         [Test]
@@ -666,8 +751,8 @@ namespace YLFramework.Tests.Audio
             var entries = new[]
             {
                 "T:" + prefix + "AudioWeightedClip",
-                "F:" + prefix + "AudioWeightedClip.Clip",
-                "F:" + prefix + "AudioWeightedClip.Weight",
+                "F:" + prefix + "AudioWeightedClip.clip",
+                "F:" + prefix + "AudioWeightedClip.weight",
                 "M:" + prefix + "AudioWeightedClip.#ctor(UnityEngine.AudioClip,System.Single)",
                 "M:" + prefix + "AudioHandle.FadeIn(System.Single,System.Boolean)",
                 "M:" + prefix + "AudioHandle.FadeOut(System.Single,System.Boolean,System.Boolean)",
@@ -745,13 +830,19 @@ namespace YLFramework.Tests.Audio
                 { "M:" + prefix + "AudioKit.GetSoundCount(UnityEngine.AudioClip)", new[] { "clip" } }
             };
             foreach (var property in typeof(AudioSoundStats).GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
                 budgetEntries.Add("P:" + prefix + "AudioSoundStats." + property.Name, Array.Empty<string>());
+            }
+
             foreach (var entry in budgetEntries)
             {
                 Assert.IsTrue(members.TryGetValue(entry.Key, out var documentation), entry.Key + " XML is missing.");
                 Assert.IsFalse(string.IsNullOrWhiteSpace(documentation.Element("summary")?.Value), entry.Key);
                 CollectionAssert.AreEqual(entry.Value, documentation.Elements("param").Select(element => (string)element.Attribute("name")), entry.Key);
-                foreach (var parameter in documentation.Elements("param")) Assert.IsFalse(string.IsNullOrWhiteSpace(parameter.Value), entry.Key);
+                foreach (var parameter in documentation.Elements("param"))
+                {
+                    Assert.IsFalse(string.IsNullOrWhiteSpace(parameter.Value), entry.Key);
+                }
             }
         }
 

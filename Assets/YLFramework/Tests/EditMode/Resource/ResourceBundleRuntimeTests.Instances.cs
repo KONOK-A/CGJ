@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -49,12 +49,16 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         private static GameObjectPoolData CacheData(InstanceCache cache) => (GameObjectPoolData)typeof(InstanceCache)
-            .GetField("data", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(cache);
+            .GetField("_data", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(cache);
 
         private static IEnumerator InstancesDrained(ResourceSystem system)
         {
             var until = Time.realtimeSinceStartup + 10;
-            while (system.GetDiagnosticsSnapshot().RecordCount != 0 && Time.realtimeSinceStartup < until) yield return null;
+            while (system.GetDiagnosticsSnapshot().RecordCount != 0 && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
@@ -96,7 +100,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(next.GameObject.GetComponent<MeshRenderer>().sharedMaterial.mainTexture, Is.SameAs(texture));
             cache.Dispose();
             Assert.That(data.IsRecycled, Is.False, "Retired Data must not return to Safe while a checkout/Destroy-pending instance still owns it.");
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             Assert.That(system.IsAvailable, Is.True);
             var replacement = system.Instantiate(Address(snapshot, "A.prefab"));
             var replacementCache = system.GetInstanceCache(Address(snapshot, "A.prefab"));
@@ -260,15 +268,25 @@ namespace YLFramework.Tests.ResourceBuild
             var system = Initialize(snapshot);
             var address = Address(snapshot, "A.prefab");
             using (var failed = system.InstantiateAsync(Address(snapshot, "unknown.prefab")))
+            {
                 Assert.That(failed.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            }
+
             using (var wrong = system.InstantiateAsync(Address(snapshot, "entry.txt")))
+            {
                 Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.TypeMismatch));
+            }
+
             using (var disposed = system.Acquire<GameObject>(address))
             {
                 disposed.Dispose();
                 Assert.Throws<ObjectDisposedException>(() => system.Instantiate(disposed));
             }
-            using (var canceled = system.InstantiateAsync(address)) canceled.Cancel();
+            using (var canceled = system.InstantiateAsync(address))
+            {
+                canceled.Cancel();
+            }
+
             using var delivered = system.InstantiateAsync(address);
             yield return Wait(delivered);
             var lease = delivered.TakeResult();
@@ -280,7 +298,11 @@ namespace YLFramework.Tests.ResourceBuild
             yield return InstancesDrained(system);
 
             ResourceRequest<InstanceLease> reentrant = null;
-            InstanceLifecycleProbe.OnAwake = _ => { InstanceLifecycleProbe.OnAwake = null; reentrant.Cancel(); };
+            InstanceLifecycleProbe.OnAwake = _ =>
+            {
+                InstanceLifecycleProbe.OnAwake = null;
+                reentrant.Cancel();
+            };
             reentrant = system.InstantiateAsync(address);
             yield return Wait(reentrant);
             Assert.That(reentrant.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
@@ -380,7 +402,11 @@ namespace YLFramework.Tests.ResourceBuild
             persistent.Prewarm(1);
             var persistentIdle = CacheData(persistent).PoolQueue.Single();
             var unload = SceneManager.UnloadSceneAsync(scene);
-            while (!unload.isDone) yield return null;
+            while (!unload.isDone)
+            {
+                yield return null;
+            }
+
             Assert.That(cache.IsRetired, Is.True);
             Assert.That(idle == null, Is.True);
             Assert.That(sceneObject == null, Is.True);
@@ -416,7 +442,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(texture == null, Is.False, "Stale public AssetLease/InstanceLease cannot subtract the Destroy-pending pin.");
             typeof(ResourceSystem).GetMethod("ResetSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
             using (var blocked = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { snapshot.CreateCatalog() })))
+            {
                 Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             yield return InstancesDrained(system);
             Assert.That(obj == null, Is.True);
             Assert.That(texture == null, Is.True);
@@ -444,26 +473,26 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(texture == null, Is.True);
         }
 
-        private static ResourceSystem exitingInstanceSystem;
-        private static InstanceLease exitingInstance;
-        private static ResourceRequest<InstanceLease> exitingInstanceRequest;
+        private static ResourceSystem _exitingInstanceSystem;
+        private static InstanceLease _exitingInstance;
+        private static ResourceRequest<InstanceLease> _exitingInstanceRequest;
 
         private static void StartActualInstanceExit()
         {
             var snapshot = Snapshot();
-            exitingInstanceSystem = Initialize(snapshot);
-            exitingInstance = exitingInstanceSystem.Instantiate(Address(snapshot, "A.prefab"));
-            exitingInstanceSystem.GetInstanceCache(Address(snapshot, "A.prefab")).Prewarm(1);
-            exitingInstanceRequest = exitingInstanceSystem.InstantiateAsync(Address(snapshot, "B.prefab"));
-            Assert.That(exitingInstanceRequest.Status, Is.EqualTo(ResourceRequestStatus.Pending));
+            _exitingInstanceSystem = Initialize(snapshot);
+            _exitingInstance = _exitingInstanceSystem.Instantiate(Address(snapshot, "A.prefab"));
+            _exitingInstanceSystem.GetInstanceCache(Address(snapshot, "A.prefab")).Prewarm(1);
+            _exitingInstanceRequest = _exitingInstanceSystem.InstantiateAsync(Address(snapshot, "B.prefab"));
+            Assert.That(_exitingInstanceRequest.Status, Is.EqualTo(ResourceRequestStatus.Pending));
             SessionState.SetBool(Key + "instance-quit", false);
             Application.quitting += OnActualInstanceQuit;
         }
 
         private static void OnActualInstanceQuit()
         {
-            SessionState.SetBool(Key + "instance-quit", exitingInstanceSystem.State == ResourceSystemState.Invalidated &&
-                !exitingInstance.IsValid && exitingInstanceRequest.IsDisposed);
+            SessionState.SetBool(Key + "instance-quit", _exitingInstanceSystem.State == ResourceSystemState.Invalidated &&
+                !_exitingInstance.IsValid && _exitingInstanceRequest.IsDisposed);
             Application.quitting -= OnActualInstanceQuit;
         }
 

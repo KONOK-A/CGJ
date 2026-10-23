@@ -14,10 +14,15 @@ namespace YLFramework.Tests.Extensions.Data
     [TestFixture]
     public class ExcelAuthoringTests
     {
-        public enum Mode : long { Off = 0, On = 4294967296 }
-        [Serializable] public class Row
+        public enum Mode : long
         {
-            [ExcelScriptableObjectID] public int Id;
+            Off = 0,
+            On = 4294967296
+        }
+        [Serializable]
+        public class Row
+        {
+            [ExcelScriptableObjectId] public int Id;
             public string Name;
             public Mode State;
             public List<int> Numbers;
@@ -30,29 +35,49 @@ namespace YLFramework.Tests.Extensions.Data
         {
             public override object Import(object owner, object value, ExcelFieldsType type)
             {
-                if (!(owner is Row)) throw new InvalidOperationException("Converter did not receive the actual staged row.");
+                if (!(owner is Row))
+                {
+                    throw new InvalidOperationException("Converter did not receive the actual staged row.");
+                }
+
                 return int.Parse(Convert.ToString(value, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture) * 10;
             }
             public override object Export(object owner, object value, ExcelFieldsType type) => (int)value / 10;
             public override void SetValue(object owner, FieldInfo field, object value) => field.SetValue(owner, value);
         }
 
-        private string folder;
-        [SetUp] public void SetUp()
+        private string _folder;
+        [SetUp]
+        public void SetUp()
         {
-            folder = Path.Combine(Environment.GetEnvironmentVariable("YL_EXCEL_TEST_OUTPUT") ?? Path.Combine(Path.GetTempPath(), "YLExcelTests"), Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(folder);
+            _folder = Path.Combine(Environment.GetEnvironmentVariable("YL_EXCEL_TEST_OUTPUT") ?? Path.Combine(Path.GetTempPath(), "YLExcelTests"), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_folder);
         }
-        private string FilePath(string name) => Path.Combine(folder, name);
+        private string FilePath(string name) => Path.Combine(_folder, name);
         private static Type Api => AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Excel.Editor.ExcelAuthoring")).FirstOrDefault(t => t != null);
         internal static object Call(string name, Type type, params object[] args)
         {
             Assert.That(Api, Is.Not.Null, "Optional Excel authoring implementation is missing.");
-            var method = Api.GetMethods().Single(m => m.Name == name);
-            if (type != null) method = method.MakeGenericMethod(type);
-            if (args.Length < method.GetParameters().Length) args = args.Concat(Enumerable.Repeat(Type.Missing, method.GetParameters().Length - args.Length)).ToArray();
-            try { return method.Invoke(null, args); }
-            catch (TargetInvocationException e) { throw e.InnerException; }
+            var method = Api.GetMethods().Single(m => m.Name == name && m.IsGenericMethodDefinition == (type != null) &&
+                m.GetParameters().Length >= args.Length && m.GetParameters().Skip(args.Length).All(parameter => parameter.IsOptional));
+            if (type != null)
+            {
+                method = method.MakeGenericMethod(type);
+            }
+
+            if (args.Length < method.GetParameters().Length)
+            {
+                args = args.Concat(Enumerable.Repeat(Type.Missing, method.GetParameters().Length - args.Length)).ToArray();
+            }
+
+            try
+            {
+                return method.Invoke(null, args);
+            }
+            catch (TargetInvocationException e)
+            {
+                throw e.InnerException;
+            }
         }
         private static object Get(object target, string name) => target.GetType().GetProperty(name).GetValue(target);
         internal static string Commit(object plan, bool confirmed) => plan.GetType().GetMethod("Commit").Invoke(plan, new object[] { confirmed }).ToString();
@@ -87,12 +112,16 @@ namespace YLFramework.Tests.Extensions.Data
                 ?? Type.GetType("MiniExcelLibs.MiniExcel, MiniExcel", true);
             var rows = new List<Dictionary<string, object>>();
             foreach (var row in new[] { names.Cast<object>().ToArray(), types.Cast<object>().ToArray(), names.Select(n => (object)("note:" + n)).ToArray() }.Concat(values))
+            {
                 rows.Add(row.Select((v, i) => new { v, i }).ToDictionary(x => "C" + x.i, x => x.v));
+            }
+
             backend.GetMethods().Single(m => m.Name == "SaveAs" && m.GetParameters()[0].ParameterType == typeof(string))
                 .Invoke(null, new object[] { path, rows, false, "Sheet1", Enum.Parse(backend.Assembly.GetType("MiniExcelLibs.ExcelType"), "XLSX"), null, false });
         }
 
-        [Test] public void RealXlsxRoundTripKeepsThreeHeadersEnumJsonLongAndCustomConversion()
+        [Test]
+        public void RealXlsxRoundTripKeepsThreeHeadersEnumJsonLongAndCustomConversion()
         {
             var source = new List<Row> { new Row { Id = 2, Name = "name", State = Mode.On, Numbers = new List<int> { 1, 3 }, Count = 9007199254740993, Rate = 1.25f, Scaled = 70, Ignored = "secret" } };
             string path = FilePath("roundtrip.xlsx");
@@ -114,7 +143,8 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(target[0].Scaled, Is.EqualTo(70));
             Assert.That(target[0].Ignored, Is.Null);
         }
-        [Test] public void PreviewReportsAddsUpdatesDeletesAndCancelPreservesReferences()
+        [Test]
+        public void PreviewReportsAddsUpdatesDeletesAndCancelPreservesReferences()
         {
             var target = Original();
             var before = target.ToArray();
@@ -130,7 +160,45 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(target, Is.EqualTo(before));
             Assert.That(target[0].Name, Is.EqualTo("old"));
         }
-        [Test] public void InvalidNumberAndJsonGiveCoordinatesAndPreserveEntireList()
+
+        [TestCase(typeof(YLFramework.BuffSystem.BuffConfigData), "buff_id", "id", "buff_name", "buffName")]
+        [TestCase(typeof(YLFramework.SkillSystem.SkillConfigData), "id", "id", "skill_name", "skillName")]
+        [TestCase(typeof(YLFramework.EquipmentSystem.EquipmentConfigData), "id", "id", "equipment_name", "equipmentName")]
+        public void ExistingDomainWorkbookHeadersRemainStableAfterFieldRenames(Type type, string oldId,
+            string currentId, string oldName, string currentName)
+        {
+            var source = UnityEngine.ScriptableObject.CreateInstance(type);
+            try
+            {
+                type.GetField(currentId).SetValue(source, 7);
+                type.GetField(currentName).SetValue(source, "legacy workbook value");
+                var rows = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(type));
+                rows.Add(source);
+                var workbook = FilePath("domain-headers.xlsx");
+                var json = FilePath("domain-headers.json");
+                Call("ScriptableObjectToExcel", type, rows, workbook, "Sheet1");
+                using (var plan = (IDisposable)Call("PreviewJson", null, workbook, json, "", null))
+                {
+                    Assert.That(Errors(plan), Is.Empty);
+                    Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+                }
+                var row = JArray.Parse(File.ReadAllText(json)).Single();
+                Assert.That((int?)row[oldId], Is.EqualTo(7), oldId);
+                Assert.That((string)row[oldName], Is.EqualTo("legacy workbook value"), oldName);
+                if (oldId != currentId)
+                {
+                    Assert.That(row[currentId], Is.Null, "Do not silently create a new ID column.");
+                }
+                Assert.That(row[currentName], Is.Null, "C# authoring names must not rename shipped worksheet columns.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(source);
+            }
+        }
+
+        [Test]
+        public void InvalidNumberAndJsonGiveCoordinatesAndPreserveEntireList()
         {
             string path = FilePath("bad.xlsx");
             WriteWorkbook(path, new[] { "Id", "Rate", "Numbers" }, new[] { "int", "float", "json" }, new object[] { 1, "not-float", "[broken" });
@@ -152,11 +220,16 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(typeof(YLFramework.DataAssets.ScriptableObjectConfigs).GetField("excel_path"), Is.Null);
             Assert.That(typeof(YLFramework.Localization.MultiLanguageConfigs).GetField("excel_path"), Is.Null);
         }
-        [Test] public void DuplicateHeaderDuplicateIdAndUnknownEnumAreNotSilentlyDropped()
+        [Test]
+        public void DuplicateHeaderDuplicateIdAndUnknownEnumAreNotSilentlyDropped()
         {
             string duplicateHeader = FilePath("header.xlsx");
             WriteWorkbook(duplicateHeader, new[] { "Id", "Id" }, new[] { "int", "int" }, new object[] { 1, 1 });
-            using (var plan = (IDisposable)Preview(duplicateHeader, Original())) Assert.That(Errors(plan), Is.Not.Empty);
+            using (var plan = (IDisposable)Preview(duplicateHeader, Original()))
+            {
+                Assert.That(Errors(plan), Is.Not.Empty);
+            }
+
             string duplicateId = FilePath("id.xlsx");
             WriteWorkbook(duplicateId, new[] { "Id", "State" }, new[] { "int", "enum" }, new object[] { 1, "Off" }, new object[] { 1, "bad-enum" });
             using (var plan = (IDisposable)Preview(duplicateId, Original()))
@@ -165,7 +238,8 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(Errors(plan).Any(e => e.Contains("duplicate") || e.Contains("Duplicate")), Is.True);
             }
         }
-        [Test] public void ChangedSourceOrTargetAfterPreviewRefusesStaleCommit()
+        [Test]
+        public void ChangedSourceOrTargetAfterPreviewRefusesStaleCommit()
         {
             string path = FilePath("stale.xlsx");
             Export(new[] { new Row { Id = 1, Name = "new", Numbers = new List<int>() } }, path);
@@ -182,7 +256,8 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(Commit(plan, true), Is.EqualTo("Failed"));
             }
         }
-        [Test] public void JsonPreviewCancellationAndLockedDestinationPreservePreviousFile()
+        [Test]
+        public void JsonPreviewCancellationAndLockedDestinationPreservePreviousFile()
         {
             string path = FilePath("json.xlsx"), json = FilePath("out.json");
             WriteWorkbook(path, new[] { "Id", "State", "Numbers", "_private" }, new[] { "int", "enum", "json", "string" }, new object[] { 7, "On", "[2,4]", "hidden" });
@@ -193,16 +268,25 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(File.ReadAllText(json), Is.EqualTo("old-json"));
             }
             using (var plan = (IDisposable)Call("PreviewJson", null, path, json, "_", null))
-            using (File.Open(json, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) Assert.That(Commit(plan, true), Is.EqualTo("Failed"));
+            using (File.Open(json, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.That(Commit(plan, true), Is.EqualTo("Failed"));
+            }
+
             Assert.That(File.ReadAllText(json), Is.EqualTo("old-json"));
-            using (var plan = (IDisposable)Call("PreviewJson", null, path, json, "_", null)) Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            using (var plan = (IDisposable)Call("PreviewJson", null, path, json, "_", null))
+            {
+                Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            }
+
             var data = JArray.Parse(File.ReadAllText(json));
             Assert.That((int)data[0]["Id"], Is.EqualTo(7));
             Assert.That((string)data[0]["State"], Is.EqualTo("On"));
             Assert.That(data[0]["Numbers"].ToObject<int[]>(), Is.EqualTo(new[] { 2, 4 }));
             Assert.That(data[0]["_private"], Is.Null);
         }
-        [Test] public void BadWorkbookAndCancelledJsonNeverCreateDestination()
+        [Test]
+        public void BadWorkbookAndCancelledJsonNeverCreateDestination()
         {
             string path = FilePath("corrupt.xlsx"), json = FilePath("untouched.json");
             File.WriteAllText(path, "not a zip");
@@ -213,7 +297,8 @@ namespace YLFramework.Tests.Extensions.Data
             }
             Assert.That(File.Exists(json), Is.False);
         }
-        [Test] public void InvariantCultureAndRowsAfterThirtyBlankRowsArePreserved()
+        [Test]
+        public void InvariantCultureAndRowsAfterThirtyBlankRowsArePreserved()
         {
             var previous = CultureInfo.CurrentCulture;
             try
@@ -232,11 +317,19 @@ namespace YLFramework.Tests.Extensions.Data
                 }
                 Assert.That(target.Select(r => r.Rate), Is.EqualTo(new[] { 1.25f, 2.5f }));
             }
-            finally { CultureInfo.CurrentCulture = previous; }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
         }
 
-        public class ReferenceRow { public int Id; public UnityEngine.Object Reference; }
-        [Test] public void MalformedGuidIsDiagnosedBeforeCallingAssetDatabaseAndKeepsList()
+        public class ReferenceRow
+        {
+            public int Id;
+            public UnityEngine.Object Reference;
+        }
+        [Test]
+        public void MalformedGuidIsDiagnosedBeforeCallingAssetDatabaseAndKeepsList()
         {
             string path = FilePath("guid.xlsx");
             WriteWorkbook(path, new[] { "Id", "Reference" }, new[] { "int", "objectreference" }, new object[] { 1, "not-a-guid" });
@@ -249,7 +342,8 @@ namespace YLFramework.Tests.Extensions.Data
             }
             Assert.That(target.Single(), Is.SameAs(old));
         }
-        [Test] public void CustomConversionExceptionCannotPartiallyReplaceList()
+        [Test]
+        public void CustomConversionExceptionCannotPartiallyReplaceList()
         {
             string path = FilePath("custom-error.xlsx");
             WriteWorkbook(path, new[] { "Id", "Scaled" }, new[] { "int", "int" }, new object[] { 1, 2 }, new object[] { 2, "bad" });
@@ -262,16 +356,21 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That(target[0].Scaled, Is.EqualTo(20));
             Assert.That(target[1].Id, Is.EqualTo(9));
         }
-        [Test] public void LockedWorkbookExportKeepsBytesAndCleansOnlyItsTemporaryFile()
+        [Test]
+        public void LockedWorkbookExportKeepsBytesAndCleansOnlyItsTemporaryFile()
         {
             string path = FilePath("locked.xlsx");
             File.WriteAllText(path, "previous bytes");
             using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
                 Assert.Throws<IOException>(() => Export(Original(), path));
+            }
+
             Assert.That(File.ReadAllText(path), Is.EqualTo("previous bytes"));
-            Assert.That(Directory.GetFiles(folder, ".*.tmp.xlsx"), Is.Empty);
+            Assert.That(Directory.GetFiles(_folder, ".*.tmp.xlsx"), Is.Empty);
         }
-        [Test] public void DuplicateTargetsAndIncompleteHeadersFailWithoutWrites()
+        [Test]
+        public void DuplicateTargetsAndIncompleteHeadersFailWithoutWrites()
         {
             string path = FilePath("short.xlsx");
             WriteWorkbook(path, new[] { "Id" }, new[] { "int" }, new object[] { 1 });
@@ -282,14 +381,22 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(Commit(plan, true), Is.EqualTo("Failed"));
             }
             WriteWorkbook(FilePath("wrong-type.xlsx"), new[] { "Id" }, new[] { "mystery" }, new object[] { 1 });
-            using (var plan = (IDisposable)Preview(FilePath("wrong-type.xlsx"), Original())) Assert.That(Errors(plan).Any(e => e.Contains("A2")), Is.True);
+            using (var plan = (IDisposable)Preview(FilePath("wrong-type.xlsx"), Original()))
+            {
+                Assert.That(Errors(plan).Any(e => e.Contains("A2")), Is.True);
+            }
         }
-        [Test] public void NumericalEnumUsesItsRealUnderlyingTypeAndInvalidValueFails()
+        [Test]
+        public void NumericalEnumUsesItsRealUnderlyingTypeAndInvalidValueFails()
         {
             string path = FilePath("numeric-enum.xlsx");
             WriteWorkbook(path, new[] { "Id", "State" }, new[] { "int", "enum" }, new object[] { 1, "4294967296" });
             var target = new List<Row>();
-            using (var plan = (IDisposable)Preview(path, target)) Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            using (var plan = (IDisposable)Preview(path, target))
+            {
+                Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            }
+
             Assert.That(target[0].State, Is.EqualTo(Mode.On));
             string invalid = FilePath("undefined-enum.xlsx");
             WriteWorkbook(invalid, new[] { "Id", "State" }, new[] { "int", "enum" }, new object[] { 1, 2 });
@@ -300,7 +407,8 @@ namespace YLFramework.Tests.Extensions.Data
             }
             Assert.That(target[0].State, Is.EqualTo(Mode.On));
         }
-        [Test] public void DisposeCancelsAndSuccessfulCommitCannotBeRepeated()
+        [Test]
+        public void DisposeCancelsAndSuccessfulCommitCannotBeRepeated()
         {
             string path = FilePath("once.xlsx");
             Export(new[] { new Row { Id = 2, Numbers = new List<int>() } }, path);
@@ -316,13 +424,23 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(target[0].Name, Is.EqualTo("subsequent-edit"));
             }
         }
-        public class UnsignedRow { public int Id; public uint Number; public ulong Count; }
-        [Test] public void UnsignedIntegerBoundariesSurviveListAndJsonExportsWithoutTruncation()
+        public class UnsignedRow
+        {
+            public int Id;
+            public uint Number;
+            public ulong Count;
+        }
+        [Test]
+        public void UnsignedIntegerBoundariesSurviveListAndJsonExportsWithoutTruncation()
         {
             string path = FilePath("unsigned.xlsx"), json = FilePath("unsigned.json");
             Call("ListToExcel", typeof(UnsignedRow), new[] { new UnsignedRow { Id = 1, Number = uint.MaxValue, Count = ulong.MaxValue } }, path, "Sheet1");
             var target = new List<UnsignedRow>();
-            using (var plan = (IDisposable)Call("PreviewList", typeof(UnsignedRow), path, target, null)) Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            using (var plan = (IDisposable)Call("PreviewList", typeof(UnsignedRow), path, target, null))
+            {
+                Assert.That(Commit(plan, true), Is.EqualTo("Applied"));
+            }
+
             Assert.That(target[0].Number, Is.EqualTo(uint.MaxValue));
             Assert.That(target[0].Count, Is.EqualTo(ulong.MaxValue));
             using (var plan = (IDisposable)Call("PreviewJson", null, path, json, "", null))
@@ -334,7 +452,8 @@ namespace YLFramework.Tests.Extensions.Data
             Assert.That((uint)data[0]["Number"], Is.EqualTo(uint.MaxValue));
             Assert.That((ulong)data[0]["Count"], Is.EqualTo(ulong.MaxValue));
         }
-        [Test] public void LossyCustomExportAndIgnoredFieldCannotHideTargetEditsAfterPreview()
+        [Test]
+        public void LossyCustomExportAndIgnoredFieldCannotHideTargetEditsAfterPreview()
         {
             string path = FilePath("hidden-edits.xlsx");
             Export(new[] { new Row { Id = 1, Scaled = 50 } }, path);
@@ -352,20 +471,26 @@ namespace YLFramework.Tests.Extensions.Data
                 Assert.That(target[0].Ignored, Is.EqualTo("new user edit"));
             }
         }
-        [Test] public void WriterExceptionAfterPartialTemporaryOutputKeepsDestinationAndRemovesTemporary()
+        [Test]
+        public void WriterExceptionAfterPartialTemporaryOutputKeepsDestinationAndRemovesTemporary()
         {
             string path = FilePath("fault.json");
             File.WriteAllText(path, "original");
             Assert.That(Api, Is.Not.Null);
             var files = Api.Assembly.GetType("YLFramework.Excel.Editor.ExcelFiles", true);
-            Action<string> writer = temporary => { File.WriteAllText(temporary, "partial"); throw new IOException("injected writer failure"); };
+            Action<string> writer = temporary =>
+            {
+                File.WriteAllText(temporary, "partial");
+                throw new IOException("injected writer failure");
+            };
             var error = Assert.Throws<TargetInvocationException>(() => files.GetMethod("WriteAtomic", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { path, writer }));
             Assert.That(error.InnerException, Is.TypeOf<IOException>());
             Assert.That(error.InnerException.Message, Is.EqualTo("injected writer failure"));
             Assert.That(File.ReadAllText(path), Is.EqualTo("original"));
-            Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName), Is.EqualTo(new[] { "fault.json" }));
+            Assert.That(Directory.GetFiles(_folder).Select(Path.GetFileName), Is.EqualTo(new[] { "fault.json" }));
         }
-        [Test] public void EmptyBaseListTemplateIncludesBoundDerivedColumnsAndRejectsIncompatibleBinding()
+        [Test]
+        public void EmptyBaseListTemplateIncludesBoundDerivedColumnsAndRejectsIncompatibleBinding()
         {
             string path = FilePath("bound-template.xlsx");
             Call("ScriptableObjectToExcel", typeof(YLFramework.DataAssets.ScriptableObjectData), new List<YLFramework.DataAssets.ScriptableObjectData>(), path, "Sheet1", typeof(ExcelBoundDataFixture));

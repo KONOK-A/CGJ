@@ -6,26 +6,43 @@ using YLFramework.Services.Resource;
 namespace YLFramework.Services.Audio
 {
     /// <summary>素材定位方式；ExternalProvider 必须由调用方显式提供后端，不自动注册 XFAB。</summary>
-    public enum AudioClipSource { Clip, Resources, AssetBundle, ExternalProvider, Resource }
+    public enum AudioClipSource
+    {
+        Clip,
+        Resources,
+        AssetBundle,
+        ExternalProvider,
+        Resource
+    }
     /// <summary>组内抽选规则；Weighted 的零权重排除条目。</summary>
-    public enum AudioClipSelectionMode { Uniform, Weighted }
+    public enum AudioClipSelectionMode
+    {
+        Uniform,
+        Weighted
+    }
 
     /// <summary>直接借用的 Clip 或 ProjectId/逻辑地址。旧 Resources/AssetBundle 枚举值仅供显式迁移读取。</summary>
     [Serializable]
     public sealed class AudioClipEntry
     {
         /// <summary>明确的素材定位方式；默认直接 Clip。</summary>
-        public AudioClipSource Source;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Source")]
+        public AudioClipSource source;
         /// <summary>仅 Clip 模式使用，调用方负责保活，不自动卸载。</summary>
-        public AudioClip Clip;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Clip")]
+        public AudioClip clip;
         /// <summary>Resource 模式的逻辑地址；ExternalProvider 模式为该后端的完整 key。</summary>
-        public string Key;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Key")]
+        public string key;
         /// <summary>Resource 模式的稳定资源项目身份，不是旧 BundleName 或 XFAB ProjectName。</summary>
-        public string ProjectId;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("ProjectId")]
+        public string projectId;
         /// <summary>保留既有序列化值供一次性显式转换；运行时不使用或推断其含义。</summary>
-        [HideInInspector] public string BundleName;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("BundleName")]
+        [HideInInspector] public string bundleName;
         /// <summary>Weighted 模式的有限非负相对权重；0 排除，Uniform 忽略。</summary>
-        public float Weight = 1f;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Weight")]
+        public float weight = 1f;
     }
 
     /// <summary>仅负责选曲，不声明音量控制通道或播放所有权。</summary>
@@ -33,23 +50,36 @@ namespace YLFramework.Services.Audio
     public sealed class AudioClipGroup
     {
         /// <summary>区分大小写的组名；同库内重名使该组选择失败。</summary>
-        public string Name;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Name")]
+        public string name;
         /// <summary>均匀或加权抽选一次。</summary>
-        public AudioClipSelectionMode Selection;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Selection")]
+        public AudioClipSelectionMode selection;
         /// <summary>直接 Clip 与明确命名定位可混用的候选。</summary>
-        public List<AudioClipEntry> Entries = new List<AudioClipEntry>();
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Entries")]
+        public List<AudioClipEntry> entries = new List<AudioClipEntry>();
     }
 
     /// <summary>一次抽选的不可变定位快照；不会在加载完成后再次随机。</summary>
     public readonly struct AudioClipSelection
     {
         /// <summary>直接素材快照；命名模式为 null。</summary>
-        public AudioClip Clip { get; }
+        public AudioClip Clip
+        {
+            get;
+        }
         /// <summary>命名资源身份快照；直接模式为 default。</summary>
-        public AudioClipAddress Address { get; }
+        public AudioClipAddress Address
+        {
+            get;
+        }
         /// <summary>本次选择是否使用显式 provider。</summary>
         public bool IsNamed => Address.Provider != null;
-        internal AudioClipSelection(AudioClip clip, AudioClipAddress address) { Clip = clip; Address = address; }
+        internal AudioClipSelection(AudioClip clip, AudioClipAddress address)
+        {
+            Clip = clip;
+            Address = address;
+        }
     }
 
     /// <summary>可共享的具名素材组。直接 Clip 永远借用，命名定位沿用正式 Audio provider 与租约。</summary>
@@ -57,7 +87,8 @@ namespace YLFramework.Services.Audio
     public sealed class AudioClipLibrary : ScriptableObject
     {
         /// <summary>序列化素材组；不包含控制通道、音源或播放资源租约。</summary>
-        public List<AudioClipGroup> Groups = new List<AudioClipGroup>();
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Groups")]
+        public List<AudioClipGroup> groups = new List<AudioClipGroup>();
 
         /// <summary>精确按组名抽选一次。缺组、重名、非法权重或定位失败返回 false，不创建播放/通道。</summary>
         /// <remarks>均匀模式忽略 Weight；空 Clip/空 key 为不可选条目。非法枚举、负数/非有限加权权重使整组失败。
@@ -65,59 +96,142 @@ namespace YLFramework.Services.Audio
         public bool TrySelect(string groupName, out AudioClipSelection selection, IAudioClipProvider externalProvider = null)
         {
             selection = default;
-            if (string.IsNullOrWhiteSpace(groupName) || Groups == null) return false;
-            AudioClipGroup group = null;
-            foreach (var candidate in Groups)
+            if (string.IsNullOrWhiteSpace(groupName) || groups == null)
             {
-                if (candidate == null || !string.Equals(candidate.Name, groupName, StringComparison.Ordinal)) continue;
-                if (group != null) return false;
+                return false;
+            }
+
+            AudioClipGroup group = null;
+            foreach (var candidate in groups)
+            {
+                if (candidate == null || !string.Equals(candidate.name, groupName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (group != null)
+                {
+                    return false;
+                }
+
                 group = candidate;
             }
-            if (group == null || group.Entries == null || (uint)group.Selection > (uint)AudioClipSelectionMode.Weighted) return false;
-            var weighted = group.Selection == AudioClipSelectionMode.Weighted;
-            double total = 0;
-            foreach (var entry in group.Entries)
+            if (group == null || group.entries == null || (uint)group.selection > (uint)AudioClipSelectionMode.Weighted)
             {
-                if (entry == null) continue;
-                if ((uint)entry.Source > (uint)AudioClipSource.Resource ||
-                    weighted && (!AudioSoundOptions.IsFinite(entry.Weight) || entry.Weight < 0)) return false;
-                if (CanSelect(entry, externalProvider)) total += weighted ? entry.Weight : 1;
+                return false;
             }
-            if (total <= 0) return false;
+
+            var weighted = group.selection == AudioClipSelectionMode.Weighted;
+            double total = 0;
+            foreach (var entry in group.entries)
+            {
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                if ((uint)entry.source > (uint)AudioClipSource.Resource ||
+                    weighted && (!AudioSoundOptions.IsFinite(entry.weight) || entry.weight < 0))
+                {
+                    return false;
+                }
+
+                if (CanSelect(entry, externalProvider))
+                {
+                    total += weighted ? entry.weight : 1;
+                }
+            }
+            if (total <= 0)
+            {
+                return false;
+            }
+
             var point = UnityEngine.Random.value * total;
             AudioClipEntry selected = null;
-            foreach (var entry in group.Entries)
+            foreach (var entry in group.entries)
             {
-                if (entry == null || !CanSelect(entry, externalProvider)) continue;
-                var weight = weighted ? entry.Weight : 1;
-                if (weight <= 0) continue;
+                if (entry == null || !CanSelect(entry, externalProvider))
+                {
+                    continue;
+                }
+
+                var weight = weighted ? entry.weight : 1;
+                if (weight <= 0)
+                {
+                    continue;
+                }
+
                 selected = entry;
                 point -= weight;
-                if (point < 0) break;
+                if (point < 0)
+                {
+                    break;
+                }
             }
-            if (selected == null) return false;
-            if (selected.Source == AudioClipSource.Clip) selection = new AudioClipSelection(selected.Clip, default);
+            if (selected == null)
+            {
+                return false;
+            }
+
+            if (selected.source == AudioClipSource.Clip)
+            {
+                selection = new AudioClipSelection(selected.clip, default);
+            }
             else
             {
                 IAudioClipProvider provider = externalProvider;
-                if (selected.Source == AudioClipSource.Resource)
-                    provider = ResourceSystem.Current.GetAudioClipProvider(selected.ProjectId);
-                selection = new AudioClipSelection(null, new AudioClipAddress(provider, selected.Key));
+                if (selected.source == AudioClipSource.Resource)
+                {
+                    provider = ResourceSystem.Current.GetAudioClipProvider(selected.projectId);
+                }
+
+                selection = new AudioClipSelection(null, new AudioClipAddress(provider, selected.key));
             }
             return true;
         }
 
         private static bool CanSelect(AudioClipEntry entry, IAudioClipProvider externalProvider)
         {
-            if (entry.Source == AudioClipSource.Clip) return entry.Clip;
-            if (string.IsNullOrWhiteSpace(entry.Key)) return false;
-            if (entry.Source == AudioClipSource.ExternalProvider) return externalProvider != null;
-            if (entry.Source != AudioClipSource.Resource || !string.IsNullOrEmpty(entry.BundleName)) return false;
+            if (entry.source == AudioClipSource.Clip)
+            {
+                return entry.clip;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.key))
+            {
+                return false;
+            }
+
+            if (entry.source == AudioClipSource.ExternalProvider)
+            {
+                return externalProvider != null;
+            }
+
+            if (entry.source != AudioClipSource.Resource || !string.IsNullOrEmpty(entry.bundleName))
+            {
+                return false;
+            }
+
             var system = ResourceSystem.Current;
-            if (system == null || !system.IsAvailable) return false;
-            try { _ = new ResourceAddress(entry.ProjectId, entry.Key); system.GetAudioClipProvider(entry.ProjectId); return true; }
-            catch (ArgumentException) { return false; }
-            catch (ResourceException) { return false; }
+            if (system == null || !system.IsAvailable)
+            {
+                return false;
+            }
+
+            try
+            {
+                _ = new ResourceAddress(entry.projectId, entry.key);
+                system.GetAudioClipProvider(entry.projectId);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+            catch (ResourceException)
+            {
+                return false;
+            }
         }
     }
 }

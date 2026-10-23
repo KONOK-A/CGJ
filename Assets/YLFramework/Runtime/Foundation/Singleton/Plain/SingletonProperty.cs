@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Singleton
+namespace YLFramework.Core.Singleton
 {
     /// <summary>
     /// 普通类单例入口：为每个封闭类型 T 维护一个实例，首次访问 <see cref="Instance"/> 时经
@@ -12,7 +12,7 @@
     {
         //实际上由于T不同，每个SingletonProperty<T>都是一个不同的类，所以可以存下所有类的实例
         private static T _instance;
-        private static readonly object Lock = new();
+        private static readonly object _lock = new();
 
         static SingletonProperty()
         {
@@ -26,7 +26,7 @@
         {
             get
             {
-                lock (Lock)
+                lock (_lock)
                 {
                     _instance ??= SingletonCreator.CreateSingleTon<T>();
                 }

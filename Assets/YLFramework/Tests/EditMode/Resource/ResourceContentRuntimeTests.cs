@@ -23,23 +23,40 @@ namespace YLFramework.Tests.ResourceBuild
     {
         private const string Key = "YL.E04.FormalRuntime.";
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
-        [Serializable] private sealed class Layout { public SceneSetup[] Scenes; }
+        [Serializable]
+        private sealed class Layout
+        {
+            public SceneSetup[] Scenes;
+        }
 
         [OneTimeSetUp]
         public void BuildAndPublishFormalEncryptedVersions()
         {
-            if (SessionState.GetBool(Key + "owned", false)) return;
-            if (Application.isPlaying) throw new InvalidOperationException("Start this owned fixture in EditMode.");
+            if (SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                throw new InvalidOperationException("Start this owned fixture in EditMode.");
+            }
+
             YLFramework.Tests.Resource.ResourceSessionTests.EnsureRestorableScenes();
             SessionState.SetString(Key + "layout", JsonUtility.ToJson(new Layout { Scenes = EditorSceneManager.GetSceneManagerSetup() }));
             using var fixture = new ResourceReleaseFixture();
             AddConsumers(fixture);
-            fixture.Project.Groups.RemoveAll(x => x.Id == "A" || x.Id == Path.GetFileNameWithoutExtension(fixture.TextPath));
-            fixture.Project.Groups.Add(new ResourceGroup { Id = "Mixed", Packing = ResourcePacking.PerAsset, Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content/A.prefab") },
-                new() { Guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) } } });
-            typeof(ResourceProject).GetField("ContentEncryption").SetValue(fixture.Project, ResourceContentEncryption.Aes256GcmHkdfSegmentedV1);
-            typeof(ResourceProject).GetField("ContentKeyId").SetValue(fixture.Project, "e04-test-v1");
+            fixture.Project.groups.RemoveAll(x => x.id == "A" || x.id == Path.GetFileNameWithoutExtension(fixture.TextPath));
+            fixture.Project.groups.Add(new ResourceGroup
+            {
+                id = "Mixed",
+                packing = ResourcePacking.PerAsset,
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content/A.prefab") },
+                new() { guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) } }
+            });
+            typeof(ResourceProject).GetField("contentEncryption").SetValue(fixture.Project, ResourceContentEncryption.Aes256GcmHkdfSegmentedV1);
+            typeof(ResourceProject).GetField("contentKeyId").SetValue(fixture.Project, "e04-test-v1");
             EditorUtility.SetDirty(fixture.Project);
             AssetDatabase.SaveAssetIfDirty(fixture.Project);
             Assert.That(ResourceEditorOperations.PrepareAtlases(fixture.Project), Is.EqualTo(1));
@@ -77,8 +94,15 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var found = type.GetMethod(method, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(found, Is.Not.Null, "Missing formal product operation: " + method);
-            try { return found.Invoke(null, arguments); }
-            catch (TargetInvocationException error) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+            try
+            {
+                return found.Invoke(null, arguments);
+            }
+            catch (TargetInvocationException error)
+            {
+                ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
         }
 
         private static void AddConsumers(ResourceReleaseFixture fixture)
@@ -91,12 +115,23 @@ namespace YLFramework.Tests.ResourceBuild
             using (var file = File.Create(audio))
             using (var writer = new BinaryWriter(file))
             {
-                const int samples = 44100;
-                writer.Write(Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + samples * 2);
-                writer.Write(Encoding.ASCII.GetBytes("WAVEfmt ")); writer.Write(16); writer.Write((short)1); writer.Write((short)1);
-                writer.Write(44100); writer.Write(88200); writer.Write((short)2); writer.Write((short)16);
-                writer.Write(Encoding.ASCII.GetBytes("data")); writer.Write(samples * 2);
-                for (var i = 0; i < samples; i++) writer.Write((short)(Math.Sin(i * 0.07) * 1000));
+                const int Samples = 44100;
+                writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+                writer.Write(36 + Samples * 2);
+                writer.Write(Encoding.ASCII.GetBytes("WAVEfmt "));
+                writer.Write(16);
+                writer.Write((short)1);
+                writer.Write((short)1);
+                writer.Write(44100);
+                writer.Write(88200);
+                writer.Write((short)2);
+                writer.Write((short)16);
+                writer.Write(Encoding.ASCII.GetBytes("data"));
+                writer.Write(Samples * 2);
+                for (var i = 0; i < Samples; i++)
+                {
+                    writer.Write((short)(Math.Sin(i * 0.07) * 1000));
+                }
             }
             AssetDatabase.ImportAsset(audio, ImportAssetOptions.ForceSynchronousImport);
             var importer = (AudioImporter)AssetImporter.GetAtPath(audio);
@@ -116,8 +151,13 @@ namespace YLFramework.Tests.ResourceBuild
             File.WriteAllBytes(cold, coldBytes);
             AssetDatabase.ImportAsset(cold, ImportAssetOptions.ForceSynchronousImport);
             foreach (var path in new[] { atlas, audio, nextAudio, cold })
-                fixture.Project.Groups.Add(new ResourceGroup { Id = Path.GetFileName(path),
-                    Selections = new List<ResourceSelection> { new() { Guid = AssetDatabase.AssetPathToGUID(path) } } });
+            {
+                fixture.Project.groups.Add(new ResourceGroup
+                {
+                    id = Path.GetFileName(path),
+                    selections = new List<ResourceSelection> { new() { guid = AssetDatabase.AssetPathToGUID(path) } }
+                });
+            }
         }
 
         private static ResourceLocalSnapshot Snapshot(bool next = false)
@@ -136,7 +176,7 @@ namespace YLFramework.Tests.ResourceBuild
             new(new[] { Snapshot().CreateCatalog() }, decryption: new ResourceDecryptionOptions(keys, maximum));
         private static ResourceContentBudget Budget(ResourceSystem system)
         {
-            var field = typeof(ResourceSystem).GetField("contentBudget", Hidden);
+            var field = typeof(ResourceSystem).GetField("_contentBudget", Hidden);
             Assert.That(field, Is.Not.Null, "The original resource subject must own its content budget.");
             return (ResourceContentBudget)field.GetValue(system);
         }
@@ -206,7 +246,17 @@ namespace YLFramework.Tests.ResourceBuild
             var snapshot = Snapshot();
             var root = snapshot.Document.Assets.Single(x => x.Address == "A.prefab").BundleId;
             var closure = new HashSet<string>(StringComparer.Ordinal);
-            void Visit(string id) { if (!closure.Add(id)) return; foreach (var dependency in snapshot.Document.Bundles.Single(x => x.LogicalId == id).Dependencies) Visit(dependency); }
+            void Visit(string id)
+            {
+                if (!closure.Add(id))
+                {
+                    return;
+                }
+                foreach (var dependency in snapshot.Document.Bundles.Single(x => x.LogicalId == id).Dependencies)
+                {
+                    Visit(dependency);
+                }
+            }
             Visit(root);
             using var keys = new TestKeys();
             using var initialize = ResourceSystem.InitializeAsync(Configuration(keys, closure.Count * ResourceDecryptStream.DataBufferBytes));
@@ -271,7 +321,7 @@ namespace YLFramework.Tests.ResourceBuild
             using var scene = system.LoadSceneAsync(Address("Owned.unity"), LoadSceneMode.Additive);
             yield return scene;
             Assert.That(scene.Status, Is.EqualTo(ResourceRequestStatus.Failed));
-            Assert.That(scene.NativeStarted, Is.False);
+            Assert.That(scene.HasNativeStarted, Is.False);
             using var independent = system.Acquire<TextAsset>(Address("entry.txt"));
             Assert.That(independent.Asset.text, Does.Contain("first release"));
         }
@@ -289,11 +339,18 @@ namespace YLFramework.Tests.ResourceBuild
                     if (scene.path.EndsWith("/Content/Owned.unity", StringComparison.Ordinal))
                     {
                         var unload = SceneManager.UnloadSceneAsync(scene);
-                        while (unload != null && !unload.isDone) yield return null;
+                        while (unload != null && !unload.isDone)
+                        {
+                            yield return null;
+                        }
                     }
                 }
                 var deadline = Time.realtimeSinceStartup + 30;
-                while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < deadline) yield return null;
+                while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
                 yield return new ExitPlayMode();
             }
@@ -303,35 +360,60 @@ namespace YLFramework.Tests.ResourceBuild
         public void RestoreOnlyTheOwnedFixture()
         {
             var layout = JsonUtility.FromJson<Layout>(SessionState.GetString(Key + "layout", "{}"));
-            if (layout?.Scenes != null) EditorSceneManager.RestoreSceneManagerSetup(layout.Scenes);
+            if (layout?.Scenes != null)
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(layout.Scenes);
+            }
+
             foreach (var suffix in new[] { "root", "workspace", "cache" })
             {
                 var path = SessionState.GetString(Key + suffix, "");
-                if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) Directory.Delete(path, true);
+                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
             }
             var scene = SessionState.GetString(Key + "scene", "");
-            if (!string.IsNullOrEmpty(scene) && File.Exists(scene)) File.Delete(scene);
-            foreach (var suffix in new[] { "root", "workspace", "cache", "v1", "v2", "project", "scene", "layout", "tlsOverride" }) SessionState.EraseString(Key + suffix);
+            if (!string.IsNullOrEmpty(scene) && File.Exists(scene))
+            {
+                File.Delete(scene);
+            }
+
+            foreach (var suffix in new[] { "root", "workspace", "cache", "v1", "v2", "project", "scene", "layout", "tlsOverride" })
+            {
+                SessionState.EraseString(Key + suffix);
+            }
+
             SessionState.EraseBool(Key + "owned");
         }
 
         private sealed class TestKeys : IResourceContentKeyProvider, IDisposable
         {
-            private readonly int ownerThread = System.Threading.Thread.CurrentThread.ManagedThreadId;
+            private readonly int _ownerThread = System.Threading.Thread.CurrentThread.ManagedThreadId;
             internal int Copies;
             internal bool Missing;
             internal Action OnCopy;
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
-                Assert.That(System.Threading.Thread.CurrentThread.ManagedThreadId, Is.EqualTo(ownerThread), "Native and IO callbacks must not call the application provider.");
+                Assert.That(System.Threading.Thread.CurrentThread.ManagedThreadId, Is.EqualTo(_ownerThread), "Native and IO callbacks must not call the application provider.");
                 Assert.That(keyId, Is.EqualTo("e04-test-v1"));
                 Copies++;
                 OnCopy?.Invoke();
-                if (Missing) return false;
-                for (var i = 0; i < destination.Length; i++) destination[i] = (byte)(93 + i);
+                if (Missing)
+                {
+                    return false;
+                }
+
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = (byte)(93 + i);
+                }
+
                 return true;
             }
-            public void Dispose() { }
+            public void Dispose()
+            {
+            }
         }
     }
 }

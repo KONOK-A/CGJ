@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,43 +21,107 @@ namespace YLFramework.Editor.Resource
 {
     public sealed class ResourceBuiltFile
     {
-        public string Name { get; }
-        public long Length { get; }
-        public string Sha256 { get; }
-        internal ResourceBuiltFile(ResourceBuildWorkspace.FileDigest value) { Name = value.Name; Length = value.Length; Sha256 = value.Sha256; }
+        public string Name
+        {
+            get;
+        }
+        public long Length
+        {
+            get;
+        }
+        public string Sha256
+        {
+            get;
+        }
+        internal ResourceBuiltFile(ResourceBuildWorkspace.FileDigest value)
+        {
+            Name = value.Name;
+            Length = value.Length;
+            Sha256 = value.Sha256;
+        }
     }
 
     public sealed class ResourceBuiltBundle
     {
-        public string Name { get; }
-        public string UnityHash { get; }
-        public ResourceBundlePlacement Placement { get; }
-        public long SourceBytes { get; }
-        public int SourceFileCount { get; }
+        public string Name
+        {
+            get;
+        }
+        public string UnityHash
+        {
+            get;
+        }
+        public ResourceBundlePlacement Placement
+        {
+            get;
+        }
+        public long SourceBytes
+        {
+            get;
+        }
+        public int SourceFileCount
+        {
+            get;
+        }
         /// <summary>已读回的真实Bundle文件字节，不含manifest旁车，不代表native内存。</summary>
-        public long FileBytes { get; }
-        public IReadOnlyList<string> Dependencies { get; }
-        public IReadOnlyList<string> Dependents { get; }
+        public long FileBytes
+        {
+            get;
+        }
+        public IReadOnlyList<string> Dependencies
+        {
+            get;
+        }
+        public IReadOnlyList<string> Dependents
+        {
+            get;
+        }
         internal ResourceBuiltBundle(ResourceBuildBundle source, string hash, string[] dependencies, long fileBytes)
         {
-            Name = source.Name; UnityHash = hash; Dependencies = Array.AsReadOnly(dependencies);
-            Placement = source.Placement; SourceBytes = source.SourceBytes; SourceFileCount = source.AssetPaths.Length;
-            Dependents = Array.AsReadOnly(source.Dependents); FileBytes = fileBytes;
+            Name = source.Name;
+            UnityHash = hash;
+            Dependencies = Array.AsReadOnly(dependencies);
+            Placement = source.Placement;
+            SourceBytes = source.SourceBytes;
+            SourceFileCount = source.AssetPaths.Length;
+            Dependents = Array.AsReadOnly(source.Dependents);
+            FileBytes = fileBytes;
         }
     }
 
     /// <summary>与同一兼容 Workspace 上次已验证记录比较，不把强制 native 重建等同于内容变化。</summary>
     public sealed class ResourceBundleChange
     {
-        public string Name { get; }
-        public long FileBytes { get; }
-        public string Sha256 { get; }
-        public string PreviousSha256 { get; }
-        public bool? ContentChanged { get; }
-        public string Reason { get; }
+        public string Name
+        {
+            get;
+        }
+        public long FileBytes
+        {
+            get;
+        }
+        public string Sha256
+        {
+            get;
+        }
+        public string PreviousSha256
+        {
+            get;
+        }
+        public bool? ContentChanged
+        {
+            get;
+        }
+        public string Reason
+        {
+            get;
+        }
         internal ResourceBundleChange(ResourceBuiltFile file, ResourceBuildWorkspace.FileDigest previous, bool baselineAvailable)
         {
-            Name = file.Name; FileBytes = file.Length; Sha256 = file.Sha256; PreviousSha256 = previous?.Sha256;
+            Name = file.Name;
+            FileBytes = file.Length;
+            Sha256 = file.Sha256;
+            PreviousSha256 = previous?.Sha256;
             ContentChanged = baselineAvailable ? previous == null || previous.Sha256 != file.Sha256 || previous.Length != file.Length : (bool?)null;
             Reason = !baselineAvailable ? "No verified baseline in this compatible Workspace; content change is unknown." :
                 previous == null ? "New Bundle compared with the previous verified Workspace." :
@@ -69,78 +133,206 @@ namespace YLFramework.Editor.Resource
     /// <summary>已在真实 Bundle 中按唯一 name+type 验证过的公开子资产；localId 只作稳定身份。</summary>
     public sealed class ResourceBuiltSubAsset
     {
-        public ResourceBuildAsset MainAsset { get; }
-        public long LocalId { get; }
-        public string Name { get; }
-        public Type AssetType { get; }
+        public ResourceBuildAsset MainAsset
+        {
+            get;
+        }
+        public long LocalId
+        {
+            get;
+        }
+        public string Name
+        {
+            get;
+        }
+        public Type AssetType
+        {
+            get;
+        }
         internal ResourceBuiltSubAsset(ResourceBuildAsset main, long localId, string name, Type type)
-        { MainAsset = main; LocalId = localId; Name = name; AssetType = type; }
+        {
+            MainAsset = main;
+            LocalId = localId;
+            Name = name;
+            AssetType = type;
+        }
     }
 
     /// <summary>已验证的 Editor 构建结果及真实工作量；Workspace 是可变缓存，不是已发布版本或持久化 Catalog。</summary>
     public sealed class ResourceBuildResult
     {
-        public ResourceBuildMap Map { get; internal set; }
-        public string WorkspacePath { get; internal set; }
-        public string ManifestBundleFile { get; internal set; }
-        public string InputFingerprint { get; internal set; }
-        public string BuildSettingsFingerprint { get; internal set; }
-        public string Platform { get; internal set; }
-        public string UnityCompatibility { get; internal set; }
-        public ResourceCompression Compression { get; internal set; }
-        public IReadOnlyList<ResourceBuiltFile> Files { get; internal set; }
-        public ResourceContentEncryption ContentEncryption { get; internal set; }
-        public string ContentKeyId { get; internal set; }
+        public ResourceBuildMap Map
+        {
+            get; internal set;
+        }
+        public string WorkspacePath
+        {
+            get; internal set;
+        }
+        public string ManifestBundleFile
+        {
+            get; internal set;
+        }
+        public string InputFingerprint
+        {
+            get; internal set;
+        }
+        public string BuildSettingsFingerprint
+        {
+            get; internal set;
+        }
+        public string Platform
+        {
+            get; internal set;
+        }
+        public string UnityCompatibility
+        {
+            get; internal set;
+        }
+        public ResourceCompression Compression
+        {
+            get; internal set;
+        }
+        public IReadOnlyList<ResourceBuiltFile> Files
+        {
+            get; internal set;
+        }
+        public ResourceContentEncryption ContentEncryption
+        {
+            get; internal set;
+        }
+        public string ContentKeyId
+        {
+            get; internal set;
+        }
         /// <summary>交付快照目录；None 时与 raw WorkspacePath 相同，不产生派生文件。</summary>
-        public string DeliveryPath { get; internal set; }
-        public IReadOnlyList<ResourceBuiltFile> DeliveryFiles { get; internal set; }
-        public long DeliveryBytes { get; internal set; }
-        public long EncodedDeliveryBytes { get; internal set; }
-        public long ReusedDeliveryBytes { get; internal set; }
-        public double ContentEncodingMilliseconds { get; internal set; }
-        public IReadOnlyList<ResourceBuiltBundle> Bundles { get; internal set; }
-        public IReadOnlyList<ResourceBuiltSubAsset> SubAssets { get; internal set; }
-        public bool IsCacheHit { get; internal set; }
-        public bool UnityBuildInvoked { get; internal set; }
-        public bool ForcedRebuild { get; internal set; }
+        public string DeliveryPath
+        {
+            get; internal set;
+        }
+        public IReadOnlyList<ResourceBuiltFile> DeliveryFiles
+        {
+            get; internal set;
+        }
+        public long DeliveryBytes
+        {
+            get; internal set;
+        }
+        public long EncodedDeliveryBytes
+        {
+            get; internal set;
+        }
+        public long ReusedDeliveryBytes
+        {
+            get; internal set;
+        }
+        public double ContentEncodingMilliseconds
+        {
+            get; internal set;
+        }
+        public IReadOnlyList<ResourceBuiltBundle> Bundles
+        {
+            get; internal set;
+        }
+        public IReadOnlyList<ResourceBuiltSubAsset> SubAssets
+        {
+            get; internal set;
+        }
+        public bool IsCacheHit
+        {
+            get; internal set;
+        }
+        public bool WasUnityBuildInvoked
+        {
+            get; internal set;
+        }
+        public bool ForceRebuild
+        {
+            get; internal set;
+        }
         /// <summary>无法冻结完整输入的 Editor 回调；有此类回调时禁用整体跳构建并强制刷新 native 产物。</summary>
-        public IReadOnlyList<string> CacheReuseBlockedBy { get; internal set; }
-        public double PreflightMilliseconds { get; internal set; }
-        public double BuildMilliseconds { get; internal set; }
-        public double ValidationMilliseconds { get; internal set; }
-        public double ElapsedMilliseconds { get; internal set; }
-        public double MapMilliseconds { get; internal set; }
+        public IReadOnlyList<string> CacheReuseBlockedBy
+        {
+            get; internal set;
+        }
+        public double PreflightMilliseconds
+        {
+            get; internal set;
+        }
+        public double BuildMilliseconds
+        {
+            get; internal set;
+        }
+        public double ValidationMilliseconds
+        {
+            get; internal set;
+        }
+        public double ElapsedMilliseconds
+        {
+            get; internal set;
+        }
+        public double MapMilliseconds
+        {
+            get; internal set;
+        }
         /// <summary>Settings 和源指纹收集/哈希的实际总耗时，含构建后复验；不是纯磁盘 Hash 算法基准。</summary>
-        public double InputFingerprintMilliseconds { get; internal set; }
-        public double BuildPipelineMilliseconds { get; internal set; }
-        public double ArtifactHashMilliseconds { get; internal set; }
-        public double ReadbackMilliseconds { get; internal set; }
-        public long BundleFileBytes { get; internal set; }
+        public double InputFingerprintMilliseconds
+        {
+            get; internal set;
+        }
+        public double BuildPipelineMilliseconds
+        {
+            get; internal set;
+        }
+        public double ArtifactHashMilliseconds
+        {
+            get; internal set;
+        }
+        public double ReadbackMilliseconds
+        {
+            get; internal set;
+        }
+        public long BundleFileBytes
+        {
+            get; internal set;
+        }
         public IReadOnlyList<ResourceBundleChange> BundleChanges { get; internal set; } = Array.Empty<ResourceBundleChange>();
         public IReadOnlyList<string> ExecutionReasons { get; internal set; } = Array.Empty<string>();
         /// <summary>本次冻结输入前执行的自动 Atlas 计划；为空表示项目未配置自动图集。</summary>
-        public ResourceAtlasPlan AtlasGeneration { get; internal set; }
-        public long SourceHashBytes { get; internal set; }
-        public long ArtifactHashBytes { get; internal set; }
+        public ResourceAtlasPlan AtlasGeneration
+        {
+            get; internal set;
+        }
+        public long SourceHashBytes
+        {
+            get; internal set;
+        }
+        public long ArtifactHashBytes
+        {
+            get; internal set;
+        }
         public long CopiedBytes => 0;
-        public int RetainedObsoleteFiles { get; internal set; }
+        public int RetainedObsoleteFiles
+        {
+            get; internal set;
+        }
     }
 
     /// <summary>主线程显式 BuildMap 构建入口。压缩白名单+StrictMode，仅写独立 owned Workspace，不发布或写入 StreamingAssets。</summary>
     [InitializeOnLoad]
     public static class ResourceBundleBuilder
     {
-        private static readonly int MainThread;
-        private static bool building;
+        private static readonly int _mainThread;
+        private static bool _isBuilding;
 
-        static ResourceBundleBuilder() => MainThread = Thread.CurrentThread.ManagedThreadId;
+        static ResourceBundleBuilder() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 
-        private static BuildAssetBundleOptions Options(ResourceProject project) => BuildAssetBundleOptions.StrictMode | (project.Compression switch
+        private static BuildAssetBundleOptions Options(ResourceProject project) => BuildAssetBundleOptions.StrictMode | (project.compression switch
         {
             ResourceCompression.Lz4 => BuildAssetBundleOptions.ChunkBasedCompression,
             ResourceCompression.Lzma => BuildAssetBundleOptions.None,
             ResourceCompression.Uncompressed => BuildAssetBundleOptions.UncompressedAssetBundle,
-            _ => throw new ArgumentOutOfRangeException(nameof(project.Compression), "Unsupported resource compression choice.")
+            _ => throw new ArgumentOutOfRangeException(nameof(project.compression), "Unsupported resource compression choice.")
         });
 
         /// <summary>预览兼容分区路径，不创建或认领目录；目标必须已是当前活动平台，避免隐式改动项目设置。</summary>
@@ -149,14 +341,14 @@ namespace YLFramework.Editor.Resource
             ValidateEditor(target);
             var map = ResourceBuildMap.Create(project);
             long bytes = 0;
-            return new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString(), project.ContentEncryption, project.ContentKeyId).Output;
+            return new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString(), project.contentEncryption, project.contentKeyId).Output;
         }
 
         internal static string PreflightWorkspace(ResourceProject project, BuildTarget target)
         {
             var map = ResourceBuildMap.Create(project);
             long bytes = 0;
-            var workspace = new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString(), project.ContentEncryption, project.ContentKeyId);
+            var workspace = new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString(), project.contentEncryption, project.contentKeyId);
             _ = workspace.Read();
             return workspace.Output;
         }
@@ -179,31 +371,48 @@ namespace YLFramework.Editor.Resource
             IResourceContentKeyProvider provider)
         {
             ResourceBuildProgress.RejectReentry();
-            if (building) throw new InvalidOperationException("An AssetBundle build is already running; reentrant builds are not allowed.");
+            if (_isBuilding)
+            {
+                throw new InvalidOperationException("An AssetBundle build is already running; reentrant builds are not allowed.");
+            }
+
             ValidateEditor(target);
             cancellation.ThrowIfCancellationRequested();
-            if (pipeline == null) throw new ArgumentNullException(nameof(pipeline));
-            building = true;
+            if (pipeline == null)
+            {
+                throw new ArgumentNullException(nameof(pipeline));
+            }
+
+            _isBuilding = true;
             AssetBundleManifest generated = null;
             byte[] contentKey = null;
             try
             {
                 var elapsed = Stopwatch.StartNew();
                 var watch = Stopwatch.StartNew();
-                if (!project) throw new ArgumentNullException(nameof(project));
+                if (!project)
+                {
+                    throw new ArgumentNullException(nameof(project));
+                }
+
                 var options = Options(project);
-                ValidateContentPolicy(project.ContentEncryption, project.ContentKeyId, target.ToString());
-                var encryption = project.ContentEncryption;
-                var keyId = encryption == ResourceContentEncryption.None ? null : project.ContentKeyId;
-                var keyProject = project.ProjectId;
+                ValidateContentPolicy(project.contentEncryption, project.contentKeyId, target.ToString());
+                var encryption = project.contentEncryption;
+                var keyId = encryption == ResourceContentEncryption.None ? null : project.contentKeyId;
+                var keyProject = project.projectId;
                 var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
                 void RequireDirectoryIdentity()
                 {
                     if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                    {
                         throw new InvalidOperationException("Resource source directories/Atlas configuration changed during key acquisition/preparation.");
+                    }
                 }
                 if (encryption != ResourceContentEncryption.None)
+                {
                     contentKey = CopyContentKey(provider, keyProject, keyId);
+                }
+
                 RequireDirectoryIdentity();
                 RejectLoadedBundles();
                 ResourceBuildProgress.Notify(ResourceBuildPhase.AtlasPreparationStarted, project, target);
@@ -212,9 +421,12 @@ namespace YLFramework.Editor.Resource
                 ResourceBuildProgress.Notify(ResourceBuildPhase.MapStarted, project, target);
                 var map = ResourceBuildMap.Create(project);
                 RequireDirectoryIdentity();
-                if (map.ProjectId != keyProject || project.ContentEncryption != encryption ||
-                    encryption != ResourceContentEncryption.None && project.ContentKeyId != keyId)
+                if (map.ProjectId != keyProject || project.contentEncryption != encryption ||
+                    encryption != ResourceContentEncryption.None && project.contentKeyId != keyId)
+                {
                     throw new InvalidOperationException("Resource content identity changed during key acquisition/preparation.");
+                }
+
                 var mapMilliseconds = watch.Elapsed.TotalMilliseconds;
                 long sourceBytes = 0;
                 var inputWatch = Stopwatch.StartNew();
@@ -232,10 +444,20 @@ namespace YLFramework.Editor.Resource
                 inputWatch.Stop();
                 cancellation.ThrowIfCancellationRequested();
                 using var locked = workspace.AcquireLock(ref record);
-                var result = new ResourceBuildResult { Map = map, WorkspacePath = workspace.Output, InputFingerprint = fingerprint,
-                    BuildSettingsFingerprint = settings, Platform = target.ToString(), UnityCompatibility = Application.unityVersion,
-                    Compression = project.Compression, ContentEncryption = encryption, ContentKeyId = keyId,
-                    CacheReuseBlockedBy = Array.AsReadOnly(callbacks), AtlasGeneration = atlasGeneration };
+                var result = new ResourceBuildResult
+                {
+                    Map = map,
+                    WorkspacePath = workspace.Output,
+                    InputFingerprint = fingerprint,
+                    BuildSettingsFingerprint = settings,
+                    Platform = target.ToString(),
+                    UnityCompatibility = Application.unityVersion,
+                    Compression = project.compression,
+                    ContentEncryption = encryption,
+                    ContentKeyId = keyId,
+                    CacheReuseBlockedBy = Array.AsReadOnly(callbacks),
+                    AtlasGeneration = atlasGeneration
+                };
                 var expected = workspace.ExpectedFiles();
                 var baselineAvailable = record.Complete;
                 var previous = record.Files.ToDictionary(x => x.Name, StringComparer.Ordinal);
@@ -244,8 +466,14 @@ namespace YLFramework.Editor.Resource
                 ResourceBuildWorkspace.FileDigest HashArtifact(string path)
                 {
                     hashWatch.Start();
-                    try { return HashFile(path, ref artifactBytes); }
-                    finally { hashWatch.Stop(); }
+                    try
+                    {
+                        return HashFile(path, ref artifactBytes);
+                    }
+                    finally
+                    {
+                        hashWatch.Stop();
+                    }
                 }
                 var integrity = record.Complete && record.Files.Select(x => x.Name).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(expected);
                 if (integrity)
@@ -254,19 +482,47 @@ namespace YLFramework.Editor.Resource
                     {
                         cancellation.ThrowIfCancellationRequested();
                         var path = Path.Combine(workspace.Output, file.Name);
-                        if (!File.Exists(path)) { integrity = false; break; }
+                        if (!File.Exists(path))
+                        {
+                            integrity = false;
+                            break;
+                        }
                         var digest = HashArtifact(path);
-                        if (digest.Length != file.Length || digest.Sha256 != file.Sha256) { integrity = false; break; }
+                        if (digest.Length != file.Length || digest.Sha256 != file.Sha256)
+                        {
+                            integrity = false;
+                            break;
+                        }
                     }
                 }
                 result.IsCacheHit = CanSkipBuild(forceRebuild, integrity, record.Fingerprint == fingerprint, callbacks);
-                result.ForcedRebuild = forceRebuild || !integrity || callbacks.Length != 0;
+                result.ForceRebuild = forceRebuild || !integrity || callbacks.Length != 0;
                 var reasons = new List<string>();
-                if (forceRebuild) reasons.Add("User explicitly requested a forced rebuild.");
-                if (!integrity) reasons.Add("Workspace is new, incomplete, or its artifact integrity does not match the verified record.");
-                if (record.Fingerprint != fingerprint) reasons.Add("Complete input fingerprint differs from the previous compatible Workspace record.");
-                if (callbacks.Length != 0) reasons.Add("Untracked build callbacks require safe forced native rebuilding (" + callbacks.Length + ").");
-                if (result.IsCacheHit) reasons.Add("Complete input and every registered artifact digest verified; no untracked callbacks.");
+                if (forceRebuild)
+                {
+                    reasons.Add("User explicitly requested a forced rebuild.");
+                }
+
+                if (!integrity)
+                {
+                    reasons.Add("Workspace is new, incomplete, or its artifact integrity does not match the verified record.");
+                }
+
+                if (record.Fingerprint != fingerprint)
+                {
+                    reasons.Add("Complete input fingerprint differs from the previous compatible Workspace record.");
+                }
+
+                if (callbacks.Length != 0)
+                {
+                    reasons.Add("Untracked build callbacks require safe forced native rebuilding (" + callbacks.Length + ").");
+                }
+
+                if (result.IsCacheHit)
+                {
+                    reasons.Add("Complete input and every registered artifact digest verified; no untracked callbacks.");
+                }
+
                 result.ExecutionReasons = reasons.AsReadOnly();
                 result.PreflightMilliseconds = watch.Elapsed.TotalMilliseconds;
                 watch.Restart();
@@ -274,17 +530,23 @@ namespace YLFramework.Editor.Resource
                 {
                     workspace.BeginAttempt(record);
                     cancellation.ThrowIfCancellationRequested();
-                    result.UnityBuildInvoked = true;
+                    result.WasUnityBuildInvoked = true;
                     ResourceBuildProgress.Notify(ResourceBuildPhase.NativeBuildStarted, map.ProjectGuid, map.ProjectId, target.ToString());
                     RequireDirectoryIdentity();
                     var pipelineWatch = Stopwatch.StartNew();
                     generated = pipeline(workspace.Output, map.UnityBuilds(), options |
-                        (result.ForcedRebuild ? BuildAssetBundleOptions.ForceRebuildAssetBundle : BuildAssetBundleOptions.None), target);
+                        (result.ForceRebuild ? BuildAssetBundleOptions.ForceRebuildAssetBundle : BuildAssetBundleOptions.None), target);
                     result.BuildPipelineMilliseconds = pipelineWatch.Elapsed.TotalMilliseconds;
                     cancellation.ThrowIfCancellationRequested();
-                    if (!generated) throw new InvalidOperationException("BuildPipeline returned no AssetBundle Manifest.");
+                    if (!generated)
+                    {
+                        throw new InvalidOperationException("BuildPipeline returned no AssetBundle Manifest.");
+                    }
+
                     if (!generated.GetAllAssetBundles().OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(map.Bundles.Select(x => x.Name)))
+                    {
                         throw new InvalidOperationException("BuildPipeline Manifest does not match the explicit BuildMap.");
+                    }
                 }
                 result.BuildMilliseconds = watch.Elapsed.TotalMilliseconds;
                 watch.Restart();
@@ -297,24 +559,37 @@ namespace YLFramework.Editor.Resource
                 result.Bundles = built.AsReadOnly();
                 result.SubAssets = subAssets.AsReadOnly();
                 ResourceBuildWorkspace.FileDigest[] files;
-                if (result.IsCacheHit) files = record.Files;
-                else files = expected.Select(name =>
+                if (result.IsCacheHit)
+                {
+                    files = record.Files;
+                }
+                else
+                {
+                    files = expected.Select(name =>
                 {
                     cancellation.ThrowIfCancellationRequested();
                     var digest = HashArtifact(Path.Combine(workspace.Output, name));
                     digest.Name = name;
                     return digest;
                 }).ToArray();
+                }
                 // BuildPipeline 会卸载未使用的 SO，局部变量不会保证 Unity 对象存活；按持久 GUID 重取配置后复验。
                 var currentProject = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(map.ProjectGuid));
-                if (!currentProject) throw new InvalidOperationException("Resource project definition was removed during the build.");
+                if (!currentProject)
+                {
+                    throw new InvalidOperationException("Resource project definition was removed during the build.");
+                }
+
                 var mapWatch = Stopwatch.StartNew();
                 var afterMap = ResourceBuildMap.Create(currentProject);
                 mapMilliseconds += mapWatch.Elapsed.TotalMilliseconds;
                 inputWatch.Start();
                 var afterSettings = Settings(afterMap, currentProject, target, ref sourceBytes);
                 if (afterSettings != settings || Fingerprint(afterMap, afterSettings, ref sourceBytes) != fingerprint)
+                {
                     throw new InvalidOperationException("Resource sources/configuration changed during the build; workspace remains unverified.");
+                }
+
                 inputWatch.Stop();
                 cancellation.ThrowIfCancellationRequested();
                 result.Files = files.Select(x => new ResourceBuiltFile(x)).ToList().AsReadOnly();
@@ -327,7 +602,11 @@ namespace YLFramework.Editor.Resource
                 {
                     ResourceBuildProgress.Notify(ResourceBuildPhase.ContentEncodingStarted, map.ProjectGuid, map.ProjectId, target.ToString());
                     var encoding = Stopwatch.StartNew();
-                    if (record.Complete) { record.Complete = false; workspace.Write(record); }
+                    if (record.Complete)
+                    {
+                        record.Complete = false;
+                        workspace.Write(record);
+                    }
                     BuildDelivery(result, workspace, (ResourceBuildWorkspace.EncryptedOwnership)record, files, contentKey, cancellation);
                     result.ContentEncodingMilliseconds = encoding.Elapsed.TotalMilliseconds;
                     // 编码可能耗时，封口前再次覆盖这段时间的源/配置变化，而不是延用raw读回前的结论。
@@ -337,7 +616,10 @@ namespace YLFramework.Editor.Resource
                     inputWatch.Start();
                     afterSettings = Settings(afterMap, currentProject, target, ref sourceBytes);
                     if (afterSettings != settings || Fingerprint(afterMap, afterSettings, ref sourceBytes) != fingerprint)
+                    {
                         throw new InvalidOperationException("Resource sources/configuration changed during content encoding; workspace remains unverified.");
+                    }
+
                     inputWatch.Stop();
                 }
                 result.DeliveryBytes = result.DeliveryFiles.Sum(x => x.Length);
@@ -366,9 +648,17 @@ namespace YLFramework.Editor.Resource
             }
             finally
             {
-                if (contentKey != null) Array.Clear(contentKey, 0, contentKey.Length);
-                if (generated) Object.DestroyImmediate(generated);
-                building = false;
+                if (contentKey != null)
+                {
+                    Array.Clear(contentKey, 0, contentKey.Length);
+                }
+
+                if (generated)
+                {
+                    Object.DestroyImmediate(generated);
+                }
+
+                _isBuilding = false;
             }
         }
 
@@ -377,11 +667,21 @@ namespace YLFramework.Editor.Resource
 
         internal static void ValidateContentPolicy(ResourceContentEncryption mode, string keyId, string platform)
         {
-            if (mode == ResourceContentEncryption.None) return;
-            if (mode != ResourceContentEncryption.Aes256GcmHkdfSegmentedV1) throw new ArgumentOutOfRangeException(nameof(mode));
+            if (mode == ResourceContentEncryption.None)
+            {
+                return;
+            }
+
+            if (mode != ResourceContentEncryption.Aes256GcmHkdfSegmentedV1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+
             ResourceBundleEnvelope.ValidateKeyId(keyId);
             if (!ResourceBundleEnvelope.IsSupported || platform != "StandaloneWindows64")
+            {
                 throw new PlatformNotSupportedException("Encrypted Resource content requires Windows x64 Editor/Mono.");
+            }
         }
 
         internal static ResourceBundleContext ContentContext(ResourceBuildResult result, string name) => new(result.Map.ProjectId,
@@ -396,7 +696,10 @@ namespace YLFramework.Editor.Resource
                 input.Position = 0;
                 using var hash = SHA256.Create();
                 if (input.Length != rawLength || ResourceBundleEnvelope.Digest(hash.ComputeHash(input)) != rawSha256)
+                {
                     throw new InvalidDataException("Support delivery differs from the original raw build.");
+                }
+
                 input.Position = 0;
                 token.ThrowIfCancellationRequested();
                 return;
@@ -405,7 +708,10 @@ namespace YLFramework.Editor.Resource
             var header = ResourceBundleEnvelope.Inspect(input, context);
             if (result.ContentEncryption != ResourceContentEncryption.None && (header == null || header.KeyId != result.ContentKeyId) ||
                 result.ContentEncryption == ResourceContentEncryption.None && header != null)
+            {
                 throw new InvalidDataException("Delivery content encoding/key identity does not match the verified build.");
+            }
+
             ResourceBundleEnvelope.ValidateAll(input, context, key, token, rawSha256, rawLength);
         }
 
@@ -418,7 +724,11 @@ namespace YLFramework.Editor.Resource
                 token.ThrowIfCancellationRequested();
                 var candidate = record.Deliveries.FirstOrDefault(x => x.Complete && x.Name == raw.Name &&
                     x.RawLength == raw.Length && x.RawSha256 == raw.Sha256 && File.Exists(Path.Combine(workspace.Root, x.RelativePath)));
-                if (candidate == null) continue;
+                if (candidate == null)
+                {
+                    continue;
+                }
+
                 using var input = ResourceBuildWorkspace.OpenVerified(Path.Combine(workspace.Root, candidate.RelativePath), candidate.Length, candidate.Sha256, token);
                 ValidateDelivery(input, result, raw.Name, key, raw.Length, raw.Sha256, token);
                 candidates.Add(raw.Name, candidate);
@@ -445,19 +755,37 @@ namespace YLFramework.Editor.Resource
                         : ResourceBuildWorkspace.OpenVerified(Path.Combine(workspace.Output, file.Name), file.RawLength, file.RawSha256, token))
                     using (var output = File.Open(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                     {
-                        if (reused || file.Name.EndsWith(".manifest", StringComparison.Ordinal)) CopyContent(source, output, token);
-                        else ResourceBundleEnvelope.Encrypt(source, output, ContentContext(result, file.Name), result.ContentKeyId, key, token);
+                        if (reused || file.Name.EndsWith(".manifest", StringComparison.Ordinal))
+                        {
+                            CopyContent(source, output, token);
+                        }
+                        else
+                        {
+                            ResourceBundleEnvelope.Encrypt(source, output, ContentContext(result, file.Name), result.ContentKeyId, key, token);
+                        }
+
                         output.Flush(true);
                     }
                     long hashed = 0;
                     var digest = HashFile(path, ref hashed);
                     using (var input = ResourceBuildWorkspace.OpenVerified(path, digest.Length, digest.Sha256, token))
+                    {
                         ValidateDelivery(input, result, file.Name, key, file.RawLength, file.RawSha256, token);
-                    file.Length = digest.Length; file.Sha256 = digest.Sha256; file.Complete = true;
+                    }
+
+                    file.Length = digest.Length;
+                    file.Sha256 = digest.Sha256;
+                    file.Complete = true;
                     if (!file.Name.EndsWith(".manifest", StringComparison.Ordinal))
                     {
-                        if (reused) result.ReusedDeliveryBytes += file.Length;
-                        else result.EncodedDeliveryBytes += file.Length;
+                        if (reused)
+                        {
+                            result.ReusedDeliveryBytes += file.Length;
+                        }
+                        else
+                        {
+                            result.EncodedDeliveryBytes += file.Length;
+                        }
                     }
                     workspace.Write(record);
                 }
@@ -501,12 +829,18 @@ namespace YLFramework.Editor.Resource
 
         internal static void ValidateEditor(BuildTarget target)
         {
-            if (Thread.CurrentThread.ManagedThreadId != MainThread || EditorApplication.isPlayingOrWillChangePlaymode ||
+            if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isPlayingOrWillChangePlaymode ||
                 EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
                 throw new InvalidOperationException("Resource builds require a settled Editor on its main thread, outside Play mode.");
+            }
+
             if (target != EditorUserBuildSettings.activeBuildTarget ||
                 !BuildPipeline.IsBuildTargetSupported(BuildPipeline.GetBuildTargetGroup(target), target))
+            {
                 throw new InvalidOperationException("The build target must already be active and installed; implicit platform switching is not allowed.");
+            }
+
             var hostTarget = Application.platform switch
             {
                 RuntimePlatform.WindowsEditor => BuildTarget.StandaloneWindows64,
@@ -515,17 +849,26 @@ namespace YLFramework.Editor.Resource
                 _ => BuildTarget.NoTarget
             };
             if (target != hostTarget)
+            {
                 throw new InvalidOperationException("Native readback requires the active desktop target matching this Editor host.");
+            }
+
             for (var i = 0; i < UnityEditor.SceneManagement.EditorSceneManager.sceneCount; i++)
+            {
                 if (UnityEditor.SceneManagement.EditorSceneManager.GetSceneAt(i).isDirty)
+                {
                     throw new InvalidOperationException("Dirty scenes must not be saved or replaced by the resource builder.");
+                }
+            }
         }
 
         internal static void RejectLoadedBundles()
         {
             // 实测 native build 会卸载其他项目已经加载的 Bundle；只防同 namespace 不足以保护外部所有权。
             if (AssetBundle.GetAllLoadedAssetBundles().Any(x => x))
+            {
                 throw new InvalidOperationException("AssetBundles are already loaded; native building could unload externally owned resources.");
+            }
         }
 
         private static List<ResourceBuiltBundle> ReadBack(ResourceBuildMap map, ResourceBuildWorkspace workspace,
@@ -538,45 +881,82 @@ namespace YLFramework.Editor.Resource
             {
                 cancellation.ThrowIfCancellationRequested();
                 var root = AssetBundle.LoadFromFile(Path.Combine(workspace.Output, workspace.Leaf));
-                if (!root) throw new InvalidOperationException("Cannot read the generated Manifest Bundle.");
+                if (!root)
+                {
+                    throw new InvalidOperationException("Cannot read the generated Manifest Bundle.");
+                }
+
                 loaded.Add(root);
                 if (!root.GetAllAssetNames().SequenceEqual(new[] { "assetbundlemanifest" }))
+                {
                     throw new InvalidOperationException("Unexpected contents in the root Manifest Bundle.");
+                }
+
                 var manifest = root.LoadAsset<AssetBundleManifest>("AssetBundleManifest");
                 if (!manifest || !manifest.GetAllAssetBundles().OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(map.Bundles.Select(x => x.Name)))
+                {
                     throw new InvalidOperationException("Persisted Manifest Bundle does not match the BuildMap.");
+                }
+
                 var result = new List<ResourceBuiltBundle>();
                 var done = new HashSet<string>(StringComparer.Ordinal);
                 while (done.Count < map.Bundles.Count)
                 {
                     var batch = map.Bundles.Where(x => !done.Contains(x.Name) && x.Dependencies.All(done.Contains)).ToArray();
-                    if (batch.Length == 0) throw new InvalidOperationException("Bundle dependency cycle during native readback.");
+                    if (batch.Length == 0)
+                    {
+                        throw new InvalidOperationException("Bundle dependency cycle during native readback.");
+                    }
+
                     foreach (var entry in batch)
                     {
                         cancellation.ThrowIfCancellationRequested();
                         var dependencies = manifest.GetDirectDependencies(entry.Name).OrderBy(x => x, StringComparer.Ordinal).ToArray();
                         if (!dependencies.SequenceEqual(entry.Dependencies))
+                        {
                             throw new InvalidOperationException("Manifest dependency mismatch: " + entry.Name + " => " + string.Join(", ", dependencies));
+                        }
+
                         var bundle = AssetBundle.LoadFromFile(Path.Combine(workspace.Output, entry.Name));
-                        if (!bundle) throw new InvalidOperationException("Cannot read generated Bundle: " + entry.Name);
+                        if (!bundle)
+                        {
+                            throw new InvalidOperationException("Cannot read generated Bundle: " + entry.Name);
+                        }
+
                         loaded.Add(bundle);
-                        if (bundle.name != entry.Name) throw new InvalidOperationException("Bundle native identity mismatch: " + bundle.name);
+                        if (bundle.name != entry.Name)
+                        {
+                            throw new InvalidOperationException("Bundle native identity mismatch: " + bundle.name);
+                        }
+
                         var actual = entry.IsScene ? bundle.GetAllScenePaths() : bundle.GetAllAssetNames();
                         // GetAllScenePaths 保留源路径大小写，GetAllAssetNames 则小写；BuildMap 已拒绝 case-folded 路径冲突。
                         if (!actual.Select(x => x.ToLowerInvariant()).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(entry.AssetPaths.Select(x => x.ToLowerInvariant()).OrderBy(x => x, StringComparer.Ordinal)))
+                        {
                             throw new InvalidOperationException("Bundle asset/Scene contents differ from explicit BuildMap: " + entry.Name + " => " + string.Join(", ", actual));
+                        }
+
                         foreach (var asset in map.Assets.Where(x => x.BundleName == entry.Name && !x.IsScene))
                         {
                             var value = bundle.LoadAsset(asset.SourcePath, asset.AssetType);
                             if (!value || !asset.AssetType.IsInstanceOfType(value))
+                            {
                                 throw new InvalidOperationException("Bundle resource identity/type readback failed: " + asset.Address);
-                            if (value is UnityEngine.U2D.SpriteAtlas atlas) ResourceAtlasRules.ValidateReadback(atlas, asset.SourcePath);
+                            }
+
+                            if (value is UnityEngine.U2D.SpriteAtlas atlas)
+                            {
+                                ResourceAtlasRules.ValidateReadback(atlas, asset.SourcePath);
+                            }
+
                             foreach (var sub in descriptions.Where(x => x.MainAsset == asset))
                             {
                                 var type = sub.AssetType;
                                 var matches = bundle.LoadAssetWithSubAssets(asset.SourcePath, type).Where(x => x && x.name == sub.Name && type.IsInstanceOfType(x)).ToArray();
                                 if (matches.Length != 1)
+                                {
                                     throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + sub.LocalId.ToString(CultureInfo.InvariantCulture));
+                                }
                             }
                         }
                         result.Add(new ResourceBuiltBundle(entry, manifest.GetAssetBundleHash(entry.Name).ToString(), dependencies,
@@ -588,7 +968,13 @@ namespace YLFramework.Editor.Resource
             }
             finally
             {
-                for (var i = loaded.Count - 1; i >= 0; i--) if (loaded[i]) loaded[i].Unload(true);
+                for (var i = loaded.Count - 1; i >= 0; i--)
+                {
+                    if (loaded[i])
+                    {
+                        loaded[i].Unload(true);
+                    }
+                }
             }
         }
 
@@ -599,7 +985,10 @@ namespace YLFramework.Editor.Resource
             foreach (var asset in map.Assets.Where(x => !x.IsScene))
             {
                 // Atlas打包产生的内部Texture/表示不是稳定公开子资产；消费端持Atlas租约并显式GetSprite。
-                if (asset.AssetType == typeof(UnityEngine.U2D.SpriteAtlas)) continue;
+                if (asset.AssetType == typeof(UnityEngine.U2D.SpriteAtlas))
+                {
+                    continue;
+                }
                 // native 的 typed 查询包含 main 和隐藏对象，并按可赋值关系匹配；localId 不能掩盖其名称歧义。
                 var candidates = AssetDatabase.LoadAllAssetsAtPath(asset.SourcePath).Where(x => x)
                     .Select(x => (x.name, Type: ResourceBuildMap.BuildType(x.GetType()))).Where(x => x.Type != null)
@@ -608,16 +997,34 @@ namespace YLFramework.Editor.Resource
                 var ids = new HashSet<long> { asset.LocalId };
                 foreach (var source in AssetDatabase.LoadAllAssetRepresentationsAtPath(asset.SourcePath))
                 {
-                    if (!source) continue;
+                    if (!source)
+                    {
+                        continue;
+                    }
+
                     var type = ResourceBuildMap.BuildType(source.GetType());
-                    if (type == null || type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal)) continue;
+                    if (type == null || type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     if (!candidates.TryGetValue(source.name, out var matches) || matches.Count(type.IsAssignableFrom) != 1)
+                    {
                         throw new InvalidOperationException("Subasset name/type cannot uniquely locate native content: " + asset.Address + "#" + source.name);
+                    }
+
                     if (string.IsNullOrWhiteSpace(source.name) || !keys.Add((source.name, type)) ||
                         !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long localId) ||
                         guid != asset.Guid || localId == 0 || !ids.Add(localId))
+                    {
                         throw new InvalidOperationException("Ambiguous subasset identity: " + asset.Address);
-                    if (map.Assets.Count + result.Count >= 16384) throw new InvalidOperationException("Catalog asset limit exceeded.");
+                    }
+
+                    if (map.Assets.Count + result.Count >= 16384)
+                    {
+                        throw new InvalidOperationException("Catalog asset limit exceeded.");
+                    }
+
                     result.Add(new ResourceBuiltSubAsset(asset, localId, source.name, type));
                 }
             }
@@ -626,7 +1033,7 @@ namespace YLFramework.Editor.Resource
 
         private static string Settings(ResourceBuildMap map, ResourceProject project, BuildTarget target, ref long bytes)
         {
-            ValidateContentPolicy(project.ContentEncryption, project.ContentKeyId, target.ToString());
+            ValidateContentPolicy(project.contentEncryption, project.contentKeyId, target.ToString());
             var data = new StringBuilder();
             Add(data, "ylr-build-workspace-v1");
             Add(data, Application.unityVersion);
@@ -635,19 +1042,26 @@ namespace YLFramework.Editor.Resource
             Add(data, map.ProjectGuid);
             Add(data, map.ProjectId);
             Add(data, ResourceProjectPaths.SemanticIdentity(project));
-            foreach (var group in project.Groups.OrderBy(x => x.Id, StringComparer.Ordinal))
+            foreach (var group in project.groups.OrderBy(x => x.id, StringComparer.Ordinal))
             {
-                Add(data, group.Id);
-                Add(data, group.Packing.ToString());
-                Add(data, group.Selections.Count.ToString());
-                foreach (var selection in group.Selections.OrderBy(x => x.Guid, StringComparer.Ordinal))
+                Add(data, group.id);
+                Add(data, group.packing.ToString());
+                Add(data, group.selections.Count.ToString());
+                foreach (var selection in group.selections.OrderBy(x => x.guid, StringComparer.Ordinal))
                 {
-                    Add(data, selection.Guid);
-                    Add(data, selection.Address ?? "");
-                    Add(data, (selection.Aliases?.Length ?? 0).ToString(CultureInfo.InvariantCulture));
-                    foreach (var alias in (selection.Aliases ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal)) Add(data, alias);
-                    Add(data, (selection.Extensions?.Length ?? 0).ToString());
-                    foreach (var extension in (selection.Extensions ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal)) Add(data, extension);
+                    Add(data, selection.guid);
+                    Add(data, selection.address ?? "");
+                    Add(data, (selection.aliases?.Length ?? 0).ToString(CultureInfo.InvariantCulture));
+                    foreach (var alias in (selection.aliases ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal))
+                    {
+                        Add(data, alias);
+                    }
+
+                    Add(data, (selection.extensions?.Length ?? 0).ToString());
+                    foreach (var extension in (selection.extensions ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal))
+                    {
+                        Add(data, extension);
+                    }
                 }
             }
             // 保守隔离所有实际设置与编译输入，包括 Editor 构建回调；不尝试靠有限 PlayerSettings 字段猜缓存兼容性。
@@ -658,8 +1072,15 @@ namespace YLFramework.Editor.Resource
             {
                 Add(data, assembly.name);
                 Add(data, assembly.flags.ToString());
-                foreach (var define in assembly.defines.OrderBy(x => x, StringComparer.Ordinal)) Add(data, define);
-                foreach (var reference in assembly.assemblyReferences.OrderBy(x => x.name, StringComparer.Ordinal)) Add(data, reference.name);
+                foreach (var define in assembly.defines.OrderBy(x => x, StringComparer.Ordinal))
+                {
+                    Add(data, define);
+                }
+
+                foreach (var reference in assembly.assemblyReferences.OrderBy(x => x.name, StringComparer.Ordinal))
+                {
+                    Add(data, reference.name);
+                }
             }
             var generated = new[] { "Library/ScriptAssemblies/", "Library/Bee/", "Temp/" }.Select(ResourceBuildMap.Absolute).ToArray();
             var files = Directory.GetFiles(settingsRoot, "*", SearchOption.AllDirectories)
@@ -670,12 +1091,16 @@ namespace YLFramework.Editor.Resource
                 .Concat(AssetDatabase.GetAllAssetPaths().Where(x => Path.GetExtension(x).Equals(".asmref", StringComparison.OrdinalIgnoreCase)));
             Add(data, InputFilesFingerprint(files, out var readBytes));
             bytes += readBytes;
-            foreach (var callback in UntrackedCallbacks()) Add(data, callback);
-            if (project.ContentEncryption != ResourceContentEncryption.None)
+            foreach (var callback in UntrackedCallbacks())
+            {
+                Add(data, callback);
+            }
+
+            if (project.contentEncryption != ResourceContentEncryption.None)
             {
                 Add(data, "ylr-content-envelope-v1");
-                Add(data, project.ContentEncryption.ToString());
-                Add(data, project.ContentKeyId);
+                Add(data, project.contentEncryption.ToString());
+                Add(data, project.contentKeyId);
             }
             return HashText(data.ToString());
         }
@@ -689,7 +1114,11 @@ namespace YLFramework.Editor.Resource
                 ResourceBuildOperation.RejectLinks(path);
                 Add(data, path);
                 Add(data, HashFile(path, ref bytes).Sha256);
-                if (!File.Exists(path + ".meta")) continue;
+                if (!File.Exists(path + ".meta"))
+                {
+                    continue;
+                }
+
                 ResourceBuildOperation.RejectLinks(path + ".meta");
                 Add(data, HashFile(path + ".meta", ref bytes).Sha256);
             }
@@ -701,47 +1130,83 @@ namespace YLFramework.Editor.Resource
             var data = new StringBuilder();
             Add(data, settings);
             foreach (var directory in map.SourceDirectories.OrderBy(x => x.Guid, StringComparer.Ordinal).ThenBy(x => x.AddressPrefix, StringComparer.Ordinal))
-            { Add(data, directory.Guid); Add(data, directory.Path); Add(data, directory.AddressPrefix); }
+            {
+                Add(data, directory.Guid);
+                Add(data, directory.Path);
+                Add(data, directory.AddressPrefix);
+            }
             foreach (var asset in map.Assets)
             {
                 Add(data, asset.AssetId);
                 Add(data, asset.Address.ToString());
-                foreach (var alias in asset.Aliases) Add(data, alias.ToString());
+                foreach (var alias in asset.Aliases)
+                {
+                    Add(data, alias.ToString());
+                }
+
                 Add(data, asset.AssetType.AssemblyQualifiedName);
                 Add(data, asset.BundleName);
             }
             foreach (var bundle in map.Bundles)
             {
                 Add(data, bundle.Name);
-                foreach (var path in bundle.AssetPaths) Add(data, path);
-                foreach (var dependency in bundle.Dependencies) Add(data, dependency);
+                foreach (var path in bundle.AssetPaths)
+                {
+                    Add(data, path);
+                }
+
+                foreach (var dependency in bundle.Dependencies)
+                {
+                    Add(data, dependency);
+                }
             }
-            foreach (var group in map.Groups) { Add(data, group.Key); foreach (var member in group.Value) Add(data, member); }
+            foreach (var group in map.Groups)
+            {
+                Add(data, group.Key);
+                foreach (var member in group.Value)
+                {
+                    Add(data, member);
+                }
+            }
             foreach (var path in map.FingerprintPaths)
             {
                 Add(data, path);
                 var definition = path == AssetDatabase.GUIDToAssetPath(map.ProjectGuid);
                 // Project 的依赖 hash 含目录展示顺序；其真实字段/引用仍由定向规范化字节及各输入单独冻结。
-                if (!definition) Add(data, AssetDatabase.GetAssetDependencyHash(path).ToString());
+                if (!definition)
+                {
+                    Add(data, AssetDatabase.GetAssetDependencyHash(path).ToString());
+                }
+
                 var full = ResourceBuildMap.Absolute(path);
                 ResourceBuildOperation.RejectLinks(full);
                 Add(data, definition ? ProjectFileHash(full, ref bytes) : HashFile(full, ref bytes).Sha256);
-                if (File.Exists(full + ".meta")) Add(data, HashFile(full + ".meta", ref bytes).Sha256);
+                if (File.Exists(full + ".meta"))
+                {
+                    Add(data, HashFile(full + ".meta", ref bytes).Sha256);
+                }
             }
             return HashText(data.ToString());
         }
 
         internal static string CanonicalDefinition(ResourceProject project)
         {
-            if (!project) throw new ArgumentNullException(nameof(project));
-            if (project.SourceDirectories == null || project.SourceDirectories.Count == 0 || project.SourceDirectories.Any(x => x == null))
+            if (!project)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
+            if (project.sourceDirectories == null || project.sourceDirectories.Count == 0 || project.sourceDirectories.Any(x => x == null))
+            {
                 throw new InvalidOperationException("资源目录列表缺失、为空或包含空条目。");
+            }
+
             var serialized = JObject.Parse(EditorJsonUtility.ToJson(project));
             // EditorJsonUtility 在当前Unity为 ScriptableObject 输出 MonoBehaviour 包装层。
             var definition = serialized["MonoBehaviour"] as JObject ?? serialized;
-            definition["SourceDirectories"] = new JArray(project.SourceDirectories.OrderBy(x => x.Guid, StringComparer.Ordinal)
-                .ThenBy(x => x.AddressPrefix ?? "", StringComparer.Ordinal)
-                .Select(x => new JObject { ["Guid"] = x.Guid, ["AddressPrefix"] = x.AddressPrefix ?? "" }));
+            definition["SourceDirectories"] = new JArray(project.sourceDirectories.OrderBy(x => x.guid, StringComparer.Ordinal)
+                .ThenBy(x => x.addressPrefix ?? "", StringComparer.Ordinal)
+                .Select(x => new JObject { ["Guid"] = x.guid, ["AddressPrefix"] = x.addressPrefix ?? "" }));
             return serialized.ToString(Formatting.None);
         }
 
@@ -762,8 +1227,10 @@ namespace YLFramework.Editor.Resource
                 // 只排序完整识别的当前记录；未知记录布局回退原始字节，其余 YAML 字节不作删减或规范化。
                 if (header.Length != 0 && records.Length != 0 && sources.Value == header + string.Concat(records) &&
                     (end == text.Length || Regex.IsMatch(text.Substring(end), @"\A  [A-Za-z_][A-Za-z0-9_]*:")))
+                {
                     raw = Encoding.UTF8.GetBytes(text.Substring(0, sources.Index) + header +
                         string.Concat(records.OrderBy(x => x, StringComparer.Ordinal)) + text.Substring(end));
+                }
             }
             using var hash = SHA256.Create();
             return Hex(hash.ComputeHash(raw));

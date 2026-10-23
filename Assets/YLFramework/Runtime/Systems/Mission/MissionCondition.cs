@@ -1,8 +1,9 @@
-using YLFramework.Foundation;
 using System;
 using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.Serialization;
 using YLFramework.Events;
+using YLFramework.Foundation;
 
 namespace YLFramework.MissionSystem
 {
@@ -56,7 +57,7 @@ namespace YLFramework.MissionSystem
         /// 参数名称
         /// </summary>
         [Tooltip("参数名称")]
-        public string param_name;
+        [FormerlySerializedAs("param_name"), JsonProperty("param_name")] public string paramName;
         /// <summary>
         /// 比较方式
         /// </summary>
@@ -69,13 +70,13 @@ namespace YLFramework.MissionSystem
         public float target;
 
 
-        private bool isMeet = false;
+        private bool _isMet = false;
 
-        private int config_name;
+        private int _configName;
 
-        private int param_name_hash;
+        private int _paramNameHash;
         [NonSerialized] private MissionParameter _parameter;
-        [NonSerialized] private IUnRegister _subscription;
+        [NonSerialized] private IUnregister _subscription;
         private int _version;
 
         #endregion
@@ -92,18 +93,24 @@ namespace YLFramework.MissionSystem
         /// 条件是否已经满足
         /// </summary>
         [JsonIgnoreAttribute]
-        public bool IsMeet
+        public bool IsMet
         {
             get
             {
-                return isMeet;
+                return _isMet;
             }
             set
             {
-                if (isMeet == value) return;
-                isMeet = value;
-                if (isMeet)
-                    onMeet?.Invoke();
+                if (_isMet == value)
+                {
+                    return;
+                }
+
+                _isMet = value;
+                if (_isMet)
+                {
+                    Met?.Invoke();
+                }
             }
         }
 
@@ -115,11 +122,15 @@ namespace YLFramework.MissionSystem
         {
             get
             {
-                if(Param == null)
+                if (Param == null)
+                {
                     return 0;
+                }
 
-                if (IsMeet) // 条件已经满足 进度为1
+                if (IsMet) // 条件已经满足 进度为1
+                {
                     return 1;
+                }
 
                 switch (Param.type)
                 {
@@ -128,9 +139,15 @@ namespace YLFramework.MissionSystem
 
                         // 如果比较方式是 等于 或者 不等于 , 这种要么完成 要么未完成 , 进度是0 或1 , 走到这里说明未完成,return 0即可!
                         if (compareType != CompareType.Greater && compareType != CompareType.GreaterEqual)
+                        {
                             return 0;
+                        }
 
-                        if (target == 0) return 0;
+                        if (target == 0)
+                        {
+                            return 0;
+                        }
+
                         return Mathf.Clamp01(Param.Value / target);
                     case MissionParamType.Bool:
                         int p = (int)Param.Value;
@@ -146,7 +163,7 @@ namespace YLFramework.MissionSystem
         /// 参数名称的hash值
         /// </summary>
         [JsonIgnoreAttribute]
-        public int ParamNameHash => param_name_hash;
+        public int ParamNameHash => _paramNameHash;
 
         #endregion
 
@@ -159,31 +176,31 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [NonSerialized]
         [Tooltip("当条件满足时触发")]
-        public Action onMeet;
+        public Action Met;
 
         /// <summary>
         /// 当进度改变时触发
         /// </summary>
         [NonSerialized]
         [Tooltip("当进度改变时触发")]
-        public Action<MissionCondition> onProgressValueChange;
+        public Action<MissionCondition> ProgressValueChanged;
 
         #endregion
 
 
         #region 方法
 
-        internal void Init(int config_name)
+        internal void Init(int configNameHash)
         {
-            this.config_name = config_name;
-            param_name_hash = MissionManager.StringToHash(param_name);
-            Bind(MissionManager.GetMissionParam(config_name, param_name_hash));
+            this._configName = configNameHash;
+            _paramNameHash = MissionManager.StringToHash(paramName);
+            Bind(MissionManager.GetMissionParam(configNameHash, _paramNameHash));
         }
 
         internal void Bind(MissionParameter parameter)
         {
             Dispose();
-            _parameter = parameter ?? throw new InvalidOperationException($"任务条件参数未登记: {param_name}");
+            _parameter = parameter ?? throw new InvalidOperationException($"任务条件参数未登记: {paramName}");
             _subscription = parameter.RegisterChanged(UpdateState);
             UpdateState(parameter);
         }
@@ -191,12 +208,12 @@ namespace YLFramework.MissionSystem
         internal void Dispose()
         {
             _version++;
-            _subscription?.UnRegister();
+            _subscription?.Unregister();
             _subscription = null;
             _parameter = null;
-            isMeet = false;
-            onMeet = null;
-            onProgressValueChange = null;
+            _isMet = false;
+            Met = null;
+            ProgressValueChanged = null;
         }
 
 
@@ -204,7 +221,7 @@ namespace YLFramework.MissionSystem
         {
             var version = _version;
             var parameterVersion = p.Version;
-            var wasMeet = isMeet;
+            var wasMeet = _isMet;
             switch (p.type)
             {
                 case MissionParamType.Float:
@@ -212,22 +229,22 @@ namespace YLFramework.MissionSystem
                     switch (compareType)
                     {
                         case CompareType.Greater:
-                            isMeet = p.Value > target;
+                            _isMet = p.Value > target;
                             break;
                         case CompareType.Less:
-                            isMeet = p.Value < target;
+                            _isMet = p.Value < target;
                             break;
                         case CompareType.GreaterEqual:
-                            isMeet = p.Value >= target;
+                            _isMet = p.Value >= target;
                             break;
                         case CompareType.LessEqual:
-                            isMeet = p.Value <= target;
+                            _isMet = p.Value <= target;
                             break;
                         case CompareType.Equals:
-                            isMeet = p.Value == target;
+                            _isMet = p.Value == target;
                             break;
                         case CompareType.NotEquals:
-                            isMeet = p.Value != target;
+                            _isMet = p.Value != target;
                             break;
                     }
 
@@ -240,40 +257,43 @@ namespace YLFramework.MissionSystem
                     switch (compareType)
                     {
                         case CompareType.Greater:
-                            isMeet = v > t;
+                            _isMet = v > t;
                             break;
                         case CompareType.Less:
-                            isMeet = v < t;
+                            _isMet = v < t;
                             break;
                         case CompareType.Equals:
-                            isMeet = v == t;
+                            _isMet = v == t;
                             break;
                         case CompareType.NotEquals:
-                            isMeet = v != t;
+                            _isMet = v != t;
                             break;
 
                         case CompareType.GreaterEqual:
-                            isMeet = v >= t;
+                            _isMet = v >= t;
                             break;
 
                         case CompareType.LessEqual:
-                            isMeet = v <= t;
+                            _isMet = v <= t;
                             break;
                     }
 
                     break;
                 case MissionParamType.Bool:
-                    isMeet = Mathf.RoundToInt(p.Value) == Mathf.RoundToInt(target);
+                    _isMet = Mathf.RoundToInt(p.Value) == Mathf.RoundToInt(target);
                     break;
             }
             // 先计算当前满足状态，回调读取Progress/IsMeet时不再落后一拍。
-            onProgressValueChange?.Invoke(this);
-            if (version == _version && parameterVersion == p.Version && isMeet && !wasMeet) onMeet?.Invoke();
+            ProgressValueChanged?.Invoke(this);
+            if (version == _version && parameterVersion == p.Version && _isMet && !wasMeet)
+            {
+                Met?.Invoke();
+            }
         }
 
         internal void Reset()
         {
-            IsMeet = false;
+            IsMet = false;
         }
 
         #endregion

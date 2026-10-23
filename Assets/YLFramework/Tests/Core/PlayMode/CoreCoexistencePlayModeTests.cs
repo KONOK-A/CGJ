@@ -44,19 +44,36 @@ namespace YLFramework.Core.Tests
         private static void AssertNoRetiredCallbacks(Type publisher)
         {
             foreach (var field in publisher.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
                 if (typeof(Delegate).IsAssignableFrom(field.FieldType) && field.GetValue(null) is Delegate callbacks)
+                {
                     foreach (var callback in callbacks.GetInvocationList())
+                    {
                         Assert.That(callback.Method.DeclaringType?.FullName, Is.Not.EqualTo("YLFramework.Core.LogUtil"), field.Name);
+                    }
+                }
+            }
         }
 
         private static Dictionary<string, string> Snapshot(string directory)
         {
             var files = new Dictionary<string, string>();
-            if (!Directory.Exists(directory)) return files;
+            if (!Directory.Exists(directory))
+            {
+                return files;
+            }
+
             using (var hash = SHA256.Create())
+            {
                 foreach (var path in Directory.GetFiles(directory, "*", SearchOption.AllDirectories))
+                {
                     using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
                         files.Add(path, Convert.ToBase64String(hash.ComputeHash(stream)));
+                    }
+                }
+            }
+
             return files;
         }
     }

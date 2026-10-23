@@ -1,44 +1,35 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.MissionSystem
 {
 
-    //internal class IconGUIContent
-    //{
-    //    public string projectName;
-    //    public string iconName;
-    //    public GUIContent content;
-    //}
-
     public class MissionListTree : ReorderableTreeView<MissionConfigData>
     {
-        private const string mission_copy_flag = "YLFramework.Mission.Objects.v1:";
+        private const string MissionCopyFlag = "YLFramework.Mission.Objects.v1:";
 
-        private MissionsConfig missionsConfig;
+        private MissionsConfig _missionsConfig;
 
-        private bool isContextClickItem;
+        private bool _isContextClickItem;
 
-        private Rect icon_rect;
-        private Rect name_rect;
-        private Rect id_rect;
+        private Rect _iconRect;
+        private Rect _nameRect;
+        private Rect _idRect;
 
-        //private Dictionary<int, IconGUIContent> contents = new Dictionary<int, IconGUIContent>();
+        private Dictionary<int, GUIContent> _nameContents = new Dictionary<int, GUIContent>();
 
-        private Dictionary<int,GUIContent> name_contents = new Dictionary<int, GUIContent>();
+        private GUIStyle _nameStyle;
 
-        private GUIStyle name_style;
-
-        public MissionsConfig MissionsConfig => missionsConfig;
-        protected override int GetItemIndex(int id) => missionsConfig.missions.FindIndex(data => data && data.id == id);
+        public MissionsConfig MissionsConfig => _missionsConfig;
+        protected override int GetItemIndex(int id) => _missionsConfig.missions.FindIndex(data => data && data.id == id);
 
 #if UNITY_6000_2_OR_NEWER
         public MissionListTree(TreeViewState<int> state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.missions, state)
@@ -47,7 +38,7 @@ namespace YLFramework.MissionSystem
 #endif
 
         {
-            this.missionsConfig = missionsConfig;
+            this._missionsConfig = missionsConfig;
             showBorder = true;
             rowHeight = 25;
         }
@@ -62,11 +53,14 @@ namespace YLFramework.MissionSystem
             for (int i = 0; i < datas.Count; i++)
             {
                 MissionConfigData info = datas[i];
-                if (info == null) continue;
+                if (info == null)
+                {
+                    continue;
+                }
 #if UNITY_6000_2_OR_NEWER
-                TreeViewItem<int> child = new TreeViewItem<int>(info.id, 0, string.Format("{0}{1}{2}", info.mission_name, info.id, info.description));
+                TreeViewItem<int> child = new TreeViewItem<int>(info.id, 0, string.Format("{0}{1}{2}", info.missionName, info.id, info.description));
 #else
-                TreeViewItem child = new TreeViewItem(info.id, 0, string.Format("{0}{1}{2}", info.mission_name, info.id, info.description));
+                TreeViewItem child = new TreeViewItem(info.id, 0, string.Format("{0}{1}{2}", info.missionName, info.id, info.description));
 #endif
 
                 root.AddChild(child);
@@ -77,35 +71,40 @@ namespace YLFramework.MissionSystem
         {
             base.RefreshDatas();
 
-            if (missionsConfig != null)
-                missionsConfig.ClearCache();
+            if (_missionsConfig != null)
+            {
+                _missionsConfig.ClearCache();
+            }
         }
 
 
         protected override void RowGUI(RowGUIArgs args)
         {
-            MissionConfigData info = missionsConfig.GetMissionConfigData(args.item.id);
+            MissionConfigData info = _missionsConfig.GetMissionConfigData(args.item.id);
 
-            if (info == null) return;
-
-            icon_rect.Set(0, args.rowRect.y, args.rowRect.height, args.rowRect.height);
-            name_rect.Set(args.rowRect.height, args.rowRect.y, args.rowRect.width - args.rowRect.height - 70, args.rowRect.height);
-
-            id_rect.Set(args.rowRect.width - 70, args.rowRect.y, 70, args.rowRect.height);
-
-            GUIContent icon_content = EditorAssetTool.GetTextureGUIContent(info.icon.projectName,info.icon.iconName);
-
-            EditorGUI.LabelField(icon_rect, icon_content);
-
-            if (name_style == null)
+            if (info == null)
             {
-                name_style = new GUIStyle(GUI.skin.label);
-                name_style.richText = true;
+                return;
             }
 
-            EditorGUI.LabelField(name_rect, GetMissionName( info), name_style);
+            _iconRect.Set(0, args.rowRect.y, args.rowRect.height, args.rowRect.height);
+            _nameRect.Set(args.rowRect.height, args.rowRect.y, args.rowRect.width - args.rowRect.height - 70, args.rowRect.height);
 
-            GUI.Label(id_rect, string.Format("id:{0}", info.id), "AnimationTimelineTick");
+            _idRect.Set(args.rowRect.width - 70, args.rowRect.y, 70, args.rowRect.height);
+
+            GUIContent iconContent = EditorAssetTool.GetTextureGuiContent(info.icon.projectName, info.icon.iconName);
+
+            EditorGUI.LabelField(_iconRect, iconContent);
+
+            if (_nameStyle == null)
+            {
+                _nameStyle = new GUIStyle(GUI.skin.label);
+                _nameStyle.richText = true;
+            }
+
+            EditorGUI.LabelField(_nameRect, GetMissionName(info), _nameStyle);
+
+            GUI.Label(_idRect, string.Format("id:{0}", info.id), "AnimationTimelineTick");
 
             GUI.Box(args.rowRect, string.Empty, "CN Box");
         }
@@ -113,17 +112,23 @@ namespace YLFramework.MissionSystem
 
         private GUIContent GetMissionName(MissionConfigData info)
         {
-            if (!name_contents.ContainsKey(info.id))
-                name_contents.Add(info.id, new GUIContent());
+            if (!_nameContents.ContainsKey(info.id))
+            {
+                _nameContents.Add(info.id, new GUIContent());
+            }
 
             if (string.IsNullOrEmpty(info.description))
-                name_contents[info.id].text = info.mission_name;
+            {
+                _nameContents[info.id].text = info.missionName;
+            }
             else
-                name_contents[info.id].text = string.Format("{0}<color=grey>({1})</color>", info.mission_name, info.description.Replace("\n",string.Empty));
+            {
+                _nameContents[info.id].text = string.Format("{0}<color=grey>({1})</color>", info.missionName, info.description.Replace("\n", string.Empty));
+            }
 
-            name_contents[info.id].tooltip = info.description;
+            _nameContents[info.id].tooltip = info.description;
 
-            return name_contents[info.id];
+            return _nameContents[info.id];
         }
 
 #if UNITY_6000_2_OR_NEWER
@@ -140,9 +145,9 @@ namespace YLFramework.MissionSystem
         {
             base.ContextClicked();
 
-            if (isContextClickItem)
+            if (_isContextClickItem)
             {
-                isContextClickItem = false;
+                _isContextClickItem = false;
                 return;
             }
 
@@ -153,7 +158,7 @@ namespace YLFramework.MissionSystem
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
-            isContextClickItem = true;
+            _isContextClickItem = true;
 
             GenericMenu menu = new GenericMenu();
             menu.AddItem(new GUIContent("删除"), false, () =>
@@ -170,17 +175,21 @@ namespace YLFramework.MissionSystem
 
                 //SetSelection(Array.Empty<int>());
 
-                List<int> new_ids = new List<int>();
+                List<int> newIds = new List<int>();
 
                 foreach (var item in ids)
                 {
-                    MissionConfigData data = missionsConfig.GetMissionConfigData(item);
+                    MissionConfigData data = _missionsConfig.GetMissionConfigData(item);
                     int i = CopyMission(data);
-                    if (i == -1) continue;
-                    new_ids.Add(i);
+                    if (i == -1)
+                    {
+                        continue;
+                    }
+
+                    newIds.Add(i);
                 }
 
-                SetSelection(new_ids);
+                SetSelection(newIds);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
@@ -206,7 +215,7 @@ namespace YLFramework.MissionSystem
         private void CreateMission(GenericMenu menu)
         {
 
-            if (GUIUtility.systemCopyBuffer.StartsWith(mission_copy_flag))
+            if (GUIUtility.systemCopyBuffer.StartsWith(MissionCopyFlag))
             {
                 menu.AddItem(new GUIContent("Paste"), false, PasteSelection);
             }
@@ -219,22 +228,26 @@ namespace YLFramework.MissionSystem
             menu.AddSeparator(string.Empty);
 
             //  查找项目中所有继承自
-            List<Type> buffs = GetAllMissionTypes(missionsConfig.GetDataType());
+            List<Type> buffs = GetAllMissionTypes(_missionsConfig.GetDataType());
 
             foreach (var item in buffs)
             {
                 string name = string.Format("创建任务/{0}", item.Name);
                 if (!string.IsNullOrEmpty(item.Namespace))
+                {
                     name = string.Format("{0}-{1}", name, item.Namespace);
+                }
 
                 if (item == typeof(MissionConfigData))
+                {
                     name = "创建任务/基础配置";
+                }
 
                 GUIContent content = new GUIContent(name);
 
                 menu.AddItem(content, false, () =>
                 {
-                    int id = MissionsConfigController.CreateMissionConfigData(item,missionsConfig);
+                    int id = MissionsConfigController.CreateMissionConfigData(item, _missionsConfig);
 
                     SetSelection(new int[] { id });
 
@@ -251,100 +264,123 @@ namespace YLFramework.MissionSystem
             var objects = new List<string>();
             foreach (var id in GetSelection())
             {
-                var data = missionsConfig.GetMissionConfigData(id);
-                if (data && AssetDatabase.Contains(data)) objects.Add(GlobalObjectId.GetGlobalObjectIdSlow(data).ToString());
+                var data = _missionsConfig.GetMissionConfigData(id);
+                if (data && AssetDatabase.Contains(data))
+                {
+                    objects.Add(GlobalObjectId.GetGlobalObjectIdSlow(data).ToString());
+                }
             }
-            GUIUtility.systemCopyBuffer = mission_copy_flag + JsonConvert.SerializeObject(objects);
+            GUIUtility.systemCopyBuffer = MissionCopyFlag + JsonConvert.SerializeObject(objects);
         }
 
         private void PasteSelection()
         {
             var text = GUIUtility.systemCopyBuffer;
-            if (!text.StartsWith(mission_copy_flag, StringComparison.Ordinal)) return;
-            var identities = JsonConvert.DeserializeObject<List<string>>(text.Substring(mission_copy_flag.Length), new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None })
+            if (!text.StartsWith(MissionCopyFlag, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var identities = JsonConvert.DeserializeObject<List<string>>(text.Substring(MissionCopyFlag.Length), new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None })
                 ?? throw new InvalidOperationException("任务剪贴板没有对象身份列表。");
             var sources = new List<MissionConfigData>();
             foreach (var identity in identities)
             {
                 if (!GlobalObjectId.TryParse(identity, out var id) || !(GlobalObjectId.GlobalObjectIdentifierToObjectSlow(id) is MissionConfigData data))
+                {
                     throw new InvalidOperationException("任务剪贴板对象已失效: " + identity);
+                }
+
                 sources.Add(data);
             }
             var selected = new List<int>();
-            foreach (var source in sources) selected.Add(CopyMission(source));
-            missionsConfig.ClearCache();
-            AssetDatabase.SaveAssetIfDirty(missionsConfig);
+            foreach (var source in sources)
+            {
+                selected.Add(CopyMission(source));
+            }
+
+            _missionsConfig.ClearCache();
+            AssetDatabase.SaveAssetIfDirty(_missionsConfig);
             SetSelection(selected);
             Reload();
         }
 
         private void DeleteMission(int id)
         {
-            if (missionsConfig == null)
+            if (_missionsConfig == null)
+            {
                 return;
+            }
 
-            MissionConfigData data = missionsConfig.GetMissionConfigData(id);
-            if (data == null) return;
+            MissionConfigData data = _missionsConfig.GetMissionConfigData(id);
+            if (data == null)
+            {
+                return;
+            }
 
-            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(missionsConfig, missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(missionsConfig));
-            missionsConfig.ClearCache();
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_missionsConfig, _missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(_missionsConfig));
+            _missionsConfig.ClearCache();
             Reload();
         }
 
         private int CopyMission(MissionConfigData buff)
         {
             MissionConfigData data = GameObject.Instantiate(buff);
-            int id = MissionsConfigController.CreateMissionConfigData(data,missionsConfig);
-            data.mission_name = GetMissionName(buff.mission_name);
+            int id = MissionsConfigController.CreateMissionConfigData(data, _missionsConfig);
+            data.missionName = GetMissionName(buff.missionName);
 
             EditorUtility.SetDirty(data);
 
             return id;
         }
 
-        private string GetMissionName(string mission_name)
+        private string GetMissionName(string missionName)
         {
 
-            if (!IsContainsMissionName(mission_name))
-                return mission_name;
+            if (!IsContainsMissionName(missionName))
+            {
+                return missionName;
+            }
 
             int count = 1;
 
-            if (Regex.IsMatch(mission_name, "\\([0-9]+\\)$"))
+            if (Regex.IsMatch(missionName, "\\([0-9]+\\)$"))
             {
-                for (int i = mission_name.Length - 1; i >= 0; i--)
+                for (int i = missionName.Length - 1; i >= 0; i--)
                 {
-                    if (mission_name[i] == '(')
+                    if (missionName[i] == '(')
                     {
-                        string c = mission_name.Substring(i + 1, mission_name.Length - i - 2);
+                        string c = missionName.Substring(i + 1, missionName.Length - i - 2);
                         count = int.Parse(c);
 
-                        mission_name = mission_name.Substring(0, i);
+                        missionName = missionName.Substring(0, i);
                         break;
                     }
                 }
             }
 
-            mission_name = mission_name.TrimEnd();
+            missionName = missionName.TrimEnd();
 
             string name = string.Empty;
 
             do
             {
-                name = string.Format("{0} ({1})", mission_name, count);
+                name = string.Format("{0} ({1})", missionName, count);
                 count++;
             } while (IsContainsMissionName(name));
 
             return name;
         }
 
-        private bool IsContainsMissionName(string mission_name)
+        private bool IsContainsMissionName(string missionName)
         {
-            MissionsConfig config = missionsConfig;
+            MissionsConfig config = _missionsConfig;
             foreach (var item in config.missions)
             {
-                if (item.mission_name == mission_name)
+                if (item.missionName == missionName)
+                {
                     return true;
+                }
             }
 
             return false;
@@ -364,14 +400,22 @@ namespace YLFramework.MissionSystem
                 string path = AssetDatabase.GUIDToAssetPath(item);
                 MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
 
-                if (script == null) continue;
+                if (script == null)
+                {
+                    continue;
+                }
 
                 Type type = script.GetClass();
 
-                if (type == null) continue;
+                if (type == null)
+                {
+                    continue;
+                }
 
                 if (type.IsSubclassOf(parent))
+                {
                     states.Add(type);
+                }
             }
 
             return states;

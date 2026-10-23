@@ -1,6 +1,6 @@
-using YLFramework.Actions;
 using System;
 using NUnit.Framework;
+using YLFramework.Actions;
 
 namespace YLFramework.Tests.Actions
 {
@@ -14,15 +14,17 @@ namespace YLFramework.Tests.Actions
 
         private sealed class PrivateConstruction
         {
-            private PrivateConstruction() { }
+            private PrivateConstruction()
+            {
+            }
             internal static PrivateConstruction Create() => new PrivateConstruction();
         }
 
         private sealed class Callback : IActionQueueCallback
         {
-            private readonly Action mCallback;
-            internal Callback(Action callback) => mCallback = callback;
-            public void Call() => mCallback();
+            private readonly Action _callback;
+            internal Callback(Action callback) => _callback = callback;
+            public void Call() => _callback();
         }
 
         [Test]
@@ -69,7 +71,11 @@ namespace YLFramework.Tests.Actions
         {
             var created = 0;
             var resets = 0;
-            var pool = new ActionPool<object>(() => { created++; return null; }, item => resets++, 2);
+            var pool = new ActionPool<object>(() =>
+            {
+                created++;
+                return null;
+            }, item => resets++, 2);
             Assert.That(resets, Is.Zero);
             Assert.That(pool.Allocate(), Is.Null);
             Assert.That(pool.Allocate(), Is.Null);
@@ -98,8 +104,16 @@ namespace YLFramework.Tests.Actions
             Assert.Throws<InvalidOperationException>(() => empty.Allocate());
             var calls = 0;
             var resets = 0;
-            var pool = new ActionPool<object>(() => { calls++; return new object(); },
-                item => { resets++; throw new InvalidOperationException("expected"); });
+            var pool = new ActionPool<object>(() =>
+            {
+                calls++;
+                return new object();
+            },
+                item =>
+                {
+                    resets++;
+                    throw new InvalidOperationException("expected");
+                });
             var value = pool.Allocate();
             Assert.Throws<InvalidOperationException>(() => pool.Recycle(value));
             Assert.That(pool.Recycle(value), Is.False);
@@ -120,13 +134,19 @@ namespace YLFramework.Tests.Actions
             {
                 Last = this;
                 Cleanups = 0;
-                if (ResetError != null) throw ResetError;
+                if (ResetError != null)
+                {
+                    throw ResetError;
+                }
             }
 
             protected override void OnDeinit()
             {
                 Cleanups++;
-                if (CleanupError != null) throw CleanupError;
+                if (CleanupError != null)
+                {
+                    throw CleanupError;
+                }
             }
         }
 
@@ -140,7 +160,7 @@ namespace YLFramework.Tests.Actions
                 var failure = new InvalidOperationException("domain cleanup");
                 FailureAction.CleanupError = failure;
                 Assert.That(Assert.Throws<InvalidOperationException>(failed.Deinit), Is.SameAs(failure));
-                Assert.That(failed.Deinited, Is.True);
+                Assert.That(failed.IsDeinitialized, Is.True);
                 Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
                 Assert.That(failed.Cleanups, Is.EqualTo(1));
                 FailureAction.CleanupError = null;
@@ -175,7 +195,7 @@ namespace YLFramework.Tests.Actions
                 Assert.That(Assert.Throws<InvalidOperationException>(() => FailureAction.Allocate()), Is.SameAs(original));
                 Assert.That(original.Data["ActionKit.CleanupException"], Is.SameAs(cleanup));
                 failed = FailureAction.Last;
-                Assert.That(failed.Deinited, Is.True);
+                Assert.That(failed.IsDeinitialized, Is.True);
                 Assert.That(failed.Cleanups, Is.EqualTo(1));
                 FailureAction.ResetError = null;
                 FailureAction.CleanupError = null;

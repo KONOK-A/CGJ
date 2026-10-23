@@ -60,8 +60,11 @@ namespace YLFramework.Tests.ResourceBuild
                         buildTarget = BuildTarget.StandaloneWindows64,
                         buildTargetGroup = BuildTargetGroup.Standalone,
                         referencesOptions = ReferencesOptions.UseEngineModules,
-                        compilerOptions = new ScriptCompilerOptions { ApiCompatibilityLevel = graph.compilerOptions.ApiCompatibilityLevel,
-                            AllowUnsafeCode = graph.compilerOptions.AllowUnsafeCode },
+                        compilerOptions = new ScriptCompilerOptions
+                        {
+                            ApiCompatibilityLevel = graph.compilerOptions.ApiCompatibilityLevel,
+                            AllowUnsafeCode = graph.compilerOptions.AllowUnsafeCode
+                        },
                         additionalDefines = Array.Empty<string>()
                     };
                     bool Allowed(string path) => YLFramework.Tests.Audio.AudioSourceIndependenceTests.IsAllowedReference(
@@ -72,14 +75,21 @@ namespace YLFramework.Tests.ResourceBuild
                     CompilerMessage[] messages = null;
                     builder.buildFinished += (_, result) => messages = result;
                     Assert.That(builder.Build(), Is.True);
-                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(messages.Where(x => x.type == CompilerMessageType.Error).Select(x => x.message), Is.Empty);
                     Assert.That(File.Exists(output), Is.True);
                     TestContext.WriteLine("{0}: {1} complete sources; Windows Development, no Editor/optional plugin inputs.", name, sources.Length);
                     runtimeOutput = output;
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
     }
 }

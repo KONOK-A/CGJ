@@ -24,7 +24,7 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void NonChineseRequest_PrefersEnglishBeforeExplicitChinese()
+        public void NonChineseRequestPrefersEnglishBeforeExplicitChinese()
         {
             Assert.That(Candidates(SystemLanguage.Japanese, SystemLanguage.Chinese, SystemLanguage.English),
                 Is.EqualTo(new[] { SystemLanguage.Japanese, SystemLanguage.English, SystemLanguage.Chinese }));
@@ -33,14 +33,14 @@ namespace YLFramework.Tests.Extensions.Data
         [TestCase(SystemLanguage.ChineseSimplified, SystemLanguage.Chinese, SystemLanguage.ChineseTraditional)]
         [TestCase(SystemLanguage.ChineseTraditional, SystemLanguage.Chinese, SystemLanguage.ChineseSimplified)]
         [TestCase(SystemLanguage.Chinese, SystemLanguage.ChineseSimplified, SystemLanguage.ChineseTraditional)]
-        public void ChineseRequest_UsesApplicableVariantOrder(SystemLanguage request, SystemLanguage second, SystemLanguage third)
+        public void ChineseRequestUsesApplicableVariantOrder(SystemLanguage request, SystemLanguage second, SystemLanguage third)
         {
             Assert.That(Candidates(request, third, SystemLanguage.English, second),
                 Is.EqualTo(new[] { request, second, third, SystemLanguage.English }));
         }
 
         [Test]
-        public void ExplicitFallbackOrder_IsStableDeduplicatedAndSkipsUnknown()
+        public void ExplicitFallbackOrderIsStableDeduplicatedAndSkipsUnknown()
         {
             Assert.That(Candidates(SystemLanguage.Japanese, SystemLanguage.French, SystemLanguage.Unknown, SystemLanguage.German, SystemLanguage.French),
                 Is.EqualTo(new[] { SystemLanguage.Japanese, SystemLanguage.English, SystemLanguage.French, SystemLanguage.German }));
@@ -58,18 +58,28 @@ namespace YLFramework.Tests.Extensions.Data
         private static IList Entries(params object[] entries)
         {
             var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(Required("LanguageInfo")));
-            foreach (var entry in entries) list.Add(entry);
+            foreach (var entry in entries)
+            {
+                list.Add(entry);
+            }
+
             return list;
         }
 
         private static object Find(object index, IList entries, int id)
         {
-            try { return index.GetType().GetMethod("Find").Invoke(index, new object[] { entries, id, "fixture/English" }); }
-            catch (TargetInvocationException error) { throw error.InnerException; }
+            try
+            {
+                return index.GetType().GetMethod("Find").Invoke(index, new object[] { entries, id, "fixture/English" });
+            }
+            catch (TargetInvocationException error)
+            {
+                throw error.InnerException;
+            }
         }
 
         [Test]
-        public void EntryCache_DetectsEqualCountReplacementAndKeyEdit()
+        public void EntryCacheDetectsEqualCountReplacementAndKeyEdit()
         {
             var index = Activator.CreateInstance(Required("LocalizationEntryIndex"), true);
             var first = Entry(1, "old");
@@ -85,7 +95,7 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void EntryCache_RejectsDuplicateAndNullEntriesWithoutRetainingPartialIndex()
+        public void EntryCacheRejectsDuplicateAndNullEntriesWithoutRetainingPartialIndex()
         {
             var index = Activator.CreateInstance(Required("LocalizationEntryIndex"), true);
             var entries = Entries(Entry(7, "a"), Entry(7, "b"));
@@ -97,7 +107,7 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void MissingEntry_DoesNotReturnEarlierCachedValue()
+        public void MissingEntryDoesNotReturnEarlierCachedValue()
         {
             var index = Activator.CreateInstance(Required("LocalizationEntryIndex"), true);
             var entries = Entries(Entry(9, "a"));
@@ -107,7 +117,7 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void MissingRequestedEntry_SearchesAllLanguagesInFallbackOrder()
+        public void MissingRequestedEntrySearchesAllLanguagesInFallbackOrder()
         {
             var method = Required("LocalizationFallback").GetMethod("Find");
             Assert.That(method, Is.Not.Null, "Per-entry fallback must use the same candidate order.");
@@ -124,19 +134,23 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void AllEntriesMissing_ReturnsNullAfterStableExplicitFallback()
+        public void AllEntriesMissingReturnsNullAfterStableExplicitFallback()
         {
             var method = Required("LocalizationFallback").GetMethod("Find");
             Assert.That(method, Is.Not.Null);
             var seen = new List<SystemLanguage>();
-            Func<SystemLanguage, string> lookup = language => { seen.Add(language); return null; };
+            Func<SystemLanguage, string> lookup = language =>
+            {
+                seen.Add(language);
+                return null;
+            };
             Assert.That(method.MakeGenericMethod(typeof(string)).Invoke(null,
                 new object[] { SystemLanguage.Japanese, new[] { SystemLanguage.French, SystemLanguage.German }, lookup }), Is.Null);
             Assert.That(seen, Is.EqualTo(new[] { SystemLanguage.Japanese, SystemLanguage.English, SystemLanguage.French, SystemLanguage.German }));
         }
 
         [Test]
-        public void TextComposition_FormatsArgumentsAndAppliesRichTextOnce()
+        public void TextCompositionFormatsArgumentsAndAppliesRichTextOnce()
         {
             var type = Required("AppendData");
             var args = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(type));
@@ -154,7 +168,7 @@ namespace YLFramework.Tests.Extensions.Data
         }
 
         [Test]
-        public void TextComposition_FormatErrorIdentifiesRequestedId()
+        public void TextCompositionFormatErrorIdentifiesRequestedId()
         {
             var type = Required("AppendData");
             var args = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(type));

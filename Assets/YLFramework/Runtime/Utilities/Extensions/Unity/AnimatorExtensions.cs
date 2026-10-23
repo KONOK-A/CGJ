@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-     
+
     public static class AnimatorExtensions
     {
         /// <summary>

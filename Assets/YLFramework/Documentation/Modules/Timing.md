@@ -13,7 +13,7 @@ Foundation 中唯一的独立到期任务内核，提供 Scaled / Unscaled 秒�
 - 运行时：[`Runtime/Foundation/Timing/`](../../Runtime/Foundation/Timing/)，归属 `YLFramework.Runtime`，namespace 为 `YLFramework.Timing`。
 - 业务 asmdef 显式引用 Runtime；计时的中立源码不消费 Core/Systems/Utilities、Root/UI 或 XF/XFAB。主体保留必要UGUI/Json.NET依赖，但不再要求XFAB。
 - `Internal/` 的 run、堆、生命周期监听和默认驱动均为实现细节，不公开可写堆字段。
-- Core `TimerObject` 归 [`Timing/Components/`](../../Runtime/Foundation/Timing/Components/)，namespace、脚本GUID与事件字段保持，无需重绑 Inspector；默认 TimerDriver 自动建立，不手动挂载。
+- Core `TimerObject` 归 [`Timing/Components/`](../../Runtime/Foundation/Timing/Components/)，namespace 与脚本 GUID 保持；事件字段为 `onCompleted/onAborted`，通过 FormerlySerializedAs 读取旧 `Action/Abort` 数据，无需重绑 Inspector。默认 TimerDriver 自动建立，不手动挂载。
 
 ## 投递入口
 
@@ -109,7 +109,7 @@ bool bound = run.BindTo(gameObject); // GO 停用即取消。
 - BindTo 只接受活跃的精确 run，可重绑，先清旧对象。已销毁或停用策略下已 inactive 的 owner 立即取消并返回 false，不执行成功 callback；终态/旧代次返回 false。
 - paused run 仍受生命周期约束。从未 active 的对象销毁可能没有 OnDestroy，由默认 Update/手动 Advance 存活兜底结束。绑定不把停用解释为暂停，也不把单个组件禁用当成 GO 停用。
 - 生命周期取消通知中不要嵌套对正在 SetActive 的同一个 GO 再调用 SetActive，Unity 会拒绝重入激活。可在后续帧重新启用、重绑其他对象，或按组件自己的启停边界重启。
-- Core TimerObject 保留 Core 类型、脚本 GUID 与 delay/ignoreTimeScale/Action/Abort；每次启用启动复用槽，自身组件禁用也精确取消。成功 callback 自停用不 Abort，Faulted 不 Abort，取消只通知一次；Action/Abort 内合法重启不会被旧收尾取消。
+- Core TimerObject 保留 Core 类型、脚本 GUID 与 delay/ignoreTimeScale；每次启用启动复用槽，自身组件禁用也精确取消。`onCompleted` 只通知正常到期，`onAborted` 只通知取消或 owner 失效；成功 callback 自停用和 Faulted 不触发中断，取消只通知一次，回调内合法重启不会被旧收尾取消。
 - 无 owner 的默认任务跨场景；模块/View/Panel 不自动接管外部任务。普通所有者用自有 handle、Scope 或 Group 清理，不调用全局 Shutdown 代替局部结束。
 - View 的临时停用不等于 Close。若选择表现会话所有权，可在 OnLoaded 创建自有 TimerScope、在 OnRemove Dispose，下一次加载新建 Scope；只有明确选择 GO 停用取消时才 BindTo。不要让旧会话 Scope 或复用槽控制新 Play 会话。
 - Timer.Shutdown、driver 失效、session reset 只结束 Timer owner 的旧责任，不清公共 Update/Events/Action/CoroutineStarter，不自动续跑旧任务。
@@ -155,7 +155,7 @@ CoroutineObservation 不属于 Timer，不提供业务成功或统一异步终�
 | GameObject owner | handle.BindTo；停用取消或仅销毁取消显式选择，暂停任务仍受 owner 约束 |
 | WaitForCoroutine | CoroutineObservation.Observe；只观察原生等待，不是 Timer，也不承诺业务成功或物理取消 |
 
-TimerObject 保留原 Core namespace、程序集、脚本路径、GUID `8fd9c1c43a386034fbb60e5c2b0fa8b0` 和四个序列化字段，因此现有组件无需重新绑定。已退出的旧类型不提供源码或二进制兼容壳；仓库外预编译调用需重新编译，外部资产或反射字符串须由使用方按真实旧类型迁移。本仓库 C 阶段定向引用核查未发现被删除脚本的挂载，不等同于外部资源兼容保证。
+TimerObject 保留原 Core namespace、程序集、脚本路径、GUID `8fd9c1c43a386034fbb60e5c2b0fa8b0` 和四字段类型/顺序，两个事件字段通过精确旧名映射迁移，既有 UnityEvent 目标、方法与参数保留。旧 C# 调用须使用 `onCompleted/onAborted` 重新编译；这不等同于任意旧二进制兼容。旧类型的仓库内挂载核查与真实旧 Prefab 数据重导入是分别验证的范围。
 
 Action 根动作入口为 `StartNamed(owner, flag)` / `ReplaceNamed(owner, flag)`，以及 `StartNamedCurrentScene` / `StartNamedGlobal` 和对应 ReplaceNamedCurrentScene / ReplaceNamedGlobal。查询与控制为 `ActionKit.TryGetNamed` / `ContainsNamed` / `CancelNamed` / `PauseNamed` / `ResumeNamed`，场景与全局版本分别追加 CurrentScene / Global 后缀，均不创建执行器。对象作用域是 owner 的 GameObject，不是单个组件；返回的 `ActionHandle` 仅属于 Action，结束或池复用后失效，不与 TimerScope 共用状态。详细 Action 接入见 [ActionKit 文档](Action.md)。
 

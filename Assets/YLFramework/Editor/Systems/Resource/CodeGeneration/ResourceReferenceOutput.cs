@@ -29,41 +29,81 @@ namespace YLFramework.Editor.Resource
             {
                 if (Directory.EnumerateFiles(parent).Any(file => file.EndsWith(".asmdef", StringComparison.OrdinalIgnoreCase) ||
                                                                file.EndsWith(".asmref", StringComparison.OrdinalIgnoreCase)))
+                {
                     throw new InvalidOperationException("生成位置已有上级程序集配置，请先确定消费者承载：" + parent);
+                }
+
                 parent = Path.GetDirectoryName(parent);
             }
-            if (File.Exists(directory)) throw new InvalidOperationException("生成目录被文件占用：" + directory);
+            if (File.Exists(directory))
+            {
+                throw new InvalidOperationException("生成目录被文件占用：" + directory);
+            }
+
             var existed = Directory.Exists(directory);
             if (!existed && File.Exists(directory + ".meta"))
+            {
                 throw new InvalidOperationException("生成目录存在未知孤立 meta，拒绝接管：" + directory);
+            }
+
             if (existed)
+            {
                 foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+                {
                     if (entry != path && entry != asmdef && entry != path + ".meta" && entry != asmdef + ".meta")
+                    {
                         throw new InvalidOperationException("生成目录含未知源码或资产，拒绝改变程序集身份：" + entry);
+                    }
+                }
+            }
+
             var hadSource = File.Exists(path);
             var hadAssembly = File.Exists(asmdef);
-            if (existed && !hadSource) throw new InvalidOperationException("生成目录没有本工具的完整归属，拒绝接管：" + directory);
+            if (existed && !hadSource)
+            {
+                throw new InvalidOperationException("生成目录没有本工具的完整归属，拒绝接管：" + directory);
+            }
+
             if (hadSource != hadAssembly || (!hadSource && (File.Exists(path + ".meta") || File.Exists(asmdef + ".meta"))))
+            {
                 throw new InvalidOperationException("生成物/程序集不完整或属于旧承载，请先确认迁移：" + directory);
+            }
+
             if (hadSource)
             {
                 var old = File.ReadAllText(path);
                 var newline = old.IndexOf('\n');
                 if (newline < 0 || old.Substring(0, newline) != Header + Hash(old.Substring(newline + 1)) ||
                     File.ReadAllText(asmdef) != AssemblyDefinition)
+                {
                     throw new InvalidOperationException("已有源码被手写/修改或程序集配置不匹配，拒绝覆盖：" + directory);
+                }
             }
             foreach (var guid in AssetDatabase.FindAssets("t:AssemblyDefinitionAsset"))
             {
                 var other = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.Equals(Path.GetFullPath(other), Path.GetFullPath(asmdef), StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(Path.GetFullPath(other), Path.GetFullPath(asmdef), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 var asset = AssetDatabase.LoadAssetAtPath<UnityEditorInternal.AssemblyDefinitionAsset>(other);
-                if (!asset) throw new InvalidOperationException("程序集资产不可读取：" + other);
+                if (!asset)
+                {
+                    throw new InvalidOperationException("程序集资产不可读取：" + other);
+                }
+
                 if (JsonUtilityName(asset.text) == AssemblyName)
+                {
                     throw new InvalidOperationException("生成程序集名称已被其他位置占用：" + other);
+                }
             }
             // 无变化也必须先查程序集占用，不能因提前返回接受重复身份。
-            if (hadSource && File.ReadAllText(path) == content) return false;
+            if (hadSource && File.ReadAllText(path) == content)
+            {
+                return false;
+            }
+
             var temporary = Path.Combine(directory, ".yl-names-" + Guid.NewGuid().ToString("N"));
             var assemblyTemporary = temporary + ".asmdef-tmp";
             var createdAssembly = false;
@@ -78,20 +118,42 @@ namespace YLFramework.Editor.Resource
                     createdAssembly = true;
                 }
                 // 同目录暂存后替换文件本体，绝不删除/重建已有 .meta。
-                if (hadSource) File.Replace(temporary, path, null);
-                else File.Move(temporary, path);
+                if (hadSource)
+                {
+                    File.Replace(temporary, path, null);
+                }
+                else
+                {
+                    File.Move(temporary, path);
+                }
+
                 return true;
             }
             catch
             {
-                if (createdAssembly) File.Delete(asmdef);
+                if (createdAssembly)
+                {
+                    File.Delete(asmdef);
+                }
+
                 throw;
             }
             finally
             {
-                if (File.Exists(temporary)) File.Delete(temporary);
-                if (File.Exists(assemblyTemporary)) File.Delete(assemblyTemporary);
-                if (!existed && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+                if (File.Exists(temporary))
+                {
+                    File.Delete(temporary);
+                }
+
+                if (File.Exists(assemblyTemporary))
+                {
+                    File.Delete(assemblyTemporary);
+                }
+
+                if (!existed && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                {
+                    Directory.Delete(directory);
+                }
             }
         }
 
@@ -102,7 +164,10 @@ namespace YLFramework.Editor.Resource
         }
 
         [Serializable]
-        private sealed class AssemblyIdentity { public string name; }
+        private sealed class AssemblyIdentity
+        {
+            public string name;
+        }
         private static string JsonUtilityName(string json) => UnityEngine.JsonUtility.FromJson<AssemblyIdentity>(json)?.name;
     }
 }

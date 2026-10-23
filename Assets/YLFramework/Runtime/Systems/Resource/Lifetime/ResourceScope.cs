@@ -7,11 +7,14 @@ namespace YLFramework.Services.Resource
     /// <summary>只聚合自己接管的请求与租约，不建立缓存或第二份资源加载权威。</summary>
     public sealed class ResourceScope : IDisposable
     {
-        private readonly ResourceSystem system;
-        private readonly HashSet<IDisposable> requests = new(ReferenceComparer.Instance);
-        private readonly HashSet<IDisposable> leases = new(ReferenceComparer.Instance);
-        public bool IsDisposed { get; private set; }
-        internal ResourceScope(ResourceSystem system) => this.system = system;
+        private readonly ResourceSystem _system;
+        private readonly HashSet<IDisposable> _requests = new(ReferenceComparer.Instance);
+        private readonly HashSet<IDisposable> _leases = new(ReferenceComparer.Instance);
+        public bool IsDisposed
+        {
+            get; private set;
+        }
+        internal ResourceScope(ResourceSystem system) => this._system = system;
 
         private sealed class ReferenceComparer : IEqualityComparer<IDisposable>
         {
@@ -23,16 +26,24 @@ namespace YLFramework.Services.Resource
         public AssetLease<T> Acquire<T>(ResourceAddress address) where T : UnityEngine.Object
         {
             CheckAvailable();
-            var lease = system.Acquire<T>(address);
-            if (IsDisposed) { lease.Dispose(); throw new ObjectDisposedException(nameof(ResourceScope)); }
+            var lease = _system.Acquire<T>(address);
+            if (IsDisposed)
+            {
+                lease.Dispose();
+                throw new ObjectDisposedException(nameof(ResourceScope));
+            }
             return Own(lease);
         }
 
         public ResourceRequest<AssetLease<T>> AcquireAsync<T>(ResourceAddress address) where T : UnityEngine.Object
         {
             CheckAvailable();
-            var request = system.AcquireAsync<T>(address);
-            if (IsDisposed) { request.Dispose(); throw new ObjectDisposedException(nameof(ResourceScope)); }
+            var request = _system.AcquireAsync<T>(address);
+            if (IsDisposed)
+            {
+                request.Dispose();
+                throw new ObjectDisposedException(nameof(ResourceScope));
+            }
             return Track(request);
         }
 
@@ -40,8 +51,12 @@ namespace YLFramework.Services.Resource
         public ResourceRequest<T> Track<T>(ResourceRequest<T> request)
         {
             CheckAvailable();
-            if (request == null) throw new ArgumentNullException(nameof(request));
-            requests.Add(request);
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            _requests.Add(request);
             return request;
         }
 
@@ -49,8 +64,12 @@ namespace YLFramework.Services.Resource
         public T Own<T>(T lease) where T : IDisposable
         {
             CheckAvailable();
-            if (lease == null) throw new ArgumentNullException(nameof(lease));
-            leases.Add(lease);
+            if (lease == null)
+            {
+                throw new ArgumentNullException(nameof(lease));
+            }
+
+            _leases.Add(lease);
             return lease;
         }
 
@@ -58,40 +77,75 @@ namespace YLFramework.Services.Resource
         public T TakeResult<T>(ResourceRequest<T> request) where T : IDisposable
         {
             CheckAvailable();
-            if (request == null || !requests.Contains(request)) throw new ArgumentException("The request is not owned by this scope.", nameof(request));
+            if (request == null || !_requests.Contains(request))
+            {
+                throw new ArgumentException("The request is not owned by this scope.", nameof(request));
+            }
+
             var lease = request.TakeResult();
-            try { leases.Add(lease); }
-            catch { lease.Dispose(); throw; }
-            requests.Remove(request);
+            try
+            {
+                _leases.Add(lease);
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
+            _requests.Remove(request);
             request.Dispose();
             return lease;
         }
 
         private void CheckAvailable()
         {
-            system.CheckThread();
-            if (IsDisposed) throw new ObjectDisposedException(nameof(ResourceScope));
+            _system.CheckThread();
+            if (IsDisposed)
+            {
+                throw new ObjectDisposedException(nameof(ResourceScope));
+            }
         }
 
         public void Dispose()
         {
-            system.CheckThread();
-            if (IsDisposed) return;
+            _system.CheckThread();
+            if (IsDisposed)
+            {
+                return;
+            }
+
             IsDisposed = true;
-            var pending = new List<IDisposable>(requests);
-            var held = new List<IDisposable>(leases);
-            requests.Clear();
-            leases.Clear();
+            var pending = new List<IDisposable>(_requests);
+            var held = new List<IDisposable>(_leases);
+            _requests.Clear();
+            _leases.Clear();
             List<Exception> errors = null;
-            foreach (var request in pending) Release(request, ref errors);
-            foreach (var lease in held) Release(lease, ref errors);
-            if (errors != null) throw new AggregateException("Resource scope cleanup failed.", errors);
+            foreach (var request in pending)
+            {
+                Release(request, ref errors);
+            }
+
+            foreach (var lease in held)
+            {
+                Release(lease, ref errors);
+            }
+
+            if (errors != null)
+            {
+                throw new AggregateException("Resource scope cleanup failed.", errors);
+            }
         }
 
         private static void Release(IDisposable value, ref List<Exception> errors)
         {
-            try { value.Dispose(); }
-            catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+            try
+            {
+                value.Dispose();
+            }
+            catch (Exception error)
+            {
+                (errors ??= new List<Exception>()).Add(error);
+            }
         }
     }
 }

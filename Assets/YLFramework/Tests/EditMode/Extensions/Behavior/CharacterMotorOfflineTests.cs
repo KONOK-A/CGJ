@@ -16,7 +16,10 @@ namespace YLFramework.Tests.Extensions.Behavior
         public void OriginalMotorChecksAndSerializableEventsArePresentWithoutEditorDependencies()
         {
             foreach (var name in new[] { "CharacterController2D", "CheckGround", "CheckWall", "CheckTop" })
+            {
                 Assert.That(File.Exists(Path.Combine(Runtime, name + ".cs")), Is.True, name);
+            }
+
             foreach (var source in Directory.GetFiles(Runtime, "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText))
             {
                 Assert.That(source.Contains("using UnityEditor"), Is.False);
@@ -26,7 +29,9 @@ namespace YLFramework.Tests.Extensions.Behavior
                 Assert.That(source.Contains("Handles."), Is.False);
             }
             foreach (var name in new[] { "BoolUnityEvent", "IntUnityEvent", "Vector2UnityEvent" })
+            {
                 Assert.That(File.Exists(Path.Combine(Runtime, "UnityEvent", name + ".cs")), Is.True, name);
+            }
         }
 
         private static object MathCall(string name, params object[] args)

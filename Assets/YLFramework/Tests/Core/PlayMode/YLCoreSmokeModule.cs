@@ -23,9 +23,18 @@ namespace YLFramework.Core.Tests
         public Action StartAction;
         public string TableName = Table;
         public string SceneOverride;
-        public int StartCount { get; private set; }
-        public bool RowReadyAtStart { get; private set; }
-        public bool SceneReadyAtStart { get; private set; }
+        public int StartCount
+        {
+            get; private set;
+        }
+        public bool RowReadyAtStart
+        {
+            get; private set;
+        }
+        public bool SceneReadyAtStart
+        {
+            get; private set;
+        }
 
 #pragma warning disable CS0618
         public override Dictionary<string, Type> PreloadConfigTables =>
@@ -48,9 +57,18 @@ namespace YLFramework.Core.Tests
     public sealed class YLCoreSmokeRow : YLFramework.Core.Model
     {
         public static Action<YLCoreSmokeRow> InitAction;
-        public string Marker { get; set; }
-        public int InitCount { get; private set; }
-        public int ExitCount { get; private set; }
+        public string Marker
+        {
+            get; set;
+        }
+        public int InitCount
+        {
+            get; private set;
+        }
+        public int ExitCount
+        {
+            get; private set;
+        }
         public override void OnInit()
         {
             InitCount++;
@@ -62,10 +80,12 @@ namespace YLFramework.Core.Tests
     public sealed class YLCoreResourceProjectModule : YLFramework.Core.Module
     {
         public bool AllowClose;
-        public override bool BaseModule => !AllowClose;
+        public override bool IsBaseModule => !AllowClose;
         [Obsolete("已过时!")]
         public override Dictionary<string, Type> PreloadConfigTables =>
             new Dictionary<string, Type> { { YLCoreSmokeModule.Table, typeof(YLCoreSmokeRow[]) } };
-        public override void OnStart() { }
+        public override void OnStart()
+        {
+        }
     }
 }

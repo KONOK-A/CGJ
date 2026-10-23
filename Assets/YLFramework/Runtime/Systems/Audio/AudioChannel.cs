@@ -28,27 +28,45 @@ namespace YLFramework.Services.Audio
     public sealed partial class AudioChannel : IDisposable
     {
         internal readonly AudioManager Owner;
-        private readonly HashSet<AudioVoice> mRequests = new HashSet<AudioVoice>();
-        private bool mDisposed, mPaused, mMuted;
-        private float mVolume = 1f;
-        private ulong mPauseVersion;
-        private ulong mVolumeVersion, mMuteVersion;
-        internal ulong Epoch { get; private set; }
+        private readonly HashSet<AudioVoice> _requests = new HashSet<AudioVoice>();
+        private bool _isDisposed;
+        private bool _isPaused;
+        private bool _isMuted;
+        private float _volume = 1f;
+        private ulong _pauseVersion;
+        private ulong _volumeVersion;
+        private ulong _muteVersion;
+        internal ulong Epoch
+        {
+            get; private set;
+        }
         internal ulong PendingVersion;
         /// <summary>区分大小写的登记名，不用作隐式存储身份。</summary>
-        public string Name { get; }
+        public string Name
+        {
+            get;
+        }
         /// <summary>显式稳定持久化身份；null 表示不读写任何通道偏好键。</summary>
-        public string PersistenceId { get; }
+        public string PersistenceId
+        {
+            get;
+        }
         /// <summary>通道使用的既有分类设置。</summary>
-        public AudioCategory Category { get; }
+        public AudioCategory Category
+        {
+            get;
+        }
         /// <summary>固定的独占/重叠拓扑。</summary>
-        public AudioChannelMode Mode { get; }
+        public AudioChannelMode Mode
+        {
+            get;
+        }
         /// <summary>登记是否仍属于可用的原 Audio 会话。</summary>
-        public bool IsValid => !mDisposed && Owner && Owner.Available;
+        public bool IsValid => !_isDisposed && Owner && Owner.IsAvailable;
         /// <summary>本通道是否显式暂停，不代表每个请求的其他暂停原因。</summary>
-        public bool IsPaused => IsValid && mPaused;
+        public bool IsPaused => IsValid && _isPaused;
         /// <summary>有效请求数，包含暂停和等待分类启用的请求。</summary>
-        public int RequestCount => IsValid ? mRequests.Count : 0;
+        public int RequestCount => IsValid ? _requests.Count : 0;
         /// <summary>局部音量实际变化且已更新原请求后通知；同值不通知。Dispose 撤销订阅，不投递初始值。</summary>
         public event Action<float> VolumeChanged;
         /// <summary>局部静音实际变化且已更新原请求后通知；不表示分类静音变化。</summary>
@@ -56,62 +74,135 @@ namespace YLFramework.Services.Audio
         /// <summary>局部 [0,1] 音量，不回写缺省分类设置。</summary>
         public float Volume
         {
-            get => mVolume;
+            get => _volume;
             set
             {
                 RequireValid();
-                if (!AudioSoundOptions.IsFinite(value) || value < 0f || value > 1f) throw new ArgumentOutOfRangeException(nameof(value));
-                if (PersistenceId != null) PlayerPrefs.SetFloat(StorageKey("Volume"), value);
-                if (mVolume == value) return;
-                mVolume = value;
-                var version = ++mVolumeVersion;
-                foreach (var request in mRequests) request.SetVolume(Owner.GetSharedVolume(request));
-                if (VolumeChanged != null) Notify(VolumeChanged, value, () => IsValid && mVolumeVersion == version);
+                if (!AudioSoundOptions.IsFinite(value) || value < 0f || value > 1f)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+
+                if (PersistenceId != null)
+                {
+                    PlayerPrefs.SetFloat(StorageKey("Volume"), value);
+                }
+
+                if (_volume == value)
+                {
+                    return;
+                }
+
+                _volume = value;
+                var version = ++_volumeVersion;
+                foreach (var request in _requests)
+                {
+                    request.SetVolume(Owner.GetSharedVolume(request));
+                }
+
+                if (VolumeChanged != null)
+                {
+                    Notify(VolumeChanged, value, () => IsValid && _volumeVersion == version);
+                }
             }
         }
         /// <summary>局部静音，不停止、重播或暂停请求；仅显式 PersistenceId 才持久化。</summary>
-        public bool Muted
+        public bool IsMuted
         {
-            get => mMuted;
+            get => _isMuted;
             set
             {
                 RequireValid();
-                if (PersistenceId != null) PlayerPrefs.SetInt(StorageKey("Mute"), value ? 1 : 0);
-                if (mMuted == value) return;
-                mMuted = value;
-                var version = ++mMuteVersion;
-                foreach (var request in mRequests) request.SetMute(Owner.GetMuted(request));
-                if (MutedChanged != null) Notify(MutedChanged, value, () => IsValid && mMuteVersion == version);
+                if (PersistenceId != null)
+                {
+                    PlayerPrefs.SetInt(StorageKey("Mute"), value ? 1 : 0);
+                }
+
+                if (_isMuted == value)
+                {
+                    return;
+                }
+
+                _isMuted = value;
+                var version = ++_muteVersion;
+                foreach (var request in _requests)
+                {
+                    request.SetMute(Owner.GetMuted(request));
+                }
+
+                if (MutedChanged != null)
+                {
+                    Notify(MutedChanged, value, () => IsValid && _muteVersion == version);
+                }
             }
         }
         internal AudioChannel(AudioManager owner, string name, AudioCategory category, AudioChannelMode mode, string persistenceId)
         {
-            Owner = owner; Name = name; Category = category; Mode = mode; PersistenceId = persistenceId;
-            if (persistenceId == null) return;
+            Owner = owner;
+            Name = name;
+            Category = category;
+            Mode = mode;
+            PersistenceId = persistenceId;
+            if (persistenceId == null)
+            {
+                return;
+            }
+
             var volume = PlayerPrefs.GetFloat(StorageKey("Volume"), 1f);
-            mVolume = AudioSoundOptions.IsFinite(volume) && volume >= 0f && volume <= 1f ? volume : 1f;
-            mMuted = PlayerPrefs.GetInt(StorageKey("Mute"), 0) != 0;
+            _volume = AudioSoundOptions.IsFinite(volume) && volume >= 0f && volume <= 1f ? volume : 1f;
+            _isMuted = PlayerPrefs.GetInt(StorageKey("Mute"), 0) != 0;
         }
         private string StorageKey(string setting) => "YLFramework.Audio.Channel:" + PersistenceId + ":" + setting;
         private static void Notify<T>(Action<T> listeners, T value, Func<bool> current)
         {
-            if (listeners == null) return;
+            if (listeners == null)
+            {
+                return;
+            }
+
             List<Exception> failures = null;
             foreach (Action<T> listener in listeners.GetInvocationList())
             {
-                if (!current()) break;
-                try { listener(value); }
-                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+                if (!current())
+                {
+                    break;
+                }
+
+                try
+                {
+                    listener(value);
+                }
+                catch (Exception exception)
+                {
+                    (failures ?? (failures = new List<Exception>())).Add(exception);
+                }
             }
-            if (failures != null) throw new AggregateException("Audio channel setting notification failed.", failures);
+            if (failures != null)
+            {
+                throw new AggregateException("Audio channel setting notification failed.", failures);
+            }
         }
-        internal void RequireValid() { if (!IsValid) throw new InvalidOperationException("Audio channel has expired."); }
+        internal void RequireValid()
+        {
+            if (!IsValid)
+            {
+                throw new InvalidOperationException("Audio channel has expired.");
+            }
+        }
         internal static void ValidateIdentity(string identity, string parameter)
         {
-            if (string.IsNullOrWhiteSpace(identity) || identity != identity.Trim()) throw new ArgumentException("A nonempty, unpadded identity is required.", parameter);
+            if (string.IsNullOrWhiteSpace(identity) || identity != identity.Trim())
+            {
+                throw new ArgumentException("A nonempty, unpadded identity is required.", parameter);
+            }
+
             foreach (var c in identity)
+            {
                 if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-' || c == '/'))
+                {
                     throw new ArgumentException("Use stable ASCII letters, digits, '.', '_', '-' or '/'.", parameter);
+                }
+            }
         }
         /// <summary>播放调用方保活的 Clip。null 选项为普通非循环 Defaults；非法配置不会替换旧请求。</summary>
         public AudioHandle Play(AudioClip clip, AudioSoundOptions options = null,
@@ -130,82 +221,211 @@ namespace YLFramework.Services.Audio
         {
             try
             {
-                RequireValid(); resource?.Validate();
+                RequireValid();
+                resource?.Validate();
                 if (borrowed)
                 {
-                    if (Mode != AudioChannelMode.Exclusive) throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                    if (Mode != AudioChannelMode.Exclusive)
+                    {
+                        throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                    }
+
                     Owner.ValidateBorrowedSource(source);
                 }
-                if (!clip) return default;
-                if (Category != AudioCategory.Sound) { options.Priority = 0; options.PlaySoundMode = null; }
-                options.Validate(false); options.ValidateClip(clip);
-                if (Category == AudioCategory.Sound && !AudioKit.Settings.IsSoundOn.Value) return default;
+                if (!clip)
+                {
+                    return default;
+                }
+
+                if (Category != AudioCategory.Sound)
+                {
+                    options.Priority = 0;
+                    options.PlaySoundMode = null;
+                }
+                options.Validate(false);
+                options.ValidateClip(clip);
+                if (Category == AudioCategory.Sound && !AudioKit.Settings.IsSoundOn.Value)
+                {
+                    return default;
+                }
+
                 var mode = options.PlaySoundMode ?? AudioKit.PlaySoundMode;
                 if (Category == AudioCategory.Sound && !AudioKit.Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
-                { AudioKit.SoundCounters.DedupRejectedCount++; return default; }
+                {
+                    AudioKit.SoundCounters.DedupRejectedCount++;
+                    return default;
+                }
                 var epoch = ++Epoch;
-                if (!namedCommit && Mode == AudioChannelMode.Exclusive) Owner.CancelPending(Category, this, AudioPlayEnd.Replaced);
-                if (!IsValid || Epoch != epoch || resource != null && !resource.CanBind) return default;
-                if (Mode == AudioChannelMode.Exclusive) StopRequests(AudioRequestEnd.Replaced);
-                if (!IsValid || Epoch != epoch) return default;
+                if (!namedCommit && Mode == AudioChannelMode.Exclusive)
+                {
+                    Owner.CancelPending(Category, this, AudioPlayEnd.Replaced);
+                }
+
+                if (!IsValid || Epoch != epoch || resource != null && !resource.CanBind)
+                {
+                    return default;
+                }
+
+                if (Mode == AudioChannelMode.Exclusive)
+                {
+                    StopRequests(AudioRequestEnd.Replaced);
+                }
+
+                if (!IsValid || Epoch != epoch)
+                {
+                    return default;
+                }
+
                 if (Category == AudioCategory.Sound)
                 {
-                    if (!AudioKit.CurrentSettings.IsSoundOn.Value) return default;
+                    if (!AudioKit.CurrentSettings.IsSoundOn.Value)
+                    {
+                        return default;
+                    }
+
                     if (!AudioKit.Channels.CanPlay(clip.GetInstanceID(), mode, Time.frameCount))
-                    { AudioKit.SoundCounters.DedupRejectedCount++; return default; }
+                    {
+                        AudioKit.SoundCounters.DedupRejectedCount++;
+                        return default;
+                    }
                 }
-                if (borrowed) Owner.ValidateBorrowedSource(source);
+                if (borrowed)
+                {
+                    Owner.ValidateBorrowedSource(source);
+                }
+
                 return Owner.PlayChannel(this, clip, in options, mode, started, finished, resource, source);
             }
-            finally { if (resource != null && !resource.IsBound) resource.Dispose(); }
+            finally
+            {
+                if (resource != null && !resource.IsBound)
+                {
+                    resource.Dispose();
+                }
+            }
         }
-        internal void Add(AudioVoice voice) => mRequests.Add(voice);
-        internal void Remove(AudioVoice voice) => mRequests.Remove(voice);
-        internal void CopyTo(List<AudioHandle> destination) { foreach (var voice in mRequests) if (voice.Active) destination.Add(voice.Handle); }
+        internal void Add(AudioVoice voice) => _requests.Add(voice);
+        internal void Remove(AudioVoice voice) => _requests.Remove(voice);
+        internal void CopyTo(List<AudioHandle> destination)
+        {
+            foreach (var voice in _requests)
+            {
+                if (voice.IsActive)
+                {
+                    destination.Add(voice.Handle);
+                }
+            }
+        }
         private void StopRequests(AudioRequestEnd reason)
         {
-            var snapshot = new List<AudioHandle>(mRequests.Count);
+            var snapshot = new List<AudioHandle>(_requests.Count);
             CopyTo(snapshot);
             List<Exception> failures = null;
             foreach (var handle in snapshot)
-                try { if (handle.Voice.Active && handle.Voice.Generation == handle.Generation) handle.Voice.Stop(reason); }
-                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
-            if (failures != null) throw new AggregateException("Audio channel cleanup failed.", failures);
+            {
+                try
+                {
+                    if (handle.Voice.IsActive && handle.Voice.Generation == handle.Generation)
+                    {
+                        handle.Voice.Stop(reason);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    (failures ?? (failures = new List<Exception>())).Add(exception);
+                }
+            }
+
+            if (failures != null)
+            {
+                throw new AggregateException("Audio channel cleanup failed.", failures);
+            }
         }
         /// <summary>停止调用进入时的请求，不停其他通道或清理重入中创建的新代次。</summary>
         public void Stop()
         {
-            if (!IsValid) return;
-            Epoch++; PendingVersion++;
+            if (!IsValid)
+            {
+                return;
+            }
+
+            Epoch++;
+            PendingVersion++;
             var pending = Owner.PendingSnapshot(Category, this);
-            try { StopRequests(AudioRequestEnd.Stopped); }
-            finally { AudioManager.EndPending(pending, AudioPlayEnd.Stopped); }
+            try
+            {
+                StopRequests(AudioRequestEnd.Stopped);
+            }
+            finally
+            {
+                AudioManager.EndPending(pending, AudioPlayEnd.Stopped);
+            }
         }
         /// <summary>局部暂停也应用于后续本通道请求；不会覆盖逐请求手动暂停。</summary>
-        public void Pause() { if (!IsValid) return; mPauseVersion++; mPaused = true; foreach (var voice in mRequests) voice.SetChannelPaused(true); }
+        public void Pause()
+        {
+            if (!IsValid)
+            {
+                return;
+            }
+
+            _pauseVersion++;
+            _isPaused = true;
+            foreach (var voice in _requests)
+            {
+                voice.SetChannelPaused(true);
+            }
+        }
         /// <summary>只解除本通道暂停，不解除请求的手动或自动暂停。</summary>
         public void Resume()
         {
-            if (!IsValid) return;
-            var pauseVersion = ++mPauseVersion;
-            mPaused = false;
-            var snapshot = new List<AudioHandle>(mRequests.Count); CopyTo(snapshot);
+            if (!IsValid)
+            {
+                return;
+            }
+
+            var pauseVersion = ++_pauseVersion;
+            _isPaused = false;
+            var snapshot = new List<AudioHandle>(_requests.Count);
+            CopyTo(snapshot);
             List<Exception> failures = null;
             foreach (var handle in snapshot)
             {
-                if (!IsValid || mPauseVersion != pauseVersion || mPaused) break;
-                try { if (handle.IsValid) handle.Voice.SetChannelPaused(false); }
-                catch (Exception exception) { (failures ?? (failures = new List<Exception>())).Add(exception); }
+                if (!IsValid || _pauseVersion != pauseVersion || _isPaused)
+                {
+                    break;
+                }
+
+                try
+                {
+                    if (handle.IsValid)
+                    {
+                        handle.Voice.SetChannelPaused(false);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    (failures ?? (failures = new List<Exception>())).Add(exception);
+                }
             }
-            if (failures != null) throw new AggregateException("Audio channel resume failed.", failures);
+            if (failures != null)
+            {
+                throw new AggregateException("Audio channel resume failed.", failures);
+            }
         }
         /// <summary>撤销登记后再结束原请求；不删除持久化值。重复调用安全。</summary>
         public void Dispose() => Release(AudioRequestEnd.Stopped);
         internal void Release(AudioRequestEnd reason)
         {
-            if (mDisposed) return;
-            mDisposed = true; Epoch++;
-            VolumeChanged = null; MutedChanged = null;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
+            Epoch++;
+            VolumeChanged = null;
+            MutedChanged = null;
             Owner.UnregisterChannel(this);
             Owner.CancelPending(Category, this, (AudioPlayEnd)reason);
             StopRequests(reason);

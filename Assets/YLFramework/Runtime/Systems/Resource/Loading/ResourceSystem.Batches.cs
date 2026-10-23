@@ -10,12 +10,27 @@ namespace YLFramework.Services.Resource
         public ResourceRequest<AssetBatchLease<T>> AcquireAllAsync<T>(string projectId, string bundleId) where T : UnityEngine.Object
         {
             CheckThread();
-            if (!IsAvailable) return BatchFailure<T>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
-            if (IsProjectBlocked(projectId)) return BatchFailure<T>(ResourceError.Busy, "The project is inside its activation barrier.");
-            if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
+            if (!IsAvailable)
+            {
+                return BatchFailure<T>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
+            if (IsProjectBlocked(projectId))
+            {
+                return BatchFailure<T>(ResourceError.Busy, "The project is inside its activation barrier.");
+            }
+
+            if (projectId == null || !_catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
                 bundleId == null || !catalog.Snapshot.Bundles.TryGetValue(bundleId, out var descriptor))
+            {
                 return BatchFailure<T>(ResourceError.AddressNotFound, "Unknown mounted project/Bundle identity.");
-            if (descriptor.IsScene) return BatchFailure<T>(ResourceError.Unsupported, "Scene Bundle preparation is not an asset batch or Scene load.");
+            }
+
+            if (descriptor.IsScene)
+            {
+                return BatchFailure<T>(ResourceError.Unsupported, "Scene Bundle preparation is not an asset batch or Scene load.");
+            }
+
             return AcquireBatch<T>(catalog.Entries.Where(x => x.Descriptor?.BundleId == bundleId && typeof(T).IsAssignableFrom(x.Location.AssetType))
                 .Select(x => (x, true)).ToArray(), "typed Bundle batch '" + bundleId + "'");
         }
@@ -24,12 +39,27 @@ namespace YLFramework.Services.Resource
         public ResourceRequest<AssetBatchLease<UnityEngine.Object>> AcquireGroupAsync(string projectId, string groupId)
         {
             CheckThread();
-            if (!IsAvailable) return BatchFailure<UnityEngine.Object>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
-            if (IsProjectBlocked(projectId)) return BatchFailure<UnityEngine.Object>(ResourceError.Busy, "The project is inside its activation barrier.");
-            if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog))
+            if (!IsAvailable)
+            {
+                return BatchFailure<UnityEngine.Object>(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
+            if (IsProjectBlocked(projectId))
+            {
+                return BatchFailure<UnityEngine.Object>(ResourceError.Busy, "The project is inside its activation barrier.");
+            }
+
+            if (projectId == null || !_catalogs.TryGetValue(projectId, out var catalog))
+            {
                 return BatchFailure<UnityEngine.Object>(ResourceError.AddressNotFound, "Unknown resource project.");
+            }
+
             var group = catalog.Groups.FirstOrDefault(x => x.Id == groupId);
-            if (group == null) return BatchFailure<UnityEngine.Object>(ResourceError.AddressNotFound, "Unknown Catalog Group.");
+            if (group == null)
+            {
+                return BatchFailure<UnityEngine.Object>(ResourceError.AddressNotFound, "Unknown Catalog Group.");
+            }
+
             var entries = catalog.Entries.ToDictionary(x => x.AssetId, StringComparer.Ordinal);
             return AcquireBatch<UnityEngine.Object>(group.Members.Select(x => (entries.TryGetValue(x.AssetId, out var entry) ? entry : null, x.Required)).ToArray(),
                 "Group '" + groupId + "'");
@@ -41,12 +71,27 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<ResourceGroupLease>(value => value.Dispose());
-            if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
-            if (IsProjectBlocked(projectId)) return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.");
-            if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog))
+            if (!IsAvailable)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
+            if (IsProjectBlocked(projectId))
+            {
+                return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.");
+            }
+
+            if (projectId == null || !_catalogs.TryGetValue(projectId, out var catalog))
+            {
                 return Fail(request, ResourceError.AddressNotFound, "Unknown resource project.");
+            }
+
             var group = catalog.Groups.FirstOrDefault(x => x.Id == groupId);
-            if (group == null) return Fail(request, ResourceError.AddressNotFound, "Unknown Catalog Group.");
+            if (group == null)
+            {
+                return Fail(request, ResourceError.AddressNotFound, "Unknown Catalog Group.");
+            }
+
             var entries = catalog.Entries.ToDictionary(x => x.AssetId, StringComparer.Ordinal);
             var descriptors = catalog.Snapshot?.Document.Assets.ToDictionary(x => x.AssetId, StringComparer.Ordinal);
             var children = new List<GroupPreloadChild>();
@@ -60,19 +105,42 @@ namespace YLFramework.Services.Resource
                 List<Exception> errors = null;
                 foreach (var child in children)
                 {
-                    try { child.Asset?.Dispose(); }
-                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
-                    try { child.SceneBundle?.Dispose(); }
-                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                    try
+                    {
+                        child.Asset?.Dispose();
+                    }
+                    catch (Exception error)
+                    {
+                        (errors ??= new List<Exception>()).Add(error);
+                    }
+                    try
+                    {
+                        child.SceneBundle?.Dispose();
+                    }
+                    catch (Exception error)
+                    {
+                        (errors ??= new List<Exception>()).Add(error);
+                    }
                 }
-                if (errors != null) throw new AggregateException("Group preload child cleanup failed.", errors);
+                if (errors != null)
+                {
+                    throw new AggregateException("Group preload child cleanup failed.", errors);
+                }
             }
             request.Attach(ReleaseChildren, () => children.Count == 0 ? 0 : children.Average(x => x.Asset?.Progress ?? x.SceneBundle?.Progress ?? 1));
             void Finish()
             {
-                if (starting || finishing || request.IsDone) return;
+                if (starting || finishing || request.IsDone)
+                {
+                    return;
+                }
+
                 var requiredFailed = children.Any(x => x.Required && x.IsDone && x.Error != null);
-                if (!requiredFailed && children.Any(x => !x.IsDone)) return;
+                if (!requiredFailed && children.Any(x => !x.IsDone))
+                {
+                    return;
+                }
+
                 finishing = true;
                 var assets = new List<AssetLease<UnityEngine.Object>>();
                 var bundles = new List<BundleLease>();
@@ -86,21 +154,45 @@ namespace YLFramework.Services.Resource
                             before = children.Count(x => x.Error != null);
                             foreach (var child in children)
                             {
-                                if (child.Error != null) continue;
+                                if (child.Error != null)
+                                {
+                                    continue;
+                                }
+
                                 try
                                 {
-                                    if (child.Kind == ResourceGroupItemKind.SceneBundle) RequireHealthyBundle(catalog.Snapshot, child.BundleId);
-                                    else if (entries.TryGetValue(child.AssetId, out var entry)) RequireContentAdmission(entry);
+                                    if (child.Kind == ResourceGroupItemKind.SceneBundle)
+                                    {
+                                        RequireHealthyBundle(catalog.Snapshot, child.BundleId);
+                                    }
+                                    else if (entries.TryGetValue(child.AssetId, out var entry))
+                                    {
+                                        RequireContentAdmission(entry);
+                                    }
                                 }
-                                catch (Exception error) { child.ResolutionError = ResourceContentValidation.Failure(error, "A Group member became unavailable before handoff."); }
+                                catch (Exception error)
+                                {
+                                    child.ResolutionError = ResourceContentValidation.Failure(error, "A Group member became unavailable before handoff.");
+                                }
                             }
                             requiredFailed = children.Any(x => x.Required && x.Error != null);
-                            if (requiredFailed) break;
+                            if (requiredFailed)
+                            {
+                                break;
+                            }
                             // optional归还可能触发用户释放回调；完成这些回调后再复核剩余待交付项。
-                            foreach (var child in children.Where(x => x.Error != null)) { child.Asset?.Dispose(); child.SceneBundle?.Dispose(); }
+                            foreach (var child in children.Where(x => x.Error != null))
+                            {
+                                child.Asset?.Dispose();
+                                child.SceneBundle?.Dispose();
+                            }
                         } while (children.Count(x => x.Error != null) != before);
                     }
-                    if (request.IsDone) return;
+                    if (request.IsDone)
+                    {
+                        return;
+                    }
+
                     if (requiredFailed)
                     {
                         // 先停止自己的等待/未领取结果，再复制稳定的逐项错误；不等别人的 native 操作。
@@ -115,7 +207,11 @@ namespace YLFramework.Services.Resource
                         var claimed = new HashSet<ResourceRequest<BundleLease>>();
                         foreach (var child in children)
                         {
-                            if (child.Error != null) continue;
+                            if (child.Error != null)
+                            {
+                                continue;
+                            }
+
                             if (child.Asset != null)
                             {
                                 var lease = child.Asset.TakeResult();
@@ -136,28 +232,58 @@ namespace YLFramework.Services.Resource
                 {
                     var cleanup = new List<Exception> { cause };
                     foreach (var lease in assets)
-                        try { lease.Dispose(); }
-                        catch (Exception error) { cleanup.Add(error); }
+                    {
+                        try
+                        {
+                            lease.Dispose();
+                        }
+                        catch (Exception error)
+                        {
+                            cleanup.Add(error);
+                        }
+                    }
+
                     foreach (var lease in bundles)
-                        try { lease.Dispose(); }
-                        catch (Exception error) { cleanup.Add(error); }
+                    {
+                        try
+                        {
+                            lease.Dispose();
+                        }
+                        catch (Exception error)
+                        {
+                            cleanup.Add(error);
+                        }
+                    }
+
                     var items = children.Select(x => x.Result()).ToArray();
                     request.SetFailure(ResourceRequestStatus.Failed, new ResourceException(ResourceError.LoadFailed, "Group preload result transfer failed.",
                         new ResourceGroupFailure(items, items.Where(x => x.Error != null).Select(x => x.Error).Cast<Exception>().Concat(cleanup))));
                 }
-                finally { ReleaseChildren(); finishing = false; }
+                finally
+                {
+                    ReleaseChildren();
+                    finishing = false;
+                }
                 request.Notify();
             }
             foreach (var member in group.Members)
             {
-                if (request.IsDone) break;
+                if (request.IsDone)
+                {
+                    break;
+                }
+
                 entries.TryGetValue(member.AssetId, out var entry);
                 ResourceCatalogAsset descriptor = null;
                 descriptors?.TryGetValue(member.AssetId, out descriptor);
-                var child = new GroupPreloadChild { AssetId = member.AssetId, Required = member.Required,
+                var child = new GroupPreloadChild
+                {
+                    AssetId = member.AssetId,
+                    Required = member.Required,
                     Address = entry?.Address ?? (descriptor == null ? (ResourceAddress?)null : new ResourceAddress(projectId, descriptor.Address, descriptor.SubAssetKey)),
                     Kind = descriptor?.Kind == "Scene" ? ResourceGroupItemKind.SceneBundle : ResourceGroupItemKind.Asset,
-                    BundleId = descriptor?.BundleId };
+                    BundleId = descriptor?.BundleId
+                };
                 children.Add(child);
                 if (child.Kind == ResourceGroupItemKind.SceneBundle)
                 {
@@ -168,12 +294,18 @@ namespace YLFramework.Services.Resource
                         sceneBundles.Add(child.BundleId, preparing);
                     }
                     child.SceneBundle = preparing;
-                    if (!request.IsDone) preparing.Completed += _ => Finish();
+                    if (!request.IsDone)
+                    {
+                        preparing.Completed += _ => Finish();
+                    }
                 }
-                else if (entry != null && sources[entry.Location.Source] is IResourceSceneSource sceneSource && sceneSource.IsScene(entry))
+                else if (entry != null && _sources[entry.Location.Source] is IResourceSceneSource sceneSource && sceneSource.IsScene(entry))
                 {
                     child.Kind = ResourceGroupItemKind.ScenePreview;
-                    try { sceneSource.ResolveScenePath(entry); }
+                    try
+                    {
+                        sceneSource.ResolveScenePath(entry);
+                    }
                     catch (Exception error)
                     {
                         child.ResolutionError = error as ResourceException ?? new ResourceException(ResourceError.LoadFailed,
@@ -183,10 +315,20 @@ namespace YLFramework.Services.Resource
                 else if (entry != null)
                 {
                     child.Asset = AcquireAsync<UnityEngine.Object>(entry.Address);
-                    if (!request.IsDone) child.Asset.Completed += _ => Finish();
+                    if (!request.IsDone)
+                    {
+                        child.Asset.Completed += _ => Finish();
+                    }
                 }
-                else child.ResolutionError = new ResourceException(ResourceError.AddressNotFound, "Missing canonical Group member: " + member.AssetId);
-                if (request.IsDone) ReleaseChildren();
+                else
+                {
+                    child.ResolutionError = new ResourceException(ResourceError.AddressNotFound, "Missing canonical Group member: " + member.AssetId);
+                }
+
+                if (request.IsDone)
+                {
+                    ReleaseChildren();
+                }
             }
             starting = false;
             Finish();
@@ -218,11 +360,21 @@ namespace YLFramework.Services.Resource
             var starting = true;
             var finishing = false;
             Track(request);
-            request.Attach(() => { foreach (var child in children.ToArray()) child.Request.Dispose(); },
+            request.Attach(() =>
+            {
+                foreach (var child in children.ToArray())
+                {
+                    child.Request.Dispose();
+                }
+            },
                 () => children.Count == 0 ? 0 : children.Sum(x => x.Request.Progress) / children.Count);
             void Finish()
             {
-                if (starting || finishing || request.IsDone || children.Any(x => !x.Request.IsDone)) return;
+                if (starting || finishing || request.IsDone || children.Any(x => !x.Request.IsDone))
+                {
+                    return;
+                }
+
                 finishing = true;
                 var errors = children.Where(x => x.Request.Status != ResourceRequestStatus.Succeeded).Select(x => x.Request.Error).ToList();
                 var rejected = new HashSet<ResourceRequest<AssetLease<T>>>();
@@ -237,8 +389,15 @@ namespace YLFramework.Services.Resource
                             before = rejected.Count;
                             foreach (var child in children)
                             {
-                                if (child.Request.Status != ResourceRequestStatus.Succeeded || rejected.Contains(child.Request)) continue;
-                                try { RequireContentAdmission(child.Entry); }
+                                if (child.Request.Status != ResourceRequestStatus.Succeeded || rejected.Contains(child.Request))
+                                {
+                                    continue;
+                                }
+
+                                try
+                                {
+                                    RequireContentAdmission(child.Entry);
+                                }
                                 catch (Exception error)
                                 {
                                     rejected.Add(child.Request);
@@ -246,11 +405,22 @@ namespace YLFramework.Services.Resource
                                     requiredFailed |= child.Required;
                                 }
                             }
-                            if (requiredFailed) break;
-                            foreach (var child in rejected) child.Dispose();
+                            if (requiredFailed)
+                            {
+                                break;
+                            }
+
+                            foreach (var child in rejected)
+                            {
+                                child.Dispose();
+                            }
                         } while (rejected.Count != before);
                     }
-                    if (request.IsDone) return;
+                    if (request.IsDone)
+                    {
+                        return;
+                    }
+
                     if (requiredFailed)
                     {
                         request.SetFailure(ResourceRequestStatus.Failed, new ResourceException(ResourceError.LoadFailed, label + " failed; required member ownership was rolled back.",
@@ -262,31 +432,55 @@ namespace YLFramework.Services.Resource
                         try
                         {
                             foreach (var child in children)
-                                if (child.Request.Status == ResourceRequestStatus.Succeeded && !rejected.Contains(child.Request)) leases.Add(child.Request.TakeResult());
+                            {
+                                if (child.Request.Status == ResourceRequestStatus.Succeeded && !rejected.Contains(child.Request))
+                                {
+                                    leases.Add(child.Request.TakeResult());
+                                }
+                            }
+
                             request.SetSuccess(new AssetBatchLease<T>(leases, errors));
                         }
                         catch (Exception error)
                         {
-                            foreach (var lease in leases) lease.Dispose();
+                            foreach (var lease in leases)
+                            {
+                                lease.Dispose();
+                            }
+
                             request.SetFailure(ResourceRequestStatus.Failed, ResourceContentValidation.Failure(error, "Batch result transfer failed."));
                         }
                     }
                 }
                 finally
                 {
-                    foreach (var child in children) child.Request.Dispose();
+                    foreach (var child in children)
+                    {
+                        child.Request.Dispose();
+                    }
+
                     finishing = false;
                 }
                 request.Notify();
             }
             foreach (var entry in entries)
             {
-                if (request.IsDone) break;
+                if (request.IsDone)
+                {
+                    break;
+                }
+
                 var child = entry.Entry == null ? Fail(new ResourceRequest<AssetLease<T>>(value => value.Dispose()), ResourceError.Unsupported,
                     "Scene/group member cannot be acquired as an ordinary asset in this Source.") : AcquireAsync<T>(entry.Entry.Address);
                 children.Add((child, entry.Required, entry.Entry));
-                if (request.IsDone) child.Dispose();
-                else child.Completed += _ => Finish();
+                if (request.IsDone)
+                {
+                    child.Dispose();
+                }
+                else
+                {
+                    child.Completed += _ => Finish();
+                }
             }
             starting = false;
             Finish();

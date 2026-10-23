@@ -12,28 +12,33 @@ namespace YLFramework.Actions
     /// </remarks>
     public class UniRxAction<T> : IAction, IActionExecutionVersion
     {
-        private static readonly ActionPool<UniRxAction<T>> mPool = new ActionPool<UniRxAction<T>>(
+        private static readonly ActionPool<UniRxAction<T>> _pool = new ActionPool<UniRxAction<T>>(
             () => new UniRxAction<T>(), null, 10, action =>
             {
-                action.ActionID = ActionKit.ID_GENERATOR++;
-                action.Deinited = false;
-                action.mCleanupFailed = false;
-                try { action.Reset(); }
+                action.ActionId = ActionKit.IdGenerator++;
+                action.IsDeinitialized = false;
+                action._hasCleanupFailed = false;
+                try
+                {
+                    action.Reset();
+                }
                 catch
                 {
-                    action.Deinited = true;
-                    action.mObservableGetter = null;
+                    action.IsDeinitialized = true;
+                    action._observableGetter = null;
                     throw;
                 }
             });
-        private Func<IObservable<T>> mObservableGetter;
-        private Subscription mSubscription;
-        private bool mCleanupFailed;
+        private Func<IObservable<T>> _observableGetter;
+        private Subscription _subscription;
+        private bool _hasCleanupFailed;
         // 每次 Reset 递增；Execute 的重入保护用它识别"同一次推进期间对象是否已被重置或复用"。
-        private ulong mExecutionVersion;
-        ulong IActionExecutionVersion.ExecutionVersion => mExecutionVersion;
+        private ulong _executionVersion;
+        ulong IActionExecutionVersion.ExecutionVersion => _executionVersion;
 
-        private UniRxAction() { }
+        private UniRxAction()
+        {
+        }
 
         /// <summary>分配动作，启动时才调用事件源工厂。</summary>
         /// <param name="observableGetter">非空的事件源工厂，每次启动时调用一次。</param>
@@ -41,54 +46,84 @@ namespace YLFramework.Actions
         /// <exception cref="System.ArgumentNullException">observableGetter 为 null。</exception>
         public static UniRxAction<T> Allocate(Func<IObservable<T>> observableGetter)
         {
-            if (observableGetter == null) throw new ArgumentNullException(nameof(observableGetter));
-            var action = mPool.Allocate();
-            action.mObservableGetter = observableGetter;
+            if (observableGetter == null)
+            {
+                throw new ArgumentNullException(nameof(observableGetter));
+            }
+
+            var action = _pool.Allocate();
+            action._observableGetter = observableGetter;
             return action;
         }
 
         /// <summary>执行器的暂停标记，不会暂停事件源或阻止外部通知。</summary>
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
         /// <summary>读取或设置动作已释放的标记。</summary>
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
         /// <summary>读取或设置当前分配的动作标识，用于隔离迟到通知。</summary>
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <summary>读取或设置动作执行状态。</summary>
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
         /// <summary>重置执行状态并释放旧订阅，下次启动会重新调用事件源工厂。</summary>
         public void Reset()
         {
-            mExecutionVersion++;
+            _executionVersion++;
             Status = ActionStatus.NotStart;
-            Paused = false;
+            IsPaused = false;
             ReleaseSubscription();
         }
 
         /// <summary>释放订阅并排队回收动作，不触发正常完成；订阅释放失败时延迟丢弃，不重试释放。</summary>
         public void Deinit()
         {
-            if (Deinited) return;
-            Deinited = true;
-            mObservableGetter = null;
-            try { ReleaseSubscription(); }
+            if (IsDeinitialized)
+            {
+                return;
+            }
+
+            IsDeinitialized = true;
+            _observableGetter = null;
+            try
+            {
+                ReleaseSubscription();
+            }
             finally
             {
                 // Subscribe 返回前可能已取消；晚到句柄的释放结果要等当前栈退出后再判断。
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<UniRxAction<T>>(mPool, this,
-                    discardWhen: action => action.mCleanupFailed));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<UniRxAction<T>>(_pool, this,
+                    discardWhen: action => action._hasCleanupFailed));
             }
         }
 
         private void ReleaseSubscription()
         {
-            var subscription = mSubscription;
-            mSubscription = null;
-            try { subscription?.Close(); }
+            var subscription = _subscription;
+            _subscription = null;
+            try
+            {
+                subscription?.Close();
+            }
             catch
             {
                 // Finish/Reset 已摘掉订阅槽，但释放失败不能在随后 Deinit 时被误判为干净。
-                if (subscription != null && ActionID == subscription.ActionId) mCleanupFailed = true;
+                if (subscription != null && ActionId == subscription.ActionId)
+                {
+                    _hasCleanupFailed = true;
+                }
+
                 throw;
             }
         }
@@ -97,17 +132,32 @@ namespace YLFramework.Actions
         public void OnStart()
         {
             var subscription = new Subscription(this);
-            mSubscription = subscription;
+            _subscription = subscription;
             try
             {
-                var observable = mObservableGetter();
-                if (!IsCurrent(subscription)) return;
-                if (observable == null) throw new InvalidOperationException("The observable factory returned null.");
+                var observable = _observableGetter();
+                if (!IsCurrent(subscription))
+                {
+                    return;
+                }
+
+                if (observable == null)
+                {
+                    throw new InvalidOperationException("The observable factory returned null.");
+                }
+
                 var disposable = observable.Subscribe(subscription);
-                try { subscription.Attach(disposable); }
+                try
+                {
+                    subscription.Attach(disposable);
+                }
                 catch
                 {
-                    if (disposable != null && ActionID == subscription.ActionId) mCleanupFailed = true;
+                    if (disposable != null && ActionId == subscription.ActionId)
+                    {
+                        _hasCleanupFailed = true;
+                    }
+
                     throw;
                 }
                 subscription.Deliver();
@@ -116,88 +166,137 @@ namespace YLFramework.Actions
             {
                 if (IsCurrent(subscription))
                 {
-                    try { Deinit(); }
-                    catch (Exception cleanup) { throw new AggregateException(original, cleanup); }
+                    try
+                    {
+                        Deinit();
+                    }
+                    catch (Exception cleanup)
+                    {
+                        throw new AggregateException(original, cleanup);
+                    }
                 }
                 throw;
             }
         }
 
         /// <summary>在启动线程处理待投递的通知，不用时间增量推进事件源。</summary>
-        public void OnExecute(float dt) => mSubscription?.Deliver();
+        public void OnExecute(float dt) => _subscription?.Deliver();
         /// <summary>正常完成时释放订阅，不释放事件源本身。</summary>
         public void OnFinish() => ReleaseSubscription();
 
-        private bool IsCurrent(Subscription subscription) => !Deinited && ActionID == subscription.ActionId &&
-            ReferenceEquals(mSubscription, subscription);
+        private bool IsCurrent(Subscription subscription) => !IsDeinitialized && ActionId == subscription.ActionId &&
+            ReferenceEquals(_subscription, subscription);
 
         // 一次启动对应一个订阅槽：只采纳首个到达的信号（首值 / 空完成 / 错误），其余全部忽略；
         // 通知可能来自其他线程，经捕获的同步上下文或启动线程的 OnExecute 回到启动线程后才会作用于动作。
         private sealed class Subscription : IObserver<T>
         {
-            private static readonly object FirstValue = new object();
-            private static readonly object EmptyCompletion = new object();
+            private static readonly object _firstValue = new object();
+            private static readonly object _emptyCompletion = new object();
             internal readonly ulong ActionId;
-            private readonly int mThreadId;
-            private readonly SynchronizationContext mContext;
-            private UniRxAction<T> mTarget;
-            private IDisposable mDisposable;
-            private object mSignal;
-            private int mClosed;
+            private readonly int _threadId;
+            private readonly SynchronizationContext _context;
+            private UniRxAction<T> _target;
+            private IDisposable _disposable;
+            private object _signal;
+            private int _closed;
 
             internal Subscription(UniRxAction<T> target)
             {
-                mTarget = target;
-                ActionId = target.ActionID;
-                mThreadId = Thread.CurrentThread.ManagedThreadId;
-                mContext = SynchronizationContext.Current;
+                _target = target;
+                ActionId = target.ActionId;
+                _threadId = Thread.CurrentThread.ManagedThreadId;
+                _context = SynchronizationContext.Current;
             }
 
             internal void Attach(IDisposable disposable)
             {
-                if (disposable == null) throw new InvalidOperationException("The observable returned a null subscription.");
+                if (disposable == null)
+                {
+                    throw new InvalidOperationException("The observable returned a null subscription.");
+                }
                 // Subscribe 返回句柄前可能已同步通知或重入取消，晚到的句柄仍需释放。
-                if (Volatile.Read(ref mClosed) != 0) disposable.Dispose();
-                else mDisposable = disposable;
+                if (Volatile.Read(ref _closed) != 0)
+                {
+                    disposable.Dispose();
+                }
+                else
+                {
+                    _disposable = disposable;
+                }
             }
 
             internal void Close()
             {
-                if (Interlocked.Exchange(ref mClosed, 1) != 0) return;
-                mTarget = null;
-                var disposable = mDisposable;
-                mDisposable = null;
-                Interlocked.Exchange(ref mSignal, null);
+                if (Interlocked.Exchange(ref _closed, 1) != 0)
+                {
+                    return;
+                }
+
+                _target = null;
+                var disposable = _disposable;
+                _disposable = null;
+                Interlocked.Exchange(ref _signal, null);
                 disposable?.Dispose();
             }
 
-            public void OnNext(T value) => Publish(FirstValue);
-            public void OnCompleted() => Publish(EmptyCompletion);
+            public void OnNext(T value) => Publish(_firstValue);
+            public void OnCompleted() => Publish(_emptyCompletion);
             public void OnError(Exception error) => Publish(error ?? new ArgumentNullException(nameof(error)));
 
             private void Publish(object signal)
             {
-                if (Volatile.Read(ref mClosed) != 0 || Interlocked.CompareExchange(ref mSignal, signal, null) != null) return;
-                if (Thread.CurrentThread.ManagedThreadId == mThreadId) Deliver();
-                else if (mContext != null) mContext.Post(_ => Deliver(), null);
+                if (Volatile.Read(ref _closed) != 0 || Interlocked.CompareExchange(ref _signal, signal, null) != null)
+                {
+                    return;
+                }
+
+                if (Thread.CurrentThread.ManagedThreadId == _threadId)
+                {
+                    Deliver();
+                }
+                else if (_context != null)
+                {
+                    _context.Post(_ => Deliver(), null);
+                }
                 // 未捕获同步上下文时，由启动线程在 OnExecute 中消费通知。
             }
 
             internal void Deliver()
             {
-                if (Thread.CurrentThread.ManagedThreadId != mThreadId || Volatile.Read(ref mClosed) != 0) return;
-                var target = mTarget;
-                if (target == null || !target.IsCurrent(this)) return;
-                var signal = Volatile.Read(ref mSignal);
-                if (signal == null) return;
+                if (Thread.CurrentThread.ManagedThreadId != _threadId || Volatile.Read(ref _closed) != 0)
+                {
+                    return;
+                }
+
+                var target = _target;
+                if (target == null || !target.IsCurrent(this))
+                {
+                    return;
+                }
+
+                var signal = Volatile.Read(ref _signal);
+                if (signal == null)
+                {
+                    return;
+                }
                 // 首值才算正常完成；空完成和错误按取消处理。
-                if (ReferenceEquals(signal, FirstValue)) target.Finish();
+                if (ReferenceEquals(signal, _firstValue))
+                {
+                    target.Finish();
+                }
                 else
                 {
-                    try { target.Deinit(); }
+                    try
+                    {
+                        target.Deinit();
+                    }
                     finally
                     {
-                        if (signal is Exception exception) UnityEngine.Debug.LogException(exception);
+                        if (signal is Exception exception)
+                        {
+                            UnityEngine.Debug.LogException(exception);
+                        }
                     }
                 }
             }
@@ -214,7 +313,11 @@ namespace YLFramework.Actions
         /// <exception cref="System.ArgumentNullException">self 为 null。</exception>
         public static IAction ToAction<T>(this IObservable<T> self)
         {
-            if (self == null) throw new ArgumentNullException(nameof(self));
+            if (self == null)
+            {
+                throw new ArgumentNullException(nameof(self));
+            }
+
             return UniRxAction<T>.Allocate(() => self);
         }
 
@@ -226,7 +329,11 @@ namespace YLFramework.Actions
         /// <exception cref="System.ArgumentNullException">self 或 observableGetter 为 null。</exception>
         public static ISequence UniRx<T>(this ISequence self, Func<IObservable<T>> observableGetter)
         {
-            if (self == null) throw new ArgumentNullException(nameof(self));
+            if (self == null)
+            {
+                throw new ArgumentNullException(nameof(self));
+            }
+
             return self.Append(UniRxAction<T>.Allocate(observableGetter));
         }
     }

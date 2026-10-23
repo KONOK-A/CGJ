@@ -35,7 +35,12 @@ namespace YLFramework.Services.Audio
         public bool IsOn
         {
             get => IsMusicOn.Value && IsVoiceOn.Value && IsSoundOn.Value;
-            set { IsMusicOn.Value = value; IsVoiceOn.Value = value; IsSoundOn.Value = value; }
+            set
+            {
+                IsMusicOn.Value = value;
+                IsVoiceOn.Value = value;
+                IsSoundOn.Value = value;
+            }
         }
         internal AudioKitSettings()
         {
@@ -46,11 +51,21 @@ namespace YLFramework.Services.Audio
         /// <summary>注销全部监听器并清除运行时输出组引用。由 AudioKit.Shutdown 调用。</summary>
         public void Dispose()
         {
-            IsSoundOn.UnRegisterAll(); IsMusicOn.UnRegisterAll(); IsVoiceOn.UnRegisterAll();
-            SoundVolume.UnRegisterAll(); MusicVolume.UnRegisterAll(); VoiceVolume.UnRegisterAll();
-            IsSoundMuted.UnRegisterAll(); IsMusicMuted.UnRegisterAll(); IsVoiceMuted.UnRegisterAll();
-            MusicOutputGroup.UnRegisterAll(); VoiceOutputGroup.UnRegisterAll(); SoundOutputGroup.UnRegisterAll();
-            MusicOutputGroup.SetValueWithoutCallback(null); VoiceOutputGroup.SetValueWithoutCallback(null); SoundOutputGroup.SetValueWithoutCallback(null);
+            IsSoundOn.UnregisterAll();
+            IsMusicOn.UnregisterAll();
+            IsVoiceOn.UnregisterAll();
+            SoundVolume.UnregisterAll();
+            MusicVolume.UnregisterAll();
+            VoiceVolume.UnregisterAll();
+            IsSoundMuted.UnregisterAll();
+            IsMusicMuted.UnregisterAll();
+            IsVoiceMuted.UnregisterAll();
+            MusicOutputGroup.UnregisterAll();
+            VoiceOutputGroup.UnregisterAll();
+            SoundOutputGroup.UnregisterAll();
+            MusicOutputGroup.SetValueWithoutCallback(null);
+            VoiceOutputGroup.SetValueWithoutCallback(null);
+            SoundOutputGroup.SetValueWithoutCallback(null);
         }
     }
 
@@ -80,7 +95,9 @@ namespace YLFramework.Services.Audio
         private static void Validate(float value)
         {
             if (!AudioSoundOptions.IsFinite(value) || value < 0f)
+            {
                 throw new ArgumentOutOfRangeException(nameof(value), "Audio volume must be finite and nonnegative.");
+            }
         }
     }
 }

@@ -23,20 +23,20 @@ namespace YLFramework.Timing
         private double _unscaledTime;
         private long _renderedFrame;
         private ulong _order;
-        private bool _advancing;
-        private bool _disposed;
-        private readonly bool _automatic;
+        private bool _isAdvancing;
+        private bool _isDisposed;
+        private readonly bool _isAutomatic;
         private Action _synchronize;
-        private bool _frameReady = true;
-        private bool _secondsReady = true;
+        private bool _isFrameReady = true;
+        private bool _isSecondsReady = true;
         private long _lastDispatchedFrame;
-        internal bool IsDisposed => _disposed;
+        internal bool IsDisposed => _isDisposed;
 
         internal TimerScheduler(Action synchronize) : this(0, 0, 0)
         {
-            _automatic = true;
+            _isAutomatic = true;
             _synchronize = synchronize;
-            _frameReady = _secondsReady = false;
+            _isFrameReady = _isSecondsReady = false;
         }
 
         internal void Refresh() => _synchronize?.Invoke();
@@ -44,9 +44,13 @@ namespace YLFramework.Timing
         internal void Sample(double scaledTime, double unscaledTime, long frame, bool secondsReady)
         {
             _renderedFrame = frame;
-            _frameReady = true;
-            _secondsReady = secondsReady;
-            if (!secondsReady) return;
+            _isFrameReady = true;
+            _isSecondsReady = secondsReady;
+            if (!secondsReady)
+            {
+                return;
+            }
+
             _scaledTime = scaledTime;
             _unscaledTime = unscaledTime;
         }
@@ -58,9 +62,19 @@ namespace YLFramework.Timing
         {
             Refresh();
             ThrowIfDisposed();
-            if (_renderedFrame == long.MaxValue) throw new InvalidOperationException("Rendered frame clock is exhausted.");
-            if (clock == TimerClock.RenderedFrame) _ = checked(_renderedFrame + frames);
-            else AddSeconds(ReadClock(clock), delay);
+            if (_renderedFrame == long.MaxValue)
+            {
+                throw new InvalidOperationException("Rendered frame clock is exhausted.");
+            }
+
+            if (clock == TimerClock.RenderedFrame)
+            {
+                _ = checked(_renderedFrame + frames);
+            }
+            else
+            {
+                AddSeconds(ReadClock(clock), delay);
+            }
         }
 
         /// <summary>以明确的初始双时钟和 rendered frame 样本创建手动实例；输入须有限且非负。</summary>
@@ -91,7 +105,11 @@ namespace YLFramework.Timing
         {
             ValidateSeconds(firstDelay, nameof(firstDelay));
             ValidateSeconds(interval, nameof(interval));
-            if (interval == 0) throw new ArgumentOutOfRangeException(nameof(interval));
+            if (interval == 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interval));
+            }
+
             ValidateCount(count);
             ValidateSecondClock(clock);
             return Schedule(clock, firstDelay, 0, interval, 0, count, null, callback, onCancelled);
@@ -101,7 +119,11 @@ namespace YLFramework.Timing
         public TimerHandle DelayFrames(long frameDelay, Action callback = null,
             Action<TimerCancellationReason> onCancelled = null)
         {
-            if (frameDelay < 0) throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            if (frameDelay < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            }
+
             return Schedule(TimerClock.RenderedFrame, 0, Math.Max(1, frameDelay), 0, 0, 1, callback, null, onCancelled);
         }
 
@@ -109,8 +131,16 @@ namespace YLFramework.Timing
         public TimerHandle RepeatFrames(long firstDelay, long interval, Action<long> callback = null, int? count = null,
             Action<TimerCancellationReason> onCancelled = null)
         {
-            if (firstDelay < 0) throw new ArgumentOutOfRangeException(nameof(firstDelay));
-            if (interval <= 0) throw new ArgumentOutOfRangeException(nameof(interval));
+            if (firstDelay < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(firstDelay));
+            }
+
+            if (interval <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interval));
+            }
+
             ValidateCount(count);
             return Schedule(TimerClock.RenderedFrame, 0, Math.Max(1, firstDelay), 0, interval, count, null, callback, onCancelled);
         }
@@ -121,11 +151,19 @@ namespace YLFramework.Timing
         {
             Refresh();
             ThrowIfDisposed();
-            if (_renderedFrame == long.MaxValue) throw new InvalidOperationException("Rendered frame clock is exhausted.");
+            if (_renderedFrame == long.MaxValue)
+            {
+                throw new InvalidOperationException("Rendered frame clock is exhausted.");
+            }
+
             var dueSeconds = clock == TimerClock.RenderedFrame ? 0 : AddSeconds(ReadClock(clock), delay);
             var dueFrame = clock == TimerClock.RenderedFrame ? checked(_renderedFrame + frames) : 0;
             var run = storage ?? new TimerRun();
-            if (run.Owner != null) throw new InvalidOperationException("Timer run is still active.");
+            if (run.Owner != null)
+            {
+                throw new InvalidOperationException("Timer run is still active.");
+            }
+
             run.Generation = checked(run.Generation + 1);
             run.Owner = this;
             run.State = TimerState.Scheduled;
@@ -143,7 +181,7 @@ namespace YLFramework.Timing
             run.PauseNext = false;
             run.FrozenSeconds = delay;
             run.FrozenFrames = frames;
-            run.NeedsAnchor = clock == TimerClock.RenderedFrame ? !_frameReady : !_secondsReady;
+            run.NeedsAnchor = clock == TimerClock.RenderedFrame ? !_isFrameReady : !_isSecondsReady;
             Queue(run);
             _owned.Add(run);
             return new TimerHandle(run);
@@ -156,27 +194,51 @@ namespace YLFramework.Timing
         /// </summary>
         public void Advance(double scaledTime, double unscaledTime, long renderedFrame)
         {
-            if (_automatic) throw new InvalidOperationException("Default timers are driven by TimerDriver.");
+            if (_isAutomatic)
+            {
+                throw new InvalidOperationException("Default timers are driven by TimerDriver.");
+            }
+
             AdvanceCore(scaledTime, unscaledTime, renderedFrame);
         }
 
         private void AdvanceCore(double scaledTime, double unscaledTime, long renderedFrame)
         {
-            if (_advancing) return;
+            if (_isAdvancing)
+            {
+                return;
+            }
+
             ThrowIfDisposed();
             ValidateSample(scaledTime, unscaledTime, renderedFrame);
-            if (scaledTime < _scaledTime) throw new ArgumentOutOfRangeException(nameof(scaledTime));
-            if (unscaledTime < _unscaledTime) throw new ArgumentOutOfRangeException(nameof(unscaledTime));
-            if (renderedFrame < _renderedFrame) throw new ArgumentOutOfRangeException(nameof(renderedFrame));
+            if (scaledTime < _scaledTime)
+            {
+                throw new ArgumentOutOfRangeException(nameof(scaledTime));
+            }
+
+            if (unscaledTime < _unscaledTime)
+            {
+                throw new ArgumentOutOfRangeException(nameof(unscaledTime));
+            }
+
+            if (renderedFrame < _renderedFrame)
+            {
+                throw new ArgumentOutOfRangeException(nameof(renderedFrame));
+            }
+
             var newFrame = renderedFrame > _lastDispatchedFrame;
             _scaledTime = scaledTime;
             _unscaledTime = unscaledTime;
             _renderedFrame = renderedFrame;
-            if (!newFrame) return;
+            if (!newFrame)
+            {
+                return;
+            }
+
             _lastDispatchedFrame = renderedFrame;
 
             List<Exception> errors = null;
-            _advancing = true;
+            _isAdvancing = true;
             try
             {
                 CheckBindings(ref errors);
@@ -192,9 +254,18 @@ namespace YLFramework.Timing
                             run.NeedsAnchor = false;
                             run.EarliestFrame = checked(_renderedFrame + 1);
                         }
-                        catch (Exception error) { Finish(run, TimerState.Faulted); AddError(ref errors, error); continue; }
+                        catch (Exception error)
+                        {
+                            Finish(run, TimerState.Faulted);
+                            AddError(ref errors, error);
+                            continue;
+                        }
                     }
-                    if (run.EarliestFrame > _renderedFrame) { i++; continue; }
+                    if (run.EarliestFrame > _renderedFrame)
+                    {
+                        i++;
+                        continue;
+                    }
                     RemoveQueued(run);
                     Heap(run.Clock).Insert(run);
                 }
@@ -202,16 +273,23 @@ namespace YLFramework.Timing
                 Dispatch(_scaled, ref errors);
                 Dispatch(_frames, ref errors);
             }
-            finally { _advancing = false; }
+            finally
+            {
+                _isAdvancing = false;
+            }
             ThrowErrors(errors);
         }
 
         private void Dispatch(TimerHeap heap, ref List<Exception> errors)
         {
-            while (!_disposed && heap.Count > 0)
+            while (!_isDisposed && heap.Count > 0)
             {
                 var run = heap.Top;
-                if (run.Clock == TimerClock.RenderedFrame ? _renderedFrame < run.DueFrame : ReadClock(run.Clock) < run.DueSeconds) break;
+                if (run.Clock == TimerClock.RenderedFrame ? _renderedFrame < run.DueFrame : ReadClock(run.Clock) < run.DueSeconds)
+                {
+                    break;
+                }
+
                 heap.Pop();
                 var generation = run.Generation;
                 var callback = run.Callback;
@@ -219,8 +297,16 @@ namespace YLFramework.Timing
                 run.ExecutingGeneration = generation;
                 run.State = TimerState.Executing;
                 var last = run.RemainingCount == 1;
-                if (run.RemainingCount.HasValue) run.RemainingCount--;
-                if (last) Detach(run); // 末轮完成责任已预留，Cancel/Dispose 不再接管它。
+                if (run.RemainingCount.HasValue)
+                {
+                    run.RemainingCount--;
+                }
+
+                if (last)
+                {
+                    Detach(run); // 末轮完成责任已预留，Cancel/Dispose 不再接管它。
+                }
+
                 Exception failure = null;
                 try
                 {
@@ -228,17 +314,26 @@ namespace YLFramework.Timing
                     callback?.Invoke();
                     tickCallback?.Invoke(run.ExecutionCount);
                 }
-                catch (Exception error) { failure = error; }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
                 finally
                 {
                     // 旧执行栈只收尾所捕获的 run/代次，不能写入新启动的存储。
                     if (run.Generation == generation)
                     {
                         run.ExecutingGeneration = 0;
-                        if (last) Finish(run, failure == null ? TimerState.Completed : TimerState.Faulted);
+                        if (last)
+                        {
+                            Finish(run, failure == null ? TimerState.Completed : TimerState.Faulted);
+                        }
                         else if (ReferenceEquals(run.Owner, this))
                         {
-                            if (failure != null) Finish(run, TimerState.Faulted);
+                            if (failure != null)
+                            {
+                                Finish(run, TimerState.Faulted);
+                            }
                             else if (run.PauseNext)
                             {
                                 run.PauseNext = false;
@@ -252,25 +347,43 @@ namespace YLFramework.Timing
                                     run.State = TimerState.Scheduled;
                                     Queue(run);
                                 }
-                                catch (Exception error) { failure = error; Finish(run, TimerState.Faulted); }
+                                catch (Exception error)
+                                {
+                                    failure = error;
+                                    Finish(run, TimerState.Faulted);
+                                }
                             }
                         }
                     }
                 }
-                if (failure != null) AddError(ref errors, failure);
+                if (failure != null)
+                {
+                    AddError(ref errors, failure);
+                }
             }
         }
 
         internal bool Cancel(TimerRun run, ulong generation)
         {
             Refresh();
-            if (!Owns(run, generation)) return false;
+            if (!Owns(run, generation))
+            {
+                return false;
+            }
+
             var notify = run.OnCancelled;
             Finish(run, TimerState.Cancelled);
-            try { notify?.Invoke(TimerCancellationReason.Cancelled); }
+            try
+            {
+                notify?.Invoke(TimerCancellationReason.Cancelled);
+            }
             catch (Exception error)
             {
-                if (!_automatic) throw;
+                if (!_isAutomatic)
+                {
+                    throw;
+                }
+
                 UnityEngine.Debug.LogException(error);
             }
             return true;
@@ -279,8 +392,16 @@ namespace YLFramework.Timing
         internal bool Pause(TimerRun run, ulong generation)
         {
             Refresh();
-            if (!Owns(run, generation)) return false;
-            if (run.State == TimerState.Paused) return true;
+            if (!Owns(run, generation))
+            {
+                return false;
+            }
+
+            if (run.State == TimerState.Paused)
+            {
+                return true;
+            }
+
             if (run.State == TimerState.Executing)
             {
                 run.PauseNext = true;
@@ -301,16 +422,27 @@ namespace YLFramework.Timing
         internal bool Resume(TimerRun run, ulong generation)
         {
             Refresh();
-            if (!Owns(run, generation)) return false;
+            if (!Owns(run, generation))
+            {
+                return false;
+            }
             // 回调仍在栈上时，仅撤销暂停；旧租约退出后统一续调度，避免双入队。
             if (run.State == TimerState.Executing && run.ExecutingGeneration == generation && run.PauseNext)
             {
                 run.PauseNext = false;
                 return true;
             }
-            if (run.State != TimerState.Paused) return false;
-            run.NeedsAnchor = run.Clock == TimerClock.RenderedFrame ? !_frameReady : !_secondsReady;
-            if (!run.NeedsAnchor) SetNextDeadline(run, run.FrozenSeconds, run.FrozenFrames);
+            if (run.State != TimerState.Paused)
+            {
+                return false;
+            }
+
+            run.NeedsAnchor = run.Clock == TimerClock.RenderedFrame ? !_isFrameReady : !_isSecondsReady;
+            if (!run.NeedsAnchor)
+            {
+                SetNextDeadline(run, run.FrozenSeconds, run.FrozenFrames);
+            }
+
             Queue(run);
             run.State = TimerState.Scheduled;
             return true;
@@ -329,8 +461,14 @@ namespace YLFramework.Timing
             clock == TimerClock.Scaled ? _scaled : _unscaled;
         private void SetNextDeadline(TimerRun run, double seconds, long frames)
         {
-            if (run.Clock == TimerClock.RenderedFrame) run.DueFrame = checked(_renderedFrame + frames);
-            else run.DueSeconds = AddSeconds(ReadClock(run.Clock), seconds);
+            if (run.Clock == TimerClock.RenderedFrame)
+            {
+                run.DueFrame = checked(_renderedFrame + frames);
+            }
+            else
+            {
+                run.DueSeconds = AddSeconds(ReadClock(run.Clock), seconds);
+            }
         }
 
         private void Queue(TimerRun run)
@@ -344,11 +482,19 @@ namespace YLFramework.Timing
         private void RemoveQueued(TimerRun run)
         {
             run.Heap?.Remove(run);
-            if (run.PendingIndex < 0) return;
+            if (run.PendingIndex < 0)
+            {
+                return;
+            }
+
             var index = run.PendingIndex;
             var last = _pending[_pending.Count - 1];
             _pending.RemoveAt(_pending.Count - 1);
-            if (index < _pending.Count) { _pending[index] = last; last.PendingIndex = index; }
+            if (index < _pending.Count)
+            {
+                _pending[index] = last;
+                last.PendingIndex = index;
+            }
             run.PendingIndex = -1;
         }
 
@@ -372,25 +518,48 @@ namespace YLFramework.Timing
         }
         internal void RemoveBinding(TimerLifetimeListener listener)
         {
-            if (!_bindingOwners.TryGetValue(listener, out var count)) return;
-            if (count == 1) _bindingOwners.Remove(listener);
-            else _bindingOwners[listener] = count - 1;
+            if (!_bindingOwners.TryGetValue(listener, out var count))
+            {
+                return;
+            }
+
+            if (count == 1)
+            {
+                _bindingOwners.Remove(listener);
+            }
+            else
+            {
+                _bindingOwners[listener] = count - 1;
+            }
         }
 
         private void CheckBindings(ref List<Exception> errors)
         {
-            if (_bindingOwners.Count == 0) return;
+            if (_bindingOwners.Count == 0)
+            {
+                return;
+            }
+
             var snapshot = ListPool<TimerLifetimeListener>.Allocate();
             try
             {
                 snapshot.AddRange(_bindingOwners.Keys);
                 foreach (var listener in snapshot)
                 {
-                    try { listener.CheckOwner(); }
-                    catch (Exception error) { AddError(ref errors, error); }
+                    try
+                    {
+                        listener.CheckOwner();
+                    }
+                    catch (Exception error)
+                    {
+                        AddError(ref errors, error);
+                    }
                 }
             }
-            finally { ListPool<TimerLifetimeListener>.Recycle(snapshot); }
+            finally
+            {
+                ListPool<TimerLifetimeListener>.Recycle(snapshot);
+            }
         }
 
         private void Finish(TimerRun run, TimerState state)
@@ -402,8 +571,12 @@ namespace YLFramework.Timing
         /// <summary>永久关闭实例，先提交全部待调度/暂停/非末轮执行任务失效，再逐项通知并汇总异常。</summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
             _synchronize = null;
             var snapshot = ListPool<TimerRun>.Allocate();
             var notifications = ListPool<Action<TimerCancellationReason>>.Allocate();
@@ -413,14 +586,28 @@ namespace YLFramework.Timing
                 snapshot.AddRange(_owned);
                 foreach (var run in snapshot)
                 {
-                    if (!ReferenceEquals(run.Owner, this)) continue;
-                    if (run.OnCancelled != null) notifications.Add(run.OnCancelled);
+                    if (!ReferenceEquals(run.Owner, this))
+                    {
+                        continue;
+                    }
+
+                    if (run.OnCancelled != null)
+                    {
+                        notifications.Add(run.OnCancelled);
+                    }
+
                     Finish(run, TimerState.Invalidated);
                 }
                 foreach (var notify in notifications)
                 {
-                    try { notify?.Invoke(TimerCancellationReason.SchedulerDisposed); }
-                    catch (Exception error) { AddError(ref errors, error); }
+                    try
+                    {
+                        notify?.Invoke(TimerCancellationReason.SchedulerDisposed);
+                    }
+                    catch (Exception error)
+                    {
+                        AddError(ref errors, error);
+                    }
                 }
             }
             finally
@@ -433,42 +620,73 @@ namespace YLFramework.Timing
 
         private void ThrowIfDisposed()
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(TimerScheduler));
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(TimerScheduler));
+            }
         }
         internal static void ValidateSeconds(double value, string name)
         {
-            if (double.IsNaN(value) || double.IsInfinity(value) || value < 0) throw new ArgumentOutOfRangeException(name);
+            if (double.IsNaN(value) || double.IsInfinity(value) || value < 0)
+            {
+                throw new ArgumentOutOfRangeException(name);
+            }
         }
         private static void ValidateSample(double scaledTime, double unscaledTime, long renderedFrame)
         {
             ValidateSeconds(scaledTime, nameof(scaledTime));
             ValidateSeconds(unscaledTime, nameof(unscaledTime));
-            if (renderedFrame < 0) throw new ArgumentOutOfRangeException(nameof(renderedFrame));
+            if (renderedFrame < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(renderedFrame));
+            }
         }
         internal static void ValidateCount(int? count)
         {
-            if (count.HasValue && count.Value <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+            if (count.HasValue && count.Value <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count));
+            }
         }
         internal static void ValidateSecondClock(TimerClock clock)
         {
-            if (clock != TimerClock.Scaled && clock != TimerClock.Unscaled) throw new ArgumentOutOfRangeException(nameof(clock));
+            if (clock != TimerClock.Scaled && clock != TimerClock.Unscaled)
+            {
+                throw new ArgumentOutOfRangeException(nameof(clock));
+            }
         }
         private static double AddSeconds(double now, double delay)
         {
             var due = now + delay;
-            if (double.IsInfinity(due)) throw new OverflowException("Timer deadline exceeds the seconds clock range.");
+            if (double.IsInfinity(due))
+            {
+                throw new OverflowException("Timer deadline exceeds the seconds clock range.");
+            }
+
             return due;
         }
         private static void AddError(ref List<Exception> errors, Exception error) => (errors ??= new List<Exception>()).Add(error);
         private void ThrowErrors(List<Exception> errors)
         {
-            if (errors == null) return;
-            if (_automatic)
+            if (errors == null)
             {
-                foreach (var error in errors) UnityEngine.Debug.LogException(error);
                 return;
             }
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+
+            if (_isAutomatic)
+            {
+                foreach (var error in errors)
+                {
+                    UnityEngine.Debug.LogException(error);
+                }
+
+                return;
+            }
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
             throw new AggregateException(errors);
         }
     }

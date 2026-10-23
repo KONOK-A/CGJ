@@ -9,21 +9,21 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioCleanupTests
     {
-        private AudioTestSettings mSettings;
-        private AudioClip mClip;
+        private AudioTestSettings _settings;
+        private AudioClip _clip;
 
         [SetUp]
         public void SetUp()
         {
-            mSettings = new AudioTestSettings();
-            mClip = AudioClip.Create("cleanup", 44100, 1, 44100, false);
+            _settings = new AudioTestSettings();
+            _clip = AudioClip.Create("cleanup", 44100, 1, 44100, false);
         }
 
         [TearDown]
         public void TearDown()
         {
-            mSettings.Dispose();
-            Object.DestroyImmediate(mClip);
+            _settings.Dispose();
+            Object.DestroyImmediate(_clip);
         }
 
         [Test]
@@ -32,17 +32,17 @@ namespace YLFramework.Tests.Audio
             var options = AudioSoundOptions.Defaults;
             options.Loop = true;
             var finishes = 0;
-            var inactive = AudioKit.PlaySound(mClip, options, (_, __) => finishes++);
+            var inactive = AudioKit.PlaySound(_clip, options, (_, __) => finishes++);
             inactive.Voice.Source.gameObject.SetActive(false);
             inactive.Voice.CheckFinished();
             Assert.IsFalse(inactive.IsValid);
-            var disabled = AudioKit.PlaySound(mClip, options, (_, __) => finishes++);
+            var disabled = AudioKit.PlaySound(_clip, options, (_, __) => finishes++);
             disabled.Voice.Source.enabled = false;
             disabled.Voice.CheckFinished();
             Assert.IsFalse(disabled.IsValid);
             Assert.AreEqual(0, AudioKit.SoundCount);
             Assert.AreEqual(0, finishes);
-            Assert.IsTrue(mClip);
+            Assert.IsTrue(_clip);
         }
 
         [Test]
@@ -83,11 +83,11 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void ShutdownInvalidatesHandlesAndDestroysOwnedSourcesButNotBorrowedClip()
         {
-            var sound = AudioKit.PlaySound(mClip);
+            var sound = AudioKit.PlaySound(_clip);
             sound.Pause();
-            var music = AudioKit.PlayMusic(mClip);
+            var music = AudioKit.PlayMusic(_clip);
             music.Pause();
-            var voice = AudioKit.PlayVoice(mClip);
+            var voice = AudioKit.PlayVoice(_clip);
             voice.Pause();
             var sources = new[] { sound.Voice.Source, music.Voice.Source, voice.Voice.Source };
             AudioKit.Shutdown();
@@ -101,13 +101,17 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0f, handle.Duration);
                 Assert.AreEqual(0f, handle.Progress);
             }
-            foreach (var source in sources) Assert.IsFalse(source);
-            Assert.IsTrue(mClip);
+            foreach (var source in sources)
+            {
+                Assert.IsFalse(source);
+            }
+
+            Assert.IsTrue(_clip);
             Assert.IsFalse(AudioManager.HasInstance);
             Assert.AreEqual(0, AudioKit.SoundCount);
             // A new session reloads the user's save rather than the fixture's silent overrides.
             AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
-            var current = AudioKit.PlaySound(mClip);
+            var current = AudioKit.PlaySound(_clip);
             Assert.IsTrue(current.IsValid);
             current.Pause();
             sound.Stop();
@@ -126,7 +130,7 @@ namespace YLFramework.Tests.Audio
             try
             {
                 Assert.AreSame(manager, AudioManager.Instance);
-                var sound = AudioKit.PlaySound(mClip);
+                var sound = AudioKit.PlaySound(_clip);
                 sound.Pause();
                 var source = sound.Voice.Source;
                 Object.DestroyImmediate(root);
@@ -134,15 +138,21 @@ namespace YLFramework.Tests.Audio
                 Assert.IsFalse(sound.IsValid);
                 Assert.IsFalse(source);
                 Assert.IsFalse(AudioManager.HasInstance);
-                Assert.IsTrue(mClip);
+                Assert.IsTrue(_clip);
             }
-            finally { if (root) Object.DestroyImmediate(root); }
+            finally
+            {
+                if (root)
+                {
+                    Object.DestroyImmediate(root);
+                }
+            }
         }
 
         [Test]
         public void ShutdownFindsActualOwnerEvenAfterHostReferenceWasReset()
         {
-            var sound = AudioKit.PlaySound(mClip);
+            var sound = AudioKit.PlaySound(_clip);
             sound.Pause();
             var source = sound.Voice.Source;
             var reset = typeof(YLFramework.Core.Singleton.MonoSingletonHost<AudioManager>)
@@ -166,12 +176,16 @@ namespace YLFramework.Tests.Audio
             options.Loop = true;
             for (var i = 0; i < sounds.Length; i++)
             {
-                sounds[i] = AudioKit.PlaySound(mClip, options, (_, __) => callbacks++);
+                sounds[i] = AudioKit.PlaySound(_clip, options, (_, __) => callbacks++);
                 sounds[i].Pause();
                 sources[i] = sounds[i].Voice.Source;
             }
             Assert.AreEqual(12, AudioKit.SoundCount, "Idle capacity is not an active concurrency limit.");
-            foreach (var sound in sounds) { sound.Stop(); sound.Stop(); }
+            foreach (var sound in sounds)
+            {
+                sound.Stop();
+                sound.Stop();
+            }
             for (var i = 0; i < 10; i++)
             {
                 Assert.IsFalse(sounds[i].IsValid);
@@ -184,30 +198,42 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(sources[11]);
             Assert.AreEqual(0, AudioKit.SoundCount);
             AudioKit.Settings.SoundVolume.Value = .3f;
-            for (var i = 0; i < 10; i++) Assert.AreEqual(1f, sources[i].volume);
+            for (var i = 0; i < 10; i++)
+            {
+                Assert.AreEqual(1f, sources[i].volume);
+            }
+
             var voices = new HashSet<AudioVoice>();
             for (var i = 0; i < 12; i++)
             {
-                var current = AudioKit.PlaySound(mClip, options);
+                var current = AudioKit.PlaySound(_clip, options);
                 current.Pause();
                 Assert.IsTrue(voices.Add(current.Voice), "Duplicate Stop cannot cache one voice twice.");
-                if (i < 10) Assert.AreSame(sounds[9 - i].Voice, current.Voice);
+                if (i < 10)
+                {
+                    Assert.AreSame(sounds[9 - i].Voice, current.Voice);
+                }
+
                 Assert.AreEqual(.3f, current.Voice.Source.volume, .001f);
             }
             AudioKit.Shutdown();
-            foreach (var source in sources) Assert.IsFalse(source);
+            foreach (var source in sources)
+            {
+                Assert.IsFalse(source);
+            }
+
             Assert.AreEqual(0, callbacks);
-            Assert.IsTrue(mClip);
+            Assert.IsTrue(_clip);
         }
 
         [Test]
         public void OldHandleCannotStopPauseOrResumeReusedVoice()
         {
-            var old = AudioKit.PlaySound(mClip);
+            var old = AudioKit.PlaySound(_clip);
             old.Pause();
             var oldGeneration = old.Generation;
             old.Stop();
-            var current = AudioKit.PlaySound(mClip);
+            var current = AudioKit.PlaySound(_clip);
             current.Pause();
             Assert.AreSame(old.Voice, current.Voice);
             Assert.Greater(current.Generation, oldGeneration);
@@ -219,7 +245,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(0f, old.Time);
             Assert.AreEqual(0f, old.Duration);
             Assert.AreEqual(0f, old.Progress);
-            Assert.AreEqual(mClip.length, current.Duration, .001f);
+            Assert.AreEqual(_clip.length, current.Duration, .001f);
             Assert.IsTrue(current.IsValid);
             Assert.IsTrue(current.IsPaused);
             Assert.AreEqual(1, AudioKit.SoundCount);
@@ -236,7 +262,7 @@ namespace YLFramework.Tests.Audio
             try
             {
                 var callbacks = 0;
-                var sound = AudioKit.PlaySoundFollowing(mClip, target.transform, AudioSoundOptions.Defaults,
+                var sound = AudioKit.PlaySoundFollowing(_clip, target.transform, AudioSoundOptions.Defaults,
                     (_, __) => callbacks++);
                 var voice = sound.Voice;
                 var source = voice.Source;
@@ -246,34 +272,40 @@ namespace YLFramework.Tests.Audio
                 Assert.IsFalse(voice.IsFollowing);
                 Assert.AreEqual(0, voice.ClipId);
                 Assert.AreEqual(0, voice.Priority);
-                foreach (var field in new[] { "mTarget", "mOnStarted", "mOnFinished" })
+                foreach (var field in new[] { "_target", "_onStarted", "_onFinished" })
+                {
                     Assert.IsNull(typeof(AudioVoice).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(voice), field);
+                }
+
                 Assert.IsTrue(source);
                 Assert.IsNull(source.clip);
                 Assert.IsNull(source.outputAudioMixerGroup);
                 Assert.IsFalse(source.gameObject.activeSelf);
                 AudioKit.SoundCacheCapacity = 0;
                 Assert.IsFalse(source);
-                Assert.IsTrue(mClip);
+                Assert.IsTrue(_clip);
                 Assert.IsTrue(target);
                 Assert.AreEqual(0, callbacks);
             }
-            finally { Object.DestroyImmediate(target); }
+            finally
+            {
+                Object.DestroyImmediate(target);
+            }
         }
 
         [Test]
         public void ExplicitSlotStopClearsDisabledRequestAndReplacementChangesGeneration()
         {
             AudioKit.Settings.IsMusicOn.Value = false;
-            var old = AudioKit.PlayMusic(mClip, false, .3f);
-            var current = AudioKit.PlayMusic(mClip, true, .7f);
+            var old = AudioKit.PlayMusic(_clip, false, .3f);
+            var current = AudioKit.PlayMusic(_clip, true, .7f);
             Assert.IsFalse(old.IsValid);
             Assert.IsTrue(current.IsValid);
             Assert.AreEqual(0f, old.Time);
             Assert.AreEqual(0f, old.Duration);
             Assert.AreEqual(0f, old.Progress);
             Assert.AreEqual(0f, current.Time);
-            Assert.AreEqual(mClip.length, current.Duration, .001f);
+            Assert.AreEqual(_clip.length, current.Duration, .001f);
             Assert.AreEqual(0f, current.Progress);
             Assert.AreNotEqual(old.Generation, current.Generation);
             old.Stop();
@@ -297,20 +329,26 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0f, missingClip.Time);
                 Assert.AreEqual(0f, missingClip.Duration);
                 Assert.AreEqual(0f, missingClip.Progress);
-                var clearedClip = AudioKit.PlaySound(mClip);
+                var clearedClip = AudioKit.PlaySound(_clip);
                 clearedClip.Pause();
                 clearedClip.Voice.Source.clip = null;
                 Assert.AreEqual(0f, clearedClip.Time);
                 Assert.AreEqual(0f, clearedClip.Duration);
                 Assert.AreEqual(0f, clearedClip.Progress);
-                var missingSource = AudioKit.PlayVoice(mClip);
+                var missingSource = AudioKit.PlayVoice(_clip);
                 missingSource.Pause();
                 Object.DestroyImmediate(missingSource.Voice.Source.gameObject);
                 Assert.AreEqual(0f, missingSource.Time);
                 Assert.AreEqual(0f, missingSource.Duration);
                 Assert.AreEqual(0f, missingSource.Progress);
             }
-            finally { if (clip) Object.DestroyImmediate(clip); }
+            finally
+            {
+                if (clip)
+                {
+                    Object.DestroyImmediate(clip);
+                }
+            }
         }
     }
 }

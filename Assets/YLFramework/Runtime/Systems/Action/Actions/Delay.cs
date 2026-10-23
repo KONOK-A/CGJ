@@ -10,22 +10,28 @@ namespace YLFramework.Actions
 
         public Func<float> DelayTimeFactory = null;
 
-        public System.Action OnDelayFinish { get; set; }
+        public System.Action OnDelayFinish
+        {
+            get; set;
+        }
 
-        public float CurrentSeconds { get; set; }
+        public float CurrentSeconds
+        {
+            get; set;
+        }
 
         private Delay()
         {
         }
 
-        private static readonly ActionPool<Delay> mPool =
+        private static readonly ActionPool<Delay> _pool =
             new ActionPool<Delay>(() => new Delay(), null, 10);
 
         public static Delay Allocate(float delayTime, System.Action onDelayFinish = null)
         {
-            var retNode = mPool.Allocate();
-            retNode.ActionID = ActionKit.ID_GENERATOR++;
-            retNode.Deinited = false;
+            var retNode = _pool.Allocate();
+            retNode.ActionId = ActionKit.IdGenerator++;
+            retNode.IsDeinitialized = false;
             retNode.Reset();
             retNode.DelayTime = delayTime;
             retNode.DelayTimeFactory = null;
@@ -36,9 +42,9 @@ namespace YLFramework.Actions
 
         public static Delay Allocate(Func<float> delayTimeFactory, System.Action onDelayFinish = null)
         {
-            var retNode = mPool.Allocate();
-            retNode.ActionID = ActionKit.ID_GENERATOR++;
-            retNode.Deinited = false;
+            var retNode = _pool.Allocate();
+            retNode.ActionId = ActionKit.IdGenerator++;
+            retNode.IsDeinitialized = false;
             retNode.Reset();
             retNode.DelayTimeFactory = delayTimeFactory;
             retNode.OnDelayFinish = onDelayFinish;
@@ -46,8 +52,14 @@ namespace YLFramework.Actions
             return retNode;
         }
 
-        public ulong ActionID { get; set; }
-        public ActionStatus Status { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
         public void OnStart()
         {
@@ -77,24 +89,30 @@ namespace YLFramework.Actions
         public void Reset()
         {
             Status = ActionStatus.NotStart;
-            Paused = false;
+            IsPaused = false;
             CurrentSeconds = 0.0f;
         }
 
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
 
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
                 OnDelayFinish = null;
                 DelayTimeFactory = null;
-                Deinited = true;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Delay>(mPool, this));
+                IsDeinitialized = true;
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Delay>(_pool, this));
             }
         }
 
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
     }
 
     /// <summary>

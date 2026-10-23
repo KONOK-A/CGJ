@@ -8,9 +8,9 @@ namespace YLFramework.Services.Resource
         {
             public ResourceUpdateDiagnostics CaptureDiagnostics()
             {
-                var transfer = stack.OfType<ResourceTransfer>().FirstOrDefault();
-                return transfer == null ? new ResourceUpdateDiagnostics(key == "check" ? "Checking" : "Preparing", waiters.Count,
-                    0, null, null, null, false, null) : transfer.CaptureDiagnostics(waiters.Count);
+                var transfer = _stack.OfType<ResourceTransfer>().FirstOrDefault();
+                return transfer == null ? new ResourceUpdateDiagnostics(_key == "check" ? "Checking" : "Preparing", _waiters.Count,
+                    0, null, null, null, false, null) : transfer.CaptureDiagnostics(_waiters.Count);
             }
         }
     }
@@ -19,10 +19,10 @@ namespace YLFramework.Services.Resource
     {
         internal ResourceUpdateDiagnostics CaptureDiagnostics(int waiters)
         {
-            var waiting = request == null && !done && clock.Elapsed.TotalSeconds < retryAt;
+            var waiting = _request == null && !_isDone && _clock.Elapsed.TotalSeconds < _retryAt;
             return new ResourceUpdateDiagnostics(waiting ? "RetryDelay" : "Downloading", waiters, Progress,
-                sink?.Written ?? part?.Length ?? 0, length > 0 ? length : (long?)null,
-                System.Math.Max(0, attempt - 1), waiting, clock.Elapsed.TotalMilliseconds);
+                _sink?.Written ?? _part?.Length ?? 0, _length > 0 ? _length : (long?)null,
+                System.Math.Max(0, _attempt - 1), waiting, _clock.Elapsed.TotalMilliseconds);
         }
     }
 }

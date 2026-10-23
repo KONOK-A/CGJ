@@ -23,9 +23,9 @@ namespace YLFramework.Tests.Resource
     {
         private sealed class ImageServer : IDisposable
         {
-            private readonly HttpListener listener = new();
-            private readonly Task listening;
-            private readonly ConcurrentBag<Task> responses = new();
+            private readonly HttpListener _listener = new();
+            private readonly Task _listening;
+            private readonly ConcurrentBag<Task> _responses = new();
             internal readonly string Root;
 
             internal ImageServer(Func<HttpListenerContext, Task> handler)
@@ -34,29 +34,29 @@ namespace YLFramework.Tests.Resource
                 probe.Start();
                 Root = "http://127.0.0.1:" + ((IPEndPoint)probe.LocalEndpoint).Port + "/";
                 probe.Stop();
-                listener.Prefixes.Add(Root);
-                listener.Start();
-                listening = Task.Run(async () =>
+                _listener.Prefixes.Add(Root);
+                _listener.Start();
+                _listening = Task.Run(async () =>
                 {
                     try
                     {
-                        while (listener.IsListening)
+                        while (_listener.IsListening)
                         {
-                            var context = await listener.GetContextAsync();
-                            responses.Add(handler(context));
+                            var context = await _listener.GetContextAsync();
+                            _responses.Add(handler(context));
                         }
                     }
-                    catch (HttpListenerException) when (!listener.IsListening) { }
-                    catch (ObjectDisposedException) when (!listener.IsListening) { }
+                    catch (HttpListenerException) when (!_listener.IsListening) { }
+                    catch (ObjectDisposedException) when (!_listener.IsListening) { }
                 });
             }
 
             public void Dispose()
             {
-                listener.Stop();
-                listener.Close();
-                Assert.That(listening.Wait(TimeSpan.FromSeconds(3)), Is.True);
-                Assert.That(Task.WaitAll(responses.ToArray(), TimeSpan.FromSeconds(3)), Is.True, "Fixture responses must settle; never leave background writers.");
+                _listener.Stop();
+                _listener.Close();
+                Assert.That(_listening.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(Task.WaitAll(_responses.ToArray(), TimeSpan.FromSeconds(3)), Is.True, "Fixture responses must settle; never leave background writers.");
             }
         }
 
@@ -65,33 +65,51 @@ namespace YLFramework.Tests.Resource
             try
             {
                 context.Response.StatusCode = status;
-                if (chunked) context.Response.SendChunked = true;
-                else context.Response.ContentLength64 = bytes.Length;
+                if (chunked)
+                {
+                    context.Response.SendChunked = true;
+                }
+                else
+                {
+                    context.Response.ContentLength64 = bytes.Length;
+                }
+
                 await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length);
             }
             catch (HttpListenerException) { /* 测试消费者可能已经取消自己的连接。 */ }
             catch (ObjectDisposedException) { /* 失败路径归还消费者后，响应流可能已关闭。 */ }
-            finally { context.Response.Close(); }
+            finally
+            {
+                context.Response.Close();
+            }
         }
 
         private static IEnumerator WaitUntil(Func<bool> condition)
         {
             var until = Time.realtimeSinceStartup + 8;
-            while (!condition() && Time.realtimeSinceStartup < until) yield return null;
+            while (!condition() && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "Image IO must reach a stable observable result.");
         }
 
         [UnityTest]
         public IEnumerator FifoKeepsQueuedOrderWhenTheLastWaiterCancelsAndTheSameIdentityRestarts()
         {
-            var bytes = File.ReadAllBytes(file);
+            var bytes = File.ReadAllBytes(_file);
             var entered = new ConcurrentQueue<(string Path, TaskCompletionSource<bool> Release)>();
             var closing = 0;
             using var server = new ImageServer(async context =>
             {
                 var release = new TaskCompletionSource<bool>();
                 entered.Enqueue((context.Request.RawUrl, release));
-                if (Volatile.Read(ref closing) != 0) release.TrySetResult(true);
+                if (Volatile.Read(ref closing) != 0)
+                {
+                    release.TrySetResult(true);
+                }
+
                 await release.Task;
                 await SendImage(context, bytes);
             });
@@ -125,8 +143,15 @@ namespace YLFramework.Tests.Resource
             finally
             {
                 Interlocked.Exchange(ref closing, 1);
-                foreach (var request in requests) request?.Dispose();
-                foreach (var call in entered) call.Release.TrySetResult(true);
+                foreach (var request in requests)
+                {
+                    request?.Dispose();
+                }
+
+                foreach (var call in entered)
+                {
+                    call.Release.TrySetResult(true);
+                }
             }
             yield return null;
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
@@ -137,7 +162,7 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator DistinctImageLoadsAreBoundedAndCanceledQueuedConsumersNeverOpenAConnection()
         {
-            var bytes = File.ReadAllBytes(file);
+            var bytes = File.ReadAllBytes(_file);
             var entered = new ConcurrentQueue<string>();
             var release = new TaskCompletionSource<bool>();
             using var server = new ImageServer(async context =>
@@ -150,9 +175,17 @@ namespace YLFramework.Tests.Resource
             var requests = new ResourceRequest<AssetLease<Texture2D>>[8];
             try
             {
-                for (var i = 0; i < requests.Length; i++) requests[i] = system.AcquireImageAsync(server.Root + i);
+                for (var i = 0; i < requests.Length; i++)
+                {
+                    requests[i] = system.AcquireImageAsync(server.Root + i);
+                }
+
                 yield return WaitUntil(() => entered.Count >= 4);
-                for (var frame = 0; frame < 8; frame++) yield return null;
+                for (var frame = 0; frame < 8; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(entered.Count, Is.EqualTo(4), "Distinct images need a producer limit, not only same-URL sharing.");
                 var report = system.GetDiagnosticsReport();
                 Assert.That(report.Assets.Count(x => Resource89TestApi.Read<bool>(x, "IsQueued")), Is.EqualTo(4));
@@ -163,12 +196,18 @@ namespace YLFramework.Tests.Resource
                 yield return WaitUntil(() => requests.All(value => value.IsDone));
                 Assert.That(entered.Count, Is.EqualTo(6));
                 Assert.That(entered.Contains("/6") || entered.Contains("/7"), Is.False, "Canceled queued images must not start IO.");
-                for (var i = 0; i < 6; i++) Assert.That(requests[i].Status, Is.EqualTo(ResourceRequestStatus.Succeeded), requests[i].Error?.ToString());
+                for (var i = 0; i < 6; i++)
+                {
+                    Assert.That(requests[i].Status, Is.EqualTo(ResourceRequestStatus.Succeeded), requests[i].Error?.ToString());
+                }
             }
             finally
             {
                 release.TrySetResult(true);
-                foreach (var request in requests) request?.Dispose();
+                foreach (var request in requests)
+                {
+                    request?.Dispose();
+                }
             }
             yield return null;
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
@@ -183,7 +222,7 @@ namespace YLFramework.Tests.Resource
                 value.GetParameters().Any(parameter => parameter.Name == "maximumConcurrentLoads"));
             Assert.That(constructor, Is.Not.Null, "Applications need an explicit bounded image IO configuration.");
             var options = (ResourceImageOptions)constructor.Invoke(new object[] { 1024 * 1024, 1024 * 1024, 0L, null, 128, 1 });
-            var bytes = File.ReadAllBytes(file);
+            var bytes = File.ReadAllBytes(_file);
             var gets = 0;
             var release = new TaskCompletionSource<bool>();
             using var server = new ImageServer(async context =>
@@ -199,7 +238,11 @@ namespace YLFramework.Tests.Resource
             try
             {
                 yield return WaitUntil(() => Volatile.Read(ref gets) >= 1);
-                for (var frame = 0; frame < 4; frame++) yield return null;
+                for (var frame = 0; frame < 4; frame++)
+                {
+                    yield return null;
+                }
+
                 first.Cancel();
                 Assert.That(Volatile.Read(ref gets), Is.EqualTo(1), "A shared producer consumes one slot; canceling A must not release B's slot.");
                 Assert.That(shared.IsDone, Is.False);
@@ -210,18 +253,24 @@ namespace YLFramework.Tests.Resource
                 yield return WaitUntil(() => system.GetDiagnosticsSnapshot().RecordCount == 0);
                 Assert.That(Volatile.Read(ref gets), Is.EqualTo(1), "Session exit must remove unstarted work rather than start new IO while draining.");
             }
-            finally { release.TrySetResult(true); }
+            finally
+            {
+                release.TrySetResult(true);
+            }
         }
 
         [UnityTest]
         public IEnumerator OneHundredConsumersShareOneGetWithIndependentCancellationAndExactUrlIdentity()
         {
-            var bytes = File.ReadAllBytes(file);
+            var bytes = File.ReadAllBytes(_file);
             var gets = 0;
             using var server = new ImageServer(context =>
             {
                 if (context.Request.RawUrl == "/Image?Version=AbC")
-                { Interlocked.Increment(ref gets); return SendImage(context, bytes); }
+                {
+                    Interlocked.Increment(ref gets);
+                    return SendImage(context, bytes);
+                }
                 return SendImage(context, Array.Empty<byte>(), 404);
             });
             var system = Initialize();
@@ -242,7 +291,11 @@ namespace YLFramework.Tests.Resource
                 }
                 Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.EqualTo(1));
                 Assert.That(system.GetDiagnosticsSnapshot().WaiterCount, Is.EqualTo(100));
-                for (var i = 0; i < 10; i++) requests[i].Cancel();
+                for (var i = 0; i < 10; i++)
+                {
+                    requests[i].Cancel();
+                }
+
                 yield return WaitUntil(() => requests.All(value => value.IsDone));
                 for (var i = 10; i < requests.Length; i++)
                 {
@@ -252,7 +305,10 @@ namespace YLFramework.Tests.Resource
                 }
                 Assert.That(Volatile.Read(ref gets), Is.EqualTo(1));
                 using (var ready = system.AcquireImage(server.Root + "Image?Version=AbC"))
+                {
                     Assert.That(ready.Asset, Is.SameAs(leases[0].Asset), "Ready URLs may be acquired synchronously without another GET.");
+                }
+
                 Assert.That(Volatile.Read(ref gets), Is.EqualTo(1));
                 using var different = system.AcquireImageAsync(server.Root + "image?version=abc");
                 yield return different;
@@ -263,8 +319,16 @@ namespace YLFramework.Tests.Resource
             }
             finally
             {
-                foreach (var request in requests) request?.Dispose();
-                foreach (var lease in leases) lease?.Dispose();
+                foreach (var request in requests)
+                {
+                    request?.Dispose();
+                }
+
+                foreach (var lease in leases)
+                {
+                    lease?.Dispose();
+                }
+
                 Flush(system);
             }
             yield return null;
@@ -274,11 +338,17 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator RefreshCannotBeOverwrittenByAnOldSharedGenerationAndDestroyReleasesTheNewImage()
         {
-            var oldBytes = File.ReadAllBytes(file);
+            var oldBytes = File.ReadAllBytes(_file);
             var nextTexture = new Texture2D(11, 4, TextureFormat.RGBA32, false);
             byte[] nextBytes;
-            try { nextBytes = nextTexture.EncodeToPNG(); }
-            finally { Object.DestroyImmediate(nextTexture); }
+            try
+            {
+                nextBytes = nextTexture.EncodeToPNG();
+            }
+            finally
+            {
+                Object.DestroyImmediate(nextTexture);
+            }
             var entered = new TaskCompletionSource<bool>();
             var release = new TaskCompletionSource<bool>();
             using var server = new ImageServer(async context =>
@@ -289,12 +359,15 @@ namespace YLFramework.Tests.Resource
                     await release.Task;
                     await SendImage(context, oldBytes);
                 }
-                else await SendImage(context, nextBytes);
+                else
+                {
+                    await SendImage(context, nextBytes);
+                }
             });
             var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 0));
-            host = new GameObject("YL89 refresh", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
-            var target = host.GetComponent<RawImage>();
-            var component = host.AddComponent<ResourceImage>();
+            _host = new GameObject("YL89 refresh", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            var target = _host.GetComponent<RawImage>();
+            var component = _host.AddComponent<ResourceImage>();
             using var independent = system.AcquireImageAsync(server.Root + "old");
             Texture oldNative = null;
             Texture newNative = null;
@@ -312,13 +385,17 @@ namespace YLFramework.Tests.Resource
                 oldNative = other.Asset;
                 Assert.That(oldNative.width, Is.EqualTo(7));
                 Assert.That(target.texture, Is.SameAs(newNative));
-                Object.Destroy(host); host = null;
+                Object.Destroy(_host);
+                _host = null;
                 yield return null;
                 yield return null;
                 Assert.That(newNative == null, Is.True, "Destroy releases the component's current lease.");
                 Assert.That(other.IsValid, Is.True, "A's refresh/destroy must not revoke B's old generation.");
             }
-            finally { release.TrySetResult(true); }
+            finally
+            {
+                release.TrySetResult(true);
+            }
             yield return null;
             Assert.That(oldNative == null, Is.True);
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);

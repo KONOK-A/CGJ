@@ -20,7 +20,7 @@ namespace YLFramework.Tests.Audio
         private const int Rounds = 4;
         private const ProfilerRecorderOptions Recording = ProfilerRecorderOptions.SumAllSamplesInFrame |
                                                           ProfilerRecorderOptions.CollectOnlyOnCurrentThread;
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
@@ -28,15 +28,31 @@ namespace YLFramework.Tests.Audio
 
         private enum Path
         {
-            SoundDefault, SoundReused,
-            MusicSimple, MusicNull, MusicReused,
-            VoiceSimple, VoiceNull, VoiceReused,
-            CrossfadeDefault, CrossfadeReused,
-            Emitter, MusicPlayer, MusicPlayerCrossfade,
-            ActionAllocateDefault, ActionAllocateReused, ActionStartDefault, ActionStartReused,
-            ChannelClosedDefault, ChannelClosedReused,
-            DedupDefault, DedupReused,
-            GlobalBudgetDefault, GlobalBudgetReused, ClipBudgetDefault, ClipBudgetReused
+            SoundDefault,
+            SoundReused,
+            MusicSimple,
+            MusicNull,
+            MusicReused,
+            VoiceSimple,
+            VoiceNull,
+            VoiceReused,
+            CrossfadeDefault,
+            CrossfadeReused,
+            Emitter,
+            MusicPlayer,
+            MusicPlayerCrossfade,
+            ActionAllocateDefault,
+            ActionAllocateReused,
+            ActionStartDefault,
+            ActionStartReused,
+            ChannelClosedDefault,
+            ChannelClosedReused,
+            DedupDefault,
+            DedupReused,
+            GlobalBudgetDefault,
+            GlobalBudgetReused,
+            ClipBudgetDefault,
+            ClipBudgetReused
         }
 
         private struct Measurement
@@ -46,42 +62,49 @@ namespace YLFramework.Tests.Audio
             public long Ticks;
         }
 
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private readonly AudioHandle[] mHandles = new AudioHandle[Requests];
-        private readonly PlaySoundAction[] mActions = new PlaySoundAction[Requests];
-        private readonly HashSet<AudioVoice> mSoundVoices = new HashSet<AudioVoice>();
-        private readonly HashSet<int> mSoundSources = new HashSet<int>();
-        private readonly HashSet<PlaySoundAction> mPooledActions = new HashSet<PlaySoundAction>();
-        private readonly HashSet<int> mSlotSources = new HashSet<int>();
-        private AudioClip mClip;
-        private GameObject mListener, mEmitterRoot, mMusicRoot;
-        private AudioEmitter mEmitter;
-        private AudioMusicPlayer mMusicPlayer;
-        private AudioSoundOptions mOptions;
-        private Action<AudioClip, AudioHandle> mStarted;
-        private ActionRecycleDriver mPreviousDriver;
-        private AudioHandle mBlocker;
-        private Random.State mRandomState;
-        private int mStarts, mEmitterStarts;
-        private bool mInvalidCallback;
-        private byte[] mCalibrationProbe;
-        private AudioPlaybackOptions mLastSnapshot;
-        private double mSnapshotChecksum;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private readonly AudioHandle[] _handles = new AudioHandle[Requests];
+        private readonly PlaySoundAction[] _actions = new PlaySoundAction[Requests];
+        private readonly HashSet<AudioVoice> _soundVoices = new HashSet<AudioVoice>();
+        private readonly HashSet<int> _soundSources = new HashSet<int>();
+        private readonly HashSet<PlaySoundAction> _pooledActions = new HashSet<PlaySoundAction>();
+        private readonly HashSet<int> _slotSources = new HashSet<int>();
+        private AudioClip _clip;
+        private GameObject _listener;
+        private GameObject _emitterRoot;
+        private GameObject _musicRoot;
+        private AudioEmitter _emitter;
+        private AudioMusicPlayer _musicPlayer;
+        private AudioSoundOptions _options;
+        private Action<AudioClip, AudioHandle> _started;
+        private ActionRecycleDriver _previousDriver;
+        private AudioHandle _blocker;
+        private Random.State _randomState;
+        private int _starts;
+        private int _emitterStarts;
+        private bool _hasInvalidCallback;
+        private byte[] _calibrationProbe;
+        private AudioPlaybackOptions _lastSnapshot;
+        private double _snapshotChecksum;
 
         [UnitySetUp]
         public IEnumerator SetUp()
         {
-            mRandomState = Random.state;
-            mPreviousDriver = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _randomState = Random.state;
+            _previousDriver = Object.FindObjectOfType<ActionRecycleDriver>(true);
             ActionQueue.Drain();
             AudioKit.Shutdown();
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             var settings = AudioKit.Settings;
             settings.IsSoundOn.SetValueWithoutCallback(true);
@@ -93,36 +116,43 @@ namespace YLFramework.Tests.Audio
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
             AudioKit.SoundCacheCapacity = Requests;
             AudioKit.SoundConcurrency = new AudioSoundConcurrency { Limit = Requests };
-            mClip = AudioClip.Create("options-allocation-playback", 220500, 1, 44100, false);
-            mOptions = AudioSoundOptions.Defaults;
-            mStarted = OnStarted;
+            _clip = AudioClip.Create("options-allocation-playback", 220500, 1, 44100, false);
+            _options = AudioSoundOptions.Defaults;
+            _started = OnStarted;
             var hasListener = false;
             foreach (var listener in Object.FindObjectsOfType<AudioListener>())
-                if (listener.isActiveAndEnabled) { hasListener = true; break; }
-            if (!hasListener)
             {
-                mListener = new GameObject("OptionsAllocation.Listener");
-                mListener.AddComponent<AudioListener>();
+                if (listener.isActiveAndEnabled)
+                {
+                    hasListener = true;
+                    break;
+                }
             }
 
-            mEmitterRoot = new GameObject("OptionsAllocation.Emitter");
-            mEmitterRoot.SetActive(false);
-            mEmitter = mEmitterRoot.AddComponent<AudioEmitter>();
-            SetField(mEmitter, "clips", new List<AudioClip> { mClip });
-            SetField(mEmitter, "playOnAwake", false);
-            mEmitter.Started.AddListener(OnEmitterStarted);
-            mEmitterRoot.SetActive(true);
-            mMusicRoot = new GameObject("OptionsAllocation.MusicPlayer");
-            mMusicRoot.SetActive(false);
-            mMusicPlayer = mMusicRoot.AddComponent<AudioMusicPlayer>();
-            SetField(mMusicPlayer, "clip", mClip);
-            SetField(mMusicPlayer, "playOnAwake", false);
-            SetField(mMusicPlayer, "loop", false);
-            mMusicRoot.SetActive(true);
-            mSoundVoices.Clear();
-            mSoundSources.Clear();
-            mPooledActions.Clear();
-            mSlotSources.Clear();
+            if (!hasListener)
+            {
+                _listener = new GameObject("OptionsAllocation.Listener");
+                _listener.AddComponent<AudioListener>();
+            }
+
+            _emitterRoot = new GameObject("OptionsAllocation.Emitter");
+            _emitterRoot.SetActive(false);
+            _emitter = _emitterRoot.AddComponent<AudioEmitter>();
+            SetField(_emitter, "clips", new List<AudioClip> { _clip });
+            SetField(_emitter, "playOnAwake", false);
+            _emitter.Started.AddListener(OnEmitterStarted);
+            _emitterRoot.SetActive(true);
+            _musicRoot = new GameObject("OptionsAllocation.MusicPlayer");
+            _musicRoot.SetActive(false);
+            _musicPlayer = _musicRoot.AddComponent<AudioMusicPlayer>();
+            SetField(_musicPlayer, "clip", _clip);
+            SetField(_musicPlayer, "playOnAwake", false);
+            SetField(_musicPlayer, "loop", false);
+            _musicRoot.SetActive(true);
+            _soundVoices.Clear();
+            _soundSources.Clear();
+            _pooledActions.Clear();
+            _slotSources.Clear();
             yield return null;
         }
 
@@ -131,22 +161,55 @@ namespace YLFramework.Tests.Audio
         {
             CleanupBatch();
             AudioKit.Shutdown();
-            if (mEmitterRoot) Object.Destroy(mEmitterRoot);
-            if (mMusicRoot) Object.Destroy(mMusicRoot);
-            if (mListener) Object.Destroy(mListener);
-            if (mClip) Object.Destroy(mClip);
+            if (_emitterRoot)
+            {
+                Object.Destroy(_emitterRoot);
+            }
+
+            if (_musicRoot)
+            {
+                Object.Destroy(_musicRoot);
+            }
+
+            if (_listener)
+            {
+                Object.Destroy(_listener);
+            }
+
+            if (_clip)
+            {
+                Object.Destroy(_clip);
+            }
+
             var driver = Object.FindObjectOfType<ActionRecycleDriver>(true);
-            if (driver && driver != mPreviousDriver) Object.Destroy(driver.gameObject);
-            mCalibrationProbe = null;
+            if (driver && driver != _previousDriver)
+            {
+                Object.Destroy(driver.gameObject);
+            }
+
+            _calibrationProbe = null;
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
             yield return null;
-            Random.state = mRandomState;
+            Random.state = _randomState;
         }
 
         private static void SetField(object target, string name, object value)
@@ -158,11 +221,11 @@ namespace YLFramework.Tests.Audio
 
         private void OnStarted(AudioClip clip, AudioHandle handle)
         {
-            mHandles[mStarts++] = handle;
-            mInvalidCallback |= clip != mClip || !handle.IsPlaying || handle.Voice.Source.clip != mClip;
+            _handles[_starts++] = handle;
+            _hasInvalidCallback |= clip != _clip || !handle.IsPlaying || handle.Voice.Source.clip != _clip;
         }
 
-        private void OnEmitterStarted() => mEmitterStarts++;
+        private void OnEmitterStarted() => _emitterStarts++;
 
         [UnityTest]
         public IEnumerator GlobalModeValidationDoesNotBoxEnumsAfterInitialization()
@@ -177,7 +240,7 @@ namespace YLFramework.Tests.Audio
             }
             using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
-                mCalibrationProbe = new byte[4096];
+                _calibrationProbe = new byte[4096];
                 recorder.Stop();
                 calibrationEvents = AllocationEvents(recorder);
                 valid &= recorder.Valid;
@@ -211,14 +274,14 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator SnapshotDefaultsCaptureValidationAndVoiceValueStorageAllocateNoManagedEvents()
         {
-            mOptions.Volume = .5f;
-            mOptions.Pitch = 1.5f;
-            mOptions.AutoFade = new AudioAutoFade(.25f, .5f);
-            var handle = AudioKit.PlayVoiceWithOptions(mClip, mOptions);
+            _options.Volume = .5f;
+            _options.Pitch = 1.5f;
+            _options.AutoFade = new AudioAutoFade(.25f, .5f);
+            var handle = AudioKit.PlayVoiceWithOptions(_clip, _options);
             handle.Pause();
             var voice = handle.Voice;
-            mOptions.Priority = -7;
-            mOptions.PlaySoundMode = (AudioKit.PlaySoundModes)999;
+            _options.Priority = -7;
+            _options.PlaySoundMode = (AudioKit.PlaySoundModes)999;
             Enum.IsDefined(typeof(AudioCrossfadeCurve), AudioCrossfadeCurve.EqualPower);
             RunSnapshotStages(voice, 1);
             long calibrationEvents, emptyEvents, snapshotEvents, enumEvents;
@@ -230,7 +293,7 @@ namespace YLFramework.Tests.Audio
             }
             using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
-                mCalibrationProbe = new byte[4096];
+                _calibrationProbe = new byte[4096];
                 recorder.Stop();
                 calibrationEvents = AllocationEvents(recorder);
                 validRecorders &= recorder.Valid;
@@ -252,22 +315,28 @@ namespace YLFramework.Tests.Audio
             using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
                 for (var i = 0; i < Requests; i++)
-                    if (Enum.IsDefined(typeof(AudioCrossfadeCurve), AudioCrossfadeCurve.EqualPower)) enumMatches++;
+                {
+                    if (Enum.IsDefined(typeof(AudioCrossfadeCurve), AudioCrossfadeCurve.EqualPower))
+                    {
+                        enumMatches++;
+                    }
+                }
+
                 recorder.Stop();
                 enumEvents = AllocationEvents(recorder);
                 validRecorders &= recorder.Valid;
             }
             Assert.IsTrue(validRecorders);
             Assert.AreEqual(Requests, enumMatches);
-            Assert.AreEqual(4096, mCalibrationProbe.Length);
+            Assert.AreEqual(4096, _calibrationProbe.Length);
             Assert.Greater(calibrationEvents, 0);
             Assert.AreEqual(0, emptyEvents);
             Assert.AreEqual(0, snapshotEvents, "Default values, Capture, normalization, validation and request value storage must not allocate.");
-            Assert.Greater(mSnapshotChecksum, 0d);
-            Assert.AreEqual(.5f, mLastSnapshot.Volume);
+            Assert.Greater(_snapshotChecksum, 0d);
+            Assert.AreEqual(.5f, _lastSnapshot.Volume);
             Assert.AreEqual(1.5f, voice.Options.Pitch);
             Assert.AreEqual(.5f, voice.Options.Volume);
-            Assert.AreEqual(-7, mOptions.Priority, "Normalization must not modify the public class.");
+            Assert.AreEqual(-7, _options.Priority, "Normalization must not modify the public class.");
             UnityEngine.Debug.Log("Audio snapshot strict benchmark: iterations=4096; calibration events=" + calibrationEvents +
                                   "; empty events=" + emptyEvents + "; snapshot/storage events=" + snapshotEvents +
                                   "; isolated Enum.IsDefined events/24 calls=" + enumEvents + ".");
@@ -287,21 +356,21 @@ namespace YLFramework.Tests.Audio
                 defaults.Validate(true);
                 music.Validate(false);
                 omitted.Validate(false);
-                var captured = AudioPlaybackOptions.Capture(mOptions);
+                var captured = AudioPlaybackOptions.Capture(_options);
                 captured.Priority = 0;
                 captured.PlaySoundMode = null;
                 captured.Validate(true);
-                captured.ValidateClip(mClip);
+                captured.ValidateClip(_clip);
                 captured.AutoFade.Normalize(5d, captured.Loop, out var fadeIn, out var fadeOut);
                 voice.SetVolumeScale(captured.Volume);
                 voice.SetPitch(captured.Pitch);
                 var stored = voice.Options;
-                mLastSnapshot = captured;
+                _lastSnapshot = captured;
                 checksum += stored.Volume + stored.Pitch + defaults.MaxDistance +
                             (music.Loop && omitted.Loop ? 1d : 0d) + fadeIn + fadeOut;
                 stored.Pitch = 3f;
             }
-            mSnapshotChecksum = checksum;
+            _snapshotChecksum = checksum;
         }
 
         [UnityTest]
@@ -317,13 +386,13 @@ namespace YLFramework.Tests.Audio
             Measurement calibration;
             using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
-                mCalibrationProbe = new byte[4096];
+                _calibrationProbe = new byte[4096];
                 recorder.Stop();
                 calibration = new Measurement { Valid = recorder.Valid, Events = AllocationEvents(recorder) };
             }
             Assert.IsTrue(calibration.Valid, "GC.Alloc recorder must be available on this PlayMode runner.");
             Assert.Greater(calibration.Events, 0, "A known byte[] allocation must be detected before accepting zero events.");
-            Assert.AreEqual(4096, mCalibrationProbe.Length);
+            Assert.AreEqual(4096, _calibrationProbe.Length);
             var empty = Measure(Path.SoundDefault, true);
             Assert.IsTrue(empty.Valid);
             Assert.AreEqual(0L, empty.Events, "The empty interval must not include harness allocations.");
@@ -339,19 +408,25 @@ namespace YLFramework.Tests.Audio
             RunBatch(Path.SoundReused);
             for (var i = 0; i < Requests; i++)
             {
-                Assert.IsTrue(mHandles[i].IsPlaying);
-                Assert.IsTrue(mSoundVoices.Add(mHandles[i].Voice));
-                Assert.IsTrue(mSoundSources.Add(mHandles[i].Voice.Source.GetInstanceID()));
+                Assert.IsTrue(_handles[i].IsPlaying);
+                Assert.IsTrue(_soundVoices.Add(_handles[i].Voice));
+                Assert.IsTrue(_soundSources.Add(_handles[i].Voice.Source.GetInstanceID()));
             }
             VerifyBatch(Path.SoundReused, false);
             CleanupBatch();
-            AudioKit.PlayMusic(mClip).Stop();
-            AudioKit.PlayVoice(mClip).Stop();
-            AudioKit.CrossFadeMusic(mClip, 10f);
-            AudioKit.CrossFadeMusic(mClip, 10f);
+            AudioKit.PlayMusic(_clip).Stop();
+            AudioKit.PlayVoice(_clip).Stop();
+            AudioKit.CrossFadeMusic(_clip, 10f);
+            AudioKit.CrossFadeMusic(_clip, 10f);
             foreach (var source in AudioManager.Instance.GetComponentsInChildren<AudioSource>(true))
-                if (!mSoundSources.Contains(source.GetInstanceID())) mSlotSources.Add(source.GetInstanceID());
-            Assert.AreEqual(3, mSlotSources.Count, "Warm both fixed Music sources and the fixed Voice source.");
+            {
+                if (!_soundSources.Contains(source.GetInstanceID()))
+                {
+                    _slotSources.Add(source.GetInstanceID());
+                }
+            }
+
+            Assert.AreEqual(3, _slotSources.Count, "Warm both fixed Music sources and the fixed Voice source.");
             AudioKit.StopMusic();
 
             foreach (Path path in Enum.GetValues(typeof(Path)))
@@ -361,14 +436,28 @@ namespace YLFramework.Tests.Audio
                 var first = Measure(path);
                 VerifyBatch(path, false);
                 if (IsAllocate(path))
-                    for (var i = 0; i < Requests; i++) mPooledActions.Add(mActions[i]);
+                {
+                    for (var i = 0; i < Requests; i++)
+                    {
+                        _pooledActions.Add(_actions[i]);
+                    }
+                }
+
                 CleanupBatch();
-                if (IsDedup(path)) yield return null;
+                if (IsDedup(path))
+                {
+                    yield return null;
+                }
+
                 PrepareBatch(path);
                 RunBatch(path);
                 VerifyBatch(path, true);
                 CleanupBatch();
-                if (IsDedup(path)) yield return null;
+                if (IsDedup(path))
+                {
+                    yield return null;
+                }
+
                 TestContext.WriteLine("{0}: preparatory batch events={1} (not steady-state).", path, first.Events);
                 Assert.IsTrue(first.Valid);
 
@@ -388,13 +477,19 @@ namespace YLFramework.Tests.Audio
                                           "admitted={8}; dedup rejected={9}; global rejected={10}; clip rejected={11}; " +
                                           "cache hits={12}; cache misses={13}; source creations={14}.",
                         path, round + 1, Requests, measurement.Events, (double)measurement.Events / Requests,
-                        measurement.Ticks * 1000000d / Stopwatch.Frequency / Requests, mStarts, mEmitterStarts,
+                        measurement.Ticks * 1000000d / Stopwatch.Frequency / Requests, _starts, _emitterStarts,
                         stats.AdmittedCount, stats.DedupRejectedCount, stats.GlobalRejectedCount,
                         stats.ClipRejectedCount, stats.CacheHitCount, stats.CacheMissCount, stats.SourceCreatedCount);
                     if (IsCrossfade(path))
+                    {
                         Assert.AreEqual(0, measurement.Events, "Prewarmed Crossfade must not allocate enum boxes in the API or component.");
+                    }
+
                     CleanupBatch();
-                    if (IsDedup(path)) yield return null;
+                    if (IsDedup(path))
+                    {
+                        yield return null;
+                    }
                 }
             }
             TestContext.WriteLine("Action Start includes the production completion/Started closures. " +
@@ -410,7 +505,11 @@ namespace YLFramework.Tests.Audio
             using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
                 var start = Stopwatch.GetTimestamp();
-                if (!empty) RunBatch(path);
+                if (!empty)
+                {
+                    RunBatch(path);
+                }
+
                 var elapsed = Stopwatch.GetTimestamp() - start;
                 recorder.Stop();
                 return new Measurement { Valid = recorder.Valid, Events = AllocationEvents(recorder), Ticks = elapsed };
@@ -431,17 +530,19 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsSoundOn.Value = true;
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
             AudioKit.SoundConcurrency = new AudioSoundConcurrency { Limit = Requests };
-            SetField(mMusicPlayer, "crossFadeOnPlay", path == Path.MusicPlayerCrossfade);
-            Array.Clear(mHandles, 0, mHandles.Length);
+            SetField(_musicPlayer, "crossFadeOnPlay", path == Path.MusicPlayerCrossfade);
+            Array.Clear(_handles, 0, _handles.Length);
             if (path == Path.ChannelClosedDefault || path == Path.ChannelClosedReused)
+            {
                 AudioKit.Settings.IsSoundOn.Value = false;
+            }
             else if (IsDedup(path))
             {
                 AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.IgnoreSameSoundInSoundFrames;
                 // Stop retains the dedup record; advance a frame outside recording between same-frame batches.
                 AudioKit.SoundFrameCountForIgnoreSameSound = 0;
-                mBlocker = AudioKit.PlaySound(mClip, mOptions);
-                Assert.IsTrue(mBlocker.IsPlaying);
+                _blocker = AudioKit.PlaySound(_clip, _options);
+                Assert.IsTrue(_blocker.IsPlaying);
             }
             else if (path == Path.GlobalBudgetDefault || path == Path.GlobalBudgetReused ||
                      path == Path.ClipBudgetDefault || path == Path.ClipBudgetReused)
@@ -453,16 +554,21 @@ namespace YLFramework.Tests.Audio
                     DefaultClipLimit = clipBudget ? 1 : 0,
                     OverflowPolicy = SoundOverflowPolicy.RejectNew
                 };
-                mBlocker = AudioKit.PlaySound(mClip, mOptions);
-                Assert.IsTrue(mBlocker.IsPlaying);
+                _blocker = AudioKit.PlaySound(_clip, _options);
+                Assert.IsTrue(_blocker.IsPlaying);
             }
             if (IsStart(path))
+            {
                 for (var i = 0; i < Requests; i++)
-                    mActions[i] = path == Path.ActionStartDefault
-                        ? PlaySoundAction.Allocate(mClip, onStarted: mStarted)
-                        : PlaySoundAction.AllocateWithOptions(mClip, mOptions, onStarted: mStarted);
-            mStarts = mEmitterStarts = 0;
-            mInvalidCallback = false;
+                {
+                    _actions[i] = path == Path.ActionStartDefault
+                        ? PlaySoundAction.Allocate(_clip, onStarted: _started)
+                        : PlaySoundAction.AllocateWithOptions(_clip, _options, onStarted: _started);
+                }
+            }
+
+            _starts = _emitterStarts = 0;
+            _hasInvalidCallback = false;
             AudioKit.ResetSoundStats();
         }
 
@@ -478,56 +584,56 @@ namespace YLFramework.Tests.Audio
                     case Path.DedupDefault:
                     case Path.GlobalBudgetDefault:
                     case Path.ClipBudgetDefault:
-                        mHandles[i] = AudioKit.PlaySound(mClip, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlaySound(_clip, onStarted: _started);
                         break;
                     case Path.SoundReused:
                     case Path.ChannelClosedReused:
                     case Path.DedupReused:
                     case Path.GlobalBudgetReused:
                     case Path.ClipBudgetReused:
-                        mHandles[i] = AudioKit.PlaySound(mClip, mOptions, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlaySound(_clip, _options, onStarted: _started);
                         break;
                     case Path.MusicSimple:
-                        mHandles[i] = AudioKit.PlayMusic(mClip, loop: false, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayMusic(_clip, loop: false, onStarted: _started);
                         break;
                     case Path.MusicNull:
-                        mHandles[i] = AudioKit.PlayMusicWithOptions(mClip, null, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayMusicWithOptions(_clip, null, onStarted: _started);
                         break;
                     case Path.MusicReused:
-                        mHandles[i] = AudioKit.PlayMusicWithOptions(mClip, mOptions, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayMusicWithOptions(_clip, _options, onStarted: _started);
                         break;
                     case Path.VoiceSimple:
-                        mHandles[i] = AudioKit.PlayVoice(mClip, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayVoice(_clip, onStarted: _started);
                         break;
                     case Path.VoiceNull:
-                        mHandles[i] = AudioKit.PlayVoiceWithOptions(mClip, null, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayVoiceWithOptions(_clip, null, onStarted: _started);
                         break;
                     case Path.VoiceReused:
-                        mHandles[i] = AudioKit.PlayVoiceWithOptions(mClip, mOptions, onStarted: mStarted);
+                        _handles[i] = AudioKit.PlayVoiceWithOptions(_clip, _options, onStarted: _started);
                         break;
                     case Path.CrossfadeDefault:
-                        mHandles[i] = AudioKit.CrossFadeMusic(mClip, 10f, onStarted: mStarted);
+                        _handles[i] = AudioKit.CrossFadeMusic(_clip, 10f, onStarted: _started);
                         break;
                     case Path.CrossfadeReused:
-                        mHandles[i] = AudioKit.CrossFadeMusic(mClip, 10f, mOptions, onStarted: mStarted);
+                        _handles[i] = AudioKit.CrossFadeMusic(_clip, 10f, _options, onStarted: _started);
                         break;
                     case Path.Emitter:
-                        mEmitter.Play();
+                        _emitter.Play();
                         break;
                     case Path.MusicPlayer:
                     case Path.MusicPlayerCrossfade:
-                        mMusicPlayer.Play();
-                        mHandles[i] = AudioKit.Music;
+                        _musicPlayer.Play();
+                        _handles[i] = AudioKit.Music;
                         break;
                     case Path.ActionAllocateDefault:
-                        mActions[i] = PlaySoundAction.Allocate(mClip, onStarted: mStarted);
+                        _actions[i] = PlaySoundAction.Allocate(_clip, onStarted: _started);
                         break;
                     case Path.ActionAllocateReused:
-                        mActions[i] = PlaySoundAction.AllocateWithOptions(mClip, mOptions, onStarted: mStarted);
+                        _actions[i] = PlaySoundAction.AllocateWithOptions(_clip, _options, onStarted: _started);
                         break;
                     case Path.ActionStartDefault:
                     case Path.ActionStartReused:
-                        mActions[i].Execute(0f);
+                        _actions[i].Execute(0f);
                         break;
                 }
             }
@@ -535,7 +641,7 @@ namespace YLFramework.Tests.Audio
 
         private void VerifyBatch(Path path, bool checkActionReuse)
         {
-            Assert.IsFalse(mInvalidCallback, "Started must see the accepted, playing clip.");
+            Assert.IsFalse(_hasInvalidCallback, "Started must see the accepted, playing clip.");
             var stats = AudioKit.SoundStats;
             Assert.AreEqual(0L, stats.SourceCreatedCount, "Only warmed sources may be used.");
             Assert.AreEqual(0L, stats.SourceReleasedCount);
@@ -545,23 +651,30 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(Requests, stats.OwnedSourceCount);
             if (IsAllocate(path))
             {
-                Assert.AreEqual(0, mStarts);
+                Assert.AreEqual(0, _starts);
                 Assert.AreEqual(0, AudioKit.SoundCount);
                 var unique = new HashSet<PlaySoundAction>();
                 for (var i = 0; i < Requests; i++)
                 {
-                    Assert.IsNotNull(mActions[i]);
-                    Assert.IsFalse(mActions[i].Deinited);
-                    Assert.AreEqual(ActionStatus.NotStart, mActions[i].Status);
-                    Assert.IsTrue(unique.Add(mActions[i]));
-                    if (checkActionReuse) Assert.IsTrue(mPooledActions.Contains(mActions[i]), "Allocate must reuse the warmed Action pool.");
+                    Assert.IsNotNull(_actions[i]);
+                    Assert.IsFalse(_actions[i].IsDeinitialized);
+                    Assert.AreEqual(ActionStatus.NotStart, _actions[i].Status);
+                    Assert.IsTrue(unique.Add(_actions[i]));
+                    if (checkActionReuse)
+                    {
+                        Assert.IsTrue(_pooledActions.Contains(_actions[i]), "Allocate must reuse the warmed Action pool.");
+                    }
                 }
                 return;
             }
             if (IsRejected(path))
             {
-                Assert.AreEqual(0, mStarts);
-                for (var i = 0; i < Requests; i++) Assert.IsFalse(mHandles[i].IsValid);
+                Assert.AreEqual(0, _starts);
+                for (var i = 0; i < Requests; i++)
+                {
+                    Assert.IsFalse(_handles[i].IsValid);
+                }
+
                 var closed = path == Path.ChannelClosedDefault || path == Path.ChannelClosedReused;
                 Assert.AreEqual(closed ? 0 : 1, AudioKit.SoundCount);
                 Assert.AreEqual(0L, stats.AdmittedCount);
@@ -569,32 +682,42 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(path == Path.DedupDefault || path == Path.DedupReused ? Requests : 0L, stats.DedupRejectedCount);
                 Assert.AreEqual(path == Path.GlobalBudgetDefault || path == Path.GlobalBudgetReused ? Requests : 0L, stats.GlobalRejectedCount);
                 Assert.AreEqual(path == Path.ClipBudgetDefault || path == Path.ClipBudgetReused ? Requests : 0L, stats.ClipRejectedCount);
-                if (!closed) Assert.IsTrue(mBlocker.IsPlaying);
+                if (!closed)
+                {
+                    Assert.IsTrue(_blocker.IsPlaying);
+                }
+
                 return;
             }
             if (path == Path.Emitter)
             {
-                Assert.AreEqual(Requests, mEmitterStarts);
+                Assert.AreEqual(Requests, _emitterStarts);
                 var sounds = AudioKit.GetPlayingSounds();
                 Assert.AreEqual(Requests, sounds.Length);
-                Array.Copy(sounds, mHandles, Requests);
+                Array.Copy(sounds, _handles, Requests);
             }
             else if (path != Path.MusicPlayer && path != Path.MusicPlayerCrossfade)
-                Assert.AreEqual(Requests, mStarts);
+            {
+                Assert.AreEqual(Requests, _starts);
+            }
+
             if (IsSound(path))
             {
                 Assert.AreEqual(Requests, stats.AdmittedCount);
                 Assert.AreEqual(Requests, stats.CacheHitCount);
-                Assert.AreEqual(Requests, AudioKit.GetSoundCount(mClip));
+                Assert.AreEqual(Requests, AudioKit.GetSoundCount(_clip));
                 var unique = new HashSet<AudioVoice>();
                 for (var i = 0; i < Requests; i++)
                 {
-                    Assert.IsTrue(mHandles[i].IsPlaying);
-                    Assert.AreSame(mClip, mHandles[i].Voice.Source.clip);
-                    Assert.IsTrue(unique.Add(mHandles[i].Voice));
-                    Assert.IsTrue(mSoundVoices.Contains(mHandles[i].Voice));
-                    Assert.IsTrue(mSoundSources.Contains(mHandles[i].Voice.Source.GetInstanceID()));
-                    if (IsStart(path)) Assert.AreEqual(ActionStatus.Started, mActions[i].Status);
+                    Assert.IsTrue(_handles[i].IsPlaying);
+                    Assert.AreSame(_clip, _handles[i].Voice.Source.clip);
+                    Assert.IsTrue(unique.Add(_handles[i].Voice));
+                    Assert.IsTrue(_soundVoices.Contains(_handles[i].Voice));
+                    Assert.IsTrue(_soundSources.Contains(_handles[i].Voice.Source.GetInstanceID()));
+                    if (IsStart(path))
+                    {
+                        Assert.AreEqual(ActionStatus.Started, _actions[i].Status);
+                    }
                 }
             }
             else
@@ -602,16 +725,22 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0, AudioKit.SoundCount);
                 Assert.AreEqual(0L, stats.AdmittedCount);
                 for (var i = 0; i < Requests; i++)
-                    Assert.IsTrue(mSlotSources.Contains(mHandles[i].Voice.Source.GetInstanceID()));
-                Assert.IsTrue(mHandles[Requests - 1].IsPlaying);
-                Assert.AreSame(mClip, mHandles[Requests - 1].Voice.Source.clip);
+                {
+                    Assert.IsTrue(_slotSources.Contains(_handles[i].Voice.Source.GetInstanceID()));
+                }
+
+                Assert.IsTrue(_handles[Requests - 1].IsPlaying);
+                Assert.AreSame(_clip, _handles[Requests - 1].Voice.Source.clip);
                 for (var i = 0; i < Requests - (IsCrossfade(path) ? 2 : 1); i++)
-                    Assert.IsFalse(mHandles[i].IsValid, "Replaced slot leases must be invalid.");
+                {
+                    Assert.IsFalse(_handles[i].IsValid, "Replaced slot leases must be invalid.");
+                }
+
                 if (IsCrossfade(path))
                 {
-                    Assert.IsTrue(mHandles[Requests - 2].IsPlaying, "Crossfade must retain a real outgoing participant.");
-                    Assert.AreNotSame(mHandles[Requests - 2].Voice.Source, mHandles[Requests - 1].Voice.Source);
-                    Assert.AreEqual(0f, mHandles[Requests - 1].Voice.Source.volume, .001f);
+                    Assert.IsTrue(_handles[Requests - 2].IsPlaying, "Crossfade must retain a real outgoing participant.");
+                    Assert.AreNotSame(_handles[Requests - 2].Voice.Source, _handles[Requests - 1].Voice.Source);
+                    Assert.AreEqual(0f, _handles[Requests - 1].Voice.Source.volume, .001f);
                 }
             }
         }
@@ -620,16 +749,28 @@ namespace YLFramework.Tests.Audio
         {
             for (var i = 0; i < Requests; i++)
             {
-                if (mActions[i] != null && !mActions[i].Deinited) mActions[i].Deinit();
-                mActions[i] = null;
+                if (_actions[i] != null && !_actions[i].IsDeinitialized)
+                {
+                    _actions[i].Deinit();
+                }
+
+                _actions[i] = null;
             }
             ActionQueue.Drain();
-            if (mEmitter) mEmitter.Stop();
-            if (mMusicPlayer) mMusicPlayer.Stop();
+            if (_emitter)
+            {
+                _emitter.Stop();
+            }
+
+            if (_musicPlayer)
+            {
+                _musicPlayer.Stop();
+            }
+
             AudioKit.StopAllSound();
             AudioKit.StopMusic();
             AudioKit.StopVoice();
-            mBlocker = default;
+            _blocker = default;
             AudioKit.Settings.IsSoundOn.Value = true;
         }
     }

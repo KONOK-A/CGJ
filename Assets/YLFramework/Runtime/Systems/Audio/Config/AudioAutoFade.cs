@@ -17,36 +17,57 @@ namespace YLFramework.Services.Audio
         /// <param name="fadeOutSeconds">Finite, nonnegative clip seconds for the final fade-out; zero when looping.</param>
         public AudioAutoFade(float fadeInSeconds, float fadeOutSeconds)
         {
-            FadeInSeconds = fadeInSeconds;
-            FadeOutSeconds = fadeOutSeconds;
+            this.FadeInSeconds = fadeInSeconds;
+            this.FadeOutSeconds = fadeOutSeconds;
         }
 
         internal bool IsEnabled => FadeInSeconds != 0f || FadeOutSeconds != 0f;
         internal void Validate(bool loop)
         {
             if (!AudioSoundOptions.IsFinite(FadeInSeconds) || FadeInSeconds < 0f)
+            {
                 throw new ArgumentOutOfRangeException(nameof(FadeInSeconds));
+            }
+
             if (!AudioSoundOptions.IsFinite(FadeOutSeconds) || FadeOutSeconds < 0f)
+            {
                 throw new ArgumentOutOfRangeException(nameof(FadeOutSeconds));
+            }
+
             if (loop && FadeOutSeconds > 0f)
+            {
                 throw new ArgumentException("Looping playback has no final fade-out. Use an initial fade-in and stop it explicitly.", nameof(FadeOutSeconds));
+            }
         }
 
         internal void ValidateClip(AudioClip clip)
         {
-            if (!IsEnabled) return;
+            if (!IsEnabled)
+            {
+                return;
+            }
+
             if (!clip || clip.samples <= 0 || clip.frequency <= 0)
+            {
                 throw new ArgumentException("Automatic fading requires a live clip with a positive sample count and frequency.", nameof(clip));
+            }
         }
 
         internal void Normalize(double length, bool loop, out double fadeIn, out double fadeOut)
         {
             Validate(loop);
             if (double.IsNaN(length) || double.IsInfinity(length) || length <= 0d)
+            {
                 throw new ArgumentOutOfRangeException(nameof(length));
+            }
+
             fadeIn = FadeInSeconds;
             fadeOut = FadeOutSeconds;
-            if (loop) { fadeIn = Math.Min(fadeIn, length); return; }
+            if (loop)
+            {
+                fadeIn = Math.Min(fadeIn, length);
+                return;
+            }
             var sum = fadeIn + fadeOut;
             if (sum > length)
             {

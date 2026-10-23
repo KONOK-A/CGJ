@@ -8,29 +8,57 @@ namespace YLFramework.Services.Resource
     /// <summary>沿用 Request 的单次领取协议。取消终态不代表 native 操作撤销；Scenes 可在迟到完成后更新。</summary>
     public sealed class SceneRequest : ResourceRequest<SceneLease>
     {
-        private readonly ResourceSystem owner;
+        private readonly ResourceSystem _owner;
         internal AsyncOperation Native;
-        internal bool ActivationRequested;
-        public LoadSceneMode Mode { get; }
-        public long LoadSequence { get; }
+        internal bool IsActivationRequested;
+        public LoadSceneMode Mode
+        {
+            get;
+        }
+        public long LoadSequence
+        {
+            get;
+        }
         /// <summary>一旦为 true，Single 可能替换旧场景，Cancel/Dispose 均不承诺回滚。</summary>
-        public bool NativeStarted { get; internal set; }
-        public bool NativeCompleted { get; internal set; }
-        public bool IsWaitingForActivation => Native != null && !ActivationRequested && Native.progress >= 0.9f;
+        public bool HasNativeStarted
+        {
+            get; internal set;
+        }
+        public bool IsNativeCompleted
+        {
+            get; internal set;
+        }
+        public bool IsWaitingForActivation => Native != null && !IsActivationRequested && Native.progress >= 0.9f;
         /// <summary>本次实际观察到的身份。歧义结果只保活候选，不授予卸载它们的权利。</summary>
         public IReadOnlyList<SceneRecord> Scenes { get; internal set; } = Array.Empty<SceneRecord>();
 
         internal SceneRequest(ResourceSystem owner, LoadSceneMode mode, long sequence, bool activate) : base(value => value.Dispose())
-        { this.owner = owner; Mode = mode; LoadSequence = sequence; ActivationRequested = activate; }
+        {
+            this._owner = owner;
+            Mode = mode;
+            LoadSequence = sequence;
+            IsActivationRequested = activate;
+        }
 
         /// <summary>允许激活，不等同 SetActiveScene。幂等；门控超时、取消和退出也会强制放行 native queue。</summary>
         public void Activate()
         {
-            owner.CheckThread();
-            if (IsDisposed) throw new ObjectDisposedException(nameof(SceneRequest));
-            if (IsDone) return;
-            ActivationRequested = true;
-            if (Native != null) Native.allowSceneActivation = true;
+            _owner.CheckThread();
+            if (IsDisposed)
+            {
+                throw new ObjectDisposedException(nameof(SceneRequest));
+            }
+
+            if (IsDone)
+            {
+                return;
+            }
+
+            IsActivationRequested = true;
+            if (Native != null)
+            {
+                Native.allowSceneActivation = true;
+            }
         }
     }
 

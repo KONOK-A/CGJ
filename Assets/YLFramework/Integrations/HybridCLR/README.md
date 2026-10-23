@@ -36,7 +36,7 @@ Recipe.Project 必须明确选择 `Generated/hybridclr` 下的 `.bytes`/`.json`�
 
 ## Runtime
 
-先启动并挂载 ResourceSystem，再构造 `new HybridCLRLoader(resources, appContentCompatibilityId)`。调用 `LoadAsync` 或 `StartModuleAsync(manifestAddress, entryAssemblyName, moduleTypeFullName)`；请求可 yield，提供 `isDone/progress/error`、原始 Exception、阶段/程序集/native 错误码和 RequiresRestart。类型只在精确入口程序集内解析。启动进度单调映射代码读取 0–0.8 与 Core 启动 0.8–1，终态为 1；Stage 区分读取、metadata/native 和具体 Core 阶段，不为同步 native 调用伪造时间平滑。`Abort` 总在改变状态前拒绝。
+先启动并挂载 ResourceSystem，再构造 `new HybridCLRLoader(resources, appContentCompatibilityId)`。调用 `LoadAsync` 或 `StartModuleAsync(manifestAddress, entryAssemblyName, moduleTypeFullName)`；请求可 yield，提供 `IsDone/Progress/Error`、原始 Exception、阶段/程序集/native 错误码和 RequiresRestart。类型只在精确入口程序集内解析。启动进度单调映射代码读取 0–0.8 与 Core 启动 0.8–1，终态为 1；Stage 区分读取、metadata/native 和具体 Core 阶段，不为同步 native 调用伪造时间平滑。`Abort` 总在改变状态前拒绝。
 
 加载器借用 ResourceSystem。先验证全部 bytes，再在主线程加载 SuperSet metadata 和依赖优先程序集；只保留一个小 manifest lease 作为活动代码版本屏障，不保留大 DLL 资源租约。可以 Check/Prepare，但活动闭包 Activate 返回 Resource Busy。先关闭本入口启动的 Module，再 Dispose loader，最后由应用关闭自己拥有的 ResourceStartup。Dispose 不关闭外部服务、不卸载 DLL，也不允许同进程换版；同名不同内容、未知来源已加载或部分 native 失败需要重启进程。
 

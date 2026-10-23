@@ -1,11 +1,10 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
-
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.BuffSystem
 {
@@ -13,16 +12,18 @@ namespace YLFramework.BuffSystem
     public class BuffSettingsProvider : SettingsProvider
     {
 
-        private static BuffSettingsProvider instance;
+        private static BuffSettingsProvider _instance;
 
         public static BuffSettingsProvider Instance
         {
             get
             {
-                if (instance == null)
-                    instance = new BuffSettingsProvider("YLFramework/Buff", SettingsScope.Project);
+                if (_instance == null)
+                {
+                    _instance = new BuffSettingsProvider("YLFramework/Buff", SettingsScope.Project);
+                }
 
-                return instance;
+                return _instance;
             }
         }
 
@@ -30,33 +31,38 @@ namespace YLFramework.BuffSystem
         {
         }
 
-        private SerializedObject serializedObject;
+        private SerializedObject _serializedObject;
 
-        private List<SerializedProperty> serializedProperties;
+        private List<SerializedProperty> _serializedProperties;
 
         public override void OnGUI(string searchContext)
         {
             //base.OnGUI(searchContext);
 
-            if (serializedObject == null)
-                serializedObject = new SerializedObject(BuffSystemSettings.Instance);
+            if (_serializedObject == null)
+            {
+                _serializedObject = new SerializedObject(BuffSystemSettings.Instance);
+            }
 
-            if (serializedProperties == null)
-                serializedProperties = serializedObject.GetAllSerializedProperty();
+            if (_serializedProperties == null)
+            {
+                _serializedProperties = _serializedObject.GetAllSerializedProperty();
+            }
 
-
-            serializedObject.Update();
+            _serializedObject.Update();
 
             EditorGUI.BeginChangeCheck();
 
-            foreach (var item in serializedProperties)
+            foreach (var item in _serializedProperties)
             {
                 if (item.name == "allEffectDatas")
+                {
                     continue;
+                }
 
                 if (item.name == "allEffectTypes")
                 {
-                    OnTypeGUI(item);
+                    OnTypeGui(item);
                     continue;
                 }
 
@@ -68,39 +74,41 @@ namespace YLFramework.BuffSystem
             }
 
 
-            serializedObject.ApplyModifiedProperties();
+            _serializedObject.ApplyModifiedProperties();
             if (EditorGUI.EndChangeCheck())
             {
                 BuffSystemSettings.Save();
             }
         }
 
-        private ReorderableList reorderableListType;
+        private ReorderableList _reorderableListType;
 
 
 
-        private void OnTypeGUI(SerializedProperty property)
+        private void OnTypeGui(SerializedProperty property)
         {
 
-            if (reorderableListType == null)
+            if (_reorderableListType == null)
             {
-                reorderableListType = new ReorderableList(property.serializedObject, property);
-                reorderableListType.draggable = false;
-                reorderableListType.drawElementCallback += ElementCallbackDelegate;
-                reorderableListType.onAddCallback += AddCallbackDelegate;
-                reorderableListType.drawHeaderCallback += HeaderCallbackDelegate;
+                _reorderableListType = new ReorderableList(property.serializedObject, property);
+                _reorderableListType.draggable = false;
+                _reorderableListType.drawElementCallback += ElementCallbackDelegate;
+                _reorderableListType.onAddCallback += AddCallbackDelegate;
+                _reorderableListType.drawHeaderCallback += HeaderCallbackDelegate;
             }
 
-            reorderableListType.DoLayoutList();
+            _reorderableListType.DoLayoutList();
         }
 
 
         private void ElementCallbackDelegate(Rect rect, int index, bool isActive, bool isFocused)
         {
-            if (index < 0 || index >= reorderableListType.serializedProperty.arraySize)
+            if (index < 0 || index >= _reorderableListType.serializedProperty.arraySize)
+            {
                 return;
+            }
 
-            SerializedProperty property = reorderableListType.serializedProperty.GetArrayElementAtIndex(index);
+            SerializedProperty property = _reorderableListType.serializedProperty.GetArrayElementAtIndex(index);
 
             SerializedProperty type = property.FindPropertyRelative("type");
             SerializedProperty name = property.FindPropertyRelative("name");
@@ -110,7 +118,7 @@ namespace YLFramework.BuffSystem
             EditorGUI.IntField(rect, type.intValue);
             EditorGUI.EndDisabledGroup();
 
-            rect.x+=rect.width;
+            rect.x += rect.width;
             name.stringValue = EditorGUI.TextField(rect, name.stringValue);
 
         }

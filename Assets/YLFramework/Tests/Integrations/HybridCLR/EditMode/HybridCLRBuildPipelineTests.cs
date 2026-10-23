@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using dnlib.DotNet;
 using Newtonsoft.Json;
@@ -17,39 +19,56 @@ namespace YLFramework.Tests.Integrations.HybridCLR
 {
     public class HybridCLRBuildPipelineTests
     {
-        private string root;
-        private string temporary;
-        private HybridCLRBuildProfile profile;
-        private string workspaceRoot;
-        private string releaseRoot;
+        private string _root;
+        private string _temporary;
+        private HybridCLRBuildProfile _profile;
+        private string _workspaceRoot;
+        private string _releaseRoot;
 
         [SetUp]
         public void SetUp()
         {
             var id = Guid.NewGuid().ToString("N");
-            root = "Assets/YLFramework/Tests/Fixtures/HybridCLRBuild-" + id;
+            _root = "Assets/YLFramework/Tests/Fixtures/HybridCLRBuild-" + id;
             AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Fixtures", "HybridCLRBuild-" + id);
-            temporary = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "kilo", "YLHybridCLRBuild-" + id);
-            Directory.CreateDirectory(temporary);
-            var project = ScriptableObject.CreateInstance<ResourceProject>(); project.ProjectId = "hot-" + id;
-            AssetDatabase.CreateAsset(project, root + "/Project.asset");
-            var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>(); recipe.Project = project;
-            recipe.Action = ResourceBuildAction.BuildAndPublish; recipe.AppContentCompatibilityId = "base-v1";
-            AssetDatabase.CreateAsset(recipe, root + "/Recipe.asset");
-            profile = ScriptableObject.CreateInstance<HybridCLRBuildProfile>(); profile.Recipe = recipe;
-            profile.GeneratedAssetDirectory = root + "/Generated";
-            profile.BaselineDirectory = System.IO.Path.GetFullPath("HybridCLRBaselines/" + id);
-            AssetDatabase.CreateAsset(profile, root + "/Profile.asset");
-            AssetDatabase.SaveAssetIfDirty(project); AssetDatabase.SaveAssetIfDirty(recipe); AssetDatabase.SaveAssetIfDirty(profile);
+            _temporary = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "kilo", "YLHybridCLRBuild-" + id);
+            Directory.CreateDirectory(_temporary);
+            var project = ScriptableObject.CreateInstance<ResourceProject>();
+            project.projectId = "hot-" + id;
+            AssetDatabase.CreateAsset(project, _root + "/Project.asset");
+            var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
+            recipe.project = project;
+            recipe.action = ResourceBuildAction.BuildAndPublish;
+            recipe.appContentCompatibilityId = "base-v1";
+            AssetDatabase.CreateAsset(recipe, _root + "/Recipe.asset");
+            _profile = ScriptableObject.CreateInstance<HybridCLRBuildProfile>();
+            _profile.recipe = recipe;
+            _profile.generatedAssetDirectory = _root + "/Generated";
+            _profile.baselineDirectory = System.IO.Path.GetFullPath("HybridCLRBaselines/" + id);
+            AssetDatabase.CreateAsset(_profile, _root + "/Profile.asset");
+            AssetDatabase.SaveAssetIfDirty(project);
+            AssetDatabase.SaveAssetIfDirty(recipe);
+            AssetDatabase.SaveAssetIfDirty(_profile);
         }
 
         [TearDown]
         public void TearDown()
         {
-            AssetDatabase.DeleteAsset(root);
-            if (Directory.Exists(temporary)) Directory.Delete(temporary, true);
-            if (workspaceRoot != null && Directory.Exists(workspaceRoot)) Directory.Delete(workspaceRoot, true);
-            if (releaseRoot != null && Directory.Exists(releaseRoot)) Directory.Delete(releaseRoot, true);
+            AssetDatabase.DeleteAsset(_root);
+            if (Directory.Exists(_temporary))
+            {
+                Directory.Delete(_temporary, true);
+            }
+
+            if (_workspaceRoot != null && Directory.Exists(_workspaceRoot))
+            {
+                Directory.Delete(_workspaceRoot, true);
+            }
+
+            if (_releaseRoot != null && Directory.Exists(_releaseRoot))
+            {
+                Directory.Delete(_releaseRoot, true);
+            }
         }
 
         [Test]
@@ -58,22 +77,102 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var backend = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone);
             var compatibility = PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone);
             var report = HybridCLRBuildPipeline.Validate(null);
-            Assert.That(report.Succeeded, Is.False);
+            Assert.That(report.HasSucceeded, Is.False);
             Assert.That(report.Stages.Single().Name, Is.EqualTo("Preflight"));
             Assert.That(report.Stages.Single().Error, Is.TypeOf<ArgumentNullException>());
             Assert.That(PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone), Is.EqualTo(backend));
             Assert.That(PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone), Is.EqualTo(compatibility));
         }
 
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void LegacyProfileNamesRetainBooleansRootsReferencesAndSettingsFingerprint(bool development, bool selectRoots)
+        {
+            _profile.development = development;
+            EditorUtility.SetDirty(_profile);
+            AssetDatabase.SaveAssetIfDirty(_profile);
+            var child = ScriptableObject.CreateInstance<HybridCLRBuildProfile>();
+            child.recipe = _profile.recipe;
+            child.development = development;
+            child.generatedAssetDirectory = _root + "/ChildGenerated";
+            child.baselineDirectory = _profile.baselineDirectory;
+            child.hotUpdateAssemblies = selectRoots ? new[] { "Legacy.Entry", "Legacy.Support" } : Array.Empty<string>();
+            child.baseProfile = _profile;
+            string path = _root + "/LegacyProfile.asset";
+            AssetDatabase.CreateAsset(child, path);
+            AssetDatabase.SaveAssetIfDirty(child);
+            var fingerprintMethod = typeof(HybridCLRBuildPipeline).GetMethod("SettingsFingerprint",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            string Fingerprint(HybridCLRBuildProfile value)
+            {
+                var settings = global::HybridCLR.Settings.HybridCLRSettings.instance;
+                var definitions = settings.hotUpdateAssemblyDefinitions;
+                var names = settings.hotUpdateAssemblies;
+                var preserved = settings.preserveHotUpdateAssemblies;
+                try
+                {
+                    settings.hotUpdateAssemblyDefinitions = Array.Empty<UnityEditorInternal.AssemblyDefinitionAsset>();
+                    settings.hotUpdateAssemblies = new[] { "Legacy.Entry", "Legacy.Support" };
+                    settings.preserveHotUpdateAssemblies = Array.Empty<string>();
+                    return (string)fingerprintMethod.Invoke(null, new object[] { value });
+                }
+                finally
+                {
+                    settings.hotUpdateAssemblyDefinitions = definitions;
+                    settings.hotUpdateAssemblies = names;
+                    settings.preserveHotUpdateAssemblies = preserved;
+                }
+            }
+
+            string fingerprint = Fingerprint(child);
+            var names = new[]
+            {
+                ("Recipe", "recipe"), ("Development", "development"),
+                ("GeneratedAssetDirectory", "generatedAssetDirectory"), ("BaselineDirectory", "baselineDirectory"),
+                ("HotUpdateAssemblies", "hotUpdateAssemblies"), ("BaseProfile", "baseProfile")
+            };
+            string yaml = File.ReadAllText(path);
+            foreach (var name in names)
+            {
+                yaml = Regex.Replace(yaml, @"(?m)^  " + name.Item2 + @":", "  " + name.Item1 + ":");
+                Assert.That(Regex.Matches(yaml, @"(?m)^  " + name.Item1 + @":").Count, Is.EqualTo(1));
+            }
+
+            File.WriteAllText(path, yaml, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            var reloaded = AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(path);
+            var serialized = new SerializedObject(reloaded);
+            foreach (var name in names)
+            {
+                Assert.That(serialized.FindProperty(name.Item2), Is.Not.Null, "Migration target field missing: " + name.Item2);
+            }
+
+            Assert.That(serialized.FindProperty("recipe").objectReferenceValue, Is.SameAs(_profile.recipe));
+            Assert.That(serialized.FindProperty("baseProfile").objectReferenceValue, Is.SameAs(_profile));
+            Assert.That(serialized.FindProperty("development").boolValue, Is.EqualTo(development));
+            Assert.That(reloaded.generatedAssetDirectory, Is.EqualTo(_root + "/ChildGenerated"));
+            Assert.That(reloaded.baselineDirectory, Is.EqualTo(_profile.baselineDirectory));
+            Assert.That(reloaded.hotUpdateAssemblies, Is.EqualTo(selectRoots ? new[] { "Legacy.Entry", "Legacy.Support" } : Array.Empty<string>()));
+            Assert.That(Fingerprint(reloaded), Is.EqualTo(fingerprint));
+            EditorUtility.SetDirty(reloaded);
+            AssetDatabase.SaveAssetIfDirty(reloaded);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            Assert.That(Fingerprint(AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(path)), Is.EqualTo(fingerprint));
+        }
+
         [Test]
         public void AnInvalidBuildStopsBeforeCompilePayloadPublicationAndBaseline()
         {
             var report = HybridCLRBuildPipeline.BuildBasePlayer(null, new BuildPlayerOptions());
-            Assert.That(report.Succeeded, Is.False);
+            Assert.That(report.HasSucceeded, Is.False);
             Assert.That(report.Stages.Select(s => s.Name), Is.EqualTo(new[] { "Preflight" }));
-            Assert.That(report.Release, Is.Null); Assert.That(report.Manifest, Is.Null); Assert.That(report.PlayerBuild, Is.Null);
-            Assert.That(Directory.Exists(profile.GeneratedAssetDirectory), Is.False);
-            Assert.That(Directory.Exists(profile.BaselineDirectory), Is.False);
+            Assert.That(report.Release, Is.Null);
+            Assert.That(report.Manifest, Is.Null);
+            Assert.That(report.PlayerBuild, Is.Null);
+            Assert.That(Directory.Exists(_profile.generatedAssetDirectory), Is.False);
+            Assert.That(Directory.Exists(_profile.baselineDirectory), Is.False);
         }
 
         [TestCase("library")]
@@ -84,41 +183,52 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             switch (invalid)
             {
-                case "library": profile.BaselineDirectory = "Library/HybridCLR/OldAot"; break;
-                case "temporary": profile.BaselineDirectory = "Temp/OldAot"; break;
-                case "assets": profile.BaselineDirectory = root + "/NativeBaseline"; break;
-                default: profile.BaselineDirectory = profile.GeneratedAssetDirectory; break;
+                case "library":
+                    _profile.baselineDirectory = "Library/HybridCLR/OldAot";
+                    break;
+                case "temporary":
+                    _profile.baselineDirectory = "Temp/OldAot";
+                    break;
+                case "assets":
+                    _profile.baselineDirectory = _root + "/NativeBaseline";
+                    break;
+                default:
+                    _profile.baselineDirectory = _profile.generatedAssetDirectory;
+                    break;
             }
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(profile));
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(_profile));
         }
 
         [Test]
         public void UnownedFilesAreRejectedWithoutOverwritingThem()
         {
-            Directory.CreateDirectory(profile.GeneratedAssetDirectory);
-            var file = profile.GeneratedAssetDirectory + "/user-file.bytes"; File.WriteAllText(file, "user-content");
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(profile));
+            Directory.CreateDirectory(_profile.generatedAssetDirectory);
+            var file = _profile.generatedAssetDirectory + "/user-file.bytes";
+            File.WriteAllText(file, "user-content");
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(_profile));
             Assert.That(File.ReadAllText(file), Is.EqualTo("user-content"));
         }
 
         [Test]
         public void EmptyPredeclaredPayloadFoldersRetainTheirMetaAndCanBeInitialized()
         {
-            AssetDatabase.CreateFolder(root, "Generated");
-            AssetDatabase.CreateFolder(profile.GeneratedAssetDirectory, "hybridclr");
-            AssetDatabase.CreateFolder(profile.GeneratedAssetDirectory + "/hybridclr", "assemblies");
-            var before = AssetDatabase.AssetPathToGUID(profile.GeneratedAssetDirectory + "/hybridclr/assemblies");
+            AssetDatabase.CreateFolder(_root, "Generated");
+            AssetDatabase.CreateFolder(_profile.generatedAssetDirectory, "hybridclr");
+            AssetDatabase.CreateFolder(_profile.generatedAssetDirectory + "/hybridclr", "assemblies");
+            var before = AssetDatabase.AssetPathToGUID(_profile.generatedAssetDirectory + "/hybridclr/assemblies");
             var baseline = CreateFormatFixture();
             var inputs = FixtureInputs();
-            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.CommitPayloads(profile, baseline.InitialManifest, inputs));
-            Assert.That(AssetDatabase.AssetPathToGUID(profile.GeneratedAssetDirectory + "/hybridclr/assemblies"), Is.EqualTo(before));
+            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.CommitPayloads(_profile, baseline.InitialManifest, inputs));
+            Assert.That(AssetDatabase.AssetPathToGUID(_profile.generatedAssetDirectory + "/hybridclr/assemblies"), Is.EqualTo(before));
         }
 
         [Test]
         public void UnchangedOwnedBytesDoNotAttemptAnotherAtomicReplacement()
         {
-            var bytes = new byte[] { 1, 2, 3 }; var path = temporary + "/owned.bytes"; File.WriteAllBytes(path, bytes);
-            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.WriteOwned(temporary, "owned.bytes", bytes,
+            var bytes = new byte[] { 1, 2, 3 };
+            var path = _temporary + "/owned.bytes";
+            File.WriteAllBytes(path, bytes);
+            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.WriteOwned(_temporary, "owned.bytes", bytes,
                 (_, _) => throw new InvalidOperationException("An unchanged payload should not be replaced."), _ => { }));
             CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
         }
@@ -126,37 +236,44 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void AtomicReplaceRetriesOnlyTheKnownNonDestructiveWindowsError()
         {
-            var original = new byte[] { 1, 2, 3 }; var replacement = new byte[] { 4, 5, 6 };
-            File.WriteAllBytes(temporary + "/owned.bytes", original); var calls = 0;
-            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.WriteOwned(temporary, "owned.bytes", replacement, (from, to) =>
+            var original = new byte[] { 1, 2, 3 };
+            var replacement = new byte[] { 4, 5, 6 };
+            File.WriteAllBytes(_temporary + "/owned.bytes", original);
+            var calls = 0;
+            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.WriteOwned(_temporary, "owned.bytes", replacement, (from, to) =>
             {
                 calls++;
-                if (calls <= 2) throw new IOException("Intentional Win32 1175 atomic replacement failure.", unchecked((int)0x80070497));
+                if (calls <= 2)
+                {
+                    throw new IOException("Intentional Win32 1175 atomic replacement failure.", unchecked((int)0x80070497));
+                }
+
                 File.Replace(from, to, null);
             }, _ => { }));
-            Assert.That(calls, Is.EqualTo(3)); CollectionAssert.AreEqual(replacement, File.ReadAllBytes(temporary + "/owned.bytes"));
+            Assert.That(calls, Is.EqualTo(3));
+            CollectionAssert.AreEqual(replacement, File.ReadAllBytes(_temporary + "/owned.bytes"));
         }
 
         [Test]
         public void AnEmptyStartupPackageInfoGitFieldIsBackedByExactManifestAndLockEvidence()
         {
-            const string url = "https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3";
-            const string hash = "6cadd24d101f4cbd00cd80190106f6621132d24d";
-            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", url, "git", url, hash, "", ""));
-            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", url, "git", url, new string('a', 40), "", ""));
-            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", url, "git", url, hash, "v7.3.0", hash));
-            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Embedded", url, "git", url, hash, "", ""));
+            const string Url = "https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3";
+            const string Hash = "6cadd24d101f4cbd00cd80190106f6621132d24d";
+            Assert.DoesNotThrow(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", Url, "git", Url, Hash, "", ""));
+            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", Url, "git", Url, new string('a', 40), "", ""));
+            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Git", Url, "git", Url, Hash, "v7.3.0", Hash));
+            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateGitProvenance("9.0.3", "Embedded", Url, "git", Url, Hash, "", ""));
         }
 
         [Test]
         public void SuccessfulBuildReportWithoutAnExecutableAndNativeAssemblyIsNotPlayerSuccess()
         {
-            var exe = temporary + "/NotARealPlayer.exe";
+            var exe = _temporary + "/NotARealPlayer.exe";
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOutputs(exe, exe));
             File.WriteAllBytes(exe, new byte[] { 1, 2, 3 });
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOutputs(exe, exe));
-            File.WriteAllBytes(temporary + "/GameAssembly.dll", new byte[] { 4, 5, 6 });
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOutputs(exe, temporary + "/Other.exe"));
+            File.WriteAllBytes(_temporary + "/GameAssembly.dll", new byte[] { 4, 5, 6 });
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOutputs(exe, _temporary + "/Other.exe"));
         }
 
         [Test]
@@ -168,10 +285,14 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             new AssemblyDefUser("GenericRoot", new Version(1, 0, 0, 0)).Modules.Add(root);
             new AssemblyDefUser("PayloadA", new Version(1, 0, 0, 0)).Modules.Add(first);
             new AssemblyDefUser("PayloadB", new Version(1, 0, 0, 0)).Modules.Add(second);
-            var box = new TypeDefUser("Fixture", "Box`1", root.CorLibTypes.Object.TypeDefOrRef); root.Types.Add(box);
-            var nested = new TypeDefUser("Fixture", "Nested`1", root.CorLibTypes.Object.TypeDefOrRef); root.Types.Add(nested);
-            var a = new TypeDefUser("Shared", "Payload", first.CorLibTypes.GetTypeRef("System", "ValueType")); first.Types.Add(a);
-            var b = new TypeDefUser("Shared", "Payload", second.CorLibTypes.GetTypeRef("System", "ValueType")); second.Types.Add(b);
+            var box = new TypeDefUser("Fixture", "Box`1", root.CorLibTypes.Object.TypeDefOrRef);
+            root.Types.Add(box);
+            var nested = new TypeDefUser("Fixture", "Nested`1", root.CorLibTypes.Object.TypeDefOrRef);
+            root.Types.Add(nested);
+            var a = new TypeDefUser("Shared", "Payload", first.CorLibTypes.GetTypeRef("System", "ValueType"));
+            first.Types.Add(a);
+            var b = new TypeDefUser("Shared", "Payload", second.CorLibTypes.GetTypeRef("System", "ValueType"));
+            second.Types.Add(b);
             var left = new global::HybridCLR.Meta.GenericClass(box, new System.Collections.Generic.List<TypeSig>
                 { new GenericInstSig(new ClassSig(nested), new ValueTypeSig(a)) });
             var right = new global::HybridCLR.Meta.GenericClass(box, new System.Collections.Generic.List<TypeSig>
@@ -191,7 +312,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             using var module = new ModuleDefUser("Fixture.dll") { Kind = ModuleKind.Dll };
             new AssemblyDefUser("Fixture", new Version(1, 0, 0, 0)).Modules.Add(module);
-            var type = new TypeDefUser("Fixture", "Box`1", module.CorLibTypes.Object.TypeDefOrRef); module.Types.Add(type);
+            var type = new TypeDefUser("Fixture", "Box`1", module.CorLibTypes.Object.TypeDefOrRef);
+            module.Types.Add(type);
             var first = new global::HybridCLR.Meta.GenericClass(type, new System.Collections.Generic.List<TypeSig> { module.CorLibTypes.Int32 });
             var second = new global::HybridCLR.Meta.GenericClass(type, new System.Collections.Generic.List<TypeSig> { module.CorLibTypes.Int64 });
             Assert.That(HybridCLRBuildPipeline.NativeTypeRequirement(first), Is.Not.EqualTo(HybridCLRBuildPipeline.NativeTypeRequirement(second)));
@@ -200,15 +322,15 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void MissingNativeToolsFailBeforeAnInstallerOrPlayerBuildIsStarted()
         {
-            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateNativeToolchain(temporary + "/missing.exe", temporary));
+            Assert.Throws<InvalidOperationException>(() => HybridCLRBuildPipeline.ValidateNativeToolchain(_temporary + "/missing.exe", _temporary));
         }
 
         [Test]
         public void PlayerOptionsCannotBuildAnotherTargetOrOverwriteAnotherPlayer()
         {
             var options = new BuildPlayerOptions { target = BuildTarget.Android, targetGroup = BuildTargetGroup.Android };
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOptions(profile, options));
-            Assert.That(Directory.Exists(profile.BaselineDirectory), Is.False);
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePlayerOptions(_profile, options));
+            Assert.That(Directory.Exists(_profile.baselineDirectory), Is.False);
         }
 
         [Test]
@@ -222,9 +344,9 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void UnrelatedEmptyGeneratedDirectoryIsNotClaimed()
         {
-            Directory.CreateDirectory(profile.GeneratedAssetDirectory + "/UserData");
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(profile));
-            Assert.That(Directory.Exists(profile.GeneratedAssetDirectory + "/UserData"), Is.True);
+            Directory.CreateDirectory(_profile.generatedAssetDirectory + "/UserData");
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidateInputPaths(_profile));
+            Assert.That(Directory.Exists(_profile.generatedAssetDirectory + "/UserData"), Is.True);
         }
 
         [TestCase("7.3.0", "9.0.3", "9.0.3")]
@@ -239,17 +361,18 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void RepeatedPayloadCommitPreservesGuidAndBadInputCannotReplaceTheManifest()
         {
-            var baseline = CreateFormatFixture(); var inputs = FixtureInputs();
-            HybridCLRBuildPipeline.CommitPayloads(profile, baseline.InitialManifest, inputs);
+            var baseline = CreateFormatFixture();
+            var inputs = FixtureInputs();
+            HybridCLRBuildPipeline.CommitPayloads(_profile, baseline.InitialManifest, inputs);
             var address = baseline.InitialManifest.HotUpdateAssemblies[0].Address;
-            var path = profile.GeneratedAssetDirectory + "/" + address;
+            var path = _profile.generatedAssetDirectory + "/" + address;
             var guid = AssetDatabase.AssetPathToGUID(path);
-            var manifestPath = profile.GeneratedAssetDirectory + "/" + HybridCLRManifest.ManifestPath;
+            var manifestPath = _profile.generatedAssetDirectory + "/" + HybridCLRManifest.ManifestPath;
             var original = File.ReadAllBytes(manifestPath);
-            HybridCLRBuildPipeline.CommitPayloads(profile, baseline.InitialManifest, inputs);
+            HybridCLRBuildPipeline.CommitPayloads(_profile, baseline.InitialManifest, inputs);
             Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(guid));
             File.WriteAllBytes(inputs.HotUpdate.Single().Path, new byte[] { 1, 2, 3 });
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.CommitPayloads(profile, baseline.InitialManifest, inputs));
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.CommitPayloads(_profile, baseline.InitialManifest, inputs));
             CollectionAssert.AreEqual(original, File.ReadAllBytes(manifestPath));
             Assert.That(AssetImporter.GetAtPath(path).assetBundleName, Is.Empty);
         }
@@ -257,18 +380,19 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void RealDllBytesPublishThroughResourceAndCancellationPreservesTheOldRelease()
         {
-            var baseline = CreateFormatFixture(); var inputs = FixtureInputs();
-            HybridCLRBuildPipeline.CommitPayloads(profile, baseline.InitialManifest, inputs);
+            var baseline = CreateFormatFixture();
+            var inputs = FixtureInputs();
+            HybridCLRBuildPipeline.CommitPayloads(_profile, baseline.InitialManifest, inputs);
             ConfigureResourceSelection();
             var report = new HybridCLRBuildReport { Manifest = baseline.InitialManifest };
-            HybridCLRBuildPipeline.PublishResources(report, profile, default, null);
+            HybridCLRBuildPipeline.PublishResources(report, _profile, default, null);
             Assert.That(report.Release, Is.Not.Null, report.ResourceBuild?.Summary);
             var digest = report.Release.Catalog.CatalogDigest;
             var oldCatalog = File.ReadAllBytes(report.Release.DirectoryPath + "/resource-catalog.json");
             var canceled = new HybridCLRBuildReport { Manifest = baseline.InitialManifest };
-            Assert.Throws<OperationCanceledException>(() => HybridCLRBuildPipeline.PublishResources(canceled, profile, new CancellationToken(true), null));
+            Assert.Throws<OperationCanceledException>(() => HybridCLRBuildPipeline.PublishResources(canceled, _profile, new CancellationToken(true), null));
             Assert.That(canceled.Release, Is.Null);
-            Assert.That(ResourcePublisher.ReadCurrent(profile.Recipe.Project, profile.Recipe.Target, "base-v1").Catalog.CatalogDigest, Is.EqualTo(digest));
+            Assert.That(ResourcePublisher.ReadCurrent(_profile.recipe.project, _profile.recipe.target, "base-v1").Catalog.CatalogDigest, Is.EqualTo(digest));
             CollectionAssert.AreEqual(oldCatalog, File.ReadAllBytes(report.Release.DirectoryPath + "/resource-catalog.json"));
         }
 
@@ -277,9 +401,9 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             var baseline = CreateFormatFixture();
             var changed = WriteAssembly("Hot.Entry", "Base");
-            var inputs = HybridCLRAssemblyAnalysis.Analyze(new[] { changed }, new[] { temporary + "/Aot/Base.dll" });
+            var inputs = HybridCLRAssemblyAnalysis.Analyze(new[] { changed }, new[] { _temporary + "/Aot/Base.dll" });
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(baseline, inputs));
-            var renamed = HybridCLRAssemblyAnalysis.Analyze(new[] { WriteAssembly("Hot.Other") }, new[] { temporary + "/Aot/Base.dll" });
+            var renamed = HybridCLRAssemblyAnalysis.Analyze(new[] { WriteAssembly("Hot.Other") }, new[] { _temporary + "/Aot/Base.dll" });
             Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(baseline, renamed));
         }
 
@@ -287,8 +411,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         public void ProjectManifestIncludesItsDependencyClosureButNotAnotherProject()
         {
             var inputs = ProjectInputs();
-            SelectProjectAssemblies(profile, "Project.A");
-            var manifest = ProjectManifest(profile, inputs);
+            SelectProjectAssemblies(_profile, "Project.A");
+            var manifest = ProjectManifest(_profile, inputs);
             Assert.That(manifest.HotUpdateAssemblies.Select(a => a.Name), Is.EqualTo(new[] { "Shared", "Project.A" }));
             Assert.That(manifest.HotUpdateAssemblies.Single(a => a.Name == "Project.A").Dependencies, Is.EqualTo(new[] { "Shared" }));
             Assert.That(inputs.HotUpdate.Select(a => a.Name), Does.Contain("Project.B"), "Selecting a project must not change the native registration input.");
@@ -299,10 +423,10 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             var inputs = HybridCLRAssemblyAnalysis.Analyze(new[] { WriteAssembly("Project.A"), WriteAssembly("Project.B", "Base") },
                 new[] { WriteAssembly("Base") });
-            SelectProjectAssemblies(profile, "Project.A");
-            Assert.That(ProjectManifest(profile, inputs).AotMetadata, Is.Empty);
-            SelectProjectAssemblies(profile, "Project.B");
-            Assert.That(ProjectManifest(profile, inputs).AotMetadata.Select(a => a.Name), Is.EqualTo(new[] { "Base" }));
+            SelectProjectAssemblies(_profile, "Project.A");
+            Assert.That(ProjectManifest(_profile, inputs).AotMetadata, Is.Empty);
+            SelectProjectAssemblies(_profile, "Project.B");
+            Assert.That(ProjectManifest(_profile, inputs).AotMetadata.Select(a => a.Name), Is.EqualTo(new[] { "Base" }));
         }
 
         [TestCase("unknown")]
@@ -310,37 +434,44 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [TestCase("case-collision")]
         public void InvalidProjectAssemblyRootsAreNotSilentlyPublishedAsTheGlobalSet(string invalid)
         {
-            SelectProjectAssemblies(profile, invalid == "unknown" ? new[] { "Not.Registered" } :
+            SelectProjectAssemblies(_profile, invalid == "unknown" ? new[] { "Not.Registered" } :
                 invalid == "duplicate" ? new[] { "Project.A", "Project.A" } : new[] { "Project.A", "project.a" });
-            Assert.Throws<InvalidDataException>(() => ProjectManifest(profile, ProjectInputs()));
+            Assert.Throws<InvalidDataException>(() => ProjectManifest(_profile, ProjectInputs()));
         }
 
         [Test]
         public void IndependentProjectsCommitOnlyTheirCodeAndPreserveSharedAssemblyBytes()
         {
             var inputs = ProjectInputs();
-            SelectProjectAssemblies(profile, "Project.A");
-            var first = ProjectManifest(profile, inputs);
-            HybridCLRBuildPipeline.CommitPayloads(profile, first, inputs);
-            var sharedPath = profile.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false);
+            SelectProjectAssemblies(_profile, "Project.A");
+            var first = ProjectManifest(_profile, inputs);
+            HybridCLRBuildPipeline.CommitPayloads(_profile, first, inputs);
+            var sharedPath = _profile.generatedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false);
             var sharedBytes = File.ReadAllBytes(sharedPath);
             var sharedGuid = AssetDatabase.AssetPathToGUID(sharedPath);
 
-            var otherProject = ScriptableObject.CreateInstance<ResourceProject>(); otherProject.ProjectId = "second-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateAsset(otherProject, root + "/OtherProject.asset");
-            var otherRecipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>(); otherRecipe.Project = otherProject;
-            otherRecipe.Action = ResourceBuildAction.BuildAndPublish; otherRecipe.AppContentCompatibilityId = "base-v1";
-            AssetDatabase.CreateAsset(otherRecipe, root + "/OtherRecipe.asset");
-            var other = ScriptableObject.CreateInstance<HybridCLRBuildProfile>(); other.Recipe = otherRecipe;
-            other.GeneratedAssetDirectory = root + "/OtherGenerated"; other.BaselineDirectory = profile.BaselineDirectory;
-            AssetDatabase.CreateAsset(other, root + "/OtherProfile.asset");
+            var otherProject = ScriptableObject.CreateInstance<ResourceProject>();
+            otherProject.projectId = "second-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateAsset(otherProject, _root + "/OtherProject.asset");
+            var otherRecipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
+            otherRecipe.project = otherProject;
+            otherRecipe.action = ResourceBuildAction.BuildAndPublish;
+            otherRecipe.appContentCompatibilityId = "base-v1";
+            AssetDatabase.CreateAsset(otherRecipe, _root + "/OtherRecipe.asset");
+            var other = ScriptableObject.CreateInstance<HybridCLRBuildProfile>();
+            other.recipe = otherRecipe;
+            other.generatedAssetDirectory = _root + "/OtherGenerated";
+            other.baselineDirectory = _profile.baselineDirectory;
+            AssetDatabase.CreateAsset(other, _root + "/OtherProfile.asset");
             SelectProjectAssemblies(other, "Project.B");
-            AssetDatabase.SaveAssetIfDirty(otherProject); AssetDatabase.SaveAssetIfDirty(otherRecipe); AssetDatabase.SaveAssetIfDirty(other);
+            AssetDatabase.SaveAssetIfDirty(otherProject);
+            AssetDatabase.SaveAssetIfDirty(otherRecipe);
+            AssetDatabase.SaveAssetIfDirty(other);
             HybridCLRBuildPipeline.CommitPayloads(other, ProjectManifest(other, inputs), inputs);
 
-            Assert.That(File.Exists(profile.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.B", false)), Is.False);
-            Assert.That(File.Exists(other.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.A", false)), Is.False);
-            CollectionAssert.AreEqual(sharedBytes, File.ReadAllBytes(other.GeneratedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false)));
+            Assert.That(File.Exists(_profile.generatedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.B", false)), Is.False);
+            Assert.That(File.Exists(other.generatedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Project.A", false)), Is.False);
+            CollectionAssert.AreEqual(sharedBytes, File.ReadAllBytes(other.generatedAssetDirectory + "/" + HybridCLRManifest.PayloadAddress("Shared", false)));
             Assert.That(AssetDatabase.AssetPathToGUID(sharedPath), Is.EqualTo(sharedGuid));
             CollectionAssert.AreEqual(sharedBytes, File.ReadAllBytes(sharedPath));
         }
@@ -349,15 +480,15 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         public void SharedBaseBindingRetainsOwnerIdentityWhileChildKeepsItsOwnProject()
         {
             CreateFormatFixture();
-            var baseline = HybridCLRBuildBaseline.Read(temporary);
-            profile.BaselineDirectory = temporary;
+            var baseline = HybridCLRBuildBaseline.Read(_temporary);
+            _profile.baselineDirectory = _temporary;
             var child = ChildProfile();
-            SetBaseProfile(child, profile);
-            var original = File.ReadAllBytes(temporary + "/baseline.json");
+            SetBaseProfile(child, _profile);
+            var original = File.ReadAllBytes(_temporary + "/baseline.json");
             Assert.DoesNotThrow(() => ValidateBinding(child, baseline));
-            Assert.That(child.Recipe.Project.ProjectId, Is.Not.EqualTo(baseline.InitialManifest.ProjectId));
-            Assert.That(baseline.ProfileGuid, Is.EqualTo(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile))));
-            CollectionAssert.AreEqual(original, File.ReadAllBytes(temporary + "/baseline.json"));
+            Assert.That(child.recipe.project.projectId, Is.Not.EqualTo(baseline.InitialManifest.ProjectId));
+            Assert.That(baseline.ProfileGuid, Is.EqualTo(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(_profile))));
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(_temporary + "/baseline.json"));
         }
 
         [TestCase("unbound")]
@@ -369,18 +500,30 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         public void ASharedBaseRequiresExplicitUnambiguousMatchingBinding(string invalid)
         {
             CreateFormatFixture();
-            var baseline = HybridCLRBuildBaseline.Read(temporary);
-            profile.BaselineDirectory = temporary;
+            var baseline = HybridCLRBuildBaseline.Read(_temporary);
+            _profile.baselineDirectory = _temporary;
             var child = ChildProfile();
-            SetBaseProfile(child, profile);
+            SetBaseProfile(child, _profile);
             switch (invalid)
             {
-                case "unbound": SetBaseProfile(child, null); break;
-                case "self": SetBaseProfile(child, child); break;
-                case "chain": SetBaseProfile(profile, child); break;
-                case "directory": child.BaselineDirectory += "-different"; break;
-                case "compatibility": child.Recipe.AppContentCompatibilityId = "other-base"; break;
-                default: child.Development = !profile.Development; break;
+                case "unbound":
+                    SetBaseProfile(child, null);
+                    break;
+                case "self":
+                    SetBaseProfile(child, child);
+                    break;
+                case "chain":
+                    SetBaseProfile(_profile, child);
+                    break;
+                case "directory":
+                    child.baselineDirectory += "-different";
+                    break;
+                case "compatibility":
+                    child.recipe.appContentCompatibilityId = "other-base";
+                    break;
+                default:
+                    child.development = !_profile.development;
+                    break;
             }
             Assert.Throws<InvalidDataException>(() => ValidateBinding(child, baseline));
         }
@@ -390,13 +533,23 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             var baseline = CreateFormatFixture();
             var other = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Hot.Unregistered"));
-            File.Move(other.Path, temporary + "/HotUpdate/Hot.Unregistered.dll");
-            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile { Path = "HotUpdate/Hot.Unregistered.dll",
-                Identity = other.Identity, Mvid = other.Mvid, Length = other.Length, Sha256 = other.Sha256 }).ToArray();
+            File.Move(other.Path, _temporary + "/HotUpdate/Hot.Unregistered.dll");
+            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile
+            {
+                Path = "HotUpdate/Hot.Unregistered.dll",
+                Identity = other.Identity,
+                Mvid = other.Mvid,
+                Length = other.Length,
+                Sha256 = other.Sha256
+            }).ToArray();
             var bytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(baseline));
-            File.WriteAllBytes(temporary + "/baseline.json", bytes);
-            File.WriteAllText(temporary + "/complete.json", JsonConvert.SerializeObject(new { schemaVersion = 1, baselineSha256 = HybridCLRManifest.Hash(bytes) }));
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildBaseline.Read(temporary));
+            File.WriteAllBytes(_temporary + "/baseline.json", bytes);
+            File.WriteAllText(_temporary + "/complete.json", JsonConvert.SerializeObject(new
+            {
+                schemaVersion = 1,
+                baselineSha256 = HybridCLRManifest.Hash(bytes)
+            }));
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildBaseline.Read(_temporary));
         }
 
         [TestCase(true)]
@@ -405,44 +558,74 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             var baseline = CreateFormatFixture();
             var other = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Hot.Other", "Base"));
-            var otherPath = temporary + "/HotUpdate/Hot.Other.dll"; File.Move(other.Path, otherPath);
-            var aot = HybridCLRAssemblyAnalysis.Read(temporary + "/Aot/Base.dll");
+            var otherPath = _temporary + "/HotUpdate/Hot.Other.dll";
+            File.Move(other.Path, otherPath);
+            var aot = HybridCLRAssemblyAnalysis.Read(_temporary + "/Aot/Base.dll");
             HybridCLRPayload Payload(HybridCLRAssemblyRecord value, bool metadata) => new HybridCLRPayload
             {
-                Name = value.Name, Identity = value.Identity, Mvid = value.Mvid, Length = value.Length, Sha256 = value.Sha256,
-                Address = HybridCLRManifest.PayloadAddress(value.Name, metadata), References = value.References
+                Name = value.Name,
+                Identity = value.Identity,
+                Mvid = value.Mvid,
+                Length = value.Length,
+                Sha256 = value.Sha256,
+                Address = HybridCLRManifest.PayloadAddress(value.Name, metadata),
+                References = value.References
             };
             baseline.InitialManifest.HotUpdateAssemblies = baseline.InitialManifest.HotUpdateAssemblies.Append(Payload(other, false)).ToArray();
             baseline.InitialManifest.AotMetadata = registered ? new[] { Payload(aot, true) } : Array.Empty<HybridCLRPayload>();
             baseline.InitialManifest.Seal();
-            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile { Path = "HotUpdate/Hot.Other.dll", Identity = other.Identity,
-                Mvid = other.Mvid, Length = other.Length, Sha256 = other.Sha256 }).ToArray();
+            baseline.Files = baseline.Files.Append(new HybridCLRBaselineFile
+            {
+                Path = "HotUpdate/Hot.Other.dll",
+                Identity = other.Identity,
+                Mvid = other.Mvid,
+                Length = other.Length,
+                Sha256 = other.Sha256
+            }).ToArray();
             var bytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(baseline));
-            File.WriteAllBytes(temporary + "/baseline.json", bytes);
-            File.WriteAllText(temporary + "/complete.json", JsonConvert.SerializeObject(new { schemaVersion = 1, baselineSha256 = HybridCLRManifest.Hash(bytes) }));
-            var frozen = HybridCLRBuildBaseline.Read(temporary);
+            File.WriteAllBytes(_temporary + "/baseline.json", bytes);
+            File.WriteAllText(_temporary + "/complete.json", JsonConvert.SerializeObject(new
+            {
+                schemaVersion = 1,
+                baselineSha256 = HybridCLRManifest.Hash(bytes)
+            }));
+            var frozen = HybridCLRBuildBaseline.Read(_temporary);
             var patch = HybridCLRAssemblyAnalysis.Analyze(new[] { otherPath }, new[] { aot.Path });
-            if (registered) Assert.DoesNotThrow(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
-            else Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
+            if (registered)
+            {
+                Assert.DoesNotThrow(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
+            }
+            else
+            {
+                Assert.Throws<InvalidDataException>(() => HybridCLRBuildPipeline.ValidatePatchSet(frozen, patch));
+            }
         }
 
         private HybridCLRBuildProfile ChildProfile()
         {
-            var project = ScriptableObject.CreateInstance<ResourceProject>(); project.ProjectId = "child-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateAsset(project, root + "/ChildProject.asset");
-            var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>(); recipe.Project = project;
-            recipe.Target = profile.Recipe.Target; recipe.AppContentCompatibilityId = profile.Recipe.AppContentCompatibilityId;
-            AssetDatabase.CreateAsset(recipe, root + "/ChildRecipe.asset");
-            var child = ScriptableObject.CreateInstance<HybridCLRBuildProfile>(); child.Recipe = recipe;
-            child.GeneratedAssetDirectory = root + "/ChildGenerated"; child.BaselineDirectory = profile.BaselineDirectory; child.Development = profile.Development;
-            AssetDatabase.CreateAsset(child, root + "/ChildProfile.asset");
-            AssetDatabase.SaveAssetIfDirty(project); AssetDatabase.SaveAssetIfDirty(recipe); AssetDatabase.SaveAssetIfDirty(child);
+            var project = ScriptableObject.CreateInstance<ResourceProject>();
+            project.projectId = "child-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateAsset(project, _root + "/ChildProject.asset");
+            var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
+            recipe.project = project;
+            recipe.target = _profile.recipe.target;
+            recipe.appContentCompatibilityId = _profile.recipe.appContentCompatibilityId;
+            AssetDatabase.CreateAsset(recipe, _root + "/ChildRecipe.asset");
+            var child = ScriptableObject.CreateInstance<HybridCLRBuildProfile>();
+            child.recipe = recipe;
+            child.generatedAssetDirectory = _root + "/ChildGenerated";
+            child.baselineDirectory = _profile.baselineDirectory;
+            child.development = _profile.development;
+            AssetDatabase.CreateAsset(child, _root + "/ChildProfile.asset");
+            AssetDatabase.SaveAssetIfDirty(project);
+            AssetDatabase.SaveAssetIfDirty(recipe);
+            AssetDatabase.SaveAssetIfDirty(child);
             return child;
         }
 
         private static void SetBaseProfile(HybridCLRBuildProfile selected, HybridCLRBuildProfile owner)
         {
-            var field = typeof(HybridCLRBuildProfile).GetField("BaseProfile");
+            var field = typeof(HybridCLRBuildProfile).GetField("baseProfile");
             Assert.That(field, Is.Not.Null, "A different resource project needs an explicit binding to the native base owner.");
             field.SetValue(selected, owner);
         }
@@ -451,9 +634,15 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             var method = typeof(HybridCLRBuildPipeline).GetMethod("ValidateBaselineBinding", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(method, Is.Not.Null);
-            try { method.Invoke(null, new object[] { selected, baseline, baseline.SettingsFingerprint }); }
+            try
+            {
+                method.Invoke(null, new object[] { selected, baseline, baseline.SettingsFingerprint });
+            }
             catch (TargetInvocationException error) when (error.InnerException != null)
-            { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+            {
+                ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
         }
 
         private HybridCLRAssemblySet ProjectInputs() => HybridCLRAssemblyAnalysis.Analyze(new[]
@@ -461,7 +650,7 @@ namespace YLFramework.Tests.Integrations.HybridCLR
 
         private static void SelectProjectAssemblies(HybridCLRBuildProfile selected, params string[] roots)
         {
-            var field = typeof(HybridCLRBuildProfile).GetField("HotUpdateAssemblies");
+            var field = typeof(HybridCLRBuildProfile).GetField("hotUpdateAssemblies");
             Assert.That(field, Is.Not.Null, "A profile must be able to select its own roots from the registered global set.");
             field.SetValue(selected, roots);
         }
@@ -474,21 +663,30 @@ namespace YLFramework.Tests.Integrations.HybridCLR
                     .Invoke(null, new object[] { selected, inputs });
             }
             catch (TargetInvocationException error) when (error.InnerException != null)
-            { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+            {
+                ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
         }
 
-        private HybridCLRAssemblySet FixtureInputs() => HybridCLRAssemblyAnalysis.Analyze(new[] { temporary + "/HotUpdate/Hot.Entry.dll" }, new[] { temporary + "/Aot/Base.dll" });
+        private HybridCLRAssemblySet FixtureInputs() => HybridCLRAssemblyAnalysis.Analyze(new[] { _temporary + "/HotUpdate/Hot.Entry.dll" }, new[] { _temporary + "/Aot/Base.dll" });
 
         private void ConfigureResourceSelection()
         {
-            var project = profile.Recipe.Project;
-            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(profile.GeneratedAssetDirectory) });
-            project.Groups.Add(new ResourceGroup { Id = "hotupdate", Selections = new System.Collections.Generic.List<ResourceSelection>
-                { new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(profile.GeneratedAssetDirectory + "/hybridclr"), Extensions = new[] { ".bytes", ".json" } } } });
-            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
-            workspaceRoot = System.IO.Path.GetDirectoryName(ResourceBundleBuilder.GetWorkspacePath(project, profile.Recipe.Target));
-            releaseRoot = System.IO.Path.GetFullPath("AssetBundles/YLFramework/" + project.ProjectId + "/" + profile.Recipe.Target);
-            Assert.That(Directory.Exists(workspaceRoot), Is.False); Assert.That(Directory.Exists(releaseRoot), Is.False);
+            var project = _profile.recipe.project;
+            project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(_profile.generatedAssetDirectory) });
+            project.groups.Add(new ResourceGroup
+            {
+                id = "hotupdate",
+                selections = new System.Collections.Generic.List<ResourceSelection>
+                { new ResourceSelection { guid = AssetDatabase.AssetPathToGUID(_profile.generatedAssetDirectory + "/hybridclr"), extensions = new[] { ".bytes", ".json" } } }
+            });
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
+            _workspaceRoot = System.IO.Path.GetDirectoryName(ResourceBundleBuilder.GetWorkspacePath(project, _profile.recipe.target));
+            _releaseRoot = System.IO.Path.GetFullPath("AssetBundles/YLFramework/" + project.projectId + "/" + _profile.recipe.target);
+            Assert.That(Directory.Exists(_workspaceRoot), Is.False);
+            Assert.That(Directory.Exists(_releaseRoot), Is.False);
         }
 
         [Test]
@@ -511,65 +709,94 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var baseline = CreateFormatFixture();
             switch (invalid)
             {
-                case "missing-marker": File.Delete(temporary + "/complete.json"); break;
-                case "changed-dll": File.AppendAllText(temporary + "/Aot/Base.dll", "corrupted"); break;
-                case "changed-native-file": File.AppendAllText(temporary + "/Generated/MethodBridge.inc", "changed"); break;
-                case "unknown-file": File.WriteAllText(temporary + "/unknown.dll", "unknown"); break;
-                default: File.AppendAllText(temporary + "/baseline.json", " "); break;
+                case "missing-marker":
+                    File.Delete(_temporary + "/complete.json");
+                    break;
+                case "changed-dll":
+                    File.AppendAllText(_temporary + "/Aot/Base.dll", "corrupted");
+                    break;
+                case "changed-native-file":
+                    File.AppendAllText(_temporary + "/Generated/MethodBridge.inc", "changed");
+                    break;
+                case "unknown-file":
+                    File.WriteAllText(_temporary + "/unknown.dll", "unknown");
+                    break;
+                default:
+                    File.AppendAllText(_temporary + "/baseline.json", " ");
+                    break;
             }
-            Assert.Throws<InvalidDataException>(() => HybridCLRBuildBaseline.Read(temporary));
-            Assert.That(File.ReadAllText(temporary + "/Generated/MethodBridge.inc"), Does.StartWith("format-test-only"));
+            Assert.Throws<InvalidDataException>(() => HybridCLRBuildBaseline.Read(_temporary));
+            Assert.That(File.ReadAllText(_temporary + "/Generated/MethodBridge.inc"), Does.StartWith("format-test-only"));
         }
 
         [Test]
         public void CompleteFormatFixtureRetainsTheExactDllIdentityAndNativeFileHash()
         {
             var baseline = CreateFormatFixture();
-            var loaded = HybridCLRBuildBaseline.Read(temporary);
+            var loaded = HybridCLRBuildBaseline.Read(_temporary);
             Assert.That(loaded.PlayerBuildHash, Is.EqualTo(baseline.PlayerBuildHash));
             Assert.That(loaded.Files.Single(f => f.Path == "Aot/Base.dll").Identity, Is.EqualTo("Base, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"));
-            Assert.That(loaded.Root, Is.EqualTo(System.IO.Path.GetFullPath(temporary)));
+            Assert.That(loaded.Root, Is.EqualTo(System.IO.Path.GetFullPath(_temporary)));
         }
 
         private string WriteAssembly(string name, params string[] dependencies)
         {
-            var path = temporary + "/" + name + ".dll";
+            var path = _temporary + "/" + name + ".dll";
             using var module = new ModuleDefUser(name + ".dll") { Kind = ModuleKind.Dll };
             new AssemblyDefUser(name, new Version(1, 0, 0, 0)).Modules.Add(module);
             foreach (var dependency in dependencies)
+            {
                 module.Types.Add(new TypeDefUser("Fixture", "Uses" + module.Types.Count,
                     new TypeRefUser(module, "Fixture", "Dependency", new AssemblyRefUser(dependency, new Version(1, 0, 0, 0)))));
-            module.Write(path); return path;
+            }
+
+            module.Write(path);
+            return path;
         }
 
         // 仅测试冻结格式完整性，绝不把此 fixture 作为真实 Player/IL2CPP 成功证据。
         private HybridCLRBuildBaseline CreateFormatFixture()
         {
-            Directory.CreateDirectory(temporary + "/Aot"); Directory.CreateDirectory(temporary + "/Generated");
-            var aot = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Base")); File.Move(aot.Path, temporary + "/Aot/Base.dll");
+            Directory.CreateDirectory(_temporary + "/Aot");
+            Directory.CreateDirectory(_temporary + "/Generated");
+            var aot = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Base"));
+            File.Move(aot.Path, _temporary + "/Aot/Base.dll");
             var hot = HybridCLRAssemblyAnalysis.Read(WriteAssembly("Hot.Entry"));
             var manifest = new HybridCLRManifest
             {
-                ProjectId = profile.Recipe.Project.ProjectId, AppContentCompatibilityId = "base-v1", UnityVersion = Application.unityVersion,
+                ProjectId = _profile.recipe.project.projectId,
+                AppContentCompatibilityId = "base-v1",
+                UnityVersion = Application.unityVersion,
                 HotUpdateAssemblies = new[] { new HybridCLRPayload { Name = hot.Name, Identity = hot.Identity, Mvid = hot.Mvid,
                     Address = HybridCLRManifest.PayloadAddress(hot.Name, false), Length = hot.Length, Sha256 = hot.Sha256 } }
             };
             manifest.Seal();
-            Directory.CreateDirectory(temporary + "/HotUpdate");
-            File.Move(hot.Path, temporary + "/HotUpdate/" + hot.Name + ".dll");
+            Directory.CreateDirectory(_temporary + "/HotUpdate");
+            File.Move(hot.Path, _temporary + "/HotUpdate/" + hot.Name + ".dll");
             var bridge = System.Text.Encoding.UTF8.GetBytes("format-test-only: not a native Player receipt");
-            foreach (var name in HybridCLRBuildBaseline.GeneratedNames) File.WriteAllBytes(temporary + "/Generated/" + name, bridge);
+            foreach (var name in HybridCLRBuildBaseline.GeneratedNames)
+            {
+                File.WriteAllBytes(_temporary + "/Generated/" + name, bridge);
+            }
+
             var baseline = new HybridCLRBuildBaseline
             {
-                ProfileGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(profile)),
-                SettingsFingerprint = new string('a', 64), PlayerBuildHash = new string('b', 64), NativeRequirements = Array.Empty<string>(), InitialManifest = manifest,
+                ProfileGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(_profile)),
+                SettingsFingerprint = new string('a', 64),
+                PlayerBuildHash = new string('b', 64),
+                NativeRequirements = Array.Empty<string>(),
+                InitialManifest = manifest,
                 Files = new[] { new HybridCLRBaselineFile { Path = "Aot/Base.dll", Length = aot.Length, Sha256 = aot.Sha256, Identity = aot.Identity, Mvid = aot.Mvid },
                     new HybridCLRBaselineFile { Path = "HotUpdate/" + hot.Name + ".dll", Length = hot.Length, Sha256 = hot.Sha256, Identity = hot.Identity, Mvid = hot.Mvid } }
                     .Concat(HybridCLRBuildBaseline.GeneratedNames.Select(n => new HybridCLRBaselineFile { Path = "Generated/" + n, Length = bridge.Length, Sha256 = HybridCLRManifest.Hash(bridge) })).ToArray()
             };
             var bytes = System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(baseline));
-            File.WriteAllBytes(temporary + "/baseline.json", bytes);
-            File.WriteAllText(temporary + "/complete.json", JsonConvert.SerializeObject(new { schemaVersion = 1, baselineSha256 = HybridCLRManifest.Hash(bytes) }));
+            File.WriteAllBytes(_temporary + "/baseline.json", bytes);
+            File.WriteAllText(_temporary + "/complete.json", JsonConvert.SerializeObject(new
+            {
+                schemaVersion = 1,
+                baselineSha256 = HybridCLRManifest.Hash(bytes)
+            }));
             return baseline;
         }
     }

@@ -13,7 +13,14 @@ namespace YLFramework.Editor.Actions
 
         internal sealed class Topic
         {
-            internal readonly string Id, Title, Group, Summary, Behavior, Notes, ExampleContext, Example;
+            internal readonly string Id;
+            internal readonly string Title;
+            internal readonly string Group;
+            internal readonly string Summary;
+            internal readonly string Behavior;
+            internal readonly string Notes;
+            internal readonly string ExampleContext;
+            internal readonly string Example;
             internal readonly string[] TypeNames;
             internal string[] FeaturedTypeNames;
             internal string RequiredAssembly;
@@ -23,8 +30,16 @@ namespace YLFramework.Editor.Actions
             internal Topic(string id, string title, string group, string summary, string behavior, string notes,
                 string exampleContext, string example, params string[] typeNames)
             {
-                Id = id; Title = title; Group = group; Summary = summary; Behavior = behavior; Notes = notes;
-                ExampleContext = exampleContext; Example = example; TypeNames = typeNames; FeaturedTypeNames = typeNames;
+                Id = id;
+                Title = title;
+                Group = group;
+                Summary = summary;
+                Behavior = behavior;
+                Notes = notes;
+                ExampleContext = exampleContext;
+                Example = example;
+                TypeNames = typeNames;
+                FeaturedTypeNames = typeNames;
             }
 
             internal bool Matches(string search) => Contains(SearchText, search);
@@ -49,7 +64,10 @@ namespace YLFramework.Editor.Actions
                     assembly.GetName().Name == "DOTween" && assembly.GetName().FullName == dependency.FullName);
                 var tween = dotween.GetType("DG.Tweening.Tween", true);
                 if (tween.Assembly != dotween)
+                {
                     throw new InvalidOperationException("DG.Tweening.Tween 必须由 wrapper 引用的 DOTween 程序集定义。");
+                }
+
                 assemblies.Add(tween.Assembly);
             }
             return assemblies.Select(assembly => assembly.Location).Distinct().ToArray();
@@ -60,7 +78,11 @@ namespace YLFramework.Editor.Actions
         internal static IEnumerable<Topic> RelatedTopics(Type type)
         {
             var root = type;
-            while (root.IsNested && root != typeof(ActionKit.ScreenTransition)) root = root.DeclaringType;
+            while (root.IsNested && root != typeof(ActionKit.ScreenTransition))
+            {
+                root = root.DeclaringType;
+            }
+
             var name = root.Name.Split('`')[0];
             return Topics.Where(topic => topic.TypeNames.Contains(name));
         }

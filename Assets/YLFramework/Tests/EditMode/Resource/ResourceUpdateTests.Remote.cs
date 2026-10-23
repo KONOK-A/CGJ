@@ -25,7 +25,9 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var data = ResourceCatalogCodec.ParseObject(envelope);
             var payload = ResourceCatalogCodec.ParseObject(Convert.FromBase64String((string)data["Payload"]));
-            change(payload); data["Payload"] = Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(payload)); data.Remove("Signature");
+            change(payload);
+            data["Payload"] = Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(payload));
+            data.Remove("Signature");
             data["Signature"] = Convert.ToBase64String(key.SignData(ResourceCatalogCodec.CanonicalBytes(data), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
             return ResourceCatalogCodec.CanonicalBytes(data);
         }
@@ -52,9 +54,14 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(release.Sequence, Is.EqualTo(7));
             Assert.That(release.Catalog.CatalogDigest, Is.EqualTo(Snapshot("a", 2).Document.CatalogDigest));
             foreach (var field in new[] { "ProjectId", "Platform", "Channel", "UnityCompatibility", "AppContentCompatibilityId" })
+            {
                 Assert.Throws<InvalidDataException>(() => new ResourceRemoteRelease(Resign(envelope, key, data => data[field] = "unauthorized"), mount, Application.unityVersion, DateTimeOffset.UtcNow), field);
-            Assert.Throws<InvalidDataException>(() => new ResourceRemoteRelease(Resign(envelope, key, data => {
-                data["IssuedUnixSeconds"] = DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds(); data["ExpiresUnixSeconds"] = DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeSeconds();
+            }
+
+            Assert.Throws<InvalidDataException>(() => new ResourceRemoteRelease(Resign(envelope, key, data =>
+            {
+                data["IssuedUnixSeconds"] = DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds();
+                data["ExpiresUnixSeconds"] = DateTimeOffset.UtcNow.AddDays(-1).ToUnixTimeSeconds();
             }), mount, Application.unityVersion, DateTimeOffset.UtcNow));
             Assert.Throws<InvalidDataException>(() => release.ReadCatalog(ResourceCatalogCodec.Write(Snapshot().Document), mount, Application.unityVersion));
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(Snapshot("a", 2).DirectoryPath)), "Signing must not mutate publisher output or include a private key.");
@@ -64,7 +71,8 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void EditorExternalCredentialAndExportStayOutsideRepositoryAndNeverOverwrite()
         {
-            using var certificate = ResourceDownloadTests.Certificate(); using var server = new ResourceTlsServer(certificate);
+            using var certificate = ResourceDownloadTests.Certificate();
+            using var server = new ResourceTlsServer(certificate);
             var source = ResourceDownloadTests.Source(server, certificate);
             var mount = new ResourceProjectMount(Snapshot().Document.ProjectId, "StandaloneWindows64", "fixture-v1", Snapshot(), remote: source);
             var snapshot = Snapshot("a", 2);

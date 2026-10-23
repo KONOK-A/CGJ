@@ -1,11 +1,11 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 using static UnityEditor.Progress;
 
 namespace YLFramework.MissionSystem
@@ -21,76 +21,76 @@ namespace YLFramework.MissionSystem
 
         #region 字段
 
-        private const string SELECT_GUID_KEY = "YLFramework.MissionSystem.SELECT_GUID_KEY";
+        private const string SelectGuidKey = "YLFramework.MissionSystem.SELECT_GUID_KEY";
 
-        private GUIContent currentMissionConfigContent;
+        private GUIContent _currentMissionConfigContent;
 
-        private string searchStr;
+        private string _searchStr;
 
         [SerializeField]
         private TreeViewStateGroup treeViewStateGroup = new TreeViewStateGroup();
 
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewState<int> missionListState => treeViewStateGroup.Get(currentMissionConfig.GetHashCode());
+        private TreeViewState<int> MissionListState => treeViewStateGroup.Get(CurrentMissionConfig.GetHashCode());
 #else
-        private TreeViewState missionListState => treeViewStateGroup.Get(currentMissionConfig.GetHashCode());
+        private TreeViewState MissionListState => treeViewStateGroup.Get(CurrentMissionConfig.GetHashCode());
 #endif
 
 
-        internal MissionListTree missionListTree;
+        internal MissionListTree MissionListTree;
 
         [SerializeField]
         private TreeViewStateGroup treeViewStateGroupParam = new TreeViewStateGroup();
 
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewState<int> paramListState => treeViewStateGroupParam.Get(currentMissionConfig.GetHashCode());
+        private TreeViewState<int> ParamListState => treeViewStateGroupParam.Get(CurrentMissionConfig.GetHashCode());
 #else
-        private TreeViewState paramListState => treeViewStateGroupParam.Get(currentMissionConfig.GetHashCode());
+        private TreeViewState ParamListState => treeViewStateGroupParam.Get(CurrentMissionConfig.GetHashCode());
 #endif
 
 
-        internal ParamListTree paramListTree;
+        internal ParamListTree ParamListTree;
 
 
-        internal MissionsConfig currentMissionConfig;
+        internal MissionsConfig CurrentMissionConfig;
 
-        private float timer = 0;
+        private float _timer = 0;
 
-        internal int currentShowMissionId = 0;
+        internal int CurrentShowMissionId = 0;
 
-        internal int currentShowParamIndex = 0;
+        internal int CurrentShowParamIndex = 0;
 
         internal static int DefaultSelectMissionId = -1;
 
 
-        private GUIContent[] LeftToolbarContents = null;
+        private GUIContent[] _leftToolbarContents = null;
 
-        private int leftToolbarSelected = 0;
+        private int _leftToolbarSelected = 0;
 
-        private GUIStyle leftToolbarStyle = null;
+        private GUIStyle _leftToolbarStyle = null;
 
-        private float lastRepaintCount = 0;
+        private float _lastRepaintCount = 0;
 
-        private int currentID;
+        private int _currentId;
         public int idChangeCount;
 
-        private int currentParameterID;
+        private int _currentParameterId;
         public int parameterIdChangeCount;
 
-#endregion
+        #endregion
 
 
         #region 属性
 
-        internal static string SelectGUID
+        internal static string SelectGuid
         {
             get
             {
-                return EditorPrefs.GetString(SELECT_GUID_KEY);
+                return EditorPrefs.GetString(SelectGuidKey);
             }
             set
             {
-                EditorPrefs.SetString(SELECT_GUID_KEY, value);
+                EditorPrefs.SetString(SelectGuidKey, value);
             }
 
         }
@@ -107,28 +107,31 @@ namespace YLFramework.MissionSystem
 
         private void Update()
         {
-            lastRepaintCount++;
-            if (lastRepaintCount > 15)
+            _lastRepaintCount++;
+            if (_lastRepaintCount > 15)
             {
                 Repaint();
-                lastRepaintCount = 0;
+                _lastRepaintCount = 0;
             }
 
         }
 
         protected override void OnGUI()
         {
-            if (Time.realtimeSinceStartup - timer > 1 && currentMissionConfig == null)
+            if (Time.realtimeSinceStartup - _timer > 1 && CurrentMissionConfig == null)
             {
-                currentMissionConfig = GetCurrentConfig();
-                timer = Time.realtimeSinceStartup;
+                CurrentMissionConfig = GetCurrentConfig();
+                _timer = Time.realtimeSinceStartup;
             }
 
-            if (currentMissionConfig == null)
-                EmptyGUI();
+            if (CurrentMissionConfig == null)
+            {
+                EmptyGui();
+            }
             else
+            {
                 base.OnGUI();
-
+            }
         }
 
 
@@ -139,26 +142,30 @@ namespace YLFramework.MissionSystem
 
         internal MissionsConfig GetCurrentConfig()
         {
-            if (!string.IsNullOrEmpty(SelectGUID))
+            if (!string.IsNullOrEmpty(SelectGuid))
             {
-                string assets_path = AssetDatabase.GUIDToAssetPath(SelectGUID);
-                MissionsConfig config = AssetDatabase.LoadAssetAtPath<MissionsConfig>(assets_path);
+                string assetsPath = AssetDatabase.GUIDToAssetPath(SelectGuid);
+                MissionsConfig config = AssetDatabase.LoadAssetAtPath<MissionsConfig>(assetsPath);
 
                 if (config != null)
+                {
                     return config;
+                }
             }
 
             List<MissionsConfig> allConfigs = MissionsConfigController.GetAllConfigs();
 
             if (allConfigs == null || allConfigs.Count == 0)
+            {
                 return null;
+            }
 
-            SelectGUID = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(allConfigs[0]));
+            SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(allConfigs[0]));
             return allConfigs[0];
         }
 
 
-        private void EmptyGUI()
+        private void EmptyGui()
         {
 
             GUILayout.BeginHorizontal();
@@ -179,17 +186,17 @@ namespace YLFramework.MissionSystem
 
         }
 
-        protected override void DrawGUILeft(Rect rect)
+        protected override void DrawGuiLeft(Rect rect)
         {
-            base.DrawGUILeft(rect);
+            base.DrawGuiLeft(rect);
             GUILayout.BeginArea(rect);
             DrawLeft(rect);
             GUILayout.EndArea();
         }
 
-        protected override void DrawGUIRight(Rect rect)
+        protected override void DrawGuiRight(Rect rect)
         {
-            base.DrawGUIRight(rect);
+            base.DrawGuiRight(rect);
             GUILayout.BeginArea(rect);
             DrawRight();
             GUILayout.EndArea();
@@ -197,38 +204,42 @@ namespace YLFramework.MissionSystem
 
         private void DrawLeft(Rect left)
         {
-            if (currentMissionConfigContent == null)
-                currentMissionConfigContent = new GUIContent();
+            if (_currentMissionConfigContent == null)
+            {
+                _currentMissionConfigContent = new GUIContent();
+            }
 
-            if (currentMissionConfig == null)
+            if (CurrentMissionConfig == null)
+            {
                 return;
+            }
 
-            currentMissionConfigContent.text = currentMissionConfig.GetDisplayName();
+            _currentMissionConfigContent.text = CurrentMissionConfig.GetDisplayName();
 
-            currentMissionConfigContent.tooltip = AssetDatabase.GetAssetPath(currentMissionConfig);
+            _currentMissionConfigContent.tooltip = AssetDatabase.GetAssetPath(CurrentMissionConfig);
 
             GUILayout.BeginHorizontal();
 
             EditorGUI.BeginChangeCheck();
 
-            searchStr = EditorGUI.TextField(new Rect(left.x, left.y, left.width * 0.5f, 20), string.Empty, searchStr, "SearchTextField");
+            _searchStr = EditorGUI.TextField(new Rect(left.x, left.y, left.width * 0.5f, 20), string.Empty, _searchStr, "SearchTextField");
 
             if (EditorGUI.EndChangeCheck())
             {
-                if (string.IsNullOrEmpty(searchStr)  )
+                if (string.IsNullOrEmpty(_searchStr))
                 {
-                    if (leftToolbarSelected == 0 && missionListTree.state.selectedIDs.Count > 0)
+                    if (_leftToolbarSelected == 0 && MissionListTree.state.selectedIDs.Count > 0)
                     {
                         EditorApplication.delayCall += () =>
                         {
-                            missionListTree.FrameItem(missionListTree.state.selectedIDs[0]);
+                            MissionListTree.FrameItem(MissionListTree.state.selectedIDs[0]);
                         };
                     }
-                    else if(leftToolbarSelected == 1 && paramListTree.state.selectedIDs.Count > 0)
+                    else if (_leftToolbarSelected == 1 && ParamListTree.state.selectedIDs.Count > 0)
                     {
                         EditorApplication.delayCall += () =>
                         {
-                            paramListTree.FrameItem(paramListTree.state.selectedIDs[0]);
+                            ParamListTree.FrameItem(ParamListTree.state.selectedIDs[0]);
                         };
                     }
                 }
@@ -236,7 +247,7 @@ namespace YLFramework.MissionSystem
 
             GUI.Box(new Rect(left.x + 1, left.y, left.width - 2, left.height), string.Empty, "CN Box");
 
-            if (EditorGUI.DropdownButton(new Rect(left.x + left.width *0.5f, left.y, left.width * 0.5f + 1, 20), currentMissionConfigContent, FocusType.Passive, "ToolbarDropDownLeft"))
+            if (EditorGUI.DropdownButton(new Rect(left.x + left.width * 0.5f, left.y, left.width * 0.5f + 1, 20), _currentMissionConfigContent, FocusType.Passive, "ToolbarDropDownLeft"))
             {
                 GUI.FocusControl(null);
                 //return;
@@ -248,11 +259,11 @@ namespace YLFramework.MissionSystem
                 foreach (var item in allConfigs)
                 {
                     string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
-                    bool isOn = SelectGUID == guid;
+                    bool isOn = SelectGuid == guid;
 
                     menu.AddItem(new GUIContent(item.GetDisplayName()), isOn, () =>
                     {
-                        SelectGUID = guid;
+                        SelectGuid = guid;
                         EditorGUIUtility.PingObject(item);
 
                         if (!isOn)
@@ -275,56 +286,58 @@ namespace YLFramework.MissionSystem
             GUILayout.EndHorizontal();
 
 
-            if (LeftToolbarContents == null || LeftToolbarContents.Length == 0)
-                LeftToolbarContents = new GUIContent[] { new GUIContent("任务列表"), new GUIContent("参数列表") };
-
-            if (leftToolbarStyle == null)
+            if (_leftToolbarContents == null || _leftToolbarContents.Length == 0)
             {
-                leftToolbarStyle = new GUIStyle("toolbarbuttonLeft");
+                _leftToolbarContents = new GUIContent[] { new GUIContent("任务列表"), new GUIContent("参数列表") };
             }
 
-            leftToolbarSelected = GUI.Toolbar(new Rect(left.x, left.y + 20, left.width, 20), leftToolbarSelected, LeftToolbarContents);
-
-            if (leftToolbarSelected == 0)
+            if (_leftToolbarStyle == null)
             {
-                if (missionListTree == null)
+                _leftToolbarStyle = new GUIStyle("toolbarbuttonLeft");
+            }
+
+            _leftToolbarSelected = GUI.Toolbar(new Rect(left.x, left.y + 20, left.width, 20), _leftToolbarSelected, _leftToolbarContents);
+
+            if (_leftToolbarSelected == 0)
+            {
+                if (MissionListTree == null)
                 {
-                    missionListTree = new MissionListTree(missionListState, currentMissionConfig);
-                    missionListTree.Reload();
+                    MissionListTree = new MissionListTree(MissionListState, CurrentMissionConfig);
+                    MissionListTree.Reload();
                 }
 
-                missionListTree.searchString = searchStr;
+                MissionListTree.searchString = _searchStr;
 
                 left.Set(left.x, left.y + 39, left.width + 1, left.height - 39);
 
-                missionListTree.OnGUI(left);
+                MissionListTree.OnGUI(left);
 
-                if (missionListTree != null && missionListTree.MissionsConfig != currentMissionConfig)
+                if (MissionListTree != null && MissionListTree.MissionsConfig != CurrentMissionConfig)
                 {
                     //missionListTree.SetSelection(Array.Empty<int>());
-                    missionListTree.Dispose();
-                    missionListTree = null;
+                    MissionListTree.Dispose();
+                    MissionListTree = null;
                 }
 
             }
-            else if (leftToolbarSelected == 1)
+            else if (_leftToolbarSelected == 1)
             {
-                if (paramListTree == null)
+                if (ParamListTree == null)
                 {
-                    paramListTree = new ParamListTree(paramListState, currentMissionConfig);
-                    paramListTree.Reload();
+                    ParamListTree = new ParamListTree(ParamListState, CurrentMissionConfig);
+                    ParamListTree.Reload();
                 }
 
-                paramListTree.searchString = searchStr;
+                ParamListTree.searchString = _searchStr;
 
                 left.Set(left.x, left.y + 39, left.width, left.height - 39);
 
-                paramListTree.OnGUI(left);
+                ParamListTree.OnGUI(left);
 
-                if (paramListTree != null && paramListTree.MissionsConfig != currentMissionConfig)
+                if (ParamListTree != null && ParamListTree.MissionsConfig != CurrentMissionConfig)
                 {
-                    paramListTree.Dispose();
-                    paramListTree = null;
+                    ParamListTree.Dispose();
+                    ParamListTree = null;
                 }
             }
         }
@@ -344,13 +357,13 @@ namespace YLFramework.MissionSystem
                 return;
             }
 
-            if (leftToolbarSelected == 0)
+            if (_leftToolbarSelected == 0)
             {
-                if (missionListState.selectedIDs.Count == 1)
+                if (MissionListState.selectedIDs.Count == 1)
                 {
                     DrawMissionData();
                 }
-                else if (missionListState.selectedIDs.Count == 0)
+                else if (MissionListState.selectedIDs.Count == 0)
                 {
                     GUILayout.FlexibleSpace();
                     GUILayout.BeginHorizontal();
@@ -378,15 +391,15 @@ namespace YLFramework.MissionSystem
             else
             {
 
-                if (paramListState.selectedIDs.Count == 1  )
+                if (ParamListState.selectedIDs.Count == 1)
                 {
-                    if (paramListTree != null)
+                    if (ParamListTree != null)
                     {
                         DrawParameterData();
                     }
 
                 }
-                else if (paramListState.selectedIDs.Count == 0)
+                else if (ParamListState.selectedIDs.Count == 0)
                 {
                     GUILayout.FlexibleSpace();
                     GUILayout.BeginHorizontal();
@@ -416,9 +429,9 @@ namespace YLFramework.MissionSystem
 
         private void DrawMissionData()
         {
-            int id = missionListState.selectedIDs[0];
+            int id = MissionListState.selectedIDs[0];
 
-            if (currentID != id)
+            if (_currentId != id)
             {
                 idChangeCount++;
                 if (idChangeCount > 1)
@@ -427,7 +440,7 @@ namespace YLFramework.MissionSystem
                     // 如果当前帧被return , 下一帧repaint 会报错，因为没有位置数据
                     if (Event.current.type != EventType.Layout)
                     {
-                        currentID = id;
+                        _currentId = id;
                         idChangeCount = 0;
                     }
                 }
@@ -436,15 +449,15 @@ namespace YLFramework.MissionSystem
                 return;
             }
 
-            MissionConfigData data = currentMissionConfig.GetMissionConfigData(id);
-            MissionConfigDataInspector.Instance.OnInspectorGUI(data, this, currentMissionConfig);
+            MissionConfigData data = CurrentMissionConfig.GetMissionConfigData(id);
+            MissionConfigDataInspector.Instance.OnInspectorGUI(data, this, CurrentMissionConfig);
         }
 
         private void DrawParameterData()
         {
-            int id = paramListState.selectedIDs[0];
+            int id = ParamListState.selectedIDs[0];
 
-            if (currentParameterID != id)
+            if (_currentParameterId != id)
             {
                 parameterIdChangeCount++;
                 if (parameterIdChangeCount > 1)
@@ -453,7 +466,7 @@ namespace YLFramework.MissionSystem
                     // 如果当前帧被return , 下一帧repaint 会报错，因为没有位置数据
                     if (Event.current.type != EventType.Layout)
                     {
-                        currentParameterID = id;
+                        _currentParameterId = id;
                         parameterIdChangeCount = 0;
                     }
 
@@ -463,19 +476,23 @@ namespace YLFramework.MissionSystem
                 return;
             }
 
-            MissionParameter parameter = paramListTree.GetMissionParameter(id);
-            MissionParameterInspector.OnInspectorGUI(currentMissionConfig, parameter, paramListTree);
+            MissionParameter parameter = ParamListTree.GetMissionParameter(id);
+            MissionParameterInspector.OnInspectorGUI(CurrentMissionConfig, parameter, ParamListTree);
         }
 
         internal bool IsEmpty()
         {
-            if (currentMissionConfig == null)
-                return true;
-
-            for (int i = 0; i < currentMissionConfig.missions.Count; i++)
+            if (CurrentMissionConfig == null)
             {
-                if (currentMissionConfig.missions[i] != null)
+                return true;
+            }
+
+            for (int i = 0; i < CurrentMissionConfig.missions.Count; i++)
+            {
+                if (CurrentMissionConfig.missions[i] != null)
+                {
                     return false;
+                }
             }
 
 
@@ -484,44 +501,45 @@ namespace YLFramework.MissionSystem
 
         public void SetSelection(int id)
         {
-            if (missionListTree != null)
+            if (MissionListTree != null)
             {
-                missionListTree.SetSelection(new int[] { id });
+                MissionListTree.SetSelection(new int[] { id });
             }
             else
             {
                 EditorApplication.delayCall += () =>
                 {
-                    if (missionListTree != null)
+                    if (MissionListTree != null)
                     {
-                        missionListTree.SetSelection(new int[] { id });
+                        MissionListTree.SetSelection(new int[] { id });
                     }
                 };
             }
 
         }
 
-        public void SetCurrentConfigs(MissionsConfig missionsConfig) {
+        public void SetCurrentConfigs(MissionsConfig missionsConfig)
+        {
             ReleaseTrees();
-            currentID = -1;
-            currentParameterID = -1;
+            _currentId = -1;
+            _currentParameterId = -1;
 
-            currentMissionConfig = missionsConfig;
+            CurrentMissionConfig = missionsConfig;
 
-            SelectGUID = AssetDatabase.AssetPathToGUID( AssetDatabase.GetAssetPath(missionsConfig));
+            SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(missionsConfig));
 
-            if (missionListTree != null)
+            if (MissionListTree != null)
             {
-                missionListTree.Reload();
+                MissionListTree.Reload();
             }
         }
 
         private void ReleaseTrees()
         {
-            missionListTree?.Dispose();
-            paramListTree?.Dispose();
-            missionListTree = null;
-            paramListTree = null;
+            MissionListTree?.Dispose();
+            ParamListTree?.Dispose();
+            MissionListTree = null;
+            ParamListTree = null;
         }
         private void OnDisable()
         {
@@ -539,21 +557,25 @@ namespace YLFramework.MissionSystem
         {
             string path = EditorUtility.OpenFolderPanel("请选择文件夹", Application.dataPath, string.Empty);
 
-            if (string.IsNullOrEmpty(path)) return;
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
 
             if (path.StartsWith(Application.dataPath))
             {
                 path = path.Replace(Application.dataPath, string.Empty);
                 path = string.Format("Assets{0}", path);
                 MissionsConfig skillsConfig = CreateInstance<MissionsConfig>();
-                skillsConfig.start_id = InitIDStart();
+                skillsConfig.startId = InitIdStart();
                 MissionsConfigController.CreateAsset(skillsConfig, path);
 
-                SelectGUID = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
+                SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skillsConfig));
 
-                if (missionListTree != null)
-                    missionListTree.Reload();
-
+                if (MissionListTree != null)
+                {
+                    MissionListTree.Reload();
+                }
             }
             else
             {
@@ -561,19 +583,21 @@ namespace YLFramework.MissionSystem
             }
         }
 
-        private int InitIDStart()
+        private int InitIdStart()
         {
-            int max_id_start = 0;
+            int maxIdStart = 0;
 
             List<MissionsConfig> allConfigs = MissionsConfigController.GetAllConfigs();
 
             foreach (var item in allConfigs)
             {
-                if (item.start_id > max_id_start)
-                    max_id_start = item.start_id;
+                if (item.startId > maxIdStart)
+                {
+                    maxIdStart = item.startId;
+                }
             }
 
-            return max_id_start + 1000;
+            return maxIdStart + 1000;
         }
 
         #endregion

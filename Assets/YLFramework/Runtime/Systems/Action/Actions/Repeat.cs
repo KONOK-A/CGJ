@@ -15,24 +15,27 @@ namespace YLFramework.Actions
     /// </summary>
     public class Repeat : IRepeat
     {
-        private Sequence mSequence = null;
+        private Sequence _sequence = null;
 
-        private int mRepeatCount = -1;
-        private int mCurrentRepeatCount = 0;
+        private int _repeatCount = -1;
+        private int _currentRepeatCount = 0;
 
-        private static ActionPool<Repeat> mPool =
+        private static ActionPool<Repeat> _pool =
             new ActionPool<Repeat>(() => new Repeat(), null, 5, action =>
             {
-                action.ActionID = ActionKit.ID_GENERATOR++;
-                action.Deinited = false;
+                action.ActionId = ActionKit.IdGenerator++;
+                action.IsDeinitialized = false;
                 try
                 {
-                    action.mSequence = Sequence.Allocate();
+                    action._sequence = Sequence.Allocate();
                     action.Reset();
                 }
                 catch (Exception original)
                 {
-                    try { action.Deinit(); }
+                    try
+                    {
+                        action.Deinit();
+                    }
                     catch (Exception cleanup)
                     {
                         original.Data["ActionKit.CleanupException"] = original.Data["ActionKit.CleanupException"] is Exception previous
@@ -53,33 +56,52 @@ namespace YLFramework.Actions
         /// <returns>尚未启动的重复组合，子动作可通过 Append 添加。</returns>
         public static Repeat Allocate(int repeatCount = -1)
         {
-            var repeat = mPool.Allocate();
-            repeat.mRepeatCount = repeatCount;
+            var repeat = _pool.Allocate();
+            repeat._repeatCount = repeatCount;
             return repeat;
         }
 
         /// <inheritdoc />
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
 
         /// <summary>清零已完成轮数并检查子动作是否已取消；本次不推进子序列。</summary>
         public void OnStart()
         {
-            mCurrentRepeatCount = 0;
-            if (Deinited) return;
-            var sequence = mSequence;
+            _currentRepeatCount = 0;
+            if (IsDeinitialized)
+            {
+                return;
+            }
+
+            var sequence = _sequence;
             try
             {
                 sequence.TryCancelIfChildDeinited();
             }
             finally
             {
-                if (sequence.Deinited && !Deinited) Deinit();
+                if (sequence.IsDeinitialized && !IsDeinitialized)
+                {
+                    Deinit();
+                }
             }
         }
 
@@ -87,30 +109,45 @@ namespace YLFramework.Actions
         /// <param name="dt">传给当前子序列的时间增量，单位为秒。</param>
         public void OnExecute(float dt)
         {
-            if (Deinited) return;
-            var sequence = mSequence;
+            if (IsDeinitialized)
+            {
+                return;
+            }
+
+            var sequence = _sequence;
             try
             {
-                if (sequence.TryCancelIfChildDeinited()) return;
+                if (sequence.TryCancelIfChildDeinited())
+                {
+                    return;
+                }
                 // -1 与 0 均无限重复；一轮结束后只重置，下一次执行才推进新一轮。
-                if (mRepeatCount == -1 || mRepeatCount == 0)
+                if (_repeatCount == -1 || _repeatCount == 0)
                 {
                     var finished = sequence.Execute(dt);
-                    if (Deinited || sequence.Deinited) return;
+                    if (IsDeinitialized || sequence.IsDeinitialized)
+                    {
+                        return;
+                    }
+
                     if (finished)
                     {
                         sequence.Reset();
                     }
                 }
-                else if (mCurrentRepeatCount < mRepeatCount)
+                else if (_currentRepeatCount < _repeatCount)
                 {
                     var finished = sequence.Execute(dt);
-                    if (Deinited || sequence.Deinited) return;
+                    if (IsDeinitialized || sequence.IsDeinitialized)
+                    {
+                        return;
+                    }
+
                     if (finished)
                     {
-                        mCurrentRepeatCount++;
+                        _currentRepeatCount++;
 
-                        if (mCurrentRepeatCount >= mRepeatCount)
+                        if (_currentRepeatCount >= _repeatCount)
                         {
                             this.Finish();
                         }
@@ -123,7 +160,10 @@ namespace YLFramework.Actions
             }
             finally
             {
-                if (sequence.Deinited && !Deinited) Deinit();
+                if (sequence.IsDeinitialized && !IsDeinitialized)
+                {
+                    Deinit();
+                }
             }
         }
 
@@ -135,22 +175,25 @@ namespace YLFramework.Actions
         /// <inheritdoc />
         public ISequence Append(IAction action)
         {
-            mSequence.Append(action);
+            _sequence.Append(action);
             return this;
         }
 
         /// <summary>释放内部子序列并安排延迟回收；取消不触发正常完成通知。</summary>
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
+                IsDeinitialized = true;
                 // 取消时释放内部序列并安排延迟回收，不标记正常完成。
-                var sequence = mSequence;
-                mSequence = null;
+                var sequence = _sequence;
+                _sequence = null;
                 try
                 {
-                    if (sequence != null && !sequence.Deinited) sequence.Deinit();
+                    if (sequence != null && !sequence.IsDeinitialized)
+                    {
+                        sequence.Deinit();
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -158,7 +201,7 @@ namespace YLFramework.Actions
                 }
                 finally
                 {
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Repeat>(mPool, this));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<Repeat>(_pool, this));
                 }
             }
         }
@@ -166,10 +209,10 @@ namespace YLFramework.Actions
         /// <summary>重置轮数、执行阶段和子序列进度，保留总轮数和子动作配置。</summary>
         public void Reset()
         {
-            mCurrentRepeatCount = 0;
+            _currentRepeatCount = 0;
             Status = ActionStatus.NotStart;
-            Paused = false;
-            mSequence?.Reset();
+            IsPaused = false;
+            _sequence?.Reset();
         }
     }
 

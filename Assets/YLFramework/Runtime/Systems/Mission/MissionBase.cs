@@ -1,7 +1,7 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using YLFramework.Foundation;
 
 namespace YLFramework.MissionSystem
 {
@@ -36,14 +36,14 @@ namespace YLFramework.MissionSystem
 
         #region 字段
 
-        private MissionState state = MissionState.NotStarted;
+        private MissionState _state = MissionState.NotStarted;
         private int _version;
 
         /// <summary>
         /// 自定义数据
         /// </summary>
         [Tooltip("自定义数据")]
-        public object userData;
+        public object UserData;
 
         #endregion
 
@@ -52,7 +52,10 @@ namespace YLFramework.MissionSystem
         /// <summary>
         /// 任务配置数据
         /// </summary>
-        public MissionConfigData MissionConfig { get; internal set; }
+        public MissionConfigData MissionConfig
+        {
+            get; internal set;
+        }
 
         /// <summary>
         /// 任务状态
@@ -61,17 +64,20 @@ namespace YLFramework.MissionSystem
         {
             get
             {
-                return state;
+                return _state;
             }
             set
             {
-                if (state == value) return;
+                if (_state == value)
+                {
+                    return;
+                }
 
                 ChangeState(value);
             }
         }
 
-        internal int config_name;
+        internal int ConfigNameHash;
 
         /// <summary>
         /// 当前任务进度(0-1)
@@ -81,13 +87,19 @@ namespace YLFramework.MissionSystem
             get
             {
                 if (State == MissionState.Completed)
+                {
                     return 1;
+                }
 
                 if (!MissionConfig || MissionConfig.conditions.Count == 0)
+                {
                     return 0;
+                }
 
                 if (MissionConfig.conditions.Count == 1)
+                {
                     return MissionConfig.conditions[0].Progress;
+                }
 
                 float p = MissionConfig.conditions[0].Progress;
 
@@ -109,13 +121,13 @@ namespace YLFramework.MissionSystem
         /// 状态改变时触发
         /// </summary>
         [Tooltip("状态改变时触发")]
-        public Action<MissionBase> onStatusChange;
+        public Action<MissionBase> StatusChanged;
 
         /// <summary>
         /// 进度改变时触发
         /// </summary>
         [Tooltip("进度改变时触发")]
-        public Action<MissionBase, MissionCondition> onProgressValueChange;
+        public Action<MissionBase, MissionCondition> ProgressValueChanged;
 
         #endregion
 
@@ -129,36 +141,50 @@ namespace YLFramework.MissionSystem
         {
             // 如果该任务不是在执行中的状态 则不需要处理
             if (State != MissionState.InProgress)
+            {
                 return;
+            }
 
             // 如果没有条件 任务则不能完成
             if (MissionConfig.conditions.Count == 0)
+            {
                 return;
+            }
 
             // 判断完成的条件是否全都满足
             foreach (var item in MissionConfig.conditions)
             {
-                if (!item.IsMeet)
+                if (!item.IsMet)
+                {
                     return;
+                }
             }
 
             // 任务已经完成
             var version = _version;
             State = MissionState.Completed;
-            if (version == _version && State == MissionState.Completed) OnMissionCompleted();
-
+            if (version == _version && State == MissionState.Completed)
+            {
+                OnMissionCompleted();
+            }
         }
 
         private void OnConditionProgressChange(MissionCondition condition)
         {
             // 如果状态不是进行中 直接return
-            if (State != MissionState.InProgress) return;
+            if (State != MissionState.InProgress)
+            {
+                return;
+            }
 
             var version = _version;
             OnProgressChange();
-            if (version != _version || State != MissionState.InProgress) return;
+            if (version != _version || State != MissionState.InProgress)
+            {
+                return;
+            }
 
-            onProgressValueChange?.Invoke(this, condition);
+            ProgressValueChanged?.Invoke(this, condition);
         }
 
         internal void Init()
@@ -167,7 +193,7 @@ namespace YLFramework.MissionSystem
             // 初始化条件
             foreach (var item in MissionConfig.conditions)
             {
-                item.Init(config_name);
+                item.Init(ConfigNameHash);
             }
         }
 
@@ -177,36 +203,41 @@ namespace YLFramework.MissionSystem
             if (MissionConfig)
             {
                 RemoveListener();
-                foreach (var condition in MissionConfig.conditions) condition.Dispose();
+                foreach (var condition in MissionConfig.conditions)
+                {
+                    condition.Dispose();
+                }
             }
             // 清理事件
-            onStatusChange = null;
-            onProgressValueChange = null;
+            StatusChanged = null;
+            ProgressValueChanged = null;
 
             // 重置状态
-            state = MissionState.NotStarted;
-            userData = null;
+            _state = MissionState.NotStarted;
+            UserData = null;
         }
 
-        internal void AddListener() {
+        internal void AddListener()
+        {
 
             foreach (var item in MissionConfig.conditions)
             {
-                item.onMeet -= OnCompleteConditionMeet;
-                item.onMeet += OnCompleteConditionMeet;
+                item.Met -= OnCompleteConditionMeet;
+                item.Met += OnCompleteConditionMeet;
 
-                item.onProgressValueChange -= OnConditionProgressChange;
-                item.onProgressValueChange += OnConditionProgressChange;
+                item.ProgressValueChanged -= OnConditionProgressChange;
+                item.ProgressValueChanged += OnConditionProgressChange;
             }
 
         }
 
-        internal void RemoveListener() {
+        internal void RemoveListener()
+        {
 
             foreach (var item in MissionConfig.conditions)
             {
-                item.onMeet -= OnCompleteConditionMeet;
-                item.onProgressValueChange -= OnConditionProgressChange;
+                item.Met -= OnCompleteConditionMeet;
+                item.ProgressValueChanged -= OnConditionProgressChange;
             }
         }
 
@@ -231,30 +262,48 @@ namespace YLFramework.MissionSystem
         private void OnMissionCompleted()
         {
             var version = _version;
-            if (!MissionConfig.reset_param_on_completed) return;
+            if (!MissionConfig.resetParamOnCompleted)
+            {
+                return;
+            }
 
             // 遍历所有条件 判断是否有别的任务引用该参数
 
             foreach (var condition in MissionConfig.conditions)
             {
-                if (!ConditionIsCanReset(condition)) continue;
+                if (!ConditionIsCanReset(condition))
+                {
+                    continue;
+                }
                 // 对值进行重置
                 if (condition.Param != null)
+                {
                     condition.Param.Value = 0;
-                if (version != _version) return;
+                }
+
+                if (version != _version)
+                {
+                    return;
+                }
             }
 
         }
 
         private bool ConditionIsCanReset(MissionCondition condition)
         {
-            List<MissionBase> missions = MissionManager.GetParamRefMission(config_name, condition.ParamNameHash);
+            List<MissionBase> missions = MissionManager.GetParamRefMission(ConfigNameHash, condition.ParamNameHash);
 
             foreach (var mission in missions)
             {
-                if (mission == this) continue;
+                if (mission == this)
+                {
+                    continue;
+                }
+
                 if (mission.State == MissionState.InProgress)
+                {
                     return false;
+                }
             }
 
             return true;
@@ -267,16 +316,23 @@ namespace YLFramework.MissionSystem
         /// <param name="state">任务状态</param>
         public void SetStateWithoutNotify(MissionState state)
         {
-            if (this.state == state) return;
+            if (this._state == state)
+            {
+                return;
+            }
 
             ChangeState(state, false);
         }
 
-        private void ChangeState(MissionState state ,bool trigger_event = true)
+        private void ChangeState(MissionState state, bool triggerEvent = true)
         {
             var version = _version;
-            if (!MissionConfig) throw new InvalidOperationException("任务已释放或尚未绑定配表。");
-            this.state = state;
+            if (!MissionConfig)
+            {
+                throw new InvalidOperationException("任务已释放或尚未绑定配表。");
+            }
+
+            this._state = state;
 
 
             if (state == MissionState.InProgress)
@@ -290,16 +346,22 @@ namespace YLFramework.MissionSystem
                 RemoveListener();
             }
 
-            if (trigger_event)
+            if (triggerEvent)
             {
                 OnStateChange(state);
-                if (_version != version || this.state != state) return;
-                onStatusChange?.Invoke(this);
+                if (_version != version || this._state != state)
+                {
+                    return;
+                }
+
+                StatusChanged?.Invoke(this);
             }
 
             // 如果任务状态被切换为执行中 这里判断一下是否已经完成
-            if (version == _version && this.state == state && state == MissionState.InProgress)
+            if (version == _version && this._state == state && state == MissionState.InProgress)
+            {
                 OnCompleteConditionMeet();
+            }
         }
 
         #endregion

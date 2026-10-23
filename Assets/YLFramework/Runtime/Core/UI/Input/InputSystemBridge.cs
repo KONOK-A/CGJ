@@ -1,7 +1,7 @@
 using System;
-using System.Reflection;
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using YLFramework.Core.Singleton;
@@ -19,18 +19,27 @@ namespace YLFramework.Core
         private const string MouseTypeName = "UnityEngine.InputSystem.Mouse, " + InputSystemAssembly;
         private const string Vector2ControlTypeName = "UnityEngine.InputSystem.Controls.Vector2Control, " + InputSystemAssembly;
 
-        private static bool _inputModuleFallbackWarned;
-        private static bool _mouseReflectionWarned;
-        private static readonly FieldInfo ActiveSystems = typeof(EventSystem).GetField("m_EventSystems", BindingFlags.NonPublic | BindingFlags.Static);
+        private static bool _hasWarnedAboutInputModuleFallback;
+        private static bool _hasWarnedAboutMouseReflection;
+        private static readonly FieldInfo _activeSystems = typeof(EventSystem).GetField("m_EventSystems", BindingFlags.NonPublic | BindingFlags.Static);
 
         // UGUI 没有公开 active 系统枚举 API。仅只读现有小集合，避免自建系统服务时每帧全场景扫描。
         internal static EventSystem FindExternalSystem(EventSystem owned)
         {
-            if (ActiveSystems == null)
+            if (_activeSystems == null)
+            {
                 throw new MissingFieldException(typeof(EventSystem).FullName, "m_EventSystems");
-            var systems = (List<EventSystem>)ActiveSystems.GetValue(null);
+            }
+
+            var systems = (List<EventSystem>)_activeSystems.GetValue(null);
             foreach (var candidate in systems)
-                if (candidate && candidate != owned && candidate.isActiveAndEnabled) return candidate;
+            {
+                if (candidate && candidate != owned && candidate.isActiveAndEnabled)
+                {
+                    return candidate;
+                }
+            }
+
             return null;
         }
 
@@ -40,31 +49,64 @@ namespace YLFramework.Core
             foreach (var module in owned.GetComponents<BaseInputModule>())
             {
                 var type = module.GetType();
-                if (type.FullName != "UnityEngine.InputSystem.UI.InputSystemUIInputModule" || !module.isActiveAndEnabled) continue;
+                if (type.FullName != "UnityEngine.InputSystem.UI.InputSystemUIInputModule" || !module.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
                 var asset = type.GetProperty("actionsAsset").GetValue(module) as UnityEngine.Object;
-                var systems = (List<EventSystem>)ActiveSystems.GetValue(null);
+                var systems = (List<EventSystem>)_activeSystems.GetValue(null);
                 bool shared = false;
                 foreach (var system in systems)
+                {
                     if (system && system.gameObject != owned)
+                    {
                         foreach (var other in system.GetComponents<BaseInputModule>())
+                        {
                             if (other.isActiveAndEnabled && other.GetType() == type &&
-                                (UnityEngine.Object)type.GetProperty("actionsAsset").GetValue(other) == asset) shared = true;
-                if (!shared) continue;
+                                (UnityEngine.Object)type.GetProperty("actionsAsset").GetValue(other) == asset)
+                            {
+                                shared = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!shared)
+                {
+                    continue;
+                }
                 // 1.14 的 UnassignActions 无条件 Dispose static defaultActions，即使另一 active 模块仍引用它。
                 // 先完成自身 PointerExit 回调，再临时摘下默认资源所有权；仅模块 OnDisable 期间保护共享资产。
                 var defaultsField = type.GetField("defaultActions", BindingFlags.Static | BindingFlags.NonPublic);
                 var resetPointers = type.GetMethod("ResetPointers", BindingFlags.Instance | BindingFlags.NonPublic);
                 if (defaultsField == null || resetPointers == null)
+                {
                     throw new MissingMemberException(type.FullName, "defaultActions/ResetPointers");
+                }
+
                 resetPointers.Invoke(module, null);
                 var defaults = defaultsField.GetValue(null);
-                if (defaults == null) continue;
+                if (defaults == null)
+                {
+                    continue;
+                }
+
                 defaultsField.SetValue(null, null);
-                try { module.enabled = false; }
+                try
+                {
+                    module.enabled = false;
+                }
                 finally
                 {
-                    if (defaultsField.GetValue(null) == null) defaultsField.SetValue(null, defaults);
-                    else Debug.LogError("[InputSystemBridge] Default UI actions changed during owned module shutdown; retained the new owner's defaults.");
+                    if (defaultsField.GetValue(null) == null)
+                    {
+                        defaultsField.SetValue(null, defaults);
+                    }
+                    else
+                    {
+                        Debug.LogError("[InputSystemBridge] Default UI actions changed during owned module shutdown; retained the new owner's defaults.");
+                    }
                 }
             }
 #endif
@@ -75,22 +117,38 @@ namespace YLFramework.Core
         {
 #if ENABLE_INPUT_SYSTEM
             var device = data.GetType().GetProperty("device")?.GetValue(data);
-            if (device == null) return null;
+            if (device == null)
+            {
+                return null;
+            }
+
             var buttonName = data.button == PointerEventData.InputButton.Right ? "rightButton" :
                 data.button == PointerEventData.InputButton.Middle ? "middleButton" : "leftButton";
             var button = device.GetType().GetProperty(buttonName)?.GetValue(device);
-            if (button != null) return button;
+            if (button != null)
+            {
+                return button;
+            }
+
             button = device.GetType().GetProperty("tip")?.GetValue(device);
-            if (button != null) return button;
+            if (button != null)
+            {
+                return button;
+            }
+
             var touches = device.GetType().GetProperty("touches")?.GetValue(device) as IEnumerable;
             var touchId = data.GetType().GetProperty("touchId")?.GetValue(data);
             if (touches != null && touchId != null)
+            {
                 foreach (var touch in touches)
                 {
                     var id = touch.GetType().GetProperty("touchId").GetValue(touch);
                     if (Equals(id.GetType().GetMethod("ReadValue").Invoke(id, null), touchId))
+                    {
                         return touch.GetType().GetProperty("press").GetValue(touch);
+                    }
                 }
+            }
 #endif
             return null;
         }
@@ -100,18 +158,35 @@ namespace YLFramework.Core
 
         internal static bool IsPointerDeviceRemoved(object device)
         {
-            if (device == null) return false; // Legacy PointerEventData 没有 InputDevice。
+            if (device == null)
+            {
+                return false; // Legacy PointerEventData 没有 InputDevice。
+            }
+
             var added = device.GetType().GetProperty("added");
             if (added == null || added.PropertyType != typeof(bool))
+            {
                 throw new InvalidOperationException("Input System 设备存活布局不匹配，不能确认旧捕获已结束。");
+            }
+
             return !(bool)added.GetValue(device);
         }
 
         private sealed class PointerAdapter
         {
-            internal readonly FieldInfo States, Length, First, Additional, EventData;
-            internal readonly FieldInfo[] Buttons, Objects;
-            internal readonly FieldInfo Dragging, IgnoreClick, ClickCount, ClickTime, SameObject, PressRaycast;
+            internal readonly FieldInfo States;
+            internal readonly FieldInfo Length;
+            internal readonly FieldInfo First;
+            internal readonly FieldInfo Additional;
+            internal readonly FieldInfo EventData;
+            internal readonly FieldInfo[] Buttons;
+            internal readonly FieldInfo[] Objects;
+            internal readonly FieldInfo Dragging;
+            internal readonly FieldInfo IgnoreClick;
+            internal readonly FieldInfo ClickCount;
+            internal readonly FieldInfo ClickTime;
+            internal readonly FieldInfo SameObject;
+            internal readonly FieldInfo PressRaycast;
             internal PointerAdapter(Type moduleType)
             {
                 FieldInfo Field(Type type, string name) => type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) ??
@@ -137,17 +212,22 @@ namespace YLFramework.Core
                     Array.Exists(Objects, member => member.FieldType != typeof(GameObject)) || SameObject.FieldType != typeof(bool) ||
                     ClickCount.FieldType != typeof(int) || ClickTime.FieldType != typeof(float) ||
                     Dragging.FieldType != typeof(bool) || IgnoreClick.FieldType != typeof(bool) || PressRaycast.FieldType != typeof(RaycastResult))
+                {
                     throw new InvalidOperationException("Input System 指针布局不匹配；需要核实实际包版本和 IL2CPP 保留结果，不能回退为业务字段覆盖。");
+                }
             }
         }
-        private static PointerAdapter pointerAdapter;
-        private static FieldInfo pendingInputFieldActivation;
+        private static PointerAdapter _pointerAdapter;
+        private static FieldInfo _pendingInputFieldActivation;
 
         internal static void CancelPendingInputFieldActivation(UnityEngine.UI.InputField input)
         {
-            var field = pendingInputFieldActivation ?? (pendingInputFieldActivation = typeof(UnityEngine.UI.InputField).GetField("m_ShouldActivateNextUpdate", BindingFlags.NonPublic | BindingFlags.Instance));
+            var field = _pendingInputFieldActivation ?? (_pendingInputFieldActivation = typeof(UnityEngine.UI.InputField).GetField("m_ShouldActivateNextUpdate", BindingFlags.NonPublic | BindingFlags.Instance));
             if (field == null || field.FieldType != typeof(bool))
+            {
                 throw new InvalidOperationException("UGUI InputField 延迟激活布局不匹配，不能完成门禁收尾。");
+            }
+
             field.SetValue(input, false);
         }
 
@@ -155,24 +235,44 @@ namespace YLFramework.Core
         internal static bool CancelPointer(BaseInputModule module, PointerEventData data, int pointerId,
             PointerEventData.InputButton button, object device, int touchId, GameObject target, bool acceptingDown = false)
         {
-            if (!module || data.pointerId != pointerId || !ReferenceEquals(GetPointerDevice(data), device) || GetTouchId(data) != touchId) return false;
+            if (!module || data.pointerId != pointerId || !ReferenceEquals(GetPointerDevice(data), device) || GetTouchId(data) != touchId)
+            {
+                return false;
+            }
+
             bool matched = false;
             if (module.GetType().FullName == "UnityEngine.InputSystem.UI.InputSystemUIInputModule")
             {
-                var adapter = pointerAdapter ?? (pointerAdapter = new PointerAdapter(module.GetType()));
+                var adapter = _pointerAdapter ?? (_pointerAdapter = new PointerAdapter(module.GetType()));
                 object states = adapter.States.GetValue(module);
                 int length = (int)adapter.Length.GetValue(states);
                 var additional = (Array)adapter.Additional.GetValue(states);
                 for (int i = 0; i < length; i++)
                 {
                     object pointer = i == 0 ? adapter.First.GetValue(states) : additional.GetValue(i - 1);
-                    if (!ReferenceEquals(adapter.EventData.GetValue(pointer), data)) continue;
+                    if (!ReferenceEquals(adapter.EventData.GetValue(pointer), data))
+                    {
+                        continue;
+                    }
+
                     var field = adapter.Buttons[(int)button];
                     object state = field.GetValue(pointer);
                     bool owns = acceptingDown;
-                    foreach (var member in adapter.Objects) owns |= (GameObject)member.GetValue(state) == target;
-                    if (!owns) continue;
-                    foreach (var member in adapter.Objects) member.SetValue(state, null);
+                    foreach (var member in adapter.Objects)
+                    {
+                        owns |= (GameObject)member.GetValue(state) == target;
+                    }
+
+                    if (!owns)
+                    {
+                        continue;
+                    }
+
+                    foreach (var member in adapter.Objects)
+                    {
+                        member.SetValue(state, null);
+                    }
+
                     adapter.Dragging.SetValue(state, false);
                     adapter.IgnoreClick.SetValue(state, true);
                     adapter.SameObject.SetValue(state, false);
@@ -180,15 +280,25 @@ namespace YLFramework.Core
                     adapter.ClickTime.SetValue(state, 0f);
                     adapter.PressRaycast.SetValue(state, default(RaycastResult));
                     field.SetValue(pointer, state);
-                    if (i == 0) adapter.First.SetValue(states, pointer);
-                    else additional.SetValue(pointer, i - 1);
+                    if (i == 0)
+                    {
+                        adapter.First.SetValue(states, pointer);
+                    }
+                    else
+                    {
+                        additional.SetValue(pointer, i - 1);
+                    }
+
                     adapter.States.SetValue(module, states);
                     matched = true;
                     break;
                 }
             }
             else if (!(module is StandaloneInputModule))
+            {
                 throw new InvalidOperationException("Panel 捕获取消仅支持 StandaloneInputModule 和经版本校验的 InputSystemUIInputModule；请配置标准输入模块。");
+            }
+
             if (data.button == button && (acceptingDown || data.pointerPress == target || data.rawPointerPress == target || data.pointerDrag == target))
             {
                 data.eligibleForClick = false;
@@ -202,7 +312,11 @@ namespace YLFramework.Core
                 data.pointerPressRaycast = default;
                 var property = typeof(PointerEventData).GetProperty("lastPress");
                 var lastPress = property?.GetSetMethod(true);
-                if (lastPress == null || property.PropertyType != typeof(GameObject)) throw new InvalidOperationException("UGUI PointerEventData.lastPress 布局不匹配，不能完成捕获取消。");
+                if (lastPress == null || property.PropertyType != typeof(GameObject))
+                {
+                    throw new InvalidOperationException("UGUI PointerEventData.lastPress 布局不匹配，不能完成捕获取消。");
+                }
+
                 lastPress.Invoke(data, new object[] { null });
                 matched = true;
             }
@@ -214,17 +328,28 @@ namespace YLFramework.Core
             if (buttonControl != null)
             {
                 var device = buttonControl.GetType().GetProperty("device").GetValue(buttonControl);
-                if (!(bool)device.GetType().GetProperty("added").GetValue(device)) return false;
+                if (!(bool)device.GetType().GetProperty("added").GetValue(device))
+                {
+                    return false;
+                }
+
                 return (bool)buttonControl.GetType().GetProperty("isPressed").GetValue(buttonControl);
             }
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (module is StandaloneInputModule)
             {
-                if (pointerId < 0) return module.input.GetMouseButton((int)button);
+                if (pointerId < 0)
+                {
+                    return module.input.GetMouseButton((int)button);
+                }
+
                 for (int i = 0; i < module.input.touchCount; i++)
                 {
                     var touch = module.input.GetTouch(i);
-                    if (touch.fingerId == pointerId) return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
+                    if (touch.fingerId == pointerId)
+                    {
+                        return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
+                    }
                 }
                 return false;
             }
@@ -235,18 +360,18 @@ namespace YLFramework.Core
 
         static InputSystemBridge() => SingletonSessionState.RegisterSessionReset(() =>
         {
-            _inputModuleFallbackWarned = _mouseReflectionWarned = false;
-            pointerAdapter = null;
-            pendingInputFieldActivation = null;
+            _hasWarnedAboutInputModuleFallback = _hasWarnedAboutMouseReflection = false;
+            _pointerAdapter = null;
+            _pendingInputFieldActivation = null;
 #if ENABLE_INPUT_SYSTEM
-            _mouseReflectionInitialized = false;
+            _hasInitializedMouseReflection = false;
             _mouseCurrentProperty = _mousePositionProperty = null;
             _readValueMethod = null;
 #endif
         });
 
 #if ENABLE_INPUT_SYSTEM
-        private static bool _mouseReflectionInitialized;
+        private static bool _hasInitializedMouseReflection;
         private static PropertyInfo _mouseCurrentProperty;
         private static PropertyInfo _mousePositionProperty;
         private static MethodInfo _readValueMethod;
@@ -258,7 +383,10 @@ namespace YLFramework.Core
         /// </summary>
         public static void EnsureEventSystemInputModule(EventSystem eventSystem)
         {
-            if (!eventSystem) throw new ArgumentNullException(nameof(eventSystem));
+            if (!eventSystem)
+            {
+                throw new ArgumentNullException(nameof(eventSystem));
+            }
 
             if (eventSystem.GetComponent<BaseInputModule>() != null)
             {
@@ -304,7 +432,11 @@ namespace YLFramework.Core
                     return false;
                 }
 
-                if (!(_readValueMethod.Invoke(positionControl, null) is Vector2 result)) return false;
+                if (!(_readValueMethod.Invoke(positionControl, null) is Vector2 result))
+                {
+                    return false;
+                }
+
                 position = result;
                 return true;
             }
@@ -337,23 +469,23 @@ namespace YLFramework.Core
 
         private static void WarnInputModuleFallbackOnce(string reason)
         {
-            if (_inputModuleFallbackWarned)
+            if (_hasWarnedAboutInputModuleFallback)
             {
                 return;
             }
 
-            _inputModuleFallbackWarned = true;
+            _hasWarnedAboutInputModuleFallback = true;
             Debug.LogWarning($"[InputSystemBridge] InputSystem 输入模块不可用（{reason}）。仅启用 Legacy 时允许回退 StandaloneInputModule。");
         }
 
         private static void WarnMouseReflectionOnce(string reason)
         {
-            if (_mouseReflectionWarned)
+            if (_hasWarnedAboutMouseReflection)
             {
                 return;
             }
 
-            _mouseReflectionWarned = true;
+            _hasWarnedAboutMouseReflection = true;
             Debug.LogWarning($"[InputSystemBridge] 反射读取 InputSystem 鼠标位置失败（{reason}），本次没有有效鼠标输入。");
         }
 
@@ -381,8 +513,16 @@ namespace YLFramework.Core
 
                 // 新模块 OnEnable 已配置默认 actions；只在 inactive 对象未初始化时补齐，避免重复分配引用。
                 var asset = moduleType.GetProperty("actionsAsset", BindingFlags.Public | BindingFlags.Instance);
-                if (asset == null) throw new MissingMemberException(moduleType.FullName, "actionsAsset");
-                if (asset.GetValue(module) == null) assignDefaultActions.Invoke(module, null);
+                if (asset == null)
+                {
+                    throw new MissingMemberException(moduleType.FullName, "actionsAsset");
+                }
+
+                if (asset.GetValue(module) == null)
+                {
+                    assignDefaultActions.Invoke(module, null);
+                }
+
                 return true;
             }
             catch (Exception e)
@@ -395,12 +535,12 @@ namespace YLFramework.Core
 
         private static bool EnsureMouseReflection()
         {
-            if (_mouseReflectionInitialized)
+            if (_hasInitializedMouseReflection)
             {
                 return _mouseCurrentProperty != null && _mousePositionProperty != null && _readValueMethod != null;
             }
 
-            _mouseReflectionInitialized = true;
+            _hasInitializedMouseReflection = true;
 
             var mouseType = Type.GetType(MouseTypeName);
             _mouseCurrentProperty = mouseType?.GetProperty("current", BindingFlags.Public | BindingFlags.Static);

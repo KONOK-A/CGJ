@@ -5,9 +5,10 @@ using UnityEngine;
 
 namespace YLFramework.Overlap
 {
-    public enum OverlapAreaMode {
+    public enum OverlapAreaMode
+    {
 
-        Position ,
+        Position,
         Transform
     }
 
@@ -19,9 +20,10 @@ namespace YLFramework.Overlap
 
         #region 字段
 
+        [global::UnityEngine.Serialization.FormerlySerializedAs("_mode")]
         [SerializeField]
         [Tooltip("检测坐标方式")]
-        private OverlapAreaMode _mode = OverlapAreaMode.Position;
+        private OverlapAreaMode mode = OverlapAreaMode.Position;
 
         [SerializeField]
         [Tooltip("检测区域坐标")]
@@ -42,12 +44,14 @@ namespace YLFramework.Overlap
         /// </summary>
         public OverlapAreaMode Mode
         {
-            get {
-                return _mode;
+            get
+            {
+                return mode;
             }
 
-            set {
-                _mode = value;
+            set
+            {
+                mode = value;
             }
 
         }
@@ -69,7 +73,11 @@ namespace YLFramework.Overlap
 
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 ClearResults();
@@ -79,26 +87,31 @@ namespace YLFramework.Overlap
                     case OverlapAreaMode.Position:
 
                         if (positions == null || positions.Count < 2)
+                        {
                             break;
+                        }
 
-                        for (int i = 0; i < positions.Count - 1 && !CheckInvalidated; i++)
+                        for (int i = 0; i < positions.Count - 1 && !IsCheckInvalidated; i++)
                         {
                             Vector3 start = transform.localToWorldMatrix.MultiplyPoint(positions[i]);
                             Vector3 to = transform.localToWorldMatrix.MultiplyPoint(positions[i + 1]);
 
-    #if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                             ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-                            int count = Physics2D.defaultPhysicsScene.OverlapArea(start, to, contactFilter, results);
-    #else
-                            int count = Physics2D.OverlapAreaNonAlloc(start, to, results, layerMask.value);
-    #endif
+                            int count = Physics2D.defaultPhysicsScene.OverlapArea(start, to, contactFilter, ResultBuffer);
+#else
+                            int count = Physics2D.OverlapAreaNonAlloc(start, to, ResultBuffer, layerMask.value);
+#endif
 
                             CheckCapacity(count);
-                            for (int j = 0; j < count && !CheckInvalidated; j++)
+                            for (int j = 0; j < count && !IsCheckInvalidated; j++)
                             {
-                                if (!results[j] || results[j].isTrigger) continue;
+                                if (!ResultBuffer[j] || ResultBuffer[j].isTrigger)
+                                {
+                                    continue;
+                                }
 
-                                AddResults(results[j], Vector3.Lerp(start, to, 0.5f));
+                                AddResults(ResultBuffer[j], Vector3.Lerp(start, to, 0.5f));
                             }
 
                         }
@@ -108,30 +121,37 @@ namespace YLFramework.Overlap
 
 
                         if (transforms == null || transforms.Count < 2)
+                        {
                             break;
+                        }
 
-                        for (int i = 0; i < transforms.Count - 1 && !CheckInvalidated; i++)
+                        for (int i = 0; i < transforms.Count - 1 && !IsCheckInvalidated; i++)
                         {
                             if (transforms[i] == null || transforms[i + 1] == null)
+                            {
                                 continue;
+                            }
 
                             Vector3 start = transforms[i].position;
                             Vector3 to = transforms[i + 1].position;
 
-    #if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                             ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-                            int count = Physics2D.defaultPhysicsScene.OverlapArea(start, to, contactFilter, results);
+                            int count = Physics2D.defaultPhysicsScene.OverlapArea(start, to, contactFilter, ResultBuffer);
 
-    #else
-                            int count = Physics2D.OverlapAreaNonAlloc(start, to, results, layerMask.value);
-    #endif
+#else
+                            int count = Physics2D.OverlapAreaNonAlloc(start, to, ResultBuffer, layerMask.value);
+#endif
 
                             CheckCapacity(count);
-                            for (int j = 0; j < count && !CheckInvalidated; j++)
+                            for (int j = 0; j < count && !IsCheckInvalidated; j++)
                             {
-                                if (!results[j] || results[j].isTrigger) continue;
+                                if (!ResultBuffer[j] || ResultBuffer[j].isTrigger)
+                                {
+                                    continue;
+                                }
 
-                                AddResults(results[j], Vector3.Lerp(start, to, 0.5f));
+                                AddResults(ResultBuffer[j], Vector3.Lerp(start, to, 0.5f));
                             }
                         }
 
@@ -140,11 +160,14 @@ namespace YLFramework.Overlap
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
         }
 
 
-#endregion
+        #endregion
 
 
 

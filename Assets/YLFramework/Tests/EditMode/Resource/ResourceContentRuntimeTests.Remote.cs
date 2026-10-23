@@ -32,7 +32,10 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     var parent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "kilo")) + Path.DirectorySeparatorChar;
                     if (!Path.GetFullPath(ownedOverride).StartsWith(parent, StringComparison.OrdinalIgnoreCase) || Path.GetFileName(ownedOverride) != "local-only-tls.pfx")
+                    {
                         throw new InvalidOperationException("The optional local test certificate must stay inside its owned temporary scope.");
+                    }
+
                     ResourceLocalSnapshot.RejectLinks(ownedOverride);
                     Environment.SetEnvironmentVariable("YL_RESOURCE_TEST_PFX", ownedOverride);
                     Environment.SetEnvironmentVariable("YL_RESOURCE_TEST_PASSWORD", "e04-local-test-only");
@@ -97,12 +100,18 @@ namespace YLFramework.Tests.ResourceBuild
             yield return activate;
             Assert.That(activate.TakeResult(), Is.True);
             using (var text = system.Acquire<UnityEngine.TextAsset>(Address("entry.txt")))
+            {
                 Assert.That(text.Asset.text, Is.EqualTo("second formal encrypted version"));
+            }
+
             using var rollback = system.RollbackAsync();
             yield return rollback;
             Assert.That(rollback.TakeResult(), Is.True);
             using (var text = system.Acquire<UnityEngine.TextAsset>(Address("entry.txt")))
+            {
                 Assert.That(text.Asset.text, Does.Contain("first release"));
+            }
+
             Assert.That(system.GetContentDiagnosticsSnapshot().ReservedBufferBytes, Is.Zero);
         }
     }

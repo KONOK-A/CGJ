@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -91,7 +91,7 @@ namespace YLFramework.Events
 
         // 使用单例比较器
         private readonly Dictionary<EventType, EventChannelBase> _eventInfoDict = new(EventTypeEnumComparer.Instance);
-        private bool _destroyed;
+        private bool _isDestroyed;
 
         #endregion
 
@@ -106,11 +106,19 @@ namespace YLFramework.Events
         /// <param name="eventType">事件类型。</param>
         /// <param name="action">事件监听回调。</param>
         /// <returns>用于精确注销本次注册的句柄。</returns>
-        public IUnRegister Register<T>(EventType eventType, Action<T> action)
+        public IUnregister Register<T>(EventType eventType, Action<T> action)
         {
-            if (_destroyed || !this) throw new ObjectDisposedException(nameof(EventListener));
+            if (_isDestroyed || !this)
+            {
+                throw new ObjectDisposedException(nameof(EventListener));
+            }
+
             ValidatePayload<T>(eventType);
-            if (action == null) return EmptyUnRegister.Instance;
+            if (action == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
             if (_eventInfoDict.TryGetValue(eventType, out var easyEvent))
             {
                 return ((EventChannel<T>)easyEvent).Register(action);
@@ -160,7 +168,9 @@ namespace YLFramework.Events
                     throw new ArgumentOutOfRangeException(nameof(eventType), eventType, "未知 Unity 事件类型。");
             }
             if (typeof(T) != payloadType)
+            {
                 throw new ArgumentException($"{eventType} 的 Unity payload 是 {payloadType.FullName}，不能注册 {typeof(T).FullName}。", nameof(eventType));
+            }
         }
 
         /// <summary>
@@ -169,14 +179,17 @@ namespace YLFramework.Events
         /// <typeparam name="T">事件参数类型。</typeparam>
         /// <param name="eventType">事件类型。</param>
         /// <param name="action">要注销的监听回调。</param>
-        public void UnRegister<T>(EventType eventType, Action<T> action)
+        public void Unregister<T>(EventType eventType, Action<T> action)
         {
             ValidatePayload<T>(eventType);
-            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
+            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent))
+            {
+                return;
+            }
             // 有保存的事件则移除
             if (easyEvent is EventChannel<T> e)
             {
-                e.UnRegister(action);
+                e.Unregister(action);
             }
         }
 
@@ -184,9 +197,12 @@ namespace YLFramework.Events
         /// 永久关闭指定 EventType 的代码通道，终结旧 token 和旧在途快照；后续注册建立新通道。
         /// </summary>
         /// <param name="eventType">事件类型。</param>
-        public void UnRegister(EventType eventType)
+        public void Unregister(EventType eventType)
         {
-            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
+            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent))
+            {
+                return;
+            }
             // 有保存的事件则移除
             easyEvent.Dispose();
             _eventInfoDict.Remove(eventType);
@@ -195,15 +211,21 @@ namespace YLFramework.Events
         /// <summary>
         /// 注销当前监听的所有代码事件。
         /// </summary>
-        /// <param name="isUnRegisterUnityEvent">是否同时清空在编辑器面板中设置的 UnityEvent。</param>
-        public void UnRegisterAll(bool isUnRegisterUnityEvent = false)
+        /// <param name="clearUnityEvents">是否同时清空在编辑器面板中设置的 UnityEvent。</param>
+        public void UnregisterAll(bool clearUnityEvents = false)
         {
             // 组件私有通道直接结束 owner，不把其寿命绑定到全局事件池。
             List<Exception> errors = null;
-            try { SubscriptionCleanup.ReleaseAll(_eventInfoDict, pair => pair.Value.Dispose()); }
-            catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+            try
+            {
+                SubscriptionCleanup.ReleaseAll(_eventInfoDict, pair => pair.Value.Dispose());
+            }
+            catch (Exception error)
+            {
+                (errors ??= new List<Exception>()).Add(error);
+            }
 
-            if (isUnRegisterUnityEvent)
+            if (clearUnityEvents)
             {
                 // UnityEvent.RemoveAllListeners 只能移除运行时动态添加的监听，清不掉 Inspector 配置的持久监听；
                 // 需要“全部清空”时只能把字段整体置空（仅影响运行时内存，不会改写资源文件）
@@ -297,19 +319,32 @@ namespace YLFramework.Events
         private LayerMask physicsLayerMask = Physics.AllLayers;
 
         /// <summary>物理消息的对方层过滤；不影响指针消息或 Unity 原生物理判定。</summary>
-        public LayerMask PhysicsLayerMask { get => physicsLayerMask; set => physicsLayerMask = value; }
+        public LayerMask PhysicsLayerMask
+        {
+            get => physicsLayerMask; set => physicsLayerMask = value;
+        }
 
         private void OnDestroy()
         {
-            _destroyed = true;
+            _isDestroyed = true;
             // 终结组件自有代码通道；Inspector 中的 UnityEvent 不受影响
-            try { UnRegisterAll(); }
-            catch (Exception error) { Debug.LogException(error, this); }
+            try
+            {
+                UnregisterAll();
+            }
+            catch (Exception error)
+            {
+                Debug.LogException(error, this);
+            }
         }
 
         private void TriggerEvent<T>(EventType eventType, T eventData)
         {
-            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent)) return;
+            if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent))
+            {
+                return;
+            }
+
             if (easyEvent is EventChannel<T> e)
             {
                 e.Trigger(eventData);
@@ -380,42 +415,66 @@ namespace YLFramework.Events
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionEnter, collision);
             collisionEnter?.Invoke(collision);
         }
 
         private void OnCollisionStay(Collision collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionStay, collision);
             collisionStay?.Invoke(collision);
         }
 
         private void OnCollisionExit(Collision collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionExit, collision);
             collisionExit?.Invoke(collision);
         }
 
         private void OnCollisionEnter2D(Collision2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionEnter2D, collision);
             collisionEnter2D?.Invoke(collision);
         }
 
         private void OnCollisionStay2D(Collision2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionStay2D, collision);
             collisionStay2D?.Invoke(collision);
         }
 
         private void OnCollisionExit2D(Collision2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnCollisionExit2D, collision);
             collisionExit2D?.Invoke(collision);
         }
@@ -426,42 +485,66 @@ namespace YLFramework.Events
 
         private void OnTriggerEnter(Collider other)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerEnter, other);
             triggerEnter?.Invoke(other);
         }
 
         private void OnTriggerStay(Collider other)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerStay, other);
             triggerStay?.Invoke(other);
         }
 
         private void OnTriggerExit(Collider other)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerExit, other);
             triggerExit?.Invoke(other);
         }
 
         private void OnTriggerEnter2D(Collider2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerEnter2D, collision);
             triggerEnter2D?.Invoke(collision);
         }
 
         private void OnTriggerStay2D(Collider2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerStay2D, collision);
             triggerStay2D?.Invoke(collision);
         }
 
         private void OnTriggerExit2D(Collider2D collision)
         {
-            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer)) return;
+            if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
+            {
+                return;
+            }
+
             TriggerEvent(EventType.OnTriggerExit2D, collision);
             triggerExit2D?.Invoke(collision);
         }

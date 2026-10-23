@@ -5,6 +5,7 @@ namespace YLFramework.Tests.Extensions.Data
 {
     public sealed class ExcelAssetOwnerFixture : ScriptableObject
     {
-        public List<ExcelAssetRowFixture> Rows = new List<ExcelAssetRowFixture>();
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Rows")]
+        public List<ExcelAssetRowFixture> rows = new List<ExcelAssetRowFixture>();
     }
 }

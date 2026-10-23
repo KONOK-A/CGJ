@@ -5,61 +5,105 @@ namespace YLFramework.Localization
 {
     public sealed class LocalizationConfigHandle : IDisposable
     {
-        private ResourceRequest<AssetLease<MultiLanguageConfigs>> request;
-        private AssetLease<MultiLanguageConfigs> lease;
-        private MultiLanguageConfigs config;
-        public MultiLanguageConfigs Config => !IsDisposed && (lease == null || lease.IsValid) ? config : null;
-        public bool IsDisposed { get; private set; }
-        public bool IsLoading => request != null && !request.IsDone;
-        public Exception Error { get; private set; }
-        internal LocalizationConfigHandle() { }
+        private ResourceRequest<AssetLease<MultiLanguageConfigs>> _request;
+        private AssetLease<MultiLanguageConfigs> _lease;
+        private MultiLanguageConfigs _config;
+        public MultiLanguageConfigs Config => !IsDisposed && (_lease == null || _lease.IsValid) ? _config : null;
+        public bool IsDisposed
+        {
+            get; private set;
+        }
+        public bool IsLoading => _request != null && !_request.IsDone;
+        public Exception Error
+        {
+            get; private set;
+        }
+        internal LocalizationConfigHandle()
+        {
+        }
 
         internal void Attach(MultiLanguageConfigs config)
         {
-            this.config = config;
-            try { LocalizationManager.Register(this); }
-            catch { this.config = null; throw; }
+            this._config = config;
+            try
+            {
+                LocalizationManager.Register(this);
+            }
+            catch
+            {
+                this._config = null;
+                throw;
+            }
         }
 
         internal void Load(ResourceSystem resources, ResourceAddress address)
         {
             var pending = resources.AcquireAsync<MultiLanguageConfigs>(address);
-            if (IsDisposed) { pending.Dispose(); return; }
-            request = pending;
+            if (IsDisposed)
+            {
+                pending.Dispose();
+                return;
+            }
+            _request = pending;
             pending.Completed += Complete;
         }
 
         private void Complete(ResourceRequest<AssetLease<MultiLanguageConfigs>> completed)
         {
-            if (ReferenceEquals(request, completed)) request = null;
+            if (ReferenceEquals(_request, completed))
+            {
+                _request = null;
+            }
+
             try
             {
-                if (IsDisposed || completed.IsDisposed) return;
-                if (completed.Status != ResourceRequestStatus.Succeeded) { Error = completed.Error; return; }
-                lease = completed.TakeResult();
-                Attach(lease.Asset);
+                if (IsDisposed || completed.IsDisposed)
+                {
+                    return;
+                }
+
+                if (completed.Status != ResourceRequestStatus.Succeeded)
+                {
+                    Error = completed.Error;
+                    return;
+                }
+                _lease = completed.TakeResult();
+                Attach(_lease.Asset);
             }
             catch (Exception error)
             {
                 Error = error;
-                lease?.Dispose();
-                lease = null;
+                _lease?.Dispose();
+                _lease = null;
             }
-            finally { completed.Dispose(); }
+            finally
+            {
+                completed.Dispose();
+            }
         }
 
         public void Dispose()
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+            {
+                return;
+            }
+
             IsDisposed = true;
-            var pending = request; request = null;
-            var held = lease; lease = null;
+            var pending = _request;
+            _request = null;
+            var held = _lease;
+            _lease = null;
             try
             {
                 pending?.Dispose();
                 LocalizationManager.Unregister(this);
             }
-            finally { config = null; held?.Dispose(); }
+            finally
+            {
+                _config = null;
+                held?.Dispose();
+            }
         }
     }
 }

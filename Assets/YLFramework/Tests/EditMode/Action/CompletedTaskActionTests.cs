@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -6,18 +5,19 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 
 namespace YLFramework.Tests.Actions
 {
     public class CompletedTaskActionTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private readonly List<TaskCompletionSource<bool>> mTasks = new List<TaskCompletionSource<bool>>();
+        private readonly List<IAction> _actions = new List<IAction>();
+        private readonly List<TaskCompletionSource<bool>> _tasks = new List<TaskCompletionSource<bool>>();
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
@@ -27,20 +27,27 @@ namespace YLFramework.Tests.Actions
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mActions)
+            foreach (var action in _actions)
             {
-                if (!action.Deinited) action.Deinit();
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            foreach (var task in mTasks) task.TrySetResult(true);
-            mActions.Clear();
-            mTasks.Clear();
+            foreach (var task in _tasks)
+            {
+                task.TrySetResult(true);
+            }
+
+            _actions.Clear();
+            _tasks.Clear();
             ActionQueue.Drain();
         }
 
         private TaskCompletionSource<bool> PendingTask()
         {
             var task = new TaskCompletionSource<bool>();
-            mTasks.Add(task);
+            _tasks.Add(task);
             return task;
         }
 
@@ -48,18 +55,26 @@ namespace YLFramework.Tests.Actions
         public void AlreadyCompletedTaskCanFinishDuringTheFirstExecute()
         {
             var getters = 0;
-            var action = Own(Kit.Task(() => { getters++; return Task.FromResult(42); }));
+            var action = Own(Kit.Task(() =>
+            {
+                getters++;
+                return Task.FromResult(42);
+            }));
             Assert.That(action.Execute(0), Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
             Assert.That(getters, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
         }
 
         [Test]
         public void ResetReevaluatesTheTaskFactoryAndExplicitAllocateRemainsAvailable()
         {
             var getters = 0;
-            var action = Own(TaskAction.Allocate(() => { getters++; return Task.CompletedTask; }));
+            var action = Own(TaskAction.Allocate(() =>
+            {
+                getters++;
+                return Task.CompletedTask;
+            }));
             Assert.That(action.Execute(0), Is.True);
             action.Reset();
             Assert.That(action.Execute(0), Is.True);
@@ -81,8 +96,12 @@ namespace YLFramework.Tests.Actions
         public void PausedBeforeFirstExecutionDoesNotPreventTaskStart()
         {
             var calls = 0;
-            var action = Own(Kit.Task(() => { calls++; return Task.CompletedTask; }));
-            action.Paused = true;
+            var action = Own(Kit.Task(() =>
+            {
+                calls++;
+                return Task.CompletedTask;
+            }));
+            action.IsPaused = true;
             Assert.That(action.Execute(0), Is.True);
             Assert.That(calls, Is.EqualTo(1));
         }
@@ -96,7 +115,7 @@ namespace YLFramework.Tests.Actions
             var pending = ActionQueue.PendingCount;
             Assert.DoesNotThrow(action.Deinit);
             Assert.DoesNotThrow(action.Deinit);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(task.Task.IsCompleted, Is.False);
             Assert.That(task.Task.IsCanceled, Is.False);
@@ -119,7 +138,7 @@ namespace YLFramework.Tests.Actions
             finally
             {
                 task.Task.Dispose();
-                mTasks.Remove(task);
+                _tasks.Remove(task);
             }
         }
 
@@ -129,7 +148,7 @@ namespace YLFramework.Tests.Actions
             LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: task-active-fault"));
             var action = Own(Kit.Task(() => Task.FromException(new InvalidOperationException("task-active-fault"))));
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
         }
 
@@ -139,7 +158,7 @@ namespace YLFramework.Tests.Actions
             LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: task-factory-fault"));
             var action = Own(Kit.Task(() => throw new InvalidOperationException("task-factory-fault")));
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
         }
 
@@ -150,7 +169,7 @@ namespace YLFramework.Tests.Actions
             task.SetCanceled();
             var action = Own(task.Task.ToAction());
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
         }
 
@@ -162,7 +181,7 @@ namespace YLFramework.Tests.Actions
             var action = Own(task.ToAction());
             Assert.That(action.Execute(0), Is.False);
             Assert.That(task.IsFaulted, Is.True);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
         }
     }

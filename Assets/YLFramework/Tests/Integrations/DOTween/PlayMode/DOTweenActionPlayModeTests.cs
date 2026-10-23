@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,6 +7,7 @@ using DG.Tweening;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.Actions.DOTween
@@ -16,20 +16,20 @@ namespace YLFramework.Tests.Actions.DOTween
 
     public class DOTweenActionPlayModeTests
     {
-        private readonly List<ActionLease> mActions = new List<ActionLease>();
-        private readonly Dictionary<Tween, object> mTweens = new Dictionary<Tween, object>();
-        private readonly List<GameObject> mRoots = new List<GameObject>();
-        private readonly List<IActionController> mControllers = new List<IActionController>();
-        private MonoUpdateActionExecutor mLocal;
-        private Action mRestoreSettings;
-        private bool mOwnEnvironment;
+        private readonly List<ActionLease> _actions = new List<ActionLease>();
+        private readonly Dictionary<Tween, object> _tweens = new Dictionary<Tween, object>();
+        private readonly List<GameObject> _roots = new List<GameObject>();
+        private readonly List<IActionController> _controllers = new List<IActionController>();
+        private MonoUpdateActionExecutor _local;
+        private Action _restoreSettings;
+        private bool _ownsEnvironment;
 
         [SetUp]
         public void SetUp()
         {
-            mOwnEnvironment = false;
+            _ownsEnvironment = false;
             Assert.That(Application.isPlaying, Is.True);
-            Assert.That(ActionKit.Initialized, Is.False, "Shutdown tests require an unowned ActionKit session.");
+            Assert.That(ActionKit.IsInitialized, Is.False, "Shutdown tests require an unowned ActionKit session.");
             Assert.That(Object.FindObjectsOfType<MonoUpdateActionExecutor>(true), Is.Empty, "Existing controllers must not be cancelled by this fixture.");
             Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true), Is.Empty);
             Assert.That(Object.FindObjectsOfType<ActionKitCurrentScene>(true), Is.Empty);
@@ -41,7 +41,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(contextType.FullName, Is.EqualTo("UnityEngine.UnitySynchronizationContext"));
             Assert.That(contextType.Assembly, Is.SameAs(typeof(Object).Assembly));
             Assert.That(contextType.IsSealed, Is.True);
-            mOwnEnvironment = true;
+            _ownsEnvironment = true;
 
             var timeScale = DOTween.timeScale;
             var unscaledTimeScale = DOTween.unscaledTimeScale;
@@ -64,7 +64,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var ease = DOTween.defaultEaseType;
             var overshoot = DOTween.defaultEaseOvershootOrAmplitude;
             var period = DOTween.defaultEasePeriod;
-            mRestoreSettings = () =>
+            _restoreSettings = () =>
             {
                 DOTween.timeScale = timeScale;
                 DOTween.unscaledTimeScale = unscaledTimeScale;
@@ -91,57 +91,94 @@ namespace YLFramework.Tests.Actions.DOTween
             // Retain the DOTween service; Clear/destroy would mutate shared initialization and pools.
             Assert.That(DOTween.Init(recyclable, safeMode, log), Is.Not.Null,
                 "A live DOTween service must be initialized before creating lifecycle test tweens.");
-            mRestoreSettings();
+            _restoreSettings();
             var root = new GameObject("ActionKit.DOTween.PlayModeTest");
-            mRoots.Add(root);
-            mLocal = root.AddComponent<MonoUpdateActionExecutor>();
+            _roots.Add(root);
+            _local = root.AddComponent<MonoUpdateActionExecutor>();
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!mOwnEnvironment) yield break;
+            if (!_ownsEnvironment)
+            {
+                yield break;
+            }
+
             try
             {
-                foreach (var entry in mTweens)
+                foreach (var entry in _tweens)
                 {
                     var tween = entry.Key;
-                    if (!tween.IsActive() || !ReferenceEquals(tween.target, entry.Value)) continue;
+                    if (!tween.IsActive() || !ReferenceEquals(tween.target, entry.Value))
+                    {
+                        continue;
+                    }
+
                     tween.onComplete = tween.onKill = tween.onPlay = tween.onPause = null;
                     tween.OnStart(null);
                 }
-                foreach (var lease in mActions)
-                    if (lease.Matches && !lease.Action.Deinited) lease.Action.Deinit();
+                foreach (var lease in _actions)
+                {
+                    if (lease.Matches && !lease.Action.IsDeinitialized)
+                    {
+                        lease.Action.Deinit();
+                    }
+                }
                 // Setup proved all module hosts/controllers were absent before acquiring this session.
                 ActionKit.Shutdown();
-                foreach (var root in mRoots)
-                    if (root) Object.Destroy(root);
+                foreach (var root in _roots)
+                {
+                    if (root)
+                    {
+                        Object.Destroy(root);
+                    }
+                }
+
                 yield return UnityContextTurn();
                 yield return null;
-                foreach (var controller in mControllers)
-                    if (controller.Action != null) controller.Recycle();
+                foreach (var controller in _controllers)
+                {
+                    if (controller.Action != null)
+                    {
+                        controller.Recycle();
+                    }
+                }
+
                 ActionQueue.Drain();
             }
             finally
             {
-                foreach (var entry in mTweens)
-                    if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value)) entry.Key.Kill(false);
-                foreach (var root in mRoots)
-                    if (root) Object.Destroy(root);
-                mRestoreSettings?.Invoke();
-                mRestoreSettings = null;
-                mControllers.Clear();
-                mActions.Clear();
-                mTweens.Clear();
-                mRoots.Clear();
-                mLocal = null;
-                mOwnEnvironment = false;
+                foreach (var entry in _tweens)
+                {
+                    if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value))
+                    {
+                        entry.Key.Kill(false);
+                    }
+                }
+
+                foreach (var root in _roots)
+                {
+                    if (root)
+                    {
+                        Object.Destroy(root);
+                    }
+                }
+
+                _restoreSettings?.Invoke();
+                _restoreSettings = null;
+                _controllers.Clear();
+                _actions.Clear();
+                _tweens.Clear();
+                _roots.Clear();
+                _local = null;
+                _ownsEnvironment = false;
             }
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(new ActionLease(action));
+            _actions.Add(new ActionLease(action));
             return action;
         }
 
@@ -153,34 +190,49 @@ namespace YLFramework.Tests.Actions.DOTween
                 .SetUpdate(UpdateType.Manual, independent).SetEase(Ease.Linear)
                 .SetAutoKill(autoKill).SetRecyclable(false).SetTarget(source);
             tween.OnPause(null).Pause();
-            mTweens[tween] = source;
+            _tweens[tween] = source;
             return tween;
         }
 
         private IActionController Start(IAction action, int scope, Action<IActionController> finished = null)
         {
             IActionController controller;
-            if (scope == 0) controller = action.Start(mLocal, finished);
+            if (scope == 0)
+            {
+                controller = action.Start(_local, finished);
+            }
             else if (scope == 1)
             {
                 var host = ActionKitCurrentScene.SceneComponent;
-                if (!mRoots.Contains(host.gameObject)) mRoots.Add(host.gameObject);
+                if (!_roots.Contains(host.gameObject))
+                {
+                    _roots.Add(host.gameObject);
+                }
+
                 controller = action.StartCurrentScene(finished);
             }
             else
             {
                 var host = ActionGlobalHost.Instance;
-                if (!mRoots.Contains(host.gameObject)) mRoots.Add(host.gameObject);
+                if (!_roots.Contains(host.gameObject))
+                {
+                    _roots.Add(host.gameObject);
+                }
+
                 controller = action.StartGlobal(finished);
             }
-            mControllers.Add(controller);
+            _controllers.Add(controller);
             return controller;
         }
 
         private static IEnumerator Await(Func<bool> condition)
         {
             var limit = Time.realtimeSinceStartup + 2f;
-            while (!condition() && Time.realtimeSinceStartup < limit) yield return null;
+            while (!condition() && Time.realtimeSinceStartup < limit)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "The real Unity executor did not reach the expected state within two seconds.");
         }
 
@@ -194,9 +246,13 @@ namespace YLFramework.Tests.Actions.DOTween
         private void Advance(float scaled = 1.1f, float unscaled = 1.1f)
         {
             // Explicit fixture dt and allocation identity avoid advancing another owner's manual tweens.
-            foreach (var entry in mTweens.ToArray())
+            foreach (var entry in _tweens.ToArray())
+            {
                 if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value))
+                {
                     entry.Key.ManualUpdate(scaled, unscaled);
+                }
+            }
         }
 
         [UnityTest]
@@ -228,7 +284,10 @@ namespace YLFramework.Tests.Actions.DOTween
             }
             finally
             {
-                if (foreign.IsActive() && ReferenceEquals(foreign.target, token)) foreign.Kill(false);
+                if (foreign.IsActive() && ReferenceEquals(foreign.target, token))
+                {
+                    foreign.Kill(false);
+                }
             }
         }
 
@@ -245,7 +304,7 @@ namespace YLFramework.Tests.Actions.DOTween
             {
                 calls++;
                 observed = current;
-                observedLiveAction = ReferenceEquals(current.Action, action) && !action.Deinited;
+                observedLiveAction = ReferenceEquals(current.Action, action) && !action.IsDeinitialized;
             });
             Assert.That(controller.Action, Is.SameAs(action));
             Assert.That(tween.IsPlaying(), Is.True);
@@ -292,7 +351,7 @@ namespace YLFramework.Tests.Actions.DOTween
             yield return null;
             yield return null;
             Assert.That(controller.Action, Is.SameAs(action));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(calls, Is.Zero);
             tween.Kill(false);
             yield return Await(() => controller.Action == null);
@@ -319,9 +378,19 @@ namespace YLFramework.Tests.Actions.DOTween
             var controller = Start(action, scope, _ => calls++);
             controller.Pause();
             GameObject host;
-            if (scope == 0) host = mLocal.gameObject;
-            else if (scope == 1) host = ActionKitCurrentScene.SceneComponent.gameObject;
-            else host = ActionGlobalHost.Instance.gameObject;
+            if (scope == 0)
+            {
+                host = _local.gameObject;
+            }
+            else if (scope == 1)
+            {
+                host = ActionKitCurrentScene.SceneComponent.gameObject;
+            }
+            else
+            {
+                host = ActionGlobalHost.Instance.gameObject;
+            }
+
             Object.Destroy(host);
             yield return Await(() => controller.Action == null);
             yield return UnityContextTurn();
@@ -380,7 +449,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var controller = Start(action, 0, _ => calls++);
             controller.Pause();
             controller.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.False);
@@ -429,7 +498,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var controller = Start(action, 0, _ => calls++);
             Assert.Throws<InvalidOperationException>(() => Start(action, 2));
             Assert.That(controller.Action, Is.SameAs(action));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(tween.IsPlaying(), Is.True);
             Advance();
             yield return Await(() => controller.Action == null);
@@ -442,11 +511,15 @@ namespace YLFramework.Tests.Actions.DOTween
             IAction action = null;
             var userComplete = 0;
             var calls = 0;
-            var tween = NewTween(false).OnComplete(() => { userComplete++; action.Deinit(); });
+            var tween = NewTween(false).OnComplete(() =>
+            {
+                userComplete++;
+                action.Deinit();
+            });
             action = Own(tween.ToAction());
             var controller = Start(action, 1, _ => calls++);
             Advance();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(tween.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             yield return Await(() => controller.Action == null);
@@ -494,21 +567,29 @@ namespace YLFramework.Tests.Actions.DOTween
                 Start(Own(tween.ToAction()), scope, _ => calls++).Pause();
             }
             var unrelated = NewTween(false).Play();
-            var userRoot = mLocal.gameObject;
+            var userRoot = _local.gameObject;
             ActionKit.Shutdown();
-            Assert.That(ActionKit.Initialized, Is.False);
+            Assert.That(ActionKit.IsInitialized, Is.False);
             foreach (var tween in owned)
             {
                 Assert.That(tween.IsActive(), Is.True);
                 Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             }
-            foreach (var controller in mControllers) Assert.That(controller.Action, Is.Null);
+            foreach (var controller in _controllers)
+            {
+                Assert.That(controller.Action, Is.Null);
+            }
+
             Assert.That(unrelated.IsActive(), Is.True);
             Assert.That(unrelated.IsPlaying(), Is.True);
             Assert.That(userRoot != null, Is.True);
             yield return UnityContextTurn();
             yield return null;
-            foreach (var tween in owned) Assert.That(tween.IsActive(), Is.False);
+            foreach (var tween in owned)
+            {
+                Assert.That(tween.IsActive(), Is.False);
+            }
+
             Assert.That(userRoot != null, Is.True);
             Assert.That(userRoot.GetComponents<MonoUpdateActionExecutor>(), Is.Empty);
             Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true), Is.Empty);
@@ -535,7 +616,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(returned.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => returned.ToAction());
             Assert.That(unrelated.IsActive(), Is.True);
-            Assert.That(ActionKit.Initialized, Is.False);
+            Assert.That(ActionKit.IsInitialized, Is.False);
             yield return UnityContextTurn();
             Assert.That(returned.IsActive(), Is.False);
             Assert.That(unrelated.IsActive(), Is.True);
@@ -547,7 +628,12 @@ namespace YLFramework.Tests.Actions.DOTween
         {
             var created = new List<Tween>();
             var calls = 0;
-            var repeat = Own(ActionKit.Repeat(3).DOTween(() => { var tween = NewTween(); created.Add(tween); return tween; }));
+            var repeat = Own(ActionKit.Repeat(3).DOTween(() =>
+            {
+                var tween = NewTween();
+                created.Add(tween);
+                return tween;
+            }));
             var controller = Start(repeat, 0, _ => calls++);
             for (var round = 0; round < 3; round++)
             {

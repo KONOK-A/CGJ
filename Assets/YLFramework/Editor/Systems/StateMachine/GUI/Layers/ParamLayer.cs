@@ -1,9 +1,9 @@
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.StateMachine
 {
@@ -11,9 +11,9 @@ namespace YLFramework.StateMachine
     {
 
         #region 字段
-        private ReorderableList reorderableList;
-        private ReorderableList reorderableListStates;
-        private Vector2 scrollView;
+        private ReorderableList _reorderableList;
+        private ReorderableList _reorderableListStates;
+        private Vector2 _scrollView;
 
         // 参数区域
         //private Rect paramLabelRect;
@@ -21,16 +21,16 @@ namespace YLFramework.StateMachine
         //const float param_value_width = 50f;
         //const float param_value_padding = 2f;
 
-        private bool isRenaming = false;
-        private string newName;
-        private List<FSMParameterData> EmptyList = new List<FSMParameterData>();
+        private bool _isRenaming = false;
+        private string _newName;
+        private List<FsmParameterData> _emptyList = new List<FsmParameterData>();
 
-        private Rect headerRect = new Rect();
+        private Rect _headerRect = new Rect();
 
-        private string[] toolbars = new string[] { "Controllers", "Paramters" };
-        private int select = 1;
+        private string[] _toolbars = new string[] { "Controllers", "Paramters" };
+        private int _select = 1;
 
-        private int index = 0;
+        private int _index = 0;
 
         //private Vector3[] lines = new Vector3[2];
         #endregion
@@ -39,16 +39,16 @@ namespace YLFramework.StateMachine
 
         public override void OnGUI(Rect rect)
         {
-            rect.Set(rect.x + 2,rect.y,rect.width,rect.height);
+            rect.Set(rect.x + 2, rect.y, rect.width, rect.height);
 
             base.OnGUI(rect);
 
-            headerRect.Set(rect.x, rect.y, rect.width, 20);
+            _headerRect.Set(rect.x, rect.y, rect.width, 20);
 
             //EditorGUI.DrawRect(headerRect, ColorConst.ParaBackground);
 
-            headerRect.Set(headerRect.x + 5, headerRect.y, 150, headerRect.height);
-            select = GUI.Toolbar(headerRect, select, toolbars, "toolbarbuttonLeft");
+            _headerRect.Set(_headerRect.x + 5, _headerRect.y, 150, _headerRect.height);
+            _select = GUI.Toolbar(_headerRect, _select, _toolbars, "toolbarbuttonLeft");
 
             //Handles.color = Color.black;
             //Handles.DrawLine(new Vector2(rect.x, rect.y + headerRect.height), new Vector2(rect.x + rect.width, rect.y + headerRect.height));
@@ -59,11 +59,12 @@ namespace YLFramework.StateMachine
             //EditorGUI.DrawRect(rect, ColorConst.ParaBackground);
             //GUI.Box(rect, string.Empty, GUI.skin.GetStyle("CN Box"));
 
-            if (select == 1)
+            if (_select == 1)
             {
                 DrawParamters(rect);
             }
-            else {
+            else
+            {
                 DrawStates(rect);
             }
 
@@ -72,36 +73,40 @@ namespace YLFramework.StateMachine
 
         private void DrawParamters(Rect rect)
         {
-            if (reorderableList == null)
+            if (_reorderableList == null)
             {
-                if (Context.Instance.RuntimeFSMController != null)
+                if (Context.Instance.RuntimeFsmController != null)
                 {
-                    reorderableList = new ReorderableList(Context.Instance.RuntimeFSMController.parameters, typeof(FSMParameterData), true, true, true, true);
+                    _reorderableList = new ReorderableList(Context.Instance.RuntimeFsmController.parameters, typeof(FsmParameterData), true, true, true, true);
                 }
                 else
                 {
-                    reorderableList = new ReorderableList(EmptyList, typeof(FSMParameterData), true, true, true, true);
+                    _reorderableList = new ReorderableList(_emptyList, typeof(FsmParameterData), true, true, true, true);
                 }
 
-                reorderableList.drawHeaderCallback += HeaderCallbackDelegate;
-                reorderableList.onAddDropdownCallback += OnAddDropdownCallback;
-                reorderableList.onRemoveCallback += OnRemoveCallback;
-                reorderableList.drawElementCallback += DrawElementCallback;
+                _reorderableList.drawHeaderCallback += HeaderCallbackDelegate;
+                _reorderableList.onAddDropdownCallback += OnAddDropdownCallback;
+                _reorderableList.onRemoveCallback += OnRemoveCallback;
+                _reorderableList.drawElementCallback += DrawElementCallback;
 
-                reorderableList.onCanRemoveCallback += onCanRemoveCallback;
-                reorderableList.onCanAddCallback += onCanRemoveCallback;
+                _reorderableList.onCanRemoveCallback += OnCanRemoveCallback;
+                _reorderableList.onCanAddCallback += OnCanRemoveCallback;
             }
 
-            if (Context.Instance.RuntimeFSMController != null)
-                reorderableList.list = Context.Instance.RuntimeFSMController.parameters;
+            if (Context.Instance.RuntimeFsmController != null)
+            {
+                _reorderableList.list = Context.Instance.RuntimeFsmController.parameters;
+            }
             else
-                reorderableList.list = EmptyList;
+            {
+                _reorderableList.list = _emptyList;
+            }
 
-            EditorGUI.BeginDisabledGroup(Context.Instance.RuntimeFSMController == null);
+            EditorGUI.BeginDisabledGroup(Context.Instance.RuntimeFsmController == null);
 
             GUILayout.BeginArea(rect);
-            scrollView = GUILayout.BeginScrollView(scrollView);
-            reorderableList.DoLayoutList();
+            _scrollView = GUILayout.BeginScrollView(_scrollView);
+            _reorderableList.DoLayoutList();
             GUILayout.EndScrollView();
             GUILayout.EndArea();
 
@@ -110,29 +115,30 @@ namespace YLFramework.StateMachine
 
         private void DrawStates(Rect rect)
         {
-            if (reorderableListStates == null)
+            if (_reorderableListStates == null)
             {
 
-                reorderableListStates = new ReorderableList(Context.Instance.RuntimeFSMControllers, typeof(RuntimeFSMController), false, true, false, false);
+                _reorderableListStates = new ReorderableList(Context.Instance.RuntimeFsmControllers, typeof(RuntimeFsmController), false, true, false, false);
 
-                reorderableListStates.headerHeight = 0;
-                reorderableListStates.drawElementCallback += DrawStateElementCallback;
-                reorderableListStates.onSelectCallback += OnStateChanged;
+                _reorderableListStates.headerHeight = 0;
+                _reorderableListStates.drawElementCallback += DrawStateElementCallback;
+                _reorderableListStates.onSelectCallback += OnStateChanged;
             }
 
-            for (int i = 0; i < Context.Instance.RuntimeFSMControllers.Count; i++)
+            for (int i = 0; i < Context.Instance.RuntimeFsmControllers.Count; i++)
             {
-                if (Context.Instance.RuntimeFSMControllers[i] == null) {
-                    Context.Instance.RuntimeFSMControllers.RemoveAt(i);
+                if (Context.Instance.RuntimeFsmControllers[i] == null)
+                {
+                    Context.Instance.RuntimeFsmControllers.RemoveAt(i);
                     i--;
                 }
             }
 
-            reorderableListStates.list = Context.Instance.RuntimeFSMControllers;
+            _reorderableListStates.list = Context.Instance.RuntimeFsmControllers;
 
             GUILayout.BeginArea(rect);
-            scrollView = GUILayout.BeginScrollView(scrollView);
-            reorderableListStates.DoLayoutList();
+            _scrollView = GUILayout.BeginScrollView(_scrollView);
+            _reorderableListStates.DoLayoutList();
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
@@ -141,7 +147,7 @@ namespace YLFramework.StateMachine
         {
             base.ProcessEvents();
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0 &&
-                position.Contains(Event.current.mousePosition)
+                Position.Contains(Event.current.mousePosition)
                 )
             {
                 Context.Instance.ClearSelections();
@@ -151,7 +157,7 @@ namespace YLFramework.StateMachine
         public override void OnLostFocus()
         {
             base.OnLostFocus();
-            isRenaming = false;
+            _isRenaming = false;
         }
 
         #endregion
@@ -173,7 +179,7 @@ namespace YLFramework.StateMachine
                 menu.AddItem(new GUIContent(v.ToString()), false, () =>
                 {
 
-                    FSMParamterFactory.CreateParamter(Context.Instance.RuntimeFSMController, v);
+                    FsmParameterFactory.CreateParamter(Context.Instance.RuntimeFsmController, v);
                 });
             }
 
@@ -183,33 +189,43 @@ namespace YLFramework.StateMachine
         // 移除
         private void OnRemoveCallback(ReorderableList list)
         {
-            FSMParamterFactory.RemoveParamter(Context.Instance.RuntimeFSMController, list.index);
+            FsmParameterFactory.RemoveParamter(Context.Instance.RuntimeFsmController, list.index);
         }
 
         // 绘制每一条数据
         private void DrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
-            if (Context.Instance.RuntimeFSMController == null) return;
-            if (index < 0 || index >= Context.Instance.RuntimeFSMController.parameters.Count) return;
+            if (Context.Instance.RuntimeFsmController == null)
+            {
+                return;
+            }
 
-            FSMParameterData parameter = Context.Instance.RuntimeFSMController.parameters[index];
+            if (index < 0 || index >= Context.Instance.RuntimeFsmController.parameters.Count)
+            {
+                return;
+            }
 
-            if (parameter == null) return;
+            FsmParameterData parameter = Context.Instance.RuntimeFsmController.parameters[index];
+
+            if (parameter == null)
+            {
+                return;
+            }
 
             rect.width *= 0.6f;
 
-            if (Event.current.type == EventType.MouseDown && Event.current.button == 0  && rect.Contains(Event.current.mousePosition) && isFocused )
+            if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && rect.Contains(Event.current.mousePosition) && isFocused)
             {
-                isRenaming = true;
-                this.index = index;
+                _isRenaming = true;
+                this._index = index;
             }
 
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0 &&
-                !rect.Contains(Event.current.mousePosition) && index == reorderableList.index)
+                !rect.Contains(Event.current.mousePosition) && index == _reorderableList.index)
             {
                 EditorApplication.delayCall += () =>
                 {
-                    isRenaming = false;
+                    _isRenaming = false;
                 };
 
                 GUI.FocusControl(null);
@@ -220,21 +236,25 @@ namespace YLFramework.StateMachine
             {
                 EditorApplication.delayCall += () =>
                 {
-                    isRenaming = false;
+                    _isRenaming = false;
                 };
 
             }
 
-            if (isRenaming && index == reorderableList.index)
+            if (_isRenaming && index == _reorderableList.index)
             {
                 // 绘制输入框
                 EditorGUI.BeginChangeCheck();
-                newName = EditorGUI.DelayedTextField(rect, parameter.name);
-                if (EditorGUI.EndChangeCheck() && this.index == index)
+                _newName = EditorGUI.DelayedTextField(rect, parameter.name);
+                if (EditorGUI.EndChangeCheck() && this._index == index)
                 {
-                    isRenaming = false;
-                    if (parameter.name.Equals(newName)) return;
-                    FSMParamterFactory.RenameParamter(Context.Instance.RuntimeFSMController, parameter, newName);
+                    _isRenaming = false;
+                    if (parameter.name.Equals(_newName))
+                    {
+                        return;
+                    }
+
+                    FsmParameterFactory.RenameParamter(Context.Instance.RuntimeFsmController, parameter, _newName);
                 }
             }
             else
@@ -267,14 +287,18 @@ namespace YLFramework.StateMachine
             }
             if (value != parameter.Value)
             {
-                if (!Application.isPlaying) Undo.RecordObject(Context.Instance.RuntimeFSMController, "Change FSM Parameter");
+                if (!Application.isPlaying)
+                {
+                    Undo.RecordObject(Context.Instance.RuntimeFsmController, "Change FSM Parameter");
+                }
+
                 parameter.Value = value;
-                Context.Instance.RuntimeFSMController.Save();
+                Context.Instance.RuntimeFsmController.Save();
             }
 
         }
 
-        private string GetParameterType(FSMParameterData parameter)
+        private string GetParameterType(FsmParameterData parameter)
         {
             switch (parameter.parameterType)
             {
@@ -293,9 +317,12 @@ namespace YLFramework.StateMachine
 
         private void DrawStateElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
-            if (index < 0 || index >= Context.Instance.RuntimeFSMControllers.Count) return;
+            if (index < 0 || index >= Context.Instance.RuntimeFsmControllers.Count)
+            {
+                return;
+            }
 
-            RuntimeFSMController controller = Context.Instance.RuntimeFSMControllers[index];
+            RuntimeFsmController controller = Context.Instance.RuntimeFsmControllers[index];
 
             //if (controller == null) return;
 
@@ -303,12 +330,14 @@ namespace YLFramework.StateMachine
             {
                 GUIContent content = EditorGUIUtility.IconContent("AnimatorController Icon");
 
-                if (controller == Context.Instance.RuntimeFSMController)
+                if (controller == Context.Instance.RuntimeFsmController)
+                {
                     GUI.Label(new Rect(rect.x, rect.y, rect.height, rect.height), "✓");
+                }
 
                 GUI.Label(new Rect(rect.x + rect.height, rect.y, rect.height, rect.height), content);
-                rect.Set(rect.x + rect.height * 2,rect.y,rect.width - rect.height,rect.height);
-                GUI.Label(rect,controller == null ? "None" : controller.name);
+                rect.Set(rect.x + rect.height * 2, rect.y, rect.width - rect.height, rect.height);
+                GUI.Label(rect, controller == null ? "None" : controller.name);
             }
             catch (Exception)
             {
@@ -317,7 +346,7 @@ namespace YLFramework.StateMachine
 
         }
 
-        private bool onCanRemoveCallback(ReorderableList list)
+        private bool OnCanRemoveCallback(ReorderableList list)
         {
             return Application.isPlaying == false;
         }
@@ -325,11 +354,17 @@ namespace YLFramework.StateMachine
 
         private void OnStateChanged(ReorderableList list)
         {
-            if (Context.Instance.RuntimeFSMControllers == null || Context.Instance.RuntimeFSMControllers.Count == 0) return;
+            if (Context.Instance.RuntimeFsmControllers == null || Context.Instance.RuntimeFsmControllers.Count == 0)
+            {
+                return;
+            }
 
-            if (Context.Instance.RuntimeFSMController == Context.Instance.RuntimeFSMControllers[list.index]) return;
+            if (Context.Instance.RuntimeFsmController == Context.Instance.RuntimeFsmControllers[list.index])
+            {
+                return;
+            }
 
-            Context.Instance.FSMControllerIndex = list.index;
+            Context.Instance.FsmControllerIndex = list.index;
         }
 
 
@@ -337,7 +372,7 @@ namespace YLFramework.StateMachine
         {
             rect.width *= 0.6f;
             rect.x += 15;
-            GUI.Label(rect,"名称");
+            GUI.Label(rect, "名称");
             rect.x += rect.width;
             rect.width /= 3;
             rect.x -= 10;

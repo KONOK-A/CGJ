@@ -65,7 +65,10 @@ namespace YLFramework.Services.Audio
 
         private void Start()
         {
-            if (playOnAwake) Play();
+            if (playOnAwake)
+            {
+                Play();
+            }
         }
 
         /// <summary>按该组件的配置选曲并播放。选曲与校验会在替换自有循环播放之前完成。</summary>
@@ -83,28 +86,52 @@ namespace YLFramework.Services.Audio
             options.OutputRoute = outputRoute;
             options.AutoFade = autoFade;
             if ((uint)positionMode > (uint)PositionMode.FollowTransform)
+            {
                 throw new ArgumentOutOfRangeException(nameof(positionMode));
+            }
+
             options.Validate(positionMode != PositionMode.TwoDimensional);
 
             // Choose once and validate all input before replacing an owned loop.
             AudioClip selectedClip;
             if (!(useWeightedRandom
                     ? AudioKit.TrySelectWeightedRandomClip(weightedClips, out selectedClip)
-                    : AudioKit.TrySelectRandomClip(clips, out selectedClip))) return;
+                    : AudioKit.TrySelectRandomClip(clips, out selectedClip)))
+            {
+                return;
+            }
+
             options.ValidateClip(selectedClip);
             var target = AudioOutputRoute.HasReference(followTarget) ? followTarget : transform;
-            if (positionMode == PositionMode.FollowTransform && (!target || !target.gameObject.activeInHierarchy)) return;
+            if (positionMode == PositionMode.FollowTransform && (!target || !target.gameObject.activeInHierarchy))
+            {
+                return;
+            }
+
             var position = positionMode == PositionMode.FollowTransform ? target.position : transform.position;
             if (positionMode != PositionMode.TwoDimensional &&
                 (!AudioSoundOptions.IsFinite(position.x) || !AudioSoundOptions.IsFinite(position.y) || !AudioSoundOptions.IsFinite(position.z)))
+            {
                 throw new ArgumentOutOfRangeException(nameof(position));
+            }
 
-            if (loop) Stop();
+            if (loop)
+            {
+                Stop();
+            }
+
             for (var i = _playbacks.Count - 1; i >= 0; i--)
             {
-                if (!_playbacks[i].Handle.IsValid) _playbacks.RemoveAt(i);
+                if (!_playbacks[i].Handle.IsValid)
+                {
+                    _playbacks.RemoveAt(i);
+                }
             }
-            if (_startedCallback == null) _startedCallback = OnPlaybackStarted;
+            if (_startedCallback == null)
+            {
+                _startedCallback = OnPlaybackStarted;
+            }
+
             _ = AudioKit.PlaySoundWithSnapshot(selectedClip, options, onStarted: _startedCallback,
                 spatial: positionMode != PositionMode.TwoDimensional,
                 position: positionMode == PositionMode.TwoDimensional ? Vector3.zero : position,
@@ -118,14 +145,20 @@ namespace YLFramework.Services.Audio
                 Handle = handle,
                 StopOnDisable = handle.Voice.Options.Loop || handle.Voice.IsFollowing
             });
-            try { onStarted.Invoke(); }
+            try
+            {
+                onStarted.Invoke();
+            }
             catch
             {
                 handle.Stop();
                 RemovePlayback(handle);
                 throw;
             }
-            if (!handle.IsValid) RemovePlayback(handle);
+            if (!handle.IsValid)
+            {
+                RemovePlayback(handle);
+            }
         }
 
         private void RemovePlayback(AudioHandle handle)
@@ -134,14 +167,20 @@ namespace YLFramework.Services.Audio
             {
                 var owned = _playbacks[i].Handle;
                 if (ReferenceEquals(owned.Voice, handle.Voice) && owned.Generation == handle.Generation)
+                {
                     _playbacks.RemoveAt(i);
+                }
             }
         }
 
         /// <summary>停止该组件仍在追踪的所有声音，并清空追踪列表。</summary>
         public void Stop()
         {
-            foreach (var playback in _playbacks) playback.Handle.Stop();
+            foreach (var playback in _playbacks)
+            {
+                playback.Handle.Stop();
+            }
+
             _playbacks.Clear();
         }
 
@@ -151,8 +190,15 @@ namespace YLFramework.Services.Audio
             for (var i = _playbacks.Count - 1; i >= 0; i--)
             {
                 var playback = _playbacks[i];
-                if (playback.StopOnDisable) playback.Handle.Stop();
-                if (playback.StopOnDisable || !playback.Handle.IsValid) _playbacks.RemoveAt(i);
+                if (playback.StopOnDisable)
+                {
+                    playback.Handle.Stop();
+                }
+
+                if (playback.StopOnDisable || !playback.Handle.IsValid)
+                {
+                    _playbacks.RemoveAt(i);
+                }
             }
         }
     }

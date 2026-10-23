@@ -17,10 +17,10 @@ namespace YLFramework.Core.Pool
         private readonly Dictionary<string, GameObjectPoolData> _pools = new();
         private readonly Dictionary<string, bool> _creating = new();
         private readonly object _identity = new();
-        private static readonly List<WeakReference<GameObjectPool>> SessionHosts = new();
+        private static readonly List<WeakReference<GameObjectPool>> _sessionHosts = new();
         private SafeObjectPool<GameObjectPoolData> _dataPool;
-        private bool _destroyed;
-        private bool _resetting;
+        private bool _isDestroyed;
+        private bool _isResetting;
 
         static GameObjectPool()
         {
@@ -30,40 +30,64 @@ namespace YLFramework.Core.Pool
         private static void ResetHosts()
         {
             List<Exception> errors = null;
-            for (var i = SessionHosts.Count - 1; i >= 0; i--)
+            for (var i = _sessionHosts.Count - 1; i >= 0; i--)
             {
-                if (!SessionHosts[i].TryGetTarget(out var host) || !host)
+                if (!_sessionHosts[i].TryGetTarget(out var host) || !host)
                 {
-                    SessionHosts.RemoveAt(i);
+                    _sessionHosts.RemoveAt(i);
                     continue;
                 }
-                host._resetting = true;
-                try { host.ClearAll(); }
-                catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
-                finally { host._dataPool = null; host._resetting = false; }
+                host._isResetting = true;
+                try
+                {
+                    host.ClearAll();
+                }
+                catch (Exception error)
+                {
+                    (errors ??= new List<Exception>()).Add(error);
+                }
+                finally
+                {
+                    host._dataPool = null;
+                    host._isResetting = false;
+                }
             }
-            if (errors != null) throw new AggregateException(errors);
+            if (errors != null)
+            {
+                throw new AggregateException(errors);
+            }
         }
 
-        public void OnSingletonInit() { }
+        public void OnSingletonInit()
+        {
+        }
 
         private void Awake()
         {
             // 路径根被预先建立或宿主被直接收养时，也保证缓存跨场景存活。
             DontDestroyOnLoad(transform.root.gameObject);
-            SessionHosts.Add(new WeakReference<GameObjectPool>(this));
+            _sessionHosts.Add(new WeakReference<GameObjectPool>(this));
         }
 
         private void OnDestroy()
         {
-            _destroyed = true;
-            try { ClearAll(); }
-            finally { MonoSingletonProperty<GameObjectPool>.NotifyDestroyed(this); }
+            _isDestroyed = true;
+            try
+            {
+                ClearAll();
+            }
+            finally
+            {
+                MonoSingletonProperty<GameObjectPool>.NotifyDestroyed(this);
+            }
         }
 
         private void ThrowIfDestroyed()
         {
-            if (_destroyed || _resetting || !this) throw new ObjectDisposedException(nameof(GameObjectPool));
+            if (_isDestroyed || _isResetting || !this)
+            {
+                throw new ObjectDisposedException(nameof(GameObjectPool));
+            }
         }
 
         private static void ValidateInitialization(string key, int capacity, int target)
@@ -71,7 +95,9 @@ namespace YLFramework.Core.Pool
             GameObjectPoolData.ValidateKey(key);
             GameObjectPoolData.ValidateCapacity(capacity);
             if (target < 0 || (capacity >= 0 && target > capacity))
+            {
                 throw new ArgumentOutOfRangeException(nameof(target));
+            }
         }
 
         private void ValidateInput(string key, GameObject obj)
@@ -79,16 +105,26 @@ namespace YLFramework.Core.Pool
             GameObjectPoolData.ValidateInstance(obj);
             GameObjectPoolData.ValidateOwner(obj, _identity, key);
             if (this && transform.IsChildOf(obj.transform))
+            {
                 throw new ArgumentException("不能将池宿主或其祖先归还到对象池。", nameof(obj));
+            }
         }
 
         private GameObjectPoolData GetOrCreate(string key, int capacity = -1)
         {
             ThrowIfDestroyed();
-            if (_creating.ContainsKey(key)) throw new InvalidOperationException("不能在层级回调中重入创建同一 key 的桶。");
+            if (_creating.ContainsKey(key))
+            {
+                throw new InvalidOperationException("不能在层级回调中重入创建同一 key 的桶。");
+            }
+
             if (_pools.TryGetValue(key, out var data))
             {
-                if (data.IsLive(data.CurrentLifetime)) return data;
+                if (data.IsLive(data.CurrentLifetime))
+                {
+                    return data;
+                }
+
                 _pools.Remove(key);
                 _dataPool.Recycle(data);
             }
@@ -101,16 +137,27 @@ namespace YLFramework.Core.Pool
                 data.CacheOwner = owner;
                 data.Init(key, transform, capacity, _identity);
                 ThrowIfDestroyed();
-                if (_creating[key]) throw new ObjectDisposedException(nameof(GameObjectPoolData));
+                if (_creating[key])
+                {
+                    throw new ObjectDisposedException(nameof(GameObjectPoolData));
+                }
+
                 _pools.Add(key, data);
                 return data;
             }
             catch
             {
-                if (data != null) owner.Discard(data);
+                if (data != null)
+                {
+                    owner.Discard(data);
+                }
+
                 throw;
             }
-            finally { _creating.Remove(key); }
+            finally
+            {
+                _creating.Remove(key);
+            }
         }
 
         /// <summary>
@@ -120,16 +167,27 @@ namespace YLFramework.Core.Pool
         public void InitOneGoData(string keyName, int maxCapacity = -1, GameObject prefab = null, int defaultQuantity = 0)
         {
             ValidateInitialization(keyName, maxCapacity, defaultQuantity);
-            if (defaultQuantity > 0 && !prefab) throw new ArgumentNullException(nameof(prefab));
+            if (defaultQuantity > 0 && !prefab)
+            {
+                throw new ArgumentNullException(nameof(prefab));
+            }
+
             var data = GetOrCreate(keyName, maxCapacity);
             data.MaxCapacity = maxCapacity;
-            if (defaultQuantity > 0) data.Prewarm(prefab, defaultQuantity);
+            if (defaultQuantity > 0)
+            {
+                data.Prewarm(prefab, defaultQuantity);
+            }
         }
 
         /// <summary>使用 Prefab 名称作为首次注册 key；取得后改名不改变归属。</summary>
         public void InitOneGoData(GameObject prefab, int maxCapacity = -1, int defaultQuantity = 0)
         {
-            if (!prefab) throw new ArgumentNullException(nameof(prefab));
+            if (!prefab)
+            {
+                throw new ArgumentNullException(nameof(prefab));
+            }
+
             InitOneGoData(prefab.name, maxCapacity, prefab, defaultQuantity);
         }
 
@@ -148,7 +206,11 @@ namespace YLFramework.Core.Pool
             {
                 foreach (var obj in gameObjects)
                 {
-                    if (!obj || !seen.Add(obj)) continue;
+                    if (!obj || !seen.Add(obj))
+                    {
+                        continue;
+                    }
+
                     ValidateInput(keyName, obj);
                     unique.Add(obj);
                 }
@@ -160,9 +222,16 @@ namespace YLFramework.Core.Pool
             data.MaxCapacity = maxCapacity;
             foreach (var obj in unique)
             {
-                if (!data.IsLive(lifetime)) throw new ObjectDisposedException(nameof(GameObjectPoolData));
+                if (!data.IsLive(lifetime))
+                {
+                    throw new ObjectDisposedException(nameof(GameObjectPoolData));
+                }
                 // 名称仅供层级识别；实例路由由不可变归属决定。
-                if (obj) obj.name = keyName;
+                if (obj)
+                {
+                    obj.name = keyName;
+                }
+
                 data.Recycle(obj, target, lifetime);
             }
         }
@@ -181,7 +250,11 @@ namespace YLFramework.Core.Pool
         /// <summary>按稳定归属归还；首次接纳未登记实例时才使用对象名称作为 key。</summary>
         public void Recycle(GameObject go)
         {
-            if (!go) return;
+            if (!go)
+            {
+                return;
+            }
+
             Recycle(GameObjectPoolData.TryGetLifetime(go, out var lifetime) ? lifetime.Key : go.name, go);
         }
 
@@ -193,10 +266,17 @@ namespace YLFramework.Core.Pool
         public bool Recycle(string keyName, GameObject obj)
         {
             GameObjectPoolData.ValidateKey(keyName);
-            if (!obj) return false;
+            if (!obj)
+            {
+                return false;
+            }
+
             ValidateInput(keyName, obj);
-            if (GameObjectPoolData.TryGetLifetime(obj, out var lifetime) && lifetime.Closed)
+            if (GameObjectPoolData.TryGetLifetime(obj, out var lifetime) && lifetime.IsClosed)
+            {
                 return GameObjectPoolData.ReturnToClosedLifetime(obj);
+            }
+
             return GetOrCreate(keyName).Recycle(obj);
         }
 
@@ -211,8 +291,16 @@ namespace YLFramework.Core.Pool
         public void Clear(string keyName)
         {
             GameObjectPoolData.ValidateKey(keyName);
-            if (_creating.ContainsKey(keyName)) _creating[keyName] = true;
-            if (!_pools.TryGetValue(keyName, out var data)) return;
+            if (_creating.ContainsKey(keyName))
+            {
+                _creating[keyName] = true;
+            }
+
+            if (!_pools.TryGetValue(keyName, out var data))
+            {
+                return;
+            }
+
             _pools.Remove(keyName);
             _dataPool.Recycle(data);
         }
@@ -220,17 +308,34 @@ namespace YLFramework.Core.Pool
         /// <summary>摘除所有当前桶再逐项关闭；回调新建的桶保留，宿主销毁时禁止新建。</summary>
         public void ClearAll()
         {
-            foreach (var key in new List<string>(_creating.Keys)) _creating[key] = true;
-            if (_pools.Count == 0) return;
+            foreach (var key in new List<string>(_creating.Keys))
+            {
+                _creating[key] = true;
+            }
+
+            if (_pools.Count == 0)
+            {
+                return;
+            }
+
             var snapshot = new List<GameObjectPoolData>(_pools.Values);
             _pools.Clear();
             List<Exception> errors = null;
             foreach (var data in snapshot)
             {
-                try { _dataPool.Recycle(data); }
-                catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                try
+                {
+                    _dataPool.Recycle(data);
+                }
+                catch (Exception error)
+                {
+                    (errors ??= new List<Exception>()).Add(error);
+                }
             }
-            if (errors != null) throw new AggregateException(errors);
+            if (errors != null)
+            {
+                throw new AggregateException(errors);
+            }
         }
     }
 }

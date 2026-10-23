@@ -85,7 +85,10 @@ namespace YLFramework.Tests.Extensions.Behavior
             var root = Environment.GetEnvironmentVariable("YL_BEHAVIOR_ROOT") ?? Directory.GetCurrentDirectory();
             var directory = Path.Combine(root, "Assets/YLFramework/Runtime/Systems/MoveablePlatform");
             foreach (var name in new[] { "Moveable", "MoveablePlatform2D", "PlatformCatcher2D", "BoolUnityEvent", "Vector3UnityEvent" })
+            {
                 Assert.That(File.Exists(Path.Combine(directory, name + ".cs")), Is.True, name);
+            }
+
             foreach (var source in Directory.GetFiles(directory, "*.cs").Select(File.ReadAllText))
             {
                 Assert.That(source.Contains("using UnityEditor") || source.Contains("XFGameFramework") || source.Contains("CharacterController2D"), Is.False);

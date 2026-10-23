@@ -28,9 +28,15 @@ namespace YLFramework.Services.Resource
         /// <summary>默认显式数据缓冲预算128MiB，不预分配整笔额度。</summary>
         public const long DefaultMaxBufferedBytes = 128L * 1024 * 1024;
         /// <summary>应用拥有的来源；框架不接管其鉴权、发放或生命周期。</summary>
-        public IResourceContentKeyProvider KeyProvider { get; }
+        public IResourceContentKeyProvider KeyProvider
+        {
+            get;
+        }
         /// <summary>共享输入及在途预留的数据字节上限；不含native读取缓冲、CNG句柄或进程总内存。</summary>
-        public long MaxBufferedBytes { get; }
+        public long MaxBufferedBytes
+        {
+            get;
+        }
 
         /// <summary>冻结provider引用和正数预算；构造本身不取key、不初始化或创建Store。</summary>
         /// <param name="provider">应用负责生命周期的key来源。</param>
@@ -38,7 +44,11 @@ namespace YLFramework.Services.Resource
         public ResourceDecryptionOptions(IResourceContentKeyProvider provider, long maxBufferedBytes = DefaultMaxBufferedBytes)
         {
             KeyProvider = provider ?? throw new ArgumentNullException(nameof(provider));
-            if (maxBufferedBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxBufferedBytes));
+            if (maxBufferedBytes <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxBufferedBytes));
+            }
+
             MaxBufferedBytes = maxBufferedBytes;
         }
     }

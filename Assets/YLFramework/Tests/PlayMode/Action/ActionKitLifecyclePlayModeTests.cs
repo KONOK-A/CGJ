@@ -1,12 +1,12 @@
-using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Threading.Tasks;
-using YLFramework.Events;
-using YLFramework.Foundation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
+using YLFramework.Events;
+using YLFramework.Foundation;
 using Kit = YLFramework.Actions.ActionKit;
 using Object = UnityEngine.Object;
 
@@ -14,22 +14,22 @@ namespace YLFramework.Tests.Actions
 {
     public class ActionKitLifecyclePlayModeTests
     {
-        private Action<Kit> mPreviousPatch;
-        private GameObject mUserRoot;
-        private TaskCompletionSource<bool> mPending;
-        private bool mOwnActionSession;
-        private UpdateManager mPreviousUpdateHost;
+        private Action<Kit> _previousPatch;
+        private GameObject _userRoot;
+        private TaskCompletionSource<bool> _pending;
+        private bool _ownsActionSession;
+        private UpdateManager _previousUpdateHost;
 
         [SetUp]
         public void SetUp()
         {
-            mOwnActionSession = false;
-            mPreviousUpdateHost = Object.FindObjectOfType<UpdateManager>(true);
+            _ownsActionSession = false;
+            _previousUpdateHost = Object.FindObjectOfType<UpdateManager>(true);
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
-            mPreviousPatch = Kit.OnRegisterPatch;
+            _previousPatch = Kit.OnRegisterPatch;
             Assert.That(canOwnActionSession, Is.True,
                 "This fixture must exclusively own an uninitialized ActionKit session; it will not shut down another owner's state.");
-            mOwnActionSession = canOwnActionSession;
+            _ownsActionSession = canOwnActionSession;
             Kit.Shutdown();
             Kit.OnRegisterPatch = _ => { };
         }
@@ -37,19 +37,29 @@ namespace YLFramework.Tests.Actions
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!mOwnActionSession) yield break;
-            try { Kit.Shutdown(); }
+            if (!_ownsActionSession)
+            {
+                yield break;
+            }
+
+            try
+            {
+                Kit.Shutdown();
+            }
             finally
             {
-                mOwnActionSession = false;
-                mPending?.TrySetResult(true);
-                mPending = null;
-                Kit.OnRegisterPatch = mPreviousPatch;
-                if (mUserRoot) Object.Destroy(mUserRoot);
+                _ownsActionSession = false;
+                _pending?.TrySetResult(true);
+                _pending = null;
+                Kit.OnRegisterPatch = _previousPatch;
+                if (_userRoot)
+                {
+                    Object.Destroy(_userRoot);
+                }
             }
             yield return null;
             yield return null;
-            ActionFixtureSession.ReleaseIdleUpdateHost(mPreviousUpdateHost);
+            ActionFixtureSession.ReleaseIdleUpdateHost(_previousUpdateHost);
             yield return null;
         }
 
@@ -62,12 +72,12 @@ namespace YLFramework.Tests.Actions
             {
                 Kit.OnUpdate.Register(() => calls++);
                 host = ActionGlobalHost.Instance;
-                Assert.That(Object.FindObjectOfType<UpdateManager>(true), Is.SameAs(mPreviousUpdateHost),
+                Assert.That(Object.FindObjectOfType<UpdateManager>(true), Is.SameAs(_previousUpdateHost),
                     "配置回调中取得的宿主尚未提交，不应连接公共源。");
                 throw new InvalidOperationException("expected patch failure");
             };
             Assert.Throws<InvalidOperationException>(Kit.Initialize);
-            Assert.That(Kit.Initialized, Is.False);
+            Assert.That(Kit.IsInitialized, Is.False);
             yield return null;
             yield return null;
             Assert.That(calls, Is.Zero, "初始化失败期间不得自动广播。");
@@ -83,16 +93,16 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator BorrowedInactiveGlobalHostKeepsItsGameObjectAndDoesNotDuplicateUpdates()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.BorrowedGlobal");
-            mUserRoot.SetActive(false);
-            var host = mUserRoot.AddComponent<ActionGlobalHost>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.BorrowedGlobal");
+            _userRoot.SetActive(false);
+            var host = _userRoot.AddComponent<ActionGlobalHost>();
             Assert.That(ActionGlobalHost.Instance, Is.SameAs(host));
             var calls = 0;
             Kit.OnUpdate.Register(() => calls++);
             yield return null;
             yield return null;
             Assert.That(calls, Is.Zero);
-            mUserRoot.SetActive(true);
+            _userRoot.SetActive(true);
             yield return null;
             var before = calls;
             yield return null;
@@ -101,7 +111,7 @@ namespace YLFramework.Tests.Actions
             var next = ActionGlobalHost.Instance;
             Assert.That(next, Is.Not.SameAs(host));
             yield return null;
-            Assert.That(mUserRoot != null, Is.True);
+            Assert.That(_userRoot != null, Is.True);
             Assert.That(host == null, Is.True);
             Assert.That(ActionGlobalHost.Instance, Is.SameAs(next));
         }
@@ -118,7 +128,11 @@ namespace YLFramework.Tests.Actions
             var finishes = 0;
             var startFrame = Time.frameCount;
             Kit.Condition(() => Time.frameCount > startFrame + 1).StartGlobal(() => finishes++);
-            for (var frame = 0; frame < 10 && finishes == 0; frame++) yield return null;
+            for (var frame = 0; frame < 10 && finishes == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(finishes, Is.EqualTo(1));
         }
 
@@ -142,7 +156,7 @@ namespace YLFramework.Tests.Actions
             yield return null;
             Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true).Length, Is.EqualTo(1));
             Assert.That(newCalls, Is.GreaterThan(0));
-            nextEvent.UnRegister(callback);
+            nextEvent.Unregister(callback);
         }
 
         [UnityTest]
@@ -162,7 +176,7 @@ namespace YLFramework.Tests.Actions
             oldEvent.Trigger();
             Assert.That(calls, Is.Zero, "Ended host must not finish the old message snapshot.");
             Assert.That(nextEvent, Is.Not.SameAs(oldEvent));
-            oldToken.UnRegister();
+            oldToken.Unregister();
             nextEvent.Trigger();
             Assert.That(calls, Is.EqualTo(1));
             yield return null;
@@ -194,15 +208,15 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator ShutdownDetachesPendingTaskWithoutCancellingTheExternalTask()
         {
-            mPending = new TaskCompletionSource<bool>();
+            _pending = new TaskCompletionSource<bool>();
             var completed = 0;
-            var action = Kit.Task(() => mPending.Task);
+            var action = Kit.Task(() => _pending.Task);
             var controller = action.StartGlobal(() => completed++);
             Kit.Shutdown();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
-            Assert.That(mPending.Task.IsCompleted, Is.False);
-            mPending.SetResult(true);
+            Assert.That(_pending.Task.IsCompleted, Is.False);
+            _pending.SetResult(true);
             yield return null;
             yield return null;
             Assert.That(completed, Is.Zero);
@@ -211,14 +225,18 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator CancelledTaskChildCancelsItsSequenceWithoutSuccessfulCompletion()
         {
-            mPending = new TaskCompletionSource<bool>();
+            _pending = new TaskCompletionSource<bool>();
             var steps = 0;
             var finishes = 0;
-            var parent = Kit.Sequence().Task(() => mPending.Task).Callback(() => steps++);
+            var parent = Kit.Sequence().Task(() => _pending.Task).Callback(() => steps++);
             var controller = parent.StartGlobal(() => finishes++);
-            mPending.SetCanceled();
-            for (var frame = 0; frame < 8 && !parent.Deinited; frame++) yield return null;
-            Assert.That(parent.Deinited, Is.True);
+            _pending.SetCanceled();
+            for (var frame = 0; frame < 8 && !parent.IsDeinitialized; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(steps, Is.Zero);
             Assert.That(finishes, Is.Zero);
@@ -227,16 +245,20 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator CancelledTaskInsideConditionalSequenceCancelsTheOuterParent()
         {
-            mPending = new TaskCompletionSource<bool>();
+            _pending = new TaskCompletionSource<bool>();
             var steps = 0;
             var finishes = 0;
             var parent = Kit.Sequence().ConditionSequence(() => true,
-                inner => inner.Task(() => mPending.Task).Callback(() => steps++)).Callback(() => steps++);
+                inner => inner.Task(() => _pending.Task).Callback(() => steps++)).Callback(() => steps++);
             var controller = parent.StartGlobal(() => finishes++);
             yield return null;
-            mPending.SetCanceled();
-            for (var frame = 0; frame < 8 && !parent.Deinited; frame++) yield return null;
-            Assert.That(parent.Deinited, Is.True);
+            _pending.SetCanceled();
+            for (var frame = 0; frame < 8 && !parent.IsDeinitialized; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(steps, Is.Zero);
             Assert.That(finishes, Is.Zero);
@@ -254,8 +276,8 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator ShutdownStopsModuleCoroutinesButLeavesUserCoroutinesRunning()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.CoroutineOwner");
-            var caller = mUserRoot.AddComponent<ActionStartTestCaller>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.CoroutineOwner");
+            var caller = _userRoot.AddComponent<ActionStartTestCaller>();
             var userSteps = 0;
             var moduleSteps = 0;
             caller.StartCoroutine(Endless(() => userSteps++));
@@ -270,8 +292,8 @@ namespace YLFramework.Tests.Actions
             yield return null;
             Assert.That(userSteps, Is.GreaterThan(before));
             Assert.That(moduleSteps, Is.EqualTo(moduleBefore));
-            Assert.That(mUserRoot != null, Is.True);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(_userRoot != null, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -287,21 +309,21 @@ namespace YLFramework.Tests.Actions
             yield return null;
             yield return null;
             Assert.That(steps, Is.EqualTo(count));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
         }
 
         [UnityTest]
         public IEnumerator DestroyingTheCoroutineHostCancelsAnActionScheduledOnALocalCaller()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.LocalCoroutineOwner");
-            var caller = mUserRoot.AddComponent<ActionStartTestCaller>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.LocalCoroutineOwner");
+            var caller = _userRoot.AddComponent<ActionStartTestCaller>();
             var action = Kit.Coroutine(() => Endless(() => { }));
             var completed = 0;
             var controller = action.Start(caller, () => completed++);
             Object.Destroy(ActionGlobalHost.Instance.gameObject);
             yield return null;
             yield return null;
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(completed, Is.Zero);
         }
@@ -309,36 +331,40 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator SameFrameLocalRestartUsesANewExecutorOnTheSameUserObject()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.SameFrameCaller");
-            var caller = mUserRoot.AddComponent<ActionStartTestCaller>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.SameFrameCaller");
+            var caller = _userRoot.AddComponent<ActionStartTestCaller>();
             var previous = Kit.Condition(() => false);
             previous.Start(caller);
             Kit.Shutdown();
             var completed = 0;
             var current = Kit.Condition(() => true);
             var controller = current.Start(caller, () => completed++);
-            for (var frame = 0; frame < 5 && completed == 0; frame++) yield return null;
+            for (var frame = 0; frame < 5 && completed == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(completed, Is.EqualTo(1));
-            Assert.That(previous.Deinited, Is.True);
+            Assert.That(previous.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
-            Assert.That(mUserRoot.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
+            Assert.That(_userRoot.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
         }
 
         [UnityTest]
         public IEnumerator ShutdownDoesNotDestroyAUserSuppliedCanvasOrCallerRoot()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.UserRoot");
-            var canvas = mUserRoot.AddComponent<ScreenTransitionCanvas>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.UserRoot");
+            var canvas = _userRoot.AddComponent<ScreenTransitionCanvas>();
             Assert.That(ScreenTransitionCanvas.Instance, Is.SameAs(canvas));
-            var caller = mUserRoot.AddComponent<ActionStartTestCaller>();
+            var caller = _userRoot.AddComponent<ActionStartTestCaller>();
             var action = Kit.Condition(() => false);
             action.Start(caller);
             Kit.Shutdown();
             yield return null;
-            Assert.That(mUserRoot != null, Is.True);
+            Assert.That(_userRoot != null, Is.True);
             Assert.That(canvas != null, Is.True);
-            Assert.That(action.Deinited, Is.True);
-            Assert.That(mUserRoot.GetComponent<MonoUpdateActionExecutor>(), Is.Null);
+            Assert.That(action.IsDeinitialized, Is.True);
+            Assert.That(_userRoot.GetComponent<MonoUpdateActionExecutor>(), Is.Null);
         }
 
         [UnityTest]
@@ -354,26 +380,26 @@ namespace YLFramework.Tests.Actions
             other.StartCurrentScene();
             yield return null;
             yield return null;
-            Assert.That(ActionKitCurrentScene.mSceneComponent, Is.SameAs(next));
+            Assert.That(ActionKitCurrentScene.CachedSceneComponent, Is.SameAs(next));
             Assert.That(next != null, Is.True);
         }
 
         [UnityTest]
         public IEnumerator ShutdownClearsModuleEventsButLeavesUserLifecycleTriggersAlone()
         {
-            mUserRoot = new GameObject("ActionKit.Lifecycle.SubscriptionOwner");
-            var trigger = mUserRoot.AddComponent<OnDestroyUnRegisterTrigger>();
+            _userRoot = new GameObject("ActionKit.Lifecycle.SubscriptionOwner");
+            var trigger = _userRoot.AddComponent<OnDestroyUnregisterTrigger>();
             var update = Kit.OnUpdate;
             var calls = 0;
             var token = update.Register(() => calls++);
-            trigger.AddUnRegister(token);
+            trigger.AddUnregister(token);
             yield return null;
             var callsBeforeShutdown = calls;
             Assert.That(callsBeforeShutdown, Is.GreaterThan(0));
             Kit.Shutdown();
-            Assert.That(mUserRoot != null, Is.True);
-            Assert.That(mUserRoot.GetComponent<OnDestroyUnRegisterTrigger>() != null, Is.True);
-            Assert.DoesNotThrow(() => token.UnRegister());
+            Assert.That(_userRoot != null, Is.True);
+            Assert.That(_userRoot.GetComponent<OnDestroyUnregisterTrigger>() != null, Is.True);
+            Assert.DoesNotThrow(() => token.Unregister());
             yield return null;
             Assert.That(calls, Is.EqualTo(callsBeforeShutdown));
         }

@@ -8,11 +8,26 @@ namespace YLFramework.Foundation.Tests
 {
     public class EventBusContractTests
     {
-        private enum WideKey : ulong { Low = 1, High = 0x8000000000000001, Max = ulong.MaxValue }
-        private enum OtherKey : ulong { Low = 1 }
-        private enum SignedKey : long { Negative = long.MinValue }
-        private class Message { }
-        private class DerivedMessage : Message { }
+        private enum WideKey : ulong
+        {
+            Low = 1,
+            High = 0x8000000000000001,
+            Max = ulong.MaxValue
+        }
+        private enum OtherKey : ulong
+        {
+            Low = 1
+        }
+        private enum SignedKey : long
+        {
+            Negative = long.MinValue
+        }
+        private class Message
+        {
+        }
+        private class DerivedMessage : Message
+        {
+        }
 
         [Test]
         public void KeysPreserveOrdinalStringsFullEnumsAndIndependentDomains()
@@ -58,17 +73,17 @@ namespace YLFramework.Foundation.Tests
             bus.Send((EventKey)"missing");
             bus.Send("missing", 1);
             bus.SendAll("missing", 1, "value", true);
-            bus.UnRegister("missing", (Action<int>)null);
+            bus.Unregister("missing", (Action<int>)null);
             bus.ClearListeners("missing");
             Assert.That(bus.RemoveKey("missing"), Is.False);
             var empty = bus.Register("missing", (Action)null);
             var emptyOnce = bus.RegisterOnce<int>("missing", null);
-            empty.UnRegister();
-            empty.UnRegister();
-            emptyOnce.UnRegister();
+            empty.Unregister();
+            empty.Unregister();
+            emptyOnce.Unregister();
             bus.SendMessage<Message>(null);
             bus.SendMessageAll<Message>(null);
-            bus.RegisterMessage<Message>(null).UnRegister();
+            bus.RegisterMessage<Message>(null).Unregister();
             Assert.That(bus.KeyCount, Is.Zero);
             bus.Register<string>("missing", _ => { });
             Assert.That(bus.KeyCount, Is.EqualTo(1));
@@ -85,12 +100,12 @@ namespace YLFramework.Foundation.Tests
             Assert.That(error.Message, Does.Contain(typeof(EventChannel<int>).ToString()));
             Assert.That(error.Message, Does.Contain(typeof(EventChannel<string>).ToString()));
             Assert.Throws<InvalidOperationException>(() => bus.RegisterOnce<string>("bound", null));
-            Assert.Throws<InvalidOperationException>(() => bus.UnRegister<string>("bound", null));
+            Assert.Throws<InvalidOperationException>(() => bus.Unregister<string>("bound", null));
             Assert.Throws<InvalidOperationException>(() => bus.Send("bound", "wrong"));
             bus.Send("bound", 1);
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(bus.ListenerCount("bound"), Is.EqualTo(1));
-            token.UnRegister();
+            token.Unregister();
             Assert.That(bus.HasKey("bound"), Is.True);
             Assert.That(bus.HasListener("bound"), Is.False);
             Assert.Throws<InvalidOperationException>(() => bus.Send("bound", "wrong"));
@@ -113,11 +128,11 @@ namespace YLFramework.Foundation.Tests
             bus.RegisterOnce<string>("variance", converted);
             Assert.Throws<InvalidOperationException>(() => bus.Send<object>("variance", "wrong signature"));
             Assert.Throws<InvalidOperationException>(() => bus.Register<object>("variance", broad));
-            Assert.Throws<InvalidOperationException>(() => bus.UnRegister<object>("variance", broad));
+            Assert.Throws<InvalidOperationException>(() => bus.Unregister<object>("variance", broad));
             bus.Send("variance", "right signature");
             Assert.That(values, Is.EqualTo(new object[] { "right signature", "right signature" }));
             Assert.That(bus.ListenerCount("variance"), Is.EqualTo(1));
-            bus.UnRegister<string>("variance", converted);
+            bus.Unregister<string>("variance", converted);
             Assert.That(bus.ListenerCount("variance"), Is.Zero);
         }
 
@@ -157,10 +172,10 @@ namespace YLFramework.Foundation.Tests
             bus.SendAll(sevenKey, 1, 2, 3, 4, 5, 6, 7);
             Assert.That(calls, Is.EqualTo(new[] { "zero", "2", "3:three:True", "1:2:3:4:5:6:7",
                 "zero", "2", "3:three:True", "1:2:3:4:5:6:7" }));
-            bus.UnRegister(zeroKey, zero);
-            bus.UnRegister(1, one);
-            bus.UnRegister(tripleKey, triple);
-            bus.UnRegister(sevenKey, seven);
+            bus.Unregister(zeroKey, zero);
+            bus.Unregister(1, one);
+            bus.Unregister(tripleKey, triple);
+            bus.Unregister(sevenKey, seven);
             Assert.That(bus.ListenerCount(zeroKey) + bus.ListenerCount(1)
                 + bus.ListenerCount(tripleKey) + bus.ListenerCount(sevenKey), Is.Zero);
             Assert.That(bus.KeyCount, Is.EqualTo(4));
@@ -175,7 +190,11 @@ namespace YLFramework.Foundation.Tests
             var textCalls = 0;
             var namedCalls = 0;
             var payload = new DerivedMessage();
-            Action<Message> callback = message => { Assert.That(message, Is.SameAs(payload)); baseCalls++; };
+            Action<Message> callback = message =>
+            {
+                Assert.That(message, Is.SameAs(payload));
+                baseCalls++;
+            };
             bus.RegisterMessage(callback);
             bus.RegisterMessageOnce<DerivedMessage>(_ => derivedCalls++);
             bus.RegisterMessage<string>(_ => textCalls++);
@@ -190,7 +209,7 @@ namespace YLFramework.Foundation.Tests
             bus.Send("message");
             Assert.That(textCalls, Is.EqualTo(1));
             Assert.That(namedCalls, Is.EqualTo(1));
-            bus.UnRegisterMessage(callback);
+            bus.UnregisterMessage(callback);
             bus.SendMessage<Message>(payload);
             Assert.That(baseCalls, Is.EqualTo(1));
         }
@@ -207,13 +226,13 @@ namespace YLFramework.Foundation.Tests
             other.Register<int>("same", _ => otherCalls++);
             bus.ClearListeners("same");
             bus.Register("same", callback);
-            old.UnRegister();
+            old.Unregister();
             bus.Send((EventKey)"same");
             Assert.That(calls, Is.EqualTo(1));
             var removed = bus.Register("same", callback);
             bus.RemoveKey("same");
             bus.Register("same", callback);
-            removed.UnRegister();
+            removed.Unregister();
             bus.Send((EventKey)"same");
             other.Send("same", 1);
             Assert.That(calls, Is.EqualTo(2));
@@ -261,7 +280,7 @@ namespace YLFramework.Foundation.Tests
             });
             var old = bus.Register("replace", () => calls.Add("old-tail"));
             bus.Send((EventKey)"replace");
-            old.UnRegister();
+            old.Unregister();
             bus.Send("replace", 1);
             Assert.That(calls, Is.EqualTo(new[] { "old-first", "new", "new" }));
         }
@@ -277,11 +296,11 @@ namespace YLFramework.Foundation.Tests
             Assert.That(tailCalls, Is.Zero);
             Assert.That(bus.IsDisposed, Is.True);
             bus.Dispose();
-            token.UnRegister();
-            token.UnRegister();
-            bus.UnRegister("close", bus.Dispose);
-            bus.UnRegister<int>("missing", _ => tailCalls++);
-            bus.UnRegisterMessage<Message>(_ => tailCalls++);
+            token.Unregister();
+            token.Unregister();
+            bus.Unregister("close", bus.Dispose);
+            bus.Unregister<int>("missing", _ => tailCalls++);
+            bus.UnregisterMessage<Message>(_ => tailCalls++);
             Assert.That(bus.RemoveKey("close"), Is.False);
             Assert.That(bus.RemoveKey("missing"), Is.False);
             Assert.Throws<ObjectDisposedException>(() => bus.Send((EventKey)"missing"));
@@ -297,8 +316,16 @@ namespace YLFramework.Foundation.Tests
             using var independent = new EventBus();
             try
             {
-                if (EventBus.TryGetDefault(out var missing)) missing.Send((EventKey)"missing");
-                if (EventBus.TryGetDefault(out missing)) missing.RemoveKey("missing");
+                if (EventBus.TryGetDefault(out var missing))
+                {
+                    missing.Send((EventKey)"missing");
+                }
+
+                if (EventBus.TryGetDefault(out missing))
+                {
+                    missing.RemoveKey("missing");
+                }
+
                 EventBus.ResetDefault();
                 Assert.That(EventBus.TryGetDefault(out _), Is.False);
                 var old = EventBus.Default;
@@ -320,7 +347,7 @@ namespace YLFramework.Foundation.Tests
                 var next = EventBus.Default;
                 Assert.That(next, Is.Not.SameAs(old));
                 next.Register("session", () => newCalls++);
-                oldToken.UnRegister();
+                oldToken.Unregister();
                 old.Dispose();
                 Assert.That(EventBus.TryGetDefault(out current), Is.True);
                 Assert.That(current, Is.SameAs(next));

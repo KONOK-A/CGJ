@@ -12,16 +12,22 @@ namespace YLFramework.Services.Resource
     /// <summary>显式绑定的本地 v1 发布快照。完整验证只读目录，不选择版本、不写索引、不加载 native Bundle。</summary>
     public sealed class ResourceLocalSnapshot
     {
-        public string DirectoryPath { get; }
-        public ResourceCatalogDocument Document { get; }
+        public string DirectoryPath
+        {
+            get;
+        }
+        public ResourceCatalogDocument Document
+        {
+            get;
+        }
         internal readonly Dictionary<string, ResourceCatalogBundle> Bundles;
-        private readonly string builtInWrapper;
+        private readonly string _builtInWrapper;
 
         private ResourceLocalSnapshot(string directory, ResourceCatalogDocument document, string wrapper = null)
         {
             DirectoryPath = directory;
             Document = document;
-            builtInWrapper = wrapper;
+            _builtInWrapper = wrapper;
             Bundles = document.Bundles.ToDictionary(x => x.LogicalId, StringComparer.Ordinal);
         }
 
@@ -38,15 +44,24 @@ namespace YLFramework.Services.Resource
             ResourceAddress.ValidateId(projectId, nameof(projectId));
             ResourceCatalogCodec.Hex(catalogDigest, 64);
             if (platform != "StandaloneWindows64" && platform != "StandaloneOSX" && platform != "StandaloneLinux64")
+            {
                 throw new ResourceException(ResourceError.Unsupported, "Built-in snapshots require a supported local desktop platform.");
+            }
+
             resourcesRoot ??= Path.Combine(Application.streamingAssetsPath, "YLFrameworkResources");
             if (string.IsNullOrWhiteSpace(resourcesRoot) || !Path.IsPathFullyQualified(resourcesRoot))
+            {
                 throw new ArgumentException("Built-in resources require an absolute readable local directory; jar/WebGL extraction is not supported.", nameof(resourcesRoot));
+            }
+
             var directory = Path.Combine(resourcesRoot, projectId, platform, catalogDigest);
             RejectLinks(directory);
             // 已有完整导出布局仍走原Open；外壳任一特征出现即必须完整验证，不能失败后回退。
             if (File.Exists(Path.Combine(directory, ResourceBuiltInLayout.ReceiptFile)) || Directory.Exists(Path.Combine(directory, ResourceBuiltInLayout.PayloadFolder)))
+            {
                 return ResourceBuiltInLayout.Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId);
+            }
+
             return Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId);
         }
 
@@ -68,21 +83,33 @@ namespace YLFramework.Services.Resource
             => Open(directory, projectId, catalogDigest, platform, appContentCompatibilityId, false, unityCompatibility: unityCompatibility, cancellation: cancellation);
 
         // Store重开快照时保留原来源边界，必须连外壳一起复验，不能仅放宽payload末级目录名。
-        internal ResourceLocalSnapshot Reopen(CancellationToken cancellation = default) => builtInWrapper == null
+        internal ResourceLocalSnapshot Reopen(CancellationToken cancellation = default) => _builtInWrapper == null
             ? OpenChecked(DirectoryPath, Document.ProjectId, Document.CatalogDigest, Document.Platform, Document.AppContentCompatibilityId, Document.UnityCompatibility, cancellation)
-            : ResourceBuiltInLayout.Open(builtInWrapper, Document.ProjectId, Document.CatalogDigest, Document.Platform, Document.AppContentCompatibilityId, Document.UnityCompatibility, cancellation);
+            : ResourceBuiltInLayout.Open(_builtInWrapper, Document.ProjectId, Document.CatalogDigest, Document.Platform, Document.AppContentCompatibilityId, Document.UnityCompatibility, cancellation);
 
         private static ResourceLocalSnapshot Open(string directory, string projectId, string catalogDigest, string platform, string appContentCompatibilityId, bool owned,
             bool staging = false, string builtInWrapper = null, string unityCompatibility = null, CancellationToken cancellation = default)
         {
             cancellation.ThrowIfCancellationRequested();
             ResourceCatalogCodec.Hex(catalogDigest, 64);
-            if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathFullyQualified(directory)) throw new ArgumentException("An absolute local publication directory is required.");
+            if (string.IsNullOrWhiteSpace(directory) || !Path.IsPathFullyQualified(directory))
+            {
+                throw new ArgumentException("An absolute local publication directory is required.");
+            }
+
             directory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             RejectLinks(directory);
-            if (!staging && builtInWrapper == null && Path.GetFileName(directory) != catalogDigest) throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
+            if (!staging && builtInWrapper == null && Path.GetFileName(directory) != catalogDigest)
+            {
+                throw new InvalidDataException("The explicit version directory must equal CatalogDigest.");
+            }
+
             var bytes = ReadBounded(Path.Combine(directory, "resource-catalog.json"));
-            if (ResourceCatalogCodec.Digest(bytes) != catalogDigest) throw new InvalidDataException("Explicit CatalogDigest mismatch.");
+            if (ResourceCatalogCodec.Digest(bytes) != catalogDigest)
+            {
+                throw new InvalidDataException("Explicit CatalogDigest mismatch.");
+            }
+
             var document = ResourceCatalogCodec.Read(bytes, projectId, platform, unityCompatibility ?? Application.unityVersion, appContentCompatibilityId);
             var complete = ResourceCatalogCodec.ParseObject(ReadBounded(Path.Combine(directory, ".ylr-complete.json")));
             ValidateComplete(complete, projectId, platform, catalogDigest, document.BuildId);
@@ -91,9 +118,18 @@ namespace YLFramework.Services.Resource
                 staging ? new[] { "resource-catalog.json", ".ylr-complete.json", ".ylr-stage.json" } :
                 new[] { "resource-catalog.json", ".ylr-complete.json" }).OrderBy(x => x, StringComparer.Ordinal);
             if (!Directory.GetFileSystemEntries(directory).All(File.Exists) || !Directory.GetFiles(directory).Select(Path.GetFileName).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(expected))
+            {
                 throw new InvalidDataException("Publication contains missing or unregistered content.");
+            }
+
             var snapshot = new ResourceLocalSnapshot(directory, document, builtInWrapper);
-            foreach (var file in files) using (snapshot.OpenVerified(file, cancellation)) { }
+            foreach (var file in files)
+            {
+                using (snapshot.OpenVerified(file, cancellation))
+                {
+                }
+            }
+
             return snapshot;
         }
 
@@ -105,7 +141,9 @@ namespace YLFramework.Services.Resource
             if (ResourceCatalogCodec.Integer(complete, "Version") != 1 || ResourceCatalogCodec.Text(complete, "ProjectId") != projectId ||
                 ResourceCatalogCodec.Text(complete, "Platform") != platform || buildId != null && ResourceCatalogCodec.Text(complete, "BuildId") != buildId ||
                 ResourceCatalogCodec.Text(complete, "CatalogDigest") != catalogDigest)
+            {
                 throw new InvalidDataException("Publication Complete/Catalog identity mismatch.");
+            }
         }
 
         /// <summary>显式编译类型映射。默认包含常用 Unity 资产；自定义 ScriptableObject 等须提供 typeof，不反射扫描或从字符串创建类型。</summary>
@@ -117,14 +155,20 @@ namespace YLFramework.Services.Resource
                 .Concat(assetTypes ?? Array.Empty<Type>()))
             {
                 if (type == null || !typeof(UnityEngine.Object).IsAssignableFrom(type) || type.ContainsGenericParameters)
+                {
                     throw new ArgumentException("A compiled Unity asset type is required.");
+                }
+
                 types[(type.FullName, type.Assembly.GetName().Name)] = type;
             }
             var entries = new List<ResourceCatalogEntry>();
             foreach (var asset in Document.Assets.Where(x => x.Kind != "Scene"))
             {
                 if (!types.TryGetValue((asset.AssetType, asset.AssetAssembly), out var type))
+                {
                     throw new ResourceException(ResourceError.TypeMismatch, $"No explicit compiled type for {asset.AssetType}, {asset.AssetAssembly}.");
+                }
+
                 var entry = new ResourceCatalogEntry(asset.AssetId, new ResourceAddress(Document.ProjectId, asset.Address, asset.SubAssetKey),
                     new ResourceLocation(ResourceSourceId.AssetBundle, asset.LoadName, type),
                     asset.Aliases.Select(x => new ResourceAddress(Document.ProjectId, x, asset.SubAssetKey)));
@@ -144,7 +188,11 @@ namespace YLFramework.Services.Resource
                 VerifyContentFile(stream, file, cancellation);
                 return stream;
             }
-            catch { stream.Dispose(); throw; }
+            catch
+            {
+                stream.Dispose();
+                throw;
+            }
         }
 
         internal FileStream OpenContentFile(ResourceCatalogFile file)
@@ -158,10 +206,17 @@ namespace YLFramework.Services.Resource
         {
             cancellation.ThrowIfCancellationRequested();
             stream.Position = 0;
-            if (stream.Length != file.Length) throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+            if (stream.Length != file.Length)
+            {
+                throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+            }
+
             using var sha = SHA256.Create();
             byte[] digest;
-            if (!cancellation.CanBeCanceled) digest = sha.ComputeHash(stream);
+            if (!cancellation.CanBeCanceled)
+            {
+                digest = sha.ComputeHash(stream);
+            }
             else
             {
                 var buffer = new byte[32768];
@@ -176,7 +231,10 @@ namespace YLFramework.Services.Resource
             }
             cancellation.ThrowIfCancellationRequested();
             if (stream.Length != file.Length || BitConverter.ToString(digest).Replace("-", "").ToLowerInvariant() != file.Sha256)
+            {
                 throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+            }
+
             stream.Position = 0;
         }
 
@@ -184,7 +242,11 @@ namespace YLFramework.Services.Resource
         {
             RejectLinks(path);
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (stream.Length == 0 || stream.Length > ResourceCatalogCodec.MaximumBytes) throw new InvalidDataException("Publication metadata size limit exceeded.");
+            if (stream.Length == 0 || stream.Length > ResourceCatalogCodec.MaximumBytes)
+            {
+                throw new InvalidDataException("Publication metadata size limit exceeded.");
+            }
+
             using var memory = new MemoryStream();
             stream.CopyTo(memory);
             return memory.ToArray();
@@ -193,8 +255,12 @@ namespace YLFramework.Services.Resource
         internal static void RejectLinks(string path)
         {
             for (var cursor = Path.GetFullPath(path); !string.IsNullOrEmpty(cursor); cursor = Path.GetDirectoryName(cursor))
+            {
                 if ((File.Exists(cursor) || Directory.Exists(cursor)) && (File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                {
                     throw new InvalidDataException("Linked resource input is not supported: " + cursor);
+                }
+            }
         }
     }
 }

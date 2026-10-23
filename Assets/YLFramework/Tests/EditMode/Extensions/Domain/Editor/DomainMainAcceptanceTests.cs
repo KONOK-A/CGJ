@@ -44,8 +44,14 @@ namespace YLFramework.Tests
             }
             finally
             {
-                if (AssetDatabase.LoadMainAssetAtPath(path)) AssetDatabase.DeleteAsset(path);
-                else if (material) UnityEngine.Object.DestroyImmediate(material);
+                if (AssetDatabase.LoadMainAssetAtPath(path))
+                {
+                    AssetDatabase.DeleteAsset(path);
+                }
+                else if (material)
+                {
+                    UnityEngine.Object.DestroyImmediate(material);
+                }
             }
         }
 
@@ -69,7 +75,8 @@ namespace YLFramework.Tests
             Assert.That(defer, Is.Not.Null, "已调度异常必须复用UTF终态恢复队列。");
             string output = SessionState.GetString("YLFramework.Domain.MainAcceptance.Output", "");
             string settings = SessionState.GetString("YLFramework.Domain.MainAcceptance.Settings", "");
-            Assert.That(output, Is.Not.Empty); Assert.That(settings, Is.Not.Empty);
+            Assert.That(output, Is.Not.Empty);
+            Assert.That(settings, Is.Not.Empty);
             Assert.That(File.Exists(output + "/settings-restored.json"), Is.False);
             defer.Invoke(null, null);
             Entry.GetMethod("FinishTests", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
@@ -96,18 +103,43 @@ namespace YLFramework.Tests
                 string before = EditorJsonUtility.ToJson(fixture);
                 using var serialized = new SerializedObject(fixture);
                 var args = new[] { (object)serialized.FindProperty(strings ? "texts" : "numbers"), snapshot };
-                if (conflict) Assert.That(() => method.Invoke(null, args), Throws.TypeOf<TargetInvocationException>().With.InnerException.TypeOf<InvalidOperationException>());
-                else Assert.That(() => method.Invoke(null, args), Throws.Nothing);
+                if (conflict)
+                {
+                    Assert.That(() => method.Invoke(null, args), Throws.TypeOf<TargetInvocationException>().With.InnerException.TypeOf<InvalidOperationException>());
+                }
+                else
+                {
+                    Assert.That(() => method.Invoke(null, args), Throws.Nothing);
+                }
+
                 Assert.That(EditorJsonUtility.ToJson(fixture), Is.EqualTo(before), "冲突预检不可先覆盖未保存的其他平台值。");
             }
-            finally { UnityEngine.Object.DestroyImmediate(fixture); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(fixture);
+            }
         }
 
-        [Serializable] private sealed class ProbeReceipt { public string path, guid; }
+        [Serializable]
+        private sealed class ProbeReceipt
+        {
+            public string path;
+            public string guid;
+        }
     }
 
-    [Serializable] public struct DomainMapNumber { public string first; public int second; }
-    [Serializable] public struct DomainMapText { public string first, second; }
+    [Serializable]
+    public struct DomainMapNumber
+    {
+        public string first;
+        public int second;
+    }
+    [Serializable]
+    public struct DomainMapText
+    {
+        public string first;
+        public string second;
+    }
     public sealed class DomainMapGuardFixture : ScriptableObject
     {
         public DomainMapNumber[] numbers;

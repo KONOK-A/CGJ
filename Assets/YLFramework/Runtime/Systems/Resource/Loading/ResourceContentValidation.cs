@@ -20,17 +20,17 @@ namespace YLFramework.Services.Resource
             internal byte[] Key;
         }
 
-        private readonly List<Input> inputs = new();
-        private readonly Dictionary<(string, string), byte[]> keys = new();
-        private readonly bool representativesOnly;
-        private ResourceContentReservation reservation;
-        private bool disposed;
-        private bool disposalStarted;
-        private bool validated;
-        internal bool HasEncryptedContent => inputs.Any(x => x.Header != null);
-        internal bool HasContentFiles => inputs.Count != 0;
+        private readonly List<Input> _inputs = new();
+        private readonly Dictionary<(string, string), byte[]> _keys = new();
+        private readonly bool _representativesOnly;
+        private ResourceContentReservation _reservation;
+        private bool _isDisposed;
+        private bool _hasStartedDisposal;
+        private bool _isValidated;
+        internal bool HasEncryptedContent => _inputs.Any(x => x.Header != null);
+        internal bool HasContentFiles => _inputs.Count != 0;
 
-        private ResourceContentValidation(bool representativesOnly) => this.representativesOnly = representativesOnly;
+        private ResourceContentValidation(bool representativesOnly) => this._representativesOnly = representativesOnly;
 
         internal static ResourceContentValidation Capture(IEnumerable<ResourceLocalSnapshot> snapshots, ResourceDecryptionOptions options,
             bool representativesOnly = false, ResourceContentBudget budget = null)
@@ -39,10 +39,11 @@ namespace YLFramework.Services.Resource
             try
             {
                 foreach (var snapshot in snapshots)
+                {
                     foreach (var file in ContentFiles(snapshot))
                     {
                         var input = new Input { File = file, Context = Context(snapshot, file), Stream = snapshot.OpenContentFile(file) };
-                        result.inputs.Add(input);
+                        result._inputs.Add(input);
                         var header = ResourceBundleEnvelope.Inspect(input.Stream, input.Context);
                         if (header == null)
                         {
@@ -50,42 +51,57 @@ namespace YLFramework.Services.Resource
                             {
                                 input.Stream.Dispose();
                                 input.Stream = null;
-                                result.inputs.Remove(input);
+                                result._inputs.Remove(input);
                             }
                             continue;
                         }
                         input.Header = header;
-                        if (input.Stream.Length != file.Length) throw new InvalidDataException("Content delivery length changed: " + file.RelativeFile);
+                        if (input.Stream.Length != file.Length)
+                        {
+                            throw new InvalidDataException("Content delivery length changed: " + file.RelativeFile);
+                        }
+
                         var pair = (snapshot.Document.ProjectId, header.KeyId);
-                        if (!result.keys.TryGetValue(pair, out var key))
+                        if (!result._keys.TryGetValue(pair, out var key))
                         {
                             key = CopyKey(options, pair.Item1, pair.Item2);
-                            result.keys.Add(pair, key);
+                            result._keys.Add(pair, key);
                         }
                         input.Key = key;
                         if (representativesOnly)
                         {
-                            var previous = result.inputs.FirstOrDefault(x => !ReferenceEquals(x, input) && ReferenceEquals(x.Key, key));
+                            var previous = result._inputs.FirstOrDefault(x => !ReferenceEquals(x, input) && ReferenceEquals(x.Key, key));
                             if (previous != null)
                             {
                                 var discard = previous.File.Length <= file.Length ? input : previous;
                                 discard.Stream.Dispose();
                                 discard.Stream = null;
-                                result.inputs.Remove(discard);
+                                result._inputs.Remove(discard);
                             }
                         }
                     }
+                }
+
                 if (result.HasEncryptedContent)
                 {
                     if (options.MaxBufferedBytes < ResourceDecryptStream.DataBufferBytes)
+                    {
                         throw new ResourceException(ResourceError.ContentBufferUnavailable, "The configured content buffer budget cannot hold one authenticated input.");
-                    if (budget != null) result.reservation = budget.Reserve(1)[0];
+                    }
+
+                    if (budget != null)
+                    {
+                        result._reservation = budget.Reserve(1)[0];
+                    }
                 }
                 return result;
             }
             catch (Exception error)
             {
-                try { result.Dispose(); }
+                try
+                {
+                    result.Dispose();
+                }
                 catch (Exception cleanup)
                 {
                     throw new ResourceException(Failure(error, "Content validation capture failed.").Kind,
@@ -98,37 +114,72 @@ namespace YLFramework.Services.Resource
 
         internal void Validate(CancellationToken cancellation = default, Action<string> checkpoint = null)
         {
-            if (disposalStarted) throw new ObjectDisposedException(nameof(ResourceContentValidation));
-            if (inputs.Count == 0) { validated = true; return; }
-            reservation?.Allocate();
-            foreach (var input in inputs)
+            if (_hasStartedDisposal)
+            {
+                throw new ObjectDisposedException(nameof(ResourceContentValidation));
+            }
+
+            if (_inputs.Count == 0)
+            {
+                _isValidated = true;
+                return;
+            }
+            _reservation?.Allocate();
+            foreach (var input in _inputs)
             {
                 cancellation.ThrowIfCancellationRequested();
                 checkpoint?.Invoke("ContentShaStarted");
-                try { ResourceLocalSnapshot.VerifyContentFile(input.Stream, input.File, cancellation); }
-                finally { checkpoint?.Invoke("ContentShaFinished"); }
-                if (input.Header == null) continue;
+                try
+                {
+                    ResourceLocalSnapshot.VerifyContentFile(input.Stream, input.File, cancellation);
+                }
+                finally
+                {
+                    checkpoint?.Invoke("ContentShaFinished");
+                }
+                if (input.Header == null)
+                {
+                    continue;
+                }
+
                 checkpoint?.Invoke("ContentAuthenticationStarted");
                 try
                 {
-                    if (representativesOnly)
+                    if (_representativesOnly)
                     {
                         using var probe = ResourceBundleEnvelope.OpenDecrypt(input.Stream, input.Context, input.Key, true, cancellation);
                     }
-                    else ResourceBundleEnvelope.ValidateAll(input.Stream, input.Context, input.Key, cancellation);
+                    else
+                    {
+                        ResourceBundleEnvelope.ValidateAll(input.Stream, input.Context, input.Key, cancellation);
+                    }
                 }
-                catch (Exception error) { throw Failure(error, "Content authentication failed for " + input.File.RelativeFile + "."); }
-                finally { checkpoint?.Invoke("ContentAuthenticationFinished"); }
+                catch (Exception error)
+                {
+                    throw Failure(error, "Content authentication failed for " + input.File.RelativeFile + ".");
+                }
+                finally
+                {
+                    checkpoint?.Invoke("ContentAuthenticationFinished");
+                }
             }
-            validated = true;
+            _isValidated = true;
         }
 
         internal void RequireStable()
         {
-            if (disposalStarted || !validated) throw new InvalidOperationException("Content validation has not completed or was released.");
-            foreach (var input in inputs)
+            if (_hasStartedDisposal || !_isValidated)
+            {
+                throw new InvalidOperationException("Content validation has not completed or was released.");
+            }
+
+            foreach (var input in _inputs)
+            {
                 if (!input.Stream.CanRead || input.Stream.Length != input.File.Length)
+                {
                     throw new InvalidDataException("A validated content input changed before commit: " + input.File.RelativeFile);
+                }
+            }
         }
 
         internal static IEnumerable<ResourceCatalogFile> ContentFiles(ResourceLocalSnapshot snapshot) => snapshot.Document.Bundles
@@ -145,69 +196,127 @@ namespace YLFramework.Services.Resource
                 using var stream = snapshot.OpenContentFile(file);
                 return ResourceBundleEnvelope.Inspect(stream, Context(snapshot, file));
             }
-            catch (Exception error) { throw Failure(error, "Content header validation failed for " + file.RelativeFile + "."); }
+            catch (Exception error)
+            {
+                throw Failure(error, "Content header validation failed for " + file.RelativeFile + ".");
+            }
         }
 
         internal static byte[] CopyKey(ResourceDecryptionOptions options, string project, string keyId)
         {
             if (options?.KeyProvider == null)
+            {
                 throw new ResourceException(ResourceError.ContentKeyUnavailable, "An explicit content key provider is required for " + project + "/" + keyId + ".");
+            }
+
             var key = new byte[32];
             try
             {
                 bool found;
-                try { found = options.KeyProvider.TryCopyKey(project, keyId, key); }
+                try
+                {
+                    found = options.KeyProvider.TryCopyKey(project, keyId, key);
+                }
                 catch (Exception error)
                 {
                     throw new ResourceException(ResourceError.ContentKeyUnavailable, "The application content key provider failed for " + project + "/" + keyId + ".",
                         new ProviderFailure(error));
                 }
-                if (!found) throw new ResourceException(ResourceError.ContentKeyUnavailable, "Content key is unavailable for " + project + "/" + keyId + ".");
+                if (!found)
+                {
+                    throw new ResourceException(ResourceError.ContentKeyUnavailable, "Content key is unavailable for " + project + "/" + keyId + ".");
+                }
+
                 return key;
             }
-            catch { Array.Clear(key, 0, key.Length); throw; }
+            catch
+            {
+                Array.Clear(key, 0, key.Length);
+                throw;
+            }
         }
 
         // 保留诊断因果对象，但常规Exception/历史日志不能串出应用provider的敏感原文。
         private sealed class ProviderFailure : Exception
         {
-            internal Exception OriginalCause { get; }
+            internal Exception OriginalCause
+            {
+                get;
+            }
             internal ProviderFailure(Exception cause) : base("Application key provider failure; sensitive cause retained privately.") => OriginalCause = cause;
         }
 
         internal static ResourceException Failure(Exception cause, string message)
         {
-            if (cause is ResourceException resource) return resource;
+            if (cause is ResourceException resource)
+            {
+                return resource;
+            }
+
             var kind = cause is PlatformNotSupportedException || cause is InvalidDataException || cause is OverflowException
                 ? ResourceError.ContentFormatUnsupported : ResourceError.LoadFailed;
             for (var current = cause; current != null; current = current.InnerException)
-                if (current is CryptographicException) { kind = ResourceError.ContentAuthenticationFailed; break; }
-            if (cause is OperationCanceledException) kind = ResourceError.Canceled;
+            {
+                if (current is CryptographicException)
+                {
+                    kind = ResourceError.ContentAuthenticationFailed;
+                    break;
+                }
+            }
+
+            if (cause is OperationCanceledException)
+            {
+                kind = ResourceError.Canceled;
+            }
+
             return new ResourceException(kind, message, cause, source: ResourceSourceId.AssetBundle);
         }
 
         public void Dispose()
         {
-            if (disposed) return;
-            disposalStarted = true;
-            foreach (var key in keys.Values) Array.Clear(key, 0, key.Length);
-            keys.Clear();
-            List<Exception> failures = null;
-            foreach (var input in inputs)
+            if (_isDisposed)
             {
-                if (input.Stream == null) continue;
-                try { input.Stream.Dispose(); input.Stream = null; }
-                catch (Exception error) { (failures ??= new()).Add(error); }
+                return;
+            }
+
+            _hasStartedDisposal = true;
+            foreach (var key in _keys.Values)
+            {
+                Array.Clear(key, 0, key.Length);
+            }
+
+            _keys.Clear();
+            List<Exception> failures = null;
+            foreach (var input in _inputs)
+            {
+                if (input.Stream == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    input.Stream.Dispose();
+                    input.Stream = null;
+                }
+                catch (Exception error)
+                {
+                    (failures ??= new()).Add(error);
+                }
             }
             if (failures != null)
             {
-                if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
+                if (failures.Count == 1)
+                {
+                    ExceptionDispatchInfo.Capture(failures[0]).Throw();
+                }
+
                 throw new AggregateException("Content input cleanup failed; unresolved inputs and budget remain owned.", failures);
             }
-            reservation?.Dispose();
-            reservation = null;
-            inputs.Clear();
-            disposed = true;
+            _reservation?.Dispose();
+            _reservation = null;
+            _inputs.Clear();
+            _isDisposed = true;
         }
     }
 }

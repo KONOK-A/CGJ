@@ -94,7 +94,7 @@ CommonSystem的局部Unity适配融入`Foundation/Events/Unity`：现有Core nam
 
 | 工具 / namespace | 正式职责与协作 | 接入与所有权 |
 |---|---|---|
-| FSM / `YLFramework.FSM` | Runtime 轻量纯代码状态机，复用 Runtime Safe 池与 Foundation 池内核；与带完整 Editor 的大型可视化 XFFSM 分层共存 | `FSM<TStateId>.Allocate`，调用方驱动及回收；不依赖 Module / XFFSM / 统一 FSM Manager，Module 关闭不自动停止 |
+| FSM / `YLFramework.FSM` | Runtime 轻量纯代码状态机，复用 Runtime Safe 池与 Foundation 池内核；与带完整 Editor 的大型可视化 XFFSM 分层共存 | `Fsm<TStateId>.Allocate`，调用方驱动及回收；不依赖 Module / XFFSM / 统一 FSM Manager，Module 关闭不自动停止 |
 | Grid / `YLFramework.Utilities.Grid` | Runtime 矩形 / 稀疏二维数据结构，无框架内依赖；不强制替代为其他 Foundation 容器 | 直接 `new NormalGrid<T>` / `DynamicGrid<T>`，调用方管理数据 |
 | Json / `YLFramework.Utilities.Json` | Runtime JSONObject 树处理，无框架内依赖；与 Json.NET 的强类型序列化、Save 文件策略、HTTP 传输职责分离 | 直接创建 / 解析节点，不建设全局 JSON 服务 |
 | Table / `YLFramework.Utilities.Table` | Runtime 通用表与多值索引；TableIndex 复用 Foundation 的 List / Dictionary 池，不接管正式Resource索引 | 调用方维护索引及 Clear / Dispose；不取得数据项 / 资源的释放权 |
@@ -114,9 +114,9 @@ HTTP 正式位于 `Runtime/Systems/Http/`，namespace 为 `YLFramework.Services.
 
 `PreWebRequest` / `PostWebRequest` 现在为可 `+=` / `-=` 的静态事件，订阅者在自身结束时解除订阅，HTTP 会话重置会清空订阅。前置事件同步配置原生请求，异常提交 Failed 并保留原始 Exception；后置事件只观察原生完成（含协议/网络错误），不在构造失败、取消或退出时调用。后置事件的原生对象仅在回调内借读，返回后释放，不能持有、重发或主动 Dispose；若前置配置替换 Handler，原先的 Handler 和回调返回时附着的新 Handler 均交由 HTTP 清理，配置过程中自行创建但从未交付/又自行替换的中间对象仍由配置者负责。
 
-`SendWebRequest.Status` 为独立稳定终态（Pending / Succeeded / Failed / Canceled / Invalidated），`error`、`NativeResult`、`ResponseCode`、`ResponseHeaders`、`Text` / `Data` 在完成通知时脱离已释放的原生对象读取；协议失败也保留响应正文。`Abort` 幂等，只停止本请求独占的传输，不撤销服务器已执行的副作用。启动拒绝、退出及会话失效都释放 HTTP 自有请求/Handler；Module.Close 不清全局 HTTP。后置观察和完成通知异常报告但不反写终态，资源清理不依赖通知成功。
+`SendWebRequest.Status` 为独立稳定终态（Pending / Succeeded / Failed / Canceled / Invalidated），`Error`、`NativeResult`、`ResponseCode`、`ResponseHeaders`、`Text` / `Data` 在完成通知时脱离已释放的原生对象读取；协议失败也保留响应正文。`Abort` 幂等，只停止本请求独占的传输，不撤销服务器已执行的副作用。启动拒绝、退出及会话失效都释放 HTTP 自有请求/Handler；Module.Close 不清全局 HTTP。后置观察和完成通知异常报告但不反写终态，资源清理不依赖通知成功。
 
-Foundation `CustomAsyncOperation` 仅提供等待和历史通知：legacy `completed` 先于 `AddCompleteEvent`，多播抛错会中断后续通知；完成后新增 `AddCompleteEvent` 立即同步调用（异常仍传播给订阅者）。基类重复完成和完成后 Abort 仍可更新 error，重复 Abort 仍运行 hook，不作为领域稳定终态或物理取消权威。HTTP 自管终态；View/Panel、Audio、Resource 保留各自 owner、逻辑取消、租约与共享 producer 所有权，不新增公共任务系统。
+Foundation `CustomAsyncOperation` 提供 `IsDone/Progress/Error` 和历史通知：legacy `Completed` 事件先于 `AddCompleteEvent`，多播抛错会中断后续通知；完成后新增 `AddCompleteEvent` 立即同步调用（异常仍传播给订阅者）。派生类调用 `Complete` 或 `CompleteWithoutNotify`，Unity 等待入口仍为 `keepWaiting`。基类重复完成和完成后 Abort 仍可更新 Error，重复 Abort 仍运行 hook，不作为领域稳定终态或物理取消权威。HTTP 自管终态；View/Panel、Audio、Resource 保留各自 owner、逻辑取消、租约与共享 producer 所有权，不新增公共任务系统。
 
 自有旧 `YLFramework.Core.LogUtil` 已退役，不保留转发壳或第二套文件 Logger；其全局异常订阅、后台写盘、三天文件清理及退出回调随实现退出。历史日志文件、原 XF LoggerSystem 和原游戏日志路径不修改。正式文件日志仍是长期需求，由后续 LoggerSystem 专题融合，本次退出不表示已有正式替代品。
 
@@ -172,9 +172,11 @@ DataAssets保留`ScriptableObjectConfigs/ScriptableObjectData`与`SingletonScrip
 
 **RootAssetTypes**是应用传给`ResourceProjectMount.assetTypes`或`ResourceLocalSnapshot.CreateCatalog`的显式编译类型清单，不是新增全局注册器。B根类型为`typeof(YLFramework.Localization.MultiLanguageConfigs)`和`typeof(YLFramework.DataAssets.ScriptableObjectConfigs)`；闭合的自定义根/直接加载的具体子资产类型由应用同时登记，不能把开放泛型当运行时根。不改Resource默认类型表或Core合同。
 
-**AssetMetadata**沿用实际字段：SO根`displayName/configs/type_script_guid`、条目`parent/id/config_name/icon/des`；语言根`displayName/languages`（公开`Languages`列表）、语言`language/displayName/languagesInfo`、条目`id/type/str/image/url/notes`。资源地址中的`projectName/imageName/subAsset`仍是YL ProjectId/Path/SubAsset，不自动转换XF地址。两处`excel_path`已删除，且不以隐藏字段、迁移器或别名恢复。
+**AssetMetadata**的当前C#字段为：SO根`displayName/configs/typeScriptGuid`、条目`parent/id/configName/icon/description`；语言根`displayName/languages`（公开`Languages`列表）、语言`language/displayName/languagesInfo`、条目`id/type/str/image/url/notes`。既有Unity字段旧名通过精确`FormerlySerializedAs`保留。资源地址中的`projectName/imageName/subAsset`仍是YL ProjectId/Path/SubAsset，不自动转换XF地址。两处`excel_path`已删除，且不以隐藏字段、迁移器或别名恢复。
 
 可选Excel提供`ExcelAuthoring`的SO/List/JSON导出及预览，`ExcelImportPlan`先核`Errors/Changes/CanCommit`再`Commit(true)`，取消不写；过期输入、新引用失效和部分应用失败均拒交或回滚。保留`boolean -> Bool`、`int64 -> Long`。已选SO根菜单位于`Assets/YLFramework/Excel/`；导出成功后EditorPrefs按资产GUID记忆工作簿，Inspector的“在文件夹中打开Excel”仅在文件存在时启用，改名/移动不丢记录，不把绝对路径写回.asset。Localization尚无Excel作者流程。选装时完整携带`Integrations/Excel/Editor`；默认包不包含它。
+
+Skill/Buff/Mission/Equipment/DataAssets的既有工作表列名不随本轮C#字段改名变化。Excel Editor对这些自有领域字段使用唯一的`FormerlySerializedAs`旧名冻结表头，ID定位、普通字段导入和导出共用映射；例如`buff_id/skill_name/equipment_name`保留。这些别名同时属于工作表协议，后续不能随意删除或增加多重歧义别名。外部模型仍使用原本的字段名规则，不把用户的Unity别名自动扩展为Excel协议；未知列、重复列和ID校验保持严格。
 
 统一Save由`SaveStore`承担唯一文件/索引/槽位/模型/异步/缓存权威，`SaveManager`只提供Unity路径和门面。只支持当前v2，损坏/IO/版本失败不变成默认值；备份读取注明来源，显式恢复才修盘。没有SaveMigration、v1复制或XF Archive导入，普通删除重载保留。用法与并发/取消边界见[Save](Modules/Save.md)。
 
@@ -194,7 +196,7 @@ Equipment已融合至YLFramework并通过技术及用户验收；主工程与无
 
 `YLFramework.EquipmentSystem`保留`EquipmentManager`静态主入口、`IEquipment/IEquippable`及Asset/Script双模式。应用先初始化Resource；通过`ResourceProjectMount.assetTypes`或`ResourceLocalSnapshot.CreateCatalog`显式提供`typeof(EquipmentsConfig)`及直接加载的具体派生类型，再调用`LoadConfig(resources,address)`或借用`AddConfig(root)`。`projectName/assetName`和图标字段采用YL ProjectId/Path，不读取旧XF配置。
 
-`CreateEquipment(id)`先设置共享只读`EquipmentData`与空`Equiper`再触发领域`OnLoaded`，不承诺早于Prefab原生Awake/OnEnable。Prefab根须有且仅有一个IEquipment；Script须为具体普通类、public无参构造，字符串类型由应用按IL2CPP路径定向保留。运行态字段放实例，不能修改登记中的定义。同一实例跨宿主返回AlreadyEquipped，同ID的不同实例可同时装备；回调抛错撤销本域挂载并清理，不承诺回滚外部业务副作用。
+`CreateEquipment(id)`先设置共享只读`EquipmentData`与空`Equipper`再触发领域`OnLoaded`，不承诺早于Prefab原生Awake/OnEnable。Prefab根须有且仅有一个IEquipment；Script须为具体普通类、public无参构造，字符串类型由应用按IL2CPP路径定向保留。运行态字段放实例，不能修改登记中的定义。同一实例跨宿主返回AlreadyEquipped，同ID的不同实例可同时装备；回调抛错撤销本域挂载并清理，不承诺回滚外部业务副作用。
 
 Manager创建的实例由其持有既有InstanceLease或CLR池责任，直接`Equip`的外部对象只借用。外部owner自行保活配置/资源；卸下或关闭不替其调用OnLoaded/OnUnloaded、销毁或回池。宿主结束显式`CloseHost`；`UnEquip(equipment,false)`留下可重装的自有实例，最终由DestroyEquipment、RemoveConfig或Shutdown归还。应用退出与Editor会话退出清理全部自有结果，包含未装备者；只归还自身根Lease，不关闭ResourceSystem或清共享缓存。归还后的原始IEquipment引用不得继续使用，不提供跨checkout的公开Handle保护。
 

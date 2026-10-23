@@ -30,9 +30,15 @@ namespace YLFramework.Editor.Audio
             var options = serializedObject.FindProperty("options");
             EditorGUILayout.LabelField("Playback Options", EditorStyles.boldLabel);
             foreach (var name in new[] { "Loop", "Volume", "Pitch", "AutoPauseWhenTimeScaleZero" })
+            {
                 EditorGUILayout.PropertyField(options.FindPropertyRelative(name));
+            }
+
             if (AudioInspectorUtility.ShowWhen(serializedObject.FindProperty("category"), (int)AudioCategory.Sound))
+            {
                 EditorGUILayout.PropertyField(options.FindPropertyRelative("Priority"), new GUIContent("Sound Admission Priority"));
+            }
+
             EditorGUILayout.HelpBox("Framework-owned sources play in 2D; borrowed sources preserve the caller's spatial curves and filters. These options do not configure spatial distances/rolloff. Sound inherits the global sound policy (nullable PlaySoundMode is not a Unity serialized field). ExternalProvider entries require SetProvider in code. Music/Voice ignore Sound priority and policy; Music does not automatically enable Loop.", MessageType.Info);
             EditorGUILayout.PropertyField(options.FindPropertyRelative("OutputRoute"), true);
             EditorGUILayout.PropertyField(options.FindPropertyRelative("AutoFade"), true);
@@ -40,8 +46,15 @@ namespace YLFramework.Editor.Audio
             AudioInspectorUtility.Field(serializedObject, "onStarted");
             serializedObject.ApplyModifiedProperties();
             foreach (var selected in targets)
+            {
                 using (var serialized = new SerializedObject(selected))
-                    foreach (var warning in GetWarnings(serialized)) AudioInspectorUtility.Message(serialized, warning, MessageType.Warning);
+                {
+                    foreach (var warning in GetWarnings(serialized))
+                    {
+                        AudioInspectorUtility.Message(serialized, warning, MessageType.Warning);
+                    }
+                }
+            }
         }
 
         internal static List<string> GetWarnings(SerializedObject serialized)
@@ -49,33 +62,89 @@ namespace YLFramework.Editor.Audio
             var warnings = new List<string>();
             var library = serialized.FindProperty("library").objectReferenceValue as AudioClipLibrary;
             var name = serialized.FindProperty("groupName").stringValue;
-            if (!library) warnings.Add("Assign a live Library. Missing material does not stop existing playback.");
-            if (string.IsNullOrWhiteSpace(name)) warnings.Add("Material Group Name must not be empty or whitespace.");
-            else if (library) warnings.AddRange(AudioClipLibraryEditor.GetWarnings(library, name));
-            try { AudioChannel.ValidateIdentity(serialized.FindProperty("channelName").stringValue, "channelName"); }
-            catch (ArgumentException exception) { warnings.Add(exception.Message); }
+            if (!library)
+            {
+                warnings.Add("Assign a live Library. Missing material does not stop existing playback.");
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                warnings.Add("Material Group Name must not be empty or whitespace.");
+            }
+            else if (library)
+            {
+                warnings.AddRange(AudioClipLibraryEditor.GetWarnings(library, name));
+            }
+
+            try
+            {
+                AudioChannel.ValidateIdentity(serialized.FindProperty("channelName").stringValue, "channelName");
+            }
+            catch (ArgumentException exception)
+            {
+                warnings.Add(exception.Message);
+            }
             var id = serialized.FindProperty("persistenceId").stringValue;
             if (!string.IsNullOrEmpty(id))
-                try { AudioChannel.ValidateIdentity(id, "persistenceId"); }
-                catch (ArgumentException exception) { warnings.Add(exception.Message); }
+            {
+                try
+                {
+                    AudioChannel.ValidateIdentity(id, "persistenceId");
+                }
+                catch (ArgumentException exception)
+                {
+                    warnings.Add(exception.Message);
+                }
+            }
+
             var category = (AudioCategory)serialized.FindProperty("category").intValue;
-            if ((uint)category > (uint)AudioCategory.Sound) warnings.Add("Unknown category.");
-            if ((uint)serialized.FindProperty("channelMode").intValue > (uint)AudioChannelMode.Overlap) warnings.Add("Unknown channelMode.");
+            if ((uint)category > (uint)AudioCategory.Sound)
+            {
+                warnings.Add("Unknown category.");
+            }
+
+            if ((uint)serialized.FindProperty("channelMode").intValue > (uint)AudioChannelMode.Overlap)
+            {
+                warnings.Add("Unknown channelMode.");
+            }
+
             var borrowed = serialized.FindProperty("borrowedSource");
             var source = borrowed.objectReferenceValue as AudioSource;
-            if (!source && borrowed.objectReferenceInstanceIDValue != 0) warnings.Add("Stored borrowedSource is missing; assign a live source or explicitly clear the reference.");
+            if (!source && borrowed.objectReferenceInstanceIDValue != 0)
+            {
+                warnings.Add("Stored borrowedSource is missing; assign a live source or explicitly clear the reference.");
+            }
+
             if (source)
             {
                 if (serialized.FindProperty("channelMode").intValue == (int)AudioChannelMode.Overlap)
+                {
                     warnings.Add("Borrowed AudioSource requires Exclusive; Overlap cannot borrow the same source.");
-                if (!source.isActiveAndEnabled) warnings.Add("Borrowed AudioSource must be active and enabled at playback submission.");
-                if (source.isPlaying) warnings.Add("Borrowed AudioSource is playing. Explicitly Stop and relinquish its owner first; borrowing does not preempt playback.");
+                }
+
+                if (!source.isActiveAndEnabled)
+                {
+                    warnings.Add("Borrowed AudioSource must be active and enabled at playback submission.");
+                }
+
+                if (source.isPlaying)
+                {
+                    warnings.Add("Borrowed AudioSource is playing. Explicitly Stop and relinquish its owner first; borrowing does not preempt playback.");
+                }
             }
-            if ((uint)serialized.FindProperty("autoPlay").intValue > (uint)AudioGroupAutoPlay.EveryEnable) warnings.Add("Unknown autoPlay.");
+            if ((uint)serialized.FindProperty("autoPlay").intValue > (uint)AudioGroupAutoPlay.EveryEnable)
+            {
+                warnings.Add("Unknown autoPlay.");
+            }
+
             var value = serialized.FindProperty("options");
             var route = value.FindPropertyRelative("OutputRoute");
             var group = route.FindPropertyRelative("Group");
-            if (!group.objectReferenceValue && group.objectReferenceInstanceIDValue != 0) warnings.Add("Stored OutputRoute.Group reference is missing; assign or explicitly clear it.");
+            if (!group.objectReferenceValue && group.objectReferenceInstanceIDValue != 0)
+            {
+                warnings.Add("Stored OutputRoute.Group reference is missing; assign or explicitly clear it.");
+            }
+
             var fade = value.FindPropertyRelative("AutoFade");
             var options = new AudioSoundOptions
             {
@@ -86,20 +155,43 @@ namespace YLFramework.Editor.Audio
                 OutputRoute = new AudioOutputRoute { Mode = (AudioOutputRoute.RouteMode)route.FindPropertyRelative("Mode").intValue, Group = group.objectReferenceValue as AudioMixerGroup },
                 AutoFade = new AudioAutoFade(fade.FindPropertyRelative("FadeInSeconds").floatValue, fade.FindPropertyRelative("FadeOutSeconds").floatValue)
             };
-            try { options.Validate(false); }
-            catch (ArgumentException exception) { warnings.Add(exception.Message); }
-            if (library && library.Groups != null)
-                foreach (var material in library.Groups)
+            try
+            {
+                options.Validate(false);
+            }
+            catch (ArgumentException exception)
+            {
+                warnings.Add(exception.Message);
+            }
+            if (library && library.groups != null)
+            {
+                foreach (var material in library.groups)
                 {
-                    if (material == null || material.Name != name || material.Entries == null) continue;
-                    foreach (var entry in material.Entries)
+                    if (material == null || material.name != name || material.entries == null)
                     {
-                        if (entry == null || entry.Source != AudioClipSource.Clip || !entry.Clip ||
-                            material.Selection == AudioClipSelectionMode.Weighted && entry.Weight <= 0f) continue;
-                        try { options.ValidateClip(entry.Clip); }
-                        catch (ArgumentException exception) { warnings.Add(exception.Message); }
+                        continue;
+                    }
+
+                    foreach (var entry in material.entries)
+                    {
+                        if (entry == null || entry.source != AudioClipSource.Clip || !entry.clip ||
+                            material.selection == AudioClipSelectionMode.Weighted && entry.weight <= 0f)
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            options.ValidateClip(entry.clip);
+                        }
+                        catch (ArgumentException exception)
+                        {
+                            warnings.Add(exception.Message);
+                        }
                     }
                 }
+            }
+
             return warnings;
         }
     }

@@ -14,9 +14,13 @@ namespace YLFramework.Core.RoslynAnalyzers
     public class MethodLocalOnlyAttribute : Attribute
     {
 
-        public MethodLocalOnlyAttribute() { }
+        public MethodLocalOnlyAttribute()
+        {
+        }
 
-        public MethodLocalOnlyAttribute(string message) { }
+        public MethodLocalOnlyAttribute(string message)
+        {
+        }
 
     }
 }

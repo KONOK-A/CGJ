@@ -10,16 +10,29 @@ namespace YLFramework.Services.Resource
     {
         private JArray ValidateFloors(JToken token)
         {
-            if (token is not JArray floors || floors.Count > 4096) throw new InvalidDataException("Invalid release history bound.");
+            if (token is not JArray floors || floors.Count > 4096)
+            {
+                throw new InvalidDataException("Invalid release history bound.");
+            }
+
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var value in floors)
             {
-                if (value is not JObject item) throw new InvalidDataException("Invalid release history entry.");
+                if (value is not JObject item)
+                {
+                    throw new InvalidDataException("Invalid release history entry.");
+                }
+
                 ResourceCatalogCodec.Fields(item, "ProjectId,Platform,Channel,Sequence,CatalogDigest");
-                var project = ResourceCatalogCodec.Text(item, "ProjectId"); var channel = ResourceCatalogCodec.Text(item, "Channel");
+                var project = ResourceCatalogCodec.Text(item, "ProjectId");
+                var channel = ResourceCatalogCodec.Text(item, "Channel");
                 ResourceCatalogCodec.Id(channel);
-                if (!mounts.TryGetValue(project, out var mount) || ResourceCatalogCodec.Text(item, "Platform") != mount.Platform ||
-                    ResourceCatalogCodec.Integer(item, "Sequence") < 1 || !seen.Add(project + ":" + channel)) throw new InvalidDataException("Release history scope/sequence mismatch.");
+                if (!_mounts.TryGetValue(project, out var mount) || ResourceCatalogCodec.Text(item, "Platform") != mount.Platform ||
+                    ResourceCatalogCodec.Integer(item, "Sequence") < 1 || !seen.Add(project + ":" + channel))
+                {
+                    throw new InvalidDataException("Release history scope/sequence mismatch.");
+                }
+
                 ResourceCatalogCodec.Hex(ResourceCatalogCodec.Text(item, "CatalogDigest"), 64);
             }
             return floors;
@@ -34,8 +47,14 @@ namespace YLFramework.Services.Resource
                 if (result.TryGetValue(key, out var previous))
                 {
                     if ((long)previous["Sequence"] == (long)entry["Sequence"] && (string)previous["CatalogDigest"] != (string)entry["CatalogDigest"])
+                    {
                         throw new InvalidDataException("The same confirmed release sequence has conflicting digests.");
-                    if ((long)previous["Sequence"] >= (long)entry["Sequence"]) continue;
+                    }
+
+                    if ((long)previous["Sequence"] >= (long)entry["Sequence"])
+                    {
+                        continue;
+                    }
                 }
                 result[key] = (JObject)entry.DeepClone();
             }
@@ -47,17 +66,38 @@ namespace YLFramework.Services.Resource
         private JArray ReadReleaseFloors()
         {
             var entries = new List<JObject>();
-            if (!ValidateOwner()) return new JArray();
+            if (!ValidateOwner())
+            {
+                return new JArray();
+            }
+
             foreach (var project in Projects)
+            {
                 foreach (var name in new[] { "active.json", "last-known-good.json" })
                 {
                     var path = Path.Combine(ProjectRoot(project.ProjectId), name);
-                    if (!File.Exists(path)) continue;
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
                     JObject index;
-                    try { index = ValidateIndex(Read(path)); }
-                    catch (InvalidDataException error) { recoveryNotes[path] = name + ": " + error.Message; continue; }
-                    if ((long)index["Version"] == 2) entries.AddRange(ValidateFloors(index["ReleaseFloors"]).Cast<JObject>());
+                    try
+                    {
+                        index = ValidateIndex(Read(path));
+                    }
+                    catch (InvalidDataException error)
+                    {
+                        _recoveryNotes[path] = name + ": " + error.Message;
+                        continue;
+                    }
+                    if ((long)index["Version"] == 2)
+                    {
+                        entries.AddRange(ValidateFloors(index["ReleaseFloors"]).Cast<JObject>());
+                    }
                 }
+            }
+
             return MergeFloors(entries);
         }
 
@@ -65,12 +105,18 @@ namespace YLFramework.Services.Resource
         {
             var floor = ReadReleaseFloors().Cast<JObject>().SingleOrDefault(x => (string)x["ProjectId"] == release.ProjectId && (string)x["Channel"] == release.Channel);
             if (floor != null && (release.Sequence < (long)floor["Sequence"] || release.Sequence == (long)floor["Sequence"] && release.CatalogDigest != (string)floor["CatalogDigest"]))
+            {
                 throw new InvalidDataException("Remote release is older than confirmed history or conflicts at the same sequence.");
+            }
         }
 
         internal bool HasConfirmedReleases(PreparedUpdate update)
         {
-            if (update.Releases.Count == 0) return true;
+            if (update.Releases.Count == 0)
+            {
+                return true;
+            }
+
             var floors = ReadReleaseFloors().Cast<JObject>().ToArray();
             return update.Releases.All(release => floors.Any(x => (string)x["ProjectId"] == release.ProjectId && (string)x["Channel"] == release.Channel &&
                 ((long)x["Sequence"] > release.Sequence || (long)x["Sequence"] == release.Sequence && (string)x["CatalogDigest"] == release.CatalogDigest)));
@@ -79,8 +125,13 @@ namespace YLFramework.Services.Resource
         private JObject WithFloors(JObject index, JArray floors)
         {
             ValidateFloors(floors);
-            if (floors.Count == 0) return index;
-            index["Version"] = 2; index["ReleaseFloors"] = floors.DeepClone();
+            if (floors.Count == 0)
+            {
+                return index;
+            }
+
+            index["Version"] = 2;
+            index["ReleaseFloors"] = floors.DeepClone();
             return index;
         }
     }

@@ -39,9 +39,10 @@ namespace YLFramework.Tests.ResourceBuild
         internal static ResourceAtlasConfiguration Configure(ResourceReleaseFixture fixture, bool folder = false, ResourceAtlasGrouping grouping = ResourceAtlasGrouping.Together)
         {
             var project = fixture.Project;
-            project.Groups.Clear();
-            project.Groups.Add(new ResourceGroup { Id = "generated" });
-            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            project.groups.Clear();
+            project.groups.Add(new ResourceGroup { id = "generated" });
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
             var configuration = ResourceAtlasGenerator.CreateConfiguration(project, fixture.Folder + "/Content", "GeneratedAtlases");
             var sourcePath = fixture.Folder + "/Content/Sprites.png";
             Object source = AssetDatabase.LoadAssetAtPath<Texture2D>(sourcePath);
@@ -51,24 +52,44 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(AssetDatabase.MoveAsset(sourcePath, fixture.Folder + "/Content/AutoSources/Sprites.png"), Is.Empty);
                 source = AssetDatabase.LoadAssetAtPath<DefaultAsset>(fixture.Folder + "/Content/AutoSources");
             }
-            configuration.Rules.Add(new ResourceAtlasRule { Id = "ui", GroupId = "generated", Address = "atlases/ui", Grouping = grouping,
-                Readable = true, Sources = new[] { source } });
+            configuration.rules.Add(new ResourceAtlasRule
+            {
+                id = "ui",
+                groupId = "generated",
+                address = "atlases/ui",
+                grouping = grouping,
+                readable = true,
+                sources = new[] { source }
+            });
             Save(configuration);
             return configuration;
         }
 
         private static void Save(ResourceAtlasConfiguration configuration)
-        { EditorUtility.SetDirty(configuration); AssetDatabase.SaveAssetIfDirty(configuration); }
+        {
+            EditorUtility.SetDirty(configuration);
+            AssetDatabase.SaveAssetIfDirty(configuration);
+        }
 
         internal static string AddSprite(string folder, string name, Color color)
         {
             var path = folder + "/" + name + ".png";
             var texture = new Texture2D(4, 4);
-            try { texture.SetPixels(Enumerable.Repeat(color, 16).ToArray()); texture.Apply(); File.WriteAllBytes(path, texture.EncodeToPNG()); }
-            finally { Object.DestroyImmediate(texture); }
+            try
+            {
+                texture.SetPixels(Enumerable.Repeat(color, 16).ToArray());
+                texture.Apply();
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+            }
+            finally
+            {
+                Object.DestroyImmediate(texture);
+            }
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
-            importer.textureType = TextureImporterType.Sprite; importer.spriteImportMode = SpriteImportMode.Single; importer.SaveAndReimport();
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.SaveAndReimport();
             return path;
         }
 
@@ -115,7 +136,9 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceAtlasGenerator.Generate(fixture.Project);
             Assert.That(AssetDatabase.LoadAssetAtPath<SpriteAtlas>(initial.Path).spriteCount, Is.EqualTo(3));
             Assert.That(AssetDatabase.MoveAsset(folder, fixture.Folder + "/Content/MovedSources"), Is.Empty);
-            configuration.Rules[0].Padding = 8; configuration.Rules[0].Address = "atlases/renamed"; Save(configuration);
+            configuration.rules[0].padding = 8;
+            configuration.rules[0].address = "atlases/renamed";
+            Save(configuration);
             ResourceAtlasGenerator.Generate(fixture.Project);
             Assert.That(AssetDatabase.AssetPathToGUID(initial.Path), Is.EqualTo(initial.Guid));
             Assert.That(AssetDatabase.LoadAssetAtPath<SpriteAtlas>(initial.Path).GetPackingSettings().padding, Is.EqualTo(8));
@@ -151,10 +174,13 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceAtlasGenerator.Generate(fixture.Project);
             Assert.That(ResourceBuildMap.Create(fixture.Project).Assets.Any(x => x.Guid == icon.Guid), Is.False);
             var selected = fixture.Project;
-            selected.Groups[0].Selections.Add(new ResourceSelection { Guid = icon.Guid });
-            EditorUtility.SetDirty(selected); AssetDatabase.SaveAssetIfDirty(selected);
+            selected.groups[0].selections.Add(new ResourceSelection { guid = icon.Guid });
+            EditorUtility.SetDirty(selected);
+            AssetDatabase.SaveAssetIfDirty(selected);
             Assert.That(Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.DeleteObsolete(fixture.Project, icon.Key)).Message, Does.Contain("selected"));
-            selected.Groups[0].Selections.Clear(); EditorUtility.SetDirty(selected); AssetDatabase.SaveAssetIfDirty(selected);
+            selected.groups[0].selections.Clear();
+            EditorUtility.SetDirty(selected);
+            AssetDatabase.SaveAssetIfDirty(selected);
             ResourceAtlasGenerator.DeleteObsolete(fixture.Project, icon.Key);
             Assert.That(File.Exists(icon.Path) || File.Exists(icon.Path + ".meta"), Is.False);
             fixture.AssertProtected();
@@ -165,7 +191,7 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new ResourceReleaseFixture();
             Configure(fixture);
-            var directory = AssetDatabase.GetAssetPath(fixture.Project.AutomaticAtlases);
+            var directory = AssetDatabase.GetAssetPath(fixture.Project.automaticAtlases);
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(directory));
             var text = ResourceEditorOperations.Preflight(fixture.Project, "fixture-v1");
             Assert.That(text, Does.Contain("Create"));
@@ -194,13 +220,18 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.CreateConfiguration(fixture.Project, fixture.Folder + "/Content", "Unknown"));
             CollectionAssert.AreEqual(unknownMeta, File.ReadAllBytes(unknown + ".meta"));
             var configuration = Configure(fixture);
-            configuration.Rules[0].Sources = new Object[] { AssetDatabase.LoadAssetAtPath<DefaultAsset>(fixture.Folder + "/Content") }; Save(configuration);
+            configuration.rules[0].sources = new Object[] { AssetDatabase.LoadAssetAtPath<DefaultAsset>(fixture.Folder + "/Content") };
+            Save(configuration);
             Assert.That(Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project)).Message, Does.Contain("overlap"));
-            configuration.Rules[0].Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(fixture.Folder + "/Content/Sprites.png") }; Save(configuration);
+            configuration.rules[0].sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(fixture.Folder + "/Content/Sprites.png") };
+            Save(configuration);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var change = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
             var importer = (SpriteAtlasImporter)AssetImporter.GetAtPath(change.Path);
-            var packing = importer.packingSettings; packing.padding = 8; importer.packingSettings = packing; importer.SaveAndReimport();
+            var packing = importer.packingSettings;
+            packing.padding = 8;
+            importer.packingSettings = packing;
+            importer.SaveAndReimport();
             var bytes = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(change.Path));
             Assert.That(Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project)).Message, Does.Contain("externally modified"));
             CollectionAssert.AreEqual(bytes, ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(change.Path)));
@@ -214,19 +245,32 @@ namespace YLFramework.Tests.ResourceBuild
             var configuration = Configure(fixture);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var initial = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
-            configuration.Rules[0].Padding = 8;
-            configuration.Rules.Add(new ResourceAtlasRule { Id = "other", GroupId = "generated", Address = "atlases/other",
-                Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) } });
+            configuration.rules[0].padding = 8;
+            configuration.rules.Add(new ResourceAtlasRule
+            {
+                id = "other",
+                groupId = "generated",
+                address = "atlases/other",
+                sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) }
+            });
             Save(configuration);
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(initial.Path));
             using var cancellation = new CancellationTokenSource();
             AutomaticAtlasImportProbe.Imported = paths =>
             {
                 if (paths.Contains(initial.Path) && ((SpriteAtlasImporter)AssetImporter.GetAtPath(initial.Path)).packingSettings.padding == 8)
+                {
                     cancellation.Cancel();
+                }
             };
-            try { Assert.Throws<OperationCanceledException>(() => ResourceAtlasGenerator.Generate(fixture.Project, cancellation.Token)); }
-            finally { AutomaticAtlasImportProbe.Imported = null; }
+            try
+            {
+                Assert.Throws<OperationCanceledException>(() => ResourceAtlasGenerator.Generate(fixture.Project, cancellation.Token));
+            }
+            finally
+            {
+                AutomaticAtlasImportProbe.Imported = null;
+            }
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(initial.Path)));
             Assert.That(AssetDatabase.AssetPathToGUID(initial.Path), Is.EqualTo(initial.Guid));
             ResourceAtlasGenerator.Generate(fixture.Project);
@@ -241,9 +285,10 @@ namespace YLFramework.Tests.ResourceBuild
             Configure(fixture);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var project = fixture.Project;
-            project.Groups[0].Selections.Add(new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) });
-            project.AutomaticAtlases = null;
-            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            project.groups[0].selections.Add(new ResourceSelection { guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) });
+            project.automaticAtlases = null;
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
             Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(project));
             Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(project));
             fixture.AssertProtected();
@@ -263,11 +308,22 @@ namespace YLFramework.Tests.ResourceBuild
             var output = plan.Changes.Single();
             switch (scenario)
             {
-                case "orphan": File.WriteAllText(plan.DirectoryPath + "/orphan.spriteatlasv2.meta", "not owned"); break;
-                case "unknown-file": File.WriteAllText(plan.DirectoryPath + "/unknown.txt", "not owned"); break;
-                case "missing-output": File.Delete(output.Path); break;
-                case "duplicate-name": Assert.That(AssetDatabase.CopyAsset(fixture.Folder + "/Content/AutoSources/Sprites.png", fixture.Folder + "/Content/AutoSources/Duplicate.png"), Is.True); break;
-                case "invalid-settings": configuration.Rules[0].MaxTextureSize = 513; Save(configuration); break;
+                case "orphan":
+                    File.WriteAllText(plan.DirectoryPath + "/orphan.spriteatlasv2.meta", "not owned");
+                    break;
+                case "unknown-file":
+                    File.WriteAllText(plan.DirectoryPath + "/unknown.txt", "not owned");
+                    break;
+                case "missing-output":
+                    File.Delete(output.Path);
+                    break;
+                case "duplicate-name":
+                    Assert.That(AssetDatabase.CopyAsset(fixture.Folder + "/Content/AutoSources/Sprites.png", fixture.Folder + "/Content/AutoSources/Duplicate.png"), Is.True);
+                    break;
+                case "invalid-settings":
+                    configuration.rules[0].maxTextureSize = 513;
+                    Save(configuration);
+                    break;
             }
             var before = ResourceReleaseFixture.Snapshot(plan.DirectoryPath);
             Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project));
@@ -282,21 +338,40 @@ namespace YLFramework.Tests.ResourceBuild
             var configuration = Configure(fixture);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var initial = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
-            configuration.Rules[0].Padding = 8; Save(configuration);
+            configuration.rules[0].padding = 8;
+            Save(configuration);
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(initial.Path));
             var source = fixture.Folder + "/Content/Sprites.png";
             var touched = false;
             AutomaticAtlasImportProbe.Imported = paths =>
             {
-                if (touched || !paths.Contains(initial.Path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(initial.Path)).packingSettings.padding != 8) return;
+                if (touched || !paths.Contains(initial.Path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(initial.Path)).packingSettings.padding != 8)
+                {
+                    return;
+                }
+
                 touched = true;
                 // A valid external source byte change during import must invalidate the frozen generation intent.
                 var png = new Texture2D(4, 2);
-                try { png.SetPixels(Enumerable.Repeat(Color.blue, 8).ToArray()); png.Apply(); File.WriteAllBytes(source, png.EncodeToPNG()); }
-                finally { Object.DestroyImmediate(png); }
+                try
+                {
+                    png.SetPixels(Enumerable.Repeat(Color.blue, 8).ToArray());
+                    png.Apply();
+                    File.WriteAllBytes(source, png.EncodeToPNG());
+                }
+                finally
+                {
+                    Object.DestroyImmediate(png);
+                }
             };
-            try { Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project)); }
-            finally { AutomaticAtlasImportProbe.Imported = null; }
+            try
+            {
+                Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project));
+            }
+            finally
+            {
+                AutomaticAtlasImportProbe.Imported = null;
+            }
             Assert.That(touched, Is.True);
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(initial.Path)));
             Assert.That(AssetDatabase.AssetPathToGUID(initial.Path), Is.EqualTo(initial.Guid));
@@ -314,9 +389,14 @@ namespace YLFramework.Tests.ResourceBuild
             var initial = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
             var original = File.ReadAllBytes(initial.Path);
             var originalMeta = File.ReadAllBytes(initial.Path + ".meta");
-            configuration.Rules[0].Padding = 8;
-            configuration.Rules.Add(new ResourceAtlasRule { Id = "other", GroupId = "generated", Address = "atlases/other",
-                Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) } });
+            configuration.rules[0].padding = 8;
+            configuration.rules.Add(new ResourceAtlasRule
+            {
+                id = "other",
+                groupId = "generated",
+                address = "atlases/other",
+                sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) }
+            });
             Save(configuration);
             var next = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single(x => x.Kind == ResourceAtlasChangeKind.Create).Path;
             var unknownMeta = System.Text.Encoding.UTF8.GetString(originalMeta).Replace(initial.Guid, Guid.NewGuid().ToString("N"));
@@ -324,18 +404,34 @@ namespace YLFramework.Tests.ResourceBuild
             using var cancellation = new CancellationTokenSource();
             AutomaticAtlasImportProbe.Imported = paths =>
             {
-                if (injected || !paths.Contains(initial.Path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(initial.Path)).packingSettings.padding != 8) return;
+                if (injected || !paths.Contains(initial.Path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(initial.Path)).packingSettings.padding != 8)
+                {
+                    return;
+                }
+
                 injected = true;
                 File.WriteAllBytes(next, original);
                 File.WriteAllText(next + ".meta", unknownMeta);
-                if (cancel) cancellation.Cancel();
+                if (cancel)
+                {
+                    cancellation.Cancel();
+                }
             };
             try
             {
-                if (cancel) Assert.Throws<OperationCanceledException>(() => ResourceAtlasGenerator.Generate(fixture.Project, cancellation.Token));
-                else Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project));
+                if (cancel)
+                {
+                    Assert.Throws<OperationCanceledException>(() => ResourceAtlasGenerator.Generate(fixture.Project, cancellation.Token));
+                }
+                else
+                {
+                    Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.Generate(fixture.Project));
+                }
             }
-            finally { AutomaticAtlasImportProbe.Imported = null; }
+            finally
+            {
+                AutomaticAtlasImportProbe.Imported = null;
+            }
             Assert.That(injected, Is.True);
             Assert.That(File.Exists(next), Is.True, "The next path was never written by this generation and must not be deleted by rollback.");
             CollectionAssert.AreEqual(original, File.ReadAllBytes(next));
@@ -353,7 +449,11 @@ namespace YLFramework.Tests.ResourceBuild
             Configure(fixture, folder: true);
             var source = AddSprite(fixture.Folder + "/Content/AutoSources", "Blue", Color.blue);
             var importer = (TextureImporter)AssetImporter.GetAtPath(source);
-            if (!wasSprite) { importer.textureType = TextureImporterType.Default; importer.SaveAndReimport(); }
+            if (!wasSprite)
+            {
+                importer.textureType = TextureImporterType.Default;
+                importer.SaveAndReimport();
+            }
             ResourceAtlasGenerator.Generate(fixture.Project);
             var output = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(output.Path));
@@ -367,7 +467,11 @@ namespace YLFramework.Tests.ResourceBuild
                 CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(output.Path)));
                 CollectionAssert.AreEqual(meta, File.ReadAllBytes(source + ".meta"));
             }
-            finally { importer.textureType = wasSprite ? TextureImporterType.Sprite : TextureImporterType.Default; importer.SaveAndReimport(); }
+            finally
+            {
+                importer.textureType = wasSprite ? TextureImporterType.Sprite : TextureImporterType.Default;
+                importer.SaveAndReimport();
+            }
             fixture.AssertProtected();
         }
 
@@ -377,8 +481,13 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new ResourceReleaseFixture();
             var configuration = Configure(fixture, folder: true, grouping: ResourceAtlasGrouping.PerFolder);
             var folderGuid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content/AutoSources");
-            configuration.Rules.Add(new ResourceAtlasRule { Id = "ui_" + folderGuid, GroupId = "generated", Address = "atlases/other",
-                Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) } });
+            configuration.rules.Add(new ResourceAtlasRule
+            {
+                id = "ui_" + folderGuid,
+                groupId = "generated",
+                address = "atlases/other",
+                sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(AddSprite(fixture.Folder + "/Content", "Blue", Color.blue)) }
+            });
             Save(configuration);
             var directory = Path.GetDirectoryName(AssetDatabase.GetAssetPath(configuration));
             var before = ResourceReleaseFixture.Snapshot(directory);
@@ -392,18 +501,29 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new ResourceReleaseFixture();
             var configuration = Configure(fixture);
-            configuration.Rules[0].Padding = 8; Save(configuration);
+            configuration.rules[0].padding = 8;
+            Save(configuration);
             var path = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single().Path;
             string unknownMeta = null;
             AutomaticAtlasImportProbe.Imported = paths =>
             {
-                if (unknownMeta != null || !paths.Contains(path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(path)).packingSettings.padding != 8) return;
+                if (unknownMeta != null || !paths.Contains(path) || ((SpriteAtlasImporter)AssetImporter.GetAtPath(path)).packingSettings.padding != 8)
+                {
+                    return;
+                }
+
                 var actual = AssetDatabase.AssetPathToGUID(path);
                 unknownMeta = File.ReadAllText(path + ".meta").Replace(actual, Guid.NewGuid().ToString("N"));
                 File.WriteAllText(path + ".meta", unknownMeta);
             };
-            try { Assert.Catch(() => ResourceAtlasGenerator.Generate(fixture.Project)); }
-            finally { AutomaticAtlasImportProbe.Imported = null; }
+            try
+            {
+                Assert.Catch(() => ResourceAtlasGenerator.Generate(fixture.Project));
+            }
+            finally
+            {
+                AutomaticAtlasImportProbe.Imported = null;
+            }
             Assert.That(unknownMeta, Is.Not.Null);
             Assert.That(File.Exists(path), Is.True);
             Assert.That(File.ReadAllText(path + ".meta"), Is.EqualTo(unknownMeta));
@@ -434,10 +554,12 @@ namespace YLFramework.Tests.ResourceBuild
             var configuration = Configure(fixture, folder: true);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var output = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
-            configuration.Rules.Clear(); Save(configuration);
+            configuration.rules.Clear();
+            Save(configuration);
             var project = fixture.Project;
-            project.Groups[0].Selections.Add(new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content"), Extensions = new[] { ".txt", ".spriteatlasv2" } });
-            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            project.groups[0].selections.Add(new ResourceSelection { guid = AssetDatabase.AssetPathToGUID(fixture.Folder + "/Content"), extensions = new[] { ".txt", ".spriteatlasv2" } });
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
             Assert.That(ResourceBuildMap.Create(project).Assets.Any(x => x.Guid == output.Guid), Is.False);
             ResourceAtlasGenerator.DeleteObsolete(project, output.Key);
             Assert.That(File.Exists(output.Path) || File.Exists(output.Path + ".meta"), Is.False);
@@ -451,9 +573,10 @@ namespace YLFramework.Tests.ResourceBuild
             var configuration = Configure(fixture);
             ResourceAtlasGenerator.Generate(fixture.Project);
             var output = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
-            configuration.Rules.Clear(); Save(configuration);
+            configuration.rules.Clear();
+            Save(configuration);
             var reference = ScriptableObject.CreateInstance<ResourceAtlasConfiguration>();
-            reference.Rules.Add(new ResourceAtlasRule { Sources = new Object[] { AssetDatabase.LoadAssetAtPath<SpriteAtlas>(output.Path) } });
+            reference.rules.Add(new ResourceAtlasRule { sources = new Object[] { AssetDatabase.LoadAssetAtPath<SpriteAtlas>(output.Path) } });
             AssetDatabase.CreateAsset(reference, fixture.Folder + "/Reference.asset");
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(output.Path));
             Assert.That(Assert.Throws<InvalidOperationException>(() => ResourceAtlasGenerator.DeleteObsolete(fixture.Project, output.Key)).Message, Does.Contain("referenced"));
@@ -474,8 +597,16 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceAtlasGenerator.Generate(fixture.Project);
             var output = ResourceAtlasGenerator.Preview(fixture.Project).Changes.Single();
             var texture = new Texture2D(4, 2);
-            try { texture.SetPixels(Enumerable.Repeat(Color.blue, 8).ToArray()); texture.Apply(); File.WriteAllBytes(fixture.Folder + "/Content/Sprites.png", texture.EncodeToPNG()); }
-            finally { Object.DestroyImmediate(texture); }
+            try
+            {
+                texture.SetPixels(Enumerable.Repeat(Color.blue, 8).ToArray());
+                texture.Apply();
+                File.WriteAllBytes(fixture.Folder + "/Content/Sprites.png", texture.EncodeToPNG());
+            }
+            finally
+            {
+                Object.DestroyImmediate(texture);
+            }
             ResourceAtlasGenerator.Generate(fixture.Project);
             var method = typeof(SpriteAtlasExtensions).GetMethod("GetPreviewTextures", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
             var packed = ((Texture2D[])method.Invoke(null, new object[] { AssetDatabase.LoadAssetAtPath<SpriteAtlas>(output.Path) })).Single();
@@ -484,13 +615,20 @@ namespace YLFramework.Tests.ResourceBuild
             var pixels = new Texture2D(packed.width, packed.height, TextureFormat.RGBA32, false);
             try
             {
-                Graphics.Blit(packed, render); RenderTexture.active = render;
-                pixels.ReadPixels(new Rect(0, 0, packed.width, packed.height), 0, 0); pixels.Apply();
+                Graphics.Blit(packed, render);
+                RenderTexture.active = render;
+                pixels.ReadPixels(new Rect(0, 0, packed.width, packed.height), 0, 0);
+                pixels.Apply();
                 var opaque = pixels.GetPixels().Where(x => x.a > .95f).ToArray();
                 Assert.That(opaque, Is.Not.Empty);
                 Assert.That(opaque.All(x => x.b > .95f && x.r < .05f), Is.True, "The real packed preview must contain the changed blue source, not stale imported red pixels.");
             }
-            finally { RenderTexture.active = previous; RenderTexture.ReleaseTemporary(render); Object.DestroyImmediate(pixels); }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(render);
+                Object.DestroyImmediate(pixels);
+            }
             fixture.AssertProtected();
         }
     }

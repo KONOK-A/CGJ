@@ -1,34 +1,35 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
-
-using UnityEditor;
-using UnityEngine;
 using System;
 using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.BuffSystem
 {
     public class BuffsConfigController
     {
-        private const string BUFF_CONFIG_DATA_PATH = "Assets/YLFrameworkData/Buff/Buffs/{0}";
+        private const string BuffConfigDataPath = "Assets/YLFrameworkData/Buff/Buffs/{0}";
 
-        private static List<BuffsConfig> allConfigs = new List<BuffsConfig>();
+        private static List<BuffsConfig> _allConfigs = new List<BuffsConfig>();
 
-        public static int GenerateID(BuffsConfig config)
+        public static int GenerateId(BuffsConfig config)
         {
-            int max_id = config.start_id;
+            int maxId = config.startId;
 
             foreach (var item in config.buffs)
             {
-                if (item.buff_id > max_id)
-                    max_id = item.buff_id;
+                if (item.id > maxId)
+                {
+                    maxId = item.id;
+                }
             }
 
-            max_id++;
+            maxId++;
 
-            return max_id;
+            return maxId;
         }
 
         public static int CreateBuffConfigData(Type type, BuffsConfig buffsConfig)
@@ -39,12 +40,15 @@ namespace YLFramework.BuffSystem
 
         public static int CreateBuffConfigData(BuffConfigData buff, BuffsConfig buffsConfig)
         {
-            if (buffsConfig == null) return -1;
+            if (buffsConfig == null)
+            {
+                return -1;
+            }
 
-            int id = GenerateID(buffsConfig);
+            int id = GenerateId(buffsConfig);
             buff.parent = buffsConfig;
-            buff.buff_id = id;
-            buff.buff_name = string.Format("Buff:{0}", id);
+            buff.id = id;
+            buff.buffName = string.Format("Buff:{0}", id);
             string path = GetBuffConfigDataPath(buffsConfig);
             CreateAsset(buff, path, false);
             buffsConfig.buffs.Add(buff);
@@ -76,40 +80,52 @@ namespace YLFramework.BuffSystem
 
         public static string GetBuffConfigDataPath(BuffsConfig buffsConfig)
         {
-            string asset_path = AssetDatabase.GetAssetPath(buffsConfig);
-            string guid = AssetDatabase.AssetPathToGUID(asset_path);
+            string assetPath = AssetDatabase.GetAssetPath(buffsConfig);
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
             return GetBuffConfigDataPath(guid);
         }
 
         public static string GetBuffConfigDataPath(string guid)
         {
-            if (string.IsNullOrEmpty(guid)) return string.Empty;
+            if (string.IsNullOrEmpty(guid))
+            {
+                return string.Empty;
+            }
 
-            return string.Format(BUFF_CONFIG_DATA_PATH, guid);
+            return string.Format(BuffConfigDataPath, guid);
         }
 
 
         public static List<BuffsConfig> GetAllConfigs()
         {
-            allConfigs.Clear();
+            _allConfigs.Clear();
 
             string filter = string.Format("t:{0}", typeof(BuffsConfig).FullName);
 
             string[] guids = AssetDatabase.FindAssets(filter);
             if (guids == null || guids.Length == 0)
-                return allConfigs;
+            {
+                return _allConfigs;
+            }
 
             foreach (var item in guids)
             {
                 string assetpath = AssetDatabase.GUIDToAssetPath(item);
                 if (string.IsNullOrEmpty(assetpath))
+                {
                     continue;
+                }
+
                 BuffsConfig config = AssetDatabase.LoadAssetAtPath<BuffsConfig>(assetpath);
-                if (config == null) continue;
-                allConfigs.Add(config);
+                if (config == null)
+                {
+                    continue;
+                }
+
+                _allConfigs.Add(config);
             }
 
-            return allConfigs;
+            return _allConfigs;
         }
 
     }

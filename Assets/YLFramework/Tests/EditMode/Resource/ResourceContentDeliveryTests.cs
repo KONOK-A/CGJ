@@ -22,12 +22,20 @@ namespace YLFramework.Tests.ResourceBuild
     public sealed class ResourceContentDeliveryTests
     {
         private const string State = "YL.E04.G4.Delivery.";
-        [Serializable] private sealed class Layout { public SceneSetup[] Scenes; }
+        [Serializable]
+        private sealed class Layout
+        {
+            public SceneSetup[] Scenes;
+        }
 
         [OneTimeSetUp]
         public void PublishAndExportOwnedDeliveryVersions()
         {
-            if (SessionState.GetBool(State + "owned", false)) return;
+            if (SessionState.GetBool(State + "owned", false))
+            {
+                return;
+            }
+
             ResourceSessionTests.EnsureRestorableScenes();
             SessionState.SetString(State + "layout", JsonUtility.ToJson(new Layout { Scenes = EditorSceneManager.GetSceneManagerSetup() }));
             var root = Path.Combine(Path.GetTempPath(), "kilo", "e4g4-" + Guid.NewGuid().ToString("N").Substring(0, 8));
@@ -35,9 +43,13 @@ namespace YLFramework.Tests.ResourceBuild
             Directory.CreateDirectory(root);
             SessionState.SetString(State + "root", root);
             using var fixture = new ResourceReleaseFixture();
-            fixture.Project.Groups.Clear();
-            fixture.Project.Groups.Add(new ResourceGroup { Id = "entry", Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) } } });
+            fixture.Project.groups.Clear();
+            fixture.Project.groups.Add(new ResourceGroup
+            {
+                id = "entry",
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(fixture.TextPath) } }
+            });
             var noise = new byte[256 * 1024];
             new System.Random(8904).NextBytes(noise);
             var suffix = Convert.ToBase64String(noise);
@@ -48,8 +60,8 @@ namespace YLFramework.Tests.ResourceBuild
                 for (var version = 0; version < 3; version++)
                 {
                     var project = fixture.Project;
-                    project.ContentEncryption = version == 0 ? ResourceContentEncryption.None : ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-                    project.ContentKeyId = version == 0 ? "" : "g4-key-" + version;
+                    project.contentEncryption = version == 0 ? ResourceContentEncryption.None : ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+                    project.contentKeyId = version == 0 ? "" : "g4-key-" + version;
                     File.WriteAllText(fixture.TextPath, "g4-version-" + version + "\n" + suffix);
                     AssetDatabase.ImportAsset(fixture.TextPath, ImportAssetOptions.ForceSynchronousImport);
                     EditorUtility.SetDirty(project);
@@ -65,13 +77,25 @@ namespace YLFramework.Tests.ResourceBuild
                     CollectionAssert.AreEqual(ResourceReleaseFixture.Snapshot(release.DirectoryPath), ResourceReleaseFixture.Snapshot(destination));
                     SessionState.SetString(State + "v" + version, destination);
                     SessionState.SetString(State + "project", release.Catalog.ProjectId);
-                    TestContext.WriteLine("G4 delivery export " + new JObject { ["Version"] = version, ["Directory"] = destination,
-                        ["CatalogDigest"] = release.Catalog.CatalogDigest, ["ProjectId"] = release.Catalog.ProjectId, ["CopiedBytes"] = bytes });
+                    TestContext.WriteLine("G4 delivery export " + new JObject
+                    {
+                        ["Version"] = version,
+                        ["Directory"] = destination,
+                        ["CatalogDigest"] = release.Catalog.CatalogDigest,
+                        ["ProjectId"] = release.Catalog.ProjectId,
+                        ["CopiedBytes"] = bytes
+                    });
                 }
             }
             finally
             {
-                foreach (var workspace in workspaces) if (Directory.Exists(workspace)) Directory.Delete(workspace, true);
+                foreach (var workspace in workspaces)
+                {
+                    if (Directory.Exists(workspace))
+                    {
+                        Directory.Delete(workspace, true);
+                    }
+                }
             }
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var scenePath = "Temp/E04G4-" + Guid.NewGuid().ToString("N") + ".unity";
@@ -99,12 +123,22 @@ namespace YLFramework.Tests.ResourceBuild
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
                 Calls++;
-                if (Missing || keyId == "g4-key-1" && MissingOld) return false;
+                if (Missing || keyId == "g4-key-1" && MissingOld)
+                {
+                    return false;
+                }
+
                 Assert.That(keyId, Is.EqualTo("g4-key-1").Or.EqualTo("g4-key-2"));
-                for (var i = 0; i < destination.Length; i++) destination[i] = (byte)(i + (keyId == "g4-key-1" ? 31 : 71) + (Wrong ? 1 : 0));
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = (byte)(i + (keyId == "g4-key-1" ? 31 : 71) + (Wrong ? 1 : 0));
+                }
+
                 return true;
             }
-            public void Dispose() { }
+            public void Dispose()
+            {
+            }
         }
 
         [UnityTest]
@@ -148,8 +182,18 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     using var server = new ResourceTlsServer(certificate);
                     var requests = new ConcurrentQueue<string>();
-                    ResourceTlsServer.Response Serve(ResourceTlsServer.Request request) => request.Path == "/release.json" ? new() { Body = envelope } :
-                        files.TryGetValue(request.Path, out var body) ? new() { Body = body, Headers = { ["ETag"] = "\"g4-fixed-cipher\"" } } : new() { StatusCode = 404 };
+                    ResourceTlsServer.Response Serve(ResourceTlsServer.Request request) => request.Path == "/release.json" ? new()
+                    {
+                        Body = envelope
+                    } :
+                        files.TryGetValue(request.Path, out var body) ? new()
+                        {
+                            Body = body,
+                            Headers = { ["ETag"] = "\"g4-fixed-cipher\"" }
+                        } : new()
+                        {
+                            StatusCode = 404
+                        };
                     server.Responder = Serve;
                     var store = new ArtifactStore(Root("s-" + mode), new[] { Mount(current, ResourceDownloadTests.Source(server, certificate)) });
                     using var keys = new DeliveryKeys();
@@ -162,7 +206,11 @@ namespace YLFramework.Tests.ResourceBuild
                     server.Responder = request =>
                     {
                         var response = Serve(request);
-                        if (request.Path == selectedPath) { response.StallAfterBytes = 32768; response.ChunkSize = 4096; }
+                        if (request.Path == selectedPath)
+                        {
+                            response.StallAfterBytes = 32768;
+                            response.ChunkSize = 4096;
+                        }
                         return response;
                     };
                     using var interrupted = system.PrepareUpdateAsync(plan);
@@ -172,14 +220,25 @@ namespace YLFramework.Tests.ResourceBuild
                     while (!interrupted.IsDone && Time.realtimeSinceStartup < deadline)
                     {
                         if (Directory.Exists(parts))
+                        {
                             part = Directory.GetFiles(parts, "*.json").Where(x => (string)JObject.Parse(File.ReadAllText(x))["File"] == selected.RelativeFile)
                                 .Select(x => Path.ChangeExtension(x, ".part")).FirstOrDefault(x => File.Exists(x) && new FileInfo(x).Length > 0);
-                        if (part != null) break;
+                        }
+
+                        if (part != null)
+                        {
+                            break;
+                        }
+
                         yield return null;
                     }
                     Assert.That(part, Is.Not.Null, interrupted.Error?.ToString());
                     interrupted.Cancel();
-                    while (system.GetDiagnosticsReport().Updates.Count != 0) yield return null;
+                    while (system.GetDiagnosticsReport().Updates.Count != 0)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(interrupted.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
                     var offset = new FileInfo(part).Length;
                     Assert.That(offset, Is.GreaterThan(0).And.LessThan(cipher.LongLength));
@@ -193,14 +252,19 @@ namespace YLFramework.Tests.ResourceBuild
                     {
                         // 真实关闭并重建Editor会话/Store，只从持久partial恢复；不是8.10的Player进程重启。
                         var storeRoot = store.RootPath;
-                        using (var stopping = system.ShutdownAsync()) { yield return stopping; Assert.That(stopping.TakeResult(), Is.True); }
+                        using (var stopping = system.ShutdownAsync())
+                        {
+                            yield return stopping;
+                            Assert.That(stopping.TakeResult(), Is.True);
+                        }
                         Assert.That(ResourceSystem.Current, Is.Null);
                         Assert.That(new FileInfo(part).Length, Is.EqualTo(offset));
                         store = new ArtifactStore(storeRoot, new[] { Mount(current, ResourceDownloadTests.Source(server, certificate)) });
                         using var restart = ResourceSystem.InitializeAsync(new ResourceConfiguration(store, decryption: new ResourceDecryptionOptions(keys)));
                         yield return restart;
                         system = restart.TakeResult();
-                        using var recheck = system.CheckRemoteUpdatesAsync(); yield return recheck;
+                        using var recheck = system.CheckRemoteUpdatesAsync();
+                        yield return recheck;
                         plan = recheck.TakeResult();
                         Assert.That(plan.Projects.Single().ToDigest, Is.EqualTo(target.Document.CatalogDigest));
                         Assert.That(new FileInfo(part).Length, Is.EqualTo(offset));
@@ -208,19 +272,35 @@ namespace YLFramework.Tests.ResourceBuild
                     server.Responder = request =>
                     {
                         var response = Serve(request);
-                        if (request.Path != selectedPath) return response;
+                        if (request.Path != selectedPath)
+                        {
+                            return response;
+                        }
+
                         request.Headers.TryGetValue("Range", out var range);
                         request.Headers.TryGetValue("If-Range", out var validator);
                         requests.Enqueue((range ?? "full") + ":" + validator);
-                        if (mode == "http-error") { response.StatusCode = 404; response.Body = Array.Empty<byte>(); }
+                        if (mode == "http-error")
+                        {
+                            response.StatusCode = 404;
+                            response.Body = Array.Empty<byte>();
+                        }
                         else if (range != null && mode != "ignored-range")
                         {
                             var start = int.Parse(range.Substring(6).TrimEnd('-'));
                             response.StatusCode = 206;
                             response.Body = cipher.Skip(start).ToArray();
                             response.Headers["Content-Range"] = "bytes " + start + "-" + (cipher.Length - 1) + "/" + cipher.Length;
-                            if (mode == "changed-etag") response.Headers["ETag"] = "\"different-entity\"";
-                            if (mode == "corrupt") { response.Body = (byte[])response.Body.Clone(); response.Body[0] ^= 1; }
+                            if (mode == "changed-etag")
+                            {
+                                response.Headers["ETag"] = "\"different-entity\"";
+                            }
+
+                            if (mode == "corrupt")
+                            {
+                                response.Body = (byte[])response.Body.Clone();
+                                response.Body[0] ^= 1;
+                            }
                         }
                         return response;
                     };
@@ -237,20 +317,29 @@ namespace YLFramework.Tests.ResourceBuild
                         {
                             Assert.That(resumed.Error.Kind, Is.EqualTo(ResourceError.ContentKeyUnavailable));
                             var count = server.RequestCount;
-                            keys.Missing = false; keys.Wrong = true;
+                            keys.Missing = false;
+                            keys.Wrong = true;
                             using var wrong = system.PrepareUpdateAsync(plan);
                             yield return wrong;
                             Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.ContentAuthenticationFailed));
                             Assert.That(server.RequestCount, Is.EqualTo(count), "Wrong/missing keys must not become network retries.");
                             keys.Wrong = false;
                         }
-                        if (mode == "corrupt") Assert.That(new FileInfo(part).Length, Is.Zero, "Corrupt ciphertext cannot remain a complete reusable part.");
+                        if (mode == "corrupt")
+                        {
+                            Assert.That(new FileInfo(part).Length, Is.Zero, "Corrupt ciphertext cannot remain a complete reusable part.");
+                        }
+
                         server.Responder = Serve;
                     }
                     using var preparing = system.PrepareUpdateAsync(plan);
                     yield return preparing;
                     var prepared = preparing.TakeResult();
-                    if (mode == "206" || mode == "ignored-range") Assert.That(requests.Count, Is.EqualTo(1), mode);
+                    if (mode == "206" || mode == "ignored-range")
+                    {
+                        Assert.That(requests.Count, Is.EqualTo(1), mode);
+                    }
+
                     if (mode == "changed-etag")
                     {
                         Assert.That(requests.Count, Is.EqualTo(2));
@@ -261,9 +350,14 @@ namespace YLFramework.Tests.ResourceBuild
                     yield return activate;
                     Assert.That(activate.TakeResult(), Is.True, activate.Error?.ToString());
                     using (var text = system.Acquire<TextAsset>(new ResourceAddress(target.Document.ProjectId, "entry.txt")))
+                    {
                         Assert.That(text.Asset.text, Does.StartWith("g4-version-1\n"));
+                    }
+
                     TestContext.WriteLine("G4 ciphertext " + mode + " offset=" + offset + " total=" + cipher.Length + " sha=" + selected.Sha256 + " requests=" + string.Join(",", requests));
-                    using var stop = system.ShutdownAsync(); yield return stop; Assert.That(stop.TakeResult(), Is.True);
+                    using var stop = system.ShutdownAsync();
+                    yield return stop;
+                    Assert.That(stop.TakeResult(), Is.True);
                     Assert.That(server.Errors, Is.Empty);
                 }
             }
@@ -293,12 +387,15 @@ namespace YLFramework.Tests.ResourceBuild
             var system = initialize.TakeResult();
             foreach (var target in new[] { first, rotated })
             {
-                using var check = system.CheckUpdatesAsync(new[] { target }); yield return check;
+                using var check = system.CheckUpdatesAsync(new[] { target });
+                yield return check;
                 var plan = check.TakeResult();
                 Assert.That(plan.Projects.Single().FromDigest, Is.EqualTo(system.GetActiveCatalogDigest(target.Document.ProjectId)));
                 Assert.That(plan.Projects.Single().ToDigest, Is.EqualTo(target.Document.CatalogDigest));
-                using var prepare = system.PrepareUpdateAsync(plan); yield return prepare;
-                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult()); yield return activate;
+                using var prepare = system.PrepareUpdateAsync(plan);
+                yield return prepare;
+                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult());
+                yield return activate;
                 Assert.That(activate.TakeResult(), Is.True, activate.Error?.ToString());
             }
             var project = rotated.Document.ProjectId;
@@ -323,14 +420,21 @@ namespace YLFramework.Tests.ResourceBuild
             using (var canceled = system.RollbackAsync())
             {
                 canceled.Cancel();
-                while (system.GetContentDiagnosticsSnapshot().ReservedBufferBytes != 0 || system.GetDiagnosticsReport().Updates.Count != 0) yield return null;
+                while (system.GetContentDiagnosticsSnapshot().ReservedBufferBytes != 0 || system.GetDiagnosticsReport().Updates.Count != 0)
+                {
+                    yield return null;
+                }
+
                 Assert.That(canceled.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
             }
             var checkpoints = new List<string>();
             store.Checkpoint = phase =>
             {
                 checkpoints.Add(phase);
-                if (phase == "JournalVerified") throw new IOException("Owned G4 failure before the transaction decision.");
+                if (phase == "JournalVerified")
+                {
+                    throw new IOException("Owned G4 failure before the transaction decision.");
+                }
             };
             try
             {
@@ -352,26 +456,50 @@ namespace YLFramework.Tests.ResourceBuild
                 TestContext.WriteLine("G4 rollback failure from=" + rotated.Document.CatalogDigest + " to=" + first.Document.CatalogDigest +
                     " phases=" + string.Join(",", checkpoints) + " status=" + failed.Status + " cause=" + failed.Error);
             }
-            finally { store.Checkpoint = null; }
-            using (var rollback = system.RollbackAsync()) { yield return rollback; Assert.That(rollback.TakeResult(), Is.True, rollback.Error?.ToString()); }
+            finally
+            {
+                store.Checkpoint = null;
+            }
+            using (var rollback = system.RollbackAsync())
+            {
+                yield return rollback;
+                Assert.That(rollback.TakeResult(), Is.True, rollback.Error?.ToString());
+            }
             Assert.That(system.GetActiveCatalogDigest(project), Is.EqualTo(first.Document.CatalogDigest));
-            using (var old = system.Acquire<TextAsset>(address)) Assert.That(old.Asset.text, Does.StartWith("g4-version-1\n"));
+            using (var old = system.Acquire<TextAsset>(address))
+            {
+                Assert.That(old.Asset.text, Does.StartWith("g4-version-1\n"));
+            }
             // LKG按原两槽合同推进；先显式将明文装入LKG，再从密文回滚，不能猜另一个历史版本。
             using (var check = system.CheckUpdatesAsync(new[] { plain }))
             {
                 yield return check;
-                using var prepare = system.PrepareUpdateAsync(check.TakeResult()); yield return prepare;
-                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult()); yield return activate; Assert.That(activate.TakeResult(), Is.True);
+                using var prepare = system.PrepareUpdateAsync(check.TakeResult());
+                yield return prepare;
+                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult());
+                yield return activate;
+                Assert.That(activate.TakeResult(), Is.True);
             }
             using (var check = system.CheckUpdatesAsync(new[] { rotated }))
             {
                 yield return check;
-                using var prepare = system.PrepareUpdateAsync(check.TakeResult()); yield return prepare;
-                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult()); yield return activate; Assert.That(activate.TakeResult(), Is.True);
+                using var prepare = system.PrepareUpdateAsync(check.TakeResult());
+                yield return prepare;
+                using var activate = system.ActivatePreparedUpdateAsync(prepare.TakeResult());
+                yield return activate;
+                Assert.That(activate.TakeResult(), Is.True);
             }
             keys.Missing = true;
-            using (var rollback = system.RollbackAsync()) { yield return rollback; Assert.That(rollback.TakeResult(), Is.True, rollback.Error?.ToString()); }
-            using (var text = system.Acquire<TextAsset>(address)) Assert.That(text.Asset.text, Does.StartWith("g4-version-0\n"));
+            using (var rollback = system.RollbackAsync())
+            {
+                yield return rollback;
+                Assert.That(rollback.TakeResult(), Is.True, rollback.Error?.ToString());
+            }
+            using (var text = system.Acquire<TextAsset>(address))
+            {
+                Assert.That(text.Asset.text, Does.StartWith("g4-version-0\n"));
+            }
+
             Assert.That(system.GetContentDiagnosticsSnapshot().ReservedBufferBytes, Is.Zero);
             TestContext.WriteLine("G4 explicit ciphertext-to-None LKG=" + plain.Document.CatalogDigest + "; new smoke release, not historical evidence.");
         }
@@ -396,9 +524,14 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(snapshot.Document.ProjectId, Is.EqualTo("yl-release-ef5f7112de994b238bc4ff8239b7e258"));
             using var keys = new DeliveryKeys { Missing = true };
             var startup = new ResourceStartup(new ResourceConfiguration(new[] { snapshot.CreateCatalog() }, decryption: new ResourceDecryptionOptions(keys)));
-            using var start = startup.StartAsync(); yield return start; start.TakeResult();
+            using var start = startup.StartAsync();
+            yield return start;
+            start.TakeResult();
             using (var text = startup.Resources.Acquire<TextAsset>(new ResourceAddress(snapshot.Document.ProjectId, "entry.txt")))
+            {
                 Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            }
+
             using (var bundle = startup.Resources.AcquireBundle(snapshot.Document.ProjectId, snapshot.Document.Assets.Single(x => x.Address == "entry.txt").BundleId))
             {
                 var input = (ResourceBundleInput)bundle.Record.Input;
@@ -406,7 +539,9 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(input.Stream, Is.TypeOf<FileStream>());
             }
             Assert.That(keys.Calls, Is.Zero);
-            using var stop = startup.StopAsync(); yield return stop; Assert.That(stop.TakeResult(), Is.True);
+            using var stop = startup.StopAsync();
+            yield return stop;
+            Assert.That(stop.TakeResult(), Is.True);
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(directory));
             TestContext.WriteLine("G4 historical pre-E04 v1 direct consumption " + directory + " digest=" + snapshot.Document.CatalogDigest + "; no rebuild/rewrite/key.");
         }
@@ -423,7 +558,13 @@ namespace YLFramework.Tests.ResourceBuild
             SessionState.SetString(State + "builtInGuid", (string)JObject.Parse(File.ReadAllText(Path.Combine(source.DirectoryPath, ".ylr-complete.json")))["ProjectGuid"]);
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.Throws<IOException>(() => ResourceBuiltInDeployer.Execute(plan, default,
-                phase => { if (phase == "BeforeImport") throw new IOException("Owned G4 post-install interruption."); }));
+                phase =>
+                {
+                    if (phase == "BeforeImport")
+                    {
+                        throw new IOException("Owned G4 post-install interruption.");
+                    }
+                }));
             var deployed = ResourceBuiltInDeployer.Recover(source.Document.ProjectId, source.Document.Platform, SessionState.GetString(State + "builtInGuid", ""));
             Assert.That(deployed, Is.Not.Null);
             Assert.That(ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(source)).IsRepeat, Is.True);
@@ -455,11 +596,19 @@ namespace YLFramework.Tests.ResourceBuild
             using var keys = new DeliveryKeys();
             var configuration = new ResourceConfiguration(store, decryption: new ResourceDecryptionOptions(keys));
             var startup = new ResourceStartup(configuration);
-            using var start = startup.StartAsync(); yield return start; start.TakeResult();
+            using var start = startup.StartAsync();
+            yield return start;
+            start.TakeResult();
             using (var text = startup.Resources.Acquire<TextAsset>(new ResourceAddress(source.Document.ProjectId, "entry.txt")))
+            {
                 Assert.That(text.Asset.text, Does.StartWith("g4-version-1\n"));
-            using var check = startup.Resources.CheckUpdatesAsync(new[] { Version(2) }); yield return check;
-            using var prepare = startup.Resources.PrepareUpdateAsync(check.TakeResult()); yield return prepare; prepare.TakeResult();
+            }
+
+            using var check = startup.Resources.CheckUpdatesAsync(new[] { Version(2) });
+            yield return check;
+            using var prepare = startup.Resources.PrepareUpdateAsync(check.TakeResult());
+            yield return prepare;
+            prepare.TakeResult();
             var calls = keys.Calls;
             keys.Missing = true;
             var files = ResourceReleaseFixture.Snapshot(store.RootPath);
@@ -476,17 +625,24 @@ namespace YLFramework.Tests.ResourceBuild
             }
             Assert.That(report.Entries.Count(x => x.Kind == ArtifactKind.Version), Is.EqualTo(2));
             TestContext.WriteLine("G4 key-free E05 ciphertext logicalBytes=" + report.ObservedBytes + " prepared=" + report.PreparedUpdates.Count + " status=" + report.Status);
-            using var stop = startup.StopAsync(); yield return stop; Assert.That(stop.TakeResult(), Is.True);
+            using var stop = startup.StopAsync();
+            yield return stop;
+            Assert.That(stop.TakeResult(), Is.True);
         }
 
         [UnityTearDown]
         public IEnumerator ReleaseTheOwnedSession()
         {
-            if (!Application.isPlaying) yield break;
+            if (!Application.isPlaying)
+            {
+                yield break;
+            }
+
             var system = ResourceSystem.Current;
             if (system != null && system.IsAvailable)
             {
-                using var shutdown = system.ShutdownAsync(); yield return shutdown;
+                using var shutdown = system.ShutdownAsync();
+                yield return shutdown;
                 Assert.That(shutdown.TakeResult(), Is.True, shutdown.Error?.ToString());
             }
             if (system != null)
@@ -510,9 +666,17 @@ namespace YLFramework.Tests.ResourceBuild
         public void RestoreTheSceneAndKeepDeliveryArtifacts()
         {
             var layout = JsonUtility.FromJson<Layout>(SessionState.GetString(State + "layout", "{}"));
-            if (layout?.Scenes != null) EditorSceneManager.RestoreSceneManagerSetup(layout.Scenes);
+            if (layout?.Scenes != null)
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(layout.Scenes);
+            }
+
             var scene = SessionState.GetString(State + "scene", "");
-            if (scene.Length != 0 && File.Exists(scene)) File.Delete(scene);
+            if (scene.Length != 0 && File.Exists(scene))
+            {
+                File.Delete(scene);
+            }
+
             var builtInProject = SessionState.GetString(State + "builtInProject", "");
             var builtInGuid = SessionState.GetString(State + "builtInGuid", "");
             if (builtInProject.Length != 0 && Directory.Exists(builtInProject))
@@ -534,7 +698,11 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(AssetDatabase.DeleteAsset("Assets/StreamingAssets/YLFrameworkResources"), Is.True);
             }
             SessionState.SetString(State + "lastRoot", SessionState.GetString(State + "root", ""));
-            foreach (var key in new[] { "layout", "root", "scene", "v0", "v1", "v2", "project", "tls", "builtInProject", "builtInGuid", "builtInWorkspace" }) SessionState.EraseString(State + key);
+            foreach (var key in new[] { "layout", "root", "scene", "v0", "v1", "v2", "project", "tls", "builtInProject", "builtInGuid", "builtInWorkspace" })
+            {
+                SessionState.EraseString(State + key);
+            }
+
             SessionState.EraseBool(State + "builtInRootExisted");
             SessionState.EraseBool(State + "owned");
         }

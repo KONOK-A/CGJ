@@ -24,12 +24,12 @@ namespace YLFramework.Core.Editor.Tests
             var getProvider = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.SettingsWindow")
                 .GetMethod("GetCurrentProvider", BindingFlags.NonPublic | BindingFlags.Instance);
             string previousPath = existing ? ((SettingsProvider)getProvider.Invoke(existing, null))?.settingsPath : null;
-            const string selectionKey = "SettingsWindow_Project Settings_current_provider";
-            const string splitterKey = "SettingsWindow_m_Splitter";
-            bool hadSelection = EditorPrefs.HasKey(selectionKey);
-            bool hadSplitter = EditorPrefs.HasKey(splitterKey);
-            string selection = EditorPrefs.GetString(selectionKey);
-            float splitter = EditorPrefs.GetFloat(splitterKey);
+            const string SelectionKey = "SettingsWindow_Project Settings_current_provider";
+            const string SplitterKey = "SettingsWindow_m_Splitter";
+            bool hadSelection = EditorPrefs.HasKey(SelectionKey);
+            bool hadSplitter = EditorPrefs.HasKey(SplitterKey);
+            string selection = EditorPrefs.GetString(SelectionKey);
+            float splitter = EditorPrefs.GetFloat(SplitterKey);
             var settings = ScriptableObject.CreateInstance<FirstSettings>();
             EditorWindow opened = null;
             try
@@ -48,23 +48,52 @@ namespace YLFramework.Core.Editor.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(settings);
-                if (!existing && opened) opened.Close();
+                if (!existing && opened)
+                {
+                    opened.Close();
+                }
                 else if (existing && previousPath != null)
+                {
                     OpenAndDrainOwnedSettingsFocus(() => SettingsService.OpenProjectSettings(previousPath));
-                if (hadSelection) EditorPrefs.SetString(selectionKey, selection);
-                else EditorPrefs.DeleteKey(selectionKey);
-                if (hadSplitter) EditorPrefs.SetFloat(splitterKey, splitter);
-                else EditorPrefs.DeleteKey(splitterKey);
-                if (previousFocus) previousFocus.Focus();
+                }
+
+                if (hadSelection)
+                {
+                    EditorPrefs.SetString(SelectionKey, selection);
+                }
+                else
+                {
+                    EditorPrefs.DeleteKey(SelectionKey);
+                }
+
+                if (hadSplitter)
+                {
+                    EditorPrefs.SetFloat(SplitterKey, splitter);
+                }
+                else
+                {
+                    EditorPrefs.DeleteKey(SplitterKey);
+                }
+
+                if (previousFocus)
+                {
+                    previousFocus.Focus();
+                }
             }
             yield return null;
-            if (previousFocus) Assert.That(EditorWindow.focusedWindow, Is.SameAs(previousFocus));
+            if (previousFocus)
+            {
+                Assert.That(EditorWindow.focusedWindow, Is.SameAs(previousFocus));
+            }
         }
 
         private static void OpenAndDrainOwnedSettingsFocus(Action open)
         {
             var before = EditorApplication.delayCall?.GetInvocationList() ?? Array.Empty<Delegate>();
-            try { open(); }
+            try
+            {
+                open();
+            }
             finally
             {
                 // 测试运行中 delayCall 不保证逐帧分发；只执行本次调用产生的原生 Show focus 回调。
@@ -93,7 +122,7 @@ namespace YLFramework.Core.Editor.Tests
             {
                 Assert.That(ScriptableObjectExtensions.GeneratedAssetRoot,
                     Is.EqualTo("Assets/YLFramework/Editor/Core/GeneratedAssets"));
-                asset.Marker = "YL test owns this asset.";
+                asset.marker = "YL test owns this asset.";
                 asset.CreateAsset(directory);
                 string firstPath = AssetDatabase.GetAssetPath(asset);
                 Assert.That(firstPath, Is.EqualTo(directory + "/" + typeof(CoreEditorGeneratedAssetFixture).Name + ".asset"));
@@ -112,12 +141,25 @@ namespace YLFramework.Core.Editor.Tests
             {
                 Selection.objects = selection;
                 if (AssetDatabase.IsValidFolder(directory))
+                {
                     AssetDatabase.DeleteAsset(directory);
-                if (asset) UnityEngine.Object.DestroyImmediate(asset);
-                if (second) UnityEngine.Object.DestroyImmediate(second);
+                }
+
+                if (asset)
+                {
+                    UnityEngine.Object.DestroyImmediate(asset);
+                }
+
+                if (second)
+                {
+                    UnityEngine.Object.DestroyImmediate(second);
+                }
+
                 if (!rootExisted && AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot) &&
                     Directory.GetFileSystemEntries(ScriptableObjectExtensions.GeneratedAssetRoot).Length == 0)
+                {
                     AssetDatabase.DeleteAsset(ScriptableObjectExtensions.GeneratedAssetRoot);
+                }
             }
         }
 
@@ -155,7 +197,10 @@ namespace YLFramework.Core.Editor.Tests
             try
             {
                 if (!rootExisted)
+                {
                     Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Editor/Core", "GeneratedAssets"), Is.Not.Empty);
+                }
+
                 Assert.That(AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot), Is.True);
                 Directory.CreateDirectory(directory);
                 string sentinel = directory + "/owned-test-sentinel.txt";
@@ -167,11 +212,21 @@ namespace YLFramework.Core.Editor.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(asset);
-                if (Directory.Exists(directory)) Directory.Delete(directory, true);
-                if (File.Exists(directory + ".meta")) File.Delete(directory + ".meta");
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+
+                if (File.Exists(directory + ".meta"))
+                {
+                    File.Delete(directory + ".meta");
+                }
+
                 if (!rootExisted && AssetDatabase.IsValidFolder(ScriptableObjectExtensions.GeneratedAssetRoot) &&
                     Directory.GetFileSystemEntries(ScriptableObjectExtensions.GeneratedAssetRoot).Length == 0)
+                {
                     AssetDatabase.DeleteAsset(ScriptableObjectExtensions.GeneratedAssetRoot);
+                }
             }
         }
 
@@ -182,21 +237,21 @@ namespace YLFramework.Core.Editor.Tests
             {
                 Assert.That(typeof(FirstSettings).Name, Is.EqualTo(typeof(SecondSettings).Name));
                 Assert.That(SettingsPath<FirstSettings>(), Is.Not.EqualTo(SettingsPath<SecondSettings>()));
-                FirstSettings.Instance.Marker = "first-" + Guid.NewGuid().ToString("N");
-                SecondSettings.Instance.Marker = "second-" + Guid.NewGuid().ToString("N");
-                string first = FirstSettings.Instance.Marker;
-                string second = SecondSettings.Instance.Marker;
+                FirstSettings.Instance.marker = "first-" + Guid.NewGuid().ToString("N");
+                SecondSettings.Instance.marker = "second-" + Guid.NewGuid().ToString("N");
+                string first = FirstSettings.Instance.marker;
+                string second = SecondSettings.Instance.marker;
                 FirstSettings.Save();
                 SecondSettings.Save();
                 byte[] secondBytes = File.ReadAllBytes(SettingsPath<SecondSettings>());
                 ResetSettings<FirstSettings>();
                 FirstSettings.LoadOrCreate();
-                Assert.That(FirstSettings.Instance.Marker, Is.EqualTo(first));
-                Assert.That(SecondSettings.Instance.Marker, Is.EqualTo(second));
+                Assert.That(FirstSettings.Instance.marker, Is.EqualTo(first));
+                Assert.That(SecondSettings.Instance.marker, Is.EqualTo(second));
                 Assert.That(File.ReadAllBytes(SettingsPath<SecondSettings>()), Is.EqualTo(secondBytes));
                 ResetSettings<SecondSettings>();
                 SecondSettings.LoadOrCreate();
-                Assert.That(SecondSettings.Instance.Marker, Is.EqualTo(second));
+                Assert.That(SecondSettings.Instance.marker, Is.EqualTo(second));
             });
         }
 
@@ -220,7 +275,7 @@ namespace YLFramework.Core.Editor.Tests
                 var wrongType = ScriptableObject.CreateInstance<SecondSettings>();
                 try
                 {
-                    wrongType.Marker = "YL test owns this incompatible input.";
+                    wrongType.marker = "YL test owns this incompatible input.";
                     InternalEditorUtility.SaveToSerializedFileAndForget(new UnityEngine.Object[] { wrongType }, SettingsPath<FirstSettings>(), true);
                     byte[] before = File.ReadAllBytes(SettingsPath<FirstSettings>());
                     DateTime timestamp = File.GetLastWriteTimeUtc(SettingsPath<FirstSettings>());
@@ -255,8 +310,15 @@ namespace YLFramework.Core.Editor.Tests
             {
                 ResetSettings<FirstSettings>();
                 ResetSettings<SecondSettings>();
-                if (File.Exists(first)) File.Delete(first);
-                if (File.Exists(second)) File.Delete(second);
+                if (File.Exists(first))
+                {
+                    File.Delete(first);
+                }
+
+                if (File.Exists(second))
+                {
+                    File.Delete(second);
+                }
             }
         }
 
@@ -271,10 +333,14 @@ namespace YLFramework.Core.Editor.Tests
 
         private static void ResetSettings<T>() where T : ScriptableObject
         {
-            var field = typeof(ProjectSettingsScriptableObject<T>).GetField("instance", BindingFlags.NonPublic | BindingFlags.Static);
+            var field = typeof(ProjectSettingsScriptableObject<T>).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(field, Is.Not.Null);
             var instance = (T)field.GetValue(null);
-            if (instance) UnityEngine.Object.DestroyImmediate(instance);
+            if (instance)
+            {
+                UnityEngine.Object.DestroyImmediate(instance);
+            }
+
             field.SetValue(null, null);
         }
     }

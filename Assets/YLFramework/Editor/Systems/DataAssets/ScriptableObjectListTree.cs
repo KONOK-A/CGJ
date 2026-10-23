@@ -10,16 +10,16 @@ namespace YLFramework.DataAssets.Editor
 {
     public sealed class ScriptableObjectListTree : ReorderableTreeView<ScriptableObjectData>
     {
-        private readonly ScriptableObjectConfigs owner;
-        private ScriptableObjectData[] rows = Array.Empty<ScriptableObjectData>();
-        private readonly GUIContent content = new GUIContent();
+        private readonly ScriptableObjectConfigs _owner;
+        private ScriptableObjectData[] _rows = Array.Empty<ScriptableObjectData>();
+        private readonly GUIContent _content = new GUIContent();
         public Action<ScriptableObjectData> Selected;
         public Action Changed;
 
         public ScriptableObjectListTree(ScriptableObjectConfigs owner, TreeViewState state)
             : base(owner, () => owner.configs, state, new MultiColumnHeader(CreateHeader()))
         {
-            this.owner = owner;
+            this._owner = owner;
             rowHeight = 25;
             showBorder = true;
             multiColumnHeader.sortingChanged += SortChanged;
@@ -35,16 +35,16 @@ namespace YLFramework.DataAssets.Editor
 
         protected override void OnBuildRoot(TreeViewItem root, IList<ScriptableObjectData> data)
         {
-            rows = data.ToArray();
+            _rows = data.ToArray();
             // TreeView ID是槽位，不是业务ID；坏配置/重复ID仍可选中并修复。
-            for (var i = 0; i < rows.Length; i++)
+            for (var i = 0; i < _rows.Length; i++)
             {
-                var item = rows[i];
-                root.AddChild(new TreeViewItem(i + 1, 0, item ? item.id + " " + item.config_name : "(Missing reference)"));
+                var item = _rows[i];
+                root.AddChild(new TreeViewItem(i + 1, 0, item ? item.id + " " + item.configName : "(Missing reference)"));
             }
         }
 
-        public ScriptableObjectData GetData(int rowId) => rowId > 0 && rowId <= rows.Length ? rows[rowId - 1] : null;
+        public ScriptableObjectData GetData(int rowId) => rowId > 0 && rowId <= _rows.Length ? _rows[rowId - 1] : null;
 
         public void RefreshKeepingSelection()
         {
@@ -57,10 +57,14 @@ namespace YLFramework.DataAssets.Editor
         {
             var remaining = new List<ScriptableObjectData>(selected);
             var ids = new List<int>();
-            for (var i = 0; i < rows.Length; i++)
+            for (var i = 0; i < _rows.Length; i++)
             {
-                var index = remaining.FindIndex(item => ReferenceEquals(item, rows[i]));
-                if (index < 0) continue;
+                var index = remaining.FindIndex(item => ReferenceEquals(item, _rows[i]));
+                if (index < 0)
+                {
+                    continue;
+                }
+
                 ids.Add(i + 1);
                 remaining.RemoveAt(index);
             }
@@ -85,15 +89,18 @@ namespace YLFramework.DataAssets.Editor
                 {
                     case 0:
                         if (data && data.icon != null)
-                            EditorGUI.LabelField(rect, EditorAssetTool.GetTextureGUIContent(data.icon.projectName, data.icon.iconName));
+                        {
+                            EditorGUI.LabelField(rect, EditorAssetTool.GetTextureGuiContent(data.icon.projectName, data.icon.iconName));
+                        }
+
                         break;
                     case 1:
                         EditorGUI.LabelField(rect, data ? data.id.ToString() : "-");
                         break;
                     case 2:
-                        content.text = data ? data.config_name : "(Missing reference)";
-                        content.tooltip = data ? data.des : "Use Unlink to remove this missing slot.";
-                        EditorGUI.LabelField(rect, content);
+                        _content.text = data ? data.configName : "(Missing reference)";
+                        _content.tooltip = data ? data.description : "Use Unlink to remove this missing slot.";
+                        EditorGUI.LabelField(rect, _content);
                         break;
                 }
             }
@@ -103,12 +110,19 @@ namespace YLFramework.DataAssets.Editor
 
         protected override void ContextClickedItem(int id)
         {
-            if (!GetSelection().Contains(id)) SetSelection(new[] { id });
+            if (!GetSelection().Contains(id))
+            {
+                SetSelection(new[] { id });
+            }
+
             var selected = GetSelection().OrderBy(value => value).Select(value => (row: value - 1, data: GetData(value))).ToArray();
             var menu = new GenericMenu();
             menu.AddItem(new GUIContent("Unlink References (Undo)"), false, () => Run(() =>
             {
-                foreach (var item in selected.Reverse()) ScriptableObjectConfigsController.RemoveReference(owner, item.row, item.data);
+                foreach (var item in selected.Reverse())
+                {
+                    ScriptableObjectConfigsController.RemoveReference(_owner, item.row, item.data);
+                }
             }));
             if (selected.All(item => item.data))
             {
@@ -117,15 +131,31 @@ namespace YLFramework.DataAssets.Editor
                     var copies = new List<ScriptableObjectData>();
                     Run(() =>
                     {
-                        foreach (var item in selected) copies.Add(ScriptableObjectConfigsController.CopyData(owner, item.data));
+                        foreach (var item in selected)
+                        {
+                            copies.Add(ScriptableObjectConfigsController.CopyData(_owner, item.data));
+                        }
                     }, () => copies);
                 });
                 menu.AddItem(new GUIContent("Delete Owned Assets..."), false, () => Run(() =>
                 {
-                    if (selected.Any(item => !ScriptableObjectConfigsController.IsOwned(owner, item.data)))
+                    if (selected.Any(item => !ScriptableObjectConfigsController.IsOwned(_owner, item.data)))
+                    {
                         throw new InvalidOperationException("The selection contains external assets. Unlink those references instead.");
-                    if (!EditorUtility.DisplayDialog("Delete DataAssets", "Delete selected owned assets? Standalone asset files cannot be restored by Undo. External references are never deleted.", "Delete", "Cancel")) return;
-                    foreach (var item in selected) if (item.data) ScriptableObjectConfigsController.DeleteData(owner, item.data, true);
+                    }
+
+                    if (!EditorUtility.DisplayDialog("Delete DataAssets", "Delete selected owned assets? Standalone asset files cannot be restored by Undo. External references are never deleted.", "Delete", "Cancel"))
+                    {
+                        return;
+                    }
+
+                    foreach (var item in selected)
+                    {
+                        if (item.data)
+                        {
+                            ScriptableObjectConfigsController.DeleteData(_owner, item.data, true);
+                        }
+                    }
                 }));
             }
             menu.AddSeparator(string.Empty);
@@ -144,29 +174,37 @@ namespace YLFramework.DataAssets.Editor
         {
             try
             {
-                foreach (var type in ScriptableObjectConfigsController.GetDataTypes(owner))
+                foreach (var type in ScriptableObjectConfigsController.GetDataTypes(_owner))
                 {
                     var selectedType = type;
                     menu.AddItem(new GUIContent("Create/" + type.FullName.Replace('.', '/')), false,
                         () =>
                         {
                             ScriptableObjectData created = null;
-                            Run(() => created = ScriptableObjectConfigsController.CreateData(selectedType, owner), () => new[] { created });
+                            Run(() => created = ScriptableObjectConfigsController.CreateData(selectedType, _owner), () => new[] { created });
                         });
                 }
             }
-            catch (InvalidOperationException error) { menu.AddDisabledItem(new GUIContent(error.Message)); }
+            catch (InvalidOperationException error)
+            {
+                menu.AddDisabledItem(new GUIContent(error.Message));
+            }
         }
 
-        private void SortChanged(MultiColumnHeader header) => Run(() => ScriptableObjectConfigsController.Sort(owner,
+        private void SortChanged(MultiColumnHeader header) => Run(() => ScriptableObjectConfigsController.Sort(_owner,
             header.sortedColumnIndex == 1 ? DataAssetSort.Id : DataAssetSort.Name, header.IsSortedAscending(header.sortedColumnIndex)));
 
         private void Run(Action operation, Func<IEnumerable<ScriptableObjectData>> selectAfter = null)
         {
             var selected = GetSelection().Select(GetData).Where(item => item).ToArray();
-            try { operation(); }
+            try
+            {
+                operation();
+            }
             catch (Exception error) when (error is ArgumentException || error is InvalidOperationException || error is System.IO.IOException)
-            { EditorUtility.DisplayDialog("DataAssets", error.Message, "Close"); }
+            {
+                EditorUtility.DisplayDialog("DataAssets", error.Message, "Close");
+            }
             Reload();
             RestoreSelection(selectAfter == null ? selected : selectAfter().Where(item => item));
             Changed?.Invoke();
@@ -174,7 +212,7 @@ namespace YLFramework.DataAssets.Editor
 
         protected override void OnDragEnd()
         {
-            owner.ClearCache();
+            _owner.ClearCache();
             Changed?.Invoke();
         }
     }

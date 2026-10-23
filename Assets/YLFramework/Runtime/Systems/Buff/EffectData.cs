@@ -1,5 +1,6 @@
-using YLFramework.Foundation;
 using UnityEngine;
+using UnityEngine.Serialization;
+using YLFramework.Foundation;
 
 namespace YLFramework.BuffSystem
 {
@@ -13,7 +14,7 @@ namespace YLFramework.BuffSystem
         public int id;
 
         [Tooltip("名称")]
-        public string effect_name;
+        [FormerlySerializedAs("effect_name")] public string effectName;
 
         [Tooltip("类型")]
         [Header("类型")]

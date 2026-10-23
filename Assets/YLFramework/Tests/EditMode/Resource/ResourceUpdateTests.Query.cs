@@ -15,8 +15,16 @@ namespace YLFramework.Tests.ResourceBuild
         {
             ArtifactStoreReport report = null;
             var routine = new ResourceConfiguration(store).QueryArtifactsAsync(value => report = value);
-            try { while (routine.MoveNext()) { } }
-            finally { (routine as IDisposable)?.Dispose(); }
+            try
+            {
+                while (routine.MoveNext())
+                {
+                }
+            }
+            finally
+            {
+                (routine as IDisposable)?.Dispose();
+            }
             Assert.That(report, Is.Not.Null);
             return report;
         }
@@ -57,14 +65,24 @@ namespace YLFramework.Tests.ResourceBuild
             var cleanup = Take(system.CleanupVersionsAsync());
             Assert.That(cleanup.ProtectedVersions, Does.Contain(obsolete));
             Assert.That(Directory.Exists(obsolete), Is.True, "A prior candidate snapshot must not authorize deletion after Prepare changes protection.");
-            loading.Cancel(); loading.Dispose(); text.Dispose();
+            loading.Cancel();
+            loading.Dispose();
+            text.Dispose();
             yield return Drain(system);
             ArtifactStoreReport changed = null;
             var pending = store.QueryAsync(value => changed = value);
             Assert.That(pending.MoveNext(), Is.True);
             Assert.That(Take(system.ShutdownAsync()), Is.True);
-            try { while (pending.MoveNext()) { } }
-            finally { (pending as IDisposable)?.Dispose(); }
+            try
+            {
+                while (pending.MoveNext())
+                {
+                }
+            }
+            finally
+            {
+                (pending as IDisposable)?.Dispose();
+            }
             Assert.That(changed.Status, Is.EqualTo(ArtifactQueryStatus.Changed));
             Assert.That(changed.CleanupCandidateBytes, Is.Null);
             Assert.That(ResourceSystem.Current, Is.Null);

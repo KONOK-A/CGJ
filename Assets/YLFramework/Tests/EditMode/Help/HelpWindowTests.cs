@@ -15,7 +15,8 @@ namespace YLFramework.Tests.Help
 
     public sealed class HelpWindowTests
     {
-        private const string First = "__helpkit_test_first", Second = "__helpkit_test_second";
+        private const string First = "__helpkit_test_first";
+        private const string Second = "__helpkit_test_second";
 
         [TearDown]
         public void RemoveTestProviders()
@@ -24,13 +25,132 @@ namespace YLFramework.Tests.Help
             Editor.HelpRegistry.Unregister(Second);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LegacyWindowStateRetainsSelectedPagesWidthsAndBooleanDefaults(bool initialized)
+        {
+            var window = ScriptableObject.CreateInstance<Editor.HelpWindow>();
+            string folder = "Assets/YLFramework/Tests/EditMode/Help/LegacyWindow-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode/Help", Path.GetFileName(folder)), Is.Not.Empty);
+            try
+            {
+                var names = new[]
+                {
+                    ("mModuleId", "moduleId", "legacy-module"), ("mSearch", "search", "legacy-query"),
+                    ("mGuideId", "guideId", "legacy-guide"), ("mApiId", "apiId", "legacy-api"),
+                    ("mAboutId", "aboutId", "legacy-about"), ("mMemberSearch", "memberSearch", "legacy-member"),
+                    ("mApiCategory", "apiCategory", "legacy-category")
+                };
+                var serialized = new SerializedObject(window);
+                foreach (var entry in names)
+                {
+                    serialized.FindProperty(entry.Item2).stringValue = entry.Item3;
+                }
+
+                serialized.FindProperty("tab").intValue = 2;
+                serialized.FindProperty("sidebarWidth").floatValue = 271;
+                serialized.FindProperty("hasInitializedGroups").boolValue = initialized;
+                serialized.FindProperty("collapsedGroups").arraySize = 1;
+                serialized.FindProperty("collapsedGroups").GetArrayElementAtIndex(0).stringValue = "guide:legacy";
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                string path = folder + "/Window.asset";
+                window.hideFlags = HideFlags.None;
+                AssetDatabase.CreateAsset(window, path);
+                EditorUtility.SetDirty(window);
+                AssetDatabase.SaveAssetIfDirty(window);
+                string yaml = File.ReadAllText(path);
+                var aliases = names.Select(entry => (entry.Item1, entry.Item2)).Concat(new[]
+                {
+                    ("mTab", "tab"), ("mSidebarWidth", "sidebarWidth"),
+                    ("mCollapsedGroups", "collapsedGroups"), ("mInitialGroupsSet", "hasInitializedGroups")
+                });
+                foreach (var alias in aliases)
+                {
+                    yaml = System.Text.RegularExpressions.Regex.Replace(yaml, @"(?m)^  " + alias.Item2 + @":", "  " + alias.Item1 + ":");
+                    Assert.That(System.Text.RegularExpressions.Regex.Matches(yaml, @"(?m)^  " + alias.Item1 + @":").Count, Is.EqualTo(1));
+                }
+
+                File.WriteAllText(path, yaml, new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                serialized = new SerializedObject(AssetDatabase.LoadAssetAtPath<Editor.HelpWindow>(path));
+                foreach (var entry in names)
+                {
+                    Assert.That(serialized.FindProperty(entry.Item2).stringValue, Is.EqualTo(entry.Item3));
+                }
+                Assert.That(serialized.FindProperty("tab").intValue, Is.EqualTo(2));
+                Assert.That(serialized.FindProperty("sidebarWidth").floatValue, Is.EqualTo(271));
+                Assert.That(serialized.FindProperty("hasInitializedGroups").boolValue, Is.EqualTo(initialized));
+                Assert.That(serialized.FindProperty("collapsedGroups").arraySize, Is.EqualTo(1));
+                Assert.That(serialized.FindProperty("collapsedGroups").GetArrayElementAtIndex(0).stringValue, Is.EqualTo("guide:legacy"));
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+                if (window)
+                {
+                    UnityEngine.Object.DestroyImmediate(window);
+                }
+            }
+        }
+
+        [TestCase(0f)]
+        [TestCase(0.57f)]
+        public void LegacySplitWindowRatioRetainsExplicitValuesAcrossReimport(float ratio)
+        {
+            var window = ScriptableObject.CreateInstance<YLFramework.Core.Editor.SplitWindow>();
+            string folder = "Assets/YLFramework/Tests/EditMode/Help/LegacySplit-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode/Help", Path.GetFileName(folder)), Is.Not.Empty);
+            try
+            {
+                Assert.That(window.HorizontalSplitPercent, Is.EqualTo(0.3f));
+                var serialized = new SerializedObject(window);
+                var property = serialized.FindProperty("horizontalSplitPercent");
+                Assert.That(property, Is.Not.Null, "The persistent ratio must use the current field name.");
+                property.floatValue = ratio;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                string path = folder + "/Window.asset";
+                window.hideFlags = HideFlags.None;
+                AssetDatabase.CreateAsset(window, path);
+                EditorUtility.SetDirty(window);
+                AssetDatabase.SaveAssetIfDirty(window);
+                string yaml = File.ReadAllText(path);
+                yaml = System.Text.RegularExpressions.Regex.Replace(yaml, @"(?m)^  horizontalSplitPercent:", "  horizontal_split_percent:");
+                Assert.That(yaml, Does.Contain("  horizontal_split_percent:"));
+                File.WriteAllText(path, yaml, new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                var restored = AssetDatabase.LoadAssetAtPath<YLFramework.Core.Editor.SplitWindow>(path);
+                Assert.That(restored.HorizontalSplitPercent, Is.EqualTo(ratio));
+                EditorUtility.SetDirty(restored);
+                AssetDatabase.SaveAssetIfDirty(restored);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                Assert.That(AssetDatabase.LoadAssetAtPath<YLFramework.Core.Editor.SplitWindow>(path).HorizontalSplitPercent, Is.EqualTo(ratio));
+                Assert.That(File.ReadAllText(path), Does.Not.Contain("  horizontal_split_percent:"));
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+                if (window)
+                {
+                    UnityEngine.Object.DestroyImmediate(window);
+                }
+            }
+        }
+
         [Test]
         public void RegistryIsExplicitLazyAndReplacesDuplicateIds()
         {
             var count = Editor.HelpRegistry.GetModules().Length;
             var created = 0;
-            Editor.HelpRegistry.Register(First, "第一个模块", () => { created++; return new Editor.HelpModule(); });
-            Editor.HelpRegistry.Register(First, "新的名称", () => { created += 10; return new Editor.HelpModule(); });
+            Editor.HelpRegistry.Register(First, "第一个模块", () =>
+            {
+                created++;
+                return new Editor.HelpModule();
+            });
+            Editor.HelpRegistry.Register(First, "新的名称", () =>
+            {
+                created += 10;
+                return new Editor.HelpModule();
+            });
             Assert.That(created, Is.Zero);
             var modules = Editor.HelpRegistry.GetModules();
             Assert.That(modules.Length, Is.EqualTo(count + 1));
@@ -50,20 +170,23 @@ namespace YLFramework.Tests.Help
             try
             {
                 window.SelectModule(First);
-                Set(window, "mSearch", "等待");
+                Set(window, "search", "等待");
                 UpdateResults(window);
                 Assert.That(Visible(window).Single().Title, Is.EqualTo("甲模块的等待"));
-                Set(window, "mTab", 1);
+                Set(window, "tab", 1);
                 window.SelectModule(Second);
-                Assert.That(Get<string>(window, "mSearch"), Is.Empty);
-                Assert.That(Get<int>(window, "mTab"), Is.Zero);
+                Assert.That(Get<string>(window, "search"), Is.Empty);
+                Assert.That(Get<int>(window, "tab"), Is.Zero);
                 UpdateResults(window);
                 Assert.That(Visible(window).Single().Title, Is.EqualTo("乙模块的播放"));
-                Set(window, "mSearch", "等待");
+                Set(window, "search", "等待");
                 UpdateResults(window);
                 Assert.That(Visible(window), Is.Empty);
             }
-            finally { UnityEngine.Object.DestroyImmediate(window); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         [Test]
@@ -73,7 +196,11 @@ namespace YLFramework.Tests.Help
             Editor.HelpWindow window = null;
             try
             {
-                foreach (var module in saved) Editor.HelpRegistry.Unregister(module.Id);
+                foreach (var module in saved)
+                {
+                    Editor.HelpRegistry.Unregister(module.Id);
+                }
+
                 Editor.HelpRegistry.Register(First, "临时模块", () => PageModule("临时指南"));
                 window = ScriptableObject.CreateInstance<Editor.HelpWindow>();
                 window.SelectModule(First);
@@ -82,15 +209,22 @@ namespace YLFramework.Tests.Help
                 Editor.HelpRegistry.Unregister(First);
                 Invoke(window, "LoadModule");
                 UpdateResults(window);
-                Assert.That(Get<Editor.HelpModule>(window, "mModule"), Is.Null);
+                Assert.That(Get<Editor.HelpModule>(window, "_module"), Is.Null);
                 Assert.That(Visible(window), Is.Empty);
-                Assert.That(Get<Editor.HelpApiType[]>(window, "mIndex"), Is.Empty);
+                Assert.That(Get<Editor.HelpApiType[]>(window, "_index"), Is.Empty);
             }
             finally
             {
-                if (window) UnityEngine.Object.DestroyImmediate(window);
+                if (window)
+                {
+                    UnityEngine.Object.DestroyImmediate(window);
+                }
+
                 Editor.HelpRegistry.Unregister(First);
-                foreach (var module in saved) Editor.HelpRegistry.Register(module.Id, module.DisplayName, module.Create);
+                foreach (var module in saved)
+                {
+                    Editor.HelpRegistry.Register(module.Id, module.DisplayName, module.Create);
+                }
             }
         }
 
@@ -112,9 +246,9 @@ namespace YLFramework.Tests.Help
         [Test]
         public void HelpBoundaryAndPersistedWindowIdentityArePreserved()
         {
-            const string assemblyPath = "Assets/YLFramework/Editor/Help/YLFramework.Editor.Help.asmdef";
-            Assert.That(File.Exists(assemblyPath), Is.False);
-            Assert.That(File.Exists(assemblyPath + ".meta"), Is.False);
+            const string AssemblyPath = "Assets/YLFramework/Editor/Help/YLFramework.Editor.Help.asmdef";
+            Assert.That(File.Exists(AssemblyPath), Is.False);
+            Assert.That(File.Exists(AssemblyPath + ".meta"), Is.False);
             Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/YLFramework.Editor.asmdef"),
                 Is.EqualTo("62b3fd14a5c704743835cacd6a6870a1"));
             Assert.That(AssetDatabase.AssetPathToGUID("Assets/YLFramework/Editor/Help/HelpWindow.cs"),
@@ -172,7 +306,10 @@ namespace YLFramework.Tests.Help
                 Assert.That(layout.Tab(tab).width, Is.EqualTo(layout.Tabs.width / 3).Within(0.01f));
                 Assert.That(layout.Tab(tab).height, Is.EqualTo(34));
                 Assert.That(layout.Tab(tab).xMax, Is.LessThanOrEqualTo(layout.Tabs.xMax + 0.01f));
-                if (tab != 0) Assert.That(layout.Tab(tab).xMin, Is.EqualTo(layout.Tab(tab - 1).xMax).Within(0.01f));
+                if (tab != 0)
+                {
+                    Assert.That(layout.Tab(tab).xMin, Is.EqualTo(layout.Tab(tab - 1).xMax).Within(0.01f));
+                }
             }
         }
 
@@ -185,20 +322,27 @@ namespace YLFramework.Tests.Help
             try
             {
                 window.SelectModule(First);
-                Set(window, "mSearch", "等待"); UpdateResults(window);
-                var highlight = Get<Editor.HelpSearchHighlight>(window, "mHighlights");
+                Set(window, "search", "等待");
+                UpdateResults(window);
+                var highlight = Get<Editor.HelpSearchHighlight>(window, "_highlights");
                 var ranges = highlight.GetRanges("等待原文");
                 Assert.That(ranges, Is.Not.Empty);
-                Set(window, "mFilterKey", null); UpdateResults(window);
+                Set(window, "_filterKey", null);
+                UpdateResults(window);
                 Assert.That(highlight.GetRanges("等待原文"), Is.Not.SameAs(ranges));
-                Set(window, "mSearch", " \t "); UpdateResults(window);
+                Set(window, "search", " \t ");
+                UpdateResults(window);
                 Assert.That(highlight.GetRanges("等待原文"), Is.Empty);
-                Set(window, "mSearch", "等待"); UpdateResults(window);
+                Set(window, "search", "等待");
+                UpdateResults(window);
                 window.SelectModule(Second);
                 Assert.That(highlight.GetRanges("等待原文"), Is.Empty);
                 Assert.That(window.minSize, Is.EqualTo(new Vector2(440, 360)));
             }
-            finally { UnityEngine.Object.DestroyImmediate(window); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         [UnityTest]
@@ -215,35 +359,61 @@ namespace YLFramework.Tests.Help
                         EditorStyles.toolbarButton, EditorStyles.toolbarSearchField, EditorStyles.helpBox };
                     var heights = shared.Select(style => style.fixedHeight).ToArray();
                     var fonts = shared.Select(style => style.fontSize).ToArray();
-                    Set(window, "mBody", new GUIStyle(EditorStyles.label));
-                    Set(window, "mStylesDark", EditorGUIUtility.isProSkin);
+                    Set(window, "_body", new GUIStyle(EditorStyles.label));
+                    Set(window, "_isDarkTheme", EditorGUIUtility.isProSkin);
                     Invoke(window, "EnsureStyles");
-                    var fields = new[] { "mTitle", "mHeaderTitle", "mHeading", "mSubheading", "mBody", "mSmall", "mCode", "mSignature",
-                        "mNavGroup", "mApiGroup", "mDetailFoldout", "mPopup", "mTabButton", "mSearchField", "mButton", "mNotice", "mLink" };
+                    var fields = new[] { "_title", "_headerTitle", "_heading", "_subheading", "_body", "_small", "_code", "_signature",
+                        "_navGroup", "_apiGroup", "_detailFoldout", "_popup", "_tabButton", "_searchField", "_button", "_notice", "_link" };
                     var styles = fields.Select(field => Get<GUIStyle>(window, field)).ToArray();
                     Assert.That(styles.Take(8).Select(style => style.fontSize), Is.EqualTo(new[] { 24, 20, 18, 15, 14, 12, 13, 13 }));
-                    Assert.That(Get<GUIStyle>(window, "mNavGroup").fontSize, Is.EqualTo(13));
-                    Assert.That(Get<GUIStyle>(window, "mApiGroup").fontSize, Is.EqualTo(18));
-                    Assert.That(Get<GUIStyle>(window, "mDetailFoldout").fontSize, Is.EqualTo(15));
+                    Assert.That(Get<GUIStyle>(window, "_navGroup").fontSize, Is.EqualTo(13));
+                    Assert.That(Get<GUIStyle>(window, "_apiGroup").fontSize, Is.EqualTo(18));
+                    Assert.That(Get<GUIStyle>(window, "_detailFoldout").fontSize, Is.EqualTo(15));
                     Assert.That(styles.All(style => !style.richText), Is.True);
                     // Toolbar resolves skin variants by style name; keep every tab on our copy.
-                    var tabStyle = Get<GUIStyle>(window, "mTabButton");
+                    var tabStyle = Get<GUIStyle>(window, "_tabButton");
                     foreach (var suffix in new[] { "left", "mid", "right" })
+                    {
                         Assert.That(GUI.skin.FindStyle(tabStyle.name + suffix), Is.Null);
-                    foreach (var field in new[] { "mPopup", "mTabButton", "mSearchField", "mButton" })
+                    }
+
+                    foreach (var field in new[] { "_popup", "_tabButton", "_searchField", "_button" })
+                    {
                         Assert.That(Get<GUIStyle>(window, field).fixedHeight, Is.Zero);
-                    Set(window, "mStylesDark", !EditorGUIUtility.isProSkin);
+                    }
+
+                    Set(window, "_isDarkTheme", !EditorGUIUtility.isProSkin);
                     Invoke(window, "EnsureStyles");
-                    for (var i = 0; i < fields.Length; i++) Assert.That(Get<GUIStyle>(window, fields[i]), Is.Not.SameAs(styles[i]));
+                    for (var i = 0; i < fields.Length; i++)
+                    {
+                        Assert.That(Get<GUIStyle>(window, fields[i]), Is.Not.SameAs(styles[i]));
+                    }
+
                     Assert.That(shared.Select(style => style.fixedHeight), Is.EqualTo(heights));
                     Assert.That(shared.Select(style => style.fontSize), Is.EqualTo(fonts));
                 };
-                probe.ShowUtility(); probe.Repaint();
-                for (var frame = 0; frame < 30 && !probe.Completed; frame++) yield return null;
+                probe.ShowUtility();
+                probe.Repaint();
+                for (var frame = 0; frame < 30 && !probe.Completed; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(probe.Completed, Is.True);
-                if (probe.Failure != null) throw probe.Failure;
+                if (probe.Failure != null)
+                {
+                    throw probe.Failure;
+                }
             }
-            finally { probe.Close(); UnityEngine.Object.DestroyImmediate(window); if (previous) previous.Focus(); }
+            finally
+            {
+                probe.Close();
+                UnityEngine.Object.DestroyImmediate(window);
+                if (previous)
+                {
+                    previous.Focus();
+                }
+            }
         }
 
         [TestCase("屏幕与屏幕", "屏幕", 0, 2, 3, 5)]
@@ -275,32 +445,45 @@ namespace YLFramework.Tests.Help
             {
                 probe.Draw = () =>
                 {
-                    var style = new GUIStyle(EditorStyles.label) { fontSize = 14, wordWrap = true, richText = false,
-                        alignment = TextAnchor.UpperLeft, padding = new RectOffset(0, 0, 3, 4) };
-                    foreach (var text in new[] { "屏幕屏幕屏幕屏幕屏幕", "Delay\r\n屏幕 Delay", "Task<T> a+b <color>" })
-                    foreach (var width in new[] { 32f, 71f, 240f })
+                    var style = new GUIStyle(EditorStyles.label)
                     {
-                        var rect = new Rect(12, 12, width, style.CalcHeight(new GUIContent(text), width));
-                        var fragments = Editor.HelpSearchHighlight.BuildFragments(text, style, rect,
-                            new[] { new Editor.HelpSearchHighlight.Range(0, text.Length) });
-                        Assert.That(fragments, Is.Not.Empty);
-                        foreach (var fragment in fragments)
+                        fontSize = 14,
+                        wordWrap = true,
+                        richText = false,
+                        alignment = TextAnchor.UpperLeft,
+                        padding = new RectOffset(0, 0, 3, 4)
+                    };
+                    foreach (var text in new[] { "屏幕屏幕屏幕屏幕屏幕", "Delay\r\n屏幕 Delay", "Task<T> a+b <color>" })
+                    {
+                        foreach (var width in new[] { 32f, 71f, 240f })
                         {
-                            Assert.That(fragment.xMin, Is.GreaterThanOrEqualTo(rect.xMin));
-                            Assert.That(fragment.xMax, Is.LessThanOrEqualTo(rect.xMax));
-                            Assert.That(fragment.yMin, Is.GreaterThanOrEqualTo(rect.yMin));
-                            Assert.That(fragment.yMax, Is.LessThanOrEqualTo(rect.yMax));
-                            Assert.That(fragment.height, Is.LessThanOrEqualTo(style.lineHeight + 0.01f));
-                        }
-                        var content = new GUIContent(text);
-                        for (var i = 0; i < text.Length; i++)
-                        {
-                            if (char.IsWhiteSpace(text[i])) continue;
-                            var cursor = style.GetCursorPixelPosition(rect, content, i);
-                            Assert.That(fragments.Any(fragment => Mathf.Abs(fragment.y - cursor.y) < 0.5f &&
-                                cursor.x >= fragment.xMin - 0.5f && cursor.x < fragment.xMax), Is.True, $"Missing glyph {i} at {width}");
+                            var rect = new Rect(12, 12, width, style.CalcHeight(new GUIContent(text), width));
+                            var fragments = Editor.HelpSearchHighlight.BuildFragments(text, style, rect,
+                                new[] { new Editor.HelpSearchHighlight.Range(0, text.Length) });
+                            Assert.That(fragments, Is.Not.Empty);
+                            foreach (var fragment in fragments)
+                            {
+                                Assert.That(fragment.xMin, Is.GreaterThanOrEqualTo(rect.xMin));
+                                Assert.That(fragment.xMax, Is.LessThanOrEqualTo(rect.xMax));
+                                Assert.That(fragment.yMin, Is.GreaterThanOrEqualTo(rect.yMin));
+                                Assert.That(fragment.yMax, Is.LessThanOrEqualTo(rect.yMax));
+                                Assert.That(fragment.height, Is.LessThanOrEqualTo(style.lineHeight + 0.01f));
+                            }
+                            var content = new GUIContent(text);
+                            for (var i = 0; i < text.Length; i++)
+                            {
+                                if (char.IsWhiteSpace(text[i]))
+                                {
+                                    continue;
+                                }
+
+                                var cursor = style.GetCursorPixelPosition(rect, content, i);
+                                Assert.That(fragments.Any(fragment => Mathf.Abs(fragment.y - cursor.y) < 0.5f &&
+                                    cursor.x >= fragment.xMin - 0.5f && cursor.x < fragment.xMax), Is.True, $"Missing glyph {i} at {width}");
+                            }
                         }
                     }
+
                     var highlight = new Editor.HelpSearchHighlight();
                     highlight.SetQuery("屏幕");
                     var size = new Vector2(90, 200);
@@ -322,7 +505,11 @@ namespace YLFramework.Tests.Help
                     {
                         var a = style.GetCursorPixelPosition(boundaryRect, new GUIContent(boundaryText), i);
                         var b = style.GetCursorPixelPosition(boundaryRect, new GUIContent(boundaryText), i + 1);
-                        if (Mathf.Abs(a.y - b.y) < 0.5f) continue;
+                        if (Mathf.Abs(a.y - b.y) < 0.5f)
+                        {
+                            continue;
+                        }
+
                         var fragment = Editor.HelpSearchHighlight.BuildFragments(boundaryText, style, boundaryRect,
                             new[] { new Editor.HelpSearchHighlight.Range(i, i + 1) }).Single();
                         var glyphWidth = style.CalcSize(new GUIContent(boundaryText.Substring(i, 1))).x - style.padding.horizontal;
@@ -334,12 +521,27 @@ namespace YLFramework.Tests.Help
                     highlight.Clear();
                     Assert.That(highlight.GetFragments("屏幕屏幕屏幕", style, size), Is.Empty);
                 };
-                probe.ShowUtility(); probe.Repaint();
-                for (var frame = 0; frame < 30 && !probe.Completed; frame++) yield return null;
+                probe.ShowUtility();
+                probe.Repaint();
+                for (var frame = 0; frame < 30 && !probe.Completed; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(probe.Completed, Is.True, "No IMGUI Repaint received");
-                if (probe.Failure != null) throw probe.Failure;
+                if (probe.Failure != null)
+                {
+                    throw probe.Failure;
+                }
             }
-            finally { probe.Close(); if (previous) previous.Focus(); }
+            finally
+            {
+                probe.Close();
+                if (previous)
+                {
+                    previous.Focus();
+                }
+            }
         }
 
         private sealed class RenderingProbe : EditorWindow
@@ -351,11 +553,29 @@ namespace YLFramework.Tests.Help
             internal Exception Failure;
             private void OnGUI()
             {
-                if (Once && (Completed || Event.current.type != EventType.Repaint)) return;
-                try { Draw(); }
-                catch (ExitGUIException) { Completed = true; throw; }
-                catch (Exception exception) { Failure = exception; }
-                if (Event.current.type == EventType.Repaint) Repaints++;
+                if (Once && (Completed || Event.current.type != EventType.Repaint))
+                {
+                    return;
+                }
+
+                try
+                {
+                    Draw();
+                }
+                catch (ExitGUIException)
+                {
+                    Completed = true;
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    Failure = exception;
+                }
+                if (Event.current.type == EventType.Repaint)
+                {
+                    Repaints++;
+                }
+
                 Completed = true;
             }
         }
@@ -375,8 +595,14 @@ namespace YLFramework.Tests.Help
                 probe.Once = false;
                 probe.Draw = () =>
                 {
-                    var style = new GUIStyle(EditorStyles.label) { fontSize = 14, richText = false, wordWrap = true,
-                        alignment = TextAnchor.UpperLeft, padding = new RectOffset(0, 0, 0, 0) };
+                    var style = new GUIStyle(EditorStyles.label)
+                    {
+                        fontSize = 14,
+                        richText = false,
+                        wordWrap = true,
+                        alignment = TextAnchor.UpperLeft,
+                        padding = new RectOffset(0, 0, 0, 0)
+                    };
                     var highlight = new Editor.HelpSearchHighlight();
                     highlight.SetQuery("Task<T> 屏幕 <color> a+b");
                     var rect = new Rect(10, 10, 290, 90);
@@ -392,10 +618,20 @@ namespace YLFramework.Tests.Help
                     GUI.EndScrollView();
                 };
                 probe.position = new Rect(100, 100, 330, 220);
-                probe.ShowUtility(); probe.Focus(); probe.Repaint();
-                for (var frame = 0; frame < 30 && probe.Repaints == 0; frame++) yield return null;
+                probe.ShowUtility();
+                probe.Focus();
+                probe.Repaint();
+                for (var frame = 0; frame < 30 && probe.Repaints == 0; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(probe.Repaints, Is.GreaterThan(0));
-                if (probe.Failure != null) throw probe.Failure;
+                if (probe.Failure != null)
+                {
+                    throw probe.Failure;
+                }
+
                 EditorGUIUtility.systemCopyBuffer = "__helpkit_copy_sentinel";
                 probe.SendEvent(new Event { type = EventType.MouseDown, button = 0, clickCount = 1, mousePosition = first });
                 probe.SendEvent(new Event { type = EventType.MouseDrag, button = 0, mousePosition = last });
@@ -407,9 +643,20 @@ namespace YLFramework.Tests.Help
                 probe.SendEvent(EditorGUIUtility.CommandEvent("SelectAll"));
                 probe.SendEvent(EditorGUIUtility.CommandEvent("Copy"));
                 Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(code));
-                if (probe.Failure != null) throw probe.Failure;
+                if (probe.Failure != null)
+                {
+                    throw probe.Failure;
+                }
             }
-            finally { probe.Close(); EditorGUIUtility.systemCopyBuffer = clipboard; if (previous) previous.Focus(); }
+            finally
+            {
+                probe.Close();
+                EditorGUIUtility.systemCopyBuffer = clipboard;
+                if (previous)
+                {
+                    previous.Focus();
+                }
+            }
         }
 
         [UnityTest]
@@ -439,52 +686,70 @@ namespace YLFramework.Tests.Help
             try
             {
                 window.SelectModule(First);
-                Set(window, "mSearch", "等待 Delay"); Set(window, "mFilterKey", null);
+                Set(window, "search", "等待 Delay");
+                Set(window, "_filterKey", null);
                 window.position = new Rect(100, 100, 800, 700);
-                window.ShowUtility(); window.Repaint();
-                var highlight = Get<Editor.HelpSearchHighlight>(window, "mHighlights");
-                var ranges = Get<Dictionary<string, Editor.HelpSearchHighlight.Range[]>>(highlight, "mRanges");
-                for (var frame = 0; frame < 30 && !ranges.ContainsKey(code); frame++) yield return null;
+                window.ShowUtility();
+                window.Repaint();
+                var highlight = Get<Editor.HelpSearchHighlight>(window, "_highlights");
+                var ranges = Get<Dictionary<string, Editor.HelpSearchHighlight.Range[]>>(highlight, "_ranges");
+                for (var frame = 0; frame < 30 && !ranges.ContainsKey(code); frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(ranges.ContainsKey(notice), Is.True, "Notice did not use the original text highlighter");
                 Assert.That(ranges.ContainsKey(code), Is.True, "Code did not use the original text highlighter");
                 Assert.That(ranges.ContainsKey("等待链接 Delay"), Is.True);
                 var originalRanges = ranges[notice];
-                var collapsed = Get<List<string>>(window, "mCollapsedGroups");
-                var searching = Get<HashSet<string>>(window, "mSearchCollapsed");
-                var details = Get<HashSet<string>>(window, "mDetailExpanded");
-                collapsed.Add("saved-normal"); searching.Add("saved-search"); details.Add("saved-detail");
+                var collapsed = Get<List<string>>(window, "collapsedGroups");
+                var searching = Get<HashSet<string>>(window, "_searchCollapsed");
+                var details = Get<HashSet<string>>(window, "_detailExpanded");
+                collapsed.Add("saved-normal");
+                searching.Add("saved-search");
+                details.Add("saved-detail");
                 yield return RunGuiAction(() => typeof(Editor.HelpWindow).GetMethod("Navigate", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(window, new object[] { 0, "next", false }));
-                Assert.That(Get<string>(window, "mGuideId"), Is.EqualTo("next"));
+                Assert.That(Get<string>(window, "guideId"), Is.EqualTo("next"));
                 Assert.That(highlight.GetRanges(notice), Is.Not.SameAs(originalRanges));
-                collapsed.Remove("saved-normal"); searching.Remove("saved-search");
+                collapsed.Remove("saved-normal");
+                searching.Remove("saved-search");
                 Click(window, new Editor.HelpHeaderLayout(window.position.width).Back.center);
-                Assert.That(Get<string>(window, "mGuideId"), Is.EqualTo("shared"));
-                Assert.That(Get<List<string>>(window, "mCollapsedGroups").Contains("saved-normal"), Is.True);
+                Assert.That(Get<string>(window, "guideId"), Is.EqualTo("shared"));
+                Assert.That(Get<List<string>>(window, "collapsedGroups").Contains("saved-normal"), Is.True);
                 Assert.That(searching.Contains("saved-search"), Is.True);
                 Assert.That(details.Contains("saved-detail"), Is.True);
-                var scrolling = Get<Dictionary<string, Vector2>>(window, "mCodeScroll");
+                var scrolling = Get<Dictionary<string, Vector2>>(window, "_codeScroll");
                 foreach (var width in new[] { 440f, 800f, 1200f })
                 {
-                    var geometry = Get<IDictionary>(highlight, "mGeometry");
+                    var geometry = Get<IDictionary>(highlight, "_geometry");
                     highlight.ClearGeometry();
                     window.position = new Rect(100, 100, width, 700);
                     scrolling["shared:1"] = new Vector2(10000, 10000);
                     window.Repaint();
-                    for (var frame = 0; frame < 30 && geometry.Count == 0; frame++) yield return null;
+                    for (var frame = 0; frame < 30 && geometry.Count == 0; frame++)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(geometry.Count, Is.GreaterThan(0), "Reader received no highlighted Repaint");
                     Assert.That(scrolling["shared:1"].x, Is.GreaterThan(0), "Code must still scroll horizontally");
                     Assert.That(scrolling["shared:1"].y, Is.GreaterThan(0), "Code must still scroll vertically");
-                    Assert.That(Get<float>(window, "mReadingWidth"), Is.LessThan(width - 100));
+                    Assert.That(Get<float>(window, "_readingWidth"), Is.LessThan(width - 100));
                 }
                 Click(window, new Editor.HelpHeaderLayout(window.position.width).Tab(1).center);
-                Assert.That(Get<int>(window, "mTab"), Is.EqualTo(1));
-                Set(window, "mSearch", "Run"); Set(window, "mFilterKey", null);
-                var api = Get<Editor.HelpApiType[]>(window, "mIndex")[0];
+                Assert.That(Get<int>(window, "tab"), Is.EqualTo(1));
+                Set(window, "search", "Run");
+                Set(window, "_filterKey", null);
+                var api = Get<Editor.HelpApiType[]>(window, "_index")[0];
                 var entry = api.Entries.First(member => member.Name == "Run");
                 details.Add(api.Id + "\n" + entry.Signature);
                 window.Repaint();
-                for (var frame = 0; frame < 30 && !ranges.ContainsKey(documentation.Returns); frame++) yield return null;
+                for (var frame = 0; frame < 30 && !ranges.ContainsKey(documentation.Returns); frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(ranges.ContainsKey(api.Declaration), Is.True);
                 Assert.That(ranges.ContainsKey(entry.Signature), Is.True);
                 Assert.That(ranges.ContainsKey("Run 参数原文"), Is.True);
@@ -493,7 +758,14 @@ namespace YLFramework.Tests.Help
                 Assert.That(ranges.ContainsKey(documentation.Remarks), Is.True);
                 Assert.That(code, Does.Contain("<color>").And.Contain("\r\n"));
             }
-            finally { window.Close(); if (previous) previous.Focus(); }
+            finally
+            {
+                window.Close();
+                if (previous)
+                {
+                    previous.Focus();
+                }
+            }
         }
 
         private static void Click(EditorWindow window, Vector2 position)
@@ -509,16 +781,32 @@ namespace YLFramework.Tests.Help
             {
                 probe.Draw = () =>
                 {
-                    try { action(); }
+                    try
+                    {
+                        action();
+                    }
                     catch (TargetInvocationException exception) when (exception.InnerException is ExitGUIException)
-                    { throw exception.InnerException; }
+                    {
+                        throw exception.InnerException;
+                    }
                 };
-                probe.ShowUtility(); probe.Repaint();
-                for (var frame = 0; frame < 30 && !probe.Completed; frame++) yield return null;
+                probe.ShowUtility();
+                probe.Repaint();
+                for (var frame = 0; frame < 30 && !probe.Completed; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(probe.Completed, Is.True);
-                if (probe.Failure != null) throw probe.Failure;
+                if (probe.Failure != null)
+                {
+                    throw probe.Failure;
+                }
             }
-            finally { probe.Close(); }
+            finally
+            {
+                probe.Close();
+            }
         }
 
         private static Editor.HelpModule PageModule(string title) => new Editor.HelpModule
@@ -534,6 +822,6 @@ namespace YLFramework.Tests.Help
         private static void Invoke(Editor.HelpWindow window, string name) => typeof(Editor.HelpWindow)
             .GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, null);
         private static void UpdateResults(Editor.HelpWindow window) => Invoke(window, "UpdateResults");
-        private static Editor.HelpPage[] Visible(Editor.HelpWindow window) => Get<Editor.HelpPage[]>(window, "mVisibleTopics");
+        private static Editor.HelpPage[] Visible(Editor.HelpWindow window) => Get<Editor.HelpPage[]>(window, "_visibleTopics");
     }
 }

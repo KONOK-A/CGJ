@@ -17,9 +17,9 @@ namespace YLFramework.Tests.ResourceBuild
     public sealed class ResourcePublicationRetryTests
     {
         private const int Retryable = unchecked((int)0x80070497u);
-        private static readonly byte[] Old = Encoding.UTF8.GetBytes("{\"value\":\"old\"}");
-        private static readonly byte[] Next = Encoding.UTF8.GetBytes("{\"value\":\"next\"}");
-        private static readonly byte[] Competitor = Encoding.UTF8.GetBytes("{\"value\":\"competitor\"}");
+        private static readonly byte[] _old = Encoding.UTF8.GetBytes("{\"value\":\"old\"}");
+        private static readonly byte[] _next = Encoding.UTF8.GetBytes("{\"value\":\"next\"}");
+        private static readonly byte[] _competitor = Encoding.UTF8.GetBytes("{\"value\":\"competitor\"}");
 
         [TestCase("cancel")]
         [TestCase("from")]
@@ -34,15 +34,33 @@ namespace YLFramework.Tests.ResourceBuild
             owned.WorkerJoined = false;
             var worker = Task.Run(() =>
             {
-                if (!entered.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("The formal 1175 backoff was never entered.");
-                if (abort.IsSet) return;
+                if (!entered.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    throw new TimeoutException("The formal 1175 backoff was never entered.");
+                }
+
+                if (abort.IsSet)
+                {
+                    return;
+                }
+
                 try
                 {
-                    if (action == "cancel") cancellation.Cancel();
-                    else Write(action == "from" ? owned.Target : owned.Temporary, Competitor);
+                    if (action == "cancel")
+                    {
+                        cancellation.Cancel();
+                    }
+                    else
+                    {
+                        Write(action == "from" ? owned.Target : owned.Temporary, _competitor);
+                    }
+
                     owned.Record(action == "cancel" ? "CancellationApplied" : action == "from" ? "FromChanged" : "ToChanged");
                 }
-                finally { changed.Set(); }
+                finally
+                {
+                    changed.Set();
+                }
             });
             Exception error;
             try
@@ -51,17 +69,32 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     owned.BeginBackoff(delay);
                     entered.Set();
-                    if (!changed.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("The controlled change did not complete.");
+                    if (!changed.Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        throw new TimeoutException("The controlled change did not complete.");
+                    }
+
                     owned.Record("BackoffResumed");
                 }, cancellation.Token);
             }
             finally
             {
-                abort.Set(); entered.Set(); changed.Set();
-                try { worker.GetAwaiter().GetResult(); }
-                finally { owned.WorkerJoined = worker.IsCompleted; }
+                abort.Set();
+                entered.Set();
+                changed.Set();
+                try
+                {
+                    worker.GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    owned.WorkerJoined = worker.IsCompleted;
+                }
             }
-            if (action == "cancel") Assert.That(error, Is.InstanceOf<OperationCanceledException>());
+            if (action == "cancel")
+            {
+                Assert.That(error, Is.InstanceOf<OperationCanceledException>());
+            }
             else
             {
                 Assert.That(error, Is.InstanceOf<InvalidOperationException>());
@@ -70,8 +103,8 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(owned.Attempts, Is.EqualTo(1), "No replacement may follow a changed/cancelled backoff.");
             Assert.That(owned.RealReplacementCalls, Is.Zero);
             CollectionAssert.AreEqual(new[] { 10 }, owned.RequestedWaits);
-            CollectionAssert.AreEqual(action == "from" ? Competitor : Old, File.ReadAllBytes(owned.Target));
-            CollectionAssert.AreEqual(action == "to" ? Competitor : Next, File.ReadAllBytes(owned.Temporary));
+            CollectionAssert.AreEqual(action == "from" ? _competitor : _old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(action == "to" ? _competitor : _next, File.ReadAllBytes(owned.Temporary));
             CollectionAssert.AreEqual(new[] { "ReplaceAttempt", "ControlledFailure", "BackoffEntered",
                 action == "cancel" ? "CancellationApplied" : action == "from" ? "FromChanged" : "ToChanged", "BackoffResumed", "TerminalError" }, owned.Kinds);
             owned.VerifyDefaultEntryAndMarkComplete();
@@ -88,7 +121,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(owned.RealReplacementCalls, Is.EqualTo(1));
             Assert.That(owned.RealCommits, Is.EqualTo(1));
             CollectionAssert.AreEqual(new[] { 10, 25 }.Take(failures), owned.RequestedWaits);
-            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(_next, File.ReadAllBytes(owned.Target));
             Assert.That(File.Exists(owned.Temporary), Is.False);
             var expected = Enumerable.Range(0, failures).SelectMany(_ => new[] {
                 "ReplaceAttempt", "ControlledFailure", "BackoffEntered", "BackoffResumed" }).Concat(new[] {
@@ -107,8 +140,8 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(owned.Attempts, Is.EqualTo(6), "One first attempt plus five retries.");
             Assert.That(owned.RealReplacementCalls, Is.Zero);
             CollectionAssert.AreEqual(new[] { 10, 25, 50, 100, 200 }, owned.RequestedWaits);
-            CollectionAssert.AreEqual(Old, File.ReadAllBytes(owned.Target));
-            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Temporary));
+            CollectionAssert.AreEqual(_old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(_next, File.ReadAllBytes(owned.Temporary));
             var expected = Enumerable.Range(0, 5).SelectMany(_ => new[] {
                 "ReplaceAttempt", "ControlledFailure", "BackoffEntered", "BackoffResumed" }).Concat(new[] {
                 "ReplaceAttempt", "ControlledFailure", "TerminalError" });
@@ -129,8 +162,8 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(owned.Attempts, Is.EqualTo(1));
             Assert.That(owned.RealReplacementCalls, Is.Zero);
             Assert.That(owned.RequestedWaits, Is.Empty);
-            CollectionAssert.AreEqual(Old, File.ReadAllBytes(owned.Target));
-            CollectionAssert.AreEqual(Next, File.ReadAllBytes(owned.Temporary));
+            CollectionAssert.AreEqual(_old, File.ReadAllBytes(owned.Target));
+            CollectionAssert.AreEqual(_next, File.ReadAllBytes(owned.Temporary));
             CollectionAssert.AreEqual(new[] { "ReplaceAttempt", "ControlledFailure", "TerminalError" }, owned.Kinds);
             owned.VerifyDefaultEntryAndMarkComplete();
         }
@@ -138,7 +171,8 @@ namespace YLFramework.Tests.ResourceBuild
         private static void Write(string path, byte[] bytes)
         {
             using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
-            stream.Write(bytes, 0, bytes.Length); stream.Flush(true);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush(true);
         }
 
         private sealed class ControlledReplaceException : IOException
@@ -148,55 +182,95 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class OrderedEvent
         {
-            public int Sequence, Attempt, ThreadId;
+            public int Sequence;
+            public int Attempt;
+            public int ThreadId;
             public string Kind;
-            public int? HResult, RequestedWaitMilliseconds;
+            public int? HResult;
+            public int? RequestedWaitMilliseconds;
         }
 
         private sealed class OwnedCase : IDisposable
         {
             private const string Scope = "1175-followup-20261017-1215";
-            private readonly string id, root;
-            private readonly List<OrderedEvent> events = new();
-            private Exception terminal;
-            private bool complete, defaultEntryVerified;
+            private readonly string _id;
+            private readonly string _root;
+            private readonly List<OrderedEvent> _events = new();
+            private Exception _terminal;
+            private bool _isComplete;
+            private bool _isDefaultEntryVerified;
             internal bool WorkerJoined = true;
-            internal int Attempts, RealReplacementCalls, RealCommits;
+            internal int Attempts;
+            internal int RealReplacementCalls;
+            internal int RealCommits;
             internal readonly List<int> RequestedWaits = new();
-            internal string Target => Path.Combine(root, "release-index.json");
+            internal string Target => Path.Combine(_root, "release-index.json");
             internal string Temporary => Target + ".next";
-            internal string[] Kinds { get { lock (events) return events.Select(x => x.Kind).ToArray(); } }
+            internal string[] Kinds
+            {
+                get
+                {
+                    lock (_events)
+                    {
+                        return _events.Select(x => x.Kind).ToArray();
+                    }
+                }
+            }
 
             internal OwnedCase(string id)
             {
-                this.id = id;
+                this._id = id;
                 var run = ResourceCostEvidence.DirectoryPath;
                 var owner = JObject.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(run), "owner.json")));
                 Assert.That((string)owner["purpose"], Is.EqualTo(Scope));
-                root = Path.Combine(run, "files", id);
-                Assert.That(Directory.Exists(root), Is.False);
-                Directory.CreateDirectory(root);
-                File.WriteAllText(Path.Combine(root, "owner.txt"), Scope);
-                Write(Target, Old);
+                _root = Path.Combine(run, "files", id);
+                Assert.That(Directory.Exists(_root), Is.False);
+                Directory.CreateDirectory(_root);
+                File.WriteAllText(Path.Combine(_root, "owner.txt"), Scope);
+                Write(Target, _old);
             }
 
             internal void Record(string kind, int? hresult = null, int? delay = null)
             {
-                lock (events) events.Add(new OrderedEvent { Sequence = events.Count + 1, Kind = kind, Attempt = Attempts,
-                    HResult = hresult, RequestedWaitMilliseconds = delay, ThreadId = Thread.CurrentThread.ManagedThreadId });
+                lock (_events)
+                {
+                    _events.Add(new OrderedEvent
+                    {
+                        Sequence = _events.Count + 1,
+                        Kind = kind,
+                        Attempt = Attempts,
+                        HResult = hresult,
+                        RequestedWaitMilliseconds = delay,
+                        ThreadId = Thread.CurrentThread.ManagedThreadId
+                    });
+                }
             }
 
             internal Action<string, string> Replacement(Func<int, int?> fault) => (replacement, target) =>
             {
                 Assert.That(replacement, Is.EqualTo(Temporary));
                 Assert.That(target, Is.EqualTo(Target));
-                Attempts++; Record("ReplaceAttempt");
+                Attempts++;
+                Record("ReplaceAttempt");
                 var code = fault(Attempts);
-                if (code.HasValue) { Record("ControlledFailure", code); throw new ControlledReplaceException(code.Value); }
-                RealReplacementCalls++; Record("RealReplaceCalled");
-                try { File.Replace(replacement, target, null); }
-                catch (IOException error) { Record("ActualOsFailure", error.HResult); throw; }
-                RealCommits++; Record("RealReplaceCommitted");
+                if (code.HasValue)
+                {
+                    Record("ControlledFailure", code);
+                    throw new ControlledReplaceException(code.Value);
+                }
+                RealReplacementCalls++;
+                Record("RealReplaceCalled");
+                try
+                {
+                    File.Replace(replacement, target, null);
+                }
+                catch (IOException error)
+                {
+                    Record("ActualOsFailure", error.HResult);
+                    throw;
+                }
+                RealCommits++;
+                Record("RealReplaceCommitted");
             };
 
             internal void BeginBackoff(int milliseconds)
@@ -205,7 +279,11 @@ namespace YLFramework.Tests.ResourceBuild
                 Record("BackoffEntered", delay: milliseconds);
             }
 
-            internal void VirtualBackoff(int milliseconds) { BeginBackoff(milliseconds); Record("BackoffResumed"); }
+            internal void VirtualBackoff(int milliseconds)
+            {
+                BeginBackoff(milliseconds);
+                Record("BackoffResumed");
+            }
 
             internal Exception Invoke(Action<string, string> replace, Action<int> backoff, CancellationToken cancellation = default)
             {
@@ -213,72 +291,121 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(method, Is.Not.Null, "A scoped boundary seam is needed to prove the existing retry path deterministically; this is not a product-failure assertion.");
                 try
                 {
-                    method.Invoke(null, new object[] { root, "release-index.json", Next, cancellation, replace, backoff });
-                    Record("ReturnedSuccess"); return null;
+                    method.Invoke(null, new object[] { _root, "release-index.json", _next, cancellation, replace, backoff });
+                    Record("ReturnedSuccess");
+                    return null;
                 }
-                catch (TargetInvocationException error) { terminal = error.InnerException; Record("TerminalError", terminal.HResult); return terminal; }
+                catch (TargetInvocationException error)
+                {
+                    _terminal = error.InnerException;
+                    Record("TerminalError", _terminal.HResult);
+                    return _terminal;
+                }
             }
 
             internal void VerifyDefaultEntryAndMarkComplete()
             {
                 // 新文件上的原四参数入口；不回写竞争变化后的From/To，也不沿用本case替身。
-                var target = Path.Combine(root, "default-probe.json");
-                Write(target, Old);
+                var target = Path.Combine(_root, "default-probe.json");
+                Write(target, _old);
                 var method = typeof(ResourcePublisher).GetMethod("AtomicWrite", BindingFlags.Static | BindingFlags.NonPublic);
-                method.Invoke(null, new object[] { root, "default-probe.json", Next, CancellationToken.None });
-                CollectionAssert.AreEqual(Next, File.ReadAllBytes(target));
+                method.Invoke(null, new object[] { _root, "default-probe.json", _next, CancellationToken.None });
+                CollectionAssert.AreEqual(_next, File.ReadAllBytes(target));
                 Assert.That(File.Exists(target + ".next"), Is.False);
-                defaultEntryVerified = true; complete = true;
+                _isDefaultEntryVerified = true;
+                _isComplete = true;
             }
 
             private static object State(string path)
             {
-                if (!File.Exists(path)) return new { Exists = false, Bytes = (string)null, Sha256 = (string)null };
+                if (!File.Exists(path))
+                {
+                    return new
+                    {
+                        Exists = false,
+                        Bytes = (string)null,
+                        Sha256 = (string)null
+                    };
+                }
+
                 var bytes = File.ReadAllBytes(path);
                 using var sha = SHA256.Create();
-                return new { Exists = true, Bytes = Encoding.UTF8.GetString(bytes),
-                    Sha256 = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant() };
+                return new
+                {
+                    Exists = true,
+                    Bytes = Encoding.UTF8.GetString(bytes),
+                    Sha256 = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant()
+                };
             }
 
             public void Dispose()
             {
-                var from = State(Target); var to = State(Temporary);
+                var from = State(Target);
+                var to = State(Temporary);
                 Exception cleanupError = null;
                 var handlesClosed = false;
                 var removed = false;
                 try
                 {
-                    foreach (var file in Directory.GetFiles(root))
+                    foreach (var file in Directory.GetFiles(_root))
                     {
                         using var probe = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
                     }
                     handlesClosed = true;
-                    if (complete)
+                    if (_isComplete)
                     {
-                        Assert.That(File.ReadAllText(Path.Combine(root, "owner.txt")), Is.EqualTo(Scope));
+                        Assert.That(File.ReadAllText(Path.Combine(_root, "owner.txt")), Is.EqualTo(Scope));
                         var allowed = new HashSet<string>(new[] { "owner.txt", "release-index.json", "release-index.json.next", "default-probe.json", "default-probe.json.next" });
-                        Assert.That(Directory.GetDirectories(root), Is.Empty);
-                        foreach (var path in Directory.GetFiles(root))
+                        Assert.That(Directory.GetDirectories(_root), Is.Empty);
+                        foreach (var path in Directory.GetFiles(_root))
                         {
                             Assert.That(allowed.Contains(Path.GetFileName(path)), Is.True, "Unknown cleanup file.");
                             Assert.That((int)(File.GetAttributes(path) & FileAttributes.ReparsePoint), Is.Zero);
                         }
-                        foreach (var path in Directory.GetFiles(root)) File.Delete(path);
-                        Directory.Delete(root); removed = true;
+                        foreach (var path in Directory.GetFiles(_root))
+                        {
+                            File.Delete(path);
+                        }
+
+                        Directory.Delete(_root);
+                        removed = true;
                     }
                 }
-                catch (Exception error) { cleanupError = error; }
+                catch (Exception error)
+                {
+                    cleanupError = error;
+                }
                 finally
                 {
-                    ResourceCostEvidence.Write("retry-" + id, new { Case = id, Root = root, Source = "Formal ResourcePublisher.AtomicWriteCore with per-call replace/backoff boundaries",
-                        Complete = complete, Attempts, Retries = Math.Max(0, Attempts - 1), RequestedWaitMilliseconds = RequestedWaits,
-                        RealReplacementCalls, RealCommits, ErrorType = terminal?.GetType().FullName, ErrorHResult = terminal?.HResult,
-                        FinalFromBeforeCleanup = from, FinalToBeforeCleanup = to, Events = events.ToArray(), WorkerJoined,
-                        DefaultEntryVerified = defaultEntryVerified, ExclusiveHandleProbesPassed = handlesClosed,
-                        OwnedFilesDeleted = removed, PreservedOnFailure = !removed, CleanupError = cleanupError?.ToString(),
-                        Boundary = "Controlled HRESULTs establish branch behavior, not unknown OS contention. Virtual waits record requested delays, not scheduler timing. 1176/1177 negative cases classify only; they do not simulate OS partial-commit effects." });
+                    ResourceCostEvidence.Write("retry-" + _id, new
+                    {
+                        Case = _id,
+                        Root = _root,
+                        Source = "Formal ResourcePublisher.AtomicWriteCore with per-call replace/backoff boundaries",
+                        Complete = _isComplete,
+                        Attempts,
+                        Retries = Math.Max(0, Attempts - 1),
+                        RequestedWaitMilliseconds = RequestedWaits,
+                        RealReplacementCalls,
+                        RealCommits,
+                        ErrorType = _terminal?.GetType().FullName,
+                        ErrorHResult = _terminal?.HResult,
+                        FinalFromBeforeCleanup = from,
+                        FinalToBeforeCleanup = to,
+                        Events = _events.ToArray(),
+                        WorkerJoined,
+                        DefaultEntryVerified = _isDefaultEntryVerified,
+                        ExclusiveHandleProbesPassed = handlesClosed,
+                        OwnedFilesDeleted = removed,
+                        PreservedOnFailure = !removed,
+                        CleanupError = cleanupError?.ToString(),
+                        Boundary = "Controlled HRESULTs establish branch behavior, not unknown OS contention. Virtual waits record requested delays, not scheduler timing. 1176/1177 negative cases classify only; they do not simulate OS partial-commit effects."
+                    });
                 }
-                if (cleanupError != null) throw new InvalidOperationException("Owned retry fixture cleanup failed.", cleanupError);
+                if (cleanupError != null)
+                {
+                    throw new InvalidOperationException("Owned retry fixture cleanup failed.", cleanupError);
+                }
             }
         }
     }

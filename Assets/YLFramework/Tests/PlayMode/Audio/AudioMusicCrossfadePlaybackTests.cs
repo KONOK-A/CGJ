@@ -15,42 +15,56 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioMusicCrossfadePlaybackTests
     {
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private AudioClip mA, mB, mC, mShort;
-        private GameObject mListener;
-        private float mTimeScale;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private AudioClip _a;
+        private AudioClip _b;
+        private AudioClip _c;
+        private AudioClip _short;
+        private GameObject _listener;
+        private float _timeScale;
 
         [UnitySetUp]
         public IEnumerator SetUp()
         {
-            mTimeScale = Time.timeScale;
+            _timeScale = Time.timeScale;
             Time.timeScale = 1f;
             AudioKit.Shutdown();
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             ConfigureSettings();
-            mA = AudioClip.Create("crossfade-play-a", 441000, 1, 44100, false);
-            mB = AudioClip.Create("crossfade-play-b", 441000, 1, 44100, false);
-            mC = AudioClip.Create("crossfade-play-c", 441000, 1, 44100, false);
-            mShort = AudioClip.Create("crossfade-native-end", 13230, 1, 44100, false);
+            _a = AudioClip.Create("crossfade-play-a", 441000, 1, 44100, false);
+            _b = AudioClip.Create("crossfade-play-b", 441000, 1, 44100, false);
+            _c = AudioClip.Create("crossfade-play-c", 441000, 1, 44100, false);
+            _short = AudioClip.Create("crossfade-native-end", 13230, 1, 44100, false);
             var hasListener = false;
             foreach (var listener in Object.FindObjectsOfType<AudioListener>())
-                if (listener.isActiveAndEnabled) { hasListener = true; break; }
+            {
+                if (listener.isActiveAndEnabled)
+                {
+                    hasListener = true;
+                    break;
+                }
+            }
+
             if (!hasListener)
             {
-                mListener = new GameObject("Crossfade.Listener");
-                mListener.AddComponent<AudioListener>();
+                _listener = new GameObject("Crossfade.Listener");
+                _listener.AddComponent<AudioListener>();
             }
             yield return null;
         }
@@ -71,15 +85,35 @@ namespace YLFramework.Tests.Audio
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            Time.timeScale = mTimeScale;
-            if (mListener) Object.Destroy(mListener);
-            Object.Destroy(mA); Object.Destroy(mB); Object.Destroy(mC); Object.Destroy(mShort);
+            Time.timeScale = _timeScale;
+            if (_listener)
+            {
+                Object.Destroy(_listener);
+            }
+
+            Object.Destroy(_a);
+            Object.Destroy(_b);
+            Object.Destroy(_c);
+            Object.Destroy(_short);
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
             yield return null;
         }
@@ -101,7 +135,11 @@ namespace YLFramework.Tests.Audio
         private static IEnumerator WaitUntil(Func<bool> condition, string message, float timeout = 3f)
         {
             var deadline = Time.realtimeSinceStartup + timeout;
-            while (!condition() && Time.realtimeSinceStartup < deadline) yield return null;
+            while (!condition() && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.IsTrue(condition(), message);
         }
 
@@ -139,14 +177,14 @@ namespace YLFramework.Tests.Audio
         public IEnumerator RealSourcesOverlapAdvanceAndExposeLatestTargetBeforeStartNotification()
         {
             var finishes = 0;
-            var old = AudioKit.PlayMusic(mA, onFinished: (_, __) => finishes++);
+            var old = AudioKit.PlayMusic(_a, onFinished: (_, __) => finishes++);
             yield return new WaitForSecondsRealtime(.08f);
             var oldSamples = old.Voice.Source.timeSamples;
             var starts = 0;
-            var incoming = AudioKit.CrossFadeMusic(mB, .6f, curve: AudioCrossfadeCurve.Linear, onStarted: (clip, lease) =>
+            var incoming = AudioKit.CrossFadeMusic(_b, .6f, curve: AudioCrossfadeCurve.Linear, onStarted: (clip, lease) =>
             {
                 starts++;
-                Assert.AreSame(mB, clip);
+                Assert.AreSame(_b, clip);
                 Assert.AreEqual(lease, AudioKit.Music);
                 Assert.IsTrue(old.IsPlaying);
                 Assert.IsTrue(lease.IsPlaying);
@@ -164,7 +202,7 @@ namespace YLFramework.Tests.Audio
             Assert.Greater(incoming.Voice.Source.timeSamples, 0);
             Assert.Greater(incoming.Time, 0f);
             Assert.Greater(incoming.Progress, 0f);
-            Assert.AreEqual(mB.length, incoming.Duration);
+            Assert.AreEqual(_b.length, incoming.Duration);
             yield return WaitUntil(() => !old.IsValid, "The outgoing lease must expire at transition completion.");
             AssertVolume(incoming, 1f);
             Assert.AreEqual(incoming, AudioKit.Music);
@@ -175,14 +213,14 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator NoOutgoingStillFadesInAndSameClipStartsANewIndependentPlayback()
         {
-            var first = AudioKit.CrossFadeMusic(mA, .15f);
+            var first = AudioKit.CrossFadeMusic(_a, .15f);
             AssertVolume(first, 0f);
             Assert.IsTrue(first.IsPlaying);
             yield return WaitUntil(() => first.Voice.Source.volume >= .99f, "A sole incoming track must reach full gain.");
             yield return new WaitForSecondsRealtime(.12f);
             var oldSamples = first.Voice.Source.timeSamples;
             Assert.Greater(oldSamples, 0);
-            var second = AudioKit.CrossFadeMusic(mA, .2f, AudioSoundOptions.Defaults);
+            var second = AudioKit.CrossFadeMusic(_a, .2f, AudioSoundOptions.Defaults);
             Assert.AreNotEqual(first, second);
             Assert.AreNotSame(first.Voice.Source, second.Voice.Source);
             Assert.IsTrue(first.IsPlaying);
@@ -192,7 +230,7 @@ namespace YLFramework.Tests.Audio
             AssertVolume(second, 0f);
             yield return WaitUntil(() => !first.IsValid, "Same-clip outgoing lease must retire normally.");
             AssertVolume(second, 1f);
-            var immediate = AudioKit.CrossFadeMusic(mC, 0f, onStarted: (_, lease) =>
+            var immediate = AudioKit.CrossFadeMusic(_c, 0f, onStarted: (_, lease) =>
             {
                 Assert.IsFalse(second.IsValid);
                 Assert.IsTrue(lease.IsPlaying);
@@ -207,9 +245,9 @@ namespace YLFramework.Tests.Audio
         public IEnumerator DefaultClockContinuesAtZeroTimeScaleButExplicitScaledClockWaits()
         {
             Time.timeScale = 0f;
-            var unscaled = AudioKit.CrossFadeMusic(mA, .15f);
+            var unscaled = AudioKit.CrossFadeMusic(_a, .15f);
             yield return WaitUntil(() => unscaled.Voice.Source.volume >= .99f, "Default crossfade uses unscaled time.");
-            var scaled = AudioKit.CrossFadeMusic(mB, .2f, ignoreTimeScale: false);
+            var scaled = AudioKit.CrossFadeMusic(_b, .2f, ignoreTimeScale: false);
             yield return new WaitForSecondsRealtime(.12f);
             AssertVolume(unscaled, 1f);
             AssertVolume(scaled, 0f);
@@ -222,30 +260,38 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator WholePauseStopsBothSourcesWhileSinglePauseOnlyFreezesTheirJointTransition()
         {
-            var old = AudioKit.PlayMusic(mA);
-            var current = AudioKit.CrossFadeMusic(mB, 1f);
+            var old = AudioKit.PlayMusic(_a);
+            var current = AudioKit.CrossFadeMusic(_b, 1f);
             yield return WaitUntil(() => current.Voice.Source.volume >= .15f, "Transition must first make progress.");
             AudioKit.PauseMusic();
-            var aVolume = old.Voice.Source.volume; var bVolume = current.Voice.Source.volume;
-            var aSamples = old.Voice.Source.timeSamples; var bSamples = current.Voice.Source.timeSamples;
+            var aVolume = old.Voice.Source.volume;
+            var bVolume = current.Voice.Source.volume;
+            var aSamples = old.Voice.Source.timeSamples;
+            var bSamples = current.Voice.Source.timeSamples;
             yield return new WaitForSecondsRealtime(.1f);
-            Assert.IsTrue(old.IsPaused); Assert.IsTrue(current.IsPaused);
+            Assert.IsTrue(old.IsPaused);
+            Assert.IsTrue(current.IsPaused);
             Assert.AreEqual(aSamples, old.Voice.Source.timeSamples);
             Assert.AreEqual(bSamples, current.Voice.Source.timeSamples);
-            AssertVolume(old, aVolume); AssertVolume(current, bVolume);
+            AssertVolume(old, aVolume);
+            AssertVolume(current, bVolume);
             AudioKit.ResumeMusic();
             old.Pause();
             bSamples = current.Voice.Source.timeSamples;
             yield return new WaitForSecondsRealtime(.1f);
             Assert.Greater(current.Voice.Source.timeSamples, bSamples);
             Assert.IsTrue(current.IsPlaying);
-            AssertVolume(old, aVolume); AssertVolume(current, bVolume);
-            old.Resume(); current.Pause();
+            AssertVolume(old, aVolume);
+            AssertVolume(current, bVolume);
+            old.Resume();
+            current.Pause();
             aSamples = old.Voice.Source.timeSamples;
             yield return new WaitForSecondsRealtime(.1f);
             Assert.Greater(old.Voice.Source.timeSamples, aSamples);
-            AssertVolume(old, aVolume); AssertVolume(current, bVolume);
-            current.Resume(); old.Stop();
+            AssertVolume(old, aVolume);
+            AssertVolume(current, bVolume);
+            current.Resume();
+            old.Stop();
             yield return WaitUntil(() => current.Voice.Source.volume >= .99f, "An invalid paused participant must not freeze the survivor.");
             Assert.IsTrue(current.IsPlaying);
             Assert.IsFalse(old.IsValid);
@@ -254,10 +300,10 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator PausedReplacementRemainsPendingUntilResumeAndFirstStartIsNotRepeated()
         {
-            var old = AudioKit.PlayMusic(mA);
+            var old = AudioKit.PlayMusic(_a);
             AudioKit.PauseMusic();
             var starts = 0;
-            var current = AudioKit.CrossFadeMusic(mB, .3f, onStarted: (_, lease) =>
+            var current = AudioKit.CrossFadeMusic(_b, .3f, onStarted: (_, lease) =>
             {
                 starts++;
                 Assert.IsTrue(lease.IsPlaying);
@@ -266,20 +312,22 @@ namespace YLFramework.Tests.Audio
             });
             yield return new WaitForSecondsRealtime(.08f);
             Assert.AreEqual(0, starts);
-            Assert.IsTrue(old.IsPaused); Assert.IsTrue(current.IsPaused);
+            Assert.IsTrue(old.IsPaused);
+            Assert.IsTrue(current.IsPaused);
             Assert.IsFalse(current.IsPlaying);
             Assert.AreEqual(0, current.Voice.Source.timeSamples);
             AudioKit.ResumeMusic();
             Assert.AreEqual(1, starts);
             yield return new WaitForSecondsRealtime(.05f);
-            AudioKit.PauseMusic(); AudioKit.ResumeMusic();
+            AudioKit.PauseMusic();
+            AudioKit.ResumeMusic();
             AudioKit.Settings.IsMusicOn.Value = false;
             Assert.IsFalse(old.IsValid);
             AudioKit.Settings.IsMusicOn.Value = true;
             Assert.AreEqual(1, starts);
             Assert.IsTrue(current.IsPlaying);
             AudioKit.PauseMusic();
-            var legacy = AudioKit.PlayMusic(mC);
+            var legacy = AudioKit.PlayMusic(_c);
             Assert.IsFalse(current.IsValid);
             Assert.IsFalse(legacy.IsPaused);
             Assert.IsTrue(legacy.IsPlaying);
@@ -288,9 +336,9 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator MusicOffCancelsTheTailAndReplaysOnlyTheLatestPendingTarget()
         {
-            var old = AudioKit.PlayMusic(mA);
+            var old = AudioKit.PlayMusic(_a);
             var starts = 0;
-            var current = AudioKit.CrossFadeMusic(mB, 1f, onStarted: (_, __) => starts++);
+            var current = AudioKit.CrossFadeMusic(_b, 1f, onStarted: (_, __) => starts++);
             yield return new WaitForSecondsRealtime(.08f);
             Assert.Greater(current.Voice.Source.timeSamples, 0);
             AudioKit.Settings.IsMusicOn.Value = false;
@@ -304,7 +352,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(1, starts);
             AudioKit.Settings.IsMusicOn.Value = false;
             var pendingStarts = 0;
-            var pending = AudioKit.CrossFadeMusic(mC, 2f, onStarted: (_, lease) =>
+            var pending = AudioKit.CrossFadeMusic(_c, 2f, onStarted: (_, lease) =>
             {
                 pendingStarts++;
                 AssertVolume(lease, 1f);
@@ -328,10 +376,11 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.Settings.MusicVolume.Value = .8f;
             AudioKit.Settings.VoiceVolume.Value = .1f;
-            var old = AudioKit.PlayMusic(mA, volume: .5f);
-            var current = AudioKit.CrossFadeMusic(mB, .5f, Options(volume: .5f), curve: AudioCrossfadeCurve.Linear);
+            var old = AudioKit.PlayMusic(_a, volume: .5f);
+            var current = AudioKit.CrossFadeMusic(_b, .5f, Options(volume: .5f), curve: AudioCrossfadeCurve.Linear);
             AudioKit.Settings.IsMusicMuted.Value = true;
-            Assert.IsTrue(old.Voice.Source.mute); Assert.IsTrue(current.Voice.Source.mute);
+            Assert.IsTrue(old.Voice.Source.mute);
+            Assert.IsTrue(current.Voice.Source.mute);
             yield return WaitUntil(() => current.Voice.Source.volume > .1f, "Mute must not freeze the transition.");
             Assert.AreEqual(.4f, old.Voice.Source.volume + current.Voice.Source.volume, .01f);
             Assert.Greater(old.Voice.Source.timeSamples, 0);
@@ -344,7 +393,8 @@ namespace YLFramework.Tests.Audio
             AssertVolume(old, oldVolume * .5f);
             Assert.AreEqual(.2f, old.Voice.Source.volume + current.Voice.Source.volume, .01f);
             AudioKit.Settings.IsMusicMuted.Value = false;
-            Assert.IsFalse(old.Voice.Source.mute); Assert.IsFalse(current.Voice.Source.mute);
+            Assert.IsFalse(old.Voice.Source.mute);
+            Assert.IsFalse(current.Voice.Source.mute);
             yield return WaitUntil(() => !old.IsValid, "Muted transition must still retire its outgoing track.");
             AssertVolume(current, .2f);
         }
@@ -353,8 +403,8 @@ namespace YLFramework.Tests.Audio
         public IEnumerator NativeClipEndsBeforeTransitionSuppressOutgoingButNotifyIncomingExactlyOnce()
         {
             var outgoingFinishes = 0;
-            var old = AudioKit.PlayMusic(mShort, loop: false, onFinished: (_, __) => outgoingFinishes++);
-            var current = AudioKit.CrossFadeMusic(mB, .9f);
+            var old = AudioKit.PlayMusic(_short, loop: false, onFinished: (_, __) => outgoingFinishes++);
+            var current = AudioKit.CrossFadeMusic(_b, .9f);
             var host = AudioManager.Instance;
             host.enabled = false;
             try
@@ -366,20 +416,26 @@ namespace YLFramework.Tests.Audio
                 Assert.IsFalse(old.IsValid);
                 Assert.Less(current.Voice.Source.volume, 1f, "The old clip, not the transition clock, ended first.");
             }
-            finally { if (host) host.enabled = true; }
+            finally
+            {
+                if (host)
+                {
+                    host.enabled = true;
+                }
+            }
             Assert.AreEqual(0, outgoingFinishes);
             Assert.IsTrue(current.IsPlaying);
             yield return WaitUntil(() => current.Voice.Source.volume >= .99f, "Incoming must continue after native outgoing end.");
             AudioKit.StopMusic();
             var incomingFinishes = 0;
-            old = AudioKit.PlayMusic(mA);
+            old = AudioKit.PlayMusic(_a);
             AudioHandle observed = default;
-            var shortTarget = AudioKit.CrossFadeMusic(mShort, .9f, AudioSoundOptions.Defaults,
+            var shortTarget = AudioKit.CrossFadeMusic(_short, .9f, AudioSoundOptions.Defaults,
                 onFinished: (clip, lease) =>
                 {
                     incomingFinishes++;
                     observed = lease;
-                    Assert.AreSame(mShort, clip);
+                    Assert.AreSame(_short, clip);
                     Assert.IsTrue(lease.IsValid);
                     Assert.IsTrue(old.IsValid);
                     Assert.IsFalse(lease.Voice.Source.isPlaying);
@@ -400,15 +456,15 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator NativeNaturalCallbackRetargetCannotAdvanceTheNewEpochFromOldUpdateSnapshot()
         {
-            var old = AudioKit.PlayMusic(mA);
+            var old = AudioKit.PlayMusic(_a);
             var finishes = 0;
             AudioHandle nested = default;
-            var current = AudioKit.CrossFadeMusic(mShort, 2f, AudioSoundOptions.Defaults,
+            var current = AudioKit.CrossFadeMusic(_short, 2f, AudioSoundOptions.Defaults,
                 onFinished: (_, lease) =>
                 {
                     finishes++;
                     Assert.IsTrue(lease.IsValid);
-                    nested = AudioKit.CrossFadeMusic(mC, 1f);
+                    nested = AudioKit.CrossFadeMusic(_c, 1f);
                     AssertVolume(nested, 0f);
                 });
             Assert.IsTrue(current.IsPlaying);
@@ -431,19 +487,25 @@ namespace YLFramework.Tests.Audio
                 Assert.Greater(nested.Voice.Source.volume, 0f);
                 Assert.AreEqual(1, finishes);
             }
-            finally { if (host) host.enabled = true; }
+            finally
+            {
+                if (host)
+                {
+                    host.enabled = true;
+                }
+            }
         }
 
         [UnityTest]
         public IEnumerator StartedReentryThenThrowAndStopOrShutdownDoNotLeakNativeTailOrStopNewTarget()
         {
-            var old = AudioKit.PlayMusic(mA);
+            var old = AudioKit.PlayMusic(_a);
             AudioHandle nested = default;
             var exception = new InvalidOperationException("crossfade-native-reentry");
-            Assert.AreSame(exception, Assert.Throws<InvalidOperationException>(() => AudioKit.CrossFadeMusic(mB, .3f,
+            Assert.AreSame(exception, Assert.Throws<InvalidOperationException>(() => AudioKit.CrossFadeMusic(_b, .3f,
                 onStarted: (_, __) =>
                 {
-                    nested = AudioKit.CrossFadeMusic(mC, .2f);
+                    nested = AudioKit.CrossFadeMusic(_c, .2f);
                     throw exception;
                 })));
             Assert.IsFalse(old.IsValid);
@@ -451,22 +513,25 @@ namespace YLFramework.Tests.Audio
             AssertVolume(nested, 0f);
             yield return WaitUntil(() => nested.Voice.Source.volume >= .99f, "Newer epoch must survive the older callback exception.");
             Assert.IsTrue(nested.IsPlaying);
-            var stopped = AudioKit.CrossFadeMusic(mA, 1f, onStarted: (_, __) => AudioKit.StopMusic());
-            Assert.IsFalse(stopped.IsValid); Assert.IsFalse(nested.IsValid);
+            var stopped = AudioKit.CrossFadeMusic(_a, 1f, onStarted: (_, __) => AudioKit.StopMusic());
+            Assert.IsFalse(stopped.IsValid);
+            Assert.IsFalse(nested.IsValid);
             yield return null;
             foreach (var source in AudioManager.Instance.GetComponentsInChildren<AudioSource>(true))
             {
                 Assert.IsFalse(source.isPlaying);
                 Assert.IsNull(source.clip);
             }
-            old = AudioKit.PlayMusic(mA);
+            old = AudioKit.PlayMusic(_a);
             var oldSource = old.Voice.Source;
-            var closed = AudioKit.CrossFadeMusic(mB, 1f, onStarted: (_, __) => AudioKit.Shutdown());
-            Assert.IsFalse(old.IsValid); Assert.IsFalse(closed.IsValid);
+            var closed = AudioKit.CrossFadeMusic(_b, 1f, onStarted: (_, __) => AudioKit.Shutdown());
+            Assert.IsFalse(old.IsValid);
+            Assert.IsFalse(closed.IsValid);
             Assert.IsFalse(AudioManager.HasInstance);
             ConfigureSettings();
-            var fresh = AudioKit.PlayMusic(mC);
-            old.Stop(); closed.Stop();
+            var fresh = AudioKit.PlayMusic(_c);
+            old.Stop();
+            closed.Stop();
             yield return null;
             Assert.IsFalse(oldSource);
             Assert.IsTrue(fresh.IsPlaying);
@@ -479,11 +544,12 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.MusicVolume.Value = .8f;
             var automatic = Options(false);
             automatic.AutoFade = new AudioAutoFade(2f, 2f);
-            var old = AudioKit.PlayMusicWithOptions(mA, automatic);
+            var old = AudioKit.PlayMusicWithOptions(_a, automatic);
             Seek(old, 1f);
             AssertVolume(old, .4f);
-            automatic.Volume = 3f; automatic.Pitch = .5f;
-            var current = AudioKit.CrossFadeMusic(mB, 4f, automatic, (_, lease) =>
+            automatic.Volume = 3f;
+            automatic.Pitch = .5f;
+            var current = AudioKit.CrossFadeMusic(_b, 4f, automatic, (_, lease) =>
             {
                 AssertVolume(lease, 0f);
                 Assert.AreEqual(.5f, lease.Voice.Source.pitch);
@@ -508,7 +574,7 @@ namespace YLFramework.Tests.Audio
                 Assert.Greater(current.Voice.Source.timeSamples, samples);
                 current.Voice.TickFade(0f, 0f);
                 var source = current.Voice.Source;
-                var automaticGain = AudioAutoFade.Evaluate(source.timeSamples / (double)mB.frequency, 10d, 2d, 2d);
+                var automaticGain = AudioAutoFade.Evaluate(source.timeSamples / (double)_b.frequency, 10d, 2d, 2d);
                 AssertVolume(current, automaticGain * .25f);
                 Seek(current, 9f);
                 AssertVolume(current, .125f);
@@ -531,8 +597,8 @@ namespace YLFramework.Tests.Audio
                 current.Voice.TickFade(1f, 1f);
                 AssertVolume(current, 0f);
                 current.Stop();
-                old = AudioKit.PlayMusic(mA);
-                current = AudioKit.CrossFadeMusic(mC, 2f, curve: AudioCrossfadeCurve.Linear);
+                old = AudioKit.PlayMusic(_a);
+                current = AudioKit.CrossFadeMusic(_c, 2f, curve: AudioCrossfadeCurve.Linear);
                 current.FadeOut(.1f);
                 current.Voice.TickFade(.1f, .1f);
                 Assert.IsFalse(current.IsValid);
@@ -543,15 +609,21 @@ namespace YLFramework.Tests.Audio
                 Assert.IsFalse(old.IsValid);
                 Assert.IsFalse(AudioKit.Music.IsValid);
             }
-            finally { if (host) host.enabled = true; }
+            finally
+            {
+                if (host)
+                {
+                    host.enabled = true;
+                }
+            }
         }
 
         [UnityTest]
         public IEnumerator DefaultEqualPowerRealSourcesKeepUnitPowerNearMidpoint()
         {
-            var old = AudioKit.PlayMusic(mA);
+            var old = AudioKit.PlayMusic(_a);
             yield return new WaitForSecondsRealtime(.05f);
-            var incoming = AudioKit.CrossFadeMusic(mB, .6f);
+            var incoming = AudioKit.CrossFadeMusic(_b, .6f);
             yield return WaitUntil(() => incoming.Voice.Source.volume >= .35f, "Equal-power transition must advance.");
             Assert.IsTrue(old.IsValid);
             var oldVolume = old.Voice.Source.volume;
@@ -577,11 +649,14 @@ namespace YLFramework.Tests.Audio
                 var crossFadeOnPlay = typeof(AudioMusicPlayer).GetField("crossFadeOnPlay", BindingFlags.NonPublic | BindingFlags.Instance);
                 var crossFadeDuration = typeof(AudioMusicPlayer).GetField("crossFadeDuration", BindingFlags.NonPublic | BindingFlags.Instance);
                 var crossFadeCurve = typeof(AudioMusicPlayer).GetField("crossFadeCurve", BindingFlags.NonPublic | BindingFlags.Instance);
-                Assert.IsNotNull(clipField); Assert.IsNotNull(playOnAwake); Assert.IsNotNull(crossFadeOnPlay);
-                Assert.IsNotNull(crossFadeDuration); Assert.IsNotNull(crossFadeCurve);
+                Assert.IsNotNull(clipField);
+                Assert.IsNotNull(playOnAwake);
+                Assert.IsNotNull(crossFadeOnPlay);
+                Assert.IsNotNull(crossFadeDuration);
+                Assert.IsNotNull(crossFadeCurve);
                 Assert.AreEqual(AudioCrossfadeCurve.Linear, crossFadeCurve.GetValue(player),
                     "Runtime AddComponent preserves the legacy field initializer; Editor Reset selects EqualPower separately.");
-                clipField.SetValue(player, mA);
+                clipField.SetValue(player, _a);
                 playOnAwake.SetValue(player, false);
                 crossFadeOnPlay.SetValue(player, true);
                 crossFadeDuration.SetValue(player, .6f);
@@ -603,7 +678,10 @@ namespace YLFramework.Tests.Audio
                 player.Stop();
                 Assert.IsFalse(AudioKit.Music.IsValid);
             }
-            finally { Object.Destroy(root); }
+            finally
+            {
+                Object.Destroy(root);
+            }
         }
 
 #if UNITY_EDITOR
@@ -622,12 +700,14 @@ namespace YLFramework.Tests.Audio
                 AudioKit.Settings.MusicOutputGroup.Value = music;
                 AudioKit.Settings.VoiceOutputGroup.Value = voice;
                 AudioKit.Settings.MusicVolume.Value = .8f;
-                var old = AudioKit.PlayMusic(mA);
-                var options = Options(volume: .5f); options.OutputRoute = routes[route];
+                var old = AudioKit.PlayMusic(_a);
+                var options = Options(volume: .5f);
+                options.OutputRoute = routes[route];
                 var expectedGroup = route == 0 ? music : route == 1 ? ui : null;
-                var current = AudioKit.CrossFadeMusic(mB, 2f, options, curve: AudioCrossfadeCurve.Linear, onStarted: (_, lease) =>
+                var current = AudioKit.CrossFadeMusic(_b, 2f, options, curve: AudioCrossfadeCurve.Linear, onStarted: (_, lease) =>
                 {
-                    Assert.IsTrue(old.IsPlaying); Assert.IsTrue(lease.IsPlaying);
+                    Assert.IsTrue(old.IsPlaying);
+                    Assert.IsTrue(lease.IsPlaying);
                     Assert.AreSame(expectedGroup, lease.Voice.Source.outputAudioMixerGroup);
                     AssertVolume(lease, 0f);
                 });
@@ -635,11 +715,18 @@ namespace YLFramework.Tests.Audio
                 host.enabled = false;
                 try
                 {
-                    if (!firstSource) { firstSource = old.Voice.Source; secondSource = current.Voice.Source; }
+                    if (!firstSource)
+                    {
+                        firstSource = old.Voice.Source;
+                        secondSource = current.Voice.Source;
+                    }
                     TickTransition(host, .5f, .5f);
-                    AssertVolume(old, .6f); AssertVolume(current, .1f);
-                    var oldGeneration = old.Generation; var currentGeneration = current.Generation;
-                    var oldSamples = old.Voice.Source.timeSamples; var currentSamples = current.Voice.Source.timeSamples;
+                    AssertVolume(old, .6f);
+                    AssertVolume(current, .1f);
+                    var oldGeneration = old.Generation;
+                    var currentGeneration = current.Generation;
+                    var oldSamples = old.Voice.Source.timeSamples;
+                    var currentSamples = current.Voice.Source.timeSamples;
                     AudioKit.Settings.VoiceVolume.Value = .1f;
                     AudioKit.Settings.VoiceOutputGroup.Value = ui;
                     Assert.AreSame(music, old.Voice.Source.outputAudioMixerGroup);
@@ -647,11 +734,13 @@ namespace YLFramework.Tests.Audio
                     Assert.AreSame(ui, old.Voice.Source.outputAudioMixerGroup);
                     Assert.AreSame(route == 2 ? null : ui, current.Voice.Source.outputAudioMixerGroup);
                     AudioKit.Settings.MusicVolume.Value = .4f;
-                    AssertVolume(old, .3f); AssertVolume(current, .05f);
+                    AssertVolume(old, .3f);
+                    AssertVolume(current, .05f);
                     yield return new WaitForSecondsRealtime(.05f);
                     Assert.Greater(old.Voice.Source.timeSamples, oldSamples);
                     Assert.Greater(current.Voice.Source.timeSamples, currentSamples);
-                    Assert.AreEqual(oldGeneration, old.Generation); Assert.AreEqual(currentGeneration, current.Generation);
+                    Assert.AreEqual(oldGeneration, old.Generation);
+                    Assert.AreEqual(currentGeneration, current.Generation);
                     AudioKit.ClearMixerRouting();
                     Assert.IsNull(old.Voice.Source.outputAudioMixerGroup);
                     Assert.AreSame(route == 1 ? ui : null, current.Voice.Source.outputAudioMixerGroup);
@@ -659,9 +748,10 @@ namespace YLFramework.Tests.Audio
                     {
                         var previousTail = old;
                         old = current;
-                        current = AudioKit.CrossFadeMusic(i % 2 == 0 ? mC : mA, 1f, options, curve: AudioCrossfadeCurve.Linear);
+                        current = AudioKit.CrossFadeMusic(i % 2 == 0 ? _c : _a, 1f, options, curve: AudioCrossfadeCurve.Linear);
                         Assert.IsFalse(previousTail.IsValid);
-                        Assert.IsTrue(old.IsPlaying); Assert.IsTrue(current.IsPlaying);
+                        Assert.IsTrue(old.IsPlaying);
+                        Assert.IsTrue(current.IsPlaying);
                         Assert.AreEqual(current, AudioKit.Music);
                         Assert.AreEqual(2, host.GetComponentsInChildren<AudioSource>(true).Length);
                         Assert.IsTrue(ReferenceEquals(current.Voice.Source, firstSource) || ReferenceEquals(current.Voice.Source, secondSource));
@@ -677,7 +767,13 @@ namespace YLFramework.Tests.Audio
                         Assert.IsNull(source.outputAudioMixerGroup);
                     }
                 }
-                finally { if (host) host.enabled = true; }
+                finally
+                {
+                    if (host)
+                    {
+                        host.enabled = true;
+                    }
+                }
             }
         }
 #endif

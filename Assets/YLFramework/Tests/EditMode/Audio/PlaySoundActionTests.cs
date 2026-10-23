@@ -9,30 +9,37 @@ namespace YLFramework.Tests.Audio
 {
     public class PlaySoundActionTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private AudioTestSettings mSettings;
-        private AudioClip mClip;
+        private readonly List<IAction> _actions = new List<IAction>();
+        private AudioTestSettings _settings;
+        private AudioClip _clip;
 
         [SetUp]
         public void SetUp()
         {
-            mSettings = new AudioTestSettings();
-            mClip = AudioClip.Create("action", 44100, 1, 44100, false);
+            _settings = new AudioTestSettings();
+            _clip = AudioClip.Create("action", 44100, 1, 44100, false);
         }
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mActions) if (!action.Deinited) action.Deinit();
-            mActions.Clear();
-            mSettings.Dispose();
+            foreach (var action in _actions)
+            {
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
+            }
+
+            _actions.Clear();
+            _settings.Dispose();
             Kit.Shutdown();
-            UnityEngine.Object.DestroyImmediate(mClip);
+            UnityEngine.Object.DestroyImmediate(_clip);
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
@@ -46,12 +53,12 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void ClipAndInheritedAllocationUseTheRealActionContract()
         {
-            var byClip = Own(PlaySoundAction.Allocate(mClip));
+            var byClip = Own(PlaySoundAction.Allocate(_clip));
             var inherited = Own(PlaySoundAction.Allocate());
             Assert.That(byClip, Is.InstanceOf<AbstractAction<PlaySoundAction>>());
-            Assert.AreNotEqual(byClip.ActionID, inherited.ActionID);
+            Assert.AreNotEqual(byClip.ActionId, inherited.ActionId);
             Assert.AreEqual(ActionStatus.NotStart, inherited.Status);
-            Assert.IsFalse(inherited.Deinited);
+            Assert.IsFalse(inherited.IsDeinitialized);
             Assert.AreEqual(0, AudioKit.SoundCount, "Allocation alone must not play.");
         }
 
@@ -59,7 +66,7 @@ namespace YLFramework.Tests.Audio
         public void CancellationStopsOnlyItsPlaybackAndDoesNotNotifyCompletion()
         {
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(mClip, () => finishes++));
+            var action = Own(PlaySoundAction.Allocate(_clip, () => finishes++));
             Assert.IsFalse(action.Execute(0));
             var sound = OnlySound();
             sound.Pause();
@@ -76,7 +83,7 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.Settings.IsSoundOn.Value = !disabled;
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(disabled ? mClip : null, () => finishes++));
+            var action = Own(PlaySoundAction.Allocate(disabled ? _clip : null, () => finishes++));
             Assert.IsTrue(action.Execute(0));
             Assert.IsTrue(action.Execute(0));
             Assert.AreEqual(1, finishes);
@@ -88,10 +95,10 @@ namespace YLFramework.Tests.Audio
         public void DeduplicationRejectionEndsWaiting()
         {
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.IgnoreSameSoundInSoundFrames;
-            var existing = AudioKit.PlaySound(mClip);
+            var existing = AudioKit.PlaySound(_clip);
             existing.Pause();
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(mClip, () => finishes++));
+            var action = Own(PlaySoundAction.Allocate(_clip, () => finishes++));
             Assert.IsTrue(action.Execute(0));
             Assert.AreEqual(1, finishes);
             action.Deinit();
@@ -102,7 +109,7 @@ namespace YLFramework.Tests.Audio
         public void ResetStopsOldHandleRetainsClipAndDoesNotNotifyCancellation()
         {
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(mClip, () => finishes++));
+            var action = Own(PlaySoundAction.Allocate(_clip, () => finishes++));
             action.Execute(0);
             var old = OnlySound();
             old.Pause();
@@ -112,7 +119,7 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(action.Execute(0));
             var current = OnlySound();
             current.Pause();
-            Assert.AreSame(mClip, current.Voice.Source.clip);
+            Assert.AreSame(_clip, current.Voice.Source.clip);
             Assert.AreSame(old.Voice, current.Voice);
             Assert.AreNotEqual(old.Generation, current.Generation);
             old.Stop();
@@ -127,7 +134,7 @@ namespace YLFramework.Tests.Audio
         public void ExternalStopCompletesActionWithoutNaturalAudioCallback()
         {
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(mClip, () => finishes++));
+            var action = Own(PlaySoundAction.Allocate(_clip, () => finishes++));
             action.Execute(0);
             OnlySound().Stop();
             Assert.IsTrue(action.Execute(0));
@@ -139,15 +146,19 @@ namespace YLFramework.Tests.Audio
         [TestCase(true)]
         public void OldActionCannotWaitForOrStopNewGeneration(bool cancel)
         {
-            var action = Own(PlaySoundAction.Allocate(mClip));
+            var action = Own(PlaySoundAction.Allocate(_clip));
             action.Execute(0);
             var old = OnlySound();
             old.Stop();
-            var current = AudioKit.PlaySound(mClip);
+            var current = AudioKit.PlaySound(_clip);
             current.Pause();
             Assert.AreSame(old.Voice, current.Voice, "Exercise actual pool reuse.");
             Assert.AreNotEqual(old.Generation, current.Generation);
-            if (!cancel) Assert.IsTrue(action.Execute(0));
+            if (!cancel)
+            {
+                Assert.IsTrue(action.Execute(0));
+            }
+
             action.Deinit();
             Assert.IsTrue(current.IsValid);
             Assert.IsTrue(current.IsPaused);
@@ -158,10 +169,10 @@ namespace YLFramework.Tests.Audio
         {
             var next = default(AudioHandle);
             var finishes = 0;
-            var action = Own(PlaySoundAction.Allocate(mClip, () =>
+            var action = Own(PlaySoundAction.Allocate(_clip, () =>
             {
                 finishes++;
-                next = AudioKit.PlaySound(mClip);
+                next = AudioKit.PlaySound(_clip);
                 next.Pause();
             }));
             action.Execute(0);
@@ -189,10 +200,14 @@ namespace YLFramework.Tests.Audio
         {
             var finishes = 0;
             PlaySoundAction action = null;
-            action = Own(PlaySoundAction.Allocate(mClip, () =>
+            action = Own(PlaySoundAction.Allocate(_clip, () =>
             {
                 finishes++;
-                if (finishes != 1) return;
+                if (finishes != 1)
+                {
+                    return;
+                }
+
                 action.Reset();
                 Assert.IsFalse(action.Execute(0));
                 OnlySound().Pause();
@@ -211,9 +226,9 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void PausingActionDoesNotPauseItsSound()
         {
-            var action = Own(PlaySoundAction.Allocate(mClip));
+            var action = Own(PlaySoundAction.Allocate(_clip));
             action.Execute(0);
-            action.Paused = true;
+            action.IsPaused = true;
             Assert.IsFalse(OnlySound().IsPaused);
             Assert.IsFalse(action.Execute(1));
             OnlySound().Pause();

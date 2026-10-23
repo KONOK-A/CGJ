@@ -5,9 +5,9 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using YLFramework.Core.Tests;
 using YLFramework.Editor.Resource;
 using YLFramework.Services.Resource;
-using YLFramework.Core.Tests;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Core.Editor.Tests
@@ -18,7 +18,9 @@ namespace YLFramework.Core.Editor.Tests
         {
             Require(!EditorApplication.isPlayingOrWillChangePlaymode, "Create fixtures in Edit Mode only.");
             for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
                 Require(!SceneManager.GetSceneAt(i).isDirty, "Refusing to touch fixtures while any open scene is dirty.");
+            }
 
             string root = YLCoreSmokeModule.FixtureRoot;
             string projectPath = root + "/ResourceProject.asset";
@@ -26,7 +28,7 @@ namespace YLFramework.Core.Editor.Tests
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 var candidate = AssetDatabase.LoadAssetAtPath<ResourceProject>(path);
-                Require(candidate.ProjectId != YLCoreSmokeModule.Project || path == projectPath,
+                Require(candidate.projectId != YLCoreSmokeModule.Project || path == projectPath,
                     "Fixture project name is already owned by " + path);
             }
 
@@ -65,9 +67,9 @@ namespace YLFramework.Core.Editor.Tests
                 Require(!File.Exists(projectPath) && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(projectPath)),
                     "Existing project asset has an unexpected type.");
                 project = ScriptableObject.CreateInstance<ResourceProject>();
-                project.ProjectId = YLCoreSmokeModule.Project;
-                project.DisplayName = "Core Resource Fixture";
-                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(root) });
+                project.projectId = YLCoreSmokeModule.Project;
+                project.displayName = "Core Resource Fixture";
+                project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(root) });
                 AssetDatabase.CreateAsset(project, projectPath);
                 AddBundle(project, "views", viewPath);
                 AddBundle(project, "panels", panelPath);
@@ -77,10 +79,10 @@ namespace YLFramework.Core.Editor.Tests
                 AssetDatabase.SaveAssetIfDirty(project);
             }
 
-            Require(project.ProjectId == YLCoreSmokeModule.Project && project.SourceDirectories != null && project.SourceDirectories.Count == 1 &&
-                project.SourceDirectories.Any(x => x != null && x.Guid == AssetDatabase.AssetPathToGUID(root) && x.AddressPrefix == ""),
+            Require(project.projectId == YLCoreSmokeModule.Project && project.sourceDirectories != null && project.sourceDirectories.Count == 1 &&
+                project.sourceDirectories.Any(x => x != null && x.guid == AssetDatabase.AssetPathToGUID(root) && x.addressPrefix == ""),
                 "Existing project identity does not match; it was not overwritten.");
-            Require(project.Groups != null && project.Groups.Count == 4, "Unexpected fixture groups.");
+            Require(project.groups != null && project.groups.Count == 4, "Unexpected fixture groups.");
             ValidateBundle(project, "views", viewPath);
             ValidateBundle(project, "panels", panelPath);
             ValidateBundle(project, "text", new[] { tablePath }.Concat(failureTables.Select(name => root + "/" + name + ".json")).ToArray());
@@ -97,14 +99,21 @@ namespace YLFramework.Core.Editor.Tests
 
         private static void AddBundle(ResourceProject project, string name, params string[] paths)
         {
-            project.Groups.Add(new ResourceGroup { Id = name, Selections = paths.Select(path => new ResourceSelection
-                { Guid = AssetDatabase.AssetPathToGUID(path), Address = Path.GetFileNameWithoutExtension(path) }).ToList() });
+            project.groups.Add(new ResourceGroup
+            {
+                id = name,
+                selections = paths.Select(path => new ResourceSelection
+                {
+                    guid = AssetDatabase.AssetPathToGUID(path),
+                    address = Path.GetFileNameWithoutExtension(path)
+                }).ToList()
+            });
         }
 
         private static void ValidateBundle(ResourceProject project, string name, params string[] paths)
         {
-            var groups = project.Groups.Where(group => group.Id == name).ToArray();
-            Require(groups.Length == 1 && groups[0].Selections.Select(x => AssetDatabase.GUIDToAssetPath(x.Guid))
+            var groups = project.groups.Where(group => group.id == name).ToArray();
+            Require(groups.Length == 1 && groups[0].selections.Select(x => AssetDatabase.GUIDToAssetPath(x.guid))
                 .OrderBy(x => x).SequenceEqual(paths.OrderBy(x => x)), "Unexpected fixture group " + name);
         }
 
@@ -127,14 +136,21 @@ namespace YLFramework.Core.Editor.Tests
                 }
                 finally
                 {
-                    if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
+                    if (previous.IsValid() && previous.isLoaded)
+                    {
+                        SceneManager.SetActiveScene(previous);
+                    }
+
                     EditorSceneManager.CloseScene(temporary, true);
                 }
             }
             Require(prefab.name == typeof(T).Name && prefab.activeSelf && prefab.GetComponent<T>() && prefab.transform.childCount == 0,
                 "Existing fixture prefab root does not match: " + path);
             Require(!prefab.GetComponent<Canvas>(), "Fixture prefab must not contain a Canvas: " + path);
-            if (panel) Require(prefab.GetComponent<RectTransform>(), "Panel root must be a RectTransform.");
+            if (panel)
+            {
+                Require(prefab.GetComponent<RectTransform>(), "Panel root must be a RectTransform.");
+            }
         }
 
         private static void CreateOrValidateScene(string path, bool entry)
@@ -142,7 +158,10 @@ namespace YLFramework.Core.Editor.Tests
             Scene previous = SceneManager.GetActiveScene();
             Scene temporary = default;
             for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
                 Require(SceneManager.GetSceneAt(i).path != path, "Close the fixture scene before validating it: " + path);
+            }
+
             try
             {
                 if (File.Exists(path))
@@ -155,7 +174,11 @@ namespace YLFramework.Core.Editor.Tests
                     Require(string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)), "Unresolved existing scene asset.");
                     temporary = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
                     SceneManager.SetActiveScene(temporary);
-                    if (entry) new GameObject(nameof(YLCoreSmokeSceneEntry)).AddComponent<YLCoreSmokeSceneEntry>();
+                    if (entry)
+                    {
+                        new GameObject(nameof(YLCoreSmokeSceneEntry)).AddComponent<YLCoreSmokeSceneEntry>();
+                    }
+
                     Require(EditorSceneManager.SaveScene(temporary, path), "Could not save fixture scene.");
                 }
                 var roots = temporary.GetRootGameObjects();
@@ -165,14 +188,25 @@ namespace YLFramework.Core.Editor.Tests
             }
             finally
             {
-                if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
-                if (temporary.IsValid() && temporary.isLoaded) EditorSceneManager.CloseScene(temporary, true);
+                if (previous.IsValid() && previous.isLoaded)
+                {
+                    SceneManager.SetActiveScene(previous);
+                }
+
+                if (temporary.IsValid() && temporary.isLoaded)
+                {
+                    EditorSceneManager.CloseScene(temporary, true);
+                }
             }
         }
 
         private static void EnsureFolder(string path)
         {
-            if (AssetDatabase.IsValidFolder(path)) return;
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                return;
+            }
+
             string parent = Path.GetDirectoryName(path).Replace('\\', '/');
             Require(path.StartsWith(YLCoreSmokeModule.FixtureRoot, StringComparison.Ordinal) ||
                 YLCoreSmokeModule.FixtureRoot.StartsWith(path + "/", StringComparison.Ordinal), "Folder outside fixture ancestry.");
@@ -182,7 +216,10 @@ namespace YLFramework.Core.Editor.Tests
 
         private static void Require(bool condition, string message)
         {
-            if (!condition) throw new InvalidOperationException(message);
+            if (!condition)
+            {
+                throw new InvalidOperationException(message);
+            }
         }
     }
 }

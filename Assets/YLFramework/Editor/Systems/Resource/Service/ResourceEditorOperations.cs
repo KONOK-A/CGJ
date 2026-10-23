@@ -1,10 +1,10 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Threading;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Services.Resource;
@@ -12,56 +12,145 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource
 {
-    public enum ResourcePreflightState { StaticBlocked, StaticReady, AtlasPreparationRequired, Complete, Failed }
+    public enum ResourcePreflightState
+    {
+        StaticBlocked,
+        StaticReady,
+        AtlasPreparationRequired,
+        Complete,
+        Failed
+    }
 
     /// <summary>同一正式预检流的只读结论；StaticReady不是完整输入、密钥或制品验证。</summary>
     public sealed class ResourcePreflightResult
     {
-        public ResourcePreflightState State { get; }
-        public string Summary { get; }
-        public Exception Error { get; }
-        public string ProjectGuid { get; }
-        public string ProjectId { get; }
-        public string Platform { get; }
-        public string AppContentCompatibilityId { get; }
+        public ResourcePreflightState State
+        {
+            get;
+        }
+        public string Summary
+        {
+            get;
+        }
+        public Exception Error
+        {
+            get;
+        }
+        public string ProjectGuid
+        {
+            get;
+        }
+        public string ProjectId
+        {
+            get;
+        }
+        public string Platform
+        {
+            get;
+        }
+        public string AppContentCompatibilityId
+        {
+            get;
+        }
         internal ResourcePreflightResult(ResourcePreflightState state, string summary, Exception error,
             ResourceProject project, BuildTarget target, string app)
         {
-            State = state; Summary = summary; Error = error; Platform = target.ToString(); AppContentCompatibilityId = app;
+            State = state;
+            Summary = summary;
+            Error = error;
+            Platform = target.ToString();
+            AppContentCompatibilityId = app;
             ProjectGuid = project ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : null;
-            ProjectId = project ? project.ProjectId : null;
+            ProjectId = project ? project.projectId : null;
         }
     }
 
     /// <summary>构建、发布和生成的独立结果；失败首因不会被后续生成或 UI 操作覆盖。</summary>
     public sealed class ResourceEditorBuildReport
     {
-        public string ProjectGuid { get; internal set; }
-        public string ProjectId { get; internal set; }
-        public string Platform { get; internal set; }
-        public string AppContentCompatibilityId { get; internal set; }
-        public string Operation { get; internal set; }
-        public bool ForceRebuild { get; internal set; }
-        public string ReferenceDirectory { get; internal set; }
-        public ResourceBuildInvocation Invocation { get; internal set; }
-        public ResourceBuildResult Build { get; internal set; }
-        public ResourceRelease Release { get; internal set; }
-        public Exception BuildError { get; internal set; }
-        public Exception PublicationError { get; internal set; }
-        public Exception GenerationError { get; internal set; }
-        public bool GenerationRequested { get; internal set; }
-        public bool GenerationChanged { get; internal set; }
+        public string ProjectGuid
+        {
+            get; internal set;
+        }
+        public string ProjectId
+        {
+            get; internal set;
+        }
+        public string Platform
+        {
+            get; internal set;
+        }
+        public string AppContentCompatibilityId
+        {
+            get; internal set;
+        }
+        public string Operation
+        {
+            get; internal set;
+        }
+        public bool ForceRebuild
+        {
+            get; internal set;
+        }
+        public string ReferenceDirectory
+        {
+            get; internal set;
+        }
+        public ResourceBuildInvocation Invocation
+        {
+            get; internal set;
+        }
+        public ResourceBuildResult Build
+        {
+            get; internal set;
+        }
+        public ResourceRelease Release
+        {
+            get; internal set;
+        }
+        public Exception BuildError
+        {
+            get; internal set;
+        }
+        public Exception PublicationError
+        {
+            get; internal set;
+        }
+        public Exception GenerationError
+        {
+            get; internal set;
+        }
+        public bool IsGenerationRequested
+        {
+            get; internal set;
+        }
+        public bool HasGenerationChanged
+        {
+            get; internal set;
+        }
         public DateTime StartedAtUtc { get; } = DateTime.UtcNow;
-        public double ElapsedMilliseconds { get; internal set; }
-        public double? PreflightMilliseconds { get; internal set; }
-        public double? PublicationMilliseconds { get; internal set; }
-        public double? GenerationMilliseconds { get; internal set; }
+        public double ElapsedMilliseconds
+        {
+            get; internal set;
+        }
+        public double? PreflightMilliseconds
+        {
+            get; internal set;
+        }
+        public double? PublicationMilliseconds
+        {
+            get; internal set;
+        }
+        public double? GenerationMilliseconds
+        {
+            get; internal set;
+        }
         public IReadOnlyList<string> GeneratedProjects { get; internal set; } = Array.Empty<string>();
         public string Summary => (Invocation == null ? "" : Invocation + "\n") + (Build == null ? "构建未完成：" + BuildError?.Message : "构建成功：" + Build.WorkspacePath) + "\n" +
             (Release != null ? "发布成功：" + Release.DirectoryPath + "\nCatalogDigest=" + Release.Catalog.CatalogDigest :
                 PublicationError != null ? "发布未确认：" + PublicationError.Message + "；如涉及提交点后的 IO，请显式恢复确认。" : "发布未执行。") + "\n" +
             (GenerationError != null ? "常量生成失败（资源版本不回滚）：" + GenerationError.Message :
-                GenerationRequested && Release != null ? "常量集合=" + string.Join(", ", GeneratedProjects) + "；" + (GenerationChanged ? "源码已更新，Unity 编译结果独立确认。" : "源码未变化。") : "常量生成未执行。");
+                IsGenerationRequested && Release != null ? "常量集合=" + string.Join(", ", GeneratedProjects) + "；" + (HasGenerationChanged ? "源码已更新，Unity 编译结果独立确认。" : "源码未变化。") : "常量生成未执行。");
     }
 
     /// <summary>工作台/自动化共用编排，只调用正式 Builder/Publisher/常量生成器，不读取旧全局 Importer 标记。</summary>
@@ -71,24 +160,35 @@ namespace YLFramework.Editor.Resource
         public static ResourceBuildInvocation ResolveRecipe(ResourceBuildRecipe recipe)
         {
             RequireRecipe(recipe);
-            RequireEditableProject(recipe.Project);
-            ResourceAddress.ValidateId(recipe.Project.ProjectId, nameof(recipe.Project.ProjectId));
-            _ = new ResourceAddress(recipe.AppContentCompatibilityId, "compatibility");
-            if (recipe.AppContentCompatibilityId.Length > 128 || !Enum.IsDefined(typeof(BuildTarget), recipe.Target) ||
-                !Enum.IsDefined(typeof(ResourceBuildAction), recipe.Action)) throw new ArgumentException("Invalid recipe target, action or compatibility id.");
-            if (recipe.GenerateReferences && recipe.Action != ResourceBuildAction.BuildAndPublish)
+            RequireEditableProject(recipe.project);
+            ResourceAddress.ValidateId(recipe.project.projectId, nameof(recipe.project.projectId));
+            _ = new ResourceAddress(recipe.appContentCompatibilityId, "compatibility");
+            if (recipe.appContentCompatibilityId.Length > 128 || !Enum.IsDefined(typeof(BuildTarget), recipe.target) ||
+                !Enum.IsDefined(typeof(ResourceBuildAction), recipe.action))
+            {
+                throw new ArgumentException("Invalid recipe target, action or compatibility id.");
+            }
+
+            if (recipe.generateReferences && recipe.action != ResourceBuildAction.BuildAndPublish)
+            {
                 throw new ArgumentException("BuildOnly cannot request publication or reference generation.");
-            if (recipe.GenerateReferences && (string.IsNullOrEmpty(recipe.ReferenceDirectory) ||
-                !recipe.ReferenceDirectory.StartsWith("Assets/", StringComparison.Ordinal) || recipe.ReferenceDirectory.Contains('\\') ||
-                recipe.ReferenceDirectory.Split('/').Any(x => x.Length == 0 || x == "." || x == "..")))
+            }
+
+            if (recipe.generateReferences && (string.IsNullOrEmpty(recipe.referenceDirectory) ||
+                !recipe.referenceDirectory.StartsWith("Assets/", StringComparison.Ordinal) || recipe.referenceDirectory.Contains('\\') ||
+                recipe.referenceDirectory.Split('/').Any(x => x.Length == 0 || x == "." || x == "..")))
+            {
                 throw new ArgumentException("ReferenceDirectory must be an explicit Assets-relative directory.");
+            }
+
             return new ResourceBuildInvocation(recipe);
         }
 
         /// <summary>只保存所选配方，不保存 Project、场景或其他资产。</summary>
         public static void SaveRecipe(ResourceBuildRecipe recipe)
         {
-            RequireRecipe(recipe); AssetDatabase.SaveAssetIfDirty(recipe);
+            RequireRecipe(recipe);
+            AssetDatabase.SaveAssetIfDirty(recipe);
         }
 
         /// <summary>主线程无窗口入口；冻结执行选项并调用原服务，错误仍按构建/发布/生成分阶段返回。</summary>
@@ -104,27 +204,41 @@ namespace YLFramework.Editor.Resource
             }
             catch (Exception error)
             {
-                var knownProject = recipe ? recipe.Project : null;
-                return Finish(new ResourceEditorBuildReport { BuildError = error, Operation = "ExecuteRecipe",
+                var knownProject = recipe ? recipe.project : null;
+                return Finish(new ResourceEditorBuildReport
+                {
+                    BuildError = error,
+                    Operation = "ExecuteRecipe",
                     ProjectGuid = knownProject ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(knownProject)) : null,
-                    ProjectId = knownProject ? knownProject.ProjectId : null, Platform = recipe ? recipe.Target.ToString() : null,
-                    AppContentCompatibilityId = recipe ? recipe.AppContentCompatibilityId : null, ForceRebuild = recipe && recipe.ForceRebuild,
-                    GenerationRequested = recipe && recipe.GenerateReferences, ReferenceDirectory = recipe ? recipe.ReferenceDirectory : null });
+                    ProjectId = knownProject ? knownProject.projectId : null,
+                    Platform = recipe ? recipe.target.ToString() : null,
+                    AppContentCompatibilityId = recipe ? recipe.appContentCompatibilityId : null,
+                    ForceRebuild = recipe && recipe.forceRebuild,
+                    IsGenerationRequested = recipe && recipe.generateReferences,
+                    ReferenceDirectory = recipe ? recipe.referenceDirectory : null
+                });
             }
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(input.ProjectGuid));
             var report = BuildOnlyForTarget(project, input.Target, input.AppContentCompatibilityId, input.ForceRebuild,
                 cancellation, provider, input);
             report.Invocation = input;
-            report.GenerationRequested = input.GenerateReferences;
+            report.IsGenerationRequested = input.GenerateReferences;
             if (report.Build != null && input.Action == ResourceBuildAction.BuildAndPublish)
+            {
                 PublishReport(report, input.AppContentCompatibilityId, input.GenerateReferences, input.ReferenceDirectory, cancellation, provider);
+            }
+
             return Finish(report);
         }
 
         private static ResourceBuildInvocation ResolveSavedRecipe(ResourceBuildRecipe recipe)
         {
             var input = ResolveRecipe(recipe);
-            if (EditorUtility.IsDirty(recipe)) throw new InvalidOperationException("请先显式保存 ResourceBuildRecipe，再执行。");
+            if (EditorUtility.IsDirty(recipe))
+            {
+                throw new InvalidOperationException("请先显式保存 ResourceBuildRecipe，再执行。");
+            }
+
             return input;
         }
 
@@ -132,7 +246,10 @@ namespace YLFramework.Editor.Resource
         {
             var path = recipe ? AssetDatabase.GetAssetPath(recipe) : "";
             if (!path.StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsOpenForEdit(recipe))
+            {
                 throw new InvalidOperationException("需要明确保存于 Assets 的可编辑 ResourceBuildRecipe。");
+            }
+
             ResourceBuildOperation.ValidateAssetPath(path);
             ResourceBuildOperation.RejectLinks(path + ".meta");
         }
@@ -148,17 +265,22 @@ namespace YLFramework.Editor.Resource
         public static void SetSourceDirectories(ResourceProject project, IEnumerable<ResourceSourceDirectory> directories)
         {
             RequireEditableProject(project);
-            var values = directories?.Select(x => new ResourceSourceDirectory { Guid = x?.Guid, AddressPrefix = x?.AddressPrefix ?? "" }).ToArray()
+            var values = directories?.Select(x => new ResourceSourceDirectory { guid = x?.guid, addressPrefix = x?.addressPrefix ?? "" }).ToArray()
                 ?? throw new ArgumentNullException(nameof(directories));
-            if (values.Length > 256) throw new ArgumentException("资源目录不能超过256个。", nameof(directories));
+            if (values.Length > 256)
+            {
+                throw new ArgumentException("资源目录不能超过256个。", nameof(directories));
+            }
+
             BeginEdit("修改资源目录");
             using var serialized = new SerializedObject(project);
-            var entries = serialized.FindProperty("SourceDirectories"); entries.arraySize = values.Length;
+            var entries = serialized.FindProperty("sourceDirectories");
+            entries.arraySize = values.Length;
             for (var index = 0; index < values.Length; index++)
             {
                 var entry = entries.GetArrayElementAtIndex(index);
-                entry.FindPropertyRelative("Guid").stringValue = values[index].Guid ?? "";
-                entry.FindPropertyRelative("AddressPrefix").stringValue = values[index].AddressPrefix;
+                entry.FindPropertyRelative("guid").stringValue = values[index].guid ?? "";
+                entry.FindPropertyRelative("addressPrefix").stringValue = values[index].addressPrefix;
             }
             serialized.ApplyModifiedProperties();
         }
@@ -175,7 +297,11 @@ namespace YLFramework.Editor.Resource
             var atlases = map.Assets.Where(value => value.AssetType == typeof(UnityEngine.U2D.SpriteAtlas))
                 .Where(value => !generated.Contains(value.Guid))
                 .Select(value => AssetDatabase.LoadAssetAtPath<UnityEngine.U2D.SpriteAtlas>(value.SourcePath)).ToArray();
-            if (atlases.Length != 0) UnityEditor.U2D.SpriteAtlasUtility.PackAtlases(atlases, EditorUserBuildSettings.activeBuildTarget, false);
+            if (atlases.Length != 0)
+            {
+                UnityEditor.U2D.SpriteAtlasUtility.PackAtlases(atlases, EditorUserBuildSettings.activeBuildTarget, false);
+            }
+
             return atlases.Length + generated.Count;
         }
 
@@ -185,12 +311,29 @@ namespace YLFramework.Editor.Resource
             if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.Ordinal) || path.Contains('\\') ||
                 path.Split('/').Any(x => x.Length == 0 || x == "." || x == "..") || Path.GetExtension(path) != ".asset" ||
                 !AssetDatabase.IsValidFolder(Path.GetDirectoryName(path)?.Replace('\\', '/')))
+            {
                 throw new InvalidOperationException("ResourceProject 只能创建于 Assets 的明确真实文件夹。");
-            ResourceBuildOperation.ValidateAssetPath(path); ResourceBuildOperation.RejectLinks(path + ".meta");
-            if (File.Exists(path) || Directory.Exists(path) || File.Exists(path + ".meta")) throw new InvalidOperationException("目标身份已占用，拒绝覆盖：" + path);
-            var asset = ScriptableObject.CreateInstance<ResourceProject>(); asset.ProjectId = "resource-" + Guid.NewGuid().ToString("N");
-            try { AssetDatabase.CreateAsset(asset, path); return asset; }
-            catch { Object.DestroyImmediate(asset); throw; }
+            }
+
+            ResourceBuildOperation.ValidateAssetPath(path);
+            ResourceBuildOperation.RejectLinks(path + ".meta");
+            if (File.Exists(path) || Directory.Exists(path) || File.Exists(path + ".meta"))
+            {
+                throw new InvalidOperationException("目标身份已占用，拒绝覆盖：" + path);
+            }
+
+            var asset = ScriptableObject.CreateInstance<ResourceProject>();
+            asset.projectId = "resource-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                AssetDatabase.CreateAsset(asset, path);
+                return asset;
+            }
+            catch
+            {
+                Object.DestroyImmediate(asset);
+                throw;
+            }
         }
 
         /// <summary>只读预检，包含源定义、已活动平台、Workspace/发布归属及已发布制品完整性；不保存场景或创建目录。</summary>
@@ -200,7 +343,11 @@ namespace YLFramework.Editor.Resource
         private static string PreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId, IResourceContentKeyProvider provider)
         {
             var result = InspectPreflightForTarget(project, target, appContentCompatibilityId, provider, true);
-            if (result.Error != null) ExceptionDispatchInfo.Capture(result.Error).Throw();
+            if (result.Error != null)
+            {
+                ExceptionDispatchInfo.Capture(result.Error).Throw();
+            }
+
             return result.Summary;
         }
 
@@ -216,19 +363,28 @@ namespace YLFramework.Editor.Resource
             try
             {
                 var input = ResolveSavedRecipe(recipe);
-                return InspectPreflightForTarget(recipe.Project, input.Target, input.AppContentCompatibilityId, provider, full);
+                return InspectPreflightForTarget(recipe.project, input.Target, input.AppContentCompatibilityId, provider, full);
             }
-            catch (Exception error) { return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
-                error.Message, error, recipe ? recipe.Project : null, recipe ? recipe.Target : EditorUserBuildSettings.activeBuildTarget,
-                recipe ? recipe.AppContentCompatibilityId : null); }
+            catch (Exception error)
+            {
+                return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
+                error.Message, error, recipe ? recipe.project : null, recipe ? recipe.target : EditorUserBuildSettings.activeBuildTarget,
+                recipe ? recipe.appContentCompatibilityId : null);
+            }
         }
 
         private static ResourcePreflightResult InspectPreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             IResourceContentKeyProvider provider, bool full)
         {
-            try { return PreflightCore(project, target, appContentCompatibilityId, provider, full); }
-            catch (Exception error) { return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
-                error.Message, error, project, target, appContentCompatibilityId); }
+            try
+            {
+                return PreflightCore(project, target, appContentCompatibilityId, provider, full);
+            }
+            catch (Exception error)
+            {
+                return new ResourcePreflightResult(full ? ResourcePreflightState.Failed : ResourcePreflightState.StaticBlocked,
+                error.Message, error, project, target, appContentCompatibilityId);
+            }
         }
 
         private static ResourcePreflightResult PreflightCore(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
@@ -237,38 +393,59 @@ namespace YLFramework.Editor.Resource
             ResourceBundleBuilder.ValidateEditor(target);
             ResourceBundleBuilder.RejectLoadedBundles();
             RequireEditableProject(project);
-            if (EditorUtility.IsDirty(project)) throw new InvalidOperationException("请先显式保存 ResourceProject 定义，再执行构建预检。");
-            _ = new ResourceAddress(appContentCompatibilityId, "compatibility");
-            if (appContentCompatibilityId.Length > 128) throw new ArgumentException("AppContentCompatibilityId exceeds its schema bound.");
-            ResourceBundleBuilder.ValidateContentPolicy(project.ContentEncryption, project.ContentKeyId, target.ToString());
-            var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
-            if (full && project.ContentEncryption != ResourceContentEncryption.None)
+            if (EditorUtility.IsDirty(project))
             {
-                var copy = ResourceBundleBuilder.CopyContentKey(ContentProvider(project.ContentEncryption, project.ProjectId, project.ContentKeyId, provider), project.ProjectId, project.ContentKeyId);
+                throw new InvalidOperationException("请先显式保存 ResourceProject 定义，再执行构建预检。");
+            }
+
+            _ = new ResourceAddress(appContentCompatibilityId, "compatibility");
+            if (appContentCompatibilityId.Length > 128)
+            {
+                throw new ArgumentException("AppContentCompatibilityId exceeds its schema bound.");
+            }
+
+            ResourceBundleBuilder.ValidateContentPolicy(project.contentEncryption, project.contentKeyId, target.ToString());
+            var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
+            if (full && project.contentEncryption != ResourceContentEncryption.None)
+            {
+                var copy = ResourceBundleBuilder.CopyContentKey(ContentProvider(project.contentEncryption, project.projectId, project.contentKeyId, provider), project.projectId, project.contentKeyId);
                 Array.Clear(copy, 0, copy.Length);
                 if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                {
                     throw new InvalidOperationException("资源目录或生成配置在密钥检查期间发生变化。本次操作已停止，请检查并重新执行；已保存的配置修改未被撤销。");
+                }
             }
             if (ResourceAtlasGenerator.IsConfigured(project))
             {
-                if (EditorUtility.IsDirty(project.AutomaticAtlases)) throw new InvalidOperationException("请先保存自动图集规则，再预检。 ");
+                if (EditorUtility.IsDirty(project.automaticAtlases))
+                {
+                    throw new InvalidOperationException("请先保存自动图集规则，再预检。 ");
+                }
+
                 if (full)
                 {
                     var atlasPlan = ResourceAtlasGenerator.Preview(project);
-                    if (atlasPlan.NeedsGeneration) return new ResourcePreflightResult(ResourcePreflightState.AtlasPreparationRequired,
+                    if (atlasPlan.NeedsGeneration)
+                    {
+                        return new ResourcePreflightResult(ResourcePreflightState.AtlasPreparationRequired,
                         "自动图集需要生成/更新；此预检未写入，尚未进行最终依赖/Workspace 检查。\n" + atlasPlan +
                         "\n正式 Build 会先执行生成与准备，再冻结输入并进行完整依赖分析；生成失败不会继续构建。", null, project, target, appContentCompatibilityId);
+                    }
                 }
             }
-            if (!full) return new ResourcePreflightResult(ResourcePreflightState.StaticReady,
+            if (!full)
+            {
+                return new ResourcePreflightResult(ResourcePreflightState.StaticReady,
                 "配置基础检查通过，尚未检查资源依赖、图集或构建输出，也未读取密钥。正式执行时会继续检查当前输入。", null, project, target, appContentCompatibilityId);
+            }
+
             var map = ResourceBuildMap.Create(project);
             _ = ResourceBundleBuilder.DescribeSubAssets(map);
             var workspace = ResourceBundleBuilder.PreflightWorkspace(project, target);
             var root = ResourcePublisher.Preflight(project, target);
             var summary = "ProjectId=" + map.ProjectId + " / GUID=" + map.ProjectGuid + "\n" +
                 "平台=" + target + " / Unity=" + Application.unityVersion + " / App=" + appContentCompatibilityId + "\n" +
-                "交付=" + project.ContentEncryption + (project.ContentEncryption == ResourceContentEncryption.None ? "" : " / KeyId=" + project.ContentKeyId) + "\n" +
+                "交付=" + project.contentEncryption + (project.contentEncryption == ResourceContentEncryption.None ? "" : " / KeyId=" + project.contentKeyId) + "\n" +
                 "资产=" + map.Assets.Count + " / Group=" + map.Groups.Count + " / Bundle=" + map.Bundles.Count + "\nWorkspace=" + workspace + "\n发布根=" + root +
                 "\n仅本地/内部受控发布，不写 StreamingAssets，不执行 Runtime 激活；同步 native 构建期间不能中途取消。";
             return new ResourcePreflightResult(ResourcePreflightState.Complete, summary, null, project, target, appContentCompatibilityId);
@@ -280,9 +457,14 @@ namespace YLFramework.Editor.Resource
             IResourceContentKeyProvider provider = null)
         {
             var report = BuildOnlyForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, forceRebuild, cancellation, provider);
-            report.Operation = "BuildAndPublish"; report.ReferenceDirectory = directory;
-            report.GenerationRequested = generateReferences;
-            if (report.Build != null) PublishReport(report, appContentCompatibilityId, generateReferences, directory, cancellation, provider);
+            report.Operation = "BuildAndPublish";
+            report.ReferenceDirectory = directory;
+            report.IsGenerationRequested = generateReferences;
+            if (report.Build != null)
+            {
+                PublishReport(report, appContentCompatibilityId, generateReferences, directory, cancellation, provider);
+            }
+
             return Finish(report);
         }
 
@@ -294,9 +476,16 @@ namespace YLFramework.Editor.Resource
         private static ResourceEditorBuildReport BuildOnlyForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             bool forceRebuild, CancellationToken cancellation, IResourceContentKeyProvider provider, ResourceBuildInvocation invocation = null)
         {
-            var report = new ResourceEditorBuildReport { ProjectGuid = project ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : null,
-                ProjectId = project ? project.ProjectId : null, Platform = target.ToString(), AppContentCompatibilityId = appContentCompatibilityId,
-                Operation = invocation?.Action.ToString() ?? "BuildOnly", ForceRebuild = forceRebuild, ReferenceDirectory = invocation?.ReferenceDirectory };
+            var report = new ResourceEditorBuildReport
+            {
+                ProjectGuid = project ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : null,
+                ProjectId = project ? project.projectId : null,
+                Platform = target.ToString(),
+                AppContentCompatibilityId = appContentCompatibilityId,
+                Operation = invocation?.Action.ToString() ?? "BuildOnly",
+                ForceRebuild = forceRebuild,
+                ReferenceDirectory = invocation?.ReferenceDirectory
+            };
             var elapsed = Stopwatch.StartNew();
             try
             {
@@ -306,23 +495,44 @@ namespace YLFramework.Editor.Resource
                 var directoryIdentity = ResourceProjectPaths.SemanticIdentity(project);
                 ResourceBuildProgress.Notify(ResourceBuildPhase.PreflightStarted, project, target);
                 var watch = Stopwatch.StartNew();
-                try { PreflightForTarget(project, target, appContentCompatibilityId, provider); }
-                finally { report.PreflightMilliseconds = watch.Elapsed.TotalMilliseconds; }
+                try
+                {
+                    PreflightForTarget(project, target, appContentCompatibilityId, provider);
+                }
+                finally
+                {
+                    report.PreflightMilliseconds = watch.Elapsed.TotalMilliseconds;
+                }
                 if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
+                {
                     throw new InvalidOperationException("资源目录或生成配置在预检期间发生变化，未开始构建。请核对当前配置后重新执行。");
-                if (invocation != null && (project.ProjectId != invocation.ProjectId || project.Compression != invocation.Compression ||
-                    project.ContentEncryption != invocation.ContentEncryption ||
-                    project.ContentEncryption != ResourceContentEncryption.None && project.ContentKeyId != invocation.ContentKeyId))
+                }
+
+                if (invocation != null && (project.projectId != invocation.ProjectId || project.compression != invocation.Compression ||
+                    project.contentEncryption != invocation.ContentEncryption ||
+                    project.contentEncryption != ResourceContentEncryption.None && project.contentKeyId != invocation.ContentKeyId))
+                {
                     throw new InvalidOperationException("Project effective policy changed after recipe resolution; explicitly resolve and execute again.");
+                }
+
                 var build = ResourceBundleBuilder.BuildWithContentKey(project, target,
-                    ContentProvider(project.ContentEncryption, project.ProjectId, project.ContentKeyId, provider), forceRebuild, cancellation);
+                    ContentProvider(project.contentEncryption, project.projectId, project.contentKeyId, provider), forceRebuild, cancellation);
                 if (invocation != null && (build.Map.ProjectGuid != invocation.ProjectGuid || build.Map.ProjectId != invocation.ProjectId ||
                     build.Compression != invocation.Compression || build.ContentEncryption != invocation.ContentEncryption || build.ContentKeyId != invocation.ContentKeyId))
+                {
                     throw new InvalidOperationException("Built policy no longer matches the frozen recipe input; publication was not started.");
+                }
+
                 report.Build = build;
             }
-            catch (Exception error) { report.BuildError = error; }
-            finally { report.ElapsedMilliseconds = elapsed.Elapsed.TotalMilliseconds; }
+            catch (Exception error)
+            {
+                report.BuildError = error;
+            }
+            finally
+            {
+                report.ElapsedMilliseconds = elapsed.Elapsed.TotalMilliseconds;
+            }
             return report;
         }
 
@@ -330,10 +540,22 @@ namespace YLFramework.Editor.Resource
         public static ResourceEditorBuildReport PublishBuild(ResourceBuildResult build, string appContentCompatibilityId,
             bool generateReferences = false, string directory = "Assets/YLFrameworkData", CancellationToken cancellation = default, IResourceContentKeyProvider provider = null)
         {
-            if (build == null) throw new ArgumentNullException(nameof(build));
-            var report = new ResourceEditorBuildReport { Build = build, GenerationRequested = generateReferences, ProjectGuid = build.Map.ProjectGuid,
-                ProjectId = build.Map.ProjectId, Platform = build.Platform, AppContentCompatibilityId = appContentCompatibilityId,
-                Operation = "PublishVerifiedBuild", ReferenceDirectory = directory };
+            if (build == null)
+            {
+                throw new ArgumentNullException(nameof(build));
+            }
+
+            var report = new ResourceEditorBuildReport
+            {
+                Build = build,
+                IsGenerationRequested = generateReferences,
+                ProjectGuid = build.Map.ProjectGuid,
+                ProjectId = build.Map.ProjectId,
+                Platform = build.Platform,
+                AppContentCompatibilityId = appContentCompatibilityId,
+                Operation = "PublishVerifiedBuild",
+                ReferenceDirectory = directory
+            };
             PublishReport(report, appContentCompatibilityId, generateReferences, directory, cancellation, provider);
             return Finish(report);
         }
@@ -349,22 +571,43 @@ namespace YLFramework.Editor.Resource
                 {
                     ResourceBuildProgress.Notify(ResourceBuildPhase.PublicationStarted, report.ProjectGuid, report.ProjectId, report.Platform);
                     report.Release = ResourcePublisher.PublishWithContentKey(report.Build, app,
-                    ContentProvider(report.Build.ContentEncryption, report.Build.Map.ProjectId, report.Build.ContentKeyId, provider), cancellation); }
-                catch (Exception error) { report.PublicationError = error; return; }
-                finally { report.PublicationMilliseconds = watch.Elapsed.TotalMilliseconds; }
-                if (!generate) return;
+                    ContentProvider(report.Build.ContentEncryption, report.Build.Map.ProjectId, report.Build.ContentKeyId, provider), cancellation);
+                }
+                catch (Exception error)
+                {
+                    report.PublicationError = error;
+                    return;
+                }
+                finally
+                {
+                    report.PublicationMilliseconds = watch.Elapsed.TotalMilliseconds;
+                }
+                if (!generate)
+                {
+                    return;
+                }
+
                 watch.Restart();
                 try
                 {
                     ResourceBuildProgress.Notify(ResourceBuildPhase.ReferenceGenerationStarted, report.ProjectGuid, report.ProjectId, report.Platform);
                     var catalogs = PublishedCatalogs(app);
                     report.GeneratedProjects = catalogs.Select(x => x.ProjectId).ToList().AsReadOnly();
-                    report.GenerationChanged = ResourceCodeGenerator.GenerateReferences(catalogs, directory);
+                    report.HasGenerationChanged = ResourceCodeGenerator.GenerateReferences(catalogs, directory);
                 }
-                catch (Exception error) { report.GenerationError = error; }
-                finally { report.GenerationMilliseconds = watch.Elapsed.TotalMilliseconds; }
+                catch (Exception error)
+                {
+                    report.GenerationError = error;
+                }
+                finally
+                {
+                    report.GenerationMilliseconds = watch.Elapsed.TotalMilliseconds;
+                }
             }
-            finally { report.ElapsedMilliseconds += elapsed.Elapsed.TotalMilliseconds; }
+            finally
+            {
+                report.ElapsedMilliseconds += elapsed.Elapsed.TotalMilliseconds;
+            }
         }
 
         private static ResourceEditorBuildReport Finish(ResourceEditorBuildReport report)
@@ -386,35 +629,71 @@ namespace YLFramework.Editor.Resource
             if (string.IsNullOrEmpty(secretEnvironmentVariable) || secretEnvironmentVariable.Length > 128 ||
                 !(secretEnvironmentVariable[0] == '_' || char.IsLetter(secretEnvironmentVariable[0])) || secretEnvironmentVariable.Any(x =>
                     !(x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z' || x >= '0' && x <= '9' || x == '_')))
+            {
                 throw new ArgumentException("An explicit ASCII process secret environment name is required.", nameof(secretEnvironmentVariable));
+            }
+
             return new EnvironmentContentKeyProvider(projectId, keyId, secretEnvironmentVariable);
         }
 
         private sealed class EnvironmentContentKeyProvider : IResourceContentKeyProvider
         {
-            private readonly string projectId;
-            private readonly string keyId;
-            private readonly string variable;
+            private readonly string _projectId;
+            private readonly string _keyId;
+            private readonly string _variable;
             internal EnvironmentContentKeyProvider(string projectId, string keyId, string variable)
-            { this.projectId = projectId; this.keyId = keyId; this.variable = variable; }
+            {
+                this._projectId = projectId;
+                this._keyId = keyId;
+                this._variable = variable;
+            }
 
             public bool TryCopyKey(string project, string requestedKey, byte[] destination)
             {
-                if (project != projectId || requestedKey != keyId) return false;
-                if (destination == null || destination.Length != 32) throw new ArgumentException("Content key destination must be exactly 32 bytes.");
-                var value = Environment.GetEnvironmentVariable(variable);
-                if (string.IsNullOrEmpty(value)) return false;
+                if (project != _projectId || requestedKey != _keyId)
+                {
+                    return false;
+                }
+
+                if (destination == null || destination.Length != 32)
+                {
+                    throw new ArgumentException("Content key destination must be exactly 32 bytes.");
+                }
+
+                var value = Environment.GetEnvironmentVariable(_variable);
+                if (string.IsNullOrEmpty(value))
+                {
+                    return false;
+                }
+
                 byte[] decoded = null;
                 try
                 {
-                    if (value.Length != 44) throw new FormatException();
+                    if (value.Length != 44)
+                    {
+                        throw new FormatException();
+                    }
+
                     decoded = Convert.FromBase64String(value);
-                    if (decoded.Length != 32 || Convert.ToBase64String(decoded) != value) throw new FormatException();
+                    if (decoded.Length != 32 || Convert.ToBase64String(decoded) != value)
+                    {
+                        throw new FormatException();
+                    }
+
                     Buffer.BlockCopy(decoded, 0, destination, 0, 32);
                     return true;
                 }
-                catch (FormatException) { throw new InvalidOperationException("The configured content secret must be canonical Base64 of exactly 32 bytes."); }
-                finally { if (decoded != null) Array.Clear(decoded, 0, decoded.Length); }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException("The configured content secret must be canonical Base64 of exactly 32 bytes.");
+                }
+                finally
+                {
+                    if (decoded != null)
+                    {
+                        Array.Clear(decoded, 0, decoded.Length);
+                    }
+                }
             }
         }
 
@@ -423,16 +702,28 @@ namespace YLFramework.Editor.Resource
         {
             var catalog = ResourcePublisher.VerifyExportInput(release);
             if (string.IsNullOrWhiteSpace(destination) || !Path.IsPathFullyQualified(destination))
+            {
                 throw new InvalidOperationException("请选择工程外的绝对本地导出路径。");
+            }
+
             var full = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var repository = ResourceBuildMap.Absolute(".").TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (full.StartsWith("\\\\", StringComparison.Ordinal) || full.StartsWith(repository, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException("只允许显式工程外本地导出；不写网络路径或工程内容。");
+            }
+
             ResourceBuildOperation.RejectLinks(full);
             if (Directory.Exists(full) || File.Exists(full) || File.Exists(full + ".meta"))
+            {
                 throw new InvalidOperationException("目标身份已存在，拒绝接管、合并或覆盖任何目录：" + full);
+            }
+
             if (!Directory.Exists(Path.GetDirectoryName(full)) || Path.GetFileName(full) != catalog.CatalogDigest)
+            {
                 throw new InvalidOperationException("请选择已存在的本地父目录；新增版本子目录必须等于 CatalogDigest。");
+            }
+
             Directory.CreateDirectory(full);
             long copied = 0;
             var names = catalog.Bundles.Select(x => x.RelativeFile).Concat(catalog.SupportFiles.Select(x => x.RelativeFile))
@@ -444,7 +735,9 @@ namespace YLFramework.Editor.Resource
                 ResourceBuildOperation.RejectLinks(sourcePath);
                 using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 using var output = new FileStream(Path.Combine(full, name), FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                source.CopyTo(output); output.Flush(true); copied += source.Length;
+                source.CopyTo(output);
+                output.Flush(true);
+                copied += source.Length;
             }
             // 导出是字节级归档，不挂载 Runtime；历史 Unity/App 版本仍按原 owner + Complete + Catalog 摘要完整验证。
             ResourcePublisher.VerifyExportInput(release, full);
@@ -462,9 +755,16 @@ namespace YLFramework.Editor.Resource
             {
                 var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(path);
                 var release = ResourcePublisher.ReadCurrent(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId);
-                if (release != null) catalogs.Add(release.Catalog);
+                if (release != null)
+                {
+                    catalogs.Add(release.Catalog);
+                }
             }
-            if (catalogs.Count == 0) throw new InvalidOperationException("该平台/App 尚无明确归属的发布 Catalog。");
+            if (catalogs.Count == 0)
+            {
+                throw new InvalidOperationException("该平台/App 尚无明确归属的发布 Catalog。");
+            }
+
             return catalogs.AsReadOnly();
         }
 
@@ -472,30 +772,46 @@ namespace YLFramework.Editor.Resource
         public static void AddSelections(ResourceProject project, int groupIndex, Object[] assets)
         {
             RequireEditableProject(project);
-            if (groupIndex < 0 || groupIndex >= project.Groups.Count || assets == null || assets.Length == 0) throw new ArgumentException("请选择 Group 和有效资产。");
+            if (groupIndex < 0 || groupIndex >= project.groups.Count || assets == null || assets.Length == 0)
+            {
+                throw new ArgumentException("请选择 Group 和有效资产。");
+            }
+
             var directories = ResourceProjectPaths.Resolve(project);
             var generated = ResourceProjectPaths.GeneratedDirectory(project);
             var paths = assets.Select(AssetDatabase.GetAssetPath).ToArray();
             foreach (var path in paths)
             {
                 directories.RequireSource(path);
-                if (ResourceProjectPaths.Contains(generated, path)) throw new InvalidOperationException("自动图集输出由规则加入Group，不能手工添加生成目录中的文件：" + path);
+                if (ResourceProjectPaths.Contains(generated, path))
+                {
+                    throw new InvalidOperationException("自动图集输出由规则加入Group，不能手工添加生成目录中的文件：" + path);
+                }
+
                 if (new[] { ".cs", ".dll", ".asmdef", ".asmref", ".meta" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                {
                     throw new InvalidOperationException("这个文件不能作为资源条目添加：" + path);
+                }
+
                 ResourceBuildOperation.ValidateAssetPath(path);
             }
             var guids = paths.Select(AssetDatabase.AssetPathToGUID).Distinct(StringComparer.Ordinal).ToArray();
-            if (guids.Any(x => project.Groups.SelectMany(g => g.Selections).Any(s => s.Guid == x))) throw new InvalidOperationException("选择已登记；请编辑已有条目。");
+            if (guids.Any(x => project.groups.SelectMany(g => g.selections).Any(s => s.guid == x)))
+            {
+                throw new InvalidOperationException("选择已登记；请编辑已有条目。");
+            }
+
             BeginEdit("添加 Resource 条目");
             using var serialized = new SerializedObject(project);
-            var selections = serialized.FindProperty("Groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("Selections");
+            var selections = serialized.FindProperty("groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("selections");
             foreach (var guid in guids)
             {
                 var index = selections.arraySize++;
                 var item = selections.GetArrayElementAtIndex(index);
-                item.FindPropertyRelative("Guid").stringValue = guid;
-                item.FindPropertyRelative("Address").stringValue = "";
-                item.FindPropertyRelative("Aliases").ClearArray(); item.FindPropertyRelative("Extensions").ClearArray();
+                item.FindPropertyRelative("guid").stringValue = guid;
+                item.FindPropertyRelative("address").stringValue = "";
+                item.FindPropertyRelative("aliases").ClearArray();
+                item.FindPropertyRelative("extensions").ClearArray();
             }
             serialized.ApplyModifiedProperties();
         }
@@ -506,14 +822,18 @@ namespace YLFramework.Editor.Resource
             RequireEditableProject(project);
             ValidateGroupId(project, -1, id);
             using var serialized = new SerializedObject(project);
-            var groups = serialized.FindProperty("Groups");
-            if (groups.arraySize >= 16384) throw new InvalidOperationException("Group collection limit exceeded.");
+            var groups = serialized.FindProperty("groups");
+            if (groups.arraySize >= 16384)
+            {
+                throw new InvalidOperationException("Group collection limit exceeded.");
+            }
+
             BeginEdit("新增 Resource Group");
             var index = groups.arraySize++;
             var group = groups.GetArrayElementAtIndex(index);
-            group.FindPropertyRelative("Id").stringValue = id;
-            group.FindPropertyRelative("Packing").enumValueIndex = 0;
-            group.FindPropertyRelative("Selections").ClearArray();
+            group.FindPropertyRelative("id").stringValue = id;
+            group.FindPropertyRelative("packing").enumValueIndex = 0;
+            group.FindPropertyRelative("selections").ClearArray();
             serialized.ApplyModifiedProperties();
             return index;
         }
@@ -526,7 +846,7 @@ namespace YLFramework.Editor.Resource
             ValidateGroupId(project, groupIndex, id);
             BeginEdit("重命名 Resource Group");
             using var serialized = new SerializedObject(project);
-            serialized.FindProperty("Groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("Id").stringValue = id;
+            serialized.FindProperty("groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("id").stringValue = id;
             serialized.ApplyModifiedProperties();
         }
 
@@ -536,7 +856,7 @@ namespace YLFramework.Editor.Resource
             RequireGroup(project, groupIndex);
             BeginEdit("移除 Resource Group");
             using var serialized = new SerializedObject(project);
-            serialized.FindProperty("Groups").DeleteArrayElementAtIndex(groupIndex);
+            serialized.FindProperty("groups").DeleteArrayElementAtIndex(groupIndex);
             serialized.ApplyModifiedProperties();
         }
 
@@ -544,26 +864,38 @@ namespace YLFramework.Editor.Resource
         public static void MoveSelections(ResourceProject project, int sourceGroup, int[] indices, int targetGroup)
         {
             RequireEditableProject(project);
-            RequireGroup(project, sourceGroup); RequireGroup(project, targetGroup);
+            RequireGroup(project, sourceGroup);
+            RequireGroup(project, targetGroup);
             var selected = SelectionIndices(project, sourceGroup, indices);
-            if (sourceGroup == targetGroup) throw new ArgumentException("请选择不同的目标 Group。");
-            var values = selected.OrderBy(x => x).Select(x => project.Groups[sourceGroup].Selections[x]).ToArray();
-            if (values.Any(x => x == null || project.Groups[targetGroup].Selections.Any(y => y.Guid == x.Guid)))
+            if (sourceGroup == targetGroup)
+            {
+                throw new ArgumentException("请选择不同的目标 Group。");
+            }
+
+            var values = selected.OrderBy(x => x).Select(x => project.groups[sourceGroup].selections[x]).ToArray();
+            if (values.Any(x => x == null || project.groups[targetGroup].selections.Any(y => y.guid == x.guid)))
+            {
                 throw new ArgumentException("目标 Group 已包含相同选择，拒绝部分移动。");
+            }
+
             BeginEdit("批量移动 Resource 条目");
             using var serialized = new SerializedObject(project);
-            var groups = serialized.FindProperty("Groups");
-            var source = groups.GetArrayElementAtIndex(sourceGroup).FindPropertyRelative("Selections");
-            var target = groups.GetArrayElementAtIndex(targetGroup).FindPropertyRelative("Selections");
+            var groups = serialized.FindProperty("groups");
+            var source = groups.GetArrayElementAtIndex(sourceGroup).FindPropertyRelative("selections");
+            var target = groups.GetArrayElementAtIndex(targetGroup).FindPropertyRelative("selections");
             foreach (var value in values)
             {
                 var item = target.GetArrayElementAtIndex(target.arraySize++);
-                item.FindPropertyRelative("Guid").stringValue = value.Guid;
-                item.FindPropertyRelative("Address").stringValue = value.Address ?? "";
-                SetStrings(item.FindPropertyRelative("Aliases"), value.Aliases);
-                SetStrings(item.FindPropertyRelative("Extensions"), value.Extensions);
+                item.FindPropertyRelative("guid").stringValue = value.guid;
+                item.FindPropertyRelative("address").stringValue = value.address ?? "";
+                SetStrings(item.FindPropertyRelative("aliases"), value.aliases);
+                SetStrings(item.FindPropertyRelative("extensions"), value.extensions);
             }
-            foreach (var index in selected) source.DeleteArrayElementAtIndex(index);
+            foreach (var index in selected)
+            {
+                source.DeleteArrayElementAtIndex(index);
+            }
+
             serialized.ApplyModifiedProperties();
         }
 
@@ -573,8 +905,12 @@ namespace YLFramework.Editor.Resource
             var selected = SelectionIndices(project, groupIndex, indices);
             BeginEdit("批量移除 Resource 条目");
             using var serialized = new SerializedObject(project);
-            var entries = serialized.FindProperty("Groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("Selections");
-            foreach (var index in selected) entries.DeleteArrayElementAtIndex(index);
+            var entries = serialized.FindProperty("groups").GetArrayElementAtIndex(groupIndex).FindPropertyRelative("selections");
+            foreach (var index in selected)
+            {
+                entries.DeleteArrayElementAtIndex(index);
+            }
+
             serialized.ApplyModifiedProperties();
         }
 
@@ -582,27 +918,38 @@ namespace YLFramework.Editor.Resource
         {
             RequireGroup(project, group);
             if (indices == null || indices.Length == 0 || indices.Distinct().Count() != indices.Length ||
-                indices.Any(x => x < 0 || x >= project.Groups[group].Selections.Count))
+                indices.Any(x => x < 0 || x >= project.groups[group].selections.Count))
+            {
                 throw new ArgumentException("批量条目选择无效；未修改任何定义。");
+            }
+
             return indices.OrderByDescending(x => x).ToArray();
         }
 
         private static void RequireGroup(ResourceProject project, int groupIndex)
         {
-            if (groupIndex < 0 || groupIndex >= project.Groups.Count) throw new ArgumentException("请选择有效的 Group。");
+            if (groupIndex < 0 || groupIndex >= project.groups.Count)
+            {
+                throw new ArgumentException("请选择有效的 Group。");
+            }
         }
 
         private static void ValidateGroupId(ResourceProject project, int index, string id)
         {
             ResourceAddress.ValidateId(id, nameof(id));
-            if (project.Groups.Where((_, i) => i != index).Any(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase)))
+            if (project.groups.Where((_, i) => i != index).Any(x => string.Equals(x.id, id, StringComparison.OrdinalIgnoreCase)))
+            {
                 throw new ArgumentException("Group ID 已存在或大小写冲突：" + id);
+            }
         }
 
         private static void SetStrings(SerializedProperty property, string[] values)
         {
             property.arraySize = values?.Length ?? 0;
-            for (var i = 0; i < property.arraySize; i++) property.GetArrayElementAtIndex(i).stringValue = values[i];
+            for (var i = 0; i < property.arraySize; i++)
+            {
+                property.GetArrayElementAtIndex(i).stringValue = values[i];
+            }
         }
 
         private static void BeginEdit(string label)
@@ -615,7 +962,10 @@ namespace YLFramework.Editor.Resource
         internal static void RequireEditableProject(ResourceProject project)
         {
             if (!project || !AssetDatabase.GetAssetPath(project).StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsOpenForEdit(project))
+            {
                 throw new InvalidOperationException("需要明确保存于 Assets 的可编辑 ResourceProject。");
+            }
+
             ResourceBuildOperation.ValidateAssetPath(AssetDatabase.GetAssetPath(project));
             ResourceBuildOperation.RejectLinks(AssetDatabase.GetAssetPath(project) + ".meta");
         }

@@ -19,13 +19,18 @@ namespace YLFramework.Tests.ResourceEditor
         [UnityTest]
         public IEnumerator EmptySearchHintDoesNotBecomeFilterTextAndTypingStillUsesTheNativeField()
         {
-            Assert.That(typeof(ResourceWorkbenchGUI).GetMethod("SearchField", Flags), Is.Not.Null, "An empty-only hint must be painted separately from the actual filter value.");
+            Assert.That(typeof(ResourceWorkbenchGui).GetMethod("SearchField", Flags), Is.Not.Null, "An empty-only hint must be painted separately from the actual filter value.");
             var focus = EditorWindow.focusedWindow;
             var window = ScriptableObject.CreateInstance<ResourceSearchFinalProbe>();
             try
             {
-                window.ShowUtility(); window.position = new Rect(80, 60, 620, 160);
-                for (var i = 0; i < 4; i++) { window.Repaint(); yield return null; }
+                window.ShowUtility();
+                window.position = new Rect(80, 60, 620, 160);
+                for (var i = 0; i < 4; i++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(window.Value, Is.Empty);
                 ResourceWorkbenchUX2Tests.Click(window, new Vector2(100, 14));
                 window.SendEvent(new Event { type = EventType.KeyDown, keyCode = KeyCode.X, character = 'x' });
@@ -37,7 +42,14 @@ namespace YLFramework.Tests.ResourceEditor
                 Assert.That(window.Value, Is.Empty, "Clearing must return an empty filter, never the placeholder.");
                 LogAssert.NoUnexpectedReceived();
             }
-            finally { window.Close(); if (focus) focus.Focus(); }
+            finally
+            {
+                window.Close();
+                if (focus)
+                {
+                    focus.Focus();
+                }
+            }
         }
 
         [UnityTest]
@@ -47,7 +59,8 @@ namespace YLFramework.Tests.ResourceEditor
             Assert.That(detailsField, Is.Not.Null, "Confirmation needs structured identity, paths/files, and execution/recovery instead of parsing Message.");
             using var source = new ResourceBuiltInDeploymentTests.BuiltInSource();
             var plan = ResourceBuiltInDeployer.Preflight(source.Snapshot);
-            var project = ScriptableObject.CreateInstance<ResourceProject>(); project.DisplayName = "Read-only confirmation";
+            var project = ScriptableObject.CreateInstance<ResourceProject>();
+            project.displayName = "Read-only confirmation";
             var focus = EditorWindow.focusedWindow;
             var clipboard = EditorGUIUtility.systemCopyBuffer;
             var window = ScriptableObject.CreateInstance<ResourceOperationConfirmation>();
@@ -66,20 +79,30 @@ namespace YLFramework.Tests.ResourceEditor
                 Assert.That(Part("Identity"), Does.Contain(source.ProjectId).And.Contain(source.ProjectGuid).And.Contain(plan.Source.Document.CatalogDigest));
                 Assert.That(Part("Paths"), Does.Contain(plan.Source.DirectoryPath).And.Contain(plan.DirectoryPath).And.Contain(plan.WorkspacePath));
                 foreach (var token in new[] { "payload~", "ylr-owner.json~", "ylr-deployment.json~", "deploy.lock", "journal.json.next", ".meta" })
+                {
                     Assert.That(Part("Paths"), Does.Contain(token));
+                }
+
                 Assert.That(Part("Execution"), Does.Contain("恢复内置部署事务").And.Contain("AssetDatabase").And.Contain("未检查磁盘容量"));
                 var message = ResourceBuiltInScope.Describe(plan);
-                window.Message = message; window.Positive = "Not executed"; window.Summary = summary;
-                typeof(ResourceOperationConfirmation).GetField("technical", Flags).SetValue(window, true);
-                window.ShowUtility(); window.position = new Rect(80, 60, 720, 520);
-                for (var i = 0; i < 5; i++) { window.Repaint(); yield return null; }
+                window.Message = message;
+                window.Positive = "Not executed";
+                window.Summary = summary;
+                typeof(ResourceOperationConfirmation).GetField("_showTechnical", Flags).SetValue(window, true);
+                window.ShowUtility();
+                window.position = new Rect(80, 60, 720, 520);
+                for (var i = 0; i < 5; i++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 window.SendEvent(new Event { type = EventType.ScrollWheel, mousePosition = new Vector2(350, 250), delta = new Vector2(0, 100) });
                 yield return null;
-                Assert.That(((Vector2)typeof(ResourceOperationConfirmation).GetField("scroll", Flags).GetValue(window)).y, Is.GreaterThan(0));
+                Assert.That(((Vector2)typeof(ResourceOperationConfirmation).GetField("_scroll", Flags).GetValue(window)).y, Is.GreaterThan(0));
                 ResourceWorkbenchUX2Tests.Click(window, new Vector2(62, 500));
                 Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(message), "Structured presentation must not replace or shorten complete scope copying.");
                 window.SendEvent(new Event { type = EventType.KeyDown, keyCode = KeyCode.Escape });
-                Assert.That(window.Accepted, Is.False);
+                Assert.That(window.IsAccepted, Is.False);
                 Assert.That(Directory.Exists(plan.WorkspacePath), Is.False);
                 Assert.That(Directory.Exists(plan.DirectoryPath), Is.False);
                 CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(source.Root));
@@ -90,10 +113,21 @@ namespace YLFramework.Tests.ResourceEditor
                 if (window)
                 {
                     var parent = typeof(EditorWindow).GetField("m_Parent", Flags).GetValue(window) as UnityEngine.Object;
-                    if (parent) window.Close(); else UnityEngine.Object.DestroyImmediate(window);
+                    if (parent)
+                    {
+                        window.Close();
+                    }
+                    else
+                    {
+                        UnityEngine.Object.DestroyImmediate(window);
+                    }
                 }
                 UnityEngine.Object.DestroyImmediate(project);
-                EditorGUIUtility.systemCopyBuffer = clipboard; if (focus) focus.Focus();
+                EditorGUIUtility.systemCopyBuffer = clipboard;
+                if (focus)
+                {
+                    focus.Focus();
+                }
             }
         }
 
@@ -129,19 +163,35 @@ namespace YLFramework.Tests.ResourceEditor
                 window.Message = string.Join("\n", Enumerable.Range(0, 100).Select(i => "owned exact target and write scope " + i));
                 window.Positive = "Not executed";
                 window.Details = new ResourceConfirmationDetails("owned identity", "owned paths", "owned execution");
-                window.ShowUtility(); window.position = new Rect(80, 60, 720, 520);
-                for (var i = 0; i < 4; i++) { window.Repaint(); yield return null; }
-                Assert.That(typeof(ResourceOperationConfirmation).GetField("technical", Flags).GetValue(window), Is.False);
+                window.ShowUtility();
+                window.position = new Rect(80, 60, 720, 520);
+                for (var i = 0; i < 4; i++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
+                Assert.That(typeof(ResourceOperationConfirmation).GetField("_showTechnical", Flags).GetValue(window), Is.False);
                 window.SendEvent(new Event { type = EventType.ScrollWheel, mousePosition = new Vector2(350, 250), delta = new Vector2(0, 30) });
                 yield return null;
-                Assert.That(((Vector2)typeof(ResourceOperationConfirmation).GetField("scroll", Flags).GetValue(window)).y, Is.GreaterThan(0),
+                Assert.That(((Vector2)typeof(ResourceOperationConfirmation).GetField("_scroll", Flags).GetValue(window)).y, Is.GreaterThan(0),
                     "Adding optional technical sections must not hide the original visible target/scope before the user expands anything.");
-                Assert.That(window.Accepted, Is.False);
+                Assert.That(window.IsAccepted, Is.False);
                 window.SendEvent(new Event { type = EventType.KeyDown, keyCode = KeyCode.Escape });
-                Assert.That(window.Accepted, Is.False);
+                Assert.That(window.IsAccepted, Is.False);
                 LogAssert.NoUnexpectedReceived();
             }
-            finally { if (window) window.Close(); if (focus) focus.Focus(); }
+            finally
+            {
+                if (window)
+                {
+                    window.Close();
+                }
+
+                if (focus)
+                {
+                    focus.Focus();
+                }
+            }
         }
     }
 
@@ -151,8 +201,11 @@ namespace YLFramework.Tests.ResourceEditor
         private void OnGUI()
         {
             GUI.SetNextControlName("Final.Search");
-            var method = typeof(ResourceWorkbenchGUI).GetMethod("SearchField", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (method != null) Value = (string)method.Invoke(null, new object[] { Value, "Filter visible records only", new[] { GUILayout.MinWidth(80) } });
+            var method = typeof(ResourceWorkbenchGui).GetMethod("SearchField", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method != null)
+            {
+                Value = (string)method.Invoke(null, new object[] { Value, "Filter visible records only", new[] { GUILayout.MinWidth(80) } });
+            }
         }
     }
 }

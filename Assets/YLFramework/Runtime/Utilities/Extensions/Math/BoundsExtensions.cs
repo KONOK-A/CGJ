@@ -13,7 +13,7 @@ namespace YLFramework.Utilities.Extensions
         /// <param name="b"></param>
         /// <param name="bounds"></param>
         /// <returns></returns>
-        public static bool Contains(this Bounds b, Bounds bounds) 
+        public static bool Contains(this Bounds b, Bounds bounds)
         {
             if (b.min.x <= bounds.min.x && b.min.y <= bounds.min.y && b.min.z <= bounds.min.z &&
                 b.max.x >= bounds.max.x && b.max.y >= bounds.max.y && b.max.z >= bounds.max.z)

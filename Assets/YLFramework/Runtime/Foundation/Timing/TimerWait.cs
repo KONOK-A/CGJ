@@ -14,7 +14,7 @@ namespace YLFramework.Timing
     {
         private TimerHandle _handle;
         private TimerState _status;
-        private bool _finished;
+        private bool _isFinished;
 
         internal TimerWait(TimerHandle handle)
         {
@@ -23,20 +23,41 @@ namespace YLFramework.Timing
         }
 
         /// <summary>未结束时为当前捕获 run 的状态，结束后为首次观察到的终态快照。</summary>
-        public TimerState Status { get { Observe(); return _status; } }
+        public TimerState Status
+        {
+            get
+            {
+                Observe();
+                return _status;
+            }
+        }
         /// <summary>是否已观察到终态；末轮 Executing 仍为 false。</summary>
-        public bool IsFinished { get { Observe(); return _finished; } }
+        public bool IsFinished
+        {
+            get
+            {
+                Observe();
+                return _isFinished;
+            }
+        }
         /// <summary>仅正常 Completed 为 true；取消、故障、失效均为 false。</summary>
         public bool IsCompleted => Status == TimerState.Completed;
         public override bool keepWaiting => !IsFinished;
 
         private void Observe()
         {
-            if (_finished) return;
+            if (_isFinished)
+            {
+                return;
+            }
+
             _status = _handle.Status;
-            _finished = _status == TimerState.Completed || _status == TimerState.Cancelled ||
+            _isFinished = _status == TimerState.Completed || _status == TimerState.Cancelled ||
                 _status == TimerState.Faulted || _status == TimerState.Invalidated;
-            if (_finished) _handle = default;
+            if (_isFinished)
+            {
+                _handle = default;
+            }
         }
     }
 }

@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
-using YLFramework.Editor.Help;
 using YLFramework.Core.RoslynAnalyzers;
+using YLFramework.Editor.Help;
 
 namespace YLFramework.Core.Editor
 {
@@ -68,7 +68,7 @@ namespace YLFramework.Core.Editor
                         "主体 Runtime 和实际引用它的 Editor/Test/游戏消费者参与；原 XF/XFAB/XFFSM、未引用主体或预定义程序集的作用域以真实编译图和 csc 输入为准。" +
                         "匹配正式程序集的 marker/View 符号，不按短名或 namespace 冒认。Editor/Test/Core 不整体豁免；生成代码默认不分析。"),
                     HelpBlock.Notice("编译器资产与静态限制", "DLL 的 Any/Editor/普通平台均禁用，关闭自动 Runtime 引用，只作为 -analyzer 输入，不加入 Runtime precompiledReferences。" +
-                        "YL0005 只保留 LoadViewArgs.Pool 与 LoadViewRequest<T>.args 两个真实内部 owner 例外；反射、object 擦除、闭包逃逸、任意跨过程副作用和所有控制流不保证。" +
+                        "YL0005 只保留 LoadViewArgs._pool 与 LoadViewRequest<T>._args 两个真实内部 owner 例外；反射、object 擦除、闭包逃逸、任意跨过程副作用和所有控制流不保证。" +
                         "原 XF/Logger 分析器是不同身份，不关闭或替代它们。"),
                     HelpBlock.Paragraph("单 ID 配置", "IDE/SDK 使用 .editorconfig 的 dotnet_diagnostic.YL0002.severity 等设置；Unity 2022.3 Console 不自动遵循 IDE 的 editorconfig。" +
                         "Unity 使用消费者 asmdef 目录的叶子 .ruleset 配置单 ID，Error 阻止编译，None 抑制该 ID；不要为局部需求覆盖根 Default.ruleset。" +

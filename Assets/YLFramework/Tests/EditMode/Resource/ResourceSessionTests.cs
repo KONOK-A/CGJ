@@ -16,12 +16,22 @@ namespace YLFramework.Tests.Resource
     public class ResourceSessionTests
     {
         private const string Key = "YL.Resource.8.1.Session.";
-        [Serializable] private sealed class Scenes { public SceneRecord[] Items; }
-        [Serializable] private sealed class SceneRecord { public string Path; public bool Loaded; public bool Active; }
-        private static ResourceSystem system;
-        private static AssetLease<TextAsset> lease;
-        private static ResourceRequest<AssetLease<TextAsset>> unclaimed;
-        private static TextAsset external;
+        [Serializable]
+        private sealed class Scenes
+        {
+            public SceneRecord[] Items;
+        }
+        [Serializable]
+        private sealed class SceneRecord
+        {
+            public string Path;
+            public bool Loaded;
+            public bool Active;
+        }
+        private static ResourceSystem _system;
+        private static AssetLease<TextAsset> _lease;
+        private static ResourceRequest<AssetLease<TextAsset>> _unclaimed;
+        private static TextAsset _external;
 
         private static ResourceConfiguration Configuration() => new(new[]
         {
@@ -35,7 +45,11 @@ namespace YLFramework.Tests.Resource
         [SetUp]
         public void SetUp()
         {
-            if (SessionState.GetBool(Key + "configured", false)) return;
+            if (SessionState.GetBool(Key + "configured", false))
+            {
+                return;
+            }
+
             Assert.That(EditorSettings.enterPlayModeOptionsEnabled, Is.False, "This fixture does not change domain reload settings.");
             Assert.That(EditorApplication.isPlayingOrWillChangePlaymode, Is.False);
             EnsureRestorableScenes();
@@ -61,22 +75,43 @@ namespace YLFramework.Tests.Resource
             {
                 var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
                 Assert.That(scene.isDirty, Is.False, "Do not close dirty scenes: " + scene.name);
-                if (string.IsNullOrEmpty(scene.path)) Assert.That(scene.rootCount, Is.Zero, "Only discard a clean empty runner scene.");
+                if (string.IsNullOrEmpty(scene.path))
+                {
+                    Assert.That(scene.rootCount, Is.Zero, "Only discard a clean empty runner scene.");
+                }
             }
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!SessionState.GetBool(Key + "configured", false)) yield break;
-            if (EditorApplication.isPlaying) yield return new ExitPlayMode();
+            if (!SessionState.GetBool(Key + "configured", false))
+            {
+                yield break;
+            }
+
+            if (EditorApplication.isPlaying)
+            {
+                yield return new ExitPlayMode();
+            }
+
             Application.quitting -= OnQuit;
             EditorApplication.playModeStateChanged -= OnExit;
             var snapshot = JsonUtility.FromJson<Scenes>(SessionState.GetString(Key + "scenes", ""));
             if (snapshot.Items.Length != 0)
+            {
                 EditorSceneManager.RestoreSceneManagerSetup(snapshot.Items.Select(scene => new SceneSetup
-                    { path = scene.Path, isLoaded = scene.Loaded, isActive = scene.Active }).ToArray());
-            else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                {
+                    path = scene.Path,
+                    isLoaded = scene.Loaded,
+                    isActive = scene.Active
+                }).ToArray());
+            }
+            else
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+
             File.Delete(SessionState.GetString(Key + "path", ""));
             SessionState.EraseString(Key + "scenes");
             SessionState.EraseString(Key + "path");
@@ -87,19 +122,23 @@ namespace YLFramework.Tests.Resource
 
         private static void OnExit(PlayModeStateChange state)
         {
-            if (state != PlayModeStateChange.ExitingPlayMode) return;
+            if (state != PlayModeStateChange.ExitingPlayMode)
+            {
+                return;
+            }
+
             using var rejected = ResourceSystem.InitializeAsync(Configuration());
             SessionState.SetBool(Key + "exit", rejected.Error?.Kind == ResourceError.SessionUnavailable &&
-                ResourceSystem.Current == null && !lease.IsValid);
+                ResourceSystem.Current == null && !_lease.IsValid);
             EditorApplication.playModeStateChanged -= OnExit;
         }
 
         private static void OnQuit()
         {
-            SessionState.SetBool(Key + "quit", system.State == ResourceSystemState.Invalidated &&
-                system.GetDiagnosticsSnapshot().RecordCount == 0 && unclaimed.IsDisposed && !lease.IsValid && external);
-            lease.Dispose();
-            unclaimed.Dispose();
+            SessionState.SetBool(Key + "quit", _system.State == ResourceSystemState.Invalidated &&
+                _system.GetDiagnosticsSnapshot().RecordCount == 0 && _unclaimed.IsDisposed && !_lease.IsValid && _external);
+            _lease.Dispose();
+            _unclaimed.Dispose();
             Application.quitting -= OnQuit;
         }
 
@@ -108,11 +147,15 @@ namespace YLFramework.Tests.Resource
         {
             yield return new EnterPlayMode();
             Assert.That(ResourceSystem.Current, Is.Null);
-            using (var initialized = ResourceSystem.InitializeAsync(Configuration())) system = initialized.TakeResult();
-            external = Resources.Load<TextAsset>("YLResource81/Message");
-            lease = system.Acquire<TextAsset>(new ResourceAddress("exit81", "text"));
-            unclaimed = system.AcquireAsync<TextAsset>(new ResourceAddress("exit81", "text"));
-            Assert.That(unclaimed.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
+            using (var initialized = ResourceSystem.InitializeAsync(Configuration()))
+            {
+                _system = initialized.TakeResult();
+            }
+
+            _external = Resources.Load<TextAsset>("YLResource81/Message");
+            _lease = _system.Acquire<TextAsset>(new ResourceAddress("exit81", "text"));
+            _unclaimed = _system.AcquireAsync<TextAsset>(new ResourceAddress("exit81", "text"));
+            Assert.That(_unclaimed.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
             Application.quitting += OnQuit;
             EditorApplication.playModeStateChanged += OnExit;
             yield return new ExitPlayMode();
@@ -124,7 +167,10 @@ namespace YLFramework.Tests.Resource
             {
                 var fresh = initialized.TakeResult();
                 using (var next = fresh.Acquire<TextAsset>(new ResourceAddress("exit81", "text")))
+                {
                     Assert.That(next.Asset.text, Does.Contain("isolated Resources fixture"));
+                }
+
                 using var shutdown = fresh.ShutdownAsync();
                 Assert.That(shutdown.TakeResult(), Is.True);
             }
@@ -147,12 +193,22 @@ namespace YLFramework.Tests.Resource
             GameObject content = null;
             try
             {
-                if (withContent) content = new GameObject("Resource81.UnsavedSafetyFixture");
-                else EditorSceneManager.MarkSceneDirty(owned);
+                if (withContent)
+                {
+                    content = new GameObject("Resource81.UnsavedSafetyFixture");
+                }
+                else
+                {
+                    EditorSceneManager.MarkSceneDirty(owned);
+                }
+
                 Assert.Throws<AssertionException>(() => ResourceSessionTests.EnsureRestorableScenes());
                 Assert.That(owned.isLoaded, Is.True);
                 Assert.That(owned.path, Is.Empty);
-                if (withContent) Assert.That(content, Is.Not.Null);
+                if (withContent)
+                {
+                    Assert.That(content, Is.Not.Null);
+                }
             }
             finally
             {

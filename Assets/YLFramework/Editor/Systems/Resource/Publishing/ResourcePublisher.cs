@@ -17,18 +17,52 @@ namespace YLFramework.Editor.Resource
 {
     public sealed class ResourceRelease
     {
-        public string RootPath { get; }
-        public string DirectoryPath { get; }
-        public ResourceCatalogDocument Catalog { get; }
-        public bool IsRepeat { get; }
-        public long CopiedBytes { get; }
-        public double ElapsedMilliseconds { get; internal set; }
-        public double CopyMilliseconds { get; internal set; }
+        public string RootPath
+        {
+            get;
+        }
+        public string DirectoryPath
+        {
+            get;
+        }
+        public ResourceCatalogDocument Catalog
+        {
+            get;
+        }
+        public bool IsRepeat
+        {
+            get;
+        }
+        public long CopiedBytes
+        {
+            get;
+        }
+        public double ElapsedMilliseconds
+        {
+            get; internal set;
+        }
+        public double CopyMilliseconds
+        {
+            get; internal set;
+        }
         /// <summary>新 staging 的文件及 native 回读检查；不含提交前后其余重复完整性检查。读取历史时没有该次测量。</summary>
-        public double StagingValidationMilliseconds { get; internal set; }
-        internal string ProjectGuid { get; }
+        public double StagingValidationMilliseconds
+        {
+            get; internal set;
+        }
+        internal string ProjectGuid
+        {
+            get;
+        }
         internal ResourceRelease(string root, ResourceCatalogDocument catalog, bool repeat = false, long copied = 0, string projectGuid = null)
-        { RootPath = root; DirectoryPath = Path.Combine(root, catalog.CatalogDigest); Catalog = catalog; IsRepeat = repeat; CopiedBytes = copied; ProjectGuid = projectGuid; }
+        {
+            RootPath = root;
+            DirectoryPath = Path.Combine(root, catalog.CatalogDigest);
+            Catalog = catalog;
+            IsRepeat = repeat;
+            CopiedBytes = copied;
+            ProjectGuid = projectGuid;
+        }
     }
 
     /// <summary>本地/内部受控发布。只新增不可变版本，最后原子替换 Index；不写 StreamingAssets，不删除任何版本。</summary>
@@ -42,10 +76,15 @@ namespace YLFramework.Editor.Resource
         private const string CatalogFile = "resource-catalog.json";
         private const string CompleteFile = ".ylr-complete.json";
         private const string Staging = ".staging";
-        private static readonly int MainThread;
-        private static bool publishing;
-        private static readonly JsonSerializerSettings JsonSettings = new()
-        { TypeNameHandling = TypeNameHandling.None, MissingMemberHandling = MissingMemberHandling.Error, MaxDepth = 32, Culture = CultureInfo.InvariantCulture };
+        private static readonly int _mainThread;
+        private static bool _isPublishing;
+        private static readonly JsonSerializerSettings _jsonSettings = new()
+        {
+            TypeNameHandling = TypeNameHandling.None,
+            MissingMemberHandling = MissingMemberHandling.Error,
+            MaxDepth = 32,
+            Culture = CultureInfo.InvariantCulture
+        };
 
         private sealed class Owner
         {
@@ -77,12 +116,16 @@ namespace YLFramework.Editor.Resource
             public string CatalogDigest;
         }
 
-        static ResourcePublisher() => MainThread = Thread.CurrentThread.ManagedThreadId;
+        static ResourcePublisher() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 
         /// <summary>只返回预期输出，不创建或认领目录。</summary>
         public static string GetReleaseRoot(ResourceBuildResult result)
         {
-            if (result?.Map == null) throw new ArgumentNullException(nameof(result));
+            if (result?.Map == null)
+            {
+                throw new ArgumentNullException(nameof(result));
+            }
+
             return Root(result.Map.ProjectId, result.Platform);
         }
 
@@ -90,14 +133,21 @@ namespace YLFramework.Editor.Resource
         {
             ValidateEditor();
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
-            var root = Root(project.ProjectId, target.ToString());
-            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("A saved ResourceProject is required.");
+            }
+
+            var root = Root(project.projectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.projectId, target.ToString());
             if (owner != null)
             {
                 ValidateRoot(root, owner);
                 var index = ReadIndex(root, owner);
-                if (index != null) VerifyVersion(root, owner, index);
+                if (index != null)
+                {
+                    VerifyVersion(root, owner, index);
+                }
             }
             return root;
         }
@@ -106,17 +156,36 @@ namespace YLFramework.Editor.Resource
         public static ResourceRelease ReadCurrent(ResourceProject project, BuildTarget target, string appContentCompatibilityId)
         {
             ValidateEditor();
-            if (project && EditorUtility.IsDirty(project)) throw new InvalidOperationException("发布集合候选定义未保存，拒绝按临时身份遗漏项目：" + AssetDatabase.GetAssetPath(project));
+            if (project && EditorUtility.IsDirty(project))
+            {
+                throw new InvalidOperationException("发布集合候选定义未保存，拒绝按临时身份遗漏项目：" + AssetDatabase.GetAssetPath(project));
+            }
+
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
-            var root = Root(project.ProjectId, target.ToString());
-            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
-            if (owner == null) return null;
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("A saved ResourceProject is required.");
+            }
+
+            var root = Root(project.projectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.projectId, target.ToString());
+            if (owner == null)
+            {
+                return null;
+            }
+
             ValidateRoot(root, owner);
             var index = ReadIndex(root, owner);
-            if (index == null) return null;
+            if (index == null)
+            {
+                return null;
+            }
+
             if (index.UnityCompatibility != Application.unityVersion || index.AppContentCompatibilityId != appContentCompatibilityId)
-                throw new InvalidOperationException("Published Project has different Unity/App compatibility: " + project.ProjectId);
+            {
+                throw new InvalidOperationException("Published Project has different Unity/App compatibility: " + project.projectId);
+            }
+
             return new ResourceRelease(root, VerifyVersion(root, owner, index), projectGuid: owner.ProjectGuid);
         }
 
@@ -125,16 +194,31 @@ namespace YLFramework.Editor.Resource
         {
             ValidateEditor();
             ResourceCatalogCodec.Hex(catalogDigest, 64);
-            if (project && EditorUtility.IsDirty(project)) throw new InvalidOperationException("Save the ResourceProject before selecting a release.");
+            if (project && EditorUtility.IsDirty(project))
+            {
+                throw new InvalidOperationException("Save the ResourceProject before selecting a release.");
+            }
+
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
-            var root = Root(project.ProjectId, target.ToString());
-            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
-            if (owner == null || !owner.KnownVersions.Contains(catalogDigest)) throw new InvalidDataException("The selected version is not an owned release.");
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("A saved ResourceProject is required.");
+            }
+
+            var root = Root(project.projectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.projectId, target.ToString());
+            if (owner == null || !owner.KnownVersions.Contains(catalogDigest))
+            {
+                throw new InvalidDataException("The selected version is not an owned release.");
+            }
+
             ValidateRoot(root, owner);
             var catalog = VerifyComplete(Path.Combine(root, catalogDigest), owner, null);
             if (catalog.UnityCompatibility != Application.unityVersion || catalog.AppContentCompatibilityId != appContentCompatibilityId)
+            {
                 throw new InvalidDataException("The selected release has incompatible Unity/App requirements.");
+            }
+
             return new ResourceRelease(root, catalog, projectGuid: owner.ProjectGuid);
         }
 
@@ -142,12 +226,24 @@ namespace YLFramework.Editor.Resource
         public static IReadOnlyList<ResourceRelease> ReadHistory(ResourceProject project, BuildTarget target)
         {
             ValidateEditor();
-            if (project && EditorUtility.IsDirty(project)) throw new InvalidOperationException("Save the ResourceProject before reading owned history.");
+            if (project && EditorUtility.IsDirty(project))
+            {
+                throw new InvalidOperationException("Save the ResourceProject before reading owned history.");
+            }
+
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
-            var root = Root(project.ProjectId, target.ToString());
-            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
-            if (owner == null) return Array.Empty<ResourceRelease>();
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("A saved ResourceProject is required.");
+            }
+
+            var root = Root(project.projectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.projectId, target.ToString());
+            if (owner == null)
+            {
+                return Array.Empty<ResourceRelease>();
+            }
+
             ValidateRoot(root, owner);
             return owner.KnownVersions.OrderBy(x => x, StringComparer.Ordinal).Select(digest =>
                 new ResourceRelease(root, VerifyComplete(Path.Combine(root, digest), owner, null), projectGuid: owner.ProjectGuid)).ToList().AsReadOnly();
@@ -156,16 +252,32 @@ namespace YLFramework.Editor.Resource
         internal static ResourceCatalogDocument VerifyExportInput(ResourceRelease release, string copiedDirectory = null)
         {
             ValidateEditor();
-            if (release?.Catalog == null || string.IsNullOrEmpty(release.ProjectGuid)) throw new ArgumentException("An explicit owned release is required.");
+            if (release?.Catalog == null || string.IsNullOrEmpty(release.ProjectGuid))
+            {
+                throw new ArgumentException("An explicit owned release is required.");
+            }
+
             var catalog = release.Catalog;
             var root = Root(catalog.ProjectId, catalog.Platform);
-            if (root != release.RootPath) throw new InvalidOperationException("Release root identity differs from its Publisher origin.");
+            if (root != release.RootPath)
+            {
+                throw new InvalidOperationException("Release root identity differs from its Publisher origin.");
+            }
+
             var owner = ReadOwner(root, release.ProjectGuid, catalog.ProjectId, catalog.Platform);
-            if (owner == null || !owner.KnownVersions.Contains(catalog.CatalogDigest)) throw new InvalidOperationException("Release is no longer registered to this owner.");
+            if (owner == null || !owner.KnownVersions.Contains(catalog.CatalogDigest))
+            {
+                throw new InvalidOperationException("Release is no longer registered to this owner.");
+            }
+
             ValidateRoot(root, owner);
             var expected = ResourceReleaseIndex.Create(catalog);
             var verified = VerifyComplete(release.DirectoryPath, owner, expected);
-            if (copiedDirectory != null) VerifyComplete(copiedDirectory, owner, expected);
+            if (copiedDirectory != null)
+            {
+                VerifyComplete(copiedDirectory, owner, expected);
+            }
+
             return verified;
         }
 
@@ -184,16 +296,27 @@ namespace YLFramework.Editor.Resource
             Action<string> checkpoint, IResourceContentKeyProvider provider)
         {
             ValidateEditor();
-            if (publishing) throw new InvalidOperationException("A resource publication is already running.");
+            if (_isPublishing)
+            {
+                throw new InvalidOperationException("A resource publication is already running.");
+            }
+
             cancellation.ThrowIfCancellationRequested();
-            publishing = true;
+            _isPublishing = true;
             byte[] contentKey = null;
             try
             {
-                if (result == null) throw new ArgumentNullException(nameof(result));
+                if (result == null)
+                {
+                    throw new ArgumentNullException(nameof(result));
+                }
+
                 ResourceBundleBuilder.ValidateContentPolicy(result.ContentEncryption, result.ContentKeyId, result.Platform);
                 if (result.ContentEncryption != ResourceContentEncryption.None)
+                {
                     contentKey = ResourceBundleBuilder.CopyContentKey(provider, result.Map.ProjectId, result.ContentKeyId);
+                }
+
                 var elapsed = Stopwatch.StartNew();
                 var copyWatch = new Stopwatch();
                 var validationWatch = new Stopwatch();
@@ -201,18 +324,28 @@ namespace YLFramework.Editor.Resource
                 var catalog = ResourceCatalogBuilder.CreateLocked(result, app);
                 // 命中已发布版本也必须验证本次key及所有段，不能只信BuildResult或历史Complete。
                 if (result.ContentEncryption != ResourceContentEncryption.None)
+                {
                     VerifyContent(result.DeliveryPath, catalog, result, contentKey, cancellation, workspaceNames: true);
+                }
+
                 var root = GetReleaseRoot(result);
                 var owner = ReadOwner(root, result.Map.ProjectGuid, result.Map.ProjectId, result.Platform);
                 using var releaseLock = Acquire(root, ref owner, result.Map.ProjectGuid, result.Map.ProjectId, result.Platform);
                 RecoverLocked(root, owner);
                 var current = ReadIndex(root, owner);
-                if (current != null) VerifyVersion(root, owner, current);
+                if (current != null)
+                {
+                    VerifyVersion(root, owner, current);
+                }
+
                 var target = ResourceReleaseIndex.Create(catalog);
                 var directory = Path.Combine(root, target.CatalogDigest);
                 ResourceRelease Completed(bool repeat = false, long bytes = 0) => new(root, catalog, repeat, bytes, result.Map.ProjectGuid)
-                { ElapsedMilliseconds = elapsed.Elapsed.TotalMilliseconds, CopyMilliseconds = copyWatch.Elapsed.TotalMilliseconds,
-                    StagingValidationMilliseconds = validationWatch.Elapsed.TotalMilliseconds };
+                {
+                    ElapsedMilliseconds = elapsed.Elapsed.TotalMilliseconds,
+                    CopyMilliseconds = copyWatch.Elapsed.TotalMilliseconds,
+                    StagingValidationMilliseconds = validationWatch.Elapsed.TotalMilliseconds
+                };
                 var existing = Directory.Exists(directory);
                 if (existing)
                 {
@@ -223,18 +356,31 @@ namespace YLFramework.Editor.Resource
                         VerifyNative(directory, catalog, result, cancellation, contentKey);
                     }
                 }
-                if (current?.CatalogDigest == target.CatalogDigest) return Completed(true);
+                if (current?.CatalogDigest == target.CatalogDigest)
+                {
+                    return Completed(true);
+                }
+
                 cancellation.ThrowIfCancellationRequested();
                 var journal = new Journal
                 {
-                    ProjectGuid = owner.ProjectGuid, ProjectId = owner.ProjectId, Platform = owner.Platform,
-                    Attempt = Guid.NewGuid().ToString("N"), From = current == null ? null : Parse(current.Write()), To = Parse(target.Write()),
+                    ProjectGuid = owner.ProjectGuid,
+                    ProjectId = owner.ProjectId,
+                    Platform = owner.Platform,
+                    Attempt = Guid.NewGuid().ToString("N"),
+                    From = current == null ? null : Parse(current.Write()),
+                    To = Parse(target.Write()),
                     Files = AllFiles(catalog).Select(x => x.RelativeFile).Append(CatalogFile).Append(CompleteFile).OrderBy(x => x, StringComparer.Ordinal).ToArray()
                 };
                 AtomicWrite(root, JournalFile, Metadata(journal), cancellation);
                 var stage = Path.Combine(root, Staging, journal.Attempt);
                 long copied = 0;
-                void Step(string name) { checkpoint?.Invoke(name); cancellation.ThrowIfCancellationRequested(); ValidateRoot(root, owner, journal); }
+                void Step(string name)
+                {
+                    checkpoint?.Invoke(name);
+                    cancellation.ThrowIfCancellationRequested();
+                    ValidateRoot(root, owner, journal);
+                }
                 if (!existing)
                 {
                     Directory.CreateDirectory(stage);
@@ -246,7 +392,11 @@ namespace YLFramework.Editor.Resource
                         copyWatch.Start();
                         using (var source = ResourceBuildWorkspace.OpenVerified(Path.Combine(result.DeliveryPath, file.Name), file.Length, file.Sha256, cancellation))
                         using (var output = File.Open(Path.Combine(stage, ResourceCatalogBuilder.PublishedFile(result, file.Name)), FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                        { ResourceBundleBuilder.CopyContent(source, output, cancellation); output.Flush(true); copied += source.Length; }
+                        {
+                            ResourceBundleBuilder.CopyContent(source, output, cancellation);
+                            output.Flush(true);
+                            copied += source.Length;
+                        }
                         copyWatch.Stop();
                         Step("FileCopied");
                     }
@@ -254,17 +404,31 @@ namespace YLFramework.Editor.Resource
                     Step("CatalogWritten");
                     validationWatch.Start();
                     VerifyFiles(stage, catalog, false);
-                    if (result.ContentEncryption != ResourceContentEncryption.None) VerifyContent(stage, catalog, result, contentKey, cancellation);
+                    if (result.ContentEncryption != ResourceContentEncryption.None)
+                    {
+                        VerifyContent(stage, catalog, result, contentKey, cancellation);
+                    }
+
                     VerifyNative(stage, catalog, result, cancellation, contentKey);
                     validationWatch.Stop();
-                    WriteNew(Path.Combine(stage, CompleteFile), Metadata(new Complete { ProjectGuid = owner.ProjectGuid,
-                        ProjectId = owner.ProjectId, Platform = owner.Platform, BuildId = catalog.BuildId, CatalogDigest = catalog.CatalogDigest }));
+                    WriteNew(Path.Combine(stage, CompleteFile), Metadata(new Complete
+                    {
+                        ProjectGuid = owner.ProjectGuid,
+                        ProjectId = owner.ProjectId,
+                        Platform = owner.Platform,
+                        BuildId = catalog.BuildId,
+                        CatalogDigest = catalog.CatalogDigest
+                    }));
                     validationWatch.Start();
                     VerifyComplete(stage, owner, target);
                     validationWatch.Stop();
                     Step("StageVerified");
                     owner.KnownVersions = owner.KnownVersions.Append(target.CatalogDigest).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-                    if (owner.KnownVersions.Length > 1024) throw new InvalidOperationException("Owned release version registration limit exceeded.");
+                    if (owner.KnownVersions.Length > 1024)
+                    {
+                        throw new InvalidOperationException("Owned release version registration limit exceeded.");
+                    }
+
                     AtomicWrite(root, OwnerFile, Metadata(owner), cancellation);
                     VerifyComplete(stage, owner, target);
                     Directory.Move(stage, directory);
@@ -273,8 +437,16 @@ namespace YLFramework.Editor.Resource
                 VerifyVersion(root, owner, target);
                 Step("BeforeIndex");
                 // 回调/外部受控工具也不能在提交前改掉基线；不以目录里的“最新”猜测授权。
-                if (!SameIndex(ReadIndex(root, owner), current)) throw new InvalidOperationException("Release Index changed during publication.");
-                if (current != null) VerifyVersion(root, owner, current);
+                if (!SameIndex(ReadIndex(root, owner), current))
+                {
+                    throw new InvalidOperationException("Release Index changed during publication.");
+                }
+
+                if (current != null)
+                {
+                    VerifyVersion(root, owner, current);
+                }
+
                 VerifyVersion(root, owner, target);
                 ValidateRoot(root, owner, journal);
                 cancellation.ThrowIfCancellationRequested();
@@ -286,8 +458,12 @@ namespace YLFramework.Editor.Resource
             }
             finally
             {
-                if (contentKey != null) Array.Clear(contentKey, 0, contentKey.Length);
-                publishing = false;
+                if (contentKey != null)
+                {
+                    Array.Clear(contentKey, 0, contentKey.Length);
+                }
+
+                _isPublishing = false;
             }
         }
 
@@ -295,20 +471,43 @@ namespace YLFramework.Editor.Resource
         public static ResourceRelease Recover(ResourceProject project, BuildTarget target, string appContentCompatibilityId)
         {
             ValidateEditor();
-            if (publishing) throw new InvalidOperationException("A resource publication is already running.");
-            if (!project) throw new ArgumentNullException(nameof(project));
+            if (_isPublishing)
+            {
+                throw new InvalidOperationException("A resource publication is already running.");
+            }
+
+            if (!project)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
+
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
-            if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("A saved ResourceProject is required.");
-            var root = Root(project.ProjectId, target.ToString());
-            var owner = ReadOwner(root, guid, project.ProjectId, target.ToString());
-            if (owner == null) return null;
-            using var locked = Acquire(root, ref owner, guid, project.ProjectId, target.ToString());
+            if (string.IsNullOrEmpty(guid))
+            {
+                throw new InvalidOperationException("A saved ResourceProject is required.");
+            }
+
+            var root = Root(project.projectId, target.ToString());
+            var owner = ReadOwner(root, guid, project.projectId, target.ToString());
+            if (owner == null)
+            {
+                return null;
+            }
+
+            using var locked = Acquire(root, ref owner, guid, project.projectId, target.ToString());
             RecoverLocked(root, owner);
             var index = ReadIndex(root, owner);
-            if (index == null) return null;
+            if (index == null)
+            {
+                return null;
+            }
+
             var catalog = VerifyVersion(root, owner, index);
             if (catalog.UnityCompatibility != Application.unityVersion || catalog.AppContentCompatibilityId != appContentCompatibilityId)
+            {
                 throw new InvalidDataException("Current published release is not compatible with the explicit recovery configuration.");
+            }
+
             return new ResourceRelease(root, catalog, projectGuid: owner.ProjectGuid);
         }
 
@@ -316,13 +515,23 @@ namespace YLFramework.Editor.Resource
         {
             ValidateRoot(root, owner);
             var journal = ReadJournal(root, owner);
-            if (journal == null) return;
+            if (journal == null)
+            {
+                return;
+            }
+
             var from = JournalIndex(journal.From, owner);
             var to = JournalIndex(journal.To, owner);
             var current = ReadIndex(root, owner);
             if (!SameIndex(current, from) && !SameIndex(current, to))
+            {
                 throw new InvalidOperationException("Journal has a stale/conflicting base; refusing to overwrite the current Release Index.");
-            if (current != null) VerifyVersion(root, owner, current);
+            }
+
+            if (current != null)
+            {
+                VerifyVersion(root, owner, current);
+            }
             // From 仍有效即中止；To 已提交即确认成功。完整但未被索引的新版本也保留，不删除已安装目录。
             var stage = Path.Combine(root, Staging, journal.Attempt);
             if (Directory.Exists(stage))
@@ -331,47 +540,87 @@ namespace YLFramework.Editor.Resource
                 foreach (var file in journal.Files)
                 {
                     var path = Path.Combine(stage, file);
-                    if (File.Exists(path)) File.Delete(path);
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
                 }
                 Directory.Delete(stage, false);
             }
             ValidateRoot(root, owner, journal);
             File.Delete(Path.Combine(root, JournalFile));
-            if (File.Exists(Path.Combine(root, JournalFile + ".next"))) File.Delete(Path.Combine(root, JournalFile + ".next"));
+            if (File.Exists(Path.Combine(root, JournalFile + ".next")))
+            {
+                File.Delete(Path.Combine(root, JournalFile + ".next"));
+            }
         }
 
         private static FileStream Acquire(string root, ref Owner owner, string guid, string project, string platform)
         {
             var creating = owner == null;
-            if (creating) Directory.CreateDirectory(root);
+            if (creating)
+            {
+                Directory.CreateDirectory(root);
+            }
+
             var locked = File.Open(Path.Combine(root, LockFile), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             try
             {
                 if (creating && !File.Exists(Path.Combine(root, OwnerFile)))
                 {
                     if (Directory.GetFileSystemEntries(root).Any(x => Path.GetFileName(x) != LockFile))
+                    {
                         throw new InvalidOperationException("Unknown content appeared before output ownership registration.");
+                    }
+
                     owner = new Owner { ProjectRoot = ResourceBuildMap.Absolute("."), ProjectGuid = guid, ProjectId = project, Platform = platform };
                     AtomicWrite(root, OwnerFile, Metadata(owner));
                 }
-                else owner = ReadOwner(root, guid, project, platform);
+                else
+                {
+                    owner = ReadOwner(root, guid, project, platform);
+                }
+
                 ValidateRoot(root, owner);
                 return locked;
             }
-            catch { locked.Dispose(); throw; }
+            catch
+            {
+                locked.Dispose();
+                throw;
+            }
         }
 
         private static Owner ReadOwner(string root, string guid, string project, string platform)
         {
             ResourceBuildOperation.RejectLinks(root);
-            if (File.Exists(root) || File.Exists(root + ".meta")) throw new InvalidOperationException("Release root is occupied by a file or orphan meta.");
-            if (!Directory.Exists(root)) return null;
-            if (!File.Exists(Path.Combine(root, OwnerFile))) throw new InvalidOperationException("Unknown release output; refusing adoption.");
+            if (File.Exists(root) || File.Exists(root + ".meta"))
+            {
+                throw new InvalidOperationException("Release root is occupied by a file or orphan meta.");
+            }
+
+            if (!Directory.Exists(root))
+            {
+                return null;
+            }
+
+            if (!File.Exists(Path.Combine(root, OwnerFile)))
+            {
+                throw new InvalidOperationException("Unknown release output; refusing adoption.");
+            }
+
             var owner = ReadMetadata<Owner>(Path.Combine(root, OwnerFile), "Version,ProjectRoot,ProjectGuid,ProjectId,Platform,KnownVersions");
             if (owner.Version != 1 || owner.ProjectRoot != ResourceBuildMap.Absolute(".") || owner.ProjectGuid != guid || owner.ProjectId != project || owner.Platform != platform ||
                 owner.KnownVersions == null || owner.KnownVersions.Length > 1024 || owner.KnownVersions.Distinct(StringComparer.Ordinal).Count() != owner.KnownVersions.Length)
+            {
                 throw new InvalidOperationException("Release output ownership conflict.");
-            foreach (var digest in owner.KnownVersions) Hex(digest, 64);
+            }
+
+            foreach (var digest in owner.KnownVersions)
+            {
+                Hex(digest, 64);
+            }
+
             ValidateRoot(root, owner);
             return owner;
         }
@@ -380,27 +629,47 @@ namespace YLFramework.Editor.Resource
         {
             ResourceBuildOperation.RejectLinks(root);
             if (owner == null || !File.Exists(Path.Combine(root, OwnerFile)))
+            {
                 throw new InvalidOperationException("Release ownership was removed during the transaction.");
+            }
+
             var liveOwner = ReadMetadata<Owner>(Path.Combine(root, OwnerFile), "Version,ProjectRoot,ProjectGuid,ProjectId,Platform,KnownVersions");
             if (!Metadata(liveOwner).SequenceEqual(Metadata(owner)))
+            {
                 throw new InvalidOperationException("Release ownership/version registration changed during the transaction.");
+            }
+
             var journal = ReadJournal(root, owner);
             if (expectedJournal != null && (journal == null || !Metadata(journal).SequenceEqual(Metadata(expectedJournal))))
+            {
                 throw new InvalidOperationException("Publication journal no longer authorizes this attempt.");
+            }
+
             var controls = new[] { OwnerFile, OwnerFile + ".next", LockFile, JournalFile, JournalFile + ".next", IndexFile, IndexFile + ".next" };
             foreach (var path in Directory.GetFileSystemEntries(root))
             {
                 var name = Path.GetFileName(path);
-                if (File.Exists(path) && controls.Contains(name, StringComparer.Ordinal)) continue;
+                if (File.Exists(path) && controls.Contains(name, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
                 if (Directory.Exists(path) && name == Staging)
                 {
                     foreach (var entry in Directory.GetFileSystemEntries(path))
                     {
                         if (journal == null || !Directory.Exists(entry) || Path.GetFileName(entry) != journal.Attempt)
+                        {
                             throw new InvalidOperationException("Unregistered staging content: " + entry);
+                        }
+
                         foreach (var file in Directory.GetFileSystemEntries(entry))
+                        {
                             if (!File.Exists(file) || !journal.Files.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+                            {
                                 throw new InvalidOperationException("Unregistered stage file/directory: " + file);
+                            }
+                        }
                     }
                     continue;
                 }
@@ -416,21 +685,43 @@ namespace YLFramework.Editor.Resource
         private static Journal ReadJournal(string root, Owner owner)
         {
             var path = Path.Combine(root, JournalFile);
-            if (!File.Exists(path)) return null;
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
             var journal = ReadMetadata<Journal>(path, "Version,ProjectGuid,ProjectId,Platform,Attempt,From,To,Files");
             if (journal.Version != 1 || journal.ProjectGuid != owner.ProjectGuid || journal.ProjectId != owner.ProjectId || journal.Platform != owner.Platform)
+            {
                 throw new InvalidOperationException("Publication journal ownership conflict.");
+            }
+
             Hex(journal.Attempt, 32);
             if (JournalIndex(journal.To, owner) == null || journal.Files == null || journal.Files.Length == 0 || journal.Files.Length > 65540 ||
                 journal.Files.Distinct(StringComparer.OrdinalIgnoreCase).Count() != journal.Files.Length || !journal.Files.Contains(CatalogFile) || !journal.Files.Contains(CompleteFile))
+            {
                 throw new InvalidDataException("Invalid publication journal file registration.");
+            }
+
             JournalIndex(journal.From, owner);
             foreach (var file in journal.Files)
             {
-                if (file == CatalogFile || file == CompleteFile) continue;
+                if (file == CatalogFile || file == CompleteFile)
+                {
+                    continue;
+                }
+
                 var native = file.EndsWith(".manifest", StringComparison.Ordinal) ? file.Substring(0, file.Length - 9) : file;
-                if (native == "manifest") continue;
-                if (!native.StartsWith("b_", StringComparison.Ordinal)) throw new InvalidDataException("Unsafe publication journal file.");
+                if (native == "manifest")
+                {
+                    continue;
+                }
+
+                if (!native.StartsWith("b_", StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("Unsafe publication journal file.");
+                }
+
                 Hex(native.Substring(2), 32);
             }
             return journal;
@@ -441,7 +732,11 @@ namespace YLFramework.Editor.Resource
 
         private static ResourceReleaseIndex JournalIndex(JObject data, Owner owner)
         {
-            if (data == null) return null;
+            if (data == null)
+            {
+                return null;
+            }
+
             return ResourceReleaseIndex.Read(Canonical(data), owner.ProjectId, owner.Platform,
                 (string)data["UnityCompatibility"], (string)data["AppContentCompatibilityId"]);
         }
@@ -450,27 +745,49 @@ namespace YLFramework.Editor.Resource
 
         private static ResourceCatalogDocument VerifyVersion(string root, Owner owner, ResourceReleaseIndex index)
         {
-            if (!owner.KnownVersions.Contains(index.CatalogDigest, StringComparer.Ordinal)) throw new InvalidOperationException("Release Index references an unowned version.");
+            if (!owner.KnownVersions.Contains(index.CatalogDigest, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException("Release Index references an unowned version.");
+            }
+
             return VerifyComplete(Path.Combine(root, index.CatalogDigest), owner, index);
         }
 
         private static ResourceCatalogDocument VerifyComplete(string directory, Owner owner, ResourceReleaseIndex expected, bool hashFiles = true)
         {
             ResourceBuildOperation.RejectLinks(directory);
-            if (!Directory.Exists(directory)) throw new InvalidDataException("Published version directory is missing.");
+            if (!Directory.Exists(directory))
+            {
+                throw new InvalidDataException("Published version directory is missing.");
+            }
+
             var complete = ReadMetadata<Complete>(Path.Combine(directory, CompleteFile), "Version,ProjectGuid,ProjectId,Platform,BuildId,CatalogDigest");
             if (complete.Version != 1 || complete.ProjectGuid != owner.ProjectGuid || complete.ProjectId != owner.ProjectId || complete.Platform != owner.Platform)
+            {
                 throw new InvalidOperationException("Published snapshot ownership conflict.");
-            Hex(complete.BuildId, 64); Hex(complete.CatalogDigest, 64);
+            }
+
+            Hex(complete.BuildId, 64);
+            Hex(complete.CatalogDigest, 64);
             if (Path.GetFileName(directory) != complete.CatalogDigest && Path.GetFileName(Path.GetDirectoryName(directory)) != Staging)
+            {
                 throw new InvalidDataException("Version directory does not match CatalogDigest.");
+            }
+
             var bytes = ReadBounded(Path.Combine(directory, CatalogFile));
-            if (ResourceCatalogCodec.Digest(bytes) != complete.CatalogDigest) throw new InvalidDataException("CatalogDigest mismatch.");
+            if (ResourceCatalogCodec.Digest(bytes) != complete.CatalogDigest)
+            {
+                throw new InvalidDataException("CatalogDigest mismatch.");
+            }
+
             var header = Parse(bytes);
             var catalog = ResourceCatalogCodec.Read(bytes, owner.ProjectId, owner.Platform,
                 (string)header["UnityCompatibility"], (string)header["AppContentCompatibilityId"]);
             if (catalog.BuildId != complete.BuildId || expected != null && !expected.Write().SequenceEqual(ResourceReleaseIndex.Create(catalog).Write()))
+            {
                 throw new InvalidDataException("Complete/Catalog/Release Index identity mismatch.");
+            }
+
             VerifyFiles(directory, catalog, true, hashFiles);
             return catalog;
         }
@@ -480,19 +797,35 @@ namespace YLFramework.Editor.Resource
         private static void VerifyFiles(string directory, ResourceCatalogDocument catalog, bool complete, bool hashFiles = true)
         {
             var expected = AllFiles(catalog).Select(x => x.RelativeFile).Append(CatalogFile).ToList();
-            if (complete) expected.Add(CompleteFile);
+            if (complete)
+            {
+                expected.Add(CompleteFile);
+            }
+
             if (!Directory.GetFileSystemEntries(directory).All(File.Exists) || !Directory.GetFiles(directory).Select(Path.GetFileName)
                 .OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(expected.OrderBy(x => x, StringComparer.Ordinal)))
+            {
                 throw new InvalidOperationException("Snapshot contains missing or unregistered files/directories.");
+            }
+
             if (ResourceCatalogCodec.Digest(ReadBounded(Path.Combine(directory, CatalogFile))) != catalog.CatalogDigest)
+            {
                 throw new InvalidDataException("Staged Catalog changed during publication.");
-            if (!hashFiles) return;
+            }
+
+            if (!hashFiles)
+            {
+                return;
+            }
+
             foreach (var file in AllFiles(catalog))
             {
                 using var stream = File.OpenRead(Path.Combine(directory, file.RelativeFile));
                 using var sha = SHA256.Create();
                 if (stream.Length != file.Length || BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant() != file.Sha256)
+                {
                     throw new InvalidDataException("Snapshot file integrity mismatch: " + file.RelativeFile);
+                }
             }
         }
 
@@ -516,12 +849,20 @@ namespace YLFramework.Editor.Resource
         }
 
         // 卸载/释放异常时保留原owner，不让GC或下一次验证猜测native已停止读取。
-        private static readonly List<NativeReadback> retainedReadbacks = new();
+        private static readonly List<NativeReadback> _retainedReadbacks = new();
 
         private static void VerifyNative(string directory, ResourceCatalogDocument catalog, ResourceBuildResult result, CancellationToken cancellation, byte[] key)
         {
-            if (retainedReadbacks.Count != 0) throw new InvalidOperationException("A previous native readback owner could not be released; ownership is retained for diagnosis.");
-            if (AssetBundle.GetAllLoadedAssetBundles().Any(x => x)) throw new InvalidOperationException("Native publication readback requires no externally loaded Bundles.");
+            if (_retainedReadbacks.Count != 0)
+            {
+                throw new InvalidOperationException("A previous native readback owner could not be released; ownership is retained for diagnosis.");
+            }
+
+            if (AssetBundle.GetAllLoadedAssetBundles().Any(x => x))
+            {
+                throw new InvalidOperationException("Native publication readback requires no externally loaded Bundles.");
+            }
+
             var loaded = new List<NativeReadback>();
             var bundles = new Dictionary<string, AssetBundle>(StringComparer.Ordinal);
             Exception primaryFailure = null;
@@ -530,15 +871,27 @@ namespace YLFramework.Editor.Resource
                 var owner = new NativeReadback();
                 loaded.Add(owner);
                 if (result.ContentEncryption == ResourceContentEncryption.None)
+                {
                     owner.Bundle = AssetBundle.LoadFromFile(Path.Combine(directory, file.RelativeFile));
+                }
                 else
                 {
                     var verified = ResourceBuildWorkspace.OpenVerified(Path.Combine(directory, file.RelativeFile), file.Length, file.Sha256, cancellation);
                     var name = file is ResourceCatalogBundle bundle ? bundle.LogicalId : result.ManifestBundleFile;
-                    try { owner.Input = ResourceBundleInput.Open(verified, ResourceBundleBuilder.ContentContext(result, name), key, token: cancellation); }
-                    catch { verified.Dispose(); throw; }
+                    try
+                    {
+                        owner.Input = ResourceBundleInput.Open(verified, ResourceBundleBuilder.ContentContext(result, name), key, token: cancellation);
+                    }
+                    catch
+                    {
+                        verified.Dispose();
+                        throw;
+                    }
                     owner.Bundle = AssetBundle.LoadFromStream(owner.Input.Stream, 0, ResourceBundleEnvelope.NativeReadBufferSize);
-                    if (owner.Input.Fault != null) throw owner.Input.Fault;
+                    if (owner.Input.Fault != null)
+                    {
+                        throw owner.Input.Fault;
+                    }
                 }
                 return owner;
             }
@@ -546,49 +899,101 @@ namespace YLFramework.Editor.Resource
             {
                 var rootOwner = Load(catalog.SupportFiles.Single(x => x.RelativeFile == catalog.ManifestFile));
                 var root = rootOwner.Bundle;
-                if (!root) throw new InvalidDataException("Cannot read staged Manifest Bundle.");
+                if (!root)
+                {
+                    throw new InvalidDataException("Cannot read staged Manifest Bundle.");
+                }
+
                 var manifest = root.LoadAsset<AssetBundleManifest>("AssetBundleManifest");
                 if (!manifest || !manifest.GetAllAssetBundles().OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(catalog.Bundles.Select(x => x.LogicalId)))
+                {
                     throw new InvalidDataException("Catalog/Manifest Bundle set mismatch.");
+                }
+
                 while (bundles.Count != catalog.Bundles.Count)
                 {
                     var batch = catalog.Bundles.Where(x => !bundles.ContainsKey(x.LogicalId) && x.Dependencies.All(bundles.ContainsKey)).ToArray();
-                    if (batch.Length == 0) throw new InvalidDataException("Catalog Bundle dependency cycle.");
+                    if (batch.Length == 0)
+                    {
+                        throw new InvalidDataException("Catalog Bundle dependency cycle.");
+                    }
+
                     foreach (var entry in batch)
                     {
                         cancellation.ThrowIfCancellationRequested();
                         if (manifest.GetAssetBundleHash(entry.NativeName).ToString() != entry.UnityHash ||
                             !manifest.GetDirectDependencies(entry.NativeName).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(entry.Dependencies))
+                        {
                             throw new InvalidDataException("Catalog/Manifest dependency/hash mismatch.");
+                        }
+
                         var owner = Load(entry);
                         var bundle = owner.Bundle;
-                        if (!bundle) throw new InvalidDataException("Cannot read staged Bundle: " + entry.RelativeFile);
+                        if (!bundle)
+                        {
+                            throw new InvalidDataException("Cannot read staged Bundle: " + entry.RelativeFile);
+                        }
+
                         bundles.Add(entry.LogicalId, bundle);
-                        if (bundle.name != entry.NativeName) throw new InvalidDataException("Staged native Bundle identity mismatch.");
+                        if (bundle.name != entry.NativeName)
+                        {
+                            throw new InvalidDataException("Staged native Bundle identity mismatch.");
+                        }
+
                         var paths = entry.IsScene ? bundle.GetAllScenePaths() : bundle.GetAllAssetNames();
                         if (!paths.Select(x => x.ToLowerInvariant()).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(
                             result.Map.Bundles.Single(x => x.Name == entry.LogicalId).AssetPaths.Select(x => x.ToLowerInvariant()).OrderBy(x => x, StringComparer.Ordinal)))
+                        {
                             throw new InvalidDataException("Staged Bundle file contents mismatch.");
+                        }
+
                         foreach (var asset in result.Map.Assets.Where(x => x.BundleName == entry.LogicalId && !x.IsScene))
                         {
                             var value = bundle.LoadAsset(asset.SourcePath, asset.AssetType);
-                            if (!value || !asset.AssetType.IsInstanceOfType(value)) throw new InvalidDataException("Staged main asset type mismatch.");
-                            if (value is UnityEngine.U2D.SpriteAtlas atlas) ResourceAtlasRules.ValidateReadback(atlas, asset.SourcePath);
+                            if (!value || !asset.AssetType.IsInstanceOfType(value))
+                            {
+                                throw new InvalidDataException("Staged main asset type mismatch.");
+                            }
+
+                            if (value is UnityEngine.U2D.SpriteAtlas atlas)
+                            {
+                                ResourceAtlasRules.ValidateReadback(atlas, asset.SourcePath);
+                            }
                         }
                         foreach (var sub in result.SubAssets.Where(x => x.MainAsset.BundleName == entry.LogicalId))
+                        {
                             if (bundle.LoadAssetWithSubAssets(sub.MainAsset.SourcePath, sub.AssetType).Count(x => x && x.name == sub.Name && sub.AssetType.IsInstanceOfType(x)) != 1)
+                            {
                                 throw new InvalidDataException("Staged subasset is ambiguous/missing.");
-                        if (owner.Input?.Fault != null) throw owner.Input.Fault;
+                            }
+                        }
+
+                        if (owner.Input?.Fault != null)
+                        {
+                            throw owner.Input.Fault;
+                        }
                     }
                 }
                 foreach (var owner in loaded)
-                    if (owner.Input?.Fault != null) throw owner.Input.Fault;
+                {
+                    if (owner.Input?.Fault != null)
+                    {
+                        throw owner.Input.Fault;
+                    }
+                }
             }
-            catch (Exception error) { primaryFailure = error; throw; }
+            catch (Exception error)
+            {
+                primaryFailure = error;
+                throw;
+            }
             finally
             {
                 var cleanup = ReleaseNativeReadbacks(loaded);
-                if (cleanup != null) throw primaryFailure == null ? cleanup : new AggregateException("Native readback and owner release failed.", primaryFailure, cleanup);
+                if (cleanup != null)
+                {
+                    throw primaryFailure == null ? cleanup : new AggregateException("Native readback and owner release failed.", primaryFailure, cleanup);
+                }
             }
         }
 
@@ -600,16 +1005,23 @@ namespace YLFramework.Editor.Resource
                 var owner = loaded[i];
                 try
                 {
-                    if (owner.Bundle) { owner.Bundle.Unload(true); owner.Bundle = null; }
+                    if (owner.Bundle)
+                    {
+                        owner.Bundle.Unload(true);
+                        owner.Bundle = null;
+                    }
                     // 较早依赖可能在后续资产物化或卸载时才失败；释放输入不能抹去这个发布失败。
                     if (owner.Input?.Fault != null)
+                    {
                         (failures ??= new()).Add(new IOException("A staged native input faulted before release.", owner.Input.Fault));
+                    }
+
                     owner.Input?.Dispose();
                     owner.Input = null;
                 }
                 catch (Exception error)
                 {
-                    retainedReadbacks.Add(owner);
+                    _retainedReadbacks.Add(owner);
                     (failures ??= new()).Add(new InvalidOperationException("Native/input release failed; the original owner is retained and further verification is refused.", error));
                 }
             }
@@ -622,51 +1034,88 @@ namespace YLFramework.Editor.Resource
             var reserved = new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" };
             if (project.Length > 128 || project.EndsWith(".", StringComparison.Ordinal) || reserved.Contains(project.Split('.')[0], StringComparer.OrdinalIgnoreCase) ||
                 !new[] { "StandaloneWindows64", "StandaloneOSX", "StandaloneLinux64" }.Contains(platform, StringComparer.Ordinal))
+            {
                 throw new InvalidOperationException("Unsafe release ProjectId or unsupported platform.");
+            }
+
             var root = ResourceBuildMap.Absolute("AssetBundles/YLFramework/" + project + "/" + platform);
             if (Path.DirectorySeparatorChar == '\\' && Path.Combine(root, new string('0', 64), "b_" + new string('0', 32) + ".manifest").Length >= 260)
+            {
                 throw new InvalidOperationException("Release paths exceed this Unity Mono Windows file API limit; use a shorter project root/ProjectId.");
+            }
+
             return root;
         }
         private static void ValidateEditor()
         {
-            if (Thread.CurrentThread.ManagedThreadId != MainThread || EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
                 throw new InvalidOperationException("Publication requires a settled Editor main thread outside Play mode.");
+            }
         }
         private static void Hex(string value, int count)
         {
             if (value == null || value.Length != count || value.Any(x => !(x >= '0' && x <= '9' || x >= 'a' && x <= 'f')))
+            {
                 throw new InvalidDataException("Invalid canonical publication identity/token.");
+            }
         }
         private static byte[] ReadBounded(string path)
         {
-            if (!File.Exists(path) || new FileInfo(path).Length > ResourceCatalogCodec.MaximumBytes) throw new InvalidDataException("Missing or oversized publication metadata: " + path);
+            if (!File.Exists(path) || new FileInfo(path).Length > ResourceCatalogCodec.MaximumBytes)
+            {
+                throw new InvalidDataException("Missing or oversized publication metadata: " + path);
+            }
+
             return File.ReadAllBytes(path);
         }
         private static JObject Parse(byte[] bytes)
         {
             try
             {
-                if (bytes.Length == 0 || bytes.Length > ResourceCatalogCodec.MaximumBytes) throw new InvalidDataException("Publication metadata limit exceeded.");
+                if (bytes.Length == 0 || bytes.Length > ResourceCatalogCodec.MaximumBytes)
+                {
+                    throw new InvalidDataException("Publication metadata limit exceeded.");
+                }
+
                 using var input = new StringReader(new UTF8Encoding(false, true).GetString(bytes));
                 using var reader = new JsonTextReader(input) { MaxDepth = 32, DateParseHandling = DateParseHandling.None };
                 var data = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error, CommentHandling = CommentHandling.Load });
-                if (reader.Read()) throw new InvalidDataException("Additional publication metadata content.");
-                if (!bytes.SequenceEqual(Canonical(data))) throw new InvalidDataException("Noncanonical publication metadata.");
+                if (reader.Read())
+                {
+                    throw new InvalidDataException("Additional publication metadata content.");
+                }
+
+                if (!bytes.SequenceEqual(Canonical(data)))
+                {
+                    throw new InvalidDataException("Noncanonical publication metadata.");
+                }
+
                 return data;
             }
             catch (Exception error) when (error is JsonException || error is DecoderFallbackException)
-            { throw new InvalidDataException("Invalid publication metadata.", error); }
+            {
+                throw new InvalidDataException("Invalid publication metadata.", error);
+            }
         }
         private static T ReadMetadata<T>(string path, string fields)
         {
             var data = Parse(ReadBounded(path));
             if (!data.Properties().Select(x => x.Name).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(fields.Split(',').OrderBy(x => x, StringComparer.Ordinal)))
+            {
                 throw new InvalidDataException("Unknown/missing publication metadata fields.");
-            try { return data.ToObject<T>(JsonSerializer.Create(JsonSettings)); }
-            catch (JsonException error) { throw new InvalidDataException("Invalid publication metadata field types.", error); }
+            }
+
+            try
+            {
+                return data.ToObject<T>(JsonSerializer.Create(_jsonSettings));
+            }
+            catch (JsonException error)
+            {
+                throw new InvalidDataException("Invalid publication metadata field types.", error);
+            }
         }
-        private static byte[] Metadata(object value) => Canonical(JObject.FromObject(value, JsonSerializer.Create(JsonSettings)));
+        private static byte[] Metadata(object value) => Canonical(JObject.FromObject(value, JsonSerializer.Create(_jsonSettings)));
         private static byte[] Canonical(JToken value)
         {
             JToken Order(JToken token) => token switch
@@ -677,15 +1126,27 @@ namespace YLFramework.Editor.Resource
             };
             var builder = new StringBuilder();
             using (var writer = new JsonTextWriter(new StringWriter(builder, CultureInfo.InvariantCulture))
-                { Formatting = Formatting.None, StringEscapeHandling = StringEscapeHandling.EscapeNonAscii }) Order(value).WriteTo(writer);
+            {
+                Formatting = Formatting.None,
+                StringEscapeHandling = StringEscapeHandling.EscapeNonAscii
+            })
+            {
+                Order(value).WriteTo(writer);
+            }
+
             var bytes = Encoding.UTF8.GetBytes(builder.ToString());
-            if (bytes.Length > ResourceCatalogCodec.MaximumBytes) throw new InvalidDataException("Publication metadata limit exceeded.");
+            if (bytes.Length > ResourceCatalogCodec.MaximumBytes)
+            {
+                throw new InvalidDataException("Publication metadata limit exceeded.");
+            }
+
             return bytes;
         }
         private static void WriteNew(string path, byte[] bytes)
         {
             using var stream = File.Open(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            stream.Write(bytes, 0, bytes.Length); stream.Flush(true);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush(true);
         }
         private static void AtomicWrite(string root, string name, byte[] bytes, CancellationToken cancellation = default)
             => AtomicWriteCore(root, name, bytes, cancellation, null, null);
@@ -697,18 +1158,34 @@ namespace YLFramework.Editor.Resource
             cancellation.ThrowIfCancellationRequested();
             var path = Path.Combine(root, name);
             var next = path + ".next";
-            ResourceBuildOperation.RejectLinks(path); ResourceBuildOperation.RejectLinks(next);
+            ResourceBuildOperation.RejectLinks(path);
+            ResourceBuildOperation.RejectLinks(next);
             var previous = File.Exists(path) ? ReadBounded(path) : null;
             using (var stream = File.Open(next, FileMode.Create, FileAccess.Write, FileShare.None))
-            { stream.Write(bytes, 0, bytes.Length); stream.Flush(true); }
-            if (previous == null) { cancellation.ThrowIfCancellationRequested(); File.Move(next, path); return; }
+            {
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
+            }
+            if (previous == null)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                File.Move(next, path);
+                return;
+            }
             for (var attempt = 0; ; attempt++)
             {
                 cancellation.ThrowIfCancellationRequested();
                 try
                 {
-                    if (replace == null) File.Replace(next, path, null);
-                    else replace(next, path);
+                    if (replace == null)
+                    {
+                        File.Replace(next, path, null);
+                    }
+                    else
+                    {
+                        replace(next, path);
+                    }
+
                     return;
                 }
                 // Win32 1175 保留 From/To 原名；仅在两份内容仍完全一致时有限重试，不处理可能已部分提交的1176/1177。
@@ -716,12 +1193,22 @@ namespace YLFramework.Editor.Resource
                 {
                     cancellation.ThrowIfCancellationRequested();
                     var delay = attempt == 0 ? 10 : 25 << (attempt - 1);
-                    if (backoff == null) Thread.Sleep(delay);
-                    else backoff(delay);
+                    if (backoff == null)
+                    {
+                        Thread.Sleep(delay);
+                    }
+                    else
+                    {
+                        backoff(delay);
+                    }
+
                     cancellation.ThrowIfCancellationRequested();
-                    ResourceBuildOperation.RejectLinks(path); ResourceBuildOperation.RejectLinks(next);
+                    ResourceBuildOperation.RejectLinks(path);
+                    ResourceBuildOperation.RejectLinks(next);
                     if (!ReadBounded(path).SequenceEqual(previous) || !ReadBounded(next).SequenceEqual(bytes))
+                    {
                         throw new InvalidOperationException("Publication metadata changed after an atomic replacement failure; retry refused.", error);
+                    }
                 }
             }
         }

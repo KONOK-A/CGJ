@@ -66,6 +66,8 @@ namespace YLFramework.Foundation.Tests
             return assembly.DefineDynamicModule("Probe").DefineType(name, TypeAttributes.Public).CreateType();
         }
 
-        private class Nested { }
+        private class Nested
+        {
+        }
     }
 }

@@ -20,9 +20,11 @@ namespace YLFramework.DataAssets.Editor
                 var width = Mathf.Max(0, position.width - 48);
                 EditorGUI.PropertyField(new Rect(position.x, position.y + line + 2, width, line), project, new GUIContent("ProjectId"));
                 EditorGUI.PropertyField(new Rect(position.x, position.y + line * 2 + 4, width, line), address, new GUIContent("Address"));
-                var preview = EditorAssetTool.GetTextureGUIContent(project.stringValue, address.stringValue);
+                var preview = EditorAssetTool.GetTextureGuiContent(project.stringValue, address.stringValue);
                 if (GUI.Button(new Rect(position.xMax - 42, position.y + line + 2, 40, 40), preview) && preview.image)
+                {
                     EditorGUIUtility.PingObject(preview.image);
+                }
             }
         }
     }

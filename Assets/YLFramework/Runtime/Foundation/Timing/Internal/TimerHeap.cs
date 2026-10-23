@@ -8,7 +8,10 @@ namespace YLFramework.Timing.Internal
     {
         private readonly TimerClock _clock;
         private TimerRun[] _array = new TimerRun[10];
-        internal int Count { get; private set; }
+        internal int Count
+        {
+            get; private set;
+        }
         internal TimerRun Top => Count == 0 ? null : _array[1];
 
         internal TimerHeap(TimerClock clock) => _clock = clock;
@@ -16,9 +19,15 @@ namespace YLFramework.Timing.Internal
         internal void Insert(TimerRun run)
         {
             if (run.Clock != _clock || run.Heap != null || run.HeapIndex != 0)
+            {
                 throw new InvalidOperationException("Timer run already belongs to a queue or uses another clock.");
+            }
+
             if (Count + 1 >= _array.Length)
+            {
                 Array.Resize(ref _array, checked(Math.Max(_array.Length + 4, (int)Math.Round(_array.Length * 1.6))));
+            }
+
             run.Heap = this;
             _array[++Count] = run;
             PercolateUp(Count);
@@ -27,7 +36,11 @@ namespace YLFramework.Timing.Internal
         internal TimerRun Pop()
         {
             var run = Top;
-            if (run != null) Remove(run);
+            if (run != null)
+            {
+                Remove(run);
+            }
+
             return run;
         }
 
@@ -35,17 +48,30 @@ namespace YLFramework.Timing.Internal
         {
             var index = run.HeapIndex;
             if (!ReferenceEquals(run.Heap, this) || index < 1 || index > Count || !ReferenceEquals(_array[index], run))
+            {
                 throw new InvalidOperationException("Timer heap ownership does not match its index.");
+            }
+
             run.HeapIndex = 0;
             run.Heap = null;
             var last = _array[Count];
             _array[Count--] = null;
-            if (index > Count) return;
+            if (index > Count)
+            {
+                return;
+            }
+
             _array[index] = last;
             last.HeapIndex = index;
             var parent = index >> 1;
-            if (parent > 0 && ComesBefore(last, _array[parent])) PercolateUp(index);
-            else PercolateDown(index);
+            if (parent > 0 && ComesBefore(last, _array[parent]))
+            {
+                PercolateUp(index);
+            }
+            else
+            {
+                PercolateDown(index);
+            }
         }
 
         private bool ComesBefore(TimerRun a, TimerRun b)
@@ -75,8 +101,16 @@ namespace YLFramework.Timing.Internal
             var child = index << 1;
             while (child <= Count)
             {
-                if (child < Count && ComesBefore(_array[child + 1], _array[child])) child++;
-                if (!ComesBefore(_array[child], run)) break;
+                if (child < Count && ComesBefore(_array[child + 1], _array[child]))
+                {
+                    child++;
+                }
+
+                if (!ComesBefore(_array[child], run))
+                {
+                    break;
+                }
+
                 _array[index] = _array[child];
                 _array[index].HeapIndex = index;
                 index = child;

@@ -1,6 +1,6 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -27,17 +27,17 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 var project = ScriptableObject.CreateInstance<ResourceProject>();
-                project.ProjectId = "recipe-owned";
-                project.ContentKeyId = "not-a-key";
+                project.projectId = "recipe-owned";
+                project.contentKeyId = "not-a-key";
                 AssetDatabase.CreateAsset(project, root + "/Project.asset");
                 var recipe = ScriptableObject.CreateInstance(type);
                 AssetDatabase.CreateAsset(recipe, root + "/Recipe.asset");
                 using (var serialized = new SerializedObject(recipe))
                 {
-                    serialized.FindProperty("Project").objectReferenceValue = project;
-                    serialized.FindProperty("Target").intValue = (int)BuildTarget.StandaloneWindows64;
-                    serialized.FindProperty("AppContentCompatibilityId").stringValue = "recipe-v1";
-                    serialized.FindProperty("ForceRebuild").boolValue = true;
+                    serialized.FindProperty("project").objectReferenceValue = project;
+                    serialized.FindProperty("target").intValue = (int)BuildTarget.StandaloneWindows64;
+                    serialized.FindProperty("appContentCompatibilityId").stringValue = "recipe-v1";
+                    serialized.FindProperty("forceRebuild").boolValue = true;
                     serialized.ApplyModifiedPropertiesWithoutUndo();
                 }
                 AssetDatabase.SaveAssetIfDirty(recipe);
@@ -54,7 +54,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(YLFramework.Services.Resource.ResourceSystem.Current, Is.Null);
                 Assert.That(Directory.Exists("AssetBundles/YLFramework/recipe-owned"), Is.False);
             }
-            finally { AssetDatabase.DeleteAsset(root); }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+            }
         }
 
         private static object Property(object value, string name) => value.GetType().GetProperty(name).GetValue(value);
@@ -68,8 +71,8 @@ namespace YLFramework.Tests.ResourceBuild
             Undo.IncrementCurrentGroup();
             using (var serialized = new SerializedObject(recipe))
             {
-                serialized.FindProperty("AppContentCompatibilityId").stringValue = "changed-app";
-                serialized.FindProperty("ForceRebuild").boolValue = true;
+                serialized.FindProperty("appContentCompatibilityId").stringValue = "changed-app";
+                serialized.FindProperty("forceRebuild").boolValue = true;
                 serialized.ApplyModifiedProperties();
             }
             Undo.FlushUndoRecordObjects();
@@ -80,8 +83,8 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(dirty.BuildError, Is.InstanceOf<InvalidOperationException>());
             Assert.That(dirty.Build, Is.Null);
             Undo.PerformUndo();
-            Assert.That(recipe.AppContentCompatibilityId, Is.EqualTo("recipe-v1"));
-            Assert.That(recipe.ForceRebuild, Is.False);
+            Assert.That(recipe.appContentCompatibilityId, Is.EqualTo("recipe-v1"));
+            Assert.That(recipe.forceRebuild, Is.False);
             ResourceEditorOperations.SaveRecipe(recipe);
         }
 
@@ -98,14 +101,29 @@ namespace YLFramework.Tests.ResourceBuild
             var source = File.ReadAllBytes(fixture.ProjectPath);
             switch (mode)
             {
-                case "missing-project": recipe.Project = null; break;
-                case "invalid-app": recipe.AppContentCompatibilityId = "../not-an-id"; break;
-                case "invalid-action": recipe.Action = (ResourceBuildAction)999; break;
-                case "generation-without-publish": recipe.GenerateReferences = true; break;
-                case "invalid-generation-path": recipe.Action = ResourceBuildAction.BuildAndPublish; recipe.GenerateReferences = true; recipe.ReferenceDirectory = "Assets/../Scenes"; break;
-                case "unsupported-target": recipe.Target = BuildTarget.Android; break;
+                case "missing-project":
+                    recipe.project = null;
+                    break;
+                case "invalid-app":
+                    recipe.appContentCompatibilityId = "../not-an-id";
+                    break;
+                case "invalid-action":
+                    recipe.action = (ResourceBuildAction)999;
+                    break;
+                case "generation-without-publish":
+                    recipe.generateReferences = true;
+                    break;
+                case "invalid-generation-path":
+                    recipe.action = ResourceBuildAction.BuildAndPublish;
+                    recipe.generateReferences = true;
+                    recipe.referenceDirectory = "Assets/../Scenes";
+                    break;
+                case "unsupported-target":
+                    recipe.target = BuildTarget.Android;
+                    break;
             }
-            EditorUtility.SetDirty(recipe); ResourceEditorOperations.SaveRecipe(recipe);
+            EditorUtility.SetDirty(recipe);
+            ResourceEditorOperations.SaveRecipe(recipe);
             var result = ResourceEditorOperations.ExecuteRecipe(recipe);
             Assert.That(result.BuildError, Is.Not.Null);
             Assert.That(result.Build, Is.Null);
@@ -122,9 +140,10 @@ namespace YLFramework.Tests.ResourceBuild
             var cancelled = ResourceEditorOperations.ExecuteRecipe(fixture.Recipe, new CancellationToken(true));
             Assert.That(cancelled.BuildError, Is.InstanceOf<OperationCanceledException>());
             var project = fixture.Project;
-            project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-            project.ContentKeyId = "recipe-test";
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+            project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            project.contentKeyId = "recipe-test";
+            EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
             fixture.TrackWorkspace();
             var source = File.ReadAllBytes(fixture.ProjectPath);
             var result = ResourceEditorOperations.ExecuteRecipe(fixture.Recipe, provider: new RecipeKeys { Missing = true });
@@ -143,8 +162,14 @@ namespace YLFramework.Tests.ResourceBuild
             var source = File.ReadAllBytes(fixture.ProjectPath);
             var input = ResourceEditorOperations.ResolveRecipe(fixture.Recipe);
             var window = ScriptableObject.CreateInstance<ResServiceEditorWindow>();
-            try { window.SetProject(fixture.Project); }
-            finally { Object.DestroyImmediate(window); }
+            try
+            {
+                window.SetProject(fixture.Project);
+            }
+            finally
+            {
+                Object.DestroyImmediate(window);
+            }
             var method = typeof(ResourceBuildRecipeEditor).GetMethod("Execute", BindingFlags.NonPublic | BindingFlags.Static);
             var ui = (ResourceEditorBuildReport)method.Invoke(null, new object[] { fixture.Recipe });
             Assert.That(ui.BuildError, Is.Null, ui.BuildError?.ToString());
@@ -155,8 +180,9 @@ namespace YLFramework.Tests.ResourceBuild
             CollectionAssert.AreEqual(ResourceCatalogCodec.Write(ResourceCatalogBuilder.Create(ui.Build, "recipe-v1")),
                 ResourceCatalogCodec.Write(ResourceCatalogBuilder.Create(legacy.Build, "recipe-v1")));
             var recipe = fixture.Recipe;
-            recipe.Action = ResourceBuildAction.BuildAndPublish;
-            EditorUtility.SetDirty(recipe); ResourceEditorOperations.SaveRecipe(recipe);
+            recipe.action = ResourceBuildAction.BuildAndPublish;
+            EditorUtility.SetDirty(recipe);
+            ResourceEditorOperations.SaveRecipe(recipe);
             var sample = typeof(YLFramework.Samples.Resource.Editor.ResourceBuildRecipeExample);
             var api = sample.GetMethod("Build");
             var report = (ResourceEditorBuildReport)api.Invoke(null, new object[] { fixture.RecipePath, null });
@@ -172,25 +198,35 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new RecipeFixture();
             var project = fixture.Project;
-            project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-            project.ContentKeyId = "recipe-test";
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+            project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            project.contentKeyId = "recipe-test";
+            EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
             fixture.TrackWorkspace();
             var changed = false;
-            var keys = new RecipeKeys { OnCopy = () => {
-                if (changed) return;
-                changed = true;
-                var current = fixture.Project;
-                current.Compression = ResourceCompression.Uncompressed;
-                EditorUtility.SetDirty(current); ResourceEditorOperations.SaveProject(current);
-                fixture.TrackWorkspace();
-            } };
+            var keys = new RecipeKeys
+            {
+                OnCopy = () =>
+                {
+                    if (changed)
+                    {
+                        return;
+                    }
+
+                    changed = true;
+                    var current = fixture.Project;
+                    current.compression = ResourceCompression.Uncompressed;
+                    EditorUtility.SetDirty(current);
+                    ResourceEditorOperations.SaveProject(current);
+                    fixture.TrackWorkspace();
+                }
+            };
             var report = ResourceEditorOperations.ExecuteRecipe(fixture.Recipe, provider: keys);
             Assert.That(changed, Is.True);
             Assert.That(report.BuildError, Is.InstanceOf<InvalidOperationException>(), "A recipe must not report frozen Lz4 while building a reentrant Uncompressed definition.");
             Assert.That(report.Build, Is.Null);
             Assert.That(fixture.WorkspaceRoots.All(x => !Directory.Exists(x)), Is.True);
-            Assert.That(fixture.Project.Compression, Is.EqualTo(ResourceCompression.Uncompressed), "Do not undo application-owned edits to restore a snapshot.");
+            Assert.That(fixture.Project.compression, Is.EqualTo(ResourceCompression.Uncompressed), "Do not undo application-owned edits to restore a snapshot.");
         }
 
         [Test]
@@ -198,19 +234,26 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var fixture = new RecipeFixture();
             var project = fixture.Project;
-            project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-            project.ContentKeyId = "recipe-test";
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+            project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            project.contentKeyId = "recipe-test";
+            EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
             fixture.TrackWorkspace();
             var recipe = fixture.Recipe;
-            recipe.Action = ResourceBuildAction.BuildAndPublish;
-            EditorUtility.SetDirty(recipe); ResourceEditorOperations.SaveRecipe(recipe);
+            recipe.action = ResourceBuildAction.BuildAndPublish;
+            EditorUtility.SetDirty(recipe);
+            ResourceEditorOperations.SaveRecipe(recipe);
             var source = File.ReadAllBytes(fixture.ProjectPath);
-            var keys = new RecipeKeys { OnCopy = () => {
-                var current = fixture.Recipe;
-                current.AppContentCompatibilityId = "future-app"; current.Action = ResourceBuildAction.BuildOnly;
-                EditorUtility.SetDirty(current);
-            } };
+            var keys = new RecipeKeys
+            {
+                OnCopy = () =>
+                {
+                    var current = fixture.Recipe;
+                    current.appContentCompatibilityId = "future-app";
+                    current.action = ResourceBuildAction.BuildOnly;
+                    EditorUtility.SetDirty(current);
+                }
+            };
             var report = ResourceEditorOperations.ExecuteRecipe(recipe, provider: keys);
             Assert.That(report.BuildError, Is.Null, report.BuildError?.ToString());
             Assert.That(report.PublicationError, Is.Null, report.PublicationError?.ToString());
@@ -220,8 +263,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(keys.Copies, Is.GreaterThan(0));
             var before = ResourceReleaseFixture.Snapshot(fixture.ReleaseRoot);
             recipe = fixture.Recipe;
-            recipe.Action = ResourceBuildAction.BuildAndPublish; recipe.AppContentCompatibilityId = "recipe-v1";
-            EditorUtility.SetDirty(recipe); ResourceEditorOperations.SaveRecipe(recipe);
+            recipe.action = ResourceBuildAction.BuildAndPublish;
+            recipe.appContentCompatibilityId = "recipe-v1";
+            EditorUtility.SetDirty(recipe);
+            ResourceEditorOperations.SaveRecipe(recipe);
             var failed = ResourceEditorOperations.ExecuteRecipe(recipe, provider: new RecipeKeys { Missing = true });
             Assert.That(failed.BuildError, Is.Not.Null);
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(fixture.ReleaseRoot));
@@ -238,10 +283,18 @@ namespace YLFramework.Tests.ResourceBuild
             internal Action OnCopy;
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
-                Copies++; OnCopy?.Invoke();
-                if (Missing) return false;
+                Copies++;
+                OnCopy?.Invoke();
+                if (Missing)
+                {
+                    return false;
+                }
                 // 运行时生成的自有非生产夹具内容，不是发布密钥或配置字段。
-                for (var i = 0; i < destination.Length; i++) destination[i] = (byte)(i + 101);
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = (byte)(i + 101);
+                }
+
                 return keyId == "recipe-test";
             }
         }
@@ -259,22 +312,31 @@ namespace YLFramework.Tests.ResourceBuild
 
             internal RecipeFixture()
             {
-                const string parent = "Assets/YLFramework/Tests/Fixtures";
-                if (!AssetDatabase.IsValidFolder(parent)) AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
-                Folder = parent + "/Recipe-" + Guid.NewGuid().ToString("N");
-                Assert.That(AssetDatabase.CreateFolder(parent, Path.GetFileName(Folder)), Is.Not.Empty);
+                const string Parent = "Assets/YLFramework/Tests/Fixtures";
+                if (!AssetDatabase.IsValidFolder(Parent))
+                {
+                    AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
+                }
+
+                Folder = Parent + "/Recipe-" + Guid.NewGuid().ToString("N");
+                Assert.That(AssetDatabase.CreateFolder(Parent, Path.GetFileName(Folder)), Is.Not.Empty);
                 File.WriteAllText(Folder + "/entry.txt", "owned recipe fixture");
                 AssetDatabase.ImportAsset(Folder + "/entry.txt", ImportAssetOptions.ForceSynchronousImport);
                 var project = ScriptableObject.CreateInstance<ResourceProject>();
-                project.ProjectId = "recipe-" + Guid.NewGuid().ToString("N");
-                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(Folder) });
-                project.Groups.Add(new ResourceGroup { Id = "text", Selections = new List<ResourceSelection> {
-                    new() { Guid = AssetDatabase.AssetPathToGUID(Folder + "/entry.txt"), Address = "entry" } } });
+                project.projectId = "recipe-" + Guid.NewGuid().ToString("N");
+                project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(Folder) });
+                project.groups.Add(new ResourceGroup
+                {
+                    id = "text",
+                    selections = new List<ResourceSelection> {
+                    new() { guid = AssetDatabase.AssetPathToGUID(Folder + "/entry.txt"), address = "entry" } }
+                });
                 AssetDatabase.CreateAsset(project, ProjectPath);
                 var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
-                recipe.Project = project; recipe.AppContentCompatibilityId = "recipe-v1";
+                recipe.project = project;
+                recipe.appContentCompatibilityId = "recipe-v1";
                 AssetDatabase.CreateAsset(recipe, RecipePath);
-                ReleaseRoot = Path.GetFullPath("AssetBundles/YLFramework/" + project.ProjectId + "/" + recipe.Target);
+                ReleaseRoot = Path.GetFullPath("AssetBundles/YLFramework/" + project.projectId + "/" + recipe.target);
                 Assert.That(Directory.Exists(ReleaseRoot), Is.False);
                 TrackWorkspace();
             }
@@ -282,15 +344,33 @@ namespace YLFramework.Tests.ResourceBuild
             internal void TrackWorkspace()
             {
                 WorkspaceRoot = Path.GetDirectoryName(ResourceBundleBuilder.GetWorkspacePath(Project, EditorUserBuildSettings.activeBuildTarget));
-                if (WorkspaceRoots.Add(WorkspaceRoot)) Assert.That(Directory.Exists(WorkspaceRoot), Is.False);
+                if (WorkspaceRoots.Add(WorkspaceRoot))
+                {
+                    Assert.That(Directory.Exists(WorkspaceRoot), Is.False);
+                }
             }
 
             public void Dispose()
             {
-                foreach (var root in WorkspaceRoots) if (Directory.Exists(root)) Directory.Delete(root, true);
-                if (Directory.Exists(ReleaseRoot)) Directory.Delete(ReleaseRoot, true);
+                foreach (var root in WorkspaceRoots)
+                {
+                    if (Directory.Exists(root))
+                    {
+                        Directory.Delete(root, true);
+                    }
+                }
+
+                if (Directory.Exists(ReleaseRoot))
+                {
+                    Directory.Delete(ReleaseRoot, true);
+                }
+
                 var projectRoot = Path.GetDirectoryName(ReleaseRoot);
-                if (Directory.Exists(projectRoot) && !Directory.EnumerateFileSystemEntries(projectRoot).Any()) Directory.Delete(projectRoot);
+                if (Directory.Exists(projectRoot) && !Directory.EnumerateFileSystemEntries(projectRoot).Any())
+                {
+                    Directory.Delete(projectRoot);
+                }
+
                 AssetDatabase.DeleteAsset(Folder);
             }
         }

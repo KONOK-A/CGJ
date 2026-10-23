@@ -4,69 +4,81 @@ namespace YLFramework.Character.Controller2D
 {
     public class CheckGround
     {
-        private ContactPoint2D[] contacts = null;
+        private ContactPoint2D[] _contacts = null;
 
-        private int contactsCount;
+        private int _contactsCount;
 
-        private CharacterController2D characher;
+        private CharacterController2D _character;
 
-        private float groundAngle = 35;
+        private float _groundAngle = 35;
 
-        private float lastCheckTime;
+        private float _lastCheckTime;
 
-        private float lastUpdateGroundInfoTime;
+        private float _lastUpdateGroundInfoTime;
 
-        public bool IsGroundByContacts { get; protected set; }
+        public bool IsGroundedByContacts
+        {
+            get; protected set;
+        }
 
         //private RaycastHit2D raycastHit;
         //private bool check = false;
 
-        private float timeInterval = 1.0f / 15; // 每秒最多检测15次
+        private float _timeInterval = 1.0f / 15; // 每秒最多检测15次
 
-        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher,int count,float groundAngle)
+        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count, float groundAngle)
         {
-            this.contacts = contacts;
-            this.characher = characher;
-            contactsCount = count;
-            this.groundAngle = groundAngle;
+            this._contacts = contacts;
+            this._character = characher;
+            _contactsCount = count;
+            this._groundAngle = groundAngle;
 
             // 检测地面
 
-            IsGroundByContacts = IsGroundedByContacts(count);
+            IsGroundedByContacts = HasGroundContacts(count);
 
-            if (IsGroundByContacts != characher.IsGrounded)
+            if (IsGroundedByContacts != characher.IsGrounded)
+            {
                 CheckGrounded();
+            }
 
-            if(IsGroundByContacts)
+            if (IsGroundedByContacts)
+            {
                 UpdateGroundInfo();
-
+            }
         }
 
-        private bool IsGroundedByContacts(int count )
+        private bool HasGroundContacts(int count)
         {
             bool isGrounded = false;
 
-            float min_angle = 90;
+            float minAngle = 90;
 
             for (int i = 0; i < count; i++)
             {
-                if (contacts[i].collider == null)
-                    continue;
-
-                if (contacts[i].collider.isTrigger)
-                    continue;
-                // 如果该游戏物体的最低点比该碰撞体的最低点小，说明该碰撞体不在该游戏物体下面
-                if (characher.bottom.bounds.min.y < contacts[i].collider.bounds.min.y)
-                    continue;
-
-                float angle = Vector2.Angle(contacts[i].normal, Vector2.up);
-
-                if (angle < min_angle)
+                if (_contacts[i].collider == null)
                 {
-                    min_angle = angle;
+                    continue;
+                }
+
+                if (_contacts[i].collider.isTrigger)
+                {
+                    continue;
+                }
+                // 如果该游戏物体的最低点比该碰撞体的最低点小，说明该碰撞体不在该游戏物体下面
+                if (_character.Bottom.bounds.min.y < _contacts[i].collider.bounds.min.y)
+                {
+                    continue;
+                }
+
+                float angle = Vector2.Angle(_contacts[i].normal, Vector2.up);
+
+                if (angle < minAngle)
+                {
+                    minAngle = angle;
                 }
             }
-            if (min_angle < groundAngle)
+            if (minAngle < _groundAngle)
             {
                 isGrounded = true;
             }
@@ -76,34 +88,38 @@ namespace YLFramework.Character.Controller2D
 
         private void CheckGrounded()
         {
-            if (!characher.IsCheckGround)
+            if (!_character.ChecksGround)
+            {
                 return;
+            }
 
-            if (Time.time - lastCheckTime < timeInterval)
+            if (Time.time - _lastCheckTime < _timeInterval)
+            {
                 return;
+            }
 
-            lastCheckTime = Time.time;
+            _lastCheckTime = Time.time;
 
 #if UNITY_EDITOR
-            characher.checkCount++;
+            _character.CheckCount++;
 #endif
 
 
-            Vector2 dir = -characher.bottom.transform.up;
+            Vector2 dir = -_character.Bottom.transform.up;
 
             int count = 0;
 
-            if (characher.bottom is CircleCollider2D)
+            if (_character.Bottom is CircleCollider2D)
             {
-                count = characher.Raycast(characher.bottom as CircleCollider2D, dir);
+                count = _character.Raycast(_character.Bottom as CircleCollider2D, dir);
             }
-            else if (characher.bottom is BoxCollider2D)
+            else if (_character.Bottom is BoxCollider2D)
             {
-                count = characher.Raycast(characher.bottom as BoxCollider2D, dir);
+                count = _character.Raycast(_character.Bottom as BoxCollider2D, dir);
             }
-            else if (characher.bottom is CapsuleCollider2D)
+            else if (_character.Bottom is CapsuleCollider2D)
             {
-                count = characher.Raycast(characher.bottom as CapsuleCollider2D, dir);
+                count = _character.Raycast(_character.Bottom as CapsuleCollider2D, dir);
             }
 
             CaculateIsGrounded(count);
@@ -111,9 +127,9 @@ namespace YLFramework.Character.Controller2D
 
         private void CaculateIsGrounded(int count)
         {
-            if (characher.speedVertical > 0)
+            if (_character.SpeedVertical > 0)
             {
-                characher.IsGrounded = false;
+                _character.IsGrounded = false;
                 return;
             }
 
@@ -121,67 +137,89 @@ namespace YLFramework.Character.Controller2D
 
             for (int i = 0; i < count; i++)
             {
-                RaycastHit2D raycast = characher.hits[i];
+                RaycastHit2D raycast = _character.Hits[i];
                 if (raycast.collider == null)
+                {
                     continue;
-                if (raycast.collider.isTrigger)
-                    continue;
+                }
 
-                if (raycast.transform == characher.transform || raycast.transform.IsChildOf(characher.transform))
+                if (raycast.collider.isTrigger)
+                {
                     continue;
+                }
+
+                if (raycast.transform == _character.transform || raycast.transform.IsChildOf(_character.transform))
+                {
+                    continue;
+                }
 
                 float angle = Vector2.Angle(raycast.normal, Vector2.up);
 
-                if (angle < groundAngle)
+                if (angle < _groundAngle)
                 {
-                    characher.GroundInfo = raycast;
+                    _character.GroundInfo = raycast;
                     grounded = true;
                     break;
                 }
             }
-            characher.IsGrounded = grounded;
+            _character.IsGrounded = grounded;
         }
 
         private void UpdateGroundInfo()
         {
-            if (!characher.IsGrounded)
+            if (!_character.IsGrounded)
+            {
                 return;
+            }
 
-            if (Time.time - lastUpdateGroundInfoTime < 0.1f)
+            if (Time.time - _lastUpdateGroundInfoTime < 0.1f)
+            {
                 return;
+            }
 
-            for (int i = 0; i < contactsCount; i++)
+            for (int i = 0; i < _contactsCount; i++)
             {
                 // 只要有一个点 和 当前法线比较接近 就不需要更新
-                bool d = Vector3.Distance(contacts[i].point, characher.GroundInfo.point) < 0.06f;
-                bool a = Vector3.Angle(contacts[i].normal, characher.GroundInfo.normal) < 3;
+                bool d = Vector3.Distance(_contacts[i].point, _character.GroundInfo.point) < 0.06f;
+                bool a = Vector3.Angle(_contacts[i].normal, _character.GroundInfo.normal) < 3;
                 // 认为法线区别不大 不需要更新
                 if (d && a)
+                {
                     return;
+                }
             }
             // 更新碰撞点 和 法线
-            lastUpdateGroundInfoTime = Time.time;
+            _lastUpdateGroundInfoTime = Time.time;
             CheckGrounded();
         }
 
-        public bool IsHaveColliderOnBelow(ContactPoint2D[] contacts , int count ) {
+        public bool HasColliderBelow(ContactPoint2D[] contacts, int count)
+        {
 
             for (int i = 0; i < count; i++)
             {
                 if (contacts[i].collider == null)
+                {
                     continue;
+                }
 
                 if (contacts[i].collider.isTrigger)
+                {
                     continue;
+                }
                 // 如果该游戏物体的最低点比该碰撞体的最低点小，说明该碰撞体不在该游戏物体下面
-                if (characher.bottom.bounds.min.y < contacts[i].collider.bounds.min.y)
+                if (_character.Bottom.bounds.min.y < contacts[i].collider.bounds.min.y)
+                {
                     continue;
+                }
 
                 float angle = Vector2.Angle(contacts[i].normal, Vector2.up);
 
                 // 下方有碰撞体
-                if (angle < groundAngle)
+                if (angle < _groundAngle)
+                {
                     return true;
+                }
             }
 
             return false;

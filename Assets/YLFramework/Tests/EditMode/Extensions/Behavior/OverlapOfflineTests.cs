@@ -39,11 +39,11 @@ namespace YLFramework.Tests.Extensions.Behavior
             var cycle = NewCycle();
             Call(cycle, "TryBegin");
             Call(cycle, "Invalidate");
-            Assert.That(cycle.GetType().GetProperty("Invalidated").GetValue(cycle), Is.EqualTo(true));
+            Assert.That(cycle.GetType().GetProperty("IsInvalidated").GetValue(cycle), Is.EqualTo(true));
             Assert.That(Call(cycle, "TryBegin"), Is.EqualTo(false));
             Call(cycle, "End");
             Assert.That(Call(cycle, "TryBegin"), Is.EqualTo(true));
-            Assert.That(cycle.GetType().GetProperty("Invalidated").GetValue(cycle), Is.EqualTo(false));
+            Assert.That(cycle.GetType().GetProperty("IsInvalidated").GetValue(cycle), Is.EqualTo(false));
         }
 
         [Test]
@@ -61,7 +61,9 @@ namespace YLFramework.Tests.Extensions.Behavior
         public void AllOriginalQueryShapesHaveYLImplementations()
         {
             foreach (var name in new[] { "Point2D", "Circle2D", "Capsule2D", "Box2D", "Area2D", "Box3D", "Sphere3D" })
+            {
                 Assert.That(File.Exists(Path.Combine(Runtime, "Overlap" + name + ".cs")), Is.True, name);
+            }
         }
 
         [Test]

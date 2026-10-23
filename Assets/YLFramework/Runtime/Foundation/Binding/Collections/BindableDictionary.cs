@@ -83,7 +83,7 @@ namespace YLFramework.Binding
 
         [NonSerialized] private int _batchDepth;
         [NonSerialized] private int _batchStartCount;
-        [NonSerialized] private bool _batchDirty;
+        [NonSerialized] private bool _isBatchDirty;
 
         /// <summary>
         /// 是否处于批量通知状态，期间不会触发任何事件
@@ -98,7 +98,7 @@ namespace YLFramework.Binding
             if (_batchDepth == 0)
             {
                 _batchStartCount = Count;
-                _batchDirty = false;
+                _isBatchDirty = false;
             }
             _batchDepth++;
         }
@@ -116,9 +116,12 @@ namespace YLFramework.Binding
             }
 
             _batchDepth--;
-            if (_batchDepth > 0 || !_batchDirty) return;
+            if (_batchDepth > 0 || !_isBatchDirty)
+            {
+                return;
+            }
 
-            _batchDirty = false;
+            _isBatchDirty = false;
             if (Count != _batchStartCount)
             {
                 _onCountChanged?.Trigger(Count);
@@ -285,7 +288,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -298,7 +301,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -311,7 +314,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -323,7 +326,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 

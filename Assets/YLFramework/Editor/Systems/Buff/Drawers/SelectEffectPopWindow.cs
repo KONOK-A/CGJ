@@ -21,26 +21,32 @@ namespace YLFramework.BuffSystem
     {
 
 
-        public EffectData effectData;
+        public EffectData EffectData;
 
 
-        public SelectEffectDataTreeViewItem(EffectData effectData) : base(effectData.id, 0, effectData.effect_name)
+        public SelectEffectDataTreeViewItem(EffectData effectData) : base(effectData.id, 0, effectData.effectName)
         {
-            this.effectData = effectData;
+            this.EffectData = effectData;
         }
 
 
         public bool DoesItemMatchSearch(string search)
         {
 
-            if (effectData.id.ToString().Contains(search))
+            if (EffectData.id.ToString().Contains(search))
+            {
                 return true;
+            }
 
-            if (effectData.effect_name.Contains(search))
+            if (EffectData.effectName.Contains(search))
+            {
                 return true;
+            }
 
-            if (effectData.description.Contains(search))
+            if (EffectData.description.Contains(search))
+            {
                 return true;
+            }
 
             return false;
 
@@ -59,13 +65,13 @@ namespace YLFramework.BuffSystem
         // Fix编码
         #region 字段
 
-        private SelectEffectPopWindow editorWindow;
+        private SelectEffectPopWindow _editorWindow;
 
-        private SerializedProperty property;
+        private SerializedProperty _property;
 
-        private Dictionary<int,GUIContent> contents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _contents = new Dictionary<int, GUIContent>();
 
-        private List<int> selections = new List<int>();
+        private List<int> _selections = new List<int>();
 
         #endregion
 
@@ -144,8 +150,12 @@ namespace YLFramework.BuffSystem
 
         {
             SelectEffectDataTreeViewItem effect = item as SelectEffectDataTreeViewItem;
-            if (effect == null) return false;
-            return effect.DoesItemMatchSearch( search);
+            if (effect == null)
+            {
+                return false;
+            }
+
+            return effect.DoesItemMatchSearch(search);
         }
 
 #if UNITY_6000_2_OR_NEWER
@@ -166,7 +176,11 @@ namespace YLFramework.BuffSystem
 
             foreach (var item in effects)
             {
-                if(item == null) continue;
+                if (item == null)
+                {
+                    continue;
+                }
+
                 root.AddChild(new SelectEffectDataTreeViewItem(item));
             }
 
@@ -189,11 +203,11 @@ namespace YLFramework.BuffSystem
 
             SelectEffectDataTreeViewItem item = FindItem(id, rootItem) as SelectEffectDataTreeViewItem;
 
-            property.objectReferenceValue = item.effectData;
-            property.serializedObject.ApplyModifiedProperties();
+            _property.objectReferenceValue = item.EffectData;
+            _property.serializedObject.ApplyModifiedProperties();
             AssetDatabase.SaveAssets();
 
-            editorWindow.Close();
+            _editorWindow.Close();
         }
 
         protected override void RowGUI(RowGUIArgs args)
@@ -201,33 +215,39 @@ namespace YLFramework.BuffSystem
             //base.RowGUI(args);
 
             SelectEffectDataTreeViewItem item = args.item as SelectEffectDataTreeViewItem;
-            if (item == null) return;
+            if (item == null)
+            {
+                return;
+            }
 
             if (args.rowRect.Contains(Event.current.mousePosition))
             {
-                selections.Clear();
-                selections.Add(item.id);
-                this.SetSelection(selections);
+                _selections.Clear();
+                _selections.Add(item.id);
+                this.SetSelection(_selections);
             }
 
             for (int i = 0; i < args.GetNumVisibleColumns(); ++i)
-                CellGUI(args.GetCellRect(i), item, args.GetColumn(i), ref args);
-
+            {
+                CellGui(args.GetCellRect(i), item, args.GetColumn(i), ref args);
+            }
         }
 
-        private void CellGUI(Rect cellRect, SelectEffectDataTreeViewItem item, int column, ref RowGUIArgs args)
+        private void CellGui(Rect cellRect, SelectEffectDataTreeViewItem item, int column, ref RowGUIArgs args)
         {
-            if (!contents.ContainsKey(item.id))
-                contents.Add(item.id, new GUIContent());
+            if (!_contents.ContainsKey(item.id))
+            {
+                _contents.Add(item.id, new GUIContent());
+            }
 
-            GUIContent content = contents[item.id];
+            GUIContent content = _contents[item.id];
 
 
             switch (column)
             {
                 case 0:
 
-                    content.text = item.effectData.id.ToString();
+                    content.text = item.EffectData.id.ToString();
                     content.tooltip = content.text;
 
                     GUI.Label(cellRect, content);
@@ -235,14 +255,14 @@ namespace YLFramework.BuffSystem
 
                 case 1:
 
-                    content.text = item.effectData.effect_name;
+                    content.text = item.EffectData.effectName;
                     content.tooltip = content.text;
 
                     GUI.Label(cellRect, content);
                     break;
                 case 2:
 
-                    content.text = BuffSystemSettings.Instance.GetType(item.effectData.type);
+                    content.text = BuffSystemSettings.Instance.GetType(item.EffectData.type);
                     content.tooltip = content.text;
 
                     GUI.Label(cellRect, content);
@@ -251,7 +271,7 @@ namespace YLFramework.BuffSystem
 
                 case 3:
 
-                    content.text = GetEffectData(item.effectData);
+                    content.text = GetEffectData(item.EffectData);
                     content.tooltip = content.text;
 
                     GUI.Label(cellRect, content);
@@ -260,7 +280,7 @@ namespace YLFramework.BuffSystem
 
                 case 4:
 
-                    content.text = item.effectData.description.Replace('\n', '\0');
+                    content.text = item.EffectData.description.Replace('\n', '\0');
                     content.tooltip = content.text;
 
                     GUI.Label(cellRect, content);
@@ -312,12 +332,12 @@ namespace YLFramework.BuffSystem
             showBorder = true;
             showAlternatingRowBackgrounds = true;
 
-            this.property = property;
-            this.editorWindow = editorWindow;
+            this._property = property;
+            this._editorWindow = editorWindow;
         }
 
 
-#endregion
+        #endregion
     }
 
 
@@ -325,46 +345,50 @@ namespace YLFramework.BuffSystem
     {
 
 
-        private SerializedProperty property;
+        private SerializedProperty _property;
 
-        private SelectEffectDataListTree listTree;
+        private SelectEffectDataListTree _listTree;
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewState<int> state;
+        private TreeViewState<int> _state;
 #else
-        private TreeViewState state;
+        private TreeViewState _state;
 #endif
 
-        private MultiColumnHeaderState effectListMCHState;
+        private MultiColumnHeaderState _effectListMCHState;
 
-        private string searchStr;
+        private string _searchStr;
 
         public SelectEffectPopWindow(SerializedProperty property)
         {
-            this.property = property;
+            this._property = property;
         }
 
         public override void OnGUI(Rect rect)
         {
-            if (state == null) {
+            if (_state == null)
+            {
 #if UNITY_6000_2_OR_NEWER
-                state = new TreeViewState<int>();
+                _state = new TreeViewState<int>();
 #else
-                state = new TreeViewState();
+                _state = new TreeViewState();
 #endif
 
             }
 
 
-            if (listTree == null)
+            if (_listTree == null)
             {
 
                 var headerState = SelectEffectDataListTree.CreateDefaultMultiColumnHeaderState();// multiColumnTreeViewRect.width);
-                if (MultiColumnHeaderState.CanOverwriteSerializedFields(effectListMCHState, headerState))
-                    MultiColumnHeaderState.OverwriteSerializedFields(effectListMCHState, headerState);
-                effectListMCHState = headerState;
+                if (MultiColumnHeaderState.CanOverwriteSerializedFields(_effectListMCHState, headerState))
+                {
+                    MultiColumnHeaderState.OverwriteSerializedFields(_effectListMCHState, headerState);
+                }
 
-                listTree = new SelectEffectDataListTree(state, property,this, effectListMCHState);
-                listTree.Reload();
+                _effectListMCHState = headerState;
+
+                _listTree = new SelectEffectDataListTree(_state, _property, this, _effectListMCHState);
+                _listTree.Reload();
             }
 
             float h = rect.height;
@@ -373,13 +397,13 @@ namespace YLFramework.BuffSystem
             rect.y += 3;
             rect.x += 3;
             rect.width -= 6;
-            searchStr = EditorGUI.TextField(rect,string.Empty, searchStr, "SearchTextField" );
+            _searchStr = EditorGUI.TextField(rect, string.Empty, _searchStr, "SearchTextField");
 
-            rect.y += rect.height- 2;
+            rect.y += rect.height - 2;
             rect.height = h - 23;
 
-            listTree.OnGUI(rect);
-            listTree.searchString = searchStr;
+            _listTree.OnGUI(rect);
+            _listTree.searchString = _searchStr;
         }
         public void Close()
         {
@@ -387,7 +411,9 @@ namespace YLFramework.BuffSystem
             EditorApplication.update -= Update;
 
             if (editorWindow == null)
+            {
                 return;
+            }
 
             editorWindow.Close();
         }
@@ -419,7 +445,7 @@ namespace YLFramework.BuffSystem
 
         public override Vector2 GetWindowSize()
         {
-            return new Vector2(500,200);
+            return new Vector2(500, 200);
         }
 
 

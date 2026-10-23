@@ -13,19 +13,19 @@
 - 元数据：[`Runtime/Foundation/Attributes/`](../../Runtime/Foundation/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
 - 必要原生 Drawer：[`Editor/Foundation/Attributes/DisableEditDrawer.cs`](../../Editor/Foundation/Attributes/DisableEditDrawer.cs)，程序集 `YLFramework.Editor`，只在Editor主体中消费Runtime元数据；原 `YLFramework.Core.Editor` 类型身份保持。
 
-## CustomClassNameGUI
+## CustomClassNameGui
 
 - 语义：为**类型**提供编辑器中的自定义显示名称（纯元数据）。
 - 目标：`AttributeTargets.Class | Struct | Interface | Enum`；`AllowMultiple = false`；`Inherited = false`（派生类型不继承显示名，需自行标注）。
-- 构造：`CustomClassNameGUI(string name)`，允许 `null` / 空字符串；`GetName()` 原样返回，不会 NRE。调用方遇到 `null` / 空字符串时应回退为类型名。
+- 构造：`CustomClassNameGui(string name)`，允许 `null` / 空字符串；`GetName()` 原样返回，不会 NRE。调用方遇到 `null` / 空字符串时应回退为类型名。
 - 消费方式：由编辑器代码读取，框架内暂无内置消费者。
 
-## CustomPropertyGUI
+## CustomPropertyGui
 
 - 语义：标记需要自定义 Editor 绘制的序列化字段（metadata + Editor 契约）。
 - 目标：`AttributeTargets.Field`；`AllowMultiple = false`；`Inherited = false`。
-- 契约：抽象特性，仅供派生；编辑器下派生类**必须实现** `OnPropertyGUI(UnityEditor.SerializedProperty)`，由外部编辑器代码读取字段上的派生特性后调用（框架内暂无内置消费者 / 绘制器）。
-- 构造：无参默认不刷新；`CustomPropertyGUI(bool reloadTreeViewOnValueChange)` 配置刷新意图；同名 public 字段可供命名特性参数与接入方读取/修改，Editor 与 Player 均可用。框架不自动发现或刷新 TreeView。
+- 契约：抽象特性，仅供派生；编辑器下派生类**必须实现** `OnPropertyGui(UnityEditor.SerializedProperty)`，由接入的 Inspector 读取字段特性后调用；现有 Mission/Skill/Buff Inspector 已有该接入。
+- 构造：无参默认不刷新；`CustomPropertyGui(bool reloadTreeViewOnValueChange)` 配置刷新意图；public 字段 `ReloadTreeViewOnValueChange` 可供命名特性参数与接入方读取/修改，Editor 与 Player 均可用。是否刷新 TreeView 由实际 Inspector 处理。
 
 ## DisableEdit
 
@@ -35,19 +35,19 @@
 ## Runtime / Editor 边界
 
 - 三个特性均归 `YLFramework.Runtime`，其源码保持中立，不消费 Core/Systems/Utilities；旧自有 Core 与 Tools 元数据副本已退出。合并后的主体允许 Core 当前 XFAB/Json.NET 依赖，不能再用整个 DLL 的引用列表代替元数据源码闭包验证。
-- 仅 `CustomPropertyGUI.OnPropertyGUI` 位于 `#if UNITY_EDITOR` 内：Editor 编译时存在、Player 编译时不存在，Player 程序集不会残留 `UnityEditor` 引用。
-- 使用 `CustomPropertyGUI` 的业务代码需注意：Player 下没有 `OnPropertyGUI`，派生类中的重写必须包在 `#if UNITY_EDITOR` 内。
+- 仅 `CustomPropertyGui.OnPropertyGui` 位于 `#if UNITY_EDITOR` 内：Editor 编译时存在、Player 编译时不存在，Player 程序集不会残留 `UnityEditor` 引用。
+- 使用 `CustomPropertyGui` 的业务代码需注意：Player 下没有 `OnPropertyGui`，派生类中的重写必须包在 `#if UNITY_EDITOR` 内。
 - `Tests/Foundation/EditMode/AttributesTests.cs` 直接编译正式元数据源码和派生构造使用者，覆盖 Editor 与无 UnityEditor 引用的 Windows Development 源码 profile；不借用预编译 Foundation DLL，不等于实际 Player 构建/运行。
 
 ## 主要类型
 
-- `CustomClassNameGUI`：类型显示名特性。
-- `CustomPropertyGUI`：字段自定义绘制抽象特性。
+- `CustomClassNameGui`：类型显示名特性。
+- `CustomPropertyGui`：字段自定义绘制抽象特性。
 - `DisableEdit`：原生 Inspector 只读绘制特性。
 
 ## 依赖
 
-- `System`；`CustomPropertyGUI` 的绘制方法条件编译依赖 UnityEditor（`#if UNITY_EDITOR`）。
+- `System`；`CustomPropertyGui` 的绘制方法条件编译依赖 UnityEditor（`#if UNITY_EDITOR`）。
 
 ## 当前状态
 
@@ -57,7 +57,7 @@
 
 混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
 
-CustomClassNameGUI / CustomPropertyGUI 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据共用 Runtime 主体，但属于不同职责和消费方式。
+CustomClassNameGui / CustomPropertyGui 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据共用 Runtime 主体，但属于不同职责和消费方式。
 
 ## Core 使用诊断
 
@@ -113,7 +113,7 @@ protected override void OnViewEnabled() { Refresh(); } // 正确
 - 开放泛型类型匹配原定义，闭合类型按完整构造符号比较；只从有效类/类型参数约束确定受管类型，不因 `IEnumerable<Args>` 等接口签名钻入隐藏内容。
 - 存储 profiles 包括实际 framework 的持有容器/对应只读集合、字典键和值、Tuple/ValueTuple/Rest、KeyValuePair、Task/ValueTask 结果、Memory/ReadOnlyMemory、ConcurrentQueue/Stack/Bag/Dictionary 及真实 Foundation ObjectPool；ArraySegment 和含值槽的 Nullable 结构也按真实存储识别。`IEnumerable`、`IEnumerator`、comparer/delegate 的签名本身不是实例持有证据，伪同名第三方容器不因名称进入 BCL profile。
 - 自有泛型摘要只沿含参数的实例 field、auto-property backing 与构造 BaseType 证明内容位，有限定义图按固定点收敛。`Box<Box<Args>>` 有值槽则报告，phantom/static-only wrapper 不报告；互环无叶不误判，有叶正确传播，未知 metadata 不猜持有。入口不全对象图扫描无关 non-generic 成员；这不是通用泄漏/closure 逃逸检查。
-- YL0005 仅豁免实际 Core 的精确 owner 字段：`LoadViewArgs.Pool` 的 private static readonly 真实 `ObjectPool<LoadViewArgs>`、`LoadViewRequest<T>.args` 的 private instance，以及 `PanelManager.PanelOperation.Args` 的 internal instance。后者一对一对应 Module pending 消费者，不是给业务保存参数的公开权限。同名伪类型、其他成员/public/static/错误嵌套或泛型形态不自动豁免。故意契约测试使用声明级局部 pragma，不排除整个 Editor/Test/Core。
+- YL0005 仅豁免实际 Core 的精确 owner 字段：`LoadViewArgs._pool` 的 private static readonly 真实 `ObjectPool<LoadViewArgs>`、`LoadViewRequest<T>._args` 的 private instance，以及 `PanelManager.PanelOperation.Args` 的 internal instance。后者一对一对应 Module pending 消费者，不是给业务保存参数的公开权限。同名伪类型、其他成员/public/static/错误嵌套或泛型形态不自动豁免。故意契约测试使用声明级局部 pragma，不排除整个 Editor/Test/Core。
 - YL0006 包含 compound/coalesce/inc/dec/deconstruction 各左值叶、ref/out/ref local/ref return 的可写暴露；读取、`in`/`ref readonly`、static 成员和 event subscription 不报。结构体值链写回外层保护成员，引用对象内部 mutation 不当成外层写；保护层级自身仍可修改状态。不追任意被调副作用或 ref 别名后续写入。
 - YL0007 是声明级提示，普通 MonoBehaviour、XF/伪 View、普通 nested helper、static/有参/generic/非 void overload 不报。实测消息遮蔽会破坏订阅轮次，OnDestroy 的及时关闭可能延后到兜底扫描；不宣称必然永久泄漏，也不改变 Runtime 可见性。
 - object/接口擦除、反射/Activator/dynamic、无约束泛型工厂、所有执行路径和跨过程所有权不保证。错误符号交给编译器，不吞异常或把 analyzer failure 当无诊断；这些 Warning 不是运行时安全边界。
@@ -167,4 +167,4 @@ SDK 编译/测试、实际 Unity csc、PlayMode 生命周期、确定性 DLL 重
 
 ## 备注
 
-- 未来接入时建议在 `Editor/` 下实现最小消费者（如由现有 EditorWindow 直接读取字段特性调用 `OnPropertyGUI`），不引入注册表 / 全局 hook / 自动扫描。
+- 未来接入时建议在 `Editor/` 下实现最小消费者（如由现有 EditorWindow 直接读取字段特性调用 `OnPropertyGui`），不引入注册表 / 全局 hook / 自动扫描。

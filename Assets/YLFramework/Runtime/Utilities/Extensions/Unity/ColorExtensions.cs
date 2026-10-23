@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
@@ -11,47 +9,51 @@ namespace YLFramework.Utilities.Extensions
         /// <summary>
         /// 颜色反向插值
         /// </summary>
-        /// <param name="from"></param>
-        /// <param name="to"></param>
-        /// <param name="current"></param>
-        /// <returns></returns>
         public static float InverseLerp(Color from, Color to, Color current)
         {
 
-            Vector4 from_color = new Vector4(from.r, from.g, from.b, from.a);
-            Vector4 to_color = new Vector4(to.r, to.g, to.b, to.a); 
-            Vector4 current_color = new Vector4(current.r,current.g,current.b,current.a);
+            Vector4 fromColor = new Vector4(from.r, from.g, from.b, from.a);
+            Vector4 toColor = new Vector4(to.r, to.g, to.b, to.a);
+            Vector4 currentColor = new Vector4(current.r, current.g, current.b, current.a);
 
-            float lerp = Mathf.InverseLerp(from_color.x, to_color.x, current_color.x);
-
-            if (lerp > 0 && lerp <= 1)
-            { 
-                if (Vector4.Distance(current_color, Vector4.Lerp(from_color, to_color, lerp)) <= 0.01f)
-                    return lerp;
-            }
-
-            lerp = Mathf.InverseLerp(from_color.y, to_color.y, current_color.y);
+            float lerp = Mathf.InverseLerp(fromColor.x, toColor.x, currentColor.x);
 
             if (lerp > 0 && lerp <= 1)
             {
-                if (Vector4.Distance(current_color, Vector4.Lerp(from_color, to_color, lerp)) <= 0.01f)
+                if (Vector4.Distance(currentColor, Vector4.Lerp(fromColor, toColor, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
 
-            lerp = Mathf.InverseLerp(from_color.z, to_color.z, current_color.z);
+            lerp = Mathf.InverseLerp(fromColor.y, toColor.y, currentColor.y);
 
             if (lerp > 0 && lerp <= 1)
             {
-                if (Vector4.Distance(current_color, Vector4.Lerp(from_color, to_color, lerp)) <= 0.01f)
+                if (Vector4.Distance(currentColor, Vector4.Lerp(fromColor, toColor, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
 
-            lerp = Mathf.InverseLerp(from_color.w, to_color.w, current_color.w);
+            lerp = Mathf.InverseLerp(fromColor.z, toColor.z, currentColor.z);
 
             if (lerp > 0 && lerp <= 1)
             {
-                if (Vector4.Distance(current_color, Vector4.Lerp(from_color, to_color, lerp)) <= 0.01f)
+                if (Vector4.Distance(currentColor, Vector4.Lerp(fromColor, toColor, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
+            }
+
+            lerp = Mathf.InverseLerp(fromColor.w, toColor.w, currentColor.w);
+
+            if (lerp > 0 && lerp <= 1)
+            {
+                if (Vector4.Distance(currentColor, Vector4.Lerp(fromColor, toColor, lerp)) <= 0.01f)
+                {
+                    return lerp;
+                }
             }
 
             return 0;

@@ -12,46 +12,62 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioAutoFadeTests
     {
-        private AudioTestSettings mSettings;
-        private AudioClip mClip;
-        private GameObject mTarget;
-        private Random.State mRandomState;
-        private readonly List<IAction> mActions = new List<IAction>();
+        private AudioTestSettings _settings;
+        private AudioClip _clip;
+        private GameObject _target;
+        private Random.State _randomState;
+        private readonly List<IAction> _actions = new List<IAction>();
 
         [SetUp]
         public void SetUp()
         {
-            mRandomState = Random.state;
-            mSettings = new AudioTestSettings();
-            mClip = AudioClip.Create("auto-fade-edit", 441000, 1, 44100, false);
-            mTarget = new GameObject("auto-fade-edit-target");
+            _randomState = Random.state;
+            _settings = new AudioTestSettings();
+            _clip = AudioClip.Create("auto-fade-edit", 441000, 1, 44100, false);
+            _target = new GameObject("auto-fade-edit-target");
         }
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mActions) if (!action.Deinited) action.Deinit();
-            mActions.Clear();
+            foreach (var action in _actions)
+            {
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
+            }
+
+            _actions.Clear();
             YLFramework.Actions.ActionKit.Shutdown();
-            mSettings.Dispose();
-            Object.DestroyImmediate(mClip);
-            Object.DestroyImmediate(mTarget);
-            Random.state = mRandomState;
+            _settings.Dispose();
+            Object.DestroyImmediate(_clip);
+            Object.DestroyImmediate(_target);
+            Random.state = _randomState;
         }
 
         private AudioHandle PlayEntry(int entry, AudioSoundOptions options, AudioClip clip)
         {
             switch (entry)
             {
-                case 0: return AudioKit.PlaySound(clip, options);
-                case 1: return AudioKit.PlaySoundAt(clip, Vector3.one, options);
-                case 2: return AudioKit.PlaySoundFollowing(clip, mTarget.transform, options);
-                case 3: return AudioKit.PlayVoiceAt(clip, Vector3.one, options);
-                case 4: return AudioKit.PlayVoiceFollowing(clip, mTarget.transform, options);
-                case 5: return AudioKit.PlayRandomSound(new[] { clip }, options);
-                case 6: return AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(clip) }, options);
-                case 7: return AudioKit.PlayMusicWithOptions(clip, options);
-                default: return AudioKit.PlayVoiceWithOptions(clip, options);
+                case 0:
+                    return AudioKit.PlaySound(clip, options);
+                case 1:
+                    return AudioKit.PlaySoundAt(clip, Vector3.one, options);
+                case 2:
+                    return AudioKit.PlaySoundFollowing(clip, _target.transform, options);
+                case 3:
+                    return AudioKit.PlayVoiceAt(clip, Vector3.one, options);
+                case 4:
+                    return AudioKit.PlayVoiceFollowing(clip, _target.transform, options);
+                case 5:
+                    return AudioKit.PlayRandomSound(new[] { clip }, options);
+                case 6:
+                    return AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(clip) }, options);
+                case 7:
+                    return AudioKit.PlayMusicWithOptions(clip, options);
+                default:
+                    return AudioKit.PlayVoiceWithOptions(clip, options);
             }
         }
 
@@ -82,13 +98,19 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(AudioManager.HasInstance);
         }
 
-        [TestCase(-1f)] [TestCase(float.NaN)] [TestCase(float.PositiveInfinity)] [TestCase(float.NegativeInfinity)]
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        [TestCase(float.NegativeInfinity)]
         public void EveryInvalidSideIsRejectedByConfigAndOptions(float value)
         {
             foreach (var fade in new[] { new AudioAutoFade(value, 0f), new AudioAutoFade(0f, value) })
             {
                 foreach (var loop in new[] { false, true })
+                {
                     Assert.Catch<ArgumentException>(() => fade.Validate(loop));
+                }
+
                 var options = AudioSoundOptions.Defaults;
                 options.AutoFade = fade;
                 Assert.Catch<ArgumentException>(() => options.Validate(false));
@@ -96,12 +118,18 @@ namespace YLFramework.Tests.Audio
             }
         }
 
-        [TestCase(0f)] [TestCase(float.Epsilon)] [TestCase(1f)] [TestCase(float.MaxValue)]
+        [TestCase(0f)]
+        [TestCase(float.Epsilon)]
+        [TestCase(1f)]
+        [TestCase(float.MaxValue)]
         public void AllFiniteNonnegativeDurationsAreAcceptedWithoutEpsilonThreshold(float value)
         {
             Assert.DoesNotThrow(() => new AudioAutoFade(value, value).Validate(false));
             Assert.DoesNotThrow(() => new AudioAutoFade(value, 0f).Validate(true));
-            if (value > 0f) Assert.Catch<ArgumentException>(() => new AudioAutoFade(0f, value).Validate(true));
+            if (value > 0f)
+            {
+                Assert.Catch<ArgumentException>(() => new AudioAutoFade(0f, value).Validate(true));
+            }
         }
 
         [Test]
@@ -111,9 +139,9 @@ namespace YLFramework.Tests.Audio
             var enabled = new AudioAutoFade(float.Epsilon, 0f);
             Assert.DoesNotThrow(() => disabled.ValidateClip(null));
             Assert.Catch<ArgumentException>(() => enabled.ValidateClip(null));
-            Assert.Greater(mClip.samples, 0);
-            Assert.Greater(mClip.frequency, 0);
-            Assert.DoesNotThrow(() => enabled.ValidateClip(mClip));
+            Assert.Greater(_clip.samples, 0);
+            Assert.Greater(_clip.frequency, 0);
+            Assert.DoesNotThrow(() => enabled.ValidateClip(_clip));
             var destroyed = AudioClip.Create("auto-fade-destroyed", 441, 1, 44100, false);
             Object.DestroyImmediate(destroyed);
             Assert.DoesNotThrow(() => disabled.ValidateClip(destroyed));
@@ -121,7 +149,7 @@ namespace YLFramework.Tests.Audio
             var options = AudioSoundOptions.Defaults;
             options.AutoFade = enabled;
             Assert.Catch<ArgumentException>(() => options.ValidateClip(destroyed));
-            Assert.DoesNotThrow(() => options.ValidateClip(mClip));
+            Assert.DoesNotThrow(() => options.ValidateClip(_clip));
         }
 
         [TestCase(0f, 0f, 10d, 0d, 0d)]
@@ -138,7 +166,9 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(expectedOut, fadeOut, 1e-12);
             Assert.LessOrEqual(fadeIn + fadeOut, length + 1e-12);
             if (fadeIn > 0d && fadeOut > 0d && inputIn + (double)inputOut > length)
+            {
                 Assert.AreEqual(1f, AudioAutoFade.Evaluate(fadeIn, length, fadeIn, fadeOut), 1e-6f);
+            }
         }
 
         [Test]
@@ -164,7 +194,10 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(1f, AudioAutoFade.Evaluate(a, 1e-100d, a, b), 1e-6f);
         }
 
-        [TestCase(0f, 0d)] [TestCase(2f, 2d)] [TestCase(20f, 10d)] [TestCase(float.MaxValue, 10d)]
+        [TestCase(0f, 0d)]
+        [TestCase(2f, 2d)]
+        [TestCase(20f, 10d)]
+        [TestCase(float.MaxValue, 10d)]
         public void LoopNormalizeClampsOnlyTheInitialFadeIn(float input, double expected)
         {
             new AudioAutoFade(input, 0f).Normalize(10d, true, out var fadeIn, out var fadeOut);
@@ -172,16 +205,26 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(0d, fadeOut);
         }
 
-        [TestCase(0d)] [TestCase(-1d)] [TestCase(double.NaN)]
-        [TestCase(double.PositiveInfinity)] [TestCase(double.NegativeInfinity)]
+        [TestCase(0d)]
+        [TestCase(-1d)]
+        [TestCase(double.NaN)]
+        [TestCase(double.PositiveInfinity)]
+        [TestCase(double.NegativeInfinity)]
         public void NormalizeRejectsInvalidClipLengthsRatherThanProducingAnInvalidEnvelope(double length)
         {
             var fade = new AudioAutoFade(1f, 1f);
             Assert.Catch<ArgumentException>(() => fade.Normalize(length, false, out _, out _));
         }
 
-        [TestCase(-1d, 0f)] [TestCase(0d, 0f)] [TestCase(1d, .5f)] [TestCase(2d, 1f)]
-        [TestCase(5d, 1f)] [TestCase(7d, 1f)] [TestCase(8.5d, .5f)] [TestCase(10d, 0f)] [TestCase(11d, 0f)]
+        [TestCase(-1d, 0f)]
+        [TestCase(0d, 0f)]
+        [TestCase(1d, .5f)]
+        [TestCase(2d, 1f)]
+        [TestCase(5d, 1f)]
+        [TestCase(7d, 1f)]
+        [TestCase(8.5d, .5f)]
+        [TestCase(10d, 0f)]
+        [TestCase(11d, 0f)]
         public void EvaluateTakesMinimumOfClampedHeadAndTail(double time, float expected)
         {
             Assert.AreEqual(expected, AudioAutoFade.Evaluate(time, 10d, 2d, 3d), 1e-6f);
@@ -191,7 +234,10 @@ namespace YLFramework.Tests.Audio
         public void EvaluateZeroAndSingleSidesKeepTheirExactEndpointSemantics()
         {
             foreach (var time in new[] { -1d, 0d, 5d, 10d, 11d })
+            {
                 Assert.AreEqual(1f, AudioAutoFade.Evaluate(time, 10d, 0d, 0d));
+            }
+
             Assert.AreEqual(0f, AudioAutoFade.Evaluate(0d, 10d, 2d, 0d));
             Assert.AreEqual(1f, AudioAutoFade.Evaluate(10d, 10d, 2d, 0d));
             Assert.AreEqual(1f, AudioAutoFade.Evaluate(0d, 10d, 0d, 3d));
@@ -201,18 +247,25 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(.5f, AudioAutoFade.Evaluate(.7d, 1d, .4d, .6d), 1e-6f);
         }
 
-        [TestCase(0)] [TestCase(1)] [TestCase(2)] [TestCase(3)] [TestCase(4)]
-        [TestCase(5)] [TestCase(6)] [TestCase(7)] [TestCase(8)]
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(5)]
+        [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
         public void InvalidAutoConfigIsRejectedBeforeCreatingHostOrReplacingSlot(int entry)
         {
-            var current = AudioKit.PlayMusic(mClip);
-            var voice = AudioKit.PlayVoice(mClip, loop: true);
+            var current = AudioKit.PlayMusic(_clip);
+            var voice = AudioKit.PlayVoice(_clip, loop: true);
             var options = AudioSoundOptions.Defaults;
             foreach (var fade in new[] { new AudioAutoFade(-1f, 0f), new AudioAutoFade(0f, float.NaN), new AudioAutoFade(1f, 1f) })
             {
                 options.AutoFade = fade;
                 options.Loop = true;
-                Assert.Catch<ArgumentException>(() => PlayEntry(entry, options, mClip));
+                Assert.Catch<ArgumentException>(() => PlayEntry(entry, options, _clip));
                 Assert.IsTrue(current.IsValid);
                 Assert.IsTrue(voice.IsValid);
                 Assert.AreEqual(current, AudioKit.Music);
@@ -220,7 +273,7 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0, AudioKit.SoundCount);
             }
             AudioKit.Shutdown();
-            Assert.Catch<ArgumentException>(() => PlayEntry(entry, options, mClip));
+            Assert.Catch<ArgumentException>(() => PlayEntry(entry, options, _clip));
             Assert.IsFalse(AudioManager.HasInstance);
             Assert.IsNull(AudioKit.CurrentSettings);
         }
@@ -233,17 +286,17 @@ namespace YLFramework.Tests.Audio
             options.PlaySoundMode = mode;
             options.Loop = true;
             options.AutoFade = new AudioAutoFade(1f, 1f);
-            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(mClip, options));
+            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(_clip, options));
             Assert.IsFalse(AudioManager.HasInstance);
             options.AutoFade = new AudioAutoFade(1f, 0f);
-            var current = AudioKit.PlaySound(mClip, options);
+            var current = AudioKit.PlaySound(_clip, options);
             Assert.IsTrue(current.IsValid);
             options.AutoFade = new AudioAutoFade(float.NaN, 0f);
-            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(mClip, options));
+            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(_clip, options));
             Assert.IsTrue(current.IsValid);
             Assert.AreEqual(1, AudioKit.SoundCount);
             options.AutoFade = new AudioAutoFade(1f, 0f);
-            Assert.IsFalse(AudioKit.PlaySound(mClip, options).IsValid);
+            Assert.IsFalse(AudioKit.PlaySound(_clip, options).IsValid);
         }
 
         [Test]
@@ -252,14 +305,15 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsSoundOn.Value = false;
             var options = AudioSoundOptions.Defaults;
             options.AutoFade = new AudioAutoFade(float.NaN, 0f);
-            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(mClip, options));
+            Assert.Catch<ArgumentException>(() => AudioKit.PlaySound(_clip, options));
             Assert.IsFalse(AudioManager.HasInstance);
             options.AutoFade = new AudioAutoFade(1f, 1f);
-            Assert.IsFalse(AudioKit.PlaySound(mClip, options).IsValid);
+            Assert.IsFalse(AudioKit.PlaySound(_clip, options).IsValid);
             Assert.IsFalse(AudioManager.HasInstance);
         }
 
-        [TestCase(false)] [TestCase(true)]
+        [TestCase(false)]
+        [TestCase(true)]
         public void WithOptionsSlotsIgnoreSoundPolicyAndSpatialFieldsButHonorPitchAndVolume(bool music)
         {
             var options = AudioSoundOptions.Defaults;
@@ -270,13 +324,13 @@ namespace YLFramework.Tests.Audio
             options.MinDistance = float.NaN;
             options.MaxDistance = -1f;
             options.RolloffMode = (AudioRolloffMode)999;
-            var handle = music ? AudioKit.PlayMusicWithOptions(mClip, options) : AudioKit.PlayVoiceWithOptions(mClip, options);
+            var handle = music ? AudioKit.PlayMusicWithOptions(_clip, options) : AudioKit.PlayVoiceWithOptions(_clip, options);
             Assert.IsTrue(handle.IsValid);
             Assert.IsFalse(handle.Voice.Source.loop);
             Assert.AreEqual(1.5f, handle.Voice.Source.pitch);
             Assert.AreEqual(.6f, handle.Voice.Source.volume, .0001f);
             Assert.AreEqual(0f, handle.Voice.Source.spatialBlend);
-            var replacement = music ? AudioKit.PlayMusicWithOptions(mClip, options) : AudioKit.PlayVoiceWithOptions(mClip, options);
+            var replacement = music ? AudioKit.PlayMusicWithOptions(_clip, options) : AudioKit.PlayVoiceWithOptions(_clip, options);
             Assert.IsFalse(handle.IsValid);
             Assert.IsTrue(replacement.IsValid);
         }
@@ -304,7 +358,13 @@ namespace YLFramework.Tests.Audio
                 Assert.IsNotNull(method, name);
                 var count = 0;
                 foreach (var candidate in typeof(AudioKit).GetMethods(BindingFlags.Public | BindingFlags.Static))
-                    if (candidate.Name == name) count++;
+                {
+                    if (candidate.Name == name)
+                    {
+                        count++;
+                    }
+                }
+
                 Assert.AreEqual(1, count, "Keep the original method group unambiguous.");
             }
             foreach (var name in new[] { "PlayMusicWithOptions", "PlayVoiceWithOptions" })
@@ -325,7 +385,9 @@ namespace YLFramework.Tests.Audio
             Assert.IsNotNull(typeof(PlaySoundExtension).GetMethod("PlaySound", new[] { typeof(ISequence), typeof(AudioClip), typeof(AudioOutputRoute), callback }));
             Assert.IsNotNull(typeof(PlaySoundExtension).GetMethod("PlaySoundWithOptions", new[] { typeof(ISequence), typeof(AudioClip), typeof(AudioSoundOptions), callback }));
             foreach (var method in typeof(AudioHandle).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
                 Assert.IsFalse(method.Name.Contains("AutoFade"), "Do not introduce a runtime automatic-envelope handle API.");
+            }
         }
 
         [Test]
@@ -333,12 +395,12 @@ namespace YLFramework.Tests.Audio
         {
             var options = AudioSoundOptions.Defaults;
             options.Priority = -1;
-            Assert.Throws<ArgumentOutOfRangeException>(() => PlaySoundAction.AllocateWithOptions(mClip, options));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PlaySoundAction.AllocateWithOptions(_clip, options));
             Assert.IsFalse(AudioManager.HasInstance);
             options.Priority = 0;
             options.AutoFade = new AudioAutoFade(1f, 1f);
             options.Loop = true;
-            Assert.Catch<ArgumentException>(() => PlaySoundAction.AllocateWithOptions(mClip, options));
+            Assert.Catch<ArgumentException>(() => PlaySoundAction.AllocateWithOptions(_clip, options));
             Assert.IsFalse(AudioManager.HasInstance);
             options.Loop = false;
             options.Volume = .4f;
@@ -346,9 +408,9 @@ namespace YLFramework.Tests.Audio
             options.OutputRoute = AudioOutputRoute.Direct;
             options.Priority = 23;
             var calls = 0;
-            var action = PlaySoundAction.AllocateWithOptions(mClip, options, () => calls++);
-            mActions.Add(action);
-            var field = typeof(PlaySoundAction).GetField("mOptions", BindingFlags.Instance | BindingFlags.NonPublic);
+            var action = PlaySoundAction.AllocateWithOptions(_clip, options, () => calls++);
+            _actions.Add(action);
+            var field = typeof(PlaySoundAction).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(field, "The new and old allocation paths share one options record.");
             Assert.AreEqual(typeof(AudioPlaybackOptions), field.FieldType);
             var allocated = (AudioPlaybackOptions)field.GetValue(action);

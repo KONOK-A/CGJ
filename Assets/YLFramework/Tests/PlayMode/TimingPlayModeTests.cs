@@ -7,15 +7,15 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Timing;
-using Timer = YLFramework.Timing.Timer;
 using Object = UnityEngine.Object;
+using Timer = YLFramework.Timing.Timer;
 
 namespace YLFramework.Tests
 {
     public class TimingPlayModeTests
     {
-        private readonly List<Component> mHosts = new();
-        private bool mIsolated;
+        private readonly List<Component> _hosts = new();
+        private bool _isIsolated;
         private static Type DriverType => typeof(Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
         private static Component CurrentHost => DriverType.GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
             .GetValue(null) as Component;
@@ -25,31 +25,54 @@ namespace YLFramework.Tests
         [SetUp]
         public void SetUp()
         {
-            mIsolated = false;
+            _isIsolated = false;
             Assert.That(FindHosts(), Is.Empty, "不接管用户已有或停用的 TimerDriver。");
             Assert.That(CurrentHost, Is.Null, "不接管尚未释放的静态 owner。");
-            mIsolated = true;
+            _isIsolated = true;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!mIsolated) yield break;
-            if (!ReferenceEquals(CurrentHost, null) && mHosts.Contains(CurrentHost)) Timer.Shutdown();
-            foreach (var host in mHosts) if (host) Object.Destroy(host.gameObject);
-            mHosts.Clear();
+            if (!_isIsolated)
+            {
+                yield break;
+            }
+
+            if (!ReferenceEquals(CurrentHost, null) && _hosts.Contains(CurrentHost))
+            {
+                Timer.Shutdown();
+            }
+
+            foreach (var host in _hosts)
+            {
+                if (host)
+                {
+                    Object.Destroy(host.gameObject);
+                }
+            }
+
+            _hosts.Clear();
             yield return null;
         }
 
         private TimerHandle Post(Func<TimerHandle> post)
         {
             var before = FindHosts();
-            Assert.That(before.All(mHosts.Contains), Is.True, "不接管并行创建的非自有宿主。");
-            try { return post(); }
+            Assert.That(before.All(_hosts.Contains), Is.True, "不接管并行创建的非自有宿主。");
+            try
+            {
+                return post();
+            }
             finally
             {
                 foreach (var host in FindHosts())
-                    if (!before.Contains(host) && !mHosts.Contains(host)) mHosts.Add(host);
+                {
+                    if (!before.Contains(host) && !_hosts.Contains(host))
+                    {
+                        _hosts.Add(host);
+                    }
+                }
             }
         }
 

@@ -1,11 +1,15 @@
 
 namespace YLFramework.StateMachine
 {
-    public class LessCompare : IPamaterCompare
+    public class LessCompare : IParameterComparer
     {
-        public bool IsMeetCondition(FSMParameterData parameter, float v)
+        public bool Matches(FsmParameterData parameter, float v)
         {
-            if (parameter == null) return false;
+            if (parameter == null)
+            {
+                return false;
+            }
+
             return parameter.Value.CompareTo(v) == -1;
         }
     }

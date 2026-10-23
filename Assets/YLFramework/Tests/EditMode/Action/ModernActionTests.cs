@@ -1,18 +1,18 @@
-using YLFramework.Actions;
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 
 namespace YLFramework.Tests.Actions
 {
     public class ModernActionTests
     {
-        private readonly List<IAction> mOwned = new List<IAction>();
+        private readonly List<IAction> _owned = new List<IAction>();
 
         private T Own<T>(T action) where T : IAction
         {
-            mOwned.Add(action);
+            _owned.Add(action);
             return action;
         }
 
@@ -28,11 +28,23 @@ namespace YLFramework.Tests.Actions
 
         private sealed class ExecutionResultProbe : IAction, IActionExecutionVersion
         {
-            public ulong ActionID { get; set; } = 1;
-            public ActionStatus Status { get; set; }
-            public bool Deinited { get; set; }
-            public bool Paused { get; set; }
-            public ulong ExecutionVersion { get; private set; }
+            public ulong ActionId { get; set; } = 1;
+            public ActionStatus Status
+            {
+                get; set;
+            }
+            public bool IsDeinitialized
+            {
+                get; set;
+            }
+            public bool IsPaused
+            {
+                get; set;
+            }
+            public ulong ExecutionVersion
+            {
+                get; private set;
+            }
             public Action Starting;
             public Action Executing;
             public Action Finishing;
@@ -40,9 +52,18 @@ namespace YLFramework.Tests.Actions
 
             public void OnStart() => Starting?.Invoke();
             public void OnExecute(float dt) => Executing?.Invoke();
-            public void OnFinish() { Finishes++; Finishing?.Invoke(); }
-            public void Deinit() => Deinited = true;
-            public void Reset() { ExecutionVersion++; Status = ActionStatus.NotStart; Paused = false; }
+            public void OnFinish()
+            {
+                Finishes++;
+                Finishing?.Invoke();
+            }
+            public void Deinit() => IsDeinitialized = true;
+            public void Reset()
+            {
+                ExecutionVersion++;
+                Status = ActionStatus.NotStart;
+                IsPaused = false;
+            }
         }
 
         [TestCase(false)]
@@ -50,11 +71,22 @@ namespace YLFramework.Tests.Actions
         public void ExecutePreservesFinishedCancellationResultWithoutCallingTheFinishHook(bool duringStart)
         {
             var action = new ExecutionResultProbe();
-            Action cancelAndFinish = () => { action.Deinit(); action.Finish(); };
-            if (duringStart) action.Starting = cancelAndFinish;
-            else { action.Executing = cancelAndFinish; Assert.That(action.Execute(0), Is.False); }
+            Action cancelAndFinish = () =>
+            {
+                action.Deinit();
+                action.Finish();
+            };
+            if (duringStart)
+            {
+                action.Starting = cancelAndFinish;
+            }
+            else
+            {
+                action.Executing = cancelAndFinish;
+                Assert.That(action.Execute(0), Is.False);
+            }
             Assert.That(action.Execute(0), Is.True);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Finishes, Is.Zero);
             Assert.That(action.Execute(0), Is.False, "An already cancelled action must not run again.");
         }
@@ -64,8 +96,15 @@ namespace YLFramework.Tests.Actions
         public void ExecuteDoesNotTreatCancellationWithoutFinishedStateAsCompletion(bool duringStart)
         {
             var action = new ExecutionResultProbe();
-            if (duringStart) action.Starting = action.Deinit;
-            else { action.Executing = action.Deinit; Assert.That(action.Execute(0), Is.False); }
+            if (duringStart)
+            {
+                action.Starting = action.Deinit;
+            }
+            else
+            {
+                action.Executing = action.Deinit;
+                Assert.That(action.Execute(0), Is.False);
+            }
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.Finishes, Is.Zero);
         }
@@ -79,11 +118,26 @@ namespace YLFramework.Tests.Actions
             var action = new ExecutionResultProbe();
             Action replaceAndFinish = () =>
             {
-                if (reset) action.Reset(); else action.ActionID++;
+                if (reset)
+                {
+                    action.Reset();
+                }
+                else
+                {
+                    action.ActionId++;
+                }
+
                 action.Finish();
             };
-            if (duringStart) action.Starting = replaceAndFinish;
-            else { action.Executing = replaceAndFinish; Assert.That(action.Execute(0), Is.False); }
+            if (duringStart)
+            {
+                action.Starting = replaceAndFinish;
+            }
+            else
+            {
+                action.Executing = replaceAndFinish;
+                Assert.That(action.Execute(0), Is.False);
+            }
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.Finishes, Is.Zero);
         }
@@ -95,7 +149,7 @@ namespace YLFramework.Tests.Actions
             action.Finishing = action.Deinit;
             Assert.That(action.Execute(0), Is.True);
             Assert.That(action.Finishes, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
         }
 
         private sealed class ThrowingDeinitAction : AbstractAction<ThrowingDeinitAction>
@@ -124,11 +178,14 @@ namespace YLFramework.Tests.Actions
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mOwned)
+            foreach (var action in _owned)
             {
-                if (!action.Deinited) action.Deinit();
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            mOwned.Clear();
+            _owned.Clear();
             ActionQueue.Drain();
         }
 
@@ -146,14 +203,20 @@ namespace YLFramework.Tests.Actions
             public override void OnStart()
             {
                 Starts++;
-                if (FinishOnStart) this.Finish();
+                if (FinishOnStart)
+                {
+                    this.Finish();
+                }
             }
 
             public override void OnExecute(float dt)
             {
                 Executions++;
                 LastDelta = dt;
-                if (FinishOnExecute) this.Finish();
+                if (FinishOnExecute)
+                {
+                    this.Finish();
+                }
             }
 
             public override void OnFinish()
@@ -171,7 +234,7 @@ namespace YLFramework.Tests.Actions
             protected override void OnDeinit()
             {
                 Deinits++;
-                ObservedDeinitedInHook = Deinited;
+                ObservedDeinitedInHook = IsDeinitialized;
             }
         }
 
@@ -198,7 +261,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(action.Execute(0.25f), Is.True);
             Assert.That(action.LastDelta, Is.EqualTo(0.25f));
             Assert.That(action.Finishes, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.False, "Manual Execute does not own Deinit.");
+            Assert.That(action.IsDeinitialized, Is.False, "Manual Execute does not own Deinit.");
         }
 
         [Test]
@@ -211,12 +274,12 @@ namespace YLFramework.Tests.Actions
             Assert.That(immediate.Finishes, Is.EqualTo(1));
 
             var paused = Own(ProbeAction.Allocate());
-            paused.Paused = true;
+            paused.IsPaused = true;
             Assert.That(paused.Execute(1f), Is.False);
             Assert.That(paused.Starts, Is.EqualTo(1));
             Assert.That(paused.Execute(1f), Is.False);
             Assert.That(paused.Executions, Is.Zero);
-            paused.Paused = false;
+            paused.IsPaused = false;
             paused.Execute(0.5f);
             Assert.That(paused.Executions, Is.EqualTo(1));
         }
@@ -236,21 +299,21 @@ namespace YLFramework.Tests.Actions
         public void AbstractActionDeinitIsDeferredAndIdempotentButResetDoesNotReactivateIt()
         {
             var action = Own(ProbeAction.Allocate());
-            var oldID = action.ActionID;
+            var oldId = action.ActionId;
             action.Deinit();
             action.Deinit();
             Assert.That(action.Deinits, Is.EqualTo(1));
             Assert.That(action.ObservedDeinitedInHook, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             action.Reset();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             var other = Own(ProbeAction.Allocate());
             Assert.That(other, Is.Not.SameAs(action));
             ActionQueue.Drain();
             var reused = Own(ProbeAction.Allocate());
             Assert.That(reused, Is.SameAs(action));
-            Assert.That(reused.Deinited, Is.False);
-            Assert.That(reused.ActionID, Is.Not.EqualTo(oldID));
+            Assert.That(reused.IsDeinitialized, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(oldId));
         }
 
         [TestCase(false)]
@@ -272,7 +335,11 @@ namespace YLFramework.Tests.Actions
             var ready = false;
             var polls = 0;
             var calls = 0;
-            var action = Own(Kit.Condition(() => { polls++; return ready; }, () => calls++));
+            var action = Own(Kit.Condition(() =>
+            {
+                polls++;
+                return ready;
+            }, () => calls++));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(polls, Is.Zero);
             Assert.That(action.Execute(1), Is.False);
@@ -299,12 +366,19 @@ namespace YLFramework.Tests.Actions
             };
             action = Own(ActionKit.Condition(() =>
             {
-                if (duringPredicate) replace();
+                if (duringPredicate)
+                {
+                    replace();
+                }
+
                 return true;
             }, () =>
             {
                 oldCalls++;
-                if (!duringPredicate) replace();
+                if (!duringPredicate)
+                {
+                    replace();
+                }
             }));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.Execute(1), Is.False);
@@ -345,18 +419,22 @@ namespace YLFramework.Tests.Actions
             var evaluations = 0;
             var originalFinishes = 0;
             var seconds = 2f;
-            var generator = Kit.ID_GENERATOR;
-            var action = Own(Delay.Allocate(() => { evaluations++; return seconds; }, () => originalFinishes++));
-            var originalID = action.ActionID;
-            Assert.That(originalID, Is.EqualTo(generator));
-            Assert.That(Kit.ID_GENERATOR, Is.EqualTo(generator + 1));
+            var generator = Kit.IdGenerator;
+            var action = Own(Delay.Allocate(() =>
+            {
+                evaluations++;
+                return seconds;
+            }, () => originalFinishes++));
+            var originalId = action.ActionId;
+            Assert.That(originalId, Is.EqualTo(generator));
+            Assert.That(Kit.IdGenerator, Is.EqualTo(generator + 1));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.Execute(1f), Is.False);
             Assert.That(evaluations, Is.EqualTo(1));
             seconds = 3f;
-            action.Paused = true;
+            action.IsPaused = true;
             action.Reset();
-            Assert.That(action.Paused, Is.False);
+            Assert.That(action.IsPaused, Is.False);
             Assert.That(action.CurrentSeconds, Is.Zero);
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.DelayTime, Is.EqualTo(3f));
@@ -370,14 +448,14 @@ namespace YLFramework.Tests.Actions
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             var other = Own(Delay.Allocate(() => 9f));
             Assert.That(other, Is.Not.SameAs(action));
-            Assert.That(other.ActionID, Is.Not.EqualTo(originalID));
+            Assert.That(other.ActionId, Is.Not.EqualTo(originalId));
             ActionQueue.Drain();
             var fixedFinishes = 0;
             var fixedDelay = Own((Delay)Kit.Delay(0f, () => fixedFinishes++));
-            var fixedID = fixedDelay.ActionID;
+            var fixedId = fixedDelay.ActionId;
             Assert.That(fixedDelay, Is.SameAs(action));
-            Assert.That(fixedID, Is.Not.EqualTo(originalID));
-            Assert.That(fixedDelay.Deinited, Is.False);
+            Assert.That(fixedId, Is.Not.EqualTo(originalId));
+            Assert.That(fixedDelay.IsDeinitialized, Is.False);
             Assert.That(fixedDelay.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(fixedDelay.CurrentSeconds, Is.Zero);
             Assert.That(fixedDelay.DelayTimeFactory, Is.Null);
@@ -389,9 +467,13 @@ namespace YLFramework.Tests.Actions
             Assert.That(evaluations, Is.EqualTo(2));
             fixedDelay.Deinit();
             ActionQueue.Drain();
-            var dynamicDelay = Own(Delay.Allocate(() => { evaluations++; return 1f; }));
+            var dynamicDelay = Own(Delay.Allocate(() =>
+            {
+                evaluations++;
+                return 1f;
+            }));
             Assert.That(dynamicDelay, Is.SameAs(fixedDelay));
-            Assert.That(dynamicDelay.ActionID, Is.Not.EqualTo(fixedID));
+            Assert.That(dynamicDelay.ActionId, Is.Not.EqualTo(fixedId));
             Assert.That(dynamicDelay.Execute(0), Is.False);
             Assert.That(dynamicDelay.DelayTime, Is.EqualTo(1f));
             Assert.That(dynamicDelay.Execute(0), Is.False);
@@ -403,10 +485,14 @@ namespace YLFramework.Tests.Actions
         {
             var evaluations = 0;
             var finishes = 0;
-            var action = Own(Delay.Allocate(() => { evaluations++; return 1f; }, () => finishes++));
+            var action = Own(Delay.Allocate(() =>
+            {
+                evaluations++;
+                return 1f;
+            }, () => finishes++));
             action.Deinit();
             action.Reset();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.DelayTimeFactory, Is.Null);
             Assert.That(action.OnDelayFinish, Is.Null);
             Assert.That(evaluations, Is.Zero);
@@ -466,12 +552,12 @@ namespace YLFramework.Tests.Actions
             var sequence = Own(Kit.Sequence().Append(child).Callback(() => trace.Add(2)));
             Assert.That(sequence.Execute(0), Is.True);
             CollectionAssert.AreEqual(new[] { 1, 2 }, trace);
-            Assert.That(child.Deinited, Is.False);
+            Assert.That(child.IsDeinitialized, Is.False);
             sequence.Reset();
             Assert.That(sequence.Execute(0), Is.True);
             CollectionAssert.AreEqual(new[] { 1, 2, 1, 2 }, trace);
             sequence.Deinit();
-            Assert.That(child.Deinited, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
         }
 
         [Test]
@@ -540,7 +626,11 @@ namespace YLFramework.Tests.Actions
             var calls = 0;
             var repeat = Own(Kit.Repeat(count).Callback(() => calls++));
             Assert.That(repeat.Execute(0), Is.False);
-            for (var index = 0; index < 4; index++) Assert.That(repeat.Execute(0), Is.False);
+            for (var index = 0; index < 4; index++)
+            {
+                Assert.That(repeat.Execute(0), Is.False);
+            }
+
             Assert.That(calls, Is.EqualTo(expectedCalls));
         }
 
@@ -550,10 +640,18 @@ namespace YLFramework.Tests.Actions
         {
             var polls = 0;
             var calls = 0;
-            var branch = Own(ConditionSequence.Allocate(() => { polls++; return condition; },
+            var branch = Own(ConditionSequence.Allocate(() =>
+            {
+                polls++;
+                return condition;
+            },
                 inner => inner.Callback(() => calls++)));
             Assert.That(branch.Execute(0), Is.EqualTo(!condition));
-            if (condition) Assert.That(branch.Execute(0), Is.True);
+            if (condition)
+            {
+                Assert.That(branch.Execute(0), Is.True);
+            }
+
             Assert.That(polls, Is.EqualTo(1));
             Assert.That(calls, Is.EqualTo(condition ? 1 : 0));
         }
@@ -569,26 +667,30 @@ namespace YLFramework.Tests.Actions
                 child = Own(inner);
                 inner.Append(leaf);
             }));
-            var originalID = branch.ActionID;
+            var originalId = branch.ActionId;
             Assert.That(branch.Execute(0), Is.False);
-            if (startChild) Assert.That(branch.Execute(0), Is.False);
+            if (startChild)
+            {
+                Assert.That(branch.Execute(0), Is.False);
+            }
+
             Assert.That(leaf.Starts, Is.EqualTo(startChild ? 1 : 0));
             branch.Deinit();
             branch.Deinit();
-            Assert.That(branch.Deinited, Is.True);
-            Assert.That(child.Deinited, Is.True);
-            Assert.That(leaf.Deinited, Is.True);
+            Assert.That(branch.IsDeinitialized, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
+            Assert.That(leaf.IsDeinitialized, Is.True);
             Assert.That(leaf.Deinits, Is.EqualTo(1));
             Assert.That(leaf.Finishes, Is.Zero);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(3));
             branch.Reset();
-            Assert.That(branch.Deinited, Is.True);
+            Assert.That(branch.IsDeinitialized, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(3));
             ActionQueue.Drain();
             var reused = Own(ConditionSequence.Allocate(() => false, inner => Assert.Fail("Cancelled settings leaked.")));
             Assert.That(reused, Is.SameAs(branch));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(originalId));
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(reused.Execute(0), Is.True);
         }
 
@@ -605,20 +707,20 @@ namespace YLFramework.Tests.Actions
                 leaves.Add(leaf);
                 inner.Append(leaf);
             }));
-            var originalID = branch.ActionID;
+            var originalId = branch.ActionId;
             Assert.That(branch.Execute(0), Is.False);
             Assert.That(branch.Execute(0), Is.False);
             Assert.That(branch.Execute(0.25f), Is.False);
-            branch.Paused = true;
+            branch.IsPaused = true;
             branch.Reset();
             branch.Reset();
-            Assert.That(children[0].Deinited, Is.True);
+            Assert.That(children[0].IsDeinitialized, Is.True);
             Assert.That(leaves[0].Deinits, Is.EqualTo(1));
             Assert.That(leaves[0].Finishes, Is.Zero);
-            Assert.That(branch.Deinited, Is.False);
-            Assert.That(branch.Paused, Is.False);
+            Assert.That(branch.IsDeinitialized, Is.False);
+            Assert.That(branch.IsPaused, Is.False);
             Assert.That(branch.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(branch.ActionID, Is.EqualTo(originalID));
+            Assert.That(branch.ActionId, Is.EqualTo(originalId));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(2));
             ready = false;
             Assert.That(branch.Execute(0), Is.True);
@@ -632,7 +734,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(leaves[1], Is.Not.SameAs(leaves[0]));
             Assert.That(branch.Execute(0), Is.False);
             branch.Deinit();
-            Assert.That(children[1].Deinited, Is.True);
+            Assert.That(children[1].IsDeinitialized, Is.True);
             Assert.That(leaves[1].Deinits, Is.EqualTo(1));
             Assert.That(leaves[0].Deinits, Is.EqualTo(1));
         }
@@ -659,7 +761,7 @@ namespace YLFramework.Tests.Actions
             }));
             var exception = Assert.Throws<InvalidOperationException>(() => branch.Execute(0));
             Assert.That(exception, Is.SameAs(settingFailure));
-            Assert.That(child.Deinited, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
             Assert.That(leaf.Deinits, Is.EqualTo(1));
             Assert.That(leaf.Starts, Is.Zero);
             Assert.That(leaf.Finishes, Is.Zero);
@@ -681,14 +783,18 @@ namespace YLFramework.Tests.Actions
         public void CustomTypedDataCallbacksAndReplacementArePreserved()
         {
             var trace = new List<string>();
-            ICustomAPI<int> custom = null;
+            ICustomApi<int> custom = null;
             var action = Own(Kit.Custom<int>(api =>
             {
                 custom = api;
                 api.Data = 7;
                 api.OnStart(() => trace.Add("replaced"));
                 api.OnStart(() => trace.Add("start"));
-                api.OnExecute(dt => { api.Data += (int)dt; api.Finish(); });
+                api.OnExecute(dt =>
+                {
+                    api.Data += (int)dt;
+                    api.Finish();
+                });
                 api.OnFinish(() => trace.Add("finish"));
             }));
             Assert.That(action.Execute(10), Is.False);
@@ -707,7 +813,7 @@ namespace YLFramework.Tests.Actions
         {
             var data = new DisposableData();
             var calls = 0;
-            ICustomAPI<DisposableData> api = null;
+            ICustomApi<DisposableData> api = null;
             var action = Own(Kit.Custom<DisposableData>(value =>
             {
                 api = value;
@@ -716,7 +822,7 @@ namespace YLFramework.Tests.Actions
                 value.OnExecute(dt => calls++);
                 value.OnFinish(() => calls++);
             }));
-            var originalID = action.ActionID;
+            var originalId = action.ActionId;
             action.Deinit();
             action.Deinit();
             Assert.That(api.Data, Is.Null);
@@ -726,10 +832,10 @@ namespace YLFramework.Tests.Actions
             var other = Own(Kit.Custom<DisposableData>(value => value.Data = data));
             Assert.That(other, Is.Not.SameAs(action));
             ActionQueue.Drain();
-            ICustomAPI<DisposableData> reusedApi = null;
+            ICustomApi<DisposableData> reusedApi = null;
             var reused = Own(Kit.Custom<DisposableData>(value => reusedApi = value));
             Assert.That(reused, Is.SameAs(action));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
+            Assert.That(reused.ActionId, Is.Not.EqualTo(originalId));
             Assert.That(reusedApi.Data, Is.Null);
             Assert.That(reused.Execute(0), Is.False);
             Assert.That(reused.Execute(0), Is.False);
@@ -740,14 +846,14 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void UntypedCustomDefersReuseAndRefreshesIDWhileItsCallbackIsExecuting()
+        public void UntypedCustomDefersReuseAndRefreshesIdWhileItsCallbackIsExecuting()
         {
-            var generator = Kit.ID_GENERATOR;
+            var generator = Kit.IdGenerator;
             var data = new DisposableData();
             var starts = 0;
             var executions = 0;
             var finishes = 0;
-            ICustomAPI<object> api = null;
+            ICustomApi<object> api = null;
             IAction first = null;
             IAction second = null;
             first = Own(Kit.Custom(value =>
@@ -766,34 +872,34 @@ namespace YLFramework.Tests.Actions
                 });
                 value.OnFinish(() => finishes++);
             }));
-            var originalID = first.ActionID;
-            Assert.That(originalID, Is.EqualTo(generator));
-            Assert.That(Kit.ID_GENERATOR, Is.EqualTo(generator + 1));
+            var originalId = first.ActionId;
+            Assert.That(originalId, Is.EqualTo(generator));
+            Assert.That(Kit.IdGenerator, Is.EqualTo(generator + 1));
             Assert.That(first.Execute(0), Is.False);
             Assert.That(first.Execute(0), Is.True);
-            Assert.That(first.Deinited, Is.True);
-            Assert.That(first.ActionID, Is.EqualTo(originalID));
+            Assert.That(first.IsDeinitialized, Is.True);
+            Assert.That(first.ActionId, Is.EqualTo(originalId));
             Assert.That(api.Data, Is.Null);
             Assert.That(data.Disposals, Is.Zero);
             Assert.That(starts, Is.EqualTo(1));
             Assert.That(executions, Is.EqualTo(1));
             Assert.That(finishes, Is.Zero);
             Assert.That(second.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(second.Deinited, Is.False);
-            Assert.That(second.ActionID, Is.Not.EqualTo(originalID));
-            Assert.That(Kit.ID_GENERATOR, Is.EqualTo(generator + 2));
+            Assert.That(second.IsDeinitialized, Is.False);
+            Assert.That(second.ActionId, Is.Not.EqualTo(originalId));
+            Assert.That(Kit.IdGenerator, Is.EqualTo(generator + 2));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             first.Reset();
-            Assert.That(first.Deinited, Is.True);
+            Assert.That(first.IsDeinitialized, Is.True);
             ActionQueue.Drain();
-            ICustomAPI<object> reusedApi = null;
+            ICustomApi<object> reusedApi = null;
             var reused = Own(Kit.Custom(value => reusedApi = value));
             Assert.That(reused, Is.SameAs(first));
             Assert.That(reusedApi, Is.SameAs(api));
             Assert.That(reusedApi.Data, Is.Null);
-            Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
-            Assert.That(Kit.ID_GENERATOR, Is.EqualTo(generator + 3));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(originalId));
+            Assert.That(Kit.IdGenerator, Is.EqualTo(generator + 3));
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(reused.Execute(0), Is.False);
             Assert.That(reused.Execute(0), Is.False);
             Assert.That(starts, Is.EqualTo(1));
@@ -814,7 +920,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(sequence.Lerp(2, 4, 0), Is.SameAs(sequence));
             Assert.That(sequence.Lerp01(0), Is.SameAs(sequence));
             var completed = false;
-            for (var iteration = 0; iteration < 20 && !completed; iteration++) completed = sequence.Execute(0);
+            for (var iteration = 0; iteration < 20 && !completed; iteration++)
+            {
+                completed = sequence.Execute(0);
+            }
+
             Assert.That(completed, Is.True);
             Assert.That(calls, Is.EqualTo(4));
         }
@@ -824,7 +934,11 @@ namespace YLFramework.Tests.Actions
         {
             var factoryCalls = 0;
             var sequence = Own(Kit.Sequence());
-            Assert.That(sequence.Delay(() => { factoryCalls++; return 0; }), Is.SameAs(sequence));
+            Assert.That(sequence.Delay(() =>
+            {
+                factoryCalls++;
+                return 0;
+            }), Is.SameAs(sequence));
             Assert.That(sequence.Repeat(inner => inner.Callback(null)), Is.SameAs(sequence));
             Assert.That(sequence.Execute(0), Is.False);
             Assert.That(sequence.Execute(0), Is.False);

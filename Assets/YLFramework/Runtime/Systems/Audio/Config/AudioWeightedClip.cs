@@ -8,18 +8,20 @@ namespace YLFramework.Services.Audio
     public struct AudioWeightedClip
     {
         /// <summary>The caller-owned clip; null and destroyed clips are excluded from selection.</summary>
-        public AudioClip Clip;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Clip")]
+        public AudioClip clip;
 
         /// <summary>A finite, nonnegative relative weight. Zero excludes this entry from selection.</summary>
-        public float Weight;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Weight")]
+        public float weight;
 
         /// <summary>Store a clip and weight without validation; the selector validates every entry.</summary>
         /// <param name="clip">Caller-owned clip candidate.</param>
         /// <param name="weight">Relative weight, defaulting to one.</param>
         public AudioWeightedClip(AudioClip clip, float weight = 1f)
         {
-            Clip = clip;
-            Weight = weight;
+            this.clip = clip;
+            this.weight = weight;
         }
     }
 }

@@ -45,7 +45,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(installed.RelativeDirectory, Is.EqualTo("YLFrameworkResources/" + source.ProjectId + "/StandaloneWindows64/" + first.Document.CatalogDigest));
             foreach (var directory in new[] { ResourceBuiltInDeployer.ResourcesRoot, source.DeployedProject,
                 Path.GetDirectoryName(firstPlan.DirectoryPath), firstPlan.DirectoryPath })
+            {
                 Assert.That(File.Exists(directory + ".meta"), Is.True, "Unity must really import the deployment shell: " + directory);
+            }
+
             var before = ResourceReleaseFixture.Snapshot(source.DeployedProject);
             var oldVersionBefore = ResourceReleaseFixture.Snapshot(installed.DirectoryPath);
             var times = Directory.GetFiles(source.DeployedProject, "*", SearchOption.AllDirectories).ToDictionary(x => x, File.GetLastWriteTimeUtc);
@@ -54,7 +57,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(repeated.IsRepeat, Is.True);
             Assert.That(repeated.CopiedBytes, Is.Zero);
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(source.DeployedProject));
-            foreach (var pair in times) Assert.That(File.GetLastWriteTimeUtc(pair.Key), Is.EqualTo(pair.Value));
+            foreach (var pair in times)
+            {
+                Assert.That(File.GetLastWriteTimeUtc(pair.Key), Is.EqualTo(pair.Value));
+            }
+
             Assert.That(Directory.GetFiles(installed.Snapshot.DirectoryPath, "*.meta", SearchOption.AllDirectories), Is.Empty);
             Assert.That(File.Exists(Path.Combine(firstPlan.DirectoryPath, "payload~.meta")), Is.False);
             Assert.That(AssetDatabase.AssetPathToGUID(RelativeAsset(installed.Snapshot.DirectoryPath)), Is.Empty);
@@ -83,7 +90,13 @@ namespace YLFramework.Tests.ResourceBuild
             var next = source.Version("next");
             var plan = ResourceBuiltInDeployer.Preflight(next);
             using var cancel = new CancellationTokenSource();
-            Assert.Throws<OperationCanceledException>(() => ResourceBuiltInDeployer.Execute(plan, cancel.Token, point => { if (point == checkpoint) cancel.Cancel(); }));
+            Assert.Throws<OperationCanceledException>(() => ResourceBuiltInDeployer.Execute(plan, cancel.Token, point =>
+            {
+                if (point == checkpoint)
+                {
+                    cancel.Cancel();
+                }
+            }));
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(source.DeployedProject));
             Assert.That(Open(old.Snapshot).Document.CatalogDigest, Is.EqualTo(old.Snapshot.Document.CatalogDigest));
             Assert.That(Directory.Exists(plan.DirectoryPath), Is.False);
@@ -103,7 +116,13 @@ namespace YLFramework.Tests.ResourceBuild
             var second = source.Version("committed");
             var plan = ResourceBuiltInDeployer.Preflight(second);
             Assert.That(Assert.Throws<IOException>(() => ResourceBuiltInDeployer.Execute(plan, default,
-                point => { if (point == checkpoint) throw new IOException("fixture commit interruption"); })).Message, Is.EqualTo("fixture commit interruption"));
+                point =>
+                {
+                    if (point == checkpoint)
+                    {
+                        throw new IOException("fixture commit interruption");
+                    }
+                })).Message, Is.EqualTo("fixture commit interruption"));
             Assert.That(File.Exists(Path.Combine(plan.WorkspacePath, "journal.json")), Is.True);
             Directory.Delete(second.DirectoryPath, true);
             var recovered = ResourceBuiltInDeployer.Recover(source.ProjectId, second.Document.Platform, source.ProjectGuid);
@@ -138,9 +157,22 @@ namespace YLFramework.Tests.ResourceBuild
                 var before = ResourceReleaseFixture.Snapshot(source.DeployedProject);
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Preflight(first));
                 CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(source.DeployedProject));
-                if (kind == "payload-meta" || kind == "wrapper-file" || kind == "corrupt-bundle") Assert.Throws<InvalidDataException>(() => Open(first));
+                if (kind == "payload-meta" || kind == "wrapper-file" || kind == "corrupt-bundle")
+                {
+                    Assert.Throws<InvalidDataException>(() => Open(first));
+                }
             }
-            finally { if (original == null) File.Delete(path); else File.WriteAllBytes(path, original); }
+            finally
+            {
+                if (original == null)
+                {
+                    File.Delete(path);
+                }
+                else
+                {
+                    File.WriteAllBytes(path, original);
+                }
+            }
             Assert.That(Open(first), Is.Not.Null);
         }
 
@@ -150,7 +182,13 @@ namespace YLFramework.Tests.ResourceBuild
             using var source = new BuiltInSource();
             var plan = ResourceBuiltInDeployer.Preflight(source.Snapshot);
             Assert.That(Assert.Throws<IOException>(() => ResourceBuiltInDeployer.Execute(plan, default,
-                point => { if (point == "FileCopied") throw new IOException("fixture interrupted copy"); })).Message, Is.EqualTo("fixture interrupted copy"));
+                point =>
+                {
+                    if (point == "FileCopied")
+                    {
+                        throw new IOException("fixture interrupted copy");
+                    }
+                })).Message, Is.EqualTo("fixture interrupted copy"));
             var stage = Directory.GetDirectories(plan.WorkspacePath).Single();
             var foreign = Path.Combine(stage, "do-not-delete.txt");
             File.WriteAllText(foreign, "unregistered");
@@ -166,7 +204,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Recover(source.ProjectId, source.Snapshot.Document.Platform, source.ProjectGuid));
                 Assert.That(Directory.Exists(stage), Is.True);
             }
-            finally { File.WriteAllBytes(journal, original); }
+            finally
+            {
+                File.WriteAllBytes(journal, original);
+            }
             Assert.That(ResourceBuiltInDeployer.Recover(source.ProjectId, source.Snapshot.Document.Platform, source.ProjectGuid), Is.Null);
             Assert.That(Directory.Exists(stage), Is.False);
         }
@@ -177,7 +218,13 @@ namespace YLFramework.Tests.ResourceBuild
             using var source = new BuiltInSource();
             var plan = ResourceBuiltInDeployer.Preflight(source.Snapshot);
             Assert.That(Assert.Throws<IOException>(() => ResourceBuiltInDeployer.Execute(plan, default,
-                point => { if (point == "StagingCreated") throw new IOException("fixture staged"); })).Message, Is.EqualTo("fixture staged"));
+                point =>
+                {
+                    if (point == "StagingCreated")
+                    {
+                        throw new IOException("fixture staged");
+                    }
+                })).Message, Is.EqualTo("fixture staged"));
             var next = Path.Combine(plan.WorkspacePath, "journal.json.next");
             try
             {
@@ -186,7 +233,13 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Recover(source.ProjectId, source.Snapshot.Document.Platform, source.ProjectGuid));
                 CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(plan.WorkspacePath));
             }
-            finally { if (File.Exists(next)) File.Delete(next); }
+            finally
+            {
+                if (File.Exists(next))
+                {
+                    File.Delete(next);
+                }
+            }
         }
 
         [Test]
@@ -202,24 +255,35 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Deploy(plan));
                 Assert.That(Directory.Exists(plan.DirectoryPath), Is.False);
             }
-            finally { File.WriteAllBytes(bundle, original); }
+            finally
+            {
+                File.WriteAllBytes(bundle, original);
+            }
             ResourceBuiltInDeployer.Deploy(plan);
             var completePath = Path.Combine(source.Snapshot.DirectoryPath, ".ylr-complete.json");
             var complete = File.ReadAllBytes(completePath);
             try
             {
-                var data = JObject.Parse(Encoding.UTF8.GetString(complete)); data["ProjectGuid"] = Guid.NewGuid().ToString("N");
+                var data = JObject.Parse(Encoding.UTF8.GetString(complete));
+                data["ProjectGuid"] = Guid.NewGuid().ToString("N");
                 File.WriteAllBytes(completePath, ResourceCatalogCodec.CanonicalBytes(data));
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Deploy(plan));
             }
-            finally { File.WriteAllBytes(completePath, complete); }
+            finally
+            {
+                File.WriteAllBytes(completePath, complete);
+            }
             Assert.That(Open(source.Snapshot), Is.Not.Null);
         }
 
         [Test]
         public void JunctionTargetIsRejectedWithoutTouchingTheOutsideContentOrOldDeployment()
         {
-            if (Application.platform != RuntimePlatform.WindowsEditor) Assert.Ignore("Windows junction contract.");
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+            {
+                Assert.Ignore("Windows junction contract.");
+            }
+
             using var source = new BuiltInSource();
             var first = source.Snapshot;
             ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(first));
@@ -227,27 +291,48 @@ namespace YLFramework.Tests.ResourceBuild
             var plan = ResourceBuiltInDeployer.Preflight(next);
             var external = ResourceReleaseFixture.Snapshot(source.Root);
             using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
-                "/c mklink /J \"" + plan.DirectoryPath + "\" \"" + next.DirectoryPath + "\"") { UseShellExecute = false, CreateNoWindow = true });
-            process.WaitForExit(); Assert.That(process.ExitCode, Is.Zero);
+                "/c mklink /J \"" + plan.DirectoryPath + "\" \"" + next.DirectoryPath + "\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            process.WaitForExit();
+            Assert.That(process.ExitCode, Is.Zero);
             try
             {
                 Assert.Throws<InvalidDataException>(() => ResourceBuiltInDeployer.Preflight(next));
                 Assert.That(Open(first), Is.Not.Null);
                 CollectionAssert.AreEqual(external, ResourceReleaseFixture.Snapshot(source.Root));
             }
-            finally { Directory.Delete(plan.DirectoryPath, false); }
+            finally
+            {
+                Directory.Delete(plan.DirectoryPath, false);
+            }
         }
 
         [Test]
         public void DanglingRootJunctionIsRejectedByReadOnlyPreflightRatherThanTreatedAsMissing()
         {
-            if (Application.platform != RuntimePlatform.WindowsEditor) Assert.Ignore("Windows junction contract.");
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+            {
+                Assert.Ignore("Windows junction contract.");
+            }
+
             using var source = new BuiltInSource();
-            if (Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot)) Assert.Ignore("This test never replaces an existing deployment root.");
+            if (Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot))
+            {
+                Assert.Ignore("This test never replaces an existing deployment root.");
+            }
+
             var missing = Path.Combine(source.Root, "nonexistent-outside-target");
             using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
-                "/c mklink /J \"" + ResourceBuiltInDeployer.ResourcesRoot + "\" \"" + missing + "\"") { UseShellExecute = false, CreateNoWindow = true });
-            process.WaitForExit(); Assert.That(process.ExitCode, Is.Zero);
+                "/c mklink /J \"" + ResourceBuiltInDeployer.ResourcesRoot + "\" \"" + missing + "\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            process.WaitForExit();
+            Assert.That(process.ExitCode, Is.Zero);
             try
             {
                 Assert.That(Directory.Exists(missing), Is.False, "The regression requires a genuinely missing junction target; Mono may still report the junction itself as an existing directory.");
@@ -256,7 +341,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(Directory.Exists(missing), Is.False);
                 Assert.That(Directory.Exists(source.WorkspacePath), Is.False);
             }
-            finally { Directory.Delete(ResourceBuiltInDeployer.ResourcesRoot, false); }
+            finally
+            {
+                Directory.Delete(ResourceBuiltInDeployer.ResourcesRoot, false);
+            }
         }
 
         private static string RelativeAsset(string path) => "Assets" + path.Substring(Application.dataPath.Length).Replace('\\', '/');
@@ -272,16 +360,21 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 var example = go.AddComponent<ResourceStartupExample>();
-                example.UseBuiltIn = true;
-                example.ProjectId = source.ProjectId; example.Platform = source.Snapshot.Document.Platform;
-                example.AppCompatibility = "app-v1"; example.CatalogDigest = source.Snapshot.Document.CatalogDigest;
-                example.SnapshotDirectory = Path.Combine(source.Root, "not-deployed-on-this-machine");
+                example.useBuiltIn = true;
+                example.projectId = source.ProjectId;
+                example.platform = source.Snapshot.Document.Platform;
+                example.appCompatibility = "app-v1";
+                example.catalogDigest = source.Snapshot.Document.CatalogDigest;
+                example.snapshotDirectory = Path.Combine(source.Root, "not-deployed-on-this-machine");
                 var mount = example.CreateMount();
                 Assert.That(mount.BuiltIn.DirectoryPath, Does.StartWith(ResourceBuiltInDeployer.ResourcesRoot));
-                Assert.That(mount.BuiltIn.Document.CatalogDigest, Is.EqualTo(example.CatalogDigest));
+                Assert.That(mount.BuiltIn.Document.CatalogDigest, Is.EqualTo(example.catalogDigest));
                 Assert.That(ResourceSystem.Current, Is.Null);
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -305,7 +398,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.Throws<InvalidDataException>(() => store.Mount(), "Reopening only the payload would miss corrupted provenance.");
                 Assert.That(Directory.Exists(cache), Is.False);
             }
-            finally { File.WriteAllBytes(receipt, original); }
+            finally
+            {
+                File.WriteAllBytes(receipt, original);
+            }
             var plan = store.Check(mounted, new[] { next.Snapshot });
             var prepared = store.Prepare(plan, default);
             Assert.That(prepared.Projects.Single().FromDigest, Is.EqualTo(first.Snapshot.Document.CatalogDigest));
@@ -320,15 +416,15 @@ namespace YLFramework.Tests.ResourceBuild
             internal readonly string ProjectId = "c02-" + Guid.NewGuid().ToString("N").Substring(0, 12);
             internal readonly string ProjectGuid = Guid.NewGuid().ToString("N");
             internal ResourceLocalSnapshot Snapshot;
-            private readonly string workspace;
-            internal string WorkspacePath => workspace;
-            private readonly bool deploymentRootExisted = Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot);
+            private readonly string _workspace;
+            internal string WorkspacePath => _workspace;
+            private readonly bool _deploymentRootExisted = Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot);
             internal string DeployedProject => Path.Combine(ResourceBuiltInDeployer.ResourcesRoot, ProjectId);
 
             internal BuiltInSource()
             {
                 Version("first");
-                workspace = ResourceBuiltInDeployer.Preflight(Snapshot).WorkspacePath;
+                _workspace = ResourceBuiltInDeployer.Preflight(Snapshot).WorkspacePath;
             }
 
             internal ResourceLocalSnapshot Version(string content)
@@ -344,34 +440,51 @@ namespace YLFramework.Tests.ResourceBuild
                 var newFile = "b_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(name)).Substring(0, 32);
                 payload["Bundles"][0]["RelativeFile"] = newFile;
                 foreach (var file in (JArray)payload["SupportFiles"])
-                    if ((string)file["RelativeFile"] == oldFile + ".manifest") file["RelativeFile"] = newFile + ".manifest";
+                {
+                    if ((string)file["RelativeFile"] == oldFile + ".manifest")
+                    {
+                        file["RelativeFile"] = newFile + ".manifest";
+                    }
+                }
+
                 byte[] Bytes(JToken file) => Encoding.UTF8.GetBytes((file["LogicalId"] != null || (string)file["RelativeFile"] == (string)payload["ManifestFile"] ? "UnityFS\0" : "") + content);
                 foreach (var file in ((JArray)payload["Bundles"]).Concat((JArray)payload["SupportFiles"]))
-                { var bytes = Bytes(file); file["Length"] = bytes.Length; file["Sha256"] = ResourceCatalogCodec.Digest(bytes); }
+                {
+                    var bytes = Bytes(file);
+                    file["Length"] = bytes.Length;
+                    file["Sha256"] = ResourceCatalogCodec.Digest(bytes);
+                }
                 var catalogBytes = ResourceCatalogCodec.Seal(Encoding.UTF8.GetBytes(payload.ToString(Formatting.None)));
                 var digest = ResourceCatalogCodec.Digest(catalogBytes);
                 var directory = Path.Combine(Root, digest);
                 Directory.CreateDirectory(directory);
                 foreach (var file in ((JArray)payload["Bundles"]).Concat((JArray)payload["SupportFiles"]))
+                {
                     File.WriteAllBytes(Path.Combine(directory, (string)file["RelativeFile"]), Bytes(file));
+                }
+
                 File.WriteAllBytes(Path.Combine(directory, "resource-catalog.json"), catalogBytes);
                 var catalog = ResourceCatalogCodec.Read(catalogBytes, ProjectId, "StandaloneWindows64", Application.unityVersion, "app-v1");
                 File.WriteAllBytes(Path.Combine(directory, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject
                 {
-                    ["Version"] = 1, ["ProjectGuid"] = ProjectGuid, ["ProjectId"] = ProjectId, ["Platform"] = catalog.Platform,
-                    ["BuildId"] = catalog.BuildId, ["CatalogDigest"] = digest
+                    ["Version"] = 1,
+                    ["ProjectGuid"] = ProjectGuid,
+                    ["ProjectId"] = ProjectId,
+                    ["Platform"] = catalog.Platform,
+                    ["BuildId"] = catalog.BuildId,
+                    ["CatalogDigest"] = digest
                 }));
                 return Snapshot = ResourceLocalSnapshot.Open(directory, ProjectId, digest, catalog.Platform, "app-v1");
             }
 
             public void Dispose()
             {
-                if (Directory.Exists(workspace))
+                if (Directory.Exists(_workspace))
                 {
-                    Assert.That((string)ResourceBuiltInLayout.ReadObject(Path.Combine(workspace, "ylr-owner.json~"))["ProjectGuid"], Is.EqualTo(ProjectGuid));
+                    Assert.That((string)ResourceBuiltInLayout.ReadObject(Path.Combine(_workspace, "ylr-owner.json~"))["ProjectGuid"], Is.EqualTo(ProjectGuid));
                     ResourceBuiltInDeployer.Recover(ProjectId, "StandaloneWindows64", ProjectGuid);
-                    ResourceBuildOperation.RejectLinks(workspace);
-                    Directory.Delete(workspace, true);
+                    ResourceBuildOperation.RejectLinks(_workspace);
+                    Directory.Delete(_workspace, true);
                 }
                 if (Directory.Exists(DeployedProject))
                 {
@@ -379,12 +492,15 @@ namespace YLFramework.Tests.ResourceBuild
                     ResourceBuildOperation.RejectLinks(DeployedProject);
                     Assert.That(AssetDatabase.DeleteAsset(RelativeAsset(DeployedProject)), Is.True);
                 }
-                if (!deploymentRootExisted && Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot))
+                if (!_deploymentRootExisted && Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot))
                 {
                     CollectionAssert.AreEquivalent(new[] { "ylr-owner.json~" }, Directory.GetFileSystemEntries(ResourceBuiltInDeployer.ResourcesRoot).Select(Path.GetFileName));
                     Assert.That(AssetDatabase.DeleteAsset("Assets/StreamingAssets/YLFrameworkResources"), Is.True);
                 }
-                if (Directory.Exists(Root)) Directory.Delete(Root, true);
+                if (Directory.Exists(Root))
+                {
+                    Directory.Delete(Root, true);
+                }
             }
         }
     }

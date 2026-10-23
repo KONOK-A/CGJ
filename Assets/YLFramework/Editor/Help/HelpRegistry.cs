@@ -10,25 +10,25 @@ namespace YLFramework.Editor.Help
         public readonly string Id;
         /// <summary>模块选择器中的名称。</summary>
         public readonly string DisplayName;
-        private readonly Func<HelpModule> mCreate;
+        private readonly Func<HelpModule> _create;
 
         internal HelpRegistration(string id, string displayName, Func<HelpModule> create)
         {
             Id = id;
             DisplayName = displayName;
-            mCreate = create;
+            _create = create;
         }
 
         /// <summary>调用提供方的内容工厂；注册项自身不缓存返回结果。</summary>
         /// <returns>提供方返回的帮助模块。</returns>
         /// <exception cref="InvalidOperationException">内容工厂返回 null。</exception>
-        public HelpModule Create() => mCreate() ?? throw new InvalidOperationException("帮助模块没有返回内容：" + Id);
+        public HelpModule Create() => _create() ?? throw new InvalidOperationException("帮助模块没有返回内容：" + Id);
     }
 
     /// <summary>项目内部帮助注册表，不扫描程序集或业务模块。</summary>
     public static class HelpRegistry
     {
-        private static readonly List<HelpRegistration> Modules = new List<HelpRegistration>();
+        private static readonly List<HelpRegistration> _modules = new List<HelpRegistration>();
         internal static event Action Changed;
 
         /// <summary>注册一个内容工厂；相同标识替换原注册，保持原显示顺序。</summary>
@@ -40,12 +40,32 @@ namespace YLFramework.Editor.Help
         /// <exception cref="ArgumentNullException">create 为 null。</exception>
         public static void Register(string id, string displayName, Func<HelpModule> create)
         {
-            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("模块标识不能为空。", nameof(id));
-            if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("模块名称不能为空。", nameof(displayName));
-            if (create == null) throw new ArgumentNullException(nameof(create));
-            var index = Modules.FindIndex(module => module.Id == id);
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("模块标识不能为空。", nameof(id));
+            }
+
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                throw new ArgumentException("模块名称不能为空。", nameof(displayName));
+            }
+
+            if (create == null)
+            {
+                throw new ArgumentNullException(nameof(create));
+            }
+
+            var index = _modules.FindIndex(module => module.Id == id);
             var registration = new HelpRegistration(id, displayName, create);
-            if (index < 0) Modules.Add(registration); else Modules[index] = registration;
+            if (index < 0)
+            {
+                _modules.Add(registration);
+            }
+            else
+            {
+                _modules[index] = registration;
+            }
+
             Changed?.Invoke();
         }
 
@@ -54,13 +74,17 @@ namespace YLFramework.Editor.Help
         /// <returns>实际移除了注册项时为 true；只有移除成功才触发注册表变更通知。</returns>
         public static bool Unregister(string id)
         {
-            var removed = Modules.RemoveAll(module => module.Id == id) != 0;
-            if (removed) Changed?.Invoke();
+            var removed = _modules.RemoveAll(module => module.Id == id) != 0;
+            if (removed)
+            {
+                Changed?.Invoke();
+            }
+
             return removed;
         }
 
         /// <summary>取得注册快照，不调用内容工厂。</summary>
         /// <returns>按注册顺序排列的新数组；修改数组不影响注册表。</returns>
-        public static HelpRegistration[] GetModules() => Modules.ToArray();
+        public static HelpRegistration[] GetModules() => _modules.ToArray();
     }
 }

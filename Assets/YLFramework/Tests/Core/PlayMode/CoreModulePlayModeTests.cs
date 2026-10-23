@@ -11,14 +11,14 @@ namespace YLFramework.Core.Tests
 {
     public class CoreModulePlayModeTests
     {
-        private static readonly PropertyInfo ManagerInstance = typeof(YLFramework.Core.ModuleManager)
+        private static readonly PropertyInfo _managerInstance = typeof(YLFramework.Core.ModuleManager)
             .GetProperty("Instance", BindingFlags.Static | BindingFlags.NonPublic);
-        private static readonly FieldInfo CurrentModule = typeof(YLFramework.Core.ModuleManager)
-            .GetField("current_module", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly List<YLFramework.Core.Module> ownedModules = new List<YLFramework.Core.Module>();
-        private object manager;
-        private object previousCurrentModule;
-        private CoreClassPoolScope classPool;
+        private static readonly FieldInfo _currentModule = typeof(YLFramework.Core.ModuleManager)
+            .GetField("_currentModule", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly List<YLFramework.Core.Module> _ownedModules = new List<YLFramework.Core.Module>();
+        private object _manager;
+        private object _previousCurrentModule;
+        private CoreClassPoolScope _classPool;
 
         [SetUp]
         public void SetUp()
@@ -26,12 +26,12 @@ namespace YLFramework.Core.Tests
             YLCoreProbeModel.ConstructorAction = null;
             YLCoreProbeController.ConstructorAction = null;
             YLCoreStartupProbeModule.ConstructorAction = null;
-            ownedModules.Clear();
-            Assert.That(ManagerInstance, Is.Not.Null);
-            Assert.That(CurrentModule, Is.Not.Null);
-            manager = ManagerInstance.GetValue(null);
-            previousCurrentModule = CurrentModule.GetValue(manager);
-            classPool = new CoreClassPoolScope();
+            _ownedModules.Clear();
+            Assert.That(_managerInstance, Is.Not.Null);
+            Assert.That(_currentModule, Is.Not.Null);
+            _manager = _managerInstance.GetValue(null);
+            _previousCurrentModule = _currentModule.GetValue(_manager);
+            _classPool = new CoreClassPoolScope();
         }
 
         [UnityTearDown]
@@ -43,25 +43,52 @@ namespace YLFramework.Core.Tests
             var failures = new List<Exception>();
             try
             {
-                for (int i = ownedModules.Count - 1; i >= 0; i--)
+                for (int i = _ownedModules.Count - 1; i >= 0; i--)
                 {
-                    var module = ownedModules[i];
-                    if (!ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), module)) continue;
+                    var module = _ownedModules[i];
+                    if (!ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(module.ModuleName), module))
+                    {
+                        continue;
+                    }
+
                     var baseProbe = module as YLCoreBaseProbeModule;
-                    if (baseProbe != null) baseProbe.AllowClose = true;
-                    try { module.Close(); }
-                    catch (Exception error) { failures.Add(error); }
+                    if (baseProbe != null)
+                    {
+                        baseProbe.AllowClose = true;
+                    }
+
+                    try
+                    {
+                        module.Close();
+                    }
+                    catch (Exception error)
+                    {
+                        failures.Add(error);
+                    }
                 }
             }
             finally
             {
                 // Do not clear shared dictionaries or replace the manager singleton.
-                if (manager != null) CurrentModule.SetValue(manager, previousCurrentModule);
-                try { classPool?.Restore(ownedModules); }
-                finally { ownedModules.Clear(); }
+                if (_manager != null)
+                {
+                    _currentModule.SetValue(_manager, _previousCurrentModule);
+                }
+
+                try
+                {
+                    _classPool?.Restore(_ownedModules);
+                }
+                finally
+                {
+                    _ownedModules.Clear();
+                }
             }
             yield return null;
-            if (failures.Count > 0) throw new AggregateException("Owned Module cleanup failed.", failures);
+            if (failures.Count > 0)
+            {
+                throw new AggregateException("Owned Module cleanup failed.", failures);
+            }
         }
 
         [UnityTest]
@@ -72,9 +99,12 @@ namespace YLFramework.Core.Tests
             var other = new YLCoreConsumerModule();
             yield return AwaitStartup(StartOwned(other));
             var scope = new CoreClassPoolScope();
-            var order = (IList)typeof(ModuleManager).GetField("registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            var order = (IList)typeof(ModuleManager).GetField("_registrationOrder", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(_manager);
             var previousOrder = new List<object>();
-            foreach (var item in order) previousOrder.Add(item);
+            foreach (var item in order)
+            {
+                previousOrder.Add(item);
+            }
 
             Assert.Throws<InvalidOperationException>(() => scope.Restore(new[] { module }));
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
@@ -85,7 +115,7 @@ namespace YLFramework.Core.Tests
             Assert.That(module.StartedModel.ExitCount, Is.Zero);
             Assert.That(module.StartedController.ExitCount, Is.Zero);
             CollectionAssert.AreEqual(previousOrder, order);
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(other));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(other));
 
             module.Close();
             Assert.DoesNotThrow(() => scope.Restore(new[] { module }));
@@ -136,12 +166,12 @@ namespace YLFramework.Core.Tests
             var count = YLFramework.Core.ModuleManager.AllModules.Count;
             var other = new YLCoreConsumerModule();
             yield return AwaitStartup(StartOwned(other));
-            var current = CurrentModule.GetValue(manager);
+            var current = _currentModule.GetValue(_manager);
             var repeated = StartOwned(module);
-            Assert.That(repeated.isDone, Is.True);
-            Assert.That(repeated.error, Is.Null.Or.Empty);
+            Assert.That(repeated.IsDone, Is.True);
+            Assert.That(repeated.Error, Is.Null.Or.Empty);
             Assert.That(repeated, Is.Not.SameAs(first));
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(current));
 
             Assert.That(module.StartCount, Is.EqualTo(1));
             Assert.That(YLFramework.Core.ModuleManager.AllModules.Count, Is.EqualTo(count + 1));
@@ -153,9 +183,9 @@ namespace YLFramework.Core.Tests
             Assert.That(restarted, Is.Not.SameAs(first).And.Not.SameAs(repeated));
             Assert.That(module.StartCount, Is.EqualTo(2));
             Assert.That(first.Module, Is.SameAs(module));
-            Assert.That(first.isDone && repeated.isDone, Is.True);
-            Assert.That(first.error, Is.Null.Or.Empty);
-            Assert.That(repeated.error, Is.Null.Or.Empty);
+            Assert.That(first.IsDone && repeated.IsDone, Is.True);
+            Assert.That(first.Error, Is.Null.Or.Empty);
+            Assert.That(repeated.Error, Is.Null.Or.Empty);
         }
 
         [UnityTest]
@@ -169,9 +199,9 @@ namespace YLFramework.Core.Tests
                 Assert.That(module.State, Is.EqualTo(ModuleState.Starting));
                 Assert.That(YLCoreStartupProbeModule.Instance, Is.SameAs(module));
                 Assert.That(ModuleManager.GetModule(typeof(YLCoreStartupProbeModule)), Is.SameAs(module));
-                Assert.That(CurrentModule.GetValue(manager), Is.SameAs(module));
+                Assert.That(_currentModule.GetValue(_manager), Is.SameAs(module));
                 reentrant = ModuleManager.StartUpModule(module);
-                Assert.That(reentrant.isDone, Is.False);
+                Assert.That(reentrant.IsDone, Is.False);
                 Assert.That(ModuleManager.StartUpModule<YLCoreStartupProbeModule>(), Is.SameAs(reentrant));
                 Assert.That(ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule)), Is.SameAs(reentrant));
                 Assert.That(ModuleManager.StartUpModule(module.ModuleName), Is.SameAs(reentrant));
@@ -179,12 +209,12 @@ namespace YLFramework.Core.Tests
                 Assert.Throws<InvalidOperationException>(() => ModuleManager.Shutdown());
                 YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest> operation = reentrant;
                 Assert.Throws<NotSupportedException>(() => operation.Abort());
-                Assert.That(operation.isDone, Is.False);
+                Assert.That(operation.IsDone, Is.False);
             };
             var first = StartOwned(module);
             Assert.That(first, Is.SameAs(reentrant));
-            Assert.That(first.isDone, Is.True, "No-yield startup completes synchronously.");
-            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.That(first.IsDone, Is.True, "No-yield startup completes synchronously.");
+            Assert.That(first.Error, Is.Null.Or.Empty);
             Assert.That(module.StartCount, Is.EqualTo(1));
             Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions));
             module.StartAction = null;
@@ -197,11 +227,11 @@ namespace YLFramework.Core.Tests
                 restarted = StartOwned(module);
             });
             Assert.That(restarted, Is.Not.SameAs(first));
-            Assert.That(restarted.isDone, Is.True);
+            Assert.That(restarted.IsDone, Is.True);
             Assert.That(module.StartCount, Is.EqualTo(2));
-            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.That(first.Error, Is.Null.Or.Empty);
             Assert.Throws<NotSupportedException>(() => first.Abort());
-            Assert.That(first.error, Is.Null.Or.Empty);
+            Assert.That(first.Error, Is.Null.Or.Empty);
             yield return null;
         }
 
@@ -212,7 +242,7 @@ namespace YLFramework.Core.Tests
             yield return AwaitStartup(StartOwned(module));
             var other = new YLCoreConsumerModule();
             yield return AwaitStartup(StartOwned(other));
-            var current = CurrentModule.GetValue(manager);
+            var current = _currentModule.GetValue(_manager);
             var rejected = new YLCoreLifecycleModule();
             var addModule = typeof(ModuleManager).GetMethod("AddModule", BindingFlags.Static | BindingFlags.NonPublic);
             addModule.Invoke(null, new object[] { module });
@@ -225,14 +255,14 @@ namespace YLFramework.Core.Tests
             Assert.That(rejected.StartCount, Is.Zero);
             Assert.That(rejected.CloseCount, Is.Zero);
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(module));
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(current));
             var readOnly = ModuleManager.AllModules;
             Assert.That(ModuleManager.AllModules, Is.SameAs(readOnly));
             Assert.Throws<NotSupportedException>(() => ((IDictionary<string, Module>)readOnly).Remove(module.ModuleName));
             Assert.Throws<NotSupportedException>(() => ((IDictionary<string, Module>)ModuleManager.AllBaseModules).Clear());
             module.Close();
             Assert.That(readOnly.ContainsKey(module.ModuleName), Is.False);
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(current));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(current));
             yield return AwaitStartup(StartOwned(rejected));
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
             Assert.Throws<InvalidOperationException>(() => ModuleManager.StartUpModule(module));
@@ -242,7 +272,7 @@ namespace YLFramework.Core.Tests
             Assert.That(ModuleManager.GetModule<YLCoreLifecycleModule>(), Is.SameAs(rejected));
             Assert.That(rejected.State, Is.EqualTo(ModuleState.Running));
             Assert.That(rejected.CloseCount, Is.Zero);
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(rejected));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(rejected));
         }
 
         [UnityTest]
@@ -250,12 +280,12 @@ namespace YLFramework.Core.Tests
         {
             using var pool = new ObjectPool<YLCoreStartupProbeModule>(() => new YLCoreStartupProbeModule());
             var pooled = pool.Allocate();
-            ownedModules.Add(pooled);
+            _ownedModules.Add(pooled);
             Assert.That(pool.Recycle(pooled), Is.True);
             var constructions = YLCoreStartupProbeModule.ConstructionCount;
             var first = ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
             var module = (YLCoreStartupProbeModule)first.Module;
-            ownedModules.Add(module);
+            _ownedModules.Add(module);
             yield return AwaitStartup(first);
             Assert.That(module, Is.Not.SameAs(pooled));
             Assert.That(YLCoreStartupProbeModule.ConstructionCount, Is.EqualTo(constructions + 1));
@@ -270,10 +300,10 @@ namespace YLFramework.Core.Tests
             Assert.That(pool.Recycle(pooled), Is.True);
             Assert.Throws<InvalidOperationException>(() => pool.Recycle(module), "Closed Modules must not be implicitly adopted by the public pool.");
             var next = ModuleManager.StartUpModule(typeof(YLCoreStartupProbeModule));
-            ownedModules.Add(next.Module);
+            _ownedModules.Add(next.Module);
             yield return AwaitStartup(next);
             Assert.That(next.Module, Is.Not.SameAs(module).And.Not.SameAs(pooled));
-            Assert.That(first.isDone, Is.True);
+            Assert.That(first.IsDone, Is.True);
             Assert.That(first.Module, Is.SameAs(module));
         }
 
@@ -288,7 +318,7 @@ namespace YLFramework.Core.Tests
             Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
             YLCoreStartupProbeModule.ConstructorAction = null;
             var request = ModuleManager.StartUpModule<YLCoreStartupProbeModule>();
-            ownedModules.Add(request.Module);
+            _ownedModules.Add(request.Module);
             yield return AwaitStartup(request);
             Assert.That(request.Module.State, Is.EqualTo(ModuleState.Running));
         }
@@ -303,21 +333,21 @@ namespace YLFramework.Core.Tests
             {
                 Assert.That(getCurrent.Invoke(null, null), Is.SameAs(outer));
                 var nested = StartOwned(inner);
-                Assert.That(nested.isDone, Is.True);
-                Assert.That(nested.error, Is.Null.Or.Empty);
+                Assert.That(nested.IsDone, Is.True);
+                Assert.That(nested.Error, Is.Null.Or.Empty);
                 Assert.That(getCurrent.Invoke(null, null), Is.SameAs(outer), "The active OnStart context owns automatic View loading.");
                 throw new InvalidOperationException("outer startup failure after inner success");
             };
             var request = StartOwned(outer);
-            Assert.That(request.isDone, Is.True);
-            Assert.That(request.error, Does.Contain("outer startup failure after inner success"));
+            Assert.That(request.IsDone, Is.True);
+            Assert.That(request.Error, Does.Contain("outer startup failure after inner success"));
             Assert.That(outer.State, Is.EqualTo(ModuleState.Closed));
             Assert.That(ModuleManager.GetModule<YLCoreStartupProbeModule>(), Is.Null);
             Assert.That(YLCoreStartupProbeModule.Instance, Is.Null);
             AssertIndexesEmpty(outer);
             Assert.That(inner.State, Is.EqualTo(ModuleState.Running));
             Assert.That(getCurrent.Invoke(null, null), Is.SameAs(inner));
-            Assert.That(CurrentModule.GetValue(manager), Is.SameAs(inner));
+            Assert.That(_currentModule.GetValue(_manager), Is.SameAs(inner));
             yield return null;
         }
 
@@ -336,8 +366,8 @@ namespace YLFramework.Core.Tests
                 completionCount++;
                 completedRequest = completed;
                 callbackSawStartedModule = module.StartCount == 1 && module.RegisteredAtStart;
-                callbackSawCompletion = completed.isDone && !completed.keepWaiting &&
-                    completed.progress == 1f && string.IsNullOrEmpty(completed.error);
+                callbackSawCompletion = completed.IsDone && !completed.keepWaiting &&
+                    completed.Progress == 1f && string.IsNullOrEmpty(completed.Error);
             };
             foundation.AddCompleteEvent(callback);
             yield return AwaitStartup(request);
@@ -348,9 +378,9 @@ namespace YLFramework.Core.Tests
             Assert.That(callbackSawCompletion, Is.True);
             Assert.That(request.Module, Is.SameAs(module));
             Assert.That(request.Step, Is.EqualTo(YLFramework.Core.StartingModuleSteps.LoadScene));
-            Assert.That(foundation.progress, Is.EqualTo(1f));
+            Assert.That(foundation.Progress, Is.EqualTo(1f));
             Assert.That(foundation.keepWaiting, Is.False);
-            Assert.That(foundation.error, Is.Null.Or.Empty);
+            Assert.That(foundation.Error, Is.Null.Or.Empty);
             int lateCount = 0;
             foundation.AddCompleteEvent(completed =>
             {
@@ -473,7 +503,7 @@ namespace YLFramework.Core.Tests
             var consumer = new YLCoreConsumerModule();
             yield return AwaitStartup(StartOwned(consumerFirst ? (YLFramework.Core.Module)consumer : owner));
             yield return AwaitStartup(StartOwned(consumerFirst ? (YLFramework.Core.Module)owner : consumer));
-            Assert.That(owner.BaseModule, Is.False);
+            Assert.That(owner.IsBaseModule, Is.False);
             var shared = owner.LoadController<YLCoreProbeController>();
             Assert.That(owner.LoadController(typeof(YLCoreProbeController)), Is.SameAs(shared));
             Assert.That(owner.LoadController(typeof(YLCoreProbeController).FullName), Is.SameAs(shared));
@@ -690,7 +720,7 @@ namespace YLFramework.Core.Tests
             Assert.That(module.GetModels<YLCoreProbeModel>(), Has.Count.EqualTo(3));
             var maximum = new YLCoreConstantHashModel { Id = long.MaxValue };
             module.AddModel(maximum);
-            typeof(YLFramework.Core.Module).GetField("nextModelId", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(module, long.MaxValue);
+            typeof(YLFramework.Core.Module).GetField("NextModelId", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(module, long.MaxValue);
             var wrapped = new YLCoreConstantHashModel();
             module.AddModel(wrapped);
             Assert.That(wrapped.Id, Is.EqualTo(0L));
@@ -981,8 +1011,14 @@ namespace YLFramework.Core.Tests
                     Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
                 }
             };
-            try { module.AddModel(model); }
-            finally { module.RemoveModel(model); }
+            try
+            {
+                module.AddModel(model);
+            }
+            finally
+            {
+                module.RemoveModel(model);
+            }
             Assert.That(model.ExitCount, Is.EqualTo(1));
             yield return AwaitStartup(StartOwned(module));
             Assert.That(module.State, Is.EqualTo(ModuleState.Running));
@@ -1048,7 +1084,11 @@ namespace YLFramework.Core.Tests
                 "Never replace or close an externally registered fixture module.");
             Assert.That(!YLFramework.Core.ModuleManager.AllBaseModules.TryGetValue(module.ModuleName, out var baseModule) ||
                 ReferenceEquals(baseModule, module), Is.True);
-            if (!ownedModules.Contains(module)) ownedModules.Add(module);
+            if (!_ownedModules.Contains(module))
+            {
+                _ownedModules.Add(module);
+            }
+
             var request = YLFramework.Core.ModuleManager.StartUpModule(module);
             Assert.That(request, Is.Not.Null);
             return request;
@@ -1058,15 +1098,19 @@ namespace YLFramework.Core.Tests
         {
             Assert.That(request, Is.Not.Null);
             float deadline = Time.realtimeSinceStartup + 5f;
-            while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(request.isDone, Is.True, "Module startup exceeded the five-second timeout.");
-            Assert.That(request.error, Is.Null.Or.Empty);
+            while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.That(request.IsDone, Is.True, "Module startup exceeded the five-second timeout.");
+            Assert.That(request.Error, Is.Null.Or.Empty);
             // Core不依赖后端缓存释放；完成当帧即可关闭或重启。
         }
 
         private static void AssertIndexesEmpty(YLFramework.Core.Module module)
         {
-            foreach (var name in new[] { "models", "controllers", "views", "type_views" })
+            foreach (var name in new[] { "Models", "Controllers", "Views", "TypeViews" })
             {
                 var field = typeof(YLFramework.Core.Module).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(field, Is.Not.Null, name);

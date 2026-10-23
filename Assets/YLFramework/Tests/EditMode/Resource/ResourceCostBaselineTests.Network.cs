@@ -20,7 +20,7 @@ namespace YLFramework.Tests.ResourceBuild
     public sealed partial class ResourceCostBaselineTests
     {
         [UnityTest, Order(2)]
-        public IEnumerator B_SignedHttpsFullAndResumeBaseline()
+        public IEnumerator BSignedHttpsFullAndResumeBaseline()
         {
             Assert.That(State.BuildsComplete, Is.True, "A must complete before entering the owned runtime scene.");
             yield return new EnterPlayMode();
@@ -35,7 +35,7 @@ namespace YLFramework.Tests.ResourceBuild
             using var certificate = ResourceDownloadTests.Certificate();
             using var signing = certificate.GetRSAPrivateKey();
             var current = OpenSnapshot(state, state.Bootstrap);
-            foreach (var mode in Modes)
+            foreach (var mode in _modes)
             {
                 var target = Snapshot(state, mode);
                 var envelope = ResourceReleaseSigner.Create(new ResourceRelease(Path.GetDirectoryName(target.DirectoryPath), target.Document),
@@ -45,9 +45,14 @@ namespace YLFramework.Tests.ResourceBuild
                         x => File.ReadAllBytes(Path.Combine(target.DirectoryPath, x)), StringComparer.Ordinal);
                 // All requests/samples serve these same immutable byte arrays; there is no per-request encryption.
                 for (var sample = 0; sample <= Samples; sample++)
+                {
                     yield return NetworkSample(state, mode, sample, false, current, target, envelope, files, certificate);
+                }
+
                 for (var sample = 1; sample <= Samples; sample++)
+                {
                     yield return NetworkSample(state, mode, sample, true, current, target, envelope, files, certificate);
+                }
             }
             state.NetworkComplete = true;
             Save(state);
@@ -55,12 +60,24 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class NetworkResult
         {
-            public string Mode, Store, Step, Error, Digest;
-            public bool Resume, Warmup, Completed;
+            public string Mode;
+            public string Store;
+            public string Step;
+            public string Error;
+            public string Digest;
+            public bool Resume;
+            public bool Warmup;
+            public bool Completed;
             public int Sample;
-            public long PlanMissingBytes, PlanReusableBytes, RemainingPayloadBytes;
+            public long PlanMissingBytes;
+            public long PlanReusableBytes;
+            public long RemainingPayloadBytes;
             public long Offset;
-            public object Partial, Interrupted, Transfer, Activation, Released;
+            public object Partial;
+            public object Interrupted;
+            public object Transfer;
+            public object Activation;
+            public object Released;
             public object Checkpoints;
             public double CheckMilliseconds;
             public object TimingBoundary = new
@@ -80,8 +97,16 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceLocalSnapshot target, byte[] envelope, Dictionary<string, byte[]> files, X509Certificate2 certificate)
         {
             var label = mode.ToLowerInvariant() + "-" + (resume ? "resume" : "full") + "-" + sample;
-            var result = new NetworkResult { Mode = mode, Resume = resume, Warmup = sample == 0, Sample = sample,
-                Digest = target.Document.CatalogDigest, Store = Path.Combine(state.CacheRoot, (mode == "None" ? "n" : "e") + (resume ? "r" : "f") + sample), Step = "Create" };
+            var result = new NetworkResult
+            {
+                Mode = mode,
+                Resume = resume,
+                Warmup = sample == 0,
+                Sample = sample,
+                Digest = target.Document.CatalogDigest,
+                Store = Path.Combine(state.CacheRoot, (mode == "None" ? "n" : "e") + (resume ? "r" : "f") + sample),
+                Step = "Create"
+            };
             Assert.That(Directory.Exists(result.Store), Is.False);
             var versionPath = Path.Combine(result.Store, state.ProjectId, Platform, "versions", target.Document.CatalogDigest);
             Assert.That(versionPath.Length, Is.LessThanOrEqualTo(210));
@@ -99,7 +124,10 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 var began = Stopwatch.GetTimestamp();
                 ResourceTlsServer.Response response;
-                if (request.Path == "/release.json") response = new ResourceTlsServer.Response { Body = envelope };
+                if (request.Path == "/release.json")
+                {
+                    response = new ResourceTlsServer.Response { Body = envelope };
+                }
                 else if (files.TryGetValue(request.Path, out var body))
                 {
                     var fileName = request.Path.Substring(request.Path.LastIndexOf('/') + 1);
@@ -108,19 +136,37 @@ namespace YLFramework.Tests.ResourceBuild
                     if (request.Headers.TryGetValue("Range", out var range))
                     {
                         if (!request.Headers.TryGetValue("If-Range", out var validator) || validator != etag || !range.StartsWith("bytes=", StringComparison.Ordinal) || !range.EndsWith("-", StringComparison.Ordinal))
+                        {
                             throw new InvalidDataException("Invalid fixture range validator.");
+                        }
+
                         var offset = int.Parse(range.Substring(6).TrimEnd('-'), CultureInfo.InvariantCulture);
-                        if (offset <= 0 || offset >= body.Length) throw new InvalidDataException("Invalid fixture offset.");
+                        if (offset <= 0 || offset >= body.Length)
+                        {
+                            throw new InvalidDataException("Invalid fixture offset.");
+                        }
+
                         var suffix = new byte[body.Length - offset];
                         Buffer.BlockCopy(body, offset, suffix, 0, suffix.Length);
                         response.Body = suffix;
                         response.StatusCode = 206;
                         response.Headers["Content-Range"] = "bytes " + offset + "-" + (body.Length - 1) + "/" + body.Length;
                     }
-                    if (interrupt && request.Path == largestPath) response.StallAfterBytes = 6 * 1024 * 1024;
-                    if (fileName == "resource-catalog.json") response.ChunkDelay = TimeSpan.Zero;
+                    if (interrupt && request.Path == largestPath)
+                    {
+                        response.StallAfterBytes = 6 * 1024 * 1024;
+                    }
+
+                    if (fileName == "resource-catalog.json")
+                    {
+                        response.ChunkDelay = TimeSpan.Zero;
+                    }
                 }
-                else response = new ResourceTlsServer.Response { StatusCode = 404 };
+                else
+                {
+                    response = new ResourceTlsServer.Response { StatusCode = 404 };
+                }
+
                 ledger.Observe(request, response, began);
                 return response;
             };
@@ -130,13 +176,17 @@ namespace YLFramework.Tests.ResourceBuild
             var previousCheckpoint = store.Checkpoint;
             store.Checkpoint = checkpoints.Record;
             using var keys = new FixtureKeys(state.ProjectId);
-            activeStartup = new ResourceStartup(new ResourceConfiguration(store, decryption: new ResourceDecryptionOptions(keys)));
+            _activeStartup = new ResourceStartup(new ResourceConfiguration(store, decryption: new ResourceDecryptionOptions(keys)));
             try
             {
                 result.Step = "Start";
                 checkpoints.Operation = "Start";
-                using (var start = activeStartup.StartAsync()) { yield return Wait(start); start.TakeResult(); }
-                var system = lastSystem = activeStartup.Resources;
+                using (var start = _activeStartup.StartAsync())
+                {
+                    yield return Wait(start);
+                    start.TakeResult();
+                }
+                var system = _lastSystem = _activeStartup.Resources;
                 result.Step = "Check";
                 checkpoints.Operation = "Check";
                 var checkStarted = Stopwatch.GetTimestamp();
@@ -151,8 +201,8 @@ namespace YLFramework.Tests.ResourceBuild
                 result.PlanMissingBytes = plan.MissingBytes;
                 result.PlanReusableBytes = plan.ReusableBytes;
                 Assert.That(plan.Projects.Single().ToDigest, Is.EqualTo(target.Document.CatalogDigest));
-                Assert.That(plan.Projects.Single().Files.Single(x => x.RelativeFile == largest.RelativeFile).Reusable, Is.False);
-                var expected = plan.Projects.Single().Files.Where(x => !x.Reusable).ToDictionary(x => x.RelativeFile, x => x.Length, StringComparer.Ordinal);
+                Assert.That(plan.Projects.Single().Files.Single(x => x.RelativeFile == largest.RelativeFile).IsReusable, Is.False);
+                var expected = plan.Projects.Single().Files.Where(x => !x.IsReusable).ToDictionary(x => x.RelativeFile, x => x.Length, StringComparer.Ordinal);
                 expected.Add(".ylr-complete.json", files["/" + target.Document.CatalogDigest + "/.ylr-complete.json"].LongLength);
                 var partPaths = expected.Keys.ToDictionary(x => x, x => PartPath(store, remote, target, x, files["/" + target.Document.CatalogDigest + "/" + x]), StringComparer.Ordinal);
                 var before = expected.Keys.ToDictionary(x => x, _ => 0L, StringComparer.Ordinal);
@@ -166,10 +216,16 @@ namespace YLFramework.Tests.ResourceBuild
                         var deadline = Now + TimeoutSeconds;
                         var selectedPart = partPaths[largest.RelativeFile];
                         while (!interrupted.IsDone && (!File.Exists(selectedPart) || new FileInfo(selectedPart).Length < 4 * MiB) && Now < deadline)
-                        { window.Tick(system); yield return null; }
+                        {
+                            window.Tick(system);
+                            yield return null;
+                        }
                         interrupted.Cancel();
                         while ((system.GetDiagnosticsReport().Updates.Count != 0 || system.GetContentDiagnosticsSnapshot().WorkCount != 0) && Now < deadline)
-                        { window.Tick(system); yield return null; }
+                        {
+                            window.Tick(system);
+                            yield return null;
+                        }
                         window.Finish();
                         before = PartLengths(partPaths);
                         result.Offset = before[largest.RelativeFile];
@@ -181,8 +237,15 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(result.Offset, Is.GreaterThanOrEqualTo(4 * MiB).And.LessThan(largest.Length));
                     var metadata = JObject.Parse(File.ReadAllText(Path.ChangeExtension(partPaths[largest.RelativeFile], ".json")));
                     var prefix = File.ReadAllBytes(partPaths[largest.RelativeFile]);
-                    result.Partial = new { File = largest.RelativeFile, result.Offset, Sha256 = Hash(partPaths[largest.RelativeFile]),
-                        EntitySha256 = (string)metadata["Sha256"], Length = (long)metadata["Length"], ETag = (string)metadata["ETag"] };
+                    result.Partial = new
+                    {
+                        File = largest.RelativeFile,
+                        result.Offset,
+                        Sha256 = Hash(partPaths[largest.RelativeFile]),
+                        EntitySha256 = (string)metadata["Sha256"],
+                        Length = (long)metadata["Length"],
+                        ETag = (string)metadata["ETag"]
+                    };
                     Assert.That((string)metadata["ETag"], Is.EqualTo("\"" + largest.Sha256 + "\""));
                     Assert.That((string)metadata["Sha256"], Is.EqualTo(largest.Sha256));
                     Assert.That((long)metadata["Length"], Is.EqualTo(largest.Length));
@@ -199,7 +262,11 @@ namespace YLFramework.Tests.ResourceBuild
                 using (var preparing = system.PrepareUpdateAsync(plan))
                 {
                     var deadline = Now + TimeoutSeconds;
-                    while (!preparing.IsDone && Now < deadline) { transfer.Tick(system); yield return null; }
+                    while (!preparing.IsDone && Now < deadline)
+                    {
+                        transfer.Tick(system);
+                        yield return null;
+                    }
                     transfer.Tick(system);
                     transfer.Finish();
                     var after = PartLengths(partPaths);
@@ -209,7 +276,10 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(preparing.IsDone, Is.True, "A finite prepare observation window expired; no automatic retry.");
                     prepared = preparing.TakeResult();
                     Assert.That(accepted, Is.EqualTo(result.RemainingPayloadBytes));
-                    foreach (var file in expected) Assert.That(after[file.Key], Is.EqualTo(file.Value), file.Key);
+                    foreach (var file in expected)
+                    {
+                        Assert.That(after[file.Key], Is.EqualTo(file.Value), file.Key);
+                    }
                 }
                 var rows = ledger.Capture(transfer.FirstRequest);
                 Assert.That(rows.All(x => x.WrittenBodyBytes == x.DeclaredBodyBytes), Is.True);
@@ -223,14 +293,22 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 var installed = prepared.Projects.Single().Target;
                 foreach (var file in target.Document.Bundles.Cast<ResourceCatalogFile>().Concat(target.Document.SupportFiles))
+                {
                     Assert.That(Hash(Path.Combine(installed.DirectoryPath, file.RelativeFile)), Is.EqualTo(file.Sha256), file.RelativeFile);
+                }
+
                 result.Step = "ActivateAndConsume";
                 checkpoints.Operation = "Activate";
                 var activationStarted = Stopwatch.GetTimestamp();
                 using (var activate = system.ActivatePreparedUpdateAsync(prepared))
                 {
                     yield return Wait(activate);
-                    result.Activation = new { Milliseconds = Milliseconds(activationStarted, Stopwatch.GetTimestamp()), Status = activate.Status.ToString(), Error = activate.Error?.ToString() };
+                    result.Activation = new
+                    {
+                        Milliseconds = Milliseconds(activationStarted, Stopwatch.GetTimestamp()),
+                        Status = activate.Status.ToString(),
+                        Error = activate.Error?.ToString()
+                    };
                     Assert.That(activate.TakeResult(), Is.True);
                 }
                 using (var request = system.AcquireAsync<TextAsset>(new ResourceAddress(state.ProjectId, "entry")))
@@ -241,10 +319,14 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 result.Step = "Stop";
                 checkpoints.Operation = "Stop";
-                using (var stop = activeStartup.StopAsync()) { yield return Wait(stop); Assert.That(stop.TakeResult(), Is.True); }
+                using (var stop = _activeStartup.StopAsync())
+                {
+                    yield return Wait(stop);
+                    Assert.That(stop.TakeResult(), Is.True);
+                }
                 result.Released = system.GetContentDiagnosticsSnapshot();
                 AssertReleased(system);
-                activeStartup = null;
+                _activeStartup = null;
                 result.Completed = true;
                 result.Step = "Complete";
             }
@@ -253,7 +335,12 @@ namespace YLFramework.Tests.ResourceBuild
                 store.Checkpoint = previousCheckpoint;
                 server.Dispose();
                 result.Checkpoints = checkpoints.Capture();
-                ResourceCostEvidence.Write("f03-b-" + label, new { Result = result, Requests = ledger.Capture(0), ServerErrors = server.Errors.Select(x => x.ToString()).ToArray() });
+                ResourceCostEvidence.Write("f03-b-" + label, new
+                {
+                    Result = result,
+                    Requests = ledger.Capture(0),
+                    ServerErrors = server.Errors.Select(x => x.ToString()).ToArray()
+                });
             }
             Assert.That(server.Errors, Is.Empty);
         }
@@ -270,32 +357,57 @@ namespace YLFramework.Tests.ResourceBuild
 
         private readonly struct CheckpointEvent
         {
-            public readonly string Operation, Phase;
+            public readonly string Operation;
+            public readonly string Phase;
             public readonly long Tick;
             public readonly int Thread;
             internal CheckpointEvent(string operation, string phase)
-            { Operation = operation; Phase = phase; Tick = Stopwatch.GetTimestamp(); Thread = System.Threading.Thread.CurrentThread.ManagedThreadId; }
+            {
+                Operation = operation;
+                Phase = phase;
+                Tick = Stopwatch.GetTimestamp();
+                Thread = System.Threading.Thread.CurrentThread.ManagedThreadId;
+            }
         }
 
         private sealed class CheckpointLedger
         {
-            private readonly object sync = new();
-            private readonly List<CheckpointEvent> events = new(1024);
-            private string operation = "Create";
-            private bool truncated;
-            internal string Operation { set { lock (sync) operation = value; } }
+            private readonly object _sync = new();
+            private readonly List<CheckpointEvent> _events = new(1024);
+            private string _operation = "Create";
+            private bool _isTruncated;
+            internal string Operation
+            {
+                set
+                {
+                    lock (_sync)
+                    {
+                        _operation = value;
+                    }
+                }
+            }
             internal void Record(string phase)
             {
-                lock (sync)
+                lock (_sync)
                 {
-                    if (events.Count < 16384) events.Add(new CheckpointEvent(operation, phase));
-                    else truncated = true;
+                    if (_events.Count < 16384)
+                    {
+                        _events.Add(new CheckpointEvent(_operation, phase));
+                    }
+                    else
+                    {
+                        _isTruncated = true;
+                    }
                 }
             }
             internal object Capture()
             {
                 CheckpointEvent[] rows;
-                lock (sync) rows = events.ToArray();
+                lock (_sync)
+                {
+                    rows = _events.ToArray();
+                }
+
                 var pending = new Dictionary<(string Operation, string Category, int Thread), Stack<long>>();
                 var completed = new List<(string Operation, string Category, double Milliseconds)>();
                 var unmatchedFinishes = new List<CheckpointEvent>();
@@ -303,100 +415,193 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     var start = row.Phase.EndsWith("Started", StringComparison.Ordinal);
                     var finish = row.Phase.EndsWith("Finished", StringComparison.Ordinal);
-                    if (!start && !finish) continue;
+                    if (!start && !finish)
+                    {
+                        continue;
+                    }
+
                     var category = row.Phase.Substring(0, row.Phase.Length - (start ? "Started".Length : "Finished".Length));
                     var key = (row.Operation, category, row.Thread);
                     if (start)
                     {
-                        if (!pending.TryGetValue(key, out var starts)) pending.Add(key, starts = new Stack<long>());
+                        if (!pending.TryGetValue(key, out var starts))
+                        {
+                            pending.Add(key, starts = new Stack<long>());
+                        }
+
                         starts.Push(row.Tick);
                     }
                     else if (pending.TryGetValue(key, out var pendingStarts) && pendingStarts.Count != 0)
+                    {
                         completed.Add((row.Operation, category, Milliseconds(pendingStarts.Pop(), row.Tick)));
-                    else unmatchedFinishes.Add(row);
+                    }
+                    else
+                    {
+                        unmatchedFinishes.Add(row);
+                    }
                 }
-                return new { Events = rows, Truncated = truncated, Stages = completed.GroupBy(x => (x.Operation, x.Category)).Select(group => new
-                    { group.Key.Operation, group.Key.Category, Count = group.Count(), Milliseconds = group.Sum(x => x.Milliseconds) }).ToArray(),
+                return new
+                {
+                    Events = rows,
+                    Truncated = _isTruncated,
+                    Stages = completed.GroupBy(x => (x.Operation, x.Category)).Select(group => new
+                    {
+                        group.Key.Operation,
+                        group.Key.Category,
+                        Count = group.Count(),
+                        Milliseconds = group.Sum(x => x.Milliseconds)
+                    }).ToArray(),
                     UnmatchedStarts = pending.Where(x => x.Value.Count != 0).Select(x => new { x.Key.Operation, x.Key.Category, x.Key.Thread, Count = x.Value.Count }).ToArray(),
                     UnmatchedFinishes = unmatchedFinishes,
-                    Boundary = "Opt-in original Store checkpoints, paired by operation/category/executing thread. Elapsed wall durations at named sites, not pure SHA CPU, whole-system coverage or disjoint accounting. Never add this table to Prepare or sum overlapping categories." };
+                    Boundary = "Opt-in original Store checkpoints, paired by operation/category/executing thread. Elapsed wall durations at named sites, not pure SHA CPU, whole-system coverage or disjoint accounting. Never add this table to Prepare or sum overlapping categories."
+                };
             }
         }
 
         private sealed class WireRow
         {
-            public string Path, Range, IfRange;
+            public string Path;
+            public string Range;
+            public string IfRange;
             public int Status;
             public bool Payload;
-            public long RequestedTick, LastWrittenTick, DeclaredBodyBytes, WrittenBodyBytes;
+            public long RequestedTick;
+            public long LastWrittenTick;
+            public long DeclaredBodyBytes;
+            public long WrittenBodyBytes;
             internal WireRow Copy() => (WireRow)MemberwiseClone();
         }
 
         private sealed class WireLedger
         {
-            private readonly string prefix;
-            private readonly object sync = new();
-            private readonly List<WireRow> rows = new();
-            internal WireLedger(string digest) => prefix = "/" + digest + "/";
-            internal int Count { get { lock (sync) return rows.Count; } }
+            private readonly string _prefix;
+            private readonly object _sync = new();
+            private readonly List<WireRow> _rows = new();
+            internal WireLedger(string digest) => _prefix = "/" + digest + "/";
+            internal int Count
+            {
+                get
+                {
+                    lock (_sync)
+                    {
+                        return _rows.Count;
+                    }
+                }
+            }
             internal void Observe(ResourceTlsServer.Request request, ResourceTlsServer.Response response, long began)
             {
                 request.Headers.TryGetValue("Range", out var range);
                 request.Headers.TryGetValue("If-Range", out var validator);
-                var row = new WireRow { Path = request.Path, Range = range, IfRange = validator, Status = response.StatusCode,
-                    RequestedTick = began, DeclaredBodyBytes = response.Body.LongLength,
-                    Payload = request.Path.StartsWith(prefix, StringComparison.Ordinal) && !request.Path.EndsWith("/resource-catalog.json", StringComparison.Ordinal) };
-                lock (sync) rows.Add(row);
-                response.BodyBytesWritten = count => { lock (sync) { row.WrittenBodyBytes += count; row.LastWrittenTick = Stopwatch.GetTimestamp(); } };
+                var row = new WireRow
+                {
+                    Path = request.Path,
+                    Range = range,
+                    IfRange = validator,
+                    Status = response.StatusCode,
+                    RequestedTick = began,
+                    DeclaredBodyBytes = response.Body.LongLength,
+                    Payload = request.Path.StartsWith(_prefix, StringComparison.Ordinal) && !request.Path.EndsWith("/resource-catalog.json", StringComparison.Ordinal)
+                };
+                lock (_sync)
+                {
+                    _rows.Add(row);
+                }
+
+                response.BodyBytesWritten = count =>
+                {
+                    lock (_sync)
+                    {
+                        row.WrittenBodyBytes += count;
+                        row.LastWrittenTick = Stopwatch.GetTimestamp();
+                    }
+                };
             }
-            internal WireRow[] Capture(int start) { lock (sync) return rows.Skip(start).Select(x => x.Copy()).ToArray(); }
+            internal WireRow[] Capture(int start)
+            {
+                lock (_sync)
+                {
+                    return _rows.Skip(start).Select(x => x.Copy()).ToArray();
+                }
+            }
         }
 
         private sealed class TransferWindow : IDisposable
         {
-            private readonly WireLedger ledger;
-            private readonly long expected;
-            private readonly long started = Stopwatch.GetTimestamp();
-            private readonly List<object> frames = new(1024);
-            private readonly MemorySampler memory = new();
-            private long completed, downloadCompleted;
-            private bool truncated;
+            private readonly WireLedger _ledger;
+            private readonly long _expected;
+            private readonly long _started = Stopwatch.GetTimestamp();
+            private readonly List<object> _frames = new(1024);
+            private readonly MemorySampler _memory = new();
+            private long _completed;
+            private long _downloadCompleted;
+            private bool _isTruncated;
             internal readonly int FirstRequest;
-            internal TransferWindow(WireLedger ledger, long expected) { this.ledger = ledger; this.expected = expected; FirstRequest = ledger.Count; }
+            internal TransferWindow(WireLedger ledger, long expected)
+            {
+                this._ledger = ledger;
+                this._expected = expected;
+                FirstRequest = ledger.Count;
+            }
             internal void Tick(ResourceSystem system)
             {
-                memory.Tick(system);
+                _memory.Tick(system);
                 var tick = Stopwatch.GetTimestamp();
                 var updates = system.GetDiagnosticsReport().Updates;
                 var downloading = updates.FirstOrDefault(x => x.Phase == "Downloading");
-                if (frames.Count < 16384) frames.Add(new { Tick = tick, Phase = downloading?.Phase ?? updates.FirstOrDefault()?.Phase,
-                    downloading?.TransferredBytes, downloading?.ExpectedBytes, downloading?.RetryCount });
-                else truncated = true;
-                // This is an observed client-side upper boundary, not a fabricated isolated network stopwatch.
-                if (downloadCompleted == 0 && downloading == null)
+                if (_frames.Count < 16384)
                 {
-                    var requests = ledger.Capture(FirstRequest).Where(x => x.Payload).ToArray();
-                    if (requests.Length != 0 && requests.Sum(x => x.WrittenBodyBytes) == expected) downloadCompleted = tick;
+                    _frames.Add(new
+                    {
+                        Tick = tick,
+                        Phase = downloading?.Phase ?? updates.FirstOrDefault()?.Phase,
+                        downloading?.TransferredBytes,
+                        downloading?.ExpectedBytes,
+                        downloading?.RetryCount
+                    });
+                }
+                else
+                {
+                    _isTruncated = true;
+                }
+                // This is an observed client-side upper boundary, not a fabricated isolated network stopwatch.
+                if (_downloadCompleted == 0 && downloading == null)
+                {
+                    var requests = _ledger.Capture(FirstRequest).Where(x => x.Payload).ToArray();
+                    if (requests.Length != 0 && requests.Sum(x => x.WrittenBodyBytes) == _expected)
+                    {
+                        _downloadCompleted = tick;
+                    }
                 }
             }
-            internal void Finish() => completed = Stopwatch.GetTimestamp();
+            internal void Finish() => _completed = Stopwatch.GetTimestamp();
             internal object Capture(long accepted, ResourceRequestStatus status, string error)
             {
-                var requests = ledger.Capture(FirstRequest).Where(x => x.Payload).ToArray();
+                var requests = _ledger.Capture(FirstRequest).Where(x => x.Payload).ToArray();
                 var first = requests.Length == 0 ? 0 : requests.Min(x => x.RequestedTick);
                 var last = requests.Length == 0 ? 0 : requests.Max(x => x.LastWrittenTick);
                 var written = requests.Sum(x => x.WrittenBodyBytes);
-                var downloadMs = first != 0 && downloadCompleted > first ? Milliseconds(first, downloadCompleted) : (double?)null;
+                var downloadMs = first != 0 && _downloadCompleted > first ? Milliseconds(first, _downloadCompleted) : (double?)null;
                 var serverMs = first != 0 && last > first ? Milliseconds(first, last) : (double?)null;
-                return new { Status = status.ToString(), Error = error, ExpectedNewPayloadBytes = expected, AcceptedNewPayloadBytes = accepted,
-                    ServerBodyBytesWritten = written, RequestCount = requests.Length, PrepareMilliseconds = Milliseconds(started, completed),
-                    DownloadCompletedObservedTick = downloadCompleted == 0 ? (long?)null : downloadCompleted,
-                    DownloadPipelineMilliseconds = downloadMs, ServerGetToLastBodyWriteMilliseconds = serverMs,
+                return new
+                {
+                    Status = status.ToString(),
+                    Error = error,
+                    ExpectedNewPayloadBytes = _expected,
+                    AcceptedNewPayloadBytes = accepted,
+                    ServerBodyBytesWritten = written,
+                    RequestCount = requests.Length,
+                    PrepareMilliseconds = Milliseconds(_started, _completed),
+                    DownloadCompletedObservedTick = _downloadCompleted == 0 ? (long?)null : _downloadCompleted,
+                    DownloadPipelineMilliseconds = downloadMs,
+                    ServerGetToLastBodyWriteMilliseconds = serverMs,
                     DownloadPipelineMiBPerSecond = downloadMs.HasValue && downloadMs.Value > 0 ? accepted / (double)MiB / (downloadMs.Value / 1000) : (double?)null,
                     ServerBodyMiBPerSecond = serverMs.HasValue && serverMs.Value > 0 ? written / (double)MiB / (serverMs.Value / 1000) : (double?)null,
-                    DiagnosticFrames = frames, FramesTruncated = truncated, Memory = memory.Capture() };
+                    DiagnosticFrames = _frames,
+                    FramesTruncated = _isTruncated,
+                    Memory = _memory.Capture()
+                };
             }
-            public void Dispose() => memory.Dispose();
+            public void Dispose() => _memory.Dispose();
         }
     }
 }

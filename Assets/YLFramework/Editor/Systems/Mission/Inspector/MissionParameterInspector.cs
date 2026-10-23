@@ -1,6 +1,3 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -8,156 +5,164 @@ using UnityEditor;
 using UnityEditor.PackageManager.UI;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 using YLFramework.MissionSystem;
 
 namespace YLFramework.MissionSystem
 {
-public class MissionParameterInspector
-{
-
-    private static SerializedObject serializedObject;
-
-    private static MissionsConfig currentMissionConfig;
-
-    private static float update_time;
-
-    private static ParamListTree paramListTree;
-
-    private static int last_index;
-
-    private static ReorderableList reorderableList = null;
-
-
-
-    public static void OnInspectorGUI(MissionsConfig missionsConfig ,MissionParameter missionParameter,ParamListTree paramListTree)
+    public class MissionParameterInspector
     {
-        if (missionParameter == null)
+
+        private static SerializedObject _serializedObject;
+
+        private static MissionsConfig _currentMissionConfig;
+
+        private static float _updateTime;
+
+        private static ParamListTree _paramListTree;
+
+        private static int _lastIndex;
+
+        private static ReorderableList _reorderableList = null;
+
+
+
+        public static void OnInspectorGUI(MissionsConfig missionsConfig, MissionParameter missionParameter, ParamListTree paramListTree)
         {
+            if (missionParameter == null)
+            {
 
-            GUILayout.FlexibleSpace();
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            GUILayout.Label("空");
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.FlexibleSpace();
+                GUILayout.FlexibleSpace();
+                GUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                GUILayout.Label("空");
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                GUILayout.FlexibleSpace();
 
-            return;
+                return;
+            }
+
+            int paramIndex = missionsConfig.parameters.IndexOf(missionParameter);
+
+            MissionParameterInspector._paramListTree = paramListTree;
+
+            if (_currentMissionConfig != missionsConfig)
+            {
+                _serializedObject?.Dispose();
+                _currentMissionConfig = missionsConfig;
+                _serializedObject = null;
+                _reorderableList = null;
+            }
+
+            if (_serializedObject == null)
+            {
+                _serializedObject = new SerializedObject(missionsConfig);
+            }
+
+            _serializedObject.Update();
+
+            if (_lastIndex != paramIndex)
+            {
+                _updateTime = Time.realtimeSinceStartup;
+                _lastIndex = paramIndex;
+                _reorderableList = null;
+            }
+
+            SerializedProperty param = _serializedObject.FindProperty("parameters");
+
+            SerializedProperty property = param.GetArrayElementAtIndex(paramIndex);
+
+            if (property == null)
+            {
+                return;
+            }
+
+            EditorGUI.BeginChangeCheck();
+
+            //EditorGUILayout.PropertyField(property.FindPropertyRelative("name"));
+
+            OnInspectorId(property.FindPropertyRelative("name"));
+
+            EditorGUILayout.PropertyField(property.FindPropertyRelative("type"));
+
+            EditorGUILayout.PropertyField(property.FindPropertyRelative("onlySetInProgress"));
+
+            EditorGUILayout.PropertyField(property.FindPropertyRelative("onlySetLarger"));
+
+            EditorGUILayout.PropertyField(property.FindPropertyRelative("description"));
+
+            OnInspectorCustomData(property.FindPropertyRelative("customData"));
+
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorUtility.SetDirty(missionsConfig);
+            }
+
+            _serializedObject.ApplyModifiedProperties();
         }
 
-        int param_index = missionsConfig.param.IndexOf(missionParameter);
 
-        MissionParameterInspector.paramListTree = paramListTree;
-
-        if (currentMissionConfig != missionsConfig)
+        private static void OnInspectorId(SerializedProperty data)
         {
-            serializedObject?.Dispose();
-            currentMissionConfig = missionsConfig;
-            serializedObject = null;
-            reorderableList = null;
+            GUILayout.Space(10);
+
+            EditorGUILayout.LabelField(string.Empty, "参数名称", "BoldLabel");
+
+            string name = data.stringValue;
+
+            EditorGUI.BeginChangeCheck();
+            name = EditorGUILayout.DelayedTextField("name", data.stringValue);
+            if (EditorGUI.EndChangeCheck() && Time.realtimeSinceStartup - _updateTime > 1)
+            {
+                _paramListTree.RenameParam(data.stringValue, name);
+                _paramListTree.Reload();
+            }
         }
 
-        if(serializedObject == null)
-            serializedObject = new SerializedObject(missionsConfig);
-
-        serializedObject.Update();
-
-        if (last_index != param_index)
+        private static void OnInspectorCustomData(SerializedProperty data)
         {
-            update_time = Time.realtimeSinceStartup;
-            last_index = param_index;
-            reorderableList = null;
+            GUILayout.Space(10);
+
+            EditorGUILayout.LabelField(string.Empty, "自定义数据(Custom_data)", "BoldLabel");
+
+
+            if (_reorderableList == null)
+            {
+                _reorderableList = new ReorderableList(_serializedObject, data);
+                _reorderableList.headerHeight = 1;
+                _reorderableList.drawElementCallback = ElementCallbackDelegate;
+            }
+
+            _reorderableList.DoLayoutList();
         }
 
-        SerializedProperty param = serializedObject.FindProperty("param");
-
-        SerializedProperty property = param.GetArrayElementAtIndex(param_index);
-
-        if (property == null) return;
-
-
-
-        EditorGUI.BeginChangeCheck();
-
-        //EditorGUILayout.PropertyField(property.FindPropertyRelative("name"));
-
-        OnInspectorID(property.FindPropertyRelative("name"));
-
-        EditorGUILayout.PropertyField(property.FindPropertyRelative("type"));
-
-        EditorGUILayout.PropertyField(property.FindPropertyRelative("only_can_set_in_progress"));
-
-        EditorGUILayout.PropertyField(property.FindPropertyRelative("only_can_set_larger"));
-
-        EditorGUILayout.PropertyField(property.FindPropertyRelative("des"));
-
-        OnInspectorCustomData(property.FindPropertyRelative("custom_data"));
-
-
-        if (EditorGUI.EndChangeCheck())
+        private static void ElementCallbackDelegate(Rect rect, int index, bool isActive, bool isFocused)
         {
-            EditorUtility.SetDirty(missionsConfig);
+            if (index < 0 || index >= _reorderableList.serializedProperty.arraySize)
+            {
+                return;
+            }
+
+            SerializedProperty serialized = _reorderableList.serializedProperty.GetArrayElementAtIndex(index);
+            EditorGUI.PropertyField(rect, serialized);
+
+
         }
 
-        serializedObject.ApplyModifiedProperties();
+        internal static void ReleaseSelection()
+        {
+            _serializedObject?.Dispose();
+            _serializedObject = null;
+            _currentMissionConfig = null;
+            _paramListTree = null;
+            _reorderableList = null;
+            _lastIndex = -1;
+        }
+
     }
-
-
-    private static void OnInspectorID(SerializedProperty data)
-    {
-        GUILayout.Space(10);
-
-        EditorGUILayout.LabelField(string.Empty, "参数名称", "BoldLabel");
-
-        string name = data.stringValue;
-
-        EditorGUI.BeginChangeCheck();
-        name = EditorGUILayout.DelayedTextField("name", data.stringValue);
-        if (EditorGUI.EndChangeCheck() && Time.realtimeSinceStartup - update_time > 1)
-        {
-            paramListTree.RenameParam(data.stringValue, name);
-            paramListTree.Reload();
-        }
-    }
-
-    private static void OnInspectorCustomData(SerializedProperty data)
-    {
-        GUILayout.Space(10);
-
-        EditorGUILayout.LabelField(string.Empty, "自定义数据(Custom_data)", "BoldLabel");
-
-
-        if (reorderableList == null)
-        {
-            reorderableList = new ReorderableList(serializedObject, data);
-            reorderableList.headerHeight = 1;
-            reorderableList.drawElementCallback = ElementCallbackDelegate;
-        }
-
-        reorderableList.DoLayoutList();
-    }
-
-    private static void ElementCallbackDelegate(Rect rect, int index, bool isActive, bool isFocused)
-    {
-        if (index < 0 || index >= reorderableList.serializedProperty.arraySize)
-            return;
-
-        SerializedProperty serialized = reorderableList.serializedProperty.GetArrayElementAtIndex(index);
-        EditorGUI.PropertyField(rect,serialized);
-
-
-    }
-
-    internal static void ReleaseSelection()
-    {
-        serializedObject?.Dispose();
-        serializedObject = null;
-        currentMissionConfig = null;
-        paramListTree = null;
-        reorderableList = null;
-        last_index = -1;
-    }
-
-}
 
 }

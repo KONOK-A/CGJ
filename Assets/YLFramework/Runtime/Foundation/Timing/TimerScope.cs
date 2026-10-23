@@ -27,7 +27,10 @@ namespace YLFramework.Timing
         public TimerScope(TimerScheduler scheduler) => _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 
         /// <summary>范围是否已永久关闭；关闭后投递抛出 ObjectDisposedException。</summary>
-        public bool IsDisposed { get; private set; }
+        public bool IsDisposed
+        {
+            get; private set;
+        }
 
         /// <summary>匿名秒等待，参数与 TimerScheduler.Delay 一致。</summary>
         public TimerHandle Delay(double delay, Action callback = null, TimerClock clock = TimerClock.Unscaled,
@@ -122,8 +125,15 @@ namespace YLFramework.Timing
         {
             if (frameTask)
             {
-                if (frames < 0) throw new ArgumentOutOfRangeException(repeating ? "firstDelay" : "frameDelay");
-                if (repeating && intervalFrames <= 0) throw new ArgumentOutOfRangeException("interval");
+                if (frames < 0)
+                {
+                    throw new ArgumentOutOfRangeException(repeating ? "firstDelay" : "frameDelay");
+                }
+
+                if (repeating && intervalFrames <= 0)
+                {
+                    throw new ArgumentOutOfRangeException("interval");
+                }
             }
             else
             {
@@ -132,40 +142,68 @@ namespace YLFramework.Timing
                 if (repeating)
                 {
                     TimerScheduler.ValidateSeconds(intervalSeconds, "interval");
-                    if (intervalSeconds == 0) throw new ArgumentOutOfRangeException("interval");
+                    if (intervalSeconds == 0)
+                    {
+                        throw new ArgumentOutOfRangeException("interval");
+                    }
                 }
             }
             TimerScheduler.ValidateCount(count);
             ThrowIfUnavailable();
             if (!replace && name != null && Contains(name))
+            {
                 throw new InvalidOperationException("Timer name already exists in this scope: " + name);
+            }
 
             var version = replace ? checked(++_version) : 0;
-            if (replace) _replacements[name] = version;
+            if (replace)
+            {
+                _replacements[name] = version;
+            }
+
             try
             {
                 if (replace)
                 {
                     (_scheduler ?? Timer.GetScheduler()).ValidateDeadline(clock, delay, frameTask ? Math.Max(1, frames) : 0);
                     ThrowIfUnavailable();
-                    if (!_replacements.TryGetValue(name, out var validated) || validated != version) return default;
+                    if (!_replacements.TryGetValue(name, out var validated) || validated != version)
+                    {
+                        return default;
+                    }
+
                     Cancel(name);
                     ThrowIfUnavailable();
-                    if (!_replacements.TryGetValue(name, out var current) || current != version) return default;
+                    if (!_replacements.TryGetValue(name, out var current) || current != version)
+                    {
+                        return default;
+                    }
                 }
                 var scheduler = _scheduler ?? Timer.GetScheduler();
                 // 默认 owner 的失效清理可能通知用户并重入；取得实例后再次核对本次投递责任。
                 ThrowIfUnavailable();
-                if (replace && (!_replacements.TryGetValue(name, out var latest) || latest != version)) return default;
+                if (replace && (!_replacements.TryGetValue(name, out var latest) || latest != version))
+                {
+                    return default;
+                }
+
                 if (!replace && name != null && Contains(name))
+                {
                     throw new InvalidOperationException("Timer name already exists in this scope: " + name);
+                }
+
                 TimerHandle handle;
                 if (frameTask)
+                {
                     handle = repeating ? scheduler.RepeatFrames(frames, intervalFrames, tickCallback, count, onCancelled) :
                         scheduler.DelayFrames(frames, callback, onCancelled);
+                }
                 else
+                {
                     handle = repeating ? scheduler.Repeat(delay, intervalSeconds, tickCallback, count, clock, onCancelled) :
                         scheduler.Delay(delay, callback, clock, onCancelled);
+                }
+
                 var run = handle.Run;
                 run.Scope = this;
                 run.Name = name;
@@ -180,7 +218,9 @@ namespace YLFramework.Timing
             finally
             {
                 if (replace && _replacements.TryGetValue(name, out var current) && current == version)
+                {
                     _replacements.Remove(name);
+                }
             }
         }
 
@@ -194,7 +234,11 @@ namespace YLFramework.Timing
             if (!IsDisposed && _names.TryGetValue(name, out var run))
             {
                 handle = new TimerHandle(run);
-                if (handle.IsActive && ReferenceEquals(run.Scope, this)) return true;
+                if (handle.IsActive && ReferenceEquals(run.Scope, this))
+                {
+                    return true;
+                }
+
                 Detach(run);
             }
             handle = default;
@@ -217,32 +261,64 @@ namespace YLFramework.Timing
             List<Exception> errors = null;
             try
             {
-                foreach (var run in _runs) snapshot.Add(new TimerHandle(run));
+                foreach (var run in _runs)
+                {
+                    snapshot.Add(new TimerHandle(run));
+                }
+
                 foreach (var handle in snapshot)
                 {
-                    try { handle.Cancel(); }
-                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                    try
+                    {
+                        handle.Cancel();
+                    }
+                    catch (Exception error)
+                    {
+                        (errors ??= new List<Exception>()).Add(error);
+                    }
                 }
             }
-            finally { ListPool<TimerHandle>.Recycle(snapshot); }
-            if (errors == null) return;
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            finally
+            {
+                ListPool<TimerHandle>.Recycle(snapshot);
+            }
+            if (errors == null)
+            {
+                return;
+            }
+
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
             throw new AggregateException(errors);
         }
 
         /// <summary>先永久关闭再取消全部责任，禁止取消通知重入投递；不关闭所属调度器。</summary>
         public void Dispose()
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+            {
+                return;
+            }
+
             IsDisposed = true;
             CancelAll();
         }
 
         internal void Detach(TimerRun run)
         {
-            if (!ReferenceEquals(run.Scope, this)) return;
+            if (!ReferenceEquals(run.Scope, this))
+            {
+                return;
+            }
+
             if (run.Name != null && _names.TryGetValue(run.Name, out var current) && ReferenceEquals(current, run))
+            {
                 _names.Remove(run.Name);
+            }
+
             _runs.Remove(run);
             run.Scope = null;
             run.Name = null;
@@ -250,18 +326,30 @@ namespace YLFramework.Timing
 
         private static void ValidateName(string name)
         {
-            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Timer name cannot be empty.", nameof(name));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Timer name cannot be empty.", nameof(name));
+            }
         }
 
         private void ThrowIfUnavailable()
         {
-            if (IsDisposed) throw new ObjectDisposedException(nameof(TimerScope));
+            if (IsDisposed)
+            {
+                throw new ObjectDisposedException(nameof(TimerScope));
+            }
+
             if (_scheduler != null)
             {
-                if (_scheduler.IsDisposed) throw new ObjectDisposedException(nameof(TimerScheduler));
+                if (_scheduler.IsDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(TimerScheduler));
+                }
             }
             else if (!ReferenceEquals(_session, SingletonSessionState.ExecutionSession))
+            {
                 throw new InvalidOperationException("Timer scope belongs to an earlier execution session.");
+            }
         }
     }
 }

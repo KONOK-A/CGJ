@@ -1,6 +1,6 @@
-using YLFramework.Core.Editor;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.StateMachine
 {
@@ -9,13 +9,16 @@ namespace YLFramework.StateMachine
 
         #region 字段
 
-        protected Rect position;
+        protected Rect Position;
 
         #endregion
 
         #region 属性
 
-        public EditorWindow EditorWindow { get; private set; }
+        public EditorWindow EditorWindow
+        {
+            get; private set;
+        }
 
 
         #endregion
@@ -23,20 +26,25 @@ namespace YLFramework.StateMachine
 
         #region 方法
 
-        public GraphLayer(EditorWindow editorWindow) {
+        public GraphLayer(EditorWindow editorWindow)
+        {
             this.EditorWindow = editorWindow;
         }
 
-        public virtual void OnGUI(Rect rect) {
-            position = rect;
+        public virtual void OnGUI(Rect rect)
+        {
+            Position = rect;
             UpdateTransformationMatrix();
         }
 
-        public virtual void ProcessEvents() {
+        public virtual void ProcessEvents()
+        {
 
         }
 
-        public virtual void Update() { }
+        public virtual void Update()
+        {
+        }
 
         private void UpdateTransformationMatrix()
         {
@@ -46,7 +54,10 @@ namespace YLFramework.StateMachine
         public virtual void OnLostFocus()
         {
             if (UnityEditor.EditorWindow.mouseOverWindow != null && UnityEditor.EditorWindow.mouseOverWindow.GetType().ToString().Equals("UnityEditor.InspectorWindow"))
+            {
                 return;
+            }
+
             Context.Instance.ClearSelections();
         }
 

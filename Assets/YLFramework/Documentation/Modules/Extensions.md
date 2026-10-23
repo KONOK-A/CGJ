@@ -9,7 +9,7 @@
 ## 位置
 
 - 运行时：[`Runtime/Utilities/Extensions/`](../../Runtime/Utilities/Extensions/)
-  - `Unity/`：`GameObjectExtension`、`ComponentExtension`、`MonoBehaviourExtension`、`ObjectExtension`、`RectTransformExtension`、`PositionSyncExtension`、`CameraExtension`、`ColorExtension`、`UIGraphicExtension`
+  - `Unity/`：`GameObjectExtension`、`ComponentExtension`、`MonoBehaviourExtension`、`ObjectExtension`、`RectTransformExtension`、`PositionSyncExtension`、`CameraExtension`、`HtmlColorExtensions`、`UIGraphicExtension`
   - `System/`：`SystemStringExtension`、`SystemIOExtension`、`SystemCollectionsExtension`、`SystemObjectExtension`、`SystemReflectionExtension`
   - `Math/`：`MathExtension`、`VectorExtension`
   - `Utilities/`：`RandomUtility`
@@ -38,7 +38,7 @@
 
 - 本模块没有 `ToLower / ToUpper` 等标识符大小写转换 API，不存在区域敏感的大小写归一问题。
 - `ToInt / ToLong / ToFloat / ToDateTime` 使用当前 Culture 解析，失败返回默认值；机器数据调用方需自行固定 Culture。
-- `ColorExtension.HtmlStringToColor` 基于 `ColorUtility`，与 Culture 无关。
+- `HtmlColorExtensions.HtmlStringToColor` 基于 `ColorUtility`，与 Culture 无关。
 - `StringTools.FormatByte(long)` 保持当前 Culture 的人类显示、1024 进制及 b/kb/mb/gb/tb 后缀；TB 以上继续以 tb 显示，最大 long 不返回空文本。小于 1024 的历史有符号 b 显示不变，不作为机器解析格式。
 
 ### IO
@@ -63,7 +63,7 @@
 
 ### Ray / Quaternion / Rigidbody / Type
 
-- Ray 的旧 `MiniDistance`、两个 `MiniDistancePoint` 与 `Distance(Vector3)` 保留**无限直线**用途；最近点参数可为负。距离非负、同向/反向平行均可求一组最近点，零方向视为原点。新增 `DistanceToRay(Vector3)` 才限制射线半轴，投影在原点后方时计算到原点的距离，不能用旧方法承诺半轴最近点。
+- Ray 的 `MinimumDistance`、两个 `GetClosestPoints` 与 `Distance(Vector3)` 保留**无限直线**用途；最近点参数可为负。距离非负、同向/反向平行均可求一组最近点，零方向视为原点。`DistanceToRay(Vector3)` 才限制射线半轴，投影在原点后方时计算到原点的距离，不能用前述方法承诺半轴最近点。
 - `QuaternionExtensions.InverseLerp` 是最短角距离比，不判断 current 是否在 from/to 同一插值弧上，也不 clamp 到 0..1。有限非零四元数先归一化，q/-q 等价；同端点返回 0，角差使用双精度 atan2 差长/和长计算，不用 `Quaternion.Angle` 的小角度死区。零或非有限四元数抛 `ArgumentException`，无法表示为有限 float 的比例抛 `InvalidOperationException`。
 - `ParabolicMotionVelocity` 是无阻力、无运动约束、恒定重力的连续解，不是物理运动控制器或原生离散积分的精确落点保证。3D 尊重 `useGravity` 及完整 `Physics.gravity`；2D 尊重 `Physics2D.gravity * gravityScale` 的方向，忽略目标 Z。指定 Y 初速度后选最晚的正到达时间，通常为下落段；零重力有正时间时可作直线求解，零初速度向低处自由落体仍可求解。
 - 抛物线不可达、没有正到达时间、零竖直重力且零竖直初速度导致时间无法确定，或所需速度超出有限 float 时抛 `InvalidOperationException`；非有限输入抛 `ArgumentException`，null/已销毁刚体抛 `ArgumentNullException`。`ParabolicMotion` 只在计算成功后写速度，拒绝路径保留已有运动状态；不改重力、drag、constraints 或对象生命周期。

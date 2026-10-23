@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -107,10 +107,18 @@ namespace YLFramework.Core.Singleton
             var matchCount = 0;
             foreach (var candidateObject in candidates)
             {
-                if (candidateObject == null) continue;
+                if (candidateObject == null)
+                {
+                    continue;
+                }
+
                 var sceneInstance = candidateObject as T;
                 if (sceneInstance == null || ReferenceEquals(sceneInstance, excludedInstance) ||
-                    (isExcluded != null && isExcluded(sceneInstance))) continue;
+                    (isExcluded != null && isExcluded(sceneInstance)))
+                {
+                    continue;
+                }
+
                 if (firstMatch == null)
                 {
                     firstMatch = sceneInstance;
@@ -130,7 +138,10 @@ namespace YLFramework.Core.Singleton
             {
                 var component = firstMatch as Component;
                 if (persistent && Application.isPlaying && component.transform.parent == null)
+                {
                     Object.DontDestroyOnLoad(component.gameObject);
+                }
+
                 firstMatch.OnSingletonInit();
                 return firstMatch;
             }
@@ -149,7 +160,9 @@ namespace YLFramework.Core.Singleton
                 onCreated?.Invoke(instance);
                 var component = instance as Component;
                 if (persistent && Application.isPlaying && component.transform.parent == null)
+                {
                     Object.DontDestroyOnLoad(component.gameObject);
+                }
             }
             instance?.OnSingletonInit();
             return instance;
@@ -183,11 +196,18 @@ namespace YLFramework.Core.Singleton
             var existing = obj.GetComponent(typeof(T)) as T;
             if (existing != null)
             {
-                if (isExcluded == null || !isExcluded(existing)) return existing;
+                if (isExcluded == null || !isExcluded(existing))
+                {
+                    return existing;
+                }
                 // 被排除的组件所在节点可能一起等待销毁，改为在同级创建替换节点承载新组件
                 var replacement = new GameObject(obj.name);
                 replacement.transform.SetParent(obj.transform.parent, false);
-                if (dontDestroy && replacement.transform.parent == null) Object.DontDestroyOnLoad(replacement);
+                if (dontDestroy && replacement.transform.parent == null)
+                {
+                    Object.DontDestroyOnLoad(replacement);
+                }
+
                 obj = replacement;
             }
             return obj.AddComponent(typeof(T)) as T;

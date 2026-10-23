@@ -9,16 +9,23 @@ namespace YLFramework.Tests
 {
     public sealed class RuntimeHostProbe : MonoSingletonHost<RuntimeHostProbe>
     {
-        public int Releases;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Releases")]
+        public int releases;
         public void Release() => ReleaseHost();
-        protected override void OnHostRelease() => Releases++;
+        protected override void OnHostRelease() => releases++;
     }
 
     [MonoSingletonPath("YL.Singleton.Path/Child")]
-    public sealed class PathSingletonProbe : MonoSingleton<PathSingletonProbe> { }
+    public sealed class PathSingletonProbe : MonoSingleton<PathSingletonProbe>
+    {
+    }
 
-    public sealed class PersistentSingletonProbe : PersistentMonoSingleton<PersistentSingletonProbe> { }
-    public sealed class PrefabSingletonProbe : MonoBehaviour { }
+    public sealed class PersistentSingletonProbe : PersistentMonoSingleton<PersistentSingletonProbe>
+    {
+    }
+    public sealed class PrefabSingletonProbe : MonoBehaviour
+    {
+    }
 
     public class SingletonHostPlayModeTests
     {
@@ -41,8 +48,15 @@ namespace YLFramework.Tests
             }
             finally
             {
-                if (first) Object.Destroy(first);
-                if (duplicate) Object.Destroy(duplicate);
+                if (first)
+                {
+                    Object.Destroy(first);
+                }
+
+                if (duplicate)
+                {
+                    Object.Destroy(duplicate);
+                }
             }
         }
 
@@ -77,9 +91,20 @@ namespace YLFramework.Tests
             {
                 PrefabSingletonProperty<PrefabSingletonProbe>.Dispose();
                 PrefabSingletonProperty<PrefabSingletonProbe>.PrefabLoader = Resources.Load<GameObject>;
-                if (firstRoot) Object.Destroy(firstRoot);
-                if (secondRoot) Object.Destroy(secondRoot);
-                if (template) Object.Destroy(template);
+                if (firstRoot)
+                {
+                    Object.Destroy(firstRoot);
+                }
+
+                if (secondRoot)
+                {
+                    Object.Destroy(secondRoot);
+                }
+
+                if (template)
+                {
+                    Object.Destroy(template);
+                }
             }
         }
 
@@ -103,8 +128,15 @@ namespace YLFramework.Tests
             {
                 PrefabSingletonProperty<PrefabSingletonProbe>.Dispose();
                 PrefabSingletonProperty<PrefabSingletonProbe>.PrefabLoader = Resources.Load<GameObject>;
-                if (clone) Object.Destroy(clone);
-                if (template) Object.Destroy(template);
+                if (clone)
+                {
+                    Object.Destroy(clone);
+                }
+
+                if (template)
+                {
+                    Object.Destroy(template);
+                }
             }
         }
 
@@ -112,10 +144,17 @@ namespace YLFramework.Tests
         public IEnumerator TearDown()
         {
             foreach (var host in Object.FindObjectsByType<RuntimeHostProbe>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
                 host.Release();
+            }
+
             MonoSingletonProperty<PathSingletonProbe>.Dispose();
             var pathRoot = GameObject.Find("YL.Singleton.Path");
-            if (pathRoot) Object.Destroy(pathRoot);
+            if (pathRoot)
+            {
+                Object.Destroy(pathRoot);
+            }
+
             yield return null;
         }
 
@@ -129,7 +168,7 @@ namespace YLFramework.Tests
             var current = RuntimeHostProbe.Instance;
             Assert.That(current, Is.Not.SameAs(first));
             Assert.That(current, Is.Not.SameAs(second));
-            Assert.That(first.Releases, Is.EqualTo(1));
+            Assert.That(first.releases, Is.EqualTo(1));
             yield return null;
             Assert.That(first == null && second == null, Is.True);
             Assert.That(RuntimeHostProbe.Instance, Is.SameAs(current));

@@ -14,13 +14,20 @@ namespace YLFramework.Tests.Extensions.Equipment
         private static Type Helper => AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("YLFramework.Tests.EquipmentAcceptance.EquipmentSettings")).First(t => t != null);
         private static object Call(string name, params object[] args)
         {
-            try { return Helper.GetMethod(name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args); }
-            catch (TargetInvocationException error) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
+            try
+            {
+                return Helper.GetMethod(name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args);
+            }
+            catch (TargetInvocationException error)
+            {
+                ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
         }
         [Test]
         public void NewSetterCannotAdoptAnUnownedAndroidChange()
         {
-            const string key = "YLFramework.Equipment.Acceptance.Settings";
+            const string Key = "YLFramework.Equipment.Acceptance.Settings";
             var android = PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Android);
             Call("Capture", "Temp/EquipmentAcceptance/Admission-" + Guid.NewGuid().ToString("N"));
             try
@@ -33,11 +40,14 @@ namespace YLFramework.Tests.Extensions.Equipment
             {
                 // 此同步用例仅撤销自己模拟的字段；失败实现也须恢复真实用户现场。
                 PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Android, android);
-                var snapshot = JObject.Parse(SessionState.GetString(key, ""));
+                var snapshot = JObject.Parse(SessionState.GetString(Key, ""));
                 var player = (UnityEngine.Object)typeof(PlayerSettings).GetMethod("InternalGetPlayerSettingsObject", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
                 using (var serialized = new SerializedObject(player))
+                {
                     snapshot["expected"] = JArray.FromObject(Helper.GetMethod("ReadMaps", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { serialized }));
-                SessionState.SetString(key, snapshot.ToString());
+                }
+
+                SessionState.SetString(Key, snapshot.ToString());
                 Call("Restore");
             }
         }

@@ -23,43 +23,69 @@ namespace YLFramework.Tests.Editor
 
     public class EventListenerEditorTests
     {
-        private readonly List<GameObject> mRoots = new List<GameObject>();
-        private readonly List<UEditor> mEditors = new List<UEditor>();
-        private Scene mScene;
-        private string mFolder;
+        private readonly List<GameObject> _roots = new List<GameObject>();
+        private readonly List<UEditor> _editors = new List<UEditor>();
+        private Scene _scene;
+        private string _folder;
 
         [SetUp]
-        public void SetUp() => mScene = EditorSceneManager.NewPreviewScene();
+        public void SetUp() => _scene = EditorSceneManager.NewPreviewScene();
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var editor in mEditors) if (editor) Object.DestroyImmediate(editor);
-            foreach (var root in mRoots)
+            foreach (var editor in _editors)
             {
-                if (!root) continue;
-                foreach (var component in root.GetComponents<Component>()) if (component) Undo.ClearUndo(component);
+                if (editor)
+                {
+                    Object.DestroyImmediate(editor);
+                }
+            }
+
+            foreach (var root in _roots)
+            {
+                if (!root)
+                {
+                    continue;
+                }
+
+                foreach (var component in root.GetComponents<Component>())
+                {
+                    if (component)
+                    {
+                        Undo.ClearUndo(component);
+                    }
+                }
+
                 Object.DestroyImmediate(root);
             }
-            mEditors.Clear();
-            mRoots.Clear();
-            if (mScene.IsValid()) EditorSceneManager.ClosePreviewScene(mScene);
-            if (mFolder != null) Assert.That(AssetDatabase.DeleteAsset(mFolder), Is.True);
-            mFolder = null;
+            _editors.Clear();
+            _roots.Clear();
+            if (_scene.IsValid())
+            {
+                EditorSceneManager.ClosePreviewScene(_scene);
+            }
+
+            if (_folder != null)
+            {
+                Assert.That(AssetDatabase.DeleteAsset(_folder), Is.True);
+            }
+
+            _folder = null;
         }
 
         private T Create<T>() where T : EventListener
         {
             var root = new GameObject("EventListener.NativeInspectorTest");
-            SceneManager.MoveGameObjectToScene(root, mScene);
-            mRoots.Add(root);
+            SceneManager.MoveGameObjectToScene(root, _scene);
+            _roots.Add(root);
             return root.AddComponent<T>();
         }
 
         private UEditor Inspector(params Object[] targets)
         {
             var editor = UEditor.CreateEditor(targets);
-            mEditors.Add(editor);
+            _editors.Add(editor);
             Assert.That(editor.GetType().FullName, Is.EqualTo("YLFramework.Editor.EventListenerEditor"));
             Assert.That(editor.GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Editor"));
             return editor;
@@ -100,7 +126,7 @@ namespace YLFramework.Tests.Editor
             var listener = Create<EventListener>();
             var editor = Inspector(listener);
             var map = ((ValueTuple<string, GUIContent>[][])editor.GetType()
-                .GetField("EventFields", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
+                .GetField("_eventFields", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
             var serializedFields = typeof(EventListener).GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
                 .Where(field => field.IsDefined(typeof(SerializeField), false)).OrderBy(field => field.MetadataToken).ToArray();
             var fields = serializedFields.Where(field => typeof(UnityEventBase).IsAssignableFrom(field.FieldType)).ToArray();
@@ -115,7 +141,7 @@ namespace YLFramework.Tests.Editor
                 "碰撞进入|碰撞保持|碰撞离开|碰撞进入2D|碰撞保持2D|碰撞离开2D|" +
                 "Trigger进入|Trigger保持|Trigger离开|Trigger进入2D|Trigger保持2D|Trigger离开2D"));
             CollectionAssert.AreEqual(new[] { "鼠标事件", "碰撞事件", "Trigger事件" },
-                (string[])editor.GetType().GetField("Tabs", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
+                (string[])editor.GetType().GetField("_tabs", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
             var payloads = Enumerable.Repeat(typeof(PointerEventData), 8).Concat(Enumerable.Repeat(typeof(Collision), 3))
                 .Concat(Enumerable.Repeat(typeof(Collision2D), 3)).Concat(Enumerable.Repeat(typeof(Collider), 3))
                 .Concat(Enumerable.Repeat(typeof(Collider2D), 3)).ToArray();
@@ -149,7 +175,13 @@ namespace YLFramework.Tests.Editor
                 Undo.PerformRedo();
                 Assert.That(listener.ExtraValue, Is.EqualTo(42));
             }
-            finally { foreach (var property in properties) property.Dispose(); }
+            finally
+            {
+                foreach (var property in properties)
+                {
+                    property.Dispose();
+                }
+            }
         }
 
         [Test]
@@ -179,12 +211,12 @@ namespace YLFramework.Tests.Editor
         [Test]
         public void OldPrefabWithoutTheFilterKeepsAllLayersAndPersistentTargets()
         {
-            const string legacy = "Assets/YLFramework/Tests/Fixtures/CommonSystem/EventListener.Legacy.prefab";
-            AssetDatabase.ImportAsset(legacy, ImportAssetOptions.ForceUpdate);
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(legacy);
+            const string Legacy = "Assets/YLFramework/Tests/Fixtures/CommonSystem/EventListener.Legacy.prefab";
+            AssetDatabase.ImportAsset(Legacy, ImportAssetOptions.ForceUpdate);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Legacy);
             Assert.That(prefab, Is.Not.Null);
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, mScene);
-            mRoots.Add(instance);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, _scene);
+            _roots.Add(instance);
             var listener = instance.GetComponent<EventListener>();
             var editor = Inspector(listener);
             var mask = editor.serializedObject.FindProperty("physicsLayerMask");
@@ -202,9 +234,9 @@ namespace YLFramework.Tests.Editor
             mask.intValue = 0;
             Assert.That(editor.serializedObject.ApplyModifiedProperties(), Is.True);
             PrefabUtility.UnpackPrefabInstance(instance, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            mFolder = "Assets/YLFramework/Tests/EventListenerEditor-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder("Assets/YLFramework/Tests", System.IO.Path.GetFileName(mFolder));
-            var saved = mFolder + "/ExplicitNone.prefab";
+            _folder = "Assets/YLFramework/Tests/EventListenerEditor-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets/YLFramework/Tests", System.IO.Path.GetFileName(_folder));
+            var saved = _folder + "/ExplicitNone.prefab";
             Assert.That(PrefabUtility.SaveAsPrefabAsset(instance, saved), Is.Not.Null);
             AssetDatabase.ImportAsset(saved, ImportAssetOptions.ForceUpdate);
             using var reloaded = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(saved).GetComponent<EventListener>());
@@ -227,13 +259,24 @@ namespace YLFramework.Tests.Editor
                 Assert.That(Click(listener).GetPersistentMethodName(0), Is.EqualTo(nameof(EventListener.OnPointerEnter)));
             }
             Undo.PerformUndo();
-            foreach (var listener in new[] { first, second }) Assert.That(Click(listener)?.GetPersistentEventCount() ?? 0, Is.Zero);
+            foreach (var listener in new[] { first, second })
+            {
+                Assert.That(Click(listener)?.GetPersistentEventCount() ?? 0, Is.Zero);
+            }
+
             Undo.PerformRedo();
-            foreach (var listener in new[] { first, second }) Assert.That(Click(listener).GetPersistentEventCount(), Is.EqualTo(1));
+            foreach (var listener in new[] { first, second })
+            {
+                Assert.That(Click(listener).GetPersistentEventCount(), Is.EqualTo(1));
+            }
+
             editor.serializedObject.Update();
             editor.serializedObject.FindProperty("pointerClick").FindPropertyRelative("m_PersistentCalls.m_Calls").arraySize = 0;
             Assert.That(editor.serializedObject.ApplyModifiedProperties(), Is.True);
-            foreach (var listener in new[] { first, second }) Assert.That(Click(listener).GetPersistentEventCount(), Is.Zero);
+            foreach (var listener in new[] { first, second })
+            {
+                Assert.That(Click(listener).GetPersistentEventCount(), Is.Zero);
+            }
         }
 
         [Test]
@@ -242,13 +285,13 @@ namespace YLFramework.Tests.Editor
             var listener = Create<EventListener>();
             var editor = Inspector(listener);
             SetPersistentCall(editor.serializedObject, listener, nameof(EventListener.OnPointerEnter));
-            mFolder = "Assets/YLFramework/Tests/EventListenerEditor-" + Guid.NewGuid().ToString("N");
-            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests", System.IO.Path.GetFileName(mFolder)), Is.Not.Empty);
-            var path = mFolder + "/Listener.prefab";
+            _folder = "Assets/YLFramework/Tests/EventListenerEditor-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests", System.IO.Path.GetFileName(_folder)), Is.Not.Empty);
+            var path = _folder + "/Listener.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(listener.gameObject, path);
             Assert.That(prefab, Is.Not.Null);
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, mScene);
-            mRoots.Add(instance);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, _scene);
+            _roots.Add(instance);
             var component = instance.GetComponent<EventListener>();
             Assert.That(Click(component).GetPersistentTarget(0), Is.SameAs(component));
             var instanceEditor = Inspector(component);

@@ -10,14 +10,23 @@ namespace YLFramework.Editor.Audio
     {
         internal static void Script(SerializedObject serialized)
         {
-            using (new EditorGUI.DisabledScope(true)) Field(serialized, "m_Script");
+            using (new EditorGUI.DisabledScope(true))
+            {
+                Field(serialized, "m_Script");
+            }
         }
 
         internal static void Field(SerializedObject serialized, string name, string label = null)
         {
             var property = serialized.FindProperty(name);
-            if (label == null) EditorGUILayout.PropertyField(property, true);
-            else EditorGUILayout.PropertyField(property, new GUIContent(label, property.tooltip), true);
+            if (label == null)
+            {
+                EditorGUILayout.PropertyField(property, true);
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(property, new GUIContent(label, property.tooltip), true);
+            }
         }
 
         internal static bool ShowWhen(SerializedProperty property, int value) =>
@@ -40,18 +49,30 @@ namespace YLFramework.Editor.Audio
                 foreach (var target in serialized.targetObjects)
                 {
                     using (var selected = new SerializedObject(target))
+                    {
                         showGroup |= selected.FindProperty("outputRoute").FindPropertyRelative("Mode").intValue == (int)AudioOutputRoute.RouteMode.MixerGroup;
+                    }
                 }
             }
             if (showGroup)
             {
-                using (new EditorGUI.DisabledScope(mode.hasMultipleDifferentValues)) EditorGUILayout.PropertyField(group);
-                if (mode.hasMultipleDifferentValues) EditorGUILayout.HelpBox("Select a common MixerGroup Mode before editing Group across mixed routes.", MessageType.Info);
+                using (new EditorGUI.DisabledScope(mode.hasMultipleDifferentValues))
+                {
+                    EditorGUILayout.PropertyField(group);
+                }
+
+                if (mode.hasMultipleDifferentValues)
+                {
+                    EditorGUILayout.HelpBox("Select a common MixerGroup Mode before editing Group across mixed routes.", MessageType.Info);
+                }
             }
             else if (group.objectReferenceValue || group.objectReferenceInstanceIDValue != 0 || group.hasMultipleDifferentValues)
             {
                 EditorGUILayout.HelpBox("A hidden Group reference is invalid for Inherit/Direct. Changing Mode does not erase it.", MessageType.Warning);
-                if (GUILayout.Button("Clear Hidden Group Reference")) group.objectReferenceValue = null;
+                if (GUILayout.Button("Clear Hidden Group Reference"))
+                {
+                    group.objectReferenceValue = null;
+                }
             }
         }
 
@@ -106,13 +127,21 @@ namespace YLFramework.Editor.Audio
         {
             var group = serialized.FindProperty("outputRoute").FindPropertyRelative("Group");
             if (!group.objectReferenceValue && group.objectReferenceInstanceIDValue != 0)
+            {
                 Message(serialized, "The stored output Group reference is missing. Assign a live Group for MixerGroup, or explicitly clear the hidden reference for Inherit/Direct in Advanced.", MessageType.Error);
+            }
         }
 
         internal static void Validate(SerializedObject serialized, Action validation)
         {
-            try { validation(); }
-            catch (ArgumentException exception) { Message(serialized, exception.Message, MessageType.Error); }
+            try
+            {
+                validation();
+            }
+            catch (ArgumentException exception)
+            {
+                Message(serialized, exception.Message, MessageType.Error);
+            }
         }
 
         internal static void Message(SerializedObject serialized, string message, MessageType type) =>
@@ -134,8 +163,8 @@ namespace YLFramework.Editor.Audio
                     var index = list.arraySize;
                     list.InsertArrayElementAtIndex(index);
                     var entry = list.GetArrayElementAtIndex(index);
-                    entry.FindPropertyRelative("Clip").objectReferenceValue = null;
-                    entry.FindPropertyRelative("Weight").floatValue = 1f;
+                    entry.FindPropertyRelative("clip").objectReferenceValue = null;
+                    entry.FindPropertyRelative("weight").floatValue = 1f;
                     serialized.ApplyModifiedProperties();
                 }
             }
@@ -151,7 +180,11 @@ namespace YLFramework.Editor.Audio
                 using (var serialized = new SerializedObject(target))
                 {
                     var list = serialized.FindProperty("weightedClips");
-                    if (index < 0 || index >= list.arraySize) continue;
+                    if (index < 0 || index >= list.arraySize)
+                    {
+                        continue;
+                    }
+
                     list.DeleteArrayElementAtIndex(index);
                     serialized.ApplyModifiedProperties();
                 }

@@ -8,10 +8,10 @@ namespace YLFramework.Localization
         public SystemLanguage language;
         public string displayName;
         public List<LanguageInfo> languagesInfo = new();
-        private readonly LocalizationEntryIndex index = new();
+        private readonly LocalizationEntryIndex _index = new();
 
-        public LanguageInfo GetLanguageInfo(int id) => index.Find(languagesInfo, id, name + "/" + language);
-        public void ClearCache() => index.Clear();
+        public LanguageInfo GetLanguageInfo(int id) => _index.Find(languagesInfo, id, name + "/" + language);
+        public void ClearCache() => _index.Clear();
         private void OnValidate() => ClearCache();
         private void OnDisable() => ClearCache();
     }

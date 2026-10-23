@@ -23,22 +23,22 @@ namespace YLFramework.Domain.Excel.Editor
         public static ExcelImportPlan PreviewImport(SkillsConfig root, string path)
         {
             Clean(root);
-            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.skills, root, Folder(SkillsConfigController.GetSkillConfigDataPath(root)), "skills", data => data.parent = root, DataType<SkillConfigData>(root.type_script_guid));
-            return ValidateRows<SkillBase>(plan, "skill_class_full_name");
+            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.skills, root, Folder(SkillsConfigController.GetSkillConfigDataPath(root)), "skills", data => data.parent = root, DataType<SkillConfigData>(root.typeScriptGuid));
+            return ValidateRows<SkillBase>(plan, "skillClassFullName");
         }
         public static ExcelImportPlan PreviewImport(BuffsConfig root, string path)
         {
             Clean(root);
             var folder = BuffsConfigController.GetBuffConfigDataPath(root);
-            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.buffs, root, Folder(folder), "buffs", data => data.parent = root, DataType<BuffConfigData>(root.type_script_guid));
-            return ValidateRows<BuffBase>(plan, "buff_class_full_name");
+            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.buffs, root, Folder(folder), "buffs", data => data.parent = root, DataType<BuffConfigData>(root.typeScriptGuid));
+            return ValidateRows<BuffBase>(plan, "buffClassFullName");
         }
         public static ExcelImportPlan PreviewImport(MissionsConfig root, string path)
         {
             Clean(root);
             var folder = "Assets/YLFrameworkData/Mission/" + AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
-            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.missions, root, Folder(folder), "missions", data => data.parent = root, DataType<MissionConfigData>(root.type_script_guid));
-            return ValidateRows<MissionBase>(plan, "mission_type_class_fullname", root);
+            var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.missions, root, Folder(folder), "missions", data => data.parent = root, DataType<MissionConfigData>(root.typeScriptGuid));
+            return ValidateRows<MissionBase>(plan, "missionTypeClassFullName", root);
         }
 
         public static ExcelImportPlan PreviewImport(EquipmentsConfig root, string path)
@@ -47,10 +47,10 @@ namespace YLFramework.Domain.Excel.Editor
             // 即使目录尚不存在，也明确选择本根的独占条目目录；预览/取消不创建目录。
             var plan = ExcelAuthoring.PreviewScriptableObjects(path, root.Equipments, root,
                 EquipmentsConfigController.GetEquipmentConfigDataPath(root), "equipments", data => data.parent = root,
-                DataType<EquipmentConfigData>(root.type_script_guid), data =>
+                DataType<EquipmentConfigData>(root.typeScriptGuid), data =>
                 {
-                    var type = data.equipmentType == EquipmentType.Script ? AssemblyTool.GetType(data.equipment_class_full_name) : null;
-                    data.equipment_class_guid = YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(type) ? YLFramework.EquipmentSystem.ScriptBindController.GetScriptGuid(type) : "";
+                    var type = data.equipmentType == EquipmentType.Script ? AssemblyTool.GetType(data.equipmentClassFullName) : null;
+                    data.equipmentClassGuid = YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(type) ? YLFramework.EquipmentSystem.ScriptBindController.GetScriptGuid(type) : "";
                 });
             try
             {
@@ -60,16 +60,23 @@ namespace YLFramework.Domain.Excel.Editor
                     var mode = row["equipmentType"].ToObject<EquipmentType>();
                     if (mode == EquipmentType.Script)
                     {
-                        var name = (string)row["equipment_class_full_name"];
+                        var name = (string)row["equipmentClassFullName"];
                         if (!YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(AssemblyTool.GetType(name)))
                             throw new InvalidOperationException($"装备 {change.Key} 脚本类型无效: {name}");
                     }
                     else if (mode == EquipmentType.Asset)
                     {
-                        try { _ = new ResourceAddress((string)row["projectName"], (string)row["assetName"]); }
-                        catch (ArgumentException error) { throw new InvalidOperationException($"装备 {change.Key} 资源地址无效。", error); }
+                        try
+                        {
+                            _ = new ResourceAddress((string)row["projectName"], (string)row["assetName"]);
+                        }
+                        catch (ArgumentException error)
+                        {
+                            throw new InvalidOperationException($"装备 {change.Key} 资源地址无效。", error);
+                        }
                     }
-                    else throw new InvalidOperationException($"装备 {change.Key} equipmentType 无效: {mode}");
+                    else
+                        throw new InvalidOperationException($"装备 {change.Key} equipmentType 无效: {mode}");
                 }
                 if (plan.CanCommit)
                 {
@@ -77,23 +84,32 @@ namespace YLFramework.Domain.Excel.Editor
                     foreach (var change in plan.Changes)
                     {
                         var id = int.Parse(change.Key, CultureInfo.InvariantCulture);
-                        if (change.Kind == ExcelChangeKind.Delete) ids.Remove(id); else ids.Add(id);
+                        if (change.Kind == ExcelChangeKind.Delete)
+                            ids.Remove(id);
+                        else
+                            ids.Add(id);
                     }
                     plan.AddValidation(() =>
                     {
                         foreach (var other in EquipmentsConfigController.GetAllEquipmentsConfig().Where(config => config != root))
-                        foreach (var data in other.Equipments.Where(data => data))
-                            if (ids.Contains(data.id)) throw new InvalidOperationException($"装备 ID {data.id} 与配表 '{other.name}' 冲突。");
+                            foreach (var data in other.Equipments.Where(data => data))
+                                if (ids.Contains(data.id))
+                                    throw new InvalidOperationException($"装备 ID {data.id} 与配表 '{other.name}' 冲突。");
                     });
                 }
                 return plan;
             }
-            catch { plan.Dispose(); throw; }
+            catch
+            {
+                plan.Dispose();
+                throw;
+            }
         }
 
         private static string EquipmentWorkbookKey(EquipmentsConfig root)
         {
-            if (!root || !AssetDatabase.IsMainAsset(root)) throw new InvalidOperationException("装备配表必须是已保存的主资产。");
+            if (!root || !AssetDatabase.IsMainAsset(root))
+                throw new InvalidOperationException("装备配表必须是已保存的主资产。");
             return "YLFramework.Equipment.Excel." + AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
         }
         public static string GetEquipmentWorkbook(EquipmentsConfig root) => EditorPrefs.GetString(EquipmentWorkbookKey(root), "");
@@ -101,7 +117,7 @@ namespace YLFramework.Domain.Excel.Editor
         public static void ExportEquipment(EquipmentsConfig root, string path)
         {
             Clean(root);
-            ExcelAuthoring.ScriptableObjectToExcel(root.Equipments, path, "equipments", DataType<EquipmentConfigData>(root.type_script_guid));
+            ExcelAuthoring.ScriptableObjectToExcel(root.Equipments, path, "equipments", DataType<EquipmentConfigData>(root.typeScriptGuid));
             RememberEquipmentWorkbook(root, path);
         }
         [MenuItem("Assets/YLFramework/Domain Excel/Open Equipment Workbook Folder")]
@@ -118,17 +134,24 @@ namespace YLFramework.Domain.Excel.Editor
                     // B差异是原字段状态：conditions为JSON数组，不再是导出器生成的字符串。
                     var row = JObject.Parse(change.After.Substring(change.After.IndexOf(':') + 1));
                     RequireType<T>((string)row[classField], int.Parse(change.Key, System.Globalization.CultureInfo.InvariantCulture));
-                    if (!missions) continue;
-                    if (!(row["conditions"] is JArray conditions)) throw new InvalidOperationException($"任务 {change.Key} 的条件必须为数组。");
+                    if (!missions)
+                        continue;
+                    if (!(row["conditions"] is JArray conditions))
+                        throw new InvalidOperationException($"任务 {change.Key} 的条件必须为数组。");
                     foreach (var condition in conditions)
                     {
-                        var name = (string)condition["param_name"];
-                        if (!missions.param.Exists(parameter => parameter.name == name)) throw new InvalidOperationException($"任务 {change.Key} 的参数不存在: {name}，请先显式导入参数。");
+                        var name = (string)condition["paramName"];
+                        if (!missions.parameters.Exists(parameter => parameter.name == name))
+                            throw new InvalidOperationException($"任务 {change.Key} 的参数不存在: {name}，请先显式导入参数。");
                     }
                 }
                 return plan;
             }
-            catch { plan.Dispose(); throw; }
+            catch
+            {
+                plan.Dispose();
+                throw;
+            }
         }
 
         // 参数单独工作簿/事务，不以连续两次覆盖冒充多sheet原子导入导出。
@@ -137,57 +160,79 @@ namespace YLFramework.Domain.Excel.Editor
         private static ExcelImportPlan PreviewParameters(MissionsConfig root, string path)
         {
             Clean(root);
-            var plan = PreviewParameters(path, root.param);
+            var plan = PreviewParameters(path, root.parameters);
             try
             {
                 ValidateParameterReferences(root, plan);
                 return plan;
             }
-            catch { plan.Dispose(); throw; }
+            catch
+            {
+                plan.Dispose();
+                throw;
+            }
         }
         private static void ValidateParameterReferences(MissionsConfig root, ExcelImportPlan plan)
         {
-                var names = new HashSet<string>(root.param.Select(parameter => parameter.name), StringComparer.Ordinal);
-                foreach (var change in plan.Changes)
-                {
-                    if (change.Kind == ExcelChangeKind.Delete) names.Remove(change.Key);
-                    else names.Add(change.Key);
-                }
-                foreach (var data in root.missions)
-                    foreach (var condition in data.conditions)
-                        if (!names.Contains(condition.param_name)) throw new InvalidOperationException($"仍有任务引用参数: {condition.param_name}，请用普通作者工具改名/同步条件后再导入。");
+            var names = new HashSet<string>(root.parameters.Select(parameter => parameter.name), StringComparer.Ordinal);
+            foreach (var change in plan.Changes)
+            {
+                if (change.Kind == ExcelChangeKind.Delete)
+                    names.Remove(change.Key);
+                else
+                    names.Add(change.Key);
+            }
+            foreach (var data in root.missions)
+                foreach (var condition in data.conditions)
+                    if (!names.Contains(condition.paramName))
+                        throw new InvalidOperationException($"仍有任务引用参数: {condition.paramName}，请用普通作者工具改名/同步条件后再导入。");
         }
 
         [MenuItem("Assets/YLFramework/Domain Excel/Preview Import Entries")]
         private static void ImportSelected()
         {
             var root = SelectedRoot();
-            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
+            if (!root)
+                throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
             var path = EditorUtility.OpenFilePanel("预览领域Excel导入", string.Empty, "xlsx");
-            if (path.Length == 0) return;
+            if (path.Length == 0)
+                return;
             var plan = root is SkillsConfig skill ? PreviewImport(skill, path) : root is BuffsConfig buff ? PreviewImport(buff, path) : root is EquipmentsConfig equipment ? PreviewImport(equipment, path) : PreviewImport((MissionsConfig)root, path);
             var window = ExcelAuthoringCommands.ShowPreview(plan);
-            window.Applied += () => { Invalidate(root); if (root is EquipmentsConfig applied) RememberEquipmentWorkbook(applied, path); };
+            window.Applied += () =>
+            {
+                Invalidate(root);
+                if (root is EquipmentsConfig applied)
+                    RememberEquipmentWorkbook(applied, path);
+            };
         }
         [MenuItem("Assets/YLFramework/Domain Excel/Export Entries")]
         private static void ExportSelected()
         {
             var root = SelectedRoot();
-            if (!root) throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
+            if (!root)
+                throw new InvalidOperationException("请选择YL Skill/Buff/Mission/Equipment配表或条目。");
             var path = SavePath(root.name);
-            if (path.Length == 0) return;
-            if (root is SkillsConfig skill) ExcelAuthoring.ScriptableObjectToExcel(skill.skills, path, "skills", DataType<SkillConfigData>(skill.type_script_guid));
-            else if (root is BuffsConfig buff) ExcelAuthoring.ScriptableObjectToExcel(buff.buffs, path, "buffs", DataType<BuffConfigData>(buff.type_script_guid));
-            else if (root is MissionsConfig mission) ExcelAuthoring.ScriptableObjectToExcel(mission.missions, path, "missions", DataType<MissionConfigData>(mission.type_script_guid));
-            else if (root is EquipmentsConfig equipment) ExportEquipment(equipment, path);
+            if (path.Length == 0)
+                return;
+            if (root is SkillsConfig skill)
+                ExcelAuthoring.ScriptableObjectToExcel(skill.skills, path, "skills", DataType<SkillConfigData>(skill.typeScriptGuid));
+            else if (root is BuffsConfig buff)
+                ExcelAuthoring.ScriptableObjectToExcel(buff.buffs, path, "buffs", DataType<BuffConfigData>(buff.typeScriptGuid));
+            else if (root is MissionsConfig mission)
+                ExcelAuthoring.ScriptableObjectToExcel(mission.missions, path, "missions", DataType<MissionConfigData>(mission.typeScriptGuid));
+            else if (root is EquipmentsConfig equipment)
+                ExportEquipment(equipment, path);
         }
         [MenuItem("Assets/YLFramework/Domain Excel/Preview Import Mission Parameters")]
         private static void ImportParameters()
         {
             var root = SelectedRoot() as MissionsConfig;
-            if (!root) throw new InvalidOperationException("请选择YL Mission配表。");
+            if (!root)
+                throw new InvalidOperationException("请选择YL Mission配表。");
             var path = EditorUtility.OpenFilePanel("预览params工作表", string.Empty, "xlsx");
-            if (path.Length == 0) return;
+            if (path.Length == 0)
+                return;
             var window = ScriptableObject.CreateInstance<ParameterPreview>();
             window.Root = root;
             window.Plan = PreviewParameters(root, path);
@@ -198,9 +243,11 @@ namespace YLFramework.Domain.Excel.Editor
         private static void ExportMissionParameters()
         {
             var root = SelectedRoot() as MissionsConfig;
-            if (!root) throw new InvalidOperationException("请选择YL Mission配表。");
+            if (!root)
+                throw new InvalidOperationException("请选择YL Mission配表。");
             var path = SavePath(root.name + ".params");
-            if (path.Length != 0) ExportParameters(root.param, path);
+            if (path.Length != 0)
+                ExportParameters(root.parameters, path);
         }
 
         private static ScriptableObject SelectedRoot() => Selection.activeObject switch
@@ -217,16 +264,20 @@ namespace YLFramework.Domain.Excel.Editor
         };
         private static void Clean(ScriptableObject root)
         {
-            if (!root || !EditorUtility.IsPersistent(root) || EditorUtility.IsDirty(root)) throw new InvalidOperationException("领域配表必须是已保存且无未保存改动的资产。");
-            if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("退出Play后才能导入领域配表。");
+            if (!root || !EditorUtility.IsPersistent(root) || EditorUtility.IsDirty(root))
+                throw new InvalidOperationException("领域配表必须是已保存且无未保存改动的资产。");
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                throw new InvalidOperationException("退出Play后才能导入领域配表。");
         }
         private static string Folder(string path) => AssetDatabase.IsValidFolder(path) ? path : null;
         private static Type DataType<T>(string guid) where T : ScriptableObject
         {
-            if (string.IsNullOrEmpty(guid)) return typeof(T);
+            if (string.IsNullOrEmpty(guid))
+                return typeof(T);
             var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(guid));
             var type = script ? script.GetClass() : null;
-            if (type == null || type.IsAbstract || !typeof(T).IsAssignableFrom(type)) throw new InvalidOperationException($"领域配表数据类型绑定失效: {guid}");
+            if (type == null || type.IsAbstract || !typeof(T).IsAssignableFrom(type))
+                throw new InvalidOperationException($"领域配表数据类型绑定失效: {guid}");
             return type;
         }
         private static void RequireType<T>(string name, int id)
@@ -238,15 +289,20 @@ namespace YLFramework.Domain.Excel.Editor
         private static string SavePath(string name)
         {
             var path = EditorUtility.SaveFilePanel("导出领域工作簿", string.Empty, name, "xlsx");
-            if (path.Length != 0 && File.Exists(path) && !EditorUtility.DisplayDialog("覆盖整个工作簿", "旧sheet及格式将被替换。Mission参数请导出为独立.params.xlsx文件。\n" + path, "覆盖", "取消")) return string.Empty;
+            if (path.Length != 0 && File.Exists(path) && !EditorUtility.DisplayDialog("覆盖整个工作簿", "旧sheet及格式将被替换。Mission参数请导出为独立.params.xlsx文件。\n" + path, "覆盖", "取消"))
+                return string.Empty;
             return path;
         }
         private static void Invalidate(ScriptableObject root)
         {
-            if (root is SkillsConfig skill) skill.ClearCache();
-            else if (root is BuffsConfig buff) buff.ClearCache();
-            else if (root is MissionsConfig mission) mission.ClearCache();
-            else if (root is EquipmentsConfig equipment) equipment.ClearCache();
+            if (root is SkillsConfig skill)
+                skill.ClearCache();
+            else if (root is BuffsConfig buff)
+                buff.ClearCache();
+            else if (root is MissionsConfig mission)
+                mission.ClearCache();
+            else if (root is EquipmentsConfig equipment)
+                equipment.ClearCache();
         }
 
         private sealed class ParameterPreview : EditorWindow
@@ -257,10 +313,16 @@ namespace YLFramework.Domain.Excel.Editor
             private string _error;
             private void OnGUI()
             {
-                if (Plan == null) { EditorGUILayout.HelpBox("请关闭并重新预览。", MessageType.Info); return; }
+                if (Plan == null)
+                {
+                    EditorGUILayout.HelpBox("请关闭并重新预览。", MessageType.Info);
+                    return;
+                }
                 _scroll = EditorGUILayout.BeginScrollView(_scroll);
-                foreach (var error in Plan.Errors) EditorGUILayout.HelpBox(error, MessageType.Error);
-                if (_error != null) EditorGUILayout.HelpBox(_error, MessageType.Error);
+                foreach (var error in Plan.Errors)
+                    EditorGUILayout.HelpBox(error, MessageType.Error);
+                if (_error != null)
+                    EditorGUILayout.HelpBox(_error, MessageType.Error);
                 foreach (var change in Plan.Changes)
                 {
                     EditorGUILayout.LabelField(change.Kind + ": " + change.Key, EditorStyles.boldLabel);
@@ -283,11 +345,19 @@ namespace YLFramework.Domain.Excel.Editor
                                 Close();
                             }
                         }
-                        catch (Exception error) { _error = error.Message; }
+                        catch (Exception error)
+                        {
+                            _error = error.Message;
+                        }
                     }
-                if (GUILayout.Button("取消")) Close();
+                if (GUILayout.Button("取消"))
+                    Close();
             }
-            private void OnDisable() { Plan?.Dispose(); Plan = null; }
+            private void OnDisable()
+            {
+                Plan?.Dispose();
+                Plan = null;
+            }
         }
     }
 }

@@ -9,64 +9,67 @@ namespace YLFramework.Actions
     /// </remarks>
     public class ScreenTransitionFade : AbstractAction<ScreenTransitionFade>
     {
-        private Color mColor = UnityEngine.Color.black;
-        private float mFromAlpha = 0;
-        private float mToAlpha = 0;
-        private float mDuration = 1.0f;
-        private float mCurrentSeconds = 0;
+        private Color _color = UnityEngine.Color.black;
+        private float _fromAlpha = 0;
+        private float _toAlpha = 0;
+        private float _duration = 1.0f;
+        private float _currentSeconds = 0;
 
         /// <summary>设置遮罩颜色，并返回当前动作。</summary>
         public ScreenTransitionFade Color(Color color)
         {
-            mColor = color;
+            _color = color;
             return this;
         }
 
         /// <summary>设置起始透明度，并返回当前动作。</summary>
         public ScreenTransitionFade FromAlpha(float alpha)
         {
-            mFromAlpha = alpha;
+            _fromAlpha = alpha;
             return this;
         }
 
         /// <summary>设置目标透明度，并返回当前动作。</summary>
         public ScreenTransitionFade ToAlpha(float alpha)
         {
-            mToAlpha = alpha;
+            _toAlpha = alpha;
             return this;
         }
 
         /// <summary>设置过渡时长（秒），并返回当前动作。</summary>
         public ScreenTransitionFade Duration(float duration)
         {
-            mDuration = duration;
+            _duration = duration;
             return this;
         }
 
         /// <summary>启动时应用遮罩颜色与起始透明度，并重置累计时间。</summary>
         public override void OnStart()
         {
-            ScreenTransitionCanvas.Instance.ColorImage.color = mColor;
-            SetAlpha(mFromAlpha);
-            mCurrentSeconds = 0;
+            ScreenTransitionCanvas.Instance.colorImage.color = _color;
+            SetAlpha(_fromAlpha);
+            _currentSeconds = 0;
         }
 
         /// <summary>按时间增量推进透明度，到达时长时标记完成。</summary>
         /// <param name="dt">本次执行的时间增量，单位为秒。</param>
         public override void OnExecute(float dt)
         {
-            mCurrentSeconds += dt;
-            var alpha = Mathf.Lerp(mFromAlpha, mToAlpha, mCurrentSeconds / mDuration);
+            _currentSeconds += dt;
+            var alpha = Mathf.Lerp(_fromAlpha, _toAlpha, _currentSeconds / _duration);
             SetAlpha(alpha);
-            if (mCurrentSeconds >= mDuration) this.Finish();
+            if (_currentSeconds >= _duration)
+            {
+                this.Finish();
+            }
         }
 
         /// <summary>正常完成时将遮罩透明度设为目标值。</summary>
-        public override void OnFinish() => SetAlpha(mToAlpha);
+        public override void OnFinish() => SetAlpha(_toAlpha);
 
         private static void SetAlpha(float alpha)
         {
-            var image = ScreenTransitionCanvas.Instance.ColorImage;
+            var image = ScreenTransitionCanvas.Instance.colorImage;
             var color = image.color;
             color.a = alpha;
             image.color = color;

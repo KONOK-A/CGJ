@@ -1,20 +1,20 @@
 
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace YLFramework.Platform2D
 {
     [RequireComponent(typeof(PlatformCatcher2D))]
     public class MoveablePlatform2D : Moveable
     {
-        private PlatformCatcher2D catcher;
-        private readonly List<RaycastHit2D> snapshot = new List<RaycastHit2D>();
-        private readonly HashSet<Rigidbody2D> movedBodies = new HashSet<Rigidbody2D>();
+        private PlatformCatcher2D _catcher;
+        private readonly List<RaycastHit2D> _snapshot = new List<RaycastHit2D>();
+        private readonly HashSet<Rigidbody2D> _movedBodies = new HashSet<Rigidbody2D>();
 
 
         protected override void Awake()
         {
-            catcher = GetComponent<PlatformCatcher2D>();
+            _catcher = GetComponent<PlatformCatcher2D>();
             base.Awake();
         }
 
@@ -26,16 +26,20 @@ namespace YLFramework.Platform2D
             transform.position = target;
 
             // 带着游戏角色一起移动
-            snapshot.Clear();
-            snapshot.AddRange(catcher.Contacts);
-            movedBodies.Clear();
-            foreach (var item in snapshot)
+            _snapshot.Clear();
+            _snapshot.AddRange(_catcher.Contacts);
+            _movedBodies.Clear();
+            foreach (var item in _snapshot)
             {
-                if (!item.rigidbody || item.rigidbody.transform == transform || item.rigidbody.transform.IsChildOf(transform) || !movedBodies.Add(item.rigidbody)) continue;
+                if (!item.rigidbody || item.rigidbody.transform == transform || item.rigidbody.transform.IsChildOf(transform) || !_movedBodies.Add(item.rigidbody))
+                {
+                    continue;
+                }
+
                 item.rigidbody.position += detal;
             }
-            snapshot.Clear();
-            movedBodies.Clear();
+            _snapshot.Clear();
+            _movedBodies.Clear();
         }
 
 

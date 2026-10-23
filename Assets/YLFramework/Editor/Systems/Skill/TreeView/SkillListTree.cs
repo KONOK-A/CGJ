@@ -1,42 +1,42 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.SkillSystem
 {
 
-    internal class IconGUIContent
+    internal class IconGuiContent
     {
-        public string projectName;
-        public string iconName;
-        public GUIContent content;
+        public string ProjectName;
+        public string IconName;
+        public GUIContent Content;
     }
 
     public class SkillListTree : ReorderableTreeView<SkillConfigData>
     {
 
-        private SkillsConfig skillsConfig;
+        private SkillsConfig _skillsConfig;
 
-        private bool isContextClickItem;
+        private bool _isContextClickItem;
 
-        private Rect icon_rect;
-        private Rect name_rect;
-        private Rect id_rect;
+        private Rect _iconRect;
+        private Rect _nameRect;
+        private Rect _idRect;
 
-        private Dictionary<int, IconGUIContent> contents = new Dictionary<int, IconGUIContent>();
+        private Dictionary<int, IconGuiContent> _contents = new Dictionary<int, IconGuiContent>();
 
-        private GUIStyle label_style;
+        private GUIStyle _labelStyle;
 
-        private Dictionary<int, GUIContent> displayNameContents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _displayNameContents = new Dictionary<int, GUIContent>();
 
 
-        public SkillsConfig SkillsConfig => skillsConfig;
+        public SkillsConfig SkillsConfig => _skillsConfig;
 
 #if UNITY_6000_2_OR_NEWER
         public SkillListTree(TreeViewState<int> state, SkillsConfig skillsConfig) : base(skillsConfig, () => skillsConfig.skills, state)
@@ -45,7 +45,7 @@ namespace YLFramework.SkillSystem
 #endif
 
         {
-            this.skillsConfig = skillsConfig;
+            this._skillsConfig = skillsConfig;
             showBorder = true;
             rowHeight = 25;
         }
@@ -60,11 +60,14 @@ namespace YLFramework.SkillSystem
 
             foreach (var item in datas)
             {
-                if (item == null) continue;
+                if (item == null)
+                {
+                    continue;
+                }
 #if UNITY_6000_2_OR_NEWER
-                TreeViewItem<int> child = new TreeViewItem<int>(item.id, 0, string.Format("{0}-{1}", item.skill_name, item.id));
+                TreeViewItem<int> child = new TreeViewItem<int>(item.id, 0, string.Format("{0}-{1}", item.skillName, item.id));
 #else
-                TreeViewItem child = new TreeViewItem(item.id, 0, string.Format("{0}-{1}", item.skill_name, item.id));
+                TreeViewItem child = new TreeViewItem(item.id, 0, string.Format("{0}-{1}", item.skillName, item.id));
 #endif
                 root.AddChild(child);
             }
@@ -73,34 +76,42 @@ namespace YLFramework.SkillSystem
 
         protected override void RowGUI(RowGUIArgs args)
         {
-            if (skillsConfig == null) return;
-
-            SkillConfigData info = skillsConfig.GetSkillConfigData(args.item.id);
-
-            if (info == null) return;
-
-            icon_rect.Set(0, args.rowRect.y, args.rowRect.height, args.rowRect.height);
-            name_rect.Set(args.rowRect.height, args.rowRect.y, args.rowRect.width - args.rowRect.height - 70, args.rowRect.height);
-
-            id_rect.Set(args.rowRect.width - 70, args.rowRect.y, 70, args.rowRect.height);
-
-            EditorGUI.LabelField(icon_rect, EditorAssetTool.GetTextureGUIContent(info.icon.projectName,info.icon.iconName));
-
-            if (!displayNameContents.ContainsKey(info.id))
-                displayNameContents.Add(info.id, new GUIContent());
-
-            displayNameContents[info.id].text = GetDisplayName(info);
-            displayNameContents[info.id].tooltip = info.description;
-
-            if (label_style == null)
+            if (_skillsConfig == null)
             {
-                label_style = new GUIStyle(EditorStyles.label);
-                label_style.richText = true;
+                return;
             }
 
-            EditorGUI.LabelField(name_rect, displayNameContents[info.id], label_style);
+            SkillConfigData info = _skillsConfig.GetSkillConfigData(args.item.id);
 
-            GUI.Label(id_rect, string.Format("id:{0}", info.id), "AnimationTimelineTick");
+            if (info == null)
+            {
+                return;
+            }
+
+            _iconRect.Set(0, args.rowRect.y, args.rowRect.height, args.rowRect.height);
+            _nameRect.Set(args.rowRect.height, args.rowRect.y, args.rowRect.width - args.rowRect.height - 70, args.rowRect.height);
+
+            _idRect.Set(args.rowRect.width - 70, args.rowRect.y, 70, args.rowRect.height);
+
+            EditorGUI.LabelField(_iconRect, EditorAssetTool.GetTextureGuiContent(info.icon.projectName, info.icon.iconName));
+
+            if (!_displayNameContents.ContainsKey(info.id))
+            {
+                _displayNameContents.Add(info.id, new GUIContent());
+            }
+
+            _displayNameContents[info.id].text = GetDisplayName(info);
+            _displayNameContents[info.id].tooltip = info.description;
+
+            if (_labelStyle == null)
+            {
+                _labelStyle = new GUIStyle(EditorStyles.label);
+                _labelStyle.richText = true;
+            }
+
+            EditorGUI.LabelField(_nameRect, _displayNameContents[info.id], _labelStyle);
+
+            GUI.Label(_idRect, string.Format("id:{0}", info.id), "AnimationTimelineTick");
 
             GUI.Box(args.rowRect, string.Empty, "CN Box");
         }
@@ -119,9 +130,9 @@ namespace YLFramework.SkillSystem
         {
             base.ContextClicked();
 
-            if (isContextClickItem)
+            if (_isContextClickItem)
             {
-                isContextClickItem = false;
+                _isContextClickItem = false;
                 return;
             }
 
@@ -132,7 +143,7 @@ namespace YLFramework.SkillSystem
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
-            isContextClickItem = true;
+            _isContextClickItem = true;
 
             GenericMenu menu = new GenericMenu();
             menu.AddItem(new GUIContent("删除"), false, () =>
@@ -157,7 +168,11 @@ namespace YLFramework.SkillSystem
                 foreach (var item in selects)
                 {
                     int id = CopySkill(item);
-                    if (id == -1) continue;
+                    if (id == -1)
+                    {
+                        continue;
+                    }
+
                     ids.Add(id);
                 }
 
@@ -173,7 +188,7 @@ namespace YLFramework.SkillSystem
 
         private void CreateSkill(GenericMenu menu)
         {
-            Type parent = skillsConfig.GetDataType();
+            Type parent = _skillsConfig.GetDataType();
 
             //Debug.Log(parent.FullName);
 
@@ -184,16 +199,20 @@ namespace YLFramework.SkillSystem
             {
                 string name = string.Format("创建技能/{0}", item.Name);
                 if (!string.IsNullOrEmpty(item.Namespace))
+                {
                     name = string.Format("{0}-{1}", name, item.Namespace);
+                }
 
                 if (item == typeof(SkillConfigData))
+                {
                     name = "创建技能/基础配置";
+                }
 
                 GUIContent content = new GUIContent(name);
 
                 menu.AddItem(content, false, () =>
                 {
-                    int id = SkillsConfigController.CreateSkillConfigData(item, skillsConfig);
+                    int id = SkillsConfigController.CreateSkillConfigData(item, _skillsConfig);
                     SetSelection(new int[] { id });
                 });
             }
@@ -204,45 +223,61 @@ namespace YLFramework.SkillSystem
 
         private void DeleteSkill(int id)
         {
-            if (skillsConfig == null) return;
+            if (_skillsConfig == null)
+            {
+                return;
+            }
 
-            SkillConfigData data = skillsConfig.GetSkillConfigData(id);
-            if (data == null) return;
+            SkillConfigData data = _skillsConfig.GetSkillConfigData(id);
+            if (data == null)
+            {
+                return;
+            }
 
-            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(skillsConfig, skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(skillsConfig));
-            skillsConfig.ClearCache();
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_skillsConfig, _skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(_skillsConfig));
+            _skillsConfig.ClearCache();
             Reload();
         }
 
         private int CopySkill(int id)
         {
-            if (skillsConfig == null) return -1;
+            if (_skillsConfig == null)
+            {
+                return -1;
+            }
 
-            SkillConfigData data = skillsConfig.GetSkillConfigData(id);
-            if (data == null) return -1;
+            SkillConfigData data = _skillsConfig.GetSkillConfigData(id);
+            if (data == null)
+            {
+                return -1;
+            }
 
             SkillConfigData skillConfigData = GameObject.Instantiate(data);
-            int new_id = SkillsConfigController.CreateSkillConfigData(skillConfigData, skillsConfig);
-            skillConfigData.skill_name = SkillsConfigController.GetCopyName(data.skill_name,skillsConfig);
-            return new_id;
+            int newId = SkillsConfigController.CreateSkillConfigData(skillConfigData, _skillsConfig);
+            skillConfigData.skillName = SkillsConfigController.GetCopyName(data.skillName, _skillsConfig);
+            return newId;
         }
 
 
         protected override void RefreshDatas()
         {
             base.RefreshDatas();
-            if(skillsConfig != null)
-                skillsConfig.ClearCache();
+            if (_skillsConfig != null)
+            {
+                _skillsConfig.ClearCache();
+            }
         }
 
-        protected override int GetItemIndex(int id) => skillsConfig.skills.FindIndex(data => data && data.id == id);
+        protected override int GetItemIndex(int id) => _skillsConfig.skills.FindIndex(data => data && data.id == id);
 
         private string GetDisplayName(SkillConfigData skillConfigData)
         {
             if (string.IsNullOrEmpty(skillConfigData.description))
-                return skillConfigData.skill_name;
+            {
+                return skillConfigData.skillName;
+            }
 
-            return string.Format("{0}(<color=grey>{1}</color>)",skillConfigData.skill_name,skillConfigData.description.Replace("\n",string.Empty));
+            return string.Format("{0}(<color=grey>{1}</color>)", skillConfigData.skillName, skillConfigData.description.Replace("\n", string.Empty));
         }
 
     }

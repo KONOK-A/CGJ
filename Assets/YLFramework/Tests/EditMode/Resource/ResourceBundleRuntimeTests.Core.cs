@@ -26,28 +26,56 @@ namespace YLFramework.Tests.ResourceBuild
             var folder = fixture.Folder + "/Content";
             var prefabPath = folder + "/A.prefab";
             var prefab = PrefabUtility.LoadPrefabContents(prefabPath);
-            try { prefab.AddComponent<YLCoreSmokeView>(); PrefabUtility.SaveAsPrefabAsset(prefab, prefabPath); }
-            finally { PrefabUtility.UnloadPrefabContents(prefab); }
+            try
+            {
+                prefab.AddComponent<YLCoreSmokeView>();
+                PrefabUtility.SaveAsPrefabAsset(prefab, prefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(prefab);
+            }
             var panel = new GameObject("Core86Panel", typeof(RectTransform), typeof(YLCoreSmokePanel));
-            try { PrefabUtility.SaveAsPrefabAsset(panel, folder + "/Core86Panel.prefab"); }
-            finally { Object.DestroyImmediate(panel); }
+            try
+            {
+                PrefabUtility.SaveAsPrefabAsset(panel, folder + "/Core86Panel.prefab");
+            }
+            finally
+            {
+                Object.DestroyImmediate(panel);
+            }
             File.WriteAllText(folder + "/Core86Rows.json", YLCoreSmokeModule.Json);
             AssetDatabase.ImportAsset(folder + "/Core86Rows.json", ImportAssetOptions.ForceSynchronousImport);
             foreach (var path in new[] { folder + "/Core86Panel.prefab", folder + "/Core86Rows.json" })
-                fixture.Project.Groups.Add(new ResourceGroup { Id = Path.GetFileNameWithoutExtension(path),
-                    Selections = new List<ResourceSelection> { new() { Guid = AssetDatabase.AssetPathToGUID(path) } } });
+            {
+                fixture.Project.groups.Add(new ResourceGroup
+                {
+                    id = Path.GetFileNameWithoutExtension(path),
+                    selections = new List<ResourceSelection> { new() { guid = AssetDatabase.AssetPathToGUID(path) } }
+                });
+            }
+
             var scene = EditorSceneManager.OpenScene(folder + "/Owned.unity", OpenSceneMode.Additive);
             try
             {
                 scene.GetRootGameObjects().Single().AddComponent<YLCoreSmokeView>();
                 Assert.That(EditorSceneManager.SaveScene(scene), Is.True);
             }
-            finally { EditorSceneManager.CloseScene(scene, true); }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
             AssetDatabase.CreateFolder(folder, "Resources");
             var fallbackName = "YLCore86Base-" + Guid.NewGuid().ToString("N");
             var fallback = new GameObject("Core86BaseFallback", typeof(YLCoreSmokeView));
-            try { PrefabUtility.SaveAsPrefabAsset(fallback, folder + "/Resources/" + fallbackName + ".prefab"); }
-            finally { Object.DestroyImmediate(fallback); }
+            try
+            {
+                PrefabUtility.SaveAsPrefabAsset(fallback, folder + "/Resources/" + fallbackName + ".prefab");
+            }
+            finally
+            {
+                Object.DestroyImmediate(fallback);
+            }
             SessionState.SetString(Key + "core86fallback", fallbackName);
             EditorUtility.SetDirty(fixture.Project);
             AssetDatabase.SaveAssetIfDirty(fixture.Project);
@@ -91,16 +119,16 @@ namespace YLFramework.Tests.ResourceBuild
                 var canceled = consumer.LoadViewAsync<YLCoreSmokeView>("A.prefab", loadViewArgs: null);
                 canceled.Abort();
                 var joined = consumer.LoadViewAsync<YLCoreSmokeView>("A.prefab", loadViewArgs: null);
-                yield return UntilScene85(() => joined.isDone && pending.Status != CoreResourceStatus.Pending);
+                yield return UntilScene85(() => joined.IsDone && pending.Status != CoreResourceStatus.Pending);
                 Assert.That(canceled.Status, Is.EqualTo(LoadViewStatus.Canceled));
-                Assert.That(joined.Status, Is.EqualTo(LoadViewStatus.Succeeded), joined.error);
-                Assert.That(joined.view.gameObject.name, Is.EqualTo("A(Clone)"));
+                Assert.That(joined.Status, Is.EqualTo(LoadViewStatus.Succeeded), joined.Error);
+                Assert.That(joined.View.gameObject.name, Is.EqualTo("A(Clone)"));
                 Assert.That(consumer.GetViews<YLCoreSmokeView>().Count, Is.EqualTo(1), "Canceled/late producers must not create extra instances.");
                 using var prefab = pending.TakeResult();
                 pending.Dispose();
                 Assert.That(prefab.IsValid, Is.True, "Taking transfers ownership out of the request.");
-                var texture = joined.view.GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
-                var first = joined.view;
+                var texture = joined.View.GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
+                var first = joined.View;
                 first.Close();
                 Assert.That(consumer.LoadView<YLCoreSmokeView>("A.prefab", loadViewArgs: null), Is.SameAs(first));
                 Assert.That(texture == null, Is.False);
@@ -110,19 +138,26 @@ namespace YLFramework.Tests.ResourceBuild
                 try
                 {
                     var panelRequest = consumer.LoadPanelAsync<YLCoreSmokePanel>("Core86Panel.prefab", root: panelRoot);
-                    yield return UntilScene85(() => panelRequest.isDone);
-                    Assert.That(panelRequest.Status, Is.EqualTo(LoadViewStatus.Succeeded), panelRequest.error);
-                    var panel = panelRequest.panel;
+                    yield return UntilScene85(() => panelRequest.IsDone);
+                    Assert.That(panelRequest.Status, Is.EqualTo(LoadViewStatus.Succeeded), panelRequest.Error);
+                    var panel = panelRequest.Panel;
                     panel.Close();
                     Assert.That(consumer.LoadPanel<YLCoreSmokePanel>("Core86Panel.prefab", root: panelRoot), Is.SameAs(panel));
                     consumer.Close();
                     Assert.That(panel.Module, Is.Null);
                 }
-                finally { Object.Destroy(parent); }
+                finally
+                {
+                    Object.Destroy(parent);
+                }
                 held = prefab.Instantiate(null, SceneManager.GetActiveScene());
                 prefab.Dispose();
                 system.ClearInstanceCaches();
-                using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+                using (var busy = system.ShutdownAsync())
+                {
+                    Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+                }
+
                 Assert.That(held.IsValid, Is.True);
                 Assert.That(texture == null, Is.False, "Retired active checkout pins dependencies.");
                 held.Discard();
@@ -172,13 +207,13 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(request.Status, Is.EqualTo(CoreResourceStatus.Pending), "This must execute a cold native request.");
                     request.Completed += _ =>
                     {
-                        Assert.That(typeof(LoadViewRequest<YLCoreSmokeView>).GetField("resourceRequest", BindingFlags.Instance | BindingFlags.NonPublic)
+                        Assert.That(typeof(LoadViewRequest<YLCoreSmokeView>).GetField("_resourceRequest", BindingFlags.Instance | BindingFlags.NonPublic)
                             .GetValue(aborted), Is.SameAs(request), "Core must already own and await this native result.");
                         aborted.Abort();
                     };
                 };
                 aborted = module.LoadViewAsync<YLCoreSmokeView>("A.prefab", loadViewArgs: null);
-                yield return UntilScene85(() => aborted.isDone);
+                yield return UntilScene85(() => aborted.IsDone);
                 Assert.That(aborted.Status, Is.EqualTo(LoadViewStatus.Canceled));
                 Assert.That(captured.IsDisposed, Is.True);
                 Assert.That(module.GetViews<View>(), Is.Empty);
@@ -190,13 +225,13 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(request.Status, Is.EqualTo(CoreResourceStatus.Pending));
                     request.Completed += _ =>
                     {
-                        var operation = typeof(LoadPanelRequest<YLCoreSmokePanel>).GetField("operation", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(invalidated);
-                        Assert.That(operation.GetType().GetField("resource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(operation), Is.SameAs(request));
+                        var operation = typeof(LoadPanelRequest<YLCoreSmokePanel>).GetField("_operation", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(invalidated);
+                        Assert.That(operation.GetType().GetField("_resource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(operation), Is.SameAs(request));
                         module.Close();
                     };
                 };
                 invalidated = module.LoadPanelAsync<YLCoreSmokePanel>("Core86Panel.prefab");
-                yield return UntilScene85(() => invalidated.isDone);
+                yield return UntilScene85(() => invalidated.IsDone);
                 Assert.That(invalidated.Status, Is.EqualTo(LoadViewStatus.Invalidated));
                 Assert.That(captured.IsDisposed, Is.True);
                 yield return Scene85Drained(system);
@@ -216,24 +251,29 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
                 Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
             }
-            finally { module.Close(); CoreResourceAccess.Unbind(observed); Object.Destroy(panelHost); }
+            finally
+            {
+                module.Close();
+                CoreResourceAccess.Unbind(observed);
+                Object.Destroy(panelHost);
+            }
         }
 
         private sealed class ObservedCoreProvider : ICoreResourceProvider
         {
-            private readonly ICoreResourceProvider inner;
+            private readonly ICoreResourceProvider _inner;
             internal Action<CoreResourceRequest<CorePrefabLease>> OnRequest;
-            internal ObservedCoreProvider(ICoreResourceProvider inner) => this.inner = inner;
-            public CoreResourceRequest<string> ReadTextAsync(string projectId, string address) => inner.ReadTextAsync(projectId, address);
-            public CorePrefabLease AcquirePrefab(string projectId, string address) => inner.AcquirePrefab(projectId, address);
+            internal ObservedCoreProvider(ICoreResourceProvider inner) => this._inner = inner;
+            public CoreResourceRequest<string> ReadTextAsync(string projectId, string address) => _inner.ReadTextAsync(projectId, address);
+            public CorePrefabLease AcquirePrefab(string projectId, string address) => _inner.AcquirePrefab(projectId, address);
             public CoreResourceRequest<CorePrefabLease> AcquirePrefabAsync(string projectId, string address)
             {
-                var request = inner.AcquirePrefabAsync(projectId, address);
+                var request = _inner.AcquirePrefabAsync(projectId, address);
                 OnRequest?.Invoke(request);
                 return request;
             }
             public CoreResourceRequest<CoreSceneResult> LoadSceneAsync(string projectId, string address, LoadSceneMode mode)
-                => inner.LoadSceneAsync(projectId, address, mode);
+                => _inner.LoadSceneAsync(projectId, address, mode);
         }
 
         [UnityTest]
@@ -258,8 +298,8 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 var startup = YLFramework.Core.ModuleManager.StartUpModule(module);
-                yield return UntilScene85(() => startup.isDone);
-                Assert.That(startup.error, Is.Null.Or.Empty);
+                yield return UntilScene85(() => startup.IsDone);
+                Assert.That(startup.Error, Is.Null.Or.Empty);
                 Assert.That(module.ReadyAtStart, Is.True);
                 var scene = SceneManager.GetSceneByPath(snapshot.Document.Assets.Single(a => a.Address == "Owned.unity").LoadName);
                 Assert.That(scene.IsValid() && scene.isLoaded, Is.True);
@@ -269,27 +309,40 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(row.ExitCount, Is.EqualTo(1));
                 Assert.That(row.Module, Is.Null);
                 Assert.That(scene.isLoaded && texture, Is.True, "Core shutdown does not own native scene unload.");
-                using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+                using (var busy = system.ShutdownAsync())
+                {
+                    Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+                }
+
                 module.WithScene = false;
                 startup = YLFramework.Core.ModuleManager.StartUpModule(module);
-                yield return UntilScene85(() => startup.isDone);
-                Assert.That(startup.error, Is.Null.Or.Empty);
+                yield return UntilScene85(() => startup.IsDone);
+                Assert.That(startup.Error, Is.Null.Or.Empty);
                 Assert.That(module.StartCount, Is.EqualTo(2));
                 module.Close();
                 SceneManager.CreateScene("Core86.NativeSceneExit");
                 var unload = SceneManager.UnloadSceneAsync(scene);
-                while (!unload.isDone) yield return null;
+                while (!unload.isDone)
+                {
+                    yield return null;
+                }
+
                 yield return Scene85Drained(system);
                 using var shutdown = system.ShutdownAsync();
                 yield return Wait(shutdown);
                 Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
             }
-            finally { module.Close(); YLCoreSmokeRow.InitAction = null; }
+            finally
+            {
+                module.Close();
+                YLCoreSmokeRow.InitAction = null;
+            }
         }
 
         public class Core86Module : YLFramework.Core.Module
         {
-            public bool WithTables, WithScene;
+            public bool WithTables;
+            public bool WithScene;
             public int StartCount;
             public bool ReadyAtStart;
             public override string DefaultStartUpScene => WithScene ? "Owned.unity" : string.Empty;
@@ -306,7 +359,7 @@ namespace YLFramework.Tests.ResourceBuild
         public sealed class Core86BaseModule : Core86Module
         {
             public bool AllowClose;
-            public override bool BaseModule => !AllowClose;
+            public override bool IsBaseModule => !AllowClose;
         }
     }
 }

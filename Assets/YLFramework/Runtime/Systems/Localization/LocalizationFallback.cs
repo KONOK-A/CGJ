@@ -9,11 +9,18 @@ namespace YLFramework.Localization
     {
         public static T Find<T>(SystemLanguage requested, IEnumerable<SystemLanguage> registered, Func<SystemLanguage, T> lookup) where T : class
         {
-            if (lookup == null) throw new ArgumentNullException(nameof(lookup));
+            if (lookup == null)
+            {
+                throw new ArgumentNullException(nameof(lookup));
+            }
+
             foreach (var candidate in GetCandidates(requested, registered))
             {
                 var value = lookup(candidate);
-                if (value != null) return value;
+                if (value != null)
+                {
+                    return value;
+                }
             }
             return null;
         }
@@ -22,16 +29,38 @@ namespace YLFramework.Localization
         {
             var result = new List<SystemLanguage>();
             Add(requested);
-            if (requested == SystemLanguage.ChineseSimplified) { Add(SystemLanguage.Chinese); Add(SystemLanguage.ChineseTraditional); }
-            else if (requested == SystemLanguage.ChineseTraditional) { Add(SystemLanguage.Chinese); Add(SystemLanguage.ChineseSimplified); }
-            else if (requested == SystemLanguage.Chinese) { Add(SystemLanguage.ChineseSimplified); Add(SystemLanguage.ChineseTraditional); }
+            if (requested == SystemLanguage.ChineseSimplified)
+            {
+                Add(SystemLanguage.Chinese);
+                Add(SystemLanguage.ChineseTraditional);
+            }
+            else if (requested == SystemLanguage.ChineseTraditional)
+            {
+                Add(SystemLanguage.Chinese);
+                Add(SystemLanguage.ChineseSimplified);
+            }
+            else if (requested == SystemLanguage.Chinese)
+            {
+                Add(SystemLanguage.ChineseSimplified);
+                Add(SystemLanguage.ChineseTraditional);
+            }
             Add(SystemLanguage.English);
-            if (registered != null) foreach (var language in registered) Add(language);
+            if (registered != null)
+            {
+                foreach (var language in registered)
+                {
+                    Add(language);
+                }
+            }
+
             return result;
 
             void Add(SystemLanguage language)
             {
-                if (language != SystemLanguage.Unknown && !result.Contains(language)) result.Add(language);
+                if (language != SystemLanguage.Unknown && !result.Contains(language))
+                {
+                    result.Add(language);
+                }
             }
         }
     }

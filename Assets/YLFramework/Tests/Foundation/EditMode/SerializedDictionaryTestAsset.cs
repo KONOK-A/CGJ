@@ -4,7 +4,9 @@ using UnityEngine;
 namespace YLFramework.Foundation.Tests
 {
     [Serializable]
-    public class StringIntDictionary : SerializedDictionary<string, int> { }
+    public class StringIntDictionary : SerializedDictionary<string, int>
+    {
+    }
 
     [Serializable]
     public class DictionaryTestValue

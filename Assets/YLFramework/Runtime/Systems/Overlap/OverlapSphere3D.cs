@@ -39,25 +39,36 @@ namespace YLFramework.Overlap
         // Fix编码
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 Vector3 scale = transform.lossyScale;
                 float r = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)) * radius;
-                int count = Physics.OverlapSphereNonAlloc(transform.position, r, results, layerMask.value);
+                int count = Physics.OverlapSphereNonAlloc(transform.position, r, ResultBuffer, layerMask.value);
 
                 ClearResults();
 
                 CheckCapacity(count);
-                for (int i = 0; i < count && !CheckInvalidated; i++)
+                for (int i = 0; i < count && !IsCheckInvalidated; i++)
                 {
-                    if (!results[i] || results[i].isTrigger) continue;
-                    AddResults(results[i], transform.position);
+                    if (!ResultBuffer[i] || ResultBuffer[i].isTrigger)
+                    {
+                        continue;
+                    }
+
+                    AddResults(ResultBuffer[i], transform.position);
                 }
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
         }
 
 

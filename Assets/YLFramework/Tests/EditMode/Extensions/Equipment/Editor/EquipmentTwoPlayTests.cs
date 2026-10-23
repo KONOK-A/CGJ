@@ -14,32 +14,44 @@ namespace YLFramework.Tests.Extensions.Equipment
 {
     public class EquipmentTwoPlayTests
     {
-        private SceneSetup[] scenes;
-        private string folder;
-        private bool reloadEnabled;
-        private EnterPlayModeOptions reloadOptions;
+        private SceneSetup[] _scenes;
+        private string _folder;
+        private bool _wasReloadEnabled;
+        private EnterPlayModeOptions _reloadOptions;
 
         [SetUp]
         public void Prepare()
         {
-            scenes = EditorSceneManager.GetSceneManagerSetup();
-            reloadEnabled = EditorSettings.enterPlayModeOptionsEnabled;
-            reloadOptions = EditorSettings.enterPlayModeOptions;
+            _scenes = EditorSceneManager.GetSceneManagerSetup();
+            _wasReloadEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            _reloadOptions = EditorSettings.enterPlayModeOptions;
             var parent = "Assets/YLFramework/Tests/Fixtures/Extensions";
-            var name = "EqTwoPlay-" + Guid.NewGuid().ToString("N"); folder = parent + "/" + name;
+            var name = "EqTwoPlay-" + Guid.NewGuid().ToString("N");
+            _folder = parent + "/" + name;
             AssetDatabase.CreateFolder(parent, name);
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            EditorSceneManager.SaveScene(scene, folder + "/Empty.unity");
+            EditorSceneManager.SaveScene(scene, _folder + "/Empty.unity");
         }
 
         [UnityTearDown]
         public IEnumerator Restore()
         {
-            if (EditorApplication.isPlaying) yield return new ExitPlayMode();
-            EditorSettings.enterPlayModeOptions = reloadOptions;
-            EditorSettings.enterPlayModeOptionsEnabled = reloadEnabled;
-            if (scenes != null) EditorSceneManager.RestoreSceneManagerSetup(scenes);
-            if (folder != null) AssetDatabase.DeleteAsset(folder);
+            if (EditorApplication.isPlaying)
+            {
+                yield return new ExitPlayMode();
+            }
+
+            EditorSettings.enterPlayModeOptions = _reloadOptions;
+            EditorSettings.enterPlayModeOptionsEnabled = _wasReloadEnabled;
+            if (_scenes != null)
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(_scenes);
+            }
+
+            if (_folder != null)
+            {
+                AssetDatabase.DeleteAsset(_folder);
+            }
         }
 
         private sealed class Source : IResourceSource
@@ -48,7 +60,9 @@ namespace YLFramework.Tests.Extensions.Equipment
             public bool SupportsSynchronousLoad => true;
             internal EquipmentsConfig Root;
             internal int Releases;
-            public void Validate(ResourceCatalogEntry entry) { }
+            public void Validate(ResourceCatalogEntry entry)
+            {
+            }
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => new(Root);
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => throw new NotSupportedException();
             public void Release(Object asset) => Releases++;
@@ -60,23 +74,28 @@ namespace YLFramework.Tests.Extensions.Equipment
             try
             {
                 EditorSettings.enterPlayModeOptionsEnabled = true;
-                EditorSettings.enterPlayModeOptions = reloadOptions | EnterPlayModeOptions.DisableDomainReload;
+                EditorSettings.enterPlayModeOptions = _reloadOptions | EnterPlayModeOptions.DisableDomainReload;
                 for (var round = 0; round < 2; round++)
                 {
                     yield return new EnterPlayMode(false);
                     Assert.That(EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload, Is.Not.Zero);
                     Assert.That(EquipmentManager.GetConfig("Equipment.TwoPlay"), Is.Null);
                     Assert.That(ResourceSystem.Current, Is.Null);
-                    var root = ScriptableObject.CreateInstance<EquipmentsConfig>(); root.name = "Equipment.TwoPlay";
+                    var root = ScriptableObject.CreateInstance<EquipmentsConfig>();
+                    root.name = "Equipment.TwoPlay";
                     var row = ScriptableObject.CreateInstance<EquipmentConfigData>();
-                    row.id = 1001; row.parent = root; row.equipmentType = EquipmentType.Script;
-                    row.equipment_class_full_name = typeof(EquipmentLifecycleTests.Probe).FullName; root.Equipments.Add(row);
+                    row.id = 1001;
+                    row.parent = root;
+                    row.equipmentType = EquipmentType.Script;
+                    row.equipmentClassFullName = typeof(EquipmentLifecycleTests.Probe).FullName;
+                    root.Equipments.Add(row);
                     var source = new Source { Root = root };
                     var address = new ResourceAddress("eq-two-play", "root");
                     using (var init = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { new ResourceCatalog("eq-two-play", new[] {
                         new ResourceCatalogEntry("root", address, new ResourceLocation(source.Id, "root", typeof(EquipmentsConfig))) }) }, new IResourceSource[] { source })))
                     {
-                        var system = init.TakeResult(); EquipmentManager.LoadConfig(system, address);
+                        var system = init.TakeResult();
+                        EquipmentManager.LoadConfig(system, address);
                     }
                     var host = new EquipmentLifecycleTests.Host();
                     var attached = (EquipmentLifecycleTests.Probe)EquipmentManager.CreateAndEquip(host, 1001);
@@ -85,14 +104,29 @@ namespace YLFramework.Tests.Extensions.Equipment
                     EquipmentManager.Equip(host, borrowed);
                     yield return new ExitPlayMode();
                     Assert.That(host.Equipments, Is.Empty, "round " + round);
-                    Assert.That(attached.Unloads, Is.EqualTo(1)); Assert.That(detached.Unloads, Is.EqualTo(1));
-                    Assert.That(borrowed.Unloads, Is.Zero); Assert.That(borrowed.UnEquips, Is.EqualTo(1));
+                    Assert.That(attached.Unloads, Is.EqualTo(1));
+                    Assert.That(detached.Unloads, Is.EqualTo(1));
+                    Assert.That(borrowed.Unloads, Is.Zero);
+                    Assert.That(borrowed.UnEquips, Is.EqualTo(1));
                     Assert.That(EquipmentManager.GetConfig("Equipment.TwoPlay"), Is.Null);
-                    Assert.That(ResourceSystem.Current, Is.Null); Assert.That(source.Releases, Is.EqualTo(1));
-                    if (row) Object.DestroyImmediate(row); if (root) Object.DestroyImmediate(root);
+                    Assert.That(ResourceSystem.Current, Is.Null);
+                    Assert.That(source.Releases, Is.EqualTo(1));
+                    if (row)
+                    {
+                        Object.DestroyImmediate(row);
+                    }
+
+                    if (root)
+                    {
+                        Object.DestroyImmediate(root);
+                    }
                 }
             }
-            finally { EditorSettings.enterPlayModeOptions = reloadOptions; EditorSettings.enterPlayModeOptionsEnabled = reloadEnabled; }
+            finally
+            {
+                EditorSettings.enterPlayModeOptions = _reloadOptions;
+                EditorSettings.enterPlayModeOptionsEnabled = _wasReloadEnabled;
+            }
         }
     }
 }

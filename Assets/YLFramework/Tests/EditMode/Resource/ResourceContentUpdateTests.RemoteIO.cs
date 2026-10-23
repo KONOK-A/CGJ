@@ -26,14 +26,29 @@ namespace YLFramework.Tests.ResourceBuild
             var document = snapshot.Document;
             var catalog = ResourceCatalogCodec.Write(document);
             var complete = File.ReadAllBytes(Path.Combine(snapshot.DirectoryPath, ".ylr-complete.json"));
-            var payload = new JObject { ["ProjectId"] = document.ProjectId, ["Platform"] = document.Platform,
-                ["UnityCompatibility"] = document.UnityCompatibility, ["AppContentCompatibilityId"] = document.AppContentCompatibilityId,
-                ["Channel"] = "isolated", ["ReleaseSequence"] = 1, ["IssuedUnixSeconds"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 60,
-                ["ExpiresUnixSeconds"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600, ["BuildId"] = document.BuildId,
-                ["CatalogDigest"] = document.CatalogDigest, ["CatalogLength"] = catalog.Length,
-                ["CompleteLength"] = complete.Length, ["CompleteSha256"] = ResourceCatalogCodec.Digest(complete) };
-            var envelope = new JObject { ["SchemaVersion"] = 1, ["Algorithm"] = "RSA-SHA256-PKCS1", ["KeyId"] = "test-signing",
-                ["Payload"] = Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(payload)) };
+            var payload = new JObject
+            {
+                ["ProjectId"] = document.ProjectId,
+                ["Platform"] = document.Platform,
+                ["UnityCompatibility"] = document.UnityCompatibility,
+                ["AppContentCompatibilityId"] = document.AppContentCompatibilityId,
+                ["Channel"] = "isolated",
+                ["ReleaseSequence"] = 1,
+                ["IssuedUnixSeconds"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 60,
+                ["ExpiresUnixSeconds"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600,
+                ["BuildId"] = document.BuildId,
+                ["CatalogDigest"] = document.CatalogDigest,
+                ["CatalogLength"] = catalog.Length,
+                ["CompleteLength"] = complete.Length,
+                ["CompleteSha256"] = ResourceCatalogCodec.Digest(complete)
+            };
+            var envelope = new JObject
+            {
+                ["SchemaVersion"] = 1,
+                ["Algorithm"] = "RSA-SHA256-PKCS1",
+                ["KeyId"] = "test-signing",
+                ["Payload"] = Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(payload))
+            };
             envelope["Signature"] = Convert.ToBase64String(key.SignData(ResourceCatalogCodec.CanonicalBytes(envelope), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
             var mount = fixture.Store.Projects.Single();
             var release = new ResourceRemoteRelease(ResourceCatalogCodec.CanonicalBytes(envelope), mount, Application.unityVersion, DateTimeOffset.UtcNow);
@@ -44,7 +59,11 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void RemoteInstalledReuseDispatchesFullIOWithoutAnyNetworkOrMainThreadHash()
         {
-            if (Application.platform != RuntimePlatform.WindowsEditor) Assert.Ignore("The remote runtime platform gate remains Windows Editor only.");
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+            {
+                Assert.Ignore("The remote runtime platform gate remains Windows Editor only.");
+            }
+
             using var key = new RSACryptoServiceProvider(2048) { PersistKeyInCsp = false };
             using var fixture = new UpdateFixture(remote: RemoteSource(key));
             var target = fixture.Create("already-installed");
@@ -55,7 +74,11 @@ namespace YLFramework.Tests.ResourceBuild
             var ioThreads = new List<int>();
             IEnumerator Dispatch(Action<CancellationToken> action)
             {
-                RunIOWorker(token => { ioThreads.Add(Thread.CurrentThread.ManagedThreadId); action(token); });
+                RunIOWorker(token =>
+                {
+                    ioThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                    action(token);
+                });
                 yield break;
             }
             var stack = new Stack<IEnumerator>();
@@ -65,12 +88,28 @@ namespace YLFramework.Tests.ResourceBuild
                 while (stack.Count != 0)
                 {
                     var routine = stack.Peek();
-                    if (!routine.MoveNext()) { stack.Pop(); (routine as IDisposable)?.Dispose(); }
-                    else if (routine.Current is IEnumerator child) stack.Push(child);
-                    else Assert.Fail("Installed reuse must not perform a network GET.");
+                    if (!routine.MoveNext())
+                    {
+                        stack.Pop();
+                        (routine as IDisposable)?.Dispose();
+                    }
+                    else if (routine.Current is IEnumerator child)
+                    {
+                        stack.Push(child);
+                    }
+                    else
+                    {
+                        Assert.Fail("Installed reuse must not perform a network GET.");
+                    }
                 }
             }
-            finally { while (stack.Count != 0) (stack.Pop() as IDisposable)?.Dispose(); }
+            finally
+            {
+                while (stack.Count != 0)
+                {
+                    (stack.Pop() as IDisposable)?.Dispose();
+                }
+            }
             Assert.That(ioThreads.Count, Is.EqualTo(2), "Both From retention and signed installed-To revalidation go through the supplied IO dispatcher.");
             Assert.That(ioThreads.All(x => x != mainThread), Is.True);
             Assert.That(fixture.Store.GetPreparedUpdates().Count, Is.EqualTo(1), "Installation alone cannot create a second Prepared authorization.");
@@ -102,7 +141,11 @@ namespace YLFramework.Tests.ResourceBuild
         [TestCase(true)]
         public void RemoteCheckUsesReadOnlyWorkerForReusableAndInstalledDeliveryBytesWithoutKeys(bool installed)
         {
-            if (installed) RequireEncryptedBackend();
+            if (installed)
+            {
+                RequireEncryptedBackend();
+            }
+
             using var key = new RSACryptoServiceProvider(2048) { PersistKeyInCsp = false };
             using var fixture = new UpdateFixture(remote: RemoteSource(key));
             var target = installed ? fixture.Create("installed-ciphertext", encrypted: true, corruptMiddle: true) : fixture.BuiltIn;
@@ -122,11 +165,14 @@ namespace YLFramework.Tests.ResourceBuild
                 files = fixture.Store.CheckRemoteFilesForContent(fixture.BuiltIn, release, token);
             });
             Assert.That(checkThread, Is.Not.EqualTo(mainThread));
-            if (installed) Assert.That(files, Is.Empty, "Signed installed delivery revalidation does not imply AEAD/key availability.");
+            if (installed)
+            {
+                Assert.That(files, Is.Empty, "Signed installed delivery revalidation does not imply AEAD/key availability.");
+            }
             else
             {
                 Assert.That(files, Is.Not.Empty);
-                Assert.That(files.All(x => x.Reusable), Is.True);
+                Assert.That(files.All(x => x.IsReusable), Is.True);
             }
             Assert.That(ReadStoreTree(fixture.Store.RootPath), Is.EqualTo(before));
             Assert.That(File.Exists(Path.Combine(fixture.Store.RootPath, ".ylr-store.lock")), Is.False);
@@ -143,7 +189,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Directory.Exists(fixture.Store.RootPath), Is.False);
             IReadOnlyList<UpdateFile> files = null;
             RunIOWorker(token => files = fixture.Store.CheckRemoteFilesForContent(fixture.BuiltIn, release, token));
-            Assert.That(files.All(x => x.Reusable), Is.True);
+            Assert.That(files.All(x => x.IsReusable), Is.True);
             Assert.That(Directory.Exists(fixture.Store.RootPath), Is.False);
         }
     }

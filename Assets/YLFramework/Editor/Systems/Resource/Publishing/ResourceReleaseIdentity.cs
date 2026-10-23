@@ -26,17 +26,34 @@ namespace YLFramework.Editor.Resource
 
         internal ResourceReleaseIdentity(ResourceRelease release)
         {
-            if (release?.Catalog == null || string.IsNullOrEmpty(release.ProjectGuid)) throw new ArgumentException("需要确切owned Release身份。");
-            projectGuid = release.ProjectGuid; projectId = release.Catalog.ProjectId; platform = release.Catalog.Platform;
-            unity = release.Catalog.UnityCompatibility; app = release.Catalog.AppContentCompatibilityId;
-            buildId = release.Catalog.BuildId; digest = release.Catalog.CatalogDigest; directory = release.DirectoryPath;
+            if (release?.Catalog == null || string.IsNullOrEmpty(release.ProjectGuid))
+            {
+                throw new ArgumentException("需要确切owned Release身份。");
+            }
+
+            projectGuid = release.ProjectGuid;
+            projectId = release.Catalog.ProjectId;
+            platform = release.Catalog.Platform;
+            unity = release.Catalog.UnityCompatibility;
+            app = release.Catalog.AppContentCompatibilityId;
+            buildId = release.Catalog.BuildId;
+            digest = release.Catalog.CatalogDigest;
+            directory = release.DirectoryPath;
         }
 
         internal ResourceRelease Resolve()
         {
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(projectGuid));
-            if (!project || project.ProjectId != projectId) throw new InvalidOperationException("选定版本的Project身份已删除/变化，不能改读另一Project或当前Index。");
-            if (!Enum.TryParse(platform, out BuildTarget target) || !Enum.IsDefined(typeof(BuildTarget), target)) throw new InvalidDataException("选定版本平台不可识别。");
+            if (!project || project.projectId != projectId)
+            {
+                throw new InvalidOperationException("选定版本的Project身份已删除/变化，不能改读另一Project或当前Index。");
+            }
+
+            if (!Enum.TryParse(platform, out BuildTarget target) || !Enum.IsDefined(typeof(BuildTarget), target))
+            {
+                throw new InvalidDataException("选定版本平台不可识别。");
+            }
+
             var release = ResourcePublisher.ReadVersion(project, target, app, digest);
             RequireSame(release);
             return release;
@@ -53,7 +70,9 @@ namespace YLFramework.Editor.Resource
         {
             if (release?.Catalog == null || release.ProjectGuid != projectGuid || release.Catalog.ProjectId != projectId || release.Catalog.Platform != platform ||
                 release.Catalog.UnityCompatibility != unity || release.Catalog.BuildId != buildId || release.Catalog.CatalogDigest != digest || release.DirectoryPath != directory)
+            {
                 throw new InvalidDataException("复验后的完整身份/来源与选定副本不一致。");
+            }
         }
 
         public override string ToString() => "ProjectId=" + projectId + " / GUID=" + projectGuid + "\nPlatform=" + platform + " / Unity=" + unity +

@@ -19,9 +19,18 @@ namespace YLFramework.Analyzers.Tests
     {
         private sealed class Sample
         {
-            public double Milliseconds { get; set; }
-            public long AllocatedBytes { get; set; }
-            public int YlDiagnostics { get; set; }
+            public double Milliseconds
+            {
+                get; set;
+            }
+            public long AllocatedBytes
+            {
+                get; set;
+            }
+            public int YlDiagnostics
+            {
+                get; set;
+            }
         }
 
         private static string Corpus(int count, int ordinaryCalls)
@@ -33,7 +42,8 @@ namespace YLFramework.Analyzers.Tests
                 text.Append("class C").Append(i).Append(":YLFramework.Core.View{\nBox<Box<YLFramework.Core.LoadViewArgs>> held;\n");
                 text.Append("[RestrictedCall(\"Awake\")]static void F(){}\nvoid Awake(){F();RegisterEvent(()=>{});}\n");
                 text.Append("protected override void Start(){base.Start();}\nvoid OnEnable(){}\nvoid Wrong(){F();\n");
-                for (int j = 0; j < ordinaryCalls; j++) text.Append("Math.Abs(-1);\n");
+                for (int j = 0; j < ordinaryCalls; j++)
+                    text.Append("Math.Abs(-1);\n");
                 text.Append("}}\n");
             }
             return text.ToString();
@@ -43,18 +53,18 @@ namespace YLFramework.Analyzers.Tests
         {
             var allocation = GC.GetTotalAllocatedBytes(true);
             var watch = Stopwatch.StartNew();
-            var compilation = CSharpCompilation.Create("Measured", new[]{tree},
-                AnalyzerFixture.Platform.Concat(new[]{AnalyzerFixture.Core}),
+            var compilation = CSharpCompilation.Create("Measured", new[] { tree },
+                AnalyzerFixture.Platform.Concat(new[] { AnalyzerFixture.Core }),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
             var diagnostics = enabled
                 ? await compilation.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new CoreUsageAnalyzer())).GetAllDiagnosticsAsync()
                 : compilation.GetDiagnostics();
             watch.Stop();
             var bytes = GC.GetTotalAllocatedBytes(true) - allocation;
-            Assert.That(diagnostics.Any(d=>d.Severity==DiagnosticSeverity.Error||d.Id=="AD0001"||d.Id=="CS8032"), Is.False,
-                string.Join("\n",diagnostics.Where(d=>d.Severity==DiagnosticSeverity.Error||d.Id=="AD0001")));
-            var count = diagnostics.Count(d=>d.Id.StartsWith("YL",StringComparison.Ordinal));
-            Assert.That(count, Is.EqualTo(enabled?expected:0));
+            Assert.That(diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error || d.Id == "AD0001" || d.Id == "CS8032"), Is.False,
+                string.Join("\n", diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error || d.Id == "AD0001")));
+            var count = diagnostics.Count(d => d.Id.StartsWith("YL", StringComparison.Ordinal));
+            Assert.That(count, Is.EqualTo(enabled ? expected : 0));
             return new Sample { Milliseconds = watch.Elapsed.TotalMilliseconds, AllocatedBytes = bytes, YlDiagnostics = count };
         }
 
@@ -64,33 +74,40 @@ namespace YLFramework.Analyzers.Tests
             var results = new List<object>();
             // 元数据/解析准备不计入比较；每轮创建同树同引用的新 compilation，避免复用已缓存的 driver 结果。
             _ = AnalyzerFixture.Core;
-            foreach (var configuration in new[]{(name:"normal",count:24,calls:3),(name:"pressure",count:350,calls:20)})
+            foreach (var configuration in new[] { (name: "normal", count: 24, calls: 3), (name: "pressure", count: 350, calls: 20) })
             {
                 var source = Corpus(configuration.count, configuration.calls);
                 var tree = CSharpSyntaxTree.ParseText(source, AnalyzerFixture.Parse, "Measured.cs");
                 var coldOff = await Measure(tree, false, 0);
-                var coldOn = await Measure(tree, true, configuration.count*3);
+                var coldOn = await Measure(tree, true, configuration.count * 3);
                 var off = new List<Sample>();
                 var on = new List<Sample>();
-                for (int iteration=0;iteration<3;iteration++)
+                for (int iteration = 0; iteration < 3; iteration++)
                 {
-                    off.Add(await Measure(tree,false,0));
-                    on.Add(await Measure(tree,true,configuration.count*3));
+                    off.Add(await Measure(tree, false, 0));
+                    on.Add(await Measure(tree, true, configuration.count * 3));
                 }
-                results.Add(new {
-                    configuration.name, configuration.count, configuration.calls,
-                    Characters=source.Length, Lines=source.Count(c=>c=='\n')+1, Nodes=tree.GetRoot().DescendantNodesAndSelf().Count(),
-                    ColdWithoutAnalyzer=coldOff, ColdWithAnalyzer=coldOn,
-                    WarmWithoutAnalyzer=off, WarmWithAnalyzer=on,
-                    WarmMedianOffMs=off.Select(s=>s.Milliseconds).OrderBy(x=>x).ElementAt(1),
-                    WarmMedianOnMs=on.Select(s=>s.Milliseconds).OrderBy(x=>x).ElementAt(1),
-                    WarmMedianOffBytes=off.Select(s=>s.AllocatedBytes).OrderBy(x=>x).ElementAt(1),
-                    WarmMedianOnBytes=on.Select(s=>s.AllocatedBytes).OrderBy(x=>x).ElementAt(1)
+                results.Add(new
+                {
+                    configuration.name,
+                    configuration.count,
+                    configuration.calls,
+                    Characters = source.Length,
+                    Lines = source.Count(c => c == '\n') + 1,
+                    Nodes = tree.GetRoot().DescendantNodesAndSelf().Count(),
+                    ColdWithoutAnalyzer = coldOff,
+                    ColdWithAnalyzer = coldOn,
+                    WarmWithoutAnalyzer = off,
+                    WarmWithAnalyzer = on,
+                    WarmMedianOffMs = off.Select(s => s.Milliseconds).OrderBy(x => x).ElementAt(1),
+                    WarmMedianOnMs = on.Select(s => s.Milliseconds).OrderBy(x => x).ElementAt(1),
+                    WarmMedianOffBytes = off.Select(s => s.AllocatedBytes).OrderBy(x => x).ElementAt(1),
+                    WarmMedianOnBytes = on.Select(s => s.AllocatedBytes).OrderBy(x => x).ElementAt(1)
                 });
             }
-            var directory = Path.Combine(TestContext.CurrentContext.TestDirectory,"TestResults");
+            var directory = Path.Combine(TestContext.CurrentContext.TestDirectory, "TestResults");
             Directory.CreateDirectory(directory);
-            File.WriteAllText(Path.Combine(directory,"performance.json"),JsonSerializer.Serialize(results,new JsonSerializerOptions{WriteIndented=true}));
+            File.WriteAllText(Path.Combine(directory, "performance.json"), JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
         }
     }
 }

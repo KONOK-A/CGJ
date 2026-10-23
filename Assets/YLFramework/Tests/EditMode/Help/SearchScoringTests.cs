@@ -13,8 +13,8 @@ namespace YLFramework.Tests.Help
     public sealed class SearchScoringTests
     {
         private const string ModuleId = "search-scoring-fixture";
-        private static readonly Type Fixture = typeof(Fixtures.ApiFixture<>);
-        private static readonly Type OtherFixture = typeof(Other.ApiFixture);
+        private static readonly Type _fixture = typeof(Fixtures.ApiFixture<>);
+        private static readonly Type _otherFixture = typeof(Other.ApiFixture);
 
         [Test]
         public void ScorePrefersExactThenPrefixThenContainsAcrossFieldWeights()
@@ -45,7 +45,7 @@ namespace YLFramework.Tests.Help
         [Test]
         public void DotQualifiedIdentifiersSplitIntoAndPartsWithoutLooseOrResults()
         {
-            var type = HelpApiIndex.Build(Module(Fixture)).Single();
+            var type = HelpApiIndex.Build(Module(_fixture)).Single();
             var memberFields = new List<HelpSearchField>();
             type.Entries.Single(entry => entry.Name == "Run").AppendSearchFields(memberFields, type.Name);
             Assert.That(HelpSearch.Score(memberFields, HelpSearch.Tokenize("ApiFixture.Run")), Is.GreaterThan(0));
@@ -59,7 +59,7 @@ namespace YLFramework.Tests.Help
         [Test]
         public void MemberNameOutweighsSummaryAndParameterDocumentation()
         {
-            var module = Module(Fixture);
+            var module = Module(_fixture);
             module.Documentation = member => member.Name == "Run"
                 ? new HelpDocumentation("运行入口", null, "备注说明", new[] { new HelpParameter("value", "数值") })
                 : null;
@@ -89,47 +89,55 @@ namespace YLFramework.Tests.Help
             try
             {
                 window.SelectModule(ModuleId);
-                Set(window, "mSearch", "sequence");
+                Set(window, "search", "sequence");
                 UpdateResults(window);
                 Assert.That(Ids(window), Is.EqualTo(new[] { "exact", "prefix", "body" }), "大小写不敏感且精确标题优先");
-                Set(window, "mSearch", "Sequence 使用");
+                Set(window, "search", "Sequence 使用");
                 UpdateResults(window);
                 Assert.That(Ids(window), Is.EqualTo(new[] { "prefix" }), "多词按 AND 匹配且可命中不同字段");
-                Set(window, "mSearch", "延迟 sequence");
+                Set(window, "search", "延迟 sequence");
                 UpdateResults(window);
                 Assert.That(Ids(window), Is.EqualTo(new[] { "body" }), "中英文混合查询");
-                Set(window, "mSearch", "不存在的关键词");
+                Set(window, "search", "不存在的关键词");
                 UpdateResults(window);
                 Assert.That(Ids(window), Is.Empty);
-                Set(window, "mSearch", "");
+                Set(window, "search", "");
                 UpdateResults(window);
                 Assert.That(Ids(window).Length, Is.EqualTo(3), "清空搜索后恢复正常导航");
             }
-            finally { UnityEngine.Object.DestroyImmediate(window); RestoreModules(saved); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+                RestoreModules(saved);
+            }
         }
 
         [Test]
         public void WindowListsMatchedMembersButNotForPureTypeQueries()
         {
-            var saved = ReplaceModules(Module(Fixture, OtherFixture));
+            var saved = ReplaceModules(Module(_fixture, _otherFixture));
             var window = ScriptableObject.CreateInstance<HelpWindow>();
             try
             {
                 window.SelectModule(ModuleId);
-                Set(window, "mSearch", "ApiFixture");
+                Set(window, "search", "ApiFixture");
                 UpdateResults(window);
-                var types = Get<HelpApiType[]>(window, "mVisibleTypes");
+                var types = Get<HelpApiType[]>(window, "_visibleTypes");
                 Assert.That(types[0].Name, Is.EqualTo("ApiFixture"), "精确类型名排在仅前缀命中之前");
-                Assert.That(Get<Dictionary<string, HelpApiMember[]>>(window, "mVisibleMembers"), Is.Empty,
+                Assert.That(Get<Dictionary<string, HelpApiMember[]>>(window, "_visibleMembers"), Is.Empty,
                     "纯类型名查询不列出全部成员");
-                Set(window, "mSearch", "ApiFixture Run");
+                Set(window, "search", "ApiFixture Run");
                 UpdateResults(window);
-                var fixture = Get<HelpApiType[]>(window, "mVisibleTypes").Single(type => type.Type == Fixture);
-                var members = Get<Dictionary<string, HelpApiMember[]>>(window, "mVisibleMembers");
+                var fixture = Get<HelpApiType[]>(window, "_visibleTypes").Single(type => type.Type == _fixture);
+                var members = Get<Dictionary<string, HelpApiMember[]>>(window, "_visibleMembers");
                 Assert.That(members.ContainsKey(fixture.Id), Is.True, "成员名命中时应列出成员级结果");
                 Assert.That(members[fixture.Id].Any(entry => entry.Name == "Run"), Is.True);
             }
-            finally { UnityEngine.Object.DestroyImmediate(window); RestoreModules(saved); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+                RestoreModules(saved);
+            }
         }
 
         private static List<HelpSearchField> Fields(params (string Text, int Weight)[] values) =>
@@ -145,7 +153,11 @@ namespace YLFramework.Tests.Help
         private static HelpRegistration[] ReplaceModules(HelpModule module)
         {
             var saved = HelpRegistry.GetModules();
-            foreach (var entry in saved) HelpRegistry.Unregister(entry.Id);
+            foreach (var entry in saved)
+            {
+                HelpRegistry.Unregister(entry.Id);
+            }
+
             HelpRegistry.Register(ModuleId, "搜索评分测试", () => module);
             return saved;
         }
@@ -153,11 +165,14 @@ namespace YLFramework.Tests.Help
         private static void RestoreModules(HelpRegistration[] saved)
         {
             HelpRegistry.Unregister(ModuleId);
-            foreach (var entry in saved) HelpRegistry.Register(entry.Id, entry.DisplayName, entry.Create);
+            foreach (var entry in saved)
+            {
+                HelpRegistry.Register(entry.Id, entry.DisplayName, entry.Create);
+            }
         }
 
         private static string[] Ids(HelpWindow window) =>
-            Get<HelpPage[]>(window, "mVisibleTopics").Select(page => page.Id).ToArray();
+            Get<HelpPage[]>(window, "_visibleTopics").Select(page => page.Id).ToArray();
 
         private static T Get<T>(object instance, string name) => (T)instance.GetType()
             .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(instance);

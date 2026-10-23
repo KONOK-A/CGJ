@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Serialization;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Excel.Editor
@@ -21,10 +22,26 @@ namespace YLFramework.Excel.Editor
             {
                 foreach (var field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 {
-                    if (field.IsInitOnly || field.IsNotSerialized) continue;
-                    if (!includeIgnored && (field.GetCustomAttribute<ExcelIgnore>() != null || field.GetCustomAttribute<JsonIgnoreAttribute>() != null)) continue;
-                    if (!field.IsPublic && field.GetCustomAttribute<SerializeField>() == null && field.GetCustomAttribute<SerializeReference>() == null) continue;
-                    if (fields.Any(f => f.Name == field.Name)) throw new InvalidOperationException("Hidden duplicate field: " + type.FullName + "." + field.Name);
+                    if (field.IsInitOnly || field.IsNotSerialized)
+                    {
+                        continue;
+                    }
+
+                    if (!includeIgnored && (field.GetCustomAttribute<ExcelIgnore>() != null || field.GetCustomAttribute<JsonIgnoreAttribute>() != null))
+                    {
+                        continue;
+                    }
+
+                    if (!field.IsPublic && field.GetCustomAttribute<SerializeField>() == null && field.GetCustomAttribute<SerializeReference>() == null)
+                    {
+                        continue;
+                    }
+
+                    if (fields.Any(f => f.Name == field.Name))
+                    {
+                        throw new InvalidOperationException("Hidden duplicate field: " + type.FullName + "." + field.Name);
+                    }
+
                     fields.Add(field);
                 }
             }
@@ -34,21 +51,70 @@ namespace YLFramework.Excel.Editor
         internal static FieldInfo Id(Type type)
         {
             var fields = Fields(type);
-            var marked = fields.Where(f => f.GetCustomAttribute<ExcelScriptableObjectID>() != null).ToArray();
-            if (marked.Length > 1) throw new InvalidOperationException("Multiple Excel ID fields: " + type.FullName);
+            var marked = fields.Where(f => f.GetCustomAttribute<ExcelScriptableObjectId>() != null).ToArray();
+            if (marked.Length > 1)
+            {
+                throw new InvalidOperationException("Multiple Excel ID fields: " + type.FullName);
+            }
+
             return marked.Length == 1 ? marked[0] : fields.FirstOrDefault(f => f.Name.Equals("id", StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static string ColumnName(FieldInfo field)
+        {
+            // 仅本轮迁移的自有领域字段沿用旧表头；不把用户模型的 Unity 别名扩展为 Excel 协议。
+            var owner = field.DeclaringType;
+            if (owner.Assembly != typeof(ExcelIgnore).Assembly ||
+                owner.Namespace is not ("YLFramework.SkillSystem" or "YLFramework.BuffSystem" or
+                    "YLFramework.MissionSystem" or "YLFramework.EquipmentSystem" or "YLFramework.DataAssets"))
+            {
+                return field.Name;
+            }
+            return field.GetCustomAttributes<FormerlySerializedAsAttribute>().SingleOrDefault()?.oldName ?? field.Name;
         }
 
         internal static ExcelFieldsType FieldType(Type type)
         {
-            if (type.IsEnum) return ExcelFieldsType.Enum;
-            if (typeof(Object).IsAssignableFrom(type)) return ExcelFieldsType.ObjectReference;
-            if (type == typeof(string)) return ExcelFieldsType.String;
-            if (type == typeof(bool)) return ExcelFieldsType.Bool;
-            if (type == typeof(float)) return ExcelFieldsType.Float;
-            if (type == typeof(double)) return ExcelFieldsType.Double;
-            if (type == typeof(long) || type == typeof(ulong)) return ExcelFieldsType.Long;
-            if (type == typeof(int) || type == typeof(uint) || type == typeof(short) || type == typeof(ushort) || type == typeof(byte) || type == typeof(sbyte)) return ExcelFieldsType.Int;
+            if (type.IsEnum)
+            {
+                return ExcelFieldsType.Enum;
+            }
+
+            if (typeof(Object).IsAssignableFrom(type))
+            {
+                return ExcelFieldsType.ObjectReference;
+            }
+
+            if (type == typeof(string))
+            {
+                return ExcelFieldsType.String;
+            }
+
+            if (type == typeof(bool))
+            {
+                return ExcelFieldsType.Bool;
+            }
+
+            if (type == typeof(float))
+            {
+                return ExcelFieldsType.Float;
+            }
+
+            if (type == typeof(double))
+            {
+                return ExcelFieldsType.Double;
+            }
+
+            if (type == typeof(long) || type == typeof(ulong))
+            {
+                return ExcelFieldsType.Long;
+            }
+
+            if (type == typeof(int) || type == typeof(uint) || type == typeof(short) || type == typeof(ushort) || type == typeof(byte) || type == typeof(sbyte))
+            {
+                return ExcelFieldsType.Int;
+            }
+
             return ExcelFieldsType.Json;
         }
 
@@ -57,43 +123,85 @@ namespace YLFramework.Excel.Editor
             string text = ExcelTable.Text(raw);
             switch (type)
             {
-                case ExcelFieldsType.String: return text;
-                case ExcelFieldsType.Enum: return text;
-                case ExcelFieldsType.ObjectReference: ValidateReference(text); return text;
-                case ExcelFieldsType.Json: return string.IsNullOrWhiteSpace(text) ? JValue.CreateNull() : JToken.Parse(text);
-                case ExcelFieldsType.Bool: return text.Length == 0 ? false : bool.Parse(text);
+                case ExcelFieldsType.String:
+                    return text;
+                case ExcelFieldsType.Enum:
+                    return text;
+                case ExcelFieldsType.ObjectReference:
+                    ValidateReference(text);
+                    return text;
+                case ExcelFieldsType.Json:
+                    return string.IsNullOrWhiteSpace(text) ? JValue.CreateNull() : JToken.Parse(text);
+                case ExcelFieldsType.Bool:
+                    return text.Length == 0 ? false : bool.Parse(text);
                 case ExcelFieldsType.Int:
                     long integer = text.Length == 0 ? 0 : long.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
-                    if (integer < int.MinValue || integer > uint.MaxValue) throw new OverflowException("Int cell exceeds the signed/unsigned 32-bit range.");
+                    if (integer < int.MinValue || integer > uint.MaxValue)
+                    {
+                        throw new OverflowException("Int cell exceeds the signed/unsigned 32-bit range.");
+                    }
+
                     return integer;
                 case ExcelFieldsType.Long:
-                    if (text.Length == 0) return 0L;
-                    if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long signed)) return signed;
+                    if (text.Length == 0)
+                    {
+                        return 0L;
+                    }
+
+                    if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long signed))
+                    {
+                        return signed;
+                    }
+
                     return ulong.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture);
                 case ExcelFieldsType.Float:
                     float single = text.Length == 0 ? 0 : float.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
-                    if (float.IsNaN(single) || float.IsInfinity(single)) throw new FormatException("Non-finite float.");
+                    if (float.IsNaN(single) || float.IsInfinity(single))
+                    {
+                        throw new FormatException("Non-finite float.");
+                    }
+
                     return single;
                 case ExcelFieldsType.Double:
                     double number = text.Length == 0 ? 0 : double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
-                    if (double.IsNaN(number) || double.IsInfinity(number)) throw new FormatException("Non-finite double.");
+                    if (double.IsNaN(number) || double.IsInfinity(number))
+                    {
+                        throw new FormatException("Non-finite double.");
+                    }
+
                     return number;
-                default: throw new FormatException("Unsupported Excel field type: " + type);
+                default:
+                    throw new FormatException("Unsupported Excel field type: " + type);
             }
         }
 
         internal static void Import(object target, FieldInfo field, object raw, ExcelFieldsType type)
         {
             var custom = field.GetCustomAttribute<CustomExcelFieldImportAndExport>();
-            if (custom != null) { custom.SetValue(target, field, custom.Import(target, raw, type)); return; }
-            if (FieldType(field.FieldType) != type) throw new FormatException("Header type " + type + " does not match " + field.FieldType.FullName);
+            if (custom != null)
+            {
+                custom.SetValue(target, field, custom.Import(target, raw, type));
+                return;
+            }
+            if (FieldType(field.FieldType) != type)
+            {
+                throw new FormatException("Header type " + type + " does not match " + field.FieldType.FullName);
+            }
+
             object value;
             string text = ExcelTable.Text(raw);
             if (type == ExcelFieldsType.Enum)
             {
-                if (string.IsNullOrWhiteSpace(text)) text = "0";
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    text = "0";
+                }
+
                 value = Enum.Parse(field.FieldType, text, true);
-                if (field.FieldType.GetCustomAttribute<FlagsAttribute>() == null && !Enum.IsDefined(field.FieldType, value)) throw new FormatException("Undefined enum value: " + text);
+                if (field.FieldType.GetCustomAttribute<FlagsAttribute>() == null && !Enum.IsDefined(field.FieldType, value))
+                {
+                    throw new FormatException("Undefined enum value: " + text);
+                }
             }
             else if (type == ExcelFieldsType.ObjectReference)
             {
@@ -109,7 +217,11 @@ namespace YLFramework.Excel.Editor
                 // 直接转目标整型，保留uint/ulong边界，不先损失为Int32/Double。
                 value = Convert.ChangeType(text.Length == 0 ? "0" : text, field.FieldType, CultureInfo.InvariantCulture);
             }
-            else value = Convert.ChangeType(Primitive(raw, type), field.FieldType, CultureInfo.InvariantCulture);
+            else
+            {
+                value = Convert.ChangeType(Primitive(raw, type), field.FieldType, CultureInfo.InvariantCulture);
+            }
+
             field.SetValue(target, value);
         }
 
@@ -118,27 +230,67 @@ namespace YLFramework.Excel.Editor
             var value = field.GetValue(target);
             var type = FieldType(field.FieldType);
             var custom = field.GetCustomAttribute<CustomExcelFieldImportAndExport>();
-            if (custom != null) return custom.Export(target, value, type);
-            if (type == ExcelFieldsType.ObjectReference) return value == null ? string.Empty : Reference(value as Object);
-            if (type == ExcelFieldsType.Json) return JsonConvert.SerializeObject(value, Formatting.None);
-            if (type == ExcelFieldsType.Enum) return value.ToString();
-            if (type == ExcelFieldsType.Long) return ExcelTable.Text(value);
-            if (value is float single) return single.ToString("R", CultureInfo.InvariantCulture);
-            if (value is double number) return number.ToString("R", CultureInfo.InvariantCulture);
+            if (custom != null)
+            {
+                return custom.Export(target, value, type);
+            }
+
+            if (type == ExcelFieldsType.ObjectReference)
+            {
+                return value == null ? string.Empty : Reference(value as Object);
+            }
+
+            if (type == ExcelFieldsType.Json)
+            {
+                return JsonConvert.SerializeObject(value, Formatting.None);
+            }
+
+            if (type == ExcelFieldsType.Enum)
+            {
+                return value.ToString();
+            }
+
+            if (type == ExcelFieldsType.Long)
+            {
+                return ExcelTable.Text(value);
+            }
+
+            if (value is float single)
+            {
+                return single.ToString("R", CultureInfo.InvariantCulture);
+            }
+
+            if (value is double number)
+            {
+                return number.ToString("R", CultureInfo.InvariantCulture);
+            }
+
             return value;
         }
 
         internal static string Key(object value, int index, bool requireId = false)
         {
-            if (value == null) throw new InvalidOperationException("Null row at index " + index);
+            if (value == null)
+            {
+                throw new InvalidOperationException("Null row at index " + index);
+            }
+
             var id = Id(value.GetType());
             if (id == null)
             {
-                if (requireId) throw new InvalidOperationException("Missing ExcelScriptableObjectID or id field: " + value.GetType().FullName);
+                if (requireId)
+                {
+                    throw new InvalidOperationException("Missing ExcelScriptableObjectId or id field: " + value.GetType().FullName);
+                }
+
                 return "row:" + index;
             }
             string key = ExcelTable.Text(id.GetValue(value));
-            if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Empty ID at index " + index);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException("Empty ID at index " + index);
+            }
+
             return key;
         }
 
@@ -147,29 +299,55 @@ namespace YLFramework.Excel.Editor
             f => typeof(Object).IsAssignableFrom(f.FieldType) ? f.GetValue(value) == null ? string.Empty : Reference(f.GetValue(value) as Object) : f.GetValue(value)));
         internal static void ValidateReference(string text)
         {
-            if (text.Length > 0 && !Regex.IsMatch(text, @"\A[0-9a-fA-F]{32}(:-?[0-9]+)?\z")) throw new FormatException("Invalid asset GUID[:localFileID]: " + text);
+            if (text.Length > 0 && !Regex.IsMatch(text, @"\A[0-9a-fA-F]{32}(:-?[0-9]+)?\z"))
+            {
+                throw new FormatException("Invalid asset GUID[:localFileID]: " + text);
+            }
         }
         private static Object ResolveReference(string text, Type type)
         {
             var parts = text.Split(':');
             string path = AssetDatabase.GUIDToAssetPath(parts[0]);
-            if (string.IsNullOrEmpty(path)) throw new FormatException("Asset GUID not found: " + text);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new FormatException("Asset GUID not found: " + text);
+            }
+
             Object value;
-            if (parts.Length == 1) value = AssetDatabase.LoadAssetAtPath(path, type);
+            if (parts.Length == 1)
+            {
+                value = AssetDatabase.LoadAssetAtPath(path, type);
+            }
             else
             {
                 long id = long.Parse(parts[1], CultureInfo.InvariantCulture);
                 value = AssetDatabase.LoadAllAssetsAtPath(path).FirstOrDefault(o => type.IsInstanceOfType(o) && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(o, out string guid, out long local) && local == id);
             }
-            if (value == null || !type.IsInstanceOfType(value)) throw new FormatException("Asset GUID type/localFileID mismatch: " + text + " -> " + type.FullName);
+            if (value == null || !type.IsInstanceOfType(value))
+            {
+                throw new FormatException("Asset GUID type/localFileID mismatch: " + text + " -> " + type.FullName);
+            }
+
             return value;
         }
         private static string Reference(Object value)
         {
-            if (value == null) return string.Empty;
-            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out string guid, out long local)) throw new FormatException("Object reference is not a persistent asset: " + value.name);
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out string guid, out long local))
+            {
+                throw new FormatException("Object reference is not a persistent asset: " + value.name);
+            }
+
             string reference = AssetDatabase.IsSubAsset(value) ? guid + ":" + local.ToString(CultureInfo.InvariantCulture) : guid;
-            if (ResolveReference(reference, value.GetType()) != value) throw new FormatException("Asset reference identity changed: " + reference);
+            if (ResolveReference(reference, value.GetType()) != value)
+            {
+                throw new FormatException("Asset reference identity changed: " + reference);
+            }
+
             return reference;
         }
     }

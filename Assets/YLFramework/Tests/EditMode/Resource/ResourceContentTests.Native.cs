@@ -53,7 +53,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(install, Is.Not.Null, "The native callback must enqueue the first observed fault without polling all inputs.");
             int notifications = 0;
             Exception notified = null;
-            install.Invoke(stream, new object[] { new Action<Exception>(error => { ++notifications; notified = error; }) });
+            install.Invoke(stream, new object[] { new Action<Exception>(error =>
+            {
+            ++notifications;
+            notified = error;
+            }) });
             stream.Position = 65480;
             Assert.Throws<IOException>(() => stream.ReadByte());
             Assert.Throws<IOException>(() => stream.ReadByte());
@@ -99,7 +103,7 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 input = (IDisposable)ContentType("ResourceBundleInput").GetMethod("Open", Members).Invoke(null,
-                    new object[] { file, Context(), TestKey, ticket, CancellationToken.None });
+                    new object[] { file, Context(), _testKey, ticket, CancellationToken.None });
                 Assert.Throws<IOException>(() => input.Dispose());
                 Assert.That(Get(input, "IsDisposed"), Is.False);
                 Assert.That(Get(input, "ReleaseFault"), Is.Not.Null);
@@ -131,13 +135,17 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 using var file = File.OpenRead(path);
                 var ticket = new TestTicket();
-                var key = (byte[])TestKey.Clone(); key[0] ^= 1;
+                var key = (byte[])_testKey.Clone();
+                key[0] ^= 1;
                 Assert.That(Assert.Throws<TargetInvocationException>(() => ContentType("ResourceBundleInput").GetMethod("Open", Members)
                     .Invoke(null, new object[] { file, Context(), key, ticket, CancellationToken.None })).InnerException, Is.TypeOf<IOException>());
                 Assert.That(file.CanRead, Is.True);
                 Assert.That(ticket.Disposals, Is.Zero);
             }
-            finally { Directory.Delete(root, true); }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
         }
 
         [Test]
@@ -165,11 +173,14 @@ namespace YLFramework.Tests.ResourceBuild
         public void UnsupportedBackendDoesNotImportCngOrFallBackToPlaintext()
         {
             if ((bool)ContentType("ResourceBundleEnvelope").GetProperty("IsSupported", Members).GetValue(null))
+            {
                 Assert.Ignore("This assertion targets an intentionally unsupported compilation configuration.");
+            }
+
             Assert.That(ContentType("CngSegmentAead").GetMethods(Members).Any(method =>
                 method.GetCustomAttributes(typeof(System.Runtime.InteropServices.DllImportAttribute), false).Length != 0), Is.False);
             Assert.Throws<PlatformNotSupportedException>(() => Invoke("OpenDecrypt", EnvelopeBytes(HeaderJson()), Context(),
-                TestKey, false, CancellationToken.None));
+                _testKey, false, CancellationToken.None));
             Assert.That(Invoke("Inspect", new MemoryStream(System.Text.Encoding.ASCII.GetBytes("UnityFS\0fixture")), Context()), Is.Null);
         }
 
@@ -181,24 +192,38 @@ namespace YLFramework.Tests.ResourceBuild
         {
             RequireBackend();
             using var input = new MemoryStream(Convert.FromBase64String(base64));
-            Invoke("ValidateAll", input, Context(), TestKey, CancellationToken.None, null, (long)length);
+            Invoke("ValidateAll", input, Context(), _testKey, CancellationToken.None, null, (long)length);
             using var stream = Open(input);
             Assert.That(stream.Length, Is.EqualTo(length));
-            if (length == 1) Assert.That(stream.ReadByte(), Is.EqualTo(0xa5));
+            if (length == 1)
+            {
+                Assert.That(stream.ReadByte(), Is.EqualTo(0xa5));
+            }
+
             Assert.That(stream.ReadByte(), Is.EqualTo(-1));
         }
 
         private static object Call(object target, string method, params object[] arguments)
         {
-            try { return target.GetType().GetMethod(method, Members).Invoke(target, arguments); }
-            catch (TargetInvocationException error) { throw error.InnerException; }
+            try
+            {
+                return target.GetType().GetMethod(method, Members).Invoke(target, arguments);
+            }
+            catch (TargetInvocationException error)
+            {
+                throw error.InnerException;
+            }
         }
 
         private sealed class TestProvider : IResourceContentKeyProvider
         {
             internal int Calls;
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
-            { ++Calls; Array.Copy(TestKey, destination, TestKey.Length); return true; }
+            {
+                ++Calls;
+                Array.Copy(_testKey, destination, _testKey.Length);
+                return true;
+            }
         }
 
         private sealed class TestTicket : IDisposable
@@ -215,18 +240,26 @@ namespace YLFramework.Tests.ResourceBuild
             public override long Length => base.Length + LengthDelta;
             public override int Read(byte[] buffer, int offset, int count)
             {
-                if (ThrowOnRead) throw new InvalidOperationException("Owned fixture read failure.");
+                if (ThrowOnRead)
+                {
+                    throw new InvalidOperationException("Owned fixture read failure.");
+                }
+
                 return base.Read(buffer, offset, Math.Min(count, 3));
             }
         }
 
         private sealed class FailOnceFileStream : FileStream
         {
-            private bool fail = true;
+            private bool _failNextWrite = true;
             internal FailOnceFileStream(string path) : base(path, FileMode.Open, FileAccess.Read, FileShare.Read) { }
             protected override void Dispose(bool disposing)
             {
-                if (disposing && fail) { fail = false; throw new IOException("Owned fixture dispose failure."); }
+                if (disposing && _failNextWrite)
+                {
+                    _failNextWrite = false;
+                    throw new IOException("Owned fixture dispose failure.");
+                }
                 base.Dispose(disposing);
             }
         }

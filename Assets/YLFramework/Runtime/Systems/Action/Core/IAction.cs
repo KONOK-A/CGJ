@@ -1,7 +1,7 @@
 namespace YLFramework.Actions
 {
     /// <summary>
-    /// 动作的执行阶段；取消和资源清理由 Deinited 表示，不是独立的状态值。
+    /// 动作的执行阶段；取消和资源清理由 IsDeinitialized 表示，不是独立的状态值。
     /// </summary>
     public enum ActionStatus
     {
@@ -31,9 +31,15 @@ namespace YLFramework.Actions
     public interface IAction<TStatus>
     {
         /// <summary>本次分配的标识，用于区分同一池对象的不同使用周期。</summary>
-        ulong ActionID { get; set; }
+        ulong ActionId
+        {
+            get; set;
+        }
         /// <summary>由执行驱动维护的当前阶段。</summary>
-        TStatus Status { get; set; }
+        TStatus Status
+        {
+            get; set;
+        }
         /// <summary>首次推进时执行的初始化钩子，可以在此标记立即完成。</summary>
         void OnStart();
         /// <summary>启动后未暂停时执行的更新钩子。</summary>
@@ -42,9 +48,15 @@ namespace YLFramework.Actions
         /// <summary>正常完成后的钩子；取消清理不应调用此钩子。</summary>
         void OnFinish();
         /// <summary>是否已清理；为 true 时不可再推进当前使用周期。</summary>
-        bool Deinited { get; set; }
+        bool IsDeinitialized
+        {
+            get; set;
+        }
         /// <summary>是否暂停后续 OnExecute；不阻止首次 OnStart。</summary>
-        bool Paused { get; set; }
+        bool IsPaused
+        {
+            get; set;
+        }
         /// <summary>重置执行进度和暂停状态，不重新分配标识，也不复活已清理的动作。</summary>
         void Reset();
         /// <summary>清除本次使用的资源和回调；实现应避免重复清理。</summary>
@@ -61,7 +73,10 @@ namespace YLFramework.Actions
     // 可复用池对象在一次 Execute 调用内被 Reset/复用时，版本号随之变化，供重入保护判断本次执行是否仍然有效。
     internal interface IActionExecutionVersion
     {
-        ulong ExecutionVersion { get; }
+        ulong ExecutionVersion
+        {
+            get;
+        }
     }
 
     // 记录子动作加入组合时的使用周期；池对象被重新分配后 Matches 为 false，组合据此取消而不是误操作新动作。
@@ -69,15 +84,15 @@ namespace YLFramework.Actions
     {
         // 池对象可能被再次分配，组合动作只持有加入时的那次使用周期。
         internal readonly IAction Action;
-        private readonly ulong mActionId;
+        private readonly ulong _actionId;
 
         internal ActionLease(IAction action)
         {
             Action = action;
-            mActionId = action.ActionID;
+            _actionId = action.ActionId;
         }
 
-        internal bool Matches => Action.ActionID == mActionId;
+        internal bool Matches => Action.ActionId == _actionId;
     }
 
     /// <summary>
@@ -87,19 +102,25 @@ namespace YLFramework.Actions
     /// <remarks>完成或取消后的对象会被复用，不应将其作为长期有效的句柄保存。</remarks>
     public abstract class AbstractAction<T> : IAction where T : AbstractAction<T>, new()
     {
-        private static readonly ActionPool<T> mPool = new ActionPool<T>(() => new T(), null, 10,
+        private static readonly ActionPool<T> _pool = new ActionPool<T>(() => new T(), null, 10,
             action =>
             {
-                action.ActionID = ActionKit.ID_GENERATOR++;
-                action.Deinited = false;
-                try { action.Reset(); }
+                action.ActionId = ActionKit.IdGenerator++;
+                action.IsDeinitialized = false;
+                try
+                {
+                    action.Reset();
+                }
                 catch (System.Exception original)
                 {
                     // 交付前失败由公共池结束本次取得；尝试一次领域清理并保留原始异常。
-                    if (!action.Deinited)
+                    if (!action.IsDeinitialized)
                     {
-                        action.Deinited = true;
-                        try { action.OnDeinit(); }
+                        action.IsDeinitialized = true;
+                        try
+                        {
+                            action.OnDeinit();
+                        }
                         catch (System.Exception cleanup)
                         {
                             original.Data["ActionKit.CleanupException"] = original.Data["ActionKit.CleanupException"] is System.Exception previous
@@ -121,17 +142,29 @@ namespace YLFramework.Actions
         /// <returns>尚未启动的动作，调用方应在执行前设置本次使用的数据。</returns>
         public static T Allocate()
         {
-            return mPool.Allocate();
+            return _pool.Allocate();
         }
 
         /// <inheritdoc />
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
 
         /// <inheritdoc />
         public virtual void OnStart()
@@ -162,7 +195,7 @@ namespace YLFramework.Actions
         public void Reset()
         {
             Status = ActionStatus.NotStart;
-            Paused = false;
+            IsPaused = false;
             OnReset();
         }
 
@@ -171,9 +204,9 @@ namespace YLFramework.Actions
         /// </summary>
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
+                IsDeinitialized = true;
                 var cleaned = false;
                 try
                 {
@@ -183,7 +216,7 @@ namespace YLFramework.Actions
                 finally
                 {
                     // 等当前执行栈退出后再复用，避免旧回调继续操作新分配的动作。
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<T>(mPool, this as T, discard: !cleaned));
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<T>(_pool, this as T, discard: !cleaned));
                 }
             }
         }
@@ -209,23 +242,31 @@ namespace YLFramework.Actions
         /// <param name="self">仍属于当前使用周期的动作。</param>
         /// <param name="dt">本次时间增量，单位为秒；首次启动不调用 OnExecute，但可同步完成并调用 OnFinish。</param>
         /// <returns>本次已到达完成分支且使用周期仍匹配时为 true，否则为 false。</returns>
-        /// <remarks>手动调用不负责回收；Finished 后再次调用会再次执行 OnFinish。回调先完成再取消时也可返回 true，调用方仍需检查 Deinited。ActionKit 关停期间调用一律返回 false，且不再触发任何钩子。</remarks>
+        /// <remarks>手动调用不负责回收；Finished 后再次调用会再次执行 OnFinish。回调先完成再取消时也可返回 true，调用方仍需检查 IsDeinitialized。ActionKit 关停期间调用一律返回 false，且不再触发任何钩子。</remarks>
         public static bool Execute(this IAction self, float dt)
         {
-            var actionId = self.ActionID;
+            var actionId = self.ActionId;
             var versioned = self as IActionExecutionVersion;
             var version = versioned?.ExecutionVersion ?? 0;
             // Shutdown 的清理等待执行栈退出，但后续业务回调必须立即停止。
-            bool SameLease() => !ActionKit.IsShuttingDown && self.ActionID == actionId &&
+            bool SameLease() => !ActionKit.IsShuttingDown && self.ActionId == actionId &&
                                 (versioned == null || versioned.ExecutionVersion == version);
-            bool Current() => !self.Deinited && SameLease();
+            bool Current() => !self.IsDeinitialized && SameLease();
             // 同一使用周期先完成再取消仍返回终止结果，由执行器抑制正常完成通知。
             bool FinishedLease() => SameLease() && self.Status == ActionStatus.Finished;
-            if (!Current()) return false;
+            if (!Current())
+            {
+                return false;
+            }
+
             if (self.Status == ActionStatus.NotStart)
             {
                 self.OnStart();
-                if (!Current()) return FinishedLease();
+                if (!Current())
+                {
+                    return FinishedLease();
+                }
+
                 if (self.Status == ActionStatus.Finished)
                 {
                     self.OnFinish();
@@ -236,9 +277,17 @@ namespace YLFramework.Actions
             }
             else if (self.Status == ActionStatus.Started)
             {
-                if (self.Paused) return false;
+                if (self.IsPaused)
+                {
+                    return false;
+                }
+
                 self.OnExecute(dt);
-                if (!Current()) return FinishedLease();
+                if (!Current())
+                {
+                    return FinishedLease();
+                }
+
                 if (self.Status == ActionStatus.Finished)
                 {
                     self.OnFinish();

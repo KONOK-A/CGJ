@@ -16,14 +16,14 @@ namespace YLFramework.Foundation.Tests
             var first = channel.Register(a);
             channel.Register(() => trace.Add("B"));
             channel.Register(a);
-            first.UnRegister();
-            first.UnRegister();
+            first.Unregister();
+            first.Unregister();
             channel.Trigger();
             CollectionAssert.AreEqual(new[] { "B", "A" }, trace);
             var old = channel.Register(a);
             channel.ClearListeners();
             channel.Register(a);
-            old.UnRegister();
+            old.Unregister();
             channel.Trigger();
             Assert.That(trace.Count, Is.EqualTo(3));
             Assert.That(channel.ListenerCount, Is.EqualTo(1));
@@ -35,12 +35,12 @@ namespace YLFramework.Foundation.Tests
         {
             var channel = new EventChannel<int>();
             var trace = new List<int>();
-            IUnRegister first = null, second = null;
+            IUnregister first = null, second = null;
             first = channel.Register(_ =>
             {
                 trace.Add(1);
-                first.UnRegister();
-                second.UnRegister();
+                first.Unregister();
+                second.Unregister();
                 channel.Register(trace.Add);
             });
             second = channel.Register(_ => trace.Add(2));
@@ -81,7 +81,7 @@ namespace YLFramework.Foundation.Tests
             });
             var old = channel.Register(last);
             channel.Trigger();
-            old.UnRegister();
+            old.Unregister();
             channel.Trigger();
             CollectionAssert.AreEqual(new[] { 1, 2, 2 }, trace);
             Assert.That(channel.IsDisposed, Is.False);
@@ -97,7 +97,7 @@ namespace YLFramework.Foundation.Tests
             channel.Trigger();
             Assert.That(laterCalls, Is.Zero);
             Assert.That(channel.ListenerCount, Is.Zero);
-            Assert.DoesNotThrow(old.UnRegister);
+            Assert.DoesNotThrow(old.Unregister);
             Assert.DoesNotThrow(channel.Dispose);
             Assert.Throws<ObjectDisposedException>(() => channel.Register(null));
             Assert.Throws<ObjectDisposedException>(channel.Trigger);
@@ -112,11 +112,19 @@ namespace YLFramework.Foundation.Tests
             var onceCalls = 0;
             channel.Register(() =>
             {
-                if (nested) return;
+                if (nested)
+                {
+                    return;
+                }
+
                 nested = true;
                 channel.Trigger();
             });
-            channel.RegisterOnce(() => { onceCalls++; channel.Trigger(); });
+            channel.RegisterOnce(() =>
+            {
+                onceCalls++;
+                channel.Trigger();
+            });
             channel.Trigger();
             channel.Trigger();
             Assert.That(onceCalls, Is.EqualTo(1));
@@ -130,10 +138,14 @@ namespace YLFramework.Foundation.Tests
             var error = new InvalidOperationException("ordinary");
             var first = channel.Register(() => throw error);
             var calls = 0;
-            channel.RegisterOnce(() => { calls++; throw error; });
+            channel.RegisterOnce(() =>
+            {
+                calls++;
+                throw error;
+            });
             Assert.That(Assert.Throws<InvalidOperationException>(channel.Trigger), Is.SameAs(error));
             Assert.That(calls, Is.Zero);
-            first.UnRegister();
+            first.Unregister();
             Assert.That(Assert.Throws<InvalidOperationException>(channel.Trigger), Is.SameAs(error));
             Assert.DoesNotThrow(channel.Trigger);
             Assert.That(calls, Is.EqualTo(1));
@@ -148,20 +160,20 @@ namespace YLFramework.Foundation.Tests
             var first = channel.Register(a + b);
             var second = channel.Register(a + b);
             Assert.That(channel.ListenerCount, Is.EqualTo(4));
-            channel.UnRegister(a);
-            second.UnRegister();
+            channel.Unregister(a);
+            second.Unregister();
             channel.Trigger();
             CollectionAssert.AreEqual(new[] { 1, 2 }, trace);
             channel.Register(a);
             channel.Register(b);
-            channel.UnRegister(a + b);
-            first.UnRegister();
+            channel.Unregister(a + b);
+            first.Unregister();
             Assert.That(channel.ListenerCount, Is.Zero);
             var once = channel.RegisterOnce(a + b);
             Assert.That(channel.ListenerCount, Is.EqualTo(1));
             channel.Trigger();
             channel.Trigger();
-            once.UnRegister();
+            once.Unregister();
             CollectionAssert.AreEqual(new[] { 1, 2, 1, 2 }, trace);
         }
 
@@ -170,7 +182,14 @@ namespace YLFramework.Foundation.Tests
         {
             var channel = new EventChannel();
             var calls = 0;
-            channel.RegisterWithACall(() => { calls++; if (calls == 1) channel.Trigger(); });
+            channel.RegisterWithACall(() =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    channel.Trigger();
+                }
+            });
             Assert.That(calls, Is.EqualTo(1));
             channel.Trigger();
             Assert.That(calls, Is.EqualTo(2));
@@ -186,9 +205,9 @@ namespace YLFramework.Foundation.Tests
             channel.Register(trace.Add);
             ((IEventSource)channel).Register(() => trace.Add(2));
             channel.Register(value => trace.Add(value + 2));
-            ((IEventSource)channel).Register(null).UnRegister();
-            channel.Register(null).UnRegister();
-            channel.RegisterOnce(null).UnRegister();
+            ((IEventSource)channel).Register(null).Unregister();
+            channel.Register(null).Unregister();
+            channel.RegisterOnce(null).Unregister();
             channel.Trigger(1);
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, trace);
             Assert.That(channel.ListenerCount, Is.EqualTo(3));
@@ -201,11 +220,22 @@ namespace YLFramework.Foundation.Tests
             var seven = new EventChannel<int, string, object, bool, long, decimal, char>();
             var payload = new object();
             var calls = 0;
-            three.Register((i, s, o) => { Assert.That(i, Is.EqualTo(1)); Assert.That(s, Is.EqualTo("three")); Assert.That(o, Is.SameAs(payload)); calls++; });
+            three.Register((i, s, o) =>
+            {
+                Assert.That(i, Is.EqualTo(1));
+                Assert.That(s, Is.EqualTo("three"));
+                Assert.That(o, Is.SameAs(payload));
+                calls++;
+            });
             seven.Register((i, s, o, b, l, d, c) =>
             {
-                Assert.That(i, Is.EqualTo(7)); Assert.That(s, Is.EqualTo("seven")); Assert.That(o, Is.SameAs(payload));
-                Assert.That(b, Is.True); Assert.That(l, Is.EqualTo(long.MaxValue)); Assert.That(d, Is.EqualTo(1.5m)); Assert.That(c, Is.EqualTo('x'));
+                Assert.That(i, Is.EqualTo(7));
+                Assert.That(s, Is.EqualTo("seven"));
+                Assert.That(o, Is.SameAs(payload));
+                Assert.That(b, Is.True);
+                Assert.That(l, Is.EqualTo(long.MaxValue));
+                Assert.That(d, Is.EqualTo(1.5m));
+                Assert.That(c, Is.EqualTo('x'));
                 calls++;
             });
             three.Trigger(1, "three", payload);
@@ -220,9 +250,17 @@ namespace YLFramework.Foundation.Tests
             var first = new InvalidOperationException("first");
             var second = new ArgumentException("second");
             var trace = new List<int>();
-            channel.Register(() => { trace.Add(1); throw first; });
+            channel.Register(() =>
+            {
+                trace.Add(1);
+                throw first;
+            });
             channel.Register(() => trace.Add(2));
-            channel.RegisterOnce(() => { trace.Add(3); throw second; });
+            channel.RegisterOnce(() =>
+            {
+                trace.Add(3);
+                throw second;
+            });
             Assert.That(Assert.Throws<InvalidOperationException>(channel.Trigger), Is.SameAs(first));
             CollectionAssert.AreEqual(new[] { 1 }, trace);
             var errors = Assert.Throws<AggregateException>(channel.TriggerAll);

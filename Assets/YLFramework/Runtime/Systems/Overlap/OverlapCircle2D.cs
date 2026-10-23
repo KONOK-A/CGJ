@@ -22,10 +22,12 @@ namespace YLFramework.Overlap
         /// </summary>
         public float Radius
         {
-            get {
+            get
+            {
                 return radius;
             }
-            set {
+            set
+            {
                 radius = value;
             }
 
@@ -38,31 +40,42 @@ namespace YLFramework.Overlap
         // Fix编码
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 Vector3 s = transform.lossyScale;
                 float scale = Mathf.Abs(s.x) > Mathf.Abs(s.y) ? Mathf.Abs(s.x) : Mathf.Abs(s.y);
 
-    #if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                 ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-                int count = Physics2D.defaultPhysicsScene.OverlapCircle(transform.position, radius * scale, contactFilter, results);
-    #else
-                int count = Physics2D.OverlapCircleNonAlloc(transform.position, radius * scale, results, layerMask.value);
-    #endif
+                int count = Physics2D.defaultPhysicsScene.OverlapCircle(transform.position, radius * scale, contactFilter, ResultBuffer);
+#else
+                int count = Physics2D.OverlapCircleNonAlloc(transform.position, radius * scale, ResultBuffer, layerMask.value);
+#endif
 
 
                 ClearResults();
                 CheckCapacity(count);
-                for (int i = 0; i < count && !CheckInvalidated; i++)
+                for (int i = 0; i < count && !IsCheckInvalidated; i++)
                 {
-                    if (!results[i] || results[i].isTrigger) continue;
-                    AddResults(results[i], transform.position);
+                    if (!ResultBuffer[i] || ResultBuffer[i].isTrigger)
+                    {
+                        continue;
+                    }
+
+                    AddResults(ResultBuffer[i], transform.position);
                 }
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
         }
 
 

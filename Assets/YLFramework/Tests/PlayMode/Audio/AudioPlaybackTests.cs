@@ -14,29 +14,33 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioPlaybackTests
     {
-        private AudioClip mLongClip;
-        private AudioClip mShortClip;
-        private readonly List<GameObject> mObjects = new List<GameObject>();
-        private static readonly string[] Keys =
+        private AudioClip _longClip;
+        private AudioClip _shortClip;
+        private readonly List<GameObject> _objects = new List<GameObject>();
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private bool mOwnActionSession;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private bool _ownsActionSession;
 
         [SetUp]
         public void SetUp()
         {
             AudioKit.Shutdown();
-            mOwnActionSession = false;
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            _ownsActionSession = false;
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             var settings = AudioKit.Settings;
             settings.IsSoundOn.SetValueWithoutCallback(true);
@@ -48,33 +52,57 @@ namespace YLFramework.Tests.Audio
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
             AudioKit.GlobalFrameCountForIgnoreSameSound = 10;
             AudioKit.SoundFrameCountForIgnoreSameSound = 10;
-            mLongClip = AudioClip.Create("long", 44100, 1, 44100, false);
-            mShortClip = AudioClip.Create("short", 2205, 1, 44100, false);
+            _longClip = AudioClip.Create("long", 44100, 1, 44100, false);
+            _shortClip = AudioClip.Create("short", 2205, 1, 44100, false);
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            if (mOwnActionSession) YLFramework.Actions.ActionKit.Shutdown();
+            if (_ownsActionSession)
+            {
+                YLFramework.Actions.ActionKit.Shutdown();
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
-            foreach (var root in mObjects) if (root) Object.Destroy(root);
-            mObjects.Clear();
-            Object.Destroy(mLongClip);
-            Object.Destroy(mShortClip);
+            foreach (var root in _objects)
+            {
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
+            }
+
+            _objects.Clear();
+            Object.Destroy(_longClip);
+            Object.Destroy(_shortClip);
             yield return null;
         }
 
         private GameObject OwnObject(string name)
         {
             var root = new GameObject(name);
-            mObjects.Add(root);
+            _objects.Add(root);
             return root;
         }
 
@@ -88,19 +116,19 @@ namespace YLFramework.Tests.Audio
 
         private void AcquireActionSession()
         {
-            Assert.IsFalse(YLFramework.Actions.ActionKit.Initialized);
+            Assert.IsFalse(YLFramework.Actions.ActionKit.IsInitialized);
             var executor = typeof(YLFramework.Actions.ActionKit).Assembly.GetType("YLFramework.Actions.MonoUpdateActionExecutor", true);
             var driver = typeof(YLFramework.Actions.ActionKit).Assembly.GetType("YLFramework.Actions.ActionRecycleDriver", true);
             Assert.IsEmpty(Object.FindObjectsOfType(executor, true));
             Assert.IsEmpty(Object.FindObjectsOfType(driver, true), "Do not release another owner's Action session.");
-            mOwnActionSession = true;
+            _ownsActionSession = true;
         }
 
         [UnityTest]
         public IEnumerator SameFrameRepeatedShutdownRecreatesHostWithoutOldCallbacksOrSources()
         {
             var calls = 0;
-            var old = AudioKit.PlaySound(mLongClip, Options(true), (_, __) => calls++);
+            var old = AudioKit.PlaySound(_longClip, Options(true), (_, __) => calls++);
             var first = AudioManager.Instance;
             var oldSource = old.Voice.Source;
             var oldSettings = AudioKit.Settings;
@@ -109,7 +137,7 @@ namespace YLFramework.Tests.Audio
             var middle = AudioManager.Instance;
             AudioKit.Shutdown();
             AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
-            var current = AudioKit.PlaySound(mLongClip, Options(true));
+            var current = AudioKit.PlaySound(_longClip, Options(true));
             var host = AudioManager.Instance;
             Assert.AreNotSame(first, host);
             Assert.AreNotSame(middle, host);
@@ -136,7 +164,7 @@ namespace YLFramework.Tests.Audio
             var manager = root.AddComponent<AudioManager>();
             Assert.AreSame(manager, AudioManager.Instance);
             root.SetActive(true);
-            var handle = AudioKit.PlaySound(mLongClip, Options(true));
+            var handle = AudioKit.PlaySound(_longClip, Options(true));
             var source = handle.Voice.Source;
             AudioKit.Shutdown();
             yield return null;
@@ -151,15 +179,15 @@ namespace YLFramework.Tests.Audio
         public IEnumerator StopAndPoolReuseDiscardCallbacksAndIsolateOldHandle()
         {
             var callback = 0;
-            var old = AudioKit.PlaySound(mLongClip, onFinished: (_, __) => callback++);
+            var old = AudioKit.PlaySound(_longClip, onFinished: (_, __) => callback++);
             var source = old.Voice.Source;
             yield return null;
             Assert.IsTrue(old.IsPlaying);
             old.Stop();
             Assert.IsFalse(old.IsValid);
             Assert.IsNull(source.clip);
-            Assert.IsTrue(mLongClip);
-            var current = AudioKit.PlaySound(mShortClip);
+            Assert.IsTrue(_longClip);
+            var current = AudioKit.PlaySound(_shortClip);
             Assert.AreSame(old.Voice, current.Voice);
             Assert.AreNotEqual(old.Generation, current.Generation);
             old.Pause();
@@ -178,11 +206,15 @@ namespace YLFramework.Tests.Audio
             var callbacks = 0;
             for (var i = 0; i < handles.Length; i++)
             {
-                handles[i] = AudioKit.PlaySound(mLongClip, Options(true), (_, __) => callbacks++);
+                handles[i] = AudioKit.PlaySound(_longClip, Options(true), (_, __) => callbacks++);
                 sources[i] = handles[i].Voice.Source;
             }
             Assert.AreEqual(12, AudioKit.SoundCount);
-            foreach (var handle in handles) { handle.Stop(); handle.Stop(); }
+            foreach (var handle in handles)
+            {
+                handle.Stop();
+                handle.Stop();
+            }
             for (var i = 0; i < 10; i++)
             {
                 Assert.IsFalse(sources[i].gameObject.activeSelf);
@@ -192,23 +224,27 @@ namespace YLFramework.Tests.Audio
             yield return null;
             Assert.IsFalse(sources[10]);
             Assert.IsFalse(sources[11]);
-            var current = AudioKit.PlaySound(mShortClip);
+            var current = AudioKit.PlaySound(_shortClip);
             Assert.AreSame(handles[9].Voice, current.Voice);
             Assert.AreSame(sources[9], current.Voice.Source);
             AudioKit.Shutdown();
             yield return null;
-            foreach (var source in sources) Assert.IsFalse(source);
+            foreach (var source in sources)
+            {
+                Assert.IsFalse(source);
+            }
+
             Assert.IsFalse(current.IsValid);
             Assert.AreEqual(0, callbacks);
-            Assert.IsTrue(mLongClip);
-            Assert.IsTrue(mShortClip);
+            Assert.IsTrue(_longClip);
+            Assert.IsTrue(_shortClip);
         }
 
         [UnityTest]
         public IEnumerator PauseResumePreservesPositionAndSuppressesCompletion()
         {
             var finished = 0;
-            var handle = AudioKit.PlaySound(mLongClip, onFinished: (_, __) => finished++);
+            var handle = AudioKit.PlaySound(_longClip, onFinished: (_, __) => finished++);
             yield return new WaitForSecondsRealtime(.12f);
             handle.Pause();
             var sample = handle.Voice.Source.timeSamples;
@@ -216,7 +252,7 @@ namespace YLFramework.Tests.Audio
             var generation = handle.Generation;
             Assert.Greater(sample, 0);
             Assert.Greater(position, 0f);
-            Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+            Assert.AreEqual(_longClip.length, handle.Duration, .001f);
             Assert.AreEqual(handle.Voice.Source.time, position, .04f);
             Assert.AreEqual(position / handle.Duration, handle.Progress, .04f);
             yield return new WaitForSecondsRealtime(.12f);
@@ -233,7 +269,7 @@ namespace YLFramework.Tests.Audio
             yield return new WaitForSecondsRealtime(.12f);
             Assert.Greater(handle.Time, position + .04f);
             Assert.That(handle.Progress, Is.InRange(0f, 1f));
-            Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+            Assert.AreEqual(_longClip.length, handle.Duration, .001f);
             handle.Stop();
             Assert.AreEqual(0, finished);
             Assert.AreEqual(0f, handle.Time);
@@ -245,7 +281,7 @@ namespace YLFramework.Tests.Audio
         public IEnumerator LoopRequiresStopAndDoesNotNotifyFinish()
         {
             var finished = 0;
-            var handle = AudioKit.PlaySound(mShortClip, Options(true), (_, __) => finished++);
+            var handle = AudioKit.PlaySound(_shortClip, Options(true), (_, __) => finished++);
             yield return new WaitForSecondsRealtime(.2f);
             Assert.IsTrue(handle.IsPlaying);
             Assert.IsTrue(handle.Voice.Source.loop);
@@ -258,10 +294,10 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator SharedVolumeUpdatesActiveSourcesButNotIdleSources()
         {
-            var music = AudioKit.PlayMusic(mLongClip, volume: .5f);
-            var voice = AudioKit.PlayVoice(mLongClip, true, .25f);
-            var first = AudioKit.PlaySound(mLongClip, Options(true, .5f));
-            var second = AudioKit.PlaySound(mLongClip, Options(true, .25f));
+            var music = AudioKit.PlayMusic(_longClip, volume: .5f);
+            var voice = AudioKit.PlayVoice(_longClip, true, .25f);
+            var first = AudioKit.PlaySound(_longClip, Options(true, .5f));
+            var second = AudioKit.PlaySound(_longClip, Options(true, .25f));
             Assert.AreEqual(.5f, first.Voice.Source.volume, .001f);
             AudioKit.Settings.SoundVolume.Value = .4f;
             Assert.AreEqual(.2f, first.Voice.Source.volume, .001f);
@@ -278,7 +314,7 @@ namespace YLFramework.Tests.Audio
             var idleVolume = idleSource.volume;
             AudioKit.Settings.SoundVolume.Value = .7f;
             Assert.AreEqual(idleVolume, idleSource.volume);
-            var current = AudioKit.PlaySound(mLongClip, Options(true, .5f));
+            var current = AudioKit.PlaySound(_longClip, Options(true, .5f));
             Assert.AreEqual(.35f, current.Voice.Source.volume, .001f);
             AudioKit.Settings.SoundVolume.Value = .2f;
             Assert.AreEqual(.1f, current.Voice.Source.volume, .001f);
@@ -287,9 +323,9 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator MusicVoiceSoundUseSeparateSlotsAndReplacementInvalidatesOldMusic()
         {
-            var music = AudioKit.PlayMusic(mLongClip);
-            var voice = AudioKit.PlayVoice(mLongClip, true, .3f);
-            var sound = AudioKit.PlaySound(mLongClip, Options(true));
+            var music = AudioKit.PlayMusic(_longClip);
+            var voice = AudioKit.PlayVoice(_longClip, true, .3f);
+            var sound = AudioKit.PlaySound(_longClip, Options(true));
             yield return null;
             Assert.AreEqual(music, AudioKit.Music);
             Assert.AreEqual(voice, AudioKit.Voice);
@@ -301,7 +337,7 @@ namespace YLFramework.Tests.Audio
             Assert.IsTrue(music.IsPaused);
             Assert.IsTrue(voice.IsPlaying);
             AudioKit.ResumeMusic();
-            var replacement = AudioKit.PlayMusic(mLongClip, false, .4f);
+            var replacement = AudioKit.PlayMusic(_longClip, false, .4f);
             Assert.IsFalse(music.IsValid);
             Assert.AreNotEqual(music.Generation, replacement.Generation);
             music.Stop();
@@ -318,10 +354,10 @@ namespace YLFramework.Tests.Audio
         {
             var starts = 0;
             var finishes = 0;
-            var music = AudioKit.PlayMusic(mLongClip, true, .5f, (_, __) => starts++, (_, __) => finishes++);
-            var voice = AudioKit.PlayVoice(mLongClip, true, .5f, (_, __) => starts++, (_, __) => finishes++);
-            var sound = AudioKit.PlaySound(mLongClip, Options(true), (_, __) => finishes++);
-            var other = AudioKit.PlaySound(mLongClip, Options(true, .2f));
+            var music = AudioKit.PlayMusic(_longClip, true, .5f, (_, __) => starts++, (_, __) => finishes++);
+            var voice = AudioKit.PlayVoice(_longClip, true, .5f, (_, __) => starts++, (_, __) => finishes++);
+            var sound = AudioKit.PlaySound(_longClip, Options(true), (_, __) => finishes++);
+            var other = AudioKit.PlaySound(_longClip, Options(true, .2f));
             yield return new WaitForSecondsRealtime(.12f);
             var musicSample = music.Voice.Source.timeSamples;
             var voiceSample = voice.Voice.Source.timeSamples;
@@ -366,14 +402,19 @@ namespace YLFramework.Tests.Audio
         public IEnumerator ParameterChangesKeepManualPauseAndSurviveSwitchReplay()
         {
             var starts = 0;
-            var music = AudioKit.PlayMusic(mLongClip, onStarted: (_, __) => starts++);
-            var voice = AudioKit.PlayVoice(mLongClip, true, onStarted: (_, __) => starts++);
-            var sound = AudioKit.PlaySound(mLongClip, Options(true));
+            var music = AudioKit.PlayMusic(_longClip, onStarted: (_, __) => starts++);
+            var voice = AudioKit.PlayVoice(_longClip, true, onStarted: (_, __) => starts++);
+            var sound = AudioKit.PlaySound(_longClip, Options(true));
             yield return new WaitForSecondsRealtime(.05f);
-            music.Pause(); voice.Pause(); sound.Pause();
-            music.SetVolumeScale(.3f); music.SetPitch(1.2f);
-            voice.SetVolumeScale(.4f); voice.SetPitch(1.4f);
-            sound.SetVolumeScale(.5f); sound.SetPitch(1.6f);
+            music.Pause();
+            voice.Pause();
+            sound.Pause();
+            music.SetVolumeScale(.3f);
+            music.SetPitch(1.2f);
+            voice.SetVolumeScale(.4f);
+            voice.SetPitch(1.4f);
+            sound.SetVolumeScale(.5f);
+            sound.SetPitch(1.6f);
             yield return null;
             Assert.IsTrue(music.IsPaused);
             Assert.IsTrue(voice.IsPaused);
@@ -381,15 +422,19 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(sound.IsPlaying);
             AudioKit.Settings.IsMusicOn.Value = false;
             AudioKit.Settings.IsVoiceOn.Value = false;
-            music.SetVolumeScale(.25f); music.SetPitch(2f);
-            voice.SetVolumeScale(.5f); voice.SetPitch(.75f);
+            music.SetVolumeScale(.25f);
+            music.SetPitch(2f);
+            voice.SetVolumeScale(.5f);
+            voice.SetPitch(.75f);
             AudioKit.Settings.MusicVolume.Value = .4f;
             AudioKit.Settings.VoiceVolume.Value = .6f;
             AudioKit.Settings.IsMusicOn.Value = true;
             AudioKit.Settings.IsVoiceOn.Value = true;
             Assert.IsTrue(music.IsPaused);
             Assert.IsTrue(voice.IsPaused);
-            music.Resume(); voice.Resume(); sound.Resume();
+            music.Resume();
+            voice.Resume();
+            sound.Resume();
             yield return null;
             Assert.IsTrue(music.IsPlaying);
             Assert.IsTrue(voice.IsPlaying);
@@ -409,10 +454,12 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsMusicOn.Value = false;
             AudioKit.Settings.IsVoiceOn.Value = false;
             var starts = 0;
-            var music = AudioKit.PlayMusic(mLongClip, onStarted: (_, __) => starts++);
-            var voice = AudioKit.PlayVoice(mLongClip, true, onStarted: (_, __) => starts++);
-            music.SetVolumeScale(.25f); music.SetPitch(1.25f);
-            voice.SetVolumeScale(.5f); voice.SetPitch(.75f);
+            var music = AudioKit.PlayMusic(_longClip, onStarted: (_, __) => starts++);
+            var voice = AudioKit.PlayVoice(_longClip, true, onStarted: (_, __) => starts++);
+            music.SetVolumeScale(.25f);
+            music.SetPitch(1.25f);
+            voice.SetVolumeScale(.5f);
+            voice.SetPitch(.75f);
             AudioKit.Settings.MusicVolume.Value = .4f;
             AudioKit.Settings.VoiceVolume.Value = .6f;
             Assert.IsFalse(music.IsPlaying);
@@ -433,13 +480,15 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator PoolReuseResetsRuntimeParametersAndIgnoresOldSetterCalls()
         {
-            var old = AudioKit.PlaySound(mLongClip, Options(true));
+            var old = AudioKit.PlaySound(_longClip, Options(true));
             var source = old.Voice.Source;
-            old.SetVolumeScale(.25f); old.SetPitch(2f);
+            old.SetVolumeScale(.25f);
+            old.SetPitch(2f);
             old.Stop();
-            var current = AudioKit.PlaySound(mLongClip, Options(true));
+            var current = AudioKit.PlaySound(_longClip, Options(true));
             Assert.AreSame(source, current.Voice.Source);
-            old.SetVolumeScale(0f); old.SetPitch(.5f);
+            old.SetVolumeScale(0f);
+            old.SetPitch(.5f);
             Assert.AreEqual(1f, source.volume);
             Assert.AreEqual(1f, source.pitch);
             Assert.AreEqual(1f, current.Voice.Options.Volume);
@@ -454,15 +503,15 @@ namespace YLFramework.Tests.Audio
             var finished = 0;
             var next = default(AudioHandle);
             var completed = default(AudioHandle);
-            var handle = AudioKit.PlaySound(mShortClip, onFinished: (clip, callbackHandle) =>
+            var handle = AudioKit.PlaySound(_shortClip, onFinished: (clip, callbackHandle) =>
             {
                 finished++;
                 completed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.IsFalse(callbackHandle.IsPlaying);
-                Assert.AreEqual(mShortClip.length, callbackHandle.Duration, .001f);
-                next = AudioKit.PlaySound(mLongClip, Options(true));
+                Assert.AreEqual(_shortClip.length, callbackHandle.Duration, .001f);
+                next = AudioKit.PlaySound(_longClip, Options(true));
             });
             yield return WaitForFinish(handle);
             Assert.AreEqual(1, finished);
@@ -484,16 +533,16 @@ namespace YLFramework.Tests.Audio
             var finished = 0;
             var next = default(AudioHandle);
             var completed = default(AudioHandle);
-            var old = AudioKit.PlayMusic(mShortClip, false, onFinished: (clip, callbackHandle) =>
+            var old = AudioKit.PlayMusic(_shortClip, false, onFinished: (clip, callbackHandle) =>
             {
                 finished++;
                 completed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.AreEqual(callbackHandle, AudioKit.Music);
-                next = AudioKit.PlayMusic(mLongClip);
+                next = AudioKit.PlayMusic(_longClip);
                 Assert.IsFalse(callbackHandle.IsValid);
-                Assert.AreSame(mShortClip, clip, "Replacement must not rewrite the captured clip.");
+                Assert.AreSame(_shortClip, clip, "Replacement must not rewrite the captured clip.");
             });
             yield return WaitForFinish(old);
             Assert.AreEqual(1, finished);
@@ -501,7 +550,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreNotEqual(completed.Generation, next.Generation);
             Assert.IsTrue(next.IsValid);
             Assert.AreEqual(next, AudioKit.Music);
-            Assert.AreSame(mLongClip, next.Voice.Source.clip);
+            Assert.AreSame(_longClip, next.Voice.Source.clip);
             Assert.IsTrue(next.Voice.Source.loop);
             yield return null;
             Assert.IsTrue(next.IsPlaying);
@@ -513,13 +562,13 @@ namespace YLFramework.Tests.Audio
             var started = 0;
             var next = default(AudioHandle);
             var startedHandle = default(AudioHandle);
-            var old = AudioKit.PlayMusic(mShortClip, false, onStarted: (clip, callbackHandle) =>
+            var old = AudioKit.PlayMusic(_shortClip, false, onStarted: (clip, callbackHandle) =>
             {
                 started++;
                 startedHandle = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
-                next = AudioKit.PlayMusic(mLongClip, true, .6f);
+                next = AudioKit.PlayMusic(_longClip, true, .6f);
                 Assert.IsFalse(callbackHandle.IsValid);
             });
             Assert.AreEqual(old, startedHandle);
@@ -530,19 +579,19 @@ namespace YLFramework.Tests.Audio
             yield return null;
             Assert.AreEqual(1, started);
             Assert.IsTrue(next.IsPlaying);
-            Assert.AreSame(mLongClip, next.Voice.Source.clip);
+            Assert.AreSame(_longClip, next.Voice.Source.clip);
             Assert.AreEqual(.6f, next.Voice.Source.volume, .001f);
         }
 
         [UnityTest]
         public IEnumerator FinishCallbackShutdownCleansOtherPlaybackAndPermitsNewSession()
         {
-            var other = AudioKit.PlaySound(mLongClip, Options(true));
+            var other = AudioKit.PlaySound(_longClip, Options(true));
             var calls = 0;
-            var finishing = AudioKit.PlaySound(mShortClip, onFinished: (clip, callbackHandle) =>
+            var finishing = AudioKit.PlaySound(_shortClip, onFinished: (clip, callbackHandle) =>
             {
                 calls++;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 AudioKit.Shutdown();
                 Assert.IsFalse(callbackHandle.IsValid);
@@ -553,7 +602,7 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(other.IsValid);
             Assert.IsFalse(AudioManager.HasInstance);
             AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
-            var current = AudioKit.PlaySound(mLongClip, Options(true));
+            var current = AudioKit.PlaySound(_longClip, Options(true));
             Assert.IsTrue(current.IsValid);
             finishing.Stop();
             other.Stop();
@@ -565,15 +614,15 @@ namespace YLFramework.Tests.Audio
         public IEnumerator ThrowingFinishCallbackStillReleasesPlayback()
         {
             LogAssert.Expect(LogType.Exception, new Regex("expected audio callback failure"));
-            var handle = AudioKit.PlaySound(mShortClip, onFinished: (clip, callbackHandle) =>
+            var handle = AudioKit.PlaySound(_shortClip, onFinished: (clip, callbackHandle) =>
             {
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 throw new InvalidOperationException("expected audio callback failure");
             });
             yield return WaitForFinish(handle);
             Assert.AreEqual(0, AudioKit.SoundCount);
-            var next = AudioKit.PlaySound(mLongClip, Options(true));
+            var next = AudioKit.PlaySound(_longClip, Options(true));
             yield return null;
             Assert.IsTrue(next.IsPlaying);
         }
@@ -583,12 +632,12 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.IgnoreSameSoundInSoundFrames;
             AudioKit.SoundFrameCountForIgnoreSameSound = 10000;
-            var first = AudioKit.PlaySound(mShortClip);
+            var first = AudioKit.PlaySound(_shortClip);
             yield return WaitForFinish(first);
-            var second = AudioKit.PlaySound(mShortClip, Options(true));
+            var second = AudioKit.PlaySound(_shortClip, Options(true));
             Assert.IsTrue(second.IsValid);
             second.Stop();
-            Assert.IsFalse(AudioKit.PlaySound(mShortClip).IsValid);
+            Assert.IsFalse(AudioKit.PlaySound(_shortClip).IsValid);
         }
 
         [UnityTest]
@@ -596,14 +645,14 @@ namespace YLFramework.Tests.Audio
         {
             var started = 0;
             var finished = 0;
-            var handle = AudioKit.PlayMusic(mLongClip, false, .35f, (_, __) => started++, (_, __) => finished++);
+            var handle = AudioKit.PlayMusic(_longClip, false, .35f, (_, __) => started++, (_, __) => finished++);
             yield return new WaitForSecondsRealtime(.12f);
             Assert.Greater(handle.Voice.Source.timeSamples, 0);
             AudioKit.Settings.IsMusicOn.Value = false;
             Assert.IsTrue(handle.IsValid);
             Assert.IsFalse(handle.IsPlaying);
             Assert.AreEqual(0f, handle.Time);
-            Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+            Assert.AreEqual(_longClip.length, handle.Duration, .001f);
             Assert.AreEqual(0f, handle.Progress);
             yield return new WaitForSecondsRealtime(.05f);
             Assert.AreEqual(0, finished);
@@ -625,7 +674,7 @@ namespace YLFramework.Tests.Audio
         {
             var started = 0;
             var finished = 0;
-            var handle = AudioKit.PlayVoice(mShortClip, true, .25f, (_, __) => started++, (_, __) => finished++);
+            var handle = AudioKit.PlayVoice(_shortClip, true, .25f, (_, __) => started++, (_, __) => finished++);
             AudioKit.Settings.IsVoiceOn.Value = false;
             Assert.IsTrue(handle.IsValid);
             Assert.IsFalse(handle.IsPlaying);
@@ -648,7 +697,7 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsVoiceOn.Value = false;
             var started = 0;
             var finished = 0;
-            var handle = AudioKit.PlayVoice(mLongClip, false, .45f, (_, __) => started++, (_, __) => finished++);
+            var handle = AudioKit.PlayVoice(_longClip, false, .45f, (_, __) => started++, (_, __) => finished++);
             Assert.IsTrue(handle.IsValid);
             Assert.IsFalse(handle.IsPlaying);
             handle.Stop();
@@ -666,8 +715,8 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsMusicOn.Value = false;
             var oldStarted = 0;
             var started = 0;
-            var old = AudioKit.PlayMusic(mLongClip, true, .2f, (_, __) => oldStarted++);
-            var current = AudioKit.PlayMusic(mShortClip, false, .7f, (_, __) => started++);
+            var old = AudioKit.PlayMusic(_longClip, true, .2f, (_, __) => oldStarted++);
+            var current = AudioKit.PlayMusic(_shortClip, false, .7f, (_, __) => started++);
             Assert.IsFalse(old.IsValid);
             Assert.IsTrue(current.IsValid);
             Assert.IsFalse(current.IsPlaying);
@@ -675,7 +724,7 @@ namespace YLFramework.Tests.Audio
             AudioKit.Settings.IsMusicOn.Value = true;
             Assert.AreEqual(0, oldStarted);
             Assert.AreEqual(1, started);
-            Assert.AreSame(mShortClip, current.Voice.Source.clip);
+            Assert.AreSame(_shortClip, current.Voice.Source.clip);
             Assert.AreEqual(.7f, current.Voice.Source.volume, .001f);
             Assert.IsFalse(current.Voice.Source.loop);
             current.Stop();
@@ -691,11 +740,11 @@ namespace YLFramework.Tests.Audio
         {
             var started = 0;
             var startedHandle = default(AudioHandle);
-            var handle = AudioKit.PlayMusic(mLongClip, onStarted: (clip, callbackHandle) =>
+            var handle = AudioKit.PlayMusic(_longClip, onStarted: (clip, callbackHandle) =>
             {
                 started++;
                 startedHandle = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 callbackHandle.Pause();
                 callbackHandle.Resume();
                 callbackHandle.Pause();
@@ -717,11 +766,11 @@ namespace YLFramework.Tests.Audio
         public IEnumerator SoundSwitchStopsAllWithoutRestoringOldPlayback()
         {
             var finished = 0;
-            var old = AudioKit.PlaySound(mLongClip, Options(true), (_, __) => finished++);
+            var old = AudioKit.PlaySound(_longClip, Options(true), (_, __) => finished++);
             AudioKit.Settings.IsSoundOn.Value = false;
             Assert.IsFalse(old.IsValid);
             Assert.AreEqual(0, AudioKit.SoundCount);
-            Assert.IsFalse(AudioKit.PlaySound(mLongClip).IsValid);
+            Assert.IsFalse(AudioKit.PlaySound(_longClip).IsValid);
             AudioKit.Settings.IsSoundOn.Value = true;
             yield return null;
             Assert.AreEqual(0, AudioKit.SoundCount);
@@ -737,7 +786,7 @@ namespace YLFramework.Tests.Audio
             options.MaxDistance = 30f;
             options.RolloffMode = AudioRolloffMode.Logarithmic;
             var position = new Vector3(7f, 3f, -2f);
-            var spatial = AudioKit.PlaySoundAt(mLongClip, position, options);
+            var spatial = AudioKit.PlaySoundAt(_longClip, position, options);
             var source = spatial.Voice.Source;
             Assert.AreEqual(position, source.transform.position);
             Assert.AreEqual(1f, source.spatialBlend);
@@ -748,7 +797,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(1.7f, source.pitch, .001f);
             spatial.Pause();
             spatial.Stop();
-            var current = AudioKit.PlaySound(mLongClip);
+            var current = AudioKit.PlaySound(_longClip);
             Assert.AreSame(source, current.Voice.Source);
             Assert.AreEqual(0f, source.spatialBlend);
             Assert.AreEqual(Vector3.zero, source.transform.localPosition);
@@ -771,7 +820,7 @@ namespace YLFramework.Tests.Audio
             var target = OwnObject("AudioKit.FollowTarget");
             target.transform.position = new Vector3(2f, 4f, 6f);
             var finished = 0;
-            var handle = AudioKit.PlaySoundFollowing(mLongClip, target.transform, Options(true), (_, __) => finished++);
+            var handle = AudioKit.PlaySoundFollowing(_longClip, target.transform, Options(true), (_, __) => finished++);
             var source = handle.Voice.Source;
             Assert.AreEqual(target.transform.position, source.transform.position);
             Assert.AreEqual(1f, source.spatialBlend);
@@ -786,7 +835,7 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(handle.IsValid);
             Assert.AreEqual(0, finished);
             Assert.IsNull(source.clip);
-            Assert.IsFalse(AudioKit.PlaySoundFollowing(mLongClip, target.transform).IsValid);
+            Assert.IsFalse(AudioKit.PlaySoundFollowing(_longClip, target.transform).IsValid);
         }
 
         [UnityTest]
@@ -800,7 +849,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreSame(manager, AudioManager.Instance);
             root.SetActive(true);
             var position = new Vector3(7f, 3f, -2f);
-            var handle = AudioKit.PlaySoundAt(mLongClip, position, Options(true));
+            var handle = AudioKit.PlaySoundAt(_longClip, position, Options(true));
             handle.Pause();
             parent.transform.SetPositionAndRotation(new Vector3(13f, -7f, 2f), Quaternion.Euler(0f, 90f, 0f));
             root.transform.localPosition = new Vector3(2f, 1f, 4f);
@@ -810,7 +859,7 @@ namespace YLFramework.Tests.Audio
                 "A fixed world sound must not follow its manager or the manager's ancestors.");
             Assert.IsTrue(handle.IsPaused);
             handle.Stop();
-            var reused = AudioKit.PlaySound(mLongClip, Options(true));
+            var reused = AudioKit.PlaySound(_longClip, Options(true));
             Assert.AreEqual(Vector3.zero, reused.Voice.Source.transform.localPosition);
             parent.transform.position += Vector3.one;
             yield return null;
@@ -824,13 +873,13 @@ namespace YLFramework.Tests.Audio
             var target = OwnObject("AudioKit.DestroyTarget");
             var followFinished = 0;
             var fixedFinished = 0;
-            var following = AudioKit.PlaySoundFollowing(mLongClip, target.transform, Options(true), (_, __) => followFinished++);
+            var following = AudioKit.PlaySoundFollowing(_longClip, target.transform, Options(true), (_, __) => followFinished++);
             var completed = default(AudioHandle);
-            var fixedSound = AudioKit.PlaySoundAt(mShortClip, target.transform.position, onFinished: (clip, callbackHandle) =>
+            var fixedSound = AudioKit.PlaySoundAt(_shortClip, target.transform.position, onFinished: (clip, callbackHandle) =>
             {
                 fixedFinished++;
                 completed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
             });
             Object.Destroy(target);
@@ -850,7 +899,7 @@ namespace YLFramework.Tests.Audio
             var target = OwnObject("AudioKit.SceneTarget");
             SceneManager.MoveGameObjectToScene(target, scene);
             var finished = 0;
-            var handle = AudioKit.PlaySoundFollowing(mLongClip, target.transform, Options(true), (_, __) => finished++);
+            var handle = AudioKit.PlaySoundFollowing(_longClip, target.transform, Options(true), (_, __) => finished++);
             try
             {
                 yield return SceneManager.UnloadSceneAsync(scene);
@@ -861,7 +910,10 @@ namespace YLFramework.Tests.Audio
             }
             finally
             {
-                if (scene.isLoaded) SceneManager.UnloadSceneAsync(scene);
+                if (scene.isLoaded)
+                {
+                    SceneManager.UnloadSceneAsync(scene);
+                }
             }
         }
 
@@ -870,7 +922,7 @@ namespace YLFramework.Tests.Audio
         {
             AcquireActionSession();
             var callback = 0;
-            var sequence = YLFramework.Actions.ActionKit.Sequence().PlaySound(mShortClip).Callback(() => callback++);
+            var sequence = YLFramework.Actions.ActionKit.Sequence().PlaySound(_shortClip).Callback(() => callback++);
             try
             {
                 Assert.IsFalse(sequence.Execute(0f));
@@ -884,7 +936,10 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(ActionStatus.Finished, sequence.Status);
                 Assert.AreEqual(1, callback);
             }
-            finally { sequence.Deinit(); }
+            finally
+            {
+                sequence.Deinit();
+            }
         }
 
         [UnityTest]
@@ -892,7 +947,7 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.Settings.IsSoundOn.Value = false;
             AudioKit.Settings.VoiceVolume.Value = .4f;
-            var music = AudioKit.PlayMusic(mLongClip);
+            var music = AudioKit.PlayMusic(_longClip);
             var options = Options(true, .5f);
             options.Pitch = 1.25f;
             options.MinDistance = 2f;
@@ -901,11 +956,11 @@ namespace YLFramework.Tests.Audio
             var position = new Vector3(3, 4, 5);
             var starts = 0;
             var startedHandle = default(AudioHandle);
-            var spatial = AudioKit.PlayVoiceAt(mLongClip, position, options, onStarted: (clip, callbackHandle) =>
+            var spatial = AudioKit.PlayVoiceAt(_longClip, position, options, onStarted: (clip, callbackHandle) =>
             {
                 starts++;
                 startedHandle = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.AreEqual(position, callbackHandle.Voice.Source.transform.position);
                 Assert.AreEqual(1f, callbackHandle.Voice.Source.spatialBlend);
                 Assert.AreEqual(2f, callbackHandle.Voice.Source.minDistance);
@@ -921,8 +976,9 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(0, AudioKit.SoundCount);
             Assert.AreEqual(0f, music.Voice.Source.spatialBlend);
             Assert.IsTrue(music.IsPlaying);
-            var current = AudioKit.PlayVoice(mLongClip, true);
-            spatial.Stop(); spatial.SetPitch(2f);
+            var current = AudioKit.PlayVoice(_longClip, true);
+            spatial.Stop();
+            spatial.SetPitch(2f);
             Assert.IsFalse(spatial.IsValid);
             Assert.AreSame(source, current.Voice.Source);
             Assert.AreEqual(0f, source.spatialBlend);
@@ -944,7 +1000,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreSame(manager, AudioManager.Instance);
             root.SetActive(true);
             var position = new Vector3(3, 2, 1);
-            var handle = AudioKit.PlayVoiceAt(mLongClip, position, Options(true));
+            var handle = AudioKit.PlayVoiceAt(_longClip, position, Options(true));
             handle.Pause();
             root.transform.SetPositionAndRotation(Vector3.one * 10f, Quaternion.Euler(0, 90, 0));
             yield return null;
@@ -960,7 +1016,7 @@ namespace YLFramework.Tests.Audio
             target.transform.position = Vector3.one;
             var starts = 0;
             var finished = 0;
-            var handle = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, Options(true),
+            var handle = AudioKit.PlayVoiceFollowing(_longClip, target.transform, Options(true),
                 (_, __) => starts++, (_, __) => finished++);
             var source = handle.Voice.Source;
             Assert.AreNotSame(target.transform, source.transform.parent);
@@ -969,7 +1025,8 @@ namespace YLFramework.Tests.Audio
             yield return null;
             Assert.AreEqual(target.transform.position, source.transform.position);
             AudioKit.Settings.IsVoiceOn.Value = false;
-            handle.SetVolumeScale(.5f); handle.SetPitch(1.5f);
+            handle.SetVolumeScale(.5f);
+            handle.SetPitch(1.5f);
             AudioKit.Settings.VoiceVolume.Value = .4f;
             target.transform.position = new Vector3(7, 8, 9);
             AudioKit.Settings.IsVoiceOn.Value = true;
@@ -998,7 +1055,7 @@ namespace YLFramework.Tests.Audio
             var target = OwnObject("AudioKit.PendingVoiceTarget");
             var starts = 0;
             var finishes = 0;
-            var handle = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, onStarted: (_, __) => starts++,
+            var handle = AudioKit.PlayVoiceFollowing(_longClip, target.transform, onStarted: (_, __) => starts++,
                 onFinished: (_, __) => finishes++);
             Assert.IsTrue(handle.IsValid);
             target.SetActive(false);
@@ -1015,7 +1072,7 @@ namespace YLFramework.Tests.Audio
         {
             var finished = 0;
             var target = OwnObject("AudioKit.DestroyedVoiceTarget");
-            var handle = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, Options(true), onFinished: (_, __) => finished++);
+            var handle = AudioKit.PlayVoiceFollowing(_longClip, target.transform, Options(true), onFinished: (_, __) => finished++);
             handle.Pause();
             Object.Destroy(target);
             yield return null;
@@ -1025,7 +1082,7 @@ namespace YLFramework.Tests.Audio
             var scene = SceneManager.CreateScene("AudioKit.VoiceScene." + Guid.NewGuid().ToString("N"));
             var sceneTarget = OwnObject("AudioKit.SceneVoiceTarget");
             SceneManager.MoveGameObjectToScene(sceneTarget, scene);
-            var next = AudioKit.PlayVoiceFollowing(mLongClip, sceneTarget.transform, Options(true), onFinished: (_, __) => finished++);
+            var next = AudioKit.PlayVoiceFollowing(_longClip, sceneTarget.transform, Options(true), onFinished: (_, __) => finished++);
             try
             {
                 yield return SceneManager.UnloadSceneAsync(scene);
@@ -1034,7 +1091,13 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0, finished);
                 Assert.AreEqual(0, AudioKit.SoundCount);
             }
-            finally { if (scene.isLoaded) SceneManager.UnloadSceneAsync(scene); }
+            finally
+            {
+                if (scene.isLoaded)
+                {
+                    SceneManager.UnloadSceneAsync(scene);
+                }
+            }
         }
 
         [UnityTest]
@@ -1044,14 +1107,14 @@ namespace YLFramework.Tests.Audio
             var next = default(AudioHandle);
             var finished = 0;
             var completed = default(AudioHandle);
-            var first = AudioKit.PlayVoiceAt(mShortClip, Vector3.one, onFinished: (clip, callbackHandle) =>
+            var first = AudioKit.PlayVoiceAt(_shortClip, Vector3.one, onFinished: (clip, callbackHandle) =>
             {
                 finished++;
                 completed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.AreEqual(callbackHandle, AudioKit.Voice);
-                next = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, Options(true));
+                next = AudioKit.PlayVoiceFollowing(_longClip, target.transform, Options(true));
                 Assert.IsFalse(callbackHandle.IsValid);
             });
             yield return WaitForFinish(first);
@@ -1060,7 +1123,8 @@ namespace YLFramework.Tests.Audio
             Assert.IsTrue(next.IsValid);
             Assert.AreEqual(next, AudioKit.Voice);
             Assert.AreEqual(1f, next.Voice.Source.spatialBlend);
-            first.SetVolumeScale(0f); first.Stop();
+            first.SetVolumeScale(0f);
+            first.Stop();
             yield return null;
             Assert.IsTrue(next.IsPlaying);
             Assert.AreEqual(1f, next.Voice.Options.Volume);
@@ -1071,7 +1135,7 @@ namespace YLFramework.Tests.Audio
         {
             AcquireActionSession();
             var finishes = 0;
-            var action = PlaySoundAction.Allocate(mLongClip, () => finishes++);
+            var action = PlaySoundAction.Allocate(_longClip, () => finishes++);
             try
             {
                 action.Execute(0f);
@@ -1094,7 +1158,10 @@ namespace YLFramework.Tests.Audio
                 Assert.IsTrue(action.Execute(0));
                 Assert.AreEqual(2, finishes, "Reset preserves the configured callback for the next execution.");
             }
-            finally { action.Deinit(); }
+            finally
+            {
+                action.Deinit();
+            }
         }
 
         [UnityTest]
@@ -1102,11 +1169,11 @@ namespace YLFramework.Tests.Audio
         {
             AcquireActionSession();
             var finishes = 0;
-            var action = PlaySoundAction.Allocate(mShortClip, () => finishes++);
+            var action = PlaySoundAction.Allocate(_shortClip, () => finishes++);
             try
             {
                 action.Execute(0f);
-                action.Paused = true;
+                action.IsPaused = true;
                 var handle = AudioKit.GetPlayingSounds()[0];
                 Assert.IsFalse(handle.IsPaused);
                 yield return WaitForFinish(handle);
@@ -1117,42 +1184,45 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(ActionStatus.Finished, action.Status);
                 Assert.AreEqual(1, finishes);
             }
-            finally { action.Deinit(); }
+            finally
+            {
+                action.Deinit();
+            }
         }
 
         [UnityTest]
         public IEnumerator ProgressAdvancesForMusicVoiceAndFixedAndFollowingSpatialRequests()
         {
             var target = OwnObject("AudioKit.ProgressTarget");
-            var music = AudioKit.PlayMusic(mLongClip);
-            var voice = AudioKit.PlayVoice(mLongClip, true);
-            var sound = AudioKit.PlaySound(mLongClip, Options(true));
-            var fixedSound = AudioKit.PlaySoundAt(mLongClip, Vector3.one, Options(true));
-            var followingSound = AudioKit.PlaySoundFollowing(mLongClip, target.transform, Options(true));
+            var music = AudioKit.PlayMusic(_longClip);
+            var voice = AudioKit.PlayVoice(_longClip, true);
+            var sound = AudioKit.PlaySound(_longClip, Options(true));
+            var fixedSound = AudioKit.PlaySoundAt(_longClip, Vector3.one, Options(true));
+            var followingSound = AudioKit.PlaySoundFollowing(_longClip, target.transform, Options(true));
             yield return new WaitForSecondsRealtime(.18f);
             foreach (var handle in new[] { music, voice, sound, fixedSound, followingSound })
             {
                 handle.Pause();
                 Assert.IsTrue(handle.IsValid);
                 Assert.Greater(handle.Time, .03f);
-                Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+                Assert.AreEqual(_longClip.length, handle.Duration, .001f);
                 Assert.That(handle.Progress, Is.InRange(0f, 1f));
                 Assert.AreEqual(handle.Time / handle.Duration, handle.Progress, .001f);
             }
-            var fixedVoice = AudioKit.PlayVoiceAt(mLongClip, Vector3.one, Options(true));
+            var fixedVoice = AudioKit.PlayVoiceAt(_longClip, Vector3.one, Options(true));
             yield return new WaitForSecondsRealtime(.18f);
             fixedVoice.Pause();
             Assert.Greater(fixedVoice.Time, .03f);
-            Assert.AreEqual(mLongClip.length, fixedVoice.Duration, .001f);
+            Assert.AreEqual(_longClip.length, fixedVoice.Duration, .001f);
             Assert.IsFalse(voice.IsValid);
             Assert.AreEqual(0f, voice.Time);
             Assert.AreEqual(0f, voice.Duration);
             Assert.AreEqual(0f, voice.Progress);
-            var followingVoice = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, Options(true));
+            var followingVoice = AudioKit.PlayVoiceFollowing(_longClip, target.transform, Options(true));
             yield return new WaitForSecondsRealtime(.18f);
             followingVoice.Pause();
             Assert.Greater(followingVoice.Time, .03f);
-            Assert.AreEqual(mLongClip.length, followingVoice.Duration, .001f);
+            Assert.AreEqual(_longClip.length, followingVoice.Duration, .001f);
             Assert.AreEqual(followingVoice.Time / followingVoice.Duration, followingVoice.Progress, .001f);
         }
 
@@ -1160,9 +1230,9 @@ namespace YLFramework.Tests.Audio
         public IEnumerator MutedPlaybackAdvancesAndUnmuteDoesNotRestartOrRestoreStaleVolume()
         {
             var settings = AudioKit.Settings;
-            var music = AudioKit.PlayMusic(mLongClip);
-            var voice = AudioKit.PlayVoice(mLongClip, true);
-            var sound = AudioKit.PlaySound(mLongClip, Options(true));
+            var music = AudioKit.PlayMusic(_longClip);
+            var voice = AudioKit.PlayVoice(_longClip, true);
+            var sound = AudioKit.PlaySound(_longClip, Options(true));
             yield return new WaitForSecondsRealtime(.12f);
             var positions = new[] { music.Time, voice.Time, sound.Time };
             var handles = new[] { music, voice, sound };
@@ -1172,7 +1242,11 @@ namespace YLFramework.Tests.Audio
             settings.MusicVolume.Value = .4f;
             settings.VoiceVolume.Value = .6f;
             settings.SoundVolume.Value = .8f;
-            foreach (var handle in handles) handle.SetVolumeScale(.5f);
+            foreach (var handle in handles)
+            {
+                handle.SetVolumeScale(.5f);
+            }
+
             yield return new WaitForSecondsRealtime(.12f);
             for (var i = 0; i < handles.Length; i++)
             {
@@ -1180,7 +1254,7 @@ namespace YLFramework.Tests.Audio
                 Assert.IsFalse(handles[i].IsPaused);
                 Assert.IsTrue(handles[i].Voice.Source.mute);
                 Assert.Greater(handles[i].Time, positions[i] + .04f);
-                Assert.AreEqual(mLongClip.length, handles[i].Duration, .001f);
+                Assert.AreEqual(_longClip.length, handles[i].Duration, .001f);
                 handles[i].Pause();
                 positions[i] = handles[i].Time;
             }
@@ -1197,7 +1271,11 @@ namespace YLFramework.Tests.Audio
                 handles[i].Resume();
             }
             yield return new WaitForSecondsRealtime(.12f);
-            for (var i = 0; i < handles.Length; i++) Assert.Greater(handles[i].Time, positions[i] + .04f);
+            for (var i = 0; i < handles.Length; i++)
+            {
+                Assert.Greater(handles[i].Time, positions[i] + .04f);
+            }
+
             Assert.IsTrue(settings.IsOn);
         }
 
@@ -1212,26 +1290,30 @@ namespace YLFramework.Tests.Audio
             var completed = new List<AudioHandle>();
             Action<AudioClip, AudioHandle> onStarted = (clip, callbackHandle) =>
             {
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.IsTrue(callbackHandle.Voice.Source.mute);
                 starts.Add(callbackHandle);
             };
             Action<AudioClip, AudioHandle> onFinished = (clip, callbackHandle) =>
             {
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.IsFalse(callbackHandle.IsPlaying);
                 Assert.IsTrue(callbackHandle.Voice.Source.mute);
-                Assert.AreEqual(mShortClip.length, callbackHandle.Duration, .001f);
+                Assert.AreEqual(_shortClip.length, callbackHandle.Duration, .001f);
                 Assert.That(callbackHandle.Progress, Is.InRange(0f, 1f));
                 completed.Add(callbackHandle);
             };
-            var music = AudioKit.PlayMusic(mShortClip, false, onStarted: onStarted, onFinished: onFinished);
-            var voice = AudioKit.PlayVoice(mShortClip, onStarted: onStarted, onFinished: onFinished);
-            var sound = AudioKit.PlaySound(mShortClip, onFinished: onFinished);
+            var music = AudioKit.PlayMusic(_shortClip, false, onStarted: onStarted, onFinished: onFinished);
+            var voice = AudioKit.PlayVoice(_shortClip, onStarted: onStarted, onFinished: onFinished);
+            var sound = AudioKit.PlaySound(_shortClip, onFinished: onFinished);
             CollectionAssert.AreEquivalent(new[] { music, voice }, starts, "Starts are synchronous, before API return.");
-            foreach (var handle in new[] { music, voice, sound }) yield return WaitForFinish(handle);
+            foreach (var handle in new[] { music, voice, sound })
+            {
+                yield return WaitForFinish(handle);
+            }
+
             CollectionAssert.AreEquivalent(new[] { music, voice, sound }, completed);
             foreach (var handle in completed)
             {
@@ -1275,7 +1357,11 @@ namespace YLFramework.Tests.Audio
                 Assert.IsTrue(handle.IsPlaying);
                 Assert.AreEqual(0, finished);
             }
-            finally { handle.Stop(); Object.Destroy(clip); }
+            finally
+            {
+                handle.Stop();
+                Object.Destroy(clip);
+            }
         }
 
         [UnityTest]
@@ -1292,7 +1378,8 @@ namespace YLFramework.Tests.Audio
                 options.Pitch = 2f;
                 fast = AudioKit.PlaySound(clip, options);
                 yield return new WaitForSecondsRealtime(.25f);
-                slow.Pause(); fast.Pause();
+                slow.Pause();
+                fast.Pause();
                 Assert.Greater(slow.Time, .03f);
                 Assert.Greater(fast.Time, slow.Time + .1f);
                 Assert.AreEqual(clip.length, slow.Duration, .001f);
@@ -1300,7 +1387,12 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(slow.Time / clip.length, slow.Progress, .001f);
                 Assert.AreEqual(fast.Time / clip.length, fast.Progress, .001f);
             }
-            finally { slow.Stop(); fast.Stop(); Object.Destroy(clip); }
+            finally
+            {
+                slow.Stop();
+                fast.Stop();
+                Object.Destroy(clip);
+            }
         }
 
         [UnityTest]
@@ -1314,11 +1406,11 @@ namespace YLFramework.Tests.Audio
             var started = default(AudioHandle);
             var completed = default(AudioHandle);
             var finishes = 0;
-            var handle = AudioKit.PlayVoiceFollowing(mLongClip, target.transform, onStarted: (clip, callbackHandle) =>
+            var handle = AudioKit.PlayVoiceFollowing(_longClip, target.transform, onStarted: (clip, callbackHandle) =>
             {
                 calls++;
                 started = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.IsTrue(callbackHandle.Voice.Source.mute);
                 Assert.AreEqual(target.transform.position, callbackHandle.Voice.Source.transform.position);
@@ -1326,14 +1418,14 @@ namespace YLFramework.Tests.Audio
             {
                 finishes++;
                 completed = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.AreEqual(started, callbackHandle);
                 Assert.IsTrue(callbackHandle.IsValid);
                 Assert.IsFalse(callbackHandle.IsPlaying);
             });
             Assert.AreEqual(0, calls);
             Assert.AreEqual(0f, handle.Time);
-            Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+            Assert.AreEqual(_longClip.length, handle.Duration, .001f);
             Assert.AreEqual(0f, handle.Progress);
             target.transform.position = Vector3.one;
             settings.IsVoiceOn.Value = true;
@@ -1343,7 +1435,7 @@ namespace YLFramework.Tests.Audio
             Assert.Greater(handle.Time, .03f);
             settings.IsVoiceOn.Value = false;
             Assert.AreEqual(0f, handle.Time);
-            Assert.AreEqual(mLongClip.length, handle.Duration, .001f);
+            Assert.AreEqual(_longClip.length, handle.Duration, .001f);
             settings.IsVoiceOn.Value = true;
             yield return null;
             Assert.AreEqual(1, calls);
@@ -1358,7 +1450,7 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator RandomFinishContextUsesSelectedClipIdentityAndOriginalGeneration()
         {
-            var other = AudioClip.Create(mShortClip.name, 2205, 1, 44100, false);
+            var other = AudioClip.Create(_shortClip.name, 2205, 1, 44100, false);
             var state = UnityEngine.Random.state;
             try
             {
@@ -1368,7 +1460,7 @@ namespace YLFramework.Tests.Audio
                     var calls = 0;
                     var handle = default(AudioHandle);
                     AudioClip selected = null;
-                    handle = AudioKit.PlayRandomSound(new[] { mShortClip, null, other }, onFinished: (clip, callbackHandle) =>
+                    handle = AudioKit.PlayRandomSound(new[] { _shortClip, null, other }, onFinished: (clip, callbackHandle) =>
                     {
                         calls++;
                         Assert.AreSame(selected, clip, "Same-name clips must be distinguished by object identity.");
@@ -1378,13 +1470,17 @@ namespace YLFramework.Tests.Audio
                         Assert.IsFalse(callbackHandle.IsPlaying);
                     });
                     selected = handle.Voice.Source.clip;
-                    CollectionAssert.Contains(new[] { mShortClip, other }, selected);
+                    CollectionAssert.Contains(new[] { _shortClip, other }, selected);
                     yield return WaitForFinish(handle);
                     Assert.AreEqual(1, calls);
                     Assert.IsFalse(handle.IsValid);
                 }
             }
-            finally { UnityEngine.Random.state = state; Object.Destroy(other); }
+            finally
+            {
+                UnityEngine.Random.state = state;
+                Object.Destroy(other);
+            }
         }
 
         [UnityTest]
@@ -1394,18 +1490,19 @@ namespace YLFramework.Tests.Audio
             var next = default(AudioHandle);
             var completed = default(AudioHandle);
             var calls = 0;
-            var first = AudioKit.PlaySoundFollowing(mShortClip, target.transform, onFinished: (clip, callbackHandle) =>
+            var first = AudioKit.PlaySoundFollowing(_shortClip, target.transform, onFinished: (clip, callbackHandle) =>
             {
                 calls++;
                 completed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 callbackHandle.Stop();
                 Assert.IsFalse(callbackHandle.IsValid);
-                next = AudioKit.PlaySound(mLongClip, Options(true));
+                next = AudioKit.PlaySound(_longClip, Options(true));
                 Assert.AreSame(callbackHandle.Voice, next.Voice);
                 Assert.AreNotEqual(callbackHandle.Generation, next.Generation);
-                callbackHandle.Pause(); callbackHandle.Stop();
+                callbackHandle.Pause();
+                callbackHandle.Stop();
                 Assert.IsTrue(next.IsValid);
             });
             yield return WaitForFinish(first);
@@ -1421,15 +1518,15 @@ namespace YLFramework.Tests.Audio
         {
             var next = default(AudioHandle);
             var calls = 0;
-            var first = AudioKit.PlaySound(mShortClip, onFinished: (clip, callbackHandle) =>
+            var first = AudioKit.PlaySound(_shortClip, onFinished: (clip, callbackHandle) =>
             {
                 calls++;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 AudioKit.Shutdown();
                 Assert.IsFalse(callbackHandle.IsValid);
                 AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
-                next = AudioKit.PlaySound(mLongClip, Options(true));
+                next = AudioKit.PlaySound(_longClip, Options(true));
                 callbackHandle.Stop();
             });
             yield return WaitForFinish(first);
@@ -1445,13 +1542,13 @@ namespace YLFramework.Tests.Audio
             var next = default(AudioHandle);
             var calls = 0;
             LogAssert.Expect(LogType.Exception, new Regex("expected reentrant audio callback failure"));
-            var first = AudioKit.PlaySound(mShortClip, onFinished: (clip, callbackHandle) =>
+            var first = AudioKit.PlaySound(_shortClip, onFinished: (clip, callbackHandle) =>
             {
                 calls++;
-                Assert.AreSame(mShortClip, clip);
+                Assert.AreSame(_shortClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 callbackHandle.Stop();
-                next = AudioKit.PlaySound(mLongClip, Options(true));
+                next = AudioKit.PlaySound(_longClip, Options(true));
                 Assert.AreSame(callbackHandle.Voice, next.Voice);
                 throw new InvalidOperationException("expected reentrant audio callback failure");
             });
@@ -1467,25 +1564,25 @@ namespace YLFramework.Tests.Audio
         {
             var calls = 0;
             var started = default(AudioHandle);
-            var first = AudioKit.PlayVoice(mLongClip, onStarted: (clip, callbackHandle) =>
+            var first = AudioKit.PlayVoice(_longClip, onStarted: (clip, callbackHandle) =>
             {
                 calls++;
                 started = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 callbackHandle.Stop();
                 Assert.IsFalse(callbackHandle.IsValid);
             });
             Assert.AreEqual(first, started);
             Assert.IsFalse(first.IsValid);
-            var next = AudioKit.PlayVoice(mLongClip, true);
+            var next = AudioKit.PlayVoice(_longClip, true);
             first.Stop();
             Assert.IsTrue(next.IsValid);
-            var last = AudioKit.PlayMusic(mLongClip, onStarted: (clip, callbackHandle) =>
+            var last = AudioKit.PlayMusic(_longClip, onStarted: (clip, callbackHandle) =>
             {
                 calls++;
                 started = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 AudioKit.Shutdown();
                 Assert.IsFalse(callbackHandle.IsValid);
@@ -1502,21 +1599,21 @@ namespace YLFramework.Tests.Audio
         public IEnumerator ThrowingStartCallbackCleansOnlyItsOriginalGeneration()
         {
             var failed = default(AudioHandle);
-            Assert.Throws<InvalidOperationException>(() => AudioKit.PlayVoice(mLongClip, onStarted: (clip, callbackHandle) =>
+            Assert.Throws<InvalidOperationException>(() => AudioKit.PlayVoice(_longClip, onStarted: (clip, callbackHandle) =>
             {
                 failed = callbackHandle;
-                Assert.AreSame(mLongClip, clip);
+                Assert.AreSame(_longClip, clip);
                 Assert.IsTrue(callbackHandle.IsValid);
                 throw new InvalidOperationException("expected start failure");
             }));
             Assert.IsFalse(failed.IsValid);
             Assert.IsFalse(AudioKit.Voice.IsValid);
             var next = default(AudioHandle);
-            Assert.Throws<InvalidOperationException>(() => AudioKit.PlayMusic(mShortClip, false, onStarted: (clip, callbackHandle) =>
+            Assert.Throws<InvalidOperationException>(() => AudioKit.PlayMusic(_shortClip, false, onStarted: (clip, callbackHandle) =>
             {
                 failed = callbackHandle;
-                Assert.AreSame(mShortClip, clip);
-                next = AudioKit.PlayMusic(mLongClip);
+                Assert.AreSame(_shortClip, clip);
+                next = AudioKit.PlayMusic(_longClip);
                 Assert.IsFalse(callbackHandle.IsValid);
                 throw new InvalidOperationException("expected replacement start failure");
             }));
@@ -1529,7 +1626,11 @@ namespace YLFramework.Tests.Audio
         private static IEnumerator WaitForFinish(AudioHandle handle)
         {
             var deadline = Time.realtimeSinceStartup + 2f;
-            while (handle.IsValid && Time.realtimeSinceStartup < deadline) yield return null;
+            while (handle.IsValid && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.IsFalse(handle.IsValid, "Playback did not complete within the test window.");
         }
     }

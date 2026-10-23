@@ -5,23 +5,23 @@ using UnityEditorInternal;
 using UnityEngine;
 
 namespace YLFramework.Core.Editor
-{ 
+{
     /// <summary>
     /// 项目全局设置(配置文件保存在Assets的同级目录ProjectSettings下面)
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public class ProjectSettingsScriptableObject<T> : ScriptableObject where T : ScriptableObject
     {
-        private static T instance;
+        private static T _instance;
         public static T Instance
         {
             get
             {
-                if (!instance)
+                if (!_instance)
                 {
                     LoadOrCreate();
                 }
-                return instance;
+                return _instance;
             }
         }
         public static void LoadOrCreate()
@@ -35,15 +35,18 @@ namespace YLFramework.Core.Editor
                 {
                     foreach (var loadedObject in arr)
                     {
-                        if (loadedObject) DestroyImmediate(loadedObject);
+                        if (loadedObject)
+                        {
+                            DestroyImmediate(loadedObject);
+                        }
                     }
                     throw new IOException("Refusing to replace incompatible YL settings: " + filePath);
                 }
-                instance = (T)arr[0];
+                _instance = (T)arr[0];
             }
             else
             {
-                instance = CreateInstance<T>();
+                _instance = CreateInstance<T>();
                 Save();
             }
 
@@ -51,8 +54,10 @@ namespace YLFramework.Core.Editor
 
         public static void Save(bool saveAsText = true)
         {
-            if (!instance)
+            if (!_instance)
+            {
                 throw new InvalidOperationException("Load YL settings before saving them.");
+            }
 
             string filePath = GetFilePath();
             if (!string.IsNullOrEmpty(filePath))
@@ -64,10 +69,15 @@ namespace YLFramework.Core.Editor
                     bool compatible = existing.Length == 1 && existing[0] != null && existing[0].GetType() == typeof(T);
                     foreach (var loadedObject in existing)
                     {
-                        if (loadedObject) DestroyImmediate(loadedObject);
+                        if (loadedObject)
+                        {
+                            DestroyImmediate(loadedObject);
+                        }
                     }
                     if (!compatible)
+                    {
                         throw new IOException("Refusing to overwrite incompatible YL settings: " + filePath);
+                    }
                 }
 
                 string directoryName = Path.GetDirectoryName(filePath);
@@ -75,7 +85,7 @@ namespace YLFramework.Core.Editor
                 {
                     Directory.CreateDirectory(directoryName);
                 }
-                UnityEngine.Object[] obj = new T[1] { instance };
+                UnityEngine.Object[] obj = new T[1] { _instance };
                 InternalEditorUtility.SaveToSerializedFileAndForget(obj, filePath, saveAsText);
             }
         }
@@ -84,14 +94,18 @@ namespace YLFramework.Core.Editor
             string fullName = typeof(T).FullName;
             if (string.IsNullOrEmpty(fullName) || fullName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
                 fullName.IndexOf('/') >= 0 || fullName.IndexOf('\\') >= 0)
+            {
                 throw new InvalidOperationException("A safe, unique FullName is required for YL settings.");
+            }
 
             string filePath = string.Format("ProjectSettings/YLFramework/Core/{0}.asset", fullName);
             for (string parent = Path.GetFullPath(filePath); !string.IsNullOrEmpty(parent); parent = Path.GetDirectoryName(parent))
             {
                 if ((Directory.Exists(parent) || File.Exists(parent)) &&
                     (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
+                {
                     throw new IOException("Linked settings paths are not supported: " + parent);
+                }
             }
             return filePath;
         }
@@ -102,5 +116,5 @@ namespace YLFramework.Core.Editor
             ProjectSettingTools.OpenProjectSettings(path);
         }
 
-    } 
+    }
 }

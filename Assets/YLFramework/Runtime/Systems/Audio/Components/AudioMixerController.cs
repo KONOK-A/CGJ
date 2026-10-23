@@ -31,7 +31,10 @@ namespace YLFramework.Services.Audio
 
         private void Awake()
         {
-            if (applyOnAwake && config) Apply();
+            if (applyOnAwake && config)
+            {
+                Apply();
+            }
         }
 
         /// <summary>Applies the complete configuration to category routing without writing Mixer parameters.</summary>
@@ -62,11 +65,17 @@ namespace YLFramework.Services.Audio
         public void SetParameter(float value)
         {
             var mixer = GetMixer(nameof(SetParameter));
-            if (!mixer) return;
+            if (!mixer)
+            {
+                return;
+            }
+
             try
             {
                 if (!AudioMixerControl.TrySetFloat(mixer, parameterName, value))
+                {
                     LogError(nameof(SetParameter), $"Mixer rejected parameter '{parameterName}' (missing parameter or snapshots being edited).");
+                }
             }
             catch (ArgumentException exception)
             {
@@ -78,11 +87,17 @@ namespace YLFramework.Services.Audio
         public void SetVolume(float linearVolume)
         {
             var mixer = GetMixer(nameof(SetVolume));
-            if (!mixer) return;
+            if (!mixer)
+            {
+                return;
+            }
+
             try
             {
                 if (!AudioMixerControl.TrySetVolume(mixer, parameterName, linearVolume))
+                {
                     LogError(nameof(SetVolume), $"Mixer rejected parameter '{parameterName}' (missing parameter or snapshots being edited).");
+                }
             }
             catch (ArgumentException exception)
             {
@@ -94,11 +109,17 @@ namespace YLFramework.Services.Audio
         public void ClearParameter()
         {
             var mixer = GetMixer(nameof(ClearParameter));
-            if (!mixer) return;
+            if (!mixer)
+            {
+                return;
+            }
+
             try
             {
                 if (!AudioMixerControl.TryClearFloat(mixer, parameterName))
+                {
                     LogError(nameof(ClearParameter), $"Mixer could not clear parameter '{parameterName}'.");
+                }
             }
             catch (ArgumentException exception)
             {
@@ -110,11 +131,18 @@ namespace YLFramework.Services.Audio
         public void TransitionToSnapshot()
         {
             var mixer = GetMixer(nameof(TransitionToSnapshot));
-            if (!mixer) return;
+            if (!mixer)
+            {
+                return;
+            }
+
             try
             {
                 if (snapshot && snapshot.audioMixer != mixer)
+                {
                     throw new ArgumentException("The snapshot must belong to the configured Mixer.", nameof(snapshot));
+                }
+
                 AudioMixerControl.TransitionToSnapshot(snapshot, transitionDuration);
             }
             catch (ArgumentException exception)
@@ -127,7 +155,11 @@ namespace YLFramework.Services.Audio
         public void TransitionToSnapshots()
         {
             var mixer = GetMixer(nameof(TransitionToSnapshots));
-            if (!mixer) return;
+            if (!mixer)
+            {
+                return;
+            }
+
             try
             {
                 AudioMixerControl.TransitionToSnapshots(mixer, snapshots, weights, transitionDuration);

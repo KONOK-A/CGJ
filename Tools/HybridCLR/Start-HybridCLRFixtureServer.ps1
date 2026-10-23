@@ -30,10 +30,28 @@ if (-not [IO.File]::Exists($pfx)) {
 }
 if ($CertificateOnly) { 'Created/reused an owned isolated fixture certificate; no system trust or secret output.'; exit 0 }
 $repository = [IO.Path]::GetFullPath($owner.repository)
-$source = [IO.File]::ReadAllText((Join-Path $repository 'Assets/YLFramework/Tests/EditMode/Resource/ResourceTlsServer.cs'))
-$errorStatement = 'private void Record(Exception exception) { lock (sync) errors.Add(exception); }'
+$source = [IO.File]::ReadAllText((Join-Path $repository 'Assets/YLFramework/Tests/EditMode/Resource/ResourceTlsServer.cs')).Replace("`r`n", "`n")
+$errorStatement = @'
+        private void Record(Exception exception)
+        {
+            lock (_sync)
+            {
+                _errors.Add(exception);
+            }
+        }
+'@
 if (-not $source.Contains($errorStatement)) { throw 'The existing TLS fixture error surface changed; do not silently adapt it.' }
-$source = $source.Replace($errorStatement, 'private void Record(Exception exception) { lock (sync) errors.Add(exception); System.Console.Error.WriteLine("TLS fixture: " + exception); }')
+$loggedErrorStatement = @'
+        private void Record(Exception exception)
+        {
+            lock (_sync)
+            {
+                _errors.Add(exception);
+            }
+            System.Console.Error.WriteLine("TLS fixture: " + exception);
+        }
+'@
+$source = $source.Replace($errorStatement, $loggedErrorStatement)
 $hostCode = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'HybridCLRFixtureHost.cs.txt'))
 Add-Type -TypeDefinition ($source + [Environment]::NewLine + $hostCode) -Language CSharp
 if ($CompileOnly) { 'Compiled the existing TLS fixture and acceptance host without starting a server.'; exit 0 }

@@ -39,13 +39,22 @@ namespace YLFramework.Services.Save
         private readonly Dictionary<int, Dictionary<string, CachedObject>> _cache = new Dictionary<int, Dictionary<string, CachedObject>>();
         private readonly FileStream _rootLock;
         private SaveIndex _index;
-        private bool _indexRecoveryRequired;
-        private bool _disposed;
-        private bool _disposeFinished;
+        private bool _requiresIndexRecovery;
+        private bool _isDisposed;
+        private bool _hasFinishedDisposal;
         private int _active;
-        public string StorageRoot { get; }
-        public JsonSerializerSettings SerializerSettings { get; }
-        public Formatting SerializationFormat { get; set; }
+        public string StorageRoot
+        {
+            get;
+        }
+        public JsonSerializerSettings SerializerSettings
+        {
+            get;
+        }
+        public Formatting SerializationFormat
+        {
+            get; set;
+        }
         private string SaveDirectory => Path.Combine(StorageRoot, "SaveData");
         private string SettingDirectory => Path.Combine(StorageRoot, "Setting");
         private string IndexPath => Path.Combine(SaveDirectory, "SaveSystemData.json");
@@ -61,30 +70,49 @@ namespace YLFramework.Services.Save
             try
             {
                 var status = SaveFileIO.ReadJson<SaveIndex>(SafePath(IndexPath), null, out _index, out var error);
-                if (status == SaveReadStatus.Failed) throw new InvalidDataException("Cannot read save index: " + error);
+                if (status == SaveReadStatus.Failed)
+                {
+                    throw new InvalidDataException("Cannot read save index: " + error);
+                }
+
                 if (status == SaveReadStatus.Missing)
                 {
                     if (Directory.Exists(SaveDirectory) && Directory.EnumerateFileSystemEntries(SaveDirectory).Any())
+                    {
                         throw new InvalidDataException("Save files exist without an index; refusing to create an empty index.");
+                    }
+
                     _index = new SaveIndex();
                 }
                 _index.Validate();
-                _indexRecoveryRequired = status == SaveReadStatus.RecoveredFromBackup;
-                foreach (var item in _index.SaveItemDict.Values) RefreshSaveTime(item);
+                _requiresIndexRecovery = status == SaveReadStatus.RecoveredFromBackup;
+                foreach (var item in _index.SaveItemDict.Values)
+                {
+                    RefreshSaveTime(item);
+                }
             }
-            catch { _rootLock.Dispose(); _shutdown.Dispose(); throw; }
+            catch
+            {
+                _rootLock.Dispose();
+                _shutdown.Dispose();
+                throw;
+            }
         }
 
-        public int? CurrentSaveID
+        public int? CurrentSaveId
         {
-            get => ReadIndex(index => index.CurrentSaveID);
+            get => ReadIndex(index => index.CurrentSaveId);
             set => Execute(-2, token =>
             {
                 lock (_metadata)
                 {
-                    if (value.HasValue && !_index.SaveItemDict.ContainsKey(value.Value)) throw new KeyNotFoundException("Unknown save slot: " + value);
+                    if (value.HasValue && !_index.SaveItemDict.ContainsKey(value.Value))
+                    {
+                        throw new KeyNotFoundException("Unknown save slot: " + value);
+                    }
+
                     var next = _index.Copy();
-                    next.CurrentSaveID = value;
+                    next.CurrentSaveId = value;
                     WriteIndex(next, token);
                 }
                 return true;
@@ -94,7 +122,7 @@ namespace YLFramework.Services.Save
         public List<SaveItem> GetAllSaveItems() => ReadIndex(index => index.SaveItemDict.Values.ToList());
         public bool HasSaveItem(int id) => ReadIndex(index => index.SaveItemDict.ContainsKey(id));
         public SaveItem GetSaveItem(int id) => ReadIndex(index => index.SaveItemDict.TryGetValue(id, out var item) ? item : null);
-        public bool IndexNeedsRecovery => ReadIndex(_ => _indexRecoveryRequired);
+        public bool IndexNeedsRecovery => ReadIndex(_ => _requiresIndexRecovery);
         public SaveItem CreateSaveItem(int? id = null) => CreateSaveItemAsync(id).GetAwaiter().GetResult();
         public Task<SaveItem> CreateSaveItemAsync(int? id = null, CancellationToken cancellationToken = default)
             => ExecuteAsync(-2, token => CreateSlot(id, null, null, token), cancellationToken);
@@ -105,11 +133,24 @@ namespace YLFramework.Services.Save
             {
                 EnsureIndexWritable();
                 var id = requestedId ?? 0;
-                if (id < 0) throw new ArgumentOutOfRangeException(nameof(requestedId));
+                if (id < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(requestedId));
+                }
+
                 if (!requestedId.HasValue)
-                    while (_index.SaveItemDict.ContainsKey(id) || Directory.Exists(SlotPath(id)) || File.Exists(SlotPath(id))) id = checked(id + 1);
+                {
+                    while (_index.SaveItemDict.ContainsKey(id) || Directory.Exists(SlotPath(id)) || File.Exists(SlotPath(id)))
+                    {
+                        id = checked(id + 1);
+                    }
+                }
+
                 if (_index.SaveItemDict.ContainsKey(id) || Directory.Exists(SlotPath(id)) || File.Exists(SlotPath(id)))
+                {
                     throw new IOException("Save slot already exists; no overwrite is allowed: " + id);
+                }
+
                 var item = new SaveItem(id, DateTime.Now);
                 var next = _index.Copy();
                 next.SaveItemDict.Add(id, item);
@@ -130,10 +171,18 @@ namespace YLFramework.Services.Save
                 catch
                 {
                     // 失败模型文件保留在独立 staging，既不占用正式槽，也不销毁诊断样本。
-                    if (moved) Directory.Move(SlotPath(id), staging);
+                    if (moved)
+                    {
+                        Directory.Move(SlotPath(id), staging);
+                    }
+
                     throw;
                 }
-                if (model != null) SetCache(id, ModelFileName, model);
+                if (model != null)
+                {
+                    SetCache(id, ModelFileName, model);
+                }
+
                 return item;
             }
         }
@@ -146,7 +195,11 @@ namespace YLFramework.Services.Save
             {
                 lock (_metadata)
                 {
-                    if (!_index.SaveItemDict.TryGetValue(id, out var original)) return false;
+                    if (!_index.SaveItemDict.TryGetValue(id, out var original))
+                    {
+                        return false;
+                    }
+
                     var modified = original.Copy();
                     change(modified);
                     var next = _index.Copy();
@@ -167,25 +220,56 @@ namespace YLFramework.Services.Save
             {
                 lock (_metadata)
                 {
-                    if (!_index.SaveItemDict.ContainsKey(id)) return false;
+                    if (!_index.SaveItemDict.ContainsKey(id))
+                    {
+                        return false;
+                    }
+
                     EnsureIndexWritable();
                     var path = SlotPath(id);
                     var tomb = SafePath(Path.Combine(SaveDirectory, ".deleted-" + id + "-" + Guid.NewGuid().ToString("N")));
                     var moved = Directory.Exists(path);
-                    if (moved) Directory.Move(path, tomb);
+                    if (moved)
+                    {
+                        Directory.Move(path, tomb);
+                    }
+
                     var next = _index.Copy();
                     next.SaveItemDict.Remove(id);
-                    if (next.CurrentSaveID == id) next.CurrentSaveID = null;
-                    try { WriteIndex(next, token); }
-                    catch { if (moved) Directory.Move(tomb, path); throw; }
-                    lock (_cacheLock) _cache.Remove(id);
+                    if (next.CurrentSaveId == id)
+                    {
+                        next.CurrentSaveId = null;
+                    }
+
+                    try
+                    {
+                        WriteIndex(next, token);
+                    }
+                    catch
+                    {
+                        if (moved)
+                        {
+                            Directory.Move(tomb, path);
+                        }
+                        throw;
+                    }
+                    lock (_cacheLock)
+                    {
+                        _cache.Remove(id);
+                    }
+
                     return true;
                 }
             }, cancellationToken);
         }
 
         public void DeleteAllSaveItems()
-        { foreach (var item in GetAllSaveItems()) DeleteSaveItem(item.SaveID); }
+        {
+            foreach (var item in GetAllSaveItems())
+            {
+                DeleteSaveItem(item.SaveId);
+            }
+        }
 
         public void SaveObject(object value, string name, int id = 0) => SaveObjectAsync(value, name, id).GetAwaiter().GetResult();
         public Task SaveObjectAsync(object value, string name, int id = 0, CancellationToken cancellationToken = default)
@@ -201,7 +285,11 @@ namespace YLFramework.Services.Save
                 var savedAt = DateTime.Now;
                 SaveFileIO.WriteTextAtomic(path, json, token);
                 SetCache(id, name, value);
-                lock (_metadata) _index.SaveItemDict[id].UpdateSaveTime(savedAt);
+                lock (_metadata)
+                {
+                    _index.SaveItemDict[id].UpdateSaveTime(savedAt);
+                }
+
                 return true;
             }, cancellationToken);
         }
@@ -211,7 +299,10 @@ namespace YLFramework.Services.Save
         public async Task<T> LoadObjectAsync<T>(string name, int id = 0, CancellationToken cancellationToken = default) where T : class
             => (await ReadObjectAsync<T>(name, id, cancellationToken).ConfigureAwait(false)).Value;
         public SaveReadResult<T> ReadObject<T>(string name, int id = 0) where T : class
-        { ValidateName(name); return Execute(id, token => ReadObjectCore<T>(name, id, token)); }
+        {
+            ValidateName(name);
+            return Execute(id, token => ReadObjectCore<T>(name, id, token));
+        }
         public Task<SaveReadResult<T>> ReadObjectAsync<T>(string name, int id = 0, CancellationToken cancellationToken = default) where T : class
         {
             ValidateName(name);
@@ -225,23 +316,38 @@ namespace YLFramework.Services.Save
             {
                 if (_cache.TryGetValue(id, out var objects) && objects.TryGetValue(name, out var cached))
                 {
-                    if (cached.Value is T typed) return new SaveReadResult<T>(typed, cached.Status, true);
+                    if (cached.Value is T typed)
+                    {
+                        return new SaveReadResult<T>(typed, cached.Status, true);
+                    }
+
                     throw new InvalidOperationException("Cached save type does not match requested type: " + name);
                 }
             }
             var result = ReadFile<T>(ObjectPath(id, name));
             token.ThrowIfCancellationRequested();
-            if (result.Value != null) SetCache(id, name, result.Value, result.Status);
+            if (result.Value != null)
+            {
+                SetCache(id, name, result.Value, result.Status);
+            }
+
             return result;
         }
 
         public bool HasObject(string name, int id = 0)
-        { ValidateName(name); return Execute(id, _ => HasSaveItem(id) && File.Exists(ObjectPath(id, name))); }
+        {
+            ValidateName(name);
+            return Execute(id, _ => HasSaveItem(id) && File.Exists(ObjectPath(id, name)));
+        }
         public List<string> GetObjectNames(int id)
         {
             return Execute(id, _ =>
             {
-                if (!HasSaveItem(id) || !Directory.Exists(SlotPath(id))) return new List<string>();
+                if (!HasSaveItem(id) || !Directory.Exists(SlotPath(id)))
+                {
+                    return new List<string>();
+                }
+
                 return Directory.GetFiles(SlotPath(id), "*.json").Select(Path.GetFileNameWithoutExtension).OrderBy(n => n, StringComparer.Ordinal).ToList();
             });
         }
@@ -251,7 +357,11 @@ namespace YLFramework.Services.Save
             ValidateName(name);
             return Execute(id, token =>
             {
-                if (!HasSaveItem(id)) return false;
+                if (!HasSaveItem(id))
+                {
+                    return false;
+                }
+
                 var path = ObjectPath(id, name);
                 var existed = File.Exists(path);
                 // 备份先移走；失败不能让后续读取复活已删除对象。所有原件仍可在 tomb 中找回。
@@ -261,10 +371,31 @@ namespace YLFramework.Services.Save
                 try
                 {
                     token.ThrowIfCancellationRequested();
-                    foreach (var file in files) if (File.Exists(SafePath(file))) { File.Move(file, file + suffix); moved.Add(file); }
+                    foreach (var file in files)
+                    {
+                        if (File.Exists(SafePath(file)))
+                        {
+                            File.Move(file, file + suffix);
+                            moved.Add(file);
+                        }
+                    }
                 }
-                catch { foreach (var file in moved.AsEnumerable().Reverse()) File.Move(file + suffix, file); throw; }
-                lock (_cacheLock) if (_cache.TryGetValue(id, out var objects)) objects.Remove(name);
+                catch
+                {
+                    foreach (var file in moved.AsEnumerable().Reverse())
+                    {
+                        File.Move(file + suffix, file);
+                    }
+                    throw;
+                }
+                lock (_cacheLock)
+                {
+                    if (_cache.TryGetValue(id, out var objects))
+                    {
+                        objects.Remove(name);
+                    }
+                }
+
                 return existed;
             });
         }
@@ -291,16 +422,27 @@ namespace YLFramework.Services.Save
             {
                 var path = SettingPath(name);
                 var value = ReadValue<T>(path);
-                if (value != null) return value;
+                if (value != null)
+                {
+                    return value;
+                }
+
                 value = new T();
                 SaveFileIO.WriteTextAtomic(path, Serialize(value), token, false);
                 return value;
             });
         }
         public bool TryLoadGlobalSetting<T>(out T value, string name) where T : class
-        { ValidateName(name); value = Execute(-1, _ => ReadValue<T>(SettingPath(name))); return value != null; }
+        {
+            ValidateName(name);
+            value = Execute(-1, _ => ReadValue<T>(SettingPath(name)));
+            return value != null;
+        }
         public SaveReadResult<T> ReadGlobalSetting<T>(string name) where T : class
-        { ValidateName(name); return Execute(-1, _ => ReadFile<T>(SettingPath(name))); }
+        {
+            ValidateName(name);
+            return Execute(-1, _ => ReadFile<T>(SettingPath(name)));
+        }
 
         public void DeleteAllSetting()
         {
@@ -308,7 +450,10 @@ namespace YLFramework.Services.Save
             {
                 token.ThrowIfCancellationRequested();
                 if (Directory.Exists(SafePath(SettingDirectory)))
+                {
                     Directory.Move(SettingDirectory, SafePath(Path.Combine(StorageRoot, ".deleted-settings-" + Guid.NewGuid().ToString("N"))));
+                }
+
                 return true;
             });
         }
@@ -321,29 +466,51 @@ namespace YLFramework.Services.Save
             {
                 RequireSlot(id);
                 var preserved = SaveFileIO.RestoreBackup<JToken>(ObjectPath(id, name), null, token);
-                lock (_cacheLock) if (_cache.TryGetValue(id, out var objects)) objects.Remove(name);
+                lock (_cacheLock)
+                {
+                    if (_cache.TryGetValue(id, out var objects))
+                    {
+                        objects.Remove(name);
+                    }
+                }
+
                 return preserved;
             });
         }
         public string RestoreSettingBackup(string name)
-        { ValidateName(name); return Execute(-1, token => SaveFileIO.RestoreBackup<JToken>(SettingPath(name), null, token)); }
+        {
+            ValidateName(name);
+            return Execute(-1, token => SaveFileIO.RestoreBackup<JToken>(SettingPath(name), null, token));
+        }
         public string RestoreIndexBackup()
         {
             return Execute(-2, token =>
             {
                 lock (_metadata)
                 {
-                    if (!_indexRecoveryRequired) throw new InvalidOperationException("Reopen a damaged index in backup-read mode before restoring it; an active healthy index cannot be rolled back.");
+                    if (!_requiresIndexRecovery)
+                    {
+                        throw new InvalidOperationException("Reopen a damaged index in backup-read mode before restoring it; an active healthy index cannot be rolled back.");
+                    }
+
                     SaveIndex restored = null;
                     var preserved = SaveFileIO.RestoreBackup<SaveIndex>(SafePath(IndexPath), null, token, index =>
                     {
                         index.Validate();
-                        foreach (var item in index.SaveItemDict.Values) RefreshSaveTime(item);
+                        foreach (var item in index.SaveItemDict.Values)
+                        {
+                            RefreshSaveTime(item);
+                        }
+
                         restored = index;
                     });
                     _index = restored;
-                    _indexRecoveryRequired = false;
-                    lock (_cacheLock) _cache.Clear();
+                    _requiresIndexRecovery = false;
+                    lock (_cacheLock)
+                    {
+                        _cache.Clear();
+                    }
+
                     return preserved;
                 }
             });
@@ -354,26 +521,54 @@ namespace YLFramework.Services.Save
         {
             cancellationToken.ThrowIfCancellationRequested();
             var model = new T { Id = id };
-            if (id < 0 || model.Id != id) throw new ArgumentException("Model Id must match a non-negative slot id.");
+            if (id < 0 || model.Id != id)
+            {
+                throw new ArgumentException("Model Id must match a non-negative slot id.");
+            }
+
             var json = Serialize(model);
-            return ExecuteAsync(id, cancellation => { CreateSlot(id, model, json, cancellation); return model; }, cancellationToken);
+            return ExecuteAsync(id, cancellation =>
+            {
+                CreateSlot(id, model, json, cancellation);
+                return model;
+            }, cancellationToken);
         }
         public void SaveModel<T>(T model) where T : class, ISaveModel
-        { if (model == null) throw new ArgumentNullException(nameof(model)); SaveObject(model, ModelFileName, model.Id); }
+        {
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+            SaveObject(model, ModelFileName, model.Id);
+        }
         public Task SaveModelAsync<T>(T model, CancellationToken cancellationToken = default) where T : class, ISaveModel
-        { if (model == null) throw new ArgumentNullException(nameof(model)); return SaveObjectAsync(model, ModelFileName, model.Id, cancellationToken); }
+        {
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+            return SaveObjectAsync(model, ModelFileName, model.Id, cancellationToken);
+        }
         public T LoadModel<T>(int? id = null) where T : class, ISaveModel
         {
-            var slot = id ?? CurrentSaveID ?? throw new InvalidOperationException("No current save slot is selected.");
+            var slot = id ?? CurrentSaveId ?? throw new InvalidOperationException("No current save slot is selected.");
             var model = LoadObject<T>(ModelFileName, slot);
-            if (model != null && model.Id != slot) throw new InvalidDataException("Model Id does not match its slot: " + slot);
+            if (model != null && model.Id != slot)
+            {
+                throw new InvalidDataException("Model Id does not match its slot: " + slot);
+            }
+
             return model;
         }
         public async Task<T> LoadModelAsync<T>(int? id = null, CancellationToken cancellationToken = default) where T : class, ISaveModel
         {
-            var slot = id ?? CurrentSaveID ?? throw new InvalidOperationException("No current save slot is selected.");
+            var slot = id ?? CurrentSaveId ?? throw new InvalidOperationException("No current save slot is selected.");
             var model = await LoadObjectAsync<T>(ModelFileName, slot, cancellationToken).ConfigureAwait(false);
-            if (model != null && model.Id != slot) throw new InvalidDataException("Model Id does not match its slot: " + slot);
+            if (model != null && model.Id != slot)
+            {
+                throw new InvalidDataException("Model Id does not match its slot: " + slot);
+            }
+
             return model;
         }
 
@@ -381,21 +576,38 @@ namespace YLFramework.Services.Save
         public async Task<List<T>> LoadAllModelsAsync<T>(CancellationToken cancellationToken = default) where T : class, ISaveModel
         {
             var models = new List<T>();
-            foreach (var item in GetAllSaveItems().OrderBy(item => item.SaveID))
+            foreach (var item in GetAllSaveItems().OrderBy(item => item.SaveId))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var model = await LoadModelAsync<T>(item.SaveID, cancellationToken).ConfigureAwait(false);
-                if (model != null) models.Add(model);
+                var model = await LoadModelAsync<T>(item.SaveId, cancellationToken).ConfigureAwait(false);
+                if (model != null)
+                {
+                    models.Add(model);
+                }
             }
             return models;
         }
 
-        public void ClearCache() { Execute(-2, _ => { lock (_cacheLock) _cache.Clear(); return true; }); }
+        public void ClearCache()
+        {
+            Execute(-2, _ =>
+            {
+                lock (_cacheLock)
+                {
+                    _cache.Clear();
+                }
+                return true;
+            });
+        }
         private void SetCache(int id, string name, object value, SaveReadStatus status = SaveReadStatus.Success)
         {
             lock (_cacheLock)
             {
-                if (!_cache.TryGetValue(id, out var objects)) _cache.Add(id, objects = new Dictionary<string, CachedObject>(StringComparer.OrdinalIgnoreCase));
+                if (!_cache.TryGetValue(id, out var objects))
+                {
+                    _cache.Add(id, objects = new Dictionary<string, CachedObject>(StringComparer.OrdinalIgnoreCase));
+                }
+
                 objects[name] = new CachedObject { Value = value, Status = status };
             }
         }
@@ -405,27 +617,76 @@ namespace YLFramework.Services.Save
         {
             ValidateSerializer();
             var status = SaveFileIO.ReadJson<T>(path, SerializerSettings, out var value, out var error);
-            if (status == SaveReadStatus.Failed) throw new InvalidDataException("Cannot read save data: " + path + " | " + error);
+            if (status == SaveReadStatus.Failed)
+            {
+                throw new InvalidDataException("Cannot read save data: " + path + " | " + error);
+            }
+
             return new SaveReadResult<T>(value, status);
         }
         private string Serialize(object value)
         {
-            if (value == null) throw new ArgumentNullException(nameof(value));
-            lock (_lifecycle) if (_disposed) throw new ObjectDisposedException(nameof(SaveStore));
+            if (value == null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
+
+            lock (_lifecycle)
+            {
+                if (_isDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(SaveStore));
+                }
+            }
+
             ValidateSerializer();
             return SaveFileIO.Serialize(value, SerializerSettings, SerializationFormat);
         }
         private void ValidateSerializer()
-        { if (SerializerSettings.TypeNameHandling != TypeNameHandling.None) throw new NotSupportedException("Save data must not instantiate CLR types from JSON ($type)."); }
+        {
+            if (SerializerSettings.TypeNameHandling != TypeNameHandling.None)
+            {
+                throw new NotSupportedException("Save data must not instantiate CLR types from JSON ($type).");
+            }
+        }
         private T ReadIndex<T>(Func<SaveIndex, T> read)
         {
             using (var operation = Begin(CancellationToken.None))
-            { try { lock (_metadata) return read(_index); } finally { End(); } }
+            {
+                try
+                {
+                    lock (_metadata)
+                    {
+                        return read(_index);
+                    }
+                }
+                finally
+                {
+                    End();
+                }
+            }
         }
         private void RequireSlot(int id, bool writing = false)
-        { lock (_metadata) { if (writing) EnsureIndexWritable(); if (!_index.SaveItemDict.ContainsKey(id)) throw new KeyNotFoundException("Unknown save slot: " + id); } }
+        {
+            lock (_metadata)
+            {
+                if (writing)
+                {
+                    EnsureIndexWritable();
+                }
+                if (!_index.SaveItemDict.ContainsKey(id))
+                {
+                    throw new KeyNotFoundException("Unknown save slot: " + id);
+                }
+            }
+        }
         private void EnsureIndexWritable()
-        { if (_indexRecoveryRequired) throw new SaveRecoveryRequiredException(IndexPath); }
+        {
+            if (_requiresIndexRecovery)
+            {
+                throw new SaveRecoveryRequiredException(IndexPath);
+            }
+        }
         private void WriteIndex(SaveIndex next, CancellationToken token)
         {
             EnsureIndexWritable();
@@ -436,15 +697,30 @@ namespace YLFramework.Services.Save
         }
         private void RefreshSaveTime(SaveItem item)
         {
-            var directory = SlotPath(item.SaveID);
-            if (!Directory.Exists(directory)) return;
+            var directory = SlotPath(item.SaveId);
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
             foreach (var path in Directory.EnumerateFiles(directory, "*.json"))
-            { var time = File.GetLastWriteTime(SafePath(path)); if (time > item.LastSaveTime) item.UpdateSaveTime(time); }
+            {
+                var time = File.GetLastWriteTime(SafePath(path));
+                if (time > item.LastSaveTime)
+                {
+                    item.UpdateSaveTime(time);
+                }
+            }
         }
         private string SlotPath(int id) => SafePath(Path.Combine(SaveDirectory, id.ToString(CultureInfo.InvariantCulture)));
         private string ObjectPath(int id, string name) => SafePath(Path.Combine(SlotPath(id), name + ".json"));
         private string SettingPath(string name) => SafePath(Path.Combine(SettingDirectory, name + ".json"));
-        private string SafePath(string path) { SaveFileIO.EnsureNoLinks(path); SaveFileIO.EnsureNoLinks(path + ".bak"); return path; }
+        private string SafePath(string path)
+        {
+            SaveFileIO.EnsureNoLinks(path);
+            SaveFileIO.EnsureNoLinks(path + ".bak");
+            return path;
+        }
         private static void ValidateName(string name)
             => SaveFileIO.ValidateFileName(name);
 
@@ -454,8 +730,21 @@ namespace YLFramework.Services.Save
             {
                 var gate = _gates.GetOrAdd(scope, _ => new SemaphoreSlim(1, 1));
                 var entered = false;
-                try { gate.Wait(operation.Token); entered = true; operation.Token.ThrowIfCancellationRequested(); return action(operation.Token); }
-                finally { if (entered) gate.Release(); End(); }
+                try
+                {
+                    gate.Wait(operation.Token);
+                    entered = true;
+                    operation.Token.ThrowIfCancellationRequested();
+                    return action(operation.Token);
+                }
+                finally
+                {
+                    if (entered)
+                    {
+                        gate.Release();
+                    }
+                    End();
+                }
             }
         }
         private async Task<T> ExecuteAsync<T>(int scope, Func<CancellationToken, T> action, CancellationToken cancellationToken)
@@ -468,40 +757,90 @@ namespace YLFramework.Services.Save
                 {
                     await gate.WaitAsync(operation.Token).ConfigureAwait(false);
                     entered = true;
-                    return await Task.Run(() => { operation.Token.ThrowIfCancellationRequested(); return action(operation.Token); }).ConfigureAwait(false);
+                    return await Task.Run(() =>
+                    {
+                        operation.Token.ThrowIfCancellationRequested();
+                        return action(operation.Token);
+                    }).ConfigureAwait(false);
                 }
-                finally { if (entered) gate.Release(); End(); }
+                finally
+                {
+                    if (entered)
+                    {
+                        gate.Release();
+                    }
+                    End();
+                }
             }
         }
         private CancellationTokenSource Begin(CancellationToken token)
         {
             lock (_lifecycle)
             {
-                if (_disposed) throw new ObjectDisposedException(nameof(SaveStore));
+                if (_isDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(SaveStore));
+                }
+
                 token.ThrowIfCancellationRequested();
                 var linked = CancellationTokenSource.CreateLinkedTokenSource(token, _shutdown.Token);
                 _active++;
                 return linked;
             }
         }
-        private void End() { lock (_lifecycle) { _active--; Monitor.PulseAll(_lifecycle); } }
+        private void End()
+        {
+            lock (_lifecycle)
+            {
+                _active--;
+                Monitor.PulseAll(_lifecycle);
+            }
+        }
         public void Dispose()
         {
             lock (_lifecycle)
             {
-                if (_disposed) { while (!_disposeFinished) Monitor.Wait(_lifecycle); return; }
-                _disposed = true;
+                if (_isDisposed)
+                {
+                    while (!_hasFinishedDisposal)
+                    {
+                        Monitor.Wait(_lifecycle);
+                    }
+                    return;
+                }
+                _isDisposed = true;
             }
             try
             {
                 _shutdown.Cancel();
-                lock (_lifecycle) while (_active != 0) Monitor.Wait(_lifecycle);
-                lock (_cacheLock) _cache.Clear();
+                lock (_lifecycle)
+                {
+                    while (_active != 0)
+                    {
+                        Monitor.Wait(_lifecycle);
+                    }
+                }
+
+                lock (_cacheLock)
+                {
+                    _cache.Clear();
+                }
+
                 _rootLock.Dispose();
                 _shutdown.Dispose();
-                foreach (var gate in _gates.Values) gate.Dispose();
+                foreach (var gate in _gates.Values)
+                {
+                    gate.Dispose();
+                }
             }
-            finally { lock (_lifecycle) { _disposeFinished = true; Monitor.PulseAll(_lifecycle); } }
+            finally
+            {
+                lock (_lifecycle)
+                {
+                    _hasFinishedDisposal = true;
+                    Monitor.PulseAll(_lifecycle);
+                }
+            }
         }
     }
 }

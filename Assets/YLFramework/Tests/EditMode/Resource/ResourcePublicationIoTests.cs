@@ -29,11 +29,21 @@ namespace YLFramework.Tests.ResourceBuild
                 for (var i = 0; i < 128; i++)
                 {
                     var bytes = Encoding.UTF8.GetBytes("{\"value\":" + i + "}");
-                    try { write.Invoke(null, new object[] { root, "release-index.json", bytes, CancellationToken.None }); }
+                    try
+                    {
+                        write.Invoke(null, new object[] { root, "release-index.json", bytes, CancellationToken.None });
+                    }
                     catch (TargetInvocationException error)
                     {
-                        attempts.Add(new { Step = "unblocked", Iteration = i, Error = error.InnerException.ToString(), error.InnerException.HResult,
-                            Attributes = File.GetAttributes(index).ToString(), NextExists = File.Exists(index + ".next") });
+                        attempts.Add(new
+                        {
+                            Step = "unblocked",
+                            Iteration = i,
+                            Error = error.InnerException.ToString(),
+                            error.InnerException.HResult,
+                            Attributes = File.GetAttributes(index).ToString(),
+                            NextExists = File.Exists(index + ".next")
+                        });
                         throw;
                     }
                     CollectionAssert.AreEqual(bytes, File.ReadAllBytes(index));
@@ -44,8 +54,15 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     var error = Assert.Throws<TargetInvocationException>(() => write.Invoke(null, new object[] { root, "release-index.json", new byte[] { 1, 2, 3 }, CancellationToken.None }));
                     Assert.That(error.InnerException, Is.InstanceOf<IOException>());
-                    attempts.Add(new { Step = "blocked-reader", Error = error.InnerException.ToString(), error.InnerException.HResult,
-                        Win32LowWord = error.InnerException.HResult & 0xffff, Attributes = File.GetAttributes(index).ToString(), NextExists = File.Exists(index + ".next") });
+                    attempts.Add(new
+                    {
+                        Step = "blocked-reader",
+                        Error = error.InnerException.ToString(),
+                        error.InnerException.HResult,
+                        Win32LowWord = error.InnerException.HResult & 0xffff,
+                        Attributes = File.GetAttributes(index).ToString(),
+                        NextExists = File.Exists(index + ".next")
+                    });
                     CollectionAssert.AreEqual(old, File.ReadAllBytes(index));
                 }
                 write.Invoke(null, new object[] { root, "release-index.json", old, CancellationToken.None });
@@ -61,42 +78,90 @@ namespace YLFramework.Tests.ResourceBuild
                 {
                     var change = Task.Run(() =>
                     {
-                        if (!SpinWait.SpinUntil(() => File.Exists(index + ".next"), TimeSpan.FromSeconds(3))) throw new TimeoutException("No next metadata appeared.");
+                        if (!SpinWait.SpinUntil(() => File.Exists(index + ".next"), TimeSpan.FromSeconds(3)))
+                        {
+                            throw new TimeoutException("No next metadata appeared.");
+                        }
+
                         using var output = File.Open(index, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
-                        output.Write(foreign, 0, foreign.Length); output.Flush(true);
+                        output.Write(foreign, 0, foreign.Length);
+                        output.Flush(true);
                     });
                     Exception rejected = null;
-                    try { write.Invoke(null, new object[] { root, "release-index.json", old, CancellationToken.None }); }
-                    catch (TargetInvocationException error) { rejected = error.InnerException; }
-                    finally { change.GetAwaiter().GetResult(); }
-                    attempts.Add(new { Step = "changed-from-refused", Error = rejected?.ToString(), HResult = rejected?.HResult });
+                    try
+                    {
+                        write.Invoke(null, new object[] { root, "release-index.json", old, CancellationToken.None });
+                    }
+                    catch (TargetInvocationException error)
+                    {
+                        rejected = error.InnerException;
+                    }
+                    finally
+                    {
+                        change.GetAwaiter().GetResult();
+                    }
+                    attempts.Add(new
+                    {
+                        Step = "changed-from-refused",
+                        Error = rejected?.ToString(),
+                        HResult = rejected?.HResult
+                    });
                     // 竞争写者也可使复查本身报sharing violation；两种情况都必须拒绝，而不是继续提交。
                     if (rejected is IOException io)
+                    {
                         Assert.That(io.HResult, Is.EqualTo(unchecked((int)0x80070020u)).Or.EqualTo(unchecked((int)0x80070497u)));
-                    else Assert.That(rejected, Is.InstanceOf<InvalidOperationException>());
+                    }
+                    else
+                    {
+                        Assert.That(rejected, Is.InstanceOf<InvalidOperationException>());
+                    }
+
                     CollectionAssert.AreEqual(foreign, File.ReadAllBytes(index));
                 }
                 write.Invoke(null, new object[] { root, "release-index.json", foreign, CancellationToken.None });
                 using (var reader = File.Open(index, FileMode.Open, FileAccess.Read, FileShare.Read))
                 using (var cancellation = new CancellationTokenSource())
                 {
-                    var stop = Task.Run(() => {
-                        if (!SpinWait.SpinUntil(() => File.Exists(index + ".next"), TimeSpan.FromSeconds(3))) throw new TimeoutException("No next metadata appeared.");
+                    var stop = Task.Run(() =>
+                    {
+                        if (!SpinWait.SpinUntil(() => File.Exists(index + ".next"), TimeSpan.FromSeconds(3)))
+                        {
+                            throw new TimeoutException("No next metadata appeared.");
+                        }
+
                         cancellation.Cancel();
                     });
                     Exception rejected = null;
-                    try { write.Invoke(null, new object[] { root, "release-index.json", old, cancellation.Token }); }
-                    catch (TargetInvocationException error) { rejected = error.InnerException; }
-                    finally { stop.GetAwaiter().GetResult(); }
+                    try
+                    {
+                        write.Invoke(null, new object[] { root, "release-index.json", old, cancellation.Token });
+                    }
+                    catch (TargetInvocationException error)
+                    {
+                        rejected = error.InnerException;
+                    }
+                    finally
+                    {
+                        stop.GetAwaiter().GetResult();
+                    }
                     Assert.That(rejected, Is.InstanceOf<OperationCanceledException>());
                     CollectionAssert.AreEqual(foreign, File.ReadAllBytes(index));
-                    attempts.Add(new { Step = "late-cancellation-refused", Error = rejected.ToString() });
+                    attempts.Add(new
+                    {
+                        Step = "late-cancellation-refused",
+                        Error = rejected.ToString()
+                    });
                 }
             }
             finally
             {
-                ResourceCostEvidence.Write("publication-io-probe", new { Root = root, UnblockedReplacements = unblocked, Observations = attempts,
-                    Boundary = "Real Unity Mono File.Replace on the original G: publication volume. The explicit reader has its own HRESULT (32 observed); it is not proof of the owner/cause of the intermittent 1175." });
+                ResourceCostEvidence.Write("publication-io-probe", new
+                {
+                    Root = root,
+                    UnblockedReplacements = unblocked,
+                    Observations = attempts,
+                    Boundary = "Real Unity Mono File.Replace on the original G: publication volume. The explicit reader has its own HRESULT (32 observed); it is not proof of the owner/cause of the intermittent 1175."
+                });
                 Assert.That(File.ReadAllText(Path.Combine(root, "owner.txt")), Is.EqualTo("B02+F03-20261017-0902"));
                 Directory.Delete(root, true);
             }

@@ -19,11 +19,11 @@ namespace YLFramework.Core.Editor
     /// </summary>
     public class ReorderableTreeView<T> : TreeView, IDisposable where T : class
     {
-        private static readonly string DragKey = typeof(ReorderableTreeView<T>).FullName;
-        private readonly ScriptableObject owner;
-        private readonly Func<IList<T>> getData;
-        private T[] rowData;
-        private bool disposed;
+        private static readonly string _dragKey = typeof(ReorderableTreeView<T>).FullName;
+        private readonly ScriptableObject _owner;
+        private readonly Func<IList<T>> _getData;
+        private T[] _rowData;
+        private bool _isDisposed;
 
         private sealed class DragData
         {
@@ -42,19 +42,35 @@ namespace YLFramework.Core.Editor
         public ReorderableTreeView(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state,
             MultiColumnHeader header) : base(state, header)
         {
-            if (!owner) throw new ArgumentNullException(nameof(owner));
-            this.owner = owner;
-            this.getData = getData ?? throw new ArgumentNullException(nameof(getData));
-            if (getData() == null) throw new ArgumentException("列表getter不能返回null。", nameof(getData));
+            if (!owner)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+
+            this._owner = owner;
+            this._getData = getData ?? throw new ArgumentNullException(nameof(getData));
+            if (getData() == null)
+            {
+                throw new ArgumentException("列表getter不能返回null。", nameof(getData));
+            }
+
             Undo.undoRedoPerformed += OnUndoRedo;
         }
 
-        private IList<T> Data => getData() ?? throw new InvalidOperationException("列表getter返回了null。");
+        private IList<T> Data => _getData() ?? throw new InvalidOperationException("列表getter返回了null。");
 
         public override void OnGUI(Rect rect)
         {
-            if (disposed) return;
-            if (!owner) { Dispose(); return; }
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (!_owner)
+            {
+                Dispose();
+                return;
+            }
             RefreshChangedRows();
             base.OnGUI(rect);
         }
@@ -64,7 +80,7 @@ namespace YLFramework.Core.Editor
             var root = new TreeViewItem(0, -1) { children = new List<TreeViewItem>() };
             var datas = Data;
             OnBuildRoot(root, datas);
-            rowData = datas.ToArray();
+            _rowData = datas.ToArray();
             return root;
         }
 
@@ -83,7 +99,11 @@ namespace YLFramework.Core.Editor
 
         protected override bool CanStartDrag(CanStartDragArgs args)
         {
-            if (disposed || !owner || RefreshChangedRows()) return false;
+            if (_isDisposed || !_owner || RefreshChangedRows())
+            {
+                return false;
+            }
+
             return !Data.IsReadOnly && args.draggedItem != null &&
                 args.draggedItem.depth == 0 && args.draggedItemIDs != null &&
                 ReferenceEquals(FindItem(args.draggedItem.id, rootItem), args.draggedItem) &&
@@ -93,52 +113,89 @@ namespace YLFramework.Core.Editor
 
         protected override void SetupDragAndDrop(SetupDragAndDropArgs args)
         {
-            if (PrepareDrag(args.draggedItemIDs)) DragAndDrop.StartDrag("Reorder items");
+            if (PrepareDrag(args.draggedItemIDs))
+            {
+                DragAndDrop.StartDrag("Reorder items");
+            }
         }
 
         private bool PrepareDrag(IList<int> ids)
         {
-            if (disposed || !owner || RefreshChangedRows() || Data.IsReadOnly) return false;
+            if (_isDisposed || !_owner || RefreshChangedRows() || Data.IsReadOnly)
+            {
+                return false;
+            }
+
             var indices = GetIndices(ids);
-            if (indices == null) return false;
+            if (indices == null)
+            {
+                return false;
+            }
+
             var data = new DragData { Source = this, Indices = indices, Snapshot = Data.ToArray() };
             DragAndDrop.PrepareStartDrag();
-            DragAndDrop.SetGenericData(DragKey, data);
+            DragAndDrop.SetGenericData(_dragKey, data);
             return true;
         }
 
         protected override DragAndDropVisualMode HandleDragAndDrop(DragAndDropArgs args)
         {
-            if (disposed || !owner || args.parentItem != rootItem || rootItem.children == null ||
+            if (_isDisposed || !_owner || args.parentItem != rootItem || rootItem.children == null ||
                 args.insertAtIndex < 0 || args.insertAtIndex > rootItem.children.Count ||
                 DragAndDrop.objectReferences.Length != 0 || (DragAndDrop.paths != null && DragAndDrop.paths.Length != 0))
+            {
                 return DragAndDropVisualMode.Rejected;
-            var drag = DragAndDrop.GetGenericData(DragKey) as DragData;
-            if (drag == null || !ReferenceEquals(drag.Source, this)) return DragAndDropVisualMode.Rejected;
+            }
+
+            var drag = DragAndDrop.GetGenericData(_dragKey) as DragData;
+            if (drag == null || !ReferenceEquals(drag.Source, this))
+            {
+                return DragAndDropVisualMode.Rejected;
+            }
+
             var datas = Data;
             if (datas.IsReadOnly || datas.Count != drag.Snapshot.Length ||
                 Enumerable.Range(0, datas.Count).Any(i => !ReferenceEquals(datas[i], drag.Snapshot[i])))
+            {
                 return DragAndDropVisualMode.Rejected;
+            }
 
             var insertion = args.insertAtIndex == rootItem.children.Count ? datas.Count :
                 GetItemIndex(rootItem.children[args.insertAtIndex].id);
-            if (insertion < 0 || insertion > datas.Count) return DragAndDropVisualMode.Rejected;
-            if (!args.performDrop) return DragAndDropVisualMode.Move;
+            if (insertion < 0 || insertion > datas.Count)
+            {
+                return DragAndDropVisualMode.Rejected;
+            }
+
+            if (!args.performDrop)
+            {
+                return DragAndDropVisualMode.Move;
+            }
 
             ClearOwnedDrag();
             var moves = drag.Indices.Select(i => datas[i]).ToArray();
             var reordered = new List<T>(datas);
-            for (var i = drag.Indices.Length - 1; i >= 0; i--) reordered.RemoveAt(drag.Indices[i]);
+            for (var i = drag.Indices.Length - 1; i >= 0; i--)
+            {
+                reordered.RemoveAt(drag.Indices[i]);
+            }
+
             var destination = insertion - drag.Indices.Count(i => i < insertion);
             reordered.InsertRange(destination, moves);
             if (!Enumerable.Range(0, datas.Count).Any(i => !ReferenceEquals(datas[i], reordered[i])))
+            {
                 return DragAndDropVisualMode.Move;
+            }
 
             Undo.IncrementCurrentGroup();
-            Undo.RegisterCompleteObjectUndo(owner, "Reorder list");
+            Undo.RegisterCompleteObjectUndo(_owner, "Reorder list");
             datas.Clear();
-            foreach (var item in reordered) datas.Add(item);
-            EditorUtility.SetDirty(owner);
+            foreach (var item in reordered)
+            {
+                datas.Add(item);
+            }
+
+            EditorUtility.SetDirty(_owner);
             Reload();
             var movedIndices = new HashSet<int>(Enumerable.Range(destination, moves.Length));
             SetSelection(rootItem.children.Where(item => movedIndices.Contains(GetItemIndex(item.id))).Select(item => item.id).ToArray());
@@ -148,7 +205,11 @@ namespace YLFramework.Core.Editor
 
         private int[] GetIndices(IList<int> ids)
         {
-            if (ids == null || ids.Count == 0) return null;
+            if (ids == null || ids.Count == 0)
+            {
+                return null;
+            }
+
             var indices = ids.Select(GetItemIndex).Distinct().OrderBy(i => i).ToArray();
             return indices.Any(i => i < 0 || i >= Data.Count) ? null : indices;
         }
@@ -166,40 +227,63 @@ namespace YLFramework.Core.Editor
         private bool RefreshChangedRows()
         {
             var datas = Data;
-            var changed = rowData == null || rowData.Length != datas.Count;
+            var changed = _rowData == null || _rowData.Length != datas.Count;
             for (var i = 0; !changed && i < datas.Count; i++)
-                changed = !ReferenceEquals(rowData[i], datas[i]);
-            if (!changed) return false;
+            {
+                changed = !ReferenceEquals(_rowData[i], datas[i]);
+            }
+
+            if (!changed)
+            {
+                return false;
+            }
+
             ClearOwnedDrag();
             RefreshDatas();
             return true;
         }
 
         /// <summary>一次实际重排完成后通知派生编辑器；悬停与原位放回不通知。</summary>
-        protected virtual void OnDragEnd() { }
+        protected virtual void OnDragEnd()
+        {
+        }
 
         private void OnUndoRedo()
         {
-            if (disposed) return;
-            if (!owner) { Dispose(); return; }
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            if (!_owner)
+            {
+                Dispose();
+                return;
+            }
             ClearOwnedDrag();
             RefreshDatas();
         }
 
         private void ClearOwnedDrag()
         {
-            if (DragAndDrop.GetGenericData(DragKey) is DragData drag && ReferenceEquals(drag.Source, this))
-                DragAndDrop.SetGenericData(DragKey, null);
+            if (DragAndDrop.GetGenericData(_dragKey) is DragData drag && ReferenceEquals(drag.Source, this))
+            {
+                DragAndDrop.SetGenericData(_dragKey, null);
+            }
         }
 
         /// <summary>窗口停用时归还本实例的Undo订阅和拖拽上下文，不清除其他窗口的拖拽。</summary>
         public void Dispose()
         {
-            if (disposed) return;
-            disposed = true;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
             Undo.undoRedoPerformed -= OnUndoRedo;
             ClearOwnedDrag();
-            rowData = null;
+            _rowData = null;
         }
     }
 }

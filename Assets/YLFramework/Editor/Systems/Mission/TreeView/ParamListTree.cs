@@ -1,14 +1,14 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 
@@ -23,44 +23,44 @@ namespace YLFramework.MissionSystem
 
     {
 
-        public MissionParameter missionParameter;
+        public MissionParameter MissionParameter;
 
         public ParamTreeViewItem(MissionParameter missionParameter) :
-            base(MissionManager.StringToHash(missionParameter.name),0, string.Format("{0}{1}", missionParameter.name, missionParameter.des))
+            base(MissionManager.StringToHash(missionParameter.name), 0, string.Format("{0}{1}", missionParameter.name, missionParameter.description))
         {
-            this.missionParameter = missionParameter;
+            this.MissionParameter = missionParameter;
         }
     }
 
     public class ParamListTree : ReorderableTreeView<MissionParameter>
     {
 
-        private const string paramter_copy_flag = "YLFramework.MissionSystem.CopyParamter";
+        private const string ParameterCopyFlag = "YLFramework.MissionSystem.CopyParamter";
 
 
-        private MissionsConfig missionsConfig;
+        private MissionsConfig _missionsConfig;
 
-        private bool isContextClickItem;
+        private bool _isContextClickItem;
 
-        private Rect name_rect;
+        private Rect _nameRect;
 
-        private GUIStyle name_style;
-        private GUIStyle type_style;
-        private GUIStyle value_style;
+        private GUIStyle _nameStyle;
+        private GUIStyle _typeStyle;
+        private GUIStyle _valueStyle;
 
-        private Dictionary<string,GUIContent> name_contents = new Dictionary<string,GUIContent>();
+        private Dictionary<string, GUIContent> _nameContents = new Dictionary<string, GUIContent>();
 
-        public MissionsConfig MissionsConfig => missionsConfig;
-        protected override int GetItemIndex(int id) => missionsConfig.param.FindIndex(data => data != null && MissionManager.StringToHash(data.name) == id);
+        public MissionsConfig MissionsConfig => _missionsConfig;
+        protected override int GetItemIndex(int id) => _missionsConfig.parameters.FindIndex(data => data != null && MissionManager.StringToHash(data.name) == id);
 
 #if UNITY_6000_2_OR_NEWER
-        public ParamListTree(TreeViewState<int> state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.param, state)
+        public ParamListTree(TreeViewState<int> state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.parameters, state)
 #else
-        public ParamListTree(TreeViewState state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.param, state)
+        public ParamListTree(TreeViewState state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.parameters, state)
 #endif
 
         {
-            this.missionsConfig = missionsConfig;
+            this._missionsConfig = missionsConfig;
             showBorder = true;
             rowHeight = 25;
         }
@@ -76,7 +76,10 @@ namespace YLFramework.MissionSystem
             for (int i = 0; i < datas.Count; i++)
             {
                 MissionParameter param = datas[i];
-                if (param == null) continue;
+                if (param == null)
+                {
+                    continue;
+                }
 
                 ParamTreeViewItem child = new ParamTreeViewItem(param);
                 root.AddChild(child);
@@ -87,8 +90,10 @@ namespace YLFramework.MissionSystem
         {
             base.RefreshDatas();
 
-            if (missionsConfig != null)
-                missionsConfig.ClearCache();
+            if (_missionsConfig != null)
+            {
+                _missionsConfig.ClearCache();
+            }
         }
 
         protected override void RowGUI(RowGUIArgs args)
@@ -98,64 +103,74 @@ namespace YLFramework.MissionSystem
 
             MissionParameter param = GetMissionParameter(args.item.id);
 
-            if (param == null) return;
+            if (param == null)
+            {
+                return;
+            }
 
-            if (args.isRenaming) return;
+            if (args.isRenaming)
+            {
+                return;
+            }
 
+            _nameRect.Set(args.rowRect.x + 10, args.rowRect.y, args.rowRect.width - 80, args.rowRect.height);
 
-            name_rect.Set(args.rowRect.x + 10, args.rowRect.y, args.rowRect.width - 80, args.rowRect.height);
+            if (!_nameContents.ContainsKey(param.name))
+            {
+                _nameContents.Add(param.name, new GUIContent());
+            }
 
-            if (!name_contents.ContainsKey(param.name))
-                name_contents.Add(param.name,new GUIContent());
-
-
-            if (string.IsNullOrEmpty(param.des))
-                name_contents[param.name].text = param.name;
+            if (string.IsNullOrEmpty(param.description))
+            {
+                _nameContents[param.name].text = param.name;
+            }
             else
-                name_contents[param.name].text =string.Format("{0}<color=grey>({1})</color>",param.name,param.des.Replace("\n",string.Empty));
-
-            name_contents[param.name].tooltip = param.des;
-
-            if (name_style == null)
             {
-                name_style = new GUIStyle(GUI.skin.label);
-                name_style.richText = true;
+                _nameContents[param.name].text = string.Format("{0}<color=grey>({1})</color>", param.name, param.description.Replace("\n", string.Empty));
             }
 
-            EditorGUI.LabelField(name_rect, name_contents[param.name], name_style);
+            _nameContents[param.name].tooltip = param.description;
 
-            name_rect.x += name_rect.width;
-            name_rect.width = 45;
-
-            name_rect.y += 1;
-            name_rect.height -= 2;
-            name_rect.width -= 11;
-
-            if (type_style == null)
+            if (_nameStyle == null)
             {
-                type_style = new GUIStyle( GUI.skin.label);
-                type_style.normal.textColor = Color.yellow;
+                _nameStyle = new GUIStyle(GUI.skin.label);
+                _nameStyle.richText = true;
             }
 
-            EditorGUI.LabelField(name_rect, param.type.ToString(), type_style);
+            EditorGUI.LabelField(_nameRect, _nameContents[param.name], _nameStyle);
 
-            name_rect.x += name_rect.width;
+            _nameRect.x += _nameRect.width;
+            _nameRect.width = 45;
+
+            _nameRect.y += 1;
+            _nameRect.height -= 2;
+            _nameRect.width -= 11;
+
+            if (_typeStyle == null)
+            {
+                _typeStyle = new GUIStyle(GUI.skin.label);
+                _typeStyle.normal.textColor = Color.yellow;
+            }
+
+            EditorGUI.LabelField(_nameRect, param.type.ToString(), _typeStyle);
+
+            _nameRect.x += _nameRect.width;
             if (Application.isPlaying)
             {
-                if (value_style == null)
+                if (_valueStyle == null)
                 {
-                    value_style = new GUIStyle(GUI.skin.label);
-                    value_style.normal.textColor = Color.green;
+                    _valueStyle = new GUIStyle(GUI.skin.label);
+                    _valueStyle.normal.textColor = Color.green;
                 }
 
                 switch (param.type)
                 {
                     case MissionParamType.Float:
                     case MissionParamType.Int:
-                        EditorGUI.LabelField(name_rect, param.Value.ToString(), value_style);
+                        EditorGUI.LabelField(_nameRect, param.Value.ToString(), _valueStyle);
                         break;
                     case MissionParamType.Bool:
-                        EditorGUI.LabelField(name_rect, (Mathf.RoundToInt(param.Value) == 1).ToString(), value_style);
+                        EditorGUI.LabelField(_nameRect, (Mathf.RoundToInt(param.Value) == 1).ToString(), _valueStyle);
                         break;
                 }
 
@@ -176,9 +191,9 @@ namespace YLFramework.MissionSystem
         {
             base.ContextClicked();
 
-            if (isContextClickItem)
+            if (_isContextClickItem)
             {
-                isContextClickItem = false;
+                _isContextClickItem = false;
                 return;
             }
 
@@ -189,7 +204,7 @@ namespace YLFramework.MissionSystem
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
-            isContextClickItem = true;
+            _isContextClickItem = true;
 
             GenericMenu menu = new GenericMenu();
             menu.AddItem(new GUIContent("删除"), false, () =>
@@ -199,7 +214,11 @@ namespace YLFramework.MissionSystem
                 foreach (var item in GetSelection())
                 {
                     MissionParameter parameter = GetMissionParameter(item);
-                    if(parameter == null) continue;
+                    if (parameter == null)
+                    {
+                        continue;
+                    }
+
                     p.Add(parameter);
                 }
 
@@ -221,7 +240,11 @@ namespace YLFramework.MissionSystem
                 foreach (var item in ids)
                 {
                     MissionParameter parameter = GetMissionParameter(item);
-                    if(parameter == null) continue;
+                    if (parameter == null)
+                    {
+                        continue;
+                    }
+
                     CopyMissionParam(parameter);
                 }
 
@@ -236,11 +259,15 @@ namespace YLFramework.MissionSystem
                 foreach (var item in GetSelection())
                 {
                     MissionParameter parameter = GetMissionParameter(item);
-                    if (parameter == null) continue;
+                    if (parameter == null)
+                    {
+                        continue;
+                    }
+
                     p.Add(parameter);
                 }
 
-                GUIUtility.systemCopyBuffer = string.Format("{0}{1}", paramter_copy_flag, JsonConvert.SerializeObject(p));
+                GUIUtility.systemCopyBuffer = string.Format("{0}{1}", ParameterCopyFlag, JsonConvert.SerializeObject(p));
 
             });
 
@@ -253,7 +280,7 @@ namespace YLFramework.MissionSystem
 
             int count = 1;
 
-            while (IsContainParamName(string.Format("{0} {1}",name, count)))
+            while (IsContainParamName(string.Format("{0} {1}", name, count)))
             {
                 count++;
             }
@@ -263,41 +290,45 @@ namespace YLFramework.MissionSystem
 
         private bool IsContainParamName(string paramName)
         {
-            if (missionsConfig.GetMissionParam(paramName) != null)
+            if (_missionsConfig.GetMissionParam(paramName) != null)
+            {
                 return true;
+            }
 
             return false;
         }
 
-        private string GetCopyParamName(string param_name)
+        private string GetCopyParamName(string paramName)
         {
-            if (!IsContainParamName(param_name))
-                return param_name;
+            if (!IsContainParamName(paramName))
+            {
+                return paramName;
+            }
 
             int count = 1;
 
-            if (Regex.IsMatch(param_name, "\\([0-9]+\\)$"))
+            if (Regex.IsMatch(paramName, "\\([0-9]+\\)$"))
             {
-                for (int i = param_name.Length - 1; i >= 0; i--)
+                for (int i = paramName.Length - 1; i >= 0; i--)
                 {
-                    if (param_name[i] == '(')
+                    if (paramName[i] == '(')
                     {
-                        string c = param_name.Substring(i + 1, param_name.Length - i - 2);
+                        string c = paramName.Substring(i + 1, paramName.Length - i - 2);
                         count = int.Parse(c);
 
-                        param_name = param_name.Substring(0, i);
+                        paramName = paramName.Substring(0, i);
                         break;
                     }
                 }
             }
 
-            param_name = param_name.TrimEnd();
+            paramName = paramName.TrimEnd();
 
             string name = string.Empty;
 
             do
             {
-                name = string.Format("{0} ({1})", param_name, count);
+                name = string.Format("{0} ({1})", paramName, count);
                 count++;
             } while (IsContainParamName(name));
 
@@ -307,14 +338,14 @@ namespace YLFramework.MissionSystem
         private void CreateParam(GenericMenu menu)
         {
 
-            if (GUIUtility.systemCopyBuffer.StartsWith(paramter_copy_flag))
+            if (GUIUtility.systemCopyBuffer.StartsWith(ParameterCopyFlag))
             {
                 menu.AddItem(new GUIContent("Paste"), false, () =>
                 {
                     SetSelection(Array.Empty<int>());
 
                     // 复制
-                    string content = GUIUtility.systemCopyBuffer.Substring(paramter_copy_flag.Length, GUIUtility.systemCopyBuffer.Length - paramter_copy_flag.Length);
+                    string content = GUIUtility.systemCopyBuffer.Substring(ParameterCopyFlag.Length, GUIUtility.systemCopyBuffer.Length - ParameterCopyFlag.Length);
 
                     List<MissionParameter> p = JsonConvert.DeserializeObject<List<MissionParameter>>(content);
 
@@ -333,20 +364,33 @@ namespace YLFramework.MissionSystem
 
             menu.AddSeparator(string.Empty);
 
-            menu.AddItem(new GUIContent("Int"), false, () => { CreateMissionParam( MissionParamType.Int); });
-            menu.AddItem(new GUIContent("Float"), false, () => { CreateMissionParam(MissionParamType.Float); });
-            menu.AddItem(new GUIContent("Bool"), false, () => { CreateMissionParam(MissionParamType.Bool); });
+            menu.AddItem(new GUIContent("Int"), false, () =>
+            {
+                CreateMissionParam(MissionParamType.Int);
+            });
+            menu.AddItem(new GUIContent("Float"), false, () =>
+            {
+                CreateMissionParam(MissionParamType.Float);
+            });
+            menu.AddItem(new GUIContent("Bool"), false, () =>
+            {
+                CreateMissionParam(MissionParamType.Bool);
+            });
 
             menu.ShowAsContext();
         }
 
-        private void DeleteParam(MissionParameter param )
+        private void DeleteParam(MissionParameter param)
         {
             if (param == null)
+            {
                 return;
+            }
 
-            if (missionsConfig == null)
+            if (_missionsConfig == null)
+            {
                 return;
+            }
 
             List<MissionConfigData> missions = GetRefMissions(param);
 
@@ -358,21 +402,21 @@ namespace YLFramework.MissionSystem
 
                 foreach (var item in missions)
                 {
-                    str.Append("<").Append(item.mission_name).Append(">");
+                    str.Append("<").Append(item.missionName).Append(">");
                 }
 
                 str.Append("引用了该参数,是否确定删除?");
 
 
-                if (!EditorUtility.DisplayDialog(string.Format("是否删除参数:{0}?", param.name),str.ToString(), "删除", "取消" ))
+                if (!EditorUtility.DisplayDialog(string.Format("是否删除参数:{0}?", param.name), str.ToString(), "删除", "取消"))
                 {
                     return;
                 }
             }
 
-            missionsConfig.param.Remove(param);
-            EditorUtility.SetDirty(missionsConfig);
-            missionsConfig.ClearCache();
+            _missionsConfig.parameters.Remove(param);
+            EditorUtility.SetDirty(_missionsConfig);
+            _missionsConfig.ClearCache();
             Reload();
         }
 
@@ -381,14 +425,15 @@ namespace YLFramework.MissionSystem
         /// </summary>
         /// <param name="p"></param>
         /// <returns></returns>
-        private List<MissionConfigData> GetRefMissions(MissionParameter p) {
+        private List<MissionConfigData> GetRefMissions(MissionParameter p)
+        {
             List<MissionConfigData> mission = new List<MissionConfigData>();
 
-            foreach (var item in missionsConfig.missions)
+            foreach (var item in _missionsConfig.missions)
             {
                 foreach (var condition in item.conditions)
                 {
-                    if (condition.param_name == p.name)
+                    if (condition.paramName == p.name)
                     {
                         mission.Add(item);
                         break;
@@ -406,25 +451,25 @@ namespace YLFramework.MissionSystem
             data.name = GenerateParamName(type);
             data.type = type;
             data.Value = 0;
-            missionsConfig.param.Add(data);
-            EditorUtility.SetDirty(missionsConfig);
+            _missionsConfig.parameters.Add(data);
+            EditorUtility.SetDirty(_missionsConfig);
             AssetDatabase.SaveAssets();
 
-            missionsConfig.ClearCache();
+            _missionsConfig.ClearCache();
 
             Reload();
             // 选中
             SetSelection(new int[] { MissionManager.StringToHash(data.name) });
         }
 
-        private void CopyMissionParam(MissionParameter source )
+        private void CopyMissionParam(MissionParameter source)
         {
             MissionParameter data = source.CloneConfiguration();
-            data.name = GetCopyParamName( source.name);
-            missionsConfig.param.Add(data);
-            EditorUtility.SetDirty(missionsConfig);
+            data.name = GetCopyParamName(source.name);
+            _missionsConfig.parameters.Add(data);
+            EditorUtility.SetDirty(_missionsConfig);
 
-            missionsConfig.ClearCache();
+            _missionsConfig.ClearCache();
 
             Reload();
 
@@ -437,52 +482,71 @@ namespace YLFramework.MissionSystem
         }
 
 
-        public void RenameParam(string originalName, string newName) {
-            if (IsContainParamName( newName))
+        public void RenameParam(string originalName, string newName)
+        {
+            if (IsContainParamName(newName))
             {
                 EditorWindow.focusedWindow.ShowNotification(EditorGUIUtility.TrTempContent(string.Format("参数名称:{0}已经存在,请使用其他的名称!", newName)));
                 return;
             }
 
-            MissionParameter param = missionsConfig.GetMissionParam( originalName);
-            if (param == null || string.IsNullOrWhiteSpace(newName)) return;
+            MissionParameter param = _missionsConfig.GetMissionParam(originalName);
+            if (param == null || string.IsNullOrWhiteSpace(newName))
+            {
+                return;
+            }
+
             Undo.IncrementCurrentGroup();
             var undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Rename mission parameter");
-            Undo.RecordObject(missionsConfig, "Rename mission parameter");
+            Undo.RecordObject(_missionsConfig, "Rename mission parameter");
 
-            for (int i = 0; i < missionsConfig.missions.Count; i++)
+            for (int i = 0; i < _missionsConfig.missions.Count; i++)
             {
-                MissionConfigData mission = missionsConfig.missions[i];
-                if (mission == null) continue;
+                MissionConfigData mission = _missionsConfig.missions[i];
+                if (mission == null)
+                {
+                    continue;
+                }
 
                 for (int j = 0; j < mission.conditions.Count; j++)
                 {
-                    if (mission.conditions[j].param_name == originalName)
+                    if (mission.conditions[j].paramName == originalName)
                     {
                         Undo.RecordObject(mission, "Rename mission parameter");
-                        mission.conditions[j].param_name = newName;
+                        mission.conditions[j].paramName = newName;
                         EditorUtility.SetDirty(mission);
                     }
                 }
             }
 
             param.name = newName;
-            EditorUtility.SetDirty(missionsConfig);
+            EditorUtility.SetDirty(_missionsConfig);
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(undoGroup);
-            AssetDatabase.SaveAssetIfDirty(missionsConfig);
-            foreach (var mission in missionsConfig.missions) if (mission) AssetDatabase.SaveAssetIfDirty(mission);
-            missionsConfig.ClearCache();
+            AssetDatabase.SaveAssetIfDirty(_missionsConfig);
+            foreach (var mission in _missionsConfig.missions)
+            {
+                if (mission)
+                {
+                    AssetDatabase.SaveAssetIfDirty(mission);
+                }
+            }
+
+            _missionsConfig.ClearCache();
 
             SetSelection(new int[] { MissionManager.StringToHash(newName) });
         }
 
-        public MissionParameter GetMissionParameter(int item_id)
+        public MissionParameter GetMissionParameter(int itemId)
         {
-            ParamTreeViewItem paramTreeViewItem = FindItem(item_id, rootItem) as ParamTreeViewItem;
-            if (paramTreeViewItem == null) return null;
-            return paramTreeViewItem.missionParameter;
+            ParamTreeViewItem paramTreeViewItem = FindItem(itemId, rootItem) as ParamTreeViewItem;
+            if (paramTreeViewItem == null)
+            {
+                return null;
+            }
+
+            return paramTreeViewItem.MissionParameter;
         }
 
     }

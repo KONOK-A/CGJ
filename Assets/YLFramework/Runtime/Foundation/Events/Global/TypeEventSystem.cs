@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using YLFramework.Core.Singleton;
 
 namespace YLFramework.Events
@@ -57,7 +57,7 @@ namespace YLFramework.Events
         /// <typeparam name="T">事件类型。</typeparam>
         /// <param name="eventAction">事件监听回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
-        public IUnRegister Register<T>(Action<T> eventAction)
+        public IUnregister Register<T>(Action<T> eventAction)
         {
             return _bus.RegisterMessage(eventAction);
         }
@@ -67,9 +67,9 @@ namespace YLFramework.Events
         /// </summary>
         /// <typeparam name="T">事件类型。</typeparam>
         /// <param name="eventAction">要注销的监听回调。</param>
-        public void UnRegister<T>(Action<T> eventAction)
+        public void Unregister<T>(Action<T> eventAction)
         {
-            _bus.UnRegisterMessage(eventAction);
+            _bus.UnregisterMessage(eventAction);
         }
 
         /// <inheritdoc />
@@ -85,9 +85,17 @@ namespace YLFramework.Events
         /// </summary>
         public void Dispose()
         {
-            if (_bus.IsDisposed) return;
+            if (_bus.IsDisposed)
+            {
+                return;
+            }
+
             _bus.Dispose();
-            if (ReferenceEquals(_sessionInstance, this)) _sessionInstance = null;
+            if (ReferenceEquals(_sessionInstance, this))
+            {
+                _sessionInstance = null;
+            }
+
             if (SingletonProperty<TypeEventSystem>.TryGetInstance(out var current) && ReferenceEquals(current, this))
             {
                 SingletonProperty<TypeEventSystem>.Dispose();

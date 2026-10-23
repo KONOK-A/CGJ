@@ -11,8 +11,8 @@ using YLFramework.Core;
 using YLFramework.Editor.Resource;
 using YLFramework.Samples.Resource;
 using YLFramework.Samples.Resource.Editor;
-using YLFramework.Services.Resource;
 using YLFramework.Services.Audio;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
@@ -20,8 +20,18 @@ namespace YLFramework.Tests.ResourceBuild
     {
         private const string Key = "YL.Resource.C05.Sample.";
         private const string EncryptedKeyId = "sample-test-only-v1";
-        [Serializable] private sealed class Scenes { public SavedScene[] Items; }
-        [Serializable] private sealed class SavedScene { public string Path; public bool Loaded; public bool Active; }
+        [Serializable]
+        private sealed class Scenes
+        {
+            public SavedScene[] Items;
+        }
+        [Serializable]
+        private sealed class SavedScene
+        {
+            public string Path;
+            public bool Loaded;
+            public bool Active;
+        }
 
         private sealed class ConfigurationOnlyKeys : IResourceContentKeyProvider
         {
@@ -32,14 +42,22 @@ namespace YLFramework.Tests.ResourceBuild
         // 仅用于自有样例夹具，不是发行密钥或生产provider。
         private sealed class EncryptedExampleKeys : IResourceContentKeyProvider
         {
-            private readonly string project;
+            private readonly string _project;
             internal int Copies;
-            internal EncryptedExampleKeys(string project) => this.project = project;
+            internal EncryptedExampleKeys(string project) => this._project = project;
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
-                if (projectId != project || keyId != EncryptedKeyId) return false;
+                if (projectId != _project || keyId != EncryptedKeyId)
+                {
+                    return false;
+                }
+
                 Assert.That(destination.Length, Is.EqualTo(32));
-                for (var i = 0; i < destination.Length; i++) destination[i] = (byte)(117 + i);
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = (byte)(117 + i);
+                }
+
                 Copies++;
                 return true;
             }
@@ -57,11 +75,18 @@ namespace YLFramework.Tests.ResourceBuild
         [OneTimeSetUp]
         public void BuildOnlyTheFormalExample()
         {
-            if (SessionState.GetBool(Key + "owned", false)) return;
+            if (SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             YLFramework.Tests.Resource.ResourceSessionTests.EnsureRestorableScenes();
             var scenes = EditorSceneManager.GetSceneManagerSetup();
-            SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new Scenes { Items = scenes.Where(x => !string.IsNullOrEmpty(x.path))
-                .Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray() }));
+            SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new Scenes
+            {
+                Items = scenes.Where(x => !string.IsNullOrEmpty(x.path))
+                .Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray()
+            }));
             SessionState.SetString(Key + "protected", ProtectedDigest());
             SessionState.SetBool(Key + "soundExisted", PlayerPrefs.HasKey("KEY_AUDIO_MANAGER_SOUND_ON"));
             SessionState.SetInt(Key + "soundValue", PlayerPrefs.GetInt("KEY_AUDIO_MANAGER_SOUND_ON", 1));
@@ -83,7 +108,11 @@ namespace YLFramework.Tests.ResourceBuild
         [UnityTearDown]
         public IEnumerator ExitOnFailure()
         {
-            if (EditorApplication.isPlaying) yield return new ExitPlayMode();
+            if (EditorApplication.isPlaying)
+            {
+                yield return new ExitPlayMode();
+            }
+
             RestoreEncryptedExample();
             var saved = SessionState.GetString(Key + "beforeBuiltInExample", "");
             if (!string.IsNullOrEmpty(saved))
@@ -102,9 +131,20 @@ namespace YLFramework.Tests.ResourceBuild
         [OneTimeTearDown]
         public void CleanupOnlyOwnedExample()
         {
-            if (!SessionState.GetBool(Key + "owned", false)) return;
-            if (SessionState.GetBool(Key + "soundExisted", false)) PlayerPrefs.SetInt("KEY_AUDIO_MANAGER_SOUND_ON", SessionState.GetInt(Key + "soundValue", 1));
-            else PlayerPrefs.DeleteKey("KEY_AUDIO_MANAGER_SOUND_ON");
+            if (!SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
+            if (SessionState.GetBool(Key + "soundExisted", false))
+            {
+                PlayerPrefs.SetInt("KEY_AUDIO_MANAGER_SOUND_ON", SessionState.GetInt(Key + "soundValue", 1));
+            }
+            else
+            {
+                PlayerPrefs.DeleteKey("KEY_AUDIO_MANAGER_SOUND_ON");
+            }
+
             Assert.That(EditorApplication.isPlaying, Is.False);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
             RestoreEncryptedExample();
@@ -123,7 +163,10 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That((string)Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(marker))["ProjectGuid"],
                         Is.EqualTo(AssetDatabase.AssetPathToGUID(SessionState.GetString(Key + "folder", "") + "/Project.asset")));
                 }
-                if (!string.IsNullOrEmpty(path) && Directory.Exists(path)) Directory.Delete(path, true);
+                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
             }
             var folder = SessionState.GetString(Key + "folder", "");
             if (!string.IsNullOrEmpty(folder))
@@ -131,8 +174,16 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(AssetDatabase.AssetPathToGUID(folder), Is.EqualTo(SessionState.GetString(Key + "guid", "")));
                 AssetDatabase.DeleteAsset(folder);
             }
-            if (GlobalObjectId.TryParse(SessionState.GetString(Key + "selection", ""), out var selected)) Selection.activeObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(selected);
-            foreach (var key in new[] { "folder", "guid", "workspace", "encryptedWorkspace", "release", "scenes", "protected", "selection" }) SessionState.EraseString(Key + key);
+            if (GlobalObjectId.TryParse(SessionState.GetString(Key + "selection", ""), out var selected))
+            {
+                Selection.activeObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(selected);
+            }
+
+            foreach (var key in new[] { "folder", "guid", "workspace", "encryptedWorkspace", "release", "scenes", "protected", "selection" })
+            {
+                SessionState.EraseString(Key + key);
+            }
+
             SessionState.EraseBool(Key + "owned");
             SessionState.EraseBool(Key + "soundExisted");
             SessionState.EraseInt(Key + "soundValue");
@@ -149,7 +200,7 @@ namespace YLFramework.Tests.ResourceBuild
             var previous = provider.GetValue(example);
             try
             {
-                example.Mode = ResourceLoadMode.Bundles;
+                example.mode = ResourceLoadMode.Bundles;
                 provider.SetValue(example, null);
                 Assert.That(example.CreateBundleConfiguration().Decryption, Is.Null, "None must keep the original key-free configuration path.");
                 var keys = new ConfigurationOnlyKeys();
@@ -161,7 +212,7 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(configuration.ArtifactStore, Is.Null, "Key injection must not opt into a cache or update store.");
                 using var serialized = new SerializedObject(example);
                 Assert.That(serialized.FindProperty("ContentKeyProvider"), Is.Null);
-                example.Mode = ResourceLoadMode.EditorSimulation;
+                example.mode = ResourceLoadMode.EditorSimulation;
                 Assert.That(ResourceStartupExampleEditor.CreateConfiguration(example).Decryption, Is.Null);
                 Assert.That(example.Startup, Is.Null);
                 Assert.That(ResourceSystem.Current, Is.Null, "Choosing keys and configuration must not initialize resources.");
@@ -179,27 +230,27 @@ namespace YLFramework.Tests.ResourceBuild
             var example = UnityEngine.Object.FindObjectOfType<ResourceStartupExample>();
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(SessionState.GetString(Key + "folder", "") + "/Project.asset");
             var previous = example.ContentKeyProvider;
-            var keyId = project.ContentKeyId;
+            var keyId = project.contentKeyId;
             var saved = JsonUtility.ToJson(example);
             var variable = "YL_RESOURCE_SAMPLE_TEST_" + Guid.NewGuid().ToString("N");
-            const string invalidSecret = "sample-only-sensitive-marker";
+            const string InvalidSecret = "sample-only-sensitive-marker";
             try
             {
-                project.ContentKeyId = "development-test-only-v1";
-                Environment.SetEnvironmentVariable(variable, invalidSecret);
+                project.contentKeyId = "development-test-only-v1";
+                Environment.SetEnvironmentVariable(variable, InvalidSecret);
                 ResourceStartupExampleEditor.UseDevelopmentContentKeyFromEnvironment(example, variable);
                 Assert.That(example.ContentKeyProvider, Is.Not.Null);
                 Assert.That(JsonUtility.ToJson(example), Is.EqualTo(saved), "Provider assembly must not change serialized sample data.");
                 var destination = new byte[32];
-                Assert.That(example.ContentKeyProvider.TryCopyKey("unselected-project", project.ContentKeyId, destination), Is.False);
-                var error = Assert.Throws<InvalidOperationException>(() => example.ContentKeyProvider.TryCopyKey(example.ProjectId, project.ContentKeyId, destination));
-                Assert.That(error.ToString(), Does.Not.Contain(invalidSecret));
+                Assert.That(example.ContentKeyProvider.TryCopyKey("unselected-project", project.contentKeyId, destination), Is.False);
+                var error = Assert.Throws<InvalidOperationException>(() => example.ContentKeyProvider.TryCopyKey(example.projectId, project.contentKeyId, destination));
+                Assert.That(error.ToString(), Does.Not.Contain(InvalidSecret));
                 Assert.That(ResourceSystem.Current, Is.Null);
             }
             finally
             {
                 Environment.SetEnvironmentVariable(variable, null);
-                project.ContentKeyId = keyId;
+                project.contentKeyId = keyId;
                 example.ContentKeyProvider = previous;
             }
         }
@@ -212,8 +263,8 @@ namespace YLFramework.Tests.ResourceBuild
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(folder + "/Project.asset");
             SessionState.SetString(Key + "beforeEncryptedExample", JsonUtility.ToJson(example));
             SessionState.SetString(Key + "beforeEncryptedProject", JsonUtility.ToJson(project));
-            project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-            project.ContentKeyId = EncryptedKeyId;
+            project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            project.contentKeyId = EncryptedKeyId;
             EditorUtility.SetDirty(project);
             AssetDatabase.SaveAssetIfDirty(project);
             Assert.That(example.gameObject.scene.path, Is.EqualTo(folder + "/Example.unity"));
@@ -221,7 +272,7 @@ namespace YLFramework.Tests.ResourceBuild
             var workspace = Path.GetDirectoryName(ResourceBundleBuilder.GetWorkspacePath(project, EditorUserBuildSettings.activeBuildTarget));
             Assert.That(Directory.Exists(workspace) || File.Exists(workspace) || File.Exists(workspace + ".meta"), Is.False, "Do not adopt a pre-existing encrypted workspace.");
             SessionState.SetString(Key + "encryptedWorkspace", workspace);
-            var keys = new EncryptedExampleKeys(example.ProjectId);
+            var keys = new EncryptedExampleKeys(example.projectId);
             example.ContentKeyProvider = keys;
             var release = ResourceStartupExampleEditor.Build(example);
             Assert.That(keys.Copies, Is.GreaterThan(0), "The original sample Build must forward the application's provider through formal build and publication.");
@@ -231,9 +282,9 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(System.Text.Encoding.ASCII.GetString(input.ReadBytes(8)), Is.EqualTo("YLRENC01"));
             }
             example.ContentKeyProvider = null;
-            example.Mode = ResourceLoadMode.Bundles;
-            example.BindCore = true;
-            example.UseAudio = false;
+            example.mode = ResourceLoadMode.Bundles;
+            example.bindCore = true;
+            example.useAudio = false;
             Assert.That(EditorSceneManager.SaveScene(example.gameObject.scene), Is.True);
             Assert.That(ResourceSystem.Current, Is.Null);
             yield return new EnterPlayMode();
@@ -244,7 +295,7 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator RunEncryptedExample()
         {
             var example = UnityEngine.Object.FindObjectOfType<ResourceStartupExample>();
-            var keys = new EncryptedExampleKeys(example.ProjectId);
+            var keys = new EncryptedExampleKeys(example.projectId);
             example.ContentKeyProvider = keys;
             var configuration = ResourceStartupExampleEditor.CreateConfiguration(example);
             Assert.That(configuration.Decryption.KeyProvider, Is.SameAs(keys));
@@ -276,7 +327,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static void RestoreEncryptedExample()
         {
             var saved = SessionState.GetString(Key + "beforeEncryptedExample", "");
-            if (string.IsNullOrEmpty(saved)) return;
+            if (string.IsNullOrEmpty(saved))
+            {
+                return;
+            }
+
             var example = UnityEngine.Object.FindObjectOfType<ResourceStartupExample>();
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(SessionState.GetString(Key + "folder", "") + "/Project.asset");
             Assert.That(example, Is.Not.Null);
@@ -307,14 +362,14 @@ namespace YLFramework.Tests.ResourceBuild
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(folder + "/Project.asset");
             SessionState.SetString(Key + "beforeBuiltInExample", JsonUtility.ToJson(example));
             SessionState.SetString(Key + "beforeBuiltInMessage", Convert.ToBase64String(File.ReadAllBytes(folder + "/Content/Message.txt")));
-            var root = Path.Combine(ResourceBuiltInDeployer.ResourcesRoot, example.ProjectId);
+            var root = Path.Combine(ResourceBuiltInDeployer.ResourcesRoot, example.projectId);
             Assert.That(Directory.Exists(root) || File.Exists(root) || File.Exists(root + ".meta"), Is.False, "The native test owns only a new independent deployment.");
             SessionState.SetBool(Key + "builtInRootExisted", Directory.Exists(ResourceBuiltInDeployer.ResourcesRoot));
-            SessionState.SetString(Key + "builtInProject", example.ProjectId);
+            SessionState.SetString(Key + "builtInProject", example.projectId);
             SessionState.SetString(Key + "builtInGuid", AssetDatabase.AssetPathToGUID(folder + "/Project.asset"));
-            var firstDigest = example.CatalogDigest;
+            var firstDigest = example.catalogDigest;
             SessionState.SetString(Key + "builtInV1", firstDigest);
-            var first = ResourcePublisher.ReadVersion(project, EditorUserBuildSettings.activeBuildTarget, example.AppCompatibility, firstDigest);
+            var first = ResourcePublisher.ReadVersion(project, EditorUserBuildSettings.activeBuildTarget, example.appCompatibility, firstDigest);
             var releaseBefore = ResourceReleaseFixture.Snapshot(first.RootPath);
             var plan = ResourceStartupExampleEditor.PreflightBuiltIn(example);
             SessionState.SetString(Key + "builtInWorkspace", plan.WorkspacePath);
@@ -332,10 +387,10 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceStartupExampleEditor.DeployBuiltIn(example);
             CollectionAssert.AreEqual(releaseBefore, ResourceReleaseFixture.Snapshot(second.RootPath));
             CollectionAssert.AreEqual(oldBefore, ResourceReleaseFixture.Snapshot(deployed.DirectoryPath));
-            example.SnapshotDirectory = "unused-developer-publication-path";
-            example.Mode = ResourceLoadMode.Bundles;
-            example.BindCore = true;
-            example.UseAudio = false;
+            example.snapshotDirectory = "unused-developer-publication-path";
+            example.mode = ResourceLoadMode.Bundles;
+            example.bindCore = true;
+            example.useAudio = false;
             Assert.That(EditorSceneManager.SaveScene(example.gameObject.scene), Is.True);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
             Assert.That(Directory.GetFiles(ResourceBuiltInDeployer.ResourcesRoot, "*.meta", SearchOption.AllDirectories)
@@ -349,18 +404,18 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator RunDeployedVersions()
         {
             var example = UnityEngine.Object.FindObjectOfType<ResourceStartupExample>();
-            var secondDigest = example.CatalogDigest;
+            var secondDigest = example.catalogDigest;
             var digests = new[] { SessionState.GetString(Key + "builtInV1", ""), secondDigest };
             var expected = new[] { "Hello from ResourceStartup", "Hello from deployed version two" };
             for (var i = 0; i < digests.Length; i++)
             {
-                example.CatalogDigest = digests[i];
+                example.catalogDigest = digests[i];
                 var cacheRoot = Path.Combine(Path.GetTempPath(), "kilo", "c02-readonly-cache-" + Guid.NewGuid().ToString("N"));
                 var configuration = i == 0 ? ResourceStartupExampleEditor.CreateConfiguration(example) :
                     ResourceConfiguration.Create(ResourceLoadMode.Bundles, new[] { example.CreateMount() }, cacheRoot);
                 Assert.That(Directory.Exists(cacheRoot), Is.False);
                 var entry = example.CreateMount().BuiltIn.CreateCatalog(new[] { typeof(ResourceStartupExampleData) })
-                    .Resolve(new ResourceAddress(example.ProjectId, "message"));
+                    .Resolve(new ResourceAddress(example.projectId, "message"));
                 Assert.That(entry.Location.Source, Is.EqualTo(ResourceSourceId.AssetBundle), "There must be no implicit simulation fallback.");
                 var run = example.Run(configuration);
                 var sawNativeBundle = false;
@@ -372,7 +427,10 @@ namespace YLFramework.Tests.ResourceBuild
                         yield return run.Current;
                     }
                 }
-                finally { (run as IDisposable)?.Dispose(); }
+                finally
+                {
+                    (run as IDisposable)?.Dispose();
+                }
                 Assert.That(sawNativeBundle, Is.True);
                 Assert.That(example.Result, Is.EqualTo("Passed: " + expected[i] + " / Explicit compiled sample type"));
                 Assert.That(example.Startup.Resources, Is.Null);
@@ -386,7 +444,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static void CleanupBuiltInDeployment()
         {
             var project = SessionState.GetString(Key + "builtInProject", "");
-            if (string.IsNullOrEmpty(project)) return;
+            if (string.IsNullOrEmpty(project))
+            {
+                return;
+            }
+
             var guid = SessionState.GetString(Key + "builtInGuid", "");
             var workspace = SessionState.GetString(Key + "builtInWorkspace", "");
             if (!string.IsNullOrEmpty(workspace) && Directory.Exists(workspace))
@@ -408,7 +470,11 @@ namespace YLFramework.Tests.ResourceBuild
                 CollectionAssert.AreEquivalent(new[] { "ylr-owner.json~" }, Directory.GetFileSystemEntries(ResourceBuiltInDeployer.ResourcesRoot).Select(Path.GetFileName));
                 Assert.That(AssetDatabase.DeleteAsset("Assets/StreamingAssets/YLFrameworkResources"), Is.True);
             }
-            foreach (var key in new[] { "builtInProject", "builtInGuid", "builtInWorkspace", "builtInV1", "beforeBuiltInExample", "beforeBuiltInMessage" }) SessionState.EraseString(Key + key);
+            foreach (var key in new[] { "builtInProject", "builtInGuid", "builtInWorkspace", "builtInV1", "beforeBuiltInExample", "beforeBuiltInMessage" })
+            {
+                SessionState.EraseString(Key + key);
+            }
+
             SessionState.EraseBool(Key + "builtInRootExisted");
         }
 
@@ -430,7 +496,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(CoreResourceAccess.Provider, Is.Null);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
 
-            example.Mode = ResourceLoadMode.Bundles;
+            example.mode = ResourceLoadMode.Bundles;
             example.ContentKeyProvider = new ConfigurationOnlyKeys();
             var bundles = ResourceStartupExampleEditor.CreateConfiguration(example);
             yield return example.Run(bundles);
@@ -440,37 +506,37 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
             example.ContentKeyProvider = null;
 
-            var projectId = example.ProjectId;
-            example.BindCore = false;
-            example.UseAudio = false;
+            var projectId = example.projectId;
+            example.bindCore = false;
+            example.useAudio = false;
             var snapshotRun = example.Run(simulation);
             try
             {
                 Assert.That(snapshotRun.MoveNext(), Is.True);
                 Assert.That(example.Startup.CoreProvider, Is.Null);
                 Assert.That(example.Startup.AudioProviders, Is.Empty);
-                example.BindCore = true;
-                example.UseAudio = true;
-                example.ProjectId = "edited-after-start";
+                example.bindCore = true;
+                example.useAudio = true;
+                example.projectId = "edited-after-start";
                 yield return snapshotRun;
                 Assert.That(example.Result, Is.EqualTo("Passed: Hello from ResourceStartup / Explicit compiled sample type"), "In-flight business must use the startup's original project and provider choices.");
             }
             finally
             {
                 (snapshotRun as IDisposable)?.Dispose();
-                example.ProjectId = projectId;
-                example.BindCore = true;
-                example.UseAudio = true;
+                example.projectId = projectId;
+                example.bindCore = true;
+                example.useAudio = true;
             }
 
             var missingTypes = new ResourceProjectMount(mount.ProjectId, mount.Platform, mount.AppContentCompatibilityId, mount.BuiltIn);
             Assert.That(Assert.Throws<ResourceException>(() => ResourceConfiguration.Create(ResourceLoadMode.Bundles, new[] { missingTypes })).Kind,
                 Is.EqualTo(ResourceError.TypeMismatch));
             Assert.Throws<ArgumentException>(() => ResourceConfiguration.Create(ResourceLoadMode.Bundles, new[] { mount, mount }));
-            var digest = example.CatalogDigest;
-            example.CatalogDigest = new string('a', 64);
+            var digest = example.catalogDigest;
+            example.catalogDigest = new string('a', 64);
             Assert.Throws<InvalidDataException>(() => ResourceStartupExampleEditor.CreateConfiguration(example));
-            example.CatalogDigest = digest;
+            example.catalogDigest = digest;
             Assert.That(ResourceSystem.Current, Is.Null, "Bundle configuration failure must never fall back to simulation.");
             var cacheRoot = Path.Combine(Path.GetTempPath(), "kilo", "c05-readonly-" + Guid.NewGuid().ToString("N"));
             _ = ResourceConfiguration.Create(ResourceLoadMode.Bundles, new[] { mount }, cacheRoot);
@@ -480,7 +546,11 @@ namespace YLFramework.Tests.ResourceBuild
             example.Begin(example.CreateBundleConfiguration());
             example.StopExample();
             var until = Time.realtimeSinceStartup + 10;
-            while (example.Startup.Resources != null && Time.realtimeSinceStartup < until) yield return null;
+            while (example.Startup.Resources != null && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(example.Startup.Resources, Is.Null, example.Result);
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);

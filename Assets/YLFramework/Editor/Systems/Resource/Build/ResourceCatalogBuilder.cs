@@ -24,32 +24,45 @@ namespace YLFramework.Editor.Resource
             JObject Asset(ResourceBuildAsset main, ResourceBuiltSubAsset sub = null) => new JObject
             {
                 ["AssetId"] = main.Guid + "_" + (sub?.LocalId ?? main.LocalId).ToString(CultureInfo.InvariantCulture),
-                ["Guid"] = main.Guid, ["LocalId"] = sub?.LocalId ?? main.LocalId, ["Address"] = main.Address.Path,
-                ["SubAssetKey"] = sub?.LocalId.ToString(CultureInfo.InvariantCulture), ["BundleId"] = main.BundleName,
+                ["Guid"] = main.Guid,
+                ["LocalId"] = sub?.LocalId ?? main.LocalId,
+                ["Address"] = main.Address.Path,
+                ["SubAssetKey"] = sub?.LocalId.ToString(CultureInfo.InvariantCulture),
+                ["BundleId"] = main.BundleName,
                 ["Aliases"] = new JArray(main.Aliases.Select(x => x.Path)),
                 ["LoadName"] = main.IsScene ? main.SourcePath : main.SourcePath.ToLowerInvariant(),
                 ["AssetType"] = main.IsScene ? "Scene" : (sub?.AssetType ?? main.AssetType).FullName,
                 ["AssetAssembly"] = main.IsScene ? null : (sub?.AssetType ?? main.AssetType).Assembly.GetName().Name,
-                ["Kind"] = main.IsScene ? "Scene" : sub == null ? "Asset" : "SubAsset", ["SubAssetName"] = sub?.Name
+                ["Kind"] = main.IsScene ? "Scene" : sub == null ? "Asset" : "SubAsset",
+                ["SubAssetName"] = sub?.Name
             };
             var bundles = new JArray();
             foreach (var bundle in result.Bundles)
             {
                 var data = FileRecord(result.DeliveryFiles.Single(x => x.Name == bundle.Name));
-                data["LogicalId"] = bundle.Name; data["NativeName"] = bundle.Name; data["UnityHash"] = bundle.UnityHash;
+                data["LogicalId"] = bundle.Name;
+                data["NativeName"] = bundle.Name;
+                data["UnityHash"] = bundle.UnityHash;
                 data["IsScene"] = result.Map.Bundles.Single(x => x.Name == bundle.Name).IsScene;
                 data["Dependencies"] = new JArray(bundle.Dependencies);
                 bundles.Add(data);
             }
             var payload = new JObject
             {
-                ["SchemaVersion"] = 1, ["ProjectId"] = result.Map.ProjectId, ["Platform"] = result.Platform,
-                ["UnityCompatibility"] = result.UnityCompatibility, ["AppContentCompatibilityId"] = app,
-                ["BuildSettingsFingerprint"] = result.BuildSettingsFingerprint, ["ManifestFile"] = "manifest",
+                ["SchemaVersion"] = 1,
+                ["ProjectId"] = result.Map.ProjectId,
+                ["Platform"] = result.Platform,
+                ["UnityCompatibility"] = result.UnityCompatibility,
+                ["AppContentCompatibilityId"] = app,
+                ["BuildSettingsFingerprint"] = result.BuildSettingsFingerprint,
+                ["ManifestFile"] = "manifest",
                 ["Bundles"] = bundles,
                 ["Assets"] = new JArray(result.Map.Assets.Select(x => Asset(x)).Concat(result.SubAssets.Select(x => Asset(x.MainAsset, x)))),
-                ["Groups"] = new JArray(result.Map.Groups.Select(x => new JObject { ["Id"] = x.Key,
-                    ["Members"] = new JArray(x.Value.Select(id => new JObject { ["AssetId"] = id, ["Required"] = true })) })),
+                ["Groups"] = new JArray(result.Map.Groups.Select(x => new JObject
+                {
+                    ["Id"] = x.Key,
+                    ["Members"] = new JArray(x.Value.Select(id => new JObject { ["AssetId"] = id, ["Required"] = true }))
+                })),
                 ["SupportFiles"] = new JArray(result.DeliveryFiles.Where(x => !result.Bundles.Any(b => b.Name == x.Name)).Select(FileRecord))
             };
             var bytes = ResourceCatalogCodec.Seal(Encoding.UTF8.GetBytes(payload.ToString(Formatting.None)));
@@ -69,13 +82,23 @@ namespace YLFramework.Editor.Resource
         internal static FileStream LockWorkspace(ResourceBuildResult result)
         {
             if (result?.Map == null || result.Files == null || result.Bundles == null || result.SubAssets == null || result.DeliveryFiles == null)
+            {
                 throw new InvalidOperationException("A verified ResourceBuildResult is required.");
+            }
+
             ResourceBundleBuilder.ValidateContentPolicy(result.ContentEncryption, result.ContentKeyId, result.Platform);
             var workspace = new ResourceBuildWorkspace(result.Map, result.BuildSettingsFingerprint, result.Platform, result.ContentEncryption, result.ContentKeyId);
             if (workspace.Output != result.WorkspacePath || workspace.Leaf != result.ManifestBundleFile)
+            {
                 throw new InvalidOperationException("Build result workspace identity mismatch.");
+            }
+
             var record = workspace.Read();
-            if (record == null || !record.Complete) throw new InvalidOperationException("Workspace is not complete.");
+            if (record == null || !record.Complete)
+            {
+                throw new InvalidOperationException("Workspace is not complete.");
+            }
+
             var locked = workspace.AcquireLock(ref record);
             try
             {
@@ -83,38 +106,60 @@ namespace YLFramework.Editor.Resource
                     !result.Files.Select(x => x.Name).SequenceEqual(workspace.ExpectedFiles()) ||
                     !record.Files.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)
                         .SequenceEqual(result.Files.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)))
+                {
                     throw new InvalidOperationException("Workspace changed since the verified build result.");
+                }
+
                 foreach (var file in result.Files)
                 {
                     var path = Path.Combine(workspace.Output, file.Name);
                     using var input = ResourceBuildWorkspace.OpenVerified(path, file.Length, file.Sha256);
                 }
                 if (!result.DeliveryFiles.Select(x => x.Name).SequenceEqual(workspace.ExpectedFiles()))
+                {
                     throw new InvalidOperationException("Build delivery file closure mismatch.");
+                }
+
                 if (record is ResourceBuildWorkspace.EncryptedOwnership encrypted)
                 {
                     if (result.DeliveryPath != Path.Combine(workspace.Root, encrypted.DeliveryDirectory ?? "") ||
                         !encrypted.DeliveryFiles.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)
                             .SequenceEqual(result.DeliveryFiles.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)))
+                    {
                         throw new InvalidOperationException("Workspace delivery snapshot changed since the verified build result.");
+                    }
+
                     foreach (var file in result.DeliveryFiles)
                     {
                         var raw = result.Files.Single(x => x.Name == file.Name);
                         if (file.Name.EndsWith(".manifest", StringComparison.Ordinal) && (file.Length != raw.Length || file.Sha256 != raw.Sha256))
+                        {
                             throw new InvalidDataException("Plain manifest sidecar delivery must remain byte-identical to its raw build.");
+                        }
+
                         var candidate = encrypted.Deliveries.SingleOrDefault(x => x.RelativePath == encrypted.DeliveryDirectory + "/" + file.Name);
                         if (candidate == null || !candidate.Complete || candidate.RawLength != raw.Length || candidate.RawSha256 != raw.Sha256 ||
                             candidate.Length != file.Length || candidate.Sha256 != file.Sha256)
+                        {
                             throw new InvalidOperationException("Delivery candidate no longer matches its raw build identity.");
+                        }
+
                         using var input = ResourceBuildWorkspace.OpenVerified(Path.Combine(result.DeliveryPath, file.Name), file.Length, file.Sha256);
                     }
                 }
                 else if (result.DeliveryPath != result.WorkspacePath || !result.DeliveryFiles.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)
                     .SequenceEqual(result.Files.Select(x => x.Name + ":" + x.Length + ":" + x.Sha256)))
+                {
                     throw new InvalidOperationException("None delivery must be the unchanged raw workspace.");
+                }
+
                 return locked;
             }
-            catch { locked.Dispose(); throw; }
+            catch
+            {
+                locked.Dispose();
+                throw;
+            }
         }
     }
 }

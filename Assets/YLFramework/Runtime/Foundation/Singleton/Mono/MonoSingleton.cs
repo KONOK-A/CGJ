@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using MonoBehaviour = UnityEngine.MonoBehaviour;
 
 namespace YLFramework.Core.Singleton
@@ -56,7 +56,11 @@ namespace YLFramework.Core.Singleton
         protected virtual void OnApplicationQuit()
         {
             SingletonSessionState.MarkApplicationQuitting();
-            if (!MonoSingletonProperty<T>.HasInstance) return;
+            if (!MonoSingletonProperty<T>.HasInstance)
+            {
+                return;
+            }
+
             if (this && gameObject)
             {
                 Object.Destroy(gameObject);

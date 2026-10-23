@@ -90,13 +90,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   settings:
-    Layer: 0
-    Priority: 0
-    Modal: 0
-    CoversRoot: 0
-    ParticipatesInTop: 0
-    InstanceMode: 1
-    CacheOnClose: 1
+    layer: 0
+    priority: 0
+    modal: 0
+    coversRoot: 0
+    participatesInTop: 0
+    instanceMode: 1
+    cacheOnClose: 1
   bg: {fileID: 7796792508018691828}
   text: {fileID: 7271027915193056046}
 --- !u!1 &5452471021022126126

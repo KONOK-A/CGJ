@@ -1,5 +1,5 @@
-using YLFramework.Foundation;
 using System.Collections.Generic;
+using YLFramework.Foundation;
 
 namespace YLFramework.SkillSystem
 {
@@ -12,14 +12,17 @@ namespace YLFramework.SkillSystem
         /// <summary>
         /// 所有的技能
         /// </summary>
-        Dictionary<int, SkillBase> Skills { get; }
+        Dictionary<int, SkillBase> Skills
+        {
+            get;
+        }
 
 
         /// <summary>
         /// 是否能够释放技能
         /// </summary>
         /// <returns></returns>
-        bool IsCanRelease();
+        bool CanRelease();
 
     }
 

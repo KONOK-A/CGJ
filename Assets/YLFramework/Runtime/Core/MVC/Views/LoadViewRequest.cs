@@ -10,7 +10,14 @@ using UnityEditor;
 
 namespace YLFramework.Core
 {
-    public enum LoadViewStatus { Pending, Succeeded, Failed, Canceled, Invalidated }
+    public enum LoadViewStatus
+    {
+        Pending,
+        Succeeded,
+        Failed,
+        Canceled,
+        Invalidated
+    }
 
     internal interface IPendingViewRequest
     {
@@ -21,54 +28,66 @@ namespace YLFramework.Core
     /// <summary>主线程表现请求；Abort仅取消Core业务结果，不停止或卸载共享后端加载。</summary>
     public sealed class LoadViewRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadViewRequest<T>>, IPendingViewRequest where T : View
     {
-        public T view { get; private set; }
-        public LoadViewStatus Status { get; private set; }
+        public T View
+        {
+            get; private set;
+        }
+        public LoadViewStatus Status
+        {
+            get; private set;
+        }
         /// <summary>原始失败原因；附加收尾错误保存在Data["YLFramework.Core.CleanupException"]。</summary>
-        public Exception Exception { get; private set; }
+        public Exception Exception
+        {
+            get; private set;
+        }
 
-        private Module owner;
-        private object lifecycle;
-        private string assetName;
-        private List<string> projects;
-        private ICoreResourceProvider provider;
-        private CoreResourceRequest<CorePrefabLease> resourceRequest;
-        private CorePrefabLease prefabLease;
-        private Transform parent;
-        private bool hasParent;
-        private Scene targetScene;
-        private readonly List<KeyValuePair<View, object>> parentSessions = new List<KeyValuePair<View, object>>();
-        private LoadViewArgs args;
-        private object[] param;
-        private GameObject directPrefab;
-        private bool hasDirectPrefab;
-        private bool executing;
-        private bool closingOwner;
-        private bool terminal;
-        private Exception interruption;
-        private LoadViewStatus interruptedStatus;
-        private readonly int threadId = Thread.CurrentThread.ManagedThreadId;
+        private Module _owner;
+        private object _lifecycle;
+        private string _assetName;
+        private List<string> _projects;
+        private ICoreResourceProvider _provider;
+        private CoreResourceRequest<CorePrefabLease> _resourceRequest;
+        private CorePrefabLease _prefabLease;
+        private Transform _parent;
+        private bool _hasParent;
+        private Scene _targetScene;
+        private readonly List<KeyValuePair<View, object>> _parentSessions = new List<KeyValuePair<View, object>>();
+        private LoadViewArgs _args;
+        private object[] _param;
+        private GameObject _directPrefab;
+        private bool _hasDirectPrefab;
+        private bool _isExecuting;
+        private bool _isClosingOwner;
+        private bool _isTerminal;
+        private Exception _interruption;
+        private LoadViewStatus _interruptedStatus;
+        private readonly int _threadId = Thread.CurrentThread.ManagedThreadId;
 
         internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, GameObject prefab = null)
         {
-            owner = module;
-            lifecycle = module.ViewLifecycle;
-            assetName = name;
-            projects = ModuleManager.ViewResourceProjects(module);
-            parent = target;
-            hasParent = !ReferenceEquals(target, null);
-            targetScene = hasParent ? target.gameObject.scene : SceneManager.GetActiveScene();
+            _owner = module;
+            _lifecycle = module.ViewLifecycle;
+            _assetName = name;
+            _projects = ModuleManager.ViewResourceProjects(module);
+            _parent = target;
+            _hasParent = !ReferenceEquals(target, null);
+            _targetScene = _hasParent ? target.gameObject.scene : SceneManager.GetActiveScene();
             for (var ancestor = target; ancestor; ancestor = ancestor.parent)
             {
                 var view = ancestor.GetComponent<View>();
-                if (view && view.Session != null) parentSessions.Add(new KeyValuePair<View, object>(view, view.Session));
+                if (view && view.Session != null)
+                {
+                    _parentSessions.Add(new KeyValuePair<View, object>(view, view.Session));
+                }
             }
-            args = claimedArgs;
-            param = parameters;
-            directPrefab = prefab;
-            hasDirectPrefab = !ReferenceEquals(prefab, null);
-            provider = hasDirectPrefab ? null : CoreResourceAccess.Provider;
+            _args = claimedArgs;
+            _param = parameters;
+            _directPrefab = prefab;
+            _hasDirectPrefab = !ReferenceEquals(prefab, null);
+            _provider = _hasDirectPrefab ? null : CoreResourceAccess.Provider;
             Validate();
-            owner.pendingViews.Add(this);
+            _owner.PendingViews.Add(this);
             Application.quitting += OnExecutionEnded;
 #if UNITY_EDITOR
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
@@ -82,58 +101,105 @@ namespace YLFramework.Core
 #if UNITY_EDITOR
         private void OnPlayModeChanged(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.ExitingPlayMode) OnExecutionEnded();
+            if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                OnExecutionEnded();
+            }
         }
 #endif
 
         private void Validate()
         {
-            if (interruption != null) throw interruption;
-            if (terminal) throw new InvalidOperationException("View request has already completed.");
-            if (hasDirectPrefab && !directPrefab) throw new InvalidOperationException("View prefab has been destroyed.");
-            ViewManager.EnsureOwner(owner);
-            if (!ReferenceEquals(owner.ViewLifecycle, lifecycle)) throw new InvalidOperationException("View owner lifecycle has ended.");
-            if (hasParent)
+            if (_interruption != null)
             {
-                if (!parent) throw new InvalidOperationException("View parent has been destroyed.");
-                foreach (var entry in parentSessions)
-                    if (!entry.Key || !ReferenceEquals(entry.Key.Session, entry.Value))
-                        throw new InvalidOperationException("View parent session has ended.");
-                // 存活parent的合法Scene/DDOL迁移遵循C；无parent则固定接受时的Scene。
-                targetScene = parent.gameObject.scene;
+                throw _interruption;
             }
-            if (!targetScene.IsValid() || !targetScene.isLoaded) throw new InvalidOperationException("View target scene has unloaded.");
+
+            if (_isTerminal)
+            {
+                throw new InvalidOperationException("View request has already completed.");
+            }
+
+            if (_hasDirectPrefab && !_directPrefab)
+            {
+                throw new InvalidOperationException("View prefab has been destroyed.");
+            }
+
+            ViewManager.EnsureOwner(_owner);
+            if (!ReferenceEquals(_owner.ViewLifecycle, _lifecycle))
+            {
+                throw new InvalidOperationException("View owner lifecycle has ended.");
+            }
+
+            if (_hasParent)
+            {
+                if (!_parent)
+                {
+                    throw new InvalidOperationException("View parent has been destroyed.");
+                }
+
+                foreach (var entry in _parentSessions)
+                {
+                    if (!entry.Key || !ReferenceEquals(entry.Key.Session, entry.Value))
+                    {
+                        throw new InvalidOperationException("View parent session has ended.");
+                    }
+                }
+                // 存活parent的合法Scene/DDOL迁移遵循C；无parent则固定接受时的Scene。
+                _targetScene = _parent.gameObject.scene;
+            }
+            if (!_targetScene.IsValid() || !_targetScene.isLoaded)
+            {
+                throw new InvalidOperationException("View target scene has unloaded.");
+            }
         }
 
         /// <summary>等待期立即结束；同步初始化中的重入取消在该事务回滚后通知。</summary>
         public override void Abort()
         {
-            if (Thread.CurrentThread.ManagedThreadId != threadId)
+            if (Thread.CurrentThread.ManagedThreadId != _threadId)
+            {
                 throw new InvalidOperationException("View request Abort must run on its accepting thread.");
-            if (terminal || interruption != null) return;
-            interruption = new OperationCanceledException("View request canceled.");
-            interruptedStatus = LoadViewStatus.Canceled;
-            if (!executing) Finish(null, interruption, interruptedStatus);
+            }
+
+            if (_isTerminal || _interruption != null)
+            {
+                return;
+            }
+
+            _interruption = new OperationCanceledException("View request canceled.");
+            _interruptedStatus = LoadViewStatus.Canceled;
+            if (!_isExecuting)
+            {
+                Finish(null, _interruption, _interruptedStatus);
+            }
         }
 
         void IPendingViewRequest.Invalidate()
         {
-            if (terminal) return;
-            closingOwner = true;
-            interruption = new InvalidOperationException("View owner lifecycle has ended.");
-            interruptedStatus = LoadViewStatus.Invalidated;
-            try { ReleaseInputs(); }
+            if (_isTerminal)
+            {
+                return;
+            }
+
+            _isClosingOwner = true;
+            _interruption = new InvalidOperationException("View owner lifecycle has ended.");
+            _interruptedStatus = LoadViewStatus.Invalidated;
+            try
+            {
+                ReleaseInputs();
+            }
             catch (Exception cleanupError)
             {
-                StartUpModuleRequest.AttachCleanupError(interruption, cleanupError);
+                StartUpModuleRequest.AttachCleanupError(_interruption, cleanupError);
                 throw;
             }
         }
 
         void IPendingViewRequest.PublishInvalidation()
         {
-            closingOwner = false;
-            Finish(null, interruption, interruptedStatus);
+            _isClosingOwner = false;
+            Finish(null, _interruption, _interruptedStatus);
         }
 
         private void ReleaseInputs()
@@ -142,46 +208,82 @@ namespace YLFramework.Core
 #if UNITY_EDITOR
             EditorApplication.playModeStateChanged -= OnPlayModeChanged;
 #endif
-            if (owner != null) owner.pendingViews.Remove(this);
-            var previousArgs = args;
-            var previousRequest = resourceRequest;
-            var previousPrefab = prefabLease;
-            resourceRequest = null;
-            prefabLease = null;
-            provider = null;
-            args = null;
-            owner = null;
-            lifecycle = null;
-            parent = null;
-            parentSessions.Clear();
-            projects = null;
-            assetName = null;
-            param = null;
-            directPrefab = null;
-            targetScene = default;
-            try { previousRequest?.Dispose(); }
+            if (_owner != null)
+            {
+                _owner.PendingViews.Remove(this);
+            }
+
+            var previousArgs = _args;
+            var previousRequest = _resourceRequest;
+            var previousPrefab = _prefabLease;
+            _resourceRequest = null;
+            _prefabLease = null;
+            _provider = null;
+            _args = null;
+            _owner = null;
+            _lifecycle = null;
+            _parent = null;
+            _parentSessions.Clear();
+            _projects = null;
+            _assetName = null;
+            _param = null;
+            _directPrefab = null;
+            _targetScene = default;
+            try
+            {
+                previousRequest?.Dispose();
+            }
             finally
             {
-                try { previousPrefab?.Dispose(); }
-                finally { if (previousArgs != null) previousArgs.Release(); }
+                try
+                {
+                    previousPrefab?.Dispose();
+                }
+                finally
+                {
+                    if (previousArgs != null)
+                    {
+                        previousArgs.Release();
+                    }
+                }
             }
         }
 
         private void Finish(T result, Exception failure, LoadViewStatus status)
         {
-            if (terminal || closingOwner) return;
-            terminal = true;
-            try { ReleaseInputs(); }
+            if (_isTerminal || _isClosingOwner)
+            {
+                return;
+            }
+
+            _isTerminal = true;
+            try
+            {
+                ReleaseInputs();
+            }
             catch (Exception cleanupError)
             {
-                if (failure != null) StartUpModuleRequest.AttachCleanupError(failure, cleanupError);
-                else { failure = cleanupError; status = LoadViewStatus.Failed; }
+                if (failure != null)
+                {
+                    StartUpModuleRequest.AttachCleanupError(failure, cleanupError);
+                }
+                else
+                {
+                    failure = cleanupError;
+                    status = LoadViewStatus.Failed;
+                }
             }
-            view = result;
+            View = result;
             Exception = failure;
             Status = status;
-            try { Completed(failure?.ToString()); }
-            catch (Exception notificationError) { Debug.LogException(notificationError); }
+            try
+            {
+                Complete(failure?.ToString());
+            }
+            catch (Exception notificationError)
+            {
+                Debug.LogException(notificationError);
+            }
         }
 
         internal IEnumerator Run()
@@ -190,14 +292,28 @@ namespace YLFramework.Core
             Exception failure = null;
             try
             {
-                while (!terminal && !closingOwner)
+                while (!_isTerminal && !_isClosingOwner)
                 {
                     bool next;
-                    executing = true;
-                    try { next = routine.MoveNext(); }
-                    catch (Exception error) { failure = error; break; }
-                    finally { executing = false; }
-                    if (!next) break;
+                    _isExecuting = true;
+                    try
+                    {
+                        next = routine.MoveNext();
+                    }
+                    catch (Exception error)
+                    {
+                        failure = error;
+                        break;
+                    }
+                    finally
+                    {
+                        _isExecuting = false;
+                    }
+                    if (!next)
+                    {
+                        break;
+                    }
+
                     yield return routine.Current;
                 }
             }
@@ -205,73 +321,113 @@ namespace YLFramework.Core
             {
                 (routine as IDisposable)?.Dispose();
             }
-            if (!terminal && !closingOwner)
-                Finish(null, failure ?? interruption ?? new InvalidOperationException("View producer stopped without a result."),
-                    interruption != null && (failure == null || ReferenceEquals(failure, interruption))
-                        ? interruptedStatus : LoadViewStatus.Failed);
+            if (!_isTerminal && !_isClosingOwner)
+            {
+                Finish(null, failure ?? _interruption ?? new InvalidOperationException("View producer stopped without a result."),
+                    _interruption != null && (failure == null || ReferenceEquals(failure, _interruption))
+                        ? _interruptedStatus : LoadViewStatus.Failed);
+            }
         }
 
         private IEnumerator Load()
         {
-            GameObject prefab = directPrefab;
+            GameObject prefab = _directPrefab;
             Exception resourceError = null;
             // 即时完成的后端与直接 Prefab 同样保留接受/取消边界。
             yield return null;
             ValidateWaiting();
-            if (!hasDirectPrefab) CoreResourceAccess.RequireProvider(provider);
-            for (int i = 0; !prefab && i < projects.Count; i++)
+            if (!_hasDirectPrefab)
             {
-                var project = projects[i];
+                CoreResourceAccess.RequireProvider(_provider);
+            }
+
+            for (int i = 0; !prefab && i < _projects.Count; i++)
+            {
+                var project = _projects[i];
                 Validate();
                 CoreResourceRequest<CorePrefabLease> acquired;
-                try { acquired = provider.AcquirePrefabAsync(project, assetName); }
-                catch (Exception error) when (CoreResourceAccess.CanFallback(error)) { resourceError = error; continue; }
+                try
+                {
+                    acquired = _provider.AcquirePrefabAsync(project, _assetName);
+                }
+                catch (Exception error) when (CoreResourceAccess.CanFallback(error))
+                {
+                    resourceError = error;
+                    continue;
+                }
                 // Provider/Source 可同步重入关闭 owner，返回值仍须由本调用接管或归还。
-                try { ValidateWaiting(); }
+                try
+                {
+                    ValidateWaiting();
+                }
                 catch (Exception error)
                 {
-                    try { acquired?.Dispose(); }
-                    catch (Exception cleanup) { StartUpModuleRequest.AttachCleanupError(error, cleanup); }
+                    try
+                    {
+                        acquired?.Dispose();
+                    }
+                    catch (Exception cleanup)
+                    {
+                        StartUpModuleRequest.AttachCleanupError(error, cleanup);
+                    }
                     throw;
                 }
-                resourceRequest = acquired;
-                var request = resourceRequest ?? throw new InvalidOperationException("View asset request is null.");
+                _resourceRequest = acquired;
+                var request = _resourceRequest ?? throw new InvalidOperationException("View asset request is null.");
                 while (request.Status == CoreResourceStatus.Pending)
                 {
                     ValidateWaiting();
-                    progress = request.Progress;
+                    Progress = request.Progress;
                     yield return null;
                 }
                 ValidateWaiting();
                 if (request.Status != CoreResourceStatus.Succeeded)
                 {
-                    resourceError = request.Error ?? new CoreResourceException(CoreResourceError.LoadFailed, $"View asset load failed: {project}/{assetName}.");
+                    resourceError = request.Error ?? new CoreResourceException(CoreResourceError.LoadFailed, $"View asset load failed: {project}/{_assetName}.");
                     request.Dispose();
-                    resourceRequest = null;
+                    _resourceRequest = null;
                     if (request.Status == CoreResourceStatus.Canceled || request.Status == CoreResourceStatus.Invalidated ||
-                        !CoreResourceAccess.CanFallback(resourceError)) throw resourceError;
+                        !CoreResourceAccess.CanFallback(resourceError))
+                    {
+                        throw resourceError;
+                    }
+
                     continue;
                 }
-                prefabLease = request.TakeResult();
+                _prefabLease = request.TakeResult();
                 request.Dispose();
-                resourceRequest = null;
-                prefab = prefabLease.Prefab;
-                if (!prefab) throw new InvalidOperationException($"View prefab is no longer valid: {project}/{assetName}.");
+                _resourceRequest = null;
+                prefab = _prefabLease.Prefab;
+                if (!prefab)
+                {
+                    throw new InvalidOperationException($"View prefab is no longer valid: {project}/{_assetName}.");
+                }
             }
-            if (!prefab) throw new InvalidOperationException($"View prefab not found: {assetName}.", resourceError);
+            if (!prefab)
+            {
+                throw new InvalidOperationException($"View prefab not found: {_assetName}.", resourceError);
+            }
+
             ValidateWaiting();
-            var result = ViewManager.CompleteAsync<T>(owner, prefab, assetName, parent, targetScene, args, param, ValidateWaiting, prefabLease);
+            var result = ViewManager.CompleteAsync<T>(_owner, prefab, _assetName, _parent, _targetScene, _args, _param, ValidateWaiting, _prefabLease);
             // 初始化已结束再提交；完成通知可以关闭或开启下一笔会话。
-            executing = false;
+            _isExecuting = false;
             Finish(result, null, LoadViewStatus.Succeeded);
         }
 
         private void ValidateWaiting()
         {
-            try { Validate(); }
+            try
+            {
+                Validate();
+            }
             catch (Exception error)
             {
-                if (interruption == null) { interruption = error; interruptedStatus = LoadViewStatus.Invalidated; }
+                if (_interruption == null)
+                {
+                    _interruption = error;
+                    _interruptedStatus = LoadViewStatus.Invalidated;
+                }
                 throw;
             }
         }

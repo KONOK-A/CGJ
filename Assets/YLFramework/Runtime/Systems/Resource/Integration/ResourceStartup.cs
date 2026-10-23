@@ -10,29 +10,44 @@ namespace YLFramework.Services.Resource
     /// <summary>应用显式持有的接入责任。构造不初始化；StartAsync复用唯一ResourceSystem，StopAsync只结算本入口的责任。</summary>
     public sealed class ResourceStartup
     {
-        private static readonly IReadOnlyDictionary<string, ResourceAudioClipProvider> EmptyAudio =
+        private static readonly IReadOnlyDictionary<string, ResourceAudioClipProvider> _emptyAudio =
             new ReadOnlyDictionary<string, ResourceAudioClipProvider>(new Dictionary<string, ResourceAudioClipProvider>());
-        private readonly ResourceConfiguration configuration;
-        private readonly bool bindCore;
-        private readonly IReadOnlyList<string> audioProjects;
-        private readonly List<ResourceRequest<ResourceStartup>> starting = new();
-        private bool startingResources;
-        private bool stopping;
-        private bool registered;
+        private readonly ResourceConfiguration _configuration;
+        private readonly bool _bindCore;
+        private readonly IReadOnlyList<string> _audioProjects;
+        private readonly List<ResourceRequest<ResourceStartup>> _starting = new();
+        private bool _isStartingResources;
+        private bool _isStopping;
+        private bool _isRegistered;
 
-        public ResourceSystem Resources { get; private set; }
-        public bool OwnsResourceSystem { get; private set; }
-        public ICoreResourceProvider CoreProvider { get; private set; }
-        public IReadOnlyDictionary<string, ResourceAudioClipProvider> AudioProviders { get; private set; } = EmptyAudio;
+        public ResourceSystem Resources
+        {
+            get; private set;
+        }
+        public bool OwnsResourceSystem
+        {
+            get; private set;
+        }
+        public ICoreResourceProvider CoreProvider
+        {
+            get; private set;
+        }
+        public IReadOnlyDictionary<string, ResourceAudioClipProvider> AudioProviders { get; private set; } = _emptyAudio;
 
         public ResourceStartup(ResourceConfiguration configuration, bool bindCore = false, IEnumerable<string> audioProjects = null)
         {
-            this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            this.bindCore = bindCore;
-            this.audioProjects = ResourceCatalog.Copy(audioProjects);
-            foreach (var project in this.audioProjects) ResourceAddress.ValidateId(project, nameof(audioProjects));
-            if (this.audioProjects.Distinct(StringComparer.Ordinal).Count() != this.audioProjects.Count)
+            this._configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            this._bindCore = bindCore;
+            this._audioProjects = ResourceCatalog.Copy(audioProjects);
+            foreach (var project in this._audioProjects)
+            {
+                ResourceAddress.ValidateId(project, nameof(audioProjects));
+            }
+
+            if (this._audioProjects.Distinct(StringComparer.Ordinal).Count() != this._audioProjects.Count)
+            {
                 throw new ArgumentException("Audio projects must be distinct.", nameof(audioProjects));
+            }
         }
 
         /// <summary>同一入口的等待者独立取消；成功结果借读本入口，Dispose请求不等价Stop。配置冲突沿用ResourceSystem规则。</summary>
@@ -40,18 +55,30 @@ namespace YLFramework.Services.Resource
         {
             ResourceSystem.CheckStartupThread();
             var request = new ResourceRequest<ResourceStartup>();
-            if (stopping) return Failure(request, new ResourceException(ResourceError.Busy, "The startup is stopping."));
-            if (registered)
+            if (_isStopping)
             {
-                if (!Resources.IsAvailable) return Failure(request, new ResourceException(ResourceError.SessionUnavailable, "The resource session ended."));
+                return Failure(request, new ResourceException(ResourceError.Busy, "The startup is stopping."));
+            }
+
+            if (_isRegistered)
+            {
+                if (!Resources.IsAvailable)
+                {
+                    return Failure(request, new ResourceException(ResourceError.SessionUnavailable, "The resource session ended."));
+                }
+
                 request.SetSuccess(this);
                 return request;
             }
-            starting.Add(request);
-            request.Attach(() => starting.Remove(request), null);
-            if (startingResources) return request;
-            startingResources = true;
-            var initialized = ResourceSystem.InitializeStartup(configuration, out var created);
+            _starting.Add(request);
+            request.Attach(() => _starting.Remove(request), null);
+            if (_isStartingResources)
+            {
+                return request;
+            }
+
+            _isStartingResources = true;
+            var initialized = ResourceSystem.InitializeStartup(_configuration, out var created);
             if (initialized.IsDisposed)
             {
                 CleanupFailedStart(initialized.Error ?? new ResourceException(ResourceError.SessionUnavailable, "The session ended before startup assembly."));
@@ -62,48 +89,90 @@ namespace YLFramework.Services.Resource
                 ResourceException error = null;
                 try
                 {
-                    if (done.Status != ResourceRequestStatus.Succeeded) error = done.Error;
+                    if (done.Status != ResourceRequestStatus.Succeeded)
+                    {
+                        error = done.Error;
+                    }
                     else
                     {
                         var acquired = done.TakeResult();
                         OwnsResourceSystem = created || (ReferenceEquals(Resources, acquired) && OwnsResourceSystem);
                         Resources = acquired;
-                        if (starting.Count == 0) error = new ResourceException(ResourceError.Canceled, "Every startup consumer canceled.");
+                        if (_starting.Count == 0)
+                        {
+                            error = new ResourceException(ResourceError.Canceled, "Every startup consumer canceled.");
+                        }
                         else
                         {
-                            var providers = audioProjects.ToDictionary(id => id, id => Resources.GetAudioClipProvider(id), StringComparer.Ordinal);
-                            CoreProvider = Resources.RegisterStartup(this, bindCore);
-                            registered = true;
+                            var providers = _audioProjects.ToDictionary(id => id, id => Resources.GetAudioClipProvider(id), StringComparer.Ordinal);
+                            CoreProvider = Resources.RegisterStartup(this, _bindCore);
+                            _isRegistered = true;
                             AudioProviders = new ReadOnlyDictionary<string, ResourceAudioClipProvider>(providers);
                         }
                     }
                 }
-                catch (ResourceException failure) { error = failure; }
-                catch (Exception failure) { error = new ResourceException(ResourceError.LoadFailed, "Resource startup assembly failed.", failure); }
-                finally { done.Dispose(); }
-                if (error == null) CompleteStart(null);
-                else CleanupFailedStart(error);
+                catch (ResourceException failure)
+                {
+                    error = failure;
+                }
+                catch (Exception failure)
+                {
+                    error = new ResourceException(ResourceError.LoadFailed, "Resource startup assembly failed.", failure);
+                }
+                finally
+                {
+                    done.Dispose();
+                }
+                if (error == null)
+                {
+                    CompleteStart(null);
+                }
+                else
+                {
+                    CleanupFailedStart(error);
+                }
             };
             return request;
         }
 
         private void CompleteStart(ResourceException error)
         {
-            startingResources = false;
-            var requests = starting.ToArray();
-            starting.Clear();
+            _isStartingResources = false;
+            var requests = _starting.ToArray();
+            _starting.Clear();
             foreach (var request in requests)
-                if (error == null) request.SetSuccess(this);
-                else request.SetFailure(error.Kind == ResourceError.SessionUnavailable ? ResourceRequestStatus.Invalidated : ResourceRequestStatus.Failed, error);
-            foreach (var request in requests) request.Notify();
+            {
+                if (error == null)
+                {
+                    request.SetSuccess(this);
+                }
+                else
+                {
+                    request.SetFailure(error.Kind == ResourceError.SessionUnavailable ? ResourceRequestStatus.Invalidated : ResourceRequestStatus.Failed, error);
+                }
+            }
+
+            foreach (var request in requests)
+            {
+                request.Notify();
+            }
         }
 
         private void CleanupFailedStart(ResourceException error)
         {
-            if (registered) { Resources.UnregisterStartup(this); registered = false; }
+            if (_isRegistered)
+            {
+                Resources.UnregisterStartup(this);
+                _isRegistered = false;
+            }
             CoreProvider = null;
-            AudioProviders = EmptyAudio;
-            if (Resources == null || !OwnsResourceSystem) { ClearLocal(); CompleteStart(error); return; }
+            AudioProviders = _emptyAudio;
+            if (Resources == null || !OwnsResourceSystem)
+            {
+                ClearLocal();
+                CompleteStart(error);
+                return;
+            }
             if (Resources.HasOtherStartups(this))
             {
                 CompleteStart(new ResourceException(error.Kind, "Startup assembly failed; its created resource session remains owned for StopAsync retry because another startup joined.", error));
@@ -113,7 +182,11 @@ namespace YLFramework.Services.Resource
             cleanup.Completed += done =>
             {
                 var failure = done.Error;
-                if (done.Status == ResourceRequestStatus.Succeeded) ClearLocal();
+                if (done.Status == ResourceRequestStatus.Succeeded)
+                {
+                    ClearLocal();
+                }
+
                 done.Dispose();
                 CompleteStart(failure == null ? error : new ResourceException(error.Kind,
                     "Startup assembly failed; created resources could not close. Release independent owners and retry StopAsync.", new AggregateException(error, failure)));
@@ -126,28 +199,51 @@ namespace YLFramework.Services.Resource
         {
             ResourceSystem.CheckStartupThread();
             var request = new ResourceRequest<bool>();
-            if (startingResources) return Failure(request, new ResourceException(ResourceError.Busy, "Startup initialization or failure cleanup is still in progress."));
-            if (stopping) return Resources.ShutdownAsync();
+            if (_isStartingResources)
+            {
+                return Failure(request, new ResourceException(ResourceError.Busy, "Startup initialization or failure cleanup is still in progress."));
+            }
+
+            if (_isStopping)
+            {
+                return Resources.ShutdownAsync();
+            }
+
             if (Resources == null || !OwnsResourceSystem || !Resources.IsSessionActive)
             {
                 ClearLocal();
                 request.SetSuccess(true);
                 return request;
             }
-            if (Resources.HasOtherStartups(this)) return Failure(request, new ResourceException(ResourceError.Busy, "Other application startups still borrow the resource session."));
-            stopping = true;
+            if (Resources.HasOtherStartups(this))
+            {
+                return Failure(request, new ResourceException(ResourceError.Busy, "Other application startups still borrow the resource session."));
+            }
+
+            _isStopping = true;
             ResourceRequest<bool> shutdown;
-            try { shutdown = Resources.ShutdownAsync(); }
+            try
+            {
+                shutdown = Resources.ShutdownAsync();
+            }
             catch (Exception error)
             {
-                stopping = false;
+                _isStopping = false;
                 return Failure(request, error as ResourceException ?? new ResourceException(ResourceError.LoadFailed, "Resource shutdown failed.", error));
             }
             shutdown.Completed += done =>
             {
-                if (done.Status == ResourceRequestStatus.Succeeded) { ClearLocal(); request.SetSuccess(true); }
-                else request.SetFailure(done.Status, done.Error);
-                stopping = false;
+                if (done.Status == ResourceRequestStatus.Succeeded)
+                {
+                    ClearLocal();
+                    request.SetSuccess(true);
+                }
+                else
+                {
+                    request.SetFailure(done.Status, done.Error);
+                }
+
+                _isStopping = false;
                 done.Dispose();
                 request.Notify();
             };
@@ -156,12 +252,16 @@ namespace YLFramework.Services.Resource
 
         private void ClearLocal()
         {
-            if (registered) Resources.UnregisterStartup(this);
-            registered = false;
+            if (_isRegistered)
+            {
+                Resources.UnregisterStartup(this);
+            }
+
+            _isRegistered = false;
             Resources = null;
             OwnsResourceSystem = false;
             CoreProvider = null;
-            AudioProviders = EmptyAudio;
+            AudioProviders = _emptyAudio;
         }
 
         private static ResourceRequest<T> Failure<T>(ResourceRequest<T> request, ResourceException error)
@@ -173,49 +273,64 @@ namespace YLFramework.Services.Resource
 
     public sealed partial class ResourceSystem
     {
-        private readonly HashSet<ResourceStartup> startups = new();
-        private readonly HashSet<ResourceStartup> startupCoreUsers = new();
-        private ICoreResourceProvider startupCoreBinding;
-        private bool ownsStartupCoreBinding;
+        private readonly HashSet<ResourceStartup> _startups = new();
+        private readonly HashSet<ResourceStartup> _startupCoreUsers = new();
+        private ICoreResourceProvider _startupCoreBinding;
+        private bool _ownsStartupCoreBinding;
 
         internal static void CheckStartupThread() => AssertThread();
 
         internal static ResourceRequest<ResourceSystem> InitializeStartup(ResourceConfiguration config, out bool created)
         {
-            created = authority == null;
+            created = _authority == null;
             return InitializeAsync(config);
         }
 
         internal ICoreResourceProvider RegisterStartup(ResourceStartup startup, bool bindCore)
         {
             CheckThread();
-            if (!IsAvailable) throw new ResourceException(ResourceError.SessionUnavailable, "The resource session ended during startup assembly.");
+            if (!IsAvailable)
+            {
+                throw new ResourceException(ResourceError.SessionUnavailable, "The resource session ended during startup assembly.");
+            }
+
             if (bindCore)
             {
                 var current = CoreResourceAccess.Provider;
-                if (current != null && !ReferenceEquals(current, coreProvider))
-                    throw new ResourceException(ResourceError.ConfigurationConflict, "A different Core resource provider is already bound; startup does not replace external bindings.");
-                if (startupCoreUsers.Count == 0 || current == null)
+                if (current != null && !ReferenceEquals(current, _coreProvider))
                 {
-                    startupCoreBinding = current ?? BindCoreResourceProvider();
-                    ownsStartupCoreBinding = current == null;
+                    throw new ResourceException(ResourceError.ConfigurationConflict, "A different Core resource provider is already bound; startup does not replace external bindings.");
                 }
-                startupCoreUsers.Add(startup);
+
+                if (_startupCoreUsers.Count == 0 || current == null)
+                {
+                    _startupCoreBinding = current ?? BindCoreResourceProvider();
+                    _ownsStartupCoreBinding = current == null;
+                }
+                _startupCoreUsers.Add(startup);
             }
-            startups.Add(startup);
-            return bindCore ? startupCoreBinding : null;
+            _startups.Add(startup);
+            return bindCore ? _startupCoreBinding : null;
         }
 
-        internal bool HasOtherStartups(ResourceStartup startup) => startups.Any(x => !ReferenceEquals(x, startup));
+        internal bool HasOtherStartups(ResourceStartup startup) => _startups.Any(x => !ReferenceEquals(x, startup));
 
         internal void UnregisterStartup(ResourceStartup startup)
         {
             CheckThread();
-            startups.Remove(startup);
-            if (!startupCoreUsers.Remove(startup) || startupCoreUsers.Count != 0) return;
-            if (ownsStartupCoreBinding) CoreResourceAccess.Unbind(startupCoreBinding);
-            startupCoreBinding = null;
-            ownsStartupCoreBinding = false;
+            _startups.Remove(startup);
+            if (!_startupCoreUsers.Remove(startup) || _startupCoreUsers.Count != 0)
+            {
+                return;
+            }
+
+            if (_ownsStartupCoreBinding)
+            {
+                CoreResourceAccess.Unbind(_startupCoreBinding);
+            }
+
+            _startupCoreBinding = null;
+            _ownsStartupCoreBinding = false;
         }
     }
 }

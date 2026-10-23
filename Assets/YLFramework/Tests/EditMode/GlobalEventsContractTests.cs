@@ -9,10 +9,21 @@ namespace YLFramework.Tests
 {
     public class GlobalEventsContractTests
     {
-        private enum Key : ulong { One = 1, High = ulong.MaxValue }
-        private enum OtherKey { One = 1 }
-        private class Message { }
-        private sealed class DerivedMessage : Message { }
+        private enum Key : ulong
+        {
+            One = 1,
+            High = ulong.MaxValue
+        }
+        private enum OtherKey
+        {
+            One = 1
+        }
+        private class Message
+        {
+        }
+        private sealed class DerivedMessage : Message
+        {
+        }
         private sealed class ConstructedMessage
         {
             internal static int Constructions;
@@ -36,10 +47,10 @@ namespace YLFramework.Tests
 
         [Test]
         public void IntFacadeLifetimeIsIsolatedAcrossDisposeAndReset() => CheckLifetime(
-            () => IntIDEventSystem.Instance, (s, a) => s.Register(1, (_, __) => a()),
+            () => IntIdEventSystem.Instance, (s, a) => s.Register(1, (_, __) => a()),
             s => s.Send(1), s => s.Dispose());
 
-        private static void CheckLifetime<T>(Func<T> instance, Func<T, Action, IUnRegister> register,
+        private static void CheckLifetime<T>(Func<T> instance, Func<T, Action, IUnregister> register,
             Action<T> send, Action<T> dispose) where T : class, ISingleton
         {
             Assert.That(SingletonProperty<T>.HasInstance, Is.False, "Test must own this facade context.");
@@ -60,7 +71,7 @@ namespace YLFramework.Tests
                 send(old);
                 CollectionAssert.AreEqual(new[] { "dispose" }, trace);
                 dispose(old);
-                oldToken.UnRegister();
+                oldToken.Unregister();
                 Assert.That(instance(), Is.SameAs(next));
                 Assert.Throws<ObjectDisposedException>(() => register(old, callback));
                 Assert.Throws<ObjectDisposedException>(() => send(old));
@@ -76,16 +87,27 @@ namespace YLFramework.Tests
                 latest = instance();
                 register(latest, callback);
                 dispose(next);
-                resetToken.UnRegister();
+                resetToken.Unregister();
                 Assert.That(instance(), Is.SameAs(latest));
                 send(latest);
                 CollectionAssert.AreEqual(new[] { "dispose", "message", "message" }, trace);
             }
             finally
             {
-                if (old != null) dispose(old);
-                if (next != null) dispose(next);
-                if (latest != null) dispose(latest);
+                if (old != null)
+                {
+                    dispose(old);
+                }
+
+                if (next != null)
+                {
+                    dispose(next);
+                }
+
+                if (latest != null)
+                {
+                    dispose(latest);
+                }
             }
         }
 
@@ -95,33 +117,42 @@ namespace YLFramework.Tests
             var strings = StringEventSystem.Instance;
             var types = TypeEventSystem.Instance;
             var enums = EnumEventSystem.Instance;
-            var ints = IntIDEventSystem.Instance;
+            var ints = IntIdEventSystem.Instance;
             var hadDefault = EventBus.TryGetDefault(out _);
             var defaultBus = EventBus.Default;
             using var independent = new EventBus();
-            const string key = "2.2-B.facade-isolation";
+            const string Key = "2.2-B.facade-isolation";
             try
             {
                 var trace = new List<string>();
-                strings.Register(key, () => trace.Add("string"));
+                strings.Register(Key, () => trace.Add("string"));
                 types.Register<int>(_ => trace.Add("type"));
-                enums.Register(Key.One, _ => trace.Add("enum"));
+                enums.Register(GlobalEventsContractTests.Key.One, _ => trace.Add("enum"));
                 ints.Register(1, (_, __) => trace.Add("int"));
-                defaultBus.Register(key, () => trace.Add("default"));
-                independent.Register(key, () => trace.Add("independent"));
+                defaultBus.Register(Key, () => trace.Add("default"));
+                independent.Register(Key, () => trace.Add("independent"));
                 strings.Dispose();
                 types.Send(1);
-                enums.Send(Key.One);
+                enums.Send(GlobalEventsContractTests.Key.One);
                 ints.Send(1);
-                defaultBus.Send(key);
-                independent.Send(key);
+                defaultBus.Send(Key);
+                independent.Send(Key);
                 CollectionAssert.AreEqual(new[] { "type", "enum", "int", "default", "independent" }, trace);
             }
             finally
             {
-                strings.Dispose(); types.Dispose(); enums.Dispose(); ints.Dispose();
-                if (hadDefault) defaultBus.RemoveKey(key);
-                else EventBus.ResetDefault();
+                strings.Dispose();
+                types.Dispose();
+                enums.Dispose();
+                ints.Dispose();
+                if (hadDefault)
+                {
+                    defaultBus.RemoveKey(Key);
+                }
+                else
+                {
+                    EventBus.ResetDefault();
+                }
             }
         }
 
@@ -136,15 +167,15 @@ namespace YLFramework.Tests
                 var values = new List<int>();
                 Action<int> callback = values.Add;
                 var old = system.Register("key", callback);
-                old.UnRegister();
+                old.Unregister();
                 Assert.Throws<InvalidOperationException>(() => system.Send("key", "wrong"));
                 Assert.Throws<InvalidOperationException>(() => system.Register<string>("key", null));
-                system.UnRegister("key");
+                system.Unregister("key");
                 system.Register("key", callback);
-                old.UnRegister();
+                old.Unregister();
                 system.Send("key", 1);
                 CollectionAssert.AreEqual(new[] { 1 }, values);
-                system.UnRegisterAll();
+                system.UnregisterAll();
                 string result = null;
                 system.Register<int, string, bool>("key", (a, b, c) => result = a + b + c);
                 system.Send("key", 2, "value", true);
@@ -155,7 +186,10 @@ namespace YLFramework.Tests
                 Assert.That(Assert.Throws<InvalidOperationException>(() => system.Send("failure")), Is.SameAs(error));
                 CollectionAssert.AreEqual(new[] { 1 }, values);
             }
-            finally { system.Dispose(); }
+            finally
+            {
+                system.Dispose();
+            }
         }
 
         [Test]
@@ -177,20 +211,31 @@ namespace YLFramework.Tests
                 Assert.That(ConstructedMessage.Constructions, Is.EqualTo(1));
                 CollectionAssert.AreEqual(new[] { "base", "derived", "constructed" }, trace);
             }
-            finally { system.Dispose(); }
+            finally
+            {
+                system.Dispose();
+            }
         }
 
         [Test]
         public void DynamicFacadesPreserveEnumIdentityArrayPayloadAndIntConversion()
         {
             var enums = EnumEventSystem.Instance;
-            var ints = IntIDEventSystem.Instance;
+            var ints = IntIdEventSystem.Instance;
             try
             {
                 var trace = new List<string>();
                 var payload = new object[] { "payload", 3 };
-                enums.Register(Key.One, args => { Assert.That(args, Is.SameAs(payload)); trace.Add("one"); });
-                enums.Register(Key.High, args => { Assert.That(args, Is.Null); trace.Add("high"); });
+                enums.Register(Key.One, args =>
+                {
+                    Assert.That(args, Is.SameAs(payload));
+                    trace.Add("one");
+                });
+                enums.Register(Key.High, args =>
+                {
+                    Assert.That(args, Is.Null);
+                    trace.Add("high");
+                });
                 enums.Register(OtherKey.One, _ => trace.Add("other"));
                 enums.Send(Key.One, payload);
                 enums.Send(Key.High, (object[])null);
@@ -206,7 +251,11 @@ namespace YLFramework.Tests
                 Assert.Throws<FormatException>(() => ints.Register("invalid", (_, __) => { }));
                 CollectionAssert.AreEqual(new[] { "one", "high", "other", "int" }, trace);
             }
-            finally { enums.Dispose(); ints.Dispose(); }
+            finally
+            {
+                enums.Dispose();
+                ints.Dispose();
+            }
         }
     }
 }

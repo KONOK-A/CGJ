@@ -1,56 +1,69 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.PackageManager.UI;
 using UnityEditor;
+using UnityEditor.PackageManager.UI;
 using UnityEngine;
-using System;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.MissionSystem
 {
     public class MissionsConfigController
     {
 
-        private static List<MissionsConfig> allConfigs = new List<MissionsConfig>();
+        private static List<MissionsConfig> _allConfigs = new List<MissionsConfig>();
 
         public static List<MissionsConfig> GetAllConfigs()
         {
-            allConfigs.Clear();
+            _allConfigs.Clear();
 
             string[] guids = AssetDatabase.FindAssets(string.Format("t:{0}", typeof(MissionsConfig).FullName));
             if (guids == null || guids.Length == 0)
-                return allConfigs;
+            {
+                return _allConfigs;
+            }
 
             foreach (var item in guids)
             {
                 string assetpath = AssetDatabase.GUIDToAssetPath(item);
                 if (string.IsNullOrEmpty(assetpath))
+                {
                     continue;
+                }
+
                 MissionsConfig config = AssetDatabase.LoadAssetAtPath<MissionsConfig>(assetpath);
-                if (config == null) continue;
-                allConfigs.Add(config);
+                if (config == null)
+                {
+                    continue;
+                }
+
+                _allConfigs.Add(config);
             }
 
-            return allConfigs;
+            return _allConfigs;
         }
 
         public static int CreateMissionConfigData(Type type, MissionsConfig config)
         {
             MissionConfigData mission = ScriptableObject.CreateInstance(type) as MissionConfigData;
-            return CreateMissionConfigData(mission,config);
+            return CreateMissionConfigData(mission, config);
         }
 
         public static int CreateMissionConfigData(MissionConfigData mission, MissionsConfig config)
         {
-            if (config == null) return -1;
-            string asset_path = AssetDatabase.GetAssetPath(config);
-            string guid = AssetDatabase.AssetPathToGUID(asset_path);
+            if (config == null)
+            {
+                return -1;
+            }
 
-            int id = GenerateID(config);
+            string assetPath = AssetDatabase.GetAssetPath(config);
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
+
+            int id = GenerateId(config);
             mission.id = id;
-            mission.mission_name = string.Format("Mission:{0}", id);
+            mission.missionName = string.Format("Mission:{0}", id);
             mission.parent = config;
 
             string path = MissionAuthoring.GeneratedDirectory(config);
@@ -64,19 +77,21 @@ namespace YLFramework.MissionSystem
             return id;
         }
 
-        public static int GenerateID(MissionsConfig config)
+        public static int GenerateId(MissionsConfig config)
         {
-            int max_id = config.start_id;
+            int maxId = config.startId;
 
             foreach (var item in config.missions)
             {
-                if (item.id > max_id)
-                    max_id = item.id;
+                if (item.id > maxId)
+                {
+                    maxId = item.id;
+                }
             }
 
-            max_id++;
+            maxId++;
 
-            return max_id;
+            return maxId;
         }
 
         public static void CreateAsset(ScriptableObject scriptableObject, string path, bool ping = true)

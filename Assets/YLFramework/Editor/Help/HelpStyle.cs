@@ -6,13 +6,47 @@ namespace YLFramework.Editor.Help
     /// <summary>帮助窗口的轻量统一配色；仅服务本窗口，不构成可扩展主题系统。</summary>
     internal sealed class HelpPalette
     {
-        internal readonly Color HeaderBg, HeaderRule, NavBg, NavRule, NavGroupBg, NavGroupRule, NavStripeA, NavStripeB,
-            NavHover, NavSelected, NavSelectedAccent, TabBarBg, TabHoverBg, TabSelectedBg, TabAccent, Separator,
-            NoticeBg, NoticeBorder, NoticeAccent, CodeBg, CodeHeaderBg, CodeBorder, CodeTagBg, Muted,
-            MemberBg, MemberBorder, MemberAccent, MemberHoverBg, MemberHoverBorder, MemberHoverAccent,
-            MemberExpandedBg, MemberExpandedBorder, MemberExpandedAccent, MemberDivider,
-            DetailInsetBg, DetailInsetBorder,
-            ChipBg, ChipHoverBg, ChipSelectedBg, ChipBorder, BadgeBg;
+        internal readonly Color HeaderBg;
+        internal readonly Color HeaderRule;
+        internal readonly Color NavBg;
+        internal readonly Color NavRule;
+        internal readonly Color NavGroupBg;
+        internal readonly Color NavGroupRule;
+        internal readonly Color NavStripeA;
+        internal readonly Color NavStripeB;
+        internal readonly Color NavHover;
+        internal readonly Color NavSelected;
+        internal readonly Color NavSelectedAccent;
+        internal readonly Color TabBarBg;
+        internal readonly Color TabHoverBg;
+        internal readonly Color TabSelectedBg;
+        internal readonly Color TabAccent;
+        internal readonly Color Separator;
+        internal readonly Color NoticeBg;
+        internal readonly Color NoticeBorder;
+        internal readonly Color NoticeAccent;
+        internal readonly Color CodeBg;
+        internal readonly Color CodeHeaderBg;
+        internal readonly Color CodeBorder;
+        internal readonly Color CodeTagBg;
+        internal readonly Color Muted;
+        internal readonly Color MemberBg;
+        internal readonly Color MemberBorder;
+        internal readonly Color MemberAccent;
+        internal readonly Color MemberHoverBg;
+        internal readonly Color MemberHoverBorder;
+        internal readonly Color MemberHoverAccent;
+        internal readonly Color MemberExpandedBg;
+        internal readonly Color MemberExpandedBorder;
+        internal readonly Color MemberExpandedAccent;
+        internal readonly Color MemberDivider;
+        internal readonly Color DetailInsetBg;
+        internal readonly Color DetailInsetBorder;
+        internal readonly Color ChipBg;
+        internal readonly Color ChipHoverBg;
+        internal readonly Color ChipSelectedBg;
+        internal readonly Color ChipBorder;
+        internal readonly Color BadgeBg;
 
         internal HelpPalette(bool dark)
         {
@@ -144,24 +178,27 @@ namespace YLFramework.Editor.Help
                 wrapMode = TextureWrapMode.Clamp
             };
             for (var y = 0; y < size; y++)
-            for (var x = 0; x < size; x++)
             {
-                // 圆角矩形的有符号距离：直边处约 1 像素，用 coverage 做外缘抗锯齿。
-                var centerX = Mathf.Clamp(x + 0.5f, radius, size - radius);
-                var centerY = Mathf.Clamp(y + 0.5f, radius, size - radius);
-                var dx = x + 0.5f - centerX;
-                var dy = y + 0.5f - centerY;
-                var distance = Mathf.Sqrt(dx * dx + dy * dy) - radius;
-                var coverage = Mathf.Clamp01(0.5f - distance);
-                if (coverage <= 0f)
+                for (var x = 0; x < size; x++)
                 {
-                    texture.SetPixel(x, y, new Color(0f, 0f, 0f, 0f));
-                    continue;
+                    // 圆角矩形的有符号距离：直边处约 1 像素，用 coverage 做外缘抗锯齿。
+                    var centerX = Mathf.Clamp(x + 0.5f, radius, size - radius);
+                    var centerY = Mathf.Clamp(y + 0.5f, radius, size - radius);
+                    var dx = x + 0.5f - centerX;
+                    var dy = y + 0.5f - centerY;
+                    var distance = Mathf.Sqrt(dx * dx + dy * dy) - radius;
+                    var coverage = Mathf.Clamp01(0.5f - distance);
+                    if (coverage <= 0f)
+                    {
+                        texture.SetPixel(x, y, new Color(0f, 0f, 0f, 0f));
+                        continue;
+                    }
+                    var color = distance > -1f ? border : x >= 1 && x <= 2 ? accent : fill;
+                    color.a *= coverage;
+                    texture.SetPixel(x, y, color);
                 }
-                var color = distance > -1f ? border : x >= 1 && x <= 2 ? accent : fill;
-                color.a *= coverage;
-                texture.SetPixel(x, y, color);
             }
+
             texture.Apply();
             return texture;
         }

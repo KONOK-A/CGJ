@@ -25,7 +25,11 @@ namespace YLFramework.Services.Audio
         public static bool TryGetFloat(AudioMixer mixer, string parameterName, out float value)
         {
             ValidateParameter(mixer, parameterName);
-            if (mixer.GetFloat(parameterName, out value)) return true;
+            if (mixer.GetFloat(parameterName, out value))
+            {
+                return true;
+            }
+
             value = 0f;
             return false;
         }
@@ -47,7 +51,11 @@ namespace YLFramework.Services.Audio
         public static bool TryGetVolume(AudioMixer mixer, string parameterName, out float linearVolume)
         {
             linearVolume = 0f;
-            if (!TryGetFloat(mixer, parameterName, out var value)) return false;
+            if (!TryGetFloat(mixer, parameterName, out var value))
+            {
+                return false;
+            }
+
             linearVolume = DecibelsToLinearVolume(value);
             return true;
         }
@@ -57,7 +65,10 @@ namespace YLFramework.Services.Audio
         {
             ValidateFinite(linearVolume, nameof(linearVolume));
             if (linearVolume < 0f || linearVolume > 1f)
+            {
                 throw new ArgumentOutOfRangeException(nameof(linearVolume), "Volume must be in [0,1].");
+            }
+
             return linearVolume == 0f ? MinimumDecibels : Mathf.Max(MinimumDecibels, 20f * Mathf.Log10(linearVolume));
         }
 
@@ -71,7 +82,11 @@ namespace YLFramework.Services.Audio
         /// <summary>Transitions immediately through the snapshot's native Mixer; no scheduling or parameter release is performed.</summary>
         public static void TransitionToSnapshot(AudioMixerSnapshot snapshot, float duration)
         {
-            if (!snapshot) throw new ArgumentException("A live snapshot is required.", nameof(snapshot));
+            if (!snapshot)
+            {
+                throw new ArgumentException("A live snapshot is required.", nameof(snapshot));
+            }
+
             ValidateMixer(snapshot.audioMixer, nameof(snapshot));
             ValidateDuration(duration);
             snapshot.TransitionTo(duration);
@@ -82,48 +97,87 @@ namespace YLFramework.Services.Audio
         {
             ValidateMixer(mixer, nameof(mixer));
             ValidateDuration(duration);
-            if (snapshots == null) throw new ArgumentNullException(nameof(snapshots));
-            if (weights == null) throw new ArgumentNullException(nameof(weights));
-            if (snapshots.Length == 0) throw new ArgumentException("At least one snapshot is required.", nameof(snapshots));
+            if (snapshots == null)
+            {
+                throw new ArgumentNullException(nameof(snapshots));
+            }
+
+            if (weights == null)
+            {
+                throw new ArgumentNullException(nameof(weights));
+            }
+
+            if (snapshots.Length == 0)
+            {
+                throw new ArgumentException("At least one snapshot is required.", nameof(snapshots));
+            }
+
             if (snapshots.Length != weights.Length)
+            {
                 throw new ArgumentException("Snapshot and weight arrays must have the same length.", nameof(weights));
+            }
 
             double totalWeight = 0d;
             for (var i = 0; i < snapshots.Length; i++)
             {
-                if (!snapshots[i]) throw new ArgumentException($"Snapshot at index {i} must be live.", nameof(snapshots));
+                if (!snapshots[i])
+                {
+                    throw new ArgumentException($"Snapshot at index {i} must be live.", nameof(snapshots));
+                }
+
                 if (snapshots[i].audioMixer != mixer)
+                {
                     throw new ArgumentException($"Snapshot at index {i} must belong to the supplied Mixer.", nameof(snapshots));
+                }
+
                 ValidateFinite(weights[i], nameof(weights));
-                if (weights[i] < 0f) throw new ArgumentOutOfRangeException(nameof(weights), "Weights must be non-negative.");
+                if (weights[i] < 0f)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(weights), "Weights must be non-negative.");
+                }
+
                 totalWeight += weights[i];
             }
-            if (totalWeight <= 0d) throw new ArgumentException("Weights must have a positive total.", nameof(weights));
+            if (totalWeight <= 0d)
+            {
+                throw new ArgumentException("Weights must have a positive total.", nameof(weights));
+            }
+
             mixer.TransitionToSnapshots(snapshots, weights, duration);
         }
 
         private static void ValidateMixer(AudioMixer mixer, string parameterName)
         {
-            if (!mixer) throw new ArgumentException("A live Mixer is required.", parameterName);
+            if (!mixer)
+            {
+                throw new ArgumentException("A live Mixer is required.", parameterName);
+            }
         }
 
         private static void ValidateParameter(AudioMixer mixer, string parameterName)
         {
             ValidateMixer(mixer, nameof(mixer));
             if (string.IsNullOrWhiteSpace(parameterName))
+            {
                 throw new ArgumentException("An exposed parameter name is required.", nameof(parameterName));
+            }
         }
 
         private static void ValidateFinite(float value, string parameterName)
         {
             if (float.IsNaN(value) || float.IsInfinity(value))
+            {
                 throw new ArgumentOutOfRangeException(parameterName, "The value must be finite.");
+            }
         }
 
         private static void ValidateDuration(float duration)
         {
             ValidateFinite(duration, nameof(duration));
-            if (duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration), "Duration must be non-negative.");
+            if (duration < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(duration), "Duration must be non-negative.");
+            }
         }
     }
 }

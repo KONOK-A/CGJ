@@ -6,17 +6,25 @@ namespace YLFramework.Services.Resource
     /// <summary>本次场景的 caller 身份；Dispose 不卸载场景，也不释放 SceneRecord 的 Bundle 图。</summary>
     public sealed class SceneLease : IDisposable
     {
-        private SceneRecord record;
-        public bool IsDisposed => record == null;
-        public bool IsValid => record != null && record.Owner.IsSessionActive && record.IsLoaded;
+        private SceneRecord _record;
+        public bool IsDisposed => _record == null;
+        public bool IsValid => _record != null && _record.Owner.IsSessionActive && _record.IsLoaded;
         public SceneRecord Record
         {
             get
             {
-                if (record == null) throw new ObjectDisposedException(nameof(SceneLease));
-                record.Owner.CheckThread();
-                if (!record.Owner.IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The Scene lease belongs to an ended session.");
-                return record;
+                if (_record == null)
+                {
+                    throw new ObjectDisposedException(nameof(SceneLease));
+                }
+
+                _record.Owner.CheckThread();
+                if (!_record.Owner.IsSessionActive)
+                {
+                    throw new ResourceException(ResourceError.SessionUnavailable, "The Scene lease belongs to an ended session.");
+                }
+
+                return _record;
             }
         }
         public Scene Scene
@@ -24,16 +32,24 @@ namespace YLFramework.Services.Resource
             get
             {
                 var value = Record;
-                if (!value.IsLoaded) throw new ResourceException(ResourceError.SceneUnloaded, "The leased Scene has been unloaded.");
+                if (!value.IsLoaded)
+                {
+                    throw new ResourceException(ResourceError.SceneUnloaded, "The leased Scene has been unloaded.");
+                }
+
                 return value.Scene;
             }
         }
-        internal SceneLease(SceneRecord record) => this.record = record;
+        internal SceneLease(SceneRecord record) => this._record = record;
         public void Dispose()
         {
-            if (record == null) return;
-            record.Owner.CheckThread();
-            record = null;
+            if (_record == null)
+            {
+                return;
+            }
+
+            _record.Owner.CheckThread();
+            _record = null;
         }
     }
 }

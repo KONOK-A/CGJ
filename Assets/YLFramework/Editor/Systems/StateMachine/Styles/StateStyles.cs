@@ -1,14 +1,15 @@
-using YLFramework.Core.Editor;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 
 namespace YLFramework.StateMachine
 {
-    public enum Style {
-        Normal=0,
+    public enum Style
+    {
+        Normal = 0,
         Blue,
         Mint,
         Green,
@@ -41,24 +42,27 @@ namespace YLFramework.StateMachine
 
     public class StateStyles
     {
-        private static Dictionary<Style, GUIStyle> styleDictionary = null;
-        static StateStyles() {
+        private static Dictionary<Style, GUIStyle> _styleDictionary = null;
+        static StateStyles()
+        {
 
-            styleDictionary = new Dictionary<Style, GUIStyle>();
+            _styleDictionary = new Dictionary<Style, GUIStyle>();
 
             foreach (Style style in Enum.GetValues(typeof(Style)))
             {
                 int value = (int)style;
                 string name = $"flow node {(value >= 14 ? "hex " : string.Empty)}{value % 7}{((value / 7) % 2 == 1 ? " on" : string.Empty)}";
-                styleDictionary.Add(style, new GUIStyle(Named(name, EditorStyles.helpBox)));
+                _styleDictionary.Add(style, new GUIStyle(Named(name, EditorStyles.helpBox)));
             }
 
         }
 
         public static GUIStyle Get(Style style)
         {
-            if(styleDictionary.ContainsKey(style))
-                return styleDictionary[style];
+            if (_styleDictionary.ContainsKey(style))
+            {
+                return _styleDictionary[style];
+            }
 
             return null;
         }

@@ -12,28 +12,58 @@ namespace YLFramework.Tests.Extensions.Domain
         private sealed class Host : IEquippableSkill
         {
             public Dictionary<int, SkillBase> Skills { get; } = new();
-            public bool IsCanRelease() => true;
+            public bool CanRelease() => true;
         }
         public sealed class Probe : SkillBase
         {
-            public int Updates, Completes, Interrupts;
+            public int Updates;
+            public int Completes;
+            public int Interrupts;
             protected override void OnUpdate() => Updates++;
             protected override void OnReleaseComplete() => Completes++;
             protected override void OnInterrupt() => Interrupts++;
         }
         private static void Advance(SkillBase skill, float delta) => typeof(SkillBase).GetMethod("Advance", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(skill, new object[] { delta });
 
-        [Test] public void ReleaseCompletionThenCooldownStaysAtOneAndCompletesOnce()
+        [Test]
+        public void ReleaseCompletionThenCooldownStaysAtOneAndCompletesOnce()
         {
             var skill = new Probe { Releaser = new Host(), Duration = 1, CoolingTime = 2 };
             var completed = 0;
             var callbacks = new List<string>();
-            skill.onStartReleaseCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("release"); };
-            skill.onReleasingCallback = (current, progress) => { Assert.That(current, Is.SameAs(skill)); Assert.That(progress, Is.EqualTo(1)); callbacks.Add("releasing"); };
-            skill.onReleaseCompleteCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("released"); };
-            skill.onStartCooldownCallback = current => { Assert.That(current, Is.SameAs(skill)); callbacks.Add("cooldown"); };
-            skill.onCoolingCallback = (current, progress) => { Assert.That(current, Is.SameAs(skill)); Assert.That(progress, Is.InRange(0f, 1f)); callbacks.Add("cooling"); };
-            skill.onCooldownCompleteCallback = current => { Assert.That(current, Is.SameAs(skill)); completed++; callbacks.Add("ready"); };
+            skill.ReleaseStarted = current =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                callbacks.Add("release");
+            };
+            skill.Releasing = (current, progress) =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                Assert.That(progress, Is.EqualTo(1));
+                callbacks.Add("releasing");
+            };
+            skill.ReleaseCompleted = current =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                callbacks.Add("released");
+            };
+            skill.CooldownStarted = current =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                callbacks.Add("cooldown");
+            };
+            skill.Cooling = (current, progress) =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                Assert.That(progress, Is.InRange(0f, 1f));
+                callbacks.Add("cooling");
+            };
+            skill.CooldownCompleted = current =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                completed++;
+                callbacks.Add("ready");
+            };
             Assert.That(skill.Release(), Is.EqualTo(ReleaseSkillStatus.Success));
             Advance(skill, 1);
             Assert.That(skill.Completes, Is.EqualTo(1));
@@ -46,11 +76,16 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(callbacks, Is.EqualTo(new[] { "release", "releasing", "released", "cooldown", "cooling", "cooling", "ready" }));
         }
 
-        [Test] public void CancellationKeepsCooldownAndInterruptCompletesExactlyOnce()
+        [Test]
+        public void CancellationKeepsCooldownAndInterruptCompletesExactlyOnce()
         {
             var skill = new Probe { Releaser = new Host(), Duration = 5, CoolingTime = 2, ActiveCancellation = true };
             var interrupted = 0;
-            skill.onInterruptCallback = current => { Assert.That(current, Is.SameAs(skill)); interrupted++; };
+            skill.Interrupted = current =>
+            {
+                Assert.That(current, Is.SameAs(skill));
+                interrupted++;
+            };
             skill.Release();
             skill.Cancel();
             skill.Interrupt();
@@ -61,18 +96,20 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(interrupted, Is.EqualTo(1));
         }
 
-        [Test] public void RemovingDuringProgressDoesNotContinueOldLeaseCallbacks()
+        [Test]
+        public void RemovingDuringProgressDoesNotContinueOldLeaseCallbacks()
         {
             var skill = new Probe { Releaser = new Host(), Duration = 1 };
-            skill.onReleasingCallback = (_, __) => typeof(SkillBase).GetMethod("ClearRuntime", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(skill, null);
+            skill.Releasing = (_, __) => typeof(SkillBase).GetMethod("ClearRuntime", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(skill, null);
             skill.Release();
             Advance(skill, 2);
             Assert.That(skill.Updates, Is.Zero);
             Assert.That(skill.Completes, Is.Zero);
             Assert.That(skill.Releaser, Is.Null);
-            Assert.That(skill.onReleasingCallback, Is.Null);
+            Assert.That(skill.Releasing, Is.Null);
         }
-        [Test] public void SkillMustOfferRealReleaseAndShutdownBoundaries()
+        [Test]
+        public void SkillMustOfferRealReleaseAndShutdownBoundaries()
         {
             var assembly = typeof(EventChannel).Assembly;
             var skill = assembly.GetType("YLFramework.SkillSystem.SkillBase");

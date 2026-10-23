@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -160,7 +160,7 @@ namespace YLFramework.Utilities.Extensions
         /// </summary>
         public static string StringJoin(this IEnumerable<string> self, string separator)
         {
-                return string.Join(separator, self);
+            return string.Join(separator, self);
         }
     }
 }

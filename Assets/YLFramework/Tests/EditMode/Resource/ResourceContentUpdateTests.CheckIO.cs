@@ -20,7 +20,11 @@ namespace YLFramework.Tests.ResourceBuild
         [TestCase("Encrypted", true)]
         public void WorkerCheckIsByteOnlyAndDoesNotCreateOrRewriteControlFiles(string encoding, bool existingStore)
         {
-            if (encoding == "Encrypted") RequireEncryptedBackend();
+            if (encoding == "Encrypted")
+            {
+                RequireEncryptedBackend();
+            }
+
             using var fixture = new UpdateFixture();
             if (existingStore)
             {
@@ -62,14 +66,24 @@ namespace YLFramework.Tests.ResourceBuild
             IEnumerable<ResourceLocalSnapshot> TargetClosure()
             {
                 entered.Set();
-                if (!release.Wait(10000)) throw new TimeoutException("The test did not release the controlled read boundary.");
+                if (!release.Wait(10000))
+                {
+                    throw new TimeoutException("The test did not release the controlled read boundary.");
+                }
+
                 yield return target;
             }
             Exception failure = null;
             var worker = new Thread(() =>
             {
-                try { fixture.Store.CheckForContent(new[] { fixture.BuiltIn }, TargetClosure(), cancellation.Token); }
-                catch (Exception error) { failure = error; }
+                try
+                {
+                    fixture.Store.CheckForContent(new[] { fixture.BuiltIn }, TargetClosure(), cancellation.Token);
+                }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
             });
             worker.Start();
             try
@@ -82,7 +96,8 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                cancellation.Cancel(); release.Set();
+                cancellation.Cancel();
+                release.Set();
                 Assert.That(worker.Join(10000), Is.True);
             }
             Assert.That(failure, Is.TypeOf<OperationCanceledException>(), failure?.ToString());

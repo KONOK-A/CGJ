@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace YLFramework.Core.Singleton
 {
@@ -12,12 +12,18 @@ namespace YLFramework.Core.Singleton
         /// <summary>
         /// 层级路径，例如 "YLFramework/Pool/GameObjectPool"（'/' 分隔）。
         /// </summary>
-        public string HierarchyPath { get; private set; }
+        public string HierarchyPath
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 路径根节点是否 DontDestroyOnLoad，默认 true。
         /// </summary>
-        public bool IsDontDestroy { get; private set; }
+        public bool IsDontDestroy
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 创建路径特性。

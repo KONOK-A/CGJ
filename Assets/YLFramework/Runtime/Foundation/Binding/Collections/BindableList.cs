@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using YLFramework.Events;
@@ -21,7 +21,9 @@ namespace YLFramework.Binding
         /// <summary>
         /// 创建空列表。
         /// </summary>
-        public BindableList(){}
+        public BindableList()
+        {
+        }
 
         /// <summary>
         /// 用序列中的元素逐个添加创建一个列表。
@@ -48,46 +50,46 @@ namespace YLFramework.Binding
         /// <param name="list">要包装的列表。</param>
         public BindableList(List<T> list) : base(list ?? new List<T>())
         {
-            
+
         }
 
         #endregion
 
         #region 监听事件
 
-        [NonSerialized]private EasyEvent<int> _onCountChanged;
+        [NonSerialized] private EasyEvent<int> _onCountChanged;
         /// <summary>
         /// 数量变化事件，参数为变化后的数量
         /// </summary>
         public EasyEvent<int> OnCountChanged => _onCountChanged ??= new EasyEvent<int>();
-        [NonSerialized]private EasyEvent _onClear;
+        [NonSerialized] private EasyEvent _onClear;
         /// <summary>
         /// 清空事件；参数无意义。
         /// </summary>
         public EasyEvent OnClear => _onClear ??= new EasyEvent();
-        [NonSerialized]private EasyEvent<int,T> _onAdd;
+        [NonSerialized] private EasyEvent<int, T> _onAdd;
         /// <summary>
         /// 添加事件，参数依次为 Index、Value。
         /// </summary>
-        public EasyEvent<int,T> OnAdd => _onAdd ??= new EasyEvent<int,T>();
-        [NonSerialized]private EasyEvent<int,T> _onRemove;
+        public EasyEvent<int, T> OnAdd => _onAdd ??= new EasyEvent<int, T>();
+        [NonSerialized] private EasyEvent<int, T> _onRemove;
         /// <summary>
         /// 移除事件，参数依次为 Index、被移除的 Value。
         /// </summary>
-        public EasyEvent<int,T> OnRemove => _onRemove ??= new EasyEvent<int,T>();
-        [NonSerialized]private EasyEvent<int,int,T> _onMove;
+        public EasyEvent<int, T> OnRemove => _onRemove ??= new EasyEvent<int, T>();
+        [NonSerialized] private EasyEvent<int, int, T> _onMove;
         /// <summary>
         /// 三个参数依次为 OldIndex、NewIndex、Value
         /// </summary>
-        public EasyEvent<int,int,T> OnMove => _onMove ??= new EasyEvent<int,int,T>();
-        
-        [NonSerialized]private EasyEvent<int,T,T> _onReplace;
+        public EasyEvent<int, int, T> OnMove => _onMove ??= new EasyEvent<int, int, T>();
+
+        [NonSerialized] private EasyEvent<int, T, T> _onReplace;
         /// <summary>
         /// 三个参数依次为 Index、OldValue、NewValue
         /// </summary>
-        public EasyEvent<int,T,T> OnReplace => _onReplace ??= new EasyEvent<int,T,T>();
+        public EasyEvent<int, T, T> OnReplace => _onReplace ??= new EasyEvent<int, T, T>();
 
-        [NonSerialized]private EasyEvent<BindableListChange<T>> _onChanged;
+        [NonSerialized] private EasyEvent<BindableListChange<T>> _onChanged;
         /// <summary>
         /// 统一变化事件：Add/Remove/Replace/Move/Clear 都会触发；批量通知结束时以 Reset 触发一次
         /// </summary>
@@ -97,9 +99,9 @@ namespace YLFramework.Binding
 
         #region 批量通知
 
-        [NonSerialized]private int _batchDepth;
-        [NonSerialized]private int _batchStartCount;
-        [NonSerialized]private bool _batchDirty;
+        [NonSerialized] private int _batchDepth;
+        [NonSerialized] private int _batchStartCount;
+        [NonSerialized] private bool _isBatchDirty;
 
         /// <summary>
         /// 是否处于批量通知状态，期间不会触发任何事件
@@ -114,7 +116,7 @@ namespace YLFramework.Binding
             if (_batchDepth == 0)
             {
                 _batchStartCount = Count;
-                _batchDirty = false;
+                _isBatchDirty = false;
             }
             _batchDepth++;
         }
@@ -132,9 +134,12 @@ namespace YLFramework.Binding
             }
 
             _batchDepth--;
-            if (_batchDepth > 0 || !_batchDirty) return;
+            if (_batchDepth > 0 || !_isBatchDirty)
+            {
+                return;
+            }
 
-            _batchDirty = false;
+            _isBatchDirty = false;
             if (Count != _batchStartCount)
             {
                 _onCountChanged?.Trigger(Count);
@@ -195,8 +200,16 @@ namespace YLFramework.Binding
                 {
                     i = Count - 1;
                 }
-                if (i < 0) break;
-                if (!match(this[i])) continue;
+                if (i < 0)
+                {
+                    break;
+                }
+
+                if (!match(this[i]))
+                {
+                    continue;
+                }
+
                 RemoveAt(i);
                 removedCount++;
             }
@@ -297,7 +310,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -310,7 +323,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -323,7 +336,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -335,7 +348,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 
@@ -347,7 +360,7 @@ namespace YLFramework.Binding
         {
             if (_batchDepth > 0)
             {
-                _batchDirty = true;
+                _isBatchDirty = true;
                 return;
             }
 

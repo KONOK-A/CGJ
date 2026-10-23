@@ -16,36 +16,56 @@ namespace YLFramework.EquipmentSystem
         private const string SelectionKey = "YLFramework.Equipment.SelectedConfig";
         [SerializeField] private EquipmentsConfig currentEquipmentConfig;
         [SerializeField] private TreeViewState state = new();
-        internal EquipmentListTree equipmentListTree;
-        private EquipmentConfigDataInspector entryEditor;
-        private Vector2 scroll;
+        internal EquipmentListTree EquipmentListTree;
+        private EquipmentConfigDataInspector _entryEditor;
+        private Vector2 _scroll;
 
         [MenuItem("Window/YLFramework/EquipmentSystem", false, 10)]
         private static void Open() => GetWindow<ConfigsWindow>().Show();
         private void OnEnable()
         {
-            titleContent = new GUIContent("装备配置"); minSize = new Vector2(700, 400);
+            titleContent = new GUIContent("装备配置");
+            minSize = new Vector2(700, 400);
             var root = currentEquipmentConfig ? currentEquipmentConfig : AssetDatabase.LoadAssetAtPath<EquipmentsConfig>(AssetDatabase.GUIDToAssetPath(EditorPrefs.GetString(SelectionKey, "")));
-            if (!root) root = EquipmentsConfigController.GetAllEquipmentsConfig().FirstOrDefault();
-            if (root) SetCurrentConfigs(root);
+            if (!root)
+            {
+                root = EquipmentsConfigController.GetAllEquipmentsConfig().FirstOrDefault();
+            }
+
+            if (root)
+            {
+                SetCurrentConfigs(root);
+            }
         }
         private void OnDisable()
         {
-            equipmentListTree?.Dispose(); equipmentListTree = null;
-            if (entryEditor) DestroyImmediate(entryEditor);
+            EquipmentListTree?.Dispose();
+            EquipmentListTree = null;
+            if (_entryEditor)
+            {
+                DestroyImmediate(_entryEditor);
+            }
         }
         public void SetCurrentConfigs(EquipmentsConfig root)
         {
-            equipmentListTree?.Dispose();
-            if (entryEditor) DestroyImmediate(entryEditor);
+            EquipmentListTree?.Dispose();
+            if (_entryEditor)
+            {
+                DestroyImmediate(_entryEditor);
+            }
+
             currentEquipmentConfig = root;
             state = new TreeViewState();
-            equipmentListTree = root ? new EquipmentListTree(state, root) : null;
-            if (root) EditorPrefs.SetString(SelectionKey, AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root)));
+            EquipmentListTree = root ? new EquipmentListTree(state, root) : null;
+            if (root)
+            {
+                EditorPrefs.SetString(SelectionKey, AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root)));
+            }
+
             Repaint();
         }
-        public void SetSelection(int id) => equipmentListTree?.SelectEquipment(id);
-        protected override void DrawGUILeft(Rect rect)
+        public void SetSelection(int id) => EquipmentListTree?.SelectEquipment(id);
+        protected override void DrawGuiLeft(Rect rect)
         {
             GUILayout.BeginArea(rect);
             try
@@ -55,52 +75,105 @@ namespace YLFramework.EquipmentSystem
                     if (GUILayout.Button(currentEquipmentConfig ? (string.IsNullOrEmpty(currentEquipmentConfig.displayName) ? currentEquipmentConfig.name : currentEquipmentConfig.displayName) : "选择配表", EditorStyles.toolbarDropDown))
                     {
                         var menu = new GenericMenu();
-                        foreach (var root in EquipmentsConfigController.GetAllEquipmentsConfig()) { var selected = root; menu.AddItem(new GUIContent(root.name + " " + root.displayName), root == currentEquipmentConfig, () => SetCurrentConfigs(selected)); }
+                        foreach (var root in EquipmentsConfigController.GetAllEquipmentsConfig())
+                        {
+                            var selected = root;
+                            menu.AddItem(new GUIContent(root.name + " " + root.displayName), root == currentEquipmentConfig, () => SetCurrentConfigs(selected));
+                        }
                         menu.ShowAsContext();
                     }
                     using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
                     {
-                        if (GUILayout.Button("+", EditorStyles.toolbarButton, GUILayout.Width(28))) CreateRoot();
-                        if (GUILayout.Button("刷新", EditorStyles.toolbarButton, GUILayout.Width(42)) && currentEquipmentConfig) { EquipmentsConfigController.RefreshEntries(currentEquipmentConfig); ScriptBindController.RefreshBindings(); equipmentListTree.Reload(); }
+                        if (GUILayout.Button("+", EditorStyles.toolbarButton, GUILayout.Width(28)))
+                        {
+                            CreateRoot();
+                        }
+
+                        if (GUILayout.Button("刷新", EditorStyles.toolbarButton, GUILayout.Width(42)) && currentEquipmentConfig)
+                        {
+                            EquipmentsConfigController.RefreshEntries(currentEquipmentConfig);
+                            ScriptBindController.RefreshBindings();
+                            EquipmentListTree.Reload();
+                        }
                     }
                 }
-                if (equipmentListTree != null)
+                if (EquipmentListTree != null)
                 {
-                    equipmentListTree.searchString = GUILayout.TextField(equipmentListTree.searchString, EditorStyles.toolbarTextField);
-                    using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode)) equipmentListTree.OnGUI(new Rect(0, 43, rect.width, rect.height - 43));
+                    EquipmentListTree.searchString = GUILayout.TextField(EquipmentListTree.searchString, EditorStyles.toolbarTextField);
+                    using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
+                    {
+                        EquipmentListTree.OnGUI(new Rect(0, 43, rect.width, rect.height - 43));
+                    }
                 }
-                else EditorGUILayout.HelpBox("创建配表后，右键列表创建基础或派生装备定义。", MessageType.Info);
+                else
+                {
+                    EditorGUILayout.HelpBox("创建配表后，右键列表创建基础或派生装备定义。", MessageType.Info);
+                }
             }
-            catch (ExitGUIException) { throw; }
-            catch (Exception error) { EditorGUILayout.HelpBox(error.Message, MessageType.Error); }
-            finally { GUILayout.EndArea(); }
+            catch (ExitGUIException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                EditorGUILayout.HelpBox(error.Message, MessageType.Error);
+            }
+            finally
+            {
+                GUILayout.EndArea();
+            }
         }
-        protected override void DrawGUIRight(Rect rect)
+        protected override void DrawGuiRight(Rect rect)
         {
-            GUILayout.BeginArea(rect); scroll = EditorGUILayout.BeginScrollView(scroll);
+            GUILayout.BeginArea(rect);
+            _scroll = EditorGUILayout.BeginScrollView(_scroll);
             try
             {
-                var selected = equipmentListTree?.Selected;
-                if (!selected) { EditorGUILayout.HelpBox("请选择装备定义。", MessageType.Info); return; }
-                if (!entryEditor || entryEditor.target != selected)
+                var selected = EquipmentListTree?.Selected;
+                if (!selected)
                 {
-                    if (entryEditor) DestroyImmediate(entryEditor);
-                    entryEditor = (EquipmentConfigDataInspector)UnityEditor.Editor.CreateEditor(selected, typeof(EquipmentConfigDataInspector));
+                    EditorGUILayout.HelpBox("请选择装备定义。", MessageType.Info);
+                    return;
                 }
-                entryEditor.OnInspectorGUI();
+                if (!_entryEditor || _entryEditor.target != selected)
+                {
+                    if (_entryEditor)
+                    {
+                        DestroyImmediate(_entryEditor);
+                    }
+
+                    _entryEditor = (EquipmentConfigDataInspector)UnityEditor.Editor.CreateEditor(selected, typeof(EquipmentConfigDataInspector));
+                }
+                _entryEditor.OnInspectorGUI();
             }
-            catch (ExitGUIException) { throw; }
-            catch (Exception error) { EditorGUILayout.HelpBox(error.Message, MessageType.Error); }
-            finally { EditorGUILayout.EndScrollView(); GUILayout.EndArea(); }
+            catch (ExitGUIException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                EditorGUILayout.HelpBox(error.Message, MessageType.Error);
+            }
+            finally
+            {
+                EditorGUILayout.EndScrollView();
+                GUILayout.EndArea();
+            }
         }
         private void CreateRoot()
         {
             var path = EditorUtility.SaveFilePanelInProject("新建装备配表", "EquipmentsConfig", "asset", "选择新配表位置");
-            if (string.IsNullOrEmpty(path)) return;
-            var root = CreateInstance<EquipmentsConfig>(); root.name = Path.GetFileNameWithoutExtension(path);
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            var root = CreateInstance<EquipmentsConfig>();
+            root.name = Path.GetFileNameWithoutExtension(path);
             root.displayName = root.name;
-            root.start_id = checked(EquipmentsConfigController.GetAllEquipmentsConfig().Select(c => c.start_id).DefaultIfEmpty(0).Max() + 1000);
-            AssetDatabase.CreateAsset(root, path); SetCurrentConfigs(root);
+            root.startId = checked(EquipmentsConfigController.GetAllEquipmentsConfig().Select(c => c.startId).DefaultIfEmpty(0).Max() + 1000);
+            AssetDatabase.CreateAsset(root, path);
+            SetCurrentConfigs(root);
         }
     }
 }

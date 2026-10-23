@@ -2,6 +2,7 @@ namespace YLFramework.Core.Editor.Tests.Settings.Second
 {
     public sealed class CoreEditorSettingsFixture : ProjectSettingsScriptableObject<CoreEditorSettingsFixture>
     {
-        public string Marker;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Marker")]
+        public string marker;
     }
 }

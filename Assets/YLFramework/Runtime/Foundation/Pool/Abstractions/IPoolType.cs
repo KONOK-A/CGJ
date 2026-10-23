@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Pool
+namespace YLFramework.Core.Pool
 {
     /// <summary>
     /// 让对象自己掌握回收入口的接口：实现方决定回收进哪个池（或不回收）。

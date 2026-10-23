@@ -9,7 +9,9 @@ namespace YLFramework.Overlap
 {
 
     [Serializable]
-    public class OverlapEvent3D : UnityEvent<OverlapHit<Collider>> { }
+    public class OverlapEvent3D : UnityEvent<OverlapHit<Collider>>
+    {
+    }
 
     public abstract class OverlapBase3D : OverlapBase<Collider, OverlapEvent3D>
     {

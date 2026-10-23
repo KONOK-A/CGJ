@@ -13,9 +13,9 @@ namespace YLFramework.Tests.Resource
 {
     public class ResourceStartupTests
     {
-        private readonly ResourceSessionTests scene = new();
-        [SetUp] public void SetUp() => scene.SetUp();
-        [UnityTearDown] public IEnumerator TearDown() => scene.TearDown();
+        private readonly ResourceSessionTests _scene = new();
+        [SetUp] public void SetUp() => _scene.SetUp();
+        [UnityTearDown] public IEnumerator TearDown() => _scene.TearDown();
 
         private sealed class Source : IResourceSource
         {
@@ -27,7 +27,9 @@ namespace YLFramework.Tests.Resource
             public void Validate(ResourceCatalogEntry entry) => OnValidate?.Invoke();
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => new(entry.Location.Locator == "text" ? Text : Clip);
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => new Operation(Load(entry, type).Asset);
-            public void Release(UnityEngine.Object value) { }
+            public void Release(UnityEngine.Object value)
+            {
+            }
             private sealed class Operation : ResourceSourceOperation
             {
                 internal Operation(UnityEngine.Object value) => Complete(value, null);
@@ -85,7 +87,10 @@ namespace YLFramework.Tests.Resource
                 Assert.That(owner.OwnsResourceSystem, Is.True);
                 Assert.That(Take(owner.StartAsync()).Resources, Is.SameAs(resources));
                 using (var text = owner.CoreProvider.ReadTextAsync("startup-c05", "message"))
+                {
                     Assert.That(text.TakeResult(), Is.EqualTo("c05-shared-business"));
+                }
+
                 using (var clip = owner.AudioProviders["startup-c05"].Load("tone"))
                 {
                     Assert.That(clip.Clip, Is.SameAs(source.Clip));
@@ -95,7 +100,11 @@ namespace YLFramework.Tests.Resource
                 Take(joined.StartAsync());
                 Assert.That(joined.OwnsResourceSystem, Is.False);
                 Assert.That(joined.Resources, Is.SameAs(resources));
-                using (var busy = owner.StopAsync()) Assert.That(busy.Error?.Kind, Is.EqualTo(ResourceError.Busy), "Another startup is a real application owner even without an asset lease.");
+                using (var busy = owner.StopAsync())
+                {
+                    Assert.That(busy.Error?.Kind, Is.EqualTo(ResourceError.Busy), "Another startup is a real application owner even without an asset lease.");
+                }
+
                 Assert.That(Take(joined.StopAsync()), Is.True);
                 Assert.That(CoreResourceAccess.Provider, Is.SameAs(owner.CoreProvider));
                 using (var external = resources.Acquire<TextAsset>(new ResourceAddress("startup-c05", "message")))
@@ -119,22 +128,38 @@ namespace YLFramework.Tests.Resource
                 var foreign = new ForeignCore();
                 CoreResourceAccess.Bind(foreign);
                 var failed = new ResourceStartup(config, true);
-                using (var start = failed.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                using (var start = failed.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                }
+
                 Assert.That(ResourceSystem.Current, Is.SameAs(resources));
                 Assert.That(CoreResourceAccess.Provider, Is.SameAs(foreign));
                 var conflict = new ResourceStartup(Configuration(source));
-                using (var start = conflict.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                using (var start = conflict.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                }
+
                 Assert.That(ResourceSystem.Current, Is.SameAs(resources));
                 CoreResourceAccess.Unbind(foreign);
                 var missingAudio = new ResourceStartup(config, true, new[] { "missing-c05" });
-                using (var start = missingAudio.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                using (var start = missingAudio.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                }
+
                 Assert.That(resources.IsAvailable, Is.True);
                 Assert.That(CoreResourceAccess.Provider, Is.Null, "Validate all optional consumers before touching the binding slot.");
                 Take(resources.ShutdownAsync());
 
                 var ownFailure = new ResourceStartup(config, true);
                 CoreResourceAccess.Bind(foreign);
-                using (var start = ownFailure.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                using (var start = ownFailure.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.ConfigurationConflict));
+                }
+
                 Assert.That(ResourceSystem.Current, Is.Null, "Assembly failure must close only the resource session created by this startup.");
                 Assert.That(CoreResourceAccess.Provider, Is.SameAs(foreign));
                 CoreResourceAccess.Unbind(foreign);
@@ -146,7 +171,11 @@ namespace YLFramework.Tests.Resource
 
                 var retry = new ResourceStartup(config, true);
                 source.OnValidate = () => throw new InvalidOperationException("c05-initialization-failure");
-                using (var start = retry.StartAsync()) Assert.That(start.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+                using (var start = retry.StartAsync())
+                {
+                    Assert.That(start.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+                }
+
                 Assert.That(ResourceSystem.Current, Is.Null);
                 source.OnValidate = null;
                 Take(retry.StartAsync());
@@ -174,18 +203,30 @@ namespace YLFramework.Tests.Resource
                     source.OnValidate = null;
                     otherJoin = otherStartup.StartAsync();
                 };
-                using (var start = retainedFailure.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                using (var start = retainedFailure.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                }
+
                 Take(otherJoin);
                 var previous = retainedFailure.Resources;
                 Assert.That(previous, Is.SameAs(otherStartup.Resources));
                 Assert.That(retainedFailure.OwnsResourceSystem, Is.True);
-                using (var start = retainedFailure.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                using (var start = retainedFailure.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                }
+
                 Assert.That(retainedFailure.OwnsResourceSystem, Is.True, "Retry on the same created instance must preserve its cleanup responsibility.");
                 Take(otherStartup.StopAsync());
                 Take(previous.ShutdownAsync());
                 var replacement = Take(ResourceSystem.InitializeAsync(config));
                 Assert.That(replacement, Is.Not.SameAs(previous));
-                using (var start = retainedFailure.StartAsync()) Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                using (var start = retainedFailure.StartAsync())
+                {
+                    Assert.That(start.Error?.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+                }
+
                 Assert.That(replacement.IsAvailable, Is.True, "A failed old startup must not inherit ownership of an external replacement session.");
                 Assert.That(ResourceSystem.Current, Is.SameAs(replacement));
                 Assert.That(retainedFailure.OwnsResourceSystem, Is.False);
@@ -207,7 +248,13 @@ namespace YLFramework.Tests.Resource
             }
             finally
             {
-                if (ResourceSystem.Current != null) using (var stop = ResourceSystem.Current.ShutdownAsync()) { }
+                if (ResourceSystem.Current != null)
+                {
+                    using (var stop = ResourceSystem.Current.ShutdownAsync())
+                    {
+                    }
+                }
+
                 UnityEngine.Object.DestroyImmediate(source.Text);
                 UnityEngine.Object.DestroyImmediate(source.Clip);
             }

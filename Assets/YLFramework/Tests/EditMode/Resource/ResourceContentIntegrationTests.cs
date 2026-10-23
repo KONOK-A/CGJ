@@ -39,7 +39,11 @@ namespace YLFramework.Tests.ResourceBuild
             ((IDisposable)first.GetValue(0)).Dispose();
             Assert.That(type.GetProperty("ReservedBytes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(budget), Is.EqualTo(0L));
             var retry = (Array)reserve.Invoke(budget, new object[] { 2 });
-            foreach (IDisposable ticket in retry) ticket.Dispose();
+            foreach (IDisposable ticket in retry)
+            {
+                ticket.Dispose();
+            }
+
             Assert.That(type.GetProperty("ReservedBytes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(budget), Is.EqualTo(0L));
         }
 

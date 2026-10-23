@@ -1,10 +1,10 @@
-using YLFramework.Actions;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using YLFramework.Timing;
 using Kit = YLFramework.Actions.ActionKit;
 
@@ -12,93 +12,129 @@ namespace YLFramework.Tests.Actions
 {
     public class ActionStartPlayModeTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private readonly List<IActionController> mControllers = new List<IActionController>();
-        private readonly List<GameObject> mRoots = new List<GameObject>();
-        private readonly List<AsyncOperation> mUnloads = new List<AsyncOperation>();
-        private readonly List<Scene> mScenes = new List<Scene>();
-        private ActionStartTestCaller mCaller;
-        private ActionGlobalHost mPreviousGlobal;
-        private ActionKitCurrentScene mPreviousSceneHost;
-        private ActionRecycleDriver mPreviousRecycle;
-        private float mPreviousTimeScale;
-        private Scene mPreviousActiveScene;
-        private bool mOwnActionSession;
+        private readonly List<IAction> _actions = new List<IAction>();
+        private readonly List<IActionController> _controllers = new List<IActionController>();
+        private readonly List<GameObject> _roots = new List<GameObject>();
+        private readonly List<AsyncOperation> _unloads = new List<AsyncOperation>();
+        private readonly List<Scene> _scenes = new List<Scene>();
+        private ActionStartTestCaller _caller;
+        private ActionGlobalHost _previousGlobal;
+        private ActionKitCurrentScene _previousSceneHost;
+        private ActionRecycleDriver _previousRecycle;
+        private float _previousTimeScale;
+        private Scene _previousActiveScene;
+        private bool _ownsActionSession;
 
         [SetUp]
         public void SetUp()
         {
-            mOwnActionSession = false;
+            _ownsActionSession = false;
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
-            mPreviousTimeScale = Time.timeScale;
-            mPreviousActiveScene = SceneManager.GetActiveScene();
-            mPreviousGlobal = Object.FindObjectOfType<ActionGlobalHost>(true);
-            mPreviousSceneHost = Object.FindObjectOfType<ActionKitCurrentScene>(true);
-            mPreviousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _previousTimeScale = Time.timeScale;
+            _previousActiveScene = SceneManager.GetActiveScene();
+            _previousGlobal = Object.FindObjectOfType<ActionGlobalHost>(true);
+            _previousSceneHost = Object.FindObjectOfType<ActionKitCurrentScene>(true);
+            _previousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
             // Only self-owned executors may be destroyed before recycling this fixture's controllers.
-            Assert.That(mPreviousGlobal == null, Is.True, "Run this fixture in an isolated test scene without an existing ActionKit global host; it will not modify another owner's executor.");
-            Assert.That(mPreviousSceneHost == null, Is.True, "Run this fixture without an existing ActionKit current-scene host; it will not replace or destroy another owner's host.");
-            mOwnActionSession = canOwnActionSession;
+            Assert.That(_previousGlobal == null, Is.True, "Run this fixture in an isolated test scene without an existing ActionKit global host; it will not modify another owner's executor.");
+            Assert.That(_previousSceneHost == null, Is.True, "Run this fixture without an existing ActionKit current-scene host; it will not replace or destroy another owner's host.");
+            _ownsActionSession = canOwnActionSession;
             ActionQueue.Drain();
             var root = new GameObject("ActionKit.Start.PlayModeTest");
-            mRoots.Add(root);
-            mCaller = root.AddComponent<ActionStartTestCaller>();
+            _roots.Add(root);
+            _caller = root.AddComponent<ActionStartTestCaller>();
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
         private IActionController Track(IActionController controller)
         {
-            mControllers.Add(controller);
+            _controllers.Add(controller);
             return controller;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            Time.timeScale = mPreviousTimeScale;
-            if (mPreviousActiveScene.IsValid() && mPreviousActiveScene.isLoaded)
-                SceneManager.SetActiveScene(mPreviousActiveScene);
+            Time.timeScale = _previousTimeScale;
+            if (_previousActiveScene.IsValid() && _previousActiveScene.isLoaded)
+            {
+                SceneManager.SetActiveScene(_previousActiveScene);
+            }
 
             var global = Object.FindObjectOfType<ActionGlobalHost>(true);
             var sceneHost = Object.FindObjectOfType<ActionKitCurrentScene>(true);
-            if (global && global != mPreviousGlobal) mRoots.Add(global.gameObject);
-            if (sceneHost && sceneHost != mPreviousSceneHost) mRoots.Add(sceneHost.gameObject);
-            foreach (var root in mRoots)
+            if (global && global != _previousGlobal)
             {
-                if (root) Object.Destroy(root);
+                _roots.Add(global.gameObject);
             }
-            mRoots.Clear();
+
+            if (sceneHost && sceneHost != _previousSceneHost)
+            {
+                _roots.Add(sceneHost.gameObject);
+            }
+
+            foreach (var root in _roots)
+            {
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
+            }
+            _roots.Clear();
             yield return null;
 
-            foreach (var action in mActions)
+            foreach (var action in _actions)
             {
-                if (!action.Deinited) action.Deinit();
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            foreach (var controller in mControllers)
+            foreach (var controller in _controllers)
             {
-                if (controller.Action != null) controller.Recycle();
+                if (controller.Action != null)
+                {
+                    controller.Recycle();
+                }
             }
-            mActions.Clear();
-            mControllers.Clear();
+            _actions.Clear();
+            _controllers.Clear();
             ActionQueue.Drain();
             var recycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
-            if (recycle && recycle != mPreviousRecycle) Object.Destroy(recycle.gameObject);
-            foreach (var unload in mUnloads) yield return unload;
-            foreach (var scene in mScenes)
+            if (recycle && recycle != _previousRecycle)
             {
-                if (scene.IsValid() && scene.isLoaded) yield return SceneManager.UnloadSceneAsync(scene);
+                Object.Destroy(recycle.gameObject);
             }
-            mUnloads.Clear();
-            mScenes.Clear();
-            if (mOwnActionSession)
+
+            foreach (var unload in _unloads)
             {
-                try { Kit.Shutdown(); }
-                finally { mOwnActionSession = false; }
+                yield return unload;
+            }
+
+            foreach (var scene in _scenes)
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    yield return SceneManager.UnloadSceneAsync(scene);
+                }
+            }
+            _unloads.Clear();
+            _scenes.Clear();
+            if (_ownsActionSession)
+            {
+                try
+                {
+                    Kit.Shutdown();
+                }
+                finally
+                {
+                    _ownsActionSession = false;
+                }
             }
             yield return null;
         }
@@ -112,17 +148,27 @@ namespace YLFramework.Tests.Actions
             System.Action<IActionController> typedCallback = controller =>
             {
                 observed = controller;
-                beforeDeinit = !controller.Action.Deinited;
+                beforeDeinit = !controller.Action.IsDeinitialized;
                 calls++;
             };
             System.Action callback = () => calls++;
             IActionController result;
-            if (scope == 0) result = typed ? action.Start(mCaller, typedCallback) : action.Start(mCaller, callback);
-            else if (scope == 1) result = typed ? action.StartCurrentScene(typedCallback) : action.StartCurrentScene(callback);
-            else result = typed ? action.StartGlobal(typedCallback) : action.StartGlobal(callback);
+            if (scope == 0)
+            {
+                result = typed ? action.Start(_caller, typedCallback) : action.Start(_caller, callback);
+            }
+            else if (scope == 1)
+            {
+                result = typed ? action.StartCurrentScene(typedCallback) : action.StartCurrentScene(callback);
+            }
+            else
+            {
+                result = typed ? action.StartGlobal(typedCallback) : action.StartGlobal(callback);
+            }
+
             Track(result);
             Assert.That(calls, Is.EqualTo(2));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             if (typed)
             {
                 Assert.That(observed, Is.SameAs(result));
@@ -150,11 +196,15 @@ namespace YLFramework.Tests.Actions
         {
             var calls = 0;
             var sequence = Own(Kit.Sequence().DelayFrame(1).Callback(() => calls++));
-            var controller = Track(sequence.Start(mCaller, () => calls++));
-            Assert.That(mCaller.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
-            for (var frame = 0; frame < 8 && calls < 2; frame++) yield return null;
+            var controller = Track(sequence.Start(_caller, () => calls++));
+            Assert.That(_caller.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
+            for (var frame = 0; frame < 8 && calls < 2; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(2));
-            Assert.That(sequence.Deinited, Is.True);
+            Assert.That(sequence.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -171,7 +221,7 @@ namespace YLFramework.Tests.Actions
                 var ready = false;
                 var calls = 0;
                 var action = Own(Kit.Condition(() => ready));
-                var actionRun = action.StartNamed(mCaller, "same", () => calls++);
+                var actionRun = action.StartNamed(_caller, "same", () => calls++);
                 var timerRun = scope.PostNamed("same", 60);
                 ownedHost = (Component)Object.FindObjectsByType(driverType, FindObjectsInactive.Include, FindObjectsSortMode.None)[0];
                 scope.CancelAll();
@@ -180,18 +230,25 @@ namespace YLFramework.Tests.Actions
                 timerRun = scope.PostNamed("same", 60);
                 Assert.That(actionRun.Cancel(), Is.True);
                 Assert.That(timerRun.IsActive, Is.True, "Action 清理不取消同名 Timer。");
-                var survivor = Own(Kit.Condition(() => ready)).StartNamed(mCaller, "same", () => calls++);
+                var survivor = Own(Kit.Condition(() => ready)).StartNamed(_caller, "same", () => calls++);
                 YLFramework.Timing.Timer.Shutdown();
                 Assert.That(timerRun.Status, Is.EqualTo(TimerState.Invalidated));
                 Assert.That(survivor.IsActive, Is.True, "默认 Timer owner 结束不清 Action 执行器。");
                 ready = true;
-                for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+                for (var frame = 0; frame < 5 && calls == 0; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(calls, Is.EqualTo(1), "只有未取消的 Action 正常完成。");
                 Assert.That(survivor.IsActive, Is.False);
             }
             finally
             {
-                if (ownedHost) Object.Destroy(ownedHost.gameObject);
+                if (ownedHost)
+                {
+                    Object.Destroy(ownedHost.gameObject);
+                }
             }
         }
 
@@ -201,19 +258,23 @@ namespace YLFramework.Tests.Actions
             var ready = false;
             var calls = 0;
             var action = Own(Kit.Condition(() => ready));
-            var controller = Track(action.Start(mCaller, () => calls++));
+            var controller = Track(action.Start(_caller, () => calls++));
             controller.Pause();
             ready = true;
             yield return null;
             yield return null;
             Assert.That(calls, Is.Zero);
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             controller.Resume();
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
 
             var cancelled = Own(Kit.Condition(() => false));
-            var cancelController = Track(cancelled.Start(mCaller, () => calls++));
+            var cancelController = Track(cancelled.Start(_caller, () => calls++));
             cancelController.Deinit();
             yield return null;
             yield return null;
@@ -229,10 +290,14 @@ namespace YLFramework.Tests.Actions
             var unscaledCalls = 0;
             var scaled = Own(Kit.Lerp(0, 1, 0.01f, value => { }, () => scaledCalls++));
             var unscaled = Own(Kit.Lerp(0, 1, 0.01f, value => { }, () => unscaledCalls++));
-            var scaledController = Track(scaled.Start(mCaller));
-            var unscaledController = Track(unscaled.Start(mCaller)).IgnoreTimeScale();
+            var scaledController = Track(scaled.Start(_caller));
+            var unscaledController = Track(unscaled.Start(_caller)).IgnoreTimeScale();
             var limit = Time.realtimeSinceStartup + 2f;
-            while (unscaledCalls == 0 && Time.realtimeSinceStartup < limit) yield return null;
+            while (unscaledCalls == 0 && Time.realtimeSinceStartup < limit)
+            {
+                yield return null;
+            }
+
             Assert.That(unscaledCalls, Is.EqualTo(1));
             Assert.That(scaledCalls, Is.Zero);
             Assert.That(unscaledController.Action, Is.Null);
@@ -245,10 +310,14 @@ namespace YLFramework.Tests.Actions
             var ready = false;
             var calls = 0;
             var action = Own(Kit.Condition(() => ready));
-            Track(action.Start(mCaller, () => calls++));
-            mCaller.enabled = false;
+            Track(action.Start(_caller, () => calls++));
+            _caller.enabled = false;
             ready = true;
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
         }
 
@@ -258,14 +327,18 @@ namespace YLFramework.Tests.Actions
             var ready = false;
             var calls = 0;
             var action = Own(Kit.Condition(() => ready));
-            Track(action.Start(mCaller, () => calls++));
-            mCaller.gameObject.SetActive(false);
+            Track(action.Start(_caller, () => calls++));
+            _caller.gameObject.SetActive(false);
             ready = true;
             yield return null;
             yield return null;
             Assert.That(calls, Is.Zero);
-            mCaller.gameObject.SetActive(true);
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            _caller.gameObject.SetActive(true);
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
         }
 
@@ -273,11 +346,11 @@ namespace YLFramework.Tests.Actions
         public IEnumerator DestroyingLocalHostCancelsItsOwnedActions()
         {
             var action = Own(Kit.Condition(() => false));
-            var controller = Track(action.Start(mCaller));
-            Object.Destroy(mCaller.gameObject);
+            var controller = Track(action.Start(_caller));
+            Object.Destroy(_caller.gameObject);
             yield return null;
             yield return null;
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -288,10 +361,14 @@ namespace YLFramework.Tests.Actions
             var calls = 0;
             var action = Own(Kit.Condition(() => ready));
             Track(action.StartGlobal(() => calls++));
-            Object.Destroy(mCaller.gameObject);
+            Object.Destroy(_caller.gameObject);
             yield return null;
             ready = true;
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true).Length, Is.EqualTo(1));
         }
@@ -299,9 +376,9 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator SceneHostIsUnloadedWhileGlobalHostAndItsActionSurvive()
         {
-            Assert.That(mPreviousSceneHost == null, Is.True, "This scene test must create and own its scene host.");
+            Assert.That(_previousSceneHost == null, Is.True, "This scene test must create and own its scene host.");
             var scene = SceneManager.CreateScene("ActionKit.Start.SceneTest");
-            mScenes.Add(scene);
+            _scenes.Add(scene);
             SceneManager.SetActiveScene(scene);
             var sceneAction = Own(Kit.Condition(() => false));
             Track(sceneAction.StartCurrentScene());
@@ -313,16 +390,20 @@ namespace YLFramework.Tests.Actions
             Track(globalAction.StartGlobal(() => calls++));
             var global = ActionGlobalHost.Instance;
             Assert.That(global.gameObject.scene, Is.Not.EqualTo(scene));
-            SceneManager.SetActiveScene(mPreviousActiveScene);
+            SceneManager.SetActiveScene(_previousActiveScene);
             var unload = SceneManager.UnloadSceneAsync(scene);
-            mUnloads.Add(unload);
+            _unloads.Add(unload);
             yield return unload;
             Assert.That(host == null, Is.True);
-            Assert.That(ActionKitCurrentScene.mSceneComponent == null, Is.True);
-            Assert.That(sceneAction.Deinited, Is.True);
+            Assert.That(ActionKitCurrentScene.CachedSceneComponent == null, Is.True);
+            Assert.That(sceneAction.IsDeinitialized, Is.True);
             Assert.That(global != null, Is.True);
             ready = true;
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
         }
 
@@ -335,17 +416,17 @@ namespace YLFramework.Tests.Actions
             Assert.That(Object.FindObjectOfType<ActionGlobalHost>(true), Is.Null);
             Assert.That(Object.FindObjectOfType<ActionKitCurrentScene>(true), Is.Null);
 
-            var sibling = mCaller.gameObject.AddComponent<ActionStartTestCaller>();
-            var local = Own(Kit.Condition(() => false)).StartNamed(mCaller, "shared");
+            var sibling = _caller.gameObject.AddComponent<ActionStartTestCaller>();
+            var local = Own(Kit.Condition(() => false)).StartNamed(_caller, "shared");
             var rejected = Own(Kit.Condition(() => false));
             Assert.Throws<System.InvalidOperationException>(() => rejected.StartNamed(sibling, "shared"));
-            Assert.That(rejected.Deinited, Is.False);
+            Assert.That(rejected.IsDeinitialized, Is.False);
             Assert.That(Kit.TryGetNamed(sibling, "shared", out var sameObject), Is.True);
             Assert.That(sameObject.Pause(), Is.True);
-            Assert.That(Kit.ResumeNamed(mCaller, "shared"), Is.True);
+            Assert.That(Kit.ResumeNamed(_caller, "shared"), Is.True);
 
             var otherRoot = new GameObject("ActionKit.Named.OtherObject");
-            mRoots.Add(otherRoot);
+            _roots.Add(otherRoot);
             var other = rejected.StartNamed(otherRoot.AddComponent<ActionStartTestCaller>(), "shared");
             var scene = Own(Kit.Condition(() => false)).StartNamedCurrentScene("shared");
             var global = Own(Kit.Condition(() => false)).StartNamedGlobal("shared");
@@ -365,21 +446,25 @@ namespace YLFramework.Tests.Actions
         {
             var ready = false;
             var calls = 0;
-            var handle = Own(Kit.Condition(() => ready)).StartNamed(mCaller, "owner", () => calls++);
-            mCaller.gameObject.SetActive(false);
+            var handle = Own(Kit.Condition(() => ready)).StartNamed(_caller, "owner", () => calls++);
+            _caller.gameObject.SetActive(false);
             ready = true;
             yield return null;
             yield return null;
             Assert.That(handle.IsActive, Is.True);
-            Assert.That(Kit.ContainsNamed(mCaller, "owner"), Is.True);
+            Assert.That(Kit.ContainsNamed(_caller, "owner"), Is.True);
             Assert.That(calls, Is.Zero);
-            mCaller.gameObject.SetActive(true);
-            mCaller.enabled = false;
-            for (var frame = 0; frame < 5 && calls == 0; frame++) yield return null;
+            _caller.gameObject.SetActive(true);
+            _caller.enabled = false;
+            for (var frame = 0; frame < 5 && calls == 0; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(handle.IsActive, Is.False);
-            var pending = Own(Kit.Condition(() => false)).ReplaceNamed(mCaller, "owner", () => calls++);
-            Object.Destroy(mCaller.gameObject);
+            var pending = Own(Kit.Condition(() => false)).ReplaceNamed(_caller, "owner", () => calls++);
+            Object.Destroy(_caller.gameObject);
             yield return null;
             Assert.That(pending.IsActive || pending.Cancel() || pending.Pause() || pending.Resume(), Is.False);
             Assert.That(calls, Is.EqualTo(1));
@@ -389,13 +474,13 @@ namespace YLFramework.Tests.Actions
         public IEnumerator NamedSceneUnloadReleasesOnlyItsScopeAndGlobalNameSurvives()
         {
             var scene = SceneManager.CreateScene("ActionKit.Named.SceneTest");
-            mScenes.Add(scene);
+            _scenes.Add(scene);
             SceneManager.SetActiveScene(scene);
             var sceneHandle = Own(Kit.Condition(() => false)).StartNamedCurrentScene("scope");
             var globalHandle = Own(Kit.Condition(() => false)).StartNamedGlobal("scope");
-            SceneManager.SetActiveScene(mPreviousActiveScene);
+            SceneManager.SetActiveScene(_previousActiveScene);
             var unload = SceneManager.UnloadSceneAsync(scene);
-            mUnloads.Add(unload);
+            _unloads.Add(unload);
             yield return unload;
             Assert.That(sceneHandle.IsActive, Is.False);
             Assert.That(Kit.ContainsNamedCurrentScene("scope"), Is.False);

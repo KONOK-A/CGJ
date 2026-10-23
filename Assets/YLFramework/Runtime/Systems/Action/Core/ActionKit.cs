@@ -16,7 +16,7 @@ namespace YLFramework.Actions
     public partial class ActionKit
     {
         /// <summary>动作分配标识的计数器；保留此公开字段，调用方不应主动重置。</summary>
-        public static ulong ID_GENERATOR = 0;
+        public static ulong IdGenerator = 0;
 
         /// <summary>创建等待指定秒数后调用回调的动作。</summary>
         /// <param name="seconds">等待时长，使用执行器传入的时间增量累计。</param>
@@ -94,7 +94,7 @@ namespace YLFramework.Actions
         /// <summary>创建自定义动作，并立即配置它的生命周期回调。</summary>
         /// <param name="customSetting">配置回调，不代表动作已经启动。</param>
         /// <returns>配置完成、尚未启动的动作。</returns>
-        public static IAction Custom(Action<ICustomAPI<object>> customSetting)
+        public static IAction Custom(Action<ICustomApi<object>> customSetting)
         {
             var custom = global::YLFramework.Actions.Custom.Allocate();
             customSetting(custom);
@@ -105,7 +105,7 @@ namespace YLFramework.Actions
         /// <typeparam name="TData">自定义动作持有的数据类型。</typeparam>
         /// <param name="customSetting">设置数据和生命周期回调的配置函数。</param>
         /// <returns>配置完成、尚未启动的动作。</returns>
-        public static IAction Custom<TData>(Action<ICustomAPI<TData>> customSetting)
+        public static IAction Custom<TData>(Action<ICustomApi<TData>> customSetting)
         {
             var custom = global::YLFramework.Actions.Custom<TData>.Allocate();
             customSetting(custom);
@@ -138,7 +138,7 @@ namespace YLFramework.Actions
         /// <remarks>复用公共 LateUpdate 相位，Shutdown 只结束 Action 自己的消息及桥接订阅。</remarks>
         public static EasyEvent OnLateUpdate => ActionGlobalHost.Instance.OnLateUpdateEvent;
         /// <summary>全局宿主的 OnGUI 通知，同帧可能触发多次。</summary>
-        public static EasyEvent OnGUI => ActionGlobalHost.Instance.OnGUIEvent;
+        public static EasyEvent OnGUI => ActionGlobalHost.Instance.OnGuiEvent;
         /// <summary>应用退出时的通知，不等同于显式 Shutdown。</summary>
         /// <remarks>通知前关闭会话创建门禁；监听中 Shutdown 后不能重建宿主，应提前保存需要注销的句柄。</remarks>
         public static EasyEvent OnApplicationQuit => ActionGlobalHost.Instance.OnApplicationQuitEvent;

@@ -3,14 +3,15 @@
 param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021')
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+$scope = & (Join-Path $PSScriptRoot 'Get-HybridCLRReceptionScope.ps1') -Root $Root
+$Root = $scope.Root
 $ownerPath = Join-Path $Root 'owner.json'
-$owner = [IO.File]::ReadAllText($ownerPath) | ConvertFrom-Json -AsHashtable
-if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Unexpected owner.' }
-$source = [IO.Path]::GetFullPath($owner.project)
+$owner = $scope.Owner
+$source = $scope.Project
 if ($source -ne (Join-Path $Root 'R') -and $source -ne [IO.Path]::GetFullPath((Join-Path $owner.repository 'Temp/H26'))) { throw 'Only the explicitly owned receivers can be copied.' }
 $parent = [IO.DirectoryInfo]::new($owner.repository).Parent.Parent.FullName
-$destination = [IO.Path]::GetFullPath((Join-Path $parent 'H26'))
-$cache = [IO.Path]::GetFullPath((Join-Path $parent 'HC26'))
+$destination = $scope.PersistentProject
+$cache = $scope.CacheRoot
 if (-not (Test-Path -LiteralPath $parent) -or [IO.Path]::Exists($destination) -or [IO.Path]::Exists($cache)) { throw 'The explicit short parent must exist and the new project/cache paths must be unused.' }
 $active = @(Get-CimInstance Win32_Process -Filter "Name = 'Unity.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($source) })
 if ($active.Count) { throw 'Exit the owned source receiver before copying; never duplicate a live project.' }

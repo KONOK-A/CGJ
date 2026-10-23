@@ -11,7 +11,7 @@ namespace YLFramework.Utilities.ZipTool
     /// </summary>
     public class ZipUtility
     {
-        private static readonly StringComparison PathComparison =
+        private static readonly StringComparison _pathComparison =
             Path.DirectorySeparatorChar == '\\' ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         /// <summary>
@@ -239,7 +239,7 @@ namespace YLFramework.Utilities.ZipTool
 
         private static bool IsPathInside(string candidateFullPath, string directoryFullPath)
         {
-            return candidateFullPath.StartsWith(AppendDirectorySeparator(directoryFullPath), PathComparison);
+            return candidateFullPath.StartsWith(AppendDirectorySeparator(directoryFullPath), _pathComparison);
         }
 
         private static string AppendDirectorySeparator(string directoryPath)

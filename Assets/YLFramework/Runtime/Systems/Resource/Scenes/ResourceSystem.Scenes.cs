@@ -8,11 +8,11 @@ namespace YLFramework.Services.Resource
 {
     public sealed partial class ResourceSystem
     {
-        private readonly List<SceneLoad> sceneLoads = new();
-        private readonly HashSet<SceneRecord> sceneRecords = new();
-        private static readonly HashSet<ResourceSystem> sceneCleanup = new();
-        private long nextSceneSequence;
-        private bool pumpingScenes;
+        private readonly List<SceneLoad> _sceneLoads = new();
+        private readonly HashSet<SceneRecord> _sceneRecords = new();
+        private static readonly HashSet<ResourceSystem> _sceneCleanup = new();
+        private long _nextSceneSequence;
+        private bool _isPumpingScenes;
 
         private sealed class SceneLoad
         {
@@ -24,7 +24,7 @@ namespace YLFramework.Services.Resource
             internal IResourceSceneSource Source;
             internal ResourceRequest<BundleLease> Preparing;
             internal BundleLease Retention;
-            internal bool Started;
+            internal bool HasStarted;
             internal float Deadline;
             internal float ActivationTimeout;
             internal int CompletedFrame = -1;
@@ -38,22 +38,40 @@ namespace YLFramework.Services.Resource
             bool activateOnLoad = true, float activationTimeoutSeconds = 30)
         {
             CheckThread();
-            var request = new SceneRequest(this, mode, ++nextSceneSequence, activateOnLoad);
-            if (!IsAvailable) { Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address); return request; }
-            if (IsProjectBlocked(address.ProjectId)) { Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address); return request; }
+            var request = new SceneRequest(this, mode, ++_nextSceneSequence, activateOnLoad);
+            if (!IsAvailable)
+            {
+                Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address);
+                return request;
+            }
+            if (IsProjectBlocked(address.ProjectId))
+            {
+                Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address);
+                return request;
+            }
             if (mode != LoadSceneMode.Single && mode != LoadSceneMode.Additive ||
                 float.IsNaN(activationTimeoutSeconds) || activationTimeoutSeconds <= 0 || activationTimeoutSeconds > 300)
-            { Fail(request, ResourceError.InvalidConfiguration, "Scene mode and a finite activation deadline are required.", address); return request; }
+            {
+                Fail(request, ResourceError.InvalidConfiguration, "Scene mode and a finite activation deadline are required.", address);
+                return request;
+            }
             var load = new SceneLoad { Request = request, Address = address, ActivationTimeout = activationTimeoutSeconds };
             try
             {
-                if (!address.IsValid || address.SubAsset != null || !catalogs.TryGetValue(address.ProjectId, out load.Catalog))
+                if (!address.IsValid || address.SubAsset != null || !_catalogs.TryGetValue(address.ProjectId, out load.Catalog))
+                {
                     throw new ResourceException(ResourceError.AddressNotFound, "Unknown Scene project/address.");
+                }
+
                 if (load.Catalog.Snapshot != null)
                 {
                     var descriptor = load.Catalog.Snapshot.Document.Assets.SingleOrDefault(x => x.Kind == "Scene" &&
                         (x.Address == address.Path || x.Aliases.Contains(address.Path)));
-                    if (descriptor == null) throw new ResourceException(ResourceError.AddressNotFound, "No Scene at this Catalog address.");
+                    if (descriptor == null)
+                    {
+                        throw new ResourceException(ResourceError.AddressNotFound, "No Scene at this Catalog address.");
+                    }
+
                     load.Path = descriptor.LoadName;
                     load.BundleId = descriptor.BundleId;
                     RequireHealthyBundle(load.Catalog.Snapshot, load.BundleId);
@@ -61,17 +79,23 @@ namespace YLFramework.Services.Resource
                 else
                 {
                     var entry = load.Catalog.Resolve(address);
-                    if (sources[entry.Location.Source] is not IResourceSceneSource source)
+                    if (_sources[entry.Location.Source] is not IResourceSceneSource source)
+                    {
                         throw new ResourceException(ResourceError.Unsupported, "This source does not support Scene loading.");
+                    }
+
                     load.Source = source;
                     load.Path = source.ResolveScenePath(entry);
                 }
             }
             catch (Exception error)
-            { Fail(request, error is ResourceException failure ? failure.Kind : ResourceError.AddressNotFound, "Cannot resolve Scene: " + address, address, cause: error); return request; }
+            {
+                Fail(request, error is ResourceException failure ? failure.Kind : ResourceError.AddressNotFound, "Cannot resolve Scene: " + address, address, cause: error);
+                return request;
+            }
             Track(request);
             request.Attach(() => CancelSceneLoad(load), () => request.Native?.progress ?? (load.Preparing?.Progress ?? 0) * 0.1f);
-            sceneLoads.Add(load);
+            _sceneLoads.Add(load);
             RegisterSceneCleanup();
             PumpScenes();
             return request;
@@ -81,12 +105,12 @@ namespace YLFramework.Services.Resource
         public IReadOnlyList<SceneRecord> GetSceneRecords()
         {
             CheckThread();
-            return sceneRecords.ToArray();
+            return _sceneRecords.ToArray();
         }
 
         private void RegisterSceneCleanup()
         {
-            if (sceneCleanup.Add(this))
+            if (_sceneCleanup.Add(this))
             {
                 SceneManager.sceneLoaded += OnResourceSceneLoaded;
                 SceneManager.sceneUnloaded += OnResourceSceneUnloaded;
@@ -96,8 +120,12 @@ namespace YLFramework.Services.Resource
 
         private void UnregisterSceneCleanup()
         {
-            if (sceneLoads.Count != 0 || sceneRecords.Count != 0) return;
-            sceneCleanup.Remove(this);
+            if (_sceneLoads.Count != 0 || _sceneRecords.Count != 0)
+            {
+                return;
+            }
+
+            _sceneCleanup.Remove(this);
             SceneManager.sceneLoaded -= OnResourceSceneLoaded;
             SceneManager.sceneUnloaded -= OnResourceSceneUnloaded;
             CheckDrain();
@@ -105,17 +133,32 @@ namespace YLFramework.Services.Resource
 
         private void PumpScenes()
         {
-            if (pumpingScenes) return;
-            pumpingScenes = true;
+            if (_isPumpingScenes)
+            {
+                return;
+            }
+
+            _isPumpingScenes = true;
             try
             {
-                while (sceneLoads.Count != 0)
+                while (_sceneLoads.Count != 0)
                 {
-                    var load = sceneLoads[0];
-                    if (load.Started) break;
-                    if (load.Request.IsDone || !IsSessionActive) { RemoveSceneLoad(load); continue; }
-                    load.Started = true;
-                    if (load.Source != null) StartNativeScene(load);
+                    var load = _sceneLoads[0];
+                    if (load.HasStarted)
+                    {
+                        break;
+                    }
+
+                    if (load.Request.IsDone || !IsSessionActive)
+                    {
+                        RemoveSceneLoad(load);
+                        continue;
+                    }
+                    load.HasStarted = true;
+                    if (load.Source != null)
+                    {
+                        StartNativeScene(load);
+                    }
                     else
                     {
                         load.Preparing = AcquireBundleRequest(load.Address.ProjectId, load.BundleId, false, false,
@@ -124,26 +167,47 @@ namespace YLFramework.Services.Resource
                         {
                             try
                             {
-                                if (load.Request.IsDone) return;
+                                if (load.Request.IsDone)
+                                {
+                                    return;
+                                }
+
                                 load.Retention = result.TakeResult();
                                 var paths = load.Retention.Bundle.GetAllScenePaths().Where(x => string.Equals(x, load.Path, StringComparison.OrdinalIgnoreCase)).ToArray();
-                                if (paths.Length != 1) throw new ResourceException(ResourceError.LoadFailed, "Catalog Scene has no unique native Bundle path.");
+                                if (paths.Length != 1)
+                                {
+                                    throw new ResourceException(ResourceError.LoadFailed, "Catalog Scene has no unique native Bundle path.");
+                                }
+
                                 load.Path = paths[0];
                                 StartNativeScene(load);
                             }
-                            catch (Exception error) { FailSceneLoad(load, error); }
+                            catch (Exception error)
+                            {
+                                FailSceneLoad(load, error);
+                            }
                             finally
                             {
                                 result.Dispose();
                                 load.Preparing = null;
-                                if (!load.Request.NativeStarted) { RemoveSceneLoad(load); PumpScenes(); }
+                                if (!load.Request.HasNativeStarted)
+                                {
+                                    RemoveSceneLoad(load);
+                                    PumpScenes();
+                                }
                             }
                         };
                     }
-                    if (sceneLoads.Contains(load)) break;
+                    if (_sceneLoads.Contains(load))
+                    {
+                        break;
+                    }
                 }
             }
-            finally { pumpingScenes = false; }
+            finally
+            {
+                _isPumpingScenes = false;
+            }
             UnregisterSceneCleanup();
         }
 
@@ -151,29 +215,56 @@ namespace YLFramework.Services.Resource
         {
             try
             {
-                if (load.Retention != null) RequireHealthyBundle(load.Retention);
-                if (load.Request.IsDone || !IsSessionActive) { RemoveSceneLoad(load); return; }
-                for (var i = 0; i < SceneManager.sceneCount; i++) load.Before.Add(SceneManager.GetSceneAt(i).handle);
+                if (load.Retention != null)
+                {
+                    RequireHealthyBundle(load.Retention);
+                }
+
+                if (load.Request.IsDone || !IsSessionActive)
+                {
+                    RemoveSceneLoad(load);
+                    return;
+                }
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    load.Before.Add(SceneManager.GetSceneAt(i).handle);
+                }
                 // 准备 Bundle 期间已完成的外部 Scene 属于 Before，不能残留为本次 native 的新身份候选。
                 load.Observed.Clear();
                 var parameters = new LoadSceneParameters(load.Request.Mode);
                 var native = load.Source == null ? SceneManager.LoadSceneAsync(load.Path, parameters) : load.Source.LoadSceneAsync(load.Path, parameters);
-                if (native == null) throw new InvalidOperationException("Unity did not return a Scene AsyncOperation.");
+                if (native == null)
+                {
+                    throw new InvalidOperationException("Unity did not return a Scene AsyncOperation.");
+                }
+
                 load.Request.Native = native;
-                load.Request.NativeStarted = true;
+                load.Request.HasNativeStarted = true;
                 load.Deadline = Time.realtimeSinceStartup + load.ActivationTimeout;
-                native.allowSceneActivation = load.Request.ActivationRequested;
-                native.completed += _ => { load.CompletedFrame = Time.frameCount; load.Request.NativeCompleted = true; };
+                native.allowSceneActivation = load.Request.IsActivationRequested;
+                native.completed += _ =>
+                {
+                    load.CompletedFrame = Time.frameCount;
+                    load.Request.IsNativeCompleted = true;
+                };
             }
-            catch (Exception error) { FailSceneLoad(load, error); RemoveSceneLoad(load); }
+            catch (Exception error)
+            {
+                FailSceneLoad(load, error);
+                RemoveSceneLoad(load);
+            }
         }
 
         private void CancelSceneLoad(SceneLoad load)
         {
-            if (load.Request.NativeStarted)
+            if (load.Request.HasNativeStarted)
             {
-                load.Request.ActivationRequested = true;
-                if (load.Request.Native != null) load.Request.Native.allowSceneActivation = true;
+                load.Request.IsActivationRequested = true;
+                if (load.Request.Native != null)
+                {
+                    load.Request.Native.allowSceneActivation = true;
+                }
+
                 return; // 不撤销 native、不释放 pending Scene 图。
             }
             load.Preparing?.Dispose();
@@ -183,7 +274,11 @@ namespace YLFramework.Services.Resource
 
         private void FailSceneLoad(SceneLoad load, Exception error)
         {
-            if (load.Request.IsDone) return;
+            if (load.Request.IsDone)
+            {
+                return;
+            }
+
             load.Request.SetFailure(IsSessionActive ? ResourceRequestStatus.Failed : ResourceRequestStatus.Invalidated,
                 error as ResourceException ?? new ResourceException(ResourceError.LoadFailed, "Scene load failed: " + load.Address, error, load.Address));
             load.Request.Notify();
@@ -191,7 +286,7 @@ namespace YLFramework.Services.Resource
 
         private void RemoveSceneLoad(SceneLoad load)
         {
-            sceneLoads.Remove(load);
+            _sceneLoads.Remove(load);
             load.Retention?.Dispose();
             load.Retention = null;
             UnregisterSceneCleanup();
@@ -199,16 +294,29 @@ namespace YLFramework.Services.Resource
 
         private void OnResourceSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (sceneLoads.Count == 0) return;
-            var load = sceneLoads[0];
-            if (!load.Started || load.Before.Contains(scene.handle) || !string.Equals(scene.path, load.Path, StringComparison.OrdinalIgnoreCase)) return;
+            if (_sceneLoads.Count == 0)
+            {
+                return;
+            }
+
+            var load = _sceneLoads[0];
+            if (!load.HasStarted || load.Before.Contains(scene.handle) || !string.Equals(scene.path, load.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             load.Observed[scene.handle] = scene;
         }
 
         private void OnResourceSceneUnloaded(Scene scene)
         {
-            foreach (var record in sceneRecords)
-                if (record.Handle == scene.handle && record.UnloadedFrame < 0) record.UnloadedFrame = Time.frameCount;
+            foreach (var record in _sceneRecords)
+            {
+                if (record.Handle == scene.handle && record.UnloadedFrame < 0)
+                {
+                    record.UnloadedFrame = Time.frameCount;
+                }
+            }
         }
 
         private void CompleteSceneLoad(SceneLoad load)
@@ -217,7 +325,10 @@ namespace YLFramework.Services.Resource
             for (var i = 0; i < SceneManager.sceneCount; i++)
             {
                 var scene = SceneManager.GetSceneAt(i);
-                if (!load.Before.Contains(scene.handle) && string.Equals(scene.path, load.Path, StringComparison.OrdinalIgnoreCase)) load.Observed[scene.handle] = scene;
+                if (!load.Before.Contains(scene.handle) && string.Equals(scene.path, load.Path, StringComparison.OrdinalIgnoreCase))
+                {
+                    load.Observed[scene.handle] = scene;
+                }
             }
             var candidates = load.Observed.Values.ToArray();
             var ambiguous = candidates.Length > 1;
@@ -226,28 +337,54 @@ namespace YLFramework.Services.Resource
             {
                 BundleLease retention = null;
                 if (load.Retention != null)
-                    retention = new BundleLease(bundleRecords[(load.Catalog.CatalogDigest, load.BundleId)], false);
+                {
+                    retention = new BundleLease(_bundleRecords[(load.Catalog.CatalogDigest, load.BundleId)], false);
+                }
+
                 var record = new SceneRecord(this, scene, load.Catalog, load.Request, load.Address, scene.path,
                     ambiguous, retention);
-                sceneRecords.Add(record);
+                _sceneRecords.Add(record);
                 results.Add(record);
             }
             load.Request.Scenes = results.AsReadOnly();
-            if (ambiguous) FailSceneLoad(load, new ResourceException(ResourceError.SceneIdentityAmbiguous,
+            if (ambiguous)
+            {
+                FailSceneLoad(load, new ResourceException(ResourceError.SceneIdentityAmbiguous,
                 "Concurrent external same-path Scene loads cannot be attributed uniquely; candidates remain pinned until real unload.", address: load.Address));
+            }
             else if (results.Count != 1 || !results[0].IsLoaded)
+            {
                 FailSceneLoad(load, new ResourceException(ResourceError.SceneUnloaded, "The native Scene completed without a surviving unique Scene.", address: load.Address));
+            }
             else if (!load.Request.IsDone)
             {
-                try { if (load.Retention != null) RequireHealthyBundle(load.Retention); }
-                catch (Exception error) { FailSceneLoad(load, error); }
-                if (!load.Request.IsDone) load.Request.SetSuccess(new SceneLease(results[0]));
+                try
+                {
+                    if (load.Retention != null)
+                    {
+                        RequireHealthyBundle(load.Retention);
+                    }
+                }
+                catch (Exception error)
+                {
+                    FailSceneLoad(load, error);
+                }
+                if (!load.Request.IsDone)
+                {
+                    load.Request.SetSuccess(new SceneLease(results[0]));
+                }
             }
             var abandonedAdditive = load.Request.Status != ResourceRequestStatus.Succeeded && load.Request.Mode == LoadSceneMode.Additive && !ambiguous;
             load.Request.Native = null;
             RemoveSceneLoad(load);
             if (abandonedAdditive)
-                foreach (var record in results) TryUnloadScene(record);
+            {
+                foreach (var record in results)
+                {
+                    TryUnloadScene(record);
+                }
+            }
+
             load.Request.Notify();
         }
 
@@ -255,7 +392,11 @@ namespace YLFramework.Services.Resource
         public ResourceRequest<bool> UnloadSceneAsync(SceneLease lease)
         {
             CheckThread();
-            if (lease == null) throw new ArgumentNullException(nameof(lease));
+            if (lease == null)
+            {
+                throw new ArgumentNullException(nameof(lease));
+            }
+
             return UnloadSceneAsync(lease.Record);
         }
 
@@ -264,12 +405,27 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<bool>();
-            if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
-            if (record == null || !ReferenceEquals(record.Owner, this) || record.IsUnloaded || !sceneRecords.Contains(record))
+            if (!IsAvailable)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
+            if (record == null || !ReferenceEquals(record.Owner, this) || record.IsUnloaded || !_sceneRecords.Contains(record))
+            {
                 return Fail(request, ResourceError.SceneUnloaded, "The Scene identity is stale or belongs to another authority.");
-            if (record.IsAmbiguous) return Fail(request, ResourceError.SceneIdentityAmbiguous, "An ambiguous external Scene candidate must be unloaded by its actual owner.");
+            }
+
+            if (record.IsAmbiguous)
+            {
+                return Fail(request, ResourceError.SceneIdentityAmbiguous, "An ambiguous external Scene candidate must be unloaded by its actual owner.");
+            }
+
             var error = TryUnloadScene(record);
-            if (error != null) return Fail(request, error.Kind, error.Message, cause: error);
+            if (error != null)
+            {
+                return Fail(request, error.Kind, error.Message, cause: error);
+            }
+
             Track(request);
             record.UnloadWaiters.Add(request);
             request.Attach(() => record.UnloadWaiters.Remove(request), () => record.UnloadOperation?.progress ?? 0);
@@ -278,62 +434,116 @@ namespace YLFramework.Services.Resource
 
         private ResourceException TryUnloadScene(SceneRecord record)
         {
-            if (record.UnloadOperation != null || !record.IsLoaded) return null;
-            if (sceneLoads.Any(x => x.Request.Native != null && !x.Request.ActivationRequested))
+            if (record.UnloadOperation != null || !record.IsLoaded)
+            {
+                return null;
+            }
+
+            if (_sceneLoads.Any(x => x.Request.Native != null && !x.Request.IsActivationRequested))
+            {
                 return new ResourceException(ResourceError.Busy, "Activate or cancel the gated Scene before unloading.");
+            }
+
             var loaded = 0;
-            for (var i = 0; i < SceneManager.sceneCount; i++) if (SceneManager.GetSceneAt(i).isLoaded) loaded++;
-            if (loaded <= 1) return new ResourceException(ResourceError.Busy, "Unity cannot unload the last Scene; load a neutral Scene first. The Scene remains pinned.");
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                if (SceneManager.GetSceneAt(i).isLoaded)
+                {
+                    loaded++;
+                }
+            }
+
+            if (loaded <= 1)
+            {
+                return new ResourceException(ResourceError.Busy, "Unity cannot unload the last Scene; load a neutral Scene first. The Scene remains pinned.");
+            }
+
             try
             {
                 record.UnloadOperation = SceneManager.UnloadSceneAsync(record.Scene);
-                if (record.UnloadOperation == null) return new ResourceException(ResourceError.LoadFailed, "Unity refused the Scene unload; ownership is retained.");
+                if (record.UnloadOperation == null)
+                {
+                    return new ResourceException(ResourceError.LoadFailed, "Unity refused the Scene unload; ownership is retained.");
+                }
             }
-            catch (Exception error) { return new ResourceException(ResourceError.LoadFailed, "Unity Scene unload failed; ownership is retained.", error); }
+            catch (Exception error)
+            {
+                return new ResourceException(ResourceError.LoadFailed, "Unity Scene unload failed; ownership is retained.", error);
+            }
             return null;
         }
 
         private void CollectScene(SceneRecord record)
         {
             record.IsUnloaded = true;
-            sceneRecords.Remove(record);
+            _sceneRecords.Remove(record);
             var waiters = record.UnloadWaiters.ToArray();
             record.UnloadWaiters.Clear();
-            foreach (var request in waiters) request.SetSuccess(true);
+            foreach (var request in waiters)
+            {
+                request.SetSuccess(true);
+            }
+
             record.UnloadOperation = null;
             record.Retention?.Dispose();
             record.Retention = null;
             UnregisterSceneCleanup();
-            foreach (var request in waiters) request.Notify();
+            foreach (var request in waiters)
+            {
+                request.Notify();
+            }
         }
 
         private static void TickSceneCleanup()
         {
-            foreach (var system in sceneCleanup.ToArray())
+            foreach (var system in _sceneCleanup.ToArray())
             {
-                if (system.sceneLoads.Count != 0)
+                if (system._sceneLoads.Count != 0)
                 {
-                    var load = system.sceneLoads[0];
+                    var load = system._sceneLoads[0];
                     var native = load.Request.Native;
                     if (native != null)
                     {
-                        if (!load.Request.ActivationRequested && Time.realtimeSinceStartup >= load.Deadline)
+                        if (!load.Request.IsActivationRequested && Time.realtimeSinceStartup >= load.Deadline)
                         {
-                            load.Request.ActivationRequested = true;
+                            load.Request.IsActivationRequested = true;
                             native.allowSceneActivation = true;
                             system.FailSceneLoad(load, new ResourceException(ResourceError.ActivationTimedOut,
                                 "Scene activation deadline expired; native activation was released. Single replacement cannot be rolled back.", address: load.Address));
                         }
-                        if (native.isDone && load.CompletedFrame < 0) { load.CompletedFrame = Time.frameCount; load.Request.NativeCompleted = true; }
-                        if (load.CompletedFrame >= 0 && (!Application.isPlaying || Time.frameCount > load.CompletedFrame)) system.CompleteSceneLoad(load);
+                        if (native.isDone && load.CompletedFrame < 0)
+                        {
+                            load.CompletedFrame = Time.frameCount;
+                            load.Request.IsNativeCompleted = true;
+                        }
+                        if (load.CompletedFrame >= 0 && (!Application.isPlaying || Time.frameCount > load.CompletedFrame))
+                        {
+                            system.CompleteSceneLoad(load);
+                        }
                     }
                 }
-                foreach (var record in system.sceneRecords.ToArray())
+                foreach (var record in system._sceneRecords.ToArray())
                 {
-                    if (record.IsLoaded) continue;
-                    if (record.UnloadedFrame < 0) record.UnloadedFrame = Time.frameCount;
-                    if (record.UnloadOperation != null && !record.UnloadOperation.isDone) continue;
-                    if (Application.isPlaying && Time.frameCount <= record.UnloadedFrame) continue;
+                    if (record.IsLoaded)
+                    {
+                        continue;
+                    }
+
+                    if (record.UnloadedFrame < 0)
+                    {
+                        record.UnloadedFrame = Time.frameCount;
+                    }
+
+                    if (record.UnloadOperation != null && !record.UnloadOperation.isDone)
+                    {
+                        continue;
+                    }
+
+                    if (Application.isPlaying && Time.frameCount <= record.UnloadedFrame)
+                    {
+                        continue;
+                    }
+
                     system.CollectScene(record);
                 }
                 system.PumpScenes();
@@ -343,9 +553,18 @@ namespace YLFramework.Services.Resource
 
         private void EndSceneSession()
         {
-            foreach (var load in sceneLoads.ToArray()) CancelSceneLoad(load);
+            foreach (var load in _sceneLoads.ToArray())
+            {
+                CancelSceneLoad(load);
+            }
             // 不卸载歧义候选或其他 owner 的 Scene；最后场景等待 Unity 真正退出卸载，不制造替身场景。
-            foreach (var record in sceneRecords.ToArray()) if (!record.IsAmbiguous) TryUnloadScene(record);
+            foreach (var record in _sceneRecords.ToArray())
+            {
+                if (!record.IsAmbiguous)
+                {
+                    TryUnloadScene(record);
+                }
+            }
         }
     }
 }

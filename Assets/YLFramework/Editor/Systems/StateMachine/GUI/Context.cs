@@ -1,9 +1,9 @@
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.StateMachine
 {
@@ -12,17 +12,17 @@ namespace YLFramework.StateMachine
 
         #region 字段
 
-        private RuntimeFSMController _runtimeFSMController;
+        private RuntimeFsmController _runtimeFsmController;
 
-        public List<FSMStateNodeData> SelectNodes = new List<FSMStateNodeData>();
+        public List<FsmStateNodeData> SelectNodes = new List<FsmStateNodeData>();
 
-        public FSMTransitionData selectTransition;
+        public FsmTransitionData SelectTransition;
 
-        public bool isPreviewTransition = false;
-        public FSMStateNodeData fromState = null;
-        public FSMStateNodeData hoverState = null;
+        public bool IsPreviewingTransition = false;
+        public FsmStateNodeData FromState = null;
+        public FsmStateNodeData HoverState = null;
 
-        private FSMController _FSMController;
+        private FsmController _fsmController;
 
         //private LayoutMatrix4x4Info _matrixInfo;
 
@@ -37,16 +37,19 @@ namespace YLFramework.StateMachine
 
         #region Layers
 
-        private List<string> empty_layers = new List<string>();
+        private List<string> _emptyLayers = new List<string>();
 
         public List<string> Layers
         {
-            get {
+            get
+            {
 
-                if(RuntimeFSMController != null)
-                    return RuntimeFSMController.Layers;
+                if (RuntimeFsmController != null)
+                {
+                    return RuntimeFsmController.layers;
+                }
 
-                return empty_layers;
+                return _emptyLayers;
             }
         }
 
@@ -55,33 +58,51 @@ namespace YLFramework.StateMachine
             get
             {
                 if (Layers.Count == 0)
+                {
                     return string.Empty;
+                }
+
                 return Layers[Layers.Count - 1];
             }
         }
 
         public void AddLayer(string layer)
         {
-            if (RuntimeFSMController == null) return;
-            RuntimeFSMController.AddLayer(layer);
+            if (RuntimeFsmController == null)
+            {
+                return;
+            }
+
+            RuntimeFsmController.AddLayer(layer);
         }
 
         public void RemoveLayer(int index, int count)
         {
-            if (RuntimeFSMController == null) return;
-            RuntimeFSMController.RemoveLayer(index,count);
+            if (RuntimeFsmController == null)
+            {
+                return;
+            }
+
+            RuntimeFsmController.RemoveLayer(index, count);
         }
 
         public void RemoveLast(string name)
         {
-            if (RuntimeFSMController == null) return;
-            int index = RuntimeFSMController.Layers.Count - 1;
-            if (index >= 0 && index < RuntimeFSMController.Layers.Count)
+            if (RuntimeFsmController == null)
             {
-                string last = RuntimeFSMController.Layers[index];
+                return;
+            }
+
+            int index = RuntimeFsmController.layers.Count - 1;
+            if (index >= 0 && index < RuntimeFsmController.layers.Count)
+            {
+                string last = RuntimeFsmController.layers[index];
                 if (!last.Equals(name))
+                {
                     return;
-                RuntimeFSMController.RemoveLayer(RuntimeFSMController.Layers.Count - 1, 1);
+                }
+
+                RuntimeFsmController.RemoveLayer(RuntimeFsmController.layers.Count - 1, 1);
             }
         }
 
@@ -91,169 +112,198 @@ namespace YLFramework.StateMachine
 
         // 这个逻辑修改为如果只有一个,逻辑不变,
         // 如果有多个,判断当前显示的是不是在多个中,如果在不做处理,如果不在设置为第一个
-        public RuntimeFSMController RuntimeFSMController {
+        public RuntimeFsmController RuntimeFsmController
+        {
             get
             {
-                if (!IsEmpty(RuntimeFSMControllers) )
+                if (!IsEmpty(RuntimeFsmControllers))
                 {
-                    if (FSMControllerIndex < 0 || FSMControllerIndex >= RuntimeFSMControllers.Count)
-                        FSMControllerIndex = 0;
-
-                    RuntimeFSMController controller = RuntimeFSMControllers[FSMControllerIndex];
-
-                    if (controller != null && !string.IsNullOrEmpty(controller.originGUID) && _runtimeFSMControllerGUID != controller.originGUID)
+                    if (FsmControllerIndex < 0 || FsmControllerIndex >= RuntimeFsmControllers.Count)
                     {
-                        EditorPrefs.SetString("YL.AssetFSMRuntimeFSMControllerGUID", controller.originGUID);
-                        _runtimeFSMControllerGUID = controller.originGUID;
+                        FsmControllerIndex = 0;
+                    }
+
+                    RuntimeFsmController controller = RuntimeFsmControllers[FsmControllerIndex];
+
+                    if (controller != null && !string.IsNullOrEmpty(controller.originGuid) && _runtimeFsmControllerGuid != controller.originGuid)
+                    {
+                        EditorPrefs.SetString("YL.AssetFSMRuntimeFSMControllerGUID", controller.originGuid);
+                        _runtimeFsmControllerGuid = controller.originGuid;
                         //Debug.LogFormat("保存的GUID:{0}", _runtimeFSMControllerGUID);
                     }
 
                     return controller;
                 }
 
-                if (_runtimeFSMController == null)
+                if (_runtimeFsmController == null)
                 {
-                    string path = AssetDatabase.GUIDToAssetPath(RuntimeFSMControllerGUID);
-                    _runtimeFSMController = AssetDatabase.LoadAssetAtPath<RuntimeFSMController>(path);
+                    string path = AssetDatabase.GUIDToAssetPath(RuntimeFsmControllerGuid);
+                    _runtimeFsmController = AssetDatabase.LoadAssetAtPath<RuntimeFsmController>(path);
                 }
 
-                return _runtimeFSMController;
+                return _runtimeFsmController;
             }
             internal set
             {
-                if (_runtimeFSMController == value) return;
-                _runtimeFSMController = value;
+                if (_runtimeFsmController == value)
+                {
+                    return;
+                }
+
+                _runtimeFsmController = value;
             }
         }
 
-        public FSMController FSMController {
-            get {
+        public FsmController FsmController
+        {
+            get
+            {
 
-                if (_FSMController == null)
+                if (_fsmController == null)
                 {
 
                     UnityEngine.Object obj = null;
 
 #if UNITY_6000_2_OR_NEWER
-                    obj = EditorUtility.EntityIdToObject(FSMControllerInstanceID);
+                    obj = EditorUtility.EntityIdToObject(FsmControllerInstanceId);
 #else
-                    obj = EditorUtility.InstanceIDToObject(FSMControllerInstanceID);
+                    obj = EditorUtility.InstanceIDToObject(FsmControllerInstanceId);
 #endif
 
                     GameObject gameObj = obj as GameObject;
-                    if (gameObj == null) return null;
-                    _FSMController = gameObj.GetComponent<FSMController>();
+                    if (gameObj == null)
+                    {
+                        return null;
+                    }
+
+                    _fsmController = gameObj.GetComponent<FsmController>();
                 }
 
-                return _FSMController;
+                return _fsmController;
             }
         }
 
 
-        private List<RuntimeFSMController> currentFSMControllers = new List<RuntimeFSMController> ();
+        private List<RuntimeFsmController> _currentFsmControllers = new List<RuntimeFsmController>();
 
-        public List<RuntimeFSMController> RuntimeFSMControllers
+        public List<RuntimeFsmController> RuntimeFsmControllers
         {
             get
             {
-                if (FSMController != null)
+                if (FsmController != null)
                 {
-                    return FSMController.RuntimeFSMController;
+                    return FsmController.RuntimeFsmController;
                 }
-                currentFSMControllers.Clear();
+                _currentFsmControllers.Clear();
 
-                if (_runtimeFSMController == null)
+                if (_runtimeFsmController == null)
                 {
-                    string path = AssetDatabase.GUIDToAssetPath(RuntimeFSMControllerGUID);
-                    _runtimeFSMController = AssetDatabase.LoadAssetAtPath<RuntimeFSMController>(path);
+                    string path = AssetDatabase.GUIDToAssetPath(RuntimeFsmControllerGuid);
+                    _runtimeFsmController = AssetDatabase.LoadAssetAtPath<RuntimeFsmController>(path);
                 }
 
-                if (_runtimeFSMController != null)
-                    currentFSMControllers.Add(_runtimeFSMController);
-                return currentFSMControllers;
+                if (_runtimeFsmController != null)
+                {
+                    _currentFsmControllers.Add(_runtimeFsmController);
+                }
+
+                return _currentFsmControllers;
             }
         }
 
         public static Context Instance
         {
-            get {
-                if(_instance == null)
+            get
+            {
+                if (_instance == null)
+                {
                     _instance = new Context();
+                }
+
                 return _instance;
             }
         }
 
-        internal int FSMControllerInstanceID
+        internal int FsmControllerInstanceId
         {
             get
             {
-                return EditorPrefs.GetInt("YL.AssetFSMControllerInstanceID",0);
+                return EditorPrefs.GetInt("YL.AssetFSMControllerInstanceID", 0);
             }
-            set {
+            set
+            {
                 EditorPrefs.SetInt("YL.AssetFSMControllerInstanceID", value);
 
                 UnityEngine.Object obj = null;
 
 #if UNITY_6000_2_OR_NEWER
-                obj = EditorUtility.EntityIdToObject(FSMControllerInstanceID);
+                obj = EditorUtility.EntityIdToObject(FsmControllerInstanceId);
 #else
-                obj = EditorUtility.InstanceIDToObject(FSMControllerInstanceID);
+                obj = EditorUtility.InstanceIDToObject(FsmControllerInstanceId);
 #endif
 
                 GameObject gameObj = obj as GameObject;
-                if (gameObj != null && gameObj.GetComponent<FSMController>() != null) {
-                    _FSMController = gameObj.GetComponent<FSMController>();
+                if (gameObj != null && gameObj.GetComponent<FsmController>() != null)
+                {
+                    _fsmController = gameObj.GetComponent<FsmController>();
                 }
                 else
-                    _FSMController = null;
-
+                {
+                    _fsmController = null;
+                }
             }
         }
 
-        private string _runtimeFSMControllerGUID;
+        private string _runtimeFsmControllerGuid;
 
-        internal string RuntimeFSMControllerGUID
+        internal string RuntimeFsmControllerGuid
         {
             get
             {
-                return EditorPrefs.GetString("YL.AssetFSMRuntimeFSMControllerGUID",string.Empty);
+                return EditorPrefs.GetString("YL.AssetFSMRuntimeFSMControllerGUID", string.Empty);
             }
             set
             {
                 //Debug.LogFormat("修改GUID:{0}",value);
                 EditorPrefs.SetString("YL.AssetFSMRuntimeFSMControllerGUID", value);
-                string path  = AssetDatabase.GUIDToAssetPath(value);
-                RuntimeFSMController = AssetDatabase.LoadAssetAtPath<RuntimeFSMController>(path);
+                string path = AssetDatabase.GUIDToAssetPath(value);
+                RuntimeFsmController = AssetDatabase.LoadAssetAtPath<RuntimeFsmController>(path);
             }
         }
 
-        internal int FSMControllerIndex
+        internal int FsmControllerIndex
         {
-            get {
+            get
+            {
                 return EditorPrefs.GetInt("FSMControllerIndex", 0);
             }
             set
             {
-                if (FSMControllerIndex == value) return;
+                if (FsmControllerIndex == value)
+                {
+                    return;
+                }
+
                 EditorPrefs.SetInt("FSMControllerIndex", value);
 
                 // 刷新RuntimeGUID
-                RefreshRuntimeFSMControllerGUID();
+                RefreshRuntimeFsmControllerGuid();
             }
         }
 
-#endregion
+        #endregion
 
         #region 方法
 
-        private Context() {
+        private Context()
+        {
         }
 
         public void ClearSelections()
         {
             // 如果不是 InspectorWindow 此时清空 Inspector
             this.SelectNodes.Clear();
-            selectTransition = null;
+            SelectTransition = null;
             Selection.activeObject = null;
             //Selection.activeObject = this.RuntimeFSMController;
         }
@@ -262,31 +312,41 @@ namespace YLFramework.StateMachine
         /// 获取当前显示状态节点
         /// </summary>
         /// <returns></returns>
-        public List<FSMStateNodeData> GetCurrentShowStateNodeData() {
-
-            if (RuntimeFSMController != null)
-                return RuntimeFSMController.GetCurrentShowStateNodeData(LayerParent);
-
-            return null;
-        }
-
-        public List<FSMTransitionData> GetCurrentShowTransitionData()
+        public List<FsmStateNodeData> GetCurrentShowStateNodeData()
         {
-            if (RuntimeFSMController != null)
-                return RuntimeFSMController.GetCurrentShowTransitionData(LayerParent);
+
+            if (RuntimeFsmController != null)
+            {
+                return RuntimeFsmController.GetCurrentShowStateNodeData(LayerParent);
+            }
+
+            return null;
+        }
+
+        public List<FsmTransitionData> GetCurrentShowTransitionData()
+        {
+            if (RuntimeFsmController != null)
+            {
+                return RuntimeFsmController.GetCurrentShowTransitionData(LayerParent);
+            }
 
             return null;
         }
 
 
-        public bool IsEmpty(List<RuntimeFSMController> controllers)
+        public bool IsEmpty(List<RuntimeFsmController> controllers)
         {
             if (controllers == null || controllers.Count == 0)
+            {
                 return true;
+            }
 
             foreach (var item in controllers)
             {
-                if (item != null) return false;
+                if (item != null)
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -302,34 +362,59 @@ namespace YLFramework.StateMachine
         // 运行时选中某一个FSMController 组件，当取消运行，这个游戏物体被销毁时
         // 仍选中这个状态配置
 
-        private List<RuntimeFSMControllerLayer> tempLayers = new List<RuntimeFSMControllerLayer>();
+        private List<RuntimeFsmControllerLayer> _tempLayers = new List<RuntimeFsmControllerLayer>();
 
-        public void RefreshRuntimeFSMControllerGUID()
+        public void RefreshRuntimeFsmControllerGuid()
         {
-            if (!Application.isPlaying) return;
-            if (FSMController == null) return;
-            if (IsEmpty(FSMController.RuntimeFSMController)) return;
-
-            // 通过反射拿到源配置
-            Type type = typeof(FSMController);
-            FieldInfo fieldInfo = type.GetField("_runtimeFSMControllerLayer", BindingFlags.NonPublic | BindingFlags.Instance);
-            List<RuntimeFSMControllerLayer> layers = fieldInfo.GetValue(FSMController) as List<RuntimeFSMControllerLayer>;
-
-            if (layers == null || layers.Count == 0) return;
-
-            tempLayers.Clear();
-            foreach (var layer in layers)
+            if (!Application.isPlaying)
             {
-                if (layer.controller == null) continue;
-                tempLayers.Add(layer);
+                return;
             }
 
-            if (FSMControllerIndex < 0 || FSMControllerIndex >= tempLayers.Count) return;
+            if (FsmController == null)
+            {
+                return;
+            }
 
-            string asset_path = AssetDatabase.GetAssetPath(tempLayers[FSMControllerIndex].controller);
-            string guid = AssetDatabase.AssetPathToGUID(asset_path);
-            if (string.IsNullOrEmpty(guid)) return;
-            RuntimeFSMControllerGUID = guid;
+            if (IsEmpty(FsmController.RuntimeFsmController))
+            {
+                return;
+            }
+
+            // 通过反射拿到源配置
+            Type type = typeof(FsmController);
+            FieldInfo fieldInfo = type.GetField("runtimeFsmControllerLayers", BindingFlags.NonPublic | BindingFlags.Instance);
+            List<RuntimeFsmControllerLayer> layers = fieldInfo.GetValue(FsmController) as List<RuntimeFsmControllerLayer>;
+
+            if (layers == null || layers.Count == 0)
+            {
+                return;
+            }
+
+            _tempLayers.Clear();
+            foreach (var layer in layers)
+            {
+                if (layer.controller == null)
+                {
+                    continue;
+                }
+
+                _tempLayers.Add(layer);
+            }
+
+            if (FsmControllerIndex < 0 || FsmControllerIndex >= _tempLayers.Count)
+            {
+                return;
+            }
+
+            string assetPath = AssetDatabase.GetAssetPath(_tempLayers[FsmControllerIndex].controller);
+            string guid = AssetDatabase.AssetPathToGUID(assetPath);
+            if (string.IsNullOrEmpty(guid))
+            {
+                return;
+            }
+
+            RuntimeFsmControllerGuid = guid;
 
         }
 

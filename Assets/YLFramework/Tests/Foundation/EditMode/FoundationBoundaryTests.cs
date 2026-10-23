@@ -17,33 +17,33 @@ namespace YLFramework.Foundation.Tests
         [Test]
         public void FoundationFamiliesHaveOneRuntimeOwnerAndTheKernelContainerIsRetired()
         {
-            const string runtimeRoot = "Assets/YLFramework/Runtime/";
-            const string kernel = runtimeRoot + "Foundation/Kernel";
-            Assert.That(Directory.Exists(kernel), Is.False);
-            Assert.That(File.Exists(kernel + ".meta"), Is.False);
-            Assert.That(File.Exists(kernel + "/YLFramework.Foundation.Runtime.asmdef"), Is.False);
-            Assert.That(File.Exists(kernel + "/YLFramework.Foundation.Runtime.asmdef.meta"), Is.False);
-            Assert.That(Directory.Exists(runtimeRoot + "Shared"), Is.False);
-            Assert.That(File.Exists(runtimeRoot + "Shared.meta"), Is.False);
+            const string RuntimeRoot = "Assets/YLFramework/Runtime/";
+            const string Kernel = RuntimeRoot + "Foundation/Kernel";
+            Assert.That(Directory.Exists(Kernel), Is.False);
+            Assert.That(File.Exists(Kernel + ".meta"), Is.False);
+            Assert.That(File.Exists(Kernel + "/YLFramework.Foundation.Runtime.asmdef"), Is.False);
+            Assert.That(File.Exists(Kernel + "/YLFramework.Foundation.Runtime.asmdef.meta"), Is.False);
+            Assert.That(Directory.Exists(RuntimeRoot + "Shared"), Is.False);
+            Assert.That(File.Exists(RuntimeRoot + "Shared.meta"), Is.False);
             foreach (var retired in new[] { "Tools/AssemblyTool", "Tools/Attributes" })
             {
-                Assert.That(Directory.Exists(runtimeRoot + retired), Is.False, retired);
-                Assert.That(File.Exists(runtimeRoot + retired + ".meta"), Is.False, retired);
+                Assert.That(Directory.Exists(RuntimeRoot + retired), Is.False, retired);
+                Assert.That(File.Exists(RuntimeRoot + retired + ".meta"), Is.False, retired);
             }
-            const string convenienceHelper = runtimeRoot + "Foundation/Utilities/UnityObjectUtility.cs";
-            Assert.That(File.Exists(convenienceHelper), Is.False);
-            Assert.That(File.Exists(convenienceHelper + ".meta"), Is.False);
+            const string ConvenienceHelper = RuntimeRoot + "Foundation/Utilities/UnityObjectUtility.cs";
+            Assert.That(File.Exists(ConvenienceHelper), Is.False);
+            Assert.That(File.Exists(ConvenienceHelper + ".meta"), Is.False);
             Assert.That(typeof(ApplicationTool).Assembly.GetType("YLFramework.Foundation.UnityObjectUtility"), Is.Null);
 
             var assemblies = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
             var foundation = assemblies.Single(a => a.name == "YLFramework.Runtime");
             Assert.That(CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(foundation.name),
-                Is.EqualTo(runtimeRoot + "YLFramework.Runtime.asmdef"));
+                Is.EqualTo(RuntimeRoot + "YLFramework.Runtime.asmdef"));
             Assert.That(foundation.sourceFiles.Select(Path.GetFullPath), Is.SupersetOf(
-                Directory.GetFiles(runtimeRoot + "Foundation", "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
-            var adapters = new[] { runtimeRoot + "Foundation/Timing/Components/TimerObject.cs",
-                runtimeRoot + "Foundation/Events/Unity/AnimationEventListener.cs",
-                runtimeRoot + "Core/MVC/Views/Components/CloseView.cs" }.Select(Path.GetFullPath).ToArray();
+                Directory.GetFiles(RuntimeRoot + "Foundation", "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
+            var adapters = new[] { RuntimeRoot + "Foundation/Timing/Components/TimerObject.cs",
+                RuntimeRoot + "Foundation/Events/Unity/AnimationEventListener.cs",
+                RuntimeRoot + "Core/MVC/Views/Components/CloseView.cs" }.Select(Path.GetFullPath).ToArray();
             Assert.That(adapters, Is.Not.Empty);
             Assert.That(assemblies.Single(a => a.name == "YLFramework.Runtime").sourceFiles.Select(Path.GetFullPath),
                 Is.SupersetOf(adapters));
@@ -69,7 +69,11 @@ namespace YLFramework.Foundation.Tests
             Assert.That(sources.Where(path => IsInsideFolder(path, root)), Is.EquivalentTo(
                 Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories).Select(Path.GetFullPath)));
             Assert.That(sources.Where(path => !IsInsideFolder(path, root)), Is.Empty);
-            foreach (var source in sources) Assert.That(File.Exists(source), Is.True, source);
+            foreach (var source in sources)
+            {
+                Assert.That(File.Exists(source), Is.True, source);
+            }
+
             var graph = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
             var uiAssembly = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "UnityEngine.UI");
             Assert.That(uiAssembly.GetType("UnityEngine.EventSystems.EventSystem"), Is.Not.Null);
@@ -96,9 +100,13 @@ namespace YLFramework.Foundation.Tests
                 {
                     var output = Path.Combine(folder, Path.GetFileNameWithoutExtension(consumer) + ".dll");
                     var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
-                    var builder = new AssemblyBuilder(output, sources.Append(consumer).ToArray()) { flags = flags,
-                        buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone,
-                        referencesOptions = ReferencesOptions.UseEngineModules };
+                    var builder = new AssemblyBuilder(output, sources.Append(consumer).ToArray())
+                    {
+                        flags = flags,
+                        buildTarget = BuildTarget.StandaloneWindows64,
+                        buildTargetGroup = BuildTargetGroup.Standalone,
+                        referencesOptions = ReferencesOptions.UseEngineModules
+                    };
                     Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
                     builder.additionalDefines = inputDefines.Except(builder.defaultDefines).ToArray();
                     var defines = builder.defaultDefines.Concat(builder.additionalDefines).Distinct().ToArray();
@@ -121,10 +129,17 @@ namespace YLFramework.Foundation.Tests
                     CompilerMessage[] messages = null;
                     builder.buildFinished += (_, result) => messages = result;
                     Assert.That(builder.Build(), Is.True);
-                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(messages, Is.Not.Null);
                     foreach (var message in messages)
+                    {
                         TestContext.WriteLine("{0}:{1}:{2}: {3}: {4}", message.file, message.line, message.column, message.type, message.message);
+                    }
+
                     var errors = messages.Where(m => m.type == CompilerMessageType.Error).ToArray();
                     if (consumer == legal)
                     {
@@ -141,28 +156,52 @@ namespace YLFramework.Foundation.Tests
                     }
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         private static bool IsAllowedReference(string path, string contents, string ui, bool editor)
         {
             var absolute = Path.GetFullPath(path);
-            if (!File.Exists(absolute)) return false;
-            if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase)) return true;
+            if (!File.Exists(absolute))
+            {
+                return false;
+            }
+
+            if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             var name = Path.GetFileName(absolute);
-            if (name.Contains("TestRunner")) return false;
+            if (name.Contains("TestRunner"))
+            {
+                return false;
+            }
+
             if (name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "PlaybackEngines")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(contents, "Managed/UnityEngine.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (editor && (name == "UnityEditor.dll" || name.StartsWith("UnityEditor.", StringComparison.Ordinal)))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEditor")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(contents, "Managed/UnityEditor.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "NetStandard")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "UnityReferenceAssemblies")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "MonoBleedingEdge/lib/mono"));
+            }
+
             return false;
         }
 
@@ -187,18 +226,26 @@ namespace YLFramework.Foundation.Tests
                     var fake = Path.Combine(folder, name);
                     File.Copy(ui, fake);
                     foreach (bool editor in new[] { false, true })
+                    {
                         Assert.That(IsAllowedReference(fake, contents, ui, editor), Is.False, fake);
+                    }
                 }
                 foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(a =>
                     a.GetName().Name.StartsWith("YLFramework", StringComparison.Ordinal) ||
                     new[] { "XFABManager", "XFGameFramework", "XFFSM", "Newtonsoft.Json" }.Contains(a.GetName().Name)))
+                {
                     Assert.That(IsAllowedReference(assembly.Location, contents, ui, true), Is.False, assembly.FullName);
+                }
+
                 Assert.That(IsAllowedReference(typeof(LogAssert).Assembly.Location, contents, ui, true), Is.False);
                 Assert.That(IsAllowedReference(typeof(EditorApplication).Assembly.Location, contents, ui, false), Is.False);
                 Assert.That(IsAllowedReference(ui, contents, ui, false), Is.True);
                 Assert.That(IsAllowedReference(typeof(UnityEngine.Object).Assembly.Location, contents, ui, false), Is.True);
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         [Test]
@@ -206,7 +253,7 @@ namespace YLFramework.Foundation.Tests
         {
             var foundation = typeof(ApplicationTool).Assembly;
             foreach (string name in new[] { "YLFramework.Foundation.AssemblyTool", "YLFramework.Foundation.LayerMaskUtility",
-                "YLFramework.Foundation.Attributes.CustomClassNameGUI", "YLFramework.Foundation.Attributes.CustomPropertyGUI",
+                "YLFramework.Foundation.Attributes.CustomClassNameGui", "YLFramework.Foundation.Attributes.CustomPropertyGui",
                 "YLFramework.Foundation.Attributes.DisableEdit" })
             {
                 Assert.That(foundation.GetType(name), Is.Not.Null, name);
@@ -215,8 +262,13 @@ namespace YLFramework.Foundation.Tests
             foreach (string oldName in new[] { "YLFramework.Core.AssemblyTools", "YLFramework.Utilities.AssemblyTool.AssemblyTool",
                 "YLFramework.Utilities.Extensions.LayerMaskUtility", "YLFramework.Core.CustomClassNameGUI",
                 "YLFramework.Core.CustomPropertyGUI", "YLFramework.Core.DisableEdit",
-                "YLFramework.Core.Attributes.CustomClassNameGUI", "YLFramework.Core.Attributes.CustomPropertyGUI" })
+                "YLFramework.Core.Attributes.CustomClassNameGUI", "YLFramework.Core.Attributes.CustomPropertyGUI",
+                "YLFramework.Core.CustomClassNameGui", "YLFramework.Core.CustomPropertyGui",
+                "YLFramework.Core.Attributes.CustomClassNameGui", "YLFramework.Core.Attributes.CustomPropertyGui",
+                "YLFramework.Foundation.Attributes.CustomClassNameGUI", "YLFramework.Foundation.Attributes.CustomPropertyGUI" })
+            {
                 Assert.That(AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetType(oldName) != null), Is.False, oldName);
+            }
         }
 
         [Test]
@@ -256,7 +308,7 @@ namespace YLFramework.Foundation.Tests
         public void ApplicationStateUsesEditorPlaymodeTransitionState()
         {
             Assert.That(EditorApplication.isPlayingOrWillChangePlaymode, Is.False);
-            Assert.That(ApplicationTool.isPlaying, Is.EqualTo(EditorApplication.isPlayingOrWillChangePlaymode));
+            Assert.That(ApplicationTool.IsPlaying, Is.EqualTo(EditorApplication.isPlayingOrWillChangePlaymode));
         }
 
         [Test]

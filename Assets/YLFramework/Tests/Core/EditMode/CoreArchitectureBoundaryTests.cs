@@ -32,7 +32,11 @@ namespace YLFramework.Core.Tests
             Assert.That(sources.Where(p => IsInsideFolder(p, Path.Combine(root, "Foundation"))), Is.EquivalentTo(foundation));
             Assert.That(sources.Where(p => IsInsideFolder(p, Path.Combine(root, "Core"))), Is.EquivalentTo(core));
             Assert.That(sources.Where(p => !foundation.Contains(p) && !core.Contains(p)), Is.EqualTo(new[] { entry }));
-            foreach (var source in sources) Assert.That(File.Exists(source), Is.True, source);
+            foreach (var source in sources)
+            {
+                Assert.That(File.Exists(source), Is.True, source);
+            }
+
             Assert.That(core, Is.Not.Empty);
 
             var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
@@ -61,8 +65,10 @@ namespace YLFramework.Core.Tests
                     var output = Path.Combine(folder, Path.GetFileNameWithoutExtension(consumer) + ".dll");
                     var builder = new AssemblyBuilder(output, sources.Append(consumer).ToArray())
                     {
-                        flags = flags, buildTarget = BuildTarget.StandaloneWindows64,
-                        buildTargetGroup = BuildTargetGroup.Standalone, referencesOptions = ReferencesOptions.UseEngineModules
+                        flags = flags,
+                        buildTarget = BuildTarget.StandaloneWindows64,
+                        buildTargetGroup = BuildTargetGroup.Standalone,
+                        referencesOptions = ReferencesOptions.UseEngineModules
                     };
                     builder.additionalDefines = input.Except(builder.defaultDefines).ToArray();
                     var defines = builder.defaultDefines.Concat(builder.additionalDefines).Distinct().ToArray();
@@ -82,10 +88,17 @@ namespace YLFramework.Core.Tests
                     CompilerMessage[] messages = null;
                     builder.buildFinished += (_, result) => messages = result;
                     Assert.That(builder.Build(), Is.True);
-                    while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+
                     Assert.That(messages, Is.Not.Null);
                     foreach (var message in messages)
+                    {
                         TestContext.WriteLine("{0}:{1}:{2}: {3}: {4}", message.file, message.line, message.column, message.type, message.message);
+                    }
+
                     var errors = messages.Where(m => m.type == CompilerMessageType.Error).ToArray();
                     if (consumer == legal)
                     {
@@ -103,7 +116,10 @@ namespace YLFramework.Core.Tests
                     }
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         private static string[] GetExternalReferences(bool editor)
@@ -149,7 +165,10 @@ namespace YLFramework.Core.Tests
                     foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(a =>
                         a.GetName().Name.StartsWith("YLFramework", StringComparison.Ordinal) ||
                         new[] { "XFABManager", "XFGameFramework", "XFFSM", "Unity.InputSystem" }.Contains(a.GetName().Name)))
+                    {
                         Assert.That(IsAllowedReference(assembly.Location, contents, extra, editor), Is.False, assembly.FullName);
+                    }
+
                     Assert.That(IsAllowedReference(typeof(LogAssert).Assembly.Location, contents, extra, editor), Is.False);
                     Assert.That(IsAllowedReference(typeof(TestAttribute).Assembly.Location, contents, extra, editor), Is.False);
                     Assert.That(IsAllowedReference(typeof(UnityEngine.Object).Assembly.Location, contents, extra, editor), Is.True);
@@ -158,7 +177,10 @@ namespace YLFramework.Core.Tests
                     Assert.That(IsAllowedReference(otherJson, contents, extra, editor), Is.False, "拒绝错profile的Json.NET插件。");
                 }
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         private static string ResolveLoadedGraphAssembly(string name, string marker)
@@ -175,22 +197,43 @@ namespace YLFramework.Core.Tests
         private static bool IsAllowedReference(string path, string contents, string[] extra, bool editor)
         {
             var absolute = Path.GetFullPath(path);
-            if (!File.Exists(absolute)) return false;
-            if (extra.Select(Path.GetFullPath).Contains(absolute, StringComparer.OrdinalIgnoreCase)) return true;
+            if (!File.Exists(absolute))
+            {
+                return false;
+            }
+
+            if (extra.Select(Path.GetFullPath).Contains(absolute, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             var name = Path.GetFileName(absolute);
-            if (name.Contains("TestRunner")) return false;
+            if (name.Contains("TestRunner"))
+            {
+                return false;
+            }
+
             if (name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "PlaybackEngines")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(contents, "Managed/UnityEngine.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (editor && (name == "UnityEditor.dll" || name.StartsWith("UnityEditor.", StringComparison.Ordinal)))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "Managed/UnityEditor")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(contents, "Managed/UnityEditor.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(contents, "NetStandard")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "UnityReferenceAssemblies")) ||
                     IsInsideFolder(absolute, Path.Combine(contents, "MonoBleedingEdge/lib/mono"));
+            }
+
             return false;
         }
 

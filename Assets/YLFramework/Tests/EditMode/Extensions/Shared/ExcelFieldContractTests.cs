@@ -14,7 +14,7 @@ namespace YLFramework.Tests.Extensions.Shared
         }
 
         [TestCase("ExcelIgnore")]
-        [TestCase("ExcelScriptableObjectID")]
+        [TestCase("ExcelScriptableObjectId")]
         public void FieldMarkersCanBeConstructedAndDiscoveredAsAttributes(string name)
         {
             var attribute = Activator.CreateInstance(Contract(name));

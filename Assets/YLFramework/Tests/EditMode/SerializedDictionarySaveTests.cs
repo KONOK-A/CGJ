@@ -30,9 +30,9 @@ namespace YLFramework.Tests
         [Test]
         public void SaveManagerDiskRoundTripRestoresBareDictionariesAndUnitySerializableRows()
         {
-            const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
-            var rootField = typeof(SaveManager).GetField("_storageRootOverride", flags);
-            var storeField = typeof(SaveManager).GetField("_store", flags);
+            const BindingFlags Flags = BindingFlags.Static | BindingFlags.NonPublic;
+            var rootField = typeof(SaveManager).GetField("_storageRootOverride", Flags);
+            var storeField = typeof(SaveManager).GetField("_store", Flags);
             Assert.That(rootField, Is.Not.Null);
             Assert.That(storeField, Is.Not.Null);
 
@@ -70,14 +70,14 @@ namespace YLFramework.Tests
                 record.Nested[7] = new Payload { Number = 6 };
                 record.Nested.Add(-2, new Payload { Number = 8 });
 
-                const string rootFileName = "root-dictionary";
-                const string recordFileName = "nested-record";
-                SaveManager.SaveObject(source, rootFileName, slot.SaveID);
-                SaveManager.SaveObject(record, recordFileName, slot.SaveID);
+                const string RootFileName = "root-dictionary";
+                const string RecordFileName = "nested-record";
+                SaveManager.SaveObject(source, RootFileName, slot.SaveId);
+                SaveManager.SaveObject(record, RecordFileName, slot.SaveId);
                 var saveDirectory = Path.Combine(tempRoot, "SaveData");
-                var slotDirectory = Path.Combine(saveDirectory, slot.SaveID.ToString());
-                var rootPath = Path.Combine(slotDirectory, rootFileName + ".json");
-                var recordPath = Path.Combine(slotDirectory, recordFileName + ".json");
+                var slotDirectory = Path.Combine(saveDirectory, slot.SaveId.ToString());
+                var rootPath = Path.Combine(slotDirectory, RootFileName + ".json");
+                var recordPath = Path.Combine(slotDirectory, RecordFileName + ".json");
                 Assert.That(File.Exists(Path.Combine(saveDirectory, "SaveSystemData.json")), Is.True);
                 Assert.That(File.Exists(rootPath), Is.True);
                 Assert.That(File.Exists(recordPath), Is.True);
@@ -85,8 +85,8 @@ namespace YLFramework.Tests
                     JToken.Parse("{\"a\":2,\"b\":4}")), Is.True);
                 Assert.That(JToken.DeepEquals(JToken.Parse(File.ReadAllText(recordPath)),
                     JToken.Parse("{\"Direct\":{\"a\":2,\"b\":4},\"Nested\":{\"7\":{\"Number\":6},\"-2\":{\"Number\":8}}}")), Is.True);
-                Assert.That(SaveManager.LoadObject<SerializedDictionary<string, int>>(rootFileName, slot.SaveID), Is.SameAs(source));
-                Assert.That(SaveManager.LoadObject<Record>(recordFileName, slot.SaveID), Is.SameAs(record));
+                Assert.That(SaveManager.LoadObject<SerializedDictionary<string, int>>(RootFileName, slot.SaveId), Is.SameAs(source));
+                Assert.That(SaveManager.LoadObject<Record>(RecordFileName, slot.SaveId), Is.SameAs(record));
 
                 // 不再保存这些修改；若 LoadObject 错误复用原实例，下面的磁盘值断言会失败。
                 source["a"] = -1;
@@ -96,8 +96,8 @@ namespace YLFramework.Tests
                 SaveManager.SetStorageRoot(tempRoot);
                 Assert.That(storeField.GetValue(null), Is.Null);
 
-                var restored = SaveManager.LoadObject<SerializedDictionary<string, int>>(rootFileName, slot.SaveID);
-                var restoredRecord = SaveManager.LoadObject<Record>(recordFileName, slot.SaveID);
+                var restored = SaveManager.LoadObject<SerializedDictionary<string, int>>(RootFileName, slot.SaveId);
+                var restoredRecord = SaveManager.LoadObject<Record>(RecordFileName, slot.SaveId);
                 Assert.That(restored, Is.Not.Null);
                 Assert.That(restored, Is.Not.SameAs(source));
                 Assert.That(restored.Count, Is.EqualTo(2));
@@ -117,9 +117,9 @@ namespace YLFramework.Tests
                 Assert.That(restoredRecord.Nested[7].Number, Is.EqualTo(6));
                 Assert.That(restoredRecord.Nested[-2].Number, Is.EqualTo(8));
                 Assert.That(SaveManager.GetSaveItemCount(), Is.EqualTo(1));
-                Assert.That(SaveManager.GetSaveItemWithID(slot.SaveID), Is.Not.SameAs(slot));
-                Assert.That(SaveManager.LoadObject<SerializedDictionary<string, int>>(rootFileName, slot.SaveID), Is.SameAs(restored));
-                Assert.That(SaveManager.LoadObject<Record>(recordFileName, slot.SaveID), Is.SameAs(restoredRecord));
+                Assert.That(SaveManager.GetSaveItemWithId(slot.SaveId), Is.Not.SameAs(slot));
+                Assert.That(SaveManager.LoadObject<SerializedDictionary<string, int>>(RootFileName, slot.SaveId), Is.SameAs(restored));
+                Assert.That(SaveManager.LoadObject<Record>(RecordFileName, slot.SaveId), Is.SameAs(restoredRecord));
 
                 var unitySource = new Record { Direct = restored, Nested = restoredRecord.Nested };
                 var unityJson = JsonUtility.ToJson(unitySource);
@@ -149,14 +149,20 @@ namespace YLFramework.Tests
                 {
                     Directory.Delete(tempRoot, true);
                 }
-                if (ownsRoot && !passed) Console.WriteLine("Preserved failed SerializedDictionary Save fixture: " + tempRoot);
+                if (ownsRoot && !passed)
+                {
+                    Console.WriteLine("Preserved failed SerializedDictionary Save fixture: " + tempRoot);
+                }
             }
             Assert.That(rootField.GetValue(null), Is.EqualTo(originalRoot));
             Assert.That(storeField.GetValue(null), Is.SameAs(originalStore));
             Assert.That(SaveManager.SerializerSettings, Is.SameAs(settings));
             Assert.That(SaveManager.SerializationFormat, Is.EqualTo(originalFormat));
             foreach (var pair in originalSettings)
+            {
                 Assert.That(pair.Key.GetValue(settings), Is.EqualTo(pair.Value));
+            }
+
             Assert.That(Directory.Exists(tempRoot), Is.False);
         }
 

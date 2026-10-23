@@ -29,20 +29,41 @@ namespace YLFramework.Timing
         public void Clear()
         {
             var snapshot = _handles;
-            if (snapshot == null) return;
+            if (snapshot == null)
+            {
+                return;
+            }
+
             _handles = null;
             List<Exception> errors = null;
             try
             {
                 foreach (var handle in snapshot)
                 {
-                    try { handle.Cancel(); }
-                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                    try
+                    {
+                        handle.Cancel();
+                    }
+                    catch (Exception error)
+                    {
+                        (errors ??= new List<Exception>()).Add(error);
+                    }
                 }
             }
-            finally { ListPool<TimerHandle>.Recycle(snapshot); }
-            if (errors == null) return;
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            finally
+            {
+                ListPool<TimerHandle>.Recycle(snapshot);
+            }
+            if (errors == null)
+            {
+                return;
+            }
+
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
             throw new AggregateException(errors);
         }
     }

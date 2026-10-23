@@ -26,7 +26,11 @@ namespace YLFramework.Tests.ResourceBuild
             var key = rsa.ExportParameters(false);
             var source = new ResourceRemoteSource(server.BaseUri.AbsoluteUri, "test", new[] { new ResourceSigningKey("isolated-test", Convert.ToBase64String(key.Modulus), Convert.ToBase64String(key.Exponent)) },
                 timeoutSeconds: timeout, idleTimeoutSeconds: Math.Min(2, timeout), attempts: attempts);
-            if (trust) source.TrustLoopbackCertificate(certificate.RawData);
+            if (trust)
+            {
+                source.TrustLoopbackCertificate(certificate.RawData);
+            }
+
             return source;
         }
 
@@ -37,9 +41,24 @@ namespace YLFramework.Tests.ResourceBuild
                 while (true)
                 {
                     bool more;
-                    try { more = transfer.MoveNext(); }
-                    catch (Exception error) { if (failure == null) throw; failure(error); yield break; }
-                    if (!more) yield break;
+                    try
+                    {
+                        more = transfer.MoveNext();
+                    }
+                    catch (Exception error)
+                    {
+                        if (failure == null)
+                        {
+                            throw;
+                        }
+                        failure(error);
+                        yield break;
+                    }
+                    if (!more)
+                    {
+                        yield break;
+                    }
+
                     yield return null;
                 }
             }
@@ -72,7 +91,10 @@ namespace YLFramework.Tests.ResourceBuild
             var body = new byte[] { 1, 2, 3, 4 };
             server.Responder = r => new ResourceTlsServer.Response { StatusCode = r.Number < 3 ? 503 : 200, Body = r.Number < 3 ? Array.Empty<byte>() : body };
             using (var download = new ResourceTransfer(source, source.Resolve("release.json"), body.Length, ResourceCatalogCodec.Digest(body)))
-            { yield return Transfer(download); CollectionAssert.AreEqual(body, download.Bytes); }
+            {
+                yield return Transfer(download);
+                CollectionAssert.AreEqual(body, download.Bytes);
+            }
             Assert.That(server.RequestCount, Is.EqualTo(3));
             server.Responder = _ => new ResourceTlsServer.Response { StatusCode = 302, Headers = { ["Location"] = "https://localhost:1/escaped" } };
             Exception rejection = null;
@@ -94,9 +116,13 @@ namespace YLFramework.Tests.ResourceBuild
             var source = Source(server, certificate, attempts: 1);
             foreach (var mode in new[] { "oversize", "encoded", "truncated", "digest", "404" })
             {
-                server.Responder = _ => new ResourceTlsServer.Response { Body = Enumerable.Repeat((byte)5, mode == "oversize" ? 4096 : 1024).ToArray(),
-                    StatusCode = mode == "404" ? 404 : 200, DisconnectAfterBytes = mode == "truncated" ? 512 : null,
-                    Headers = mode == "encoded" ? new System.Collections.Generic.Dictionary<string, string> { ["Content-Encoding"] = "gzip" } : new System.Collections.Generic.Dictionary<string, string>() };
+                server.Responder = _ => new ResourceTlsServer.Response
+                {
+                    Body = Enumerable.Repeat((byte)5, mode == "oversize" ? 4096 : 1024).ToArray(),
+                    StatusCode = mode == "404" ? 404 : 200,
+                    DisconnectAfterBytes = mode == "truncated" ? 512 : null,
+                    Headers = mode == "encoded" ? new System.Collections.Generic.Dictionary<string, string> { ["Content-Encoding"] = "gzip" } : new System.Collections.Generic.Dictionary<string, string>()
+                };
                 Exception rejection = null;
                 yield return Transfer(new ResourceTransfer(source, source.Resolve("release.json"), 1024, ResourceCatalogCodec.Digest(new byte[1024])), e => rejection = e);
                 Assert.That(rejection, Is.Not.Null, mode);
@@ -123,10 +149,16 @@ namespace YLFramework.Tests.ResourceBuild
             using var server = new ResourceTlsServer(certificate);
             var source = Source(server, certificate);
             foreach (var path in new[] { "../evil", "a/../evil", "https://evil.test/file", "//evil.test/file", "a\\b", "a%2fb", "/root", "a?token=x", "a#fragment" })
+            {
                 Assert.Throws<InvalidDataException>(() => source.Resolve(path), path);
-            using var rsa = certificate.GetRSAPublicKey(); var key = rsa.ExportParameters(false);
+            }
+
+            using var rsa = certificate.GetRSAPublicKey();
+            var key = rsa.ExportParameters(false);
             foreach (var url in new[] { "http://localhost/", "https://user:password@localhost/", "https://localhost/a/../", "https://localhost/%2e/", "https://localhost/?secret=1" })
+            {
                 Assert.Throws<ArgumentException>(() => new ResourceRemoteSource(url, "test", new[] { new ResourceSigningKey("test", Convert.ToBase64String(key.Modulus), Convert.ToBase64String(key.Exponent)) }), url);
+            }
         }
     }
 }

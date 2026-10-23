@@ -1,12 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEditor.SceneManagement;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
@@ -22,7 +22,10 @@ namespace YLFramework.Tests
             // Unity 2022.3 的绑定按时间间隔轮询，固定帧数不能代表绑定或结构刷新完成。
             var deadline = EditorApplication.timeSinceStartup + 3;
             while (!ready() && EditorApplication.timeSinceStartup < deadline)
+            {
                 yield return null;
+            }
+
             Assert.That(ready(), Is.True, message);
         }
 
@@ -56,7 +59,10 @@ namespace YLFramework.Tests
                     Assert.That(ui.Q<HelpBox>().text, Does.Contain("原始 0").And.Contain("有效 0"));
                 }
             }
-            finally { Object.DestroyImmediate(asset); }
+            finally
+            {
+                Object.DestroyImmediate(asset);
+            }
         }
 
         [Test]
@@ -88,7 +94,10 @@ namespace YLFramework.Tests
                     Assert.That(asset.Direct.InvalidEntryCount, Is.Zero);
                 }
             }
-            finally { Object.DestroyImmediate(asset); }
+            finally
+            {
+                Object.DestroyImmediate(asset);
+            }
         }
 
         [Test]
@@ -114,7 +123,10 @@ namespace YLFramework.Tests
                     Assert.That(component.EnumKeys.InvalidEntryCount, Is.EqualTo(1));
                 }
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -132,7 +144,10 @@ namespace YLFramework.Tests
                         Does.Contain("待确认 1").And.Contain("fake-null"));
                 }
             }
-            finally { Object.DestroyImmediate(asset); }
+            finally
+            {
+                Object.DestroyImmediate(asset);
+            }
         }
 
         [UnityTest]
@@ -170,7 +185,11 @@ namespace YLFramework.Tests
             {
                 window.LegacyEditor = null;
                 window.Release();
-                if (editor != null) Object.DestroyImmediate(editor);
+                if (editor != null)
+                {
+                    Object.DestroyImmediate(editor);
+                }
+
                 Undo.ClearUndo(asset);
                 Object.DestroyImmediate(asset);
             }
@@ -204,7 +223,11 @@ namespace YLFramework.Tests
             {
                 window.LegacyEditor = null;
                 window.Release();
-                if (editor != null) Object.DestroyImmediate(editor);
+                if (editor != null)
+                {
+                    Object.DestroyImmediate(editor);
+                }
+
                 Object.DestroyImmediate(a);
                 Object.DestroyImmediate(b);
             }
@@ -239,7 +262,11 @@ namespace YLFramework.Tests
             {
                 window.LegacyEditor = null;
                 window.Release();
-                if (editor != null) Object.DestroyImmediate(editor);
+                if (editor != null)
+                {
+                    Object.DestroyImmediate(editor);
+                }
+
                 Object.DestroyImmediate(asset);
             }
         }
@@ -317,7 +344,11 @@ namespace YLFramework.Tests
             finally
             {
                 window.Release();
-                if (editor != null) Object.DestroyImmediate(editor);
+                if (editor != null)
+                {
+                    Object.DestroyImmediate(editor);
+                }
+
                 Undo.ClearUndo(asset);
                 Object.DestroyImmediate(asset);
             }
@@ -335,7 +366,11 @@ namespace YLFramework.Tests
             {
                 a.Direct.Add("a", 1);
                 b.Direct.Add("b", 2);
-                if (differentLength) b.Direct.Add("extra", 3);
+                if (differentLength)
+                {
+                    b.Direct.Add("extra", 3);
+                }
+
                 var beforeA = JsonUtility.ToJson(a);
                 var beforeB = JsonUtility.ToJson(b);
                 using (var serialized = new SerializedObject(new Object[] { a, b }))
@@ -495,9 +530,21 @@ namespace YLFramework.Tests
             }
             finally
             {
-                if (contents != null) PrefabUtility.UnloadPrefabContents(contents);
-                if (instance != null) Object.DestroyImmediate(instance);
-                if (original != null) Object.DestroyImmediate(original);
+                if (contents != null)
+                {
+                    PrefabUtility.UnloadPrefabContents(contents);
+                }
+
+                if (instance != null)
+                {
+                    Object.DestroyImmediate(instance);
+                }
+
+                if (original != null)
+                {
+                    Object.DestroyImmediate(original);
+                }
+
                 EditorSceneManager.ClosePreviewScene(scene);
                 AssetDatabase.DeleteAsset(folder);
             }
@@ -514,12 +561,18 @@ namespace YLFramework.Tests
             rootVisualElement.Clear();
             Close();
             // 尚未 Show 的窗口没有容器，Close 不会销毁 CreateInstance 创建的对象。
-            if (this != null) Object.DestroyImmediate(this);
+            if (this != null)
+            {
+                Object.DestroyImmediate(this);
+            }
         }
 
         private void OnGUI()
         {
-            if (LegacyEditor != null) LegacyEditor.OnInspectorGUI();
+            if (LegacyEditor != null)
+            {
+                LegacyEditor.OnInspectorGUI();
+            }
         }
     }
 
@@ -537,9 +590,14 @@ namespace YLFramework.Tests
             var property = serializedObject.FindProperty("Direct");
             DrawnHeight = EditorGUI.GetPropertyHeight(property, true);
             if (NarrowWidth > 0)
+            {
                 EditorGUI.PropertyField(new Rect(0, 0, NarrowWidth, DrawnHeight), property, true);
+            }
             else
+            {
                 EditorGUILayout.PropertyField(property, true);
+            }
+
             if (MenuPaths != null)
             {
                 var labels = new List<string>();

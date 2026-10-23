@@ -5,13 +5,25 @@ namespace YLFramework.Actions
     public interface IActionController
     {
         /// <summary>控制器绑定的动作分配标识，必须与 Action 匹配。</summary>
-        ulong ActionID { get; set; }
+        ulong ActionId
+        {
+            get; set;
+        }
         /// <summary>本次执行绑定的动作。</summary>
-        IAction Action { get; set; }
+        IAction Action
+        {
+            get; set;
+        }
         /// <summary>后续更新使用的缩放或非缩放时间增量。</summary>
-        ActionUpdateModes UpdateMode { get; set; }
+        ActionUpdateModes UpdateMode
+        {
+            get; set;
+        }
         /// <summary>是否暂停当前匹配动作的更新。</summary>
-        bool Paused { get; set; }
+        bool IsPaused
+        {
+            get; set;
+        }
         /// <summary>重置仍匹配的动作进度，不重新调度或分配动作。</summary>
         void Reset();
         /// <summary>清理仍匹配的动作，不触发正常完成通知；不立即回收控制器。</summary>
@@ -23,33 +35,48 @@ namespace YLFramework.Actions
     /// <summary>使用对象池的标准动作控制器，保存本次执行的动作绑定。</summary>
     public class ActionController : IActionController
     {
-        private static readonly ActionPool<IActionController> mPool = new ActionPool<IActionController>(
+        private static readonly ActionPool<IActionController> _pool = new ActionPool<IActionController>(
             () => new ActionController(), controller =>
             {
                 controller.UpdateMode = ActionUpdateModes.ScaledDeltaTime;
-                controller.ActionID = 0;
+                controller.ActionId = 0;
                 controller.Action = null;
             }, 50);
 
         /// <inheritdoc />
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public IAction Action { get; set; }
+        public IAction Action
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ActionUpdateModes UpdateMode { get; set; }
-        private bool mRecycled;
+        public ActionUpdateModes UpdateMode
+        {
+            get; set;
+        }
+        private bool _isRecycled;
         // 每次从池分配时递增：同一控制器对象被复用时，旧租约里的代次不再匹配。
-        internal uint Generation { get; private set; }
+        internal uint Generation
+        {
+            get; private set;
+        }
         // 有效绑定判定：控制器未回收、动作非空且动作标识与控制器记录一致。
-        private bool HasCurrentAction => !mRecycled && Action != null && Action.ActionID == ActionID;
+        private bool HasCurrentAction => !_isRecycled && Action != null && Action.ActionId == ActionId;
 
         /// <inheritdoc />
-        public bool Paused
+        public bool IsPaused
         {
-            get => HasCurrentAction && Action.Paused;
+            get => HasCurrentAction && Action.IsPaused;
             set
             {
-                if (HasCurrentAction) Action.Paused = value;
+                if (HasCurrentAction)
+                {
+                    Action.IsPaused = value;
+                }
             }
         }
 
@@ -62,12 +89,12 @@ namespace YLFramework.Actions
             }
         }
 
-        /// <summary>取得新使用周期的控制器，调用方或执行器需设置 Action 和 ActionID。</summary>
+        /// <summary>取得新使用周期的控制器，调用方或执行器需设置 Action 和 ActionId。</summary>
         /// <returns>尚未绑定动作的池控制器。</returns>
         public static IActionController Allocate()
         {
-            var controller = (ActionController)mPool.Allocate();
-            controller.mRecycled = false;
+            var controller = (ActionController)_pool.Allocate();
+            controller._isRecycled = false;
             controller.Generation++;
             return controller;
         }
@@ -84,9 +111,13 @@ namespace YLFramework.Actions
         /// <inheritdoc />
         public void Recycle()
         {
-            if (mRecycled) return;
-            mRecycled = true;
-            mPool.Recycle(this);
+            if (_isRecycled)
+            {
+                return;
+            }
+
+            _isRecycled = true;
+            _pool.Recycle(this);
         }
     }
 

@@ -21,9 +21,13 @@ namespace YLFramework.Overlap
                     Handles.matrix = Matrix4x4.TRS(center, Quaternion.Euler(0, 0, transform.eulerAngles.z), Vector3.one);
                     var size = box.Size * (Vector2)transform.lossyScale;
                     if (overlap is OverlapCapsule2D capsule)
+                    {
                         HandlesExtensions.DrawCapsule2D(Vector3.zero, size, capsule.Direction);
+                    }
                     else
+                    {
                         Handles.DrawWireCube(Vector3.zero, size);
+                    }
                 }
                 else if (overlap is OverlapCircle2D circle)
                 {
@@ -33,12 +37,23 @@ namespace YLFramework.Overlap
                 else if (overlap is OverlapArea2D area)
                 {
                     if (area.Mode == OverlapAreaMode.Position && area.Positions != null)
+                    {
                         for (int i = 0; i + 1 < area.Positions.Count; i++)
+                        {
                             Handles.DrawLine(transform.TransformPoint(area.Positions[i]), transform.TransformPoint(area.Positions[i + 1]));
+                        }
+                    }
+
                     if (area.Mode == OverlapAreaMode.Transform && area.Transforms != null)
+                    {
                         for (int i = 0; i + 1 < area.Transforms.Count; i++)
+                        {
                             if (area.Transforms[i] && area.Transforms[i + 1])
+                            {
                                 Handles.DrawLine(area.Transforms[i].position, area.Transforms[i + 1].position);
+                            }
+                        }
+                    }
                 }
             }
             finally

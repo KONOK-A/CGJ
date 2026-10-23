@@ -5,7 +5,12 @@ using UnityEngine.Events;
 namespace YLFramework.Services.Audio
 {
     /// <summary>显式的组自动播放时机；不改变已有 Emitter/MusicPlayer 的首次 Start 行为。</summary>
-    public enum AudioGroupAutoPlay { Manual, FirstStart, EveryEnable }
+    public enum AudioGroupAutoPlay
+    {
+        Manual,
+        FirstStart,
+        EveryEnable
+    }
 
     /// <summary>具名素材组播放所有者；自有音源为 2D，借源保留调用方空间配置，复用唯一内核与显式命名通道。</summary>
     /// <remarks>素材组与控制通道是两种身份。失活取消 pending 并停止自有播放；不控制其他组件的通道。
@@ -27,30 +32,48 @@ namespace YLFramework.Services.Audio
         [SerializeField] private bool loadAsync = true;
         [SerializeField] private AudioSoundOptions options = new AudioSoundOptions();
         [SerializeField] private UnityEvent onStarted = new UnityEvent();
-        private AudioChannel mChannel;
-        private IAudioClipProvider mProvider;
-        private ulong mVersion, mSubmission;
-        private bool mStarted, mDestroyed;
+        private AudioChannel _channel;
+        private IAudioClipProvider _provider;
+        private ulong _version;
+        private ulong _submission;
+        private bool _hasStarted;
+        private bool _isDestroyed;
 
         /// <summary>已登记的原控制通道；未播放/已退出时为 null 或失效身份。</summary>
-        public AudioChannel Channel => mChannel;
+        public AudioChannel Channel => _channel;
         /// <summary>最近有效提交的命名请求；保留错误/终态供诊断，不代表当前一定在播放。</summary>
-        public AudioPlayRequest LastRequest { get; private set; }
+        public AudioPlayRequest LastRequest
+        {
+            get; private set;
+        }
         /// <summary>最近开始的原句柄；失效后不能控制复用代次。</summary>
-        public AudioHandle LastHandle { get; private set; }
+        public AudioHandle LastHandle
+        {
+            get; private set;
+        }
         /// <summary>原句柄已归入本通道后触发；允许同步 Stop/失活/销毁。</summary>
         public UnityEvent Started => onStarted;
 
         /// <summary>设置 ExternalProvider 条目的显式后端；先停止本所有者的旧请求，不注册全局后端。</summary>
-        public void SetProvider(IAudioClipProvider provider) { Stop(); mProvider = provider; }
+        public void SetProvider(IAudioClipProvider provider)
+        {
+            Stop();
+            _provider = provider;
+        }
         private void Start()
         {
-            mStarted = true;
-            if (autoPlay != AudioGroupAutoPlay.Manual) Play();
+            _hasStarted = true;
+            if (autoPlay != AudioGroupAutoPlay.Manual)
+            {
+                Play();
+            }
         }
         private void OnEnable()
         {
-            if (mStarted && autoPlay == AudioGroupAutoPlay.EveryEnable) Play();
+            if (_hasStarted && autoPlay == AudioGroupAutoPlay.EveryEnable)
+            {
+                Play();
+            }
         }
         /// <summary>按 Inspector 的组名抽选播放；无参入口可绑定 UnityEvent。</summary>
         public void Play() => PlayGroup(groupName);
@@ -58,65 +81,128 @@ namespace YLFramework.Services.Audio
         /// <summary>按明确组名抽选并提交；不是控制通道名称。失活组件不提交在途请求。</summary>
         public void PlayGroup(string name)
         {
-            if (mDestroyed || !isActiveAndEnabled || !library || !library.TrySelect(name, out var selection, mProvider)) return;
+            if (_isDestroyed || !isActiveAndEnabled || !library || !library.TrySelect(name, out var selection, _provider))
+            {
+                return;
+            }
+
             var snapshot = AudioPlaybackOptions.Capture(options);
-            if (category != AudioCategory.Sound) { snapshot.Priority = 0; snapshot.PlaySoundMode = null; }
+            if (category != AudioCategory.Sound)
+            {
+                snapshot.Priority = 0;
+                snapshot.PlaySoundMode = null;
+            }
             snapshot.Validate(false);
-            if (!selection.IsNamed) snapshot.ValidateClip(selection.Clip);
-            if ((uint)autoPlay > (uint)AudioGroupAutoPlay.EveryEnable) throw new ArgumentOutOfRangeException(nameof(autoPlay));
+            if (!selection.IsNamed)
+            {
+                snapshot.ValidateClip(selection.Clip);
+            }
+
+            if ((uint)autoPlay > (uint)AudioGroupAutoPlay.EveryEnable)
+            {
+                throw new ArgumentOutOfRangeException(nameof(autoPlay));
+            }
+
             var borrowed = AudioOutputRoute.HasReference(borrowedSource);
             if (borrowed)
             {
-                if (channelMode != AudioChannelMode.Exclusive) throw new InvalidOperationException("Borrowing requires an exclusive channel.");
-                if (!borrowedSource || !borrowedSource.isActiveAndEnabled) throw new ArgumentException("Borrowed Source must be live and enabled.", nameof(borrowedSource));
+                if (channelMode != AudioChannelMode.Exclusive)
+                {
+                    throw new InvalidOperationException("Borrowing requires an exclusive channel.");
+                }
+
+                if (!borrowedSource || !borrowedSource.isActiveAndEnabled)
+                {
+                    throw new ArgumentException("Borrowed Source must be live and enabled.", nameof(borrowedSource));
+                }
             }
-            if (mChannel == null || !mChannel.IsValid)
-                mChannel = AudioKit.RegisterChannel(channelName, category, channelMode, string.IsNullOrEmpty(persistenceId) ? null : persistenceId);
-            var version = mVersion;
-            var submission = ++mSubmission;
+            if (_channel == null || !_channel.IsValid)
+            {
+                _channel = AudioKit.RegisterChannel(channelName, category, channelMode, string.IsNullOrEmpty(persistenceId) ? null : persistenceId);
+            }
+
+            var version = _version;
+            var submission = ++_submission;
             Action<AudioClip, AudioHandle> started = (clip, handle) =>
             {
-                if (mDestroyed || version != mVersion || !isActiveAndEnabled) { handle.Stop(); return; }
+                if (_isDestroyed || version != _version || !isActiveAndEnabled)
+                {
+                    handle.Stop();
+                    return;
+                }
                 LastHandle = handle;
-                try { onStarted.Invoke(); }
+                try
+                {
+                    onStarted.Invoke();
+                }
                 finally
                 {
-                    if (mDestroyed || version != mVersion || !isActiveAndEnabled) handle.Stop();
+                    if (_isDestroyed || version != _version || !isActiveAndEnabled)
+                    {
+                        handle.Stop();
+                    }
                 }
             };
             // 命名路径由 4.3 pending/租约负责加载失败、最新独占提交和迟到结果；这里不提前 Stop。
             if (selection.IsNamed)
             {
-                var request = loadAsync ? (borrowed ? mChannel.PlayBorrowedAsync(borrowedSource, selection.Address, options, started) :
-                    mChannel.PlayAsync(selection.Address, options, started)) : null;
+                var request = loadAsync ? (borrowed ? _channel.PlayBorrowedAsync(borrowedSource, selection.Address, options, started) :
+                    _channel.PlayAsync(selection.Address, options, started)) : null;
                 if (!loadAsync)
                 {
-                    var handle = borrowed ? mChannel.PlayBorrowedNamed(borrowedSource, selection.Address, options, started) :
-                        mChannel.PlayNamed(selection.Address, options, started);
-                    if (version != mVersion || mDestroyed) handle.Stop();
-                    if (submission == mSubmission) LastRequest = null;
+                    var handle = borrowed ? _channel.PlayBorrowedNamed(borrowedSource, selection.Address, options, started) :
+                        _channel.PlayNamed(selection.Address, options, started);
+                    if (version != _version || _isDestroyed)
+                    {
+                        handle.Stop();
+                    }
+
+                    if (submission == _submission)
+                    {
+                        LastRequest = null;
+                    }
                 }
                 else
                 {
-                    if (version != mVersion || mDestroyed) request.Cancel();
-                    if (submission == mSubmission) LastRequest = request;
+                    if (version != _version || _isDestroyed)
+                    {
+                        request.Cancel();
+                    }
+
+                    if (submission == _submission)
+                    {
+                        LastRequest = request;
+                    }
                 }
             }
             else
             {
-                var handle = mChannel.PlayWithSnapshot(selection.Clip, snapshot, started, source: borrowed ? borrowedSource : null, borrowed: borrowed);
-                if (version != mVersion || mDestroyed) handle.Stop();
-                if (submission == mSubmission) LastRequest = null;
+                var handle = _channel.PlayWithSnapshot(selection.Clip, snapshot, started, source: borrowed ? borrowedSource : null, borrowed: borrowed);
+                if (version != _version || _isDestroyed)
+                {
+                    handle.Stop();
+                }
+
+                if (submission == _submission)
+                {
+                    LastRequest = null;
+                }
             }
         }
 
         /// <summary>停止进入时本通道的播放与 pending；不停止清理重入中新建的请求。</summary>
-        public void Stop() { mVersion++; mChannel?.Stop(); }
+        public void Stop()
+        {
+            _version++;
+            _channel?.Stop();
+        }
         private void OnDisable() => Stop();
         private void OnDestroy()
         {
-            mDestroyed = true; mVersion++;
-            var channel = mChannel; mChannel = null;
+            _isDestroyed = true;
+            _version++;
+            var channel = _channel;
+            _channel = null;
             channel?.Dispose();
         }
     }

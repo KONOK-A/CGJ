@@ -29,7 +29,9 @@ namespace YLFramework.Tests
             // 原 delay=6 的任务恢复后在 10 到期，同到期的原 delay=10 先登记。
             CollectionAssert.AreEqual(new[] { 2, 3, 4, 5, 7, 8, 9, 10, 6, 12, 13, 14, 15, 16 }, calls);
             for (var i = 0; i < handles.Length; i++)
+            {
                 Assert.That(handles[i].Status, Is.EqualTo(i == 15 || i == 5 ? TimerState.Cancelled : TimerState.Completed));
+            }
         }
 
         [Test]

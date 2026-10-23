@@ -34,7 +34,11 @@ namespace YLFramework.Tests.Audio
             {
                 var list = serialized.FindProperty("weightedClips");
                 list.arraySize = weights.Length;
-                for (var i = 0; i < weights.Length; i++) list.GetArrayElementAtIndex(i).FindPropertyRelative("Weight").floatValue = weights[i];
+                for (var i = 0; i < weights.Length; i++)
+                {
+                    list.GetArrayElementAtIndex(i).FindPropertyRelative("weight").floatValue = weights[i];
+                }
+
                 serialized.ApplyModifiedPropertiesWithoutUndo();
             }
         }
@@ -45,7 +49,11 @@ namespace YLFramework.Tests.Audio
             {
                 var list = serialized.FindProperty("weightedClips");
                 var result = new float[list.arraySize];
-                for (var i = 0; i < result.Length; i++) result[i] = list.GetArrayElementAtIndex(i).FindPropertyRelative("Weight").floatValue;
+                for (var i = 0; i < result.Length; i++)
+                {
+                    result[i] = list.GetArrayElementAtIndex(i).FindPropertyRelative("weight").floatValue;
+                }
+
                 return result;
             }
         }
@@ -53,8 +61,22 @@ namespace YLFramework.Tests.Audio
         [TearDown]
         public void TearDown()
         {
-            foreach (var owned in _objects) if (owned) Undo.ClearUndo(owned);
-            for (var i = _objects.Count - 1; i >= 0; i--) if (_objects[i]) Object.DestroyImmediate(_objects[i]);
+            foreach (var owned in _objects)
+            {
+                if (owned)
+                {
+                    Undo.ClearUndo(owned);
+                }
+            }
+
+            for (var i = _objects.Count - 1; i >= 0; i--)
+            {
+                if (_objects[i])
+                {
+                    Object.DestroyImmediate(_objects[i]);
+                }
+            }
+
             _objects.Clear();
         }
 
@@ -178,8 +200,8 @@ namespace YLFramework.Tests.Audio
             using (var serialized = new SerializedObject(emitter))
             {
                 var list = serialized.FindProperty("weightedClips");
-                list.GetArrayElementAtIndex(0).FindPropertyRelative("Clip").objectReferenceValue = clip;
-                list.GetArrayElementAtIndex(1).FindPropertyRelative("Clip").objectReferenceValue = clip;
+                list.GetArrayElementAtIndex(0).FindPropertyRelative("clip").objectReferenceValue = clip;
+                list.GetArrayElementAtIndex(1).FindPropertyRelative("clip").objectReferenceValue = clip;
                 list.InsertArrayElementAtIndex(0);
                 var clips = serialized.FindProperty("clips");
                 clips.arraySize = 1;
@@ -187,8 +209,8 @@ namespace YLFramework.Tests.Audio
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 AudioInspectorUtility.AddWeightedClip(serialized);
                 CollectionAssert.AreEqual(new[] { 0f, 0f, 3f, 1f }, Weights(emitter), "An explicitly duplicated zero-weight entry stays excluded.");
-                Assert.AreSame(clip, serialized.FindProperty("weightedClips").GetArrayElementAtIndex(0).FindPropertyRelative("Clip").objectReferenceValue);
-                Assert.IsNull(serialized.FindProperty("weightedClips").GetArrayElementAtIndex(3).FindPropertyRelative("Clip").objectReferenceValue);
+                Assert.AreSame(clip, serialized.FindProperty("weightedClips").GetArrayElementAtIndex(0).FindPropertyRelative("clip").objectReferenceValue);
+                Assert.IsNull(serialized.FindProperty("weightedClips").GetArrayElementAtIndex(3).FindPropertyRelative("clip").objectReferenceValue);
                 Assert.AreEqual(1, serialized.FindProperty("clips").arraySize);
                 Assert.AreSame(clip, serialized.FindProperty("clips").GetArrayElementAtIndex(0).objectReferenceValue);
                 serialized.FindProperty("useWeightedRandom").boolValue = true;
@@ -208,7 +230,11 @@ namespace YLFramework.Tests.Audio
             SetWeights(second, 7f, 0f);
             Undo.IncrementCurrentGroup();
             var group = Undo.GetCurrentGroup();
-            using (var serialized = new SerializedObject(new Object[] { first, second })) AudioInspectorUtility.AddWeightedClip(serialized);
+            using (var serialized = new SerializedObject(new Object[] { first, second }))
+            {
+                AudioInspectorUtility.AddWeightedClip(serialized);
+            }
+
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
             CollectionAssert.AreEqual(new[] { 0f, 1f }, Weights(first));
@@ -221,7 +247,11 @@ namespace YLFramework.Tests.Audio
             CollectionAssert.AreEqual(new[] { 7f, 0f, 1f }, Weights(second));
             Undo.IncrementCurrentGroup();
             var removeGroup = Undo.GetCurrentGroup();
-            using (var serialized = new SerializedObject(new Object[] { first, second })) AudioInspectorUtility.RemoveWeightedClip(serialized, 0);
+            using (var serialized = new SerializedObject(new Object[] { first, second }))
+            {
+                AudioInspectorUtility.RemoveWeightedClip(serialized, 0);
+            }
+
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(removeGroup);
             CollectionAssert.AreEqual(new[] { 1f }, Weights(first));
@@ -260,11 +290,19 @@ namespace YLFramework.Tests.Audio
             var original = Weights(source);
             var instance = Own((GameObject)PrefabUtility.InstantiatePrefab(prefab));
             var emitter = Own(instance.GetComponentInChildren<AudioEmitter>(true));
-            using (var serialized = new SerializedObject(emitter)) AudioInspectorUtility.AddWeightedClip(serialized);
+            using (var serialized = new SerializedObject(emitter))
+            {
+                AudioInspectorUtility.AddWeightedClip(serialized);
+            }
+
             Assert.AreEqual(original.Length + 1, Weights(emitter).Length);
             Assert.AreEqual(1f, Weights(emitter)[original.Length]);
             Assert.IsTrue(PrefabUtility.HasPrefabInstanceAnyOverrides(instance, false));
-            using (var serialized = new SerializedObject(emitter)) Assert.IsTrue(serialized.FindProperty("weightedClips").prefabOverride);
+            using (var serialized = new SerializedObject(emitter))
+            {
+                Assert.IsTrue(serialized.FindProperty("weightedClips").prefabOverride);
+            }
+
             CollectionAssert.AreEqual(original, Weights(source));
         }
 
@@ -299,7 +337,9 @@ namespace YLFramework.Tests.Audio
                 Assert.AreSame(groups[0], serialized.FindProperty("outputRoute").FindPropertyRelative("Group").objectReferenceValue);
             }
             foreach (var type in new[] { typeof(AudioEmitter), typeof(AudioMusicPlayer) })
+            {
                 Assert.IsFalse(type.GetField("volume", BindingFlags.Instance | BindingFlags.NonPublic).IsDefined(typeof(UnityEngine.RangeAttribute), false));
+            }
         }
     }
 }

@@ -17,7 +17,7 @@ namespace YLFramework.Foundation
     {
         private Coroutine _wrapper;
         private Action _callback;
-        private bool _ended;
+        private bool _isEnded;
 
         private CoroutineObservation(Action callback) => _callback = callback;
 
@@ -25,31 +25,53 @@ namespace YLFramework.Foundation
         /// Starter 是否返回了有效观察句柄；false 明确表示未取得可运行观察，不代表 producer 已结束。
         /// 此值记录启动结果，不承诺后续宿主存活。
         /// </summary>
-        public bool IsStarted { get; private set; }
+        public bool IsStarted
+        {
+            get; private set;
+        }
 
         /// <summary>通过 CoroutineStarter 的原 owner 路由启动观察；参数无效时不创建宿主。</summary>
         public static CoroutineObservation Observe(Coroutine producer, Action callback)
         {
-            if (producer == null) throw new ArgumentNullException(nameof(producer));
-            if (callback == null) throw new ArgumentNullException(nameof(callback));
+            if (producer == null)
+            {
+                throw new ArgumentNullException(nameof(producer));
+            }
+
+            if (callback == null)
+            {
+                throw new ArgumentNullException(nameof(callback));
+            }
+
             var observation = new CoroutineObservation(callback);
             var wrapper = CoroutineStarter.Start(observation.Wait(producer));
             observation.IsStarted = wrapper != null;
             if (wrapper == null)
             {
-                observation._ended = true;
+                observation._isEnded = true;
                 observation._callback = null;
             }
-            else if (observation._ended) CoroutineStarter.Stop(wrapper);
-            else observation._wrapper = wrapper;
+            else if (observation._isEnded)
+            {
+                CoroutineStarter.Stop(wrapper);
+            }
+            else
+            {
+                observation._wrapper = wrapper;
+            }
+
             return observation;
         }
 
         private IEnumerator Wait(Coroutine producer)
         {
             yield return producer;
-            if (_ended) yield break;
-            _ended = true;
+            if (_isEnded)
+            {
+                yield break;
+            }
+
+            _isEnded = true;
             _wrapper = null;
             var callback = _callback;
             _callback = null;
@@ -59,8 +81,12 @@ namespace YLFramework.Foundation
         /// <summary>幂等释放观察及 callback；不取消 producer，不创建或查找替代 Starter 宿主。</summary>
         public void Dispose()
         {
-            if (_ended) return;
-            _ended = true;
+            if (_isEnded)
+            {
+                return;
+            }
+
+            _isEnded = true;
             _callback = null;
             var wrapper = _wrapper;
             _wrapper = null;

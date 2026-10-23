@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Pool
+namespace YLFramework.Core.Pool
 {
     /// <summary>
     /// 对象池通用接口。

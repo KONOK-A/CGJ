@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using System.Runtime.ExceptionServices;
+using YLFramework.Core.Singleton;
+using YLFramework.Events;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 using UpdateManager = YLFramework.Foundation.UpdateManager;
-using YLFramework.Events;
-using YLFramework.Core.Singleton;
 
 namespace YLFramework.Core
 {
@@ -15,87 +15,151 @@ namespace YLFramework.Core
     {
         private static void EndPruneRound()
         {
-            pruneRound = null;
-            var subscription = pruneSubscription;
-            pruneSubscription = null;
-            subscription?.UnRegister();
+            _pruneRound = null;
+            var subscription = _pruneSubscription;
+            _pruneSubscription = null;
+            subscription?.Unregister();
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
         }
 
         private static void PruneDestroyedSessions(object round)
         {
             // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
-            pruneOwners.Clear();
-            pruneOwners.AddRange(sceneOwners);
-            foreach (var module in pruneOwners)
+            _pruneOwners.Clear();
+            _pruneOwners.AddRange(_sceneOwners);
+            foreach (var module in _pruneOwners)
             {
-                if (!ReferenceEquals(pruneRound, round)) break;
-                if (module.viewTransactions != 0) continue;
-                try { PruneDestroyed(module); }
-                catch (Exception error) { Debug.LogException(error); }
+                if (!ReferenceEquals(_pruneRound, round))
+                {
+                    break;
+                }
+
+                if (module.ViewTransactions != 0)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    PruneDestroyed(module);
+                }
+                catch (Exception error)
+                {
+                    Debug.LogException(error);
+                }
             }
-            pruneOwners.Clear();
+            _pruneOwners.Clear();
         }
 
         #region 添加 
         internal static void AddView(Module module, View view)
         {
             EnsureOwner(module);
-            if (!view) throw new ArgumentNullException(nameof(view));
-            if (view.IsRemoving || view.IsUnbinding) throw new InvalidOperationException("Cannot register a View during exit or unbinding.");
+            if (!view)
+            {
+                throw new ArgumentNullException(nameof(view));
+            }
+
+            if (view.IsRemoving || view.IsUnbinding)
+            {
+                throw new InvalidOperationException("Cannot register a View during exit or unbinding.");
+            }
+
             if (view.Module != null || view.Session != null)
             {
                 if (!ReferenceEquals(view.Module, module))
+                {
                     throw new InvalidOperationException("View is already owned by another Module.");
+                }
+
                 if (view.IsInitializing || view.IsRemoving)
+                {
                     throw new InvalidOperationException("Cannot register a View during its lifecycle callback.");
-                if (HasRegistration(module, view, view.Session)) return;
+                }
+
+                if (HasRegistration(module, view, view.Session))
+                {
+                    return;
+                }
+
                 throw new InvalidOperationException("View owner and registration do not match.");
             }
             int id = view.GetInstanceID();
-            if (module.ownedViews.ContainsKey(id) ||
-                (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var existing) && existing.ContainsKey(id)))
+            if (module.OwnedViews.ContainsKey(id) ||
+                (!string.IsNullOrEmpty(view.AssetName) && module.Views.TryGetValue(view.AssetName, out var existing) && existing.ContainsKey(id)))
+            {
                 throw new InvalidOperationException($"View ID {id} is already registered.");
+            }
+
             Type type = view.GetType();
-            if (module.type_views.TryGetValue(type, out var typed) && typed.Exists(item => ReferenceEquals(item, view)))
+            if (module.TypeViews.TryGetValue(type, out var typed) && typed.Exists(item => ReferenceEquals(item, view)))
+            {
                 throw new InvalidOperationException("View type index already contains this instance.");
+            }
+
             view.RegisteredId = id;
             view.Session = new object();
             view.LastSession = view.Session;
             view.Module = module;
-            module.ownedViews.Add(id, view);
+            module.OwnedViews.Add(id, view);
             if (!string.IsNullOrEmpty(view.AssetName))
             {
-                if (!module.views.TryGetValue(view.AssetName, out var named))
-                    module.views.Add(view.AssetName, named = new Dictionary<int, View>());
+                if (!module.Views.TryGetValue(view.AssetName, out var named))
+                {
+                    module.Views.Add(view.AssetName, named = new Dictionary<int, View>());
+                }
+
                 named.Add(id, view);
             }
-            if (typed == null) module.type_views.Add(type, typed = new List<View>());
+            if (typed == null)
+            {
+                module.TypeViews.Add(type, typed = new List<View>());
+            }
+
             typed.Add(view);
             TrackScene(module, view);
         }
 
         internal static void EnsureOwner(Module module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
             if (!SingletonSessionState.CanRunExecution)
+            {
                 throw new InvalidOperationException("Views cannot be acquired outside an active execution session.");
+            }
+
             module.EnsureCanAddObjects();
             if (!ReferenceEquals(ModuleManager.GetModule(module.ModuleName), module) ||
                 (module.State != ModuleState.Starting && module.State != ModuleState.Running))
+            {
                 throw new InvalidOperationException("View requires a registered Starting or Running Module.");
+            }
         }
 
         private static bool HasRegistration(Module module, View view, object session)
         {
             if (!(session != null && ReferenceEquals(view.Module, module) && ReferenceEquals(view.Session, session) &&
-                module.ownedViews.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view) &&
-                (string.IsNullOrEmpty(view.AssetName) || (module.views.TryGetValue(view.AssetName, out var named) &&
+                module.OwnedViews.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view) &&
+                (string.IsNullOrEmpty(view.AssetName) || (module.Views.TryGetValue(view.AssetName, out var named) &&
                     named.TryGetValue(view.RegisteredId, out var byName) && ReferenceEquals(byName, view))) &&
-                module.type_views.TryGetValue(view.GetType(), out var typed))) return false;
+                module.TypeViews.TryGetValue(view.GetType(), out var typed)))
+            {
+                return false;
+            }
+
             int count = 0;
             foreach (var item in typed)
-                if (ReferenceEquals(item, view)) count++;
+            {
+                if (ReferenceEquals(item, view))
+                {
+                    count++;
+                }
+            }
+
             return count == 1;
         }
 
@@ -105,7 +169,11 @@ namespace YLFramework.Core
 
         internal static void RemoveView(Module module, View view)
         {
-            if (ReferenceEquals(view, null)) return;
+            if (ReferenceEquals(view, null))
+            {
+                return;
+            }
+
             RemoveView(module, view, view.Session);
         }
 
@@ -116,51 +184,119 @@ namespace YLFramework.Core
         {
             if (module == null || ReferenceEquals(view, null) || session == null ||
                 !ReferenceEquals(view.Module, module) || !ReferenceEquals(view.Session, session) ||
-                !module.ownedViews.TryGetValue(view.RegisteredId, out var registered) || !ReferenceEquals(registered, view)) return;
-            if (view.IsRemoving) return;
+                !module.OwnedViews.TryGetValue(view.RegisteredId, out var registered) || !ReferenceEquals(registered, view))
+            {
+                return;
+            }
+
+            if (view.IsRemoving)
+            {
+                return;
+            }
+
             if (view.IsInitializing || view.IsUnbinding || (view.IsAttaching && !rollback))
+            {
                 throw new InvalidOperationException("Cannot close a View during initialization, attachment or unbinding.");
-            if (!rollback && !destroyed) EnsureNoOpeningPanelRetired(module, view, session);
-            bool notify = view.loaded;
+            }
+
+            if (!rollback && !destroyed)
+            {
+                EnsureNoOpeningPanelRetired(module, view, session);
+            }
+
+            bool notify = view.IsSessionLoaded;
             view.IsRemoving = true;
-            view.loaded = false;
-            module.viewTransactions++;
+            view.IsSessionLoaded = false;
+            module.ViewTransactions++;
             var errors = new List<Exception>();
-            bool damaged = view.DiscardOnExit || (view is Panel policy && !policy.EffectiveSettings.CacheOnClose);
+            bool damaged = view.DiscardOnExit || (view is Panel policy && !policy.EffectiveSettings.cacheOnClose);
             bool backend = view.UsesBackend;
             bool nestedBackend = backend && !ReferenceEquals(view.BackendRoot, null);
             GameObject instance = backend ? view.BackendInstance : (!destroyed && view ? view.gameObject : null);
             var instanceLease = view.BackendLease;
             // 卸载中的场景实例可能尚未变为 fake-null，但已不能归还缓存。
             if (backend && (destroyed || (instance && (!instance.scene.IsValid() || !instance.scene.isLoaded))))
+            {
                 damaged = true;
+            }
+
             if (backend)
+            {
                 foreach (var child in Snapshot(module))
+                {
                     if (!ReferenceEquals(child.Key, view) && ReferenceEquals(child.Key.BackendRoot, view) &&
                         ReferenceEquals(child.Key.BackendRootSession, session))
                     {
-                        try { RemoveViewCore(module, child.Key, child.Value, !child.Key, !child.Key.UsesBackend, rollback); }
-                        catch (Exception error) { errors.Add(error); }
+                        try
+                        {
+                            RemoveViewCore(module, child.Key, child.Value, !child.Key, !child.Key.UsesBackend, rollback);
+                        }
+                        catch (Exception error)
+                        {
+                            errors.Add(error);
+                        }
                     }
-            try { view.StopEvents(); }
-            catch (Exception error) { errors.Add(error); damaged = true; }
-            if (notify && view.onViewRemove != null)
-                foreach (Action observer in view.onViewRemove.GetInvocationList())
-                {
-                    try { observer(); }
-                    catch (Exception error) { errors.Add(error); }
                 }
-            try { view.OnRemove(); }
-            catch (Exception error) { errors.Add(error); damaged = true; }
-            try { view.DetachModel(); }
-            catch (Exception error) { errors.Add(error); damaged = true; }
+            }
+
+            try
+            {
+                view.StopEvents();
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+                damaged = true;
+            }
+            if (notify && view.ViewRemoved != null)
+            {
+                foreach (Action observer in view.ViewRemoved.GetInvocationList())
+                {
+                    try
+                    {
+                        observer();
+                    }
+                    catch (Exception error)
+                    {
+                        errors.Add(error);
+                    }
+                }
+            }
+
+            try
+            {
+                view.OnRemove();
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+                damaged = true;
+            }
+            try
+            {
+                view.DetachModel();
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+                damaged = true;
+            }
             List<CorePrefabLease> panelSources = null;
-            try { PanelManager.ReleaseView(view, out panelSources, rollback); }
-            catch (Exception error) { errors.Add(error); damaged = true; }
+            try
+            {
+                PanelManager.ReleaseView(view, out panelSources, rollback);
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+                damaged = true;
+            }
             damaged |= view.DiscardOnExit;
             if (damaged && !backend && !ReferenceEquals(view.BackendRoot, null) &&
                 ReferenceEquals(view.BackendRoot.Session, view.BackendRootSession))
+            {
                 view.BackendRoot.DiscardOnExit = true;
+            }
 
             // 撤销当前会话后仍保持Removing，直到实例处理结束，禁止OnDisable重入复活。
             DetachIndexes(module, view, session);
@@ -169,43 +305,86 @@ namespace YLFramework.Core
                 if (!preserveInstance)
                 {
                     // 独立取得、挂在另一取得根下的实例仍独立归还，不能留在外层缓存子树中被再次纳管。
-                    if (nestedBackend && instance) instance.transform.SetParent(null, true);
+                    if (nestedBackend && instance)
+                    {
+                        instance.transform.SetParent(null, true);
+                    }
+
                     if (backend && instanceLease != null)
                     {
-                        if (damaged) instanceLease.Discard();
-                        else instanceLease.Return();
+                        if (damaged)
+                        {
+                            instanceLease.Discard();
+                        }
+                        else
+                        {
+                            instanceLease.Return();
+                        }
                     }
                     else if (instance)
                     {
                         instance.SetActive(false);
-                        if (backend && damaged) UnityEngine.Object.Destroy(instance);
+                        if (backend && damaged)
+                        {
+                            UnityEngine.Object.Destroy(instance);
+                        }
                     }
                 }
             }
             catch (Exception error)
             {
                 errors.Add(error);
-                try { instanceLease?.Discard(); }
-                catch (Exception discardError) { errors.Add(discardError); }
+                try
+                {
+                    instanceLease?.Discard();
+                }
+                catch (Exception discardError)
+                {
+                    errors.Add(discardError);
+                }
                 if (backend && instance)
                 {
-                    try { UnityEngine.Object.Destroy(instance); }
-                    catch (Exception discardError) { errors.Add(discardError); }
+                    try
+                    {
+                        UnityEngine.Object.Destroy(instance);
+                    }
+                    catch (Exception discardError)
+                    {
+                        errors.Add(discardError);
+                    }
                 }
             }
-            try { PanelManager.ReleaseSources(panelSources); }
-            catch (Exception error) { errors.Add(error); }
+            try
+            {
+                PanelManager.ReleaseSources(panelSources);
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+            }
             view.IsRemoving = false;
-            module.viewTransactions--;
+            module.ViewTransactions--;
             if (notify)
             {
-                try { EventManager.TriggerEventAll(CoreEvents.ON_REMOVE_VIEW, view); }
-                catch (Exception error) { errors.Add(error); }
+                try
+                {
+                    EventManager.TriggerEventAll(CoreEvents.ViewRemoved, view);
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
                 // 广播可以复用同一组件；不把旧完成钩子派发给已开启过的新会话。
                 if (ReferenceEquals(view.LastSession, session))
                 {
-                    try { view.NotifyClosed(); }
-                    catch (Exception error) { errors.Add(error); }
+                    try
+                    {
+                        view.NotifyClosed();
+                    }
+                    catch (Exception error)
+                    {
+                        errors.Add(error);
+                    }
                 }
             }
             ThrowCleanupErrors(errors);
@@ -213,22 +392,38 @@ namespace YLFramework.Core
 
         private static void DetachIndexes(Module module, View view, object session)
         {
-            if (!ReferenceEquals(view.Session, session) || !ReferenceEquals(view.Module, module)) return;
-            if (module.ownedViews.TryGetValue(view.RegisteredId, out var owned) && ReferenceEquals(owned, view))
-                module.ownedViews.Remove(view.RegisteredId);
-            if (!string.IsNullOrEmpty(view.AssetName) && module.views.TryGetValue(view.AssetName, out var named))
+            if (!ReferenceEquals(view.Session, session) || !ReferenceEquals(view.Module, module))
+            {
+                return;
+            }
+
+            if (module.OwnedViews.TryGetValue(view.RegisteredId, out var owned) && ReferenceEquals(owned, view))
+            {
+                module.OwnedViews.Remove(view.RegisteredId);
+            }
+
+            if (!string.IsNullOrEmpty(view.AssetName) && module.Views.TryGetValue(view.AssetName, out var named))
             {
                 if (named.TryGetValue(view.RegisteredId, out var registered) && ReferenceEquals(registered, view))
+                {
                     named.Remove(view.RegisteredId);
-                if (named.Count == 0) module.views.Remove(view.AssetName);
+                }
+
+                if (named.Count == 0)
+                {
+                    module.Views.Remove(view.AssetName);
+                }
             }
             Type type = view.GetType();
-            if (module.type_views.TryGetValue(type, out var typed))
+            if (module.TypeViews.TryGetValue(type, out var typed))
             {
                 typed.RemoveAll(item => ReferenceEquals(item, view));
-                if (typed.Count == 0) module.type_views.Remove(type);
+                if (typed.Count == 0)
+                {
+                    module.TypeViews.Remove(type);
+                }
             }
-            view.onViewRemove = null;
+            view.ViewRemoved = null;
             view.AssetName = null;
             view.UsesBackend = false;
             view.BackendInstance = null;
@@ -239,11 +434,15 @@ namespace YLFramework.Core
             view.DiscardOnExit = false;
             view.Module = null;
             view.Session = null;
-            if (view is Panel panel) panel.EndPanelSession();
-            if (module.ownedViews.Count == 0)
+            if (view is Panel panel)
             {
-                sceneOwners.Remove(module);
-                if (sceneOwners.Count == 0)
+                panel.EndPanelSession();
+            }
+
+            if (module.OwnedViews.Count == 0)
+            {
+                _sceneOwners.Remove(module);
+                if (_sceneOwners.Count == 0)
                 {
                     EndPruneRound();
                 }
@@ -252,23 +451,41 @@ namespace YLFramework.Core
 
         internal static void ThrowCleanupErrors(List<Exception> errors)
         {
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
-            if (errors.Count > 1) throw new AggregateException("View cleanup failed.", errors).Flatten();
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
+            if (errors.Count > 1)
+            {
+                throw new AggregateException("View cleanup failed.", errors).Flatten();
+            }
         }
 
         private static void EnsureNoOpeningPanelRetired(Module module, View root, object session)
         {
-            foreach (var candidate in module.ownedViews.Values)
+            foreach (var candidate in module.OwnedViews.Values)
             {
-                if (!(candidate is Panel panel) || panel.OpeningSession == null || !ReferenceEquals(panel.OpeningSession, panel.Session)) continue;
+                if (!(candidate is Panel panel) || panel.OpeningSession == null || !ReferenceEquals(panel.OpeningSession, panel.Session))
+                {
+                    continue;
+                }
+
                 var current = candidate;
                 var currentSession = candidate.Session;
                 while (!ReferenceEquals(current, null))
                 {
                     if (ReferenceEquals(current, root) && ReferenceEquals(currentSession, session))
+                    {
                         throw new InvalidOperationException("OnOpen 期间不能关闭当前 Panel 或退役其 backend 祖先。");
+                    }
+
                     var parent = current.BackendRoot;
-                    if (ReferenceEquals(parent, null) || !ReferenceEquals(parent.Session, current.BackendRootSession)) break;
+                    if (ReferenceEquals(parent, null) || !ReferenceEquals(parent.Session, current.BackendRootSession))
+                    {
+                        break;
+                    }
+
                     currentSession = current.BackendRootSession;
                     current = parent;
                 }
@@ -288,11 +505,15 @@ namespace YLFramework.Core
             ClearSessions(module, Snapshot(module));
         }
 
-        internal static void ClearView(Module module, string asset_name)
+        internal static void ClearView(Module module, string assetName)
         {
-            if (asset_name == null) throw new ArgumentNullException(nameof(asset_name));
+            if (assetName == null)
+            {
+                throw new ArgumentNullException(nameof(assetName));
+            }
+
             var sessions = Snapshot(module);
-            sessions.RemoveAll(item => item.Key.AssetName != asset_name);
+            sessions.RemoveAll(item => item.Key.AssetName != assetName);
             ClearSessions(module, sessions);
         }
 
@@ -305,10 +526,16 @@ namespace YLFramework.Core
 
         internal static List<KeyValuePair<View, object>> Snapshot(Module module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
-            var sessions = new List<KeyValuePair<View, object>>(module.ownedViews.Count);
-            foreach (var view in module.ownedViews.Values)
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
+            var sessions = new List<KeyValuePair<View, object>>(module.OwnedViews.Count);
+            foreach (var view in module.OwnedViews.Values)
+            {
                 sessions.Add(new KeyValuePair<View, object>(view, view.Session));
+            }
             // 取得根先退出，子会话不单独改变缓存子树的activeSelf。
             sessions.Sort((left, right) => right.Key.UsesBackend.CompareTo(left.Key.UsesBackend));
             return sessions;
@@ -318,27 +545,53 @@ namespace YLFramework.Core
         {
             // 批量出口先完整预检，不能在后面的受保护会话报错前先归还前面的 checkout。
             foreach (var session in sessions)
-                if (session.Key) EnsureNoOpeningPanelRetired(module, session.Key, session.Value);
+            {
+                if (session.Key)
+                {
+                    EnsureNoOpeningPanelRetired(module, session.Key, session.Value);
+                }
+            }
+
             var errors = new List<Exception>();
             foreach (var session in sessions)
             {
-                try { RemoveView(module, session.Key, session.Value, !session.Key); }
-                catch (Exception error) { errors.Add(error); }
+                try
+                {
+                    RemoveView(module, session.Key, session.Value, !session.Key);
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
             }
             ThrowCleanupErrors(errors);
         }
 
         private static void PruneDestroyed(Module module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
             List<KeyValuePair<View, object>> dead = null;
-            foreach (var view in module.ownedViews.Values)
+            foreach (var view in module.OwnedViews.Values)
+            {
                 if (!view)
                 {
-                    if (dead == null) dead = new List<KeyValuePair<View, object>>();
+                    if (dead == null)
+                    {
+                        dead = new List<KeyValuePair<View, object>>();
+                    }
+
                     dead.Add(new KeyValuePair<View, object>(view, view.Session));
                 }
-            if (dead != null) ClearSessions(module, dead);
+            }
+
+            if (dead != null)
+            {
+                ClearSessions(module, dead);
+            }
         }
 
         #endregion

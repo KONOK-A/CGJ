@@ -15,7 +15,11 @@ namespace YLFramework.BuffSystem
             var ids = new List<int>();
             foreach (var effect in (List<EffectData>)value)
             {
-                if (!effect) throw new InvalidOperationException("Buff效果引用为空，不能导出。");
+                if (!effect)
+                {
+                    throw new InvalidOperationException("Buff效果引用为空，不能导出。");
+                }
+
                 ids.Add(effect.id);
             }
             return JsonConvert.SerializeObject(ids);
@@ -29,14 +33,26 @@ namespace YLFramework.BuffSystem
             foreach (var guid in UnityEditor.AssetDatabase.FindAssets("t:EffectData"))
             {
                 var effect = UnityEditor.AssetDatabase.LoadAssetAtPath<EffectData>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
-                if (!effect || !needed.Contains(effect.id)) continue;
-                if (assets.ContainsKey(effect.id)) throw new InvalidOperationException($"效果ID歧义: {effect.id}");
+                if (!effect || !needed.Contains(effect.id))
+                {
+                    continue;
+                }
+
+                if (assets.ContainsKey(effect.id))
+                {
+                    throw new InvalidOperationException($"效果ID歧义: {effect.id}");
+                }
+
                 assets.Add(effect.id, effect);
             }
             var result = new List<EffectData>();
             foreach (var id in ids)
             {
-                if (!assets.TryGetValue(id, out var effect)) throw new InvalidOperationException($"效果ID未找到: {id}");
+                if (!assets.TryGetValue(id, out var effect))
+                {
+                    throw new InvalidOperationException($"效果ID未找到: {id}");
+                }
+
                 result.Add(effect);
             }
             return result;

@@ -8,13 +8,21 @@ namespace YLFramework.Samples.HybridCLR.HotUpdate
     [Preserve]
     public sealed class ExampleMessage : Model
     {
-        public string Text { get; set; }
+        public string Text
+        {
+            get; set;
+        }
     }
 
     [Preserve]
     public sealed class ExampleModule : Module
     {
-        public override string ProjectName { get => HybridCLRExampleState.ProjectId; set { } }
+        public override string ProjectName
+        {
+            get => HybridCLRExampleState.ProjectId; set
+            {
+            }
+        }
 #pragma warning disable CS0672, CS0618
         public override Dictionary<string, Type> PreloadConfigTables => new Dictionary<string, Type>
         {
@@ -24,7 +32,11 @@ namespace YLFramework.Samples.HybridCLR.HotUpdate
         public override void OnStart()
         {
             var message = GetModel<ExampleMessage>(1);
-            if (message == null) throw new InvalidOperationException("The YL Core configuration did not create the sample Model.");
+            if (message == null)
+            {
+                throw new InvalidOperationException("The YL Core configuration did not create the sample Model.");
+            }
+
             HybridCLRExampleState.Message = VersionInfo.Version + ": " + message.Text + "; dependency-count=" + VersionInfo.Count(new List<int> { 1, 2 });
             HybridCLRExampleState.Async = VersionInfo.DescribeAsync();
         }

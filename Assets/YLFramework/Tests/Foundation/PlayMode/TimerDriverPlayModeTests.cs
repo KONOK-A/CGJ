@@ -18,13 +18,13 @@ namespace YLFramework.Foundation.Tests
     {
         private const BindingFlags PrivateStatic = BindingFlags.NonPublic | BindingFlags.Static;
         private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
-        private readonly List<Component> hosts = new();
-        private readonly List<GameObject> probes = new();
-        private bool isolated;
-        private float previousTimeScale;
-        private bool previousStopping;
-        private bool previousQuitting;
-        private object previousSession;
+        private readonly List<Component> _hosts = new();
+        private readonly List<GameObject> _probes = new();
+        private bool _isIsolated;
+        private float _previousTimeScale;
+        private bool _wasStopping;
+        private bool _wasQuitting;
+        private object _previousSession;
         private static Type DriverType => typeof(Timer).Assembly.GetType("YLFramework.Timing.Internal.TimerDriver", true);
         private static Type SessionType => typeof(Timer).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState", true);
         private static Component[] FindHosts() => Object.FindObjectsByType(DriverType,
@@ -33,39 +33,61 @@ namespace YLFramework.Foundation.Tests
         [SetUp]
         public void SetUp()
         {
-            isolated = false;
+            _isIsolated = false;
             Assert.That(FindHosts(), Is.Empty, "不接管用户已有 TimerDriver，包括停用宿主。");
             Assert.That(DriverType.GetField("_instance", PrivateStatic).GetValue(null), Is.Null,
                 "不接管尚未释放的静态 owner。");
-            previousTimeScale = Time.timeScale;
-            previousStopping = (bool)SessionType.GetField("_executionStopping", PrivateStatic).GetValue(null);
-            previousQuitting = (bool)SessionType.GetField("_isApplicationQuitting", PrivateStatic).GetValue(null);
-            previousSession = SessionType.GetProperty("ExecutionSession", PrivateStatic).GetValue(null);
+            _previousTimeScale = Time.timeScale;
+            _wasStopping = (bool)SessionType.GetField("_isExecutionStopping", PrivateStatic).GetValue(null);
+            _wasQuitting = (bool)SessionType.GetField("_isApplicationQuitting", PrivateStatic).GetValue(null);
+            _previousSession = SessionType.GetProperty("ExecutionSession", PrivateStatic).GetValue(null);
             Assert.That(SessionType.GetProperty("CanRunExecution", PrivateStatic).GetValue(null), Is.True,
                 "测试不擅自打开用户已关闭的执行门禁。");
-            isolated = true;
+            _isIsolated = true;
             Time.timeScale = 1;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!isolated) yield break;
+            if (!_isIsolated)
+            {
+                yield break;
+            }
+
             try
             {
-                foreach (var probe in probes) if (probe) Object.Destroy(probe);
-                probes.Clear();
+                foreach (var probe in _probes)
+                {
+                    if (probe)
+                    {
+                        Object.Destroy(probe);
+                    }
+                }
+
+                _probes.Clear();
                 var owner = DriverType.GetField("_instance", PrivateStatic).GetValue(null) as Component;
-                if (!ReferenceEquals(owner, null) && hosts.Contains(owner)) Timer.Shutdown();
-                foreach (var host in hosts) if (host) Object.Destroy(host.gameObject);
-                hosts.Clear();
+                if (!ReferenceEquals(owner, null) && _hosts.Contains(owner))
+                {
+                    Timer.Shutdown();
+                }
+
+                foreach (var host in _hosts)
+                {
+                    if (host)
+                    {
+                        Object.Destroy(host.gameObject);
+                    }
+                }
+
+                _hosts.Clear();
             }
             finally
             {
-                Time.timeScale = previousTimeScale;
-                SessionType.GetField("<ExecutionSession>k__BackingField", PrivateStatic).SetValue(null, previousSession);
-                SessionType.GetField("_executionStopping", PrivateStatic).SetValue(null, previousStopping);
-                SessionType.GetField("_isApplicationQuitting", PrivateStatic).SetValue(null, previousQuitting);
+                Time.timeScale = _previousTimeScale;
+                SessionType.GetField("<ExecutionSession>k__BackingField", PrivateStatic).SetValue(null, _previousSession);
+                SessionType.GetField("_isExecutionStopping", PrivateStatic).SetValue(null, _wasStopping);
+                SessionType.GetField("_isApplicationQuitting", PrivateStatic).SetValue(null, _wasQuitting);
             }
             yield return null;
         }
@@ -73,35 +95,49 @@ namespace YLFramework.Foundation.Tests
         private TimerHandle Post(Func<TimerHandle> post)
         {
             var before = FindHosts();
-            Assert.That(before.All(hosts.Contains), Is.True, "并行出现的非自有宿主不能被测试接管。");
-            try { return post(); }
+            Assert.That(before.All(_hosts.Contains), Is.True, "并行出现的非自有宿主不能被测试接管。");
+            try
+            {
+                return post();
+            }
             finally
             {
                 foreach (var host in FindHosts())
-                    if (!before.Contains(host) && !hosts.Contains(host)) hosts.Add(host);
+                {
+                    if (!before.Contains(host) && !_hosts.Contains(host))
+                    {
+                        _hosts.Add(host);
+                    }
+                }
             }
         }
 
         private TimerDriverPhaseProbe CreateProbe()
         {
             var obj = new GameObject("YLTimer.TestPhaseProbe");
-            probes.Add(obj);
+            _probes.Add(obj);
             return obj.AddComponent<TimerDriverPhaseProbe>();
         }
 
         private static IEnumerator Until(Func<bool> condition)
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 3;
-            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "真实 Unity 帧未在期限内完成预期操作。");
         }
 
         private void AssertNoForeignExecutionHosts()
         {
-            Assert.That(FindHosts().All(hosts.Contains), Is.True, "不能 reset 非自有 TimerDriver。");
+            Assert.That(FindHosts().All(_hosts.Contains), Is.True, "不能 reset 非自有 TimerDriver。");
             foreach (var type in new[] { typeof(UpdateManager), typeof(CoroutineStarter) })
+            {
                 Assert.That(Object.FindObjectsByType(type, FindObjectsInactive.Include, FindObjectsSortMode.None),
                     Is.Empty, "会话 reset/quit 不得影响其他共享执行宿主：" + type.Name);
+            }
         }
 
         private void ResetTimerSessionOnly()
@@ -141,7 +177,11 @@ namespace YLFramework.Foundation.Tests
                 Assert.That(scope.Resume("missing"), Is.False);
                 scope.CancelAll();
             }
-            using (var slot = new ReusableTimer()) Assert.That(slot.Current.IsActive, Is.False);
+            using (var slot = new ReusableTimer())
+            {
+                Assert.That(slot.Current.IsActive, Is.False);
+            }
+
             var group = new TimerHandleGroup();
             group.Add(empty);
             group.CancelAll();
@@ -164,7 +204,11 @@ namespace YLFramework.Foundation.Tests
             var firedAtAnchor = false;
             probe.OnLate = () =>
             {
-                if (registeredFrame >= 0) return;
+                if (registeredFrame >= 0)
+                {
+                    return;
+                }
+
                 registeredFrame = Time.frameCount;
                 Post(() => Timer.DelayFrames(1, () => frameOne = Time.frameCount));
                 Post(() => Timer.Delay(0, () => zeroSeconds = Time.frameCount));
@@ -173,7 +217,11 @@ namespace YLFramework.Foundation.Tests
             };
             probe.OnUpdate = () =>
             {
-                if (registeredFrame < 0 || firstUpdate >= 0) return;
+                if (registeredFrame < 0 || firstUpdate >= 0)
+                {
+                    return;
+                }
+
                 firstUpdate = Time.frameCount;
                 firedAtAnchor = frameOne >= 0 || zeroSeconds >= 0 || zeroFrames >= 0;
             };
@@ -200,7 +248,11 @@ namespace YLFramework.Foundation.Tests
                 parentFrame = Time.frameCount;
                 Post(() => Timer.Delay(0, () => secondsFrame = Time.frameCount));
                 Post(() => Timer.DelayFrames(0, () => framesFrame = Time.frameCount));
-                Post(() => Timer.RepeatFrames(0, 1, tick => { ticks.Add(tick); tickFrames.Add(Time.frameCount); }, count: 2));
+                Post(() => Timer.RepeatFrames(0, 1, tick =>
+                {
+                    ticks.Add(tick);
+                    tickFrames.Add(Time.frameCount);
+                }, count: 2));
                 inline = secondsFrame >= 0 || framesFrame >= 0 || ticks.Count != 0;
             }));
             yield return Until(() => secondsFrame >= 0 && framesFrame >= 0 && ticks.Count == 2);
@@ -225,17 +277,25 @@ namespace YLFramework.Foundation.Tests
             var remainingAtAnchor = -1d;
             var firedAtAnchor = false;
             TimerHandle handle = default;
-            const double delay = 0.05;
+            const double Delay = 0.05;
             probe.OnFixed = () =>
             {
-                if (registered) return;
+                if (registered)
+                {
+                    return;
+                }
+
                 registered = true;
                 inFixed = Time.inFixedTimeStep;
-                handle = Post(() => Timer.Delay(delay, () => completed = Time.unscaledTimeAsDouble));
+                handle = Post(() => Timer.Delay(Delay, () => completed = Time.unscaledTimeAsDouble));
             };
             probe.OnUpdate = () =>
             {
-                if (!registered || anchor >= 0) return;
+                if (!registered || anchor >= 0)
+                {
+                    return;
+                }
+
                 anchor = Time.unscaledTimeAsDouble;
                 remainingAtAnchor = handle.RemainingSeconds;
                 firedAtAnchor = completed >= 0;
@@ -243,8 +303,8 @@ namespace YLFramework.Foundation.Tests
             yield return Until(() => completed >= 0);
             Assert.That(inFixed, Is.True);
             Assert.That(firedAtAnchor, Is.False);
-            Assert.That(remainingAtAnchor, Is.EqualTo(delay).Within(0.000001));
-            Assert.That(completed, Is.GreaterThanOrEqualTo(anchor + delay - 0.000001));
+            Assert.That(remainingAtAnchor, Is.EqualTo(Delay).Within(0.000001));
+            Assert.That(completed, Is.GreaterThanOrEqualTo(anchor + Delay - 0.000001));
         }
 
         [UnityTest]
@@ -424,7 +484,10 @@ namespace YLFramework.Foundation.Tests
             finally
             {
                 SceneManager.SetActiveScene(previous);
-                if (scene.IsValid() && scene.isLoaded) SceneManager.UnloadSceneAsync(scene);
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    SceneManager.UnloadSceneAsync(scene);
+                }
             }
         }
     }

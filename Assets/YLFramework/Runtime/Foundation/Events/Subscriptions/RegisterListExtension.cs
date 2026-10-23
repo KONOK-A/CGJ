@@ -1,7 +1,7 @@
 namespace YLFramework.Events
 {
     /// <summary>
-    /// <see cref="IUnRegisterList"/> 的扩展：批量收集与统一注销。
+    /// <see cref="IUnregisterList"/> 的扩展：批量收集与统一注销。
     /// </summary>
     public static class RegisterListExtension
     {
@@ -9,10 +9,10 @@ namespace YLFramework.Events
         /// 把一个注销句柄加入集合。
         /// </summary>
         /// <param name="self">要加入的注销句柄。</param>
-        /// <param name="unRegisterList">目标集合。</param>
-        public static void AddToUnRegisterList(this IUnRegister self, IUnRegisterList unRegisterList)
+        /// <param name="owner">目标集合。</param>
+        public static void AddToUnregisterList(this IUnregister self, IUnregisterList owner)
         {
-            unRegisterList.UnRegisterList.Add(self);
+            owner.UnregisterList.Add(self);
         }
 
         /// <summary>
@@ -23,25 +23,28 @@ namespace YLFramework.Events
         /// 集合已被清空，不会在下次调用时重复注销旧句柄。
         /// </summary>
         /// <param name="self">目标集合。</param>
-        public static void UnRegisterAll(this IUnRegisterList self)
+        public static void UnregisterAll(this IUnregisterList self)
         {
-            var list = self.UnRegisterList;
-            if (list.Count == 0) return;
+            var list = self.UnregisterList;
+            if (list.Count == 0)
+            {
+                return;
+            }
 
             var snapshot = SubscriptionCleanup.DetachAll(list);
-            foreach (var unRegister in snapshot)
+            foreach (var subscription in snapshot)
             {
-                unRegister?.UnRegister();
+                subscription?.Unregister();
             }
         }
 
         /// <summary>
         /// 尝试注销本轮全部句柄，保留失败项及回调中新加入项，最后统一报告异常。
-        /// 与旧 UnRegisterAll 的 fail-fast 行为不同，供必要所有权清理显式使用。
+        /// 与旧 UnregisterAll 的 fail-fast 行为不同，供必要所有权清理显式使用。
         /// </summary>
-        public static void UnRegisterAllRetainingFailures(this IUnRegisterList self)
+        public static void UnregisterAllRetainingFailures(this IUnregisterList self)
         {
-            SubscriptionCleanup.ReleaseAll(self.UnRegisterList, token => token?.UnRegister());
+            SubscriptionCleanup.ReleaseAll(self.UnregisterList, token => token?.Unregister());
         }
     }
 }

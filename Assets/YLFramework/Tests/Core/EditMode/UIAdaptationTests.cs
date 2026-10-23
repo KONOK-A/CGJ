@@ -67,7 +67,10 @@ namespace YLFramework.Core.Tests
                 InvokeLifecycle(adaptation, "Start");
                 Assert.That(rect.anchoredPosition.y, Is.EqualTo(37), "Wide-screen margin must not erase vertical layout.");
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -106,7 +109,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(adaptation.ReferenceResolution, Is.EqualTo(new Vector2(640, 480)));
                 Assert.That(adaptation.ManualMatch, Is.EqualTo(0.4f));
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -216,7 +222,11 @@ namespace YLFramework.Core.Tests
                 var adaptation = content.AddComponent<SafeAreaAdaptation>();
                 Canvas.ForceUpdateCanvases();
                 // EditMode 的 Screen 尺寸不一定等于 Overlay Canvas 的实际像素区域。
-                if (mode == RenderMode.ScreenSpaceOverlay) display = canvas.pixelRect.size;
+                if (mode == RenderMode.ScreenSpaceOverlay)
+                {
+                    display = canvas.pixelRect.size;
+                }
+
                 Assert.That(adaptation.Refresh(new Rect(80, 120, 640, 360), new Vector2(800, 600)), Is.True);
                 var corners = new Vector3[4];
                 rect.GetWorldCorners(corners);

@@ -14,7 +14,7 @@
 
 - 运行时：[`Runtime/Utilities/FSM/`](../../Runtime/Utilities/FSM/)
   - `Abstractions/`：`IState`、`IFsmOwner`、`MachineState`
-  - `Core/`：`FSM<TStateId>`
+  - `Core/`：`Fsm<TStateId>`
   - `States/`：`CustomState`、`AbstractState<TStateId>`
 - namespace：`YLFramework.FSM`；程序集：`YLFramework.Runtime`。有 asmdef 的使用者引用 Runtime 即可，不需要引用 `YLFramework.Core.Runtime` 或 XFFSM。
 
@@ -25,7 +25,7 @@
 ```csharp
 enum State { Idle, Move, Attack }
 
-var fsm = FSM<State>.Allocate();
+var fsm = Fsm<State>.Allocate();
 fsm.Init(null);                                     // 可选；仅实现 IFsmOwner 的宿主才能传 this
 
 fsm.State(State.Idle)
@@ -48,7 +48,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 - 注册与启动：`Init(owner)`、`AddState(id, state)`、`State(id)`（不存在时自动创建 `CustomState`）、`SetUp(startStateId)`。
 - 驱动：`Update()` / `LateUpdate()` / `FixedUpdate()` / `OnGUI()`，仅在 Running 时执行。
 - 切换：`ChangeState(id, reCurrentState = false)`（带重入保护）、`Pause()`、`Continue()`、`Continue(stateId)`。
-- 查询：`MachineState`、`IsRunning`、`IsPaused`、`CurrentStateID` / `CurrentState`、`PreviousStateID` / `PreviousState`、`HasState(id)`、`TryGetState(id, out state)`、`StateCount`。
+- 查询：`MachineState`、`IsRunning`、`IsPaused`、`CurrentStateId` / `CurrentState`、`PreviousStateId` / `PreviousState`、`HasState(id)`、`TryGetState(id, out state)`、`StateCount`。
 - 计时：`FrameCountOfCurrentState`、`SecondsOfCurrentState`。
 - 池化：`Allocate()` / `RecycleToCache()`（实现 `IOfPool` / `IPoolType`）。
 
@@ -67,7 +67,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 1. 校验：必须 Running、非切换中、目标已注册、`Condition()` 通过（目标与当前相同且 `reCurrentState == false` 时直接返回 false）。
 2. `旧状态.Exit()`。
-3. 更新 `CurrentState` / `PreviousStateID` / `CurrentStateID`。
+3. 更新 `CurrentState` / `PreviousStateId` / `CurrentStateId`。
 4. 触发 `OnStateChanged(previous, next)`。
 5. 重置 `FrameCountOfCurrentState = 1`、`SecondsOfCurrentState = 0`。
 6. `新状态.Enter()`。
@@ -128,10 +128,10 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 ## 主要类型
 
-- `FSM<TStateId>`：状态机主体（`Core/FSM.cs`）。
+- `Fsm<TStateId>`：状态机主体（`Core/Fsm.cs`），保留命名空间 `YLFramework.FSM`。
 - `IState`：状态契约；`Condition` 的语义见上。
 - `CustomState`：委托链式快速状态（未设置的委托不执行，重复设置以后一次为准）。
-- `AbstractState<TStateId>`：正式业务状态基类，提供 `MFsm` / `StateId` / `Owner` 字段，以及 `ChangeState`、`SecondsInState`、`FramesInState`、`GetOwner<T>()` 等 protected 便捷入口。
+- `AbstractState<TStateId>`：正式业务状态基类，提供 `StateMachine` / `StateId` / `Owner` 字段，以及 `ChangeState`、`SecondsInState`、`FramesInState`、`GetOwner<T>()` 等 protected 便捷入口。
 - `IFsmOwner`：宿主标记接口，允许为 null；不定义行为。
 - `MachineState`：`NotStart` / `Running` / `Stop`（Stop 表示已暂停，不是终止）。
 

@@ -29,6 +29,9 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 注册名称；null 或空字符串表示使用无名注册。
         /// </summary>
-        public string Name { get; set; }
+        public string Name
+        {
+            get; set;
+        }
     }
 }

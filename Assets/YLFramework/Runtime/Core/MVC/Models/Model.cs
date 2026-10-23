@@ -5,10 +5,10 @@ using YLFramework.Core.RoslynAnalyzers;
 namespace YLFramework.Core
 {
 
-    [ProtectedHierarchy(typeof(MonoBehaviour),typeof(View))]
+    [ProtectedHierarchy(typeof(MonoBehaviour), typeof(View))]
     public abstract class Model
     {
-        private long id = -1;
+        private long _id = -1;
         internal bool IsInitializing;
         internal bool IsExiting;
         [NonSerialized] internal object Registration;
@@ -20,20 +20,26 @@ namespace YLFramework.Core
         /// </summary>
         public long Id
         {
-            get => id;
+            get => _id;
             set
             {
-                if (Module != null && value != id)
+                if (Module != null && value != _id)
+                {
                     throw new InvalidOperationException("Cannot change the ID of a registered Model.");
-                id = value;
+                }
+
+                _id = value;
             }
         }
 
         /// <summary>
         /// 拥有者；初始化及退出回调期间有效，移除或初始化失败后为null。
         /// </summary>
-        public Module Module { get; internal set; }
-          
+        public Module Module
+        {
+            get; internal set;
+        }
+
         #endregion
 
         #region 方法
@@ -42,12 +48,16 @@ namespace YLFramework.Core
         /// <summary>
         /// 每次有效注册时调用一次；期间可查询自身，但注册尚未提交完成。
         /// </summary>  
-        public virtual void OnInit() { }
+        public virtual void OnInit()
+        {
+        }
 
         /// <summary>
         /// 移除Model时调用
         /// </summary>
-        public virtual void OnExit() { }
+        public virtual void OnExit()
+        {
+        }
 
         #endregion
 

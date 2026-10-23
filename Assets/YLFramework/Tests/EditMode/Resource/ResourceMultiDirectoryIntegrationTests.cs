@@ -12,9 +12,9 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public sealed class ResourceMultiDirectoryIntegrationTests
     {
-        private string root;
-        private ResourceProject project;
-        private bool createdModern;
+        private string _root;
+        private ResourceProject _project;
+        private bool _hasCreatedModern;
 
         [SetUp]
         public void SetUp()
@@ -24,38 +24,53 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 Assert.That(Directory.Exists(ResourceMultiDirectoryEvidence.Root) || File.Exists(ResourceMultiDirectoryEvidence.Root + ".meta"), Is.False);
                 Assert.That(AssetDatabase.CreateFolder(ResourceMultiDirectoryEvidence.FixtureRoot, "Modern"), Is.Not.Empty);
-                createdModern = true;
+                _hasCreatedModern = true;
             }
-            root = ResourceMultiDirectoryEvidence.Root + "/Integration-" + Guid.NewGuid().ToString("N");
-            Assert.That(AssetDatabase.CreateFolder(ResourceMultiDirectoryEvidence.Root, Path.GetFileName(root)), Is.Not.Empty);
-            foreach (var name in new[] { "Textures", "Materials", "Text" }) Assert.That(AssetDatabase.CreateFolder(root, name), Is.Not.Empty);
-            project = ResourceEditorOperations.CreateProject(root + "/Project.asset");
-            project.ProjectId = "multi-integration-" + Guid.NewGuid().ToString("N");
+            _root = ResourceMultiDirectoryEvidence.Root + "/Integration-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder(ResourceMultiDirectoryEvidence.Root, Path.GetFileName(_root)), Is.Not.Empty);
+            foreach (var name in new[] { "Textures", "Materials", "Text" })
+            {
+                Assert.That(AssetDatabase.CreateFolder(_root, name), Is.Not.Empty);
+            }
+
+            _project = ResourceEditorOperations.CreateProject(_root + "/Project.asset");
+            _project.projectId = "multi-integration-" + Guid.NewGuid().ToString("N");
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (project) Undo.ClearUndo(project);
-            if (!string.IsNullOrEmpty(root) && AssetDatabase.IsValidFolder(root)) Assert.That(AssetDatabase.DeleteAsset(root), Is.True);
-            if (createdModern && AssetDatabase.IsValidFolder(ResourceMultiDirectoryEvidence.Root) &&
+            if (_project)
+            {
+                Undo.ClearUndo(_project);
+            }
+
+            if (!string.IsNullOrEmpty(_root) && AssetDatabase.IsValidFolder(_root))
+            {
+                Assert.That(AssetDatabase.DeleteAsset(_root), Is.True);
+            }
+
+            if (_hasCreatedModern && AssetDatabase.IsValidFolder(ResourceMultiDirectoryEvidence.Root) &&
                 !Directory.EnumerateFileSystemEntries(ResourceMultiDirectoryEvidence.Root).Any())
+            {
                 Assert.That(AssetDatabase.DeleteAsset(ResourceMultiDirectoryEvidence.Root), Is.True);
-            createdModern = false;
+            }
+
+            _hasCreatedModern = false;
         }
 
         [Test]
         public void CrossDirectoryDependencyIsAssignedOnceAcrossGroupsWithoutCollectingUnselectedText()
         {
             SharedGraph();
-            var map = ResourceBuildMap.Create(project);
+            var map = ResourceBuildMap.Create(_project);
             CollectionAssert.AreEquivalent(new[] { "materials/A.mat", "materials/B.mat", "text/selected.txt" }, map.Assets.Select(x => x.Address.Path));
             Assert.That(map.Groups["main"].Count, Is.EqualTo(2), "同 Group 的材质与文本来自不同源目录。 ");
             var shared = map.Bundles.Single(x => x.IsShared);
-            CollectionAssert.AreEqual(new[] { root + "/Textures/Shared.asset" }, shared.AssetPaths);
+            CollectionAssert.AreEqual(new[] { _root + "/Textures/Shared.asset" }, shared.AssetPaths);
             var paths = map.Bundles.SelectMany(x => x.AssetPaths).ToArray();
-            Assert.That(paths.Count(x => x == root + "/Textures/Shared.asset"), Is.EqualTo(1));
-            Assert.That(paths, Does.Not.Contain(root + "/Text/unselected.txt"));
+            Assert.That(paths.Count(x => x == _root + "/Textures/Shared.asset"), Is.EqualTo(1));
+            Assert.That(paths, Does.Not.Contain(_root + "/Text/unselected.txt"));
             var a = map.Assets.Single(x => x.Address.Path == "materials/A.mat");
             var b = map.Assets.Single(x => x.Address.Path == "materials/B.mat");
             Assert.That(map.Bundles.Single(x => x.Name == a.BundleName).Dependencies, Does.Contain(shared.Name));
@@ -66,33 +81,33 @@ namespace YLFramework.Tests.ResourceBuild
         public void RemovingADependencyOnlyDirectoryRejectsTheGraphWithoutDeletingSelectionsOrSourceBytes()
         {
             SharedGraph();
-            var before = ResourceReleaseFixture.Snapshot(root);
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Materials", "materials"), (root + "/Text", "text"));
-            var error = Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(project));
-            Assert.That(error.Message, Does.Contain(root + "/Textures/Shared.asset"));
-            Assert.That(project.Groups.Single(x => x.Id == "main").Selections.Count, Is.EqualTo(2));
-            Assert.That(project.Groups.Single(x => x.Id == "other").Selections.Count, Is.EqualTo(1));
-            CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(root), "A dependency-range failure must not save a definition or rewrite source files/meta.");
+            var before = ResourceReleaseFixture.Snapshot(_root);
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Materials", "materials"), (_root + "/Text", "text"));
+            var error = Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(_project));
+            Assert.That(error.Message, Does.Contain(_root + "/Textures/Shared.asset"));
+            Assert.That(_project.groups.Single(x => x.id == "main").selections.Count, Is.EqualTo(2));
+            Assert.That(_project.groups.Single(x => x.id == "other").selections.Count, Is.EqualTo(1));
+            CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(_root), "A dependency-range failure must not save a definition or rewrite source files/meta.");
         }
 
         [Test]
         public void SimulationResolvesTheSameCanonicalIdentityAndAliasAfterDirectoryReordering()
         {
             SharedGraph();
-            var map = ResourceBuildMap.Create(project);
-            var simulation = new ResourceEditorSimulation(new[] { project });
+            var map = ResourceBuildMap.Create(_project);
+            var simulation = new ResourceEditorSimulation(new[] { _project });
             var expected = map.Assets.Single(x => x.Address.Path == "text/selected.txt");
-            var canonical = new ResourceAddress(project.ProjectId, "text/selected.txt");
-            var alias = new ResourceAddress(project.ProjectId, "message");
+            var canonical = new ResourceAddress(_project.projectId, "text/selected.txt");
+            var alias = new ResourceAddress(_project.projectId, "message");
             Assert.That(simulation.Resolve(canonical).AssetId, Is.EqualTo(expected.AssetId));
             Assert.That(simulation.Resolve(alias).AssetId, Is.EqualTo(expected.AssetId));
-            Assert.That(simulation.Load<TextAsset>(alias), Is.SameAs(AssetDatabase.LoadAssetAtPath<TextAsset>(root + "/Text/selected.txt")));
-            Assert.That(simulation.Load<Material>(new ResourceAddress(project.ProjectId, "materials/A.mat")),
-                Is.SameAs(AssetDatabase.LoadAssetAtPath<Material>(root + "/Materials/A.mat")));
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Text", "text"), (root + "/Materials", "materials"), (root + "/Textures", "textures"));
+            Assert.That(simulation.Load<TextAsset>(alias), Is.SameAs(AssetDatabase.LoadAssetAtPath<TextAsset>(_root + "/Text/selected.txt")));
+            Assert.That(simulation.Load<Material>(new ResourceAddress(_project.projectId, "materials/A.mat")),
+                Is.SameAs(AssetDatabase.LoadAssetAtPath<Material>(_root + "/Materials/A.mat")));
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Text", "text"), (_root + "/Materials", "materials"), (_root + "/Textures", "textures"));
             Assert.That(simulation.Resolve(alias).AssetId, Is.EqualTo(expected.AssetId));
-            CollectionAssert.AreEquivalent(map.Groups["main"], simulation.GetGroup(project.ProjectId, "main").Select(x => x.AssetId));
-            Assert.Throws<ArgumentException>(() => simulation.Resolve(new ResourceAddress(project.ProjectId, "text/unselected.txt")));
+            CollectionAssert.AreEquivalent(map.Groups["main"], simulation.GetGroup(_project.projectId, "main").Select(x => x.AssetId));
+            Assert.Throws<ArgumentException>(() => simulation.Resolve(new ResourceAddress(_project.projectId, "text/unselected.txt")));
             Assert.That(ResourceSystem.Current, Is.Null, "Simulation 不应初始化 Runtime。 ");
         }
 
@@ -100,79 +115,99 @@ namespace YLFramework.Tests.ResourceBuild
         public void SetSourceDirectoriesSupportsUndoAndOnlyExplicitSavePersistsTheNewPrefix()
         {
             var path = Text("selected.txt");
-            project.Groups.Add(new ResourceGroup { Id = "main", Selections = new List<ResourceSelection> { Select(path) } });
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Text", "text"));
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
-            var projectPath = AssetDatabase.GetAssetPath(project); var before = File.ReadAllBytes(projectPath);
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Text", "renamed"));
+            _project.groups.Add(new ResourceGroup { id = "main", selections = new List<ResourceSelection> { Select(path) } });
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Text", "text"));
+            EditorUtility.SetDirty(_project);
+            ResourceEditorOperations.SaveProject(_project);
+            var projectPath = AssetDatabase.GetAssetPath(_project);
+            var before = File.ReadAllBytes(projectPath);
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Text", "renamed"));
             Undo.FlushUndoRecordObjects();
-            Assert.That(EditorUtility.IsDirty(project), Is.True);
-            Assert.That(ResourceBuildMap.Create(project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
+            Assert.That(EditorUtility.IsDirty(_project), Is.True);
+            Assert.That(ResourceBuildMap.Create(_project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
             CollectionAssert.AreEqual(before, File.ReadAllBytes(projectPath), "编辑不能悄悄保存。 ");
             Undo.PerformUndo();
-            Assert.That(ResourceBuildMap.Create(project).Assets.Single().Address.Path, Is.EqualTo("text/selected.txt"));
+            Assert.That(ResourceBuildMap.Create(_project).Assets.Single().Address.Path, Is.EqualTo("text/selected.txt"));
             Undo.PerformRedo();
-            Assert.That(ResourceBuildMap.Create(project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
-            ResourceEditorOperations.SaveProject(project);
-            Undo.ClearUndo(project); Resources.UnloadAsset(project);
-            project = AssetDatabase.LoadAssetAtPath<ResourceProject>(projectPath);
-            Assert.That(ResourceBuildMap.Create(project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
-            Assert.That(EditorUtility.IsDirty(project), Is.False);
+            Assert.That(ResourceBuildMap.Create(_project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
+            ResourceEditorOperations.SaveProject(_project);
+            Undo.ClearUndo(_project);
+            Resources.UnloadAsset(_project);
+            _project = AssetDatabase.LoadAssetAtPath<ResourceProject>(projectPath);
+            Assert.That(ResourceBuildMap.Create(_project).Assets.Single().Address.Path, Is.EqualTo("renamed/selected.txt"));
+            Assert.That(EditorUtility.IsDirty(_project), Is.False);
         }
 
         [Test]
         public void CurrentDirectoryModelSaveAndReloadKeepCanonicalAddressAliasAndSourceIdentity()
         {
             var path = Text("selected.txt");
-            project.Groups.Add(new ResourceGroup { Id = "main", Selections = new List<ResourceSelection> { Select(path, "message") } });
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Materials", "materials"), (root + "/Text", "messages"));
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
-            var projectPath = AssetDatabase.GetAssetPath(project);
+            _project.groups.Add(new ResourceGroup { id = "main", selections = new List<ResourceSelection> { Select(path, "message") } });
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Materials", "materials"), (_root + "/Text", "messages"));
+            EditorUtility.SetDirty(_project);
+            ResourceEditorOperations.SaveProject(_project);
+            var projectPath = AssetDatabase.GetAssetPath(_project);
             var before = File.ReadAllBytes(projectPath);
             var projectMeta = File.ReadAllBytes(projectPath + ".meta");
-            var source = File.ReadAllBytes(path); var sourceMeta = File.ReadAllBytes(path + ".meta");
-            var first = ResourceBuildMap.Create(project).Assets.Single();
+            var source = File.ReadAllBytes(path);
+            var sourceMeta = File.ReadAllBytes(path + ".meta");
+            var first = ResourceBuildMap.Create(_project).Assets.Single();
             Assert.That(first.Address.Path, Is.EqualTo("messages/selected.txt"));
             Assert.That(first.Aliases.Single().Path, Is.EqualTo("message"));
-            Assert.That(EditorUtility.IsDirty(project), Is.False);
+            Assert.That(EditorUtility.IsDirty(_project), Is.False);
             CollectionAssert.AreEqual(before, File.ReadAllBytes(projectPath), "只读解析不能改写当前目录列表。 ");
-            project.DisplayName = "当前目录模型的显式保存";
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
-            Undo.ClearUndo(project); Resources.UnloadAsset(project); project = AssetDatabase.LoadAssetAtPath<ResourceProject>(projectPath);
-            var saved = ResourceBuildMap.Create(project).Assets.Single();
+            _project.displayName = "当前目录模型的显式保存";
+            EditorUtility.SetDirty(_project);
+            ResourceEditorOperations.SaveProject(_project);
+            Undo.ClearUndo(_project);
+            Resources.UnloadAsset(_project);
+            _project = AssetDatabase.LoadAssetAtPath<ResourceProject>(projectPath);
+            var saved = ResourceBuildMap.Create(_project).Assets.Single();
             Assert.That(saved.Address.Path, Is.EqualTo("messages/selected.txt"));
             Assert.That(saved.Aliases.Single().Path, Is.EqualTo("message"));
             Assert.That(saved.AssetId, Is.EqualTo(first.AssetId));
-            Assert.That(project.DisplayName, Is.EqualTo("当前目录模型的显式保存"));
-            CollectionAssert.AreEqual(new[] { AssetDatabase.AssetPathToGUID(root + "/Materials"), AssetDatabase.AssetPathToGUID(root + "/Text") },
-                project.SourceDirectories.Select(x => x.Guid));
-            CollectionAssert.AreEqual(new[] { "materials", "messages" }, project.SourceDirectories.Select(x => x.AddressPrefix));
+            Assert.That(_project.displayName, Is.EqualTo("当前目录模型的显式保存"));
+            CollectionAssert.AreEqual(new[] { AssetDatabase.AssetPathToGUID(_root + "/Materials"), AssetDatabase.AssetPathToGUID(_root + "/Text") },
+                _project.sourceDirectories.Select(x => x.guid));
+            CollectionAssert.AreEqual(new[] { "materials", "messages" }, _project.sourceDirectories.Select(x => x.addressPrefix));
             CollectionAssert.AreEqual(projectMeta, File.ReadAllBytes(projectPath + ".meta"));
             CollectionAssert.AreEqual(source, File.ReadAllBytes(path));
             CollectionAssert.AreEqual(sourceMeta, File.ReadAllBytes(path + ".meta"));
-            Assert.That(EditorUtility.IsDirty(project), Is.False);
+            Assert.That(EditorUtility.IsDirty(_project), Is.False);
         }
 
         private void SharedGraph()
         {
             var texture = new Texture2D(2, 2) { name = "Shared" };
-            AssetDatabase.CreateAsset(texture, root + "/Textures/Shared.asset");
-            var shader = Shader.Find("Unlit/Texture"); Assert.That(shader, Is.Not.Null);
-            foreach (var name in new[] { "A", "B" }) AssetDatabase.CreateAsset(new Material(shader) { name = name, mainTexture = texture }, root + "/Materials/" + name + ".mat");
-            var text = Text("selected.txt"); Text("unselected.txt");
-            project.Groups.Add(new ResourceGroup { Id = "main", Selections = new List<ResourceSelection> { Select(root + "/Materials/A.mat"), Select(text, "message") } });
-            project.Groups.Add(new ResourceGroup { Id = "other", Selections = new List<ResourceSelection> { Select(root + "/Materials/B.mat") } });
-            ResourceMultiDirectoryEvidence.SetSources(project, (root + "/Textures", "textures"), (root + "/Materials", "materials"), (root + "/Text", "text"));
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+            AssetDatabase.CreateAsset(texture, _root + "/Textures/Shared.asset");
+            var shader = Shader.Find("Unlit/Texture");
+            Assert.That(shader, Is.Not.Null);
+            foreach (var name in new[] { "A", "B" })
+            {
+                AssetDatabase.CreateAsset(new Material(shader) { name = name, mainTexture = texture }, _root + "/Materials/" + name + ".mat");
+            }
+
+            var text = Text("selected.txt");
+            Text("unselected.txt");
+            _project.groups.Add(new ResourceGroup { id = "main", selections = new List<ResourceSelection> { Select(_root + "/Materials/A.mat"), Select(text, "message") } });
+            _project.groups.Add(new ResourceGroup { id = "other", selections = new List<ResourceSelection> { Select(_root + "/Materials/B.mat") } });
+            ResourceMultiDirectoryEvidence.SetSources(_project, (_root + "/Textures", "textures"), (_root + "/Materials", "materials"), (_root + "/Text", "text"));
+            EditorUtility.SetDirty(_project);
+            ResourceEditorOperations.SaveProject(_project);
         }
 
         private string Text(string name)
         {
-            var path = root + "/Text/" + name;
-            File.WriteAllText(path, "自有多目录测试文本"); AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport); return path;
+            var path = _root + "/Text/" + name;
+            File.WriteAllText(path, "自有多目录测试文本");
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            return path;
         }
 
-        private static ResourceSelection Select(string path, string alias = null) => new() { Guid = AssetDatabase.AssetPathToGUID(path),
-            Aliases = alias == null ? Array.Empty<string>() : new[] { alias } };
+        private static ResourceSelection Select(string path, string alias = null) => new()
+        {
+            guid = AssetDatabase.AssetPathToGUID(path),
+            aliases = alias == null ? Array.Empty<string>() : new[] { alias }
+        };
     }
 }

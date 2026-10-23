@@ -18,10 +18,16 @@ namespace YLFramework.Tests.Resource
         private const string Root = @"C:\Users\Kano\AppData\Local\Temp\kilo\e04-product-20261016-2103";
         private const string Owner = "ses_eb976ffe9ffePUz27Uq1etyOtE";
         private const string StateKey = "YL.E04.Validation.20261016.Run";
-        private static readonly Observer Callback = new();
+        private static readonly Observer _callback = new();
 
-        [Serializable] private sealed class OwnerReceipt { public string ownerSessionId; public string ownedRoot; }
-        [Serializable] private sealed class Run
+        [Serializable]
+        private sealed class OwnerReceipt
+        {
+            public string ownerSessionId;
+            public string ownedRoot;
+        }
+        [Serializable]
+        private sealed class Run
         {
             public string Id;
             public string Fixture;
@@ -32,7 +38,8 @@ namespace YLFramework.Tests.Resource
             public string EvidenceFailure;
             public bool Completed;
         }
-        [Serializable] private sealed class Leaf
+        [Serializable]
+        private sealed class Leaf
         {
             public string Name;
             public string Status;
@@ -44,7 +51,8 @@ namespace YLFramework.Tests.Resource
             public string StackTrace;
             public string Output;
         }
-        [Serializable] private sealed class Summary
+        [Serializable]
+        private sealed class Summary
         {
             public Run Run;
             public string FinishedAtUtc;
@@ -62,8 +70,12 @@ namespace YLFramework.Tests.Resource
         static ResourceE04ValidationResults()
         {
             var run = ReadRun();
-            if (run != null && !run.Completed) Register();
-            AssemblyReloadEvents.beforeAssemblyReload += () => TestRunnerApi.UnregisterTestCallback(Callback);
+            if (run != null && !run.Completed)
+            {
+                Register();
+            }
+
+            AssemblyReloadEvents.beforeAssemblyReload += () => TestRunnerApi.UnregisterTestCallback(_callback);
         }
 
         /// <summary>协调者在一次 tests-run 前调用；不会启动测试、清旧结果、保存场景或抢占其他运行。</summary>
@@ -71,23 +83,50 @@ namespace YLFramework.Tests.Resource
         {
             CheckOwner();
             if (string.IsNullOrEmpty(runId) || runId.Any(c => !(c >= 'a' && c <= 'z') && !(c >= '0' && c <= '9') && c != '-'))
+            {
                 throw new ArgumentException("A lowercase filename-safe run id is required.", nameof(runId));
-            if (string.IsNullOrWhiteSpace(fixture) || expectedLeaves <= 0) throw new ArgumentException("An exact fixture and positive expected leaf count are required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(fixture) || expectedLeaves <= 0)
+            {
+                throw new ArgumentException("An exact fixture and positive expected leaf count are required.");
+            }
+
             var previous = ReadRun();
-            if (previous != null && !previous.Completed) throw new InvalidOperationException("The previous armed run has not completed; do not overwrite or restart it.");
+            if (previous != null && !previous.Completed)
+            {
+                throw new InvalidOperationException("The previous armed run has not completed; do not overwrite or restart it.");
+            }
+
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating ||
                 EditorUtility.scriptCompilationFailed || EditorSceneManager.GetSceneManagerSetup().Any(x => string.IsNullOrEmpty(x.path)) ||
                 Enumerable.Range(0, UnityEngine.SceneManagement.SceneManager.sceneCount)
                     .Any(i => UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty))
+            {
                 throw new InvalidOperationException("Arm only in an idle, compiled Editor with saved scenes. This helper never saves user scenes.");
+            }
+
             if (!string.IsNullOrEmpty(SessionState.GetString("Unity_MCP_TestRunner_TestCallRequestID", "")) ||
                 !string.IsNullOrEmpty(SessionState.GetString("MCP_PendingTestRun", "")))
+            {
                 throw new InvalidOperationException("An MCP test request is still active or pending. Recover that run instead of starting another.");
+            }
+
             var directory = Path.Combine(Root, "evidence", "test-results", runId);
-            if (Directory.Exists(directory)) throw new IOException("Refusing to adopt an existing result directory.");
+            if (Directory.Exists(directory))
+            {
+                throw new IOException("Refusing to adopt an existing result directory.");
+            }
+
             Directory.CreateDirectory(directory);
-            var run = new Run { Id = runId, Fixture = fixture, Directory = directory,
-                ExpectedLeaves = expectedLeaves, ArmedAtUtc = DateTime.UtcNow.ToString("O") };
+            var run = new Run
+            {
+                Id = runId,
+                Fixture = fixture,
+                Directory = directory,
+                ExpectedLeaves = expectedLeaves,
+                ArmedAtUtc = DateTime.UtcNow.ToString("O")
+            };
             SaveRun(run);
             WriteNew(Path.Combine(directory, "armed.json"), run);
             Register();
@@ -98,8 +137,8 @@ namespace YLFramework.Tests.Resource
 
         private static void Register()
         {
-            TestRunnerApi.UnregisterTestCallback(Callback);
-            TestRunnerApi.RegisterTestCallback(Callback);
+            TestRunnerApi.UnregisterTestCallback(_callback);
+            TestRunnerApi.RegisterTestCallback(_callback);
         }
 
         private static Run ReadRun()
@@ -114,7 +153,9 @@ namespace YLFramework.Tests.Resource
         {
             var owner = JsonUtility.FromJson<OwnerReceipt>(File.ReadAllText(Path.Combine(Root, "owner.json")));
             if (owner.ownerSessionId != Owner || !string.Equals(Path.GetFullPath(owner.ownedRoot), Root, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException("The validation root owner does not match this helper.");
+            }
         }
 
         private static void WriteNew(string path, object value)
@@ -122,11 +163,19 @@ namespace YLFramework.Tests.Resource
             CheckOwner();
             var absolute = Path.GetFullPath(path);
             if (!absolute.StartsWith(Path.Combine(Root, "evidence", "test-results") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new InvalidOperationException("Result path escaped this run's owned evidence root.");
+            }
+
             for (var cursor = Path.GetDirectoryName(absolute); cursor != null && cursor.StartsWith(Root, StringComparison.OrdinalIgnoreCase);
                 cursor = Path.GetDirectoryName(cursor))
+            {
                 if (Directory.Exists(cursor) && (File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                {
                     throw new IOException("Refusing linked result directories.");
+                }
+            }
+
             var bytes = new UTF8Encoding(false).GetBytes(JsonUtility.ToJson(value, true) + "\n");
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             stream.Write(bytes, 0, bytes.Length);
@@ -136,27 +185,42 @@ namespace YLFramework.Tests.Resource
         {
             public void RunStarted(ITestAdaptor testsToRun) => Observe(run =>
             {
-                if (!string.IsNullOrEmpty(run.StartedAtUtc)) return;
+                if (!string.IsNullOrEmpty(run.StartedAtUtc))
+                {
+                    return;
+                }
+
                 run.StartedAtUtc = DateTime.UtcNow.ToString("O");
                 SaveRun(run);
                 WriteNew(Path.Combine(run.Directory, "started.json"), run);
             });
 
-            public void TestStarted(ITestAdaptor test) { }
+            public void TestStarted(ITestAdaptor test)
+            {
+            }
 
             public void TestFinished(ITestResultAdaptor result)
             {
-                if (result.Test.IsSuite) return;
+                if (result.Test.IsSuite)
+                {
+                    return;
+                }
+
                 Observe(run =>
                 {
                     using var sha = SHA256.Create();
                     var name = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(result.FullName))).Replace("-", "").ToLowerInvariant();
                     WriteNew(Path.Combine(run.Directory, "leaf-" + name + ".json"), new Leaf
                     {
-                        Name = result.FullName, Status = result.TestStatus.ToString(), ResultState = result.ResultState,
-                        DurationSeconds = result.Duration, StartedAtUtc = result.StartTime.ToUniversalTime().ToString("O"),
-                        FinishedAtUtc = result.EndTime.ToUniversalTime().ToString("O"), Message = result.Message,
-                        StackTrace = result.StackTrace, Output = result.Output
+                        Name = result.FullName,
+                        Status = result.TestStatus.ToString(),
+                        ResultState = result.ResultState,
+                        DurationSeconds = result.Duration,
+                        StartedAtUtc = result.StartTime.ToUniversalTime().ToString("O"),
+                        FinishedAtUtc = result.EndTime.ToUniversalTime().ToString("O"),
+                        Message = result.Message,
+                        StackTrace = result.StackTrace,
+                        Output = result.Output
                     });
                 });
             }
@@ -176,18 +240,43 @@ namespace YLFramework.Tests.Resource
                 while (pending.Count != 0)
                 {
                     var item = pending.Pop();
-                    if (!item.Test.IsSuite) continue;
-                    foreach (var child in item.Children) pending.Push(child);
-                    if (item.TestStatus.ToString() == "Failed") failedSuites.Add(new Leaf {
-                        Name = item.FullName, Status = item.TestStatus.ToString(), ResultState = item.ResultState,
-                        Message = item.Message, StackTrace = item.StackTrace, Output = item.Output });
+                    if (!item.Test.IsSuite)
+                    {
+                        continue;
+                    }
+
+                    foreach (var child in item.Children)
+                    {
+                        pending.Push(child);
+                    }
+
+                    if (item.TestStatus.ToString() == "Failed")
+                    {
+                        failedSuites.Add(new Leaf
+                        {
+                            Name = item.FullName,
+                            Status = item.TestStatus.ToString(),
+                            ResultState = item.ResultState,
+                            Message = item.Message,
+                            StackTrace = item.StackTrace,
+                            Output = item.Output
+                        });
+                    }
                 }
-                var summary = new Summary { Run = run, FinishedAtUtc = DateTime.UtcNow.ToString("O"),
-                    RunnerResultState = result.ResultState, SuiteFailures = failedSuites.ToArray(), ExecutedLeaves = leaves.Length,
-                    Passed = leaves.Count(x => x.Status == "Passed"), Failed = leaves.Count(x => x.Status == "Failed"),
+                var summary = new Summary
+                {
+                    Run = run,
+                    FinishedAtUtc = DateTime.UtcNow.ToString("O"),
+                    RunnerResultState = result.ResultState,
+                    SuiteFailures = failedSuites.ToArray(),
+                    ExecutedLeaves = leaves.Length,
+                    Passed = leaves.Count(x => x.Status == "Passed"),
+                    Failed = leaves.Count(x => x.Status == "Failed"),
                     Other = leaves.Count(x => x.Status != "Passed" && x.Status != "Failed"),
-                    UnexpectedLeaves = unexpected, CompleteEvidence = complete,
-                    PassedGate = complete && leaves.All(x => x.Status == "Passed") && result.TestStatus.ToString() == "Passed" };
+                    UnexpectedLeaves = unexpected,
+                    CompleteEvidence = complete,
+                    PassedGate = complete && leaves.All(x => x.Status == "Passed") && result.TestStatus.ToString() == "Passed"
+                };
                 run.Completed = true;
                 WriteNew(Path.Combine(run.Directory, "finished.json"), summary);
                 SaveRun(run);
@@ -197,8 +286,15 @@ namespace YLFramework.Tests.Resource
             private static void Observe(Action<Run> action)
             {
                 var run = ReadRun();
-                if (run == null || run.Completed) return;
-                try { action(run); }
+                if (run == null || run.Completed)
+                {
+                    return;
+                }
+
+                try
+                {
+                    action(run);
+                }
                 catch (Exception error)
                 {
                     run.EvidenceFailure = error.GetType().FullName;

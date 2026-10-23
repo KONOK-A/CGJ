@@ -1,10 +1,10 @@
-using YLFramework.Core.Editor;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Events;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.Platform2D
 {
@@ -13,49 +13,49 @@ namespace YLFramework.Platform2D
     public class MoveableInspector : UnityEditor.Editor
     {
 
-        private List<SerializedProperty> serializedProperties;
+        private List<SerializedProperty> _serializedProperties;
 
         //private SerializedProperty m_Script = null;
 
-        private SerializedProperty positionType = null;
-        private SerializedProperty transforms = null;
-        private SerializedProperty positions = null;
+        private SerializedProperty _positionType = null;
+        private SerializedProperty _transforms = null;
+        private SerializedProperty _positions = null;
 
-        private SerializedProperty onStartRun = null;
-        private SerializedProperty onMove = null;
-        private SerializedProperty onPause = null;
-        private SerializedProperty onStop = null;
+        private SerializedProperty _onStartRun = null;
+        private SerializedProperty _onMove = null;
+        private SerializedProperty _onPause = null;
+        private SerializedProperty _onStop = null;
 
-        private ReorderableList reorderableList = null;
+        private ReorderableList _reorderableList = null;
 
         //private bool foldout = false;
 
-        private bool positionsFoldout = false;
+        private bool _showPositions = false;
 
-        private Moveable moveable;
+        private Moveable _moveable;
 
-        private Vector3 snap = new Vector3(0.1f, 0.1f, 0.01f);
+        private Vector3 _snap = new Vector3(0.1f, 0.1f, 0.01f);
 
         private void OnEnable()
         {
-            serializedProperties = serializedObject.GetAllSerializedProperty();
+            _serializedProperties = serializedObject.GetAllSerializedProperty();
             //m_Script = serializedObject.FindProperty("m_Script");
 
-            positionType = serializedObject.FindProperty("positionType");
-            transforms = serializedObject.FindProperty("transforms");
-            positions = serializedObject.FindProperty("positions");
+            _positionType = serializedObject.FindProperty("positionType");
+            _transforms = serializedObject.FindProperty("transforms");
+            _positions = serializedObject.FindProperty("positions");
 
-            onStartRun = serializedObject.FindProperty("onStartRun");
-            onMove = serializedObject.FindProperty("onMove");
-            onPause = serializedObject.FindProperty("onPause");
-            onStop = serializedObject.FindProperty("onStop");
+            _onStartRun = serializedObject.FindProperty("onStartRun");
+            _onMove = serializedObject.FindProperty("onMove");
+            _onPause = serializedObject.FindProperty("onPause");
+            _onStop = serializedObject.FindProperty("onStop");
 
-            reorderableList = new ReorderableList(serializedObject, positions);
-            reorderableList.headerHeight = 1;
-            reorderableList.drawElementCallback += OnDrawElementCallback;
-            reorderableList.onAddCallback += OnAddCallback;
-            reorderableList.onSelectCallback += OnSelect;
-            moveable = target as Moveable;
+            _reorderableList = new ReorderableList(serializedObject, _positions);
+            _reorderableList.headerHeight = 1;
+            _reorderableList.drawElementCallback += OnDrawElementCallback;
+            _reorderableList.onAddCallback += OnAddCallback;
+            _reorderableList.onSelectCallback += OnSelect;
+            _moveable = target as Moveable;
         }
 
 
@@ -70,56 +70,88 @@ namespace YLFramework.Platform2D
             //EditorGUILayout.PropertyField(m_Script);
             //EditorGUI.EndDisabledGroup();
 
-            foreach (var item in serializedProperties)
+            foreach (var item in _serializedProperties)
             {
                 //if (item.displayName == "Script") continue;
-                if (item.name == positionType.name) continue;
-                if (item.name == transforms.name) continue;
-                if (item.name == positions.name) continue;
-                if (item.name == onStartRun.name) continue;
-                if (item.name == onMove.name) continue;
-                if (item.name == onPause.name) continue;
-                if (item.name == onStop.name) continue;
+                if (item.name == _positionType.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _transforms.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _positions.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _onStartRun.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _onMove.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _onPause.name)
+                {
+                    continue;
+                }
+
+                if (item.name == _onStop.name)
+                {
+                    continue;
+                }
 
                 EditorGUI.BeginDisabledGroup(item.IsScript());
                 EditorGUILayout.PropertyField(item);
                 EditorGUI.EndDisabledGroup();
             }
 
-            EditorGUILayout.PropertyField (positionType);
+            EditorGUILayout.PropertyField(_positionType);
 
-            if (positionType.enumValueIndex == 0)
+            if (_positionType.enumValueIndex == 0)
             {
-                positionsFoldout = EditorGUILayout.Foldout(positionsFoldout, "Positions");
+                _showPositions = EditorGUILayout.Foldout(_showPositions, "Positions");
 
-                if(positionsFoldout)
-                    reorderableList.DoLayoutList();
+                if (_showPositions)
+                {
+                    _reorderableList.DoLayoutList();
+                }
             }
-            else {
-                EditorGUILayout.PropertyField(transforms);
-            }
-
-            onStartRun.isExpanded = EditorGUILayout.Foldout(onStartRun.isExpanded, "事件");
-
-            if (onStartRun.isExpanded)
+            else
             {
-                EditorGUILayout.PropertyField(onStartRun);
-                EditorGUILayout.PropertyField(onMove);
-                EditorGUILayout.PropertyField(onPause);
-                EditorGUILayout.PropertyField(onStop);
+                EditorGUILayout.PropertyField(_transforms);
+            }
+
+            _onStartRun.isExpanded = EditorGUILayout.Foldout(_onStartRun.isExpanded, "事件");
+
+            if (_onStartRun.isExpanded)
+            {
+                EditorGUILayout.PropertyField(_onStartRun);
+                EditorGUILayout.PropertyField(_onMove);
+                EditorGUILayout.PropertyField(_onPause);
+                EditorGUILayout.PropertyField(_onStop);
             }
 
 
             serializedObject.ApplyModifiedProperties();
-            if (!moveable.ValidatePath(out string error))
+            if (!_moveable.ValidatePath(out string error))
+            {
                 EditorGUILayout.HelpBox(error, MessageType.Error);
+            }
         }
 
         private void OnDrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
             EditorGUI.BeginChangeCheck();
 
-            SerializedProperty property = reorderableList.serializedProperty.GetArrayElementAtIndex(index);
+            SerializedProperty property = _reorderableList.serializedProperty.GetArrayElementAtIndex(index);
             property.vector3Value = EditorGUI.Vector3Field(rect, "", property.vector3Value);
 
             if (EditorGUI.EndChangeCheck())
@@ -140,7 +172,7 @@ namespace YLFramework.Platform2D
 
             if (size == 0)
             {
-                target = moveable.transform.position;
+                target = _moveable.transform.position;
             }
             else if (size == 1)
             {
@@ -151,7 +183,7 @@ namespace YLFramework.Platform2D
                 SerializedProperty last2 = list.serializedProperty.GetArrayElementAtIndex(size - 2);
                 SerializedProperty last1 = list.serializedProperty.GetArrayElementAtIndex(size - 1);
 
-                target =(last1.vector3Value - last2.vector3Value).normalized + last1.vector3Value;
+                target = (last1.vector3Value - last2.vector3Value).normalized + last1.vector3Value;
             }
 
             property.vector3Value = target;
@@ -161,13 +193,17 @@ namespace YLFramework.Platform2D
         private void OnSceneGUI()
         {
 
-            if (positionType.enumValueIndex != 0 || reorderableList.index < 0 || reorderableList.index >= positions.arraySize)
+            if (_positionType.enumValueIndex != 0 || _reorderableList.index < 0 || _reorderableList.index >= _positions.arraySize)
+            {
                 return;
+            }
 
-            SerializedProperty property = reorderableList.serializedProperty.GetArrayElementAtIndex(reorderableList.index);
+            SerializedProperty property = _reorderableList.serializedProperty.GetArrayElementAtIndex(_reorderableList.index);
 
             if (property == null)
+            {
                 return;
+            }
 
             EditorGUI.BeginChangeCheck();
 
@@ -190,7 +226,10 @@ namespace YLFramework.Platform2D
 
         private void OnSelect(ReorderableList list)
         {
-            if (SceneView.lastActiveSceneView) SceneView.lastActiveSceneView.Repaint();
+            if (SceneView.lastActiveSceneView)
+            {
+                SceneView.lastActiveSceneView.Repaint();
+            }
         }
 
     }

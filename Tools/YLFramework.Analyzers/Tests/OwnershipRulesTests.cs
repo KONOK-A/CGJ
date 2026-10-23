@@ -43,7 +43,7 @@ namespace YLFramework.Analyzers.Tests
             yield return Case("Storage_PseudoBclNameNotSeeded", "namespace System.Collections.Generic{class List<T>{public static T cache;}}class C{System.Collections.Generic.List<YLFramework.Core.LoadViewArgs> no;}");
             yield return Case("Storage_ClassNotInterfaceConstraint", "class C<T,U,V>where T:U where U:YLFramework.Core.LoadViewArgs where V:IEnumerable<YLFramework.Core.LoadViewArgs>{T {|YL0005:held|};V no;}");
             yield return Case("Storage_RecordAutoAndPositional", "record R{public YLFramework.Core.LoadViewArgs {|YL0005:Value|}{get;init;}}record S(YLFramework.Core.LoadViewArgs {|YL0005:Value|});");
-            yield return Case("Storage_FakeCoreOwnerNoExemption", "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]class LoadViewArgs{private static readonly Pool.ObjectPool<LoadViewArgs> {|YL0005:Pool|}=new Pool.ObjectPool<LoadViewArgs>(()=>null);}class LoadViewRequest<T>{private LoadViewArgs {|YL0005:args|};}class PanelManager{internal sealed class PanelOperation{internal LoadViewArgs {|YL0005:Args|};}}}");
+            yield return Case("Storage_FakeCoreOwnerNoExemption", "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]class LoadViewArgs{private static readonly Pool.ObjectPool<LoadViewArgs> {|YL0005:_pool|}=new Pool.ObjectPool<LoadViewArgs>(()=>null);}class LoadViewRequest<T>{private LoadViewArgs {|YL0005:_args|};}class PanelManager{internal sealed class PanelOperation{internal LoadViewArgs {|YL0005:Args|};}}}");
             yield return Case("Storage_ForeignPoolAndFalseSelfOwner", "class C{private static readonly YLFramework.Core.Pool.ObjectPool<YLFramework.Core.LoadViewArgs> {|YL0005:Pool|};}[MethodLocalOnly]class A{private static readonly YLFramework.Core.Pool.ObjectPool<A> {|YL0005:Pool|};}");
         }
 
@@ -63,35 +63,35 @@ namespace YLFramework.Analyzers.Tests
                 AnalyzerFixture.PoolSource.Replace("private T[] storage", "public T[] storage")
             }, AnalyzerFixture.Platform).WithProperties(new MetadataReferenceProperties(aliases: System.Collections.Immutable.ImmutableArray.Create("foreign")));
             var source = "extern alias foreign;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" +
-                "private static readonly foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs> Pool=" +
+                "private static readonly foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs> _pool=" +
                 "new foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs>(()=>null);}}";
             var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source).AddReferences(foreign));
             Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
             Assert.That(diagnostics.Single().Location.SourceSpan.Start,
-                Is.EqualTo(source.IndexOf(" Pool=", StringComparison.Ordinal) + 1));
+                Is.EqualTo(source.IndexOf(" _pool=", StringComparison.Ordinal) + 1));
         }
 
-        [TestCase("public static readonly", "ObjectPool<LoadViewArgs>", "Pool")]
-        [TestCase("private static", "ObjectPool<LoadViewArgs>", "Pool")]
+        [TestCase("public static readonly", "ObjectPool<LoadViewArgs>", "_pool")]
+        [TestCase("private static", "ObjectPool<LoadViewArgs>", "_pool")]
         [TestCase("private static readonly", "ObjectPool<LoadViewArgs>", "OtherPool")]
         public async Task CoreIdentityDoesNotExemptOtherPoolShapes(string modifiers, string type, string name)
         {
             var source = "using YLFramework.Core.Pool;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" + modifiers + " " + type + " " + name + ";}}";
             var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source));
-            Assert.That(diagnostics.Select(d=>d.Id), Is.EqualTo(new[]{"YL0005"}));
+            Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
             Assert.That(diagnostics.Single().Location.SourceSpan.Start, Is.EqualTo(source.IndexOf(" " + name + ";", System.StringComparison.Ordinal) + 1));
         }
 
-        [TestCase("private", "args", 1, false)]
-        [TestCase("public", "args", 1, true)]
-        [TestCase("private static", "args", 1, true)]
+        [TestCase("private", "_args", 1, false)]
+        [TestCase("public", "_args", 1, true)]
+        [TestCase("private static", "_args", 1, true)]
         [TestCase("private", "other", 1, true)]
-        [TestCase("private", "args", 2, true)]
+        [TestCase("private", "_args", 2, true)]
         public async Task RequestOwnerIsOneExactMemberShape(string modifiers, string name, int arity, bool violation)
         {
-            var source = "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{}public class LoadViewRequest<" + (arity==1?"T":"T,U") + ">{" + modifiers + " LoadViewArgs " + name + ";}}";
+            var source = "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{}public class LoadViewRequest<" + (arity == 1 ? "T" : "T,U") + ">{" + modifiers + " LoadViewArgs " + name + ";}}";
             var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source));
-            Assert.That(diagnostics.Select(d=>d.Id), Is.EqualTo(violation?new[]{"YL0005"}:new string[0]));
+            Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(violation ? new[] { "YL0005" } : new string[0]));
         }
 
         [TestCase("internal", "Args", "PanelManager", false)]
@@ -111,7 +111,7 @@ namespace YLFramework.Analyzers.Tests
         [Test]
         public async Task SignatureOnlyMetadataIsUnknownNotGuessedStorage()
         {
-            var opaque = AnalyzerFixture.Emit("Opaque", new[]{"public class Opaque<T>{public T Get()=>default;}"}, AnalyzerFixture.Platform);
+            var opaque = AnalyzerFixture.Emit("Opaque", new[] { "public class Opaque<T>{public T Get()=>default;}" }, AnalyzerFixture.Platform);
             var compilation = AnalyzerFixture.Compilation(AnalyzerFixture.Prefix + "class C{Opaque<YLFramework.Core.LoadViewArgs> field;}").AddReferences(opaque);
             Assert.That(await AnalyzerFixture.Diagnostics(compilation), Is.Empty);
         }

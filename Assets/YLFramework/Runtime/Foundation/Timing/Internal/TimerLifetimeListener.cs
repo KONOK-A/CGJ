@@ -21,14 +21,23 @@ namespace YLFramework.Timing.Internal
 
         internal void CheckOwner()
         {
-            if (!_owner || !this) Notify(true, false);
-            else if (!_owner.activeInHierarchy) Notify(false, false);
+            if (!_owner || !this)
+            {
+                Notify(true, false);
+            }
+            else if (!_owner.activeInHierarchy)
+            {
+                Notify(false, false);
+            }
         }
 
         private void OnDisable()
         {
             // 只禁用监听组件不代表 owner GameObject 已停用。
-            if (!gameObject.activeInHierarchy) Notify(false);
+            if (!gameObject.activeInHierarchy)
+            {
+                Notify(false);
+            }
         }
         private void OnDestroy() => Notify(true);
 
@@ -41,17 +50,37 @@ namespace YLFramework.Timing.Internal
                 snapshot.AddRange(_bindings);
                 foreach (var binding in snapshot)
                 {
-                    try { binding.OwnerEnded(destroyed); }
+                    try
+                    {
+                        binding.OwnerEnded(destroyed);
+                    }
                     catch (Exception error)
                     {
-                        if (reportErrors) Debug.LogException(error);
-                        else (errors ??= new List<Exception>()).Add(error);
+                        if (reportErrors)
+                        {
+                            Debug.LogException(error);
+                        }
+                        else
+                        {
+                            (errors ??= new List<Exception>()).Add(error);
+                        }
                     }
                 }
             }
-            finally { ListPool<TimerGameObjectBinding>.Recycle(snapshot); }
-            if (errors == null) return;
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            finally
+            {
+                ListPool<TimerGameObjectBinding>.Recycle(snapshot);
+            }
+            if (errors == null)
+            {
+                return;
+            }
+
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
             throw new AggregateException(errors);
         }
     }

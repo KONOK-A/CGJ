@@ -10,114 +10,213 @@ namespace YLFramework.Services.Resource
     /// <summary>单个有界GET。由ResourceSystem现有主线程tick驱动；Dispose同步撤销私有UWR和文件句柄。</summary>
     internal sealed partial class ResourceTransfer : IEnumerator, IDisposable
     {
-        private readonly ResourceRemoteSource source;
-        private readonly Uri uri;
-        private readonly long length;
-        private readonly string digest;
-        private readonly long maximum;
-        private readonly ArtifactStore.DownloadPart part;
-        private readonly bool deferPartVerification;
-        private readonly Stopwatch clock = Stopwatch.StartNew();
-        private readonly Random random = new();
-        private UnityWebRequest request;
-        private UnityWebRequestAsyncOperation native;
-        private Sink sink;
-        private int attempt;
-        private double started;
-        private double retryAt;
-        private bool done;
-        internal byte[] Bytes { get; private set; }
-        internal float Progress => length <= 0 ? 0 : (float)(sink?.Written ?? part?.Length ?? 0) / length;
+        private readonly ResourceRemoteSource _source;
+        private readonly Uri _uri;
+        private readonly long _length;
+        private readonly string _digest;
+        private readonly long _maximum;
+        private readonly ArtifactStore.DownloadPart _part;
+        private readonly bool _deferPartVerification;
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private readonly Random _random = new();
+        private UnityWebRequest _request;
+        private UnityWebRequestAsyncOperation _native;
+        private Sink _sink;
+        private int _attempt;
+        private double _started;
+        private double _retryAt;
+        private bool _isDone;
+        internal byte[] Bytes
+        {
+            get; private set;
+        }
+        internal float Progress => _length <= 0 ? 0 : (float)(_sink?.Written ?? _part?.Length ?? 0) / _length;
         public object Current => null;
 
         internal ResourceTransfer(ResourceRemoteSource source, Uri uri, long length = 0, string digest = null, long maximum = ResourceReleaseSignature.MaximumBytes,
             ArtifactStore.DownloadPart part = null, bool deferPartVerification = false)
         {
-            this.source = source; this.uri = uri; this.length = length; this.digest = digest; this.maximum = length > 0 ? length : maximum; this.part = part;
-            this.deferPartVerification = deferPartVerification;
-            if (uri.Scheme != "https" || !source.Endpoint.IsBaseOf(uri) || maximum < 1 || length < 0) throw new ArgumentException("An owned bounded HTTPS transfer is required.");
+            this._source = source;
+            this._uri = uri;
+            this._length = length;
+            this._digest = digest;
+            this._maximum = length > 0 ? length : maximum;
+            this._part = part;
+            this._deferPartVerification = deferPartVerification;
+            if (uri.Scheme != "https" || !source.Endpoint.IsBaseOf(uri) || maximum < 1 || length < 0)
+            {
+                throw new ArgumentException("An owned bounded HTTPS transfer is required.");
+            }
         }
 
         public bool MoveNext()
         {
-            if (done) return false;
-            if (request == null)
+            if (_isDone)
             {
-                if (clock.Elapsed.TotalSeconds < retryAt) return true;
-                if (part != null && part.Length == length)
+                return false;
+            }
+
+            if (_request == null)
+            {
+                if (_clock.Elapsed.TotalSeconds < _retryAt)
                 {
-                    if (deferPartVerification) { done = true; return false; }
-                    try { part.Verify(); done = true; return false; }
-                    catch (InvalidDataException) { part.Reset(); }
+                    return true;
+                }
+
+                if (_part != null && _part.Length == _length)
+                {
+                    if (_deferPartVerification)
+                    {
+                        _isDone = true;
+                        return false;
+                    }
+                    try
+                    {
+                        _part.Verify();
+                        _isDone = true;
+                        return false;
+                    }
+                    catch (InvalidDataException)
+                    {
+                        _part.Reset();
+                    }
                 }
                 Start();
             }
-            if (!native.isDone)
+            if (!_native.isDone)
             {
-                if (clock.Elapsed.TotalSeconds - started < source.TimeoutSeconds && clock.Elapsed.TotalSeconds - sink.LastData < source.IdleTimeoutSeconds) return true;
-                request.Abort();
+                if (_clock.Elapsed.TotalSeconds - _started < _source.TimeoutSeconds && _clock.Elapsed.TotalSeconds - _sink.LastData < _source.IdleTimeoutSeconds)
+                {
+                    return true;
+                }
+
+                _request.Abort();
                 return Failure(new IOException("Release GET timed out without completing."), true);
             }
-            sink.Close();
-            if (sink.Error is ResourceRangeException rangeError) { part?.Reset(); return Failure(rangeError, true); }
-            if (sink.Error != null) { var error = sink.Error; Close(); done = true; throw error; }
-            if (request.responseCode == 416 && part != null) { part.Reset(); return Failure(new ResourceRangeException(), true); }
-            if (request.result != UnityWebRequest.Result.Success || request.responseCode != 200 && request.responseCode != 206)
-                return Failure(new IOException("Release GET failed (HTTP " + request.responseCode + ", " + request.result + ")."),
-                    request.result == UnityWebRequest.Result.ConnectionError && (request.responseCode == 0 || request.responseCode == 200 || request.responseCode == 206) ||
-                    request.responseCode == 408 || request.responseCode == 429 || request.responseCode >= 500 && request.responseCode <= 599);
+            _sink.Close();
+            if (_sink.Error is ResourceRangeException rangeError)
+            {
+                _part?.Reset();
+                return Failure(rangeError, true);
+            }
+            if (_sink.Error != null)
+            {
+                var error = _sink.Error;
+                Close();
+                _isDone = true;
+                throw error;
+            }
+            if (_request.responseCode == 416 && _part != null)
+            {
+                _part.Reset();
+                return Failure(new ResourceRangeException(), true);
+            }
+            if (_request.result != UnityWebRequest.Result.Success || _request.responseCode != 200 && _request.responseCode != 206)
+            {
+                return Failure(new IOException("Release GET failed (HTTP " + _request.responseCode + ", " + _request.result + ")."),
+                    _request.result == UnityWebRequest.Result.ConnectionError && (_request.responseCode == 0 || _request.responseCode == 200 || _request.responseCode == 206) ||
+                    _request.responseCode == 408 || _request.responseCode == 429 || _request.responseCode >= 500 && _request.responseCode <= 599);
+            }
+
             try
             {
-                sink.ValidateHeaders(); // 空body也不得绕过响应合同。
-                sink.Close();
-                if (length > 0 && sink.Written != length || sink.Written == 0) throw new IOException("Release GET ended with an incomplete length.");
-                if (part != null) { if (!deferPartVerification) part.Verify(); }
+                _sink.ValidateHeaders(); // 空body也不得绕过响应合同。
+                _sink.Close();
+                if (_length > 0 && _sink.Written != _length || _sink.Written == 0)
+                {
+                    throw new IOException("Release GET ended with an incomplete length.");
+                }
+
+                if (_part != null)
+                {
+                    if (!_deferPartVerification)
+                    {
+                        _part.Verify();
+                    }
+                }
                 else
                 {
-                    Bytes = sink.Bytes();
-                    if (digest != null && ResourceCatalogCodec.Digest(Bytes) != digest) throw new InvalidDataException("Release response digest mismatch.");
+                    Bytes = _sink.Bytes();
+                    if (_digest != null && ResourceCatalogCodec.Digest(Bytes) != _digest)
+                    {
+                        throw new InvalidDataException("Release response digest mismatch.");
+                    }
                 }
-                done = true; Close(); return false;
+                _isDone = true;
+                Close();
+                return false;
             }
-            catch (ResourceRangeException error) { sink.Close(); part?.Reset(); return Failure(error, true); }
-            catch (InvalidDataException) { Close(); part?.Reset(); done = true; throw; }
-            catch (IOException error) { return Failure(error, true); }
+            catch (ResourceRangeException error)
+            {
+                _sink.Close();
+                _part?.Reset();
+                return Failure(error, true);
+            }
+            catch (InvalidDataException)
+            {
+                Close();
+                _part?.Reset();
+                _isDone = true;
+                throw;
+            }
+            catch (IOException error)
+            {
+                return Failure(error, true);
+            }
         }
 
         private void Start()
         {
-            attempt++;
-            var offset = part?.Length ?? 0;
-            var validator = part?.Validator;
-            if (offset > 0 && !ResourceDownloadResponse.StrongETag(validator)) { part.Reset(); offset = 0; }
-            request = new UnityWebRequest(uri.AbsoluteUri, "GET") { redirectLimit = 0, timeout = source.TimeoutSeconds };
+            _attempt++;
+            var offset = _part?.Length ?? 0;
+            var validator = _part?.Validator;
+            if (offset > 0 && !ResourceDownloadResponse.StrongETag(validator))
+            {
+                _part.Reset();
+                offset = 0;
+            }
+            _request = new UnityWebRequest(_uri.AbsoluteUri, "GET") { redirectLimit = 0, timeout = _source.TimeoutSeconds };
             try
             {
-                request.certificateHandler = source.CreateCertificateHandler();
-                request.SetRequestHeader("Accept-Encoding", "identity");
+                _request.certificateHandler = _source.CreateCertificateHandler();
+                _request.SetRequestHeader("Accept-Encoding", "identity");
                 if (offset > 0)
                 {
-                    request.SetRequestHeader("Range", "bytes=" + offset.ToString(CultureInfo.InvariantCulture) + "-");
-                    request.SetRequestHeader("If-Range", validator);
+                    _request.SetRequestHeader("Range", "bytes=" + offset.ToString(CultureInfo.InvariantCulture) + "-");
+                    _request.SetRequestHeader("If-Range", validator);
                 }
-                sink = new Sink(request, length, maximum, offset, validator, part, clock);
-                request.downloadHandler = sink;
-                started = clock.Elapsed.TotalSeconds;
-                native = request.SendWebRequest();
+                _sink = new Sink(_request, _length, _maximum, offset, validator, _part, _clock);
+                _request.downloadHandler = _sink;
+                _started = _clock.Elapsed.TotalSeconds;
+                _native = _request.SendWebRequest();
             }
-            catch { Close(); throw; }
+            catch
+            {
+                Close();
+                throw;
+            }
         }
 
         private bool Failure(Exception error, bool retry)
         {
-            var delay = Math.Min(8, .25 * Math.Pow(2, attempt - 1)) + random.NextDouble() * .1;
-            var retryAfter = request?.GetResponseHeader("Retry-After");
-            if (ResourceDownloadResponse.Number(retryAfter, out var seconds)) delay = Math.Max(delay, Math.Min(10, seconds));
+            var delay = Math.Min(8, .25 * Math.Pow(2, _attempt - 1)) + _random.NextDouble() * .1;
+            var retryAfter = _request?.GetResponseHeader("Retry-After");
+            if (ResourceDownloadResponse.Number(retryAfter, out var seconds))
+            {
+                delay = Math.Max(delay, Math.Min(10, seconds));
+            }
             else if (DateTimeOffset.TryParse(retryAfter, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
+            {
                 delay = Math.Max(delay, Math.Min(10, Math.Max(0, (date - DateTimeOffset.UtcNow).TotalSeconds)));
+            }
+
             Close();
-            if (!retry || attempt >= source.Attempts) { done = true; throw error; }
-            retryAt = clock.Elapsed.TotalSeconds + delay;
+            if (!retry || _attempt >= _source.Attempts)
+            {
+                _isDone = true;
+                throw error;
+            }
+            _retryAt = _clock.Elapsed.TotalSeconds + delay;
             return true;
         }
 
@@ -125,73 +224,135 @@ namespace YLFramework.Services.Resource
         {
             try
             {
-                if (request != null && native != null && !native.isDone) request.Abort();
-                sink?.Close();
+                if (_request != null && _native != null && !_native.isDone)
+                {
+                    _request.Abort();
+                }
+
+                _sink?.Close();
             }
-            finally { request?.Dispose(); request = null; native = null; sink = null; }
+            finally
+            {
+                _request?.Dispose();
+                _request = null;
+                _native = null;
+                _sink = null;
+            }
         }
-        public void Dispose() { done = true; Close(); }
+        public void Dispose()
+        {
+            _isDone = true;
+            Close();
+        }
         public void Reset() => throw new NotSupportedException();
 
         private sealed class Sink : DownloadHandlerScript
         {
-            private readonly UnityWebRequest request;
-            private readonly long expected;
-            private readonly long maximum;
-            private readonly long offset;
-            private readonly string validator;
-            private readonly ArtifactStore.DownloadPart part;
-            private readonly Stopwatch clock;
-            private Stream output;
-            private readonly MemoryStream memory;
-            private bool headers;
-            private long discarded;
-            internal Exception Error { get; private set; }
-            internal long Written { get; private set; }
-            internal double LastData { get; private set; }
+            private readonly UnityWebRequest _request;
+            private readonly long _expected;
+            private readonly long _maximum;
+            private readonly long _offset;
+            private readonly string _validator;
+            private readonly ArtifactStore.DownloadPart _part;
+            private readonly Stopwatch _clock;
+            private Stream _output;
+            private readonly MemoryStream _memory;
+            private bool _hasValidatedHeaders;
+            private long _discarded;
+            internal Exception Error
+            {
+                get; private set;
+            }
+            internal long Written
+            {
+                get; private set;
+            }
+            internal double LastData
+            {
+                get; private set;
+            }
 
             internal Sink(UnityWebRequest request, long expected, long maximum, long offset, string validator, ArtifactStore.DownloadPart part, Stopwatch clock)
                 : base(new byte[64 * 1024])
             {
-                this.request = request; this.expected = expected; this.maximum = maximum; this.offset = offset; this.validator = validator; this.part = part; this.clock = clock;
-                if (part == null) memory = new MemoryStream();
+                this._request = request;
+                this._expected = expected;
+                this._maximum = maximum;
+                this._offset = offset;
+                this._validator = validator;
+                this._part = part;
+                this._clock = clock;
+                if (part == null)
+                {
+                    _memory = new MemoryStream();
+                }
+
                 LastData = clock.Elapsed.TotalSeconds;
             }
 
             internal void ValidateHeaders()
             {
-                if (headers) return;
-                var start = ResourceDownloadResponse.Offset(request.responseCode, offset, expected, validator, request.GetResponseHeader);
-                var size = request.GetResponseHeader("Content-Length");
-                if (size != null && (!ResourceDownloadResponse.Number(size, out var count) || count > maximum - start))
+                if (_hasValidatedHeaders)
+                {
+                    return;
+                }
+
+                var start = ResourceDownloadResponse.Offset(_request.responseCode, _offset, _expected, _validator, _request.GetResponseHeader);
+                var size = _request.GetResponseHeader("Content-Length");
+                if (size != null && (!ResourceDownloadResponse.Number(size, out var count) || count > _maximum - start))
+                {
                     throw new InvalidDataException("Release response exceeds its byte limit.");
-                output = part == null ? memory : part.OpenWrite(start, request.GetResponseHeader("ETag"));
+                }
+
+                _output = _part == null ? _memory : _part.OpenWrite(start, _request.GetResponseHeader("ETag"));
                 Written = start;
-                headers = true;
+                _hasValidatedHeaders = true;
             }
 
             protected override bool ReceiveData(byte[] data, int dataLength)
             {
                 try
                 {
-                    LastData = clock.Elapsed.TotalSeconds;
-                    if (request.responseCode != 200 && request.responseCode != 206)
-                    { discarded += dataLength; return discarded <= ResourceReleaseSignature.MaximumBytes; }
+                    LastData = _clock.Elapsed.TotalSeconds;
+                    if (_request.responseCode != 200 && _request.responseCode != 206)
+                    {
+                        _discarded += dataLength;
+                        return _discarded <= ResourceReleaseSignature.MaximumBytes;
+                    }
                     ValidateHeaders();
-                    if (dataLength < 0 || dataLength > maximum - Written) throw new InvalidDataException("Release response exceeded its byte limit.");
-                    output.Write(data, 0, dataLength); Written += dataLength;
+                    if (dataLength < 0 || dataLength > _maximum - Written)
+                    {
+                        throw new InvalidDataException("Release response exceeded its byte limit.");
+                    }
+
+                    _output.Write(data, 0, dataLength);
+                    Written += dataLength;
                     return true;
                 }
                 catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is InvalidDataException)
-                { Error = error; return false; }
+                {
+                    Error = error;
+                    return false;
+                }
             }
 
-            internal byte[] Bytes() => memory.ToArray();
+            internal byte[] Bytes() => _memory.ToArray();
             internal void Close()
             {
-                if (output == null || ReferenceEquals(output, memory)) return;
-                try { ((FileStream)output).Flush(true); }
-                finally { output.Dispose(); output = null; }
+                if (_output == null || ReferenceEquals(_output, _memory))
+                {
+                    return;
+                }
+
+                try
+                {
+                    ((FileStream)_output).Flush(true);
+                }
+                finally
+                {
+                    _output.Dispose();
+                    _output = null;
+                }
             }
         }
     }

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-    public class QuaternionExtensions 
+    public class QuaternionExtensions
     {
 
         /// <summary>
@@ -22,10 +22,17 @@ namespace YLFramework.Utilities.Extensions
             to = NormalizeRotation(to, nameof(to));
             current = NormalizeRotation(current, nameof(current));
             double totalAngle = ShortestAngle(from, to);
-            if (totalAngle == 0) return 0;
+            if (totalAngle == 0)
+            {
+                return 0;
+            }
+
             double ratio = ShortestAngle(from, current) / totalAngle;
             if (ratio > float.MaxValue)
+            {
                 throw new InvalidOperationException("角距离比例无法表示为有限 float。");
+            }
+
             return (float)ratio;
         }
 
@@ -48,7 +55,10 @@ namespace YLFramework.Utilities.Extensions
             double lengthSquared = (double)value.x * value.x + (double)value.y * value.y
                 + (double)value.z * value.z + (double)value.w * value.w;
             if (lengthSquared == 0 || double.IsNaN(lengthSquared) || double.IsInfinity(lengthSquared))
+            {
                 throw new ArgumentException("旋转必须是有限非零 Quaternion。", parameter);
+            }
+
             double length = Math.Sqrt(lengthSquared);
             return new Quaternion((float)(value.x / length), (float)(value.y / length),
                 (float)(value.z / length), (float)(value.w / length));

@@ -135,6 +135,8 @@ AudioKit.PlaySound(soundClip, options);
 
 完整旧 JSON 保留原字段格式。显式 Pitch=0 仍非法，Volume=0 仍合法，不按零值猜缺字段。原 `Nullable<AudioSoundOptions>` 不再适用，原值类型可选 `AudioSoundOptions?` 参数改为 `AudioSoundOptions options=null`；`PlaySoundMode` 字段仍是可空枚举。依赖值复制、值相等、反射签名或生成绑定的使用方需更新，外部预编译程序集必须重新构建；不承诺二进制 ABI 稳定。
 
+`AudioSoundOptions` 及其嵌套 `AudioAutoFade/AudioOutputRoute` 的字段同时构成这里的 `JsonUtility` 合同，因此保留 PascalCase 原名，作为命名规范的协议例外。`FormerlySerializedAs` 只迁移 Unity 资产，不能保护这些 JSON 键；不通过字段改名或自定义回退悄悄改变该合同。
+
 ## 命名加载与资源责任
 
 命名入口不重载旧 Clip API，使用 `PlayMusicNamed`、`PlayVoiceNamed`、`PlaySoundNamed`、`CrossFadeMusicNamed`；对应异步入口为 `PlayMusicAsync`、`PlayVoiceAsync`、`PlaySoundAsync`、`CrossFadeMusicAsync`。命名通道使用 `channel.PlayNamed` / `channel.PlayAsync`，仍复用原 Exclusive/Overlap 拓扑与 `AudioHandle`。异步接口返回可观察、可逻辑取消的 `AudioPlayRequest`，不是通用 Task/协程调度框架。
@@ -208,7 +210,7 @@ XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/
 
 ## 素材组与组件
 
-`AudioClipLibrary` 是可共享的选曲资产，不是控制通道或第二个播放器。通过 `Assets/Create/YLFramework/Audio/Clip Library` 新建，Groups 内填写区分大小写的组名及 Entries；一个组可以混用直接 Clip 和命名定位。`Uniform` 在有效条目中均匀选取，忽略存储的 Weight；`Weighted` 只选正权重条目，Weight=0 明确排除。每次提交只抽选一次并保存定位快照，不在异步完成后重新随机。
+`AudioClipLibrary` 是可共享的选曲资产，不是控制通道或第二个播放器。通过 `Assets/Create/YLFramework/Audio/Clip Library` 新建，`groups` 内填写区分大小写的组名 `name` 及 `entries`；一个组可以混用直接 Clip 和命名定位。`Uniform` 在有效条目中均匀选取，忽略存储的 `weight`；`Weighted` 只选正权重条目，`weight=0` 明确排除。每次提交只抽选一次并保存定位快照，不在异步完成后重新随机。作者字段的旧 PascalCase 键由 `FormerlySerializedAs` 读取，类型、引用及枚举数值不变。
 
 | Entry Source | 必要配置与责任 |
 |---|---|
@@ -602,7 +604,7 @@ var characterVoice = AudioKit.PlayVoiceFollowing(voiceClip, character, options);
 
 ### 轻量加权选择
 
-`AudioWeightedClip` 是 `[Serializable]` struct，只有公开字段 `AudioClip Clip`、`float Weight` 和构造 `AudioWeightedClip(AudioClip clip, float weight=1f)`。使用配对项而不是两份平行列表：
+`AudioWeightedClip` 是 `[Serializable]` struct，只有公开字段 `AudioClip clip`、`float weight` 和构造 `AudioWeightedClip(AudioClip clip, float weight=1f)`。使用配对项而不是两份平行列表；旧 Unity 资产的 `Clip/Weight` 通过 `FormerlySerializedAs` 保留：
 
 ```csharp
 var weighted = new[]
@@ -655,7 +657,7 @@ AudioKit.SoundFrameCountForIgnoreSameSound = 10;
 | Music | `KEY_AUDIO_MANAGER_MUSIC_ON` | `KEY_AUDIO_MANAGER_MUSIC_VOLUME` |
 | Voice | `KEY_AUDIO_MANAGER_VOICE_ON` | `KEY_AUDIO_MANAGER_VOICE_VOLUME` |
 
-上述六个持久化属性沿用 `YLFramework.Binding.PlayerPrefsBoolProperty/PlayerPrefsFloatProperty` 公开类型，分类音量在 Audio 局部校验。Load/Reload 遇到负数、NaN 或 Infinity 在内存回退 1，不自动重写坏存档；合法 0 和大于 1 的倍率原样保留，Delete 恢复缺省且不写回。通过 `.Value`、`TrySetValue` 或 `SetValueWithoutCallback` 赋非法音量均抛 `ArgumentOutOfRangeException`，不改变内存、存档、通知或播放状态。合法 `.Value` 变化先持久化再通知；`SetValueWithoutCallback` 只改内存，不通知或持久化。UI 使用 `Register/RegisterWithInitValue` 返回的 YL Events 令牌管理订阅；Shutdown 对旧 Settings 执行 `UnRegisterAll`。没有旧 Settings 的 Init/Deinit/Initialized，也不修改 Binding 全局规则或 comparer。
+上述六个持久化属性沿用 `YLFramework.Binding.PlayerPrefsBoolProperty/PlayerPrefsFloatProperty` 公开类型，分类音量在 Audio 局部校验。Load/Reload 遇到负数、NaN 或 Infinity 在内存回退 1，不自动重写坏存档；合法 0 和大于 1 的倍率原样保留，Delete 恢复缺省且不写回。通过 `.Value`、`TrySetValue` 或 `SetValueWithoutCallback` 赋非法音量均抛 `ArgumentOutOfRangeException`，不改变内存、存档、通知或播放状态。合法 `.Value` 变化先持久化再通知；`SetValueWithoutCallback` 只改内存，不通知或持久化。UI 使用 `Register/RegisterWithInitValue` 返回的 YL Events 令牌管理订阅；Shutdown 对旧 Settings 执行 `UnregisterAll`。没有旧 Settings 的 Init/Deinit/Initialized，也不修改 Binding 全局规则或 comparer。
 
 `IsMusicMuted/IsVoiceMuted/IsSoundMuted` 是 `BindableProperty<bool>`，通过 `.Value` 修改并可沿用同一订阅模式，默认均为 false，仅保留在当前运行时 Settings，不增加 PlayerPrefs 键或主动 Save。Shutdown 清理订阅；重建 Settings 后恢复 false，旧 Settings 的修改不影响新宿主。
 
@@ -852,7 +854,7 @@ ActionKit.Sequence().PlaySoundWithOptions(soundClip, options,
 
 启动才播放；等待的是请求结束，不保证自然播放成功，拒播、外部 Stop、抢占或裁剪也结束等待。取消/Deinit 停止自身请求且不通知成功。Reset 停止旧请求、保留 Clip 与完整值快照模板，下一次执行重新建立自动包络；Deinit 将模板清为 `default(AudioPlaybackOptions)`，释放其中借用的 `OutputRoute.Group` 引用并清除其他资源引用，不卸载或销毁资源，池复用不泄漏。旧 Action 的回调或句柄不能控制新执行代次。暂停动作或序列不自动暂停音频，音频自然结束仍可将动作标记 Finished；完成通知由 Action 执行契约处理。暂停音频继续等待。
 
-Action 在用户 onStarted 之前写入实际 lease，允许回调 Reset/Deinit 停止已启播但尚未从 Play 返回的请求。回调返回与播放方法返回后检查 ActionID/执行版本/Deinited，旧外层赋值不覆盖重入的新执行。并发拒播与抢占仍沿用原等待完成检查，不改变自然完成/取消行为。
+Action 在用户 onStarted 之前写入实际 lease，允许回调 Reset/Deinit 停止已启播但尚未从 Play 返回的请求。回调返回与播放方法返回后检查 ActionId/执行版本/IsDeinitialized，旧外层赋值不覆盖重入的新执行。并发拒播与抢占仍沿用原等待完成检查，不改变自然完成/取消行为。
 
 该 `onFinish` 仍为无参 `Action`，不迁移为音频的 `(clip, handle)` 签名；它通知 Action 等待结束，包含拒播/外部停止，不等同于 AudioKit 的自然完成回调。Action 序列的 `.Callback(() => ...)` 也保持不变。
 

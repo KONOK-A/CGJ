@@ -98,7 +98,10 @@ namespace YLFramework.Foundation.Tests
             scheduler.Advance(2, 4, 3);
             CollectionAssert.AreEqual(new[] { "seconds1", "frames1", "seconds2", "scaled", "frames2" }, calls);
             foreach (var handle in new[] { scaled, seconds, frames, anonymousSeconds, anonymousFrames, single })
+            {
                 Assert.That(handle.Status, Is.EqualTo(TimerState.Completed));
+            }
+
             Assert.That(scope.Contains("seconds") || scope.Contains("frames") || scope.Contains("scaled"), Is.False);
         }
 
@@ -162,8 +165,14 @@ namespace YLFramework.Foundation.Tests
                 scope.PostNamed("name", 0, onCancelled: _ => notifications++);
             Assert.Throws<OverflowException>(() =>
             {
-                if (frames) scope.ReplaceNamedFrames("name", long.MaxValue);
-                else scope.ReplaceNamed("name", double.MaxValue);
+                if (frames)
+                {
+                    scope.ReplaceNamedFrames("name", long.MaxValue);
+                }
+                else
+                {
+                    scope.ReplaceNamed("name", double.MaxValue);
+                }
             });
             Assert.That(old.IsActive, Is.True);
             Assert.That(scope.TryGet("name", out var found), Is.True);
@@ -295,7 +304,10 @@ namespace YLFramework.Foundation.Tests
             var failure = Assert.Throws<AggregateException>(scope.CancelAll);
             CollectionAssert.AreEquivalent(new Exception[] { firstFailure, secondFailure }, failure.InnerExceptions);
             foreach (var handle in new[] { named, paused, anonymous })
+            {
                 Assert.That(handle.Status, Is.EqualTo(TimerState.Cancelled));
+            }
+
             Assert.That(current.IsActive, Is.True);
             Assert.That(scope.TryGet("name", out var found), Is.True);
             Assert.That(found, Is.EqualTo(current));
@@ -348,10 +360,23 @@ namespace YLFramework.Foundation.Tests
             using var scheduler = new TimerScheduler(0, 0, 0);
             using var scope = new TimerScope(scheduler);
             var handle = scope.PostNamed("name", 0, terminal == TimerState.Faulted ? (Action)(() => throw new InvalidOperationException()) : null);
-            if (terminal == TimerState.Cancelled) handle.Cancel();
-            else if (terminal == TimerState.Invalidated) scheduler.Dispose();
-            else if (terminal == TimerState.Faulted) Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
-            else scheduler.Advance(0, 0, 1);
+            if (terminal == TimerState.Cancelled)
+            {
+                handle.Cancel();
+            }
+            else if (terminal == TimerState.Invalidated)
+            {
+                scheduler.Dispose();
+            }
+            else if (terminal == TimerState.Faulted)
+            {
+                Assert.Throws<InvalidOperationException>(() => scheduler.Advance(0, 0, 1));
+            }
+            else
+            {
+                scheduler.Advance(0, 0, 1);
+            }
+
             Assert.That(handle.Status, Is.EqualTo(terminal));
             Assert.That(scope.Contains("name"), Is.False);
             var run = typeof(TimerHandle).GetField("_run", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(handle);

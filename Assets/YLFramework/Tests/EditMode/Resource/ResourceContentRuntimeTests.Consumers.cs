@@ -103,15 +103,27 @@ namespace YLFramework.Tests.ResourceBuild
             var provider = system.GetAudioClipProvider(Snapshot().Document.ProjectId);
             using var music = AudioKit.PlayMusicAsync(new AudioClipAddress(provider, "Owned.wav"));
             var deadline = Time.realtimeSinceStartup + 10;
-            while (!music.HasStarted && music.State != AudioPlayState.Ended && Time.realtimeSinceStartup < deadline) yield return null;
+            while (!music.HasStarted && music.State != AudioPlayState.Ended && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(music.Error, Is.Null);
             Assert.That(music.HasStarted, Is.True);
             using var next = AudioKit.CrossFadeMusicAsync(new AudioClipAddress(provider, "Next.wav"), 0.25f);
-            while (!next.HasStarted && next.State != AudioPlayState.Ended && Time.realtimeSinceStartup < deadline) yield return null;
+            while (!next.HasStarted && next.State != AudioPlayState.Ended && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(next.HasStarted, Is.True);
             Assert.That(music.Handle.IsValid, Is.True, "The tail still owns its original source and clip lease.");
             Assert.That(Budget(system).LiveInputs, Is.EqualTo(2));
-            while (music.Handle.IsValid && Time.realtimeSinceStartup < deadline) yield return null;
+            while (music.Handle.IsValid && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(music.Handle.IsValid, Is.False);
             yield return null;
             Assert.That(Budget(system).LiveInputs, Is.EqualTo(1));
@@ -164,7 +176,10 @@ namespace YLFramework.Tests.ResourceBuild
             yield return activate;
             Assert.That(activate.TakeResult(), Is.True);
             using (var held = system.Acquire<TextAsset>(Address("entry.txt")))
+            {
                 Assert.That(held.Asset.text, Is.EqualTo("second formal encrypted version"));
+            }
+
             keys.Missing = true;
             using (var rejected = system.RollbackAsync())
             {
@@ -177,7 +192,10 @@ namespace YLFramework.Tests.ResourceBuild
             using var rollback = system.RollbackAsync();
             yield return rollback;
             Assert.That(rollback.TakeResult(), Is.True);
-            using (var held = system.Acquire<TextAsset>(Address("entry.txt"))) Assert.That(held.Asset.text, Does.Contain("first release"));
+            using (var held = system.Acquire<TextAsset>(Address("entry.txt")))
+            {
+                Assert.That(held.Asset.text, Does.Contain("first release"));
+            }
         }
 
         [UnityTest]

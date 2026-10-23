@@ -27,10 +27,10 @@ namespace YLFramework.Tests.Audio
         private static IEnumerator CompileSourceClosure(AssemblyBuilderFlags flags)
         {
             var runtime = Path.Combine(Application.dataPath, "YLFramework/Runtime");
-            // Audio 必须全量收集，避免新增正式组件被固定文件清单漏掉；其他目录仅取真实依赖闭包。
+            // Audio及Root的Core依赖全量收集；不能用缺失UIRootContext的伪闭包证明独立编译。
             var directories = new[]
             {
-                "Systems/Audio", "Systems/Action", "Foundation", "Core/ResourceAccess",
+                "Systems/Audio", "Systems/Action", "Foundation", "Core",
                 "Systems/Resource/Catalog", "Systems/Resource/Loading", "Systems/Resource/Lifetime",
                 "Systems/Resource/Sources", "Systems/Resource/Instances", "Systems/Resource/Scenes", "Systems/Resource/Integration",
                 "Systems/Resource/Content", "Systems/Resource/Updates", "Systems/Resource/Diagnostics"
@@ -55,9 +55,14 @@ namespace YLFramework.Tests.Audio
                     "*.cs", SearchOption.AllDirectories))
                 .Concat(files.Select(file => Path.Combine(runtime, file)))
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => path, StringComparer.Ordinal).ToArray();
-            foreach (var source in sources) Assert.That(File.Exists(source), Is.True, source);
-            Assert.That(sources.All(source => IsInsideFolder(source, runtime) &&
-                (!IsInsideFolder(source, Path.Combine(runtime, "Core")) || IsInsideFolder(source, Path.Combine(runtime, "Core/ResourceAccess")))), Is.True);
+            foreach (var source in sources)
+            {
+                Assert.That(File.Exists(source), Is.True, source);
+            }
+
+            Assert.That(sources.All(source => IsInsideFolder(source, runtime)), Is.True);
+            Assert.That(sources.Where(source => IsInsideFolder(source, Path.Combine(runtime, "Core"))),
+                Is.EquivalentTo(Directory.GetFiles(Path.Combine(runtime, "Core"), "*.cs", SearchOption.AllDirectories)));
             Assert.That(Directory.GetFiles(Path.Combine(runtime, "Systems/Audio"), "*.cs", SearchOption.AllDirectories), Is.Not.Empty);
 
             var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLFramework.Audio.SourceClosure-" + Guid.NewGuid().ToString("N"));
@@ -75,8 +80,11 @@ namespace YLFramework.Tests.Audio
                 };
                 var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
                 var profile = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player).Single(x => x.name == "YLFramework.Runtime");
-                builder.compilerOptions = new ScriptCompilerOptions { ApiCompatibilityLevel = profile.compilerOptions.ApiCompatibilityLevel,
-                    AllowUnsafeCode = profile.compilerOptions.AllowUnsafeCode };
+                builder.compilerOptions = new ScriptCompilerOptions
+                {
+                    ApiCompatibilityLevel = profile.compilerOptions.ApiCompatibilityLevel,
+                    AllowUnsafeCode = profile.compilerOptions.AllowUnsafeCode
+                };
                 var json = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "Newtonsoft.Json.dll");
                 var contentCrypto = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "BouncyCastle.Cryptography.dll");
                 Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(contentCrypto), Is.True);
@@ -93,13 +101,21 @@ namespace YLFramework.Tests.Audio
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "UnityEngine.CoreModule.dll"), Is.True);
                 Assert.That(effective.Any(path => Path.GetFileName(path) == "mscorlib.dll" || Path.GetFileName(path) == "netstandard.dll"), Is.True);
                 if (editor)
+                {
                     foreach (var type in new[] { typeof(PlayModeStateChange), typeof(InitializeOnLoadMethodAttribute), typeof(BuildTarget) })
+                    {
                         Assert.That(effective.Select(Path.GetFullPath).Contains(Path.GetFullPath(type.Assembly.Location), StringComparer.OrdinalIgnoreCase), Is.True, type.FullName);
+                    }
+                }
 
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True, "AssemblyBuilder could not start; run this fixture without another compilation in progress.");
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(message => message.type == CompilerMessageType.Error)
                     .Select(message => message.file + ":" + message.line + ": " + message.message), Is.Empty);
@@ -107,11 +123,16 @@ namespace YLFramework.Tests.Audio
                 TestContext.WriteLine("Compiled {0} production source files with {1}; references:\n{2}",
                     sources.Length, flags, string.Join("\n", effective));
                 foreach (var warning in messages.Where(message => message.type == CompilerMessageType.Warning))
+                {
                     TestContext.WriteLine(warning.file + ":" + warning.line + ": " + warning.message);
+                }
             }
             finally
             {
-                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                }
             }
         }
 
@@ -124,9 +145,15 @@ namespace YLFramework.Tests.Audio
             foreach (var name in new[] { "YLFramework.Runtime.dll", "YLFramework.Foundation.Runtime.dll",
                 "YLFramework.Core.Runtime.dll", "YLFramework.Utilities.ZipTool.dll", "YLFramework.Audio.XFAB.dll",
                 "XFGameFramework.dll", "XFABManager.dll", "XFFSM.dll", "Assembly-CSharp.dll", "System.Fake.dll", "UnityEngine.Fake.dll" })
+            {
                 Assert.That(IsAllowedReference(Path.Combine(project, "Library/ScriptAssemblies", name), contents, ui, true), Is.False, name);
+            }
+
             foreach (var name in new[] { "Sirenix.OdinInspector.Attributes.dll", "Sirenix.Serialization.dll", "Sirenix.Utilities.dll" })
+            {
                 Assert.That(IsAllowedReference(Path.Combine(Application.dataPath, "YLFramework/Plugins/Sirenix/Assemblies", name), contents, ui, true), Is.False, name);
+            }
+
             Assert.That(IsAllowedReference(typeof(AudioSourceIndependenceTests).Assembly.Location, contents, ui, true), Is.False);
             Assert.That(IsAllowedReference(typeof(LogAssert).Assembly.Location, contents, ui, true), Is.False);
             Assert.That(IsAllowedReference(typeof(EditorApplication).Assembly.Location, contents, ui, false), Is.False);
@@ -142,23 +169,44 @@ namespace YLFramework.Tests.Audio
         internal static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
         {
             var absolute = Path.GetFullPath(path);
-            if (Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(absolute)) return true;
-            if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase)) return true;
-            if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase)) return true;
+            if (Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(absolute))
+            {
+                return true;
+            }
+
+            if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             var name = Path.GetFileName(absolute);
             if ((name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal)) && name != "UnityEngine.TestRunner.dll")
+            {
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "PlaybackEngines")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEngine.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (editor && (name == "UnityEditor.dll" || name.StartsWith("UnityEditor.", StringComparison.Ordinal)) && name != "UnityEditor.TestRunner.dll")
+            {
                 // Unity 2022.3 的 Editor 模块与 Engine 模块同放在 Managed/UnityEngine，根 UnityEditor.dll 仅是 facade。
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEditor")) ||
                     string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEditor.dll")), StringComparison.OrdinalIgnoreCase);
+            }
+
             if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "Microsoft.CSharp.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
+            {
                 return IsInsideFolder(absolute, Path.Combine(unityContents, "NetStandard")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "UnityReferenceAssemblies")) ||
                     IsInsideFolder(absolute, Path.Combine(unityContents, "MonoBleedingEdge/lib/mono"));
+            }
+
             return false;
         }
 

@@ -1,7 +1,7 @@
-using UnityEngine; 
+using UnityEngine;
 
 namespace YLFramework.Core
-{ 
+{
     /// <summary>
     /// 用于回收View的组件
     /// </summary>
@@ -16,29 +16,29 @@ namespace YLFramework.Core
         [Tooltip("忽略时间缩放")]
         public bool ingoreTimeScale;
 
-        private float timer = 0;
+        private float _timer = 0;
 
 
-        private View view;
+        private View _view;
 
         private void Awake()
         {
-            view = GetComponent<View>();
+            _view = GetComponent<View>();
         }
 
         private void OnEnable()
         {
-            timer = 0;
+            _timer = 0;
         }
 
         private void Update()
         {
-            timer += ingoreTimeScale ? Time.unscaledDeltaTime : Time.deltaTime;
+            _timer += ingoreTimeScale ? Time.unscaledDeltaTime : Time.deltaTime;
 
-            if (timer >= duration)
+            if (_timer >= duration)
             {
-                view.Close();
-                timer = 0;
+                _view.Close();
+                _timer = 0;
             }
         }
     }

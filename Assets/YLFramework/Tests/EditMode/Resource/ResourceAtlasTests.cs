@@ -22,22 +22,31 @@ namespace YLFramework.Tests.ResourceBuild
             if (legacy)
             {
                 var atlas = new SpriteAtlas();
-                atlas.Add(packables); atlas.SetIncludeInBuild(includeInBuild);
-                AssetDatabase.CreateAsset(atlas, path); AssetDatabase.SaveAssetIfDirty(atlas);
+                atlas.Add(packables);
+                atlas.SetIncludeInBuild(includeInBuild);
+                AssetDatabase.CreateAsset(atlas, path);
+                AssetDatabase.SaveAssetIfDirty(atlas);
             }
             else
             {
                 var atlas = new SpriteAtlasAsset();
                 try
                 {
-                    atlas.Add(packables); atlas.SetIncludeInBuild(includeInBuild);
+                    atlas.Add(packables);
+                    atlas.SetIncludeInBuild(includeInBuild);
                     SpriteAtlasAsset.Save(atlas, path);
                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
                     var importer = (SpriteAtlasImporter)AssetImporter.GetAtPath(path);
                     importer.includeInBuild = includeInBuild;
                     importer.SaveAndReimport();
                 }
-                finally { if ((object)atlas is Object owned) Object.DestroyImmediate(owned); }
+                finally
+                {
+                    if ((object)atlas is Object owned)
+                    {
+                        Object.DestroyImmediate(owned);
+                    }
+                }
             }
             return path;
         }
@@ -50,11 +59,16 @@ namespace YLFramework.Tests.ResourceBuild
             var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(path);
             atlas.Remove(atlas.GetPackables());
             atlas.Add(new Object[] { AssetDatabase.LoadAssetAtPath<DefaultAsset>(fixture.Folder + "/Content") });
-            EditorUtility.SetDirty(atlas); AssetDatabase.SaveAssetIfDirty(atlas);
+            EditorUtility.SetDirty(atlas);
+            AssetDatabase.SaveAssetIfDirty(atlas);
             var project = fixture.Project;
-            project.Groups.Clear();
-            project.Groups.Add(new ResourceGroup { Id = "atlas", Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(path) } } });
+            project.groups.Clear();
+            project.groups.Add(new ResourceGroup
+            {
+                id = "atlas",
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(path) } }
+            });
             var map = ResourceBuildMap.Create(project);
             var sources = map.Bundles.SelectMany(value => value.AssetPaths).ToArray();
             Assert.That(sources, Does.Contain(fixture.Folder + "/Content/Sprites.png"));
@@ -73,11 +87,16 @@ namespace YLFramework.Tests.ResourceBuild
             var path = AddAtlas(fixture, legacy: true);
             var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(path);
             atlas.Add(new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(other) });
-            EditorUtility.SetDirty(atlas); AssetDatabase.SaveAssetIfDirty(atlas);
+            EditorUtility.SetDirty(atlas);
+            AssetDatabase.SaveAssetIfDirty(atlas);
             var project = fixture.Project;
-            project.Groups.Clear();
-            project.Groups.Add(new ResourceGroup { Id = "atlas", Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(path) } } });
+            project.groups.Clear();
+            project.groups.Add(new ResourceGroup
+            {
+                id = "atlas",
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(path) } }
+            });
             Assert.That(Assert.Throws<InvalidOperationException>(() => ResourceBuildMap.Create(project)).Message, Does.Contain("unique names"));
             fixture.AssertProtected();
         }
@@ -99,16 +118,29 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new ResourceReleaseFixture();
             var path = AddAtlas(fixture, legacy: legacy);
             var project = fixture.Project;
-            project.Groups.Clear();
-            project.Groups.Add(new ResourceGroup { Id = "atlas", Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(path) } } });
+            project.groups.Clear();
+            project.groups.Add(new ResourceGroup
+            {
+                id = "atlas",
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(path) } }
+            });
             EditorUtility.SetDirty(project);
             AssetDatabase.SaveAssetIfDirty(project);
             Assert.That(ResourceEditorOperations.PrepareAtlases(project), Is.EqualTo(1));
             project = fixture.Project;
             var sourceSprite = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(path).GetSprite("Left");
-            try { Assert.That(sourceSprite && sourceSprite.texture, Is.True); }
-            finally { if (sourceSprite) Object.DestroyImmediate(sourceSprite); }
+            try
+            {
+                Assert.That(sourceSprite && sourceSprite.texture, Is.True);
+            }
+            finally
+            {
+                if (sourceSprite)
+                {
+                    Object.DestroyImmediate(sourceSprite);
+                }
+            }
             var build = fixture.Build();
             Assert.That(build.Map.Assets.Single().AssetType, Is.EqualTo(typeof(SpriteAtlas)));
             Assert.That(build.SubAssets, Is.Empty, "Packing-generated Atlas representations are not stable public Catalog subassets.");

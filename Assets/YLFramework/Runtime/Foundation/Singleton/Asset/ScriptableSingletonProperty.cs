@@ -10,16 +10,16 @@ namespace YLFramework.Core.Singleton
     /// </summary>
     public class ScriptableSingletonProperty<T> where T : ScriptableObject
     {
-        private static readonly Func<string, T> DefaultLoader = Resources.Load<T>;
+        private static readonly Func<string, T> _defaultLoader = Resources.Load<T>;
 
         /// <summary>
         /// 资产加载方式，可替换（例如接入 ResService）
         /// </summary>
-        public static Func<string, T> ScriptableLoader = DefaultLoader;
+        public static Func<string, T> ScriptableLoader = _defaultLoader;
 
         private static T _instance;
-        private static bool _loadedFromDefaultLoader;
-        private static bool _loadFailedWarned;
+        private static bool _isLoadedFromDefaultLoader;
+        private static bool _hasWarnedLoadFailure;
         private static bool _isCreating;
 
         static ScriptableSingletonProperty()
@@ -52,7 +52,7 @@ namespace YLFramework.Core.Singleton
                     _isCreating = true;
                     try
                     {
-                        _loadedFromDefaultLoader = ReferenceEquals(ScriptableLoader, DefaultLoader);
+                        _isLoadedFromDefaultLoader = ReferenceEquals(ScriptableLoader, _defaultLoader);
                         _instance = ScriptableLoader?.Invoke(typeof(T).Name);
                     }
                     finally
@@ -62,7 +62,7 @@ namespace YLFramework.Core.Singleton
 
                     if (_instance != null)
                     {
-                        _loadFailedWarned = false;
+                        _hasWarnedLoadFailure = false;
                     }
                     else
                     {
@@ -94,23 +94,23 @@ namespace YLFramework.Core.Singleton
         /// </summary>
         public static void Dispose()
         {
-            if (_instance != null && _loadedFromDefaultLoader)
+            if (_instance != null && _isLoadedFromDefaultLoader)
             {
                 Resources.UnloadAsset(_instance);
             }
 
             _instance = null;
-            _loadedFromDefaultLoader = false;
+            _isLoadedFromDefaultLoader = false;
         }
 
         private static void WarnLoadFailed()
         {
-            if (_loadFailedWarned)
+            if (_hasWarnedLoadFailure)
             {
                 return;
             }
 
-            _loadFailedWarned = true;
+            _hasWarnedLoadFailure = true;
             Debug.LogWarning(
                 $"[ScriptableSingletonProperty<{typeof(T).Name}>] 未能加载单例资产：ScriptableLoader 返回空。" +
                 $"默认按类型名从 Resources 加载 \"{typeof(T).Name}\"，请确认该资产存在，或使用 InstanceWithLoader 提供加载方式。");
@@ -119,10 +119,10 @@ namespace YLFramework.Core.Singleton
         private static void ResetSessionState()
         {
             _instance = null;
-            _loadedFromDefaultLoader = false;
-            _loadFailedWarned = false;
+            _isLoadedFromDefaultLoader = false;
+            _hasWarnedLoadFailure = false;
             _isCreating = false;
-            ScriptableLoader = DefaultLoader;
+            ScriptableLoader = _defaultLoader;
         }
     }
 }

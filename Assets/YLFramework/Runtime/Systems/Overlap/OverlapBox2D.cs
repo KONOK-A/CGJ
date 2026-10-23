@@ -25,11 +25,14 @@ namespace YLFramework.Overlap
         /// <summary>
         /// 偏移
         /// </summary>
-        public Vector2 Offset {
-            get {
+        public Vector2 Offset
+        {
+            get
+            {
                 return offset;
             }
-            set {
+            set
+            {
                 offset = value;
             }
         }
@@ -37,11 +40,14 @@ namespace YLFramework.Overlap
         /// <summary>
         /// 大小
         /// </summary>
-        public Vector2 Size {
-            get {
+        public Vector2 Size
+        {
+            get
+            {
                 return size;
             }
-            set {
+            set
+            {
                 size = value;
             }
         }
@@ -55,7 +61,11 @@ namespace YLFramework.Overlap
 
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 Vector3 center = transform.localToWorldMatrix.MultiplyPoint(offset);
@@ -67,27 +77,34 @@ namespace YLFramework.Overlap
 
                 s.Set(Mathf.Abs(s.x), Mathf.Abs(s.y));
 
-    #if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER
                 ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-                int count = Physics2D.defaultPhysicsScene.OverlapBox(center, s, transform.eulerAngles.z, contactFilter, results);
-    #else
-                int count = Physics2D.OverlapBoxNonAlloc(center, s, transform.eulerAngles.z, results, layerMask.value);
-    #endif
+                int count = Physics2D.defaultPhysicsScene.OverlapBox(center, s, transform.eulerAngles.z, contactFilter, ResultBuffer);
+#else
+                int count = Physics2D.OverlapBoxNonAlloc(center, s, transform.eulerAngles.z, ResultBuffer, layerMask.value);
+#endif
 
                 CheckCapacity(count);
-                for (int i = 0; i < count && !CheckInvalidated; i++)
+                for (int i = 0; i < count && !IsCheckInvalidated; i++)
                 {
-                    if (!results[i] || results[i].isTrigger) continue;
-                    AddResults(results[i],center);
+                    if (!ResultBuffer[i] || ResultBuffer[i].isTrigger)
+                    {
+                        continue;
+                    }
+
+                    AddResults(ResultBuffer[i], center);
                 }
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
 
         }
 
-#endregion
+        #endregion
 
 
     }

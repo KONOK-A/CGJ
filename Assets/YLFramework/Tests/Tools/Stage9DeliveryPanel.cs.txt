@@ -4,12 +4,17 @@ using YLFramework.Core;
 // 独立接收方自建的最小Panel，不属于产品或旧Acceptance场景。
 public sealed class Stage9DeliveryPanel : Panel
 {
-    public Button Button;
-    public Text Caption;
-    public int Opens { get; private set; }
+    [global::UnityEngine.Serialization.FormerlySerializedAs("Button")]
+    public Button button;
+    [global::UnityEngine.Serialization.FormerlySerializedAs("Caption")]
+    public Text caption;
+    public int Opens
+    {
+        get; private set;
+    }
     protected override void OnOpen(LoadViewArgs args)
     {
         Opens++;
-        Caption.text = "YLFramework Independent Delivery\nPanel / native UGUI / Resource lease\nOpen " + Opens;
+        caption.text = "YLFramework Independent Delivery\nPanel / native UGUI / Resource lease\nOpen " + Opens;
     }
 }

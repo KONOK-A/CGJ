@@ -1,17 +1,17 @@
-using YLFramework.Actions;
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using YLFramework.Actions;
 
 namespace YLFramework.Tests.Actions
 {
     public class CompositeCancellationTests
     {
-        private readonly List<IAction> mOwned = new List<IAction>();
+        private readonly List<IAction> _owned = new List<IAction>();
 
         private T Own<T>(T action) where T : IAction
         {
-            mOwned.Add(action);
+            _owned.Add(action);
             return action;
         }
 
@@ -19,10 +19,14 @@ namespace YLFramework.Tests.Actions
         {
             switch (kind)
             {
-                case 0: return Own(Sequence.Allocate());
-                case 1: return Own(Parallel.Allocate());
-                case 2: return Own(Repeat.Allocate(2));
-                default: throw new ArgumentOutOfRangeException(nameof(kind));
+                case 0:
+                    return Own(Sequence.Allocate());
+                case 1:
+                    return Own(Parallel.Allocate());
+                case 2:
+                    return Own(Repeat.Allocate(2));
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
             }
         }
 
@@ -35,21 +39,31 @@ namespace YLFramework.Tests.Actions
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mOwned)
+            foreach (var action in _owned)
             {
-                if (action is ProbeAction probe) probe.OnDeinited = null;
-                if (action is FailingAction failing) failing.Failure = null;
+                if (action is ProbeAction probe)
+                {
+                    probe.OnDeinited = null;
+                }
+
+                if (action is FailingAction failing)
+                {
+                    failing.Failure = null;
+                }
             }
             try
             {
-                foreach (var action in mOwned)
+                foreach (var action in _owned)
                 {
-                    if (!action.Deinited) action.Deinit();
+                    if (!action.IsDeinitialized)
+                    {
+                        action.Deinit();
+                    }
                 }
             }
             finally
             {
-                mOwned.Clear();
+                _owned.Clear();
                 ActionQueue.Drain();
             }
         }
@@ -65,10 +79,22 @@ namespace YLFramework.Tests.Actions
             public int Deinits;
             public float LastDelta;
 
-            public ulong ActionID { get; set; }
-            public ActionStatus Status { get; set; }
-            public bool Paused { get; set; }
-            public bool Deinited { get; set; }
+            public ulong ActionId
+            {
+                get; set;
+            }
+            public ActionStatus Status
+            {
+                get; set;
+            }
+            public bool IsPaused
+            {
+                get; set;
+            }
+            public bool IsDeinitialized
+            {
+                get; set;
+            }
 
             public void OnStart()
             {
@@ -91,13 +117,17 @@ namespace YLFramework.Tests.Actions
             public void Reset()
             {
                 Status = ActionStatus.NotStart;
-                Paused = false;
+                IsPaused = false;
             }
 
             public void Deinit()
             {
-                if (Deinited) return;
-                Deinited = true;
+                if (IsDeinitialized)
+                {
+                    return;
+                }
+
+                IsDeinitialized = true;
                 Deinits++;
                 OnDeinited?.Invoke();
             }
@@ -119,8 +149,11 @@ namespace YLFramework.Tests.Actions
             protected override void OnDeinit()
             {
                 Deinits++;
-                ObservedDeinited = Deinited;
-                if (Failure != null) throw Failure;
+                ObservedDeinited = IsDeinitialized;
+                if (Failure != null)
+                {
+                    throw Failure;
+                }
             }
         }
 
@@ -143,12 +176,12 @@ namespace YLFramework.Tests.Actions
             parent.Append(callback);
 
             Assert.That(parent.Execute(1f), Is.False);
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(cancelled.Deinits, Is.EqualTo(1));
             Assert.That(sibling.Deinits, Is.EqualTo(1));
             Assert.That(sibling.Starts, Is.Zero);
-            Assert.That(callback.Deinited, Is.True);
+            Assert.That(callback.IsDeinitialized, Is.True);
             Assert.That(callbacks, Is.Zero);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(kind == 2 ? 3 : 2));
         }
@@ -165,13 +198,17 @@ namespace YLFramework.Tests.Actions
             var parent = CreateComposite(kind).Append(child).Append(callback);
 
             Assert.That(parent.Execute(0), Is.False);
-            if (!parent.Deinited) Assert.That(parent.Execute(0.25f), Is.False);
-            Assert.That(parent.Deinited, Is.True);
+            if (!parent.IsDeinitialized)
+            {
+                Assert.That(parent.Execute(0.25f), Is.False);
+            }
+
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(child.Starts, Is.EqualTo(1));
             Assert.That(child.Finishes, Is.Zero);
             Assert.That(child.Deinits, Is.EqualTo(1));
-            Assert.That(callback.Deinited, Is.True);
+            Assert.That(callback.IsDeinitialized, Is.True);
             Assert.That(callbacks, Is.Zero);
         }
 
@@ -188,8 +225,12 @@ namespace YLFramework.Tests.Actions
 
             Assert.That(parent.Execute(0), Is.False);
             Assert.That(parent.Execute(0.25f), Is.False);
-            if (!parent.Deinited) Assert.That(parent.Execute(0.25f), Is.False);
-            Assert.That(parent.Deinited, Is.True);
+            if (!parent.IsDeinitialized)
+            {
+                Assert.That(parent.Execute(0.25f), Is.False);
+            }
+
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(child.LastDelta, Is.EqualTo(0.25f));
             Assert.That(child.Deinits, Is.EqualTo(1));
@@ -213,8 +254,12 @@ namespace YLFramework.Tests.Actions
 
             Assert.That(parent.Execute(0), Is.False);
             Assert.That(parent.Execute(0.25f), Is.False);
-            if (!parent.Deinited) Assert.That(parent.Execute(0.25f), Is.False);
-            Assert.That(parent.Deinited, Is.True);
+            if (!parent.IsDeinitialized)
+            {
+                Assert.That(parent.Execute(0.25f), Is.False);
+            }
+
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(child.Deinits, Is.EqualTo(1));
             Assert.That(sibling.Deinits, Is.EqualTo(1));
@@ -245,7 +290,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(taskChild.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(taskChild.Finishes, Is.Zero);
             Assert.That(taskChild.Deinits, Is.EqualTo(1));
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(sibling.Deinits, Is.EqualTo(1));
             Assert.That(callbacks, Is.Zero);
@@ -259,11 +304,25 @@ namespace YLFramework.Tests.Actions
             var trace = new List<int>();
             var firstFailure = new InvalidOperationException("first cleanup failed");
             var lastFailure = new InvalidOperationException("last cleanup failed");
-            var first = Own(new ProbeAction { OnDeinited = () => { trace.Add(1); throw firstFailure; } });
+            var first = Own(new ProbeAction
+            {
+                OnDeinited = () =>
+                {
+                    trace.Add(1);
+                    throw firstFailure;
+                }
+            });
             var middle = Own(new ProbeAction { OnDeinited = () => trace.Add(2) });
-            var last = Own(new ProbeAction { OnDeinited = () => { trace.Add(3); throw lastFailure; } });
+            var last = Own(new ProbeAction
+            {
+                OnDeinited = () =>
+                {
+                    trace.Add(3);
+                    throw lastFailure;
+                }
+            });
             var parent = CreateComposite(kind).Append(first).Append(middle).Append(last);
-            var originalID = parent.ActionID;
+            var originalId = parent.ActionId;
             parent.Execute(0);
             parent.Execute(0);
             parent.Append(first).Append(parent);
@@ -271,31 +330,39 @@ namespace YLFramework.Tests.Actions
             var exception = Assert.Throws<AggregateException>(() => parent.Deinit());
             CollectionAssert.AreEqual(new Exception[] { firstFailure, lastFailure }, exception.Flatten().InnerExceptions);
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, trace);
-            Assert.That(first.Deinited, Is.True);
-            Assert.That(middle.Deinited, Is.True);
-            Assert.That(last.Deinited, Is.True);
+            Assert.That(first.IsDeinitialized, Is.True);
+            Assert.That(middle.IsDeinitialized, Is.True);
+            Assert.That(last.IsDeinitialized, Is.True);
             Assert.That(first.Deinits, Is.EqualTo(1));
             Assert.That(middle.Deinits, Is.EqualTo(1));
             Assert.That(last.Deinits, Is.EqualTo(1));
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             var pending = kind == 2 ? 2 : 1;
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(pending));
             parent.Deinit();
             parent.Reset();
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(pending));
 
             ActionQueue.Drain();
             var reused = CreateComposite(kind);
             Assert.That(reused, Is.SameAs(parent));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(originalId));
+            Assert.That(reused.IsDeinitialized, Is.False);
             var runs = 0;
             var freshChild = Own(new ProbeAction());
-            freshChild.OnStarted = () => { runs++; freshChild.Finish(); };
+            freshChild.OnStarted = () =>
+            {
+                runs++;
+                freshChild.Finish();
+            };
             reused.Append(freshChild);
             var completed = false;
-            for (var index = 0; index < 6 && !completed; index++) completed = reused.Execute(0);
+            for (var index = 0; index < 6 && !completed; index++)
+            {
+                completed = reused.Execute(0);
+            }
+
             Assert.That(completed, Is.True);
             Assert.That(runs, Is.EqualTo(kind == 2 ? 2 : 1));
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, trace);
@@ -306,11 +373,11 @@ namespace YLFramework.Tests.Actions
         {
             var failure = new InvalidOperationException("hook failed");
             var action = Own(FailingAction.Allocate());
-            var originalID = action.ActionID;
+            var originalId = action.ActionId;
             action.Failure = failure;
             var exception = Assert.Throws<InvalidOperationException>(() => action.Deinit());
             Assert.That(exception, Is.SameAs(failure));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.ObservedDeinited, Is.True);
             Assert.That(action.Deinits, Is.EqualTo(1));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
@@ -322,8 +389,8 @@ namespace YLFramework.Tests.Actions
             ActionQueue.Drain();
             var reused = Own(FailingAction.Allocate());
             Assert.That(reused, Is.Not.SameAs(action));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(originalID));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(originalId));
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(reused.Failure, Is.Null);
             Assert.That(reused.Deinits, Is.Zero);
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.NotStart));
@@ -337,15 +404,24 @@ namespace YLFramework.Tests.Actions
         public void LiveChildExecutionFailurePreservesTheOriginalException(int kind)
         {
             var failure = new InvalidOperationException("execution failed");
-            var child = Own(new ProbeAction { OnStarted = () => { throw failure; } });
+            var child = Own(new ProbeAction
+            {
+                OnStarted = () =>
+                {
+                    throw failure;
+                }
+            });
             var sibling = Own(new ProbeAction());
             var parent = CreateComposite(kind).Append(child).Append(sibling);
-            if (kind != 0) Assert.That(parent.Execute(0), Is.False);
+            if (kind != 0)
+            {
+                Assert.That(parent.Execute(0), Is.False);
+            }
 
             var exception = Assert.Throws<InvalidOperationException>(() => parent.Execute(0));
             Assert.That(exception, Is.SameAs(failure));
-            Assert.That(child.Deinited, Is.False);
-            Assert.That(parent.Deinited, Is.False);
+            Assert.That(child.IsDeinitialized, Is.False);
+            Assert.That(parent.IsDeinitialized, Is.False);
             Assert.That(sibling.Starts, Is.Zero);
             Assert.That(ActionQueue.PendingCount, Is.Zero);
         }
@@ -358,9 +434,21 @@ namespace YLFramework.Tests.Actions
             var innerFailure = new InvalidOperationException("inner cleanup failed");
             var outerFailure = new InvalidOperationException("outer cleanup failed");
             var taskChild = Own(new ProbeAction());
-            var innerSibling = Own(new ProbeAction { OnDeinited = () => { throw innerFailure; } });
+            var innerSibling = Own(new ProbeAction
+            {
+                OnDeinited = () =>
+                {
+                    throw innerFailure;
+                }
+            });
             var inner = Own(Sequence.Allocate()).Append(taskChild).Append(innerSibling);
-            var outerSibling = Own(new ProbeAction { OnDeinited = () => { throw outerFailure; } });
+            var outerSibling = Own(new ProbeAction
+            {
+                OnDeinited = () =>
+                {
+                    throw outerFailure;
+                }
+            });
             var parent = CreateComposite(kind).Append(inner).Append(outerSibling);
             Assert.That(parent.Execute(0), Is.False);
             Assert.That(parent.Execute(0), Is.False);
@@ -368,9 +456,9 @@ namespace YLFramework.Tests.Actions
 
             var exception = Assert.Throws<AggregateException>(() => parent.Execute(0));
             CollectionAssert.AreEquivalent(new Exception[] { innerFailure, outerFailure }, exception.Flatten().InnerExceptions);
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
-            Assert.That(inner.Deinited, Is.True);
+            Assert.That(inner.IsDeinitialized, Is.True);
             Assert.That(taskChild.Deinits, Is.EqualTo(1));
             Assert.That(innerSibling.Deinits, Is.EqualTo(1));
             Assert.That(outerSibling.Deinits, Is.EqualTo(1));

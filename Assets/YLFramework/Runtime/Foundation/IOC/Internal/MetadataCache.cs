@@ -12,18 +12,18 @@ namespace YLFramework.Core.IOC
     /// </summary>
     internal static class MetadataCache
     {
-        private static readonly Dictionary<Type, InjectionMetadata> InjectionMetadataByType =
+        private static readonly Dictionary<Type, InjectionMetadata> _injectionMetadataByType =
             new Dictionary<Type, InjectionMetadata>();
 
-        private static readonly Dictionary<Type, CreationPlan> CreationPlansByType =
+        private static readonly Dictionary<Type, CreationPlan> _creationPlansByType =
             new Dictionary<Type, CreationPlan>();
 
         internal static InjectionMetadata GetInjectionMetadata(Type type)
         {
-            if (!InjectionMetadataByType.TryGetValue(type, out var metadata))
+            if (!_injectionMetadataByType.TryGetValue(type, out var metadata))
             {
                 metadata = BuildInjectionMetadata(type);
-                InjectionMetadataByType[type] = metadata;
+                _injectionMetadataByType[type] = metadata;
             }
 
             return metadata;
@@ -31,10 +31,10 @@ namespace YLFramework.Core.IOC
 
         internal static CreationPlan GetCreationPlan(Type type)
         {
-            if (!CreationPlansByType.TryGetValue(type, out var plan))
+            if (!_creationPlansByType.TryGetValue(type, out var plan))
             {
                 plan = BuildCreationPlan(type);
-                CreationPlansByType[type] = plan;
+                _creationPlansByType[type] = plan;
             }
 
             return plan;

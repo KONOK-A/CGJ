@@ -31,23 +31,43 @@ namespace YLFramework.Core
         {
             get
             {
-                if (!IsValid || uiLayers == null || uiLayers.Length == 0) return false;
+                if (!IsValid || uiLayers == null || uiLayers.Length == 0)
+                {
+                    return false;
+                }
+
                 foreach (var layer in uiLayers)
+                {
                     if (layer == null || !layer.root || !layer.root.IsChildOf(transform) ||
                         layer.root.GetComponentInParent<UIRootContext>(true) != this ||
-                        (layer.enableMask && (!layer.maskImage || !layer.maskImage.transform.IsChildOf(layer.root)))) return false;
+                        (layer.enableMask && (!layer.maskImage || !layer.maskImage.transform.IsChildOf(layer.root))))
+                    {
+                        return false;
+                    }
+                }
+
                 return true;
             }
         }
         internal void ValidateStructure()
         {
             ValidateRoot();
-            if (!HasValidStructure) throw new InvalidOperationException("UIRootContext 层容器或必需遮罩丢失、跨根，根结构已失效。");
+            if (!HasValidStructure)
+            {
+                throw new InvalidOperationException("UIRootContext 层容器或必需遮罩丢失、跨根，根结构已失效。");
+            }
         }
         internal void ValidateRoot()
         {
-            if (!IsValid) throw new InvalidOperationException("UIRootContext 必须有存活 Canvas/GraphicRaycaster 并属于已加载场景。");
-            if (uiLayers == null || uiLayers.Length == 0) throw new InvalidOperationException("UIRootContext 需要显式 Layer 0；请执行资产迁移或配置层容器。");
+            if (!IsValid)
+            {
+                throw new InvalidOperationException("UIRootContext 必须有存活 Canvas/GraphicRaycaster 并属于已加载场景。");
+            }
+
+            if (uiLayers == null || uiLayers.Length == 0)
+            {
+                throw new InvalidOperationException("UIRootContext 需要显式 Layer 0；请执行资产迁移或配置层容器。");
+            }
         }
         /// <summary>返回明确配置的层容器。缺层、已销毁层或跨根引用均报错，不补层也不回退。</summary>
         public Transform GetLayer(int index)
@@ -55,7 +75,10 @@ namespace YLFramework.Core
             ValidateRoot();
             if (index < 0 || index >= uiLayers.Length || uiLayers[index] == null || !uiLayers[index].root ||
                 !uiLayers[index].root.IsChildOf(transform) || uiLayers[index].root.GetComponentInParent<UIRootContext>(true) != this)
+            {
                 throw new ArgumentOutOfRangeException(nameof(index), "Panel Layer 缺失、已销毁或不属于该根。");
+            }
+
             return uiLayers[index].root;
         }
         internal bool HasMask(int index) => index >= 0 && index < uiLayers.Length && uiLayers[index] != null &&
@@ -63,35 +86,76 @@ namespace YLFramework.Core
 
         private void OnEnable()
         {
-            if (!Application.isPlaying) return;
-            if (!canvas) canvas = GetComponent<Canvas>();
-            if (!graphicRaycaster) graphicRaycaster = GetComponent<GraphicRaycaster>();
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            if (!canvas)
+            {
+                canvas = GetComponent<Canvas>();
+            }
+
+            if (!graphicRaycaster)
+            {
+                graphicRaycaster = GetComponent<GraphicRaycaster>();
+            }
+
             PanelManager.RegisterRoot(this);
         }
         private void OnDisable()
         {
-            if (uiLayers != null) foreach (var layer in uiLayers)
-                if (layer != null && layer.maskImage) layer.maskImage.gameObject.SetActive(false);
+            if (uiLayers != null)
+            {
+                foreach (var layer in uiLayers)
+                {
+                    if (layer != null && layer.maskImage)
+                    {
+                        layer.maskImage.gameObject.SetActive(false);
+                    }
+                }
+            }
+
             PanelManager.RootChanged();
         }
         private void OnDestroy() => PanelManager.UnregisterRoot(this);
 
         internal void RefreshMasks()
         {
-            if (uiLayers == null) return;
+            if (uiLayers == null)
+            {
+                return;
+            }
+
             for (int i = 0; i < uiLayers.Length; i++)
             {
                 var layer = uiLayers[i];
-                if (layer == null || !layer.maskImage) continue;
+                if (layer == null || !layer.maskImage)
+                {
+                    continue;
+                }
+
                 var modal = PanelManager.GetLayerModal(this, i);
                 var session = modal ? modal.Session : null;
                 bool show = IsAvailable && layer.enableMask && modal;
                 layer.maskImage.gameObject.SetActive(show);
                 layer.maskImage.raycastTarget = show;
-                if (!show || !modal || !modal.IsLoaded || !ReferenceEquals(modal.Session, session)) continue;
+                if (!show || !modal || !modal.IsLoaded || !ReferenceEquals(modal.Session, session))
+                {
+                    continue;
+                }
+
                 var maskCanvas = layer.maskImage.GetComponent<Canvas>();
-                if (!maskCanvas) maskCanvas = layer.maskImage.gameObject.AddComponent<Canvas>();
-                if (!layer.maskImage.GetComponent<GraphicRaycaster>()) layer.maskImage.gameObject.AddComponent<GraphicRaycaster>();
+                if (!maskCanvas)
+                {
+                    maskCanvas = layer.maskImage.gameObject.AddComponent<Canvas>();
+                }
+
+                if (!layer.maskImage.GetComponent<GraphicRaycaster>())
+                {
+                    layer.maskImage.gameObject.AddComponent<GraphicRaycaster>();
+                }
+
                 maskCanvas.overrideSorting = true;
                 maskCanvas.sortingLayerID = Canvas.sortingLayerID;
                 maskCanvas.sortingOrder = modal.SortingOrder - 1;

@@ -9,9 +9,9 @@ namespace YLFramework.Editor.Resource
     {
         internal static ResourceConfirmationSummary Summarize(ResourceProject project, ResourceBuiltInPlan plan) => new()
         {
-            Fields = new[] { ("资源项目", project.DisplayName + " / " + plan.Source.Document.ProjectId), ("构建平台", plan.Source.Document.Platform),
+            Fields = new[] { ("资源项目", project.displayName + " / " + plan.Source.Document.ProjectId), ("构建平台", plan.Source.Document.Platform),
                 ("所选版本", plan.Source.Document.CatalogDigest.Substring(0, 16)), ("来源", "本地发布目录"), ("目标", "Assets/StreamingAssets 内置资源目录"),
-                ("资源文件", plan.Files.Count + " 个 · " + ResourceWorkbenchGUI.Bytes(plan.PayloadBytes)),
+                ("资源文件", plan.Files.Count + " 个 · " + ResourceWorkbenchGui.Bytes(plan.PayloadBytes)),
                 ("部署预检", plan.IsRepeat ? "重复部署：已有相同版本，执行前重新检查" : "通过：将写入所选版本，执行前重新检查") },
             Effects = new[] { "写入内置版本目录、部署凭据及必要控制文件；不会自动切换正在运行的资源版本。",
                 "使用 Assets 之外的部署工作目录，可能写入暂存、锁和恢复记录。", "新目录会生成 .meta，并触发 Unity 资源导入；不会接管已有的未知内容。" },
@@ -30,7 +30,11 @@ namespace YLFramework.Editor.Resource
 
         internal static string Describe(ResourceBuiltInPlan plan)
         {
-            if (plan == null) throw new ArgumentNullException(nameof(plan));
+            if (plan == null)
+            {
+                throw new ArgumentNullException(nameof(plan));
+            }
+
             var catalog = plan.Source.Document;
             var root = ResourceBuiltInDeployer.ResourcesRoot;
             var project = Path.Combine(root, catalog.ProjectId);

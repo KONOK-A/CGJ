@@ -14,20 +14,20 @@ namespace YLFramework.Actions
     {
         protected override Transform HostParent => YLFrameworkRoot.Instance.GetModuleRoot("Action");
         // 由协程动作登记的取消回调；宿主释放时统一调用，确保协程先于宿主被停止和清理。
-        private readonly HashSet<Action> mCoroutineCancellations = new HashSet<Action>();
+        private readonly HashSet<Action> _coroutineCancellations = new HashSet<Action>();
 
-        private IUnRegister mUpdateToken;
-        private IUnRegister mFixedUpdateToken;
-        private IUnRegister mLateUpdateToken;
-        private object mUpdateRound;
-        private object mExecutionSession;
-        private bool mQuitting;
+        private IUnregister _updateToken;
+        private IUnregister _fixedUpdateToken;
+        private IUnregister _lateUpdateToken;
+        private object _updateRound;
+        private object _executionSession;
+        private bool _isQuitting;
 
         // owned 消息保持 Action 自己的上下文和 fail-fast；三相位只共享公共更新源。
         internal readonly EasyEvent OnUpdateEvent = new EasyEvent();
         internal readonly EasyEvent OnFixedUpdateEvent = new EasyEvent();
         internal readonly EasyEvent OnLateUpdateEvent = new EasyEvent();
-        internal readonly EasyEvent OnGUIEvent = new EasyEvent();
+        internal readonly EasyEvent OnGuiEvent = new EasyEvent();
         internal readonly EasyEvent OnApplicationQuitEvent = new EasyEvent();
         internal readonly EasyEvent<bool> OnApplicationFocusEvent = new EasyEvent<bool>();
         internal readonly EasyEvent<bool> OnApplicationPauseEvent = new EasyEvent<bool>();
@@ -40,8 +40,16 @@ namespace YLFramework.Actions
         {
             get
             {
-                if (ActionKit.IsShuttingDown) return null;
-                if (!HasInstance && (!CanCreateHost() || !SingletonSessionState.CanRunExecution)) return null;
+                if (ActionKit.IsShuttingDown)
+                {
+                    return null;
+                }
+
+                if (!HasInstance && (!CanCreateHost() || !SingletonSessionState.CanRunExecution))
+                {
+                    return null;
+                }
+
                 ActionKit.Initialize();
                 return GetInstance();
             }
@@ -49,7 +57,7 @@ namespace YLFramework.Actions
 
         public override void OnSingletonInit()
         {
-            mExecutionSession = SingletonSessionState.ExecutionSession;
+            _executionSession = SingletonSessionState.ExecutionSession;
             RefreshUpdateBridge();
         }
 
@@ -59,13 +67,17 @@ namespace YLFramework.Actions
         // 初始化补丁可以重入取得宿主；只有模块成功提交后才允许连接。
         internal void RefreshUpdateBridge()
         {
-            if (mUpdateRound != null || !CanForwardUpdate()) return;
-            var round = mUpdateRound = new object();
+            if (_updateRound != null || !CanForwardUpdate())
+            {
+                return;
+            }
+
+            var round = _updateRound = new object();
             try
             {
-                mUpdateToken = UpdateManager.AddUpdateEvent(() => ForwardUpdate(OnUpdateEvent, round));
-                mFixedUpdateToken = UpdateManager.AddFixedUpdateEvent(() => ForwardUpdate(OnFixedUpdateEvent, round));
-                mLateUpdateToken = UpdateManager.AddLateUpdateEvent(() => ForwardUpdate(OnLateUpdateEvent, round));
+                _updateToken = UpdateManager.AddUpdateEvent(() => ForwardUpdate(OnUpdateEvent, round));
+                _fixedUpdateToken = UpdateManager.AddFixedUpdateEvent(() => ForwardUpdate(OnFixedUpdateEvent, round));
+                _lateUpdateToken = UpdateManager.AddLateUpdateEvent(() => ForwardUpdate(OnLateUpdateEvent, round));
             }
             catch
             {
@@ -74,46 +86,69 @@ namespace YLFramework.Actions
             }
         }
 
-        private bool CanForwardUpdate() => this && !HostReleased && IsCurrentHost && isActiveAndEnabled &&
-            !mQuitting && ActionKit.Initialized && !ActionKit.IsShuttingDown &&
+        private bool CanForwardUpdate() => this && !IsHostReleased && IsCurrentHost && isActiveAndEnabled &&
+            !_isQuitting && ActionKit.IsInitialized && !ActionKit.IsShuttingDown &&
             SingletonSessionState.CanRunExecution &&
-            ReferenceEquals(mExecutionSession, SingletonSessionState.ExecutionSession);
+            ReferenceEquals(_executionSession, SingletonSessionState.ExecutionSession);
 
         private void ForwardUpdate(EasyEvent message, object round)
         {
-            if (!ReferenceEquals(mUpdateRound, round) || !CanForwardUpdate() || !message.HasListener) return;
+            if (!ReferenceEquals(_updateRound, round) || !CanForwardUpdate() || !message.HasListener)
+            {
+                return;
+            }
+
             message.Trigger();
         }
 
         private void DisconnectUpdateBridge()
         {
             // token 注销保留公共在途快照，先失效轮次；只释放本宿主的三个身份。
-            mUpdateRound = null;
-            var update = mUpdateToken;
-            var fixedUpdate = mFixedUpdateToken;
-            var lateUpdate = mLateUpdateToken;
-            mUpdateToken = mFixedUpdateToken = mLateUpdateToken = null;
-            try { update?.UnRegister(); }
+            _updateRound = null;
+            var update = _updateToken;
+            var fixedUpdate = _fixedUpdateToken;
+            var lateUpdate = _lateUpdateToken;
+            _updateToken = _fixedUpdateToken = _lateUpdateToken = null;
+            try
+            {
+                update?.Unregister();
+            }
             finally
             {
-                try { fixedUpdate?.UnRegister(); }
-                finally { lateUpdate?.UnRegister(); }
+                try
+                {
+                    fixedUpdate?.Unregister();
+                }
+                finally
+                {
+                    lateUpdate?.Unregister();
+                }
             }
         }
 
-        private void OnGUI() => OnGUIEvent.Trigger();
+        private void OnGUI() => OnGuiEvent.Trigger();
         private void OnApplicationFocus(bool hasFocus) => OnApplicationFocusEvent.Trigger(hasFocus);
         private void OnApplicationPause(bool pauseStatus) => OnApplicationPauseEvent.Trigger(pauseStatus);
 
         protected override void OnApplicationQuit()
         {
-            if (HostReleased || !IsCurrentHost || mQuitting ||
-                !ReferenceEquals(mExecutionSession, SingletonSessionState.ExecutionSession)) return;
-            mQuitting = true;
+            if (IsHostReleased || !IsCurrentHost || _isQuitting ||
+                !ReferenceEquals(_executionSession, SingletonSessionState.ExecutionSession))
+            {
+                return;
+            }
+
+            _isQuitting = true;
             SingletonSessionState.MarkApplicationQuitting();
             DisconnectUpdateBridge();
-            try { OnApplicationQuitEvent.Trigger(); }
-            finally { base.OnApplicationQuit(); }
+            try
+            {
+                OnApplicationQuitEvent.Trigger();
+            }
+            finally
+            {
+                base.OnApplicationQuit();
+            }
         }
 
         public void ExecuteCoroutine(IEnumerator coroutine, Action onFinish)
@@ -123,30 +158,44 @@ namespace YLFramework.Actions
 
         internal Coroutine StartActionCoroutine(IEnumerator coroutine, Action onFinish)
         {
-            if (HostReleased || ActionKit.IsShuttingDown) throw new InvalidOperationException("ActionKit coroutine host is shutting down.");
+            if (IsHostReleased || ActionKit.IsShuttingDown)
+            {
+                throw new InvalidOperationException("ActionKit coroutine host is shutting down.");
+            }
+
             return StartCoroutine(DoExecuteCoroutine(coroutine, onFinish));
         }
 
         // 协程动作启动时登记取消回调，正常结束或取消时反登记；宿主释放时统一调用剩余登记项。
-        internal void RegisterCoroutineCancellation(Action cancellation) => mCoroutineCancellations.Add(cancellation);
-        internal void UnRegisterCoroutineCancellation(Action cancellation) => mCoroutineCancellations.Remove(cancellation);
+        internal void RegisterCoroutineCancellation(Action cancellation) => _coroutineCancellations.Add(cancellation);
+        internal void UnRegisterCoroutineCancellation(Action cancellation) => _coroutineCancellations.Remove(cancellation);
 
         // 先快照再清空集合，避免取消回调重入登记或反登记改变正在遍历的集合。
         private void CancelOwnedCoroutineActions()
         {
-            var cancellations = new List<Action>(mCoroutineCancellations);
-            mCoroutineCancellations.Clear();
+            var cancellations = new List<Action>(_coroutineCancellations);
+            _coroutineCancellations.Clear();
             List<Exception> errors = null;
             foreach (var cancellation in cancellations)
             {
-                try { cancellation(); }
+                try
+                {
+                    cancellation();
+                }
                 catch (Exception exception)
                 {
-                    if (errors == null) errors = new List<Exception>();
+                    if (errors == null)
+                    {
+                        errors = new List<Exception>();
+                    }
+
                     errors.Add(exception);
                 }
             }
-            if (errors != null) throw new AggregateException("ActionKit coroutine cancellation failed.", errors);
+            if (errors != null)
+            {
+                throw new AggregateException("ActionKit coroutine cancellation failed.", errors);
+            }
         }
 
         // 包装内层协程：内层正常跑完才触发完成回调；宿主销毁时 StopAllCoroutines 会直接中断它，
@@ -175,13 +224,40 @@ namespace YLFramework.Actions
         // 宿主结束须终结消息代次，避免旧快照在 Shutdown/重建后继续进入业务。
         private void ClearEvents()
         {
-            if (!OnUpdateEvent.IsDisposed) OnUpdateEvent.ResetOwner();
-            if (!OnFixedUpdateEvent.IsDisposed) OnFixedUpdateEvent.ResetOwner();
-            if (!OnLateUpdateEvent.IsDisposed) OnLateUpdateEvent.ResetOwner();
-            if (!OnGUIEvent.IsDisposed) OnGUIEvent.ResetOwner();
-            if (!OnApplicationQuitEvent.IsDisposed) OnApplicationQuitEvent.ResetOwner();
-            if (!OnApplicationFocusEvent.IsDisposed) OnApplicationFocusEvent.ResetOwner();
-            if (!OnApplicationPauseEvent.IsDisposed) OnApplicationPauseEvent.ResetOwner();
+            if (!OnUpdateEvent.IsDisposed)
+            {
+                OnUpdateEvent.ResetOwner();
+            }
+
+            if (!OnFixedUpdateEvent.IsDisposed)
+            {
+                OnFixedUpdateEvent.ResetOwner();
+            }
+
+            if (!OnLateUpdateEvent.IsDisposed)
+            {
+                OnLateUpdateEvent.ResetOwner();
+            }
+
+            if (!OnGuiEvent.IsDisposed)
+            {
+                OnGuiEvent.ResetOwner();
+            }
+
+            if (!OnApplicationQuitEvent.IsDisposed)
+            {
+                OnApplicationQuitEvent.ResetOwner();
+            }
+
+            if (!OnApplicationFocusEvent.IsDisposed)
+            {
+                OnApplicationFocusEvent.ResetOwner();
+            }
+
+            if (!OnApplicationPauseEvent.IsDisposed)
+            {
+                OnApplicationPauseEvent.ResetOwner();
+            }
         }
 
         // 模块级释放：释放所有全局宿主实例（含场景中被收养的），清空单例缓存，并聚合各宿主的清理异常。
@@ -190,15 +266,25 @@ namespace YLFramework.Actions
             List<Exception> errors = null;
             foreach (var host in FindObjectsOfType<ActionGlobalHost>(true))
             {
-                try { host.ReleaseHost(); }
+                try
+                {
+                    host.ReleaseHost();
+                }
                 catch (Exception exception)
                 {
-                    if (errors == null) errors = new List<Exception>();
+                    if (errors == null)
+                    {
+                        errors = new List<Exception>();
+                    }
+
                     errors.Add(exception);
                 }
             }
             ResetHostReference();
-            if (errors != null) throw new AggregateException("ActionKit global host cleanup failed.", errors);
+            if (errors != null)
+            {
+                throw new AggregateException("ActionKit global host cleanup failed.", errors);
+            }
         }
     }
 }

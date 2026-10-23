@@ -4,6 +4,7 @@ namespace YLFramework.Core.Editor.Tests
 {
     public sealed class CoreEditorGeneratedAssetFixture : ScriptableObject
     {
-        public string Marker;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Marker")]
+        public string marker;
     }
 }

@@ -34,7 +34,7 @@ namespace YLFramework.Analyzers.Tests
             };
             var results = await Task.WhenAll(inputs.Select(s => AnalyzerFixture.Compilation(AnalyzerFixture.Prefix + s)
                 .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(analyzer)).GetAnalyzerDiagnosticsAsync()));
-            Assert.That(results[0].Select(d=>d.Id), Is.EqualTo(new[]{"YL0005"}));
+            Assert.That(results[0].Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
             Assert.That(results[1], Is.Empty);
         }
 
@@ -47,14 +47,14 @@ namespace YLFramework.Analyzers.Tests
             canceled.Cancel();
             Assert.CatchAsync<System.OperationCanceledException>(async () => await driver.GetAnalyzerDiagnosticsAsync(canceled.Token));
             var results = await driver.GetAnalyzerDiagnosticsAsync();
-            Assert.That(results.Select(d=>d.Id), Is.EqualTo(new[]{"YL0005"}));
+            Assert.That(results.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
         }
 
         [Test]
         public async Task IncompleteGenericAndUnboundWriteHaveNoAnalyzerException()
         {
             var compilation = AnalyzerFixture.Compilation(AnalyzerFixture.Prefix + "class Box<T>{Missing<T> value;}class C:YLFramework.Core.View{Box<YLFramework.Core.LoadViewArgs> held;void M(){missing.X=1;}}");
-            Assert.That(compilation.GetDiagnostics().Any(d=>d.Severity == DiagnosticSeverity.Error), Is.True);
+            Assert.That(compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error), Is.True);
             var results = await compilation.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new CoreUsageAnalyzer())).GetAnalyzerDiagnosticsAsync();
             Assert.That(results, Is.Empty, string.Join("\n", results));
         }

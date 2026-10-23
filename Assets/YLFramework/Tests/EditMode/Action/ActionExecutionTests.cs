@@ -1,8 +1,8 @@
-using YLFramework.Actions;
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 using Object = UnityEngine.Object;
 
@@ -10,45 +10,55 @@ namespace YLFramework.Tests.Actions
 {
     public class ActionExecutionTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private readonly List<IActionController> mControllers = new List<IActionController>();
-        private GameObject mRoot;
-        private MonoUpdateActionExecutor mExecutor;
+        private readonly List<IAction> _actions = new List<IAction>();
+        private readonly List<IActionController> _controllers = new List<IActionController>();
+        private GameObject _root;
+        private MonoUpdateActionExecutor _executor;
 
         [SetUp]
         public void SetUp()
         {
             ActionQueue.Drain();
-            mRoot = new GameObject("ActionKit.Execution.EditModeTest");
-            mExecutor = mRoot.AddComponent<MonoUpdateActionExecutor>();
+            _root = new GameObject("ActionKit.Execution.EditModeTest");
+            _executor = _root.AddComponent<MonoUpdateActionExecutor>();
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (mRoot) Object.DestroyImmediate(mRoot);
-            foreach (var action in mActions)
+            if (_root)
             {
-                if (!action.Deinited) action.Deinit();
+                Object.DestroyImmediate(_root);
             }
-            foreach (var controller in mControllers)
+
+            foreach (var action in _actions)
             {
-                if (controller.Action != null) controller.Recycle();
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            mActions.Clear();
-            mControllers.Clear();
+            foreach (var controller in _controllers)
+            {
+                if (controller.Action != null)
+                {
+                    controller.Recycle();
+                }
+            }
+            _actions.Clear();
+            _controllers.Clear();
             ActionQueue.Drain();
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
         private IActionController Track(IActionController controller)
         {
-            mControllers.Add(controller);
+            _controllers.Add(controller);
             return controller;
         }
 
@@ -64,7 +74,10 @@ namespace YLFramework.Tests.Actions
             {
                 Executions++;
                 Delta = dt;
-                if (Complete) this.Finish();
+                if (Complete)
+                {
+                    this.Finish();
+                }
             }
 
             protected override void OnReset()
@@ -81,21 +94,21 @@ namespace YLFramework.Tests.Actions
             var action = Own(DeltaProbe.Allocate());
             var controller = Track(ActionController.Allocate());
             controller.Action = action;
-            controller.ActionID = action.ActionID;
-            controller.Paused = true;
-            Assert.That(action.Paused, Is.True);
+            controller.ActionId = action.ActionId;
+            controller.IsPaused = true;
+            Assert.That(action.IsPaused, Is.True);
             controller.Resume();
-            Assert.That(controller.Paused, Is.False);
+            Assert.That(controller.IsPaused, Is.False);
             controller.Pause();
-            Assert.That(action.Paused, Is.True);
+            Assert.That(action.IsPaused, Is.True);
             action.Execute(0);
             controller.Reset();
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Paused, Is.False);
+            Assert.That(action.IsPaused, Is.False);
             Assert.That(controller.IgnoreTimeScale(), Is.SameAs(controller));
             Assert.That(controller.UpdateMode, Is.EqualTo(ActionUpdateModes.UnscaledDeltaTime));
             controller.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
         }
 
         [Test]
@@ -104,19 +117,19 @@ namespace YLFramework.Tests.Actions
             var action = Own(DeltaProbe.Allocate());
             var controller = Track(ActionController.Allocate());
             controller.Action = action;
-            controller.ActionID = action.ActionID + 1;
+            controller.ActionId = action.ActionId + 1;
             action.Execute(0);
             controller.Pause();
             controller.Reset();
             controller.Deinit();
-            Assert.That(action.Paused, Is.False);
+            Assert.That(action.IsPaused, Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
-            action.Paused = true;
+            Assert.That(action.IsDeinitialized, Is.False);
+            action.IsPaused = true;
             controller.Resume();
-            Assert.That(action.Paused, Is.True);
-            controller.Paused = false;
-            Assert.That(action.Paused, Is.True);
+            Assert.That(action.IsPaused, Is.True);
+            controller.IsPaused = false;
+            Assert.That(action.IsPaused, Is.True);
         }
 
         [Test]
@@ -125,11 +138,11 @@ namespace YLFramework.Tests.Actions
             var action = Own(Kit.Condition(() => false));
             var first = Track(ActionController.Allocate());
             first.Action = action;
-            first.ActionID = action.ActionID;
+            first.ActionId = action.ActionId;
             first.IgnoreTimeScale();
             first.Recycle();
             Assert.That(first.Action, Is.Null);
-            Assert.That(first.ActionID, Is.Zero);
+            Assert.That(first.ActionId, Is.Zero);
             Assert.That(first.UpdateMode, Is.EqualTo(ActionUpdateModes.ScaledDeltaTime));
             var reused = Track(ActionController.Allocate());
             Assert.That(reused, Is.SameAs(first));
@@ -145,7 +158,7 @@ namespace YLFramework.Tests.Actions
             Assert.DoesNotThrow(() => controller.Reset());
             Assert.DoesNotThrow(() => controller.Pause());
             Assert.DoesNotThrow(() => controller.Resume());
-            Assert.That(controller.Paused, Is.False);
+            Assert.That(controller.IsPaused, Is.False);
             controller.Recycle();
             Assert.DoesNotThrow(() => controller.Recycle());
         }
@@ -159,15 +172,15 @@ namespace YLFramework.Tests.Actions
             var action = Own(Kit.Callback(() => calls++));
             IActionController callbackController = null;
             var controller = typedCallback
-                ? Track(action.Start(mExecutor, value =>
+                ? Track(action.Start(_executor, value =>
                 {
                     callbackController = value;
-                    callbackObservedBeforeDeinit = !value.Action.Deinited;
+                    callbackObservedBeforeDeinit = !value.Action.IsDeinitialized;
                     calls++;
                 }))
-                : Track(action.Start(mExecutor, () => calls++));
+                : Track(action.Start(_executor, () => calls++));
             Assert.That(calls, Is.EqualTo(2));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null, "Synchronous completion must release the controller too.");
             if (typedCallback)
             {
@@ -182,22 +195,22 @@ namespace YLFramework.Tests.Actions
         {
             var action = Own(DeltaProbe.Allocate());
             var calls = 0;
-            var controller = Track(action.Start(mExecutor, value =>
+            var controller = Track(action.Start(_executor, value =>
             {
                 Assert.That(value.Action, Is.SameAs(action));
-                Assert.That(value.Action.Deinited, Is.False);
+                Assert.That(value.Action.IsDeinitialized, Is.False);
                 calls++;
             }));
             controller.UpdateMode = mode;
             Assert.That(action.Starts, Is.EqualTo(1));
             Assert.That(action.Executions, Is.Zero);
             action.Complete = true;
-            mExecutor.Tick(0.25f, 0.75f);
+            _executor.Tick(0.25f, 0.75f);
             Assert.That(action.Delta, Is.EqualTo(expected));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(controller.Action, Is.Null);
-            mExecutor.Tick(1, 1);
+            _executor.Tick(1, 1);
             Assert.That(calls, Is.EqualTo(1));
         }
 
@@ -206,9 +219,9 @@ namespace YLFramework.Tests.Actions
         {
             var action = Own(Kit.Condition(() => false));
             var calls = 0;
-            var controller = Track(action.Start(mExecutor, () => calls++));
+            var controller = Track(action.Start(_executor, () => calls++));
             controller.Deinit();
-            mExecutor.Tick(1, 1);
+            _executor.Tick(1, 1);
             Assert.That(calls, Is.Zero);
             Assert.That(controller.Action, Is.Null);
         }
@@ -219,7 +232,7 @@ namespace YLFramework.Tests.Actions
             var starts = 0;
             var action = Own(Kit.Callback(() => starts++));
             action.Finish();
-            Track(action.Start(mExecutor));
+            Track(action.Start(_executor));
             Assert.That(starts, Is.EqualTo(1));
         }
 
@@ -229,11 +242,11 @@ namespace YLFramework.Tests.Actions
             var action = Own(Kit.Condition(() => true));
             var controller = Track(ActionController.Allocate());
             controller.Action = action;
-            controller.ActionID = action.ActionID;
+            controller.ActionId = action.ActionId;
             var calls = 0;
-            Assert.That(mExecutor.ExecuteByUpdate(action, controller, _ => calls++), Is.SameAs(action));
-            Assert.That(mRoot.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
-            mExecutor.Tick(0, 0);
+            Assert.That(_executor.ExecuteByUpdate(action, controller, _ => calls++), Is.SameAs(action));
+            Assert.That(_root.GetComponents<MonoUpdateActionExecutor>().Length, Is.EqualTo(1));
+            _executor.Tick(0, 0);
             Assert.That(calls, Is.EqualTo(1));
         }
 
@@ -243,12 +256,12 @@ namespace YLFramework.Tests.Actions
             var ready = false;
             var first = Own(Kit.Condition(() => ready));
             var second = Own(DeltaProbe.Allocate());
-            Track(first.Start(mExecutor, () => Track(second.Start(mExecutor))));
+            Track(first.Start(_executor, () => Track(second.Start(_executor))));
             ready = true;
-            mExecutor.Tick(1, 1);
+            _executor.Tick(1, 1);
             Assert.That(second.Starts, Is.EqualTo(1));
             Assert.That(second.Executions, Is.Zero);
-            mExecutor.Tick(2, 2);
+            _executor.Tick(2, 2);
             Assert.That(second.Executions, Is.EqualTo(1));
         }
 
@@ -259,23 +272,23 @@ namespace YLFramework.Tests.Actions
             var firstCalls = 0;
             var secondCalls = 0;
             var action = Own(Kit.Condition(() => ready));
-            var first = Track(action.Start(mExecutor, () => firstCalls++));
-            Assert.Throws<InvalidOperationException>(() => action.Start(mExecutor, () => secondCalls++));
+            var first = Track(action.Start(_executor, () => firstCalls++));
+            Assert.Throws<InvalidOperationException>(() => action.Start(_executor, () => secondCalls++));
             ready = true;
-            mExecutor.Tick(1, 1);
+            _executor.Tick(1, 1);
             Assert.That(firstCalls, Is.EqualTo(1));
             Assert.That(secondCalls, Is.Zero);
             Assert.That(first.Action, Is.Null);
-            Assert.That(mExecutor.ScheduledCount, Is.Zero);
+            Assert.That(_executor.ScheduledCount, Is.Zero);
         }
 
         [Test]
         public void DestroyingTheExecutorCancelsItsActionsAndReleasesControllers()
         {
             var action = Own(Kit.Condition(() => false));
-            var controller = Track(action.Start(mExecutor));
-            Object.DestroyImmediate(mExecutor);
-            Assert.That(action.Deinited, Is.True);
+            var controller = Track(action.Start(_executor));
+            Object.DestroyImmediate(_executor);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -283,27 +296,31 @@ namespace YLFramework.Tests.Actions
         public void EditorLifecycleCallbacksDoNotAutomaticallyExecuteScheduledActions()
         {
             var polls = 0;
-            var action = Own(Kit.Condition(() => { polls++; return true; }));
-            var controller = Track(action.Start(mExecutor));
-            mExecutor.SendMessage("Update");
+            var action = Own(Kit.Condition(() =>
+            {
+                polls++;
+                return true;
+            }));
+            var controller = Track(action.Start(_executor));
+            _executor.SendMessage("Update");
             Assert.That(polls, Is.Zero);
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(controller.Action, Is.SameAs(action));
-            mExecutor.Tick(0, 0);
+            _executor.Tick(0, 0);
             Assert.That(polls, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
         [Test]
         public void SameActionCannotBeScheduledOnTwoExecutors()
         {
-            var other = mRoot.AddComponent<MonoUpdateActionExecutor>();
+            var other = _root.AddComponent<MonoUpdateActionExecutor>();
             var action = Own(Kit.Condition(() => false));
-            var controller = Track(action.Start(mExecutor));
+            var controller = Track(action.Start(_executor));
             var second = Track(ActionController.Allocate());
             second.Action = action;
-            second.ActionID = action.ActionID;
+            second.ActionId = action.ActionId;
             Assert.Throws<InvalidOperationException>(() => other.Execute(second));
             Assert.That(controller.Action, Is.SameAs(action));
         }
@@ -313,15 +330,15 @@ namespace YLFramework.Tests.Actions
         {
             var ready = false;
             var action = Own(Kit.Condition(() => ready));
-            var controller = Track(action.Start(mExecutor, () =>
+            var controller = Track(action.Start(_executor, () =>
             {
                 Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
-                Assert.Throws<InvalidOperationException>(() => action.Start(mExecutor));
+                Assert.Throws<InvalidOperationException>(() => action.Start(_executor));
                 Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
             }));
             ready = true;
-            mExecutor.Tick(0, 0);
-            Assert.That(action.Deinited, Is.True);
+            _executor.Tick(0, 0);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -341,11 +358,11 @@ namespace YLFramework.Tests.Actions
             var action = Own(FaultProbe.Allocate());
             action.StartError = original;
             action.CleanupError = cleanup;
-            var error = Assert.Throws<InvalidOperationException>(() => action.Start(mExecutor));
+            var error = Assert.Throws<InvalidOperationException>(() => action.Start(_executor));
             Assert.That(error, Is.SameAs(original));
             Assert.That(error.Data["ActionKit.CleanupException"], Is.InstanceOf<AggregateException>());
-            Assert.That(action.Deinited, Is.True);
-            Assert.That(mExecutor.ScheduledCount, Is.Zero);
+            Assert.That(action.IsDeinitialized, Is.True);
+            Assert.That(_executor.ScheduledCount, Is.Zero);
         }
 
         [Test]
@@ -355,16 +372,16 @@ namespace YLFramework.Tests.Actions
             var next = Own(Kit.Condition(() => false));
             IActionController replacement = null;
             var first = Own(Kit.Callback(null));
-            var error = Assert.Throws<InvalidOperationException>(() => first.Start(mExecutor, controller =>
+            var error = Assert.Throws<InvalidOperationException>(() => first.Start(_executor, controller =>
             {
                 controller.Recycle();
-                replacement = Track(next.Start(mExecutor));
+                replacement = Track(next.Start(_executor));
                 throw original;
             }));
             Assert.That(error, Is.SameAs(original));
             Assert.That(replacement.Action, Is.SameAs(next));
-            Assert.That(next.Deinited, Is.False);
-            mExecutor.Tick(0, 0);
+            Assert.That(next.IsDeinitialized, Is.False);
+            _executor.Tick(0, 0);
             Assert.That(replacement.Action, Is.SameAs(next));
         }
 
@@ -382,10 +399,10 @@ namespace YLFramework.Tests.Actions
             action.Finish();
             action.ResetCallback = Kit.Shutdown;
             IActionController controller = null;
-            Assert.DoesNotThrow(() => controller = action.Start(mExecutor));
-            Assert.That(action.Deinited, Is.True);
+            Assert.DoesNotThrow(() => controller = action.Start(_executor));
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
-            Assert.That(Kit.Initialized, Is.False);
+            Assert.That(Kit.IsInitialized, Is.False);
         }
 
         [Test]
@@ -393,27 +410,27 @@ namespace YLFramework.Tests.Actions
         {
             var action = Own(ResetProbe.Allocate());
             action.Finish();
-            action.ResetCallback = () => Assert.Throws<InvalidOperationException>(() => action.Start(mExecutor));
-            var controller = Track(action.Start(mExecutor));
+            action.ResetCallback = () => Assert.Throws<InvalidOperationException>(() => action.Start(_executor));
+            var controller = Track(action.Start(_executor));
             Assert.That(controller.Action, Is.SameAs(action));
-            Assert.That(mExecutor.ScheduledCount, Is.EqualTo(1));
+            Assert.That(_executor.ScheduledCount, Is.EqualTo(1));
         }
 
         [Test]
         public void ACancelledPooledActionCanStartANewLeaseBeforeTheOldTaskIsRemoved()
         {
             var first = Own(Kit.Condition(() => false));
-            var oldController = Track(first.Start(mExecutor));
+            var oldController = Track(first.Start(_executor));
             first.Deinit();
             ActionQueue.Drain();
             var replacement = Own(Kit.Condition(() => false));
             Assert.That(replacement, Is.SameAs(first));
             IActionController current = null;
-            Assert.DoesNotThrow(() => current = Track(replacement.Start(mExecutor)));
-            mExecutor.Tick(0, 0);
+            Assert.DoesNotThrow(() => current = Track(replacement.Start(_executor)));
+            _executor.Tick(0, 0);
             Assert.That(oldController.Action, Is.Null);
             Assert.That(current.Action, Is.SameAs(replacement));
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
         }
 
         [Test]
@@ -426,11 +443,11 @@ namespace YLFramework.Tests.Actions
             })));
             var other = Track(ActionController.Allocate());
             other.Action = cancelled;
-            other.ActionID = cancelled.ActionID;
+            other.ActionId = cancelled.ActionId;
             var calls = 0;
-            Assert.That(mExecutor.UpdateAction(other, 0, _ => calls++), Is.True);
+            Assert.That(_executor.UpdateAction(other, 0, _ => calls++), Is.True);
             Assert.That(calls, Is.Zero);
-            Assert.That(cancelled.Deinited, Is.True);
+            Assert.That(cancelled.IsDeinitialized, Is.True);
         }
 
         [TestCase(false)]
@@ -443,13 +460,13 @@ namespace YLFramework.Tests.Actions
             var parent = Own(conditional
                 ? Kit.Sequence().ConditionSequence(() => true, inner => inner.Append(child)).Callback(() => steps++)
                 : Kit.Sequence().Append(child).Callback(() => steps++));
-            var controller = Track(parent.Start(mExecutor, () => finishes++));
-            mExecutor.Tick(0, 0);
+            var controller = Track(parent.Start(_executor, () => finishes++));
+            _executor.Tick(0, 0);
             child.Deinit();
-            mExecutor.Tick(0, 0);
-            Assert.That(parent.Deinited, Is.True);
+            _executor.Tick(0, 0);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
-            Assert.That(mExecutor.ScheduledCount, Is.Zero);
+            Assert.That(_executor.ScheduledCount, Is.Zero);
             Assert.That(steps, Is.Zero);
             Assert.That(finishes, Is.Zero);
         }

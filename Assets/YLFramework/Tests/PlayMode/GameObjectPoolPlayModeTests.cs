@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using YLFramework.Core.Pool;
 using Object = UnityEngine.Object;
 
@@ -18,7 +18,11 @@ namespace YLFramework.Tests
         public Action ParentChanged;
         public Action ChildrenChanged;
         [NonSerialized] public int EnableCalls;
-        private void OnEnable() { EnableCalls++; Enabled?.Invoke(); }
+        private void OnEnable()
+        {
+            EnableCalls++;
+            Enabled?.Invoke();
+        }
         private void OnDisable() => Disabled?.Invoke();
         private void OnTransformParentChanged() => ParentChanged?.Invoke();
         private void OnTransformChildrenChanged() => ChildrenChanged?.Invoke();
@@ -48,14 +52,34 @@ namespace YLFramework.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (_pool) _pool.ClearAll();
+            if (_pool)
+            {
+                _pool.ClearAll();
+            }
+
             foreach (var obj in _objects)
-                if (obj) Object.Destroy(obj);
+            {
+                if (obj)
+                {
+                    Object.Destroy(obj);
+                }
+            }
+
             _objects.Clear();
             yield return null;
-            if (_originalScene.IsValid() && _originalScene.isLoaded) SceneManager.SetActiveScene(_originalScene);
+            if (_originalScene.IsValid() && _originalScene.isLoaded)
+            {
+                SceneManager.SetActiveScene(_originalScene);
+            }
+
             foreach (var scene in _scenes)
-                if (scene.IsValid() && scene.isLoaded) yield return SceneManager.UnloadSceneAsync(scene);
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    yield return SceneManager.UnloadSceneAsync(scene);
+                }
+            }
+
             _scenes.Clear();
         }
 
@@ -329,10 +353,20 @@ namespace YLFramework.Tests
             var rejected = false;
             probe.ChildrenChanged = () =>
             {
-                if (fired) return;
+                if (fired)
+                {
+                    return;
+                }
+
                 fired = true;
-                try { data.Init("nested", root.transform); }
-                catch (InvalidOperationException) { rejected = true; }
+                try
+                {
+                    data.Init("nested", root.transform);
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected = true;
+                }
             };
             try
             {
@@ -348,17 +382,30 @@ namespace YLFramework.Tests
                 Assert.That(obj == null, Is.True);
                 Assert.That(root.transform.childCount, Is.Zero);
             }
-            finally { data.OnRecycle(); }
+            finally
+            {
+                data.OnRecycle();
+            }
 
             var hostProbe = _pool.gameObject.AddComponent<GameObjectPoolLifecycleProbe>();
             fired = false;
             rejected = false;
             hostProbe.ChildrenChanged = () =>
             {
-                if (fired) return;
+                if (fired)
+                {
+                    return;
+                }
+
                 fired = true;
-                try { _pool.InitOneGoData("creating", 2); }
-                catch (InvalidOperationException) { rejected = true; }
+                try
+                {
+                    _pool.InitOneGoData("creating", 2);
+                }
+                catch (InvalidOperationException)
+                {
+                    rejected = true;
+                }
             };
             _pool.InitOneGoData("creating", 1);
             Assert.That(rejected, Is.True);
@@ -366,7 +413,11 @@ namespace YLFramework.Tests
             fired = false;
             hostProbe.ChildrenChanged = () =>
             {
-                if (fired) return;
+                if (fired)
+                {
+                    return;
+                }
+
                 fired = true;
                 _pool.Clear("cancel-creating");
             };
@@ -396,7 +447,11 @@ namespace YLFramework.Tests
                 yield return null;
                 Assert.That(obj != null, Is.True);
             }
-            finally { first.OnRecycle(); second.OnRecycle(); }
+            finally
+            {
+                first.OnRecycle();
+                second.OnRecycle();
+            }
         }
     }
 }

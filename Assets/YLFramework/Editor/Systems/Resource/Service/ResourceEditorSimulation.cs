@@ -20,12 +20,12 @@ namespace YLFramework.Editor.Resource
     [InitializeOnLoad]
     public sealed class ResourceEditorSimulation
     {
-        private static readonly int MainThread;
-        private readonly Dictionary<string, string> projects = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, ResourceCatalogDocument> catalogs = new(StringComparer.Ordinal);
+        private static readonly int _mainThread;
+        private readonly Dictionary<string, string> _projects = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ResourceCatalogDocument> _catalogs = new(StringComparer.Ordinal);
         static ResourceEditorSimulation()
         {
-            MainThread = Thread.CurrentThread.ManagedThreadId;
+            _mainThread = Thread.CurrentThread.ManagedThreadId;
             YLFramework.Core.Editor.EditorAssetTool.PreviewResolver = ResolveCorePreview;
         }
 
@@ -34,26 +34,43 @@ namespace YLFramework.Editor.Resource
             CheckEditor();
             var matches = AssetDatabase.FindAssets("t:ResourceProject")
                 .Select(guid => AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(guid)))
-                .Where(project => project && project.ProjectId == projectId).ToArray();
-            if (matches.Length == 0) throw new ArgumentException("No formal YL resource project matches ProjectId: " + projectId);
-            if (matches.Length != 1) throw new InvalidOperationException("Ambiguous YL resource ProjectId: " + projectId);
+                .Where(project => project && project.projectId == projectId).ToArray();
+            if (matches.Length == 0)
+            {
+                throw new ArgumentException("No formal YL resource project matches ProjectId: " + projectId);
+            }
+
+            if (matches.Length != 1)
+            {
+                throw new InvalidOperationException("Ambiguous YL resource ProjectId: " + projectId);
+            }
+
             return new ResourceEditorSimulation(matches).Load(new ResourceAddress(projectId, address, subAsset), typeof(Object));
         }
 
         public ResourceEditorSimulation(ResourceProject[] projects, ResourceCatalogDocument[] catalogs = null)
         {
             CheckEditor();
-            if (projects == null || projects.Length == 0 || projects.Length > 16384) throw new ArgumentException("Explicit resource projects are required.");
+            if (projects == null || projects.Length == 0 || projects.Length > 16384)
+            {
+                throw new ArgumentException("Explicit resource projects are required.");
+            }
+
             foreach (var project in projects)
             {
                 var map = ResourceBuildMap.Create(project);
-                if (!this.projects.TryAdd(map.ProjectId, map.ProjectGuid)) throw new ArgumentException("Duplicate simulation project.");
+                if (!this._projects.TryAdd(map.ProjectId, map.ProjectGuid))
+                {
+                    throw new ArgumentException("Duplicate simulation project.");
+                }
             }
             foreach (var catalog in catalogs ?? Array.Empty<ResourceCatalogDocument>())
             {
-                if (catalog == null || !this.projects.ContainsKey(catalog.ProjectId) || !this.catalogs.TryAdd(catalog.ProjectId, catalog) ||
+                if (catalog == null || !this._projects.ContainsKey(catalog.ProjectId) || !this._catalogs.TryAdd(catalog.ProjectId, catalog) ||
                     catalog.UnityCompatibility != Application.unityVersion || catalog.Platform != EditorUserBuildSettings.activeBuildTarget.ToString())
+                {
                     throw new ArgumentException("Simulation catalog identity/compatibility mismatch.");
+                }
             }
         }
 
@@ -62,15 +79,27 @@ namespace YLFramework.Editor.Resource
         /// <summary>调用方显式给出已编译类型；不根据 Catalog 类型字符串反射，也不回退到 XFAB/Resources。</summary>
         public Object Load(ResourceAddress address, Type type)
         {
-            if (type == null || !typeof(Object).IsAssignableFrom(type) || type.ContainsGenericParameters) throw new ArgumentException("A compiled Unity asset type is required.");
+            if (type == null || !typeof(Object).IsAssignableFrom(type) || type.ContainsGenericParameters)
+            {
+                throw new ArgumentException("A compiled Unity asset type is required.");
+            }
+
             var entry = Resolve(address);
-            if (!type.IsAssignableFrom(entry.Location.AssetType)) throw new InvalidOperationException("Simulation asset type mismatch: " + address);
+            if (!type.IsAssignableFrom(entry.Location.AssetType))
+            {
+                throw new InvalidOperationException("Simulation asset type mismatch: " + address);
+            }
+
             var path = entry.Location.Locator;
             var candidates = entry.Address.SubAsset == null ? new[] { AssetDatabase.LoadMainAssetAtPath(path) } : AssetDatabase.LoadAllAssetRepresentationsAtPath(path);
             var matches = candidates.Where(x => x && type.IsInstanceOfType(x) &&
                 AssetDatabase.TryGetGUIDAndLocalFileIdentifier(x, out string guid, out long id) &&
                 guid + "_" + id.ToString(CultureInfo.InvariantCulture) == entry.AssetId).ToArray();
-            if (matches.Length != 1) throw new InvalidOperationException("Simulation asset identity is missing or ambiguous: " + address);
+            if (matches.Length != 1)
+            {
+                throw new InvalidOperationException("Simulation asset identity is missing or ambiguous: " + address);
+            }
+
             return matches[0];
         }
 
@@ -80,7 +109,11 @@ namespace YLFramework.Editor.Resource
         public IReadOnlyList<ResourceCatalogEntry> GetGroup(string projectId, string groupId)
         {
             var snapshot = Snapshot(projectId);
-            if (!snapshot.Map.Groups.TryGetValue(groupId, out var members)) throw new ArgumentException("Unknown simulation Group: " + groupId);
+            if (!snapshot.Map.Groups.TryGetValue(groupId, out var members))
+            {
+                throw new ArgumentException("Unknown simulation Group: " + groupId);
+            }
+
             return snapshot.Catalog.Entries.Where(x => members.Contains(x.AssetId)).ToList().AsReadOnly();
         }
 
@@ -90,15 +123,37 @@ namespace YLFramework.Editor.Resource
         public static ResourceConfiguration CreateConfiguration(ResourceLoadMode mode, ResourceProject[] projects,
             IEnumerable<ResourceProjectMount> mounts = null, string cacheRoot = null, ResourceImageOptions images = null)
         {
-            if (mode == ResourceLoadMode.Bundles) return ResourceConfiguration.Create(mode, mounts, cacheRoot, images);
-            if (mode != ResourceLoadMode.EditorSimulation) throw new ArgumentOutOfRangeException(nameof(mode));
-            if (cacheRoot != null) throw new ArgumentException("Editor simulation does not mount or write an artifact store.", nameof(cacheRoot));
+            if (mode == ResourceLoadMode.Bundles)
+            {
+                return ResourceConfiguration.Create(mode, mounts, cacheRoot, images);
+            }
+
+            if (mode != ResourceLoadMode.EditorSimulation)
+            {
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+
+            if (cacheRoot != null)
+            {
+                throw new ArgumentException("Editor simulation does not mount or write an artifact store.", nameof(cacheRoot));
+            }
+
             var versions = mounts?.ToArray();
             if (versions != null && (projects == null || versions.Length != projects.Length || versions.Any(x => x?.BuiltIn == null) ||
                 !versions.Select(x => x.ProjectId).OrderBy(x => x, StringComparer.Ordinal).SequenceEqual(
-                    projects.Select(x => x ? x.ProjectId : null).OrderBy(x => x, StringComparer.Ordinal))))
+                    projects.Select(x => x ? x.projectId : null).OrderBy(x => x, StringComparer.Ordinal))))
+            {
                 throw new ArgumentException("Explicit simulation versions must match the complete selected project set.", nameof(mounts));
-            if (versions != null) foreach (var version in versions) _ = version.BuiltIn.CreateCatalog(version.AssetTypes);
+            }
+
+            if (versions != null)
+            {
+                foreach (var version in versions)
+                {
+                    _ = version.BuiltIn.CreateCatalog(version.AssetTypes);
+                }
+            }
+
             return new ResourceEditorSimulation(projects, versions?.Select(x => x.BuiltIn.Document).ToArray()).CreateConfiguration(images);
         }
 
@@ -106,47 +161,75 @@ namespace YLFramework.Editor.Resource
         public ResourceConfiguration CreateConfiguration() => CreateConfiguration(ResourceImageOptions.Default);
 
         /// <summary>模拟与Bundle配置共用同一图片策略；不因使用Editor Source而绕过编码/像素/并发边界。</summary>
-        public ResourceConfiguration CreateConfiguration(ResourceImageOptions images) => new(projects.Keys.Select(id => Snapshot(id).Catalog),
+        public ResourceConfiguration CreateConfiguration(ResourceImageOptions images) => new(_projects.Keys.Select(id => Snapshot(id).Catalog),
             new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true, images), new TextureResourceSource(false, images), new SimulationSource(this) }, images);
 
         private sealed class SimulationSource : IResourceSource, IResourceSceneSource
         {
-            private readonly ResourceEditorSimulation simulation;
-            internal SimulationSource(ResourceEditorSimulation simulation) => this.simulation = simulation;
+            private readonly ResourceEditorSimulation _simulation;
+            internal SimulationSource(ResourceEditorSimulation simulation) => this._simulation = simulation;
             public ResourceSourceId Id => ResourceSourceId.Editor;
             public bool SupportsSynchronousLoad => true;
             public bool IsScene(ResourceCatalogEntry entry) => entry.Location.AssetType == typeof(SceneAsset);
             public void Validate(ResourceCatalogEntry entry)
             {
-                var current = simulation.Resolve(entry.Address);
-                if (current.AssetId != entry.AssetId || !current.Location.Equals(entry.Location)) throw new InvalidOperationException("Editor Source snapshot is stale: " + entry.Address);
+                var current = _simulation.Resolve(entry.Address);
+                if (current.AssetId != entry.AssetId || !current.Location.Equals(entry.Location))
+                {
+                    throw new InvalidOperationException("Editor Source snapshot is stale: " + entry.Address);
+                }
             }
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type)
             {
                 Validate(entry);
-                if (entry.Location.AssetType == typeof(SceneAsset)) throw new ResourceException(ResourceError.Unsupported, "Scene previews are not Runtime asset acquisitions.");
-                return new ResourceSourceResult(simulation.Load(entry.Address, type));
+                if (entry.Location.AssetType == typeof(SceneAsset))
+                {
+                    throw new ResourceException(ResourceError.Unsupported, "Scene previews are not Runtime asset acquisitions.");
+                }
+
+                return new ResourceSourceResult(_simulation.Load(entry.Address, type));
             }
             public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => new Operation(Load(entry, type).Asset);
-            public void Release(Object asset) { }
+            public void Release(Object asset)
+            {
+            }
             public string ResolveScenePath(ResourceCatalogEntry entry)
             {
                 Validate(entry);
-                if (!IsScene(entry)) throw new ResourceException(ResourceError.TypeMismatch, "The Editor address is not a Scene.");
+                if (!IsScene(entry))
+                {
+                    throw new ResourceException(ResourceError.TypeMismatch, "The Editor address is not a Scene.");
+                }
+
                 var path = AssetDatabase.GUIDToAssetPath(entry.AssetId.Substring(0, 32));
-                if (path != entry.Location.Locator) throw new ResourceException(ResourceError.AddressNotFound, "Editor Scene GUID/path changed.");
+                if (path != entry.Location.Locator)
+                {
+                    throw new ResourceException(ResourceError.AddressNotFound, "Editor Scene GUID/path changed.");
+                }
+
                 return path;
             }
             public AsyncOperation LoadSceneAsync(string path, LoadSceneParameters parameters) => EditorSceneManager.LoadSceneAsyncInPlayMode(path, parameters);
-            private sealed class Operation : ResourceSourceOperation { internal Operation(Object asset) => Complete(asset, null); }
+            private sealed class Operation : ResourceSourceOperation
+            {
+                internal Operation(Object asset) => Complete(asset, null);
+            }
         }
 
         private (ResourceBuildMap Map, ResourceCatalog Catalog) Snapshot(string projectId)
         {
             CheckEditor();
-            if (projectId == null || !projects.TryGetValue(projectId, out var guid)) throw new ArgumentException("Unknown simulation ProjectId.");
+            if (projectId == null || !_projects.TryGetValue(projectId, out var guid))
+            {
+                throw new ArgumentException("Unknown simulation ProjectId.");
+            }
+
             var project = AssetDatabase.LoadAssetAtPath<ResourceProject>(AssetDatabase.GUIDToAssetPath(guid));
-            if (!project || project.ProjectId != projectId) throw new InvalidOperationException("Simulation project removed or identity changed; select it again.");
+            if (!project || project.projectId != projectId)
+            {
+                throw new InvalidOperationException("Simulation project removed or identity changed; select it again.");
+            }
+
             var map = ResourceBuildMap.Create(project);
             var entries = new List<ResourceCatalogEntry>();
             void Add(ResourceBuildAsset main, ResourceBuiltSubAsset sub = null)
@@ -156,15 +239,29 @@ namespace YLFramework.Editor.Resource
                     new ResourceAddress(projectId, main.Address.Path, key), new ResourceLocation(new ResourceSourceId("editor"), main.SourcePath, sub?.AssetType ?? main.AssetType),
                     main.Aliases.Select(x => new ResourceAddress(projectId, x.Path, key))));
             }
-            foreach (var main in map.Assets) Add(main);
-            foreach (var sub in ResourceBundleBuilder.DescribeSubAssets(map)) Add(sub.MainAsset, sub);
-            var snapshot = new ResourceCatalog(projectId, entries) { Groups = map.Groups.Select(x => new ResourceCatalogGroup(x.Key,
-                x.Value.Select(id => new ResourceCatalogGroupMember(id, true)))).ToList().AsReadOnly() };
-            if (catalogs.TryGetValue(projectId, out var published))
+            foreach (var main in map.Assets)
+            {
+                Add(main);
+            }
+
+            foreach (var sub in ResourceBundleBuilder.DescribeSubAssets(map))
+            {
+                Add(sub.MainAsset, sub);
+            }
+
+            var snapshot = new ResourceCatalog(projectId, entries)
+            {
+                Groups = map.Groups.Select(x => new ResourceCatalogGroup(x.Key,
+                x.Value.Select(id => new ResourceCatalogGroupMember(id, true)))).ToList().AsReadOnly()
+            };
+            if (_catalogs.TryGetValue(projectId, out var published))
             {
                 // immutable Catalog 不随源重命名/定义切换偷偷漂移；仅允许内容重导入而身份描述不变。
                 if (published.Assets.Count != entries.Count || published.Groups.Count != map.Groups.Count)
+                {
                     throw new InvalidOperationException("Published Catalog is stale; rebuild the resource project.");
+                }
+
                 foreach (var asset in published.Assets)
                 {
                     var current = entries.SingleOrDefault(x => x.AssetId == asset.AssetId);
@@ -176,19 +273,27 @@ namespace YLFramework.Editor.Resource
                         !current.Aliases.Select(x => x.Path).SequenceEqual(asset.Aliases) ||
                         asset.SubAssetKey != null && !AssetDatabase.LoadAllAssetRepresentationsAtPath(main.SourcePath).Any(x => x && x.name == asset.SubAssetName &&
                             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(x, out string _, out long id) && id == asset.LocalId))
+                    {
                         throw new InvalidOperationException("Published Catalog descriptor is stale: " + asset.AssetId);
+                    }
                 }
                 foreach (var group in published.Groups)
+                {
                     if (!map.Groups.TryGetValue(group.Id, out var members) || !members.SequenceEqual(group.Members.Select(x => x.AssetId)) || group.Members.Any(x => !x.Required))
+                    {
                         throw new InvalidOperationException("Published Catalog Group is stale: " + group.Id);
+                    }
+                }
             }
             return (map, snapshot);
         }
 
         private static void CheckEditor()
         {
-            if (Thread.CurrentThread.ManagedThreadId != MainThread || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
                 throw new InvalidOperationException("Simulation requires the settled Editor main thread.");
+            }
         }
     }
 }

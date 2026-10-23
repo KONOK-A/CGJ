@@ -11,7 +11,14 @@ namespace YLFramework.Core.Pool
     /// <typeparam name="T">不要求实现领域接口的引用类型。</typeparam>
     public sealed class ObjectPool<T> : IPool<T>, IDisposable where T : class
     {
-        private enum State { Allocating, Leased, Returning, Idle, Retired }
+        private enum State
+        {
+            Allocating,
+            Leased,
+            Returning,
+            Idle,
+            Retired
+        }
         private sealed class Entry
         {
             internal State State;
@@ -26,7 +33,7 @@ namespace YLFramework.Core.Pool
         private readonly Action<T> _onDiscard;
         private IObjectFactory<T> _factory;
         private int _maxPoolSize;
-        private bool _disposed;
+        private bool _isDisposed;
 
         /// <summary>
         /// 创建实例池。工厂必须提供独占的新引用；回收 Reset 清租用数据，
@@ -36,14 +43,23 @@ namespace YLFramework.Core.Pool
             Action<T> onDiscard = null, int maxPoolSize = 20, PoolCacheOrder cacheOrder = PoolCacheOrder.Fifo)
         {
             if (cacheOrder != PoolCacheOrder.Fifo && cacheOrder != PoolCacheOrder.Lifo)
+            {
                 throw new ArgumentOutOfRangeException(nameof(cacheOrder));
+            }
+
             _factory = new CustomObjectFactory<T>(factory);
             _onAllocate = onAllocate;
             _reset = reset;
             _onDiscard = onDiscard;
             _maxPoolSize = maxPoolSize;
-            if (cacheOrder == PoolCacheOrder.Fifo) _queue = new Queue<T>();
-            else _stack = new Stack<T>();
+            if (cacheOrder == PoolCacheOrder.Fifo)
+            {
+                _queue = new Queue<T>();
+            }
+            else
+            {
+                _stack = new Stack<T>();
+            }
         }
 
         /// <summary>当前空闲对象数量，不包含借出及转换期对象。</summary>
@@ -59,7 +75,10 @@ namespace YLFramework.Core.Pool
             set
             {
                 _maxPoolSize = value;
-                if (value > 0 && CurStoreCount > value) RetireCached(CurStoreCount - value);
+                if (value > 0 && CurStoreCount > value)
+                {
+                    RetireCached(CurStoreCount - value);
+                }
             }
         }
 
@@ -75,22 +94,35 @@ namespace YLFramework.Core.Pool
 
         private void ThrowIfDisposed()
         {
-            if (_disposed) throw new ObjectDisposedException(GetType().FullName);
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
         }
 
         private T TakeCached() => _stack == null ? _queue.Dequeue() : _stack.Pop();
 
         private void Cache(T item, Entry entry)
         {
-            if (_stack == null) _queue.Enqueue(item);
-            else _stack.Push(item);
+            if (_stack == null)
+            {
+                _queue.Enqueue(item);
+            }
+            else
+            {
+                _stack.Push(item);
+            }
+
             entry.State = State.Idle;
         }
 
         private T Create()
         {
             if (_factory == null)
+            {
                 throw new InvalidOperationException($"[Pool] {typeof(T).FullName} 尚未设置对象工厂。");
+            }
+
             var item = _factory.Create();
             if (ReferenceEquals(item, null))
             {
@@ -98,7 +130,10 @@ namespace YLFramework.Core.Pool
                 return null;
             }
             if (_entries.TryGetValue(item, out _))
+            {
                 throw new InvalidOperationException("[Pool] 工厂必须返回本池尚未登记的独占新对象。");
+            }
+
             _entries.Add(item, new Entry { State = State.Allocating });
             return item;
         }
@@ -111,7 +146,11 @@ namespace YLFramework.Core.Pool
         {
             ThrowIfDisposed();
             var item = CurStoreCount > 0 ? TakeCached() : Create();
-            if (ReferenceEquals(item, null)) return null;
+            if (ReferenceEquals(item, null))
+            {
+                return null;
+            }
+
             _entries.TryGetValue(item, out var entry);
             entry.State = State.Allocating;
             try
@@ -149,11 +188,22 @@ namespace YLFramework.Core.Pool
 
         private bool Return(T item, bool allowCache, int cacheTarget = int.MaxValue)
         {
-            if (ReferenceEquals(item, null)) return false;
+            if (ReferenceEquals(item, null))
+            {
+                return false;
+            }
+
             if (!_entries.TryGetValue(item, out var entry))
+            {
                 throw new InvalidOperationException("[Pool] 不能归还不属于本池的对象。");
-            if (entry.State != State.Leased) return false;
-            var willCache = allowCache && !_disposed && CurStoreCount < cacheTarget &&
+            }
+
+            if (entry.State != State.Leased)
+            {
+                return false;
+            }
+
+            var willCache = allowCache && !_isDisposed && CurStoreCount < cacheTarget &&
                 (_maxPoolSize <= 0 || CurStoreCount < _maxPoolSize);
             entry.State = State.Returning;
             try
@@ -166,7 +216,7 @@ namespace YLFramework.Core.Pool
                 throw;
             }
             // 保留初判满池的保守丢弃语义，同时复核嵌套归还/缩容/关闭后的真实上限。
-            if (willCache && !_disposed && CurStoreCount < cacheTarget &&
+            if (willCache && !_isDisposed && CurStoreCount < cacheTarget &&
                 (_maxPoolSize <= 0 || CurStoreCount < _maxPoolSize))
             {
                 Cache(item, entry);
@@ -180,8 +230,14 @@ namespace YLFramework.Core.Pool
         private void RetireFailed(T item, Entry entry, Exception error)
         {
             entry.State = State.Retired;
-            try { _onDiscard?.Invoke(item); }
-            catch (Exception cleanupError) { throw new AggregateException(error, cleanupError); }
+            try
+            {
+                _onDiscard?.Invoke(item);
+            }
+            catch (Exception cleanupError)
+            {
+                throw new AggregateException(error, cleanupError);
+            }
         }
 
         /// <summary>按目标空闲数量补齐并执行 Reset，返回本次新增缓存数。</summary>
@@ -198,18 +254,33 @@ namespace YLFramework.Core.Pool
         {
             ThrowIfDisposed();
             if (mode != PoolPrewarmMode.Recycle && mode != PoolPrewarmMode.Raw)
+            {
                 throw new ArgumentOutOfRangeException(nameof(mode));
-            if (_maxPoolSize > 0) count = Math.Min(count, _maxPoolSize);
+            }
+
+            if (_maxPoolSize > 0)
+            {
+                count = Math.Min(count, _maxPoolSize);
+            }
+
             var missing = Math.Max(0, count > CurStoreCount ? count - CurStoreCount : 0);
             var cached = 0;
             for (var i = 0; i < missing; i++)
             {
                 ThrowIfDisposed();
-                if (CurStoreCount >= count) break;
+                if (CurStoreCount >= count)
+                {
+                    break;
+                }
+
                 var item = Create();
-                if (ReferenceEquals(item, null)) continue;
+                if (ReferenceEquals(item, null))
+                {
+                    continue;
+                }
+
                 _entries.TryGetValue(item, out var entry);
-                if (_disposed)
+                if (_isDisposed)
                 {
                     var error = new ObjectDisposedException(GetType().FullName);
                     RetireFailed(item, entry, error);
@@ -218,7 +289,10 @@ namespace YLFramework.Core.Pool
                 if (mode == PoolPrewarmMode.Recycle)
                 {
                     entry.State = State.Leased;
-                    if (Return(item, true, count)) cached++;
+                    if (Return(item, true, count))
+                    {
+                        cached++;
+                    }
                 }
                 else
                 {
@@ -250,7 +324,11 @@ namespace YLFramework.Core.Pool
 
         private void RetireCached(int count, Action<T> itemClearCallback = null)
         {
-            if (count == 0) return;
+            if (count == 0)
+            {
+                return;
+            }
+
             var snapshot = new T[count];
             for (var i = 0; i < count; i++)
             {
@@ -262,12 +340,27 @@ namespace YLFramework.Core.Pool
             List<Exception> errors = null;
             foreach (var item in snapshot)
             {
-                try { _onDiscard?.Invoke(item); }
-                catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
-                try { itemClearCallback?.Invoke(item); }
-                catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                try
+                {
+                    _onDiscard?.Invoke(item);
+                }
+                catch (Exception error)
+                {
+                    (errors ??= new List<Exception>()).Add(error);
+                }
+                try
+                {
+                    itemClearCallback?.Invoke(item);
+                }
+                catch (Exception error)
+                {
+                    (errors ??= new List<Exception>()).Add(error);
+                }
             }
-            if (errors != null) throw new AggregateException(errors);
+            if (errors != null)
+            {
+                throw new AggregateException(errors);
+            }
         }
 
         /// <summary>摘除当前空闲快照再逐项永久清理，不再次 Reset；回调中新归还的缓存保留。</summary>
@@ -282,8 +375,12 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
             _factory = null;
             Clear();
         }

@@ -5,12 +5,16 @@ YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务�
 > 当前框架仍在持续开发和完善中，部分模块缺少测试或存在明确的待完善项，详见各模块文档的“当前状态”。
 > 本文档是导航性质的内部文档，不是完整 API Reference。
 
+自有代码的格式、命名、bool 语义与安全改名规则统一见框架根目录的 [代码规范](../CodingStyle.md)；AI 编程工作说明见 [AGENTS.md](../AGENTS.md)。
+
 ## 目录结构（当前）
 
 框架根目录为 `Assets/YLFramework/`：
 
 | 目录 | 说明 |
 |---|---|
+| [`CodingStyle.md`](../CodingStyle.md) | 代码、命名、bool 分类与安全改名的唯一规范 |
+| [`AGENTS.md`](../AGENTS.md) | 面向 AI 编程的项目导航、工作流程与验证要求 |
 | [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
 | [`Editor/`](../Editor/) | Editor-only主体；功能工具、模块帮助提供方与共享Help分区 |
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |

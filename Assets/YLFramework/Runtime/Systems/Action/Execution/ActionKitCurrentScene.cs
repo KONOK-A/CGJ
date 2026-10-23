@@ -8,7 +8,7 @@ namespace YLFramework.Actions
     public class ActionKitCurrentScene : MonoSingletonHost<ActionKitCurrentScene>
     {
         /// <summary>当前缓存的场景宿主；保留原公开字段，调用方应通过 SceneComponent 取得实例。</summary>
-        public static ActionKitCurrentScene mSceneComponent = null;
+        public static ActionKitCurrentScene CachedSceneComponent = null;
         // 自建宿主保持在当前场景中，不设 DontDestroyOnLoad，随场景卸载一起销毁并取消其动作。
         protected override bool PersistentHost => false;
 
@@ -18,12 +18,16 @@ namespace YLFramework.Actions
         {
             get
             {
-                if (ActionKit.IsShuttingDown) throw new InvalidOperationException("ActionKit is shutting down.");
-                if (!mSceneComponent || mSceneComponent.HostReleased)
+                if (ActionKit.IsShuttingDown)
                 {
-                    mSceneComponent = GetInstance(true);
+                    throw new InvalidOperationException("ActionKit is shutting down.");
                 }
-                return mSceneComponent;
+
+                if (!CachedSceneComponent || CachedSceneComponent.IsHostReleased)
+                {
+                    CachedSceneComponent = GetInstance(true);
+                }
+                return CachedSceneComponent;
             }
         }
 
@@ -36,8 +40,17 @@ namespace YLFramework.Actions
 
         protected override void OnDestroy()
         {
-            try { base.OnDestroy(); }
-            finally { if (mSceneComponent == this) mSceneComponent = null; }
+            try
+            {
+                base.OnDestroy();
+            }
+            finally
+            {
+                if (CachedSceneComponent == this)
+                {
+                    CachedSceneComponent = null;
+                }
+            }
         }
 
         // Shutdown 专用：只释放模块自建的宿主（借用场景组件时保留组件本身），再清空单例与静态缓存。
@@ -45,10 +58,13 @@ namespace YLFramework.Actions
         {
             foreach (var instance in FindObjectsOfType<ActionKitCurrentScene>(true))
             {
-                if (instance.OwnsHostGameObject) instance.ReleaseHost();
+                if (instance.OwnsHostGameObject)
+                {
+                    instance.ReleaseHost();
+                }
             }
             ResetHostReference();
-            mSceneComponent = null;
+            CachedSceneComponent = null;
         }
     }
 }

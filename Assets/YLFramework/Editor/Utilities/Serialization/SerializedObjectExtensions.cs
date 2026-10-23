@@ -1,12 +1,12 @@
-using System; 
+using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEditor; 
+using UnityEditor;
 
 namespace YLFramework.Core.Editor
 {
 
-    public static class SerializedObjectExtensions  
+    public static class SerializedObjectExtensions
     {
 
         /// <summary>
@@ -15,7 +15,7 @@ namespace YLFramework.Core.Editor
         /// <param name="serializedObject"></param>
         /// <returns></returns>
 
-        public static List<SerializedProperty> GetAllSerializedProperty(this SerializedObject serializedObject) 
+        public static List<SerializedProperty> GetAllSerializedProperty(this SerializedObject serializedObject)
         {
             var list = new List<SerializedProperty>();
             var iterator = serializedObject.GetIterator();
@@ -31,7 +31,7 @@ namespace YLFramework.Core.Editor
 
             return list;
         }
-         
+
     }
 
 }

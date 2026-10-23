@@ -56,7 +56,11 @@ namespace YLFramework.Editor.Help
         /// <exception cref="ArgumentException">id 为 null、空或仅由空白字符组成。</exception>
         public HelpPage(string id, string title, string group, string summary, params HelpBlock[] blocks)
         {
-            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("页面标识不能为空。", nameof(id));
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("页面标识不能为空。", nameof(id));
+            }
+
             Id = id;
             Title = title ?? "";
             Group = group ?? "";
@@ -78,7 +82,11 @@ namespace YLFramework.Editor.Help
             fields.Add(new HelpSearchField(Title, HelpSearch.TitleWeight));
             fields.Add(new HelpSearchField(Group, HelpSearch.KeywordWeight));
             fields.Add(new HelpSearchField(Summary, HelpSearch.SummaryWeight));
-            foreach (var keyword in Keywords) fields.Add(new HelpSearchField(keyword, HelpSearch.KeywordWeight));
+            foreach (var keyword in Keywords)
+            {
+                fields.Add(new HelpSearchField(keyword, HelpSearch.KeywordWeight));
+            }
+
             foreach (var block in Blocks)
             {
                 fields.Add(new HelpSearchField(block.Title, HelpSearch.BodyWeight));
@@ -90,7 +98,10 @@ namespace YLFramework.Editor.Help
                 else
                 {
                     fields.Add(new HelpSearchField(block.Content, HelpSearch.BodyWeight));
-                    if (block.Kind == HelpBlockKind.Link) fields.Add(new HelpSearchField(block.Url, HelpSearch.TechnicalWeight));
+                    if (block.Kind == HelpBlockKind.Link)
+                    {
+                        fields.Add(new HelpSearchField(block.Url, HelpSearch.TechnicalWeight));
+                    }
                 }
             }
         }
@@ -223,12 +234,20 @@ namespace YLFramework.Editor.Help
         /// <remarks>命中取字段权重加匹配等级（整体等于 +30、前缀 +20、包含 +10）；含点号的词先整体匹配，失败再按点拆分逐段 AND，并扣少量分值。</remarks>
         internal static int Score(IReadOnlyList<HelpSearchField> fields, string[] terms)
         {
-            if (terms == null || terms.Length == 0) return 0;
+            if (terms == null || terms.Length == 0)
+            {
+                return 0;
+            }
+
             var total = 0;
             foreach (var term in terms)
             {
                 var score = MatchTerm(fields, term);
-                if (score < 0) return -1;
+                if (score < 0)
+                {
+                    return -1;
+                }
+
                 total += score;
             }
             return total;
@@ -246,10 +265,20 @@ namespace YLFramework.Editor.Help
                     foreach (var part in parts)
                     {
                         var partScore = MatchSingle(fields, part);
-                        if (partScore < 0) { split = -1; break; }
-                        if (partScore < split) split = partScore;
+                        if (partScore < 0)
+                        {
+                            split = -1;
+                            break;
+                        }
+                        if (partScore < split)
+                        {
+                            split = partScore;
+                        }
                     }
-                    if (split >= 0) best = Math.Max(best, Math.Max(1, split - SplitPenalty));
+                    if (split >= 0)
+                    {
+                        best = Math.Max(best, Math.Max(1, split - SplitPenalty));
+                    }
                 }
             }
             return best;
@@ -261,13 +290,33 @@ namespace YLFramework.Editor.Help
             for (var index = 0; index < fields.Count; index++)
             {
                 var field = fields[index];
-                if (field.Text.Length == 0) continue;
+                if (field.Text.Length == 0)
+                {
+                    continue;
+                }
+
                 int bonus;
-                if (field.Text.Equals(term, StringComparison.OrdinalIgnoreCase)) bonus = ExactBonus;
-                else if (field.Text.StartsWith(term, StringComparison.OrdinalIgnoreCase)) bonus = PrefixBonus;
-                else if (field.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) bonus = ContainsBonus;
-                else continue;
-                if (field.Weight + bonus > best) best = field.Weight + bonus;
+                if (field.Text.Equals(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    bonus = ExactBonus;
+                }
+                else if (field.Text.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    bonus = PrefixBonus;
+                }
+                else if (field.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    bonus = ContainsBonus;
+                }
+                else
+                {
+                    continue;
+                }
+
+                if (field.Weight + bonus > best)
+                {
+                    best = field.Weight + bonus;
+                }
             }
             return best;
         }
@@ -279,7 +328,10 @@ namespace YLFramework.Editor.Help
         internal const int BodyWeight = 70;
         internal const int DocWeight = 60;
         internal const int TechnicalWeight = 40;
-        private const int ExactBonus = 30, PrefixBonus = 20, ContainsBonus = 10, SplitPenalty = 10;
+        private const int ExactBonus = 30;
+        private const int PrefixBonus = 20;
+        private const int ContainsBonus = 10;
+        private const int SplitPenalty = 10;
     }
 
     /// <summary>一条带权重的可搜索字段；评分时按权重区分名称、说明与签名等来源。</summary>

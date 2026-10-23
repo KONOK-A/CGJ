@@ -12,44 +12,56 @@ namespace YLFramework.Core.Tests
 {
     public class CoreDefaultResourcePlayModeTests
     {
-        private static readonly FieldInfo InstanceField = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic);
-        private static readonly FieldInfo OwnedEventSystemField = typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic);
-        private static readonly MethodInfo Refresh = typeof(PanelManager).GetMethod("RefreshEventSystem", BindingFlags.Static | BindingFlags.NonPublic);
-        private readonly List<GameObject> ownedObjects = new List<GameObject>();
-        private readonly List<UIRootContext> ownedRoots = new List<UIRootContext>();
-        private object previousManager;
-        private object manager;
-        private CoreUpdateHostScope updateHosts;
+        private static readonly FieldInfo _instanceField = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly FieldInfo _ownedEventSystemField = typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly MethodInfo _refresh = typeof(PanelManager).GetMethod("RefreshEventSystem", BindingFlags.Static | BindingFlags.NonPublic);
+        private readonly List<GameObject> _ownedObjects = new List<GameObject>();
+        private readonly List<UIRootContext> _ownedRoots = new List<UIRootContext>();
+        private object _previousManager;
+        private object _manager;
+        private CoreUpdateHostScope _updateHosts;
 
         [SetUp]
         public void SetUp()
         {
             Assert.That(EventSystem.current, Is.Null, "This fixture requires an empty test scene; never remove external input objects.");
-            updateHosts = new CoreUpdateHostScope();
-            previousManager = InstanceField.GetValue(null);
+            _updateHosts = new CoreUpdateHostScope();
+            _previousManager = _instanceField.GetValue(null);
             // Isolate the resource paths without registering or clearing shared manager callbacks.
-            manager = Activator.CreateInstance(typeof(PanelManager), true);
-            InstanceField.SetValue(null, manager);
+            _manager = Activator.CreateInstance(typeof(PanelManager), true);
+            _instanceField.SetValue(null, _manager);
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (manager != null)
+            if (_manager != null)
             {
-                foreach (var root in ownedRoots)
-                    if (root) typeof(PanelManager).GetMethod("UnregisterRoot", BindingFlags.Static | BindingFlags.NonPublic)
+                foreach (var root in _ownedRoots)
+                {
+                    if (root)
+                    {
+                        typeof(PanelManager).GetMethod("UnregisterRoot", BindingFlags.Static | BindingFlags.NonPublic)
                         .Invoke(null, new object[] { root });
-                typeof(PanelManager).GetMethod("ReleaseOwnedInput", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
+                    }
+                }
+
+                typeof(PanelManager).GetMethod("ReleaseOwnedInput", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(_manager, null);
             }
-            foreach (var go in ownedObjects)
-                if (go) UnityEngine.Object.Destroy(go);
-            ownedObjects.Clear();
+            foreach (var go in _ownedObjects)
+            {
+                if (go)
+                {
+                    UnityEngine.Object.Destroy(go);
+                }
+            }
+
+            _ownedObjects.Clear();
             yield return null;
-            ownedRoots.Clear();
-            InstanceField.SetValue(null, previousManager);
-            manager = null;
-            updateHosts.ReleaseOwnedIdleHosts();
+            _ownedRoots.Clear();
+            _instanceField.SetValue(null, _previousManager);
+            _manager = null;
+            _updateHosts.ReleaseOwnedIdleHosts();
             yield return null;
         }
 
@@ -58,16 +70,16 @@ namespace YLFramework.Core.Tests
         {
             Assert.That(UnityEngine.Object.FindObjectsByType<YLFrameworkRoot>(FindObjectsInactive.Include, FindObjectsSortMode.None), Is.Empty,
                 "此用例不覆盖或销毁外部宿主。");
-            var previous = PanelManager.onCreateCanvas;
+            var previous = PanelManager.CanvasCreated;
             int notifications = 0;
             try
             {
-                PanelManager.onCreateCanvas = _ => notifications++;
+                PanelManager.CanvasCreated = _ => notifications++;
                 var custom = CreateRoot();
                 PanelManager.RegisterRoot(custom);
                 Assert.That(notifications, Is.Zero);
                 var hostObject = new GameObject("YLCore.PreboundHost");
-                ownedObjects.Add(hostObject);
+                _ownedObjects.Add(hostObject);
                 var host = hostObject.AddComponent<YLFrameworkRoot>();
                 host.GetModuleRoot("Audio");
                 host.GetModuleRoot("Action");
@@ -76,7 +88,7 @@ namespace YLFramework.Core.Tests
                 bound.transform.SetParent(host.transform, false);
                 typeof(YLFrameworkRoot).GetField("panelRoot", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(host, bound);
                 var prepare = typeof(YLFrameworkRoot).GetMethod("GetPanelRoot", BindingFlags.Instance | BindingFlags.NonPublic);
-                PanelManager.onCreateCanvas = canvas =>
+                PanelManager.CanvasCreated = canvas =>
                 {
                     notifications++;
                     Assert.That(canvas, Is.SameAs(bound.Canvas));
@@ -91,21 +103,24 @@ namespace YLFramework.Core.Tests
                 Assert.That(prepare.Invoke(host, null), Is.SameAs(bound));
                 Assert.That(notifications, Is.EqualTo(1));
             }
-            finally { PanelManager.onCreateCanvas = previous; }
+            finally
+            {
+                PanelManager.CanvasCreated = previous;
+            }
         }
 
         [UnityTest]
         public IEnumerator DefaultEventSystemIsCreatedOnlyOnceWhenNoneExists()
         {
             var root = CreateRoot();
-            var created = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var created = (GameObject)_ownedEventSystemField.GetValue(_manager);
             Assert.That(created, Is.Not.Null);
             Assert.That(created.name, Is.EqualTo("EventSystem(Created By YLFramework.Core)"));
             Assert.That(EventSystem.current, Is.SameAs(created.GetComponent<EventSystem>()));
             yield return null;
-            Refresh.Invoke(null, null);
+            _refresh.Invoke(null, null);
             PanelManager.RegisterRoot(root);
-            Assert.That(OwnedEventSystemField.GetValue(manager), Is.SameAs(created));
+            Assert.That(_ownedEventSystemField.GetValue(_manager), Is.SameAs(created));
             Assert.That(UnityEngine.Object.FindObjectsOfType<EventSystem>(), Has.Length.EqualTo(1));
             Assert.That(created.GetComponents<BaseInputModule>(), Has.Length.EqualTo(1));
 #if ENABLE_INPUT_SYSTEM
@@ -125,7 +140,7 @@ namespace YLFramework.Core.Tests
         {
             var first = CreateRoot();
             var second = CreateRoot(persistent: true);
-            var created = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var created = (GameObject)_ownedEventSystemField.GetValue(_manager);
             UnityEngine.Object.Destroy(first.gameObject);
             yield return null;
             yield return null;
@@ -143,9 +158,9 @@ namespace YLFramework.Core.Tests
         public IEnumerator LaterExternalSystemIsBorrowedWithoutOwningOrChangingItsModule()
         {
             CreateRoot();
-            var owned = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var owned = (GameObject)_ownedEventSystemField.GetValue(_manager);
             var external = new GameObject("LaterExternalInput", typeof(EventSystem), typeof(StandaloneInputModule));
-            ownedObjects.Add(external);
+            _ownedObjects.Add(external);
             var input = external.GetComponent<StandaloneInputModule>();
             input.repeatDelay = 0.91f;
             yield return null;
@@ -162,9 +177,9 @@ namespace YLFramework.Core.Tests
         public IEnumerator BorrowingLaterInputSystemKeepsItsRuntimeDefaultActionsAlive()
         {
             CreateRoot();
-            var owned = (GameObject)OwnedEventSystemField.GetValue(manager);
+            var owned = (GameObject)_ownedEventSystemField.GetValue(_manager);
             var external = new GameObject("LaterInputSystem", typeof(EventSystem));
-            ownedObjects.Add(external);
+            _ownedObjects.Add(external);
             var type = Type.GetType("UnityEngine.InputSystem.UI.InputSystemUIInputModule, Unity.InputSystem");
             var module = external.AddComponent(type);
             var asset = (UnityEngine.Object)type.GetProperty("actionsAsset").GetValue(module);
@@ -187,11 +202,11 @@ namespace YLFramework.Core.Tests
             var originalPrefab = Resources.Load<GameObject>("XFGameFramework/EventSystem");
             Assert.That(originalPrefab, Is.Not.Null);
             var external = UnityEngine.Object.Instantiate(originalPrefab);
-            ownedObjects.Add(external); // The fixture owns this XF instance, not PanelManager.
+            _ownedObjects.Add(external); // The fixture owns this XF instance, not PanelManager.
             var eventSystem = external.GetComponent<EventSystem>();
             var input = external.GetComponent<StandaloneInputModule>();
             var selected = new GameObject("ExternalSelection");
-            ownedObjects.Add(selected);
+            _ownedObjects.Add(selected);
             eventSystem.firstSelectedGameObject = selected;
             eventSystem.SetSelectedGameObject(selected);
             eventSystem.pixelDragThreshold = 23;
@@ -201,10 +216,14 @@ namespace YLFramework.Core.Tests
 
             var components = external.GetComponents<Component>();
             var currentModule = eventSystem.currentInputModule;
-            for (int i = 0; i < 3; i++) Refresh.Invoke(null, null);
+            for (int i = 0; i < 3; i++)
+            {
+                _refresh.Invoke(null, null);
+            }
+
             var parent = CreateRoot();
             Assert.That(parent.GetComponent<AutomaticAdaptationCanvasScaler>(), Is.Not.Null);
-            Assert.That(OwnedEventSystemField.GetValue(manager), Is.Null);
+            Assert.That(_ownedEventSystemField.GetValue(_manager), Is.Null);
             Assert.That(EventSystem.current, Is.SameAs(eventSystem));
             Assert.That(eventSystem.currentInputModule, Is.SameAs(currentModule));
             Assert.That(external.GetComponents<Component>(), Is.EqualTo(components));
@@ -217,10 +236,10 @@ namespace YLFramework.Core.Tests
 
             UnityEngine.Object.Destroy(parent.gameObject);
             yield return null;
-            Refresh.Invoke(null, null);
+            _refresh.Invoke(null, null);
             Assert.That(external && input && input.enabled && external.activeInHierarchy, Is.True);
             Assert.That(EventSystem.current, Is.SameAs(eventSystem));
-            Assert.That(OwnedEventSystemField.GetValue(manager), Is.Null);
+            Assert.That(_ownedEventSystemField.GetValue(_manager), Is.Null);
         }
 #endif
 
@@ -230,7 +249,7 @@ namespace YLFramework.Core.Tests
             var originalPrefab = Resources.Load<GameObject>("XFGameFramework/Canvas");
             Assert.That(originalPrefab, Is.Not.Null);
             var original = UnityEngine.Object.Instantiate(originalPrefab);
-            ownedObjects.Add(original);
+            _ownedObjects.Add(original);
             var originalComponents = original.GetComponents<Component>();
             var ui = CreateRoot(order: 23);
             var persistent = CreateRoot(persistent: true, order: 71);
@@ -265,7 +284,7 @@ namespace YLFramework.Core.Tests
         private UIRootContext CreateRoot(bool persistent = false, int order = 0)
         {
             var host = new GameObject("YLCore.InputRoot", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            ownedObjects.Add(host);
+            _ownedObjects.Add(host);
             host.SetActive(false);
             var canvas = host.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -275,8 +294,12 @@ namespace YLFramework.Core.Tests
             scaler.referenceResolution = new Vector2(1920, 1080);
             host.AddComponent<AutomaticAdaptationCanvasScaler>();
             var root = CorePanelTestRoots.Create(host);
-            ownedRoots.Add(root);
-            if (persistent) UnityEngine.Object.DontDestroyOnLoad(host);
+            _ownedRoots.Add(root);
+            if (persistent)
+            {
+                UnityEngine.Object.DontDestroyOnLoad(host);
+            }
+
             return root;
         }
     }

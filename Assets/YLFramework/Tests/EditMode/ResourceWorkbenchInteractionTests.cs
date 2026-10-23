@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
@@ -43,8 +43,8 @@ namespace YLFramework.Tests.ResourceEditor
             var movedGuid = AssetDatabase.AssetPathToGUID(a);
             Undo.ClearUndo(project);
             ResourceEditorOperations.MoveSelections(project, 0, (int[])indices.Invoke(table, new object[] { project, 0 }), 1);
-            Assert.That(project.Groups[0].Selections.Single().Guid, Is.EqualTo(AssetDatabase.AssetPathToGUID(b)));
-            Assert.That(project.Groups[1].Selections.Any(x => x.Guid == movedGuid), Is.True);
+            Assert.That(project.groups[0].selections.Single().guid, Is.EqualTo(AssetDatabase.AssetPathToGUID(b)));
+            Assert.That(project.groups[1].selections.Any(x => x.guid == movedGuid), Is.True);
             Undo.PerformUndo();
             Assert.That(JsonUtility.ToJson(project), Is.EqualTo(before));
             refresh.Invoke(table, new object[] { project, 0 });
@@ -63,15 +63,26 @@ namespace YLFramework.Tests.ResourceEditor
             try
             {
                 typeof(ResServiceView).GetMethod("QueueOperation", flags).Invoke(view,
-                    new object[] { new Func<string>(() => { calls++; return "Executed"; }) });
-                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("pending", flags).GetValue(view);
+                    new object[] { new Func<string>(() =>
+                    {
+                    calls++;
+                    return "Executed";
+                    }) });
+                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("_pending", flags).GetValue(view);
                 Assert.That(EditorApplication.delayCall?.GetInvocationList().Contains(pending) ?? false, Is.False,
                     "A formal queued action must not stall until background Editor inspectors become idle.");
-                for (var frame = 0; frame < 20 && calls == 0; frame++) yield return null;
+                for (var frame = 0; frame < 20 && calls == 0; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(calls, Is.EqualTo(1));
-                Assert.That(typeof(ResServiceView).GetField("pending", flags).GetValue(view), Is.Null);
+                Assert.That(typeof(ResServiceView).GetField("_pending", flags).GetValue(view), Is.Null);
             }
-            finally { view.OnDispose(); }
+            finally
+            {
+                view.OnDispose();
+            }
         }
 
         [UnityTest]
@@ -91,21 +102,28 @@ namespace YLFramework.Tests.ResourceEditor
                     ran = true;
                     return "Owned resource operation";
                 }) });
-                for (var frame = 0; frame < 20 && !ran; frame++) yield return null;
+                for (var frame = 0; frame < 20 && !ran; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(ran, Is.True);
                 var visible = typeof(ResServiceView).GetProperty("VisibleStatus", flags);
                 Assert.That(visible.GetValue(view), Is.EqualTo("Owned resource operation"));
                 view.RefreshPreview();
-                var map = typeof(ResServiceView).GetField("map", flags).GetValue(view);
+                var map = typeof(ResServiceView).GetField("_map", flags).GetValue(view);
                 view.SetProject(fixture.Project);
-                Assert.That(typeof(ResServiceView).GetField("map", flags).GetValue(view), Is.SameAs(map), "Reselecting the same Project is not a definition change.");
+                Assert.That(typeof(ResServiceView).GetField("_map", flags).GetValue(view), Is.SameAs(map), "Reselecting the same Project is not a definition change.");
                 Assert.That(visible.GetValue(view), Is.EqualTo("Owned resource operation"));
-                typeof(ResServiceView).GetField("tab", flags).SetValue(view, 4);
+                typeof(ResServiceView).GetField("_tab", flags).SetValue(view, 4);
                 Assert.That(visible.GetValue(view), Is.Null, "A resource success must not become a Diagnostics banner.");
                 view.SetProject(null);
                 Assert.That(visible.GetValue(view), Is.Null, "Project changes must not relabel old success as the new context.");
             }
-            finally { view.OnDispose(); }
+            finally
+            {
+                view.OnDispose();
+            }
         }
 
         [UnityTest]
@@ -126,12 +144,21 @@ namespace YLFramework.Tests.ResourceEditor
                 DragAndDrop.PrepareStartDrag();
                 DragAndDrop.objectReferences = new[] { AssetDatabase.LoadMainAssetAtPath(path) };
                 window.PendingDrop = true;
-                while (window.PendingDrop) { window.Repaint(); yield return null; }
+                while (window.PendingDrop)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(JsonUtility.ToJson(fixture.Project), Is.EqualTo(before));
                 Assert.That(window.Changes, Is.Zero);
                 Assert.That(window.LastVisualMode, Is.EqualTo(DragAndDropVisualMode.Rejected));
             }
-            finally { window.Close(); DragAndDrop.objectReferences = Array.Empty<Object>(); DragAndDrop.paths = Array.Empty<string>(); }
+            finally
+            {
+                window.Close();
+                DragAndDrop.objectReferences = Array.Empty<Object>();
+                DragAndDrop.paths = Array.Empty<string>();
+            }
         }
 
         [UnityTest]
@@ -144,23 +171,38 @@ namespace YLFramework.Tests.ResourceEditor
             {
                 window.View.GetType().GetMethod("RecordReport", flags).Invoke(window.View,
                     new object[] { new ResourceEditorBuildReport { BuildError = new InvalidOperationException("owned failed attempt") }, new Action<ResourceBuildResult>(_ => { }) });
-                window.View.GetType().GetField("attemptsExpanded", flags).SetValue(window.View, true);
+                window.View.GetType().GetField("_areAttemptsExpanded", flags).SetValue(window.View, true);
                 window.ShowUtility();
-                for (var frame = 0; frame < 10 && window.Button.width == 0; frame++) { window.Repaint(); yield return null; }
+                for (var frame = 0; frame < 10 && window.Button.width == 0; frame++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(window.Button.width, Is.GreaterThan(0));
                 window.SendEvent(new Event { type = EventType.MouseDown, button = 0, mousePosition = window.Button.center });
                 window.SendEvent(new Event { type = EventType.MouseUp, button = 0, mousePosition = window.Button.center });
-                Assert.That(window.View.DefinitionChanged, Is.False, "Selecting a report is not a Project edit or import.");
+                Assert.That(window.View.HasDefinitionChanged, Is.False, "Selecting a report is not a Project edit or import.");
                 Assert.That(window.View.IsHistoricalReport, Is.False);
                 window.View.GetType().GetMethod("RecordReport", flags).Invoke(window.View,
                     new object[] { new ResourceEditorBuildReport { BuildError = new InvalidOperationException("newer owned attempt") }, new Action<ResourceBuildResult>(_ => { }) });
-                for (var frame = 0; frame < 3; frame++) { window.Repaint(); yield return null; }
+                for (var frame = 0; frame < 3; frame++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 window.SendEvent(new Event { type = EventType.MouseDown, button = 0, mousePosition = window.Button.center });
                 window.SendEvent(new Event { type = EventType.MouseUp, button = 0, mousePosition = window.Button.center });
                 Assert.That(window.View.IsHistoricalReport, Is.True, "The older attempt still has a separate history gate.");
-                Assert.That(window.View.DefinitionChanged, Is.False, "History selection must not poison the global definition revision.");
+                Assert.That(window.View.HasDefinitionChanged, Is.False, "History selection must not poison the global definition revision.");
             }
-            finally { window.Close(); if (previous) previous.Focus(); }
+            finally
+            {
+                window.Close();
+                if (previous)
+                {
+                    previous.Focus();
+                }
+            }
         }
 
         [Test]
@@ -173,8 +215,8 @@ namespace YLFramework.Tests.ResourceEditor
                 view.SetProject(fixture.Project);
                 view.RefreshPreview();
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
-                var definition = typeof(ResServiceView).GetField("definition", flags).GetValue(view);
-                var table = (TreeView)definition.GetType().GetField("table", flags).GetValue(definition);
+                var definition = typeof(ResServiceView).GetField("_definition", flags).GetValue(view);
+                var table = (TreeView)definition.GetType().GetField("_table", flags).GetValue(definition);
                 Assert.That(table.GetRows().Count, Is.EqualTo(1));
                 var path = fixture.Folder + "/Content/external-edit.txt";
                 Assert.That(AssetDatabase.CopyAsset(fixture.TextPath, path), Is.True);
@@ -185,7 +227,10 @@ namespace YLFramework.Tests.ResourceEditor
                     "Explicit refresh must rebuild the real row-to-definition identity mapping after external edits.");
                 Undo.ClearUndo(fixture.Project);
             }
-            finally { view.OnDispose(); }
+            finally
+            {
+                view.OnDispose();
+            }
         }
 
         [UnityTest]
@@ -199,7 +244,8 @@ namespace YLFramework.Tests.ResourceEditor
             try
             {
                 window.position = new Rect(120, 80, 500, 220);
-                window.ShowUtility(); window.Focus();
+                window.ShowUtility();
+                window.Focus();
                 yield return null;
                 var before = JsonUtility.ToJson(fixture.Project);
                 DragAndDrop.PrepareStartDrag();
@@ -207,15 +253,23 @@ namespace YLFramework.Tests.ResourceEditor
                 DragAndDrop.paths = new[] { path };
                 window.AllowEdits = false;
                 window.PendingDrop = true;
-                while (window.PendingDrop) { window.Repaint(); yield return null; }
+                while (window.PendingDrop)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(JsonUtility.ToJson(fixture.Project), Is.EqualTo(before), "A disabled custom input handler must respect the same editing gate as native controls.");
                 Assert.That(window.Changes, Is.Zero);
                 Assert.That(window.LastVisualMode, Is.EqualTo(DragAndDropVisualMode.Rejected), window.LastInput);
                 window.AllowEdits = true;
                 DragAndDrop.objectReferences = new[] { AssetDatabase.LoadMainAssetAtPath(path) };
                 window.PendingDrop = true;
-                while (window.PendingDrop) { window.Repaint(); yield return null; }
-                Assert.That(fixture.Project.Groups[0].Selections.Count, Is.EqualTo(2), "The enabled handler must remain functional.");
+                while (window.PendingDrop)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
+                Assert.That(fixture.Project.groups[0].selections.Count, Is.EqualTo(2), "The enabled handler must remain functional.");
                 Assert.That(window.Changes, Is.EqualTo(1));
                 Undo.ClearUndo(fixture.Project);
             }
@@ -235,7 +289,10 @@ namespace YLFramework.Tests.ResourceEditor
         private void OnGUI()
         {
             View.DrawAttempts();
-            if (Event.current.type == EventType.Repaint) Button = GUILayoutUtility.GetLastRect();
+            if (Event.current.type == EventType.Repaint)
+            {
+                Button = GUILayoutUtility.GetLastRect();
+            }
         }
     }
 
@@ -248,33 +305,40 @@ namespace YLFramework.Tests.ResourceEditor
         internal bool PendingDrop;
         internal DragAndDropVisualMode LastVisualMode;
         internal string LastInput;
-        private object definition;
-        private MethodInfo drop;
+        private object _definition;
+        private MethodInfo _drop;
 
         private void OnEnable()
         {
             var type = typeof(ResServiceView).Assembly.GetType("YLFramework.Editor.Resource.ResourceDefinitionView");
-            definition = Activator.CreateInstance(type, true);
-            drop = type.GetMethod("HandleDrop", BindingFlags.Instance | BindingFlags.NonPublic);
+            _definition = Activator.CreateInstance(type, true);
+            _drop = type.GetMethod("HandleDrop", BindingFlags.Instance | BindingFlags.NonPublic);
         }
 
         private void OnGUI()
         {
-            if (!Project || !PendingDrop || Event.current.type != EventType.Repaint) return;
+            if (!Project || !PendingDrop || Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
             PendingDrop = false;
             using var disabled = new EditorGUI.DisabledScope(!AllowEdits);
             var previous = Event.current;
-            definition.GetType().GetField("group", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(definition, Aggregate ? -1 : 0);
+            _definition.GetType().GetField("_group", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(_definition, Aggregate ? -1 : 0);
             var input = new Event { type = EventType.DragPerform, mousePosition = new Vector2(30, 30) };
             Event.current = input;
             try
             {
                 LastInput = Event.current.type + " refs=" + DragAndDrop.objectReferences.Length + " enabled=" + GUI.enabled;
-                drop.Invoke(definition, new object[] { new Rect(10, 10, 440, 150), Project,
+                _drop.Invoke(_definition, new object[] { new Rect(10, 10, 440, 150), Project,
                     new Action(() => Changes++), new Action<Func<string>>(operation => operation()) });
                 LastVisualMode = DragAndDrop.visualMode;
             }
-            finally { Event.current = previous; }
+            finally
+            {
+                Event.current = previous;
+            }
         }
     }
 }

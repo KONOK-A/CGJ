@@ -208,16 +208,25 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 类型映射集合（服务类型 + 名称 → 实现类型）。
         /// </summary>
-        TypeMappingCollection Mappings { get; set; }
+        TypeMappingCollection Mappings
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 已注册实例集合。
         /// </summary>
-        TypeInstanceCollection Instances { get; set; }
+        TypeInstanceCollection Instances
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 关系映射集合（(TFor, TBase) → TConcrete）。
         /// </summary>
-        TypeRelationCollection RelationshipMappings { get; set; }
+        TypeRelationCollection RelationshipMappings
+        {
+            get; set;
+        }
     }
 }

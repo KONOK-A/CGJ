@@ -10,16 +10,24 @@ namespace YLFramework.Services.Resource
     public sealed partial class ResourceSystem
     {
         private const int BundleConcurrency = 4;
-        private readonly Dictionary<(string, string), BundleRecord> bundleRecords = new();
-        private readonly HashSet<BundleLease> publicBundleLeases = new();
-        private readonly Queue<BundleRecord> bundleQueue = new();
-        private int runningBundles;
-        private bool pumpingBundles;
-        private bool pumpAgain;
-        private int nativeBundleLoads;
-        private int nativeBundleUnloads;
+        private readonly Dictionary<(string, string), BundleRecord> _bundleRecords = new();
+        private readonly HashSet<BundleLease> _publicBundleLeases = new();
+        private readonly Queue<BundleRecord> _bundleQueue = new();
+        private int _runningBundles;
+        private bool _isPumpingBundles;
+        private bool _shouldPumpAgain;
+        private int _nativeBundleLoads;
+        private int _nativeBundleUnloads;
 
-        internal enum BundleState { Waiting, Queued, Loading, Ready, Failed, Released }
+        internal enum BundleState
+        {
+            Waiting,
+            Queued,
+            Loading,
+            Ready,
+            Failed,
+            Released
+        }
         internal sealed class BundleWaiter
         {
             internal Action Prepare;
@@ -39,10 +47,10 @@ namespace YLFramework.Services.Resource
             internal ResourceContentReservation Reservation;
             internal ContentWork InputWork;
             internal Exception CleanupError;
-            internal bool Collecting;
+            internal bool IsCollecting;
             internal bool OccupiesSlot;
-            internal bool InputRegistered;
-            internal bool AdmissionInFlight;
+            internal bool IsInputRegistered;
+            internal bool IsAdmissionInFlight;
             internal ResourceException Error;
             internal int References;
             internal int RootPins;
@@ -50,7 +58,11 @@ namespace YLFramework.Services.Resource
             internal readonly List<BundleWaiter> Waiters = new();
             internal bool IsDone => State == BundleState.Ready || State == BundleState.Failed;
             internal BundleRecord(ResourceSystem owner, ResourceLocalSnapshot snapshot, ResourceCatalogBundle descriptor)
-            { Owner = owner; Snapshot = snapshot; Descriptor = descriptor; }
+            {
+                Owner = owner;
+                Snapshot = snapshot;
+                Descriptor = descriptor;
+            }
         }
 
         /// <summary>取得明确 Catalog BundleId 的低层图租约，不加载 Scene 或创建实例。</summary>
@@ -66,14 +78,33 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<BundleLease>(value => value.Dispose());
-            if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
-            if (IsProjectBlocked(projectId)) return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.");
-            if (projectId == null || !catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
+            if (!IsAvailable)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
+            if (IsProjectBlocked(projectId))
+            {
+                return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.");
+            }
+
+            if (projectId == null || !_catalogs.TryGetValue(projectId, out var catalog) || catalog.Snapshot == null ||
                 bundleId == null || !catalog.Snapshot.Bundles.ContainsKey(bundleId))
+            {
                 return Fail(request, ResourceError.AddressNotFound, "Unknown mounted project/Bundle identity.");
+            }
+
             var snapshot = catalog.Snapshot;
-            try { RequireHealthyBundle(snapshot, bundleId); }
-            catch (ResourceException error) { request.SetFailure(ResourceRequestStatus.Failed, error); request.Notify(); return request; }
+            try
+            {
+                RequireHealthyBundle(snapshot, bundleId);
+            }
+            catch (ResourceException error)
+            {
+                request.SetFailure(ResourceRequestStatus.Failed, error);
+                request.Notify();
+                return request;
+            }
             var closure = new List<ResourceCatalogBundle>();
             var visited = new HashSet<string>(StringComparer.Ordinal);
             var pending = new Stack<string>();
@@ -81,13 +112,22 @@ namespace YLFramework.Services.Resource
             while (pending.Count != 0)
             {
                 var id = pending.Pop();
-                if (!visited.Add(id)) continue;
+                if (!visited.Add(id))
+                {
+                    continue;
+                }
+
                 var descriptor = snapshot.Bundles[id];
                 closure.Add(descriptor);
-                foreach (var dependency in descriptor.Dependencies) pending.Push(dependency);
+                foreach (var dependency in descriptor.Dependencies)
+                {
+                    pending.Push(dependency);
+                }
             }
-            if (synchronous && closure.Any(x => bundleRecords.TryGetValue((snapshot.Document.CatalogDigest, x.LogicalId), out var existing) && !existing.IsDone))
+            if (synchronous && closure.Any(x => _bundleRecords.TryGetValue((snapshot.Document.CatalogDigest, x.LogicalId), out var existing) && !existing.IsDone))
+            {
                 return Fail(request, ResourceError.InProgress, "The Bundle graph is already in flight; use AcquireBundleAsync.");
+            }
 
             // 先建立全部节点和依赖入边，再运行任何可能即时失败/通知的 IO。
             var added = new List<BundleRecord>();
@@ -96,15 +136,23 @@ namespace YLFramework.Services.Resource
                 foreach (var descriptor in closure)
                 {
                     var key = (snapshot.Document.CatalogDigest, descriptor.LogicalId);
-                    if (bundleRecords.ContainsKey(key)) continue;
+                    if (_bundleRecords.ContainsKey(key))
+                    {
+                        continue;
+                    }
+
                     added.Add(new BundleRecord(this, snapshot, descriptor) { Header = ResourceContentValidation.Inspect(snapshot, descriptor) });
                 }
-                var tickets = contentBudget.Reserve(added.Count(x => x.Header != null));
+                var tickets = _contentBudget.Reserve(added.Count(x => x.Header != null));
                 var index = 0;
                 foreach (var value in added)
                 {
-                    if (value.Header != null) value.Reservation = tickets[index++];
-                    bundleRecords.Add((snapshot.Document.CatalogDigest, value.Descriptor.LogicalId), value);
+                    if (value.Header != null)
+                    {
+                        value.Reservation = tickets[index++];
+                    }
+
+                    _bundleRecords.Add((snapshot.Document.CatalogDigest, value.Descriptor.LogicalId), value);
                 }
             }
             catch (Exception error)
@@ -112,7 +160,11 @@ namespace YLFramework.Services.Resource
                 foreach (var value in added)
                 {
                     var key = (snapshot.Document.CatalogDigest, value.Descriptor.LogicalId);
-                    if (bundleRecords.TryGetValue(key, out var current) && ReferenceEquals(current, value)) bundleRecords.Remove(key);
+                    if (_bundleRecords.TryGetValue(key, out var current) && ReferenceEquals(current, value))
+                    {
+                        _bundleRecords.Remove(key);
+                    }
+
                     value.Reservation?.Dispose();
                 }
                 RetainContentFailureOwners(error);
@@ -121,24 +173,48 @@ namespace YLFramework.Services.Resource
                 return request;
             }
             foreach (var value in added)
+            {
                 foreach (var dependency in value.Descriptor.Dependencies)
                 {
-                    var child = bundleRecords[(snapshot.Document.CatalogDigest, dependency)];
+                    var child = _bundleRecords[(snapshot.Document.CatalogDigest, dependency)];
                     child.References++;
                     value.Dependencies.Add(child);
                 }
-            var record = bundleRecords[(snapshot.Document.CatalogDigest, bundleId)];
+            }
+
+            var record = _bundleRecords[(snapshot.Document.CatalogDigest, bundleId)];
             var lease = new BundleLease(record, publicLease, origin);
-            if (publicLease) publicBundleLeases.Add(lease);
+            if (publicLease)
+            {
+                _publicBundleLeases.Add(lease);
+            }
+
             Track(request);
             var waiter = new BundleWaiter();
             waiter.Prepare = () =>
             {
-                if (request.IsDone) return;
+                if (request.IsDone)
+                {
+                    return;
+                }
+
                 ResourceException failure = record.Error;
                 if (record.State == BundleState.Ready && IsSessionActive)
-                    try { RequireHealthyBundle(snapshot, bundleId); } catch (ResourceException error) { failure = error; }
-                if (record.State == BundleState.Ready && IsSessionActive && failure == null) request.SetSuccess(lease);
+                {
+                    try
+                    {
+                        RequireHealthyBundle(snapshot, bundleId);
+                    }
+                    catch (ResourceException error)
+                    {
+                        failure = error;
+                    }
+                }
+
+                if (record.State == BundleState.Ready && IsSessionActive && failure == null)
+                {
+                    request.SetSuccess(lease);
+                }
                 else
                 {
                     request.SetFailure(IsSessionActive ? ResourceRequestStatus.Failed : ResourceRequestStatus.Invalidated,
@@ -147,13 +223,27 @@ namespace YLFramework.Services.Resource
                 }
             };
             waiter.Notify = request.Notify;
-            request.Attach(() => { record.Waiters.Remove(waiter); lease.Dispose(); }, () => record.Native?.progress ?? (record.IsDone ? 1 : 0));
-            if (record.IsDone) { waiter.Prepare(); waiter.Notify(); }
+            request.Attach(() =>
+            {
+                record.Waiters.Remove(waiter);
+                lease.Dispose();
+            }, () => record.Native?.progress ?? (record.IsDone ? 1 : 0));
+            if (record.IsDone)
+            {
+                waiter.Prepare();
+                waiter.Notify();
+            }
             else
             {
                 record.Waiters.Add(waiter);
-                if (synchronous) DriveSynchronousBundles(added);
-                else PumpBundles();
+                if (synchronous)
+                {
+                    DriveSynchronousBundles(added);
+                }
+                else
+                {
+                    PumpBundles();
+                }
             }
             return request;
         }
@@ -167,15 +257,32 @@ namespace YLFramework.Services.Resource
                 var advanced = false;
                 foreach (var record in pending.ToArray())
                 {
-                    if (record.State != BundleState.Released && !record.Dependencies.All(x => x.IsDone)) continue;
+                    if (record.State != BundleState.Released && !record.Dependencies.All(x => x.IsDone))
+                    {
+                        continue;
+                    }
+
                     pending.Remove(record);
                     advanced = true;
-                    if (record.State == BundleState.Released) continue;
+                    if (record.State == BundleState.Released)
+                    {
+                        continue;
+                    }
+
                     var failed = record.Dependencies.FirstOrDefault(x => x.State == BundleState.Failed);
-                    if (failed != null) FinishBundle(record, null, DependencyFailure(record, failed));
-                    else StartBundle(record, true);
+                    if (failed != null)
+                    {
+                        FinishBundle(record, null, DependencyFailure(record, failed));
+                    }
+                    else
+                    {
+                        StartBundle(record, true);
+                    }
                 }
-                if (!advanced) throw new InvalidOperationException("A validated cold Bundle DAG could not make synchronous progress.");
+                if (!advanced)
+                {
+                    throw new InvalidOperationException("A validated cold Bundle DAG could not make synchronous progress.");
+                }
             }
             CheckDrain();
         }
@@ -185,81 +292,134 @@ namespace YLFramework.Services.Resource
 
         private void PumpBundles()
         {
-            if (pumpingBundles) { pumpAgain = true; return; }
-            pumpingBundles = true;
+            if (_isPumpingBundles)
+            {
+                _shouldPumpAgain = true;
+                return;
+            }
+            _isPumpingBundles = true;
             try
             {
                 do
                 {
-                    pumpAgain = false;
-                    foreach (var record in bundleRecords.Values.ToArray())
+                    _shouldPumpAgain = false;
+                    foreach (var record in _bundleRecords.Values.ToArray())
                     {
-                        if (record.State != BundleState.Waiting) continue;
+                        if (record.State != BundleState.Waiting)
+                        {
+                            continue;
+                        }
+
                         var failed = record.Dependencies.FirstOrDefault(x => x.State == BundleState.Failed);
                         if (failed != null)
                         {
                             FinishBundle(record, null, DependencyFailure(record, failed));
-                            pumpAgain = true;
+                            _shouldPumpAgain = true;
                         }
                         else if (record.Dependencies.All(x => x.State == BundleState.Ready))
-                        { record.State = BundleState.Queued; bundleQueue.Enqueue(record); }
+                        {
+                            record.State = BundleState.Queued;
+                            _bundleQueue.Enqueue(record);
+                        }
                     }
-                    while (bundleQueue.Count != 0 && runningBundles < BundleConcurrency)
+                    while (_bundleQueue.Count != 0 && _runningBundles < BundleConcurrency)
                     {
-                        var record = bundleQueue.Dequeue();
-                        if (record.State != BundleState.Queued) continue;
+                        var record = _bundleQueue.Dequeue();
+                        if (record.State != BundleState.Queued)
+                        {
+                            continue;
+                        }
+
                         StartBundle(record, false);
                     }
-                } while (pumpAgain);
+                } while (_shouldPumpAgain);
             }
-            finally { pumpingBundles = false; }
+            finally
+            {
+                _isPumpingBundles = false;
+            }
             CheckDrain();
         }
 
         private void StartBundle(BundleRecord record, bool synchronous)
         {
             if (!IsAvailable)
-            { FinishBundle(record, null, new ResourceException(ResourceError.SessionUnavailable, "The Bundle producing session ended.")); pumpAgain = true; return; }
+            {
+                FinishBundle(record, null, new ResourceException(ResourceError.SessionUnavailable, "The Bundle producing session ended."));
+                _shouldPumpAgain = true;
+                return;
+            }
             byte[] key = null;
-            record.AdmissionInFlight = true;
+            record.IsAdmissionInFlight = true;
             record.State = BundleState.Loading;
             try
             {
                 RequireHealthyBundle(record.Snapshot, record.Descriptor.LogicalId);
-                if (record.Header != null) key = ResourceContentValidation.CopyKey(configuration.Decryption, record.Snapshot.Document.ProjectId, record.Header.KeyId);
-                if (!IsAvailable || record.References == 0) throw new OperationCanceledException("The Bundle input no longer has an owner.");
+                if (record.Header != null)
+                {
+                    key = ResourceContentValidation.CopyKey(_configuration.Decryption, record.Snapshot.Document.ProjectId, record.Header.KeyId);
+                }
+
+                if (!IsAvailable || record.References == 0)
+                {
+                    throw new OperationCanceledException("The Bundle input no longer has an owner.");
+                }
+
                 if (synchronous)
                 {
-                    var ownedKey = key; key = null;
+                    var ownedKey = key;
+                    key = null;
                     AttachBundleInput(record, OpenBundleInput(record, ownedKey, default));
                     StartNativeBundle(record, true);
-                    pumpAgain = true;
+                    _shouldPumpAgain = true;
                 }
                 else
                 {
                     record.OccupiesSlot = true;
-                    runningBundles++;
+                    _runningBundles++;
                     var ownedKey = key;
                     record.InputWork = StartContentWork(token => OpenBundleInput(record, ownedKey, token), (input, error) =>
                     {
                         record.InputWork = null;
                         try
                         {
-                            if (input != null) AttachBundleInput(record, input);
-                            if (error == null && (!IsAvailable || record.References == 0)) error = new OperationCanceledException("The Bundle input no longer has an owner.");
+                            if (input != null)
+                            {
+                                AttachBundleInput(record, input);
+                            }
+
+                            if (error == null && (!IsAvailable || record.References == 0))
+                            {
+                                error = new OperationCanceledException("The Bundle input no longer has an owner.");
+                            }
+
                             if (error is OperationCanceledException && record.References > 0 && IsAvailable && input == null)
                             {
                                 // 旧私有IO已实际结束；后来显式加入的owner不继承它的取消终态。
                                 record.Reservation?.PrepareRetry();
-                                if (record.OccupiesSlot) { record.OccupiesSlot = false; runningBundles--; }
+                                if (record.OccupiesSlot)
+                                {
+                                    record.OccupiesSlot = false;
+                                    _runningBundles--;
+                                }
                                 record.State = BundleState.Waiting;
                                 PumpBundles();
                                 return;
                             }
-                            if (error != null) { RetainContentFailureOwners(error); FinishBundle(record, null, error); }
-                            else StartNativeBundle(record, false);
+                            if (error != null)
+                            {
+                                RetainContentFailureOwners(error);
+                                FinishBundle(record, null, error);
+                            }
+                            else
+                            {
+                                StartNativeBundle(record, false);
+                            }
                         }
-                        catch (Exception cause) { FinishBundle(record, null, cause); }
+                        catch (Exception cause)
+                        {
+                            FinishBundle(record, null, cause);
+                        }
                         PumpBundles();
                     }, snapshots: new[] { record.Snapshot });
                     key = null;
@@ -268,12 +428,16 @@ namespace YLFramework.Services.Resource
             catch (Exception error)
             {
                 FinishBundle(record, null, error);
-                pumpAgain = true;
+                _shouldPumpAgain = true;
             }
             finally
             {
-                if (key != null) Array.Clear(key, 0, key.Length);
-                record.AdmissionInFlight = false;
+                if (key != null)
+                {
+                    Array.Clear(key, 0, key.Length);
+                }
+
+                record.IsAdmissionInFlight = false;
                 CollectBundle(record);
             }
         }
@@ -292,54 +456,86 @@ namespace YLFramework.Services.Resource
             }
             catch (Exception error)
             {
-                try { file?.Dispose(); }
-                catch (Exception cleanup) { throw new ResourceContentCleanupException(file, new AggregateException(error, cleanup)); }
+                try
+                {
+                    file?.Dispose();
+                }
+                catch (Exception cleanup)
+                {
+                    throw new ResourceContentCleanupException(file, new AggregateException(error, cleanup));
+                }
                 throw;
             }
-            finally { if (key != null) Array.Clear(key, 0, key.Length); }
+            finally
+            {
+                if (key != null)
+                {
+                    Array.Clear(key, 0, key.Length);
+                }
+            }
         }
 
         private void AttachBundleInput(BundleRecord record, ResourceBundleInput input)
         {
             record.Input = input;
-            record.InputRegistered = true;
-            liveContentInputs++;
+            record.IsInputRegistered = true;
+            _liveContentInputs++;
             RegisterContentCleanup();
-            input.SetFaultNotification(error => contentFaults.Enqueue((record, error)));
+            input.SetFaultNotification(error => _contentFaults.Enqueue((record, error)));
         }
 
         private void StartNativeBundle(BundleRecord record, bool synchronous)
         {
             RequireHealthyBundle(record.Snapshot, record.Descriptor.LogicalId);
             if (AssetBundle.GetAllLoadedAssetBundles().Any(x => x && x.name == record.Descriptor.NativeName))
+            {
                 throw new ResourceException(ResourceError.Busy, "The native Bundle identity is owned outside this graph: " + record.Descriptor.NativeName);
+            }
+
             var path = Path.Combine(record.Snapshot.DirectoryPath, record.Descriptor.RelativeFile);
             if (synchronous)
             {
-                nativeBundleLoads++;
+                _nativeBundleLoads++;
                 var bundle = record.Input.IsEncrypted ? AssetBundle.LoadFromStream(record.Input.Stream, 0, ResourceBundleEnvelope.NativeReadBufferSize) : AssetBundle.LoadFromFile(path);
                 FinishBundle(record, bundle, null);
             }
             else
             {
                 record.Native = record.Input.IsEncrypted ? AssetBundle.LoadFromStreamAsync(record.Input.Stream, 0, ResourceBundleEnvelope.NativeReadBufferSize) : AssetBundle.LoadFromFileAsync(path);
-                if (record.Native == null) throw new InvalidOperationException("Unity did not return an AssetBundleCreateRequest.");
-                nativeBundleLoads++;
+                if (record.Native == null)
+                {
+                    throw new InvalidOperationException("Unity did not return an AssetBundleCreateRequest.");
+                }
+
+                _nativeBundleLoads++;
                 record.NativeCompletion = _ => CompleteNativeBundle(record);
                 record.Native.completed += record.NativeCompletion;
-                if (record.Native.isDone) CompleteNativeBundle(record);
+                if (record.Native.isDone)
+                {
+                    CompleteNativeBundle(record);
+                }
             }
         }
 
         private void CompleteNativeBundle(BundleRecord record)
         {
-            if (record.Native == null) return;
+            if (record.Native == null)
+            {
+                return;
+            }
+
             record.Native.completed -= record.NativeCompletion;
             record.NativeCompletion = null;
             AssetBundle bundle = null;
             Exception error = null;
-            try { bundle = record.Native.assetBundle; }
-            catch (Exception cause) { error = cause; }
+            try
+            {
+                bundle = record.Native.assetBundle;
+            }
+            catch (Exception cause)
+            {
+                error = cause;
+            }
             record.Native = null;
             FinishBundle(record, bundle, error);
             PumpBundles();
@@ -347,27 +543,63 @@ namespace YLFramework.Services.Resource
 
         private void FinishBundle(BundleRecord record, AssetBundle bundle, Exception cause)
         {
-            if (record.State == BundleState.Released && !bundle) return;
+            if (record.State == BundleState.Released && !bundle)
+            {
+                return;
+            }
+
             record.Bundle = bundle;
-            if (record.OccupiesSlot) { record.OccupiesSlot = false; runningBundles--; }
+            if (record.OccupiesSlot)
+            {
+                record.OccupiesSlot = false;
+                _runningBundles--;
+            }
             if (cause == null)
-                try { RequireHealthyBundle(record.Snapshot, record.Descriptor.LogicalId); } catch (Exception error) { cause = error; }
+            {
+                try
+                {
+                    RequireHealthyBundle(record.Snapshot, record.Descriptor.LogicalId);
+                }
+                catch (Exception error)
+                {
+                    cause = error;
+                }
+            }
+
             if (cause == null && (!bundle || bundle.name != record.Descriptor.NativeName || bundle.isStreamedSceneAssetBundle != record.Descriptor.IsScene))
+            {
                 cause = new InvalidDataException("Unity Bundle result/native identity mismatch: " + record.Descriptor.LogicalId);
-            if (cause == null && !IsSessionActive) cause = new ResourceException(ResourceError.SessionUnavailable, "The Bundle producing session ended.");
+            }
+
+            if (cause == null && !IsSessionActive)
+            {
+                cause = new ResourceException(ResourceError.SessionUnavailable, "The Bundle producing session ended.");
+            }
+
             record.Error = cause == null ? null : ResourceContentValidation.Failure(cause,
                 $"Bundle '{record.Descriptor.LogicalId}' failed in '{record.Snapshot.Document.ProjectId}'/{record.Snapshot.Document.CatalogDigest}.");
             record.State = record.Error == null ? BundleState.Ready : BundleState.Failed;
             var waiters = record.Waiters.ToArray();
             record.Waiters.Clear();
-            foreach (var waiter in waiters) waiter.Prepare();
+            foreach (var waiter in waiters)
+            {
+                waiter.Prepare();
+            }
+
             CollectBundle(record);
-            foreach (var waiter in waiters) waiter.Notify();
+            foreach (var waiter in waiters)
+            {
+                waiter.Notify();
+            }
         }
 
         internal void ReleaseBundle(BundleLease lease, BundleRecord record)
         {
-            if (lease.Public) publicBundleLeases.Remove(lease);
+            if (lease.IsPublic)
+            {
+                _publicBundleLeases.Remove(lease);
+            }
+
             record.RootPins--;
             record.References--;
             CollectBundle(record);
@@ -381,19 +613,35 @@ namespace YLFramework.Services.Resource
             while (collect.Count != 0)
             {
                 var record = collect.Pop();
-                if (record.References != 0 || record.Native != null || record.State == BundleState.Released || record.Collecting || record.CleanupError != null || record.AdmissionInFlight) continue;
-                if (record.InputWork != null) { record.InputWork.Cancel(); continue; }
+                if (record.References != 0 || record.Native != null || record.State == BundleState.Released || record.IsCollecting || record.CleanupError != null || record.IsAdmissionInFlight)
+                {
+                    continue;
+                }
+
+                if (record.InputWork != null)
+                {
+                    record.InputWork.Cancel();
+                    continue;
+                }
                 // 先卸载依赖者，再归还依赖入边；不能用 Unload(false) 留下无主对象。
-                record.Collecting = true;
+                record.IsCollecting = true;
                 try
                 {
-                    if (record.Bundle) { record.Bundle.Unload(true); nativeBundleUnloads++; }
+                    if (record.Bundle)
+                    {
+                        record.Bundle.Unload(true);
+                        _nativeBundleUnloads++;
+                    }
                     record.Bundle = null;
                     record.Input?.Dispose();
                     record.Input = null;
                     record.Reservation?.Dispose();
                     record.Reservation = null;
-                    if (record.InputRegistered) { record.InputRegistered = false; liveContentInputs--; }
+                    if (record.IsInputRegistered)
+                    {
+                        record.IsInputRegistered = false;
+                        _liveContentInputs--;
+                    }
                 }
                 catch (Exception error)
                 {
@@ -402,11 +650,22 @@ namespace YLFramework.Services.Resource
                     Debug.LogException(new ResourceException(ResourceError.LoadFailed, "Bundle cleanup failed; the original input, budget and dependency ownership remain retained.", error));
                     continue;
                 }
-                finally { record.Collecting = false; }
+                finally
+                {
+                    record.IsCollecting = false;
+                }
                 var key = (record.Snapshot.Document.CatalogDigest, record.Descriptor.LogicalId);
-                if (bundleRecords.TryGetValue(key, out var current) && ReferenceEquals(current, record)) bundleRecords.Remove(key);
+                if (_bundleRecords.TryGetValue(key, out var current) && ReferenceEquals(current, record))
+                {
+                    _bundleRecords.Remove(key);
+                }
+
                 record.State = BundleState.Released;
-                foreach (var dependency in record.Dependencies) { dependency.References--; collect.Push(dependency); }
+                foreach (var dependency in record.Dependencies)
+                {
+                    dependency.References--;
+                    collect.Push(dependency);
+                }
                 record.Dependencies.Clear();
             }
         }
@@ -419,12 +678,17 @@ namespace YLFramework.Services.Resource
             var platform = Application.platform switch
             {
                 RuntimePlatform.WindowsPlayer => IntPtr.Size == 8 ? "StandaloneWindows64" : "StandaloneWindows",
-                RuntimePlatform.LinuxPlayer => "StandaloneLinux64", RuntimePlatform.OSXPlayer => "StandaloneOSX",
-                RuntimePlatform.Android => "Android", RuntimePlatform.IPhonePlayer => "iOS", _ => null
+                RuntimePlatform.LinuxPlayer => "StandaloneLinux64",
+                RuntimePlatform.OSXPlayer => "StandaloneOSX",
+                RuntimePlatform.Android => "Android",
+                RuntimePlatform.IPhonePlayer => "iOS",
+                _ => null
             };
 #endif
             if (platform == null || snapshot.Document.Platform != platform || snapshot.Document.UnityCompatibility != Application.unityVersion)
+            {
                 throw new ResourceException(ResourceError.Unsupported, "The explicit local snapshot does not match this Unity runtime/platform.");
+            }
         }
     }
 }

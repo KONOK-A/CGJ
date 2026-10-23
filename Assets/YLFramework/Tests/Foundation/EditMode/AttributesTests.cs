@@ -13,41 +13,49 @@ namespace YLFramework.Foundation.Tests
 {
     public class AttributesTests
     {
-        [CustomClassNameGUI("Display")]
-        private class Named { }
-        private class Derived : Named { }
-
-        private class DrawAttribute : CustomPropertyGUI
+        [CustomClassNameGui("Display")]
+        private class Named
         {
-            public DrawAttribute() { }
+        }
+        private class Derived : Named
+        {
+        }
+
+        private class DrawAttribute : CustomPropertyGui
+        {
+            public DrawAttribute()
+            {
+            }
             public DrawAttribute(bool reload) : base(reload) { }
-            public override void OnPropertyGUI(SerializedProperty property) { }
+            public override void OnPropertyGui(SerializedProperty property)
+            {
+            }
         }
 
         private class Fields
         {
-            [Draw(true)] public int value;
-            [DisableEdit] public int readOnly;
+            [Draw(true)] public int Value;
+            [DisableEdit] public int ReadOnly;
         }
 
         [Test]
         public void DisplayAndRefreshMetadataRemainReadableWithExplicitUsage()
         {
-            var name = (CustomClassNameGUI)Attribute.GetCustomAttribute(typeof(Named), typeof(CustomClassNameGUI));
+            var name = (CustomClassNameGui)Attribute.GetCustomAttribute(typeof(Named), typeof(CustomClassNameGui));
             Assert.That(name.GetName(), Is.EqualTo("Display"));
-            Assert.That(Attribute.GetCustomAttribute(typeof(Derived), typeof(CustomClassNameGUI)), Is.Null);
-            Assert.That(new CustomClassNameGUI(null).GetName(), Is.Null);
-            Assert.That(new CustomClassNameGUI("").GetName(), Is.Empty);
-            Assert.That(new DrawAttribute().reloadTreeViewOnValueChange, Is.False);
-            var draw = (DrawAttribute)Attribute.GetCustomAttribute(typeof(Fields).GetField("value"), typeof(DrawAttribute));
-            Assert.That(draw.reloadTreeViewOnValueChange, Is.True);
-            draw.reloadTreeViewOnValueChange = false;
-            Assert.That(draw.reloadTreeViewOnValueChange, Is.False);
-            AssertUsage(typeof(CustomClassNameGUI), AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Enum, false);
-            AssertUsage(typeof(CustomPropertyGUI), AttributeTargets.Field, false);
+            Assert.That(Attribute.GetCustomAttribute(typeof(Derived), typeof(CustomClassNameGui)), Is.Null);
+            Assert.That(new CustomClassNameGui(null).GetName(), Is.Null);
+            Assert.That(new CustomClassNameGui("").GetName(), Is.Empty);
+            Assert.That(new DrawAttribute().ReloadTreeViewOnValueChange, Is.False);
+            var draw = (DrawAttribute)Attribute.GetCustomAttribute(typeof(Fields).GetField(nameof(Fields.Value)), typeof(DrawAttribute));
+            Assert.That(draw.ReloadTreeViewOnValueChange, Is.True);
+            draw.ReloadTreeViewOnValueChange = false;
+            Assert.That(draw.ReloadTreeViewOnValueChange, Is.False);
+            AssertUsage(typeof(CustomClassNameGui), AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Enum, false);
+            AssertUsage(typeof(CustomPropertyGui), AttributeTargets.Field, false);
             AssertUsage(typeof(DisableEdit), AttributeTargets.Field | AttributeTargets.Property, true);
-            Assert.That(Attribute.GetCustomAttribute(typeof(Fields).GetField("readOnly"), typeof(DisableEdit)), Is.Not.Null);
-            Assert.That(typeof(CustomPropertyGUI).GetMethod("OnPropertyGUI").IsAbstract, Is.True);
+            Assert.That(Attribute.GetCustomAttribute(typeof(Fields).GetField(nameof(Fields.ReadOnly)), typeof(DisableEdit)), Is.Not.Null);
+            Assert.That(typeof(CustomPropertyGui).GetMethod("OnPropertyGui").IsAbstract, Is.True);
         }
 
         private static void AssertUsage(Type type, AttributeTargets targets, bool inherited)
@@ -78,15 +86,15 @@ namespace YLFramework.Foundation.Tests
             {
                 string probe = Path.Combine(folder, "Probe.cs");
                 File.WriteAllText(probe, @"using YLFramework.Foundation.Attributes;
-[CustomClassNameGUI(""Player metadata"")] public class Probe {
-    [Draw(reloadTreeViewOnValueChange = true), DisableEdit] public int value;
-    public bool Read() { return new DrawAttribute(true).reloadTreeViewOnValueChange && new CustomClassNameGUI(""name"").GetName() == ""name""; }
+[CustomClassNameGui(""Player metadata"")] public class Probe {
+    [Draw(ReloadTreeViewOnValueChange = true), DisableEdit] public int value;
+    public bool Read() { return new DrawAttribute(true).ReloadTreeViewOnValueChange && new CustomClassNameGui(""name"").GetName() == ""name""; }
 }
-public class DrawAttribute : CustomPropertyGUI {
+public class DrawAttribute : CustomPropertyGui {
     public DrawAttribute() : base() { }
     public DrawAttribute(bool reload) : base(reload) { }
 #if UNITY_EDITOR
-    public override void OnPropertyGUI(UnityEditor.SerializedProperty property) { }
+    public override void OnPropertyGui(UnityEditor.SerializedProperty property) { }
 #endif
 }");
                 string root = Path.Combine(Application.dataPath, "YLFramework/Runtime/Foundation/Attributes");
@@ -108,12 +116,22 @@ public class DrawAttribute : CustomPropertyGUI {
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(m => m.type == CompilerMessageType.Error).Select(m => m.message), Is.Empty);
                 Assert.That(File.Exists(output), Is.True);
             }
-            finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+            finally
+            {
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                }
+            }
         }
     }
 }

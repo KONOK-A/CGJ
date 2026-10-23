@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace YLFramework.EquipmentSystem
 {
@@ -8,29 +9,48 @@ namespace YLFramework.EquipmentSystem
     public class EquipmentsConfig : ScriptableObject
     {
         public string displayName;
-        [HideInInspector] public int start_id;
+        [HideInInspector, FormerlySerializedAs("start_id")] public int startId;
         [SerializeField] private List<EquipmentConfigData> equipments = new();
-        [HideInInspector] public string type_script_guid;
-        private Dictionary<int, EquipmentConfigData> index;
-        private EquipmentConfigData[] snapshot;
-        private int[] ids;
+        [HideInInspector, FormerlySerializedAs("type_script_guid")] public string typeScriptGuid;
+        private Dictionary<int, EquipmentConfigData> _index;
+        private EquipmentConfigData[] _snapshot;
+        private int[] _ids;
 
         /// <summary>读取不扫描或保存资产；编辑列表后查询会核对引用与 ID 快照。</summary>
         public List<EquipmentConfigData> Equipments => equipments;
 
         public EquipmentConfigData GetEquipmentConfigData(int id)
         {
-            if (!CacheMatches()) RebuildCache();
-            return index.TryGetValue(id, out var value) && value ? value : null;
+            if (!CacheMatches())
+            {
+                RebuildCache();
+            }
+
+            return _index.TryGetValue(id, out var value) && value ? value : null;
         }
 
-        public void ClearCache() { index = null; snapshot = null; ids = null; }
+        public void ClearCache()
+        {
+            _index = null;
+            _snapshot = null;
+            _ids = null;
+        }
 
         private bool CacheMatches()
         {
-            if (index == null || snapshot.Length != equipments.Count) return false;
-            for (var i = 0; i < snapshot.Length; i++)
-                if (!ReferenceEquals(snapshot[i], equipments[i]) || ids[i] != (equipments[i] ? equipments[i].id : 0)) return false;
+            if (_index == null || _snapshot.Length != equipments.Count)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < _snapshot.Length; i++)
+            {
+                if (!ReferenceEquals(_snapshot[i], equipments[i]) || _ids[i] != (equipments[i] ? equipments[i].id : 0))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -42,14 +62,22 @@ namespace YLFramework.EquipmentSystem
             for (var i = 0; i < entries.Length; i++)
             {
                 var data = entries[i];
-                if (!data) continue;
+                if (!data)
+                {
+                    continue;
+                }
+
                 keys[i] = data.id;
-                if (next.ContainsKey(data.id)) throw new InvalidOperationException($"Equipment '{name}': duplicate ID {data.id}, row {i}.");
+                if (next.ContainsKey(data.id))
+                {
+                    throw new InvalidOperationException($"Equipment '{name}': duplicate ID {data.id}, row {i}.");
+                }
+
                 next.Add(data.id, data);
             }
-            index = next;
-            snapshot = entries;
-            ids = keys;
+            _index = next;
+            _snapshot = entries;
+            _ids = keys;
         }
     }
 }

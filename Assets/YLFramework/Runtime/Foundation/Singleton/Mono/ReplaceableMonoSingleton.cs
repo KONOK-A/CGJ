@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace YLFramework.Core.Singleton
 {
@@ -89,7 +89,10 @@ namespace YLFramework.Core.Singleton
             var check = FindObjectsByType<T>(FindObjectsSortMode.InstanceID);
             foreach (var searched in check)
             {
-                if (searched == this) continue;
+                if (searched == this)
+                {
+                    continue;
+                }
                 //如果搜索到的物体创建顺序早于当前实例，则销毁
                 if (searched._creationOrder < _creationOrder)
                 {

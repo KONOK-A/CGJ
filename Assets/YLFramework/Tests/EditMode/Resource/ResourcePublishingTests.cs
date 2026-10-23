@@ -57,7 +57,11 @@ namespace YLFramework.Tests.ResourceBuild
             Rejected<InvalidOperationException>(() => Publish(firstBuild));
             Rejected<IOException>(() => Execute(secondBuild, default, step =>
             {
-                if (step != "StagingCreated") return;
+                if (step != "StagingCreated")
+                {
+                    return;
+                }
+
                 var stage = Directory.GetDirectories(Path.Combine(root, ".staging")).Single();
                 var registered = secondCatalog.Bundles[0].RelativeFile;
                 File.WriteAllText(Path.Combine(stage, registered), "copy destination already exists");
@@ -66,13 +70,25 @@ namespace YLFramework.Tests.ResourceBuild
             Recover(fixture);
             using (var cancel = new CancellationTokenSource())
             {
-                Rejected<OperationCanceledException>(() => Execute(secondBuild, cancel.Token, step => { if (step == "CatalogWritten") cancel.Cancel(); }));
+                Rejected<OperationCanceledException>(() => Execute(secondBuild, cancel.Token, step =>
+                {
+                    if (step == "CatalogWritten")
+                    {
+                        cancel.Cancel();
+                    }
+                }));
                 CollectionAssert.AreEqual(originalIndex, File.ReadAllBytes(indexPath));
                 Assert.That(((ResourceCatalogDocument)Value(Recover(fixture), "Catalog")).CatalogDigest, Is.EqualTo(firstCatalog.CatalogDigest));
             }
             foreach (var fault in new[] { "StagingCreated", "FileCopied", "CatalogWritten", "StageVerified", "VersionInstalled", "BeforeIndex" })
             {
-                Rejected<IOException>(() => Execute(secondBuild, default, step => { if (step == fault) throw new IOException("Injected " + fault); }));
+                Rejected<IOException>(() => Execute(secondBuild, default, step =>
+                {
+                    if (step == fault)
+                    {
+                        throw new IOException("Injected " + fault);
+                    }
+                }));
                 CollectionAssert.AreEqual(originalIndex, File.ReadAllBytes(indexPath), fault);
                 CollectionAssert.AreEqual(immutableBefore, ResourceReleaseFixture.Snapshot(firstPath), fault);
                 var recovered = Recover(fixture);
@@ -84,13 +100,25 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 Rejected<IOException>(() => Execute(secondBuild, default, step =>
                 {
-                    if (step == "BeforeIndex") blockedIndex = File.Open(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    if (step == "BeforeIndex")
+                    {
+                        blockedIndex = File.Open(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    }
                 }));
             }
-            finally { blockedIndex?.Dispose(); }
+            finally
+            {
+                blockedIndex?.Dispose();
+            }
             CollectionAssert.AreEqual(originalIndex, File.ReadAllBytes(indexPath), "A real File.Replace failure must retain the old Index.");
             Recover(fixture);
-            Rejected<IOException>(() => Execute(secondBuild, default, step => { if (step == "IndexCommitted") throw new IOException("Simulated interruption after the commit point"); }));
+            Rejected<IOException>(() => Execute(secondBuild, default, step =>
+            {
+                if (step == "IndexCommitted")
+                {
+                    throw new IOException("Simulated interruption after the commit point");
+                }
+            }));
             var second = Recover(fixture);
             Assert.That(((ResourceCatalogDocument)Value(second, "Catalog")).CatalogDigest, Is.EqualTo(secondCatalog.CatalogDigest));
             CollectionAssert.AreEqual(immutableBefore, ResourceReleaseFixture.Snapshot(firstPath));
@@ -108,7 +136,7 @@ namespace YLFramework.Tests.ResourceBuild
             var stable = Publish(stableBuild);
             Assert.That(Value(stable, "IsRepeat"), Is.True);
             Assert.That(stableBuild.CacheReuseBlockedBy.Count, Is.EqualTo(6), "Keep the established untracked-callback correctness gate.");
-            Assert.That(stableBuild.UnityBuildInvoked && stableBuild.ForcedRebuild && !stableBuild.IsCacheHit, Is.True);
+            Assert.That(stableBuild.WasUnityBuildInvoked && stableBuild.ForceRebuild && !stableBuild.IsCacheHit, Is.True);
             fixture.AssertProtected();
             fixture.RetainRelease = true;
             Debug.Log("REAL_82B root=" + root + "; v1=" + firstCatalog.CatalogDigest + "; v2=" + secondCatalog.CatalogDigest +
@@ -122,7 +150,9 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Publisher, Is.Not.Null);
             var method = Publisher.GetMethod("Root", BindingFlags.Static | BindingFlags.NonPublic);
             foreach (var id in new[] { "CON", "NUL.txt", "trailing.", new string('x', 128) })
+            {
                 Rejected<InvalidOperationException>(() => method.Invoke(null, new object[] { id, "StandaloneWindows64" }));
+            }
         }
 
         [Test]
@@ -144,11 +174,19 @@ namespace YLFramework.Tests.ResourceBuild
                     Rejected<InvalidOperationException>(() => Publisher.GetMethod("Execute", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null,
                         new object[] { build, "fixture-next", default(CancellationToken), (Action<string>)(step =>
                         {
-                            if (step != "BeforeIndex") return;
-                            owner = File.ReadAllBytes(ownerPath); journal = File.ReadAllBytes(journalPath);
-                            if (mutation == "missing-owner") File.Delete(ownerPath);
-                            else if (mutation == "missing-journal") File.Delete(journalPath);
-                            else
+                            if (step != "BeforeIndex")
+{
+return;
+}
+owner = File.ReadAllBytes(ownerPath);
+journal = File.ReadAllBytes(journalPath);
+                            if (mutation == "missing-owner")
+{
+File.Delete(ownerPath);
+} else if (mutation == "missing-journal")
+{
+File.Delete(journalPath);
+} else
                             {
                                 var file = mutation == "conflicting-owner" ? ownerPath : journalPath;
                                 var data = JObject.Parse(File.ReadAllText(file));
@@ -160,8 +198,15 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 finally
                 {
-                    if (owner != null) File.WriteAllBytes(ownerPath, owner);
-                    if (journal != null) File.WriteAllBytes(journalPath, journal);
+                    if (owner != null)
+                    {
+                        File.WriteAllBytes(ownerPath, owner);
+                    }
+
+                    if (journal != null)
+                    {
+                        File.WriteAllBytes(journalPath, journal);
+                    }
                 }
                 Recover(fixture);
             }
@@ -195,12 +240,24 @@ namespace YLFramework.Tests.ResourceBuild
             File.WriteAllBytes(ownerPath, ownerBytes);
             var junction = Path.Combine(root, "owned-link");
             var start = new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c mklink /J \"" + junction + "\" \"" + Path.GetFullPath(fixture.Folder) + "\"")
-            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            using (var process = System.Diagnostics.Process.Start(start)) { process.WaitForExit(); Assert.That(process.ExitCode, Is.Zero, process.StandardError.ReadToEnd()); }
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var process = System.Diagnostics.Process.Start(start))
+            {
+                process.WaitForExit();
+                Assert.That(process.ExitCode, Is.Zero, process.StandardError.ReadToEnd());
+            }
             Rejected<InvalidOperationException>(() => Publish(build));
             Directory.Delete(junction);
             using (File.Open(Path.Combine(root, ".ylr-release.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
                 Rejected<IOException>(() => Publish(build));
+            }
+
             var bundlePath = Path.Combine(path, ((ResourceCatalogDocument)Value(release, "Catalog")).Bundles[0].RelativeFile);
             var saved = File.ReadAllBytes(bundlePath);
             File.AppendAllText(bundlePath, "corrupt immutable output");
@@ -212,7 +269,13 @@ namespace YLFramework.Tests.ResourceBuild
             File.WriteAllText(fixture.TextPath, "new generation for partial-stage test");
             AssetDatabase.ImportAsset(fixture.TextPath, ImportAssetOptions.ForceSynchronousImport);
             build = fixture.Build();
-            Rejected<IOException>(() => Execute(build, default, step => { if (step == "FileCopied") throw new IOException("partial copy"); }));
+            Rejected<IOException>(() => Execute(build, default, step =>
+            {
+                if (step == "FileCopied")
+                {
+                    throw new IOException("partial copy");
+                }
+            }));
             var stage = Directory.GetDirectories(Path.Combine(root, ".staging")).Single();
             var foreign = Path.Combine(stage, "foreign.txt");
             File.WriteAllText(foreign, "unregistered content");
@@ -246,8 +309,17 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var asset = document.Assets.Single(x => x.AssetType == typeof(TextAsset).FullName);
             var bundle = AssetBundle.LoadFromFile(Path.Combine(path, document.Bundles.Single(x => x.LogicalId == asset.BundleId).RelativeFile));
-            try { Assert.That(bundle.LoadAsset<TextAsset>(asset.LoadName).text, Is.EqualTo(text)); }
-            finally { if (bundle) bundle.Unload(true); }
+            try
+            {
+                Assert.That(bundle.LoadAsset<TextAsset>(asset.LoadName).text, Is.EqualTo(text));
+            }
+            finally
+            {
+                if (bundle)
+                {
+                    bundle.Unload(true);
+                }
+            }
         }
     }
 }

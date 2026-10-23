@@ -23,7 +23,11 @@ namespace YLFramework.Foundation.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (_object) Object.Destroy(_object);
+            if (_object)
+            {
+                Object.Destroy(_object);
+            }
+
             yield return null;
         }
 
@@ -81,10 +85,16 @@ namespace YLFramework.Foundation.Tests
         private static IEnumerator Until(Func<bool> condition)
         {
             var deadline = Time.realtimeSinceStartupAsDouble + 3;
-            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+            while (!condition() && Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True);
         }
     }
 
-    public sealed class TimerWaitOwner : MonoBehaviour { }
+    public sealed class TimerWaitOwner : MonoBehaviour
+    {
+    }
 }

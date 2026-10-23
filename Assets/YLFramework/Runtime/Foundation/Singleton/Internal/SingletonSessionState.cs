@@ -14,9 +14,9 @@ namespace YLFramework.Core.Singleton
     /// </summary>
     internal static class SingletonSessionState
     {
-        private static readonly List<Action> SessionResets = new();
+        private static readonly List<Action> _sessionResets = new();
         private static bool _isApplicationQuitting;
-        private static bool _executionStopping;
+        private static bool _isExecutionStopping;
         internal static object ExecutionSession { get; private set; } = new();
 
         // 只约束基础执行宿主，不改变 ApplicationTool 或其他领域单例的既有语义。
@@ -25,9 +25,9 @@ namespace YLFramework.Core.Singleton
             // 请求退出后 isPlaying 暂时仍为 true；不依赖 ExitingPlayMode 监听的注册顺序。
             EditorApplication.isPlayingOrWillChangePlaymode &&
 #endif
-            !_executionStopping && !_isApplicationQuitting;
+            !_isExecutionStopping && !_isApplicationQuitting;
 
-        internal static void StopExecution() => _executionStopping = true;
+        internal static void StopExecution() => _isExecutionStopping = true;
 
 #if UNITY_EDITOR
         [InitializeOnLoadMethod]
@@ -40,7 +40,10 @@ namespace YLFramework.Core.Singleton
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.EnteredEditMode) StopExecution();
+                state == PlayModeStateChange.EnteredEditMode)
+            {
+                StopExecution();
+            }
         }
 #endif
 
@@ -54,10 +57,14 @@ namespace YLFramework.Core.Singleton
         /// </summary>
         public static void RegisterSessionReset(Action reset)
         {
-            if (reset == null) return;
-            lock (SessionResets)
+            if (reset == null)
             {
-                SessionResets.Add(reset);
+                return;
+            }
+
+            lock (_sessionResets)
+            {
+                _sessionResets.Add(reset);
             }
         }
 
@@ -84,14 +91,14 @@ namespace YLFramework.Core.Singleton
             Application.quitting -= OnApplicationQuitting;
             Application.quitting += OnApplicationQuitting;
 
-            lock (SessionResets)
+            lock (_sessionResets)
             {
-                for (var i = 0; i < SessionResets.Count; i++)
+                for (var i = 0; i < _sessionResets.Count; i++)
                 {
-                    SessionResets[i]?.Invoke();
+                    _sessionResets[i]?.Invoke();
                 }
             }
-            _executionStopping = false;
+            _isExecutionStopping = false;
         }
 
         private static void OnApplicationQuitting()

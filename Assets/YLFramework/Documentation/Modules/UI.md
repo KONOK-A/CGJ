@@ -37,15 +37,15 @@ window.Close();
 2. Module 最近一次成功绑定的规则快照。
 3. 本次 `PanelOverrides`。
 
-| 字段 | 默认 | 含义 |
+| PanelConfig / PanelOverrides | 默认 | 含义 |
 |---|---|---|
-| Layer | 0 | 根内明确配置的层索引，不存在就拒绝 |
-| Priority | 0 | 同层同 Modal 分组内的业务优先级，不是 Canvas 原始顺序 |
-| Modal | false | 阻挡同根低于它的标准 UI 输入 |
-| CoversRoot | false | 声明完整覆盖，允许低于它的同根 Panel 停绘，不改 RectTransform |
-| ParticipatesInTop | true | 是否进入 Top 查询，与 Modal 独立 |
-| InstanceMode | Single | 同 Module、同实际根、同可证明来源的实例模式 |
-| CacheOnClose | true | 有效会话正常结束时是否允许既有后端缓存 |
+| layer / Layer | 0 | 根内明确配置的层索引，不存在就拒绝 |
+| priority / Priority | 0 | 同层同 Modal 分组内的业务优先级，不是 Canvas 原始顺序 |
+| modal / Modal | false | 阻挡同根低于它的标准 UI 输入 |
+| coversRoot / CoversRoot | false | 声明完整覆盖，允许低于它的同根 Panel 停绘，不改 RectTransform |
+| participatesInTop / ParticipatesInTop | true | 是否进入 Top 查询，与 Modal 独立 |
+| instanceMode / InstanceMode | Single | 同 Module、同实际根、同可证明来源的实例模式 |
+| cacheOnClose / CacheOnClose | true | 有效会话正常结束时是否允许既有后端缓存 |
 
 配置值类型统一为 `YLFramework.Core.PanelConfig`，避免与 UI Toolkit 的同名设置类混淆；不保留旧类型别名。`PanelConfig.Default` 才是框架默认值，结构体零值并不等价。Panel 的序列化字段仍名为 `settings`，七个成员及自然 bool 语义不变；更名不表示已取得 Prefab/Variant 导入迁移证据。`PanelOverrides` 的 nullable 字段用 null 表示未指定，显式 false/0 必须生效，不作 Inspector 序列化。
 
@@ -59,7 +59,7 @@ window.Close();
 - 解析到相同 Prefab 后，在提交前筛掉取消、错型和非法配置，Single 只用最高有效接受序号的意图打开一次。未知来源可以并行解析，不假设不同地址必然相同。
 - 同步调用不等待或接管已确认的异步 Single 首开；若健康实例已存在，可重开，但迟到的旧请求不倒灌旧数据。有效 Close 对关闭前接受的同源请求形成失效屏障。
 - Abort 只影响本消费者，在首个业务初始化回调前有效；进入提交或失败清理后不抢占既定终态。完成通知前归还参数、退出事务，并在每个通知前复核原 Session、Module 代次、根与资源责任。前一个观察者 Close 后复用同一 GameObject，不能使后续旧消费者获得新 Session 的成功结果。
-- `panel` 非空只代表该次交付时的成功引用，不延长会话寿命；检查 `Status/Exception`，不能只看 `progress == 1`。观察异常不阻止其他消费者收尾，原错误保留并附带清理错误。
+- `Panel` 非空只代表该次交付时的成功引用，不延长会话寿命；检查 `Status/Exception`，不能只看 `Progress == 1`。观察异常不阻止其他消费者收尾，原错误保留并附带清理错误。
 
 ### 三个短场景
 
@@ -107,7 +107,7 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 - `UpdateDisplay` 只接收 Layer、Priority、Modal、CoversRoot、ParticipatesInTop，先完成校验再原子提交；拒绝另外两个生命周期字段，不调用 OnOpen。换层使用 `SetParent(false)` 保留局部布局，不拉伸。各层容器的尺寸、锚点或 pivot 不同时，即使保留窗口局部布局参数，屏幕位置/尺寸也可能改变；这不是跨层自动对齐承诺，需由层容器或业务布局配置解决，不要求所有层相同。
 - 顺序为 Layer → 同层 Modal 分组 → Priority → 最近接受/前置序号。`BringToFront` 只改最后一项，不能穿越层、模态或优先级；生成 `SortingOrder` 只读，并预留模态遮罩槽位。
 - `GetTopPanel(root)` 可返回被更高模态阻挡但仍可见且参与 Top 的 Panel；`GetModalPanel` 包含不参与 Top 的模态。Focus 与 EventSystem 实际选择不等价。
-- CoversRoot 只停绘低于它的同根 Panel，不决定布局、实例模式或 Modal；不会影响另一根。旧会话 Close 后的显示命令不能复活它，销毁对象的 IsTop/HasFocus 为 false。
+- CoversRoot 只停绘低于它的同根 Panel，不决定布局、实例模式或 Modal；不会影响另一根。`PanelManager.CullCoveredPanels` 默认 true，关闭时只停用这种覆盖停绘，不改变 Modal 阻挡或 View 会话。旧会话 Close 后的显示命令不能复活它，销毁对象的 IsTop/HasFocus 为 false。
 
 ## 根与资产
 
@@ -115,7 +115,7 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 
 首次显式传入 inactive 根也直接校验其场景、原生组件和明确层映射并准备 Panel，不依赖该根先执行 OnEnable；不会强行激活。inactive 仅暂停可见/输入，恢复时仍是原 Session；必需组件或层容器销毁则属于结构失效，不能与暂停混淆。
 
-`UIRootContext` 仅保存 Canvas、GraphicRaycaster、明确层映射与可选遮罩，既不拥有 Module，也不决定场景寿命。注册自定义根不会使其变成宿主默认根或调用 DontDestroyOnLoad，也不触发 onCreateCanvas；宿主预绑定和懒建默认根在同一执行代次首次准备完成时统一通知一次，保留防重入事务。重复宿主有明确诊断。查询不创建根。
+`UIRootContext` 仅保存 Canvas、GraphicRaycaster、明确层映射与可选遮罩，既不拥有 Module，也不决定场景寿命。注册自定义根不会使其变成宿主默认根或调用 DontDestroyOnLoad，也不触发 CanvasCreated；宿主预绑定和懒建默认根在同一执行代次首次准备完成时统一通知一次，保留防重入事务。重复宿主有明确诊断。查询不创建根。
 
 Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 CanvasScaler 与 `AutomaticAdaptationCanvasScaler`，根不再保存另一份配置。层 0 也必须明确配置，没有 UIRootContext、缺层、外根映射、损坏的必需组件或遮罩都不能运行时补齐。已有 Panel 的 Attach 只认真实祖先根，不搬去默认根，也不加入资源 Single 合流范围。
 

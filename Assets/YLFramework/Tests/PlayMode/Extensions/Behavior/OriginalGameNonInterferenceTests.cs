@@ -20,7 +20,10 @@ namespace YLFramework.Tests.Extensions.Behavior
             var overlapType = Type.GetType("XFGameFramework.Overlap.OverlapBase2D, XFGameFramework.Overlap", true);
             FieldInfo timer = null;
             for (var current = overlapType; current != null && timer == null; current = current.BaseType)
+            {
                 timer = current.GetField("timer", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            }
+
             Assert.That(timer, Is.Not.Null);
             var scenes = new HashSet<int>();
             var times = new Dictionary<int, float>();
@@ -32,7 +35,10 @@ namespace YLFramework.Tests.Extensions.Behavior
                 {
                     yield return flow.Current;
                     var scene = SceneManager.GetActiveScene();
-                    if (scene.name != "Game" || !scenes.Add(scene.handle)) continue;
+                    if (scene.name != "Game" || !scenes.Add(scene.handle))
+                    {
+                        continue;
+                    }
                     // 在推进原流程的暂停/返回按钮前，留出真实 Update 以观察旧 Overlap 自身的计时归零。
                     int beforeCycles = automaticCycles, rawCount = 0;
                     float deadline = Time.realtimeSinceStartup + 10f;
@@ -43,11 +49,23 @@ namespace YLFramework.Tests.Extensions.Behavior
                         foreach (var item in overlaps)
                         {
                             var component = (MonoBehaviour)item;
-                            if (!component.isActiveAndEnabled || !(bool)overlapType.GetProperty("Running").GetValue(item)) continue;
+                            if (!component.isActiveAndEnabled || !(bool)overlapType.GetProperty("Running").GetValue(item))
+                            {
+                                continue;
+                            }
+
                             float value = (float)timer.GetValue(item);
                             int id = item.GetInstanceID();
-                            if (times.TryGetValue(id, out float before) && value < before) automaticCycles++;
-                            if (!times.ContainsKey(id)) components++;
+                            if (times.TryGetValue(id, out float before) && value < before)
+                            {
+                                automaticCycles++;
+                            }
+
+                            if (!times.ContainsKey(id))
+                            {
+                                components++;
+                            }
+
                             times[id] = value;
                         }
                         yield return null;
@@ -56,7 +74,10 @@ namespace YLFramework.Tests.Extensions.Behavior
                     roundCycles.Add(automaticCycles - beforeCycles);
                 }
             }
-            finally { (flow as IDisposable)?.Dispose(); }
+            finally
+            {
+                (flow as IDisposable)?.Dispose();
+            }
             Assert.That(scenes.Count, Is.EqualTo(2), "Both original Game scene entries must execute.");
             Assert.That(roundCycles, Has.Count.EqualTo(2));
             Assert.That(roundCycles, Has.All.GreaterThan(0), "Each reentry round must run original Overlap queries independently.");

@@ -25,10 +25,10 @@ namespace YLFramework.Services.Save
         public const string TempSuffix = ".tmp";
         private const string CorruptSuffix = ".corrupt-";
         private const int MaxFileNameLength = 200;
-        private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false, true);
+        private static readonly UTF8Encoding _utf8NoBom = new UTF8Encoding(false, true);
 
         // Windows 保留设备名（不区分大小写，带扩展名同样保留）
-        private static readonly HashSet<string> ReservedDeviceNames = new HashSet<string>(StringComparer.Ordinal)
+        private static readonly HashSet<string> _reservedDeviceNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "CON", "PRN", "AUX", "NUL",
             "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -45,25 +45,63 @@ namespace YLFramework.Services.Save
         /// <returns>合法返回 true，否则返回 false（不抛异常）。</returns>
         public static bool IsValidFileName(string fileName)
         {
-            if (string.IsNullOrWhiteSpace(fileName)) return false;
-            if (fileName.Length > MaxFileNameLength) return false;
-            if (fileName == "." || fileName == "..") return false;
-            if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
-            if (fileName.IndexOfAny(new[] { '<', '>', ':', '"', '|', '?', '*' }) >= 0) return false;
-            foreach (var character in fileName) if (char.IsControl(character)) return false;
-            if (fileName.IndexOf('/') >= 0 || fileName.IndexOf('\\') >= 0) return false;
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return false;
+            }
+
+            if (fileName.Length > MaxFileNameLength)
+            {
+                return false;
+            }
+
+            if (fileName == "." || fileName == "..")
+            {
+                return false;
+            }
+
+            if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                return false;
+            }
+
+            if (fileName.IndexOfAny(new[] { '<', '>', ':', '"', '|', '?', '*' }) >= 0)
+            {
+                return false;
+            }
+
+            foreach (var character in fileName)
+            {
+                if (char.IsControl(character))
+                {
+                    return false;
+                }
+            }
+
+            if (fileName.IndexOf('/') >= 0 || fileName.IndexOf('\\') >= 0)
+            {
+                return false;
+            }
 
             // Windows 会忽略文件名末尾的点与空白，拒绝以避免与合法名称互相覆盖
             var last = fileName[fileName.Length - 1];
-            if (last == '.' || char.IsWhiteSpace(last)) return false;
+            if (last == '.' || char.IsWhiteSpace(last))
+            {
+                return false;
+            }
 
             // Windows 保留设备名（"CON"、"CON.txt" 均不可用）
             var baseName = fileName.Split('.')[0].TrimEnd(' ').ToUpperInvariant();
-            return !ReservedDeviceNames.Contains(baseName);
+            return !_reservedDeviceNames.Contains(baseName);
         }
 
         internal static void ValidateFileName(string name)
-        { if (!IsValidFileName(name)) throw new ArgumentException("Invalid save file name: " + name, nameof(name)); }
+        {
+            if (!IsValidFileName(name))
+            {
+                throw new ArgumentException("Invalid save file name: " + name, nameof(name));
+            }
+        }
 
         internal static string Serialize(object value, JsonSerializerSettings settings, Formatting formatting)
         {
@@ -91,10 +129,18 @@ namespace YLFramework.Services.Save
             where T : class
         {
             var primary = ReadJsonFile(path, settings, out value, out error, out _);
-            if (primary == SaveReadStatus.Success) return primary;
+            if (primary == SaveReadStatus.Success)
+            {
+                return primary;
+            }
+
             var backupPath = path + BackupSuffix;
             var backup = ReadJsonFile(backupPath, settings, out value, out var backupError, out _);
-            if (backup == SaveReadStatus.Success) return SaveReadStatus.RecoveredFromBackup;
+            if (backup == SaveReadStatus.Success)
+            {
+                return SaveReadStatus.RecoveredFromBackup;
+            }
+
             error = string.IsNullOrEmpty(error) ? backupError : error + " | backup: " + backupError;
             return primary == SaveReadStatus.Missing && backup == SaveReadStatus.Missing ? SaveReadStatus.Missing : SaveReadStatus.Failed;
         }
@@ -107,7 +153,10 @@ namespace YLFramework.Services.Save
         {
             try
             {
-                if (File.Exists(path)) File.Delete(path);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
             catch (IOException)
             {
@@ -126,13 +175,24 @@ namespace YLFramework.Services.Save
             json = null;
             try
             {
-                json = File.ReadAllText(path, Utf8NoBom);
+                json = File.ReadAllText(path, _utf8NoBom);
                 var document = JToken.Parse(json, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-                if (document.Type == JTokenType.Null) throw new JsonSerializationException("JSON null is not save data.");
+                if (document.Type == JTokenType.Null)
+                {
+                    throw new JsonSerializationException("JSON null is not save data.");
+                }
+
                 using (var text = new StringReader(json))
                 using (var reader = new JsonTextReader(text))
+                {
                     value = JsonSerializer.Create(settings ?? new JsonSerializerSettings()).Deserialize<T>(reader);
-                if (value != null) return SaveReadStatus.Success;
+                }
+
+                if (value != null)
+                {
+                    return SaveReadStatus.Success;
+                }
+
                 error = "反序列化结果为空";
                 return SaveReadStatus.Failed;
             }
@@ -146,15 +206,23 @@ namespace YLFramework.Services.Save
                 error = e.Message;
                 return SaveReadStatus.Failed;
             }
-            catch (FileNotFoundException) { return SaveReadStatus.Missing; }
-            catch (DirectoryNotFoundException) { return SaveReadStatus.Missing; }
+            catch (FileNotFoundException)
+            {
+                return SaveReadStatus.Missing;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return SaveReadStatus.Missing;
+            }
         }
 
         internal static void ValidateWritableJson(string path)
         {
             var status = ReadJson<JToken>(path, null, out _, out var error);
             if (status == SaveReadStatus.Failed || status == SaveReadStatus.RecoveredFromBackup)
+            {
                 throw new SaveRecoveryRequiredException(path, error);
+            }
         }
 
         internal static string RestoreBackup<T>(string path, JsonSerializerSettings settings,
@@ -162,7 +230,10 @@ namespace YLFramework.Services.Save
         {
             var backup = path + BackupSuffix;
             if (ReadJsonFile<T>(backup, settings, out var value, out var error, out var json) != SaveReadStatus.Success)
+            {
                 throw new InvalidDataException("Invalid backup: " + backup + " | " + error);
+            }
+
             validate?.Invoke(value);
             cancellationToken.ThrowIfCancellationRequested();
             string preserved = null;
@@ -180,13 +251,16 @@ namespace YLFramework.Services.Save
         {
             cancellationToken.ThrowIfCancellationRequested();
             var directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
 
             var tempPath = path + TempSuffix + "-" + Guid.NewGuid().ToString("N");
             try
             {
                 using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(stream, Utf8NoBom))
+                using (var writer = new StreamWriter(stream, _utf8NoBom))
                 {
                     var buffer = new char[4096];
                     for (var offset = 0; offset < content.Length; offset += 4096)
@@ -220,12 +294,19 @@ namespace YLFramework.Services.Save
 
         internal static string NormalizeRoot(string root)
         {
-            if (string.IsNullOrWhiteSpace(root)) throw new ArgumentException("An explicit save root is required.", nameof(root));
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                throw new ArgumentException("An explicit save root is required.", nameof(root));
+            }
+
             var full = Path.GetFullPath(root);
             EnsureNoLinks(full);
             var normalized = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (normalized.Length <= Path.GetPathRoot(full).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length)
+            {
                 throw new ArgumentException("A filesystem root cannot be used as a save directory.", nameof(root));
+            }
+
             return normalized;
         }
 
@@ -234,11 +315,22 @@ namespace YLFramework.Services.Save
             for (var current = Path.GetFullPath(path); !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
             {
                 FileAttributes attributes;
-                try { attributes = File.GetAttributes(current); }
-                catch (FileNotFoundException) { continue; }
-                catch (DirectoryNotFoundException) { continue; }
+                try
+                {
+                    attributes = File.GetAttributes(current);
+                }
+                catch (FileNotFoundException)
+                {
+                    continue;
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    continue;
+                }
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
                     throw new IOException("Save paths cannot traverse symbolic links or junctions: " + current);
+                }
             }
         }
     }

@@ -11,9 +11,11 @@ namespace YLFramework.Tests.ResourceBuild
         {
             foreach (var name in new[] { "IResourceContentKeyProvider", "ResourceDecryptionOptions",
                          "ResourceBundleContext", "ResourceBundleEnvelope", "ResourceDecryptStream", "ResourceBundleInput" })
+            {
                 Assert.That(AppDomain.CurrentDomain.GetAssemblies().Any(assembly =>
                     assembly.GetType("YLFramework.Services.Resource." + name) != null), Is.True,
                     "Missing formal content contract: " + name);
+            }
         }
     }
 }

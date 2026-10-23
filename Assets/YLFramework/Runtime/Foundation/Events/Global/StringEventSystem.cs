@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using YLFramework.Core.Singleton;
 
 namespace YLFramework.Events
@@ -9,7 +9,7 @@ namespace YLFramework.Events
     /// 类型安全：同一个 key 必须始终使用相同的参数签名。
     /// 若按其他签名访问已存在的 key（注册 / 注销 / 发送），会抛出
     /// <see cref="InvalidOperationException"/>，错误信息包含 key、已绑定的事件类型与请求类型；
-    /// 如需更换签名，请先调用 <see cref="UnRegister(string)"/> 移除旧事件。
+    /// 如需更换签名，请先调用 <see cref="Unregister(string)"/> 移除旧事件。
     /// 各系统持有独立 EventBus；Dispose 或 Play Session reset 永久关闭旧实例，截断旧在途通知。
     /// 关闭后注册与发送抛出 ObjectDisposedException，退订为空操作；Instance 可创建新实例。
     /// </summary>
@@ -45,7 +45,7 @@ namespace YLFramework.Events
         /// <param name="action">事件监听回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public IUnRegister Register(string key, Action action)
+        public IUnregister Register(string key, Action action)
         {
             return _bus.Register(key, action);
         }
@@ -54,9 +54,9 @@ namespace YLFramework.Events
         /// 注销无参事件上的一个监听。
         /// </summary>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public void UnRegister(string key, Action action)
+        public void Unregister(string key, Action action)
         {
-            _bus.UnRegister(key, action);
+            _bus.Unregister(key, action);
         }
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace YLFramework.Events
         /// </summary>
         /// <returns>用于注销本次注册的句柄。</returns>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public IUnRegister Register<T>(string key, Action<T> action)
+        public IUnregister Register<T>(string key, Action<T> action)
         {
             return _bus.Register(key, action);
         }
@@ -86,9 +86,9 @@ namespace YLFramework.Events
         /// 注销单参数事件上的一个监听。
         /// </summary>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public void UnRegister<T>(string key, Action<T> action)
+        public void Unregister<T>(string key, Action<T> action)
         {
-            _bus.UnRegister(key, action);
+            _bus.Unregister(key, action);
         }
 
         /// <summary>
@@ -109,7 +109,7 @@ namespace YLFramework.Events
         /// </summary>
         /// <returns>用于注销本次注册的句柄。</returns>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public IUnRegister Register<T1, T2>(string key, Action<T1, T2> action)
+        public IUnregister Register<T1, T2>(string key, Action<T1, T2> action)
         {
             return _bus.Register(key, action);
         }
@@ -118,9 +118,9 @@ namespace YLFramework.Events
         /// 注销双参数事件上的一个监听。
         /// </summary>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public void UnRegister<T1, T2>(string key, Action<T1, T2> action)
+        public void Unregister<T1, T2>(string key, Action<T1, T2> action)
         {
-            _bus.UnRegister(key, action);
+            _bus.Unregister(key, action);
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace YLFramework.Events
         /// </summary>
         /// <returns>用于注销本次注册的句柄。</returns>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public IUnRegister Register<T1, T2, T3>(string key, Action<T1, T2, T3> action)
+        public IUnregister Register<T1, T2, T3>(string key, Action<T1, T2, T3> action)
         {
             return _bus.Register(key, action);
         }
@@ -150,9 +150,9 @@ namespace YLFramework.Events
         /// 注销三参数事件上的一个监听。
         /// </summary>
         /// <exception cref="InvalidOperationException">key 已被其他参数签名占用。</exception>
-        public void UnRegister<T1, T2, T3>(string key, Action<T1, T2, T3> action)
+        public void Unregister<T1, T2, T3>(string key, Action<T1, T2, T3> action)
         {
-            _bus.UnRegister(key, action);
+            _bus.Unregister(key, action);
         }
 
         /// <summary>
@@ -171,7 +171,7 @@ namespace YLFramework.Events
         /// 与签名无关，始终可用；移除后可安全地用其他参数签名重新使用该 key。
         /// </summary>
         /// <param name="key">事件 key。</param>
-        public void UnRegister(string key)
+        public void Unregister(string key)
         {
             _bus.RemoveKey(key);
         }
@@ -179,9 +179,12 @@ namespace YLFramework.Events
         /// <summary>
         /// 终结并移除所有 key 的事件及在途通知，系统仍可用；关闭后为空操作。
         /// </summary>
-        public void UnRegisterAll()
+        public void UnregisterAll()
         {
-            if (!_bus.IsDisposed) _bus.ClearKeys();
+            if (!_bus.IsDisposed)
+            {
+                _bus.ClearKeys();
+            }
         }
 
         /// <inheritdoc />
@@ -197,9 +200,17 @@ namespace YLFramework.Events
         /// </summary>
         public void Dispose()
         {
-            if (_bus.IsDisposed) return;
+            if (_bus.IsDisposed)
+            {
+                return;
+            }
+
             _bus.Dispose();
-            if (ReferenceEquals(_sessionInstance, this)) _sessionInstance = null;
+            if (ReferenceEquals(_sessionInstance, this))
+            {
+                _sessionInstance = null;
+            }
+
             if (SingletonProperty<StringEventSystem>.TryGetInstance(out var current) && ReferenceEquals(current, this))
             {
                 SingletonProperty<StringEventSystem>.Dispose();

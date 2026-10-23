@@ -1,0 +1,67 @@
+root = true
+
+# YL-owned CSharp only. Game code and external packages keep their own style.
+[{Assets/YLFramework/{Runtime,Editor,Integrations,Samples,Tests}/**.cs,Tools/YLFramework.Analyzers/{Analyzer,Tests}/**.cs,Tools/UIPanelOfflineRunner.cs}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+tab_width = 4
+trim_trailing_whitespace = true
+max_line_length = 120
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_after_comma = true
+csharp_space_around_binary_operators = before_and_after
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = false
+csharp_prefer_braces = true:suggestion
+dotnet_sort_system_directives_first = true
+
+# Naming hints are IDE-only; the whitespace Check does not execute naming rules.
+# Fields need Unity serialization context and are reviewed semantically.
+dotnet_naming_rule.yl_types_pascal.symbols = yl_types
+dotnet_naming_rule.yl_types_pascal.style = yl_pascal
+dotnet_naming_rule.yl_types_pascal.severity = suggestion
+dotnet_naming_symbols.yl_types.applicable_kinds = class, struct, enum, delegate
+dotnet_naming_style.yl_pascal.capitalization = pascal_case
+dotnet_naming_rule.yl_interfaces.symbols = yl_interfaces
+dotnet_naming_rule.yl_interfaces.style = yl_interface
+dotnet_naming_rule.yl_interfaces.severity = suggestion
+dotnet_naming_symbols.yl_interfaces.applicable_kinds = interface
+dotnet_naming_style.yl_interface.required_prefix = I
+dotnet_naming_style.yl_interface.capitalization = pascal_case
+
+# Do not apply YL formatting to upstream libraries or generated/build content.
+[{Assets/YLFramework/{Plugins/**,Runtime/Utilities/Json/**,Runtime/Utilities/ZipTool/ICSharpCode.SharpZipLib/**,Tests/Integrations/HybridCLR/PlayMode/Resources/**,**/Plugins/**,**/Generated/**,**/obj/**,**/bin/**,**/*.g,**/*.generated}.cs,Tools/YLFramework.Analyzers/{Analyzer,Tests}/{obj/**,bin/**,**/*.g,**/*.generated}.cs}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+indent_style = unset
+indent_size = unset
+tab_width = unset
+trim_trailing_whitespace = unset
+max_line_length = unset
+csharp_new_line_before_open_brace = unset
+csharp_new_line_before_else = unset
+csharp_new_line_before_catch = unset
+csharp_new_line_before_finally = unset
+csharp_indent_case_contents = unset
+csharp_indent_switch_labels = unset
+csharp_indent_labels = unset
+csharp_space_after_keywords_in_control_flow_statements = unset
+csharp_space_after_comma = unset
+csharp_space_around_binary_operators = unset
+csharp_preserve_single_line_statements = unset
+csharp_preserve_single_line_blocks = unset
+csharp_prefer_braces = unset
+dotnet_sort_system_directives_first = unset
+dotnet_naming_rule.yl_types_pascal.severity = unset
+dotnet_naming_rule.yl_interfaces.severity = unset

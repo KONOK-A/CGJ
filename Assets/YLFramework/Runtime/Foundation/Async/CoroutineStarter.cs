@@ -17,12 +17,13 @@ namespace YLFramework.Foundation
         private static CoroutineStarter _instance;
         private static ConditionalWeakTable<Coroutine, CoroutineStarter> _owners = new();
         private object _session;
-        private bool _released;
+        private bool _isReleased;
 
         static CoroutineStarter() => SingletonSessionState.RegisterSessionReset(ResetSession);
 
-        private bool IsCurrent => !_released && ReferenceEquals(_instance, this) &&
+        private bool IsCurrent => !_isReleased && ReferenceEquals(_instance, this) &&
             ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
+
         private void Awake() => DontDestroyOnLoad(gameObject);
 
         /// <summary>
@@ -31,11 +32,23 @@ namespace YLFramework.Foundation
         /// <remarks>返回 null 表示没有可用句柄，不保证迭代器从未执行；同步执行可能已完成或使宿主失效。</remarks>
         public static Coroutine Start(IEnumerator enumerator)
         {
-            if (!SingletonSessionState.CanRunExecution) return null;
+            if (!SingletonSessionState.CanRunExecution)
+            {
+                return null;
+            }
+
             var host = _instance;
-            var created = !host;
-            if (created) host = CreateHost();
-            if (!host.IsCurrent || !host.gameObject.activeInHierarchy) return null;
+            var wasCreated = !host;
+            if (wasCreated)
+            {
+                host = CreateHost();
+            }
+
+            if (!host.IsCurrent || !host.gameObject.activeInHierarchy)
+            {
+                return null;
+            }
+
             try
             {
                 var coroutine = host.StartCoroutine(enumerator);
@@ -43,19 +56,29 @@ namespace YLFramework.Foundation
                 if (!host || !host.IsCurrent || !host.gameObject.activeInHierarchy ||
                     !SingletonSessionState.CanRunExecution)
                 {
-                    if (host && coroutine != null) host.StopCoroutine(coroutine);
+                    if (host && coroutine != null)
+                    {
+                        host.StopCoroutine(coroutine);
+                    }
+
                     return null;
                 }
-                if (coroutine != null) _owners.Add(coroutine, host);
+
+                if (coroutine != null)
+                {
+                    _owners.Add(coroutine, host);
+                }
+
                 return coroutine;
             }
             catch
             {
-                if (created && host)
+                if (wasCreated && host)
                 {
                     host.ReleaseOwner();
                     Destroy(host.gameObject);
                 }
+
                 throw;
             }
         }
@@ -66,9 +89,16 @@ namespace YLFramework.Foundation
         /// <remarks>不创建、查找或借用替代宿主；不停止其他 MonoBehaviour 或实例 StartCoroutine 拥有的工作。</remarks>
         public static void Stop(Coroutine coroutine)
         {
-            if (coroutine == null || !_owners.TryGetValue(coroutine, out var host)) return;
+            if (coroutine == null || !_owners.TryGetValue(coroutine, out var host))
+            {
+                return;
+            }
+
             _owners.Remove(coroutine);
-            if (host && host.IsCurrent) host.StopCoroutine(coroutine);
+            if (host && host.IsCurrent)
+            {
+                host.StopCoroutine(coroutine);
+            }
         }
 
         private static CoroutineStarter CreateHost()
@@ -88,22 +118,37 @@ namespace YLFramework.Foundation
             }
             catch
             {
-                if (host) host.ReleaseOwner();
-                if (obj) Destroy(obj);
+                if (host)
+                {
+                    host.ReleaseOwner();
+                }
+
+                if (obj)
+                {
+                    Destroy(obj);
+                }
+
                 throw;
             }
         }
 
         private void ReleaseOwner()
         {
-            if (_released) return;
-            _released = true;
+            if (_isReleased)
+            {
+                return;
+            }
+
+            _isReleased = true;
             if (ReferenceEquals(_instance, this))
             {
                 _instance = null;
                 _owners = new ConditionalWeakTable<Coroutine, CoroutineStarter>();
             }
-            if (this) StopAllCoroutines();
+            if (this)
+            {
+                StopAllCoroutines();
+            }
         }
 
         private static void ResetSession()
@@ -111,7 +156,11 @@ namespace YLFramework.Foundation
             var old = _instance;
             _instance = null;
             _owners = new ConditionalWeakTable<Coroutine, CoroutineStarter>();
-            if (!old) return;
+            if (!old)
+            {
+                return;
+            }
+
             old.ReleaseOwner();
             old.enabled = false;
             Destroy(old.gameObject);
@@ -119,7 +168,11 @@ namespace YLFramework.Foundation
 
         private void OnApplicationQuit()
         {
-            if (!IsCurrent) return;
+            if (!IsCurrent)
+            {
+                return;
+            }
+
             SingletonSessionState.StopExecution();
             ReleaseOwner();
             enabled = false;

@@ -6,7 +6,7 @@ namespace YLFramework.Services.Audio
     /// <summary>Passive IMGUI diagnostics with explicit statistics reset. Does not initialize playback or create a listener.</summary>
     public static class AudioKitDiagnostics
     {
-        private static readonly List<AudioHandle> sSounds = new List<AudioHandle>();
+        private static readonly List<AudioHandle> _sounds = new List<AudioHandle>();
         /// <summary>在当前 GUILayout 区域绘制被动诊断界面；唯一的写操作是显式的 Sound 统计重置。</summary>
         public static void Draw(ref Vector2 scrollPosition)
         {
@@ -22,7 +22,8 @@ namespace YLFramework.Services.Audio
                 GUILayout.EndScrollView();
                 return;
             }
-            DrawPlayer("Music", AudioKit.Music); DrawPlayer("Voice", AudioKit.Voice);
+            DrawPlayer("Music", AudioKit.Music);
+            DrawPlayer("Voice", AudioKit.Voice);
             if (AudioManager.TryGetInstance(out var host))
             {
                 DrawPlayer("Music outgoing", host.MusicPlayback.Outgoing);
@@ -38,16 +39,24 @@ namespace YLFramework.Services.Audio
             DrawGroup("Music default", settings.MusicOutputGroup.Value);
             DrawGroup("Voice default", settings.VoiceOutputGroup.Value);
             DrawGroup("Sound default", settings.SoundOutputGroup.Value);
-            AudioKit.CopyPlayingSounds(sSounds);
-            GUILayout.Label("Sound requests: " + sSounds.Count);
-            foreach (var handle in sSounds) DrawPlayer("Sound", handle);
-            sSounds.Clear();
+            AudioKit.CopyPlayingSounds(_sounds);
+            GUILayout.Label("Sound requests: " + _sounds.Count);
+            foreach (var handle in _sounds)
+            {
+                DrawPlayer("Sound", handle);
+            }
+
+            _sounds.Clear();
             GUILayout.EndScrollView();
         }
         private static string FormatLimit(int limit) => limit == 0 ? "unlimited" : limit.ToString();
         private static void DrawSoundStats()
         {
-            if (GUILayout.Button("Reset Sound statistics")) AudioKit.ResetSoundStats();
+            if (GUILayout.Button("Reset Sound statistics"))
+            {
+                AudioKit.ResetSoundStats();
+            }
+
             var stats = AudioKit.SoundStats;
             GUILayout.Label("Sound active: " + stats.ActiveCount + " / Peak: " + stats.PeakActiveCount +
                 " / Admitted: " + stats.AdmittedCount + " / Start failures: " + stats.StartFailureCount);
@@ -61,7 +70,11 @@ namespace YLFramework.Services.Audio
         }
         private static void DrawPlayer(string title, AudioHandle handle)
         {
-            if (!handle.IsValid) { GUILayout.Label(title + ": (none)"); return; }
+            if (!handle.IsValid)
+            {
+                GUILayout.Label(title + ": (none)");
+                return;
+            }
             var source = handle.Voice.Source;
             GUILayout.Label(title + ": " + (source && source.clip ? source.clip.name : "(none)") +
                 "  Playing: " + handle.IsPlaying + "  Paused: " + handle.IsPaused);
@@ -79,7 +92,10 @@ namespace YLFramework.Services.Audio
                 GUILayout.Label("Volume: " + source.volume + "  Pitch: " + source.pitch + "  Spatial: " + source.spatialBlend + "  Transition: " + handle.Voice.TransitionGain);
                 DrawGroup("Output (" + handle.Voice.Options.OutputRoute.Mode + ")", source.outputAudioMixerGroup);
                 var requestedGroup = handle.Voice.Options.OutputRoute.Group;
-                if (AudioOutputRoute.HasReference(requestedGroup) && !requestedGroup) GUILayout.Label("Requested mixer group is no longer alive.");
+                if (AudioOutputRoute.HasReference(requestedGroup) && !requestedGroup)
+                {
+                    GUILayout.Label("Requested mixer group is no longer alive.");
+                }
             }
         }
         private static void DrawGroup(string title, UnityEngine.Audio.AudioMixerGroup group)

@@ -28,8 +28,10 @@ namespace YLFramework.Analyzers.Tests
         private static string FindRoot()
         {
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !File.Exists(Path.Combine(directory.FullName, "ProjectSettings/ProjectVersion.txt"))) directory = directory.Parent;
-            if (directory == null) throw new InvalidOperationException("Tests must run from the configured repository output directory.");
+            while (directory != null && !File.Exists(Path.Combine(directory.FullName, "ProjectSettings/ProjectVersion.txt")))
+                directory = directory.Parent;
+            if (directory == null)
+                throw new InvalidOperationException("Tests must run from the configured repository output directory.");
             return directory.FullName;
         }
 
@@ -69,10 +71,10 @@ namespace YLFramework.Core {
  }
  [RoslynAnalyzers.DisableNew(""Use New"")][RoslynAnalyzers.MethodLocalOnly(""Lease reason"")]
  public class LoadViewArgs {
-  private static readonly Pool.ObjectPool<LoadViewArgs> Pool = new Pool.ObjectPool<LoadViewArgs>(()=>new LoadViewArgs());
-  public static LoadViewArgs New()=>Pool.Allocate();
+   private static readonly Pool.ObjectPool<LoadViewArgs> _pool = new Pool.ObjectPool<LoadViewArgs>(()=>new LoadViewArgs());
+   public static LoadViewArgs New()=>_pool.Allocate();
  }
-  public class LoadViewRequest<T> { private LoadViewArgs args; }
+  public class LoadViewRequest<T> { private LoadViewArgs _args; }
   public class PanelManager { internal sealed class PanelOperation { internal LoadViewArgs Args; } }
 }");
             return CSharpCompilation.Create("YLFramework.Runtime", sources.Select(s => CSharpSyntaxTree.ParseText(s, Parse)),
@@ -119,7 +121,8 @@ namespace YLFramework.Core {
                 Assert.That(diagnostics[i].Severity, Is.EqualTo(DiagnosticSeverity.Warning));
                 Assert.That(diagnostics[i].Location.SourceSpan, Is.EqualTo(wanted[i].span));
                 Assert.That(diagnostics[i].GetMessage(), Does.Match(@"[\u4e00-\u9fff]"));
-                foreach (var part in messageParts) Assert.That(diagnostics[i].GetMessage(), Does.Contain(part));
+                foreach (var part in messageParts)
+                    Assert.That(diagnostics[i].GetMessage(), Does.Contain(part));
             }
         }
     }

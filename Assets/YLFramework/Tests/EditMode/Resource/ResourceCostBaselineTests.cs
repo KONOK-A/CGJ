@@ -28,20 +28,35 @@ namespace YLFramework.Tests.ResourceBuild
         private const long MiB = 1024L * 1024;
         private const int Samples = 3;
         private const double TimeoutSeconds = 180;
-        private static readonly string[] Modes = { "None", "Encrypted" };
-        private static ResourceStartup activeStartup;
-        private static ResourceSystem lastSystem;
+        private static readonly string[] _modes = { "None", "Encrypted" };
+        private static ResourceStartup _activeStartup;
+        private static ResourceSystem _lastSystem;
 
         [Serializable]
         private sealed class FixtureState
         {
-            public string Run, Root, CacheRoot, Token, Folder, FolderGuid, ProjectId, ProjectGuid, Scene;
-            public string Bootstrap, None, Encrypted;
-            public string NoneText, EncryptedText;
+            public string Run;
+            public string Root;
+            public string CacheRoot;
+            public string Token;
+            public string Folder;
+            public string FolderGuid;
+            public string ProjectId;
+            public string ProjectGuid;
+            public string Scene;
+            public string Bootstrap;
+            public string None;
+            public string Encrypted;
+            public string NoneText;
+            public string EncryptedText;
             public SceneSetup[] Scenes;
             public List<string> Workspaces = new();
             public List<string> CacheStores = new();
-            public bool FolderCreated, SceneCreated, Ready, BuildsComplete, NetworkComplete;
+            public bool FolderCreated;
+            public bool SceneCreated;
+            public bool Ready;
+            public bool BuildsComplete;
+            public bool NetworkComplete;
             public bool BuildFailed;
         }
 
@@ -91,11 +106,20 @@ namespace YLFramework.Tests.ResourceBuild
             ResourceLocalSnapshot.RejectLinks(state.CacheRoot);
             Directory.CreateDirectory(state.CacheRoot);
             File.WriteAllText(Path.Combine(state.CacheRoot, "owner.json"), new JObject
-                { ["Kind"] = "F03BaselineCache", ["Run"] = state.Run, ["Root"] = state.CacheRoot, ["Token"] = state.Token }.ToString());
-            const string parent = "Assets/YLFramework/Tests/Fixtures";
-            if (!AssetDatabase.IsValidFolder(parent)) AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
+            {
+                ["Kind"] = "F03BaselineCache",
+                ["Run"] = state.Run,
+                ["Root"] = state.CacheRoot,
+                ["Token"] = state.Token
+            }.ToString());
+            const string Parent = "Assets/YLFramework/Tests/Fixtures";
+            if (!AssetDatabase.IsValidFolder(Parent))
+            {
+                AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
+            }
+
             Assert.That(Directory.Exists(state.Folder) || File.Exists(state.Folder) || File.Exists(state.Folder + ".meta"), Is.False);
-            Assert.That(AssetDatabase.CreateFolder(parent, Path.GetFileName(state.Folder)), Is.Not.Empty);
+            Assert.That(AssetDatabase.CreateFolder(Parent, Path.GetFileName(state.Folder)), Is.Not.Empty);
             state.FolderCreated = true;
             state.FolderGuid = AssetDatabase.AssetPathToGUID(state.Folder);
             Save(state);
@@ -122,24 +146,27 @@ namespace YLFramework.Tests.ResourceBuild
                     go.AddComponent<MeshRenderer>().sharedMaterial = material;
                     Assert.That(PrefabUtility.SaveAsPrefabAsset(go, Content(state) + "/" + name + ".prefab"), Is.Not.Null);
                 }
-                finally { Object.DestroyImmediate(go); }
+                finally
+                {
+                    Object.DestroyImmediate(go);
+                }
             }
             WritePcm(Content(state) + "/Owned.wav");
             ChangeEntry(state, 0);
             var project = ScriptableObject.CreateInstance<ResourceProject>();
-            project.ProjectId = state.ProjectId;
-            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(Content(state)) });
-            project.Compression = ResourceCompression.Uncompressed;
-            project.Groups.Add(Group(state, "entry", "entry.txt", "entry"));
+            project.projectId = state.ProjectId;
+            project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(Content(state)) });
+            project.compression = ResourceCompression.Uncompressed;
+            project.groups.Add(Group(state, "entry", "entry.txt", "entry"));
             AssetDatabase.CreateAsset(project, state.Folder + "/Project.asset");
             state.ProjectGuid = AssetDatabase.AssetPathToGUID(state.Folder + "/Project.asset");
             Save(state);
             var recipe = ScriptableObject.CreateInstance<ResourceBuildRecipe>();
-            recipe.Project = project;
-            recipe.Target = BuildTarget.StandaloneWindows64;
-            recipe.AppContentCompatibilityId = AppId;
-            recipe.Action = ResourceBuildAction.BuildAndPublish;
-            recipe.GenerateReferences = false;
+            recipe.project = project;
+            recipe.target = BuildTarget.StandaloneWindows64;
+            recipe.appContentCompatibilityId = AppId;
+            recipe.action = ResourceBuildAction.BuildAndPublish;
+            recipe.generateReferences = false;
             AssetDatabase.CreateAsset(recipe, state.Folder + "/Recipe.asset");
             Assert.That(Directory.Exists(PublisherRoot(state)), Is.False);
             Assert.That(scene.rootCount, Is.Zero);
@@ -148,11 +175,19 @@ namespace YLFramework.Tests.ResourceBuild
             Save(state);
             ResourceCostEvidence.Write("f03-fixture", new
             {
-                state.Folder, state.ProjectGuid, state.ProjectId, state.Root, state.CacheRoot,
-                Compression = "Uncompressed + StrictMode", Texture = "2048x2048 and 1024x1024 RGBA32, no mipmaps, deterministic byte noise",
+                state.Folder,
+                state.ProjectGuid,
+                state.ProjectId,
+                state.Root,
+                state.CacheRoot,
+                Compression = "Uncompressed + StrictMode",
+                Texture = "2048x2048 and 1024x1024 RGBA32, no mipmaps, deterministic byte noise",
                 Audio = "20 seconds, 44100 Hz, stereo 16-bit PCM, DecompressOnLoad; no audio-underrun counter",
                 Shared = "Three separately packed Prefabs reference the same Material and Large Texture",
-                WarmupPerMode = 1, NewWorkspaceSamples = Samples, NoSourceChangeSamples = Samples, LocalChangeSamples = Samples,
+                WarmupPerMode = 1,
+                NewWorkspaceSamples = Samples,
+                NoSourceChangeSamples = Samples,
+                LocalChangeSamples = Samples,
                 LocalChange = "Only the independent 16 KiB entry TextAsset changes; source import is outside operation timing",
                 Boundaries = "Editor baseline, not batchmode/CI or OS-cold disk. New-workspace resets raw only; the owned Publisher persists and IsRepeat says whether publication copied. No thresholds or extrapolation to G3 Player.",
                 Sources = SourceFacts(state)
@@ -171,14 +206,22 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static void WritePcm(string path)
         {
-            const int frames = 44100 * 20;
+            const int Frames = 44100 * 20;
             using (var output = new BinaryWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write)))
             {
-                output.Write(Encoding.ASCII.GetBytes("RIFF")); output.Write(36 + frames * 4);
-                output.Write(Encoding.ASCII.GetBytes("WAVEfmt ")); output.Write(16); output.Write((short)1); output.Write((short)2);
-                output.Write(44100); output.Write(44100 * 4); output.Write((short)4); output.Write((short)16);
-                output.Write(Encoding.ASCII.GetBytes("data")); output.Write(frames * 4);
-                for (var i = 0; i < frames; i++)
+                output.Write(Encoding.ASCII.GetBytes("RIFF"));
+                output.Write(36 + Frames * 4);
+                output.Write(Encoding.ASCII.GetBytes("WAVEfmt "));
+                output.Write(16);
+                output.Write((short)1);
+                output.Write((short)2);
+                output.Write(44100);
+                output.Write(44100 * 4);
+                output.Write((short)4);
+                output.Write((short)16);
+                output.Write(Encoding.ASCII.GetBytes("data"));
+                output.Write(Frames * 4);
+                for (var i = 0; i < Frames; i++)
                 {
                     output.Write((short)(Math.Sin(i * 2 * Math.PI * 437 / 44100) * 12000));
                     output.Write((short)(Math.Sin(i * 2 * Math.PI * 659 / 44100) * 12000));
@@ -205,11 +248,12 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static ResourceGroup Group(FixtureState state, string id, string file, string address) => new()
         {
-            Id = id, Selections = new List<ResourceSelection> { new() { Guid = AssetDatabase.AssetPathToGUID(Content(state) + "/" + file), Address = address } }
+            id = id,
+            selections = new List<ResourceSelection> { new() { guid = AssetDatabase.AssetPathToGUID(Content(state) + "/" + file), address = address } }
         };
 
         [Test, Order(1)]
-        public void A_RecipeBuildAndPublicationBaseline()
+        public void ARecipeBuildAndPublicationBaseline()
         {
             var state = State;
             Assert.That(state.BuildsComplete, Is.False, "Use a fresh explicitly armed run for a rerun.");
@@ -220,12 +264,17 @@ namespace YLFramework.Tests.ResourceBuild
             Save(state);
             // A real, one-way definition evolution, not a temporary execution override or Project clone.
             var project = Project(state);
-            foreach (var name in new[] { "A", "B", "C" }) project.Groups.Add(Group(state, "prefab-" + name.ToLowerInvariant(), name + ".prefab", name));
-            project.Groups.Add(Group(state, "large", "Large.asset", "large"));
-            project.Groups.Add(Group(state, "medium", "Medium.asset", "medium"));
-            project.Groups.Add(Group(state, "audio", "Owned.wav", "audio"));
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
-            foreach (var mode in Modes)
+            foreach (var name in new[] { "A", "B", "C" })
+            {
+                project.groups.Add(Group(state, "prefab-" + name.ToLowerInvariant(), name + ".prefab", name));
+            }
+
+            project.groups.Add(Group(state, "large", "Large.asset", "large"));
+            project.groups.Add(Group(state, "medium", "Medium.asset", "medium"));
+            project.groups.Add(Group(state, "audio", "Owned.wav", "audio"));
+            EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
+            foreach (var mode in _modes)
             {
                 // 两种交付模式从完全相同的资源字节开始，局部变更序列也相同。
                 var version = 0;
@@ -233,9 +282,10 @@ namespace YLFramework.Tests.ResourceBuild
                 if (mode == "Encrypted")
                 {
                     project = Project(state);
-                    project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-                    project.ContentKeyId = "f03-owned";
-                    EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+                    project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+                    project.contentKeyId = "f03-owned";
+                    EditorUtility.SetDirty(project);
+                    ResourceEditorOperations.SaveProject(project);
                 }
                 var workspace = TrackWorkspace(state);
                 BuildSample(state, mode, "warmup", 0, keys);
@@ -245,7 +295,7 @@ namespace YLFramework.Tests.ResourceBuild
                     DeleteWorkspace(state, workspace);
                     Assert.That(Directory.Exists(workspace), Is.False);
                     previous = BuildSample(state, mode, "new-workspace", i, keys);
-                    Assert.That(previous.Build.UnityBuildInvoked, Is.True);
+                    Assert.That(previous.Build.WasUnityBuildInvoked, Is.True);
                 }
                 for (var i = 1; i <= Samples; i++)
                 {
@@ -254,7 +304,11 @@ namespace YLFramework.Tests.ResourceBuild
                     CollectionAssert.AreEqual(previous.Build.DeliveryFiles.Select(FileIdentity), next.Build.DeliveryFiles.Select(FileIdentity));
                     Assert.That(next.Release.Catalog.CatalogDigest, Is.EqualTo(previous.Release.Catalog.CatalogDigest));
                     Assert.That(next.Release.IsRepeat, Is.True);
-                    if (mode == "Encrypted") Assert.That(next.Build.EncodedDeliveryBytes, Is.Zero);
+                    if (mode == "Encrypted")
+                    {
+                        Assert.That(next.Build.EncodedDeliveryBytes, Is.Zero);
+                    }
+
                     previous = next;
                 }
                 for (var i = 1; i <= Samples; i++)
@@ -265,16 +319,39 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(next.Release.Catalog.CatalogDigest, Is.Not.EqualTo(previous.Release.Catalog.CatalogDigest));
                     var textBundle = next.Build.Map.Assets.Single(x => x.Address.Path == "entry").BundleName;
                     CollectionAssert.AreEquivalent(new[] { textBundle }, next.Build.BundleChanges.Where(x => x.ContentChanged == true).Select(x => x.Name));
-                    if (mode == "None") state.NoneText = text; else state.EncryptedText = text;
+                    if (mode == "None")
+                    {
+                        state.NoneText = text;
+                    }
+                    else
+                    {
+                        state.EncryptedText = text;
+                    }
+
                     previous = next;
                 }
                 var path = Export(state, previous.Release, mode.ToLowerInvariant());
-                if (mode == "None") state.None = path; else state.Encrypted = path;
+                if (mode == "None")
+                {
+                    state.None = path;
+                }
+                else
+                {
+                    state.Encrypted = path;
+                }
+
                 Save(state);
             }
             state.BuildsComplete = true;
             Save(state);
-            ResourceCostEvidence.Write("f03-releases", new { state.Bootstrap, state.None, state.Encrypted, state.ProjectId, state.ProjectGuid });
+            ResourceCostEvidence.Write("f03-releases", new
+            {
+                state.Bootstrap,
+                state.None,
+                state.Encrypted,
+                state.ProjectId,
+                state.ProjectGuid
+            });
         }
 
         private static string TrackWorkspace(FixtureState state)
@@ -283,7 +360,8 @@ namespace YLFramework.Tests.ResourceBuild
             if (!state.Workspaces.Contains(root))
             {
                 Assert.That(Directory.Exists(root) || File.Exists(root), Is.False, "Never adopt an earlier Workspace.");
-                state.Workspaces.Add(root); Save(state);
+                state.Workspaces.Add(root);
+                Save(state);
             }
             return root;
         }
@@ -296,28 +374,55 @@ namespace YLFramework.Tests.ResourceBuild
             // Serialization, assertions and extra hashes are deliberately outside the performance window.
             ResourceCostEvidence.Write("f03-a-" + mode.ToLowerInvariant() + "-" + kind + "-" + sample, new
             {
-                Mode = mode, Kind = kind, Sample = sample, Warmup = kind == "warmup" || kind == "setup",
+                Mode = mode,
+                Kind = kind,
+                Sample = sample,
+                Warmup = kind == "warmup" || kind == "setup",
                 WallMilliseconds = Milliseconds(started, finished),
-                Invocation = report.Invocation == null ? null : new { report.Invocation.RecipePath, report.Invocation.ProjectGuid,
-                    report.Invocation.ProjectId, report.Invocation.Target, report.Invocation.AppContentCompatibilityId, report.Invocation.Action,
-                    report.Invocation.ForceRebuild, report.Invocation.Compression, report.Invocation.ContentEncryption, report.Invocation.GenerateReferences },
-                report.ElapsedMilliseconds, report.PreflightMilliseconds, report.PublicationMilliseconds,
+                Invocation = report.Invocation == null ? null : new
+                {
+                    report.Invocation.RecipePath,
+                    report.Invocation.ProjectGuid,
+                    report.Invocation.ProjectId,
+                    report.Invocation.Target,
+                    report.Invocation.AppContentCompatibilityId,
+                    report.Invocation.Action,
+                    report.Invocation.ForceRebuild,
+                    report.Invocation.Compression,
+                    report.Invocation.ContentEncryption,
+                    report.Invocation.GenerateReferences
+                },
+                report.ElapsedMilliseconds,
+                report.PreflightMilliseconds,
+                report.PublicationMilliseconds,
                 Build = BuildFacts(report.Build),
-                Release = report.Release == null ? null : new { report.Release.DirectoryPath, report.Release.Catalog.BuildId,
-                    report.Release.Catalog.CatalogDigest, report.Release.IsRepeat, report.Release.CopiedBytes,
-                    report.Release.ElapsedMilliseconds, report.Release.CopyMilliseconds, report.Release.StagingValidationMilliseconds },
+                Release = report.Release == null ? null : new
+                {
+                    report.Release.DirectoryPath,
+                    report.Release.Catalog.BuildId,
+                    report.Release.Catalog.CatalogDigest,
+                    report.Release.IsRepeat,
+                    report.Release.CopiedBytes,
+                    report.Release.ElapsedMilliseconds,
+                    report.Release.CopyMilliseconds,
+                    report.Release.StagingValidationMilliseconds
+                },
                 Errors = new[] { report.BuildError, report.PublicationError, report.GenerationError }.Where(x => x != null).Select(x => x.ToString()).ToArray(),
                 Sources = SourceFacts(state),
                 TimingBoundary = "ExecuteRecipe, including original Preflight/Builder/Publisher and all full checks. Nested timings overlap; do not sum them. No source import or evidence IO."
             });
             if (report.BuildError != null || report.PublicationError != null || report.GenerationError != null)
             {
-                state.BuildFailed = true; Save(state);
-                ResourceCostEvidence.Write("f03-build-failure-state", new { State = state,
+                state.BuildFailed = true;
+                Save(state);
+                ResourceCostEvidence.Write("f03-build-failure-state", new
+                {
+                    State = state,
                     Errors = new[] { report.BuildError, report.PublicationError, report.GenerationError }.Where(x => x != null)
                         .Select(x => new { Type = x.GetType().FullName, x.HResult, Win32LowWord = x.HResult & 0xffff, Detail = x.ToString() }),
                     Metadata = Directory.Exists(PublisherRoot(state)) ? Directory.GetFiles(PublisherRoot(state), "*", SearchOption.TopDirectoryOnly)
-                        .Select(x => new { Path = x, Attributes = File.GetAttributes(x).ToString(), Length = new FileInfo(x).Length }).ToArray() : null });
+                        .Select(x => new { Path = x, Attributes = File.GetAttributes(x).ToString(), Length = new FileInfo(x).Length }).ToArray() : null
+                });
             }
             Assert.That(report.BuildError, Is.Null, report.BuildError?.ToString());
             Assert.That(report.PublicationError, Is.Null, report.PublicationError?.ToString());
@@ -325,7 +430,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(report.Release, Is.Not.Null);
             if (report.Build.CacheReuseBlockedBy.Count != 0)
             {
-                Assert.That(report.Build.UnityBuildInvoked && report.Build.ForcedRebuild, Is.True);
+                Assert.That(report.Build.WasUnityBuildInvoked && report.Build.ForceRebuild, Is.True);
                 Assert.That(report.Build.IsCacheHit, Is.False, "Never bypass the callback safety gate for a performance result.");
             }
             if (mode != "bootstrap")
@@ -340,14 +445,39 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static object BuildFacts(ResourceBuildResult build) => build == null ? null : new
         {
-            build.WorkspacePath, build.InputFingerprint, build.BuildSettingsFingerprint, build.Platform, build.UnityCompatibility,
-            build.Compression, build.ContentEncryption, build.IsCacheHit, build.UnityBuildInvoked, build.ForcedRebuild,
-            build.CacheReuseBlockedBy, build.ExecutionReasons, build.PreflightMilliseconds, build.BuildMilliseconds,
-            build.ValidationMilliseconds, build.ElapsedMilliseconds, build.MapMilliseconds, build.InputFingerprintMilliseconds,
-            build.BuildPipelineMilliseconds, build.ArtifactHashMilliseconds, build.ReadbackMilliseconds,
-            build.ContentEncodingMilliseconds, build.SourceHashBytes, build.ArtifactHashBytes, build.BundleFileBytes,
-            build.DeliveryBytes, build.EncodedDeliveryBytes, build.ReusedDeliveryBytes, build.RetainedObsoleteFiles,
-            RawFiles = build.Files, DeliveryFiles = build.DeliveryFiles, build.BundleChanges, build.Bundles,
+            build.WorkspacePath,
+            build.InputFingerprint,
+            build.BuildSettingsFingerprint,
+            build.Platform,
+            build.UnityCompatibility,
+            build.Compression,
+            build.ContentEncryption,
+            build.IsCacheHit,
+            UnityBuildInvoked = build.WasUnityBuildInvoked,
+            ForcedRebuild = build.ForceRebuild,
+            build.CacheReuseBlockedBy,
+            build.ExecutionReasons,
+            build.PreflightMilliseconds,
+            build.BuildMilliseconds,
+            build.ValidationMilliseconds,
+            build.ElapsedMilliseconds,
+            build.MapMilliseconds,
+            build.InputFingerprintMilliseconds,
+            build.BuildPipelineMilliseconds,
+            build.ArtifactHashMilliseconds,
+            build.ReadbackMilliseconds,
+            build.ContentEncodingMilliseconds,
+            build.SourceHashBytes,
+            build.ArtifactHashBytes,
+            build.BundleFileBytes,
+            build.DeliveryBytes,
+            build.EncodedDeliveryBytes,
+            build.ReusedDeliveryBytes,
+            build.RetainedObsoleteFiles,
+            RawFiles = build.Files,
+            DeliveryFiles = build.DeliveryFiles,
+            build.BundleChanges,
+            build.Bundles,
             Assets = build.Map.Assets.Select(x => new { x.Guid, x.LocalId, x.SourcePath, Address = x.Address.Path, x.BundleName }),
             Note = "Raw/source/artifact logical bytes are not native or process memory. Original timings are hierarchical, not additive."
         };
@@ -372,8 +502,14 @@ namespace YLFramework.Tests.ResourceBuild
             var path = Path.Combine(parent, release.Catalog.CatalogDigest);
             Assert.That(Path.Combine(path, release.Catalog.Bundles.OrderByDescending(x => x.RelativeFile.Length).First().RelativeFile).Length, Is.LessThan(255));
             var bytes = ResourceEditorOperations.ExportRelease(release, path);
-            ResourceCostEvidence.Write("f03-export-" + label, new { Directory = path, release.Catalog.CatalogDigest, release.Catalog.BuildId,
-                CopiedBytes = bytes, Files = Directory.GetFiles(path).Select(x => new { Name = Path.GetFileName(x), Length = new FileInfo(x).Length, Sha256 = Hash(x) }).ToArray() });
+            ResourceCostEvidence.Write("f03-export-" + label, new
+            {
+                Directory = path,
+                release.Catalog.CatalogDigest,
+                release.Catalog.BuildId,
+                CopiedBytes = bytes,
+                Files = Directory.GetFiles(path).Select(x => new { Name = Path.GetFileName(x), Length = new FileInfo(x).Length, Sha256 = Hash(x) }).ToArray()
+            });
             return path;
         }
 
@@ -386,39 +522,67 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class FixtureKeys : IResourceContentKeyProvider, IDisposable
         {
-            private readonly string project;
-            private readonly int thread = System.Threading.Thread.CurrentThread.ManagedThreadId;
-            private bool disposed;
-            internal FixtureKeys(string project) => this.project = project;
+            private readonly string _project;
+            private readonly int _thread = System.Threading.Thread.CurrentThread.ManagedThreadId;
+            private bool _isDisposed;
+            internal FixtureKeys(string project) => this._project = project;
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
-                if (disposed || projectId != project || keyId != "f03-owned" || destination.Length != 32 || System.Threading.Thread.CurrentThread.ManagedThreadId != thread)
+                if (_isDisposed || projectId != _project || keyId != "f03-owned" || destination.Length != 32 || System.Threading.Thread.CurrentThread.ManagedThreadId != _thread)
+                {
                     throw new InvalidOperationException("Invalid owned fixture key request.");
-                for (var i = 0; i < destination.Length; i++) destination[i] = (byte)(113 + i);
+                }
+
+                for (var i = 0; i < destination.Length; i++)
+                {
+                    destination[i] = (byte)(113 + i);
+                }
+
                 return true;
             }
-            public void Dispose() => disposed = true;
+            public void Dispose() => _isDisposed = true;
         }
 
         private static string PublisherRoot(FixtureState state) => Path.GetFullPath("AssetBundles/YLFramework/" + state.ProjectId + "/" + Platform);
 
         private static void DeleteWorkspace(FixtureState state, string root)
         {
-            if (!Directory.Exists(root)) return;
+            if (!Directory.Exists(root))
+            {
+                return;
+            }
+
             Assert.That(Path.GetFileName(root), Does.StartWith("YLR_" + state.ProjectGuid + "_"));
             var marker = JObject.Parse(File.ReadAllText(Path.Combine(root, ".ylr-workspace.json")));
             Assert.That((string)marker["ProjectGuid"], Is.EqualTo(state.ProjectGuid));
             Assert.That((string)marker["ProjectId"], Is.EqualTo(state.ProjectId));
             Assert.That((string)marker["ProjectRoot"], Is.EqualTo(Path.GetFullPath(".")));
             var known = new HashSet<string>(new[] { ".ylr-workspace.json", ".ylr-workspace.next", ".ylr-workspace.lock" }, StringComparer.Ordinal);
-            foreach (var file in (JArray)marker["KnownFiles"]) known.Add((string)marker["Leaf"] + "/" + (string)file);
-            if (marker["KnownDeliveryFiles"] is JArray deliveries) foreach (var file in deliveries) known.Add((string)file);
+            foreach (var file in (JArray)marker["KnownFiles"])
+            {
+                known.Add((string)marker["Leaf"] + "/" + (string)file);
+            }
+
+            if (marker["KnownDeliveryFiles"] is JArray deliveries)
+            {
+                foreach (var file in deliveries)
+                {
+                    known.Add((string)file);
+                }
+            }
+
             RejectTreeLinks(root);
             var directories = new HashSet<string>(known.Where(x => x.Contains('/')).Select(x => x.Substring(0, x.IndexOf('/'))), StringComparer.Ordinal);
             foreach (var directory in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
+            {
                 Assert.That(directories.Contains(Path.GetRelativePath(root, directory).Replace('\\', '/')), Is.True, "Do not delete an unregistered Workspace directory: " + directory);
+            }
+
             foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            {
                 Assert.That(known.Contains(Path.GetRelativePath(root, file).Replace('\\', '/')), Is.True, "Do not delete an unregistered Workspace file: " + file);
+            }
+
             Directory.Delete(root, true);
         }
 
@@ -428,7 +592,10 @@ namespace YLFramework.Tests.ResourceBuild
             foreach (var path in Directory.GetFileSystemEntries(root))
             {
                 ResourceLocalSnapshot.RejectLinks(path);
-                if (Directory.Exists(path)) RejectTreeLinks(path);
+                if (Directory.Exists(path))
+                {
+                    RejectTreeLinks(path);
+                }
             }
         }
 
@@ -436,31 +603,67 @@ namespace YLFramework.Tests.ResourceBuild
         public void RestoreScenesAndRemoveOnlyVerifiedOwnedBuildInputs()
         {
             var state = State;
-            if (string.IsNullOrEmpty(state.Root)) return;
+            if (string.IsNullOrEmpty(state.Root))
+            {
+                return;
+            }
+
             Assert.That(Application.isPlaying, Is.False, "A failed runtime cleanup must be diagnosed before removing its fixture.");
             var failures = new List<Exception>();
-            void Clean(Action action) { try { action(); } catch (Exception error) { failures.Add(error); } }
+            void Clean(Action action)
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception error)
+                {
+                    failures.Add(error);
+                }
+            }
             Clean(() =>
             {
                 Assert.That(Application.isPlaying, Is.False);
                 ResourceSessionTests.EnsureRestorableScenes();
-                if (state.Scenes != null) EditorSceneManager.RestoreSceneManagerSetup(state.Scenes);
-                if (state.SceneCreated && File.Exists(state.Scene)) File.Delete(state.Scene);
+                if (state.Scenes != null)
+                {
+                    EditorSceneManager.RestoreSceneManagerSetup(state.Scenes);
+                }
+
+                if (state.SceneCreated && File.Exists(state.Scene))
+                {
+                    File.Delete(state.Scene);
+                }
             });
             if (state.BuildFailed)
             {
-                ResourceCostEvidence.Write("f03-preserved-build-failure", new { State = state,
+                ResourceCostEvidence.Write("f03-preserved-build-failure", new
+                {
+                    State = state,
                     Note = "The failed raw/Publisher/source roots remain owned for diagnosis. No retry, recovery, overwrite or deletion was performed.",
-                    SceneRestoreFailures = failures.Select(x => x.ToString()).ToArray() });
-                if (failures.Count != 0) throw new AggregateException("Scene restoration failed after owned build failure.", failures);
+                    SceneRestoreFailures = failures.Select(x => x.ToString()).ToArray()
+                });
+                if (failures.Count != 0)
+                {
+                    throw new AggregateException("Scene restoration failed after owned build failure.", failures);
+                }
+
                 SessionState.EraseString(StateKey);
                 return;
             }
-            foreach (var root in state.Workspaces) Clean(() => DeleteWorkspace(state, root));
+            foreach (var root in state.Workspaces)
+            {
+                Clean(() => DeleteWorkspace(state, root));
+            }
+
             Clean(() =>
             {
                 var root = PublisherRoot(state);
-                if (!Directory.Exists(root)) return;
+                if (!Directory.Exists(root))
+                {
+                    return;
+                }
+
                 var owner = JObject.Parse(File.ReadAllText(Path.Combine(root, ".ylr-release-owner.json")));
                 Assert.That((string)owner["ProjectGuid"], Is.EqualTo(state.ProjectGuid));
                 Assert.That((string)owner["ProjectId"], Is.EqualTo(state.ProjectId));
@@ -469,18 +672,29 @@ namespace YLFramework.Tests.ResourceBuild
                 RejectTreeLinks(root);
                 Directory.Delete(root, true);
                 var parent = Path.GetDirectoryName(root);
-                if (Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any()) Directory.Delete(parent);
+                if (Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
+                {
+                    Directory.Delete(parent);
+                }
             });
             Clean(() =>
             {
-                if (!state.FolderCreated || !AssetDatabase.IsValidFolder(state.Folder)) return;
+                if (!state.FolderCreated || !AssetDatabase.IsValidFolder(state.Folder))
+                {
+                    return;
+                }
+
                 Assert.That(AssetDatabase.AssetPathToGUID(state.Folder), Is.EqualTo(state.FolderGuid));
                 RejectTreeLinks(Path.GetFullPath(state.Folder));
                 Assert.That(AssetDatabase.DeleteAsset(state.Folder), Is.True);
             });
             Clean(() =>
             {
-                if (!state.NetworkComplete || !Directory.Exists(state.CacheRoot)) return;
+                if (!state.NetworkComplete || !Directory.Exists(state.CacheRoot))
+                {
+                    return;
+                }
+
                 RejectTreeLinks(state.CacheRoot);
                 var marker = JObject.Parse(File.ReadAllText(Path.Combine(state.CacheRoot, "owner.json")));
                 Assert.That((string)marker["Kind"], Is.EqualTo("F03BaselineCache"));
@@ -488,7 +702,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That((string)marker["Root"], Is.EqualTo(state.CacheRoot));
                 Assert.That((string)marker["Token"], Is.EqualTo(state.Token));
                 foreach (var path in Directory.GetFileSystemEntries(state.CacheRoot))
+                {
                     Assert.That(Path.GetFileName(path) == "owner.json" || state.CacheStores.Contains(path), Is.True, "An unregistered cache child must not be deleted.");
+                }
+
                 foreach (var root in state.CacheStores.Where(Directory.Exists))
                 {
                     var owner = JObject.Parse(File.ReadAllText(Path.Combine(root, ".ylr-store-owner.json")));
@@ -498,11 +715,18 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 Directory.Delete(state.CacheRoot, true);
             });
-            Clean(() => ResourceCostEvidence.Write("f03-owned-cleanup", new { Preserved = state.Root,
+            Clean(() => ResourceCostEvidence.Write("f03-owned-cleanup", new
+            {
+                Preserved = state.Root,
                 FailedCachePreserved = state.NetworkComplete ? null : state.CacheRoot,
                 Note = "Original JSON and fixed exported releases remain. Successful cache roots, owned sources/raw/Publisher/runner scene are reclaimed; failed network cache is retained.",
-                Failures = failures.Select(x => x.ToString()).ToArray() }));
-            if (failures.Count != 0) throw new AggregateException("Owned F03 fixture cleanup failed; do not accept a leaf-only gate.", failures);
+                Failures = failures.Select(x => x.ToString()).ToArray()
+            }));
+            if (failures.Count != 0)
+            {
+                throw new AggregateException("Owned F03 fixture cleanup failed; do not accept a leaf-only gate.", failures);
+            }
+
             SessionState.EraseString(StateKey);
         }
     }

@@ -41,8 +41,14 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var input = Payload();
             input[key] = key == "SchemaVersion" ? (JToken)int.Parse(value) : value;
-            if (key == "SchemaVersion" || key == "ProjectId") AssertRejected(() => Seal(input));
-            else AssertRejected(() => Read(Seal(input)));
+            if (key == "SchemaVersion" || key == "ProjectId")
+            {
+                AssertRejected(() => Seal(input));
+            }
+            else
+            {
+                AssertRejected(() => Read(Seal(input)));
+            }
         }
 
         [Test]
@@ -61,7 +67,12 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void IdentityAddressGroupDependencyAndFileConflictsCannotBeSealed()
         {
-            void Reject(Action<JObject> mutate) { var input = Payload(); mutate(input); AssertRejected(() => Seal(input)); }
+            void Reject(Action<JObject> mutate)
+            {
+                var input = Payload();
+                mutate(input);
+                AssertRejected(() => Seal(input));
+            }
             Reject(x => x["Assets"][0]["AssetId"] = "invented");
             Reject(x => ((JArray)x["Assets"]).Add(x["Assets"][0].DeepClone()));
             Reject(x => x["Groups"][0]["Members"][0]["AssetId"] = "missing");
@@ -80,7 +91,8 @@ namespace YLFramework.Tests.ResourceBuild
                 var asset = x["Assets"][0].DeepClone();
                 asset["Guid"] = "fedcba9876543210fedcba9876543210";
                 asset["AssetId"] = "fedcba9876543210fedcba9876543210_11400000";
-                asset["Address"] = "ENTRY.TXT"; asset["LoadName"] = "assets/owned/another.txt";
+                asset["Address"] = "ENTRY.TXT";
+                asset["LoadName"] = "assets/owned/another.txt";
                 ((JArray)x["Assets"]).Add(asset);
             });
         }
@@ -134,13 +146,20 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var input = Payload();
             var first = input["Assets"][0].DeepClone();
-            first["AssetId"] = (string)first["Guid"] + "_11400001"; first["LocalId"] = 11400001;
-            first["SubAssetKey"] = "11400001"; first["Kind"] = "SubAsset"; first["SubAssetName"] = "Same";
-            first["AssetType"] = "Example.SameType"; first["AssetAssembly"] = "AssemblyOne";
+            first["AssetId"] = (string)first["Guid"] + "_11400001";
+            first["LocalId"] = 11400001;
+            first["SubAssetKey"] = "11400001";
+            first["Kind"] = "SubAsset";
+            first["SubAssetName"] = "Same";
+            first["AssetType"] = "Example.SameType";
+            first["AssetAssembly"] = "AssemblyOne";
             var second = first.DeepClone();
-            second["AssetId"] = (string)second["Guid"] + "_11400002"; second["LocalId"] = 11400002; second["SubAssetKey"] = "11400002";
+            second["AssetId"] = (string)second["Guid"] + "_11400002";
+            second["LocalId"] = 11400002;
+            second["SubAssetKey"] = "11400002";
             second["AssetAssembly"] = "AssemblyTwo";
-            ((JArray)input["Assets"]).Add(first); ((JArray)input["Assets"]).Add(second);
+            ((JArray)input["Assets"]).Add(first);
+            ((JArray)input["Assets"]).Add(second);
             Assert.That(((ResourceCatalogDocument)Read(Seal(input))).Assets.Count, Is.EqualTo(3));
             second["AssetAssembly"] = "AssemblyOne";
             AssertRejected(() => Seal(input));
@@ -153,10 +172,17 @@ namespace YLFramework.Tests.ResourceBuild
             var template = input["Assets"][0];
             var entries = new JArray(Enumerable.Range(1, 16384).Select(i =>
             {
-                var asset = template.DeepClone(); var guid = i.ToString("x32");
-                asset["Guid"] = guid; asset["AssetId"] = guid + "_11400000";
-                asset["Address"] = "entry-" + i; asset["LoadName"] = "assets/owned/entry-" + i + ".txt";
-                if (i == 1) asset["Aliases"] = new JArray("alias");
+                var asset = template.DeepClone();
+                var guid = i.ToString("x32");
+                asset["Guid"] = guid;
+                asset["AssetId"] = guid + "_11400000";
+                asset["Address"] = "entry-" + i;
+                asset["LoadName"] = "assets/owned/entry-" + i + ".txt";
+                if (i == 1)
+                {
+                    asset["Aliases"] = new JArray("alias");
+                }
+
                 return asset;
             }));
             input["Assets"] = entries;
@@ -164,7 +190,8 @@ namespace YLFramework.Tests.ResourceBuild
             AssertRejected(() => Seal(input));
             input["Assets"] = new JArray(entries.Reverse());
             AssertRejected(() => Seal(input));
-            entries.RemoveAt(entries.Count - 1); input["Assets"] = entries;
+            entries.RemoveAt(entries.Count - 1);
+            input["Assets"] = entries;
             Assert.That(((ResourceCatalogDocument)Read(Seal(input))).Assets.Count, Is.EqualTo(16383), "16383 canonical + 1 alias reaches the exact shared limit.");
         }
 
@@ -201,9 +228,9 @@ namespace YLFramework.Tests.ResourceBuild
 
         internal static JObject Payload()
         {
-            const string guid = "0123456789abcdef0123456789abcdef";
+            const string Guid = "0123456789abcdef0123456789abcdef";
             var prefix = "ylr_" + Hash(Encoding.UTF8.GetBytes("catalog"))[..32] + "_";
-            var name = prefix + "a_" + guid;
+            var name = prefix + "a_" + Guid;
             var fileName = "b_" + Hash(Encoding.UTF8.GetBytes(name))[..32];
             var manifest = "manifest";
             JObject File(string file) => new JObject { ["RelativeFile"] = file, ["Length"] = 10, ["Sha256"] = new string('a', 64) };
@@ -215,18 +242,30 @@ namespace YLFramework.Tests.ResourceBuild
             bundle["Dependencies"] = new JArray();
             return new JObject
             {
-                ["SchemaVersion"] = 1, ["ProjectId"] = "catalog", ["Platform"] = "StandaloneWindows64",
-                ["UnityCompatibility"] = "2022.3.62f3c1", ["AppContentCompatibilityId"] = "app-v1",
-                ["BuildSettingsFingerprint"] = new string('c', 64), ["ManifestFile"] = manifest,
+                ["SchemaVersion"] = 1,
+                ["ProjectId"] = "catalog",
+                ["Platform"] = "StandaloneWindows64",
+                ["UnityCompatibility"] = "2022.3.62f3c1",
+                ["AppContentCompatibilityId"] = "app-v1",
+                ["BuildSettingsFingerprint"] = new string('c', 64),
+                ["ManifestFile"] = manifest,
                 ["Bundles"] = new JArray(bundle),
                 ["Assets"] = new JArray(new JObject
                 {
-                    ["AssetId"] = guid + "_11400000", ["Guid"] = guid, ["LocalId"] = 11400000,
-                    ["Address"] = "entry.txt", ["Aliases"] = new JArray(), ["SubAssetKey"] = null, ["BundleId"] = name,
-                    ["LoadName"] = "assets/owned/entry.txt", ["AssetType"] = "UnityEngine.TextAsset", ["AssetAssembly"] = "UnityEngine.CoreModule",
-                    ["Kind"] = "Asset", ["SubAssetName"] = null
+                    ["AssetId"] = Guid + "_11400000",
+                    ["Guid"] = Guid,
+                    ["LocalId"] = 11400000,
+                    ["Address"] = "entry.txt",
+                    ["Aliases"] = new JArray(),
+                    ["SubAssetKey"] = null,
+                    ["BundleId"] = name,
+                    ["LoadName"] = "assets/owned/entry.txt",
+                    ["AssetType"] = "UnityEngine.TextAsset",
+                    ["AssetAssembly"] = "UnityEngine.CoreModule",
+                    ["Kind"] = "Asset",
+                    ["SubAssetName"] = null
                 }),
-                ["Groups"] = new JArray(new JObject { ["Id"] = "main", ["Members"] = new JArray(new JObject { ["AssetId"] = guid + "_11400000", ["Required"] = true }) }),
+                ["Groups"] = new JArray(new JObject { ["Id"] = "main", ["Members"] = new JArray(new JObject { ["AssetId"] = Guid + "_11400000", ["Required"] = true }) }),
                 ["SupportFiles"] = new JArray(File(manifest), File(manifest + ".manifest"), File(fileName + ".manifest"))
             };
         }

@@ -8,30 +8,44 @@ namespace YLFramework.Tests.Extensions.Shared
     public class E0ReorderableTestWindow : EditorWindow
     {
         public TreeView Tree;
-        public int GuiCalls;
-        private Action pending;
-        private EventType eventType;
-        private Exception failure;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("GuiCalls")]
+        public int guiCalls;
+        private Action _pending;
+        private EventType _eventType;
+        private Exception _failure;
 
         public void Dispatch(EventType type, Action action)
         {
-            eventType = type;
-            pending = action;
-            failure = null;
+            _eventType = type;
+            _pending = action;
+            _failure = null;
             SendEvent(new Event { type = type, mousePosition = new Vector2(20, 20), button = 0 });
-            if (pending != null) throw new InvalidOperationException("窗口未处理请求的IMGUI事件。");
-            if (failure != null) throw new InvalidOperationException("窗口IMGUI操作失败。", failure);
+            if (_pending != null)
+            {
+                throw new InvalidOperationException("窗口未处理请求的IMGUI事件。");
+            }
+
+            if (_failure != null)
+            {
+                throw new InvalidOperationException("窗口IMGUI操作失败。", _failure);
+            }
         }
 
         private void OnGUI()
         {
-            GuiCalls++;
-            if (pending != null && Event.current.type == eventType)
+            guiCalls++;
+            if (_pending != null && Event.current.type == _eventType)
             {
-                var action = pending;
-                pending = null;
-                try { action(); }
-                catch (Exception error) { failure = error; }
+                var action = _pending;
+                _pending = null;
+                try
+                {
+                    action();
+                }
+                catch (Exception error)
+                {
+                    _failure = error;
+                }
                 Event.current.Use();
             }
             Tree?.OnGUI(new Rect(0, 0, position.width, position.height));

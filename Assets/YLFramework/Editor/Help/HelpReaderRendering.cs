@@ -9,7 +9,13 @@ namespace YLFramework.Editor.Help
     /// <summary>标题区各控件按窗口宽度算出的矩形布局；所有位置在构造时一次确定。</summary>
     internal readonly struct HelpHeaderLayout
     {
-        internal readonly Rect Title, Module, Back, Tabs, Search, Clear, Scope;
+        internal readonly Rect Title;
+        internal readonly Rect Module;
+        internal readonly Rect Back;
+        internal readonly Rect Tabs;
+        internal readonly Rect Search;
+        internal readonly Rect Clear;
+        internal readonly Rect Scope;
         internal readonly float BodyY;
 
         internal HelpHeaderLayout(float width)
@@ -33,41 +39,67 @@ namespace YLFramework.Editor.Help
     {
         internal readonly struct Range
         {
-            internal readonly int Start, End;
-            internal Range(int start, int end) { Start = start; End = end; }
+            internal readonly int Start;
+            internal readonly int End;
+            internal Range(int start, int end)
+            {
+                Start = start;
+                End = end;
+            }
         }
 
-        private string mQuery;
-        private string[] mTerms = Array.Empty<string>();
-        private readonly Dictionary<string, Range[]> mRanges = new Dictionary<string, Range[]>();
-        private readonly Dictionary<(string, GUIStyle, float), (Vector2 Size, Rect[] Fragments)> mGeometry =
+        private string _query;
+        private string[] _terms = Array.Empty<string>();
+        private readonly Dictionary<string, Range[]> _ranges = new Dictionary<string, Range[]>();
+        private readonly Dictionary<(string, GUIStyle, float), (Vector2 Size, Rect[] Fragments)> _geometry =
             new Dictionary<(string, GUIStyle, float), (Vector2, Rect[])>();
 
         internal void Clear()
         {
-            mQuery = null; mTerms = Array.Empty<string>(); mRanges.Clear(); mGeometry.Clear();
+            _query = null;
+            _terms = Array.Empty<string>();
+            _ranges.Clear();
+            _geometry.Clear();
         }
 
-        internal void ClearGeometry() => mGeometry.Clear();
+        internal void ClearGeometry() => _geometry.Clear();
 
         internal void SetQuery(string query)
         {
             // 每次绘制前都会调用；查询未变时保留已有缓存。
-            if (mQuery == query) return;
-            Clear(); mQuery = query;
-            mTerms = (query ?? "").Split((char[])null, StringSplitOptions.RemoveEmptyEntries)
+            if (_query == query)
+            {
+                return;
+            }
+
+            Clear();
+            _query = query;
+            _terms = (query ?? "").Split((char[])null, StringSplitOptions.RemoveEmptyEntries)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
         internal Range[] GetRanges(string text)
         {
-            if (mTerms.Length == 0 || string.IsNullOrEmpty(text)) return Array.Empty<Range>();
-            if (mRanges.TryGetValue(text, out var cached)) return cached;
+            if (_terms.Length == 0 || string.IsNullOrEmpty(text))
+            {
+                return Array.Empty<Range>();
+            }
+
+            if (_ranges.TryGetValue(text, out var cached))
+            {
+                return cached;
+            }
+
             var found = new List<Range>();
-            foreach (var term in mTerms)
+            foreach (var term in _terms)
+            {
                 for (var start = text.IndexOf(term, StringComparison.OrdinalIgnoreCase); start >= 0;
                     start = text.IndexOf(term, start + 1, StringComparison.OrdinalIgnoreCase))
+                {
                     found.Add(new Range(start, start + term.Length));
+                }
+            }
+
             found.Sort((a, b) => a.Start.CompareTo(b.Start));
             // 合并重叠或相接的区间，避免高亮在连接处重复绘制或留缝。
             var merged = new List<Range>();
@@ -78,29 +110,46 @@ namespace YLFramework.Editor.Help
                     var previous = merged[merged.Count - 1];
                     merged[merged.Count - 1] = new Range(previous.Start, Math.Max(previous.End, range.End));
                 }
-                else merged.Add(range);
+                else
+                {
+                    merged.Add(range);
+                }
             }
-            return mRanges[text] = merged.ToArray();
+            return _ranges[text] = merged.ToArray();
         }
 
         internal Rect[] GetFragments(string text, GUIStyle style, Vector2 size)
         {
             var ranges = GetRanges(text);
-            if (ranges.Length == 0) return Array.Empty<Rect>();
+            if (ranges.Length == 0)
+            {
+                return Array.Empty<Rect>();
+            }
+
             var key = (text, style, EditorGUIUtility.pixelsPerPoint);
             // 尺寸不参与缓存键，需要单独比较：同一文本会按不同阅读宽度绘制。
-            if (mGeometry.TryGetValue(key, out var cached) && cached.Size == size) return cached.Fragments;
+            if (_geometry.TryGetValue(key, out var cached) && cached.Size == size)
+            {
+                return cached.Fragments;
+            }
+
             var fragments = BuildFragments(text, style, new Rect(Vector2.zero, size), ranges);
-            mGeometry[key] = (size, fragments);
+            _geometry[key] = (size, fragments);
             return fragments;
         }
 
         internal void Draw(Rect rect, string text, GUIStyle style, bool dark)
         {
-            if (Event.current.type != EventType.Repaint) return;
+            if (Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
             var color = dark ? new Color(0.66f, 0.46f, 0.13f, 0.42f) : new Color(0.92f, 0.65f, 0.20f, 0.36f);
             foreach (var fragment in GetFragments(text, style, rect.size))
+            {
                 EditorGUI.DrawRect(new Rect(rect.position + fragment.position, fragment.size), color);
+            }
         }
 
         /// <summary>把字符区间转换成逐行的像素矩形；换行处不绘制，同一行的相邻片段合并。</summary>
@@ -121,7 +170,11 @@ namespace YLFramework.Editor.Help
                         if (Mathf.Abs(end.y - start.y) > 0.5f)
                         {
                             // 换行边界的光标属于下一行；使用相同字体关闭自动换行，测量本行最后一个字形的宽度。
-                            if (unwrapped == null) unwrapped = new GUIStyle(style) { wordWrap = false };
+                            if (unwrapped == null)
+                            {
+                                unwrapped = new GUIStyle(style) { wordWrap = false };
+                            }
+
                             right = start.x + unwrapped.GetCursorPixelPosition(rect, content, i + 1).x -
                                 unwrapped.GetCursorPixelPosition(rect, content, i).x;
                         }
@@ -136,7 +189,10 @@ namespace YLFramework.Editor.Help
                                 previous.xMax = Mathf.Max(previous.xMax, fragment.xMax);
                                 fragments[fragments.Count - 1] = previous;
                             }
-                            else fragments.Add(fragment);
+                            else
+                            {
+                                fragments.Add(fragment);
+                            }
                         }
                     }
                     start = end;

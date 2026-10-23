@@ -53,7 +53,7 @@ namespace YLFramework.Services.Save
         {
             return this.ConvertToColor().GetHashCode();
         }
-        
+
 
         /// <summary>从 <see cref="Color"/> 隐式转换（逐分量复制）。</summary>
         public static implicit operator SerializedColor(Color color)

@@ -34,19 +34,31 @@ namespace YLFramework.Services.Audio
 
         private void Start()
         {
-            if (playOnAwake) Play();
+            if (playOnAwake)
+            {
+                Play();
+            }
         }
 
         /// <summary>开始播放配置的 Clip，可选择对当前音乐做 Crossfade。配置校验会在替换该组件现有 lease 之前完成。</summary>
         public void Play()
         {
-            if (!clip) return;
+            if (!clip)
+            {
+                return;
+            }
+
             if (crossFadeOnPlay)
             {
                 if (!AudioSoundOptions.IsFinite(crossFadeDuration) || crossFadeDuration < 0f)
+                {
                     throw new ArgumentOutOfRangeException(nameof(crossFadeDuration));
+                }
+
                 if ((uint)crossFadeCurve > (uint)AudioCrossfadeCurve.EqualPower)
+                {
                     throw new ArgumentOutOfRangeException(nameof(crossFadeCurve));
+                }
             }
 
             var options = AudioPlaybackOptions.Defaults;
@@ -58,22 +70,36 @@ namespace YLFramework.Services.Audio
             options.ValidateClip(clip);
 
             // Crossfade 自身会管理退场的旧音乐；若这里先停止已追踪的 lease，会截断重叠过渡。
-            if (!crossFadeOnPlay) Stop();
+            if (!crossFadeOnPlay)
+            {
+                Stop();
+            }
+
             var handle = crossFadeOnPlay
                 ? AudioKit.CrossFadeMusicWithSnapshot(clip, crossFadeDuration, options, ignoreTimeScale: crossFadeIgnoreTimeScale, curve: crossFadeCurve)
                 : AudioKit.PlaySlotWithSnapshot(clip, true, options, null, null);
             // 保留该 lease 供 Stop/OnDisable 使用，并移除已经结束的 lease。
             for (var i = _owned.Count - 1; i >= 0; i--)
             {
-                if (!_owned[i].IsValid) _owned.RemoveAt(i);
+                if (!_owned[i].IsValid)
+                {
+                    _owned.RemoveAt(i);
+                }
             }
-            if (handle.IsValid) _owned.Add(handle);
+            if (handle.IsValid)
+            {
+                _owned.Add(handle);
+            }
         }
 
         /// <summary>停止该组件仍在追踪的所有音乐 lease，并清空追踪列表。</summary>
         public void Stop()
         {
-            foreach (var handle in _owned) handle.Stop();
+            foreach (var handle in _owned)
+            {
+                handle.Stop();
+            }
+
             _owned.Clear();
         }
 

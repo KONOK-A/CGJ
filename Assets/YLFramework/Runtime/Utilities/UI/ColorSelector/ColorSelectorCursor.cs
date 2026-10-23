@@ -13,6 +13,7 @@ namespace YLFramework.Core
             var rect = rectTransform.rect;
             float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
             for (int band = 0; band < 2; band++)
+            {
                 for (int i = 0; i < 32; i++)
                 {
                     float a = i * Mathf.PI / 16;
@@ -30,6 +31,7 @@ namespace YLFramework.Core
                     mesh.AddTriangle(start, start + 1, start + 2);
                     mesh.AddTriangle(start, start + 2, start + 3);
                 }
+            }
         }
     }
 }

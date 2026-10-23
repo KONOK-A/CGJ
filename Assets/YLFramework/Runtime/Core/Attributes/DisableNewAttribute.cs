@@ -15,9 +15,13 @@ namespace YLFramework.Core.RoslynAnalyzers
     public class DisableNewAttribute : Attribute
     {
 
-        public DisableNewAttribute() { }
+        public DisableNewAttribute()
+        {
+        }
 
-        public DisableNewAttribute(string message) { }
+        public DisableNewAttribute(string message)
+        {
+        }
 
-    } 
+    }
 }

@@ -30,7 +30,11 @@ namespace YLFramework.Tests.ResourceBuild
             var reentered = false;
             keys.OnCopy = () =>
             {
-                if (original == null || reentered) return;
+                if (original == null || reentered)
+                {
+                    return;
+                }
+
                 reentered = true;
                 original.Cancel();
                 retry = system.AcquireAsync<GameObject>(Address("A.prefab"));
@@ -39,14 +43,23 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 original = system.AcquireAsync<GameObject>(Address("A.prefab"));
                 var deadline = Time.realtimeSinceStartup + 8;
-                while ((retry == null || !retry.IsDone) && Time.realtimeSinceStartup < deadline) yield return null;
+                while ((retry == null || !retry.IsDone) && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(reentered, Is.True);
                 Assert.That(retry?.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), "An old admission callback cannot delete the retry's record/ticket/dependency edges.");
                 using var held = retry.TakeResult();
                 Assert.That(held.Asset.GetComponent<MeshRenderer>().sharedMaterial.mainTexture, Is.Not.Null);
                 Assert.That(Budget(system).ReservedBytes, Is.Zero);
             }
-            finally { keys.OnCopy = null; original?.Dispose(); retry?.Dispose(); }
+            finally
+            {
+                keys.OnCopy = null;
+                original?.Dispose();
+                retry?.Dispose();
+            }
         }
 
         [UnityTest]
@@ -68,7 +81,7 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 var snapshot = Snapshot();
                 var id = snapshot.Document.Assets.Single(x => x.Address == "Cold.bytes").BundleId;
-                var records = (IDictionary)typeof(ResourceSystem).GetField("bundleRecords", Hidden).GetValue(system);
+                var records = (IDictionary)typeof(ResourceSystem).GetField("_bundleRecords", Hidden).GetValue(system);
                 old = system.AcquireAsync<TextAsset>(Address("Cold.bytes"));
                 var record = (ResourceSystem.BundleRecord)records[(snapshot.Document.CatalogDigest, id)];
                 var work = record.InputWork;
@@ -80,13 +93,21 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(canceled.Flatten().InnerExceptions.Any(x => x is OperationCanceledException), Is.True);
                 retry = system.AcquireAsync<TextAsset>(Address("Cold.bytes"));
                 var deadline = Time.realtimeSinceStartup + 8;
-                while (!retry.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+                while (!retry.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(retry.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), "A new owner did not request cancellation of the abandoned IO generation.");
                 using var held = retry.TakeResult();
                 Assert.That(held.Asset.bytes.Length, Is.EqualTo(8 * 1024 * 1024));
                 Assert.That(Budget(system).ReservedBytes, Is.Zero);
             }
-            finally { old?.Dispose(); retry?.Dispose(); }
+            finally
+            {
+                old?.Dispose();
+                retry?.Dispose();
+            }
         }
 
         [UnityTest]
@@ -139,20 +160,35 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 system.GetAudioClipProvider(snapshot.Document.ProjectId).LoadAsync("Owned.wav", (lease, error) =>
-                { received = lease; failure = error; completed = true; }, progress =>
                 {
-                    if (progress < 1 || faulted) return;
+                    received = lease;
+                    failure = error;
+                    completed = true;
+                }, progress =>
+                {
+                    if (progress < 1 || faulted)
+                    {
+                        return;
+                    }
+
                     faulted = true;
                     LatchOwnedFault(system, snapshot, id);
                 });
                 var deadline = Time.realtimeSinceStartup + 8;
-                while (!completed && Time.realtimeSinceStartup < deadline) yield return null;
+                while (!completed && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(completed && faulted, Is.True);
                 Assert.That(received, Is.Null);
                 Assert.That(failure, Is.TypeOf<ResourceException>());
                 Assert.That(((ResourceException)failure).Kind, Is.EqualTo(ResourceError.ContentAuthenticationFailed));
             }
-            finally { received?.Dispose(); }
+            finally
+            {
+                received?.Dispose();
+            }
         }
 
         [UnityTest]

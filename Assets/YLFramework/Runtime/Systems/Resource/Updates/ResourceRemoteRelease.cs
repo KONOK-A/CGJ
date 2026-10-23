@@ -20,7 +20,10 @@ namespace YLFramework.Services.Resource
         internal readonly long CompleteLength;
         internal readonly string CompleteSha256;
         internal readonly long Expires;
-        internal ResourceCatalogDocument Catalog { get; private set; }
+        internal ResourceCatalogDocument Catalog
+        {
+            get; private set;
+        }
 
         internal ResourceRemoteRelease(byte[] envelope, ResourceProjectMount mount, string unity, DateTimeOffset now, bool fresh = true)
         {
@@ -29,40 +32,76 @@ namespace YLFramework.Services.Resource
             var key = Source.Keys.SingleOrDefault(x => x.KeyId == (string)header["KeyId"]) ?? throw new InvalidDataException("Release key is not authorized by this project.");
             var data = ResourceReleaseSignature.Verify(envelope, key.KeyId, key.Parameters);
             ResourceCatalogCodec.Fields(data, "ProjectId,Platform,UnityCompatibility,AppContentCompatibilityId,Channel,ReleaseSequence,CatalogDigest,CatalogLength,BuildId,CompleteLength,CompleteSha256,IssuedUnixSeconds,ExpiresUnixSeconds");
-            ProjectId = ResourceCatalogCodec.Text(data, "ProjectId"); Platform = ResourceCatalogCodec.Text(data, "Platform"); Channel = ResourceCatalogCodec.Text(data, "Channel");
+            ProjectId = ResourceCatalogCodec.Text(data, "ProjectId");
+            Platform = ResourceCatalogCodec.Text(data, "Platform");
+            Channel = ResourceCatalogCodec.Text(data, "Channel");
             if (ProjectId != mount.ProjectId || Platform != mount.Platform || Channel != Source.Channel || ResourceCatalogCodec.Text(data, "UnityCompatibility") != unity ||
-                ResourceCatalogCodec.Text(data, "AppContentCompatibilityId") != mount.AppContentCompatibilityId) throw new InvalidDataException("Release project/platform/channel/Unity/app authorization mismatch.");
-            CatalogDigest = ResourceCatalogCodec.Text(data, "CatalogDigest"); ResourceCatalogCodec.Hex(CatalogDigest, 64);
-            BuildId = ResourceCatalogCodec.Text(data, "BuildId"); ResourceCatalogCodec.Hex(BuildId, 64);
-            CompleteSha256 = ResourceCatalogCodec.Text(data, "CompleteSha256"); ResourceCatalogCodec.Hex(CompleteSha256, 64);
+                ResourceCatalogCodec.Text(data, "AppContentCompatibilityId") != mount.AppContentCompatibilityId)
+            {
+                throw new InvalidDataException("Release project/platform/channel/Unity/app authorization mismatch.");
+            }
+
+            CatalogDigest = ResourceCatalogCodec.Text(data, "CatalogDigest");
+            ResourceCatalogCodec.Hex(CatalogDigest, 64);
+            BuildId = ResourceCatalogCodec.Text(data, "BuildId");
+            ResourceCatalogCodec.Hex(BuildId, 64);
+            CompleteSha256 = ResourceCatalogCodec.Text(data, "CompleteSha256");
+            ResourceCatalogCodec.Hex(CompleteSha256, 64);
             Sequence = ResourceCatalogCodec.Integer(data, "ReleaseSequence");
-            CatalogLength = ResourceCatalogCodec.Integer(data, "CatalogLength"); CompleteLength = ResourceCatalogCodec.Integer(data, "CompleteLength");
+            CatalogLength = ResourceCatalogCodec.Integer(data, "CatalogLength");
+            CompleteLength = ResourceCatalogCodec.Integer(data, "CompleteLength");
             Expires = ResourceCatalogCodec.Integer(data, "ExpiresUnixSeconds");
             var issued = ResourceCatalogCodec.Integer(data, "IssuedUnixSeconds");
             if (Sequence < Source.MinimumReleaseSequence || CatalogLength < 1 || CatalogLength > ResourceCatalogCodec.MaximumBytes || CompleteLength < 1 || CompleteLength > ResourceReleaseSignature.MaximumBytes ||
                 issued < 0 || issued > now.ToUnixTimeSeconds() + 300 || Expires <= issued || Expires - issued > 31L * 86400)
+            {
                 throw new InvalidDataException("Release sequence, file bound or validity interval rejected.");
-            if (fresh) RequireFresh(now);
+            }
+
+            if (fresh)
+            {
+                RequireFresh(now);
+            }
+
             Envelope = (byte[])envelope.Clone();
         }
 
         internal void RequireFresh(DateTimeOffset now)
         {
-            if (Expires <= now.ToUnixTimeSeconds()) throw new InvalidDataException("Release metadata expired according to the local clock.");
+            if (Expires <= now.ToUnixTimeSeconds())
+            {
+                throw new InvalidDataException("Release metadata expired according to the local clock.");
+            }
         }
 
         internal void ReadCatalog(byte[] bytes, ResourceProjectMount mount, string unity)
         {
-            if (bytes.LongLength != CatalogLength || ResourceCatalogCodec.Digest(bytes) != CatalogDigest) throw new InvalidDataException("Signed catalog length/digest mismatch.");
+            if (bytes.LongLength != CatalogLength || ResourceCatalogCodec.Digest(bytes) != CatalogDigest)
+            {
+                throw new InvalidDataException("Signed catalog length/digest mismatch.");
+            }
+
             var catalog = ResourceCatalogCodec.Read(bytes, ProjectId, Platform, unity, mount.AppContentCompatibilityId);
-            if (catalog.BuildId != BuildId) throw new InvalidDataException("Signed BuildId/Catalog mismatch.");
+            if (catalog.BuildId != BuildId)
+            {
+                throw new InvalidDataException("Signed BuildId/Catalog mismatch.");
+            }
+
             long total = checked(CatalogLength + CompleteLength);
             foreach (var file in catalog.Bundles.Cast<ResourceCatalogFile>().Concat(catalog.SupportFiles))
             {
-                if (file.Length > Source.MaximumFileBytes) throw new InvalidDataException("Release file exceeds the configured download bound.");
+                if (file.Length > Source.MaximumFileBytes)
+                {
+                    throw new InvalidDataException("Release file exceeds the configured download bound.");
+                }
+
                 total = checked(total + file.Length);
             }
-            if (total > Source.MaximumDownloadBytes) throw new InvalidDataException("Release exceeds the configured total download bound.");
+            if (total > Source.MaximumDownloadBytes)
+            {
+                throw new InvalidDataException("Release exceeds the configured total download bound.");
+            }
+
             Catalog = catalog;
         }
 

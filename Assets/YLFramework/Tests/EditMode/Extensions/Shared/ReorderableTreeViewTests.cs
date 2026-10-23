@@ -16,48 +16,68 @@ namespace YLFramework.Tests.Extensions.Shared
     {
         private const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private const string FixtureParent = "Assets/YLFramework/Tests/Fixtures/Extensions/Shared";
-        private readonly List<E0ReorderableTestWindow> windows = new List<E0ReorderableTestWindow>();
-        private readonly List<E0ReorderableListAsset> assets = new List<E0ReorderableListAsset>();
-        private string folder;
-        private EditorWindow previousFocus;
+        private readonly List<E0ReorderableTestWindow> _windows = new List<E0ReorderableTestWindow>();
+        private readonly List<E0ReorderableListAsset> _assets = new List<E0ReorderableListAsset>();
+        private string _folder;
+        private EditorWindow _previousFocus;
 
         [SetUp]
         public void SetUp()
         {
             Assert.That(DragAndDrop.objectReferences, Is.Empty, "不接管用户已有的对象拖拽。");
             Assert.That(DragAndDrop.paths, Is.Null.Or.Empty, "不接管用户已有的文件拖拽。");
-            previousFocus = EditorWindow.focusedWindow;
+            _previousFocus = EditorWindow.focusedWindow;
             Assert.That(AssetDatabase.IsValidFolder(FixtureParent), Is.True);
-            folder = FixtureParent + "/Run-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder(FixtureParent, folder.Substring(folder.LastIndexOf('/') + 1));
+            _folder = FixtureParent + "/Run-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder(FixtureParent, _folder.Substring(_folder.LastIndexOf('/') + 1));
         }
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var window in windows) if (window) window.Close();
-            windows.Clear();
-            foreach (var asset in assets) if (asset) Undo.ClearUndo(asset);
-            assets.Clear();
-            if (folder != null && AssetDatabase.IsValidFolder(folder))
-                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
-            folder = null;
-            if (previousFocus) previousFocus.Focus();
+            foreach (var window in _windows)
+            {
+                if (window)
+                {
+                    window.Close();
+                }
+            }
+
+            _windows.Clear();
+            foreach (var asset in _assets)
+            {
+                if (asset)
+                {
+                    Undo.ClearUndo(asset);
+                }
+            }
+
+            _assets.Clear();
+            if (_folder != null && AssetDatabase.IsValidFolder(_folder))
+            {
+                Assert.That(AssetDatabase.DeleteAsset(_folder), Is.True);
+            }
+
+            _folder = null;
+            if (_previousFocus)
+            {
+                _previousFocus.Focus();
+            }
         }
 
         private E0ReorderableListAsset Asset(string name)
         {
             var asset = ScriptableObject.CreateInstance<E0ReorderableListAsset>();
-            AssetDatabase.CreateAsset(asset, folder + "/" + name + ".asset");
+            AssetDatabase.CreateAsset(asset, _folder + "/" + name + ".asset");
             foreach (var label in new[] { "A", "B", "C", "D", "E" })
             {
                 var entry = new Texture2D(1, 1) { name = label };
                 AssetDatabase.AddObjectToAsset(entry, asset);
-                asset.Items.Add(entry);
+                asset.items.Add(entry);
             }
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssetIfDirty(asset);
-            assets.Add(asset);
+            _assets.Add(asset);
             return asset;
         }
 
@@ -68,14 +88,14 @@ namespace YLFramework.Tests.Extensions.Shared
                 .GetType("YLFramework.Core.Editor.ReorderableTreeView`1");
             Assert.That(generic, Is.Not.Null, "缺少实际列表重排能力，不能只提供字段契约。");
             var tree = prepared ?? (TreeView)Activator.CreateInstance(generic.MakeGenericType(typeof(Object)),
-                asset, getData ?? (() => asset.Items), new TreeViewState());
+                asset, getData ?? (() => asset.items), new TreeViewState());
             var window = ScriptableObject.CreateInstance<E0ReorderableTestWindow>();
             window.hideFlags = HideFlags.HideAndDontSave;
-            window.titleContent = new GUIContent("E0 owned reorder " + windows.Count);
+            window.titleContent = new GUIContent("E0 owned reorder " + _windows.Count);
             window.Tree = tree;
-            windows.Add(window);
+            _windows.Add(window);
             window.ShowUtility();
-            window.position = new Rect(160 + windows.Count * 280, 180, 260, 240);
+            window.position = new Rect(160 + _windows.Count * 280, 180, 260, 240);
             tree.Reload();
             return window;
         }
@@ -89,7 +109,10 @@ namespace YLFramework.Tests.Extensions.Shared
             foreach (var field in fields)
             {
                 var property = parameter.GetProperty(field.name, InstanceMembers);
-                if (property != null) property.SetValue(args, field.value);
+                if (property != null)
+                {
+                    property.SetValue(args, field.value);
+                }
                 else
                 {
                     var info = parameter.GetField(field.name, InstanceMembers);
@@ -134,113 +157,130 @@ namespace YLFramework.Tests.Extensions.Shared
         public IEnumerator ImmediateDropPreservesDuplicateReferencesAndNullSlots()
         {
             var asset = Asset("duplicates");
-            var a = asset.Items[0]; var b = asset.Items[1]; var c = asset.Items[2];
-            asset.Items = new List<Object> { a, b, a, null, c };
+            var a = asset.items[0];
+            var b = asset.items[1];
+            var c = asset.items[2];
+            asset.items = new List<Object> { a, b, a, null, c };
             var window = Window(asset);
             yield return null;
             Start(window, 3);
             Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(new Object[] { a, b, null, c, a }, asset.Items);
-            Assert.That(window.GuiCalls, Is.GreaterThan(0));
+            CollectionAssert.AreEqual(new Object[] { a, b, null, c, a }, asset.items);
+            Assert.That(window.guiCalls, Is.GreaterThan(0));
         }
 
         [UnityTest]
         public IEnumerator NonContiguousSelectionMovesInSourceOrder()
         {
-            var asset = Asset("multi"); var before = asset.Items.ToArray();
+            var asset = Asset("multi");
+            var before = asset.items.ToArray();
             var window = Window(asset);
             yield return null;
             Start(window, 4, 2);
             Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(new[] { before[0], before[2], before[4], before[1], before[3] }, asset.Items);
+            CollectionAssert.AreEqual(new[] { before[0], before[2], before[4], before[1], before[3] }, asset.items);
         }
 
         [UnityTest]
         public IEnumerator UndoRedoRefreshesTheListAndAllowsAnotherReorder()
         {
-            var asset = Asset("undo"); var before = asset.Items.ToArray();
+            var asset = Asset("undo");
+            var before = asset.items.ToArray();
             var window = Window(asset);
             yield return null;
-            Start(window, 1); Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Move));
+            Start(window, 1);
+            Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Move));
             var reordered = new[] { before[1], before[2], before[3], before[4], before[0] };
-            CollectionAssert.AreEqual(reordered, asset.Items);
-            Undo.FlushUndoRecordObjects(); Undo.PerformUndo();
+            CollectionAssert.AreEqual(reordered, asset.items);
+            Undo.FlushUndoRecordObjects();
+            Undo.PerformUndo();
             yield return null;
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(before, asset.items);
             CollectionAssert.AreEqual(new[] { "A", "B", "C", "D", "E" }, window.Tree.GetRows().Select(row => row.displayName));
             Undo.PerformRedo();
             yield return null;
-            CollectionAssert.AreEqual(reordered, asset.Items);
-            Start(window, 5); Assert.That(Drop(window, 0), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(reordered, asset.items);
+            Start(window, 5);
+            Assert.That(Drop(window, 0), Is.EqualTo(DragAndDropVisualMode.Move));
+            CollectionAssert.AreEqual(before, asset.items);
             AssetDatabase.SaveAssetIfDirty(asset);
             var path = AssetDatabase.GetAssetPath(asset);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            CollectionAssert.AreEqual(before, AssetDatabase.LoadAssetAtPath<E0ReorderableListAsset>(path).Items);
+            CollectionAssert.AreEqual(before, AssetDatabase.LoadAssetAtPath<E0ReorderableListAsset>(path).items);
         }
 
         [UnityTest]
         public IEnumerator SameTypeWindowsCannotConsumeEachOthersDrag()
         {
-            var first = Asset("first"); var before = first.Items.ToArray();
-            var second = Asset("second"); var other = second.Items.ToArray();
-            var left = Window(first); var right = Window(second);
+            var first = Asset("first");
+            var before = first.items.ToArray();
+            var second = Asset("second");
+            var other = second.items.ToArray();
+            var left = Window(first);
+            var right = Window(second);
             yield return null;
             Start(left, 1);
             Assert.That(Drop(right, 5), Is.EqualTo(DragAndDropVisualMode.Rejected));
-            CollectionAssert.AreEqual(before, first.Items); CollectionAssert.AreEqual(other, second.Items);
+            CollectionAssert.AreEqual(before, first.items);
+            CollectionAssert.AreEqual(other, second.items);
             Assert.That(Drop(left, 5), Is.EqualTo(DragAndDropVisualMode.Move), "拒绝外来拖拽不能清除其来源窗口的责任。");
             Assert.That(left.GetInstanceID(), Is.Not.EqualTo(right.GetInstanceID()));
-            Assert.That(left.GuiCalls, Is.GreaterThan(0)); Assert.That(right.GuiCalls, Is.GreaterThan(0));
+            Assert.That(left.guiCalls, Is.GreaterThan(0));
+            Assert.That(right.guiCalls, Is.GreaterThan(0));
         }
 
         [UnityTest]
         public IEnumerator ChangedListAndInvalidDestinationAreRejectedWithoutMutation()
         {
-            var asset = Asset("invalid"); var window = Window(asset);
+            var asset = Asset("invalid");
+            var window = Window(asset);
             yield return null;
             Start(window, 1);
             Assert.That(Drop(window, -1), Is.EqualTo(DragAndDropVisualMode.Rejected));
             Start(window, 1);
             Assert.That(Drop(window, 6), Is.EqualTo(DragAndDropVisualMode.Rejected));
             Start(window, 1);
-            asset.Items.Reverse(); var changed = asset.Items.ToArray();
+            asset.items.Reverse();
+            var changed = asset.items.ToArray();
             Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Rejected));
-            CollectionAssert.AreEqual(changed, asset.Items);
+            CollectionAssert.AreEqual(changed, asset.items);
         }
 
         [UnityTest]
         public IEnumerator HoverAndNoOpDoNotDirtyTheAsset()
         {
-            var asset = Asset("noop"); var before = asset.Items.ToArray();
+            var asset = Asset("noop");
+            var before = asset.items.ToArray();
             var window = Window(asset);
             yield return null;
             Assert.That(EditorUtility.IsDirty(asset), Is.False);
             Start(window, 2);
             Assert.That(Drop(window, 5, false), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(before, asset.items);
             Assert.That(EditorUtility.IsDirty(asset), Is.False);
             Assert.That(Drop(window, 2), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(before, asset.items);
             Assert.That(EditorUtility.IsDirty(asset), Is.False);
         }
 
         [UnityTest]
         public IEnumerator DisposedTreeRejectsItsOutstandingDrag()
         {
-            var asset = Asset("dispose"); var before = asset.Items.ToArray();
+            var asset = Asset("dispose");
+            var before = asset.items.ToArray();
             var window = Window(asset);
             yield return null;
             Start(window, 1);
             ((IDisposable)window.Tree).Dispose();
             Assert.That(Drop(window, 5), Is.EqualTo(DragAndDropVisualMode.Rejected));
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(before, asset.items);
         }
 
         [UnityTest]
         public IEnumerator UnselectedRowCannotStartADrag()
         {
-            var asset = Asset("unselected"); var window = Window(asset);
+            var asset = Asset("unselected");
+            var window = Window(asset);
             yield return null;
             window.Tree.SetSelection(Array.Empty<int>());
             Assert.That(Invoke(window.Tree, "CanStartDrag", ("draggedItem", window.Tree.GetRows()[0]),
@@ -250,62 +290,74 @@ namespace YLFramework.Tests.Extensions.Shared
         [UnityTest]
         public IEnumerator TwoWindowsForTheSameAssetStillHaveIsolatedDragOwnership()
         {
-            var asset = Asset("shared-owner"); var before = asset.Items.ToArray();
-            var left = Window(asset); var right = Window(asset);
+            var asset = Asset("shared-owner");
+            var before = asset.items.ToArray();
+            var left = Window(asset);
+            var right = Window(asset);
             yield return null;
             Start(left, 1);
             Assert.That(Drop(right, 5), Is.EqualTo(DragAndDropVisualMode.Rejected));
-            CollectionAssert.AreEqual(before, asset.Items);
+            CollectionAssert.AreEqual(before, asset.items);
             Assert.That(Drop(left, 5), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(new[] { before[1], before[2], before[3], before[4], before[0] }, asset.Items);
+            CollectionAssert.AreEqual(new[] { before[1], before[2], before[3], before[4], before[0] }, asset.items);
         }
 
         [UnityTest]
         public IEnumerator StaleRowsInAnotherWindowCannotMoveADifferentObject()
         {
-            var asset = Asset("stale-rows"); var before = asset.Items.ToArray();
-            var left = Window(asset); var right = Window(asset);
+            var asset = Asset("stale-rows");
+            var before = asset.items.ToArray();
+            var left = Window(asset);
+            var right = Window(asset);
             yield return null;
             var staleRow = right.Tree.GetRows()[0];
-            Start(left, 1); Assert.That(Drop(left, 5), Is.EqualTo(DragAndDropVisualMode.Move));
+            Start(left, 1);
+            Assert.That(Drop(left, 5), Is.EqualTo(DragAndDropVisualMode.Move));
             var current = new[] { before[1], before[2], before[3], before[4], before[0] };
             right.Tree.SetSelection(new[] { staleRow.id });
             Assert.That(Invoke(right.Tree, "CanStartDrag", ("draggedItem", staleRow),
                 ("draggedItemIDs", new[] { staleRow.id })), Is.False, "旧行显示A时不能按新索引移动B。");
-            CollectionAssert.AreEqual(current, asset.Items);
+            CollectionAssert.AreEqual(current, asset.items);
             CollectionAssert.AreEqual(new[] { "B", "C", "D", "E", "A" }, right.Tree.GetRows().Select(row => row.displayName));
-            Start(right, 1); Assert.That(Drop(right, 5), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(new[] { before[2], before[3], before[4], before[0], before[1] }, asset.Items);
+            Start(right, 1);
+            Assert.That(Drop(right, 5), Is.EqualTo(DragAndDropVisualMode.Move));
+            CollectionAssert.AreEqual(new[] { before[2], before[3], before[4], before[0], before[1] }, asset.items);
         }
 
         [UnityTest]
         public IEnumerator FilteredRowsUseActualDataIndicesAndKeepHiddenNullSlots()
         {
-            var asset = Asset("filtered"); var before = asset.Items.ToArray();
-            asset.Items = new List<Object> { before[0], null, before[1], before[2] };
+            var asset = Asset("filtered");
+            var before = asset.items.ToArray();
+            asset.items = new List<Object> { before[0], null, before[1], before[2] };
             var window = Window(asset, prepared: new FilteredTree(asset));
             yield return null;
             Start(window, before[1].GetInstanceID());
             Assert.That(Drop(window, 0), Is.EqualTo(DragAndDropVisualMode.Move));
-            CollectionAssert.AreEqual(new Object[] { before[1], before[0], null, before[2] }, asset.Items);
+            CollectionAssert.AreEqual(new Object[] { before[1], before[0], null, before[2] }, asset.items);
         }
 
         private sealed class FilteredTree : YLFramework.Core.Editor.ReorderableTreeView<Object>
         {
-            private readonly E0ReorderableListAsset asset;
+            private readonly E0ReorderableListAsset _asset;
 
-            public FilteredTree(E0ReorderableListAsset asset) : base(asset, () => asset.Items, new TreeViewState())
+            public FilteredTree(E0ReorderableListAsset asset) : base(asset, () => asset.items, new TreeViewState())
             {
-                this.asset = asset;
+                this._asset = asset;
             }
 
             protected override void OnBuildRoot(TreeViewItem root, IList<Object> datas)
             {
                 foreach (var item in datas)
-                    if (item) root.AddChild(new TreeViewItem(item.GetInstanceID(), 0, item.name));
+                {
+                    if (item)
+                    {
+                        root.AddChild(new TreeViewItem(item.GetInstanceID(), 0, item.name));
+                    }
+                }
             }
 
-            protected override int GetItemIndex(int id) => asset.Items.FindIndex(item => item && item.GetInstanceID() == id);
+            protected override int GetItemIndex(int id) => _asset.items.FindIndex(item => item && item.GetInstanceID() == id);
         }
     }
 }

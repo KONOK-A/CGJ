@@ -12,7 +12,7 @@ namespace YLFramework.Utilities.ZipTool
     {
         private const int BufferSize = 81920;
 
-        private static readonly StringComparison PathComparison =
+        private static readonly StringComparison _pathComparison =
             Path.DirectorySeparatorChar == '\\' ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         private ZipFile _zipFile;
@@ -445,7 +445,7 @@ namespace YLFramework.Utilities.ZipTool
                 throw new InvalidDataException("zip 条目名非法：" + entryName, ex);
             }
 
-            if (!targetPath.StartsWith(destRootWithSeparator, PathComparison))
+            if (!targetPath.StartsWith(destRootWithSeparator, _pathComparison))
             {
                 throw new InvalidDataException("zip 条目路径越界（Zip Slip）：" + entryName);
             }

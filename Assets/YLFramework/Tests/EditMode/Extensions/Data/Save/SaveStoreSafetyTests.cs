@@ -12,9 +12,23 @@ namespace YLFramework.Tests.Extensions.Data.Save
 {
     public class SaveStoreSafetyTests
     {
-        public class Payload { public int Number; }
-        public class Model : ISaveModel { public int Id { get; set; } public int Score; public string DateText; }
-        public class StringPayload { public string Text; }
+        public class Payload
+        {
+            public int Number;
+        }
+        public class Model : ISaveModel
+        {
+            public int Id
+            {
+                get; set;
+            }
+            public int Score;
+            public string DateText;
+        }
+        public class StringPayload
+        {
+            public string Text;
+        }
 
         [Test]
         public void SaveApiDoesNotExposeHistoricalFormatImport()
@@ -33,7 +47,14 @@ namespace YLFramework.Tests.Extensions.Data.Save
             {
                 var data = JObject.Load(reader);
                 var number = (int)data["Number"];
-                if (number == 1) { Entered.Set(); if (!Release.Wait(10000)) throw new TimeoutException("Test read was not released."); }
+                if (number == 1)
+                {
+                    Entered.Set();
+                    if (!Release.Wait(10000))
+                    {
+                        throw new TimeoutException("Test read was not released.");
+                    }
+                }
                 return new Payload { Number = number };
             }
             public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) => throw new NotSupportedException();
@@ -52,7 +73,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
             public override bool CanConvert(Type type) => type == typeof(Payload);
             public override bool CanWrite => false;
             public override object ReadJson(JsonReader reader, Type type, object existing, JsonSerializer serializer)
-            { ReadThread = Thread.CurrentThread.ManagedThreadId; return new Payload { Number = (int)JObject.Load(reader)["Number"] }; }
+            {
+                ReadThread = Thread.CurrentThread.ManagedThreadId;
+                return new Payload { Number = (int)JObject.Load(reader)["Number"] };
+            }
             public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) => throw new NotSupportedException();
         }
 
@@ -96,7 +120,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 File.WriteAllText(path, "{\"Number\":8}");
                 File.WriteAllText(path + ".bak", "{\"Number\":7}");
                 using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
                     Assert.Throws<IOException>(() => SaveFileIO.ReadJson<Payload>(path, new JsonSerializerSettings(), out _, out _));
+                }
+
                 Assert.That(File.ReadAllText(path), Is.EqualTo("{\"Number\":8}"));
                 Assert.That(File.ReadAllText(path + ".bak"), Is.EqualTo("{\"Number\":7}"));
             });
@@ -119,9 +146,9 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 {
                     var first = store.CreateSaveItem();
                     var second = store.CreateSaveItem(7);
-                    Assert.That((int)first.SaveID, Is.EqualTo(0));
-                    Assert.That((int)second.SaveID, Is.EqualTo(7));
-                    store.CurrentSaveID = 7;
+                    Assert.That((int)first.SaveId, Is.EqualTo(0));
+                    Assert.That((int)second.SaveId, Is.EqualTo(7));
+                    store.CurrentSaveId = 7;
                     var payload = new Payload { Number = 42 };
                     store.SaveObject(payload, "player", 7);
                     Assert.That((object)store.LoadObject<Payload>("player", 7), Is.SameAs(payload));
@@ -129,11 +156,43 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 }
                 using (var store = Open(root))
                 {
-                    Assert.That((int?)store.CurrentSaveID, Is.EqualTo(7));
+                    Assert.That((int?)store.CurrentSaveId, Is.EqualTo(7));
                     Assert.That((int)store.LoadObject<Payload>("player", 7).Number, Is.EqualTo(42));
                     Assert.That((int)store.LoadGlobalSetting<Payload>("options").Number, Is.EqualTo(9));
                     Assert.That((int)store.GetAllSaveItems().Count, Is.EqualTo(2));
                     Assert.That(File.ReadAllText(Path.Combine(root, "SaveData/7/player.json")), Does.Contain("42"));
+                }
+            });
+        }
+
+        [Test]
+        public void RenamedSaveIdApiKeepsLegacyJsonKeysAcrossColdReopen()
+        {
+            Assert.That(typeof(SaveStore).GetProperty("CurrentSaveId"), Is.Not.Null);
+            Assert.That(typeof(SaveManager.SaveItem).GetProperty("SaveId"), Is.Not.Null);
+            Run(root =>
+            {
+                Directory.CreateDirectory(Path.Combine(root, "SaveData/7"));
+                string path = Path.Combine(root, "SaveData/SaveSystemData.json");
+                string json = "{\"DataVersion\":" + SaveStore.FormatVersion +
+                    ",\"SaveItemDict\":{\"7\":{\"SaveID\":7,\"CreateTime\":\"2026-10-21T00:00:00Z\",\"LastSaveTime\":\"2026-10-21T01:00:00Z\"}},\"CurrentSaveID\":7}";
+                File.WriteAllText(path, json);
+                using (var store = Open(root))
+                {
+                    Assert.That(store.CurrentSaveId, Is.EqualTo(7));
+                    Assert.That(store.GetAllSaveItems().Single().SaveId, Is.EqualTo(7));
+                    Assert.That(store.RenameSaveItem(7, "renamed"), Is.True);
+                }
+
+                var index = JObject.Parse(File.ReadAllText(path));
+                Assert.That((int)index["CurrentSaveID"], Is.EqualTo(7));
+                Assert.That(index["CurrentSaveId"], Is.Null);
+                Assert.That((int)index["SaveItemDict"]["7"]["SaveID"], Is.EqualTo(7));
+                Assert.That(index["SaveItemDict"]["7"]["SaveId"], Is.Null);
+                using (var reopened = Open(root))
+                {
+                    Assert.That(reopened.CurrentSaveId, Is.EqualTo(7));
+                    Assert.That(reopened.GetAllSaveItems().Single().DisplayName, Is.EqualTo("renamed"));
                 }
             });
         }
@@ -149,7 +208,12 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 {
                     var json = "{\"DataVersion\":" + version + ",\"SaveItemDict\":{}}";
                     File.WriteAllText(path, json);
-                    var error = Assert.Catch(() => { using (Open(root)) { } });
+                    var error = Assert.Catch(() =>
+                    {
+                        using (Open(root))
+                        {
+                        }
+                    });
                     Assert.That(error, Is.Not.Null);
                     Assert.That(File.ReadAllText(path), Is.EqualTo(json));
                     Assert.That(Directory.GetFiles(Path.GetDirectoryName(path)).Length, Is.EqualTo(1));
@@ -170,7 +234,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
                     var path = Path.Combine(root, "SaveData/0/player.json");
                     var before = File.ReadAllBytes(path);
                     using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
                         Assert.Catch<IOException>(() => store.SaveObject(new Payload { Number = 99 }, "player", 0));
+                    }
+
                     Assert.That(File.ReadAllBytes(path), Is.EqualTo(before));
                     Assert.That((object)store.LoadObject<Payload>("player", 0), Is.SameAs(previous));
                     Assert.That(Directory.GetFiles(Path.GetDirectoryName(path), "*.tmp-*").Length, Is.EqualTo(0));
@@ -201,8 +268,19 @@ namespace YLFramework.Tests.Extensions.Data.Save
             Run(root =>
             {
                 using (var store = Open(root))
-                    Assert.Catch<IOException>(() => { using (Open(root.ToUpperInvariant())) { } });
-                using (var reopened = Open(root)) Assert.That(reopened.GetAllSaveItems().Count, Is.EqualTo(0));
+                {
+                    Assert.Catch<IOException>(() =>
+                    {
+                        using (Open(root.ToUpperInvariant()))
+                        {
+                        }
+                    });
+                }
+
+                using (var reopened = Open(root))
+                {
+                    Assert.That(reopened.GetAllSaveItems().Count, Is.EqualTo(0));
+                }
             });
         }
 
@@ -237,15 +315,25 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 settings.Converters.Add(converter);
                 using (var store = Open(root, settings))
                 {
-                    store.CreateSaveItem(0); store.CreateSaveItem(1);
+                    store.CreateSaveItem(0);
+                    store.CreateSaveItem(1);
                     store.SaveObject(new Payload { Number = 1 }, "player", 0);
                     store.ClearCache();
                     var blocked = (Task<Payload>)store.LoadObjectAsync<Payload>("player", 0, CancellationToken.None);
                     Assert.That(converter.Entered.Wait(3000), Is.True);
-                    var independent = Task.Run(() => { store.SaveObject(new Payload { Number = 2 }, "player", 1); });
+                    var independent = Task.Run(() =>
+                    {
+                        store.SaveObject(new Payload { Number = 2 }, "player", 1);
+                    });
                     bool progressed;
-                    try { progressed = independent.Wait(2000); }
-                    finally { converter.Release.Set(); }
+                    try
+                    {
+                        progressed = independent.Wait(2000);
+                    }
+                    finally
+                    {
+                        converter.Release.Set();
+                    }
                     Task.WaitAll(blocked, independent);
                     Assert.That(progressed, Is.True, "A different slot should not wait for this slot's converter.");
                     Assert.That((int)store.LoadObject<Payload>("player", 1).Number, Is.EqualTo(2));
@@ -259,11 +347,14 @@ namespace YLFramework.Tests.Extensions.Data.Save
             Run(root =>
             {
                 var converter = new BlockingReadConverter();
-                var settings = new JsonSerializerSettings(); settings.Converters.Add(converter);
+                var settings = new JsonSerializerSettings();
+                settings.Converters.Add(converter);
                 var store = Open(root, settings);
                 try
                 {
-                    store.CreateSaveItem(); store.SaveObject(new Payload { Number = 1 }, "player", 0); store.ClearCache();
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 1 }, "player", 0);
+                    store.ClearCache();
                     var blocked = (Task<Payload>)store.LoadObjectAsync<Payload>("player", 0, CancellationToken.None);
                     Assert.That(converter.Entered.Wait(3000), Is.True);
                     var queued = (Task)store.DeleteSaveItemAsync(0, CancellationToken.None);
@@ -276,13 +367,25 @@ namespace YLFramework.Tests.Extensions.Data.Save
                         Assert.That(closing.IsCompleted, Is.False);
                         using (var secondEntered = new ManualResetEventSlim())
                         {
-                            secondClosing = Task.Run(() => { secondEntered.Set(); store.Dispose(); });
+                            secondClosing = Task.Run(() =>
+                            {
+                                secondEntered.Set();
+                                store.Dispose();
+                            });
                             Assert.That(secondEntered.Wait(3000), Is.True);
                             Assert.That(secondClosing.Wait(200), Is.False, "Every Dispose caller must wait for the owner to finish, not only the first caller.");
                         }
-                        Assert.Catch<IOException>(() => { using (Open(root)) { } });
+                        Assert.Catch<IOException>(() =>
+                        {
+                            using (Open(root))
+                            {
+                            }
+                        });
                     }
-                    finally { converter.Release.Set(); }
+                    finally
+                    {
+                        converter.Release.Set();
+                    }
                     Assert.Catch<OperationCanceledException>(() => blocked.GetAwaiter().GetResult());
                     closing.GetAwaiter().GetResult();
                     secondClosing.GetAwaiter().GetResult();
@@ -293,7 +396,11 @@ namespace YLFramework.Tests.Extensions.Data.Save
                         Assert.That((int)reopened.LoadObject<Payload>("player", 0).Number, Is.EqualTo(1));
                     }
                 }
-                finally { converter.Release.Set(); ((IDisposable)store).Dispose(); }
+                finally
+                {
+                    converter.Release.Set();
+                    ((IDisposable)store).Dispose();
+                }
             });
         }
 
@@ -303,7 +410,11 @@ namespace YLFramework.Tests.Extensions.Data.Save
             Run(root =>
             {
                 using (var store = Open(root))
-                { store.CreateSaveItem(); store.SaveObject(new Payload { Number = 5 }, "player", 0); store.RenameSaveItem(0, "new"); }
+                {
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 5 }, "player", 0);
+                    store.RenameSaveItem(0, "new");
+                }
                 var path = Path.Combine(root, "SaveData/SaveSystemData.json");
                 File.WriteAllText(path, "damaged-index");
                 var backup = File.ReadAllBytes(path + ".bak");
@@ -327,7 +438,11 @@ namespace YLFramework.Tests.Extensions.Data.Save
             Run(root =>
             {
                 using (var store = Open(root))
-                { store.CreateSaveItem(); store.SaveObject(new Payload { Number = 5 }, "player", 0); store.SaveObject(new Payload { Number = 6 }, "player", 0); }
+                {
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 5 }, "player", 0);
+                    store.SaveObject(new Payload { Number = 6 }, "player", 0);
+                }
                 var path = Path.Combine(root, "SaveData/0/player.json");
                 File.WriteAllText(path, "damaged-object");
                 var backup = File.ReadAllBytes(path + ".bak");
@@ -353,13 +468,19 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 using (var store = Open(root))
                 {
                     Directory.CreateDirectory(Path.Combine(root, "Setting"));
-                    var path = Path.Combine(root, "Setting/options.json"); File.WriteAllText(path, "bad-settings");
+                    var path = Path.Combine(root, "Setting/options.json");
+                    File.WriteAllText(path, "bad-settings");
                     Assert.Catch<InvalidDataException>(() => store.LoadGlobalSetting<Payload>("options"));
                     Assert.That(File.ReadAllText(path), Is.EqualTo("bad-settings"));
                 }
                 Directory.CreateDirectory(Path.Combine(root, "SaveData/3"));
                 File.WriteAllText(Path.Combine(root, "SaveData/3/player.json"), "{\"Number\":3}");
-                Assert.Catch<InvalidDataException>(() => { using (Open(root)) { } });
+                Assert.Catch<InvalidDataException>(() =>
+                {
+                    using (Open(root))
+                    {
+                    }
+                });
                 Assert.That(File.Exists(Path.Combine(root, "SaveData/SaveSystemData.json")), Is.False);
                 Assert.That(File.ReadAllText(Path.Combine(root, "SaveData/3/player.json")), Is.EqualTo("{\"Number\":3}"));
             });
@@ -373,8 +494,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 using (var store = Open(root))
                 {
                     var item = store.CreateSaveItem();
-                    var value = new Payload { Number = 17 }; store.SaveObject(value, "player", 0);
-                    var path = Path.Combine(root, "SaveData/SaveSystemData.json"); var bytes = File.ReadAllBytes(path);
+                    var value = new Payload { Number = 17 };
+                    store.SaveObject(value, "player", 0);
+                    var path = Path.Combine(root, "SaveData/SaveSystemData.json");
+                    var bytes = File.ReadAllBytes(path);
                     using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                     {
                         Assert.Catch<IOException>(() => store.CreateSaveItem());
@@ -397,7 +520,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
             {
                 using (var store = Open(root))
                 {
-                    var model = (Model)store.CreateModel<Model>(5); model.Score = 20; store.SaveModel(model); store.CurrentSaveID = 5;
+                    var model = (Model)store.CreateModel<Model>(5);
+                    model.Score = 20;
+                    store.SaveModel(model);
+                    store.CurrentSaveId = 5;
                     Assert.That((object)store.LoadModel<Model>(), Is.SameAs(model));
                     Assert.That((object)store.LoadObject<Model>(SaveStore.ModelFileName, 5), Is.SameAs(model));
                     Assert.Catch<IOException>(() => store.CreateModel<Model>(5));
@@ -407,7 +533,7 @@ namespace YLFramework.Tests.Extensions.Data.Save
                     Assert.That((int)store.LoadModel<Model>().Id, Is.EqualTo(5));
                     Assert.That((int)store.LoadModel<Model>().Score, Is.EqualTo(20));
                     store.DeleteSaveItem(5);
-                    Assert.That((int?)store.CurrentSaveID, Is.Null);
+                    Assert.That((int?)store.CurrentSaveId, Is.Null);
                     Assert.That((bool)store.HasSaveItem(5), Is.False);
                     Assert.That(Directory.GetFiles(root, "ArchiveModel.json", SearchOption.AllDirectories).Length, Is.EqualTo(1), "Deleted content remains recoverable, outside the live slot.");
                 }
@@ -423,7 +549,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 {
                     store.CreateSaveItem();
                     foreach (var name in new[] { "..", "../escape", "a/b", "a\\b", "CON", "nul.json", "tail.", "tail ", "a:b", "x?y", "" })
+                    {
                         Assert.Catch<ArgumentException>(() => store.SaveObject(new Payload(), name, 0));
+                    }
+
                     Assert.Catch<ArgumentNullException>(() => store.SaveObject(null, "valid", 0));
                     Assert.That((int)store.GetObjectNames(0).Count, Is.EqualTo(0));
                     Assert.That(File.Exists(Path.Combine(root, "escape.json")), Is.False);
@@ -438,10 +567,15 @@ namespace YLFramework.Tests.Extensions.Data.Save
             {
                 Directory.CreateDirectory(Path.Combine(root, "SaveData"));
                 var path = Path.Combine(root, "SaveData/SaveSystemData.json");
-                const string json = "{\"DataVersion\":2,\"SaveItemDict\":{},\"SaveItemDict\":{}}";
-                File.WriteAllText(path, json);
-                Assert.Catch<InvalidDataException>(() => { using (Open(root)) { } });
-                Assert.That(File.ReadAllText(path), Is.EqualTo(json));
+                const string Json = "{\"DataVersion\":2,\"SaveItemDict\":{},\"SaveItemDict\":{}}";
+                File.WriteAllText(path, Json);
+                Assert.Catch<InvalidDataException>(() =>
+                {
+                    using (Open(root))
+                    {
+                    }
+                });
+                Assert.That(File.ReadAllText(path), Is.EqualTo(Json));
             });
         }
 
@@ -454,11 +588,22 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 try
                 {
                     JsonConvert.DefaultSettings = () => new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All, Converters = { new AmbientPoisonConverter() } };
-                    using (var store = Open(root)) { store.CreateSaveItem(); store.SaveObject(new Payload { Number = 4 }, "player", 0); }
-                    using (var store = Open(root)) Assert.That(store.LoadObject<Payload>("player", 0).Number, Is.EqualTo(4));
+                    using (var store = Open(root))
+                    {
+                        store.CreateSaveItem();
+                        store.SaveObject(new Payload { Number = 4 }, "player", 0);
+                    }
+                    using (var store = Open(root))
+                    {
+                        Assert.That(store.LoadObject<Payload>("player", 0).Number, Is.EqualTo(4));
+                    }
+
                     Assert.That(File.ReadAllText(Path.Combine(root, "SaveData/SaveSystemData.json")), Does.Not.Contain("$type"));
                 }
-                finally { JsonConvert.DefaultSettings = original; }
+                finally
+                {
+                    JsonConvert.DefaultSettings = original;
+                }
             });
         }
 
@@ -467,10 +612,14 @@ namespace YLFramework.Tests.Extensions.Data.Save
         {
             Run(root =>
             {
-                var converter = new ThreadReadConverter(); var settings = new JsonSerializerSettings(); settings.Converters.Add(converter);
+                var converter = new ThreadReadConverter();
+                var settings = new JsonSerializerSettings();
+                settings.Converters.Add(converter);
                 using (var store = Open(root, settings))
                 {
-                    store.CreateSaveItem(); store.SaveObject(new Payload { Number = 8 }, "player", 0); store.ClearCache();
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 8 }, "player", 0);
+                    store.ClearCache();
                     var caller = Thread.CurrentThread.ManagedThreadId;
                     Assert.That((int)store.LoadObject<Payload>("player", 0).Number, Is.EqualTo(8));
                     Assert.That(converter.ReadThread, Is.EqualTo(caller));
@@ -483,9 +632,14 @@ namespace YLFramework.Tests.Extensions.Data.Save
         {
             Run(root =>
             {
-                const string text = "2026-01-02T03:04:05+03:00";
+                const string Text = "2026-01-02T03:04:05+03:00";
                 using (var store = Open(root))
-                { store.CreateSaveItem(); store.SaveObject(new StringPayload { Text = text }, "player", 0); store.ClearCache(); Assert.That((string)store.LoadObject<StringPayload>("player", 0).Text, Is.EqualTo(text)); }
+                {
+                    store.CreateSaveItem();
+                    store.SaveObject(new StringPayload { Text = Text }, "player", 0);
+                    store.ClearCache();
+                    Assert.That((string)store.LoadObject<StringPayload>("player", 0).Text, Is.EqualTo(Text));
+                }
             });
         }
 
@@ -496,7 +650,8 @@ namespace YLFramework.Tests.Extensions.Data.Save
             {
                 using (var store = Open(root))
                 {
-                    store.CreateSaveItem(); Directory.CreateDirectory(Path.Combine(root, "SaveData/0/player.json"));
+                    store.CreateSaveItem();
+                    Directory.CreateDirectory(Path.Combine(root, "SaveData/0/player.json"));
                     Assert.Catch<UnauthorizedAccessException>(() => store.LoadObject<Payload>("player", 0));
                 }
             });
@@ -508,7 +663,11 @@ namespace YLFramework.Tests.Extensions.Data.Save
             Run(root =>
             {
                 using (var store = Open(root))
-                { store.CreateSaveItem(); store.SaveObject(new Payload { Number = 5 }, "player", 0); store.SaveObject(new Payload { Number = 6 }, "player", 0); }
+                {
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 5 }, "player", 0);
+                    store.SaveObject(new Payload { Number = 6 }, "player", 0);
+                }
                 File.WriteAllText(Path.Combine(root, "SaveData/0/player.json"), "bad-primary");
                 using (var store = Open(root))
                 {
@@ -528,17 +687,27 @@ namespace YLFramework.Tests.Extensions.Data.Save
         {
             Run(root =>
             {
-                var converter = new BlockingReadConverter(); var settings = new JsonSerializerSettings(); settings.Converters.Add(converter);
+                var converter = new BlockingReadConverter();
+                var settings = new JsonSerializerSettings();
+                settings.Converters.Add(converter);
                 using (var store = Open(root, settings))
                 using (var cancellation = new CancellationTokenSource())
                 {
-                    store.CreateSaveItem(); store.SaveObject(new Payload { Number = 1 }, "player", 0); store.ClearCache();
+                    store.CreateSaveItem();
+                    store.SaveObject(new Payload { Number = 1 }, "player", 0);
+                    store.ClearCache();
                     var blocked = store.LoadObjectAsync<Payload>("player", 0);
                     Assert.That(converter.Entered.Wait(3000), Is.True);
                     var queued = store.SaveObjectAsync(new Payload { Number = 99 }, "player", 0, cancellation.Token);
                     cancellation.Cancel();
-                    try { Assert.Catch<OperationCanceledException>(() => queued.GetAwaiter().GetResult()); }
-                    finally { converter.Release.Set(); }
+                    try
+                    {
+                        Assert.Catch<OperationCanceledException>(() => queued.GetAwaiter().GetResult());
+                    }
+                    finally
+                    {
+                        converter.Release.Set();
+                    }
                     Assert.That(blocked.GetAwaiter().GetResult().Number, Is.EqualTo(1));
                     Assert.That(store.LoadObject<Payload>("player", 0).Number, Is.EqualTo(1));
                     Assert.That(JObject.Parse(File.ReadAllText(Path.Combine(root, "SaveData/0/player.json")))["Number"].Value<int>(), Is.EqualTo(1));
@@ -554,10 +723,15 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 using (var store = Open(root))
                 {
                     store.CreateSaveItem();
-                    var path = Path.Combine(root, "SaveData/SaveSystemData.json"); var before = File.ReadAllBytes(path);
+                    var path = Path.Combine(root, "SaveData/SaveSystemData.json");
+                    var before = File.ReadAllBytes(path);
                     using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
                         Assert.Catch<IOException>(() => store.CreateModel<Model>(9));
-                    Assert.That(File.ReadAllBytes(path), Is.EqualTo(before)); Assert.That(store.HasSaveItem(9), Is.False);
+                    }
+
+                    Assert.That(File.ReadAllBytes(path), Is.EqualTo(before));
+                    Assert.That(store.HasSaveItem(9), Is.False);
                     Assert.That(Directory.Exists(Path.Combine(root, "SaveData/9")), Is.False);
                     Assert.That(Directory.GetFiles(Path.Combine(root, "SaveData"), "ArchiveModel.json", SearchOption.AllDirectories).Length, Is.EqualTo(1), "Failed staged model must be retained.");
                 }
@@ -572,16 +746,18 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 using (var store = Open(root))
                 {
                     store.CreateSaveItem(0);
-                    var last = store.CreateModelAsync<Model>(9).GetAwaiter().GetResult(); last.Score = 90;
+                    var last = store.CreateModelAsync<Model>(9).GetAwaiter().GetResult();
+                    last.Score = 90;
                     store.SaveModelAsync(last).GetAwaiter().GetResult();
-                    var first = store.CreateModelAsync<Model>(3).GetAwaiter().GetResult(); first.Score = 30;
+                    var first = store.CreateModelAsync<Model>(3).GetAwaiter().GetResult();
+                    first.Score = 30;
                     store.SaveModelAsync(first).GetAwaiter().GetResult();
                     store.ClearCache();
                     var all = store.LoadAllModelsAsync<Model>().GetAwaiter().GetResult();
                     Assert.That(all.Select(model => model.Id).ToArray(), Is.EqualTo(new[] { 3, 9 }));
                     Assert.That(all.Select(model => model.Score).ToArray(), Is.EqualTo(new[] { 30, 90 }));
                     Assert.That(store.LoadObject<Model>(SaveStore.ModelFileName, 3), Is.SameAs(all[0]));
-                    Assert.That(store.CurrentSaveID, Is.Null);
+                    Assert.That(store.CurrentSaveId, Is.Null);
                 }
             });
         }
@@ -596,8 +772,10 @@ namespace YLFramework.Tests.Extensions.Data.Save
                 using (var observed = new ManualResetEventSlim())
                 {
                     store.CreateSaveItem();
-                    var previous = new StringPayload { Text = "old" }; store.SaveObject(previous, "player", 0);
-                    var path = Path.Combine(root, "SaveData/0/player.json"); var before = File.ReadAllBytes(path);
+                    var previous = new StringPayload { Text = "old" };
+                    store.SaveObject(previous, "player", 0);
+                    var path = Path.Combine(root, "SaveData/0/player.json");
+                    var before = File.ReadAllBytes(path);
                     var replacement = new StringPayload { Text = new string('x', 16 * 1024 * 1024) };
                     using (var stop = new ManualResetEventSlim())
                     using (var ready = new ManualResetEventSlim())
@@ -612,21 +790,40 @@ namespace YLFramework.Tests.Extensions.Data.Save
                                 while (!stop.IsSet)
                                 {
                                     if (Directory.EnumerateFiles(Path.GetDirectoryName(path), "player.json.tmp-*").Any())
-                                    { cancellation.Cancel(); observed.Set(); return; }
+                                    {
+                                        cancellation.Cancel();
+                                        observed.Set();
+                                        return;
+                                    }
                                     Thread.Yield();
                                 }
                             }
-                            catch (Exception error) { observerError = error; }
-                        }) { IsBackground = true, Name = "Save temporary-file cancellation observer" };
+                            catch (Exception error)
+                            {
+                                observerError = error;
+                            }
+                        })
+                        {
+                            IsBackground = true,
+                            Name = "Save temporary-file cancellation observer"
+                        };
                         observer.Start();
                         var committed = false;
                         try
                         {
                             Assert.That(ready.Wait(5000), Is.True);
-                            try { store.SaveObjectAsync(replacement, "player", 0, cancellation.Token).GetAwaiter().GetResult(); committed = true; }
+                            try
+                            {
+                                store.SaveObjectAsync(replacement, "player", 0, cancellation.Token).GetAwaiter().GetResult();
+                                committed = true;
+                            }
                             catch (OperationCanceledException) { }
                         }
-                        finally { stop.Set(); Assert.That(observer.Join(5000), Is.True); }
+                        finally
+                        {
+                            stop.Set();
+                            Assert.That(observer.Join(5000), Is.True);
+                        }
                         Assert.That(observerError, Is.Null);
                         Assert.That(observed.Wait(3000), Is.True, "Cancellation must be triggered by a real temporary file, not just before dispatch.");
                         if (committed)
@@ -653,8 +850,11 @@ namespace YLFramework.Tests.Extensions.Data.Save
             {
                 using (var store = Open(root))
                 {
-                    store.CreateSaveItem(); var previous = new Payload { Number = 1 }; store.SaveObject(previous, "player", 0);
-                    var path = Path.Combine(root, "SaveData/0/player.json"); var before = File.ReadAllBytes(path);
+                    store.CreateSaveItem();
+                    var previous = new Payload { Number = 1 };
+                    store.SaveObject(previous, "player", 0);
+                    var path = Path.Combine(root, "SaveData/0/player.json");
+                    var before = File.ReadAllBytes(path);
                     Directory.CreateDirectory(path + ".bak");
                     var error = Assert.Catch(() => store.SaveObject(new Payload { Number = 99 }, "player", 0));
                     Assert.That(error is IOException || error is UnauthorizedAccessException, Is.True);

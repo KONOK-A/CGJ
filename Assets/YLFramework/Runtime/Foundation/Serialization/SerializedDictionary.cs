@@ -26,21 +26,28 @@ namespace YLFramework.Foundation
         [SerializeField]
         private List<DictionaryItem<TKey, TValue>> datas;
 
-        [NonSerialized] private Dictionary<TKey, int> index;
-        [NonSerialized] private int invalidEntryCount;
-        [NonSerialized] private int version;
-        [NonSerialized] private DictionaryView<TKey> keys;
-        [NonSerialized] private DictionaryView<TValue> values;
+        [NonSerialized] private Dictionary<TKey, int> _index;
+        [NonSerialized] private int _invalidEntryCount;
+        [NonSerialized] private int _version;
+        [NonSerialized] private DictionaryView<TKey> _keys;
+        [NonSerialized] private DictionaryView<TValue> _values;
 
-        public SerializedDictionary() { }
+        public SerializedDictionary()
+        {
+        }
 
         /// <summary>复制有效条目，不借用外部集合；null 来源或重复键会抛出异常。</summary>
         public SerializedDictionary(IEnumerable<KeyValuePair<TKey, TValue>> source)
         {
             if (source == null)
+            {
                 throw new ArgumentNullException(nameof(source));
+            }
+
             foreach (var pair in source)
+            {
                 Add(pair.Key, pair.Value);
+            }
         }
 
         public int Count => Index.Count;
@@ -48,12 +55,16 @@ namespace YLFramework.Foundation
         /// <summary>原始序列化行中被忽略的 null 行、null 键及重复键数量；读取不会删除行。</summary>
         public int InvalidEntryCount
         {
-            get { EnsureIndex(); return invalidEntryCount; }
+            get
+            {
+                EnsureIndex();
+                return _invalidEntryCount;
+            }
         }
 
         /// <summary>有效键的只读实时视图，顺序与首个有效序列化行一致。</summary>
-        public ICollection<TKey> Keys => keys ?? (keys = new DictionaryView<TKey>(this, pair => pair.Key));
-        public ICollection<TValue> Values => values ?? (values = new DictionaryView<TValue>(this, pair => pair.Value));
+        public ICollection<TKey> Keys => _keys ?? (_keys = new DictionaryView<TKey>(this, pair => pair.Key));
+        public ICollection<TValue> Values => _values ?? (_values = new DictionaryView<TValue>(this, pair => pair.Value));
         IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
         IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
         bool ICollection<KeyValuePair<TKey, TValue>>.IsReadOnly => false;
@@ -64,7 +75,10 @@ namespace YLFramework.Foundation
             get
             {
                 if (TryGetValue(key, out var value))
+                {
                     return value;
+                }
+
                 throw new KeyNotFoundException();
             }
             set
@@ -73,17 +87,21 @@ namespace YLFramework.Foundation
                 if (Index.TryGetValue(key, out var row))
                 {
                     datas[row].Value = value;
-                    version++;
+                    _version++;
                 }
                 else
+                {
                     Add(key, value);
+                }
             }
         }
 
         public void Add(TKey key, TValue value)
         {
             if (!TryAdd(key, value))
+            {
                 throw new ArgumentException("已存在相同的键。", nameof(key));
+            }
         }
 
         /// <summary>合法新键写穿序列化列表；重复键返回 false，null 键抛出异常。</summary>
@@ -92,12 +110,18 @@ namespace YLFramework.Foundation
             ValidateKey(key);
             var current = Index;
             if (current.ContainsKey(key))
+            {
                 return false;
+            }
+
             if (datas == null)
+            {
                 datas = new List<DictionaryItem<TKey, TValue>>();
+            }
+
             current.Add(key, datas.Count);
             datas.Add(new DictionaryItem<TKey, TValue> { Key = key, Value = value });
-            version++;
+            _version++;
             return true;
         }
 
@@ -122,8 +146,13 @@ namespace YLFramework.Foundation
         public bool ContainsValue(TValue value)
         {
             foreach (var pair in this)
+            {
                 if (EqualityComparer<TValue>.Default.Equals(pair.Value, value))
+                {
                     return true;
+                }
+            }
+
             return false;
         }
 
@@ -132,7 +161,10 @@ namespace YLFramework.Foundation
         {
             ValidateKey(key);
             if (!Index.ContainsKey(key))
+            {
                 return false;
+            }
+
             datas.RemoveAll(item => item != null && !(item.Key is null) &&
                 EqualityComparer<TKey>.Default.Equals(item.Key, key));
             Invalidate();
@@ -143,7 +175,10 @@ namespace YLFramework.Foundation
         public void Clear()
         {
             if (datas == null || datas.Count == 0)
+            {
                 return;
+            }
+
             datas.Clear();
             Invalidate();
         }
@@ -159,7 +194,9 @@ namespace YLFramework.Foundation
         {
             ValidateCopyTo(array, arrayIndex, Count);
             foreach (var pair in this)
+            {
                 array[arrayIndex++] = pair;
+            }
         }
 
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() =>
@@ -168,18 +205,27 @@ namespace YLFramework.Foundation
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         // 回调可能在工作线程执行：不遍历键，不查询 Unity 对象，不重写原始行。
-        public void OnBeforeSerialize() { }
+        public void OnBeforeSerialize()
+        {
+        }
         public void OnAfterDeserialize() => Invalidate();
 
         private Dictionary<TKey, int> Index
         {
-            get { EnsureIndex(); return index; }
+            get
+            {
+                EnsureIndex();
+                return _index;
+            }
         }
 
         private void EnsureIndex()
         {
-            if (index != null)
+            if (_index != null)
+            {
                 return;
+            }
+
             var rebuilt = new Dictionary<TKey, int>(datas?.Count ?? 0);
             var invalid = 0;
             if (datas != null)
@@ -188,57 +234,73 @@ namespace YLFramework.Foundation
                 {
                     var item = datas[row];
                     if (item == null || item.Key is null || rebuilt.ContainsKey(item.Key))
+                    {
                         invalid++;
+                    }
                     else
+                    {
                         rebuilt.Add(item.Key, row);
+                    }
                 }
             }
             // 比较器抛错时，不发布半建缓存。
-            invalidEntryCount = invalid;
-            index = rebuilt;
+            _invalidEntryCount = invalid;
+            _index = rebuilt;
         }
 
         private void Invalidate()
         {
-            index = null;
-            invalidEntryCount = 0;
-            version++;
+            _index = null;
+            _invalidEntryCount = 0;
+            _version++;
         }
 
         private void CheckVersion(int expectedVersion)
         {
-            if (version != expectedVersion)
+            if (_version != expectedVersion)
+            {
                 throw new InvalidOperationException("枚举期间字典已修改或反序列化。");
+            }
         }
 
         private static void ValidateKey(TKey key)
         {
             if (key is null)
+            {
                 throw new ArgumentNullException(nameof(key));
+            }
         }
 
         private static void ValidateCopyTo<T>(T[] array, int arrayIndex, int count)
         {
             if (array == null)
+            {
                 throw new ArgumentNullException(nameof(array));
+            }
+
             if (arrayIndex < 0 || arrayIndex > array.Length)
+            {
                 throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+            }
+
             if (array.Length - arrayIndex < count)
+            {
                 throw new ArgumentException("目标数组空间不足。", nameof(array));
+            }
         }
 
         private sealed class DictionaryView<T> : ICollection<T>, IReadOnlyCollection<T>
         {
-            private readonly SerializedDictionary<TKey, TValue> owner;
-            private readonly Func<KeyValuePair<TKey, TValue>, T> select;
+            private readonly SerializedDictionary<TKey, TValue> _owner;
+            private readonly Func<KeyValuePair<TKey, TValue>, T> _select;
 
             public DictionaryView(SerializedDictionary<TKey, TValue> owner, Func<KeyValuePair<TKey, TValue>, T> select)
             {
-                this.owner = owner;
-                this.select = select;
+                this._owner = owner;
+                this._select = select;
             }
 
-            public int Count => owner.Count;
+            public int Count => _owner.Count;
             public bool IsReadOnly => true;
             public void Add(T item) => throw new NotSupportedException();
             public void Clear() => throw new NotSupportedException();
@@ -247,8 +309,13 @@ namespace YLFramework.Foundation
             public bool Contains(T item)
             {
                 foreach (var value in this)
+                {
                     if (EqualityComparer<T>.Default.Equals(value, item))
+                    {
                         return true;
+                    }
+                }
+
                 return false;
             }
 
@@ -256,36 +323,44 @@ namespace YLFramework.Foundation
             {
                 ValidateCopyTo(array, arrayIndex, Count);
                 foreach (var item in this)
+                {
                     array[arrayIndex++] = item;
+                }
             }
 
-            public IEnumerator<T> GetEnumerator() => new DictionaryEnumerator<T>(owner, select);
+            public IEnumerator<T> GetEnumerator() => new DictionaryEnumerator<T>(_owner, _select);
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
         private sealed class DictionaryEnumerator<T> : IEnumerator<T>
         {
-            private readonly SerializedDictionary<TKey, TValue> owner;
-            private readonly Func<KeyValuePair<TKey, TValue>, T> select;
-            private readonly int expectedVersion;
-            private int row = -1;
-            private bool hasCurrent;
+            private readonly SerializedDictionary<TKey, TValue> _owner;
+            private readonly Func<KeyValuePair<TKey, TValue>, T> _select;
+            private readonly int _expectedVersion;
+            private int _row = -1;
+            private bool _hasCurrent;
 
             public DictionaryEnumerator(SerializedDictionary<TKey, TValue> owner, Func<KeyValuePair<TKey, TValue>, T> select)
             {
                 owner.EnsureIndex();
-                this.owner = owner;
-                this.select = select;
-                expectedVersion = owner.version;
+                this._owner = owner;
+                this._select = select;
+                _expectedVersion = owner._version;
             }
 
-            public T Current { get; private set; }
+            public T Current
+            {
+                get; private set;
+            }
             object IEnumerator.Current
             {
                 get
                 {
-                    if (!hasCurrent)
+                    if (!_hasCurrent)
+                    {
                         throw new InvalidOperationException("枚举器不在有效条目上。");
+                    }
+
                     return Current;
                 }
             }
@@ -293,30 +368,35 @@ namespace YLFramework.Foundation
             public bool MoveNext()
             {
                 // 即使已枚举结束，也必须检查后续修改；yield 的结束状态会跳过此检查。
-                owner.CheckVersion(expectedVersion);
-                while (row + 1 < (owner.datas?.Count ?? 0))
+                _owner.CheckVersion(_expectedVersion);
+                while (_row + 1 < (_owner.datas?.Count ?? 0))
                 {
-                    var item = owner.datas[++row];
-                    if (item == null || item.Key is null || !owner.index.TryGetValue(item.Key, out var first) || first != row)
+                    var item = _owner.datas[++_row];
+                    if (item == null || item.Key is null || !_owner._index.TryGetValue(item.Key, out var first) || first != _row)
+                    {
                         continue;
-                    Current = select(new KeyValuePair<TKey, TValue>(item.Key, item.Value));
-                    hasCurrent = true;
+                    }
+
+                    Current = _select(new KeyValuePair<TKey, TValue>(item.Key, item.Value));
+                    _hasCurrent = true;
                     return true;
                 }
                 Current = default;
-                hasCurrent = false;
+                _hasCurrent = false;
                 return false;
             }
 
             public void Reset()
             {
-                owner.CheckVersion(expectedVersion);
-                row = -1;
+                _owner.CheckVersion(_expectedVersion);
+                _row = -1;
                 Current = default;
-                hasCurrent = false;
+                _hasCurrent = false;
             }
 
-            public void Dispose() { }
+            public void Dispose()
+            {
+            }
         }
     }
 #endif

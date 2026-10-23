@@ -1,10 +1,10 @@
-using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 using Object = UnityEngine.Object;
 
@@ -12,78 +12,112 @@ namespace YLFramework.Tests.Actions
 {
     public class ScreenTransitionPlayModeTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private readonly List<IActionController> mControllers = new List<IActionController>();
-        private ScreenTransitionCanvas mCanvas;
-        private ActionRecycleDriver mPreviousRecycle;
-        private float mTimeScale;
-        private bool mOwnEnvironment;
-        private bool mOwnActionSession;
+        private readonly List<IAction> _actions = new List<IAction>();
+        private readonly List<IActionController> _controllers = new List<IActionController>();
+        private ScreenTransitionCanvas _canvas;
+        private ActionRecycleDriver _previousRecycle;
+        private float _timeScale;
+        private bool _ownsEnvironment;
+        private bool _ownsActionSession;
 
         [SetUp]
         public void SetUp()
         {
-            mOwnEnvironment = false;
-            mOwnActionSession = false;
+            _ownsEnvironment = false;
+            _ownsActionSession = false;
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
-            mTimeScale = Time.timeScale;
-            mPreviousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _timeScale = Time.timeScale;
+            _previousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
             Assert.That(Object.FindObjectOfType<ScreenTransitionCanvas>() == null, Is.True,
                 "This fixture must own its transition canvas.");
             Assert.That(Object.FindObjectOfType<ActionGlobalHost>(true) == null, Is.True,
                 "This fixture must own its global executor.");
             Assert.That(Resources.Load<GameObject>(ScreenTransitionCanvas.ResourcePath), Is.Not.Null,
                 "Run YLFramework > Action > 创建屏幕过渡资源 once, outside Play Mode.");
-            mOwnEnvironment = true;
-            mOwnActionSession = canOwnActionSession;
+            _ownsEnvironment = true;
+            _ownsActionSession = canOwnActionSession;
             Time.timeScale = 1;
             ActionQueue.Drain();
-            mCanvas = ScreenTransitionCanvas.Instance;
+            _canvas = ScreenTransitionCanvas.Instance;
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
         private IActionController Track(IActionController controller)
         {
-            mControllers.Add(controller);
+            _controllers.Add(controller);
             return controller;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!mOwnEnvironment) yield break;
-            Time.timeScale = mTimeScale;
+            if (!_ownsEnvironment)
+            {
+                yield break;
+            }
+
+            Time.timeScale = _timeScale;
             var host = Object.FindObjectOfType<ActionGlobalHost>(true);
-            if (host) Object.Destroy(host.gameObject);
+            if (host)
+            {
+                Object.Destroy(host.gameObject);
+            }
+
             var canvas = Object.FindObjectOfType<ScreenTransitionCanvas>();
-            if (canvas) Object.Destroy(canvas.gameObject);
+            if (canvas)
+            {
+                Object.Destroy(canvas.gameObject);
+            }
+
             yield return null;
-            foreach (var action in mActions)
+            foreach (var action in _actions)
             {
                 if (action is ScreenTransitionInOut<ScreenTransitionFade, ScreenTransitionFade> fadeInOut)
+                {
                     fadeInOut.In(null).Out(null).OnInFinish(null);
+                }
+
                 if (action is ScreenTransitionInOut<Probe, Probe> probeInOut)
+                {
                     probeInOut.In(null).Out(null).OnInFinish(null);
-                if (!action.Deinited) action.Deinit();
+                }
+
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            foreach (var controller in mControllers)
+            foreach (var controller in _controllers)
             {
-                if (controller.Action != null) controller.Recycle();
+                if (controller.Action != null)
+                {
+                    controller.Recycle();
+                }
             }
-            mActions.Clear();
-            mControllers.Clear();
+            _actions.Clear();
+            _controllers.Clear();
             ActionQueue.Drain();
             var recycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
-            if (recycle && recycle != mPreviousRecycle) Object.Destroy(recycle.gameObject);
-            if (mOwnActionSession)
+            if (recycle && recycle != _previousRecycle)
             {
-                try { Kit.Shutdown(); }
-                finally { mOwnActionSession = false; }
+                Object.Destroy(recycle.gameObject);
+            }
+
+            if (_ownsActionSession)
+            {
+                try
+                {
+                    Kit.Shutdown();
+                }
+                finally
+                {
+                    _ownsActionSession = false;
+                }
             }
             yield return null;
         }
@@ -97,7 +131,10 @@ namespace YLFramework.Tests.Actions
             public override void OnStart() => Trace?.Add(Name + ".start");
             public override void OnExecute(float dt)
             {
-                if (Ready) this.Finish();
+                if (Ready)
+                {
+                    this.Finish();
+                }
             }
             public override void OnFinish() => Trace?.Add(Name + ".finish");
             protected override void OnDeinit()
@@ -112,18 +149,22 @@ namespace YLFramework.Tests.Actions
         private static IEnumerator Until(Func<bool> condition)
         {
             var end = Time.realtimeSinceStartup + 2f;
-            while (!condition() && Time.realtimeSinceStartup < end) yield return null;
+            while (!condition() && Time.realtimeSinceStartup < end)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "The expected transition did not complete within the test bound.");
         }
 
         [UnityTest]
         public IEnumerator NewResourceInstantiatesOnePersistentCanvasAndKeepsTheImageReference()
         {
-            Assert.That(mCanvas, Is.Not.Null);
-            Assert.That(mCanvas.ColorImage, Is.Not.Null);
-            Assert.That(ScreenTransitionCanvas.Instance, Is.SameAs(mCanvas));
+            Assert.That(_canvas, Is.Not.Null);
+            Assert.That(_canvas.colorImage, Is.Not.Null);
+            Assert.That(ScreenTransitionCanvas.Instance, Is.SameAs(_canvas));
             Assert.That(Object.FindObjectsOfType<ScreenTransitionCanvas>().Length, Is.EqualTo(1));
-            Assert.That(mCanvas.gameObject.scene.name, Is.EqualTo("DontDestroyOnLoad"));
+            Assert.That(_canvas.gameObject.scene.name, Is.EqualTo("DontDestroyOnLoad"));
             yield return null;
         }
 
@@ -136,8 +177,8 @@ namespace YLFramework.Tests.Actions
                 .Append(Own(Kit.ScreenTransition.FadeOut().Duration(0.01f))));
             var controller = Track(sequence.StartGlobal(() => completed++));
             yield return Until(() => completed == 1);
-            Assert.That(mCanvas.ColorImage.color.a, Is.Zero);
-            Assert.That(sequence.Deinited, Is.True);
+            Assert.That(_canvas.colorImage.color.a, Is.Zero);
+            Assert.That(sequence.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -153,7 +194,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(completed, Is.Zero);
             controller.IgnoreTimeScale();
             yield return Until(() => completed == 1);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(1));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(1));
         }
 
         [UnityTest]
@@ -167,13 +208,13 @@ namespace YLFramework.Tests.Actions
                 .Out(fade => outFade = Own(fade).Duration(0.01f))
                 .OnInFinish(() =>
                 {
-                    Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(1));
+                    Assert.That(_canvas.colorImage.color.a, Is.EqualTo(1));
                     middle++;
                 }));
             Track(transition.StartGlobal(() => finished++));
-            yield return Until(() => outFade != null && outFade.Deinited);
+            yield return Until(() => outFade != null && outFade.IsDeinitialized);
             Assert.That(middle, Is.EqualTo(1));
-            Assert.That(mCanvas.ColorImage.color.a, Is.Zero);
+            Assert.That(_canvas.colorImage.color.a, Is.Zero);
             Assert.That(transition.Status, Is.EqualTo(ActionStatus.Started), "AK-912 remains open.");
             Assert.That(finished, Is.Zero);
         }
@@ -185,14 +226,24 @@ namespace YLFramework.Tests.Actions
             var input = Own(Probe.Allocate());
             var output = Own(Probe.Allocate());
             var parent = Own(ScreenTransitionInOut<Probe, Probe>.Allocate(input, output)
-                .In(value => { value.Trace = trace; value.Name = "in"; value.Ready = true; })
-                .Out(value => { value.Trace = trace; value.Name = "out"; value.Ready = true; })
+                .In(value =>
+                {
+                    value.Trace = trace;
+                    value.Name = "in";
+                    value.Ready = true;
+                })
+                .Out(value =>
+                {
+                    value.Trace = trace;
+                    value.Name = "out";
+                    value.Ready = true;
+                })
                 .OnInFinish(() => trace.Add("middle")));
             var controller = Track(parent.StartGlobal());
             controller.Pause();
-            yield return Until(() => output.Deinited);
+            yield return Until(() => output.IsDeinitialized);
             CollectionAssert.AreEqual(new[] { "in.start", "in.finish", "middle", "out.start", "out.finish" }, trace);
-            Assert.That(parent.Paused, Is.True);
+            Assert.That(parent.IsPaused, Is.True);
             Assert.That(parent.Status, Is.EqualTo(ActionStatus.Started));
         }
 
@@ -206,22 +257,22 @@ namespace YLFramework.Tests.Actions
             var parent = Own(ScreenTransitionInOut<Probe, Probe>.Allocate(input, output).OnInFinish(() => middle++));
             Track(parent.StartGlobal());
             parent.Deinit();
-            Assert.That(input.Deinited, Is.False);
+            Assert.That(input.IsDeinitialized, Is.False);
             input.Ready = true;
-            yield return Until(() => output.Deinited);
+            yield return Until(() => output.IsDeinitialized);
             Assert.That(middle, Is.EqualTo(1), "AK-912: parent cancellation is not propagated to the child sequence.");
         }
 
         [UnityTest]
         public IEnumerator DestroyedCanvasIsRecreatedFromTheNewResource()
         {
-            var previous = mCanvas;
+            var previous = _canvas;
             Object.Destroy(previous.gameObject);
             yield return null;
             Assert.That(previous == null, Is.True);
-            mCanvas = ScreenTransitionCanvas.Instance;
-            Assert.That(mCanvas, Is.Not.Null);
-            Assert.That(mCanvas.ColorImage, Is.Not.Null);
+            _canvas = ScreenTransitionCanvas.Instance;
+            Assert.That(_canvas, Is.Not.Null);
+            Assert.That(_canvas.colorImage, Is.Not.Null);
             Assert.That(Object.FindObjectsOfType<ScreenTransitionCanvas>().Length, Is.EqualTo(1));
         }
     }

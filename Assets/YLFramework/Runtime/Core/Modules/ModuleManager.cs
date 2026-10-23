@@ -1,4 +1,4 @@
-using System; 
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 #if UNITY_EDITOR
@@ -9,7 +9,7 @@ using YLFramework.Foundation;
 using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
 
 namespace YLFramework.Core
-{ 
+{
 
     public class ModuleManager
     {
@@ -27,8 +27,8 @@ namespace YLFramework.Core
                 {
                     _instance = new ModuleManager();
 #if UNITY_EDITOR
-                    EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
-                    EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
+                    EditorApplication.playModeStateChanged -= EditorApplicationPlayModeStateChanged;
+                    EditorApplication.playModeStateChanged += EditorApplicationPlayModeStateChanged;
 #endif
                 }
 #pragma warning restore IDE0074 // 使用复合分配
@@ -40,7 +40,7 @@ namespace YLFramework.Core
 
 #if UNITY_EDITOR
 
-        private static void EditorApplication_playModeStateChanged(PlayModeStateChange obj)
+        private static void EditorApplicationPlayModeStateChanged(PlayModeStateChange obj)
         {
             // Edit > Project Settings > Editor >  Enter Play Mode Settings > Reload Domain 
             // 该选项如果禁用掉,重新运行时静态数据不会清空,可能会导致异常,所以这里置空,防止异常
@@ -59,26 +59,26 @@ namespace YLFramework.Core
 
         private ModuleManager()
         {
-            allModules = new ReadOnlyDictionary<string, Module>(modules);
-            allBaseModules = new ReadOnlyDictionary<string, Module>(baseModules);
+            _allModules = new ReadOnlyDictionary<string, Module>(_modules);
+            _allBaseModules = new ReadOnlyDictionary<string, Module>(_baseModules);
         }
 
         #endregion
 
         #region 字段
 
-        private readonly Dictionary<string, Module> modules = new Dictionary<string, Module>();
+        private readonly Dictionary<string, Module> _modules = new Dictionary<string, Module>();
 
-        private readonly Dictionary<string, Module> baseModules = new Dictionary<string, Module>();
-        private readonly IReadOnlyDictionary<string, Module> allModules;
-        private readonly IReadOnlyDictionary<string, Module> allBaseModules;
-        private readonly Dictionary<Type, StartUpModuleRequest> startingModules = new Dictionary<Type, StartUpModuleRequest>();
-        private readonly HashSet<Type> creatingModules = new HashSet<Type>();
-        private readonly List<Module> registrationOrder = new List<Module>();
-        private bool shuttingDown;
- 
-        private Module current_module;
-        private Module startupContext;
+        private readonly Dictionary<string, Module> _baseModules = new Dictionary<string, Module>();
+        private readonly IReadOnlyDictionary<string, Module> _allModules;
+        private readonly IReadOnlyDictionary<string, Module> _allBaseModules;
+        private readonly Dictionary<Type, StartUpModuleRequest> _startingModules = new Dictionary<Type, StartUpModuleRequest>();
+        private readonly HashSet<Type> _creatingModules = new HashSet<Type>();
+        private readonly List<Module> _registrationOrder = new List<Module>();
+        private bool _isShuttingDown;
+
+        private Module _currentModule;
+        private Module _startupContext;
 
         #endregion
 
@@ -90,21 +90,23 @@ namespace YLFramework.Core
         /// <summary>
         /// 所有已注册模块的只读实时视图；Starting可见不代表已经Running。
         /// </summary>
-        public static IReadOnlyDictionary<string, Module> AllModules => Instance.allModules;
+        public static IReadOnlyDictionary<string, Module> AllModules => Instance._allModules;
 
         /// <summary>
         /// 已注册基础模块的只读实时视图，不允许外部修改权威索引。
         /// </summary>
-        public static IReadOnlyDictionary<string, Module> AllBaseModules => Instance.allBaseModules;
-         
+        public static IReadOnlyDictionary<string, Module> AllBaseModules => Instance._allBaseModules;
+
 
         private static Module CurrentModule
         {
-            get { 
-                return Instance.current_module;
+            get
+            {
+                return Instance._currentModule;
             }
-            set {
-                Instance.current_module = value;
+            set
+            {
+                Instance._currentModule = value;
             }
         }
 
@@ -119,20 +121,37 @@ namespace YLFramework.Core
         internal static void AddModule(Module module)
         {
 
-            if (module == null) throw new ArgumentNullException(nameof(module));
-            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot register a Module during Shutdown.");
-            if (Instance.modules.TryGetValue(module.ModuleName, out var registered))
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
+            if (Instance._isShuttingDown)
+            {
+                throw new InvalidOperationException("Cannot register a Module during Shutdown.");
+            }
+
+            if (Instance._modules.TryGetValue(module.ModuleName, out var registered))
             {
                 if (!ReferenceEquals(registered, module))
+                {
                     throw new InvalidOperationException($"Module already registered: {module.ModuleName}");
+                }
+
                 return;
             }
             if (module.State == ModuleState.Closed || module.State == ModuleState.Closing || module.State == ModuleState.CloseFailed)
+            {
                 throw new InvalidOperationException($"Cannot register Module in state {module.State}: {module.ModuleName}");
-            Instance.modules.Add(module.ModuleName, module);
+            }
+
+            Instance._modules.Add(module.ModuleName, module);
             module.ViewLifecycle = new object();
-            Instance.registrationOrder.Add(module);
-            if (module.BaseModule) Instance.baseModules.Add(module.ModuleName, module);
+            Instance._registrationOrder.Add(module);
+            if (module.IsBaseModule)
+            {
+                Instance._baseModules.Add(module.ModuleName, module);
+            }
         }
 
         /// <summary>
@@ -167,7 +186,11 @@ namespace YLFramework.Core
         /// </summary>
         public static Module GetModule(Type moduleType)
         {
-            if (moduleType == null) throw new ArgumentNullException(nameof(moduleType));
+            if (moduleType == null)
+            {
+                throw new ArgumentNullException(nameof(moduleType));
+            }
+
             var module = GetModule(moduleType.FullName);
             return module != null && module.GetType() == moduleType ? module : null;
         }
@@ -195,86 +218,172 @@ namespace YLFramework.Core
         private static void ValidateClose(Module module)
         {
             if (module.State == ModuleState.Starting)
+            {
                 throw new InvalidOperationException($"Cannot close a starting Module: {module.ModuleName}");
+            }
+
             ValidateObjectTransactions(module);
         }
 
         private static void ValidateObjectTransactions(Module module)
         {
-            if (module.viewTransactions != 0)
+            if (module.ViewTransactions != 0)
+            {
                 throw new InvalidOperationException("Cannot start or close a Module during View initialization or exit.");
+            }
             // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
-            if (module.creatingModels.Count != 0 || module.creatingControllers.Count != 0)
+            if (module.CreatingModels.Count != 0 || module.CreatingControllers.Count != 0)
+            {
                 throw new InvalidOperationException("Cannot start or close a Module during object construction.");
-            foreach (var controller in module.controllers.Values)
+            }
+
+            foreach (var controller in module.Controllers.Values)
+            {
                 if (controller.IsInitializing || controller.IsExiting)
+                {
                     throw new InvalidOperationException("Cannot start or close a Module during Controller initialization or exit.");
-            foreach (var bucket in module.models.Values)
+                }
+            }
+
+            foreach (var bucket in module.Models.Values)
+            {
                 foreach (var model in bucket.Values)
+                {
                     if (model.IsInitializing || model.IsExiting)
+                    {
                         throw new InvalidOperationException("Cannot start or close a Module during Model initialization or exit.");
+                    }
+                }
+            }
         }
 
         private static void CloseModule(Module module, bool allowBaseModule, List<IPendingViewRequest> deferredNotifications = null)
         {
-            if (!ReferenceEquals(GetModule(module.ModuleName), module)) return;
-            if (module.State == ModuleState.Closing) return;
-            if (!allowBaseModule && Instance.shuttingDown)
+            if (!ReferenceEquals(GetModule(module.ModuleName), module))
+            {
+                return;
+            }
+
+            if (module.State == ModuleState.Closing)
+            {
+                return;
+            }
+
+            if (!allowBaseModule && Instance._isShuttingDown)
+            {
                 throw new InvalidOperationException("Cannot close another Module during Shutdown.");
-            if (!allowBaseModule && module.BaseModule)
+            }
+
+            if (!allowBaseModule && module.IsBaseModule)
+            {
                 throw new InvalidOperationException("基础模块不能关闭! 请使用ModuleManager.Shutdown。");
+            }
+
             ValidateClose(module);
             module.State = ModuleState.Closing;
             var errors = new List<Exception>();
             module.ViewLifecycle = null;
-            var pendingViews = new List<IPendingViewRequest>(module.pendingViews);
+            var pendingViews = new List<IPendingViewRequest>(module.PendingViews);
             foreach (var pending in pendingViews)
             {
-                try { pending.Invalidate(); }
-                catch (Exception error) { errors.Add(error); }
+                try
+                {
+                    pending.Invalidate();
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
             }
             // 保存会话身份，钩子内关闭并复用的实例不能被旧快照再次退出。
             var views = ViewManager.Snapshot(module);
-            try { module.Exit(); }
-            catch (Exception error) { errors.Add(error); }
-
-            foreach (var controller in new List<Controller>(module.controllers.Values))
+            try
             {
-                try { module.RemoveController(controller); }
-                catch (Exception error) { errors.Add(error); }
+                module.Exit();
+            }
+            catch (Exception error)
+            {
+                errors.Add(error);
+            }
+
+            foreach (var controller in new List<Controller>(module.Controllers.Values))
+            {
+                try
+                {
+                    module.RemoveController(controller);
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
             }
 
             foreach (var session in views)
             {
-                try { ViewManager.RemoveView(module, session.Key, session.Value, !session.Key); }
-                catch (Exception error) { errors.Add(error); }
+                try
+                {
+                    ViewManager.RemoveView(module, session.Key, session.Value, !session.Key);
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
             }
 
             foreach (var model in module.GetModels<Model>())
             {
-                try { module.RemoveModel(model); }
-                catch (Exception error) { errors.Add(error); }
+                try
+                {
+                    module.RemoveModel(model);
+                }
+                catch (Exception error)
+                {
+                    errors.Add(error);
+                }
             }
 
-            Instance.modules.Remove(module.ModuleName);
-            Instance.baseModules.Remove(module.ModuleName);
-            Instance.registrationOrder.RemoveAll(item => ReferenceEquals(item, module));
-            if (ReferenceEquals(module, CurrentModule)) CurrentModule = null;
-            if (ReferenceEquals(module, Instance.startupContext)) Instance.startupContext = null;
-            module.controllers.Clear();
-            module.models.Clear();
-            module.views.Clear();
-            module.type_views.Clear();
-            module.ownedViews.Clear();
+            Instance._modules.Remove(module.ModuleName);
+            Instance._baseModules.Remove(module.ModuleName);
+            Instance._registrationOrder.RemoveAll(item => ReferenceEquals(item, module));
+            if (ReferenceEquals(module, CurrentModule))
+            {
+                CurrentModule = null;
+            }
+
+            if (ReferenceEquals(module, Instance._startupContext))
+            {
+                Instance._startupContext = null;
+            }
+
+            module.Controllers.Clear();
+            module.Models.Clear();
+            module.Views.Clear();
+            module.TypeViews.Clear();
+            module.OwnedViews.Clear();
             module.State = ModuleState.Closed;
-            if (deferredNotifications != null) deferredNotifications.AddRange(pendingViews);
+            if (deferredNotifications != null)
+            {
+                deferredNotifications.AddRange(pendingViews);
+            }
             else
+            {
                 foreach (var pending in pendingViews)
                 {
-                    try { pending.PublishInvalidation(); }
-                    catch (Exception error) { errors.Add(error); }
+                    try
+                    {
+                        pending.PublishInvalidation();
+                    }
+                    catch (Exception error)
+                    {
+                        errors.Add(error);
+                    }
                 }
-            if (errors.Count != 0) throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors).Flatten();
+            }
+
+            if (errors.Count != 0)
+            {
+                throw new AggregateException($"Module close cleanup failed: {module.ModuleName}", errors).Flatten();
+            }
         }
 
         /// <summary>
@@ -283,54 +392,115 @@ namespace YLFramework.Core
         /// </summary>
         public static void Shutdown()
         {
-            if (Instance.shuttingDown) return;
+            if (Instance._isShuttingDown)
+            {
+                return;
+            }
+
             var order = new List<Module>();
             for (int group = 0; group < 2; group++)
-                for (int i = Instance.registrationOrder.Count - 1; i >= 0; i--)
+            {
+                for (int i = Instance._registrationOrder.Count - 1; i >= 0; i--)
                 {
-                    var module = Instance.registrationOrder[i];
-                    if (!ReferenceEquals(GetModule(module.ModuleName), module)) continue;
-                    if (Instance.baseModules.ContainsKey(module.ModuleName) != (group == 1)) continue;
+                    var module = Instance._registrationOrder[i];
+                    if (!ReferenceEquals(GetModule(module.ModuleName), module))
+                    {
+                        continue;
+                    }
+
+                    if (Instance._baseModules.ContainsKey(module.ModuleName) != (group == 1))
+                    {
+                        continue;
+                    }
+
                     if (module.State == ModuleState.Closing)
+                    {
                         throw new InvalidOperationException("Cannot begin Shutdown during Module close.");
+                    }
+
                     ValidateClose(module);
                     order.Add(module);
                 }
+            }
+
             var errors = new List<Exception>();
-            Instance.shuttingDown = true;
+            Instance._isShuttingDown = true;
             try
             {
                 foreach (var module in order)
                 {
-                    try { CloseModule(module, true); }
-                    catch (Exception error) { errors.Add(error); }
+                    try
+                    {
+                        CloseModule(module, true);
+                    }
+                    catch (Exception error)
+                    {
+                        errors.Add(error);
+                    }
                 }
             }
-            finally { Instance.shuttingDown = false; }
-            if (errors.Count != 0) throw new AggregateException("Module Shutdown cleanup failed.", errors).Flatten();
+            finally
+            {
+                Instance._isShuttingDown = false;
+            }
+            if (errors.Count != 0)
+            {
+                throw new AggregateException("Module Shutdown cleanup failed.", errors).Flatten();
+            }
         }
 
         internal static List<string> ViewResourceProjects(Module owner)
         {
             var projects = new List<string> { owner.ProjectName };
-            foreach (var module in Instance.registrationOrder)
-                if (Instance.baseModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) &&
+            foreach (var module in Instance._registrationOrder)
+            {
+                if (Instance._baseModules.TryGetValue(module.ModuleName, out var registered) && ReferenceEquals(registered, module) &&
                     (module.State == ModuleState.Starting || module.State == ModuleState.Running) &&
                     !projects.Contains(module.ProjectName))
+                {
                     projects.Add(module.ProjectName);
+                }
+            }
+
             return projects;
         }
 
         private static bool HasRegisteredObjects(Module module)
         {
-            if (module.ownedViews.Count != 0) return true;
-            if (module.controllers.Count != 0) return true;
-            foreach (var bucket in module.models.Values)
-                if (bucket.Count != 0) return true;
-            foreach (var bucket in module.views.Values)
-                if (bucket.Count != 0) return true;
-            foreach (var bucket in module.type_views.Values)
-                if (bucket.Count != 0) return true;
+            if (module.OwnedViews.Count != 0)
+            {
+                return true;
+            }
+
+            if (module.Controllers.Count != 0)
+            {
+                return true;
+            }
+
+            foreach (var bucket in module.Models.Values)
+            {
+                if (bucket.Count != 0)
+                {
+                    return true;
+                }
+            }
+
+            foreach (var bucket in module.Views.Values)
+            {
+                if (bucket.Count != 0)
+                {
+                    return true;
+                }
+            }
+
+            foreach (var bucket in module.TypeViews.Values)
+            {
+                if (bucket.Count != 0)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -353,18 +523,38 @@ namespace YLFramework.Core
         /// <exception cref="Exception"></exception>
         public static StartUpModuleRequest StartUpModule(Module module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
-            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot start a Module during Shutdown.");
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
+            if (Instance._isShuttingDown)
+            {
+                throw new InvalidOperationException("Cannot start a Module during Shutdown.");
+            }
+
             var type = module.GetType();
-            if (Instance.creatingModules.Contains(type))
+            if (Instance._creatingModules.Contains(type))
+            {
                 throw new InvalidOperationException($"Module construction is in progress: {module.ModuleName}");
+            }
+
             var registered = GetModule(module.ModuleName);
             if (registered != null && !ReferenceEquals(registered, module))
+            {
                 throw new InvalidOperationException($"Module already registered: {module.ModuleName}");
+            }
+
             if ((module.State == ModuleState.Starting || module.State == ModuleState.Running) && !ReferenceEquals(registered, module))
+            {
                 throw new InvalidOperationException($"Module lifecycle has no matching registration: {module.ModuleName}");
+            }
+
             if (module.State == ModuleState.Starting)
-                return Instance.startingModules[type];
+            {
+                return Instance._startingModules[type];
+            }
+
             if (module.State == ModuleState.Running)
             {
                 var completed = new StartUpModuleRequest(module);
@@ -372,27 +562,40 @@ namespace YLFramework.Core
                 return completed;
             }
             if (module.State != ModuleState.Created && module.State != ModuleState.Closed)
+            {
                 throw new InvalidOperationException($"Module must be cleaned before restarting: {module.ModuleName} ({module.State})");
+            }
+
             if (module.State == ModuleState.Closed && HasRegisteredObjects(module))
+            {
                 throw new InvalidOperationException($"Closed Module still owns registered objects: {module.ModuleName}");
+            }
             // 不能让启动回滚与尚未结束的B对象事务交叉；拒绝发生在本次注册和请求之前。
             ValidateObjectTransactions(module);
             var request = new StartUpModuleRequest(module, CurrentModule);
             // 发布记录后才执行注册、协程和任何业务回调，支持无yield的同步完成与重入。
             module.State = ModuleState.Starting;
-            Instance.startingModules.Add(type, request);
+            Instance._startingModules.Add(type, request);
             try
             {
                 AddModule(module);
                 CurrentModule = module;
                 var coroutine = CoroutineStarter.Start(request.StartUp());
-                if (coroutine == null && !request.isDone)
+                if (coroutine == null && !request.IsDone)
+                {
                     request.Finish(new InvalidOperationException("Module startup requires an active coroutine host."));
+                }
             }
             catch (Exception error)
             {
-                if (!request.isDone) request.Finish(error);
-                else Debug.LogException(error);
+                if (!request.IsDone)
+                {
+                    request.Finish(error);
+                }
+                else
+                {
+                    Debug.LogException(error);
+                }
             }
             return request;
         }
@@ -400,7 +603,11 @@ namespace YLFramework.Core
         internal static void CompleteStartup(StartUpModuleRequest request, Exception error)
         {
             var module = request.Module;
-            if (!Instance.startingModules.TryGetValue(module.GetType(), out var pending) || !ReferenceEquals(pending, request)) return;
+            if (!Instance._startingModules.TryGetValue(module.GetType(), out var pending) || !ReferenceEquals(pending, request))
+            {
+                return;
+            }
+
             bool restoreCurrent = ReferenceEquals(CurrentModule, module);
             var deferredNotifications = new List<IPendingViewRequest>();
             try
@@ -414,32 +621,56 @@ namespace YLFramework.Core
                 {
                     // 启动事务已展开完毕；只绕过Starting和基础模块禁令，复用D的唯一管线。
                     module.State = ModuleState.StartFailed;
-                    try { CloseModule(module, true, deferredNotifications); }
-                    catch (Exception cleanupError) { StartUpModuleRequest.AttachCleanupError(error, cleanupError); }
+                    try
+                    {
+                        CloseModule(module, true, deferredNotifications);
+                    }
+                    catch (Exception cleanupError)
+                    {
+                        StartUpModuleRequest.AttachCleanupError(error, cleanupError);
+                    }
                 }
-                else module.State = request.InitialState;
+                else
+                {
+                    module.State = request.InitialState;
+                }
             }
             finally
             {
-                Instance.startingModules.Remove(module.GetType());
+                Instance._startingModules.Remove(module.GetType());
                 if (error != null && restoreCurrent && (CurrentModule == null || ReferenceEquals(CurrentModule, module)))
+                {
                     CurrentModule = IsCurrentCandidate(request.PreviousCurrentModule) ? request.PreviousCurrentModule : null;
+                }
+
                 request.PreviousCurrentModule = null;
                 // View通知可重启同一实例；旧启动记录与上下文必须先完成收尾。
                 foreach (var pendingView in deferredNotifications)
                 {
-                    try { pendingView.PublishInvalidation(); }
-                    catch (Exception notificationError) { Debug.LogException(notificationError); }
+                    try
+                    {
+                        pendingView.PublishInvalidation();
+                    }
+                    catch (Exception notificationError)
+                    {
+                        Debug.LogException(notificationError);
+                    }
                 }
             }
         }
 
         internal static bool MoveStartup(Module module, System.Collections.IEnumerator routine)
         {
-            var previous = Instance.startupContext;
-            Instance.startupContext = module;
-            try { return routine.MoveNext(); }
-            finally { Instance.startupContext = IsCurrentCandidate(previous) ? previous : null; }
+            var previous = Instance._startupContext;
+            Instance._startupContext = module;
+            try
+            {
+                return routine.MoveNext();
+            }
+            finally
+            {
+                Instance._startupContext = IsCurrentCandidate(previous) ? previous : null;
+            }
         }
 
         private static bool IsCurrentCandidate(Module module)
@@ -456,22 +687,45 @@ namespace YLFramework.Core
         /// <exception cref="Exception"></exception>
         public static StartUpModuleRequest StartUpModule(Type moduleType)
         {
-            if (Instance.shuttingDown) throw new InvalidOperationException("Cannot start a Module during Shutdown.");
-            if (moduleType == null) throw new ArgumentNullException(nameof(moduleType));
+            if (Instance._isShuttingDown)
+            {
+                throw new InvalidOperationException("Cannot start a Module during Shutdown.");
+            }
+
+            if (moduleType == null)
+            {
+                throw new ArgumentNullException(nameof(moduleType));
+            }
+
             if (!typeof(Module).IsAssignableFrom(moduleType) || moduleType.IsAbstract || moduleType.ContainsGenericParameters)
+            {
                 throw new ArgumentException("A concrete Module type is required.", nameof(moduleType));
+            }
+
             var registered = GetModule(moduleType.FullName);
             if (registered != null)
             {
                 if (registered.GetType() != moduleType)
+                {
                     throw new InvalidOperationException($"Module name already registered: {moduleType.FullName}");
+                }
+
                 return StartUpModule(registered);
             }
-            if (!Instance.creatingModules.Add(moduleType))
+            if (!Instance._creatingModules.Add(moduleType))
+            {
                 throw new InvalidOperationException($"Module construction is in progress: {moduleType.FullName}");
+            }
+
             Module module;
-            try { module = (Module)Activator.CreateInstance(moduleType); }
-            finally { Instance.creatingModules.Remove(moduleType); }
+            try
+            {
+                module = (Module)Activator.CreateInstance(moduleType);
+            }
+            finally
+            {
+                Instance._creatingModules.Remove(moduleType);
+            }
             return StartUpModule(module);
         }
 
@@ -480,7 +734,7 @@ namespace YLFramework.Core
         /// </summary>
         /// <typeparam name="T">模块类型</typeparam>
         /// <returns></returns>
-        public static StartUpModuleRequest StartUpModule<T>() where T : Module,new()
+        public static StartUpModuleRequest StartUpModule<T>() where T : Module, new()
         {
             return StartUpModule(typeof(T));
         }
@@ -504,12 +758,32 @@ namespace YLFramework.Core
         /// <returns></returns>
         internal static Module GetCurrentModule()
         {
-            if (IsCurrentCandidate(Instance.startupContext)) return Instance.startupContext;
-            if (IsCurrentCandidate(CurrentModule)) return CurrentModule;
+            if (IsCurrentCandidate(Instance._startupContext))
+            {
+                return Instance._startupContext;
+            }
+
+            if (IsCurrentCandidate(CurrentModule))
+            {
+                return CurrentModule;
+            }
+
             foreach (var item in AllModules.Values)
-                if (IsCurrentCandidate(item) && !AllBaseModules.ContainsKey(item.ModuleName)) return item;
+            {
+                if (IsCurrentCandidate(item) && !AllBaseModules.ContainsKey(item.ModuleName))
+                {
+                    return item;
+                }
+            }
+
             foreach (var item in AllBaseModules.Values)
-                if (IsCurrentCandidate(item)) return item;
+            {
+                if (IsCurrentCandidate(item))
+                {
+                    return item;
+                }
+            }
+
             return null;
         }
 

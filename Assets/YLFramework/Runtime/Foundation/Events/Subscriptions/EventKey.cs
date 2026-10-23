@@ -8,7 +8,14 @@ namespace YLFramework.Events
     /// </summary>
     public readonly struct EventKey : IEquatable<EventKey>
     {
-        private enum KeyKind : byte { Invalid, String, Int, Enum, Type }
+        private enum KeyKind : byte
+        {
+            Invalid,
+            String,
+            Int,
+            Enum,
+            Type
+        }
 
         private readonly KeyKind _kind;
         private readonly object _value;
@@ -60,7 +67,11 @@ namespace YLFramework.Events
 
         public bool Equals(EventKey other)
         {
-            if (_kind != other._kind) return false;
+            if (_kind != other._kind)
+            {
+                return false;
+            }
+
             switch (_kind)
             {
                 case KeyKind.String:
@@ -92,11 +103,16 @@ namespace YLFramework.Events
         {
             switch (_kind)
             {
-                case KeyKind.String: return $"string:\"{_value}\"";
-                case KeyKind.Int: return $"int:{_intValue}";
-                case KeyKind.Enum: return $"enum:{_value.GetType().FullName}:{((Enum)_value).ToString("D")}";
-                case KeyKind.Type: return $"type:{((Type)_value).FullName}";
-                default: return "invalid";
+                case KeyKind.String:
+                    return $"string:\"{_value}\"";
+                case KeyKind.Int:
+                    return $"int:{_intValue}";
+                case KeyKind.Enum:
+                    return $"enum:{_value.GetType().FullName}:{((Enum)_value).ToString("D")}";
+                case KeyKind.Type:
+                    return $"type:{((Type)_value).FullName}";
+                default:
+                    return "invalid";
             }
         }
     }

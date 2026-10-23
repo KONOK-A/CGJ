@@ -16,14 +16,41 @@ namespace YLFramework.Tests.EquipmentAcceptance
     public static class EquipmentBuild
     {
         private const string Key = "YLFramework.Equipment.Acceptance.Build";
-        [Serializable] private sealed class Job { public string gate, output, run, archive; public bool il2cpp, exit; }
-        private static int stableFrames;
-        static EquipmentBuild() { if (SessionState.GetString(Key, "").Length != 0) EditorApplication.update += Resume; }
-        private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
-        private static string Hash(string path) { using var sha = SHA256.Create(); return BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", ""); }
+        [Serializable]
+        private sealed class Job
+        {
+            public string gate;
+            public string output;
+            public string run;
+            public string archive;
+            public bool il2cpp;
+            public bool exit;
+        }
+        private static int _stableFrames;
+        static EquipmentBuild()
+        {
+            if (SessionState.GetString(Key, "").Length != 0)
+            {
+                EditorApplication.update += Resume;
+            }
+        }
+        private static void Require(bool value, string message)
+        {
+            if (!value)
+            {
+                throw new InvalidOperationException(message);
+            }
+        }
+        private static string Hash(string path)
+        {
+            using var sha = SHA256.Create();
+            return BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "");
+        }
         private static void Write(string path, object value)
         {
-            var temp = path + ".tmp"; File.WriteAllText(temp, JsonConvert.SerializeObject(value, Formatting.Indented)); File.Move(temp, path);
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, JsonConvert.SerializeObject(value, Formatting.Indented));
+            File.Move(temp, path);
         }
         public static void Queue(string gate, string output, bool il2cpp) => Queue(gate, output, il2cpp, false);
         private static void Queue(string gate, string output, bool il2cpp, bool exit, string archive = null)
@@ -33,17 +60,31 @@ namespace YLFramework.Tests.EquipmentAcceptance
             output = Path.GetFullPath(output);
             Require(output.StartsWith(temp, StringComparison.OrdinalIgnoreCase) && !Directory.Exists(output), "Expected a new, approved short temporary build output.");
             EquipmentSettings.Capture(gate);
-            if (archive != null) Require(Path.GetFullPath(archive).StartsWith(temp, StringComparison.OrdinalIgnoreCase) && !Directory.Exists(archive), "Expected a new owned gate archive.");
+            if (archive != null)
+            {
+                Require(Path.GetFullPath(archive).StartsWith(temp, StringComparison.OrdinalIgnoreCase) && !Directory.Exists(archive), "Expected a new owned gate archive.");
+            }
+
             var job = new Job { gate = Path.GetFullPath(gate), output = output, run = "EQ-" + Guid.NewGuid().ToString("N"), il2cpp = il2cpp, exit = exit, archive = archive };
             Write(job.gate + "/queued.json", job);
             SessionState.SetString(Key, JsonConvert.SerializeObject(job));
-            EquipmentSettings.EnableAcceptance(); EquipmentSettings.SetBackend(il2cpp);
-            EditorApplication.update -= Resume; EditorApplication.update += Resume;
+            EquipmentSettings.EnableAcceptance();
+            EquipmentSettings.SetBackend(il2cpp);
+            EditorApplication.update -= Resume;
+            EditorApplication.update += Resume;
         }
         public static void QueueFromCommandLine()
         {
             var args = Environment.GetCommandLineArgs();
-            string Get(string key) { var i = Array.IndexOf(args, key); if (i < 0 || i + 1 == args.Length) throw new ArgumentException("Missing " + key); return args[i + 1]; }
+            string Get(string key)
+            {
+                var i = Array.IndexOf(args, key);
+                if (i < 0 || i + 1 == args.Length)
+                {
+                    throw new ArgumentException("Missing " + key);
+                }
+                return args[i + 1];
+            }
             Require(Application.isBatchMode, "CLI queue is for an owned receiver Editor only.");
             var approved = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp/kilo")) + Path.DirectorySeparatorChar;
             Require(Path.GetFullPath(Application.dataPath).StartsWith(approved, StringComparison.OrdinalIgnoreCase), "Never exit the user's main Editor.");
@@ -53,7 +94,11 @@ namespace YLFramework.Tests.EquipmentAcceptance
             var setup = EditorSceneManager.GetSceneManagerSetup();
             if (setup.Length == 0 || setup.Any(scene => string.IsNullOrEmpty(scene.path)))
             {
-                for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++) Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty, "Do not save an unexpected dirty receiver scene.");
+                for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+                {
+                    Require(!UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty, "Do not save an unexpected dirty receiver scene.");
+                }
+
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 Require(EditorSceneManager.SaveScene(scene, "Assets/EquipmentHarness/Empty.unity"), "Could not save the receiver-owned empty scene.");
             }
@@ -61,9 +106,16 @@ namespace YLFramework.Tests.EquipmentAcceptance
         }
         private static void Resume()
         {
-            if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || EditorApplication.isPlaying) { stableFrames = 0; return; }
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || EditorApplication.isPlaying)
+            {
+                _stableFrames = 0;
+                return;
+            }
 #if YL_EQUIPMENT_ACCEPTANCE
-            if (++stableFrames < 8) return;
+            if (++_stableFrames < 8)
+            {
+                return;
+            }
             EditorApplication.update -= Resume;
             var job = JsonConvert.DeserializeObject<Job>(SessionState.GetString(Key, ""));
             if (job != null) BuildConfigured(job);
@@ -71,7 +123,8 @@ namespace YLFramework.Tests.EquipmentAcceptance
         }
         private static void BuildConfigured(Job job)
         {
-            var succeeded = false; Exception failure = null;
+            var succeeded = false;
+            Exception failure = null;
             var folder = "Assets/YLFramework/Tests/Fixtures/Extensions/Equipment/Run-" + job.run;
             try
             {
@@ -95,7 +148,7 @@ namespace YLFramework.Tests.EquipmentAcceptance
                     var data = ScriptableObject.CreateInstance<YLFramework.Equipment.Acceptance.ProbeEquipmentData>();
                     data.id = id; data.name = id.ToString(); data.parent = root; data.bonus = 42;
                     data.equipmentType = id == 1001 ? EquipmentType.Script : EquipmentType.Asset;
-                    data.equipment_class_full_name = "YLFramework.Equipment.Acceptance.StringOnlyEquipment";
+                    data.equipmentClassFullName = "YLFramework.Equipment.Acceptance.StringOnlyEquipment";
                     data.projectName = "equipment-acceptance"; data.assetName = "prefab";
                     AssetDatabase.AddObjectToAsset(data, root); root.Equipments.Add(data);
                 }
@@ -104,7 +157,7 @@ namespace YLFramework.Tests.EquipmentAcceptance
                 AssetDatabase.ImportAsset(folder + "/link.xml");
                 var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var probe = new GameObject("Equipment Player Acceptance").AddComponent<YLFramework.Equipment.Acceptance.EquipmentPlayerProbe>();
-                probe.Prefix = prefix;
+                probe.prefix = prefix;
                 var scenePath = folder + "/Equipment.unity";
                 Require(EditorSceneManager.SaveScene(scene, scenePath), "Could not save the owned acceptance scene.");
                 var assemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
@@ -135,33 +188,65 @@ namespace YLFramework.Tests.EquipmentAcceptance
                 throw new InvalidOperationException("Acceptance consumer is not compiled.");
 #endif
             }
-            catch (Exception error) { failure = error; Debug.LogException(error); }
+            catch (Exception error)
+            {
+                failure = error;
+                Debug.LogException(error);
+            }
             finally
             {
                 try
                 {
                     EquipmentSettings.Restore();
-                    if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+                    if (AssetDatabase.IsValidFolder(folder))
+                    {
+                        AssetDatabase.DeleteAsset(folder);
+                    }
                 }
-                catch (Exception error) { succeeded = false; failure = failure == null ? error : new AggregateException(failure, error); Debug.LogException(error); }
+                catch (Exception error)
+                {
+                    succeeded = false;
+                    failure = failure == null ? error : new AggregateException(failure, error);
+                    Debug.LogException(error);
+                }
                 SessionState.EraseString(Key);
-                Write(job.gate + "/gate-complete.json", new { succeeded, job.run, job.output, job.il2cpp, error = failure?.ToString(), utc = DateTime.UtcNow });
+                Write(job.gate + "/gate-complete.json", new
+                {
+                    succeeded,
+                    job.run,
+                    job.output,
+                    job.il2cpp,
+                    error = failure?.ToString(),
+                    utc = DateTime.UtcNow
+                });
                 if (job.archive != null)
                 {
                     Directory.CreateDirectory(job.archive);
                     foreach (var file in Directory.GetFiles(job.gate, "*", SearchOption.AllDirectories))
                     {
                         var target = Path.Combine(job.archive, file.Substring(job.gate.Length + 1));
-                        Directory.CreateDirectory(Path.GetDirectoryName(target)); File.Copy(file, target);
+                        Directory.CreateDirectory(Path.GetDirectoryName(target));
+                        File.Copy(file, target);
                     }
                 }
-                if (job.exit) EditorApplication.Exit(succeeded ? 0 : 1);
+                if (job.exit)
+                {
+                    EditorApplication.Exit(succeeded ? 0 : 1);
+                }
             }
         }
         private static void EnsureFolder(string path)
         {
             var current = "Assets";
-            foreach (var part in path.Substring(7).Split('/')) { var next = current + "/" + part; if (!AssetDatabase.IsValidFolder(next)) AssetDatabase.CreateFolder(current, part); current = next; }
+            foreach (var part in path.Substring(7).Split('/'))
+            {
+                var next = current + "/" + part;
+                if (!AssetDatabase.IsValidFolder(next))
+                {
+                    AssetDatabase.CreateFolder(current, part);
+                }
+                current = next;
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using YLFramework.Foundation;
 
@@ -535,7 +535,7 @@ namespace YLFramework.Utilities.Extensions
         }
 
         /// <summary>把 child 挂到自身下，并按 isLastOrFirstSibling 决定移到末尾或开头，返回自身。</summary>
-        public static GameObject AddChild(this GameObject self, Transform child,bool isLastOrFirstSibling)
+        public static GameObject AddChild(this GameObject self, Transform child, bool isLastOrFirstSibling)
         {
             child.parent = self.transform;
             if (isLastOrFirstSibling)

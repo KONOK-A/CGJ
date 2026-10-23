@@ -1,6 +1,6 @@
-using System; 
-using System.Collections.Generic; 
-using UnityEngine; 
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using YLFramework.Foundation;
 
 namespace YLFramework.Core
@@ -23,7 +23,7 @@ namespace YLFramework.Core
         /// <summary>保留的旧失败状态；唯一关闭管线在报告错误前已进入Closed。</summary>
         CloseFailed
     }
-      
+
     /// <summary>业务对象的唯一owner。</summary>
     /// <remarks>
     /// 同步LoadView只返回已完成初始化的实例，参数、资源或初始化错误直接抛出。
@@ -37,32 +37,32 @@ namespace YLFramework.Core
         /// <summary>
         /// 存放 所有的数据
         /// </summary>
-        internal Dictionary<Type, Dictionary<long, Model>> models = new Dictionary<Type, Dictionary<long, Model>>();
+        internal Dictionary<Type, Dictionary<long, Model>> Models = new Dictionary<Type, Dictionary<long, Model>>();
         /// <summary>
         /// 存放所有的视图(key:string value:Dictionary<int, View>) 使用名称 和 id 查询比较方便
         /// </summary>
-        internal Dictionary<string, Dictionary<int, View>> views = new Dictionary<string, Dictionary<int, View>>();
+        internal Dictionary<string, Dictionary<int, View>> Views = new Dictionary<string, Dictionary<int, View>>();
 
         /// <summary>
         /// 存放所有的视图(key:type value:List<View>) 使用类型查询比较方便
         /// </summary>
-        internal Dictionary<Type,List<View>> type_views = new Dictionary<Type, List<View>>();
-        internal Dictionary<int, View> ownedViews = new Dictionary<int, View>();
-        internal int viewTransactions;
+        internal Dictionary<Type, List<View>> TypeViews = new Dictionary<Type, List<View>>();
+        internal Dictionary<int, View> OwnedViews = new Dictionary<int, View>();
+        internal int ViewTransactions;
         internal object ViewLifecycle;
-        internal readonly HashSet<IPendingViewRequest> pendingViews = new HashSet<IPendingViewRequest>();
-        
+        internal readonly HashSet<IPendingViewRequest> PendingViews = new HashSet<IPendingViewRequest>();
+
         /// <summary>
         /// 存放 所有的业务逻辑
         /// </summary>
-        internal Dictionary<Type, Controller> controllers = new Dictionary<Type, Controller>();
+        internal Dictionary<Type, Controller> Controllers = new Dictionary<Type, Controller>();
 
-        internal long nextModelId = 1;
-        internal HashSet<Type> creatingModels = new HashSet<Type>();
-        internal HashSet<Type> creatingControllers = new HashSet<Type>();
+        internal long NextModelId = 1;
+        internal HashSet<Type> CreatingModels = new HashSet<Type>();
+        internal HashSet<Type> CreatingControllers = new HashSet<Type>();
 
 
-        private string projectName;
+        private string _projectName;
 
         #endregion
 
@@ -81,14 +81,17 @@ namespace YLFramework.Core
         /// YL Resource ProjectId，与Module类型身份分离；默认类型短名，必须对应显式挂载的新YL项目。
         /// 可在启动前赋值或重写，启动请求在首次加载前捕获该值，不依赖OnStart赋值。
         /// </summary>
-        public virtual string ProjectName { get => projectName ?? GetType().Name; set => projectName = value; }
+        public virtual string ProjectName
+        {
+            get => _projectName ?? GetType().Name; set => _projectName = value;
+        }
 
-       
+
         /// <summary>
         /// 是否是基础模块
         /// 基础模块不能普通关闭，由ModuleManager.Shutdown或启动失败回滚结束；默认false
         /// </summary>
-        public virtual bool BaseModule => false;
+        public virtual bool IsBaseModule => false;
 
         /// <summary>
         /// 必需的启动配表（资产名到Model数组类型）。空数组合法，缺失或无效文本导致启动失败。
@@ -105,7 +108,7 @@ namespace YLFramework.Core
         public virtual string DefaultStartUpScene => string.Empty;
 
         #endregion
-         
+
         #region 方法
 
         /// <summary>
@@ -116,25 +119,29 @@ namespace YLFramework.Core
         /// <summary>
         /// 进入Closing后、业务对象清理前触发；无需调用base即可完成框架收尾。
         /// </summary>
-        protected virtual void OnClose() { }
+        protected virtual void OnClose()
+        {
+        }
 
         internal void Exit() => OnClose();
 
         internal void EnsureCanAddObjects()
         {
             if (State == ModuleState.Closing || State == ModuleState.Closed || State == ModuleState.CloseFailed)
+            {
                 throw new InvalidOperationException($"Cannot add objects to Module in state {State}: {ModuleName}");
+            }
         }
 
         /// <summary>
         /// 关闭当前注册的自身实例；Starting期间拒绝关闭，不作为启动取消。
         /// </summary>
-        public void Close() 
+        public void Close()
         {
             ModuleManager.CloseModule(this);
         }
 
-#endregion
+        #endregion
 
     }
 }

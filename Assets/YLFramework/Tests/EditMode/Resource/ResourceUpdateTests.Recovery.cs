@@ -19,8 +19,10 @@ namespace YLFramework.Tests.ResourceBuild
             store.Commit(store.Rollback(store.Mount()));
             var mounted = Store(store.RootPath, true).Mount();
             foreach (var project in new[] { "a", "b" })
+            {
                 Assert.That(mounted.Single(x => x.Document.ProjectId == Snapshot(project).Document.ProjectId).Document.CatalogDigest,
                     Is.EqualTo(Snapshot(project, 2).Document.CatalogDigest));
+            }
         }
 
         [Test]
@@ -31,8 +33,10 @@ namespace YLFramework.Tests.ResourceBuild
             File.WriteAllBytes(Path.Combine(VersionPath(store, 2), Snapshot("a", 2).Document.Bundles[0].RelativeFile), new byte[] { 1 });
             var mounted = Store(store.RootPath, true).Mount();
             foreach (var project in new[] { "a", "b" })
+            {
                 Assert.That(mounted.Single(x => x.Document.ProjectId == Snapshot(project).Document.ProjectId).Document.CatalogDigest,
                     Is.EqualTo(Snapshot(project).Document.CatalogDigest), "Do not combine fallback A1 with active B2.");
+            }
         }
 
         [Test]
@@ -46,7 +50,10 @@ namespace YLFramework.Tests.ResourceBuild
                 var owner = File.ReadAllBytes(ownerPath);
                 store.Checkpoint = stage =>
                 {
-                    if (stage == "JournalVerified") File.Delete(removed == "commit-journal.json" ? ProjectPath(store, removed) : ownerPath);
+                    if (stage == "JournalVerified")
+                    {
+                        File.Delete(removed == "commit-journal.json" ? ProjectPath(store, removed) : ownerPath);
+                    }
                 };
                 Assert.Throws<InvalidDataException>(() => store.Commit(prepared), removed);
                 Assert.That(File.Exists(ProjectPath(store)), Is.False, removed);
@@ -57,9 +64,14 @@ namespace YLFramework.Tests.ResourceBuild
             byte[] savedOwner = null;
             promotion.Checkpoint = stage =>
             {
-                if (stage != "CompleteWritten") return;
+                if (stage != "CompleteWritten")
+                {
+                    return;
+                }
+
                 var path = Path.Combine(promotion.RootPath, ".ylr-store-owner.json");
-                savedOwner = File.ReadAllBytes(path); File.Delete(path);
+                savedOwner = File.ReadAllBytes(path);
+                File.Delete(path);
             };
             Assert.Throws<InvalidDataException>(() => Prepare(promotion));
             Assert.That(Directory.GetDirectories(ProjectPath(promotion, "versions")), Is.Empty);
@@ -71,12 +83,24 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var store = NewStore();
             var prepared = Prepare(store);
-            store.Checkpoint = stage => { if (stage == "JournalVerified") throw new IOException("interrupted"); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "JournalVerified")
+                {
+                    throw new IOException("interrupted");
+                }
+            };
             Assert.Throws<IOException>(() => store.Commit(prepared));
             foreach (var name in new[] { "commit-journal.json", "active.json", "last-known-good.json" })
+            {
                 File.WriteAllText(ProjectPath(store, name) + ".next", "{\"Version\":");
+            }
+
             Assert.That(Store(store.RootPath).Mount().Single().Document.CatalogDigest, Is.EqualTo(Snapshot().Document.CatalogDigest));
-            foreach (var name in new[] { "commit-journal.json", "active.json", "last-known-good.json" }) Assert.That(File.Exists(ProjectPath(store, name) + ".next"), Is.False);
+            foreach (var name in new[] { "commit-journal.json", "active.json", "last-known-good.json" })
+            {
+                Assert.That(File.Exists(ProjectPath(store, name) + ".next"), Is.False);
+            }
         }
 
         [Test]
@@ -85,7 +109,13 @@ namespace YLFramework.Tests.ResourceBuild
             var store = NewStore(true);
             using var cancellation = new CancellationTokenSource();
             var installed = 0;
-            store.Checkpoint = stage => { if (stage == "VersionInstalled" && ++installed == 2) cancellation.Cancel(); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "VersionInstalled" && ++installed == 2)
+                {
+                    cancellation.Cancel();
+                }
+            };
             var plan = store.Check(store.Mount(), new[] { Snapshot("a", 2), Snapshot("b", 2) });
             Assert.Throws<OperationCanceledException>(() => store.Prepare(plan, cancellation.Token));
             Assert.That(Store(store.RootPath, true).GetPreparedUpdates(), Is.Empty, "A complete individual version is not a complete prepared closure.");
@@ -114,7 +144,13 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var store = NewStore();
             var prepared = Prepare(store);
-            store.Checkpoint = stage => { if (stage == "JournalVerified") throw new IOException("interrupted"); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "JournalVerified")
+                {
+                    throw new IOException("interrupted");
+                }
+            };
             Assert.Throws<IOException>(() => store.Commit(prepared));
             var candidate = JObject.Parse(File.ReadAllText(ProjectPath(store, "commit-journal.json")));
             candidate["OwnerId"] = new string('f', 32);
@@ -156,20 +192,31 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var store = NewStore();
             using var cancellation = new CancellationTokenSource();
-            store.Checkpoint = stage => { if (stage == "FileCopied") cancellation.Cancel(); };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "FileCopied")
+                {
+                    cancellation.Cancel();
+                }
+            };
             Assert.Throws<OperationCanceledException>(() => store.Prepare(store.Check(store.Mount(), new[] { Snapshot("a", 2) }), cancellation.Token));
             store.Checkpoint = null;
             var staging = ProjectPath(store, "staging");
-            var unknown = Path.Combine(staging, "foreign"); Directory.CreateDirectory(unknown);
+            var unknown = Path.Combine(staging, "foreign");
+            Directory.CreateDirectory(unknown);
             File.WriteAllText(Path.Combine(unknown, "mine"), "keep");
-            Assert.That(store.Cleanup(store.Mount()).Succeeded, Is.True);
+            Assert.That(store.Cleanup(store.Mount()).HasSucceeded, Is.True);
             CollectionAssert.AreEqual(new[] { unknown }, Directory.GetDirectories(staging));
-            store.Commit(Prepare(store)); store.Commit(Prepare(store, 3));
+            store.Commit(Prepare(store));
+            store.Commit(Prepare(store, 3));
             var obsolete = VersionPath(store, 1);
             using (var locked = new FileStream(Path.Combine(obsolete, Snapshot().Document.Bundles.Last().RelativeFile), FileMode.Open, FileAccess.Read, FileShare.Read))
-                Assert.That(store.Cleanup(store.Mount()).Succeeded, Is.False);
+            {
+                Assert.That(store.Cleanup(store.Mount()).HasSucceeded, Is.False);
+            }
+
             var retry = store.Cleanup(store.Mount());
-            Assert.That(retry.Succeeded, Is.True, string.Join("\n", retry.Errors));
+            Assert.That(retry.HasSucceeded, Is.True, string.Join("\n", retry.Errors));
             Assert.That(Directory.Exists(obsolete), Is.False);
             Assert.That(File.ReadAllText(Path.Combine(unknown, "mine")), Is.EqualTo("keep"));
         }
@@ -186,11 +233,17 @@ namespace YLFramework.Tests.ResourceBuild
             var bytes = ResourceCatalogCodec.Seal(ResourceCatalogCodec.CanonicalBytes(payload));
             var large = ResourceCatalogCodec.Read(bytes, doc.ProjectId, doc.Platform, doc.UnityCompatibility, doc.AppContentCompatibilityId);
             var sourceRoot = NewStore().RootPath;
-            var path = Path.Combine(sourceRoot, large.CatalogDigest); Directory.CreateDirectory(path);
-            foreach (var file in Directory.GetFiles(source.DirectoryPath)) File.Copy(file, Path.Combine(path, Path.GetFileName(file)));
+            var path = Path.Combine(sourceRoot, large.CatalogDigest);
+            Directory.CreateDirectory(path);
+            foreach (var file in Directory.GetFiles(source.DirectoryPath))
+            {
+                File.Copy(file, Path.Combine(path, Path.GetFileName(file)));
+            }
+
             File.WriteAllBytes(Path.Combine(path, "resource-catalog.json"), ResourceCatalogCodec.Write(large));
             var complete = JObject.Parse(File.ReadAllText(Path.Combine(path, ".ylr-complete.json")));
-            complete["BuildId"] = large.BuildId; complete["CatalogDigest"] = large.CatalogDigest;
+            complete["BuildId"] = large.BuildId;
+            complete["CatalogDigest"] = large.CatalogDigest;
             File.WriteAllText(Path.Combine(path, ".ylr-complete.json"), complete.ToString());
             var builtIn = ResourceLocalSnapshot.Open(path, large.ProjectId, large.CatalogDigest, large.Platform, large.AppContentCompatibilityId);
             var store = new ArtifactStore(NewStore().RootPath, new[] { new ResourceProjectMount(large.ProjectId, large.Platform, large.AppContentCompatibilityId, builtIn) });

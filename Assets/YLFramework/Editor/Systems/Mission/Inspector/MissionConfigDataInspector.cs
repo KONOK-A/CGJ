@@ -1,6 +1,3 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -9,6 +6,9 @@ using System.Runtime.Remoting.Messaging;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.MissionSystem
@@ -24,18 +24,21 @@ namespace YLFramework.MissionSystem
             get
             {
                 if (_instance == null)
+                {
                     _instance = CreateInstance<MissionConfigDataInspector>();
+                }
+
                 return _instance;
             }
         }
 
-        private MissionConfigData currentMissionConfigData;
+        private MissionConfigData _currentMissionConfigData;
 
-        private SerializedObject missionConfigSerializedObject = null;
+        private SerializedObject _missionConfigSerializedObject = null;
 
-        private List<SerializedProperty> serializedProperties;
+        private List<SerializedProperty> _serializedProperties;
 
-        private Vector2 currentPosition;
+        private Vector2 _currentPosition;
 
         //private SerializedProperty m_Script = null;
 
@@ -50,7 +53,7 @@ namespace YLFramework.MissionSystem
         }
 
 
-        internal void OnInspectorGUI(MissionConfigData data, ConfigsWindow window,MissionsConfig missionsConfig)
+        internal void OnInspectorGUI(MissionConfigData data, ConfigsWindow window, MissionsConfig missionsConfig)
         {
             if (data == null)
             {
@@ -68,12 +71,12 @@ namespace YLFramework.MissionSystem
 
             BindSelection(data);
 
-            currentPosition = GUILayout.BeginScrollView(currentPosition);
+            _currentPosition = GUILayout.BeginScrollView(_currentPosition);
 
-            missionConfigSerializedObject.Update();
+            _missionConfigSerializedObject.Update();
 
 
-            foreach (var property in serializedProperties)
+            foreach (var property in _serializedProperties)
             {
 
                 //if (property.displayName == "Script") continue;
@@ -83,13 +86,17 @@ namespace YLFramework.MissionSystem
                     property.objectReferenceValue = missionsConfig;
                 }
 
-                if (GetPropertyCustomAttribute<HideInInspector>(property) != null) continue;
-                CustomPropertyGUI customPropertyGUI = GetPropertyCustomAttribute<CustomPropertyGUI>(property) ?? (drawers.TryGetValue(property.name, out var drawer) ? drawer : null);
+                if (GetPropertyCustomAttribute<HideInInspector>(property) != null)
+                {
+                    continue;
+                }
+
+                CustomPropertyGui customPropertyGui = GetPropertyCustomAttribute<CustomPropertyGui>(property) ?? (_drawers.TryGetValue(property.name, out var drawer) ? drawer : null);
                 EditorGUI.BeginChangeCheck();
 
-                if (customPropertyGUI != null)
+                if (customPropertyGui != null)
                 {
-                    customPropertyGUI.OnPropertyGUI(property);
+                    customPropertyGui.OnPropertyGui(property);
                 }
                 else
                 {
@@ -100,19 +107,24 @@ namespace YLFramework.MissionSystem
 
                 if (EditorGUI.EndChangeCheck())
                 {
-                    missionConfigSerializedObject.ApplyModifiedProperties();
+                    _missionConfigSerializedObject.ApplyModifiedProperties();
 
                     if (property.name == "id")
+                    {
                         window.SetSelection(property.intValue);
+                    }
 
                     //EditorUtility.SetDirty(currentMissionConfigData);
 
-                    if (currentMissionConfigData.parent != null)
-                        currentMissionConfigData.parent.ClearCache();
+                    if (_currentMissionConfigData.parent != null)
+                    {
+                        _currentMissionConfigData.parent.ClearCache();
+                    }
 
-                    if (customPropertyGUI != null && customPropertyGUI.reloadTreeViewOnValueChange)
-                        window.missionListTree.Reload();
-
+                    if (customPropertyGui != null && customPropertyGui.ReloadTreeViewOnValueChange)
+                    {
+                        window.MissionListTree.Reload();
+                    }
                 }
 
             }
@@ -120,52 +132,64 @@ namespace YLFramework.MissionSystem
             GUILayout.EndScrollView();
         }
 
-        private Dictionary<string, CustomPropertyGUI> drawers = new();
-        private static Dictionary<string, CustomPropertyGUI> CreateDrawers() => new()
+        private Dictionary<string, CustomPropertyGui> _drawers = new();
+        private static Dictionary<string, CustomPropertyGui> CreateDrawers() => new()
         {
-            ["id"] = new CustomMissionConfigDataIDGUI(),
-            ["parent"] = new CustomMissionConfigDataParentGUI(),
-            ["icon"] = new YLFramework.Editor.Domain.DomainResourceIconGUI(),
-            ["conditions"] = new CustomMissionConfigDataCompleteConditionGUI(),
-            ["mission_type_class_fullname"] = new CustomMissionConfigDataClassGUI()
+            ["id"] = new CustomMissionConfigDataIdGui(),
+            ["parent"] = new CustomMissionConfigDataParentGui(),
+            ["icon"] = new YLFramework.Editor.Domain.DomainResourceIconGui(),
+            ["conditions"] = new CustomMissionConfigDataCompleteConditionGui(),
+            ["missionTypeClassFullName"] = new CustomMissionConfigDataClassGui()
         };
 
         internal void BindSelection(MissionConfigData data)
         {
-            if (currentMissionConfigData == data && missionConfigSerializedObject != null) return;
+            if (_currentMissionConfigData == data && _missionConfigSerializedObject != null)
+            {
+                return;
+            }
+
             ReleaseSelection();
-            if (!data) return;
-            currentMissionConfigData = data;
-            missionConfigSerializedObject = new SerializedObject(data);
-            serializedProperties = missionConfigSerializedObject.GetAllSerializedProperty();
-            drawers = CreateDrawers();
+            if (!data)
+            {
+                return;
+            }
+
+            _currentMissionConfigData = data;
+            _missionConfigSerializedObject = new SerializedObject(data);
+            _serializedProperties = _missionConfigSerializedObject.GetAllSerializedProperty();
+            _drawers = CreateDrawers();
         }
 
         internal void ReleaseSelection()
         {
-            missionConfigSerializedObject?.Dispose();
-            missionConfigSerializedObject = null;
-            currentMissionConfigData = null;
-            serializedProperties = null;
-            attributes.Clear();
-            drawers.Clear();
+            _missionConfigSerializedObject?.Dispose();
+            _missionConfigSerializedObject = null;
+            _currentMissionConfigData = null;
+            _serializedProperties = null;
+            _attributes.Clear();
+            _drawers.Clear();
         }
         private void OnDisable() => ReleaseSelection();
 
-        private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
+        private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> _attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
 
         private T GetPropertyCustomAttribute<T>(SerializedProperty property) where T : Attribute
         {
-            if (!attributes.ContainsKey(property))
-                attributes.Add(property, new Dictionary<Type, Attribute>());
+            if (!_attributes.ContainsKey(property))
+            {
+                _attributes.Add(property, new Dictionary<Type, Attribute>());
+            }
 
-            if (attributes[property].ContainsKey(typeof(T)))
-                return attributes[property][typeof(T)] as T;
+            if (_attributes[property].ContainsKey(typeof(T)))
+            {
+                return _attributes[property][typeof(T)] as T;
+            }
 
-            T customPropertyGUI = property.GetAttribute<T>();
+            T customPropertyGui = property.GetAttribute<T>();
 
-            attributes[property].Add(typeof(T), customPropertyGUI);
-            return customPropertyGUI;
+            _attributes[property].Add(typeof(T), customPropertyGui);
+            return customPropertyGui;
         }
 
     }

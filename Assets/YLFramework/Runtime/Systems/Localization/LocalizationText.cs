@@ -5,7 +5,11 @@ using System.Text;
 
 namespace YLFramework.Localization
 {
-    public enum AppendType { ID, String }
+    public enum AppendType
+    {
+        Id,
+        String
+    }
     [Serializable]
     public struct AppendData
     {
@@ -20,29 +24,51 @@ namespace YLFramework.Localization
     {
         public static string Compose(int id, Func<int, string> lookup, IList<AppendData> args, IList<AppendData> appends)
         {
-            if (lookup == null) throw new ArgumentNullException(nameof(lookup));
+            if (lookup == null)
+            {
+                throw new ArgumentNullException(nameof(lookup));
+            }
+
             try
             {
                 var template = lookup(id) ?? string.Empty;
                 var values = GetArguments(lookup, args);
                 var builder = new StringBuilder(values.Length == 0 ? template : string.Format(CultureInfo.CurrentCulture, template, values));
-                if (appends != null) foreach (var item in appends) builder.Append(GetValue(lookup, item));
+                if (appends != null)
+                {
+                    foreach (var item in appends)
+                    {
+                        builder.Append(GetValue(lookup, item));
+                    }
+                }
+
                 return builder.ToString();
             }
-            catch (FormatException error) { throw new FormatException($"Localization ID={id}: invalid argument/append format.", error); }
+            catch (FormatException error)
+            {
+                throw new FormatException($"Localization ID={id}: invalid argument/append format.", error);
+            }
         }
 
         public static string[] GetArguments(Func<int, string> lookup, IList<AppendData> args)
         {
-            if (args == null || args.Count == 0) return Array.Empty<string>();
+            if (args == null || args.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
             var result = new string[args.Count];
-            for (var i = 0; i < result.Length; i++) result[i] = GetValue(lookup, args[i]);
+            for (var i = 0; i < result.Length; i++)
+            {
+                result[i] = GetValue(lookup, args[i]);
+            }
+
             return result;
         }
 
         private static string GetValue(Func<int, string> lookup, AppendData item)
         {
-            var value = item.type == AppendType.ID ? lookup(item.id) ?? string.Empty : item.str ?? string.Empty;
+            var value = item.type == AppendType.Id ? lookup(item.id) ?? string.Empty : item.str ?? string.Empty;
             return string.IsNullOrEmpty(item.richText) ? value : string.Format(CultureInfo.CurrentCulture, item.richText, value);
         }
     }

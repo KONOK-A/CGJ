@@ -7,33 +7,92 @@ namespace YLFramework.Services.Resource
     /// <summary>由原 BundleRecord 持有；只有确认 native 卸载后才允许释放流和预算。</summary>
     internal sealed class ResourceBundleInput : IDisposable
     {
-        private readonly object gate = new();
-        private Stream stream;
-        private IDisposable reservation;
-        private Exception releaseFault;
-        private bool streamReleased;
-        internal Stream Stream { get { lock (gate) return stream ?? throw new ObjectDisposedException(nameof(ResourceBundleInput)); } }
-        internal bool IsEncrypted { get; }
-        internal bool IsDisposed { get { lock (gate) return stream == null && reservation == null; } }
+        private readonly object _gate = new();
+        private Stream _stream;
+        private IDisposable _reservation;
+        private Exception _releaseFault;
+        private bool _isStreamReleased;
+        internal Stream Stream
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _stream ?? throw new ObjectDisposedException(nameof(ResourceBundleInput));
+                }
+            }
+        }
+        internal bool IsEncrypted
+        {
+            get;
+        }
+        internal bool IsDisposed
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _stream == null && _reservation == null;
+                }
+            }
+        }
         internal long DataBufferBytes => IsEncrypted ? ResourceDecryptStream.DataBufferBytes : 0;
-        internal long CngKeyObjectBytes { get { lock (gate) return stream is ResourceDecryptStream decrypt ? decrypt.CngKeyObjectBytes : 0; } }
-        internal Exception Fault { get { lock (gate) return stream is ResourceDecryptStream decrypt ? decrypt.Fault : null; } }
-        internal Exception ReleaseFault { get { lock (gate) return releaseFault ?? (stream is ResourceDecryptStream decrypt ? decrypt.ReleaseFault : null); } }
+        internal long CngKeyObjectBytes
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _stream is ResourceDecryptStream decrypt ? decrypt.CngKeyObjectBytes : 0;
+                }
+            }
+        }
+        internal Exception Fault
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _stream is ResourceDecryptStream decrypt ? decrypt.Fault : null;
+                }
+            }
+        }
+        internal Exception ReleaseFault
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _releaseFault ?? (_stream is ResourceDecryptStream decrypt ? decrypt.ReleaseFault : null);
+                }
+            }
+        }
 
         private ResourceBundleInput(Stream stream, bool encrypted, IDisposable reservation)
         {
-            this.stream = stream;
-            this.reservation = reservation;
+            this._stream = stream;
+            this._reservation = reservation;
             IsEncrypted = encrypted;
         }
 
         internal void SetFaultNotification(Action<Exception> notification)
         {
-            if (notification == null) throw new ArgumentNullException(nameof(notification));
-            lock (gate)
+            if (notification == null)
             {
-                if (stream == null) throw new ObjectDisposedException(nameof(ResourceBundleInput));
-                if (stream is ResourceDecryptStream decrypt) decrypt.SetFaultNotification(notification);
+                throw new ArgumentNullException(nameof(notification));
+            }
+
+            lock (_gate)
+            {
+                if (_stream == null)
+                {
+                    throw new ObjectDisposedException(nameof(ResourceBundleInput));
+                }
+
+                if (_stream is ResourceDecryptStream decrypt)
+                {
+                    decrypt.SetFaultNotification(notification);
+                }
             }
         }
 
@@ -54,16 +113,32 @@ namespace YLFramework.Services.Resource
 
         public void Dispose()
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (stream == null && reservation == null) return;
+                if (_stream == null && _reservation == null)
+                {
+                    return;
+                }
+
                 try
                 {
-                    if (!streamReleased) { stream.Dispose(); streamReleased = true; }
-                    if (reservation != null) { reservation.Dispose(); reservation = null; }
-                    stream = null;
+                    if (!_isStreamReleased)
+                    {
+                        _stream.Dispose();
+                        _isStreamReleased = true;
+                    }
+                    if (_reservation != null)
+                    {
+                        _reservation.Dispose();
+                        _reservation = null;
+                    }
+                    _stream = null;
                 }
-                catch (Exception error) { releaseFault = error; throw; }
+                catch (Exception error)
+                {
+                    _releaseFault = error;
+                    throw;
+                }
             }
         }
     }

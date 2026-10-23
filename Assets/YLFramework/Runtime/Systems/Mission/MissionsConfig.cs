@@ -1,8 +1,8 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
+using UnityEngine.Serialization;
+using YLFramework.Foundation;
 
 namespace YLFramework.MissionSystem
 {
@@ -14,7 +14,7 @@ namespace YLFramework.MissionSystem
     {
 
         [HideInInspector]
-        public int start_id = 0;
+        [FormerlySerializedAs("start_id")] public int startId = 0;
 
         /// <summary>
         /// 任务配置集合
@@ -28,20 +28,20 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("参数集合")]
         [HideInInspector]
-        public List<MissionParameter> param = new List<MissionParameter>();
+        [FormerlySerializedAs("param")] public List<MissionParameter> parameters = new List<MissionParameter>();
 
-        private Dictionary<int,MissionConfigData> missions_dic = new Dictionary<int, MissionConfigData>();
+        private Dictionary<int, MissionConfigData> _missionsDic = new Dictionary<int, MissionConfigData>();
 
-        private Dictionary<string, MissionParameter> param_dic = new Dictionary<string, MissionParameter>();
+        private Dictionary<string, MissionParameter> _paramDic = new Dictionary<string, MissionParameter>();
 
         /// <summary>
         /// 显示名
         /// </summary>
         [Tooltip("显示名")]
         [Header("显示名")]
-        public string display_name;
+        [FormerlySerializedAs("display_name")] public string displayName;
 
-        public string type_script_guid;
+        [FormerlySerializedAs("type_script_guid")] public string typeScriptGuid;
 
 
         /// <summary>
@@ -53,21 +53,27 @@ namespace YLFramework.MissionSystem
         public MissionConfigData GetMissionConfigData(int id)
         {
 
-            if(missions_dic.Count == 0)
+            if (_missionsDic.Count == 0)
             {
                 foreach (var item in missions)
                 {
-                    if(item == null) continue;
+                    if (item == null)
+                    {
+                        continue;
+                    }
 
-                    if (missions_dic.ContainsKey(item.id))
-                        throw new Exception(string.Format("任务id:{0}重复!",id));
-                    missions_dic.Add(item.id, item);
+                    if (_missionsDic.ContainsKey(item.id))
+                    {
+                        throw new Exception(string.Format("任务id:{0}重复!", id));
+                    }
+
+                    _missionsDic.Add(item.id, item);
                 }
             }
 
-            if (missions_dic.ContainsKey(id))
+            if (_missionsDic.ContainsKey(id))
             {
-                return missions_dic[id];
+                return _missionsDic[id];
             }
 
             return null;
@@ -83,20 +89,27 @@ namespace YLFramework.MissionSystem
         {
 
             if (string.IsNullOrEmpty(paramName))
-                return null;
-
-            if (param_dic.Count == 0)
             {
-                foreach (var item in param)
+                return null;
+            }
+
+            if (_paramDic.Count == 0)
+            {
+                foreach (var item in parameters)
                 {
-                    if (param_dic.ContainsKey(item.name))
-                        throw new Exception(string.Format("参数名称:{0}重复!",item.name));
-                    param_dic.Add(item.name, item);
+                    if (_paramDic.ContainsKey(item.name))
+                    {
+                        throw new Exception(string.Format("参数名称:{0}重复!", item.name));
+                    }
+
+                    _paramDic.Add(item.name, item);
                 }
             }
 
-            if(param_dic.ContainsKey(paramName))
-                return param_dic[paramName];
+            if (_paramDic.ContainsKey(paramName))
+            {
+                return _paramDic[paramName];
+            }
 
             return null;
         }
@@ -106,8 +119,8 @@ namespace YLFramework.MissionSystem
         /// </summary>
         public void ClearCache()
         {
-            missions_dic.Clear();
-            param_dic.Clear();
+            _missionsDic.Clear();
+            _paramDic.Clear();
         }
 
         /// <summary>
@@ -115,13 +128,13 @@ namespace YLFramework.MissionSystem
         /// </summary>
         public string GetDisplayName()
         {
-            if (string.IsNullOrEmpty(display_name))
+            if (string.IsNullOrEmpty(displayName))
             {
                 return name;
             }
             else
             {
-               return string.Format("{0}({1})", name, display_name);
+                return string.Format("{0}({1})", name, displayName);
             }
         }
 

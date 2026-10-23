@@ -11,11 +11,19 @@ namespace YLFramework.Core
         internal static readonly Vector2 HueVertex = new Vector2(0, 0.65f);
         internal static readonly Vector2 BlackVertex = new Vector2(-0.5629165f, -0.325f);
         internal static readonly Vector2 WhiteVertex = new Vector2(0.5629165f, -0.325f);
-        private float hue;
+        private float _hue;
         public float Hue
         {
-            get => hue;
-            set { if (hue == value) return; hue = value; SetVerticesDirty(); }
+            get => _hue;
+            set
+            {
+                if (_hue == value)
+                {
+                    return;
+                }
+                _hue = value;
+                SetVerticesDirty();
+            }
         }
 
         protected override void OnPopulateMesh(VertexHelper mesh)
@@ -23,12 +31,16 @@ namespace YLFramework.Core
             mesh.Clear();
             var rect = rectTransform.rect;
             float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
-            if (radius <= 0) return;
-            const int segments = 120;
-            for (int i = 0; i < segments; i++)
+            if (radius <= 0)
             {
-                float a = (float)i / segments;
-                float b = (float)(i + 1) / segments;
+                return;
+            }
+
+            const int Segments = 120;
+            for (int i = 0; i < Segments; i++)
+            {
+                float a = (float)i / Segments;
+                float b = (float)(i + 1) / Segments;
                 Vector2 p = new Vector2(Mathf.Cos(a * Mathf.PI * 2), Mathf.Sin(a * Mathf.PI * 2));
                 Vector2 q = new Vector2(Mathf.Cos(b * Mathf.PI * 2), Mathf.Sin(b * Mathf.PI * 2));
                 int start = mesh.currentVertCount;
@@ -42,7 +54,7 @@ namespace YLFramework.Core
                 mesh.AddTriangle(start, start + 2, start + 3);
             }
             int triangle = mesh.currentVertCount;
-            mesh.AddVert(rect.center + HueVertex * radius, Color.HSVToRGB(hue, 1, 1) * color, Vector2.zero);
+            mesh.AddVert(rect.center + HueVertex * radius, Color.HSVToRGB(_hue, 1, 1) * color, Vector2.zero);
             mesh.AddVert(rect.center + BlackVertex * radius, Color.black * color, Vector2.zero);
             mesh.AddVert(rect.center + WhiteVertex * radius, Color.white * color, Vector2.zero);
             mesh.AddTriangle(triangle, triangle + 1, triangle + 2);
@@ -61,7 +73,11 @@ namespace YLFramework.Core
         internal static Vector2 ClampTriangle(Vector2 point)
         {
             var weights = Weights(point);
-            if (weights.x >= 0 && weights.y >= 0 && weights.z >= 0) return point;
+            if (weights.x >= 0 && weights.y >= 0 && weights.z >= 0)
+            {
+                return point;
+            }
+
             Vector2 Closest(Vector2 a, Vector2 b) => a + (b - a) * Mathf.Clamp01(Vector2.Dot(point - a, b - a) / (b - a).sqrMagnitude);
             var first = Closest(HueVertex, BlackVertex);
             var second = Closest(BlackVertex, WhiteVertex);

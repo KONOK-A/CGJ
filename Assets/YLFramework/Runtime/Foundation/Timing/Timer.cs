@@ -28,7 +28,11 @@ namespace YLFramework.Timing
         {
             TimerScheduler.ValidateSeconds(firstDelay, nameof(firstDelay));
             TimerScheduler.ValidateSeconds(interval, nameof(interval));
-            if (interval == 0) throw new ArgumentOutOfRangeException(nameof(interval));
+            if (interval == 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interval));
+            }
+
             TimerScheduler.ValidateCount(count);
             TimerScheduler.ValidateSecondClock(clock);
         }
@@ -37,7 +41,11 @@ namespace YLFramework.Timing
         public static TimerHandle DelayFrames(long frameDelay, Action callback = null,
             Action<TimerCancellationReason> onCancelled = null)
         {
-            if (frameDelay < 0) throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            if (frameDelay < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            }
+
             return GetScheduler().DelayFrames(frameDelay, callback, onCancelled);
         }
 
@@ -51,8 +59,16 @@ namespace YLFramework.Timing
 
         internal static void ValidateFrameRepeat(long firstDelay, long interval, int? count)
         {
-            if (firstDelay < 0) throw new ArgumentOutOfRangeException(nameof(firstDelay));
-            if (interval <= 0) throw new ArgumentOutOfRangeException(nameof(interval));
+            if (firstDelay < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(firstDelay));
+            }
+
+            if (interval <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interval));
+            }
+
             TimerScheduler.ValidateCount(count);
         }
 

@@ -1,5 +1,5 @@
-using YLFramework.Foundation;
 using System.Collections.Generic;
+using YLFramework.Foundation;
 
 namespace YLFramework.BuffSystem
 {
@@ -11,14 +11,17 @@ namespace YLFramework.BuffSystem
         /// <summary>
         /// 所有的Buff
         /// </summary>
-        List<BuffBase> Buffs { get; }
+        List<BuffBase> Buffs
+        {
+            get;
+        }
 
         /// <summary>
         /// 判断是否能够添加某个buff
         /// </summary>
         /// <param name="buff"></param>
         /// <returns></returns>
-        bool IsCanAdd(int buff_id);
+        bool CanAdd(int buffId);
 
         /// <summary>
         /// 添加Buff回调

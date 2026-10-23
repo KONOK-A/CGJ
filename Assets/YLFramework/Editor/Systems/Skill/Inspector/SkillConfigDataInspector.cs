@@ -1,12 +1,12 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.SkillSystem
@@ -23,20 +23,23 @@ namespace YLFramework.SkillSystem
             get
             {
                 if (_instance == null)
+                {
                     _instance = CreateInstance<SkillConfigDataInspector>();
+                }
+
                 return _instance;
             }
         }
 
-        private SkillConfigData currentSkillConfigData;
+        private SkillConfigData _currentSkillConfigData;
         //private Type currentSkillConfigDataType;
-        private SerializedObject currentSerializedObject;
-        private List<SerializedProperty> currentSerializeProperty;
+        private SerializedObject _currentSerializedObject;
+        private List<SerializedProperty> _currentSerializeProperty;
         //private Vector2 currentPosition;
 
         //private SerializedProperty script = null;
 
-        //private Dictionary<string,CustomPropertyGUI> custom_property = new Dictionary<string,CustomPropertyGUI>();
+        //private Dictionary<string,CustomPropertyGui> custom_property = new Dictionary<string,CustomPropertyGui>();
 
 
         public override void OnInspectorGUI()
@@ -63,36 +66,41 @@ namespace YLFramework.SkillSystem
             //}
         }
 
-        internal void OnInspectorGUI(SkillConfigData data, ConfigsWindow window,SkillsConfig skillsConfig )
+        internal void OnInspectorGUI(SkillConfigData data, ConfigsWindow window, SkillsConfig skillsConfig)
         {
             if (data != null)
             {
                 BindSelection(data);
 
-                currentSerializedObject.Update();
+                _currentSerializedObject.Update();
 
                 //EditorGUI.BeginDisabledGroup(true);
                 //EditorGUILayout.PropertyField(script);
                 //EditorGUI.EndDisabledGroup();
 
-                for (int i = 0; i < currentSerializeProperty.Count; i++)
+                for (int i = 0; i < _currentSerializeProperty.Count; i++)
                 {
-                    SerializedProperty property = currentSerializeProperty[i];
+                    SerializedProperty property = _currentSerializeProperty[i];
 
                     //if (property.displayName == "Script") continue;
 
 
                     if (property.name == "parent" && property.objectReferenceValue == null)
+                    {
                         property.objectReferenceValue = skillsConfig;
+                    }
 
+                    if (GetPropertyCustomAttribute<HideInInspector>(property) != null)
+                    {
+                        continue;
+                    }
 
-                    if (GetPropertyCustomAttribute<HideInInspector>(property) != null) continue;
-                    CustomPropertyGUI customPropertyGUI = GetPropertyCustomAttribute<CustomPropertyGUI>(property) ?? GetDomainDrawer(property.name);
+                    CustomPropertyGui customPropertyGui = GetPropertyCustomAttribute<CustomPropertyGui>(property) ?? GetDomainDrawer(property.name);
                     EditorGUI.BeginChangeCheck();
 
-                    if (customPropertyGUI != null)
+                    if (customPropertyGui != null)
                     {
-                        customPropertyGUI.OnPropertyGUI(property);
+                        customPropertyGui.OnPropertyGui(property);
                     }
                     else
                     {
@@ -103,18 +111,24 @@ namespace YLFramework.SkillSystem
 
                     if (EditorGUI.EndChangeCheck())
                     {
-                        currentSerializedObject.ApplyModifiedProperties();
+                        _currentSerializedObject.ApplyModifiedProperties();
 
                         if (property.name == "id")
+                        {
                             window.SetSelection(property.intValue);
+                        }
 
                         //EditorUtility.SetDirty(currentSkillConfigData);
 
-                        if(currentSkillConfigData.parent != null)
-                            currentSkillConfigData.parent.ClearCache();
+                        if (_currentSkillConfigData.parent != null)
+                        {
+                            _currentSkillConfigData.parent.ClearCache();
+                        }
 
-                        if (customPropertyGUI != null && customPropertyGUI.reloadTreeViewOnValueChange)
-                            window.skillListTree.Reload();
+                        if (customPropertyGui != null && customPropertyGui.ReloadTreeViewOnValueChange)
+                        {
+                            window.SkillListTree.Reload();
+                        }
                     }
                 }
             }
@@ -132,52 +146,64 @@ namespace YLFramework.SkillSystem
         }
 
 
-        private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
-        private Dictionary<string, CustomPropertyGUI> drawers = new();
-        private static Dictionary<string, CustomPropertyGUI> CreateDrawers() => new()
+        private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> _attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
+        private Dictionary<string, CustomPropertyGui> _drawers = new();
+        private static Dictionary<string, CustomPropertyGui> CreateDrawers() => new()
         {
-            ["id"] = new CustomSkillConfigDataIDGUI(),
-            ["parent"] = new CustomSkillConfigDataParentGUI(),
-            ["icon"] = new YLFramework.Editor.Domain.DomainResourceIconGUI(),
-            ["canbe_released_at_the_same_time"] = new CustomSkillConfigDataSkillGUI(),
-            ["skill_class_full_name"] = new CustomSkillConfigDataSkillClassGUI()
+            ["id"] = new CustomSkillConfigDataIdGui(),
+            ["parent"] = new CustomSkillConfigDataParentGui(),
+            ["icon"] = new YLFramework.Editor.Domain.DomainResourceIconGui(),
+            ["simultaneousSkillIds"] = new CustomSkillConfigDataSkillGui(),
+            ["skillClassFullName"] = new CustomSkillConfigDataSkillClassGui()
         };
-        private CustomPropertyGUI GetDomainDrawer(string name) => drawers.TryGetValue(name, out var drawer) ? drawer : null;
+        private CustomPropertyGui GetDomainDrawer(string name) => _drawers.TryGetValue(name, out var drawer) ? drawer : null;
 
         internal void BindSelection(SkillConfigData data)
         {
-            if (currentSkillConfigData == data && currentSerializedObject != null) return;
+            if (_currentSkillConfigData == data && _currentSerializedObject != null)
+            {
+                return;
+            }
+
             ReleaseSelection();
-            if (!data) return;
-            currentSkillConfigData = data;
-            currentSerializedObject = new SerializedObject(data);
-            currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
-            drawers = CreateDrawers();
+            if (!data)
+            {
+                return;
+            }
+
+            _currentSkillConfigData = data;
+            _currentSerializedObject = new SerializedObject(data);
+            _currentSerializeProperty = _currentSerializedObject.GetAllSerializedProperty();
+            _drawers = CreateDrawers();
         }
 
         internal void ReleaseSelection()
         {
-            currentSerializedObject?.Dispose();
-            currentSerializedObject = null;
-            currentSkillConfigData = null;
-            currentSerializeProperty = null;
-            attributes.Clear();
-            drawers.Clear();
+            _currentSerializedObject?.Dispose();
+            _currentSerializedObject = null;
+            _currentSkillConfigData = null;
+            _currentSerializeProperty = null;
+            _attributes.Clear();
+            _drawers.Clear();
         }
         private void OnDisable() => ReleaseSelection();
 
         private T GetPropertyCustomAttribute<T>(SerializedProperty property) where T : Attribute
         {
-            if (!attributes.ContainsKey(property))
-                attributes.Add(property, new Dictionary<Type, Attribute>());
+            if (!_attributes.ContainsKey(property))
+            {
+                _attributes.Add(property, new Dictionary<Type, Attribute>());
+            }
 
-            if (attributes[property].ContainsKey(typeof(T)))
-                return attributes[property][typeof(T)] as T;
+            if (_attributes[property].ContainsKey(typeof(T)))
+            {
+                return _attributes[property][typeof(T)] as T;
+            }
 
-            var customPropertyGUI = property.GetAttribute<T>();
+            var customPropertyGui = property.GetAttribute<T>();
 
-            attributes[property].Add(typeof(T), customPropertyGUI);
-            return customPropertyGUI;
+            _attributes[property].Add(typeof(T), customPropertyGui);
+            return customPropertyGui;
         }
     }
 

@@ -25,7 +25,11 @@ namespace YLFramework.Actions
         // 播放中首次产生回收项时创建驱动器；关停期间或当前不允许创建宿主时跳过，等下一次回收请求再试。
         internal static void EnsureCreated()
         {
-            if (HasInstance || ActionKit.IsShuttingDown || !CanCreateHost()) return;
+            if (HasInstance || ActionKit.IsShuttingDown || !CanCreateHost())
+            {
+                return;
+            }
+
             _ = Instance;
         }
 
@@ -53,7 +57,10 @@ namespace YLFramework.Actions
 
         protected override void OnHostRelease()
         {
-            if (!IsCurrentHost) return;
+            if (!IsCurrentHost)
+            {
+                return;
+            }
             // 被替换或销毁的驱动器在释放钩子里兜底清空队列，避免回收项无人处理。
             ActionQueue.Drain();
         }

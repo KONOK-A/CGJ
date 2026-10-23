@@ -2,10 +2,10 @@ using UnityEditor;
 using UnityEngine;
 
 
-namespace YLFramework.Core.Editor 
+namespace YLFramework.Core.Editor
 {
-    
-    public static class HandlesExtensions 
+
+    public static class HandlesExtensions
     {
         // Fix编码
 
@@ -17,12 +17,14 @@ namespace YLFramework.Core.Editor
         /// <param name="dir">方向</param>
         public static void DrawCapsule2D(Vector3 center, Vector2 size, CapsuleDirection2D dir)
         {
-            size.Set(Mathf.Abs(size.x),Mathf.Abs(size.y));
+            size.Set(Mathf.Abs(size.x), Mathf.Abs(size.y));
 
             if (dir == CapsuleDirection2D.Vertical)
             {
-                if(size.y < size.x)
+                if (size.y < size.x)
+                {
                     size.Set(size.x, size.x);
+                }
 
                 Handles.DrawWireArc(new Vector3(0, (size.y - size.x) / 2) + center, -Vector3.forward, Vector3.left, 180, size.x / 2);
 
@@ -34,7 +36,9 @@ namespace YLFramework.Core.Editor
             else
             {
                 if (size.x < size.y)
+                {
                     size.Set(size.y, size.y);
+                }
 
                 Handles.DrawWireArc(new Vector3(-(size.x - size.y) / 2, 0) + center, -Vector3.forward, Vector3.down, 180, size.y / 2);
 

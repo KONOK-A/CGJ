@@ -66,7 +66,10 @@ namespace YLFramework.Tests.ResourceBuild
                     Assert.That(SceneManager.sceneCount, Is.EqualTo(sceneCount));
                     Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1));
                 }
-                finally { Assert.That(AssetDatabase.MoveAsset(moved, source), Is.Empty); }
+                finally
+                {
+                    Assert.That(AssetDatabase.MoveAsset(moved, source), Is.Empty);
+                }
                 outside.Dispose();
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
                 using var shutdown = system.ShutdownAsync();
@@ -173,11 +176,21 @@ namespace YLFramework.Tests.ResourceBuild
                 elapsed.Stop();
                 Assert.That(sampled.Assets.Single().Owners.Count, Is.EqualTo(302));
                 var detail = sampled.Bundles.SelectMany(x => x.RetentionReasons).Single(x => x.Kind == "Asset").Detail;
-                foreach (var holder in holders) Assert.That(detail, Does.Contain(holder.OwnerLabel));
+                foreach (var holder in holders)
+                {
+                    Assert.That(detail, Does.Contain(holder.OwnerLabel));
+                }
+
                 Debug.Log("YL8.9 diagnostics sample: labeled holders=300, capture=" + elapsed.Elapsed.TotalMilliseconds.ToString("F2") +
                     " ms, retention detail=" + detail.Length + " chars. Current-thread allocation counter returns zero in this Mono runtime and is not treated as a measurement.");
             }
-            finally { foreach (var holder in holders) holder?.Dispose(); }
+            finally
+            {
+                foreach (var holder in holders)
+                {
+                    holder?.Dispose();
+                }
+            }
             active.Discard();
             Assert.That(system.GetDiagnosticsReport().InstanceCaches.Single().DestroyPendingCount, Is.EqualTo(1));
             cache.Dispose();

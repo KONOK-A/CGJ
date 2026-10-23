@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace YLFramework.Actions
 {
@@ -7,21 +7,24 @@ namespace YLFramework.Actions
     /// </summary>
     public class ConditionSequence : IAction
     {
-        private Func<bool> mCondition;
-        private Action<ISequence> mSequenceSetting;
-        private ISequence mSequence;
+        private Func<bool> _condition;
+        private Action<ISequence> _sequenceSetting;
+        private ISequence _sequence;
 
-        private static ActionPool<ConditionSequence> mPool =
+        private static ActionPool<ConditionSequence> _pool =
             new ActionPool<ConditionSequence>(() => new ConditionSequence(), null, 10, action =>
             {
-                action.ActionID = ActionKit.ID_GENERATOR++;
-                action.Deinited = false;
-                try { action.Reset(); }
+                action.ActionId = ActionKit.IdGenerator++;
+                action.IsDeinitialized = false;
+                try
+                {
+                    action.Reset();
+                }
                 catch
                 {
-                    action.Deinited = true;
-                    action.mCondition = null;
-                    action.mSequenceSetting = null;
+                    action.IsDeinitialized = true;
+                    action._condition = null;
+                    action._sequenceSetting = null;
                     throw;
                 }
             });
@@ -38,31 +41,46 @@ namespace YLFramework.Actions
         /// <returns>尚未判断条件的分支动作；配置回调不在分配时执行。</returns>
         public static ConditionSequence Allocate(Func<bool> condition, Action<ISequence> sequenceSetting)
         {
-            var whenAction = mPool.Allocate();
-            whenAction.mCondition = condition;
-            whenAction.mSequenceSetting = sequenceSetting;
+            var whenAction = _pool.Allocate();
+            whenAction._condition = condition;
+            whenAction._sequenceSetting = sequenceSetting;
             return whenAction;
         }
 
         /// <inheritdoc />
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
         /// <summary>判断一次条件；为真时配置新子序列，为假时直接标记完成。</summary>
         public void OnStart()
         {
-            if (mCondition())
+            if (_condition())
             {
                 var sequence = ActionKit.Sequence();
-                mSequence = sequence;
+                _sequence = sequence;
                 try
                 {
-                    mSequenceSetting.Invoke(sequence);
-                    if (sequence.Deinited) Deinit();
+                    _sequenceSetting.Invoke(sequence);
+                    if (sequence.IsDeinitialized)
+                    {
+                        Deinit();
+                    }
                 }
                 catch (Exception settingException)
                 {
@@ -77,7 +95,7 @@ namespace YLFramework.Actions
                     }
                     finally
                     {
-                        mSequence = null;
+                        _sequence = null;
                     }
                     throw;
                 }
@@ -92,9 +110,13 @@ namespace YLFramework.Actions
         /// <param name="dt">传给子序列的时间增量，单位为秒。</param>
         public void OnExecute(float dt)
         {
-            var sequence = mSequence;
-            if (sequence == null) return;
-            if (sequence.Deinited)
+            var sequence = _sequence;
+            if (sequence == null)
+            {
+                return;
+            }
+
+            if (sequence.IsDeinitialized)
             {
                 Deinit();
                 return;
@@ -102,7 +124,7 @@ namespace YLFramework.Actions
             Exception executionError = null;
             try
             {
-                if (sequence.Execute(dt) && !sequence.Deinited)
+                if (sequence.Execute(dt) && !sequence.IsDeinitialized)
                 {
                     this.Finish();
                 }
@@ -114,12 +136,19 @@ namespace YLFramework.Actions
             }
             finally
             {
-                if (sequence.Deinited && !Deinited)
+                if (sequence.IsDeinitialized && !IsDeinitialized)
                 {
-                    try { Deinit(); }
+                    try
+                    {
+                        Deinit();
+                    }
                     catch (Exception cleanupError)
                     {
-                        if (executionError == null) throw;
+                        if (executionError == null)
+                        {
+                            throw;
+                        }
+
                         executionError.Data["ConditionSequence.DeinitException"] = cleanupError;
                     }
                 }
@@ -129,29 +158,29 @@ namespace YLFramework.Actions
         /// <summary>正常完成后释放本轮子序列，不清除条件和配置回调。</summary>
         public void OnFinish()
         {
-            if (mSequence != null)
+            if (_sequence != null)
             {
-                mSequence.Deinit();
-                mSequence = null;
+                _sequence.Deinit();
+                _sequence = null;
             }
         }
 
         /// <summary>释放子序列并清除条件及配置回调，安排延迟回收。</summary>
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
+                IsDeinitialized = true;
                 try
                 {
-                    mSequence?.Deinit();
+                    _sequence?.Deinit();
                 }
                 finally
                 {
-                    mSequence = null;
-                    mCondition = null;
-                    mSequenceSetting = null;
-                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionSequence>(mPool, this));
+                    _sequence = null;
+                    _condition = null;
+                    _sequenceSetting = null;
+                    ActionQueue.AddCallback(new ActionQueueRecycleCallback<ConditionSequence>(_pool, this));
                 }
             }
         }
@@ -162,12 +191,12 @@ namespace YLFramework.Actions
             // 先释放旧子序列，下次启动重新判断条件并配置新序列。
             try
             {
-                mSequence?.Deinit();
+                _sequence?.Deinit();
             }
             finally
             {
-                mSequence = null;
-                Paused = false;
+                _sequence = null;
+                IsPaused = false;
                 Status = ActionStatus.NotStart;
             }
         }

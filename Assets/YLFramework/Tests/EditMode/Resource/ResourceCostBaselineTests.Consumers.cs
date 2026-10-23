@@ -19,7 +19,7 @@ namespace YLFramework.Tests.ResourceBuild
     public sealed partial class ResourceCostBaselineTests
     {
         [UnityTest, Order(3)]
-        public IEnumerator C_EditorSharedConsumerAndPeakBaseline()
+        public IEnumerator CEditorSharedConsumerAndPeakBaseline()
         {
             Assert.That(State.BuildsComplete, Is.True, "A must complete before entering the owned runtime scene.");
             yield return new EnterPlayMode();
@@ -31,24 +31,50 @@ namespace YLFramework.Tests.ResourceBuild
             var state = State;
             Assert.That(state.BuildsComplete, Is.True, "Run A before C by selecting the entire ordered fixture.");
             var counter = new AllocationCounter();
-            ResourceCostEvidence.Write("f03-c-allocation-capability", new { counter.Available, counter.ProbeBefore, counter.ProbeAfter,
-                RequiredKnownAllocation = 8192, Unavailable = counter.Available ? null : "Missing/unsupported/constant per-thread counter; all allocation deltas are null, never zero-allocation claims." });
-            foreach (var mode in Modes)
+            ResourceCostEvidence.Write("f03-c-allocation-capability", new
+            {
+                counter.Available,
+                counter.ProbeBefore,
+                counter.ProbeAfter,
+                RequiredKnownAllocation = 8192,
+                Unavailable = counter.Available ? null : "Missing/unsupported/constant per-thread counter; all allocation deltas are null, never zero-allocation claims."
+            });
+            foreach (var mode in _modes)
             {
                 var snapshot = Snapshot(state, mode);
-                for (var sample = 0; sample <= Samples; sample++) yield return ConsumerSample(state, mode, sample, snapshot, counter);
+                for (var sample = 0; sample <= Samples; sample++)
+                {
+                    yield return ConsumerSample(state, mode, sample, snapshot, counter);
+                }
             }
         }
 
         private sealed class ConsumerResult
         {
-            public string Mode, Digest, Step, Error;
-            public int Sample, SharedConsumers = 12, HotOperations = 32 * 16, ExpectedBundleClosure;
-            public bool Warmup, Completed, HotIdentityMatched = true;
+            public string Mode;
+            public string Digest;
+            public string Step;
+            public string Error;
+            public int Sample;
+            public int SharedConsumers = 12;
+            public int HotOperations = 32 * 16;
+            public int ExpectedBundleClosure;
+            public bool Warmup;
+            public bool Completed;
+            public bool HotIdentityMatched = true;
             public bool AudioSourcePlayingObserved;
-            public double? StartupMilliseconds, ColdAcquireMilliseconds, InstanceAndAudioStartMilliseconds, HeldHotMilliseconds, ReleaseMilliseconds, StopMilliseconds;
-            public long? ColdMainThreadAllocatedBytes, HotMainThreadAllocatedBytes;
-            public object Held, Released, Stopped, Memory;
+            public double? StartupMilliseconds;
+            public double? ColdAcquireMilliseconds;
+            public double? InstanceAndAudioStartMilliseconds;
+            public double? HeldHotMilliseconds;
+            public double? ReleaseMilliseconds;
+            public double? StopMilliseconds;
+            public long? ColdMainThreadAllocatedBytes;
+            public long? HotMainThreadAllocatedBytes;
+            public object Held;
+            public object Released;
+            public object Stopped;
+            public object Memory;
             public string[] CleanupFailures;
             public string[] RequestFailures;
             public string Boundary = "Windows Editor baseline only. A fixed exported snapshot is strictly opened before timing. New ResourceStartup/native session each sample, not OS-cold disk. ColdAcquire covers 12 shared Prefab async consumers + two Texture consumers + two formal Audio-provider consumers, full formal SHA/input/native/materialization and request handoff. Hot is 32 passes of 16 acquire/dispose operations while original leases remain held; no IO/native rebuild is expected. AudioSource playback is muted and does not establish an underrun/glitch guarantee. Memory is main-thread tick sampling including the observer/test workload, not absolute instantaneous peaks or allocation attribution. Original G3 Windows64 Mono Player 5-sample x3 evidence is not rerun/replaced.";
@@ -75,63 +101,156 @@ namespace YLFramework.Tests.ResourceBuild
             using var memory = new MemorySampler();
             var config = ResourceConfiguration.Create(ResourceLoadMode.Bundles,
                 new[] { new ResourceProjectMount(state.ProjectId, Platform, AppId, snapshot) }, decryption: new ResourceDecryptionOptions(keys));
-            activeStartup = new ResourceStartup(config, audioProjects: new[] { state.ProjectId });
+            _activeStartup = new ResourceStartup(config, audioProjects: new[] { state.ProjectId });
             var addresses = new[] { "A", "B", "C" }.Select(x => new ResourceAddress(state.ProjectId, x)).ToArray();
             var textureAddresses = new[] { new ResourceAddress(state.ProjectId, "large"), new ResourceAddress(state.ProjectId, "medium") };
 
-            void Release(Action action) { try { action(); } catch (Exception failure) { cleanupFailures.Add(failure); } }
+            void Release(Action action)
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception failure)
+                {
+                    cleanupFailures.Add(failure);
+                }
+            }
             void ReleaseConsumers()
             {
-                if (released) return;
+                if (released)
+                {
+                    return;
+                }
+
                 released = true;
                 closing = true;
-                if (source) { Release(() => source.Stop()); Release(() => source.clip = null); }
-                if (audioObject) Release(() => Object.Destroy(audioObject));
-                foreach (var instance in instances) Release(instance.Dispose);
-                if (system != null) Release(system.ClearInstanceCaches);
-                foreach (var lease in prefabLeases) if (lease != null) Release(lease.Dispose);
-                foreach (var lease in textures) if (lease != null) Release(lease.Dispose);
-                foreach (var lease in audio) if (lease != null) Release(lease.Dispose);
-                foreach (var request in prefabRequests) if (request != null) Release(request.Dispose);
-                foreach (var request in textureRequests) if (request != null) Release(request.Dispose);
+                if (source)
+                {
+                    Release(() => source.Stop());
+                    Release(() => source.clip = null);
+                }
+                if (audioObject)
+                {
+                    Release(() => Object.Destroy(audioObject));
+                }
+
+                foreach (var instance in instances)
+                {
+                    Release(instance.Dispose);
+                }
+
+                if (system != null)
+                {
+                    Release(system.ClearInstanceCaches);
+                }
+
+                foreach (var lease in prefabLeases)
+                {
+                    if (lease != null)
+                    {
+                        Release(lease.Dispose);
+                    }
+                }
+
+                foreach (var lease in textures)
+                {
+                    if (lease != null)
+                    {
+                        Release(lease.Dispose);
+                    }
+                }
+
+                foreach (var lease in audio)
+                {
+                    if (lease != null)
+                    {
+                        Release(lease.Dispose);
+                    }
+                }
+
+                foreach (var request in prefabRequests)
+                {
+                    if (request != null)
+                    {
+                        Release(request.Dispose);
+                    }
+                }
+
+                foreach (var request in textureRequests)
+                {
+                    if (request != null)
+                    {
+                        Release(request.Dispose);
+                    }
+                }
             }
 
             try
             {
                 var began = Stopwatch.GetTimestamp();
-                using (var start = activeStartup.StartAsync())
+                using (var start = _activeStartup.StartAsync())
                 {
                     var deadline = Now + TimeoutSeconds;
-                    while (!start.IsDone && Now < deadline) { memory.Tick(activeStartup.Resources); yield return null; }
+                    while (!start.IsDone && Now < deadline)
+                    {
+                        memory.Tick(_activeStartup.Resources);
+                        yield return null;
+                    }
                     result.StartupMilliseconds = Milliseconds(began, Stopwatch.GetTimestamp());
                     result.Error = start.Error?.ToString();
                     Assert.That(start.IsDone, Is.True);
                     start.TakeResult();
                 }
-                system = lastSystem = activeStartup.Resources;
-                var provider = activeStartup.AudioProviders[state.ProjectId];
+                system = _lastSystem = _activeStartup.Resources;
+                var provider = _activeStartup.AudioProviders[state.ProjectId];
                 result.Step = "ColdAcquire";
                 var allocated = counter.Read();
                 began = Stopwatch.GetTimestamp();
                 try
                 {
-                    for (var i = 0; i < prefabRequests.Length; i++) prefabRequests[i] = system.AcquireAsync<GameObject>(addresses[i / 4]);
-                    for (var i = 0; i < textureRequests.Length; i++) textureRequests[i] = system.AcquireAsync<Texture2D>(textureAddresses[i]);
+                    for (var i = 0; i < prefabRequests.Length; i++)
+                    {
+                        prefabRequests[i] = system.AcquireAsync<GameObject>(addresses[i / 4]);
+                    }
+
+                    for (var i = 0; i < textureRequests.Length; i++)
+                    {
+                        textureRequests[i] = system.AcquireAsync<Texture2D>(textureAddresses[i]);
+                    }
+
                     for (var i = 0; i < audio.Length; i++)
                     {
                         var index = i;
                         provider.LoadAsync("audio", (lease, error) =>
                         {
-                            if (closing) lease?.Dispose();
-                            else { audio[index] = lease; audioErrors[index] = error; }
+                            if (closing)
+                            {
+                                lease?.Dispose();
+                            }
+                            else
+                            {
+                                audio[index] = lease;
+                                audioErrors[index] = error;
+                            }
                             audioDone++;
                         }, null);
                     }
                     var deadline = Now + TimeoutSeconds;
                     while ((prefabRequests.Any(x => !x.IsDone) || textureRequests.Any(x => !x.IsDone) || audioDone != audio.Length) && Now < deadline)
-                    { memory.Tick(system); yield return null; }
-                    for (var i = 0; i < prefabLeases.Length; i++) prefabLeases[i] = prefabRequests[i].TakeResult();
-                    for (var i = 0; i < textures.Length; i++) textures[i] = textureRequests[i].TakeResult();
+                    {
+                        memory.Tick(system);
+                        yield return null;
+                    }
+                    for (var i = 0; i < prefabLeases.Length; i++)
+                    {
+                        prefabLeases[i] = prefabRequests[i].TakeResult();
+                    }
+
+                    for (var i = 0; i < textures.Length; i++)
+                    {
+                        textures[i] = textureRequests[i].TakeResult();
+                    }
                 }
                 finally
                 {
@@ -159,10 +278,16 @@ namespace YLFramework.Tests.ResourceBuild
 
                 result.Step = "InstancesAndAudio";
                 began = Stopwatch.GetTimestamp();
-                for (var i = 0; i < 3; i++) instances.Add(system.Instantiate(prefabLeases[i * 4]));
+                for (var i = 0; i < 3; i++)
+                {
+                    instances.Add(system.Instantiate(prefabLeases[i * 4]));
+                }
+
                 audioObject = new GameObject("F03-OwnedAudio");
                 source = audioObject.AddComponent<AudioSource>();
-                source.playOnAwake = false; source.mute = true; source.loop = true;
+                source.playOnAwake = false;
+                source.mute = true;
+                source.loop = true;
                 source.clip = audio[0].Clip;
                 source.Play();
                 result.InstanceAndAudioStartMilliseconds = Milliseconds(began, Stopwatch.GetTimestamp());
@@ -187,12 +312,22 @@ namespace YLFramework.Tests.ResourceBuild
                 result.HeldHotMilliseconds = Milliseconds(began, Stopwatch.GetTimestamp());
                 result.HotMainThreadAllocatedBytes = counter.Delta(allocated);
                 // Keep all base leases, instances and clip consumers alive through the sampled residency window.
-                for (var frame = 0; frame < 8; frame++) { memory.Tick(system); yield return null; }
+                for (var frame = 0; frame < 8; frame++)
+                {
+                    memory.Tick(system);
+                    yield return null;
+                }
                 result.AudioSourcePlayingObserved = source.isPlaying;
                 var held = system.GetDiagnosticsReport();
-                result.Held = new { held.Summary, held.Content, held.Bundles, held.InstanceCaches,
+                result.Held = new
+                {
+                    held.Summary,
+                    held.Content,
+                    held.Bundles,
+                    held.InstanceCaches,
                     TextureNativeBytes = Profiler.GetRuntimeMemorySizeLong(textures[0].Asset) + Profiler.GetRuntimeMemorySizeLong(textures[1].Asset),
-                    AudioNativeBytes = Profiler.GetRuntimeMemorySizeLong(audio[0].Clip) };
+                    AudioNativeBytes = Profiler.GetRuntimeMemorySizeLong(audio[0].Clip)
+                };
                 Assert.That(result.HotIdentityMatched, Is.True);
                 Assert.That(held.Summary.NativeBundleLoadCount, Is.EqualTo(beforeHotNative));
                 Assert.That(held.Content.LiveInputs, Is.EqualTo(hotLive));
@@ -204,15 +339,23 @@ namespace YLFramework.Tests.ResourceBuild
                 began = Stopwatch.GetTimestamp();
                 ReleaseConsumers();
                 var releaseDeadline = Now + TimeoutSeconds;
-                while (!IsReleased(system) && Now < releaseDeadline) { memory.Tick(system); yield return null; }
+                while (!IsReleased(system) && Now < releaseDeadline)
+                {
+                    memory.Tick(system);
+                    yield return null;
+                }
                 memory.Tick(system);
                 result.ReleaseMilliseconds = Milliseconds(began, Stopwatch.GetTimestamp());
-                result.Released = new { Content = system.GetContentDiagnosticsSnapshot(), Summary = system.GetDiagnosticsSnapshot() };
+                result.Released = new
+                {
+                    Content = system.GetContentDiagnosticsSnapshot(),
+                    Summary = system.GetDiagnosticsSnapshot()
+                };
                 Assert.That(cleanupFailures, Is.Empty);
                 AssertReleased(system);
                 result.Step = "Stop";
                 began = Stopwatch.GetTimestamp();
-                using (var stop = activeStartup.StopAsync())
+                using (var stop = _activeStartup.StopAsync())
                 {
                     yield return Wait(stop);
                     result.StopMilliseconds = Milliseconds(began, Stopwatch.GetTimestamp());
@@ -221,7 +364,7 @@ namespace YLFramework.Tests.ResourceBuild
                 result.Stopped = system.GetContentDiagnosticsSnapshot();
                 AssertReleased(system);
                 Assert.That(ResourceSystem.Current, Is.Null);
-                activeStartup = null;
+                _activeStartup = null;
                 result.Step = "Complete";
                 result.Completed = true;
             }
@@ -234,23 +377,47 @@ namespace YLFramework.Tests.ResourceBuild
                     .Concat(textureRequests.Where(x => x?.Error != null).Select(x => x.Error.ToString()))
                     .Concat(audioErrors.Where(x => x != null).Select(x => x.ToString())).ToArray();
                 ResourceCostEvidence.Write("f03-c-" + mode.ToLowerInvariant() + "-" + sample, result);
-                if (cleanupFailures.Count != 0) throw new AggregateException("F03 consumer release failed.", cleanupFailures);
+                if (cleanupFailures.Count != 0)
+                {
+                    throw new AggregateException("F03 consumer release failed.", cleanupFailures);
+                }
             }
         }
 
         private static int ConsumerClosure(ResourceCatalogDocument document)
         {
             var found = new HashSet<string>(StringComparer.Ordinal);
-            void Visit(string id) { if (found.Add(id)) foreach (var next in document.Bundles.Single(x => x.LogicalId == id).Dependencies) Visit(next); }
-            foreach (var address in new[] { "A", "B", "C", "large", "medium", "audio" }) Visit(document.Assets.Single(x => x.Address == address && x.Kind != "SubAsset").BundleId);
+            void Visit(string id)
+            {
+                if (found.Add(id))
+                {
+                    foreach (var next in document.Bundles.Single(x => x.LogicalId == id).Dependencies)
+                    {
+                        Visit(next);
+                    }
+                }
+            }
+            foreach (var address in new[] { "A", "B", "C", "large", "medium", "audio" })
+            {
+                Visit(document.Assets.Single(x => x.Address == address && x.Kind != "SubAsset").BundleId);
+            }
+
             return found.Count;
         }
 
         private static IEnumerator Wait<T>(ResourceRequest<T> request)
         {
             var deadline = Now + TimeoutSeconds;
-            while (!request.IsDone && Now < deadline) yield return null;
-            if (request.IsDone) yield break;
+            while (!request.IsDone && Now < deadline)
+            {
+                yield return null;
+            }
+
+            if (request.IsDone)
+            {
+                yield break;
+            }
+
             request.Cancel();
             throw new TimeoutException("The owned F03 request exceeded its finite observation window.");
         }
@@ -279,63 +446,97 @@ namespace YLFramework.Tests.ResourceBuild
         [UnityTearDown]
         public IEnumerator EndOnlyTheOwnedRuntimeSession()
         {
-            if (!Application.isPlaying) yield break;
-            if (activeStartup != null)
+            if (!Application.isPlaying)
             {
-                lastSystem = activeStartup.Resources ?? lastSystem;
-                using var stop = activeStartup.StopAsync();
+                yield break;
+            }
+
+            if (_activeStartup != null)
+            {
+                _lastSystem = _activeStartup.Resources ?? _lastSystem;
+                using var stop = _activeStartup.StopAsync();
                 yield return Wait(stop);
                 var sequence = SessionState.GetInt(StateKey + ".cleanup", 0) + 1;
                 SessionState.SetInt(StateKey + ".cleanup", sequence);
-                ResourceCostEvidence.Write("f03-runtime-cleanup-" + sequence, new { Status = stop.Status.ToString(), Error = stop.Error?.ToString(),
-                    Content = lastSystem?.GetContentDiagnosticsSnapshot(), Summary = lastSystem?.GetDiagnosticsSnapshot() });
+                ResourceCostEvidence.Write("f03-runtime-cleanup-" + sequence, new
+                {
+                    Status = stop.Status.ToString(),
+                    Error = stop.Error?.ToString(),
+                    Content = _lastSystem?.GetContentDiagnosticsSnapshot(),
+                    Summary = _lastSystem?.GetDiagnosticsSnapshot()
+                });
                 Assert.That(stop.TakeResult(), Is.True, stop.Error?.ToString());
-                activeStartup = null;
+                _activeStartup = null;
             }
-            if (lastSystem != null) AssertReleased(lastSystem);
+            if (_lastSystem != null)
+            {
+                AssertReleased(_lastSystem);
+            }
+
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty, "Never use UnloadAllAssetBundles to manufacture cleanup.");
-            lastSystem = null;
+            _lastSystem = null;
             yield return new ExitPlayMode();
         }
 
         private sealed class AllocationCounter
         {
-            private readonly Func<long> read;
-            internal bool Available { get; }
-            internal long? ProbeBefore { get; }
-            internal long? ProbeAfter { get; }
+            private readonly Func<long> _read;
+            internal bool Available
+            {
+                get;
+            }
+            internal long? ProbeBefore
+            {
+                get;
+            }
+            internal long? ProbeAfter
+            {
+                get;
+            }
             internal AllocationCounter()
             {
                 var method = typeof(GC).GetMethod("GetAllocatedBytesForCurrentThread", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
-                if (method == null) return;
-                read = (Func<long>)Delegate.CreateDelegate(typeof(Func<long>), method);
+                if (method == null)
+                {
+                    return;
+                }
+
+                _read = (Func<long>)Delegate.CreateDelegate(typeof(Func<long>), method);
                 try
                 {
-                    ProbeBefore = read();
+                    ProbeBefore = _read();
                     var known = new byte[8192];
                     known[0] = 1;
-                    ProbeAfter = read();
+                    ProbeAfter = _read();
                     GC.KeepAlive(known);
                     Available = ProbeBefore.HasValue && ProbeAfter.HasValue && ProbeAfter.Value - ProbeBefore.Value >= 8192;
                 }
                 catch (PlatformNotSupportedException) { }
                 catch (NotSupportedException) { }
             }
-            internal long? Read() => Available ? read() : (long?)null;
-            internal long? Delta(long? before) => before.HasValue ? read() - before.Value : (long?)null;
+            internal long? Read() => Available ? _read() : (long?)null;
+            internal long? Delta(long? before) => before.HasValue ? _read() - before.Value : (long?)null;
         }
 
         private readonly struct MemoryPoint
         {
-            public readonly long Tick, MonoUsedBytes, MonoHeapBytes, UnityAllocatedBytes, UnityReservedBytes, UnityUnusedReservedBytes;
-            public readonly long? WorkingSetBytes, PrivateBytes;
+            public readonly long Tick;
+            public readonly long MonoUsedBytes;
+            public readonly long MonoHeapBytes;
+            public readonly long UnityAllocatedBytes;
+            public readonly long UnityReservedBytes;
+            public readonly long UnityUnusedReservedBytes;
+            public readonly long? WorkingSetBytes;
+            public readonly long? PrivateBytes;
             public readonly ResourceContentDiagnosticsSnapshot Content;
             internal MemoryPoint(ResourceSystem system, Process process, bool processAvailable)
             {
                 Tick = Stopwatch.GetTimestamp();
-                MonoUsedBytes = Profiler.GetMonoUsedSizeLong(); MonoHeapBytes = Profiler.GetMonoHeapSizeLong();
-                UnityAllocatedBytes = Profiler.GetTotalAllocatedMemoryLong(); UnityReservedBytes = Profiler.GetTotalReservedMemoryLong();
+                MonoUsedBytes = Profiler.GetMonoUsedSizeLong();
+                MonoHeapBytes = Profiler.GetMonoHeapSizeLong();
+                UnityAllocatedBytes = Profiler.GetTotalAllocatedMemoryLong();
+                UnityReservedBytes = Profiler.GetTotalReservedMemoryLong();
                 UnityUnusedReservedBytes = Profiler.GetTotalUnusedReservedMemoryLong();
                 var workingSet = processAvailable ? process.WorkingSet64 : (long?)null;
                 var privateBytes = processAvailable ? process.PrivateMemorySize64 : (long?)null;
@@ -348,50 +549,70 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class MemorySampler : IDisposable
         {
-            private readonly Process process = Process.GetCurrentProcess();
-            private readonly List<MemoryPoint> points = new(4096);
-            private bool processAvailable = true;
-            private bool truncated;
-            private string unavailable;
+            private readonly Process _process = Process.GetCurrentProcess();
+            private readonly List<MemoryPoint> _points = new(4096);
+            private bool _isProcessAvailable = true;
+            private bool _isTruncated;
+            private string _unavailable;
             internal void Tick(ResourceSystem system)
             {
-                if (points.Count >= 16384) { truncated = true; return; }
-                if (processAvailable)
+                if (_points.Count >= 16384)
                 {
-                    try { process.Refresh(); _ = process.WorkingSet64; _ = process.PrivateMemorySize64; }
-                    catch (Win32Exception error) { processAvailable = false; unavailable = error.GetType().Name; }
-                    catch (PlatformNotSupportedException error) { processAvailable = false; unavailable = error.GetType().Name; }
+                    _isTruncated = true;
+                    return;
                 }
-                points.Add(new MemoryPoint(system, process, processAvailable));
+                if (_isProcessAvailable)
+                {
+                    try
+                    {
+                        _process.Refresh();
+                        _ = _process.WorkingSet64;
+                        _ = _process.PrivateMemorySize64;
+                    }
+                    catch (Win32Exception error)
+                    {
+                        _isProcessAvailable = false;
+                        _unavailable = error.GetType().Name;
+                    }
+                    catch (PlatformNotSupportedException error)
+                    {
+                        _isProcessAvailable = false;
+                        _unavailable = error.GetType().Name;
+                    }
+                }
+                _points.Add(new MemoryPoint(system, _process, _isProcessAvailable));
             }
             internal object Capture()
             {
-                var workingSetAvailable = processAvailable && points.Count > 0 && points.All(x => x.WorkingSetBytes.HasValue);
-                var privateBytesAvailable = processAvailable && points.Count > 0 && points.All(x => x.PrivateBytes.HasValue);
+                var workingSetAvailable = _isProcessAvailable && _points.Count > 0 && _points.All(x => x.WorkingSetBytes.HasValue);
+                var privateBytesAvailable = _isProcessAvailable && _points.Count > 0 && _points.All(x => x.PrivateBytes.HasValue);
                 return new
                 {
-                    Samples = points.Count, Truncated = truncated, ProcessCountersAvailable = workingSetAvailable && privateBytesAvailable,
-                    WorkingSetCounterAvailable = workingSetAvailable, PrivateCounterAvailable = privateBytesAvailable,
-                    ProcessCounterUnavailable = unavailable ?? (workingSetAvailable && privateBytesAvailable ? null : "Runtime process counters returned missing/non-positive values; these are not zero-memory measurements."),
-                    PeakWorkingSetBytes = workingSetAvailable ? points.Max(x => x.WorkingSetBytes) : null,
-                    PeakPrivateBytes = privateBytesAvailable ? points.Max(x => x.PrivateBytes) : null,
-                    PeakMonoUsedBytes = points.Select(x => x.MonoUsedBytes).DefaultIfEmpty().Max(),
-                    PeakUnityAllocatedBytes = points.Select(x => x.UnityAllocatedBytes).DefaultIfEmpty().Max(),
-                    PeakUnityReservedBytes = points.Select(x => x.UnityReservedBytes).DefaultIfEmpty().Max(),
-                    PeakAllocatedContentBytes = points.Select(x => x.Content.AllocatedBufferBytes).DefaultIfEmpty().Max(),
-                    PeakReservedContentBytes = points.Select(x => x.Content.ReservedBufferBytes).DefaultIfEmpty().Max(),
-                    SubjectObservedPeakContentBytes = points.Select(x => x.Content.PeakBufferBytes).DefaultIfEmpty().Max(),
-                    PeakLiveInputs = points.Select(x => x.Content.LiveInputs).DefaultIfEmpty().Max(),
-                    PeakContentWork = points.Select(x => x.Content.WorkCount).DefaultIfEmpty().Max(),
-                    PeakDeclaredNativeReadBytes = points.Select(x => x.Content.DeclaredNativeReadBufferBytes).DefaultIfEmpty().Max(),
-                    PeakProcessCngProviders = points.Select(x => x.Content.ProcessCngProviderCount).DefaultIfEmpty().Max(),
-                    PeakProcessCngKeys = points.Select(x => x.Content.ProcessCngKeyCount).DefaultIfEmpty().Max(),
-                    PeakProcessCngKeyObjectBytes = points.Select(x => x.Content.ProcessCngKeyObjectBytes).DefaultIfEmpty().Max(),
-                    Points = points,
+                    Samples = _points.Count,
+                    Truncated = _isTruncated,
+                    ProcessCountersAvailable = workingSetAvailable && privateBytesAvailable,
+                    WorkingSetCounterAvailable = workingSetAvailable,
+                    PrivateCounterAvailable = privateBytesAvailable,
+                    ProcessCounterUnavailable = _unavailable ?? (workingSetAvailable && privateBytesAvailable ? null : "Runtime process counters returned missing/non-positive values; these are not zero-memory measurements."),
+                    PeakWorkingSetBytes = workingSetAvailable ? _points.Max(x => x.WorkingSetBytes) : null,
+                    PeakPrivateBytes = privateBytesAvailable ? _points.Max(x => x.PrivateBytes) : null,
+                    PeakMonoUsedBytes = _points.Select(x => x.MonoUsedBytes).DefaultIfEmpty().Max(),
+                    PeakUnityAllocatedBytes = _points.Select(x => x.UnityAllocatedBytes).DefaultIfEmpty().Max(),
+                    PeakUnityReservedBytes = _points.Select(x => x.UnityReservedBytes).DefaultIfEmpty().Max(),
+                    PeakAllocatedContentBytes = _points.Select(x => x.Content.AllocatedBufferBytes).DefaultIfEmpty().Max(),
+                    PeakReservedContentBytes = _points.Select(x => x.Content.ReservedBufferBytes).DefaultIfEmpty().Max(),
+                    SubjectObservedPeakContentBytes = _points.Select(x => x.Content.PeakBufferBytes).DefaultIfEmpty().Max(),
+                    PeakLiveInputs = _points.Select(x => x.Content.LiveInputs).DefaultIfEmpty().Max(),
+                    PeakContentWork = _points.Select(x => x.Content.WorkCount).DefaultIfEmpty().Max(),
+                    PeakDeclaredNativeReadBytes = _points.Select(x => x.Content.DeclaredNativeReadBufferBytes).DefaultIfEmpty().Max(),
+                    PeakProcessCngProviders = _points.Select(x => x.Content.ProcessCngProviderCount).DefaultIfEmpty().Max(),
+                    PeakProcessCngKeys = _points.Select(x => x.Content.ProcessCngKeyCount).DefaultIfEmpty().Max(),
+                    PeakProcessCngKeyObjectBytes = _points.Select(x => x.Content.ProcessCngKeyObjectBytes).DefaultIfEmpty().Max(),
+                    Points = _points,
                     Note = "Main-thread/tick sampled high-water marks, not exact instantaneous peaks. Profiler totals are logical process/Unity counters, not native allocation counts. No GC.Collect or OS cache flush. Allocation deltas, when capability-proven, include this observer and test consumers."
                 };
             }
-            public void Dispose() => process.Dispose();
+            public void Dispose() => _process.Dispose();
         }
     }
 }

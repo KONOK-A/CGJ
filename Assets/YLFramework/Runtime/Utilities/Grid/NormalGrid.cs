@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace YLFramework.Utilities.Grid
@@ -16,12 +16,18 @@ namespace YLFramework.Utilities.Grid
         /// <summary>
         /// 网格宽度（x 方向的有效坐标数量）。
         /// </summary>
-        public int Width { get; private set; }
+        public int Width
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 网格高度（y 方向的有效坐标数量）。
         /// </summary>
-        public int Height { get; private set; }
+        public int Height
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 网格总格子数（Width * Height）。

@@ -26,14 +26,14 @@ namespace YLFramework.Editor
                     new[] { typeof(Core.Pool.ObjectPool<>), typeof(Events.EventBus), typeof(Binding.BindableProperty<>),
                         typeof(Timing.Timer), typeof(Timing.TimerScope), typeof(SerializedDictionary<,>) },
                     HelpBlock.Paragraph("引用与所有权", "业务 asmdef 显式引用 YLFramework.Runtime。Foundation与Core是同主体的职责分区；Core 与 Audio 已通过消费合同接入唯一 ResourceSystem；ObjectPool<T>的借用对象由调用方归还；" +
-                        "EventBus 的 IUnRegister 令牌由订阅所有者注销，独立 EventBus 实例须自行 Dispose。BindableProperty<T> 的监听沿同一注销协议。" +
+                        "EventBus 的 IUnregister 令牌由订阅所有者注销，独立 EventBus 实例须自行 Dispose。BindableProperty<T> 的监听沿同一注销协议。" +
                         "Timer/TimerScope 管理到期回调与生命周期，不替代 Action 的逐帧插值/组合。"),
                     HelpBlock.Paragraph("编辑与导航", "SerializedDictionary<TKey,TValue> 由普通 Editor 的现有 Drawer 编辑并提示重复键等问题。" +
                         "Singleton、Pool、Events、Binding、IOC、Timing、AssemblyTool 的完整契约见 Documentation/Modules 下对应说明；" +
                         "这里仅展示精选 API，不扫描整个工程或执行成员。"),
                     Document("基础模块导航", "README.md")),
                 Guide("tools", "Tools 与 Editor 工具", "按需选用数据与 UI 便利工具，不增加统一工具宿主或配置中心。",
-                    new[] { typeof(Utilities.StringTools), typeof(FSM.FSM<>), typeof(Utilities.Grid.NormalGrid<>), typeof(Utilities.Json.JSONObject),
+                    new[] { typeof(Utilities.StringTools), typeof(FSM.Fsm<>), typeof(Utilities.Grid.NormalGrid<>), typeof(Utilities.Json.JSONObject),
                         typeof(Core.ColorSelector), typeof(Core.ColorSelectorWindow) },
                     HelpBlock.Paragraph("选用工具", "StringTools/Extensions、FSM、Grid、Json/JSONObject、Table 位于 YLFramework.Runtime；FSM 由调用方驱动及回收，" +
                          "不替代可视化XFFSM。ZipTool也归Runtime主体，源码仍BCL-only；Zip/GZip的reader以using管理寿命。" +
@@ -50,11 +50,11 @@ namespace YLFramework.Editor
                     Document("工具导航与导出说明", "README.md"),
                     Document("取色工具接入", "Modules/UI.md")),
                 Guide("attributes", "Attributes 与显示边界", "Foundation 展示元数据与 Core 编译器诊断是不同机制。",
-                    new[] { typeof(DisableEdit), typeof(CustomClassNameGUI), typeof(CustomPropertyGUI) },
+                    new[] { typeof(DisableEdit), typeof(CustomClassNameGui), typeof(CustomPropertyGui) },
                     HelpBlock.Paragraph("必要 Drawer", "DisableEdit的原生Drawer位于Editor主体，只在编辑器禁用序列化字段及子属性并恢复GUI状态；普通C# property不会因此变成可序列化字段。" +
                         "Attributes源码归Foundation，元数据不消费上层Core逻辑；主体身份与源码边界分开核验。"),
-                    HelpBlock.Paragraph("显式扩展元数据", "CustomClassNameGUI 保存类型显示名；CustomPropertyGUI 是抽象字段绘制契约，当前没有内置自动扫描器或通用 Inspector 消费者。" +
-                        "自定义 Editor 须显式读取并调用；OnPropertyGUI 及其业务 override 必须保持 #if UNITY_EDITOR 隔离，Player 不包含该方法。"),
+                    HelpBlock.Paragraph("显式扩展元数据", "CustomClassNameGui 保存类型显示名；CustomPropertyGui 是抽象字段绘制契约，当前没有内置自动扫描器或通用 Inspector 消费者。" +
+                        "自定义 Editor 须显式读取并调用；OnPropertyGui 及其业务 override 必须保持 #if UNITY_EDITOR 隔离，Player 不包含该方法。"),
                     HelpBlock.Notice("声明与文档", "精选 API 来自真实编译元数据，读取不构造对象或访问静态实例属性。缺少 XML 时仍显示声明，不按名字编造摘要。" +
                         "Core 的 YL0001～YL0007 自有分析器、Warning 默认、作用域与源码重建入口见 Core 帮助及 Attributes 文档。"),
                     Document("Attributes、分析器与配置", "Modules/Attributes.md"))

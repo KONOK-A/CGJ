@@ -31,7 +31,13 @@ namespace YLFramework.Tests
                 Assert.That(third, Is.Not.Null.And.Not.SameAs(second));
                 Assert.That(go.GetComponents<BoxCollider>().Length, Is.EqualTo(1));
             }
-            finally { if (go) Object.Destroy(go); }
+            finally
+            {
+                if (go)
+                {
+                    Object.Destroy(go);
+                }
+            }
         }
 
         [UnityTest]
@@ -49,7 +55,13 @@ namespace YLFramework.Tests
                 Assert.That(component.DestroySelfGracefully(), Is.SameAs(component));
                 Assert.That(((Object)null).DestroySelfGracefully(), Is.Null);
             }
-            finally { if (go) Object.Destroy(go); }
+            finally
+            {
+                if (go)
+                {
+                    Object.Destroy(go);
+                }
+            }
         }
 
         [UnityTest]
@@ -79,7 +91,13 @@ namespace YLFramework.Tests
                 Assert.DoesNotThrow(() => component.DestroyGameObjGracefully());
                 Assert.DoesNotThrow(() => ((Component)null).DestroyGameObjGracefully());
             }
-            finally { if (go) Object.Destroy(go); }
+            finally
+            {
+                if (go)
+                {
+                    Object.Destroy(go);
+                }
+            }
         }
     }
 }

@@ -9,22 +9,15 @@ param(
     [ValidatePattern('^YLFramework\.Tests\.HybridCLRReception\.Editor\.HybridCLRReceptionBootstrap\.[A-Za-z]+$')][string]$EntryPoint,
     [switch]$KeepOpenForCallback,
     [switch]$AuditOnly,
-    [switch]$Graphics
+    [switch]$Graphics,
+    [ValidatePattern('^[A-Za-z0-9-]+\.unitypackage$')][string]$BasePackage = 'YLFramework.unitypackage'
 )
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
-$Root = [IO.Path]::GetFullPath($Root)
-$approved = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Temp/kilo')) + [IO.Path]::DirectorySeparatorChar
-if (-not $Root.StartsWith($approved, [StringComparison]::OrdinalIgnoreCase)) { throw 'Expected the approved independent receiver root.' }
-for ($cursor = $Root; $cursor; $cursor = [IO.Path]::GetDirectoryName($cursor)) {
-    if ([IO.Path]::Exists($cursor) -and ([IO.File]::GetAttributes($cursor) -band [IO.FileAttributes]::ReparsePoint)) { throw 'Linked receiver paths are not supported.' }
-}
-$owner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json
-if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Receiver ownership mismatch.' }
-$project = [IO.Path]::GetFullPath($owner.project)
-$shortProject = [IO.Path]::GetFullPath((Join-Path $owner.repository 'Temp/H26'))
-$persistentProject = [IO.Path]::GetFullPath((Join-Path ([IO.DirectoryInfo]::new($owner.repository).Parent.Parent.FullName) 'H26'))
-if ($project -ne (Join-Path $Root 'R') -and $project -ne $shortProject -and $project -ne $persistentProject) { throw 'Unexpected receiver project path.' }
+$scope = & (Join-Path $PSScriptRoot 'Get-HybridCLRReceptionScope.ps1') -Root $Root
+$Root = $scope.Root
+$owner = $scope.Owner
+$project = $scope.Project
 if (-not (Test-Path -LiteralPath $Root) -or -not (Test-Path -LiteralPath $Unity)) { throw 'Missing explicit receiver parent or Unity executable.' }
 $others = @(Get-CimInstance Win32_Process -Filter "Name = 'Unity.exe'" | Where-Object { $_.CommandLine -notmatch 'AssetImportWorker' -and $_.CommandLine.Contains($project) })
 if ($others.Count) { throw 'This receiver already has a Unity instance; never launch a second one.' }
@@ -42,7 +35,7 @@ if ($Action -eq 'Create') {
     if (-not (Test-Path -LiteralPath (Join-Path $project 'ProjectSettings/ProjectVersion.txt'))) { throw 'Receiver project has not been created.' }
     $arguments += @('-projectPath', $project, '-buildTarget', 'Win64')
     if ($Action -in @('ImportBase','ImportOptional','SyncOptional')) {
-        $package = Join-Path $Root $(if ($Action -eq 'ImportBase') { 'YLFramework.unitypackage' } else { $OptionalPackage })
+        $package = Join-Path $Root $(if ($Action -eq 'ImportBase') { $BasePackage } else { $OptionalPackage })
         if (-not (Test-Path -LiteralPath $package)) { throw 'Missing formal exported product artifact.' }
         $arguments += @('-importPackage', $package)
     }

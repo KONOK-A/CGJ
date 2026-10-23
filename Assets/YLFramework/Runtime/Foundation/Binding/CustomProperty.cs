@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace YLFramework.Binding
 {
@@ -20,7 +20,7 @@ namespace YLFramework.Binding
         {
             _valueGetter = valueGetter;
         }
-        
+
         private Func<T> _valueGetter;
 
         /// <summary>
@@ -28,8 +28,8 @@ namespace YLFramework.Binding
         /// </summary>
         protected override T GetValue()
         {
-            _value =  _valueGetter.Invoke();
-            return _value;
+            StoredValue = _valueGetter.Invoke();
+            return StoredValue;
         }
     }
 }

@@ -1,8 +1,8 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
+using UnityEngine.Serialization;
+using YLFramework.Foundation;
 
 namespace YLFramework.SkillSystem
 {
@@ -31,7 +31,7 @@ namespace YLFramework.SkillSystem
         public int id;
         [Tooltip("技能名称")]
         [Header("技能名称")]
-        public string skill_name;
+        [FormerlySerializedAs("skill_name")] public string skillName;
 
         [Tooltip("技能图标")]
         [Header("技能图标")]
@@ -39,32 +39,32 @@ namespace YLFramework.SkillSystem
         public IconInfo icon = new IconInfo();
         [Tooltip("冷却时间")]
         [Header("冷却时间")]
-        public float cooling_time;
+        [FormerlySerializedAs("cooling_time")] public float cooldownSeconds;
         [Tooltip("持续时间")]
         [Header("持续时间")]
         public float duration;
         [Tooltip("能够同时释放的技能(默认所有的技能都不能同时释放)")]
         [Header("能够同时释放的技能(默认所有的技能都不能同时释放)")]
 
-        public List<int> canbe_released_at_the_same_time = new List<int>();
+        [FormerlySerializedAs("canbe_released_at_the_same_time")] public List<int> simultaneousSkillIds = new List<int>();
         [Tooltip("是否能够主动取消")]
         [Header("是否能够主动取消")]
-        public bool active_cancellation;
+        [FormerlySerializedAs("active_cancellation")] public bool allowCancellation;
 
         [Tooltip("技能描述")]
         [Header("技能描述")]
         //[Multiline(8)]
-        [TextArea(3,8)]
+        [TextArea(3, 8)]
         public string description;
 
         [Tooltip("技能类名称(含命名空间)")]
 
-        public string skill_class_full_name;
+        [FormerlySerializedAs("skill_class_full_name")] public string skillClassFullName;
 
         [Tooltip("技能类脚本guid")]
         [HideInInspector]
         [YLFramework.Excel.ExcelIgnore]
-        public string skill_class_guid;
+        [FormerlySerializedAs("skill_class_guid")] public string skillClassGuid;
 
     }
 }

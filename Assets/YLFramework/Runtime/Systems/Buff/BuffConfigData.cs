@@ -1,9 +1,9 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
+using UnityEngine.Serialization;
 using YLFramework.Excel;
+using YLFramework.Foundation;
 
 namespace YLFramework.BuffSystem
 {
@@ -44,11 +44,11 @@ namespace YLFramework.BuffSystem
 
         [Tooltip("唯一标识")]
 
-        [ExcelScriptableObjectID]
-        public int buff_id;
+        [ExcelScriptableObjectId]
+        [FormerlySerializedAs("buff_id")] public int id;
         [Tooltip("名称")]
         [Header("名称")]
-        public string buff_name;
+        [FormerlySerializedAs("buff_name")] public string buffName;
         [Tooltip("图标")]
         [Header("图标")]
 
@@ -70,12 +70,12 @@ namespace YLFramework.BuffSystem
         public List<EffectData> effects = new List<EffectData>();
         [Tooltip("Buff脚本名称")]
 
-        public string buff_class_full_name;
+        [FormerlySerializedAs("buff_class_full_name")] public string buffClassFullName;
 
         [Tooltip("Buff脚本guid")]
         [HideInInspector]
         [ExcelIgnore]
-        public string buff_class_guid;
+        [FormerlySerializedAs("buff_class_guid")] public string buffClassGuid;
 
     }
 }

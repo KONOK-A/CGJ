@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.TestTools;
-using Unity.Profiling;
 using YLFramework.Services.Audio;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -13,39 +13,50 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioSoundBudgetPlaybackTests
     {
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private readonly List<AudioClip> mBurstClips = new List<AudioClip>();
-        private AudioClip mClip;
-        private GameObject mListener;
-        private Random.State mRandomState;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private readonly List<AudioClip> _burstClips = new List<AudioClip>();
+        private AudioClip _clip;
+        private GameObject _listener;
+        private Random.State _randomState;
 
         [UnitySetUp]
         public IEnumerator SetUp()
         {
-            mRandomState = Random.state;
+            _randomState = Random.state;
             AudioKit.Shutdown();
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             ConfigureSettings();
-            mClip = AudioClip.Create("budget-playback", 220500, 1, 44100, false);
+            _clip = AudioClip.Create("budget-playback", 220500, 1, 44100, false);
             var hasListener = false;
             foreach (var listener in Object.FindObjectsOfType<AudioListener>())
-                if (listener.isActiveAndEnabled) { hasListener = true; break; }
+            {
+                if (listener.isActiveAndEnabled)
+                {
+                    hasListener = true;
+                    break;
+                }
+            }
+
             if (!hasListener)
             {
-                mListener = new GameObject("BudgetPlayback.Listener");
-                mListener.AddComponent<AudioListener>();
+                _listener = new GameObject("BudgetPlayback.Listener");
+                _listener.AddComponent<AudioListener>();
             }
             yield return null;
         }
@@ -66,19 +77,47 @@ namespace YLFramework.Tests.Audio
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            if (mClip) Object.Destroy(mClip);
-            foreach (var clip in mBurstClips) if (clip) Object.Destroy(clip);
-            mBurstClips.Clear();
-            if (mListener) Object.Destroy(mListener);
+            if (_clip)
+            {
+                Object.Destroy(_clip);
+            }
+
+            foreach (var clip in _burstClips)
+            {
+                if (clip)
+                {
+                    Object.Destroy(clip);
+                }
+            }
+
+            _burstClips.Clear();
+            if (_listener)
+            {
+                Object.Destroy(_listener);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
             yield return null;
-            Random.state = mRandomState;
+            Random.state = _randomState;
         }
 
         private static AudioSoundOptions Loop(int priority = 0)
@@ -109,28 +148,28 @@ namespace YLFramework.Tests.Audio
                             DefaultClipLimit = scope == 0 ? 0 : 1,
                             OverflowPolicy = SoundOverflowPolicy.RejectNew
                         };
-                        var first = AudioKit.PlaySound(mClip, Loop(10));
+                        var first = AudioKit.PlaySound(_clip, Loop(10));
                         first.Pause();
                         AudioKit.Settings.IsSoundMuted.Value = true;
                         var startFrame = Time.frameCount;
                         var checks = 0;
                         while (Time.frameCount - startFrame <= frames)
                         {
-                            Assert.IsFalse(AudioKit.PlaySound(mClip, Loop(int.MaxValue)).IsValid);
+                            Assert.IsFalse(AudioKit.PlaySound(_clip, Loop(int.MaxValue)).IsValid);
                             checks++;
                             Assert.IsTrue(first.IsPaused);
-                            Assert.AreEqual(1, AudioKit.GetSoundCount(mClip));
+                            Assert.AreEqual(1, AudioKit.GetSoundCount(_clip));
                             Assert.AreEqual(0L, AudioKit.SoundStats.GlobalRejectedCount);
                             Assert.AreEqual(0L, AudioKit.SoundStats.ClipRejectedCount);
                             yield return null;
                         }
                         Assert.AreEqual(checks, AudioKit.SoundStats.DedupRejectedCount);
-                        Assert.IsFalse(AudioKit.PlaySound(mClip, Loop(int.MaxValue)).IsValid, "Passing dedup does not bypass active capacity.");
+                        Assert.IsFalse(AudioKit.PlaySound(_clip, Loop(int.MaxValue)).IsValid, "Passing dedup does not bypass active capacity.");
                         Assert.AreEqual(scope == 0 ? 1L : 0L, AudioKit.SoundStats.GlobalRejectedCount);
                         Assert.AreEqual(scope == 0 ? 0L : 1L, AudioKit.SoundStats.ClipRejectedCount);
-                        Assert.IsTrue(AudioKit.Channels.CanPlay(mClip.GetInstanceID(), mode, Time.frameCount));
+                        Assert.IsTrue(AudioKit.Channels.CanPlay(_clip.GetInstanceID(), mode, Time.frameCount));
                         first.Stop();
-                        var retry = AudioKit.PlaySound(mClip, Loop(10));
+                        var retry = AudioKit.PlaySound(_clip, Loop(10));
                         Assert.IsTrue(retry.IsValid, "Capacity rejection cannot commit or extend a dedup window.");
                         AudioKit.SoundConcurrency = new AudioSoundConcurrency
                         {
@@ -138,7 +177,7 @@ namespace YLFramework.Tests.Audio
                             DefaultClipLimit = scope == 0 ? 0 : 1,
                             OverflowPolicy = SoundOverflowPolicy.StopLowestPriority
                         };
-                        Assert.IsFalse(AudioKit.PlaySound(mClip, Loop(int.MaxValue)).IsValid);
+                        Assert.IsFalse(AudioKit.PlaySound(_clip, Loop(int.MaxValue)).IsValid);
                         Assert.IsTrue(retry.IsValid, "Higher priority still cannot steal through same-frame dedup.");
                         Assert.AreEqual(0L, AudioKit.SoundStats.StolenCount);
                         Assert.AreEqual(0L, AudioKit.SoundStats.PriorityRejectedCount);
@@ -157,19 +196,19 @@ namespace YLFramework.Tests.Audio
                 ConfigureSettings();
                 AudioKit.PlaySoundMode = mode;
                 AudioKit.SoundConcurrency = new AudioSoundConcurrency { Limit = 2, DefaultClipLimit = 2 };
-                var first = AudioKit.PlaySound(mClip, Loop());
+                var first = AudioKit.PlaySound(_clip, Loop());
                 var options = Loop(int.MaxValue);
                 options.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
-                var second = AudioKit.PlaySound(mClip, options);
+                var second = AudioKit.PlaySound(_clip, options);
                 Assert.IsTrue(first.IsValid);
                 Assert.IsTrue(second.IsValid);
-                Assert.IsFalse(AudioKit.PlaySound(mClip, options).IsValid);
-                Assert.AreEqual(2, AudioKit.GetSoundCount(mClip));
+                Assert.IsFalse(AudioKit.PlaySound(_clip, options).IsValid);
+                Assert.AreEqual(2, AudioKit.GetSoundCount(_clip));
                 Assert.AreEqual(1L, AudioKit.SoundStats.ClipRejectedCount);
                 Assert.AreEqual(0L, AudioKit.SoundStats.GlobalRejectedCount, "Joint rejection has exactly one clip-first reason.");
                 first.Stop();
-                Assert.IsTrue(AudioKit.PlaySound(mClip, options).IsValid);
-                Assert.IsFalse(AudioKit.PlaySound(mClip, Loop(int.MaxValue)).IsValid, "EveryOne does not clear an earlier committed record.");
+                Assert.IsTrue(AudioKit.PlaySound(_clip, options).IsValid);
+                Assert.IsFalse(AudioKit.PlaySound(_clip, Loop(int.MaxValue)).IsValid, "EveryOne does not clear an earlier committed record.");
                 Assert.AreEqual(1L, AudioKit.SoundStats.DedupRejectedCount);
                 yield return null;
             }
@@ -179,12 +218,12 @@ namespace YLFramework.Tests.Audio
         public IEnumerator DisableCallbackChangingCapacityToZeroCannotCacheTheReturningSource()
         {
             AudioKit.SoundCacheCapacity = 2;
-            var handle = AudioKit.PlaySound(mClip, Loop());
+            var handle = AudioKit.PlaySound(_clip, Loop());
             var sourceRoot = handle.Voice.Source.gameObject;
             var relay = sourceRoot.AddComponent<AudioBudgetStopOnDisable>();
-            relay.DisableCache = true;
+            relay.disableCache = true;
             handle.Stop();
-            Assert.That(relay.Calls, Is.EqualTo(1));
+            Assert.That(relay.calls, Is.EqualTo(1));
             Assert.That(AudioKit.SoundCacheCapacity, Is.Zero);
             Assert.That(AudioKit.SoundStats.CachedCount, Is.Zero);
             Assert.That(AudioKit.SoundStats.OwnedSourceCount, Is.Zero);
@@ -202,22 +241,24 @@ namespace YLFramework.Tests.Audio
             {
                 AudioKit.SoundConcurrency = new AudioSoundConcurrency
                 {
-                    Limit = 2, DefaultClipLimit = clipLimit, OverflowPolicy = SoundOverflowPolicy.StopOldest
+                    Limit = 2,
+                    DefaultClipLimit = clipLimit,
+                    OverflowPolicy = SoundOverflowPolicy.StopOldest
                 };
-                var first = AudioKit.PlaySound(mClip, Loop());
-                var second = AudioKit.PlaySound(mClip, Loop());
+                var first = AudioKit.PlaySound(_clip, Loop());
+                var second = AudioKit.PlaySound(_clip, Loop());
                 var relay = first.Voice.Source.gameObject.AddComponent<AudioBudgetStopOnDisable>();
                 relay.Other = second;
-                var replacement = AudioKit.PlaySound(mClip, Loop());
-                Assert.AreEqual(1, relay.Calls);
+                var replacement = AudioKit.PlaySound(_clip, Loop());
+                Assert.AreEqual(1, relay.calls);
                 Assert.IsFalse(first.IsValid);
                 Assert.IsFalse(second.IsValid);
                 Assert.IsTrue(replacement.IsPlaying);
                 Assert.AreEqual(1, AudioKit.SoundCount);
-                Assert.AreEqual(1, AudioKit.GetSoundCount(mClip));
+                Assert.AreEqual(1, AudioKit.GetSoundCount(_clip));
                 replacement.Stop();
                 Assert.AreEqual(0, AudioKit.SoundCount);
-                Assert.AreEqual(0, AudioKit.GetSoundCount(mClip));
+                Assert.AreEqual(0, AudioKit.GetSoundCount(_clip));
                 Object.Destroy(relay);
                 yield return null;
             }
@@ -229,17 +270,17 @@ namespace YLFramework.Tests.Audio
             AudioKit.SoundCacheCapacity = 24;
             AudioKit.SoundConcurrency = new AudioSoundConcurrency { Limit = 24 };
             var clips = new AudioClip[24];
-            clips[0] = mClip;
+            clips[0] = _clip;
             for (var i = 1; i < clips.Length; i++)
             {
                 clips[i] = AudioClip.Create("budget-burst-" + i, 44100, 1, 44100, false);
-                mBurstClips.Add(clips[i]);
+                _burstClips.Add(clips[i]);
             }
             var random = Random.state;
-            const ProfilerRecorderOptions recording = ProfilerRecorderOptions.SumAllSamplesInFrame | ProfilerRecorderOptions.CollectOnlyOnCurrentThread;
+            const ProfilerRecorderOptions Recording = ProfilerRecorderOptions.SumAllSamplesInFrame | ProfilerRecorderOptions.CollectOnlyOnCurrentThread;
             long calibrationAllocations, prewarmAllocations, firstBurstAllocations, steadyBurstAllocations;
             bool validRecorder;
-            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, recording))
+            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
                 validRecorder = recorder.Valid;
                 var probe = new byte[4096];
@@ -250,7 +291,7 @@ namespace YLFramework.Tests.Audio
             Assert.IsTrue(validRecorder);
             Assert.Greater(calibrationAllocations, 0, "Verify the allocation recorder with a known allocation before accepting zero samples.");
             int added;
-            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, recording))
+            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
                 added = AudioKit.PrewarmSounds(24);
                 recorder.Stop();
@@ -271,9 +312,13 @@ namespace YLFramework.Tests.Audio
             }
             Assert.AreEqual(24, sourceIds.Count);
             var options = Loop();
-            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, recording))
+            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
             {
-                for (var i = 0; i < handles.Length; i++) handles[i] = AudioKit.PlaySound(clips[i], options);
+                for (var i = 0; i < handles.Length; i++)
+                {
+                    handles[i] = AudioKit.PlaySound(clips[i], options);
+                }
+
                 recorder.Stop();
                 firstBurstAllocations = recorder.Count == 0 ? 0 : recorder.GetSample(0).Count;
             }
@@ -284,7 +329,11 @@ namespace YLFramework.Tests.Audio
                 Assert.IsTrue(sourceIds.Contains(handle.Voice.Source.GetInstanceID()));
             }
             Assert.AreEqual(24, AudioKit.SoundStats.ActiveCount);
-            foreach (var clip in clips) Assert.AreEqual(1, AudioKit.GetSoundCount(clip));
+            foreach (var clip in clips)
+            {
+                Assert.AreEqual(1, AudioKit.GetSoundCount(clip));
+            }
+
             Assert.AreEqual(24, AudioKit.SoundStats.PeakActiveCount);
             Assert.AreEqual(0, AudioKit.SoundStats.CachedCount);
             Assert.AreEqual(24L, AudioKit.SoundStats.CacheHitCount);
@@ -292,13 +341,25 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(24L, AudioKit.SoundStats.SourceCreatedCount);
             yield return null;
             AudioKit.StopAllSound();
-            foreach (var handle in handles) Assert.IsFalse(handle.IsValid);
+            foreach (var handle in handles)
+            {
+                Assert.IsFalse(handle.IsValid);
+            }
+
             Assert.AreEqual(24, AudioKit.SoundStats.CachedCount);
             Assert.AreEqual(24, AudioKit.SoundStats.OwnedSourceCount);
-            foreach (var clip in clips) Assert.AreEqual(0, AudioKit.GetSoundCount(clip));
-            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, recording))
+            foreach (var clip in clips)
             {
-                for (var i = 0; i < handles.Length; i++) handles[i] = AudioKit.PlaySound(clips[i], options);
+                Assert.AreEqual(0, AudioKit.GetSoundCount(clip));
+            }
+
+            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1, Recording))
+            {
+                for (var i = 0; i < handles.Length; i++)
+                {
+                    handles[i] = AudioKit.PlaySound(clips[i], options);
+                }
+
                 recorder.Stop();
                 steadyBurstAllocations = recorder.Count == 0 ? 0 : recorder.GetSample(0).Count;
             }
@@ -323,7 +384,10 @@ namespace YLFramework.Tests.Audio
                 "; prewarm (sources + containers)=" + prewarmAllocations + "; first 24-request burst=" + firstBurstAllocations +
                 "; steady 24-request burst=" + steadyBurstAllocations + ".");
             yield return null;
-            foreach (var handle in handles) Assert.IsTrue(handle.IsPlaying);
+            foreach (var handle in handles)
+            {
+                Assert.IsTrue(handle.IsPlaying);
+            }
         }
 
         [UnityTest]
@@ -347,7 +411,13 @@ namespace YLFramework.Tests.Audio
                 Assert.IsTrue(root, "The borrowed host GameObject is not owned by AudioKit.");
                 Assert.AreEqual(0, root.transform.childCount);
             }
-            finally { if (root) Object.Destroy(root); }
+            finally
+            {
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
+            }
         }
 
         [UnityTest]
@@ -355,8 +425,12 @@ namespace YLFramework.Tests.Audio
         {
             AudioKit.PrewarmSounds(10);
             var roots = new List<GameObject>();
-            foreach (var source in AudioManager.Instance.GetComponentsInChildren<AudioSource>(true)) roots.Add(source.gameObject);
-            var playing = AudioKit.PlaySound(mClip, Loop());
+            foreach (var source in AudioManager.Instance.GetComponentsInChildren<AudioSource>(true))
+            {
+                roots.Add(source.gameObject);
+            }
+
+            var playing = AudioKit.PlaySound(_clip, Loop());
             AudioKit.SoundCacheCapacity = 2;
             Assert.IsTrue(playing.IsValid);
             Assert.AreEqual(1, AudioKit.SoundCount);
@@ -365,7 +439,14 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(7L, AudioKit.SoundStats.SourceReleasedCount, "Release counts requests; native destruction may be deferred.");
             yield return null;
             var alive = 0;
-            foreach (var root in roots) if (root) alive++;
+            foreach (var root in roots)
+            {
+                if (root)
+                {
+                    alive++;
+                }
+            }
+
             Assert.AreEqual(3, alive);
             AudioKit.SoundCacheCapacity = 0;
             Assert.IsTrue(playing.IsValid);
@@ -375,7 +456,11 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(0, AudioKit.SoundStats.CachedCount);
             Assert.AreEqual(10L, AudioKit.SoundStats.SourceReleasedCount);
             yield return null;
-            foreach (var root in roots) Assert.IsFalse(root, "Released Sound sources must not leave orphan roots.");
+            foreach (var root in roots)
+            {
+                Assert.IsFalse(root, "Released Sound sources must not leave orphan roots.");
+            }
+
             Assert.AreEqual(0, AudioManager.Instance.GetComponentsInChildren<AudioSource>(true).Length);
         }
     }

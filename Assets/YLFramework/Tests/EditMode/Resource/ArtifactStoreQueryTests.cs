@@ -43,8 +43,16 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static void Run(IEnumerator routine)
         {
-            try { while (routine.MoveNext()) { } }
-            finally { (routine as IDisposable)?.Dispose(); }
+            try
+            {
+                while (routine.MoveNext())
+                {
+                }
+            }
+            finally
+            {
+                (routine as IDisposable)?.Dispose();
+            }
         }
 
         [Test]
@@ -87,13 +95,21 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new StoreFixture();
             using (var canceled = new CancellationTokenSource())
             {
-                fixture.Store.Checkpoint = stage => { if (stage == "FileCopied") canceled.Cancel(); };
+                fixture.Store.Checkpoint = stage =>
+                {
+                    if (stage == "FileCopied")
+                    {
+                        canceled.Cancel();
+                    }
+                };
                 Assert.Throws<OperationCanceledException>(() => fixture.Prepare(2, canceled.Token));
                 fixture.Store.Checkpoint = null;
             }
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
             var metadata = fixture.Part(7);
-            var orphan = Path.Combine(fixture.ProjectRoot("catalog"), "parts", "orphan.part"); File.WriteAllBytes(orphan, new byte[11]);
+            var orphan = Path.Combine(fixture.ProjectRoot("catalog"), "parts", "orphan.part");
+            File.WriteAllBytes(orphan, new byte[11]);
             var before = Tree(fixture.Store.RootPath);
             var report = Query(fixture.Store);
             Assert.That(report.Status, Is.EqualTo(ArtifactQueryStatus.Ready), string.Join("\n", report.Issues));
@@ -121,10 +137,23 @@ namespace YLFramework.Tests.ResourceBuild
         public void InvalidOwnershipOrClosureNeverProducesCleanupCandidates(string fault)
         {
             using var fixture = new StoreFixture(true);
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Prepare(3);
-            if (fault == "owner") File.WriteAllText(Path.Combine(fixture.Store.RootPath, ".ylr-store-owner.json"), "broken");
-            if (fault == "mirrors") File.Delete(Path.Combine(fixture.ProjectRoot("other"), "active.json"));
-            if (fault == "prepared") File.WriteAllText(Directory.GetFiles(Path.Combine(fixture.ProjectRoot("catalog"), "prepared")).Single(), "broken");
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Prepare(3);
+            if (fault == "owner")
+            {
+                File.WriteAllText(Path.Combine(fixture.Store.RootPath, ".ylr-store-owner.json"), "broken");
+            }
+
+            if (fault == "mirrors")
+            {
+                File.Delete(Path.Combine(fixture.ProjectRoot("other"), "active.json"));
+            }
+
+            if (fault == "prepared")
+            {
+                File.WriteAllText(Directory.GetFiles(Path.Combine(fixture.ProjectRoot("catalog"), "prepared")).Single(), "broken");
+            }
+
             var before = Tree(fixture.Store.RootPath);
             var report = Query(fixture.Store);
             Assert.That(report.Status, Is.EqualTo(ArtifactQueryStatus.Invalid));
@@ -142,10 +171,21 @@ namespace YLFramework.Tests.ResourceBuild
             var update = fixture.Prepare(2);
             if (fault == "journal")
             {
-                fixture.Store.Checkpoint = stage => { if (stage == "JournalVerified") throw new IOException("fixture interrupted commit"); };
-                Assert.Throws<IOException>(() => fixture.Store.Commit(update)); fixture.Store.Checkpoint = null;
+                fixture.Store.Checkpoint = stage =>
+                {
+                    if (stage == "JournalVerified")
+                    {
+                        throw new IOException("fixture interrupted commit");
+                    }
+                };
+                Assert.Throws<IOException>(() => fixture.Store.Commit(update));
+                fixture.Store.Checkpoint = null;
             }
-            else File.WriteAllText(Path.Combine(fixture.ProjectRoot("catalog"), "active.json.next"), "truncated replacement");
+            else
+            {
+                File.WriteAllText(Path.Combine(fixture.ProjectRoot("catalog"), "active.json.next"), "truncated replacement");
+            }
+
             var before = Tree(fixture.Store.RootPath);
             var report = Query(fixture.Store);
             Assert.That(report.Status, Is.EqualTo(ArtifactQueryStatus.RecoveryRequired));
@@ -157,10 +197,12 @@ namespace YLFramework.Tests.ResourceBuild
         public void CorruptCompleteUnknownDirectoriesAndReadFailuresAreNotSafeCandidates()
         {
             using var fixture = new StoreFixture();
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
             var obsolete = fixture.Version("catalog", 1);
             File.WriteAllText(Path.Combine(obsolete, ".ylr-complete.json"), "broken Complete");
-            var unknown = Path.Combine(fixture.ProjectRoot("catalog"), "versions", "unowned"); Directory.CreateDirectory(unknown);
+            var unknown = Path.Combine(fixture.ProjectRoot("catalog"), "versions", "unowned");
+            Directory.CreateDirectory(unknown);
             File.WriteAllBytes(Path.Combine(unknown, "do-not-scan"), new byte[101]);
             var report = Query(fixture.Store);
             var entry = report.Entries.Single(x => x.Path == obsolete);
@@ -183,7 +225,8 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new StoreFixture();
             var update = fixture.Prepare(2);
             Assert.That(Query(fixture.Store, 1).Status, Is.EqualTo(ArtifactQueryStatus.Incomplete));
-            using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
             Assert.That(Query(fixture.Store, cancellation: cancellation.Token).Status, Is.EqualTo(ArtifactQueryStatus.Canceled));
             ArtifactStoreReport report = null;
             var query = fixture.Store.QueryAsync(value => report = value);
@@ -207,7 +250,11 @@ namespace YLFramework.Tests.ResourceBuild
             var observed = false;
             fixture.Store.Checkpoint = stage =>
             {
-                if (stage != "FileCopied" || observed) return;
+                if (stage != "FileCopied" || observed)
+                {
+                    return;
+                }
+
                 observed = true;
                 var before = Tree(fixture.Store.RootPath);
                 Assert.That(Query(fixture.Store).Status, Is.EqualTo(ArtifactQueryStatus.Busy));
@@ -218,8 +265,19 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(observed, Is.True);
             var query = fixture.Store.QueryAsync(_ => { });
             Exception error = null;
-            var worker = new Thread(() => { try { query.MoveNext(); } catch (Exception cause) { error = cause; } });
-            worker.Start(); worker.Join();
+            var worker = new Thread(() =>
+            {
+                try
+                {
+                    query.MoveNext();
+                }
+                catch (Exception cause)
+                {
+                    error = cause;
+                }
+            });
+            worker.Start();
+            worker.Join();
             Assert.That(error, Is.TypeOf<InvalidOperationException>());
             (query as IDisposable)?.Dispose();
         }
@@ -228,7 +286,8 @@ namespace YLFramework.Tests.ResourceBuild
         public void PreviewDoesNotAuthorizeDeletingVersionsThatBecomePreparedLater()
         {
             using var fixture = new StoreFixture();
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
             var obsolete = fixture.Version("catalog", 1);
             Assert.That(Query(fixture.Store).Entries.Single(x => x.Path == obsolete).IsCleanupCandidate, Is.True);
             fixture.Prepare(1);
@@ -242,12 +301,19 @@ namespace YLFramework.Tests.ResourceBuild
         public void DirectoryLinksAreNotFollowedAndBundleBytesAreNotHashedForDisplay()
         {
             using var fixture = new StoreFixture();
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
-            var target = Path.Combine(Path.GetDirectoryName(fixture.Store.RootPath), "outside"); Directory.CreateDirectory(target);
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
+            var target = Path.Combine(Path.GetDirectoryName(fixture.Store.RootPath), "outside");
+            Directory.CreateDirectory(target);
             File.WriteAllBytes(Path.Combine(target, "outside.bin"), new byte[113]);
             var link = Path.Combine(fixture.ProjectRoot("catalog"), "versions", "linked");
             using var process = Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("COMSPEC"), "/d /c mklink /J \"" + link + "\" \"" + target + "\"")
-            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true });
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
             Assert.That(process.WaitForExit(10000), Is.True);
             Assert.That(process.ExitCode, Is.Zero, process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd());
             try
@@ -263,25 +329,30 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(report.Entries.Single(x => x.Path == obsolete).State, Is.EqualTo(ArtifactState.CompleteRecord), "Statting logical lengths must not read every Bundle.");
                 Assert.That(File.ReadAllBytes(Path.Combine(target, "outside.bin")).Length, Is.EqualTo(113));
             }
-            finally { Directory.Delete(link); }
+            finally
+            {
+                Directory.Delete(link);
+            }
         }
 
         [Test]
         public void OwnedRemaindersAndStandalonePartialCandidatesFollowExistingRetryCleanup()
         {
             using var fixture = new StoreFixture();
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
             var obsolete = fixture.Version("catalog", 1);
             File.Delete(Directory.GetFiles(obsolete).First(x => Path.GetFileName(x).StartsWith("b_", StringComparison.Ordinal)));
             var metadata = fixture.Part(3);
-            File.Delete(metadata); File.Delete(Path.ChangeExtension(metadata, ".part"));
+            File.Delete(metadata);
+            File.Delete(Path.ChangeExtension(metadata, ".part"));
             var report = Query(fixture.Store);
             Assert.That(report.Status, Is.EqualTo(ArtifactQueryStatus.Ready), string.Join("\n", report.Issues));
             Assert.That(report.Entries.Single(x => x.Path == obsolete).State, Is.EqualTo(ArtifactState.Incomplete));
             Assert.That(report.Entries.Single(x => x.Path == obsolete).IsCleanupCandidate, Is.True);
             Assert.That(report.Entries.Single(x => x.Path == metadata + ".next").IsCleanupCandidate, Is.True);
             var cleanup = fixture.Store.Cleanup(fixture.Store.Mount());
-            Assert.That(cleanup.Succeeded, Is.True, string.Join("\n", cleanup.Errors));
+            Assert.That(cleanup.HasSucceeded, Is.True, string.Join("\n", cleanup.Errors));
             Assert.That(Directory.Exists(obsolete), Is.False);
             Assert.That(File.Exists(metadata + ".next"), Is.False);
         }
@@ -291,13 +362,19 @@ namespace YLFramework.Tests.ResourceBuild
         [TestCase("unregistered")]
         public void PartialOwnershipAndCandidateConflictsArePreserved(string fault)
         {
-            using var fixture = new StoreFixture(); fixture.Prepare(2);
+            using var fixture = new StoreFixture();
+            fixture.Prepare(2);
             var metadata = fixture.Part(3);
-            if (fault == "unregistered") { File.Delete(metadata); File.Delete(metadata + ".next"); }
+            if (fault == "unregistered")
+            {
+                File.Delete(metadata);
+                File.Delete(metadata + ".next");
+            }
             else
             {
                 var path = fault == "owner" ? metadata : metadata + ".next";
-                var record = JObject.Parse(File.ReadAllText(path)); record["OwnerId"] = new string('0', 32);
+                var record = JObject.Parse(File.ReadAllText(path));
+                record["OwnerId"] = new string('0', 32);
                 File.WriteAllBytes(path, ResourceCatalogCodec.CanonicalBytes(record));
             }
             var before = Tree(fixture.Store.RootPath);
@@ -315,7 +392,8 @@ namespace YLFramework.Tests.ResourceBuild
             Directory.CreateDirectory(fixture.Store.RootPath);
             Assert.That(Query(fixture.Store).Status, Is.EqualTo(ArtifactQueryStatus.Invalid));
             Directory.Delete(fixture.Store.RootPath);
-            fixture.Store.Commit(fixture.Prepare(2)); fixture.Store.Commit(fixture.Prepare(3));
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Store.Commit(fixture.Prepare(3));
             var obsolete = fixture.Version("catalog", 1);
             using var input = new FileStream(Path.Combine(obsolete, ".ylr-version.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             var report = Query(fixture.Store);
@@ -327,8 +405,13 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void PartialReplacementAfterValidationButBeforeItsFirstSizeStatInvalidatesTheQuery()
         {
-            using var fixture = new StoreFixture(); fixture.Prepare(2);
-            for (var i = 0; i < 40; i++) fixture.Part(7, i);
+            using var fixture = new StoreFixture();
+            fixture.Prepare(2);
+            for (var i = 0; i < 40; i++)
+            {
+                fixture.Part(7, i);
+            }
+
             ArtifactStoreReport report = null;
             var query = fixture.Store.QueryAsync(value => report = value);
             var changed = false;
@@ -337,22 +420,36 @@ namespace YLFramework.Tests.ResourceBuild
                 while (query.MoveNext())
                 {
                     var scan = ScanContext(query);
-                    var observed = (IDictionary)Field(scan, "observations");
-                    foreach (var entry in (IEnumerable)Field(scan, "entries"))
+                    var observed = (IDictionary)Field(scan, "_observations");
+                    foreach (var entry in (IEnumerable)Field(scan, "_entries"))
                     {
                         var path = (string)Field(entry, "Path");
                         if (changed || !path.EndsWith(".json", StringComparison.Ordinal) || !path.Contains(Path.DirectorySeparatorChar + "parts" + Path.DirectorySeparatorChar) ||
-                            !observed.Contains(path) || observed.Contains(path + ".next")) continue;
+                            !observed.Contains(path) || observed.Contains(path + ".next"))
+                        {
+                            continue;
+                        }
+
                         var next = path + ".next";
-                        var record = JObject.Parse(File.ReadAllText(next)); record["OwnerId"] = new string('0', 32);
+                        var record = JObject.Parse(File.ReadAllText(next));
+                        record["OwnerId"] = new string('0', 32);
                         File.WriteAllBytes(next, ResourceCatalogCodec.CanonicalBytes(record));
                         File.SetLastWriteTimeUtc(next, DateTime.UtcNow.AddSeconds(1));
                         changed = true;
                     }
-                    if (changed) break;
+                    if (changed)
+                    {
+                        break;
+                    }
                 }
             }
-            finally { if (!changed) (query as IDisposable)?.Dispose(); }
+            finally
+            {
+                if (!changed)
+                {
+                    (query as IDisposable)?.Dispose();
+                }
+            }
             // 修复后，在验证前 next 已被观测；选择一个尚未统计完的 partial 组来验证同一跨段改写。
             if (!changed)
             {
@@ -360,15 +457,22 @@ namespace YLFramework.Tests.ResourceBuild
                 while (query.MoveNext())
                 {
                     var scan = ScanContext(query);
-                    var observed = (IDictionary)Field(scan, "observations");
-                    var entry = ((IEnumerable)Field(scan, "entries")).Cast<object>().FirstOrDefault(x =>
+                    var observed = (IDictionary)Field(scan, "_observations");
+                    var entry = ((IEnumerable)Field(scan, "_entries")).Cast<object>().FirstOrDefault(x =>
                         ((string)Field(x, "Path")).Contains(Path.DirectorySeparatorChar + "parts" + Path.DirectorySeparatorChar) &&
-                        !(bool)Field(x, "Eligible") && observed.Contains((string)Field(x, "Path") + ".next"));
-                    if (entry == null) continue;
+                        !(bool)Field(x, "IsEligible") && observed.Contains((string)Field(x, "Path") + ".next"));
+                    if (entry == null)
+                    {
+                        continue;
+                    }
+
                     var path = (string)Field(entry, "Path") + ".next";
-                    var record = JObject.Parse(File.ReadAllText(path)); record["OwnerId"] = new string('0', 32);
-                    File.WriteAllBytes(path, ResourceCatalogCodec.CanonicalBytes(record)); File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(1));
-                    changed = true; break;
+                    var record = JObject.Parse(File.ReadAllText(path));
+                    record["OwnerId"] = new string('0', 32);
+                    File.WriteAllBytes(path, ResourceCatalogCodec.CanonicalBytes(record));
+                    File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(1));
+                    changed = true;
+                    break;
                 }
             }
             Assert.That(changed, Is.True, "The fixture must actually interleave a write with a partial file-group scan.");
@@ -380,13 +484,19 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void UnknownPreparedEntriesAreChargedBeforeFilteringAndJsonDirectoriesRemainUnknown()
         {
-            using var fixture = new StoreFixture(); fixture.Store.Commit(fixture.Prepare(2));
+            using var fixture = new StoreFixture();
+            fixture.Store.Commit(fixture.Prepare(2));
             var root = Path.Combine(fixture.ProjectRoot("catalog"), "prepared");
-            var directory = Path.Combine(root, "foreign.json"); Directory.CreateDirectory(directory);
-            for (var i = 0; i < 128; i++) File.WriteAllBytes(Path.Combine(root, "foreign-" + i), new byte[] { 1 });
+            var directory = Path.Combine(root, "foreign.json");
+            Directory.CreateDirectory(directory);
+            for (var i = 0; i < 128; i++)
+            {
+                File.WriteAllBytes(Path.Combine(root, "foreign-" + i), new byte[] { 1 });
+            }
+
             var query = fixture.Store.QueryAsync(_ => { });
             Assert.That(query.MoveNext(), Is.True);
-            var charged = ((IEnumerable)Field(ScanContext(query), "entries")).Cast<object>().Count(x => ((string)Field(x, "Path")).StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+            var charged = ((IEnumerable)Field(ScanContext(query), "_entries")).Cast<object>().Count(x => ((string)Field(x, "Path")).StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal));
             (query as IDisposable)?.Dispose();
             Assert.That(charged, Is.GreaterThan(0), "Prepared directory items must be stepped and charged before trying to filter the whole directory for valid records.");
             Assert.That(Query(fixture.Store, 32).Status, Is.EqualTo(ArtifactQueryStatus.Incomplete));
@@ -404,14 +514,16 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void FinalProtectionChecksEachConsumeAScanStep()
         {
-            using var fixture = new StoreFixture(true); fixture.Store.Commit(fixture.Prepare(2)); fixture.Prepare(3);
+            using var fixture = new StoreFixture(true);
+            fixture.Store.Commit(fixture.Prepare(2));
+            fixture.Prepare(3);
             ArtifactStoreReport report = null;
             var query = fixture.Store.QueryAsync(value => report = value);
             Assert.That(query.MoveNext(), Is.True);
             var scan = ScanContext(query);
             Run(query);
             Assert.That(report.Status, Is.EqualTo(ArtifactQueryStatus.Ready));
-            var observations = ((IDictionary)Field(scan, "observations")).Count;
+            var observations = ((IDictionary)Field(scan, "_observations")).Count;
             var checks = (IEnumerable)scan.GetType().GetMethod("VerifyObservations", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(scan, null);
             Assert.That(checks.Cast<object>().Count(), Is.EqualTo(observations + report.ProtectedVersions.Count), "Every protected path check must yield to the same budget/cancellation driver; not one uncharged O(P*E) tail.");
         }
@@ -419,8 +531,10 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void StationaryUnknownPreparedJsonDirectoriesAreNotReportedAsConcurrentChange()
         {
-            using var fixture = new StoreFixture(); fixture.Prepare(2);
-            var path = Path.Combine(fixture.ProjectRoot("catalog"), "prepared", "foreign.json"); Directory.CreateDirectory(path);
+            using var fixture = new StoreFixture();
+            fixture.Prepare(2);
+            var path = Path.Combine(fixture.ProjectRoot("catalog"), "prepared", "foreign.json");
+            Directory.CreateDirectory(path);
             for (var i = 0; i < 2; i++)
             {
                 var report = Query(fixture.Store);
@@ -443,70 +557,117 @@ namespace YLFramework.Tests.ResourceBuild
         // 复用 Catalog v1 夹具及正式 Open/Check/Prepare/Commit。文件内容只服务 Store IO，不冒充 native Bundle 验收。
         private sealed class StoreFixture : IDisposable
         {
-            private readonly string root = Path.Combine(Path.GetTempPath(), "kilo", "q05-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-            private readonly Dictionary<(string, int), ResourceLocalSnapshot> snapshots = new();
+            private readonly string _root = Path.Combine(Path.GetTempPath(), "kilo", "q05-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            private readonly Dictionary<(string, int), ResourceLocalSnapshot> _snapshots = new();
             internal readonly string[] Projects;
-            internal ArtifactStore Store { get; }
+            internal ArtifactStore Store
+            {
+                get;
+            }
             internal StoreFixture(bool multi = false)
             {
                 Projects = multi ? new[] { "catalog", "other" } : new[] { "catalog" };
                 foreach (var project in Projects)
-                    for (var version = 1; version <= (project == "catalog" ? 3 : 2); version++) snapshots.Add((project, version), Create(project, version));
+                {
+                    for (var version = 1; version <= (project == "catalog" ? 3 : 2); version++)
+                    {
+                        _snapshots.Add((project, version), Create(project, version));
+                    }
+                }
+
                 Store = Reopen();
             }
-            internal ArtifactStore Reopen() => new(Path.Combine(root, "s"), Projects.Select(x => new ResourceProjectMount(x, "StandaloneWindows64", "app-v1", snapshots[(x, 1)])));
+            internal ArtifactStore Reopen() => new(Path.Combine(_root, "s"), Projects.Select(x => new ResourceProjectMount(x, "StandaloneWindows64", "app-v1", _snapshots[(x, 1)])));
             internal string ProjectRoot(string project) => Path.Combine(Store.RootPath, project, "StandaloneWindows64");
-            internal string Version(string project, int version) => Path.Combine(ProjectRoot(project), "versions", snapshots[(project, version)].Document.CatalogDigest);
+            internal string Version(string project, int version) => Path.Combine(ProjectRoot(project), "versions", _snapshots[(project, version)].Document.CatalogDigest);
             internal PreparedUpdate Prepare(int version, CancellationToken cancellation = default) => Store.Prepare(Store.Check(Store.Mount(),
-                Projects.Select(x => snapshots[(x, x == "catalog" ? version : Math.Min(version, 2))])), cancellation);
+                Projects.Select(x => _snapshots[(x, x == "catalog" ? version : Math.Min(version, 2))])), cancellation);
 
             private ResourceLocalSnapshot Create(string project, int version)
             {
                 var payload = ResourceCatalogCodecTests.Payload();
-                payload["ProjectId"] = project; payload["UnityCompatibility"] = Application.unityVersion;
+                payload["ProjectId"] = project;
+                payload["UnityCompatibility"] = Application.unityVersion;
                 var bundle = payload["Bundles"][0];
                 var oldFile = (string)bundle["RelativeFile"];
                 var name = "ylr_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(project)).Substring(0, 32) + "_a_0123456789abcdef0123456789abcdef";
                 var file = "b_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(name)).Substring(0, 32);
-                bundle["LogicalId"] = name; bundle["NativeName"] = name; bundle["RelativeFile"] = file;
+                bundle["LogicalId"] = name;
+                bundle["NativeName"] = name;
+                bundle["RelativeFile"] = file;
                 payload["Assets"][0]["BundleId"] = name;
-                foreach (var item in payload["SupportFiles"]) if ((string)item["RelativeFile"] == oldFile + ".manifest") item["RelativeFile"] = file + ".manifest";
+                foreach (var item in payload["SupportFiles"])
+                {
+                    if ((string)item["RelativeFile"] == oldFile + ".manifest")
+                    {
+                        item["RelativeFile"] = file + ".manifest";
+                    }
+                }
+
                 var files = new Dictionary<string, byte[]>();
                 foreach (JObject record in ((JArray)payload["Bundles"]).Concat((JArray)payload["SupportFiles"]))
                 {
                     var binary = record["LogicalId"] != null || (string)record["RelativeFile"] == (string)payload["ManifestFile"];
                     var bytes = Encoding.UTF8.GetBytes((binary ? "UnityFS\0" : "") + project + ":" + version + ":" + record["RelativeFile"]);
-                    record["Length"] = bytes.Length; record["Sha256"] = ResourceCatalogCodec.Digest(bytes); files.Add((string)record["RelativeFile"], bytes);
+                    record["Length"] = bytes.Length;
+                    record["Sha256"] = ResourceCatalogCodec.Digest(bytes);
+                    files.Add((string)record["RelativeFile"], bytes);
                 }
                 var catalogBytes = ResourceCatalogCodec.Seal(ResourceCatalogCodec.CanonicalBytes(payload));
                 var document = ResourceCatalogCodec.Read(catalogBytes, project, "StandaloneWindows64", Application.unityVersion, "app-v1");
-                var path = Path.Combine(root, "i", project, document.CatalogDigest); Directory.CreateDirectory(path);
-                foreach (var item in files) File.WriteAllBytes(Path.Combine(path, item.Key), item.Value);
+                var path = Path.Combine(_root, "i", project, document.CatalogDigest);
+                Directory.CreateDirectory(path);
+                foreach (var item in files)
+                {
+                    File.WriteAllBytes(Path.Combine(path, item.Key), item.Value);
+                }
+
                 File.WriteAllBytes(Path.Combine(path, "resource-catalog.json"), catalogBytes);
                 File.WriteAllBytes(Path.Combine(path, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject
-                { ["Version"] = 1, ["ProjectGuid"] = new string('1', 32), ["ProjectId"] = project, ["Platform"] = document.Platform, ["BuildId"] = document.BuildId, ["CatalogDigest"] = document.CatalogDigest }));
+                {
+                    ["Version"] = 1,
+                    ["ProjectGuid"] = new string('1', 32),
+                    ["ProjectId"] = project,
+                    ["Platform"] = document.Platform,
+                    ["BuildId"] = document.BuildId,
+                    ["CatalogDigest"] = document.CatalogDigest
+                }));
                 return ResourceLocalSnapshot.Open(path, project, document.CatalogDigest, document.Platform, "app-v1");
             }
 
             internal string Part(int length, int identity = 0)
             {
-                var doc = snapshots[("catalog", 3)].Document;
+                var doc = _snapshots[("catalog", 3)].Document;
                 var file = doc.SupportFiles[0];
                 var source = "https://fixture.invalid/releases/" + identity + "/" + doc.CatalogDigest + "/" + file.RelativeFile;
                 var token = ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(source + ":" + file.Sha256)).Substring(0, 32);
                 var path = Path.Combine(ProjectRoot("catalog"), "parts", token + ".json");
                 var record = new JObject
                 {
-                    ["Version"] = 1, ["OwnerId"] = JObject.Parse(File.ReadAllText(Path.Combine(Store.RootPath, ".ylr-store-owner.json")))["OwnerId"],
-                    ["State"] = "Partial", ["ProjectId"] = doc.ProjectId, ["Platform"] = doc.Platform, ["CatalogDigest"] = doc.CatalogDigest,
-                    ["File"] = file.RelativeFile, ["Length"] = file.Length, ["Sha256"] = file.Sha256, ["Source"] = source, ["ETag"] = "\"fixture\""
+                    ["Version"] = 1,
+                    ["OwnerId"] = JObject.Parse(File.ReadAllText(Path.Combine(Store.RootPath, ".ylr-store-owner.json")))["OwnerId"],
+                    ["State"] = "Partial",
+                    ["ProjectId"] = doc.ProjectId,
+                    ["Platform"] = doc.Platform,
+                    ["CatalogDigest"] = doc.CatalogDigest,
+                    ["File"] = file.RelativeFile,
+                    ["Length"] = file.Length,
+                    ["Sha256"] = file.Sha256,
+                    ["Source"] = source,
+                    ["ETag"] = "\"fixture\""
                 };
                 File.WriteAllBytes(path, ResourceCatalogCodec.CanonicalBytes(record));
                 File.WriteAllBytes(path + ".next", ResourceCatalogCodec.CanonicalBytes(record));
                 File.WriteAllBytes(Path.ChangeExtension(path, ".part"), new byte[length]);
                 return path;
             }
-            public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            public void Dispose()
+            {
+                if (Directory.Exists(_root))
+                {
+                    Directory.Delete(_root, true);
+                }
+            }
         }
     }
 }

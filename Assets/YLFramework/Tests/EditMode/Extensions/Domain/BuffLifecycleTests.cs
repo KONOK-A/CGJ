@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
-using YLFramework.Events;
 using YLFramework.BuffSystem;
+using YLFramework.Events;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
@@ -11,9 +11,13 @@ namespace YLFramework.Tests.Extensions.Domain
         private sealed class Host : IAddableBuff
         {
             public List<BuffBase> Buffs { get; } = new();
-            public bool IsCanAdd(int id) => true;
-            public void OnAddBuff(BuffBase buff) { }
-            public void OnRemoveBuff(BuffBase buff) { }
+            public bool CanAdd(int id) => true;
+            public void OnAddBuff(BuffBase buff)
+            {
+            }
+            public void OnRemoveBuff(BuffBase buff)
+            {
+            }
         }
         private static void Advance(BuffBase buff, float delta) => typeof(BuffBase).GetMethod("Advance", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(buff, new object[] { delta });
 
@@ -27,18 +31,20 @@ namespace YLFramework.Tests.Extensions.Domain
             Assert.That(buff.Progress, Is.EqualTo(expected));
         }
 
-        [Test] public void PoolResetReleasesHostUserDataAndElapsedState()
+        [Test]
+        public void PoolResetReleasesHostUserDataAndElapsedState()
         {
-            var buff = new BuffBase { Duration = 5, userData = new object() };
+            var buff = new BuffBase { Duration = 5, UserData = new object() };
             typeof(BuffBase).GetProperty("Owner").SetValue(buff, new Host());
             Advance(buff, 3);
             typeof(BuffBase).GetMethod("ClearRuntime", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(buff, null);
             Assert.That(buff.Owner, Is.Null);
-            Assert.That(buff.userData, Is.Null);
+            Assert.That(buff.UserData, Is.Null);
             Assert.That(buff.ExistedTime, Is.Zero);
             Assert.That(buff.BuffData, Is.Null);
         }
-        [Test] public void BuffMustOfferDurationAndExplicitHostShutdown()
+        [Test]
+        public void BuffMustOfferDurationAndExplicitHostShutdown()
         {
             var assembly = typeof(EventChannel).Assembly;
             var buff = assembly.GetType("YLFramework.BuffSystem.BuffBase");

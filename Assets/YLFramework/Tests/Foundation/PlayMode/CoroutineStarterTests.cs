@@ -14,7 +14,7 @@ namespace YLFramework.Foundation.Tests
     {
         private sealed class Probe : CustomAsyncOperation<Probe>
         {
-            public void Finish() => Completed();
+            public void Finish() => Complete();
         }
 
         private CoroutineStarter _host;
@@ -33,12 +33,25 @@ namespace YLFramework.Foundation.Tests
         public IEnumerator TearDown()
         {
             foreach (var host in _ownedHosts)
-                if (host) Object.Destroy(host.gameObject);
+            {
+                if (host)
+                {
+                    Object.Destroy(host.gameObject);
+                }
+            }
+
             _ownedHosts.Clear();
             _host = null;
-            if (_foreignObject) Object.Destroy(_foreignObject);
+            if (_foreignObject)
+            {
+                Object.Destroy(_foreignObject);
+            }
+
             if (_scene.IsValid() && _scene.isLoaded)
+            {
                 yield return SceneManager.UnloadSceneAsync(_scene);
+            }
+
             yield return null;
             if (_restoreSession)
             {
@@ -50,7 +63,7 @@ namespace YLFramework.Foundation.Tests
         [UnityTest]
         public IEnumerator StartCreatesOneIndependentNamedHostAndReusesIt()
         {
-            Assert.That(ApplicationTool.isPlaying, Is.True);
+            Assert.That(ApplicationTool.IsPlaying, Is.True);
             _foreignObject = new GameObject("CoroutineStarter");
             var ticks = 0;
             var first = StartOwned(Tick(() => ticks++));
@@ -128,7 +141,11 @@ namespace YLFramework.Foundation.Tests
             Assert.That(FindHosts(), Is.Empty);
             CoroutineStarter.Stop(oldCoroutine);
             // 回归失败时也清理本次 Stop 意外创建的宿主，不污染后续用例。
-            foreach (var host in FindHosts()) _ownedHosts.Add(host);
+            foreach (var host in FindHosts())
+            {
+                _ownedHosts.Add(host);
+            }
+
             Assert.That(FindHosts(), Is.Empty, "Stop(old) 不得创建替代宿主。");
             var countAfterDestroy = oldTicks;
             var newTicks = 0;
@@ -345,14 +362,14 @@ namespace YLFramework.Foundation.Tests
             var ticksAtAbort = producerTicks;
             yield return null;
             yield return null;
-            Assert.That(operation.isDone, Is.True);
-            Assert.That(operation.error, Is.EqualTo("request abort!"));
+            Assert.That(operation.IsDone, Is.True);
+            Assert.That(operation.Error, Is.EqualTo("request abort!"));
             Assert.That(completionCount, Is.EqualTo(1));
             Assert.That(producerTicks, Is.GreaterThan(ticksAtAbort));
             allowProducerCompletion = true;
             yield return null;
             yield return null;
-            Assert.That(operation.error, Is.Null);
+            Assert.That(operation.Error, Is.Null);
             Assert.That(completionCount, Is.EqualTo(1));
         }
 
@@ -377,7 +394,12 @@ namespace YLFramework.Foundation.Tests
             {
                 // Track only this fixture's new hosts, even when Start or its assertion fails.
                 foreach (var host in FindHosts())
-                    if (Array.IndexOf(before, host) < 0 && !_ownedHosts.Contains(host)) _ownedHosts.Add(host);
+                {
+                    if (Array.IndexOf(before, host) < 0 && !_ownedHosts.Contains(host))
+                    {
+                        _ownedHosts.Add(host);
+                    }
+                }
             }
             return coroutine;
         }

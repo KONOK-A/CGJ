@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using UnityEditor;
-using UnityEditor.Events;
 using UnityEditor.Build.Reporting;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -23,23 +23,29 @@ namespace YLFramework.Behavior.Acceptance
         public static string Generate(bool development = false, Action<string> folderCreated = null)
         {
             for (int i = 0; i < SceneManager.sceneCount; i++)
-                if (SceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("Save open scenes before generating the owned fixture. No scene was overwritten.");
+            {
+                if (SceneManager.GetSceneAt(i).isDirty)
+                {
+                    throw new InvalidOperationException("Save open scenes before generating the owned fixture. No scene was overwritten.");
+                }
+            }
+
             string folder = "GeneratedAcceptance_" + Guid.NewGuid().ToString("N");
             AssetDatabase.CreateFolder(Root, folder);
             folder = Root + "/" + folder;
             folderCreated?.Invoke(folder);
-            var asset = ScriptableObject.CreateInstance<RuntimeFSMController>();
+            var asset = ScriptableObject.CreateInstance<RuntimeFsmController>();
             asset.name = "BehaviorAcceptanceFSM";
             foreach (string name in new[] { "Idle", "Active" })
             {
-                var state = new FSMStateNodeData { name = name, defaultState = name == "Idle" };
-                state.StateScripts.Add(new FSMStateScriptInfo { className = typeof(BehaviorAcceptanceState).FullName });
+                var state = new FsmStateNodeData { name = name, isDefaultState = name == "Idle" };
+                state.stateScripts.Add(new FsmStateScriptInfo { className = typeof(BehaviorAcceptanceState).FullName });
                 asset.states.Add(state);
             }
-            asset.parameters.Add(new FSMParameterData { name = "Go", parameterType = ParameterType.Bool });
-            asset.parameters.Add(new FSMParameterData { name = "Fire", parameterType = ParameterType.Trigger });
-            var transition = new FSMTransitionData { fromStateName = "Idle", toStateName = "Active" };
-            transition.conditions.Add(new FSMConditionData { parameterName = "Go", targetValue = 1, compareType = CompareType.Equal });
+            asset.parameters.Add(new FsmParameterData { name = "Go", parameterType = ParameterType.Bool });
+            asset.parameters.Add(new FsmParameterData { name = "Fire", parameterType = ParameterType.Trigger });
+            var transition = new FsmTransitionData { fromStateName = "Idle", toStateName = "Active" };
+            transition.conditions.Add(new FsmConditionData { parameterName = "Go", targetValue = 1, compareType = CompareType.Equal });
             asset.transitions.Add(transition);
             string assetPath = folder + "/BehaviorAcceptanceFSM.asset";
             AssetDatabase.CreateAsset(asset, assetPath);
@@ -68,12 +74,21 @@ namespace YLFramework.Behavior.Acceptance
                 SceneManager.MoveGameObjectToScene(camera.gameObject, scene);
                 camera.clearFlags = CameraClearFlags.SolidColor;
                 camera.backgroundColor = new Color(0.025f, 0.04f, 0.065f);
-                if (!EditorSceneManager.SaveScene(scene, scenePath)) throw new InvalidOperationException("Acceptance scene save failed.");
+                if (!EditorSceneManager.SaveScene(scene, scenePath))
+                {
+                    throw new InvalidOperationException("Acceptance scene save failed.");
+                }
             }
             finally
             {
-                if (onlyEmptyUntitled) EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                else EditorSceneManager.CloseScene(scene, true);
+                if (onlyEmptyUntitled)
+                {
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                }
+                else
+                {
+                    EditorSceneManager.CloseScene(scene, true);
+                }
             }
             Debug.Log($"Owned fixture: {scenePath}; source GUID {AssetDatabase.AssetPathToGUID(assetPath)}. Generated, NOT run or Player-verified.");
             return scenePath;
@@ -96,21 +111,28 @@ namespace YLFramework.Behavior.Acceptance
                 var receiver = root.AddComponent<BehaviorEventReceiver>();
                 Child("Target2D", Vector3.zero).AddComponent<BoxCollider2D>();
                 var query = Child("Query2D", Vector3.zero).AddComponent<OverlapCircle2D>();
-                query.Running = false; query.Radius = 2; query.LayerMask = 1;
-                query.onColliderEnter = new OverlapEvent2D(); query.onColliderExit = new OverlapEvent2D();
+                query.IsRunning = false;
+                query.Radius = 2;
+                query.LayerMask = 1;
+                query.onColliderEnter = new OverlapEvent2D();
+                query.onColliderExit = new OverlapEvent2D();
                 UnityEventTools.AddPersistentListener(query.onColliderEnter, receiver.ReceiveHit);
                 UnityEventTools.AddPersistentListener(query.onColliderExit, receiver.ReceiveHit);
                 Child("Target3D", Vector3.forward * 20).AddComponent<BoxCollider>();
                 var sphere = Child("Query3D", Vector3.forward * 20).AddComponent<OverlapSphere3D>();
-                sphere.Running = false; sphere.Radius = 2; sphere.LayerMask = 1;
-                sphere.onColliderEnter = new OverlapEvent3D(); sphere.onColliderExit = new OverlapEvent3D();
+                sphere.IsRunning = false;
+                sphere.Radius = 2;
+                sphere.LayerMask = 1;
+                sphere.onColliderEnter = new OverlapEvent3D();
+                sphere.onColliderExit = new OverlapEvent3D();
                 UnityEventTools.AddPersistentListener(sphere.onColliderEnter, receiver.ReceiveHit3D);
                 UnityEventTools.AddPersistentListener(sphere.onColliderExit, receiver.ReceiveHit3D);
                 var motorObject = Child("Motor", Vector3.right * 5);
                 motorObject.AddComponent<Rigidbody2D>().gravityScale = 2;
                 motorObject.AddComponent<BoxCollider2D>().size = new Vector2(1, 2);
                 var motor = motorObject.AddComponent<CharacterController2D>();
-                motor.IsCheckWall = true; motor.IsCheckTop = true;
+                motor.ChecksWalls = true;
+                motor.ChecksCeiling = true;
                 motor.onGroundValueChange = new YLFramework.Character.Controller2D.BoolUnityEvent();
                 motor.onTouchWallValueChange = new YLFramework.Character.Controller2D.BoolUnityEvent();
                 motor.onTopValueChange = new YLFramework.Character.Controller2D.BoolUnityEvent();
@@ -125,15 +147,24 @@ namespace YLFramework.Behavior.Acceptance
                 Child("Wall", new Vector3(5.74f, 0)).AddComponent<BoxCollider2D>().size = new Vector2(0.5f, 2);
                 Child("Ceiling", new Vector3(5, 2)).AddComponent<BoxCollider2D>().size = new Vector2(2, 0.5f);
                 var platform = Child("Moveable", Vector3.right * 12).AddComponent<Moveable>();
-                platform.Positions.Add(platform.transform.position); platform.Positions.Add(platform.transform.position + Vector3.right);
-                platform.Speed = 2; platform.MoveType = MoveType.Once;
+                platform.Positions.Add(platform.transform.position);
+                platform.Positions.Add(platform.transform.position + Vector3.right);
+                platform.Speed = 2;
+                platform.MoveType = MoveType.Once;
                 platform.onMove = new Vector3UnityEvent();
                 UnityEventTools.AddPersistentListener(platform.onMove, receiver.ReceiveVector3);
                 var prefab = PrefabUtility.SaveAsPrefabAsset(root, folder + "/BehaviorEvents.prefab");
-                if (!prefab) throw new InvalidOperationException("Could not save serialized Player event fixture.");
+                if (!prefab)
+                {
+                    throw new InvalidOperationException("Could not save serialized Player event fixture.");
+                }
+
                 return prefab;
             }
-            finally { UnityEngine.Object.DestroyImmediate(root); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [MenuItem("Tools/YLFramework/Behavior Acceptance/Build Release Mono Windows64")]
@@ -151,16 +182,30 @@ namespace YLFramework.Behavior.Acceptance
         internal static BuildReport Build(ScriptingImplementation expected, bool development, string outputDirectory = null)
         {
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 || PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != expected)
+            {
                 throw new InvalidOperationException($"Select Windows64 and {expected} in the main Unity integration workspace first. This tool does not modify ProjectSettings.");
+            }
+
             string scene = Generate(development);
             string directory = outputDirectory == null ? Path.GetFullPath("Temp/Behavior.Acceptance/" + expected + "/" + (development ? "Development/" : "Release/") + Guid.NewGuid().ToString("N")) : Path.GetFullPath(outputDirectory);
             if (outputDirectory != null && (!directory.StartsWith("C:\\Users\\Kano\\AppData\\Local\\Temp\\kilo\\BA26\\", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(Path.GetDirectoryName(directory))))
+            {
                 throw new InvalidOperationException("CI output must be a new child of the dedicated A evidence directory.");
-            if (!Directory.Exists(Path.GetFullPath("Temp"))) throw new InvalidOperationException("Missing project Temp parent.");
+            }
+
+            if (!Directory.Exists(Path.GetFullPath("Temp")))
+            {
+                throw new InvalidOperationException("Missing project Temp parent.");
+            }
+
             Directory.CreateDirectory(directory);
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { scene }, target = BuildTarget.StandaloneWindows64, locationPathName = Path.Combine(directory, "BehaviorAcceptance.exe"), options = development ? BuildOptions.Development : BuildOptions.None });
             Debug.Log($"Behavior {expected} build: {report.summary.result}; development={development}; errors={report.summary.totalErrors}; output={directory}. Player runtime is not yet verified. Run with -batchmode -nographics -logFile <owned-log-path>, require exit 0 and YL_BEHAVIOR_ACCEPTANCE result=PASS.");
-            if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Behavior acceptance Player build failed.");
+            if (report.summary.result != BuildResult.Succeeded)
+            {
+                throw new InvalidOperationException("Behavior acceptance Player build failed.");
+            }
+
             return report;
         }
     }

@@ -15,8 +15,8 @@ namespace YLFramework.Services.Http
     /// <summary>主线程轻量 HTTP 入口；每笔请求独占传输，不管理认证、重试或共享资源生产者。</summary>
     public class HttpManager
     {
-        private static readonly HashSet<SendWebRequest> pendingRequests = new();
-        private static bool ending;
+        private static readonly HashSet<SendWebRequest> _pendingRequests = new();
+        private static bool _isEnding;
 
         static HttpManager()
         {
@@ -27,7 +27,9 @@ namespace YLFramework.Services.Http
 #endif
         }
 
-        private HttpManager() { }
+        private HttpManager()
+        {
+        }
 
         /// <summary>发送前同步配置。不得持有或释放借用的原生请求/Handler；异常使本请求失败。</summary>
         /// <remarks>
@@ -40,17 +42,20 @@ namespace YLFramework.Services.Http
         /// <remarks>终态已提交；异常仅报告，不改结果。完成通知应读取 SendWebRequest 的响应快照。</remarks>
         public static event Action<UnityWebRequest, float> PostWebRequest;
 
-        internal static bool CanRun => !ending && SingletonSessionState.CanRunExecution;
-        internal static void Register(SendWebRequest request) => pendingRequests.Add(request);
-        internal static void Unregister(SendWebRequest request) => pendingRequests.Remove(request);
+        internal static bool CanRun => !_isEnding && SingletonSessionState.CanRunExecution;
+        internal static void Register(SendWebRequest request) => _pendingRequests.Add(request);
+        internal static void Unregister(SendWebRequest request) => _pendingRequests.Remove(request);
         internal static Action<UnityWebRequest> Before => PreWebRequest;
         internal static Action<UnityWebRequest, float> After => PostWebRequest;
 
         private static void OnExecutionEnded()
         {
-            ending = true;
+            _isEnding = true;
             // 请求自行先撤销在途身份再通知；通知重入不能向正在退出的 HTTP 会话增加工作。
-            foreach (var request in new List<SendWebRequest>(pendingRequests)) request.Invalidate();
+            foreach (var request in new List<SendWebRequest>(_pendingRequests))
+            {
+                request.Invalidate();
+            }
         }
 
         private static void ResetSession()
@@ -58,14 +63,17 @@ namespace YLFramework.Services.Http
             OnExecutionEnded();
             PreWebRequest = null;
             PostWebRequest = null;
-            ending = false;
+            _isEnding = false;
         }
 
 #if UNITY_EDITOR
         private static void OnPlayModeChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.EnteredEditMode) OnExecutionEnded();
+                state == PlayModeStateChange.EnteredEditMode)
+            {
+                OnExecutionEnded();
+            }
         }
 #endif
 
@@ -79,12 +87,19 @@ namespace YLFramework.Services.Http
             {
                 var body = new StringBuilder();
                 if (param != null)
+                {
                     foreach (var item in param)
                     {
-                        if (body.Length != 0) body.Append('&');
+                        if (body.Length != 0)
+                        {
+                            body.Append('&');
+                        }
+
                         body.Append(UnityWebRequest.EscapeURL(item.Key, Encoding.UTF8)).Append('=')
                             .Append(UnityWebRequest.EscapeURL(item.Value ?? string.Empty, Encoding.UTF8));
                     }
+                }
+
                 return Build(operation, url, UnityWebRequest.kHttpVerbPOST, body.ToString(), "application/x-www-form-urlencoded; charset=utf-8");
             }, headers);
 
@@ -93,9 +108,9 @@ namespace YLFramework.Services.Http
             => Create(operation => Build(operation, url, UnityWebRequest.kHttpVerbPOST, JsonConvert.SerializeObject(param), "application/json; charset=utf-8"), headers);
 
         /// <summary>原样提交 JSON 字符串；null 字符串为参数错误，不进行 JSON 内容校验。</summary>
-        public static SendWebRequest PostBody(string url, string json_param, Dictionary<string, string> headers)
+        public static SendWebRequest PostBody(string url, string jsonParam, Dictionary<string, string> headers)
             => Create(operation => Build(operation, url, UnityWebRequest.kHttpVerbPOST,
-                json_param ?? throw new ArgumentNullException(nameof(json_param)), "application/json; charset=utf-8"), headers);
+                jsonParam ?? throw new ArgumentNullException(nameof(jsonParam)), "application/json; charset=utf-8"), headers);
 
         /// <summary>以 PUT 提交字典的 UTF-8 JSON。</summary>
         public static SendWebRequest Put(string url, Dictionary<string, object> param, Dictionary<string, string> headers)
@@ -107,8 +122,16 @@ namespace YLFramework.Services.Http
 
         private static string QueryUrl(string url, Dictionary<string, object> parameters)
         {
-            if (parameters == null || parameters.Count == 0) return url;
-            if (url == null) throw new ArgumentNullException(nameof(url));
+            if (parameters == null || parameters.Count == 0)
+            {
+                return url;
+            }
+
+            if (url == null)
+            {
+                throw new ArgumentNullException(nameof(url));
+            }
+
             var fragmentIndex = url.IndexOf('#');
             var fragment = fragmentIndex >= 0 ? url.Substring(fragmentIndex) : string.Empty;
             var address = fragmentIndex >= 0 ? url.Substring(0, fragmentIndex) : url;
@@ -116,8 +139,15 @@ namespace YLFramework.Services.Http
             var hasQuery = address.IndexOf('?') >= 0;
             foreach (var item in parameters)
             {
-                if (!hasQuery) builder.Append('?');
-                else if (builder[builder.Length - 1] != '?' && builder[builder.Length - 1] != '&') builder.Append('&');
+                if (!hasQuery)
+                {
+                    builder.Append('?');
+                }
+                else if (builder[builder.Length - 1] != '?' && builder[builder.Length - 1] != '&')
+                {
+                    builder.Append('&');
+                }
+
                 builder.Append(Uri.EscapeDataString(item.Key)).Append('=')
                     .Append(Uri.EscapeDataString(Convert.ToString(item.Value, CultureInfo.InvariantCulture) ?? string.Empty));
                 hasQuery = true;
@@ -128,7 +158,10 @@ namespace YLFramework.Services.Http
         private static UnityWebRequest Build(SendWebRequest operation, string url, string method, string body, string contentType)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+            {
                 throw new ArgumentException("HTTP requires an absolute http/https URI.", nameof(url));
+            }
+
             var request = new UnityWebRequest(url, method);
             operation.TakeOwnership(request);
             request.downloadHandler = operation.Own(new DownloadHandlerBuffer());
@@ -149,15 +182,28 @@ namespace YLFramework.Services.Http
                 var request = factory(operation);
                 request.timeout = 5;
                 if (headers != null)
-                    foreach (var header in headers) request.SetRequestHeader(header.Key, header.Value);
+                {
+                    foreach (var header in headers)
+                    {
+                        request.SetRequestHeader(header.Key, header.Value);
+                    }
+                }
+
                 operation.Start();
             }
-            catch (Exception exception) { operation.Fail(exception); }
+            catch (Exception exception)
+            {
+                operation.Fail(exception);
+            }
             return operation;
         }
 
         // 内部生产入口接管全部原生资源；不提供外部重用同一 transport 的能力。
         internal static SendWebRequest SendWebRequest(UnityWebRequest request)
-            => Create(operation => { operation.TakeOwnership(request); return request; }, null);
+            => Create(operation =>
+            {
+                operation.TakeOwnership(request);
+                return request;
+            }, null);
     }
 }

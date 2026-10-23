@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,22 +7,25 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.Actions
 {
-    public sealed class ObservableActionTestHost : MonoBehaviour { }
+    public sealed class ObservableActionTestHost : MonoBehaviour
+    {
+    }
 
     public class ObservableActionPlayModeTests
     {
-        private readonly Dictionary<IAction, ulong> mOwned = new Dictionary<IAction, ulong>();
-        private readonly List<GameObject> mRoots = new List<GameObject>();
-        private ObservableActionTestHost mCaller;
-        private ActionRecycleDriver mPreviousRecycle;
-        private SynchronizationContext mPreviousContext;
-        private int mMainThread;
-        private bool mOwnEnvironment;
-        private bool mOwnActionSession;
+        private readonly Dictionary<IAction, ulong> _owned = new Dictionary<IAction, ulong>();
+        private readonly List<GameObject> _roots = new List<GameObject>();
+        private ObservableActionTestHost _caller;
+        private ActionRecycleDriver _previousRecycle;
+        private SynchronizationContext _previousContext;
+        private int _mainThread;
+        private bool _ownsEnvironment;
+        private bool _ownsActionSession;
 
         private sealed class SubscriptionProbe : IDisposable
         {
@@ -59,90 +61,112 @@ namespace YLFramework.Tests.Actions
 
         private sealed class MainThreadContext : SynchronizationContext
         {
-            private readonly int mOwner = Thread.CurrentThread.ManagedThreadId;
-            private readonly Queue<Action> mPending = new Queue<Action>();
+            private readonly int _owner = Thread.CurrentThread.ManagedThreadId;
+            private readonly Queue<Action> _pending = new Queue<Action>();
             public int Posts;
             public int PostThread;
 
             public override void Post(SendOrPostCallback callback, object state)
             {
-                lock (mPending)
+                lock (_pending)
                 {
                     Posts++;
                     PostThread = Thread.CurrentThread.ManagedThreadId;
-                    mPending.Enqueue(() => callback(state));
+                    _pending.Enqueue(() => callback(state));
                 }
             }
 
             public void DeliverOnMainThread()
             {
-                Assert.That(Thread.CurrentThread.ManagedThreadId, Is.EqualTo(mOwner));
+                Assert.That(Thread.CurrentThread.ManagedThreadId, Is.EqualTo(_owner));
                 Action[] pending;
-                lock (mPending)
+                lock (_pending)
                 {
-                    pending = mPending.ToArray();
-                    mPending.Clear();
+                    pending = _pending.ToArray();
+                    _pending.Clear();
                 }
-                foreach (var callback in pending) callback();
+                foreach (var callback in pending)
+                {
+                    callback();
+                }
             }
         }
 
         [SetUp]
         public void SetUp()
         {
-            mOwnEnvironment = false;
-            mOwnActionSession = false;
+            _ownsEnvironment = false;
+            _ownsActionSession = false;
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
-            mPreviousContext = SynchronizationContext.Current;
-            mMainThread = Thread.CurrentThread.ManagedThreadId;
+            _previousContext = SynchronizationContext.Current;
+            _mainThread = Thread.CurrentThread.ManagedThreadId;
             Assert.That(Object.FindObjectsOfType<MonoUpdateActionExecutor>(true), Is.Empty, "Use an isolated test scene; this fixture must not stop another owner's actions.");
             Assert.That(Object.FindObjectsOfType<ActionGlobalHost>(true), Is.Empty);
             Assert.That(Object.FindObjectsOfType<ActionKitCurrentScene>(true), Is.Empty);
-            mOwnEnvironment = true;
-            mOwnActionSession = canOwnActionSession;
+            _ownsEnvironment = true;
+            _ownsActionSession = canOwnActionSession;
             ActionQueue.Drain();
-            mPreviousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _previousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
             var root = new GameObject("ActionKit.Observable.TestCaller");
-            mRoots.Add(root);
-            mCaller = root.AddComponent<ObservableActionTestHost>();
+            _roots.Add(root);
+            _caller = root.AddComponent<ObservableActionTestHost>();
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            SynchronizationContext.SetSynchronizationContext(mPreviousContext);
-            if (!mOwnEnvironment) yield break;
-            foreach (var root in mRoots)
+            SynchronizationContext.SetSynchronizationContext(_previousContext);
+            if (!_ownsEnvironment)
             {
-                if (root) Object.Destroy(root);
+                yield break;
             }
-            mRoots.Clear();
+
+            foreach (var root in _roots)
+            {
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
+            }
+            _roots.Clear();
             yield return null;
             try
             {
-                foreach (var lease in mOwned)
+                foreach (var lease in _owned)
                 {
-                    if (lease.Key.ActionID == lease.Value && !lease.Key.Deinited) lease.Key.Deinit();
+                    if (lease.Key.ActionId == lease.Value && !lease.Key.IsDeinitialized)
+                    {
+                        lease.Key.Deinit();
+                    }
                 }
             }
             finally
             {
-                mOwned.Clear();
+                _owned.Clear();
                 ActionQueue.Drain();
                 var recycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
-                if (recycle && recycle != mPreviousRecycle) Object.Destroy(recycle.gameObject);
+                if (recycle && recycle != _previousRecycle)
+                {
+                    Object.Destroy(recycle.gameObject);
+                }
             }
-            if (mOwnActionSession)
+            if (_ownsActionSession)
             {
-                try { ActionKit.Shutdown(); }
-                finally { mOwnActionSession = false; }
+                try
+                {
+                    ActionKit.Shutdown();
+                }
+                finally
+                {
+                    _ownsActionSession = false;
+                }
             }
             yield return null;
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mOwned[action] = action.ActionID;
+            _owned[action] = action.ActionId;
             return action;
         }
 
@@ -150,15 +174,19 @@ namespace YLFramework.Tests.Actions
 
         private IActionController Start(IAction action, int scope, Action<IActionController> onFinish)
         {
-            if (scope == 0) return action.Start(mCaller, onFinish);
+            if (scope == 0)
+            {
+                return action.Start(_caller, onFinish);
+            }
+
             if (scope == 1)
             {
-                mRoots.Add(ActionKitCurrentScene.SceneComponent.gameObject);
+                _roots.Add(ActionKitCurrentScene.SceneComponent.gameObject);
                 return action.StartCurrentScene(onFinish);
             }
             if (scope == 2)
             {
-                mRoots.Add(ActionGlobalHost.Instance.gameObject);
+                _roots.Add(ActionGlobalHost.Instance.gameObject);
                 return action.StartGlobal(onFinish);
             }
             throw new ArgumentOutOfRangeException(nameof(scope));
@@ -168,8 +196,14 @@ namespace YLFramework.Tests.Actions
         {
             var previous = SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(context);
-            try { operation(); }
-            finally { SynchronizationContext.SetSynchronizationContext(previous); }
+            try
+            {
+                operation();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previous);
+            }
         }
 
         // Signals never wait for the context and the worker never calls Unity or NUnit.
@@ -195,9 +229,9 @@ namespace YLFramework.Tests.Actions
                 callbacks++;
                 callbackThread = Thread.CurrentThread.ManagedThreadId;
                 observed = current;
-                beforeDeinit = !current.Action.Deinited;
+                beforeDeinit = !current.Action.IsDeinitialized;
             });
-            Assert.That(source.SubscribeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.SubscribeThread, Is.EqualTo(_mainThread));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(controller.Action, Is.SameAs(action));
             yield return null;
@@ -211,11 +245,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(callbacks, Is.EqualTo(1));
             Assert.That(observed, Is.SameAs(controller));
             Assert.That(beforeDeinit, Is.True);
-            Assert.That(callbackThread, Is.EqualTo(mMainThread));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(callbackThread, Is.EqualTo(_mainThread));
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
             Assert.That(source.SourceDisposals, Is.Zero);
             Assert.That(GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Tests.PlayMode"));
         }
@@ -234,9 +268,9 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             source.DuringSubscribe = observer => observer.OnNext(1);
             var callbacks = 0;
-            var controller = action.Start(mCaller, () => callbacks++);
+            var controller = action.Start(_caller, () => callbacks++);
             Assert.That(callbacks, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             yield return null;
@@ -244,7 +278,7 @@ namespace YLFramework.Tests.Actions
             var reused = Action(new ObservableProbe());
             Assert.That(reused, Is.SameAs(action));
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(callbacks, Is.EqualTo(1));
         }
 
@@ -255,11 +289,11 @@ namespace YLFramework.Tests.Actions
             var callbacks = 0;
             var controller = Start(action, scope, _ => callbacks++);
             yield return null;
-            var host = scope == 0 ? mCaller.gameObject : scope == 1 ? ActionKitCurrentScene.SceneComponent.gameObject : ActionGlobalHost.Instance.gameObject;
+            var host = scope == 0 ? _caller.gameObject : scope == 1 ? ActionKitCurrentScene.SceneComponent.gameObject : ActionGlobalHost.Instance.gameObject;
             Object.Destroy(host);
             yield return null;
             yield return null;
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(controller.Action, Is.Null);
             Assert.That(callbacks, Is.Zero);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
@@ -283,7 +317,7 @@ namespace YLFramework.Tests.Actions
             var source = new ObservableProbe();
             var action = Action(source);
             var callbacks = 0;
-            var controller = action.Start(mCaller, () => callbacks++);
+            var controller = action.Start(_caller, () => callbacks++);
             yield return null;
             if (faulted)
             {
@@ -291,8 +325,12 @@ namespace YLFramework.Tests.Actions
                 ExpectError(error);
                 source.Observers[0].OnError(error);
             }
-            else source.Observers[0].OnCompleted();
-            Assert.That(action.Deinited, Is.True);
+            else
+            {
+                source.Observers[0].OnCompleted();
+            }
+
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             yield return null;
             yield return null;
@@ -313,10 +351,10 @@ namespace YLFramework.Tests.Actions
             var source = new ObservableProbe();
             var action = Action(source);
             var callbacks = 0;
-            var controller = action.Start(mCaller, () => callbacks++);
+            var controller = action.Start(_caller, () => callbacks++);
             controller.Pause();
             yield return null;
-            Assert.That(action.Paused, Is.True);
+            Assert.That(action.IsPaused, Is.True);
             source.Observers[0].OnNext(1);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
             yield return null;
@@ -334,7 +372,11 @@ namespace YLFramework.Tests.Actions
             var reset = false;
             source.DuringSubscribe = observer =>
             {
-                if (resetInFactory || reset) return;
+                if (resetInFactory || reset)
+                {
+                    return;
+                }
+
                 reset = true;
                 action.Reset();
             };
@@ -349,19 +391,23 @@ namespace YLFramework.Tests.Actions
                 return source;
             }));
             var callbacks = 0;
-            var controller = action.Start(mCaller, () => callbacks++);
+            var controller = action.Start(_caller, () => callbacks++);
             yield return null;
             yield return null;
             Assert.That(factoryCalls, Is.EqualTo(2), "An executor must restart the slot invalidated by a synchronous Reset.");
             Assert.That(source.Observers.Count, Is.EqualTo(resetInFactory ? 1 : 2));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(callbacks, Is.Zero);
             source.Observers[source.Observers.Count - 1].OnNext(1);
             yield return null;
             yield return null;
             Assert.That(callbacks, Is.EqualTo(1));
             Assert.That(controller.Action, Is.Null);
-            foreach (var token in source.Tokens) Assert.That(token.Disposals, Is.EqualTo(1));
+            foreach (var token in source.Tokens)
+            {
+                Assert.That(token.Disposals, Is.EqualTo(1));
+            }
+
             Assert.That(source.SourceDisposals, Is.Zero);
         }
 
@@ -389,19 +435,23 @@ namespace YLFramework.Tests.Actions
             };
             original = Own(UniRxAction<int>.Allocate(() =>
             {
-                if (cancelInFactory) replace();
+                if (cancelInFactory)
+                {
+                    replace();
+                }
+
                 return first;
             }));
-            var id = original.ActionID;
+            var id = original.ActionId;
             var oldCallbacks = 0;
-            var oldController = original.Start(mCaller, () => oldCallbacks++);
+            var oldController = original.Start(_caller, () => oldCallbacks++);
             Assert.That(replacement, Is.SameAs(original));
-            Assert.That(replacement.ActionID, Is.Not.EqualTo(id));
+            Assert.That(replacement.ActionId, Is.Not.EqualTo(id));
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.NotStart), "Start must not let an old Execute stack change the replacement lease.");
             Assert.That(oldController.Action, Is.Null);
             Assert.That(second.Observers, Is.Empty);
             var callbacks = 0;
-            var controller = replacement.Start(mCaller, () => callbacks++);
+            var controller = replacement.Start(_caller, () => callbacks++);
             Assert.That(second.Observers.Count, Is.EqualTo(1));
             yield return null;
             Assert.That(oldCallbacks, Is.Zero);
@@ -412,7 +462,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(callbacks, Is.EqualTo(1));
             Assert.That(oldCallbacks, Is.Zero);
             Assert.That(controller.Action, Is.Null);
-            foreach (var token in first.Tokens) Assert.That(token.Disposals, Is.EqualTo(1));
+            foreach (var token in first.Tokens)
+            {
+                Assert.That(token.Disposals, Is.EqualTo(1));
+            }
+
             Assert.That(second.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(first.SourceDisposals + second.SourceDisposals, Is.Zero);
         }
@@ -431,17 +485,17 @@ namespace YLFramework.Tests.Actions
             var callbacks = 0;
             var callbackThread = 0;
             IActionController controller = null;
-            WithContext(context, () => controller = action.Start(mCaller, () =>
+            WithContext(context, () => controller = action.Start(_caller, () =>
             {
                 callbacks++;
                 callbackThread = Thread.CurrentThread.ManagedThreadId;
             }));
             var worker = OnWorker(() => source.Observers[0].OnNext(1));
-            Assert.That(worker, Is.Not.EqualTo(mMainThread));
+            Assert.That(worker, Is.Not.EqualTo(_mainThread));
             Assert.That(context.Posts, Is.EqualTo(1));
             Assert.That(context.PostThread, Is.EqualTo(worker));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(source.Tokens[0].Disposals, Is.Zero);
             Assert.That(callbacks, Is.Zero);
             context.DeliverOnMainThread();
@@ -450,8 +504,8 @@ namespace YLFramework.Tests.Actions
             yield return null;
             yield return null;
             Assert.That(callbacks, Is.EqualTo(1));
-            Assert.That(callbackThread, Is.EqualTo(mMainThread));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(callbackThread, Is.EqualTo(_mainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(controller.Action, Is.Null);
         }
@@ -464,20 +518,20 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             var callbacks = 0;
             var callbackThread = 0;
-            var controller = action.Start(mCaller, () =>
+            var controller = action.Start(_caller, () =>
             {
                 callbacks++;
                 callbackThread = Thread.CurrentThread.ManagedThreadId;
             });
-            Assert.That(OnWorker(() => source.Observers[0].OnNext(1)), Is.Not.EqualTo(mMainThread));
+            Assert.That(OnWorker(() => source.Observers[0].OnNext(1)), Is.Not.EqualTo(_mainThread));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(source.Tokens[0].Disposals, Is.Zero);
             yield return null;
             yield return null;
             Assert.That(callbacks, Is.EqualTo(1));
-            Assert.That(callbackThread, Is.EqualTo(mMainThread));
+            Assert.That(callbackThread, Is.EqualTo(_mainThread));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
             Assert.That(controller.Action, Is.Null);
         }
 
@@ -486,9 +540,9 @@ namespace YLFramework.Tests.Actions
         {
             var source = new ObservableProbe();
             var action = Action(source);
-            var id = action.ActionID;
+            var id = action.ActionId;
             WithContext(null, () => action.Execute(0));
-            Assert.That(OnWorker(() => source.Observers[0].OnNext(1)), Is.Not.EqualTo(mMainThread));
+            Assert.That(OnWorker(() => source.Observers[0].OnNext(1)), Is.Not.EqualTo(_mainThread));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(source.Tokens[0].Disposals, Is.Zero);
             OnWorker(() => action.OnExecute(0));
@@ -497,13 +551,13 @@ namespace YLFramework.Tests.Actions
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(action.Execute(0), Is.True);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
             action.Deinit();
             yield return null;
             yield return null;
             var reused = Action(new ObservableProbe());
             Assert.That(reused, Is.SameAs(action));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(id));
+            Assert.That(reused.ActionId, Is.Not.EqualTo(id));
         }
 
         [UnityTest]
@@ -512,10 +566,10 @@ namespace YLFramework.Tests.Actions
             var context = new MainThreadContext();
             var first = new ObservableProbe();
             var original = Action(first);
-            var oldId = original.ActionID;
+            var oldId = original.ActionId;
             var oldCallbacks = 0;
             IActionController oldController = null;
-            WithContext(context, () => oldController = original.Start(mCaller, () => oldCallbacks++));
+            WithContext(context, () => oldController = original.Start(_caller, () => oldCallbacks++));
             OnWorker(() => first.Observers[0].OnNext(1));
             Assert.That(context.Posts, Is.EqualTo(1));
             oldController.Deinit();
@@ -526,13 +580,13 @@ namespace YLFramework.Tests.Actions
             var second = new ObservableProbe();
             var replacement = Action(second);
             Assert.That(replacement, Is.SameAs(original));
-            Assert.That(replacement.ActionID, Is.Not.EqualTo(oldId));
+            Assert.That(replacement.ActionId, Is.Not.EqualTo(oldId));
             var newCallbacks = 0;
-            var newController = replacement.Start(mCaller, () => newCallbacks++);
+            var newController = replacement.Start(_caller, () => newCallbacks++);
             context.DeliverOnMainThread();
             first.Observers[0].OnError(new InvalidOperationException("cancelled posted observer"));
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(second.Tokens[0].Disposals, Is.Zero);
             Assert.That(oldCallbacks, Is.Zero);
             yield return null;
@@ -559,7 +613,7 @@ namespace YLFramework.Tests.Actions
             action.Execute(0);
             context.DeliverOnMainThread();
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(source.Tokens[1].Disposals, Is.Zero);
             yield return null;
             source.Observers[1].OnNext(2);
@@ -575,17 +629,17 @@ namespace YLFramework.Tests.Actions
             var error = new InvalidOperationException("worker observable error");
             WithContext(null, () => action.Execute(0));
             OnWorker(() => source.Observers[0].OnError(error));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(source.Tokens[0].Disposals, Is.Zero);
             LogAssert.NoUnexpectedReceived();
             yield return null;
             ExpectError(error);
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
         }
 
         [UnityTest]
@@ -596,7 +650,7 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             var callbacks = 0;
             IActionController controller = null;
-            WithContext(context, () => controller = action.Start(mCaller, () => callbacks++));
+            WithContext(context, () => controller = action.Start(_caller, () => callbacks++));
             OnWorker(() =>
             {
                 source.Observers[0].OnCompleted();
@@ -605,12 +659,12 @@ namespace YLFramework.Tests.Actions
             });
             Assert.That(context.Posts, Is.EqualTo(1));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             LogAssert.NoUnexpectedReceived();
             context.DeliverOnMainThread();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
-            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(mMainThread));
+            Assert.That(source.Tokens[0].DisposeThread, Is.EqualTo(_mainThread));
             yield return null;
             yield return null;
             Assert.That(controller.Action, Is.Null);
@@ -630,7 +684,7 @@ namespace YLFramework.Tests.Actions
                 return source;
             });
             var callbacks = 0;
-            var controller = repeat.Start(mCaller, () => callbacks++);
+            var controller = repeat.Start(_caller, () => callbacks++);
             yield return null;
             yield return null;
             Assert.That(sources.Count, Is.EqualTo(1));
@@ -641,7 +695,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(sources.Count, Is.EqualTo(2));
             Assert.That(sources[0].Tokens[0].Disposals, Is.EqualTo(1));
             sources[0].Observers[0].OnCompleted();
-            Assert.That(repeat.Deinited, Is.False);
+            Assert.That(repeat.IsDeinitialized, Is.False);
             Assert.That(callbacks, Is.Zero);
             sources[1].Observers[0].OnNext(2);
             yield return null;
@@ -659,37 +713,41 @@ namespace YLFramework.Tests.Actions
         {
             var first = new ObservableProbe();
             var child = Action(first);
-            var id = child.ActionID;
+            var id = child.ActionId;
             var tailCalls = 0;
             var callbacks = 0;
             var parent = Own(ActionKit.Sequence()).Append(child).Callback(() => tailCalls++);
-            var controller = parent.Start(mCaller, () => callbacks++);
-            mCaller.gameObject.SetActive(false);
+            var controller = parent.Start(_caller, () => callbacks++);
+            _caller.gameObject.SetActive(false);
             if (faulted)
             {
                 var error = new InvalidOperationException("inactive parent observable failure");
                 ExpectError(error);
                 first.Observers[0].OnError(error);
             }
-            else first.Observers[0].OnCompleted();
-            Assert.That(child.Deinited, Is.True);
+            else
+            {
+                first.Observers[0].OnCompleted();
+            }
+
+            Assert.That(child.IsDeinitialized, Is.True);
             yield return null;
             yield return null;
             var second = new ObservableProbe();
             var replacement = Action(second);
             Assert.That(replacement, Is.SameAs(child));
-            Assert.That(replacement.ActionID, Is.Not.EqualTo(id));
-            mCaller.gameObject.SetActive(true);
+            Assert.That(replacement.ActionId, Is.Not.EqualTo(id));
+            _caller.gameObject.SetActive(true);
             yield return null;
             yield return null;
-            Assert.That(parent.Deinited, Is.True, "The inactive parent's old child lease must remain cancelled after recycling.");
+            Assert.That(parent.IsDeinitialized, Is.True, "The inactive parent's old child lease must remain cancelled after recycling.");
             Assert.That(controller.Action, Is.Null);
             Assert.That(tailCalls, Is.Zero);
             Assert.That(callbacks, Is.Zero);
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(second.Observers, Is.Empty);
-            var restarted = replacement.Start(mCaller, () => callbacks++);
+            var restarted = replacement.Start(_caller, () => callbacks++);
             second.Observers[0].OnNext(2);
             yield return null;
             yield return null;
@@ -710,9 +768,9 @@ namespace YLFramework.Tests.Actions
         public IEnumerator ShutdownCancelsAllScopesButKeepsUserHostsAndExternalSources()
         {
             var userSceneRoot = new GameObject("ActionKit.Observable.UserSceneHost");
-            mRoots.Add(userSceneRoot);
+            _roots.Add(userSceneRoot);
             var userSceneHost = userSceneRoot.AddComponent<ActionKitCurrentScene>();
-            ActionKitCurrentScene.mSceneComponent = userSceneHost;
+            ActionKitCurrentScene.CachedSceneComponent = userSceneHost;
             var sources = new[] { new ObservableProbe(), new ObservableProbe(), new ObservableProbe() };
             var actions = new UniRxAction<int>[3];
             var controllers = new IActionController[3];
@@ -727,7 +785,7 @@ namespace YLFramework.Tests.Actions
             ActionKit.Shutdown();
             for (var scope = 0; scope < 3; scope++)
             {
-                Assert.That(actions[scope].Deinited, Is.True);
+                Assert.That(actions[scope].IsDeinitialized, Is.True);
                 Assert.That(controllers[scope].Action, Is.Null);
                 Assert.That(sources[scope].Tokens[0].Disposals, Is.EqualTo(1));
                 Assert.That(sources[scope].SourceDisposals, Is.Zero);
@@ -737,8 +795,8 @@ namespace YLFramework.Tests.Actions
             }
             yield return null;
             yield return null;
-            Assert.That(mCaller != null, Is.True);
-            Assert.That(mCaller.gameObject.activeSelf, Is.True);
+            Assert.That(_caller != null, Is.True);
+            Assert.That(_caller.gameObject.activeSelf, Is.True);
             Assert.That(userSceneRoot != null, Is.True);
             Assert.That(userSceneHost != null, Is.True);
             Assert.That(Object.FindObjectsOfType<MonoUpdateActionExecutor>(true), Is.Empty);
@@ -746,7 +804,7 @@ namespace YLFramework.Tests.Actions
             Assert.That(callbacks, Is.Zero);
             var fresh = new ObservableProbe();
             var replacement = Action(fresh);
-            var restarted = replacement.Start(mCaller, () => callbacks++);
+            var restarted = replacement.Start(_caller, () => callbacks++);
             fresh.Observers[0].OnNext(2);
             yield return null;
             yield return null;

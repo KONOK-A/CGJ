@@ -10,7 +10,10 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 注入失败时的依赖链，供诊断使用；无上下文时为 null。
         /// </summary>
-        public string DependencyPath { get; }
+        public string DependencyPath
+        {
+            get;
+        }
 
         /// <summary>
         /// 使用指定错误消息创建异常。

@@ -15,37 +15,48 @@ namespace YLFramework.Core.Tests
             Assert.That(typeof(PanelConfig).IsDefined(typeof(SerializableAttribute), false), Is.True);
             var fields = typeof(PanelConfig).GetFields(BindingFlags.Public | BindingFlags.Instance);
             Assert.That(fields.Select(field => field.Name), Is.EquivalentTo(new[]
-                { "Layer", "Priority", "Modal", "CoversRoot", "ParticipatesInTop", "InstanceMode", "CacheOnClose" }));
-            foreach (var field in fields.Where(field => field.Name == "Modal" || field.Name == "CoversRoot" ||
-                field.Name == "ParticipatesInTop" || field.Name == "CacheOnClose")) Assert.That(field.FieldType, Is.EqualTo(typeof(bool)));
+                { "layer", "priority", "modal", "coversRoot", "participatesInTop", "instanceMode", "cacheOnClose" }));
+            foreach (var field in fields.Where(field => field.Name == "modal" || field.Name == "coversRoot" ||
+                field.Name == "participatesInTop" || field.Name == "cacheOnClose"))
+            {
+                Assert.That(field.FieldType, Is.EqualTo(typeof(bool)));
+            }
         }
 
         [Test]
         public void DefaultAndExplicitZeroOrFalseRemainDistinct()
         {
             var settings = PanelConfig.Default;
-            Assert.That(settings.ParticipatesInTop && settings.CacheOnClose, Is.True);
-            Assert.That(settings.InstanceMode, Is.EqualTo(PanelInstanceMode.Single));
+            Assert.That(settings.participatesInTop && settings.cacheOnClose, Is.True);
+            Assert.That(settings.instanceMode, Is.EqualTo(PanelInstanceMode.Single));
             settings = new PanelOverrides { Priority = 8, Modal = true }.ApplyTo(settings);
             settings = new PanelOverrides { Priority = 0, Modal = false, ParticipatesInTop = false, CacheOnClose = false }.ApplyTo(settings);
-            Assert.That(settings.Priority, Is.Zero);
-            Assert.That(settings.Modal || settings.ParticipatesInTop || settings.CacheOnClose, Is.False);
-            Assert.That(default(PanelOverrides).ApplyTo(PanelConfig.Default).CacheOnClose, Is.True);
+            Assert.That(settings.priority, Is.Zero);
+            Assert.That(settings.modal || settings.participatesInTop || settings.cacheOnClose, Is.False);
+            Assert.That(default(PanelOverrides).ApplyTo(PanelConfig.Default).cacheOnClose, Is.True);
         }
 
         [Test]
         public void PrefabThenRuleThenRequestMergeAllSevenFields()
         {
-            var prefab = new PanelOverrides { Layer = 2, Priority = 7, Modal = true, CoversRoot = true,
-                ParticipatesInTop = false, InstanceMode = PanelInstanceMode.Multiple, CacheOnClose = false }.ApplyTo(PanelConfig.Default);
+            var prefab = new PanelOverrides
+            {
+                Layer = 2,
+                Priority = 7,
+                Modal = true,
+                CoversRoot = true,
+                ParticipatesInTop = false,
+                InstanceMode = PanelInstanceMode.Multiple,
+                CacheOnClose = false
+            }.ApplyTo(PanelConfig.Default);
             var rules = PanelRuleSnapshot.Capture(new[] { new PanelRule("ui/Window.prefab", new PanelOverrides { Layer = 4, Priority = 5, Modal = false, CacheOnClose = true }) });
             var result = rules.Resolve("ui/Window.prefab", null).ApplyTo(prefab);
             result = new PanelOverrides { Priority = 0, CoversRoot = false }.ApplyTo(result);
-            Assert.That(result.Layer, Is.EqualTo(4));
-            Assert.That(result.Priority, Is.Zero);
-            Assert.That(result.Modal || result.CoversRoot || result.ParticipatesInTop, Is.False);
-            Assert.That(result.InstanceMode, Is.EqualTo(PanelInstanceMode.Multiple));
-            Assert.That(result.CacheOnClose, Is.True);
+            Assert.That(result.layer, Is.EqualTo(4));
+            Assert.That(result.priority, Is.Zero);
+            Assert.That(result.modal || result.coversRoot || result.participatesInTop, Is.False);
+            Assert.That(result.instanceMode, Is.EqualTo(PanelInstanceMode.Multiple));
+            Assert.That(result.cacheOnClose, Is.True);
         }
 
         [Test]

@@ -151,7 +151,11 @@ namespace YLFramework.Actions
             Action<IActionController> onFinish)
         {
             ValidateNamedStart(action, flag);
-            if (!owner) throw new ArgumentNullException(nameof(owner));
+            if (!owner)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+
             ActionKit.Initialize();
             return MonoUpdateActionExecutor.Find(owner.gameObject, true).StartNamed(action, flag, replace, onFinish);
         }

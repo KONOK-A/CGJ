@@ -1,5 +1,5 @@
 using System;
-using System.Collections; 
+using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -9,7 +9,7 @@ namespace YLFramework.Core
 {
 
     public enum StartingModuleSteps
-    { 
+    {
         /// <summary>
         /// 加载配表
         /// </summary>
@@ -27,19 +27,34 @@ namespace YLFramework.Core
     /// </summary>
     public sealed class StartUpModuleRequest : YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest>
     {
-         
-        public StartingModuleSteps Step { get;private set; }
-        
-        public Module Module { get; }
+
+        public StartingModuleSteps Step
+        {
+            get; private set;
+        }
+
+        public Module Module
+        {
+            get;
+        }
 
         /// <summary>
         /// 首次导致启动失败的原始异常；额外清理错误附在Data["YLFramework.Core.CleanupException"]。
         /// 成功结果为null，失败完成通知前已结束本次Core逻辑所有权。
         /// </summary>
-        public Exception Exception { get; private set; }
+        public Exception Exception
+        {
+            get; private set;
+        }
 
-        internal Module PreviousCurrentModule { get; set; }
-        internal ModuleState InitialState { get; }
+        internal Module PreviousCurrentModule
+        {
+            get; set;
+        }
+        internal ModuleState InitialState
+        {
+            get;
+        }
 
         internal StartUpModuleRequest(Module module, Module previousCurrentModule = null)
         {
@@ -58,15 +73,27 @@ namespace YLFramework.Core
 
         internal void Finish(Exception error = null)
         {
-            if (isDone) return;
+            if (IsDone)
+            {
+                return;
+            }
             // 先提交生命周期与移除进行中记录，通知异常不能反过来改写启动结果。
             Exception = error;
             ModuleManager.CompleteStartup(this, error);
             string message = error?.ToString();
             if (error?.Data["YLFramework.Core.CleanupException"] is Exception cleanupError)
+            {
                 message += "\nStartup cleanup errors: " + cleanupError;
-            try { Completed(message); }
-            catch (Exception notificationError) { Debug.LogException(notificationError); }
+            }
+
+            try
+            {
+                Complete(message);
+            }
+            catch (Exception notificationError)
+            {
+                Debug.LogException(notificationError);
+            }
         }
 
         internal IEnumerator StartUp()
@@ -78,23 +105,39 @@ namespace YLFramework.Core
                 while (true)
                 {
                     bool hasNext;
-                    try { hasNext = ModuleManager.MoveStartup(Module, routine); }
+                    try
+                    {
+                        hasNext = ModuleManager.MoveStartup(Module, routine);
+                    }
                     catch (Exception error)
                     {
                         failure = error;
                         break;
                     }
-                    if (!hasNext) break;
+                    if (!hasNext)
+                    {
+                        break;
+                    }
+
                     yield return routine.Current;
                 }
             }
             finally
             {
-                try { (routine as IDisposable)?.Dispose(); }
+                try
+                {
+                    (routine as IDisposable)?.Dispose();
+                }
                 catch (Exception cleanupError)
                 {
-                    if (failure == null) failure = cleanupError;
-                    else AttachCleanupError(failure, cleanupError);
+                    if (failure == null)
+                    {
+                        failure = cleanupError;
+                    }
+                    else
+                    {
+                        AttachCleanupError(failure, cleanupError);
+                    }
                 }
             }
             Finish(failure);
@@ -102,20 +145,22 @@ namespace YLFramework.Core
 
         internal static void AttachCleanupError(Exception error, Exception cleanupError)
         {
-            const string key = "YLFramework.Core.CleanupException";
-            var previous = error.Data[key] as Exception;
-            error.Data[key] = previous == null ? cleanupError :
+            const string Key = "YLFramework.Core.CleanupException";
+            var previous = error.Data[Key] as Exception;
+            error.Data[Key] = previous == null ? cleanupError :
                 new AggregateException("Startup cleanup failed.", previous, cleanupError);
         }
 
         private IEnumerator RunStartup()
         {
             var module = Module;
-            progress = 0;
+            Progress = 0;
             string projectName = module.ProjectName;
             var provider = CoreResourceAccess.Provider;
             if (string.IsNullOrWhiteSpace(projectName))
+            {
                 throw new InvalidOperationException($"Resource project name is required: {module.ModuleName}");
+            }
 
             Step = StartingModuleSteps.PreloadConfigTables;
 
@@ -128,32 +173,53 @@ namespace YLFramework.Core
                 float currentCount = 0;
                 foreach (var table in tables)
                 {
-                    string asset_name = table.Key;
-                    if (string.IsNullOrWhiteSpace(asset_name))
+                    string assetName = table.Key;
+                    if (string.IsNullOrWhiteSpace(assetName))
+                    {
                         throw new InvalidOperationException("Config table asset name is required.");
+                    }
+
                     if (table.Value == null || !table.Value.IsArray || table.Value.GetArrayRank() != 1 ||
                         !typeof(Model).IsAssignableFrom(table.Value.GetElementType()))
-                        throw new InvalidOperationException($"Config table must specify a Model array type: {asset_name}");
-                    string json;
-                    using (var request = CoreResourceAccess.RequireProvider(provider).ReadTextAsync(projectName, asset_name))
                     {
-                        if (request == null) throw new InvalidOperationException($"Config table request is null: {projectName}/{asset_name}");
+                        throw new InvalidOperationException($"Config table must specify a Model array type: {assetName}");
+                    }
+
+                    string json;
+                    using (var request = CoreResourceAccess.RequireProvider(provider).ReadTextAsync(projectName, assetName))
+                    {
+                        if (request == null)
+                        {
+                            throw new InvalidOperationException($"Config table request is null: {projectName}/{assetName}");
+                        }
+
                         yield return request;
                         if (request.Status != CoreResourceStatus.Succeeded)
-                            throw new InvalidOperationException($"Config table load failed: {projectName}/{asset_name}", request.Error);
+                        {
+                            throw new InvalidOperationException($"Config table load failed: {projectName}/{assetName}", request.Error);
+                        }
+
                         json = request.TakeResult();
                         if (string.IsNullOrWhiteSpace(json))
-                            throw new InvalidOperationException($"Config table asset or JSON text is empty: {projectName}/{asset_name}");
+                        {
+                            throw new InvalidOperationException($"Config table asset or JSON text is empty: {projectName}/{assetName}");
+                        }
                     }
 
                     var models = JsonConvert.DeserializeObject(json, table.Value,
                         new JsonSerializerSettings { CheckAdditionalContent = true }) as Model[];
                     if (models == null)
-                        throw new InvalidOperationException($"Config table JSON must contain a Model array: {projectName}/{asset_name}");
-                    foreach (var model in models) module.AddModel(model);
+                    {
+                        throw new InvalidOperationException($"Config table JSON must contain a Model array: {projectName}/{assetName}");
+                    }
+
+                    foreach (var model in models)
+                    {
+                        module.AddModel(model);
+                    }
 
                     currentCount++;
-                    progress = currentCount / allCount * 0.5f; // 更新进度
+                    Progress = currentCount / allCount * 0.5f; // 更新进度
                 }
             }
 #pragma warning restore CS0618 // 类型或成员已过时
@@ -167,24 +233,33 @@ namespace YLFramework.Core
             {
                 using var operation = CoreResourceAccess.RequireProvider(provider).LoadSceneAsync(projectName, sceneName, LoadSceneMode.Single);
                 if (operation == null)
+                {
                     throw new InvalidOperationException($"Default scene request is null: {projectName}/{sceneName}");
+                }
+
                 while (operation.Status == CoreResourceStatus.Pending)
                 {
                     yield return null;
-                    progress = 0.5f + operation.Progress * 0.5f;
+                    Progress = 0.5f + operation.Progress * 0.5f;
                 }
                 if (operation.Status != CoreResourceStatus.Succeeded)
+                {
                     throw new InvalidOperationException($"Default scene load failed: {projectName}/{sceneName}", operation.Error);
+                }
+
                 var loadedScene = operation.TakeResult().Scene;
                 if (!loadedScene.IsValid() || !loadedScene.isLoaded)
+                {
                     throw new InvalidOperationException($"Default scene result is not loaded: {projectName}/{sceneName}");
+                }
+
                 module.AttachViews(loadedScene);
             }
 
             module.OnStart();
         }
 
-      
+
 
     }
 

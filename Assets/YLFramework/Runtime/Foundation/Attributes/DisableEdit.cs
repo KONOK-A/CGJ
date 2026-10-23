@@ -1,4 +1,4 @@
-using System; 
+using System;
 using UnityEngine;
 
 namespace YLFramework.Foundation.Attributes
@@ -10,6 +10,6 @@ namespace YLFramework.Foundation.Attributes
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public class DisableEdit : PropertyAttribute
     {
-        
+
     }
 }

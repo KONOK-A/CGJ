@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using YLFramework.Actions;
-using YLFramework.Editor.Help;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Actions;
+using YLFramework.Editor.Help;
 
 namespace YLFramework.Editor.Actions
 {
@@ -46,16 +46,30 @@ namespace YLFramework.Editor.Actions
         {
             var blocks = new List<HelpBlock>();
             if (!topic.IsAvailable)
+            {
                 blocks.Add(HelpBlock.Notice("可选程序集未加载", "此指南使用可选程序集 " + topic.RequiredAssembly +
                     "，当前未加载。代码仅供查阅，接入前需要安装并引用该程序集。"));
+            }
+
             if (topic.Example.Length != 0)
+            {
                 blocks.Add(HelpBlock.Code("常用用法", topic.ExampleContext, topic.Example));
+            }
             else if (!string.IsNullOrWhiteSpace(topic.ExampleContext))
+            {
                 blocks.Add(HelpBlock.Paragraph("使用方式", topic.ExampleContext));
+            }
+
             if (!string.IsNullOrWhiteSpace(topic.Behavior))
+            {
                 blocks.Add(HelpBlock.Paragraph("参数、执行与生命周期", topic.Behavior));
+            }
+
             if (!string.IsNullOrWhiteSpace(topic.Notes))
+            {
                 blocks.Add(HelpBlock.Notice("注意事项", topic.Notes));
+            }
+
             return new HelpPage(topic.Id, topic.Title, topic.Group, topic.Summary, blocks.ToArray())
             {
                 Keywords = topic.TypeNames,

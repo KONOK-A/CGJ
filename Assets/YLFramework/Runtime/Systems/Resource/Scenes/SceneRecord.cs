@@ -12,24 +12,58 @@ namespace YLFramework.Services.Resource
         internal AsyncOperation UnloadOperation;
         internal readonly List<ResourceRequest<bool>> UnloadWaiters = new();
         internal int UnloadedFrame = -1;
-        public Scene Scene { get; }
+        public Scene Scene
+        {
+            get;
+        }
         public int Handle => Scene.handle;
-        public long LoadSequence { get; }
-        public ResourceAddress Address { get; }
-        public System.Guid SnapshotId { get; }
-        public string CatalogDigest { get; }
-        public string Path { get; }
-        public LoadSceneMode Mode { get; }
-        public bool IsAmbiguous { get; }
-        public bool IsUnloaded { get; internal set; }
+        public long LoadSequence
+        {
+            get;
+        }
+        public ResourceAddress Address
+        {
+            get;
+        }
+        public System.Guid SnapshotId
+        {
+            get;
+        }
+        public string CatalogDigest
+        {
+            get;
+        }
+        public string Path
+        {
+            get;
+        }
+        public LoadSceneMode Mode
+        {
+            get;
+        }
+        public bool IsAmbiguous
+        {
+            get;
+        }
+        public bool IsUnloaded
+        {
+            get; internal set;
+        }
         public bool IsLoaded => !IsUnloaded && Scene.IsValid() && Scene.isLoaded && Scene.path == Path;
 
         internal SceneRecord(ResourceSystem owner, Scene scene, ResourceCatalog catalog, SceneRequest request,
             ResourceAddress address, string path, bool ambiguous, BundleLease retention)
         {
-            Owner = owner; Scene = scene; LoadSequence = request.LoadSequence; Address = address;
-            SnapshotId = catalog.SnapshotId; CatalogDigest = catalog.CatalogDigest; Path = path;
-            Mode = request.Mode; IsAmbiguous = ambiguous; Retention = retention;
+            Owner = owner;
+            Scene = scene;
+            LoadSequence = request.LoadSequence;
+            Address = address;
+            SnapshotId = catalog.SnapshotId;
+            CatalogDigest = catalog.CatalogDigest;
+            Path = path;
+            Mode = request.Mode;
+            IsAmbiguous = ambiguous;
+            Retention = retention;
         }
     }
 }

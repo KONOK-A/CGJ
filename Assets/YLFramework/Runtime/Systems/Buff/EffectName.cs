@@ -1,5 +1,5 @@
-using YLFramework.Foundation;
 using System;
+using YLFramework.Foundation;
 
 
 namespace YLFramework.BuffSystem
@@ -8,13 +8,13 @@ namespace YLFramework.BuffSystem
     public class EffectName : Attribute
     {
 
-        private string name;
+        private string _name;
 
-        public string Name => name;
+        public string Name => _name;
 
         public EffectName(string name)
         {
-            this.name = name;
+            this._name = name;
         }
     }
 

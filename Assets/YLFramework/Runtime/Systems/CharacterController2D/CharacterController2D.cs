@@ -12,51 +12,62 @@ namespace YLFramework.Character.Controller2D
         /// <summary>
         /// 这个值不能再小了,否则会影响检测!!!
         /// </summary>
-        private const float DISTANCE = 0.1F;
+        private const float Distance = 0.1F;
         #endregion
 
 
         #region 字段
 
-        internal readonly RaycastHit2D[] hits = new RaycastHit2D[10];
+        internal readonly RaycastHit2D[] Hits = new RaycastHit2D[10];
 
-        internal readonly ContactPoint2D[] contacts = new ContactPoint2D[10];
-        private bool colliderReady;
-        private bool HasValidColliders => colliderReady && IsUsable(top) && IsUsable(bottom) && IsUsable(left) && IsUsable(right);
-        internal int PhysicsVersion { get; private set; }
+        internal readonly ContactPoint2D[] Contacts = new ContactPoint2D[10];
+        private bool _isColliderReady;
+        private bool HasValidColliders => _isColliderReady && IsUsable(Top) && IsUsable(Bottom) && IsUsable(Left) && IsUsable(Right);
+        internal int PhysicsVersion
+        {
+            get; private set;
+        }
         internal bool IsPhysicsCurrent(int version) => this && isActiveAndEnabled && HasValidColliders && version == PhysicsVersion;
         private static bool IsUsable(Collider2D collider) => collider && collider.enabled && !collider.isTrigger && collider.gameObject.activeInHierarchy;
 
         private bool EnsureColliders()
         {
-            if (HasValidColliders) return true;
-            if (colliderReady) { colliderReady = false; ReleaseGravityAndResetState(); }
+            if (HasValidColliders)
+            {
+                return true;
+            }
+
+            if (_isColliderReady)
+            {
+                _isColliderReady = false;
+                ReleaseGravityAndResetState();
+            }
             return false;
         }
 
-        private int contactCount;
+        private int _contactCount;
 
-        internal LayerMask checkLayerMask;
+        internal LayerMask CheckLayerMask;
 
-        private int currentLayer = 0;
+        private int _currentLayer = 0;
 
         private Rigidbody2D _rigidbody2d;
 
-        internal int checkCount; // 测试用
+        internal int CheckCount; // 测试用
 #if UNITY_EDITOR
-        private int lastSecond;
+        private int _lastSecond;
 #endif
 
-        internal Collider2D top = null;
-        internal Collider2D bottom = null;
-        internal Collider2D left = null;
-        internal Collider2D right = null;
+        internal Collider2D Top = null;
+        internal Collider2D Bottom = null;
+        internal Collider2D Left = null;
+        internal Collider2D Right = null;
 
         [Tooltip("是否自动旋转?如果开启，当前角色会根据地面倾斜角度自动旋转,始终保持与地面垂直")]
         public bool autoRotation = false;
 
         // 是否在空中 用于自动控制旋转角度
-        private bool inTheAir = false;
+        private bool _isInTheAir = false;
 
         [SerializeField]
         [Tooltip("是否绘制调试的线条?如果开启，可以在场景中看到接触点的法线，角度等信息")]
@@ -75,28 +86,29 @@ namespace YLFramework.Character.Controller2D
         [SerializeField]
         private bool isCheckTop = false;
 
-        private Vector2 moveDelta;
+        private Vector2 _moveDelta;
 
-        private Vector2 lastPosition;
+        private Vector2 _lastPosition;
 
-        internal float speedVertical;
+        internal float SpeedVertical;
 
         [Tooltip("当前角色受到的重力大小(仅在开启检测地面时有效,如果未开启检测地面,当前角色不会受到重力影响!)")]
         public float gravityScale = 1;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("MaxFallingVelocity")]
         [Tooltip("下落的最大速度(默认:20)")]
-        [Range(1,100)]
-        public float MaxFallingVelocity = 20;
+        [Range(1, 100)]
+        public float maxFallingVelocity = 20;
 
-        private float rigidbodyGravityScale = 0;
+        private float _rigidbodyGravityScale = 0;
 
-        private CheckGround checkGround;
+        private CheckGround _checkGround;
 
-        private CheckWall checkWall;
+        private CheckWall _checkWall;
 
-        private CheckTop checkTop;
+        private CheckTop _checkTop;
 
         [Tooltip("地面倾斜角度,0代表水平无倾斜,如果为30,则是倾斜角度在30以内的地面,才会被认为是地面!")]
-        [Range(1,45)]
+        [Range(1, 45)]
         public float groundAngle = 35;
 
         [Tooltip("墙面倾斜角度,0代表竖直向上,如果为30,则是竖直向上往左或往右偏移30度以内认为是墙面!")]
@@ -108,21 +120,22 @@ namespace YLFramework.Character.Controller2D
         [Range(1, 60)]
         public float topAngle = 45;
 
-        private bool isGrounded;
+        private bool _isGrounded;
 
-        private bool isTouchWall;
+        private bool _isTouchingWall;
 
-        private bool isTop;
+        private bool _isTouchingCeiling;
 
-        private Vector2 velocity;
+        private Vector2 _velocity;
 
+        [global::UnityEngine.Serialization.FormerlySerializedAs("MaxJumpCount")]
         [Tooltip("角色最多连续跳跃次数")]
-        public int MaxJumpCount = 1;
+        public int maxJumpCount = 1;
 
-        private int currentJumpCount = 0;
+        private int _currentJumpCount = 0;
 
-        private bool jumping = false;
-        private float jumpAbortSpeedReduction = 0;
+        private bool _isJumping = false;
+        private float _jumpAbortSpeedReduction = 0;
         #endregion
 
         #region 属性
@@ -134,69 +147,89 @@ namespace YLFramework.Character.Controller2D
         {
             get
             {
-                if (speedVertical > 0)
+                if (SpeedVertical > 0)
                 {
-                    isGrounded = false;
+                    _isGrounded = false;
                     return false;
                 }
 
-                return isGrounded;
+                return _isGrounded;
             }
             internal protected set
             {
-                bool changed = isGrounded != value;
-                isGrounded = value;
-                if (changed) onGroundValueChange?.Invoke(value);
+                bool changed = _isGrounded != value;
+                _isGrounded = value;
+                if (changed)
+                {
+                    onGroundValueChange?.Invoke(value);
+                }
             }
         }
 
         /// <summary>
         /// 与地面的接触信息(比如 接触点 法线 等)
         /// </summary>
-        public RaycastHit2D GroundInfo { get; internal protected set; }
+        public RaycastHit2D GroundInfo
+        {
+            get; internal protected set;
+        }
 
         /// <summary>
         /// 是否接触到墙面
         /// </summary>
-        public bool IsTouchWall
+        public bool IsTouchingWall
         {
-            get {
-                return isTouchWall;
+            get
+            {
+                return _isTouchingWall;
             }
             internal protected set
             {
-                bool changed = isTouchWall != value;
-                isTouchWall = value;
-                if (changed) onTouchWallValueChange?.Invoke(value);
+                bool changed = _isTouchingWall != value;
+                _isTouchingWall = value;
+                if (changed)
+                {
+                    onTouchWallValueChange?.Invoke(value);
+                }
             }
         }
 
         /// <summary>
         /// 与墙面的接触信息(比如 接触点 法线 等)
         /// </summary>
-        public RaycastHit2D WallInfo { get; internal protected set; }
+        public RaycastHit2D WallInfo
+        {
+            get; internal protected set;
+        }
 
         /// <summary>
         /// 头顶是否接触到游戏物体
         /// </summary>
-        public bool IsTop
+        public bool IsTouchingCeiling
         {
-            get {
-                return isTop;
+            get
+            {
+                return _isTouchingCeiling;
             }
-            internal protected set {
+            internal protected set
+            {
 
-                bool changed = isTop != value;
-                isTop = value;
-                if (changed) onTopValueChange?.Invoke(value);
-
+                bool changed = _isTouchingCeiling != value;
+                _isTouchingCeiling = value;
+                if (changed)
+                {
+                    onTopValueChange?.Invoke(value);
+                }
             }
         }
 
         /// <summary>
         /// 与顶部的接触信息(比如 接触点 法线 等)
         /// </summary>
-        public RaycastHit2D TopInfo { get; internal protected set; }
+        public RaycastHit2D TopInfo
+        {
+            get; internal protected set;
+        }
 
 
         /// <summary>
@@ -204,22 +237,30 @@ namespace YLFramework.Character.Controller2D
         /// </summary>
         public Vector2 Velocity
         {
-            get {
-                return velocity;
+            get
+            {
+                return _velocity;
             }
             internal protected set
             {
-                bool changed = velocity != value;
-                velocity = value;
-                if (changed) onVelocityValueChange?.Invoke(value);
+                bool changed = _velocity != value;
+                _velocity = value;
+                if (changed)
+                {
+                    onVelocityValueChange?.Invoke(value);
+                }
             }
         }
 
-        public Rigidbody2D Rigidbody {
+        public Rigidbody2D Rigidbody
+        {
             get
             {
-                if(_rigidbody2d == null)
+                if (_rigidbody2d == null)
+                {
                     _rigidbody2d = GetComponent<Rigidbody2D>();
+                }
+
                 return _rigidbody2d;
             }
         }
@@ -228,7 +269,7 @@ namespace YLFramework.Character.Controller2D
         /// <summary>
         /// 是否检测角色当前是否在地面上(默认检测)
         /// </summary>
-        public bool IsCheckGround
+        public bool ChecksGround
         {
             get
             {
@@ -241,7 +282,7 @@ namespace YLFramework.Character.Controller2D
                 {
                     IsGrounded = false;
                     ResetSpeedVertical();
-                    Rigidbody.gravityScale = rigidbodyGravityScale;
+                    Rigidbody.gravityScale = _rigidbodyGravityScale;
                 }
             }
         }
@@ -249,16 +290,18 @@ namespace YLFramework.Character.Controller2D
         /// <summary>
         /// 是否检测角色当前是否接触墙面(默认不检测)
         /// </summary>
-        public bool IsCheckWall
+        public bool ChecksWalls
         {
-            get {
+            get
+            {
                 return isCheckWall;
             }
-            set {
+            set
+            {
                 isCheckWall = value;
                 if (isCheckWall == false)
                 {
-                    IsTouchWall = false;
+                    IsTouchingWall = false;
                 }
             }
         }
@@ -266,9 +309,10 @@ namespace YLFramework.Character.Controller2D
         /// <summary>
         /// 是否检测角色头顶是否碰到游戏物体(默认不检测)
         /// </summary>
-        public bool IsCheckTop
+        public bool ChecksCeiling
         {
-            get {
+            get
+            {
                 return isCheckTop;
             }
             set
@@ -276,7 +320,7 @@ namespace YLFramework.Character.Controller2D
                 isCheckTop = value;
                 if (isCheckTop == false)
                 {
-                    IsTop = false;
+                    IsTouchingCeiling = false;
                 }
             }
         }
@@ -288,14 +332,17 @@ namespace YLFramework.Character.Controller2D
         {
             get
             {
-                return currentJumpCount;
+                return _currentJumpCount;
             }
 
             set
             {
-                bool changed = currentJumpCount != value;
-                currentJumpCount = value;
-                if (changed) onJumpCountValueChange?.Invoke(value);
+                bool changed = _currentJumpCount != value;
+                _currentJumpCount = value;
+                if (changed)
+                {
+                    onJumpCountValueChange?.Invoke(value);
+                }
             }
 
         }
@@ -328,37 +375,54 @@ namespace YLFramework.Character.Controller2D
         private void Awake()
         {
             if (Rigidbody == null)
+            {
                 throw new System.Exception("未查询到刚体组件!");
-            rigidbodyGravityScale = Rigidbody.gravityScale;
+            }
 
-            currentLayer = gameObject.layer;
-            checkLayerMask.Physics2DSetting(gameObject.layer);
+            _rigidbodyGravityScale = Rigidbody.gravityScale;
+
+            _currentLayer = gameObject.layer;
+            CheckLayerMask.Physics2DSetting(gameObject.layer);
         }
 
         private void Reset()
         {
             if (Rigidbody == null)
+            {
                 throw new System.Exception("未查询到刚体组件!");
+            }
 
             gravityScale = Rigidbody.gravityScale;
         }
 
         private void FixedUpdate()
         {
-            if (!EnsureColliders()) return;
+            if (!EnsureColliders())
+            {
+                return;
+            }
+
             int version = PhysicsVersion;
             UpdateSpeedVertical();
-            if (!IsPhysicsCurrent(version)) return;
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
+
             Move();
-            if (!IsPhysicsCurrent(version)) return;
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
+
             JumpHeld();
         }
 
         private void OnEnable()
         {
-            rigidbodyGravityScale = Rigidbody.gravityScale;
+            _rigidbodyGravityScale = Rigidbody.gravityScale;
             RefreshColliders();
-            lastPosition = Rigidbody.position;
+            _lastPosition = Rigidbody.position;
         }
 
         private void OnDisable()
@@ -367,34 +431,43 @@ namespace YLFramework.Character.Controller2D
         private void ReleaseGravityAndResetState()
         {
             PhysicsVersion++;
-            if (Rigidbody) Rigidbody.gravityScale = rigidbodyGravityScale;
+            if (Rigidbody)
+            {
+                Rigidbody.gravityScale = _rigidbodyGravityScale;
+            }
             // 停用不发送额外业务事件，也不把上次输入或接触缓存带入下一次启用。
-            moveDelta = Vector2.zero;
-            velocity = Vector2.zero;
-            speedVertical = 0;
-            jumping = false;
-            jumpAbortSpeedReduction = 0;
-            currentJumpCount = 0;
-            isGrounded = isTouchWall = isTop = false;
-            checkGround = null;
-            checkWall = null;
-            checkTop = null;
+            _moveDelta = Vector2.zero;
+            _velocity = Vector2.zero;
+            SpeedVertical = 0;
+            _isJumping = false;
+            _jumpAbortSpeedReduction = 0;
+            _currentJumpCount = 0;
+            _isGrounded = _isTouchingWall = _isTouchingCeiling = false;
+            _checkGround = null;
+            _checkWall = null;
+            _checkTop = null;
             GroundInfo = WallInfo = TopInfo = default;
-            Array.Clear(hits, 0, hits.Length);
-            Array.Clear(contacts, 0, contacts.Length);
+            Array.Clear(Hits, 0, Hits.Length);
+            Array.Clear(Contacts, 0, Contacts.Length);
         }
 
         private void Update()
         {
-            if (!EnsureColliders()) return;
+            if (!EnsureColliders())
+            {
+                return;
+            }
+
             if (autoRotation)
+            {
                 // 修改当前人物旋转角度
                 AutoRotation();
+            }
 
-            if (currentLayer != gameObject.layer)
+            if (_currentLayer != gameObject.layer)
             {
-                checkLayerMask.Physics2DSetting(gameObject.layer);
-                currentLayer = gameObject.layer;
+                CheckLayerMask.Physics2DSetting(gameObject.layer);
+                _currentLayer = gameObject.layer;
             }
 
             PhysicsCheck();
@@ -403,7 +476,7 @@ namespace YLFramework.Character.Controller2D
         }
 
 
-#endregion
+        #endregion
 
 
         #region 方法
@@ -414,11 +487,17 @@ namespace YLFramework.Character.Controller2D
         /// <param name="delta">移动的增量</param>
         public void Move(Vector2 delta)
         {
-            if (!isActiveAndEnabled || !HasValidColliders) return;
-            if (IsIgnoreMoveX(delta))
-                delta.x = 0;
+            if (!isActiveAndEnabled || !HasValidColliders)
+            {
+                return;
+            }
 
-            moveDelta += delta;
+            if (IsIgnoreMoveX(delta))
+            {
+                delta.x = 0;
+            }
+
+            _moveDelta += delta;
         }
 
 
@@ -428,7 +507,7 @@ namespace YLFramework.Character.Controller2D
         /// <param name="speed"></param>
         public void MoveHorizontal(float speed)
         {
-            if (IsGrounded && IsCheckGround)
+            if (IsGrounded && ChecksGround)
             {
                 Vector3 dir = Vector3.Cross(GroundInfo.normal, Vector3.forward);
                 Move(dir.normalized * speed * Time.fixedDeltaTime);
@@ -442,40 +521,56 @@ namespace YLFramework.Character.Controller2D
         private void Move()
         {
             int version = PhysicsVersion;
-            if (Mathf.Abs(moveDelta.x) <= 0.01f && Mathf.Abs(moveDelta.y) <= 0.01f)
+            if (Mathf.Abs(_moveDelta.x) <= 0.01f && Mathf.Abs(_moveDelta.y) <= 0.01f)
             {
                 Velocity = Vector2.zero;
-                if (!IsPhysicsCurrent(version)) return;
-                moveDelta = Vector2.zero;
-                lastPosition = Rigidbody.position;
+                if (!IsPhysicsCurrent(version))
+                {
+                    return;
+                }
+
+                _moveDelta = Vector2.zero;
+                _lastPosition = Rigidbody.position;
                 return;
             }
 
             // 移动到目标位置
-            Rigidbody.MovePosition(Rigidbody.position + moveDelta);
+            Rigidbody.MovePosition(Rigidbody.position + _moveDelta);
 
-            Velocity = (Rigidbody.position - lastPosition) / Time.fixedDeltaTime;
-            if (!IsPhysicsCurrent(version)) return;
-
-            lastPosition = Rigidbody.position;
-            moveDelta = Vector2.zero;
-
-            if (IsCheckTop)
+            Velocity = (Rigidbody.position - _lastPosition) / Time.fixedDeltaTime;
+            if (!IsPhysicsCurrent(version))
             {
-                if (IsTop && speedVertical > 0)
+                return;
+            }
+
+            _lastPosition = Rigidbody.position;
+            _moveDelta = Vector2.zero;
+
+            if (ChecksCeiling)
+            {
+                if (IsTouchingCeiling && SpeedVertical > 0)
+                {
                     ResetSpeedVertical();
+                }
             }
             else
             {
-                if (checkTop == null)
-                    checkTop = new CheckTop();
+                if (_checkTop == null)
+                {
+                    _checkTop = new CheckTop();
+                }
 
-                int count = Rigidbody.GetContacts(contacts);
-                checkTop.Check(contacts, this, count,topAngle);
-                if (!IsPhysicsCurrent(version)) return;
+                int count = Rigidbody.GetContacts(Contacts);
+                _checkTop.Check(Contacts, this, count, topAngle);
+                if (!IsPhysicsCurrent(version))
+                {
+                    return;
+                }
 
-                if (checkTop.IsTopByContact && speedVertical > 0)
+                if (_checkTop.IsTopByContact && SpeedVertical > 0)
+                {
                     ResetSpeedVertical();
+                }
             }
 
 
@@ -487,29 +582,49 @@ namespace YLFramework.Character.Controller2D
         /// <param name="speed">跳跃初速度,值越大跳的越高</param>
         public void Jump(float speed)
         {
-            if (!isActiveAndEnabled || !HasValidColliders) return;
-            if (!IsCheckGround)
+            if (!isActiveAndEnabled || !HasValidColliders)
+            {
+                return;
+            }
+
+            if (!ChecksGround)
             {
                 Debug.LogWarning("是否检测地面的选项未开启，无法跳跃!");
                 return;
             }
 
-            if (CurrentJumpCount >= MaxJumpCount)
+            if (CurrentJumpCount >= maxJumpCount)
+            {
                 return;
+            }
+
             int version = PhysicsVersion;
             CurrentJumpCount++;
-            if (!IsPhysicsCurrent(version)) return;
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
 
-            speedVertical = speed;
-            if (speedVertical > 0)
+            SpeedVertical = speed;
+            if (SpeedVertical > 0)
+            {
                 IsGrounded = false;
-            if (!IsPhysicsCurrent(version)) return;
+            }
+
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
 
             // 重置速度
             Velocity = Vector2.zero;
-            if (!IsPhysicsCurrent(version)) return;
-            moveDelta = Vector2.zero;
-            lastPosition = Rigidbody.position;
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
+
+            _moveDelta = Vector2.zero;
+            _lastPosition = Rigidbody.position;
         }
 
         /// <summary>
@@ -517,34 +632,51 @@ namespace YLFramework.Character.Controller2D
         /// </summary>
         /// <param name="speed">跳跃初速度,值越大跳的越高 </param>
         /// <param name="jumpAbortSpeedReduction">跳跃中断后的减速度, 值越大减速越快,跳的越低</param>
-        public void JumpStart(float speed,float jumpAbortSpeedReduction)
+        public void JumpStart(float speed, float jumpAbortSpeedReduction)
         {
-            if (!isActiveAndEnabled || !HasValidColliders || !IsCheckGround) return;
-            if (CurrentJumpCount >= MaxJumpCount)
+            if (!isActiveAndEnabled || !HasValidColliders || !ChecksGround)
+            {
                 return;
+            }
+
+            if (CurrentJumpCount >= maxJumpCount)
+            {
+                return;
+            }
 
             int version = PhysicsVersion;
             Jump(speed);
-            if (!IsPhysicsCurrent(version)) return;
-            jumping = true;
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
+
+            _isJumping = true;
 
             if (jumpAbortSpeedReduction < 0)
+            {
                 jumpAbortSpeedReduction = 0;
-            this.jumpAbortSpeedReduction = jumpAbortSpeedReduction;
+            }
+
+            this._jumpAbortSpeedReduction = jumpAbortSpeedReduction;
         }
 
         private void JumpHeld()
         {
-            if (jumpAbortSpeedReduction == 0)
-                return;
-
-            if (!jumping && speedVertical > 0)
-                speedVertical -= jumpAbortSpeedReduction * Time.fixedDeltaTime;
-
-            if (speedVertical <= 0)
+            if (_jumpAbortSpeedReduction == 0)
             {
-                jumpAbortSpeedReduction = 0;
-                jumping = false;
+                return;
+            }
+
+            if (!_isJumping && SpeedVertical > 0)
+            {
+                SpeedVertical -= _jumpAbortSpeedReduction * Time.fixedDeltaTime;
+            }
+
+            if (SpeedVertical <= 0)
+            {
+                _jumpAbortSpeedReduction = 0;
+                _isJumping = false;
             }
 
         }
@@ -554,7 +686,7 @@ namespace YLFramework.Character.Controller2D
         /// </summary>
         public void JumpEnd()
         {
-            jumping = false;
+            _isJumping = false;
         }
 
         /// <summary>
@@ -562,35 +694,40 @@ namespace YLFramework.Character.Controller2D
         /// </summary>
         public void ResetSpeedVertical()
         {
-            speedVertical = 0;
+            SpeedVertical = 0;
         }
 
         private void UpdateSpeedVertical()
         {
             // 如果不检测地面 则不需要控制竖直方向速度
-            if (!IsCheckGround) return;
-
-            if (checkGround != null && checkGround.IsGroundByContacts && speedVertical <= 0)
+            if (!ChecksGround)
             {
-                speedVertical = 0;
-                Rigidbody.gravityScale = rigidbodyGravityScale;
+                return;
+            }
+
+            if (_checkGround != null && _checkGround.IsGroundedByContacts && SpeedVertical <= 0)
+            {
+                SpeedVertical = 0;
+                Rigidbody.gravityScale = _rigidbodyGravityScale;
             }
             else
             {
                 Rigidbody.gravityScale = 0;
 
                 // 如果下方有碰撞体 没有必要往下落
-                if (checkGround != null)
+                if (_checkGround != null)
                 {
-                    contactCount = Rigidbody.GetContacts(contacts);
-                    if (checkGround.IsHaveColliderOnBelow(contacts, contactCount) && speedVertical < 0)
+                    _contactCount = Rigidbody.GetContacts(Contacts);
+                    if (_checkGround.HasColliderBelow(Contacts, _contactCount) && SpeedVertical < 0)
+                    {
                         return;
+                    }
                 }
 
-                speedVertical = CharacterMotorMath.IntegrateGravity(speedVertical, Physics2D.gravity.y, gravityScale, Time.fixedDeltaTime, MaxFallingVelocity);
+                SpeedVertical = CharacterMotorMath.IntegrateGravity(SpeedVertical, Physics2D.gravity.y, gravityScale, Time.fixedDeltaTime, maxFallingVelocity);
 
                 // 竖直方向的移动
-                Move(Vector2.up * speedVertical * Time.fixedDeltaTime);
+                Move(Vector2.up * SpeedVertical * Time.fixedDeltaTime);
             }
         }
 
@@ -598,64 +735,85 @@ namespace YLFramework.Character.Controller2D
         public bool RefreshColliders()
         {
             PhysicsVersion++;
-            top = bottom = left = right = null;
+            Top = Bottom = Left = Right = null;
             List<Collider2D> colliders = new List<Collider2D>();
             Rigidbody.GetAttachedColliders(colliders);
 
             for (int i = 0; i < colliders.Count; i++)
             {
                 Collider2D collider = colliders[i];
-                if (!IsUsable(collider)) continue;
+                if (!IsUsable(collider))
+                {
+                    continue;
+                }
 
                 bool iscollider2d = !(collider is BoxCollider2D);
                 bool iscirclecollider2d = !(collider is CircleCollider2D);
                 bool iscapsulecollider2d = !(collider is CapsuleCollider2D);
 
                 if (iscollider2d && iscirclecollider2d && iscapsulecollider2d)
+                {
                     continue;
-
-                if (top == null)
-                    top = collider;
-                else
-                {
-                    if (collider.bounds.max.y > top.bounds.max.y)
-                        top = collider;
                 }
 
-                if (bottom == null)
-                    bottom = collider;
+                if (Top == null)
+                {
+                    Top = collider;
+                }
                 else
                 {
-                    if (collider.bounds.min.y < bottom.bounds.min.y)
-                        bottom = collider;
+                    if (collider.bounds.max.y > Top.bounds.max.y)
+                    {
+                        Top = collider;
+                    }
                 }
 
-                if (right == null)
-                    right = collider;
+                if (Bottom == null)
+                {
+                    Bottom = collider;
+                }
                 else
                 {
-                    if (collider.bounds.max.x > right.bounds.max.x)
-                        right = collider;
+                    if (collider.bounds.min.y < Bottom.bounds.min.y)
+                    {
+                        Bottom = collider;
+                    }
                 }
 
-                if (left == null)
-                    left = collider;
+                if (Right == null)
+                {
+                    Right = collider;
+                }
                 else
                 {
-                    if (collider.bounds.min.x < left.bounds.min.x)
-                        left = collider;
+                    if (collider.bounds.max.x > Right.bounds.max.x)
+                    {
+                        Right = collider;
+                    }
+                }
+
+                if (Left == null)
+                {
+                    Left = collider;
+                }
+                else
+                {
+                    if (collider.bounds.min.x < Left.bounds.min.x)
+                    {
+                        Left = collider;
+                    }
                 }
 
 
             }
 
-            colliderReady = left && right && bottom && top;
-            if (!colliderReady)
+            _isColliderReady = Left && Right && Bottom && Top;
+            if (!_isColliderReady)
             {
                 ReleaseGravityAndResetState();
                 Debug.LogError($"{nameof(CharacterController2D)} on '{name}': Rigidbody2D requires an attached, non-trigger BoxCollider2D, CircleCollider2D or CapsuleCollider2D. Add one and call RefreshColliders().", this);
             }
-            return colliderReady;
+            return _isColliderReady;
 
         }
 
@@ -664,47 +822,61 @@ namespace YLFramework.Character.Controller2D
             int version = PhysicsVersion;
             // 获取与当前刚体接触的游戏物体
 
-            if (IsCheckGround || IsCheckWall || IsCheckTop)
-                contactCount = Rigidbody.GetContacts(contacts);
-
-
-            if (IsCheckGround)
+            if (ChecksGround || ChecksWalls || ChecksCeiling)
             {
-                if (checkGround == null)
-                    checkGround = new CheckGround();
+                _contactCount = Rigidbody.GetContacts(Contacts);
+            }
 
-                checkGround.Check(contacts, this, contactCount, groundAngle);
+            if (ChecksGround)
+            {
+                if (_checkGround == null)
+                {
+                    _checkGround = new CheckGround();
+                }
+
+                _checkGround.Check(Contacts, this, _contactCount, groundAngle);
 
                 if (IsGrounded)
+                {
                     CurrentJumpCount = 0;
+                }
             }
 
-            if (!IsPhysicsCurrent(version)) return;
-
-
-            if (IsCheckWall)
+            if (!IsPhysicsCurrent(version))
             {
-                if (checkWall == null)
-                    checkWall = new CheckWall();
-
-                checkWall.Check(contacts, this, contactCount, wallAngle);
+                return;
             }
 
-            if (!IsPhysicsCurrent(version)) return;
-
-            if (IsCheckTop)
+            if (ChecksWalls)
             {
-                if (checkTop == null)
-                    checkTop = new CheckTop();
+                if (_checkWall == null)
+                {
+                    _checkWall = new CheckWall();
+                }
 
-                checkTop.Check(contacts, this, contactCount, topAngle);
+                _checkWall.Check(Contacts, this, _contactCount, wallAngle);
+            }
+
+            if (!IsPhysicsCurrent(version))
+            {
+                return;
+            }
+
+            if (ChecksCeiling)
+            {
+                if (_checkTop == null)
+                {
+                    _checkTop = new CheckTop();
+                }
+
+                _checkTop.Check(Contacts, this, _contactCount, topAngle);
             }
 
 #if UNITY_EDITOR
-            if (Mathf.FloorToInt(Time.time) != lastSecond)
+            if (Mathf.FloorToInt(Time.time) != _lastSecond)
             {
-                lastSecond = Mathf.FloorToInt(Time.time);
-                checkCount = 0;
+                _lastSecond = Mathf.FloorToInt(Time.time);
+                CheckCount = 0;
             }
 #endif
 
@@ -728,11 +900,11 @@ namespace YLFramework.Character.Controller2D
             float r = circle.radius * Mathf.Max(Mathf.Abs(circle.transform.lossyScale.x), Mathf.Abs(circle.transform.lossyScale.y));
 
 #if UNITY_6000_0_OR_NEWER
-            ContactFilter2D contactFilter = CreateLegacyFilter(checkLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.CircleCast(point, r, dir, DISTANCE, contactFilter, hits);
+            ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
+            return Physics2D.defaultPhysicsScene.CircleCast(point, r, dir, DISTANCE, contactFilter, Hits);
 
 #else
-            return Physics2D.CircleCastNonAlloc(point, r, dir, hits, DISTANCE, checkLayerMask.value);
+            return Physics2D.CircleCastNonAlloc(point, r, dir, Hits, Distance, CheckLayerMask.value);
 #endif
         }
 
@@ -743,10 +915,10 @@ namespace YLFramework.Character.Controller2D
             float angle = GetColliderCastAngle(box);
 
 #if UNITY_6000_0_OR_NEWER
-            ContactFilter2D contactFilter = CreateLegacyFilter(checkLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.BoxCast(point, size, angle, dir, DISTANCE, contactFilter, hits);
+            ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
+            return Physics2D.defaultPhysicsScene.BoxCast(point, size, angle, dir, DISTANCE, contactFilter, Hits);
 #else
-            return Physics2D.BoxCastNonAlloc(point, size, angle, dir, hits, DISTANCE, checkLayerMask.value);
+            return Physics2D.BoxCastNonAlloc(point, size, angle, dir, Hits, Distance, CheckLayerMask.value);
 #endif
 
         }
@@ -759,10 +931,10 @@ namespace YLFramework.Character.Controller2D
             CapsuleDirection2D d = capsule.direction;
 
 #if UNITY_6000_0_OR_NEWER
-            ContactFilter2D contactFilter = CreateLegacyFilter(checkLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.CapsuleCast(point, size, d, angle, dir, DISTANCE, contactFilter, hits);
+            ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
+            return Physics2D.defaultPhysicsScene.CapsuleCast(point, size, d, angle, dir, DISTANCE, contactFilter, Hits);
 #else
-            return Physics2D.CapsuleCastNonAlloc(point, size, d, angle, dir, hits, DISTANCE, checkLayerMask.value);
+            return Physics2D.CapsuleCastNonAlloc(point, size, d, angle, dir, Hits, Distance, CheckLayerMask.value);
 #endif
         }
 
@@ -777,34 +949,48 @@ namespace YLFramework.Character.Controller2D
         private void AutoRotation()
         {
 
-            if (!IsCheckGround)
+            if (!ChecksGround)
+            {
                 return;
+            }
 
             if (IsGrounded)
             {
-                inTheAir = false;
+                _isInTheAir = false;
                 float angle = -Vector2.SignedAngle(GroundInfo.normal, Vector2.up);
 
                 if (transform.right.x < 0)
+                {
                     angle = -angle;
+                }
+
                 transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, angle);
             }
             else
             {
-                if (!inTheAir)
+                if (!_isInTheAir)
+                {
                     transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, 0);
-                inTheAir = true;
+                }
+
+                _isInTheAir = true;
             }
 
         }
 
         private bool IsIgnoreMoveX(Vector2 delta)
         {
-            if (!IsCheckWall) return false;
+            if (!ChecksWalls)
+            {
+                return false;
+            }
 
-            if (!IsCheckGround) return false;
+            if (!ChecksGround)
+            {
+                return false;
+            }
 
-            if (IsTouchWall && !IsGrounded)
+            if (IsTouchingWall && !IsGrounded)
             {
                 // 判断法线方向和移动方向是否相反 不能往墙上移动
                 if (CharacterMotorMath.BlocksHorizontal(delta.x, WallInfo.normal.x))
@@ -813,18 +999,22 @@ namespace YLFramework.Character.Controller2D
                 }
             }
 
-            if (!IsTouchWall && !IsGrounded)
+            if (!IsTouchingWall && !IsGrounded)
             {
-                int count = Rigidbody.GetContacts(contacts);
+                int count = Rigidbody.GetContacts(Contacts);
                 for (int i = 0; i < count; i++)
                 {
-                    if (contacts[i].collider == null)
+                    if (Contacts[i].collider == null)
+                    {
                         continue;
+                    }
 
-                    if (contacts[i].collider.isTrigger)
+                    if (Contacts[i].collider.isTrigger)
+                    {
                         continue;
+                    }
 
-                    if (CharacterMotorMath.BlocksHorizontal(delta.x, contacts[i].normal.x))
+                    if (CharacterMotorMath.BlocksHorizontal(delta.x, Contacts[i].normal.x))
                     {
                         return true;
                     }
@@ -835,7 +1025,7 @@ namespace YLFramework.Character.Controller2D
             return false;
         }
 
-#endregion
+        #endregion
 
     }
 }

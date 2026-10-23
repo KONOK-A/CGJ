@@ -12,21 +12,23 @@ namespace YLFramework.Core.Tests
         [Test]
         public void CoreResponsibilitiesHaveOneOwnerAcrossSmallPartialDeclarations()
         {
-            const string root = "Assets/YLFramework/Runtime/Core/";
+            const string Root = "Assets/YLFramework/Runtime/Core/";
             foreach (var path in new[] { "Modules/Module.cs", "Modules/ModuleManager.cs", "Modules/SingletonModule.cs",
                 "Modules/Requests/StartUpModuleRequest.cs", "MVC/Models/Model.cs", "MVC/Models/ModelManager.cs",
                 "MVC/Controllers/Controller.cs", "MVC/Controllers/ControllerManager.cs", "MVC/Views/View.cs",
                 "Events/EventManager.cs", "UI/Windows/Panel.cs", "UI/Windows/PanelConfig.cs", "UI/Windows/PanelOverrides.cs",
                 "UI/Windows/PanelRule.cs", "UI/Windows/PanelManager.Requests.cs", "UI/Roots/UIRootContext.cs",
                 "UI/Input/InputSystemBridge.cs", "UI/Tips/UITipsPresenter.cs", "Attributes/MustCallBaseAttribute.cs" })
-                Assert.That(System.IO.File.Exists(root + path), Is.True, path);
+            {
+                Assert.That(System.IO.File.Exists(Root + path), Is.True, path);
+            }
 
             foreach (var family in new[] {
                 new[] { "Modules/Module", "Models", "Controllers", "Views", "Panels" },
                 new[] { "MVC/Views/ViewManager", "Registration", "Loading", "Queries" },
                 new[] { "UI/Windows/PanelManager", "Loading", "Sorting", "Input" } })
             {
-                var paths = new[] { root + family[0] + ".cs" }.Concat(family.Skip(1).Select(part => root + family[0] + "." + part + ".cs")).ToArray();
+                var paths = new[] { Root + family[0] + ".cs" }.Concat(family.Skip(1).Select(part => Root + family[0] + "." + part + ".cs")).ToArray();
                 foreach (var path in paths)
                 {
                     Assert.That(System.IO.File.Exists(path), Is.True, path);
@@ -34,18 +36,20 @@ namespace YLFramework.Core.Tests
                     Assert.That(System.IO.File.Exists(path + ".meta"), Is.True, path);
                 }
             }
-            Assert.That(System.IO.Directory.GetFiles(root, "*.asmdef", System.IO.SearchOption.AllDirectories), Is.Empty);
+            Assert.That(System.IO.Directory.GetFiles(Root, "*.asmdef", System.IO.SearchOption.AllDirectories), Is.Empty);
             foreach (var retired in new[] { "WindowCatalog", "WindowDefinition", "UIType", "PanelType" })
+            {
                 Assert.That(typeof(Panel).Assembly.GetType("YLFramework.Core." + retired), Is.Null, retired);
+            }
         }
 
         [Test]
         public void FormalCoreRootPreservesGuidAndExactRuntimeAssemblyOwnership()
         {
-            const string root = "Assets/YLFramework/Runtime/Core";
-            Assert.That(UnityEditor.AssetDatabase.AssetPathToGUID(root), Is.EqualTo("cc6645c11ab57e145b6b167078de0fac"));
-            Assert.That(System.IO.File.Exists(root + "/YLFramework.Core.Runtime.asmdef"), Is.False);
-            Assert.That(System.IO.File.Exists(root + "/YLFramework.Core.Runtime.asmdef.meta"), Is.False);
+            const string Root = "Assets/YLFramework/Runtime/Core";
+            Assert.That(UnityEditor.AssetDatabase.AssetPathToGUID(Root), Is.EqualTo("cc6645c11ab57e145b6b167078de0fac"));
+            Assert.That(System.IO.File.Exists(Root + "/YLFramework.Core.Runtime.asmdef"), Is.False);
+            Assert.That(System.IO.File.Exists(Root + "/YLFramework.Core.Runtime.asmdef.meta"), Is.False);
             Assert.That(UnityEditor.AssetDatabase.AssetPathToGUID("Assets/YLFramework/Runtime/YLFramework.Runtime.asmdef"),
                 Is.EqualTo("2d319060abc80e3449e84285dd7fb703"));
             var assembly = UnityEditor.Compilation.CompilationPipeline.GetAssemblies(UnityEditor.Compilation.AssembliesType.Editor)
@@ -116,7 +120,11 @@ namespace YLFramework.Core.Tests
             var loads = 0;
             var returns = 0;
             using var pool = new ObjectPool<object>(() => Activator.CreateInstance(type),
-                onAllocate: _ => loads++, reset: value => { ((System.Text.StringBuilder)value).Clear(); returns++; });
+                onAllocate: _ => loads++, reset: value =>
+                {
+                    ((System.Text.StringBuilder)value).Clear();
+                    returns++;
+                });
             var first = pool.Allocate();
             ((System.Text.StringBuilder)first).Append("old lease");
             Assert.That(pool.Recycle(first), Is.True);
@@ -178,12 +186,15 @@ namespace YLFramework.Core.Tests
             {
                 var declaringType = t;
                 while (declaringType.DeclaringType != null)
+                {
                     declaringType = declaringType.DeclaringType;
+                }
+
                 return !declaringType.IsDefined(typeof(CompilerGeneratedAttribute), false);
             }).ToArray();
             Assert.That(types.All(t => t.Namespace != null &&
                 (t.Namespace == "YLFramework.Core" || t.Namespace.StartsWith("YLFramework.Core."))), Is.True);
-            Assert.That(typeof(YLFramework.Foundation.Attributes.CustomClassNameGUI).Assembly,
+            Assert.That(typeof(YLFramework.Foundation.Attributes.CustomClassNameGui).Assembly,
                 Is.SameAs(typeof(CustomAsyncOperation<>).Assembly));
             Assert.That(core.GetTypes().Any(t => t.Namespace == "YLFramework.Core.Extensions"), Is.False);
 
@@ -193,7 +204,9 @@ namespace YLFramework.Core.Tests
             foreach (var type in types)
             {
                 foreach (var assembly in others)
+                {
                     Assert.That(assembly.GetType(type.FullName), Is.Null, type.FullName + " also exists in " + assembly.GetName().Name);
+                }
             }
         }
     }

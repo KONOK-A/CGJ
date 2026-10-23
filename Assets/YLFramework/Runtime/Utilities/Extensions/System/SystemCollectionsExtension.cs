@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -98,7 +98,10 @@ namespace YLFramework.Utilities.Extensions
                 if (dict.ContainsKey(current.Key))
                 {
                     if (isOverride)
+                    {
                         dict[current.Key] = current.Value;
+                    }
+
                     continue;
                 }
 

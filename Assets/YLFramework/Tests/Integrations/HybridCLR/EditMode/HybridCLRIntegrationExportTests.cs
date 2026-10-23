@@ -32,7 +32,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void ActualOptionalArchiveContainsOnlyTheSelectedSourcesAndPreservesGuid()
         {
-            var parent = Path.Combine(Path.GetTempPath(), "kilo", "YLHybridCLRExport-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(parent);
+            var parent = Path.Combine(Path.GetTempPath(), "kilo", "YLHybridCLRExport-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(parent);
             try
             {
                 var path = parent + "/integration.unitypackage";
@@ -45,8 +46,13 @@ namespace YLFramework.Tests.Integrations.HybridCLR
                     TarEntry entry;
                     while ((entry = tar.GetNextEntry()) != null)
                     {
-                        if (!entry.Name.EndsWith("/pathname", StringComparison.Ordinal)) continue;
-                        using var output = new MemoryStream(); tar.CopyEntryContents(output);
+                        if (!entry.Name.EndsWith("/pathname", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        using var output = new MemoryStream();
+                        tar.CopyEntryContents(output);
                         var asset = Encoding.UTF8.GetString(output.ToArray()).TrimEnd('\0', '\r', '\n');
                         Assert.That(asset == "Assets/YLFramework/LICENSE.md" || asset == Root || asset.StartsWith(Root + "/", StringComparison.Ordinal) ||
                             AssetDatabase.IsValidFolder(asset) && Root.StartsWith(asset + "/", StringComparison.Ordinal), Is.True, asset);
@@ -55,10 +61,17 @@ namespace YLFramework.Tests.Integrations.HybridCLR
                         names.Add(asset);
                     }
                 }
-                foreach (var required in HybridCLRIntegrationExporter.GetExportPaths(true)) Assert.That(names, Does.Contain(required));
+                foreach (var required in HybridCLRIntegrationExporter.GetExportPaths(true))
+                {
+                    Assert.That(names, Does.Contain(required));
+                }
+
                 Assert.Throws<IOException>(() => HybridCLRIntegrationExporter.Export(path));
             }
-            finally { Directory.Delete(parent, true); }
+            finally
+            {
+                Directory.Delete(parent, true);
+            }
         }
 
         [TestCase("//127.0.0.1/share/integration.unitypackage")]

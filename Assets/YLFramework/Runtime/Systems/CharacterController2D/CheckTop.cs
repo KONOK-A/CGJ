@@ -8,70 +8,82 @@ namespace YLFramework.Character.Controller2D
     public class CheckTop
     {
 
-        private ContactPoint2D[] contacts = null;
+        private ContactPoint2D[] _contacts = null;
 
-        private CharacterController2D characher;
+        private CharacterController2D _character;
 
-        private float topAngle = 45;
+        private float _topAngle = 45;
 
-        private float lastCheckTime;
+        private float _lastCheckTime;
 
-        private float lastUpdateTopInfoTime;
+        private float _lastUpdateTopInfoTime;
 
-        private float timeInterval = 1.0f / 10.0f; // 每秒最多检测10次
+        private float _timeInterval = 1.0f / 10.0f; // 每秒最多检测10次
 
-        private int contactsCount;
+        private int _contactsCount;
 
-        public bool IsTopByContact { get; set; }
-
-        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count,float topAngle)
+        public bool IsTopByContact
         {
-            this.contacts = contacts;
-            this.characher = characher;
-            this.topAngle = topAngle;
-            this.contactsCount = count;
+            get; set;
+        }
+
+        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count, float topAngle)
+        {
+            this._contacts = contacts;
+            this._character = characher;
+            this._topAngle = topAngle;
+            this._contactsCount = count;
             // 检测地面
 
             // 检测头顶
 
-            IsTopByContact = IsTopByContacts(count );
+            IsTopByContact = IsTopByContacts(count);
 
-            if (IsTopByContact != characher.IsTop)
+            if (IsTopByContact != characher.IsTouchingCeiling)
+            {
                 CheckTopInfo();
+            }
 
-            if(IsTopByContact)
+            if (IsTopByContact)
+            {
                 UpdateTopInfo();
+            }
         }
 
         private void CheckTopInfo()
         {
-            if (!characher.IsCheckTop) return;
-
-            if (Time.time - lastCheckTime < timeInterval)
+            if (!_character.ChecksCeiling)
+            {
                 return;
+            }
 
-            lastCheckTime = Time.time;
+            if (Time.time - _lastCheckTime < _timeInterval)
+            {
+                return;
+            }
+
+            _lastCheckTime = Time.time;
 
 #if UNITY_EDITOR
-            characher.checkCount++;
+            _character.CheckCount++;
 #endif
 
 
-            Vector2 dir = characher.top.transform.up;
+            Vector2 dir = _character.Top.transform.up;
 
             int count = 0;
 
-            if (characher.top is CircleCollider2D)
+            if (_character.Top is CircleCollider2D)
             {
-                count = characher.Raycast(characher.top as CircleCollider2D, dir);
+                count = _character.Raycast(_character.Top as CircleCollider2D, dir);
             }
-            else if (characher.top is BoxCollider2D)
+            else if (_character.Top is BoxCollider2D)
             {
-                count = characher.Raycast(characher.top as BoxCollider2D, dir);
+                count = _character.Raycast(_character.Top as BoxCollider2D, dir);
             }
-            else if (characher.top is CapsuleCollider2D)
+            else if (_character.Top is CapsuleCollider2D)
             {
-                count = characher.Raycast(characher.top as CapsuleCollider2D, dir);
+                count = _character.Raycast(_character.Top as CapsuleCollider2D, dir);
             }
 
             CalculateIsTop(count);
@@ -79,9 +91,9 @@ namespace YLFramework.Character.Controller2D
 
         private void CalculateIsTop(int count)
         {
-            if (characher.speedVertical < 0)
+            if (_character.SpeedVertical < 0)
             {
-                characher.IsTop = false;
+                _character.IsTouchingCeiling = false;
                 return;
             }
 
@@ -89,58 +101,73 @@ namespace YLFramework.Character.Controller2D
 
             for (int i = 0; i < count; i++)
             {
-                RaycastHit2D raycast = characher.hits[i];
+                RaycastHit2D raycast = _character.Hits[i];
                 if (raycast.collider == null)
+                {
                     continue;
-                if (raycast.collider.isTrigger)
-                    continue;
+                }
 
-                if (raycast.transform == characher.transform || raycast.transform.IsChildOf(characher.transform))
+                if (raycast.collider.isTrigger)
+                {
                     continue;
+                }
+
+                if (raycast.transform == _character.transform || raycast.transform.IsChildOf(_character.transform))
+                {
+                    continue;
+                }
 
                 float angle = Vector2.Angle(raycast.normal, Vector2.down);
 
-                if (angle < topAngle)
+                if (angle < _topAngle)
                 {
-                    characher.TopInfo = raycast;
+                    _character.TopInfo = raycast;
                     touching = true;
                     break;
                 }
             }
-            characher.IsTop = touching;
+            _character.IsTouchingCeiling = touching;
 
         }
 
-        private bool IsTopByContacts(int count )
+        private bool IsTopByContacts(int count)
         {
             bool isTop = false;
 
-            float min_angle = 90;
+            float minAngle = 90;
             //int min_index = 0;
 
             for (int i = 0; i < count; i++)
             {
-                if (contacts[i].collider == null)
-                    continue;
-
-                if (contacts[i].collider.isTrigger)
-                    continue;
-
-                if (contacts[i].collider.usedByEffector)
+                if (_contacts[i].collider == null)
                 {
-                    Vector3 center = contacts[i].collider.bounds.center;
-                    Vector2 point = characher.Rigidbody.ClosestPoint(center);
-                    if (contacts[i].collider.bounds.Contains(point))
-                        continue;
+                    continue;
                 }
 
-                float angle = Vector2.Angle(contacts[i].normal, Vector2.down);
+                if (_contacts[i].collider.isTrigger)
+                {
+                    continue;
+                }
 
-                if (angle < min_angle)
-                    min_angle = angle;
+                if (_contacts[i].collider.usedByEffector)
+                {
+                    Vector3 center = _contacts[i].collider.bounds.center;
+                    Vector2 point = _character.Rigidbody.ClosestPoint(center);
+                    if (_contacts[i].collider.bounds.Contains(point))
+                    {
+                        continue;
+                    }
+                }
+
+                float angle = Vector2.Angle(_contacts[i].normal, Vector2.down);
+
+                if (angle < minAngle)
+                {
+                    minAngle = angle;
+                }
             }
 
-            if (min_angle < topAngle)
+            if (minAngle < _topAngle)
             {
                 isTop = true;
             }
@@ -150,24 +177,30 @@ namespace YLFramework.Character.Controller2D
 
         private void UpdateTopInfo()
         {
-            if (!characher.IsTop)
+            if (!_character.IsTouchingCeiling)
+            {
                 return;
+            }
 
-            if (Time.time - lastUpdateTopInfoTime < 0.06f)
+            if (Time.time - _lastUpdateTopInfoTime < 0.06f)
+            {
                 return;
+            }
 
-            for (int i = 0; i < contactsCount; i++)
+            for (int i = 0; i < _contactsCount; i++)
             {
                 // 只要有一个点 和 当前法线比较接近 就不需要更新
-                bool d = Vector3.Distance(contacts[i].point, characher.TopInfo.point) < 0.1f;
-                bool a = Vector3.Angle(contacts[i].normal, characher.TopInfo.normal) < 3;
+                bool d = Vector3.Distance(_contacts[i].point, _character.TopInfo.point) < 0.1f;
+                bool a = Vector3.Angle(_contacts[i].normal, _character.TopInfo.normal) < 3;
                 // 认为法线区别不大 不需要更新
                 if (d && a)
+                {
                     return;
+                }
             }
 
             // 更新碰撞点 和 法线
-            lastUpdateTopInfoTime = Time.time;
+            _lastUpdateTopInfoTime = Time.time;
             CheckTopInfo();
         }
 

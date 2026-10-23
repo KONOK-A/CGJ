@@ -9,25 +9,35 @@ namespace YLFramework.Events
     /// </summary>
     public sealed class SubscriptionScope : IDisposable
     {
-        private readonly List<IUnRegister> _subscriptions = new();
-        private bool _cleaning;
+        private readonly List<IUnregister> _subscriptions = new();
+        private bool _isCleaning;
 
         /// <summary>是否已永久关闭。</summary>
-        public bool IsDisposed { get; private set; }
+        public bool IsDisposed
+        {
+            get; private set;
+        }
 
         /// <summary>尚未完成清理的责任数量。</summary>
         public int Count => _subscriptions.Count;
 
         /// <summary>加入句柄；关闭后立即取消，不复活作用域。</summary>
-        public void Add(IUnRegister subscription)
+        public void Add(IUnregister subscription)
         {
-            if (subscription == null) return;
+            if (subscription == null)
+            {
+                return;
+            }
+
             if (!IsDisposed)
             {
                 _subscriptions.Add(subscription);
                 return;
             }
-            try { subscription.UnRegister(); }
+            try
+            {
+                subscription.Unregister();
+            }
             catch
             {
                 _subscriptions.Add(subscription);
@@ -39,10 +49,20 @@ namespace YLFramework.Events
         public void Dispose()
         {
             IsDisposed = true;
-            if (_cleaning) return;
-            _cleaning = true;
-            try { SubscriptionCleanup.ReleaseAll(_subscriptions, token => token.UnRegister()); }
-            finally { _cleaning = false; }
+            if (_isCleaning)
+            {
+                return;
+            }
+
+            _isCleaning = true;
+            try
+            {
+                SubscriptionCleanup.ReleaseAll(_subscriptions, token => token.Unregister());
+            }
+            finally
+            {
+                _isCleaning = false;
+            }
         }
     }
 }

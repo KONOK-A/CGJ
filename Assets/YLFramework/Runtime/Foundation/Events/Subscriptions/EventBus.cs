@@ -13,19 +13,19 @@ namespace YLFramework.Events
     public sealed class EventBus : IDisposable
     {
         private static EventBus _default;
-        private static bool _sessionResetRegistered;
+        private static bool _isSessionResetRegistered;
         private readonly Dictionary<EventKey, EventChannelBase> _channels = new();
-        private bool _disposed;
+        private bool _isDisposed;
 
         /// <summary>显式选择全局上下文；仅此入口会惰性创建 Default。</summary>
         public static EventBus Default
         {
             get
             {
-                if (!_sessionResetRegistered)
+                if (!_isSessionResetRegistered)
                 {
                     SingletonSessionState.RegisterSessionReset(ResetDefault);
-                    _sessionResetRegistered = true;
+                    _isSessionResetRegistered = true;
                 }
                 return _default ??= new EventBus();
             }
@@ -46,8 +46,15 @@ namespace YLFramework.Events
             previous?.Dispose();
         }
 
-        public bool IsDisposed => _disposed;
-        public int KeyCount { get { ThrowIfDisposed(); return _channels.Count; } }
+        public bool IsDisposed => _isDisposed;
+        public int KeyCount
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _channels.Count;
+            }
+        }
 
         public bool HasKey(EventKey key)
         {
@@ -67,14 +74,21 @@ namespace YLFramework.Events
 
         private void ThrowIfDisposed()
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(EventBus));
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(EventBus));
+            }
         }
 
         private TChannel GetExisting<TChannel>(EventKey key) where TChannel : EventChannelBase
         {
             ThrowIfDisposed();
             key.Validate();
-            if (!_channels.TryGetValue(key, out var channel)) return null;
+            if (!_channels.TryGetValue(key, out var channel))
+            {
+                return null;
+            }
+
             if (channel.GetType() != typeof(TChannel))
             {
                 throw new InvalidOperationException(
@@ -83,180 +97,276 @@ namespace YLFramework.Events
             return (TChannel)channel;
         }
 
-        public IUnRegister Register(EventKey key, Action callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce(EventKey key, Action callback) => RegisterCore(key, callback, true);
+        public IUnregister Register(EventKey key, Action callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce(EventKey key, Action callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore(EventKey key, Action callback, bool once)
+        private IUnregister RegisterCore(EventKey key, Action callback, bool once)
         {
             var channel = GetExisting<EventChannel>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister(EventKey key, Action callback)
+        public void Unregister(EventKey key, Action callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send(EventKey key) => GetExisting<EventChannel>(key)?.Trigger();
         public void SendAll(EventKey key) => GetExisting<EventChannel>(key)?.TriggerAll();
 
-        public IUnRegister Register<T1>(EventKey key, Action<T1> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1>(EventKey key, Action<T1> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1>(EventKey key, Action<T1> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1>(EventKey key, Action<T1> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1>(EventKey key, Action<T1> callback, bool once)
+        private IUnregister RegisterCore<T1>(EventKey key, Action<T1> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1>(EventKey key, Action<T1> callback)
+        public void Unregister<T1>(EventKey key, Action<T1> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1>(EventKey key, T1 p1) => GetExisting<EventChannel<T1>>(key)?.Trigger(p1);
         public void SendAll<T1>(EventKey key, T1 p1) => GetExisting<EventChannel<T1>>(key)?.TriggerAll(p1);
 
-        public IUnRegister Register<T1, T2>(EventKey key, Action<T1, T2> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2>(EventKey key, Action<T1, T2> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2>(EventKey key, Action<T1, T2> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2>(EventKey key, Action<T1, T2> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2>(EventKey key, Action<T1, T2> callback, bool once)
+        private IUnregister RegisterCore<T1, T2>(EventKey key, Action<T1, T2> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2>(EventKey key, Action<T1, T2> callback)
+        public void Unregister<T1, T2>(EventKey key, Action<T1, T2> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2>(EventKey key, T1 p1, T2 p2) => GetExisting<EventChannel<T1, T2>>(key)?.Trigger(p1, p2);
         public void SendAll<T1, T2>(EventKey key, T1 p1, T2 p2) => GetExisting<EventChannel<T1, T2>>(key)?.TriggerAll(p1, p2);
 
-        public IUnRegister Register<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback, bool once)
+        private IUnregister RegisterCore<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2, T3>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2, T3>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2, T3>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback)
+        public void Unregister<T1, T2, T3>(EventKey key, Action<T1, T2, T3> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2, T3>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2, T3>(EventKey key, T1 p1, T2 p2, T3 p3) => GetExisting<EventChannel<T1, T2, T3>>(key)?.Trigger(p1, p2, p3);
         public void SendAll<T1, T2, T3>(EventKey key, T1 p1, T2 p2, T3 p3) => GetExisting<EventChannel<T1, T2, T3>>(key)?.TriggerAll(p1, p2, p3);
 
-        public IUnRegister Register<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback, bool once)
+        private IUnregister RegisterCore<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2, T3, T4>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback)
+        public void Unregister<T1, T2, T3, T4>(EventKey key, Action<T1, T2, T3, T4> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2, T3, T4>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2, T3, T4>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4) => GetExisting<EventChannel<T1, T2, T3, T4>>(key)?.Trigger(p1, p2, p3, p4);
         public void SendAll<T1, T2, T3, T4>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4) => GetExisting<EventChannel<T1, T2, T3, T4>>(key)?.TriggerAll(p1, p2, p3, p4);
 
-        public IUnRegister Register<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback, bool once)
+        private IUnregister RegisterCore<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback)
+        public void Unregister<T1, T2, T3, T4, T5>(EventKey key, Action<T1, T2, T3, T4, T5> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2, T3, T4, T5>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5) => GetExisting<EventChannel<T1, T2, T3, T4, T5>>(key)?.Trigger(p1, p2, p3, p4, p5);
         public void SendAll<T1, T2, T3, T4, T5>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5) => GetExisting<EventChannel<T1, T2, T3, T4, T5>>(key)?.TriggerAll(p1, p2, p3, p4, p5);
 
-        public IUnRegister Register<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback, bool once)
+        private IUnregister RegisterCore<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5, T6>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5, T6>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5, T6>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback)
+        public void Unregister<T1, T2, T3, T4, T5, T6>(EventKey key, Action<T1, T2, T3, T4, T5, T6> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5, T6>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2, T3, T4, T5, T6>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6) => GetExisting<EventChannel<T1, T2, T3, T4, T5, T6>>(key)?.Trigger(p1, p2, p3, p4, p5, p6);
         public void SendAll<T1, T2, T3, T4, T5, T6>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6) => GetExisting<EventChannel<T1, T2, T3, T4, T5, T6>>(key)?.TriggerAll(p1, p2, p3, p4, p5, p6);
 
-        public IUnRegister Register<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback) => RegisterCore(key, callback, false);
-        public IUnRegister RegisterOnce<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback) => RegisterCore(key, callback, true);
+        public IUnregister Register<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback) => RegisterCore(key, callback, false);
+        public IUnregister RegisterOnce<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback) => RegisterCore(key, callback, true);
 
-        private IUnRegister RegisterCore<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback, bool once)
+        private IUnregister RegisterCore<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback, bool once)
         {
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5, T6, T7>>(key);
-            if (callback == null) return EmptyUnRegister.Instance;
-            if (channel == null) _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5, T6, T7>());
+            if (callback == null)
+            {
+                return EmptyUnregister.Instance;
+            }
+
+            if (channel == null)
+            {
+                _channels.Add(key, channel = new EventChannel<T1, T2, T3, T4, T5, T6, T7>());
+            }
+
             return once ? channel.RegisterOnce(callback) : channel.Register(callback);
         }
 
-        public void UnRegister<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+        public void Unregister<T1, T2, T3, T4, T5, T6, T7>(EventKey key, Action<T1, T2, T3, T4, T5, T6, T7> callback)
         {
-            if (_disposed) return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
             var channel = GetExisting<EventChannel<T1, T2, T3, T4, T5, T6, T7>>(key);
-            channel?.UnRegister(callback);
+            channel?.Unregister(callback);
         }
 
         public void Send<T1, T2, T3, T4, T5, T6, T7>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7) => GetExisting<EventChannel<T1, T2, T3, T4, T5, T6, T7>>(key)?.Trigger(p1, p2, p3, p4, p5, p6, p7);
         public void SendAll<T1, T2, T3, T4, T5, T6, T7>(EventKey key, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7) => GetExisting<EventChannel<T1, T2, T3, T4, T5, T6, T7>>(key)?.TriggerAll(p1, p2, p3, p4, p5, p6, p7);
 
         /// <summary>按 typeof(T) 注册 payload；与命名键入口区分，不按实际 payload 子类型路由。</summary>
-        public IUnRegister RegisterMessage<T>(Action<T> callback) => Register(EventKey.ForType<T>(), callback);
+        public IUnregister RegisterMessage<T>(Action<T> callback) => Register(EventKey.ForType<T>(), callback);
         /// <summary>在 typeof(T) 的 payload 通道注册一次性回调。</summary>
-        public IUnRegister RegisterMessageOnce<T>(Action<T> callback) => RegisterOnce(EventKey.ForType<T>(), callback);
+        public IUnregister RegisterMessageOnce<T>(Action<T> callback) => RegisterOnce(EventKey.ForType<T>(), callback);
         /// <summary>只取消 typeof(T) 通道上最后一个相等的普通委托子序列；已关闭时为空操作。</summary>
-        public void UnRegisterMessage<T>(Action<T> callback) => UnRegister(EventKey.ForType<T>(), callback);
+        public void UnregisterMessage<T>(Action<T> callback) => Unregister(EventKey.ForType<T>(), callback);
         /// <summary>按泛型声明类型发布 payload；string/int/enum payload 不会被解释为命名键。</summary>
         public void SendMessage<T>(T payload) => Send(EventKey.ForType<T>(), payload);
         /// <summary>构造并发布 typeof(T) 的消息；缺失键时不构造 payload。</summary>
@@ -269,22 +379,36 @@ namespace YLFramework.Events
         {
             ThrowIfDisposed();
             key.Validate();
-            if (_channels.TryGetValue(key, out var channel)) channel.ClearListeners();
+            if (_channels.TryGetValue(key, out var channel))
+            {
+                channel.ClearListeners();
+            }
         }
 
         /// <summary>仅清所有键的监听，不删除键或签名。</summary>
         public void ClearListeners()
         {
             ThrowIfDisposed();
-            foreach (var channel in _channels.Values) channel.ClearListeners();
+            foreach (var channel in _channels.Values)
+            {
+                channel.ClearListeners();
+            }
         }
 
         /// <summary>终结指定键的 channel 与旧在途快照；删除签名，允许后续重新绑定。已关闭时返回 false。</summary>
         public bool RemoveKey(EventKey key)
         {
-            if (_disposed) return false;
+            if (_isDisposed)
+            {
+                return false;
+            }
+
             key.Validate();
-            if (!_channels.TryGetValue(key, out var channel)) return false;
+            if (!_channels.TryGetValue(key, out var channel))
+            {
+                return false;
+            }
+
             _channels.Remove(key);
             channel.Dispose();
             return true;
@@ -294,17 +418,33 @@ namespace YLFramework.Events
         public void ClearKeys()
         {
             ThrowIfDisposed();
-            foreach (var channel in _channels.Values) channel.Dispose();
+            foreach (var channel in _channels.Values)
+            {
+                channel.Dispose();
+            }
+
             _channels.Clear();
         }
 
         /// <summary>永久关闭 bus，清除监听及签名；重复调用无副作用。</summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            if (ReferenceEquals(_default, this)) _default = null;
-            foreach (var channel in _channels.Values) channel.Dispose();
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
+            if (ReferenceEquals(_default, this))
+            {
+                _default = null;
+            }
+
+            foreach (var channel in _channels.Values)
+            {
+                channel.Dispose();
+            }
+
             _channels.Clear();
         }
     }

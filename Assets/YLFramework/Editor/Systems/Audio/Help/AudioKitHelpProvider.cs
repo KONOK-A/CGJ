@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
-using YLFramework.Editor.Help;
-using YLFramework.Services.Audio;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Editor.Help;
+using YLFramework.Services.Audio;
 
 namespace YLFramework.Editor.Audio
 {
@@ -25,11 +25,17 @@ namespace YLFramework.Editor.Audio
                 Application.dataPath, "..", "Library", assembly.GetName().Name + ".xml")));
             var guides = CreateGuides();
             if (!File.Exists(paths[runtime]))
+            {
                 guides[0] = new HelpPage("overview", guides[0].Title, guides[0].Group, guides[0].Summary,
                     guides[0].Blocks.Concat(new[] { HelpBlock.Notice("XML 文档尚未生成",
                         "模块 csc.rsp 在 Unity 编译时生成 Library/YLFramework.Runtime.xml。声明来自真实程序集，" +
                         "缺少 XML 时不按名称补造说明；请等待统一脚本编译完成。") }).ToArray())
-                { RelatedTypes = guides[0].RelatedTypes, FeaturedTypes = guides[0].FeaturedTypes };
+                {
+                    RelatedTypes = guides[0].RelatedTypes,
+                    FeaturedTypes = guides[0].FeaturedTypes
+                };
+            }
+
             return new HelpModule
             {
                 Guides = guides,
@@ -370,7 +376,7 @@ namespace YLFramework.Editor.Audio
                     "普通 Allocate 内部使用值默认并覆盖 OutputRoute，Priority 默认 0，不创建配置类；WithOptions 的 options 位置必填但 null 使用 Sound 值默认，动作在 Allocate 时捕获并校验完整 AudioPlaybackOptions 值快照（含 AutoFade/Priority），Start 将模板按值提交内部播放链，不再复制配置类。" +
                     "分配后修改原对象不影响动作，句柄修改不反写动作模板或其他请求；不新增 Priority 专用入口。取消/Deinit 只停止自己的句柄，不通知成功。Reset 停止旧请求但保留 Clip 与完整值快照模板，下次执行重新播放、建立自动包络；Deinit 将模板清为 default(AudioPlaybackOptions)，释放借用的 OutputRoute.Group 引用并清除其他资源引用，不卸载或销毁资源，池复用不泄漏，执行代次与取消契约不变。" +
                     "等待请求结束，不保证自然播放成功；拒播、外部停止、抢占或裁剪也结束等待。暂停动作或序列不自动暂停音频；音频自然结束仍可将动作标记完成，通知由 Action 执行契约处理。暂停音频则继续等待。旧动作不能等待或停止池复用后的新代次。" +
-                    "Action 在用户 onStarted 之前写入实际 lease，回调中 Reset/Deinit 可停止尚未从 Play 返回的请求；返回后核对 ActionID/执行版本/Deinited，不覆盖重入新执行。" +
+                    "Action 在用户 onStarted 之前写入实际 lease，回调中 Reset/Deinit 可停止尚未从 Play 返回的请求；返回后核对 ActionId/执行版本/IsDeinitialized，不覆盖重入新执行。" +
                     "拒播/抢占仍按原 Action 检查完成，不把 onFinish 改为自然完成通知；固定签名反射/委托与预编译调用须按追加参数迁移，无旧重载。")),
             Guide("timer", "Timing 与生命周期边界", "计时工具独立于音频，不增加第二条播放链。",
                 Array.Empty<Type>(),

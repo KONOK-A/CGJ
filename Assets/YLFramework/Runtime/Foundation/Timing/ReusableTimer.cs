@@ -13,14 +13,14 @@ namespace YLFramework.Timing
         private readonly TimerScheduler _manual;
         private readonly object _session;
         private readonly TimerRun _storage = new();
-        private bool _disposed;
+        private bool _isDisposed;
 
         /// <summary>绑定当前执行 session，但不创建默认宿主；同会话 Shutdown 后可显式重新 Start。</summary>
         public ReusableTimer() => _session = SingletonSessionState.ExecutionSession;
         /// <summary>绑定显式手动内核，不读取 Unity 时间，不创建默认宿主。</summary>
         public ReusableTimer(TimerScheduler scheduler) => _manual = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
         /// <summary>是否永久关闭；Dispose 后不能复活。</summary>
-        public bool IsDisposed => _disposed;
+        public bool IsDisposed => _isDisposed;
         /// <summary>当前代次的观察/控制句柄；尚未启动时为默认无效值。历史结果须在下次 Start 前自行复制。</summary>
         public TimerHandle Current => _storage.Generation == 0 ? default : new TimerHandle(_storage);
 
@@ -45,7 +45,11 @@ namespace YLFramework.Timing
         public TimerHandle StartFrames(long frameDelay, Action callback = null,
             Action<TimerCancellationReason> onCancelled = null)
         {
-            if (frameDelay < 0) throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            if (frameDelay < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(frameDelay));
+            }
+
             return StartRun(TimerClock.RenderedFrame, 0, Math.Max(1, frameDelay), 0, 0, 1, callback, null, onCancelled);
         }
 
@@ -60,10 +64,21 @@ namespace YLFramework.Timing
         private TimerHandle StartRun(TimerClock clock, double delay, long frames, double intervalSeconds,
             long intervalFrames, int? count, Action callback, Action<long> tickCallback, Action<TimerCancellationReason> onCancelled)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(ReusableTimer));
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(ReusableTimer));
+            }
+
             if (_manual == null && !ReferenceEquals(_session, SingletonSessionState.ExecutionSession))
+            {
                 throw new InvalidOperationException("ReusableTimer belongs to an old execution session.");
-            if (Current.IsActive) throw new InvalidOperationException("Cancel the active timer before starting a new run.");
+            }
+
+            if (Current.IsActive)
+            {
+                throw new InvalidOperationException("Cancel the active timer before starting a new run.");
+            }
+
             return (_manual ?? Timer.GetScheduler()).Schedule(clock, delay, frames, intervalSeconds, intervalFrames,
                 count, callback, tickCallback, onCancelled, _storage);
         }
@@ -71,8 +86,12 @@ namespace YLFramework.Timing
         /// <summary>永久关闭槽并取消当前责任；先关闭再通知，取消回调不能重启此槽。</summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
             Current.Cancel();
         }
     }

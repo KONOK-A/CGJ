@@ -20,7 +20,7 @@ namespace YLFramework.Actions
             ActionKit.Initialize();
             var controller = ActionController.Allocate();
             var generation = ((ActionController)controller).Generation;
-            controller.ActionID = self.ActionID;
+            controller.ActionId = self.ActionId;
             controller.Action = self;
             controller.UpdateMode = ActionUpdateModes.ScaledDeltaTime;
             try
@@ -29,7 +29,11 @@ namespace YLFramework.Actions
             }
             catch
             {
-                if (((ActionController)controller).Generation == generation) controller.Recycle();
+                if (((ActionController)controller).Generation == generation)
+                {
+                    controller.Recycle();
+                }
+
                 throw;
             }
             return controller;
@@ -85,9 +89,9 @@ namespace YLFramework.Actions
         /// <param name="self">当前执行的控制器。</param>
         public static void Pause(this IActionController self)
         {
-            if (self.Action != null && self.ActionID == self.Action.ActionID)
+            if (self.Action != null && self.ActionId == self.Action.ActionId)
             {
-                self.Action.Paused = true;
+                self.Action.IsPaused = true;
             }
         }
 
@@ -95,9 +99,9 @@ namespace YLFramework.Actions
         /// <param name="self">当前执行的控制器。</param>
         public static void Resume(this IActionController self)
         {
-            if (self.Action != null && self.ActionID == self.Action.ActionID)
+            if (self.Action != null && self.ActionId == self.Action.ActionId)
             {
-                self.Action.Paused = false;
+                self.Action.IsPaused = false;
             }
         }
     }

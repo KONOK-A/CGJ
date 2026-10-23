@@ -13,7 +13,11 @@ namespace YLFramework.Utilities.Extensions
         /// </summary>
         public static Vector3 ParabolicMotionVelocity(this Rigidbody rigidbody, float upSpeed, Vector3 targetPosition)
         {
-            if (rigidbody == null) throw new ArgumentNullException(nameof(rigidbody));
+            if (rigidbody == null)
+            {
+                throw new ArgumentNullException(nameof(rigidbody));
+            }
+
             return CalculateVelocity(rigidbody.position, upSpeed, targetPosition,
                 rigidbody.useGravity ? Physics.gravity : Vector3.zero);
         }
@@ -35,7 +39,11 @@ namespace YLFramework.Utilities.Extensions
         /// </summary>
         public static Vector2 ParabolicMotionVelocity(this Rigidbody2D rigidbody, float upSpeed, Vector3 targetPosition)
         {
-            if (rigidbody == null) throw new ArgumentNullException(nameof(rigidbody));
+            if (rigidbody == null)
+            {
+                throw new ArgumentNullException(nameof(rigidbody));
+            }
+
             Vector2 acceleration = Physics2D.gravity * rigidbody.gravityScale;
             return CalculateVelocity(rigidbody.position, upSpeed,
                 new Vector3(targetPosition.x, targetPosition.y, 0), acceleration);
@@ -55,20 +63,29 @@ namespace YLFramework.Utilities.Extensions
         private static Vector3 CalculateVelocity(Vector3 origin, float upSpeed, Vector3 target, Vector3 acceleration)
         {
             if (!Finite(origin) || !Finite(target) || !Finite(acceleration) || float.IsNaN(upSpeed) || float.IsInfinity(upSpeed))
+            {
                 throw new ArgumentException("位置、速度和有效重力必须是有限值。");
+            }
+
             double height = (double)target.y - origin.y;
             double time;
             if (acceleration.y == 0)
             {
                 if (upSpeed == 0)
+                {
                     throw new InvalidOperationException("零竖直速度与零竖直重力无法确定正到达时间。");
+                }
+
                 time = height / upSpeed;
             }
             else
             {
                 double discriminant = (double)upSpeed * upSpeed + 2.0 * acceleration.y * height;
                 if (discriminant < 0)
+                {
                     throw new InvalidOperationException("目标高度不可达。");
+                }
+
                 double root = Math.Sqrt(discriminant);
                 // 稳定求根，避免极小高度差时 -v + sqrt(v*v + 2*a*h) 的消减。
                 double q = -upSpeed - (upSpeed >= 0 ? root : -root);
@@ -77,13 +94,18 @@ namespace YLFramework.Utilities.Extensions
                 time = Math.Max(first, second);
             }
             if (time <= 0 || double.IsNaN(time) || double.IsInfinity(time))
+            {
                 throw new InvalidOperationException("目标没有正到达时间。");
+            }
 
             double x = ((double)target.x - origin.x) / time - 0.5 * acceleration.x * time;
             double z = ((double)target.z - origin.z) / time - 0.5 * acceleration.z * time;
             var velocity = new Vector3((float)x, upSpeed, (float)z);
             if (!Finite(velocity))
+            {
                 throw new InvalidOperationException("所需速度无法表示为有限 float。");
+            }
+
             return velocity;
         }
 

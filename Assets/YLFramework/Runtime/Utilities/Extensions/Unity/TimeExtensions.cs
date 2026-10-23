@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-    public class TimeExtensions  
+    public class TimeExtensions
     {
         /// <summary>
         /// 获取DeltaTime
@@ -19,7 +19,7 @@ namespace YLFramework.Utilities.Extensions
                 // 大于 0.2 说明这个值有点不正常 使用0.02
                 return Time.unscaledDeltaTime > 0.2f ? 0.02f : Time.unscaledDeltaTime;
             }
-        
+
             return Time.deltaTime;
         }
 

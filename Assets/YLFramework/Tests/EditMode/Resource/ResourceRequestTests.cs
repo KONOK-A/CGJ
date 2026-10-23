@@ -46,8 +46,16 @@ namespace YLFramework.Tests.Resource
             var request = new ResourceRequest<Owner>(value => value.Dispose());
             var observed = 0;
             request.Completed += _ => throw new InvalidOperationException("resource-observer-test");
-            request.Completed += value => { observed++; value.Dispose(); };
-            request.Completed += value => { observed++; Assert.That(value.Status, Is.EqualTo(ResourceRequestStatus.Succeeded)); };
+            request.Completed += value =>
+            {
+                observed++;
+                value.Dispose();
+            };
+            request.Completed += value =>
+            {
+                observed++;
+                Assert.That(value.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
+            };
             LogAssert.Expect(LogType.Exception, "InvalidOperationException: resource-observer-test");
             request.SetSuccess(owner);
             request.Notify();

@@ -12,17 +12,19 @@ namespace YLFramework.Tests
 
     public sealed class EditHostProbe : MonoSingletonHost<EditHostProbe>
     {
-        public int Initializations;
-        public int Releases;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Initializations")]
+        public int initializations;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Releases")]
+        public int releases;
         public static EditHostProbe Get() => GetInstance(true);
         public void Release() => ReleaseHost();
         public void SimulateQuit() => base.OnApplicationQuit();
         public override void OnSingletonInit()
         {
-            Initializations++;
+            initializations++;
             Assert.That(Get(), Is.SameAs(this));
         }
-        protected override void OnHostRelease() => Releases++;
+        protected override void OnHostRelease() => releases++;
     }
 
     public class SingletonContractTests
@@ -31,7 +33,10 @@ namespace YLFramework.Tests
         public void TearDown()
         {
             foreach (var host in Object.FindObjectsByType<EditHostProbe>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
                 host.Release();
+            }
+
             SingletonProperty<PlainSingletonProbe>.Dispose();
         }
 
@@ -51,7 +56,7 @@ namespace YLFramework.Tests
         {
             Assert.That(EditHostProbe.Instance, Is.Null);
             var first = EditHostProbe.Get();
-            Assert.That(first.Initializations, Is.EqualTo(1));
+            Assert.That(first.initializations, Is.EqualTo(1));
             var root = first.gameObject;
             first.Release();
             Assert.That(root == null, Is.True);
@@ -78,11 +83,14 @@ namespace YLFramework.Tests
                 var host = root.AddComponent<EditHostProbe>();
                 Assert.That(EditHostProbe.Get(), Is.SameAs(host));
                 host.Release();
-                Assert.That(host.Releases, Is.EqualTo(1));
+                Assert.That(host.releases, Is.EqualTo(1));
                 Assert.That(root != null, Is.True);
                 Assert.That(root.GetComponent<EditHostProbe>(), Is.Null);
             }
-            finally { Object.DestroyImmediate(root); }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
 
         [Test]

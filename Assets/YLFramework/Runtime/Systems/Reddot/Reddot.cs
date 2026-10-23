@@ -7,25 +7,41 @@ namespace YLFramework.ReddotSystem
     [AddComponentMenu("YLFramework/Reddot")]
     public sealed class Reddot : MonoBehaviour
     {
+        [global::UnityEngine.Serialization.FormerlySerializedAs("_path")]
         [SerializeField, Tooltip("按段匹配，例如 Mail/Gift；空路径不显示。")]
-        private string _path;
+        private string path;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("_indicator")]
         [SerializeField, Tooltip("只控制此指示器。不能是本物体或其祖先，避免关闭监听宿主。")]
-        private GameObject _indicator;
-        private IUnRegister _subscription;
+        private GameObject indicator;
+        private IUnregister _subscription;
 
-        public string Path { get => _path; set { _path = value; Refresh(); } }
-        public GameObject Indicator { get => _indicator; set { _indicator = value; Refresh(); } }
+        public string Path
+        {
+            get => path; set
+            {
+                path = value;
+                Refresh();
+            }
+        }
+        public GameObject Indicator
+        {
+            get => indicator; set
+            {
+                indicator = value;
+                Refresh();
+            }
+        }
 
         private void OnEnable()
         {
-            _subscription?.UnRegister();
+            _subscription?.Unregister();
             _subscription = ReddotManager.RegisterChanged(Refresh);
             Refresh();
         }
 
         private void OnDisable()
         {
-            _subscription?.UnRegister();
+            _subscription?.Unregister();
             _subscription = null;
         }
 
@@ -33,12 +49,19 @@ namespace YLFramework.ReddotSystem
 
         public void Refresh()
         {
-            if (!_indicator || _indicator == gameObject || transform.IsChildOf(_indicator.transform)) return;
-            var active = isActiveAndEnabled && ReddotManager.ShouldBeDisplay(_path);
-            if (_indicator.activeSelf != active) _indicator.SetActive(active);
+            if (!indicator || indicator == gameObject || transform.IsChildOf(indicator.transform))
+            {
+                return;
+            }
+
+            var active = isActiveAndEnabled && ReddotManager.ShouldBeDisplayed(path);
+            if (indicator.activeSelf != active)
+            {
+                indicator.SetActive(active);
+            }
         }
 
         /// <summary>仅移除普通集合路径；独立来源须由业务owner自行释放。</summary>
-        public void Remove() => ReddotManager.RemovePath(_path);
+        public void Remove() => ReddotManager.RemovePath(path);
     }
 }

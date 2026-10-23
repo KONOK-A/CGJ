@@ -16,7 +16,7 @@ namespace YLFramework.FSM
         private Action _onUpdate;
         private Action _onFixedUpdate;
         private Action _onLateUpdate;
-        private Action _onGUI;
+        private Action _onGui;
         private Action _onExit;
 
         /// <summary>设置切入条件；未设置时默认允许切入。重复设置以后一次为准。</summary>
@@ -55,9 +55,9 @@ namespace YLFramework.FSM
         }
 
         /// <summary>设置 OnGUI 回调。重复设置以后一次为准。</summary>
-        public CustomState OnGUI(Action onGUI)
+        public CustomState OnGUI(Action onGui)
         {
-            _onGUI = onGUI;
+            _onGui = onGui;
             return this;
         }
 
@@ -89,7 +89,7 @@ namespace YLFramework.FSM
             _onUpdate = null;
             _onFixedUpdate = null;
             _onLateUpdate = null;
-            _onGUI = null;
+            _onGui = null;
         }
 
         /// <inheritdoc />
@@ -119,7 +119,7 @@ namespace YLFramework.FSM
         /// <inheritdoc />
         public void OnGUI()
         {
-            _onGUI?.Invoke();
+            _onGui?.Invoke();
         }
 
         /// <inheritdoc />

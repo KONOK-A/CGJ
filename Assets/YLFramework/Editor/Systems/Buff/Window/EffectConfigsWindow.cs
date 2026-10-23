@@ -1,12 +1,12 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
 using YLFramework.Excel;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.BuffSystem
 {
@@ -25,60 +25,61 @@ namespace YLFramework.BuffSystem
 
         //private Rect left;
 
-        private string searchStr;
+        private string _searchStr;
 
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewState<int> effectListState;
+        private TreeViewState<int> _effectListState;
 #else
-        private TreeViewState effectListState;
+        private TreeViewState _effectListState;
 #endif
 
-        internal EffectListTree effectListTree;
+        internal EffectListTree EffectListTree;
 
-        internal EffectData currentEffectData;
+        internal EffectData CurrentEffectData;
 
-        internal int currentShowBuffId = 0;
+        internal int CurrentShowBuffId = 0;
 
         internal static int DefaultSelectBuffId = -1;
 
-        private MultiColumnHeaderState effectListMCHState;
+        private MultiColumnHeaderState _effectListMCHState;
 
-        private GUIContent dropdown_excel_content;
+        private GUIContent _dropdownExcelContent;
 
-        private float lastRepaintCount = 0;
+        private float _lastRepaintCount = 0;
 
-        private int currentID;
+        private int _currentId;
         public int idChangeCount;
 
-#endregion
+        #endregion
 
         #region 生命周期
 
         private void Awake()
         {
             titleContent = new GUIContent("Effect配置窗口", "Effect配置窗口");
-            horizontal_split_percent = 0.7f;
+            horizontalSplitPercent = 0.7f;
         }
 
         private void OnEnable()
         {
             Undo.undoRedoPerformed += RefreshList;
-            currentEffectData = GetCurrentConfig();
+            CurrentEffectData = GetCurrentConfig();
         }
 
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= RefreshList;
-            effectListTree?.Dispose();
-            effectListTree = null;
+            EffectListTree?.Dispose();
+            EffectListTree = null;
         }
 
         private void Update()
         {
-            lastRepaintCount++;
-            if (lastRepaintCount > 15) {
+            _lastRepaintCount++;
+            if (_lastRepaintCount > 15)
+            {
                 Repaint();
-                lastRepaintCount = 0;
+                _lastRepaintCount = 0;
             }
         }
 
@@ -90,22 +91,24 @@ namespace YLFramework.BuffSystem
         internal EffectData GetCurrentConfig()
         {
             if (BuffSystemSettings.Instance.AllEffectDatas == null || BuffSystemSettings.Instance.AllEffectDatas.Count == 0)
+            {
                 return null;
+            }
 
             return BuffSystemSettings.Instance.AllEffectDatas[0];
         }
 
-        protected override void DrawGUILeft(Rect rect)
+        protected override void DrawGuiLeft(Rect rect)
         {
-            base.DrawGUILeft(rect);
+            base.DrawGuiLeft(rect);
             GUILayout.BeginArea(rect);
             DrawLeft(rect);
             GUILayout.EndArea();
         }
 
-        protected override void DrawGUIRight(Rect rect)
+        protected override void DrawGuiRight(Rect rect)
         {
-            base.DrawGUIRight(rect);
+            base.DrawGuiRight(rect);
             GUILayout.BeginArea(rect);
             DrawRight();
             GUILayout.EndArea();
@@ -119,15 +122,15 @@ namespace YLFramework.BuffSystem
 
             EditorGUI.BeginChangeCheck();
 
-            searchStr = EditorGUILayout.TextField( string.Empty,searchStr, "SearchTextField",GUILayout.MinWidth(0));
+            _searchStr = EditorGUILayout.TextField(string.Empty, _searchStr, "SearchTextField", GUILayout.MinWidth(0));
 
             if (EditorGUI.EndChangeCheck())
             {
-                if (string.IsNullOrEmpty(searchStr) && effectListTree.state.selectedIDs.Count > 0)
+                if (string.IsNullOrEmpty(_searchStr) && EffectListTree.state.selectedIDs.Count > 0)
                 {
                     EditorApplication.delayCall += () =>
                     {
-                        effectListTree.FrameItem(effectListTree.state.selectedIDs[0]);
+                        EffectListTree.FrameItem(EffectListTree.state.selectedIDs[0]);
                     };
                 }
             }
@@ -136,29 +139,33 @@ namespace YLFramework.BuffSystem
             GUILayout.EndHorizontal();
 
 
-            if (effectListState == null) {
+            if (_effectListState == null)
+            {
 #if UNITY_6000_2_OR_NEWER
-                effectListState = new TreeViewState<int>();
+                _effectListState = new TreeViewState<int>();
 #else
-                effectListState = new TreeViewState();
+                _effectListState = new TreeViewState();
 #endif
             }
 
-            if (effectListTree == null)
+            if (EffectListTree == null)
             {
                 var headerState = EffectListTree.CreateDefaultMultiColumnHeaderState();// multiColumnTreeViewRect.width);
-                if (MultiColumnHeaderState.CanOverwriteSerializedFields(effectListMCHState, headerState))
-                    MultiColumnHeaderState.OverwriteSerializedFields(effectListMCHState, headerState);
-                effectListMCHState = headerState;
+                if (MultiColumnHeaderState.CanOverwriteSerializedFields(_effectListMCHState, headerState))
+                {
+                    MultiColumnHeaderState.OverwriteSerializedFields(_effectListMCHState, headerState);
+                }
 
-                effectListTree = new EffectListTree(effectListState, effectListMCHState);
+                _effectListMCHState = headerState;
+
+                EffectListTree = new EffectListTree(_effectListState, _effectListMCHState);
                 RefreshList();
             }
 
-            effectListTree.searchString = searchStr;
+            EffectListTree.searchString = _searchStr;
 
             rect.Set(rect.x, rect.y + 20, rect.width, rect.height - 20);
-            effectListTree.OnGUI(rect);
+            EffectListTree.OnGUI(rect);
 
         }
 
@@ -178,11 +185,11 @@ namespace YLFramework.BuffSystem
                 return;
             }
 
-            if (effectListState.selectedIDs.Count == 1)
+            if (_effectListState.selectedIDs.Count == 1)
             {
                 DrawData();
             }
-            else if (effectListState.selectedIDs.Count == 0)
+            else if (_effectListState.selectedIDs.Count == 0)
             {
                 GUILayout.FlexibleSpace();
                 GUILayout.BeginHorizontal();
@@ -209,9 +216,9 @@ namespace YLFramework.BuffSystem
 
         private void DrawData()
         {
-            int id = effectListState.selectedIDs[0];
+            int id = _effectListState.selectedIDs[0];
 
-            if (currentID != id)
+            if (_currentId != id)
             {
                 idChangeCount++;
 
@@ -221,7 +228,7 @@ namespace YLFramework.BuffSystem
                 {
                     if (idChangeCount > 2)
                     {
-                        currentID = id;
+                        _currentId = id;
                         idChangeCount = 0;
                     }
                 }
@@ -232,36 +239,43 @@ namespace YLFramework.BuffSystem
             }
 
 
-            EffectData effectData = effectListTree.GetEffectData(id);
+            EffectData effectData = EffectListTree.GetEffectData(id);
             EffectDataInspector.Instance.OnInspectorGUI(this, effectData);
         }
 
 
         internal bool IsEmpty()
         {
-            if (currentEffectData == null)
+            if (CurrentEffectData == null)
+            {
                 return true;
+            }
 
             return false;
         }
 
         public void RefreshList()
         {
-            if (effectListTree == null)
-                return;
-
-            effectListTree.Reload();
-            if (currentEffectData == null && BuffSystemSettings.Instance.AllEffectDatas.Count > 0)
-                currentEffectData = BuffSystemSettings.Instance.AllEffectDatas[0];
-            if (currentEffectData != null)
+            if (EffectListTree == null)
             {
-                effectListTree.SetSelection(new int[] { currentEffectData.id });
-                effectListTree.SetExpanded(currentEffectData.id, true);
-                effectListTree.FrameItem(currentEffectData.id);
+                return;
+            }
+
+            EffectListTree.Reload();
+            if (CurrentEffectData == null && BuffSystemSettings.Instance.AllEffectDatas.Count > 0)
+            {
+                CurrentEffectData = BuffSystemSettings.Instance.AllEffectDatas[0];
+            }
+
+            if (CurrentEffectData != null)
+            {
+                EffectListTree.SetSelection(new int[] { CurrentEffectData.id });
+                EffectListTree.SetExpanded(CurrentEffectData.id, true);
+                EffectListTree.FrameItem(CurrentEffectData.id);
             }
         }
 
-#endregion
+        #endregion
 
 
 

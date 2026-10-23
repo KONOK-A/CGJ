@@ -1,10 +1,10 @@
-using YLFramework.Foundation;
-
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.Serialization;
 using YLFramework.Events;
+using YLFramework.Foundation;
 
 namespace YLFramework.MissionSystem
 {
@@ -32,7 +32,7 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("参数名称")]
         [Header("参数名称")]
-        [YLFramework.Excel.ExcelScriptableObjectID]
+        [YLFramework.Excel.ExcelScriptableObjectId]
         public string name;
 
         /// <summary>
@@ -43,21 +43,21 @@ namespace YLFramework.MissionSystem
         public MissionParamType type;
 
         [Tooltip("当前参数的值")]
-        private float value = 0;
+        private float _value = 0;
 
         /// <summary>
         /// 只能在任务执行中设置参数,如果参数对应的任务不在执行中,则无法设置!(默认:true)
         /// </summary>
         [Tooltip("只能在任务执行中设置参数,如果参数对应的任务不在执行中,则无法设置!(默认:true)")]
         [Header("只能在任务执行中设置参数,如果参数对应的任务不在执行中,则无法设置!(默认:true)")]
-        public bool only_can_set_in_progress = true;
+        [FormerlySerializedAs("only_can_set_in_progress"), JsonProperty("only_can_set_in_progress")] public bool onlySetInProgress = true;
 
         /// <summary>
         /// 设置参数时,设置的目标值比当前值大时生效,否则无效(默认:false)
         /// </summary>
         [Tooltip("设置参数时,设置的目标值比当前值大时生效,否则无效(默认:false)")]
         [Header("设置参数时,设置的目标值比当前值大时生效,否则无效(默认:false)")]
-        public bool only_can_set_larger = false;
+        [FormerlySerializedAs("only_can_set_larger"), JsonProperty("only_can_set_larger")] public bool onlySetLarger = false;
 
         /// <summary>
         /// 参数描述
@@ -65,7 +65,7 @@ namespace YLFramework.MissionSystem
         [Tooltip("参数描述")]
         [Header("参数描述")]
         [TextArea]
-        public string des;
+        [FormerlySerializedAs("des"), JsonProperty("des")] public string description;
 
         /// <summary>
         /// 自定义数据
@@ -73,8 +73,8 @@ namespace YLFramework.MissionSystem
         [SerializeField]
         [Tooltip("自定义数据")]
         [Header("自定义数据")]
-        [JsonProperty]
-        private List<string> custom_data = new List<string>();
+        [JsonProperty("custom_data"), FormerlySerializedAs("custom_data")]
+        private List<string> customData = new List<string>();
         #endregion
 
         #region 事件
@@ -85,14 +85,14 @@ namespace YLFramework.MissionSystem
         [NonSerialized] private EventChannel<MissionParameter> _changes;
         private int _version;
         internal int Version => _version;
-        internal IUnRegister RegisterChanged(Action<MissionParameter> callback) => (_changes ??= new EventChannel<MissionParameter>()).Register(callback);
+        internal IUnregister RegisterChanged(Action<MissionParameter> callback) => (_changes ??= new EventChannel<MissionParameter>()).Register(callback);
 
         /// <summary>
         /// 值改变的事件
         /// </summary>
         [Tooltip("值改变的事件")]
         [JsonIgnore]
-        public Action<MissionParameter> onValueChange;
+        public Action<MissionParameter> ValueChanged;
         #endregion
 
 
@@ -105,15 +105,22 @@ namespace YLFramework.MissionSystem
         {
             get
             {
-                return value;
+                return _value;
             }
             set
             {
-                if (this.value.Equals(value)) return;
+                if (this._value.Equals(value))
+                {
+                    return;
+                }
+
                 var version = ++_version;
-                this.value = value;
+                this._value = value;
                 _changes?.TriggerAll(this);
-                if (version == _version) onValueChange?.Invoke(this);
+                if (version == _version)
+                {
+                    ValueChanged?.Invoke(this);
+                }
             }
         }
 
@@ -126,21 +133,21 @@ namespace YLFramework.MissionSystem
         internal void Reset()
         {
             _version++;
-            onValueChange = null;
+            ValueChanged = null;
             _changes?.Dispose();
             _changes = null;
-            value = 0;
+            _value = 0;
         }
 
         /// <summary>独立复制配置与自定义数据，不复制运行值、监听或通知状态。</summary>
         public MissionParameter CloneConfiguration()
         {
             var clone = (MissionParameter)MemberwiseClone();
-            clone.value = 0;
-            clone.onValueChange = null;
+            clone._value = 0;
+            clone.ValueChanged = null;
             clone._changes = null;
             clone._version = 0;
-            clone.custom_data = custom_data == null ? new List<string>() : new List<string>(custom_data);
+            clone.customData = customData == null ? new List<string>() : new List<string>(customData);
             return clone;
         }
 
@@ -151,19 +158,24 @@ namespace YLFramework.MissionSystem
         /// <returns></returns>
         public bool ContainsCustomData(string customData)
         {
-            if(string.IsNullOrEmpty(customData))
+            if (string.IsNullOrEmpty(customData))
+            {
                 return false;
+            }
 
-            if (custom_data == null || custom_data.Count == 0)
+            if (this.customData == null || this.customData.Count == 0)
+            {
                 return false;
+            }
 
-            return custom_data.Contains(customData);
+            return this.customData.Contains(customData);
         }
 
 
 
-        public void SetValueWithoutNotify(float v) {
-            this.value = v;
+        public void SetValueWithoutNotify(float v)
+        {
+            this._value = v;
         }
 
         #endregion

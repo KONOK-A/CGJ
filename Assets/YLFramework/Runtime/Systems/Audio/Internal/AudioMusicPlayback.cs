@@ -8,25 +8,35 @@ namespace YLFramework.Services.Audio
     // Two fixed leases and an epoch keep callback reentry from controlling a later transition.
     internal sealed class AudioMusicPlayback
     {
-        private readonly AudioManager mOwner;
-        private readonly AudioVoice mFirst, mSecond;
-        private AudioHandle mIncoming, mOutgoing;
-        private double mElapsed, mDuration;
-        private float mOutgoingGain;
-        private bool mTransition, mIgnoreTimeScale;
-        private ulong mControlVersion;
-        private AudioCrossfadeCurve mCurve;
-        internal AudioVoice Current { get; private set; }
-        internal AudioHandle Outgoing => mOutgoing.IsValid ? mOutgoing : default;
-        internal ulong Epoch { get; private set; }
-        internal AudioCrossfadeCurve CurrentCurve => mCurve;
+        private readonly AudioManager _owner;
+        private readonly AudioVoice _first;
+        private readonly AudioVoice _second;
+        private AudioHandle _incoming;
+        private AudioHandle _outgoing;
+        private double _elapsed;
+        private double _duration;
+        private float _outgoingGain;
+        private bool _isTransitioning;
+        private bool _ignoreTimeScale;
+        private ulong _controlVersion;
+        private AudioCrossfadeCurve _curve;
+        internal AudioVoice Current
+        {
+            get; private set;
+        }
+        internal AudioHandle Outgoing => _outgoing.IsValid ? _outgoing : default;
+        internal ulong Epoch
+        {
+            get; private set;
+        }
+        internal AudioCrossfadeCurve CurrentCurve => _curve;
 
         internal AudioMusicPlayback(AudioManager owner)
         {
-            mOwner = owner;
-            mFirst = new AudioVoice(owner, AudioVoice.Kind.Music);
-            mSecond = new AudioVoice(owner, AudioVoice.Kind.Music);
-            Current = mFirst;
+            _owner = owner;
+            _first = new AudioVoice(owner, AudioVoice.Kind.Music);
+            _second = new AudioVoice(owner, AudioVoice.Kind.Music);
+            Current = _first;
         }
 
         internal AudioHandle Play(AudioClip clip, in AudioPlaybackOptions options,
@@ -34,7 +44,11 @@ namespace YLFramework.Services.Audio
         {
             var epoch = Epoch;
             Stop(AudioRequestEnd.Replaced);
-            if (!mOwner.Available || Epoch != epoch + 1 || resource != null && !resource.CanBind) return default;
+            if (!_owner.IsAvailable || Epoch != epoch + 1 || resource != null && !resource.CanBind)
+            {
+                return default;
+            }
+
             var settings = AudioKit.Settings;
             return Current.Begin(clip, in options, settings.IsMusicOn.Value, settings.MusicVolume.Value,
                 settings.IsMusicMuted.Value, started, finished, resource: resource);
@@ -45,101 +59,186 @@ namespace YLFramework.Services.Audio
             AudioCrossfadeCurve curve, AudioResourceLease resource = null)
         {
             var settings = AudioKit.Settings;
-            if (!settings.IsMusicOn.Value) return Play(clip, in options, started, finished, resource);
-            var paused = Current.Active && Current.ManuallyPaused;
+            if (!settings.IsMusicOn.Value)
+            {
+                return Play(clip, in options, started, finished, resource);
+            }
+
+            var paused = Current.IsActive && Current.IsManuallyPaused;
             if (duration == 0f)
             {
                 var previousEpoch = Epoch;
                 Stop(AudioRequestEnd.Replaced);
-                if (!mOwner.Available || Epoch != previousEpoch + 1 || resource != null && !resource.CanBind) return default;
+                if (!_owner.IsAvailable || Epoch != previousEpoch + 1 || resource != null && !resource.CanBind)
+                {
+                    return default;
+                }
+
                 return Current.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
                     started, finished, paused: paused, resource: resource);
             }
             var epoch = ++Epoch;
-            if (mOutgoing.IsValid) mOutgoing.Voice.Stop(AudioRequestEnd.Replaced);
-            if (!mOwner.Available || Epoch != epoch || resource != null && !resource.CanBind) return default;
-            mOutgoing = Current.Handle;
-            if (mOutgoing.IsValid) Current.SuppressCompletion();
-            mOutgoingGain = Current.TransitionGain;
-            Current = ReferenceEquals(Current, mFirst) ? mSecond : mFirst;
-            mElapsed = 0d; mDuration = duration; mIgnoreTimeScale = ignoreTimeScale; mTransition = true; mCurve = curve;
+            if (_outgoing.IsValid)
+            {
+                _outgoing.Voice.Stop(AudioRequestEnd.Replaced);
+            }
+
+            if (!_owner.IsAvailable || Epoch != epoch || resource != null && !resource.CanBind)
+            {
+                return default;
+            }
+
+            _outgoing = Current.Handle;
+            if (_outgoing.IsValid)
+            {
+                Current.SuppressCompletion();
+            }
+
+            _outgoingGain = Current.TransitionGain;
+            Current = ReferenceEquals(Current, _first) ? _second : _first;
+            _elapsed = 0d;
+            _duration = duration;
+            _ignoreTimeScale = ignoreTimeScale;
+            _isTransitioning = true;
+            _curve = curve;
             try
             {
                 var incoming = Current;
                 var result = incoming.Begin(clip, in options, true, settings.MusicVolume.Value, settings.IsMusicMuted.Value,
                     started, finished, startImmediately: false, initialTransitionGain: 0f, paused: paused, resource: resource);
-                if (Epoch != epoch) return result;
-                mIncoming = result;
+                if (Epoch != epoch)
+                {
+                    return result;
+                }
+
+                _incoming = result;
                 incoming.StartConfigured(result.Generation);
                 return result;
             }
             catch
             {
-                if (Epoch == epoch) Stop(AudioRequestEnd.Failed);
+                if (Epoch == epoch)
+                {
+                    Stop(AudioRequestEnd.Failed);
+                }
+
                 throw;
             }
         }
 
         internal void Tick(float deltaTime, float unscaledDeltaTime)
         {
-            if (!mOwner.Available || !mTransition) return;
-            var incoming = mIncoming.IsValid;
-            var outgoing = mOutgoing.IsValid;
-            if (!incoming && !outgoing) { CancelTransition(); return; }
-            if (incoming && !mIncoming.Voice.CanAdvanceTransition || outgoing && !mOutgoing.Voice.CanAdvanceTransition) return;
-            var delta = mIgnoreTimeScale ? unscaledDeltaTime : deltaTime;
-            if (delta <= 0f) return;
-            mElapsed = Math.Min(mDuration, mElapsed + delta);
-            var progress = (float)(mElapsed / mDuration);
+            if (!_owner.IsAvailable || !_isTransitioning)
+            {
+                return;
+            }
+
+            var incoming = _incoming.IsValid;
+            var outgoing = _outgoing.IsValid;
+            if (!incoming && !outgoing)
+            {
+                CancelTransition();
+                return;
+            }
+            if (incoming && !_incoming.Voice.CanAdvanceTransition || outgoing && !_outgoing.Voice.CanAdvanceTransition)
+            {
+                return;
+            }
+
+            var delta = _ignoreTimeScale ? unscaledDeltaTime : deltaTime;
+            if (delta <= 0f)
+            {
+                return;
+            }
+
+            _elapsed = Math.Min(_duration, _elapsed + delta);
+            var progress = (float)(_elapsed / _duration);
             var incomingGain = progress;
             var outgoingScale = 1f - progress;
-            if (mCurve == AudioCrossfadeCurve.EqualPower)
+            if (_curve == AudioCrossfadeCurve.EqualPower)
             {
                 var angle = progress * Mathf.PI * .5f;
                 incomingGain = Mathf.Sin(angle);
                 outgoingScale = Mathf.Cos(angle);
             }
-            if (incoming) mIncoming.Voice.SetTransitionGain(incomingGain);
-            if (outgoing) mOutgoing.Voice.SetTransitionGain(mOutgoingGain * outgoingScale);
-            if (mElapsed >= mDuration) CancelTransition();
+            if (incoming)
+            {
+                _incoming.Voice.SetTransitionGain(incomingGain);
+            }
+
+            if (outgoing)
+            {
+                _outgoing.Voice.SetTransitionGain(_outgoingGain * outgoingScale);
+            }
+
+            if (_elapsed >= _duration)
+            {
+                CancelTransition();
+            }
         }
 
         private void CancelTransition(AudioRequestEnd reason = AudioRequestEnd.Replaced)
         {
             Epoch++;
-            var outgoing = mOutgoing;
-            mOutgoing = default; mIncoming = default;
-            mTransition = false; mElapsed = mDuration = 0d; mCurve = AudioCrossfadeCurve.Linear;
-            if (outgoing.IsValid) outgoing.Voice.Stop(reason);
+            var outgoing = _outgoing;
+            _outgoing = default;
+            _incoming = default;
+            _isTransitioning = false;
+            _elapsed = _duration = 0d;
+            _curve = AudioCrossfadeCurve.Linear;
+            if (outgoing.IsValid)
+            {
+                outgoing.Voice.Stop(reason);
+            }
         }
         internal void Stop(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
-            var first = mFirst.Handle;
-            var second = mSecond.Handle;
+            var first = _first.Handle;
+            var second = _second.Handle;
             CancelTransition(reason);
-            if (first.IsValid) first.Voice.Stop(reason);
-            if (second.IsValid) second.Voice.Stop(reason);
+            if (first.IsValid)
+            {
+                first.Voice.Stop(reason);
+            }
+
+            if (second.IsValid)
+            {
+                second.Voice.Stop(reason);
+            }
         }
         internal void Pause()
         {
-            mControlVersion++;
+            _controlVersion++;
             Current.Handle.Pause();
-            mOutgoing.Pause();
+            _outgoing.Pause();
         }
         internal void Resume()
         {
-            var control = ++mControlVersion;
+            var control = ++_controlVersion;
             var epoch = Epoch;
             var current = Current.Handle;
-            var outgoing = mOutgoing;
+            var outgoing = _outgoing;
             current.Resume();
-            if (Epoch == epoch && mControlVersion == control) outgoing.Resume();
+            if (Epoch == epoch && _controlVersion == control)
+            {
+                outgoing.Resume();
+            }
         }
         internal void StartFailed(AudioHandle failed, ulong epoch)
         {
-            if (Epoch != epoch) return;
-            if (ReferenceEquals(Current, failed.Voice) && failed.IsValid) Stop(AudioRequestEnd.Failed);
-            else if (failed.IsValid) failed.Voice.Stop(AudioRequestEnd.Failed);
+            if (Epoch != epoch)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(Current, failed.Voice) && failed.IsValid)
+            {
+                Stop(AudioRequestEnd.Failed);
+            }
+            else if (failed.IsValid)
+            {
+                failed.Voice.Stop(AudioRequestEnd.Failed);
+            }
         }
         internal void SetEnabled(bool enabled)
         {
@@ -148,7 +247,11 @@ namespace YLFramework.Services.Audio
                 var previousEpoch = Epoch;
                 var disabling = Current.Handle;
                 CancelTransition();
-                if (!mOwner.Available || Epoch != previousEpoch + 1 || AudioKit.CurrentSettings.IsMusicOn.Value) return;
+                if (!_owner.IsAvailable || Epoch != previousEpoch + 1 || AudioKit.CurrentSettings.IsMusicOn.Value)
+                {
+                    return;
+                }
+
                 if (disabling.IsValid)
                 {
                     disabling.Voice.SetEnabled(false);
@@ -156,40 +259,72 @@ namespace YLFramework.Services.Audio
                 }
                 return;
             }
-            var control = ++mControlVersion;
+            var control = ++_controlVersion;
             var epoch = Epoch;
             var current = Current.Handle;
-            var outgoing = mOutgoing;
-            if (current.IsValid) current.Voice.SetEnabled(true);
-            if (Epoch == epoch && mControlVersion == control && outgoing.IsValid) outgoing.Voice.SetEnabled(true);
+            var outgoing = _outgoing;
+            if (current.IsValid)
+            {
+                current.Voice.SetEnabled(true);
+            }
+
+            if (Epoch == epoch && _controlVersion == control && outgoing.IsValid)
+            {
+                outgoing.Voice.SetEnabled(true);
+            }
         }
         internal void SetVolume(float value)
         {
             Current.SetVolume(value);
-            if (mOutgoing.IsValid) mOutgoing.Voice.SetVolume(value);
+            if (_outgoing.IsValid)
+            {
+                _outgoing.Voice.SetVolume(value);
+            }
         }
         internal void SetMute(bool value)
         {
             Current.SetMute(value);
-            if (mOutgoing.IsValid) mOutgoing.Voice.SetMute(value);
+            if (_outgoing.IsValid)
+            {
+                _outgoing.Voice.SetMute(value);
+            }
         }
         internal void SetInheritedOutputGroup(AudioMixerGroup group)
         {
             Current.SetInheritedOutputGroup(group);
-            if (mOutgoing.IsValid) mOutgoing.Voice.SetInheritedOutputGroup(group);
+            if (_outgoing.IsValid)
+            {
+                _outgoing.Voice.SetInheritedOutputGroup(group);
+            }
         }
         internal void CopyTo(List<AudioHandle> handles)
         {
-            if (Current.Active) handles.Add(Current.Handle);
-            if (mOutgoing.IsValid) handles.Add(mOutgoing);
+            if (Current.IsActive)
+            {
+                handles.Add(Current.Handle);
+            }
+
+            if (_outgoing.IsValid)
+            {
+                handles.Add(_outgoing);
+            }
         }
         internal void DestroySources()
         {
-            try { Stop(AudioRequestEnd.Shutdown); }
+            try
+            {
+                Stop(AudioRequestEnd.Shutdown);
+            }
             finally
             {
-                try { mFirst.DestroySource(); }
-                finally { mSecond.DestroySource(); }
+                try
+                {
+                    _first.DestroySource();
+                }
+                finally
+                {
+                    _second.DestroySource();
+                }
             }
         }
     }

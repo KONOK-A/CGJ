@@ -9,15 +9,19 @@ namespace YLFramework.Utilities.Extensions
         /// 计算两个 Ray 所在无限直线之间的非负最小距离，不限制在射线半轴。
         /// 零方向按原点处理。
         /// </summary>
-        public static float MiniDistance(this Ray ray, Ray other)
+        public static float MinimumDistance(this Ray ray, Ray other)
         {
-            Vector3 u = ray.direction, v = other.direction;
+            Vector3 u = ray.direction;
+            Vector3 v = other.direction;
             double nx = (double)u.y * v.z - (double)u.z * v.y;
             double ny = (double)u.z * v.x - (double)u.x * v.z;
             double nz = (double)u.x * v.y - (double)u.y * v.x;
             double lengthSquared = nx * nx + ny * ny + nz * nz;
             if (lengthSquared == 0)
+            {
                 return Dot(u, u) == 0 ? other.Distance(ray.origin) : ray.Distance(other.origin);
+            }
+
             double dx = (double)other.origin.x - ray.origin.x;
             double dy = (double)other.origin.y - ray.origin.y;
             double dz = (double)other.origin.z - ray.origin.z;
@@ -26,28 +30,37 @@ namespace YLFramework.Utilities.Extensions
         }
 
         /// <summary>计算无限直线之间最近的点；点可能在原点后方。</summary>
-        public static void MiniDistancePoint(this Ray ray, Ray other, out Vector3 ray_point, out Vector3 other_point)
+        public static void GetClosestPoints(this Ray ray, Ray other, out Vector3 rayPoint, out Vector3 otherPoint)
         {
-            ray.MiniDistancePoint(other, out float first, out float second);
-            ray_point = ray.GetPoint(first);
-            other_point = other.GetPoint(second);
+            ray.GetClosestPoints(other, out float first, out float second);
+            rayPoint = ray.GetPoint(first);
+            otherPoint = other.GetPoint(second);
         }
 
         /// <summary>
         /// 计算无限直线最近点的有符号参数；负值代表原点反方向，不保证落在射线半轴。
         /// 平行时返回一组最近点，零方向按原点处理。
         /// </summary>
-        public static void MiniDistancePoint(this Ray ray, Ray other, out float ray_point_distance, out float other_point_ditance)
+        public static void GetClosestPoints(this Ray ray, Ray other, out float rayParameter, out float otherParameter)
         {
-            Vector3 u = ray.direction, v = other.direction;
+            Vector3 u = ray.direction;
+            Vector3 v = other.direction;
             Vector3 delta = other.origin - ray.origin;
-            double a = Dot(u, u), c = Dot(v, v);
-            double first = 0, second = 0;
+            double a = Dot(u, u);
+            double c = Dot(v, v);
+            double first = 0;
+            double second = 0;
             if (a == 0)
             {
-                if (c != 0) second = -Dot(delta, v) / c;
+                if (c != 0)
+                {
+                    second = -Dot(delta, v) / c;
+                }
             }
-            else if (c == 0) first = Dot(delta, u) / a;
+            else if (c == 0)
+            {
+                first = Dot(delta, u) / a;
+            }
             else
             {
                 // 用 double 叉积求分母，避免 a*c-b*b 在近乎平行时消减为零。
@@ -74,8 +87,8 @@ namespace YLFramework.Utilities.Extensions
                         + ((double)delta.x * u.y - (double)delta.y * u.x) * nz) / denominator;
                 }
             }
-            ray_point_distance = FiniteParameter(first);
-            other_point_ditance = FiniteParameter(second);
+            rayParameter = FiniteParameter(first);
+            otherParameter = FiniteParameter(second);
         }
 
         /// <summary>
@@ -101,7 +114,11 @@ namespace YLFramework.Utilities.Extensions
             double lengthSquared = Dot(ray.direction, ray.direction);
             double parameter = lengthSquared == 0 ? 0
                 : (dx * ray.direction.x + dy * ray.direction.y + dz * ray.direction.z) / lengthSquared;
-            if (halfLine && parameter < 0) parameter = 0;
+            if (halfLine && parameter < 0)
+            {
+                parameter = 0;
+            }
+
             dx -= parameter * ray.direction.x;
             dy -= parameter * ray.direction.y;
             dz -= parameter * ray.direction.z;
@@ -114,7 +131,10 @@ namespace YLFramework.Utilities.Extensions
         private static float FiniteParameter(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) > float.MaxValue)
+            {
                 throw new ArgumentException("几何参数必须可表示为有限 float。");
+            }
+
             return (float)value;
         }
     }

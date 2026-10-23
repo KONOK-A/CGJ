@@ -14,7 +14,11 @@ namespace YLFramework.DataAssets.Editor
 
         public static bool Remember(ScriptableObjectConfigs root, string path)
         {
-            if (!TryKey(root, out var key) || !IsWorkbookPath(path)) return false;
+            if (!TryKey(root, out var key) || !IsWorkbookPath(path))
+            {
+                return false;
+            }
+
             EditorPrefs.SetString(key, Path.GetFullPath(path));
             return true;
         }
@@ -22,9 +26,17 @@ namespace YLFramework.DataAssets.Editor
         public static bool TryGetPath(ScriptableObjectConfigs root, out string path)
         {
             path = null;
-            if (!TryKey(root, out var key)) return false;
+            if (!TryKey(root, out var key))
+            {
+                return false;
+            }
+
             var stored = EditorPrefs.GetString(key, string.Empty);
-            if (!IsWorkbookPath(stored)) return false;
+            if (!IsWorkbookPath(stored))
+            {
+                return false;
+            }
+
             path = stored;
             return true;
         }
@@ -33,22 +45,37 @@ namespace YLFramework.DataAssets.Editor
 
         public static bool Reveal(ScriptableObjectConfigs root)
         {
-            if (!TryGetPath(root, out var path) || !File.Exists(path)) return false;
+            if (!TryGetPath(root, out var path) || !File.Exists(path))
+            {
+                return false;
+            }
+
             EditorUtility.RevealInFinder(path);
             return true;
         }
 
         public static void Forget(ScriptableObjectConfigs root)
         {
-            if (TryKey(root, out var key)) EditorPrefs.DeleteKey(key);
+            if (TryKey(root, out var key))
+            {
+                EditorPrefs.DeleteKey(key);
+            }
         }
 
         private static bool TryKey(ScriptableObjectConfigs root, out string key)
         {
             key = null;
-            if (!root) return false;
+            if (!root)
+            {
+                return false;
+            }
+
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(root));
-            if (string.IsNullOrEmpty(guid)) return false;
+            if (string.IsNullOrEmpty(guid))
+            {
+                return false;
+            }
+
             key = Prefix + guid;
             return true;
         }

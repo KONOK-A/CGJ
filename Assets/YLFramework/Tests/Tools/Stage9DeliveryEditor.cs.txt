@@ -36,12 +36,23 @@ public static class Stage9DeliveryEditor
         if ((string)owner["Purpose"] != "Stage9-independent-receiver" || (string)owner["Project"] != Project ||
             !Project.StartsWith(Path.GetFullPath(Delivery) + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
             Project.IndexOf("CGJ2024", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
             throw new InvalidOperationException("Wrong independent project identity.");
+        }
+
         if (Application.unityVersion != "2022.3.62f3c1" || EditorApplication.isPlayingOrWillChangePlaymode ||
             EditorUtility.scriptCompilationFailed || EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64)
+        {
             throw new InvalidOperationException("Wrong actual Unity state.");
+        }
+
         for (var i = 0; i < EditorSceneManager.sceneCount; i++)
-            if (EditorSceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("Never save an unowned dirty scene.");
+        {
+            if (EditorSceneManager.GetSceneAt(i).isDirty)
+            {
+                throw new InvalidOperationException("Never save an unowned dirty scene.");
+            }
+        }
     }
 
     public static void Audit()
@@ -61,12 +72,18 @@ public static class Stage9DeliveryEditor
             }
             if (Sha(Path.Combine(Project, relative + ".meta")) != (string)file["MetaSha256"] ||
                 (!(bool)file["Folder"] && Sha(Path.Combine(Project, relative)) != (string)file["Sha256"]))
+            {
                 throw new InvalidDataException("Imported product bytes differ from the actual package: " + relative);
+            }
         }
         var duplicates = Directory.GetFiles(Application.dataPath, "*.meta", SearchOption.AllDirectories)
             .Select(path => new { Path = path, Guid = Regex.Match(File.ReadAllText(path), @"(?m)^guid:\s*([0-9a-f]{32})").Groups[1].Value })
             .Where(x => x.Guid.Length != 0).GroupBy(x => x.Guid).Where(g => g.Count() != 1).ToArray();
-        if (duplicates.Length != 0) throw new InvalidDataException("Duplicate Assets GUIDs.");
+        if (duplicates.Length != 0)
+        {
+            throw new InvalidDataException("Duplicate Assets GUIDs.");
+        }
+
         var prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/YLFramework" }).Select(AssetDatabase.GUIDToAssetPath).ToArray();
         foreach (var path in prefabs)
         {
@@ -74,50 +91,88 @@ public static class Stage9DeliveryEditor
             foreach (var transform in prefab.GetComponentsInChildren<Transform>(true))
             {
                 if (GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject) != 0)
+                {
                     throw new InvalidDataException("Missing script: " + path);
+                }
+
                 foreach (var component in transform.GetComponents<Component>())
                 {
-                    if (!component) throw new InvalidDataException("Missing component: " + path);
+                    if (!component)
+                    {
+                        throw new InvalidDataException("Missing component: " + path);
+                    }
+
                     var serialized = new SerializedObject(component);
                     var property = serialized.GetIterator();
                     while (property.Next(true))
+                    {
                         if (property.propertyType == SerializedPropertyType.ObjectReference && property.objectReferenceInstanceIDValue != 0 && !property.objectReferenceValue)
+                        {
                             throw new InvalidDataException("Invalid prefab reference: " + path + " / " + property.propertyPath);
+                        }
+                    }
                 }
             }
             foreach (var dependency in AssetDatabase.GetDependencies(path, true))
+            {
                 if (!dependency.StartsWith("Assets/YLFramework/", StringComparison.Ordinal) && !dependency.StartsWith("Packages/com.unity.", StringComparison.Ordinal) &&
                     !dependency.StartsWith("Resources/", StringComparison.Ordinal) && !dependency.StartsWith("Library/", StringComparison.Ordinal))
+                {
                     throw new InvalidDataException("Unexpected product prefab dependency: " + dependency);
+                }
+            }
         }
         YLFramework.Editor.UIPanelAssetMigration.ValidateAssets();
         var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages();
         if (packages.Any(p => p.name.StartsWith("com.xf", StringComparison.Ordinal) || p.name.Contains("mcp")))
+        {
             throw new InvalidDataException("An original XF or MCP package entered the receiver.");
+        }
+
         var references = typeof(ResourceSystem).Assembly.GetReferencedAssemblies().Select(x => x.Name).ToArray();
         if (references.Any(x => x.Contains("XF") || x.Contains("Tests") || x == "Assembly-CSharp"))
+        {
             throw new InvalidDataException("Product Editor-profile runtime reverse dependency: " + string.Join(", ", references));
+        }
+
         var player = CompilationPipeline.GetAssemblies(AssembliesType.Player).Single(a => a.name == "YLFramework.Runtime");
         var playerReferences = player.compiledAssemblyReferences.Select(Path.GetFileNameWithoutExtension)
             .Concat(player.assemblyReferences.Select(a => a.name)).ToArray();
         if (playerReferences.Any(x => x.Contains("XF") || x.Contains("UnityEditor") || x.Contains("Tests") || x == "Assembly-CSharp"))
+        {
             throw new InvalidDataException("Product Player-profile runtime reverse dependency: " + string.Join(", ", playerReferences));
+        }
+
         var analyzer = "Assets/YLFramework/Runtime/Core/Analyzers/YLFramework.Analyzers.dll";
         if (Sha(analyzer) != "e125f5247c632277f26edadfc1888e06760b9476de11959c9813238d0e00c46f")
+        {
             throw new InvalidDataException("Not the final integrated Analyzer artifact.");
+        }
+
         var responseFiles = Directory.GetFiles("Library/Bee", "*.rsp", SearchOption.AllDirectories)
             .Where(x => File.ReadAllText(x).Contains("YLFramework.Analyzers.dll")).ToArray();
-        if (responseFiles.Length == 0) throw new InvalidDataException("Analyzer absent from actual Unity compiler inputs.");
+        if (responseFiles.Length == 0)
+        {
+            throw new InvalidDataException("Analyzer absent from actual Unity compiler inputs.");
+        }
+
         var evidence = new JObject
         {
-            ["Passed"] = true, ["Project"] = Project, ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
-            ["Unity"] = Application.unityVersion, ["ProductRecords"] = files.Count, ["MissingScripts"] = 0,
-            ["DuplicateGuids"] = 0, ["Prefabs"] = new JArray(prefabs), ["RuntimeReferences"] = new JArray(references),
+            ["Passed"] = true,
+            ["Project"] = Project,
+            ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+            ["Unity"] = Application.unityVersion,
+            ["ProductRecords"] = files.Count,
+            ["MissingScripts"] = 0,
+            ["DuplicateGuids"] = 0,
+            ["Prefabs"] = new JArray(prefabs),
+            ["RuntimeReferences"] = new JArray(references),
             ["ImporterSkippedEmptyFolders"] = new JArray(skippedEmptyFolders),
             ["PlayerCompilationReferences"] = new JArray(playerReferences),
             ["RenderPipeline"] = GraphicsSettings.currentRenderPipeline ? GraphicsSettings.currentRenderPipeline.GetType().FullName : "Built-in",
             ["Packages"] = JArray.FromObject(packages.Select(p => new { p.name, p.version, Source = p.source.ToString(), p.resolvedPath })),
-            ["AnalyzerSha256"] = Sha(analyzer), ["AnalyzerCompilerInputs"] = new JArray(responseFiles),
+            ["AnalyzerSha256"] = Sha(analyzer),
+            ["AnalyzerCompilerInputs"] = new JArray(responseFiles),
             ["Assemblies"] = JArray.FromObject(CompilationPipeline.GetAssemblies().Select(a => new { a.name, a.sourceFiles, a.compiledAssemblyReferences }))
         };
         Write("audit-" + Run + ".json", evidence);
@@ -127,10 +182,18 @@ public static class Stage9DeliveryEditor
     public static void Generate()
     {
         Verify();
-        if (AssetDatabase.IsValidFolder(Root + "/Content")) throw new IOException("Never adopt an existing fixture.");
+        if (AssetDatabase.IsValidFolder(Root + "/Content"))
+        {
+            throw new IOException("Never adopt an existing fixture.");
+        }
+
         EditorSettings.spritePackerMode = SpritePackerMode.SpriteAtlasV2;
         AssetDatabase.CreateFolder(Root, "Content");
-        if (!AssetDatabase.IsValidFolder("Assets/StreamingAssets")) AssetDatabase.CreateFolder("Assets", "StreamingAssets");
+        if (!AssetDatabase.IsValidFolder("Assets/StreamingAssets"))
+        {
+            AssetDatabase.CreateFolder("Assets", "StreamingAssets");
+        }
+
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         var camera = new GameObject("Independent delivery camera", typeof(Camera), typeof(AudioListener));
         camera.GetComponent<Camera>().clearFlags = CameraClearFlags.SolidColor;
@@ -143,26 +206,35 @@ public static class Stage9DeliveryEditor
             var id = encrypted ? "stage9-encrypted" : "stage9-none";
             var folder = Root + "/Content/" + id;
             AssetDatabase.CreateFolder(Root + "/Content", id);
-            AssetDatabase.CreateFolder(folder, "Text"); AssetDatabase.CreateFolder(folder, "Visual");
+            AssetDatabase.CreateFolder(folder, "Text");
+            AssetDatabase.CreateFolder(folder, "Visual");
             Texture(folder + "/Visual/icon.png");
             Wave(folder + "/Text/Tone.wav");
             PanelPrefab(folder + "/Visual/Panel.prefab", new Vector2(-240, 0));
             PanelPrefab(folder + "/Visual/Modal.prefab", new Vector2(240, 0));
             var project = ScriptableObject.CreateInstance<ResourceProject>();
-            project.ProjectId = id; project.DisplayName = "Stage 9 independent " + id;
-            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Text"), AddressPrefix = "text" });
-            project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Visual"), AddressPrefix = "ui" });
-            project.Compression = ResourceCompression.Uncompressed;
-            project.ContentEncryption = encrypted ? ResourceContentEncryption.Aes256GcmHkdfSegmentedV1 : ResourceContentEncryption.None;
-            project.ContentKeyId = encrypted ? "stage9-nonproduction" : null;
-            project.Groups.Add(Group("text", (folder + "/Text/Message.txt", "message"), (folder + "/Text/Tone.wav", "tone")));
-            project.Groups.Add(Group("ui", (folder + "/Visual/Panel.prefab", "panel"), (folder + "/Visual/Modal.prefab", "modal")));
-            project.Groups.Add(new ResourceGroup { Id = "atlases", Packing = ResourcePacking.Together });
+            project.projectId = id;
+            project.displayName = "Stage 9 independent " + id;
+            project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(folder + "/Text"), addressPrefix = "text" });
+            project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(folder + "/Visual"), addressPrefix = "ui" });
+            project.compression = ResourceCompression.Uncompressed;
+            project.contentEncryption = encrypted ? ResourceContentEncryption.Aes256GcmHkdfSegmentedV1 : ResourceContentEncryption.None;
+            project.contentKeyId = encrypted ? "stage9-nonproduction" : null;
+            project.groups.Add(Group("text", (folder + "/Text/Message.txt", "message"), (folder + "/Text/Tone.wav", "tone")));
+            project.groups.Add(Group("ui", (folder + "/Visual/Panel.prefab", "panel"), (folder + "/Visual/Modal.prefab", "modal")));
+            project.groups.Add(new ResourceGroup { id = "atlases", packing = ResourcePacking.Together });
             AssetDatabase.CreateAsset(project, folder + "/Project.asset");
             var atlases = ResourceAtlasGenerator.CreateConfiguration(project, folder, "Generated");
-            atlases.Rules.Add(new ResourceAtlasRule { Id = "ui", GroupId = "atlases", Address = "atlas", Grouping = ResourceAtlasGrouping.Together,
-                Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(folder + "/Visual/icon.png") } });
-            EditorUtility.SetDirty(atlases); AssetDatabase.SaveAssetIfDirty(atlases);
+            atlases.rules.Add(new ResourceAtlasRule
+            {
+                id = "ui",
+                groupId = "atlases",
+                address = "atlas",
+                grouping = ResourceAtlasGrouping.Together,
+                sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(folder + "/Visual/icon.png") }
+            });
+            EditorUtility.SetDirty(atlases);
+            AssetDatabase.SaveAssetIfDirty(atlases);
             var digests = new JArray();
             for (var version = 1; version <= 2; version++)
             {
@@ -170,18 +242,29 @@ public static class Stage9DeliveryEditor
                 AssetDatabase.ImportAsset(folder + "/Text/Message.txt", ImportAssetOptions.ForceSynchronousImport);
                 project = AssetDatabase.LoadAssetAtPath<ResourceProject>(folder + "/Project.asset");
                 // Message首次导入后重新登记真实GUID；不伪造或拷贝来源工程身份。
-                project.Groups[0].Selections[0].Guid = AssetDatabase.AssetPathToGUID(folder + "/Text/Message.txt");
-                EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+                project.groups[0].selections[0].guid = AssetDatabase.AssetPathToGUID(folder + "/Text/Message.txt");
+                EditorUtility.SetDirty(project);
+                AssetDatabase.SaveAssetIfDirty(project);
                 EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
                 var report = ResourceEditorOperations.BuildAndPublish(project, "stage9-app", provider: encrypted ? new Stage9DeliveryKeys() : null);
                 if (report.BuildError != null || report.PublicationError != null || report.GenerationError != null || report.Release == null)
+                {
                     throw new InvalidOperationException(report.Summary, report.BuildError ?? report.PublicationError ?? report.GenerationError);
+                }
+
                 var release = report.Release;
                 var deployed = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(release));
                 digests.Add(release.Catalog.CatalogDigest);
-                publications.Add(new JObject { ["Project"] = id, ["Version"] = version, ["Digest"] = release.Catalog.CatalogDigest,
-                    ["Release"] = release.DirectoryPath, ["Deployment"] = deployed.RelativeDirectory,
-                    ["SourceDirectories"] = project.SourceDirectories.Count, ["AutomaticAtlas"] = report.Build.AtlasGeneration != null });
+                publications.Add(new JObject
+                {
+                    ["Project"] = id,
+                    ["Version"] = version,
+                    ["Digest"] = release.Catalog.CatalogDigest,
+                    ["Release"] = release.DirectoryPath,
+                    ["Deployment"] = deployed.RelativeDirectory,
+                    ["SourceDirectories"] = project.sourceDirectories.Count,
+                    ["AutomaticAtlas"] = report.Build.AtlasGeneration != null
+                });
             }
             ((JArray)config["Projects"]).Add(new JObject { ["Id"] = id, ["Digests"] = digests, ["Encrypted"] = encrypted });
         }
@@ -191,15 +274,15 @@ public static class Stage9DeliveryEditor
         var sampleRelease = ResourceStartupExampleEditor.Build(example);
         EditorSceneManager.SaveScene(example.gameObject.scene, sampleFolder + "/Example.unity");
         ResourceStartupExampleEditor.DeployBuiltIn(example);
-        example.Mode = ResourceLoadMode.Bundles;
+        example.mode = ResourceLoadMode.Bundles;
         EditorSceneManager.SaveScene(example.gameObject.scene, sampleFolder + "/Example.unity");
-        config["Sample"] = new JObject { ["Id"] = example.ProjectId, ["Digest"] = sampleRelease.Catalog.CatalogDigest, ["App"] = example.AppCompatibility, ["Folder"] = sampleFolder };
+        config["Sample"] = new JObject { ["Id"] = example.projectId, ["Digest"] = sampleRelease.Catalog.CatalogDigest, ["App"] = example.appCompatibility, ["Folder"] = sampleFolder };
         EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
         var probe = new GameObject("Independent delivery consumer").AddComponent<Stage9DeliveryProbe>();
-        probe.FullTemplate = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
-        probe.ColorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
-        probe.PanelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Content/stage9-none/Visual/Panel.prefab");
-        probe.ModalPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Content/stage9-none/Visual/Modal.prefab");
+        probe.fullTemplate = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
+        probe.colorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
+        probe.panelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Content/stage9-none/Visual/Panel.prefab");
+        probe.modalPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Content/stage9-none/Visual/Modal.prefab");
         EditorSceneManager.SaveScene(probe.gameObject.scene, Root + "/Bootstrap.unity");
         File.WriteAllText("Assets/StreamingAssets/stage9-config.json", config.ToString(Formatting.Indented));
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -222,16 +305,30 @@ public static class Stage9DeliveryEditor
             {
                 var release = ResourcePublisher.ReadVersion(project, BuildTarget.StandaloneWindows64, "stage9-app", (string)digest);
                 var snapshot = ResourceLocalSnapshot.OpenBuiltIn(id, (string)digest, "StandaloneWindows64", "stage9-app");
-                if (release.Catalog.CatalogDigest != (string)digest || snapshot.Document.CatalogDigest != (string)digest) throw new InvalidDataException("Incomplete independent release/deployment.");
+                if (release.Catalog.CatalogDigest != (string)digest || snapshot.Document.CatalogDigest != (string)digest)
+                {
+                    throw new InvalidDataException("Incomplete independent release/deployment.");
+                }
+
                 checkedVersions.Add(new JObject { ["Id"] = id, ["Digest"] = digest, ["Release"] = release.DirectoryPath });
             }
         }
         var sample = configuration["Sample"];
         ResourceLocalSnapshot.OpenBuiltIn((string)sample["Id"], (string)sample["Digest"], "StandaloneWindows64", (string)sample["App"]);
         var scene = EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
-        if (scene.GetRootGameObjects().SelectMany(x => x.GetComponentsInChildren<Stage9DeliveryProbe>(true)).Count() != 1) throw new InvalidDataException("Independent bootstrap not saved.");
-        Write("generation-verified-" + Run + ".json", new JObject { ["Passed"] = true, ["Project"] = Project, ["CheckedVersions"] = checkedVersions,
-            ["Sample"] = sample, ["Recovery"] = "Verify the same previously generated releases/deployments; no duplicate native builds or copied old scenes." });
+        if (scene.GetRootGameObjects().SelectMany(x => x.GetComponentsInChildren<Stage9DeliveryProbe>(true)).Count() != 1)
+        {
+            throw new InvalidDataException("Independent bootstrap not saved.");
+        }
+
+        Write("generation-verified-" + Run + ".json", new JObject
+        {
+            ["Passed"] = true,
+            ["Project"] = Project,
+            ["CheckedVersions"] = checkedVersions,
+            ["Sample"] = sample,
+            ["Recovery"] = "Verify the same previously generated releases/deployments; no duplicate native builds or copied old scenes."
+        });
         CleanBatchScene();
         Debug.Log("STAGE9_GENERATION_VERIFIED");
     }
@@ -248,10 +345,20 @@ public static class Stage9DeliveryEditor
         var exported = Path.Combine(Delivery, Path.GetFileName(Project) + "-defaults-probe-" + Run + ".unitypackage");
         YLFramework.Editor.ExportUnityPackage.Export(exported);
         var after = File.ReadAllText(path);
-        Write("default-getters-" + Run + ".json", new JObject { ["Project"] = Project, ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
-            ["BeforeSha256"] = beforeSha, ["AfterSha256"] = Sha(path), ["BeforeBackendEmpty"] = before.Contains("scriptingBackend: {}"),
-            ["BeforeStrippingEmpty"] = before.Contains("managedStrippingLevel: {}"), ["Backend"] = backend.ToString(), ["Stripping"] = stripping.ToString(),
-            ["FormalExportProbe"] = exported, ["AfterBackendEmpty"] = after.Contains("scriptingBackend: {}"), ["AfterStrippingEmpty"] = after.Contains("managedStrippingLevel: {}") });
+        Write("default-getters-" + Run + ".json", new JObject
+        {
+            ["Project"] = Project,
+            ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+            ["BeforeSha256"] = beforeSha,
+            ["AfterSha256"] = Sha(path),
+            ["BeforeBackendEmpty"] = before.Contains("scriptingBackend: {}"),
+            ["BeforeStrippingEmpty"] = before.Contains("managedStrippingLevel: {}"),
+            ["Backend"] = backend.ToString(),
+            ["Stripping"] = stripping.ToString(),
+            ["FormalExportProbe"] = exported,
+            ["AfterBackendEmpty"] = after.Contains("scriptingBackend: {}"),
+            ["AfterStrippingEmpty"] = after.Contains("managedStrippingLevel: {}")
+        });
         CleanBatchScene();
     }
 
@@ -261,7 +368,11 @@ public static class Stage9DeliveryEditor
     {
         Verify();
         var output = Path.Combine(Project, "P", (name == "Mono" ? "m-" : "i-") + Run);
-        if (Directory.Exists(output)) throw new IOException("Never overwrite an existing Player.");
+        if (Directory.Exists(output))
+        {
+            throw new IOException("Never overwrite an existing Player.");
+        }
+
         Directory.CreateDirectory(output);
         var optional = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().SingleOrDefault(p => p.name == "com.xfkj.xfgameframework.loggersystem");
         JObject optionalEvidence = null;
@@ -269,49 +380,103 @@ public static class Stage9DeliveryEditor
         {
             var artifact = JObject.Parse(File.ReadAllText(Path.Combine(Delivery, "Optional/logger-final-receipt.json")));
             if (optional.version != "1.0.1" || optional.source.ToString() != "LocalTarball" || Sha((string)artifact["Artifact"]) != (string)artifact["Sha256"])
+            {
                 throw new InvalidDataException("Optional Logger must come from the exact separately audited local tarball.");
+            }
+
             foreach (var item in artifact["Files"])
+            {
                 if (Sha(Path.Combine(optional.resolvedPath, (string)item["Path"])) != (string)item["Sha256"])
+                {
                     throw new InvalidDataException("Optional Logger loaded bytes differ from the fixed artifact: " + item["Path"]);
-            optionalEvidence = JObject.FromObject(new { optional.name, optional.version, Source = optional.source.ToString(), optional.packageId, optional.resolvedPath,
-                ArtifactSha256 = (string)artifact["Sha256"], RequiredByProduct = false });
+                }
+            }
+
+            optionalEvidence = JObject.FromObject(new
+            {
+                optional.name,
+                optional.version,
+                Source = optional.source.ToString(),
+                optional.packageId,
+                optional.resolvedPath,
+                ArtifactSha256 = (string)artifact["Sha256"],
+                RequiredByProduct = false
+            });
         }
         var scene = EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
         var consumer = Object.FindObjectOfType<Stage9DeliveryProbe>();
-        consumer.OptionalLogger = optional != null; EditorUtility.SetDirty(consumer); EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
+        consumer.optionalLogger = optional != null;
+        EditorUtility.SetDirty(consumer);
+        EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
         PlayerSettings.companyName = "YLFramework-Independent-Acceptance";
         PlayerSettings.productName = "Stage9-" + name;
         PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard);
         PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, backend);
         PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, backend == ScriptingImplementation.IL2CPP ? ManagedStrippingLevel.Low : ManagedStrippingLevel.Disabled);
-        if (backend == ScriptingImplementation.IL2CPP) PlayerSettings.SetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone, Il2CppCompilerConfiguration.Release);
-        var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { Root + "/Bootstrap.unity" },
-            locationPathName = Path.Combine(output, "Stage9Delivery.exe"), target = BuildTarget.StandaloneWindows64, options = BuildOptions.None });
-        var licenses = Path.Combine(output, "Licenses"); Directory.CreateDirectory(licenses);
+        if (backend == ScriptingImplementation.IL2CPP)
+        {
+            PlayerSettings.SetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone, Il2CppCompilerConfiguration.Release);
+        }
+
+        var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+        {
+            scenes = new[] { Root + "/Bootstrap.unity" },
+            locationPathName = Path.Combine(output, "Stage9Delivery.exe"),
+            target = BuildTarget.StandaloneWindows64,
+            options = BuildOptions.None
+        });
+        var licenses = Path.Combine(output, "Licenses");
+        Directory.CreateDirectory(licenses);
         foreach (var path in new[] { "Assets/YLFramework/LICENSE.md",
             "Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt" })
+        {
             File.Copy(path, Path.Combine(licenses, path.Replace("Assets/YLFramework/", "").Replace('/', '-')));
+        }
+
         foreach (var assembly in new[] { typeof(JsonConvert).Assembly, typeof(Button).Assembly })
         {
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(assembly);
             foreach (var file in new[] { "LICENSE.md", "Third Party Notices.md" })
-                if (File.Exists(Path.Combine(package.resolvedPath, file))) File.Copy(Path.Combine(package.resolvedPath, file), Path.Combine(licenses, package.name + "-" + file));
+            {
+                if (File.Exists(Path.Combine(package.resolvedPath, file)))
+                {
+                    File.Copy(Path.Combine(package.resolvedPath, file), Path.Combine(licenses, package.name + "-" + file));
+                }
+            }
         }
-        if (optional != null) File.Copy(Path.Combine(optional.resolvedPath, "LICENSE"), Path.Combine(licenses, "Optional-LoggerSystem-MIT-LICENSE.txt"));
-        var receipt = new JObject { ["Result"] = report.summary.result.ToString(), ["Errors"] = report.summary.totalErrors,
-            ["Warnings"] = report.summary.totalWarnings, ["Options"] = report.summary.options.ToString(), ["Development"] = false,
-            ["Backend"] = backend.ToString(), ["Stripping"] = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(),
+        if (optional != null)
+        {
+            File.Copy(Path.Combine(optional.resolvedPath, "LICENSE"), Path.Combine(licenses, "Optional-LoggerSystem-MIT-LICENSE.txt"));
+        }
+
+        var receipt = new JObject
+        {
+            ["Result"] = report.summary.result.ToString(),
+            ["Errors"] = report.summary.totalErrors,
+            ["Warnings"] = report.summary.totalWarnings,
+            ["Options"] = report.summary.options.ToString(),
+            ["Development"] = false,
+            ["Backend"] = backend.ToString(),
+            ["Stripping"] = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(),
             ["BuildGuid"] = report.summary.guid.ToString(),
             ["OptionalLogger"] = optionalEvidence,
-            ["Unity"] = Application.unityVersion, ["Project"] = Project, ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
-            ["PackageSha256"] = Owner["PackageSha256"], ["Seconds"] = report.summary.totalTime.TotalSeconds,
+            ["Unity"] = Application.unityVersion,
+            ["Project"] = Project,
+            ["Pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+            ["PackageSha256"] = Owner["PackageSha256"],
+            ["Seconds"] = report.summary.totalTime.TotalSeconds,
             ["Messages"] = JArray.FromObject(report.steps.SelectMany(s => s.messages).Where(m => m.type != LogType.Log).Select(m => new { Type = m.type.ToString(), m.content })),
             ["Assemblies"] = JArray.FromObject(CompilationPipeline.GetAssemblies(AssembliesType.Player).Select(a => new { a.name, a.sourceFiles, a.compiledAssemblyReferences })),
             ["PlayerFiles"] = new JArray(Directory.GetFiles(output, "*", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal)
-                .Select(x => new JObject { ["Path"] = x.Substring(output.Length + 1).Replace('\\', '/'), ["Sha256"] = Sha(x), ["Length"] = new FileInfo(x).Length })) };
+                .Select(x => new JObject { ["Path"] = x.Substring(output.Length + 1).Replace('\\', '/'), ["Sha256"] = Sha(x), ["Length"] = new FileInfo(x).Length }))
+        };
         File.WriteAllText(Path.Combine(output, "BuildReport.json"), receipt.ToString(Formatting.Indented));
         Write("build-" + name + "-" + Run + ".json", receipt);
-        if (report.summary.result != BuildResult.Succeeded || report.summary.totalErrors != 0) throw new InvalidOperationException("Actual independent Player build failed.");
+        if (report.summary.result != BuildResult.Succeeded || report.summary.totalErrors != 0)
+        {
+            throw new InvalidOperationException("Actual independent Player build failed.");
+        }
+
         CleanBatchScene();
         Debug.Log("STAGE9_BUILD_PASS " + name);
     }
@@ -328,52 +493,118 @@ public static class Stage9DeliveryEditor
     [InitializeOnLoadMethod]
     private static void ResumeExitAfterReload()
     {
-        if (UnityEditor.SessionState.GetBool("Stage9.ReadyToExit", false)) EditorApplication.delayCall += ExitWhenSettled;
+        if (UnityEditor.SessionState.GetBool("Stage9.ReadyToExit", false))
+        {
+            EditorApplication.delayCall += ExitWhenSettled;
+        }
     }
     private static void ExitWhenSettled()
     {
-        if (EditorApplication.isCompiling || EditorApplication.isUpdating) { EditorApplication.delayCall += ExitWhenSettled; return; }
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+        {
+            EditorApplication.delayCall += ExitWhenSettled;
+            return;
+        }
         UnityEditor.SessionState.SetBool("Stage9.ReadyToExit", false);
         EditorApplication.Exit(0);
     }
 
-    private static ResourceGroup Group(string id, params (string path, string address)[] files) => new ResourceGroup { Id = id, Packing = ResourcePacking.PerAsset,
-        Selections = files.Select(x => new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(x.path), Address = x.address }).ToList() };
+    private static ResourceGroup Group(string id, params (string path, string address)[] files) => new ResourceGroup
+    {
+        id = id,
+        packing = ResourcePacking.PerAsset,
+        selections = files.Select(x => new ResourceSelection { guid = AssetDatabase.AssetPathToGUID(x.path), address = x.address }).ToList()
+    };
     private static void PanelPrefab(string path, Vector2 position)
     {
         var go = new GameObject("Independent Panel", typeof(RectTransform), typeof(Image), typeof(Stage9DeliveryPanel));
-        var rect = (RectTransform)go.transform; rect.sizeDelta = new Vector2(400, 270); rect.anchoredPosition = position;
+        var rect = (RectTransform)go.transform;
+        rect.sizeDelta = new Vector2(400, 270);
+        rect.anchoredPosition = position;
         go.GetComponent<Image>().color = new Color(.06f, .15f, .22f, .98f);
         var caption = new GameObject("Caption", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
-        caption.transform.SetParent(go.transform, false); caption.rectTransform.sizeDelta = new Vector2(370, 160); caption.rectTransform.anchoredPosition = new Vector2(0, 35);
-        caption.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); caption.fontSize = 21; caption.alignment = TextAnchor.MiddleCenter; caption.color = Color.white; caption.raycastTarget = false;
+        caption.transform.SetParent(go.transform, false);
+        caption.rectTransform.sizeDelta = new Vector2(370, 160);
+        caption.rectTransform.anchoredPosition = new Vector2(0, 35);
+        caption.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        caption.fontSize = 21;
+        caption.alignment = TextAnchor.MiddleCenter;
+        caption.color = Color.white;
+        caption.raycastTarget = false;
         var button = new GameObject("Native Button", typeof(RectTransform), typeof(Image), typeof(Button)).GetComponent<Button>();
-        button.transform.SetParent(go.transform, false); ((RectTransform)button.transform).sizeDelta = new Vector2(260, 52); ((RectTransform)button.transform).anchoredPosition = new Vector2(0, -85);
-        button.GetComponent<Image>().color = new Color(.1f, .7f, .65f); button.targetGraphic = button.GetComponent<Image>();
-        var text = Object.Instantiate(caption, button.transform); text.name = "Label"; text.rectTransform.anchoredPosition = Vector2.zero; text.rectTransform.sizeDelta = new Vector2(250, 45); text.text = "Native Input";
-        go.GetComponent<Stage9DeliveryPanel>().Button = button; go.GetComponent<Stage9DeliveryPanel>().Caption = caption;
-        PrefabUtility.SaveAsPrefabAsset(go, path); Object.DestroyImmediate(go);
+        button.transform.SetParent(go.transform, false);
+        ((RectTransform)button.transform).sizeDelta = new Vector2(260, 52);
+        ((RectTransform)button.transform).anchoredPosition = new Vector2(0, -85);
+        button.GetComponent<Image>().color = new Color(.1f, .7f, .65f);
+        button.targetGraphic = button.GetComponent<Image>();
+        var text = Object.Instantiate(caption, button.transform);
+        text.name = "Label";
+        text.rectTransform.anchoredPosition = Vector2.zero;
+        text.rectTransform.sizeDelta = new Vector2(250, 45);
+        text.text = "Native Input";
+        go.GetComponent<Stage9DeliveryPanel>().button = button;
+        go.GetComponent<Stage9DeliveryPanel>().caption = caption;
+        PrefabUtility.SaveAsPrefabAsset(go, path);
+        Object.DestroyImmediate(go);
     }
     private static void Texture(string path)
     {
         var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-        texture.SetPixels(Enumerable.Repeat(new Color(.1f, .8f, .5f), 256).ToArray()); texture.Apply();
-        File.WriteAllBytes(path, texture.EncodeToPNG()); Object.DestroyImmediate(texture);
+        texture.SetPixels(Enumerable.Repeat(new Color(.1f, .8f, .5f), 256).ToArray());
+        texture.Apply();
+        File.WriteAllBytes(path, texture.EncodeToPNG());
+        Object.DestroyImmediate(texture);
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-        var importer = (TextureImporter)AssetImporter.GetAtPath(path); importer.textureType = TextureImporterType.Sprite;
-        importer.spriteImportMode = SpriteImportMode.Single; importer.mipmapEnabled = false; importer.textureCompression = TextureImporterCompression.Uncompressed; importer.SaveAndReimport();
+        var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Single;
+        importer.mipmapEnabled = false;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.SaveAndReimport();
     }
     private static void Wave(string path)
     {
         using (var writer = new BinaryWriter(File.Create(path)))
         {
-            const int rate = 22050; writer.Write(Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + rate * 2); writer.Write(Encoding.ASCII.GetBytes("WAVEfmt "));
-            writer.Write(16); writer.Write((short)1); writer.Write((short)1); writer.Write(rate); writer.Write(rate * 2); writer.Write((short)2); writer.Write((short)16);
-            writer.Write(Encoding.ASCII.GetBytes("data")); writer.Write(rate * 2); for (var i = 0; i < rate; i++) writer.Write((short)(Math.Sin(i * 2 * Math.PI * 220 / rate) * 4096));
+            const int Rate = 22050;
+            writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+            writer.Write(36 + Rate * 2);
+            writer.Write(Encoding.ASCII.GetBytes("WAVEfmt "));
+            writer.Write(16);
+            writer.Write((short)1);
+            writer.Write((short)1);
+            writer.Write(Rate);
+            writer.Write(Rate * 2);
+            writer.Write((short)2);
+            writer.Write((short)16);
+            writer.Write(Encoding.ASCII.GetBytes("data"));
+            writer.Write(Rate * 2);
+            for (var i = 0; i < Rate; i++)
+            {
+                writer.Write((short)(Math.Sin(i * 2 * Math.PI * 220 / Rate) * 4096));
+            }
         }
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
     }
-    private static string Sha(string path) { using var hash = SHA256.Create(); using var file = File.OpenRead(path); return BitConverter.ToString(hash.ComputeHash(file)).Replace("-", "").ToLowerInvariant(); }
-    private static string Argument(string name, string fallback) { var args = Environment.GetCommandLineArgs(); var index = Array.IndexOf(args, name); return index < 0 ? fallback : args[index + 1]; }
-    private static void Write(string name, JToken value) { var path = Path.Combine(Delivery, Path.GetFileName(Project) + "-" + name); if (File.Exists(path)) throw new IOException("Preserve existing evidence."); File.WriteAllText(path, value.ToString(Formatting.Indented)); }
+    private static string Sha(string path)
+    {
+        using var hash = SHA256.Create();
+        using var file = File.OpenRead(path);
+        return BitConverter.ToString(hash.ComputeHash(file)).Replace("-", "").ToLowerInvariant();
+    }
+    private static string Argument(string name, string fallback)
+    {
+        var args = Environment.GetCommandLineArgs();
+        var index = Array.IndexOf(args, name);
+        return index < 0 ? fallback : args[index + 1];
+    }
+    private static void Write(string name, JToken value)
+    {
+        var path = Path.Combine(Delivery, Path.GetFileName(Project) + "-" + name);
+        if (File.Exists(path))
+        {
+            throw new IOException("Preserve existing evidence.");
+        }
+        File.WriteAllText(path, value.ToString(Formatting.Indented));
+    }
 }

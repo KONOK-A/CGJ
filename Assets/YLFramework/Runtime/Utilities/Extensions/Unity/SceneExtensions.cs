@@ -5,7 +5,7 @@ namespace YLFramework.Utilities.Extensions
 {
     // Fix 编码
 
-    public static class SceneExtensions 
+    public static class SceneExtensions
     {
 
         /// <summary>
@@ -14,12 +14,15 @@ namespace YLFramework.Utilities.Extensions
         /// <param name="scene"></param>
         /// <param name="name"></param>
         /// <returns></returns>
-        public static GameObject FindRootGameObject(this Scene scene,string name)
+        public static GameObject FindRootGameObject(this Scene scene, string name)
         {
             GameObject[] objs = scene.GetRootGameObjects();
             foreach (GameObject obj in objs)
             {
-                if (obj.name == name) return obj;
+                if (obj.name == name)
+                {
+                    return obj;
+                }
             }
 
             return null;

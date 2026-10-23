@@ -25,7 +25,9 @@ namespace YLFramework.Editor.Audio
                     var config = (AudioMixerConfig)selected;
                     AudioInspectorUtility.Validate(serialized, config.Validate);
                     if (!config.MusicGroup && !config.VoiceGroup && !config.SoundGroup)
+                    {
                         AudioInspectorUtility.Message(serialized, "All Groups are empty. Apply clears all category Mixer routing to Direct.", MessageType.Warning);
+                    }
                 }
             }
         }

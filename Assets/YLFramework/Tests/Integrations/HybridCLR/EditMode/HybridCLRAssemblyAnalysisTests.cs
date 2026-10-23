@@ -3,34 +3,37 @@ using System.IO;
 using System.Linq;
 using dnlib.DotNet;
 using NUnit.Framework;
-using YLFramework.Integrations.HybridCLR.Editor;
 using UnityEditor;
+using YLFramework.Integrations.HybridCLR.Editor;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
 {
     public class HybridCLRAssemblyAnalysisTests
     {
-        private string directory;
+        private string _directory;
 
         [SetUp]
         public void SetUp()
         {
-            directory = Path.Combine(Path.GetTempPath(), "kilo", "YLHybridCLRAnalysis-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
+            _directory = Path.Combine(Path.GetTempPath(), "kilo", "YLHybridCLRAnalysis-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_directory);
         }
 
         [TearDown]
-        public void TearDown() => Directory.Delete(directory, true);
+        public void TearDown() => Directory.Delete(_directory, true);
 
         private string WriteAssembly(string file, string name, params string[] dependencies)
         {
-            var path = Path.Combine(directory, file + ".dll");
+            var path = Path.Combine(_directory, file + ".dll");
             using var module = new ModuleDefUser(name + ".dll") { Kind = ModuleKind.Dll };
             var assembly = new AssemblyDefUser(name, new Version(1, 0, 0, 0));
             assembly.Modules.Add(module);
             foreach (var dependency in dependencies)
+            {
                 module.Types.Add(new TypeDefUser("Fixture", "Uses" + module.Types.Count,
                     new TypeRefUser(module, "Fixture", "Dependency", new AssemblyRefUser(dependency, new Version(1, 0, 0, 0)))));
+            }
+
             module.Write(path);
             return path;
         }
@@ -71,12 +74,26 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var aot = Array.Empty<string>();
             switch (invalid)
             {
-                case "missing": hot = new[] { WriteAssembly("Entry", "Hot.Entry", "Absent") }; break;
-                case "cycle": hot = new[] { WriteAssembly("A", "Hot.A", "Hot.B"), WriteAssembly("B", "Hot.B", "Hot.A") }; break;
-                case "duplicate": hot = new[] { WriteAssembly("A", "Hot.Entry"), WriteAssembly("B", "Hot.Entry") }; break;
-                case "case": hot = new[] { WriteAssembly("A", "Hot.Entry"), WriteAssembly("B", "hot.entry") }; break;
-                case "editor": hot = new[] { WriteAssembly("Entry", "Hot.Entry", "UnityEditor") }; aot = new[] { WriteAssembly("Editor", "UnityEditor") }; break;
-                default: hot = new[] { WriteAssembly("Entry", "Hot.Entry") }; aot = new[] { WriteAssembly("Aot", "Base", "Hot.Entry") }; break;
+                case "missing":
+                    hot = new[] { WriteAssembly("Entry", "Hot.Entry", "Absent") };
+                    break;
+                case "cycle":
+                    hot = new[] { WriteAssembly("A", "Hot.A", "Hot.B"), WriteAssembly("B", "Hot.B", "Hot.A") };
+                    break;
+                case "duplicate":
+                    hot = new[] { WriteAssembly("A", "Hot.Entry"), WriteAssembly("B", "Hot.Entry") };
+                    break;
+                case "case":
+                    hot = new[] { WriteAssembly("A", "Hot.Entry"), WriteAssembly("B", "hot.entry") };
+                    break;
+                case "editor":
+                    hot = new[] { WriteAssembly("Entry", "Hot.Entry", "UnityEditor") };
+                    aot = new[] { WriteAssembly("Editor", "UnityEditor") };
+                    break;
+                default:
+                    hot = new[] { WriteAssembly("Entry", "Hot.Entry") };
+                    aot = new[] { WriteAssembly("Aot", "Base", "Hot.Entry") };
+                    break;
             }
             Assert.Throws<InvalidDataException>(() => HybridCLRAssemblyAnalysis.Analyze(hot, aot));
         }
@@ -90,12 +107,15 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var referenceIdentity = HybridCLRAssemblyAnalysis.Read(referencePath).Identity;
             var implementationIdentity = HybridCLRAssemblyAnalysis.Read(implementation).Identity;
             Assert.That(referenceIdentity, Is.Not.EqualTo(implementationIdentity), "The regression covers the real Unity reference/native public-key retargeting, not arbitrary version substitution.");
-            var path = directory + "/FrameworkUser.dll";
+            var path = _directory + "/FrameworkUser.dll";
             using (var module = new ModuleDefUser("FrameworkUser.dll") { Kind = ModuleKind.Dll })
             {
                 new AssemblyDefUser("Hot.FrameworkUser", new Version(1, 0, 0, 0)).Modules.Add(module);
                 var reference = new AssemblyRefUser("System", new Version(4, 0, 0, 0))
-                { PublicKeyOrToken = new PublicKeyToken(new byte[] { 0xb7, 0x7a, 0x5c, 0x56, 0x19, 0x34, 0xe0, 0x89 }), HasPublicKey = false };
+                {
+                    PublicKeyOrToken = new PublicKeyToken(new byte[] { 0xb7, 0x7a, 0x5c, 0x56, 0x19, 0x34, 0xe0, 0x89 }),
+                    HasPublicKey = false
+                };
                 module.Types.Add(new TypeDefUser("Fixture", "UsesFramework", new TypeRefUser(module, "System", "Uri", reference)));
                 module.Write(path);
             }
@@ -122,7 +142,8 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [Test]
         public void CorruptDllBytesAreRejectedByTheRealMetadataReader()
         {
-            var path = Path.Combine(directory, "broken.dll"); File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });
+            var path = Path.Combine(_directory, "broken.dll");
+            File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });
             Assert.Throws<InvalidDataException>(() => HybridCLRAssemblyAnalysis.Read(path));
         }
     }

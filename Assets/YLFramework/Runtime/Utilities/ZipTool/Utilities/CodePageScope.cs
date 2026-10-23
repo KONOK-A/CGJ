@@ -9,16 +9,16 @@ namespace YLFramework.Utilities.ZipTool
     /// </summary>
     internal struct CodePageScope : IDisposable
     {
-        private readonly bool _changed;
+        private readonly bool _isChanged;
         private readonly int _originalCodePage;
-        private bool _disposed;
+        private bool _isDisposed;
 
         public CodePageScope(int? nameCodePage)
         {
-            _changed = nameCodePage.HasValue;
-            _originalCodePage = _changed ? ZipConstants.DefaultCodePage : 0;
-            _disposed = false;
-            if (_changed)
+            _isChanged = nameCodePage.HasValue;
+            _originalCodePage = _isChanged ? ZipConstants.DefaultCodePage : 0;
+            _isDisposed = false;
+            if (_isChanged)
             {
                 ZipConstants.DefaultCodePage = nameCodePage.Value;
             }
@@ -26,9 +26,9 @@ namespace YLFramework.Utilities.ZipTool
 
         public void Dispose()
         {
-            if (_changed && !_disposed)
+            if (_isChanged && !_isDisposed)
             {
-                _disposed = true;
+                _isDisposed = true;
                 ZipConstants.DefaultCodePage = _originalCodePage;
             }
         }

@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 
 using System;
 using System.IO;
@@ -13,7 +13,7 @@ namespace YLFramework.Editor
         private const string PackageVersion = "1.0.0";
 
         // 只递归分发产品根；商业 Editor Enhancers 留在宿主工程，不随框架再分发。
-        private static readonly string[] ExportRoots =
+        private static readonly string[] _exportRoots =
         {
             "Assets/YLFramework/Editor",
             "Assets/YLFramework/Plugins/BouncyCastle",
@@ -22,6 +22,8 @@ namespace YLFramework.Editor
             "Assets/YLFramework/Samples",
             "Assets/YLFramework/Documentation",
             "Assets/YLFramework/LICENSE.md",
+            "Assets/YLFramework/CodingStyle.md",
+            "Assets/YLFramework/AGENTS.md",
         };
 
         /// <summary>向明确的现有本地父目录导出同一框架闭包；不保存资产、创建目录或自动覆盖已有交付。</summary>
@@ -31,21 +33,52 @@ namespace YLFramework.Editor
         {
             if (string.IsNullOrWhiteSpace(packagePath) || !Path.IsPathFullyQualified(packagePath) ||
                 !string.Equals(Path.GetExtension(packagePath), ".unitypackage", StringComparison.OrdinalIgnoreCase))
+            {
                 throw new ArgumentException("Select an explicit absolute local .unitypackage destination.", nameof(packagePath));
+            }
+
             var full = Path.GetFullPath(packagePath);
             if (full.StartsWith("\\\\", StringComparison.Ordinal))
+            {
                 throw new ArgumentException("Network and device export paths are not supported.", nameof(packagePath));
-            if (!Directory.Exists(Path.GetDirectoryName(full))) throw new DirectoryNotFoundException("The explicit export parent must already exist.");
+            }
+
+            if (!Directory.Exists(Path.GetDirectoryName(full)))
+            {
+                throw new DirectoryNotFoundException("The explicit export parent must already exist.");
+            }
+
             for (var cursor = full; cursor != null; cursor = Path.GetDirectoryName(cursor))
+            {
                 if ((File.Exists(cursor) || Directory.Exists(cursor)) && (File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                {
                     throw new IOException("Refusing linked export paths.");
-            if (Directory.Exists(full) || File.Exists(full) && !overwrite) throw new IOException("The export destination already exists.");
+                }
+            }
+
+            if (Directory.Exists(full) || File.Exists(full) && !overwrite)
+            {
+                throw new IOException("The export destination already exists.");
+            }
+
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
                 throw new InvalidOperationException("Export requires an idle Editor.");
-            foreach (var root in ExportRoots)
-                if (!AssetDatabase.LoadMainAssetAtPath(root)) throw new FileNotFoundException("Missing framework export root.", root);
-            AssetDatabase.ExportPackage(ExportRoots, full, ExportPackageOptions.Recurse);
-            if (!File.Exists(full) || new FileInfo(full).Length == 0) throw new IOException("No complete framework package was produced.");
+            }
+
+            foreach (var root in _exportRoots)
+            {
+                if (!AssetDatabase.LoadMainAssetAtPath(root))
+                {
+                    throw new FileNotFoundException("Missing framework export root.", root);
+                }
+            }
+
+            AssetDatabase.ExportPackage(_exportRoots, full, ExportPackageOptions.Recurse);
+            if (!File.Exists(full) || new FileInfo(full).Length == 0)
+            {
+                throw new IOException("No complete framework package was produced.");
+            }
         }
 
         [MenuItem("YLFramework/Toolkit/导出框架包", priority = 1)] //%e 表示快捷键 ctrl + e 
@@ -58,7 +91,7 @@ namespace YLFramework.Editor
             }
 
             var hasMissingRoot = false;
-            foreach (var exportRoot in ExportRoots)
+            foreach (var exportRoot in _exportRoots)
             {
                 if (!AssetDatabase.LoadMainAssetAtPath(exportRoot))
                 {

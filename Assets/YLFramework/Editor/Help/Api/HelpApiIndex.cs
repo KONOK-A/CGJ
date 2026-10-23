@@ -16,16 +16,36 @@ namespace YLFramework.Editor.Help
         /// <remarks>包含 protected internal 成员和非静态构造函数；不展开继承成员或嵌套类型，也不执行成员。</remarks>
         public static IEnumerable<MemberInfo> GetDeclaredApi(Type type)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+            const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
                                        BindingFlags.Static | BindingFlags.DeclaredOnly;
-            if (typeof(Delegate).IsAssignableFrom(type)) return Array.Empty<MemberInfo>();
-            return type.GetMembers(flags).Where(member =>
+            if (typeof(Delegate).IsAssignableFrom(type))
             {
-                if (member is MethodBase method) return !method.IsSpecialName && Accessible(method) ||
+                return Array.Empty<MemberInfo>();
+            }
+
+            return type.GetMembers(Flags).Where(member =>
+            {
+                if (member is MethodBase method)
+                {
+                    return !method.IsSpecialName && Accessible(method) ||
                     method is ConstructorInfo && !method.IsStatic && Accessible(method);
-                if (member is PropertyInfo property) return property.GetAccessors(true).Any(Accessible);
-                if (member is FieldInfo field) return !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly);
-                if (member is EventInfo signal) return signal.GetAddMethod(true) != null && Accessible(signal.GetAddMethod(true));
+                }
+
+                if (member is PropertyInfo property)
+                {
+                    return property.GetAccessors(true).Any(Accessible);
+                }
+
+                if (member is FieldInfo field)
+                {
+                    return !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly);
+                }
+
+                if (member is EventInfo signal)
+                {
+                    return signal.GetAddMethod(true) != null && Accessible(signal.GetAddMethod(true));
+                }
+
                 return false;
             });
         }
@@ -39,25 +59,77 @@ namespace YLFramework.Editor.Help
         /// <returns>C# 风格的类型显示名；泛型实参与嵌套关系一并展开。</returns>
         public static string FormatType(Type type, params string[] shortNamespaces)
         {
-            if (type.IsByRef) return FormatType(type.GetElementType(), shortNamespaces);
-            if (type.IsArray) return FormatType(type.GetElementType(), shortNamespaces) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
-            if (type.IsGenericParameter) return type.Name;
-            if (type == typeof(void)) return "void";
-            if (type == typeof(bool)) return "bool";
-            if (type == typeof(int)) return "int";
-            if (type == typeof(ulong)) return "ulong";
-            if (type == typeof(float)) return "float";
-            if (type == typeof(double)) return "double";
-            if (type == typeof(string)) return "string";
-            if (type == typeof(object)) return "object";
+            if (type.IsByRef)
+            {
+                return FormatType(type.GetElementType(), shortNamespaces);
+            }
+
+            if (type.IsArray)
+            {
+                return FormatType(type.GetElementType(), shortNamespaces) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
+            }
+
+            if (type.IsGenericParameter)
+            {
+                return type.Name;
+            }
+
+            if (type == typeof(void))
+            {
+                return "void";
+            }
+
+            if (type == typeof(bool))
+            {
+                return "bool";
+            }
+
+            if (type == typeof(int))
+            {
+                return "int";
+            }
+
+            if (type == typeof(ulong))
+            {
+                return "ulong";
+            }
+
+            if (type == typeof(float))
+            {
+                return "float";
+            }
+
+            if (type == typeof(double))
+            {
+                return "double";
+            }
+
+            if (type == typeof(string))
+            {
+                return "string";
+            }
+
+            if (type == typeof(object))
+            {
+                return "object";
+            }
+
             var name = type.Name.Split('`')[0];
             var arguments = type.IsGenericType ? type.GetGenericArguments() : Type.EmptyTypes;
             var inherited = type.IsNested && type.DeclaringType.IsGenericType ? type.DeclaringType.GetGenericArguments().Length : 0;
-            if (arguments.Length > inherited) name += "<" + string.Join(", ", arguments.Skip(inherited).Select(argument => FormatType(argument, shortNamespaces))) + ">";
+            if (arguments.Length > inherited)
+            {
+                name += "<" + string.Join(", ", arguments.Skip(inherited).Select(argument => FormatType(argument, shortNamespaces))) + ">";
+            }
+
             if (type.IsNested)
             {
                 var declaring = type.DeclaringType;
-                if (inherited != 0) declaring = declaring.MakeGenericType(arguments.Take(inherited).ToArray());
+                if (inherited != 0)
+                {
+                    declaring = declaring.MakeGenericType(arguments.Take(inherited).ToArray());
+                }
+
                 return FormatType(declaring, shortNamespaces) + "." + name;
             }
             return string.IsNullOrEmpty(type.Namespace) || type.Namespace == "System" || type.Namespace == "System.Collections.Generic" ||
@@ -83,11 +155,18 @@ namespace YLFramework.Editor.Help
             if (type.IsEnum)
             {
                 var underlying = Enum.GetUnderlyingType(type);
-                if (underlying != typeof(int)) bases.Add(underlying);
+                if (underlying != typeof(int))
+                {
+                    bases.Add(underlying);
+                }
             }
             else
             {
-                if (type.BaseType != null && type.BaseType != typeof(object) && !type.IsValueType) bases.Add(type.BaseType);
+                if (type.BaseType != null && type.BaseType != typeof(object) && !type.IsValueType)
+                {
+                    bases.Add(type.BaseType);
+                }
+
                 bases.AddRange(type.GetInterfaces().Where(contract => contract.IsVisible)
                     .OrderBy(contract => FormatType(contract, shortNamespaces), StringComparer.Ordinal));
             }
@@ -105,7 +184,10 @@ namespace YLFramework.Editor.Help
         public static string FormatSignature(MemberInfo member, params string[] shortNamespaces)
         {
             if (member is ConstructorInfo constructor)
+            {
                 return Access(constructor) + constructor.DeclaringType.Name.Split('`')[0] + "(" + Parameters(constructor, shortNamespaces) + ");";
+            }
+
             if (member is MethodInfo method)
             {
                 var generic = method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes;
@@ -128,7 +210,11 @@ namespace YLFramework.Editor.Help
             }
             if (member is FieldInfo field)
             {
-                if (field.DeclaringType.IsEnum) return field.Name + " = " + Convert.ToString(field.GetRawConstantValue(), CultureInfo.InvariantCulture) + ",";
+                if (field.DeclaringType.IsEnum)
+                {
+                    return field.Name + " = " + Convert.ToString(field.GetRawConstantValue(), CultureInfo.InvariantCulture) + ",";
+                }
+
                 return (field.IsPublic ? "public " : field.IsFamilyOrAssembly ? "protected internal " : "protected ") +
                     (field.IsLiteral ? "const " : field.IsStatic ? "static " : "") + (field.IsInitOnly ? "readonly " : "") +
                     FormatType(field.FieldType, shortNamespaces) + " " + field.Name +
@@ -165,23 +251,57 @@ namespace YLFramework.Editor.Help
                 var constraints = new List<string>();
                 var flags = argument.GenericParameterAttributes;
                 var value = (flags & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0;
-                if (value) constraints.Add("struct");
-                else if ((flags & GenericParameterAttributes.ReferenceTypeConstraint) != 0) constraints.Add("class");
+                if (value)
+                {
+                    constraints.Add("struct");
+                }
+                else if ((flags & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+                {
+                    constraints.Add("class");
+                }
+
                 constraints.AddRange(argument.GetGenericParameterConstraints().Where(type => type != typeof(ValueType))
                     .Select(type => FormatType(type, shortNamespaces)));
-                if (!value && (flags & GenericParameterAttributes.DefaultConstructorConstraint) != 0) constraints.Add("new()");
-                if (constraints.Count != 0) result += " where " + argument.Name + " : " + string.Join(", ", constraints);
+                if (!value && (flags & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+                {
+                    constraints.Add("new()");
+                }
+
+                if (constraints.Count != 0)
+                {
+                    result += " where " + argument.Name + " : " + string.Join(", ", constraints);
+                }
             }
             return result;
         }
 
         private static string Literal(object value, string[] shortNamespaces)
         {
-            if (value == null) return "null";
-            if (value is string text) return "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-            if (value is bool flag) return flag ? "true" : "false";
-            if (value is float number) return number.ToString("R", CultureInfo.InvariantCulture) + "f";
-            if (value is Enum) return FormatType(value.GetType(), shortNamespaces) + "." + value;
+            if (value == null)
+            {
+                return "null";
+            }
+
+            if (value is string text)
+            {
+                return "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            }
+
+            if (value is bool flag)
+            {
+                return flag ? "true" : "false";
+            }
+
+            if (value is float number)
+            {
+                return number.ToString("R", CultureInfo.InvariantCulture) + "f";
+            }
+
+            if (value is Enum)
+            {
+                return FormatType(value.GetType(), shortNamespaces) + "." + value;
+            }
+
             return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
     }
@@ -220,8 +340,16 @@ namespace YLFramework.Editor.Help
         internal void AppendSearchFields(List<HelpSearchField> fields, string owner, bool includeDocumentation = true)
         {
             fields.Add(new HelpSearchField(Name, HelpSearch.TitleWeight));
-            if (!string.IsNullOrEmpty(owner)) fields.Add(new HelpSearchField(owner, HelpSearch.TechnicalWeight));
-            if (!includeDocumentation) return;
+            if (!string.IsNullOrEmpty(owner))
+            {
+                fields.Add(new HelpSearchField(owner, HelpSearch.TechnicalWeight));
+            }
+
+            if (!includeDocumentation)
+            {
+                return;
+            }
+
             fields.Add(new HelpSearchField(Help.Summary, HelpSearch.SummaryWeight));
             fields.Add(new HelpSearchField(HelpApiIndex.DocumentationNotes(Help), HelpSearch.DocWeight));
             fields.Add(new HelpSearchField(Signature, HelpSearch.TechnicalWeight));
@@ -293,7 +421,11 @@ namespace YLFramework.Editor.Help
                 fields.Add(new HelpSearchField(HelpApiIndex.DocumentationNotes(Help), HelpSearch.DocWeight));
             }
             fields.Add(new HelpSearchField(Declaration, HelpSearch.TechnicalWeight));
-            if (!includeMembers) return;
+            if (!includeMembers)
+            {
+                return;
+            }
+
             foreach (var entry in Entries)
             {
                 fields.Add(new HelpSearchField(entry.Name, HelpSearch.MemberNameWeight));
@@ -309,7 +441,11 @@ namespace YLFramework.Editor.Help
         /// <returns>查询词中未被类型上下文覆盖的部分全部命中该成员时为 true；没有这类剩余词时为 false。</returns>
         public bool MemberMatches(HelpApiMember member, string search)
         {
-            if (string.IsNullOrWhiteSpace(search)) return false;
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                return false;
+            }
+
             var context = Type.Namespace + "\n" + Name + "\n" + Declaration;
             var terms = search.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
             var memberTerms = terms.Where(term => !HelpSearch.Contains(context, term)).ToArray();
@@ -330,7 +466,11 @@ namespace YLFramework.Editor.Help
         /// <exception cref="ArgumentNullException">module 为 null。</exception>
         public static HelpApiType[] Build(HelpModule module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
             var definitions = module.ApiTypes ?? Array.Empty<HelpApiTypeDefinition>();
             var shortNamespaces = definitions.Select(definition => definition.Type.Namespace).Distinct().ToArray();
             var pages = (module.Guides ?? Array.Empty<HelpPage>()).Concat(module.About ?? Array.Empty<HelpPage>()).ToArray();

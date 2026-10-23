@@ -11,16 +11,16 @@ namespace YLFramework.Core.Singleton
     /// </summary>
     public class PrefabSingletonProperty<T> where T : MonoBehaviour
     {
-        private static readonly Func<string, GameObject> DefaultLoader = Resources.Load<GameObject>;
+        private static readonly Func<string, GameObject> _defaultLoader = Resources.Load<GameObject>;
 
         /// <summary>
         /// 预制体加载方式，可替换（例如接入 ResService）
         /// </summary>
-        public static Func<string, GameObject> PrefabLoader = DefaultLoader;
+        public static Func<string, GameObject> PrefabLoader = _defaultLoader;
 
         private static T _instance;
         private static T _disposedInstance;
-        private static bool _creationFailedWarned;
+        private static bool _hasWarnedCreationFailure;
         private static bool _isCreating;
 
         static PrefabSingletonProperty()
@@ -66,7 +66,7 @@ namespace YLFramework.Core.Singleton
                     if (_instance != null)
                     {
                         _disposedInstance = null;
-                        _creationFailedWarned = false;
+                        _hasWarnedCreationFailure = false;
                     }
                     else if (!_isCreating)
                     {
@@ -113,8 +113,16 @@ namespace YLFramework.Core.Singleton
         {
             foreach (var candidate in Object.FindObjectsByType<T>(FindObjectsSortMode.InstanceID))
             {
-                if (candidate == null) continue;
-                if (ReferenceEquals(candidate, _disposedInstance)) continue;
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(candidate, _disposedInstance))
+                {
+                    continue;
+                }
+
                 return candidate;
             }
 
@@ -161,12 +169,12 @@ namespace YLFramework.Core.Singleton
 
         private static void WarnCreationFailed()
         {
-            if (_creationFailedWarned)
+            if (_hasWarnedCreationFailure)
             {
                 return;
             }
 
-            _creationFailedWarned = true;
+            _hasWarnedCreationFailure = true;
             Debug.LogWarning(
                 $"[PrefabSingletonProperty<{typeof(T).Name}>] 未能创建单例：场景中不存在该组件，且 PrefabLoader 返回空。" +
                 $"默认按类型名从 Resources 加载 \"{typeof(T).Name}\"，请确认该预制体存在，或使用 InstanceWithLoader 提供加载方式。");
@@ -176,9 +184,9 @@ namespace YLFramework.Core.Singleton
         {
             _instance = null;
             _disposedInstance = null;
-            _creationFailedWarned = false;
+            _hasWarnedCreationFailure = false;
             _isCreating = false;
-            PrefabLoader = DefaultLoader;
+            PrefabLoader = _defaultLoader;
         }
     }
 }

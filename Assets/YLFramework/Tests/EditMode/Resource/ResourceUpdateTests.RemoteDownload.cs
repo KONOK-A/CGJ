@@ -40,20 +40,55 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static IEnumerator Steps(IEnumerator routine, Action<Exception> rejection = null)
         {
-            var stack = new Stack<IEnumerator>(); stack.Push(routine);
+            var stack = new Stack<IEnumerator>();
+            stack.Push(routine);
             try
             {
                 while (stack.Count != 0)
                 {
-                    var current = stack.Peek(); bool more = false; Exception failure = null;
-                    try { more = current.MoveNext(); } catch (Exception error) { failure = error; }
-                    if (failure != null) { if (rejection == null) throw failure; rejection(failure); yield break; }
-                    if (!more) { stack.Pop(); (current as IDisposable)?.Dispose(); continue; }
-                    if (current.Current is IEnumerator child) stack.Push(child);
-                    else yield return null;
+                    var current = stack.Peek();
+                    bool more = false;
+                    Exception failure = null;
+                    try
+                    {
+                        more = current.MoveNext();
+                    }
+                    catch (Exception error)
+                    {
+                        failure = error;
+                    }
+                    if (failure != null)
+                    {
+                        if (rejection == null)
+                        {
+                            throw failure;
+                        }
+                        rejection(failure);
+                        yield break;
+                    }
+                    if (!more)
+                    {
+                        stack.Pop();
+                        (current as IDisposable)?.Dispose();
+                        continue;
+                    }
+                    if (current.Current is IEnumerator child)
+                    {
+                        stack.Push(child);
+                    }
+                    else
+                    {
+                        yield return null;
+                    }
                 }
             }
-            finally { while (stack.Count != 0) (stack.Pop() as IDisposable)?.Dispose(); }
+            finally
+            {
+                while (stack.Count != 0)
+                {
+                    (stack.Pop() as IDisposable)?.Dispose();
+                }
+            }
         }
 
         [Test]
@@ -69,9 +104,14 @@ namespace YLFramework.Tests.ResourceBuild
             release.ReadCatalog(ResourceCatalogCodec.Write(Snapshot("a", 2).Document), store.Projects[0], Application.unityVersion);
             var file = release.Catalog.Bundles.First();
             var part = new ArtifactStore.DownloadPart(store, release, file.RelativeFile, file.Length, file.Sha256);
-            using (var output = part.OpenWrite(0, "\"stable\"")) output.WriteByte(7);
+            using (var output = part.OpenWrite(0, "\"stable\""))
+            {
+                output.WriteByte(7);
+            }
+
             Assert.Throws<InvalidDataException>(() => part.Verify());
-            var unknown = Path.Combine(ProjectPath(store, "parts"), "user.part"); File.WriteAllText(unknown, "retained unknown data");
+            var unknown = Path.Combine(ProjectPath(store, "parts"), "user.part");
+            File.WriteAllText(unknown, "retained unknown data");
             store.Cleanup(store.Mount());
             Assert.That(File.Exists(part.Path), Is.False, "Explicit store cleanup owns registered partial data.");
             Assert.That(File.Exists(Path.ChangeExtension(part.Path, ".json")), Is.False);
@@ -89,23 +129,40 @@ namespace YLFramework.Tests.ResourceBuild
             var store = RemoteStore(source);
             var envelope = Signed(2, 7, signing);
             server.Responder = Serve(envelope, Snapshot("a", 2));
-            UpdatePlan plan = null; yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
-            var selected = plan.Projects[0].Files.First(x => !x.Reusable && x.Length > 32).RelativeFile;
-            var calls = 0; var ranges = 0;
+            UpdatePlan plan = null;
+            yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
+            var selected = plan.Projects[0].Files.First(x => !x.IsReusable && x.Length > 32).RelativeFile;
+            var calls = 0;
+            var ranges = 0;
             server.Responder = Serve(envelope, Snapshot("a", 2), (request, response) =>
             {
-                if (!request.Path.EndsWith("/" + selected, StringComparison.Ordinal)) return;
-                if (Interlocked.Increment(ref calls) == 1) { response.DisconnectAfterBytes = response.Body.Length / 2; response.ChunkSize = 32; return; }
+                if (!request.Path.EndsWith("/" + selected, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    response.DisconnectAfterBytes = response.Body.Length / 2;
+                    response.ChunkSize = 32;
+                    return;
+                }
                 Assert.That(request.Headers["If-Range"], Is.EqualTo("\"stable\""));
-                var start = int.Parse(request.Headers["Range"].Substring(6).TrimEnd('-')); Interlocked.Increment(ref ranges);
-                var total = response.Body.Length; response.Body = response.Body.Skip(start).ToArray(); response.StatusCode = 206;
+                var start = int.Parse(request.Headers["Range"].Substring(6).TrimEnd('-'));
+                Interlocked.Increment(ref ranges);
+                var total = response.Body.Length;
+                response.Body = response.Body.Skip(start).ToArray();
+                response.StatusCode = 206;
                 response.Headers["Content-Range"] = "bytes " + start + "-" + (total - 1) + "/" + total;
             });
-            PreparedUpdate prepared = null; yield return Steps(store.PrepareRemote(plan, value => prepared = value));
-            Assert.That(prepared, Is.Not.Null); Assert.That(ranges, Is.EqualTo(1));
+            PreparedUpdate prepared = null;
+            yield return Steps(store.PrepareRemote(plan, value => prepared = value));
+            Assert.That(prepared, Is.Not.Null);
+            Assert.That(ranges, Is.EqualTo(1));
             var before = ResourceReleaseFixture.Snapshot(store.RootPath);
             var impossible = new UpdatePlan(store.RootPath, plan.Projects, 0, long.MaxValue);
-            Exception capacity = null; yield return Steps(store.PrepareRemote(impossible, _ => Assert.Fail("Unbounded preparation passed capacity validation.")), e => capacity = e);
+            Exception capacity = null;
+            yield return Steps(store.PrepareRemote(impossible, _ => Assert.Fail("Unbounded preparation passed capacity validation.")), e => capacity = e);
             Assert.That(capacity, Is.TypeOf<IOException>());
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(store.RootPath));
             Assert.That(File.Exists(ProjectPath(store)), Is.False);
@@ -131,7 +188,13 @@ namespace YLFramework.Tests.ResourceBuild
             var requests = server.RequestCount;
             yield return Steps(store.PrepareRemote(plan, value => prepared = value));
             Assert.That(server.RequestCount, Is.EqualTo(requests), "Complete owned targets are reverified, not redownloaded.");
-            store.Checkpoint = point => { if (point == "JournalVerified") throw new IOException("injected before commit decision"); };
+            store.Checkpoint = point =>
+            {
+                if (point == "JournalVerified")
+                {
+                    throw new IOException("injected before commit decision");
+                }
+            };
             Assert.Throws<IOException>(() => store.Commit(prepared));
             store = RemoteStore(source, store.RootPath, true);
             Assert.That(store.Mount().Single(x => x.Document.ProjectId == Snapshot().Document.ProjectId).Document.CatalogDigest, Is.EqualTo(Snapshot().Document.CatalogDigest));
@@ -198,23 +261,39 @@ namespace YLFramework.Tests.ResourceBuild
             }
             Assert.That(File.Exists(ProjectPath(store)), Is.False, "Busy cannot advance active or release history.");
             Assert.That(Take(system.ActivatePreparedUpdateAsync(prepared)), Is.True);
-            using (var updated = system.Acquire<TextAsset>(Address())) Assert.That(updated.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var updated = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(updated.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             var instance = system.Instantiate(Address("A.prefab"));
-            Assert.That(instance.GameObject, Is.Not.Null); instance.Discard();
+            Assert.That(instance.GameObject, Is.Not.Null);
+            instance.Discard();
             system.ClearInstanceCaches(); // Discard结束checkout；空桶的prefab pin仍按既有8.5合同显式退休。
             yield return Drain(system);
             using var loading = system.LoadSceneAsync(Address("Owned.unity"), LoadSceneMode.Additive);
             yield return Wait(loading);
-            var scene = loading.TakeResult(); var native = scene.Scene; scene.Dispose();
+            var scene = loading.TakeResult();
+            var native = scene.Scene;
+            scene.Dispose();
             Assert.That(native.isLoaded, Is.True);
             var unloading = SceneManager.UnloadSceneAsync(native);
             Assert.That(unloading, Is.Not.Null);
-            while (!unloading.isDone) yield return null;
+            while (!unloading.isDone)
+            {
+                yield return null;
+            }
+
             yield return Drain(system);
             Assert.That(Take(system.RollbackAsync()), Is.True);
-            using (var old = system.Acquire<TextAsset>(Address())) Assert.That(old.Asset.text, Is.EqualTo("first release content"));
+            using (var old = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(old.Asset.text, Is.EqualTo("first release content"));
+            }
+
             server.Responder = Serve(Signed(1, 6, signing), Snapshot());
-            using var replay = system.CheckRemoteUpdatesAsync(); yield return Wait(replay);
+            using var replay = system.CheckRemoteUpdatesAsync();
+            yield return Wait(replay);
             Assert.That(replay.Status, Is.EqualTo(ResourceRequestStatus.Failed));
             Assert.That(replay.Error.InnerException, Is.TypeOf<InvalidDataException>());
             Assert.That(Take(system.ShutdownAsync()), Is.True);
@@ -239,19 +318,33 @@ namespace YLFramework.Tests.ResourceBuild
                 var store = RemoteStore(source);
                 var system = Initialize(store);
                 server.Responder = Serve(envelope, Snapshot("a", 2));
-                using var check = system.CheckRemoteUpdatesAsync(); yield return Wait(check); var plan = Take(check);
-                var file = plan.Projects[0].Files.First(x => !x.Reusable && x.Length > 32).RelativeFile;
+                using var check = system.CheckRemoteUpdatesAsync();
+                yield return Wait(check);
+                var plan = Take(check);
+                var file = plan.Projects[0].Files.First(x => !x.IsReusable && x.Length > 32).RelativeFile;
                 server.Responder = Serve(envelope, Snapshot("a", 2), (request, response) =>
                 {
-                    if (!request.Path.EndsWith("/" + file, StringComparison.Ordinal)) return;
+                    if (!request.Path.EndsWith("/" + file, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
                     response.StallAfterBytes = Math.Min(128, response.Body.Length / 2);
                     response.ChunkSize = 32;
-                    if (mode == "no-validator") response.Headers.Remove("ETag");
+                    if (mode == "no-validator")
+                    {
+                        response.Headers.Remove("ETag");
+                    }
                 });
                 using var first = system.PrepareUpdateAsync(plan);
                 var deadline = Time.realtimeSinceStartup + 10;
-                while (!first.IsDone && first.Progress <= 0 && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(first.IsDone, Is.False, first.Error?.ToString()); Assert.That(first.Progress, Is.GreaterThan(0), mode);
+                while (!first.IsDone && first.Progress <= 0 && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.That(first.IsDone, Is.False, first.Error?.ToString());
+                Assert.That(first.Progress, Is.GreaterThan(0), mode);
                 var downloading = system.GetDiagnosticsReport().Updates.Single();
                 Assert.That(downloading.Phase, Is.EqualTo("Downloading"));
                 Assert.That(downloading.TransferredBytes, Is.GreaterThan(0));
@@ -262,27 +355,45 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(store.GetPreparedUpdates(), Is.Empty);
                 var partPath = Directory.GetFiles(ProjectPath(store, "parts"), "*.part").Single(x => new FileInfo(x).Length > 0 && new FileInfo(x).Length < plan.Projects[0].Files.First(f => f.RelativeFile == file).Length);
                 Assert.That(new FileInfo(partPath).Length, Is.GreaterThan(0));
-                var ranged = 0; var full = 0;
+                var ranged = 0;
+                var full = 0;
                 server.Responder = Serve(envelope, Snapshot("a", 2), (request, response) =>
                 {
-                    if (!request.Path.EndsWith("/" + file, StringComparison.Ordinal)) return;
+                    if (!request.Path.EndsWith("/" + file, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
                     if (request.Headers.TryGetValue("Range", out var range))
                     {
                         Interlocked.Increment(ref ranged);
                         Assert.That(request.Headers["If-Range"], Is.EqualTo("\"stable\""));
                         var start = int.Parse(range.Substring(6).TrimEnd('-'));
                         var total = response.Body.Length;
-                        if (mode == "416") { response.StatusCode = 416; response.Body = Array.Empty<byte>(); response.Headers["Content-Range"] = "bytes */" + total; }
+                        if (mode == "416")
+                        {
+                            response.StatusCode = 416;
+                            response.Body = Array.Empty<byte>();
+                            response.Headers["Content-Range"] = "bytes */" + total;
+                        }
                         else if (mode != "200")
                         {
-                            response.StatusCode = 206; response.Body = response.Body.Skip(start).ToArray();
+                            response.StatusCode = 206;
+                            response.Body = response.Body.Skip(start).ToArray();
                             response.Headers["Content-Range"] = "bytes " + (mode == "wrong-range" ? start + 1 : start) + "-" + (total - 1) + "/" + total;
-                            if (mode == "changed-etag") response.Headers["ETag"] = "\"changed\"";
+                            if (mode == "changed-etag")
+                            {
+                                response.Headers["ETag"] = "\"changed\"";
+                            }
                         }
                     }
-                    else Interlocked.Increment(ref full);
+                    else
+                    {
+                        Interlocked.Increment(ref full);
+                    }
                 });
-                using var resumed = system.PrepareUpdateAsync(plan); yield return Wait(resumed);
+                using var resumed = system.PrepareUpdateAsync(plan);
+                yield return Wait(resumed);
                 var prepared = Take(resumed);
                 Assert.That(ranged, Is.EqualTo(mode == "no-validator" ? 0 : 1), mode);
                 Assert.That(full, Is.EqualTo(mode == "206" || mode == "200" ? 0 : 1), mode);

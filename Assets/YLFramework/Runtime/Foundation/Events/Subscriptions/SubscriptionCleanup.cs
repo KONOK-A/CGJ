@@ -17,7 +17,11 @@ namespace YLFramework.Events
         /// <param name="release">对每个元素执行的释放回调。</param>
         public static void ReleaseAfterSuccess<T>(ICollection<T> items, Action<T> release)
         {
-            foreach (var item in items) release(item);
+            foreach (var item in items)
+            {
+                release(item);
+            }
+
             items.Clear();
         }
 
@@ -39,13 +43,24 @@ namespace YLFramework.Events
         /// </summary>
         public static void ReleaseAll<T>(ICollection<T> items, Action<T> release)
         {
-            if (items == null) throw new ArgumentNullException(nameof(items));
-            if (release == null) throw new ArgumentNullException(nameof(release));
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            if (release == null)
+            {
+                throw new ArgumentNullException(nameof(release));
+            }
+
             List<Exception> errors = null;
             List<T> failures = null;
             foreach (var item in DetachAll(items))
             {
-                try { release(item); }
+                try
+                {
+                    release(item);
+                }
                 catch (Exception error)
                 {
                     (failures ??= new List<T>()).Add(item);
@@ -54,14 +69,28 @@ namespace YLFramework.Events
             }
             // 失败责任到本轮结束才归还，避免后序释放回调重入清理时隐式重试本轮失败项。
             if (failures != null)
-                foreach (var item in failures) items.Add(item);
+            {
+                foreach (var item in failures)
+                {
+                    items.Add(item);
+                }
+            }
+
             ThrowErrors(errors);
         }
 
         internal static void ThrowErrors(List<Exception> errors)
         {
-            if (errors == null || errors.Count == 0) return;
-            if (errors.Count == 1) ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            if (errors == null || errors.Count == 0)
+            {
+                return;
+            }
+
+            if (errors.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(errors[0]).Throw();
+            }
+
             throw new AggregateException(errors);
         }
     }

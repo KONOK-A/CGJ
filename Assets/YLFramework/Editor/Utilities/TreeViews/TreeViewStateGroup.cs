@@ -13,39 +13,41 @@ using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 namespace YLFramework.Core.Editor
 {
     [Serializable]
-    public class TreeViewStateInfo 
+    public class TreeViewStateInfo
     {
         public int id;
 
 
         public TreeViewState treeViewState;
 
-        public TreeViewStateInfo(int id,TreeViewState treeViewState)
+        public TreeViewStateInfo(int id, TreeViewState treeViewState)
         {
             this.id = id;
             this.treeViewState = treeViewState;
-        } 
+        }
     }
-     
+
     [Serializable]
-    public class TreeViewStateGroup  
+    public class TreeViewStateGroup
     {
 
         [SerializeField]
         private List<TreeViewStateInfo> treeViewStates = new List<TreeViewStateInfo>();
 
-        public TreeViewState Get(int hash_code)
+        public TreeViewState Get(int hashCode)
         {
 
             foreach (var item in treeViewStates)
             {
-                if (item.id == hash_code) 
+                if (item.id == hashCode)
+                {
                     return item.treeViewState;
+                }
             }
 
             TreeViewState treeViewState = new TreeViewState();
 
-            treeViewStates.Add(new TreeViewStateInfo(hash_code,treeViewState)); 
+            treeViewStates.Add(new TreeViewStateInfo(hashCode, treeViewState));
             return treeViewState;
         }
 

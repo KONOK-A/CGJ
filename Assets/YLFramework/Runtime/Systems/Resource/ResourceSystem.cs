@@ -10,54 +10,103 @@ using UnityEditor;
 
 namespace YLFramework.Services.Resource
 {
-    public enum ResourceSystemState { Initializing, Ready, ShuttingDown, Closed, Failed, Invalidated }
+    public enum ResourceSystemState
+    {
+        Initializing,
+        Ready,
+        ShuttingDown,
+        Closed,
+        Failed,
+        Invalidated
+    }
 
     /// <summary>逻辑记账快照，不代表 Unity native memory 用量或物理卸载。</summary>
     public readonly struct ResourceDiagnosticsSnapshot
     {
-        public int RecordCount { get; }
-        public int ProducerCount { get; }
-        public int WaiterCount { get; }
-        public int LeaseCount { get; }
-        public int BundleRecordCount { get; }
-        public int BundleRootPinCount { get; }
-        public int BundleDependencyPinCount { get; }
-        public int RunningBundleCount { get; }
-        public int QueuedBundleCount { get; }
-        public int NativeBundleLoadCount { get; }
-        public int NativeBundleUnloadCount { get; }
+        public int RecordCount
+        {
+            get;
+        }
+        public int ProducerCount
+        {
+            get;
+        }
+        public int WaiterCount
+        {
+            get;
+        }
+        public int LeaseCount
+        {
+            get;
+        }
+        public int BundleRecordCount
+        {
+            get;
+        }
+        public int BundleRootPinCount
+        {
+            get;
+        }
+        public int BundleDependencyPinCount
+        {
+            get;
+        }
+        public int RunningBundleCount
+        {
+            get;
+        }
+        public int QueuedBundleCount
+        {
+            get;
+        }
+        public int NativeBundleLoadCount
+        {
+            get;
+        }
+        public int NativeBundleUnloadCount
+        {
+            get;
+        }
         internal ResourceDiagnosticsSnapshot(int records, int producers, int waiters, int leases, int bundles,
             int roots, int edges, int running, int queued, int loads, int unloads)
         {
-            RecordCount = records; ProducerCount = producers; WaiterCount = waiters; LeaseCount = leases;
-            BundleRecordCount = bundles; BundleRootPinCount = roots; BundleDependencyPinCount = edges;
-            RunningBundleCount = running; QueuedBundleCount = queued; NativeBundleLoadCount = loads; NativeBundleUnloadCount = unloads;
+            RecordCount = records;
+            ProducerCount = producers;
+            WaiterCount = waiters;
+            LeaseCount = leases;
+            BundleRecordCount = bundles;
+            BundleRootPinCount = roots;
+            BundleDependencyPinCount = edges;
+            RunningBundleCount = running;
+            QueuedBundleCount = queued;
+            NativeBundleLoadCount = loads;
+            NativeBundleUnloadCount = unloads;
         }
     }
 
     /// <summary>每会话唯一、显式初始化的资源权威。所有入口仅用于 Unity 主线程，不创建协程宿主。</summary>
     public sealed partial class ResourceSystem
     {
-        private static ResourceSystem authority;
-        private static readonly HashSet<ResourceSystem> draining = new();
-        private static bool ending;
-        private static int mainThreadId;
-        private readonly ResourceConfiguration configuration;
-        private readonly object session = SingletonSessionState.ExecutionSession;
-        private readonly Dictionary<string, ResourceCatalog> catalogs = new(StringComparer.Ordinal);
-        private readonly Dictionary<ResourceSourceId, IResourceSource> sources = new();
-        private readonly Dictionary<(ResourceCatalog, string, Type), AssetRecord> records = new();
-        private readonly HashSet<IResourceRequest> ownedRequests = new();
-        private readonly List<ResourceRequest<ResourceSystem>> initialization = new();
-        private readonly List<ResourceRequest<bool>> shutdowns = new();
-        private bool checkingShutdown;
+        private static ResourceSystem _authority;
+        private static readonly HashSet<ResourceSystem> _draining = new();
+        private static bool _isEnding;
+        private static int _mainThreadId;
+        private readonly ResourceConfiguration _configuration;
+        private readonly object _session = SingletonSessionState.ExecutionSession;
+        private readonly Dictionary<string, ResourceCatalog> _catalogs = new(StringComparer.Ordinal);
+        private readonly Dictionary<ResourceSourceId, IResourceSource> _sources = new();
+        private readonly Dictionary<(ResourceCatalog, string, Type), AssetRecord> _records = new();
+        private readonly HashSet<IResourceRequest> _ownedRequests = new();
+        private readonly List<ResourceRequest<ResourceSystem>> _initialization = new();
+        private readonly List<ResourceRequest<bool>> _shutdowns = new();
+        private bool _isCheckingShutdown;
 
         /// <summary>读取不加载资源、不初始化服务、不创建宿主；初始化失败或关闭后为 null。</summary>
-        public static ResourceSystem Current => authority != null &&
-            (authority.State == ResourceSystemState.Ready || authority.State == ResourceSystemState.ShuttingDown) ? authority : null;
+        public static ResourceSystem Current => _authority != null &&
+            (_authority.State == ResourceSystemState.Ready || _authority.State == ResourceSystemState.ShuttingDown) ? _authority : null;
         public ResourceSystemState State { get; private set; } = ResourceSystemState.Initializing;
         public bool IsAvailable => State == ResourceSystemState.Ready && IsSessionActive;
-        internal bool IsSessionActive => !ending && SingletonSessionState.CanRunExecution && ReferenceEquals(session, SingletonSessionState.ExecutionSession) &&
+        internal bool IsSessionActive => !_isEnding && SingletonSessionState.CanRunExecution && ReferenceEquals(_session, SingletonSessionState.ExecutionSession) &&
             (State == ResourceSystemState.Ready || State == ResourceSystemState.Initializing || State == ResourceSystemState.ShuttingDown);
 
         static ResourceSystem()
@@ -66,26 +115,35 @@ namespace YLFramework.Services.Resource
             Application.quitting += EndSession;
 #if UNITY_EDITOR
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
-            EditorApplication.update += () => { if (!Application.isPlaying) TickInstanceCleanup(); };
+            EditorApplication.update += () =>
+            {
+                if (!Application.isPlaying)
+                {
+                    TickInstanceCleanup();
+                }
+            };
 #endif
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void InitializeThread() => mainThreadId = Thread.CurrentThread.ManagedThreadId;
+        private static void InitializeThread() => _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 #if UNITY_EDITOR
         [InitializeOnLoadMethod]
         private static void InitializeEditorThread() => InitializeThread();
         private static void OnPlayModeChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.EnteredEditMode) EndSession();
+                state == PlayModeStateChange.EnteredEditMode)
+            {
+                EndSession();
+            }
         }
 #endif
 
         private ResourceSystem(ResourceConfiguration configuration)
         {
-            this.configuration = configuration;
-            contentBudget = new ResourceContentBudget(configuration?.Decryption?.MaxBufferedBytes ?? 128L * 1024 * 1024);
+            this._configuration = configuration;
+            _contentBudget = new ResourceContentBudget(configuration?.Decryption?.MaxBufferedBytes ?? 128L * 1024 * 1024);
         }
 
         /// <summary>8.1 内存验证可即时完成。同一配置对象的在途初始化可 join；不同配置须先成功 Shutdown。</summary>
@@ -94,33 +152,65 @@ namespace YLFramework.Services.Resource
         {
             AssertThread();
             var request = new ResourceRequest<ResourceSystem>();
-            if (ending || !SingletonSessionState.CanRunExecution)
-                return Fail(request, ResourceError.SessionUnavailable, "Resource initialization requires an active Play/Player session.");
-            TickInstanceCleanup();
-            if (draining.Count != 0)
-                return Fail(request, ResourceError.Busy, "An old session still owns unfinished native producers.");
-            if (authority != null)
+            if (_isEnding || !SingletonSessionState.CanRunExecution)
             {
-                if (!ReferenceEquals(authority.configuration, config))
+                return Fail(request, ResourceError.SessionUnavailable, "Resource initialization requires an active Play/Player session.");
+            }
+
+            TickInstanceCleanup();
+            if (_draining.Count != 0)
+            {
+                return Fail(request, ResourceError.Busy, "An old session still owns unfinished native producers.");
+            }
+
+            if (_authority != null)
+            {
+                if (!ReferenceEquals(_authority._configuration, config))
+                {
                     return Fail(request, ResourceError.ConfigurationConflict, "Another resource configuration is active or initializing.");
-                if (authority.State == ResourceSystemState.Initializing) authority.JoinInitialization(request);
-                else if (authority.IsAvailable) { request.SetSuccess(authority); request.Notify(); }
-                else return Fail(request, ResourceError.Busy, "The resource authority is closing.");
+                }
+
+                if (_authority.State == ResourceSystemState.Initializing)
+                {
+                    _authority.JoinInitialization(request);
+                }
+                else if (_authority.IsAvailable)
+                {
+                    request.SetSuccess(_authority);
+                    request.Notify();
+                }
+                else
+                {
+                    return Fail(request, ResourceError.Busy, "The resource authority is closing.");
+                }
+
                 return request;
             }
             var system = new ResourceSystem(config);
-            authority = system;
+            _authority = system;
             system.JoinInitialization(request);
             try
             {
-                if (config?.ArtifactStore == null) system.ContinueInitialization(null);
-                else system.initializationWork = system.StartContentWork(token => config.ArtifactStore.MountForContent(token), (mounted, error) =>
+                if (config?.ArtifactStore == null)
                 {
-                    system.initializationWork = null;
-                    if (error != null) system.FinishInitialization(error is ResourceException || error is System.OperationCanceledException ? error :
+                    system.ContinueInitialization(null);
+                }
+                else
+                {
+                    system._initializationWork = system.StartContentWork(token => config.ArtifactStore.MountForContent(token), (mounted, error) =>
+                {
+                    system._initializationWork = null;
+                    if (error != null)
+                    {
+                        system.FinishInitialization(error is ResourceException || error is System.OperationCanceledException ? error :
                         new ResourceException(ResourceError.InvalidConfiguration, "Resource mounted configuration validation failed.", error));
-                    else system.ContinueInitialization(mounted);
+                    }
+                    else
+                    {
+                        system.ContinueInitialization(mounted);
+                    }
                 }, snapshots: new List<ResourceLocalSnapshot>(config.ArtifactStore.Projects.Select(x => x.BuiltIn)));
+                }
             }
             catch (Exception error)
             {
@@ -131,31 +221,62 @@ namespace YLFramework.Services.Resource
 
         private void ValidateConfiguration(IReadOnlyList<ResourceLocalSnapshot> mounted)
         {
-            if (configuration == null) throw new ArgumentException("An explicit resource configuration is required.");
-            foreach (var source in configuration.Sources)
+            if (_configuration == null)
             {
-                if (source == null || !source.Id.IsValid || sources.ContainsKey(source.Id)) throw new ArgumentException("Null, invalid or duplicate source identity.");
-                sources.Add(source.Id, source);
+                throw new ArgumentException("An explicit resource configuration is required.");
             }
-            sources.Add(ResourceSourceId.AssetBundle, new AssetBundleSource(this));
+
+            foreach (var source in _configuration.Sources)
+            {
+                if (source == null || !source.Id.IsValid || _sources.ContainsKey(source.Id))
+                {
+                    throw new ArgumentException("Null, invalid or duplicate source identity.");
+                }
+
+                _sources.Add(source.Id, source);
+            }
+            _sources.Add(ResourceSourceId.AssetBundle, new AssetBundleSource(this));
             var projects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var configuredCatalogs = new List<ResourceCatalog>(configuration.Catalogs);
-            if (configuration.ArtifactStore != null)
-                foreach (var snapshot in mounted) configuredCatalogs.Add(CreateStoreCatalog(snapshot));
+            var configuredCatalogs = new List<ResourceCatalog>(_configuration.Catalogs);
+            if (_configuration.ArtifactStore != null)
+            {
+                foreach (var snapshot in mounted)
+                {
+                    configuredCatalogs.Add(CreateStoreCatalog(snapshot));
+                }
+            }
+
             foreach (var catalog in configuredCatalogs)
             {
-                if (catalog == null || !projects.Add(catalog.ProjectId)) throw new ArgumentException("Null or case-conflicting project catalog.");
-                catalogs.Add(catalog.ProjectId, catalog);
-                if (catalog.Snapshot != null) ValidateSnapshotPlatform(catalog.Snapshot);
+                if (catalog == null || !projects.Add(catalog.ProjectId))
+                {
+                    throw new ArgumentException("Null or case-conflicting project catalog.");
+                }
+
+                _catalogs.Add(catalog.ProjectId, catalog);
+                if (catalog.Snapshot != null)
+                {
+                    ValidateSnapshotPlatform(catalog.Snapshot);
+                }
+
                 var resourcePaths = new HashSet<(string, Type)>(new ResourcesPathComparer());
                 foreach (var entry in catalog.Entries)
                 {
-                    if (!sources.TryGetValue(entry.Location.Source, out var source))
+                    if (!_sources.TryGetValue(entry.Location.Source, out var source))
+                    {
                         throw new ArgumentException($"Unconfigured source '{entry.Location.Source}' for '{entry.Address}'.");
+                    }
+
                     source.Validate(entry);
                     if (entry.Location.Source.Equals(ResourceSourceId.Resources) && !resourcePaths.Add((entry.Location.Locator, entry.Location.AssetType)))
+                    {
                         throw new ArgumentException($"Case-conflicting Resources locator: '{entry.Location.Locator}'.");
-                    if (!IsSessionActive) throw new ResourceException(ResourceError.SessionUnavailable, "The session ended during source validation.");
+                    }
+
+                    if (!IsSessionActive)
+                    {
+                        throw new ResourceException(ResourceError.SessionUnavailable, "The session ended during source validation.");
+                    }
                 }
             }
         }
@@ -169,7 +290,11 @@ namespace YLFramework.Services.Resource
         public AssetLease<T> Acquire<T>(ResourceAddress address) where T : UnityEngine.Object
         {
             using var request = AcquireRequest<T>(address, true);
-            if (request.Status != ResourceRequestStatus.Succeeded) throw request.Error;
+            if (request.Status != ResourceRequestStatus.Succeeded)
+            {
+                throw request.Error;
+            }
+
             return request.TakeResult();
         }
 
@@ -177,7 +302,11 @@ namespace YLFramework.Services.Resource
         public ResourceScope CreateScope()
         {
             CheckThread();
-            if (!IsAvailable) throw new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            if (!IsAvailable)
+            {
+                throw new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.");
+            }
+
             return new ResourceScope(this);
         }
 
@@ -185,39 +314,74 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<AssetLease<T>>(lease => lease.Dispose());
-            if (!IsAvailable) return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address);
-            if (!address.IsValid) return Fail(request, ResourceError.InvalidAddress, "A valid resource address is required.", address);
-            if (IsProjectBlocked(address.ProjectId)) return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address);
+            if (!IsAvailable)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "ResourceSystem is not available.", address);
+            }
+
+            if (!address.IsValid)
+            {
+                return Fail(request, ResourceError.InvalidAddress, "A valid resource address is required.", address);
+            }
+
+            if (IsProjectBlocked(address.ProjectId))
+            {
+                return Fail(request, ResourceError.Busy, "The project is inside its activation barrier.", address);
+            }
+
             ResourceCatalogEntry entry;
             ResourceCatalog catalog;
             try
             {
-                if (!catalogs.TryGetValue(address.ProjectId, out catalog)) throw new ArgumentException("Unknown resource project.");
+                if (!_catalogs.TryGetValue(address.ProjectId, out catalog))
+                {
+                    throw new ArgumentException("Unknown resource project.");
+                }
+
                 entry = catalog.Resolve(address);
             }
             catch (ArgumentException error)
-            { return Fail(request, ResourceError.AddressNotFound, $"Unknown resource address: {address}.", address, cause: error); }
+            {
+                return Fail(request, ResourceError.AddressNotFound, $"Unknown resource address: {address}.", address, cause: error);
+            }
             return AcquireEntry<T>(catalog, entry, address, synchronous, request);
         }
 
         private ResourceRequest<AssetLease<T>> AcquireEntry<T>(ResourceCatalog catalog, ResourceCatalogEntry entry,
             ResourceAddress address, bool synchronous, ResourceRequest<AssetLease<T>> request, bool cacheImage = false) where T : UnityEngine.Object
         {
-            try { RequireContentAdmission(entry); }
-            catch (ResourceException error) { request.SetFailure(ResourceRequestStatus.Failed, error); request.Notify(); return request; }
+            try
+            {
+                RequireContentAdmission(entry);
+            }
+            catch (ResourceException error)
+            {
+                request.SetFailure(ResourceRequestStatus.Failed, error);
+                request.Notify();
+                return request;
+            }
             if (!typeof(T).IsAssignableFrom(entry.Location.AssetType))
+            {
                 return Fail(request, ResourceError.TypeMismatch, $"'{address}' declares {entry.Location.AssetType.FullName}, not {typeof(T).FullName}.", address, entry.Location.Source);
+            }
             // 当前投影只是可赋值借读；同一目录声明类型的基类请求不重复建立 native producer。
             var key = (catalog, entry.AssetId, entry.Location.AssetType);
-            if (records.TryGetValue(key, out var record))
+            if (_records.TryGetValue(key, out var record))
             {
-                if (record.Loading && synchronous) return Fail(request, ResourceError.InProgress, $"'{address}' is already loading; use AcquireAsync.", address, entry.Location.Source);
-                if (!record.Loading)
+                if (record.IsLoading && synchronous)
+                {
+                    return Fail(request, ResourceError.InProgress, $"'{address}' is already loading; use AcquireAsync.", address, entry.Location.Source);
+                }
+
+                if (!record.IsLoading)
                 {
                     if (!record.Asset)
                     {
                         if (record.LeaseCount != 0)
+                        {
                             return Fail(request, ResourceError.LoadFailed, "The cached Unity object was destroyed externally.", address, entry.Location.Source);
+                        }
+
                         ReleaseRecord(record);
                         return AcquireEntry<T>(catalog, entry, address, synchronous, request, cacheImage);
                     }
@@ -230,12 +394,15 @@ namespace YLFramework.Services.Resource
             }
             else
             {
-                var source = sources[entry.Location.Source];
+                var source = _sources[entry.Location.Source];
                 if (synchronous && !source.SupportsSynchronousLoad)
+                {
                     return Fail(request, ResourceError.Unsupported, "This source cannot produce synchronously.", address, entry.Location.Source);
+                }
+
                 record = new AssetRecord(this, key, entry, source);
-                record.ImageCacheEligible = cacheImage;
-                records.Add(key, record);
+                record.IsImageCacheEligible = cacheImage;
+                _records.Add(key, record);
             }
             Track(request);
             var waiter = new Waiter<T>(request, address);
@@ -246,11 +413,18 @@ namespace YLFramework.Services.Resource
                 loading.Waiters.Remove(waiter);
                 CancelUnobservedProducer(loading);
             }, () => loading.Operation?.Progress ?? loading.LastProgress);
-            if (record.Started) return request;
-            record.Started = true;
+            if (record.HasStarted)
+            {
+                return request;
+            }
+
+            record.HasStarted = true;
             try
             {
-                if (synchronous) CompleteRecord(record, record.Source.Load(entry, entry.Location.AssetType), null);
+                if (synchronous)
+                {
+                    CompleteRecord(record, record.Source.Load(entry, entry.Location.AssetType), null);
+                }
                 else
                 {
                     StartAsyncProducer(record);
@@ -259,8 +433,14 @@ namespace YLFramework.Services.Resource
             catch (Exception cause)
             {
                 // 只捕获来源生产失败；观察者异常已在 Request 中隔离，不伪装成加载失败。
-                if (record.Loading) CompleteRecord(record, default, cause);
-                else throw;
+                if (record.IsLoading)
+                {
+                    CompleteRecord(record, default, cause);
+                }
+                else
+                {
+                    throw;
+                }
             }
             return request;
         }
@@ -269,10 +449,13 @@ namespace YLFramework.Services.Resource
         {
             if (record.Source is TextureResourceSource)
             {
-                record.ImageQueueNode = imageLoadQueue.AddLast(record);
+                record.ImageQueueNode = _imageLoadQueue.AddLast(record);
                 PumpImageLoads();
             }
-            else StartSourceOperation(record);
+            else
+            {
+                StartSourceOperation(record);
+            }
         }
 
         private void StartSourceOperation(AssetRecord record)
@@ -281,22 +464,31 @@ namespace YLFramework.Services.Resource
             record.Operation = operation;
             record.Completion = () => FinishOperation(record);
             operation.Completed += record.Completion;
-            if (operation.IsDone) FinishOperation(record);
-            else CancelUnobservedProducer(record);
+            if (operation.IsDone)
+            {
+                FinishOperation(record);
+            }
+            else
+            {
+                CancelUnobservedProducer(record);
+            }
         }
 
         private void CancelUnobservedProducer(AssetRecord record)
         {
             if (record.Waiters.Count == 0 && record.ImageQueueNode != null)
             {
-                imageLoadQueue.Remove(record.ImageQueueNode);
+                _imageLoadQueue.Remove(record.ImageQueueNode);
                 record.ImageQueueNode = null;
-                record.Loading = false;
+                record.IsLoading = false;
                 ReleaseRecord(record);
                 CheckDrain();
                 return;
             }
-            if (record.Waiters.Count != 0 || record.CancelRequested || record.Operation?.SupportsCancellation != true) return;
+            if (record.Waiters.Count != 0 || record.CancelRequested || record.Operation?.SupportsCancellation != true)
+            {
+                return;
+            }
             // 先标记这一代已进入取消收尾，再调用可能同步完成/重入的私有 IO 取消。
             record.CancelRequested = true;
             record.Operation.Cancel();
@@ -305,19 +497,27 @@ namespace YLFramework.Services.Resource
         internal void Track<T>(ResourceRequest<T> request)
         {
             TrackDiagnostics(request);
-            ownedRequests.Add(request);
+            _ownedRequests.Add(request);
             request.Terminal = () =>
             {
-                if (request.Status == ResourceRequestStatus.Succeeded) return;
-                ownedRequests.Remove(request);
+                if (request.Status == ResourceRequestStatus.Succeeded)
+                {
+                    return;
+                }
+
+                _ownedRequests.Remove(request);
                 request.OwnershipEnded = null;
             };
-            request.OwnershipEnded = () => ownedRequests.Remove(request);
+            request.OwnershipEnded = () => _ownedRequests.Remove(request);
         }
 
         private void FinishOperation(AssetRecord record)
         {
-            if (!record.Loading) return;
+            if (!record.IsLoading)
+            {
+                return;
+            }
+
             var operation = record.Operation;
             record.LastProgress = operation.Progress;
             var result = operation.TakeResult();
@@ -337,7 +537,17 @@ namespace YLFramework.Services.Resource
                     record.LastProgress = 0;
                     StartAsyncProducer(record);
                 }
-                catch (Exception error) { if (record.Loading) CompleteRecord(record, default, error); else throw; }
+                catch (Exception error)
+                {
+                    if (record.IsLoading)
+                    {
+                        CompleteRecord(record, default, error);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
                 return;
             }
             CompleteRecord(record, result, cause);
@@ -348,24 +558,42 @@ namespace YLFramework.Services.Resource
         {
             var asset = result.Asset;
             record.Retention = result.Retention;
-            record.Loading = false;
+            record.IsLoading = false;
             var waiters = record.Waiters.ToArray();
             record.Waiters.Clear();
             ResourceException failure = null;
             if (!IsSessionActive)
+            {
                 failure = new ResourceException(ResourceError.SessionUnavailable, "The producing session ended.", cause, record.Entry.Address, record.Entry.Location.Source);
+            }
             else if (cause != null || !asset)
+            {
                 failure = new ResourceException(cause is ResourceException resourceError ? resourceError.Kind : ResourceError.LoadFailed,
                     $"Source failed to load '{record.Entry.Address}' from {record.Entry.Location}.", cause, record.Entry.Address, record.Entry.Location.Source);
+            }
             else if (!record.Entry.Location.AssetType.IsInstanceOfType(asset))
+            {
                 failure = new ResourceException(ResourceError.TypeMismatch, $"Source returned {asset.GetType().FullName} for {record.Entry.Location}.", address: record.Entry.Address, source: record.Entry.Location.Source);
+            }
+
             record.Asset = asset;
             // 全部消费者先登记独立 lease 和终态，清生产责任后才允许业务观察重入。
-            foreach (var waiter in waiters) waiter.Prepare(record, failure);
+            foreach (var waiter in waiters)
+            {
+                waiter.Prepare(record, failure);
+            }
+
             RecordProducerCompletion(record, failure, waiters.Length);
-            if (failure != null || record.LeaseCount == 0) ReleaseRecord(record);
+            if (failure != null || record.LeaseCount == 0)
+            {
+                ReleaseRecord(record);
+            }
+
             CheckDrain();
-            foreach (var waiter in waiters) waiter.Notify();
+            foreach (var waiter in waiters)
+            {
+                waiter.Notify();
+            }
         }
 
         internal sealed class AssetRecord
@@ -380,20 +608,25 @@ namespace YLFramework.Services.Resource
             internal int LeaseCount;
             internal int InstancePins;
             internal IAssetLeaseDiagnostics LeaseHead;
-            internal bool ImageCacheEligible;
+            internal bool IsImageCacheEligible;
             internal LinkedListNode<AssetRecord> ImageCacheNode;
             internal LinkedListNode<AssetRecord> ImageQueueNode;
-            internal bool ImageLoadRunning;
+            internal bool IsImageLoadRunning;
             internal long ImageBytes;
             internal double IdleSince;
             internal float LastProgress;
-            internal bool Loading = true;
+            internal bool IsLoading = true;
             internal bool CancelRequested;
-            internal bool Started;
+            internal bool HasStarted;
             internal ResourceSourceOperation Operation;
             internal Action Completion;
             internal AssetRecord(ResourceSystem owner, (ResourceCatalog, string, Type) key, ResourceCatalogEntry entry, IResourceSource source)
-            { Owner = owner; Key = key; Entry = entry; Source = source; }
+            {
+                Owner = owner;
+                Key = key;
+                Entry = entry;
+                Source = source;
+            }
         }
 
         internal interface IWaiter
@@ -404,31 +637,65 @@ namespace YLFramework.Services.Resource
 
         private sealed class Waiter<T> : IWaiter where T : UnityEngine.Object
         {
-            private readonly ResourceRequest<AssetLease<T>> request;
-            private readonly ResourceAddress address;
-            internal Waiter(ResourceRequest<AssetLease<T>> request, ResourceAddress address) { this.request = request; this.address = address; }
+            private readonly ResourceRequest<AssetLease<T>> _request;
+            private readonly ResourceAddress _address;
+            internal Waiter(ResourceRequest<AssetLease<T>> request, ResourceAddress address)
+            {
+                this._request = request;
+                this._address = address;
+            }
             public void Prepare(AssetRecord record, ResourceException failure)
             {
-                if (request.IsDone) return;
-                if (failure == null) request.SetSuccess(new AssetLease<T>(record, address));
-                else request.SetFailure(failure.Kind == ResourceError.SessionUnavailable ? ResourceRequestStatus.Invalidated : ResourceRequestStatus.Failed, failure);
+                if (_request.IsDone)
+                {
+                    return;
+                }
+
+                if (failure == null)
+                {
+                    _request.SetSuccess(new AssetLease<T>(record, _address));
+                }
+                else
+                {
+                    _request.SetFailure(failure.Kind == ResourceError.SessionUnavailable ? ResourceRequestStatus.Invalidated : ResourceRequestStatus.Failed, failure);
+                }
             }
-            public void Notify() => request.Notify();
+            public void Notify() => _request.Notify();
         }
 
         internal void ReleaseLease(AssetRecord record, bool instancePin = false)
         {
-            if (!instancePin && !IsSessionActive) return; // 退出已结算public责任，不能扣仍在等待Destroy的实例pin。
-            if (record.LeaseCount == 0) return; // 会话强制退出已结算；旧 lease 不得影响新 record。
-            if (instancePin) record.InstancePins--;
-            if (--record.LeaseCount == 0 && !record.Loading && !TryCacheImage(record)) ReleaseRecord(record);
+            if (!instancePin && !IsSessionActive)
+            {
+                return; // 退出已结算public责任，不能扣仍在等待Destroy的实例pin。
+            }
+
+            if (record.LeaseCount == 0)
+            {
+                return; // 会话强制退出已结算；旧 lease 不得影响新 record。
+            }
+
+            if (instancePin)
+            {
+                record.InstancePins--;
+            }
+
+            if (--record.LeaseCount == 0 && !record.IsLoading && !TryCacheImage(record))
+            {
+                ReleaseRecord(record);
+            }
+
             CheckDrain();
         }
 
         private void ReleaseRecord(AssetRecord record)
         {
             RemoveIdleImage(record);
-            if (records.TryGetValue(record.Key, out var current) && ReferenceEquals(current, record)) records.Remove(record.Key);
+            if (_records.TryGetValue(record.Key, out var current) && ReferenceEquals(current, record))
+            {
+                _records.Remove(record.Key);
+            }
+
             var asset = record.Asset;
             record.Asset = null;
             record.LeaseCount = 0;
@@ -440,8 +707,17 @@ namespace YLFramework.Services.Resource
         private static void ReleaseProduction(IResourceSource source, ResourceSourceResult result)
         {
             if (!ReferenceEquals(result.Asset, null))
-                try { source.Release(result.Asset); }
-                catch (Exception error) { Debug.LogException(error); }
+            {
+                try
+                {
+                    source.Release(result.Asset);
+                }
+                catch (Exception error)
+                {
+                    Debug.LogException(error);
+                }
+            }
+
             result.Retention?.Dispose();
         }
 
@@ -450,21 +726,55 @@ namespace YLFramework.Services.Resource
         {
             CheckThread();
             var request = new ResourceRequest<bool>();
-            if (State == ResourceSystemState.Closed) { request.SetSuccess(true); return request; }
-            if (!IsSessionActive) return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
-            if (updating || remoteJobs.Count != 0) return Fail(request, ResourceError.Busy, "A resource version operation is in progress.");
-            if (checkingShutdown) return Fail(request, ResourceError.Busy, "Resource shutdown is checking its ownership barrier.");
-            if (State == ResourceSystemState.ShuttingDown) { shutdowns.Add(request); CheckDrain(); return request; }
+            if (State == ResourceSystemState.Closed)
+            {
+                request.SetSuccess(true);
+                return request;
+            }
+            if (!IsSessionActive)
+            {
+                return Fail(request, ResourceError.SessionUnavailable, "The resource session is unavailable.");
+            }
+
+            if (_isUpdating || _remoteJobs.Count != 0)
+            {
+                return Fail(request, ResourceError.Busy, "A resource version operation is in progress.");
+            }
+
+            if (_isCheckingShutdown)
+            {
+                return Fail(request, ResourceError.Busy, "Resource shutdown is checking its ownership barrier.");
+            }
+
+            if (State == ResourceSystemState.ShuttingDown)
+            {
+                _shutdowns.Add(request);
+                CheckDrain();
+                return request;
+            }
             State = ResourceSystemState.ShuttingDown;
-            checkingShutdown = true;
+            _isCheckingShutdown = true;
             try
             {
                 ClearImageCache();
                 ClearInstanceCaches();
-                var busy = publicBundleLeases.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0;
-                foreach (var cache in instanceCaches) if (cache.HasLiveOwners) busy = true;
-                foreach (var record in records.Values)
-                    if (record.LeaseCount > record.InstancePins || record.Waiters.Count != 0) busy = true;
+                var busy = _publicBundleLeases.Count != 0 || _sceneLoads.Count != 0 || _sceneRecords.Count != 0;
+                foreach (var cache in _instanceCaches)
+                {
+                    if (cache.HasLiveOwners)
+                    {
+                        busy = true;
+                    }
+                }
+
+                foreach (var record in _records.Values)
+                {
+                    if (record.LeaseCount > record.InstancePins || record.Waiters.Count != 0)
+                    {
+                        busy = true;
+                    }
+                }
+
                 if (busy)
                 {
                     State = ResourceSystemState.Ready;
@@ -476,64 +786,139 @@ namespace YLFramework.Services.Resource
                 State = ResourceSystemState.Ready;
                 throw;
             }
-            finally { checkingShutdown = false; }
-            shutdowns.Add(request);
+            finally
+            {
+                _isCheckingShutdown = false;
+            }
+            _shutdowns.Add(request);
             CheckDrain();
             return request;
         }
 
         private void CheckDrain()
         {
-            if (checkingShutdown) return;
-            if (records.Count != 0 || bundleRecords.Count != 0 || instanceCaches.Count != 0 || sceneLoads.Count != 0 || sceneRecords.Count != 0 || remoteJobs.Count != 0 ||
-                contentWork.Count != 0 || retainedContentCleanup.Count != 0 || !contentFaults.IsEmpty) return;
-            bundleQueue.Clear();
-            draining.Remove(this);
-            if (State != ResourceSystemState.ShuttingDown) return;
+            if (_isCheckingShutdown)
+            {
+                return;
+            }
+
+            if (_records.Count != 0 || _bundleRecords.Count != 0 || _instanceCaches.Count != 0 || _sceneLoads.Count != 0 || _sceneRecords.Count != 0 || _remoteJobs.Count != 0 ||
+                _contentWork.Count != 0 || _retainedContentCleanup.Count != 0 || !_contentFaults.IsEmpty)
+            {
+                return;
+            }
+
+            _bundleQueue.Clear();
+            _draining.Remove(this);
+            if (State != ResourceSystemState.ShuttingDown)
+            {
+                return;
+            }
+
             State = ResourceSystemState.Closed;
             UnbindCoreResourceProvider();
-            if (ReferenceEquals(authority, this)) authority = null;
-            var completed = shutdowns.ToArray();
-            shutdowns.Clear();
-            foreach (var request in completed) request.SetSuccess(true);
-            foreach (var request in completed) request.Notify();
+            if (ReferenceEquals(_authority, this))
+            {
+                _authority = null;
+            }
+
+            var completed = _shutdowns.ToArray();
+            _shutdowns.Clear();
+            foreach (var request in completed)
+            {
+                request.SetSuccess(true);
+            }
+
+            foreach (var request in completed)
+            {
+                request.Notify();
+            }
         }
 
         private static void EndSession()
         {
-            ending = true;
-            var system = authority;
-            authority = null;
-            if (system == null) return;
+            _isEnding = true;
+            var system = _authority;
+            _authority = null;
+            if (system == null)
+            {
+                return;
+            }
+
             system.State = ResourceSystemState.Invalidated;
             system.CancelContentWork();
             system.UnbindCoreResourceProvider();
-            draining.Add(system);
-            var requests = new List<IResourceRequest>(system.ownedRequests);
-            system.ownedRequests.Clear();
-            foreach (var request in system.initialization) requests.Add(request);
-            system.initialization.Clear();
-            foreach (var request in system.shutdowns) requests.Add(request);
-            system.shutdowns.Clear();
+            _draining.Add(system);
+            var requests = new List<IResourceRequest>(system._ownedRequests);
+            system._ownedRequests.Clear();
+            foreach (var request in system._initialization)
+            {
+                requests.Add(request);
+            }
+
+            system._initialization.Clear();
+            foreach (var request in system._shutdowns)
+            {
+                requests.Add(request);
+            }
+
+            system._shutdowns.Clear();
             // 整批先冻结终态和解绑等待，再释放/通知；观察者取消兄弟或 Dispose Scope 不改变退出原因。
-            foreach (var request in requests) request.PrepareInvalidation();
             foreach (var request in requests)
-                try { request.ReleaseInvalidatedResult(); }
-                catch (Exception error) { Debug.LogException(error); }
-            system.EndSceneSession();
-            foreach (var cache in new List<InstanceCache>(system.instanceCaches)) cache.EndSession();
-            foreach (var record in new List<AssetRecord>(system.records.Values))
-                if (!record.Loading)
+            {
+                request.PrepareInvalidation();
+            }
+
+            foreach (var request in requests)
+            {
+                try
                 {
-                    if (record.InstancePins == 0) system.ReleaseRecord(record);
-                    else record.LeaseCount = record.InstancePins;
+                    request.ReleaseInvalidatedResult();
                 }
-            foreach (var lease in new List<BundleLease>(system.publicBundleLeases)) lease.Dispose();
+                catch (Exception error)
+                {
+                    Debug.LogException(error);
+                }
+            }
+
+            system.EndSceneSession();
+            foreach (var cache in new List<InstanceCache>(system._instanceCaches))
+            {
+                cache.EndSession();
+            }
+
+            foreach (var record in new List<AssetRecord>(system._records.Values))
+            {
+                if (!record.IsLoading)
+                {
+                    if (record.InstancePins == 0)
+                    {
+                        system.ReleaseRecord(record);
+                    }
+                    else
+                    {
+                        record.LeaseCount = record.InstancePins;
+                    }
+                }
+            }
+
+            foreach (var lease in new List<BundleLease>(system._publicBundleLeases))
+            {
+                lease.Dispose();
+            }
+
             system.CheckDrain();
-            foreach (var request in requests) request.NotifyInvalidation();
+            foreach (var request in requests)
+            {
+                request.NotifyInvalidation();
+            }
         }
 
-        private static void ResetSession() { EndSession(); ending = false; }
+        private static void ResetSession()
+        {
+            EndSession();
+            _isEnding = false;
+        }
 
         public ResourceDiagnosticsSnapshot GetDiagnosticsSnapshot()
         {
@@ -541,19 +926,29 @@ namespace YLFramework.Services.Resource
             var producers = 0;
             var waiters = 0;
             var leases = 0;
-            foreach (var record in records.Values)
-            { if (record.Loading) producers++; waiters += record.Waiters.Count; leases += record.LeaseCount; }
+            foreach (var record in _records.Values)
+            {
+                if (record.IsLoading)
+                {
+                    producers++;
+                }
+                waiters += record.Waiters.Count;
+                leases += record.LeaseCount;
+            }
             var roots = 0;
             var edges = 0;
             var queued = 0;
-            foreach (var record in bundleRecords.Values)
+            foreach (var record in _bundleRecords.Values)
             {
                 roots += record.RootPins;
                 edges += record.References - record.RootPins;
-                if (record.State == BundleState.Queued) queued++;
+                if (record.State == BundleState.Queued)
+                {
+                    queued++;
+                }
             }
-            return new ResourceDiagnosticsSnapshot(records.Count, producers, waiters, leases, bundleRecords.Count, roots, edges,
-                runningBundles, queued, nativeBundleLoads, nativeBundleUnloads);
+            return new ResourceDiagnosticsSnapshot(_records.Count, producers, waiters, leases, _bundleRecords.Count, roots, edges,
+                _runningBundles, queued, _nativeBundleLoads, _nativeBundleUnloads);
         }
 
         private static ResourceRequest<T> Fail<T>(ResourceRequest<T> request, ResourceError kind, string message,
@@ -567,8 +962,10 @@ namespace YLFramework.Services.Resource
         internal void CheckThread() => AssertThread();
         internal static void AssertThread()
         {
-            if (Thread.CurrentThread.ManagedThreadId != mainThreadId)
+            if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+            {
                 throw new InvalidOperationException("ResourceSystem must be used on the Unity main thread.");
+            }
         }
     }
 }

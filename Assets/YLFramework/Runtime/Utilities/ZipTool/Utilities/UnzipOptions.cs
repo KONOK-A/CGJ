@@ -10,17 +10,26 @@ namespace YLFramework.Utilities.ZipTool
         /// <summary>
         /// 全部文件解压后总字节数上限；0 = 不限制。
         /// </summary>
-        public long MaxTotalUncompressedBytes { get; set; }
+        public long MaxTotalUncompressedBytes
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 单条目解压后字节数上限；0 = 不限制。
         /// </summary>
-        public long MaxEntryUncompressedBytes { get; set; }
+        public long MaxEntryUncompressedBytes
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 条目总数上限（含目录条目）；0 = 不限制。
         /// </summary>
-        public int MaxEntryCount { get; set; }
+        public int MaxEntryCount
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 网络下载来源的推荐预设：总量 4GB / 单条目 1GB / 10 万条目。

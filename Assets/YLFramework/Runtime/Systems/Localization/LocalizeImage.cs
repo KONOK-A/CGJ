@@ -7,24 +7,47 @@ namespace YLFramework.Localization
     [AddComponentMenu("YLFramework/Localization/Localize Image")]
     public class LocalizeImage : LocalizeBase
     {
-        private ResourceImage loader;
+        private ResourceImage _loader;
         protected override void OnLanguageValueChange()
         {
-            if (!loader) loader = GetComponent<ResourceImage>();
-            if (!loader) return;
-            var entry = LocalizationManager.GetLanguageInfo(ID);
-            if (entry == null) { loader.Clear(); return; }
+            if (!_loader)
+            {
+                _loader = GetComponent<ResourceImage>();
+            }
+
+            if (!_loader)
+            {
+                return;
+            }
+
+            var entry = LocalizationManager.GetLanguageInfo(Id);
+            if (entry == null)
+            {
+                _loader.Clear();
+                return;
+            }
             if (entry.type == MultiLanguageType.Image && entry.image != null)
-                loader.SetImage(new ResourceAddress(entry.image.projectName, entry.image.imageName,
+            {
+                _loader.SetImage(new ResourceAddress(entry.image.projectName, entry.image.imageName,
                     string.IsNullOrEmpty(entry.image.subAsset) ? null : entry.image.subAsset));
-            else if (entry.type == MultiLanguageType.NetworkImage) loader.SetImage(entry.url);
-            else loader.Clear();
+            }
+            else if (entry.type == MultiLanguageType.NetworkImage)
+            {
+                _loader.SetImage(entry.url);
+            }
+            else
+            {
+                _loader.Clear();
+            }
         }
 
         protected override void OnDisable()
         {
             base.OnDisable();
-            if (loader) loader.Clear();
+            if (_loader)
+            {
+                _loader.Clear();
+            }
         }
     }
 }

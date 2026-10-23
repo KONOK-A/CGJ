@@ -14,9 +14,9 @@ namespace YLFramework.Foundation.Tests
 {
     public class UpdateManagerPlayModeTests
     {
-        private readonly List<Component> hosts = new();
-        private readonly List<IUnRegister> tokens = new();
-        private bool isolated;
+        private readonly List<Component> _hosts = new();
+        private readonly List<IUnregister> _tokens = new();
+        private bool _isIsolated;
         private static Type UpdateType => typeof(UpdateManager);
         private static Component[] FindHosts() => Object.FindObjectsByType(UpdateType,
             FindObjectsInactive.Include, FindObjectsSortMode.None).Cast<Component>().ToArray();
@@ -24,35 +24,59 @@ namespace YLFramework.Foundation.Tests
         [SetUp]
         public void SetUp()
         {
-            isolated = false;
+            _isIsolated = false;
             Assert.That(FindHosts(), Is.Empty, "不接管已有公共宿主。");
-            isolated = true;
+            _isIsolated = true;
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!isolated) yield break;
-            foreach (var token in tokens) token?.UnRegister();
-            tokens.Clear();
-            foreach (var host in hosts) if (host) Object.Destroy(host.gameObject);
-            hosts.Clear();
+            if (!_isIsolated)
+            {
+                yield break;
+            }
+
+            foreach (var token in _tokens)
+            {
+                token?.Unregister();
+            }
+
+            _tokens.Clear();
+            foreach (var host in _hosts)
+            {
+                if (host)
+                {
+                    Object.Destroy(host.gameObject);
+                }
+            }
+
+            _hosts.Clear();
             yield return null;
         }
 
         private object Call(string method, Action callback)
         {
-            try { return UpdateType.GetMethod(method).Invoke(null, new object[] { callback }); }
+            try
+            {
+                return UpdateType.GetMethod(method).Invoke(null, new object[] { callback });
+            }
             finally
             {
-                foreach (var host in FindHosts()) if (!hosts.Contains(host)) hosts.Add(host);
+                foreach (var host in FindHosts())
+                {
+                    if (!_hosts.Contains(host))
+                    {
+                        _hosts.Add(host);
+                    }
+                }
             }
         }
-        private IUnRegister Register(string phase, Action callback)
+        private IUnregister Register(string phase, Action callback)
         {
-            var token = Call("Add" + phase + "Event", callback) as IUnRegister;
+            var token = Call("Add" + phase + "Event", callback) as IUnregister;
             Assert.That(token, Is.Not.Null, "每次注册必须返回精确身份。");
-            tokens.Add(token);
+            _tokens.Add(token);
             return token;
         }
 
@@ -81,18 +105,36 @@ namespace YLFramework.Foundation.Tests
             try
             {
                 UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
-                var u = Register("Update", () => { update++; wrongPhase |= Time.inFixedTimeStep; });
-                var f = Register("FixedUpdate", () => { fixedUpdate++; wrongPhase |= !Time.inFixedTimeStep; });
-                var l = Register("LateUpdate", () => { late++; wrongPhase |= Time.inFixedTimeStep; });
+                var u = Register("Update", () =>
+                {
+                    update++;
+                    wrongPhase |= Time.inFixedTimeStep;
+                });
+                var f = Register("FixedUpdate", () =>
+                {
+                    fixedUpdate++;
+                    wrongPhase |= !Time.inFixedTimeStep;
+                });
+                var l = Register("LateUpdate", () =>
+                {
+                    late++;
+                    wrongPhase |= Time.inFixedTimeStep;
+                });
                 var host = FindHosts().Single();
                 Assert.That(host.name, Is.EqualTo("YLFramework.Foundation.UpdateManager"));
                 UnityEngine.SceneManagement.SceneManager.SetActiveScene(previous);
                 yield return UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
                 var deadline = Time.realtimeSinceStartup + 3;
-                while ((update == 0 || fixedUpdate == 0 || late == 0) && Time.realtimeSinceStartup < deadline) yield return null;
+                while ((update == 0 || fixedUpdate == 0 || late == 0) && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(update > 0 && fixedUpdate > 0 && late > 0, Is.True);
                 Assert.That(wrongPhase, Is.False);
-                u.UnRegister(); f.UnRegister(); l.UnRegister();
+                u.Unregister();
+                f.Unregister();
+                l.Unregister();
                 var counts = new[] { update, fixedUpdate, late };
                 yield return null;
                 yield return null;
@@ -102,7 +144,10 @@ namespace YLFramework.Foundation.Tests
             finally
             {
                 UnityEngine.SceneManagement.SceneManager.SetActiveScene(previous);
-                if (scene.IsValid() && scene.isLoaded) UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+                }
             }
         }
 
@@ -113,20 +158,22 @@ namespace YLFramework.Foundation.Tests
             Action shared = () => calls.Add("shared");
             var first = Register("Update", shared);
             var second = Register("Update", shared);
-            first.UnRegister(); first.UnRegister();
+            first.Unregister();
+            first.Unregister();
             Action tail = () => calls.Add("tail");
             var multi = Register("Update", shared + tail);
             Call("RemoveUpdateEvent", shared);
             FindHosts().Single().SendMessage("Update");
             CollectionAssert.AreEqual(new[] { "shared", "tail" }, calls);
-            second.UnRegister(); multi.UnRegister();
+            second.Unregister();
+            multi.Unregister();
             calls.Clear();
-            IUnRegister removed = null;
-            IUnRegister added = null;
+            IUnregister removed = null;
+            IUnregister added = null;
             var head = Register("Update", () =>
             {
                 calls.Add("head");
-                removed.UnRegister();
+                removed.Unregister();
                 added ??= Register("Update", () => calls.Add("added"));
             });
             removed = Register("Update", () => calls.Add("removed"));
@@ -135,7 +182,8 @@ namespace YLFramework.Foundation.Tests
             calls.Clear();
             FindHosts().Single().SendMessage("Update");
             CollectionAssert.AreEqual(new[] { "head", "added" }, calls);
-            head.UnRegister(); added.UnRegister();
+            head.Unregister();
+            added.Unregister();
             yield break;
         }
 
@@ -163,24 +211,31 @@ namespace YLFramework.Foundation.Tests
                     Assert.That(errors[1].Message, Is.EqualTo("YLUpdate.SecondFailure"));
                 }
             }
-            finally { Debug.unityLogger.logHandler = previousHandler; }
+            finally
+            {
+                Debug.unityLogger.logHandler = previousHandler;
+            }
             Assert.That(observed, Is.EqualTo(2));
-            foreach (var token in tokens) token.UnRegister();
+            foreach (var token in _tokens)
+            {
+                token.Unregister();
+            }
+
             yield break;
         }
 
         private sealed class ExceptionCapture : ILogHandler
         {
-            private readonly ILogHandler previous;
+            private readonly ILogHandler _previous;
             internal Exception Error;
-            internal ExceptionCapture(ILogHandler previous) => this.previous = previous;
+            internal ExceptionCapture(ILogHandler previous) => this._previous = previous;
             public void LogException(Exception exception, Object context)
             {
                 Error = exception;
-                previous.LogException(exception, context);
+                _previous.LogException(exception, context);
             }
             public void LogFormat(LogType type, Object context, string format, params object[] args)
-                => previous.LogFormat(type, context, format, args);
+                => _previous.LogFormat(type, context, format, args);
         }
 
         [UnityTest]
@@ -194,7 +249,7 @@ namespace YLFramework.Foundation.Tests
             Assert.That(oldCalls, Is.Zero, "owner 销毁截断旧快照。");
             Assert.That(FindHosts(), Is.Empty, "OnDestroy 不自行重建。");
             Register("Update", () => newCalls++);
-            oldToken.UnRegister();
+            oldToken.Unregister();
             FindHosts().Single().SendMessage("Update");
             Assert.That(newCalls, Is.EqualTo(1));
             yield break;
@@ -216,14 +271,14 @@ namespace YLFramework.Foundation.Tests
             Assert.That(newHost, Is.Not.SameAs(oldHost));
             oldHost.SendMessage("OnApplicationQuit");
             oldHost.SendMessage("OnDestroy");
-            oldToken.UnRegister();
+            oldToken.Unregister();
             newHost.SendMessage("Update");
             Assert.That(oldCalls, Is.Zero);
             Assert.That(newCalls, Is.EqualTo(1));
             newHost.SendMessage("OnApplicationQuit");
-            current.UnRegister();
+            current.Unregister();
             Call("RemoveUpdateEvent", () => { });
-            var refused = Call("AddUpdateEvent", (Action)(() => newCalls++)) as IUnRegister;
+            var refused = Call("AddUpdateEvent", (Action)(() => newCalls++)) as IUnregister;
             Assert.That(refused, Is.Not.Null);
             Assert.That(FindHosts().Length, Is.EqualTo(2));
             newHost.SendMessage("Update");

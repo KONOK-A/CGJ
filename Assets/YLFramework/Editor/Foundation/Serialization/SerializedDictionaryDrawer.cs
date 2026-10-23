@@ -15,7 +15,7 @@ namespace YLFramework.Editor
     {
         private const float Spacing = 2f;
         private static float DiagnosticHeight => EditorGUIUtility.singleLineHeight * 4;
-        private Vector2 diagnosticScroll;
+        private Vector2 _diagnosticScroll;
 
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
@@ -33,17 +33,25 @@ namespace YLFramework.Editor
             {
                 var current = serialized.FindProperty(path);
                 if (current == null)
+                {
                     return;
+                }
+
                 help.text = Describe(current, out var editable);
                 var rows = current.FindPropertyRelative("datas");
                 var size = rows.arraySize;
                 if (size == previousSize && editable == previousEditable)
+                {
                     return;
+                }
+
                 previousSize = size;
                 previousEditable = editable;
                 fields.Clear();
                 if (!serialized.isEditingMultipleObjects)
+                {
                     fields.Add(new PropertyField(rows, current.displayName + " (Key / Value)"));
+                }
                 else
                 {
                     // 多选不提供列表结构控件，避免原生数组操作覆盖各目标不同的原始行。
@@ -79,10 +87,16 @@ namespace YLFramework.Editor
                 var text = Describe(property, out var editable);
                 var contentWidth = Mathf.Max(1, position.width - 18);
                 var contentHeight = Mathf.Max(DiagnosticHeight, EditorStyles.helpBox.CalcHeight(new GUIContent(text), contentWidth));
-                diagnosticScroll = GUI.BeginScrollView(new Rect(position.x, position.y, position.width, DiagnosticHeight),
-                    diagnosticScroll, new Rect(0, 0, contentWidth, contentHeight));
-                try { EditorGUI.HelpBox(new Rect(0, 0, contentWidth, contentHeight), text, MessageType.Info); }
-                finally { GUI.EndScrollView(); }
+                _diagnosticScroll = GUI.BeginScrollView(new Rect(position.x, position.y, position.width, DiagnosticHeight),
+                    _diagnosticScroll, new Rect(0, 0, contentWidth, contentHeight));
+                try
+                {
+                    EditorGUI.HelpBox(new Rect(0, 0, contentWidth, contentHeight), text, MessageType.Info);
+                }
+                finally
+                {
+                    GUI.EndScrollView();
+                }
                 position.y += DiagnosticHeight + Spacing;
                 var rows = property.FindPropertyRelative("datas");
                 if (!property.serializedObject.isEditingMultipleObjects)
@@ -95,7 +109,10 @@ namespace YLFramework.Editor
                     position.height = EditorGUIUtility.singleLineHeight;
                     property.isExpanded = EditorGUI.Foldout(position, property.isExpanded, label, true);
                     if (!property.isExpanded)
+                    {
                         return;
+                    }
+
                     using (new EditorGUI.DisabledScope(!editable))
                     {
                         for (int i = 0; i < rows.arraySize; i++)
@@ -115,7 +132,10 @@ namespace YLFramework.Editor
                     }
                 }
             }
-            finally { EditorGUI.EndProperty(); }
+            finally
+            {
+                EditorGUI.EndProperty();
+            }
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
@@ -124,9 +144,13 @@ namespace YLFramework.Editor
             var height = DiagnosticHeight + Spacing;
             var rows = property.FindPropertyRelative("datas");
             if (!property.serializedObject.isEditingMultipleObjects)
+            {
                 return height + EditorGUI.GetPropertyHeight(rows, label, true);
+            }
+
             height += EditorGUIUtility.singleLineHeight;
             if (property.isExpanded)
+            {
                 for (int i = 0; i < rows.arraySize; i++)
                 {
                     var row = rows.GetArrayElementAtIndex(i);
@@ -134,6 +158,8 @@ namespace YLFramework.Editor
                     height += EditorGUI.GetPropertyHeight(row.FindPropertyRelative("Key"), true) + Spacing;
                     height += EditorGUI.GetPropertyHeight(row.FindPropertyRelative("Value"), true) + Spacing;
                 }
+            }
+
             return height;
         }
 
@@ -142,15 +168,25 @@ namespace YLFramework.Editor
             editable = true;
             var dictionaryType = fieldInfo.FieldType;
             if (dictionaryType.IsArray)
+            {
                 dictionaryType = dictionaryType.GetElementType();
+            }
             else if (dictionaryType.IsGenericType && dictionaryType.GetGenericTypeDefinition() == typeof(List<>))
+            {
                 dictionaryType = dictionaryType.GetGenericArguments()[0];
+            }
+
             while (!dictionaryType.IsGenericType || dictionaryType.GetGenericTypeDefinition() != typeof(SerializedDictionary<,>))
+            {
                 dictionaryType = dictionaryType.BaseType;
+            }
+
             var keyType = dictionaryType.GetGenericArguments()[0];
             var text = new StringBuilder("首个有效键参与运行时；原始行不会自动删除。行号对应 Element，下方可修改 Key / Value。\n");
             if (!property.serializedObject.isEditingMultipleObjects)
+            {
                 return text.Append(DescribeRows(property.FindPropertyRelative("datas"), keyType)).ToString();
+            }
 
             int? size = null;
             foreach (var target in property.serializedObject.targetObjects)
@@ -165,7 +201,10 @@ namespace YLFramework.Editor
                         continue;
                     }
                     if (size.HasValue && size != rows.arraySize)
+                    {
                         editable = false;
+                    }
+
                     size = rows.arraySize;
                     text.Append(target.name).Append(": ").Append(DescribeRows(rows, keyType)).Append('\n');
                 }
@@ -190,7 +229,10 @@ namespace YLFramework.Editor
                 }
                 object key;
                 // 2022.3 不支持装箱闭合泛型条目，读取其实际 Key 字段而非运行时缓存。
-                try { key = keyProperty.boxedValue; }
+                try
+                {
+                    key = keyProperty.boxedValue;
+                }
                 catch (InvalidOperationException exception)
                 {
                     return $"原始 {rows.arraySize}；当前 Unity 不支持此字段的 boxedValue 诊断：{exception.Message}。可编辑原始字段，但无法确定有效数。";
@@ -203,11 +245,17 @@ namespace YLFramework.Editor
                         issues.Append($"\n行 [{i}]：None/Missing 引用，SerializedProperty 无法区分 CLR null 与 Unity fake-null；运行时仅拒绝 CLR null。建议用稳定 ID 作持久化键。");
                     }
                     else
+                    {
                         issues.Append($"\n行 [{i}]：CLR null 键，不参与运行时。");
+                    }
+
                     continue;
                 }
                 if (keyType.IsEnum)
+                {
                     key = Enum.ToObject(keyType, key);
+                }
+
                 if (firstRows == null)
                 {
                     var comparer = (IEqualityComparer)typeof(EqualityComparer<>).MakeGenericType(keyType)
@@ -215,7 +263,9 @@ namespace YLFramework.Editor
                     firstRows = new Dictionary<object, int>(new KeyComparer(comparer));
                 }
                 if (firstRows.TryGetValue(key, out var first))
+                {
                     issues.Append($"\n行 [{i}]：重复键，首个有效行为 [{first}]，此行不参与运行时。");
+                }
                 else
                 {
                     firstRows.Add(key, i);
@@ -229,10 +279,13 @@ namespace YLFramework.Editor
 
         private sealed class KeyComparer : IEqualityComparer<object>
         {
-            private readonly IEqualityComparer comparer;
-            public KeyComparer(IEqualityComparer comparer) { this.comparer = comparer; }
-            public new bool Equals(object x, object y) => comparer.Equals(x, y);
-            public int GetHashCode(object obj) => comparer.GetHashCode(obj);
+            private readonly IEqualityComparer _comparer;
+            public KeyComparer(IEqualityComparer comparer)
+            {
+                this._comparer = comparer;
+            }
+            public new bool Equals(object x, object y) => _comparer.Equals(x, y);
+            public int GetHashCode(object obj) => _comparer.GetHashCode(obj);
         }
     }
 }

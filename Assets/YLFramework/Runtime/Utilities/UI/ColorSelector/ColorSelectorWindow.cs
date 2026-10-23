@@ -22,14 +22,36 @@ namespace YLFramework.Core
         protected override void OnOpen(LoadViewArgs args) => Configure(args);
         private void Configure(LoadViewArgs args)
         {
-            if (!selector || !closeButton) throw new InvalidOperationException("ColorSelectorWindow requires selector and close button bindings.");
+            if (!selector || !closeButton)
+            {
+                throw new InvalidOperationException("ColorSelectorWindow requires selector and close button bindings.");
+            }
+
             selector.BeginSession(args.GetObject("initialColor") is Color initial ? initial : Color.white,
                 args.GetObject("colorChanged") as Action<Color>);
         }
 
-        private void CloseFromButton() { if (IsLoaded && !IsInputBlocked) Close(); }
+        private void CloseFromButton()
+        {
+            if (IsLoaded && !IsInputBlocked)
+            {
+                Close();
+            }
+        }
         protected override void OnViewEnabled() => closeButton.onClick.AddListener(CloseFromButton);
-        protected override void OnViewDisabled() { if (closeButton) closeButton.onClick.RemoveListener(CloseFromButton); }
-        public override void OnRemove() { if (selector) selector.EndSession(); }
+        protected override void OnViewDisabled()
+        {
+            if (closeButton)
+            {
+                closeButton.onClick.RemoveListener(CloseFromButton);
+            }
+        }
+        public override void OnRemove()
+        {
+            if (selector)
+            {
+                selector.EndSession();
+            }
+        }
     }
 }

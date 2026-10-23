@@ -49,27 +49,42 @@ namespace YLFramework.Binding
         /// <summary>
         /// 本次变化的类型，决定其余字段的有效性。
         /// </summary>
-        public BindableCollectionChangeType ChangeType { get; }
+        public BindableCollectionChangeType ChangeType
+        {
+            get;
+        }
 
         /// <summary>
         /// Add/Remove/Replace 为元素下标；Move 为移动前下标；Clear/Reset 为 -1。
         /// </summary>
-        public int Index { get; }
+        public int Index
+        {
+            get;
+        }
 
         /// <summary>
         /// 仅 Move 有效：移动后的目标下标；其余类型为 -1。
         /// </summary>
-        public int NewIndex { get; }
+        public int NewIndex
+        {
+            get;
+        }
 
         /// <summary>
         /// 旧值：Remove 为被移除值，Replace 为替换前值；其余类型为 default。
         /// </summary>
-        public T OldValue { get; }
+        public T OldValue
+        {
+            get;
+        }
 
         /// <summary>
         /// 新值：Add 为新增值，Replace 为替换后值，Move 为被移动元素；其余类型为 default。
         /// </summary>
-        public T NewValue { get; }
+        public T NewValue
+        {
+            get;
+        }
 
         /// <summary>
         /// 创建 Add 变化（Index 与 NewValue 有效）。
@@ -139,22 +154,34 @@ namespace YLFramework.Binding
         /// <summary>
         /// 本次变化的类型，决定其余字段的有效性。
         /// </summary>
-        public BindableCollectionChangeType ChangeType { get; }
+        public BindableCollectionChangeType ChangeType
+        {
+            get;
+        }
 
         /// <summary>
         /// 发生变化的键；Clear/Reset 为 default。
         /// </summary>
-        public TKey Key { get; }
+        public TKey Key
+        {
+            get;
+        }
 
         /// <summary>
         /// 旧值：Remove 为被移除值，Replace 为替换前值；其余类型为 default。
         /// </summary>
-        public TValue OldValue { get; }
+        public TValue OldValue
+        {
+            get;
+        }
 
         /// <summary>
         /// 新值：Add 为新增值，Replace 为替换后值；其余类型为 default。
         /// </summary>
-        public TValue NewValue { get; }
+        public TValue NewValue
+        {
+            get;
+        }
 
         /// <summary>
         /// 创建 Add 变化（Key 与 NewValue 有效）。

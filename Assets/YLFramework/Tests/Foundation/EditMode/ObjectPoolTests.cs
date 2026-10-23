@@ -34,7 +34,11 @@ namespace YLFramework.Foundation.Tests
             var allocated = new List<object>();
             var reset = new List<object>();
             var discarded = new List<object>();
-            using var pool = new ObjectPool<object>(() => { created++; return new object(); },
+            using var pool = new ObjectPool<object>(() =>
+            {
+                created++;
+                return new object();
+            },
                 onAllocate: allocated.Add, reset: reset.Add, onDiscard: discarded.Add);
 
             var cold = pool.Allocate();
@@ -149,21 +153,37 @@ namespace YLFramework.Foundation.Tests
             using var pool = new ObjectPool<object>(() => item,
                 onAllocate: _ => allocations++, reset: _ => resets++, onDiscard: _ => discards++);
             Assert.That(pool.Allocate(), Is.SameAs(item));
-            if (state == "idle") Assert.That(pool.Recycle(item), Is.True);
-            if (state == "retired") pool.Discard(item);
+            if (state == "idle")
+            {
+                Assert.That(pool.Recycle(item), Is.True);
+            }
+
+            if (state == "retired")
+            {
+                pool.Discard(item);
+            }
+
             var previousResets = resets;
             var previousDiscards = discards;
 
             if (state == "idle")
+            {
                 Assert.Throws<InvalidOperationException>(() => pool.Prewarm(2, PoolPrewarmMode.Raw));
+            }
             else
+            {
                 Assert.Throws<InvalidOperationException>(() => pool.Allocate());
+            }
 
             Assert.That(allocations, Is.EqualTo(1));
             Assert.That(resets, Is.EqualTo(previousResets));
             Assert.That(discards, Is.EqualTo(previousDiscards));
             Assert.That(pool.CurStoreCount, Is.EqualTo(state == "idle" ? 1 : 0));
-            if (state == "idle") Assert.That(pool.Allocate(), Is.SameAs(item));
+            if (state == "idle")
+            {
+                Assert.That(pool.Allocate(), Is.SameAs(item));
+            }
+
             Assert.That(pool.Recycle(item), Is.EqualTo(state != "retired"));
         }
 
@@ -180,9 +200,26 @@ namespace YLFramework.Foundation.Tests
             var discards = 0;
             object failed = null;
             using var pool = new ObjectPool<object>(() => failed = new object(),
-                onAllocate: _ => { if (fail) throw root; }, reset: _ => resets++,
-                onDiscard: _ => { discards++; if (cleanupFails) throw cleanup; });
-            if (hot) Assert.That(pool.Recycle(pool.Allocate()), Is.True);
+                onAllocate: _ =>
+                {
+                    if (fail)
+                    {
+                        throw root;
+                    }
+                }, reset: _ => resets++,
+                onDiscard: _ =>
+                {
+                    discards++;
+                    if (cleanupFails)
+                    {
+                        throw cleanup;
+                    }
+                });
+            if (hot)
+            {
+                Assert.That(pool.Recycle(pool.Allocate()), Is.True);
+            }
+
             fail = true;
 
             if (cleanupFails)
@@ -193,7 +230,9 @@ namespace YLFramework.Foundation.Tests
                 Assert.That(error.InnerExceptions[1], Is.SameAs(cleanup));
             }
             else
+            {
                 Assert.That(Assert.Throws<InvalidOperationException>(() => pool.Allocate()), Is.SameAs(root));
+            }
 
             Assert.That(pool.CurStoreCount, Is.Zero);
             Assert.That(resets, Is.EqualTo(hot ? 1 : 0));
@@ -219,13 +258,33 @@ namespace YLFramework.Foundation.Tests
             var resets = 0;
             var discards = 0;
             using var pool = new ObjectPool<object>(() => new object(),
-                reset: _ => { resets++; if (fail) throw root; },
-                onDiscard: _ => { discards++; if (cleanupFails) throw cleanup; });
+                reset: _ =>
+                {
+                    resets++;
+                    if (fail)
+                    {
+                        throw root;
+                    }
+                },
+                onDiscard: _ =>
+                {
+                    discards++;
+                    if (cleanupFails)
+                    {
+                        throw cleanup;
+                    }
+                });
             var failed = pool.Allocate();
             TestDelegate returnFailed = () =>
             {
-                if (discard) pool.Discard(failed);
-                else pool.Recycle(failed);
+                if (discard)
+                {
+                    pool.Discard(failed);
+                }
+                else
+                {
+                    pool.Recycle(failed);
+                }
             };
 
             if (cleanupFails)
@@ -236,7 +295,9 @@ namespace YLFramework.Foundation.Tests
                 Assert.That(error.InnerExceptions[1], Is.SameAs(cleanup));
             }
             else
+            {
                 Assert.That(Assert.Throws<InvalidOperationException>(returnFailed), Is.SameAs(root));
+            }
 
             Assert.That(pool.CurStoreCount, Is.Zero);
             Assert.That(pool.Recycle(failed), Is.False);
@@ -272,7 +333,11 @@ namespace YLFramework.Foundation.Tests
             var discards = 0;
             pool = new ObjectPool<object>(() => new object(),
                 onAllocate: item => nestedResults.Add(pool.Recycle(item)),
-                reset: item => { resets++; nestedResults.Add(pool.Recycle(item)); },
+                reset: item =>
+                {
+                    resets++;
+                    nestedResults.Add(pool.Recycle(item));
+                },
                 onDiscard: _ => discards++);
             using (pool)
             {
@@ -299,7 +364,10 @@ namespace YLFramework.Foundation.Tests
             pool = new ObjectPool<object>(() => new object(), reset: item =>
             {
                 resets.Add(item);
-                if (ReferenceEquals(item, outer)) nestedCached = pool.Recycle(other);
+                if (ReferenceEquals(item, outer))
+                {
+                    nestedCached = pool.Recycle(other);
+                }
             }, onDiscard: discarded.Add, maxPoolSize: 1);
             using (pool)
             {
@@ -324,7 +392,10 @@ namespace YLFramework.Foundation.Tests
             var discarded = new List<object>();
             pool = new ObjectPool<object>(() => new object(), reset: item =>
             {
-                if (ReferenceEquals(item, outer)) nestedLease = pool.Allocate();
+                if (ReferenceEquals(item, outer))
+                {
+                    nestedLease = pool.Allocate();
+                }
             }, onDiscard: discarded.Add, maxPoolSize: 1);
             using (pool)
             {
@@ -346,7 +417,11 @@ namespace YLFramework.Foundation.Tests
             var resets = 0;
             var discards = 0;
             pool = new ObjectPool<object>(() => new object(),
-                reset: _ => { resets++; pool.Dispose(); }, onDiscard: _ => discards++);
+                reset: _ =>
+                {
+                    resets++;
+                    pool.Dispose();
+                }, onDiscard: _ => discards++);
             using (pool)
             {
                 var item = pool.Allocate();
@@ -375,7 +450,11 @@ namespace YLFramework.Foundation.Tests
                 onDiscard: item =>
                 {
                     discarded.Add(item);
-                    if (++callbacks != 1) return;
+                    if (++callbacks != 1)
+                    {
+                        return;
+                    }
+
                     Assert.That(pool.CurStoreCount, Is.Zero);
                     Assert.That(pool.Recycle(first), Is.False);
                     Assert.That(pool.Recycle(second), Is.False);
@@ -417,8 +496,15 @@ namespace YLFramework.Foundation.Tests
                 onDiscard: item =>
                 {
                     discarded.Add(item);
-                    if (discarded.Count == 1) throw firstError;
-                    if (discarded.Count == 2) throw secondError;
+                    if (discarded.Count == 1)
+                    {
+                        throw firstError;
+                    }
+
+                    if (discarded.Count == 2)
+                    {
+                        throw secondError;
+                    }
                 }, cacheOrder: order);
             var first = pool.Allocate();
             var second = pool.Allocate();
@@ -452,7 +538,10 @@ namespace YLFramework.Foundation.Tests
             pool = new ObjectPool<object>(() => new object(), reset: _ => resets++, onDiscard: item =>
             {
                 discarded.Add(item);
-                if (!ReferenceEquals(item, late)) nestedResult = pool.Recycle(late);
+                if (!ReferenceEquals(item, late))
+                {
+                    nestedResult = pool.Recycle(late);
+                }
             });
             using (pool)
             {
@@ -483,7 +572,10 @@ namespace YLFramework.Foundation.Tests
                 discarded.Add(item);
                 Assert.Throws<ObjectDisposedException>(() => pool.Allocate());
                 pool.Dispose();
-                if (fail) throw errors[discarded.Count - 1];
+                if (fail)
+                {
+                    throw errors[discarded.Count - 1];
+                }
             });
             using (pool)
             {
@@ -531,13 +623,28 @@ namespace YLFramework.Foundation.Tests
             var close = false;
             pool = new ObjectPool<object>(() =>
             {
-                if (factoryDisposes && close) pool.Dispose();
+                if (factoryDisposes && close)
+                {
+                    pool.Dispose();
+                }
+
                 return item;
-            }, onAllocate: _ => { allocations++; if (close) pool.Dispose(); },
+            }, onAllocate: _ =>
+            {
+                allocations++;
+                if (close)
+                {
+                    pool.Dispose();
+                }
+            },
                 reset: _ => resets++, onDiscard: discarded.Add);
             using (pool)
             {
-                if (hot) Assert.That(pool.Recycle(pool.Allocate()), Is.True);
+                if (hot)
+                {
+                    Assert.That(pool.Recycle(pool.Allocate()), Is.True);
+                }
+
                 close = true;
                 Assert.Throws<ObjectDisposedException>(() => pool.Allocate());
                 Assert.That(allocations, Is.EqualTo(hot ? 2 : factoryDisposes ? 0 : 1));
@@ -555,7 +662,11 @@ namespace YLFramework.Foundation.Tests
         {
             var created = 0;
             var callbacks = 0;
-            using var pool = new ObjectPool<object>(() => { created++; return null; },
+            using var pool = new ObjectPool<object>(() =>
+            {
+                created++;
+                return null;
+            },
                 onAllocate: _ => callbacks++, reset: _ => callbacks++, onDiscard: _ => callbacks++);
             Assert.That(pool.Allocate(), Is.Null);
             Assert.That(pool.TryAllocate(out var item), Is.False);
@@ -591,7 +702,11 @@ namespace YLFramework.Foundation.Tests
             var created = 0;
             var allocations = 0;
             var resets = 0;
-            using var pool = new ObjectPool<object>(() => { created++; return new object(); },
+            using var pool = new ObjectPool<object>(() =>
+            {
+                created++;
+                return new object();
+            },
                 onAllocate: _ => allocations++, reset: _ => resets++, maxPoolSize: 3);
             Assert.That(pool.Prewarm(-1, mode), Is.Zero);
             Assert.That(pool.Prewarm(int.MinValue, mode), Is.Zero);
@@ -617,9 +732,17 @@ namespace YLFramework.Foundation.Tests
             using var pool = new ObjectPool<object>(() => new object(), maxPoolSize: capacity);
             Assert.That(pool.Prewarm(25, PoolPrewarmMode.Raw), Is.EqualTo(25));
             var leases = new List<object>();
-            for (var i = 0; i < 30; i++) leases.Add(pool.Allocate());
+            for (var i = 0; i < 30; i++)
+            {
+                leases.Add(pool.Allocate());
+            }
+
             Assert.That(pool.CurStoreCount, Is.Zero);
-            foreach (var item in leases) Assert.That(pool.Recycle(item), Is.True);
+            foreach (var item in leases)
+            {
+                Assert.That(pool.Recycle(item), Is.True);
+            }
+
             Assert.That(pool.CurStoreCount, Is.EqualTo(30));
         }
 
@@ -634,7 +757,11 @@ namespace YLFramework.Foundation.Tests
             object first = null;
             using var pool = new ObjectPool<object>(() =>
             {
-                if (++attempts == 2) throw root;
+                if (++attempts == 2)
+                {
+                    throw root;
+                }
+
                 return first = new object();
             }, reset: _ => resets++, onDiscard: _ => discards++);
             Assert.That(Assert.Throws<ApplicationException>(() => pool.Prewarm(3, mode)), Is.SameAs(root));
@@ -658,8 +785,18 @@ namespace YLFramework.Foundation.Tests
                 var item = new object();
                 created.Add(item);
                 return item;
-            }, reset: _ => { if (++resets == 2) throw root; },
-                onDiscard: item => { discarded.Add(item); throw cleanup; });
+            }, reset: _ =>
+            {
+                if (++resets == 2)
+                {
+                    throw root;
+                }
+            },
+                onDiscard: item =>
+                {
+                    discarded.Add(item);
+                    throw cleanup;
+                });
             var error = Assert.Throws<AggregateException>(() => pool.Prewarm(3));
             Assert.That(error.InnerExceptions.Count, Is.EqualTo(2));
             Assert.That(error.InnerExceptions[0], Is.SameAs(root));
@@ -683,7 +820,11 @@ namespace YLFramework.Foundation.Tests
             var allocated = new List<object>();
             var reset = new List<object>();
             var discarded = new List<object>();
-            pool = new ObjectPool<object>(() => { factoryCalls++; return new object(); },
+            pool = new ObjectPool<object>(() =>
+            {
+                factoryCalls++;
+                return new object();
+            },
                 onAllocate: allocated.Add, reset: reset.Add, onDiscard: discarded.Add, maxPoolSize: 5);
             using (pool)
             {
@@ -716,7 +857,11 @@ namespace YLFramework.Foundation.Tests
             var item = new object();
             var resets = 0;
             var discarded = new List<object>();
-            pool = new ObjectPool<object>(() => { pool.Dispose(); return item; },
+            pool = new ObjectPool<object>(() =>
+            {
+                pool.Dispose();
+                return item;
+            },
                 reset: _ => resets++, onDiscard: discarded.Add);
             using (pool)
             {
@@ -739,7 +884,10 @@ namespace YLFramework.Foundation.Tests
             pool = new ObjectPool<object>(() => new object(), reset: item =>
             {
                 reset.Add(item);
-                if (ReferenceEquals(item, created)) Assert.That(pool.Recycle(otherLease), Is.True);
+                if (ReferenceEquals(item, created))
+                {
+                    Assert.That(pool.Recycle(otherLease), Is.True);
+                }
             }, onDiscard: discarded.Add, maxPoolSize: 5);
             using (pool)
             {
@@ -767,7 +915,11 @@ namespace YLFramework.Foundation.Tests
             using var pool = new ObjectPool<object>(() => first, reset: reset.Add, onDiscard: discarded.Add);
             Assert.That(pool.Allocate(), Is.SameAs(first));
             Assert.That(pool.Recycle(first), Is.True);
-            pool.SetFactoryMethod(() => { replacementCalls++; return second; });
+            pool.SetFactoryMethod(() =>
+            {
+                replacementCalls++;
+                return second;
+            });
             Assert.That(pool.Allocate(), Is.SameAs(first));
             Assert.That(replacementCalls, Is.Zero);
             Assert.That(pool.Allocate(), Is.SameAs(second));

@@ -16,33 +16,41 @@ namespace YLFramework.Core.Editor
         /// <param name="forder">资源所在目录</param>
         /// <returns></returns>
         public static string GetName(string name, string forder)
-        { 
+        {
             if (!AssetDatabase.IsValidFolder(forder))
+            {
                 return name;
+            }
 
             string tempName = name;
-             
+
             int count = 0;
 
-            while (IsContainName(tempName,forder))
+            while (IsContainName(tempName, forder))
             {
-                count++; 
-                tempName = string.Format("{0} ({1})", name, count); 
+                count++;
+                tempName = string.Format("{0} ({1})", name, count);
             }
 
             return tempName;
         }
 
-        private static bool IsContainName(string name, string forder) 
+        private static bool IsContainName(string name, string forder)
         {
             string[] matchs = AssetDatabase.FindAssets(name, new string[] { forder });
 
             foreach (var item in matchs)
             {
-                string asset_path = AssetDatabase.GUIDToAssetPath(item);
-                if (string.IsNullOrEmpty(asset_path)) continue;
-                if (System.IO.Path.GetFileNameWithoutExtension(asset_path) == name)
+                string assetPath = AssetDatabase.GUIDToAssetPath(item);
+                if (string.IsNullOrEmpty(assetPath))
+                {
+                    continue;
+                }
+
+                if (System.IO.Path.GetFileNameWithoutExtension(assetPath) == name)
+                {
                     return true;
+                }
             }
 
             return false;

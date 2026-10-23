@@ -11,15 +11,18 @@ namespace YLFramework.Services.Resource
     internal sealed class CngSegmentAead : IDisposable
     {
 #if UNITY_EDITOR_WIN || (!UNITY_EDITOR && UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP))
-        private readonly object gate = new();
-        private IntPtr algorithm;
-        private IntPtr key;
-        private bool disposed;
-        private Exception releaseFault;
-        private long keyObjectBytes;
-        private static long activeAlgorithms, activeKeys, activeKeyObjectBytes, releaseFailures;
+        private readonly object _gate = new();
+        private IntPtr _algorithm;
+        private IntPtr _key;
+        private bool _isDisposed;
+        private Exception _releaseFault;
+        private long _keyObjectBytes;
+        private static long _activeAlgorithms;
+        private static long _activeKeys;
+        private static long _activeKeyObjectBytes;
+        private static long _releaseFailures;
         // 无法确认销毁的系统 owner 必须留存；不重试有歧义的 native 释放，也不关闭其 provider。
-        private static readonly List<CngSegmentAead> RetainedOwners = new();
+        private static readonly List<CngSegmentAead> _retainedOwners = new();
 
         internal static bool IsSupported => Environment.OSVersion.Platform == PlatformID.Win32NT && IntPtr.Size == 8
 #if ENABLE_IL2CPP && !UNITY_EDITOR
@@ -27,39 +30,82 @@ namespace YLFramework.Services.Resource
             && UnityEngine.Application.unityVersion == "2022.3.62f3c1"
 #endif
             ;
-        internal static long ActiveAlgorithms => Interlocked.Read(ref activeAlgorithms);
-        internal static long ActiveKeys => Interlocked.Read(ref activeKeys);
-        internal static long ActiveKeyObjectBytes => Interlocked.Read(ref activeKeyObjectBytes);
-        internal static long ReleaseFailures => Interlocked.Read(ref releaseFailures);
-        internal static int RetainedReleaseOwners { get { lock (RetainedOwners) return RetainedOwners.Count; } }
-        internal long KeyObjectBytes => keyObjectBytes;
-        internal Exception ReleaseFault { get { lock (gate) return releaseFault; } }
+        internal static long ActiveAlgorithms => Interlocked.Read(ref _activeAlgorithms);
+        internal static long ActiveKeys => Interlocked.Read(ref _activeKeys);
+        internal static long ActiveKeyObjectBytes => Interlocked.Read(ref _activeKeyObjectBytes);
+        internal static long ReleaseFailures => Interlocked.Read(ref _releaseFailures);
+        internal static int RetainedReleaseOwners
+        {
+            get
+            {
+                lock (_retainedOwners)
+                {
+                    return _retainedOwners.Count;
+                }
+            }
+        }
+        internal long KeyObjectBytes => _keyObjectBytes;
+        internal Exception ReleaseFault
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _releaseFault;
+                }
+            }
+        }
 
         internal CngSegmentAead(byte[] secret)
         {
-            if (!IsSupported) throw Unsupported();
+            if (!IsSupported)
+            {
+                throw Unsupported();
+            }
+
             ResourceBundleEnvelope.ValidateKey(secret);
             ValidateAbi();
             try
             {
-                int status = BCryptOpenAlgorithmProvider(out algorithm, "AES", "Microsoft Primitive Provider", 0);
-                if (algorithm != IntPtr.Zero) Interlocked.Increment(ref activeAlgorithms);
+                int status = BCryptOpenAlgorithmProvider(out _algorithm, "AES", "Microsoft Primitive Provider", 0);
+                if (_algorithm != IntPtr.Zero)
+                {
+                    Interlocked.Increment(ref _activeAlgorithms);
+                }
+
                 Check(status, "BCryptOpenAlgorithmProvider");
-                if (algorithm == IntPtr.Zero) throw new CryptographicException("CNG returned no algorithm owner.");
-                const string mode = "ChainingModeGCM";
-                Check(BCryptSetProperty(algorithm, "ChainingMode", mode, (mode.Length + 1) * 2, 0), "BCryptSetProperty");
-                Check(BCryptGetTagLengths(algorithm, "AuthTagLength", out var tags, 12, out var tagBytes, 0), "BCryptGetProperty(AuthTagLength)");
+                if (_algorithm == IntPtr.Zero)
+                {
+                    throw new CryptographicException("CNG returned no algorithm owner.");
+                }
+
+                const string Mode = "ChainingModeGCM";
+                Check(BCryptSetProperty(_algorithm, "ChainingMode", Mode, (Mode.Length + 1) * 2, 0), "BCryptSetProperty");
+                Check(BCryptGetTagLengths(_algorithm, "AuthTagLength", out var tags, 12, out var tagBytes, 0), "BCryptGetProperty(AuthTagLength)");
                 if (tagBytes != 12 || tags.Minimum < 0 || tags.Increment < 0 || tags.Minimum > 16 || tags.Maximum < 16 ||
                     tags.Increment != 0 && (16 - tags.Minimum) % tags.Increment != 0)
+                {
                     throw new CryptographicException("CNG provider does not support the required 128-bit tag.");
-                Check(BCryptGetProperty(algorithm, "ObjectLength", out var bytes, sizeof(int), out var propertyBytes, 0), "BCryptGetProperty(ObjectLength)");
-                if (propertyBytes != sizeof(int) || bytes <= 0) throw new CryptographicException("Invalid CNG key-object size.");
+                }
+
+                Check(BCryptGetProperty(_algorithm, "ObjectLength", out var bytes, sizeof(int), out var propertyBytes, 0), "BCryptGetProperty(ObjectLength)");
+                if (propertyBytes != sizeof(int) || bytes <= 0)
+                {
+                    throw new CryptographicException("Invalid CNG key-object size.");
+                }
+
                 GenerateKey(secret, bytes);
             }
             catch (Exception error)
             {
-                try { Dispose(); }
-                catch (Exception cleanup) { throw new AggregateException("CNG construction and owner cleanup failed.", error, cleanup); }
+                try
+                {
+                    Dispose();
+                }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException("CNG construction and owner cleanup failed.", error, cleanup);
+                }
                 throw;
             }
         }
@@ -68,15 +114,18 @@ namespace YLFramework.Services.Resource
         {
             fixed (byte* pointer = secret)
             {
-                int status = BCryptGenerateSymmetricKey(algorithm, out key, IntPtr.Zero, 0, (IntPtr)pointer, secret.Length, 0);
-                if (key != IntPtr.Zero)
+                int status = BCryptGenerateSymmetricKey(_algorithm, out _key, IntPtr.Zero, 0, (IntPtr)pointer, secret.Length, 0);
+                if (_key != IntPtr.Zero)
                 {
-                    keyObjectBytes = bytes;
-                    Interlocked.Increment(ref activeKeys);
-                    Interlocked.Add(ref activeKeyObjectBytes, bytes);
+                    _keyObjectBytes = bytes;
+                    Interlocked.Increment(ref _activeKeys);
+                    Interlocked.Add(ref _activeKeyObjectBytes, bytes);
                 }
                 Check(status, "BCryptGenerateSymmetricKey");
-                if (key == IntPtr.Zero) throw new CryptographicException("CNG returned no key owner.");
+                if (_key == IntPtr.Zero)
+                {
+                    throw new CryptographicException("CNG returned no key owner.");
+                }
             }
         }
 
@@ -85,26 +134,48 @@ namespace YLFramework.Services.Resource
 
         private unsafe int Transform(bool encrypt, byte[] input, int count, byte[] nonce, byte[] output)
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (disposed || key == IntPtr.Zero || releaseFault != null) throw new ObjectDisposedException(nameof(CngSegmentAead));
-                if (input == null || output == null || nonce == null) throw new ArgumentNullException();
+                if (_isDisposed || _key == IntPtr.Zero || _releaseFault != null)
+                {
+                    throw new ObjectDisposedException(nameof(CngSegmentAead));
+                }
+
+                if (input == null || output == null || nonce == null)
+                {
+                    throw new ArgumentNullException();
+                }
+
                 if (count < (encrypt ? 0 : 16) || count > input.Length || nonce.Length != 12 || ReferenceEquals(input, output))
+                {
                     throw new ArgumentException("Invalid single-segment AEAD input.");
+                }
+
                 int plainCount = encrypt ? count : count - 16;
                 int resultCount = encrypt ? checked(count + 16) : plainCount;
-                if (output.Length < resultCount) throw new ArgumentException("Segment output too short.");
+                if (output.Length < resultCount)
+                {
+                    throw new ArgumentException("Segment output too short.");
+                }
+
                 fixed (byte* inputPointer = input, outputPointer = output, noncePointer = nonce)
                 {
                     byte empty = 0;
-                    var info = new AuthInfo { Size = 88, Version = 1, Nonce = (IntPtr)noncePointer, NonceBytes = 12,
-                        Tag = (IntPtr)(encrypt ? outputPointer + plainCount : inputPointer + plainCount), TagBytes = 16 };
+                    var info = new AuthInfo
+                    {
+                        Size = 88,
+                        Version = 1,
+                        Nonce = (IntPtr)noncePointer,
+                        NonceBytes = 12,
+                        Tag = (IntPtr)(encrypt ? outputPointer + plainCount : inputPointer + plainCount),
+                        TagBytes = 16
+                    };
                     // 空消息仍须认证；NULL output 会变成尺寸查询，不能当作 tag 验证。
                     var source = plainCount == 0 ? (IntPtr)(&empty) : (IntPtr)inputPointer;
                     var destination = plainCount == 0 ? (IntPtr)(&empty) : (IntPtr)outputPointer;
                     int status = encrypt
-                        ? BCryptEncrypt(key, source, plainCount, ref info, IntPtr.Zero, 0, destination, plainCount, out var written, 0)
-                        : BCryptDecrypt(key, source, plainCount, ref info, IntPtr.Zero, 0, destination, plainCount, out written, 0);
+                        ? BCryptEncrypt(_key, source, plainCount, ref info, IntPtr.Zero, 0, destination, plainCount, out var written, 0)
+                        : BCryptDecrypt(_key, source, plainCount, ref info, IntPtr.Zero, 0, destination, plainCount, out written, 0);
                     GC.KeepAlive(this);
                     if (status != 0 || written != plainCount)
                     {
@@ -119,42 +190,65 @@ namespace YLFramework.Services.Resource
 
         public void Dispose()
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (releaseFault != null) throw new ResourceContentCleanupException(this, releaseFault);
-                if (disposed) return;
-                if (key != IntPtr.Zero)
+                if (_releaseFault != null)
                 {
-                    int status = BCryptDestroyKey(key);
-                    if (status != 0) throw RetainFailure(status, "BCryptDestroyKey");
-                    key = IntPtr.Zero;
-                    Interlocked.Decrement(ref activeKeys);
-                    Interlocked.Add(ref activeKeyObjectBytes, -keyObjectBytes);
+                    throw new ResourceContentCleanupException(this, _releaseFault);
                 }
-                if (algorithm != IntPtr.Zero)
+
+                if (_isDisposed)
                 {
-                    int status = BCryptCloseAlgorithmProvider(algorithm, 0);
-                    if (status != 0) throw RetainFailure(status, "BCryptCloseAlgorithmProvider");
-                    algorithm = IntPtr.Zero;
-                    Interlocked.Decrement(ref activeAlgorithms);
+                    return;
                 }
-                disposed = true;
+
+                if (_key != IntPtr.Zero)
+                {
+                    int status = BCryptDestroyKey(_key);
+                    if (status != 0)
+                    {
+                        throw RetainFailure(status, "BCryptDestroyKey");
+                    }
+
+                    _key = IntPtr.Zero;
+                    Interlocked.Decrement(ref _activeKeys);
+                    Interlocked.Add(ref _activeKeyObjectBytes, -_keyObjectBytes);
+                }
+                if (_algorithm != IntPtr.Zero)
+                {
+                    int status = BCryptCloseAlgorithmProvider(_algorithm, 0);
+                    if (status != 0)
+                    {
+                        throw RetainFailure(status, "BCryptCloseAlgorithmProvider");
+                    }
+
+                    _algorithm = IntPtr.Zero;
+                    Interlocked.Decrement(ref _activeAlgorithms);
+                }
+                _isDisposed = true;
                 GC.SuppressFinalize(this);
             }
         }
 
         private ResourceContentCleanupException RetainFailure(int status, string operation)
         {
-            releaseFault = NativeFailure(status, operation);
-            Interlocked.Increment(ref releaseFailures);
-            lock (RetainedOwners) RetainedOwners.Add(this);
+            _releaseFault = NativeFailure(status, operation);
+            Interlocked.Increment(ref _releaseFailures);
+            lock (_retainedOwners)
+            {
+                _retainedOwners.Add(this);
+            }
+
             GC.SuppressFinalize(this);
-            return new ResourceContentCleanupException(this, releaseFault);
+            return new ResourceContentCleanupException(this, _releaseFault);
         }
 
         ~CngSegmentAead()
         {
-            try { Dispose(); }
+            try
+            {
+                Dispose();
+            }
             catch (ResourceContentCleanupException) { /* owner 已留存并记入诊断，不在 finalizer 重试。 */ }
         }
 
@@ -164,27 +258,44 @@ namespace YLFramework.Services.Resource
                 nameof(AuthInfo.AuthData), nameof(AuthInfo.AuthDataBytes), nameof(AuthInfo.Tag), nameof(AuthInfo.TagBytes),
                 nameof(AuthInfo.MacContext), nameof(AuthInfo.MacContextBytes), nameof(AuthInfo.AadBytes), nameof(AuthInfo.DataBytes), nameof(AuthInfo.Flags) };
             var offsets = new[] { 0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 68, 72, 80 };
-            if (Marshal.SizeOf<AuthInfo>() != 88 || Marshal.SizeOf<TagLengths>() != 12) throw new PlatformNotSupportedException("Unexpected CNG AEAD ABI size.");
+            if (Marshal.SizeOf<AuthInfo>() != 88 || Marshal.SizeOf<TagLengths>() != 12)
+            {
+                throw new PlatformNotSupportedException("Unexpected CNG AEAD ABI size.");
+            }
+
             for (int i = 0; i < names.Length; ++i)
+            {
                 if (Marshal.OffsetOf<AuthInfo>(names[i]).ToInt32() != offsets[i])
+                {
                     throw new PlatformNotSupportedException("Unexpected CNG AEAD ABI member offset.");
+                }
+            }
         }
 
         private static void Check(int status, string operation)
         {
-            if (status != 0) throw NativeFailure(status, operation);
+            if (status != 0)
+            {
+                throw NativeFailure(status, operation);
+            }
         }
 
         private static CryptographicException NativeFailure(int status, string operation) =>
             new(operation + " NTSTATUS=0x" + unchecked((uint)status).ToString("X8"));
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct TagLengths { internal int Minimum, Maximum, Increment; }
+        private struct TagLengths
+        {
+            internal int Minimum;
+            internal int Maximum;
+            internal int Increment;
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct AuthInfo
         {
-            internal int Size, Version;
+            internal int Size;
+            internal int Version;
             internal IntPtr Nonce;
             internal int NonceBytes;
             internal IntPtr AuthData;
@@ -192,7 +303,8 @@ namespace YLFramework.Services.Resource
             internal IntPtr Tag;
             internal int TagBytes;
             internal IntPtr MacContext;
-            internal int MacContextBytes, AadBytes;
+            internal int MacContextBytes;
+            internal int AadBytes;
             internal ulong DataBytes;
             internal int Flags;
         }
@@ -307,10 +419,15 @@ namespace YLFramework.Services.Resource
         internal static int RetainedReleaseOwners => 0;
         internal long KeyObjectBytes => 0;
         internal Exception ReleaseFault => null;
-        internal CngSegmentAead(byte[] secret) { throw Unsupported(); }
+        internal CngSegmentAead(byte[] secret)
+        {
+            throw Unsupported();
+        }
         internal int Encrypt(byte[] input, int count, byte[] nonce, byte[] output) => throw Unsupported();
         internal int Decrypt(byte[] input, int count, byte[] nonce, byte[] output) => throw Unsupported();
-        public void Dispose() { }
+        public void Dispose()
+        {
+        }
 #endif
         private static PlatformNotSupportedException Unsupported() =>
             new("Encrypted Resource content requires Windows x64 Editor or a validated Windows64 Mono/IL2CPP Player backend.");
@@ -318,7 +435,10 @@ namespace YLFramework.Services.Resource
 
     internal sealed class ResourceContentCleanupException : IOException
     {
-        internal IDisposable Owner { get; }
+        internal IDisposable Owner
+        {
+            get;
+        }
         internal ResourceContentCleanupException(IDisposable owner, Exception cause)
             : base("Resource native content owner release failed; owner retained without automatic retry.", cause) => Owner = owner;
     }

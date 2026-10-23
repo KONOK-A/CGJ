@@ -8,11 +8,11 @@ namespace YLFramework.Timing.Internal
     internal sealed class TimerDriver : MonoBehaviour
     {
         private static TimerDriver _instance;
-        private static bool _shuttingDown;
+        private static bool _isShuttingDown;
         private TimerScheduler _scheduler;
         private object _session;
-        private bool _released;
-        private bool _ready;
+        private bool _isReleased;
+        private bool _isReady;
         private int _unityFrame;
         private long _frame;
         private long _secondsFrame;
@@ -20,21 +20,34 @@ namespace YLFramework.Timing.Internal
         private double _unscaled;
 
         static TimerDriver() => SingletonSessionState.RegisterSessionReset(ResetSession);
-        private bool IsCurrent => !_released && ReferenceEquals(_instance, this) &&
+        private bool IsCurrent => !_isReleased && ReferenceEquals(_instance, this) &&
             ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
 
         internal static TimerScheduler GetScheduler()
         {
-            if (_shuttingDown || !SingletonSessionState.CanRunExecution)
+            if (_isShuttingDown || !SingletonSessionState.CanRunExecution)
+            {
                 throw new InvalidOperationException("Timer execution is not available.");
+            }
+
             var host = _instance;
             if (!ReferenceEquals(host, null))
             {
-                if (!host) { _instance = null; host.ReleaseOwner(); }
+                if (!host)
+                {
+                    _instance = null;
+                    host.ReleaseOwner();
+                }
                 else if (!host.IsCurrent || !host.isActiveAndEnabled)
+                {
                     throw new InvalidOperationException("Timer driver is disabled or released; shut it down before restarting.");
+                }
             }
-            if (!_instance) CreateHost();
+            if (!_instance)
+            {
+                CreateHost();
+            }
+
             return _instance._scheduler;
         }
 
@@ -55,9 +68,21 @@ namespace YLFramework.Timing.Internal
             }
             catch
             {
-                if (host) host.ReleaseOwner();
-                if (ReferenceEquals(_instance, host)) _instance = null;
-                if (obj) Destroy(obj);
+                if (host)
+                {
+                    host.ReleaseOwner();
+                }
+
+                if (ReferenceEquals(_instance, host))
+                {
+                    _instance = null;
+                }
+
+                if (obj)
+                {
+                    Destroy(obj);
+                }
+
                 throw;
             }
         }
@@ -71,9 +96,13 @@ namespace YLFramework.Timing.Internal
                 return;
             }
             // 首个 Update 之前不读取 Awake 中未定义的时间/帧；Fixed 步只更新已知帧身份。
-            if (!_ready && !update) return;
+            if (!_isReady && !update)
+            {
+                return;
+            }
+
             var unityFrame = Time.frameCount;
-            var newFrame = !_ready || unityFrame != _unityFrame;
+            var newFrame = !_isReady || unityFrame != _unityFrame;
             if (newFrame)
             {
                 _frame = checked(_frame + 1);
@@ -86,37 +115,60 @@ namespace YLFramework.Timing.Internal
                 _unscaled = Time.unscaledTimeAsDouble;
                 _secondsFrame = _frame;
             }
-            _ready = true;
+            _isReady = true;
             _scheduler.Sample(_scaled, _unscaled, _frame, validSeconds);
         }
 
         private void Update()
         {
             Synchronize(true);
-            if (_released) return;
+            if (_isReleased)
+            {
+                return;
+            }
+
             _scheduler.AdvanceAutomatic();
         }
 
         private void ReleaseOwner()
         {
-            if (_released) return;
-            _released = true;
+            if (_isReleased)
+            {
+                return;
+            }
+
+            _isReleased = true;
             _scheduler?.Dispose();
         }
 
         internal static void Shutdown()
         {
-            if (_shuttingDown) return;
-            _shuttingDown = true;
+            if (_isShuttingDown)
+            {
+                return;
+            }
+
+            _isShuttingDown = true;
             try
             {
                 var old = _instance;
                 _instance = null;
-                if (ReferenceEquals(old, null)) return;
+                if (ReferenceEquals(old, null))
+                {
+                    return;
+                }
+
                 old.ReleaseOwner();
-                if (old) { old.enabled = false; Destroy(old.gameObject); }
+                if (old)
+                {
+                    old.enabled = false;
+                    Destroy(old.gameObject);
+                }
             }
-            finally { _shuttingDown = false; }
+            finally
+            {
+                _isShuttingDown = false;
+            }
         }
 
         private static void ResetSession() => Shutdown();
@@ -124,11 +176,18 @@ namespace YLFramework.Timing.Internal
         private void OnDestroy()
         {
             ReleaseOwner();
-            if (ReferenceEquals(_instance, this)) _instance = null;
+            if (ReferenceEquals(_instance, this))
+            {
+                _instance = null;
+            }
         }
         private void OnApplicationQuit()
         {
-            if (!IsCurrent) return;
+            if (!IsCurrent)
+            {
+                return;
+            }
+
             SingletonSessionState.StopExecution();
             ReleaseOwner();
         }

@@ -19,14 +19,18 @@ namespace YLFramework.Core.RoslynAnalyzers
         /// <summary>
         /// 配置一个允许的直接调用方法；空值不表示任意调用者。
         /// </summary>
-        /// <param name="caller_method">允许的方法选择器；accessor 可使用 get_P/set_P 或限定的 Type.P，构造器可用 .ctor/.cctor。</param>
-        public RestrictedCallAttribute(string caller_method) { }
+        /// <param name="callerMethod">允许的方法选择器；accessor 可使用 get_P/set_P 或限定的 Type.P，构造器可用 .ctor/.cctor。</param>
+        public RestrictedCallAttribute(string callerMethod)
+        {
+        }
 
         /// <summary>
         /// 配置允许的直接调用方法集合；null/空项被忽略，没有有效项时不允许直接调用。
         /// </summary>
-        /// <param name="caller_methods">允许调用的方法</param>
-        public RestrictedCallAttribute(string[] caller_methods) { } 
+        /// <param name="callerMethods">允许调用的方法</param>
+        public RestrictedCallAttribute(string[] callerMethods)
+        {
+        }
     }
 
 }

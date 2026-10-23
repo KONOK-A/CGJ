@@ -4,9 +4,26 @@ namespace YLFramework.Domain.Excel.Tests
 {
     public class EquipmentExcelScriptA : IEquipment
     {
-        public IEquippable Equiper { get; set; }
-        public EquipmentConfigData EquipmentData { get; set; }
-        public void OnLoaded() { } public void OnUnloaded() { } public void OnEquip() { } public void OnUnEquip() { }
+        public IEquippable Equipper
+        {
+            get; set;
+        }
+        public EquipmentConfigData EquipmentData
+        {
+            get; set;
+        }
+        public void OnLoaded()
+        {
+        }
+        public void OnUnloaded()
+        {
+        }
+        public void OnEquip()
+        {
+        }
+        public void OnUnequip()
+        {
+        }
     }
 }
 #endif

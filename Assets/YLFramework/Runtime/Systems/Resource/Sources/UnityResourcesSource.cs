@@ -15,44 +15,64 @@ namespace YLFramework.Services.Resource
             ResourceAddress.ValidatePath(path, nameof(entry.Location.Locator));
             if (path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || path.IndexOf(':') >= 0 ||
                 path.LastIndexOf('.') > path.LastIndexOf('/'))
+            {
                 throw new ArgumentException($"Resources requires an extension-free path relative to Resources: '{path}'.");
+            }
+
             if (entry.Address.SubAsset != null || entry.Dependencies.Count != 0)
+            {
                 throw new ArgumentException("Resources subasset selection and explicit dependency execution are not supported in 8.1.");
+            }
         }
 
         public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type) => new(Resources.Load(entry.Location.Locator, type));
         public ResourceSourceOperation LoadAsync(ResourceCatalogEntry entry, Type type) => new Operation(entry.Location.Locator, type);
 
         // 外部借用者不可枚举，也不属于本系统；禁止单租约触发 UnloadAsset/Destroy/全局扫描。
-        public void Release(UnityEngine.Object asset) { }
+        public void Release(UnityEngine.Object asset)
+        {
+        }
 
         private sealed class Operation : ResourceSourceOperation
         {
-            private UnityEngine.ResourceRequest native;
-            public override float Progress => native == null ? base.Progress : native.progress;
+            private UnityEngine.ResourceRequest _native;
+            public override float Progress => _native == null ? base.Progress : _native.progress;
 
             internal Operation(string path, Type type)
             {
-                native = Resources.LoadAsync(path, type);
-                native.completed += OnCompleted;
-                if (native.isDone) OnCompleted(native);
+                _native = Resources.LoadAsync(path, type);
+                _native.completed += OnCompleted;
+                if (_native.isDone)
+                {
+                    OnCompleted(_native);
+                }
             }
 
             private void OnCompleted(AsyncOperation operation)
             {
-                if (IsDone) return;
-                native.completed -= OnCompleted;
+                if (IsDone)
+                {
+                    return;
+                }
+
+                _native.completed -= OnCompleted;
                 UnityEngine.Object result = null;
                 Exception error = null;
-                try { result = native.asset; }
-                catch (Exception cause) { error = cause; }
+                try
+                {
+                    result = _native.asset;
+                }
+                catch (Exception cause)
+                {
+                    error = cause;
+                }
                 Complete(result, error);
             }
 
             public override void Dispose()
             {
                 base.Dispose();
-                native = null;
+                _native = null;
             }
         }
     }

@@ -11,9 +11,15 @@ namespace YLFramework.Events
         private object _incarnation = new();
 
         /// <summary>是否永久关闭。关闭后不能注册、发布或重置。</summary>
-        public bool IsDisposed { get; private set; }
+        public bool IsDisposed
+        {
+            get; private set;
+        }
         /// <summary>普通注册展开后的 target 数量；Once 的 multicast 回调作为一个监听。</summary>
-        public abstract int ListenerCount { get; }
+        public abstract int ListenerCount
+        {
+            get;
+        }
         /// <summary>是否存在监听。</summary>
         public bool HasListener => ListenerCount != 0;
 
@@ -37,7 +43,11 @@ namespace YLFramework.Events
         /// <summary>永久关闭，撤销所有身份并截断在途快照；重复调用为空操作。</summary>
         public void Dispose()
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+            {
+                return;
+            }
+
             IsDisposed = true;
             _incarnation = new object();
             ClearListenersCore();
@@ -47,13 +57,18 @@ namespace YLFramework.Events
         /// <summary>清除具体签名的注册记录。</summary>
         protected abstract void ClearListenersCore();
         /// <summary>监听变更已提交后的组合适配钩子，不参与普通广播异常策略。</summary>
-        protected virtual void OnListenersChanged() { }
+        protected virtual void OnListenersChanged()
+        {
+        }
         internal void NotifyListenersChanged() => OnListenersChanged();
         internal object Incarnation => _incarnation;
         internal bool IsCurrent(object incarnation) => ReferenceEquals(_incarnation, incarnation);
         internal void ThrowIfDisposed()
         {
-            if (IsDisposed) throw new ObjectDisposedException(GetType().FullName);
+            if (IsDisposed)
+            {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
         }
     }
 }

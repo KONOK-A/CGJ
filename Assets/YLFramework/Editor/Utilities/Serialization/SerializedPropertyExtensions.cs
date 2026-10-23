@@ -17,11 +17,11 @@ namespace YLFramework.Core.Editor
         /// </summary>
         /// <param name="serializedProperty"></param>
         /// <param name="target"></param>
-        public static void SyncFrom(this SerializedProperty serializedProperty, SerializedProperty target) 
-        { 
+        public static void SyncFrom(this SerializedProperty serializedProperty, SerializedProperty target)
+        {
             switch (serializedProperty.propertyType)
             {
-                case SerializedPropertyType.Generic: 
+                case SerializedPropertyType.Generic:
                     break;
                 case SerializedPropertyType.Integer:
                     serializedProperty.intValue = target.intValue;
@@ -70,7 +70,7 @@ namespace YLFramework.Core.Editor
                 case SerializedPropertyType.Bounds:
                     serializedProperty.boundsValue = target.boundsValue;
                     break;
-                case SerializedPropertyType.Gradient: 
+                case SerializedPropertyType.Gradient:
                     break;
                 case SerializedPropertyType.Quaternion:
                     serializedProperty.quaternionValue = target.quaternionValue;
@@ -93,10 +93,7 @@ namespace YLFramework.Core.Editor
                 case SerializedPropertyType.BoundsInt:
                     serializedProperty.boundsIntValue = target.boundsIntValue;
                     break;
-                //case SerializedPropertyType.ManagedReference:
-                //    serializedProperty.managedReferenceValue = target.managedReferenceValue;
-                //    break; 
-            } 
+            }
         }
 
         /// <summary>
@@ -117,13 +114,13 @@ namespace YLFramework.Core.Editor
                     return serializedProperty.boolValue.ToString();
 
                 case SerializedPropertyType.Float:
-                    return serializedProperty.floatValue.ToString(); 
+                    return serializedProperty.floatValue.ToString();
                 case SerializedPropertyType.String:
                     return serializedProperty.stringValue;
 
                 case SerializedPropertyType.Color:
                     return serializedProperty.colorValue.ToString();
-                     
+
                 case SerializedPropertyType.ObjectReference:
                     return serializedProperty.objectReferenceValue ? serializedProperty.objectReferenceValue.ToString() : "None";
                 case SerializedPropertyType.LayerMask:
@@ -134,56 +131,56 @@ namespace YLFramework.Core.Editor
 
                 case SerializedPropertyType.Vector2:
                     return serializedProperty.vector2Value.ToString();
-                    
+
                 case SerializedPropertyType.Vector3:
                     return serializedProperty.vector3Value.ToString();
-                     
+
                 case SerializedPropertyType.Vector4:
                     return serializedProperty.vector4Value.ToString();
-                    
+
                 case SerializedPropertyType.Rect:
                     return serializedProperty.rectValue.ToString();
-                    
+
                 case SerializedPropertyType.ArraySize:
                     return serializedProperty.arraySize.ToString();
-                    
+
                 case SerializedPropertyType.Character:
                     break;
                 case SerializedPropertyType.AnimationCurve:
                     return serializedProperty.animationCurveValue.ToString();
-                    
+
                 case SerializedPropertyType.Bounds:
                     return serializedProperty.boundsValue.ToString();
-                     
+
                 case SerializedPropertyType.Gradient:
                     break;
                 case SerializedPropertyType.Quaternion:
                     return serializedProperty.quaternionValue.ToString();
-                    
+
                 case SerializedPropertyType.ExposedReference:
                     return serializedProperty.exposedReferenceValue ? serializedProperty.exposedReferenceValue.ToString() : "None";
-                    
+
                 case SerializedPropertyType.FixedBufferSize:
                     //serializedProperty.fixedBufferSize = target.fixedBufferSize;
                     break;
                 case SerializedPropertyType.Vector2Int:
                     return serializedProperty.vector2IntValue.ToString();
-                    
+
                 case SerializedPropertyType.Vector3Int:
                     return serializedProperty.vector3IntValue.ToString();
-                   
+
                 case SerializedPropertyType.RectInt:
                     return serializedProperty.rectIntValue.ToString();
-                    
+
                 case SerializedPropertyType.BoundsInt:
                     return serializedProperty.boundsIntValue.ToString();
-                   
+
             }
 
             return string.Empty;
 
         }
-         
+
         /// <summary>
         /// 使用 Unity 原生格式复制属性；混值或原生解析器不支持的属性明确拒绝。
         /// </summary>
@@ -191,7 +188,11 @@ namespace YLFramework.Core.Editor
         public static void CopyToClipboard(this SerializedProperty serializedProperty)
         {
             string error = ClipboardPropertyError(serializedProperty, false);
-            if (error != null) throw new InvalidOperationException(error);
+            if (error != null)
+            {
+                throw new InvalidOperationException(error);
+            }
+
             GetClipboardMethod("UnityEditor.Clipboard", "SetSerializedProperty", typeof(void), typeof(SerializedProperty))
                 .Invoke(null, new object[] { serializedProperty });
         }
@@ -204,7 +205,10 @@ namespace YLFramework.Core.Editor
         public static void PasteFromClipboard(this SerializedProperty serializedProperty)
         {
             if (!PrepareClipboardPaste(serializedProperty, out var staged, out string error))
+            {
                 throw new InvalidOperationException(error);
+            }
+
             using (staged)
             {
                 serializedProperty.serializedObject.CopyFromSerializedProperty(staged.FindProperty(serializedProperty.propertyPath));
@@ -232,30 +236,49 @@ namespace YLFramework.Core.Editor
             var method = type?.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
                 null, parameters, null);
             if (method == null || method.ReturnType != returnType)
+            {
                 throw new NotSupportedException($"Unity {Application.unityVersion} Clipboard API 不兼容：{typeName}.{name}({string.Join(", ", parameters.Select(p => p.Name))}) -> {returnType.Name}。");
+            }
+
             return method;
         }
 
         private static string ClipboardPropertyError(SerializedProperty property, bool paste)
         {
-            if (property == null) return "Clipboard 操作需要有效的 SerializedProperty。";
+            if (property == null)
+            {
+                return "Clipboard 操作需要有效的 SerializedProperty。";
+            }
+
             if (paste && (!property.editable || property.serializedObject.targetObjects.Any(target =>
                 !target || (target.hideFlags & HideFlags.NotEditable) != 0 ||
                 PrefabUtility.IsPartOfImmutablePrefab(target) ||
                 (EditorUtility.IsPersistent(target) && !AssetDatabase.IsOpenForEdit(target)))))
+            {
                 return "Clipboard 目标不可编辑。";
+            }
+
             if (property.serializedObject.targetObjects.Select(target => target.GetType()).Distinct().Count() != 1)
+            {
                 return "Clipboard 不支持不同类型的多对象操作。";
+            }
+
             using var iterator = property.Copy();
             using var end = property.GetEndProperty();
             do
             {
-                if (iterator.hasMultipleDifferentValues) return "Clipboard 不支持混值属性，请分别编辑目标对象。";
+                if (iterator.hasMultipleDifferentValues)
+                {
+                    return "Clipboard 不支持混值属性，请分别编辑目标对象。";
+                }
+
                 if (iterator.propertyType == SerializedPropertyType.ManagedReference ||
                     iterator.propertyType == SerializedPropertyType.ExposedReference ||
                     iterator.propertyType == SerializedPropertyType.FixedBufferSize ||
                     (iterator.propertyType == SerializedPropertyType.Float && iterator.type == "double"))
+                {
                     return "Unity 原生 Clipboard 不能可靠处理此属性：" + iterator.propertyPath;
+                }
             } while (iterator.Next(true) && !SerializedProperty.EqualContents(iterator, end));
             return null;
         }
@@ -264,7 +287,10 @@ namespace YLFramework.Core.Editor
         {
             staged = null;
             error = ClipboardPropertyError(property, true);
-            if (error != null) return false;
+            if (error != null)
+            {
+                return false;
+            }
 
             var has = GetClipboardMethod("UnityEditor.Clipboard", "HasSerializedProperty", typeof(bool));
             var read = GetClipboardMethod("UnityEditor.Clipboard", "GetSerializedProperty", typeof(void), typeof(SerializedProperty));
@@ -273,21 +299,34 @@ namespace YLFramework.Core.Editor
             var deserialize = GetClipboardMethod("UnityEditor.Json", "Deserialize", typeof(object), typeof(string));
             var serialize = GetClipboardMethod("UnityEditor.Json", "Serialize", typeof(string), typeof(object), typeof(bool), typeof(string));
             error = "Clipboard 数据损坏、不兼容或无法完整粘贴；未应用修改。";
-            if (!(bool)has.Invoke(null, null)) return false;
+            if (!(bool)has.Invoke(null, null))
+            {
+                return false;
+            }
             // 使用 Unity 自身的格式、编码器与解析器，不建立自有 Clipboard 协议。
             var clipboardType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.Clipboard");
             var prefixField = clipboardType.GetField("kGenericPrefix", BindingFlags.NonPublic | BindingFlags.Static);
             if (prefixField == null || !prefixField.IsLiteral || prefixField.FieldType != typeof(string))
+            {
                 throw new NotSupportedException($"Unity {Application.unityVersion} Clipboard API 不兼容：kGenericPrefix。");
+            }
+
             string prefix = (string)prefixField.GetRawConstantValue();
             string contents = EditorGUIUtility.systemCopyBuffer;
-            if (string.IsNullOrEmpty(prefix) || !contents.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            if (string.IsNullOrEmpty(prefix) || !contents.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             bool accepted = false;
             try
             {
                 var expected = deserialize.Invoke(null, new object[] { contents.Substring(prefix.Length) }) as Dictionary<string, object>;
                 if (expected == null || !expected.TryGetValue("name", out var name) ||
-                    !(name is string sourceName) || string.IsNullOrEmpty(sourceName)) return false;
+                    !(name is string sourceName) || string.IsNullOrEmpty(sourceName))
+                {
+                    return false;
+                }
                 // 独立缓冲以相同目标初始化；原生解析即使部分写入，也不会碰到调用者或真实对象。
                 staged = new SerializedObject(property.serializedObject.targetObjects);
                 staged.CopyFromSerializedProperty(property);
@@ -321,15 +360,21 @@ namespace YLFramework.Core.Editor
         private static bool ClipboardValuesEqual(object expected, object actual)
         {
             if (expected is Dictionary<string, object> dictionary)
+            {
                 return actual is Dictionary<string, object> other && dictionary.Count == other.Count &&
                     dictionary.All(pair => other.TryGetValue(pair.Key, out var value) && ClipboardValuesEqual(pair.Value, value));
+            }
+
             if (expected is List<object> list)
+            {
                 return actual is List<object> otherList && list.Count == otherList.Count &&
                     list.Select((value, index) => ClipboardValuesEqual(value, otherList[index])).All(equal => equal);
+            }
+
             return Equals(expected, actual);
         }
 
-         
+
         /// <summary>
         /// 查询当前属性的特性
         /// </summary>
@@ -351,7 +396,10 @@ namespace YLFramework.Core.Editor
         public static T[] GetAttributes<T>(this SerializedProperty prop) where T : Attribute
         {
             var target = prop.serializedObject.targetObject;
-            if (target == null) return Array.Empty<T>();
+            if (target == null)
+            {
+                return Array.Empty<T>();
+            }
 
             // 把 "myList.Array.data[0].field" 转成 "myList[0].field"
             var path = prop.propertyPath.Replace(".Array.data[", "[");
@@ -365,18 +413,30 @@ namespace YLFramework.Core.Editor
                 string name = part;
                 // array element like list[0]
                 var bracket = part.IndexOf('[');
-                if (bracket > 0) name = part.Substring(0, bracket);
+                if (bracket > 0)
+                {
+                    name = part.Substring(0, bracket);
+                }
 
                 field = GetFieldInHierarchy(currentType, name);
-                if (field == null) return Array.Empty<T>();
+                if (field == null)
+                {
+                    return Array.Empty<T>();
+                }
 
                 currentType = field.FieldType;
                 // 如果是集合，切换到元素类型
-                if (currentType.IsArray) currentType = currentType.GetElementType();
+                if (currentType.IsArray)
+                {
+                    currentType = currentType.GetElementType();
+                }
                 else if (currentType.IsGenericType && typeof(System.Collections.IEnumerable).IsAssignableFrom(currentType))
                 {
                     var args = currentType.GetGenericArguments();
-                    if (args.Length > 0) currentType = args[0];
+                    if (args.Length > 0)
+                    {
+                        currentType = args[0];
+                    }
                 }
             }
 
@@ -388,7 +448,11 @@ namespace YLFramework.Core.Editor
             while (type != null)
             {
                 var fi = type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                if (fi != null) return fi;
+                if (fi != null)
+                {
+                    return fi;
+                }
+
                 type = type.BaseType;
             }
             return null;
@@ -400,12 +464,12 @@ namespace YLFramework.Core.Editor
         /// <param name="property"></param>
         /// <param name="recursive"></param>
         /// <returns></returns>
-        public static List<SerializedProperty> GetChildrens(this SerializedProperty property,bool recursive = false)
+        public static List<SerializedProperty> GetChildrens(this SerializedProperty property, bool recursive = false)
         {
-             
+
             var list = new List<SerializedProperty>();
 
-            if (!property.hasChildren) 
+            if (!property.hasChildren)
             {
                 // 没有子属性，直接返回空列表
                 return list;
@@ -416,22 +480,28 @@ namespace YLFramework.Core.Editor
 
             // Move to first child
             if (!iterator.NextVisible(true))
+            {
                 return list;
+            }
 
             while (!SerializedProperty.EqualContents(iterator, end))
             {
                 SerializedProperty p = iterator.Copy();
 
                 list.Add(p);
-                if(recursive && p.hasChildren)
+                if (recursive && p.hasChildren)
+                {
                     list.AddRange(p.GetChildrens(recursive));
+                }
 
                 if (!iterator.NextVisible(false))
+                {
                     break;
+                }
             }
 
             return list;
-             
+
         }
 
 
@@ -439,18 +509,23 @@ namespace YLFramework.Core.Editor
         /// 判断属性是否为脚本属性（即 MonoScript 类型），如果是脚本属性，则通常在 Inspector 中显示为不可编辑的字段，显示 MonoScript 的名称和图标。
         /// </summary>
         /// <returns></returns>
-        public static bool IsScript(this SerializedProperty property) 
+        public static bool IsScript(this SerializedProperty property)
         {
-            if (property == null) return false;
-             
+            if (property == null)
+            {
+                return false;
+            }
+
             if (property.propertyType == SerializedPropertyType.ObjectReference)
-            { 
-                if (property.objectReferenceValue) 
-                { 
+            {
+                if (property.objectReferenceValue)
+                {
                     // Direct object check
                     if (property.objectReferenceValue is MonoScript && property.name == "m_Script")
-                        return true; 
-                } 
+                    {
+                        return true;
+                    }
+                }
             }
 
             return false;

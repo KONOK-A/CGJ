@@ -17,37 +17,63 @@ namespace YLFramework.Tests.AudioSession
     public class AudioExitTests
     {
         private const string Key = "YL.Audio.4.1.Exit.";
-        [Serializable] private class Scenes { public SceneRecord[] Items; }
-        [Serializable] private class SceneRecord { public string Path; public bool Loaded, Active; }
-        private static AudioClip sClip;
-        private static AudioHandle sHandle;
+        [Serializable]
+        private class Scenes
+        {
+            public SceneRecord[] Items;
+        }
+        [Serializable]
+        private class SceneRecord
+        {
+            public string Path;
+            public bool Loaded;
+            public bool Active;
+        }
+        private static AudioClip _clip;
+        private static AudioHandle _handle;
 
         private sealed class Resource : IDisposable
         {
             public void Dispose()
             {
                 SessionState.SetInt(Key + "releases", SessionState.GetInt(Key + "releases", 0) + 1);
-                try { AudioKit.PlaySound(sClip); }
-                catch (InvalidOperationException) { SessionState.SetBool(Key + "releaseRejected", true); }
+                try
+                {
+                    AudioKit.PlaySound(_clip);
+                }
+                catch (InvalidOperationException)
+                {
+                    SessionState.SetBool(Key + "releaseRejected", true);
+                }
             }
         }
 
         [SetUp]
         public void SetUp()
         {
-            if (SessionState.GetBool(Key + "configured", false)) return;
+            if (SessionState.GetBool(Key + "configured", false))
+            {
+                return;
+            }
+
             Assert.IsFalse(EditorApplication.isPlayingOrWillChangePlaymode);
             Assert.IsFalse(EditorSettings.enterPlayModeOptionsEnabled, "本窄退出测试使用当前正常域重载设置，不接管双 Play 门禁。");
             for (var i = 0; i < SceneManager.sceneCount; i++)
             {
                 var opened = SceneManager.GetSceneAt(i);
                 // 同批先前测试会标脏 Runner 的无路径空场景；不保存或覆盖任何用户场景。
-                if (!string.IsNullOrEmpty(opened.path)) Assert.IsFalse(opened.isDirty, opened.path);
+                if (!string.IsNullOrEmpty(opened.path))
+                {
+                    Assert.IsFalse(opened.isDirty, opened.path);
+                }
             }
             Assert.IsFalse(AudioManager.HasInstance, "不接管其他音频 owner。");
             var setup = EditorSceneManager.GetSceneManagerSetup();
-            var snapshot = new Scenes { Items = setup.Where(s => !string.IsNullOrEmpty(s.path)).Select(s =>
-                new SceneRecord { Path = s.path, Loaded = s.isLoaded, Active = s.isActive }).ToArray() };
+            var snapshot = new Scenes
+            {
+                Items = setup.Where(s => !string.IsNullOrEmpty(s.path)).Select(s =>
+                new SceneRecord { Path = s.path, Loaded = s.isLoaded, Active = s.isActive }).ToArray()
+            };
             SessionState.SetString(Key + "scenes", JsonUtility.ToJson(snapshot));
             var path = "Temp/YLAudio.Exit." + Guid.NewGuid().ToString("N") + ".unity";
             SessionState.SetString(Key + "path", path);
@@ -63,15 +89,29 @@ namespace YLFramework.Tests.AudioSession
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!SessionState.GetBool(Key + "configured", false)) yield break;
-            if (EditorApplication.isPlaying) yield return new ExitPlayMode();
+            if (!SessionState.GetBool(Key + "configured", false))
+            {
+                yield break;
+            }
+
+            if (EditorApplication.isPlaying)
+            {
+                yield return new ExitPlayMode();
+            }
+
             EditorApplication.playModeStateChanged -= OnExit;
             Application.quitting -= OnQuit;
             var snapshot = JsonUtility.FromJson<Scenes>(SessionState.GetString(Key + "scenes", ""));
             if (snapshot.Items.Length > 0)
+            {
                 EditorSceneManager.RestoreSceneManagerSetup(snapshot.Items.Select(s =>
                     new SceneSetup { path = s.Path, isLoaded = s.Loaded, isActive = s.Active }).ToArray());
-            else EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            else
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+
             File.Delete(SessionState.GetString(Key + "path", ""));
             SessionState.SetBool(Key + "configured", false);
             // 实际退出的断言已经结束；恢复本 fixture 的 Audio 静态状态，避免污染后续 EditMode 测试。
@@ -81,23 +121,37 @@ namespace YLFramework.Tests.AudioSession
 
         private static void OnExit(PlayModeStateChange state)
         {
-            if (state != PlayModeStateChange.ExitingPlayMode) return;
+            if (state != PlayModeStateChange.ExitingPlayMode)
+            {
+                return;
+            }
+
             var hosts = UnityEngine.Object.FindObjectsOfType<AudioManager>(true).Length;
             var rejected = false;
-            try { AudioKit.PlaySound(sClip); }
-            catch (InvalidOperationException) { rejected = true; }
-            SessionState.SetBool(Key + "exitRejected", rejected && !sHandle.IsValid &&
+            try
+            {
+                AudioKit.PlaySound(_clip);
+            }
+            catch (InvalidOperationException)
+            {
+                rejected = true;
+            }
+            SessionState.SetBool(Key + "exitRejected", rejected && !_handle.IsValid &&
                 hosts == UnityEngine.Object.FindObjectsOfType<AudioManager>(true).Length);
             EditorApplication.playModeStateChanged -= OnExit;
         }
 
         private static void OnQuit()
         {
-            SessionState.SetBool(Key + "quitClean", !sHandle.IsValid && AudioKit.SoundCount == 0 &&
+            SessionState.SetBool(Key + "quitClean", !_handle.IsValid && AudioKit.SoundCount == 0 &&
                 !AudioManager.HasInstance && AudioKit.CurrentSettings == null && SessionState.GetInt(Key + "releases", 0) == 1);
             Application.quitting -= OnQuit;
-            if (sClip) UnityEngine.Object.DestroyImmediate(sClip);
-            sClip = null;
+            if (_clip)
+            {
+                UnityEngine.Object.DestroyImmediate(_clip);
+            }
+
+            _clip = null;
         }
 
         [UnityTest]
@@ -106,13 +160,13 @@ namespace YLFramework.Tests.AudioSession
             yield return new EnterPlayMode();
             var listener = new GameObject("AudioExit.Listener");
             listener.AddComponent<AudioListener>();
-            sClip = AudioClip.Create("audio-exit", 44100, 1, 44100, false);
+            _clip = AudioClip.Create("audio-exit", 44100, 1, 44100, false);
             var options = AudioPlaybackOptions.Defaults;
             options.Loop = true;
             // 不改持久设置；此处只在本测试的运行时快照启用 Sound。
             AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
-            sHandle = AudioKit.PlaySoundWithSnapshot(sClip, options, resource: new AudioResourceLease(new Resource()));
-            Assert.IsTrue(sHandle.IsValid);
+            _handle = AudioKit.PlaySoundWithSnapshot(_clip, options, resource: new AudioResourceLease(new Resource()));
+            Assert.IsTrue(_handle.IsValid);
             Application.quitting += OnQuit;
             EditorApplication.playModeStateChanged += OnExit;
             yield return new ExitPlayMode();

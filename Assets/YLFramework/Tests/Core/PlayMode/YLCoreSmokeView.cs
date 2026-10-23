@@ -12,24 +12,63 @@ namespace YLFramework.Core.Tests
         public static System.Action SharedEventHandler;
         public static bool DuplicateProbeHandler;
         public static string SignatureConflictEvent;
-        public int AwakeCount { get; private set; }
-        public int LoadedCount { get; private set; }
-        public int ArgsCount { get; private set; }
-        public int RemovedCount { get; private set; }
-        public int UnboundCount { get; private set; }
-        public int ClosedCount { get; private set; }
-        public int EnabledCount { get; private set; }
-        public int DisabledCount { get; private set; }
-        public int EventCount { get; private set; }
-        public int Token { get; private set; }
-        public object Parameter { get; private set; }
+        public int AwakeCount
+        {
+            get; private set;
+        }
+        public int LoadedCount
+        {
+            get; private set;
+        }
+        public int ArgsCount
+        {
+            get; private set;
+        }
+        public int RemovedCount
+        {
+            get; private set;
+        }
+        public int UnboundCount
+        {
+            get; private set;
+        }
+        public int ClosedCount
+        {
+            get; private set;
+        }
+        public int EnabledCount
+        {
+            get; private set;
+        }
+        public int DisabledCount
+        {
+            get; private set;
+        }
+        public int EventCount
+        {
+            get; private set;
+        }
+        public int Token
+        {
+            get; private set;
+        }
+        public object Parameter
+        {
+            get; private set;
+        }
         public Model BoundModel
         {
             get => Model;
             set
             {
-                if (value == null) UnbindModel();
-                else BindModel(value);
+                if (value == null)
+                {
+                    UnbindModel();
+                }
+                else
+                {
+                    BindModel(value);
+                }
             }
         }
         public System.Action RemoveAction;
@@ -54,9 +93,16 @@ namespace YLFramework.Core.Tests
         {
             AwakeCount++;
             var handler = SharedEventHandler ?? (System.Action)HandleEvent;
-            if (DuplicateProbeHandler) handler += handler;
+            if (DuplicateProbeHandler)
+            {
+                handler += handler;
+            }
+
             RegisterEvent(ProbeEvent, handler);
-            if (SignatureConflictEvent != null) RegisterEvent<int>(SignatureConflictEvent, _ => EventCount++);
+            if (SignatureConflictEvent != null)
+            {
+                RegisterEvent<int>(SignatureConflictEvent, _ => EventCount++);
+            }
         }
 
         private void HandleEvent()

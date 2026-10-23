@@ -5,10 +5,13 @@ using UnityEngine;
 using UnityEngine.Events;
 using YLFramework.Utilities.Extensions;
 
-namespace YLFramework.Overlap {
+namespace YLFramework.Overlap
+{
 
     [Serializable]
-    public class OverlapEvent2D : UnityEvent<OverlapHit<Collider2D>> { }
+    public class OverlapEvent2D : UnityEvent<OverlapHit<Collider2D>>
+    {
+    }
 
     public abstract class OverlapBase2D : OverlapBase<Collider2D, OverlapEvent2D>
     {

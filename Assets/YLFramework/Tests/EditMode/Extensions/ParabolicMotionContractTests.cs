@@ -35,7 +35,10 @@ namespace YLFramework.Tests.Extensions
                 Assert.Throws<InvalidOperationException>(() => body.ParabolicMotion(0, Vector3.up));
                 Assert.That(body.velocity, Is.EqualTo(new Vector3(1, 2, 3)));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -60,7 +63,10 @@ namespace YLFramework.Tests.Extensions
                 var falling = body.ParabolicMotionVelocity(0, new Vector3(10, -2 * g, 0));
                 Assert.That(falling.x, Is.EqualTo(5).Within(1e-4));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -76,7 +82,10 @@ namespace YLFramework.Tests.Extensions
                 Assert.Throws<InvalidOperationException>(() => body.ParabolicMotionVelocity(2, Vector3.down));
                 Assert.Throws<ArgumentException>(() => body.ParabolicMotionVelocity(float.NaN, Vector3.one));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         [Test]
@@ -100,7 +109,10 @@ namespace YLFramework.Tests.Extensions
                 Assert.That(rising.y, Is.Zero);
                 Assert.Throws<InvalidOperationException>(() => body.ParabolicMotionVelocity(0, Vector3.down));
             }
-            finally { UnityEngine.Object.DestroyImmediate(go); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
     }
 }

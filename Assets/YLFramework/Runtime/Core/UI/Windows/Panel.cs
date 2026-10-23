@@ -9,18 +9,24 @@ namespace YLFramework.Core
     public abstract class Panel : View
     {
         [SerializeField] private PanelConfig settings = PanelConfig.Default;
-        private PanelConfig effective;
+        private PanelConfig _effective;
         internal bool DefersEvents;
         internal object OpeningSession;
         internal PanelManager.PanelOperation InitialOpen;
         internal readonly List<CorePrefabLease> SourcePins = new List<CorePrefabLease>();
 
         /// <summary>当前有效配置的值副本；关闭后不能通过它修改旧会话。</summary>
-        public PanelConfig EffectiveSettings => effective;
+        public PanelConfig EffectiveSettings => _effective;
         /// <summary>当前会话固定的真实根；不会因 Module 重新绑定而迁移。</summary>
-        public UIRootContext Root { get; private set; }
+        public UIRootContext Root
+        {
+            get; private set;
+        }
         /// <summary>本 Panel 自身 Canvas，不借用祖先 Panel 的 Canvas。</summary>
-        public Canvas Canvas { get; private set; }
+        public Canvas Canvas
+        {
+            get; private set;
+        }
         /// <summary>由根统一生成的只读顺序，不是业务 Priority。</summary>
         public int SortingOrder => Canvas ? Canvas.sortingOrder : 0;
         /// <summary>当前有效会话实际可见；Hide、根暂停或完整覆盖时为 false。</summary>
@@ -33,12 +39,20 @@ namespace YLFramework.Core
         public bool IsTop() => this && IsLoaded && Session != null && PanelManager.GetTopPanel(Root) == this;
 
         internal PanelConfig Defaults => settings;
-        internal void Configure(UIRootContext root, PanelConfig value) { Root = root; effective = value; }
-        internal void CommitSettings(PanelConfig value) => effective = value;
+        internal void Configure(UIRootContext root, PanelConfig value)
+        {
+            Root = root;
+            _effective = value;
+        }
+        internal void CommitSettings(PanelConfig value) => _effective = value;
 
-        protected virtual void Awake() { }
+        protected virtual void Awake()
+        {
+        }
         /// <summary>每次有效打开的数据钩子。仅此调用中借读参数，不可关闭当前 Panel/owner 或重入本 Module 的 Panel 打开。</summary>
-        protected virtual void OnOpen(LoadViewArgs args) { }
+        protected virtual void OnOpen(LoadViewArgs args)
+        {
+        }
 
         internal void Open(LoadViewArgs args)
         {
@@ -47,10 +61,19 @@ namespace YLFramework.Core
             try
             {
                 args.BeginRead();
-                try { OnOpen(args); }
-                finally { args.EndRead(); }
+                try
+                {
+                    OnOpen(args);
+                }
+                finally
+                {
+                    args.EndRead();
+                }
             }
-            finally { OpeningSession = previous; }
+            finally
+            {
+                OpeningSession = previous;
+            }
         }
 
         /// <summary>保留会话和事件，仅撤销显示意图；不重新初始化、不触发 OnOpen。</summary>
@@ -65,28 +88,64 @@ namespace YLFramework.Core
         internal void EnsureDisplayAllowed()
         {
             if (OpeningSession != null && ReferenceEquals(OpeningSession, Session))
+            {
                 throw new InvalidOperationException("OnOpen 期间不能调用当前 Panel 的显示命令；请使用打开 overrides。");
+            }
         }
         internal override void BeforeOnLoaded()
         {
             base.BeforeOnLoaded();
-            if (!Root) Configure(PanelManager.RequireAttachedRoot(this), settings);
-            effective.Validate();
+            if (!Root)
+            {
+                Configure(PanelManager.RequireAttachedRoot(this), settings);
+            }
+
+            _effective.Validate();
             Canvas = GetComponent<Canvas>();
-            if (!Canvas) Canvas = gameObject.AddComponent<Canvas>();
-            if (!GetComponent<GraphicRaycaster>()) gameObject.AddComponent<GraphicRaycaster>();
+            if (!Canvas)
+            {
+                Canvas = gameObject.AddComponent<Canvas>();
+            }
+
+            if (!GetComponent<GraphicRaycaster>())
+            {
+                gameObject.AddComponent<GraphicRaycaster>();
+            }
+
             Canvas.overrideSorting = true;
             PanelManager.Prepare(this);
         }
 
         /// <summary>生成顺序变化通知。自身准备阶段的异常使打开失败，其他会话的观察异常单独报告。</summary>
-        protected virtual void OnSortingOrderChange(int sortingOrder) { }
+        protected virtual void OnSortingOrderChange(int sortingOrder)
+        {
+        }
         /// <summary>统一协调后实际变为不可见的通知，不是 Hide 命令，也不替代 OnViewDisabled。</summary>
-        protected virtual void Invisible() { }
+        protected virtual void Invisible()
+        {
+        }
         /// <summary>统一协调后实际变为可见的通知，不是 Show 命令，也不是每次打开钩子。</summary>
-        protected virtual void Visible() { }
+        protected virtual void Visible()
+        {
+        }
         internal void NotifySortingOrder() => OnSortingOrderChange(SortingOrder);
-        internal void NotifyVisible(bool value) { if (value) Visible(); else Invisible(); }
-        internal void EndPanelSession() { Root = null; effective = default; DefersEvents = false; OpeningSession = null; }
+        internal void NotifyVisible(bool value)
+        {
+            if (value)
+            {
+                Visible();
+            }
+            else
+            {
+                Invisible();
+            }
+        }
+        internal void EndPanelSession()
+        {
+            Root = null;
+            _effective = default;
+            DefersEvents = false;
+            OpeningSession = null;
+        }
     }
 }

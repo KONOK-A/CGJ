@@ -68,24 +68,37 @@ namespace YLFramework.Editor.Resource
             public FileDigest[] DeliveryFiles = Array.Empty<FileDigest>();
         }
 
-        private readonly ResourceBuildMap map;
-        private readonly string settings;
-        private readonly string platform;
-        private readonly string keyId;
-        private readonly bool encrypted;
-        internal string Root { get; }
-        internal string Output { get; }
-        internal string Leaf { get; }
+        private readonly ResourceBuildMap _map;
+        private readonly string _settings;
+        private readonly string _platform;
+        private readonly string _keyId;
+        private readonly bool _isEncrypted;
+        internal string Root
+        {
+            get;
+        }
+        internal string Output
+        {
+            get;
+        }
+        internal string Leaf
+        {
+            get;
+        }
 
         internal ResourceBuildWorkspace(ResourceBuildMap map, string settings, string platform,
             ResourceContentEncryption encryption = ResourceContentEncryption.None, string keyId = null)
         {
-            this.map = map;
-            this.settings = settings;
-            this.platform = platform;
-            this.keyId = keyId;
-            encrypted = encryption == ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-            if (!encrypted && encryption != ResourceContentEncryption.None) throw new ArgumentOutOfRangeException(nameof(encryption));
+            this._map = map;
+            this._settings = settings;
+            this._platform = platform;
+            this._keyId = keyId;
+            _isEncrypted = encryption == ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+            if (!_isEncrypted && encryption != ResourceContentEncryption.None)
+            {
+                throw new ArgumentOutOfRangeException(nameof(encryption));
+            }
+
             Leaf = "ylr_" + map.ProjectToken + "_" + platform;
             // Unity 禁止向 Library 构建。只管理 AssetBundles 下新 GUID 的独立根，不认领/清理共享父目录或历史产物。
             // 路径使用 128-bit token 缩短 Windows 路径；marker 仍比较完整配置 SHA-256，碰撞只能拒绝，不能复用。
@@ -93,55 +106,109 @@ namespace YLFramework.Editor.Resource
             Output = Path.Combine(Root, Leaf);
             // Native管线可写出Mono随后无法读回的长路径，必须在认领Workspace或调用构建前拒绝。
             if (Path.DirectorySeparatorChar == '\\' && ExpectedFiles().Any(name => Path.Combine(Output, name).Length >= 260))
+            {
                 throw new PathTooLongException("Workspace paths exceed this Unity Mono Windows file API limit; use a shorter Unity project path before building.");
+            }
         }
 
         internal Ownership Read()
         {
             ResourceBuildOperation.RejectLinks(Root);
-            if (File.Exists(Root) || File.Exists(Root + ".meta")) throw new InvalidOperationException("Workspace root is occupied by a file or orphan meta: " + Root);
-            if (!Directory.Exists(Root)) return null;
+            if (File.Exists(Root) || File.Exists(Root + ".meta"))
+            {
+                throw new InvalidOperationException("Workspace root is occupied by a file or orphan meta: " + Root);
+            }
+
+            if (!Directory.Exists(Root))
+            {
+                return null;
+            }
+
             var marker = Path.Combine(Root, Marker);
             if (!File.Exists(marker) || new FileInfo(marker).Length > 16 * 1024 * 1024)
+            {
                 throw new InvalidOperationException("Unknown or invalid workspace ownership; refusing adoption: " + Root);
+            }
+
             Ownership record;
-            try { record = encrypted ? JsonUtility.FromJson<EncryptedOwnership>(File.ReadAllText(marker)) : JsonUtility.FromJson<Ownership>(File.ReadAllText(marker)); }
-            catch (ArgumentException error) { throw new InvalidOperationException("Invalid workspace marker: " + marker, error); }
-            if (record == null || record.Version != (encrypted ? 2 : 1) || record.ProjectRoot != ResourceBuildMap.Absolute(".") ||
-                record.ProjectGuid != map.ProjectGuid || record.ProjectId != map.ProjectId || record.Settings != settings ||
+            try
+            {
+                record = _isEncrypted ? JsonUtility.FromJson<EncryptedOwnership>(File.ReadAllText(marker)) : JsonUtility.FromJson<Ownership>(File.ReadAllText(marker));
+            }
+            catch (ArgumentException error)
+            {
+                throw new InvalidOperationException("Invalid workspace marker: " + marker, error);
+            }
+            if (record == null || record.Version != (_isEncrypted ? 2 : 1) || record.ProjectRoot != ResourceBuildMap.Absolute(".") ||
+                record.ProjectGuid != _map.ProjectGuid || record.ProjectId != _map.ProjectId || record.Settings != _settings ||
                 record.Leaf != Leaf || record.KnownFiles == null || record.Files == null || record.KnownFiles.Length > MaximumFiles ||
                 record.Files.Length > MaximumFiles)
+            {
                 throw new InvalidOperationException("Workspace owner/settings conflict: " + Root);
+            }
+
             var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var file in record.KnownFiles)
-                if (!ValidFile(file) || !known.Add(file)) throw new InvalidOperationException("Invalid workspace file registration: " + file);
+            {
+                if (!ValidFile(file) || !known.Add(file))
+                {
+                    throw new InvalidOperationException("Invalid workspace file registration: " + file);
+                }
+            }
+
             var digests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var file in record.Files)
+            {
                 if (file == null || !known.Contains(file.Name) || !digests.Add(file.Name) || file.Length < 0 ||
                     file.Sha256 == null || file.Sha256.Length != 64 || file.Sha256.Any(x => !Uri.IsHexDigit(x)))
+                {
                     throw new InvalidOperationException("Invalid workspace digest record.");
+                }
+            }
+
             if (record is EncryptedOwnership delivery)
             {
-                if (delivery.KeyId != keyId || delivery.Platform != platform || delivery.UnityCompatibility != Application.unityVersion ||
+                if (delivery.KeyId != _keyId || delivery.Platform != _platform || delivery.UnityCompatibility != Application.unityVersion ||
                     delivery.ContentProtocolVersion != 1 || delivery.KnownDeliveryFiles == null || delivery.Deliveries == null || delivery.DeliveryFiles == null ||
                     delivery.KnownDeliveryFiles.Length > MaximumFiles || delivery.Deliveries.Length > MaximumFiles || delivery.DeliveryFiles.Length > MaximumFiles)
+                {
                     throw new InvalidOperationException("Encrypted workspace policy/registration conflict.");
+                }
+
                 var registered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var path in delivery.KnownDeliveryFiles)
-                    if (!ValidDeliveryPath(path) || !registered.Add(path)) throw new InvalidOperationException("Invalid delivery file registration.");
+                {
+                    if (!ValidDeliveryPath(path) || !registered.Add(path))
+                    {
+                        throw new InvalidOperationException("Invalid delivery file registration.");
+                    }
+                }
+
                 var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var file in delivery.Deliveries)
+                {
                     if (file == null || !registered.Contains(file.RelativePath) || !candidates.Add(file.RelativePath) ||
                         file.Name != file.RelativePath.Split('/')[1] || file.RawLength < 0 || !ValidDigest(file.RawSha256) ||
                         file.Complete && (file.Length < 0 || !ValidDigest(file.Sha256)))
+                    {
                         throw new InvalidOperationException("Invalid delivery candidate identity.");
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(delivery.DeliveryDirectory) && !ValidDeliveryDirectory(delivery.DeliveryDirectory))
+                {
                     throw new InvalidOperationException("Invalid current delivery directory.");
+                }
+
                 var current = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var file in delivery.DeliveryFiles)
+                {
                     if (file == null || !ValidFile(file.Name) || !current.Add(file.Name) || file.Length < 0 || !ValidDigest(file.Sha256) ||
                         !registered.Contains(delivery.DeliveryDirectory + "/" + file.Name))
+                    {
                         throw new InvalidOperationException("Invalid current delivery snapshot.");
+                    }
+                }
             }
             ValidateContents(record);
             return record;
@@ -158,9 +225,13 @@ namespace YLFramework.Editor.Resource
 
         private bool ValidFile(string name)
         {
-            if (string.IsNullOrEmpty(name) || name.IndexOfAny(new[] { '/', '\\' }) >= 0) return false;
+            if (string.IsNullOrEmpty(name) || name.IndexOfAny(new[] { '/', '\\' }) >= 0)
+            {
+                return false;
+            }
+
             var native = name.EndsWith(".manifest", StringComparison.Ordinal) ? name.Substring(0, name.Length - 9) : name;
-            return native.StartsWith("ylr_" + map.ProjectToken + "_", StringComparison.Ordinal) &&
+            return native.StartsWith("ylr_" + _map.ProjectToken + "_", StringComparison.Ordinal) &&
                 native.All(x => x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z' || x >= '0' && x <= '9' || x == '_');
         }
 
@@ -174,40 +245,75 @@ namespace YLFramework.Editor.Resource
             foreach (var entry in Directory.GetFileSystemEntries(Root))
             {
                 var name = Path.GetFileName(entry);
-                if (name == Leaf && Directory.Exists(entry)) continue;
+                if (name == Leaf && Directory.Exists(entry))
+                {
+                    continue;
+                }
+
                 if (deliveryDirectories.Contains(name) && Directory.Exists(entry))
                 {
                     foreach (var file in Directory.GetFileSystemEntries(entry))
+                    {
                         if (!File.Exists(file) || !deliveryFiles.Contains(name + "/" + Path.GetFileName(file)))
+                        {
                             throw new InvalidOperationException("Workspace contains unregistered delivery content: " + file);
+                        }
+                    }
+
                     continue;
                 }
-                if ((name == Marker || name == Next || name == Lock) && File.Exists(entry)) continue;
+                if ((name == Marker || name == Next || name == Lock) && File.Exists(entry))
+                {
+                    continue;
+                }
+
                 throw new InvalidOperationException("Workspace contains unknown content: " + entry);
             }
-            if (!Directory.Exists(Output)) return;
+            if (!Directory.Exists(Output))
+            {
+                return;
+            }
+
             foreach (var entry in Directory.GetFileSystemEntries(Output))
+            {
                 if (!File.Exists(entry) || !known.Contains(Path.GetFileName(entry)))
+                {
                     throw new InvalidOperationException("Workspace contains an unregistered file/directory: " + entry);
+                }
+            }
         }
 
         internal FileStream AcquireLock(ref Ownership record)
         {
             var creating = record == null;
-            if (creating) Directory.CreateDirectory(Root);
+            if (creating)
+            {
+                Directory.CreateDirectory(Root);
+            }
+
             var handle = File.Open(Path.Combine(Root, Lock), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             try
             {
                 if (creating && !File.Exists(Path.Combine(Root, Marker)))
                 {
                     if (Directory.GetFileSystemEntries(Root).Any(x => Path.GetFileName(x) != Lock))
+                    {
                         throw new InvalidOperationException("Concurrent unknown workspace content; refusing adoption.");
-                    record = encrypted ? new EncryptedOwnership { Version = 2, KeyId = keyId, Platform = platform, UnityCompatibility = Application.unityVersion } : new Ownership();
-                    record.ProjectRoot = ResourceBuildMap.Absolute("."); record.ProjectGuid = map.ProjectGuid;
-                    record.ProjectId = map.ProjectId; record.Settings = settings; record.Leaf = Leaf;
+                    }
+
+                    record = _isEncrypted ? new EncryptedOwnership { Version = 2, KeyId = _keyId, Platform = _platform, UnityCompatibility = Application.unityVersion } : new Ownership();
+                    record.ProjectRoot = ResourceBuildMap.Absolute(".");
+                    record.ProjectGuid = _map.ProjectGuid;
+                    record.ProjectId = _map.ProjectId;
+                    record.Settings = _settings;
+                    record.Leaf = Leaf;
                     Write(record);
                 }
-                else record = Read();
+                else
+                {
+                    record = Read();
+                }
+
                 return handle;
             }
             catch
@@ -217,14 +323,18 @@ namespace YLFramework.Editor.Resource
             }
         }
 
-        internal string[] ExpectedFiles() => map.Bundles.Select(x => x.Name).Append(Leaf)
+        internal string[] ExpectedFiles() => _map.Bundles.Select(x => x.Name).Append(Leaf)
             .SelectMany(x => new[] { x, x + ".manifest" }).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
         internal void BeginAttempt(Ownership record)
         {
             var expected = ExpectedFiles();
             record.KnownFiles = record.KnownFiles.Concat(expected).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-            if (record.KnownFiles.Length > MaximumFiles) throw new InvalidOperationException("Workspace registration limit exceeded; use a new explicit configuration.");
+            if (record.KnownFiles.Length > MaximumFiles)
+            {
+                throw new InvalidOperationException("Workspace registration limit exceeded; use a new explicit configuration.");
+            }
+
             record.Complete = false;
             record.Fingerprint = null;
             record.Files = Array.Empty<FileDigest>();
@@ -239,21 +349,42 @@ namespace YLFramework.Editor.Resource
             var next = Path.Combine(Root, Next);
             File.WriteAllText(next, JsonUtility.ToJson(record, true), new UTF8Encoding(false));
             var marker = Path.Combine(Root, Marker);
-            if (File.Exists(marker)) File.Replace(next, marker, null);
-            else File.Move(next, marker);
+            if (File.Exists(marker))
+            {
+                File.Replace(next, marker, null);
+            }
+            else
+            {
+                File.Move(next, marker);
+            }
         }
 
         internal string RegisterDelivery(EncryptedOwnership record, FileDigest[] raw, out DeliveryRecord[] pending)
         {
             var directory = "d_" + Guid.NewGuid().ToString("N");
             var path = Path.Combine(Root, directory);
-            if (Directory.Exists(path) || File.Exists(path)) throw new IOException("New delivery identity is already occupied.");
-            pending = raw.Select(file => new DeliveryRecord { RelativePath = directory + "/" + file.Name,
-                Name = file.Name, RawLength = file.Length, RawSha256 = file.Sha256 }).ToArray();
+            if (Directory.Exists(path) || File.Exists(path))
+            {
+                throw new IOException("New delivery identity is already occupied.");
+            }
+
+            pending = raw.Select(file => new DeliveryRecord
+            {
+                RelativePath = directory + "/" + file.Name,
+                Name = file.Name,
+                RawLength = file.Length,
+                RawSha256 = file.Sha256
+            }).ToArray();
             if (record.KnownDeliveryFiles.Length + pending.Length > MaximumFiles)
+            {
                 throw new InvalidOperationException("Delivery registration limit exceeded; use a new explicit configuration.");
+            }
+
             if (Path.DirectorySeparatorChar == '\\' && pending.Any(x => Path.Combine(Root, x.RelativePath).Length >= 260))
+            {
                 throw new InvalidOperationException("Delivery paths exceed this Unity Mono Windows file API limit.");
+            }
+
             record.KnownDeliveryFiles = record.KnownDeliveryFiles.Concat(pending.Select(x => x.RelativePath)).ToArray();
             record.Deliveries = record.Deliveries.Concat(pending).ToArray();
             record.Complete = false;
@@ -270,7 +401,11 @@ namespace YLFramework.Editor.Resource
             {
                 using var sha = SHA256.Create();
                 var buffer = new byte[32768];
-                if (input.Length != length) throw new InvalidDataException("Artifact length mismatch: " + Path.GetFileName(path));
+                if (input.Length != length)
+                {
+                    throw new InvalidDataException("Artifact length mismatch: " + Path.GetFileName(path));
+                }
+
                 int count;
                 while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
                 {
@@ -280,11 +415,18 @@ namespace YLFramework.Editor.Resource
                 sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
                 token.ThrowIfCancellationRequested();
                 if (input.Length != length || ResourceBundleEnvelope.Digest(sha.Hash) != digest)
+                {
                     throw new InvalidDataException("Artifact SHA-256 mismatch: " + Path.GetFileName(path));
+                }
+
                 input.Position = 0;
                 return input;
             }
-            catch { input.Dispose(); throw; }
+            catch
+            {
+                input.Dispose();
+                throw;
+            }
         }
     }
 }

@@ -1,7 +1,8 @@
-using YLFramework.Actions;
 using System;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using YLFramework.Actions;
 
 namespace YLFramework.Tests.Actions
 {
@@ -9,7 +10,7 @@ namespace YLFramework.Tests.Actions
     {
         private const float Tolerance = 0.00001f;
 
-        private static readonly string[] ExpectedNames =
+        private static readonly string[] _expectedNames =
         {
             "Linear", "InOutBack", "InBack", "OutBack", "InOutBounce", "OutBounce", "InBounce",
             "InOutCircle", "OutCircle", "InCircle", "InOutCubic", "OutCubic", "InCubic",
@@ -21,10 +22,10 @@ namespace YLFramework.Tests.Actions
         [Test]
         public void EaseTypePreservesEveryNameAndNumericValue()
         {
-            CollectionAssert.AreEqual(ExpectedNames, Enum.GetNames(typeof(EaseType)));
-            for (var index = 0; index < ExpectedNames.Length; index++)
+            CollectionAssert.AreEqual(_expectedNames, Enum.GetNames(typeof(EaseType)));
+            for (var index = 0; index < _expectedNames.Length; index++)
             {
-                Assert.That((int)Enum.Parse(typeof(EaseType), ExpectedNames[index]), Is.EqualTo(index));
+                Assert.That((int)Enum.Parse(typeof(EaseType), _expectedNames[index]), Is.EqualTo(index));
             }
         }
 
@@ -41,7 +42,7 @@ namespace YLFramework.Tests.Actions
 
             for (var index = 0; index < (int)EaseType.Count; index++)
             {
-                var name = ExpectedNames[index] == "InoutQuart" ? "InOutQuart" : ExpectedNames[index];
+                var name = _expectedNames[index] == "InoutQuart" ? "InOutQuart" : _expectedNames[index];
                 var method = typeof(EaseUtility).GetMethod(name);
                 Assert.That(method, Is.Not.Null, name);
                 Assert.That(method.ReturnType, Is.EqualTo(typeof(float)), name);
@@ -93,7 +94,14 @@ namespace YLFramework.Tests.Actions
                 var allowed = name == "XFABManager" || name == "Newtonsoft.Json" || name == "UnityEditor.CoreModule" ||
                               name == "mscorlib" || name == "netstandard" || name == "System" ||
                               name.StartsWith("System.", StringComparison.Ordinal) ||
-                              name == "UnityEngine" || name.StartsWith("UnityEngine.", StringComparison.Ordinal);
+                               name == "UnityEngine" || name.StartsWith("UnityEngine.", StringComparison.Ordinal);
+                if (name == "BouncyCastle.Cryptography")
+                {
+                    var runtime = UnityEditor.Compilation.CompilationPipeline.GetAssemblies()
+                        .Single(item => item.name == assembly.GetName().Name);
+                    var crypto = runtime.compiledAssemblyReferences.Single(path => System.IO.Path.GetFileName(path) == "BouncyCastle.Cryptography.dll");
+                    allowed = Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(crypto);
+                }
                 Assert.That(allowed, Is.True, "Unexpected runtime dependency: " + name);
             }
         }
@@ -188,7 +196,7 @@ namespace YLFramework.Tests.Actions
         }
 
         [Test]
-        public void LegacyBounceQuirksRemainCharacterized_NotApprovedAsCorrectCurves()
+        public void LegacyBounceQuirksRemainCharacterizedNotApprovedAsCorrectCurves()
         {
             // AK-924: retain the local baseline until a separate behavior change is approved.
             Assert.That(EaseUtility.InBounce(0f, 1f, 1f), Is.EqualTo(0f));

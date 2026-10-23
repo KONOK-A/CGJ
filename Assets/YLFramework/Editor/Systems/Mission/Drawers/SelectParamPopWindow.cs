@@ -15,18 +15,18 @@ namespace YLFramework.MissionSystem
 
     public class ParamPopupTreeView : TreeView
     {
-        private MissionsConfig config;
-        private SerializedProperty condition;
-        private MissionConfigData missionConfigData;
+        private MissionsConfig _config;
+        private SerializedProperty _condition;
+        private MissionConfigData _missionConfigData;
 
-        private GUIStyle label_style;
+        private GUIStyle _labelStyle;
 
-        private Dictionary<int, GUIContent> contents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _contents = new Dictionary<int, GUIContent>();
 
-        public ParamPopupTreeView(TreeViewState state, MissionsConfig controller, SerializedProperty condition ) : base(state)
+        public ParamPopupTreeView(TreeViewState state, MissionsConfig controller, SerializedProperty condition) : base(state)
         {
-            this.config = controller;
-            this.condition = condition;
+            this._config = controller;
+            this._condition = condition;
 
             showAlternatingRowBackgrounds = true;
         }
@@ -36,11 +36,11 @@ namespace YLFramework.MissionSystem
 
             TreeViewItem root = new TreeViewItem(-1, -1);
 
-            if (config != null)
+            if (_config != null)
             {
-                for (int i = 0; i < config.param.Count; i++)
+                for (int i = 0; i < _config.parameters.Count; i++)
                 {
-                    root.AddChild(new TreeViewItem(i, 0, string.Format("{0}{1}", config.param[i].name, config.param[i].des)));
+                    root.AddChild(new TreeViewItem(i, 0, string.Format("{0}{1}", _config.parameters[i].name, _config.parameters[i].description)));
                 }
             }
 
@@ -56,17 +56,19 @@ namespace YLFramework.MissionSystem
         {
             base.SingleClickedItem(id);
 
-            if (id < 0 || id >= config.param.Count)
+            if (id < 0 || id >= _config.parameters.Count)
+            {
                 return;
+            }
 
-            MissionParameter p = config.param[id];
+            MissionParameter p = _config.parameters[id];
 
             if (p != null)
             {
-                SerializedProperty param_name = condition.FindPropertyRelative("param_name");
-                param_name.stringValue = p.name;
+                SerializedProperty paramName = _condition.FindPropertyRelative("paramName");
+                paramName.stringValue = p.name;
 
-                SerializedProperty compareType = condition.FindPropertyRelative("compareType");
+                SerializedProperty compareType = _condition.FindPropertyRelative("compareType");
 
 
                 switch (p.type)
@@ -87,7 +89,8 @@ namespace YLFramework.MissionSystem
                         break;
                     case MissionParamType.Bool:
 
-                        for (int i = 0; i < compareType.enumNames.Length; i++) {
+                        for (int i = 0; i < compareType.enumNames.Length; i++)
+                        {
                             if (compareType.enumNames[i] == CompareType.Equals.ToString())
                             {
                                 compareType.enumValueIndex = i;
@@ -100,7 +103,7 @@ namespace YLFramework.MissionSystem
                 }
 
                 // 保存
-                condition.serializedObject.ApplyModifiedProperties();
+                _condition.serializedObject.ApplyModifiedProperties();
             }
 
         }
@@ -109,46 +112,55 @@ namespace YLFramework.MissionSystem
         {
 
 
-            if (args.item.id < 0 || args.item.id >= config.param.Count)
+            if (args.item.id < 0 || args.item.id >= _config.parameters.Count)
+            {
                 return;
-            SerializedProperty param_name = condition.FindPropertyRelative("param_name");
+            }
 
-            MissionParameter parameter = config.param[args.item.id];
+            SerializedProperty paramName = _condition.FindPropertyRelative("paramName");
 
-            if (parameter.name.Equals(param_name.stringValue))
+            MissionParameter parameter = _config.parameters[args.item.id];
+
+            if (parameter.name.Equals(paramName.stringValue))
+            {
                 GUI.Label(args.rowRect, "√");
+            }
 
             args.rowRect.x += 15;
             args.rowRect.width -= 15;
 
             args.rowRect.width -= 35;
 
-            if (label_style == null) {
-                label_style = new GUIStyle(GUI.skin.label);
-                label_style.richText = true;
-            }
-
-            if (!contents.ContainsKey(args.item.id))
-                contents.Add(args.item.id, new GUIContent());
-
-            if (string.IsNullOrEmpty(parameter.des))
+            if (_labelStyle == null)
             {
-                contents[args.item.id].text = parameter.name;
-            }
-            else {
-                contents[args.item.id].text = string.Format("{0}<color=grey>({1})</color>", parameter.name, parameter.des.Replace("\n", string.Empty));
+                _labelStyle = new GUIStyle(GUI.skin.label);
+                _labelStyle.richText = true;
             }
 
-            contents[args.item.id].tooltip = parameter.des;
+            if (!_contents.ContainsKey(args.item.id))
+            {
+                _contents.Add(args.item.id, new GUIContent());
+            }
 
-            EditorGUI.LabelField(args.rowRect, contents[args.item.id], label_style);
+            if (string.IsNullOrEmpty(parameter.description))
+            {
+                _contents[args.item.id].text = parameter.name;
+            }
+            else
+            {
+                _contents[args.item.id].text = string.Format("{0}<color=grey>({1})</color>", parameter.name, parameter.description.Replace("\n", string.Empty));
+            }
+
+            _contents[args.item.id].tooltip = parameter.description;
+
+            EditorGUI.LabelField(args.rowRect, _contents[args.item.id], _labelStyle);
 
             args.rowRect.x += args.rowRect.width;
 
             Color c = GUI.color;
 
             GUI.color = Color.yellow;
-            EditorGUI.LabelField(args.rowRect, parameter.type.ToString() );
+            EditorGUI.LabelField(args.rowRect, parameter.type.ToString());
 
             GUI.color = c;
         }
@@ -159,75 +171,75 @@ namespace YLFramework.MissionSystem
     {
         #region 字段
 
-        private float width;
+        private float _width;
 
-        private MissionsConfig controller;
-        private SerializedProperty condition;
-        private MissionConfigData missionConfigData;
+        private MissionsConfig _controller;
+        private SerializedProperty _condition;
+        private MissionConfigData _missionConfigData;
 
         // 搜索框
-        private SearchField searchField;
-        private Rect searchRect;
-        const float searchHeight = 25f;
+        private SearchField _searchField;
+        private Rect _searchRect;
+        const float SearchHeight = 25f;
 
         // 标签
-        private Rect labelRect;
-        const float labelHeight = 30f;
+        private Rect _labelRect;
+        const float LabelHeight = 30f;
 
         // 参数列表
-        private ParamPopupTreeView paramTree;
-        private TreeViewState paramState;
-        private Rect paramRect;
+        private ParamPopupTreeView _paramTree;
+        private TreeViewState _paramState;
+        private Rect _paramRect;
 
         #endregion
 
 
-        public SelectParamPopWindow(float width , MissionsConfig controller, SerializedProperty condition)
+        public SelectParamPopWindow(float width, MissionsConfig controller, SerializedProperty condition)
         {
-            this.width = width;
-            this.controller = controller;
-            this.condition = condition;
+            this._width = width;
+            this._controller = controller;
+            this._condition = condition;
         }
 
 
         public override Vector2 GetWindowSize()
         {
-            return new Vector2(this.width, 240);
+            return new Vector2(this._width, 240);
         }
 
         public override void OnGUI(Rect rect)
         {
 
-            if (paramTree == null)
+            if (_paramTree == null)
             {
-                if (paramState == null)
+                if (_paramState == null)
                 {
-                    paramState = new TreeViewState();
+                    _paramState = new TreeViewState();
                 }
 
-                paramTree = new ParamPopupTreeView(paramState, controller,condition);
-                paramTree.Reload();
+                _paramTree = new ParamPopupTreeView(_paramState, _controller, _condition);
+                _paramTree.Reload();
             }
 
             // 搜索框
-            if (searchField == null)
+            if (_searchField == null)
             {
-                searchField = new SearchField();
+                _searchField = new SearchField();
             }
-            searchRect.Set(rect.x + 5, rect.y + 5, rect.width - 10, searchHeight);
-            paramTree.searchString = searchField.OnGUI(searchRect, paramTree.searchString);
+            _searchRect.Set(rect.x + 5, rect.y + 5, rect.width - 10, SearchHeight);
+            _paramTree.searchString = _searchField.OnGUI(_searchRect, _paramTree.searchString);
 
             // 标签
-            labelRect.Set(rect.x, rect.y + searchHeight, rect.width, labelHeight);
+            _labelRect.Set(rect.x, rect.y + SearchHeight, rect.width, LabelHeight);
 
-            SerializedProperty param_name = condition.FindPropertyRelative("param_name");
+            SerializedProperty paramName = _condition.FindPropertyRelative("paramName");
 
-            EditorGUI.LabelField(labelRect, param_name.stringValue, GUI.skin.GetStyle("AC BoldHeader"));
+            EditorGUI.LabelField(_labelRect, paramName.stringValue, GUI.skin.GetStyle("AC BoldHeader"));
 
             // 参数列表
 
-            paramRect.Set(rect.x, rect.y + searchHeight + labelHeight - 5, rect.width, rect.height - searchHeight - labelHeight);
-            paramTree.OnGUI(paramRect);
+            _paramRect.Set(rect.x, rect.y + SearchHeight + LabelHeight - 5, rect.width, rect.height - SearchHeight - LabelHeight);
+            _paramTree.OnGUI(_paramRect);
 
         }
     }

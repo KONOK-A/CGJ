@@ -11,7 +11,11 @@ namespace YLFramework.Timing
         private readonly TimerRun _run;
         private readonly ulong _generation;
 
-        internal TimerHandle(TimerRun run) { _run = run; _generation = run.Generation; }
+        internal TimerHandle(TimerRun run)
+        {
+            _run = run;
+            _generation = run.Generation;
+        }
         private bool IsCurrent => _run != null && _run.Generation == _generation;
         internal TimerRun Run => IsCurrent ? _run : null;
 
@@ -22,7 +26,11 @@ namespace YLFramework.Timing
         {
             get
             {
-                if (!IsCurrent) return false;
+                if (!IsCurrent)
+                {
+                    return false;
+                }
+
                 _run.Owner?.Refresh();
                 return IsCurrent && _run.Owner != null;
             }

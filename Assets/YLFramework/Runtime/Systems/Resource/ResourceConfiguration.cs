@@ -1,22 +1,41 @@
 using System;
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
 namespace YLFramework.Services.Resource
 {
-    public enum ResourceLoadMode { Bundles, EditorSimulation }
+    public enum ResourceLoadMode
+    {
+        Bundles,
+        EditorSimulation
+    }
 
     /// <summary>显式只读配置。默认装配 Resources、本地/URL Texture；已验证快照由唯一 ResourceSystem 装配 Bundle 来源，不读取旧设置。</summary>
     public sealed class ResourceConfiguration
     {
-        public IReadOnlyList<ResourceCatalog> Catalogs { get; }
-        public ArtifactStore ArtifactStore { get; }
-        public ResourceImageOptions Images { get; }
+        public IReadOnlyList<ResourceCatalog> Catalogs
+        {
+            get;
+        }
+        public ArtifactStore ArtifactStore
+        {
+            get;
+        }
+        public ResourceImageOptions Images
+        {
+            get;
+        }
         /// <summary>可选应用key来源与显式数据预算；None来源不因此执行密码处理。</summary>
-        public ResourceDecryptionOptions Decryption { get; }
-        internal IReadOnlyList<IResourceSource> Sources { get; }
+        public ResourceDecryptionOptions Decryption
+        {
+            get;
+        }
+        internal IReadOnlyList<IResourceSource> Sources
+        {
+            get;
+        }
 
         /// <summary>只读枚举明确配置的 Store；无需初始化 ResourceSystem。必须在 Unity 主线程逐步驱动并在中止时 Dispose 枚举器。</summary>
         public IEnumerator QueryArtifactsAsync(Action<ArtifactStoreReport> completed, int maxEntries = 10000, CancellationToken cancellation = default)
@@ -27,7 +46,10 @@ namespace YLFramework.Services.Resource
 
         public ResourceConfiguration(IEnumerable<ResourceCatalog> catalogs, ResourceImageOptions images = null, ResourceDecryptionOptions decryption = null)
             : this(catalogs, new IResourceSource[] { new UnityResourcesSource(), new TextureResourceSource(true, images), new TextureResourceSource(false, images) })
-        { Images = images ?? ResourceImageOptions.Default; Decryption = decryption; }
+        {
+            Images = images ?? ResourceImageOptions.Default;
+            Decryption = decryption;
+        }
 
         public ResourceConfiguration(ArtifactStore artifactStore, IEnumerable<ResourceCatalog> catalogs = null, ResourceImageOptions images = null,
             ResourceDecryptionOptions decryption = null)
@@ -47,14 +69,27 @@ namespace YLFramework.Services.Resource
             string cacheRoot = null, ResourceImageOptions images = null, ResourceDecryptionOptions decryption = null)
         {
             if (mode != ResourceLoadMode.Bundles)
+            {
                 throw new ResourceException(ResourceError.Unsupported, "Runtime configuration only accepts the explicit Bundles mode; use the Editor simulation factory for EditorSimulation.");
+            }
+
             var mounts = ResourceCatalog.Copy(projects ?? throw new ArgumentNullException(nameof(projects)));
             if (mounts.Count == 0 || mounts.Any(x => x == null) ||
                 mounts.Select(x => x.ProjectId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != mounts.Count)
+            {
                 throw new ArgumentException("An explicit nonempty set of distinct resource projects is required.", nameof(projects));
-            if (cacheRoot != null) return new ResourceConfiguration(new ArtifactStore(cacheRoot, mounts), images: images, decryption: decryption);
+            }
+
+            if (cacheRoot != null)
+            {
+                return new ResourceConfiguration(new ArtifactStore(cacheRoot, mounts), images: images, decryption: decryption);
+            }
+
             if (mounts.Any(x => x.BuiltIn == null || x.Remote != null))
+            {
                 throw new ArgumentException("Direct snapshots require a complete local snapshot for every project and no remote source; configure an explicit cacheRoot for the update store.", nameof(projects));
+            }
+
             return new ResourceConfiguration(mounts.Select(x => x.BuiltIn.CreateCatalog(x.AssetTypes)), images, decryption);
         }
     }

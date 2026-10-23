@@ -1,7 +1,6 @@
-using YLFramework.Foundation;
-
 using System;
 using UnityEngine;
+using YLFramework.Foundation;
 
 namespace YLFramework.BuffSystem
 {
@@ -13,9 +12,9 @@ namespace YLFramework.BuffSystem
         #region 字段
 
         [Tooltip("用户自定义数据")]
-        public object userData;
+        public object UserData;
 
-        private float fixedUpdateTimer;
+        private float _fixedUpdateTimer;
 
         private float _duration;
         private int _version;
@@ -28,17 +27,26 @@ namespace YLFramework.BuffSystem
         /// <summary>
         /// 拥有当前Buff的游戏角色对象
         /// </summary>
-        public IAddableBuff Owner { get; internal set; }
+        public IAddableBuff Owner
+        {
+            get; internal set;
+        }
 
         /// <summary>
         /// Buff配置信息
         /// </summary>
-        public BuffConfigData BuffData { get; internal set; }
+        public BuffConfigData BuffData
+        {
+            get; internal set;
+        }
 
         /// <summary>
         /// Buff已存在的时间
         /// </summary>
-        public float ExistedTime { get; private set; }
+        public float ExistedTime
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 持续时间
@@ -63,7 +71,9 @@ namespace YLFramework.BuffSystem
             get
             {
                 if (Duration <= 0)
+                {
                     return -1;
+                }
 
                 return ExistedTime / Duration;
             }
@@ -76,12 +86,16 @@ namespace YLFramework.BuffSystem
         /// <summary>
         /// 当Buff被添加时调用
         /// </summary>
-        public virtual void OnAdd() { }
+        public virtual void OnAdd()
+        {
+        }
 
         /// <summary>
         /// 当Buff被移除时调用
         /// </summary>
-        public virtual void OnRemove() { }
+        public virtual void OnRemove()
+        {
+        }
 
         internal void Update() => Advance(UnityEngine.Time.deltaTime);
         internal void Advance(float deltaTime)
@@ -92,10 +106,12 @@ namespace YLFramework.BuffSystem
 
         internal void FixedUpdate()
         {
-            if (fixedUpdateTimer - ExistedTime > UnityEngine.Time.fixedDeltaTime * 2)
+            if (_fixedUpdateTimer - ExistedTime > UnityEngine.Time.fixedDeltaTime * 2)
+            {
                 return;
+            }
 
-            fixedUpdateTimer += UnityEngine.Time.fixedDeltaTime;
+            _fixedUpdateTimer += UnityEngine.Time.fixedDeltaTime;
             OnFixedUpdate();
         }
 
@@ -105,32 +121,41 @@ namespace YLFramework.BuffSystem
             _duration = BuffData.duration;
             ExistedTime = 0;
             Owner = null;
-            fixedUpdateTimer = 0;
+            _fixedUpdateTimer = 0;
         }
 
         /// <summary>
         /// Update
         /// </summary>
-        protected virtual void OnUpdate() { }
+        protected virtual void OnUpdate()
+        {
+        }
 
         /// <summary>
         /// FixedUpdate
         /// </summary>
-        public virtual void OnFixedUpdate() { }
+        public virtual void OnFixedUpdate()
+        {
+        }
 
         /// <summary>
         /// LateUpdate
         /// </summary>
-        public virtual void OnLateUpdate() { }
+        public virtual void OnLateUpdate()
+        {
+        }
 
-        internal void Detach() { _version++; }
+        internal void Detach()
+        {
+            _version++;
+        }
         internal void ClearRuntime()
         {
             _version++;
             Owner = null;
             BuffData = null;
-            userData = null;
-            ExistedTime = fixedUpdateTimer = _duration = 0;
+            UserData = null;
+            ExistedTime = _fixedUpdateTimer = _duration = 0;
         }
 
         /// <summary>
@@ -145,7 +170,7 @@ namespace YLFramework.BuffSystem
         /// 判断当前buff是否能够添加
         /// </summary>
         /// <returns></returns>
-        public virtual bool IsCanAdd()
+        public virtual bool CanAdd()
         {
             return true;
         }

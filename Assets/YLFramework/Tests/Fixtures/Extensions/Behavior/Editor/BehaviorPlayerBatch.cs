@@ -9,12 +9,24 @@ namespace YLFramework.Behavior.Acceptance
 {
     public static class BehaviorPlayerBatch
     {
-        [Serializable] private sealed class Result
+        [Serializable]
+        private sealed class Result
         {
-            public string utc, unity, requestedBackend, actualBackend, stripping, output, status, error, guid, company, product;
+            public string utc;
+            public string unity;
+            public string requestedBackend;
+            public string actualBackend;
+            public string stripping;
+            public string output;
+            public string status;
+            public string error;
+            public string guid;
+            public string company;
+            public string product;
             public bool development;
             public ulong size;
-            public int errors, warnings;
+            public int errors;
+            public int warnings;
             public double seconds;
         }
 
@@ -47,13 +59,21 @@ namespace YLFramework.Behavior.Acceptance
                 result.product = PlayerSettings.productName;
                 report = BehaviorAcceptanceBuilder.Build(expected, false, Path.Combine(output, "player"));
                 Fill(result, report);
-                if (report.summary.result != BuildResult.Succeeded || result.development) throw new InvalidOperationException("Expected successful non-Development build: " + report.summary.result);
+                if (report.summary.result != BuildResult.Succeeded || result.development)
+                {
+                    throw new InvalidOperationException("Expected successful non-Development build: " + report.summary.result);
+                }
+
                 result.status = "BuildSucceeded_PlayerNotRun";
             }
             catch (Exception error)
             {
                 report = report ? report : BuildReport.GetLatestReport();
-                if (report) Fill(result, report);
+                if (report)
+                {
+                    Fill(result, report);
+                }
+
                 result.status = "BuildFailed";
                 result.error = error.ToString();
                 throw;

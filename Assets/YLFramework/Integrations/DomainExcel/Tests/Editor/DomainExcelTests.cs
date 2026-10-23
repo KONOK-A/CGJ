@@ -13,11 +13,17 @@ namespace YLFramework.Domain.Excel.Tests
     {
         private string _path;
         [SetUp] public void Setup() => _path = Path.Combine(Path.GetTempPath(), "YLDomainC-params-" + Guid.NewGuid().ToString("N") + ".xlsx");
-        [TearDown] public void Cleanup() { if (File.Exists(_path)) File.Delete(_path); }
-
-        [Test] public void MissionParametersRoundTripRequiresConfirmation()
+        [TearDown]
+        public void Cleanup()
         {
-            DomainExcelCommands.ExportParameters(new[] { new MissionParameter { name = "coins", type = MissionParamType.Int, des = "author-data" } }, _path);
+            if (File.Exists(_path))
+                File.Delete(_path);
+        }
+
+        [Test]
+        public void MissionParametersRoundTripRequiresConfirmation()
+        {
+            DomainExcelCommands.ExportParameters(new[] { new MissionParameter { name = "coins", type = MissionParamType.Int, description = "author-data" } }, _path);
             var values = new List<MissionParameter> { new MissionParameter { name = "old" } };
             using (var cancel = DomainExcelCommands.PreviewParameters(_path, values))
             {
@@ -30,10 +36,11 @@ namespace YLFramework.Domain.Excel.Tests
             Assert.That(plan.Commit(true), Is.EqualTo(ExcelCommitResult.Applied));
             Assert.That(values[0].name, Is.EqualTo("coins"));
             Assert.That(values[0].type, Is.EqualTo(MissionParamType.Int));
-            Assert.That(values[0].des, Is.EqualTo("author-data"));
+            Assert.That(values[0].description, Is.EqualTo("author-data"));
         }
 
-        [Test] public void DuplicateParameterNamesAreRealWorkbookErrors()
+        [Test]
+        public void DuplicateParameterNamesAreRealWorkbookErrors()
         {
             DomainExcelCommands.ExportParameters(new[] { new MissionParameter { name = "same" }, new MissionParameter { name = "same" } }, _path);
             var values = new List<MissionParameter>();
@@ -43,7 +50,8 @@ namespace YLFramework.Domain.Excel.Tests
             Assert.That(values, Is.Empty);
         }
 
-        [Test] public void WorkbookChangeAfterPreviewCannotWriteTarget()
+        [Test]
+        public void WorkbookChangeAfterPreviewCannotWriteTarget()
         {
             DomainExcelCommands.ExportParameters(new[] { new MissionParameter { name = "original" } }, _path);
             var values = new List<MissionParameter>();

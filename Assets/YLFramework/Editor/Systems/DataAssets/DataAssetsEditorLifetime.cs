@@ -10,7 +10,9 @@ namespace YLFramework.DataAssets.Editor
             EditorApplication.playModeStateChanged += state =>
             {
                 if (state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.EnteredEditMode)
+                {
                     ScriptableObjectManager.Clear();
+                }
             };
             AssemblyReloadEvents.beforeAssemblyReload += ScriptableObjectManager.Clear;
         }

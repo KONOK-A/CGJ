@@ -36,10 +36,10 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 
 ## 双 FSM
 
-- 原轻量 `YLFramework.FSM.FSM<TStateId>` 的6个C#及原meta均未修改。继续原 `Allocate → Init/State → SetUp → Update/FixedUpdate/LateUpdate/OnGUI → Pause/Continue → RecycleToCache`；不要在其生命周期回调内回收。
-- 资产FSM为 `YLFramework.StateMachine`，独立使用原XFFSM算法与API。`FSMController`按Start初始化、Update/Late/Fixed驱动；`RuntimeFSMController`保存层级/子状态机、状态脚本、参数和条件组；组内AND/组间OR、AnyState、Trigger及完整回调保留。Entry沿用作者工具的默认入口展示，不新增原包没有的条件边执行语义；空条件链只有显式`AutoSwtich=true`才自动切换。
-- 状态脚本所在asmdef引用`YLFramework.Runtime`。类继承此namespace的`FSMState`，保持public无参构造，使用原`controller`、`currentStateInfo`、`userData`字段；不要把旧包`XFFSM.FSMState`子类直接绑定给YL资产。原游戏、Scene、Prefab、旧包className/GUID完全不重绑。
-- 在自有GameObject添加`FSMController`，序列化配置层，或在Start前调用`AddRuntimeFSMController(source, layerName)`；新`UserData`属性支持直接挂载时的启动前数据注入。沿用`GetCurrentStateInfo(index/layerName, subStateName)`、Set/Get Bool/Float/Int/Trigger、ResetTrigger。相同参数名跨层保留原广播/任意非零读取语义，但读取按参数类型匹配。
+- 原轻量 `YLFramework.FSM.Fsm<TStateId>` 的6个C#及原meta均未修改。继续原 `Allocate → Init/State → SetUp → Update/FixedUpdate/LateUpdate/OnGUI → Pause/Continue → RecycleToCache`；不要在其生命周期回调内回收。
+- 资产FSM为 `YLFramework.StateMachine`，独立使用原XFFSM算法与API。`FsmController`按Start初始化、Update/Late/Fixed驱动；`RuntimeFsmController`保存层级/子状态机、状态脚本、参数和条件组；组内AND/组间OR、AnyState、Trigger及完整回调保留。Entry沿用作者工具的默认入口展示，不新增原包没有的条件边执行语义；空条件链只有显式`AutoSwtich=true`才自动切换。
+- 状态脚本所在asmdef引用`YLFramework.Runtime`。类继承此namespace的`FsmState`，保持public无参构造，使用原`controller`、`currentStateInfo`、`userData`字段；不要把旧包`XFFSM.FSMState`子类直接绑定给YL资产。原游戏、Scene、Prefab、旧包className/GUID完全不重绑。
+- 在自有GameObject添加`FsmController`，序列化配置层，或在Start前调用`AddRuntimeFSMController(source, layerName)`；新`UserData`属性支持直接挂载时的启动前数据注入。沿用`GetCurrentStateInfo(index/layerName, subStateName)`、Set/Get Bool/Float/Int/Trigger、ResetTrigger。相同参数名跨层保留原广播/任意非零读取语义，但读取按参数类型匹配。
 - YL尚未对外发布，不承接XF旧数据：宿主仅序列化带名称的`_runtimeFSMControllerLayer`，不保留旧`_runtimeFSMController`列表或启动迁移。Editor脚本绑定以显式GUID为准，刷新不再扫描状态类型并为缺GUID的旧`className`记录补写身份；使用Add Script/Create And Add建立当前绑定。运行时按`className`构造状态仍是现用能力，程序化消费者无需伪造Editor GUID。
 - 内置状态身份只由`isBuildInState`与`buildInStateName`共同决定，`name`不再作为Any State/Entry旧格式回退；自动绑定也只按GUID去重。缺标记或缺GUID的旧Editor记录不自动迁移、删除或修补，不应与当前有效绑定混用；当前创建器生成完整标记和GUID。
 - 图内选中普通状态或连线后可按Delete删除；多选共用一次Undo/Redo，Entry/Any State/Up与运行时仍受保护，文本输入中的Delete不删节点。背景右键保留Create State/Create Sub-State Machine；Inspector在删除或切换选择后重绑有效属性，不继续绘制已移除的节点/过渡。
@@ -47,10 +47,10 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 - 首次创建按脚本分别记录，回调重入不会消费尚未访问脚本的OnCreate；未创建脚本不发送退出。首次回调异常摘除失败运行层、释放克隆，恢复初始化标志并完成其余层后传播原异常；参数不永久排队。Start前或初始化期间可取消尚未启动的源层。
 - 同帧同状态访问上限32、整链256；超过后每帧最多一次资产/层/状态诊断，拒绝本帧后续切换，不依赖scaled Time、不抛循环检测异常。回调修改层列表用快照，常态驱动/预热后广播不按帧新建快照。未作Unity Profiler结论。
 - 作者入口：`Assets/Create/YLFramework/Asset FSM/FSMController`、`Assets/Create/YLFramework/Asset FSM/FSMState`、`Window/YLFramework/Asset FSM/StateMachineWindow`。图保留节点/层级/连线/参数/脚本选择/预览；拖拽、框选和网格用Unity公共GraphView组件。旧内部`UnityEditor.Graphs`已移除，重点样式查找有公共Editor样式fallback，模板附`[Preserve]`。
-- 保存/绑定只操作当前资产，不在Editor加载时扫描和重写所有配置；缺类型/参数/父节点或循环配置给资产/状态/字段诊断，暂时失效的脚本绑定不自动删除。严重损坏的重复/null节点可在Unity Debug Inspector按字段修复。脚本只按此FSMState基类筛选，不吸入旧包状态类型。
+- 保存/绑定只操作当前资产，不在Editor加载时扫描和重写所有配置；缺类型/参数/父节点或循环配置给资产/状态/字段诊断，暂时失效的脚本绑定不自动删除。严重损坏的重复/null节点可在Unity Debug Inspector按字段修复。脚本只按此FsmState基类筛选，不吸入旧包状态类型。
 - New Scripts用独立文件存在检查及CreateNew拒绝覆盖已存在源码；Create And Add在刷新前保存项目作用域SessionState待绑定记录，等待编译/导入及程序集重载完成再绑定，不假设下一次delayCall已有GetClass。该流程已在A通过真实产品入口、编译重载及保存重导入验证，不由测试手工附加。条件阈值/比较/参数/AutoSwitch/组增删登记Undo，主组和附加组重排使用SerializedProperty；Undo后重新绑定Inspector。缺参数等错误保留合法端点连线，允许在图内修复，不隐藏整张图。
 - 实现说明：`FSMSelectionDragger.cs`与Unity Reference-Only源码近似，未复制；网格/框选也未复制，分别调用公共`SelectionDragger`/`GridBackground`/`RectangleSelector`。未复制Logo或原GUID。
-- `AssetFSMRuntimeTests`已执行双实例/资产隔离、嵌套默认状态、组条件、Entry/Any、Trigger消费/重启清队列、回调增删层、退出异常清理、零timeScale循环和双FSM退出。`BehaviorAuthoringTests`已执行原生资产/条件组、Prefab持久事件保存重导入及Undo/Redo；默认RuntimeOnly不在EditMode Invoke，测试显式验证并序列化EditorAndRuntime，不改产品默认。
+- `AssetFsmRuntimeTests`已执行双实例/资产隔离、嵌套默认状态、组条件、Entry/Any、Trigger消费/重启清队列、回调增删层、退出异常清理、零timeScale循环和双FSM退出。`BehaviorAuthoringTests`已执行原生资产/条件组、Prefab持久事件保存重导入及Undo/Redo；默认RuntimeOnly不在EditMode Invoke，测试显式验证并序列化EditorAndRuntime，不改产品默认。
 - Play退出/再进入已在同一Editor进程按默认双Reload、禁Domain、同时禁Domain/Scene三种组合各连续两轮，验证双FSM独立起步/转换及退出无克隆。静态StartupFSM/RemoveFSM所有组合、源资产卸载和完整场景链仍不据此外推。轻量FSM的真实Unity时间/三相位由引擎用例及探针驱动，离线不做Time stub。
 
 ## 主 Unity / Player

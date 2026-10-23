@@ -9,37 +9,45 @@ namespace YLFramework.Foundation.Tests
 {
     public class TimerBindingPlayModeTests
     {
-        private GameObject owner;
-        private GameObject replacement;
-        private TimerScheduler scheduler;
+        private GameObject _owner;
+        private GameObject _replacement;
+        private TimerScheduler _scheduler;
 
         [SetUp]
         public void SetUp()
         {
-            scheduler = new TimerScheduler(0, 0, 0);
-            owner = new GameObject("YLTimer.BindingPlayOwner");
+            _scheduler = new TimerScheduler(0, 0, 0);
+            _owner = new GameObject("YLTimer.BindingPlayOwner");
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            scheduler.Dispose();
-            if (owner) Object.Destroy(owner);
-            if (replacement) Object.Destroy(replacement);
+            _scheduler.Dispose();
+            if (_owner)
+            {
+                Object.Destroy(_owner);
+            }
+
+            if (_replacement)
+            {
+                Object.Destroy(_replacement);
+            }
+
             yield return null;
         }
 
         [UnityTest]
         public IEnumerator NeverActivatedPausedOwnerIsCancelledOnNextAdvanceAfterDestroy()
         {
-            owner.SetActive(false);
+            _owner.SetActive(false);
             var cancels = 0;
-            var handle = scheduler.Delay(100, onCancelled: _ => cancels++);
-            handle.BindTo(owner, TimerGameObjectLifetime.CancelOnDestroy);
+            var handle = _scheduler.Delay(100, onCancelled: _ => cancels++);
+            handle.BindTo(_owner, TimerGameObjectLifetime.CancelOnDestroy);
             handle.Pause();
-            Object.Destroy(owner);
+            Object.Destroy(_owner);
             yield return null;
-            scheduler.Advance(0, 0, 1);
+            _scheduler.Advance(0, 0, 1);
             Assert.That(handle.Status, Is.EqualTo(TimerState.Cancelled));
             Assert.That(cancels, Is.EqualTo(1));
         }
@@ -47,35 +55,35 @@ namespace YLFramework.Foundation.Tests
         [UnityTest]
         public IEnumerator DisableCancelsPausedRunButDestroyOnlyRunContinues()
         {
-            var stopped = scheduler.Delay(100);
-            var survives = scheduler.Delay(0);
-            stopped.BindTo(owner);
-            survives.BindTo(owner, TimerGameObjectLifetime.CancelOnDestroy);
+            var stopped = _scheduler.Delay(100);
+            var survives = _scheduler.Delay(0);
+            stopped.BindTo(_owner);
+            survives.BindTo(_owner, TimerGameObjectLifetime.CancelOnDestroy);
             stopped.Pause();
-            owner.SetActive(false);
+            _owner.SetActive(false);
             Assert.That(stopped.Status, Is.EqualTo(TimerState.Cancelled));
             Assert.That(survives.IsActive, Is.True);
             yield return null;
-            scheduler.Advance(0, 0, 1);
+            _scheduler.Advance(0, 0, 1);
             Assert.That(survives.Status, Is.EqualTo(TimerState.Completed));
         }
 
         [UnityTest]
         public IEnumerator CallbackRebindAndRestartIsNotCancelledByOldListenerSnapshot()
         {
-            replacement = new GameObject("YLTimer.BindingReplacement");
-            using var slot = new ReusableTimer(scheduler);
+            _replacement = new GameObject("YLTimer.BindingReplacement");
+            using var slot = new ReusableTimer(_scheduler);
             TimerHandle next = default;
             var calls = 0;
             var handle = slot.Start(10, onCancelled: _ =>
             {
                 next = slot.Start(0, () => calls++);
-                next.BindTo(replacement);
+                next.BindTo(_replacement);
             });
-            handle.BindTo(owner);
-            owner.SetActive(false);
+            handle.BindTo(_owner);
+            _owner.SetActive(false);
             yield return null;
-            scheduler.Advance(0, 0, 1);
+            _scheduler.Advance(0, 0, 1);
             Assert.That(handle.Status, Is.EqualTo(TimerState.Invalidated));
             Assert.That(next.Status, Is.EqualTo(TimerState.Completed));
             Assert.That(calls, Is.EqualTo(1));

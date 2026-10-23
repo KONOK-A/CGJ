@@ -1,13 +1,23 @@
 namespace YLFramework.Core.Tests
 {
-    public sealed class YLCoreDerivedHorizontalLayoutGroup : UnityEngine.UI.HorizontalLayoutGroup { }
+    public sealed class YLCoreDerivedHorizontalLayoutGroup : UnityEngine.UI.HorizontalLayoutGroup
+    {
+    }
 
     public sealed class YLCoreNativeLayoutReentryProbe : UnityEngine.EventSystems.UIBehaviour
     {
         public System.Action DimensionsChanged;
         public System.Action ParentChanged;
-        protected override void OnRectTransformDimensionsChange() { base.OnRectTransformDimensionsChange(); DimensionsChanged?.Invoke(); }
-        protected override void OnTransformParentChanged() { base.OnTransformParentChanged(); ParentChanged?.Invoke(); }
+        protected override void OnRectTransformDimensionsChange()
+        {
+            base.OnRectTransformDimensionsChange();
+            DimensionsChanged?.Invoke();
+        }
+        protected override void OnTransformParentChanged()
+        {
+            base.OnTransformParentChanged();
+            ParentChanged?.Invoke();
+        }
     }
 
     public sealed class YLCoreSmokePanel : YLFramework.Core.Panel
@@ -22,13 +32,34 @@ namespace YLFramework.Core.Tests
         public const string ProbeEvent = "YLCoreSmoke.PanelEvent";
         public static bool UseSharedHandler;
         public static int SharedEventCount;
-        public int LoadedCount { get; private set; }
-        public int ArgsCount { get; private set; }
-        public int OpenCount { get; private set; }
-        public int RemovedCount { get; private set; }
-        public int ClosedCount { get; private set; }
-        public int Token { get; private set; }
-        public int EventCount { get; private set; }
+        public int LoadedCount
+        {
+            get; private set;
+        }
+        public int ArgsCount
+        {
+            get; private set;
+        }
+        public int OpenCount
+        {
+            get; private set;
+        }
+        public int RemovedCount
+        {
+            get; private set;
+        }
+        public int ClosedCount
+        {
+            get; private set;
+        }
+        public int Token
+        {
+            get; private set;
+        }
+        public int EventCount
+        {
+            get; private set;
+        }
         public System.Action RemoveAction;
         public System.Action ClosedAction;
 
@@ -57,7 +88,11 @@ namespace YLFramework.Core.Tests
         protected override void OnSortingOrderChange(int sortingOrder) => SortingProbe?.Invoke(this, sortingOrder);
         protected override void Visible() => VisibleProbe?.Invoke(this);
         protected override void Invisible() => InvisibleProbe?.Invoke(this);
-        protected override void OnClosed() { ClosedCount++; ClosedAction?.Invoke(); }
+        protected override void OnClosed()
+        {
+            ClosedCount++;
+            ClosedAction?.Invoke();
+        }
         protected override void OnViewEnabled() => EnabledProbe?.Invoke(this);
         protected override void OnOpen(LoadViewArgs args)
         {
@@ -90,13 +125,27 @@ namespace YLFramework.Core.Tests
     {
         public static UIRootContext Create(UnityEngine.GameObject host, int layerCount = 2, bool activate = true)
         {
-            if (!host) throw new System.ArgumentNullException(nameof(host));
+            if (!host)
+            {
+                throw new System.ArgumentNullException(nameof(host));
+            }
+
             if (host.activeSelf || !host.GetComponent<UnityEngine.Canvas>() ||
                 !host.GetComponent<UnityEngine.UI.GraphicRaycaster>())
+            {
                 throw new System.ArgumentException("测试根必须 inactive 且已有 Canvas/GraphicRaycaster。", nameof(host));
-            if (layerCount < 1) throw new System.ArgumentOutOfRangeException(nameof(layerCount));
+            }
+
+            if (layerCount < 1)
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(layerCount));
+            }
+
             if (host.GetComponent<UIRootContext>())
+            {
                 throw new System.ArgumentException("测试根不能已有 UIRootContext。", nameof(host));
+            }
+
             var context = host.AddComponent<UIRootContext>();
             var layers = new UIRootContext.Layer[layerCount];
             for (int i = 0; i < layers.Length; i++)
@@ -121,7 +170,11 @@ namespace YLFramework.Core.Tests
             }
             typeof(UIRootContext).GetField("uiLayers", System.Reflection.BindingFlags.Instance |
                 System.Reflection.BindingFlags.NonPublic).SetValue(context, layers);
-            if (activate) host.SetActive(true);
+            if (activate)
+            {
+                host.SetActive(true);
+            }
+
             return context;
         }
     }

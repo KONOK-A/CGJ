@@ -12,16 +12,16 @@ namespace YLFramework.Core.Tests
     {
 #pragma warning disable YL0005 // 只为检查真实参数池的回收契约，通过反射借用池而不提供业务持有入口。
         private static ObjectPool<LoadViewArgs> ArgsPool => (ObjectPool<LoadViewArgs>)typeof(LoadViewArgs)
-            .GetField("Pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            .GetField("_pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 #pragma warning restore YL0005
-        private static readonly Action<LoadViewArgs> Claim = Lifecycle("Claim");
-        private static readonly Action<LoadViewArgs> Release = Lifecycle("Release");
-        private static readonly Action<LoadViewArgs> BeginRead = Lifecycle("BeginRead");
-        private static readonly Action<LoadViewArgs> EndRead = Lifecycle("EndRead");
-        private static readonly Action<LoadViewArgs> Recycle = (Action<LoadViewArgs>)Delegate.CreateDelegate(
+        private static readonly Action<LoadViewArgs> _claim = Lifecycle("Claim");
+        private static readonly Action<LoadViewArgs> _release = Lifecycle("Release");
+        private static readonly Action<LoadViewArgs> _beginRead = Lifecycle("BeginRead");
+        private static readonly Action<LoadViewArgs> _endRead = Lifecycle("EndRead");
+        private static readonly Action<LoadViewArgs> _recycle = (Action<LoadViewArgs>)Delegate.CreateDelegate(
             typeof(Action<LoadViewArgs>), typeof(LoadViewArgs).GetMethod("Recycle", BindingFlags.Static | BindingFlags.NonPublic));
 #pragma warning disable YL0005 // Fixture 故意跟踪借用对象，TearDown 验证生产路径已归还并清引用。
-        private readonly HashSet<LoadViewArgs> arguments = new HashSet<LoadViewArgs>();
+        private readonly HashSet<LoadViewArgs> _arguments = new HashSet<LoadViewArgs>();
 #pragma warning restore YL0005
 
         private static Action<LoadViewArgs> Lifecycle(string name) => (Action<LoadViewArgs>)Delegate.CreateDelegate(
@@ -30,35 +30,37 @@ namespace YLFramework.Core.Tests
         [SetUp]
         public void CapturePool()
         {
-            arguments.Clear();
+            _arguments.Clear();
         }
 
         [TearDown]
         public void RestoreReturnedFixtureObjects()
         {
-            foreach (var args in arguments)
+            foreach (var args in _arguments)
             {
                 // 只检查生产路径已完成归还，不用 reset 或补回收掩盖 lease/owner 残留。
-                Assert.That(typeof(LoadViewArgs).GetField("leased", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
-                Assert.That(typeof(LoadViewArgs).GetField("owned", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
+                Assert.That(typeof(LoadViewArgs).GetField("_isLeased", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
+                Assert.That(typeof(LoadViewArgs).GetField("_isOwned", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(args), Is.False);
                 AssertValuesCleared(args);
             }
             // 空闲参数不含 fixture 引用且容量有界；不改共享池结构或补回收掩盖残留。
-            arguments.Clear();
+            _arguments.Clear();
         }
 
         private LoadViewArgs NewArgs()
         {
             var args = LoadViewArgs.New();
-            arguments.Add(args);
+            _arguments.Add(args);
             return args;
         }
 
         private static void AssertValuesCleared(LoadViewArgs args)
         {
-            foreach (var name in new[] { "strings", "ints", "bools", "floats", "longs", "doubles", "objects" })
+            foreach (var name in new[] { "_strings", "_ints", "_bools", "_floats", "_longs", "_doubles", "_objects" })
+            {
                 Assert.That(((IDictionary)typeof(LoadViewArgs).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
                     .GetValue(args)).Count, Is.Zero, name + " retained values after return");
+            }
         }
 
         private static Action[] Reads(LoadViewArgs args) => new Action[]
@@ -80,7 +82,7 @@ namespace YLFramework.Core.Tests
         public void ReturnedArgumentsImmediatelyClearEveryCategoryAndReuseEmpty(bool claimed)
         {
             var first = NewArgs();
-            var returnArgs = Recycle;
+            var returnArgs = _recycle;
             try
             {
                 var marker = new object();
@@ -100,8 +102,8 @@ namespace YLFramework.Core.Tests
                 Assert.That(first.GetObject("value"), Is.SameAs(marker));
                 if (claimed)
                 {
-                    Claim(first);
-                    returnArgs = Release;
+                    _claim(first);
+                    returnArgs = _release;
                 }
             }
             finally
@@ -109,9 +111,17 @@ namespace YLFramework.Core.Tests
                 returnArgs(first);
             }
             AssertValuesCleared(first);
-            foreach (var read in Reads(first)) Assert.Throws<ObjectDisposedException>(() => read());
-            foreach (var write in Writes(first)) Assert.Throws<ObjectDisposedException>(() => write());
-            Assert.Throws<ObjectDisposedException>(() => Claim(first));
+            foreach (var read in Reads(first))
+            {
+                Assert.Throws<ObjectDisposedException>(() => read());
+            }
+
+            foreach (var write in Writes(first))
+            {
+                Assert.Throws<ObjectDisposedException>(() => write());
+            }
+
+            Assert.Throws<ObjectDisposedException>(() => _claim(first));
 
             var reused = NewArgs();
             try
@@ -127,7 +137,7 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                Recycle(reused);
+                _recycle(reused);
             }
         }
 
@@ -136,33 +146,52 @@ namespace YLFramework.Core.Tests
         {
             var args = NewArgs();
             args.SetObject("value", args);
-            Claim(args);
+            _claim(args);
             try
             {
-                Assert.Throws<InvalidOperationException>(() => Claim(args));
-                Assert.Throws<InvalidOperationException>(() => Recycle(args));
-                foreach (var read in Reads(args)) Assert.Throws<InvalidOperationException>(() => read());
-                foreach (var write in Writes(args)) Assert.Throws<InvalidOperationException>(() => write());
-                BeginRead(args);
+                Assert.Throws<InvalidOperationException>(() => _claim(args));
+                Assert.Throws<InvalidOperationException>(() => _recycle(args));
+                foreach (var read in Reads(args))
+                {
+                    Assert.Throws<InvalidOperationException>(() => read());
+                }
+
+                foreach (var write in Writes(args))
+                {
+                    Assert.Throws<InvalidOperationException>(() => write());
+                }
+
+                _beginRead(args);
                 try
                 {
-                    Assert.Throws<InvalidOperationException>(() => Claim(args));
-                    Assert.Throws<InvalidOperationException>(() => Recycle(args));
-                    Assert.Throws<InvalidOperationException>(() => BeginRead(args));
-                    foreach (var write in Writes(args)) Assert.Throws<InvalidOperationException>(() => write());
+                    Assert.Throws<InvalidOperationException>(() => _claim(args));
+                    Assert.Throws<InvalidOperationException>(() => _recycle(args));
+                    Assert.Throws<InvalidOperationException>(() => _beginRead(args));
+                    foreach (var write in Writes(args))
+                    {
+                        Assert.Throws<InvalidOperationException>(() => write());
+                    }
+
                     Assert.That(args.GetObject("value"), Is.SameAs(args));
-                    foreach (var read in Reads(args)) Assert.DoesNotThrow(() => read());
+                    foreach (var read in Reads(args))
+                    {
+                        Assert.DoesNotThrow(() => read());
+                    }
                 }
                 finally
                 {
-                    EndRead(args);
+                    _endRead(args);
                 }
-                foreach (var read in Reads(args)) Assert.Throws<InvalidOperationException>(() => read());
-                Assert.Throws<InvalidOperationException>(() => EndRead(args));
+                foreach (var read in Reads(args))
+                {
+                    Assert.Throws<InvalidOperationException>(() => read());
+                }
+
+                Assert.Throws<InvalidOperationException>(() => _endRead(args));
             }
             finally
             {
-                Release(args);
+                _release(args);
             }
             AssertValuesCleared(args);
         }
@@ -171,21 +200,27 @@ namespace YLFramework.Core.Tests
         public void CallbackExceptionEndsBorrowingWithoutReturningTheOwnersLease()
         {
             var args = NewArgs();
-            Claim(args);
+            _claim(args);
             try
             {
                 Assert.Throws<FormatException>(() =>
                 {
-                    BeginRead(args);
-                    try { throw new FormatException("fixture callback"); }
-                    finally { EndRead(args); }
+                    _beginRead(args);
+                    try
+                    {
+                        throw new FormatException("fixture callback");
+                    }
+                    finally
+                    {
+                        _endRead(args);
+                    }
                 });
                 Assert.Throws<InvalidOperationException>(() => args.GetObject("value"));
-                Assert.Throws<InvalidOperationException>(() => Recycle(args));
+                Assert.Throws<InvalidOperationException>(() => _recycle(args));
             }
             finally
             {
-                Release(args);
+                _release(args);
             }
             Assert.Throws<ObjectDisposedException>(() => args.GetObject("value"));
         }
@@ -195,8 +230,12 @@ namespace YLFramework.Core.Tests
         public void RepeatedReturnDoesNotAddAnotherPoolEntry(bool claimed)
         {
             var args = NewArgs();
-            if (claimed) Claim(args);
-            var returnArgs = claimed ? Release : Recycle;
+            if (claimed)
+            {
+                _claim(args);
+            }
+
+            var returnArgs = claimed ? _release : _recycle;
             returnArgs(args);
             var count = ArgsPool.CurStoreCount;
             returnArgs(args);
@@ -211,8 +250,8 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                Recycle(first);
-                Recycle(second);
+                _recycle(first);
+                _recycle(second);
             }
         }
 
@@ -223,14 +262,14 @@ namespace YLFramework.Core.Tests
             try
             {
                 args.SetInt("value", 7);
-                Assert.Throws<InvalidOperationException>(() => Release(args));
-                Assert.Throws<InvalidOperationException>(() => BeginRead(args));
-                Assert.Throws<InvalidOperationException>(() => EndRead(args));
+                Assert.Throws<InvalidOperationException>(() => _release(args));
+                Assert.Throws<InvalidOperationException>(() => _beginRead(args));
+                Assert.Throws<InvalidOperationException>(() => _endRead(args));
                 Assert.That(args.GetInt("value"), Is.EqualTo(7));
             }
             finally
             {
-                Recycle(args);
+                _recycle(args);
             }
         }
 
@@ -252,7 +291,7 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                Recycle(args);
+                _recycle(args);
             }
             Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
             Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
@@ -264,7 +303,7 @@ namespace YLFramework.Core.Tests
         {
             var args = NewArgs();
             args.SetInt("value", 7);
-            Claim(args);
+            _claim(args);
             try
             {
 #pragma warning disable YL0004 // 同一外来工厂用于验证 owned 借用数据不会被通用池清理。
@@ -272,13 +311,19 @@ namespace YLFramework.Core.Tests
 #pragma warning restore YL0004
                 Assert.Throws<InvalidOperationException>(() => foreignPool.Recycle(args));
                 Assert.Throws<InvalidOperationException>(() => foreignPool.Discard(args));
-                BeginRead(args);
-                try { Assert.That(args.GetInt("value"), Is.EqualTo(7)); }
-                finally { EndRead(args); }
+                _beginRead(args);
+                try
+                {
+                    Assert.That(args.GetInt("value"), Is.EqualTo(7));
+                }
+                finally
+                {
+                    _endRead(args);
+                }
             }
             finally
             {
-                Release(args);
+                _release(args);
             }
         }
 
@@ -288,12 +333,12 @@ namespace YLFramework.Core.Tests
             var idle = NewArgs();
             var ownedArgs = NewArgs();
             ownedArgs.SetInt("value", 7);
-            Claim(ownedArgs);
-            Recycle(idle);
+            _claim(ownedArgs);
+            _recycle(idle);
             try
             {
                 var state = typeof(ObjectPool<>).Assembly.GetType("YLFramework.Core.Singleton.SingletonSessionState");
-                var resets = (List<Action>)state.GetField("SessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+                var resets = (List<Action>)state.GetField("_sessionResets", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
                 var callbacks = resets.FindAll(reset => ReferenceEquals(reset.Target, ArgsPool));
                 Assert.That(callbacks, Has.Count.EqualTo(1), "The parameter pool must register exactly one real session reset.");
                 callbacks[0]();
@@ -303,14 +348,26 @@ namespace YLFramework.Core.Tests
                 try
                 {
                     Assert.That(next, Is.Not.SameAs(idle).And.Not.SameAs(ownedArgs));
-                    BeginRead(ownedArgs);
-                    try { Assert.That(ownedArgs.GetInt("value"), Is.EqualTo(7)); }
-                    finally { EndRead(ownedArgs); }
+                    _beginRead(ownedArgs);
+                    try
+                    {
+                        Assert.That(ownedArgs.GetInt("value"), Is.EqualTo(7));
+                    }
+                    finally
+                    {
+                        _endRead(ownedArgs);
+                    }
                     Assert.That(next.GetInt("value"), Is.Zero);
                 }
-                finally { Recycle(next); }
+                finally
+                {
+                    _recycle(next);
+                }
             }
-            finally { Release(ownedArgs); }
+            finally
+            {
+                _release(ownedArgs);
+            }
         }
 
         [Test]
@@ -322,24 +379,36 @@ namespace YLFramework.Core.Tests
             {
                 var operations = new Action[]
                 {
-                    () => args.GetInt("value"), () => args.SetInt("value", 9), () => Claim(args),
-                    () => Recycle(args), () => Release(args), () => BeginRead(args), () => EndRead(args)
+                    () => args.GetInt("value"), () => args.SetInt("value", 9), () => _claim(args),
+                    () => _recycle(args), () => _release(args), () => _beginRead(args), () => _endRead(args)
                 };
                 var failures = new Exception[operations.Length];
                 var worker = new Thread(() =>
                 {
                     for (var i = 0; i < operations.Length; i++)
-                        try { operations[i](); }
-                        catch (Exception exception) { failures[i] = exception; }
+                    {
+                        try
+                        {
+                            operations[i]();
+                        }
+                        catch (Exception exception)
+                        {
+                            failures[i] = exception;
+                        }
+                    }
                 });
                 worker.Start();
                 Assert.That(worker.Join(5000), Is.True, "fixture worker did not terminate");
-                foreach (var failure in failures) Assert.That(failure, Is.TypeOf<InvalidOperationException>());
+                foreach (var failure in failures)
+                {
+                    Assert.That(failure, Is.TypeOf<InvalidOperationException>());
+                }
+
                 Assert.That(args.GetInt("value"), Is.EqualTo(7));
             }
             finally
             {
-                Recycle(args);
+                _recycle(args);
             }
         }
     }

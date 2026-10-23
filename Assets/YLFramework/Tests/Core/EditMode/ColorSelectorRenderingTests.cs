@@ -74,7 +74,10 @@ namespace YLFramework.Core.Tests
                 EditorSceneManager.ClosePreviewScene(scene);
                 Object.DestroyImmediate(pixels);
                 Object.DestroyImmediate(output);
-                if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
+                if (previous.IsValid() && previous.isLoaded)
+                {
+                    SceneManager.SetActiveScene(previous);
+                }
             }
         }
 
@@ -90,7 +93,10 @@ namespace YLFramework.Core.Tests
         private static void SetLayer(Transform root)
         {
             root.gameObject.layer = 31;
-            foreach (Transform child in root) SetLayer(child);
+            foreach (Transform child in root)
+            {
+                SetLayer(child);
+            }
         }
     }
 }

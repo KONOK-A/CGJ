@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-namespace YLFramework.Core.RoslynAnalyzers 
+namespace YLFramework.Core.RoslynAnalyzers
 {
 
     // Fixed 编码
@@ -18,9 +18,13 @@ namespace YLFramework.Core.RoslynAnalyzers
     public class WarnInClassesAttribute : Attribute
     {
 
-        public WarnInClassesAttribute(Type type,string message) { }
+        public WarnInClassesAttribute(Type type, string message)
+        {
+        }
 
-        public WarnInClassesAttribute(Type[] type, string message) { }
+        public WarnInClassesAttribute(Type[] type, string message)
+        {
+        }
 
     }
 }

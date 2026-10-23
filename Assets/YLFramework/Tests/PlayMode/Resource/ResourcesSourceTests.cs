@@ -11,13 +11,13 @@ namespace YLFramework.Tests.Resource
     public class ResourcesSourceTests
     {
         private const string Locator = "YLResource81/Message";
-        private readonly ResourceAddress address = new("resources81", "message");
+        private readonly ResourceAddress _address = new("resources81", "message");
 
         private ResourceConfiguration Configuration(string locator = Locator, Type type = null) => new(new[]
         {
             new ResourceCatalog("resources81", new[]
             {
-                new ResourceCatalogEntry("message", address, new ResourceLocation(ResourceSourceId.Resources, locator, type ?? typeof(TextAsset)))
+                new ResourceCatalogEntry("message", _address, new ResourceLocation(ResourceSourceId.Resources, locator, type ?? typeof(TextAsset)))
             })
         });
 
@@ -32,9 +32,17 @@ namespace YLFramework.Tests.Resource
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (ResourceSystem.Current == null) yield break;
+            if (ResourceSystem.Current == null)
+            {
+                yield break;
+            }
+
             using var shutdown = ResourceSystem.Current.ShutdownAsync();
-            for (var frame = 0; frame < 120 && !shutdown.IsDone; frame++) yield return null;
+            for (var frame = 0; frame < 120 && !shutdown.IsDone; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), shutdown.Error?.ToString());
         }
 
@@ -44,7 +52,7 @@ namespace YLFramework.Tests.Resource
             var external = Resources.Load<TextAsset>(Locator);
             Assert.That(external, Is.Not.Null);
             var system = Initialize(Configuration());
-            using (var lease = system.Acquire<TextAsset>(address))
+            using (var lease = system.Acquire<TextAsset>(_address))
             {
                 Assert.That(lease.Asset, Is.SameAs(external));
                 Assert.That(lease.Asset.text.Trim(), Is.EqualTo("YL Resource 8.1 isolated Resources fixture."));
@@ -60,9 +68,13 @@ namespace YLFramework.Tests.Resource
         {
             var system = Initialize(Configuration());
             using var scope = system.CreateScope();
-            var first = scope.AcquireAsync<TextAsset>(address);
-            using var second = system.AcquireAsync<TextAsset>(address);
-            for (var frame = 0; frame < 120 && !second.IsDone; frame++) yield return null;
+            var first = scope.AcquireAsync<TextAsset>(_address);
+            using var second = system.AcquireAsync<TextAsset>(_address);
+            for (var frame = 0; frame < 120 && !second.IsDone; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(second.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), second.Error?.ToString());
             var a = scope.TakeResult(first);
             using var b = second.TakeResult();
@@ -81,10 +93,14 @@ namespace YLFramework.Tests.Resource
         {
             var external = Resources.Load<TextAsset>(Locator);
             var system = Initialize(Configuration());
-            var request = system.AcquireAsync<TextAsset>(address);
+            var request = system.AcquireAsync<TextAsset>(_address);
             request.Dispose();
             using var shutdown = system.ShutdownAsync();
-            for (var frame = 0; frame < 120 && !shutdown.IsDone; frame++) yield return null;
+            for (var frame = 0; frame < 120 && !shutdown.IsDone; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), shutdown.Error?.ToString());
             Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.Zero);
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
@@ -103,8 +119,12 @@ namespace YLFramework.Tests.Resource
                 Assert.That(ResourceSystem.Current, Is.Null);
             }
             var system = Initialize(Configuration("YLResource81/DoesNotExist"));
-            using var request = system.AcquireAsync<TextAsset>(address);
-            for (var frame = 0; frame < 120 && !request.IsDone; frame++) yield return null;
+            using var request = system.AcquireAsync<TextAsset>(_address);
+            for (var frame = 0; frame < 120 && !request.IsDone; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Failed));
             Assert.That(request.Error.Kind, Is.EqualTo(ResourceError.LoadFailed));
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
@@ -114,7 +134,7 @@ namespace YLFramework.Tests.Resource
         {
             new ResourceCatalog("resources81", new[]
             {
-                new ResourceCatalogEntry("sprite", address,
+                new ResourceCatalogEntry("sprite", _address,
                     new ResourceLocation(ResourceSourceId.Resources, "YLResource81/ProjectionSprite81", typeof(Sprite))),
                 new ResourceCatalogEntry("texture", new ResourceAddress("resources81", "texture"),
                     new ResourceLocation(ResourceSourceId.Resources, "YLResource81/ProjectionSprite81", typeof(Texture2D)))
@@ -125,8 +145,8 @@ namespace YLFramework.Tests.Resource
         public void CatalogDeclaredNativeTypeDisambiguatesBaseTypeSyncProjection()
         {
             var system = Initialize(ProjectionConfiguration());
-            using var broad = system.Acquire<UnityEngine.Object>(address);
-            using var specific = system.Acquire<Sprite>(address);
+            using var broad = system.Acquire<UnityEngine.Object>(_address);
+            using var specific = system.Acquire<Sprite>(_address);
             using var texture = system.Acquire<UnityEngine.Object>(new ResourceAddress("resources81", "texture"));
             Assert.That(broad.Asset, Is.InstanceOf<Sprite>());
             Assert.That(broad.Asset, Is.SameAs(specific.Asset));
@@ -138,10 +158,14 @@ namespace YLFramework.Tests.Resource
         public IEnumerator BaseTypeAsyncProjectionSharesTheDeclaredNativeProducer()
         {
             var system = Initialize(ProjectionConfiguration());
-            using var broad = system.AcquireAsync<UnityEngine.Object>(address);
-            using var specific = system.AcquireAsync<Sprite>(address);
+            using var broad = system.AcquireAsync<UnityEngine.Object>(_address);
+            using var specific = system.AcquireAsync<Sprite>(_address);
             Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.LessThanOrEqualTo(1));
-            for (var frame = 0; frame < 120 && !broad.IsDone; frame++) yield return null;
+            for (var frame = 0; frame < 120 && !broad.IsDone; frame++)
+            {
+                yield return null;
+            }
+
             Assert.That(broad.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), broad.Error?.ToString());
             using var a = broad.TakeResult();
             using var b = specific.TakeResult();

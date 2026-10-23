@@ -13,9 +13,14 @@ namespace YLFramework.Foundation.Tests
             var type = typeof(ApplicationTool).Assembly.GetType("YLFramework.Foundation.UpdateManager");
             Assert.That(type, Is.Not.Null);
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
                 Assert.That(assembly.GetType("YLFramework.Core.UpdateManager"), Is.Null);
+            }
+
             foreach (var phase in new[] { "Update", "FixedUpdate", "LateUpdate" })
-                Assert.That(type.GetMethod("Add" + phase + "Event").ReturnType, Is.EqualTo(typeof(IUnRegister)));
+            {
+                Assert.That(type.GetMethod("Add" + phase + "Event").ReturnType, Is.EqualTo(typeof(IUnregister)));
+            }
         }
 
         [Test]
@@ -26,9 +31,10 @@ namespace YLFramework.Foundation.Tests
             Assert.That(Application.isPlaying, Is.False);
             foreach (var phase in new[] { "Update", "FixedUpdate", "LateUpdate" })
             {
-                var token = (IUnRegister)type.GetMethod("Add" + phase + "Event").Invoke(null, new object[] { (Action)(() => Assert.Fail()) });
+                var token = (IUnregister)type.GetMethod("Add" + phase + "Event").Invoke(null, new object[] { (Action)(() => Assert.Fail()) });
                 Assert.That(token, Is.Not.Null);
-                token.UnRegister(); token.UnRegister();
+                token.Unregister();
+                token.Unregister();
                 type.GetMethod("Remove" + phase + "Event").Invoke(null, new object[] { null });
             }
             Assert.That(UnityEngine.Object.FindObjectsByType(type, FindObjectsInactive.Include, FindObjectsSortMode.None), Is.Empty);

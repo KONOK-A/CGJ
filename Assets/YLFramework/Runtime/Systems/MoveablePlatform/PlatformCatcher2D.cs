@@ -27,57 +27,61 @@ namespace YLFramework.Platform2D
         [Tooltip("当前平台接触到的游戏物体")]
         public List<RaycastHit2D> Contacts = new List<RaycastHit2D>();
 
-        private LayerMask layerMask;
+        private LayerMask _layerMask;
 
-        private int layer;
+        private int _layer;
 
         private List<ContactPoint2D> _contacts = new List<ContactPoint2D>();
 
-        private readonly ContactPoint2D[] contactsTemp = new ContactPoint2D[20];
+        private readonly ContactPoint2D[] _contactsTemp = new ContactPoint2D[20];
 
-        private List<ContactPoint2D> allContacts = new List<ContactPoint2D>();
+        private List<ContactPoint2D> _allContacts = new List<ContactPoint2D>();
 
-        private float timer = 0;
+        private float _timer = 0;
 
-        private Collider2D[] collider2d;
+        private Collider2D[] _collider2d;
 
 
 
-        private float checkTimer = 0;
+        private float _checkTimer = 0;
 
-#endregion
+        #endregion
 
 
         #region 生命周期
 
         private void Awake()
         {
-            layer = gameObject.layer;
-            layerMask.Physics2DSetting(gameObject.layer);
-            collider2d = GetComponentsInChildren<Collider2D>();
+            _layer = gameObject.layer;
+            _layerMask.Physics2DSetting(gameObject.layer);
+            _collider2d = GetComponentsInChildren<Collider2D>();
         }
 
         private void OnEnable()
         {
-            collider2d = GetComponentsInChildren<Collider2D>();
-            timer = checkTimer = 0;
+            _collider2d = GetComponentsInChildren<Collider2D>();
+            _timer = _checkTimer = 0;
         }
 
         private void OnDisable()
         {
             Contacts.Clear();
             _contacts.Clear();
-            allContacts.Clear();
+            _allContacts.Clear();
             Array.Clear(_hits, 0, _hits.Length);
-            Array.Clear(contactsTemp, 0, contactsTemp.Length);
+            Array.Clear(_contactsTemp, 0, _contactsTemp.Length);
         }
 
         public void RefreshContacts()
         {
-            if (!isActiveAndEnabled) { Contacts.Clear(); return; }
-            layer = gameObject.layer;
-            layerMask.Physics2DSetting(layer);
-            collider2d = GetComponentsInChildren<Collider2D>();
+            if (!isActiveAndEnabled)
+            {
+                Contacts.Clear();
+                return;
+            }
+            _layer = gameObject.layer;
+            _layerMask.Physics2DSetting(_layer);
+            _collider2d = GetComponentsInChildren<Collider2D>();
             Check();
         }
 
@@ -94,16 +98,16 @@ namespace YLFramework.Platform2D
                 Area area = new Area();
                 area.from = transform.worldToLocalMatrix.MultiplyPoint(from);
                 area.to = transform.worldToLocalMatrix.MultiplyPoint(to);
-                areas = new Area[] { area};
+                areas = new Area[] { area };
             }
         }
 
         private void Update()
         {
-            if (gameObject.layer != layer)
+            if (gameObject.layer != _layer)
             {
-                layer = gameObject.layer;
-                layerMask.Physics2DSetting(gameObject.layer);
+                _layer = gameObject.layer;
+                _layerMask.Physics2DSetting(gameObject.layer);
             }
 
             CheckWithTimer();
@@ -112,11 +116,11 @@ namespace YLFramework.Platform2D
             // 如果没有，可以不用检测 ， 等接触的游戏物体发生变化时再检测
             if (Contacts.Count > 0)
             {
-                checkTimer += Time.deltaTime;
-                if (checkTimer >= 0.1f)
+                _checkTimer += Time.deltaTime;
+                if (_checkTimer >= 0.1f)
                 {
                     Check();
-                    checkTimer = 0;
+                    _checkTimer = 0;
                 }
             }
 
@@ -130,25 +134,35 @@ namespace YLFramework.Platform2D
 
         private void CheckWithTimer()
         {
-            timer += Time.deltaTime;
+            _timer += Time.deltaTime;
 
-            if (timer <= 1.0f / 30.0f) return;
-
-            timer = 0;
-
-            if (collider2d == null || collider2d.Length == 0)
-                return;
-
-            allContacts.Clear();
-
-            for (int i = 0; i < collider2d.Length; i++)
+            if (_timer <= 1.0f / 30.0f)
             {
-                Collider2D collider = collider2d[i];
-                if (!collider) continue;
-                int contactsCount = collider.GetContacts(contactsTemp);
+                return;
+            }
 
-                for (int j = 0; j < contactsCount; j++) {
-                    allContacts.Add(contactsTemp[j]);
+            _timer = 0;
+
+            if (_collider2d == null || _collider2d.Length == 0)
+            {
+                return;
+            }
+
+            _allContacts.Clear();
+
+            for (int i = 0; i < _collider2d.Length; i++)
+            {
+                Collider2D collider = _collider2d[i];
+                if (!collider)
+                {
+                    continue;
+                }
+
+                int contactsCount = collider.GetContacts(_contactsTemp);
+
+                for (int j = 0; j < contactsCount; j++)
+                {
+                    _allContacts.Add(_contactsTemp[j]);
                 }
             }
 
@@ -158,7 +172,7 @@ namespace YLFramework.Platform2D
                 Check();
 
                 _contacts.Clear();
-                _contacts.AddRange(allContacts);
+                _contacts.AddRange(_allContacts);
             }
 
 
@@ -169,8 +183,9 @@ namespace YLFramework.Platform2D
         {
             Contacts.Clear();
             if (areas == null || areas.Length == 0)
+            {
                 return;
-
+            }
 
             foreach (Area area in areas)
             {
@@ -178,15 +193,19 @@ namespace YLFramework.Platform2D
                 Vector3 to = transform.localToWorldMatrix.MultiplyPoint(area.to);
 
 #if UNITY_6000_0_OR_NEWER
-                ContactFilter2D contactFilter = CreateLegacyFilter(layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
+                ContactFilter2D contactFilter = CreateLegacyFilter(_layerMask.value, float.NegativeInfinity, float.PositiveInfinity);
                 int count = Physics2D.defaultPhysicsScene.Linecast(from, to, contactFilter, _hits);
 #else
-                int count = Physics2D.LinecastNonAlloc(from,to,_hits, layerMask.value);
+                int count = Physics2D.LinecastNonAlloc(from, to, _hits, _layerMask.value);
 #endif
 
                 for (int i = 0; i < count; i++)
                 {
-                    if (!_hits[i].collider || _hits[i].collider.isTrigger || _hits[i].transform == transform || _hits[i].transform.IsChildOf(transform)) continue;
+                    if (!_hits[i].collider || _hits[i].collider.isTrigger || _hits[i].transform == transform || _hits[i].transform.IsChildOf(transform))
+                    {
+                        continue;
+                    }
+
                     Contacts.Add(_hits[i]);
                 }
             }
@@ -198,14 +217,17 @@ namespace YLFramework.Platform2D
         private bool CompareTheSame()
         {
 
-            if (allContacts.Count != _contacts.Count)
-                return false;
-
-
-            for (int i = 0; i < allContacts.Count; i++)
+            if (_allContacts.Count != _contacts.Count)
             {
-                if (!allContacts[i].collider || !ContainsTransform(allContacts[i].collider.transform))
+                return false;
+            }
+
+            for (int i = 0; i < _allContacts.Count; i++)
+            {
+                if (!_allContacts[i].collider || !ContainsTransform(_allContacts[i].collider.transform))
+                {
                     return false;
+                }
             }
 
             return true;
@@ -216,8 +238,10 @@ namespace YLFramework.Platform2D
 
             foreach (var item in _contacts)
             {
-                if(item.collider && item.collider.transform == trans)
+                if (item.collider && item.collider.transform == trans)
+                {
                     return true;
+                }
             }
 
             return false;

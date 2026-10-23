@@ -24,7 +24,11 @@ namespace YLFramework.Tests.Audio
         [OneTimeSetUp]
         public void BuildIndependentPublication()
         {
-            if (SessionState.GetBool(Key + "owned", false)) return;
+            if (SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             ResourceSessionTests.EnsureRestorableScenes();
             var protectedBefore = ProtectedDigest();
             var folder = "Assets/YLFramework/Tests/Fixtures/Audio/Resource-" + Guid.NewGuid().ToString("N");
@@ -34,8 +38,8 @@ namespace YLFramework.Tests.Audio
             {
                 AssetDatabase.CreateFolder(folder, "Content");
                 var project = ScriptableObject.CreateInstance<ResourceProject>();
-                project.ProjectId = "yl-audio86b-" + Guid.NewGuid().ToString("N");
-                project.SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
+                project.projectId = "yl-audio86b-" + Guid.NewGuid().ToString("N");
+                project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
                 var shared = new Material(Shader.Find("Unlit/Color")) { name = "SharedAudioDependency" };
                 AssetDatabase.CreateAsset(shared, folder + "/Content/Shared.mat");
                 foreach (var name in new[] { "first", "second" })
@@ -51,12 +55,19 @@ namespace YLFramework.Tests.Audio
                         holder.GetComponent<MeshRenderer>().sharedMaterial = shared;
                         PrefabUtility.SaveAsPrefabAsset(holder, prefab);
                     }
-                    finally { Object.DestroyImmediate(holder); }
-                    project.Groups.Add(new ResourceGroup { Id = name, Selections = new List<ResourceSelection>
+                    finally
                     {
-                        new() { Guid = AssetDatabase.AssetPathToGUID(wave) },
-                        new() { Guid = AssetDatabase.AssetPathToGUID(prefab) }
-                    } });
+                        Object.DestroyImmediate(holder);
+                    }
+                    project.groups.Add(new ResourceGroup
+                    {
+                        id = name,
+                        selections = new List<ResourceSelection>
+                    {
+                        new() { guid = AssetDatabase.AssetPathToGUID(wave) },
+                        new() { guid = AssetDatabase.AssetPathToGUID(prefab) }
+                    }
+                    });
                 }
                 AssetDatabase.CreateAsset(project, folder + "/Project.asset");
                 var expectedWorkspace = Path.GetDirectoryName(ResourceBundleBuilder.GetWorkspacePath(project, EditorUserBuildSettings.activeBuildTarget));
@@ -73,7 +84,7 @@ namespace YLFramework.Tests.Audio
                 SessionState.SetString(Key + "workspace", workspace);
                 SessionState.SetString(Key + "root", root);
                 SessionState.SetString(Key + "path", release.DirectoryPath);
-                SessionState.SetString(Key + "project", project.ProjectId);
+                SessionState.SetString(Key + "project", project.projectId);
                 SessionState.SetString(Key + "digest", release.Catalog.CatalogDigest);
                 SessionState.SetBool(Key + "owned", true);
                 SessionState.SetString(Key + "protected", protectedBefore);
@@ -81,8 +92,16 @@ namespace YLFramework.Tests.Audio
             catch
             {
                 AssetDatabase.DeleteAsset(folder);
-                if (workspace != null && Directory.Exists(workspace)) Directory.Delete(workspace, true);
-                if (root != null && Directory.Exists(root)) Directory.Delete(root, true);
+                if (workspace != null && Directory.Exists(workspace))
+                {
+                    Directory.Delete(workspace, true);
+                }
+
+                if (root != null && Directory.Exists(root))
+                {
+                    Directory.Delete(root, true);
+                }
+
                 throw;
             }
         }
@@ -90,7 +109,11 @@ namespace YLFramework.Tests.Audio
         [OneTimeTearDown]
         public void CleanupPublication()
         {
-            if (!SessionState.GetBool(Key + "owned", false)) return;
+            if (!SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             Assert.That(EditorApplication.isPlaying, Is.False);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
             Assert.That(ProtectedDigest(), Is.EqualTo(SessionState.GetString(Key + "protected", "")), "Protect the game, historical Bundles and project settings during native audio verification.");
@@ -99,7 +122,11 @@ namespace YLFramework.Tests.Audio
             AssetDatabase.DeleteAsset(folder);
             Directory.Delete(SessionState.GetString(Key + "workspace", ""), true);
             Directory.Delete(SessionState.GetString(Key + "root", ""), true);
-            foreach (var key in new[] { "folder", "guid", "workspace", "root", "path", "project", "digest", "protected" }) SessionState.EraseString(Key + key);
+            foreach (var key in new[] { "folder", "guid", "workspace", "root", "path", "project", "digest", "protected" })
+            {
+                SessionState.EraseString(Key + key);
+            }
+
             SessionState.EraseBool(Key + "owned");
         }
 
@@ -119,7 +146,11 @@ namespace YLFramework.Tests.Audio
         private static IEnumerator Accepted(AudioPlayRequest request)
         {
             var until = Time.realtimeSinceStartupAsDouble + 10;
-            while (!request.Handle.IsValid && !request.IsDone && Time.realtimeSinceStartupAsDouble < until) yield return null;
+            while (!request.Handle.IsValid && !request.IsDone && Time.realtimeSinceStartupAsDouble < until)
+            {
+                yield return null;
+            }
+
             Assert.That(request.Handle.IsPlaying, Is.True, request.Error?.ToString() ?? request.EndReason.ToString());
         }
 
@@ -131,11 +162,18 @@ namespace YLFramework.Tests.Audio
                 AudioKit.Shutdown();
                 typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
                 var until = Time.realtimeSinceStartupAsDouble + 10;
-                while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartupAsDouble < until) yield return null;
+                while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartupAsDouble < until)
+                {
+                    yield return null;
+                }
+
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
             }
             var cleanup = new ResourceSessionTests().TearDown();
-            while (cleanup.MoveNext()) yield return cleanup.Current;
+            while (cleanup.MoveNext())
+            {
+                yield return cleanup.Current;
+            }
         }
 
         [UnityTest]
@@ -172,21 +210,34 @@ namespace YLFramework.Tests.Audio
             do
             {
                 AudioListener.GetOutputData(samples, 0);
-                if (samples.Sum(x => x * x) > .0001f) break;
+                if (samples.Sum(x => x * x) > .0001f)
+                {
+                    break;
+                }
+
                 yield return null;
             } while (Time.realtimeSinceStartupAsDouble < outputDeadline);
             Assert.That(samples.Sum(x => x * x), Is.GreaterThan(.0001f),
                 $"Actual AudioSource output must contain the fixture signal: volume={music.Voice.Source.volume}, mute={music.Voice.Source.mute}, virtual={music.Voice.Source.isVirtual}, listenerPause={AudioListener.pause}, listenerVolume={AudioListener.volume}, data={clip.loadState}, time={music.Voice.Source.timeSamples}.");
-            music.Pause(); AudioKit.Settings.IsMusicOn.SetValueWithoutCallback(false);
+            music.Pause();
+            AudioKit.Settings.IsMusicOn.SetValueWithoutCallback(false);
             yield return null;
             Assert.That(clip && sound.IsPlaying && voice.IsPlaying && named.IsPlaying, Is.True);
-            AudioKit.Settings.IsMusicOn.SetValueWithoutCallback(true); music.Resume();
+            AudioKit.Settings.IsMusicOn.SetValueWithoutCallback(true);
+            music.Resume();
             var next = AudioKit.CrossFadeMusicAsync(second, .25f, onStarted: (_, _) => music.Pause());
             yield return Accepted(next);
-            sound.Stop(); voice.Stop(); named.Stop(); AudioKit.ClearClipCache();
+            sound.Stop();
+            voice.Stop();
+            named.Stop();
+            AudioKit.ClearClipCache();
             Assert.That(music.IsValid && clip, Is.True, "The crossfade tail is now the only first-Clip user.");
             music.Resume();
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             Assert.That(system.IsAvailable, Is.True);
             yield return new WaitForSecondsRealtime(.4f);
             Assert.That(music.IsValid, Is.False);
@@ -198,18 +249,31 @@ namespace YLFramework.Tests.Audio
             Assert.That(native.All(x => !x), Is.True);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
 
-            AudioKit.ClipCacheCapacity = 1; AudioKit.ClipCacheIdleSeconds = 60;
-            var cached = AudioKit.AcquireClip(first); var cachedClip = cached.Clip;
-            cached.Dispose(); cached.Dispose();
+            AudioKit.ClipCacheCapacity = 1;
+            AudioKit.ClipCacheIdleSeconds = 60;
+            var cached = AudioKit.AcquireClip(first);
+            var cachedClip = cached.Clip;
+            cached.Dispose();
+            cached.Dispose();
             Assert.IsTrue(cachedClip);
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             AudioKit.ClearClipCache();
             Assert.That(cachedClip == null, Is.True);
-            var explicitOwner = AudioKit.AcquireClip(first); var explicitClip = explicitOwner.Clip;
+            var explicitOwner = AudioKit.AcquireClip(first);
+            var explicitClip = explicitOwner.Clip;
             AudioKit.Shutdown();
             Assert.IsTrue(explicitClip, "An explicit caller lease survives Audio Shutdown.");
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
-            explicitOwner.Dispose(); explicitOwner.Dispose();
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
+            explicitOwner.Dispose();
+            explicitOwner.Dispose();
             Assert.That(explicitClip == null, Is.True);
             var borrowed = AudioClip.Create("external86b", 44100, 1, 44100, false);
             try
@@ -220,7 +284,10 @@ namespace YLFramework.Tests.Audio
                 Assert.IsTrue(borrowed);
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             }
-            finally { Object.Destroy(borrowed); }
+            finally
+            {
+                Object.Destroy(borrowed);
+            }
             using var shutdown = system.ShutdownAsync();
             Assert.That(shutdown.TakeResult(), Is.True);
         }
@@ -246,7 +313,8 @@ namespace YLFramework.Tests.Audio
             var canceled = AudioKit.PlaySoundAsync(address, AudioSoundOptions.MusicDefaults);
             var old = AudioKit.PlayVoiceAsync(address, AudioSoundOptions.MusicDefaults);
             Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.GreaterThan(0));
-            canceled.Cancel(); AudioKit.Shutdown();
+            canceled.Cancel();
+            AudioKit.Shutdown();
             Assert.That(canceled.EndReason, Is.EqualTo(AudioPlayEnd.Canceled));
             Assert.That(old.EndReason, Is.EqualTo(AudioPlayEnd.Shutdown));
             AudioState.EnablePlayback();
@@ -258,7 +326,7 @@ namespace YLFramework.Tests.Audio
             Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
 
             var pending = AudioKit.PlayMusicAsync(new AudioClipAddress(provider, "second.wav"));
-            Assert.That(pending.AssetReady, Is.False);
+            Assert.That(pending.IsAssetReady, Is.False);
             Assert.That(system.GetDiagnosticsSnapshot().ProducerCount, Is.GreaterThan(0));
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
             Assert.That(pending.IsDone, Is.True);
@@ -267,7 +335,11 @@ namespace YLFramework.Tests.Audio
             AudioKit.Shutdown();
             var until = Time.realtimeSinceStartupAsDouble + 10;
             while ((system.GetDiagnosticsSnapshot().ProducerCount != 0 || system.GetDiagnosticsSnapshot().BundleRecordCount != 0) &&
-                Time.realtimeSinceStartupAsDouble < until) yield return null;
+                Time.realtimeSinceStartupAsDouble < until)
+            {
+                yield return null;
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
@@ -292,15 +364,28 @@ namespace YLFramework.Tests.Audio
             var exitedWithClaimedLease = false;
             AudioClipLease delivered = null;
             Exception failure = null;
-            provider.LoadAsync("first.wav", (lease, error) => { delivered = lease; failure = error; calls++; },
+            provider.LoadAsync("first.wav", (lease, error) =>
+            {
+                delivered = lease;
+                failure = error;
+                calls++;
+            },
                 value =>
                 {
-                    if (value < 1 || system.GetDiagnosticsSnapshot().LeaseCount == 0) return;
+                    if (value < 1 || system.GetDiagnosticsSnapshot().LeaseCount == 0)
+                    {
+                        return;
+                    }
+
                     exitedWithClaimedLease = true;
                     typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
                 });
             var until = Time.realtimeSinceStartupAsDouble + 10;
-            while (calls == 0 && Time.realtimeSinceStartupAsDouble < until) yield return null;
+            while (calls == 0 && Time.realtimeSinceStartupAsDouble < until)
+            {
+                yield return null;
+            }
+
             try
             {
                 Assert.That(calls, Is.EqualTo(1));
@@ -309,56 +394,89 @@ namespace YLFramework.Tests.Audio
                 Assert.That(failure, Is.TypeOf<ResourceException>());
                 Assert.That(((ResourceException)failure).Kind, Is.EqualTo(ResourceError.SessionUnavailable));
                 while ((system.GetDiagnosticsSnapshot().RecordCount != 0 || system.GetDiagnosticsSnapshot().BundleRecordCount != 0) &&
-                    Time.realtimeSinceStartupAsDouble < until) yield return null;
+                    Time.realtimeSinceStartupAsDouble < until)
+                {
+                    yield return null;
+                }
+
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
                 Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty);
             }
-            finally { delivered?.Dispose(); }
+            finally
+            {
+                delivered?.Dispose();
+            }
         }
 
         private sealed class AudioState : IDisposable
         {
-            private readonly bool music, voice, sound;
-            private readonly float musicVolume, voiceVolume, soundVolume;
-            private readonly GameObject listener;
+            private readonly bool _wasMusicOn;
+            private readonly bool _wasVoiceOn;
+            private readonly bool _wasSoundOn;
+            private readonly float _musicVolume;
+            private readonly float _voiceVolume;
+            private readonly float _soundVolume;
+            private readonly GameObject _listener;
             internal AudioState()
             {
                 AudioKit.Shutdown();
                 var settings = AudioKit.Settings;
-                music = settings.IsMusicOn.Value; voice = settings.IsVoiceOn.Value; sound = settings.IsSoundOn.Value;
-                musicVolume = settings.MusicVolume.Value; voiceVolume = settings.VoiceVolume.Value; soundVolume = settings.SoundVolume.Value;
+                _wasMusicOn = settings.IsMusicOn.Value;
+                _wasVoiceOn = settings.IsVoiceOn.Value;
+                _wasSoundOn = settings.IsSoundOn.Value;
+                _musicVolume = settings.MusicVolume.Value;
+                _voiceVolume = settings.VoiceVolume.Value;
+                _soundVolume = settings.SoundVolume.Value;
                 EnablePlayback();
                 AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
-                listener = new GameObject("Audio86b.Listener", typeof(AudioListener));
+                _listener = new GameObject("Audio86b.Listener", typeof(AudioListener));
             }
             internal static void EnablePlayback()
             {
                 var settings = AudioKit.Settings;
-                settings.IsMusicOn.SetValueWithoutCallback(true); settings.IsVoiceOn.SetValueWithoutCallback(true); settings.IsSoundOn.SetValueWithoutCallback(true);
-                settings.MusicVolume.SetValueWithoutCallback(1); settings.VoiceVolume.SetValueWithoutCallback(1); settings.SoundVolume.SetValueWithoutCallback(1);
+                settings.IsMusicOn.SetValueWithoutCallback(true);
+                settings.IsVoiceOn.SetValueWithoutCallback(true);
+                settings.IsSoundOn.SetValueWithoutCallback(true);
+                settings.MusicVolume.SetValueWithoutCallback(1);
+                settings.VoiceVolume.SetValueWithoutCallback(1);
+                settings.SoundVolume.SetValueWithoutCallback(1);
             }
             public void Dispose()
             {
                 AudioKit.Shutdown();
                 var settings = AudioKit.Settings;
-                settings.IsMusicOn.SetValueWithoutCallback(music); settings.IsVoiceOn.SetValueWithoutCallback(voice); settings.IsSoundOn.SetValueWithoutCallback(sound);
-                settings.MusicVolume.SetValueWithoutCallback(musicVolume); settings.VoiceVolume.SetValueWithoutCallback(voiceVolume); settings.SoundVolume.SetValueWithoutCallback(soundVolume);
-                Object.Destroy(listener);
+                settings.IsMusicOn.SetValueWithoutCallback(_wasMusicOn);
+                settings.IsVoiceOn.SetValueWithoutCallback(_wasVoiceOn);
+                settings.IsSoundOn.SetValueWithoutCallback(_wasSoundOn);
+                settings.MusicVolume.SetValueWithoutCallback(_musicVolume);
+                settings.VoiceVolume.SetValueWithoutCallback(_voiceVolume);
+                settings.SoundVolume.SetValueWithoutCallback(_soundVolume);
+                Object.Destroy(_listener);
             }
         }
 
         internal static void WriteWave(string path)
         {
             Assert.That(Directory.Exists(Path.GetDirectoryName(path)), Is.True);
-            const int samples = 44100 * 3;
+            const int Samples = 44100 * 3;
             using var writer = new BinaryWriter(File.Create(path));
-            writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + samples * 2);
-            writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); writer.Write(16);
-            writer.Write((short)1); writer.Write((short)1); writer.Write(44100); writer.Write(88200);
-            writer.Write((short)2); writer.Write((short)16);
-            writer.Write(System.Text.Encoding.ASCII.GetBytes("data")); writer.Write(samples * 2);
-            for (var i = 0; i < samples; i++) writer.Write((short)(Math.Sin(i * 2 * Math.PI * 330 / 44100) * 4000));
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            writer.Write(36 + Samples * 2);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
+            writer.Write(16);
+            writer.Write((short)1);
+            writer.Write((short)1);
+            writer.Write(44100);
+            writer.Write(88200);
+            writer.Write((short)2);
+            writer.Write((short)16);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+            writer.Write(Samples * 2);
+            for (var i = 0; i < Samples; i++)
+            {
+                writer.Write((short)(Math.Sin(i * 2 * Math.PI * 330 / 44100) * 4000));
+            }
         }
     }
 }

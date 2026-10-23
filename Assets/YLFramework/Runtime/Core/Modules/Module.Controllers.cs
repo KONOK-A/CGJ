@@ -1,6 +1,6 @@
-using System; 
-using System.Collections.Generic; 
-using UnityEngine; 
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using YLFramework.Foundation;
 
 namespace YLFramework.Core
@@ -47,9 +47,17 @@ namespace YLFramework.Core
         /// </summary>
         public Controller GetController(string controllerTypeFullName)
         {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) return null;
+            if (string.IsNullOrEmpty(controllerTypeFullName))
+            {
+                return null;
+            }
+
             Type type = AssemblyTool.GetType(controllerTypeFullName);
-            if (type == null) return null;
+            if (type == null)
+            {
+                return null;
+            }
+
             return GetController(type);
         }
 
@@ -59,11 +67,19 @@ namespace YLFramework.Core
         /// <param name="controllerTypeFullName">业务逻辑脚本名称(包含命名空间)</param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public Controller LoadController(string controllerTypeFullName) 
+        public Controller LoadController(string controllerTypeFullName)
         {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
+            if (string.IsNullOrEmpty(controllerTypeFullName))
+            {
+                throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
+            }
+
             Type type = AssemblyTool.GetType(controllerTypeFullName);
-            if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
+            if (type == null)
+            {
+                throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
+            }
+
             return LoadController(type);
         }
 
@@ -117,7 +133,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
         /// </summary>
-        public T CreateController<T>()  where T: Controller
+        public T CreateController<T>() where T : Controller
         {
             return ControllerManager.CreateController<T>(this);
         }
@@ -125,7 +141,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 新建并注册本地Controller；类型已注册时在构造前拒绝，不借用其他模块实例。
         /// </summary>
-        public Controller CreateController(Type type) 
+        public Controller CreateController(Type type)
         {
             return ControllerManager.CreateController(this, type);
         }
@@ -133,10 +149,19 @@ namespace YLFramework.Core
         /// <summary>
         /// 按完整类型名新建本地Controller，不查询或借用其他模块的实例。
         /// </summary>
-        public Controller CreateController(string controllerTypeFullName) {
-            if (string.IsNullOrEmpty(controllerTypeFullName)) throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
+        public Controller CreateController(string controllerTypeFullName)
+        {
+            if (string.IsNullOrEmpty(controllerTypeFullName))
+            {
+                throw new ArgumentException("Controller type name is required.", nameof(controllerTypeFullName));
+            }
+
             Type type = AssemblyTool.GetType(controllerTypeFullName);
-            if (type == null) throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
+            if (type == null)
+            {
+                throw new Exception(string.Format("未查询到类:{0}!", controllerTypeFullName));
+            }
+
             return CreateController(type);
         }
 

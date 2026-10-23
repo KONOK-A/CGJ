@@ -7,9 +7,9 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEditor.PackageManager;
+using YLFramework.Integrations.HybridCLR.Editor;
 using Assembly = UnityEditor.Compilation.Assembly;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
-using YLFramework.Integrations.HybridCLR.Editor;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
 {
@@ -53,12 +53,21 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             while (pending.Count != 0)
             {
                 var assembly = pending.Pop();
-                if (!visited.Add(assembly.name)) continue;
+                if (!visited.Add(assembly.name))
+                {
+                    continue;
+                }
+
                 Assert.That(IsOptionalDependency(assembly.name), Is.False, assembly.name);
-                foreach (var reference in assembly.assemblyReferences) pending.Push(reference);
+                foreach (var reference in assembly.assemblyReferences)
+                {
+                    pending.Push(reference);
+                }
             }
             foreach (var reference in root.compiledAssemblyReferences)
+            {
                 Assert.That(IsOptionalDependency(Path.GetFileNameWithoutExtension(reference)), Is.False, reference);
+            }
         }
 
         [TestCase(ProductRoot + "Runtime/YLFramework.HybridCLR.asmdef", false, false)]
@@ -79,11 +88,17 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             Assert.That(version.Value<string>("define"), Is.EqualTo(VersionDefine));
             CollectionAssert.AreEqual(editorOnly ? new[] { "Editor" } : Array.Empty<string>(), definition["includePlatforms"].Values<string>());
             foreach (var reference in definition["references"].Values<string>())
+            {
                 Assert.That(reference.IndexOf("xf", StringComparison.OrdinalIgnoreCase), Is.LessThan(0), reference);
+            }
+
             if (!editorOnly)
             {
                 foreach (var reference in definition["references"].Values<string>())
+                {
                     Assert.That(reference.EndsWith(".Editor", StringComparison.Ordinal), Is.False, reference);
+                }
+
                 Assert.That(definition["precompiledReferences"].Values<string>(), Does.Not.Contain("dnlib.dll"));
             }
         }

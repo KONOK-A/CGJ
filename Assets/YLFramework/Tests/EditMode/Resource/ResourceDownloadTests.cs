@@ -21,8 +21,13 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 var invalid = new Dictionary<string, string>(headers) { [change.Item1] = change.Item2 };
                 if (change.Item1 == "Content-Length" || change.Item1 == "Content-Encoding")
+                {
                     Assert.Throws<InvalidDataException>(() => Response(206, 4, 10, "\"v1\"", invalid), change.ToString());
-                else Assert.Throws<ResourceRangeException>(() => Response(206, 4, 10, "\"v1\"", invalid), change.ToString());
+                }
+                else
+                {
+                    Assert.Throws<ResourceRangeException>(() => Response(206, 4, 10, "\"v1\"", invalid), change.ToString());
+                }
             }
             Assert.Catch<IOException>(() => Response(206, 4, 10, null, headers));
             Assert.Catch<IOException>(() => Response(206, 0, 10, null, headers));

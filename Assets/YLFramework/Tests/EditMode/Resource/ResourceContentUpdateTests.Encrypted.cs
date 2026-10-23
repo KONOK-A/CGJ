@@ -12,24 +12,29 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public sealed partial class ResourceContentUpdateTests
     {
-        private static readonly byte[] TestMaterial = Enumerable.Range(1, 32).Select(x => (byte)x).ToArray();
+        private static readonly byte[] _testMaterial = Enumerable.Range(1, 32).Select(x => (byte)x).ToArray();
 
         private sealed class ContentKeys : IResourceContentKeyProvider
         {
             internal bool Available = true;
-            internal byte[] Material = (byte[])TestMaterial.Clone();
+            internal byte[] Material = (byte[])_testMaterial.Clone();
             internal int Calls;
             internal int CallingThread;
             internal Action Copying;
 
             public bool TryCopyKey(string projectId, string keyId, byte[] destination)
             {
-                Calls++; CallingThread = Thread.CurrentThread.ManagedThreadId;
+                Calls++;
+                CallingThread = Thread.CurrentThread.ManagedThreadId;
                 Assert.That(projectId, Is.EqualTo("catalog"));
                 Assert.That(keyId, Is.EqualTo("test-content"));
                 Assert.That(destination.Length, Is.EqualTo(32));
                 Copying?.Invoke();
-                if (!Available) return false;
+                if (!Available)
+                {
+                    return false;
+                }
+
                 Buffer.BlockCopy(Material, 0, destination, 0, 32);
                 return true;
             }
@@ -38,7 +43,9 @@ namespace YLFramework.Tests.ResourceBuild
         private static void RequireEncryptedBackend()
         {
             if ((Application.platform != RuntimePlatform.WindowsEditor && Application.platform != RuntimePlatform.WindowsPlayer) || IntPtr.Size != 8)
+            {
                 Assert.Ignore("Encrypted update integration is supported only on Windows x64 Editor/Mono Player.");
+            }
         }
 
         private static void RunIOWorker(Action<CancellationToken> action, CancellationToken cancellation = default)
@@ -46,25 +53,44 @@ namespace YLFramework.Tests.ResourceBuild
             Exception failure = null;
             var worker = new Thread(() =>
             {
-                try { action(cancellation); }
-                catch (Exception error) { failure = error; }
+                try
+                {
+                    action(cancellation);
+                }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
             });
             worker.Start();
             Assert.That(worker.Join(10000), Is.True, "Pure update IO must settle without requesting Unity/main-thread work.");
-            if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+            if (failure != null)
+            {
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            }
         }
 
         [TestCase(false)]
         [TestCase(true)]
         public void InstallationForContentCopiesOnWorkerAndCapturesKeysOnlyAfterMainThreadHandoff(bool encrypted)
         {
-            if (encrypted) RequireEncryptedBackend();
+            if (encrypted)
+            {
+                RequireEncryptedBackend();
+            }
+
             using var fixture = new UpdateFixture();
             var target = fixture.Create("worker-target", encrypted: encrypted);
             var plan = fixture.Store.Check(fixture.Store.Mount(), new[] { target });
             var mainThread = Thread.CurrentThread.ManagedThreadId;
             var copyingThreads = new List<int>();
-            fixture.Store.Checkpoint = point => { if (point == "FileCopied") copyingThreads.Add(Thread.CurrentThread.ManagedThreadId); };
+            fixture.Store.Checkpoint = point =>
+            {
+                if (point == "FileCopied")
+                {
+                    copyingThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                }
+            };
             var keys = new ContentKeys();
             RunIOWorker(token => fixture.Store.InstallPreparationForContent(plan, token));
             Assert.That(copyingThreads, Is.Not.Empty);
@@ -73,7 +99,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(fixture.Store.GetPreparedUpdates(), Is.Empty);
             using var receipt = fixture.Store.CapturePreparation(plan, encrypted ? new ResourceDecryptionOptions(keys) : null);
             Assert.That(keys.Calls, Is.EqualTo(encrypted ? 1 : 0));
-            if (encrypted) Assert.That(keys.CallingThread, Is.EqualTo(mainThread));
+            if (encrypted)
+            {
+                Assert.That(keys.CallingThread, Is.EqualTo(mainThread));
+            }
+
             RunIOWorker(token => receipt.Validate(token));
             fixture.Store.CompletePreparation(plan, receipt);
             Assert.That(fixture.Store.GetPreparedUpdates().Count, Is.EqualTo(1));
@@ -85,7 +115,13 @@ namespace YLFramework.Tests.ResourceBuild
             using var fixture = new UpdateFixture();
             var plan = fixture.Store.Check(fixture.Store.Mount(), new[] { fixture.Create("worker-target") });
             using var cancellation = new CancellationTokenSource();
-            fixture.Store.Checkpoint = point => { if (point == "FileCopied") cancellation.Cancel(); };
+            fixture.Store.Checkpoint = point =>
+            {
+                if (point == "FileCopied")
+                {
+                    cancellation.Cancel();
+                }
+            };
             Assert.Throws<OperationCanceledException>(() => RunIOWorker(token => fixture.Store.InstallPreparationForContent(plan, token), cancellation.Token));
             Assert.That(fixture.Store.GetPreparedUpdates(), Is.Empty);
             Assert.That(File.Exists(fixture.Control("active.json")), Is.False);
@@ -107,7 +143,11 @@ namespace YLFramework.Tests.ResourceBuild
             var target = fixture.Create("encrypted", encrypted: true, corruptMiddle: fault == "middle");
             var plan = fixture.Store.Check(fixture.Store.Mount(), new[] { target });
             var keys = new ContentKeys { Available = fault != "missing" };
-            if (fault == "wrong") keys.Material[0] ^= 1;
+            if (fault == "wrong")
+            {
+                keys.Material[0] ^= 1;
+            }
+
             Assert.That(keys.Calls, Is.Zero, "Check/Mount cannot request content keys.");
             var error = Assert.Throws<ResourceException>(() => fixture.Store.Prepare(plan, CancellationToken.None, new ResourceDecryptionOptions(keys)));
             Assert.That(error.Kind, Is.EqualTo(fault == "missing" ? ResourceError.ContentKeyUnavailable : ResourceError.ContentAuthenticationFailed));
@@ -115,8 +155,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(File.Exists(fixture.Control("active.json")), Is.False);
             Assert.That(File.Exists(fixture.Control("last-known-good.json")), Is.False);
             foreach (var file in target.Document.Bundles.Cast<ResourceCatalogFile>().Concat(target.Document.SupportFiles))
+            {
                 CollectionAssert.AreEqual(File.ReadAllBytes(Path.Combine(target.DirectoryPath, file.RelativeFile)),
                     File.ReadAllBytes(Path.Combine(fixture.Owned(target), file.RelativeFile)), "Content/key failure must retain delivery bytes for an explicit retry.");
+            }
         }
 
         [TestCase(false)]
@@ -130,7 +172,11 @@ namespace YLFramework.Tests.ResourceBuild
             var options = new ResourceDecryptionOptions(keys);
             var plan = fixture.Store.Check(fixture.Store.Mount(), new[] { target });
             var prepared = fixture.Store.Prepare(plan, CancellationToken.None, options);
-            if (activateFirst) fixture.Store.Commit(prepared, options);
+            if (activateFirst)
+            {
+                fixture.Store.Commit(prepared, options);
+            }
+
             plan = fixture.Store.Check(fixture.Store.Mount(), new[] { target });
             Assert.That(plan.Projects.Single().IsChanged, Is.EqualTo(!activateFirst));
             var before = keys.Calls;
@@ -183,7 +229,7 @@ namespace YLFramework.Tests.ResourceBuild
             fixture.Store.Prepare(plan, CancellationToken.None, new ResourceDecryptionOptions(keys));
             Assert.That(keys.Calls, Is.EqualTo(1), "Bundle and Manifest sharing one (ProjectId,KeyId) use an operation-owned copy.");
             Assert.That(keys.CallingThread, Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
-            CollectionAssert.AreEqual(TestMaterial, keys.Material, "Cleanup clears only private key copies, never application material.");
+            CollectionAssert.AreEqual(_testMaterial, keys.Material, "Cleanup clears only private key copies, never application material.");
         }
 
         [Test]
@@ -262,8 +308,14 @@ namespace YLFramework.Tests.ResourceBuild
             Exception failure = null;
             var worker = new Thread(() =>
             {
-                try { selected = fixture.Store.MountForContent(CancellationToken.None).Single(); }
-                catch (Exception error) { failure = error; }
+                try
+                {
+                    selected = fixture.Store.MountForContent(CancellationToken.None).Single();
+                }
+                catch (Exception error)
+                {
+                    failure = error;
+                }
             });
             worker.Start();
             Assert.That(worker.Join(10000), Is.True, "Pure IO mount must settle without waiting for Unity/main-thread work.");

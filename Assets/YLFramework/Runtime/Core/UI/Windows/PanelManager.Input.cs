@@ -25,26 +25,59 @@ namespace YLFramework.Core
         {
             var owned = _eventSystem;
             _eventSystem = null;
-            if (!owned) return;
+            if (!owned)
+            {
+                return;
+            }
+
             InputSystemBridge.DisableOwnedSystem(owned);
-            if (Application.isPlaying) UnityEngine.Object.Destroy(owned);
-            else UnityEngine.Object.DestroyImmediate(owned);
+            if (Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(owned);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(owned);
+            }
         }
 
         private void RefreshInput(bool discover = false)
         {
-            if (released || !ApplicationTool.isPlaying) return;
-            registeredRoots.RemoveWhere(root => !root || !root.HasValidStructure);
+            if (_isReleased || !ApplicationTool.IsPlaying)
+            {
+                return;
+            }
+
+            _registeredRoots.RemoveWhere(root => !root || !root.HasValidStructure);
             bool needed = false;
-            foreach (var root in registeredRoots)
-                if (root.IsAvailable) { needed = true; break; }
-            if (!needed) { ReleaseOwnedInput(); SyncLateSubscription(); return; }
+            foreach (var root in _registeredRoots)
+            {
+                if (root.IsAvailable)
+                {
+                    needed = true;
+                    break;
+                }
+            }
+
+            if (!needed)
+            {
+                ReleaseOwnedInput();
+                SyncLateSubscription();
+                return;
+            }
             var current = EventSystem.current;
-            if (current && !current.isActiveAndEnabled) current = null;
+            if (current && !current.isActiveAndEnabled)
+            {
+                current = null;
+            }
+
             if (_eventSystem && current && current.gameObject == _eventSystem)
             {
                 var external = InputSystemBridge.FindExternalSystem(current);
-                if (external) current = external;
+                if (external)
+                {
+                    current = external;
+                }
             }
             if (discover || !current)
             {
@@ -53,13 +86,20 @@ namespace YLFramework.Core
                 bool inactive = false;
                 foreach (var system in systems)
                 {
-                    if (!system.isActiveAndEnabled) { inactive = true; continue; }
+                    if (!system.isActiveAndEnabled)
+                    {
+                        inactive = true;
+                        continue;
+                    }
                     active++;
-                    if ((!current || current.gameObject == _eventSystem) && system.gameObject != _eventSystem) current = system;
+                    if ((!current || current.gameObject == _eventSystem) && system.gameObject != _eventSystem)
+                    {
+                        current = system;
+                    }
                 }
-                if (!inputConfigurationWarned && (active > 1 || (!current && inactive)))
+                if (!_hasWarnedInputConfiguration && (active > 1 || (!current && inactive)))
                 {
-                    inputConfigurationWarned = true;
+                    _hasWarnedInputConfiguration = true;
                     Debug.LogWarning("[PanelManager] 多个 active 或仅 inactive EventSystem。保留外部对象；优先借用 active 系统，inactive 系统不会被激活。");
                 }
             }
@@ -67,27 +107,40 @@ namespace YLFramework.Core
             {
                 ReleaseOwnedInput();
                 // 借用系统不补齐、不切换其模块，也不更改其配置与对象寿命。
-                if (!inputConfigurationWarned)
+                if (!_hasWarnedInputConfiguration)
                 {
                     bool usable = false;
                     foreach (var module in current.GetComponents<BaseInputModule>())
                     {
 #if !ENABLE_LEGACY_INPUT_MANAGER
-                        if (module is StandaloneInputModule) continue;
+                        if (module is StandaloneInputModule)
+                            continue;
 #endif
-                        if (module.isActiveAndEnabled && module.IsModuleSupported()) { usable = true; break; }
+                        if (module.isActiveAndEnabled && module.IsModuleSupported())
+                        {
+                            usable = true;
+                            break;
+                        }
                     }
                     if (!usable)
                     {
-                        inputConfigurationWarned = true;
+                        _hasWarnedInputConfiguration = true;
                         Debug.LogWarning("[PanelManager] 借用的 EventSystem 没有可用输入模块，请由其 owner 配置；框架不会替换外部模块。");
                     }
                 }
                 return;
             }
-            if (_eventSystem) return;
+            if (_eventSystem)
+            {
+                return;
+            }
+
             var prefab = Resources.Load<GameObject>("YLFramework/Core/EventSystem");
-            if (!prefab) throw new InvalidOperationException("Core EventSystem prefab is unavailable.");
+            if (!prefab)
+            {
+                throw new InvalidOperationException("Core EventSystem prefab is unavailable.");
+            }
+
             var created = UnityEngine.Object.Instantiate(prefab);
             try
             {
@@ -108,54 +161,90 @@ namespace YLFramework.Core
         private void RefreshPanelInput(List<PanelState> snapshot)
         {
             var system = EventSystem.current;
-            if (pendingSelectionRelease != null && system && !system.alreadySelecting)
+            if (_pendingSelectionRelease != null && system && !system.alreadySelecting)
             {
-                var ended = pendingSelectionRelease;
-                var target = releasedSelection;
-                var targetSystem = releasedSelectionSystem;
-                pendingSelectionRelease = null;
-                releasedSelection = null;
-                releasedSelectionSystem = null;
+                var ended = _pendingSelectionRelease;
+                var target = _releasedSelection;
+                var targetSystem = _releasedSelectionSystem;
+                _pendingSelectionRelease = null;
+                _releasedSelection = null;
+                _releasedSelectionSystem = null;
                 if (system == targetSystem && system.currentSelectedGameObject == target &&
                     (!ended.Panel || ended.Panel.Session == null || ReferenceEquals(ended.Panel.Session, ended.Session)))
+                {
                     system.SetSelectedGameObject(null);
+                }
             }
             // 移出原窗口的组件先交还输入属性，再由新窗口决定覆盖；不能由枚举顺序决定新快照。
-            foreach (var state in snapshot) if (Current(state)) state.Input.RestoreDeparted();
             foreach (var state in snapshot)
             {
-                if (!Current(state)) continue;
+                if (IsCurrent(state))
+                {
+                    state.Input.RestoreDeparted();
+                }
+            }
+
+            foreach (var state in snapshot)
+            {
+                if (!IsCurrent(state))
+                {
+                    continue;
+                }
+
                 var input = state.Input;
-                if (state.Blocked && !input.Blocked && system && input.Owns(system.currentSelectedGameObject))
+                if (state.IsBlocked && !input.IsBlocked && system && input.Owns(system.currentSelectedGameObject))
                 {
                     input.Selection = system.currentSelectedGameObject;
                     input.SelectionSystem = system;
                 }
-                try { input.Apply(state.Blocked); }
+                try
+                {
+                    input.Apply(state.IsBlocked);
+                }
                 catch (Exception error)
                 {
-                    if (state.Panel.IsInitializing) throw;
+                    if (state.Panel.IsInitializing)
+                    {
+                        throw;
+                    }
                     // 动态业务层级使物理门禁失效时结束该会话，不能让标准控件在仅逻辑阻挡下继续接收输入。
                     Debug.LogException(error);
                     state.Panel.DiscardOnExit = true;
-                    if (Current(state)) Notify(state.Panel.Close);
+                    if (IsCurrent(state))
+                    {
+                        Notify(state.Panel.Close);
+                    }
                 }
             }
-            if (!system || !system.isActiveAndEnabled || system.alreadySelecting) return;
+            if (!system || !system.isActiveAndEnabled || system.alreadySelecting)
+            {
+                return;
+            }
+
             bool cleared = false;
             foreach (var state in snapshot)
-                if (Current(state) && state.Blocked && state.Input.Owns(system.currentSelectedGameObject))
+            {
+                if (IsCurrent(state) && state.IsBlocked && state.Input.Owns(system.currentSelectedGameObject))
                 {
                     system.SetSelectedGameObject(null);
                     cleared = true;
                     break;
                 }
+            }
             // Select/Deselect 可关闭、销毁或重开窗口。只允许仍匹配的会话恢复，且不覆盖外部或新选择。
-            if (released || EventSystem.current != system || system.currentSelectedGameObject) return;
+            if (_isReleased || EventSystem.current != system || system.currentSelectedGameObject)
+            {
+                return;
+            }
+
             snapshot.Sort((a, b) => Compare(b, a));
             foreach (var state in snapshot)
             {
-                if (!Active(state) || state.Blocked || GetFocusedPanel(state.Root) != state.Panel) continue;
+                if (!IsActive(state) || state.IsBlocked || GetFocusedPanel(state.Root) != state.Panel)
+                {
+                    continue;
+                }
+
                 var input = state.Input;
                 var selection = input.Selection;
                 if (selection && input.SelectionSystem == system && input.Owns(selection) && selection.activeInHierarchy &&
@@ -165,10 +254,14 @@ namespace YLFramework.Core
                     system.SetSelectedGameObject(selection);
                     return;
                 }
-                if ((cleared || state.Panel.EffectiveSettings.Modal) && state.Panel.EffectiveSettings.Modal && state.Panel.EffectiveSettings.ParticipatesInTop)
+                if ((cleared || state.Panel.EffectiveSettings.modal) && state.Panel.EffectiveSettings.modal && state.Panel.EffectiveSettings.participatesInTop)
                 {
                     selection = input.FirstSelection();
-                    if (selection) { system.SetSelectedGameObject(selection); return; }
+                    if (selection)
+                    {
+                        system.SetSelectedGameObject(selection);
+                        return;
+                    }
                 }
             }
         }
@@ -177,31 +270,49 @@ namespace YLFramework.Core
         {
             sources = null;
             var manager = _instance;
-            if (!(view is Panel panel)) return;
+            if (!(view is Panel panel))
+            {
+                return;
+            }
             // 来源责任随 Core 实例会话保存；协调器先 reset 也不能先于 instance discard 释放它。
             sources = panel.SourcePins;
-            if (sources.Count != 0) view.DiscardOnExit = true;
-            if (manager == null) return;
-            if (manager.states.TryGetValue(panel, out var state))
+            if (sources.Count != 0)
             {
-                manager.states.Remove(panel);
-                if (!rollback && state.Source && panel.EffectiveSettings.InstanceMode == PanelInstanceMode.Single)
+                view.DiscardOnExit = true;
+            }
+
+            if (manager == null)
+            {
+                return;
+            }
+
+            if (manager._states.TryGetValue(panel, out var state))
+            {
+                manager._states.Remove(panel);
+                if (!rollback && state.Source && panel.EffectiveSettings.instanceMode == PanelInstanceMode.Single)
                 {
-                    manager.sequence = checked(manager.sequence + 1);
-                    foreach (var pending in panel.Module.pendingViews)
-                        if (pending is PanelOperation operation && operation.Sequence < manager.sequence)
+                    manager._sequence = checked(manager._sequence + 1);
+                    foreach (var pending in panel.Module.PendingViews)
+                    {
+                        if (pending is PanelOperation operation && operation.Sequence < manager._sequence)
+                        {
                             operation.AddClosedScope(state.Source, state.Root);
+                        }
+                    }
                 }
                 var system = EventSystem.current;
                 if (system && state.Input.Owns(system.currentSelectedGameObject))
                 {
                     if (system.alreadySelecting)
                     {
-                        manager.pendingSelectionRelease = state;
-                        manager.releasedSelection = system.currentSelectedGameObject;
-                        manager.releasedSelectionSystem = system;
+                        manager._pendingSelectionRelease = state;
+                        manager._releasedSelection = system.currentSelectedGameObject;
+                        manager._releasedSelectionSystem = system;
                     }
-                    else system.SetSelectedGameObject(null);
+                    else
+                    {
+                        system.SetSelectedGameObject(null);
+                    }
                 }
                 state.Input.Restore(true);
             }
@@ -209,20 +320,31 @@ namespace YLFramework.Core
         }
 
         internal static bool IsVisible(Panel panel) => _instance != null && panel &&
-            _instance.states.TryGetValue(panel, out var state) && _instance.Active(state) && state.Visible;
-        internal static bool IsInputBlocked(Panel panel) => !IsVisible(panel) || _instance.states[panel].Blocked;
+            _instance._states.TryGetValue(panel, out var state) && _instance.IsActive(state) && state.IsVisible;
+        internal static bool IsInputBlocked(Panel panel) => !IsVisible(panel) || _instance._states[panel].IsBlocked;
 
         private static Panel Query(UIRootContext root, bool modal, bool focus)
         {
             var manager = _instance;
-            if (manager == null || !root) return null;
+            if (manager == null || !root)
+            {
+                return null;
+            }
+
             PanelState top = null;
-            foreach (var state in manager.states.Values)
+            foreach (var state in manager._states.Values)
             {
                 var settings = state.Panel.EffectiveSettings;
-                if (!manager.Active(state) || !state.Visible || state.Root != root ||
-                    (modal ? !settings.Modal : focus ? state.Blocked || (!settings.ParticipatesInTop && !settings.Modal) : !settings.ParticipatesInTop)) continue;
-                if (top == null || Compare(state, top) > 0) top = state;
+                if (!manager.IsActive(state) || !state.IsVisible || state.Root != root ||
+                    (modal ? !settings.modal : focus ? state.IsBlocked || (!settings.participatesInTop && !settings.modal) : !settings.participatesInTop))
+                {
+                    continue;
+                }
+
+                if (top == null || Compare(state, top) > 0)
+                {
+                    top = state;
+                }
             }
             return top?.Panel;
         }
@@ -236,23 +358,46 @@ namespace YLFramework.Core
 
         internal static Panel GetLayerModal(UIRootContext root, int layer)
         {
-            if (_instance == null) return null;
+            if (_instance == null)
+            {
+                return null;
+            }
+
             PanelState top = null;
-            foreach (var state in _instance.states.Values)
-                if (_instance.Active(state) && state.Visible && state.Root == root && state.Panel.EffectiveSettings.Modal &&
-                    state.Panel.EffectiveSettings.Layer == layer && (top == null || Compare(state, top) > 0)) top = state;
+            foreach (var state in _instance._states.Values)
+            {
+                if (_instance.IsActive(state) && state.IsVisible && state.Root == root && state.Panel.EffectiveSettings.modal &&
+                    state.Panel.EffectiveSettings.layer == layer && (top == null || Compare(state, top) > 0))
+                {
+                    top = state;
+                }
+            }
+
             return top?.Panel;
         }
 
         /// <summary>清空并填充指定根的全部有效会话，包含隐藏和停用会话；不承诺枚举排序。</summary>
         public static void GetAllPanels(UIRootContext root, List<Panel> results)
         {
-            if (results == null) throw new ArgumentNullException(nameof(results));
+            if (results == null)
+            {
+                throw new ArgumentNullException(nameof(results));
+            }
+
             results.Clear();
             var manager = _instance;
-            if (manager == null || !root || !root.HasValidStructure) return;
-            foreach (var state in manager.states.Values)
-                if (manager.Current(state) && state.Root == root && ResourcesValid(state)) results.Add(state.Panel);
+            if (manager == null || !root || !root.HasValidStructure)
+            {
+                return;
+            }
+
+            foreach (var state in manager._states.Values)
+            {
+                if (manager.IsCurrent(state) && state.Root == root && AreResourcesValid(state))
+                {
+                    results.Add(state.Panel);
+                }
+            }
         }
 
     }

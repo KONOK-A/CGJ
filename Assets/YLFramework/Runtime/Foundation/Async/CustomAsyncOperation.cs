@@ -1,138 +1,123 @@
-using System; 
-using UnityEngine; 
-
+using System;
+using UnityEngine;
 
 namespace YLFramework.Foundation
 {
     public class CustomAsyncOperation<T> : CustomYieldInstruction where T : CustomAsyncOperation<T>
     {
-        #region 字段 
-
-        [Obsolete("已过时,请使用AddCompleteEvent代替!")] 
-        public event Action<T> completed = null;
+        [Obsolete("已过时,请使用AddCompleteEvent代替!")]
+        public event Action<T> Completed = null;
 
         private Action<T> _completed;
-        //public event Action<int> completed;
-
         private bool _isCompleted = false;
-
         private string _error = string.Empty;
+        private const string CheckingError = "正在检测中...";
 
-        private const string CHECKING_ERROR = "正在检测中...";
+        public bool IsDone => IsCompleted;
 
-        #endregion
-
-        #region 属性 
-
-#pragma warning disable IDE1006 // 命名样式
-        public bool isDone { get { return isCompleted; } }
-#pragma warning restore IDE1006 // 命名样式
-
-
-        protected bool isCompleted {
-            get {
-                return _isCompleted;
-            }
-
-            set {
+        protected bool IsCompleted
+        {
+            get => _isCompleted;
+            set
+            {
                 _isCompleted = value;
-                if (_isCompleted) 
+                if (_isCompleted)
                 {
-                    completed?.Invoke(this as T);
+                    Completed?.Invoke(this as T);
                     _completed?.Invoke(this as T);
                     OnCompleted();
                 }
             }
         }
 
-        public float progress { get; protected set; }
-
-
-
-        public string error { 
-            get {
-                if (!isDone)
-                    return CHECKING_ERROR;
-                return _error;
-            } 
-            private set 
-            {
-                _error = value;
-            }
-        
+        public float Progress
+        {
+            get; protected set;
         }
 
-        #endregion
-
-        public override bool keepWaiting
+        public string Error
         {
             get
             {
-                return !isDone;
+                if (!IsDone)
+                {
+                    return CheckingError;
+                }
+
+                return _error;
             }
+            private set => _error = value;
         }
 
-        protected virtual void OnCompleted() { 
+        public override bool keepWaiting => !IsDone;
 
-        }
-
-        protected void Completed(string error = null) {
-            this.error = error;
-            Completed();
-        }
-
-        private void Completed() {
-            progress = 1;
-
-            if ( isCompleted ) return;
-            isCompleted = true;
-        }
-
-
-        protected void CompletedWithoutNotify(string error = null) 
+        protected virtual void OnCompleted()
         {
-            this.error = error;
-            CompletedWithoutNotify();  
         }
 
-        private void CompletedWithoutNotify() 
+        protected void Complete(string error = null)
         {
-            progress = 1;
-
-            if (isCompleted) return; 
-            _isCompleted = true; 
-            OnCompleted(); 
+            Error = error;
+            Complete();
         }
 
+        private void Complete()
+        {
+            Progress = 1;
+            if (IsCompleted)
+            {
+                return;
+            }
+
+            IsCompleted = true;
+        }
+
+        protected void CompleteWithoutNotify(string error = null)
+        {
+            Error = error;
+            CompleteWithoutNotify();
+        }
+
+        private void CompleteWithoutNotify()
+        {
+            Progress = 1;
+            if (IsCompleted)
+            {
+                return;
+            }
+
+            _isCompleted = true;
+            OnCompleted();
+        }
 
         public void AddCompleteEvent(Action<T> action)
         {
             _completed += action;
-            // 如果该异步请求已经执行完成,则直接触发完成的回调
-            if (isDone)
+            // 已完成的请求对迟到订阅者同步通知，异常仍由调用方观察。
+            if (IsDone)
+            {
                 action?.Invoke(this as T);
+            }
         }
 
-        public void RemoveCompleteEvent(Action<T> action) { 
+        public void RemoveCompleteEvent(Action<T> action)
+        {
             _completed -= action;
         }
 
-
-        public void RemoveAllCompleteEvent() 
+        public void RemoveAllCompleteEvent()
         {
             _completed = null;
         }
 
         public virtual void Abort()
-        { 
-            Completed("request abort!");
+        {
+            Complete("request abort!");
             OnAbort();
         }
 
-        protected virtual void OnAbort() {
-            
+        protected virtual void OnAbort()
+        {
         }
-
     }
-
 }

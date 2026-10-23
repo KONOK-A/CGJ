@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
-using YLFramework.Events;
 using YLFramework.Core.Pool;
+using YLFramework.Events;
 
 namespace YLFramework.Core.Tests
 {
@@ -11,7 +11,9 @@ namespace YLFramework.Core.Tests
     {
         private sealed class ProbeModule : Module
         {
-            public override void OnStart() { }
+            public override void OnStart()
+            {
+            }
         }
 
         private sealed class ProbeModel : Model
@@ -24,12 +26,15 @@ namespace YLFramework.Core.Tests
             {
                 ExitCount++;
                 ExitAction?.Invoke();
-                if (ExitError != null) throw ExitError;
+                if (ExitError != null)
+                {
+                    throw ExitError;
+                }
             }
         }
 
         private static ObjectPool<List<T>> Pool<T>() => (ObjectPool<List<T>>)typeof(ListPool<T>)
-            .GetField("Pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            .GetField("_pool", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 
         [Test]
         public void RemoveAllEventsTerminatesOldSnapshotAndAllowsNewSignaturesWithoutDisposingDefault()
@@ -58,8 +63,8 @@ namespace YLFramework.Core.Tests
                 Assert.That(bus.IsDisposed, Is.False);
                 Assert.That(EventBus.Default, Is.SameAs(bus));
                 EventManager.AddEvent<int>(101, value => calls.Add("new " + value));
-                oldToken.UnRegister();
-                oldToken.UnRegister();
+                oldToken.Unregister();
+                oldToken.Unregister();
                 EventManager.TriggerEvent(101, 7);
                 Assert.That(calls, Is.EqualTo(new[] { "clear", "new 7" }));
                 EventManager.RemoveAllEvent();
@@ -90,8 +95,14 @@ namespace YLFramework.Core.Tests
             {
                 var error = Assert.Throws<InvalidOperationException>(() =>
                 {
-                    if (typed) module.ClearModel(typeof(ProbeModel));
-                    else module.ClearModel();
+                    if (typed)
+                    {
+                        module.ClearModel(typeof(ProbeModel));
+                    }
+                    else
+                    {
+                        module.ClearModel();
+                    }
                 });
                 Assert.That(error, Is.SameAs(failure));
                 Assert.That(model.ExitCount, Is.EqualTo(1));
@@ -100,13 +111,25 @@ namespace YLFramework.Core.Tests
                 Assert.That(models, Is.Empty);
                 Assert.That(keys, Is.Empty);
                 var returnedModels = ListPool<Model>.Allocate();
-                try { Assert.That(returnedModels, Is.SameAs(models)); }
-                finally { ListPool<Model>.Recycle(returnedModels); }
+                try
+                {
+                    Assert.That(returnedModels, Is.SameAs(models));
+                }
+                finally
+                {
+                    ListPool<Model>.Recycle(returnedModels);
+                }
                 if (typed)
                 {
                     var returnedKeys = ListPool<Type>.Allocate();
-                    try { Assert.That(returnedKeys, Is.SameAs(keys)); }
-                    finally { ListPool<Type>.Recycle(returnedKeys); }
+                    try
+                    {
+                        Assert.That(returnedKeys, Is.SameAs(keys));
+                    }
+                    finally
+                    {
+                        ListPool<Type>.Recycle(returnedKeys);
+                    }
                 }
             }
             finally
@@ -178,14 +201,24 @@ namespace YLFramework.Core.Tests
             try
             {
                 // 暂借已有空闲项以走冷创建，结束后原样归还，不清空其他消费者的缓存。
-                while (pool.CurStoreCount > 0) held.Add(ListPool<Model>.Allocate());
+                while (pool.CurStoreCount > 0)
+                {
+                    held.Add(ListPool<Model>.Allocate());
+                }
+
                 pool.SetFactoryMethod(() => throw failure);
                 var error = Assert.Throws<InvalidOperationException>(() => module.ClearModel(typeof(ProbeModel)));
                 Assert.That(error, Is.SameAs(failure));
                 Assert.That(keys, Is.Empty);
                 var returnedKeys = ListPool<Type>.Allocate();
-                try { Assert.That(returnedKeys, Is.SameAs(keys)); }
-                finally { ListPool<Type>.Recycle(returnedKeys); }
+                try
+                {
+                    Assert.That(returnedKeys, Is.SameAs(keys));
+                }
+                finally
+                {
+                    ListPool<Type>.Recycle(returnedKeys);
+                }
                 Assert.That(model.ExitCount, Is.Zero);
                 Assert.That(model.Module, Is.SameAs(module));
                 Assert.That(module.GetModel<ProbeModel>(), Is.SameAs(model));
@@ -193,7 +226,11 @@ namespace YLFramework.Core.Tests
             finally
             {
                 pool.SetObjectFactory(previousFactory);
-                for (int i = held.Count - 1; i >= 0; i--) ListPool<Model>.Recycle(held[i]);
+                for (int i = held.Count - 1; i >= 0; i--)
+                {
+                    ListPool<Model>.Recycle(held[i]);
+                }
+
                 module.RemoveModel(model);
             }
         }

@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using YLFramework.Binding;
 using YLFramework.Core.Pool;
 using YLFramework.Events;
-using System.Reflection;
 
 namespace YLFramework.Tests
 {
     public class BindingContractTests
     {
-        private sealed class PooledValue { }
+        private sealed class PooledValue
+        {
+        }
 
         [Test]
         public void PooledPropertyClearsValueComparerAndListenersButRetainsItsOwnedEvent()
@@ -42,8 +44,8 @@ namespace YLFramework.Tests
                 var newCalls = 0;
                 next.Register(listener);
                 next.Register(_ => newCalls++);
-                oldToken.UnRegister();
-                oldToken.UnRegister();
+                oldToken.Unregister();
+                oldToken.Unregister();
                 next.Value = new PooledValue();
                 Assert.That(oldCalls, Is.EqualTo(1));
                 Assert.That(newCalls, Is.EqualTo(1));
@@ -53,14 +55,22 @@ namespace YLFramework.Tests
                 BindableProperty<PooledValue>.Recycle(next);
                 Assert.Throws<InvalidOperationException>(() => BindableProperty<PooledValue>.Recycle(new BindableProperty<PooledValue>()));
             }
-            finally { pool.Dispose(); events.Dispose(); }
+            finally
+            {
+                pool.Dispose();
+                events.Dispose();
+            }
         }
 
         private sealed class FirstSetProperty : BindableProperty<string>
         {
-            private bool _set;
-            protected override bool IsSameValue(string value) => _set && base.IsSameValue(value);
-            protected override void SetValue(string value) { base.SetValue(value); _set = true; }
+            private bool _hasSet;
+            protected override bool IsSameValue(string value) => _hasSet && base.IsSameValue(value);
+            protected override void SetValue(string value)
+            {
+                base.SetValue(value);
+                _hasSet = true;
+            }
         }
 
         [Test]
@@ -68,11 +78,17 @@ namespace YLFramework.Tests
         {
             var property = new BindableProperty<int>();
             var observed = new List<int>();
-            property.Register(value => { if (value == 1) property.Value = 2; });
+            property.Register(value =>
+            {
+                if (value == 1)
+                {
+                    property.Value = 2;
+                }
+            });
             var once = property.RegisterOnce(observed.Add);
 
             property.Value = 1;
-            once.UnRegister();
+            once.Unregister();
             property.Value = 3;
 
             CollectionAssert.AreEqual(new[] { 2 }, observed);
@@ -94,7 +110,7 @@ namespace YLFramework.Tests
             var oldToken = property.Register(_ => observed.Add("stale"));
 
             property.Value = 1;
-            oldToken.UnRegister();
+            oldToken.Unregister();
             property.ForceNotify();
 
             Assert.That(property.Value, Is.Zero);
@@ -133,7 +149,11 @@ namespace YLFramework.Tests
             using (list.BeginBatchScope())
             {
                 list.Add(3);
-                using (list.BeginBatchScope()) list.Add(4);
+                using (list.BeginBatchScope())
+                {
+                    list.Add(4);
+                }
+
                 Assert.That(observed.Count, Is.EqualTo(5));
             }
             list.Clear();
@@ -164,7 +184,7 @@ namespace YLFramework.Tests
             Assert.That(mapped.Value, Is.EqualTo(2));
             mapped.ForceNotify();
             mapped.Dispose();
-            token.UnRegister();
+            token.Unregister();
             source.Value = 3;
             mapped.ForceNotify();
 
@@ -179,15 +199,18 @@ namespace YLFramework.Tests
             var token = property.RegisterWithInitValue(value =>
             {
                 observed.Add(value);
-                if (value == "first") property.Value = "second";
+                if (value == "first")
+                {
+                    property.Value = "second";
+                }
             });
             property.Value = "second";
             property.Value = "third";
             property.Value = null;
             property.Value = null;
             CollectionAssert.AreEqual(new[] { "first", "third", null }, observed);
-            token.UnRegister();
-            token.UnRegister();
+            token.Unregister();
+            token.Unregister();
             property.Value = "fourth";
             Assert.That(observed.Count, Is.EqualTo(3));
         }
@@ -217,10 +240,10 @@ namespace YLFramework.Tests
             Assert.That(observed, Is.Empty);
             Assert.That(property.TrySetValue(2), Is.False);
             property.ForceNotify();
-            first.UnRegister();
+            first.Unregister();
             property.Value = 3;
-            property.UnRegisterAll();
-            second.UnRegister();
+            property.UnregisterAll();
+            second.Unregister();
             property.Value = 4;
             CollectionAssert.AreEqual(new[] { 2, 2, 3 }, observed);
         }
@@ -256,7 +279,10 @@ namespace YLFramework.Tests
                 Assert.That(PlayerPrefs.GetInt(key), Is.EqualTo(expected ? 0 : 1));
                 Assert.That(new PlayerPrefsBoolProperty(key).Value, Is.EqualTo(!expected));
             }
-            finally { PlayerPrefs.DeleteKey(key); }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
         }
 
         [Test]
@@ -284,7 +310,10 @@ namespace YLFramework.Tests
                 Assert.That(calls, Is.EqualTo(1));
                 Assert.That(new PlayerPrefsFloatProperty(key).Value, Is.EqualTo(changed));
             }
-            finally { PlayerPrefs.DeleteKey(key); }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
         }
 
         [Test]
@@ -301,12 +330,21 @@ namespace YLFramework.Tests
                 property.Delete();
                 Assert.That(property.Value, Is.EqualTo(3));
                 Assert.That(property.HasKey, Is.False);
-                property.Register(value => { if (value == 6) property.Value = 7; });
+                property.Register(value =>
+                {
+                    if (value == 6)
+                    {
+                        property.Value = 7;
+                    }
+                });
                 PlayerPrefs.SetInt(key, 6);
                 property.Reload();
                 Assert.That(PlayerPrefs.GetInt(key), Is.EqualTo(7));
             }
-            finally { PlayerPrefs.DeleteKey(key); }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
         }
     }
 }

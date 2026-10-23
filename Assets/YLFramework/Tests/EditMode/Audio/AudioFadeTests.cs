@@ -11,43 +11,63 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioFadeTests
     {
-        private AudioTestSettings mSettings;
-        private AudioClip mClip;
-        private GameObject mTarget;
+        private AudioTestSettings _settings;
+        private AudioClip _clip;
+        private GameObject _target;
 
         [SetUp]
         public void SetUp()
         {
-            mSettings = new AudioTestSettings();
-            mClip = AudioClip.Create("fade-edit", 441000, 1, 44100, false);
-            mTarget = new GameObject("fade-target");
+            _settings = new AudioTestSettings();
+            _clip = AudioClip.Create("fade-edit", 441000, 1, 44100, false);
+            _target = new GameObject("fade-target");
         }
 
         [TearDown]
         public void TearDown()
         {
-            mSettings.Dispose();
-            Object.DestroyImmediate(mClip);
-            Object.DestroyImmediate(mTarget);
+            _settings.Dispose();
+            Object.DestroyImmediate(_clip);
+            Object.DestroyImmediate(_target);
         }
 
         private AudioHandle Play(int category, float volume = .8f)
         {
-            if (category == 1) return AudioKit.PlayMusic(mClip, volume: volume);
-            if (category == 2) return AudioKit.PlayVoice(mClip, loop: true, volume: volume);
+            if (category == 1)
+            {
+                return AudioKit.PlayMusic(_clip, volume: volume);
+            }
+
+            if (category == 2)
+            {
+                return AudioKit.PlayVoice(_clip, loop: true, volume: volume);
+            }
+
             var options = AudioSoundOptions.Defaults;
-            options.Loop = true; options.Volume = volume;
-            return AudioKit.PlaySound(mClip, options);
+            options.Loop = true;
+            options.Volume = volume;
+            return AudioKit.PlaySound(_clip, options);
         }
 
         private void SetCategoryVolume(int category, float value)
         {
-            if (category == 1) AudioKit.Settings.MusicVolume.Value = value;
-            else if (category == 2) AudioKit.Settings.VoiceVolume.Value = value;
-            else AudioKit.Settings.SoundVolume.Value = value;
+            if (category == 1)
+            {
+                AudioKit.Settings.MusicVolume.Value = value;
+            }
+            else if (category == 2)
+            {
+                AudioKit.Settings.VoiceVolume.Value = value;
+            }
+            else
+            {
+                AudioKit.Settings.SoundVolume.Value = value;
+            }
         }
 
-        [TestCase(0)] [TestCase(1)] [TestCase(2)]
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
         public void UnusedEnvelopeKeepsOriginalVolumeFormula(int category)
         {
             SetCategoryVolume(category, .6f);
@@ -60,7 +80,9 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(3f, handle.Voice.Options.Volume);
         }
 
-        [TestCase(0)] [TestCase(1)] [TestCase(2)]
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
         public void FirstFadeInStartsAtSilenceAndPreservesRequestAndCategoryVolume(int category)
         {
             SetCategoryVolume(category, .5f);
@@ -80,7 +102,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(.4f, handle.Voice.Options.Volume);
             Assert.AreEqual(generation, handle.Generation);
             Assert.IsTrue(handle.IsValid);
-            Assert.AreSame(mClip, source.clip);
+            Assert.AreSame(_clip, source.clip);
             Assert.IsTrue(source.loop);
         }
 
@@ -113,7 +135,7 @@ namespace YLFramework.Tests.Audio
         public void FadeOutStopsOnlyItsLeaseWithoutNaturalCompletion()
         {
             var callbacks = 0;
-            var handle = AudioKit.PlayMusic(mClip, onFinished: (_, __) => callbacks++);
+            var handle = AudioKit.PlayMusic(_clip, onFinished: (_, __) => callbacks++);
             handle.FadeOut(2f);
             handle.Voice.TickFade(1f, 1f);
             Assert.IsTrue(handle.IsValid);
@@ -157,7 +179,10 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(handle.IsValid);
         }
 
-        [TestCase(-1f)] [TestCase(float.NaN)] [TestCase(float.PositiveInfinity)] [TestCase(float.NegativeInfinity)]
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        [TestCase(float.NegativeInfinity)]
         public void InvalidDurationDoesNotReplaceTheCurrentFade(float duration)
         {
             var handle = Play(0);
@@ -256,7 +281,8 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(.8f, current.Voice.Source.volume);
         }
 
-        [TestCase(true)] [TestCase(false)]
+        [TestCase(true)]
+        [TestCase(false)]
         public void CallerChoosesUnscaledOrScaledClock(bool ignoreTimeScale)
         {
             var handle = Play(0);
@@ -267,7 +293,8 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(ignoreTimeScale ? .8f : .4f, handle.Voice.Source.volume, .0001f);
         }
 
-        [TestCase(float.Epsilon)] [TestCase(float.MaxValue)]
+        [TestCase(float.Epsilon)]
+        [TestCase(float.MaxValue)]
         public void FiniteDurationBoundariesRemainFiniteAndReachTarget(float duration)
         {
             var handle = Play(0);
@@ -316,10 +343,10 @@ namespace YLFramework.Tests.Audio
         {
             var callbacks = 0;
             AudioHandle current = default;
-            var old = AudioKit.PlayMusic(mClip, loop: false, onFinished: (_, __) =>
+            var old = AudioKit.PlayMusic(_clip, loop: false, onFinished: (_, __) =>
             {
                 callbacks++;
-                current = AudioKit.PlayMusic(mClip);
+                current = AudioKit.PlayMusic(_clip);
                 current.FadeIn(1f);
             });
             old.FadeOut(10f);
@@ -337,9 +364,9 @@ namespace YLFramework.Tests.Audio
             var callbacks = 0;
             var options = AudioSoundOptions.Defaults;
             options.Loop = true;
-            var old = AudioKit.PlaySoundFollowing(mClip, mTarget.transform, options, (_, __) => callbacks++);
+            var old = AudioKit.PlaySoundFollowing(_clip, _target.transform, options, (_, __) => callbacks++);
             old.FadeOut(1f);
-            mTarget.SetActive(false);
+            _target.SetActive(false);
             old.Voice.CheckFinished();
             Assert.IsFalse(old.IsValid);
             Assert.AreEqual(0, callbacks);

@@ -83,7 +83,10 @@ namespace YLFramework.Tests.Resource
             Assert.That(first, Is.EqualTo(same));
             Assert.That(first, Is.Not.EqualTo(differentCase));
             Assert.That(first, Is.Not.EqualTo(subAsset));
-            foreach (var property in type.GetProperties()) Assert.That(property.SetMethod, Is.Null);
+            foreach (var property in type.GetProperties())
+            {
+                Assert.That(property.SetMethod, Is.Null);
+            }
         }
 
         [TestCase("", "text")]

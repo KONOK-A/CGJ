@@ -7,36 +7,95 @@ namespace YLFramework.Services.Audio
     internal sealed class AudioBorrowedSource
     {
         internal readonly AudioSource Source;
-        private readonly AudioClip mOriginalClip, mClip;
-        private readonly bool mOriginalLoop, mOriginalMute;
-        private readonly float mOriginalVolume, mOriginalPitch;
-        private readonly AudioMixerGroup mOriginalOutput;
-        private float mVolume, mPitch;
-        private bool mMute, mLoop;
-        private AudioMixerGroup mOutput;
-        internal bool OwnsPlayback => Source && Source.clip == mClip;
+        private readonly AudioClip _originalClip;
+        private readonly AudioClip _clip;
+        private readonly bool _originalLoop;
+        private readonly bool _originalMute;
+        private readonly float _originalVolume;
+        private readonly float _originalPitch;
+        private readonly AudioMixerGroup _originalOutput;
+        private float _volume;
+        private float _pitch;
+        private bool _mute;
+        private bool _loop;
+        private AudioMixerGroup _output;
+        internal bool OwnsPlayback => Source && Source.clip == _clip;
         internal AudioBorrowedSource(AudioSource source, AudioClip clip, in AudioPlaybackOptions options)
         {
-            Source = source; mClip = clip; mOriginalClip = source.clip;
-            mOriginalLoop = source.loop; mOriginalVolume = source.volume; mOriginalPitch = source.pitch;
-            mOriginalMute = source.mute; mOriginalOutput = source.outputAudioMixerGroup;
-            source.clip = clip; source.loop = mLoop = options.Loop;
+            Source = source;
+            _clip = clip;
+            _originalClip = source.clip;
+            _originalLoop = source.loop;
+            _originalVolume = source.volume;
+            _originalPitch = source.pitch;
+            _originalMute = source.mute;
+            _originalOutput = source.outputAudioMixerGroup;
+            source.clip = clip;
+            source.loop = _loop = options.Loop;
             SetPitch(options.Pitch);
         }
-        internal void SetVolume(float value) { if (OwnsPlayback) Source.volume = mVolume = value; }
-        internal void SetPitch(float value) { if (OwnsPlayback) Source.pitch = mPitch = value; }
-        internal void SetMute(bool value) { if (OwnsPlayback) Source.mute = mMute = value; }
-        internal void SetOutput(AudioMixerGroup value) { if (OwnsPlayback) Source.outputAudioMixerGroup = mOutput = value; }
+        internal void SetVolume(float value)
+        {
+            if (OwnsPlayback)
+            {
+                Source.volume = _volume = value;
+            }
+        }
+        internal void SetPitch(float value)
+        {
+            if (OwnsPlayback)
+            {
+                Source.pitch = _pitch = value;
+            }
+        }
+        internal void SetMute(bool value)
+        {
+            if (OwnsPlayback)
+            {
+                Source.mute = _mute = value;
+            }
+        }
+        internal void SetOutput(AudioMixerGroup value)
+        {
+            if (OwnsPlayback)
+            {
+                Source.outputAudioMixerGroup = _output = value;
+            }
+        }
         internal void Release()
         {
-            if (!OwnsPlayback) return;
+            if (!OwnsPlayback)
+            {
+                return;
+            }
+
             Source.Stop();
-            if (Source.loop == mLoop) Source.loop = mOriginalLoop;
-            if (Source.volume == mVolume) Source.volume = mOriginalVolume;
-            if (Source.pitch == mPitch) Source.pitch = mOriginalPitch;
-            if (Source.mute == mMute) Source.mute = mOriginalMute;
-            if (Source.outputAudioMixerGroup == mOutput) Source.outputAudioMixerGroup = mOriginalOutput;
-            Source.clip = mOriginalClip ? mOriginalClip : null;
+            if (Source.loop == _loop)
+            {
+                Source.loop = _originalLoop;
+            }
+
+            if (Source.volume == _volume)
+            {
+                Source.volume = _originalVolume;
+            }
+
+            if (Source.pitch == _pitch)
+            {
+                Source.pitch = _originalPitch;
+            }
+
+            if (Source.mute == _mute)
+            {
+                Source.mute = _originalMute;
+            }
+
+            if (Source.outputAudioMixerGroup == _output)
+            {
+                Source.outputAudioMixerGroup = _originalOutput;
+            }
+
+            Source.clip = _originalClip ? _originalClip : null;
         }
     }
 }

@@ -15,22 +15,25 @@ namespace YLFramework.Foundation.Tests
             public int Registrations;
             public int Cancellations;
 
-            public IUnRegister Register(Action callback)
+            public IUnregister Register(Action callback)
             {
                 Registrations++;
                 OnRegister?.Invoke();
                 var token = Channel.Register(callback);
-                try { callback?.Invoke(); }
+                try
+                {
+                    callback?.Invoke();
+                }
                 catch
                 {
-                    token.UnRegister();
+                    token.Unregister();
                     throw;
                 }
-                return new CustomUnRegister(() =>
+                return new CustomUnregister(() =>
                 {
                     Cancellations++;
                     OnCancel?.Invoke();
-                    token.UnRegister();
+                    token.Unregister();
                 });
             }
         }
@@ -42,11 +45,15 @@ namespace YLFramework.Foundation.Tests
             public readonly InvalidOperationException Failure = new InvalidOperationException("connect after notify");
             public int Registrations;
 
-            public IUnRegister Register(Action callback)
+            public IUnregister Register(Action callback)
             {
                 var attempt = ++Registrations;
                 callback();
-                if (attempt == 1) throw Failure;
+                if (attempt == 1)
+                {
+                    throw Failure;
+                }
+
                 return Channel.Register(callback);
             }
         }
@@ -56,16 +63,19 @@ namespace YLFramework.Foundation.Tests
         {
             var failure = new InvalidOperationException("cancel");
             var calls = 0;
-            CustomUnRegister token = null;
-            token = new CustomUnRegister(() =>
+            CustomUnregister token = null;
+            token = new CustomUnregister(() =>
             {
                 calls++;
-                token.UnRegister();
-                if (calls == 1) throw failure;
+                token.Unregister();
+                if (calls == 1)
+                {
+                    throw failure;
+                }
             });
-            Assert.That(Assert.Throws<InvalidOperationException>(token.UnRegister), Is.SameAs(failure));
-            token.UnRegister();
-            token.UnRegister();
+            Assert.That(Assert.Throws<InvalidOperationException>(token.Unregister), Is.SameAs(failure));
+            token.Unregister();
+            token.Unregister();
             Assert.That(calls, Is.EqualTo(2));
         }
 
@@ -73,11 +83,11 @@ namespace YLFramework.Foundation.Tests
         public void NecessaryCleanupTriesAllAndRetainsFailuresAndNewItems()
         {
             var failure = new InvalidOperationException("cancel");
-            var items = new List<IUnRegister>();
+            var items = new List<IUnregister>();
             var failedCalls = 0;
             var laterCalls = 0;
-            var added = new CustomUnRegister(() => laterCalls++);
-            var failed = new CustomUnRegister(() =>
+            var added = new CustomUnregister(() => laterCalls++);
+            var failed = new CustomUnregister(() =>
             {
                 if (++failedCalls == 1)
                 {
@@ -86,12 +96,12 @@ namespace YLFramework.Foundation.Tests
                 }
             });
             items.Add(failed);
-            items.Add(new CustomUnRegister(() => laterCalls++));
+            items.Add(new CustomUnregister(() => laterCalls++));
             Assert.That(Assert.Throws<InvalidOperationException>(() =>
-                SubscriptionCleanup.ReleaseAll(items, token => token.UnRegister())), Is.SameAs(failure));
-            CollectionAssert.AreEquivalent(new IUnRegister[] { failed, added }, items);
+                SubscriptionCleanup.ReleaseAll(items, token => token.Unregister())), Is.SameAs(failure));
+            CollectionAssert.AreEquivalent(new IUnregister[] { failed, added }, items);
             Assert.That(laterCalls, Is.EqualTo(1));
-            SubscriptionCleanup.ReleaseAll(items, token => token.UnRegister());
+            SubscriptionCleanup.ReleaseAll(items, token => token.Unregister());
             Assert.That(items, Is.Empty);
             Assert.That(failedCalls, Is.EqualTo(2));
             Assert.That(laterCalls, Is.EqualTo(2));
@@ -103,14 +113,14 @@ namespace YLFramework.Foundation.Tests
             var first = new InvalidOperationException("first");
             var second = new ArgumentException("second");
             var calls = 0;
-            var items = new List<IUnRegister>
+            var items = new List<IUnregister>
             {
-                new CustomUnRegister(() => throw first),
-                new CustomUnRegister(() => throw second),
-                new CustomUnRegister(() => calls++)
+                new CustomUnregister(() => throw first),
+                new CustomUnregister(() => throw second),
+                new CustomUnregister(() => calls++)
             };
             var error = Assert.Throws<AggregateException>(() =>
-                SubscriptionCleanup.ReleaseAll(items, token => token.UnRegister()));
+                SubscriptionCleanup.ReleaseAll(items, token => token.Unregister()));
             CollectionAssert.AreEqual(new Exception[] { first, second }, error.InnerExceptions);
             Assert.That(items.Count, Is.EqualTo(2));
             Assert.That(calls, Is.EqualTo(1));
@@ -119,13 +129,17 @@ namespace YLFramework.Foundation.Tests
         [Test]
         public void CleanupReentryDoesNotRetryEarlierFailureInTheSameRound()
         {
-            var items = new List<IUnRegister>();
+            var items = new List<IUnregister>();
             var attempts = 0;
-            items.Add(new CustomUnRegister(() => { attempts++; throw new InvalidOperationException(); }));
-            items.Add(new CustomUnRegister(() =>
-                SubscriptionCleanup.ReleaseAll(items, token => token.UnRegister())));
+            items.Add(new CustomUnregister(() =>
+            {
+                attempts++;
+                throw new InvalidOperationException();
+            }));
+            items.Add(new CustomUnregister(() =>
+                SubscriptionCleanup.ReleaseAll(items, token => token.Unregister())));
             Assert.Throws<InvalidOperationException>(() =>
-                SubscriptionCleanup.ReleaseAll(items, token => token.UnRegister()));
+                SubscriptionCleanup.ReleaseAll(items, token => token.Unregister()));
             Assert.That(attempts, Is.EqualTo(1));
             Assert.That(items.Count, Is.EqualTo(1));
         }
@@ -136,21 +150,27 @@ namespace YLFramework.Foundation.Tests
             var scope = new SubscriptionScope();
             var failure = new InvalidOperationException("late cancel");
             var attempts = 0;
-            var late = new CustomUnRegister(() => { if (++attempts == 1) throw failure; });
+            var late = new CustomUnregister(() =>
+            {
+                if (++attempts == 1)
+                {
+                    throw failure;
+                }
+            });
             var calls = 0;
-            scope.Add(new CustomUnRegister(() =>
+            scope.Add(new CustomUnregister(() =>
             {
                 Assert.That(scope.IsDisposed, Is.True);
                 scope.Dispose();
                 Assert.That(Assert.Throws<InvalidOperationException>(() => scope.Add(late)), Is.SameAs(failure));
             }));
-            scope.Add(new CustomUnRegister(() => calls++));
+            scope.Add(new CustomUnregister(() => calls++));
             scope.Dispose();
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(scope.Count, Is.EqualTo(1));
             scope.Dispose();
             Assert.That(scope.Count, Is.Zero);
-            scope.Add(new CustomUnRegister(() => calls++));
+            scope.Add(new CustomUnregister(() => calls++));
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(scope.Count, Is.Zero);
             Assert.That(attempts, Is.EqualTo(2));
@@ -170,14 +190,14 @@ namespace YLFramework.Foundation.Tests
             source.Trigger();
             appended.Trigger();
             Assert.That(calls, Is.EqualTo(3));
-            old.UnRegister();
+            old.Unregister();
             Assert.That(source.HasListener || appended.HasListener, Is.False);
             var next = combined.Register(() => calls++);
-            old.UnRegister();
+            old.Unregister();
             source.Trigger();
             Assert.That(calls, Is.EqualTo(5));
             Assert.That(combined.ListenerCount, Is.EqualTo(1));
-            next.UnRegister();
+            next.Unregister();
             combined.Dispose();
             Assert.Throws<ObjectDisposedException>(() => combined.Register(() => { }));
             Assert.Throws<ObjectDisposedException>(() => combined.Or(source));
@@ -205,7 +225,7 @@ namespace YLFramework.Foundation.Tests
             var combined = new OrEvent().Or(source).Or(failing);
             Assert.That(Assert.Throws<InvalidOperationException>(() => combined.Register(() => { })), Is.SameAs(failure));
             Assert.That(source.HasListener || combined.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
             failing.OnRegister = null;
             combined.Register(() => { });
             Assert.That(source.HasListener, Is.True);
@@ -223,7 +243,7 @@ namespace YLFramework.Foundation.Tests
             Assert.Throws<InvalidOperationException>(() => combined.Or(failing));
             source.Trigger();
             Assert.That(calls, Is.EqualTo(1));
-            first.UnRegister();
+            first.Unregister();
             combined.Register(() => calls++);
             Assert.That(failing.Registrations, Is.EqualTo(1));
             source.Trigger();
@@ -243,11 +263,11 @@ namespace YLFramework.Foundation.Tests
             var error = Assert.Throws<AggregateException>(() => combined.Register(() => { }));
             CollectionAssert.AreEquivalent(new Exception[] { registrationFailure, cancellationFailure }, error.InnerExceptions);
             Assert.That(combined.HasListener || other.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             registered.OnCancel = null;
             combined.Dispose();
             Assert.That(registered.Channel.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
         }
 
         [Test]
@@ -287,16 +307,16 @@ namespace YLFramework.Foundation.Tests
             var source = new EventChannel();
             var combined = new OrEvent().Or(source);
             var calls = 0;
-            IUnRegister old = null;
+            IUnregister old = null;
             var reconnect = source.Register(() =>
             {
-                old.UnRegister();
+                old.Unregister();
                 combined.Register(() => calls++);
             });
             old = combined.Register(() => Assert.Fail("old round"));
             source.Trigger();
             Assert.That(calls, Is.Zero);
-            reconnect.UnRegister();
+            reconnect.Unregister();
             source.Trigger();
             Assert.That(calls, Is.EqualTo(1));
             combined.Dispose();
@@ -308,13 +328,22 @@ namespace YLFramework.Foundation.Tests
             var source = new EventChannel();
             var combined = new OrEvent().Or(source);
             var trace = new List<int>();
-            IUnRegister first = null, second = null;
-            first = combined.Register(() => { trace.Add(1); first.UnRegister(); second.UnRegister(); });
+            IUnregister first = null, second = null;
+            first = combined.Register(() =>
+            {
+                trace.Add(1);
+                first.Unregister();
+                second.Unregister();
+            });
             second = combined.Register(() => trace.Add(2));
             source.Trigger();
             CollectionAssert.AreEqual(new[] { 1, 2 }, trace);
             Assert.That(source.HasListener, Is.False);
-            combined.Register(() => { trace.Add(3); combined.Dispose(); });
+            combined.Register(() =>
+            {
+                trace.Add(3);
+                combined.Dispose();
+            });
             combined.Register(() => trace.Add(4));
             source.Trigger();
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, trace);
@@ -371,21 +400,27 @@ namespace YLFramework.Foundation.Tests
         {
             var failure = new InvalidOperationException("cancel");
             var failing = new TestSource();
-            failing.OnCancel = () => { if (failing.Cancellations == 1) throw failure; };
+            failing.OnCancel = () =>
+            {
+                if (failing.Cancellations == 1)
+                {
+                    throw failure;
+                }
+            };
             var other = new EventChannel();
             var combined = new OrEvent().Or(failing).Or(other);
             var calls = 0;
             var token = combined.Register(() => calls++);
             Assert.That(calls, Is.EqualTo(1));
-            Assert.That(Assert.Throws<InvalidOperationException>(token.UnRegister), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(token.Unregister), Is.SameAs(failure));
             Assert.That(other.HasListener || combined.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             failing.Channel.Trigger();
             Assert.That(calls, Is.EqualTo(1));
             combined.Dispose();
             Assert.That(failing.Cancellations, Is.EqualTo(2));
             Assert.That(failing.Channel.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
         }
 
         [Test]
@@ -396,7 +431,7 @@ namespace YLFramework.Foundation.Tests
             var combined = new OrEvent().Or(source);
             Assert.That(Assert.Throws<InvalidOperationException>(() => combined.RegisterOnce(() => { })), Is.SameAs(failure));
             Assert.That(source.Cancellations, Is.EqualTo(1));
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             source.OnCancel = null;
             combined.Dispose();
             Assert.That(source.Cancellations, Is.EqualTo(2));
@@ -416,14 +451,14 @@ namespace YLFramework.Foundation.Tests
                 throw failure;
             };
             var token = combined.Register(() => { });
-            Assert.That(Assert.Throws<InvalidOperationException>(token.UnRegister), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(token.Unregister), Is.SameAs(failure));
             Assert.That(source.Cancellations, Is.EqualTo(1));
             Assert.That(other.HasListener, Is.False);
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             source.OnCancel = null;
             combined.Dispose();
             Assert.That(source.Cancellations, Is.EqualTo(2));
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
             Assert.That(source.Channel.HasListener, Is.False);
         }
 
@@ -436,14 +471,14 @@ namespace YLFramework.Foundation.Tests
             combined.Register(() => { });
             Assert.That(Assert.Throws<InvalidOperationException>(combined.Dispose), Is.SameAs(failure));
             Assert.That(source.Cancellations, Is.EqualTo(1));
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             Assert.That(Assert.Throws<InvalidOperationException>(combined.Dispose), Is.SameAs(failure));
             Assert.That(source.Cancellations, Is.EqualTo(2));
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             source.OnCancel = null;
             combined.Dispose();
             Assert.That(source.Cancellations, Is.EqualTo(3));
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
         }
 
         [Test]
@@ -455,15 +490,15 @@ namespace YLFramework.Foundation.Tests
             var combined = new OrEvent().Or(first).Or(later);
             later.OnCancel = combined.Dispose;
             var token = combined.Register(() => { });
-            Assert.That(Assert.Throws<InvalidOperationException>(token.UnRegister), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(token.Unregister), Is.SameAs(failure));
             Assert.That(first.Cancellations, Is.EqualTo(1));
             Assert.That(later.Cancellations, Is.EqualTo(1));
-            Assert.That(combined.UnRegisterList.Count, Is.EqualTo(1));
+            Assert.That(combined.UnregisterList.Count, Is.EqualTo(1));
             Assert.That(later.Channel.HasListener, Is.False);
             first.OnCancel = null;
             combined.Dispose();
             Assert.That(first.Cancellations, Is.EqualTo(2));
-            Assert.That(combined.UnRegisterList, Is.Empty);
+            Assert.That(combined.UnregisterList, Is.Empty);
         }
 
         [Test]
@@ -472,7 +507,7 @@ namespace YLFramework.Foundation.Tests
             var healthy = new EventChannel();
             var failing = new NotifyThenFailOnceSource();
             var combined = new OrEvent().Or(healthy).Or(failing);
-            IUnRegister nested = null;
+            IUnregister nested = null;
             var thrown = Assert.Throws<InvalidOperationException>(() =>
                 combined.Register(() => nested = combined.Register(() => { })));
             Assert.That(thrown, Is.SameAs(failing.Failure));
@@ -480,18 +515,18 @@ namespace YLFramework.Foundation.Tests
             Assert.That(nested, Is.Not.Null);
             Assert.That(combined.ListenerCount, Is.Zero);
             Assert.That(healthy.HasListener, Is.False);
-            Assert.DoesNotThrow(nested.UnRegister);
+            Assert.DoesNotThrow(nested.Unregister);
 
             var calls = 0;
             var rebound = combined.Register(() => calls++);
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(combined.ListenerCount, Is.EqualTo(1));
             Assert.That(healthy.ListenerCount, Is.EqualTo(1));
-            nested.UnRegister();
+            nested.Unregister();
             healthy.Trigger();
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(combined.ListenerCount, Is.EqualTo(1));
-            rebound.UnRegister();
+            rebound.Unregister();
             Assert.That(combined.ListenerCount, Is.Zero);
             Assert.That(healthy.HasListener, Is.False);
             combined.Dispose();
@@ -504,7 +539,7 @@ namespace YLFramework.Foundation.Tests
             var failing = new NotifyThenFailOnceSource();
             var combined = new OrEvent().Or(source).Or(failing);
             var calls = 0;
-            IUnRegister rebind = null;
+            IUnregister rebind = null;
             var thrown = Assert.Throws<InvalidOperationException>(() => combined.Register(() =>
             {
                 combined.ClearListeners();
@@ -520,7 +555,7 @@ namespace YLFramework.Foundation.Tests
             source.Trigger();
             failing.Channel.Trigger();
             Assert.That(calls, Is.EqualTo(3));
-            rebind.UnRegister();
+            rebind.Unregister();
             Assert.That(source.HasListener || failing.Channel.HasListener, Is.False);
             combined.Dispose();
         }

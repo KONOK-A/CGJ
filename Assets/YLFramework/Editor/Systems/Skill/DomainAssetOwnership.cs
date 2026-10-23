@@ -13,11 +13,18 @@ namespace YLFramework.Editor.Domain
         {
             var ownerPath = OwnerPath(owner);
             var index = values.IndexOf(data);
-            if (index < 0) return;
+            if (index < 0)
+            {
+                return;
+            }
+
             var path = AssetDatabase.GetAssetPath(data);
             Undo.RecordObject(owner, "Remove domain entry");
             values.RemoveAt(index);
-            if (AssetDatabase.IsSubAsset(data) && path == ownerPath) Undo.DestroyObjectImmediate(data);
+            if (AssetDatabase.IsSubAsset(data) && path == ownerPath)
+            {
+                Undo.DestroyObjectImmediate(data);
+            }
             else if (OwnedFile(data, path, folder) && !AssetDatabase.DeleteAsset(path))
             {
                 values.Insert(index, data);
@@ -42,7 +49,10 @@ namespace YLFramework.Editor.Domain
             else if (OwnedFile(data, path, folder))
             {
                 var error = AssetDatabase.RenameAsset(path, AssetNameTools.GetName(name, folder));
-                if (!string.IsNullOrEmpty(error)) throw new InvalidOperationException(error);
+                if (!string.IsNullOrEmpty(error))
+                {
+                    throw new InvalidOperationException(error);
+                }
             }
         }
 
@@ -52,9 +62,17 @@ namespace YLFramework.Editor.Domain
 
         private static string OwnerPath(ScriptableObject owner)
         {
-            if (!owner || !AssetDatabase.IsMainAsset(owner)) throw new InvalidOperationException("领域配表必须是已保存的主资产。");
+            if (!owner || !AssetDatabase.IsMainAsset(owner))
+            {
+                throw new InvalidOperationException("领域配表必须是已保存的主资产。");
+            }
+
             var path = AssetDatabase.GetAssetPath(owner);
-            if (!path.StartsWith("Assets/", StringComparison.Ordinal)) throw new InvalidOperationException("只允许修改Assets内的领域配表。");
+            if (!path.StartsWith("Assets/", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("只允许修改Assets内的领域配表。");
+            }
+
             return path;
         }
     }

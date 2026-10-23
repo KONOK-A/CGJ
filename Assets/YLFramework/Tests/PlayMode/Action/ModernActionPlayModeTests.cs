@@ -1,57 +1,64 @@
-using YLFramework.Actions;
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 
 namespace YLFramework.Tests.Actions
 {
     public class ModernActionPlayModeTests
     {
-        private readonly List<IAction> mOwned = new List<IAction>();
-        private ActionRecycleDriver mPreviousDriver;
-        private float mPreviousTimeScale;
-        private Scene mCreatedScene;
-        private AsyncOperation mSceneUnload;
+        private readonly List<IAction> _owned = new List<IAction>();
+        private ActionRecycleDriver _previousDriver;
+        private float _previousTimeScale;
+        private Scene _createdScene;
+        private AsyncOperation _sceneUnload;
 
         private T Own<T>(T action) where T : IAction
         {
-            mOwned.Add(action);
+            _owned.Add(action);
             return action;
         }
 
         [SetUp]
         public void SetUp()
         {
-            mPreviousDriver = Object.FindObjectOfType<ActionRecycleDriver>(true);
-            mPreviousTimeScale = Time.timeScale;
-            mCreatedScene = default;
-            mSceneUnload = null;
+            _previousDriver = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _previousTimeScale = Time.timeScale;
+            _createdScene = default;
+            _sceneUnload = null;
             ActionQueue.Drain();
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            Time.timeScale = mPreviousTimeScale;
-            foreach (var action in mOwned)
+            Time.timeScale = _previousTimeScale;
+            foreach (var action in _owned)
             {
-                if (!action.Deinited) action.Deinit();
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            mOwned.Clear();
+            _owned.Clear();
             ActionQueue.Drain();
             var current = Object.FindObjectOfType<ActionRecycleDriver>(true);
-            if (current && current != mPreviousDriver) Object.Destroy(current.gameObject);
-            if (mSceneUnload != null)
+            if (current && current != _previousDriver)
             {
-                yield return mSceneUnload;
+                Object.Destroy(current.gameObject);
             }
-            else if (mCreatedScene.IsValid() && mCreatedScene.isLoaded)
+
+            if (_sceneUnload != null)
             {
-                yield return SceneManager.UnloadSceneAsync(mCreatedScene);
+                yield return _sceneUnload;
+            }
+            else if (_createdScene.IsValid() && _createdScene.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(_createdScene);
             }
             yield return null;
         }
@@ -94,12 +101,12 @@ namespace YLFramework.Tests.Actions
             var calls = 0;
             var action = Own(Kit.NextFrame(() => calls++));
             action.Execute(0);
-            action.Paused = true;
+            action.IsPaused = true;
             yield return null;
             yield return null;
             Assert.That(action.Execute(0), Is.False);
             Assert.That(calls, Is.Zero);
-            action.Paused = false;
+            action.IsPaused = false;
             Assert.That(action.Execute(0), Is.True);
             Assert.That(calls, Is.EqualTo(1));
         }
@@ -124,7 +131,7 @@ namespace YLFramework.Tests.Actions
         public IEnumerator RuntimeRecycleIsDeferredAndReusesTheActionAfterUpdate()
         {
             var first = Own(Kit.Condition(() => false));
-            var id = first.ActionID;
+            var id = first.ActionId;
             first.Deinit();
             Assert.That(ActionQueue.PendingCount, Is.GreaterThan(0));
             var second = Own(Kit.Condition(() => false));
@@ -134,14 +141,14 @@ namespace YLFramework.Tests.Actions
             Assert.That(ActionQueue.PendingCount, Is.Zero);
             var reused = Own(Kit.Condition(() => false));
             Assert.That(reused, Is.SameAs(first));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(id));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.ActionId, Is.Not.EqualTo(id));
+            Assert.That(reused.IsDeinitialized, Is.False);
         }
 
         [UnityTest]
         public IEnumerator RecycleDriverIsAdoptedAfterStaticResetAndRecreatedAfterDestruction()
         {
-            Assert.That(mPreviousDriver == null, Is.True, "Run this lifecycle test without an existing module driver; it will not destroy another owner's host.");
+            Assert.That(_previousDriver == null, Is.True, "Run this lifecycle test without an existing module driver; it will not destroy another owner's host.");
             ActionRecycleDriver.EnsureCreated();
             var original = Object.FindObjectOfType<ActionRecycleDriver>(true);
             Assert.That(original, Is.Not.Null);
@@ -164,10 +171,10 @@ namespace YLFramework.Tests.Actions
         [UnityTest]
         public IEnumerator RecycleDriverSurvivesTheSceneWhereItWasCreated()
         {
-            Assert.That(mPreviousDriver == null, Is.True, "This test must create and own its driver.");
+            Assert.That(_previousDriver == null, Is.True, "This test must create and own its driver.");
             var previousScene = SceneManager.GetActiveScene();
             var scene = SceneManager.CreateScene("ActionKit.Recycle.SceneTest");
-            mCreatedScene = scene;
+            _createdScene = scene;
             try
             {
                 SceneManager.SetActiveScene(scene);
@@ -176,8 +183,8 @@ namespace YLFramework.Tests.Actions
                 Assert.That(driver, Is.Not.Null);
                 Assert.That(driver.gameObject.scene, Is.Not.EqualTo(scene));
                 SceneManager.SetActiveScene(previousScene);
-                mSceneUnload = SceneManager.UnloadSceneAsync(scene);
-                yield return mSceneUnload;
+                _sceneUnload = SceneManager.UnloadSceneAsync(scene);
+                yield return _sceneUnload;
                 Assert.That(driver != null, Is.True);
                 var action = Own(Kit.Callback(null));
                 action.Deinit();
@@ -188,9 +195,9 @@ namespace YLFramework.Tests.Actions
             finally
             {
                 SceneManager.SetActiveScene(previousScene);
-                if (mSceneUnload == null && scene.IsValid() && scene.isLoaded)
+                if (_sceneUnload == null && scene.IsValid() && scene.isLoaded)
                 {
-                    mSceneUnload = SceneManager.UnloadSceneAsync(scene);
+                    _sceneUnload = SceneManager.UnloadSceneAsync(scene);
                 }
             }
         }

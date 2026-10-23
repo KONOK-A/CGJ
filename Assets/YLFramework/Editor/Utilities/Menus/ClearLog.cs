@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 
 using System.Reflection;
 using UnityEditor;
@@ -7,7 +7,7 @@ namespace YLFramework.Editor
 {
     public static class ClearLog
     {
-        [MenuItem("YLFramework/Toolkit/清空控制台",false,priority = 0)] // # 代表Shift
+        [MenuItem("YLFramework/Toolkit/清空控制台", false, priority = 0)] // # 代表Shift
         public static void MenuClicked()
         {
             //LogEntries 为 internal 权限 所以需要利用反射来处理

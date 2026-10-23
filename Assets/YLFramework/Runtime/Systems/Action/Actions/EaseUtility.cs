@@ -95,7 +95,10 @@ namespace YLFramework.Actions
         {
             var distance = end - start;
             if (pos < 1f / 2.75f)
+            {
                 return distance * (bounciness * pos * pos) + start;
+            }
+
             if (pos < 2f / 2.75f)
             {
                 pos -= 1.5f / 2.75f;
@@ -184,8 +187,15 @@ namespace YLFramework.Actions
         {
             var distance = end - start;
 
-            if (pos == 0 || distance == 0) return start;
-            if (Math.Abs(pos - 1.0f) < 0.01f) return end;
+            if (pos == 0 || distance == 0)
+            {
+                return start;
+            }
+
+            if (Math.Abs(pos - 1.0f) < 0.01f)
+            {
+                return end;
+            }
 
             var p = duration * elasticity;
             var s = Mathf.Sign(distance) < 0 ? p * 0.25f : p / (2 * Mathf.PI) * Mathf.Asin(1);
@@ -200,8 +210,15 @@ namespace YLFramework.Actions
         {
             var distance = end - start;
 
-            if (pos == 0 || distance == 0) return start;
-            if (Math.Abs(pos - 1) < 0.01f) return end;
+            if (pos == 0 || distance == 0)
+            {
+                return start;
+            }
+
+            if (Math.Abs(pos - 1) < 0.01f)
+            {
+                return end;
+            }
 
             var p = duration * elasticity;
             var s = Mathf.Sign(distance) < -1 ? p * 0.25f : p / (2 * Mathf.PI) * Mathf.Asin(1);

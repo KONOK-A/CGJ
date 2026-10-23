@@ -36,13 +36,31 @@ namespace YLFramework.Excel.Editor
 
         private static Type RequireValidRoot(ScriptableObjectConfigs root)
         {
-            if (root == null || !AssetDatabase.IsMainAsset(root) || !AssetDatabase.GetAssetPath(root).StartsWith("Assets/", StringComparison.Ordinal)) throw new InvalidOperationException("Select a saved YL DataAssets root under Assets/.");
+            if (root == null || !AssetDatabase.IsMainAsset(root) || !AssetDatabase.GetAssetPath(root).StartsWith("Assets/", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Select a saved YL DataAssets root under Assets/.");
+            }
+
             var type = root.GetDataType();
-            if (type != typeof(ScriptableObjectData) && !TypeCache.GetTypesDerivedFrom<ScriptableObjectData>().Contains(type)) throw new InvalidOperationException("Bound data type is unavailable in TypeCache: " + type.FullName);
+            if (type != typeof(ScriptableObjectData) && !TypeCache.GetTypesDerivedFrom<ScriptableObjectData>().Contains(type))
+            {
+                throw new InvalidOperationException("Bound data type is unavailable in TypeCache: " + type.FullName);
+            }
+
             var diagnostics = ScriptableObjectConfigsController.Validate(root);
-            if (diagnostics.Count != 0) throw new InvalidOperationException(string.Join("\n", diagnostics.Select(d => "Row " + d.Row + ": " + d.Message)));
+            if (diagnostics.Count != 0)
+            {
+                throw new InvalidOperationException(string.Join("\n", diagnostics.Select(d => "Row " + d.Row + ": " + d.Message)));
+            }
+
             foreach (var item in root.configs)
-                if (!ScriptableObjectConfigsController.IsOwned(root, item)) throw new InvalidOperationException("Entry is not owned by this root: " + AssetDatabase.GetAssetPath(item));
+            {
+                if (!ScriptableObjectConfigsController.IsOwned(root, item))
+                {
+                    throw new InvalidOperationException("Entry is not owned by this root: " + AssetDatabase.GetAssetPath(item));
+                }
+            }
+
             return type;
         }
 
@@ -51,9 +69,19 @@ namespace YLFramework.Excel.Editor
         {
             var root = Selection.activeObject as ScriptableObjectConfigs;
             string path = EditorUtility.OpenFilePanel("Import YL DataAssets .xlsx", string.Empty, "xlsx");
-            if (path.Length == 0) return;
+            if (path.Length == 0)
+            {
+                return;
+            }
+
             var window = ExcelAuthoringCommands.ShowPreview(PreviewImport(root, path));
-            window.Applied += () => { if (root != null) root.ClearCache(); };
+            window.Applied += () =>
+            {
+                if (root != null)
+                {
+                    root.ClearCache();
+                }
+            };
         }
 
         [MenuItem("Assets/YLFramework/Excel/Preview Import Selected Data Root", true)]
@@ -64,10 +92,24 @@ namespace YLFramework.Excel.Editor
         {
             var root = Selection.activeObject as ScriptableObjectConfigs;
             string path = EditorUtility.SaveFilePanel("Export YL DataAssets .xlsx", string.Empty, root == null ? "Data" : root.name, "xlsx");
-            if (path.Length == 0) return;
-            if (File.Exists(path) && !EditorUtility.DisplayDialog("Replace Workbook", "Replace this entire workbook, including its sheets and formatting?\n" + path, "Replace", "Cancel")) return;
-            try { Export(root, path); }
-            catch (Exception e) { EditorUtility.DisplayDialog("Excel Export Failed", e.Message, "Close"); }
+            if (path.Length == 0)
+            {
+                return;
+            }
+
+            if (File.Exists(path) && !EditorUtility.DisplayDialog("Replace Workbook", "Replace this entire workbook, including its sheets and formatting?\n" + path, "Replace", "Cancel"))
+            {
+                return;
+            }
+
+            try
+            {
+                Export(root, path);
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog("Excel Export Failed", e.Message, "Close");
+            }
         }
 
         [MenuItem("Assets/YLFramework/Excel/Export Selected Data Root", true)]

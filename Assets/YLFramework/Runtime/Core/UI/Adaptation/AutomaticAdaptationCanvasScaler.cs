@@ -14,14 +14,18 @@ namespace YLFramework.Core
         [SerializeField] private Vector2 referenceResolution;
         [SerializeField] private bool automaticMatch = true;
         [SerializeField, Range(0, 1)] private float manualMatch;
-        private CanvasScaler scaler;
-        private Canvas canvas;
-        private string lastError;
+        private CanvasScaler _scaler;
+        private Canvas _canvas;
+        private string _lastError;
 
         /// <summary>设计参考分辨率；修改后立即刷新。</summary>
         public Vector2 ReferenceResolution
         {
-            get { AdoptExistingConfiguration(); return referenceResolution; }
+            get
+            {
+                AdoptExistingConfiguration();
+                return referenceResolution;
+            }
             set => Configure(value, automaticMatch, ManualMatch);
         }
 
@@ -35,17 +39,27 @@ namespace YLFramework.Core
         /// <summary>手动宽高匹配值，范围为 0 到 1。</summary>
         public float ManualMatch
         {
-            get { AdoptExistingConfiguration(); return manualMatch; }
+            get
+            {
+                AdoptExistingConfiguration();
+                return manualMatch;
+            }
             set => Configure(ReferenceResolution, automaticMatch, value);
         }
 
         /// <summary>一次提交根的适配配置；非法参数不会改变已有配置。</summary>
         public void Configure(Vector2 referenceResolution, bool automaticMatch, float manualMatch)
         {
-            if (!PositiveFinite(referenceResolution))
+            if (!IsPositiveFinite(referenceResolution))
+            {
                 throw new ArgumentException("Reference resolution must contain positive finite values.", nameof(referenceResolution));
+            }
+
             if (float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
+            {
                 throw new ArgumentException("Manual match must be between 0 and 1.", nameof(manualMatch));
+            }
+
             this.referenceResolution = referenceResolution;
             this.automaticMatch = automaticMatch;
             this.manualMatch = manualMatch;
@@ -56,46 +70,79 @@ namespace YLFramework.Core
         public bool Refresh()
         {
             AdoptExistingConfiguration();
-            if (!scaler || !canvas) return Reject("AutomaticAdaptationCanvasScaler requires a Canvas and CanvasScaler.");
-            if (!PositiveFinite(referenceResolution) || float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
+            if (!_scaler || !_canvas)
+            {
+                return Reject("AutomaticAdaptationCanvasScaler requires a Canvas and CanvasScaler.");
+            }
+
+            if (!IsPositiveFinite(referenceResolution) || float.IsNaN(manualMatch) || manualMatch < 0 || manualMatch > 1)
+            {
                 return Reject("AutomaticAdaptationCanvasScaler requires a positive finite reference resolution and a manual match between 0 and 1.");
+            }
 
             float match = manualMatch;
             if (automaticMatch)
             {
                 // 与已安装 CanvasScaler 使用同一显示尺寸，避免参考分辨率更新后沿用旧 match。
-                Vector2 size = canvas.renderingDisplaySize;
-                int display = canvas.targetDisplay;
+                Vector2 size = _canvas.renderingDisplaySize;
+                int display = _canvas.targetDisplay;
                 if (display > 0 && display < Display.displays.Length)
+                {
                     size = new Vector2(Display.displays[display].renderingWidth, Display.displays[display].renderingHeight);
-                if (!PositiveFinite(size)) return Reject("AutomaticAdaptationCanvasScaler requires a positive finite rendering size.");
+                }
+
+                if (!IsPositiveFinite(size))
+                {
+                    return Reject("AutomaticAdaptationCanvasScaler requires a positive finite rendering size.");
+                }
+
                 match = size.x / size.y > referenceResolution.x / referenceResolution.y ? 1 : 0;
             }
-            if (scaler.referenceResolution != referenceResolution) scaler.referenceResolution = referenceResolution;
-            if (scaler.matchWidthOrHeight != match) scaler.matchWidthOrHeight = match;
-            lastError = null;
+            if (_scaler.referenceResolution != referenceResolution)
+            {
+                _scaler.referenceResolution = referenceResolution;
+            }
+
+            if (_scaler.matchWidthOrHeight != match)
+            {
+                _scaler.matchWidthOrHeight = match;
+            }
+
+            _lastError = null;
             return true;
         }
 
         private void AdoptExistingConfiguration()
         {
-            if (!scaler) scaler = GetComponent<CanvasScaler>();
-            if (!canvas) canvas = GetComponent<Canvas>();
-            if (referenceResolution.x == 0 && referenceResolution.y == 0 && scaler)
+            if (!_scaler)
             {
-                referenceResolution = scaler.referenceResolution;
-                manualMatch = scaler.matchWidthOrHeight;
+                _scaler = GetComponent<CanvasScaler>();
+            }
+
+            if (!_canvas)
+            {
+                _canvas = GetComponent<Canvas>();
+            }
+
+            if (referenceResolution.x == 0 && referenceResolution.y == 0 && _scaler)
+            {
+                referenceResolution = _scaler.referenceResolution;
+                manualMatch = _scaler.matchWidthOrHeight;
             }
         }
 
         private bool Reject(string error)
         {
-            if (lastError != error) Debug.LogError(error, this);
-            lastError = error;
+            if (_lastError != error)
+            {
+                Debug.LogError(error, this);
+            }
+
+            _lastError = error;
             return false;
         }
 
-        private static bool PositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
+        private static bool IsPositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
             !float.IsInfinity(value.x) && !float.IsInfinity(value.y);
 
         private void Awake() => AdoptExistingConfiguration();
@@ -103,7 +150,10 @@ namespace YLFramework.Core
         private void Update() => Refresh();
         private void OnRectTransformDimensionsChange()
         {
-            if (isActiveAndEnabled) Refresh();
+            if (isActiveAndEnabled)
+            {
+                Refresh();
+            }
         }
     }
 }

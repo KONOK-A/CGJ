@@ -10,7 +10,9 @@ namespace YLFramework.Core.Editor.Tests
 {
     public class DisableEditDrawerTests
     {
-        public class ObserveDisabled : UnityEngine.PropertyAttribute { }
+        public class ObserveDisabled : UnityEngine.PropertyAttribute
+        {
+        }
         [CustomPropertyDrawer(typeof(ObserveDisabled))]
         public class ObserveDisabledDrawer : PropertyDrawer
         {
@@ -23,7 +25,10 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Serializable]
-        public class Data { [ObserveDisabled] public int value = 17; }
+        public class Data
+        {
+            [ObserveDisabled] public int value = 17;
+        }
         public class Fixture : ScriptableObject
         {
             public Data data = new Data();
@@ -37,10 +42,23 @@ namespace YLFramework.Core.Editor.Tests
             internal bool Drawn;
             private void OnGUI()
             {
-                if (Drawn || Event.current.type != EventType.Repaint) return;
-                try { Draw(); }
-                catch (Exception error) { Error = error; }
-                finally { Drawn = true; }
+                if (Drawn || Event.current.type != EventType.Repaint)
+                {
+                    return;
+                }
+
+                try
+                {
+                    Draw();
+                }
+                catch (Exception error)
+                {
+                    Error = error;
+                }
+                finally
+                {
+                    Drawn = true;
+                }
             }
         }
 
@@ -57,7 +75,10 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(expected, Is.GreaterThan(EditorGUIUtility.singleLineHeight));
                 Assert.That(new DisableEditDrawer().GetPropertyHeight(property, GUIContent.none), Is.EqualTo(expected));
             }
-            finally { UnityEngine.Object.DestroyImmediate(target); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
         }
 
         [UnityTest]
@@ -80,7 +101,11 @@ namespace YLFramework.Core.Editor.Tests
                         {
                             GUI.enabled = enabled;
                             bool observed = false;
-                            ObserveDisabledDrawer.Observe = state => { observed = true; Assert.That(state, Is.False); };
+                            ObserveDisabledDrawer.Observe = state =>
+                            {
+                                observed = true;
+                                Assert.That(state, Is.False);
+                            };
                             EditorGUI.PropertyField(new Rect(0, 0, 250, 60), property, GUIContent.none, true);
                             Assert.That(observed, Is.True, "The expanded child must actually be drawn through the registered DisableEdit drawer.");
                             Assert.That(GUI.enabled, Is.EqualTo(enabled));
@@ -90,7 +115,11 @@ namespace YLFramework.Core.Editor.Tests
                             Assert.That(GUI.enabled, Is.EqualTo(enabled));
                         }
                     }
-                    finally { GUI.enabled = original; ObserveDisabledDrawer.Observe = null; }
+                    finally
+                    {
+                        GUI.enabled = original;
+                        ObserveDisabledDrawer.Observe = null;
+                    }
                     Assert.That(serialized.ApplyModifiedProperties(), Is.False);
                     Assert.That(target.readOnlyData.value, Is.EqualTo(17));
                 };
@@ -101,7 +130,10 @@ namespace YLFramework.Core.Editor.Tests
                     yield return null;
                 }
                 Assert.That(window.Drawn, Is.True);
-                if (window.Error != null) throw window.Error;
+                if (window.Error != null)
+                {
+                    throw window.Error;
+                }
             }
             finally
             {

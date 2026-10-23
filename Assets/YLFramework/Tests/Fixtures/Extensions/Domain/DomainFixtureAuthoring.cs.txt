@@ -13,34 +13,57 @@ namespace YLFramework.DomainFixture
         [MenuItem("Tools/YLFramework/Domain Fixture/Create Receiver Assets")]
         public static void Create()
         {
-            const string path = "Assets/Resources/DomainFixture";
-            if (AssetDatabase.IsValidFolder(path)) throw new InvalidOperationException("Receiver fixture already exists; refusing to overwrite user data.");
-            if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
+            const string Path = "Assets/Resources/DomainFixture";
+            if (AssetDatabase.IsValidFolder(Path))
+            {
+                throw new InvalidOperationException("Receiver fixture already exists; refusing to overwrite user data.");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+            {
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            }
+
             AssetDatabase.CreateFolder("Assets/Resources", "DomainFixture");
             var skills = ScriptableObject.CreateInstance<SkillsConfig>();
             skills.name = "Skills";
             var skill = ScriptableObject.CreateInstance<SkillConfigData>();
-            skill.id = 100; skill.duration = 0.02f; skill.cooling_time = 0.02f;
-            skill.skill_class_full_name = "YLFramework.DomainFixture.ReceiverSkill";
-            skill.parent = skills; skills.skills.Add(skill);
-            AssetDatabase.CreateAsset(skills, path + "/Skills.asset"); AssetDatabase.AddObjectToAsset(skill, skills);
+            skill.id = 100;
+            skill.duration = 0.02f;
+            skill.cooldownSeconds = 0.02f;
+            skill.skillClassFullName = "YLFramework.DomainFixture.ReceiverSkill";
+            skill.parent = skills;
+            skills.skills.Add(skill);
+            AssetDatabase.CreateAsset(skills, Path + "/Skills.asset");
+            AssetDatabase.AddObjectToAsset(skill, skills);
             var buffs = ScriptableObject.CreateInstance<BuffsConfig>();
             buffs.name = "Buffs";
             var buff = ScriptableObject.CreateInstance<BuffConfigData>();
-            buff.buff_id = 100; buff.duration = 0.02f; buff.buff_class_full_name = "YLFramework.DomainFixture.ReceiverBuff";
-            buff.parent = buffs; buffs.buffs.Add(buff);
-            AssetDatabase.CreateAsset(buffs, path + "/Buffs.asset"); AssetDatabase.AddObjectToAsset(buff, buffs);
+            buff.id = 100;
+            buff.duration = 0.02f;
+            buff.buffClassFullName = "YLFramework.DomainFixture.ReceiverBuff";
+            buff.parent = buffs;
+            buffs.buffs.Add(buff);
+            AssetDatabase.CreateAsset(buffs, Path + "/Buffs.asset");
+            AssetDatabase.AddObjectToAsset(buff, buffs);
             var missions = ScriptableObject.CreateInstance<MissionsConfig>();
             missions.name = "Missions";
             var mission = ScriptableObject.CreateInstance<MissionConfigData>();
-            mission.id = 100; mission.mission_type_class_fullname = "YLFramework.DomainFixture.ReceiverMission";
-            mission.conditions.Add(new MissionCondition { param_name = "amount", compareType = CompareType.GreaterEqual, target = 1 });
+            mission.id = 100;
+            mission.missionTypeClassFullName = "YLFramework.DomainFixture.ReceiverMission";
+            mission.conditions.Add(new MissionCondition { paramName = "amount", compareType = CompareType.GreaterEqual, target = 1 });
             mission.rewards.Add(new RewardInfo { id = 1, count = 1 });
-            missions.param.Add(new MissionParameter { name = "amount", type = MissionParamType.Float });
-            mission.parent = missions; missions.missions.Add(mission);
-            AssetDatabase.CreateAsset(missions, path + "/Missions.asset"); AssetDatabase.AddObjectToAsset(mission, missions);
-            EditorUtility.SetDirty(skills); EditorUtility.SetDirty(buffs); EditorUtility.SetDirty(missions);
-            AssetDatabase.SaveAssetIfDirty(skills); AssetDatabase.SaveAssetIfDirty(buffs); AssetDatabase.SaveAssetIfDirty(missions);
+            missions.parameters.Add(new MissionParameter { name = "amount", type = MissionParamType.Float });
+            mission.parent = missions;
+            missions.missions.Add(mission);
+            AssetDatabase.CreateAsset(missions, Path + "/Missions.asset");
+            AssetDatabase.AddObjectToAsset(mission, missions);
+            EditorUtility.SetDirty(skills);
+            EditorUtility.SetDirty(buffs);
+            EditorUtility.SetDirty(missions);
+            AssetDatabase.SaveAssetIfDirty(skills);
+            AssetDatabase.SaveAssetIfDirty(buffs);
+            AssetDatabase.SaveAssetIfDirty(missions);
         }
     }
 }

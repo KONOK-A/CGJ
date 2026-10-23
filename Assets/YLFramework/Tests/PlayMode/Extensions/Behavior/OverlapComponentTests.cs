@@ -9,12 +9,12 @@ namespace YLFramework.Tests.Extensions.Behavior
 {
     public class OverlapComponentTests
     {
-        private readonly List<GameObject> owned = new List<GameObject>();
+        private readonly List<GameObject> _owned = new List<GameObject>();
         private GameObject NewObject(string name, Vector3 position)
         {
             var obj = new GameObject("YL.Behavior." + name);
             obj.transform.position = position;
-            owned.Add(obj);
+            _owned.Add(obj);
             return obj;
         }
 
@@ -23,7 +23,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             var circle = NewObject("Query", center).AddComponent<OverlapCircle2D>();
             circle.Radius = 3;
             circle.LayerMask = 1;
-            circle.Running = false;
+            circle.IsRunning = false;
             circle.onColliderEnter = new OverlapEvent2D();
             circle.onColliderExit = new OverlapEvent2D();
             return circle;
@@ -32,8 +32,15 @@ namespace YLFramework.Tests.Extensions.Behavior
         [TearDown]
         public void Cleanup()
         {
-            foreach (var obj in owned) if (obj) Object.DestroyImmediate(obj);
-            owned.Clear();
+            foreach (var obj in _owned)
+            {
+                if (obj)
+                {
+                    Object.DestroyImmediate(obj);
+                }
+            }
+
+            _owned.Clear();
         }
 
         [Test]
@@ -45,19 +52,24 @@ namespace YLFramework.Tests.Extensions.Behavior
             var firstCollider = NewObject("First", center).AddComponent<BoxCollider2D>();
             var secondCollider = NewObject("Second", second.transform.position).AddComponent<BoxCollider2D>();
             int enters = 0, exits = 0;
-            first.onColliderEnter.AddListener(hit => { enters++; first.CheckOverlap(); second.CheckOverlap(); });
+            first.onColliderEnter.AddListener(hit =>
+            {
+                enters++;
+                first.CheckOverlap();
+                second.CheckOverlap();
+            });
             first.onColliderExit.AddListener(hit => exits++);
             Physics2D.SyncTransforms();
             first.CheckOverlap();
-            Assert.That(first.Results.Count, Is.EqualTo(1));
-            Assert.That(first.Results[0].collider, Is.SameAs(firstCollider));
-            Assert.That(second.Results[0].collider, Is.SameAs(secondCollider));
+            Assert.That(first.results.Count, Is.EqualTo(1));
+            Assert.That(first.results[0].collider, Is.SameAs(firstCollider));
+            Assert.That(second.results[0].collider, Is.SameAs(secondCollider));
             first.CheckOverlap();
             Assert.That(enters, Is.EqualTo(1));
             firstCollider.transform.position += Vector3.up * 20;
             Physics2D.SyncTransforms();
             first.CheckOverlap();
-            Assert.That(first.Results, Is.Empty);
+            Assert.That(first.results, Is.Empty);
             Assert.That(exits, Is.EqualTo(1));
         }
 
@@ -69,15 +81,19 @@ namespace YLFramework.Tests.Extensions.Behavior
             NewObject("TargetA", center).AddComponent<BoxCollider2D>();
             NewObject("TargetB", center + Vector3.right).AddComponent<BoxCollider2D>();
             int enters = 0;
-            circle.onColliderEnter.AddListener(hit => { enters++; circle.enabled = false; });
+            circle.onColliderEnter.AddListener(hit =>
+            {
+                enters++;
+                circle.enabled = false;
+            });
             Physics2D.SyncTransforms();
             circle.CheckOverlap();
             Assert.That(enters, Is.EqualTo(1));
-            Assert.That(circle.Results, Is.Empty);
+            Assert.That(circle.results, Is.Empty);
             circle.onColliderEnter.RemoveAllListeners();
             circle.enabled = true;
             circle.CheckOverlap();
-            Assert.That(circle.Results.Count, Is.EqualTo(2));
+            Assert.That(circle.results.Count, Is.EqualTo(2));
         }
 
         [Test]
@@ -85,7 +101,7 @@ namespace YLFramework.Tests.Extensions.Behavior
         {
             var center = new Vector3(12000, 12200);
             var area = NewObject("Area", center).AddComponent<OverlapArea2D>();
-            area.Running = false;
+            area.IsRunning = false;
             area.LayerMask = 1;
             area.Positions.Add(new Vector3(-2, -2));
             area.Positions.Add(new Vector3(2, 2));
@@ -95,11 +111,11 @@ namespace YLFramework.Tests.Extensions.Behavior
             area.onColliderExit.AddListener(hit => exits++);
             Physics2D.SyncTransforms();
             area.CheckOverlap();
-            Assert.That(area.Results.Count, Is.EqualTo(1));
+            Assert.That(area.results.Count, Is.EqualTo(1));
             Object.DestroyImmediate(collider);
             area.Positions.Clear();
             area.CheckOverlap();
-            Assert.That(area.Results, Is.Empty);
+            Assert.That(area.results, Is.Empty);
             Assert.That(exits, Is.EqualTo(1));
         }
 
@@ -115,7 +131,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             obj.transform.localScale = new Vector3(-2, 1, 1);
             obj.transform.rotation = Quaternion.Euler(0, 0, 90);
             var query = (OverlapBase2D)obj.AddComponent(shape);
-            query.Running = false;
+            query.IsRunning = false;
             query.LayerMask = 1;
             var hitPosition = center;
             if (query is OverlapCapsule2D capsule)
@@ -156,7 +172,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             Physics2D.SyncTransforms();
             query.CheckOverlap();
 
-            Assert.That(query.Results.ConvertAll(hit => hit.collider), Is.EquivalentTo(new[] { target }));
+            Assert.That(query.results.ConvertAll(hit => hit.collider), Is.EquivalentTo(new[] { target }));
         }
 
         [TestCase(typeof(OverlapBox3D))]
@@ -168,7 +184,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             obj.transform.localScale = new Vector3(-2, 1, 3);
             obj.transform.rotation = Quaternion.Euler(0, 0, 90);
             var query = (OverlapBase3D)obj.AddComponent(shape);
-            query.Running = false;
+            query.IsRunning = false;
             query.LayerMask = 1;
             Vector3 hitPosition;
             if (query is OverlapBox3D box)
@@ -194,7 +210,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             Physics.SyncTransforms();
             query.CheckOverlap();
 
-            Assert.That(query.Results.ConvertAll(hit => hit.collider), Is.EquivalentTo(new[] { target }));
+            Assert.That(query.results.ConvertAll(hit => hit.collider), Is.EquivalentTo(new[] { target }));
         }
 
         [Test]
@@ -210,7 +226,7 @@ namespace YLFramework.Tests.Extensions.Behavior
             var query = NewObject("Capacity3D", new Vector3(12000, 12600, 100)).AddComponent<OverlapSphere3D>();
             query.Radius = 3;
             query.LayerMask = 1;
-            query.Running = false;
+            query.IsRunning = false;
             AssertCapacityLifecycle(query, obj => obj.AddComponent<BoxCollider>(), Physics.SyncTransforms);
         }
 
@@ -221,7 +237,10 @@ namespace YLFramework.Tests.Extensions.Behavior
         {
             var colliders = new List<T>();
             for (int i = 0; i < 100; i++)
+            {
                 colliders.Add(addCollider(NewObject("CapacityTarget" + i, query.transform.position)));
+            }
+
             int warnings = 0, enters = 0, exits = 0;
             query.onColliderEnter = new TEvent();
             query.onColliderExit = new TEvent();
@@ -230,7 +249,10 @@ namespace YLFramework.Tests.Extensions.Behavior
             var warningPattern = new System.Text.RegularExpressions.Regex(query.GetType().Name + ":.*capacity 100.*may be truncated");
             Application.LogCallback recordWarning = (message, trace, type) =>
             {
-                if (type == LogType.Warning && warningPattern.IsMatch(message)) warnings++;
+                if (type == LogType.Warning && warningPattern.IsMatch(message))
+                {
+                    warnings++;
+                }
             };
             Application.logMessageReceived += recordWarning;
             try
@@ -240,14 +262,14 @@ namespace YLFramework.Tests.Extensions.Behavior
                 LogAssert.Expect(LogType.Warning, warningPattern);
 #endif
                 query.CheckOverlap();
-                Assert.That(query.Results.ConvertAll(hit => hit.collider), Is.EquivalentTo(colliders));
+                Assert.That(query.results.ConvertAll(hit => hit.collider), Is.EquivalentTo(colliders));
 
                 var extra = NewObject("CapacityTarget100", query.transform.position);
                 colliders.Add(addCollider(extra));
                 syncTransforms();
                 query.CheckOverlap();
                 query.CheckOverlap();
-                var truncated = query.Results.ConvertAll(hit => hit.collider);
+                var truncated = query.results.ConvertAll(hit => hit.collider);
                 Assert.That(truncated.Count, Is.EqualTo(100));
                 Assert.That(new HashSet<T>(truncated).Count, Is.EqualTo(100));
                 Assert.That(truncated, Is.SubsetOf(colliders));
@@ -256,7 +278,7 @@ namespace YLFramework.Tests.Extensions.Behavior
                 colliders[0].gameObject.SetActive(false);
                 syncTransforms();
                 query.CheckOverlap();
-                Assert.That(query.Results.Count, Is.EqualTo(99));
+                Assert.That(query.results.Count, Is.EqualTo(99));
                 extra.SetActive(true);
                 colliders[0].gameObject.SetActive(true);
                 syncTransforms();
@@ -270,15 +292,15 @@ namespace YLFramework.Tests.Extensions.Behavior
                 int exitsBeforeDisable = exits;
                 int entersBeforeDisable = enters;
                 query.enabled = false;
-                Assert.That(query.Results, Is.Empty);
+                Assert.That(query.results, Is.Empty);
                 Assert.That(exits, Is.EqualTo(exitsBeforeDisable), "Disable must not synthesize exits.");
-                Assert.That(query.Running, Is.False);
+                Assert.That(query.IsRunning, Is.False);
                 query.enabled = true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 LogAssert.Expect(LogType.Warning, warningPattern);
 #endif
                 query.CheckOverlap();
-                Assert.That(query.Results.Count, Is.EqualTo(100));
+                Assert.That(query.results.Count, Is.EqualTo(100));
                 Assert.That(enters - entersBeforeDisable, Is.EqualTo(100), "Re-enable must start a fresh enter snapshot.");
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Assert.That(warnings, Is.EqualTo(2));

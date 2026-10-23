@@ -5,42 +5,52 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using YLFramework.Core;
 using YLFramework.Integrations.HybridCLR;
 using YLFramework.Services.Resource;
-using YLFramework.Core;
-using UnityEngine.SceneManagement;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
 {
     public class HybridCLRSessionTests
     {
-        private SceneSetup[] originalScenes;
-        private string ownedFolder;
-        private bool changedOptions;
-        private bool oldEnabled;
-        private EnterPlayModeOptions oldOptions;
-        private HybridCLRLoader firstLoader;
-        private HybridCLRLoader secondLoader;
+        private SceneSetup[] _originalScenes;
+        private string _ownedFolder;
+        private bool _hasChangedOptions;
+        private bool _wasEnabled;
+        private EnterPlayModeOptions _oldOptions;
+        private HybridCLRLoader _firstLoader;
+        private HybridCLRLoader _secondLoader;
 
         [UnityTest]
         public IEnumerator PendingModuleBecomesTerminalWhenTheRealPlaySessionEnds()
         {
             PrepareOwnedScene();
             yield return new EnterPlayMode();
-            var resources = Initialize(); firstLoader = new HybridCLRLoader(resources, "base-test");
+            var resources = Initialize();
+            _firstLoader = new HybridCLRLoader(resources, "base-test");
             CoreResourceAccess.Bind(new WaitingProvider());
             var address = new ResourceAddress("hybridclr-test", HybridCLRManifest.ManifestPath);
-            var request = firstLoader.StartModuleAsync(address, "YLFramework.HybridCLR.Tests.PlayMode", "YLFramework.Tests.Integrations.HybridCLR.HybridCLRWaitingModule");
-            for (var i = 0; i < 240 && request.Module == null && !request.isDone; i++) yield return null;
-            Assert.That(request.Module, Is.Not.Null); Assert.That(request.isDone, Is.False);
+            var request = _firstLoader.StartModuleAsync(address, "YLFramework.HybridCLR.Tests.PlayMode", "YLFramework.Tests.Integrations.HybridCLR.HybridCLRWaitingModule");
+            for (var i = 0; i < 240 && request.Module == null && !request.IsDone; i++)
+            {
+                yield return null;
+            }
+
+            Assert.That(request.Module, Is.Not.Null);
+            Assert.That(request.IsDone, Is.False);
             yield return new ExitPlayMode();
-            Assert.That(request.isDone, Is.True, "A stopped Core coroutine must not leave its accepted wrapper pending forever.");
+            Assert.That(request.IsDone, Is.True, "A stopped Core coroutine must not leave its accepted wrapper pending forever.");
             Assert.That(request.Exception, Is.TypeOf<InvalidOperationException>());
             yield return new EnterPlayMode();
-            var next = Initialize(); firstLoader.Dispose(); firstLoader = null;
+            var next = Initialize();
+            _firstLoader.Dispose();
+            _firstLoader = null;
             Assert.That(next.IsAvailable, Is.True);
-            using var stop = next.ShutdownAsync(); yield return stop; stop.TakeResult();
+            using var stop = next.ShutdownAsync();
+            yield return stop;
+            stop.TakeResult();
             yield return new ExitPlayMode();
         }
 
@@ -49,25 +59,34 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         {
             PrepareOwnedScene();
             yield return new EnterPlayMode();
-            var first = Initialize(); firstLoader = new HybridCLRLoader(first, "base-test");
+            var first = Initialize();
+            _firstLoader = new HybridCLRLoader(first, "base-test");
             var address = new ResourceAddress("hybridclr-test", HybridCLRManifest.ManifestPath);
-            var firstLoad = firstLoader.LoadAsync(address); yield return firstLoad;
-            Assert.That(firstLoad.Exception, Is.Null, firstLoad.error); Assert.That(firstLoad.Result.Simulation, Is.True);
+            var firstLoad = _firstLoader.LoadAsync(address);
+            yield return firstLoad;
+            Assert.That(firstLoad.Exception, Is.Null, firstLoad.Error);
+            Assert.That(firstLoad.Result.IsSimulation, Is.True);
             Assert.That(first.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1));
 
             // 刻意不正常 Stop，以真实退出 Play 验证会话失效；不宣称托管程序集已经卸载。
             yield return new ExitPlayMode();
             yield return new EnterPlayMode();
             Assert.That(first.IsAvailable, Is.False);
-            Assert.Throws<InvalidOperationException>(() => firstLoader.LoadAsync(address));
-            var second = Initialize(); secondLoader = new HybridCLRLoader(second, "base-test");
-            firstLoader.Dispose(); firstLoader = null;
+            Assert.Throws<InvalidOperationException>(() => _firstLoader.LoadAsync(address));
+            var second = Initialize();
+            _secondLoader = new HybridCLRLoader(second, "base-test");
+            _firstLoader.Dispose();
+            _firstLoader = null;
             Assert.That(second.IsAvailable, Is.True, "Disposing a stale loader must not close the current authority.");
-            var secondLoad = secondLoader.LoadAsync(address); yield return secondLoad;
-            Assert.That(secondLoad.Exception, Is.Null, secondLoad.error); Assert.That(secondLoad.Result.Simulation, Is.True);
+            var secondLoad = _secondLoader.LoadAsync(address);
+            yield return secondLoad;
+            Assert.That(secondLoad.Exception, Is.Null, secondLoad.Error);
+            Assert.That(secondLoad.Result.IsSimulation, Is.True);
             Assert.That(second.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1));
-            secondLoader.Dispose(); secondLoader = null;
-            using var shutdown = second.ShutdownAsync(); yield return shutdown;
+            _secondLoader.Dispose();
+            _secondLoader = null;
+            using var shutdown = second.ShutdownAsync();
+            yield return shutdown;
             Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), shutdown.Error?.ToString());
             yield return new ExitPlayMode();
         }
@@ -75,16 +94,21 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         private void PrepareOwnedScene()
         {
             Assert.That(EditorApplication.isPlaying, Is.False);
-            originalScenes = EditorSceneManager.GetSceneManagerSetup();
-            if (originalScenes.Any(s => string.IsNullOrEmpty(s.path)) || Enumerable.Range(0, UnityEngine.SceneManagement.SceneManager.sceneCount)
+            _originalScenes = EditorSceneManager.GetSceneManagerSetup();
+            if (_originalScenes.Any(s => string.IsNullOrEmpty(s.path)) || Enumerable.Range(0, UnityEngine.SceneManagement.SceneManager.sceneCount)
                 .Any(i => UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty))
+            {
                 throw new InvalidOperationException("Save your own scenes explicitly before this real cross-Play test.");
+            }
+
             HybridCLRTestFixtures.Prepare();
-            ownedFolder = "Assets/YLFramework/Tests/Fixtures/HybridCLRSession-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Fixtures", System.IO.Path.GetFileName(ownedFolder));
+            _ownedFolder = "Assets/YLFramework/Tests/Fixtures/HybridCLRSession-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Fixtures", System.IO.Path.GetFileName(_ownedFolder));
             var neutral = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            Assert.That(EditorSceneManager.SaveScene(neutral, ownedFolder + "/Neutral.unity"), Is.True);
-            oldEnabled = EditorSettings.enterPlayModeOptionsEnabled; oldOptions = EditorSettings.enterPlayModeOptions; changedOptions = true;
+            Assert.That(EditorSceneManager.SaveScene(neutral, _ownedFolder + "/Neutral.unity"), Is.True);
+            _wasEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            _oldOptions = EditorSettings.enterPlayModeOptions;
+            _hasChangedOptions = true;
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
             EditorSettings.enterPlayModeOptionsEnabled = true;
 
@@ -109,17 +133,32 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         [UnityTearDown]
         public IEnumerator RestoreOnlyOwnedState()
         {
-            if (Application.isPlaying) yield return new ExitPlayMode();
-            try { firstLoader?.Dispose(); secondLoader?.Dispose(); }
+            if (Application.isPlaying)
+            {
+                yield return new ExitPlayMode();
+            }
+
+            try
+            {
+                _firstLoader?.Dispose();
+                _secondLoader?.Dispose();
+            }
             finally
             {
-                if (changedOptions)
+                if (_hasChangedOptions)
                 {
-                    EditorSettings.enterPlayModeOptions = oldOptions;
-                    EditorSettings.enterPlayModeOptionsEnabled = oldEnabled;
+                    EditorSettings.enterPlayModeOptions = _oldOptions;
+                    EditorSettings.enterPlayModeOptionsEnabled = _wasEnabled;
                 }
-                if (originalScenes != null && originalScenes.All(s => !string.IsNullOrEmpty(s.path))) EditorSceneManager.RestoreSceneManagerSetup(originalScenes);
-                if (ownedFolder != null && AssetDatabase.IsValidFolder(ownedFolder)) AssetDatabase.DeleteAsset(ownedFolder);
+                if (_originalScenes != null && _originalScenes.All(s => !string.IsNullOrEmpty(s.path)))
+                {
+                    EditorSceneManager.RestoreSceneManagerSetup(_originalScenes);
+                }
+
+                if (_ownedFolder != null && AssetDatabase.IsValidFolder(_ownedFolder))
+                {
+                    AssetDatabase.DeleteAsset(_ownedFolder);
+                }
             }
         }
 
@@ -132,15 +171,15 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         }
         private sealed class WaitingScene : CoreResourceRequest<CoreSceneResult>
         {
-            private bool disposed;
+            private bool _isDisposed;
             public override CoreResourceStatus Status => IsDisposed ? CoreResourceStatus.Canceled : CoreResourceStatus.Pending;
             public override float Progress => 0;
             public override CoreResourceException Error => null;
-            public override bool IsDisposed => disposed;
+            public override bool IsDisposed => _isDisposed;
             public override event Action<CoreResourceRequest<CoreSceneResult>> Completed { add { } remove { } }
             public override CoreSceneResult TakeResult() => throw new InvalidOperationException("Deliberately pending test scene.");
             public override void Cancel() => Dispose();
-            public override void Dispose() => disposed = true;
+            public override void Dispose() => _isDisposed = true;
         }
     }
 }

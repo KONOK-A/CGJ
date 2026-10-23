@@ -17,37 +17,40 @@ namespace YLFramework.Core.Tests
 
     public sealed class UIPanelAcceptanceDragProbe : MonoBehaviour, UnityEngine.EventSystems.IDragHandler
     {
-        public int Drags;
-        public void OnDrag(UnityEngine.EventSystems.PointerEventData data) => Drags++;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Drags")]
+        public int drags;
+        public void OnDrag(UnityEngine.EventSystems.PointerEventData data) => drags++;
     }
 
     /// <summary>真实 Play / Mono Player 共用的定向验收入口；不参与框架分发。</summary>
     public sealed class UIAcceptanceEntry : MonoBehaviour
     {
-        public GameObject RootPrefab;
-        public GameObject ColorPrefab;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("RootPrefab")]
+        public GameObject rootPrefab;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("ColorPrefab")]
+        public GameObject colorPrefab;
         public static int Round;
         public static string Result;
-        private static GameObject previousRoot;
-        private static ColorSelectorWindow previousWindow;
-        private static LoadPanelRequest<ColorSelectorWindow> previousPending;
-        private static UITipHandle previousTip;
-        private static int oldHookCalls;
-        private static int oldColorCalls;
-        private static int oldTipCalls;
-        private static int expectedTipCalls;
-        private static bool exitAcquisitionRejected;
-        private readonly AcceptanceModule owner = new AcceptanceModule();
-        private GameObject rootObject;
-        private UIRootContext root;
-        private ColorSelectorWindow first;
-        private ColorSelectorWindow second;
-        private UITipsPresenter tips;
-        private Mouse mouse;
-        private Keyboard keyboard;
-        private InputActionAsset actions;
-        private UnityEngine.InputSystem.Utilities.ReadOnlyArray<InputDevice>? previousDevices;
-        private int changes;
+        private static GameObject _previousRoot;
+        private static ColorSelectorWindow _previousWindow;
+        private static LoadPanelRequest<ColorSelectorWindow> _previousPending;
+        private static UITipHandle _previousTip;
+        private static int _oldHookCalls;
+        private static int _oldColorCalls;
+        private static int _oldTipCalls;
+        private static int _expectedTipCalls;
+        private static bool _wasExitAcquisitionRejected;
+        private readonly AcceptanceModule _owner = new AcceptanceModule();
+        private GameObject _rootObject;
+        private UIRootContext _root;
+        private ColorSelectorWindow _first;
+        private ColorSelectorWindow _second;
+        private UITipsPresenter _tips;
+        private Mouse _mouse;
+        private Keyboard _keyboard;
+        private InputActionAsset _actions;
+        private UnityEngine.InputSystem.Utilities.ReadOnlyArray<InputDevice>? _previousDevices;
+        private int _changes;
 
         private IEnumerator Start()
         {
@@ -69,12 +72,26 @@ namespace YLFramework.Core.Tests
                     Result = "FAILED: " + error;
                     Debug.LogError("UI34 " + Result);
                     ReleaseDevices();
-                    if (!Application.isEditor) Application.Quit(1);
+                    if (!Application.isEditor)
+                    {
+                        Application.Quit(1);
+                    }
+
                     yield break;
                 }
-                if (!next) { routines.Pop(); continue; }
-                if (current is IEnumerator nested && !(current is CustomYieldInstruction)) routines.Push(nested);
-                else yield return current;
+                if (!next)
+                {
+                    routines.Pop();
+                    continue;
+                }
+                if (current is IEnumerator nested && !(current is CustomYieldInstruction))
+                {
+                    routines.Push(nested);
+                }
+                else
+                {
+                    yield return current;
+                }
             }
         }
 
@@ -83,114 +100,127 @@ namespace YLFramework.Core.Tests
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "-ui34-game") >= 0)
             {
                 DontDestroyOnLoad(gameObject);
-                var game = GameAcceptanceFlow.Run(ColorPrefab);
-                try { while (game.MoveNext()) yield return game.Current; }
-                finally { (game as IDisposable)?.Dispose(); }
+                var game = GameAcceptanceFlow.Run(colorPrefab);
+                try
+                {
+                    while (game.MoveNext())
+                    {
+                        yield return game.Current;
+                    }
+                }
+                finally
+                {
+                    (game as IDisposable)?.Dispose();
+                }
                 Result = "GAME_PLAYER_PASS";
                 Debug.Log("UI34 " + Result);
                 Application.Quit(0);
                 yield break;
             }
             Round++;
-            Check(!previousRoot && !previousWindow, "previous Play objects destroyed");
-            Check(PanelManager.onCreateCanvas == null, "previous static canvas hook cleared");
+            Check(!_previousRoot && !_previousWindow, "previous Play objects destroyed");
+            Check(PanelManager.CanvasCreated == null, "previous static canvas hook cleared");
             Check(ModuleManager.GetModule(typeof(AcceptanceModule)) == null, "previous owner not registered");
-            if (previousPending != null)
+            if (_previousPending != null)
             {
-                Check(previousPending.isDone && previousPending.Status == LoadViewStatus.Invalidated, "exit invalidates pending request");
-                Check(previousTip.IsDone && oldTipCalls == expectedTipCalls, "exit completes old Tips exactly once");
-                Check(oldHookCalls == 0 && oldColorCalls == 0, "old closures never invoked by next Play");
-                Check(exitAcquisitionRejected, "pending completion cannot acquire UI during exit");
+                Check(_previousPending.IsDone && _previousPending.Status == LoadViewStatus.Invalidated, "exit invalidates pending request");
+                Check(_previousTip.IsDone && _oldTipCalls == _expectedTipCalls, "exit completes old Tips exactly once");
+                Check(_oldHookCalls == 0 && _oldColorCalls == 0, "old closures never invoked by next Play");
+                Check(_wasExitAcquisitionRejected, "pending completion cannot acquire UI during exit");
             }
-            var startup = ModuleManager.StartUpModule(owner);
+            var startup = ModuleManager.StartUpModule(_owner);
             yield return startup;
-            Check(startup.Exception == null && owner.State == ModuleState.Running, "explicit owner started");
-            rootObject = Instantiate(RootPrefab);
-            rootObject.name = "UI34.OwnedRoot";
-            root = rootObject.GetComponentInChildren<UIRootContext>();
-            tips = rootObject.GetComponentInChildren<UITipsPresenter>();
-            Check(root && tips, "formal template root and Tips bindings");
-            root.Canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            root.Canvas.worldCamera = null;
-            root.GetComponent<AutomaticAdaptationCanvasScaler>().Configure(new Vector2(1280, 720), false, 0.5f);
-            first = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab,
-                ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.4f), _ => changes++), root, Multiple);
-            second = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.blue), root, Multiple);
-            first.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 0);
-            second.GetComponent<RectTransform>().anchoredPosition = new Vector2(250, 0);
-            Check(first != second && first.CurrentColor.r == 1 && second.CurrentColor.b == 1, "independent initial colors");
+            Check(startup.Exception == null && _owner.State == ModuleState.Running, "explicit owner started");
+            _rootObject = Instantiate(rootPrefab);
+            _rootObject.name = "UI34.OwnedRoot";
+            _root = _rootObject.GetComponentInChildren<UIRootContext>();
+            _tips = _rootObject.GetComponentInChildren<UITipsPresenter>();
+            Check(_root && _tips, "formal template root and Tips bindings");
+            _root.Canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _root.Canvas.worldCamera = null;
+            _root.GetComponent<AutomaticAdaptationCanvasScaler>().Configure(new Vector2(1280, 720), false, 0.5f);
+            _first = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab,
+                ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.4f), _ => _changes++), _root, Multiple);
+            _second = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.blue), _root, Multiple);
+            _first.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 0);
+            _second.GetComponent<RectTransform>().anchoredPosition = new Vector2(250, 0);
+            Check(_first != _second && _first.CurrentColor.r == 1 && _second.CurrentColor.b == 1, "independent initial colors");
             var system = EventSystem.current;
             yield return null;
             Check(system && system.currentInputModule is InputSystemUIInputModule, "Both selects real InputSystemUIInputModule");
             var input = (InputSystemUIInputModule)system.currentInputModule;
             // 仅过滤本验收场景自建输入模块的非持久 runtime actions；不触碰原游戏输入。
-            actions = input.actionsAsset;
-            mouse = InputSystem.AddDevice<Mouse>("UI34.Mouse");
-            keyboard = InputSystem.AddDevice<Keyboard>("UI34.Keyboard");
-            previousDevices = actions.devices;
-            actions.devices = new InputDevice[] { mouse, keyboard };
+            _actions = input.actionsAsset;
+            _mouse = InputSystem.AddDevice<Mouse>("UI34.Mouse");
+            _keyboard = InputSystem.AddDevice<Keyboard>("UI34.Keyboard");
+            _previousDevices = _actions.devices;
+            _actions.devices = new InputDevice[] { _mouse, _keyboard };
             yield return null;
             Canvas.ForceUpdateCanvases();
-            var selector = first.GetComponentInChildren<ColorSelector>();
+            var selector = _first.GetComponentInChildren<ColorSelector>();
             var wheel = selector.GetComponent<RectTransform>();
             QueueMouse(Point(wheel, new Vector2(-0.44f, 0.7621024f)), false);
             yield return null;
             QueueMouse(Point(wheel, new Vector2(-0.44f, 0.7621024f)), true);
             yield return null;
-            Check(first.CurrentColor.g > 0.99f && changes == 1, "module-dispatched Overlay hue selection");
-            root.GetComponent<AutomaticAdaptationCanvasScaler>().Configure(new Vector2(1000, 800), false, 0.25f);
+            Check(_first.CurrentColor.g > 0.99f && _changes == 1, "module-dispatched Overlay hue selection");
+            _root.GetComponent<AutomaticAdaptationCanvasScaler>().Configure(new Vector2(1000, 800), false, 0.25f);
             yield return null;
             Canvas.ForceUpdateCanvases();
             QueueMouse(Point(wheel, new Vector2(-0.44f, -0.7621024f)), true);
             yield return null;
-            Check(first.CurrentColor.b > 0.99f && Mathf.Abs(first.CurrentColor.a - 0.4f) < 0.001f && second.CurrentColor == Color.blue,
+            Check(_first.CurrentColor.b > 0.99f && Mathf.Abs(_first.CurrentColor.a - 0.4f) < 0.001f && _second.CurrentColor == Color.blue,
                 "drag after adaptation preserves alpha and other instance");
             QueueMouse(Point(wheel, new Vector2(-0.44f, -0.7621024f)), false);
             yield return null;
-            first.UpdateDisplay(new PanelOverrides { Priority = 100 });
-            var focus = first.GetComponentInChildren<Button>();
-            Check(PanelManager.GetFocusedPanel(root) == first, "focus restoration target is the current navigable window");
+            _first.UpdateDisplay(new PanelOverrides { Priority = 100 });
+            var focus = _first.GetComponentInChildren<Button>();
+            Check(PanelManager.GetFocusedPanel(_root) == _first, "focus restoration target is the current navigable window");
             system.SetSelectedGameObject(focus.gameObject);
-            var modal = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.white), root,
+            var modal = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.white), _root,
                 new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true, Layer = 1 });
             yield return null;
-            Check(first.IsInputBlocked && !focus.IsInteractable() && system.currentSelectedGameObject != focus.gameObject, "modal blocks navigation and focus");
+            Check(_first.IsInputBlocked && !focus.IsInteractable() && system.currentSelectedGameObject != focus.gameObject, "modal blocks navigation and focus");
             Check(UIPointer.CheckPositionOnUI(new Vector2(5, 5)), "formal mask blocks outside content");
             modal.Close();
-            Check(!first.IsInputBlocked && focus.IsInteractable() && system.currentSelectedGameObject == focus.gameObject, "modal restores valid focus");
+            Check(!_first.IsInputBlocked && focus.IsInteractable() && system.currentSelectedGameObject == focus.gameObject, "modal restores valid focus");
             yield return VerifyNativeCaptureGate();
             system.SetSelectedGameObject(focus.gameObject);
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Enter));
+            InputSystem.QueueStateEvent(_keyboard, new KeyboardState(Key.Enter));
             yield return null;
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.QueueStateEvent(_keyboard, new KeyboardState());
             yield return null;
-            Check(first.Module == null, "real keyboard Submit closes focused window");
-            int oldChanges = changes;
-            first = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.red), root, Multiple);
-            Check(first.CurrentColor == Color.red, "new session resets initial color");
-            Check(changes == oldChanges, "initial synchronization does not invoke old callback");
-            first.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 0);
-            var camera = rootObject.GetComponentInChildren<Camera>(true);
+            Check(_first.Module == null, "real keyboard Submit closes focused window");
+            int oldChanges = _changes;
+            _first = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.red), _root, Multiple);
+            Check(_first.CurrentColor == Color.red, "new session resets initial color");
+            Check(_changes == oldChanges, "initial synchronization does not invoke old callback");
+            _first.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 0);
+            var camera = _rootObject.GetComponentInChildren<Camera>(true);
             camera.gameObject.SetActive(true);
-            root.Canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            root.Canvas.worldCamera = camera;
-            root.Canvas.planeDistance = 5;
+            _root.Canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            _root.Canvas.worldCamera = camera;
+            _root.Canvas.planeDistance = 5;
             yield return null;
             Canvas.ForceUpdateCanvases();
-            wheel = first.GetComponentInChildren<ColorSelector>().GetComponent<RectTransform>();
+            wheel = _first.GetComponentInChildren<ColorSelector>().GetComponent<RectTransform>();
             QueueMouse(Point(wheel, new Vector2(-0.44f, 0.7621024f)), false);
             yield return null;
             QueueMouse(Point(wheel, new Vector2(-0.44f, 0.7621024f)), true);
             yield return null;
             QueueMouse(Point(wheel, new Vector2(-0.44f, 0.7621024f)), false);
             yield return null;
-            Check(first.CurrentColor.g > 0.99f && changes == oldChanges, "Camera input on reused session has no old callback");
-            CheckRender(first, second);
-            var tip = tips.Show(owner, "UI34 Tips", duration: 0.05f, fade: false);
+            Check(_first.CurrentColor.g > 0.99f && _changes == oldChanges, "Camera input on reused session has no old callback");
+            CheckRender(_first, _second);
+            var tip = _tips.Show(_owner, "UI34 Tips", duration: 0.05f, fade: false);
             var deadline = Time.realtimeSinceStartup + 3;
-            while (!tip.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
-            Check(tip.IsDone && tip.Result == UITipResult.Completed && tips.ActiveCount == 0, "formal Tips completes and returns owned item");
-            var close = first.GetComponentInChildren<Button>();
+            while (!tip.IsDone && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Check(tip.IsDone && tip.Result == UITipResult.Completed && _tips.ActiveCount == 0, "formal Tips completes and returns owned item");
+            var close = _first.GetComponentInChildren<Button>();
             var closePoint = RectTransformUtility.WorldToScreenPoint(EventCamera, close.transform.position);
             QueueMouse(closePoint, false);
             yield return null;
@@ -198,32 +228,32 @@ namespace YLFramework.Core.Tests
             yield return null;
             QueueMouse(closePoint, false);
             yield return null;
-            Check(first.Module == null, "module-dispatched close button");
-            var pending = owner.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab, root: root, overrides: Multiple);
+            Check(_first.Module == null, "module-dispatched close button");
+            var pending = _owner.LoadPanelAsync<ColorSelectorWindow>(colorPrefab, root: _root, overrides: Multiple);
             pending.Abort();
             Check(pending.Status == LoadViewStatus.Canceled, "pending Abort stable terminal state");
-            pending = owner.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab, root: root, overrides: Multiple);
-            owner.Close();
-            Check(pending.Status == LoadViewStatus.Invalidated && second.Module == null, "owner exit invalidates pending and both window sessions");
-            var restart = ModuleManager.StartUpModule(owner);
+            pending = _owner.LoadPanelAsync<ColorSelectorWindow>(colorPrefab, root: _root, overrides: Multiple);
+            _owner.Close();
+            Check(pending.Status == LoadViewStatus.Invalidated && _second.Module == null, "owner exit invalidates pending and both window sessions");
+            var restart = ModuleManager.StartUpModule(_owner);
             yield return restart;
-            Check(owner.State == ModuleState.Running, "owner restarts without stale key");
-            first = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.magenta), root, Multiple);
-            Check(first.CurrentColor == Color.magenta, "window safely rebuilt after owner restart");
+            Check(_owner.State == ModuleState.Running, "owner restarts without stale key");
+            _first = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.magenta), _root, Multiple);
+            Check(_first.CurrentColor == Color.magenta, "window safely rebuilt after owner restart");
             ReleaseDevices();
             Result = "READY round=" + Round;
             Debug.Log("UI34 " + Result + " platform=" + Application.platform + " input=InputSystemUIInputModule");
             if (!Application.isEditor)
             {
-                owner.Close();
-                Destroy(rootObject);
+                _owner.Close();
+                Destroy(_rootObject);
                 yield return null;
                 yield return null;
-                Check(!rootObject && !EventSystem.current, "last owned root releases input host in Player");
-                var lastStartup = ModuleManager.StartUpModule(owner);
+                Check(!_rootObject && !EventSystem.current, "last owned root releases input host in Player");
+                var lastStartup = ModuleManager.StartUpModule(_owner);
                 yield return lastStartup;
-                var quitting = owner.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab, overrides: Multiple);
-                Check(!quitting.isDone, "Player quit probe is genuinely pending");
+                var quitting = _owner.LoadPanelAsync<ColorSelectorWindow>(colorPrefab, overrides: Multiple);
+                Check(!quitting.IsDone, "Player quit probe is genuinely pending");
                 quitting.AddCompleteEvent(request =>
                 {
                     Check(request.Status == LoadViewStatus.Invalidated, "actual Player quit invalidates pending");
@@ -240,44 +270,50 @@ namespace YLFramework.Core.Tests
         /// <summary>在 Editor 已暂停的真实 Play 内调用，留下真正在途请求供退出路径处理。</summary>
         public void PrepareExit()
         {
-            Check(Application.isPlaying && first.IsLoaded, "exit probe requires live session");
-            first.Close();
-            exitAcquisitionRejected = false;
-            previousPending = owner.LoadPanelAsync<ColorSelectorWindow>(ColorPrefab,
-                ColorSelectorWindow.Arguments(Color.red, _ => oldColorCalls++), root, Multiple);
-            Check(!previousPending.isDone, "exit probe is genuinely pending");
-            previousPending.AddCompleteEvent(_ =>
+            Check(Application.isPlaying && _first.IsLoaded, "exit probe requires live session");
+            _first.Close();
+            _wasExitAcquisitionRejected = false;
+            _previousPending = _owner.LoadPanelAsync<ColorSelectorWindow>(colorPrefab,
+                ColorSelectorWindow.Arguments(Color.red, _ => _oldColorCalls++), _root, Multiple);
+            Check(!_previousPending.IsDone, "exit probe is genuinely pending");
+            _previousPending.AddCompleteEvent(_ =>
             {
-                try { owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, root: root, overrides: Multiple); }
-                catch (InvalidOperationException error) { exitAcquisitionRejected = error.Message == "Views cannot be acquired outside an active execution session."; }
+                try
+                {
+                    _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, root: _root, overrides: Multiple);
+                }
+                catch (InvalidOperationException error)
+                {
+                    _wasExitAcquisitionRejected = error.Message == "Views cannot be acquired outside an active execution session.";
+                }
             });
-            previousTip = tips.Show(owner, "Exit-owned tip", duration: 60, completed: _ => oldTipCalls++);
-            expectedTipCalls = oldTipCalls + 1;
-            previousRoot = rootObject;
-            previousWindow = second;
-            PanelManager.onCreateCanvas = _ => oldHookCalls++;
+            _previousTip = _tips.Show(_owner, "Exit-owned tip", duration: 60, completed: _ => _oldTipCalls++);
+            _expectedTipCalls = _oldTipCalls + 1;
+            _previousRoot = _rootObject;
+            _previousWindow = _second;
+            PanelManager.CanvasCreated = _ => _oldHookCalls++;
             Debug.Log("UI34 EXIT_ARMED round=" + Round);
         }
 
         public static string VerifyExit()
         {
-            Check(previousPending.isDone && previousPending.Status == LoadViewStatus.Invalidated, "real Play exit terminates pending");
-            Check(previousTip.IsDone && oldTipCalls == expectedTipCalls, "real Play exit terminates Tips exactly once");
-            Check(!previousRoot && !previousWindow && PanelManager.onCreateCanvas == null, "real Play exit destroys own root and clears hook");
-            Check(exitAcquisitionRejected, "real Play exit rejects callback acquisition");
+            Check(_previousPending.IsDone && _previousPending.Status == LoadViewStatus.Invalidated, "real Play exit terminates pending");
+            Check(_previousTip.IsDone && _oldTipCalls == _expectedTipCalls, "real Play exit terminates Tips exactly once");
+            Check(!_previousRoot && !_previousWindow && PanelManager.CanvasCreated == null, "real Play exit destroys own root and clears hook");
+            Check(_wasExitAcquisitionRejected, "real Play exit rejects callback acquisition");
             return "EXIT_PASS round=" + Round;
         }
 
         private Vector2 Point(RectTransform wheel, Vector2 normalized)
             => RectTransformUtility.WorldToScreenPoint(EventCamera, wheel.TransformPoint(wheel.rect.center + normalized * Mathf.Min(wheel.rect.width, wheel.rect.height) * 0.5f));
-        private Camera EventCamera => root.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : root.Canvas.worldCamera;
+        private Camera EventCamera => _root.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _root.Canvas.worldCamera;
         private static PanelOverrides Multiple => new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple };
 
         // 同一个入口在 Editor 和 Windows64 IL2CPP 中运行；私有指针布局不匹配必须明确失败。
         private IEnumerator VerifyNativeCaptureGate()
         {
             var container = new GameObject("UIAcceptance.NativeLayout", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-            container.transform.SetParent(first.transform, false);
+            container.transform.SetParent(_first.transform, false);
             ((RectTransform)container.transform).sizeDelta = new Vector2(180, 90);
             var layout = container.GetComponent<HorizontalLayoutGroup>();
             layout.childControlWidth = layout.childControlHeight = false;
@@ -292,16 +328,19 @@ namespace YLFramework.Core.Tests
             var business = control.GetComponent<CanvasGroup>();
             business.alpha = .65f;
             var probe = control.GetComponent<UIPanelAcceptancePointerProbe>();
-            yield return null; yield return null;
+            yield return null;
+            yield return null;
             Canvas.ForceUpdateCanvases();
             Check(rect.sizeDelta == new Vector2(120, 70) && control.GetComponents<CanvasGroup>().Length == 1,
                 "native layout and readonly driven getter preserve the business control");
             var point = RectTransformUtility.WorldToScreenPoint(EventCamera, rect.position);
             for (int button = 0; button < 3; button++)
             {
-                QueueNativeButton(point, (MouseButton)button, false); yield return null;
-                QueueNativeButton(point, (MouseButton)button, true); yield return null;
-                var modal = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.white), root,
+                QueueNativeButton(point, (MouseButton)button, false);
+                yield return null;
+                QueueNativeButton(point, (MouseButton)button, true);
+                yield return null;
+                var modal = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.white), _root,
                     new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true, Layer = 1 });
                 yield return null;
                 Check(control.GetComponent<Button>().interactable && control.GetComponent<Button>().enabled, "gate preserves business control fields");
@@ -309,10 +348,13 @@ namespace YLFramework.Core.Tests
                     "gate preserves the original business CanvasGroup");
                 Check(!control.GetComponent<Button>().IsInteractable(), "native selectable is blocked without disabling it");
                 modal.Close();
-                QueueNativeButton(point, (MouseButton)button, false); yield return null;
+                QueueNativeButton(point, (MouseButton)button, false);
+                yield return null;
                 Check(probe.Clicks[button] == 0, "old physical button cannot click after modal release: " + button);
-                QueueNativeButton(point, (MouseButton)button, true); yield return null;
-                QueueNativeButton(point, (MouseButton)button, false); yield return null;
+                QueueNativeButton(point, (MouseButton)button, true);
+                yield return null;
+                QueueNativeButton(point, (MouseButton)button, false);
+                yield return null;
                 Check(probe.Clicks[button] == 1, "a fresh button gesture works: " + button);
             }
             Destroy(container);
@@ -320,7 +362,7 @@ namespace YLFramework.Core.Tests
             foreach (var movement in new[] { ScrollRect.MovementType.Elastic, ScrollRect.MovementType.Clamped })
             {
                 var viewport = new GameObject("UIAcceptance.NativeScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect), typeof(UIPanelAcceptanceDragProbe));
-                viewport.transform.SetParent(first.transform, false);
+                viewport.transform.SetParent(_first.transform, false);
                 ((RectTransform)viewport.transform).sizeDelta = new Vector2(220, 220);
                 var content = new GameObject("Content", typeof(RectTransform));
                 content.transform.SetParent(viewport.transform, false);
@@ -328,45 +370,63 @@ namespace YLFramework.Core.Tests
                 contentRect.anchorMin = contentRect.anchorMax = contentRect.pivot = Vector2.up;
                 contentRect.sizeDelta = new Vector2(800, 800);
                 var scroll = viewport.GetComponent<ScrollRect>();
-                scroll.content = contentRect; scroll.viewport = (RectTransform)viewport.transform;
-                scroll.movementType = movement; scroll.inertia = true;
-                yield return null; yield return null;
+                scroll.content = contentRect;
+                scroll.viewport = (RectTransform)viewport.transform;
+                scroll.movementType = movement;
+                scroll.inertia = true;
+                yield return null;
+                yield return null;
                 Canvas.ForceUpdateCanvases();
                 point = RectTransformUtility.WorldToScreenPoint(EventCamera, viewport.transform.position);
-                QueueNativeButton(point, MouseButton.Left, false); yield return null;
-                QueueNativeButton(point, MouseButton.Left, true); yield return null;
-                QueueNativeButton(point + new Vector2(-30, 30), MouseButton.Left, true); yield return null;
-                QueueNativeButton(point + new Vector2(-70, 70), MouseButton.Left, true); yield return null;
+                QueueNativeButton(point, MouseButton.Left, false);
+                yield return null;
+                QueueNativeButton(point, MouseButton.Left, true);
+                yield return null;
+                QueueNativeButton(point + new Vector2(-30, 30), MouseButton.Left, true);
+                yield return null;
+                QueueNativeButton(point + new Vector2(-70, 70), MouseButton.Left, true);
+                yield return null;
                 yield return null; // 由真实 LateUpdate 采样速度，不直接赋值或调用内部更新。
                 Check(contentRect.anchoredPosition.sqrMagnitude > 0 && scroll.velocity.sqrMagnitude > 0, "native drag and inertia are exercised");
                 if (movement == ScrollRect.MovementType.Elastic)
-                { QueueNativeButton(point + new Vector2(120, -120), MouseButton.Left, true); yield return null; }
-                var modal = owner.LoadPanel<ColorSelectorWindow>(ColorPrefab, ColorSelectorWindow.Arguments(Color.white), root,
+                {
+                    QueueNativeButton(point + new Vector2(120, -120), MouseButton.Left, true);
+                    yield return null;
+                }
+                var modal = _owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.white), _root,
                     new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true, Layer = 1 });
                 var stopped = contentRect.anchoredPosition;
                 var dragProbe = viewport.GetComponent<UIPanelAcceptanceDragProbe>();
-                int stoppedDrags = dragProbe.Drags;
+                int stoppedDrags = dragProbe.drags;
                 Check(scroll.velocity == Vector2.zero && scroll.enabled && scroll.inertia, "cancel stops inertia without disabling business state");
-                yield return null; yield return null;
-                Check(dragProbe.Drags == stoppedDrags, "blocked scroll cannot receive the old drag for " + movement);
-                if (movement == ScrollRect.MovementType.Clamped) Check(contentRect.anchoredPosition == stopped, "clamped content has no remaining inertia");
+                yield return null;
+                yield return null;
+                Check(dragProbe.drags == stoppedDrags, "blocked scroll cannot receive the old drag for " + movement);
+                if (movement == ScrollRect.MovementType.Clamped)
+                {
+                    Check(contentRect.anchoredPosition == stopped, "clamped content has no remaining inertia");
+                }
+
                 modal.Close();
-                QueueNativeButton(point, MouseButton.Left, true); yield return null;
-                Check(dragProbe.Drags == stoppedDrags, "the old held gesture cannot resume; elastic return is allowed");
-                QueueNativeButton(point, MouseButton.Left, false); yield return null;
-                Destroy(viewport); yield return null;
+                QueueNativeButton(point, MouseButton.Left, true);
+                yield return null;
+                Check(dragProbe.drags == stoppedDrags, "the old held gesture cannot resume; elastic return is allowed");
+                QueueNativeButton(point, MouseButton.Left, false);
+                yield return null;
+                Destroy(viewport);
+                yield return null;
             }
             Debug.Log("UI_PANEL_NATIVE_CAPTURE_GATE_REACHED: runtime checks completed; no independent final acceptance claim");
         }
         private void QueueNativeButton(Vector2 point, MouseButton button, bool pressed)
-            => InputSystem.QueueStateEvent(mouse, new MouseState { position = point }.WithButton(button, pressed));
+            => InputSystem.QueueStateEvent(_mouse, new MouseState { position = point }.WithButton(button, pressed));
 
         private void QueueMouse(Vector2 position, bool pressed)
-            => InputSystem.QueueStateEvent(mouse, new MouseState { position = position, buttons = (ushort)(pressed ? 1 : 0) });
+            => InputSystem.QueueStateEvent(_mouse, new MouseState { position = position, buttons = (ushort)(pressed ? 1 : 0) });
 
         private void CheckRender(ColorSelectorWindow green, ColorSelectorWindow blue)
         {
-            var camera = root.Canvas.worldCamera;
+            var camera = _root.Canvas.worldCamera;
             var target = new RenderTexture(Screen.width, Screen.height, 24);
             var texture = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
             var previous = camera.targetTexture;
@@ -399,24 +459,42 @@ namespace YLFramework.Core.Tests
 
         private void ReleaseDevices()
         {
-            if (actions) actions.devices = previousDevices;
-            actions = null;
-            if (mouse != null) InputSystem.RemoveDevice(mouse);
-            if (keyboard != null) InputSystem.RemoveDevice(keyboard);
-            mouse = null;
-            keyboard = null;
+            if (_actions)
+            {
+                _actions.devices = _previousDevices;
+            }
+
+            _actions = null;
+            if (_mouse != null)
+            {
+                InputSystem.RemoveDevice(_mouse);
+            }
+
+            if (_keyboard != null)
+            {
+                InputSystem.RemoveDevice(_keyboard);
+            }
+
+            _mouse = null;
+            _keyboard = null;
         }
 
         private void OnDestroy() => ReleaseDevices();
         private static void Check(bool condition, string contract)
         {
-            if (!condition) throw new InvalidOperationException("UI34 contract: " + contract);
+            if (!condition)
+            {
+                throw new InvalidOperationException("UI34 contract: " + contract);
+            }
+
             Debug.Log("UI34 CHECK " + contract);
         }
 
         private sealed class AcceptanceModule : Module
         {
-            public override void OnStart() { }
+            public override void OnStart()
+            {
+            }
         }
     }
 }

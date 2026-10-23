@@ -3,17 +3,19 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
-using YLFramework.Events;
-using YLFramework.Binding;
-using YLFramework.Core.Pool;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Binding;
+using YLFramework.Core.Pool;
+using YLFramework.Events;
 
 namespace YLFramework.Tests
 {
     public class EventsContractTests
     {
-        private sealed class PooledValue { }
+        private sealed class PooledValue
+        {
+        }
 
         [Test]
         public void PooledEventClearsListenersReusesIdentityAndRejectsOrdinaryInstance()
@@ -35,10 +37,10 @@ namespace YLFramework.Tests
                 var next = EasyEvent<PooledValue>.Allocate();
                 Assert.That(next, Is.SameAs(e));
                 var freshToken = next.Register(callback);
-                oldToken.UnRegister();
+                oldToken.Unregister();
                 next.Trigger(new PooledValue());
                 Assert.That(calls, Is.EqualTo(1), "Old token must not remove the same callback in a new lease.");
-                freshToken.UnRegister();
+                freshToken.Unregister();
                 var ordinary = new EasyEvent<PooledValue>();
                 ordinary.Register(_ => calls++);
                 Assert.Throws<InvalidOperationException>(ordinary.RecycleToCache);
@@ -46,7 +48,10 @@ namespace YLFramework.Tests
                 Assert.That(ordinary.IsRecycled, Is.False);
                 next.RecycleToCache();
             }
-            finally { pool.Dispose(); }
+            finally
+            {
+                pool.Dispose();
+            }
         }
 
         [Test]
@@ -62,12 +67,12 @@ namespace YLFramework.Tests
             var first = e.Register(a);
             e.Register(() => trace.Add("B"));
             e.Register(a);
-            first.UnRegister();
+            first.Unregister();
             e.Trigger();
             CollectionAssert.AreEqual(new[] { "B", "A" }, trace);
-            e.UnRegisterAll();
+            e.UnregisterAll();
             e.Register(a);
-            first.UnRegister();
+            first.Unregister();
             e.Trigger();
             CollectionAssert.AreEqual(new[] { "B", "A", "A" }, trace);
         }
@@ -79,7 +84,11 @@ namespace YLFramework.Tests
             var nested = false;
             e.Register(value =>
             {
-                if (nested) return;
+                if (nested)
+                {
+                    return;
+                }
+
                 nested = true;
                 e.Trigger(value + 1);
             });
@@ -94,7 +103,9 @@ namespace YLFramework.Tests
             Assert.That(e.ListenerCount, Is.EqualTo(1));
         }
 
-        private sealed class PooledLifecycleValue { }
+        private sealed class PooledLifecycleValue
+        {
+        }
 
         [Test]
         public void RecycleAndReallocateInsideNotificationStopsOldSnapshotOnly()
@@ -115,14 +126,21 @@ namespace YLFramework.Tests
                 });
                 var oldToken = e.Register(_ => trace.Add("old"));
                 e.Trigger(new PooledLifecycleValue());
-                oldToken.UnRegister();
+                oldToken.Unregister();
                 next.Trigger(new PooledLifecycleValue());
                 CollectionAssert.AreEqual(new[] { "end", "new" }, trace);
             }
             finally
             {
-                if (next != null && !next.IsRecycled) next.RecycleToCache();
-                else if (!e.IsRecycled) e.RecycleToCache();
+                if (next != null && !next.IsRecycled)
+                {
+                    next.RecycleToCache();
+                }
+                else if (!e.IsRecycled)
+                {
+                    e.RecycleToCache();
+                }
+
                 pool.Dispose();
             }
         }
@@ -132,12 +150,12 @@ namespace YLFramework.Tests
         {
             var e = new EasyEvent<int>();
             var trace = new List<int>();
-            IUnRegister first = null, second = null;
+            IUnregister first = null, second = null;
             first = e.Register(_ =>
             {
                 trace.Add(1);
-                first.UnRegister();
-                second.UnRegister();
+                first.Unregister();
+                second.Unregister();
                 e.Register(value => trace.Add(value));
             });
             second = e.Register(_ => trace.Add(2));
@@ -155,11 +173,11 @@ namespace YLFramework.Tests
             var first = e.Register(listener);
             e.Register(listener);
             e.Trigger();
-            first.UnRegister();
-            first.UnRegister();
+            first.Unregister();
+            first.Unregister();
             e.Trigger();
             Assert.That(calls, Is.EqualTo(3));
-            e.UnRegisterAll();
+            e.UnregisterAll();
             e.Register(() => throw new InvalidOperationException());
             e.Register(listener);
             Assert.Throws<InvalidOperationException>(e.Trigger);
@@ -171,7 +189,14 @@ namespace YLFramework.Tests
         {
             var e = new EasyEvent();
             var calls = 0;
-            e.RegisterWithACall(() => { calls++; if (calls == 1) e.Trigger(); });
+            e.RegisterWithACall(() =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    e.Trigger();
+                }
+            });
             Assert.That(calls, Is.EqualTo(1));
             e.Trigger();
             Assert.That(calls, Is.EqualTo(2));
@@ -181,14 +206,14 @@ namespace YLFramework.Tests
         public void SingleUseTokenIsConsumedBeforeReentryAndFailure()
         {
             var calls = 0;
-            SingleUseUnRegister token = null;
-            token = new SingleUseUnRegister(() =>
+            SingleUseUnregister token = null;
+            token = new SingleUseUnregister(() =>
             {
                 calls++;
                 token.Dispose();
                 throw new InvalidOperationException();
             });
-            Assert.Throws<InvalidOperationException>(token.UnRegister);
+            Assert.Throws<InvalidOperationException>(token.Unregister);
             Assert.DoesNotThrow(token.Dispose);
             Assert.That(calls, Is.EqualTo(1));
         }
@@ -197,10 +222,16 @@ namespace YLFramework.Tests
         public void ExistingTokenRetainsCallbackUntilSuccess()
         {
             var calls = 0;
-            var token = new CustomUnRegister(() => { if (++calls == 1) throw new InvalidOperationException(); });
-            Assert.Throws<InvalidOperationException>(token.UnRegister);
-            token.UnRegister();
-            token.UnRegister();
+            var token = new CustomUnregister(() =>
+            {
+                if (++calls == 1)
+                {
+                    throw new InvalidOperationException();
+                }
+            });
+            Assert.Throws<InvalidOperationException>(token.Unregister);
+            token.Unregister();
+            token.Unregister();
             Assert.That(calls, Is.EqualTo(2));
         }
 
@@ -208,20 +239,20 @@ namespace YLFramework.Tests
         public void StrictCallbackCopiesKeepIndependentStateAndRepeatFailure()
         {
             var calls = 0;
-            var token = new CallbackUnRegister(() => calls++, CallbackReleaseMode.StrictAfterSuccess);
+            var token = new CallbackUnregister(() => calls++, CallbackReleaseMode.StrictAfterSuccess);
             var copy = token;
-            token.UnRegister();
-            Assert.Throws<NullReferenceException>(() => token.UnRegister());
-            copy.UnRegister();
+            token.Unregister();
+            Assert.Throws<NullReferenceException>(() => token.Unregister());
+            copy.Unregister();
             Assert.That(calls, Is.EqualTo(2));
         }
 
         [Test]
         public void DetachSnapshotAllowsReentryAndPreservesNewSubscriptions()
         {
-            var items = new SubscriptionSet<IUnRegister>();
-            var later = new SingleUseUnRegister(() => { });
-            var token = new SingleUseUnRegister(() =>
+            var items = new SubscriptionSet<IUnregister>();
+            var later = new SingleUseUnregister(() => { });
+            var token = new SingleUseUnregister(() =>
             {
                 Assert.That(items.Count, Is.Zero);
                 Assert.That(items.DetachAll(), Is.Empty);
@@ -230,7 +261,11 @@ namespace YLFramework.Tests
             items.Add(token);
             items.Add(token);
             Assert.That(items.Count, Is.EqualTo(1));
-            foreach (var item in items.DetachAll()) item.UnRegister();
+            foreach (var item in items.DetachAll())
+            {
+                item.Unregister();
+            }
+
             Assert.That(items.Count, Is.EqualTo(1));
             items.Remove(later);
             Assert.That(items.Count, Is.Zero);
@@ -240,13 +275,13 @@ namespace YLFramework.Tests
         public void LegacyReleaseRetainsCollectionOnFailure()
         {
             var laterCalls = 0;
-            var items = new List<IUnRegister>
+            var items = new List<IUnregister>
             {
-                new CustomUnRegister(() => throw new InvalidOperationException()),
-                new CustomUnRegister(() => laterCalls++)
+                new CustomUnregister(() => throw new InvalidOperationException()),
+                new CustomUnregister(() => laterCalls++)
             };
             Assert.Throws<InvalidOperationException>(() =>
-                SubscriptionCleanup.ReleaseAfterSuccess(items, item => item.UnRegister()));
+                SubscriptionCleanup.ReleaseAfterSuccess(items, item => item.Unregister()));
             Assert.That(items.Count, Is.EqualTo(2));
             Assert.That(laterCalls, Is.Zero);
         }
@@ -260,7 +295,7 @@ namespace YLFramework.Tests
             var token = old.Register(_ => calls++);
             events.ClearListeners();
             old.Trigger(1);
-            token.UnRegister();
+            token.Unregister();
             Assert.That(calls, Is.Zero);
             Assert.That(events.GetEvent<EasyEvent<int>>(), Is.Null);
             var next = events.GetOrAddEvent<EasyEvent<int>>();
@@ -273,7 +308,7 @@ namespace YLFramework.Tests
         private sealed class ThrowingCleanupEvent : EasyEvent, IEasyEvent
         {
             internal Action Cleanup;
-            void IEasyEvent.UnRegisterAll() => Cleanup();
+            void IEasyEvent.UnregisterAll() => Cleanup();
         }
 
         [Test]
@@ -296,7 +331,9 @@ namespace YLFramework.Tests
             events.ClearListeners();
         }
 
-        private sealed class GlobalResetEvent : EasyEvent { }
+        private sealed class GlobalResetEvent : EasyEvent
+        {
+        }
 
         [Test]
         public void GlobalContainerResetEndsOldOwnerWithoutRecyclingTheEvent()
@@ -306,17 +343,21 @@ namespace YLFramework.Tests
             var reset = typeof(EasyEvents).GetMethod("ClearGlobalEvents", BindingFlags.NonPublic | BindingFlags.Static);
             var trace = new List<string>();
             Action callback = () => trace.Add("fresh");
-            old.Register(() => { trace.Add("reset"); reset.Invoke(null, null); });
+            old.Register(() =>
+            {
+                trace.Add("reset");
+                reset.Invoke(null, null);
+            });
             var oldToken = old.Register(callback);
             old.Trigger();
             Assert.That(EasyEvents.Get<GlobalResetEvent>(), Is.Null);
             Assert.That(old.IsRecycled, Is.False);
             Assert.That(old.HasListener, Is.False);
             old.Register(callback);
-            oldToken.UnRegister();
+            oldToken.Unregister();
             old.Trigger();
             CollectionAssert.AreEqual(new[] { "reset", "fresh" }, trace);
-            old.UnRegisterAll();
+            old.UnregisterAll();
         }
 
         [Test]
@@ -327,7 +368,11 @@ namespace YLFramework.Tests
             var custom = EasyEvents.Get<ThrowingCleanupEvent>();
             var ordinary = EasyEvents.Get<GlobalResetEvent>();
             var cleanupCalls = 0;
-            custom.Cleanup = () => { cleanupCalls++; throw new InvalidOperationException("custom-global-cleanup"); };
+            custom.Cleanup = () =>
+            {
+                cleanupCalls++;
+                throw new InvalidOperationException("custom-global-cleanup");
+            };
             custom.Register(() => { });
             ordinary.Register(() => { });
             LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: custom-global-cleanup"));
@@ -347,10 +392,10 @@ namespace YLFramework.Tests
             var calls = 0;
             var first = combined.Register(() => calls++);
             var second = combined.Register(() => calls++);
-            first.UnRegister();
+            first.Unregister();
             source.Trigger();
             Assert.That(calls, Is.EqualTo(1));
-            second.UnRegister();
+            second.Unregister();
             Assert.That(source.HasListener, Is.False);
             combined.Dispose();
         }
@@ -366,8 +411,8 @@ namespace YLFramework.Tests
             value.Trigger(7);
             CollectionAssert.AreEqual(new[] { 7 }, observed);
             Assert.That(notifications, Is.EqualTo(1));
-            typed.UnRegister();
-            untyped.UnRegister();
+            typed.Unregister();
+            untyped.Unregister();
             value.Trigger(9);
             Assert.That(observed.Count, Is.EqualTo(1));
             Assert.That(notifications, Is.EqualTo(1));
@@ -396,9 +441,9 @@ namespace YLFramework.Tests
             Assert.That(three.HasListener, Is.False);
             Assert.DoesNotThrow(() => three.Trigger(1, "a", true));
 
-            first.UnRegister();
-            second.UnRegister();
-            third.UnRegister();
+            first.Unregister();
+            second.Unregister();
+            third.Unregister();
 
             var calls = 0;
             three.Register((_, __, ___) => calls++);
@@ -413,13 +458,13 @@ namespace YLFramework.Tests
             var token = ((IEasyEvent)property).Register(null);
             Assert.That(token, Is.Not.Null);
             Assert.DoesNotThrow(() => property.Value = 1);
-            token.UnRegister();
+            token.Unregister();
 
             var notifications = 0;
             property.Register(value => notifications++);
             property.Value = 2;
             Assert.That(notifications, Is.EqualTo(1));
-            property.UnRegisterAll();
+            property.UnregisterAll();
         }
 
         [Test]
@@ -428,20 +473,24 @@ namespace YLFramework.Tests
             var source = new EasyEvent();
             var combined = source.Or(new EasyEvent());
             var trace = new List<int>();
-            IUnRegister first = null;
-            first = combined.Register(() => { trace.Add(1); first.UnRegister(); });
+            IUnregister first = null;
+            first = combined.Register(() =>
+            {
+                trace.Add(1);
+                first.Unregister();
+            });
             var second = combined.Register(() => trace.Add(2));
             source.Trigger();
             source.Trigger();
             CollectionAssert.AreEqual(new[] { 1, 2, 2 }, trace);
-            second.UnRegister();
+            second.Unregister();
             Assert.That(source.HasListener, Is.False);
             Assert.DoesNotThrow(() => combined.Dispose());
         }
 
-        private sealed class SubscriptionList : IUnRegisterList
+        private sealed class SubscriptionList : IUnregisterList
         {
-            public List<IUnRegister> UnRegisterList { get; } = new List<IUnRegister>();
+            public List<IUnregister> UnregisterList { get; } = new List<IUnregister>();
         }
 
         [Test]
@@ -451,15 +500,15 @@ namespace YLFramework.Tests
             var second = new EasyEvent();
             var calls = 0;
             var list = new SubscriptionList();
-            first.Register(() => calls++).AddToUnRegisterList(list);
-            second.Register(() => calls++).AddToUnRegisterList(list);
-            Assert.That(list.UnRegisterList.Count, Is.EqualTo(2));
+            first.Register(() => calls++).AddToUnregisterList(list);
+            second.Register(() => calls++).AddToUnregisterList(list);
+            Assert.That(list.UnregisterList.Count, Is.EqualTo(2));
             first.Trigger();
             second.Trigger();
             Assert.That(calls, Is.EqualTo(2));
-            list.UnRegisterAll();
-            Assert.That(list.UnRegisterList, Is.Empty);
-            list.UnRegisterAll();
+            list.UnregisterAll();
+            Assert.That(list.UnregisterList, Is.Empty);
+            list.UnregisterAll();
             first.Trigger();
             second.Trigger();
             Assert.That(calls, Is.EqualTo(2));

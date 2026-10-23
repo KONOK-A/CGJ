@@ -10,11 +10,23 @@ namespace YLFramework.MissionSystem
         internal static string GeneratedDirectory(MissionsConfig config) => GeneratedRoot + "/" + AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(config));
         internal static Type GetDataType(this MissionsConfig config)
         {
-            if (string.IsNullOrEmpty(config.type_script_guid)) return typeof(MissionConfigData);
-            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(config.type_script_guid));
+            if (string.IsNullOrEmpty(config.typeScriptGuid))
+            {
+                return typeof(MissionConfigData);
+            }
+
+            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(config.typeScriptGuid));
             var type = script ? script.GetClass() : null;
-            if (type == null) throw new InvalidOperationException($"任务数据类型绑定失效: {config.name}, GUID={config.type_script_guid}");
-            if (!typeof(MissionConfigData).IsAssignableFrom(type) || type.IsAbstract) throw new InvalidOperationException($"任务数据类型无效: {config.name}, {type.FullName}");
+            if (type == null)
+            {
+                throw new InvalidOperationException($"任务数据类型绑定失效: {config.name}, GUID={config.typeScriptGuid}");
+            }
+
+            if (!typeof(MissionConfigData).IsAssignableFrom(type) || type.IsAbstract)
+            {
+                throw new InvalidOperationException($"任务数据类型无效: {config.name}, {type.FullName}");
+            }
+
             return type;
         }
         internal static void Rename(this MissionConfigData data)

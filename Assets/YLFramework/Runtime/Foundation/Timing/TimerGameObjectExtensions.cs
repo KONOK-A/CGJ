@@ -22,8 +22,15 @@ namespace YLFramework.Timing
             TimerGameObjectLifetime lifetime = TimerGameObjectLifetime.CancelOnDisable)
         {
             if (lifetime != TimerGameObjectLifetime.CancelOnDisable && lifetime != TimerGameObjectLifetime.CancelOnDestroy)
+            {
                 throw new ArgumentOutOfRangeException(nameof(lifetime));
-            if (!handle.IsActive) return false;
+            }
+
+            if (!handle.IsActive)
+            {
+                return false;
+            }
+
             var run = handle.Run;
             run.Binding?.Detach();
             if (!owner || (lifetime == TimerGameObjectLifetime.CancelOnDisable && !owner.activeInHierarchy))
@@ -32,7 +39,11 @@ namespace YLFramework.Timing
                 return false;
             }
             var listener = owner.GetComponent<TimerLifetimeListener>();
-            if (!listener) listener = owner.AddComponent<TimerLifetimeListener>();
+            if (!listener)
+            {
+                listener = owner.AddComponent<TimerLifetimeListener>();
+            }
+
             var binding = new TimerGameObjectBinding(handle, owner, lifetime, listener);
             run.Binding = binding;
             run.Owner.AddBinding(listener);

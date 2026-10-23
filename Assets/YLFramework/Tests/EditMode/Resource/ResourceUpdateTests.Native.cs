@@ -34,7 +34,11 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static void Busy(ResourceRequest<bool> request)
         {
-            using (request) Assert.That(request.Error?.Kind, Is.EqualTo(ResourceError.Busy), request.Error?.ToString());
+            using (request)
+            {
+                Assert.That(request.Error?.Kind, Is.EqualTo(ResourceError.Busy), request.Error?.ToString());
+            }
+
             Assert.That(ResourceSystem.Current.IsAvailable, Is.True);
             using var old = ResourceSystem.Current.Acquire<TextAsset>(Address());
             Assert.That(old.Asset.text, Is.EqualTo("first release content"));
@@ -43,14 +47,22 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator Wait<T>(ResourceRequest<T> request)
         {
             var deadline = Time.realtimeSinceStartup + 10;
-            while (!request.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+            while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(request.IsDone, Is.True, "A native operation did not settle within the fixture deadline.");
         }
 
         private static IEnumerator Drain(ResourceSystem system)
         {
             var deadline = Time.realtimeSinceStartup + 10;
-            while (system.GetDiagnosticsSnapshot().BundleRecordCount != 0 && Time.realtimeSinceStartup < deadline) yield return null;
+            while (system.GetDiagnosticsSnapshot().BundleRecordCount != 0 && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
         }
 
@@ -93,11 +105,18 @@ namespace YLFramework.Tests.ResourceBuild
 
             var provider = system.BindCoreResourceProvider();
             using (var prefab = provider.AcquirePrefab(Snapshot().Document.ProjectId, "A.prefab"))
+            {
                 Busy(system.ActivatePreparedUpdateAsync(update));
+            }
+
             yield return Drain(system);
             Assert.That(Take(system.ActivatePreparedUpdateAsync(update)), Is.True);
             Assert.That(system.GetActiveCatalogDigest(Snapshot().Document.ProjectId), Is.EqualTo(Snapshot("a", 2).Document.CatalogDigest));
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             var active = File.ReadAllBytes(ProjectPath(store));
             store.Checkpoint = _ => Assert.Fail("already-active cannot perform another persistent transaction.");
             Assert.That(Take(system.ActivatePreparedUpdateAsync(update)), Is.True);
@@ -110,7 +129,11 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
             }
             Assert.That(Take(system.RollbackAsync()), Is.True);
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
         }
 
@@ -131,7 +154,11 @@ namespace YLFramework.Tests.ResourceBuild
             var blocked = new System.Collections.Generic.Dictionary<string, ResourceError?>();
             store.Checkpoint = stage =>
             {
-                if (stage != "JournalVerified" || hit) return;
+                if (stage != "JournalVerified" || hit)
+                {
+                    return;
+                }
+
                 hit = true;
                 using var asset = system.AcquireAsync<TextAsset>(Address());
                 blocked["asset"] = asset.Error?.Kind;
@@ -145,33 +172,71 @@ namespace YLFramework.Tests.ResourceBuild
                 blocked["shutdown"] = shutdown.Error?.Kind;
                 throw new IOException("injected pre-commit interruption");
             };
-            using (var failed = system.ActivatePreparedUpdateAsync(update)) Assert.That(failed.Error?.Kind, Is.EqualTo(ResourceError.UpdateFailed));
+            using (var failed = system.ActivatePreparedUpdateAsync(update))
+            {
+                Assert.That(failed.Error?.Kind, Is.EqualTo(ResourceError.UpdateFailed));
+            }
+
             Assert.That(hit, Is.True);
             Assert.That(blocked.Count, Is.EqualTo(5));
-            foreach (var pair in blocked) Assert.That(pair.Value, Is.EqualTo(ResourceError.Busy), pair.Key);
-            using (var old = system.Acquire<TextAsset>(Address())) Assert.That(old.Asset.text, Is.EqualTo("first release content"));
+            foreach (var pair in blocked)
+            {
+                Assert.That(pair.Value, Is.EqualTo(ResourceError.Busy), pair.Key);
+            }
+
+            using (var old = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(old.Asset.text, Is.EqualTo("first release content"));
+            }
+
             Assert.That(File.Exists(ProjectPath(store)), Is.False);
             hit = false;
-            store.Checkpoint = stage => { if (stage == "CommitDecided" && !hit) { hit = true; throw new IOException("injected post-decision interruption"); } };
+            store.Checkpoint = stage =>
+            {
+                if (stage == "CommitDecided" && !hit)
+                {
+                    hit = true;
+                    throw new IOException("injected post-decision interruption");
+                }
+            };
             Assert.That(Take(system.ActivatePreparedUpdateAsync(update)), Is.True);
             Assert.That(hit, Is.True);
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             Assert.That(Store(store.RootPath).Mount().Single().Document.CatalogDigest, Is.EqualTo(system.GetActiveCatalogDigest(Snapshot().Document.ProjectId)));
             store.Checkpoint = null;
             var third = Prepare(system, 3);
             store.Checkpoint = stage =>
             {
-                if (stage == "CommitDecided") File.WriteAllBytes(Path.Combine(VersionPath(store, 3), Snapshot("a", 3).Document.Bundles[0].RelativeFile), new byte[] { 1 });
+                if (stage == "CommitDecided")
+                {
+                    File.WriteAllBytes(Path.Combine(VersionPath(store, 3), Snapshot("a", 3).Document.Bundles[0].RelativeFile), new byte[] { 1 });
+                }
             };
-            using (var failed = system.ActivatePreparedUpdateAsync(third)) Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed),
+            using (var failed = system.ActivatePreparedUpdateAsync(third))
+            {
+                Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed),
                 "Recovering From after target corruption must not report successful activation of To.");
+            }
+
             Assert.That(system.GetActiveCatalogDigest(Snapshot().Document.ProjectId), Is.EqualTo(Snapshot("a", 2).Document.CatalogDigest));
             store.Checkpoint = null;
             File.WriteAllBytes(Path.Combine(VersionPath(store, 2), Snapshot("a", 2).Document.Bundles[0].RelativeFile), new byte[] { 1 });
-            using (var failed = system.ActivatePreparedUpdateAsync(third)) Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+            using (var failed = system.ActivatePreparedUpdateAsync(third))
+            {
+                Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+            }
+
             Assert.That(system.GetActiveCatalogDigest(Snapshot().Document.ProjectId), Is.EqualTo(Store(store.RootPath).Mount().Single().Document.CatalogDigest),
                 "Failure recovery must reconcile memory with the complete fallback closure too, not only with a successful target.");
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
         }
 
@@ -192,16 +257,32 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Take(system.ActivatePreparedUpdateAsync(recovered)), Is.True);
             var third = Prepare(system, 3);
             Assert.That(Take(system.ActivatePreparedUpdateAsync(third)), Is.True);
-            using (var stale = system.ActivatePreparedUpdateAsync(recovered)) Assert.That(stale.Error?.Kind, Is.EqualTo(ResourceError.StaleBase));
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v3"));
+            using (var stale = system.ActivatePreparedUpdateAsync(recovered))
+            {
+                Assert.That(stale.Error?.Kind, Is.EqualTo(ResourceError.StaleBase));
+            }
+
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v3"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
             yield return new ExitPlayMode();
             yield return new EnterPlayMode();
             store = Store(SessionState.GetString(Key + "restart", ""));
             system = Initialize(store);
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v3"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v3"));
+            }
+
             Assert.That(Take(system.RollbackAsync()), Is.True);
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
         }
 
@@ -212,16 +293,31 @@ namespace YLFramework.Tests.ResourceBuild
             var store = NewStore(true);
             var system = Initialize(store);
             using (var incomplete = system.CheckUpdatesAsync(new[] { Snapshot("a", 2) }))
+            {
                 Assert.That(incomplete.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+            }
+
             var update = Prepare(system, 2, true);
-            using (var pin = system.Acquire<TextAsset>(Address(project: "b"))) Busy(system.ActivatePreparedUpdateAsync(update));
+            using (var pin = system.Acquire<TextAsset>(Address(project: "b")))
+            {
+                Busy(system.ActivatePreparedUpdateAsync(update));
+            }
+
             Assert.That(File.Exists(ProjectPath(store)), Is.False);
             Assert.That(File.Exists(ProjectPath(store, project: "b")), Is.False);
             var file = Path.Combine(VersionPath(store, 2, "b"), Snapshot("b", 2).Document.Bundles[0].RelativeFile);
             var bytes = File.ReadAllBytes(file);
             File.WriteAllBytes(file, new byte[] { 1 });
-            using (var failed = system.ActivatePreparedUpdateAsync(update)) Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
-            foreach (var project in new[] { "a", "b" }) Assert.That(system.GetActiveCatalogDigest(Snapshot(project).Document.ProjectId), Is.EqualTo(Snapshot(project).Document.CatalogDigest));
+            using (var failed = system.ActivatePreparedUpdateAsync(update))
+            {
+                Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+            }
+
+            foreach (var project in new[] { "a", "b" })
+            {
+                Assert.That(system.GetActiveCatalogDigest(Snapshot(project).Document.ProjectId), Is.EqualTo(Snapshot(project).Document.CatalogDigest));
+            }
+
             File.WriteAllBytes(file, bytes);
             Assert.That(Take(system.ActivatePreparedUpdateAsync(update)), Is.True);
             foreach (var project in new[] { "a", "b" })
@@ -256,9 +352,19 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(external, Is.Not.Null, "The barrier must not take ownership of an external native bundle.");
                 Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
             }
-            finally { if (external) external.Unload(true); }
+            finally
+            {
+                if (external)
+                {
+                    external.Unload(true);
+                }
+            }
             Assert.That(Take(system.ActivatePreparedUpdateAsync(update)), Is.True);
-            using (var text = system.Acquire<TextAsset>(Address())) Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var text = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
         }
     }

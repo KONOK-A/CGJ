@@ -1,11 +1,11 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.BuffSystem
@@ -13,7 +13,7 @@ namespace YLFramework.BuffSystem
     public class EffectsDataController
     {
 
-        public static void CreateAsset(ScriptableObject scriptableObject, string path, bool ping = true, string pre_name = null)
+        public static void CreateAsset(ScriptableObject scriptableObject, string path, bool ping = true, string preName = null)
         {
             if (!System.IO.Directory.Exists(path))
             {
@@ -21,7 +21,7 @@ namespace YLFramework.BuffSystem
                 AssetDatabase.Refresh();
             }
 
-            string name = GetName(string.IsNullOrEmpty(pre_name) ? scriptableObject.GetType().Name : pre_name, path);
+            string name = GetName(string.IsNullOrEmpty(preName) ? scriptableObject.GetType().Name : preName, path);
             AssetDatabase.CreateAsset(scriptableObject, string.Format("{0}/{1}.asset", path, name));
             Selection.activeObject = scriptableObject;
 
@@ -40,7 +40,9 @@ namespace YLFramework.BuffSystem
         {
 
             if (!AssetDatabase.IsValidFolder(path))
+            {
                 return name;
+            }
 
             int count = 0;
 
@@ -63,7 +65,7 @@ namespace YLFramework.BuffSystem
 
             string tempName = name;
 
-            while ( IsContainEffectName(tempName))
+            while (IsContainEffectName(tempName))
             {
                 count++;
                 tempName = string.Format("{0} ({1})", name, count);
@@ -77,8 +79,10 @@ namespace YLFramework.BuffSystem
         {
             foreach (var item in BuffSystemSettings.Instance.AllEffectDatas)
             {
-                if (item.effect_name == name)
+                if (item.effectName == name)
+                {
                     return true;
+                }
             }
 
             return false;

@@ -18,45 +18,53 @@ namespace YLFramework.Tests.ResourceEditor
 {
     public sealed class ResourceWorkbenchUX4Tests
     {
-        private static readonly BindingFlags Internal = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static;
+        private static readonly BindingFlags _internal = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static;
 
         [Test]
         public void NewPublicationCannotBeReplacedByAnOldTableSelectionOrFreshenOldIndex()
         {
             using var fixture = new ResourceReleaseFixture();
-            var first = Release(fixture.Project, "ux4-app", 'a'); var next = Release(fixture.Project, "ux4-app", 'b');
-            var view = new ResourceDeliveryView(); var table = new ResourceReleaseTable(); table.SetData(new[] { first }, first.Catalog.CatalogDigest);
+            var first = Release(fixture.Project, "ux4-app", 'a');
+            var next = Release(fixture.Project, "ux4-app", 'b');
+            var view = new ResourceDeliveryView();
+            var table = new ResourceReleaseTable();
+            table.SetData(new[] { first }, first.Catalog.CatalogDigest);
             table.SetSelection(new[] { table.GetRows()[0].id });
-            typeof(ResourceDeliveryView).GetField("table", Internal).SetValue(view, table);
-            typeof(ResourceDeliveryView).GetField("historyRead", Internal).SetValue(view, true);
-            typeof(ResourceDeliveryView).GetField("indexRead", Internal).SetValue(view, true);
+            typeof(ResourceDeliveryView).GetField("_table", _internal).SetValue(view, table);
+            typeof(ResourceDeliveryView).GetField("_hasReadHistory", _internal).SetValue(view, true);
+            typeof(ResourceDeliveryView).GetField("_hasReadIndex", _internal).SetValue(view, true);
             view.OfferRelease(next);
             Assert.That(table.Selected == null || table.Selected.Release.Catalog.CatalogDigest == next.Catalog.CatalogDigest, Is.True,
                 "An old selected row must not overwrite the new publication on the next repaint.");
-            Assert.That((bool)typeof(ResourceDeliveryView).GetField("historyStale", Internal).GetValue(view), Is.True);
-            Assert.That((bool)typeof(ResourceDeliveryView).GetField("indexStale", Internal).GetValue(view), Is.True);
+            Assert.That((bool)typeof(ResourceDeliveryView).GetField("_isHistoryStale", _internal).GetValue(view), Is.True);
+            Assert.That((bool)typeof(ResourceDeliveryView).GetField("_isIndexStale", _internal).GetValue(view), Is.True);
         }
 
         [Test]
         public void RefreshingOnlyIndexDoesNotRevalidateHistoryOrAnotherSelectedVersion()
         {
             using var fixture = new ResourceReleaseFixture();
-            var first = Release(fixture.Project, "ux4-app", 'a'); var next = Release(fixture.Project, "ux4-app", 'b');
-            var view = new ResourceDeliveryView(); view.OfferRelease(first);
-            typeof(ResourceDeliveryView).GetField("historyRead", Internal).SetValue(view, true); view.Invalidate();
-            var apply = typeof(ResourceDeliveryView).GetMethod("ApplyCurrent", Internal);
-            Assert.That(apply, Is.Not.Null); apply.Invoke(view, new object[] { next });
-            Assert.That((bool)typeof(ResourceDeliveryView).GetField("historyStale", Internal).GetValue(view), Is.True);
-            Assert.That((bool)typeof(ResourceDeliveryView).GetField("selectionStale", Internal).GetValue(view), Is.True);
-            Assert.That((bool)typeof(ResourceDeliveryView).GetField("indexStale", Internal).GetValue(view), Is.False);
+            var first = Release(fixture.Project, "ux4-app", 'a');
+            var next = Release(fixture.Project, "ux4-app", 'b');
+            var view = new ResourceDeliveryView();
+            view.OfferRelease(first);
+            typeof(ResourceDeliveryView).GetField("_hasReadHistory", _internal).SetValue(view, true);
+            view.Invalidate();
+            var apply = typeof(ResourceDeliveryView).GetMethod("ApplyCurrent", _internal);
+            Assert.That(apply, Is.Not.Null);
+            apply.Invoke(view, new object[] { next });
+            Assert.That((bool)typeof(ResourceDeliveryView).GetField("_isHistoryStale", _internal).GetValue(view), Is.True);
+            Assert.That((bool)typeof(ResourceDeliveryView).GetField("_isSelectionStale", _internal).GetValue(view), Is.True);
+            Assert.That((bool)typeof(ResourceDeliveryView).GetField("_isIndexStale", _internal).GetValue(view), Is.False);
         }
 
         [Test]
         public void ArchiveExportKeepsTheOriginalHistoricalValidationInsteadOfCurrentUnityReadVersion()
         {
             using var fixture = new ResourceReleaseFixture();
-            var release = Release(fixture.Project, "ux4-archive", 'a'); var identity = new ResourceReleaseIdentity(release);
-            var method = typeof(ResourceReleaseIdentity).GetMethod("ResolveForArchive", Internal);
+            var release = Release(fixture.Project, "ux4-archive", 'a');
+            var identity = new ResourceReleaseIdentity(release);
+            var method = typeof(ResourceReleaseIdentity).GetMethod("ResolveForArchive", _internal);
             Assert.That(method, Is.Not.Null, "Byte archive export has its original VerifyExportInput contract, not signing's current-Unity ReadVersion gate.");
             var failure = Assert.Throws<TargetInvocationException>(() => method.Invoke(identity, new object[] { release }));
             Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>(), "Original VerifyExportInput uses InvalidOperationException for an unregistered owner.");
@@ -70,7 +78,7 @@ namespace YLFramework.Tests.ResourceEditor
             using var fixture = new ResourceReleaseFixture();
             var release = Release(fixture.Project, "ux4-export", 'a');
             var identity = new ResourceReleaseIdentity(release);
-            var method = typeof(ResourceDeliveryView).GetMethod("ExportDirectory", Internal);
+            var method = typeof(ResourceDeliveryView).GetMethod("ExportDirectory", _internal);
             Assert.That(method, Is.Not.Null, "An arbitrary new output directory can pass Publisher copying but cannot be opened as a complete version; UI must keep the Digest directory.");
             var parent = Path.Combine(Path.GetTempPath(), "kilo");
             var result = (string)method.Invoke(null, new object[] { identity, parent });
@@ -87,26 +95,39 @@ namespace YLFramework.Tests.ResourceEditor
             var window = ScriptableObject.CreateInstance<ResourceUX2GuiWindow>();
             try
             {
-                window.ShowUtility(); window.SetProject(fixture.Project); window.position = new Rect(100, 80, 1080, 720);
-                var view = typeof(ResServiceEditorWindow).GetField("_resServiceView", Internal).GetValue(window);
-                view.GetType().GetField("tab", Internal).SetValue(view, 3);
-                var build = view.GetType().GetField("build", Internal).GetValue(view);
-                var delivery = build.GetType().GetField("delivery", Internal).GetValue(build);
+                window.ShowUtility();
+                window.SetProject(fixture.Project);
+                window.position = new Rect(100, 80, 1080, 720);
+                var view = typeof(ResServiceEditorWindow).GetField("_resServiceView", _internal).GetValue(window);
+                view.GetType().GetField("_tab", _internal).SetValue(view, 3);
+                var build = view.GetType().GetField("_build", _internal).GetValue(view);
+                var delivery = build.GetType().GetField("_delivery", _internal).GetValue(build);
                 var before = JsonUtility.ToJson(fixture.Project);
                 foreach (var width in new[] { 1080, 720, 620 })
                 {
                     window.position = new Rect(100, 80, width, width == 620 ? 440 : 720);
-                    for (var i = 0; i < 3; i++) { window.Repaint(); yield return null; }
+                    for (var i = 0; i < 3; i++)
+                    {
+                        window.Repaint();
+                        yield return null;
+                    }
                 }
-                Assert.That(delivery.GetType().GetField("historyRead", Internal).GetValue(delivery), Is.False);
-                Assert.That(delivery.GetType().GetField("indexRead", Internal).GetValue(delivery), Is.False);
-                Assert.That(delivery.GetType().GetField("plan", Internal).GetValue(delivery), Is.Null);
+                Assert.That(delivery.GetType().GetField("_hasReadHistory", _internal).GetValue(delivery), Is.False);
+                Assert.That(delivery.GetType().GetField("_hasReadIndex", _internal).GetValue(delivery), Is.False);
+                Assert.That(delivery.GetType().GetField("_plan", _internal).GetValue(delivery), Is.Null);
                 Assert.That(JsonUtility.ToJson(fixture.Project), Is.EqualTo(before));
-                Assert.That(Directory.Exists(Path.Combine(ResourceBuildMap.Absolute("AssetBundles/YLFramework"), fixture.Project.ProjectId)), Is.False);
+                Assert.That(Directory.Exists(Path.Combine(ResourceBuildMap.Absolute("AssetBundles/YLFramework"), fixture.Project.projectId)), Is.False);
                 Assert.That(ResourceSystem.Current, Is.Null);
                 LogAssert.NoUnexpectedReceived();
             }
-            finally { window.Close(); if (focus) focus.Focus(); }
+            finally
+            {
+                window.Close();
+                if (focus)
+                {
+                    focus.Focus();
+                }
+            }
         }
 
         [Test]
@@ -115,20 +136,23 @@ namespace YLFramework.Tests.ResourceEditor
             using var fixture = new ResourceReleaseFixture();
             var source = Release(fixture.Project, "ux4-app", 'a');
             var type = typeof(ResourcePublisher).Assembly.GetType("YLFramework.Editor.Resource.ResourceReleaseSigningWindow");
-            var bind = type.GetMethod("SelectRelease", Internal);
+            var bind = type.GetMethod("SelectRelease", _internal);
             Assert.That(bind, Is.Not.Null, "Selected-version signing must not silently read ReadCurrent at execution time.");
             var window = ScriptableObject.CreateInstance(type);
             try
             {
                 bind.Invoke(window, new object[] { fixture.Project, source });
-                var identity = type.GetField("selected", Internal).GetValue(window);
+                var identity = type.GetField("selected", _internal).GetValue(window);
                 Assert.That(ResourceWorkbenchUX2Tests.Value(identity, "CatalogDigest"), Is.EqualTo(source.Catalog.CatalogDigest));
                 Assert.That(ResourceWorkbenchUX2Tests.Value(identity, "ProjectGuid"), Is.EqualTo(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(fixture.Project))));
-                var failure = Assert.Throws<TargetInvocationException>(() => type.GetMethod("ResolveRelease", Internal).Invoke(window, null));
+                var failure = Assert.Throws<TargetInvocationException>(() => type.GetMethod("ResolveRelease", _internal).Invoke(window, null));
                 Assert.That(failure.InnerException, Is.TypeOf<InvalidDataException>(), "This unit fixture is not an owned Publisher release: exact ReadVersion must reject it, not fall back to a null/current Index.");
                 Assert.That(Directory.Exists(source.RootPath), Is.False);
             }
-            finally { UnityEngine.Object.DestroyImmediate(window); }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         [Test]
@@ -140,10 +164,12 @@ namespace YLFramework.Tests.ResourceEditor
             var type = typeof(ResourcePublisher).Assembly.GetType("YLFramework.Editor.Resource.ResourceReleaseTable");
             Assert.That(type, Is.Not.Null);
             var table = (TreeView)Activator.CreateInstance(type, true);
-            type.GetMethod("SetData", Internal).Invoke(table, new object[] { new[] { first, second }, second.Catalog.CatalogDigest });
+            type.GetMethod("SetData", _internal).Invoke(table, new object[] { new[] { first, second }, second.Catalog.CatalogDigest });
             Assert.That(table.GetRows().Count, Is.EqualTo(2));
-            var row = table.GetRows()[0]; table.SetSelection(new[] { row.id });
-            var selected = type.GetProperty("Selected", Internal); var original = selected.GetValue(table);
+            var row = table.GetRows()[0];
+            table.SetSelection(new[] { row.id });
+            var selected = type.GetProperty("Selected", _internal);
+            var original = selected.GetValue(table);
             table.multiColumnHeader.SetSorting(1, false);
             Assert.That(selected.GetValue(table), Is.SameAs(original));
             var release = (ResourceRelease)ResourceWorkbenchUX2Tests.Value(original, "Release");
@@ -152,7 +178,8 @@ namespace YLFramework.Tests.ResourceEditor
             Assert.That(selected.GetValue(table), Is.SameAs(original));
             Assert.That((bool)ResourceWorkbenchUX2Tests.Value(original, "IsCurrent"), Is.EqualTo(release.Catalog.CatalogDigest == second.Catalog.CatalogDigest));
             table.searchString = "not-an-owned-version";
-            Assert.That(table.GetRows(), Is.Empty); Assert.That(table.GetSelection(), Is.EqualTo(new[] { row.id }));
+            Assert.That(table.GetRows(), Is.Empty);
+            Assert.That(table.GetSelection(), Is.EqualTo(new[] { row.id }));
             Assert.That(Directory.Exists(first.RootPath), Is.False, "Projection/sorting/filtering must not read or create Publisher directories.");
         }
 
@@ -163,10 +190,13 @@ namespace YLFramework.Tests.ResourceEditor
             var plan = ResourceBuiltInDeployer.Preflight(fixture.Snapshot);
             var type = typeof(ResourcePublisher).Assembly.GetType("YLFramework.Editor.Resource.ResourceBuiltInScope");
             Assert.That(type, Is.Not.Null);
-            var text = (string)type.GetMethod("Describe", Internal).Invoke(null, new object[] { plan });
+            var text = (string)type.GetMethod("Describe", _internal).Invoke(null, new object[] { plan });
             foreach (var token in new[] { plan.WorkspacePath, plan.DirectoryPath, fixture.ProjectId, "ylr-owner.json~", "deploy.lock", "journal.json",
                 "journal.json.next", "stage", "ylr-deployment.json~", "payload~", ".meta", "AssetDatabase", "未检查磁盘容量" })
+            {
                 Assert.That(text, Does.Contain(token));
+            }
+
             Assert.That(Directory.Exists(plan.WorkspacePath), Is.False);
             Assert.That(Directory.Exists(plan.DirectoryPath), Is.False);
             Assert.That(ResourceSystem.Current, Is.Null);
@@ -186,18 +216,28 @@ namespace YLFramework.Tests.ResourceEditor
         private static ResourceRelease Release(ResourceProject project, string app, char build)
         {
             var data = ResourceCatalogCodecTests.Payload();
-            data["ProjectId"] = project.ProjectId; data["AppContentCompatibilityId"] = app;
-            data["UnityCompatibility"] = Application.unityVersion; data["BuildSettingsFingerprint"] = new string(build, 64);
+            data["ProjectId"] = project.projectId;
+            data["AppContentCompatibilityId"] = app;
+            data["UnityCompatibility"] = Application.unityVersion;
+            data["BuildSettingsFingerprint"] = new string(build, 64);
             var oldFile = (string)data["Bundles"][0]["RelativeFile"];
-            var native = "ylr_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(project.ProjectId)).Substring(0, 32) + "_a_fixture";
+            var native = "ylr_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(project.projectId)).Substring(0, 32) + "_a_fixture";
             var file = "b_" + ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(native)).Substring(0, 32);
-            data["Bundles"][0]["LogicalId"] = native; data["Bundles"][0]["NativeName"] = native;
-            data["Bundles"][0]["RelativeFile"] = file; data["Assets"][0]["BundleId"] = native;
+            data["Bundles"][0]["LogicalId"] = native;
+            data["Bundles"][0]["NativeName"] = native;
+            data["Bundles"][0]["RelativeFile"] = file;
+            data["Assets"][0]["BundleId"] = native;
             foreach (var support in (JArray)data["SupportFiles"])
-                if ((string)support["RelativeFile"] == oldFile + ".manifest") support["RelativeFile"] = file + ".manifest";
-            var catalog = ResourceCatalogCodec.Read(ResourceCatalogCodec.Seal(Encoding.UTF8.GetBytes(data.ToString())), project.ProjectId,
+            {
+                if ((string)support["RelativeFile"] == oldFile + ".manifest")
+                {
+                    support["RelativeFile"] = file + ".manifest";
+                }
+            }
+
+            var catalog = ResourceCatalogCodec.Read(ResourceCatalogCodec.Seal(Encoding.UTF8.GetBytes(data.ToString())), project.projectId,
                 "StandaloneWindows64", Application.unityVersion, app);
-            var root = Path.Combine(ResourceBuildMap.Absolute("AssetBundles/YLFramework"), project.ProjectId, "StandaloneWindows64");
+            var root = Path.Combine(ResourceBuildMap.Absolute("AssetBundles/YLFramework"), project.projectId, "StandaloneWindows64");
             return new ResourceRelease(root, catalog, projectGuid: AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)));
         }
     }

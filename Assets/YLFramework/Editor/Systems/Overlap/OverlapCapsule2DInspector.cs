@@ -1,20 +1,20 @@
-using YLFramework.Core.Editor;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.Overlap
 {
     [CustomEditor(typeof(OverlapCapsule2D))]
     public class OverlapCapsule2DInspector : OverlapBox2DInspector
     {
-        private OverlapCapsule2D overlapCapsule;
+        private OverlapCapsule2D _overlapCapsule;
 
         protected override void OnEnable()
         {
             base.OnEnable();
-            overlapCapsule = target as OverlapCapsule2D;
+            _overlapCapsule = target as OverlapCapsule2D;
         }
 
 
@@ -22,19 +22,21 @@ namespace YLFramework.Overlap
         {
             base.OnInspectorGUI();
 
-            switch (overlapCapsule.Direction)
+            switch (_overlapCapsule.Direction)
             {
                 case CapsuleDirection2D.Vertical:
-                    if (size.vector2Value.y < size.vector2Value.x) {
-                        size.vector2Value = new Vector2(size.vector2Value.x, size.vector2Value.x);
-                        size.serializedObject.ApplyModifiedProperties();
+                    if (Size.vector2Value.y < Size.vector2Value.x)
+                    {
+                        Size.vector2Value = new Vector2(Size.vector2Value.x, Size.vector2Value.x);
+                        Size.serializedObject.ApplyModifiedProperties();
                     }
 
                     break;
                 case CapsuleDirection2D.Horizontal:
-                    if (size.vector2Value.x < size.vector2Value.y) {
-                        size.vector2Value = new Vector2(size.vector2Value.y, size.vector2Value.y);
-                        size.serializedObject.ApplyModifiedProperties();
+                    if (Size.vector2Value.x < Size.vector2Value.y)
+                    {
+                        Size.vector2Value = new Vector2(Size.vector2Value.y, Size.vector2Value.y);
+                        Size.serializedObject.ApplyModifiedProperties();
                     }
                     break;
             }

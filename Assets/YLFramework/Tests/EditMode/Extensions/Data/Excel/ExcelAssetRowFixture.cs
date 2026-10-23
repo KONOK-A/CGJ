@@ -4,11 +4,15 @@ using YLFramework.Excel;
 
 namespace YLFramework.Tests.Extensions.Data
 {
-    public enum ExcelAssetState { Off, On }
+    public enum ExcelAssetState
+    {
+        Off,
+        On
+    }
 
     public sealed class ExcelAssetRowFixture : ScriptableObject
     {
-        [ExcelScriptableObjectID] public int Id;
+        [ExcelScriptableObjectId] public int Id;
         public string Text;
         public ExcelAssetState State;
         public List<int> Numbers = new List<int>();

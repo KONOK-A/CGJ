@@ -11,8 +11,13 @@ namespace YLFramework.Tests.ResourceBuild
     {
         private static byte[] Envelope(RSA key, string keyId = "isolated-test")
         {
-            var data = new JObject { ["SchemaVersion"] = 1, ["Algorithm"] = "RSA-SHA256-PKCS1", ["KeyId"] = keyId,
-                ["Payload"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"Channel\":\"test\",\"ReleaseSequence\":7}")) };
+            var data = new JObject
+            {
+                ["SchemaVersion"] = 1,
+                ["Algorithm"] = "RSA-SHA256-PKCS1",
+                ["KeyId"] = keyId,
+                ["Payload"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"Channel\":\"test\",\"ReleaseSequence\":7}"))
+            };
             data["Signature"] = Convert.ToBase64String(key.SignData(ResourceCatalogCodec.CanonicalBytes(data), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
             return ResourceCatalogCodec.CanonicalBytes(data);
         }
@@ -54,7 +59,9 @@ namespace YLFramework.Tests.ResourceBuild
             using var key = new RSACryptoServiceProvider(2048);
             var modulus = Convert.ToBase64String(key.ExportParameters(false).Modulus);
             foreach (var exponent in new[] { new byte[] { 1 }, new byte[] { 0 }, new byte[] { 2 }, new byte[] { 0, 1, 0, 1 }, new byte[] { 1, 0, 0 } })
+            {
                 Assert.Throws<ArgumentException>(() => new ResourceSigningKey("isolated-test", modulus, Convert.ToBase64String(exponent)));
+            }
         }
     }
 }

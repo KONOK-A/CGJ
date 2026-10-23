@@ -22,17 +22,20 @@ namespace YLFramework.Tests.ResourceBuild
         private const string NextKeyId = "g2-test-v2";
         private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
         // 仅用于自有测试夹具，不是可用于发行的密钥材料。
-        private static readonly byte[] TestKey = Enumerable.Range(1, 32).Select(x => (byte)x).ToArray();
-        private static readonly byte[] OtherKey = Enumerable.Range(33, 32).Select(x => (byte)x).ToArray();
+        private static readonly byte[] _testKey = Enumerable.Range(1, 32).Select(x => (byte)x).ToArray();
+        private static readonly byte[] _otherKey = Enumerable.Range(33, 32).Select(x => (byte)x).ToArray();
 
         [Test]
         public void ContentBuildExposesDeliveryFactsWithoutAmbiguousLegacyOverloads()
         {
-            Assert.That(Field("ContentEncryption").FieldType, Is.EqualTo(typeof(ResourceContentEncryption)));
-            Assert.That(Field("ContentKeyId").FieldType, Is.EqualTo(typeof(string)));
+            Assert.That(Field("contentEncryption").FieldType, Is.EqualTo(typeof(ResourceContentEncryption)));
+            Assert.That(Field("contentKeyId").FieldType, Is.EqualTo(typeof(string)));
             foreach (var name in new[] { "ContentEncryption", "ContentKeyId", "DeliveryPath", "DeliveryFiles", "DeliveryBytes",
                          "EncodedDeliveryBytes", "ReusedDeliveryBytes", "ContentEncodingMilliseconds" })
+            {
                 Property(typeof(ResourceBuildResult), name);
+            }
+
             BuildMethod();
             Method(typeof(ResourceBundleBuilder), "ExecuteWithContentKey", typeof(ResourceProject), typeof(BuildTarget), typeof(bool),
                 typeof(CancellationToken), typeof(Func<string, AssetBundleBuild[], BuildAssetBundleOptions, BuildTarget, AssetBundleManifest>),
@@ -85,7 +88,11 @@ namespace YLFramework.Tests.ResourceBuild
             var workspace = fixture.Workspace();
             var invoked = false;
             var error = Assert.Throws<ResourceException>(() => fixture.Execute(providerState == "absent" ? null : keys,
-                (path, builds, options, target) => { invoked = true; return null; }));
+                (path, builds, options, target) =>
+                {
+                    invoked = true;
+                    return null;
+                }));
             Assert.That(error.Kind, Is.EqualTo(ResourceError.ContentKeyUnavailable));
             Assert.That(error.ToString(), Does.Not.Contain("g2-sensitive-provider-material"));
             Assert.That(invoked, Is.False);
@@ -135,7 +142,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(raw.Sha256, Is.EqualTo(ResourceCatalogCodec.Digest(rawBytes)));
                 Assert.That(delivered.Length, Is.EqualTo(deliveryBytes.LongLength));
                 Assert.That(delivered.Sha256, Is.EqualTo(ResourceCatalogCodec.Digest(deliveryBytes)));
-                if (raw.Name.EndsWith(".manifest", StringComparison.Ordinal)) CollectionAssert.AreEqual(rawBytes, deliveryBytes);
+                if (raw.Name.EndsWith(".manifest", StringComparison.Ordinal))
+                {
+                    CollectionAssert.AreEqual(rawBytes, deliveryBytes);
+                }
                 else
                 {
                     Assert.That(System.Text.Encoding.ASCII.GetString(rawBytes, 0, 8), Is.EqualTo("UnityFS\0"));
@@ -143,11 +153,14 @@ namespace YLFramework.Tests.ResourceBuild
                     using var input = File.OpenRead(Path.Combine(delivery, raw.Name));
                     var header = ResourceBundleEnvelope.Inspect(input, Context(build, raw.Name));
                     Assert.That(header.KeyId, Is.EqualTo(KeyId));
-                    ResourceBundleEnvelope.ValidateAll(input, Context(build, raw.Name), TestKey, default, raw.Sha256, raw.Length);
+                    ResourceBundleEnvelope.ValidateAll(input, Context(build, raw.Name), _testKey, default, raw.Sha256, raw.Length);
                 }
             }
             foreach (var bundle in build.Bundles)
+            {
                 Assert.That(bundle.FileBytes, Is.EqualTo(build.Files.Single(x => x.Name == bundle.Name).Length));
+            }
+
             var catalog = ResourceCatalogBuilder.Create(build, App);
             AssertCatalogDelivery(build, catalog);
             Assert.That(Value<long>(build, "DeliveryBytes"), Is.EqualTo(DeliveryFiles(build).Sum(x => x.Length)));
@@ -170,7 +183,7 @@ namespace YLFramework.Tests.ResourceBuild
             var digest = ResourceCatalogBuilder.Create(first, App).CatalogDigest;
             var previousCopies = keys.Copies;
             var second = fixture.Build(keys, force: true);
-            Assert.That(second.UnityBuildInvoked && second.ForcedRebuild, Is.True);
+            Assert.That(second.WasUnityBuildInvoked && second.ForceRebuild, Is.True);
             CollectionAssert.AreEqual(raw, Facts(second.Files));
             CollectionAssert.AreEqual(delivery, ResourceReleaseFixture.Snapshot(DeliveryPath(second)));
             Assert.That(ResourceCatalogBuilder.Create(second, App).CatalogDigest, Is.EqualTo(digest));
@@ -188,7 +201,7 @@ namespace YLFramework.Tests.ResourceBuild
             using var keys = fixture.Keys();
             var first = fixture.Build(keys);
             var before = ResourceReleaseFixture.Snapshot(DeliveryPath(first));
-            using var wrong = fixture.Keys(material: OtherKey);
+            using var wrong = fixture.Keys(material: _otherKey);
             var error = Assert.Catch(() => fixture.Build(wrong));
             AssertAuthenticationFailure(error);
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(DeliveryPath(first)));
@@ -224,7 +237,9 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(DeliveryFiles(second).Single(x => x.Name == name).Sha256, Is.Not.EqualTo(previous.Sha256));
             Assert.That(ResourceCatalogBuilder.Create(second, App).CatalogDigest, Is.Not.EqualTo(digest));
             foreach (var file in DeliveryFiles(first).Where(x => x.Name != name))
+            {
                 Assert.That(DeliveryFiles(second).Single(x => x.Name == file.Name).Sha256, Is.EqualTo(file.Sha256));
+            }
         }
 
         [Test]
@@ -236,7 +251,7 @@ namespace YLFramework.Tests.ResourceBuild
             var first = fixture.Build(keys);
             var before = ResourceReleaseFixture.Snapshot(Path.GetDirectoryName(first.WorkspacePath));
             fixture.Configure(keyId: NextKeyId);
-            using var rotated = fixture.Keys(NextKeyId, OtherKey);
+            using var rotated = fixture.Keys(NextKeyId, _otherKey);
             var second = fixture.Build(rotated);
             Assert.That(second.WorkspacePath, Is.Not.EqualTo(first.WorkspacePath));
             Assert.That(second.ManifestBundleFile, Is.EqualTo(first.ManifestBundleFile), "Content encoding must not change the native isolation identity.");
@@ -245,7 +260,7 @@ namespace YLFramework.Tests.ResourceBuild
             using var input = File.OpenRead(Path.Combine(DeliveryPath(second), second.ManifestBundleFile));
             Assert.That(ResourceBundleEnvelope.Inspect(input, Context(second, second.ManifestBundleFile)).KeyId, Is.EqualTo(NextKeyId));
             var raw = second.Files.Single(x => x.Name == second.ManifestBundleFile);
-            ResourceBundleEnvelope.ValidateAll(input, Context(second, raw.Name), OtherKey, default, raw.Sha256, raw.Length);
+            ResourceBundleEnvelope.ValidateAll(input, Context(second, raw.Name), _otherKey, default, raw.Sha256, raw.Length);
         }
 
         [Test]
@@ -307,7 +322,10 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static T Invoke<T>(MethodInfo method, params object[] arguments)
         {
-            try { return (T)method.Invoke(null, arguments); }
+            try
+            {
+                return (T)method.Invoke(null, arguments);
+            }
             catch (TargetInvocationException error) when (error.InnerException != null)
             {
                 ExceptionDispatchInfo.Capture(error.InnerException).Throw();
@@ -318,7 +336,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static void AssertAuthenticationFailure(Exception error)
         {
             var causes = new List<Exception>();
-            for (var cause = error; cause != null; cause = cause.InnerException) causes.Add(cause);
+            for (var cause = error; cause != null; cause = cause.InnerException)
+            {
+                causes.Add(cause);
+            }
+
             Assert.That(causes.Any(x => x is CryptographicException || x is ResourceException resource &&
                 resource.Kind == ResourceError.ContentAuthenticationFailed), Is.True, error?.ToString());
         }
@@ -349,43 +371,55 @@ namespace YLFramework.Tests.ResourceBuild
         private sealed class ContentBuildFixture : IDisposable
         {
             internal readonly ResourceReleaseFixture Source;
-            private readonly HashSet<string> roots = new(StringComparer.Ordinal);
+            private readonly HashSet<string> _roots = new(StringComparer.Ordinal);
 
             internal ContentBuildFixture()
             {
                 // 缺能力时先明确 RED，不先执行昂贵 native 构建或建立夹具资产。
                 BuildMethod();
-                Field("ContentEncryption"); Field("ContentKeyId");
+                Field("contentEncryption");
+                Field("contentKeyId");
                 Source = new ResourceReleaseFixture();
             }
 
             internal void Configure(ResourceContentEncryption mode = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1, string keyId = KeyId)
             {
                 var project = Source.Project;
-                Field("ContentEncryption").SetValue(project, mode);
-                Field("ContentKeyId").SetValue(project, keyId);
-                EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+                Field("contentEncryption").SetValue(project, mode);
+                Field("contentKeyId").SetValue(project, keyId);
+                EditorUtility.SetDirty(project);
+                AssetDatabase.SaveAssetIfDirty(project);
             }
 
             internal void ConfigureLargeText()
             {
                 Configure();
                 var project = Source.Project;
-                project.Compression = ResourceCompression.Uncompressed;
-                EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
-                var bytes = new byte[240000]; new System.Random(20604).NextBytes(bytes);
+                project.compression = ResourceCompression.Uncompressed;
+                EditorUtility.SetDirty(project);
+                AssetDatabase.SaveAssetIfDirty(project);
+                var bytes = new byte[240000];
+                new System.Random(20604).NextBytes(bytes);
                 File.WriteAllText(Source.TextPath, Convert.ToBase64String(bytes));
                 AssetDatabase.ImportAsset(Source.TextPath, ImportAssetOptions.ForceSynchronousImport);
             }
 
             internal TestKeys Keys(string keyId = KeyId, byte[] material = null, bool missing = false, bool throws = false) =>
-                new(Source.Project.ProjectId, keyId, material ?? TestKey) { Missing = missing, Throw = throws };
+                new(Source.Project.projectId, keyId, material ?? _testKey)
+                {
+                    Missing = missing,
+                    Throw = throws
+                };
 
             internal string Workspace()
             {
                 var path = ResourceBundleBuilder.GetWorkspacePath(Source.Project, EditorUserBuildSettings.activeBuildTarget);
                 var root = Path.GetDirectoryName(path);
-                if (roots.Add(root)) Assert.That(Directory.Exists(root), Is.False, "Do not adopt a pre-existing fixture workspace.");
+                if (_roots.Add(root))
+                {
+                    Assert.That(Directory.Exists(root), Is.False, "Do not adopt a pre-existing fixture workspace.");
+                }
+
                 return path;
             }
 
@@ -432,39 +466,61 @@ namespace YLFramework.Tests.ResourceBuild
                 try
                 {
                     Source.AssertProtected();
-                    foreach (var root in roots) if (Directory.Exists(root)) Directory.Delete(root, true);
+                    foreach (var root in _roots)
+                    {
+                        if (Directory.Exists(root))
+                        {
+                            Directory.Delete(root, true);
+                        }
+                    }
                 }
-                finally { Source.Dispose(); }
+                finally
+                {
+                    Source.Dispose();
+                }
             }
         }
 
         private sealed class TestKeys : IResourceContentKeyProvider, IDisposable
         {
-            private readonly string project;
-            private readonly string keyId;
-            private readonly byte[] material;
-            private readonly int mainThread = Thread.CurrentThread.ManagedThreadId;
-            private readonly List<byte[]> copies = new();
-            internal int Copies => copies.Count;
+            private readonly string _project;
+            private readonly string _keyId;
+            private readonly byte[] _material;
+            private readonly int _mainThread = Thread.CurrentThread.ManagedThreadId;
+            private readonly List<byte[]> _copies = new();
+            internal int Copies => _copies.Count;
             internal bool Missing;
             internal bool Throw;
             internal bool Disposed;
 
-            internal TestKeys(string project, string keyId, byte[] material) { this.project = project; this.keyId = keyId; this.material = material; }
+            internal TestKeys(string project, string keyId, byte[] material)
+            {
+                this._project = project;
+                this._keyId = keyId;
+                this._material = material;
+            }
             public bool TryCopyKey(string projectId, string requestedKey, byte[] destination)
             {
-                Assert.That(Thread.CurrentThread.ManagedThreadId, Is.EqualTo(mainThread), "Application key providers run on the initiating Editor thread.");
-                Assert.That(projectId, Is.EqualTo(project));
-                Assert.That(requestedKey, Is.EqualTo(keyId));
+                Assert.That(Thread.CurrentThread.ManagedThreadId, Is.EqualTo(_mainThread), "Application key providers run on the initiating Editor thread.");
+                Assert.That(projectId, Is.EqualTo(_project));
+                Assert.That(requestedKey, Is.EqualTo(_keyId));
                 Assert.That(destination.Length, Is.EqualTo(32));
                 Assert.That(Disposed, Is.False);
-                copies.Add(destination);
-                if (Throw) throw new InvalidOperationException("g2-sensitive-provider-material");
-                if (Missing) return false;
-                Array.Copy(material, destination, material.Length);
+                _copies.Add(destination);
+                if (Throw)
+                {
+                    throw new InvalidOperationException("g2-sensitive-provider-material");
+                }
+
+                if (Missing)
+                {
+                    return false;
+                }
+
+                Array.Copy(_material, destination, _material.Length);
                 return true;
             }
-            internal void AssertReleasedCopies() => Assert.That(copies.All(x => x.All(value => value == 0)), Is.True, "The operation must clear each key copy it owns.");
+            internal void AssertReleasedCopies() => Assert.That(_copies.All(x => x.All(value => value == 0)), Is.True, "The operation must clear each key copy it owns.");
             public void Dispose() => Disposed = true;
         }
     }

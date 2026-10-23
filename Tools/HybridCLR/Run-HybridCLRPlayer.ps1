@@ -9,20 +9,21 @@ param(
 )
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
-$owner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json
-if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Unexpected receiver owner.' }
+$scope = & (Join-Path $PSScriptRoot 'Get-HybridCLRReceptionScope.ps1') -Root $Root
+$Root = $scope.Root
+$owner = $scope.Owner
 if ($Action -eq 'ProjectSubsets') {
     if ($Variant -ne 'Development' -or $TrustReceipt -or $Run -in @('project-subsets-base','project-subsets-patch')) { throw 'ProjectSubsets requires its own new Development/local-snapshot run.' }
     $subsetBasePath = Join-Path $Root 'project-subsets-base.json'
     $subsetBase = [IO.File]::ReadAllText($subsetBasePath) | ConvertFrom-Json
     $subsetPatch = [IO.File]::ReadAllText((Join-Path $Root 'project-subsets-patch.json')) | ConvertFrom-Json
     if (-not $subsetBase.passed -or -not $subsetPatch.passed -or -not $subsetBase.Development -or -not $subsetPatch.Development -or
-        $subsetBase.CompatibilityId -ne 'hybridclr-project-subsets-v1' -or $subsetPatch.CompatibilityId -ne $subsetBase.CompatibilityId -or
+        $subsetBase.CompatibilityId -ne $scope.SubsetCompatibility -or $subsetPatch.CompatibilityId -ne $subsetBase.CompatibilityId -or
         -not [IO.Path]::IsPathFullyQualified($subsetBase.PlayerDirectory)) { throw 'The dedicated successful subset base/patch receipts are required.' }
     $playerRoot = [IO.Path]::GetFullPath($subsetBase.PlayerDirectory)
-    if ($playerRoot -ne [IO.Path]::GetFullPath('G:/Unity/H26S') -or
-        [IO.Path]::GetFullPath($subsetBase.RuntimeCacheDirectory) -ne [IO.Path]::GetFullPath('G:/Unity/HC26S') -or
-        [IO.Path]::GetFullPath($subsetBase.Baseline) -ne [IO.Path]::GetFullPath((Join-Path $owner.repository 'Build/HybridCLR/Reception-20261022/ProjectSubsets'))) {
+    if ($playerRoot -ne $scope.SubsetPlayer -or
+        [IO.Path]::GetFullPath($subsetBase.RuntimeCacheDirectory) -ne $scope.SubsetCache -or
+        [IO.Path]::GetFullPath($subsetBase.Baseline) -ne $scope.SubsetBaseline) {
         throw 'Refuse any legacy or unowned Player, cache or baseline path.'
     }
     if ([IO.Path]::Exists($subsetBase.RuntimeCacheDirectory) -or [IO.Path]::Exists($subsetBase.RuntimeCacheDirectory + '.meta')) { throw 'Never adopt an existing project-subset runtime cache.' }

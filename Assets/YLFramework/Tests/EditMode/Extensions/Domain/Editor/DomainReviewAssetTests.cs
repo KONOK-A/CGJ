@@ -14,7 +14,8 @@ namespace YLFramework.Tests.Extensions.Domain
     public class DomainReviewAssetTests
     {
         private string _folder;
-        [SetUp] public void Setup()
+        [SetUp]
+        public void Setup()
         {
             _folder = "Assets/DomainReviewFixture-" + Guid.NewGuid().ToString("N");
             DomainTestAssets.OwnPath(_folder);
@@ -34,7 +35,7 @@ namespace YLFramework.Tests.Extensions.Domain
             var rootPath = _folder + "/root.asset";
             AssetDatabase.CreateAsset(root, rootPath);
             var values = (IList)rootType.GetField(listName).GetValue(root);
-            var idField = dataType.GetField(module == "Buff" ? "buff_id" : "id");
+            var idField = dataType.GetField("id");
             var first = ScriptableObject.CreateInstance(dataType);
             var sibling = ScriptableObject.CreateInstance(dataType);
             var borrowed = ScriptableObject.CreateInstance(dataType);
@@ -43,12 +44,14 @@ namespace YLFramework.Tests.Extensions.Domain
             {
                 idField.SetValue(entries[i], 100 + i);
                 dataType.GetField("parent").SetValue(entries[i], root);
-                dataType.GetField(module == "Skill" ? "skill_name" : module == "Buff" ? "buff_name" : "mission_name").SetValue(entries[i], "entry-" + i);
+                dataType.GetField(module == "Skill" ? "skillName" : module == "Buff" ? "buffName" : "missionName").SetValue(entries[i], "entry-" + i);
                 values.Add(entries[i]);
             }
-            AssetDatabase.AddObjectToAsset(first, root); AssetDatabase.AddObjectToAsset(sibling, root);
+            AssetDatabase.AddObjectToAsset(first, root);
+            AssetDatabase.AddObjectToAsset(sibling, root);
             AssetDatabase.CreateAsset(borrowed, _folder + "/borrowed.asset");
-            EditorUtility.SetDirty(root); AssetDatabase.SaveAssetIfDirty(root);
+            EditorUtility.SetDirty(root);
+            AssetDatabase.SaveAssetIfDirty(root);
             var name = root.name;
             idField.SetValue(first, 200);
             var author = typeof(SkillsConfigController).Assembly.GetType("YLFramework." + module + "System." + module + "Authoring");
@@ -70,7 +73,10 @@ namespace YLFramework.Tests.Extensions.Domain
                 Assert.That(AssetDatabase.LoadMainAssetAtPath(_folder + "/borrowed.asset"), Is.SameAs(borrowed));
                 Assert.That(values.Count, Is.EqualTo(1));
             }
-            finally { ((IDisposable)tree).Dispose(); }
+            finally
+            {
+                ((IDisposable)tree).Dispose();
+            }
         }
 
         [TestCase("Skill")]
@@ -82,13 +88,16 @@ namespace YLFramework.Tests.Extensions.Domain
             var root = ScriptableObject.CreateInstance(type);
             try
             {
-                type.GetField("type_script_guid").SetValue(root, "ffffffffffffffffffffffffffffffff");
+                type.GetField("typeScriptGuid").SetValue(root, "ffffffffffffffffffffffffffffffff");
                 var author = typeof(SkillsConfigController).Assembly.GetType("YLFramework." + module + "System." + module + "Authoring");
                 var error = Assert.Throws<TargetInvocationException>(() => author.GetMethod("GetDataType", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { root }));
                 Assert.That(error.InnerException, Is.InstanceOf<InvalidOperationException>());
                 Assert.That(error.InnerException.Message, Does.Contain("ffffffffffffffffffffffffffffffff"));
             }
-            finally { Object.DestroyImmediate(root); }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
 
         [TestCase("Skill")]
@@ -99,11 +108,12 @@ namespace YLFramework.Tests.Extensions.Domain
             var dataType = module == "Skill" ? typeof(SkillConfigData) : module == "Buff" ? typeof(BuffConfigData) : typeof(MissionConfigData);
             var inspectorType = typeof(SkillsConfigController).Assembly.GetType("YLFramework." + module + "System." + module + "ConfigDataInspector");
             var inspector = ScriptableObject.CreateInstance(inspectorType);
-            var first = ScriptableObject.CreateInstance(dataType); var second = ScriptableObject.CreateInstance(dataType);
+            var first = ScriptableObject.CreateInstance(dataType);
+            var second = ScriptableObject.CreateInstance(dataType);
             try
             {
                 var bind = inspectorType.GetMethod("BindSelection", BindingFlags.Instance | BindingFlags.NonPublic);
-                var drawers = inspectorType.GetField("drawers", BindingFlags.Instance | BindingFlags.NonPublic);
+                var drawers = inspectorType.GetField("_drawers", BindingFlags.Instance | BindingFlags.NonPublic);
                 bind.Invoke(inspector, new object[] { first });
                 var previous = (IDictionary)drawers.GetValue(inspector);
                 bind.Invoke(inspector, new object[] { second });
@@ -111,21 +121,31 @@ namespace YLFramework.Tests.Extensions.Domain
                 inspectorType.GetMethod("ReleaseSelection", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(inspector, null);
                 Assert.That(((IDictionary)drawers.GetValue(inspector)).Count, Is.Zero);
             }
-            finally { Object.DestroyImmediate(inspector); Object.DestroyImmediate(first); Object.DestroyImmediate(second); }
+            finally
+            {
+                Object.DestroyImmediate(inspector);
+                Object.DestroyImmediate(first);
+                Object.DestroyImmediate(second);
+            }
         }
 
-        [Test] public void MissionClipboardDistinguishesTwoSubassetsInOneFile()
+        [Test]
+        public void MissionClipboardDistinguishesTwoSubassetsInOneFile()
         {
             var root = ScriptableObject.CreateInstance<MissionsConfig>();
             AssetDatabase.CreateAsset(root, _folder + "/missions.asset");
             for (var i = 0; i < 2; i++)
             {
                 var data = ScriptableObject.CreateInstance<MissionConfigData>();
-                data.parent = root; data.id = 100 + i; data.mission_name = "mission-" + i;
+                data.parent = root;
+                data.id = 100 + i;
+                data.missionName = "mission-" + i;
                 data.rewards.Add(new RewardInfo { id = i + 1, count = 1 });
-                AssetDatabase.AddObjectToAsset(data, root); root.missions.Add(data);
+                AssetDatabase.AddObjectToAsset(data, root);
+                root.missions.Add(data);
             }
-            EditorUtility.SetDirty(root); AssetDatabase.SaveAssetIfDirty(root);
+            EditorUtility.SetDirty(root);
+            AssetDatabase.SaveAssetIfDirty(root);
             var tree = new MissionListTree(new UnityEditor.IMGUI.Controls.TreeViewState(), root);
             tree.Reload();
             var clipboard = GUIUtility.systemCopyBuffer;
@@ -139,28 +159,36 @@ namespace YLFramework.Tests.Extensions.Domain
                 Assert.That(root.missions[3].rewards[0].id, Is.EqualTo(2));
                 Assert.That(root.missions[2], Is.Not.SameAs(root.missions[3]));
             }
-            finally { GUIUtility.systemCopyBuffer = clipboard; tree.Dispose(); }
+            finally
+            {
+                GUIUtility.systemCopyBuffer = clipboard;
+                tree.Dispose();
+            }
         }
 
-        [Test] public void ParameterDuplicateKeepsCustomConfigurationAndResetsRuntime()
+        [Test]
+        public void ParameterDuplicateKeepsCustomConfigurationAndResetsRuntime()
         {
             var root = ScriptableObject.CreateInstance<MissionsConfig>();
             AssetDatabase.CreateAsset(root, _folder + "/parameters.asset");
             var source = new MissionParameter { name = "parameter" };
             source.Value = 7;
-            typeof(MissionParameter).GetField("custom_data", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(source, new System.Collections.Generic.List<string> { "category" });
-            root.param.Add(source);
+            typeof(MissionParameter).GetField("customData", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(source, new System.Collections.Generic.List<string> { "category" });
+            root.parameters.Add(source);
             var tree = new ParamListTree(new UnityEditor.IMGUI.Controls.TreeViewState(), root);
             try
             {
                 typeof(ParamListTree).GetMethod("CopyMissionParam", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(tree, new object[] { source });
-                Assert.That(root.param.Count, Is.EqualTo(2));
-                Assert.That(root.param[1].name, Is.Not.EqualTo(source.name));
-                Assert.That(root.param[1].ContainsCustomData("category"), Is.True);
-                Assert.That(root.param[1].Value, Is.Zero);
+                Assert.That(root.parameters.Count, Is.EqualTo(2));
+                Assert.That(root.parameters[1].name, Is.Not.EqualTo(source.name));
+                Assert.That(root.parameters[1].ContainsCustomData("category"), Is.True);
+                Assert.That(root.parameters[1].Value, Is.Zero);
                 Assert.That(source.Value, Is.EqualTo(7));
             }
-            finally { tree.Dispose(); }
+            finally
+            {
+                tree.Dispose();
+            }
         }
     }
 }

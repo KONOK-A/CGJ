@@ -1,10 +1,10 @@
-using YLFramework.Core.Editor;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YLFramework.Core.Editor;
 
 namespace YLFramework.Overlap
 {
@@ -14,38 +14,38 @@ namespace YLFramework.Overlap
     {
         // Fix编码
 
-        private List<SerializedProperty> property;
+        private List<SerializedProperty> _property;
 
-        private SerializedProperty mode;
-        private SerializedProperty positions;
+        private SerializedProperty _mode;
+        private SerializedProperty _positions;
         //private SerializedProperty mScript;
 
-        private ReorderableList reorderableList = null;
+        private ReorderableList _reorderableList = null;
 
-        private Transform transform = null;
+        private Transform _transform = null;
 
-        private bool positions_foldout = false;
+        private bool _showPositions = false;
 
-        private OverlapArea2D overlapArea2D;
+        private OverlapArea2D _overlapArea2D;
 
-        private bool resultFoldout;
+        private bool _showResults;
 
         private void OnEnable()
         {
-            overlapArea2D = serializedObject.targetObject as OverlapArea2D;
-            transform = overlapArea2D.transform;
+            _overlapArea2D = serializedObject.targetObject as OverlapArea2D;
+            _transform = _overlapArea2D.transform;
 
-            property = serializedObject.GetAllSerializedProperty();
-            mode = serializedObject.FindProperty("_mode");
-            positions = serializedObject.FindProperty("positions");
+            _property = serializedObject.GetAllSerializedProperty();
+            _mode = serializedObject.FindProperty("mode");
+            _positions = serializedObject.FindProperty("positions");
 
             //mScript = serializedObject.FindProperty("m_Script");
 
-            reorderableList = new ReorderableList(serializedObject, positions,true,false,true,true);
-            reorderableList.headerHeight = 1;
-            reorderableList.drawElementCallback += OnDrawElementCallback;
-            reorderableList.onSelectCallback += OnSelectCallback;
-            reorderableList.onAddCallback += OnAddCallback;
+            _reorderableList = new ReorderableList(serializedObject, _positions, true, false, true, true);
+            _reorderableList.headerHeight = 1;
+            _reorderableList.drawElementCallback += OnDrawElementCallback;
+            _reorderableList.onSelectCallback += OnSelectCallback;
+            _reorderableList.onAddCallback += OnAddCallback;
         }
 
         public override void OnInspectorGUI()
@@ -53,20 +53,26 @@ namespace YLFramework.Overlap
             serializedObject.Update();
 
 
-            foreach (var item in property)
+            foreach (var item in _property)
             {
 
-                if (item.name == "positions" && mode.enumValueIndex != 0)
+                if (item.name == "positions" && _mode.enumValueIndex != 0)
+                {
                     continue;
+                }
 
-                if (item.name == "transforms" && mode.enumValueIndex != 1)
+                if (item.name == "transforms" && _mode.enumValueIndex != 1)
+                {
                     continue;
+                }
 
                 if (item.name == "positions")
                 {
-                    positions_foldout = EditorGUILayout.Foldout(positions_foldout, "Positions");
-                    if (positions_foldout)
-                        reorderableList.DoLayoutList();
+                    _showPositions = EditorGUILayout.Foldout(_showPositions, "Positions");
+                    if (_showPositions)
+                    {
+                        _reorderableList.DoLayoutList();
+                    }
 
                     continue;
                 }
@@ -78,19 +84,23 @@ namespace YLFramework.Overlap
 
             serializedObject.ApplyModifiedProperties();
 
-            OverlapBase2DInpector.DrawResult(ref resultFoldout, overlapArea2D.Results);
+            OverlapBase2DInspector.DrawResult(ref _showResults, _overlapArea2D.results);
         }
 
         private void OnDrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
-            SerializedProperty property = positions.GetArrayElementAtIndex(index);
+            SerializedProperty property = _positions.GetArrayElementAtIndex(index);
             Vector3 vector3 = property.vector3Value;
-            property.vector3Value =  EditorGUI.Vector3Field(rect,string.Empty, vector3);
+            property.vector3Value = EditorGUI.Vector3Field(rect, string.Empty, vector3);
             property.serializedObject.ApplyModifiedProperties();
         }
 
-        private void OnSelectCallback(ReorderableList list) {
-            if (SceneView.lastActiveSceneView) SceneView.lastActiveSceneView.Repaint();
+        private void OnSelectCallback(ReorderableList list)
+        {
+            if (SceneView.lastActiveSceneView)
+            {
+                SceneView.lastActiveSceneView.Repaint();
+            }
         }
 
         private void OnAddCallback(ReorderableList list)
@@ -112,7 +122,11 @@ namespace YLFramework.Overlap
                 SerializedProperty last1 = list.serializedProperty.GetArrayElementAtIndex(count - 2);
                 SerializedProperty last2 = list.serializedProperty.GetArrayElementAtIndex(count - 1);
                 Vector3 dir = last2.vector3Value - last1.vector3Value;
-                if (dir == Vector3.zero) dir = Vector3.right;
+                if (dir == Vector3.zero)
+                {
+                    dir = Vector3.right;
+                }
+
                 current.vector3Value = last2.vector3Value + dir.normalized;
             }
 
@@ -122,27 +136,31 @@ namespace YLFramework.Overlap
         private void OnSceneGUI()
         {
 
-            if (mode.enumValueIndex != 0) return;
-
-            for (int i = 0;i < positions.arraySize;i++)
+            if (_mode.enumValueIndex != 0)
             {
-                SerializedProperty property = positions.GetArrayElementAtIndex(i);
+                return;
+            }
+
+            for (int i = 0; i < _positions.arraySize; i++)
+            {
+                SerializedProperty property = _positions.GetArrayElementAtIndex(i);
                 float size = HandleUtility.GetHandleSize(property.vector3Value) * 0.1f;
 
-                Handles.color = reorderableList.index == i ? Color.red : Color.green;
+                Handles.color = _reorderableList.index == i ? Color.red : Color.green;
 
                 EditorGUI.BeginChangeCheck();
 
-                Vector3 world = transform.localToWorldMatrix.MultiplyPoint(property.vector3Value);
+                Vector3 world = _transform.localToWorldMatrix.MultiplyPoint(property.vector3Value);
 
                 world = Handles.FreeMoveHandle(world, size, Vector3.one * 0.1f, Handles.CubeHandleCap);
 
 
-                property.vector3Value = transform.worldToLocalMatrix.MultiplyPoint(world);
+                property.vector3Value = _transform.worldToLocalMatrix.MultiplyPoint(world);
                 property.serializedObject.ApplyModifiedProperties();
 
-                if (EditorGUI.EndChangeCheck()) {
-                    reorderableList.index = i;
+                if (EditorGUI.EndChangeCheck())
+                {
+                    _reorderableList.index = i;
                 }
 
             }

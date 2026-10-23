@@ -12,29 +12,31 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioWeightedRandomTests
     {
-        private AudioTestSettings mSettings;
-        private AudioClip mFirst, mSecond, mDestroyed;
-        private Random.State mRandomState;
+        private AudioTestSettings _settings;
+        private AudioClip _first;
+        private AudioClip _second;
+        private AudioClip _destroyed;
+        private Random.State _randomState;
 
         [SetUp]
         public void SetUp()
         {
-            mRandomState = Random.state;
-            mSettings = new AudioTestSettings();
+            _randomState = Random.state;
+            _settings = new AudioTestSettings();
             AudioKit.Shutdown();
-            mFirst = AudioClip.Create("weighted-first", 44100, 1, 44100, false);
-            mSecond = AudioClip.Create("weighted-second", 44100, 1, 44100, false);
-            mDestroyed = AudioClip.Create("weighted-destroyed", 44100, 1, 44100, false);
-            Object.DestroyImmediate(mDestroyed);
+            _first = AudioClip.Create("weighted-first", 44100, 1, 44100, false);
+            _second = AudioClip.Create("weighted-second", 44100, 1, 44100, false);
+            _destroyed = AudioClip.Create("weighted-destroyed", 44100, 1, 44100, false);
+            Object.DestroyImmediate(_destroyed);
         }
 
         [TearDown]
         public void TearDown()
         {
-            mSettings.Dispose();
-            Object.DestroyImmediate(mFirst);
-            Object.DestroyImmediate(mSecond);
-            Random.state = mRandomState;
+            _settings.Dispose();
+            Object.DestroyImmediate(_first);
+            Object.DestroyImmediate(_second);
+            Random.state = _randomState;
         }
 
         [Test]
@@ -43,30 +45,33 @@ namespace YLFramework.Tests.Audio
             Assert.IsTrue(typeof(AudioWeightedClip).IsValueType);
             Assert.IsTrue(typeof(AudioWeightedClip).IsSerializable);
             var fields = typeof(AudioWeightedClip).GetFields(BindingFlags.Public | BindingFlags.Instance);
-            CollectionAssert.AreEquivalent(new[] { "Clip", "Weight" }, fields.Select(field => field.Name));
-            Assert.AreEqual(typeof(AudioClip), typeof(AudioWeightedClip).GetField("Clip").FieldType);
-            Assert.AreEqual(typeof(float), typeof(AudioWeightedClip).GetField("Weight").FieldType);
+            CollectionAssert.AreEquivalent(new[] { "clip", "weight" }, fields.Select(field => field.Name));
+            Assert.AreEqual(typeof(AudioClip), typeof(AudioWeightedClip).GetField("clip").FieldType);
+            Assert.AreEqual(typeof(float), typeof(AudioWeightedClip).GetField("weight").FieldType);
             var ctor = typeof(AudioWeightedClip).GetConstructor(new[] { typeof(AudioClip), typeof(float) });
             Assert.IsNotNull(ctor);
             Assert.IsTrue(ctor.GetParameters()[1].IsOptional);
             Assert.AreEqual(1f, ctor.GetParameters()[1].DefaultValue);
-            var entry = new AudioWeightedClip(mFirst);
-            Assert.AreSame(mFirst, entry.Clip);
-            Assert.AreEqual(1f, entry.Weight);
+            var entry = new AudioWeightedClip(_first);
+            Assert.AreSame(_first, entry.clip);
+            Assert.AreEqual(1f, entry.weight);
             entry = new AudioWeightedClip(null, float.NaN);
-            Assert.IsNull(entry.Clip);
-            Assert.IsTrue(float.IsNaN(entry.Weight), "Construction stores values; selection owns validation.");
-            entry = new AudioWeightedClip(mDestroyed, -1f);
-            Assert.AreSame(mDestroyed, entry.Clip);
-            Assert.AreEqual(-1f, entry.Weight);
-            Assert.AreEqual(0f, default(AudioWeightedClip).Weight);
+            Assert.IsNull(entry.clip);
+            Assert.IsTrue(float.IsNaN(entry.weight), "Construction stores values; selection owns validation.");
+            entry = new AudioWeightedClip(_destroyed, -1f);
+            Assert.AreSame(_destroyed, entry.clip);
+            Assert.AreEqual(-1f, entry.weight);
+            Assert.AreEqual(0f, default(AudioWeightedClip).weight);
         }
 
         [Test]
         public void NewEntriesAreIndependentAndExistingRandomSignatureHasNoOverloads()
         {
             foreach (var name in new[] { "PlayRandomSound", "PlayWeightedRandomSound", "TrySelectWeightedRandomClip" })
+            {
                 Assert.AreEqual(1, typeof(AudioKit).GetMethods().Count(method => method.Name == name), name);
+            }
+
             var existing = typeof(AudioKit).GetMethod("PlayRandomSound").GetParameters();
             Assert.AreEqual(typeof(IReadOnlyList<AudioClip>), existing[0].ParameterType);
             var weighted = typeof(AudioKit).GetMethod("PlayWeightedRandomSound").GetParameters();
@@ -95,8 +100,8 @@ namespace YLFramework.Tests.Audio
             var candidates = new IReadOnlyList<AudioWeightedClip>[]
             {
                 null, Array.Empty<AudioWeightedClip>(),
-                new[] { new AudioWeightedClip(mFirst, 0f), new AudioWeightedClip(mSecond, -0f) },
-                new[] { new AudioWeightedClip(null, 5f), new AudioWeightedClip(mDestroyed, 9f) }
+                new[] { new AudioWeightedClip(_first, 0f), new AudioWeightedClip(_second, -0f) },
+                new[] { new AudioWeightedClip(null, 5f), new AudioWeightedClip(_destroyed, 9f) }
             };
             var state = Random.state;
             var callbacks = 0;
@@ -119,14 +124,14 @@ namespace YLFramework.Tests.Audio
         public void EveryWeightIncludingNullAndDestroyedEntriesIsValidatedBeforeSampling(float weight)
         {
             var state = Random.state;
-            foreach (var invalidClip in new[] { mFirst, null, mDestroyed })
+            foreach (var invalidClip in new[] { _first, null, _destroyed })
             {
                 foreach (var invalidFirst in new[] { true, false })
                 {
-                    var valid = new AudioWeightedClip(mSecond, 1f);
+                    var valid = new AudioWeightedClip(_second, 1f);
                     var invalid = new AudioWeightedClip(invalidClip, weight);
                     var clips = invalidFirst ? new[] { invalid, valid } : new[] { valid, invalid };
-                    var selected = mFirst;
+                    var selected = _first;
                     Assert.Throws<ArgumentOutOfRangeException>(() => AudioKit.TrySelectWeightedRandomClip(clips, out selected));
                     Assert.IsNull(selected);
                     var options = AudioSoundOptions.Defaults;
@@ -147,8 +152,8 @@ namespace YLFramework.Tests.Audio
         {
             var clips = new[]
             {
-                new AudioWeightedClip(mSecond, 0f), new AudioWeightedClip(null, float.MaxValue),
-                new AudioWeightedClip(mDestroyed, float.MaxValue), new AudioWeightedClip(mFirst, float.Epsilon)
+                new AudioWeightedClip(_second, 0f), new AudioWeightedClip(null, float.MaxValue),
+                new AudioWeightedClip(_destroyed, float.MaxValue), new AudioWeightedClip(_first, float.Epsilon)
             };
             Random.InitState(739);
             for (var i = 0; i < 64; i++)
@@ -158,7 +163,7 @@ namespace YLFramework.Tests.Audio
                 var afterOne = Random.state;
                 Random.state = before;
                 Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(clips, out var clip));
-                Assert.AreSame(mFirst, clip);
+                Assert.AreSame(_first, clip);
                 Assert.AreEqual(afterOne, Random.state);
             }
             Assert.IsNull(AudioKit.CurrentSettings);
@@ -170,8 +175,8 @@ namespace YLFramework.Tests.Audio
         {
             var clips = new[]
             {
-                new AudioWeightedClip(mFirst, 1f), new AudioWeightedClip(mSecond, 6f),
-                new AudioWeightedClip(mFirst, 3f), new AudioWeightedClip(null, 20f)
+                new AudioWeightedClip(_first, 1f), new AudioWeightedClip(_second, 6f),
+                new AudioWeightedClip(_first, 3f), new AudioWeightedClip(null, 20f)
             };
             var original = (AudioWeightedClip[])clips.Clone();
             Random.InitState(3217);
@@ -179,7 +184,7 @@ namespace YLFramework.Tests.Audio
             {
                 var before = Random.state;
                 var sample = Random.value * 10d;
-                var expected = sample < 1d || sample >= 7d ? mFirst : mSecond;
+                var expected = sample < 1d || sample >= 7d ? _first : _second;
                 var afterOne = Random.state;
                 Random.state = before;
                 Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(clips, out var clip));
@@ -194,17 +199,20 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void MultipleMaximumFloatWeightsUseDoubleAccumulation()
         {
-            var clips = new[] { new AudioWeightedClip(mFirst, float.MaxValue), new AudioWeightedClip(mSecond, float.MaxValue) };
+            var clips = new[] { new AudioWeightedClip(_first, float.MaxValue), new AudioWeightedClip(_second, float.MaxValue) };
             Random.InitState(8013);
             var firstCount = 0;
             for (var i = 0; i < 512; i++)
             {
                 var before = Random.state;
-                var expected = Random.value < .5f ? mFirst : mSecond;
+                var expected = Random.value < .5f ? _first : _second;
                 Random.state = before;
                 Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(clips, out var clip));
                 Assert.AreSame(expected, clip);
-                if (clip == mFirst) firstCount++;
+                if (clip == _first)
+                {
+                    firstCount++;
+                }
             }
             Assert.That(firstCount, Is.InRange(170, 340));
         }
@@ -214,29 +222,32 @@ namespace YLFramework.Tests.Audio
         public void FixedSeedDistributionHasGenerousToleranceAndDuplicateClipProbabilityAddsNaturally(bool duplicates, float expected)
         {
             var clips = duplicates
-                ? new[] { new AudioWeightedClip(mFirst, 1f), new AudioWeightedClip(mSecond, 6f), new AudioWeightedClip(mFirst, 3f) }
-                : new[] { new AudioWeightedClip(mFirst, 1f), new AudioWeightedClip(mSecond, 3f) };
+                ? new[] { new AudioWeightedClip(_first, 1f), new AudioWeightedClip(_second, 6f), new AudioWeightedClip(_first, 3f) }
+                : new[] { new AudioWeightedClip(_first, 1f), new AudioWeightedClip(_second, 3f) };
             Random.InitState(4919);
             var count = 0;
-            const int samples = 8000;
-            for (var i = 0; i < samples; i++)
+            const int Samples = 8000;
+            for (var i = 0; i < Samples; i++)
             {
                 Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(clips, out var clip));
-                if (clip == mFirst) count++;
+                if (clip == _first)
+                {
+                    count++;
+                }
             }
-            Assert.That(count / (float)samples, Is.InRange(expected - .06f, expected + .06f));
+            Assert.That(count / (float)Samples, Is.InRange(expected - .06f, expected + .06f));
         }
 
         [Test]
         public void LegacyEqualRandomStillUsesOneIntegerRangeAndCountsDuplicateEntries()
         {
-            var clips = new[] { null, mFirst, mSecond, mDestroyed, mFirst };
+            var clips = new[] { null, _first, _second, _destroyed, _first };
             Random.InitState(619);
             for (var i = 0; i < 128; i++)
             {
                 var before = Random.state;
                 var index = Random.Range(0, 3);
-                var expected = index == 1 ? mSecond : mFirst;
+                var expected = index == 1 ? _second : _first;
                 var afterOne = Random.state;
                 Random.state = before;
                 Assert.IsTrue(AudioKit.TrySelectRandomClip(clips, out var selected));
@@ -257,7 +268,7 @@ namespace YLFramework.Tests.Audio
             var afterOne = Random.state;
             Random.state = before;
             Assert.Throws<ArgumentOutOfRangeException>(() => AudioKit.PlayWeightedRandomSound(
-                new[] { new AudioWeightedClip(mFirst) }, options));
+                new[] { new AudioWeightedClip(_first) }, options));
             Assert.AreEqual(afterOne, Random.state);
             Assert.IsNull(AudioKit.CurrentSettings);
             Assert.IsFalse(AudioManager.HasInstance);
@@ -273,7 +284,10 @@ namespace YLFramework.Tests.Audio
                 var type = typeof(AudioEmitter);
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 foreach (var name in new[] { "clips", "useWeightedRandom", "weightedClips" })
+                {
                     Assert.IsTrue(type.GetField(name, flags).IsDefined(typeof(SerializeField), false), name);
+                }
+
                 Assert.AreEqual(false, type.GetField("useWeightedRandom", flags).GetValue(emitter));
                 var clips = (List<AudioClip>)type.GetField("clips", flags).GetValue(emitter);
                 var weighted = (List<AudioWeightedClip>)type.GetField("weightedClips", flags).GetValue(emitter);
@@ -281,15 +295,18 @@ namespace YLFramework.Tests.Audio
                 Assert.IsNotNull(weighted);
                 Assert.IsEmpty(clips);
                 Assert.IsEmpty(weighted);
-                clips.Add(mFirst);
+                clips.Add(_first);
                 Assert.IsEmpty(weighted);
-                weighted.Add(new AudioWeightedClip(mSecond));
-                CollectionAssert.AreEqual(new[] { mFirst }, clips);
+                weighted.Add(new AudioWeightedClip(_second));
+                CollectionAssert.AreEqual(new[] { _first }, clips);
                 JsonUtility.FromJsonOverwrite("{\"volume\":0.6,\"loop\":true}", emitter);
                 Assert.AreEqual(false, type.GetField("useWeightedRandom", flags).GetValue(emitter));
-                Assert.AreSame(mFirst, clips[0]);
+                Assert.AreSame(_first, clips[0]);
             }
-            finally { Object.DestroyImmediate(root); }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
     }
 }

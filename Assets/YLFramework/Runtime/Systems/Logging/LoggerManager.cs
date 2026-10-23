@@ -20,8 +20,16 @@ namespace YLFramework.Logging
         /// <summary>当前会话重复启用返回同一对象，不重复安装。更换配置先Disable。</summary>
         public static LoggerSession Enable(LoggerOptions options = null)
         {
-            if (!SingletonSessionState.CanRunExecution) throw new InvalidOperationException("Logger只能在有效Play会话中显式启用。");
-            if (_current != null) return _current;
+            if (!SingletonSessionState.CanRunExecution)
+            {
+                throw new InvalidOperationException("Logger只能在有效Play会话中显式启用。");
+            }
+
+            if (_current != null)
+            {
+                return _current;
+            }
+
             options ??= new LoggerOptions();
             var resolved = new LoggerOptions
             {
@@ -48,7 +56,11 @@ namespace YLFramework.Logging
             catch
             {
                 session.Dispose();
-                if (obj) Destroy(obj);
+                if (obj)
+                {
+                    Destroy(obj);
+                }
+
                 throw;
             }
         }
@@ -72,12 +84,27 @@ namespace YLFramework.Logging
         private void Release()
         {
             var session = _session;
-            if (session == null) return;
+            if (session == null)
+            {
+                return;
+            }
+
             _session = null;
-            if (ReferenceEquals(Debug.unityLogger.logHandler, session)) Debug.unityLogger.logHandler = _previous;
+            if (ReferenceEquals(Debug.unityLogger.logHandler, session))
+            {
+                Debug.unityLogger.logHandler = _previous;
+            }
+
             session.Dispose();
-            if (ReferenceEquals(_current, session)) _current = null;
-            if (ReferenceEquals(_host, this)) _host = null;
+            if (ReferenceEquals(_current, session))
+            {
+                _current = null;
+            }
+
+            if (ReferenceEquals(_host, this))
+            {
+                _host = null;
+            }
         }
 
         private void OnDisable() => Release();

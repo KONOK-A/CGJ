@@ -1,6 +1,6 @@
-using System; 
-using System.Collections.Generic; 
-using UnityEngine; 
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using YLFramework.Foundation;
 
 namespace YLFramework.Core
@@ -132,7 +132,7 @@ namespace YLFramework.Core
         /// </summary>
         /// <param name="type">数据类型</param>
         /// <returns></returns>
-        public Model LoadModel(Type type) 
+        public Model LoadModel(Type type)
         {
             return ModelManager.LoadModel(this, type);
         }
@@ -144,7 +144,8 @@ namespace YLFramework.Core
         /// </summary>
         /// <typeparam name="T">数据类型</typeparam>
         /// <returns></returns>
-        public T LoadModel<T>() where T : Model {
+        public T LoadModel<T>() where T : Model
+        {
             return ModelManager.LoadModel<T>(this);
         }
 

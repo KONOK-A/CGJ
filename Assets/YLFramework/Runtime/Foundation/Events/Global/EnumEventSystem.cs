@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using YLFramework.Core.Singleton;
 
 namespace YLFramework.Events
@@ -36,7 +36,9 @@ namespace YLFramework.Events
         /// <summary>
         /// 创建事件系统实例；外部请通过 <see cref="Instance"/> 访问单例。
         /// </summary>
-        protected EnumEventSystem() { }
+        protected EnumEventSystem()
+        {
+        }
 
         /// <summary>
         /// 注册指定枚举 key 的监听，返回注销句柄；key 不存在时自动创建对应事件。
@@ -45,7 +47,7 @@ namespace YLFramework.Events
         /// <param name="key">事件 key。</param>
         /// <param name="eventAction">事件监听回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
-        public IUnRegister Register<T>(T key, Action<object[]> eventAction) where T : Enum
+        public IUnregister Register<T>(T key, Action<object[]> eventAction) where T : Enum
         {
             return _bus.Register(new EventKey(key), eventAction);
         }
@@ -56,9 +58,9 @@ namespace YLFramework.Events
         /// <typeparam name="T">枚举类型。</typeparam>
         /// <param name="key">事件 key。</param>
         /// <param name="eventAction">要注销的监听回调。</param>
-        public void UnRegister<T>(T key, Action<object[]> eventAction) where T : Enum
+        public void Unregister<T>(T key, Action<object[]> eventAction) where T : Enum
         {
-            _bus.UnRegister(new EventKey(key), eventAction);
+            _bus.Unregister(new EventKey(key), eventAction);
         }
 
         /// <summary>
@@ -66,7 +68,7 @@ namespace YLFramework.Events
         /// </summary>
         /// <typeparam name="T">枚举类型。</typeparam>
         /// <param name="key">事件 key。</param>
-        public void UnRegister<T>(T key) where T : Enum
+        public void Unregister<T>(T key) where T : Enum
         {
             _bus.RemoveKey(new EventKey(key));
         }
@@ -74,9 +76,12 @@ namespace YLFramework.Events
         /// <summary>
         /// 终结并移除所有 key 的事件及在途通知，系统仍可用；关闭后为空操作。
         /// </summary>
-        public void UnRegisterAll()
+        public void UnregisterAll()
         {
-            if (!_bus.IsDisposed) _bus.ClearKeys();
+            if (!_bus.IsDisposed)
+            {
+                _bus.ClearKeys();
+            }
         }
 
         /// <summary>
@@ -103,9 +108,17 @@ namespace YLFramework.Events
         /// </summary>
         public void Dispose()
         {
-            if (_bus.IsDisposed) return;
+            if (_bus.IsDisposed)
+            {
+                return;
+            }
+
             _bus.Dispose();
-            if (ReferenceEquals(_sessionInstance, this)) _sessionInstance = null;
+            if (ReferenceEquals(_sessionInstance, this))
+            {
+                _sessionInstance = null;
+            }
+
             if (SingletonProperty<EnumEventSystem>.TryGetInstance(out var current) && ReferenceEquals(current, this))
             {
                 SingletonProperty<EnumEventSystem>.Dispose();

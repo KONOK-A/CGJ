@@ -21,13 +21,13 @@ namespace YLFramework.Utilities.Table
     /// 返回后会 fail-fast 抛 <see cref="ObjectDisposedException"/>；若选择器内 Add/Remove/Clear，则先按调用顺序完成。
     /// </para>
     /// </summary>
-    /// <typeparam name="TKeyType">索引键类型。</typeparam>
+    /// <typeparam name="TKey">索引键类型。</typeparam>
     /// <typeparam name="TDataItem">数据项类型。</typeparam>
-    public class TableIndex<TKeyType, TDataItem> : IDisposable
+    public class TableIndex<TKey, TDataItem> : IDisposable
     {
-        private Dictionary<TKeyType, List<TDataItem>> _index;
+        private Dictionary<TKey, List<TDataItem>> _index;
 
-        private readonly Func<TDataItem, TKeyType> _getKeyByDataItem;
+        private readonly Func<TDataItem, TKey> _getKeyByDataItem;
 
         private bool _isDisposed;
 
@@ -36,11 +36,11 @@ namespace YLFramework.Utilities.Table
         /// </summary>
         /// <param name="keyGetterByDataItem">从数据项计算索引键的委托；不能为 null。</param>
         /// <exception cref="ArgumentNullException"><paramref name="keyGetterByDataItem"/> 为 null。</exception>
-        public TableIndex(Func<TDataItem, TKeyType> keyGetterByDataItem)
+        public TableIndex(Func<TDataItem, TKey> keyGetterByDataItem)
         {
             _getKeyByDataItem = keyGetterByDataItem ??
                                 throw new ArgumentNullException(nameof(keyGetterByDataItem));
-            _index = DictionaryPool<TKeyType, List<TDataItem>>.Allocate();
+            _index = DictionaryPool<TKey, List<TDataItem>>.Allocate();
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace YLFramework.Utilities.Table
         /// 旧引用生命周期：Clear 后同一字典仍有效但内容已清空；Dispose 后字典已归还 <see cref="DictionaryPool{TKey,TValue}"/>，旧引用失效。
         /// </summary>
         /// <exception cref="ObjectDisposedException">索引已释放。</exception>
-        public IDictionary<TKeyType, List<TDataItem>> Dictionary
+        public IDictionary<TKey, List<TDataItem>> Dictionary
         {
             get
             {
@@ -142,7 +142,7 @@ namespace YLFramework.Utilities.Table
         /// <returns>该键下的数据项集合；键不存在时为空集合。</returns>
         /// <exception cref="ObjectDisposedException">索引已释放。</exception>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> 为 null。</exception>
-        public IEnumerable<TDataItem> Get(TKeyType key)
+        public IEnumerable<TDataItem> Get(TKey key)
         {
             ThrowIfDisposed();
             ThrowIfKeyNull(key);
@@ -194,11 +194,11 @@ namespace YLFramework.Utilities.Table
         {
             if (_isDisposed)
             {
-                throw new ObjectDisposedException(nameof(TableIndex<TKeyType, TDataItem>));
+                throw new ObjectDisposedException(nameof(TableIndex<TKey, TDataItem>));
             }
         }
 
-        private static void ThrowIfKeyNull(TKeyType key)
+        private static void ThrowIfKeyNull(TKey key)
         {
             // Dictionary 对 null 键会抛 ArgumentNullException，这里提前给出更明确的上下文；
             // 对值类型键该判断恒为 false，不影响正常路径。

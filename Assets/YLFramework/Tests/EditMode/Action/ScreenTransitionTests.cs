@@ -1,9 +1,9 @@
-using YLFramework.Actions;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using YLFramework.Actions;
 using Kit = YLFramework.Actions.ActionKit;
 using Object = UnityEngine.Object;
 
@@ -11,9 +11,9 @@ namespace YLFramework.Tests.Actions
 {
     public class ScreenTransitionTests
     {
-        private readonly List<IAction> mActions = new List<IAction>();
-        private GameObject mRoot;
-        private ScreenTransitionCanvas mCanvas;
+        private readonly List<IAction> _actions = new List<IAction>();
+        private GameObject _root;
+        private ScreenTransitionCanvas _canvas;
 
         [SetUp]
         public void SetUp()
@@ -21,33 +21,42 @@ namespace YLFramework.Tests.Actions
             ActionQueue.Drain();
             Assert.That(Object.FindObjectOfType<ScreenTransitionCanvas>() == null, Is.True,
                 "This fixture must own its screen-transition canvas.");
-            mRoot = new GameObject("ActionKit.ScreenTransition.EditModeTest", typeof(RectTransform),
+            _root = new GameObject("ActionKit.ScreenTransition.EditModeTest", typeof(RectTransform),
                 typeof(Canvas), typeof(ScreenTransitionCanvas));
             var imageRoot = new GameObject("ColorImage", typeof(RectTransform), typeof(Image));
-            imageRoot.transform.SetParent(mRoot.transform, false);
-            mCanvas = mRoot.GetComponent<ScreenTransitionCanvas>();
-            mCanvas.ColorImage = imageRoot.GetComponent<Image>();
-            mCanvas.ColorImage.color = Color.black;
+            imageRoot.transform.SetParent(_root.transform, false);
+            _canvas = _root.GetComponent<ScreenTransitionCanvas>();
+            _canvas.colorImage = imageRoot.GetComponent<Image>();
+            _canvas.colorImage.color = Color.black;
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(action);
+            _actions.Add(action);
             return action;
         }
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var action in mActions)
+            foreach (var action in _actions)
             {
                 if (action is ScreenTransitionInOut<ScreenTransitionFade, ScreenTransitionFade> inOut)
+                {
                     inOut.In(null).Out(null).OnInFinish(null);
-                if (!action.Deinited) action.Deinit();
+                }
+
+                if (!action.IsDeinitialized)
+                {
+                    action.Deinit();
+                }
             }
-            mActions.Clear();
+            _actions.Clear();
             ActionQueue.Drain();
-            if (mRoot) Object.DestroyImmediate(mRoot);
+            if (_root)
+            {
+                Object.DestroyImmediate(_root);
+            }
         }
 
         [Test]
@@ -55,11 +64,11 @@ namespace YLFramework.Tests.Actions
         {
             var fade = Own(Kit.ScreenTransition.FadeIn());
             Assert.That(fade.Execute(0), Is.False);
-            Assert.That(mCanvas.ColorImage.color, Is.EqualTo(new Color(0, 0, 0, 0)));
+            Assert.That(_canvas.colorImage.color, Is.EqualTo(new Color(0, 0, 0, 0)));
             Assert.That(fade.Execute(0.25f), Is.False);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.25f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.25f));
             Assert.That(fade.Execute(0.75f), Is.True);
-            Assert.That(mCanvas.ColorImage.color, Is.EqualTo(Color.black));
+            Assert.That(_canvas.colorImage.color, Is.EqualTo(Color.black));
         }
 
         [Test]
@@ -67,11 +76,11 @@ namespace YLFramework.Tests.Actions
         {
             var fade = Own(Kit.ScreenTransition.FadeOut());
             fade.Execute(0);
-            Assert.That(mCanvas.ColorImage.color, Is.EqualTo(Color.black));
+            Assert.That(_canvas.colorImage.color, Is.EqualTo(Color.black));
             Assert.That(fade.Execute(0.5f), Is.False);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.5f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.5f));
             Assert.That(fade.Execute(0.5f), Is.True);
-            Assert.That(mCanvas.ColorImage.color.a, Is.Zero);
+            Assert.That(_canvas.colorImage.color.a, Is.Zero);
         }
 
         [Test]
@@ -83,14 +92,14 @@ namespace YLFramework.Tests.Actions
             Assert.That(fade.ToAlpha(0.8f), Is.SameAs(fade));
             Assert.That(fade.Duration(2), Is.SameAs(fade));
             fade.Execute(0);
-            Assert.That(mCanvas.ColorImage.color.r, Is.EqualTo(1));
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.2f));
+            Assert.That(_canvas.colorImage.color.r, Is.EqualTo(1));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.2f));
             Assert.That(fade.Execute(1), Is.False);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.5f).Within(0.00001f));
-            Assert.That(mCanvas.ColorImage.color.g, Is.EqualTo(0.25f));
-            Assert.That(mCanvas.ColorImage.color.b, Is.EqualTo(0.5f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.5f).Within(0.00001f));
+            Assert.That(_canvas.colorImage.color.g, Is.EqualTo(0.25f));
+            Assert.That(_canvas.colorImage.color.b, Is.EqualTo(0.5f));
             Assert.That(fade.Execute(1), Is.True);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.8f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.8f));
         }
 
         [TestCase(0f)]
@@ -100,7 +109,7 @@ namespace YLFramework.Tests.Actions
             var fade = Own(Kit.ScreenTransition.FadeIn().Duration(duration));
             Assert.That(fade.Execute(0), Is.False);
             Assert.That(fade.Execute(0.1f), Is.True);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(1));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(1));
         }
 
         [Test]
@@ -109,22 +118,22 @@ namespace YLFramework.Tests.Actions
             var fade = Own(Kit.ScreenTransition.FadeIn().Duration(2));
             fade.Execute(0);
             fade.Execute(1);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.5f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.5f));
             fade.Reset();
             fade.Execute(0);
-            Assert.That(mCanvas.ColorImage.color.a, Is.Zero);
+            Assert.That(_canvas.colorImage.color.a, Is.Zero);
             fade.Execute(1);
-            Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.5f));
+            Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.5f));
         }
 
         [Test]
         public void ForcedFinishOnlySetsTargetAlphaWithoutApplyingTheConfiguredStartColor()
         {
-            mCanvas.ColorImage.color = Color.green;
+            _canvas.colorImage.color = Color.green;
             var fade = Own(Kit.ScreenTransition.FadeIn());
             fade.Finish();
             Assert.That(fade.Execute(0), Is.True);
-            Assert.That(mCanvas.ColorImage.color, Is.EqualTo(Color.green));
+            Assert.That(_canvas.colorImage.color, Is.EqualTo(Color.green));
         }
 
         [Test]
@@ -139,16 +148,19 @@ namespace YLFramework.Tests.Actions
                 reused = Own(ScreenTransitionFade.Allocate());
                 Assert.That(reused, Is.SameAs(first));
                 reused.Execute(0);
-                Assert.That(mCanvas.ColorImage.color.r, Is.EqualTo(1));
-                Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.3f));
+                Assert.That(_canvas.colorImage.color.r, Is.EqualTo(1));
+                Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.3f));
                 reused.Execute(1);
-                Assert.That(mCanvas.ColorImage.color.a, Is.EqualTo(0.5f).Within(0.00001f));
+                Assert.That(_canvas.colorImage.color.a, Is.EqualTo(0.5f).Within(0.00001f));
             }
             finally
             {
                 // Leave no characterized settings behind even when an assertion fails.
                 first.Color(Color.black).FromAlpha(0).ToAlpha(0).Duration(1);
-                if (reused != null) reused.Color(Color.black).FromAlpha(0).ToAlpha(0).Duration(1);
+                if (reused != null)
+                {
+                    reused.Color(Color.black).FromAlpha(0).ToAlpha(0).Duration(1);
+                }
             }
         }
 
@@ -170,7 +182,7 @@ namespace YLFramework.Tests.Actions
         [Test]
         public void AnExistingSceneCanvasHasPriorityOverResourceInstantiation()
         {
-            Assert.That(ScreenTransitionCanvas.Instance, Is.SameAs(mCanvas));
+            Assert.That(ScreenTransitionCanvas.Instance, Is.SameAs(_canvas));
             Assert.That(Object.FindObjectsOfType<ScreenTransitionCanvas>().Length, Is.EqualTo(1));
         }
 
@@ -192,10 +204,13 @@ namespace YLFramework.Tests.Actions
             foreach (var child in prefab.GetComponentsInChildren<Transform>(true))
             {
                 Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject), Is.Zero);
-                foreach (var attached in child.GetComponents<Component>()) Assert.That(attached, Is.Not.Null);
+                foreach (var attached in child.GetComponents<Component>())
+                {
+                    Assert.That(attached, Is.Not.Null);
+                }
             }
-            Assert.That(component.ColorImage, Is.Not.Null);
-            Assert.That(component.ColorImage.transform.parent, Is.EqualTo(prefab.transform));
+            Assert.That(component.colorImage, Is.Not.Null);
+            Assert.That(component.colorImage.transform.parent, Is.EqualTo(prefab.transform));
             var canvas = prefab.GetComponent<Canvas>();
             Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
             Assert.That(canvas.sortingOrder, Is.EqualTo(10000));
@@ -203,11 +218,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ConstantPixelSize));
             Assert.That(scaler.scaleFactor, Is.EqualTo(1));
             Assert.That(scaler.referencePixelsPerUnit, Is.EqualTo(100));
-            Assert.That(component.ColorImage.color, Is.EqualTo(Color.black));
-            Assert.That(component.ColorImage.raycastTarget, Is.True);
-            Assert.That(component.ColorImage.sprite, Is.Null);
+            Assert.That(component.colorImage.color, Is.EqualTo(Color.black));
+            Assert.That(component.colorImage.raycastTarget, Is.True);
+            Assert.That(component.colorImage.sprite, Is.Null);
             Assert.That(prefab.GetComponent<GraphicRaycaster>(), Is.Null, "Do not add input behavior absent from the original resource.");
-            var rect = component.ColorImage.rectTransform;
+            var rect = component.colorImage.rectTransform;
             Assert.That(rect.anchorMin, Is.EqualTo(Vector2.zero));
             Assert.That(rect.anchorMax, Is.EqualTo(Vector2.one));
             Assert.That(rect.sizeDelta, Is.EqualTo(Vector2.zero));

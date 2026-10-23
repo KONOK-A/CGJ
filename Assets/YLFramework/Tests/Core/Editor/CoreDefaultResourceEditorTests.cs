@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -15,6 +17,220 @@ namespace YLFramework.Core.Editor.Tests
 {
     public class CoreDefaultResourceEditorTests
     {
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LegacyPanelConfigNamesPreserveExplicitBooleansZerosAndReferences(bool enabled)
+        {
+            string folder = CreateLegacyPanelFolder();
+            try
+            {
+                var yaml = LegacyPanelYaml(File.ReadAllText(UIPanelAssetMigration.ColorPath));
+                var values = new[]
+                {
+                    ("Layer", "layer", enabled ? 3 : 0),
+                    ("Priority", "priority", enabled ? 9 : 0),
+                    ("Modal", "modal", enabled ? 1 : 0),
+                    ("CoversRoot", "coversRoot", enabled ? 0 : 1),
+                    ("ParticipatesInTop", "participatesInTop", enabled ? 1 : 0),
+                    ("InstanceMode", "instanceMode", enabled ? 1 : 0),
+                    ("CacheOnClose", "cacheOnClose", enabled ? 0 : 1)
+                };
+                foreach (var value in values)
+                {
+                    yaml = Regex.Replace(yaml, @"(?m)^    " + value.Item1 + @": [^\r\n]*$",
+                        "    " + value.Item1 + ": " + value.Item3);
+                }
+
+                string path = folder + "/Legacy.prefab";
+                File.WriteAllText(path, yaml, new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                Assert.That(prefab.GetComponent<Panel>(), Is.Not.Null, "The real legacy script reference must survive.");
+                var selector = prefab.GetComponentInChildren<ColorSelector>(true);
+                Assert.That(selector, Is.Not.Null);
+                var cursor = new SerializedObject(selector).FindProperty("outerCursor").objectReferenceValue as Transform;
+                Assert.That(cursor && cursor.IsChildOf(prefab.transform), Is.True,
+                    "The legacy local fileID reference must resolve inside the copied prefab.");
+                Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(prefab), Is.Zero);
+                var settings = new SerializedObject(prefab.GetComponent<Panel>()).FindProperty("settings");
+                foreach (var value in values)
+                {
+                    var property = settings.FindPropertyRelative(value.Item2);
+                    Assert.That(property, Is.Not.Null, "Migration target field missing: " + value.Item2);
+                    if (property.propertyType == SerializedPropertyType.Boolean)
+                    {
+                        Assert.That(property.boolValue, Is.EqualTo(value.Item3 != 0), value.Item2);
+                    }
+                    else
+                    {
+                        Assert.That(property.intValue, Is.EqualTo(value.Item3), value.Item2);
+                    }
+                }
+
+                Assert.That(PrefabUtility.SavePrefabAsset(prefab), Is.Not.Null);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(guid));
+                var saved = File.ReadAllText(path);
+                foreach (var value in values)
+                {
+                    StringAssert.Contains("    " + value.Item2 + ": " + value.Item3, saved);
+                    Assert.That(Regex.IsMatch(saved, @"(?m)^    " + value.Item1 + @": "), Is.False);
+                }
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+            }
+        }
+
+        [Test]
+        public void LegacyPanelVariantLayerOverrideSurvivesReimport()
+        {
+            string folder = CreateLegacyPanelFolder();
+            try
+            {
+                string basePath = folder + "/Base.prefab";
+                File.WriteAllText(basePath, LegacyPanelYaml(File.ReadAllText(UIPanelAssetMigration.TipsPath)),
+                    new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(basePath, ImportAssetOptions.ForceSynchronousImport);
+                string baseGuid = AssetDatabase.AssetPathToGUID(basePath);
+                var variantYaml = File.ReadAllText(UIPanelAssetMigration.TipsVariantPath)
+                    .Replace(AssetDatabase.AssetPathToGUID(UIPanelAssetMigration.TipsPath), baseGuid)
+                    .Replace("propertyPath: settings.layer", "propertyPath: settings.Layer");
+                StringAssert.Contains("propertyPath: settings.Layer", variantYaml);
+                string variantPath = folder + "/Variant.prefab";
+                File.WriteAllText(variantPath, variantYaml, new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(variantPath, ImportAssetOptions.ForceSynchronousImport);
+                var variant = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
+                Assert.That(PrefabUtility.GetPrefabAssetType(variant), Is.EqualTo(PrefabAssetType.Variant));
+                var migrate = typeof(UIPanelAssetMigration).GetMethod("MigratePanelConfigOverridePaths",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                Assert.That(migrate, Is.Not.Null, "Legacy property paths require an explicit migration, not a weaker override assertion.");
+                var original = PrefabUtility.GetPropertyModifications(variant);
+                var legacy = original.Single(change => change.propertyPath == "settings.Layer");
+                var conflicting = original.Concat(new[] { new PropertyModification
+                {
+                    target = legacy.target,
+                    propertyPath = "settings.layer",
+                    value = "7"
+                } }).ToArray();
+                PrefabUtility.SetPropertyModifications(variant, conflicting);
+                var beforeConflict = PrefabUtility.GetPropertyModifications(variant)
+                    .Select(change => (change.target, change.propertyPath, change.value, change.objectReference)).ToArray();
+                var conflict = Assert.Throws<TargetInvocationException>(() => migrate.Invoke(null, new object[] { variant }));
+                Assert.That(conflict.InnerException, Is.TypeOf<InvalidOperationException>());
+                Assert.That(PrefabUtility.GetPropertyModifications(variant)
+                    .Select(change => (change.target, change.propertyPath, change.value, change.objectReference)),
+                    Is.EqualTo(beforeConflict),
+                    "A conflicting legacy/canonical pair must be rejected before any modification.");
+                PrefabUtility.SetPropertyModifications(variant, original);
+                Assert.That(migrate.Invoke(null, new object[] { variant }), Is.EqualTo(true));
+                Assert.That(migrate.Invoke(null, new object[] { variant }), Is.EqualTo(false), "Migration must be idempotent.");
+                var layer = new SerializedObject(variant.GetComponent<Panel>()).FindProperty("settings.layer");
+                Assert.That(layer, Is.Not.Null, "Migration target field missing: settings.layer");
+                Assert.That(layer.intValue, Is.EqualTo(4), "The old override must not silently fall back to the base layer.");
+                Assert.That(layer.prefabOverride, Is.True);
+                Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(variant),
+                    Is.SameAs(AssetDatabase.LoadAssetAtPath<GameObject>(basePath)));
+                Assert.That(PrefabUtility.SavePrefabAsset(variant), Is.Not.Null);
+                AssetDatabase.ImportAsset(variantPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                var reloaded = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(variantPath).GetComponent<Panel>());
+                Assert.That(reloaded.FindProperty("settings.layer").intValue, Is.EqualTo(4));
+                Assert.That(reloaded.FindProperty("settings.layer").prefabOverride, Is.True);
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+            }
+        }
+
+        private static string CreateLegacyPanelFolder()
+        {
+            string name = "LegacyPanelFields_" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/Core/Editor", name), Is.Not.Empty);
+            return "Assets/YLFramework/Tests/Core/Editor/" + name;
+        }
+
+        [Test]
+        public void LegacyTimerEventsRetainPersistentTargetsArgumentsAndClockPolicy()
+        {
+            string folder = CreateLegacyPanelFolder();
+            try
+            {
+                string path = folder + "/Timer.prefab";
+                File.WriteAllBytes(path, File.ReadAllBytes(UIPanelAssetMigration.TipsPath));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                var contents = PrefabUtility.LoadPrefabContents(path);
+                try
+                {
+                    contents.SetActive(false);
+                    var timer = contents.AddComponent<TimerObject>();
+                    Assert.That(timer.delay, Is.EqualTo(2));
+                    Assert.That(timer.ignoreTimeScale, Is.True);
+                    timer.delay = 3.25f;
+                    timer.ignoreTimeScale = false;
+                    timer.onCompleted = new UnityEngine.Events.UnityEvent();
+                    timer.onAborted = new UnityEngine.Events.UnityEvent();
+                    UnityEditor.Events.UnityEventTools.AddBoolPersistentListener(timer.onCompleted, contents.SetActive, true);
+                    UnityEditor.Events.UnityEventTools.AddBoolPersistentListener(timer.onAborted, contents.SetActive, false);
+                    Assert.That(PrefabUtility.SaveAsPrefabAsset(contents, path), Is.Not.Null);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(contents);
+                }
+
+                string yaml = File.ReadAllText(path).Replace("\n  onCompleted:", "\n  Action:")
+                    .Replace("\n  onAborted:", "\n  Abort:");
+                StringAssert.Contains("\n  Action:", yaml);
+                StringAssert.Contains("\n  Abort:", yaml);
+                File.WriteAllText(path, yaml, new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                var restored = prefab.GetComponent<TimerObject>();
+                Assert.That(restored.delay, Is.EqualTo(3.25f));
+                Assert.That(restored.ignoreTimeScale, Is.False);
+                var serialized = new SerializedObject(restored);
+                foreach (var entry in new[] { ("onCompleted", true), ("onAborted", false) })
+                {
+                    var property = serialized.FindProperty(entry.Item1);
+                    Assert.That(property, Is.Not.Null, "Migration target field missing: " + entry.Item1);
+                    var calls = property.FindPropertyRelative("m_PersistentCalls.m_Calls");
+                    Assert.That(calls.arraySize, Is.EqualTo(1));
+                    var call = calls.GetArrayElementAtIndex(0);
+                    Assert.That(call.FindPropertyRelative("m_Target").objectReferenceValue, Is.SameAs(prefab));
+                    Assert.That(call.FindPropertyRelative("m_MethodName").stringValue, Is.EqualTo("SetActive"));
+                    Assert.That(call.FindPropertyRelative("m_Arguments.m_BoolArgument").boolValue, Is.EqualTo(entry.Item2));
+                }
+
+                Assert.That(PrefabUtility.SavePrefabAsset(prefab), Is.Not.Null);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                StringAssert.Contains("\n  onCompleted:", File.ReadAllText(path));
+                StringAssert.Contains("\n  onAborted:", File.ReadAllText(path));
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+            }
+        }
+
+        private static string LegacyPanelYaml(string yaml)
+        {
+            foreach (var names in new[]
+            {
+                ("Layer", "layer"), ("Priority", "priority"), ("Modal", "modal"),
+                ("CoversRoot", "coversRoot"), ("ParticipatesInTop", "participatesInTop"),
+                ("InstanceMode", "instanceMode"), ("CacheOnClose", "cacheOnClose")
+            })
+            {
+                yaml = Regex.Replace(yaml, @"(?m)^    " + names.Item2 + @": ", "    " + names.Item1 + ": ");
+                Assert.That(Regex.Matches(yaml, @"(?m)^    " + names.Item1 + @": ").Count, Is.EqualTo(1));
+            }
+
+            return yaml;
+        }
+
         [Test]
         public void PanelMigrationAndIl2CppBuildAreExplicitEntrypointsWithoutAutomaticMigrationHooks()
         {
@@ -22,7 +238,9 @@ namespace YLFramework.Core.Editor.Tests
             {
                 Assert.That(type.GetCustomAttributes(typeof(InitializeOnLoadAttribute), false), Is.Empty);
                 foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                {
                     Assert.That(method.GetCustomAttributes(typeof(InitializeOnLoadMethodAttribute), false), Is.Empty, method.Name);
+                }
             }
             Assert.That(typeof(UIPanelAssetMigration).GetMethod("ValidateAssets", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
             Assert.That(typeof(UIPanelAssetMigration).GetMethod("MigrateAssets", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
@@ -47,22 +265,26 @@ namespace YLFramework.Core.Editor.Tests
                 original.SetActive(false);
                 var configured = new SerializedObject(original.GetComponent<Panel>());
                 var defaults = configured.FindProperty("settings");
-                defaults.FindPropertyRelative("Layer").intValue = 0;
-                defaults.FindPropertyRelative("Priority").intValue = 11;
-                defaults.FindPropertyRelative("Modal").boolValue = true;
-                defaults.FindPropertyRelative("ParticipatesInTop").boolValue = true;
-                defaults.FindPropertyRelative("CacheOnClose").boolValue = true;
+                defaults.FindPropertyRelative("layer").intValue = 0;
+                defaults.FindPropertyRelative("priority").intValue = 11;
+                defaults.FindPropertyRelative("modal").boolValue = true;
+                defaults.FindPropertyRelative("participatesInTop").boolValue = true;
+                defaults.FindPropertyRelative("cacheOnClose").boolValue = true;
                 configured.ApplyModifiedPropertiesWithoutUndo();
                 string basePath = folder + "/Base.prefab", variantPath = folder + "/Variant.prefab";
                 Assert.That(PrefabUtility.SaveAsPrefabAsset(original, basePath), Is.Not.Null);
                 var baseAsset = AssetDatabase.LoadAssetAtPath<GameObject>(basePath);
                 var reloaded = new SerializedObject(baseAsset.GetComponent<Panel>()).FindProperty("settings");
-                Assert.That(reloaded.FindPropertyRelative("ParticipatesInTop").boolValue && reloaded.FindPropertyRelative("CacheOnClose").boolValue, Is.True);
+                Assert.That(reloaded.FindPropertyRelative("participatesInTop").boolValue && reloaded.FindPropertyRelative("cacheOnClose").boolValue, Is.True);
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(baseAsset, preview);
                 var changed = new SerializedObject(instance.GetComponent<Panel>());
                 var overrides = changed.FindProperty("settings");
-                overrides.FindPropertyRelative("Priority").intValue = 0;
-                foreach (var field in new[] { "Modal", "ParticipatesInTop", "CacheOnClose" }) overrides.FindPropertyRelative(field).boolValue = false;
+                overrides.FindPropertyRelative("priority").intValue = 0;
+                foreach (var field in new[] { "modal", "participatesInTop", "cacheOnClose" })
+                {
+                    overrides.FindPropertyRelative(field).boolValue = false;
+                }
+
                 changed.ApplyModifiedPropertiesWithoutUndo();
                 Assert.That(PrefabUtility.SaveAsPrefabAsset(instance, variantPath), Is.Not.Null);
                 var variant = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
@@ -70,15 +292,25 @@ namespace YLFramework.Core.Editor.Tests
                 Assert.That(PrefabUtility.GetCorrespondingObjectFromSource(variant), Is.SameAs(baseAsset));
                 var clone = (GameObject)PrefabUtility.InstantiatePrefab(variant, preview);
                 var values = new SerializedObject(clone.GetComponent<Panel>()).FindProperty("settings");
-                Assert.That(values.FindPropertyRelative("Priority").intValue, Is.Zero);
-                foreach (var field in new[] { "Modal", "ParticipatesInTop", "CacheOnClose" }) Assert.That(values.FindPropertyRelative(field).boolValue, Is.False, field);
+                Assert.That(values.FindPropertyRelative("priority").intValue, Is.Zero);
+                foreach (var field in new[] { "modal", "participatesInTop", "cacheOnClose" })
+                {
+                    Assert.That(values.FindPropertyRelative(field).boolValue, Is.False, field);
+                }
+
                 var saved = new SerializedObject(variant.GetComponent<Panel>()).FindProperty("settings");
-                foreach (var field in new[] { "Priority", "Modal", "ParticipatesInTop", "CacheOnClose" }) Assert.That(saved.FindPropertyRelative(field).prefabOverride, Is.True, field);
+                foreach (var field in new[] { "priority", "modal", "participatesInTop", "cacheOnClose" })
+                {
+                    Assert.That(saved.FindPropertyRelative(field).prefabOverride, Is.True, field);
+                }
             }
             finally
             {
                 EditorSceneManager.ClosePreviewScene(preview);
-                if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+                if (AssetDatabase.IsValidFolder(folder))
+                {
+                    AssetDatabase.DeleteAsset(folder);
+                }
             }
         }
 
@@ -109,7 +341,11 @@ namespace YLFramework.Core.Editor.Tests
                 var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 var identities = asset.GetComponentsInChildren<Transform>(true)
                     .SelectMany(t => new UnityEngine.Object[] { t.gameObject }.Concat(t.GetComponents<Component>()))
-                    .ToDictionary(obj => { AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id); return id; }, obj => obj.GetType());
+                    .ToDictionary(obj =>
+                    {
+                        AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id);
+                        return id;
+                    }, obj => obj.GetType());
                 var capture = typeof(UIPanelAssetMigration).GetMethod("CaptureIdentity", BindingFlags.NonPublic | BindingFlags.Static);
                 var save = typeof(UIPanelAssetMigration).GetMethod("SaveChecked", BindingFlags.NonPublic | BindingFlags.Static);
                 for (int round = 0; round < 2; round++)
@@ -119,6 +355,7 @@ namespace YLFramework.Core.Editor.Tests
                     try
                     {
                         if (convert && round == 0)
+                        {
                             PrefabUtility.ConvertToPrefabInstance(contents.transform.Find("UISystem").gameObject,
                                 AssetDatabase.LoadAssetAtPath<GameObject>(UIPanelAssetMigration.BaseRootPath), new ConvertToPrefabInstanceSettings
                                 {
@@ -128,14 +365,27 @@ namespace YLFramework.Core.Editor.Tests
                                     gameObjectsNotMatchedBecomesOverride = true,
                                     changeRootNameToAssetName = false
                                 }, InteractionMode.AutomatedAction);
+                        }
+
                         save.Invoke(null, new[] { contents, path, before });
                     }
-                    finally { PrefabUtility.UnloadPrefabContents(contents); }
+                    finally
+                    {
+                        PrefabUtility.UnloadPrefabContents(contents);
+                    }
                     asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                     var actual = asset.GetComponentsInChildren<Transform>(true)
                         .SelectMany(t => new UnityEngine.Object[] { t.gameObject }.Concat(t.GetComponents<Component>()))
-                        .ToDictionary(obj => { AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id); return id; }, obj => obj.GetType());
-                    foreach (var pair in identities) Assert.That(actual.TryGetValue(pair.Key, out var type) && type == pair.Value, Is.True, pair.Key.ToString());
+                        .ToDictionary(obj =>
+                        {
+                            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id);
+                            return id;
+                        }, obj => obj.GetType());
+                    foreach (var pair in identities)
+                    {
+                        Assert.That(actual.TryGetValue(pair.Key, out var type) && type == pair.Value, Is.True, pair.Key.ToString());
+                    }
+
                     var saved = new SerializedObject(asset.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true));
                     Assert.That(saved.FindProperty("referenceResolution").vector2Value, Is.EqualTo(Vector2.zero));
                     Assert.That(saved.FindProperty("automaticMatch").boolValue, Is.False);
@@ -145,7 +395,10 @@ namespace YLFramework.Core.Editor.Tests
             finally
             {
                 EditorSceneManager.ClosePreviewScene(preview);
-                if (AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder);
+                if (AssetDatabase.IsValidFolder(folder))
+                {
+                    AssetDatabase.DeleteAsset(folder);
+                }
             }
         }
 
@@ -186,7 +439,9 @@ namespace YLFramework.Core.Editor.Tests
                 {
                     Assert.That(GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject), Is.Zero);
                     foreach (var component in transform.GetComponents<Component>())
+                    {
                         Assert.That(component.GetType().Assembly.GetName().Name, Does.Not.StartWith("XFGameFramework"));
+                    }
                 }
                 if (name == "Canvas")
                 {
@@ -236,8 +491,15 @@ namespace YLFramework.Core.Editor.Tests
             }
             finally
             {
-                if (preview.IsValid()) EditorSceneManager.ClosePreviewScene(preview);
-                if (AssetDatabase.IsValidFolder(directory)) AssetDatabase.DeleteAsset(directory);
+                if (preview.IsValid())
+                {
+                    EditorSceneManager.ClosePreviewScene(preview);
+                }
+
+                if (AssetDatabase.IsValidFolder(directory))
+                {
+                    AssetDatabase.DeleteAsset(directory);
+                }
             }
             Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(activeScene));
             Assert.That(activeScene.isDirty, Is.EqualTo(activeWasDirty));
@@ -282,7 +544,9 @@ namespace YLFramework.Core.Editor.Tests
             finally
             {
                 if (scheduled)
+                {
                     EditorApplication.delayCall -= callback;
+                }
             }
         }
 
@@ -332,7 +596,10 @@ namespace YLFramework.Core.Editor.Tests
             };
             // Missing-resource generation belongs to coordinator verification, not destructive test setup.
             foreach (string path in paths)
+            {
                 Assert.That(File.Exists(path), Is.True, "Coordinator must create/import default resources first: " + path);
+            }
+
             return paths.Select(path => new DefaultFileSnapshot
             {
                 Path = path,

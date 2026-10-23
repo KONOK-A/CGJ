@@ -14,11 +14,19 @@ namespace YLFramework.Services.Resource
 
         internal static JObject ReadEnvelope(byte[] bytes)
         {
-            if (bytes == null || bytes.Length > MaximumBytes) throw new InvalidDataException("Release envelope exceeds its bound.");
+            if (bytes == null || bytes.Length > MaximumBytes)
+            {
+                throw new InvalidDataException("Release envelope exceeds its bound.");
+            }
+
             var data = ResourceCatalogCodec.ParseObject(bytes);
             ResourceCatalogCodec.Fields(data, "SchemaVersion,Algorithm,KeyId,Payload,Signature");
             if (ResourceCatalogCodec.Integer(data, "SchemaVersion") != 1 || ResourceCatalogCodec.Text(data, "Algorithm") != Algorithm ||
-                !bytes.SequenceEqual(ResourceCatalogCodec.CanonicalBytes(data))) throw new InvalidDataException("Unsupported or noncanonical release envelope.");
+                !bytes.SequenceEqual(ResourceCatalogCodec.CanonicalBytes(data)))
+            {
+                throw new InvalidDataException("Unsupported or noncanonical release envelope.");
+            }
+
             ResourceCatalogCodec.Id(ResourceCatalogCodec.Text(data, "KeyId"));
             return data;
         }
@@ -26,21 +34,34 @@ namespace YLFramework.Services.Resource
         internal static byte[] Base64(JObject data, string field, int maximum)
         {
             if (data[field]?.Type != JTokenType.String || ((string)data[field]).Length > (maximum + 2L) / 3 * 4)
+            {
                 throw new InvalidDataException("Invalid bounded release encoding.");
+            }
+
             try
             {
                 var bytes = Convert.FromBase64String((string)data[field]);
                 if (bytes.Length == 0 || bytes.Length > maximum || Convert.ToBase64String(bytes) != (string)data[field])
+                {
                     throw new InvalidDataException("Noncanonical release encoding.");
+                }
+
                 return bytes;
             }
-            catch (FormatException error) { throw new InvalidDataException("Invalid release encoding.", error); }
+            catch (FormatException error)
+            {
+                throw new InvalidDataException("Invalid release encoding.", error);
+            }
         }
 
         internal static JObject Verify(byte[] bytes, string trustedKeyId, RSAParameters publicKey)
         {
             var envelope = ReadEnvelope(bytes);
-            if ((string)envelope["KeyId"] != trustedKeyId) throw new InvalidDataException("Release signing key is not trusted.");
+            if ((string)envelope["KeyId"] != trustedKeyId)
+            {
+                throw new InvalidDataException("Release signing key is not trusted.");
+            }
+
             var signature = Base64(envelope, "Signature", 1024);
             var payload = Base64(envelope, "Payload", 32 * 1024);
             envelope.Remove("Signature");
@@ -50,11 +71,20 @@ namespace YLFramework.Services.Resource
                 rsa.ImportParameters(new RSAParameters { Modulus = publicKey.Modulus, Exponent = publicKey.Exponent });
                 if (rsa.KeySize < 2048 || rsa.KeySize > 8192 || signature.Length != rsa.KeySize / 8 ||
                     !rsa.VerifyData(ResourceCatalogCodec.CanonicalBytes(envelope), signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+                {
                     throw new InvalidDataException("Release signature rejected.");
+                }
             }
-            catch (CryptographicException error) { throw new InvalidDataException("Release signature rejected.", error); }
+            catch (CryptographicException error)
+            {
+                throw new InvalidDataException("Release signature rejected.", error);
+            }
             var data = ResourceCatalogCodec.ParseObject(payload);
-            if (!payload.SequenceEqual(ResourceCatalogCodec.CanonicalBytes(data))) throw new InvalidDataException("Noncanonical signed payload.");
+            if (!payload.SequenceEqual(ResourceCatalogCodec.CanonicalBytes(data)))
+            {
+                throw new InvalidDataException("Noncanonical signed payload.");
+            }
+
             return data;
         }
     }

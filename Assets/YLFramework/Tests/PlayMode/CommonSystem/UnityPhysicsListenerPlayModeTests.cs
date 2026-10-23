@@ -17,18 +17,21 @@ namespace YLFramework.Tests.CommonSystem
 {
     public class UnityPhysicsListenerPlayModeTests
     {
-        private Scene scene;
+        private Scene _scene;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (scene.IsValid() && scene.isLoaded) yield return SceneManager.UnloadSceneAsync(scene);
+            if (_scene.IsValid() && _scene.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(_scene);
+            }
         }
 
         private GameObject Root(string name)
         {
             var root = new GameObject(name);
-            SceneManager.MoveGameObjectToScene(root, scene);
+            SceneManager.MoveGameObjectToScene(root, _scene);
             return root;
         }
 
@@ -39,7 +42,7 @@ namespace YLFramework.Tests.CommonSystem
 
         private IEnumerator Matrix(bool twoD, bool trigger)
         {
-            scene = SceneManager.CreateScene("YL.CommonSystem.Physics",
+            _scene = SceneManager.CreateScene("YL.CommonSystem.Physics",
                 new CreateSceneParameters(twoD ? LocalPhysicsMode.Physics2D : LocalPhysicsMode.Physics3D));
             var mask = typeof(EventListener).GetProperty("PhysicsLayerMask");
             Assert.That(mask, Is.Not.Null);
@@ -65,9 +68,15 @@ namespace YLFramework.Tests.CommonSystem
                     body.sleepMode = RigidbodySleepMode2D.NeverSleep;
                     other.AddComponent<BoxCollider2D>();
                     move = position => body.position = position;
-                    step = () => Assert.That(scene.GetPhysicsScene2D().Simulate(0.02f), Is.True);
-                    if (trigger) Wire<Collider2D>(listener, true, true, counts, flag, payload => payload.gameObject, other);
-                    else Wire<Collision2D>(listener, true, false, counts, flag, payload => payload.gameObject, other);
+                    step = () => Assert.That(_scene.GetPhysicsScene2D().Simulate(0.02f), Is.True);
+                    if (trigger)
+                    {
+                        Wire<Collider2D>(listener, true, true, counts, flag, payload => payload.gameObject, other);
+                    }
+                    else
+                    {
+                        Wire<Collision2D>(listener, true, false, counts, flag, payload => payload.gameObject, other);
+                    }
                 }
                 else
                 {
@@ -79,9 +88,19 @@ namespace YLFramework.Tests.CommonSystem
                     body.sleepThreshold = 0;
                     other.AddComponent<BoxCollider>();
                     move = position => body.position = position;
-                    step = () => { body.WakeUp(); scene.GetPhysicsScene().Simulate(0.02f); };
-                    if (trigger) Wire<Collider>(listener, false, true, counts, flag, payload => payload.gameObject, other);
-                    else Wire<Collision>(listener, false, false, counts, flag, payload => payload.gameObject, other);
+                    step = () =>
+                    {
+                        body.WakeUp();
+                        _scene.GetPhysicsScene().Simulate(0.02f);
+                    };
+                    if (trigger)
+                    {
+                        Wire<Collider>(listener, false, true, counts, flag, payload => payload.gameObject, other);
+                    }
+                    else
+                    {
+                        Wire<Collision>(listener, false, false, counts, flag, payload => payload.gameObject, other);
+                    }
                 }
                 mask.SetValue(listener, (LayerMask)value);
                 var accepted = value == Physics.AllLayers || value == 1;

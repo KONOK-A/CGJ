@@ -42,7 +42,10 @@ namespace YLFramework.Core.Tests
             Events.Add("module.start");
             RegisteredAtStart = ReferenceEquals(YLFramework.Core.ModuleManager.GetModule(ModuleName), this);
             ProjectNameAtStart = ProjectName;
-            if (!SeedMvc) return;
+            if (!SeedMvc)
+            {
+                return;
+            }
 
             StartedModel = new YLCoreProbeModel { Id = 101, Events = Events };
             AddModel(StartedModel);
@@ -60,15 +63,19 @@ namespace YLFramework.Core.Tests
 
     public sealed class YLCoreConsumerModule : YLFramework.Core.Module
     {
-        public override void OnStart() { }
+        public override void OnStart()
+        {
+        }
     }
 
     public sealed class YLCoreBaseProbeModule : YLFramework.Core.Module
     {
         // Only the fixture may make its own base module closable during cleanup.
         public bool AllowClose;
-        public override bool BaseModule => !AllowClose;
-        public override void OnStart() { }
+        public override bool IsBaseModule => !AllowClose;
+        public override void OnStart()
+        {
+        }
     }
 
     public class YLCoreProbeModel : YLFramework.Core.Model
@@ -93,7 +100,11 @@ namespace YLFramework.Core.Tests
         {
             InitCount++;
             RegisteredAtInit = ReferenceEquals(Module.GetModel(GetType(), Id), this);
-            if (Events != null) Events.Add("model.init");
+            if (Events != null)
+            {
+                Events.Add("model.init");
+            }
+
             InitAction?.Invoke(this);
         }
 
@@ -101,12 +112,18 @@ namespace YLFramework.Core.Tests
         {
             ExitCount++;
             RegisteredAtExit = ReferenceEquals(Module.GetModel(GetType(), Id), this);
-            if (Events != null) Events.Add("model.exit");
+            if (Events != null)
+            {
+                Events.Add("model.exit");
+            }
+
             ExitAction?.Invoke(this);
         }
     }
 
-    public sealed class YLCoreDerivedProbeModel : YLCoreProbeModel { }
+    public sealed class YLCoreDerivedProbeModel : YLCoreProbeModel
+    {
+    }
 
     public sealed class YLCoreConstantHashModel : YLCoreProbeModel
     {
@@ -135,7 +152,11 @@ namespace YLFramework.Core.Tests
             InitCount++;
             OwnerAtInit = Module;
             var lifecycle = Module as YLCoreLifecycleModule;
-            if (lifecycle != null) lifecycle.Events.Add("controller.init");
+            if (lifecycle != null)
+            {
+                lifecycle.Events.Add("controller.init");
+            }
+
             InitAction?.Invoke(this);
         }
 
@@ -144,7 +165,11 @@ namespace YLFramework.Core.Tests
             ExitCount++;
             OwnerAtExit = Module;
             var lifecycle = Module as YLCoreLifecycleModule;
-            if (lifecycle != null) lifecycle.Events.Add("controller.exit");
+            if (lifecycle != null)
+            {
+                lifecycle.Events.Add("controller.exit");
+            }
+
             ExitAction?.Invoke(this);
         }
     }

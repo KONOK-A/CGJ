@@ -17,13 +17,27 @@ namespace YLFramework.Tests.ResourceBuild
     public partial class ResourceBundleRuntimeTests
     {
         private const string Key = "YL.Resource83.Native.";
-        [Serializable] private sealed class SceneList { public SavedScene[] Items; }
-        [Serializable] private sealed class SavedScene { public string Path; public bool Loaded; public bool Active; }
+        [Serializable]
+        private sealed class SceneList
+        {
+            public SavedScene[] Items;
+        }
+        [Serializable]
+        private sealed class SavedScene
+        {
+            public string Path;
+            public bool Loaded;
+            public bool Active;
+        }
 
         [OneTimeSetUp]
         public void BuildPublication()
         {
-            if (SessionState.GetBool(Key + "owned", false)) return;
+            if (SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             YLFramework.Tests.Resource.ResourceSessionTests.EnsureRestorableScenes();
             var savedScenes = EditorSceneManager.GetSceneManagerSetup();
             var fixture = new ResourceReleaseFixture();
@@ -38,7 +52,10 @@ namespace YLFramework.Tests.ResourceBuild
                     instancePrefab.AddComponent<InstanceLifecycleProbe>();
                     PrefabUtility.SaveAsPrefabAsset(instancePrefab, instancePrefabPath);
                 }
-                finally { PrefabUtility.UnloadPrefabContents(instancePrefab); }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(instancePrefab);
+                }
                 var go = new GameObject("Diamond83");
                 var diamondPath = fixture.Folder + "/Content/C.prefab";
                 try
@@ -47,19 +64,22 @@ namespace YLFramework.Tests.ResourceBuild
                         AssetDatabase.LoadAssetAtPath<Material>(fixture.Folder + "/Content/B.mat") };
                     PrefabUtility.SaveAsPrefabAsset(go, diamondPath);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(go); }
-                project.Groups.Add(new ResourceGroup { Id = "diamond83", Selections = new List<ResourceSelection> { new() { Guid = AssetDatabase.AssetPathToGUID(diamondPath) } } });
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(go);
+                }
+                project.groups.Add(new ResourceGroup { id = "diamond83", selections = new List<ResourceSelection> { new() { guid = AssetDatabase.AssetPathToGUID(diamondPath) } } });
                 foreach (var spec in new[] { ("bulk83", 2, ResourcePacking.Together), ("fault83", 6, ResourcePacking.PerAsset) })
                 {
-                    var group = new ResourceGroup { Id = spec.Item1, Packing = spec.Item3 };
+                    var group = new ResourceGroup { id = spec.Item1, packing = spec.Item3 };
                     for (var i = 0; i < spec.Item2; i++)
                     {
                         var text = fixture.Folder + "/Content/" + spec.Item1 + "-" + i + ".txt";
                         File.WriteAllText(text, "batch83-" + spec.Item1 + "-" + i);
                         AssetDatabase.ImportAsset(text, ImportAssetOptions.ForceSynchronousImport);
-                        group.Selections.Add(new ResourceSelection { Guid = AssetDatabase.AssetPathToGUID(text) });
+                        group.selections.Add(new ResourceSelection { guid = AssetDatabase.AssetPathToGUID(text) });
                     }
-                    project.Groups.Add(group);
+                    project.groups.Add(group);
                 }
                 EditorUtility.SetDirty(project);
                 AssetDatabase.SaveAssetIfDirty(project);
@@ -79,8 +99,11 @@ namespace YLFramework.Tests.ResourceBuild
                 SessionState.SetString(Key + "workspace", Path.GetDirectoryName(build.WorkspacePath));
                 fixture.AssertProtected();
                 SessionState.SetString(Key + "protected", ProtectedDigest());
-                SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new SceneList { Items = savedScenes
-                    .Where(x => !string.IsNullOrEmpty(x.path)).Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray() }));
+                SessionState.SetString(Key + "scenes", JsonUtility.ToJson(new SceneList
+                {
+                    Items = savedScenes
+                    .Where(x => !string.IsNullOrEmpty(x.path)).Select(x => new SavedScene { Path = x.path, Loaded = x.isLoaded, Active = x.isActive }).ToArray()
+                }));
                 scenePath = "Temp/YL83-Native-" + Guid.NewGuid().ToString("N") + ".unity";
                 Assert.That(Directory.Exists("Temp"), Is.True);
                 SessionState.SetString(Key + "scene", scenePath);
@@ -90,7 +113,11 @@ namespace YLFramework.Tests.ResourceBuild
             catch
             {
                 EditorSceneManager.RestoreSceneManagerSetup(savedScenes);
-                if (scenePath != null) File.Delete(scenePath);
+                if (scenePath != null)
+                {
+                    File.Delete(scenePath);
+                }
+
                 fixture.Dispose();
                 ClearFixtureSession();
                 throw;
@@ -103,7 +130,11 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static void ClearFixtureSession()
         {
-            foreach (var key in new[] { "root", "path", "project", "digest", "scenes", "scene", "folder", "guid", "workspace", "protected", "core86fallback" }) SessionState.EraseString(Key + key);
+            foreach (var key in new[] { "root", "path", "project", "digest", "scenes", "scene", "folder", "guid", "workspace", "protected", "core86fallback" })
+            {
+                SessionState.EraseString(Key + key);
+            }
+
             SessionState.EraseBool(Key + "owned");
             SessionState.EraseBool(Key + "quit");
         }
@@ -111,7 +142,11 @@ namespace YLFramework.Tests.ResourceBuild
         [OneTimeTearDown]
         public void CleanupPublication()
         {
-            if (!SessionState.GetBool(Key + "owned", false)) return;
+            if (!SessionState.GetBool(Key + "owned", false))
+            {
+                return;
+            }
+
             Assert.That(EditorApplication.isPlaying, Is.False);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero, "Do not delete a publication still used by native Bundles.");
             Assert.That(ProtectedDigest(), Is.EqualTo(SessionState.GetString(Key + "protected", "")), "Native runtime verification must preserve the protected file baseline.");
@@ -141,7 +176,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator Wait<T>(ResourceRequest<T> request)
         {
             var until = Time.realtimeSinceStartup + 10;
-            while (!request.IsDone && Time.realtimeSinceStartup < until) yield return null;
+            while (!request.IsDone && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(request.IsDone, Is.True, "Native/dependency failure must not leave the queue hanging.");
         }
 
@@ -149,11 +188,19 @@ namespace YLFramework.Tests.ResourceBuild
         public IEnumerator ExitOwnedSession()
         {
             InstanceLifecycleProbe.ResetCallbacks();
-            if (!EditorApplication.isPlaying) yield break;
+            if (!EditorApplication.isPlaying)
+            {
+                yield break;
+            }
+
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
             yield return DrainOwnedScene85Fixture();
             var until = Time.realtimeSinceStartup + 10;
-            while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < until) yield return null;
+            while (AssetBundle.GetAllLoadedAssetBundles().Any() && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
             yield return new ExitPlayMode();
         }
@@ -169,8 +216,16 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var snapshot = Snapshot();
             var system = Initialize(snapshot);
-            using (var wrong = system.AcquireAsync<Sprite>(Address(snapshot, "entry.txt"))) Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.TypeMismatch));
-            using (var unknown = system.AcquireAsync<Sprite>(Address(snapshot, "Sprites.png", "unknown-sub-key"))) Assert.That(unknown.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            using (var wrong = system.AcquireAsync<Sprite>(Address(snapshot, "entry.txt")))
+            {
+                Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.TypeMismatch));
+            }
+
+            using (var unknown = system.AcquireAsync<Sprite>(Address(snapshot, "Sprites.png", "unknown-sub-key")))
+            {
+                Assert.That(unknown.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().NativeBundleLoadCount, Is.Zero);
             using var a = system.CreateScope();
             using var b = system.CreateScope();
@@ -195,7 +250,13 @@ namespace YLFramework.Tests.ResourceBuild
             while (stack.Count != 0)
             {
                 var id = stack.Pop();
-                if (graph.Add(id)) foreach (var dep in snapshot.Document.Bundles.Single(x => x.LogicalId == id).Dependencies) stack.Push(dep);
+                if (graph.Add(id))
+                {
+                    foreach (var dep in snapshot.Document.Bundles.Single(x => x.LogicalId == id).Dependencies)
+                    {
+                        stack.Push(dep);
+                    }
+                }
             }
             Assert.That(system.GetDiagnosticsSnapshot().NativeBundleLoadCount, Is.EqualTo(graph.Count), "Every native graph node must be produced once, including the diamond leaf.");
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Select(x => x.name).Distinct().Count(), Is.EqualTo(AssetBundle.GetAllLoadedAssetBundles().Count()));
@@ -208,7 +269,11 @@ namespace YLFramework.Tests.ResourceBuild
             diamond.Dispose();
             Assert.That(texture == null, Is.True, "Final graph ownership must actually Unload(true).");
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
-            using (var text = system.Acquire<TextAsset>(Address(snapshot, "entry.txt"))) Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            using (var text = system.Acquire<TextAsset>(Address(snapshot, "entry.txt")))
+            {
+                Assert.That(text.Asset.text, Is.EqualTo("first release content"));
+            }
+
             Sprite old = null;
             foreach (var sub in snapshot.Document.Assets.Where(x => x.Kind == "SubAsset"))
             {
@@ -222,7 +287,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(old == null, Is.True);
             var left = snapshot.Document.Assets.Single(x => x.SubAssetName == "Left");
             using (var reload = system.Acquire<Sprite>(Address(snapshot, left.Address, left.SubAssetKey)))
+            {
                 Assert.That(reload.Asset.name, Is.EqualTo("Left"));
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             using var closed = system.ShutdownAsync();
             yield return Wait(closed);
@@ -257,7 +325,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(members.Items.All(x => x.IsValid), Is.True);
             members.Dispose();
             Assert.That(native == null, Is.False, "Explicit Bundle lease pins native assets after asset consumers leave.");
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             low.Dispose();
             Assert.That(native == null, Is.True);
             var spriteBundle = snapshot.Document.Assets.Single(x => x.SubAssetName == "Left").BundleId;
@@ -294,7 +366,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
                 Assert.That(failed.Error.ToString(), Does.Contain(shared.LogicalId));
             }
-            finally { File.WriteAllBytes(path, bytes); }
+            finally
+            {
+                File.WriteAllBytes(path, bytes);
+            }
             var damaged = snapshot.Document.Assets.Single(x => x.Address == "fault83-0.txt");
             path = Path.Combine(snapshot.DirectoryPath, snapshot.Document.Bundles.Single(x => x.LogicalId == damaged.BundleId).RelativeFile);
             bytes = File.ReadAllBytes(path);
@@ -311,7 +386,10 @@ namespace YLFramework.Tests.ResourceBuild
                 using var text = unrelated.TakeResult();
                 Assert.That(text.Asset.text, Is.EqualTo("first release content"));
             }
-            finally { File.WriteAllBytes(path, bytes); }
+            finally
+            {
+                File.WriteAllBytes(path, bytes);
+            }
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
@@ -331,7 +409,11 @@ namespace YLFramework.Tests.ResourceBuild
             using var first = system.AcquireAsync<GameObject>(Address(snapshot, "C.prefab"));
             using var other = system.AcquireAsync<GameObject>(Address(snapshot, "C.prefab"));
             first.Cancel();
-            other.Completed += value => { using var owned = value.TakeResult(); throw new InvalidOperationException("native83-observer"); };
+            other.Completed += value =>
+            {
+                using var owned = value.TakeResult();
+                throw new InvalidOperationException("native83-observer");
+            };
             LogAssert.Expect(LogType.Exception, "InvalidOperationException: native83-observer");
             yield return Wait(other);
             Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
@@ -348,9 +430,16 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(pending.Status, Is.EqualTo(ResourceRequestStatus.Invalidated));
             typeof(ResourceSystem).GetMethod("ResetSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
             using (var blocked = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { snapshot.CreateCatalog() })))
+            {
                 Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             var until = Time.realtimeSinceStartup + 10;
-            while ((system.GetDiagnosticsSnapshot().BundleRecordCount != 0 || system.GetDiagnosticsSnapshot().RecordCount != 0) && Time.realtimeSinceStartup < until) yield return null;
+            while ((system.GetDiagnosticsSnapshot().BundleRecordCount != 0 || system.GetDiagnosticsSnapshot().RecordCount != 0) && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
@@ -376,7 +465,7 @@ namespace YLFramework.Tests.ResourceBuild
             var system = initialized.TakeResult();
             var external = AssetDatabase.LoadAssetAtPath<TextAsset>(SessionState.GetString(Key + "folder", "") + "/Content/entry.txt");
             using var scope = system.CreateScope();
-            var request = scope.AcquireAsync<TextAsset>(new ResourceAddress(project.ProjectId, "entry.txt"));
+            var request = scope.AcquireAsync<TextAsset>(new ResourceAddress(project.projectId, "entry.txt"));
             yield return Wait(request);
             Assert.That(scope.TakeResult(request).Asset, Is.SameAs(external));
             scope.Dispose();
@@ -440,18 +529,33 @@ namespace YLFramework.Tests.ResourceBuild
                 using var queued = system.AcquireBundleAsync(snapshot.Document.ProjectId, descriptor.LogicalId);
                 queued.Completed += _ =>
                 {
-                    try { using var value = system.Acquire<TextAsset>(Address(snapshot, "entry.txt")); nested = value.Asset.text; }
-                    catch (Exception error) { nestedFailure = error; }
+                    try
+                    {
+                        using var value = system.Acquire<TextAsset>(Address(snapshot, "entry.txt"));
+                        nested = value.Asset.text;
+                    }
+                    catch (Exception error)
+                    {
+                        nestedFailure = error;
+                    }
                 };
                 var bulkId = snapshot.Document.Assets.Single(x => x.Address == "bulk83-0.txt").BundleId;
-                using (var cold = system.AcquireBundle(snapshot.Document.ProjectId, bulkId)) Assert.That(cold.IsValid, Is.True);
+                using (var cold = system.AcquireBundle(snapshot.Document.ProjectId, bulkId))
+                {
+                    Assert.That(cold.IsValid, Is.True);
+                }
+
                 yield return Wait(queued);
                 Assert.That(nestedFailure, Is.Null, nestedFailure?.ToString());
                 Assert.That(nested, Is.EqualTo("first release content"));
             }
             finally
             {
-                foreach (var request in active) request.Dispose();
+                foreach (var request in active)
+                {
+                    request.Dispose();
+                }
+
                 File.WriteAllBytes(path, bytes);
             }
             using var closing = system.ShutdownAsync();
@@ -459,25 +563,25 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero);
         }
 
-        private static ResourceSystem exitSystem;
-        private static AssetLease<GameObject> exitLease;
-        private static ResourceRequest<AssetLease<Sprite>> exitPending;
+        private static ResourceSystem _exitSystem;
+        private static AssetLease<GameObject> _exitLease;
+        private static ResourceRequest<AssetLease<Sprite>> _exitPending;
 
         private static void StartRealExit()
         {
             var snapshot = Snapshot();
-            exitSystem = Initialize(snapshot);
-            exitLease = exitSystem.Acquire<GameObject>(Address(snapshot, "C.prefab"));
+            _exitSystem = Initialize(snapshot);
+            _exitLease = _exitSystem.Acquire<GameObject>(Address(snapshot, "C.prefab"));
             var sub = snapshot.Document.Assets.Single(x => x.SubAssetName == "Left");
-            using var prepared = exitSystem.AcquireBundle(snapshot.Document.ProjectId, sub.BundleId);
-            exitPending = exitSystem.AcquireAsync<Sprite>(Address(snapshot, sub.Address, sub.SubAssetKey));
-            Assert.That(AssetNative(exitSystem).isDone, Is.False, "Exit must include an already-started AssetBundleRequest, not only Bundle creation.");
+            using var prepared = _exitSystem.AcquireBundle(snapshot.Document.ProjectId, sub.BundleId);
+            _exitPending = _exitSystem.AcquireAsync<Sprite>(Address(snapshot, sub.Address, sub.SubAssetKey));
+            Assert.That(AssetNative(_exitSystem).isDone, Is.False, "Exit must include an already-started AssetBundleRequest, not only Bundle creation.");
             SessionState.SetBool(Key + "quit", false);
             Application.quitting += OnActualQuit;
         }
         private static void OnActualQuit()
         {
-            SessionState.SetBool(Key + "quit", exitSystem.State == ResourceSystemState.Invalidated && !exitLease.IsValid && exitPending.IsDisposed);
+            SessionState.SetBool(Key + "quit", _exitSystem.State == ResourceSystemState.Invalidated && !_exitLease.IsValid && _exitPending.IsDisposed);
             Application.quitting -= OnActualQuit;
         }
 
@@ -496,7 +600,11 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(AssetBundle.GetAllLoadedAssetBundles().Count(), Is.Zero, "Old native identities must drain before a new authority can use them.");
             var snapshot = Snapshot();
             var next = Initialize(snapshot);
-            using (var lease = next.Acquire<GameObject>(Address(snapshot, "C.prefab"))) Assert.That(lease.Asset.name, Is.EqualTo("C"));
+            using (var lease = next.Acquire<GameObject>(Address(snapshot, "C.prefab")))
+            {
+                Assert.That(lease.Asset.name, Is.EqualTo("C"));
+            }
+
             using var closed = next.ShutdownAsync();
             yield return Wait(closed);
             Assert.That(closed.TakeResult(), Is.True);
@@ -504,9 +612,9 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static AssetBundleRequest AssetNative(ResourceSystem system)
         {
-            var records = (IDictionary)typeof(ResourceSystem).GetField("records", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(system);
-            var producer = records.Values.Cast<ResourceSystem.AssetRecord>().Single(x => x.Loading).Operation;
-            return (AssetBundleRequest)producer.GetType().GetField("native", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(producer);
+            var records = (IDictionary)typeof(ResourceSystem).GetField("_records", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(system);
+            var producer = records.Values.Cast<ResourceSystem.AssetRecord>().Single(x => x.IsLoading).Operation;
+            return (AssetBundleRequest)producer.GetType().GetField("_native", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(producer);
         }
 
         [UnityTest]
@@ -550,14 +658,22 @@ namespace YLFramework.Tests.ResourceBuild
             var sprites = prepared.Bundle.LoadAssetWithSubAssets<Sprite>(left.LoadName);
             Assert.That(sprites.Length, Is.EqualTo(2));
             // 只扰动本测试拥有的 native Sprite；不编辑 Catalog、源图片或持久化发布，验证绝不取“第一个匹配”。
-            foreach (var sprite in sprites) sprite.name = "Moved83";
+            foreach (var sprite in sprites)
+            {
+                sprite.name = "Moved83";
+            }
+
             using (var missing = system.AcquireAsync<Sprite>(Address(snapshot, left.Address, left.SubAssetKey)))
             {
                 yield return Wait(missing);
                 Assert.That(missing.Status, Is.EqualTo(ResourceRequestStatus.Failed));
                 Assert.That(missing.Error.ToString(), Does.Contain("0 native matches"));
             }
-            foreach (var sprite in sprites) sprite.name = "Left";
+            foreach (var sprite in sprites)
+            {
+                sprite.name = "Left";
+            }
+
             using (var ambiguous = system.AcquireAsync<Sprite>(Address(snapshot, left.Address, left.SubAssetKey)))
             {
                 yield return Wait(ambiguous);
@@ -602,7 +718,11 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static IEnumerator CloseCurrent()
         {
-            if (ResourceSystem.Current == null) yield break;
+            if (ResourceSystem.Current == null)
+            {
+                yield break;
+            }
+
             using var closed = ResourceSystem.Current.ShutdownAsync();
             yield return Wait(closed);
             Assert.That(closed.TakeResult(), Is.True);

@@ -21,35 +21,51 @@ namespace YLFramework.Foundation
         private readonly EventChannel _fixedUpdate = new();
         private readonly EventChannel _lateUpdate = new();
         private object _session;
-        private bool _released;
+        private bool _isReleased;
 
         static UpdateManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
-        private enum Phase { Update, FixedUpdate, LateUpdate }
-        private bool IsCurrent => !_released && ReferenceEquals(_instance, this) &&
+        private enum Phase
+        {
+            Update,
+            FixedUpdate,
+            LateUpdate
+        }
+        private bool IsCurrent => !_isReleased && ReferenceEquals(_instance, this) &&
             ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
         private EventChannel Channel(Phase phase) => phase == Phase.Update ? _update :
             phase == Phase.FixedUpdate ? _fixedUpdate : _lateUpdate;
 
         /// <summary>注册 Update，无效输入或退出期间返回空句柄，不创建宿主。</summary>
-        public static IUnRegister AddUpdateEvent(Action action) => Register(action, Phase.Update);
+        public static IUnregister AddUpdateEvent(Action action) => Register(action, Phase.Update);
         /// <summary>注册 FixedUpdate，每次调用返回独立的精确注销身份。</summary>
-        public static IUnRegister AddFixedUpdateEvent(Action action) => Register(action, Phase.FixedUpdate);
+        public static IUnregister AddFixedUpdateEvent(Action action) => Register(action, Phase.FixedUpdate);
         /// <summary>注册 LateUpdate，保持相位内注册顺序。</summary>
-        public static IUnRegister AddLateUpdateEvent(Action action) => Register(action, Phase.LateUpdate);
+        public static IUnregister AddLateUpdateEvent(Action action) => Register(action, Phase.LateUpdate);
         /// <summary>移除最后相等的普通委托子序列；仅访问既有宿主。</summary>
-        public static void RemoveUpdateEvent(Action action) => UnRegister(action, Phase.Update);
+        public static void RemoveUpdateEvent(Action action) => Unregister(action, Phase.Update);
         /// <summary>移除最后相等的 FixedUpdate 委托子序列，不创建宿主。</summary>
-        public static void RemoveFixedUpdateEvent(Action action) => UnRegister(action, Phase.FixedUpdate);
+        public static void RemoveFixedUpdateEvent(Action action) => Unregister(action, Phase.FixedUpdate);
         /// <summary>移除最后相等的 LateUpdate 委托子序列，不创建宿主。</summary>
-        public static void RemoveLateUpdateEvent(Action action) => UnRegister(action, Phase.LateUpdate);
+        public static void RemoveLateUpdateEvent(Action action) => Unregister(action, Phase.LateUpdate);
 
-        private static IUnRegister Register(Action action, Phase phase)
+        private static IUnregister Register(Action action, Phase phase)
         {
-            if (action == null || !SingletonSessionState.CanRunExecution) return EmptyUnRegister.Instance;
+            if (action == null || !SingletonSessionState.CanRunExecution)
+            {
+                return EmptyUnregister.Instance;
+            }
+
             var host = _instance;
             var created = !host;
-            if (created) host = CreateHost();
-            try { return host.Channel(phase).Register(action); }
+            if (created)
+            {
+                host = CreateHost();
+            }
+
+            try
+            {
+                return host.Channel(phase).Register(action);
+            }
             catch
             {
                 if (created)
@@ -78,16 +94,27 @@ namespace YLFramework.Foundation
             }
             catch
             {
-                if (host) host.ReleaseOwner();
-                if (obj) Destroy(obj);
+                if (host)
+                {
+                    host.ReleaseOwner();
+                }
+
+                if (obj)
+                {
+                    Destroy(obj);
+                }
+
                 throw;
             }
         }
 
-        private static void UnRegister(Action action, Phase phase)
+        private static void Unregister(Action action, Phase phase)
         {
             var host = _instance;
-            if (action != null && host && host.IsCurrent) host.Channel(phase).UnRegister(action);
+            if (action != null && host && host.IsCurrent)
+            {
+                host.Channel(phase).Unregister(action);
+            }
         }
 
         private void Update() => Dispatch(_update);
@@ -95,26 +122,47 @@ namespace YLFramework.Foundation
         private void LateUpdate() => Dispatch(_lateUpdate);
         private void Dispatch(EventChannel channel)
         {
-            if (!IsCurrent || !SingletonSessionState.CanRunExecution || !channel.HasListener) return;
-            try { channel.TriggerAll(); }
-            catch (Exception error) { Debug.LogException(error); }
+            if (!IsCurrent || !SingletonSessionState.CanRunExecution || !channel.HasListener)
+            {
+                return;
+            }
+
+            try
+            {
+                channel.TriggerAll();
+            }
+            catch (Exception error)
+            {
+                Debug.LogException(error);
+            }
         }
 
         private void ReleaseOwner()
         {
-            if (_released) return;
-            _released = true;
+            if (_isReleased)
+            {
+                return;
+            }
+
+            _isReleased = true;
             _update.Dispose();
             _fixedUpdate.Dispose();
             _lateUpdate.Dispose();
-            if (ReferenceEquals(_instance, this)) _instance = null;
+            if (ReferenceEquals(_instance, this))
+            {
+                _instance = null;
+            }
         }
 
         private static void ResetSession()
         {
             var old = _instance;
             _instance = null;
-            if (!old) return;
+            if (!old)
+            {
+                return;
+            }
+
             old.ReleaseOwner();
             old.enabled = false;
             Destroy(old.gameObject);
@@ -123,7 +171,11 @@ namespace YLFramework.Foundation
         private void OnApplicationQuit()
         {
             // 迟到的旧宿主消息不能关闭新会话的门禁。
-            if (!IsCurrent) return;
+            if (!IsCurrent)
+            {
+                return;
+            }
+
             SingletonSessionState.StopExecution();
             ReleaseOwner();
             enabled = false;

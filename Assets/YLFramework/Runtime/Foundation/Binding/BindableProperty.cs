@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using YLFramework.Core.Pool;
 using YLFramework.Core.Singleton;
@@ -16,27 +16,30 @@ namespace YLFramework.Binding
         /// <summary>
         /// 当前值；读取本身不会触发任何回调。
         /// </summary>
-        T Value { get; }
+        T Value
+        {
+            get;
+        }
 
         /// <summary>
         /// 注册值变化监听并立即用当前值同步回调一次，随后保持注册。
         /// </summary>
         /// <param name="onValueChanged">值变化回调，为 null 时不产生实际监听。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
-        IUnRegister RegisterWithInitValue(Action<T> onValueChanged);
+        IUnregister RegisterWithInitValue(Action<T> onValueChanged);
 
         /// <summary>
         /// 注册值变化监听，返回用于注销本次注册的句柄。
         /// </summary>
         /// <param name="onValueChanged">值变化回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
-        IUnRegister Register(Action<T> onValueChanged);
+        IUnregister Register(Action<T> onValueChanged);
 
         /// <summary>
         /// 注销一个已注册的值变化回调；未注册时为空操作。
         /// </summary>
         /// <param name="onValueChanged">要注销的回调。</param>
-        void UnRegister(Action<T> onValueChanged);
+        void Unregister(Action<T> onValueChanged);
     }
 
     /// <summary>
@@ -48,7 +51,10 @@ namespace YLFramework.Binding
         /// <summary>
         /// 读写当前值；赋值等价于 <see cref="TrySetValue"/>：仅在判定为变化时才通知。
         /// </summary>
-        new T Value { get; set; }
+        new T Value
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 直接写入存储值，不触发任何回调，也不做相等比较；写入后的值作为后续比较的当前值。
@@ -83,7 +89,7 @@ namespace YLFramework.Binding
         /// </summary>
         public BindableProperty()
         {
-            _value = default;
+            StoredValue = default;
         }
 
         /// <summary>
@@ -92,7 +98,7 @@ namespace YLFramework.Binding
         /// <param name="defaultValue">初始值。</param>
         public BindableProperty(T defaultValue = default)
         {
-            _value = defaultValue;
+            StoredValue = defaultValue;
         }
 
         /// <summary>
@@ -116,11 +122,10 @@ namespace YLFramework.Binding
 
         #region 值的设置和读取
 
-        // ReSharper disable once InconsistentNaming
         /// <summary>
         /// 当前存储值；派生类请通过 <see cref="GetValue"/> / <see cref="SetValue"/> 或 Value 读写，直接访问不触发通知。
         /// </summary>
-        protected T _value;
+        protected T StoredValue;
         private Func<T, T, bool> _instanceComparer;
 
         private Func<T, T, bool> CurrentComparer => _instanceComparer ?? Comparer;
@@ -128,12 +133,12 @@ namespace YLFramework.Binding
         /// <summary>
         /// 写入存储值（默认直接覆盖，不触发通知）；派生类可扩展写入行为。
         /// </summary>
-        protected virtual void SetValue(T value) => _value = value;
+        protected virtual void SetValue(T value) => StoredValue = value;
 
         /// <summary>
         /// 读取存储值（默认直接返回内部字段）；派生类可扩展取值来源。
         /// </summary>
-        protected virtual T GetValue() => _value;
+        protected virtual T GetValue() => StoredValue;
 
         /// <summary>
         /// 读写当前值：get 取存储值；set 等价于 <see cref="TrySetValue"/>（未变化不通知）。
@@ -149,7 +154,11 @@ namespace YLFramework.Binding
         /// </summary>
         public virtual bool TrySetValue(T value)
         {
-            if (IsSameValue(value)) return false;
+            if (IsSameValue(value))
+            {
+                return false;
+            }
+
             SetValue(value);
             OnValueChange();
             return true;
@@ -166,8 +175,12 @@ namespace YLFramework.Binding
         /// </summary>
         protected virtual bool IsSameValue(T value)
         {
-            if (value == null) return _value == null;
-            return CurrentComparer(value, _value);
+            if (value == null)
+            {
+                return StoredValue == null;
+            }
+
+            return CurrentComparer(value, StoredValue);
         }
 
         /// <summary>
@@ -181,8 +194,8 @@ namespace YLFramework.Binding
         /// 返回当前值的字符串表示；值为 null 时返回空字符串。
         /// </summary>
         public override string ToString() => Value?.ToString() ?? string.Empty;
-        
-        
+
+
         private readonly EasyEvent<T> _onValueChanged = EasyEvent<T>.Allocate();
 
         /// <summary>
@@ -192,20 +205,20 @@ namespace YLFramework.Binding
         {
             _onValueChanged?.Trigger(Value);
         }
-        
+
         /// <inheritdoc />
-        IUnRegister IEventSource.Register(Action eventAction)
+        IUnregister IEventSource.Register(Action eventAction)
         {
-            return eventAction == null ? EmptyUnRegister.Instance : Register(Action);
+            return eventAction == null ? EmptyUnregister.Instance : Register(Action);
             void Action(T _) => eventAction();
         }
 
         /// <summary>
         /// 注销所有值变化监听。
         /// </summary>
-        public void UnRegisterAll()
+        public void UnregisterAll()
         {
-            _onValueChanged?.UnRegisterAll();
+            _onValueChanged?.UnregisterAll();
         }
 
         /// <summary>
@@ -217,10 +230,10 @@ namespace YLFramework.Binding
         /// 初始回调直接使用内部存储值，不经过 <see cref="GetValue"/> 派生逻辑；
         /// 重写了 GetValue 的派生类（如 CustomProperty）建议先读取一次 Value 让缓存刷新，再调用本方法。
         /// </remarks>
-        public IUnRegister RegisterWithInitValue(Action<T> onValueChanged)
+        public IUnregister RegisterWithInitValue(Action<T> onValueChanged)
         {
             //先传一下初始值
-            onValueChanged?.Invoke(_value);
+            onValueChanged?.Invoke(StoredValue);
             return Register(onValueChanged);
         }
 
@@ -229,7 +242,7 @@ namespace YLFramework.Binding
         /// </summary>
         /// <param name="onValueChanged">值变化回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
-        public virtual IUnRegister Register(Action<T> onValueChanged)
+        public virtual IUnregister Register(Action<T> onValueChanged)
         {
             return _onValueChanged.Register(onValueChanged);
         }
@@ -237,7 +250,7 @@ namespace YLFramework.Binding
         /// <summary>
         /// 只监听一次值变化；用户回调执行前消费注册，嵌套通知不会重复执行。
         /// </summary>
-        public IUnRegister RegisterOnce(Action<T> onValueChanged)
+        public IUnregister RegisterOnce(Action<T> onValueChanged)
         {
             return _onValueChanged.RegisterOnce(onValueChanged);
         }
@@ -245,9 +258,9 @@ namespace YLFramework.Binding
         /// <summary>
         /// 注销一个已注册的值变化回调；未注册时为空操作。
         /// </summary>
-        public virtual void UnRegister(Action<T> onValueChanged)
+        public virtual void Unregister(Action<T> onValueChanged)
         {
-            _onValueChanged.UnRegister(onValueChanged);
+            _onValueChanged.Unregister(onValueChanged);
         }
 
         #region 对象池相关
@@ -278,11 +291,11 @@ namespace YLFramework.Binding
         {
             if (!SingletonProperty<SafeObjectPool<BindableProperty<T>>>.HasInstance)
             {
-                SafeObjectPool<BindableProperty<T>>.Instance.Init(50,1);
+                SafeObjectPool<BindableProperty<T>>.Instance.Init(50, 1);
             }
         }
-        
-        
+
+
         /// <summary>
         /// 池回收时调用：终结旧通知代次、清空监听与实例比较器并重置值；保留自有事件，不将其归池。
         /// 直接调用不会入池，入池应使用 <see cref="Recycle"/>。
@@ -291,13 +304,16 @@ namespace YLFramework.Binding
         {
             _onValueChanged.ResetOwner();
             _instanceComparer = null;
-            _value = default;
+            StoredValue = default;
         }
 
         /// <summary>
         /// 领域回收标记，由池维护；真实池身份不由此标记决定。
         /// </summary>
-        public bool IsRecycled { get; set; }
+        public bool IsRecycled
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 实现 <see cref="IOfPool"/> 的回收入口，等价于 <see cref="Recycle"/>。
@@ -309,7 +325,7 @@ namespace YLFramework.Binding
 
         #endregion
     }
-    
+
     /// <summary>
     /// 在进入 Play 时为常见值类型注册默认比较器，使 BindableProperty&lt;T&gt; 的相等判定不依赖各类型 Equals 的默认实现
     /// （例如 float 采用 Mathf.Approximately 近似比较，Color32/RangeInt 按字段比较）。

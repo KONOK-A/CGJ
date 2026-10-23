@@ -30,8 +30,14 @@ namespace YLFramework.Foundation.Tests
             Assert.Throws<ArgumentNullException>(() => dictionary.Remove((string)null));
             Assert.Throws<ArgumentNullException>(() => dictionary[null] = "value");
             Assert.Throws<ArgumentNullException>(() => dictionary.TryGetValue(null, out _));
-            Assert.Throws<ArgumentNullException>(() => { var ignored = dictionary[null]; });
-            Assert.Throws<KeyNotFoundException>(() => { var ignored = mutable["missing"]; });
+            Assert.Throws<ArgumentNullException>(() =>
+            {
+                var ignored = dictionary[null];
+            });
+            Assert.Throws<KeyNotFoundException>(() =>
+            {
+                var ignored = mutable["missing"];
+            });
             Assert.That(dictionary.TryGetValue("missing", out var missing), Is.False);
             Assert.That(missing, Is.Null);
             Assert.That(dictionary.TryGetValue("", out var present), Is.True);
@@ -354,9 +360,16 @@ namespace YLFramework.Foundation.Tests
             }
             finally
             {
-                if (clone != null) Object.DestroyImmediate(clone);
+                if (clone != null)
+                {
+                    Object.DestroyImmediate(clone);
+                }
+
                 AssetDatabase.DeleteAsset(path);
-                if (asset != null) Object.DestroyImmediate(asset);
+                if (asset != null)
+                {
+                    Object.DestroyImmediate(asset);
+                }
             }
         }
 

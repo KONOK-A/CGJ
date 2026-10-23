@@ -53,7 +53,11 @@ namespace YLFramework.Tests.ResourceBuild
             var stageVerified = false;
             var release = fixture.Publish(build, keys, checkpoint: step =>
             {
-                if (step != "StageVerified") return;
+                if (step != "StageVerified")
+                {
+                    return;
+                }
+
                 stageVerified = true;
                 Assert.That(AssetBundle.GetAllLoadedAssetBundles(), Is.Empty, "Staged native owners must be unloaded before inputs are released.");
                 var stage = Directory.GetDirectories(Path.Combine(fixture.Source.ReleaseRoot, ".staging")).Single();
@@ -94,9 +98,12 @@ namespace YLFramework.Tests.ResourceBuild
             var build = fixture.Build(keys);
             var first = fixture.Publish(build, keys);
             var before = ResourceReleaseFixture.Snapshot(first.RootPath);
-            using var rejected = fixture.Keys(material: wrong ? OtherKey : TestKey, missing: !wrong);
+            using var rejected = fixture.Keys(material: wrong ? _otherKey : _testKey, missing: !wrong);
             var error = Assert.Catch(() => fixture.Publish(build, rejected));
-            if (wrong) AssertAuthenticationFailure(error);
+            if (wrong)
+            {
+                AssertAuthenticationFailure(error);
+            }
             else
             {
                 Assert.That(error, Is.InstanceOf<ResourceException>());
@@ -121,7 +128,9 @@ namespace YLFramework.Tests.ResourceBuild
             AssertAuthenticationFailure(Assert.Catch(() => fixture.Publish(build, keys)));
             AssertUncommitted(first, before, index);
             foreach (var stage in Directory.GetDirectories(Path.Combine(first.RootPath, ".staging")))
+            {
                 Assert.That(File.Exists(Path.Combine(stage, ".ylr-complete.json")), Is.False);
+            }
         }
 
         [TestCase("Bundle")]
@@ -160,14 +169,24 @@ namespace YLFramework.Tests.ResourceBuild
             ReplaceContent(build, name, File.ReadAllBytes(Path.Combine(foreign.WorkspacePath, foreignName)), replaceRaw: true);
             var raw = build.Files.Single(x => x.Name == name);
             using (var verified = File.OpenRead(Path.Combine(DeliveryPath(build), name)))
-                ResourceBundleEnvelope.ValidateAll(verified, Context(build, name), TestKey, default, raw.Sha256, raw.Length);
+            {
+                ResourceBundleEnvelope.ValidateAll(verified, Context(build, name), _testKey, default, raw.Sha256, raw.Length);
+            }
+
             var reachedStage = false;
             var before = ResourceReleaseFixture.Snapshot(first.DirectoryPath);
             var index = File.ReadAllBytes(Path.Combine(first.RootPath, "release-index.json"));
             Assert.Throws<InvalidDataException>(() => fixture.Publish(build, keys, checkpoint: step =>
             {
-                if (step == "CatalogWritten") reachedStage = true;
-                if (step == "StageVerified") Assert.Fail("A different native Bundle must not be sealed as this verified build.");
+                if (step == "CatalogWritten")
+                {
+                    reachedStage = true;
+                }
+
+                if (step == "StageVerified")
+                {
+                    Assert.Fail("A different native Bundle must not be sealed as this verified build.");
+                }
             }));
             Assert.That(reachedStage, Is.True, "This fixture must reach stage verification, not merely fail its delivery SHA check.");
             AssertUncommitted(first, before, index);
@@ -190,9 +209,19 @@ namespace YLFramework.Tests.ResourceBuild
             using var cancellation = new CancellationTokenSource();
             var error = Assert.Catch(() => fixture.Publish(next, keys, cancellation.Token, step =>
             {
-                if (step != fault) return;
-                if (cancel) cancellation.Cancel();
-                else throw new IOException("Owned G2 fault at " + fault);
+                if (step != fault)
+                {
+                    return;
+                }
+
+                if (cancel)
+                {
+                    cancellation.Cancel();
+                }
+                else
+                {
+                    throw new IOException("Owned G2 fault at " + fault);
+                }
             }));
             Assert.That(error, cancel ? Is.InstanceOf<OperationCanceledException>() : Is.InstanceOf<IOException>());
             AssertUncommitted(first, before, index);
@@ -229,8 +258,9 @@ namespace YLFramework.Tests.ResourceBuild
             var published = Invoke<ResourceEditorBuildReport>(publishMethod, built.Build, App, false, "Assets/YLFrameworkData", default(CancellationToken), keys);
             Assert.That(published.PublicationError, Is.Null, published.Summary);
             Assert.That(published.Release, Is.Not.Null, published.Summary);
-            Assert.That(published.GenerationRequested, Is.False);
-            keys.AssertReleasedCopies(); missing.AssertReleasedCopies();
+            Assert.That(published.IsGenerationRequested, Is.False);
+            keys.AssertReleasedCopies();
+            missing.AssertReleasedCopies();
         }
 
         [Test]
@@ -243,11 +273,11 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 var provider = Invoke<IResourceContentKeyProvider>(method, "g2-env-fixture", KeyId, variable);
                 Assert.That(provider.TryCopyKey("g2-env-fixture", KeyId, destination), Is.False);
-                Environment.SetEnvironmentVariable(variable, Convert.ToBase64String(TestKey));
+                Environment.SetEnvironmentVariable(variable, Convert.ToBase64String(_testKey));
                 Assert.That(provider.TryCopyKey("other-project", KeyId, destination), Is.False);
                 Assert.That(provider.TryCopyKey("g2-env-fixture", NextKeyId, destination), Is.False);
                 Assert.That(provider.TryCopyKey("g2-env-fixture", KeyId, destination), Is.True);
-                CollectionAssert.AreEqual(TestKey, destination);
+                CollectionAssert.AreEqual(_testKey, destination);
                 foreach (var value in new[] { "g2-not-base64-sensitive-material", Convert.ToBase64String(new byte[31]), Convert.ToBase64String(new byte[33]) })
                 {
                     Array.Clear(destination, 0, destination.Length);
@@ -311,18 +341,25 @@ namespace YLFramework.Tests.ResourceBuild
             cipher[payload + 65536 + 23] ^= 1;
             ReplaceDeliveryFile(build, name, cipher);
             using var input = File.OpenRead(Path.Combine(DeliveryPath(build), name));
-            using (var probe = ResourceBundleEnvelope.OpenDecrypt(input, Context(build, name), TestKey, true))
+            using (var probe = ResourceBundleEnvelope.OpenDecrypt(input, Context(build, name), _testKey, true))
+            {
                 Assert.That(probe.Length, Is.GreaterThan(2 * 65536));
-            Assert.Throws<IOException>(() => ResourceBundleEnvelope.ValidateAll(input, Context(build, name), TestKey));
+            }
+
+            Assert.Throws<IOException>(() => ResourceBundleEnvelope.ValidateAll(input, Context(build, name), _testKey));
         }
 
         private static void ReplaceContent(ResourceBuildResult build, string name, byte[] rawBytes, bool replaceRaw)
         {
             using var raw = new MemoryStream(rawBytes);
             using var encrypted = new MemoryStream();
-            ResourceBundleEnvelope.Encrypt(raw, encrypted, Context(build, name), KeyId, TestKey);
+            ResourceBundleEnvelope.Encrypt(raw, encrypted, Context(build, name), KeyId, _testKey);
             ReplaceDeliveryFile(build, name, encrypted.ToArray());
-            if (!replaceRaw) return;
+            if (!replaceRaw)
+            {
+                return;
+            }
+
             var previous = build.Files.Single(x => x.Name == name);
             var replacement = FileFact(name, rawBytes);
             File.WriteAllBytes(Path.Combine(build.WorkspacePath, name), rawBytes);
@@ -333,7 +370,11 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         private static ResourceBuiltFile FileFact(string name, byte[] bytes) => new(new ResourceBuildWorkspace.FileDigest
-        { Name = name, Length = bytes.LongLength, Sha256 = ResourceCatalogCodec.Digest(bytes) });
+        {
+            Name = name,
+            Length = bytes.LongLength,
+            Sha256 = ResourceCatalogCodec.Digest(bytes)
+        });
 
         private static void ReplaceDeliveryFile(ResourceBuildResult build, string name, byte[] bytes)
         {
@@ -357,7 +398,11 @@ namespace YLFramework.Tests.ResourceBuild
                 var property = (JProperty)digest.Parent;
                 var owner = (JObject)property.Parent;
                 var lengthName = property.Name.Replace("Sha256", "Length");
-                if (lengthName != property.Name && owner[lengthName] != null) owner[lengthName] = after.Length;
+                if (lengthName != property.Name && owner[lengthName] != null)
+                {
+                    owner[lengthName] = after.Length;
+                }
+
                 digest.Value = after.Sha256;
             }
             File.WriteAllText(path, record.ToString(Formatting.Indented));
@@ -373,13 +418,21 @@ namespace YLFramework.Tests.ResourceBuild
                 Stream input = verified;
                 try
                 {
-                    input = ResourceBundleEnvelope.OpenDecrypt(verified, Context(build, rawName), TestKey);
+                    input = ResourceBundleEnvelope.OpenDecrypt(verified, Context(build, rawName), _testKey);
                     var bundle = AssetBundle.LoadFromStream(input, 0, 32768);
                     Assert.That(bundle, Is.Not.Null);
                     inputs.Add((bundle, input));
                     return bundle;
                 }
-                catch { input.Dispose(); if (!ReferenceEquals(input, verified)) verified.Dispose(); throw; }
+                catch
+                {
+                    input.Dispose();
+                    if (!ReferenceEquals(input, verified))
+                    {
+                        verified.Dispose();
+                    }
+                    throw;
+                }
             }
             try
             {
@@ -407,7 +460,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(prefabs[0].GetComponent<MeshRenderer>().sharedMaterial.mainTexture,
                     Is.SameAs(prefabs[1].GetComponent<MeshRenderer>().sharedMaterial.mainTexture));
                 foreach (var sprite in release.Catalog.Assets.Where(x => x.Kind == "SubAsset"))
+                {
                     Assert.That(bundles[sprite.BundleId].LoadAssetWithSubAssets<Sprite>(sprite.LoadName).Count(x => x.name == sprite.SubAssetName), Is.EqualTo(1));
+                }
+
                 var scene = release.Catalog.Assets.Single(x => x.Kind == "Scene");
                 CollectionAssert.Contains(bundles[scene.BundleId].GetAllScenePaths(), scene.LoadName);
             }
@@ -415,7 +471,11 @@ namespace YLFramework.Tests.ResourceBuild
             {
                 for (var i = inputs.Count - 1; i >= 0; i--)
                 {
-                    if (inputs[i].Bundle) inputs[i].Bundle.Unload(true);
+                    if (inputs[i].Bundle)
+                    {
+                        inputs[i].Bundle.Unload(true);
+                    }
+
                     inputs[i].Input.Dispose();
                 }
             }

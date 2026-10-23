@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using YLFramework.Core.Singleton;
 
@@ -13,7 +13,7 @@ namespace YLFramework.Core.Pool
     public static class ListPool<T>
     {
         private static int _createCapacity;
-        private static readonly ObjectPool<List<T>> Pool = new(
+        private static readonly ObjectPool<List<T>> _pool = new(
             Create, reset: list => list.Clear(), cacheOrder: PoolCacheOrder.Lifo);
 
         static ListPool()
@@ -26,8 +26,8 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public static int MaxPoolSize
         {
-            get => Pool.MaxPoolSize;
-            set => Pool.MaxPoolSize = value;
+            get => _pool.MaxPoolSize;
+            set => _pool.MaxPoolSize = value;
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace YLFramework.Core.Pool
             _createCapacity = capacity;
             try
             {
-                list = Pool.Allocate();
+                list = _pool.Allocate();
             }
             finally
             {
@@ -73,7 +73,7 @@ namespace YLFramework.Core.Pool
             }
             catch
             {
-                Pool.Discard(list);
+                _pool.Discard(list);
                 throw;
             }
         }
@@ -86,7 +86,7 @@ namespace YLFramework.Core.Pool
         /// <exception cref="InvalidOperationException">列表不是从本池取得的。</exception>
         public static void Recycle(List<T> toRecycle)
         {
-            Pool.Recycle(toRecycle);
+            _pool.Recycle(toRecycle);
         }
 
         /// <summary>
@@ -94,7 +94,7 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public static void Clear()
         {
-            Pool.Clear();
+            _pool.Clear();
         }
 
         private static List<T> Create() => new(_createCapacity);

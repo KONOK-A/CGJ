@@ -6,7 +6,7 @@ using UnityEngine;
 namespace YLFramework.Utilities.Extensions
 {
 
-    public static class RandomExtensions 
+    public static class RandomExtensions
     {
 
         /// <summary>
@@ -16,10 +16,17 @@ namespace YLFramework.Utilities.Extensions
         /// <returns></returns>
         public static bool Random(float probability)
         {
-            if (probability >= 1) return true;
-            if (probability <= 0) return false;
+            if (probability >= 1)
+            {
+                return true;
+            }
 
-            int p = Mathf.RoundToInt( probability * 100); 
+            if (probability <= 0)
+            {
+                return false;
+            }
+
+            int p = Mathf.RoundToInt(probability * 100);
             return UnityEngine.Random.Range(1, 101) <= p;
         }
     }

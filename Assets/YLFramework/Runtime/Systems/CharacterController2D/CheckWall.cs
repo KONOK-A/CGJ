@@ -7,27 +7,27 @@ namespace YLFramework.Character.Controller2D
 {
     public class CheckWall
     {
-        private ContactPoint2D[] contacts = null;
+        private ContactPoint2D[] _contacts = null;
 
-        private CharacterController2D characher;
+        private CharacterController2D _character;
 
-        private float wallAngle = 20;
+        private float _wallAngle = 20;
 
-        private float lastCheckTime;
+        private float _lastCheckTime;
 
-        private float lastUpdateWallInfoTime;
+        private float _lastUpdateWallInfoTime;
 
-        private float timeInterval = 1.0f / 10.0f; // 每秒最多检测30次
+        private float _timeInterval = 1.0f / 10.0f; // 每秒最多检测30次
 
-        private int contactsCount;
+        private int _contactsCount;
 
-        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count,float wallAngle)
+        internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count, float wallAngle)
         {
-            this.contacts = contacts;
-            this.characher = characher;
-            this.wallAngle = wallAngle;
+            this._contacts = contacts;
+            this._character = characher;
+            this._wallAngle = wallAngle;
 
-            this.contactsCount = count;
+            this._contactsCount = count;
             int version = characher.PhysicsVersion;
 
             int wallIndex = 0;
@@ -35,28 +35,40 @@ namespace YLFramework.Character.Controller2D
             bool isWallByContacts = IsWallByContacts(count, out wallIndex);
 
             // 检测墙面
-            if (isWallByContacts != characher.IsTouchWall)
+            if (isWallByContacts != characher.IsTouchingWall)
+            {
                 CheckWallTouch();
+            }
 
-            if (!characher.IsPhysicsCurrent(version)) return;
+            if (!characher.IsPhysicsCurrent(version))
+            {
+                return;
+            }
 
-            if(isWallByContacts)
+            if (isWallByContacts)
+            {
                 UpdateWallInfo(wallIndex);
+            }
         }
 
         private bool IsWallByContacts(int count, out int index)
         {
             bool isWall = false;
-            float min_angle = 90;
-            int min_index = 0;
+            float minAngle = 90;
+            int minIndex = 0;
 
             for (int i = 0; i < count; i++)
             {
-                ContactPoint2D raycast = contacts[i];
+                ContactPoint2D raycast = _contacts[i];
                 if (raycast.collider == null)
+                {
                     continue;
+                }
+
                 if (raycast.collider.isTrigger)
+                {
                     continue;
+                }
 
                 if (raycast.collider is BoxCollider2D || raycast.collider is CapsuleCollider2D)
                 {
@@ -68,105 +80,128 @@ namespace YLFramework.Character.Controller2D
 
                 float angle = Vector2.Angle(raycast.normal, raycast.normal.x < 0 ? -Vector2.right : Vector2.right);
 
-                if (angle < min_angle)
+                if (angle < minAngle)
                 {
-                    min_angle = angle;
-                    min_index = i;
+                    minAngle = angle;
+                    minIndex = i;
                 }
             }
 
 
-            if (min_angle < wallAngle)
+            if (minAngle < _wallAngle)
             {
                 isWall = true;
             }
 
-            index = min_index;
+            index = minIndex;
             return isWall;
         }
 
         private void UpdateWallInfo(int index)
         {
-            if (!characher.IsTouchWall)
-                return;
-
-            if (Time.time - lastUpdateWallInfoTime < 0.1f)
-                return;
-
-            for (int i = 0; i < contactsCount; i++)
+            if (!_character.IsTouchingWall)
             {
-                // 只要有一个点 和 当前法线比较接近 就不需要更新
-                bool d = Vector3.Distance(contacts[i].point, characher.WallInfo.point) < 0.1f;
-                bool a = Vector3.Angle(contacts[i].normal, characher.WallInfo.normal) < 3;
-                // 认为法线区别不大 不需要更新
-                if (d && a)
-                    return;
+                return;
             }
 
-            lastUpdateWallInfoTime = Time.time;
+            if (Time.time - _lastUpdateWallInfoTime < 0.1f)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _contactsCount; i++)
+            {
+                // 只要有一个点 和 当前法线比较接近 就不需要更新
+                bool d = Vector3.Distance(_contacts[i].point, _character.WallInfo.point) < 0.1f;
+                bool a = Vector3.Angle(_contacts[i].normal, _character.WallInfo.normal) < 3;
+                // 认为法线区别不大 不需要更新
+                if (d && a)
+                {
+                    return;
+                }
+            }
+
+            _lastUpdateWallInfoTime = Time.time;
             CheckWallTouch();
         }
 
 
         private void CheckWallTouch()
         {
-            if (!characher.IsCheckWall) return;
-            int version = characher.PhysicsVersion;
-
-            if (Time.time - lastCheckTime < timeInterval)
+            if (!_character.ChecksWalls)
+            {
                 return;
+            }
 
-            lastCheckTime = Time.time;
+            int version = _character.PhysicsVersion;
+
+            if (Time.time - _lastCheckTime < _timeInterval)
+            {
+                return;
+            }
+
+            _lastCheckTime = Time.time;
 
 #if UNITY_EDITOR
-            characher.checkCount++;
+            _character.CheckCount++;
 #endif
 
 
-            Vector2 dir = characher.right.transform.right;
+            Vector2 dir = _character.Right.transform.right;
 
             // 如果缩放值小于0 翻转方向
-            if (characher.right.transform.lossyScale.x < 0)
+            if (_character.Right.transform.lossyScale.x < 0)
+            {
                 dir = -dir;
+            }
 
             int count = 0;
 
-            if (characher.right is CircleCollider2D)
+            if (_character.Right is CircleCollider2D)
             {
-                count = characher.Raycast(characher.right as CircleCollider2D, dir);
+                count = _character.Raycast(_character.Right as CircleCollider2D, dir);
             }
-            else if (characher.right is BoxCollider2D)
+            else if (_character.Right is BoxCollider2D)
             {
-                count = characher.Raycast(characher.right as BoxCollider2D, dir);
+                count = _character.Raycast(_character.Right as BoxCollider2D, dir);
 
             }
-            else if (characher.right is CapsuleCollider2D)
+            else if (_character.Right is CapsuleCollider2D)
             {
-                count = characher.Raycast(characher.right as CapsuleCollider2D, dir);
+                count = _character.Raycast(_character.Right as CapsuleCollider2D, dir);
             }
 
             CaculateIsWallTouch(count);
 
-            if (!characher.IsPhysicsCurrent(version)) return;
-            if (characher.IsTouchWall) return;
+            if (!_character.IsPhysicsCurrent(version))
+            {
+                return;
+            }
 
-            dir = -characher.left.transform.right;
+            if (_character.IsTouchingWall)
+            {
+                return;
+            }
+
+            dir = -_character.Left.transform.right;
 
             // 如果缩放值小于0 翻转方向
-            if (characher.left.transform.lossyScale.x < 0)
+            if (_character.Left.transform.lossyScale.x < 0)
+            {
                 dir = -dir;
+            }
 
-            if (characher.left is CircleCollider2D)
+            if (_character.Left is CircleCollider2D)
             {
-                count = characher.Raycast(characher.left as CircleCollider2D, dir);
+                count = _character.Raycast(_character.Left as CircleCollider2D, dir);
             }
-            else if (characher.left is BoxCollider2D)
+            else if (_character.Left is BoxCollider2D)
             {
-                count = characher.Raycast(characher.left as BoxCollider2D, dir);
+                count = _character.Raycast(_character.Left as BoxCollider2D, dir);
             }
-            else if (characher.left is CapsuleCollider2D)
+            else if (_character.Left is CapsuleCollider2D)
             {
-                count = characher.Raycast(characher.left as CapsuleCollider2D, dir);
+                count = _character.Raycast(_character.Left as CapsuleCollider2D, dir);
             }
 
             CaculateIsWallTouch(count);
@@ -178,14 +213,21 @@ namespace YLFramework.Character.Controller2D
 
             for (int i = 0; i < count; i++)
             {
-                RaycastHit2D raycast = characher.hits[i];
+                RaycastHit2D raycast = _character.Hits[i];
                 if (raycast.collider == null)
+                {
                     continue;
-                if (raycast.collider.isTrigger)
-                    continue;
+                }
 
-                if (raycast.transform == characher.transform || raycast.transform.IsChildOf(characher.transform))
+                if (raycast.collider.isTrigger)
+                {
                     continue;
+                }
+
+                if (raycast.transform == _character.transform || raycast.transform.IsChildOf(_character.transform))
+                {
+                    continue;
+                }
 
                 if (raycast.collider is BoxCollider2D || raycast.collider is CapsuleCollider2D)
                 {
@@ -197,14 +239,14 @@ namespace YLFramework.Character.Controller2D
 
                 float angle = Vector2.Angle(raycast.normal, raycast.normal.x < 0 ? -Vector2.right : Vector2.right);
 
-                if (angle < wallAngle)
+                if (angle < _wallAngle)
                 {
-                    characher.WallInfo = raycast;
+                    _character.WallInfo = raycast;
                     touching = true;
                     break;
                 }
             }
-            characher.IsTouchWall = touching;
+            _character.IsTouchingWall = touching;
 
 
         }

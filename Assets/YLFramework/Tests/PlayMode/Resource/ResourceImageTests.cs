@@ -5,9 +5,9 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using YLFramework.Services.Resource;
 using Object = UnityEngine.Object;
 
@@ -15,27 +15,37 @@ namespace YLFramework.Tests.Resource
 {
     public partial class ResourceImageTests
     {
-        private string file;
-        private GameObject host;
+        private string _file;
+        private GameObject _host;
 
         [SetUp]
         public void SetUp()
         {
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.That(Directory.Exists(Application.temporaryCachePath), Is.True);
-            file = Path.Combine(Application.temporaryCachePath, "YL89-Image-" + Guid.NewGuid().ToString("N") + ".png");
+            _file = Path.Combine(Application.temporaryCachePath, "YL89-Image-" + Guid.NewGuid().ToString("N") + ".png");
             var image = new Texture2D(7, 3, TextureFormat.RGBA32, false);
-            try { File.WriteAllBytes(file, image.EncodeToPNG()); }
-            finally { Object.DestroyImmediate(image); }
+            try
+            {
+                File.WriteAllBytes(_file, image.EncodeToPNG());
+            }
+            finally
+            {
+                Object.DestroyImmediate(image);
+            }
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (host) Object.DestroyImmediate(host);
+            if (_host)
+            {
+                Object.DestroyImmediate(_host);
+            }
+
             typeof(ResourceSystem).GetMethod("EndSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
             typeof(ResourceSystem).GetMethod("ResetSession", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
-            File.Delete(file);
+            File.Delete(_file);
         }
 
         private static ResourceSystem Initialize(ResourceImageOptions options = null)
@@ -55,8 +65,8 @@ namespace YLFramework.Tests.Resource
         public IEnumerator DirectImagesShareProductionCancelIndependentlyAndFlushOnlyIdleOwners()
         {
             var system = Initialize();
-            using var first = Acquire(system, file);
-            using var second = Acquire(system, file);
+            using var first = Acquire(system, _file);
+            using var second = Acquire(system, _file);
             first.Cancel();
             yield return second;
             Assert.That(second.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), second.Error?.ToString());
@@ -66,7 +76,7 @@ namespace YLFramework.Tests.Resource
             Flush(system);
             Assert.That(lease.IsValid, Is.True, "A cache flush cannot revoke an active consumer.");
             lease.Dispose();
-            using (var cached = Acquire(system, file))
+            using (var cached = Acquire(system, _file))
             {
                 Assert.That(cached.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
                 using var warm = cached.TakeResult();
@@ -82,8 +92,8 @@ namespace YLFramework.Tests.Resource
         public IEnumerator ImageComponentDisableReleasesOwnedSpriteAndDoesNotDestroyBorrowedPlaceholder()
         {
             var system = Initialize();
-            host = new GameObject("YL89 Image", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var target = host.GetComponent<Image>();
+            _host = new GameObject("YL89 Image", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var target = _host.GetComponent<Image>();
             var placeholderTexture = new Texture2D(2, 2);
             var placeholder = Sprite.Create(placeholderTexture, new Rect(0, 0, 2, 2), Vector2.one * .5f);
             try
@@ -91,10 +101,14 @@ namespace YLFramework.Tests.Resource
                 target.sprite = placeholder;
                 var type = typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource.ResourceImage");
                 Assert.That(type, Is.Not.Null, "A formal Unity UI component must own its display lease.");
-                var component = (Behaviour)host.AddComponent(type);
-                type.GetMethod("SetImage", new[] { typeof(string) }).Invoke(component, new object[] { file });
+                var component = (Behaviour)_host.AddComponent(type);
+                type.GetMethod("SetImage", new[] { typeof(string) }).Invoke(component, new object[] { _file });
                 var until = Time.realtimeSinceStartup + 8;
-                while (target.sprite == placeholder && Time.realtimeSinceStartup < until) yield return null;
+                while (target.sprite == placeholder && Time.realtimeSinceStartup < until)
+                {
+                    yield return null;
+                }
+
                 Assert.That(target.sprite, Is.Not.Null.And.Not.SameAs(placeholder));
                 var created = target.sprite;
                 component.enabled = false;
@@ -108,7 +122,8 @@ namespace YLFramework.Tests.Resource
             }
             finally
             {
-                Object.DestroyImmediate(host); host = null;
+                Object.DestroyImmediate(_host);
+                _host = null;
                 Object.DestroyImmediate(placeholder);
                 Object.DestroyImmediate(placeholderTexture);
             }
@@ -128,8 +143,8 @@ namespace YLFramework.Tests.Resource
                     new YLFramework.Services.Resource.ResourceLocation(source.Id, "borrowed-atlas", typeof(UnityEngine.U2D.SpriteAtlas))) });
                 using var initialized = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { catalog }, new IResourceSource[] { source }));
                 var system = initialized.TakeResult();
-                host = new GameObject("AtlasImage89", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                var root = host;
+                _host = new GameObject("AtlasImage89", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var root = _host;
                 var image = root.AddComponent<ResourceImage>();
                 setter.Invoke(image, new object[] { address, "not-in-the-atlas" });
                 yield return WaitUntil(() => image.Status != ResourceRequestStatus.Pending);
@@ -143,24 +158,34 @@ namespace YLFramework.Tests.Resource
                 Assert.That(source.Loads, Is.EqualTo(2), "Switching Inspector source mode must not retain a hidden Catalog subasset key for an Atlas main address.");
                 Assert.That(image.Error.Message, Does.Contain("SpriteAtlas does not contain"));
             }
-            finally { if (atlas) UnityEngine.Object.DestroyImmediate(atlas); }
+            finally
+            {
+                if (atlas)
+                {
+                    UnityEngine.Object.DestroyImmediate(atlas);
+                }
+            }
         }
 
         [UnityTest]
         public IEnumerator RawImageTargetReplacementDoesNotRestoreOverAnExternalChange()
         {
             var system = Initialize();
-            host = new GameObject("YL89 RawImage", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
-            var target = host.GetComponent<RawImage>();
+            _host = new GameObject("YL89 RawImage", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            var target = _host.GetComponent<RawImage>();
             var external = new Texture2D(2, 2);
             try
             {
                 var type = typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource.ResourceImage");
                 Assert.That(type, Is.Not.Null);
-                var component = (Behaviour)host.AddComponent(type);
-                type.GetMethod("SetImage", new[] { typeof(string) }).Invoke(component, new object[] { file });
+                var component = (Behaviour)_host.AddComponent(type);
+                type.GetMethod("SetImage", new[] { typeof(string) }).Invoke(component, new object[] { _file });
                 var until = Time.realtimeSinceStartup + 8;
-                while (!target.texture && Time.realtimeSinceStartup < until) yield return null;
+                while (!target.texture && Time.realtimeSinceStartup < until)
+                {
+                    yield return null;
+                }
+
                 Assert.That(target.texture, Is.Not.Null);
                 target.texture = external;
                 component.enabled = false;
@@ -168,19 +193,26 @@ namespace YLFramework.Tests.Resource
                 Assert.That(external, Is.Not.Null);
                 Flush(system);
             }
-            finally { Object.DestroyImmediate(external); }
+            finally
+            {
+                Object.DestroyImmediate(external);
+            }
         }
 
         [UnityTest]
         public IEnumerator DestroyedTargetDuringRequestHasAStableFailureInsteadOfPendingForever()
         {
             var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 0));
-            host = new GameObject("YL89 destroyed target", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
-            var component = host.AddComponent<ResourceImage>();
-            component.SetImage(file);
-            Object.DestroyImmediate(host.GetComponent<RawImage>());
+            _host = new GameObject("YL89 destroyed target", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            var component = _host.AddComponent<ResourceImage>();
+            component.SetImage(_file);
+            Object.DestroyImmediate(_host.GetComponent<RawImage>());
             var until = Time.realtimeSinceStartup + 8;
-            while (component.Status == ResourceRequestStatus.Pending && Time.realtimeSinceStartup < until) yield return null;
+            while (component.Status == ResourceRequestStatus.Pending && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(component.Status, Is.EqualTo(ResourceRequestStatus.Failed));
             Assert.That(component.IsLoading, Is.False);
             Assert.That(component.Error, Is.Not.Null);
@@ -190,12 +222,12 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator CacheCapacityAndTtlEvictOnlyIdleImagesAndShutdownFlushesWithoutBusy()
         {
-            var secondFile = file + ".other.png";
-            File.Copy(file, secondFile);
+            var secondFile = _file + ".other.png";
+            File.Copy(_file, secondFile);
             try
             {
                 var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 7 * 3 * 4, idleTimeToLive: TimeSpan.FromSeconds(.05)));
-                var first = system.AcquireImage(file);
+                var first = system.AcquireImage(_file);
                 var nativeFirst = first.Asset;
                 var second = system.AcquireImage(secondFile);
                 var nativeSecond = second.Asset;
@@ -204,15 +236,26 @@ namespace YLFramework.Tests.Resource
                 yield return null;
                 Assert.That(nativeFirst == null, Is.True, "LRU must evict the oldest zero-owner image when the byte budget is full.");
                 var until = Time.realtimeSinceStartup + 2;
-                while (nativeSecond && Time.realtimeSinceStartup < until) yield return null;
+                while (nativeSecond && Time.realtimeSinceStartup < until)
+                {
+                    yield return null;
+                }
+
                 Assert.That(nativeSecond == null, Is.True, "TTL is enforced by the existing cleanup loop, not only the next acquire.");
-                using (var last = system.AcquireImage(file)) Assert.That(last.IsValid, Is.True);
+                using (var last = system.AcquireImage(_file))
+                {
+                    Assert.That(last.IsValid, Is.True);
+                }
+
                 using var shutdown = system.ShutdownAsync();
                 yield return shutdown;
                 Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), shutdown.Error?.ToString());
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             }
-            finally { File.Delete(secondFile); }
+            finally
+            {
+                File.Delete(secondFile);
+            }
         }
 
         [UnityTest]
@@ -220,35 +263,46 @@ namespace YLFramework.Tests.Resource
         {
             var options = new ResourceImageOptions(maximumEncodedBytes: 1024, maximumPixels: 1024, idleCapacityBytes: 1024, idleCapacity: 1);
             var system = Initialize(options);
-            var secondFile = file + ".second.png";
-            File.Copy(file, secondFile);
+            var secondFile = _file + ".second.png";
+            File.Copy(_file, secondFile);
             try
             {
-                var first = system.AcquireImage(file);
+                var first = system.AcquireImage(_file);
                 var old = first.Asset;
                 first.Dispose();
-                using (var second = system.AcquireImage(secondFile)) Assert.That(second.IsValid, Is.True);
+                using (var second = system.AcquireImage(secondFile))
+                {
+                    Assert.That(second.IsValid, Is.True);
+                }
+
                 yield return null;
                 Assert.That(old == null, Is.True);
                 Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.EqualTo(1));
                 Flush(system);
             }
-            finally { File.Delete(secondFile); }
+            finally
+            {
+                File.Delete(secondFile);
+            }
         }
 
         [UnityTest]
         public IEnumerator EncodedAndPixelBudgetsRejectBeforeNativeDecode()
         {
             var system = Initialize(new ResourceImageOptions(maximumEncodedBytes: 24));
-            using (var tooManyBytes = system.AcquireImageAsync(file))
+            using (var tooManyBytes = system.AcquireImageAsync(_file))
             {
                 yield return tooManyBytes;
                 Assert.That(tooManyBytes.Status, Is.EqualTo(ResourceRequestStatus.Failed));
                 Assert.That(tooManyBytes.Error.ToString(), Does.Contain("byte limit"));
             }
-            using (var closed = system.ShutdownAsync()) Assert.That(closed.TakeResult(), Is.True);
+            using (var closed = system.ShutdownAsync())
+            {
+                Assert.That(closed.TakeResult(), Is.True);
+            }
+
             system = Initialize(new ResourceImageOptions(maximumPixels: 2));
-            using (var tooManyPixels = system.AcquireImageAsync(file))
+            using (var tooManyPixels = system.AcquireImageAsync(_file))
             {
                 yield return tooManyPixels;
                 Assert.That(tooManyPixels.Status, Is.EqualTo(ResourceRequestStatus.Failed));
@@ -261,10 +315,16 @@ namespace YLFramework.Tests.Resource
         public IEnumerator JpegHeaderIsValidatedAndTheDecodedDisplayTextureHasNoReadablePixelCopy()
         {
             var input = new Texture2D(9, 5, TextureFormat.RGB24, false);
-            try { File.WriteAllBytes(file, input.EncodeToJPG()); }
-            finally { Object.DestroyImmediate(input); }
+            try
+            {
+                File.WriteAllBytes(_file, input.EncodeToJPG());
+            }
+            finally
+            {
+                Object.DestroyImmediate(input);
+            }
             var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 0));
-            using var request = system.AcquireImageAsync(file);
+            using var request = system.AcquireImageAsync(_file);
             yield return request;
             Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), request.Error?.ToString());
             var lease = request.TakeResult();
@@ -282,13 +342,19 @@ namespace YLFramework.Tests.Resource
         public IEnumerator SetNativeSizeCannotCommitALeaseAfterReentrantDisable()
         {
             var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 0));
-            host = new GameObject("YL89 reentrant dimensions", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
-            var target = host.GetComponent<RawImage>();
-            var component = host.AddComponent<ResourceImage>();
+            _host = new GameObject("YL89 reentrant dimensions", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            var target = _host.GetComponent<RawImage>();
+            var component = _host.AddComponent<ResourceImage>();
             component.SetNativeSize = true;
-            var reentrant = host.AddComponent<ImageDimensionsObserver>();
-            reentrant.Changed = () => { if (target.texture) component.enabled = false; };
-            component.SetImage(file);
+            var reentrant = _host.AddComponent<ImageDimensionsObserver>();
+            reentrant.Changed = () =>
+            {
+                if (target.texture)
+                {
+                    component.enabled = false;
+                }
+            };
+            component.SetImage(_file);
             yield return WaitUntil(() => !component.enabled);
             yield return null;
             Assert.That(target.texture == null, Is.True, "The disabled consumer restores its original display.");
@@ -300,25 +366,25 @@ namespace YLFramework.Tests.Resource
         public IEnumerator DestroyedBackingTextureEndsTheSpriteConsumerAndReleasesItsLease()
         {
             var system = Initialize(new ResourceImageOptions(idleCapacityBytes: 0));
-            host = new GameObject("YL89 externally destroyed texture", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var component = host.AddComponent<ResourceImage>();
-            component.SetImage(file);
+            _host = new GameObject("YL89 externally destroyed texture", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var component = _host.AddComponent<ResourceImage>();
+            component.SetImage(_file);
             yield return WaitUntil(() => component.Status == ResourceRequestStatus.Succeeded);
-            Object.Destroy(host.GetComponent<Image>().sprite.texture);
+            Object.Destroy(_host.GetComponent<Image>().sprite.texture);
             yield return null;
             yield return null;
             Assert.That(component.Status, Is.EqualTo(ResourceRequestStatus.Failed));
-            Assert.That(host.GetComponent<Image>().sprite, Is.Null);
+            Assert.That(_host.GetComponent<Image>().sprite, Is.Null);
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
         }
 
         [Test]
         public void UrlIdentityRemainsExactWhileDiagnosticTextDoesNotExposeQueryCredentials()
         {
-            const string url = "https://example.invalid/Image?token=YL89-private&Version=AbC";
-            var location = new YLFramework.Services.Resource.ResourceLocation(ResourceSourceId.UrlTexture, url, typeof(Texture2D));
-            var different = new YLFramework.Services.Resource.ResourceLocation(ResourceSourceId.UrlTexture, url.Replace("AbC", "abc"), typeof(Texture2D));
-            Assert.That(location.Locator, Is.EqualTo(url));
+            const string Url = "https://example.invalid/Image?token=YL89-private&Version=AbC";
+            var location = new YLFramework.Services.Resource.ResourceLocation(ResourceSourceId.UrlTexture, Url, typeof(Texture2D));
+            var different = new YLFramework.Services.Resource.ResourceLocation(ResourceSourceId.UrlTexture, Url.Replace("AbC", "abc"), typeof(Texture2D));
+            Assert.That(location.Locator, Is.EqualTo(Url));
             Assert.That(location.Equals(different), Is.False);
             Assert.That(location.ToString(), Does.Not.Contain("YL89-private"));
         }
@@ -340,12 +406,18 @@ namespace YLFramework.Tests.Resource
         {
             var input = new Texture2D(1024, 1024, TextureFormat.RGBA32, false);
             byte[] encoded;
-            try { encoded = input.EncodeToPNG(); }
-            finally { Object.DestroyImmediate(input); }
-            File.WriteAllBytes(file, encoded);
+            try
+            {
+                encoded = input.EncodeToPNG();
+            }
+            finally
+            {
+                Object.DestroyImmediate(input);
+            }
+            File.WriteAllBytes(_file, encoded);
             var system = Initialize();
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
-            var lease = system.AcquireImage(file);
+            var lease = system.AcquireImage(_file);
             var coldMilliseconds = elapsed.Elapsed.TotalMilliseconds;
             var texture = lease.Asset;
             Assert.That(texture.isReadable, Is.False, "CPU pixel readback is not retained for display-only decoded images.");
@@ -354,7 +426,11 @@ namespace YLFramework.Tests.Resource
             lease.Dispose();
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
             elapsed.Restart();
-            using (var warm = system.AcquireImage(file)) Assert.That(warm.Asset, Is.SameAs(texture));
+            using (var warm = system.AcquireImage(_file))
+            {
+                Assert.That(warm.Asset, Is.SameAs(texture));
+            }
+
             var warmMilliseconds = elapsed.Elapsed.TotalMilliseconds;
             Debug.Log($"YL8.9 image memory measurement: PNG={encoded.Length} bytes, RGBA idle budget estimate={1024L * 1024 * 4} bytes, Unity Profiler runtime sample={runtimeBytes} bytes, cold decode={coldMilliseconds:F2} ms, ready cache acquire={warmMilliseconds:F2} ms; not process peak/RSS.");
             Flush(system);

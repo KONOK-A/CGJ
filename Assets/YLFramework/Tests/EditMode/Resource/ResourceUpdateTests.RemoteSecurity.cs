@@ -26,41 +26,58 @@ namespace YLFramework.Tests.ResourceBuild
                 var source = ResourceDownloadTests.Source(server, certificate);
                 var store = RemoteStore(source);
                 server.Responder = Serve(Signed(1, 5, signing), Snapshot());
-                UpdatePlan initial = null; yield return Steps(store.CheckRemote(store.Mount(), value => initial = value));
-                PreparedUpdate current = null; yield return Steps(store.PrepareRemote(initial, value => current = value));
+                UpdatePlan initial = null;
+                yield return Steps(store.CheckRemote(store.Mount(), value => initial = value));
+                PreparedUpdate current = null;
+                yield return Steps(store.PrepareRemote(initial, value => current = value));
                 store.Commit(current);
-                var active = File.ReadAllBytes(ProjectPath(store)); var good = File.ReadAllBytes(ProjectPath(store, "last-known-good.json"));
+                var active = File.ReadAllBytes(ProjectPath(store));
+                var good = File.ReadAllBytes(ProjectPath(store, "last-known-good.json"));
                 var metadata = Signed(2, 8, signing);
                 if (mode == "signature")
                 {
                     var header = ResourceCatalogCodec.ParseObject(metadata);
-                    var signature = Convert.FromBase64String((string)header["Signature"]); signature[0] ^= 1;
-                    header["Signature"] = Convert.ToBase64String(signature); metadata = ResourceCatalogCodec.CanonicalBytes(header);
+                    var signature = Convert.FromBase64String((string)header["Signature"]);
+                    signature[0] ^= 1;
+                    header["Signature"] = Convert.ToBase64String(signature);
+                    metadata = ResourceCatalogCodec.CanonicalBytes(header);
                 }
                 server.Responder = Serve(metadata, Snapshot("a", 2), (request, response) =>
                 {
                     if (mode == "catalog" && request.Path.EndsWith("/resource-catalog.json", StringComparison.Ordinal))
-                    { response.Body = (byte[])response.Body.Clone(); response.Body[0] ^= 1; }
+                    {
+                        response.Body = (byte[])response.Body.Clone();
+                        response.Body[0] ^= 1;
+                    }
                 });
                 if (mode == "path")
                 {
                     var catalog = ResourceCatalogCodec.ParseObject(ResourceCatalogCodec.Write(Snapshot("a", 2).Document));
                     catalog["Bundles"][0]["RelativeFile"] = "../escape";
-                    var bytes = ResourceCatalogCodec.CanonicalBytes(catalog); var digest = ResourceCatalogCodec.Digest(bytes);
-                    metadata = Resign(metadata, signing, data => { data["CatalogDigest"] = digest; data["CatalogLength"] = bytes.LongLength; });
+                    var bytes = ResourceCatalogCodec.CanonicalBytes(catalog);
+                    var digest = ResourceCatalogCodec.Digest(bytes);
+                    metadata = Resign(metadata, signing, data =>
+                    {
+                        data["CatalogDigest"] = digest;
+                        data["CatalogLength"] = bytes.LongLength;
+                    });
                     server.Responder = request => request.Path == "/release.json" ? new ResourceTlsServer.Response { Body = metadata } :
                         request.Path == "/" + digest + "/resource-catalog.json" ? new ResourceTlsServer.Response { Body = bytes } : new ResourceTlsServer.Response { StatusCode = 404 };
                 }
-                UpdatePlan plan = null; Exception rejection = null;
+                UpdatePlan plan = null;
+                Exception rejection = null;
                 yield return Steps(store.CheckRemote(store.Mount(), value => plan = value), error => rejection = error);
                 if (mode == "complete" || mode == "bundle")
                 {
                     Assert.That(plan, Is.Not.Null, mode);
-                    var selected = mode == "complete" ? ".ylr-complete.json" : plan.Projects[0].Files.First(x => !x.Reusable && x.Length > 0).RelativeFile;
+                    var selected = mode == "complete" ? ".ylr-complete.json" : plan.Projects[0].Files.First(x => !x.IsReusable && x.Length > 0).RelativeFile;
                     server.Responder = Serve(metadata, Snapshot("a", 2), (request, response) =>
                     {
                         if (request.Path.EndsWith("/" + selected, StringComparison.Ordinal))
-                        { response.Body = (byte[])response.Body.Clone(); response.Body[0] ^= 1; }
+                        {
+                            response.Body = (byte[])response.Body.Clone();
+                            response.Body[0] ^= 1;
+                        }
                     });
                     yield return Steps(store.PrepareRemote(plan, _ => Assert.Fail("Unverified remote bytes produced Prepared.")), error => rejection = error);
                 }
@@ -79,13 +96,20 @@ namespace YLFramework.Tests.ResourceBuild
             using var certificate = ResourceDownloadTests.Certificate();
             using var server = new ResourceTlsServer(certificate);
             using var signing = certificate.GetRSAPrivateKey();
-            var store = RemoteStore(ResourceDownloadTests.Source(server, certificate)); Prepare(store);
+            var store = RemoteStore(ResourceDownloadTests.Source(server, certificate));
+            Prepare(store);
             var release = new ResourceRemoteRelease(Signed(2, 7, signing), store.Projects[0], Application.unityVersion, DateTimeOffset.UtcNow);
             var file = Snapshot("a", 2).Document.Bundles.First();
             var part = new ArtifactStore.DownloadPart(store, release, file.RelativeFile, file.Length, file.Sha256);
-            using (var output = part.OpenWrite(0, "\"stable\"")) output.WriteByte(7);
-            var path = Path.ChangeExtension(part.Path, ".json"); var record = File.ReadAllBytes(path);
-            var foreign = ResourceCatalogCodec.ParseObject(record); foreign["OwnerId"] = new string('0', 32);
+            using (var output = part.OpenWrite(0, "\"stable\""))
+            {
+                output.WriteByte(7);
+            }
+
+            var path = Path.ChangeExtension(part.Path, ".json");
+            var record = File.ReadAllBytes(path);
+            var foreign = ResourceCatalogCodec.ParseObject(record);
+            foreign["OwnerId"] = new string('0', 32);
             File.WriteAllBytes(path, ResourceCatalogCodec.CanonicalBytes(foreign));
             Assert.Throws<InvalidDataException>(() => part.OpenWrite(0, null));
             Assert.Throws<InvalidDataException>(() => part.Verify());
@@ -100,8 +124,11 @@ namespace YLFramework.Tests.ResourceBuild
         [UnityTest]
         public IEnumerator ReusedOwnedVersionMustMatchSignedCompleteAtCheckPrepareAndCommit()
         {
-            using var certificate = ResourceDownloadTests.Certificate(); using var server = new ResourceTlsServer(certificate); using var signing = certificate.GetRSAPrivateKey();
-            var store = RemoteStore(ResourceDownloadTests.Source(server, certificate)); Prepare(store);
+            using var certificate = ResourceDownloadTests.Certificate();
+            using var server = new ResourceTlsServer(certificate);
+            using var signing = certificate.GetRSAPrivateKey();
+            var store = RemoteStore(ResourceDownloadTests.Source(server, certificate));
+            Prepare(store);
             var metadata = Signed(2, 7, signing);
             server.Responder = Serve(Resign(metadata, signing, data => data["CompleteSha256"] = new string('f', 64)), Snapshot("a", 2));
             Exception wrongManifest = null;
@@ -109,10 +136,12 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(wrongManifest, Is.TypeOf<InvalidDataException>());
 
             server.Responder = Serve(metadata, Snapshot("a", 2));
-            UpdatePlan plan = null; yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
+            UpdatePlan plan = null;
+            yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
             var completePath = Path.Combine(VersionPath(store, 2), ".ylr-complete.json");
             var original = File.ReadAllBytes(completePath);
-            var tampered = ResourceCatalogCodec.ParseObject(original); tampered["ProjectGuid"] = new string('0', 32);
+            var tampered = ResourceCatalogCodec.ParseObject(original);
+            tampered["ProjectGuid"] = new string('0', 32);
             var other = ResourceCatalogCodec.CanonicalBytes(tampered);
             try
             {
@@ -121,8 +150,12 @@ namespace YLFramework.Tests.ResourceBuild
                 yield return Steps(store.PrepareRemote(plan, _ => Assert.Fail("Prepare reused a Complete file different from signed authorization.")), error => rejected = error);
                 Assert.That(rejected, Is.TypeOf<InvalidDataException>());
             }
-            finally { File.WriteAllBytes(completePath, original); }
-            PreparedUpdate prepared = null; yield return Steps(store.PrepareRemote(plan, value => prepared = value));
+            finally
+            {
+                File.WriteAllBytes(completePath, original);
+            }
+            PreparedUpdate prepared = null;
+            yield return Steps(store.PrepareRemote(plan, value => prepared = value));
             try
             {
                 File.WriteAllBytes(completePath, other);
@@ -130,7 +163,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(File.Exists(ProjectPath(store)), Is.False);
                 Assert.That(File.Exists(ProjectPath(store, "commit-journal.json")), Is.False);
             }
-            finally { File.WriteAllBytes(completePath, original); }
+            finally
+            {
+                File.WriteAllBytes(completePath, original);
+            }
         }
 
         [UnityTest]
@@ -145,29 +181,40 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static IEnumerator SaveRemotePreparedForReload()
         {
-            using var certificate = ResourceDownloadTests.Certificate(); using var server = new ResourceTlsServer(certificate); using var signing = certificate.GetRSAPrivateKey();
+            using var certificate = ResourceDownloadTests.Certificate();
+            using var server = new ResourceTlsServer(certificate);
+            using var signing = certificate.GetRSAPrivateKey();
             var store = RemoteStore(ResourceDownloadTests.Source(server, certificate));
             server.Responder = Serve(Signed(2, 7, signing), Snapshot("a", 2));
-            UpdatePlan plan = null; yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
+            UpdatePlan plan = null;
+            yield return Steps(store.CheckRemote(store.Mount(), value => plan = value));
             yield return Steps(store.PrepareRemote(plan, _ => { }));
             SessionState.SetString(Key + "remote-restart", store.RootPath);
         }
 
         private static IEnumerator ActivateRemotePreparedAfterReload()
         {
-            using var certificate = ResourceDownloadTests.Certificate(); using var server = new ResourceTlsServer(certificate);
+            using var certificate = ResourceDownloadTests.Certificate();
+            using var server = new ResourceTlsServer(certificate);
             var store = RemoteStore(ResourceDownloadTests.Source(server, certificate), SessionState.GetString(Key + "remote-restart", ""));
-            var system = Initialize(store); var prepared = store.GetPreparedUpdates().Single();
+            var system = Initialize(store);
+            var prepared = store.GetPreparedUpdates().Single();
             Assert.That(prepared.Releases.Single().Sequence, Is.EqualTo(7));
             Assert.That(Take(system.ActivatePreparedUpdateAsync(prepared)), Is.True);
-            using (var lease = system.Acquire<TextAsset>(Address())) Assert.That(lease.Asset.text, Is.EqualTo("release87-a-v2"));
+            using (var lease = system.Acquire<TextAsset>(Address()))
+            {
+                Assert.That(lease.Asset.text, Is.EqualTo("release87-a-v2"));
+            }
+
             Assert.That(Take(system.ShutdownAsync()), Is.True);
             yield break;
         }
 
         private static IEnumerator RejectReplayAfterReload()
         {
-            using var certificate = ResourceDownloadTests.Certificate(); using var server = new ResourceTlsServer(certificate); using var signing = certificate.GetRSAPrivateKey();
+            using var certificate = ResourceDownloadTests.Certificate();
+            using var server = new ResourceTlsServer(certificate);
+            using var signing = certificate.GetRSAPrivateKey();
             var store = RemoteStore(ResourceDownloadTests.Source(server, certificate), SessionState.GetString(Key + "remote-restart", ""));
             server.Responder = Serve(Signed(1, 6, signing), Snapshot());
             Exception rejected = null;

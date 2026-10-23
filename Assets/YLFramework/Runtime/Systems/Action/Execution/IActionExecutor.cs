@@ -25,8 +25,12 @@ namespace YLFramework.Actions
             Action<IActionController> onFinish = null)
         {
             var action = controller?.Action;
-            if (action == null || action.ActionID != controller.ActionID || action.Deinited) return true;
-            var id = action.ActionID;
+            if (action == null || action.ActionId != controller.ActionId || action.IsDeinitialized)
+            {
+                return true;
+            }
+
+            var id = action.ActionId;
             var generation = controller is ActionController concrete ? concrete.Generation : 0;
             // 推进可能取消动作、替换绑定或回收控制器：之后的完成通知与清理都要以本次标识和代次复核为前提。
             if (action.Execute(dt))
@@ -34,10 +38,12 @@ namespace YLFramework.Actions
                 Exception callbackError = null;
                 try
                 {
-                    if (!action.Deinited && action.ActionID == id && controller.ActionID == id &&
+                    if (!action.IsDeinitialized && action.ActionId == id && controller.ActionId == id &&
                         ReferenceEquals(controller.Action, action) &&
                         (!(controller is ActionController current) || current.Generation == generation))
+                    {
                         onFinish?.Invoke(controller);
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -48,11 +54,18 @@ namespace YLFramework.Actions
                 {
                     try
                     {
-                        if (action.ActionID == id && !action.Deinited) action.Deinit();
+                        if (action.ActionId == id && !action.IsDeinitialized)
+                        {
+                            action.Deinit();
+                        }
                     }
                     catch (Exception cleanupError)
                     {
-                        if (callbackError == null) throw;
+                        if (callbackError == null)
+                        {
+                            throw;
+                        }
+
                         callbackError.Data["ActionKit.CleanupException"] = callbackError.Data["ActionKit.CleanupException"] is Exception previous
                             ? new AggregateException(previous, cleanupError) : cleanupError;
                     }
@@ -60,7 +73,7 @@ namespace YLFramework.Actions
                 return true;
             }
 
-            return action.ActionID != id || action.Deinited;
+            return action.ActionId != id || action.IsDeinitialized;
         }
     }
 }

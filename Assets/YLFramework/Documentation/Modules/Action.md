@@ -53,7 +53,7 @@ DOTween wrapper 显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应
 ## Runtime Flow
 
 ```text
-创建：ActionKit.Sequence()/Delay() → Xxx.Allocate() → ActionPool<T>.Allocate()（取得 ActionID，未启动）
+创建：ActionKit.Sequence()/Delay() → Xxx.Allocate() → ActionPool<T>.Allocate()（取得 ActionId，未启动）
 启动：action.Start(owner) → ActionKit.Initialize() → ActionController.Allocate() → owner.ExecuteByUpdate(...) → Step → OnStart
 推进：Unity Update → MonoUpdateActionExecutor.Tick(Time.deltaTime, Time.unscaledDeltaTime) → IAction.Execute(dt) → OnExecute(dt)
 完成：Finish() → 下一次 Execute 触发 OnFinish 并返回 true → 执行器调用外部 onFinish 回调 → Deinit → ActionQueue
@@ -91,7 +91,7 @@ ActionKit.Delay(2f, null).ReplaceNamed(this, "opening");
 - 名字采用 `StringComparer.Ordinal`，区分大小写，所有命名入口拒绝 null/空白名字。默认有效重名抛出 `InvalidOperationException`，不消费新动作，也不扰动旧任务。匿名 `Start` 不创建名字字典或命名包装对象。
 - 作用域为组件所属 GameObject，而非单个组件；其他对象、场景/全局执行器及 Timer 可以使用相同名字，索引彼此独立。沿用现有场景宿主行为，不因 activeScene 切换自动取消或新建作用域。
 - 首次同步推进前登记；同步完成不留名。根完成通知中可以用新动作启动同名执行，旧收尾不删新登记；子节点回调和 Repeat 每轮回调仍属于活跃根执行，不提前释放名字。
-- `ActionHandle.IsActive`、`Pause()`、`Resume()`、`Cancel()`、`SetUpdateMode(mode)` 每次核验原租约。默认值、正常完成、取消、异常、宿主销毁、Shutdown 后返回 `false`，控制器/动作池复用不使旧句柄重新有效；ActionID 为 0 也可有效。活跃动作 Reset 仅重置进度，不改变句柄租约。
+- `ActionHandle.IsActive`、`Pause()`、`Resume()`、`Cancel()`、`SetUpdateMode(mode)` 每次核验原租约。默认值、正常完成、取消、异常、宿主销毁、Shutdown 后返回 `false`，控制器/动作池复用不使旧句柄重新有效；ActionId 为 0 也可有效。活跃动作 Reset 仅重置进度，不改变句柄租约。
 - 对象停用仍只暂停自动 Update，组件停用仍不停止执行器；对象销毁取消所属任务。不要把命名接口当作 Timer 的时钟/重复算法，Delay、Lerp、Repeat 及 Shutdown 原语义未改。
 
 全局任务不依附调用方对象；需要调用方退出时取消，应显式保存安全句柄并清理：
@@ -107,14 +107,14 @@ private void OnDisable() => mBackground.Cancel();
 - 自定义动作：继承 `AbstractAction<T>`；或用 `ActionKit.Custom` / `Custom<TData>`、`ActionKit.Task`、`ActionKit.Coroutine` 包装逻辑。
 - 组合扩展：`ISequence.Append` 与各 `XxxExtension`（`SequenceExtension`、`ParallelExtension`、`RepeatExtension`、`DelayExtension`、`LerpExtension`、`CustomExtension`、`TaskExtension` 等）。
 - 执行器：`IActionExecutor` 是 public 接口并提供 `IActionExecutorExtensions.UpdateAction`，但 `Start` 路径固定使用 internal 的 `MonoUpdateActionExecutor`，当前没有公开注入点。
-- 订阅生命周期：使用 `YLFramework.Events.UnRegisterExtension` 与 `RegisterListExtension` 绑定注销句柄；`ActionKit.Shutdown` 只清空模块自有事件，不处置用户触发器或句柄。
+- 订阅生命周期：使用 `YLFramework.Events.UnregisterExtension` 与 `RegisterListExtension` 绑定注销句柄；`ActionKit.Shutdown` 只清空模块自有事件，不处置用户触发器或句柄。
 - 池：`ActionPool<T>` 为 internal，无缓存数量上限，模块外不可配置。
 
 ## 生命周期与资源
 
 - `Initialize()` 幂等懒初始化；`Start` 或全局宿主访问会自动调用。`Shutdown()` 取消模块管理的动作、释放全局宿主与事件；Session reset 处理关闭 Domain Reload 的残留。
 - 全局 `OnUpdate` / `OnFixedUpdate` / `OnLateUpdate` 的自动通知复用 `YLFramework.Foundation.UpdateManager`。每个初始化成功且启用的全局宿主持有三个精确订阅，组件 disabled 或对象 inactive 时断开，恢复后重新连接；借用 inactive 宿主不会被自动激活。连接轮次与执行会话检查拒绝退订后仍留在公共快照中的旧回调。
-- 七个属性继续返回模块自有 `EasyEvent` / `EasyEvent<bool>`；手动 Trigger、UnRegisterAll、Dispose 及内部 fail-fast 语义保持。Action 监听抛异常会停止该消息的后续监听，公共源仍继续其他公共消费者并报告异常；清理 Action 消息或 Shutdown 不清理公共源的其他订阅。
+- 七个属性继续返回模块自有 `EasyEvent` / `EasyEvent<bool>`；手动 Trigger、UnregisterAll、Dispose 及内部 fail-fast 语义保持。Action 监听抛异常会停止该消息的后续监听，公共源仍继续其他公共消费者并报告异常；清理 Action 消息或 Shutdown 不清理公共源的其他订阅。
 - 初始化补丁中取得宿主不会提前连接，成功提交后刷新已有宿主；初始化失败期间不自动广播。本次不扩展为完整的补丁事务回滚。Shutdown/重建终结旧 owned 消息代次，旧 token 不进入新宿主。
 - GUI/Focus/Pause/Quit 与 Action 协程仍由全局宿主处理；Quit 通知前设置共享会话退出屏障，监听中 Shutdown 后无法重建宿主或启动 Foundation 协程。需要注销的事件或句柄应提前保存，不在退出后重新访问创建式属性。
 - 对象执行器与延迟回收驱动仍独立推进；全局消息、执行器和回收之间不保证执行全序。公共宿主被外部销毁或停用时不自动恢复既有工作；共享更新源不构成性能提升结论。
@@ -133,4 +133,4 @@ private void OnDisable() => mBackground.Cancel();
 - API 筛选所属 namespace 的精确或点分边界，包含内建 Observable 及可用 DOTween 类型，不展示整个共享 Runtime。只有 DOTween 指南保留可选程序集门控。
 - XML 来自唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 的 `Library/YLFramework.Runtime.xml`；optional 使用 `Library/YLFramework.Actions.DOTween.xml`，按真实 Assembly 去重。XML 是构建产物，不默认导出。
 - 单文件导出功能及专用菜单 / 测试已退出；分发使用 `YLFramework/Toolkit/导出框架包`，边界见 [文档首页](../README.md#帮助与导出)，不承诺另一工程的独立替代安装。
-��承诺另一工程的独立替代安装。
+��承诺另一工程的独立替代安装。

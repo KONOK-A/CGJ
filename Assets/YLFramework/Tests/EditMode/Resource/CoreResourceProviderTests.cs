@@ -1,12 +1,12 @@
 using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using YLFramework.Core;
 using YLFramework.Services.Resource;
-using UnityEditor;
-using UnityEngine.SceneManagement;
 using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.Resource
@@ -14,7 +14,7 @@ namespace YLFramework.Tests.Resource
     public class CoreResourceProviderTests
     {
         private const string ExitKey = "YL.Core86.ProviderExit";
-        private static CoreResourceRequest<string> unclaimed;
+        private static CoreResourceRequest<string> _unclaimed;
 
         [UnityTest]
         public IEnumerator RealExitInvalidatesUnclaimedCoreRequestsAndRemovesBinding()
@@ -25,9 +25,13 @@ namespace YLFramework.Tests.Resource
             {
                 var system = initialize.TakeResult();
                 var provider = system.BindCoreResourceProvider();
-                unclaimed = provider.ReadTextAsync("core86", "text");
-                while (unclaimed.Status == CoreResourceStatus.Pending) yield return null;
-                Assert.That(unclaimed.Status, Is.EqualTo(CoreResourceStatus.Succeeded));
+                _unclaimed = provider.ReadTextAsync("core86", "text");
+                while (_unclaimed.Status == CoreResourceStatus.Pending)
+                {
+                    yield return null;
+                }
+
+                Assert.That(_unclaimed.Status, Is.EqualTo(CoreResourceStatus.Succeeded));
                 EditorApplication.playModeStateChanged += ObserveExit;
             }
             yield return new ExitPlayMode();
@@ -37,15 +41,25 @@ namespace YLFramework.Tests.Resource
 
         private static void ObserveExit(PlayModeStateChange state)
         {
-            if (state != PlayModeStateChange.ExitingPlayMode) return;
+            if (state != PlayModeStateChange.ExitingPlayMode)
+            {
+                return;
+            }
+
             bool rejected = false;
-            try { unclaimed.TakeResult(); }
-            catch (System.ObjectDisposedException) { rejected = true; }
-            SessionState.SetBool(ExitKey, CoreResourceAccess.Provider == null && unclaimed.IsDisposed &&
-                unclaimed.Status == CoreResourceStatus.Succeeded && rejected);
+            try
+            {
+                _unclaimed.TakeResult();
+            }
+            catch (System.ObjectDisposedException)
+            {
+                rejected = true;
+            }
+            SessionState.SetBool(ExitKey, CoreResourceAccess.Provider == null && _unclaimed.IsDisposed &&
+                _unclaimed.Status == CoreResourceStatus.Succeeded && rejected);
             EditorApplication.playModeStateChanged -= ObserveExit;
-            unclaimed.Dispose();
-            unclaimed = null;
+            _unclaimed.Dispose();
+            _unclaimed = null;
         }
 
         private static ResourceConfiguration Configuration() => new(new[]
@@ -77,7 +91,11 @@ namespace YLFramework.Tests.Resource
             Assert.That(CoreResourceAccess.Provider, Is.SameAs(provider));
             using var independent = system.Acquire<TextAsset>(new ResourceAddress("core86", "text"));
             using var read = provider.ReadTextAsync("core86", "text");
-            while (read.Status == CoreResourceStatus.Pending) yield return null;
+            while (read.Status == CoreResourceStatus.Pending)
+            {
+                yield return null;
+            }
+
             Assert.That(read.Status, Is.EqualTo(CoreResourceStatus.Succeeded), read.Error?.ToString());
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(1), "Text is released before Core receives success.");
             Assert.That(read.TakeResult(), Is.EqualTo(independent.Asset.text));
@@ -102,7 +120,10 @@ namespace YLFramework.Tests.Resource
                 Assert.That(secondShutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
                 Assert.That(CoreResourceAccess.Provider, Is.SameAs(other), "A former owner cannot remove a replacement binding.");
             }
-            finally { CoreResourceAccess.Unbind(other); }
+            finally
+            {
+                CoreResourceAccess.Unbind(other);
+            }
         }
 
         private sealed class OtherBinding : ICoreResourceProvider
@@ -117,7 +138,10 @@ namespace YLFramework.Tests.Resource
         public IEnumerator ExitSession()
         {
             var cleanup = new ResourceSessionTests().TearDown();
-            while (cleanup.MoveNext()) yield return cleanup.Current;
+            while (cleanup.MoveNext())
+            {
+                yield return cleanup.Current;
+            }
         }
     }
 }

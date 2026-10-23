@@ -1,6 +1,6 @@
-using System; 
-using System.Collections.Generic; 
-using UnityEngine; 
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using YLFramework.Foundation;
 
 namespace YLFramework.Core
@@ -28,9 +28,9 @@ namespace YLFramework.Core
         /// <summary>
         /// 清空指定名称的View
         /// </summary>
-        public void ClearView(string asset_name)
+        public void ClearView(string assetName)
         {
-            ViewManager.ClearView(this, asset_name);
+            ViewManager.ClearView(this, assetName);
         }
 
         #endregion
@@ -59,28 +59,28 @@ namespace YLFramework.Core
         /// <summary>
         /// 加载View,从当前模块和基础模块中加载
         /// </summary>
-        /// <param name="asset_name">View预制体名称</param>
+        /// <param name="assetName">View预制体名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="param">参数</param>
         /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadView(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public View LoadView(string asset_name, Transform parent = null, params object[] param)
+        [Obsolete("已过时,请使用重载函数:LoadView(string assetName, Transform parent,LoadViewArgs loadViewArgs)代替!")]
+        public View LoadView(string assetName, Transform parent = null, params object[] param)
         {
-            return ViewManager.LoadView(this,asset_name, parent, param);
+            return ViewManager.LoadView(this, assetName, parent, param);
         }
 
         /// <summary>
         /// 加载View(泛型方式),从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="param">参数</param>
         /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadView<T>(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public T LoadView<T>(string asset_name, Transform parent = null, params object[] param) where T : View
+        [Obsolete("已过时,请使用重载函数:LoadView<T>(string assetName, Transform parent,LoadViewArgs loadViewArgs)代替!")]
+        public T LoadView<T>(string assetName, Transform parent = null, params object[] param) where T : View
         {
-            return ViewManager.LoadViewLegacy<T>(this, asset_name, parent, param);
+            return ViewManager.LoadViewLegacy<T>(this, assetName, parent, param);
         }
 
         /// <summary>
@@ -110,7 +110,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 加载View(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
+        /// 按脚本类型名加载 View；脚本名称必须与预制体名称一致。
         /// 从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
@@ -127,32 +127,32 @@ namespace YLFramework.Core
         /// <summary>
         /// 异步加载View,从当前模块和基础模块中加载
         /// </summary>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="param">参数</param>
         /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadViewAsync(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public LoadViewRequest<View> LoadViewAsync(string asset_name, Transform parent = null, params object[] param)
+        [Obsolete("已过时,请使用重载函数:LoadViewAsync(string assetName, Transform parent,LoadViewArgs loadViewArgs)代替!")]
+        public LoadViewRequest<View> LoadViewAsync(string assetName, Transform parent = null, params object[] param)
         {
-            return ViewManager.LoadViewAsync<View>(this, asset_name, parent,true, param);
+            return ViewManager.LoadViewAsync<View>(this, assetName, parent, true, param);
         }
 
         /// <summary>
         /// 异步加载View(泛型方式),从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="param"></param>
         /// <returns></returns>
-        [Obsolete("已过时,请使用重载函数:LoadViewAsync<T>(string asset_name, Transform parent,LoadViewArgs loadViewArgs)代替!")]
-        public LoadViewRequest<T> LoadViewAsync<T>(string asset_name, Transform parent = null, params object[] param) where T : View
+        [Obsolete("已过时,请使用重载函数:LoadViewAsync<T>(string assetName, Transform parent,LoadViewArgs loadViewArgs)代替!")]
+        public LoadViewRequest<T> LoadViewAsync<T>(string assetName, Transform parent = null, params object[] param) where T : View
         {
-            return ViewManager.LoadViewAsync<T>(this ,asset_name, parent,true , param);
+            return ViewManager.LoadViewAsync<T>(this, assetName, parent, true, param);
         }
 
         /// <summary>
-        /// 异步加载View(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
+        /// 按脚本类型名异步加载 View；脚本名称必须与预制体名称一致。
         /// 从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
@@ -162,7 +162,7 @@ namespace YLFramework.Core
         [Obsolete("已过时,请使用重载函数:LoadViewAsync<T>(Transform parent,LoadViewArgs loadViewArgs)代替!")]
         public LoadViewRequest<T> LoadViewAsync<T>(Transform parent = null, params object[] param) where T : View
         {
-            return ViewManager.LoadViewAsync<T>(this,typeof(T).Name, parent,true, param);
+            return ViewManager.LoadViewAsync<T>(this, typeof(T).Name, parent, true, param);
         }
 
 
@@ -173,26 +173,26 @@ namespace YLFramework.Core
         /// <summary>
         /// 加载View,从当前模块和基础模块中加载
         /// </summary>
-        /// <param name="asset_name">View预制体名称</param>
+        /// <param name="assetName">View预制体名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
         /// <returns></returns>
-        public View LoadView(string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null)
+        public View LoadView(string assetName, Transform parent = null, LoadViewArgs loadViewArgs = null)
         {
-            return ViewManager.LoadView<View>(this, asset_name, parent, loadViewArgs);
+            return ViewManager.LoadView<View>(this, assetName, parent, loadViewArgs);
         }
 
         /// <summary>
         /// 加载View(泛型方式),从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
         /// <returns></returns>
-        public T LoadView<T>(string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
+        public T LoadView<T>(string assetName, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            return ViewManager.LoadView<T>(this,asset_name, parent, loadViewArgs);
+            return ViewManager.LoadView<T>(this, assetName, parent, loadViewArgs);
         }
 
         /// <summary>
@@ -202,7 +202,7 @@ namespace YLFramework.Core
         /// <param name="parent">父节点</param>
         /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
         /// <returns></returns>
-        public View LoadView(GameObject prefab, Transform parent = null,LoadViewArgs loadViewArgs = null)
+        public View LoadView(GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null)
         {
             return ViewManager.LoadView<View>(this, prefab, parent, loadViewArgs);
         }
@@ -216,11 +216,11 @@ namespace YLFramework.Core
         /// <returns></returns>
         public T LoadView<T>(GameObject prefab, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            return ViewManager.LoadView<T>(this,prefab, parent, loadViewArgs);
+            return ViewManager.LoadView<T>(this, prefab, parent, loadViewArgs);
         }
 
         /// <summary>
-        /// 加载View(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
+        /// 按脚本类型名加载 View；脚本名称必须与预制体名称一致。
         /// 从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
@@ -236,30 +236,30 @@ namespace YLFramework.Core
         /// <summary>
         /// 异步加载View,从当前模块和基础模块中加载
         /// </summary>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
         /// <returns></returns>
-        public LoadViewRequest<View> LoadViewAsync(string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null)
+        public LoadViewRequest<View> LoadViewAsync(string assetName, Transform parent = null, LoadViewArgs loadViewArgs = null)
         {
-            return ViewManager.LoadViewAsync<View>(this, asset_name, parent, true, loadViewArgs);
+            return ViewManager.LoadViewAsync<View>(this, assetName, parent, true, loadViewArgs);
         }
 
         /// <summary>
         /// 异步加载View(泛型方式),从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
-        /// <param name="asset_name">资源名称</param>
+        /// <param name="assetName">资源名称</param>
         /// <param name="parent">父节点</param>
         /// <param name="loadViewArgs">参数(使用LoadViewArgs.New() 来创建参数对象)</param>
         /// <returns></returns>
-        public LoadViewRequest<T> LoadViewAsync<T>(string asset_name, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
+        public LoadViewRequest<T> LoadViewAsync<T>(string assetName, Transform parent = null, LoadViewArgs loadViewArgs = null) where T : View
         {
-            return ViewManager.LoadViewAsync<T>(this, asset_name, parent, true, loadViewArgs);
+            return ViewManager.LoadViewAsync<T>(this, assetName, parent, true, loadViewArgs);
         }
 
         /// <summary>
-        /// 异步加载View(泛型方式且无参数asset_name,但是需要脚本名称与预制体名称一致)
+        /// 按脚本类型名异步加载 View；脚本名称必须与预制体名称一致。
         /// 从当前模块和基础模块中加载
         /// </summary>
         /// <typeparam name="T">View类型</typeparam>
@@ -280,9 +280,9 @@ namespace YLFramework.Core
         /// <param name="assetName">资源名</param>
         /// <param name="id">View ID</param>
         /// <returns></returns>
-        public View GetView( string assetName, int id)
+        public View GetView(string assetName, int id)
         {
-            return ViewManager.GetView(this,assetName,id);
+            return ViewManager.GetView(this, assetName, id);
         }
 
         /// <summary>
@@ -313,9 +313,9 @@ namespace YLFramework.Core
         /// </summary>
         /// <param name="assetName">资源名</param> 
         /// <returns></returns>
-        public View GetView(string assetName )
+        public View GetView(string assetName)
         {
-            return ViewManager.GetView(this, assetName );
+            return ViewManager.GetView(this, assetName);
         }
 
         /// <summary>
@@ -324,9 +324,9 @@ namespace YLFramework.Core
         /// <typeparam name="T">View类型</typeparam>
         /// <param name="assetName">资源名称</param> 
         /// <returns></returns>
-        public T GetView<T>(string assetName ) where T : View
+        public T GetView<T>(string assetName) where T : View
         {
-            return ViewManager.GetView<T>(this, assetName );
+            return ViewManager.GetView<T>(this, assetName);
         }
 
         /// <summary>
@@ -355,9 +355,9 @@ namespace YLFramework.Core
         /// <typeparam name="T"></typeparam>
         /// <param name="assetName"></param>
         /// <returns></returns>
-        public List<T> GetViews<T>( string assetName) where T : View
+        public List<T> GetViews<T>(string assetName) where T : View
         {
-            return ViewManager.GetViews<T>(this,assetName);
+            return ViewManager.GetViews<T>(this, assetName);
         }
 
         /// <summary>
@@ -373,7 +373,7 @@ namespace YLFramework.Core
 
         public void GetViewsNonAlloc<T>(List<T> results) where T : View
         {
-            ViewManager.GetViewsNonAlloc(this,results);
+            ViewManager.GetViewsNonAlloc(this, results);
         }
 
         #endregion

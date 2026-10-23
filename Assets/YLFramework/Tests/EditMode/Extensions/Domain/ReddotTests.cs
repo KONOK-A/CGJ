@@ -16,7 +16,14 @@ namespace YLFramework.Tests.Extensions.Domain
             return Manager.GetMethod(method, types).Invoke(null, args);
         }
 
-        [TearDown] public void Clean() { if (Manager != null) Call("Reset"); }
+        [TearDown]
+        public void Clean()
+        {
+            if (Manager != null)
+            {
+                Call("Reset");
+            }
+        }
 
         [TestCase("Mail", true)]
         [TestCase("Mail/Gift", true)]
@@ -26,72 +33,84 @@ namespace YLFramework.Tests.Extensions.Domain
         public void PathsMatchWholeSegments(string path, bool expected)
         {
             Call("AddPath", " /Mail//Gift/ ");
-            Assert.That(Call("ShouldBeDisplay", path), Is.EqualTo(expected));
+            Assert.That(Call("ShouldBeDisplayed", path), Is.EqualTo(expected));
         }
 
-        [Test] public void ResetNotifiesAfterClearingAndDuplicateAddDoesNotNotify()
+        [Test]
+        public void ResetNotifiesAfterClearingAndDuplicateAddDoesNotNotify()
         {
             var displays = new List<bool>();
-            Action changed = () => displays.Add((bool)Call("ShouldBeDisplay", "Mail"));
-            var token = (IUnRegister)Call("RegisterChanged", changed);
+            Action changed = () => displays.Add((bool)Call("ShouldBeDisplayed", "Mail"));
+            var token = (IUnregister)Call("RegisterChanged", changed);
             try
             {
                 Call("AddPath", "Mail");
                 Call("AddPath", "/Mail/");
                 Call("Reset");
                 Assert.That(displays, Is.EqualTo(new[] { true, false }));
-                token.UnRegister();
+                token.Unregister();
                 Call("AddPath", "Mail");
                 Assert.That(displays.Count, Is.EqualTo(2));
             }
-            finally { token.UnRegister(); }
+            finally
+            {
+                token.Unregister();
+            }
         }
 
-        [Test] public void SamePathSourcesAreReleasedIndependently()
+        [Test]
+        public void SamePathSourcesAreReleasedIndependently()
         {
             var first = (IDisposable)Call("RegisterPath", "Mail/Gift");
             var second = (IDisposable)Call("RegisterPath", "Mail/Gift/");
             first.Dispose();
             first.Dispose();
-            Assert.That(Call("ShouldBeDisplay", "Mail"), Is.True);
+            Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.True);
             second.Dispose();
-            Assert.That(Call("ShouldBeDisplay", "Mail"), Is.False);
+            Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.False);
         }
 
-        [Test] public void OldRegistrationCannotRemoveNewPathAfterReset()
+        [Test]
+        public void OldRegistrationCannotRemoveNewPathAfterReset()
         {
             var old = (IDisposable)Call("RegisterPath", "Mail");
             Call("Reset");
             var current = (IDisposable)Call("RegisterPath", "Mail");
             old.Dispose();
-            Assert.That(Call("ShouldBeDisplay", "Mail"), Is.True);
+            Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.True);
             current.Dispose();
         }
 
-        [Test] public void CollectionRemoveDoesNotStealIndependentSource()
+        [Test]
+        public void CollectionRemoveDoesNotStealIndependentSource()
         {
             var source = (IDisposable)Call("RegisterPath", "Mail");
             Call("AddPath", "Mail");
             Call("RemovePath", "Mail");
             Call("RemovePath", (string)null);
-            Assert.That(Call("ShouldBeDisplay", "Mail"), Is.True);
+            Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.True);
             source.Dispose();
-            Assert.That(Call("ShouldBeDisplay", "Mail"), Is.False);
+            Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.False);
         }
 
-        [Test] public void FailedRegistrationPublishesRollbackAndPreservesBothObserverErrors()
+        [Test]
+        public void FailedRegistrationPublishesRollbackAndPreservesBothObserverErrors()
         {
             var visible = false;
-            var display = (IUnRegister)Call("RegisterChanged", (Action)(() => visible = (bool)Call("ShouldBeDisplay", "Mail")));
-            var throwing = (IUnRegister)Call("RegisterChanged", (Action)(() => throw new InvalidOperationException("observer-marker")));
+            var display = (IUnregister)Call("RegisterChanged", (Action)(() => visible = (bool)Call("ShouldBeDisplayed", "Mail")));
+            var throwing = (IUnregister)Call("RegisterChanged", (Action)(() => throw new InvalidOperationException("observer-marker")));
             try
             {
                 var error = Assert.Throws<TargetInvocationException>(() => Call("RegisterPath", "Mail"));
-                Assert.That(Call("ShouldBeDisplay", "Mail"), Is.False);
+                Assert.That(Call("ShouldBeDisplayed", "Mail"), Is.False);
                 Assert.That(visible, Is.False, "回滚后的状态也必须送给已经刷新过的观察者。");
                 Assert.That(error.InnerException, Is.InstanceOf<AggregateException>());
             }
-            finally { display.UnRegister(); throwing.UnRegister(); }
+            finally
+            {
+                display.Unregister();
+                throwing.Unregister();
+            }
         }
     }
 }

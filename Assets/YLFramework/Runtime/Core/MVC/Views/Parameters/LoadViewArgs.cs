@@ -6,7 +6,7 @@ using YLFramework.Core.RoslynAnalyzers;
 using YLFramework.Core.Singleton;
 
 
- 
+
 namespace YLFramework.Core
 {
     /// <summary>
@@ -23,35 +23,35 @@ namespace YLFramework.Core
     {
         #region 字段
 
-        private static readonly ObjectPool<LoadViewArgs> Pool = new(
+        private static readonly ObjectPool<LoadViewArgs> _pool = new(
             () => new LoadViewArgs(), onAllocate: args => args.BeginLease(),
             reset: args => args.ResetLease(), cacheOrder: PoolCacheOrder.Lifo);
 
         static LoadViewArgs()
         {
             // 只清空闲缓存；已接管参数仍由原操作终态负责释放，不替换其所属池。
-            SingletonSessionState.RegisterSessionReset(Pool.Clear);
+            SingletonSessionState.RegisterSessionReset(_pool.Clear);
         }
 
 #pragma warning disable IDE0044 // 添加只读修饰符
-        private Dictionary<string, string> strings = new Dictionary<string, string>(); 
+        private Dictionary<string, string> _strings = new Dictionary<string, string>();
 
-        private Dictionary<string, int> ints = new Dictionary<string, int>();
+        private Dictionary<string, int> _ints = new Dictionary<string, int>();
 
-        private Dictionary<string, bool> bools = new Dictionary<string, bool>();
-         
-        private Dictionary<string, float> floats = new Dictionary<string, float>();
+        private Dictionary<string, bool> _bools = new Dictionary<string, bool>();
 
-        private Dictionary<string, long> longs = new Dictionary<string, long>();
+        private Dictionary<string, float> _floats = new Dictionary<string, float>();
 
-        private Dictionary<string, double> doubles = new Dictionary<string, double>();
+        private Dictionary<string, long> _longs = new Dictionary<string, long>();
 
-        private Dictionary<string, object> objects = new Dictionary<string, object>();
+        private Dictionary<string, double> _doubles = new Dictionary<string, double>();
 
-        private bool leased;
-        private bool owned;
-        private bool reading;
-        private int threadId;
+        private Dictionary<string, object> _objects = new Dictionary<string, object>();
+
+        private bool _isLeased;
+        private bool _isOwned;
+        private bool _isReading;
+        private int _threadId;
 
 #pragma warning restore IDE0044 // 添加只读修饰符
 
@@ -62,8 +62,10 @@ namespace YLFramework.Core
         public string GetString(string name)
         {
             EnsureReadable();
-            if(strings.ContainsKey(name))
-                return strings[name];
+            if (_strings.ContainsKey(name))
+            {
+                return _strings[name];
+            }
 
             return string.Empty;
         }
@@ -71,8 +73,10 @@ namespace YLFramework.Core
         public int GetInt(string name)
         {
             EnsureReadable();
-            if (ints.ContainsKey(name))
-                return ints[name];
+            if (_ints.ContainsKey(name))
+            {
+                return _ints[name];
+            }
 
             return 0;
         }
@@ -80,8 +84,10 @@ namespace YLFramework.Core
         public bool GetBool(string name)
         {
             EnsureReadable();
-            if (bools.ContainsKey(name))
-                return bools[name];
+            if (_bools.ContainsKey(name))
+            {
+                return _bools[name];
+            }
 
             return false;
         }
@@ -89,8 +95,10 @@ namespace YLFramework.Core
         public float GetFloat(string name)
         {
             EnsureReadable();
-            if (floats.ContainsKey(name))
-                return floats[name];
+            if (_floats.ContainsKey(name))
+            {
+                return _floats[name];
+            }
 
             return 0.0f;
         }
@@ -98,8 +106,10 @@ namespace YLFramework.Core
         public long GetLong(string name)
         {
             EnsureReadable();
-            if (longs.ContainsKey(name))
-                return longs[name];
+            if (_longs.ContainsKey(name))
+            {
+                return _longs[name];
+            }
 
             return 0;
         }
@@ -107,8 +117,10 @@ namespace YLFramework.Core
         public double GetDouble(string name)
         {
             EnsureReadable();
-            if (doubles.ContainsKey(name))
-                return doubles[name];
+            if (_doubles.ContainsKey(name))
+            {
+                return _doubles[name];
+            }
 
             return 0.0;
         }
@@ -116,8 +128,11 @@ namespace YLFramework.Core
         public object GetObject(string name)
         {
             EnsureReadable();
-            if (objects.ContainsKey(name))
-                return objects[name];
+            if (_objects.ContainsKey(name))
+            {
+                return _objects[name];
+            }
+
             return null;
         }
 
@@ -128,43 +143,43 @@ namespace YLFramework.Core
         public void SetString(string name, string value)
         {
             EnsureWritable();
-            strings[name] = value;
+            _strings[name] = value;
         }
 
         public void SetInt(string name, int value)
         {
             EnsureWritable();
-            ints[name] = value;
+            _ints[name] = value;
         }
 
         public void SetBool(string name, bool value)
         {
             EnsureWritable();
-            bools[name] = value;
+            _bools[name] = value;
         }
 
         public void SetFloat(string name, float value)
         {
             EnsureWritable();
-            floats[name] = value;
+            _floats[name] = value;
         }
 
         public void SetLong(string name, long value)
         {
             EnsureWritable();
-            longs[name] = value;
+            _longs[name] = value;
         }
 
         public void SetDouble(string name, double value)
         {
             EnsureWritable();
-            doubles[name] = value; 
+            _doubles[name] = value;
         }
 
         public void SetObject(string name, object value)
         {
             EnsureWritable();
-            objects[name] = value;
+            _objects[name] = value;
         }
 
         #endregion
@@ -173,37 +188,47 @@ namespace YLFramework.Core
 
         private void BeginLease()
         {
-            if (leased)
+            if (_isLeased)
+            {
                 throw new InvalidOperationException("The pool returned leased LoadViewArgs.");
+            }
+
             ClearValues();
-            threadId = Thread.CurrentThread.ManagedThreadId;
-            owned = false;
-            reading = false;
-            leased = true;
+            _threadId = Thread.CurrentThread.ManagedThreadId;
+            _isOwned = false;
+            _isReading = false;
+            _isLeased = true;
         }
 
         private void ResetLease()
         {
             ClearValues();
-            reading = false;
-            owned = false;
-            leased = false;
+            _isReading = false;
+            _isOwned = false;
+            _isLeased = false;
         }
 
         /// <summary>接管本次租用。失败不改变既有所有权或数据。</summary>
         internal void Claim()
         {
             EnsureWritable();
-            owned = true;
+            _isOwned = true;
         }
 
         /// <summary>归还已接管参数一次；已归还时无操作。</summary>
         internal void Release()
         {
             EnsureThread();
-            if (!leased) return;
-            if (!owned)
+            if (!_isLeased)
+            {
+                return;
+            }
+
+            if (!_isOwned)
+            {
                 throw new InvalidOperationException("LoadViewArgs has not been claimed.");
+            }
+
             ReturnToPool();
         }
 
@@ -211,61 +236,76 @@ namespace YLFramework.Core
         internal void BeginRead()
         {
             EnsureLeased();
-            if (!owned || reading)
+            if (!_isOwned || _isReading)
+            {
                 throw new InvalidOperationException("LoadViewArgs must be owned without an active read window.");
-            reading = true;
+            }
+
+            _isReading = true;
         }
 
         /// <summary>结束业务回调的读取权，不归还参数。</summary>
         internal void EndRead()
         {
             EnsureLeased();
-            if (!owned || !reading)
+            if (!_isOwned || !_isReading)
+            {
                 throw new InvalidOperationException("LoadViewArgs has no active read window.");
-            reading = false;
+            }
+
+            _isReading = false;
         }
 
         private void EnsureThread()
         {
-            if (threadId != 0 && threadId != Thread.CurrentThread.ManagedThreadId)
+            if (_threadId != 0 && _threadId != Thread.CurrentThread.ManagedThreadId)
+            {
                 throw new InvalidOperationException("LoadViewArgs must stay on the thread that called New.");
+            }
         }
 
         private void EnsureLeased()
         {
-            if (!leased)
+            if (!_isLeased)
+            {
                 throw new ObjectDisposedException(nameof(LoadViewArgs));
+            }
+
             EnsureThread();
         }
 
         private void EnsureReadable()
         {
             EnsureLeased();
-            if (owned && !reading)
+            if (_isOwned && !_isReading)
+            {
                 throw new InvalidOperationException("LoadViewArgs is only readable during OnLoaded after being claimed.");
+            }
         }
 
         private void EnsureWritable()
         {
             EnsureLeased();
-            if (owned)
+            if (_isOwned)
+            {
                 throw new InvalidOperationException("Claimed LoadViewArgs cannot be modified or recycled by the caller.");
+            }
         }
 
         private void ClearValues()
         {
-            strings.Clear();
-            ints.Clear();
-            bools.Clear();
-            floats.Clear();
-            longs.Clear();
-            doubles.Clear();
-            objects.Clear();
+            _strings.Clear();
+            _ints.Clear();
+            _bools.Clear();
+            _floats.Clear();
+            _longs.Clear();
+            _doubles.Clear();
+            _objects.Clear();
         }
 
         private void ReturnToPool()
         {
-            Pool.Recycle(this);
+            _pool.Recycle(this);
         }
 
         #endregion
@@ -278,21 +318,29 @@ namespace YLFramework.Core
         /// <returns></returns>
         public static LoadViewArgs New()
         {
-            return Pool.Allocate();
+            return _pool.Allocate();
         }
 
         /// <summary>归还未接管参数；已归还时无操作，已接管时拒绝。</summary>
         internal static void Recycle(LoadViewArgs args)
         {
-            if (args == null) return;
+            if (args == null)
+            {
+                return;
+            }
+
             args.EnsureThread();
-            if (!args.leased) return;
+            if (!args._isLeased)
+            {
+                return;
+            }
+
             args.EnsureWritable();
             args.ReturnToPool();
         }
 
         #endregion 
 
-    } 
+    }
 
 }

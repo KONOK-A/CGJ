@@ -13,78 +13,111 @@ namespace YLFramework.Core
     {
         private const DrivenTransformProperties RectProperties = DrivenTransformProperties.Anchors |
             DrivenTransformProperties.AnchoredPosition3D | DrivenTransformProperties.SizeDelta;
-        private static readonly PropertyInfo DrivenProperties = typeof(RectTransform).GetProperty("drivenProperties",
+        private static readonly PropertyInfo _drivenProperties = typeof(RectTransform).GetProperty("drivenProperties",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        private readonly List<Component> ignorers = new List<Component>();
-        private readonly List<Component> elements = new List<Component>();
-        private RectTransform target, slot, frame;
-        private PanelInputGateLayout coordinates;
-        private PanelInputGate binding;
-        private Transform initialParent;
-        private Transform synchronizationParent;
-        private ulong synchronizationBinding;
-        private bool initialized, passThrough, wasAttached, synchronizing, retiring, previousIgnore = true;
+        private readonly List<Component> _ignorers = new List<Component>();
+        private readonly List<Component> _elements = new List<Component>();
+        private RectTransform _target;
+        private RectTransform _slot;
+        private RectTransform _frame;
+        private PanelInputGateLayout _coordinates;
+        private PanelInputGate _binding;
+        private Transform _initialParent;
+        private Transform _synchronizationParent;
+        private ulong _synchronizationBinding;
+        private bool _isInitialized;
+        private bool _isPassThrough;
+        private bool _wasAttached;
+        private bool _isSynchronizing;
+        private bool _isRetiring;
+        private bool _previousIgnore = true;
 
         internal void Initialize(RectTransform target, RectTransform frame)
         {
-            if (DrivenProperties == null || DrivenProperties.PropertyType != typeof(DrivenTransformProperties) ||
-                DrivenProperties.GetGetMethod(true) == null)
+            if (_drivenProperties == null || _drivenProperties.PropertyType != typeof(DrivenTransformProperties) ||
+                _drivenProperties.GetGetMethod(true) == null)
+            {
                 throw new InvalidOperationException("无法只读访问 RectTransform.drivenProperties；请核对 Unity 版本及 IL2CPP accessor 保留。");
-            this.target = target;
-            binding = target.GetComponent<PanelInputGate>();
-            this.frame = frame;
-            slot = (RectTransform)transform;
-            coordinates = frame.GetComponent<PanelInputGateLayout>();
-            if (!coordinates || !coordinates.passThrough || coordinates.target != target)
+            }
+
+            _target = target;
+            _binding = target.GetComponent<PanelInputGate>();
+            _frame = frame;
+            _slot = (RectTransform)transform;
+            _coordinates = frame.GetComponent<PanelInputGateLayout>();
+            if (!_coordinates || !_coordinates._isPassThrough || _coordinates._target != target)
+            {
                 throw new InvalidOperationException("Panel 输入门禁需要先初始化 frame 的布局穿透组件。");
-            initialParent = target.parent;
-            passThrough = false;
-            wasAttached = false;
-            initialized = true;
+            }
+
+            _initialParent = target.parent;
+            _isPassThrough = false;
+            _wasAttached = false;
+            _isInitialized = true;
             Synchronize();
         }
 
         internal void InitializePassThrough(RectTransform target)
         {
-            this.target = target;
-            binding = target.GetComponent<PanelInputGate>();
-            frame = (RectTransform)transform;
-            slot = frame.parent as RectTransform;
-            initialParent = target.parent;
-            passThrough = true;
-            wasAttached = false;
-            initialized = true;
+            this._target = target;
+            _binding = target.GetComponent<PanelInputGate>();
+            _frame = (RectTransform)transform;
+            _slot = _frame.parent as RectTransform;
+            _initialParent = target.parent;
+            _isPassThrough = true;
+            _wasAttached = false;
+            _isInitialized = true;
             Synchronize();
         }
 
-        private bool Valid()
+        private bool IsValid()
         {
-            if (!initialized || !target || !slot || !frame || frame.parent != slot) return false;
-            if (synchronizing && (!binding || binding.BindingVersion != synchronizationBinding || slot.parent != synchronizationParent)) return false;
-            if (target.parent == frame) { wasAttached = true; return true; }
+            if (!_isInitialized || !_target || !_slot || !_frame || _frame.parent != _slot)
+            {
+                return false;
+            }
+
+            if (_isSynchronizing && (!_binding || _binding.BindingVersion != _synchronizationBinding || _slot.parent != _synchronizationParent))
+            {
+                return false;
+            }
+
+            if (_target.parent == _frame)
+            {
+                _wasAttached = true;
+                return true;
+            }
             // 首次挂接前只准备自有坐标；挂接后绝不追随外部重挂的业务对象。
-            return !wasAttached && target.parent == initialParent;
+            return !_wasAttached && _target.parent == _initialParent;
         }
 
-        private bool Measurable => !passThrough && Valid() && target.parent == frame && target.gameObject.activeInHierarchy;
-        public float minWidth => Measurable ? LayoutUtility.GetMinWidth(target) : 0;
-        public float preferredWidth => Measurable ? LayoutUtility.GetPreferredWidth(target) : 0;
-        public float flexibleWidth => Measurable ? LayoutUtility.GetFlexibleWidth(target) : 0;
-        public float minHeight => Measurable ? LayoutUtility.GetMinHeight(target) : 0;
-        public float preferredHeight => Measurable ? LayoutUtility.GetPreferredHeight(target) : 0;
-        public float flexibleHeight => Measurable ? LayoutUtility.GetFlexibleHeight(target) : 0;
+        private bool IsMeasurable => !_isPassThrough && IsValid() && _target.parent == _frame && _target.gameObject.activeInHierarchy;
+        public float minWidth => IsMeasurable ? LayoutUtility.GetMinWidth(_target) : 0;
+        public float preferredWidth => IsMeasurable ? LayoutUtility.GetPreferredWidth(_target) : 0;
+        public float flexibleWidth => IsMeasurable ? LayoutUtility.GetFlexibleWidth(_target) : 0;
+        public float minHeight => IsMeasurable ? LayoutUtility.GetMinHeight(_target) : 0;
+        public float preferredHeight => IsMeasurable ? LayoutUtility.GetPreferredHeight(_target) : 0;
+        public float flexibleHeight => IsMeasurable ? LayoutUtility.GetFlexibleHeight(_target) : 0;
 
         public int layoutPriority
         {
             get
             {
-                if (!Measurable) return 0;
-                target.GetComponents(typeof(ILayoutElement), elements);
+                if (!IsMeasurable)
+                {
+                    return 0;
+                }
+
+                _target.GetComponents(typeof(ILayoutElement), _elements);
                 int priority = int.MinValue;
                 bool found = false;
-                foreach (var element in elements)
+                foreach (var element in _elements)
                 {
-                    if (element is Behaviour behaviour && !behaviour.isActiveAndEnabled) continue;
+                    if (element is Behaviour behaviour && !behaviour.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+
                     priority = Math.Max(priority, ((ILayoutElement)element).layoutPriority);
                     found = true;
                 }
@@ -96,105 +129,253 @@ namespace YLFramework.Core
         {
             get
             {
-                if (!Measurable) return true;
-                target.GetComponents(typeof(ILayoutIgnorer), ignorers);
-                foreach (var ignorer in ignorers)
-                    if (!((ILayoutIgnorer)ignorer).ignoreLayout) return false;
-                return ignorers.Count != 0;
+                if (!IsMeasurable)
+                {
+                    return true;
+                }
+
+                _target.GetComponents(typeof(ILayoutIgnorer), _ignorers);
+                foreach (var ignorer in _ignorers)
+                {
+                    if (!((ILayoutIgnorer)ignorer).ignoreLayout)
+                    {
+                        return false;
+                    }
+                }
+
+                return _ignorers.Count != 0;
             }
         }
 
         internal void Synchronize() => Synchronize(false);
-        internal void RetireMount() => retiring = true;
+        internal void RetireMount() => _isRetiring = true;
 
         private void Synchronize(bool prepareHorizontal)
         {
-            if (retiring || synchronizing || !Valid()) return;
-            synchronizationBinding = binding ? binding.BindingVersion : 0;
-            synchronizationParent = slot.parent;
-            synchronizing = true;
+            if (_isRetiring || _isSynchronizing || !IsValid())
+            {
+                return;
+            }
+
+            _synchronizationBinding = _binding ? _binding.BindingVersion : 0;
+            _synchronizationParent = _slot.parent;
+            _isSynchronizing = true;
             bool changed = false;
             try
             {
-                if (passThrough)
+                if (_isPassThrough)
                 {
-                    var parent = slot.parent as RectTransform;
+                    var parent = _slot.parent as RectTransform;
                     var size = parent ? parent.rect.size : Vector2.zero;
                     var pivot = parent ? parent.pivot : new Vector2(.5f, .5f);
-                    var scale = slot.localScale;
+                    var scale = _slot.localScale;
                     var inverse = new Vector3(Inverse(scale.x), Inverse(scale.y), Inverse(scale.z));
-                    if (!frame.anchorMin.Equals(Vector2.zero)) { frame.anchorMin = Vector2.zero; changed = true; }
-                    if (!Valid()) return;
-                    if (!frame.anchorMax.Equals(Vector2.zero)) { frame.anchorMax = Vector2.zero; changed = true; }
-                    if (!Valid()) return;
-                    if (!frame.pivot.Equals(pivot)) { frame.pivot = pivot; changed = true; }
-                    if (!Valid()) return;
-                    if (!frame.sizeDelta.Equals(size)) { frame.sizeDelta = size; changed = true; }
-                    if (!Valid()) return;
-                    if (!frame.localRotation.Equals(Quaternion.identity)) { frame.localRotation = Quaternion.identity; changed = true; }
-                    if (!Valid()) return;
-                    if (!frame.localScale.Equals(inverse)) { frame.localScale = inverse; changed = true; }
-                    if (!Valid()) return;
-                    var position = -Vector3.Scale(slot.localPosition, inverse);
-                    if (!frame.localPosition.Equals(position)) { frame.localPosition = position; changed = true; }
+                    if (!_frame.anchorMin.Equals(Vector2.zero))
+                    {
+                        _frame.anchorMin = Vector2.zero;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_frame.anchorMax.Equals(Vector2.zero))
+                    {
+                        _frame.anchorMax = Vector2.zero;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_frame.pivot.Equals(pivot))
+                    {
+                        _frame.pivot = pivot;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_frame.sizeDelta.Equals(size))
+                    {
+                        _frame.sizeDelta = size;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_frame.localRotation.Equals(Quaternion.identity))
+                    {
+                        _frame.localRotation = Quaternion.identity;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_frame.localScale.Equals(inverse))
+                    {
+                        _frame.localScale = inverse;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    var position = -Vector3.Scale(_slot.localPosition, inverse);
+                    if (!_frame.localPosition.Equals(position))
+                    {
+                        _frame.localPosition = position;
+                        changed = true;
+                    }
                     return;
                 }
 
                 bool ignored = ignoreLayout;
-                if (previousIgnore != ignored) { previousIgnore = ignored; changed = true; }
+                if (_previousIgnore != ignored)
+                {
+                    _previousIgnore = ignored;
+                    changed = true;
+                }
                 var layout = ParentLayout();
                 if (layout && !ignored)
                 {
                     // 横算在原父清除上轮 tracker 之前执行，不能沿用旧驱动 flags。
                     var preserve = prepareHorizontal ? DrivenTransformProperties.None : ReadDriven(layout);
-                    changed |= CopyRect(target, slot, RectProperties & ~preserve);
-                    if (!Valid()) return;
-                    if (!slot.pivot.Equals(target.pivot)) { slot.pivot = target.pivot; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.localScale.Equals(target.localScale)) { slot.localScale = target.localScale; changed = true; }
+                    changed |= CopyRect(_target, _slot, RectProperties & ~preserve);
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.pivot.Equals(_target.pivot))
+                    {
+                        _slot.pivot = _target.pivot;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.localScale.Equals(_target.localScale))
+                    {
+                        _slot.localScale = _target.localScale;
+                        changed = true;
+                    }
                 }
                 else
                 {
-                    var parent = slot.parent as RectTransform;
+                    var parent = _slot.parent as RectTransform;
                     var pivot = parent ? parent.pivot : new Vector2(.5f, .5f);
-                    if (!slot.anchorMin.Equals(Vector2.zero)) { slot.anchorMin = Vector2.zero; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.anchorMax.Equals(Vector2.one)) { slot.anchorMax = Vector2.one; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.pivot.Equals(pivot)) { slot.pivot = pivot; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.sizeDelta.Equals(Vector2.zero)) { slot.sizeDelta = Vector2.zero; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.anchoredPosition3D.Equals(Vector3.zero)) { slot.anchoredPosition3D = Vector3.zero; changed = true; }
-                    if (!Valid()) return;
-                    if (!slot.localScale.Equals(Vector3.one)) { slot.localScale = Vector3.one; changed = true; }
+                    if (!_slot.anchorMin.Equals(Vector2.zero))
+                    {
+                        _slot.anchorMin = Vector2.zero;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.anchorMax.Equals(Vector2.one))
+                    {
+                        _slot.anchorMax = Vector2.one;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.pivot.Equals(pivot))
+                    {
+                        _slot.pivot = pivot;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.sizeDelta.Equals(Vector2.zero))
+                    {
+                        _slot.sizeDelta = Vector2.zero;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.anchoredPosition3D.Equals(Vector3.zero))
+                    {
+                        _slot.anchoredPosition3D = Vector3.zero;
+                        changed = true;
+                    }
+                    if (!IsValid())
+                    {
+                        return;
+                    }
+
+                    if (!_slot.localScale.Equals(Vector3.one))
+                    {
+                        _slot.localScale = Vector3.one;
+                        changed = true;
+                    }
                 }
-                if (!Valid()) return;
-                if (!slot.localRotation.Equals(Quaternion.identity)) { slot.localRotation = Quaternion.identity; changed = true; }
-                if (Valid()) coordinates.Synchronize();
+                if (!IsValid())
+                {
+                    return;
+                }
+
+                if (!_slot.localRotation.Equals(Quaternion.identity))
+                {
+                    _slot.localRotation = Quaternion.identity;
+                    changed = true;
+                }
+                if (IsValid())
+                {
+                    _coordinates.Synchronize();
+                }
             }
             finally
             {
-                synchronizing = false;
-                if (changed) SetDirty();
+                _isSynchronizing = false;
+                if (changed)
+                {
+                    SetDirty();
+                }
             }
         }
 
         private static float Inverse(float value)
         {
-            if (value == 0) return 0;
+            if (value == 0)
+            {
+                return 0;
+            }
+
             float inverse = 1f / value;
             return float.IsInfinity(inverse) || float.IsNaN(inverse) ? 0 : inverse;
         }
 
         private LayoutGroup ParentLayout()
         {
-            var layout = slot.parent ? slot.parent.GetComponent<LayoutGroup>() : null;
+            var layout = _slot.parent ? _slot.parent.GetComponent<LayoutGroup>() : null;
             return layout && layout.isActiveAndEnabled ? layout : null;
         }
 
-        private DrivenTransformProperties ReadDriven(LayoutGroup layout) => slot.drivenByObject == layout
-            ? (DrivenTransformProperties)DrivenProperties.GetValue(slot) : DrivenTransformProperties.None;
+        private DrivenTransformProperties ReadDriven(LayoutGroup layout) => _slot.drivenByObject == layout
+            ? (DrivenTransformProperties)_drivenProperties.GetValue(_slot) : DrivenTransformProperties.None;
 
         public void CalculateLayoutInputHorizontal() => Synchronize(true);
         public void CalculateLayoutInputVertical() => Synchronize(false);
@@ -203,30 +384,56 @@ namespace YLFramework.Core
 
         private void ApplyLayout(bool vertical)
         {
-            if (passThrough) { Synchronize(); return; }
-            if (synchronizing || !Valid() || target.parent != frame) return;
+            if (_isPassThrough)
+            {
+                Synchronize();
+                return;
+            }
+            if (_isSynchronizing || !IsValid() || _target.parent != _frame)
+            {
+                return;
+            }
+
             var layout = ParentLayout();
-            if (!layout || ignoreLayout) { Synchronize(); return; }
+            if (!layout || ignoreLayout)
+            {
+                Synchronize();
+                return;
+            }
             var driven = ReadDriven(layout);
             if (layout is GridLayoutGroup)
+            {
                 driven &= DrivenTransformProperties.Anchors | DrivenTransformProperties.SizeDelta |
                     (vertical ? DrivenTransformProperties.AnchoredPosition : DrivenTransformProperties.None);
+            }
             else if (layout is HorizontalOrVerticalLayoutGroup)
+            {
                 driven &= DrivenTransformProperties.Anchors | (vertical
                     ? DrivenTransformProperties.AnchoredPositionY | DrivenTransformProperties.SizeDeltaY
                     : DrivenTransformProperties.AnchoredPositionX | DrivenTransformProperties.SizeDeltaX);
+            }
             // Grid 纵控确实重写两轴；线性布局纵控不能重放横向值覆盖已经执行的 CSF。
-            synchronizationBinding = binding ? binding.BindingVersion : 0;
-            synchronizationParent = slot.parent;
-            synchronizing = true;
+            _synchronizationBinding = _binding ? _binding.BindingVersion : 0;
+            _synchronizationParent = _slot.parent;
+            _isSynchronizing = true;
             try
             {
-                coordinates.Synchronize();
-                if (!Valid()) return;
-                CopyRect(slot, target, driven);
-                if (Valid()) coordinates.Synchronize();
+                _coordinates.Synchronize();
+                if (!IsValid())
+                {
+                    return;
+                }
+
+                CopyRect(_slot, _target, driven);
+                if (IsValid())
+                {
+                    _coordinates.Synchronize();
+                }
             }
-            finally { synchronizing = false; }
+            finally
+            {
+                _isSynchronizing = false;
+            }
         }
 
         private bool CopyRect(RectTransform source, RectTransform destination, DrivenTransformProperties properties)
@@ -234,25 +441,62 @@ namespace YLFramework.Core
             bool changed = false;
             var value = Select(destination.anchorMin, source.anchorMin, properties,
                 DrivenTransformProperties.AnchorMinX, DrivenTransformProperties.AnchorMinY);
-            if (!destination.anchorMin.Equals(value)) { destination.anchorMin = value; changed = true; }
-            if (!Valid()) return changed;
+            if (!destination.anchorMin.Equals(value))
+            {
+                destination.anchorMin = value;
+                changed = true;
+            }
+            if (!IsValid())
+            {
+                return changed;
+            }
+
             value = Select(destination.anchorMax, source.anchorMax, properties,
                 DrivenTransformProperties.AnchorMaxX, DrivenTransformProperties.AnchorMaxY);
-            if (!destination.anchorMax.Equals(value)) { destination.anchorMax = value; changed = true; }
-            if (!Valid()) return changed;
+            if (!destination.anchorMax.Equals(value))
+            {
+                destination.anchorMax = value;
+                changed = true;
+            }
+            if (!IsValid())
+            {
+                return changed;
+            }
+
             value = Select(destination.sizeDelta, source.sizeDelta, properties,
                 DrivenTransformProperties.SizeDeltaX, DrivenTransformProperties.SizeDeltaY);
-            if (!destination.sizeDelta.Equals(value)) { destination.sizeDelta = value; changed = true; }
-            if (!Valid()) return changed;
+            if (!destination.sizeDelta.Equals(value))
+            {
+                destination.sizeDelta = value;
+                changed = true;
+            }
+            if (!IsValid())
+            {
+                return changed;
+            }
+
             value = Select(destination.anchoredPosition, source.anchoredPosition, properties,
                 DrivenTransformProperties.AnchoredPositionX, DrivenTransformProperties.AnchoredPositionY);
-            if (!destination.anchoredPosition.Equals(value)) { destination.anchoredPosition = value; changed = true; }
-            if (!Valid()) return changed;
+            if (!destination.anchoredPosition.Equals(value))
+            {
+                destination.anchoredPosition = value;
+                changed = true;
+            }
+            if (!IsValid())
+            {
+                return changed;
+            }
+
             if ((properties & DrivenTransformProperties.AnchoredPositionZ) != 0)
             {
                 var position = destination.localPosition;
                 float z = source.localPosition.z;
-                if (!position.z.Equals(z)) { position.z = z; destination.localPosition = position; changed = true; }
+                if (!position.z.Equals(z))
+                {
+                    position.z = z;
+                    destination.localPosition = position;
+                    changed = true;
+                }
             }
             return changed;
         }
@@ -260,49 +504,138 @@ namespace YLFramework.Core
         private static Vector2 Select(Vector2 current, Vector2 input, DrivenTransformProperties properties,
             DrivenTransformProperties x, DrivenTransformProperties y)
         {
-            if ((properties & x) != 0) current.x = input.x;
-            if ((properties & y) != 0) current.y = input.y;
+            if ((properties & x) != 0)
+            {
+                current.x = input.x;
+            }
+
+            if ((properties & y) != 0)
+            {
+                current.y = input.y;
+            }
+
             return current;
         }
 
         private void SetDirty()
         {
-            var rect = passThrough ? frame : slot;
-            if (rect && !CanvasUpdateRegistry.IsRebuildingLayout()) LayoutRebuilder.MarkLayoutForRebuild(rect);
+            var rect = _isPassThrough ? _frame : _slot;
+            if (rect && !CanvasUpdateRegistry.IsRebuildingLayout())
+            {
+                LayoutRebuilder.MarkLayoutForRebuild(rect);
+            }
         }
 
-        protected override void OnEnable() { base.OnEnable(); if (retiring) Retire(); else { Synchronize(); SetDirty(); } }
-        protected override void OnDisable() { SetDirty(); base.OnDisable(); }
-        protected override void OnTransformParentChanged() { base.OnTransformParentChanged(); Synchronize(); SetDirty(); }
-        protected override void OnRectTransformDimensionsChange()
+        protected override void OnEnable()
         {
-            base.OnRectTransformDimensionsChange();
-            if (synchronizing) return;
+            base.OnEnable();
+            if (_isRetiring)
+            {
+                Retire();
+            }
+            else
+            {
+                Synchronize();
+                SetDirty();
+            }
+        }
+        protected override void OnDisable()
+        {
+            SetDirty();
+            base.OnDisable();
+        }
+        protected override void OnTransformParentChanged()
+        {
+            base.OnTransformParentChanged();
             Synchronize();
             SetDirty();
         }
-        private void OnTransformChildrenChanged() { Synchronize(); SetDirty(); }
-        private void LateUpdate() { if (retiring) Retire(); else Synchronize(); }
+        protected override void OnRectTransformDimensionsChange()
+        {
+            base.OnRectTransformDimensionsChange();
+            if (_isSynchronizing)
+            {
+                return;
+            }
+
+            Synchronize();
+            SetDirty();
+        }
+        private void OnTransformChildrenChanged()
+        {
+            Synchronize();
+            SetDirty();
+        }
+        private void LateUpdate()
+        {
+            if (_isRetiring)
+            {
+                Retire();
+            }
+            else
+            {
+                Synchronize();
+            }
+        }
 
         private void Retire()
         {
-            if (passThrough || !slot) return;
+            if (_isPassThrough || !_slot)
+            {
+                return;
+            }
+
             var children = new List<Transform>();
-            if (frame)
-                for (int i = 0; i < frame.childCount; i++) children.Add(frame.GetChild(i));
+            if (_frame)
+            {
+                for (int i = 0; i < _frame.childCount; i++)
+                {
+                    children.Add(_frame.GetChild(i));
+                }
+            }
+
             foreach (var child in children)
-                if (slot && child && child.parent == frame) child.SetParent(slot.parent, false);
-            if (!slot) return;
+            {
+                if (_slot && child && child.parent == _frame)
+                {
+                    child.SetParent(_slot.parent, false);
+                }
+            }
+
+            if (!_slot)
+            {
+                return;
+            }
+
             children.Clear();
-            for (int i = 0; i < slot.childCount; i++)
-                if (slot.GetChild(i) != frame) children.Add(slot.GetChild(i));
+            for (int i = 0; i < _slot.childCount; i++)
+            {
+                if (_slot.GetChild(i) != _frame)
+                {
+                    children.Add(_slot.GetChild(i));
+                }
+            }
+
             foreach (var child in children)
-                if (slot && child && child.parent == slot) child.SetParent(slot.parent, true);
-            if (!slot) return;
+            {
+                if (_slot && child && child.parent == _slot)
+                {
+                    child.SetParent(_slot.parent, true);
+                }
+            }
+
+            if (!_slot)
+            {
+                return;
+            }
             // 父级回调可向旧壳再次放入业务节点；本轮只处理快照，下帧重试，不能连带销毁。
-            if ((frame && frame.childCount != 0) || slot.childCount > (frame && frame.parent == slot ? 1 : 0)) return;
-            Destroy(slot.gameObject);
-            slot = null;
+            if ((_frame && _frame.childCount != 0) || _slot.childCount > (_frame && _frame.parent == _slot ? 1 : 0))
+            {
+                return;
+            }
+
+            Destroy(_slot.gameObject);
+            _slot = null;
         }
     }
 }

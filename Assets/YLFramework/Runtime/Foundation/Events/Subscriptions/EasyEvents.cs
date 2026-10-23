@@ -14,7 +14,7 @@ namespace YLFramework.Events
     /// </summary>
     public class EasyEvents
     {
-        private static readonly EasyEvents GlobalEasyEvents = new();
+        private static readonly EasyEvents _globalEasyEvents = new();
 
         static EasyEvents()
         {
@@ -29,7 +29,7 @@ namespace YLFramework.Events
         /// <typeparam name="T">事件类型。</typeparam>
         public static T Get<T>() where T : IEasyEvent, new()
         {
-            return GlobalEasyEvents.GetEvent<T>();
+            return _globalEasyEvents.GetEvent<T>();
         }
 
         /// <summary>
@@ -38,14 +38,14 @@ namespace YLFramework.Events
         /// <typeparam name="T">事件类型。</typeparam>
         public static void Register<T>() where T : IEasyEvent, new()
         {
-            GlobalEasyEvents.AddEvent<T>();
+            _globalEasyEvents.AddEvent<T>();
         }
 
         private static void ClearGlobalEvents()
         {
             try
             {
-                GlobalEasyEvents.ClearListeners(true);
+                _globalEasyEvents.ClearListeners(true);
             }
             catch (Exception error)
             {
@@ -131,13 +131,19 @@ namespace YLFramework.Events
             {
                 if (resetOwners && e is EventChannelBase channel)
                 {
-                    try { channel.ResetOwner(); }
-                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+                    try
+                    {
+                        channel.ResetOwner();
+                    }
+                    catch (Exception error)
+                    {
+                        (errors ??= new List<Exception>()).Add(error);
+                    }
                 }
                 try
                 {
                     // 自定义事件可能重实现接口并持有额外责任，不能被标准 channel 的重置替代。
-                    e.UnRegisterAll();
+                    e.UnregisterAll();
                 }
                 catch (Exception error)
                 {

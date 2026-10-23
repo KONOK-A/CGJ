@@ -24,7 +24,10 @@ namespace YLFramework.Core.Editor
         public static void GenerateDefaultResources()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer)
+            {
                 return;
+            }
+
             GenerateCanvas();
             GenerateEventSystem();
         }
@@ -39,7 +42,10 @@ namespace YLFramework.Core.Editor
         private static void GenerateCanvas()
         {
             if (!CanCreate(CanvasPath))
+            {
                 return;
+            }
+
             var scene = EditorSceneManager.NewPreviewScene();
             try
             {
@@ -57,7 +63,10 @@ namespace YLFramework.Core.Editor
         private static void GenerateEventSystem()
         {
             if (!CanCreate(EventSystemPath))
+            {
                 return;
+            }
+
             var scene = EditorSceneManager.NewPreviewScene();
             try
             {
@@ -120,7 +129,10 @@ namespace YLFramework.Core.Editor
             // Set the serialized asset active without activating scene input components.
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null)
+            {
                 throw new IOException("Could not create YL default resource: " + path);
+            }
+
             using (var serialized = new SerializedObject(prefab))
             {
                 serialized.FindProperty("m_IsActive").boolValue = true;

@@ -56,14 +56,20 @@ namespace YLFramework.Tests.ResourceBuild
         // 仅测试 Store 的交付与认证边界；UnityFS 前缀夹具不声称可由 native 加载。
         private sealed class UpdateFixture : IDisposable
         {
-            private readonly string root = Path.Combine(Path.GetTempPath(), "kilo", "cu-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-            internal ResourceLocalSnapshot BuiltIn { get; }
-            internal ArtifactStore Store { get; }
+            private readonly string _root = Path.Combine(Path.GetTempPath(), "kilo", "cu-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            internal ResourceLocalSnapshot BuiltIn
+            {
+                get;
+            }
+            internal ArtifactStore Store
+            {
+                get;
+            }
 
             internal UpdateFixture(string invalidRole = null, ResourceRemoteSource remote = null)
             {
                 BuiltIn = Create("built-in", invalidRole);
-                Store = new ArtifactStore(Path.Combine(root, "store"), new[] {
+                Store = new ArtifactStore(Path.Combine(_root, "store"), new[] {
                     new ResourceProjectMount("catalog", "StandaloneWindows64", "app-v1", BuiltIn, remote: remote) });
             }
 
@@ -86,9 +92,12 @@ namespace YLFramework.Tests.ResourceBuild
                         using var raw = new MemoryStream(bytes, false);
                         using var output = new MemoryStream();
                         ResourceBundleEnvelope.Encrypt(raw, output, new ResourceBundleContext("catalog", "StandaloneWindows64", Application.unityVersion,
-                            role, role == "Bundle" ? (string)record["LogicalId"] : "manifest"), "test-content", TestMaterial);
+                            role, role == "Bundle" ? (string)record["LogicalId"] : "manifest"), "test-content", _testMaterial);
                         bytes = output.ToArray();
-                        if (corruptMiddle && role == "Bundle") bytes[12 + BitConverter.ToInt32(bytes, 8) + 65536 + 50] ^= 1;
+                        if (corruptMiddle && role == "Bundle")
+                        {
+                            bytes[12 + BitConverter.ToInt32(bytes, 8) + 65536 + 50] ^= 1;
+                        }
                     }
                     record["Length"] = bytes.Length;
                     record["Sha256"] = ResourceCatalogCodec.Digest(bytes);
@@ -96,19 +105,32 @@ namespace YLFramework.Tests.ResourceBuild
                 }
                 var catalogBytes = ResourceCatalogCodec.Seal(ResourceCatalogCodec.CanonicalBytes(payload));
                 var document = ResourceCatalogCodec.Read(catalogBytes, "catalog", "StandaloneWindows64", Application.unityVersion, "app-v1");
-                var path = Path.Combine(root, "source", document.CatalogDigest);
+                var path = Path.Combine(_root, "source", document.CatalogDigest);
                 Directory.CreateDirectory(path);
-                foreach (var file in files) File.WriteAllBytes(Path.Combine(path, file.Key), file.Value);
+                foreach (var file in files)
+                {
+                    File.WriteAllBytes(Path.Combine(path, file.Key), file.Value);
+                }
+
                 File.WriteAllBytes(Path.Combine(path, "resource-catalog.json"), catalogBytes);
-                File.WriteAllBytes(Path.Combine(path, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject {
-                    ["Version"] = 1, ["ProjectGuid"] = new string('1', 32), ["ProjectId"] = document.ProjectId,
-                    ["Platform"] = document.Platform, ["BuildId"] = document.BuildId, ["CatalogDigest"] = document.CatalogDigest }));
+                File.WriteAllBytes(Path.Combine(path, ".ylr-complete.json"), ResourceCatalogCodec.CanonicalBytes(new JObject
+                {
+                    ["Version"] = 1,
+                    ["ProjectGuid"] = new string('1', 32),
+                    ["ProjectId"] = document.ProjectId,
+                    ["Platform"] = document.Platform,
+                    ["BuildId"] = document.BuildId,
+                    ["CatalogDigest"] = document.CatalogDigest
+                }));
                 return ResourceLocalSnapshot.Open(path, "catalog", document.CatalogDigest, document.Platform, "app-v1");
             }
 
             public void Dispose()
             {
-                if (Directory.Exists(root)) Directory.Delete(root, true);
+                if (Directory.Exists(_root))
+                {
+                    Directory.Delete(_root, true);
+                }
             }
         }
     }

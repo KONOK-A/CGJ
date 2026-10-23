@@ -21,7 +21,10 @@ namespace YLFramework.Tests.ResourceBuild
                 return type.GetMethod("Open").Invoke(null, new object[] { release.DirectoryPath, release.Catalog.ProjectId,
                     release.Catalog.CatalogDigest, release.Catalog.Platform, "fixture-v1" });
             }
-            catch (TargetInvocationException error) { throw error.InnerException; }
+            catch (TargetInvocationException error)
+            {
+                throw error.InnerException;
+            }
         }
 
         [Test]
@@ -31,7 +34,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(method, Is.Not.Null, "The formal built-in layout must be consumable without application-owned path glue.");
             using var fixture = new ResourceReleaseFixture();
             var project = fixture.Project;
-            project.Groups.RemoveAll(value => value.Id != "entry");
+            project.groups.RemoveAll(value => value.id != "entry");
             EditorUtility.SetDirty(project);
             AssetDatabase.SaveAssetIfDirty(project);
             var release = ResourcePublisher.Publish(fixture.Build(), "fixture-v1");
@@ -66,7 +69,10 @@ namespace YLFramework.Tests.ResourceBuild
                     "../escape", release.Catalog.CatalogDigest, release.Catalog.Platform, "fixture-v1", root })).InnerException, Is.InstanceOf<ArgumentException>());
                 fixture.AssertProtected();
             }
-            finally { Directory.Delete(root, true); }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
         }
 
         [Test]
@@ -84,7 +90,10 @@ namespace YLFramework.Tests.ResourceBuild
             var catalog = (ResourceCatalog)snapshot.GetType().GetMethod("CreateCatalog").Invoke(snapshot, new object[] { null });
             Assert.That(catalog.Resolve(new ResourceAddress(release.Catalog.ProjectId, "entry.txt")).Location.AssetType, Is.EqualTo(typeof(TextAsset)));
             foreach (var sprite in release.Catalog.Assets.Where(x => x.Kind == "SubAsset"))
+            {
                 Assert.That(catalog.Resolve(new ResourceAddress(release.Catalog.ProjectId, sprite.Address, sprite.SubAssetKey)).AssetId, Is.EqualTo(sprite.AssetId));
+            }
+
             CollectionAssert.AreEquivalent(nativeBefore, AssetBundle.GetAllLoadedAssetBundles().Select(x => x.GetInstanceID()));
             var file = Path.Combine(release.DirectoryPath, release.Catalog.Bundles[0].RelativeFile);
             var bytes = File.ReadAllBytes(file);
@@ -95,7 +104,10 @@ namespace YLFramework.Tests.ResourceBuild
                 File.Delete(file);
                 Assert.That(Assert.Throws<InvalidDataException>(() => Open(release)).Message, Is.EqualTo("Publication contains missing or unregistered content."));
             }
-            finally { File.WriteAllBytes(file, bytes); }
+            finally
+            {
+                File.WriteAllBytes(file, bytes);
+            }
             fixture.AssertProtected();
         }
     }

@@ -1,8 +1,8 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
+using UnityEngine.Serialization;
+using YLFramework.Foundation;
 
 namespace YLFramework.MissionSystem
 {
@@ -47,7 +47,7 @@ namespace YLFramework.MissionSystem
     /// 默认任务配置数据
     /// </summary>
     [Serializable]
-    public class MissionConfigData  : ScriptableObject
+    public class MissionConfigData : ScriptableObject
     {
 
 
@@ -72,7 +72,7 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("任务名称")]
         [Header("任务名称")]
-        public string mission_name;
+        [FormerlySerializedAs("mission_name")] public string missionName;
 
         /// <summary>
         /// 任务图标
@@ -86,7 +86,7 @@ namespace YLFramework.MissionSystem
         /// </summary>
         [Tooltip("任务描述")]
         [Header("任务描述")]
-        [TextArea(3,8)]
+        [TextArea(3, 8)]
         public string description;
 
 
@@ -111,21 +111,21 @@ namespace YLFramework.MissionSystem
         [Tooltip("任务类型文件对应的guid")]
         [HideInInspector]
         [YLFramework.Excel.ExcelIgnore]
-        public string mission_type_guid;
+        [FormerlySerializedAs("mission_type_guid")] public string missionTypeGuid;
 
         /// <summary>
         /// 任务类全名称
         /// </summary>
         [Tooltip("任务类全名称")]
 
-        public string mission_type_class_fullname;
+        [FormerlySerializedAs("mission_type_class_fullname")] public string missionTypeClassFullName;
 
         /// <summary>
         /// 任务完成后是否重置参数(该参数在没有其他正在执行中的任务引用的情况下,默认:true)
         /// </summary>
         [Tooltip("任务完成后是否重置参数(该参数在没有其他正在执行中的任务引用的情况下,默认:true)")]
         [Header("任务完成后是否重置参数(该参数在没有其他正在执行中的任务引用的情况下,默认:true)")]
-        public bool reset_param_on_completed = true;
+        [FormerlySerializedAs("reset_param_on_completed")] public bool resetParamOnCompleted = true;
 
     }
 }

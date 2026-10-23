@@ -5,8 +5,8 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using YLFramework.Events;
@@ -17,32 +17,46 @@ namespace YLFramework.Tests
 {
     public class EventsLifecyclePlayModeTests
     {
-        private readonly List<GameObject> mRoots = new List<GameObject>();
-        private Scene mScene;
-        private Scene mOtherScene;
-        private AsyncOperation mUnload;
+        private readonly List<GameObject> _roots = new List<GameObject>();
+        private Scene _scene;
+        private Scene _otherScene;
+        private AsyncOperation _unload;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            foreach (var root in mRoots)
+            foreach (var root in _roots)
             {
-                if (root) Object.Destroy(root);
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
             }
-            mRoots.Clear();
-            if (mUnload != null) yield return mUnload;
-            else if (mScene.IsValid() && mScene.isLoaded) yield return SceneManager.UnloadSceneAsync(mScene);
-            if (mOtherScene.IsValid() && mOtherScene.isLoaded) yield return SceneManager.UnloadSceneAsync(mOtherScene);
-            mScene = default;
-            mOtherScene = default;
-            mUnload = null;
+            _roots.Clear();
+            if (_unload != null)
+            {
+                yield return _unload;
+            }
+            else if (_scene.IsValid() && _scene.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(_scene);
+            }
+
+            if (_otherScene.IsValid() && _otherScene.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(_otherScene);
+            }
+
+            _scene = default;
+            _otherScene = default;
+            _unload = null;
             yield return null;
         }
 
         private GameObject Root()
         {
             var root = new GameObject("Events.Lifecycle.PlayModeTest");
-            mRoots.Add(root);
+            _roots.Add(root);
             return root;
         }
 
@@ -52,7 +66,7 @@ namespace YLFramework.Tests
             var source = new EasyEvent();
             var root = Root();
             var calls = 0;
-            source.Register(() => calls++).UnRegisterWhenGameObjectDestroyed(root);
+            source.Register(() => calls++).UnregisterWhenGameObjectDestroyed(root);
             source.Trigger();
             Object.Destroy(root);
             yield return null;
@@ -66,7 +80,7 @@ namespace YLFramework.Tests
             var source = new EasyEvent();
             var root = Root();
             var calls = 0;
-            source.Register(() => calls++).UnRegisterWhenGameObjectDestroyed(root.transform);
+            source.Register(() => calls++).UnregisterWhenGameObjectDestroyed(root.transform);
             Object.Destroy(root);
             yield return null;
             source.Trigger();
@@ -79,12 +93,12 @@ namespace YLFramework.Tests
             var source = new EasyEvent();
             var root = Root();
             var calls = 0;
-            source.Register(() => calls++).UnRegisterWhenDisabled(root);
+            source.Register(() => calls++).UnregisterWhenDisabled(root);
             source.Trigger();
             root.SetActive(false);
             source.Trigger();
             root.SetActive(true);
-            source.Register(() => calls++).UnRegisterWhenDisabled(root.transform);
+            source.Register(() => calls++).UnregisterWhenDisabled(root.transform);
             source.Trigger();
             root.SetActive(false);
             source.Trigger();
@@ -97,23 +111,23 @@ namespace YLFramework.Tests
         {
             var source = new EasyEvent();
             var root = Root();
-            var trigger = root.AddComponent<OnDestroyUnRegisterTrigger>();
+            var trigger = root.AddComponent<OnDestroyUnregisterTrigger>();
             var calls = 0;
             var token = source.Register(() => calls++);
-            Assert.That(trigger.AddUnRegister(token), Is.SameAs(token));
-            trigger.AddUnRegister(token);
-            trigger.UnRegister();
-            Assert.DoesNotThrow(() => trigger.UnRegister());
+            Assert.That(trigger.AddUnregister(token), Is.SameAs(token));
+            trigger.AddUnregister(token);
+            trigger.Unregister();
+            Assert.DoesNotThrow(() => trigger.Unregister());
             source.Trigger();
             Assert.That(calls, Is.Zero);
             var detached = source.Register(() => calls++);
-            trigger.AddUnRegister(detached);
-            trigger.RemoveUnRegister(detached);
+            trigger.AddUnregister(detached);
+            trigger.RemoveUnregister(detached);
             Object.Destroy(root);
             yield return null;
             source.Trigger();
             Assert.That(calls, Is.EqualTo(1));
-            detached.UnRegister();
+            detached.Unregister();
         }
 
         [UnityTest]
@@ -121,14 +135,14 @@ namespace YLFramework.Tests
         {
             var source = new EasyEvent();
             var calls = 0;
-            source.Register(() => calls++).UnRegisterWhenAnySceneUnloaded();
-            var trigger = OnCurSceneUnLoadUnRegisterTrigger.Instance;
-            Assert.That(OnCurSceneUnLoadUnRegisterTrigger.Instance, Is.SameAs(trigger));
+            source.Register(() => calls++).UnregisterWhenAnySceneUnloaded();
+            var trigger = SceneUnregisterTrigger.Instance;
+            Assert.That(SceneUnregisterTrigger.Instance, Is.SameAs(trigger));
             source.Trigger();
-            mScene = SceneManager.CreateScene("Events.Lifecycle.UnloadTest");
-            Assert.That(trigger.gameObject.scene, Is.Not.EqualTo(mScene));
-            mUnload = SceneManager.UnloadSceneAsync(mScene);
-            yield return mUnload;
+            _scene = SceneManager.CreateScene("Events.Lifecycle.UnloadTest");
+            Assert.That(trigger.gameObject.scene, Is.Not.EqualTo(_scene));
+            _unload = SceneManager.UnloadSceneAsync(_scene);
+            yield return _unload;
             source.Trigger();
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(trigger != null, Is.True);
@@ -137,38 +151,44 @@ namespace YLFramework.Tests
         [UnityTest]
         public IEnumerator TriggerAttemptsAllFailuresAndRetainsNewAndFailedResponsibilities()
         {
-            var trigger = Root().AddComponent<OnDestroyUnRegisterTrigger>();
+            var trigger = Root().AddComponent<OnDestroyUnregisterTrigger>();
             var attempts = 0;
             var succeeded = 0;
             var added = 0;
             var fail = true;
             var firstError = new InvalidOperationException("first cancellation");
             var secondError = new ArgumentException("second cancellation");
-            trigger.AddUnRegister(new CustomUnRegister(() =>
+            trigger.AddUnregister(new CustomUnregister(() =>
             {
                 attempts++;
-                if (fail) throw firstError;
+                if (fail)
+                {
+                    throw firstError;
+                }
             }));
-            trigger.AddUnRegister(new CustomUnRegister(() =>
+            trigger.AddUnregister(new CustomUnregister(() =>
             {
-                if (fail) throw secondError;
+                if (fail)
+                {
+                    throw secondError;
+                }
             }));
-            trigger.AddUnRegister(new CustomUnRegister(() =>
+            trigger.AddUnregister(new CustomUnregister(() =>
             {
                 succeeded++;
-                trigger.AddUnRegister(new CustomUnRegister(() => added++));
-                trigger.UnRegister();
+                trigger.AddUnregister(new CustomUnregister(() => added++));
+                trigger.Unregister();
             }));
-            var error = Assert.Throws<AggregateException>(() => trigger.UnRegister());
+            var error = Assert.Throws<AggregateException>(() => trigger.Unregister());
             Assert.That(error.InnerExceptions, Is.EquivalentTo(new Exception[] { firstError, secondError }));
             Assert.That(succeeded, Is.EqualTo(1));
             Assert.That(attempts, Is.EqualTo(1));
             Assert.That(added, Is.Zero);
             fail = false;
-            trigger.UnRegister();
+            trigger.Unregister();
             Assert.That(attempts, Is.EqualTo(2));
             Assert.That(added, Is.EqualTo(1));
-            Assert.DoesNotThrow(() => trigger.UnRegister());
+            Assert.DoesNotThrow(() => trigger.Unregister());
             yield return null;
         }
 
@@ -176,10 +196,10 @@ namespace YLFramework.Tests
         public IEnumerator SceneTriggerDestructionCancelsPendingSubscriptions()
         {
             var source = new EventChannel();
-            source.Register(() => { }).UnRegisterWhenAnySceneUnloaded();
-            mScene = SceneManager.CreateScene("Events.Lifecycle.PendingScene");
-            source.Register(() => { }).UnRegisterWhenSceneUnloaded(mScene);
-            var trigger = OnCurSceneUnLoadUnRegisterTrigger.Instance;
+            source.Register(() => { }).UnregisterWhenAnySceneUnloaded();
+            _scene = SceneManager.CreateScene("Events.Lifecycle.PendingScene");
+            source.Register(() => { }).UnregisterWhenSceneUnloaded(_scene);
+            var trigger = SceneUnregisterTrigger.Instance;
             Object.Destroy(trigger.gameObject);
             yield return null;
             Assert.That(source.ListenerCount, Is.Zero);
@@ -190,29 +210,29 @@ namespace YLFramework.Tests
         public IEnumerator AdditiveSceneBindingCapturesExplicitOwnerAndKeepsAnySceneDistinct()
         {
             var source = new EventChannel();
-            mScene = SceneManager.CreateScene("Events.Lifecycle.Owner");
-            mOtherScene = SceneManager.CreateScene("Events.Lifecycle.Other");
+            _scene = SceneManager.CreateScene("Events.Lifecycle.Owner");
+            _otherScene = SceneManager.CreateScene("Events.Lifecycle.Other");
             var root = Root();
-            SceneManager.MoveGameObjectToScene(root, mScene);
+            SceneManager.MoveGameObjectToScene(root, _scene);
             var ownerCalls = 0;
             var otherCalls = 0;
             var anyCalls = 0;
-            source.Register(() => ownerCalls++).UnRegisterWhenSceneUnloaded(root.scene);
-            source.Register(() => otherCalls++).UnRegisterWhenSceneUnloaded(mOtherScene);
-            source.Register(() => anyCalls++).UnRegisterWhenAnySceneUnloaded();
-            SceneManager.MoveGameObjectToScene(root, mOtherScene);
-            yield return SceneManager.UnloadSceneAsync(mOtherScene);
+            source.Register(() => ownerCalls++).UnregisterWhenSceneUnloaded(root.scene);
+            source.Register(() => otherCalls++).UnregisterWhenSceneUnloaded(_otherScene);
+            source.Register(() => anyCalls++).UnregisterWhenAnySceneUnloaded();
+            SceneManager.MoveGameObjectToScene(root, _otherScene);
+            yield return SceneManager.UnloadSceneAsync(_otherScene);
             source.Trigger();
             Assert.That(ownerCalls, Is.EqualTo(1));
             Assert.That(otherCalls, Is.Zero);
             Assert.That(anyCalls, Is.Zero);
-            mUnload = SceneManager.UnloadSceneAsync(mScene);
-            yield return mUnload;
+            _unload = SceneManager.UnloadSceneAsync(_scene);
+            yield return _unload;
             source.Trigger();
             Assert.That(ownerCalls, Is.EqualTo(1));
             Assert.That(source.ListenerCount, Is.Zero);
-            source.Register(() => { }).UnRegisterWhenSceneUnloaded(mScene);
-            source.Register(() => { }).UnRegisterWhenSceneUnloaded(default);
+            source.Register(() => { }).UnregisterWhenSceneUnloaded(_scene);
+            source.Register(() => { }).UnregisterWhenSceneUnloaded(default);
             Assert.That(source.ListenerCount, Is.Zero);
             source.Dispose();
         }
@@ -220,48 +240,58 @@ namespace YLFramework.Tests
         [UnityTest]
         public IEnumerator SceneCleanupKeepsFailuresAndDefersReentrantRegistrations()
         {
-            mScene = SceneManager.CreateScene("Events.Lifecycle.ReentrantOwner");
-            var trigger = OnCurSceneUnLoadUnRegisterTrigger.Instance;
+            _scene = SceneManager.CreateScene("Events.Lifecycle.ReentrantOwner");
+            var trigger = SceneUnregisterTrigger.Instance;
             var fail = true;
             var attempts = 0;
             var sceneCalls = 0;
             var laterCalls = 0;
             var error = new InvalidOperationException("scene cancellation failed");
-            new CustomUnRegister(() =>
+            new CustomUnregister(() =>
             {
                 attempts++;
-                if (fail) throw error;
-            }).UnRegisterWhenSceneUnloaded(mScene);
-            new CustomUnRegister(() => sceneCalls++).UnRegisterWhenSceneUnloaded(mScene);
-            new CustomUnRegister(() =>
-                new CustomUnRegister(() => laterCalls++).UnRegisterWhenSceneUnloaded(mScene))
-                .UnRegisterWhenAnySceneUnloaded();
-            Assert.That(Assert.Throws<InvalidOperationException>(() => trigger.UnRegister()), Is.SameAs(error));
+                if (fail)
+                {
+                    throw error;
+                }
+            }).UnregisterWhenSceneUnloaded(_scene);
+            new CustomUnregister(() => sceneCalls++).UnregisterWhenSceneUnloaded(_scene);
+            new CustomUnregister(() =>
+                new CustomUnregister(() => laterCalls++).UnregisterWhenSceneUnloaded(_scene))
+                .UnregisterWhenAnySceneUnloaded();
+            Assert.That(Assert.Throws<InvalidOperationException>(() => trigger.Unregister()), Is.SameAs(error));
             Assert.That(sceneCalls, Is.EqualTo(1));
             Assert.That(attempts, Is.EqualTo(1));
             Assert.That(laterCalls, Is.Zero);
             fail = false;
-            trigger.UnRegister();
+            trigger.Unregister();
             Assert.That(attempts, Is.EqualTo(2));
             Assert.That(laterCalls, Is.EqualTo(1));
-            mUnload = SceneManager.UnloadSceneAsync(mScene);
-            yield return mUnload;
+            _unload = SceneManager.UnloadSceneAsync(_scene);
+            yield return _unload;
             Assert.That(attempts, Is.EqualTo(2));
         }
 
         [UnityTest]
         public IEnumerator RemovingASceneOwnedTokenTransfersResponsibilityWithoutCancellingIt()
         {
-            mScene = SceneManager.CreateScene("Events.Lifecycle.DetachedOwner");
+            _scene = SceneManager.CreateScene("Events.Lifecycle.DetachedOwner");
             var source = new EventChannel();
             var token = source.Register(() => { });
-            var trigger = OnCurSceneUnLoadUnRegisterTrigger.Instance;
-            trigger.AddUnRegister(token, mScene);
-            trigger.RemoveUnRegister(token);
-            mUnload = SceneManager.UnloadSceneAsync(mScene);
-            yield return mUnload;
-            try { Assert.That(source.ListenerCount, Is.EqualTo(1)); }
-            finally { token.UnRegister(); source.Dispose(); }
+            var trigger = SceneUnregisterTrigger.Instance;
+            trigger.AddUnregister(token, _scene);
+            trigger.RemoveUnregister(token);
+            _unload = SceneManager.UnloadSceneAsync(_scene);
+            yield return _unload;
+            try
+            {
+                Assert.That(source.ListenerCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                token.Unregister();
+                source.Dispose();
+            }
         }
 
         [UnityTest]
@@ -271,17 +301,17 @@ namespace YLFramework.Tests
             var root = Root();
             var component = root.transform;
             root.SetActive(false);
-            source.Register(() => { }).UnRegisterWhenDisabled(root);
+            source.Register(() => { }).UnregisterWhenDisabled(root);
             Assert.That(source.ListenerCount, Is.EqualTo(1));
             root.SetActive(true);
             root.SetActive(false);
             Assert.That(source.ListenerCount, Is.Zero);
             Object.Destroy(root);
             yield return null;
-            source.Register(() => { }).UnRegisterWhenGameObjectDestroyed(root);
-            source.Register(() => { }).UnRegisterWhenGameObjectDestroyed(component);
-            source.Register(() => { }).UnRegisterWhenDisabled(root);
-            source.Register(() => { }).UnRegisterWhenDisabled(component);
+            source.Register(() => { }).UnregisterWhenGameObjectDestroyed(root);
+            source.Register(() => { }).UnregisterWhenGameObjectDestroyed(component);
+            source.Register(() => { }).UnregisterWhenDisabled(root);
+            source.Register(() => { }).UnregisterWhenDisabled(component);
             Assert.That(source.ListenerCount, Is.Zero);
             source.Dispose();
         }
@@ -290,24 +320,30 @@ namespace YLFramework.Tests
         public IEnumerator DisableAndDestroyReportErrorsAfterAttemptingAllResponsibilities()
         {
             var root = Root();
-            var trigger = root.AddComponent<OnDisableUnRegisterTrigger>();
+            var trigger = root.AddComponent<OnDisableUnregisterTrigger>();
             var fail = true;
             var attempts = 0;
             var laterCalls = 0;
-            trigger.AddUnRegister(new CustomUnRegister(() =>
+            trigger.AddUnregister(new CustomUnregister(() =>
             {
                 attempts++;
-                if (fail) throw new InvalidOperationException("disable cleanup failed");
+                if (fail)
+                {
+                    throw new InvalidOperationException("disable cleanup failed");
+                }
             }));
-            trigger.AddUnRegister(new CustomUnRegister(() => laterCalls++));
+            trigger.AddUnregister(new CustomUnregister(() => laterCalls++));
             LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: disable cleanup failed"));
             root.SetActive(false);
             Assert.That(laterCalls, Is.EqualTo(1));
             fail = false;
-            trigger.UnRegister();
+            trigger.Unregister();
             Assert.That(attempts, Is.EqualTo(2));
-            trigger.AddUnRegister(new CustomUnRegister(() => { throw new InvalidOperationException("destroy cleanup failed"); }));
-            trigger.AddUnRegister(new CustomUnRegister(() => laterCalls++));
+            trigger.AddUnregister(new CustomUnregister(() =>
+            {
+                throw new InvalidOperationException("destroy cleanup failed");
+            }));
+            trigger.AddUnregister(new CustomUnregister(() => laterCalls++));
             LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: destroy cleanup failed"));
             Object.Destroy(root);
             yield return null;
@@ -325,13 +361,13 @@ namespace YLFramework.Tests
             var field = typeof(EventListener).GetField("pointerClick", BindingFlags.Instance | BindingFlags.NonPublic);
             field.SetValue(listener, unityEvent);
             var oldToken = listener.Register<PointerEventData>(EventType.OnClick, _ => order.Add("old"));
-            listener.Register<PointerEventData>(EventType.OnClick, null).UnRegister();
+            listener.Register<PointerEventData>(EventType.OnClick, null).Unregister();
             listener.OnPointerClick(null);
             Assert.That(order, Is.EqualTo(new[] { "old", "unity" }));
-            listener.UnRegisterAll();
+            listener.UnregisterAll();
             Assert.That(field.GetValue(listener), Is.SameAs(unityEvent));
             var token = listener.Register<PointerEventData>(EventType.OnClick, _ => order.Add("new"));
-            oldToken.UnRegister();
+            oldToken.Unregister();
             order.Clear();
             listener.OnPointerClick(null);
             Assert.That(order, Is.EqualTo(new[] { "new", "unity" }));
@@ -340,13 +376,16 @@ namespace YLFramework.Tests
             order.Clear();
             listener.OnPointerClick(null);
             Assert.That(order, Is.EqualTo(new[] { "new", "unity" }));
-            token.UnRegister();
-            var failing = listener.Register<PointerEventData>(EventType.OnClick, _ => { throw new InvalidOperationException("code failed"); });
+            token.Unregister();
+            var failing = listener.Register<PointerEventData>(EventType.OnClick, _ =>
+            {
+                throw new InvalidOperationException("code failed");
+            });
             order.Clear();
             Assert.Throws<InvalidOperationException>(() => listener.OnPointerClick(null));
             Assert.That(order, Is.Empty);
-            failing.UnRegister();
-            listener.UnRegisterAll(true);
+            failing.Unregister();
+            listener.UnregisterAll(true);
             Assert.That(field.GetValue(listener), Is.Null);
             listener.OnPointerClick(null);
             Assert.That(order, Is.Empty);
@@ -367,7 +406,7 @@ namespace YLFramework.Tests
             var token = listener.Register<PointerEventData>(EventType.OnClick, _ => calls++);
             listener.OnPointerClick(null);
             Assert.That(calls, Is.EqualTo(1));
-            token.UnRegister();
+            token.Unregister();
             yield return null;
         }
     }

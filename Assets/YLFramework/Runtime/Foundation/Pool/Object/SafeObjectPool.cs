@@ -23,7 +23,10 @@ namespace YLFramework.Core.Pool
             // HasInstance 可先触发 SingletonProperty 注册；关闭不依赖其静态引用尚未摘除。
             var original = _sessionPool;
             _sessionPool = null;
-            if (original != null && original.TryGetTarget(out var pool)) pool.Dispose();
+            if (original != null && original.TryGetTarget(out var pool))
+            {
+                pool.Dispose();
+            }
         }
 
         void ISingleton.OnSingletonInit() => _sessionPool = new WeakReference<SafeObjectPool<T>>(this);
@@ -40,7 +43,10 @@ namespace YLFramework.Core.Pool
         public int CurStoreCount => _pool.CurStoreCount;
 
         /// <summary>空闲容量上限，默认 20，非正值不限；缩容不重复 OnRecycle。</summary>
-        public int MaxPoolSize { get => _pool.MaxPoolSize; set => _pool.MaxPoolSize = value; }
+        public int MaxPoolSize
+        {
+            get => _pool.MaxPoolSize; set => _pool.MaxPoolSize = value;
+        }
 
         /// <summary>替换后续冷创建的工厂，不改变已借用对象的生命周期责任。</summary>
         public void SetObjectFactory(IObjectFactory<T> factory)
@@ -55,7 +61,10 @@ namespace YLFramework.Core.Pool
         protected virtual T Create()
         {
             if (ObjectFactory == null)
+            {
                 throw new InvalidOperationException($"[Pool] {typeof(T).FullName} 尚未设置对象工厂。");
+            }
+
             return ObjectFactory.Create();
         }
 
@@ -101,8 +110,14 @@ namespace YLFramework.Core.Pool
         protected virtual void Reset(T item)
         {
             item.IsRecycled = true;
-            try { item.OnRecycle(); }
-            finally { item.IsRecycled = true; }
+            try
+            {
+                item.OnRecycle();
+            }
+            finally
+            {
+                item.IsRecycled = true;
+            }
         }
 
         protected virtual void OnDiscard(T item) => item.IsRecycled = true;
@@ -113,14 +128,22 @@ namespace YLFramework.Core.Pool
         /// </summary>
         public virtual void Dispose()
         {
-            try { _pool.Dispose(); }
+            try
+            {
+                _pool.Dispose();
+            }
             finally
             {
                 ObjectFactory = null;
                 if (_sessionPool != null && _sessionPool.TryGetTarget(out var original) && ReferenceEquals(original, this))
+                {
                     _sessionPool = null;
+                }
+
                 if (SingletonProperty<SafeObjectPool<T>>.TryGetInstance(out var current) && ReferenceEquals(current, this))
+                {
                     SingletonProperty<SafeObjectPool<T>>.Dispose();
+                }
             }
         }
     }

@@ -23,232 +23,232 @@ namespace YLFramework.Core
         #region int 键
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent(int event_name_hash, Action callback)
-            => GetDefault(event_name_hash, callback != null)?.Register(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent(int eventId, Action callback)
+            => GetDefault(eventId, callback != null)?.Register(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent(int event_name_hash, Action callback)
-            => GetDefault(event_name_hash)?.UnRegister(event_name_hash, callback);
+        public static void RemoveEvent(int eventId, Action callback)
+            => GetDefault(eventId)?.Unregister(eventId, callback);
 
-        public static void TriggerEvent(int event_name_hash)
-            => GetDefault(event_name_hash)?.Send(event_name_hash);
+        public static void TriggerEvent(int eventId)
+            => GetDefault(eventId)?.Send(eventId);
 
-        public static void TriggerEventAll(int event_name_hash)
-            => GetDefault(event_name_hash)?.SendAll(event_name_hash);
+        public static void TriggerEventAll(int eventId)
+            => GetDefault(eventId)?.SendAll(eventId);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1>(int event_name_hash, Action<T1> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1>(int eventId, Action<T1> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1>(int event_name_hash, Action<T1> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1>(event_name_hash, callback);
+        public static void RemoveEvent<T1>(int eventId, Action<T1> callback)
+            => GetDefault(eventId)?.Unregister<T1>(eventId, callback);
 
-        public static void TriggerEvent<T1>(int event_name_hash, T1 p)
-            => GetDefault(event_name_hash)?.Send<T1>(event_name_hash, p);
+        public static void TriggerEvent<T1>(int eventId, T1 p)
+            => GetDefault(eventId)?.Send<T1>(eventId, p);
 
-        public static void TriggerEventAll<T1>(int event_name_hash, T1 p1)
-            => GetDefault(event_name_hash)?.SendAll<T1>(event_name_hash, p1);
+        public static void TriggerEventAll<T1>(int eventId, T1 p1)
+            => GetDefault(eventId)?.SendAll<T1>(eventId, p1);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2>(int event_name_hash, Action<T1, T2> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2>(int eventId, Action<T1, T2> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2>(int event_name_hash, Action<T1, T2> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2>(int eventId, Action<T1, T2> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2>(int event_name_hash, T1 p, T2 p2)
-            => GetDefault(event_name_hash)?.Send<T1, T2>(event_name_hash, p, p2);
+        public static void TriggerEvent<T1, T2>(int eventId, T1 p, T2 p2)
+            => GetDefault(eventId)?.Send<T1, T2>(eventId, p, p2);
 
-        public static void TriggerEventAll<T1, T2>(int event_name_hash, T1 p1, T2 p2)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2>(event_name_hash, p1, p2);
+        public static void TriggerEventAll<T1, T2>(int eventId, T1 p1, T2 p2)
+            => GetDefault(eventId)?.SendAll<T1, T2>(eventId, p1, p2);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3>(int event_name_hash, Action<T1, T2, T3> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3>(int eventId, Action<T1, T2, T3> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2, T3>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3>(int event_name_hash, Action<T1, T2, T3> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2, T3>(int eventId, Action<T1, T2, T3> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2, T3>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2, T3>(int event_name_hash, T1 p, T2 p2, T3 p3)
-            => GetDefault(event_name_hash)?.Send<T1, T2, T3>(event_name_hash, p, p2, p3);
+        public static void TriggerEvent<T1, T2, T3>(int eventId, T1 p, T2 p2, T3 p3)
+            => GetDefault(eventId)?.Send<T1, T2, T3>(eventId, p, p2, p3);
 
-        public static void TriggerEventAll<T1, T2, T3>(int event_name_hash, T1 p1, T2 p2, T3 p3)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3>(event_name_hash, p1, p2, p3);
+        public static void TriggerEventAll<T1, T2, T3>(int eventId, T1 p1, T2 p2, T3 p3)
+            => GetDefault(eventId)?.SendAll<T1, T2, T3>(eventId, p1, p2, p3);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4>(int event_name_hash, Action<T1, T2, T3, T4> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4>(int eventId, Action<T1, T2, T3, T4> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2, T3, T4>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4>(int event_name_hash, Action<T1, T2, T3, T4> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2, T3, T4>(int eventId, Action<T1, T2, T3, T4> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2, T3, T4>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4)
-            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4>(event_name_hash, p, p2, p3, p4);
+        public static void TriggerEvent<T1, T2, T3, T4>(int eventId, T1 p, T2 p2, T3 p3, T4 p4)
+            => GetDefault(eventId)?.Send<T1, T2, T3, T4>(eventId, p, p2, p3, p4);
 
-        public static void TriggerEventAll<T1, T2, T3, T4>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4>(event_name_hash, p1, p2, p3, p4);
+        public static void TriggerEventAll<T1, T2, T3, T4>(int eventId, T1 p1, T2 p2, T3 p3, T4 p4)
+            => GetDefault(eventId)?.SendAll<T1, T2, T3, T4>(eventId, p1, p2, p3, p4);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5>(int event_name_hash, Action<T1, T2, T3, T4, T5> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5>(int eventId, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2, T3, T4, T5>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5>(int event_name_hash, Action<T1, T2, T3, T4, T5> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5>(int eventId, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2, T3, T4, T5>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
-            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5>(event_name_hash, p, p2, p3, p4, p5);
+        public static void TriggerEvent<T1, T2, T3, T4, T5>(int eventId, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(eventId)?.Send<T1, T2, T3, T4, T5>(eventId, p, p2, p3, p4, p5);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5>(event_name_hash, p1, p2, p3, p4, p5);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5>(int eventId, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(eventId)?.SendAll<T1, T2, T3, T4, T5>(eventId, p1, p2, p3, p4, p5);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5, T6>(int eventId, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5, T6>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(int eventId, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2, T3, T4, T5, T6>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
-            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5, T6>(event_name_hash, p, p2, p3, p4, p5, p6);
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(int eventId, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(eventId)?.Send<T1, T2, T3, T4, T5, T6>(eventId, p, p2, p3, p4, p5, p6);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5, T6>(event_name_hash, p1, p2, p3, p4, p5, p6);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(int eventId, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(eventId)?.SendAll<T1, T2, T3, T4, T5, T6>(eventId, p1, p2, p3, p4, p5, p6);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6, T7> callback)
-            => GetDefault(event_name_hash, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5, T6, T7>(int eventId, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(eventId, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(eventId, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, Action<T1, T2, T3, T4, T5, T6, T7> callback)
-            => GetDefault(event_name_hash)?.UnRegister<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(int eventId, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(eventId)?.Unregister<T1, T2, T3, T4, T5, T6, T7>(eventId, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
-            => GetDefault(event_name_hash)?.Send<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, p, p2, p3, p4, p5, p6, p7);
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(int eventId, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(eventId)?.Send<T1, T2, T3, T4, T5, T6, T7>(eventId, p, p2, p3, p4, p5, p6, p7);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(int event_name_hash, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
-            => GetDefault(event_name_hash)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(event_name_hash, p1, p2, p3, p4, p5, p6, p7);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(int eventId, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(eventId)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(eventId, p1, p2, p3, p4, p5, p6, p7);
 
         #endregion
 
         #region string 键
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent(string event_name, Action callback)
-            => GetDefault(event_name, callback != null)?.Register(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent(string eventName, Action callback)
+            => GetDefault(eventName, callback != null)?.Register(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent(string event_name, Action callback)
-            => GetDefault(event_name)?.UnRegister(event_name, callback);
+        public static void RemoveEvent(string eventName, Action callback)
+            => GetDefault(eventName)?.Unregister(eventName, callback);
 
-        public static void TriggerEvent(string event_name)
-            => GetDefault(event_name)?.Send(event_name);
+        public static void TriggerEvent(string eventName)
+            => GetDefault(eventName)?.Send(eventName);
 
-        public static void TriggerEventAll(string event_name)
-            => GetDefault(event_name)?.SendAll(event_name);
+        public static void TriggerEventAll(string eventName)
+            => GetDefault(eventName)?.SendAll(eventName);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1>(string event_name, Action<T1> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1>(string eventName, Action<T1> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1>(string event_name, Action<T1> callback)
-            => GetDefault(event_name)?.UnRegister<T1>(event_name, callback);
+        public static void RemoveEvent<T1>(string eventName, Action<T1> callback)
+            => GetDefault(eventName)?.Unregister<T1>(eventName, callback);
 
-        public static void TriggerEvent<T1>(string event_name, T1 p)
-            => GetDefault(event_name)?.Send<T1>(event_name, p);
+        public static void TriggerEvent<T1>(string eventName, T1 p)
+            => GetDefault(eventName)?.Send<T1>(eventName, p);
 
-        public static void TriggerEventAll<T1>(string event_name, T1 p1)
-            => GetDefault(event_name)?.SendAll<T1>(event_name, p1);
+        public static void TriggerEventAll<T1>(string eventName, T1 p1)
+            => GetDefault(eventName)?.SendAll<T1>(eventName, p1);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2>(string event_name, Action<T1, T2> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2>(string eventName, Action<T1, T2> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2>(string event_name, Action<T1, T2> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2>(event_name, callback);
+        public static void RemoveEvent<T1, T2>(string eventName, Action<T1, T2> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2>(string event_name, T1 p, T2 p2)
-            => GetDefault(event_name)?.Send<T1, T2>(event_name, p, p2);
+        public static void TriggerEvent<T1, T2>(string eventName, T1 p, T2 p2)
+            => GetDefault(eventName)?.Send<T1, T2>(eventName, p, p2);
 
-        public static void TriggerEventAll<T1, T2>(string event_name, T1 p1, T2 p2)
-            => GetDefault(event_name)?.SendAll<T1, T2>(event_name, p1, p2);
+        public static void TriggerEventAll<T1, T2>(string eventName, T1 p1, T2 p2)
+            => GetDefault(eventName)?.SendAll<T1, T2>(eventName, p1, p2);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3>(string event_name, Action<T1, T2, T3> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3>(string eventName, Action<T1, T2, T3> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2, T3>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3>(string event_name, Action<T1, T2, T3> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2, T3>(event_name, callback);
+        public static void RemoveEvent<T1, T2, T3>(string eventName, Action<T1, T2, T3> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2, T3>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2, T3>(string event_name, T1 p, T2 p2, T3 p3)
-            => GetDefault(event_name)?.Send<T1, T2, T3>(event_name, p, p2, p3);
+        public static void TriggerEvent<T1, T2, T3>(string eventName, T1 p, T2 p2, T3 p3)
+            => GetDefault(eventName)?.Send<T1, T2, T3>(eventName, p, p2, p3);
 
-        public static void TriggerEventAll<T1, T2, T3>(string event_name, T1 p1, T2 p2, T3 p3)
-            => GetDefault(event_name)?.SendAll<T1, T2, T3>(event_name, p1, p2, p3);
+        public static void TriggerEventAll<T1, T2, T3>(string eventName, T1 p1, T2 p2, T3 p3)
+            => GetDefault(eventName)?.SendAll<T1, T2, T3>(eventName, p1, p2, p3);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4>(string event_name, Action<T1, T2, T3, T4> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4>(string eventName, Action<T1, T2, T3, T4> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2, T3, T4>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4>(string event_name, Action<T1, T2, T3, T4> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4>(event_name, callback);
+        public static void RemoveEvent<T1, T2, T3, T4>(string eventName, Action<T1, T2, T3, T4> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2, T3, T4>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4>(string event_name, T1 p, T2 p2, T3 p3, T4 p4)
-            => GetDefault(event_name)?.Send<T1, T2, T3, T4>(event_name, p, p2, p3, p4);
+        public static void TriggerEvent<T1, T2, T3, T4>(string eventName, T1 p, T2 p2, T3 p3, T4 p4)
+            => GetDefault(eventName)?.Send<T1, T2, T3, T4>(eventName, p, p2, p3, p4);
 
-        public static void TriggerEventAll<T1, T2, T3, T4>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4)
-            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4>(event_name, p1, p2, p3, p4);
+        public static void TriggerEventAll<T1, T2, T3, T4>(string eventName, T1 p1, T2 p2, T3 p3, T4 p4)
+            => GetDefault(eventName)?.SendAll<T1, T2, T3, T4>(eventName, p1, p2, p3, p4);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5>(string event_name, Action<T1, T2, T3, T4, T5> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5>(string eventName, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2, T3, T4, T5>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5>(string event_name, Action<T1, T2, T3, T4, T5> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5>(event_name, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5>(string eventName, Action<T1, T2, T3, T4, T5> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2, T3, T4, T5>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
-            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5>(event_name, p, p2, p3, p4, p5);
+        public static void TriggerEvent<T1, T2, T3, T4, T5>(string eventName, T1 p, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(eventName)?.Send<T1, T2, T3, T4, T5>(eventName, p, p2, p3, p4, p5);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
-            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5>(event_name, p1, p2, p3, p4, p5);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5>(string eventName, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5)
+            => GetDefault(eventName)?.SendAll<T1, T2, T3, T4, T5>(eventName, p1, p2, p3, p4, p5);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6>(string event_name, Action<T1, T2, T3, T4, T5, T6> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5, T6>(string eventName, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2, T3, T4, T5, T6>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(string event_name, Action<T1, T2, T3, T4, T5, T6> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5, T6>(event_name, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6>(string eventName, Action<T1, T2, T3, T4, T5, T6> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2, T3, T4, T5, T6>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
-            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5, T6>(event_name, p, p2, p3, p4, p5, p6);
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6>(string eventName, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(eventName)?.Send<T1, T2, T3, T4, T5, T6>(eventName, p, p2, p3, p4, p5, p6);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
-            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5, T6>(event_name, p1, p2, p3, p4, p5, p6);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6>(string eventName, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6)
+            => GetDefault(eventName)?.SendAll<T1, T2, T3, T4, T5, T6>(eventName, p1, p2, p3, p4, p5, p6);
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 方法代替!")]
-        public static IUnRegister AddEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, Action<T1, T2, T3, T4, T5, T6, T7> callback)
-            => GetDefault(event_name, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(event_name, callback) ?? EmptyUnRegister.Instance;
+        public static IUnregister AddEvent<T1, T2, T3, T4, T5, T6, T7>(string eventName, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(eventName, callback != null)?.Register<T1, T2, T3, T4, T5, T6, T7>(eventName, callback) ?? EmptyUnregister.Instance;
 
         [WarnInClasses(typeof(View), "推荐使用 View 中的 RegisterEvent 来注册事件,通过该方法注册事件会自动移除!")]
-        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, Action<T1, T2, T3, T4, T5, T6, T7> callback)
-            => GetDefault(event_name)?.UnRegister<T1, T2, T3, T4, T5, T6, T7>(event_name, callback);
+        public static void RemoveEvent<T1, T2, T3, T4, T5, T6, T7>(string eventName, Action<T1, T2, T3, T4, T5, T6, T7> callback)
+            => GetDefault(eventName)?.Unregister<T1, T2, T3, T4, T5, T6, T7>(eventName, callback);
 
-        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(string event_name, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
-            => GetDefault(event_name)?.Send<T1, T2, T3, T4, T5, T6, T7>(event_name, p, p2, p3, p4, p5, p6, p7);
+        public static void TriggerEvent<T1, T2, T3, T4, T5, T6, T7>(string eventName, T1 p, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(eventName)?.Send<T1, T2, T3, T4, T5, T6, T7>(eventName, p, p2, p3, p4, p5, p6, p7);
 
-        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(string event_name, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
-            => GetDefault(event_name)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(event_name, p1, p2, p3, p4, p5, p6, p7);
+        public static void TriggerEventAll<T1, T2, T3, T4, T5, T6, T7>(string eventName, T1 p1, T2 p2, T3 p3, T4 p4, T5 p5, T6 p6, T7 p7)
+            => GetDefault(eventName)?.SendAll<T1, T2, T3, T4, T5, T6, T7>(eventName, p1, p2, p3, p4, p5, p6, p7);
 
         #endregion
 
@@ -258,15 +258,18 @@ namespace YLFramework.Core
         /// </summary>
         public static void RemoveAllEvent()
         {
-            if (EventBus.TryGetDefault(out var bus)) bus.ClearKeys();
+            if (EventBus.TryGetDefault(out var bus))
+            {
+                bus.ClearKeys();
+            }
         }
 
         /// <summary>终结并删除 Default 中此完整 string 键及在途快照，允许重新绑定签名；旧 token 失效。</summary>
-        public static void RemoveAllEvent(string event_name)
-            => GetDefault(event_name)?.RemoveKey(event_name);
+        public static void RemoveAllEvent(string eventName)
+            => GetDefault(eventName)?.RemoveKey(eventName);
 
         /// <summary>终结并删除 Default 中此 int 键及在途快照，允许重新绑定签名；旧 token 失效。</summary>
-        public static void RemoveAllEvent(int event_name_hash)
-            => GetDefault(event_name_hash)?.RemoveKey(event_name_hash);
+        public static void RemoveAllEvent(int eventId)
+            => GetDefault(eventId)?.RemoveKey(eventId);
     }
 }

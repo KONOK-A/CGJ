@@ -399,13 +399,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   settings:
-    Layer: 0
-    Priority: 0
-    Modal: 0
-    CoversRoot: 0
-    ParticipatesInTop: 1
-    InstanceMode: 0
-    CacheOnClose: 1
+    layer: 0
+    priority: 0
+    modal: 0
+    coversRoot: 0
+    participatesInTop: 1
+    instanceMode: 0
+    cacheOnClose: 1
   selector: {fileID: 3265877842729904943}
   closeButton: {fileID: 4581110874883613210}
 --- !u!1 &5689308771819569600

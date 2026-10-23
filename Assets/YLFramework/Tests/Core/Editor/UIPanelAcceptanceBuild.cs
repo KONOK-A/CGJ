@@ -18,13 +18,29 @@ namespace YLFramework.Editor
         public static void BuildWindows64IL2CPP()
         {
             if (Application.isPlaying || EditorApplication.isCompiling || PrefabStageUtility.GetCurrentPrefabStage() != null)
+            {
                 throw new InvalidOperationException("退出 Play/Prefab Stage 并等待编译完成后构建，不保存用户场景。");
+            }
+
             for (int i = 0; i < EditorSceneManager.sceneCount; i++)
-                if (EditorSceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("存在未保存场景，验收构建不会替用户保存。");
-            if (!AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath)) throw new InvalidOperationException("缺少正式 UIAcceptance 场景。");
+            {
+                if (EditorSceneManager.GetSceneAt(i).isDirty)
+                {
+                    throw new InvalidOperationException("存在未保存场景，验收构建不会替用户保存。");
+                }
+            }
+
+            if (!AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath))
+            {
+                throw new InvalidOperationException("缺少正式 UIAcceptance 场景。");
+            }
+
             var basic = AssetDatabase.LoadAssetAtPath<GameObject>(UIPanelAssetMigration.BaseRootPath);
             if (!basic || !basic.GetComponent<Core.UIRootContext>() || !AssetDatabase.LoadAssetAtPath<GameObject>(UIPanelAssetMigration.TipsVariantPath))
+            {
                 throw new InvalidOperationException("先完成显式资产迁移及导入核验，再构建 IL2CPP 关口。");
+            }
+
             var moduleType = Type.GetType("UnityEngine.InputSystem.UI.InputSystemUIInputModule, Unity.InputSystem", true);
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(moduleType.Assembly);
             Debug.Log("UI Panel 实际加载 Input System：" + (package == null ? moduleType.Assembly.FullName : package.name + "@" + package.version));
@@ -37,9 +53,18 @@ namespace YLFramework.Editor
                 PlayerSettings.SetManagedStrippingLevel(target, ManagedStrippingLevel.Medium);
                 var output = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/UI.Panel.IL2CPP/UIAcceptance.exe"));
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
-                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { ScenePath }, target = BuildTarget.StandaloneWindows64,
-                    locationPathName = output, options = BuildOptions.Development });
-                if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("IL2CPP 构建未成功：" + report.summary.result);
+                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = new[] { ScenePath },
+                    target = BuildTarget.StandaloneWindows64,
+                    locationPathName = output,
+                    options = BuildOptions.Development
+                });
+                if (report.summary.result != BuildResult.Succeeded)
+                {
+                    throw new InvalidOperationException("IL2CPP 构建未成功：" + report.summary.result);
+                }
+
                 Debug.Log("仅完成构建，尚未运行或验收：" + output + "。运行默认 UI 场景并检查退出、原生捕获门标记及无相关异常。");
             }
             finally

@@ -11,7 +11,9 @@ using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.DataAssets
 {
-    public sealed class DataAssetSingletonFixture : SingletonScriptableObjectConfigs<DataAssetSingletonFixture> { }
+    public sealed class DataAssetSingletonFixture : SingletonScriptableObjectConfigs<DataAssetSingletonFixture>
+    {
+    }
 
     public class DataAssetResourceTests
     {
@@ -29,7 +31,9 @@ namespace YLFramework.Tests.DataAssets
             internal Action OnLoad;
             internal int Releases;
             internal readonly List<Operation> Operations = new List<Operation>();
-            public void Validate(ResourceCatalogEntry entry) { }
+            public void Validate(ResourceCatalogEntry entry)
+            {
+            }
             public ResourceSourceResult Load(ResourceCatalogEntry entry, Type type)
             {
                 OnLoad?.Invoke();
@@ -40,153 +44,179 @@ namespace YLFramework.Tests.DataAssets
                 OnLoad?.Invoke();
                 var operation = new Operation();
                 Operations.Add(operation);
-                if (Immediate) operation.Finish(Asset);
+                if (Immediate)
+                {
+                    operation.Finish(Asset);
+                }
+
                 return operation;
             }
             public void Release(Object asset) => Releases++;
         }
 
-        private Source source;
-        private ScriptableObjectConfigs root;
-        private ScriptableObjectData child;
-        private ResourceSystem resource;
-        private readonly List<IDisposable> owned = new List<IDisposable>();
-        private readonly ResourceAddress address = new ResourceAddress("data-assets", "items");
+        private Source _source;
+        private ScriptableObjectConfigs _root;
+        private ScriptableObjectData _child;
+        private ResourceSystem _resource;
+        private readonly List<IDisposable> _owned = new List<IDisposable>();
+        private readonly ResourceAddress _address = new ResourceAddress("data-assets", "items");
 
         [SetUp]
         public void SetUp()
         {
             Assert.That(ResourceSystem.Current, Is.Null, "Do not take over another Resource authority.");
             Assert.That(ScriptableObjectManager.RegistrationCount, Is.Zero, "Do not clear another owner's registrations.");
-            root = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
-            root.name = "DataAssets-Owned-Items";
-            child = ScriptableObject.CreateInstance<ScriptableObjectData>();
-            child.id = 17;
-            child.config_name = "Potion";
-            child.parent = root;
-            root.configs.Add(child);
-            source = new Source { Asset = root };
+            _root = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
+            _root.name = "DataAssets-Owned-Items";
+            _child = ScriptableObject.CreateInstance<ScriptableObjectData>();
+            _child.id = 17;
+            _child.configName = "Potion";
+            _child.parent = _root;
+            _root.configs.Add(_child);
+            _source = new Source { Asset = _root };
         }
 
         private ResourceSystem Initialize(Type type = null)
         {
             var config = new ResourceConfiguration(new[] { new ResourceCatalog("data-assets", new[]
             {
-                new ResourceCatalogEntry("items", address, new ResourceLocation(source.Id, "controlled", type ?? typeof(ScriptableObjectConfigs)))
-            }) }, new IResourceSource[] { source });
+                new ResourceCatalogEntry("items", _address, new ResourceLocation(_source.Id, "controlled", type ?? typeof(ScriptableObjectConfigs)))
+            }) }, new IResourceSource[] { _source });
             using var initialized = ResourceSystem.InitializeAsync(config);
             Assert.That(initialized.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), initialized.Error?.ToString());
-            return resource = initialized.TakeResult();
+            return _resource = initialized.TakeResult();
         }
 
-        private T Own<T>(T value) where T : IDisposable { owned.Add(value); return value; }
+        private T Own<T>(T value) where T : IDisposable
+        {
+            _owned.Add(value);
+            return value;
+        }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            foreach (var owner in owned) owner.Dispose();
-            owned.Clear();
-            DataAssetSingletonFixture.Release();
-            foreach (var operation in source.Operations) if (!operation.IsDone) operation.Finish(source.Asset);
-            if (resource != null && resource.State == ResourceSystemState.Ready)
+            foreach (var owner in _owned)
             {
-                using var shutdown = resource.ShutdownAsync();
+                owner.Dispose();
+            }
+
+            _owned.Clear();
+            DataAssetSingletonFixture.Release();
+            foreach (var operation in _source.Operations)
+            {
+                if (!operation.IsDone)
+                {
+                    operation.Finish(_source.Asset);
+                }
+            }
+
+            if (_resource != null && _resource.State == ResourceSystemState.Ready)
+            {
+                using var shutdown = _resource.ShutdownAsync();
                 yield return shutdown;
                 Assert.That(shutdown.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), shutdown.Error?.ToString());
             }
-            if (source.Asset && !ReferenceEquals(source.Asset, root)) Object.DestroyImmediate(source.Asset);
-            Object.DestroyImmediate(child);
-            Object.DestroyImmediate(root);
+            if (_source.Asset && !ReferenceEquals(_source.Asset, _root))
+            {
+                Object.DestroyImmediate(_source.Asset);
+            }
+
+            Object.DestroyImmediate(_child);
+            Object.DestroyImmediate(_root);
             Assert.That(ScriptableObjectManager.RegistrationCount, Is.Zero);
         }
 
         [Test]
         public void TwoOwnersKeepRootAndChildAliveUntilLastLeaseReturns()
         {
-            source.Immediate = true;
+            _source.Immediate = true;
             var system = Initialize();
-            var first = Own(ScriptableObjectManager.LoadAsync(system, address));
-            var second = Own(ScriptableObjectManager.LoadAsync(system, address));
+            var first = Own(ScriptableObjectManager.LoadAsync(system, _address));
+            var second = Own(ScriptableObjectManager.LoadAsync(system, _address));
             Assert.That(first.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
-            Assert.That(ScriptableObjectManager.GetConfig(root.name).GetScriptableObjectData(17), Is.SameAs(child));
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name).GetScriptableObjectData(17), Is.SameAs(_child));
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.EqualTo(2));
             first.Dispose();
-            Assert.That(second.Asset, Is.SameAs(root));
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.SameAs(root));
-            Assert.That(source.Releases, Is.Zero);
+            Assert.That(second.Asset, Is.SameAs(_root));
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.SameAs(_root));
+            Assert.That(_source.Releases, Is.Zero);
             second.Dispose();
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.Null);
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
-            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(_source.Releases, Is.EqualTo(1));
         }
 
         [Test]
         public void ClosingBeforeCompletionCannotPublishLateRoot()
         {
             var system = Initialize();
-            var load = Own(ScriptableObjectManager.LoadAsync(system, address));
+            var load = Own(ScriptableObjectManager.LoadAsync(system, _address));
             load.Dispose();
             Assert.That(load.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
-            source.Operations[0].Finish(root);
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
+            _source.Operations[0].Finish(_root);
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.Null);
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
-            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(_source.Releases, Is.EqualTo(1));
         }
 
         [Test]
         public void ReentrantCloseDuringAsyncStartReleasesUnclaimedImmediateResult()
         {
-            source.Immediate = true;
-            source.OnLoad = ScriptableObjectManager.Clear;
+            _source.Immediate = true;
+            _source.OnLoad = ScriptableObjectManager.Clear;
             var system = Initialize();
-            var load = Own(ScriptableObjectManager.LoadAsync(system, address));
+            var load = Own(ScriptableObjectManager.LoadAsync(system, _address));
             Assert.That(load.IsDisposed, Is.True);
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.Null);
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
-            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(_source.Releases, Is.EqualTo(1));
         }
 
         [Test]
         public void ReentrantCloseDuringSynchronousLoadCannotRegisterAfterClear()
         {
-            source.OnLoad = ScriptableObjectManager.Clear;
+            _source.OnLoad = ScriptableObjectManager.Clear;
             var system = Initialize();
-            Assert.Throws<OperationCanceledException>(() => ScriptableObjectManager.Load(system, address));
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
+            Assert.Throws<OperationCanceledException>(() => ScriptableObjectManager.Load(system, _address));
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.Null);
             Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
-            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(_source.Releases, Is.EqualTo(1));
         }
 
         [Test]
         public void DuplicateRootNameFailureReleasesOnlyRejectedLoad()
         {
             var original = ScriptableObject.CreateInstance<ScriptableObjectConfigs>();
-            original.name = root.name;
+            original.name = _root.name;
             try
             {
                 using var registered = ScriptableObjectManager.AddConfig(original);
-                source.Immediate = true;
+                _source.Immediate = true;
                 var system = Initialize();
-                var rejected = Own(ScriptableObjectManager.LoadAsync(system, address));
+                var rejected = Own(ScriptableObjectManager.LoadAsync(system, _address));
                 Assert.That(rejected.Status, Is.EqualTo(ResourceRequestStatus.Failed));
                 Assert.That(rejected.Error, Is.InstanceOf<InvalidOperationException>());
-                Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.SameAs(original));
+                Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.SameAs(original));
                 Assert.That(system.GetDiagnosticsSnapshot().LeaseCount, Is.Zero);
-                Assert.That(source.Releases, Is.EqualTo(1));
+                Assert.That(_source.Releases, Is.EqualTo(1));
             }
-            finally { Object.DestroyImmediate(original); }
+            finally
+            {
+                Object.DestroyImmediate(original);
+            }
         }
 
         [Test]
         public void RemovingRenamedRootByReferenceReleasesOriginalRegistrationAndLease()
         {
             var system = Initialize();
-            var owner = Own(ScriptableObjectManager.Load(system, address));
-            root.name = "Renamed";
-            ScriptableObjectManager.RemoveConfig(root);
+            var owner = Own(ScriptableObjectManager.Load(system, _address));
+            _root.name = "Renamed";
+            ScriptableObjectManager.RemoveConfig(_root);
             Assert.That(owner.IsDisposed, Is.True);
             Assert.That(ScriptableObjectManager.GetConfig("DataAssets-Owned-Items"), Is.Null);
-            Assert.That(source.Releases, Is.EqualTo(1));
+            Assert.That(_source.Releases, Is.EqualTo(1));
         }
 
         [Test]
@@ -196,34 +226,37 @@ namespace YLFramework.Tests.DataAssets
             otherRoot.name = "DataAssets-Owned-Other";
             try
             {
-                var first = Own(ScriptableObjectManager.AddConfig(root));
-                var second = Own(ScriptableObjectManager.AddConfig(root));
+                var first = Own(ScriptableObjectManager.AddConfig(_root));
+                var second = Own(ScriptableObjectManager.AddConfig(_root));
                 using var other = ScriptableObjectManager.AddConfig(otherRoot);
-                var hash = ScriptableObjectManager.StringToHash(root.name);
+                var hash = ScriptableObjectManager.StringToHash(_root.name);
                 Assert.That(hash, Is.Not.EqualTo(ScriptableObjectManager.StringToHash(otherRoot.name)), "Fixture roots must have distinct hashes.");
                 ScriptableObjectManager.RemoveConfig(hash);
                 Assert.That(first.IsDisposed && second.IsDisposed, Is.True);
-                Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.Null);
+                Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.Null);
                 Assert.That(other.Config, Is.SameAs(otherRoot));
                 Assert.That(ScriptableObjectManager.RegistrationCount, Is.EqualTo(1));
             }
-            finally { Object.DestroyImmediate(otherRoot); }
+            finally
+            {
+                Object.DestroyImmediate(otherRoot);
+            }
         }
 
         [Test]
         public void ClearCancelsPendingSingletonAndAllowsExplicitReload()
         {
-            source.Asset = ScriptableObject.CreateInstance<DataAssetSingletonFixture>();
+            _source.Asset = ScriptableObject.CreateInstance<DataAssetSingletonFixture>();
             var system = Initialize(typeof(DataAssetSingletonFixture));
-            var pending = Own(DataAssetSingletonFixture.LoadAsync(system, address));
-            Assert.Throws<InvalidOperationException>(() => DataAssetSingletonFixture.LoadAsync(system, address));
+            var pending = Own(DataAssetSingletonFixture.LoadAsync(system, _address));
+            Assert.Throws<InvalidOperationException>(() => DataAssetSingletonFixture.LoadAsync(system, _address));
             ScriptableObjectManager.Clear();
-            source.Operations[0].Finish(source.Asset);
+            _source.Operations[0].Finish(_source.Asset);
             Assert.That(pending.IsDisposed, Is.True);
             Assert.That(DataAssetSingletonFixture.Instance, Is.Null);
-            source.Immediate = true;
-            var replacement = Own(DataAssetSingletonFixture.LoadAsync(system, address));
-            Assert.That(DataAssetSingletonFixture.Instance, Is.SameAs(source.Asset));
+            _source.Immediate = true;
+            var replacement = Own(DataAssetSingletonFixture.LoadAsync(system, _address));
+            Assert.That(DataAssetSingletonFixture.Instance, Is.SameAs(_source.Asset));
             DataAssetSingletonFixture.Release();
             Assert.That(replacement.IsDisposed, Is.True);
             Assert.That(DataAssetSingletonFixture.Instance, Is.Null);
@@ -234,14 +267,18 @@ namespace YLFramework.Tests.DataAssets
         public void ExplicitConsecutiveResourceSessionsDoNotReuseDisposedRegistrations()
         {
             var first = Initialize();
-            var firstOwner = Own(ScriptableObjectManager.Load(first, address));
+            var firstOwner = Own(ScriptableObjectManager.Load(first, _address));
             firstOwner.Dispose();
-            using (var shutdown = first.ShutdownAsync()) Assert.That(shutdown.TakeResult(), Is.True);
+            using (var shutdown = first.ShutdownAsync())
+            {
+                Assert.That(shutdown.TakeResult(), Is.True);
+            }
+
             var second = Initialize();
-            using var secondOwner = ScriptableObjectManager.Load(second, address);
-            Assert.That(secondOwner.Config, Is.SameAs(root));
+            using var secondOwner = ScriptableObjectManager.Load(second, _address);
+            Assert.That(secondOwner.Config, Is.SameAs(_root));
             firstOwner.Dispose();
-            Assert.That(ScriptableObjectManager.GetConfig(root.name), Is.SameAs(root));
+            Assert.That(ScriptableObjectManager.GetConfig(_root.name), Is.SameAs(_root));
         }
     }
 }

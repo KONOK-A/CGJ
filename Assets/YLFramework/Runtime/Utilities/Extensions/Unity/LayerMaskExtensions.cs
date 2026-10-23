@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-    public static class LayerMaskExtensions  
+    public static class LayerMaskExtensions
     {
         // Fix编码
         /// <summary>
@@ -14,9 +14,9 @@ namespace YLFramework.Utilities.Extensions
         /// <param name="layerMask"></param>
         /// <param name="layerName">层级名称</param>
         /// <param name="open"></param>
-        public static void Set(this ref LayerMask layerMask, string layerName,bool open)
-        { 
-            layerMask.Set(LayerMask.NameToLayer(layerName), open); 
+        public static void Set(this ref LayerMask layerMask, string layerName, bool open)
+        {
+            layerMask.Set(LayerMask.NameToLayer(layerName), open);
         }
 
         /// <summary>
@@ -46,10 +46,10 @@ namespace YLFramework.Utilities.Extensions
         /// </summary>
         /// <param name="layerMask"></param>
         /// <param name="layer"></param>
-        public static void Physics2DSetting(this ref LayerMask layerMask, int layer) 
+        public static void Physics2DSetting(this ref LayerMask layerMask, int layer)
         {
             ValidateLayer(layer);
-             
+
             List<string> layers = new List<string>();
 
             // 遍历所有层级
@@ -57,14 +57,22 @@ namespace YLFramework.Utilities.Extensions
             {
                 string name = LayerMask.LayerToName(i);
                 // 跳过空的层级
-                if (string.IsNullOrEmpty(name)) continue;
+                if (string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+
                 bool ignore = Physics2D.GetIgnoreLayerCollision(layer, i);
                 // 跳过不能碰撞的层级
-                if (ignore) continue;
+                if (ignore)
+                {
+                    continue;
+                }
+
                 layers.Add(name);
             }
 
-            layerMask = LayerMask.GetMask(layers.ToArray()); 
+            layerMask = LayerMask.GetMask(layers.ToArray());
         }
 
         /// <summary>
@@ -83,10 +91,18 @@ namespace YLFramework.Utilities.Extensions
             {
                 string name = LayerMask.LayerToName(i);
                 // 跳过空的层级
-                if (string.IsNullOrEmpty(name)) continue;
+                if (string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+
                 bool ignore = Physics.GetIgnoreLayerCollision(layer, i);
                 // 跳过不能碰撞的层级
-                if (ignore) continue;
+                if (ignore)
+                {
+                    continue;
+                }
+
                 layers.Add(name);
             }
 
@@ -96,7 +112,9 @@ namespace YLFramework.Utilities.Extensions
         private static void ValidateLayer(int layer)
         {
             if (layer < 0 || layer > 31)
+            {
                 throw new ArgumentOutOfRangeException(nameof(layer), layer, "层号必须在 0..31 范围内。");
+            }
         }
 
     }

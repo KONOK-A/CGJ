@@ -1,7 +1,7 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using YLFramework.Foundation;
 
 namespace YLFramework.SkillSystem
 {
@@ -30,23 +30,23 @@ namespace YLFramework.SkillSystem
 
         #region 字段
         // 能够同时释放的技能
-        private List<int> canbe_released_at_the_same_time = new List<int>();
+        private List<int> _simultaneousSkillIds = new List<int>();
         // 是否能够主动取消
-        private bool active_cancellation = false;
+        private bool _allowCancellation = false;
 
 
-        private float fixedTimer = 0;
+        private float _fixedTimer = 0;
 
 
-        private bool isCooldown = true;
+        private bool _isCooldownComplete = true;
 
         private float _duration;
 
-        private float _cooling_time;
+        private float _cooldownSeconds;
         private int _version;
-        private bool _removing;
+        private bool _isRemoving;
         internal int Version => _version;
-        internal bool IsAttached => !_removing && Releaser != null;
+        internal bool IsAttached => !_isRemoving && Releaser != null;
 
         #endregion
 
@@ -55,32 +55,46 @@ namespace YLFramework.SkillSystem
         /// <summary>
         /// 技能释放者(装备当前技能的游戏角色对象)
         /// </summary>
-        public IEquippableSkill Releaser { get; set; }
+        public IEquippableSkill Releaser
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 技能配置数据
         /// </summary>
-        public SkillConfigData SkillData { get;internal set; }
+        public SkillConfigData SkillData
+        {
+            get; internal set;
+        }
 
         /// <summary>
         /// 技能是否冷却完成(如果想要重置技能cd,可以直接把该属性设置为true)
         /// </summary>
         public bool IsCooldown
         {
-            get {
-                return isCooldown;
+            get
+            {
+                return _isCooldownComplete;
             }
             set
             {
-                if (isCooldown == value) return;
-                isCooldown = value;
+                if (_isCooldownComplete == value)
+                {
+                    return;
+                }
+
+                _isCooldownComplete = value;
                 CooldownTimer = value ? Math.Max(0, CoolingTime) : 0;
 
-                if (isCooldown)
+                if (_isCooldownComplete)
                 {
                     var version = _version;
-                    onCooldownCompleteCallback?.Invoke(this);
-                    if (version == _version) OnCooldownComplete();
+                    CooldownCompleted?.Invoke(this);
+                    if (version == _version)
+                    {
+                        OnCooldownComplete();
+                    }
                 }
 
             }
@@ -89,7 +103,10 @@ namespace YLFramework.SkillSystem
         /// <summary>
         /// 已冷却的时间
         /// </summary>
-        public float CooldownTimer { get; set; }
+        public float CooldownTimer
+        {
+            get; set;
+        }
 
         /// <summary>
         /// 冷却时间
@@ -98,23 +115,29 @@ namespace YLFramework.SkillSystem
         {
             get
             {
-                return _cooling_time;
+                return _cooldownSeconds;
             }
             set
             {
-                _cooling_time = value;
+                _cooldownSeconds = value;
             }
         }
 
         /// <summary>
         /// 是否正在释放中
         /// </summary>
-        public bool IsReleasing { get; protected set; }
+        public bool IsReleasing
+        {
+            get; protected set;
+        }
 
         /// <summary>
         /// 已释放的时间
         /// </summary>
-        public float ReleasedTimer { get; protected set; }
+        public float ReleasedTimer
+        {
+            get; protected set;
+        }
 
         /// <summary>
         /// 持续时间
@@ -125,7 +148,8 @@ namespace YLFramework.SkillSystem
             {
                 return _duration;
             }
-            set {
+            set
+            {
                 _duration = value;
             }
         }
@@ -137,7 +161,10 @@ namespace YLFramework.SkillSystem
         {
             get
             {
-                if (IsCooldown || CoolingTime <= 0) return 1;
+                if (IsCooldown || CoolingTime <= 0)
+                {
+                    return 1;
+                }
 
                 return Mathf.Clamp01(CooldownTimer / CoolingTime);
             }
@@ -152,7 +179,9 @@ namespace YLFramework.SkillSystem
             {
 
                 if (Duration == 0)
+                {
                     return 0;
+                }
 
                 return Mathf.Clamp01(ReleasedTimer / Duration);
             }
@@ -165,11 +194,11 @@ namespace YLFramework.SkillSystem
         {
             get
             {
-                return canbe_released_at_the_same_time;
+                return _simultaneousSkillIds;
             }
             set
             {
-                this.canbe_released_at_the_same_time = value;
+                this._simultaneousSkillIds = value;
             }
         }
 
@@ -180,11 +209,11 @@ namespace YLFramework.SkillSystem
         {
             get
             {
-                return active_cancellation;
+                return _allowCancellation;
             }
             set
             {
-                active_cancellation = value;
+                _allowCancellation = value;
             }
         }
 
@@ -195,20 +224,30 @@ namespace YLFramework.SkillSystem
         {
             get
             {
-                if (!IsAttached || !Releaser.IsCanRelease())
+                if (!IsAttached || !Releaser.CanRelease())
+                {
                     return ReleaseSkillStatus.ReleaserCannotRelease;
+                }
 
                 if (IsReleasing)
+                {
                     return ReleaseSkillStatus.Releasing;
+                }
 
                 if (!IsCooldown)
+                {
                     return ReleaseSkillStatus.InCooling;
+                }
 
-                if (!IsCanRelease())
+                if (!CanRelease())
+                {
                     return ReleaseSkillStatus.DonotMeetTheCondition;
+                }
 
                 if (!IsCanbeReleaseAtSameTime())
+                {
                     return ReleaseSkillStatus.OtherReleasing;
+                }
 
                 return ReleaseSkillStatus.Success;
             }
@@ -219,27 +258,27 @@ namespace YLFramework.SkillSystem
         #region 事件
 
         [Tooltip("开始冷却的事件回调")]
-        public Action<SkillBase> onStartCooldownCallback;
+        public Action<SkillBase> CooldownStarted;
 
         [Tooltip("冷却中的事件回调")]
-        public Action<SkillBase,float> onCoolingCallback;
+        public Action<SkillBase, float> Cooling;
 
         [Tooltip("冷却完成的事件回调")]
-        public Action<SkillBase> onCooldownCompleteCallback;
+        public Action<SkillBase> CooldownCompleted;
 
         [Tooltip("开始释放的事件回调")]
-        public Action<SkillBase> onStartReleaseCallback;
+        public Action<SkillBase> ReleaseStarted;
 
         [Tooltip("释放中的事件回调")]
-        public Action<SkillBase,float> onReleasingCallback;
+        public Action<SkillBase, float> Releasing;
 
         [Tooltip("释放完成的事件回调")]
-        public Action<SkillBase> onReleaseCompleteCallback;
+        public Action<SkillBase> ReleaseCompleted;
 
 
 
         [Tooltip("中断的事件回调")]
-        public Action<SkillBase> onInterruptCallback;
+        public Action<SkillBase> Interrupted;
 
         #endregion
 
@@ -249,23 +288,38 @@ namespace YLFramework.SkillSystem
 
         internal void Advance(float deltaTime)
         {
-            if (!IsAttached) return;
+            if (!IsAttached)
+            {
+                return;
+            }
+
             var version = _version;
             if (IsReleasing)
             {
                 // 释放
                 ReleasedTimer += deltaTime;
 
-                onReleasingCallback?.Invoke(this, ReleasingProgress);
-                if (version != _version || !IsAttached) return;
+                Releasing?.Invoke(this, ReleasingProgress);
+                if (version != _version || !IsAttached)
+                {
+                    return;
+                }
+
                 OnUpdate();
-                if (version != _version || !IsAttached) return;
+                if (version != _version || !IsAttached)
+                {
+                    return;
+                }
+
                 if (ReleasedTimer >= Duration && IsComplete())
                 {
                     ReleasedTimer = 0;
                     IsReleasing = false;
-                    onReleaseCompleteCallback?.Invoke(this);
-                    if (version != _version || !IsAttached) return;
+                    ReleaseCompleted?.Invoke(this);
+                    if (version != _version || !IsAttached)
+                    {
+                        return;
+                    }
                     // 释放结束
                     OnReleaseComplete();
                 }
@@ -279,16 +333,26 @@ namespace YLFramework.SkillSystem
                 {
                     if (CooldownTimer == 0)
                     {
-                        onStartCooldownCallback?.Invoke(this);
-                        if (version != _version || !IsAttached) return;
+                        CooldownStarted?.Invoke(this);
+                        if (version != _version || !IsAttached)
+                        {
+                            return;
+                        }
                     }
 
                     CooldownTimer += deltaTime;
-                    onCoolingCallback?.Invoke(this, CooldownProgress);
-                    if (version != _version || !IsAttached) return;
+                    Cooling?.Invoke(this, CooldownProgress);
+                    if (version != _version || !IsAttached)
+                    {
+                        return;
+                    }
                     // 冷却中
                     OnCooling();
-                    if (version != _version || !IsAttached) return;
+                    if (version != _version || !IsAttached)
+                    {
+                        return;
+                    }
+
                     if (CooldownTimer >= CoolingTime)
                     {
                         IsCooldown = true;
@@ -305,10 +369,12 @@ namespace YLFramework.SkillSystem
             // 这句代码是为了保证 FixedUpdate 和 Update 同步执行
             // 假如在释放技能的过程中游戏出现卡顿 导致技能执行的时间变长 FixedUpdate的调用就会变多
             // 导致表现的效果 和 不卡的时候有一定的差距
-            if (fixedTimer - ReleasedTimer > Time.fixedDeltaTime * 2)
+            if (_fixedTimer - ReleasedTimer > Time.fixedDeltaTime * 2)
+            {
                 return;
+            }
 
-            fixedTimer += Time.fixedDeltaTime;
+            _fixedTimer += Time.fixedDeltaTime;
             OnFixedUpdate();
         }
 
@@ -319,18 +385,23 @@ namespace YLFramework.SkillSystem
         public ReleaseSkillStatus Release()
         {
             if (ReleaseSkillStatus != ReleaseSkillStatus.Success)
+            {
                 return ReleaseSkillStatus;
+            }
 
             CooldownTimer = 0;
             IsCooldown = false;
             IsReleasing = true;
             ReleasedTimer = 0;
-            fixedTimer = 0;
+            _fixedTimer = 0;
             var version = _version;
             OnRelease();
-            if (version != _version || !IsAttached) return ReleaseSkillStatus.Success;
+            if (version != _version || !IsAttached)
+            {
+                return ReleaseSkillStatus.Success;
+            }
             // 触发事件
-            onStartReleaseCallback?.Invoke(this);
+            ReleaseStarted?.Invoke(this);
 
             return ReleaseSkillStatus.Success;
         }
@@ -341,7 +412,9 @@ namespace YLFramework.SkillSystem
         public void Cancel()
         {
             if (ActiveCancellation && IsReleasing)
+            {
                 Interrupt();
+            }
         }
 
         /// <summary>
@@ -349,15 +422,27 @@ namespace YLFramework.SkillSystem
         /// </summary>
         public void Interrupt()
         {
-            if (!IsReleasing) return;
+            if (!IsReleasing)
+            {
+                return;
+            }
+
             IsReleasing = false;
             ReleasedTimer = 0;
             var version = _version;
 
-            onInterruptCallback?.Invoke(this);
-            if (version != _version) return;
+            Interrupted?.Invoke(this);
+            if (version != _version)
+            {
+                return;
+            }
+
             OnInterrupt();
-            if (version != _version) return;
+            if (version != _version)
+            {
+                return;
+            }
+
             OnReleaseComplete();
         }
 
@@ -365,7 +450,7 @@ namespace YLFramework.SkillSystem
         /// 判断当前技能是否能够释放(默认:true,如果该技能在某种特殊情况下不能释放,可以重写此方法,返回false即可!)
         /// </summary>
         /// <returns></returns>
-        protected virtual bool IsCanRelease()
+        protected virtual bool CanRelease()
         {
 
             return true;
@@ -393,16 +478,24 @@ namespace YLFramework.SkillSystem
             foreach (var item in Releaser.Skills.Values)
             {
                 // 如果技能没在释放中 直接判断下一个
-                if (!item.IsReleasing) continue;
+                if (!item.IsReleasing)
+                {
+                    continue;
+                }
                 // 如果正在释放中的技能是自己 说明当前这个技能正在释放中 直接return false;
-                if (item.SkillData.id == this.SkillData.id) return false;
+                if (item.SkillData.id == this.SkillData.id)
+                {
+                    return false;
+                }
 
                 bool release = CanbeReleasedAtTheSameTime.Contains(item.SkillData.id);
                 release |= item.CanbeReleasedAtTheSameTime.Contains(SkillData.id);
 
                 // 如果不能同时释放 直接return false;
                 if (!release)
+                {
                     return false;
+                }
             }
 
             return true;
@@ -414,11 +507,13 @@ namespace YLFramework.SkillSystem
         /// </summary>
         public void ResetCanbeReleasedAtTheSameTime()
         {
-            if (canbe_released_at_the_same_time == null)
-                canbe_released_at_the_same_time = new List<int>();
+            if (_simultaneousSkillIds == null)
+            {
+                _simultaneousSkillIds = new List<int>();
+            }
 
-            canbe_released_at_the_same_time.Clear();
-            canbe_released_at_the_same_time.AddRange(SkillData.canbe_released_at_the_same_time);
+            _simultaneousSkillIds.Clear();
+            _simultaneousSkillIds.AddRange(SkillData.simultaneousSkillIds);
         }
 
         /// <summary>
@@ -426,53 +521,57 @@ namespace YLFramework.SkillSystem
         /// </summary>
         public void ResetActiveCancellation()
         {
-            ActiveCancellation = SkillData.active_cancellation;
+            ActiveCancellation = SkillData.allowCancellation;
         }
 
         internal void ResetData()
         {
             _version++;
-            _removing = false;
+            _isRemoving = false;
             _duration = SkillData.duration;
-            _cooling_time = SkillData.cooling_time;
+            _cooldownSeconds = SkillData.cooldownSeconds;
             ResetCanbeReleasedAtTheSameTime();
             ResetActiveCancellation();
-            isCooldown = true;
+            _isCooldownComplete = true;
             CooldownTimer = 0;
             IsReleasing = false;
             ReleasedTimer = 0;
-            fixedTimer = 0;
+            _fixedTimer = 0;
 
-            onStartCooldownCallback = null;
-            onCoolingCallback = null;
-            onCooldownCompleteCallback = null;
+            CooldownStarted = null;
+            Cooling = null;
+            CooldownCompleted = null;
 
-            onStartReleaseCallback = null;
-            onReleasingCallback = null;
-            onReleaseCompleteCallback = null;
+            ReleaseStarted = null;
+            Releasing = null;
+            ReleaseCompleted = null;
 
-            onInterruptCallback = null;
+            Interrupted = null;
         }
 
-        internal void BeginRemove() { _removing = true; _version++; }
+        internal void BeginRemove()
+        {
+            _isRemoving = true;
+            _version++;
+        }
 
         internal void ClearRuntime()
         {
             _version++;
-            _removing = true;
+            _isRemoving = true;
             Releaser = null;
             SkillData = null;
             IsReleasing = false;
-            isCooldown = true;
-            CooldownTimer = ReleasedTimer = fixedTimer = 0;
-            canbe_released_at_the_same_time.Clear();
-            onStartCooldownCallback = null;
-            onCoolingCallback = null;
-            onCooldownCompleteCallback = null;
-            onStartReleaseCallback = null;
-            onReleasingCallback = null;
-            onReleaseCompleteCallback = null;
-            onInterruptCallback = null;
+            _isCooldownComplete = true;
+            CooldownTimer = ReleasedTimer = _fixedTimer = 0;
+            _simultaneousSkillIds.Clear();
+            CooldownStarted = null;
+            Cooling = null;
+            CooldownCompleted = null;
+            ReleaseStarted = null;
+            Releasing = null;
+            ReleaseCompleted = null;
+            Interrupted = null;
         }
 
         #endregion
@@ -484,51 +583,71 @@ namespace YLFramework.SkillSystem
         /// <summary>
         /// 添加技能时调用
         /// </summary>
-        internal protected virtual void OnAdd() { }
+        internal protected virtual void OnAdd()
+        {
+        }
 
         /// <summary>
         /// 移除技能时调用
         /// </summary>
-        internal protected virtual void OnRemove() { }
+        internal protected virtual void OnRemove()
+        {
+        }
 
         /// <summary>
         /// 当技能释放的时候调用
         /// </summary>
-        protected virtual void OnRelease() { }
+        protected virtual void OnRelease()
+        {
+        }
 
         /// <summary>
         /// 当技能释放结束时调用(中断技能时也会触发该回调)
         /// </summary>
-        protected virtual void OnReleaseComplete() { }
+        protected virtual void OnReleaseComplete()
+        {
+        }
 
         /// <summary>
         /// 当技能正在冷却中调用
         /// </summary>
-        protected virtual void OnCooling() { }
+        protected virtual void OnCooling()
+        {
+        }
 
         /// <summary>
         /// 当技能冷却完成时调用
         /// </summary>
-        protected virtual void OnCooldownComplete() { }
+        protected virtual void OnCooldownComplete()
+        {
+        }
 
         /// <summary>
         /// 当技能中断时调用
         /// </summary>
-        protected virtual void OnInterrupt() { }
+        protected virtual void OnInterrupt()
+        {
+        }
 
         /// <summary>
         /// Update回调(仅在技能正在释放中时才会触发)
         /// </summary>
-        protected virtual void OnUpdate() { }
+        protected virtual void OnUpdate()
+        {
+        }
 
         /// <summary>
         /// FixedUpdate回调(仅在技能正在释放中时才会触发)
         /// </summary>
-        internal protected virtual void OnFixedUpdate() { }
+        internal protected virtual void OnFixedUpdate()
+        {
+        }
         /// <summary>
         /// LateUpdate回调(仅在技能正在释放中时才会触发)
         /// </summary>
-        internal protected virtual void OnLateUpdate() { }
+        internal protected virtual void OnLateUpdate()
+        {
+        }
 
 
         #endregion

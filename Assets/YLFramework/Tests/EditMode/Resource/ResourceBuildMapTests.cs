@@ -15,20 +15,24 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public class ResourceBuildMapTests
     {
-        private string folder;
+        private string _folder;
 
         [SetUp]
         public void SetUp()
         {
-            const string parent = "Assets/YLFramework/Tests/Fixtures";
-            if (!AssetDatabase.IsValidFolder(parent)) AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
-            folder = parent + "/Build82-" + Guid.NewGuid().ToString("N");
-            AssetDatabase.CreateFolder(Path.GetDirectoryName(folder).Replace('\\', '/'), Path.GetFileName(folder));
-            AssetDatabase.CreateFolder(folder, "Content");
+            const string Parent = "Assets/YLFramework/Tests/Fixtures";
+            if (!AssetDatabase.IsValidFolder(Parent))
+            {
+                AssetDatabase.CreateFolder("Assets/YLFramework/Tests", "Fixtures");
+            }
+
+            _folder = Parent + "/Build82-" + Guid.NewGuid().ToString("N");
+            AssetDatabase.CreateFolder(Path.GetDirectoryName(_folder).Replace('\\', '/'), Path.GetFileName(_folder));
+            AssetDatabase.CreateFolder(_folder, "Content");
         }
 
         [TearDown]
-        public void TearDown() => AssetDatabase.DeleteAsset(folder);
+        public void TearDown() => AssetDatabase.DeleteAsset(_folder);
 
         [Test]
         public void ExplicitGuidSelectionProducesProjectRelativeAddressesWithoutImporterMarks()
@@ -47,9 +51,21 @@ namespace YLFramework.Tests.ResourceBuild
         {
             string a;
             AssetDatabase.StartAssetEditing();
-            try { a = Text("a"); Text("b"); }
-            finally { AssetDatabase.StopAssetEditing(); }
-            var project = Project(new { Id = "files", Packing = 1, Selections = new[] { new { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content"), Extensions = new[] { ".txt" } } } });
+            try
+            {
+                a = Text("a");
+                Text("b");
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+            }
+            var project = Project(new
+            {
+                id = "files",
+                packing = 1,
+                selections = new[] { new { guid = AssetDatabase.AssetPathToGUID(_folder + "/Content"), extensions = new[] { ".txt" } } }
+            });
             var first = Map(project);
             var asset = Items(first, "Assets").Single(x => (string)Value(x, "SourcePath") == a);
             var name = Value(asset, "BundleName");
@@ -65,7 +81,7 @@ namespace YLFramework.Tests.ResourceBuild
         public void BundleAnalysisSeparatesSourceBytesAndPlacementFromNativeSizesAndShowsReverseEdges()
         {
             var texture = new Texture2D(2, 2) { name = "Shared" };
-            AssetDatabase.CreateAsset(texture, folder + "/Content/Shared.asset");
+            AssetDatabase.CreateAsset(texture, _folder + "/Content/Shared.asset");
             var a = Prefab("A", Material("A", texture));
             var b = Prefab("B", Material("B", texture));
             var map = Map(Project(Group("a", Select(a)), Group("b", Select(b))));
@@ -87,16 +103,19 @@ namespace YLFramework.Tests.ResourceBuild
         public void SharedDependenciesAreAssignedOnceAndManifestGraphHasOneSharedNode()
         {
             var texture = new Texture2D(2, 2) { name = "Shared" };
-            AssetDatabase.CreateAsset(texture, folder + "/Content/Shared.asset");
+            AssetDatabase.CreateAsset(texture, _folder + "/Content/Shared.asset");
             var a = Prefab("A", Material("A", texture));
             var b = Prefab("B", Material("B", texture));
             var map = Map(Project(Group("a", Select(a)), Group("b", Select(b))));
             var bundles = Items(map, "Bundles");
             Assert.That(bundles.Length, Is.EqualTo(3));
             var shared = bundles.Single(x => (bool)Value(x, "IsShared"));
-            CollectionAssert.AreEqual(new[] { folder + "/Content/Shared.asset" }, (string[])Value(shared, "AssetPaths"));
+            CollectionAssert.AreEqual(new[] { _folder + "/Content/Shared.asset" }, (string[])Value(shared, "AssetPaths"));
             foreach (var bundle in bundles.Where(x => !ReferenceEquals(x, shared)))
+            {
                 CollectionAssert.AreEqual(new[] { (string)Value(shared, "Name") }, (string[])Value(bundle, "Dependencies"));
+            }
+
             var allPaths = bundles.SelectMany(x => (string[])Value(x, "AssetPaths")).ToArray();
             Assert.That(allPaths.Distinct().Count(), Is.EqualTo(allPaths.Length));
             Assert.That(Value(map, "AvoidedDuplicateSourceBytes"), Is.GreaterThan(0));
@@ -105,13 +124,16 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void CrossProjectDependencyAndOverlappingProjectRootsAreRejected()
         {
-            var material = Material("outside", null, folder + "/Outside.mat");
+            var material = Material("outside", null, _folder + "/Outside.mat");
             var prefab = Prefab("External", material);
             var project = Project(Group("main", Select(prefab)));
             AssertRejected(() => Map(project), "outside");
             AssetDatabase.DeleteAsset(prefab);
             var text = Text("safe");
-            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new { Groups = new[] { Group("main", Select(text)) } }), project);
+            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new
+            {
+                groups = new[] { Group("main", Select(text)) }
+            }), project);
             Project(Group("other", Select(text)));
             AssertRejected(() => Map(project), "overlap");
         }
@@ -123,7 +145,10 @@ namespace YLFramework.Tests.ResourceBuild
             var b = Text("b");
             var project = Project(Group("main", Select(a, "alias"), Select(b, "ALIAS")));
             AssertRejected(() => Map(project), "address");
-            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new { Groups = new[] { Group("main", Select(a), Select(a)) } }), project);
+            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new
+            {
+                groups = new[] { Group("main", Select(a), Select(a)) }
+            }), project);
             AssertRejected(() => Map(project), "selected");
         }
 
@@ -145,18 +170,21 @@ namespace YLFramework.Tests.ResourceBuild
         public void ScenePrivateOrdinaryDependenciesUseTheirOwnBundle()
         {
             var texture = new Texture2D(2, 2);
-            AssetDatabase.CreateAsset(texture, folder + "/Content/SceneTexture.asset");
+            AssetDatabase.CreateAsset(texture, _folder + "/Content/SceneTexture.asset");
             var material = Material("SceneMaterial", texture);
             var setup = EditorSceneManager.GetSceneManagerSetup();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            var path = folder + "/Content/NonEmpty.unity";
+            var path = _folder + "/Content/NonEmpty.unity";
             try
             {
                 var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 cube.GetComponent<MeshRenderer>().sharedMaterial = material;
                 Assert.That(EditorSceneManager.SaveScene(scene, path), Is.True);
             }
-            finally { EditorSceneManager.RestoreSceneManagerSetup(setup); }
+            finally
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(setup);
+            }
             var map = Map(Project(Group("scene", Select(path))));
             var bundles = Items(map, "Bundles");
             Assert.That(bundles.Length, Is.EqualTo(2));
@@ -170,16 +198,19 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void AnimatorControllersHaveRuntimeTypesAndCanBePrefabDependencies()
         {
-            var path = folder + "/Content/Owned.controller";
+            var path = _folder + "/Content/Owned.controller";
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
             var go = new GameObject("Animated");
-            var prefab = folder + "/Content/Animated.prefab";
+            var prefab = _folder + "/Content/Animated.prefab";
             try
             {
                 go.AddComponent<Animator>().runtimeAnimatorController = controller;
                 PrefabUtility.SaveAsPrefabAsset(go, prefab);
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
             var map = Map(Project(Group("animation", Select(prefab), Select(path))));
             var descriptor = Items(map, "Assets").Single(x => (string)Value(x, "SourcePath") == path);
             Assert.That(Value(descriptor, "AssetType"), Is.EqualTo(typeof(RuntimeAnimatorController)));
@@ -190,9 +221,12 @@ namespace YLFramework.Tests.ResourceBuild
         public void EditorAssemblyAssetsCannotEnterAnExplicitBuildMap()
         {
             var project = Project(Group("main", Select(Text("entry"))));
-            var path = folder + "/Content/EditorProject.asset";
+            var path = _folder + "/Content/EditorProject.asset";
             Assert.That(AssetDatabase.MoveAsset(AssetDatabase.GetAssetPath(project), path), Is.Empty);
-            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new { Groups = new[] { Group("main", Select(path)) } }), project);
+            JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new
+            {
+                groups = new[] { Group("main", Select(path)) }
+            }), project);
             AssertRejected(() => Map(project), "unsupported selected");
         }
 
@@ -200,11 +234,21 @@ namespace YLFramework.Tests.ResourceBuild
         public void ScenesAndOrdinaryAssetsAreNeverMixedAndGroupMembersStayCanonical()
         {
             var setup = EditorSceneManager.GetSceneManagerSetup();
-            for (var i = 0; i < EditorSceneManager.sceneCount; i++) Assert.That(EditorSceneManager.GetSceneAt(i).isDirty, Is.False);
+            for (var i = 0; i < EditorSceneManager.sceneCount; i++)
+            {
+                Assert.That(EditorSceneManager.GetSceneAt(i).isDirty, Is.False);
+            }
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            var scenePath = folder + "/Content/Owned.unity";
-            try { Assert.That(EditorSceneManager.SaveScene(scene, scenePath), Is.True); }
-            finally { EditorSceneManager.RestoreSceneManagerSetup(setup); }
+            var scenePath = _folder + "/Content/Owned.unity";
+            try
+            {
+                Assert.That(EditorSceneManager.SaveScene(scene, scenePath), Is.True);
+            }
+            finally
+            {
+                EditorSceneManager.RestoreSceneManagerSetup(setup);
+            }
             var map = Map(Project(Group("main", Select(scenePath), Select(Text("entry")))));
             var bundles = Items(map, "Bundles");
             Assert.That(bundles.Length, Is.EqualTo(2));
@@ -215,7 +259,7 @@ namespace YLFramework.Tests.ResourceBuild
 
         private string Text(string name)
         {
-            var path = folder + "/Content/" + name + ".txt";
+            var path = _folder + "/Content/" + name + ".txt";
             File.WriteAllText(path, "YL 8.2a owned fixture");
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
             return path;
@@ -224,7 +268,7 @@ namespace YLFramework.Tests.ResourceBuild
         private Material Material(string name, Texture texture, string path = null)
         {
             var material = new Material(Shader.Find("Unlit/Texture")) { name = name, mainTexture = texture };
-            AssetDatabase.CreateAsset(material, path ?? folder + "/Content/" + name + ".mat");
+            AssetDatabase.CreateAsset(material, path ?? _folder + "/Content/" + name + ".mat");
             return material;
         }
 
@@ -234,15 +278,18 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 go.AddComponent<MeshRenderer>().sharedMaterial = material;
-                var path = folder + "/Content/" + name + ".prefab";
+                var path = _folder + "/Content/" + name + ".prefab";
                 PrefabUtility.SaveAsPrefabAsset(go, path);
                 return path;
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
-        private static object Select(string path, string address = null) => new { Guid = AssetDatabase.AssetPathToGUID(path), Address = address };
-        private static object Group(string id, params object[] selections) => new { Id = id, Selections = selections };
+        private static object Select(string path, string address = null) => new { guid = AssetDatabase.AssetPathToGUID(path), address = address };
+        private static object Group(string id, params object[] selections) => new { id = id, selections = selections };
 
         private ScriptableObject Project(params object[] groups)
         {
@@ -252,11 +299,11 @@ namespace YLFramework.Tests.ResourceBuild
             var project = ScriptableObject.CreateInstance(projectType);
             JsonUtility.FromJsonOverwrite(JsonConvert.SerializeObject(new
             {
-                ProjectId = "yl-test-" + Guid.NewGuid().ToString("N"),
-                Groups = groups
+                projectId = "yl-test-" + Guid.NewGuid().ToString("N"),
+                groups = groups
             }), project);
-            ((ResourceProject)project).SourceDirectories.Add(new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID(folder + "/Content") });
-            AssetDatabase.CreateAsset(project, folder + "/Project-" + Guid.NewGuid().ToString("N") + ".asset");
+            ((ResourceProject)project).sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(_folder + "/Content") });
+            AssetDatabase.CreateAsset(project, _folder + "/Project-" + Guid.NewGuid().ToString("N") + ".asset");
             return project;
         }
 

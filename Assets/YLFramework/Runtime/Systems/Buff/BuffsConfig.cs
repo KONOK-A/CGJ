@@ -1,8 +1,8 @@
-using YLFramework.Foundation;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
+using UnityEngine.Serialization;
+using YLFramework.Foundation;
 
 namespace YLFramework.BuffSystem
 {
@@ -10,12 +10,12 @@ namespace YLFramework.BuffSystem
     /// <summary>
     /// Buff配表
     /// </summary>
-    [CreateAssetMenu(menuName ="YLFramework/BuffsConfig(Buff配置)")]
+    [CreateAssetMenu(menuName = "YLFramework/BuffsConfig(Buff配置)")]
     public class BuffsConfig : ScriptableObject
     {
 
         [HideInInspector]
-        public int start_id;
+        [FormerlySerializedAs("start_id")] public int startId;
 
         [Header("显示名称")]
         public string displayName;
@@ -23,10 +23,10 @@ namespace YLFramework.BuffSystem
         [Tooltip("Buff配表集合")]
         public List<BuffConfigData> buffs = new List<BuffConfigData>();
 
-        private Dictionary<int, BuffConfigData> buffs_dic = new Dictionary<int, BuffConfigData>();
+        private Dictionary<int, BuffConfigData> _buffsDic = new Dictionary<int, BuffConfigData>();
 
 
-        public string type_script_guid;
+        [FormerlySerializedAs("type_script_guid")] public string typeScriptGuid;
 
         /// <summary>
         /// 查询Buff配置信息
@@ -37,28 +37,36 @@ namespace YLFramework.BuffSystem
         public BuffConfigData GetBuffData(int buffId)
         {
 
-            if (buffs_dic.Count == 0)
+            if (_buffsDic.Count == 0)
             {
                 foreach (var item in buffs)
                 {
-                    if (!item) continue;
-                    if (buffs_dic.ContainsKey(item.buff_id))
-                        throw new System.Exception(string.Format("BuffInfo id:{0}重复!", item.buff_id));
-                    buffs_dic.Add(item.buff_id, item);
+                    if (!item)
+                    {
+                        continue;
+                    }
+
+                    if (_buffsDic.ContainsKey(item.id))
+                    {
+                        throw new System.Exception(string.Format("BuffInfo id:{0}重复!", item.id));
+                    }
+
+                    _buffsDic.Add(item.id, item);
                 }
             }
 
-            if (buffs_dic.ContainsKey(buffId))
+            if (_buffsDic.ContainsKey(buffId))
             {
-                return buffs_dic[buffId];
+                return _buffsDic[buffId];
             }
 
             return null;
         }
 
 
-        public void ClearCache() {
-            buffs_dic.Clear();
+        public void ClearCache()
+        {
+            _buffsDic.Clear();
         }
 
     }

@@ -25,10 +25,12 @@ namespace YLFramework.Overlap
         /// </summary>
         public Vector3 Size
         {
-            get {
+            get
+            {
                 return size;
             }
-            set {
+            set
+            {
                 size = value;
             }
         }
@@ -40,25 +42,36 @@ namespace YLFramework.Overlap
         // Fix编码
         public override void CheckOverlap()
         {
-            if (!TryBeginCheck()) return;
+            if (!TryBeginCheck())
+            {
+                return;
+            }
+
             try
             {
                 Vector3 lossy = transform.lossyScale;
-                Vector3 s = new Vector3( Mathf.Abs( size.x * lossy.x * 0.5f), Mathf.Abs( size.y * lossy.y * 0.5f),Mathf.Abs(  size.z * lossy.z * 0.5f));
+                Vector3 s = new Vector3(Mathf.Abs(size.x * lossy.x * 0.5f), Mathf.Abs(size.y * lossy.y * 0.5f), Mathf.Abs(size.z * lossy.z * 0.5f));
 
-                int count = Physics.OverlapBoxNonAlloc(transform.position, s, results, transform.rotation, layerMask.value);
+                int count = Physics.OverlapBoxNonAlloc(transform.position, s, ResultBuffer, transform.rotation, layerMask.value);
                 ClearResults();
 
                 CheckCapacity(count);
-                for (int i = 0; i < count && !CheckInvalidated; i++)
+                for (int i = 0; i < count && !IsCheckInvalidated; i++)
                 {
-                    if (!results[i] || results[i].isTrigger) continue;
-                    AddResults(results[i],transform.position);
+                    if (!ResultBuffer[i] || ResultBuffer[i].isTrigger)
+                    {
+                        continue;
+                    }
+
+                    AddResults(ResultBuffer[i], transform.position);
                 }
 
                 OverlapEnd();
             }
-            finally { EndCheck(); }
+            finally
+            {
+                EndCheck();
+            }
         }
 
 

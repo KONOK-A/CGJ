@@ -1,8 +1,8 @@
-using YLFramework.Actions;
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 
 namespace YLFramework.Tests.Actions
 {

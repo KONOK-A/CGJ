@@ -5,14 +5,18 @@ using NUnit.Framework;
 using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Foundation.Tests;
-using SaveManager = YLFramework.Services.Save.SaveManager;
 using Object = UnityEngine.Object;
+using SaveManager = YLFramework.Services.Save.SaveManager;
 
 namespace YLFramework.Tests
 {
     public class SerializedDictionaryJsonTests
     {
-        public enum SampleKey { First, Second }
+        public enum SampleKey
+        {
+            First,
+            Second
+        }
 
         [Serializable]
         public class Record

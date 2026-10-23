@@ -23,7 +23,7 @@ namespace YLFramework.Utilities.Extensions
         }
 
         /// <summary>世界位置归零、世界旋转归为 identity、localScale 归一，返回原组件。</summary>
-        public static T TransformIdentity<T>(this T self) where T :Component
+        public static T TransformIdentity<T>(this T self) where T : Component
         {
             Transform transform = self.transform;
             if (transform != null)
@@ -68,7 +68,7 @@ namespace YLFramework.Utilities.Extensions
         public static Vector2 Position2D(this Component self)
         {
             var t = self.transform;
-            return t != null ? new Vector2(self.PositionX(),self.PositionY()) : Vector2.zero;
+            return t != null ? new Vector2(self.PositionX(), self.PositionY()) : Vector2.zero;
         }
         /// <summary>设置世界坐标 x/y（保留 z），返回原组件。</summary>
         public static T Position2D<T>(this T self, Vector2 position) where T : Component
@@ -212,10 +212,10 @@ namespace YLFramework.Utilities.Extensions
         public static Vector2 LocalPosition2D(this Component self)
         {
             Transform t = self.transform;
-            return t != null ? new Vector2(t.localPosition.x,t.localPosition.y) : Vector2.zero;
+            return t != null ? new Vector2(t.localPosition.x, t.localPosition.y) : Vector2.zero;
         }
         /// <summary>设置局部坐标 x/y（保留 z），返回原组件。</summary>
-        public static T LocalPosition2D<T>(this T self,float x,float y) where T : Component
+        public static T LocalPosition2D<T>(this T self, float x, float y) where T : Component
         {
             Transform t = self.transform;
             if (t != null)
@@ -610,7 +610,10 @@ namespace YLFramework.Utilities.Extensions
         /// <summary>销毁所有直接子物体（延迟到帧末生效），返回原组件。</summary>
         public static T DestroyChildren<T>(this T selfComponent) where T : Component
         {
-            if (selfComponent.transform == null || selfComponent.transform.childCount == 0) return selfComponent;
+            if (selfComponent.transform == null || selfComponent.transform.childCount == 0)
+            {
+                return selfComponent;
+            }
 
             var childCount = selfComponent.transform.childCount;
             for (var i = childCount - 1; i >= 0; i--)
@@ -624,7 +627,10 @@ namespace YLFramework.Utilities.Extensions
         public static T DestroyChildrenWithCondition<T>(this T selfComponent, Func<Transform, bool> condition)
             where T : Component
         {
-            if (selfComponent.transform == null || selfComponent.transform.childCount == 0) return selfComponent;
+            if (selfComponent.transform == null || selfComponent.transform.childCount == 0)
+            {
+                return selfComponent;
+            }
 
             var childCount = selfComponent.transform.childCount;
             for (var i = childCount - 1; i >= 0; i--)
@@ -688,7 +694,7 @@ namespace YLFramework.Utilities.Extensions
         }
 
         /// <summary>把 child 挂到自身所在对象下，并按 isLastOrFirstSibling 决定移到末尾或开头，返回原组件。</summary>
-        public static T AddChild<T>(this T self, Transform child,bool isLastOrFirstSibling) where T : Component
+        public static T AddChild<T>(this T self, Transform child, bool isLastOrFirstSibling) where T : Component
         {
             if (self.transform != null)
             {

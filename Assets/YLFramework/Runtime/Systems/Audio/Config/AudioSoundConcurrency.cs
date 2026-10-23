@@ -28,10 +28,20 @@ namespace YLFramework.Services.Audio
 
         internal void Validate()
         {
-            if (Limit < 0) throw new ArgumentOutOfRangeException(nameof(Limit));
-            if (DefaultClipLimit < 0) throw new ArgumentOutOfRangeException(nameof(DefaultClipLimit));
+            if (Limit < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(Limit));
+            }
+
+            if (DefaultClipLimit < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(DefaultClipLimit));
+            }
+
             if ((uint)OverflowPolicy > (uint)SoundOverflowPolicy.StopLowestPriority)
+            {
                 throw new ArgumentOutOfRangeException(nameof(OverflowPolicy));
+            }
         }
     }
 }

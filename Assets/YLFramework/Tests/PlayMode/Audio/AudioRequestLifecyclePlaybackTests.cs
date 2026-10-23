@@ -14,12 +14,12 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioRequestLifecyclePlaybackTests
     {
-        private AudioClip mClip;
-        private GameObject mListener;
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private static readonly string[] Keys =
+        private AudioClip _clip;
+        private GameObject _listener;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
@@ -34,20 +34,24 @@ namespace YLFramework.Tests.Audio
         public void SetUp()
         {
             AudioKit.Shutdown();
-            for (var i = 0; i < 6; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < 6; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             AudioKit.Settings.IsSoundOn.SetValueWithoutCallback(true);
             AudioKit.Settings.IsMusicOn.SetValueWithoutCallback(true);
             AudioKit.Settings.IsVoiceOn.SetValueWithoutCallback(true);
-            mClip = AudioClip.Create("lifecycle-short", 2205, 1, 44100, false);
+            _clip = AudioClip.Create("lifecycle-short", 2205, 1, 44100, false);
             if (Object.FindObjectsOfType<AudioListener>().Length == 0)
             {
-                mListener = new GameObject("Lifecycle.Listener");
-                mListener.AddComponent<AudioListener>();
+                _listener = new GameObject("Lifecycle.Listener");
+                _listener.AddComponent<AudioListener>();
             }
         }
 
@@ -55,14 +59,31 @@ namespace YLFramework.Tests.Audio
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            Object.Destroy(mClip);
-            if (mListener) Object.Destroy(mListener);
+            Object.Destroy(_clip);
+            if (_listener)
+            {
+                Object.Destroy(_listener);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
             yield return null;
         }
@@ -72,21 +93,25 @@ namespace YLFramework.Tests.Audio
         {
             var resource = new Resource();
             var finishes = 0;
-            var handle = AudioKit.PlaySoundWithSnapshot(mClip, AudioPlaybackOptions.Defaults, (_, original) =>
+            var handle = AudioKit.PlaySoundWithSnapshot(_clip, AudioPlaybackOptions.Defaults, (_, original) =>
             {
                 finishes++;
                 Assert.IsTrue(original.IsValid);
                 Assert.AreEqual(0, resource.Releases);
             }, resource: new AudioResourceLease(resource));
             var deadline = Time.realtimeSinceStartup + 2f;
-            while (handle.IsValid && Time.realtimeSinceStartup < deadline) yield return null;
+            while (handle.IsValid && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.IsFalse(handle.IsValid);
             Assert.AreEqual(1, finishes);
             Assert.AreEqual(1, resource.Releases);
             var missing = new Resource();
             var options = AudioPlaybackOptions.Defaults;
             options.Loop = true;
-            var lost = AudioKit.PlaySoundWithSnapshot(mClip, options, (_, __) => finishes++, resource: new AudioResourceLease(missing));
+            var lost = AudioKit.PlaySoundWithSnapshot(_clip, options, (_, __) => finishes++, resource: new AudioResourceLease(missing));
             Object.Destroy(lost.Voice.Source);
             yield return null;
             yield return null;
@@ -95,7 +120,7 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(1, finishes);
             AudioKit.Shutdown();
             AudioKit.Shutdown();
-            Assert.IsTrue(mClip);
+            Assert.IsTrue(_clip);
             Assert.AreEqual(1, resource.Releases);
             Assert.AreEqual(1, missing.Releases);
         }
@@ -109,15 +134,22 @@ namespace YLFramework.Tests.Audio
             AudioHandle handle = default;
             try
             {
-                const int samples = 44100 * 120;
+                const int Samples = 44100 * 120;
                 using (var writer = new BinaryWriter(File.Create(path)))
                 {
-                    writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + samples * 2);
-                    writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); writer.Write(16);
-                    writer.Write((short)1); writer.Write((short)1); writer.Write(44100); writer.Write(88200);
-                    writer.Write((short)2); writer.Write((short)16);
-                    writer.Write(System.Text.Encoding.ASCII.GetBytes("data")); writer.Write(samples * 2);
-                    writer.Write(new byte[samples * 2]);
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                    writer.Write(36 + Samples * 2);
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
+                    writer.Write(16);
+                    writer.Write((short)1);
+                    writer.Write((short)1);
+                    writer.Write(44100);
+                    writer.Write(88200);
+                    writer.Write((short)2);
+                    writer.Write((short)16);
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+                    writer.Write(Samples * 2);
+                    writer.Write(new byte[Samples * 2]);
                 }
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
                 var importer = (AudioImporter)AssetImporter.GetAtPath(path);
@@ -131,14 +163,22 @@ namespace YLFramework.Tests.Audio
                 var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
                 Assert.IsTrue(clip.loadInBackground);
                 Assert.IsFalse(clip.preloadAudioData);
-                if (clip.loadState == AudioDataLoadState.Loaded) Assert.IsTrue(clip.UnloadAudioData());
+                if (clip.loadState == AudioDataLoadState.Loaded)
+                {
+                    Assert.IsTrue(clip.UnloadAudioData());
+                }
+
                 Assert.AreEqual(AudioDataLoadState.Unloaded, clip.loadState);
                 var resource = new Resource();
                 var started = 0;
                 var finishes = 0;
                 AudioHandle observed = default;
                 handle = AudioKit.PlaySoundWithSnapshot(clip, AudioPlaybackOptions.Defaults, (_, __) => finishes++,
-                    (_, original) => { started++; observed = original; }, resource: new AudioResourceLease(resource));
+                    (_, original) =>
+                    {
+                        started++;
+                        observed = original;
+                    }, resource: new AudioResourceLease(resource));
                 var initialState = clip.loadState;
                 var initialPlaying = handle.IsPlaying;
                 Assert.AreEqual(1, started, "Started remains the synchronous Source.Play submission notification.");
@@ -147,7 +187,11 @@ namespace YLFramework.Tests.Audio
                 handle.Voice.CheckFinished();
                 Assert.IsTrue(handle.IsValid, "Waiting data cannot be classified as natural completion.");
                 var deadline = Time.realtimeSinceStartup + 5f;
-                while (clip.loadState == AudioDataLoadState.Loading && Time.realtimeSinceStartup < deadline) yield return null;
+                while (clip.loadState == AudioDataLoadState.Loading && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.AreEqual(AudioDataLoadState.Loaded, clip.loadState);
                 yield return null;
                 Assert.IsTrue(handle.IsPlaying);
@@ -160,7 +204,11 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(0, finishes);
                 Assert.AreEqual(1, resource.Releases);
                 Assert.IsTrue(clip.LoadAudioData());
-                while (clip.loadState == AudioDataLoadState.Loading && Time.realtimeSinceStartup < deadline) yield return null;
+                while (clip.loadState == AudioDataLoadState.Loading && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 var secondResource = new Resource();
                 handle = AudioKit.PlaySoundWithSnapshot(clip, AudioPlaybackOptions.Defaults, resource: new AudioResourceLease(secondResource));
                 handle.Stop();

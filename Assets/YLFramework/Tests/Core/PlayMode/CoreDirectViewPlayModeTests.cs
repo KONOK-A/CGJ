@@ -6,8 +6,8 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using YLFramework.Events;
 using YLFramework.Timing;
 using Object = UnityEngine.Object;
@@ -24,19 +24,29 @@ namespace YLFramework.Core.Tests
 
     public sealed class YLCoreSelectionInputProbe : MonoBehaviour, UnityEngine.EventSystems.ICancelHandler, UnityEngine.EventSystems.IDeselectHandler, UnityEngine.EventSystems.ISelectHandler
     {
-        public int Cancels;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Cancels")]
+        public int cancels;
         public Action Deselected;
         public Action Selected;
-        public void OnCancel(UnityEngine.EventSystems.BaseEventData data) => Cancels++;
+        public void OnCancel(UnityEngine.EventSystems.BaseEventData data) => cancels++;
         public void OnDeselect(UnityEngine.EventSystems.BaseEventData data) => Deselected?.Invoke();
         public void OnSelect(UnityEngine.EventSystems.BaseEventData data) => Selected?.Invoke();
     }
 
     public sealed class YLCoreOtherInputGate : MonoBehaviour
     {
-        public bool Allowed;
-        public int Reads;
-        public bool IsInputAllowed { get { Reads++; return Allowed; } }
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Allowed")]
+        public bool isAllowed;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Reads")]
+        public int reads;
+        public bool IsInputAllowed
+        {
+            get
+            {
+                reads++;
+                return isAllowed;
+            }
+        }
     }
 
     public sealed class YLCorePointerClickProbe : MonoBehaviour, UnityEngine.EventSystems.IPointerClickHandler, UnityEngine.EventSystems.IPointerDownHandler
@@ -49,8 +59,9 @@ namespace YLFramework.Core.Tests
 
     public sealed class YLCoreNativeDragProbe : MonoBehaviour, UnityEngine.EventSystems.IDragHandler
     {
-        public int Drags;
-        public void OnDrag(UnityEngine.EventSystems.PointerEventData data) => Drags++;
+        [global::UnityEngine.Serialization.FormerlySerializedAs("Drags")]
+        public int drags;
+        public void OnDrag(UnityEngine.EventSystems.PointerEventData data) => drags++;
     }
 
     public sealed class YLCoreParentChangeProbe : MonoBehaviour
@@ -62,29 +73,36 @@ namespace YLFramework.Core.Tests
 #if ENABLE_LEGACY_INPUT_MANAGER
     public sealed class YLCoreLegacyPointerInput : UnityEngine.EventSystems.BaseInput
     {
-        private Vector2 position;
-        private readonly bool[] pressed = new bool[3];
-        private readonly int[] downFrame = { -1, -1, -1 }, upFrame = { -1, -1, -1 };
+        private Vector2 _position;
+        private readonly bool[] _pressed = new bool[3];
+        private readonly int[] _downFrame = { -1, -1, -1 };
+        private readonly int[] _upFrame = { -1, -1, -1 };
         public void Set(Vector2 position, bool left, bool right = false, bool middle = false)
         {
-            this.position = position;
+            this._position = position;
             var next = new[] { left, right, middle };
             for (int button = 0; button < 3; button++)
             {
-                if (next[button] != pressed[button])
+                if (next[button] != _pressed[button])
                 {
-                    if (next[button]) downFrame[button] = Time.frameCount + 1;
-                    else upFrame[button] = Time.frameCount + 1;
+                    if (next[button])
+                    {
+                        _downFrame[button] = Time.frameCount + 1;
+                    }
+                    else
+                    {
+                        _upFrame[button] = Time.frameCount + 1;
+                    }
                 }
-                pressed[button] = next[button];
+                _pressed[button] = next[button];
             }
         }
         public override bool mousePresent => true;
-        public override Vector2 mousePosition => position;
+        public override Vector2 mousePosition => _position;
         public override bool touchSupported => false;
-        public override bool GetMouseButton(int button) => pressed[button];
-        public override bool GetMouseButtonDown(int button) => Time.frameCount == downFrame[button];
-        public override bool GetMouseButtonUp(int button) => Time.frameCount == upFrame[button];
+        public override bool GetMouseButton(int button) => _pressed[button];
+        public override bool GetMouseButtonDown(int button) => Time.frameCount == _downFrame[button];
+        public override bool GetMouseButtonUp(int button) => Time.frameCount == _upFrame[button];
         public override float GetAxisRaw(string axisName) => 0;
         public override bool GetButtonDown(string buttonName) => false;
     }
@@ -92,14 +110,14 @@ namespace YLFramework.Core.Tests
 
     public class CoreDirectViewPlayModeTests
     {
-        private readonly List<GameObject> objects = new List<GameObject>();
-        private readonly List<int> prefabKeys = new List<int>();
-        private readonly List<int> instanceKeys = new List<int>();
-        private readonly List<Scene> scenes = new List<Scene>();
-        private YLCoreDirectViewModule module;
-        private CoreClassPoolScope classPool;
-        private CoreUpdateHostScope updateHosts;
-        private readonly HashSet<GameObject> priorEventSystems = new HashSet<GameObject>();
+        private readonly List<GameObject> _objects = new List<GameObject>();
+        private readonly List<int> _prefabKeys = new List<int>();
+        private readonly List<int> _instanceKeys = new List<int>();
+        private readonly List<Scene> _scenes = new List<Scene>();
+        private YLCoreDirectViewModule _module;
+        private CoreClassPoolScope _classPool;
+        private CoreUpdateHostScope _updateHosts;
+        private readonly HashSet<GameObject> _priorEventSystems = new HashSet<GameObject>();
 
         [SetUp]
         public void SetUp()
@@ -113,12 +131,15 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeView.DuplicateProbeHandler = false;
             YLCoreSmokeView.SignatureConflictEvent = null;
             Assert.That(ModuleManager.AllModules, Is.Empty, "Use the independent test scene, not a running business module.");
-            classPool = new CoreClassPoolScope();
-            updateHosts = new CoreUpdateHostScope();
-            priorEventSystems.Clear();
+            _classPool = new CoreClassPoolScope();
+            _updateHosts = new CoreUpdateHostScope();
+            _priorEventSystems.Clear();
             foreach (var system in Object.FindObjectsByType<UnityEngine.EventSystems.EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                priorEventSystems.Add(system.gameObject);
-            module = new YLCoreDirectViewModule();
+            {
+                _priorEventSystems.Add(system.gameObject);
+            }
+
+            _module = new YLCoreDirectViewModule();
         }
 
         [UnityTearDown]
@@ -126,7 +147,10 @@ namespace YLFramework.Core.Tests
         {
             try
             {
-                if (ReferenceEquals(ModuleManager.GetModule<YLCoreDirectViewModule>(), module)) module.Close();
+                if (ReferenceEquals(ModuleManager.GetModule<YLCoreDirectViewModule>(), _module))
+                {
+                    _module.Close();
+                }
             }
             finally
             {
@@ -138,17 +162,26 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokeView.SharedEventHandler = null;
                 YLCoreSmokeView.DuplicateProbeHandler = false;
                 YLCoreSmokeView.SignatureConflictEvent = null;
-                try { classPool?.Restore(new Module[] { module }); }
+                try
+                {
+                    _classPool?.Restore(new Module[] { _module });
+                }
                 finally
                 {
                     ReleaseObjects();
-                    updateHosts?.ReleaseOwnedIdleHosts();
+                    _updateHosts?.ReleaseOwnedIdleHosts();
                 }
             }
             yield return null;
-            foreach (var scene in scenes)
-                if (scene.IsValid() && scene.isLoaded) yield return SceneManager.UnloadSceneAsync(scene);
-            scenes.Clear();
+            foreach (var scene in _scenes)
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    yield return SceneManager.UnloadSceneAsync(scene);
+                }
+            }
+
+            _scenes.Clear();
             Assert.That(ModuleManager.GetModule<YLCoreDirectViewModule>(), Is.Null);
         }
 
@@ -156,13 +189,31 @@ namespace YLFramework.Core.Tests
         {
             var policy = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             var inputHost = policy == null ? null : (GameObject)typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(policy);
-            if (inputHost && !priorEventSystems.Contains(inputHost)) objects.Add(inputHost);
-            foreach (var obj in objects) if (obj) Object.Destroy(obj);
+            if (inputHost && !_priorEventSystems.Contains(inputHost))
+            {
+                _objects.Add(inputHost);
+            }
+
+            foreach (var obj in _objects)
+            {
+                if (obj)
+                {
+                    Object.Destroy(obj);
+                }
+            }
+
             var pool = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
-            if (pool) foreach (var key in prefabKeys) pool.Clear("YL.Core.Direct/" + key);
-            objects.Clear();
-            prefabKeys.Clear();
-            instanceKeys.Clear();
+            if (pool)
+            {
+                foreach (var key in _prefabKeys)
+                {
+                    pool.Clear("YL.Core.Direct/" + key);
+                }
+            }
+
+            _objects.Clear();
+            _prefabKeys.Clear();
+            _instanceKeys.Clear();
         }
 
         [UnityTest]
@@ -173,47 +224,47 @@ namespace YLFramework.Core.Tests
             var prefab = Template<YLCoreSmokePanel>("YLPanel.RulePrefab", true);
             var defaults = new PanelOverrides { Layer = 1, Priority = 9, Modal = true }.ApplyTo(PanelConfig.Default);
             SetPrivate(prefab.GetComponent<YLCoreSmokePanel>(), "settings", defaults);
-            module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 17, Modal = true,
+            _module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 17, Modal = true,
                 CoversRoot = true, ParticipatesInTop = false, InstanceMode = PanelInstanceMode.Single, CacheOnClose = false, Layer = 0 }) });
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: new PanelOverrides { Priority = 0, Modal = false }));
-            Assert.That(panel.EffectiveSettings.Priority, Is.Zero);
-            Assert.That(panel.EffectiveSettings.Modal, Is.False);
-            Assert.That(panel.EffectiveSettings.CoversRoot, Is.True);
-            Assert.That(panel.EffectiveSettings.ParticipatesInTop, Is.False);
-            Assert.That(panel.EffectiveSettings.CacheOnClose, Is.False);
-            Assert.That(panel.EffectiveSettings.InstanceMode, Is.EqualTo(PanelInstanceMode.Single));
-            Assert.That(panel.EffectiveSettings.Layer, Is.Zero);
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: new PanelOverrides { Priority = 0, Modal = false }));
+            Assert.That(panel.EffectiveSettings.priority, Is.Zero);
+            Assert.That(panel.EffectiveSettings.modal, Is.False);
+            Assert.That(panel.EffectiveSettings.coversRoot, Is.True);
+            Assert.That(panel.EffectiveSettings.participatesInTop, Is.False);
+            Assert.That(panel.EffectiveSettings.cacheOnClose, Is.False);
+            Assert.That(panel.EffectiveSettings.instanceMode, Is.EqualTo(PanelInstanceMode.Single));
+            Assert.That(panel.EffectiveSettings.layer, Is.Zero);
             Assert.That(panel.Root, Is.SameAs(root));
             Assert.That(panel.transform.parent, Is.SameAs(root.GetLayer(0)));
             Assert.That(panel.LoadedCount, Is.EqualTo(1));
             Assert.That(panel.ArgsCount, Is.EqualTo(1));
             Assert.That(panel.OpenCount, Is.EqualTo(1));
             int initial = panel.LoadedCount;
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root), Is.SameAs(panel));
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root), Is.SameAs(panel));
             Assert.That(panel.LoadedCount, Is.EqualTo(initial));
             Assert.That(panel.ArgsCount, Is.EqualTo(1));
             Assert.That(panel.OpenCount, Is.EqualTo(2));
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(17), "临时覆盖不能成为重开默认。");
-            Assert.That(panel.EffectiveSettings.Modal, Is.True);
-            Assert.Throws<ArgumentException>(() => module.BindPanelRules(new[] { new PanelRule(prefab, default), new PanelRule(prefab, default) }));
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(17), "临时覆盖不能成为重开默认。");
+            Assert.That(panel.EffectiveSettings.modal, Is.True);
+            Assert.Throws<ArgumentException>(() => _module.BindPanelRules(new[] { new PanelRule(prefab, default), new PanelRule(prefab, default) }));
             IEnumerable<PanelRule> BrokenRules()
             {
                 yield return new PanelRule(prefab, new PanelOverrides { Priority = 99 });
                 throw new InvalidOperationException("rule enumeration failed");
             }
-            Assert.Throws<InvalidOperationException>(() => module.BindPanelRules(BrokenRules()));
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings.Priority, Is.EqualTo(17));
-            var pending = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
-            module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 34 }) });
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(17), "重绑不能刷新现有会话。");
+            Assert.Throws<InvalidOperationException>(() => _module.BindPanelRules(BrokenRules()));
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings.priority, Is.EqualTo(17));
+            var pending = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            _module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 34 }) });
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(17), "重绑不能刷新现有会话。");
             yield return pending;
             Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Succeeded));
-            Assert.That(pending.panel, Is.SameAs(panel));
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(17), "在途请求固定接受时规则快照。");
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings.Priority, Is.EqualTo(34));
-            module.BindPanelRules(null);
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(34));
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings, Is.EqualTo(defaults));
+            Assert.That(pending.Panel, Is.SameAs(panel));
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(17), "在途请求固定接受时规则快照。");
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings.priority, Is.EqualTo(34));
+            _module.BindPanelRules(null);
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(34));
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root).EffectiveSettings, Is.EqualTo(defaults));
             Assert.That(panel.transform.parent, Is.SameAs(root.GetLayer(1)));
             Assert.That(prefab.GetComponent<YLCoreSmokePanel>().EffectiveSettings, Is.EqualTo(default(PanelConfig)), "源 Prefab 不得被写成会话配置。");
         }
@@ -228,26 +279,26 @@ namespace YLFramework.Core.Tests
             firstArgs.SetInt("token", 11);
             var latestArgs = NewArgs();
             latestArgs.SetInt("token", 22);
-            var a = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, firstArgs, root);
-            var b = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, latestArgs, root);
+            var a = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, firstArgs, root);
+            var b = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, latestArgs, root);
             Assert.That(a.Status, Is.EqualTo(LoadViewStatus.Pending));
             Assert.That(b.Status, Is.EqualTo(LoadViewStatus.Pending));
             YLCoreSmokePanel replacement = null;
             object originalSession = null;
             a.AddCompleteEvent(done =>
             {
-                Assert.That(done.panel.Token, Is.EqualTo(22), "合流批次使用最新有效参数。");
-                Assert.That(done.panel.OpenCount, Is.EqualTo(1));
-                originalSession = ViewSession(done.panel);
+                Assert.That(done.Panel.Token, Is.EqualTo(22), "合流批次使用最新有效参数。");
+                Assert.That(done.Panel.OpenCount, Is.EqualTo(1));
+                originalSession = ViewSession(done.Panel);
                 AssertArgsReleased(firstArgs);
                 AssertArgsReleased(latestArgs);
-                Track(done.panel).Close();
-                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                Track(done.Panel).Close();
+                replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             });
             yield return a;
             yield return b;
             Assert.That(a.Status, Is.EqualTo(LoadViewStatus.Succeeded));
-            Assert.That(replacement, Is.SameAs(a.panel));
+            Assert.That(replacement, Is.SameAs(a.Panel));
             Assert.That(ViewSession(replacement), Is.Not.SameAs(originalSession));
             Assert.That(b.Status, Is.EqualTo(LoadViewStatus.Invalidated), "不能把同一 GameObject 的新 Session 交给旧消费者。");
         }
@@ -288,28 +339,28 @@ namespace YLFramework.Core.Tests
                 Assert.Throws<InvalidOperationException>(panel.BringToFront);
                 Assert.Throws<InvalidOperationException>(() => panel.UpdateDisplay(default));
                 Assert.Throws<InvalidOperationException>(panel.Close);
-                Assert.Throws<InvalidOperationException>(module.Close);
+                Assert.Throws<InvalidOperationException>(_module.Close);
                 Assert.Throws<InvalidOperationException>(ModuleManager.Shutdown);
-                Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                Assert.Throws<InvalidOperationException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 calls.Add("open");
             };
             YLCoreSmokePanel.EnabledProbe = panel =>
             {
                 Assert.Throws<InvalidOperationException>(() => input.GetInt("token"));
                 Assert.Throws<InvalidOperationException>(panel.Close);
-                Assert.Throws<InvalidOperationException>(module.Close);
+                Assert.Throws<InvalidOperationException>(_module.Close);
                 panel.UpdateDisplay(new PanelOverrides { Priority = 23 });
                 panel.BringToFront();
                 panel.Hide();
                 calls.Add("enabled");
             };
-            var result = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, input, root));
+            var result = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, input, root));
             Assert.That(calls, Is.EqualTo(new[] { "loaded", "args", "open", "enabled" }));
             AssertArgsReleased(input);
             Assert.That(result.IsLoaded, Is.True);
             Assert.That(result.IsVisible, Is.False);
-            Assert.That(result.EffectiveSettings.Priority, Is.EqualTo(23));
-            Assert.That(result.EffectiveSettings.Layer, Is.EqualTo(1));
+            Assert.That(result.EffectiveSettings.priority, Is.EqualTo(23));
+            Assert.That(result.EffectiveSettings.layer, Is.EqualTo(1));
             Assert.That(result.transform.parent, Is.SameAs(root.GetLayer(1)));
             Assert.Throws<ArgumentException>(() => result.UpdateDisplay(new PanelOverrides { InstanceMode = PanelInstanceMode.Single }));
             Assert.Throws<ArgumentException>(() => result.UpdateDisplay(new PanelOverrides { CacheOnClose = true }));
@@ -325,23 +376,23 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLPanel.OpenClearRoot");
-            var sibling = Track(module.LoadView<YLCoreSmokeView>(Template<YLCoreSmokeView>("YLPanel.ClearSibling", true), root.GetLayer(0), loadViewArgs: null));
+            var sibling = Track(_module.LoadView<YLCoreSmokeView>(Template<YLCoreSmokeView>("YLPanel.ClearSibling", true), root.GetLayer(0), loadViewArgs: null));
             var source = Template<YLCoreSmokePanel>("YLPanel.ClearCurrent", true);
-            var current = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+            var current = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
             object session = ViewSession(current);
             int removed = current.RemovedCount, closed = current.ClosedCount;
             YLCoreSmokePanel.UpdateProbe = (panel, args) =>
             {
-                Assert.Throws<InvalidOperationException>(() => module.ClearView<YLCoreSmokePanel>());
-                Assert.Throws<InvalidOperationException>(() => module.ClearView(source.name));
-                Assert.Throws<InvalidOperationException>(module.ClearView);
+                Assert.Throws<InvalidOperationException>(() => _module.ClearView<YLCoreSmokePanel>());
+                Assert.Throws<InvalidOperationException>(() => _module.ClearView(source.name));
+                Assert.Throws<InvalidOperationException>(_module.ClearView);
                 Assert.That(ViewSession(panel), Is.SameAs(session));
                 Assert.That(panel.IsLoaded, Is.True);
                 Assert.That(panel.RemovedCount, Is.EqualTo(removed));
                 Assert.That(panel.ClosedCount, Is.EqualTo(closed));
-                Assert.That(sibling.Module, Is.SameAs(module), "批量移除须在任何退出副作用前拒绝。");
+                Assert.That(sibling.Module, Is.SameAs(_module), "批量移除须在任何退出副作用前拒绝。");
             };
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(source, root: root), Is.SameAs(current));
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(source, root: root), Is.SameAs(current));
         }
 
         [UnityTest]
@@ -353,21 +404,21 @@ namespace YLFramework.Core.Tests
             canvas.SetActive(false);
             canvas.transform.SetParent(source.transform, false);
             CorePanelTestRoots.Create(canvas);
-            var parent = Track(module.LoadView<YLCoreSmokeView>(source, loadViewArgs: null));
+            var parent = Track(_module.LoadView<YLCoreSmokeView>(source, loadViewArgs: null));
             var root = parent.GetComponentInChildren<UIRootContext>(true);
             var panelSource = Template<YLCoreSmokePanel>("YLPanel.NestedOpen", true);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(panelSource, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(panelSource, root: root));
             var parentLease = (CoreInstanceLease)typeof(View).GetField("BackendLease", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(parent);
             Assert.That(typeof(View).GetField("BackendRoot", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(panel), Is.SameAs(parent));
             YLCoreSmokePanel.UpdateProbe = (current, args) =>
             {
                 Assert.Throws<InvalidOperationException>(parent.Close);
-                Assert.Throws<InvalidOperationException>(() => module.ClearView(source.name));
-                Assert.That(parent.Module, Is.SameAs(module));
+                Assert.Throws<InvalidOperationException>(() => _module.ClearView(source.name));
+                Assert.That(parent.Module, Is.SameAs(_module));
                 Assert.That(parentLease.IsValid, Is.True);
                 Assert.That(current.RemovedCount, Is.Zero);
             };
-            Assert.That(module.LoadPanel<YLCoreSmokePanel>(panelSource, root: root), Is.SameAs(panel));
+            Assert.That(_module.LoadPanel<YLCoreSmokePanel>(panelSource, root: root), Is.SameAs(panel));
             Assert.That(parentLease.IsValid && panel.IsLoaded, Is.True);
         }
 
@@ -382,31 +433,42 @@ namespace YLFramework.Core.Tests
             var root = PolicyRoot("YLPanel.ParentCallbackRoot");
             var targetHost = new GameObject("YLPanel.ParentCallbackTarget", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
             targetHost.SetActive(false);
-            objects.Add(targetHost);
+            _objects.Add(targetHost);
             var target = CorePanelTestRoots.Create(targetHost, 1);
             var prefab = Template<YLCoreSmokePanel>("YLPanel.ParentCallbackPanel", true);
             prefab.AddComponent<YLCoreParentChangeProbe>();
-            var original = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var original = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             object firstSession = ViewSession(original);
             YLCoreSmokePanel replacement = null;
             original.ClosedAction = () =>
             {
                 original.ClosedAction = null;
-                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: target,
+                replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: target,
                     overrides: new PanelOverrides { Layer = 0, Priority = 41, Modal = true }));
             };
             var probe = original.GetComponent<YLCoreParentChangeProbe>();
-            probe.Changed = () => { probe.Changed = null; original.Close(); };
+            probe.Changed = () =>
+            {
+                probe.Changed = null;
+                original.Close();
+            };
             var changes = new PanelOverrides { Layer = 1, Priority = 999, Modal = false };
-            if (reopen) Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: changes));
-            else Assert.DoesNotThrow(() => original.UpdateDisplay(changes));
+            if (reopen)
+            {
+                Assert.Throws<InvalidOperationException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: changes));
+            }
+            else
+            {
+                Assert.DoesNotThrow(() => original.UpdateDisplay(changes));
+            }
+
             Assert.That(replacement, Is.SameAs(original), "必须真正覆盖同一 GameObject 的新 Session。");
             Assert.That(ViewSession(replacement), Is.Not.SameAs(firstSession));
             Assert.That(replacement.Root, Is.SameAs(target));
             Assert.That(replacement.transform.parent, Is.SameAs(target.GetLayer(0)));
-            Assert.That(replacement.EffectiveSettings.Layer, Is.Zero);
-            Assert.That(replacement.EffectiveSettings.Priority, Is.EqualTo(41));
-            Assert.That(replacement.EffectiveSettings.Modal, Is.True);
+            Assert.That(replacement.EffectiveSettings.layer, Is.Zero);
+            Assert.That(replacement.EffectiveSettings.priority, Is.EqualTo(41));
+            Assert.That(replacement.EffectiveSettings.modal, Is.True);
             Assert.That(replacement.IsLoaded, Is.True);
         }
 
@@ -419,37 +481,41 @@ namespace YLFramework.Core.Tests
             {
                 var request = ModuleManager.StartUpModule(baseModule);
                 var deadline = Time.realtimeSinceStartup + 10;
-                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(request.isDone, Is.True);
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.IsDone, Is.True);
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var model = baseModule.LoadModel<YLCoreProbeModel>();
                 var controller = baseModule.LoadController<YLCoreProbeController>();
                 var prefab = Template<YLCoreSmokeView>("YLCoreBaseLookupPrefab");
                 var view = Track(baseModule.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
 
-                Assert.That(module.GetModel<YLCoreProbeModel>(), Is.Null);
-                Assert.That(module.GetController<YLCoreProbeController>(), Is.Null);
-                Assert.That(module.GetView<YLCoreSmokeView>(prefab.name, view.Id), Is.Null);
-                Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.Null);
-                Assert.That(module.GetView(prefab.name), Is.Null);
-                Assert.That(module.GetView<YLCoreSmokeView>(prefab.name), Is.Null);
-                Assert.That(module.GetView<YLCoreSmokeView>(), Is.Null);
-                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
-                Assert.That(module.GetViews(prefab.name), Is.Empty);
-                Assert.That(module.GetViews<YLCoreSmokeView>(prefab.name), Is.Empty);
+                Assert.That(_module.GetModel<YLCoreProbeModel>(), Is.Null);
+                Assert.That(_module.GetController<YLCoreProbeController>(), Is.Null);
+                Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name, view.Id), Is.Null);
+                Assert.That(_module.GetView<YLCoreSmokeView>(view.Id), Is.Null);
+                Assert.That(_module.GetView(prefab.name), Is.Null);
+                Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name), Is.Null);
+                Assert.That(_module.GetView<YLCoreSmokeView>(), Is.Null);
+                Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
+                Assert.That(_module.GetViews(prefab.name), Is.Empty);
+                Assert.That(_module.GetViews<YLCoreSmokeView>(prefab.name), Is.Empty);
                 var results = new List<View> { view };
-                module.GetViewsNonAlloc(results);
+                _module.GetViewsNonAlloc(results);
                 Assert.That(results, Is.Empty);
                 Assert.That(view.Module, Is.SameAs(baseModule));
-                var local = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                Assert.That(module.GetView<YLCoreSmokeView>(), Is.SameAs(local));
-                module.ClearView(prefab.name);
+                var local = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.That(_module.GetView<YLCoreSmokeView>(), Is.SameAs(local));
+                _module.ClearView(prefab.name);
                 Assert.That(local.Module, Is.Null);
-                local = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                module.ClearView<View>();
+                local = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                _module.ClearView<View>();
                 Assert.That(local.Module, Is.Null);
-                module.ClearView();
-                module.Close();
+                _module.ClearView();
+                _module.Close();
                 Assert.That(view.gameObject.activeSelf, Is.True);
                 Assert.That(view.RemovedCount, Is.Zero);
                 Assert.That(model.ExitCount, Is.Zero);
@@ -460,9 +526,15 @@ namespace YLFramework.Core.Tests
                 baseModule.AllowClose = true;
                 try
                 {
-                    if (ReferenceEquals(ModuleManager.GetModule(baseModule.ModuleName), baseModule)) baseModule.Close();
+                    if (ReferenceEquals(ModuleManager.GetModule(baseModule.ModuleName), baseModule))
+                    {
+                        baseModule.Close();
+                    }
                 }
-                finally { classPool.Restore(new Module[] { baseModule }); }
+                finally
+                {
+                    _classPool.Restore(new Module[] { baseModule });
+                }
             }
         }
 
@@ -475,39 +547,43 @@ namespace YLFramework.Core.Tests
             {
                 var request = ModuleManager.StartUpModule(owner);
                 var deadline = Time.realtimeSinceStartup + 10;
-                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(request.isDone, Is.True);
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.IsDone, Is.True);
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var shared = new YLCoreProbeModel { Id = 41 };
                 var local = new YLCoreProbeModel { Id = 41 };
                 owner.AddModel(shared);
-                module.AddModel(local);
+                _module.AddModel(local);
                 var prefab = Template<YLCoreSmokeView>("YLCoreModelRemovalPrefab");
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 view.BoundModel = shared;
                 view.Close();
                 Assert.That(view.Model, Is.Null);
                 Assert.That(view.UnboundCount, Is.EqualTo(1));
                 Assert.That(shared.Module, Is.SameAs(owner));
                 Assert.That(shared.ExitCount, Is.Zero);
-                Assert.That(module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
-                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.That(_module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
+                view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.Throws<InvalidOperationException>(() => view.BoundModel = new YLCoreProbeModel { Id = 41 });
                 Assert.That(view.Model, Is.Null);
                 view.Close();
                 Assert.That(local.ExitCount, Is.Zero);
-                Assert.That(module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
-                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.That(_module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
+                view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 view.BoundModel = local;
                 view.Close();
-                Assert.That(local.Module, Is.SameAs(module));
+                Assert.That(local.Module, Is.SameAs(_module));
                 Assert.That(local.ExitCount, Is.Zero);
-                Assert.That(module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
-                module.RemoveModel(local);
-                module.RemoveModel(local);
+                Assert.That(_module.GetModel<YLCoreProbeModel>(41), Is.SameAs(local));
+                _module.RemoveModel(local);
+                _module.RemoveModel(local);
                 Assert.That(local.Module, Is.Null);
                 Assert.That(local.ExitCount, Is.EqualTo(1));
-                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.Throws<InvalidOperationException>(() => view.BoundModel = local);
                 view.Close();
                 Assert.That(local.ExitCount, Is.EqualTo(1));
@@ -517,9 +593,15 @@ namespace YLFramework.Core.Tests
             {
                 try
                 {
-                    if (ReferenceEquals(ModuleManager.GetModule(owner.ModuleName), owner)) owner.Close();
+                    if (ReferenceEquals(ModuleManager.GetModule(owner.ModuleName), owner))
+                    {
+                        owner.Close();
+                    }
                 }
-                finally { classPool.Restore(new Module[] { owner }); }
+                finally
+                {
+                    _classPool.Restore(new Module[] { owner });
+                }
             }
         }
 
@@ -533,18 +615,18 @@ namespace YLFramework.Core.Tests
             var prefab = Template<YLCoreSmokeView>("YLCoreOwnerStatePrefab");
             var unattached = prefab.GetComponent<YLCoreSmokeView>();
             typeof(View).GetProperty("AssetName", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(unattached, prefab.name);
-            Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", module, unattached));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", _module, unattached));
             Assert.Throws<InvalidOperationException>(() => unattached.BoundModel = new YLCoreProbeModel());
             unattached.Close();
             Assert.That(unattached.RemovedCount, Is.Zero);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             YLCoreSmokeView loaded = null;
-            module.StartAction = () =>
+            _module.StartAction = () =>
             {
-                Assert.That(module.State, Is.EqualTo(ModuleState.Starting));
-                Assert.That(ModuleManager.GetModule(module.ModuleName), Is.SameAs(module));
-                loaded = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.That(_module.State, Is.EqualTo(ModuleState.Starting));
+                Assert.That(ModuleManager.GetModule(_module.ModuleName), Is.SameAs(_module));
+                loaded = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             };
             yield return StartModule();
             Assert.That(loaded.IsLoaded, Is.True);
@@ -553,11 +635,14 @@ namespace YLFramework.Core.Tests
             {
                 Assert.Throws<InvalidOperationException>(() => unregistered.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", unregistered, loaded));
-                Assert.That(loaded.Module, Is.SameAs(module));
-                Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { loaded }));
+                Assert.That(loaded.Module, Is.SameAs(_module));
+                Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { loaded }));
                 Assert.That(unregistered.GetViews<View>(), Is.Empty);
             }
-            finally { classPool.Restore(new Module[] { unregistered }); }
+            finally
+            {
+                _classPool.Restore(new Module[] { unregistered });
+            }
         }
 
         [UnityTest]
@@ -569,25 +654,29 @@ namespace YLFramework.Core.Tests
             {
                 var request = ModuleManager.StartUpModule(other);
                 var deadline = Time.realtimeSinceStartup + 10;
-                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(request.isDone, Is.True);
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.IsDone, Is.True);
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var prefab = Template<YLCoreSmokeView>("YLCoreExactOwnerPrefab");
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                var model = module.LoadModel<YLCoreProbeModel>();
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var model = _module.LoadModel<YLCoreProbeModel>();
                 view.BoundModel = model;
                 var session = ViewSession(view);
-                InvokeViewManager("AddView", module, view);
-                InvokeViewManager("AddView", module, view);
+                InvokeViewManager("AddView", _module, view);
+                InvokeViewManager("AddView", _module, view);
                 Assert.That(ViewSession(view), Is.SameAs(session));
-                Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { view }));
-                Assert.That(module.GetViews(prefab.name), Is.EqualTo(new View[] { view }));
+                Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { view }));
+                Assert.That(_module.GetViews(prefab.name), Is.EqualTo(new View[] { view }));
                 Assert.That(view.LoadedCount, Is.EqualTo(1));
                 Assert.That(view.Model, Is.SameAs(model));
                 Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", other, view));
                 InvokeViewManager("RemoveView", other, view);
                 Assert.That(other.GetViews<View>(), Is.Empty);
-                Assert.That(view.Module, Is.SameAs(module));
+                Assert.That(view.Module, Is.SameAs(_module));
                 Assert.That(view.RemovedCount, Is.Zero);
                 Assert.That(view.gameObject.activeSelf, Is.True);
 
@@ -595,16 +684,19 @@ namespace YLFramework.Core.Tests
                 assetName.SetValue(view, prefab.name + "Conflict");
                 try
                 {
-                    Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", module, view));
-                    Assert.That(module.GetView(prefab.name, view.Id), Is.SameAs(view));
-                    Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { view }));
-                    Assert.That(module.GetViews(prefab.name + "Conflict"), Is.Empty);
+                    Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", _module, view));
+                    Assert.That(_module.GetView(prefab.name, view.Id), Is.SameAs(view));
+                    Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { view }));
+                    Assert.That(_module.GetViews(prefab.name + "Conflict"), Is.Empty);
                 }
-                finally { assetName.SetValue(view, prefab.name); }
+                finally
+                {
+                    assetName.SetValue(view, prefab.name);
+                }
 
-                InvokeViewManager("RemoveView", module, view);
-                InvokeViewManager("RemoveView", module, view);
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                InvokeViewManager("RemoveView", _module, view);
+                InvokeViewManager("RemoveView", _module, view);
+                Assert.That(_module.GetViews<View>(), Is.Empty);
                 Assert.That(view.Module, Is.Null);
                 Assert.That(view.Model, Is.Null);
                 Assert.That(view.RemovedCount, Is.EqualTo(1));
@@ -614,8 +706,14 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                try { other.Close(); }
-                finally { classPool.Restore(new Module[] { other }); }
+                try
+                {
+                    other.Close();
+                }
+                finally
+                {
+                    _classPool.Restore(new Module[] { other });
+                }
             }
         }
 
@@ -623,10 +721,10 @@ namespace YLFramework.Core.Tests
         public IEnumerator SharedModelBindingsDoNotOwnModelAndOldRegistrationCannotRevive()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreSharedBindingPrefab");
-            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            var second = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var second = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             first.BoundModel = model;
             first.BoundModel = model;
             second.BoundModel = model;
@@ -635,13 +733,13 @@ namespace YLFramework.Core.Tests
             Assert.That(first.Model, Is.Null);
             Assert.That(second.Model, Is.SameAs(model));
             Assert.That(model.ExitCount, Is.Zero);
-            first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             first.BoundModel = model;
-            module.RemoveModel(model);
+            _module.RemoveModel(model);
             Assert.That(first.Model, Is.Null);
             Assert.That(second.Model, Is.Null);
             Assert.That(model.ExitCount, Is.EqualTo(1));
-            module.AddModel(model);
+            _module.AddModel(model);
             Assert.That(model.InitCount, Is.EqualTo(2));
             Assert.That(first.Model, Is.Null, "The same Model instance has a new registration token.");
             Assert.That(second.Model, Is.Null);
@@ -654,7 +752,7 @@ namespace YLFramework.Core.Tests
             Assert.That(first.Model, Is.SameAs(model));
             Assert.That(model.ExitCount, Is.EqualTo(1));
             first.Close();
-            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(model.Module, Is.SameAs(_module));
             Assert.That(model.ExitCount, Is.EqualTo(1));
         }
 
@@ -662,9 +760,9 @@ namespace YLFramework.Core.Tests
         public IEnumerator ExplicitUnbindFailureClearsSlotPreservesModelAndMarksInstanceForDiscard()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreExplicitUnbindPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             view.BoundModel = model;
             var failure = new InvalidOperationException("explicit unbind");
             view.UnboundAction = previous =>
@@ -673,19 +771,19 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.Model, Is.Null);
                 Assert.Throws<InvalidOperationException>(() => view.BoundModel = model);
                 Assert.Throws<InvalidOperationException>(() => view.Close());
-                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", module, view));
-                Assert.Throws<InvalidOperationException>(() => module.Close());
+                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", _module, view));
+                Assert.Throws<InvalidOperationException>(() => _module.Close());
                 view.BoundModel = null;
                 throw failure;
             };
             Assert.That(Assert.Throws<InvalidOperationException>(() => view.BoundModel = null), Is.SameAs(failure));
             Assert.That(view.UnboundCount, Is.EqualTo(1));
             Assert.That(view.Model, Is.Null);
-            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.Module, Is.SameAs(_module));
             Assert.That(view.IsLoaded, Is.True);
             Assert.That(view.gameObject.activeSelf, Is.True);
             Assert.That(model.ExitCount, Is.Zero);
-            Assert.That(module.GetModel<YLCoreProbeModel>(model.Id), Is.SameAs(model));
+            Assert.That(_module.GetModel<YLCoreProbeModel>(model.Id), Is.SameAs(model));
             view.UnboundAction = null;
             view.BoundModel = model;
             view.Close();
@@ -693,7 +791,7 @@ namespace YLFramework.Core.Tests
             Assert.That(model.ExitCount, Is.Zero);
             yield return null;
             Assert.That(view == null, Is.True, "A caught explicit unbind failure still contaminates the pooled instance.");
-            var fresh = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var fresh = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             Assert.That(fresh, Is.Not.SameAs(view));
             Assert.That(fresh.LoadedCount, Is.EqualTo(1));
         }
@@ -702,25 +800,37 @@ namespace YLFramework.Core.Tests
         public IEnumerator CloseIsReentrantAndEveryObserverRunsBeforeNecessaryCleanupAndCompletion()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreExitObserversPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             view.BoundModel = model;
             var events = new List<string>();
             var firstError = new InvalidOperationException("first observer");
             var lastError = new ArgumentException("last observer");
             var broadcastError = new InvalidOperationException("first broadcast observer");
-            view.onViewRemove = () => { events.Add("first"); throw firstError; };
-            view.onViewRemove += () =>
+            view.ViewRemoved = () =>
+            {
+                events.Add("first");
+                throw firstError;
+            };
+            view.ViewRemoved += () =>
             {
                 events.Add("reentrant");
                 Assert.That(view.IsLoaded, Is.False);
                 view.Close();
-                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", module, view));
+                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", _module, view));
                 Assert.Throws<InvalidOperationException>(() => view.BoundModel = model);
             };
-            view.onViewRemove += () => { events.Add("last"); throw lastError; };
-            view.RemoveAction = () => { events.Add("remove"); view.Close(); };
+            view.ViewRemoved += () =>
+            {
+                events.Add("last");
+                throw lastError;
+            };
+            view.RemoveAction = () =>
+            {
+                events.Add("remove");
+                view.Close();
+            };
             view.UnboundAction = previous =>
             {
                 events.Add("unbind");
@@ -732,12 +842,16 @@ namespace YLFramework.Core.Tests
             };
             Action<View> broadcast = removed =>
             {
-                if (!ReferenceEquals(removed, view)) return;
+                if (!ReferenceEquals(removed, view))
+                {
+                    return;
+                }
+
                 events.Add("broadcast");
                 Assert.That(view.Module, Is.Null);
                 Assert.That(view.Model, Is.Null);
                 Assert.That(view.gameObject.activeSelf, Is.False);
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(_module.GetViews<View>(), Is.Empty);
             };
             view.AfterClose = () =>
             {
@@ -746,13 +860,17 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.gameObject.activeSelf, Is.False);
                 view.Close();
             };
-            var firstBroadcastToken = EventManager.AddEvent<View>(CoreEvents.ON_REMOVE_VIEW, removed =>
+            var firstBroadcastToken = EventManager.AddEvent<View>(CoreEvents.ViewRemoved, removed =>
             {
-                if (!ReferenceEquals(removed, view)) return;
+                if (!ReferenceEquals(removed, view))
+                {
+                    return;
+                }
+
                 events.Add("broadcast.throw");
                 throw broadcastError;
             });
-            var broadcastToken = EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
+            var broadcastToken = EventManager.AddEvent(CoreEvents.ViewRemoved, broadcast);
             try
             {
                 var error = Assert.Throws<AggregateException>(() => view.Close());
@@ -761,21 +879,21 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.RemovedCount, Is.EqualTo(1));
                 Assert.That(view.UnboundCount, Is.EqualTo(1));
                 Assert.That(view.ClosedCount, Is.EqualTo(1));
-                Assert.That(model.Module, Is.SameAs(module));
+                Assert.That(model.Module, Is.SameAs(_module));
                 Assert.That(model.ExitCount, Is.Zero);
                 view.Close();
                 Assert.That(events, Has.Count.EqualTo(8));
             }
             finally
             {
-                firstBroadcastToken.UnRegister();
-                broadcastToken.UnRegister();
-                view.onViewRemove = null;
+                firstBroadcastToken.Unregister();
+                broadcastToken.Unregister();
+                view.ViewRemoved = null;
                 view.RemoveAction = null;
                 view.UnboundAction = null;
                 view.AfterClose = null;
             }
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view), "Observer errors do not contaminate an otherwise healthy pooled instance.");
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view), "Observer errors do not contaminate an otherwise healthy pooled instance.");
             var completionError = new InvalidOperationException("completion observer");
             view.AfterClose = () => throw completionError;
             try
@@ -785,19 +903,22 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.Module, Is.Null);
                 Assert.That(view.gameObject.activeSelf, Is.False);
             }
-            finally { view.AfterClose = null; }
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view));
+            finally
+            {
+                view.AfterClose = null;
+            }
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view));
         }
 
         [UnityTest]
         public IEnumerator GlobalRemovalObserverReplacementSessionDoesNotReceiveOldCompletionHook()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             for (int phase = 0; phase < 2; phase++)
             {
                 var prefab = Template<YLCoreSmokeView>("YLCoreBroadcastReplacementPrefab" + phase);
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 view.BoundModel = model;
                 var oldSession = ViewSession(view);
                 YLCoreSmokeView replacement = null;
@@ -810,13 +931,20 @@ namespace YLFramework.Core.Tests
                 };
                 Action<View> broadcast = removed =>
                 {
-                    if (!ReferenceEquals(removed, view) || !ReferenceEquals(replacement, null)) return;
-                    replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                    if (!ReferenceEquals(removed, view) || !ReferenceEquals(replacement, null))
+                    {
+                        return;
+                    }
+
+                    replacement = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                     replacement.BoundModel = model;
                     Assert.That(ViewSession(replacement), Is.Not.SameAs(oldSession));
-                    if (phase == 1) replacement.Close();
+                    if (phase == 1)
+                    {
+                        replacement.Close();
+                    }
                 };
-                EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
+                EventManager.AddEvent(CoreEvents.ViewRemoved, broadcast);
                 try
                 {
                     view.Close();
@@ -828,21 +956,21 @@ namespace YLFramework.Core.Tests
                     if (phase == 0)
                     {
                         Assert.That(view.Model, Is.SameAs(model));
-                        Assert.That(view.Module, Is.SameAs(module));
-                        Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
+                        Assert.That(view.Module, Is.SameAs(_module));
+                        Assert.That(_module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
                         Assert.That(view.gameObject.activeSelf, Is.True);
                     }
                     else
                     {
                         Assert.That(view.Model, Is.Null);
                         Assert.That(view.Module, Is.Null);
-                        Assert.That(module.GetViews<View>(), Is.Empty);
+                        Assert.That(_module.GetViews<View>(), Is.Empty);
                     }
                     Assert.That(model.ExitCount, Is.Zero);
                 }
                 finally
                 {
-                    EventManager.RemoveEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
+                    EventManager.RemoveEvent(CoreEvents.ViewRemoved, broadcast);
                     view.AfterClose = null;
                     view.Close();
                 }
@@ -853,20 +981,31 @@ namespace YLFramework.Core.Tests
         public IEnumerator NecessaryCleanupFailuresFinishExitButDestroyInstanceRatherThanPoolIt()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             for (int phase = 0; phase < 3; phase++)
             {
                 var prefab = Template<YLCoreSmokeView>("YLCoreNecessaryFailurePrefab" + phase);
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 view.BoundModel = model;
                 var failure = new InvalidOperationException(phase == 0 ? "OnRemove failure" : "unbind failure");
-                if (phase == 0) view.RemoveAction = () => throw failure;
-                if (phase == 2) view.onViewRemove = () => view.BoundModel = null;
+                if (phase == 0)
+                {
+                    view.RemoveAction = () => throw failure;
+                }
+
+                if (phase == 2)
+                {
+                    view.ViewRemoved = () => view.BoundModel = null;
+                }
+
                 view.UnboundAction = previous =>
                 {
                     Assert.That(view.Model, Is.Null);
                     Assert.That(previous, Is.SameAs(model));
-                    if (phase != 0) throw failure;
+                    if (phase != 0)
+                    {
+                        throw failure;
+                    }
                 };
                 var closed = 0;
                 view.AfterClose = () =>
@@ -880,13 +1019,13 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.RemovedCount, Is.EqualTo(1));
                 Assert.That(view.UnboundCount, Is.EqualTo(1));
                 Assert.That(closed, Is.EqualTo(1));
-                Assert.That(module.GetViews<View>(), Is.Empty);
-                Assert.That(model.Module, Is.SameAs(module));
+                Assert.That(_module.GetViews<View>(), Is.Empty);
+                Assert.That(model.Module, Is.SameAs(_module));
                 Assert.That(model.ExitCount, Is.Zero);
                 view.Close();
                 yield return null;
                 Assert.That(view == null, Is.True, "Necessary cleanup failure must never re-enter the backend's reusable pool.");
-                var fresh = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var fresh = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.That(fresh, Is.Not.SameAs(view));
                 Assert.That(fresh.LoadedCount, Is.EqualTo(1));
                 fresh.Close();
@@ -898,25 +1037,25 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreStaleSessionPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             var previousSession = ViewSession(view);
             var id = view.Id;
             view.Close();
-            var reused = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var reused = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             Assert.That(reused, Is.SameAs(view));
             Assert.That(reused.Id, Is.EqualTo(id));
             Assert.That(ViewSession(reused), Is.Not.SameAs(previousSession));
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             reused.BoundModel = model;
-            InvokeViewManager("RemoveView", module, reused, previousSession, false);
-            Assert.That(reused.Module, Is.SameAs(module));
+            InvokeViewManager("RemoveView", _module, reused, previousSession, false);
+            Assert.That(reused.Module, Is.SameAs(_module));
             Assert.That(reused.Model, Is.SameAs(model));
             Assert.That(reused.IsLoaded, Is.True);
             Assert.That(reused.gameObject.activeSelf, Is.True);
-            Assert.That(module.GetView<YLCoreSmokeView>(id), Is.SameAs(reused));
+            Assert.That(_module.GetView<YLCoreSmokeView>(id), Is.SameAs(reused));
             Assert.That(reused.RemovedCount, Is.EqualTo(1));
             Assert.That(reused.ClosedCount, Is.EqualTo(1));
-            InvokeViewManager("RemoveView", module, reused);
+            InvokeViewManager("RemoveView", _module, reused);
             Assert.That(reused.RemovedCount, Is.EqualTo(2));
             Assert.That(reused.Model, Is.Null);
             Assert.That(model.ExitCount, Is.Zero);
@@ -926,9 +1065,9 @@ namespace YLFramework.Core.Tests
         public IEnumerator DestroyedViewsEndBindingsAndUnactivatedWrappersArePrunedBySavedIdentity()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreDestroyedViewPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             view.BoundModel = model;
             var id = view.Id;
             Object.Destroy(view.gameObject);
@@ -938,50 +1077,59 @@ namespace YLFramework.Core.Tests
             Assert.That(view.Model, Is.Null);
             Assert.That(view.RemovedCount, Is.EqualTo(1));
             Assert.That(view.UnboundCount, Is.EqualTo(1));
-            Assert.That(module.GetView<View>(id), Is.Null);
-            Assert.That(module.GetViews(prefab.name), Is.Empty);
-            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(_module.GetView<View>(id), Is.Null);
+            Assert.That(_module.GetViews(prefab.name), Is.Empty);
+            Assert.That(model.Module, Is.SameAs(_module));
             Assert.That(model.ExitCount, Is.Zero);
 
             // 从未激活的对象不保证收到OnDestroy，索引扫描和查询均依靠保存身份收尾。
             var inactive = Template<YLCoreSmokeView>("YLCoreUnactivatedView").GetComponent<YLCoreSmokeView>();
             typeof(View).GetProperty("AssetName", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(inactive, "YLCoreUnactivatedView");
-            InvokeViewManager("AddView", module, inactive);
+            InvokeViewManager("AddView", _module, inactive);
             id = inactive.Id;
             Object.Destroy(inactive.gameObject);
             yield return null;
             yield return null;
             Assert.That(inactive == null, Is.True);
             Assert.That(ViewSession(inactive), Is.Null, "Destruction cleanup does not require a business query.");
-            Assert.That(module.GetView<View>(id), Is.Null);
+            Assert.That(_module.GetView<View>(id), Is.Null);
             Assert.That(inactive.Module, Is.Null);
             Assert.That(ViewSession(inactive), Is.Null);
             Assert.That(inactive.RemovedCount, Is.EqualTo(1));
-            Assert.That(module.GetViews<View>(), Is.Empty);
-            Assert.That(module.GetViews("YLCoreUnactivatedView"), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews("YLCoreUnactivatedView"), Is.Empty);
         }
 
         [UnityTest]
         public IEnumerator AllClearOverloadsContinueAfterSiblingFailureAndPreserveModelRegistration()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             for (int phase = 0; phase < 3; phase++)
             {
                 var prefab = Template<YLCoreSmokeView>("YLCoreClearFailurePrefab" + phase);
-                var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var sibling = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 first.BoundModel = model;
                 sibling.BoundModel = model;
                 var failure = new InvalidOperationException("clear observer " + phase);
-                first.onViewRemove = () => throw failure;
+                first.ViewRemoved = () => throw failure;
                 try
                 {
                     var error = Assert.Throws<InvalidOperationException>(() =>
                     {
-                        if (phase == 0) module.ClearView();
-                        else if (phase == 1) module.ClearView<View>();
-                        else module.ClearView(prefab.name);
+                        if (phase == 0)
+                        {
+                            _module.ClearView();
+                        }
+                        else if (phase == 1)
+                        {
+                            _module.ClearView<View>();
+                        }
+                        else
+                        {
+                            _module.ClearView(prefab.name);
+                        }
                     });
                     Assert.That(error, Is.SameAs(failure));
                     Assert.That(first.Module, Is.Null);
@@ -992,12 +1140,15 @@ namespace YLFramework.Core.Tests
                     Assert.That(sibling.RemovedCount, Is.EqualTo(1));
                     Assert.That(sibling.ClosedCount, Is.EqualTo(1));
                     Assert.That(sibling.gameObject.activeSelf, Is.False);
-                    Assert.That(module.GetViews<View>(), Is.Empty);
-                    Assert.That(module.State, Is.EqualTo(ModuleState.Running));
-                    Assert.That(model.Module, Is.SameAs(module));
+                    Assert.That(_module.GetViews<View>(), Is.Empty);
+                    Assert.That(_module.State, Is.EqualTo(ModuleState.Running));
+                    Assert.That(model.Module, Is.SameAs(_module));
                     Assert.That(model.ExitCount, Is.Zero);
                 }
-                finally { first.onViewRemove = null; }
+                finally
+                {
+                    first.ViewRemoved = null;
+                }
             }
         }
 
@@ -1017,11 +1168,11 @@ namespace YLFramework.Core.Tests
             view.LoadedAction = () =>
             {
                 Assert.That(view.IsLoaded, Is.False);
-                Assert.That(view.Module, Is.SameAs(module));
+                Assert.That(view.Module, Is.SameAs(_module));
                 Assert.Throws<InvalidOperationException>(() => view.Close());
-                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", module, view));
+                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("AddView", _module, view));
             };
-            InvokeViewManager("InitView", module, view, prefab.name, null, new object[0]);
+            InvokeViewManager("InitView", _module, view, prefab.name, null, new object[0]);
             Assert.That(view.IsLoaded, Is.True);
             Assert.That(view.LoadedCount, Is.EqualTo(1));
             Assert.That(view.ArgsCount, Is.EqualTo(1));
@@ -1035,7 +1186,7 @@ namespace YLFramework.Core.Tests
         public IEnumerator FailedInitializationRollsBackRegistrationAndBindingWithoutExitingModel()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreInitializationRollbackPrefab");
             var view = prefab.GetComponent<YLCoreSmokeView>();
             var failure = new InvalidOperationException("view initialization");
@@ -1044,13 +1195,13 @@ namespace YLFramework.Core.Tests
                 view.BoundModel = model;
                 throw failure;
             };
-            Assert.That(Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", module, view, prefab.name, null, new object[0])), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", _module, view, prefab.name, null, new object[0])), Is.SameAs(failure));
             Assert.That(view.Module, Is.Null);
             Assert.That(view.Model, Is.Null);
             Assert.That(view.IsLoaded, Is.False);
             Assert.That(view.UnboundCount, Is.EqualTo(1));
-            Assert.That(module.GetViews<View>(), Is.Empty);
-            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(_module.GetViews<View>(), Is.Empty);
+            Assert.That(model.Module, Is.SameAs(_module));
             Assert.That(model.ExitCount, Is.Zero);
             yield return null;
             Assert.That(view == null, Is.True);
@@ -1066,7 +1217,7 @@ namespace YLFramework.Core.Tests
             // 独立构造不经过Instance属性，不注册场景或编辑器事件，也不污染已有manager。
             var manager = Activator.CreateInstance(type, true);
             instanceField.SetValue(null, manager);
-            var states = (IDictionary)type.GetField("states", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
+            var states = (IDictionary)type.GetField("_states", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
             UIRootContext root = null;
             List<Panel> Queue()
             {
@@ -1080,20 +1231,24 @@ namespace YLFramework.Core.Tests
                 for (int phase = 0; phase < 2; phase++)
                 {
                     var prefab = Template<YLCoreSmokePanel>("YLCorePanelCleanupPrefab" + phase, true);
-                    var previous = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                    var previous = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                         overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
-                    var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                    var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                         overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                     Assert.That(states.Contains(previous), Is.True);
                     Assert.That(states.Contains(panel), Is.True);
                     previous.UpdateDisplay(new PanelOverrides { Priority = 10 });
                     panel.UpdateDisplay(new PanelOverrides { Priority = 20 });
-                    PanelManager.MultiPanelListener = phase == 1;
+                    PanelManager.CullCoveredPanels = phase == 1;
                     var failure = new InvalidOperationException("global panel observer " + phase);
                     var followingCalls = 0;
                     Action<View> broadcast = removed =>
                     {
-                        if (!ReferenceEquals(removed, panel)) return;
+                        if (!ReferenceEquals(removed, panel))
+                        {
+                            return;
+                        }
+
                         Assert.That(states.Contains(panel), Is.False);
                         Assert.That(Queue(), Is.EqualTo(new Panel[] { previous }));
                         Assert.That(PanelManager.GetTopPanel(previous.Root), Is.SameAs(previous));
@@ -1101,10 +1256,14 @@ namespace YLFramework.Core.Tests
                         Assert.That(panel.Module, Is.Null);
                         throw failure;
                     };
-                    var broadcastToken = EventManager.AddEvent(CoreEvents.ON_REMOVE_VIEW, broadcast);
-                    var followingToken = EventManager.AddEvent<View>(CoreEvents.ON_REMOVE_VIEW, removed =>
+                    var broadcastToken = EventManager.AddEvent(CoreEvents.ViewRemoved, broadcast);
+                    var followingToken = EventManager.AddEvent<View>(CoreEvents.ViewRemoved, removed =>
                     {
-                        if (!ReferenceEquals(removed, panel)) return;
+                        if (!ReferenceEquals(removed, panel))
+                        {
+                            return;
+                        }
+
                         followingCalls++;
                         Assert.That(panel.IsLoaded, Is.False);
                         Assert.That(panel.Module, Is.Null);
@@ -1121,15 +1280,15 @@ namespace YLFramework.Core.Tests
                         Assert.That(panel.RemovedCount, Is.EqualTo(1));
                         Assert.That(panel.ClosedCount, Is.EqualTo(1));
                         Assert.That(followingCalls, Is.EqualTo(1), "A failed removal observer must not skip the next observer.");
-                        Assert.That(module.State, Is.EqualTo(ModuleState.Running));
-                        Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { previous }));
+                        Assert.That(_module.State, Is.EqualTo(ModuleState.Running));
+                        Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { previous }));
                     }
                     finally
                     {
-                        broadcastToken.UnRegister();
-                        followingToken.UnRegister();
+                        broadcastToken.Unregister();
+                        followingToken.Unregister();
                     }
-                    Assert.That(Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                    Assert.That(Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                         overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true })), Is.SameAs(panel));
                     panel.Close();
                     previous.Close();
@@ -1143,10 +1302,13 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokePanel.ResetProbes();
                 try
                 {
-                    ((IUnRegister)typeof(PanelManager).GetField("lateSubscription", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager))?.UnRegister();
+                    ((IUnregister)typeof(PanelManager).GetField("_lateSubscription", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager))?.Unregister();
                     typeof(PanelManager).GetMethod("ReleaseOwnedInput", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(manager, null);
                 }
-                finally { instanceField.SetValue(null, previousManager); }
+                finally
+                {
+                    instanceField.SetValue(null, previousManager);
+                }
             }
         }
 
@@ -1156,26 +1318,26 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreDirectViewPrefab");
             var args = LoadViewArgs.New();
-            classPool.Track(args);
+            _classPool.Track(args);
             args.SetInt("token", 41);
-            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
+            var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
             Assert.That(first, Is.Not.Null);
-            Assert.That(first.Module, Is.SameAs(module));
+            Assert.That(first.Module, Is.SameAs(_module));
             Assert.That(first.LoadedCount, Is.EqualTo(1));
             Assert.That(first.IsLoaded, Is.True);
             Assert.That(first.ArgsCount, Is.EqualTo(1));
             Assert.That(first.Token, Is.EqualTo(41));
             Assert.That(first.gameObject.activeSelf, Is.True);
-            Assert.That(module.GetView<YLCoreSmokeView>(prefab.name, first.Id), Is.SameAs(first));
+            Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name, first.Id), Is.SameAs(first));
             yield return null;
             Assert.That(first.LoadedCount, Is.EqualTo(1), "Start must not initialize an already loaded View again.");
             var removed = 0;
-            first.onViewRemove += () => removed++;
+            first.ViewRemoved += () => removed++;
             first.Close();
             Assert.That(first.gameObject.activeSelf, Is.False);
             Assert.That(first != null, Is.True, "Close is cache return, not destruction or asset release.");
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
-            Assert.That(module.GetViews(prefab.name), Is.Empty);
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            Assert.That(_module.GetViews(prefab.name), Is.Empty);
             Assert.That(first.RemovedCount, Is.EqualTo(1));
             Assert.That(first.Module, Is.Null);
             Assert.That(first.IsLoaded, Is.False);
@@ -1183,16 +1345,16 @@ namespace YLFramework.Core.Tests
             first.Close();
             Assert.That(removed, Is.EqualTo(1));
             Assert.That(first.ClosedCount, Is.EqualTo(1));
-            var second = Track(module.LoadView<YLCoreSmokeView>(prefab, null, new object[] { "reused" }));
+            var second = Track(_module.LoadView<YLCoreSmokeView>(prefab, null, new object[] { "reused" }));
             Assert.That(second, Is.SameAs(first));
             Assert.That(second.LoadedCount, Is.EqualTo(2));
             Assert.That(second.Parameter, Is.EqualTo("reused"));
             Assert.That(second.Token, Is.Zero, "Recycled load arguments must not carry previous values.");
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Has.Count.EqualTo(1));
-            module.Close();
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Has.Count.EqualTo(1));
+            _module.Close();
             Assert.That(second.gameObject.activeSelf, Is.False);
             Assert.That(second.RemovedCount, Is.EqualTo(2));
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
         }
 
         [UnityTest]
@@ -1200,7 +1362,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreDirectEventsPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.EqualTo(1));
             view.gameObject.SetActive(false);
@@ -1212,7 +1374,7 @@ namespace YLFramework.Core.Tests
             view.Close();
             EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.EqualTo(2));
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view));
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(view));
             EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.EqualTo(3));
             Assert.That(view.EnabledCount, Is.EqualTo(3));
@@ -1229,27 +1391,34 @@ namespace YLFramework.Core.Tests
             var reopen = true;
             var token = EventBus.Default.Register(YLCoreSmokeView.ProbeEvent, () =>
             {
-                if (!reopen) return;
+                if (!reopen)
+                {
+                    return;
+                }
+
                 reopen = false;
                 view.Close();
-                replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                replacement = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             });
             try
             {
-                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 var session = ViewSession(view);
                 EventBus.Default.Send(YLCoreSmokeView.ProbeEvent);
                 Assert.That(replacement, Is.SameAs(view));
                 Assert.That(ViewSession(replacement), Is.Not.SameAs(session));
                 Assert.That(replacement.EventCount, Is.Zero, "The old ordinary snapshot must not enter the replacement session.");
                 Assert.That(replacement.IsLoaded, Is.True);
-                Assert.That(replacement.Module, Is.SameAs(module));
+                Assert.That(replacement.Module, Is.SameAs(_module));
                 Assert.That(replacement.RemovedCount, Is.EqualTo(1));
                 Assert.That(replacement.LoadedCount, Is.EqualTo(2));
                 EventBus.Default.Send(YLCoreSmokeView.ProbeEvent);
                 Assert.That(replacement.EventCount, Is.EqualTo(1), "The replacement subscription receives the next round exactly once.");
             }
-            finally { token.UnRegister(); }
+            finally
+            {
+                token.Unregister();
+            }
         }
 
         [UnityTest]
@@ -1262,7 +1431,7 @@ namespace YLFramework.Core.Tests
                 for (int phase = 0; phase < 2; phase++)
                 {
                     var prefab = Template<YLCoreSmokeView>("YLCoreReentrantEventRoundPrefab" + phase);
-                    var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                    var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                     var session = ViewSession(view);
                     YLCoreSmokeView replacement = null;
                     view.EventAction = () =>
@@ -1271,7 +1440,7 @@ namespace YLFramework.Core.Tests
                         if (phase == 0)
                         {
                             view.Close();
-                            replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                            replacement = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                         }
                         else
                         {
@@ -1285,13 +1454,16 @@ namespace YLFramework.Core.Tests
                     Assert.That(ViewSession(replacement), phase == 0 ? Is.Not.SameAs(session) : Is.SameAs(session));
                     Assert.That(replacement.EventCount, Is.EqualTo(1), "Remaining callbacks belong to the old session or subscription epoch.");
                     Assert.That(replacement.IsLoaded, Is.True);
-                    Assert.That(replacement.Module, Is.SameAs(module));
+                    Assert.That(replacement.Module, Is.SameAs(_module));
                     EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
                     Assert.That(replacement.EventCount, Is.EqualTo(3), "Both handlers remain registered exactly once in the new round.");
                     replacement.Close();
                 }
             }
-            finally { YLCoreSmokeView.DuplicateProbeHandler = false; }
+            finally
+            {
+                YLCoreSmokeView.DuplicateProbeHandler = false;
+            }
         }
 
         [UnityTest]
@@ -1302,28 +1474,28 @@ namespace YLFramework.Core.Tests
             var sharedCalls = 0;
             var conflictCalls = 0;
             Action shared = () => sharedCalls++;
-            IUnRegister sharedToken = null;
-            IUnRegister conflictToken = null;
+            IUnregister sharedToken = null;
+            IUnregister conflictToken = null;
             YLCoreSmokeView failed = null;
             try
             {
                 YLCoreSmokeView.SharedEventHandler = shared;
                 var prefab = Template<YLCoreSmokeView>("YLCorePartialEventRegistrationPrefab");
-                var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var sibling = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 sharedToken = EventBus.Default.Register(YLCoreSmokeView.ProbeEvent, shared);
                 conflictToken = EventManager.AddEvent(conflict, () => conflictCalls++);
                 YLCoreSmokeView.SignatureConflictEvent = conflict;
                 YLCoreSmokeView.LoadingProbe = view => failed = Track(view);
-                Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                Assert.Throws<InvalidOperationException>(() => _module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.That(failed, Is.Not.Null);
                 Assert.That(failed.Module, Is.Null);
                 Assert.That(failed.IsLoaded, Is.False);
                 Assert.That(failed.RemovedCount, Is.EqualTo(1));
                 Assert.That(failed.ClosedCount, Is.Zero);
-                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { sibling }));
+                Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { sibling }));
                 Assert.That(sibling.IsLoaded, Is.True);
                 Assert.That(sibling.RemovedCount, Is.Zero);
-                Assert.That(module.State, Is.EqualTo(ModuleState.Running));
+                Assert.That(_module.State, Is.EqualTo(ModuleState.Running));
                 Assert.That(EventBus.Default.ListenerCount(YLCoreSmokeView.ProbeEvent), Is.EqualTo(2));
                 EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
                 Assert.That(sharedCalls, Is.EqualTo(2), "Rollback preserves both the sibling View and the equal direct Default callback.");
@@ -1338,8 +1510,8 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokeView.SignatureConflictEvent = null;
                 YLCoreSmokeView.SharedEventHandler = null;
                 YLCoreSmokeView.LoadingProbe = null;
-                sharedToken?.UnRegister();
-                conflictToken?.UnRegister();
+                sharedToken?.Unregister();
+                conflictToken?.Unregister();
                 EventBus.Default.RemoveKey(conflict);
             }
             yield return null;
@@ -1351,54 +1523,55 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreDirectMultiPrefab");
-            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            var second = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var second = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             Assert.That(first.Id, Is.Not.EqualTo(second.Id));
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Has.Count.EqualTo(2));
-            Assert.Throws<InvalidOperationException>(() => module.GetView<YLCoreSmokeView>());
-            Assert.Throws<InvalidOperationException>(() => module.GetView(prefab.name));
-            Assert.Throws<InvalidOperationException>(() => module.GetView<YLCoreSmokeView>(prefab.name));
-            Assert.That(module.GetView<View>(), Is.Null, "Type-only lookup uses the exact runtime type.");
-            Assert.That(module.GetView<YLCoreSmokeView>(first.Id), Is.SameAs(first), "The prefab name is deliberately not the component type name.");
-            Assert.That(module.GetView<View>(second.Id), Is.SameAs(second));
-            Assert.Throws<InvalidCastException>(() => module.GetView<YLCoreSmokePanel>(prefab.name, first.Id));
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Has.Count.EqualTo(2));
+            Assert.Throws<InvalidOperationException>(() => _module.GetView<YLCoreSmokeView>());
+            Assert.Throws<InvalidOperationException>(() => _module.GetView(prefab.name));
+            Assert.Throws<InvalidOperationException>(() => _module.GetView<YLCoreSmokeView>(prefab.name));
+            Assert.That(_module.GetView<View>(), Is.Null, "Type-only lookup uses the exact runtime type.");
+            Assert.That(_module.GetView<YLCoreSmokeView>(first.Id), Is.SameAs(first), "The prefab name is deliberately not the component type name.");
+            Assert.That(_module.GetView<View>(second.Id), Is.SameAs(second));
+            Assert.Throws<InvalidCastException>(() => _module.GetView<YLCoreSmokePanel>(prefab.name, first.Id));
             first.Close();
-            Assert.That(module.GetView<YLCoreSmokeView>(prefab.name, first.Id), Is.Null);
-            Assert.That(module.GetView<YLCoreSmokeView>(prefab.name, second.Id), Is.SameAs(second));
+            Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name, first.Id), Is.Null);
+            Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name, second.Id), Is.SameAs(second));
             Assert.That(second.gameObject.activeSelf, Is.True);
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { second }));
-            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { second }));
-            Assert.That(module.GetView<YLCoreSmokeView>(prefab.name), Is.SameAs(second));
-            Assert.Throws<InvalidCastException>(() => module.GetView<YLCoreSmokePanel>(prefab.name));
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { second }));
+            Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { second }));
+            Assert.That(_module.GetView<YLCoreSmokeView>(prefab.name), Is.SameAs(second));
+            Assert.Throws<InvalidCastException>(() => _module.GetView<YLCoreSmokePanel>(prefab.name));
         }
 
         [UnityTest]
         public IEnumerator PanelSwitchDoesNotDuplicateTokenAndLastRootEndsInputLifetimeSubscription()
         {
             yield return StartModule();
-            var stopper = YLFramework.Foundation.UpdateManager.AddLateUpdateEvent(() => PanelManager.MultiPanelListener = false);
+            var stopper = YLFramework.Foundation.UpdateManager.AddLateUpdateEvent(() => PanelManager.CullCoveredPanels = false);
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCorePanelUpdateRound", true);
                 var root = PolicyRoot("YLCore.LateRoundRoot");
-                var previous = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var previous = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
-                var current = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var current = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 current.enabled = false;
                 current.gameObject.SetActive(false);
                 var host = UnityEngine.Object.FindFirstObjectByType<YLFramework.Foundation.UpdateManager>();
                 host.SendMessage("LateUpdate");
                 Assert.That(previous.Canvas.enabled, Is.True, "关闭遮挡策略应立即恢复显示。");
-                stopper.UnRegister();
-                PanelManager.MultiPanelListener = true;
-                PanelManager.MultiPanelListener = true;
+                stopper.Unregister();
+                PanelManager.CullCoveredPanels = true;
+                PanelManager.CullCoveredPanels = true;
                 host.SendMessage("LateUpdate");
                 Assert.That(previous.Canvas.enabled, Is.True);
                 var channel = (EventChannel)typeof(YLFramework.Foundation.UpdateManager)
                     .GetField("_lateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(host);
                 Assert.That(channel.ListenerCount, Is.EqualTo(1), "同值启用不能重复建立连接。");
-                current.Close(); previous.Close();
+                current.Close();
+                previous.Close();
                 Assert.That(channel.ListenerCount, Is.EqualTo(1), "窗口队列归零后仍服务有效输入根，不销毁其他 Module 可继续使用的输入。");
                 Object.Destroy(root.gameObject);
                 yield return null;
@@ -1408,8 +1581,8 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                stopper.UnRegister();
-                PanelManager.MultiPanelListener = true;
+                stopper.Unregister();
+                PanelManager.CullCoveredPanels = true;
                 YLCoreSmokePanel.ResetProbes();
             }
         }
@@ -1422,23 +1595,23 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeView first = null;
             YLCoreSmokeView replacement = null;
             object firstSession = null;
-            IUnRegister resetter = null;
+            IUnregister resetter = null;
             resetter = YLFramework.Foundation.UpdateManager.AddUpdateEvent(() =>
             {
-                resetter.UnRegister();
+                resetter.Unregister();
                 InvokeViewManager("ResetSession");
-                Assert.That(first.Module, Is.SameAs(module));
+                Assert.That(first.Module, Is.SameAs(_module));
                 Assert.That(ViewSession(first), Is.SameAs(firstSession), "执行会话重置不调用业务 Close 或清 Module 索引。");
                 var obj = new GameObject("YLCoreNewInactiveViewRound");
-                objects.Add(obj);
+                _objects.Add(obj);
                 obj.SetActive(false);
                 replacement = obj.AddComponent<YLCoreSmokeView>();
-                module.AttachView(replacement);
+                _module.AttachView(replacement);
                 UnityEngine.Object.DestroyImmediate(obj);
             });
             try
             {
-                first = Track(module.LoadView<YLCoreSmokeView>(template, loadViewArgs: null));
+                first = Track(_module.LoadView<YLCoreSmokeView>(template, loadViewArgs: null));
                 firstSession = ViewSession(first);
                 var host = UnityEngine.Object.FindFirstObjectByType<YLFramework.Foundation.UpdateManager>();
                 host.SendMessage("Update");
@@ -1446,24 +1619,27 @@ namespace YLFramework.Core.Tests
                 yield return null;
                 yield return null;
                 Assert.That(ViewSession(replacement), Is.Null, "新轮次继续保留从未激活对象的必要扫描。");
-                Assert.That(first.Module, Is.SameAs(module));
+                Assert.That(first.Module, Is.SameAs(_module));
                 first.Close();
             }
-            finally { resetter.UnRegister(); }
+            finally
+            {
+                resetter.Unregister();
+            }
         }
 
         [UnityTest]
         public IEnumerator DefaultPanelListenerRestoresPreviousPanelWhenDisabledComponentMissesDeactivation()
         {
             yield return StartModule();
-            Assert.That(PanelManager.MultiPanelListener, Is.True);
+            Assert.That(PanelManager.CullCoveredPanels, Is.True);
             try
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCorePanelLateFallback", true);
                 var root = PolicyRoot("YLCore.LateFallbackRoot");
-                var previous = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var previous = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
-                var current = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var current = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 Assert.That(previous.Canvas.enabled, Is.False);
                 // 停用保留会话；Late 扫描也必须收敛到实际可见性。
@@ -1474,9 +1650,13 @@ namespace YLFramework.Core.Tests
                 Assert.That(previous.Canvas.enabled, Is.True);
                 Assert.That(PanelManager.GetTopPanel(previous.Root), Is.SameAs(previous));
                 Assert.That(current.IsLoaded, Is.True);
-                current.Close(); previous.Close();
+                current.Close();
+                previous.Close();
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -1487,31 +1667,35 @@ namespace YLFramework.Core.Tests
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCoreInactivePanelPrefab", true);
                 var root = PolicyRoot("YLCore.InactiveRoot");
-                var visible = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                var visible = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 var parent = new GameObject("YLCoreInactivePanelParent");
-                objects.Add(parent);
+                _objects.Add(parent);
                 parent.transform.SetParent(root.transform, false);
                 parent.SetActive(false);
                 var obj = new GameObject("YLCoreInactiveScenePanel", typeof(RectTransform));
-                objects.Add(obj);
+                _objects.Add(obj);
                 obj.transform.SetParent(parent.transform);
                 var inactive = obj.AddComponent<YLCoreSmokePanel>();
                 SetPrivate(inactive, "settings", new PanelOverrides { CoversRoot = true }.ApplyTo(PanelConfig.Default));
-                module.AttachView(inactive);
+                _module.AttachView(inactive);
                 Assert.That(inactive.IsLoaded, Is.True);
                 Assert.That(inactive.gameObject.activeSelf, Is.True);
                 Assert.That(inactive.gameObject.activeInHierarchy, Is.False);
                 Assert.That(visible.Canvas.enabled, Is.True, "Inactive preparation cannot hide the current Panel.");
-                var orders = (IDictionary)typeof(PanelManager).GetField("states", BindingFlags.Instance | BindingFlags.NonPublic)
+                var orders = (IDictionary)typeof(PanelManager).GetField("_states", BindingFlags.Instance | BindingFlags.NonPublic)
                     .GetValue(typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null));
                 Assert.That(orders.Contains(inactive), Is.True);
                 inactive.UpdateDisplay(new PanelOverrides { Priority = 91 });
                 var preparedOrder = inactive.SortingOrder;
-                Assert.That(inactive.EffectiveSettings.Priority, Is.EqualTo(91));
+                Assert.That(inactive.EffectiveSettings.priority, Is.EqualTo(91));
                 parent.SetActive(true);
                 Assert.That(visible.Canvas.enabled, Is.False);
                 Assert.That(inactive.Canvas.enabled, Is.True);
-                if (!inactive.Canvas.isRootCanvas) Assert.That(inactive.Canvas.overrideSorting, Is.True);
+                if (!inactive.Canvas.isRootCanvas)
+                {
+                    Assert.That(inactive.Canvas.overrideSorting, Is.True);
+                }
+
                 Assert.That(inactive.Canvas.sortingOrder, Is.EqualTo(preparedOrder), "First native Canvas activation must restore the prepared order.");
                 YLCoreSmokePanel.VisibleProbe = panel => EventManager.TriggerEvent(YLCoreSmokePanel.ProbeEvent);
                 parent.SetActive(false);
@@ -1519,13 +1703,16 @@ namespace YLFramework.Core.Tests
                 Assert.That(visible.EventCount, Is.EqualTo(1));
                 Assert.That(visible.Canvas.enabled, Is.True);
                 Assert.That(inactive.IsLoaded, Is.True);
-                Assert.That(inactive.Module, Is.SameAs(module));
+                Assert.That(inactive.Module, Is.SameAs(_module));
                 Assert.That(orders.Contains(inactive), Is.True, "Disable pauses display, not business registration or sorting ownership.");
                 inactive.Close();
                 Assert.That(orders.Contains(inactive), Is.False);
                 visible.Close();
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -1537,17 +1724,17 @@ namespace YLFramework.Core.Tests
             {
                 var prefab = Template<YLCoreSmokePanel>("YLCoreSharedPanelEventPrefab", true);
                 var root = PolicyRoot("YLCore.SharedEventRoot");
-                var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 YLCoreSmokePanel.InvisibleProbe = panel =>
                 {
                     Assert.That(panel, Is.SameAs(first));
-                    var activating = module.GetViews<YLCoreSmokePanel>().Find(item => item != first);
+                    var activating = _module.GetViews<YLCoreSmokePanel>().Find(item => item != first);
                     Assert.That(activating, Is.Not.Null);
                     YLCoreSmokePanel.InvisibleProbe = null;
                     activating.gameObject.SetActive(false);
                 };
-                var second = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var second = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 Assert.That(second.IsLoaded, Is.True);
                 Assert.That(second.gameObject.activeSelf, Is.False);
@@ -1557,7 +1744,10 @@ namespace YLFramework.Core.Tests
                 first.Close();
                 second.Close();
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -1565,14 +1755,17 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             foreach (var name in new[] { nameof(Panel.EffectiveSettings), nameof(Panel.Root), nameof(Panel.Canvas), nameof(Panel.SortingOrder) })
+            {
                 Assert.That(typeof(Panel).GetProperty(name).GetSetMethod(), Is.Null, name + " 不能提供公开写入口。");
+            }
+
             var prefab = Template<YLCoreSmokePanel>("YLCoreDirectPanelPrefab", true);
             var parent = PolicyRoot("YLCoreDirectPanelParent");
             parent.gameObject.SetActive(false);
             var args = LoadViewArgs.New();
-            classPool.Track(args);
+            _classPool.Track(args);
             args.SetInt("token", 17);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, args, root: parent));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, args, root: parent));
             Assert.That(panel.IsLoaded, Is.True);
             Assert.That(panel.gameObject.activeInHierarchy, Is.False);
             parent.gameObject.SetActive(true);
@@ -1582,11 +1775,11 @@ namespace YLFramework.Core.Tests
             Assert.That(panel.GetComponent<UnityEngine.UI.GraphicRaycaster>(), Is.Not.Null);
             Assert.That(panel.Token, Is.EqualTo(17));
             panel.UpdateDisplay(new PanelOverrides { Priority = 30 });
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(30));
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(30));
             var canvas = panel.Canvas;
             panel.Close();
             Assert.That(panel.RemovedCount, Is.EqualTo(1));
-            var reused = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: parent));
+            var reused = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: parent));
             Assert.That(reused, Is.SameAs(panel));
             Assert.That(reused.Canvas, Is.SameAs(canvas));
             Assert.That(reused.GetComponents<Canvas>(), Has.Length.EqualTo(1));
@@ -1609,16 +1802,26 @@ namespace YLFramework.Core.Tests
             var expected = Template<YLCoreSmokePanel>("SamePanelName", true);
             var other = Template<YLCoreSmokePanel>("SamePanelName", true);
             var wrong = Object.Instantiate(other);
-            objects.Add(wrong);
+            _objects.Add(wrong);
             var wrongPanel = wrong.GetComponent<YLCoreSmokePanel>();
             typeof(View).GetField("DirectSource", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(wrongPanel, other);
-            if (destroySource) Object.DestroyImmediate(other);
+            if (destroySource)
+            {
+                Object.DestroyImmediate(other);
+            }
+
             string key = "YL.Core.Direct/" + expected.GetInstanceID();
             var pool = YLFramework.Core.Pool.GameObjectPool.Instance;
             Assert.That(pool.Recycle(key, wrong), Is.True);
             int wrongCallbacks = 0;
-            YLCoreSmokePanel.LoadingProbe = panel => { if (ReferenceEquals(panel, wrongPanel)) wrongCallbacks++; };
-            var result = Track(module.LoadPanel<YLCoreSmokePanel>(expected, root: root));
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                if (ReferenceEquals(panel, wrongPanel))
+                {
+                    wrongCallbacks++;
+                }
+            };
+            var result = Track(_module.LoadPanel<YLCoreSmokePanel>(expected, root: root));
             Assert.That(result, Is.Not.SameAs(wrongPanel));
             Assert.That(wrongCallbacks, Is.Zero, "不能先初始化错源实例再事后修正来源。");
             Assert.That(typeof(View).GetField("DirectSource", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(result), Is.SameAs(expected));
@@ -1634,21 +1837,21 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var prefab = Template<YLCoreSmokePanel>("YLCore.PanelThroughView", true);
             var args = NewArgs();
-            var error = Assert.Throws<InvalidOperationException>(() => module.LoadView<View>(prefab, loadViewArgs: args));
+            var error = Assert.Throws<InvalidOperationException>(() => _module.LoadView<View>(prefab, loadViewArgs: args));
             StringAssert.Contains("LoadPanel", error.Message);
             AssertArgsReleased(args);
             args = NewArgs();
             // 普通 View 没有公开 direct Async 重载，直接覆盖已有生产内核的同一拒绝边界。
             var start = typeof(View).Assembly.GetType("YLFramework.Core.ViewManager", true)
                 .GetMethod("StartAsync", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(typeof(View));
-            var pending = (LoadViewRequest<View>)start.Invoke(null, new object[] { module, prefab.name, null, args, null, prefab });
+            var pending = (LoadViewRequest<View>)start.Invoke(null, new object[] { _module, prefab.name, null, args, null, prefab });
             yield return pending;
             Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Failed));
             Assert.That(pending.Exception, Is.TypeOf<InvalidOperationException>());
             StringAssert.Contains("LoadPanel", pending.Exception.Message);
             AssertArgsReleased(args);
             Assert.That(prefab.GetComponent<YLCoreSmokePanel>().LoadedCount, Is.Zero);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             var pool = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
             if (pool)
             {
@@ -1664,14 +1867,14 @@ namespace YLFramework.Core.Tests
             var events = new List<string>();
             var bound = new YLCoreProbeModel { Id = 1, ExitAction = _ => events.Add("bound.exit") };
             var remaining = new YLCoreProbeModel { Id = 2, ExitAction = _ => events.Add("remaining.exit") };
-            module.AddModel(bound);
-            module.AddModel(remaining);
-            var controller = module.LoadController<YLCoreProbeController>();
+            _module.AddModel(bound);
+            _module.AddModel(remaining);
+            var controller = _module.LoadController<YLCoreProbeController>();
             controller.ExitAction = _ => events.Add("controller.exit");
             var prefab = Template<YLCoreSmokeView>("YLCoreCloseOrderPrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             view.BoundModel = bound;
-            view.onViewRemove = () => events.Add("view.remove");
+            view.ViewRemoved = () => events.Add("view.remove");
             view.RemoveAction = () => events.Add("view.onRemove");
             view.UnboundAction = previous =>
             {
@@ -1686,23 +1889,23 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.Model, Is.Null);
                 Assert.That(view.IsLoaded, Is.False);
                 Assert.That(view.gameObject.activeSelf, Is.False);
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(_module.GetViews<View>(), Is.Empty);
                 events.Add("view.closed");
             };
-            module.CloseAction = () =>
+            _module.CloseAction = () =>
             {
                 events.Add("module.close");
-                Assert.That(module.GetView(prefab.name), Is.SameAs(view));
+                Assert.That(_module.GetView(prefab.name), Is.SameAs(view));
                 Assert.That(controller.ExitCount, Is.Zero);
                 Assert.That(bound.ExitCount, Is.Zero);
             };
-            module.Close();
+            _module.Close();
             Assert.That(events, Is.EqualTo(new[] { "module.close", "controller.exit", "view.remove", "view.onRemove", "view.unbound", "view.closed", "bound.exit", "remaining.exit" }));
             Assert.That(bound.ExitCount, Is.EqualTo(1));
             Assert.That(remaining.ExitCount, Is.EqualTo(1));
             Assert.That(view.Module, Is.Null);
             Assert.That(view.gameObject.activeSelf, Is.False);
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
         }
 
         [UnityTest]
@@ -1712,16 +1915,16 @@ namespace YLFramework.Core.Tests
             {
                 yield return StartModule();
                 var prefab = Template<YLCoreSmokeView>("YLCoreHookClosePrefab" + phase);
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                var controller = module.LoadController<YLCoreProbeController>();
-                module.CloseAction = phase == 0 ? (Action)(() => view.Close()) : null;
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var controller = _module.LoadController<YLCoreProbeController>();
+                _module.CloseAction = phase == 0 ? (Action)(() => view.Close()) : null;
                 controller.ExitAction = _ => view.Close();
-                view.onViewRemove = () => Assert.That(view.Module, Is.SameAs(module));
-                module.Close();
+                view.ViewRemoved = () => Assert.That(view.Module, Is.SameAs(_module));
+                _module.Close();
                 Assert.That(view.RemovedCount, Is.EqualTo(1));
                 Assert.That(view.Module, Is.Null);
                 Assert.That(view.gameObject.activeSelf, Is.False);
-                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+                Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
             }
         }
 
@@ -1735,13 +1938,17 @@ namespace YLFramework.Core.Tests
             {
                 var request = ModuleManager.StartUpModule(other);
                 var deadline = Time.realtimeSinceStartup + 10;
-                while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That(request.isDone, Is.True);
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.IsDone, Is.True);
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var prefab = Template<YLCoreSmokeView>("YLCoreTransferOnClosePrefab");
-                view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-                var bound = module.LoadModel<YLCoreProbeModel>();
+                view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var sibling = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var bound = _module.LoadModel<YLCoreProbeModel>();
                 view.BoundModel = bound;
                 YLCoreSmokeView reloaded = null;
                 YLCoreSmokeView reloadedSibling = null;
@@ -1750,12 +1957,12 @@ namespace YLFramework.Core.Tests
                     Assert.That(view.Module, Is.Null);
                     Assert.That(view.Model, Is.Null);
                     Assert.That(view.gameObject.activeSelf, Is.False);
-                    Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { sibling }));
+                    Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { sibling }));
                     sibling.Close();
                     reloaded = Track(other.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                     reloadedSibling = Track(other.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 };
-                module.Close();
+                _module.Close();
                 view.AfterClose = null;
                 Assert.That(reloaded, Is.SameAs(view));
                 Assert.That(reloadedSibling, Is.SameAs(sibling));
@@ -1767,7 +1974,7 @@ namespace YLFramework.Core.Tests
                 Assert.That(other.GetView(prefab.name, view.Id), Is.SameAs(view));
                 Assert.That(other.GetView(prefab.name, sibling.Id), Is.SameAs(sibling));
                 Assert.That(view.gameObject.activeSelf, Is.True);
-                Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+                Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
                 view.Close();
                 Assert.That(other.GetViews<YLCoreSmokeView>(), Is.EqualTo(new[] { sibling }));
                 Assert.That(view.RemovedCount, Is.EqualTo(2));
@@ -1777,9 +1984,13 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                if (view) view.AfterClose = null;
+                if (view)
+                {
+                    view.AfterClose = null;
+                }
+
                 other.Close();
-                classPool.Restore(new Module[] { other });
+                _classPool.Restore(new Module[] { other });
             }
         }
 
@@ -1787,28 +1998,28 @@ namespace YLFramework.Core.Tests
         public IEnumerator ViewCleanupErrorDoesNotBlockSiblingViewsOrRemainingModelCleanup()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var prefab = Template<YLCoreSmokeView>("YLCoreCloseFailurePrefab");
-            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var sibling = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             first.BoundModel = model;
             var viewError = new InvalidOperationException("view cleanup");
-            first.onViewRemove = () => throw viewError;
-            var error = Assert.Throws<AggregateException>(() => module.Close());
+            first.ViewRemoved = () => throw viewError;
+            var error = Assert.Throws<AggregateException>(() => _module.Close());
             Assert.That(error.InnerExceptions, Is.EqualTo(new[] { viewError }));
-            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
-            Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
+            Assert.That(_module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(ModuleManager.GetModule(_module.ModuleName), Is.Null);
             Assert.That(model.ExitCount, Is.EqualTo(1));
             Assert.That(model.Module, Is.Null);
             Assert.That(first.Module, Is.Null);
             Assert.That(sibling.Module, Is.Null);
             Assert.That(sibling.RemovedCount, Is.EqualTo(1));
             Assert.That(sibling.gameObject.activeSelf, Is.False);
-            Assert.That(module.GetViews<YLCoreSmokeView>(), Is.Empty);
+            Assert.That(_module.GetViews<YLCoreSmokeView>(), Is.Empty);
             first.Close();
-            module.Close();
+            _module.Close();
             Assert.That(model.ExitCount, Is.EqualTo(1));
-            first.onViewRemove = null;
+            first.ViewRemoved = null;
         }
 
         [UnityTest]
@@ -1816,10 +2027,10 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreAggregatedExitPrefab");
-            var first = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            var sibling = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
-            var controller = module.LoadController<YLCoreProbeController>();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var first = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var sibling = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var controller = _module.LoadController<YLCoreProbeController>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             first.BoundModel = model;
             var controllerError = new InvalidOperationException("controller exit");
             var observerError = new ArgumentException("view observer");
@@ -1829,7 +2040,7 @@ namespace YLFramework.Core.Tests
             var siblingError = new InvalidOperationException("sibling observer");
             var modelError = new InvalidOperationException("model exit");
             controller.ExitAction = _ => throw controllerError;
-            first.onViewRemove = () => throw observerError;
+            first.ViewRemoved = () => throw observerError;
             first.RemoveAction = () => throw removeError;
             first.UnboundAction = previous =>
             {
@@ -1842,16 +2053,16 @@ namespace YLFramework.Core.Tests
                 Assert.That(first.gameObject.activeSelf, Is.False);
                 throw completedError;
             };
-            sibling.onViewRemove = () => throw siblingError;
+            sibling.ViewRemoved = () => throw siblingError;
             model.ExitAction = _ => throw modelError;
-            var error = Assert.Throws<AggregateException>(() => module.Close());
+            var error = Assert.Throws<AggregateException>(() => _module.Close());
             Assert.That(error.InnerExceptions, Is.EquivalentTo(new Exception[]
             {
                 controllerError, observerError, removeError, unbindError, completedError, siblingError, modelError
             }));
-            Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
-            Assert.That(ModuleManager.GetModule(module.ModuleName), Is.Null);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.State, Is.EqualTo(ModuleState.Closed));
+            Assert.That(ModuleManager.GetModule(_module.ModuleName), Is.Null);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(first.Model, Is.Null);
             Assert.That(first.UnboundCount, Is.EqualTo(1));
             Assert.That(first.ClosedCount, Is.EqualTo(1));
@@ -1862,7 +2073,7 @@ namespace YLFramework.Core.Tests
             Assert.That(controller.Module, Is.Null);
             Assert.That(model.Module, Is.Null);
             first.Close();
-            module.Close();
+            _module.Close();
             yield return null;
             Assert.That(first == null, Is.True);
             Assert.That(sibling != null, Is.True);
@@ -1874,9 +2085,9 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreLegacyMismatchPrefab");
 #pragma warning disable CS0618
-            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(prefab, null, new object[0]));
+            Assert.Throws<InvalidCastException>(() => _module.LoadView<YLCoreSmokePanel>(prefab, null, new object[0]));
 #pragma warning restore CS0618
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(prefab.GetComponent<YLCoreSmokeView>().LoadedCount, Is.Zero);
         }
 
@@ -1886,33 +2097,33 @@ namespace YLFramework.Core.Tests
             var prefab = Template<YLCoreSmokeView>("YLCoreInvalidInputsPrefab");
             var args = NewArgs();
             args.SetObject("retained", prefab);
-            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args));
             AssertArgsReleased(args);
             args = NewArgs();
-            Assert.Throws<InvalidOperationException>(() => module.LoadPanel("unused", loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadPanel("unused", loadViewArgs: args));
             AssertArgsReleased(args);
             yield return StartModule();
             args = NewArgs();
-            Assert.Throws<ArgumentNullException>(() => module.LoadView((GameObject)null, loadViewArgs: args));
+            Assert.Throws<ArgumentNullException>(() => _module.LoadView((GameObject)null, loadViewArgs: args));
             AssertArgsReleased(args);
             args = NewArgs();
-            Assert.Throws<ArgumentException>(() => module.LoadView(" ", loadViewArgs: args));
+            Assert.Throws<ArgumentException>(() => _module.LoadView(" ", loadViewArgs: args));
             AssertArgsReleased(args);
             args = NewArgs();
-            Assert.Throws<InvalidCastException>(() => module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
+            Assert.Throws<InvalidCastException>(() => _module.LoadView<YLCoreSmokePanel>(prefab, loadViewArgs: args));
             AssertArgsReleased(args);
             var noView = new GameObject("YLCoreNoViewPrefab");
-            objects.Add(noView);
+            _objects.Add(noView);
             args = NewArgs();
-            Assert.Throws<InvalidOperationException>(() => module.LoadView(noView, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView(noView, loadViewArgs: args));
             AssertArgsReleased(args);
             var deadParent = new GameObject("YLCoreDeadParent").transform;
             Object.Destroy(deadParent.gameObject);
             yield return null;
             args = NewArgs();
-            Assert.Throws<ArgumentException>(() => module.LoadView(prefab, deadParent, loadViewArgs: args));
+            Assert.Throws<ArgumentException>(() => _module.LoadView(prefab, deadParent, loadViewArgs: args));
             AssertArgsReleased(args);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             var loader = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
             if (loader)
             {
@@ -1934,17 +2145,17 @@ namespace YLFramework.Core.Tests
             {
                 Track(view);
                 Assert.That(view.IsLoaded, Is.False);
-                Assert.That(module.GetView(prefab.name, view.Id), Is.SameAs(view));
-                Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
-                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", module, view, prefab.name, null, new object[0]));
+                Assert.That(_module.GetView(prefab.name, view.Id), Is.SameAs(view));
+                Assert.That(_module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
+                Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", _module, view, prefab.name, null, new object[0]));
                 Assert.Throws<InvalidOperationException>(() => view.Close());
-                Assert.Throws<InvalidOperationException>(() => module.Close());
+                Assert.Throws<InvalidOperationException>(() => _module.Close());
                 Assert.Throws<InvalidOperationException>(() => ModuleManager.Shutdown());
                 Assert.Throws<InvalidOperationException>(() => args.GetInt("token"));
-                Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+                Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args));
                 EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
                 Assert.That(view.EventCount, Is.Zero);
-                var sibling = Track(module.LoadPanel<YLCoreSmokePanel>(siblingPrefab, root: siblingRoot));
+                var sibling = Track(_module.LoadPanel<YLCoreSmokePanel>(siblingPrefab, root: siblingRoot));
                 Assert.That(sibling.IsLoaded, Is.True, "Other valid objects may initialize inside the transaction.");
             };
             YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
@@ -1952,7 +2163,7 @@ namespace YLFramework.Core.Tests
                 Assert.That(borrowed, Is.SameAs(args));
                 Assert.That(borrowed.GetInt("token"), Is.EqualTo(91));
                 Assert.Throws<InvalidOperationException>(() => borrowed.SetInt("token", 2));
-                Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: borrowed));
+                Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: borrowed));
                 Assert.That(borrowed.GetInt("token"), Is.EqualTo(91), "Rejected second takeover cannot recycle the first operation's input.");
                 Assert.That(view.IsLoaded, Is.False);
             };
@@ -1961,13 +2172,13 @@ namespace YLFramework.Core.Tests
                 Assert.That(view.IsLoaded, Is.True);
                 Assert.Throws<InvalidOperationException>(() => args.GetInt("token"), "The borrowing window ended before event activation.");
             };
-            var loaded = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
+            var loaded = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
             Assert.That(loaded.Token, Is.EqualTo(91));
             AssertArgsReleased(args);
             Assert.That(loaded.LoadedCount, Is.EqualTo(1));
             Assert.That(loaded.ArgsCount, Is.EqualTo(1));
-            Assert.That(module.GetViews<View>(), Has.Count.EqualTo(2));
-            Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", module, loaded, prefab.name, null, new object[0]));
+            Assert.That(_module.GetViews<View>(), Has.Count.EqualTo(2));
+            Assert.Throws<InvalidOperationException>(() => InvokeViewManager("InitView", _module, loaded, prefab.name, null, new object[0]));
             Assert.That(loaded.LoadedCount, Is.EqualTo(1));
         }
 
@@ -1975,7 +2186,7 @@ namespace YLFramework.Core.Tests
         public IEnumerator BothBusinessLoadHooksAndEventActivationFailureRollbackWithoutReusingDamagedInstance()
         {
             yield return StartModule();
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             for (int phase = 0; phase < 3; phase++)
             {
                 var prefab = Template<YLCoreSmokeView>("YLCoreLoadFailurePrefab" + phase);
@@ -1988,16 +2199,28 @@ namespace YLFramework.Core.Tests
                 {
                     failed = Track(view);
                     view.BoundModel = model;
-                    view.onViewRemove = () => Assert.Fail("Failed initialization must not publish normal removal notifications.");
+                    view.ViewRemoved = () => Assert.Fail("Failed initialization must not publish normal removal notifications.");
                     if (phase == 0)
                     {
                         view.RemoveAction = () => throw cleanupError;
                         throw failure;
                     }
                 };
-                YLCoreSmokeView.ArgsProbe = (view, borrowed) => { if (phase == 1) throw failure; };
-                YLCoreSmokeView.EnabledProbe = view => { if (phase == 2) throw failure; };
-                Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args)), Is.SameAs(failure));
+                YLCoreSmokeView.ArgsProbe = (view, borrowed) =>
+                {
+                    if (phase == 1)
+                    {
+                        throw failure;
+                    }
+                };
+                YLCoreSmokeView.EnabledProbe = view =>
+                {
+                    if (phase == 2)
+                    {
+                        throw failure;
+                    }
+                };
+                Assert.That(Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args)), Is.SameAs(failure));
                 AssertArgsReleased(args);
                 Assert.That(failed.Module, Is.Null);
                 Assert.That(failed.Model, Is.Null);
@@ -2005,17 +2228,21 @@ namespace YLFramework.Core.Tests
                 Assert.That(failed.RemovedCount, Is.EqualTo(1));
                 Assert.That(failed.UnboundCount, Is.EqualTo(1));
                 Assert.That(failed.ClosedCount, Is.Zero);
-                Assert.That(failed.onViewRemove, Is.Null);
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(failed.ViewRemoved, Is.Null);
+                Assert.That(_module.GetViews<View>(), Is.Empty);
                 Assert.That(model.ExitCount, Is.Zero);
-                Assert.That(module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+                Assert.That(_module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
                 Assert.That(failed.gameObject.activeSelf, Is.False);
                 Assert.That(BackendInUse(prefab, failed.gameObject), Is.True, "Do not expose a pending Destroy as idle in the pool.");
-                if (phase == 0) Assert.That(failure.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupError));
+                if (phase == 0)
+                {
+                    Assert.That(failure.Data["YLFramework.Core.CleanupException"], Is.SameAs(cleanupError));
+                }
+
                 YLCoreSmokeView.LoadingProbe = null;
                 YLCoreSmokeView.ArgsProbe = null;
                 YLCoreSmokeView.EnabledProbe = null;
-                var replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var replacement = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 Assert.That(replacement, Is.Not.SameAs(failed), "Same-frame load cannot reuse a damaged instance.");
                 Assert.That(replacement.IsLoaded, Is.True);
                 yield return null;
@@ -2033,9 +2260,9 @@ namespace YLFramework.Core.Tests
             var root = PolicyRoot("YLCore.InvalidCanvasRoot");
             root.Canvas.sortingOrder = short.MaxValue;
             var args = NewArgs();
-            Assert.Throws<ArgumentOutOfRangeException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, args, root));
+            Assert.Throws<ArgumentOutOfRangeException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, args, root));
             AssertArgsReleased(args);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             var all = Resources.FindObjectsOfTypeAll<YLCoreSmokePanel>().Where(view => view && view.gameObject.scene.IsValid() &&
                 view.gameObject.name == prefab.name + "(Clone)").ToArray();
             Assert.That(all, Is.Empty, "排序空间预校验必须先于实例取得。初始化中失败的回滚由独立用例覆盖。");
@@ -2051,17 +2278,17 @@ namespace YLFramework.Core.Tests
             var prefab = Template<YLCoreSmokeView>("YLCoreInactiveParentPrefab");
             var parent = new GameObject("YLCoreInactiveParent");
             parent.SetActive(false);
-            objects.Add(parent);
-            var model = module.LoadModel<YLCoreProbeModel>();
+            _objects.Add(parent);
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var args = NewArgs();
             args.SetInt("token", 51);
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: args));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: args));
             Assert.That(view.IsLoaded, Is.True);
             Assert.That(view.AwakeCount, Is.Zero);
             Assert.That(view.EnabledCount, Is.Zero);
             Assert.That(view.Token, Is.EqualTo(51));
             view.BoundModel = model;
-            view.onViewRemove = () => { };
+            view.ViewRemoved = () => { };
             EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.Zero);
             parent.SetActive(true);
@@ -2070,15 +2297,15 @@ namespace YLFramework.Core.Tests
             EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
             Assert.That(view.EventCount, Is.EqualTo(1));
             parent.SetActive(false);
-            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.Module, Is.SameAs(_module));
             Assert.That(view.Model, Is.SameAs(model));
             view.Close();
             var session = ViewSession(view);
             Assert.That(session, Is.Null);
-            var reused = Track(module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: null));
+            var reused = Track(_module.LoadView<YLCoreSmokeView>(prefab, parent.transform, loadViewArgs: null));
             Assert.That(reused, Is.SameAs(view));
             Assert.That(reused.Model, Is.Null);
-            Assert.That(reused.onViewRemove, Is.Null);
+            Assert.That(reused.ViewRemoved, Is.Null);
             Assert.That(reused.Token, Is.Zero);
             Assert.That(reused.LoadedCount, Is.EqualTo(2));
             Assert.That(reused.AwakeCount, Is.EqualTo(1));
@@ -2096,17 +2323,17 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreMutatedCachePrefab");
-            var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             var instance = view.gameObject;
             view.Close();
             Object.DestroyImmediate(view);
             var args = NewArgs();
-            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args));
             AssertArgsReleased(args);
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(BackendInUse(prefab, instance), Is.True);
             Assert.That(instance.activeSelf, Is.False);
-            var fresh = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var fresh = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             Assert.That(fresh.gameObject, Is.Not.SameAs(instance));
             yield return null;
             Assert.That(instance == null, Is.True);
@@ -2119,7 +2346,7 @@ namespace YLFramework.Core.Tests
             for (int phase = 0; phase < 3; phase++)
             {
                 var prefab = Template<YLCoreSmokeView>("YLCoreEventReplacementPrefab" + phase);
-                var view = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                var view = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 var session = ViewSession(view);
                 var failure = new InvalidOperationException("old event hook " + phase);
                 YLCoreSmokeView replacement = null;
@@ -2127,11 +2354,15 @@ namespace YLFramework.Core.Tests
                 view.AfterClose = () =>
                 {
                     view.AfterClose = null;
-                    replacement = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+                    replacement = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
                 };
                 Action<YLCoreSmokeView> hook = current =>
                 {
-                    if (!once) return;
+                    if (!once)
+                    {
+                        return;
+                    }
+
                     once = false;
                     if (phase == 2)
                     {
@@ -2139,7 +2370,11 @@ namespace YLFramework.Core.Tests
                         InvokeViewInstance("ResumeEvents", current);
                         replacement = current;
                     }
-                    else current.Close();
+                    else
+                    {
+                        current.Close();
+                    }
+
                     throw failure;
                 };
                 if (phase != 1)
@@ -2147,13 +2382,17 @@ namespace YLFramework.Core.Tests
                     InvokeViewInstance("StopEvents", view);
                     YLCoreSmokeView.EnabledProbe = hook;
                 }
-                else YLCoreSmokeView.DisabledProbe = hook;
+                else
+                {
+                    YLCoreSmokeView.DisabledProbe = hook;
+                }
+
                 var error = Assert.Throws<InvalidOperationException>(() => InvokeViewInstance(phase == 1 ? "StopEvents" : "ResumeEvents", view));
                 Assert.That(error, Is.SameAs(failure));
                 Assert.That(replacement, Is.SameAs(view));
                 Assert.That(ViewSession(replacement), phase == 2 ? Is.SameAs(session) : Is.Not.SameAs(session));
                 Assert.That(replacement.IsLoaded, Is.True);
-                Assert.That(replacement.Module, Is.SameAs(module));
+                Assert.That(replacement.Module, Is.SameAs(_module));
                 var count = replacement.EventCount;
                 EventManager.TriggerEvent(YLCoreSmokeView.ProbeEvent);
                 Assert.That(replacement.EventCount, Is.EqualTo(count + 1), "Old hook cleanup must not stop the replacement's listeners.");
@@ -2161,7 +2400,7 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokeView.DisabledProbe = null;
                 replacement.AfterClose = null;
                 replacement.Close();
-                Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(replacement), "The replacement stays healthy and reusable.");
+                Assert.That(Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(replacement), "The replacement stays healthy and reusable.");
                 replacement.Close();
             }
         }
@@ -2171,7 +2410,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreDestroyDuringEventOpenPrefab");
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var args = NewArgs();
             YLCoreSmokeView destroyed = null;
             GameObject root = null;
@@ -2182,7 +2421,7 @@ namespace YLFramework.Core.Tests
                 root = view.gameObject;
                 Object.DestroyImmediate(view);
             };
-            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args));
             AssertArgsReleased(args);
             Assert.That(destroyed == null, Is.True);
             Assert.That(destroyed.Module, Is.Null);
@@ -2191,8 +2430,8 @@ namespace YLFramework.Core.Tests
             Assert.That(destroyed.RemovedCount, Is.EqualTo(1));
             Assert.That(destroyed.UnboundCount, Is.EqualTo(1));
             Assert.That(destroyed.ClosedCount, Is.Zero);
-            Assert.That(module.GetViews<View>(), Is.Empty);
-            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(_module.GetViews<View>(), Is.Empty);
+            Assert.That(model.Module, Is.SameAs(_module));
             Assert.That(model.ExitCount, Is.Zero);
             Assert.That(root.activeSelf, Is.False);
             Assert.That(BackendInUse(prefab, root), Is.True);
@@ -2205,25 +2444,25 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var prefab = Template<YLCoreSmokeView>("YLCoreModelChangesDuringLoadPrefab");
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             var args = NewArgs();
             YLCoreSmokeView failed = null;
             YLCoreSmokeView.LoadingProbe = view =>
             {
                 failed = Track(view);
                 view.BoundModel = model;
-                module.RemoveModel(model);
-                module.AddModel(model);
+                _module.RemoveModel(model);
+                _module.AddModel(model);
                 Assert.That(view.Model, Is.Null);
             };
-            Assert.Throws<InvalidOperationException>(() => module.LoadView(prefab, loadViewArgs: args));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadView(prefab, loadViewArgs: args));
             AssertArgsReleased(args);
             Assert.That(failed.Module, Is.Null);
             Assert.That(failed.Model, Is.Null);
             Assert.That(failed.IsLoaded, Is.False);
             Assert.That(failed.UnboundCount, Is.EqualTo(1));
-            Assert.That(module.GetViews<View>(), Is.Empty);
-            Assert.That(module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
+            Assert.That(_module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetModel<YLCoreProbeModel>(), Is.SameAs(model));
             Assert.That(model.ExitCount, Is.EqualTo(1), "Only the explicit business removal ends a registration.");
             yield return null;
             Assert.That(failed == null, Is.True);
@@ -2236,20 +2475,20 @@ namespace YLFramework.Core.Tests
             var view = Template<YLCoreSmokeView>("YLCore.SceneOwned").GetComponent<YLCoreSmokeView>();
             var args = NewArgs();
             args.SetInt("token", 23);
-            Assert.That(module.AttachView(view, args), Is.SameAs(view));
+            Assert.That(_module.AttachView(view, args), Is.SameAs(view));
             AssertArgsReleased(args);
             Assert.That(view.IsLoaded, Is.True);
-            Assert.That(view.Module, Is.SameAs(module));
+            Assert.That(view.Module, Is.SameAs(_module));
             Assert.That(view.Token, Is.EqualTo(23));
             Assert.That(view.AwakeCount, Is.Zero);
             Assert.That(view.EnabledCount, Is.Zero);
             Assert.That(view.gameObject.activeSelf, Is.False);
-            Assert.That(module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
-            Assert.That(module.GetViews(view.gameObject.name), Is.Empty, "Scene names are not fabricated resource keys.");
+            Assert.That(_module.GetView<YLCoreSmokeView>(view.Id), Is.SameAs(view));
+            Assert.That(_module.GetViews(view.gameObject.name), Is.Empty, "Scene names are not fabricated resource keys.");
             args = NewArgs();
-            module.AttachView(view, args);
+            _module.AttachView(view, args);
             AssertArgsReleased(args);
-            module.AttachViews(view.gameObject);
+            _module.AttachViews(view.gameObject);
             Assert.That(view.LoadedCount, Is.EqualTo(1));
             view.gameObject.SetActive(true);
             Assert.That(view.AwakeCount, Is.EqualTo(1));
@@ -2258,9 +2497,9 @@ namespace YLFramework.Core.Tests
             Assert.That(view, Is.Not.Null);
             Assert.That(view.gameObject.activeSelf, Is.False);
             Assert.That(view.Module, Is.Null);
-            module.AttachView(view);
+            _module.AttachView(view);
             Assert.That(view.LoadedCount, Is.EqualTo(2));
-            module.Close();
+            _module.Close();
             Assert.That(view.RemovedCount, Is.EqualTo(2));
             Assert.That(view, Is.Not.Null, "Caller instances are never discarded or pooled by Core.");
         }
@@ -2273,13 +2512,13 @@ namespace YLFramework.Core.Tests
             var existing = Template<YLCoreSmokeView>("YLCore.ExistingChild").GetComponent<YLCoreSmokeView>();
             existing.transform.SetParent(root.transform);
             existing.gameObject.SetActive(true);
-            module.AttachView(existing);
+            _module.AttachView(existing);
             var oldSession = ViewSession(existing);
             var failing = Template<YLCoreSmokeView>("YLCore.FailingChild").GetComponent<YLCoreSmokeView>();
             failing.transform.SetParent(root.transform);
             var failure = new InvalidOperationException("hierarchy attach");
             failing.LoadedAction = () => throw failure;
-            Assert.That(Assert.Throws<InvalidOperationException>(() => module.AttachViews(root.gameObject)), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(() => _module.AttachViews(root.gameObject)), Is.SameAs(failure));
             Assert.That(root.Module, Is.Null);
             Assert.That(failing.Module, Is.Null);
             Assert.That(root.RemovedCount, Is.EqualTo(1));
@@ -2290,9 +2529,9 @@ namespace YLFramework.Core.Tests
             Assert.That(ViewSession(existing), Is.SameAs(oldSession));
             Assert.That(existing.IsLoaded, Is.True);
             Assert.That(existing.RemovedCount, Is.Zero);
-            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { existing }));
+            Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { existing }));
             failing.LoadedAction = null;
-            Assert.That(module.AttachViews(root.gameObject).Count, Is.EqualTo(3));
+            Assert.That(_module.AttachViews(root.gameObject).Count, Is.EqualTo(3));
             Assert.That(existing.LoadedCount, Is.EqualTo(1));
             Assert.That(root.gameObject.activeSelf, Is.False);
         }
@@ -2305,24 +2544,32 @@ namespace YLFramework.Core.Tests
             try
             {
                 var request = ModuleManager.StartUpModule(other);
-                while (!request.isDone) yield return null;
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var root = Template<YLCoreSmokeView>("YLCore.ConflictRoot").GetComponent<YLCoreSmokeView>();
                 var child = Template<YLCoreSmokeView>("YLCore.ForeignChild").GetComponent<YLCoreSmokeView>();
                 child.transform.SetParent(root.transform);
                 other.AttachView(child);
-                Assert.Throws<InvalidOperationException>(() => module.AttachView(child));
-                Assert.Throws<InvalidOperationException>(() => module.AttachViews(root.gameObject));
+                Assert.Throws<InvalidOperationException>(() => _module.AttachView(child));
+                Assert.Throws<InvalidOperationException>(() => _module.AttachViews(root.gameObject));
                 Assert.That(root.LoadedCount, Is.Zero);
                 Assert.That(root.Module, Is.Null);
                 Assert.That(child.Module, Is.SameAs(other));
                 Assert.That(child.RemovedCount, Is.Zero);
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(_module.GetViews<View>(), Is.Empty);
             }
             finally
             {
-                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other)) other.Close();
-                classPool.Restore(new Module[] { other });
+                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other))
+                {
+                    other.Close();
+                }
+
+                _classPool.Restore(new Module[] { other });
             }
         }
 
@@ -2338,33 +2585,33 @@ namespace YLFramework.Core.Tests
             active.SetActive(true);
             var args = NewArgs();
             args.SetInt("token", 47);
-            var root = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
+            var root = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: args));
             var child = root.transform.Find("activeChild").GetComponent<YLCoreSmokeView>();
             var dormant = root.transform.Find("inactiveChild").GetComponent<YLCoreSmokeView>();
-            Assert.That(module.GetViews<View>().Count, Is.EqualTo(3));
+            Assert.That(_module.GetViews<View>().Count, Is.EqualTo(3));
             Assert.That(root.Token, Is.EqualTo(47));
             Assert.That(child.Token, Is.Zero);
             Assert.That(dormant.Token, Is.Zero);
             Assert.That(dormant.IsLoaded, Is.True);
             Assert.That(dormant.AwakeCount, Is.Zero);
-            Assert.That(module.GetViews(prefab.name), Is.EqualTo(new View[] { root }));
+            Assert.That(_module.GetViews(prefab.name), Is.EqualTo(new View[] { root }));
             child.Close();
             Assert.That(root.IsLoaded, Is.True);
             Assert.That(dormant.IsLoaded, Is.True);
             Assert.That(BackendInUse(prefab, root.gameObject), Is.True);
             Assert.That(child.gameObject.activeSelf, Is.False);
-            module.AttachView(child);
+            _module.AttachView(child);
             child.gameObject.SetActive(true);
-            child.AfterClose = () => Assert.Throws<InvalidOperationException>(() => module.AttachView(child));
-            module.ClearView();
+            child.AfterClose = () => Assert.Throws<InvalidOperationException>(() => _module.AttachView(child));
+            _module.ClearView();
             child.AfterClose = null;
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(child.RemovedCount, Is.EqualTo(2));
             Assert.That(dormant.RemovedCount, Is.EqualTo(1));
             Assert.That(child.gameObject.activeSelf, Is.True, "Batch root return preserves nested activeSelf.");
             Assert.That(dormant.gameObject.activeSelf, Is.False);
             Assert.That(BackendInUse(prefab, root.gameObject), Is.False);
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(root));
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(root));
             Assert.That(child.LoadedCount, Is.EqualTo(3));
             Assert.That(dormant.LoadedCount, Is.EqualTo(2));
         }
@@ -2380,23 +2627,29 @@ namespace YLFramework.Core.Tests
             YLCoreSmokeView failedRoot = null;
             YLCoreSmokeView.LoadingProbe = view =>
             {
-                if (!view.transform.parent) failedRoot = Track(view);
-                else throw failure;
+                if (!view.transform.parent)
+                {
+                    failedRoot = Track(view);
+                }
+                else
+                {
+                    throw failure;
+                }
             };
-            Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(failure));
+            Assert.That(Assert.Throws<InvalidOperationException>(() => _module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null)), Is.SameAs(failure));
             YLCoreSmokeView.LoadingProbe = null;
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(failedRoot.Module, Is.Null);
             Assert.That(failedRoot.ClosedCount, Is.Zero);
             Assert.That(BackendInUse(prefab, failedRoot.gameObject), Is.True);
-            var root = Track(module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
+            var root = Track(_module.LoadView<YLCoreSmokeView>(prefab, loadViewArgs: null));
             Assert.That(root, Is.Not.SameAs(failedRoot));
             var child = root.transform.Find("badChild").GetComponent<YLCoreSmokeView>();
             child.RemoveAction = () => throw failure;
             Assert.That(Assert.Throws<InvalidOperationException>(() => child.Close()), Is.SameAs(failure));
             Assert.That(root.IsLoaded, Is.True);
             root.Close();
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(BackendInUse(prefab, root.gameObject), Is.True);
             yield return null;
             Assert.That(root == null && failedRoot == null, Is.True);
@@ -2408,17 +2661,17 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var outerPrefab = Template<YLCoreSmokeView>("YLCore.OuterPrefab");
             var innerPrefab = Template<YLCoreSmokeView>("YLCore.InnerPrefab");
-            var outer = Track(module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null));
-            var inner = Track(module.LoadView<YLCoreSmokeView>(innerPrefab, outer.transform, loadViewArgs: null));
+            var outer = Track(_module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null));
+            var inner = Track(_module.LoadView<YLCoreSmokeView>(innerPrefab, outer.transform, loadViewArgs: null));
             outer.Close();
             Assert.That(inner.Module, Is.Null);
             Assert.That(inner.RemovedCount, Is.EqualTo(1));
             Assert.That(inner.transform.IsChildOf(outer.transform), Is.False, "Independent checkout must leave the outer cached hierarchy.");
             Assert.That(BackendInUse(innerPrefab, inner.gameObject), Is.False);
             Assert.That(BackendInUse(outerPrefab, outer.gameObject), Is.False);
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null)), Is.SameAs(outer));
-            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { outer }));
-            Assert.That(Track(module.LoadView<YLCoreSmokeView>(innerPrefab, loadViewArgs: null)), Is.SameAs(inner));
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(outerPrefab, loadViewArgs: null)), Is.SameAs(outer));
+            Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { outer }));
+            Assert.That(Track(_module.LoadView<YLCoreSmokeView>(innerPrefab, loadViewArgs: null)), Is.SameAs(inner));
         }
 
         [UnityTest]
@@ -2433,18 +2686,18 @@ namespace YLFramework.Core.Tests
             var survivor = Template<YLCoreSmokeView>("YLCore.Survivor").GetComponent<YLCoreSmokeView>();
             SceneManager.MoveGameObjectToScene(dead.gameObject, first);
             SceneManager.MoveGameObjectToScene(survivor.gameObject, second);
-            module.AttachViews(first);
-            module.AttachViews(second);
+            _module.AttachViews(first);
+            _module.AttachViews(second);
             Assert.That(dead.AwakeCount, Is.Zero);
             yield return SceneManager.UnloadSceneAsync(first);
             Assert.That(dead == null, Is.True);
             Assert.That(dead.Module, Is.Null, "sceneUnloaded cleans inactive wrappers without query-side pruning.");
             Assert.That(dead.RemovedCount, Is.EqualTo(1));
-            Assert.That(survivor.Module, Is.SameAs(module));
+            Assert.That(survivor.Module, Is.SameAs(_module));
             Assert.That(survivor.IsLoaded, Is.True);
             Assert.That(survivor.RemovedCount, Is.Zero);
-            Assert.That(module.GetViews<View>(), Is.EqualTo(new View[] { survivor }));
-            Assert.Throws<ArgumentException>(() => module.AttachViews(first));
+            Assert.That(_module.GetViews<View>(), Is.EqualTo(new View[] { survivor }));
+            Assert.Throws<ArgumentException>(() => _module.AttachViews(first));
         }
 
         [UnityTest]
@@ -2457,19 +2710,19 @@ namespace YLFramework.Core.Tests
             var persistent = Template<YLCoreSmokeView>("YLCore.Persistent").GetComponent<YLCoreSmokeView>();
             SceneManager.MoveGameObjectToScene(migrated.gameObject, original);
             SceneManager.MoveGameObjectToScene(persistent.gameObject, original);
-            module.AttachViews(original);
+            _module.AttachViews(original);
             SceneManager.MoveGameObjectToScene(migrated.gameObject, destination);
             Object.DontDestroyOnLoad(persistent.gameObject);
             yield return SceneManager.UnloadSceneAsync(original);
             Assert.That(migrated.IsLoaded && persistent.IsLoaded, Is.True);
-            Assert.That(migrated.Module, Is.SameAs(module));
-            Assert.That(persistent.Module, Is.SameAs(module));
+            Assert.That(migrated.Module, Is.SameAs(_module));
+            Assert.That(persistent.Module, Is.SameAs(_module));
             Assert.That(migrated.RemovedCount + persistent.RemovedCount, Is.Zero);
             yield return SceneManager.UnloadSceneAsync(destination);
             Assert.That(migrated.Module, Is.Null);
             Assert.That(migrated.RemovedCount, Is.EqualTo(1));
             Assert.That(persistent.IsLoaded, Is.True);
-            module.Close();
+            _module.Close();
             Assert.That(persistent.Module, Is.Null);
             Assert.That(persistent.RemovedCount, Is.EqualTo(1));
             Assert.That(persistent, Is.Not.Null);
@@ -2481,11 +2734,11 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var active = Template<YLCoreSmokeView>("YLCore.DestroyActive").GetComponent<YLCoreSmokeView>();
             var dormant = Template<YLCoreSmokeView>("YLCore.DestroyInactive").GetComponent<YLCoreSmokeView>();
-            module.AttachView(active);
-            module.AttachView(dormant);
+            _module.AttachView(active);
+            _module.AttachView(dormant);
             active.gameObject.SetActive(true);
             int dormantId = dormant.Id;
-            var model = module.LoadModel<YLCoreProbeModel>();
+            var model = _module.LoadModel<YLCoreProbeModel>();
             active.BoundModel = model;
             Object.Destroy(active.gameObject);
             Object.Destroy(dormant.gameObject);
@@ -2494,12 +2747,12 @@ namespace YLFramework.Core.Tests
             Assert.That(active.Module, Is.Null);
             Assert.That(active.RemovedCount, Is.EqualTo(1));
             Assert.That(dormant.Module, Is.Null, "Never-activated external destruction is pruned without a business query.");
-            Assert.That(module.GetView<YLCoreSmokeView>(dormantId), Is.Null);
+            Assert.That(_module.GetView<YLCoreSmokeView>(dormantId), Is.Null);
             Assert.That(dormant.Module, Is.Null);
             Assert.That(dormant.RemovedCount, Is.EqualTo(1));
-            Assert.That(module.GetViews<View>(), Is.Empty);
+            Assert.That(_module.GetViews<View>(), Is.Empty);
             Assert.That(model.ExitCount, Is.Zero);
-            Assert.That(model.Module, Is.SameAs(module));
+            Assert.That(model.Module, Is.SameAs(_module));
             active.Close();
             dormant.Close();
             Assert.That(active.RemovedCount + dormant.RemovedCount, Is.EqualTo(2));
@@ -2513,25 +2766,29 @@ namespace YLFramework.Core.Tests
             var innerView = Template<YLCoreSmokeView>("YLCore.InnerSceneView").GetComponent<YLCoreSmokeView>();
             var failure = new InvalidOperationException("starting attach");
             Module nestedOwner = null;
-            module.StartAction = () =>
+            _module.StartAction = () =>
             {
                 var innerStart = ModuleManager.StartUpModule(inner);
-                Assert.That(innerStart.isDone, Is.True);
-                Assert.That(innerStart.error, Is.Null.Or.Empty);
+                Assert.That(innerStart.IsDone, Is.True);
+                Assert.That(innerStart.Error, Is.Null.Or.Empty);
                 inner.AttachView(innerView);
                 nestedOwner = innerView.Module;
-                module.AttachView(outerView);
+                _module.AttachView(outerView);
                 var failing = Template<YLCoreSmokeView>("YLCore.StartingFailView").GetComponent<YLCoreSmokeView>();
                 failing.LoadedAction = () => throw failure;
-                module.AttachView(failing);
+                _module.AttachView(failing);
             };
             try
             {
-                var request = ModuleManager.StartUpModule(module);
-                while (!request.isDone) yield return null;
+                var request = ModuleManager.StartUpModule(_module);
+                while (!request.IsDone)
+                {
+                    yield return null;
+                }
+
                 Assert.That(request.Exception, Is.SameAs(failure));
-                Assert.That(module.State, Is.EqualTo(ModuleState.Closed));
-                Assert.That(module.GetViews<View>(), Is.Empty);
+                Assert.That(_module.State, Is.EqualTo(ModuleState.Closed));
+                Assert.That(_module.GetViews<View>(), Is.Empty);
                 Assert.That(outerView.Module, Is.Null);
                 Assert.That(outerView.RemovedCount, Is.EqualTo(1));
                 Assert.That(innerView.Module, Is.SameAs(nestedOwner));
@@ -2541,21 +2798,28 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                if (ReferenceEquals(ModuleManager.GetModule(inner.ModuleName), inner)) inner.Close();
-                classPool.Restore(new Module[] { inner });
+                if (ReferenceEquals(ModuleManager.GetModule(inner.ModuleName), inner))
+                {
+                    inner.Close();
+                }
+
+                _classPool.Restore(new Module[] { inner });
             }
         }
 
         private Scene OwnScene(string name)
         {
             var scene = SceneManager.CreateScene(name);
-            scenes.Add(scene);
+            _scenes.Add(scene);
             return scene;
         }
 
         private static void InvokeViewInstance(string name, View view)
         {
-            try { typeof(View).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null); }
+            try
+            {
+                typeof(View).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
+            }
             catch (TargetInvocationException error) when (error.InnerException != null)
             {
                 ExceptionDispatchInfo.Capture(error.InnerException).Throw();
@@ -2566,7 +2830,7 @@ namespace YLFramework.Core.Tests
         private LoadViewArgs NewArgs()
         {
             var args = LoadViewArgs.New();
-            classPool.Track(args);
+            _classPool.Track(args);
             return args;
         }
 
@@ -2575,13 +2839,22 @@ namespace YLFramework.Core.Tests
             Assert.Throws<ObjectDisposedException>(() => args.GetObject("retained"));
             Assert.Throws<ObjectDisposedException>(() => args.SetInt("token", 1));
             foreach (var field in typeof(LoadViewArgs).GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
-                if (field.GetValue(args) is IDictionary values) Assert.That(values.Count, Is.Zero, field.Name);
+            {
+                if (field.GetValue(args) is IDictionary values)
+                {
+                    Assert.That(values.Count, Is.Zero, field.Name);
+                }
+            }
         }
 
         private static bool BackendInUse(GameObject prefab, GameObject instance)
         {
             var loader = Object.FindFirstObjectByType<YLFramework.Core.Pool.GameObjectPool>();
-            if (!loader) return true;
+            if (!loader)
+            {
+                return true;
+            }
+
             var pools = (IDictionary)loader.GetType().GetField("_pools", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(loader);
             var pool = (YLFramework.Core.Pool.GameObjectPoolData)pools["YL.Core.Direct/" + prefab.GetInstanceID()];
             return pool == null || !pool.PoolQueue.Contains(instance);
@@ -2600,7 +2873,7 @@ namespace YLFramework.Core.Tests
             try
             {
                 var view = Template<YLCoreSmokeView>("YLTimer.ViewSession").GetComponent<YLCoreSmokeView>();
-                module.AttachView(view);
+                _module.AttachView(view);
                 view.gameObject.SetActive(true);
                 var cancelled = 0;
                 view.RemoveAction = scope.Dispose;
@@ -2621,22 +2894,29 @@ namespace YLFramework.Core.Tests
                 Assert.That(cancelled, Is.EqualTo(1));
                 Assert.That(global.IsActive, Is.True, "View.Close 不清外部全局 Timer。");
                 using var nextScope = new TimerScope();
-                module.AttachView(view);
+                _module.AttachView(view);
                 view.gameObject.SetActive(true);
                 view.RemoveAction = nextScope.Dispose;
                 var next = nextScope.PostNamed("view", 60);
                 Assert.That(next.IsActive, Is.True);
-                module.Close();
+                _module.Close();
                 Assert.That(next.Status, Is.EqualTo(TimerState.Cancelled));
                 Assert.That(cancelled, Is.EqualTo(1), "旧 Scope 不参与重启后的 View 会话。");
-                for (var frame = 0; frame < 8 && completed == 0; frame++) yield return null;
+                for (var frame = 0; frame < 8 && completed == 0; frame++)
+                {
+                    yield return null;
+                }
+
                 Assert.That(global.Status, Is.EqualTo(TimerState.Completed));
                 Assert.That(completed, Is.EqualTo(1));
             }
             finally
             {
                 global.Cancel();
-                if (ownedHost) Object.Destroy(ownedHost.gameObject);
+                if (ownedHost)
+                {
+                    Object.Destroy(ownedHost.gameObject);
+                }
             }
         }
 
@@ -2648,13 +2928,17 @@ namespace YLFramework.Core.Tests
             try
             {
                 var request = ModuleManager.StartUpModule(other);
-                while (!request.isDone) yield return null;
-                Assert.That(request.error, Is.Null.Or.Empty);
+                while (!request.IsDone)
+                {
+                    yield return null;
+                }
+
+                Assert.That(request.Error, Is.Null.Or.Empty);
                 var root = PolicyRoot("YLPolicy.SharedRoot");
                 var prefab = Template<YLCoreSmokePanel>("YLPolicy.Order", true);
                 var high = Track(other.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { Priority = 210, CoversRoot = true, InstanceMode = PanelInstanceMode.Multiple }));
-                var low = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var low = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { Priority = 50, CoversRoot = true, InstanceMode = PanelInstanceMode.Multiple }));
                 Assert.That(high.Canvas.sortingOrder, Is.GreaterThan(low.Canvas.sortingOrder));
                 Assert.That(high.IsTop(), Is.True);
@@ -2664,19 +2948,25 @@ namespace YLFramework.Core.Tests
                 Assert.That(low.IsVisible, Is.False, "跨 Module 的固定 Priority 高于接受顺序。");
                 low.BringToFront();
                 Assert.That(high.IsTop(), Is.True, "BringToFront 不跨固定 Priority。");
-                var third = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var third = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 var stable = high.Canvas.sortingOrder;
                 Assert.That(third.IsVisible, Is.False);
                 third.Close();
                 int visibleAtActivation = 0, hiddenAfterTransition = 0;
                 YLCoreSmokePanel.VisibleProbe = _ => visibleAtActivation++;
-                third = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                third = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
                 Assert.That(third.IsVisible, Is.False, "低优先级窗口首开即受覆盖，不能短暂发布 Visible。");
                 Assert.That(visibleAtActivation, Is.Zero);
                 YLCoreSmokePanel.VisibleProbe = null;
-                YLCoreSmokePanel.InvisibleProbe = panel => { if (panel == third) hiddenAfterTransition++; };
+                YLCoreSmokePanel.InvisibleProbe = panel =>
+                {
+                    if (panel == third)
+                    {
+                        hiddenAfterTransition++;
+                    }
+                };
                 third.UpdateDisplay(new PanelOverrides { Priority = 220 });
                 third.UpdateDisplay(new PanelOverrides { Priority = 0 });
                 Assert.That(hiddenAfterTransition, Is.EqualTo(1));
@@ -2690,8 +2980,12 @@ namespace YLFramework.Core.Tests
             finally
             {
                 YLCoreSmokePanel.ResetProbes();
-                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other)) other.Close();
-                classPool.Restore(new Module[] { other });
+                if (ReferenceEquals(ModuleManager.GetModule(other.ModuleName), other))
+                {
+                    other.Close();
+                }
+
+                _classPool.Restore(new Module[] { other });
             }
         }
 
@@ -2704,13 +2998,13 @@ namespace YLFramework.Core.Tests
                 var rootA = PolicyRoot("YLPolicy.RootA");
                 var rootB = PolicyRoot("YLPolicy.RootB");
                 var container = new GameObject("YLPolicy.Container", typeof(RectTransform));
-                objects.Add(container);
+                _objects.Add(container);
                 container.transform.SetParent(rootB.transform, false);
                 var prefab = Template<YLCoreSmokePanel>("YLPolicy.RootWindow", true);
-                var a = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
+                var a = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
                     overrides: new PanelOverrides { CoversRoot = true }));
                 var obj = Object.Instantiate(prefab, container.transform, false);
-                var b = Track(module.AttachView(obj.GetComponent<YLCoreSmokePanel>()));
+                var b = Track(_module.AttachView(obj.GetComponent<YLCoreSmokePanel>()));
                 obj.SetActive(true);
                 Assert.That(b.transform.parent, Is.SameAs(container.transform), "Attach 原位，不偷偷使用 LoadPanel 的层容器。");
                 Assert.That(b.Root, Is.SameAs(rootB));
@@ -2721,7 +3015,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(a.IsTop(), Is.True);
                 Assert.That(b.IsTop(), Is.True);
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -2731,10 +3028,10 @@ namespace YLFramework.Core.Tests
             var root = PolicyRoot("YLPolicy.PresetRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.Preset", true);
             prefab.AddComponent<Canvas>();
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Priority = int.MaxValue }));
-            Assert.That(panel.EffectiveSettings.Priority, Is.EqualTo(int.MaxValue), "业务 Priority 不受 Canvas 的 short 排序空间限制。");
-            var sibling = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            Assert.That(panel.EffectiveSettings.priority, Is.EqualTo(int.MaxValue), "业务 Priority 不受 Canvas 的 short 排序空间限制。");
+            var sibling = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Priority = int.MaxValue }));
             Assert.That(sibling.Canvas.sortingOrder, Is.GreaterThan(panel.Canvas.sortingOrder));
             Assert.That(sibling.IsTop(), Is.True, "同 Priority 按接受顺序排序，而非 Dictionary 顺序。");
@@ -2745,12 +3042,17 @@ namespace YLFramework.Core.Tests
             var parent = panel.transform.parent;
             Assert.Throws<ArgumentOutOfRangeException>(() => panel.UpdateDisplay(new PanelOverrides { Modal = true, Layer = 1 }));
             Assert.That(panel.SortingOrder, Is.EqualTo(previous));
-            Assert.That(panel.EffectiveSettings.Modal, Is.False);
+            Assert.That(panel.EffectiveSettings.modal, Is.False);
             Assert.That(panel.transform.parent, Is.SameAs(parent));
             Assert.That(sibling.SortingOrder, Is.EqualTo(display));
             panel.Close();
             var retired = panel.SortingOrder;
-            Assert.DoesNotThrow(() => { panel.Show(); panel.BringToFront(); panel.UpdateDisplay(new PanelOverrides { Priority = int.MinValue }); });
+            Assert.DoesNotThrow(() =>
+            {
+                panel.Show();
+                panel.BringToFront();
+                panel.UpdateDisplay(new PanelOverrides { Priority = int.MinValue });
+            });
             Assert.That(panel.SortingOrder, Is.EqualTo(retired));
             Assert.That(panel.IsVisible, Is.False, "已结束会话不能复活缓存对象。");
             Assert.That(sibling.IsLoaded && sibling.IsVisible, Is.True);
@@ -2762,13 +3064,13 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLPolicy.ModalRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.Modal", true);
-            var content = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var content = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true }));
-            var second = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var second = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true }));
-            var overlay = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var overlay = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 1, ParticipatesInTop = false }));
             Assert.That(content.IsVisible, Is.True, "Modal does not imply full-screen rendering occlusion.");
             Assert.That(content.IsInputBlocked, Is.True);
@@ -2786,10 +3088,10 @@ namespace YLFramework.Core.Tests
             second.Close();
             Assert.That(content.HasFocus, Is.True);
             Assert.That(overlay.HasFocus, Is.False);
-            PanelManager.MultiPanelListener = false;
+            PanelManager.CullCoveredPanels = false;
             try
             {
-                first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true }));
                 Assert.That(content.IsInputBlocked, Is.True);
                 first.enabled = false;
@@ -2799,7 +3101,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(content.HasFocus, Is.True, "Occlusion switch cannot disable modal/focus lifecycle maintenance.");
                 Assert.That(content.IsInputBlocked, Is.False);
             }
-            finally { PanelManager.MultiPanelListener = true; }
+            finally
+            {
+                PanelManager.CullCoveredPanels = true;
+            }
         }
 
         [UnityTest]
@@ -2808,18 +3113,18 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLPolicy.BorrowRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.BorrowOwner", true);
-            var owner = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var owner = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CoversRoot = true }));
             var childObject = new GameObject("YLPolicy.BorrowedChild", typeof(RectTransform));
-            objects.Add(childObject);
+            _objects.Add(childObject);
             childObject.transform.SetParent(owner.transform, false);
-            var child = module.AttachView(childObject.AddComponent<YLCoreSmokePanel>());
+            var child = _module.AttachView(childObject.AddComponent<YLCoreSmokePanel>());
             Assert.That(child.Canvas, Is.Not.SameAs(owner.Canvas));
             Assert.That(child.Root, Is.SameAs(root));
-            Assert.That(child.EffectiveSettings.CoversRoot, Is.False);
+            Assert.That(child.EffectiveSettings.coversRoot, Is.False);
             child.UpdateDisplay(new PanelOverrides { Priority = int.MaxValue });
             Assert.That(child.IsTop(), Is.True);
-            var covering = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var covering = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 1, CoversRoot = true }));
             Assert.That(owner.IsVisible, Is.False);
             Assert.That(child.IsVisible, Is.False, "独立子 Panel 仍受同根实际更高的 CoversRoot 遮挡。");
@@ -2838,11 +3143,11 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var host = new GameObject("YLPanel.FirstInactiveRoot", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
             host.SetActive(false);
-            objects.Add(host);
+            _objects.Add(host);
             var root = CorePanelTestRoots.Create(host, activate: false);
             Assert.That(typeof(UIRootContext).GetField("canvas", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(root), Is.Null,
                 "必须覆盖从未 OnEnable 的根，不能以先激活再停用代替首次 inactive 使用。");
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLPanel.InitiallyInactive", true), root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLPanel.InitiallyInactive", true), root: root));
             var session = ViewSession(panel);
             Assert.That(panel.IsLoaded, Is.True);
             Assert.That(panel.Root, Is.SameAs(root));
@@ -2852,22 +3157,29 @@ namespace YLFramework.Core.Tests
             Assert.That(host.activeSelf, Is.False);
             Assert.That(panel.IsVisible, Is.False);
             Assert.That(panel.IsInputBlocked, Is.True);
-            host.SetActive(true); yield return null;
+            host.SetActive(true);
+            yield return null;
             Assert.That(panel.IsVisible && !panel.IsInputBlocked, Is.True);
-            host.SetActive(false); yield return null;
+            host.SetActive(false);
+            yield return null;
             Assert.That(panel.IsLoaded && panel.IsInputBlocked, Is.True);
-            host.SetActive(true); yield return null;
+            host.SetActive(true);
+            yield return null;
             Assert.That(ViewSession(panel), Is.SameAs(session));
             Assert.That(panel.LoadedCount, Is.EqualTo(1));
             Assert.That(panel.OpenCount, Is.EqualTo(1));
             var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             var ownedSystem = (GameObject)typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
             Object.DestroyImmediate(host.GetComponent<UnityEngine.UI.GraphicRaycaster>());
-            yield return null; yield return null;
+            yield return null;
+            yield return null;
             Assert.That(panel.Module, Is.Null);
             Assert.That(panel.IsLoaded, Is.False);
             Assert.That(host.GetComponent<UnityEngine.UI.GraphicRaycaster>(), Is.Null, "必需组件损坏不得被运行时自修复。");
-            if (!ReferenceEquals(ownedSystem, null)) Assert.That(ownedSystem == null, Is.True, "最后有效根损坏后不得仅因其 Canvas 仍启用而保留自建输入系统。");
+            if (!ReferenceEquals(ownedSystem, null))
+            {
+                Assert.That(ownedSystem == null, Is.True, "最后有效根损坏后不得仅因其 Canvas 仍启用而保留自建输入系统。");
+            }
         }
 
         [UnityTest]
@@ -2875,13 +3187,13 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var previousScene = SceneManager.GetActiveScene();
-            var previousHook = PanelManager.onCreateCanvas;
+            var previousHook = PanelManager.CanvasCreated;
             var sceneA = OwnScene("YLPolicy.SceneA");
             var sceneB = OwnScene("YLPolicy.SceneB");
             var system = new GameObject("YLPolicy.OwnEventSystem", typeof(UnityEngine.EventSystems.EventSystem));
-            objects.Add(system);
+            _objects.Add(system);
             int defaultCreations = 0;
-            PanelManager.onCreateCanvas = _ => defaultCreations++;
+            PanelManager.CanvasCreated = _ => defaultCreations++;
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.ScenePanel", true);
             var persistent = PolicyRoot("YLPolicy.PersistentRoot");
             Object.DontDestroyOnLoad(persistent.gameObject);
@@ -2895,11 +3207,11 @@ namespace YLFramework.Core.Tests
                 Assert.That(rootA.gameObject.scene, Is.EqualTo(sceneA));
                 Assert.That(rootB.gameObject.scene, Is.EqualTo(sceneB));
                 SceneManager.SetActiveScene(sceneA);
-                module.PanelRoot = rootA;
-                var a = Track(module.LoadPanel<YLCoreSmokePanel>(prefab));
-                module.PanelRoot = rootB;
-                var b = Track(module.LoadPanel<YLCoreSmokePanel>(prefab));
-                var d = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: persistent,
+                _module.PanelRoot = rootA;
+                var a = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab));
+                _module.PanelRoot = rootB;
+                var b = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab));
+                var d = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: persistent,
                     overrides: new PanelOverrides { Priority = 100, CoversRoot = true }));
                 Assert.That(a.Root, Is.SameAs(rootA), "重新绑定只影响之后接受的请求。");
                 Assert.That(b.Root, Is.SameAs(rootB));
@@ -2913,16 +3225,20 @@ namespace YLFramework.Core.Tests
                 Assert.That(a.IsTop(), Is.False, "Unity fake-null cannot compare equal to an empty Top query.");
                 Assert.That(a.HasFocus, Is.False);
                 Assert.That(b.IsLoaded && b.IsVisible && d.IsLoaded && d.IsVisible, Is.True);
-                Assert.That(b.Module, Is.SameAs(module));
-                Assert.That(d.Module, Is.SameAs(module));
-                module.Close();
+                Assert.That(b.Module, Is.SameAs(_module));
+                Assert.That(d.Module, Is.SameAs(_module));
+                _module.Close();
                 Assert.That(persistent != null, Is.True, "Module 退出不销毁共享根。");
             }
             finally
             {
-                if (previousScene.IsValid() && previousScene.isLoaded) SceneManager.SetActiveScene(previousScene);
-                PanelManager.onCreateCanvas = previousHook;
-                module.PanelRoot = null;
+                if (previousScene.IsValid() && previousScene.isLoaded)
+                {
+                    SceneManager.SetActiveScene(previousScene);
+                }
+
+                PanelManager.CanvasCreated = previousHook;
+                _module.PanelRoot = null;
             }
         }
 
@@ -2933,8 +3249,8 @@ namespace YLFramework.Core.Tests
             var rootA = PolicyRoot("YLPolicy.MovingRootA");
             var rootB = PolicyRoot("YLPolicy.MovingRootB");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.Moving", true);
-            var moving = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA));
-            var other = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootB));
+            var moving = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA));
+            var other = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootB));
             var session = ViewSession(moving);
             moving.transform.SetParent(rootB.GetLayer(0), false);
             Object.DestroyImmediate(rootA.gameObject);
@@ -2943,7 +3259,7 @@ namespace YLFramework.Core.Tests
             Assert.That(moving.Module, Is.Null);
             Assert.That(moving.Root, Is.Null);
             Assert.That(ViewSession(moving), Is.Not.SameAs(session));
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { other }));
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.EqualTo(new[] { other }));
             Assert.That(other.IsTop() && other.IsVisible, Is.True);
         }
 
@@ -2956,19 +3272,32 @@ namespace YLFramework.Core.Tests
             var failure = new InvalidOperationException("YLPolicy.InitializationSortingFailure");
             YLCoreSmokePanel prepared = null;
             var args = NewArgs();
-            args.SetObject("retained", module);
+            args.SetObject("retained", _module);
             root.Canvas.sortingOrder = 98;
-            YLCoreSmokePanel.SortingProbe = (_, order) => { if (order == 100) throw failure; };
-            YLCoreSmokePanel.LoadingProbe = panel => { prepared = Track(panel); panel.UpdateDisplay(new PanelOverrides { Modal = true }); };
+            YLCoreSmokePanel.SortingProbe = (_, order) =>
+            {
+                if (order == 100)
+                {
+                    throw failure;
+                }
+            };
+            YLCoreSmokePanel.LoadingProbe = panel =>
+            {
+                prepared = Track(panel);
+                panel.UpdateDisplay(new PanelOverrides { Modal = true });
+            };
             try
             {
-                Assert.That(Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, args, root)), Is.SameAs(failure));
-                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+                Assert.That(Assert.Throws<InvalidOperationException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, args, root)), Is.SameAs(failure));
+                Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty);
                 Assert.That(prepared.IsLoaded, Is.False);
                 Assert.That(prepared.RemovedCount, Is.EqualTo(1));
                 AssertArgsReleased(args);
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -2981,7 +3310,10 @@ namespace YLFramework.Core.Tests
             YLCoreSmokePanel child = null;
             YLCoreSmokePanel.SortingProbe = (panel, order) =>
             {
-                if (panel == outer && order > 1) throw new InvalidOperationException("YLPolicy.OuterObserver");
+                if (panel == outer && order > 1)
+                {
+                    throw new InvalidOperationException("YLPolicy.OuterObserver");
+                }
             };
             YLCoreSmokePanel.LoadingProbe = panel =>
             {
@@ -2989,18 +3321,21 @@ namespace YLFramework.Core.Tests
                 {
                     outer = Track(panel);
                     LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: YLPolicy.OuterObserver"));
-                    child = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                    child = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                         overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Priority = -100 }));
                 }
             };
             try
             {
-                var loaded = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var loaded = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 Assert.That(loaded, Is.SameAs(outer));
                 Assert.That(outer.IsLoaded && child.IsLoaded, Is.True);
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -3023,8 +3358,12 @@ namespace YLFramework.Core.Tests
             target.anchoredPosition = new Vector2(50, -30);
             target.sizeDelta = new Vector2(-60, -40);
             var prefab = Template<YLCoreSmokePanel>("YLPanel.DifferentLayerPanel", true);
-            if (businessGate) { prefab.AddComponent<CanvasGroup>().alpha = .6f; prefab.AddComponent<UnityEngine.UI.Button>(); }
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            if (businessGate)
+            {
+                prefab.AddComponent<CanvasGroup>().alpha = .6f;
+                prefab.AddComponent<UnityEngine.UI.Button>();
+            }
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             var rect = (RectTransform)panel.transform;
             rect.anchorMin = new Vector2(.1f, .3f);
             rect.anchorMax = new Vector2(.6f, .8f);
@@ -3034,14 +3373,21 @@ namespace YLFramework.Core.Tests
             rect.localScale = new Vector3(.8f, .9f, 1);
             var session = ViewSession(panel);
             var changes = new PanelOverrides { Layer = 1, Priority = 23, Modal = true };
-            if (reopen) Assert.That(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: changes), Is.SameAs(panel));
-            else panel.UpdateDisplay(changes);
+            if (reopen)
+            {
+                Assert.That(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root, overrides: changes), Is.SameAs(panel));
+            }
+            else
+            {
+                panel.UpdateDisplay(changes);
+            }
+
             var placement = businessGate ? panel.transform.parent.parent : panel.transform;
             Assert.That(placement.parent, Is.SameAs(target));
             Assert.That(panel.Root, Is.SameAs(root));
             Assert.That(ViewSession(panel), Is.SameAs(session));
-            Assert.That(panel.EffectiveSettings.Layer, Is.EqualTo(1));
-            Assert.That(panel.EffectiveSettings.Modal, Is.True);
+            Assert.That(panel.EffectiveSettings.layer, Is.EqualTo(1));
+            Assert.That(panel.EffectiveSettings.modal, Is.True);
             Assert.That(rect.anchorMin, Is.EqualTo(new Vector2(.1f, .3f)));
             Assert.That(rect.anchorMax, Is.EqualTo(new Vector2(.6f, .8f)));
             Assert.That(rect.pivot, Is.EqualTo(new Vector2(.4f, .7f)));
@@ -3066,8 +3412,8 @@ namespace YLFramework.Core.Tests
             var rootA = PolicyRoot("YLPolicy.AtomicRootA");
             var rootB = PolicyRoot("YLPolicy.AtomicRootB");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.Atomic", true);
-            var a = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA));
-            var b = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootB));
+            var a = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA));
+            var b = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootB));
             var rect = (RectTransform)a.transform;
             rect.anchorMin = new Vector2(.2f, .3f);
             rect.anchorMax = new Vector2(.7f, .9f);
@@ -3105,17 +3451,17 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var rootA = PolicyRoot("YLPolicy.ChildMovingRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.BorrowMoving", true);
-            var a = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
+            var a = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
-            var b = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
+            var b = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             var obj = new GameObject("YLPolicy.LiveBorrowed", typeof(RectTransform));
-            objects.Add(obj);
+            _objects.Add(obj);
             obj.transform.SetParent(a.transform, false);
-            var child = module.AttachView(obj.AddComponent<YLCoreSmokePanel>());
+            var child = _module.AttachView(obj.AddComponent<YLCoreSmokePanel>());
             var canvas = child.Canvas;
             var session = ViewSession(child);
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: rootA,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true }));
             obj.transform.SetParent(b.transform, false);
             yield return null;
@@ -3123,7 +3469,7 @@ namespace YLFramework.Core.Tests
             Assert.That(child.Canvas, Is.SameAs(canvas).And.Not.SameAs(b.Canvas));
             Assert.That(child.Root, Is.SameAs(rootA));
             Assert.That(ViewSession(child), Is.SameAs(session));
-            Assert.That(child.EffectiveSettings.Modal, Is.False);
+            Assert.That(child.EffectiveSettings.modal, Is.False);
             Assert.That(child.IsVisible, Is.True);
             Assert.That(child.IsInputBlocked, Is.True);
             Assert.That(a.Canvas.enabled && b.Canvas.enabled, Is.True);
@@ -3137,15 +3483,15 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLPolicy.PriorityGroupRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.PriorityGroup", true);
-            var content = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var content = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Modal = true, Priority = int.MaxValue }));
-            var next = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var next = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             Assert.That(next.SortingOrder, Is.GreaterThan(content.SortingOrder));
             Assert.That(modal.SortingOrder, Is.GreaterThan(next.SortingOrder));
-            Assert.That(modal.EffectiveSettings.Priority, Is.EqualTo(int.MaxValue));
+            Assert.That(modal.EffectiveSettings.priority, Is.EqualTo(int.MaxValue));
             Assert.That(modal.SortingOrder, Is.LessThan(10));
             Assert.That(next.IsInputBlocked && content.IsInputBlocked, Is.True);
         }
@@ -3156,7 +3502,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLPolicy.SortingLayerRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.DefaultLayer", true);
-            var low = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var low = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { Priority = int.MaxValue, CoversRoot = true }));
             var layeredPrefab = Template<YLCoreSmokePanel>("YLPolicy.UpperLayer", true);
             var layer = SortingLayer.NameToID("Map");
@@ -3166,12 +3512,12 @@ namespace YLFramework.Core.Tests
             root.Canvas.sortingLayerID = layer;
             Assert.That(root.Canvas.sortingLayerID, Is.EqualTo(layer), "先确认原生根接受 SortingLayer，不能用忽略该属性的屏幕空间根作输入。");
             layeredPrefab.AddComponent<Canvas>().sortingLayerID = 0;
-            var high = Track(module.LoadPanel<YLCoreSmokePanel>(layeredPrefab, root: root,
+            var high = Track(_module.LoadPanel<YLCoreSmokePanel>(layeredPrefab, root: root,
                 overrides: new PanelOverrides { Layer = 1, Priority = int.MinValue, CoversRoot = true }));
             Assert.That(high.IsTop(), Is.True);
             Assert.That(low.IsVisible, Is.False);
             Assert.That(high.IsVisible, Is.True);
-            var next = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLPolicy.NextLayer", true), root: root,
+            var next = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLPolicy.NextLayer", true), root: root,
                 overrides: new PanelOverrides { Priority = int.MaxValue }));
             Assert.That(next.SortingOrder, Is.GreaterThan(low.SortingOrder).And.LessThan(high.SortingOrder));
             Assert.That(low.Canvas.sortingLayerID, Is.EqualTo(layer));
@@ -3184,10 +3530,10 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var bare = new GameObject("YLPolicy.BareCanvas", typeof(RectTransform), typeof(Canvas));
-            objects.Add(bare);
+            _objects.Add(bare);
             var barePanel = new GameObject("YLPolicy.BarePanel", typeof(RectTransform), typeof(YLCoreSmokePanel));
             barePanel.transform.SetParent(bare.transform, false);
-            Assert.Throws<InvalidOperationException>(() => module.AttachView(barePanel.GetComponent<YLCoreSmokePanel>()));
+            Assert.Throws<InvalidOperationException>(() => _module.AttachView(barePanel.GetComponent<YLCoreSmokePanel>()));
             Assert.That(barePanel != null, Is.True, "拒绝裸 Canvas 不销毁调用方的外部对象。");
             Assert.That(bare.GetComponent<UIRootContext>(), Is.Null, "Attach 不自动补上下文。");
             var outer = PolicyRoot("YLPolicy.OuterRoot");
@@ -3198,8 +3544,8 @@ namespace YLFramework.Core.Tests
             PanelManager.RegisterRoot(firstRoot);
             PanelManager.RegisterRoot(secondRoot);
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.ExplicitRootPanel", true);
-            var a = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: firstRoot, overrides: new PanelOverrides { CoversRoot = true }));
-            var b = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: secondRoot, overrides: new PanelOverrides { CoversRoot = true }));
+            var a = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: firstRoot, overrides: new PanelOverrides { CoversRoot = true }));
+            var b = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: secondRoot, overrides: new PanelOverrides { CoversRoot = true }));
             Assert.That(a.Root, Is.SameAs(firstRoot));
             Assert.That(b.Root, Is.SameAs(secondRoot));
             Assert.That(a.IsVisible && b.IsVisible && a.IsTop() && b.IsTop(), Is.True);
@@ -3212,9 +3558,9 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLPolicy.SortObserverRoot");
             var prefab = Template<YLCoreSmokePanel>("YLPolicy.SortObserver", true);
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Priority = 100 }));
-            var second = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var second = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Priority = 100 }));
             int following = 0;
             YLCoreSmokePanel.SortingProbe = (panel, _) =>
@@ -3224,18 +3570,24 @@ namespace YLFramework.Core.Tests
                     Assert.That(second.Canvas.sortingOrder, Is.EqualTo(root.Canvas.sortingOrder + 3), "All Canvas orders must be committed before notifying business code.");
                     throw new InvalidOperationException("YLPolicy.SortObserverFailure");
                 }
-                if (panel == second) following++;
+                if (panel == second)
+                {
+                    following++;
+                }
             };
             try
             {
                 LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: YLPolicy.SortObserverFailure"));
-                var third = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var third = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 Assert.That(following, Is.EqualTo(1));
                 Assert.That(first.IsLoaded && second.IsLoaded && third.IsLoaded, Is.True);
                 Assert.That(PanelManager.GetTopPanel(root), Is.SameAs(second));
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -3244,21 +3596,21 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLWindow.UniqueRoot");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.Unique", true);
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             Assert.That(first.gameObject.activeSelf && first.IsVisible, Is.True, "Open must show even an initially inactive prefab.");
             var session = ViewSession(first);
-            var again = module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
+            var again = _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
             Assert.That(again, Is.SameAs(first));
             Assert.That(ViewSession(again), Is.SameAs(session));
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
             Assert.That(first.LoadedCount, Is.EqualTo(1));
             Assert.That(first.OpenCount, Is.EqualTo(2));
             first.Close();
             Assert.That(first.Module, Is.Null);
-            var reopened = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var reopened = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             Assert.That(reopened, Is.SameAs(first));
             Assert.That(ViewSession(reopened), Is.Not.SameAs(session));
-            Assert.That(reopened.Module, Is.SameAs(module));
+            Assert.That(reopened.Module, Is.SameAs(_module));
         }
 
         [UnityTest]
@@ -3267,55 +3619,55 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLWindow.AsyncRoot");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.Async", true);
-            var request = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            var request = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
             Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
             var rejectedArgs = NewArgs();
-            Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, rejectedArgs, root));
+            Assert.Throws<InvalidOperationException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, rejectedArgs, root));
             AssertArgsReleased(rejectedArgs);
             Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty, "同步拒绝不能接管异步生产或交付半初始化对象。");
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty, "同步拒绝不能接管异步生产或交付半初始化对象。");
             var nextArgs = NewArgs();
             nextArgs.SetInt("token", 42);
-            var next = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, nextArgs, root);
-            Assert.That(((IEnumerable)typeof(Module).GetField("pendingViews", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(module)).Cast<object>().Count(), Is.EqualTo(2));
+            var next = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, nextArgs, root);
+            Assert.That(((IEnumerable)typeof(Module).GetField("PendingViews", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(_module)).Cast<object>().Count(), Is.EqualTo(2));
             request.Abort();
             request.Abort();
             Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Canceled));
             Assert.That(next.Status, Is.EqualTo(LoadViewStatus.Pending));
             yield return next;
-            Assert.That(next.Status, Is.EqualTo(LoadViewStatus.Succeeded), next.error);
-            var panel = Track(next.panel);
+            Assert.That(next.Status, Is.EqualTo(LoadViewStatus.Succeeded), next.Error);
+            var panel = Track(next.Panel);
             Assert.That(panel.Token, Is.EqualTo(42));
             AssertArgsReleased(nextArgs);
             Assert.That(panel.gameObject.activeSelf && panel.IsVisible, Is.True);
             var session = ViewSession(panel);
-            var again = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            var again = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
             Assert.That(again.Status, Is.EqualTo(LoadViewStatus.Pending), "有效实例也先返回 Pending，数据回调最早下一帧。");
             Assert.That(panel.OpenCount, Is.EqualTo(1));
             yield return again;
             Assert.That(again.Status, Is.EqualTo(LoadViewStatus.Succeeded));
-            Assert.That(again.panel, Is.SameAs(panel));
+            Assert.That(again.Panel, Is.SameAs(panel));
             Assert.That(ViewSession(panel), Is.SameAs(session));
             Assert.That(panel.LoadedCount, Is.EqualTo(1));
             Assert.That(panel.OpenCount, Is.EqualTo(2));
             panel.Close();
             var canceledArgs = NewArgs();
-            var canceled = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, canceledArgs, root);
+            var canceled = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, canceledArgs, root);
             canceled.Abort();
             yield return null;
             Assert.That(canceled.Status, Is.EqualTo(LoadViewStatus.Canceled));
-            Assert.That(canceled.panel, Is.Null);
+            Assert.That(canceled.Panel, Is.Null);
             AssertArgsReleased(canceledArgs);
             Assert.That(panel.OpenCount, Is.EqualTo(2), "全部消费者提交前取消不能调用业务钩子。");
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
-            var pending = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
-            var pendingSibling = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
-            module.Close();
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+            var pending = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            var pendingSibling = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            _module.Close();
             Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Invalidated));
             Assert.That(pendingSibling.Status, Is.EqualTo(LoadViewStatus.Invalidated));
-            Assert.That(((IEnumerable)typeof(Module).GetField("pendingViews", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(module)).Cast<object>().Count(), Is.Zero);
+            Assert.That(((IEnumerable)typeof(Module).GetField("PendingViews", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(_module)).Cast<object>().Count(), Is.Zero);
             yield return null;
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty);
         }
 
         [UnityTest]
@@ -3324,11 +3676,11 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLWindow.DeadPrefabRoot");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.DeadPrefab", true);
-            var request = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+            var request = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
             Object.DestroyImmediate(prefab);
             yield return request;
             Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Invalidated));
-            Assert.That(request.panel, Is.Null);
+            Assert.That(request.Panel, Is.Null);
         }
 
         [UnityTest]
@@ -3337,13 +3689,13 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLWindow.MultiRoot");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.Multi", true);
-            module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CacheOnClose = false }) });
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
-            var second = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            _module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, CacheOnClose = false }) });
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var second = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             Assert.That(first, Is.Not.SameAs(second));
             first.Close();
             Assert.That(first.Module, Is.Null);
-            Assert.That(second.Module, Is.SameAs(module));
+            Assert.That(second.Module, Is.SameAs(_module));
             yield return null;
             Assert.That(first == null, Is.True, "Non-reusable acquired instance must be destroyed, not cached.");
         }
@@ -3358,18 +3710,25 @@ namespace YLFramework.Core.Tests
             try
             {
                 Time.timeScale = 0;
-                var handle = presenter.Show(module, "Paused tip", duration: 0.05f, fade: false);
+                var handle = presenter.Show(_module, "Paused tip", duration: 0.05f, fade: false);
                 var item = handle.Item;
-                Assert.That(item.Module, Is.SameAs(module));
+                Assert.That(item.Module, Is.SameAs(_module));
                 var deadline = Time.realtimeSinceStartup + 2;
-                while (!handle.IsDone && Time.realtimeSinceStartup < deadline) yield return null;
+                while (!handle.IsDone && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+
                 Assert.That(handle.IsDone, Is.True);
                 Assert.That(handle.Result, Is.EqualTo(UITipResult.Completed));
                 Assert.That(item.Module, Is.Null);
                 Assert.That(item.gameObject.activeSelf, Is.False);
                 Assert.That(presenter.ActiveCount, Is.Zero);
             }
-            finally { Time.timeScale = oldScale; }
+            finally
+            {
+                Time.timeScale = oldScale;
+            }
         }
 
         [UnityTest]
@@ -3378,21 +3737,21 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLTips.CancelRoot");
             var presenter = CreateTips(root);
-            var first = presenter.Show(module, "first");
+            var first = presenter.Show(_module, "first");
             first.Dispose();
             Assert.That(first.IsDone, Is.True);
-            var next = presenter.Show(module, "next");
+            var next = presenter.Show(_module, "next");
             Assert.That(next.Item, Is.SameAs(first.Item));
             first.Dispose();
             Assert.That(next.IsDone, Is.False, "Old handle cannot close the reused item.");
-            var window = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLTips.RealWindow", true), root: root));
-            Assert.That(window.Module, Is.SameAs(module));
-            Assert.That(module.GetViews<Panel>(), Has.Count.EqualTo(2), "Tips 原位 Attach 会话不占用资源 Single 范围。");
-            module.Close();
+            var window = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLTips.RealWindow", true), root: root));
+            Assert.That(window.Module, Is.SameAs(_module));
+            Assert.That(_module.GetViews<Panel>(), Has.Count.EqualTo(2), "Tips 原位 Attach 会话不占用资源 Single 范围。");
+            _module.Close();
             Assert.That(next.IsDone, Is.True);
             Assert.That(presenter.ActiveCount, Is.Zero);
             yield return StartModule();
-            var ending = presenter.Show(module, "host");
+            var ending = presenter.Show(_module, "host");
             presenter.enabled = false;
             Assert.That(ending.IsDone, Is.True);
             Assert.That(ending.Result, Is.EqualTo(UITipResult.HostEnded));
@@ -3406,9 +3765,9 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var presenter = CreateTips(PolicyRoot("YLTips.CallbackRoot"));
             UITipHandle reentrant = null;
-            Assert.Throws<InvalidOperationException>(() => presenter.Show(module, "zero", duration: 0, completed: _ =>
+            Assert.Throws<InvalidOperationException>(() => presenter.Show(_module, "zero", duration: 0, completed: _ =>
             {
-                reentrant = presenter.Show(module, "new session");
+                reentrant = presenter.Show(_module, "new session");
                 throw new InvalidOperationException("YLTips.CallbackFailure");
             }));
             Assert.That(presenter.ActiveCount, Is.EqualTo(1));
@@ -3422,7 +3781,10 @@ namespace YLFramework.Core.Tests
         {
             var prefab = Template<UITipsItem>("YLTips.Template", true);
             SetPrivate(prefab.GetComponent<UITipsItem>(), "settings", new PanelOverrides
-                { ParticipatesInTop = false, InstanceMode = PanelInstanceMode.Multiple }.ApplyTo(PanelConfig.Default));
+            {
+                ParticipatesInTop = false,
+                InstanceMode = PanelInstanceMode.Multiple
+            }.ApplyTo(PanelConfig.Default));
             var bg = prefab.AddComponent<UnityEngine.UI.Image>();
             var label = new GameObject("Text", typeof(RectTransform), typeof(UnityEngine.UI.Text));
             label.transform.SetParent(prefab.transform, false);
@@ -3433,7 +3795,10 @@ namespace YLFramework.Core.Tests
             SetPrivate(presenter, "uiTipItemPrefab", prefab);
             SetPrivate(presenter, "uiTipItemPool", root.transform);
             foreach (var field in new[] { "middleTipRoot", "leftTopTipRoot", "leftDownTipRoot", "rightTopTipRoot", "rightDownTipRoot" })
+            {
                 SetPrivate(presenter, field, root.transform);
+            }
+
             return presenter;
         }
 
@@ -3442,7 +3807,11 @@ namespace YLFramework.Core.Tests
             for (var type = target.GetType(); type != null; type = type.BaseType)
             {
                 var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                if (field == null) continue;
+                if (field == null)
+                {
+                    continue;
+                }
+
                 field.SetValue(target, value);
                 return;
             }
@@ -3460,14 +3829,19 @@ namespace YLFramework.Core.Tests
             {
                 var prefab = Object.Instantiate(asset);
                 prefab.SetActive(false);
-                objects.Add(prefab);
-                prefabKeys.Add(prefab.GetHashCode());
+                _objects.Add(prefab);
+                _prefabKeys.Add(prefab.GetHashCode());
                 var rootGate = prefab.AddComponent<YLCoreOtherInputGate>();
-                rootGate.Allowed = false;
+                rootGate.isAllowed = false;
                 if (order == 1)
-                    while (UnityEditorInternal.ComponentUtility.MoveComponentUp(rootGate)) { }
+                {
+                    while (UnityEditorInternal.ComponentUtility.MoveComponentUp(rootGate))
+                    {
+                    }
+                }
+
                 var child = prefab.GetComponentInChildren<ColorSelector>(true).gameObject;
-                child.AddComponent<YLCoreOtherInputGate>().Allowed = true;
+                child.AddComponent<YLCoreOtherInputGate>().isAllowed = true;
                 prefab.SetActive(true);
                 var unowned = prefab.GetComponent<ColorSelectorWindow>();
                 try
@@ -3490,7 +3864,7 @@ namespace YLFramework.Core.Tests
                     prefab.SetActive(false);
                 }
                 int changes = 0;
-                var window = Track(module.LoadPanel<ColorSelectorWindow>(prefab,
+                var window = Track(_module.LoadPanel<ColorSelectorWindow>(prefab,
                     ColorSelectorWindow.Arguments(Color.red, _ => changes++), root));
                 window.gameObject.SetActive(true);
                 yield return null;
@@ -3499,13 +3873,16 @@ namespace YLFramework.Core.Tests
                 var rect = selector.GetComponent<RectTransform>();
                 Vector2 Point(Vector2 normalized) => RectTransformUtility.WorldToScreenPoint(null,
                     rect.TransformPoint(rect.rect.center + normalized * Mathf.Min(rect.rect.width, rect.rect.height) * .5f));
-                var data = new UnityEngine.EventSystems.PointerEventData(null) { pointerId = 23,
+                var data = new UnityEngine.EventSystems.PointerEventData(null)
+                {
+                    pointerId = 23,
                     button = UnityEngine.EventSystems.PointerEventData.InputButton.Left,
-                    position = Point(new Vector2(-.44f, .7621024f)) };
+                    position = Point(new Vector2(-.44f, .7621024f))
+                };
                 selector.OnPointerDown(data);
                 Assert.That(window.CurrentColor.g, Is.EqualTo(1).Within(.001f), "An unrelated denying gate on the Panel must not change its original priority.");
                 Assert.That(changes, Is.EqualTo(1));
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLColor.MixedModal" + order, true), root: root,
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLColor.MixedModal" + order, true), root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 modal.gameObject.SetActive(true);
                 modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -3521,7 +3898,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(window.CurrentColor.b, Is.EqualTo(1).Within(.001f));
                 Assert.That(changes, Is.EqualTo(2));
                 foreach (var gate in window.GetComponentsInChildren<YLCoreOtherInputGate>(true))
-                    Assert.That(gate.Reads, Is.Zero, "The explicit formal Panel owns this session, in either component order.");
+                {
+                    Assert.That(gate.reads, Is.Zero, "The explicit formal Panel owns this session, in either component order.");
+                }
+
                 window.Close();
             }
 #endif
@@ -3536,11 +3916,11 @@ namespace YLFramework.Core.Tests
             Assert.That(asset, Is.Not.Null);
             var prefab = Object.Instantiate(asset);
             prefab.SetActive(false);
-            objects.Add(prefab);
-            prefabKeys.Add(prefab.GetHashCode());
+            _objects.Add(prefab);
+            _prefabKeys.Add(prefab.GetHashCode());
             var root = PolicyRoot("YLColor.CameraRoot");
             var cameraObject = new GameObject("YLColor.Camera", typeof(Camera));
-            objects.Add(cameraObject);
+            _objects.Add(cameraObject);
             var camera = cameraObject.GetComponent<Camera>();
             camera.transform.position = new Vector3(0, 0, -10);
             var canvas = root.GetComponent<Canvas>();
@@ -3548,7 +3928,7 @@ namespace YLFramework.Core.Tests
             canvas.worldCamera = camera;
             canvas.planeDistance = 1;
             int old = 0, current = 0;
-            var first = Track(module.LoadPanel<ColorSelectorWindow>(prefab,
+            var first = Track(_module.LoadPanel<ColorSelectorWindow>(prefab,
                 ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.35f), _ => old++), root));
             first.gameObject.SetActive(true);
             first.GetComponent<RectTransform>().anchoredPosition = new Vector2(120, -80);
@@ -3576,7 +3956,10 @@ namespace YLFramework.Core.Tests
                 system.enabled = false;
                 Assert.That(UIPointer.CheckPositionOnUI(data.position), Is.False);
             }
-            finally { system.enabled = true; }
+            finally
+            {
+                system.enabled = true;
+            }
             Assert.That(UIPointer.CheckPositionOnUI(data.position), Is.True, "Cache must follow the actual current EventSystem.");
             data.pointerPressRaycast = hits[0];
             UnityEngine.EventSystems.ExecuteEvents.Execute(hits[0].gameObject, data, UnityEngine.EventSystems.ExecuteEvents.pointerDownHandler);
@@ -3585,7 +3968,7 @@ namespace YLFramework.Core.Tests
             Assert.That(first.CurrentColor.a, Is.EqualTo(0.35f));
             Assert.That(old, Is.EqualTo(1));
             first.Close();
-            var second = Track(module.LoadPanel<ColorSelectorWindow>(prefab,
+            var second = Track(_module.LoadPanel<ColorSelectorWindow>(prefab,
                 ColorSelectorWindow.Arguments(Color.blue, _ => current++), root));
             second.gameObject.SetActive(true);
             Assert.That(second, Is.SameAs(first));
@@ -3606,7 +3989,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.ModalRoot");
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Lower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Lower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var buttonObject = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
@@ -3621,11 +4004,11 @@ namespace YLFramework.Core.Tests
             if (!system)
             {
                 var input = new GameObject("YLInput.TestSystem", typeof(UnityEngine.EventSystems.EventSystem));
-                objects.Add(input);
+                _objects.Add(input);
                 system = input.GetComponent<UnityEngine.EventSystems.EventSystem>();
             }
             system.SetSelectedGameObject(buttonObject);
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Modal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.Modal", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             modal.gameObject.SetActive(true);
             modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -3634,7 +4017,9 @@ namespace YLFramework.Core.Tests
             Assert.That(system.currentSelectedGameObject, Is.Not.SameAs(buttonObject));
             var hits = new List<UnityEngine.EventSystems.RaycastResult>();
             system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system)
-            { position = RectTransformUtility.WorldToScreenPoint(null, buttonRect.position) }, hits);
+            {
+                position = RectTransformUtility.WorldToScreenPoint(null, buttonRect.position)
+            }, hits);
             Assert.That(hits.Exists(hit => hit.gameObject == buttonObject), Is.False);
             UnityEngine.EventSystems.ExecuteEvents.Execute(buttonObject, new UnityEngine.EventSystems.BaseEventData(system),
                 UnityEngine.EventSystems.ExecuteEvents.submitHandler);
@@ -3657,25 +4042,28 @@ namespace YLFramework.Core.Tests
                 var child = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
                 child.transform.SetParent(prefab.transform, false);
             }
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var system = UnityEngine.EventSystems.EventSystem.current;
             var buttons = lower.GetComponentsInChildren<UnityEngine.UI.Button>();
             buttons[0].GetComponent<YLCoreSelectionInputProbe>().Deselected = lower.Close;
             system.SetSelectedGameObject(buttons[0].gameObject);
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ReentrantModal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ReentrantModal", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             modal.gameObject.SetActive(true);
             modal.UpdateDisplay(new PanelOverrides { Modal = true });
             Assert.That(lower.Module, Is.Null);
             modal.Close();
-            var next = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var next = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             Assert.That(next, Is.SameAs(lower));
             next.gameObject.SetActive(true);
             foreach (var button in next.GetComponentsInChildren<UnityEngine.UI.Button>())
+            {
                 Assert.That(button.IsInteractable(), Is.True, "Old Apply must stop as soon as Deselect ends its session.");
+            }
+
             Assert.That(next.GetComponent<UnityEngine.UI.GraphicRaycaster>().enabled, Is.True);
         }
 
@@ -3684,13 +4072,13 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.NestedRoot");
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.NestedLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.NestedLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var modalPrefab = Template<YLCoreSmokePanel>("YLInput.NestedModal", true);
             modalPrefab.AddComponent<Canvas>();
             var modalObject = Object.Instantiate(modalPrefab, lower.transform, false);
-            var modal = Track(module.AttachView(modalObject.GetComponent<YLCoreSmokePanel>()));
+            var modal = Track(_module.AttachView(modalObject.GetComponent<YLCoreSmokePanel>()));
             var button = new GameObject("NestedModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
             button.transform.SetParent(modal.transform, false);
             int deselections = 0;
@@ -3710,14 +4098,14 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.SelectCloseRoot");
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var previous = new GameObject("Previous", typeof(RectTransform), typeof(UnityEngine.UI.Button));
             previous.transform.SetParent(lower.transform, false);
             var system = UnityEngine.EventSystems.EventSystem.current;
             system.SetSelectedGameObject(previous);
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseModal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectCloseModal", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             var selected = new GameObject("CloseOnSelect", typeof(RectTransform), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
             selected.transform.SetParent(modal.transform, false);
@@ -3735,7 +4123,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.SelectableBoundaryRoot");
-            var outer = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectableBoundaryOuter", true), root: root,
+            var outer = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectableBoundaryOuter", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             var parent = new GameObject("ParentSelectable", typeof(RectTransform), typeof(UnityEngine.UI.Button));
             parent.transform.SetParent(outer.transform, false);
@@ -3743,7 +4131,7 @@ namespace YLFramework.Core.Tests
             child.SetActive(false);
             child.transform.SetParent(parent.transform, false);
             new GameObject("ChildButton", typeof(RectTransform), typeof(UnityEngine.UI.Button)).transform.SetParent(child.transform, false);
-            var error = Assert.Throws<InvalidOperationException>(() => module.AttachView(child.GetComponent<YLCoreSmokePanel>()));
+            var error = Assert.Throws<InvalidOperationException>(() => _module.AttachView(child.GetComponent<YLCoreSmokePanel>()));
             StringAssert.Contains("Selectable", error.Message);
             Assert.That(child.GetComponent<YLCoreSmokePanel>().Module, Is.Null);
             Assert.That(parent.GetComponent<UnityEngine.UI.Button>().interactable, Is.True);
@@ -3755,7 +4143,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.LayoutReentryRoot");
             var prefab = Template<YLCoreSmokePanel>("YLInput.LayoutReentryPanel", true);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             var surfaceObject = new GameObject("LayoutSurface", typeof(RectTransform), typeof(UnityEngine.UI.HorizontalLayoutGroup));
             surfaceObject.transform.SetParent(panel.transform, false);
             var surface = (RectTransform)surfaceObject.transform;
@@ -3794,7 +4182,11 @@ namespace YLFramework.Core.Tests
             probe.DimensionsChanged = () =>
             {
                 // 父尺寸通知不算触发；必须进入实际目标宽度写入后的原生回调。
-                if (target.sizeDelta.x <= oldWidth) return;
+                if (target.sizeDelta.x <= oldWidth)
+                {
+                    return;
+                }
+
                 probe.DimensionsChanged = null;
                 callbacks++;
                 callbackFrame = Time.frameCount;
@@ -3810,7 +4202,7 @@ namespace YLFramework.Core.Tests
                     target.anchoredPosition = expectedPosition;
                 };
                 panel.Close();
-                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             };
             void AssertReopenedLayout()
             {
@@ -3839,7 +4231,11 @@ namespace YLFramework.Core.Tests
             }
             finally
             {
-                if (probe) probe.DimensionsChanged = null;
+                if (probe)
+                {
+                    probe.DimensionsChanged = null;
+                }
+
                 YLCoreSmokePanel.UpdateProbe = null;
             }
         }
@@ -3850,7 +4246,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.GateCleanupRoot");
             var prefab = Template<YLCoreSmokePanel>("YLInput.GateCleanupPanel", true);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             foreach (bool destroyButton in new[] { false, true })
             {
                 string phase = destroyButton ? "Retire" : "ReleaseMount";
@@ -3866,18 +4262,22 @@ namespace YLFramework.Core.Tests
                 var oldSlot = oldFrame.parent;
                 Assert.That(oldSlot.parent, Is.SameAs(parent.transform), phase);
                 var foreign = new GameObject(phase + "Foreign", typeof(RectTransform), typeof(YLCoreNativeLayoutReentryProbe));
-                objects.Add(foreign);
+                _objects.Add(foreign);
                 foreign.transform.SetParent(oldFrame, false);
                 var probe = foreign.GetComponent<YLCoreNativeLayoutReentryProbe>();
                 GameObject replacement = null;
                 int callbacks = 0;
                 probe.ParentChanged = () =>
                 {
-                    if (foreign.transform.parent == oldFrame) return;
+                    if (foreign.transform.parent == oldFrame)
+                    {
+                        return;
+                    }
+
                     probe.ParentChanged = null;
                     callbacks++;
                     replacement = new GameObject(phase + "Replacement", typeof(RectTransform));
-                    objects.Add(replacement);
+                    _objects.Add(replacement);
                     replacement.transform.SetParent(oldFrame, false);
                 };
                 void AssertForeignPreserved()
@@ -3891,18 +4291,34 @@ namespace YLFramework.Core.Tests
                 }
                 try
                 {
-                    if (destroyButton) Object.Destroy(button);
-                    else button.transform.SetParent(destination.transform, false);
+                    if (destroyButton)
+                    {
+                        Object.Destroy(button);
+                    }
+                    else
+                    {
+                        button.transform.SetParent(destination.transform, false);
+                    }
+
                     for (int frame = 0; frame < 4; frame++)
                     {
                         yield return null;
-                        if (!oldSlot) AssertForeignPreserved();
+                        if (!oldSlot)
+                        {
+                            AssertForeignPreserved();
+                        }
                     }
                     Assert.That(callbacks, Is.EqualTo(1), phase + " 必须通过实际父级回调挂入替代节点。");
                     AssertForeignPreserved();
                     Assert.That(!oldSlot, Is.True, phase + " 应在有限帧内只清理自身结构。");
                 }
-                finally { if (probe) probe.ParentChanged = null; }
+                finally
+                {
+                    if (probe)
+                    {
+                        probe.ParentChanged = null;
+                    }
+                }
             }
         }
 
@@ -3912,7 +4328,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.BusinessLayoutRoot");
             var prefab = Template<YLCoreSmokePanel>("YLInput.BusinessLayoutPanel", true);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             foreach (var groupType in new[] { typeof(UnityEngine.UI.HorizontalLayoutGroup), typeof(UnityEngine.UI.VerticalLayoutGroup), typeof(UnityEngine.UI.GridLayoutGroup), typeof(YLCoreDerivedHorizontalLayoutGroup) })
             {
@@ -3957,7 +4373,12 @@ namespace YLFramework.Core.Tests
                     text.text = name;
                     var fitter = go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
                     fitter.horizontalFit = fitter.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-                    if (business) { var group = go.AddComponent<CanvasGroup>(); group.alpha = .37f; group.blocksRaycasts = false; }
+                    if (business)
+                    {
+                        var group = go.AddComponent<CanvasGroup>();
+                        group.alpha = .37f;
+                        group.blocksRaycasts = false;
+                    }
                     return go.GetComponent<UnityEngine.UI.Button>();
                 }
                 var baseline = Surface("Baseline");
@@ -3973,9 +4394,15 @@ namespace YLFramework.Core.Tests
                     {
                         var a = (RectTransform)controls[i].transform;
                         var b = (RectTransform)controls[i + 2].transform;
-                        var expected = new Vector3[4]; var observed = new Vector3[4];
-                        a.GetWorldCorners(expected); b.GetWorldCorners(observed);
-                        for (int corner = 0; corner < 4; corner++) Assert.That(Vector3.Distance(observed[corner], expected[corner]), Is.LessThan(.01f), groupType.Name + " corner " + corner);
+                        var expected = new Vector3[4];
+                        var observed = new Vector3[4];
+                        a.GetWorldCorners(expected);
+                        b.GetWorldCorners(observed);
+                        for (int corner = 0; corner < 4; corner++)
+                        {
+                            Assert.That(Vector3.Distance(observed[corner], expected[corner]), Is.LessThan(.01f), groupType.Name + " corner " + corner);
+                        }
+
                         Assert.That(b.anchorMin, Is.EqualTo(a.anchorMin));
                         Assert.That(b.anchorMax, Is.EqualTo(a.anchorMax));
                         Assert.That(b.anchoredPosition, Is.EqualTo(a.anchoredPosition));
@@ -3992,7 +4419,7 @@ namespace YLFramework.Core.Tests
                 yield return null;
                 Compare();
                 Assert.That(panel.IsLoaded, Is.True);
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.LayoutModal", true), root: root,
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.LayoutModal", true), root: root,
                     overrides: new PanelOverrides { Modal = true }));
                 Assert.That(controls[2].IsInteractable(), Is.False);
                 Compare();
@@ -4009,10 +4436,12 @@ namespace YLFramework.Core.Tests
                 baselineIgnore.ignoreLayout = actualIgnore.ignoreLayout = false;
                 yield return null;
                 Compare();
-                controls[0].gameObject.SetActive(false); controls[2].gameObject.SetActive(false);
+                controls[0].gameObject.SetActive(false);
+                controls[2].gameObject.SetActive(false);
                 yield return null;
                 Compare();
-                controls[0].gameObject.SetActive(true); controls[2].gameObject.SetActive(true);
+                controls[0].gameObject.SetActive(true);
+                controls[2].gameObject.SetActive(true);
                 modal.Close();
                 yield return null;
                 Compare();
@@ -4020,12 +4449,13 @@ namespace YLFramework.Core.Tests
                 var retainedGate = controls[0].GetComponent<CanvasGroup>();
                 var previous = panel;
                 panel.Close();
-                panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 Assert.That(panel, Is.SameAs(previous));
                 Assert.That(controls[0].GetComponent<CanvasGroup>(), Is.SameAs(retainedGate));
                 Assert.That(panel.IsLoaded && controls[2].IsInteractable(), Is.True);
                 Compare();
-                Object.Destroy(baseline.gameObject); Object.Destroy(actual.gameObject);
+                Object.Destroy(baseline.gameObject);
+                Object.Destroy(actual.gameObject);
                 yield return null;
             }
         }
@@ -4040,7 +4470,7 @@ namespace YLFramework.Core.Tests
             child.GetComponent<CanvasGroup>().ignoreParentGroups = true;
             child.transform.SetParent(prefab.transform, false);
             var nativeHost = new GameObject("NativeGroupCapability", typeof(RectTransform), typeof(CanvasGroup));
-            objects.Add(nativeHost);
+            _objects.Add(nativeHost);
             nativeHost.transform.SetParent(root.GetLayer(0), false);
             var native = new GameObject("NativeControl", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
             native.transform.SetParent(nativeHost.transform, false);
@@ -4051,12 +4481,12 @@ namespace YLFramework.Core.Tests
             nativeHost.SetActive(false);
             if (!nativeCanGate)
             {
-                Assert.Throws<InvalidOperationException>(() => module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
-                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty, "原生准备已不能隔离时，首次打开必须原子拒绝。");
+                Assert.Throws<InvalidOperationException>(() => _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty, "原生准备已不能隔离时，首次打开必须原子拒绝。");
                 Assert.That(child.GetComponent<CanvasGroup>().ignoreParentGroups, Is.True);
                 child.GetComponent<CanvasGroup>().ignoreParentGroups = false;
             }
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             lower.gameObject.SetActive(true);
             yield return null;
             var business = lower.GetComponentInChildren<UnityEngine.UI.Button>().GetComponent<CanvasGroup>();
@@ -4065,7 +4495,7 @@ namespace YLFramework.Core.Tests
                 business.ignoreParentGroups = true;
                 LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("InvalidOperationException: .*ignoreParentGroups"));
             }
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.IgnoreGroupModal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.IgnoreGroupModal", true), root: root,
                 overrides: new PanelOverrides { Modal = true, Layer = 1 }));
             modal.gameObject.SetActive(true);
             if (nativeCanGate)
@@ -4077,7 +4507,11 @@ namespace YLFramework.Core.Tests
                 modal.Close();
                 Assert.That(button.IsInteractable(), Is.True);
             }
-            else Assert.That(lower.Module, Is.Null, "原生结构不能隔离时必须诊断并结束会话，不能假成功或写业务字段。");
+            else
+            {
+                Assert.That(lower.Module, Is.Null, "原生结构不能隔离时必须诊断并结束会话，不能假成功或写业务字段。");
+            }
+
             Assert.That(business.ignoreParentGroups, Is.True, "失败清理也不能回写业务组。");
             Assert.That(child.GetComponent<CanvasGroup>().ignoreParentGroups, Is.EqualTo(nativeCanGate));
         }
@@ -4087,7 +4521,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.BusinessWritesRoot");
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var nested = new GameObject("NestedSortingCanvas", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
@@ -4099,7 +4533,7 @@ namespace YLFramework.Core.Tests
             var graphic = child.GetComponent<UnityEngine.UI.Image>();
             var raycaster = lower.GetComponent<UnityEngine.UI.GraphicRaycaster>();
             var nestedRaycaster = nested.GetComponent<UnityEngine.UI.GraphicRaycaster>();
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesModal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesModal", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             modal.gameObject.SetActive(true);
             modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -4114,7 +4548,9 @@ namespace YLFramework.Core.Tests
                 Canvas.ForceUpdateCanvases();
                 hits.Clear();
                 system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system)
-                    { position = RectTransformUtility.WorldToScreenPoint(null, child.transform.position) }, hits);
+                {
+                    position = RectTransformUtility.WorldToScreenPoint(null, child.transform.position)
+                }, hits);
             }
             RaycastControl();
             Assert.That(hits.Exists(hit => hit.gameObject == child), Is.False, "nested overrideSorting 不能绕过射线门禁。");
@@ -4130,7 +4566,7 @@ namespace YLFramework.Core.Tests
             button.interactable = true;
             raycaster.enabled = true;
             graphic.raycastTarget = true;
-            modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesModal2", true), root: root,
+            modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.BusinessWritesModal2", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             modal.gameObject.SetActive(true);
             modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -4159,7 +4595,7 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var root = PolicyRoot("YLInput.ControlMoveRoot");
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             var child = new GameObject("MovedButton", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Button));
@@ -4168,7 +4604,7 @@ namespace YLFramework.Core.Tests
             var business = child.GetComponent<CanvasGroup>();
             business.alpha = .4f;
             business.blocksRaycasts = false;
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveModal", true), root: root,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ControlMoveModal", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             modal.gameObject.SetActive(true);
             modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -4194,8 +4630,8 @@ namespace YLFramework.Core.Tests
             var first = PolicyRoot("YLInput.MoveRootA");
             var second = PolicyRoot("YLInput.MoveRootB");
             var prefab = Template<YLCoreSmokePanel>("YLInput.MovedPanel", true);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: first));
-            var survivor = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: second));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: first));
+            var survivor = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: second));
             panel.gameObject.SetActive(true);
             var system = UnityEngine.EventSystems.EventSystem.current;
             panel.transform.SetParent(second.GetLayer(0), false);
@@ -4237,7 +4673,7 @@ namespace YLFramework.Core.Tests
             if (legacy)
             {
                 var external = new GameObject("YLInput.LegacySystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule), typeof(YLCoreLegacyPointerInput));
-                objects.Add(external);
+                _objects.Add(external);
                 scriptedInput = external.GetComponent<YLCoreLegacyPointerInput>();
                 external.GetComponent<UnityEngine.EventSystems.StandaloneInputModule>().inputOverride = scriptedInput;
             }
@@ -4249,7 +4685,7 @@ namespace YLFramework.Core.Tests
             if (cameraMode)
             {
                 var cameraObject = new GameObject("YLInput.NativeCamera", typeof(Camera));
-                objects.Add(cameraObject);
+                _objects.Add(cameraObject);
                 camera = cameraObject.GetComponent<Camera>();
                 camera.transform.position = new Vector3(0, 0, -10);
             }
@@ -4259,10 +4695,10 @@ namespace YLFramework.Core.Tests
             var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/ColorSelector.prefab");
             var prefab = Object.Instantiate(asset);
             prefab.SetActive(false);
-            objects.Add(prefab);
-            prefabKeys.Add(prefab.GetHashCode());
+            _objects.Add(prefab);
+            _prefabKeys.Add(prefab.GetHashCode());
             int changes = 0;
-            var window = Track(module.LoadPanel<ColorSelectorWindow>(prefab,
+            var window = Track(_module.LoadPanel<ColorSelectorWindow>(prefab,
                 ColorSelectorWindow.Arguments(new Color(1, 0, 0, 0.4f), _ => changes++), root));
             window.gameObject.SetActive(true);
             yield return null;
@@ -4276,14 +4712,22 @@ namespace YLFramework.Core.Tests
             Action<Vector2, bool> queue = (position, pressed) =>
             {
 #if ENABLE_LEGACY_INPUT_MANAGER
-                if (scriptedInput) { scriptedInput.Set(position, pressed); return; }
+                if (scriptedInput)
+                {
+                    scriptedInput.Set(position, pressed);
+                    return;
+                }
 #endif
                 QueueMouse(inputType, stateType, mouse, position, pressed);
             };
             Action restoreDevices = null;
             try
             {
-                if (mouse != null) restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse);
+                if (mouse != null)
+                {
+                    restoreDevices = UseOwnedInputDevices(system.currentInputModule, mouse);
+                }
+
                 var wheel = window.GetComponentInChildren<ColorSelector>().GetComponent<RectTransform>();
                 var center = wheel.rect.center;
                 float radius = Mathf.Min(wheel.rect.width, wheel.rect.height) * 0.5f;
@@ -4329,7 +4773,10 @@ namespace YLFramework.Core.Tests
             finally
             {
                 restoreDevices?.Invoke();
-                if (mouse != null) inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+                if (mouse != null)
+                {
+                    inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+                }
             }
 #endif
         }
@@ -4349,7 +4796,7 @@ namespace YLFramework.Core.Tests
             using (var pointer = CreateNativePointer(false))
             {
                 var root = PolicyRoot("YLInput.ChildNativeRoot");
-                var parent = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ChildNativeParent", true), root: root));
+                var parent = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ChildNativeParent", true), root: root));
                 var childObject = new GameObject("IndependentChild", typeof(RectTransform));
                 childObject.SetActive(false);
                 childObject.transform.SetParent(parent.transform, false);
@@ -4358,13 +4805,14 @@ namespace YLFramework.Core.Tests
                 var button = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCorePointerClickProbe));
                 button.transform.SetParent(child.transform, false);
                 ((RectTransform)button.transform).sizeDelta = new Vector2(150, 70);
-                module.AttachView(child);
+                _module.AttachView(child);
                 parent.gameObject.SetActive(true);
                 childObject.SetActive(true);
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ChildNativeModal", true), root: root,
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ChildNativeModal", true), root: root,
                     overrides: new PanelOverrides { Modal = true }));
                 modal.gameObject.SetActive(true);
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 pointer.Bind();
                 Assert.That(parent.IsInputBlocked, Is.True);
                 Assert.That(child.IsInputBlocked, Is.False);
@@ -4375,9 +4823,12 @@ namespace YLFramework.Core.Tests
                 var system = UnityEngine.EventSystems.EventSystem.current;
                 system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system) { position = point }, hits);
                 Assert.That(hits.Exists(hit => hit.gameObject == button), Is.True);
-                pointer.Queue(point, 0); yield return null;
-                pointer.Queue(point, 1); yield return null;
-                pointer.Queue(point, 0); yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
+                pointer.Queue(point, 1);
+                yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
                 Assert.That(button.GetComponent<YLCorePointerClickProbe>().Clicks[0], Is.EqualTo(1), "父 Panel 门禁不得跨独立子 Canvas 阻断实际点击。");
             }
         }
@@ -4394,13 +4845,14 @@ namespace YLFramework.Core.Tests
             buttonObject.transform.SetParent(source.transform, false);
             ((RectTransform)buttonObject.transform).sizeDelta = new Vector2(100, 80);
             ((RectTransform)buttonObject.transform).anchoredPosition = new Vector2(-120, 0);
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
             panel.gameObject.SetActive(true);
             var external = new GameObject("ExternalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCorePointerClickProbe));
             external.transform.SetParent(externalRoot.GetLayer(0), false);
             ((RectTransform)external.transform).sizeDelta = new Vector2(100, 80);
             ((RectTransform)external.transform).anchoredPosition = new Vector2(120, 0);
-            yield return null; yield return null;
+            yield return null;
+            yield return null;
             Canvas.ForceUpdateCanvases();
             var ownProbe = panel.GetComponentInChildren<YLCorePointerClickProbe>();
             var externalProbe = external.GetComponent<YLCorePointerClickProbe>();
@@ -4422,11 +4874,13 @@ namespace YLFramework.Core.Tests
             try
             {
                 restore = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, device);
-                Queue(11, ownPoint, "Began"); Queue(22, externalPoint, "Began"); yield return null;
+                Queue(11, ownPoint, "Began");
+                Queue(22, externalPoint, "Began");
+                yield return null;
                 Assert.That(ownProbe.Downs.Count, Is.EqualTo(1));
                 Assert.That(externalProbe.Downs.Count, Is.EqualTo(1));
                 var originalData = ownProbe.Downs[0];
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.TouchModal", true), root: root,
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.TouchModal", true), root: root,
                     overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
                 Canvas.ForceUpdateCanvases();
@@ -4435,22 +4889,34 @@ namespace YLFramework.Core.Tests
                 system.RaycastAll(new UnityEngine.EventSystems.PointerEventData(system) { position = externalPoint }, hits);
                 Assert.That(hits, Is.Not.Empty);
                 Assert.That(hits[0].gameObject, Is.SameAs(external), "外部触点的释放射线必须仍首命中外部按钮，而非本根的模态遮罩。");
-                Queue(11, ownPoint, "Ended"); Queue(22, externalPoint, "Ended"); yield return null;
+                Queue(11, ownPoint, "Ended");
+                Queue(22, externalPoint, "Ended");
+                yield return null;
                 Assert.That(ownProbe.Clicks[0], Is.Zero);
                 Assert.That(externalProbe.Clicks[0], Is.EqualTo(1), "只能清理本 Panel 捕获，不能重置同一模块的外部触点。");
                 // Input System 1.14.2 在释放后的下一帧才将触点事件回池。
                 yield return null;
-                Queue(33, externalPoint, "Began"); Queue(44, externalPoint, "Began"); yield return null;
+                Queue(33, externalPoint, "Began");
+                Queue(44, externalPoint, "Began");
+                yield return null;
                 Assert.That(externalProbe.Downs.Exists(data => ReferenceEquals(data, originalData)), Is.True,
                     "本用例必须真正经历事件池复用，布局变化需更新明确版本适配而非把未覆盖报通过。");
-                Queue(33, externalPoint, "Ended"); Queue(44, externalPoint, "Ended"); yield return null;
+                Queue(33, externalPoint, "Ended");
+                Queue(44, externalPoint, "Ended");
+                yield return null;
                 Assert.That(externalProbe.Clicks[0], Is.EqualTo(3), "旧捕获不能按复用 eventData 的新 pointer/touchId 误取消外部手势。");
                 modal.Close();
-                Queue(55, ownPoint, "Began"); yield return null;
-                Queue(55, ownPoint, "Ended"); yield return null;
+                Queue(55, ownPoint, "Began");
+                yield return null;
+                Queue(55, ownPoint, "Ended");
+                yield return null;
                 Assert.That(ownProbe.Clicks[0], Is.EqualTo(1));
             }
-            finally { restore?.Invoke(); input.GetMethod("RemoveDevice").Invoke(null, new[] { device }); }
+            finally
+            {
+                restore?.Invoke();
+                input.GetMethod("RemoveDevice").Invoke(null, new[] { device });
+            }
         }
 
         [UnityTest] public IEnumerator InputSystemThreeMouseButtonsCancelAndAcceptANewGesture() => DriveThreeMouseButtons(false);
@@ -4472,7 +4938,7 @@ namespace YLFramework.Core.Tests
             if (legacy)
             {
                 var host = new GameObject("YLInput.StandardLegacy", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule), typeof(YLCoreLegacyPointerInput));
-                objects.Add(host);
+                _objects.Add(host);
                 var input = host.GetComponent<YLCoreLegacyPointerInput>();
                 var nativeModule = host.GetComponent<UnityEngine.EventSystems.StandaloneInputModule>();
                 nativeModule.inputOverride = input;
@@ -4503,7 +4969,11 @@ namespace YLFramework.Core.Tests
                     Assert.That(nativeModule.GetType().FullName, Is.EqualTo("UnityEngine.InputSystem.UI.InputSystemUIInputModule"));
                     restore = UseOwnedInputDevices(nativeModule, mouse);
                 },
-                Release = () => { restore?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+                Release = () =>
+                {
+                    restore?.Invoke();
+                    inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+                }
             };
         }
         private IEnumerator DriveThreeMouseButtons(bool legacy)
@@ -4516,7 +4986,7 @@ namespace YLFramework.Core.Tests
                 var target = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCorePointerClickProbe));
                 target.transform.SetParent(source.transform, false);
                 ((RectTransform)target.transform).sizeDelta = new Vector2(200, 80);
-                var lower = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+                var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
                 lower.gameObject.SetActive(true);
                 yield return null;
                 yield return null;
@@ -4529,19 +4999,24 @@ namespace YLFramework.Core.Tests
                 for (int index = 0; index < 3; index++)
                 {
                     ushort mask = (ushort)(1 << index);
-                    pointer.Queue(point, 0); yield return null;
-                    pointer.Queue(point, mask); yield return null;
-                    var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ButtonModal" + index, true), root: root,
+                    pointer.Queue(point, 0);
+                    yield return null;
+                    pointer.Queue(point, mask);
+                    yield return null;
+                    var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ButtonModal" + index, true), root: root,
                         overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                     modal.gameObject.SetActive(true);
                     Assert.That(button.interactable && button.enabled, Is.True);
                     Assert.That(button.IsInteractable(), Is.False);
                     yield return null;
                     modal.Close();
-                    pointer.Queue(point, 0); yield return null;
+                    pointer.Queue(point, 0);
+                    yield return null;
                     Assert.That(probe.Clicks[index], Is.Zero, "旧按压不能在解除模态后生成 click。");
-                    pointer.Queue(point, mask); yield return null;
-                    pointer.Queue(point, 0); yield return null;
+                    pointer.Queue(point, mask);
+                    yield return null;
+                    pointer.Queue(point, 0);
+                    yield return null;
                     Assert.That(probe.Clicks[index], Is.EqualTo(1), "同一设备的新手势必须恢复。");
                 }
             }
@@ -4572,40 +5047,53 @@ namespace YLFramework.Core.Tests
                 label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 ((RectTransform)text.transform).sizeDelta = new Vector2(350, 45);
                 field.GetComponent<UnityEngine.UI.InputField>().textComponent = label;
-                var lower = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+                var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
                 lower.gameObject.SetActive(true);
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 pointer.Bind();
                 Canvas.ForceUpdateCanvases();
                 var scrollbar = lower.GetComponentInChildren<UnityEngine.UI.Scrollbar>();
                 var input = lower.GetComponentInChildren<UnityEngine.UI.InputField>();
                 Vector2 barPoint = RectTransformUtility.WorldToScreenPoint(null, scrollbar.transform.TransformPoint(new Vector3(140, 0)));
-                pointer.Queue(barPoint, 0); yield return null;
-                pointer.Queue(barPoint, 1); yield return null; yield return null;
+                pointer.Queue(barPoint, 0);
+                yield return null;
+                pointer.Queue(barPoint, 1);
+                yield return null;
+                yield return null;
                 Assert.That(scrollbar.value, Is.GreaterThan(0), "必须先证明原生点击持续滚动实际发生。");
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.StandardModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.StandardModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
                 float blockedValue = scrollbar.value;
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 Assert.That(scrollbar.enabled && scrollbar.interactable, Is.True);
                 Assert.That(scrollbar.value, Is.EqualTo(blockedValue), "取消必须结束 Scrollbar 的持续点击协程。");
                 modal.Close();
-                pointer.Queue(barPoint, 0); yield return null;
+                pointer.Queue(barPoint, 0);
+                yield return null;
                 Vector2 fieldPoint = RectTransformUtility.WorldToScreenPoint(null, input.transform.position);
-                pointer.Queue(fieldPoint, 0); yield return null;
-                pointer.Queue(fieldPoint, 1); yield return null;
-                pointer.Queue(fieldPoint, 0); yield return null; yield return null;
+                pointer.Queue(fieldPoint, 0);
+                yield return null;
+                pointer.Queue(fieldPoint, 1);
+                yield return null;
+                pointer.Queue(fieldPoint, 0);
+                yield return null;
+                yield return null;
                 Assert.That(input.isFocused, Is.True, "必须由真实模块激活 InputField。");
                 int edits = 0;
                 input.onEndEdit.AddListener(_ => edits++);
-                modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.FieldModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
+                modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.FieldModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
                 Assert.That(input.isFocused, Is.False);
                 Assert.That(edits, Is.EqualTo(1), "EndEdit 必须在应用物理门禁前正常收尾。");
                 Assert.That(input.enabled && input.interactable, Is.True);
                 modal.Close();
-                pointer.Queue(fieldPoint, 1); yield return null;
-                pointer.Queue(fieldPoint, 0); yield return null; yield return null;
+                pointer.Queue(fieldPoint, 1);
+                yield return null;
+                pointer.Queue(fieldPoint, 0);
+                yield return null;
+                yield return null;
                 Assert.That(input.isFocused, Is.True, "解除后原生新手势必须重新激活输入。");
             }
         }
@@ -4629,43 +5117,63 @@ namespace YLFramework.Core.Tests
                 configured.content = contentRect;
                 configured.movementType = movement;
                 configured.inertia = true;
-                var lower = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+                var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
                 lower.gameObject.SetActive(true);
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 pointer.Bind();
                 Canvas.ForceUpdateCanvases();
                 var scroll = lower.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
                 var dragProbe = scroll.GetComponent<YLCoreNativeDragProbe>();
                 Vector2 point = RectTransformUtility.WorldToScreenPoint(null, scroll.transform.position);
-                pointer.Queue(point, 0); yield return null;
-                pointer.Queue(point, 1); yield return null;
-                pointer.Queue(point + new Vector2(-40, 40), 1); yield return null;
-                pointer.Queue(point + new Vector2(-80, 80), 1); yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
+                pointer.Queue(point, 1);
+                yield return null;
+                pointer.Queue(point + new Vector2(-40, 40), 1);
+                yield return null;
+                pointer.Queue(point + new Vector2(-80, 80), 1);
+                yield return null;
                 // 保持按压，跨过真实 LateUpdate 后再检查拖拽速度。
                 yield return null;
                 Assert.That(scroll.content.anchoredPosition.sqrMagnitude, Is.GreaterThan(0), "先证明真实拖拽实际移动内容。");
                 Assert.That(scroll.velocity.sqrMagnitude, Is.GreaterThan(0));
                 if (movement == UnityEngine.UI.ScrollRect.MovementType.Elastic)
-                { pointer.Queue(point + new Vector2(180, -180), 1); yield return null; }
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.InertiaModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
+                {
+                    pointer.Queue(point + new Vector2(180, -180), 1);
+                    yield return null;
+                }
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.InertiaModal", true), root: root, overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
                 Vector2 stopped = scroll.content.anchoredPosition;
-                int stoppedDrags = dragProbe.Drags;
+                int stoppedDrags = dragProbe.drags;
                 Assert.That(scroll.velocity, Is.EqualTo(Vector2.zero));
-                pointer.Queue(point + new Vector2(-60, 60), 1); yield return null; yield return null;
-                Assert.That(dragProbe.Drags, Is.EqualTo(stoppedDrags));
-                if (movement == UnityEngine.UI.ScrollRect.MovementType.Clamped) Assert.That(scroll.content.anchoredPosition, Is.EqualTo(stopped));
+                pointer.Queue(point + new Vector2(-60, 60), 1);
+                yield return null;
+                yield return null;
+                Assert.That(dragProbe.drags, Is.EqualTo(stoppedDrags));
+                if (movement == UnityEngine.UI.ScrollRect.MovementType.Clamped)
+                {
+                    Assert.That(scroll.content.anchoredPosition, Is.EqualTo(stopped));
+                }
+
                 Assert.That(scroll.enabled && scroll.inertia, Is.True);
                 Assert.That(scroll.movementType, Is.EqualTo(movement));
                 modal.Close();
-                pointer.Queue(point + new Vector2(-20, 20), 1); yield return null;
-                Assert.That(dragProbe.Drags, Is.EqualTo(stoppedDrags), "解除后旧按压不能续拖；Elastic 自然回位不是续拖。");
-                pointer.Queue(point, 0); yield return null;
-                pointer.Queue(point, 1); yield return null;
-                pointer.Queue(point + new Vector2(-30, 30), 1); yield return null;
-                pointer.Queue(point + new Vector2(-70, 70), 1); yield return null;
-                Assert.That(dragProbe.Drags, Is.GreaterThan(stoppedDrags), "新拖拽应恢复。");
-                pointer.Queue(point, 0); yield return null;
+                pointer.Queue(point + new Vector2(-20, 20), 1);
+                yield return null;
+                Assert.That(dragProbe.drags, Is.EqualTo(stoppedDrags), "解除后旧按压不能续拖；Elastic 自然回位不是续拖。");
+                pointer.Queue(point, 0);
+                yield return null;
+                pointer.Queue(point, 1);
+                yield return null;
+                pointer.Queue(point + new Vector2(-30, 30), 1);
+                yield return null;
+                pointer.Queue(point + new Vector2(-70, 70), 1);
+                yield return null;
+                Assert.That(dragProbe.drags, Is.GreaterThan(stoppedDrags), "新拖拽应恢复。");
+                pointer.Queue(point, 0);
+                yield return null;
             }
         }
 
@@ -4688,9 +5196,10 @@ namespace YLFramework.Core.Tests
                 other.transform.SetParent(source.transform, false);
                 ((RectTransform)other.transform).sizeDelta = new Vector2(100, 50);
                 ((RectTransform)other.transform).anchoredPosition = new Vector2(0, -100);
-                var lower = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+                var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
                 lower.gameObject.SetActive(true);
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 pointer.Bind();
                 var input = lower.GetComponentInChildren<UnityEngine.UI.InputField>();
                 var button = lower.GetComponentInChildren<UnityEngine.UI.Button>();
@@ -4698,9 +5207,13 @@ namespace YLFramework.Core.Tests
                 YLCoreSmokePanel modal = null;
                 input.GetComponent<YLCoreSelectionInputProbe>().Selected = () =>
                 {
-                    if (!firstSelect) return;
+                    if (!firstSelect)
+                    {
+                        return;
+                    }
+
                     firstSelect = false;
-                    modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.PendingFieldModal", true), root: root,
+                    modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.PendingFieldModal", true), root: root,
                         overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                     modal.gameObject.SetActive(true);
                     Assert.That(input.IsInteractable(), Is.False);
@@ -4709,34 +5222,50 @@ namespace YLFramework.Core.Tests
                 input.onEndEdit.AddListener(_ => edits++);
                 Canvas.ForceUpdateCanvases();
                 Vector2 point = RectTransformUtility.WorldToScreenPoint(null, input.transform.position);
-                pointer.Queue(point, 0); yield return null;
-                pointer.Queue(point, 1); yield return null;
-                pointer.Queue(point, 0); yield return null; yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
+                pointer.Queue(point, 1);
+                yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
+                yield return null;
                 Assert.That(modal && lower.IsInputBlocked, Is.True);
                 Assert.That(input.isFocused, Is.False, "原生 Select 已排队的延迟激活必须一并取消。");
                 Assert.That(edits, Is.Zero, "尚未激活的字段不能伪造 EndEdit。");
                 modal.Close();
-                yield return null; yield return null;
+                yield return null;
+                yield return null;
                 Assert.That(input.isFocused, Is.True, "解除后合法焦点恢复可重新激活字段。");
                 bool onEndEdit = true;
                 input.onEndEdit.AddListener(_ =>
                 {
-                    if (!onEndEdit) return;
+                    if (!onEndEdit)
+                    {
+                        return;
+                    }
+
                     onEndEdit = false;
-                    modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.EndEditSelectionModal", true), root: root,
+                    modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.EndEditSelectionModal", true), root: root,
                         overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                     modal.gameObject.SetActive(true);
                 });
                 Vector2 next = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
-                pointer.Queue(next, 0); yield return null;
-                pointer.Queue(next, 1); yield return null;
-                pointer.Queue(next, 0); yield return null; yield return null;
+                pointer.Queue(next, 0);
+                yield return null;
+                pointer.Queue(next, 1);
+                yield return null;
+                pointer.Queue(next, 0);
+                yield return null;
+                yield return null;
                 Assert.That(input.isFocused, Is.False);
                 Assert.That(edits, Is.EqualTo(1), "原生 Deselect 的 EndEdit 内重入阻挡仍只能通知一次。");
                 Assert.That(input.interactable && input.enabled, Is.True);
                 modal.Close();
-                pointer.Queue(point, 1); yield return null;
-                pointer.Queue(point, 0); yield return null; yield return null;
+                pointer.Queue(point, 1);
+                yield return null;
+                pointer.Queue(point, 0);
+                yield return null;
+                yield return null;
                 Assert.That(input.isFocused, Is.True);
                 Assert.That(edits, Is.EqualTo(1));
             }
@@ -4754,10 +5283,10 @@ namespace YLFramework.Core.Tests
         private Action UseOwnedInputDevices(object module, params object[] devices)
         {
             var host = ((UnityEngine.EventSystems.BaseInputModule)module).gameObject;
-            Assert.That(priorEventSystems.Contains(host), Is.False, "Never change a pre-existing EventSystem's device filter.");
+            Assert.That(_priorEventSystems.Contains(host), Is.False, "Never change a pre-existing EventSystem's device filter.");
             var manager = typeof(PanelManager).GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             var owned = manager == null ? null : typeof(PanelManager).GetField("_eventSystem", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(manager);
-            Assert.That(ReferenceEquals(owned, host) || objects.Contains(host), Is.True, "Only this fixture's input host may be filtered.");
+            Assert.That(ReferenceEquals(owned, host) || _objects.Contains(host), Is.True, "Only this fixture's input host may be filtered.");
             var asset = module.GetType().GetProperty("actionsAsset").GetValue(module);
 #if UNITY_EDITOR
             Assert.That(UnityEditor.AssetDatabase.Contains((Object)asset), Is.False, "Only the owned runtime actions may be filtered, never persistent assets.");
@@ -4767,7 +5296,11 @@ namespace YLFramework.Core.Tests
             var readonlyArray = property.PropertyType.GetGenericArguments()[0];
             var deviceType = readonlyArray.GetGenericArguments()[0];
             var array = Array.CreateInstance(deviceType, devices.Length);
-            for (int i = 0; i < devices.Length; i++) array.SetValue(devices[i], i);
+            for (int i = 0; i < devices.Length; i++)
+            {
+                array.SetValue(devices[i], i);
+            }
+
             property.SetValue(asset, Activator.CreateInstance(readonlyArray, new object[] { array }));
             return () => property.SetValue(asset, previous);
         }
@@ -4775,11 +5308,14 @@ namespace YLFramework.Core.Tests
         private static void QueueInputState(Type inputType, Type stateType, object device, object state)
         {
             foreach (var method in inputType.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
                 if (method.Name == "QueueStateEvent" && method.IsGenericMethodDefinition)
                 {
                     method.MakeGenericMethod(stateType).Invoke(null, new[] { device, state, (object)(-1d) });
                     return;
                 }
+            }
+
             Assert.Fail("Installed Input System does not expose QueueStateEvent<TState>.");
         }
 
@@ -4790,7 +5326,11 @@ namespace YLFramework.Core.Tests
             var stateType = Type.GetType("UnityEngine.InputSystem.LowLevel.KeyboardState, Unity.InputSystem");
             keyNames = keyNames ?? Array.Empty<string>();
             var keys = Array.CreateInstance(keyType, keyNames.Length);
-            for (int i = 0; i < keyNames.Length; i++) keys.SetValue(Enum.Parse(keyType, keyNames[i]), i);
+            for (int i = 0; i < keyNames.Length; i++)
+            {
+                keys.SetValue(Enum.Parse(keyType, keyNames[i]), i);
+            }
+
             var state = Activator.CreateInstance(stateType, new object[] { keys });
             QueueInputState(inputType, stateType, keyboard, state);
         }
@@ -4803,20 +5343,27 @@ namespace YLFramework.Core.Tests
             var source = Template<YLCoreSmokePanel>("YLInput.SelectSubmitPanel", true);
             var a = new GameObject("From", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
             var b = new GameObject("To", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
-            a.transform.SetParent(source.transform, false); b.transform.SetParent(source.transform, false);
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+            a.transform.SetParent(source.transform, false);
+            b.transform.SetParent(source.transform, false);
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
             lower.gameObject.SetActive(true);
-            yield return null; yield return null;
+            yield return null;
+            yield return null;
             var buttons = lower.GetComponentsInChildren<UnityEngine.UI.Button>();
-            var from = buttons[0]; var to = buttons[1];
+            var from = buttons[0];
+            var to = buttons[1];
             from.navigation = new UnityEngine.UI.Navigation { mode = UnityEngine.UI.Navigation.Mode.Explicit, selectOnRight = to };
             int clicks = 0;
             to.onClick.AddListener(() => clicks++);
             YLCoreSmokePanel modal = null;
             to.GetComponent<YLCoreSelectionInputProbe>().Selected = () =>
             {
-                if (modal) return;
-                modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectSubmitModal", true), root: root,
+                if (modal)
+                {
+                    return;
+                }
+
+                modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.SelectSubmitModal", true), root: root,
                     overrides: new PanelOverrides { Modal = true, Layer = 1 }));
                 modal.gameObject.SetActive(true);
                 Assert.That(lower.IsInputBlocked, Is.True);
@@ -4830,17 +5377,25 @@ namespace YLFramework.Core.Tests
             {
                 restore = UseOwnedInputDevices(system.currentInputModule, keyboard);
                 system.SetSelectedGameObject(from.gameObject);
-                QueueKeyboard(input, keyboard, "RightArrow", "Enter"); yield return null;
-                QueueKeyboard(input, keyboard); yield return null;
+                QueueKeyboard(input, keyboard, "RightArrow", "Enter");
+                yield return null;
+                QueueKeyboard(input, keyboard);
+                yield return null;
                 Assert.That(modal && lower.IsInputBlocked, Is.True);
                 Assert.That(clicks, Is.Zero, "同一原生模块帧内的后续 Submit 不能到达下层 Button。");
                 modal.Close();
                 system.SetSelectedGameObject(to.gameObject);
-                QueueKeyboard(input, keyboard, "Enter"); yield return null;
-                QueueKeyboard(input, keyboard); yield return null;
+                QueueKeyboard(input, keyboard, "Enter");
+                yield return null;
+                QueueKeyboard(input, keyboard);
+                yield return null;
                 Assert.That(clicks, Is.EqualTo(1));
             }
-            finally { restore?.Invoke(); input.GetMethod("RemoveDevice").Invoke(null, new[] { keyboard }); }
+            finally
+            {
+                restore?.Invoke();
+                input.GetMethod("RemoveDevice").Invoke(null, new[] { keyboard });
+            }
         }
 
 #if !ENABLE_LEGACY_INPUT_MANAGER
@@ -4875,7 +5430,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.ScrollRoot");
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.GetComponent<RectTransform>().sizeDelta = new Vector2(400, 400);
             var scroll = lower.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
@@ -4900,25 +5455,36 @@ namespace YLFramework.Core.Tests
             {
                 restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
                 Vector2 point = RectTransformUtility.WorldToScreenPoint(null, lower.transform.position);
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point + new Vector2(40, 40), true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point + new Vector2(60, 60), true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(40, 40), true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(60, 60), true);
+                yield return null;
                 Assert.That(contentRect.anchoredPosition.sqrMagnitude, Is.GreaterThan(1));
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollModal", true), root: root,
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.ScrollModal", true), root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 modal.gameObject.SetActive(true);
                 modal.UpdateDisplay(new PanelOverrides { Modal = true });
                 Vector2 stopped = contentRect.anchoredPosition;
-                QueueMouse(inputType, mouseType, mouse, point + new Vector2(100, 100), true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(100, 100), true);
+                yield return null;
                 Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped));
                 modal.Close();
-                QueueMouse(inputType, mouseType, mouse, point + new Vector2(120, 120), true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point + new Vector2(120, 120), true);
+                yield return null;
                 Assert.That(contentRect.anchoredPosition, Is.EqualTo(stopped), "An old capture must not resume after the modal ends.");
                 Assert.That(scroll.enabled, Is.True);
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
             }
-            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+            finally
+            {
+                restoreDevices?.Invoke();
+                inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+            }
         }
 
         [UnityTest]
@@ -4947,7 +5513,8 @@ namespace YLFramework.Core.Tests
                 var rect = (RectTransform)content.transform;
                 rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.up;
                 rect.sizeDelta = new Vector2(800, 800);
-                scroll.content = rect; scroll.viewport = (RectTransform)control.transform;
+                scroll.content = rect;
+                scroll.viewport = (RectTransform)control.transform;
                 scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Unrestricted;
                 scroll.inertia = true;
             }
@@ -4960,9 +5527,10 @@ namespace YLFramework.Core.Tests
                 bar.targetGraphic = handle.GetComponent<UnityEngine.UI.Image>();
                 bar.size = .1f;
             }
-            var panel = Track(module.LoadPanel<YLCoreSmokePanel>(source, root: root));
+            var panel = Track(_module.LoadPanel<YLCoreSmokePanel>(source, root: root));
             panel.gameObject.SetActive(true);
-            yield return null; yield return null;
+            yield return null;
+            yield return null;
             Canvas.ForceUpdateCanvases();
             var scrollRect = panel.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
             var scrollbar = panel.GetComponentInChildren<UnityEngine.UI.Scrollbar>();
@@ -4984,28 +5552,45 @@ namespace YLFramework.Core.Tests
                     stateType.GetField("touchId").SetValue(state, 42);
                     stateType.GetProperty("phase").SetValue(state, Enum.Parse(phaseType, down ? began ? "Began" : "Moved" : "Ended"));
                 }
-                else stateType.GetField("buttons").SetValue(state, (ushort)(down ? 1 : 0));
+                else
+                {
+                    stateType.GetField("buttons").SetValue(state, (ushort)(down ? 1 : 0));
+                }
+
                 QueueInputState(input, stateType, device, state);
             }
             try
             {
                 var moduleInput = UnityEngine.EventSystems.EventSystem.current.currentInputModule;
                 restore = UseOwnedInputDevices(moduleInput, device);
-                if (!touch) { Queue(point, false); yield return null; }
-                Queue(point, true, true); yield return null;
+                if (!touch)
+                {
+                    Queue(point, false);
+                    yield return null;
+                }
+                Queue(point, true, true);
+                yield return null;
                 if (scrolling)
                 {
-                    Queue(point + new Vector2(-35, 35), true); yield return null;
-                    Queue(point + new Vector2(-70, 70), true); yield return null;
+                    Queue(point + new Vector2(-35, 35), true);
+                    yield return null;
+                    Queue(point + new Vector2(-70, 70), true);
+                    yield return null;
                     // 保持按压，跨过真实 LateUpdate 后再检查拖拽速度。
                     yield return null;
-                    Assert.That(scrollRect.GetComponent<YLCoreNativeDragProbe>().Drags, Is.GreaterThan(0));
+                    Assert.That(scrollRect.GetComponent<YLCoreNativeDragProbe>().drags, Is.GreaterThan(0));
                     Assert.That(scrollRect.velocity.sqrMagnitude, Is.GreaterThan(0));
                 }
-                else Assert.That(scrollbar.value, Is.GreaterThan(0), "先确认真实按住重复已启动。");
-                remove.Invoke(null, new[] { device }); device = null;
-                yield return null; yield return null;
-                int drags = scrolling ? scrollRect.GetComponent<YLCoreNativeDragProbe>().Drags : 0;
+                else
+                {
+                    Assert.That(scrollbar.value, Is.GreaterThan(0), "先确认真实按住重复已启动。");
+                }
+
+                remove.Invoke(null, new[] { device });
+                device = null;
+                yield return null;
+                yield return null;
+                int drags = scrolling ? scrollRect.GetComponent<YLCoreNativeDragProbe>().drags : 0;
                 if (scrolling)
                 {
                     Assert.That(typeof(UnityEngine.UI.ScrollRect).GetField("m_Dragging", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(scrollRect), Is.False);
@@ -5015,25 +5600,46 @@ namespace YLFramework.Core.Tests
                 else
                 {
                     scrollbar.value = .3f;
-                    yield return null; yield return null;
+                    yield return null;
+                    yield return null;
                     Assert.That(scrollbar.value, Is.EqualTo(.3f), "移除设备后旧持续点击不能改写业务新值。");
                     Assert.That(scrollbar.enabled && scrollbar.interactable, Is.True);
                 }
-                restore(); restore = null;
+                restore();
+                restore = null;
                 device = add.Invoke(null, new object[] { touch ? "Touchscreen" : "Mouse", "YLInput.ReplacementDevice", null });
                 restore = UseOwnedInputDevices(moduleInput, device);
-                if (!touch) { Queue(point, false); yield return null; }
-                Queue(point, true, true); yield return null;
+                if (!touch)
+                {
+                    Queue(point, false);
+                    yield return null;
+                }
+                Queue(point, true, true);
+                yield return null;
                 if (scrolling)
                 {
-                    Queue(point + new Vector2(-30, 30), true); yield return null;
-                    Queue(point + new Vector2(-60, 60), true); yield return null;
-                    Assert.That(scrollRect.GetComponent<YLCoreNativeDragProbe>().Drags, Is.GreaterThan(drags));
+                    Queue(point + new Vector2(-30, 30), true);
+                    yield return null;
+                    Queue(point + new Vector2(-60, 60), true);
+                    yield return null;
+                    Assert.That(scrollRect.GetComponent<YLCoreNativeDragProbe>().drags, Is.GreaterThan(drags));
                 }
-                else Assert.That(scrollbar.value, Is.GreaterThan(.3f));
-                Queue(point, false); yield return null;
+                else
+                {
+                    Assert.That(scrollbar.value, Is.GreaterThan(.3f));
+                }
+
+                Queue(point, false);
+                yield return null;
             }
-            finally { restore?.Invoke(); if (device != null) remove.Invoke(null, new[] { device }); }
+            finally
+            {
+                restore?.Invoke();
+                if (device != null)
+                {
+                    remove.Invoke(null, new[] { device });
+                }
+            }
         }
 
         [UnityTest]
@@ -5042,7 +5648,7 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLInput.RemovedDeviceRoot");
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceLower", true), root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceLower", true), root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             var sliderObject = new GameObject("CapturedSlider", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Slider));
             sliderObject.transform.SetParent(lower.transform, false);
@@ -5061,9 +5667,11 @@ namespace YLFramework.Core.Tests
             {
                 restore = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
                 var point = RectTransformUtility.WorldToScreenPoint(null, slider.transform.position);
-                QueueMouse(inputType, stateType, mouse, point, false); yield return null;
-                QueueMouse(inputType, stateType, mouse, point, true); yield return null;
-                var modal = Track(module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceModal", true), root: root,
+                QueueMouse(inputType, stateType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, stateType, mouse, point, true);
+                yield return null;
+                var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(Template<YLCoreSmokePanel>("YLInput.RemovedDeviceModal", true), root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 modal.gameObject.SetActive(true);
                 modal.UpdateDisplay(new PanelOverrides { Modal = true });
@@ -5076,7 +5684,14 @@ namespace YLFramework.Core.Tests
                 yield return null;
                 Assert.That(slider.enabled, Is.True, "Removed controls cannot retain an invalid capture or read device state.");
             }
-            finally { restore?.Invoke(); if (!removed) remove.Invoke(null, new[] { mouse }); }
+            finally
+            {
+                restore?.Invoke();
+                if (!removed)
+                {
+                    remove.Invoke(null, new[] { mouse });
+                }
+            }
         }
 
         [UnityTest]
@@ -5089,7 +5704,7 @@ namespace YLFramework.Core.Tests
             var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
             child.transform.SetParent(prefab.transform, false);
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             int clicks = 0;
@@ -5106,22 +5721,33 @@ namespace YLFramework.Core.Tests
             {
                 restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
                 Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
                 lower.Close();
-                var next = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                var next = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 Assert.That(next, Is.SameAs(lower));
                 next.gameObject.SetActive(true);
-                QueueMouse(inputType, mouseType, mouse, point, true, true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, false, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true, true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false, true);
+                yield return null;
                 Assert.That(clicks, Is.Zero, "Up from an old session cannot invoke a new session's Button.");
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
                 Assert.That(clicks, Is.EqualTo(1));
             }
-            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+            finally
+            {
+                restoreDevices?.Invoke();
+                inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+            }
         }
 
         [UnityTest]
@@ -5134,7 +5760,7 @@ namespace YLFramework.Core.Tests
             var child = new GameObject("Button", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
             child.GetComponent<RectTransform>().sizeDelta = new Vector2(100, 100);
             child.transform.SetParent(prefab.transform, false);
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
             lower.gameObject.SetActive(true);
             int clicks = 0;
@@ -5144,7 +5770,7 @@ namespace YLFramework.Core.Tests
             button.GetComponent<YLCoreSelectionInputProbe>().Selected = () =>
             {
                 lower.Close();
-                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
+                replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                     overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple }));
                 replacement.GetComponentInChildren<YLCoreSelectionInputProbe>().Selected = null;
                 replacement.gameObject.SetActive(true);
@@ -5160,16 +5786,25 @@ namespace YLFramework.Core.Tests
             {
                 restoreDevices = UseOwnedInputDevices(UnityEngine.EventSystems.EventSystem.current.currentInputModule, mouse);
                 Vector2 point = RectTransformUtility.WorldToScreenPoint(null, button.transform.position);
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
                 Assert.That(replacement, Is.SameAs(lower));
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
                 Assert.That(clicks, Is.Zero);
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
                 Assert.That(clicks, Is.EqualTo(1));
             }
-            finally { restoreDevices?.Invoke(); inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse }); }
+            finally
+            {
+                restoreDevices?.Invoke();
+                inputType.GetMethod("RemoveDevice").Invoke(null, new[] { mouse });
+            }
         }
 
         [UnityTest]
@@ -5179,10 +5814,10 @@ namespace YLFramework.Core.Tests
 #if UNITY_EDITOR
             var template = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
             var host = Object.Instantiate(template);
-            objects.Add(host);
+            _objects.Add(host);
             var context = host.GetComponentInChildren<UIRootContext>();
             var prefab = Template<YLCoreSmokePanel>("YLInput.NavigationWindow", true);
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: context,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: context,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 0 }));
             lower.gameObject.SetActive(true);
             var lowerButton = new GameObject("LowerButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
@@ -5195,7 +5830,7 @@ namespace YLFramework.Core.Tests
             var system = UnityEngine.EventSystems.EventSystem.current;
             yield return null;
             system.SetSelectedGameObject(lowerButton);
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: context,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: context,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 3, Modal = true }));
             var modalButton = new GameObject("ModalButton", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button), typeof(YLCoreSelectionInputProbe));
             modalButton.transform.SetParent(modal.transform, false);
@@ -5221,30 +5856,41 @@ namespace YLFramework.Core.Tests
                 Assert.That(hits, Is.Not.Empty);
                 Assert.That(hits[0].gameObject.name, Is.EqualTo("Mask"));
                 Assert.That(UIPointer.CheckPositionOnUI(point), Is.True, "Mask is a world-input blocker, not an empty UI result.");
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, true); yield return null;
-                QueueMouse(inputType, mouseType, mouse, point, false); yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, true);
+                yield return null;
+                QueueMouse(inputType, mouseType, mouse, point, false);
+                yield return null;
                 Assert.That(lowerClicks, Is.Zero);
                 // 点击非 Selectable 遮罩可清空选择；显式选择模态按钮后验证真正后端的导航事件。
                 system.SetSelectedGameObject(modalButton);
-                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
-                QueueKeyboard(inputType, keyboard); yield return null;
+                QueueKeyboard(inputType, keyboard, "Enter");
+                yield return null;
+                QueueKeyboard(inputType, keyboard);
+                yield return null;
                 Assert.That(modalClicks, Is.EqualTo(1));
                 Assert.That(lowerClicks, Is.Zero);
-                QueueKeyboard(inputType, keyboard, "Escape"); yield return null;
-                QueueKeyboard(inputType, keyboard); yield return null;
-                Assert.That(modalButton.GetComponent<YLCoreSelectionInputProbe>().Cancels, Is.EqualTo(1));
+                QueueKeyboard(inputType, keyboard, "Escape");
+                yield return null;
+                QueueKeyboard(inputType, keyboard);
+                yield return null;
+                Assert.That(modalButton.GetComponent<YLCoreSelectionInputProbe>().cancels, Is.EqualTo(1));
                 modal.Close();
                 Assert.That(system.currentSelectedGameObject, Is.SameAs(lowerButton));
-                QueueKeyboard(inputType, keyboard, "Enter"); yield return null;
-                QueueKeyboard(inputType, keyboard); yield return null;
+                QueueKeyboard(inputType, keyboard, "Enter");
+                yield return null;
+                QueueKeyboard(inputType, keyboard);
+                yield return null;
                 Assert.That(lowerClicks, Is.EqualTo(1));
                 system.SetSelectedGameObject(sliderObject);
                 float oldValue = slider.value;
-                QueueKeyboard(inputType, keyboard, "RightArrow"); yield return null;
-                QueueKeyboard(inputType, keyboard); yield return null;
+                QueueKeyboard(inputType, keyboard, "RightArrow");
+                yield return null;
+                QueueKeyboard(inputType, keyboard);
+                yield return null;
                 Assert.That(slider.value, Is.GreaterThan(oldValue));
-                var tip = host.GetComponentInChildren<UITipsPresenter>().Show(module, "Adapted input", UITipPos.RightTop);
+                var tip = host.GetComponentInChildren<UITipsPresenter>().Show(_module, "Adapted input", UITipPos.RightTop);
                 Assert.That(((RectTransform)tip.Item.transform.parent).anchorMin, Is.EqualTo(Vector2.one));
                 tip.Dispose();
             }
@@ -5267,45 +5913,52 @@ namespace YLFramework.Core.Tests
 #if UNITY_EDITOR
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Prefabs/YLFramework.prefab");
             var instance = Object.Instantiate(prefab);
-            objects.Add(instance);
+            _objects.Add(instance);
             var context = instance.GetComponentInChildren<UIRootContext>(true);
             var presenter = instance.GetComponentInChildren<UITipsPresenter>(true);
             Assert.That(context && presenter, Is.True);
             var panelPrefab = Template<YLCoreSmokePanel>("YLWindow.LayerTemplate", true);
             panelPrefab.AddComponent<UnityEngine.UI.Image>();
             panelPrefab.SetActive(true);
-            var lower = Track(module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
+            var lower = Track(_module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 0, Priority = int.MaxValue }));
-            var modal = Track(module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
+            var modal = Track(_module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 3, Modal = true }));
             Assert.That(modal.Root, Is.SameAs(lower.Root));
             Assert.That(modal.SortingOrder, Is.GreaterThan(lower.SortingOrder), "业务 Priority 不得跨配置 Layer。");
             Assert.That(lower.IsInputBlocked, Is.True);
             var masks = context.GetLayer(3).GetComponentsInChildren<UnityEngine.UI.Image>(true);
             UnityEngine.UI.Image mask = null;
-            foreach (var image in masks) if (image.gameObject.name == "Mask") mask = image;
+            foreach (var image in masks)
+            {
+                if (image.gameObject.name == "Mask")
+                {
+                    mask = image;
+                }
+            }
+
             Assert.That(mask, Is.Not.Null);
             Assert.That(mask.gameObject.activeSelf && mask.raycastTarget, Is.True);
             Assert.That(mask.GetComponent<Canvas>().sortingOrder, Is.EqualTo(modal.SortingOrder - 1));
-            var placement = presenter.Show(module, "Right top", UITipPos.RightTop);
+            var placement = presenter.Show(_module, "Right top", UITipPos.RightTop);
             Assert.That(((RectTransform)placement.Item.transform.parent).anchorMin, Is.EqualTo(Vector2.one));
             Assert.That(placement.Item.SortingOrder, Is.GreaterThan(modal.SortingOrder), "模板 Tips Variant 的 Layer 必须高于示例模态层。");
             placement.Dispose();
-            var tip = presenter.Show(module, "Migrated template", UITipPos.RightTop, duration: 0);
+            var tip = presenter.Show(_module, "Migrated template", UITipPos.RightTop, duration: 0);
             Assert.That(tip.IsDone, Is.True);
             Assert.That(presenter.ActiveCount, Is.Zero);
             modal.Close();
             Assert.That(mask.gameObject.activeSelf, Is.False);
             Assert.That(lower.IsInputBlocked, Is.False);
             lower.Close();
-            modal = Track(module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
+            modal = Track(_module.LoadPanel<YLCoreSmokePanel>(panelPrefab, root: context,
                 overrides: new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 3, Modal = true }));
             int order = modal.SortingOrder;
             context.Canvas.sortingOrder = short.MaxValue - 2;
             modal.UpdateDisplay(default);
             order = modal.SortingOrder;
             var other = NewArgs();
-            Assert.Throws<ArgumentOutOfRangeException>(() => module.LoadPanel<YLCoreSmokePanel>(panelPrefab, other, context,
+            Assert.Throws<ArgumentOutOfRangeException>(() => _module.LoadPanel<YLCoreSmokePanel>(panelPrefab, other, context,
                 new PanelOverrides { InstanceMode = PanelInstanceMode.Multiple, Layer = 0 }));
             AssertArgsReleased(other);
             Assert.That(modal.SortingOrder, Is.EqualTo(order), "模态遮罩空间不足应在新实例提交前拒绝。");
@@ -5326,7 +5979,7 @@ namespace YLFramework.Core.Tests
             var prefab = Template<YLCoreSmokePanel>("YLWindow.Activation", true);
             var old = NewArgs();
             old.SetInt("token", 11);
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, old, root));
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, old, root));
             var session = ViewSession(first);
             first.gameObject.SetActive(false);
             YLCoreSmokePanel replacement = null;
@@ -5338,7 +5991,7 @@ namespace YLFramework.Core.Tests
                 panel.Close();
                 var next = NewArgs();
                 next.SetInt("token", 22);
-                replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, next, root));
+                replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, next, root));
             };
             try
             {
@@ -5349,7 +6002,10 @@ namespace YLFramework.Core.Tests
                 Assert.That(updates, Is.EqualTo(1), "只执行 replacement 本次 OnOpen，旧激活栈不能重放数据。");
                 AssertArgsReleased(old);
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         [UnityTest]
@@ -5359,17 +6015,17 @@ namespace YLFramework.Core.Tests
             var a = PolicyRoot("YLWindow.PendingA");
             var b = PolicyRoot("YLWindow.PendingB");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.PendingMigration", true);
-            module.PanelRoot = a;
-            var pending = module.LoadPanelAsync<YLCoreSmokePanel>(prefab);
-            module.PanelRoot = b;
-            var current = Track(module.LoadPanel<YLCoreSmokePanel>(prefab));
+            _module.PanelRoot = a;
+            var pending = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab);
+            _module.PanelRoot = b;
+            var current = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab));
             Object.DestroyImmediate(a.gameObject);
             yield return pending;
             Assert.That(pending.Status, Is.EqualTo(LoadViewStatus.Invalidated));
-            Assert.That(pending.panel, Is.Null);
-            Assert.That(module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
+            Assert.That(pending.Panel, Is.Null);
+            Assert.That(_module.GetViews<YLCoreSmokePanel>(), Has.Count.EqualTo(1));
             Assert.That(current.Root, Is.SameAs(b));
-            module.PanelRoot = null;
+            _module.PanelRoot = null;
         }
 
         [UnityTest]
@@ -5382,28 +6038,28 @@ namespace YLFramework.Core.Tests
             {
                 var root = PolicyRoot("YLWindow.OffsetRoot");
                 var prefab = Template<YLCoreSmokePanel>("YLWindow.Offset", true);
-                module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 10 }) });
+                _module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 10 }) });
                 other.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 20 }) });
-                var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 var second = Track(other.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 first.gameObject.SetActive(true);
                 second.gameObject.SetActive(true);
                 Assert.That(second.IsTop(), Is.True);
-                module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
+                _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
                 Assert.That(second.IsTop(), Is.True, "重开不能跨其他 Module 的固定更高 Priority。");
-                module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 20 }) });
-                module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
+                _module.BindPanelRules(new[] { new PanelRule(prefab, new PanelOverrides { Priority = 20 }) });
+                _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
                 Assert.That(first.IsTop(), Is.True);
                 second.BringToFront();
                 Assert.That(second.IsTop(), Is.True);
-                module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
+                _module.LoadPanel<YLCoreSmokePanel>(prefab, root: root);
                 Assert.That(first.IsTop(), Is.True);
             }
             finally
             {
                 other.AllowClose = true;
                 other.Close();
-                classPool.Restore(new Module[] { other });
+                _classPool.Restore(new Module[] { other });
             }
         }
 
@@ -5412,15 +6068,15 @@ namespace YLFramework.Core.Tests
         {
             yield return StartModule();
             var presenter = CreateTips(PolicyRoot("YLTips.Reactivation"));
-            var handle = presenter.Show(module, "old host", completed: _ =>
+            var handle = presenter.Show(_module, "old host", completed: _ =>
             {
                 presenter.enabled = true;
-                Assert.Throws<InvalidOperationException>(() => presenter.Show(module, "nested host"));
+                Assert.Throws<InvalidOperationException>(() => presenter.Show(_module, "nested host"));
             });
             presenter.enabled = false;
             Assert.That(handle.IsDone, Is.True);
             Assert.That(presenter.ActiveCount, Is.Zero);
-            var next = presenter.Show(module, "new host");
+            var next = presenter.Show(_module, "new host");
             next.Dispose();
             Assert.That(next.IsDone, Is.True);
             Assert.That(presenter.ActiveCount, Is.Zero);
@@ -5432,41 +6088,48 @@ namespace YLFramework.Core.Tests
             yield return StartModule();
             var root = PolicyRoot("YLWindow.UpdateExitRoot");
             var prefab = Template<YLCoreSmokePanel>("YLWindow.UpdateExit", true);
-            var first = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+            var first = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
             YLCoreSmokePanel.UpdateProbe = (panel, _) => panel.Close();
             try
             {
-                var request = module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
+                var request = _module.LoadPanelAsync<YLCoreSmokePanel>(prefab, root: root);
                 Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Pending));
                 yield return request;
                 Assert.That(request.Status, Is.EqualTo(LoadViewStatus.Failed));
                 Assert.That(request.Exception, Is.TypeOf<InvalidOperationException>());
-                Assert.That(request.panel, Is.Null);
+                Assert.That(request.Panel, Is.Null);
                 Assert.That(first.Module, Is.Null);
-                Assert.That(module.GetViews<YLCoreSmokePanel>(), Is.Empty);
+                Assert.That(_module.GetViews<YLCoreSmokePanel>(), Is.Empty);
                 YLCoreSmokePanel.UpdateProbe = null;
-                var replacement = Track(module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
+                var replacement = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root));
                 Assert.That(replacement.IsLoaded && replacement.IsVisible, Is.True, "OnOpen 标记失败后必须准确解除。");
             }
-            finally { YLCoreSmokePanel.ResetProbes(); }
+            finally
+            {
+                YLCoreSmokePanel.ResetProbes();
+            }
         }
 
         private UIRootContext PolicyRoot(string name)
         {
             var root = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.GraphicRaycaster));
             root.SetActive(false);
-            objects.Add(root);
+            _objects.Add(root);
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             return CorePanelTestRoots.Create(root);
         }
 
         private IEnumerator StartModule()
         {
-            var request = ModuleManager.StartUpModule(module);
+            var request = ModuleManager.StartUpModule(_module);
             var deadline = Time.realtimeSinceStartup + 10;
-            while (!request.isDone && Time.realtimeSinceStartup < deadline) yield return null;
-            Assert.That(request.isDone, Is.True);
-            Assert.That(request.error, Is.Null.Or.Empty);
+            while (!request.IsDone && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.That(request.IsDone, Is.True);
+            Assert.That(request.Error, Is.Null.Or.Empty);
         }
 
         private static object ViewSession(View view) => typeof(View).GetField("Session", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
@@ -5477,12 +6140,19 @@ namespace YLFramework.Core.Tests
             MethodInfo method = null;
             foreach (var candidate in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public))
             {
-                if (candidate.Name != methodName || candidate.IsGenericMethod || candidate.GetParameters().Length != arguments.Length) continue;
+                if (candidate.Name != methodName || candidate.IsGenericMethod || candidate.GetParameters().Length != arguments.Length)
+                {
+                    continue;
+                }
+
                 method = candidate;
                 break;
             }
             Assert.That(method, Is.Not.Null, methodName + " overload must exist.");
-            try { return method.Invoke(null, arguments); }
+            try
+            {
+                return method.Invoke(null, arguments);
+            }
             catch (TargetInvocationException error) when (error.InnerException != null)
             {
                 ExceptionDispatchInfo.Capture(error.InnerException).Throw();
@@ -5495,17 +6165,17 @@ namespace YLFramework.Core.Tests
             var prefab = rect ? new GameObject(name, typeof(RectTransform)) : new GameObject(name);
             prefab.SetActive(false);
             prefab.AddComponent<T>();
-            objects.Add(prefab);
-            prefabKeys.Add(prefab.GetHashCode());
+            _objects.Add(prefab);
+            _prefabKeys.Add(prefab.GetHashCode());
             return prefab;
         }
 
         private T Track<T>(T view) where T : View
         {
-            if (view && !objects.Contains(view.gameObject))
+            if (view && !_objects.Contains(view.gameObject))
             {
-                objects.Add(view.gameObject);
-                instanceKeys.Add(view.gameObject.GetHashCode());
+                _objects.Add(view.gameObject);
+                _instanceKeys.Add(view.gameObject.GetHashCode());
             }
             return view;
         }

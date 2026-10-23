@@ -22,18 +22,29 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 texture.SetPixels(new[] { Color.green, Color.green, Color.blue, Color.blue, Color.green, Color.green, Color.blue, Color.blue });
-                texture.Apply(); File.WriteAllBytes(source, texture.EncodeToPNG());
+                texture.Apply();
+                File.WriteAllBytes(source, texture.EncodeToPNG());
             }
-            finally { Object.DestroyImmediate(texture); }
+            finally
+            {
+                Object.DestroyImmediate(texture);
+            }
             AssetDatabase.ImportAsset(source, ImportAssetOptions.ForceSynchronousImport);
             var meta = File.ReadAllBytes(source + ".meta");
             var project = fixture.Project;
-            project.Groups.Add(new ResourceGroup { Id = "automatic-atlas" });
-            EditorUtility.SetDirty(project); AssetDatabase.SaveAssetIfDirty(project);
+            project.groups.Add(new ResourceGroup { id = "automatic-atlas" });
+            EditorUtility.SetDirty(project);
+            AssetDatabase.SaveAssetIfDirty(project);
             var configuration = ResourceAtlasGenerator.CreateConfiguration(project, fixture.Folder + "/Content", "GeneratedAtlases");
-            configuration.Rules.Add(new ResourceAtlasRule { Id = "native", GroupId = "automatic-atlas", Address = "atlases/generated",
-                Sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(source) } });
-            EditorUtility.SetDirty(configuration); AssetDatabase.SaveAssetIfDirty(configuration);
+            configuration.rules.Add(new ResourceAtlasRule
+            {
+                id = "native",
+                groupId = "automatic-atlas",
+                address = "atlases/generated",
+                sources = new Object[] { AssetDatabase.LoadAssetAtPath<Texture2D>(source) }
+            });
+            EditorUtility.SetDirty(configuration);
+            AssetDatabase.SaveAssetIfDirty(configuration);
             ResourceAtlasGenerator.Generate(project);
             var map = ResourceBuildMap.Create(fixture.Project);
             Assert.That(map.Assets.Single(x => x.Address.Path == "atlases/generated").AssetType, Is.EqualTo(typeof(SpriteAtlas)));
@@ -84,7 +95,8 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(last == null, Is.True);
                 Assert.That(held.IsValid && packed, Is.True, "Another Atlas lease must keep the shared packed texture alive.");
                 AssertSpritePixel(probe, Color.green);
-                Object.Destroy(probe); probe = null;
+                Object.Destroy(probe);
+                probe = null;
                 held.Dispose();
                 yield return UntilScene85(() => system.GetDiagnosticsSnapshot().BundleRecordCount == 0);
                 Assert.That(atlas == null && packed == null, Is.True, "Final lease unloads real native Atlas/texture, not just managed counters.");
@@ -93,7 +105,11 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                if (probe) Object.Destroy(probe);
+                if (probe)
+                {
+                    Object.Destroy(probe);
+                }
+
                 Object.DestroyImmediate(host);
             }
         }
@@ -106,9 +122,11 @@ namespace YLFramework.Tests.ResourceBuild
             var sample = new Texture2D(1, 1, TextureFormat.RGBA32, false, true);
             try
             {
-                Graphics.Blit(texture, render); RenderTexture.active = render;
+                Graphics.Blit(texture, render);
+                RenderTexture.active = render;
                 var rect = sprite.textureRect;
-                sample.ReadPixels(new Rect(Mathf.Floor(rect.center.x), Mathf.Floor(rect.center.y), 1, 1), 0, 0); sample.Apply();
+                sample.ReadPixels(new Rect(Mathf.Floor(rect.center.x), Mathf.Floor(rect.center.y), 1, 1), 0, 0);
+                sample.Apply();
                 var actual = sample.GetPixel(0, 0);
                 Assert.That(actual.r, Is.EqualTo(expected.r).Within(.04f));
                 Assert.That(actual.g, Is.EqualTo(expected.g).Within(.04f));
@@ -117,7 +135,9 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                RenderTexture.active = previous; RenderTexture.ReleaseTemporary(render); Object.DestroyImmediate(sample);
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(render);
+                Object.DestroyImmediate(sample);
             }
         }
     }

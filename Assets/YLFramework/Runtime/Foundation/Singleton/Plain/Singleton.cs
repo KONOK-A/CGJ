@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Singleton
+namespace YLFramework.Core.Singleton
 {
     /// <summary>
     /// 纯 C# 单例基类：继承后通过静态 <see cref="Instance"/> 访问，首次访问时经 <see cref="SingletonCreator"/> 创建并调用

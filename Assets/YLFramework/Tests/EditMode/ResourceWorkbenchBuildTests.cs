@@ -22,8 +22,9 @@ namespace YLFramework.Tests.ResourceEditor
             Assert.IsNotNull(export, "Explicit safe local release export is missing.");
             using var fixture = new ResourceReleaseFixture();
             var project = fixture.Project;
-            project.Groups.RemoveRange(1, project.Groups.Count - 1);
-            EditorUtility.SetDirty(project); ResourceEditorOperations.SaveProject(project);
+            project.groups.RemoveRange(1, project.groups.Count - 1);
+            EditorUtility.SetDirty(project);
+            ResourceEditorOperations.SaveProject(project);
             var first = fixture.Build();
             var release = ResourcePublisher.Publish(first, "fixture-v1");
             fixture.ReleaseRoot = release.RootPath;
@@ -38,7 +39,7 @@ namespace YLFramework.Tests.ResourceEditor
             Assert.Greater(first.ArtifactHashBytes, 0);
             Assert.AreEqual(first.Files.Single(x => x.Name == first.Bundles[0].Name).Length, Number(first, "BundleFileBytes"));
             var second = fixture.Build();
-            Assert.IsTrue(second.UnityBuildInvoked && second.ForcedRebuild && !second.IsCacheHit, "Untracked callbacks must still force the safe native build.");
+            Assert.IsTrue(second.WasUnityBuildInvoked && second.ForceRebuild && !second.IsCacheHit, "Untracked callbacks must still force the safe native build.");
             var changes = (System.Collections.IEnumerable)second.GetType().GetProperty("BundleChanges").GetValue(second);
             var unchanged = changes.Cast<object>().ToArray();
             Assert.AreEqual(1, unchanged.Length);
@@ -46,7 +47,7 @@ namespace YLFramework.Tests.ResourceEditor
             File.WriteAllText(fixture.TextPath, "8.9 measured single Text content change");
             AssetDatabase.ImportAsset(fixture.TextPath, ImportAssetOptions.ForceSynchronousImport);
             var changed = fixture.Build();
-            Assert.IsTrue(changed.UnityBuildInvoked && changed.ForcedRebuild && !changed.IsCacheHit);
+            Assert.IsTrue(changed.WasUnityBuildInvoked && changed.ForceRebuild && !changed.IsCacheHit);
             var changedBundles = ((System.Collections.IEnumerable)changed.GetType().GetProperty("BundleChanges").GetValue(changed)).Cast<object>().ToArray();
             Assert.AreEqual(1, changedBundles.Length);
             Assert.AreEqual(true, changedBundles[0].GetType().GetProperty("ContentChanged").GetValue(changedBundles[0]));
@@ -70,7 +71,10 @@ namespace YLFramework.Tests.ResourceEditor
                 Assert.Throws<TargetInvocationException>(() => export.Invoke(null, new object[] { release, child }));
                 CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(release.RootPath));
             }
-            finally { Directory.Delete(output, true); }
+            finally
+            {
+                Directory.Delete(output, true);
+            }
             fixture.AssertProtected();
         }
 

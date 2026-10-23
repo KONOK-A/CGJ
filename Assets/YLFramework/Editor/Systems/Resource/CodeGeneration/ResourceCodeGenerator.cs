@@ -5,9 +5,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.CSharp;
 using UnityEditor;
-using System.Text;
 using YLFramework.Services.Resource;
 
 namespace YLFramework.Editor.Resource
@@ -23,31 +24,57 @@ namespace YLFramework.Editor.Resource
         public static bool GenerateReferences(IEnumerable<ResourceCatalogDocument> catalogs, string directory = "Assets/YLFrameworkData", string @namespace = "YLFramework.Resources")
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
                 throw new InvalidOperationException("请在非播放、非编译、非导入状态生成资源常量。");
+            }
+
             return ResourceReferenceOutput.Publish(directory, GenerateCatalogs(catalogs, @namespace));
         }
 
         internal static string GenerateCatalogs(IEnumerable<ResourceCatalogDocument> catalogs, string @namespace)
         {
-            if (catalogs == null) throw new ArgumentNullException(nameof(catalogs));
+            if (catalogs == null)
+            {
+                throw new ArgumentNullException(nameof(catalogs));
+            }
+
             using var provider = new CSharpCodeProvider();
             if (string.IsNullOrWhiteSpace(@namespace) || @namespace.Contains('@') || @namespace.Split('.').Any(x => !provider.IsValidIdentifier(x)))
+            {
                 throw new ArgumentException("无效的 C# namespace：" + @namespace, nameof(@namespace));
+            }
+
             var inputs = catalogs.ToArray();
-            if (inputs.Length == 0 || inputs.Length > 16384 || inputs.Any(x => x == null)) throw new InvalidOperationException("需要明确、非空的正式 Catalog 集合。");
+            if (inputs.Length == 0 || inputs.Length > 16384 || inputs.Any(x => x == null))
+            {
+                throw new InvalidOperationException("需要明确、非空的正式 Catalog 集合。");
+            }
+
             var occupied = new HashSet<string>(StringComparer.Ordinal);
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(x => x.GetName().Name != ResourceReferenceOutput.AssemblyName))
-            foreach (var type in assembly.GetTypes())
             {
-                if (type.FullName != null) occupied.Add(type.FullName);
-                for (var space = type.Namespace; space != null && space.StartsWith(@namespace + ".", StringComparison.Ordinal); space = space.Substring(0, space.LastIndexOf('.')))
-                    occupied.Add(space);
+                foreach (var type in assembly.GetTypes())
+                {
+                    if (type.FullName != null)
+                    {
+                        occupied.Add(type.FullName);
+                    }
+
+                    for (var space = type.Namespace; space != null && space.StartsWith(@namespace + ".", StringComparison.Ordinal); space = space.Substring(0, space.LastIndexOf('.')))
+                    {
+                        occupied.Add(space);
+                    }
+                }
             }
+
             var prefix = "";
             foreach (var part in @namespace.Split('.'))
             {
                 prefix = prefix.Length == 0 ? part : prefix + "." + part;
-                if (occupied.Contains(prefix)) throw new InvalidOperationException("namespace 与已有类型冲突：" + prefix);
+                if (occupied.Contains(prefix))
+                {
+                    throw new InvalidOperationException("namespace 与已有类型冲突：" + prefix);
+                }
             }
             var classes = new HashSet<string>(StringComparer.Ordinal);
             var projects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -63,9 +90,15 @@ namespace YLFramework.Editor.Resource
             {
                 var name = Identifier(catalog.ProjectId, provider);
                 if (!projects.Add(catalog.ProjectId) || !classes.Add(name) || occupied.Contains(@namespace + "." + name))
+                {
                     throw new InvalidOperationException("Project 常量类与项目/类型/namespace 冲突：" + catalog.ProjectId + " -> " + name);
+                }
+
                 if (new[] { "ProjectId", "Addresses", "Aliases", "SubAssets", "Groups" }.Contains(name))
+                {
                     throw new InvalidOperationException("Project 常量类与保留成员冲突：" + name);
+                }
+
                 text.Append("    public static class ").Append(name).Append("\n    {\n");
                 Constant("        ", "ProjectId", catalog.ProjectId);
                 void Keys(string nested, IEnumerable<(string Name, string Value)> keys)
@@ -75,7 +108,11 @@ namespace YLFramework.Editor.Resource
                     foreach (var key in keys.OrderBy(x => x.Name, StringComparer.Ordinal))
                     {
                         var member = Identifier(key.Name, provider);
-                        if (!names.Add(member)) throw new InvalidOperationException("常量成员碰撞：" + catalog.ProjectId + "." + nested + " / " + key.Name + " -> " + member);
+                        if (!names.Add(member))
+                        {
+                            throw new InvalidOperationException("常量成员碰撞：" + catalog.ProjectId + "." + nested + " / " + key.Name + " -> " + member);
+                        }
+
                         Constant("            ", member, key.Value);
                     }
                     text.Append("        }\n");
@@ -87,10 +124,15 @@ namespace YLFramework.Editor.Resource
                 var subNames = new HashSet<string>(StringComparer.Ordinal) { "SubAssets" };
                 foreach (var sub in catalog.Assets.Where(x => x.SubAssetKey != null).OrderBy(x => x.Address, StringComparer.Ordinal).ThenBy(x => x.SubAssetKey, StringComparer.Ordinal))
                 {
-                    var member = Identifier(sub.Address, provider) + "_" + Identifier(sub.SubAssetName, provider);
-                    if (!subNames.Add(member) || member == "Address" || member == "Key") throw new InvalidOperationException("子资产常量类碰撞：" + sub.Address + "#" + sub.SubAssetKey);
+                    var member = Identifier(sub.Address, provider) + Identifier(sub.SubAssetName, provider).TrimStart('_');
+                    if (!subNames.Add(member) || member == "Address" || member == "Key")
+                    {
+                        throw new InvalidOperationException("子资产常量类碰撞：" + sub.Address + "#" + sub.SubAssetKey);
+                    }
+
                     text.Append("            public static class ").Append(member).Append("\n            {\n");
-                    Constant("                ", "Address", sub.Address); Constant("                ", "Key", sub.SubAssetKey);
+                    Constant("                ", "Address", sub.Address);
+                    Constant("                ", "Key", sub.SubAssetKey);
                     text.Append("            }\n");
                 }
                 text.Append("        }\n    }\n");
@@ -101,11 +143,34 @@ namespace YLFramework.Editor.Resource
         private static string Identifier(string value, CSharpCodeProvider provider)
         {
             if (string.IsNullOrWhiteSpace(value) || !value.Any(char.IsLetterOrDigit) || value.Any(char.IsControl))
+            {
                 throw new InvalidOperationException("资源名称为空或不能生成有效标识符：" + value);
-            var identifier = new string(value.Select(c => char.IsLetterOrDigit(c) || c == '_' ? c : '_').ToArray());
-            identifier = char.ToUpperInvariant(identifier[0]) + identifier.Substring(1);
-            if (char.IsDigit(identifier[0])) identifier = "_" + identifier;
-            if (!provider.IsValidIdentifier(identifier)) throw new InvalidOperationException("不能生成有效 C# 标识符：" + value);
+            }
+
+            var identifier = string.Concat(Regex.Split(value, @"[^\p{L}\p{Nd}]+").Where(part => part.Length != 0).Select(part =>
+            {
+                if (string.Equals(part, "ui", StringComparison.OrdinalIgnoreCase) || string.Equals(part, "io", StringComparison.OrdinalIgnoreCase))
+                {
+                    return part.ToUpperInvariant();
+                }
+                if (part.All(character => !char.IsLetter(character) || char.IsUpper(character)))
+                {
+                    part = part.ToLowerInvariant();
+                }
+                return char.ToUpperInvariant(part[0]) + part.Substring(1);
+            }));
+            identifier = Regex.Replace(identifier, @"(GUID|MVID|HTTP|JSON|XML|URL|API|FSM)(?=$|[A-Z])",
+                match => char.ToUpperInvariant(match.Value[0]) + match.Value.Substring(1).ToLowerInvariant(), RegexOptions.CultureInvariant);
+            if (char.IsDigit(identifier[0]))
+            {
+                identifier = "_" + identifier;
+            }
+
+            if (!provider.IsValidIdentifier(identifier))
+            {
+                throw new InvalidOperationException("不能生成有效 C# 标识符：" + value);
+            }
+
             return identifier;
         }
 

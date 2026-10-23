@@ -10,7 +10,12 @@ namespace YLFramework.Localization
         public string subAsset;
     }
 
-    public enum MultiLanguageType { String, Image, NetworkImage }
+    public enum MultiLanguageType
+    {
+        String,
+        Image,
+        NetworkImage
+    }
 
     /// <summary>保留原多语言条目字段布局；图片项目名在YL中表示显式Resource ProjectId。</summary>
     [Serializable]

@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 using YLFramework.Excel;
 using YLFramework.Services.Resource;
 
@@ -16,7 +17,11 @@ namespace YLFramework.DataAssets
         public bool TryGetAddress(out ResourceAddress address)
         {
             address = default;
-            if (string.IsNullOrEmpty(projectName) || string.IsNullOrEmpty(iconName)) return false;
+            if (string.IsNullOrEmpty(projectName) || string.IsNullOrEmpty(iconName))
+            {
+                return false;
+            }
+
             address = new ResourceAddress(projectName, iconName);
             return true;
         }
@@ -29,14 +34,17 @@ namespace YLFramework.DataAssets
         public ScriptableObjectConfigs parent;
         [Tooltip("Unique ID within the root")]
         public int id;
-        public string config_name;
+        [FormerlySerializedAs("config_name")] public string configName;
         public IconInfo icon = new IconInfo();
         [TextArea(3, 10)]
-        public string des;
+        [FormerlySerializedAs("des")] public string description;
 
         protected virtual void OnValidate()
         {
-            if (parent) parent.ClearCache();
+            if (parent)
+            {
+                parent.ClearCache();
+            }
         }
     }
 }

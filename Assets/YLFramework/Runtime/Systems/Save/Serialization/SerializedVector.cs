@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace YLFramework.Services.Save
@@ -14,7 +14,11 @@ namespace YLFramework.Services.Save
     public class SerializedVector3
     {
         /// <summary>X / Y / Z 分量。</summary>
-        public float x, y, z;
+        public float x;
+        /// <summary>X / Y / Z 分量。</summary>
+        public float y;
+        /// <summary>X / Y / Z 分量。</summary>
+        public float z;
 
         /// <summary>
         /// 按分量创建向量。
@@ -61,7 +65,7 @@ namespace YLFramework.Services.Save
             return new Vector3Int((int)vector3.x, (int)vector3.y, (int)vector3.z);
         }
     }
-    
+
     /// <summary>
     /// <see cref="Vector2"/> 的可序列化替身：以两个 float 字段存储，便于存档 JSON 或 Unity 序列化读写二维向量。
     /// 支持与 <see cref="Vector2"/> / <see cref="Vector2Int"/> 的隐式互转。
@@ -73,7 +77,9 @@ namespace YLFramework.Services.Save
     public struct SerializedVector2
     {
         /// <summary>X / Y 分量。</summary>
-        public float x, y;
+        public float x;
+        /// <summary>X / Y 分量。</summary>
+        public float y;
 
         /// <summary>
         /// 按分量创建向量。

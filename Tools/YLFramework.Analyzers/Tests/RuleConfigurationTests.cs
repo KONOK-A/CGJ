@@ -20,14 +20,14 @@ namespace YLFramework.Analyzers.Tests
             var file = Path.Combine(directory, "EditorConfigFixture.cs");
             var options = set.GetOptionsForSourcePath(file);
             Assert.That(options.TreeOptions["YL0002"], Is.EqualTo(ReportDiagnostic.Suppress));
-            Assert.That(set.GetOptionsForSourcePath(Path.Combine(directory,"Other.cs")).TreeOptions.ContainsKey("YL0002"), Is.False);
+            Assert.That(set.GetOptionsForSourcePath(Path.Combine(directory, "Other.cs")).TreeOptions.ContainsKey("YL0002"), Is.False);
             var source = AnalyzerFixture.Prefix + "class C:YLFramework.Core.View{protected override void Start(){}void Wrong(){RegisterEvent(()=>{});}}";
             var compilation = AnalyzerFixture.Compilation(source, file);
             var defaults = await AnalyzerFixture.Diagnostics(compilation);
-            Assert.That(defaults.Select(d=>d.Id).OrderBy(id=>id), Is.EqualTo(new[]{"YL0001","YL0002"}));
+            Assert.That(defaults.Select(d => d.Id).OrderBy(id => id), Is.EqualTo(new[] { "YL0001", "YL0002" }));
             var configured = compilation.WithOptions(compilation.Options.WithSpecificDiagnosticOptions(options.TreeOptions));
             var diagnostics = await AnalyzerFixture.Diagnostics(configured);
-            Assert.That(diagnostics.Select(d=>d.Id), Is.EqualTo(new[]{"YL0001"}));
+            Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0001" }));
             Assert.That(diagnostics.Single().Severity, Is.EqualTo(DiagnosticSeverity.Warning));
         }
     }

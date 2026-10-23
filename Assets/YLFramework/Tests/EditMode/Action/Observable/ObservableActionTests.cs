@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,13 +7,14 @@ using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 
 namespace YLFramework.Tests.Actions
 {
     public class ObservableActionTests
     {
-        private readonly Dictionary<IAction, ulong> mOwned = new Dictionary<IAction, ulong>();
-        private readonly List<ObservableProbe> mSources = new List<ObservableProbe>();
+        private readonly Dictionary<IAction, ulong> _owned = new Dictionary<IAction, ulong>();
+        private readonly List<ObservableProbe> _sources = new List<ObservableProbe>();
 
         private sealed class SubscriptionProbe : IDisposable
         {
@@ -26,7 +26,10 @@ namespace YLFramework.Tests.Actions
             {
                 Disposals++;
                 DuringDispose?.Invoke();
-                if (Failure != null) throw Failure;
+                if (Failure != null)
+                {
+                    throw Failure;
+                }
             }
         }
 
@@ -47,7 +50,11 @@ namespace YLFramework.Tests.Actions
                 var token = new SubscriptionProbe { Failure = DisposeFailure };
                 Tokens.Add(token);
                 DuringSubscribe?.Invoke(observer);
-                if (SubscribeFailure != null) throw SubscribeFailure;
+                if (SubscribeFailure != null)
+                {
+                    throw SubscribeFailure;
+                }
+
                 return ReturnNull ? null : token;
             }
 
@@ -71,7 +78,7 @@ namespace YLFramework.Tests.Actions
         [TearDown]
         public void TearDown()
         {
-            foreach (var source in mSources)
+            foreach (var source in _sources)
             {
                 source.DuringSubscribe = null;
                 foreach (var token in source.Tokens)
@@ -82,29 +89,32 @@ namespace YLFramework.Tests.Actions
             }
             try
             {
-                foreach (var lease in mOwned)
+                foreach (var lease in _owned)
                 {
-                    if (lease.Key.ActionID == lease.Value && !lease.Key.Deinited) lease.Key.Deinit();
+                    if (lease.Key.ActionId == lease.Value && !lease.Key.IsDeinitialized)
+                    {
+                        lease.Key.Deinit();
+                    }
                 }
             }
             finally
             {
-                mOwned.Clear();
-                mSources.Clear();
+                _owned.Clear();
+                _sources.Clear();
                 ActionQueue.Drain();
             }
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mOwned[action] = action.ActionID;
+            _owned[action] = action.ActionId;
             return action;
         }
 
         private ObservableProbe Source()
         {
             var source = new ObservableProbe();
-            mSources.Add(source);
+            _sources.Add(source);
             return source;
         }
 
@@ -114,10 +124,14 @@ namespace YLFramework.Tests.Actions
         {
             switch (kind)
             {
-                case 0: return Own(ActionKit.Sequence());
-                case 1: return Own(ActionKit.Parallel());
-                case 2: return Own(ActionKit.Repeat(2));
-                default: throw new ArgumentOutOfRangeException(nameof(kind));
+                case 0:
+                    return Own(ActionKit.Sequence());
+                case 1:
+                    return Own(ActionKit.Parallel());
+                case 2:
+                    return Own(ActionKit.Repeat(2));
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
             }
         }
 
@@ -161,11 +175,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(type.GetMethod("OnExecute", flags).ReturnType, Is.EqualTo(typeof(void)));
             Assert.That(type.GetMethod("OnExecute", flags).GetParameters().Select(parameter => parameter.ParameterType), Is.EqualTo(new[] { typeof(float) }));
             var properties = type.GetProperties(flags);
-            CollectionAssert.AreEquivalent(new[] { "Paused", "Deinited", "ActionID", "Status" }, properties.Select(property => property.Name));
+            CollectionAssert.AreEquivalent(new[] { "IsPaused", "IsDeinitialized", "ActionId", "Status" }, properties.Select(property => property.Name));
             foreach (var property in properties)
             {
                 Assert.That(property.GetGetMethod().IsPublic && property.GetSetMethod().IsPublic, Is.True);
-                var expected = property.Name == "ActionID" ? typeof(ulong) : property.Name == "Status" ? typeof(ActionStatus) : typeof(bool);
+                var expected = property.Name == "ActionId" ? typeof(ulong) : property.Name == "Status" ? typeof(ActionStatus) : typeof(bool);
                 Assert.That(property.PropertyType, Is.EqualTo(expected));
             }
 
@@ -211,7 +225,11 @@ namespace YLFramework.Tests.Actions
             Assert.That(direct, Is.TypeOf<UniRxAction<int>>());
             var calls = 0;
             var sequence = Own(ActionKit.Sequence());
-            Assert.That(sequence.UniRx(() => { calls++; return source; }), Is.SameAs(sequence));
+            Assert.That(sequence.UniRx(() =>
+            {
+                calls++;
+                return source;
+            }), Is.SameAs(sequence));
             Assert.That(calls, Is.Zero);
             Assert.That(source.Observers, Is.Empty);
             Assert.That(sequence.Execute(0), Is.False);
@@ -237,7 +255,7 @@ namespace YLFramework.Tests.Actions
                 observer.OnError(new InvalidOperationException("ignored after first value"));
             };
             Assert.That(action.Execute(0), Is.True);
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             action.OnFinish();
             action.Reset();
@@ -254,19 +272,30 @@ namespace YLFramework.Tests.Actions
             var source = Source();
             var action = Action(source);
             var failure = new InvalidOperationException("synchronous observable failure");
-            if (faulted) ExpectError(failure);
+            if (faulted)
+            {
+                ExpectError(failure);
+            }
+
             source.DuringSubscribe = observer =>
             {
-                if (faulted) observer.OnError(failure);
-                else observer.OnCompleted();
-                Assert.That(action.Deinited, Is.True);
+                if (faulted)
+                {
+                    observer.OnError(failure);
+                }
+                else
+                {
+                    observer.OnCompleted();
+                }
+
+                Assert.That(action.IsDeinitialized, Is.True);
                 Assert.That(source.Tokens[0].Disposals, Is.Zero);
                 observer.OnNext(1);
                 observer.OnCompleted();
                 observer.OnError(failure);
             };
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
@@ -283,17 +312,34 @@ namespace YLFramework.Tests.Actions
             Assert.That(action.Execute(0), Is.False);
             var observer = source.Observers[0];
             var failure = new InvalidOperationException("first terminal wins");
-            if (first == 0) observer.OnNext(1);
-            else if (first == 1) observer.OnCompleted();
-            else { ExpectError(failure); observer.OnError(failure); }
+            if (first == 0)
+            {
+                observer.OnNext(1);
+            }
+            else if (first == 1)
+            {
+                observer.OnCompleted();
+            }
+            else
+            {
+                ExpectError(failure);
+                observer.OnError(failure);
+            }
             observer.OnNext(2);
             observer.OnCompleted();
             observer.OnError(failure);
             observer.OnError(null);
-            Assert.That(action.Deinited, Is.EqualTo(first != 0));
+            Assert.That(action.IsDeinitialized, Is.EqualTo(first != 0));
             Assert.That(action.Status == ActionStatus.Finished, Is.EqualTo(first == 0));
-            if (first == 0) Assert.That(action.Execute(0), Is.True);
-            else action.OnExecute(0);
+            if (first == 0)
+            {
+                Assert.That(action.Execute(0), Is.True);
+            }
+            else
+            {
+                action.OnExecute(0);
+            }
+
             action.OnFinish();
             action.Deinit();
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
@@ -308,7 +354,7 @@ namespace YLFramework.Tests.Actions
             action.Execute(0);
             LogAssert.Expect(LogType.Exception, new Regex("ArgumentNullException"));
             source.Observers[0].OnError(null);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
         }
@@ -325,15 +371,21 @@ namespace YLFramework.Tests.Actions
                 calls++;
                 if (calls == 1)
                 {
-                    if (cancel) action.Deinit();
-                    else action.Reset();
+                    if (cancel)
+                    {
+                        action.Deinit();
+                    }
+                    else
+                    {
+                        action.Reset();
+                    }
                 }
                 return source;
             }));
             action.OnStart();
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(source.Observers, Is.Empty);
-            Assert.That(action.Deinited, Is.EqualTo(cancel));
+            Assert.That(action.IsDeinitialized, Is.EqualTo(cancel));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
             if (!cancel)
             {
@@ -353,14 +405,21 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             source.DuringSubscribe = observer =>
             {
-                if (cancel) action.Deinit();
-                else action.Reset();
+                if (cancel)
+                {
+                    action.Deinit();
+                }
+                else
+                {
+                    action.Reset();
+                }
+
                 Assert.That(source.Tokens[0].Disposals, Is.Zero);
             };
             action.OnStart();
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.EqualTo(cancel));
+            Assert.That(action.IsDeinitialized, Is.EqualTo(cancel));
             source.Observers[0].OnNext(1);
             source.Observers[0].OnCompleted();
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
@@ -378,7 +437,7 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             source.DuringSubscribe = observer => action.Deinit();
             Assert.That(Assert.Throws<InvalidOperationException>(action.OnStart), Is.SameAs(failure));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             ActionQueue.Drain();
@@ -399,7 +458,11 @@ namespace YLFramework.Tests.Actions
             var reset = false;
             source.DuringSubscribe = observer =>
             {
-                if (resetInFactory || reset) return;
+                if (resetInFactory || reset)
+                {
+                    return;
+                }
+
                 reset = true;
                 action.Reset();
             };
@@ -414,17 +477,24 @@ namespace YLFramework.Tests.Actions
                 return source;
             }));
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(source.Observers.Count, Is.EqualTo(resetInFactory ? 0 : 1));
-            if (!resetInFactory) Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
+            if (!resetInFactory)
+            {
+                Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
+            }
 
             Assert.That(action.Execute(0), Is.False);
             Assert.That(calls, Is.EqualTo(2), "Reset during startup must restart the factory, not leave Started with no subscription.");
             Assert.That(source.Observers.Count, Is.EqualTo(resetInFactory ? 1 : 2));
             source.Observers.Last().OnNext(1);
             Assert.That(action.Execute(0), Is.True);
-            foreach (var token in source.Tokens) Assert.That(token.Disposals, Is.EqualTo(1));
+            foreach (var token in source.Tokens)
+            {
+                Assert.That(token.Disposals, Is.EqualTo(1));
+            }
+
             Assert.That(source.SourceDisposals, Is.Zero);
         }
 
@@ -443,7 +513,7 @@ namespace YLFramework.Tests.Actions
             };
             action.OnStart();
             Assert.That(calls, Is.EqualTo(2));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(first.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(second.Tokens[0].Disposals, Is.Zero);
@@ -461,9 +531,13 @@ namespace YLFramework.Tests.Actions
             var first = Source();
             var second = Source();
             var failure = new InvalidOperationException("late handle disposal failure");
-            if (throwingHandle) first.DisposeFailure = failure;
+            if (throwingHandle)
+            {
+                first.DisposeFailure = failure;
+            }
+
             var original = Action(first);
-            var oldId = original.ActionID;
+            var oldId = original.ActionId;
             UniRxAction<int> replacement = null;
             first.DuringSubscribe = observer =>
             {
@@ -471,15 +545,22 @@ namespace YLFramework.Tests.Actions
                 ActionQueue.Drain();
                 replacement = Action(second);
                 Assert.That(replacement, Is.SameAs(original));
-                Assert.That(replacement.ActionID, Is.Not.EqualTo(oldId));
+                Assert.That(replacement.ActionId, Is.Not.EqualTo(oldId));
                 replacement.Execute(0);
                 observer.OnNext(1);
             };
-            if (throwingHandle) Assert.That(Assert.Throws<InvalidOperationException>(() => original.OnStart()), Is.SameAs(failure));
-            else original.OnStart();
+            if (throwingHandle)
+            {
+                Assert.That(Assert.Throws<InvalidOperationException>(() => original.OnStart()), Is.SameAs(failure));
+            }
+            else
+            {
+                original.OnStart();
+            }
+
             Assert.That(first.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(second.Tokens[0].Disposals, Is.Zero);
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.Started));
             first.Observers[0].OnCompleted();
             first.Observers[0].OnError(failure);
@@ -509,17 +590,25 @@ namespace YLFramework.Tests.Actions
             };
             original = Own(UniRxAction<int>.Allocate(() =>
             {
-                if (cancelInFactory) replace();
+                if (cancelInFactory)
+                {
+                    replace();
+                }
+
                 return first;
             }));
-            var id = original.ActionID;
+            var id = original.ActionId;
             Assert.That(original.Execute(0), Is.False);
             Assert.That(replacement, Is.SameAs(original));
-            Assert.That(replacement.ActionID, Is.Not.EqualTo(id));
-            Assert.That(replacement.Status, Is.EqualTo(ActionStatus.NotStart), "An old Execute stack must not write Started into a new ActionID.");
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.ActionId, Is.Not.EqualTo(id));
+            Assert.That(replacement.Status, Is.EqualTo(ActionStatus.NotStart), "An old Execute stack must not write Started into a new ActionId.");
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(second.Observers, Is.Empty);
-            if (!cancelInFactory) Assert.That(first.Tokens[0].Disposals, Is.EqualTo(1));
+            if (!cancelInFactory)
+            {
+                Assert.That(first.Tokens[0].Disposals, Is.EqualTo(1));
+            }
+
             Assert.That(replacement.Execute(0), Is.False);
             Assert.That(second.Observers.Count, Is.EqualTo(1));
             second.Observers[0].OnNext(2);
@@ -534,16 +623,16 @@ namespace YLFramework.Tests.Actions
             var action = Action(source);
             action.Execute(0);
             var old = source.Observers[0];
-            action.Paused = true;
+            action.IsPaused = true;
             action.Reset();
-            Assert.That(action.Paused, Is.False);
+            Assert.That(action.IsPaused, Is.False);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             action.Execute(0);
             old.OnNext(1);
             old.OnCompleted();
             old.OnError(new InvalidOperationException("old subscription"));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(source.Tokens[1].Disposals, Is.Zero);
             source.Observers[1].OnNext(2);
             Assert.That(action.Execute(0), Is.True);
@@ -555,7 +644,7 @@ namespace YLFramework.Tests.Actions
         {
             var first = Source();
             var original = Action(first);
-            var id = original.ActionID;
+            var id = original.ActionId;
             original.Execute(0);
             original.Deinit();
             var other = Action(Source());
@@ -564,13 +653,13 @@ namespace YLFramework.Tests.Actions
             var next = Source();
             var reused = Action(next);
             Assert.That(reused, Is.SameAs(original));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(id));
+            Assert.That(reused.ActionId, Is.Not.EqualTo(id));
             reused.Execute(0);
             first.Observers[0].OnNext(1);
             first.Observers[0].OnCompleted();
             first.Observers[0].OnError(new InvalidOperationException("old pooled lease"));
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(next.Tokens[0].Disposals, Is.Zero);
             next.Observers[0].OnNext(2);
             Assert.That(reused.Execute(0), Is.True);
@@ -582,12 +671,12 @@ namespace YLFramework.Tests.Actions
             var source = Source();
             var action = Action(source);
             action.Execute(0);
-            action.ActionID++;
+            action.ActionId++;
             Own(action);
             source.Observers[0].OnNext(1);
             action.OnExecute(0);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(source.Tokens[0].Disposals, Is.Zero);
             action.Reset();
             action.Execute(0);
@@ -603,8 +692,8 @@ namespace YLFramework.Tests.Actions
         {
             var provider = new ProviderProbe { Source = Source() };
             var action = Own(UniRxAction<int>.Allocate(provider.GetSource));
-            var getter = typeof(UniRxAction<int>).GetField("mObservableGetter", BindingFlags.NonPublic | BindingFlags.Instance);
-            var subscription = typeof(UniRxAction<int>).GetField("mSubscription", BindingFlags.NonPublic | BindingFlags.Instance);
+            var getter = typeof(UniRxAction<int>).GetField("_observableGetter", BindingFlags.NonPublic | BindingFlags.Instance);
+            var subscription = typeof(UniRxAction<int>).GetField("_subscription", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(((Delegate)getter.GetValue(action)).Target, Is.SameAs(provider));
             action.Execute(0);
             action.Deinit();
@@ -624,29 +713,46 @@ namespace YLFramework.Tests.Actions
             var failure = new InvalidOperationException("subscription disposal failure");
             source.DisposeFailure = failure;
             var action = Action(source);
-            var id = action.ActionID;
+            var id = action.ActionId;
             action.Execute(0);
-            if (operation == 0) source.Observers[0].OnNext(1);
+            if (operation == 0)
+            {
+                source.Observers[0].OnNext(1);
+            }
+
             TestDelegate close;
-            if (operation == 0) close = () => { action.Execute(0); };
-            else if (operation == 1) close = action.Reset;
-            else close = action.Deinit;
+            if (operation == 0)
+            {
+                close = () =>
+                {
+                    action.Execute(0);
+                };
+            }
+            else if (operation == 1)
+            {
+                close = action.Reset;
+            }
+            else
+            {
+                close = action.Deinit;
+            }
+
             Assert.That(Assert.Throws<InvalidOperationException>(close), Is.SameAs(failure));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             action.OnFinish();
             action.Reset();
             action.Deinit();
             action.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(source.SourceDisposals, Is.Zero);
             ActionQueue.Drain();
             var reused = Action(Source());
             Assert.That(reused, Is.Not.SameAs(action), "订阅释放失败的动作不得重新交付。");
-            Assert.That(reused.ActionID, Is.Not.EqualTo(id));
+            Assert.That(reused.ActionId, Is.Not.EqualTo(id));
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.IsDeinitialized, Is.False);
         }
 
         [Test]
@@ -660,7 +766,7 @@ namespace YLFramework.Tests.Actions
             action.Execute(0);
             ExpectError(original);
             Assert.That(Assert.Throws<InvalidOperationException>(() => source.Observers[0].OnError(original)), Is.SameAs(cleanup));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
             action.Deinit();
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
@@ -674,7 +780,7 @@ namespace YLFramework.Tests.Actions
             var failure = new InvalidOperationException("executor finish disposal failure");
             source.DisposeFailure = failure;
             var action = Action(source);
-            var id = action.ActionID;
+            var id = action.ActionId;
             var root = new GameObject("ActionKit.Observable.EditModeExecutor");
             IActionController controller = null;
             try
@@ -682,12 +788,12 @@ namespace YLFramework.Tests.Actions
                 var executor = root.AddComponent<MonoUpdateActionExecutor>();
                 controller = ActionController.Allocate();
                 controller.Action = action;
-                controller.ActionID = id;
+                controller.ActionId = id;
                 var callbacks = 0;
                 executor.Execute(controller, _ => callbacks++);
                 source.Observers[0].OnNext(1);
                 Assert.That(Assert.Throws<InvalidOperationException>(() => executor.Tick(0, 0)), Is.SameAs(failure));
-                Assert.That(action.Deinited, Is.True);
+                Assert.That(action.IsDeinitialized, Is.True);
                 Assert.That(controller.Action, Is.Null);
                 Assert.That(executor.ScheduledCount, Is.Zero);
                 Assert.That(callbacks, Is.Zero);
@@ -696,15 +802,26 @@ namespace YLFramework.Tests.Actions
                 ActionQueue.Drain();
                 var reused = Action(Source());
                 Assert.That(reused, Is.Not.SameAs(action));
-                Assert.That(reused.ActionID, Is.Not.EqualTo(id));
-                Assert.That(reused.Deinited, Is.False);
+                Assert.That(reused.ActionId, Is.Not.EqualTo(id));
+                Assert.That(reused.IsDeinitialized, Is.False);
                 Assert.That(source.SourceDisposals, Is.Zero);
             }
             finally
             {
-                foreach (var token in source.Tokens) token.Failure = null;
-                if (root) UnityEngine.Object.DestroyImmediate(root);
-                if (controller != null && controller.Action != null) controller.Recycle();
+                foreach (var token in source.Tokens)
+                {
+                    token.Failure = null;
+                }
+
+                if (root)
+                {
+                    UnityEngine.Object.DestroyImmediate(root);
+                }
+
+                if (controller != null && controller.Action != null)
+                {
+                    controller.Recycle();
+                }
             }
         }
 
@@ -714,14 +831,22 @@ namespace YLFramework.Tests.Actions
         {
             var source = Source();
             var failure = new InvalidOperationException("observable caller fault");
-            if (subscribe) source.SubscribeFailure = failure;
+            if (subscribe)
+            {
+                source.SubscribeFailure = failure;
+            }
+
             var action = Own(UniRxAction<int>.Allocate(() =>
             {
-                if (!subscribe) throw failure;
+                if (!subscribe)
+                {
+                    throw failure;
+                }
+
                 return source;
             }));
             Assert.That(Assert.Throws<InvalidOperationException>(() => action.Execute(0)), Is.SameAs(failure));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(source.Observers.Count, Is.EqualTo(subscribe ? 1 : 0));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
@@ -736,7 +861,7 @@ namespace YLFramework.Tests.Actions
             source.ReturnNull = nullToken;
             var action = Own(UniRxAction<int>.Allocate(() => nullToken ? source : null));
             Assert.Throws<InvalidOperationException>(() => action.Execute(0));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(source.Observers.Count, Is.EqualTo(nullToken ? 1 : 0));
             Assert.That(ActionQueue.PendingCount, Is.EqualTo(1));
@@ -761,7 +886,7 @@ namespace YLFramework.Tests.Actions
                 return fresh;
             }));
             Assert.That(Assert.Throws<InvalidOperationException>(() => action.OnStart()), Is.SameAs(failure));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(fresh.Tokens[0].Disposals, Is.Zero);
             fresh.Observers[0].OnNext(1);
             Assert.That(action.Execute(0), Is.True);
@@ -792,16 +917,24 @@ namespace YLFramework.Tests.Actions
                 ExpectError(failure);
                 source.Observers[0].OnError(failure);
             }
-            else source.Observers[0].OnCompleted();
+            else
+            {
+                source.Observers[0].OnCompleted();
+            }
+
             Assert.That(parent.Execute(0), Is.False);
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
-            Assert.That(child.Deinited, Is.True);
-            Assert.That(sibling.Deinited, Is.True);
-            Assert.That(tail.Deinited, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
+            Assert.That(sibling.IsDeinitialized, Is.True);
+            Assert.That(tail.IsDeinitialized, Is.True);
             Assert.That(callbacks, Is.Zero);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
-            foreach (var token in siblingSource.Tokens) Assert.That(token.Disposals, Is.EqualTo(1));
+            foreach (var token in siblingSource.Tokens)
+            {
+                Assert.That(token.Disposals, Is.EqualTo(1));
+            }
+
             Assert.That(source.SourceDisposals + siblingSource.SourceDisposals, Is.Zero);
         }
 
@@ -815,7 +948,7 @@ namespace YLFramework.Tests.Actions
         {
             var first = Source();
             var child = Action(first);
-            var id = child.ActionID;
+            var id = child.ActionId;
             var parent = Composite(kind).Append(child);
             parent.Execute(0);
             parent.Execute(0);
@@ -825,18 +958,22 @@ namespace YLFramework.Tests.Actions
                 ExpectError(failure);
                 first.Observers[0].OnError(failure);
             }
-            else first.Observers[0].OnCompleted();
-            Assert.That(child.Deinited, Is.True);
+            else
+            {
+                first.Observers[0].OnCompleted();
+            }
+
+            Assert.That(child.IsDeinitialized, Is.True);
             ActionQueue.Drain();
             var second = Source();
             var replacement = Action(second);
             Assert.That(replacement, Is.SameAs(child));
-            Assert.That(replacement.ActionID, Is.Not.EqualTo(id));
+            Assert.That(replacement.ActionId, Is.Not.EqualTo(id));
             Assert.That(parent.Execute(0), Is.False);
-            Assert.That(parent.Deinited, Is.True, "A replaced child lease is still cancellation of the parent's original child.");
+            Assert.That(parent.IsDeinitialized, Is.True, "A replaced child lease is still cancellation of the parent's original child.");
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
             parent.Deinit();
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(second.Observers, Is.Empty);
             Assert.That(first.Tokens[0].Disposals, Is.EqualTo(1));
@@ -858,7 +995,7 @@ namespace YLFramework.Tests.Actions
             parent.Execute(0);
             parent.Deinit();
             parent.Deinit();
-            Assert.That(child.Deinited, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
             source.Observers[0].OnNext(1);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
@@ -880,7 +1017,7 @@ namespace YLFramework.Tests.Actions
             first.Execute(0);
             later.Execute(0);
             appended.Execute(0);
-            appended.Paused = true;
+            appended.IsPaused = true;
             var appends = 0;
             firstSource.Tokens[0].DuringDispose = () =>
             {
@@ -890,7 +1027,7 @@ namespace YLFramework.Tests.Actions
 
             Assert.DoesNotThrow(() => parent.Reset());
             Assert.That(appends, Is.EqualTo(1));
-            Assert.That(parent.Deinited, Is.False);
+            Assert.That(parent.IsDeinitialized, Is.False);
             Assert.That(parent.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(firstSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(laterSource.Tokens[0].Disposals, Is.EqualTo(1));
@@ -898,12 +1035,12 @@ namespace YLFramework.Tests.Actions
             Assert.That(later.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(appendedSource.Tokens[0].Disposals, Is.Zero);
             Assert.That(appended.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(appended.Paused, Is.True);
+            Assert.That(appended.IsPaused, Is.True);
 
             parent.Reset();
             Assert.That(appendedSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(appended.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(appended.Paused, Is.False);
+            Assert.That(appended.IsPaused, Is.False);
             Assert.That(appends, Is.EqualTo(1));
             Assert.That(firstSource.SourceDisposals + laterSource.SourceDisposals + appendedSource.SourceDisposals, Is.Zero);
         }
@@ -919,7 +1056,7 @@ namespace YLFramework.Tests.Actions
             var first = Action(firstSource);
             var later = Action(laterSource);
             var untouched = Action(untouchedSource);
-            var laterId = later.ActionID;
+            var laterId = later.ActionId;
             var parent = Composite(kind).Append(first).Append(later).Append(untouched);
             first.Execute(0);
             later.Execute(0);
@@ -931,19 +1068,19 @@ namespace YLFramework.Tests.Actions
                 ActionQueue.Drain();
                 replacement = Action(freshSource);
                 Assert.That(replacement, Is.SameAs(later));
-                Assert.That(replacement.ActionID, Is.Not.EqualTo(laterId));
+                Assert.That(replacement.ActionId, Is.Not.EqualTo(laterId));
                 Assert.That(replacement.Execute(0), Is.False);
             };
 
             Assert.DoesNotThrow(() => parent.Reset());
-            Assert.That(parent.Deinited, Is.True);
+            Assert.That(parent.IsDeinitialized, Is.True);
             Assert.That(parent.Status, Is.Not.EqualTo(ActionStatus.Finished));
-            Assert.That(first.Deinited, Is.True);
-            Assert.That(untouched.Deinited, Is.True);
+            Assert.That(first.IsDeinitialized, Is.True);
+            Assert.That(untouched.IsDeinitialized, Is.True);
             Assert.That(firstSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(laterSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(untouchedSource.Tokens[0].Disposals, Is.EqualTo(1));
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(freshSource.Observers.Count, Is.EqualTo(1));
             Assert.That(freshSource.Tokens[0].Disposals, Is.Zero);
@@ -965,8 +1102,8 @@ namespace YLFramework.Tests.Actions
             var first = Action(firstSource);
             var later = Action(laterSource);
             var parent = Composite(kind).Append(first).Append(later);
-            var parentId = parent.ActionID;
-            var laterId = later.ActionID;
+            var parentId = parent.ActionId;
+            var laterId = later.ActionId;
             first.Execute(0);
             later.Execute(0);
             ISequence replacementParent = null;
@@ -978,26 +1115,26 @@ namespace YLFramework.Tests.Actions
                 replacementParent = Composite(kind);
                 replacementChild = Action(freshSource);
                 Assert.That(replacementParent, Is.SameAs(parent));
-                Assert.That(replacementParent.ActionID, Is.Not.EqualTo(parentId));
+                Assert.That(replacementParent.ActionId, Is.Not.EqualTo(parentId));
                 Assert.That(replacementChild, Is.SameAs(later));
-                Assert.That(replacementChild.ActionID, Is.Not.EqualTo(laterId));
+                Assert.That(replacementChild.ActionId, Is.Not.EqualTo(laterId));
                 replacementParent.Append(replacementChild);
                 Assert.That(replacementParent.Execute(0), Is.False);
                 Assert.That(replacementParent.Execute(0), Is.False);
-                replacementParent.Paused = true;
+                replacementParent.IsPaused = true;
             };
 
             Assert.DoesNotThrow(() => parent.Reset());
-            Assert.That(replacementParent.Deinited, Is.False);
+            Assert.That(replacementParent.IsDeinitialized, Is.False);
             Assert.That(replacementParent.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(replacementParent.Paused, Is.True);
-            Assert.That(replacementChild.Deinited, Is.False);
+            Assert.That(replacementParent.IsPaused, Is.True);
+            Assert.That(replacementChild.IsDeinitialized, Is.False);
             Assert.That(replacementChild.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(firstSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(laterSource.Tokens[0].Disposals, Is.EqualTo(1));
             Assert.That(freshSource.Observers.Count, Is.EqualTo(1));
             Assert.That(freshSource.Tokens[0].Disposals, Is.Zero);
-            replacementParent.Paused = false;
+            replacementParent.IsPaused = false;
             freshSource.Observers[0].OnNext(1);
             Assert.That(replacementParent.Execute(0), Is.True);
             Assert.That(freshSource.Tokens[0].Disposals, Is.EqualTo(1));
@@ -1026,7 +1163,7 @@ namespace YLFramework.Tests.Actions
             iterations[0].Observers[0].OnCompleted();
             iterations[0].Observers[0].OnError(new InvalidOperationException("previous repeat iteration"));
             Assert.That(child.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(child.Deinited, Is.False);
+            Assert.That(child.IsDeinitialized, Is.False);
             iterations[1].Observers[0].OnNext(2);
             Assert.That(repeat.Execute(0), Is.True);
             Assert.That(iterations[1].Tokens[0].Disposals, Is.EqualTo(1));
@@ -1044,10 +1181,10 @@ namespace YLFramework.Tests.Actions
             var source = Source();
             var action = Action(source);
             action.Execute(0);
-            action.Paused = true;
+            action.IsPaused = true;
             source.Observers[0].OnNext(1);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
-            Assert.That(action.Paused, Is.True);
+            Assert.That(action.IsPaused, Is.True);
             Assert.That(action.Execute(0), Is.True);
             Assert.That(source.Tokens[0].Disposals, Is.EqualTo(1));
         }

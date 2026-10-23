@@ -17,28 +17,34 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioWeightedPlaybackTests
     {
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private readonly List<GameObject> mObjects = new List<GameObject>();
-        private AudioClip mFirst, mSecond, mShort;
-        private Random.State mRandomState;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private readonly List<GameObject> _objects = new List<GameObject>();
+        private AudioClip _first;
+        private AudioClip _second;
+        private AudioClip _short;
+        private Random.State _randomState;
 
         [SetUp]
         public void SetUp()
         {
-            mRandomState = Random.state;
+            _randomState = Random.state;
             AudioKit.Shutdown();
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
             var settings = AudioKit.Settings;
             settings.IsSoundOn.SetValueWithoutCallback(true);
@@ -50,39 +56,69 @@ namespace YLFramework.Tests.Audio
             AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
             AudioKit.GlobalFrameCountForIgnoreSameSound = 10;
             AudioKit.SoundFrameCountForIgnoreSameSound = 10;
-            mFirst = AudioClip.Create("weighted-play-first", 88200, 1, 44100, false);
-            mSecond = AudioClip.Create("weighted-play-second", 88200, 1, 44100, false);
-            mShort = AudioClip.Create("weighted-play-short", 4410, 1, 44100, false);
+            _first = AudioClip.Create("weighted-play-first", 88200, 1, 44100, false);
+            _second = AudioClip.Create("weighted-play-second", 88200, 1, 44100, false);
+            _short = AudioClip.Create("weighted-play-short", 4410, 1, 44100, false);
             var hasListener = false;
             foreach (var listener in Object.FindObjectsOfType<AudioListener>())
-                if (listener.isActiveAndEnabled) { hasListener = true; break; }
-            if (!hasListener) OwnObject("WeightedPlayback.Listener").AddComponent<AudioListener>();
+            {
+                if (listener.isActiveAndEnabled)
+                {
+                    hasListener = true;
+                    break;
+                }
+            }
+
+            if (!hasListener)
+            {
+                OwnObject("WeightedPlayback.Listener").AddComponent<AudioListener>();
+            }
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            foreach (var root in mObjects) if (root) Object.Destroy(root);
-            mObjects.Clear();
-            Object.Destroy(mFirst);
-            Object.Destroy(mSecond);
-            Object.Destroy(mShort);
+            foreach (var root in _objects)
+            {
+                if (root)
+                {
+                    Object.Destroy(root);
+                }
+            }
+
+            _objects.Clear();
+            Object.Destroy(_first);
+            Object.Destroy(_second);
+            Object.Destroy(_short);
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
             yield return null;
-            Random.state = mRandomState;
+            Random.state = _randomState;
         }
 
         private GameObject OwnObject(string name)
         {
             var root = new GameObject(name);
-            mObjects.Add(root);
+            _objects.Add(root);
             return root;
         }
 
@@ -99,8 +135,8 @@ namespace YLFramework.Tests.Audio
             root.SetActive(false);
             root.transform.position = new Vector3(3f, 4f, 5f);
             var emitter = root.AddComponent<AudioEmitter>();
-            SetField(emitter, "clips", new List<AudioClip> { mFirst });
-            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(mSecond) });
+            SetField(emitter, "clips", new List<AudioClip> { _first });
+            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(_second) });
             SetField(emitter, "useWeightedRandom", weighted);
             SetField(emitter, "loop", loop);
             SetField(emitter, "positionMode", mode);
@@ -121,7 +157,7 @@ namespace YLFramework.Tests.Audio
         {
             var clips = new[]
             {
-                new AudioWeightedClip(null, 100f), new AudioWeightedClip(mShort, 2f), new AudioWeightedClip(mFirst, 0f)
+                new AudioWeightedClip(null, 100f), new AudioWeightedClip(_short, 2f), new AudioWeightedClip(_first, 0f)
             };
             var original = (AudioWeightedClip[])clips.Clone();
             AudioKit.Settings.SoundVolume.SetValueWithoutCallback(.5f);
@@ -136,13 +172,13 @@ namespace YLFramework.Tests.Audio
             var handle = AudioKit.PlayWeightedRandomSound(clips, options, (clip, lease) =>
             {
                 calls++;
-                Assert.AreSame(mShort, clip);
+                Assert.AreSame(_short, clip);
                 Assert.IsTrue(lease.IsValid, "Natural completion runs before lease cleanup.");
                 Assert.AreSame(clip, lease.Voice.Source.clip);
                 callbackHandle = lease;
             });
             Assert.IsTrue(handle.IsValid);
-            Assert.AreSame(mShort, handle.Voice.Source.clip);
+            Assert.AreSame(_short, handle.Voice.Source.clip);
             Assert.AreEqual(.3f, handle.Voice.Source.volume, .001f);
             Assert.AreEqual(1.25f, handle.Voice.Source.pitch);
             Assert.IsFalse(handle.Voice.Source.loop);
@@ -151,7 +187,11 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(options.PlaySoundMode, handle.Voice.Options.PlaySoundMode);
             Assert.AreEqual(19, handle.Voice.Priority);
             var deadline = Time.realtimeSinceStartup + 2f;
-            while (handle.IsValid && Time.realtimeSinceStartup < deadline) yield return null;
+            while (handle.IsValid && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
             Assert.IsFalse(handle.IsValid, "The real sound must complete within the deadline.");
             Assert.AreEqual(1, calls);
             Assert.AreEqual(handle, callbackHandle);
@@ -167,12 +207,12 @@ namespace YLFramework.Tests.Audio
             var calls = 0;
             var state = Random.state;
             Assert.IsFalse(AudioKit.PlayWeightedRandomSound(null, onFinished: (_, __) => calls++).IsValid);
-            Assert.IsFalse(AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(mFirst, 0f) }).IsValid);
+            Assert.IsFalse(AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(_first, 0f) }).IsValid);
             Assert.AreEqual(state, Random.state);
             Assert.IsNull(AudioKit.CurrentSettings);
             Assert.Throws<ArgumentOutOfRangeException>(() => AudioKit.PlayWeightedRandomSound(new[]
             {
-                new AudioWeightedClip(mFirst), new AudioWeightedClip(null, float.NaN)
+                new AudioWeightedClip(_first), new AudioWeightedClip(null, float.NaN)
             }));
             Assert.AreEqual(state, Random.state);
             Assert.IsNull(AudioKit.CurrentSettings);
@@ -182,7 +222,7 @@ namespace YLFramework.Tests.Audio
             _ = Random.value;
             var afterOne = Random.state;
             Random.state = before;
-            Assert.IsFalse(AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(mFirst) },
+            Assert.IsFalse(AudioKit.PlayWeightedRandomSound(new[] { new AudioWeightedClip(_first) },
                 onFinished: (_, __) => calls++).IsValid);
             Assert.AreEqual(afterOne, Random.state);
             Assert.IsFalse(AudioManager.HasInstance);
@@ -194,7 +234,7 @@ namespace YLFramework.Tests.Audio
         [UnityTest]
         public IEnumerator DeduplicationRejectsTheSelectedClipWithoutSamplingAgain()
         {
-            var clips = new[] { new AudioWeightedClip(mFirst, 1f), new AudioWeightedClip(mSecond, 3f) };
+            var clips = new[] { new AudioWeightedClip(_first, 1f), new AudioWeightedClip(_second, 3f) };
             Random.InitState(2719);
             var before = Random.state;
             Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(clips, out var selected));
@@ -231,7 +271,7 @@ namespace YLFramework.Tests.Audio
             _ = Random.value;
             var afterOne = Random.state;
             Random.state = before;
-            Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(new[] { new AudioWeightedClip(mSecond) }, out var clip));
+            Assert.IsTrue(AudioKit.TrySelectWeightedRandomClip(new[] { new AudioWeightedClip(_second) }, out var clip));
             Assert.AreEqual(afterOne, Random.state);
             Assert.IsNull(AudioKit.CurrentSettings);
             Assert.IsFalse(AudioManager.HasInstance);
@@ -281,18 +321,18 @@ namespace YLFramework.Tests.Audio
             var inherit = typeof(AudioEmitter).GetField("useGlobalPlaySoundMode", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(inherit);
             Assert.IsFalse((bool)inherit.GetValue(emitter), "Runtime AddComponent keeps the legacy field default; Editor Reset is a separate contract.");
-            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(mSecond, float.NaN) });
+            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(_second, float.NaN) });
             Assert.DoesNotThrow(emitter.Play, "Disabled weighted data must not be validated.");
             var old = AudioKit.GetPlayingSounds()[0];
-            Assert.AreSame(mFirst, old.Voice.Source.clip);
+            Assert.AreSame(_first, old.Voice.Source.clip);
             SetField(emitter, "clips", new List<AudioClip>());
-            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(mSecond) });
+            SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(_second) });
             SetField(emitter, "useWeightedRandom", true);
             emitter.Play();
             Assert.IsFalse(old.IsValid);
             Assert.AreEqual(1, AudioKit.SoundCount);
             var current = AudioKit.GetPlayingSounds()[0];
-            Assert.AreSame(mSecond, current.Voice.Source.clip, "Weighted mode must not consult the empty legacy list.");
+            Assert.AreSame(_second, current.Voice.Source.clip, "Weighted mode must not consult the empty legacy list.");
             SetField(emitter, "weightedClips", new List<AudioWeightedClip>());
             emitter.Play();
             Assert.IsTrue(current.IsValid, "No eligible weighted selection must not replace the current loop.");
@@ -315,7 +355,10 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(2, starts);
                 Assert.AreEqual(2, AudioKit.SoundCount, "Missing/false useGlobalPlaySoundMode preserves the legacy explicit EveryOne mode.");
                 foreach (var handle in AudioKit.GetPlayingSounds())
+                {
                     Assert.AreEqual(AudioKit.PlaySoundModes.EveryOne, handle.Voice.Options.PlaySoundMode);
+                }
+
                 SetField(emitter, "useGlobalPlaySoundMode", true);
                 emitter.Play();
                 Assert.AreEqual(3, starts);
@@ -369,7 +412,7 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(1, AudioKit.SoundCount);
                 var old = AudioKit.GetPlayingSounds()[0];
                 var source = old.Voice.Source;
-                Assert.AreSame(mSecond, source.clip);
+                Assert.AreSame(_second, source.clip);
                 Assert.AreEqual(.6f, source.volume, .001f);
                 Assert.AreEqual(1.4f, source.pitch);
                 Assert.AreEqual(31, old.Voice.Priority);
@@ -391,8 +434,16 @@ namespace YLFramework.Tests.Audio
                 target.position += Vector3.right;
                 yield return null;
                 Assert.IsTrue(old.IsPlaying);
-                if (mode == AudioEmitter.PositionMode.FixedPosition) Assert.AreEqual(originalPosition, source.transform.position);
-                if (mode == AudioEmitter.PositionMode.FollowTransform) Assert.AreEqual(target.position, source.transform.position);
+                if (mode == AudioEmitter.PositionMode.FixedPosition)
+                {
+                    Assert.AreEqual(originalPosition, source.transform.position);
+                }
+
+                if (mode == AudioEmitter.PositionMode.FollowTransform)
+                {
+                    Assert.AreEqual(target.position, source.transform.position);
+                }
+
                 emitter.Play();
                 Assert.IsFalse(old.IsValid);
                 Assert.AreEqual(1, AudioKit.SoundCount);
@@ -419,14 +470,14 @@ namespace YLFramework.Tests.Audio
                 {
                     SetField(emitter, "weightedClips", new List<AudioWeightedClip>
                     {
-                        new AudioWeightedClip(mFirst), new AudioWeightedClip(null, weight)
+                        new AudioWeightedClip(_first), new AudioWeightedClip(null, weight)
                     });
                     var state = Random.state;
                     Assert.Throws<ArgumentOutOfRangeException>(emitter.Play);
                     Assert.AreEqual(state, Random.state);
                     Assert.AreEqual(generation, current.Generation);
                     Assert.IsTrue(current.IsValid);
-                    Assert.AreSame(mSecond, current.Voice.Source.clip);
+                    Assert.AreSame(_second, current.Voice.Source.clip);
                     Assert.AreEqual(1, AudioKit.SoundCount);
                 }
                 SetField(emitter, "outputRoute", new AudioOutputRoute { Mode = (AudioOutputRoute.RouteMode)99 });
@@ -434,7 +485,7 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual("Mode", routeError.ParamName, "Keep the existing outputRoute validation ahead of weighted data.");
                 Assert.IsTrue(current.IsValid);
                 SetField(emitter, "outputRoute", AudioOutputRoute.Direct);
-                SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(mFirst) });
+                SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(_first) });
                 SetField(emitter, "pitch", 0f);
                 var optionError = Assert.Throws<ArgumentOutOfRangeException>(emitter.Play);
                 Assert.AreEqual("Pitch", optionError.ParamName, "Selected clips still enter the ordinary playback validation chain.");
@@ -452,80 +503,82 @@ namespace YLFramework.Tests.Audio
         public IEnumerator EmitterInvalidOptionsAndEmptyCandidatesPreserveOwnedLoopWithoutSubmittingRequests()
         {
             foreach (var weighted in new[] { false, true })
-            foreach (AudioEmitter.PositionMode mode in Enum.GetValues(typeof(AudioEmitter.PositionMode)))
             {
-                var emitter = Emitter(mode, weighted);
-                var starts = 0;
-                emitter.Started.AddListener(() => starts++);
-                emitter.Play();
-                var current = AudioKit.GetPlayingSounds()[0];
-                var source = current.Voice.Source;
-                var generation = current.Generation;
-                var stats = AudioKit.SoundStats;
-                var fields = new[] { "volume", "pitch", "priority", "playSoundMode", "positionMode", "outputRoute",
+                foreach (AudioEmitter.PositionMode mode in Enum.GetValues(typeof(AudioEmitter.PositionMode)))
+                {
+                    var emitter = Emitter(mode, weighted);
+                    var starts = 0;
+                    emitter.Started.AddListener(() => starts++);
+                    emitter.Play();
+                    var current = AudioKit.GetPlayingSounds()[0];
+                    var source = current.Voice.Source;
+                    var generation = current.Generation;
+                    var stats = AudioKit.SoundStats;
+                    var fields = new[] { "volume", "pitch", "priority", "playSoundMode", "positionMode", "outputRoute",
                     "minDistance", "maxDistance", "rolloffMode" };
-                var values = new object[] { float.NaN, 0f, -1, (AudioKit.PlaySoundModes)99, (AudioEmitter.PositionMode)99,
+                    var values = new object[] { float.NaN, 0f, -1, (AudioKit.PlaySoundModes)99, (AudioEmitter.PositionMode)99,
                     new AudioOutputRoute { Mode = (AudioOutputRoute.RouteMode)99 }, -1f, 0f, (AudioRolloffMode)99 };
-                var parameters = new[] { "Volume", "Pitch", "Priority", "PlaySoundMode", "positionMode", "Mode",
+                    var parameters = new[] { "Volume", "Pitch", "Priority", "PlaySoundMode", "positionMode", "Mode",
                     "MinDistance", "MaxDistance", "RolloffMode" };
 
-                void AssertPreserved()
-                {
-                    Assert.IsTrue(current.IsValid);
-                    Assert.IsTrue(current.IsPlaying);
-                    Assert.AreSame(source, current.Voice.Source);
-                    Assert.AreSame(weighted ? mSecond : mFirst, source.clip);
-                    Assert.IsTrue(source.loop);
-                    Assert.AreEqual(generation, current.Voice.Generation);
-                    CollectionAssert.AreEqual(new[] { current }, AudioKit.GetPlayingSounds());
-                    Assert.AreEqual(stats, AudioKit.SoundStats, "Rejected inputs cannot allocate, admit, release or commit deduplication.");
-                    Assert.AreEqual(1, starts, "Rejected inputs must not invoke Started.");
-                }
+                    void AssertPreserved()
+                    {
+                        Assert.IsTrue(current.IsValid);
+                        Assert.IsTrue(current.IsPlaying);
+                        Assert.AreSame(source, current.Voice.Source);
+                        Assert.AreSame(weighted ? _second : _first, source.clip);
+                        Assert.IsTrue(source.loop);
+                        Assert.AreEqual(generation, current.Voice.Generation);
+                        CollectionAssert.AreEqual(new[] { current }, AudioKit.GetPlayingSounds());
+                        Assert.AreEqual(stats, AudioKit.SoundStats, "Rejected inputs cannot allocate, admit, release or commit deduplication.");
+                        Assert.AreEqual(1, starts, "Rejected inputs must not invoke Started.");
+                    }
 
-                for (var i = 0; i < (mode == AudioEmitter.PositionMode.TwoDimensional ? 6 : fields.Length); i++)
-                {
-                    var field = typeof(AudioEmitter).GetField(fields[i], BindingFlags.Instance | BindingFlags.NonPublic);
-                    Assert.IsNotNull(field, fields[i]);
-                    var original = field.GetValue(emitter);
-                    SetField(emitter, fields[i], values[i]);
-                    var random = Random.state;
-                    Assert.AreEqual(parameters[i], Assert.Throws<ArgumentOutOfRangeException>(emitter.Play).ParamName);
-                    Assert.AreEqual(random, Random.state, "Invalid options must be rejected before selection.");
+                    for (var i = 0; i < (mode == AudioEmitter.PositionMode.TwoDimensional ? 6 : fields.Length); i++)
+                    {
+                        var field = typeof(AudioEmitter).GetField(fields[i], BindingFlags.Instance | BindingFlags.NonPublic);
+                        Assert.IsNotNull(field, fields[i]);
+                        var original = field.GetValue(emitter);
+                        SetField(emitter, fields[i], values[i]);
+                        var random = Random.state;
+                        Assert.AreEqual(parameters[i], Assert.Throws<ArgumentOutOfRangeException>(emitter.Play).ParamName);
+                        Assert.AreEqual(random, Random.state, "Invalid options must be rejected before selection.");
+                        AssertPreserved();
+                        SetField(emitter, fields[i], original);
+                    }
+                    SetField(emitter, "outputRoute", new AudioOutputRoute { Mode = AudioOutputRoute.RouteMode.MixerGroup });
+                    Assert.Catch<ArgumentException>(emitter.Play);
                     AssertPreserved();
-                    SetField(emitter, fields[i], original);
-                }
-                SetField(emitter, "outputRoute", new AudioOutputRoute { Mode = AudioOutputRoute.RouteMode.MixerGroup });
-                Assert.Catch<ArgumentException>(emitter.Play);
-                AssertPreserved();
-                SetField(emitter, "outputRoute", AudioOutputRoute.Inherit);
+                    SetField(emitter, "outputRoute", AudioOutputRoute.Inherit);
 
-                if (mode == AudioEmitter.PositionMode.FollowTransform)
-                {
-                    var target = OwnObject("WeightedPlayback.InactiveTarget");
-                    target.SetActive(false);
-                    SetField(emitter, "followTarget", target.transform);
+                    if (mode == AudioEmitter.PositionMode.FollowTransform)
+                    {
+                        var target = OwnObject("WeightedPlayback.InactiveTarget");
+                        target.SetActive(false);
+                        SetField(emitter, "followTarget", target.transform);
+                        Assert.DoesNotThrow(emitter.Play);
+                        AssertPreserved();
+                        Object.DestroyImmediate(target);
+                        Assert.DoesNotThrow(emitter.Play);
+                        AssertPreserved();
+                        SetField(emitter, "followTarget", null);
+                    }
+                    SetField(emitter, "clips", new List<AudioClip>());
+                    SetField(emitter, "weightedClips", new List<AudioWeightedClip>());
+                    var state = Random.state;
                     Assert.DoesNotThrow(emitter.Play);
+                    Assert.AreEqual(state, Random.state);
                     AssertPreserved();
-                    Object.DestroyImmediate(target);
+                    SetField(emitter, "clips", new List<AudioClip> { null });
+                    SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(_first, 0f) });
                     Assert.DoesNotThrow(emitter.Play);
+                    Assert.AreEqual(state, Random.state);
                     AssertPreserved();
-                    SetField(emitter, "followTarget", null);
+                    emitter.Stop();
+                    Assert.IsFalse(current.IsValid, "Input protection must not break explicit ownership cleanup.");
+                    Assert.AreEqual(0, AudioKit.SoundCount);
+                    yield return null;
                 }
-                SetField(emitter, "clips", new List<AudioClip>());
-                SetField(emitter, "weightedClips", new List<AudioWeightedClip>());
-                var state = Random.state;
-                Assert.DoesNotThrow(emitter.Play);
-                Assert.AreEqual(state, Random.state);
-                AssertPreserved();
-                SetField(emitter, "clips", new List<AudioClip> { null });
-                SetField(emitter, "weightedClips", new List<AudioWeightedClip> { new AudioWeightedClip(mFirst, 0f) });
-                Assert.DoesNotThrow(emitter.Play);
-                Assert.AreEqual(state, Random.state);
-                AssertPreserved();
-                emitter.Stop();
-                Assert.IsFalse(current.IsValid, "Input protection must not break explicit ownership cleanup.");
-                Assert.AreEqual(0, AudioKit.SoundCount);
-                yield return null;
             }
         }
 
@@ -555,7 +608,7 @@ namespace YLFramework.Tests.Audio
             var sound = soundGroups[0];
             var ui = uiGroups[0];
             AudioKit.Settings.SoundOutputGroup.Value = sound;
-            var clips = new[] { new AudioWeightedClip(mFirst) };
+            var clips = new[] { new AudioWeightedClip(_first) };
             var routes = new[] { AudioOutputRoute.Inherit, AudioOutputRoute.ToMixer(ui), AudioOutputRoute.Direct };
             var groups = new[] { sound, ui, null };
             for (var i = 0; i < routes.Length; i++)
@@ -574,7 +627,7 @@ namespace YLFramework.Tests.Audio
                     SetField(emitter, "outputRoute", routes[i]);
                     emitter.Play();
                     var emitted = AudioKit.GetPlayingSounds()[0];
-                    Assert.AreSame(mSecond, emitted.Voice.Source.clip);
+                    Assert.AreSame(_second, emitted.Voice.Source.clip);
                     Assert.AreSame(groups[i], emitted.Voice.Source.outputAudioMixerGroup);
                     yield return null;
                     Assert.IsTrue(emitted.IsPlaying);

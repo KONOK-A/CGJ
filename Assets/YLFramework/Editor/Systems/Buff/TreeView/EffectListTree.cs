@@ -1,6 +1,3 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,6 +5,9 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 namespace YLFramework.BuffSystem
 {
@@ -18,14 +18,14 @@ namespace YLFramework.BuffSystem
 #endif
 
     {
-        public EffectData effectData;
+        public EffectData EffectData;
 
-        public GroupEffectData groupEffectData;
+        public GroupEffectData GroupEffectData;
 
-        public EffectTreeViewItem(GroupEffectData groupEffectData, EffectData data, int depth) : base(data.id, depth, data.effect_name)
+        public EffectTreeViewItem(GroupEffectData groupEffectData, EffectData data, int depth) : base(data.id, depth, data.effectName)
         {
-            this.effectData = data;
-            this.groupEffectData = groupEffectData;
+            this.EffectData = data;
+            this.GroupEffectData = groupEffectData;
         }
     }
 
@@ -37,27 +37,27 @@ namespace YLFramework.BuffSystem
 
     {
 
-        private const string EFFECT_DRAGGED_DATA_KEY = "YLFramework.Buff.EffectList.DraggedItemId";
+        private const string EffectDraggedDataKey = "YLFramework.Buff.EffectList.DraggedItemId";
 
 
-        private bool isContextClickItem;
+        private bool _isContextClickItem;
 
-        private GUIStyle style_label;
+        private GUIStyle _styleLabel;
 
-        private GUIStyle style_dropdown;
+        private GUIStyle _styleDropdown;
 
-        private Dictionary<int, GUIContent> des_contents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _desContents = new Dictionary<int, GUIContent>();
 
-        private Dictionary<int, GUIContent> type_contents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _typeContents = new Dictionary<int, GUIContent>();
 
-        private Dictionary<int, GUIContent> display_contents = new Dictionary<int, GUIContent>();
+        private Dictionary<int, GUIContent> _displayContents = new Dictionary<int, GUIContent>();
 
-        private float lastRefreshTime;
+        private float _lastRefreshTime;
 
 #if UNITY_6000_2_OR_NEWER
         public EffectListTree(TreeViewState<int> state , MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #else
-        public EffectListTree(TreeViewState state , MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
+        public EffectListTree(TreeViewState state, MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #endif
 
         {
@@ -74,7 +74,9 @@ namespace YLFramework.BuffSystem
             bool asc = false;
 
             if (multiColumnHeader.sortedColumnIndex >= 0 && multiColumnHeader.sortedColumnIndex < 3)
+            {
                 asc = multiColumnHeader.IsSortedAscending(multiColumnHeader.sortedColumnIndex);
+            }
 
             foreach (var groupEffectData in BuffSystemSettings.Instance.AllEffectDataWithType)
             {
@@ -84,7 +86,7 @@ namespace YLFramework.BuffSystem
                         // 根据名称排序
                         groupEffectData.effectDatas.Sort((x, y) =>
                         {
-                            return !asc ? x.effect_name.CompareTo(y.effect_name) : y.effect_name.CompareTo(x.effect_name);
+                            return !asc ? x.effectName.CompareTo(y.effectName) : y.effectName.CompareTo(x.effectName);
                         });
                         break;
                     case 1:
@@ -164,7 +166,7 @@ namespace YLFramework.BuffSystem
 
             retVal[3].headerContent = new GUIContent("描述", "描述!");
             retVal[3].minWidth = 30;
-            retVal[3].width =  180;
+            retVal[3].width = 180;
             retVal[3].maxWidth = 1000;
             retVal[3].headerTextAlignment = TextAlignment.Left;
             retVal[3].canSort = false;
@@ -208,13 +210,20 @@ namespace YLFramework.BuffSystem
                 foreach (EffectData data in groupEffectData.effectDatas)
                 {
 
-                    if (data == null) continue;
+                    if (data == null)
+                    {
+                        continue;
+                    }
 
                     // 过滤掉重复的数据
-                    if (ids.Contains(data.id)) continue;
+                    if (ids.Contains(data.id))
+                    {
+                        continue;
+                    }
+
                     ids.Add(data.id);
 
-                    EffectTreeViewItem d = new EffectTreeViewItem(groupEffectData,data, 1);
+                    EffectTreeViewItem d = new EffectTreeViewItem(groupEffectData, data, 1);
                     child.AddChild(d);
                 }
 
@@ -224,7 +233,7 @@ namespace YLFramework.BuffSystem
             return root;
         }
 
-        private int GenerateID()
+        private int GenerateId()
         {
             int id = 0;
 
@@ -239,7 +248,10 @@ namespace YLFramework.BuffSystem
                     continue;
                 }
 
-                if (item.id > id) id = item.id;
+                if (item.id > id)
+                {
+                    id = item.id;
+                }
             }
 
 
@@ -260,9 +272,9 @@ namespace YLFramework.BuffSystem
         {
             base.ContextClicked();
 
-            if (isContextClickItem)
+            if (_isContextClickItem)
             {
-                isContextClickItem = false;
+                _isContextClickItem = false;
                 return;
             }
 
@@ -273,7 +285,7 @@ namespace YLFramework.BuffSystem
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
-            isContextClickItem = true;
+            _isContextClickItem = true;
 
             EffectTreeViewItem item = FindItem(id, rootItem) as EffectTreeViewItem;
 
@@ -286,8 +298,12 @@ namespace YLFramework.BuffSystem
                     foreach (var item in GetSelection())
                     {
                         EffectTreeViewItem tree = FindItem(item, rootItem) as EffectTreeViewItem;
-                        if(tree == null) continue;
-                        DeleteEffect(tree.effectData.id);
+                        if (tree == null)
+                        {
+                            continue;
+                        }
+
+                        DeleteEffect(tree.EffectData.id);
                     }
 
                     AssetDatabase.SaveAssets();
@@ -301,8 +317,12 @@ namespace YLFramework.BuffSystem
                     foreach (var item in GetSelection())
                     {
                         EffectTreeViewItem tree = FindItem(item, rootItem) as EffectTreeViewItem;
-                        if (tree == null) continue;
-                        ints.Add( CopyEffect(tree.effectData));
+                        if (tree == null)
+                        {
+                            continue;
+                        }
+
+                        ints.Add(CopyEffect(tree.EffectData));
                     }
 
                     AssetDatabase.SaveAssets();
@@ -338,14 +358,14 @@ namespace YLFramework.BuffSystem
             return CreateEffect(effect);
         }
 
-        private int CreateEffect(EffectData effect,string pre_name = null )
+        private int CreateEffect(EffectData effect, string preName = null)
         {
             string path = "Assets/YLFrameworkData/Buff/Effects";
 
-            EffectsDataController.CreateAsset(effect, path, true, pre_name);
+            EffectsDataController.CreateAsset(effect, path, true, preName);
 
-            effect.effect_name = effect.name;
-            effect.id = GenerateID();
+            effect.effectName = effect.name;
+            effect.id = GenerateId();
             EditorUtility.SetDirty(effect);
             return effect.id;
         }
@@ -353,7 +373,7 @@ namespace YLFramework.BuffSystem
         private int CopyEffect(EffectData effect)
         {
             EffectData data = GameObject.Instantiate(effect);
-            return CreateEffect(data ,data.effect_name);
+            return CreateEffect(data, data.effectName);
         }
 
         private void ShowCreateEffectMenu(GenericMenu menu)
@@ -394,7 +414,9 @@ namespace YLFramework.BuffSystem
                 {
                     name = string.Format("创建Effect/{0}", item.Name);
                     if (!string.IsNullOrEmpty(item.Namespace))
+                    {
                         name = string.Format("{0}-{1}", name, item.Namespace);
+                    }
                 }
 
 
@@ -418,8 +440,11 @@ namespace YLFramework.BuffSystem
 
         private void DeleteEffect(int id)
         {
-            EffectData data = BuffSystemSettings.Instance.GetEffectDataByID(id);
-            if (data == null) return;
+            EffectData data = BuffSystemSettings.Instance.GetEffectDataById(id);
+            if (data == null)
+            {
+                return;
+            }
             // 移除
             BuffSystemSettings.Instance.RemoveEffectData(data);
 
@@ -438,14 +463,22 @@ namespace YLFramework.BuffSystem
                 string path = AssetDatabase.GUIDToAssetPath(item);
                 MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
 
-                if (script == null) continue;
+                if (script == null)
+                {
+                    continue;
+                }
 
                 Type type = script.GetClass();
 
-                if (type == null) continue;
+                if (type == null)
+                {
+                    continue;
+                }
 
                 if (type.IsSubclassOf(typeof(EffectData)))
+                {
                     states.Add(type);
+                }
             }
 
             return states;
@@ -455,22 +488,24 @@ namespace YLFramework.BuffSystem
         protected override void RowGUI(RowGUIArgs args)
         {
             for (int i = 0; i < args.GetNumVisibleColumns(); ++i)
-                CellGUI(args.GetCellRect(i), args.item, args.GetColumn(i), ref args);
+            {
+                CellGui(args.GetCellRect(i), args.item, args.GetColumn(i), ref args);
+            }
         }
 
 #if UNITY_6000_2_OR_NEWER
 
-        private void CellGUI(Rect cellRect, TreeViewItem<int> item, int column, ref RowGUIArgs args)
+        private void CellGui(Rect cellRect, TreeViewItem<int> item, int column, ref RowGUIArgs args)
 #else
-        private void CellGUI(Rect cellRect, TreeViewItem item, int column, ref RowGUIArgs args)
+        private void CellGui(Rect cellRect, TreeViewItem item, int column, ref RowGUIArgs args)
 #endif
 
         {
 
-            if (style_label == null)
+            if (_styleLabel == null)
             {
-                style_label = GUI.skin.label;
-                style_label.richText = true;
+                _styleLabel = GUI.skin.label;
+                _styleLabel.richText = true;
             }
 
             EffectTreeViewItem effectItem = item as EffectTreeViewItem;
@@ -482,50 +517,55 @@ namespace YLFramework.BuffSystem
                     case 0:
                         cellRect.x += 30;
                         cellRect.width -= 30;
-                        GUI.Label(cellRect, effectItem.effectData.effect_name, style_label);
+                        GUI.Label(cellRect, effectItem.EffectData.effectName, _styleLabel);
                         break;
 
                     case 1:
-                        GUI.Label(cellRect, effectItem.effectData.id.ToString(), style_label);
+                        GUI.Label(cellRect, effectItem.EffectData.id.ToString(), _styleLabel);
                         break;
 
                     case 2:
 
-                        if (!type_contents.ContainsKey(effectItem.effectData.id))
-                            type_contents.Add(effectItem.effectData.id, new GUIContent());
-
-                        type_contents[effectItem.effectData.id].text = BuffSystemSettings.Instance.GetType(effectItem.effectData.type);
-                        type_contents[effectItem.effectData.id].tooltip = BuffSystemSettings.Instance.GetType(effectItem.effectData.type, false);
-
-                        if (style_dropdown == null)
+                        if (!_typeContents.ContainsKey(effectItem.EffectData.id))
                         {
-                            style_dropdown = new GUIStyle("DropDown");
-                            style_dropdown.richText = true;
+                            _typeContents.Add(effectItem.EffectData.id, new GUIContent());
                         }
 
-                        if (EditorGUI.DropdownButton(cellRect, type_contents[effectItem.effectData.id], FocusType.Passive, style_dropdown))
+                        _typeContents[effectItem.EffectData.id].text = BuffSystemSettings.Instance.GetType(effectItem.EffectData.type);
+                        _typeContents[effectItem.EffectData.id].tooltip = BuffSystemSettings.Instance.GetType(effectItem.EffectData.type, false);
+
+                        if (_styleDropdown == null)
+                        {
+                            _styleDropdown = new GUIStyle("DropDown");
+                            _styleDropdown.richText = true;
+                        }
+
+                        if (EditorGUI.DropdownButton(cellRect, _typeContents[effectItem.EffectData.id], FocusType.Passive, _styleDropdown))
                         {
                             GenericMenu menu = new GenericMenu();
 
-                            menu.AddItem(new GUIContent("0(空)"), effectItem.effectData.type == 0, () => {
-                                effectItem.effectData.type = 0;
-                                EditorUtility.SetDirty(effectItem.effectData);
+                            menu.AddItem(new GUIContent("0(空)"), effectItem.EffectData.type == 0, () =>
+                            {
+                                effectItem.EffectData.type = 0;
+                                EditorUtility.SetDirty(effectItem.EffectData);
                                 AssetDatabase.SaveAssets();
 
                                 Reload();
                             });
 
                             if (BuffSystemSettings.Instance.AllEffectType.Count > 0)
+                            {
                                 menu.AddSeparator(string.Empty);
+                            }
 
                             foreach (var type in BuffSystemSettings.Instance.AllEffectType)
                             {
                                 GUIContent content = new GUIContent(BuffSystemSettings.Instance.GetType(type.type, false));
 
-                                menu.AddItem(content, effectItem.effectData.type == type.type, () =>
+                                menu.AddItem(content, effectItem.EffectData.type == type.type, () =>
                                 {
-                                    effectItem.effectData.type = type.type;
-                                    EditorUtility.SetDirty(effectItem.effectData);
+                                    effectItem.EffectData.type = type.type;
+                                    EditorUtility.SetDirty(effectItem.EffectData);
                                     AssetDatabase.SaveAssets();
 
                                     Reload();
@@ -533,7 +573,9 @@ namespace YLFramework.BuffSystem
                             }
 
                             if (BuffSystemSettings.Instance.AllEffectType.Count > 0)
+                            {
                                 menu.AddSeparator(string.Empty);
+                            }
 
                             menu.AddItem(new GUIContent("编辑"), false, () =>
                             {
@@ -547,15 +589,20 @@ namespace YLFramework.BuffSystem
 
                     case 3:
 
-                        if (!des_contents.ContainsKey(effectItem.effectData.id))
-                            des_contents.Add(effectItem.effectData.id, new GUIContent());
+                        if (!_desContents.ContainsKey(effectItem.EffectData.id))
+                        {
+                            _desContents.Add(effectItem.EffectData.id, new GUIContent());
+                        }
 
-                        if (string.IsNullOrEmpty(effectItem.effectData.description))
+                        if (string.IsNullOrEmpty(effectItem.EffectData.description))
+                        {
                             return;
-                        des_contents[effectItem.effectData.id].text = effectItem.effectData.description.Replace('\n', '\0');
-                        des_contents[effectItem.effectData.id].tooltip = effectItem.effectData.description;
+                        }
 
-                        GUI.Label(cellRect, des_contents[effectItem.effectData.id], style_label);
+                        _desContents[effectItem.EffectData.id].text = effectItem.EffectData.description.Replace('\n', '\0');
+                        _desContents[effectItem.EffectData.id].tooltip = effectItem.EffectData.description;
+
+                        GUI.Label(cellRect, _desContents[effectItem.EffectData.id], _styleLabel);
                         break;
                 }
             }
@@ -566,13 +613,15 @@ namespace YLFramework.BuffSystem
                     cellRect.x += 20;
                     cellRect.width -= 20;
 
-                    if (!display_contents.ContainsKey(args.item.GetHashCode()))
-                        display_contents.Add(args.item.GetHashCode(), new GUIContent());
+                    if (!_displayContents.ContainsKey(args.item.GetHashCode()))
+                    {
+                        _displayContents.Add(args.item.GetHashCode(), new GUIContent());
+                    }
 
-                    display_contents[args.item.GetHashCode()].text = args.item.displayName;
-                    display_contents[args.item.GetHashCode()].tooltip = args.item.displayName;
+                    _displayContents[args.item.GetHashCode()].text = args.item.displayName;
+                    _displayContents[args.item.GetHashCode()].tooltip = args.item.displayName;
 
-                    GUI.Label(cellRect, display_contents[args.item.GetHashCode()], style_label);
+                    GUI.Label(cellRect, _displayContents[args.item.GetHashCode()], _styleLabel);
                 }
             }
 
@@ -591,18 +640,21 @@ namespace YLFramework.BuffSystem
 
             EffectTreeViewItem treeViewItem = FindItem(id, rootItem) as EffectTreeViewItem;
 
-            if (treeViewItem == null) return;
+            if (treeViewItem == null)
+            {
+                return;
+            }
 
-            currentDragGroup = treeViewItem.groupEffectData;
+            _currentDragGroup = treeViewItem.GroupEffectData;
 
-            dragItemParent = treeViewItem.parent;
+            _dragItemParent = treeViewItem.parent;
 
             // 先触发开始拖拽 再触发点击 在这里判断一下要拖拽的东西是否都在同一个节点
             // 如果有的节点 跟当前点击的节点不是同一个父节点的情况下 ， 就需要把他移除
             // 因为只能拖拽同一个节点下面的数据
             // 如果没拖拽的情况下这里的逻辑没有任何影响，因为 DragAndDrop.GetGenericData(EFFECT_DRAGGED_DATA_KEY) 这个数据
             // 只会在拖拽中和拖拽结束的时候用到
-            IList<int> draggedItemIDs = DragAndDrop.GetGenericData(EFFECT_DRAGGED_DATA_KEY) as IList<int>;
+            IList<int> draggedItemIDs = DragAndDrop.GetGenericData(EffectDraggedDataKey) as IList<int>;
 
             if (draggedItemIDs != null)
             {
@@ -613,7 +665,7 @@ namespace YLFramework.BuffSystem
 #else
                     TreeViewItem item = FindItem(draggedItemIDs[i], rootItem);
 #endif
-                    if (item.parent != dragItemParent)
+                    if (item.parent != _dragItemParent)
                     {
                         draggedItemIDs.RemoveAt(i);
                     }
@@ -629,16 +681,23 @@ namespace YLFramework.BuffSystem
 
         private void RefreshList()
         {
-            if (Time.realtimeSinceStartup - lastRefreshTime < 1)
+            if (Time.realtimeSinceStartup - _lastRefreshTime < 1)
+            {
                 return;
-            lastRefreshTime = Time.realtimeSinceStartup;
+            }
+
+            _lastRefreshTime = Time.realtimeSinceStartup;
 
             bool remove = false;
 
-            for (int i = BuffSystemSettings.Instance.AllEffectDatas.Count - 1; i>=0; i--)
+            for (int i = BuffSystemSettings.Instance.AllEffectDatas.Count - 1; i >= 0; i--)
             {
                 EffectData effectData = BuffSystemSettings.Instance.AllEffectDatas[i];
-                if (effectData != null) continue;
+                if (effectData != null)
+                {
+                    continue;
+                }
+
                 remove = true;
                 BuffSystemSettings.Instance.AllEffectDatas.RemoveAt(i);
             }
@@ -656,21 +715,25 @@ namespace YLFramework.BuffSystem
         public EffectData GetEffectData(int id)
         {
             EffectTreeViewItem item = FindItem(id, rootItem) as EffectTreeViewItem;
-            if (item == null) return null;
-            return item.effectData;
+            if (item == null)
+            {
+                return null;
+            }
+
+            return item.EffectData;
         }
 
         #region 拖拽功能实现
 
-        private float startDragTime;
+        private float _startDragTime;
 
-        private int dragCount;
+        private int _dragCount;
 #if UNITY_6000_2_OR_NEWER
-        private TreeViewItem<int> dragItemParent; // 拖拽的parent
+        private TreeViewItem<int> _dragItemParent; // 拖拽的parent
 #else
-        private TreeViewItem dragItemParent; // 拖拽的parent
+        private TreeViewItem _dragItemParent; // 拖拽的parent
 #endif
-        private GroupEffectData currentDragGroup;
+        private GroupEffectData _currentDragGroup;
         private sealed class EffectDrag
         {
             internal EffectListTree Owner;
@@ -681,27 +744,50 @@ namespace YLFramework.BuffSystem
 
         protected override bool CanStartDrag(CanStartDragArgs args)
         {
-            if (!(args.draggedItem is EffectTreeViewItem first) || !GetSelection().Contains(first.id)) return false;
-            return args.draggedItemIDs != null && args.draggedItemIDs.All(id => FindItem(id, rootItem) is EffectTreeViewItem item && ReferenceEquals(item.groupEffectData, first.groupEffectData));
+            if (!(args.draggedItem is EffectTreeViewItem first) || !GetSelection().Contains(first.id))
+            {
+                return false;
+            }
+
+            return args.draggedItemIDs != null && args.draggedItemIDs.All(id => FindItem(id, rootItem) is EffectTreeViewItem item && ReferenceEquals(item.GroupEffectData, first.GroupEffectData));
         }
 
         protected override DragAndDropVisualMode HandleDragAndDrop(DragAndDropArgs args)
         {
-            var drag = DragAndDrop.GetGenericData(EFFECT_DRAGGED_DATA_KEY) as EffectDrag;
-            if (drag == null || !ReferenceEquals(drag.Owner, this) || args.parentItem != dragItemParent ||
+            var drag = DragAndDrop.GetGenericData(EffectDraggedDataKey) as EffectDrag;
+            if (drag == null || !ReferenceEquals(drag.Owner, this) || args.parentItem != _dragItemParent ||
                 args.insertAtIndex < 0 || args.insertAtIndex > drag.Snapshot.Length ||
-                !drag.Group.effectDatas.SequenceEqual(drag.Snapshot)) return DragAndDropVisualMode.Rejected;
-            if (!args.performDrop) return DragAndDropVisualMode.Move;
+                !drag.Group.effectDatas.SequenceEqual(drag.Snapshot))
+            {
+                return DragAndDropVisualMode.Rejected;
+            }
+
+            if (!args.performDrop)
+            {
+                return DragAndDropVisualMode.Move;
+            }
+
             var list = new List<EffectData>(drag.Snapshot);
             var moved = drag.Indices.Select(index => list[index]).ToArray();
-            for (var i = drag.Indices.Length - 1; i >= 0; i--) list.RemoveAt(drag.Indices[i]);
+            for (var i = drag.Indices.Length - 1; i >= 0; i--)
+            {
+                list.RemoveAt(drag.Indices[i]);
+            }
+
             list.InsertRange(args.insertAtIndex - drag.Indices.Count(index => index < args.insertAtIndex), moved);
             if (!list.SequenceEqual(drag.Snapshot))
             {
                 Undo.RecordObject(BuffSystemSettings.Instance, "Reorder Buff effects");
                 var all = BuffSystemSettings.Instance.AllEffectDatas;
                 var next = 0;
-                for (var i = 0; i < all.Count; i++) if (drag.Snapshot.Contains(all[i])) all[i] = list[next++];
+                for (var i = 0; i < all.Count; i++)
+                {
+                    if (drag.Snapshot.Contains(all[i]))
+                    {
+                        all[i] = list[next++];
+                    }
+                }
+
                 drag.Group.effectDatas.Clear();
                 drag.Group.effectDatas.AddRange(list);
                 BuffSystemSettings.Save();
@@ -714,29 +800,44 @@ namespace YLFramework.BuffSystem
         protected override void SetupDragAndDrop(SetupDragAndDropArgs args)
         {
             var items = args.draggedItemIDs.Select(id => FindItem(id, rootItem) as EffectTreeViewItem).ToArray();
-            if (items.Length == 0 || items.Any(item => item == null)) return;
-            currentDragGroup = items[0].groupEffectData;
-            dragItemParent = items[0].parent;
-            if (items.Any(item => !ReferenceEquals(item.groupEffectData, currentDragGroup))) return;
-            var indices = items.Select(item => currentDragGroup.effectDatas.IndexOf(item.effectData)).Distinct().OrderBy(index => index).ToArray();
-            if (indices.Any(index => index < 0)) return;
+            if (items.Length == 0 || items.Any(item => item == null))
+            {
+                return;
+            }
+
+            _currentDragGroup = items[0].GroupEffectData;
+            _dragItemParent = items[0].parent;
+            if (items.Any(item => !ReferenceEquals(item.GroupEffectData, _currentDragGroup)))
+            {
+                return;
+            }
+
+            var indices = items.Select(item => _currentDragGroup.effectDatas.IndexOf(item.EffectData)).Distinct().OrderBy(index => index).ToArray();
+            if (indices.Any(index => index < 0))
+            {
+                return;
+            }
+
             DragAndDrop.PrepareStartDrag();
-            DragAndDrop.SetGenericData(EFFECT_DRAGGED_DATA_KEY, new EffectDrag { Owner = this, Group = currentDragGroup, Indices = indices, Snapshot = currentDragGroup.effectDatas.ToArray() });
+            DragAndDrop.SetGenericData(EffectDraggedDataKey, new EffectDrag { Owner = this, Group = _currentDragGroup, Indices = indices, Snapshot = _currentDragGroup.effectDatas.ToArray() });
             DragAndDrop.StartDrag("Reorder Buff effects");
         }
 
         public void Dispose()
         {
-            if (DragAndDrop.GetGenericData(EFFECT_DRAGGED_DATA_KEY) is EffectDrag drag && ReferenceEquals(drag.Owner, this)) DragAndDrop.SetGenericData(EFFECT_DRAGGED_DATA_KEY, null);
+            if (DragAndDrop.GetGenericData(EffectDraggedDataKey) is EffectDrag drag && ReferenceEquals(drag.Owner, this))
+            {
+                DragAndDrop.SetGenericData(EffectDraggedDataKey, null);
+            }
         }
 
 
         private int GetItemIndex(int id)
         {
 #if UNITY_6000_2_OR_NEWER
-            TreeViewItem<int> treeViewItem = FindItem(id, dragItemParent);
+            TreeViewItem<int> treeViewItem = FindItem(id, _dragItemParent);
 #else
-            TreeViewItem treeViewItem = FindItem(id, dragItemParent);
+            TreeViewItem treeViewItem = FindItem(id, _dragItemParent);
 #endif
 
             if (treeViewItem == null)
@@ -744,10 +845,10 @@ namespace YLFramework.BuffSystem
                 return -1;
             }
 
-            return dragItemParent.children.IndexOf(treeViewItem);
+            return _dragItemParent.children.IndexOf(treeViewItem);
         }
 
-#endregion
+        #endregion
 
     }
 

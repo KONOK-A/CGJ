@@ -1,5 +1,5 @@
 using System;
- 
+
 namespace YLFramework.Core.RoslynAnalyzers
 {
 
@@ -10,11 +10,15 @@ namespace YLFramework.Core.RoslynAnalyzers
     /// </summary>
     public class MustCallBaseAttribute : Attribute
     {
-        
-        public MustCallBaseAttribute() { }
 
-        public MustCallBaseAttribute(string message) { }
+        public MustCallBaseAttribute()
+        {
+        }
+
+        public MustCallBaseAttribute(string message)
+        {
+        }
 
     }
-    
+
 }

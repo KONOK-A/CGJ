@@ -6,101 +6,107 @@ using UnityEngine;
 namespace YLFramework.Core.Editor
 {
     public class SplitWindow : EditorWindow
-    { 
-        const int padding = 1; // 内边距
+    {
+        const int PanePadding = 1; // 内边距
 
+        [UnityEngine.Serialization.FormerlySerializedAs("horizontal_split_percent")]
         [SerializeField]
-        protected float horizontal_split_percent = 0.3f;
+        protected float horizontalSplitPercent = 0.3f;
 
-        private Rect horizontal_split_rect;       // 水平分割的矩形
+        private Rect _horizontalSplitRect;       // 水平分割的矩形
 
-        private bool isResizingHorizontal;      // 是不是正在调整 水平的比例
+        private bool _isResizingHorizontal;      // 是不是正在调整 水平的比例
 
-        protected bool showBorder = false;
+        protected bool ShowBorder = false;
 
-        private bool isLayout;
+        private bool _isLayout;
 
-        public float HorizontalSplitPercent 
+        public float HorizontalSplitPercent
         {
-            get 
+            get
             {
-                return horizontal_split_percent;
+                return horizontalSplitPercent;
             }
-            set 
+            set
             {
-                horizontal_split_percent = value;
+                horizontalSplitPercent = value;
             }
         }
 
 
         private void HorizontalResize()
-        { 
-            horizontal_split_rect.Set(position.width * horizontal_split_percent - padding - 1, 0, padding * 2 + 1, position.height);
-            
-            if (Event.current != null) 
+        {
+            _horizontalSplitRect.Set(position.width * horizontalSplitPercent - PanePadding - 1, 0, PanePadding * 2 + 1, position.height);
+
+            if (Event.current != null)
             {
 
-                EditorGUIUtility.AddCursorRect(horizontal_split_rect, MouseCursor.ResizeHorizontal);
-                 
-                if (Event.current.type == EventType.MouseDown && horizontal_split_rect.Contains(Event.current.mousePosition))
-                {
-                    isResizingHorizontal = true;
-                } 
+                EditorGUIUtility.AddCursorRect(_horizontalSplitRect, MouseCursor.ResizeHorizontal);
 
-                if (isResizingHorizontal)
-                { 
-                    horizontal_split_percent = Mathf.Clamp(Event.current.mousePosition.x / position.width, 0.1f, 0.8f);
+                if (Event.current.type == EventType.MouseDown && _horizontalSplitRect.Contains(Event.current.mousePosition))
+                {
+                    _isResizingHorizontal = true;
+                }
+
+                if (_isResizingHorizontal)
+                {
+                    horizontalSplitPercent = Mathf.Clamp(Event.current.mousePosition.x / position.width, 0.1f, 0.8f);
                 }
 
                 if (Event.current.type == EventType.MouseUp)
                 {
-                    isResizingHorizontal = false;
+                    _isResizingHorizontal = false;
                 }
 
-                if(isResizingHorizontal)
-                    Repaint();
-
-            } 
-        }
-         
-        protected virtual void OnGUI()
-        { 
-            if (Event.current != null && Event.current.type == EventType.Repaint)
-            { 
-                if (!isLayout)
+                if (_isResizingHorizontal)
                 {
-                    return; 
-                } 
+                    Repaint();
+                }
+            }
+        }
+
+        protected virtual void OnGUI()
+        {
+            if (Event.current != null && Event.current.type == EventType.Repaint)
+            {
+                if (!_isLayout)
+                {
+                    return;
+                }
             }
 
-            isLayout = Event.current != null && Event.current.type == EventType.Layout;
+            _isLayout = Event.current != null && Event.current.type == EventType.Layout;
 
-            Rect left = new Rect(0,0, position.width * horizontal_split_percent - padding  ,position.height);
-            Rect right = new Rect(left.width + horizontal_split_rect.width, 0, position.width * (1 - horizontal_split_percent) - padding - 1, position.height);
- 
-            HorizontalResize(); 
-            DrawGUILeft(left);
-            DrawGUIRight(right);
+            Rect left = new Rect(0, 0, position.width * horizontalSplitPercent - PanePadding, position.height);
+            Rect right = new Rect(left.width + _horizontalSplitRect.width, 0, position.width * (1 - horizontalSplitPercent) - PanePadding - 1, position.height);
 
-            if (showBorder) 
-            {             
-                GUI.Box(left,string.Empty , "GroupBox"); 
+            HorizontalResize();
+            DrawGuiLeft(left);
+            DrawGuiRight(right);
+
+            if (ShowBorder)
+            {
+                GUI.Box(left, string.Empty, "GroupBox");
                 GUI.Box(right, string.Empty, "GroupBox");
             }
-            
 
-            Vector2 half = Vector2.up * horizontal_split_rect.height / 2;
 
-            Color origin = Handles.color;  
-            Handles.color = isResizingHorizontal ? Color.green : Color.white;
-            Handles.DrawLine(horizontal_split_rect.center - half, horizontal_split_rect.center + half ); 
+            Vector2 half = Vector2.up * _horizontalSplitRect.height / 2;
+
+            Color origin = Handles.color;
+            Handles.color = _isResizingHorizontal ? Color.green : Color.white;
+            Handles.DrawLine(_horizontalSplitRect.center - half, _horizontalSplitRect.center + half);
 
             Handles.color = origin;
         }
-         
-        protected virtual void DrawGUILeft(Rect rect) { }
 
-        protected virtual void DrawGUIRight(Rect rect) { }
+        protected virtual void DrawGuiLeft(Rect rect)
+        {
+        }
+
+        protected virtual void DrawGuiRight(Rect rect)
+        {
+        }
 
     }
 

@@ -22,7 +22,7 @@ namespace YLFramework.Editor
         public const string TipsPath = "Assets/YLFramework/Prefabs/UITips.prefab";
         public const string TipsVariantPath = "Assets/YLFramework/Prefabs/UITipsOverlay.prefab";
         public const string ColorPath = "Assets/YLFramework/Prefabs/ColorSelector.prefab";
-        private static readonly string[] FixturePanelPaths =
+        private static readonly string[] _fixturePanelPaths =
         {
             "Assets/YLFramework/Tests/Core/Fixtures/YLCoreSmokeModule/YLCoreSmokePanel.prefab",
             "Assets/YLFramework/Tests/Core/Fixtures/YLCoreResourceModule/YLCoreSmokePanel.prefab"
@@ -38,31 +38,70 @@ namespace YLFramework.Editor
             var template = Required(TemplatePath);
             var tips = Required(TipsPath);
             var color = Required(ColorPath);
-            foreach (var prefab in new[] { basic, template, tips, color }) Objects(prefab).ToArray();
-            if (!color.GetComponent<ColorSelectorWindow>()) throw new InvalidOperationException("取色 Prefab 根不是正式 ColorSelectorWindow。");
+            foreach (var prefab in new[] { basic, template, tips, color })
+            {
+                Objects(prefab).ToArray();
+            }
+
+            if (!color.GetComponent<ColorSelectorWindow>())
+            {
+                throw new InvalidOperationException("取色 Prefab 根不是正式 ColorSelectorWindow。");
+            }
+
             if (!basic.GetComponent<Canvas>() || !basic.GetComponent<CanvasScaler>() || !basic.GetComponent<GraphicRaycaster>())
+            {
                 throw new InvalidOperationException("基础根缺少既有 Canvas/CanvasScaler/GraphicRaycaster，停止以免覆盖未知结构。");
+            }
+
             var host = template.GetComponent<YLFrameworkRoot>();
             var contexts = template.GetComponentsInChildren<UIRootContext>(true);
-            if (!host || contexts.Length != 1) throw new InvalidOperationException("完整模板必须有唯一宿主和唯一实际 UI 根。");
+            if (!host || contexts.Length != 1)
+            {
+                throw new InvalidOperationException("完整模板必须有唯一宿主和唯一实际 UI 根。");
+            }
+
             var context = contexts[0];
             if (!context.GetComponent<Canvas>() || !context.GetComponent<CanvasScaler>() || !context.GetComponent<GraphicRaycaster>())
+            {
                 throw new InvalidOperationException("完整模板原生 Canvas 组件不完整。");
+            }
+
             ValidateLayers(context, false);
-            if (new SerializedObject(context).FindProperty("uiLayers").arraySize <= 4) throw new InvalidOperationException("完整模板需要明确 Layer4 承载 Tips Variant，不自动扩层。");
+            if (new SerializedObject(context).FindProperty("uiLayers").arraySize <= 4)
+            {
+                throw new InvalidOperationException("完整模板需要明确 Layer4 承载 Tips Variant，不自动扩层。");
+            }
+
             var presenters = template.GetComponentsInChildren<UITipsPresenter>(true);
-            if (presenters.Length != 1 || !tips.GetComponent<UITipsItem>()) throw new InvalidOperationException("Tips 承载不明确，停止自动替换引用。");
-            if (!presenters[0].transform.IsChildOf(context.transform)) throw new InvalidOperationException("Tips Presenter 不属于模板 UI 根，停止迁移。");
+            if (presenters.Length != 1 || !tips.GetComponent<UITipsItem>())
+            {
+                throw new InvalidOperationException("Tips 承载不明确，停止自动替换引用。");
+            }
+
+            if (!presenters[0].transform.IsChildOf(context.transform))
+            {
+                throw new InvalidOperationException("Tips Presenter 不属于模板 UI 根，停止迁移。");
+            }
+
             var current = new SerializedObject(presenters[0]).FindProperty("uiTipItemPrefab").objectReferenceValue;
             var variant = AssetDatabase.LoadAssetAtPath<GameObject>(TipsVariantPath);
-            if (current != tips && (!variant || current != variant)) throw new InvalidOperationException("模板 Tips 使用自定义来源，请先人工确认，不覆盖其绑定。");
+            if (current != tips && (!variant || current != variant))
+            {
+                throw new InvalidOperationException("模板 Tips 使用自定义来源，请先人工确认，不覆盖其绑定。");
+            }
+
             if (variant && PrefabUtility.GetPrefabAssetType(variant) != PrefabAssetType.Variant)
+            {
                 throw new InvalidOperationException("UITipsOverlay 路径已存在非 Variant，停止覆盖。");
+            }
+
             if (variant)
             {
                 Objects(variant).ToArray();
                 if (PrefabUtility.GetCorrespondingObjectFromSource(variant) != tips)
+                {
                     throw new InvalidOperationException("现有 Tips Variant 不是原 UITips 的直接 Variant，停止改变来源。");
+                }
             }
             return "UI Panel 资产预检完成。基础根：" + (basic.GetComponent<UIRootContext>() ? "已有根组件" : "待补显式 Layer0") +
                 "；完整模板：" + (PrefabUtility.GetCorrespondingObjectFromSource(context.gameObject) == basic ? "已引用基础根" : "待转换基础根实例") +
@@ -88,19 +127,28 @@ namespace YLFramework.Editor
         public static void MigrateTestFixtures()
         {
             EnsureCanMigrate();
-            foreach (var path in FixturePanelPaths)
+            foreach (var path in _fixturePanelPaths)
             {
                 var fixture = Required(path);
                 Objects(fixture).ToArray();
-                if (!fixture.GetComponent<Panel>()) throw new InvalidOperationException("测试 Panel 脚本未导入或类型不匹配，请先完成测试程序集导入：" + path);
+                if (!fixture.GetComponent<Panel>())
+                {
+                    throw new InvalidOperationException("测试 Panel 脚本未导入或类型不匹配，请先完成测试程序集导入：" + path);
+                }
             }
-            foreach (var path in FixturePanelPaths) MigratePanel(path);
+            foreach (var path in _fixturePanelPaths)
+            {
+                MigratePanel(path);
+            }
+
             Debug.Log("测试 Panel 七字段已显式保存，仍需重载/实例化和运行测试验证。");
         }
         private static void EnsureCanMigrate()
         {
             if (Application.isPlaying || EditorApplication.isCompiling || EditorApplication.isUpdating || PrefabStageUtility.GetCurrentPrefabStage() != null)
+            {
                 throw new InvalidOperationException("请退出 Play，等待编译/导入结束并关闭 Prefab Stage 后执行资产迁移。");
+            }
         }
 
         private static GameObject Required(string path) => AssetDatabase.LoadAssetAtPath<GameObject>(path) ??
@@ -116,15 +164,25 @@ namespace YLFramework.Editor
         private static void ValidateLayers(UIRootContext context, bool allowEmpty)
         {
             var layers = new SerializedObject(context).FindProperty("uiLayers");
-            if (!allowEmpty && layers.arraySize == 0) throw new InvalidOperationException("完整模板没有既有层映射，停止猜测。");
+            if (!allowEmpty && layers.arraySize == 0)
+            {
+                throw new InvalidOperationException("完整模板没有既有层映射，停止猜测。");
+            }
+
             for (int i = 0; i < layers.arraySize; i++)
             {
                 var layer = layers.GetArrayElementAtIndex(i);
                 var root = layer.FindPropertyRelative("root").objectReferenceValue as Transform;
                 var image = layer.FindPropertyRelative("maskImage").objectReferenceValue as Image;
-                if (!root || !root.IsChildOf(context.transform)) throw new InvalidOperationException("层容器丢失或跨根。");
+                if (!root || !root.IsChildOf(context.transform))
+                {
+                    throw new InvalidOperationException("层容器丢失或跨根。");
+                }
+
                 if (layer.FindPropertyRelative("enableMask").boolValue && (!image || !image.transform.IsChildOf(root)))
+                {
                     throw new InvalidOperationException("模态层遮罩丢失或不属于层容器。");
+                }
             }
         }
         private static void MigrateBase()
@@ -134,13 +192,21 @@ namespace YLFramework.Editor
             try
             {
                 var context = contents.GetComponent<UIRootContext>();
-                if (!context) context = contents.AddComponent<UIRootContext>();
+                if (!context)
+                {
+                    context = contents.AddComponent<UIRootContext>();
+                }
+
                 BindRoot(context);
                 var serialized = new SerializedObject(context);
                 var layers = serialized.FindProperty("uiLayers");
                 if (layers.arraySize == 0)
                 {
-                    if (contents.transform.Find("Layer0")) throw new InvalidOperationException("已有未绑定 Layer0，请先核查，不能重复创建。");
+                    if (contents.transform.Find("Layer0"))
+                    {
+                        throw new InvalidOperationException("已有未绑定 Layer0，请先核查，不能重复创建。");
+                    }
+
                     var layer = new GameObject("Layer0", typeof(RectTransform));
                     layer.transform.SetParent(contents.transform, false);
                     Stretch((RectTransform)layer.transform);
@@ -154,11 +220,15 @@ namespace YLFramework.Editor
                 ValidateLayers(context, false);
                 SaveChecked(contents, BaseRootPath, identity);
             }
-            finally { PrefabUtility.UnloadPrefabContents(contents); }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
         }
         private static void Stretch(RectTransform transform)
         {
-            transform.anchorMin = Vector2.zero; transform.anchorMax = Vector2.one;
+            transform.anchorMin = Vector2.zero;
+            transform.anchorMax = Vector2.one;
             transform.offsetMin = transform.offsetMax = Vector2.zero;
             transform.localScale = Vector3.one;
         }
@@ -166,17 +236,35 @@ namespace YLFramework.Editor
         {
             var sourceIdentity = CaptureIdentity(TipsPath);
             var sourceContents = PrefabUtility.LoadPrefabContents(TipsPath);
-            try { ConfigureTips(sourceContents.GetComponent<UITipsItem>(), false); SaveChecked(sourceContents, TipsPath, sourceIdentity); }
-            finally { PrefabUtility.UnloadPrefabContents(sourceContents); }
+            try
+            {
+                ConfigureTips(sourceContents.GetComponent<UITipsItem>(), false);
+                SaveChecked(sourceContents, TipsPath, sourceIdentity);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(sourceContents);
+            }
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(TipsVariantPath);
             if (existing)
             {
                 if (PrefabUtility.GetCorrespondingObjectFromSource(existing) != Required(TipsPath))
+                {
                     throw new InvalidOperationException("现有 Tips Variant 不是原 UITips 的直接 Variant，不改变其来源。");
+                }
+
                 var identity = CaptureIdentity(TipsVariantPath);
                 var contents = PrefabUtility.LoadPrefabContents(TipsVariantPath);
-                try { ConfigureTips(contents.GetComponent<UITipsItem>(), true); SaveChecked(contents, TipsVariantPath, identity); }
-                finally { PrefabUtility.UnloadPrefabContents(contents); }
+                try
+                {
+                    MigratePanelConfigOverridePaths(contents);
+                    ConfigureTips(contents.GetComponent<UITipsItem>(), true);
+                    SaveChecked(contents, TipsVariantPath, identity);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(contents);
+                }
                 return;
             }
             var preview = EditorSceneManager.NewPreviewScene();
@@ -184,48 +272,80 @@ namespace YLFramework.Editor
             {
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(Required(TipsPath), preview);
                 ConfigureTips(instance.GetComponent<UITipsItem>(), true);
-                if (!PrefabUtility.SaveAsPrefabAsset(instance, TipsVariantPath)) throw new InvalidOperationException("Tips Variant 保存失败。");
+                if (!PrefabUtility.SaveAsPrefabAsset(instance, TipsVariantPath))
+                {
+                    throw new InvalidOperationException("Tips Variant 保存失败。");
+                }
             }
-            finally { EditorSceneManager.ClosePreviewScene(preview); }
+            finally
+            {
+                EditorSceneManager.ClosePreviewScene(preview);
+            }
         }
         private static void MigratePanel(string path)
         {
             var identity = CaptureIdentity(path);
             var contents = PrefabUtility.LoadPrefabContents(path);
-            try { WriteSettings(contents.GetComponent<Panel>(), PanelConfig.Default); SaveChecked(contents, path, identity); }
-            finally { PrefabUtility.UnloadPrefabContents(contents); }
+            try
+            {
+                WriteSettings(contents.GetComponent<Panel>(), PanelConfig.Default);
+                SaveChecked(contents, path, identity);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
         }
         private static void WriteSettings(Panel panel, PanelConfig value)
         {
             var serialized = new SerializedObject(panel);
             var settings = serialized.FindProperty("settings");
-            settings.FindPropertyRelative("Layer").intValue = value.Layer;
-            settings.FindPropertyRelative("Priority").intValue = value.Priority;
-            settings.FindPropertyRelative("Modal").boolValue = value.Modal;
-            settings.FindPropertyRelative("CoversRoot").boolValue = value.CoversRoot;
-            settings.FindPropertyRelative("ParticipatesInTop").boolValue = value.ParticipatesInTop;
-            settings.FindPropertyRelative("InstanceMode").enumValueIndex = (int)value.InstanceMode;
-            settings.FindPropertyRelative("CacheOnClose").boolValue = value.CacheOnClose;
+            settings.FindPropertyRelative("layer").intValue = value.layer;
+            settings.FindPropertyRelative("priority").intValue = value.priority;
+            settings.FindPropertyRelative("modal").boolValue = value.modal;
+            settings.FindPropertyRelative("coversRoot").boolValue = value.coversRoot;
+            settings.FindPropertyRelative("participatesInTop").boolValue = value.participatesInTop;
+            settings.FindPropertyRelative("instanceMode").enumValueIndex = (int)value.instanceMode;
+            settings.FindPropertyRelative("cacheOnClose").boolValue = value.cacheOnClose;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // FormerlySerializedAs 能恢复值，但旧 Variant 路径不一定被视作新字段的有效 override。
+        internal static bool MigratePanelConfigOverridePaths(GameObject prefab)
+        {
+            return SerializedFieldMigration.MigratePrefabOverrides(prefab, target => target is Panel);
         }
         private static void ConfigureTips(UITipsItem tip, bool overlay)
         {
-            if (!tip) throw new InvalidOperationException("Tips Variant 根缺少 UITipsItem。");
-            if (!overlay) WriteSettings(tip, new PanelOverrides { ParticipatesInTop = false, InstanceMode = PanelInstanceMode.Multiple }.ApplyTo(PanelConfig.Default));
+            if (!tip)
+            {
+                throw new InvalidOperationException("Tips Variant 根缺少 UITipsItem。");
+            }
+
+            if (!overlay)
+            {
+                WriteSettings(tip, new PanelOverrides { ParticipatesInTop = false, InstanceMode = PanelInstanceMode.Multiple }.ApplyTo(PanelConfig.Default));
+            }
             else
             {
                 var serialized = new SerializedObject(tip);
                 var settings = serialized.FindProperty("settings");
-                foreach (var field in new[] { "Priority", "Modal", "CoversRoot", "ParticipatesInTop", "InstanceMode", "CacheOnClose" })
+                foreach (var field in new[] { "priority", "modal", "coversRoot", "participatesInTop", "instanceMode", "cacheOnClose" })
                 {
                     var property = settings.FindPropertyRelative(field);
-                    if (property.prefabOverride) PrefabUtility.RevertPropertyOverride(property, InteractionMode.AutomatedAction);
+                    if (property.prefabOverride)
+                    {
+                        PrefabUtility.RevertPropertyOverride(property, InteractionMode.AutomatedAction);
+                    }
                 }
                 serialized.Update();
-                serialized.FindProperty("settings").FindPropertyRelative("Layer").intValue = 4;
+                serialized.FindProperty("settings").FindPropertyRelative("layer").intValue = 4;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
             }
-            foreach (var graphic in tip.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
+            foreach (var graphic in tip.GetComponentsInChildren<Graphic>(true))
+            {
+                graphic.raycastTarget = false;
+            }
         }
         private static void MigrateTemplate()
         {
@@ -249,7 +369,9 @@ namespace YLFramework.Editor
                 if (source != basic)
                 {
                     if (PrefabUtility.IsPartOfPrefabInstance(context.gameObject))
+                    {
                         throw new InvalidOperationException("完整模板根已有不同 Prefab 来源，不自动解包或重定向。");
+                    }
                     // ByHierarchy 保留根和匹配组件，其余层、Tips、Camera 作为 added override 保留。
                     // 匹配组件记录原值 override，特别保护两份预设的 CanvasScaler/AutomaticAdaptation 配置差异。
                     PrefabUtility.ConvertToPrefabInstance(context.gameObject, basic, new ConvertToPrefabInstanceSettings
@@ -273,7 +395,10 @@ namespace YLFramework.Editor
                 context.gameObject.SetActive(active);
                 SaveChecked(contents, TemplatePath, identity);
             }
-            finally { PrefabUtility.UnloadPrefabContents(contents); }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
         }
 
         private sealed class Identity
@@ -290,14 +415,26 @@ namespace YLFramework.Editor
             {
                 yield return transform.gameObject;
                 foreach (var component in transform.GetComponents<Component>())
-                { if (!component) throw new InvalidOperationException("资产有 Missing Script，迁移前必须先解决。"); yield return component; }
+                {
+                    if (!component)
+                    {
+                        throw new InvalidOperationException("资产有 Missing Script，迁移前必须先解决。");
+                    }
+                    yield return component;
+                }
             }
         }
         private static Dictionary<long, string> FileIds(GameObject root)
         {
             var ids = new Dictionary<long, string>();
             foreach (var obj in Objects(root))
-                if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id)) ids[id] = obj.GetType().FullName;
+            {
+                if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id))
+                {
+                    ids[id] = obj.GetType().FullName;
+                }
+            }
+
             return ids;
         }
         private static Identity CaptureIdentity(string path)
@@ -305,9 +442,14 @@ namespace YLFramework.Editor
             var prefab = Required(path);
             var scaler = prefab.GetComponentInChildren<CanvasScaler>(true);
             var adaptation = prefab.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true);
-            return new Identity { Guid = AssetDatabase.AssetPathToGUID(path), Objects = FileIds(prefab),
+            return new Identity
+            {
+                Guid = AssetDatabase.AssetPathToGUID(path),
+                Objects = FileIds(prefab),
                 Keys = KeyedObjects(prefab).ToDictionary(pair => pair.Key, pair => LocalId(pair.Value)),
-                Scaler = scaler ? ScaleValues(scaler) : null, Adaptation = adaptation ? AdaptationValues(adaptation) : null };
+                Scaler = scaler ? ScaleValues(scaler) : null,
+                Adaptation = adaptation ? AdaptationValues(adaptation) : null
+            };
         }
         private static IEnumerable<KeyValuePair<string, Object>> KeyedObjects(GameObject root)
         {
@@ -323,7 +465,10 @@ namespace YLFramework.Editor
         private static long LocalId(Object obj)
         {
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id) || id == 0)
+            {
                 throw new InvalidOperationException("无法读取资产对象身份：" + obj);
+            }
+
             return id;
         }
         private static float[] AdaptationValues(AutomaticAdaptationCanvasScaler adaptation)
@@ -341,20 +486,35 @@ namespace YLFramework.Editor
             var scaler = contents.GetComponentInChildren<CanvasScaler>(true);
             if (before.Scaler != null)
             {
-                if (!scaler) throw new InvalidOperationException("迁移丢失既有 CanvasScaler，拒绝保存：" + path);
+                if (!scaler)
+                {
+                    throw new InvalidOperationException("迁移丢失既有 CanvasScaler，拒绝保存：" + path);
+                }
                 // ExecuteInEditMode 的适配组件可能在加载内容时更新 match；资产写入仍保留原生序列化配置。
                 var values = before.Scaler;
-                scaler.uiScaleMode = (CanvasScaler.ScaleMode)values[0]; scaler.referencePixelsPerUnit = values[1];
-                scaler.scaleFactor = values[2]; scaler.referenceResolution = new Vector2(values[3], values[4]);
-                scaler.screenMatchMode = (CanvasScaler.ScreenMatchMode)values[5]; scaler.matchWidthOrHeight = values[6];
-                scaler.physicalUnit = (CanvasScaler.Unit)values[7]; scaler.fallbackScreenDPI = values[8];
-                scaler.defaultSpriteDPI = values[9]; scaler.dynamicPixelsPerUnit = values[10];
-                if (!ScaleValues(scaler).SequenceEqual(values)) throw new InvalidOperationException("无法保留 CanvasScaler 配置。");
+                scaler.uiScaleMode = (CanvasScaler.ScaleMode)values[0];
+                scaler.referencePixelsPerUnit = values[1];
+                scaler.scaleFactor = values[2];
+                scaler.referenceResolution = new Vector2(values[3], values[4]);
+                scaler.screenMatchMode = (CanvasScaler.ScreenMatchMode)values[5];
+                scaler.matchWidthOrHeight = values[6];
+                scaler.physicalUnit = (CanvasScaler.Unit)values[7];
+                scaler.fallbackScreenDPI = values[8];
+                scaler.defaultSpriteDPI = values[9];
+                scaler.dynamicPixelsPerUnit = values[10];
+                if (!ScaleValues(scaler).SequenceEqual(values))
+                {
+                    throw new InvalidOperationException("无法保留 CanvasScaler 配置。");
+                }
             }
             if (before.Adaptation != null)
             {
                 var adaptation = contents.GetComponentInChildren<AutomaticAdaptationCanvasScaler>(true);
-                if (!adaptation) throw new InvalidOperationException("迁移丢失既有适配组件：" + path);
+                if (!adaptation)
+                {
+                    throw new InvalidOperationException("迁移丢失既有适配组件：" + path);
+                }
+
                 var serialized = new SerializedObject(adaptation);
                 var values = before.Adaptation;
                 serialized.FindProperty("referenceResolution").vector2Value = new Vector2(values[0], values[1]);
@@ -362,11 +522,17 @@ namespace YLFramework.Editor
                 serialized.FindProperty("manualMatch").floatValue = values[3];
                 serialized.ApplyModifiedPropertiesWithoutUndo();
             }
-            if (!PrefabUtility.SaveAsPrefabAsset(contents, path)) throw new InvalidOperationException("Prefab 保存失败：" + path);
+            if (!PrefabUtility.SaveAsPrefabAsset(contents, path))
+            {
+                throw new InvalidOperationException("Prefab 保存失败：" + path);
+            }
+
             PreserveLocalIds(path, before);
             var after = FileIds(Required(path));
             if (AssetDatabase.AssetPathToGUID(path) != before.Guid || before.Objects.Any(pair => !after.TryGetValue(pair.Key, out var type) || type != pair.Value))
+            {
                 throw new InvalidOperationException("保存后 GUID/fileID 核验失败；迁移尚未验收，请检查该资产 diff，不要继续集成：" + path);
+            }
         }
 
         private static void PreserveLocalIds(string path, Identity before)
@@ -377,14 +543,30 @@ namespace YLFramework.Editor
             var declarations = new StringBuilder();
             foreach (var pair in before.Keys)
             {
-                if (!objects.TryGetValue(pair.Key, out var obj)) throw new InvalidOperationException("迁移丢失既有对象：" + pair.Key);
+                if (!objects.TryGetValue(pair.Key, out var obj))
+                {
+                    throw new InvalidOperationException("迁移丢失既有对象：" + pair.Key);
+                }
+
                 long current = LocalId(obj);
-                if (current == pair.Value) continue;
+                if (current == pair.Value)
+                {
+                    continue;
+                }
+
                 replacements.Add(current, pair.Value);
-                if (Regex.IsMatch(text, @"(?m)^--- !u!\d+ &" + current + @"(?: stripped)?\r?$")) continue;
+                if (Regex.IsMatch(text, @"(?m)^--- !u!\d+ &" + current + @"(?: stripped)?\r?$"))
+                {
+                    continue;
+                }
+
                 var source = PrefabUtility.GetCorrespondingObjectFromSource(obj);
                 var handle = PrefabUtility.GetPrefabInstanceHandle(obj);
-                if (!source || !handle) throw new InvalidOperationException("仅支持保留转换后的嵌套 Prefab 对象身份：" + pair.Key);
+                if (!source || !handle)
+                {
+                    throw new InvalidOperationException("仅支持保留转换后的嵌套 Prefab 对象身份：" + pair.Key);
+                }
+
                 AssetDatabase.TryGetGUIDAndLocalFileIdentifier(source, out string guid, out long sourceId);
                 int classId = obj is GameObject ? 1 : obj is RectTransform ? 224 : obj is Transform ? 4 : obj is Canvas ? 223 : obj is MonoBehaviour ? 114 :
                     throw new InvalidOperationException("不能安全恢复此类嵌套对象身份：" + obj.GetType());
@@ -401,8 +583,15 @@ namespace YLFramework.Editor
                         .Append("  m_Name: \n  m_EditorClassIdentifier: \n");
                 }
             }
-            if (replacements.Count == 0) return;
-            if (!text.StartsWith("%YAML 1.1", StringComparison.Ordinal)) throw new InvalidOperationException("身份保留仅支持已核验的文本 Prefab：" + path);
+            if (replacements.Count == 0)
+            {
+                return;
+            }
+
+            if (!text.StartsWith("%YAML 1.1", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("身份保留仅支持已核验的文本 Prefab：" + path);
+            }
             // Unity 2022.3 会重新生成匹配组件的嵌套 fileID；显式 stripped 记录保留外部引用，不能改带 GUID 的来源引用。
             text += declarations;
             string Replace(Match match) => match.Groups[1].Value +

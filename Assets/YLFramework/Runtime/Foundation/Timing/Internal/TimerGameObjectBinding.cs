@@ -24,17 +24,27 @@ namespace YLFramework.Timing.Internal
         internal void OwnerEnded(bool destroyed)
         {
             if (_scheduler != null && (destroyed || _lifetime == TimerGameObjectLifetime.CancelOnDisable))
+            {
                 _handle.Cancel();
+            }
         }
 
         internal void Detach()
         {
-            if (_scheduler == null) return;
+            if (_scheduler == null)
+            {
+                return;
+            }
+
             _scheduler.RemoveBinding(_listener);
             // Remove 只操作托管集合；对象已 fake-null 时也必须释放旧监听责任。
             _listener.Remove(this);
             var run = _handle.Run;
-            if (run != null && ReferenceEquals(run.Binding, this)) run.Binding = null;
+            if (run != null && ReferenceEquals(run.Binding, this))
+            {
+                run.Binding = null;
+            }
+
             _handle = default;
             _scheduler = null;
             _owner = null;

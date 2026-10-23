@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 // 按本地 ActionKit Prefab 的设置创建模块自有资源，不读取、复制或覆盖旧资源。
 using System;
 using System.IO;
@@ -7,6 +6,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using YLFramework.Actions;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Actions
@@ -27,7 +27,11 @@ namespace YLFramework.Editor.Actions
             if (File.Exists(absolutePath) || File.Exists(absolutePath + ".meta"))
             {
                 var existing = AssetDatabase.LoadMainAssetAtPath(AssetPath);
-                if (existing) EditorGUIUtility.PingObject(existing);
+                if (existing)
+                {
+                    EditorGUIUtility.PingObject(existing);
+                }
+
                 Debug.Log("Existing ActionKit ScreenTransition resource or metadata was kept unchanged: " + AssetPath);
                 return;
             }
@@ -89,7 +93,7 @@ namespace YLFramework.Editor.Actions
                 image.sprite = null;
                 image.useSpriteMesh = false;
                 imageObject.GetComponent<CanvasRenderer>().cullTransparentMesh = false;
-                root.GetComponent<ScreenTransitionCanvas>().ColorImage = image;
+                root.GetComponent<ScreenTransitionCanvas>().colorImage = image;
 
                 var rootRect = root.GetComponent<RectTransform>();
                 rootRect.anchorMin = Vector2.zero;
@@ -102,16 +106,30 @@ namespace YLFramework.Editor.Actions
 
                 var prefab = PrefabUtility.SaveAsPrefabAsset(root, AssetPath, out var success);
                 if (!success || !prefab)
+                {
                     throw new InvalidOperationException("Could not save the new ActionKit ScreenTransition resource: " + AssetPath);
+                }
+
                 Selection.activeObject = prefab;
                 EditorGUIUtility.PingObject(prefab);
                 Debug.Log("Created ActionKit ScreenTransition resource: " + AssetPath);
             }
             finally
             {
-                if (imageObject) Object.DestroyImmediate(imageObject);
-                if (root) Object.DestroyImmediate(root);
-                if (temporaryScene.IsValid()) EditorSceneManager.ClosePreviewScene(temporaryScene);
+                if (imageObject)
+                {
+                    Object.DestroyImmediate(imageObject);
+                }
+
+                if (root)
+                {
+                    Object.DestroyImmediate(root);
+                }
+
+                if (temporaryScene.IsValid())
+                {
+                    EditorSceneManager.ClosePreviewScene(temporaryScene);
+                }
             }
         }
 
@@ -123,7 +141,10 @@ namespace YLFramework.Editor.Actions
             {
                 var next = parent + "/" + segments[index];
                 if (!AssetDatabase.IsValidFolder(next) && string.IsNullOrEmpty(AssetDatabase.CreateFolder(parent, segments[index])))
+                {
                     throw new IOException("Could not create the ActionKit resource folder: " + next);
+                }
+
                 parent = next;
             }
         }

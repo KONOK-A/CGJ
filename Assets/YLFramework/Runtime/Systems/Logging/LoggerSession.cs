@@ -22,8 +22,8 @@ namespace YLFramework.Logging
         private readonly bool _writeToFile;
         private readonly string _directory;
         private StreamWriter _writer;
-        private bool _fileFailed;
-        private bool _disposed;
+        private bool _hasFileFailure;
+        private bool _isDisposed;
         private Action<LogType, string> _onLog;
         private Exception _lastError;
         private long _recursiveCount;
@@ -32,35 +32,93 @@ namespace YLFramework.Logging
         public LoggerSession(ILogHandler destination, LoggerOptions options)
         {
             _destination = destination ?? throw new ArgumentNullException(nameof(destination));
-            if (options == null) throw new ArgumentNullException(nameof(options));
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
             _console = Snapshot(options.ConsoleFilter);
             _file = Snapshot(options.FileFilter);
             _writeToFile = options.WriteToFile;
             if (_writeToFile && string.IsNullOrWhiteSpace(options.Directory))
+            {
                 throw new ArgumentException("文件日志需要显式输出目录。", nameof(options));
+            }
+
             _directory = options.Directory;
         }
 
-        public string LogFilePath { get { lock (_gate) return _logFilePath; } }
-        public Exception LastError { get { lock (_gate) return _lastError; } }
+        public string LogFilePath
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _logFilePath;
+                }
+            }
+        }
+        public Exception LastError
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _lastError;
+                }
+            }
+        }
         public long SuppressedRecursiveCount => Interlocked.Read(ref _recursiveCount);
-        public bool IsDisposed { get { lock (_gate) return _disposed; } }
+        public bool IsDisposed
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _isDisposed;
+                }
+            }
+        }
         public event Action<LogType, string> OnLogEvent
         {
-            add { lock (_gate) { if (_disposed) throw new ObjectDisposedException(nameof(LoggerSession)); _onLog += value; } }
-            remove { lock (_gate) _onLog -= value; }
+            add
+            {
+                lock (_gate)
+                {
+                    if (_isDisposed)
+                    {
+                        throw new ObjectDisposedException(nameof(LoggerSession));
+                    }
+                    _onLog += value;
+                }
+            }
+            remove
+            {
+                lock (_gate)
+                {
+                    _onLog -= value;
+                }
+            }
         }
 
         private static bool[] Snapshot(Dictionary<LogType, bool> filter)
         {
             var result = new bool[5];
-            for (var i = 0; i < result.Length; i++) result[i] = filter == null || filter.TryGetValue((LogType)i, out var enabled) && enabled;
+            for (var i = 0; i < result.Length; i++)
+            {
+                result[i] = filter == null || filter.TryGetValue((LogType)i, out var enabled) && enabled;
+            }
+
             return result;
         }
 
         public void LogException(Exception exception, UnityEngine.Object context)
         {
-            if (exception == null) throw new ArgumentNullException(nameof(exception));
+            if (exception == null)
+            {
+                throw new ArgumentNullException(nameof(exception));
+            }
+
             Dispatch(LogType.Exception, context, null, null, exception);
         }
 
@@ -72,13 +130,20 @@ namespace YLFramework.Logging
         private void Dispatch(LogType type, UnityEngine.Object context, string format, object[] args, Exception exception)
         {
             var active = _activeSessions ??= new HashSet<LoggerSession>();
-            if (!active.Add(this)) { Interlocked.Increment(ref _recursiveCount); return; }
+            if (!active.Add(this))
+            {
+                Interlocked.Increment(ref _recursiveCount);
+                return;
+            }
             try
             {
                 lock (_gate)
                 {
                     string message;
-                    try { message = exception != null ? exception.ToString() : string.Format(CultureInfo.CurrentCulture, format ?? string.Empty, args ?? Array.Empty<object>()); }
+                    try
+                    {
+                        message = exception != null ? exception.ToString() : string.Format(CultureInfo.CurrentCulture, format ?? string.Empty, args ?? Array.Empty<object>());
+                    }
                     catch (FormatException error)
                     {
                         _lastError = error;
@@ -87,28 +152,62 @@ namespace YLFramework.Logging
                     var index = (int)type;
                     var knownType = index >= 0 && index < _console.Length;
                     // 后续handler可能仍串联本对象。关闭后只透明转发，不重开writer/事件。
-                    if (_disposed || knownType && _console[index])
+                    if (_isDisposed || knownType && _console[index])
                     {
                         try
                         {
-                            if (exception != null) _destination.LogException(exception, context);
-                            else _destination.LogFormat(type, context, "{0}", message);
+                            if (exception != null)
+                            {
+                                _destination.LogException(exception, context);
+                            }
+                            else
+                            {
+                                _destination.LogFormat(type, context, "{0}", message);
+                            }
                         }
-                        catch (Exception error) { _lastError = error; }
+                        catch (Exception error)
+                        {
+                            _lastError = error;
+                        }
                     }
-                    if (_disposed) return;
-                    if (knownType && _writeToFile && _file[index] && !_fileFailed) WriteToFile(type, message);
+                    if (_isDisposed)
+                    {
+                        return;
+                    }
+
+                    if (knownType && _writeToFile && _file[index] && !_hasFileFailure)
+                    {
+                        WriteToFile(type, message);
+                    }
+
                     var listeners = _onLog;
-                    if (listeners == null) return;
+                    if (listeners == null)
+                    {
+                        return;
+                    }
+
                     foreach (Action<LogType, string> listener in listeners.GetInvocationList())
                     {
-                        if (_disposed) break;
-                        try { listener(type, message); }
-                        catch (Exception error) { _lastError = error; }
+                        if (_isDisposed)
+                        {
+                            break;
+                        }
+
+                        try
+                        {
+                            listener(type, message);
+                        }
+                        catch (Exception error)
+                        {
+                            _lastError = error;
+                        }
                     }
                 }
             }
-            finally { active.Remove(this); }
+            finally
+            {
+                active.Remove(this);
+            }
         }
 
         private void WriteToFile(LogType type, string message)
@@ -128,7 +227,7 @@ namespace YLFramework.Logging
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is ArgumentException || error is NotSupportedException)
             {
                 _lastError = error;
-                _fileFailed = true;
+                _hasFileFailure = true;
                 ReleaseWriter();
             }
         }
@@ -137,16 +236,26 @@ namespace YLFramework.Logging
         {
             var writer = _writer;
             _writer = null;
-            try { writer?.Dispose(); }
-            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException) { _lastError = error; }
+            try
+            {
+                writer?.Dispose();
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                _lastError = error;
+            }
         }
 
         public void Dispose()
         {
             lock (_gate)
             {
-                if (_disposed) return;
-                _disposed = true;
+                if (_isDisposed)
+                {
+                    return;
+                }
+
+                _isDisposed = true;
                 _onLog = null;
                 ReleaseWriter();
             }

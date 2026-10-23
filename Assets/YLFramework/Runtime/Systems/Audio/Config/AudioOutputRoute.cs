@@ -8,7 +8,12 @@ namespace YLFramework.Services.Audio
     public struct AudioOutputRoute
     {
         /// <summary>Inherit category routing, use an explicit mixer group, or bypass mixer output.</summary>
-        public enum RouteMode { Inherit, MixerGroup, Direct }
+        public enum RouteMode
+        {
+            Inherit,
+            MixerGroup,
+            Direct
+        }
 
         /// <summary>Zero means inherit. Only MixerGroup may contain a Group reference.</summary>
         public RouteMode Mode;
@@ -29,13 +34,22 @@ namespace YLFramework.Services.Audio
 
         internal void Validate()
         {
-            if ((uint)Mode > (uint)RouteMode.Direct) throw new ArgumentOutOfRangeException(nameof(Mode));
+            if ((uint)Mode > (uint)RouteMode.Direct)
+            {
+                throw new ArgumentOutOfRangeException(nameof(Mode));
+            }
+
             if (Mode == RouteMode.MixerGroup)
             {
-                if (!Group) throw new ArgumentException("A mixer route requires a live output group.", nameof(Group));
+                if (!Group)
+                {
+                    throw new ArgumentException("A mixer route requires a live output group.", nameof(Group));
+                }
             }
             else if (HasReference(Group))
+            {
                 throw new ArgumentException("Only a MixerGroup route can contain an output group.", nameof(Group));
+            }
         }
 
         // Serialized empty Unity references can have a managed wrapper with instance ID zero.
@@ -43,7 +57,7 @@ namespace YLFramework.Services.Audio
 
         internal AudioMixerGroup Resolve(AudioMixerGroup categoryGroup)
         {
-            var group = Mode == RouteMode.Inherit ? categoryGroup : Mode == RouteMode.MixerGroup ? Group : null;
+            var group = Mode == RouteMode.Inherit ? categoryGroup : Mode == RouteMode.MixerGroup ? this.Group : null;
             return group ? group : null;
         }
     }

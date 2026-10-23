@@ -10,8 +10,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
-using YLFramework.Services.Resource;
 using YLFramework.Editor.Resource;
+using YLFramework.Services.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
@@ -26,12 +26,19 @@ namespace YLFramework.Tests.ResourceBuild
                 scene.GetRootGameObjects().Single().AddComponent<InstanceLifecycleProbe>();
                 Assert.That(EditorSceneManager.SaveScene(scene), Is.True);
             }
-            finally { EditorSceneManager.CloseScene(scene, true); }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
             AssetDatabase.CreateFolder(folder, "Other");
             var other = folder + "/Other/Alternate.unity";
             Assert.That(AssetDatabase.CopyAsset(folder + "/Owned.unity", other), Is.True);
-            fixture.Project.Groups.Add(new ResourceGroup { Id = "scene85-other", Selections = new List<ResourceSelection>
-                { new() { Guid = AssetDatabase.AssetPathToGUID(other) } } });
+            fixture.Project.groups.Add(new ResourceGroup
+            {
+                id = "scene85-other",
+                selections = new List<ResourceSelection>
+                { new() { guid = AssetDatabase.AssetPathToGUID(other) } }
+            });
             EditorUtility.SetDirty(fixture.Project);
             AssetDatabase.SaveAssetIfDirty(fixture.Project);
         }
@@ -39,7 +46,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator UntilScene85(Func<bool> condition)
         {
             var until = Time.realtimeSinceStartup + 15;
-            while (!condition() && Time.realtimeSinceStartup < until) yield return null;
+            while (!condition() && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(condition(), Is.True, "Scene operation must reach its real terminal/cleanup state.");
         }
 
@@ -52,7 +63,11 @@ namespace YLFramework.Tests.ResourceBuild
         private static IEnumerator DrainOwnedScene85Fixture()
         {
             var folder = SessionState.GetString(Key + "folder", "");
-            if (string.IsNullOrEmpty(folder)) yield break;
+            if (string.IsNullOrEmpty(folder))
+            {
+                yield break;
+            }
+
             var unloading = new HashSet<int>();
             var until = Time.realtimeSinceStartup + 15;
             do
@@ -61,11 +76,23 @@ namespace YLFramework.Tests.ResourceBuild
                     .Where(x => x.isLoaded && x.path.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase)).ToArray();
                 foreach (var scene in scenes)
                 {
-                    if (!unloading.Add(scene.handle)) continue;
-                    if (SceneManager.sceneCount <= 1) SceneManager.CreateScene("YL85-Cleanup-" + Guid.NewGuid().ToString("N"));
+                    if (!unloading.Add(scene.handle))
+                    {
+                        continue;
+                    }
+
+                    if (SceneManager.sceneCount <= 1)
+                    {
+                        SceneManager.CreateScene("YL85-Cleanup-" + Guid.NewGuid().ToString("N"));
+                    }
+
                     SceneManager.UnloadSceneAsync(scene);
                 }
-                if (!AssetBundle.GetAllLoadedAssetBundles().Any()) yield break;
+                if (!AssetBundle.GetAllLoadedAssetBundles().Any())
+                {
+                    yield break;
+                }
+
                 yield return null;
             } while (Time.realtimeSinceStartup < until);
         }
@@ -99,10 +126,18 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(scene.isLoaded, Is.True);
             Assert.That(texture == null, Is.False, "Caller ownership is not Scene ownership.");
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.GreaterThan(0));
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             InstanceLifecycleProbe.OnDestroyed = _ => Assert.That(texture == null, Is.False, "Scene dependencies must survive OnDestroy.");
             var unload = SceneManager.UnloadSceneAsync(scene);
-            while (!unload.isDone) yield return null;
+            while (!unload.isDone)
+            {
+                yield return null;
+            }
+
             InstanceLifecycleProbe.ResetCallbacks();
             yield return Scene85Drained(system);
             Assert.That(texture == null, Is.True);
@@ -142,7 +177,11 @@ namespace YLFramework.Tests.ResourceBuild
             using var fresh = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive);
             yield return Wait(fresh);
             using var c = fresh.TakeResult();
-            using (var stale = system.UnloadSceneAsync(old)) Assert.That(stale.Error.Kind, Is.EqualTo(ResourceError.SceneUnloaded));
+            using (var stale = system.UnloadSceneAsync(old))
+            {
+                Assert.That(stale.Error.Kind, Is.EqualTo(ResourceError.SceneUnloaded));
+            }
+
             Assert.That(c.IsValid && b.IsValid, Is.True);
             using var unloadB = system.UnloadSceneAsync(b);
             using var unloadC = system.UnloadSceneAsync(c);
@@ -157,23 +196,31 @@ namespace YLFramework.Tests.ResourceBuild
         {
             var snapshot = Snapshot();
             var system = Initialize(snapshot);
-            using (var missing = system.LoadSceneAsync(Address(snapshot, "missing.unity"))) Assert.That(missing.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
-            using (var wrong = system.LoadSceneAsync(Address(snapshot, "entry.txt"))) Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            using (var missing = system.LoadSceneAsync(Address(snapshot, "missing.unity")))
+            {
+                Assert.That(missing.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            }
+
+            using (var wrong = system.LoadSceneAsync(Address(snapshot, "entry.txt")))
+            {
+                Assert.That(wrong.Error.Kind, Is.EqualTo(ResourceError.AddressNotFound));
+            }
+
             using (var early = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive))
             {
-                Assert.That(early.NativeStarted, Is.False);
+                Assert.That(early.HasNativeStarted, Is.False);
                 early.Cancel();
                 Assert.That(early.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
-                Assert.That(early.NativeStarted, Is.False);
+                Assert.That(early.HasNativeStarted, Is.False);
             }
             yield return Scene85Drained(system);
             var id = snapshot.Document.Assets.Single(x => x.Address == "Owned.unity").BundleId;
             using var prepared = system.AcquireBundle(snapshot.Document.ProjectId, id);
             using var gated = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive, false);
-            Assert.That(gated.NativeStarted, Is.True);
+            Assert.That(gated.HasNativeStarted, Is.True);
             using var queued = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive);
             queued.Dispose();
-            Assert.That(queued.NativeStarted, Is.False);
+            Assert.That(queued.HasNativeStarted, Is.False);
             yield return UntilScene85(() => gated.IsWaitingForActivation);
             var native = gated.Native;
             prepared.Dispose();
@@ -183,15 +230,15 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(native.allowSceneActivation, Is.True);
             Assert.That(gated.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
             yield return Scene85Drained(system);
-            Assert.That(gated.NativeCompleted, Is.True);
+            Assert.That(gated.IsNativeCompleted, Is.True);
             Assert.That(gated.Scenes.Single().IsUnloaded, Is.True);
-            Assert.That(queued.NativeStarted, Is.False);
+            Assert.That(queued.HasNativeStarted, Is.False);
 
             using var automatic = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive, false, 0.25f);
             yield return Wait(automatic);
             Assert.That(automatic.Error.Kind, Is.EqualTo(ResourceError.ActivationTimedOut));
             yield return Scene85Drained(system);
-            Assert.That(automatic.NativeCompleted, Is.True);
+            Assert.That(automatic.IsNativeCompleted, Is.True);
 
             using var activated = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive, false);
             yield return UntilScene85(() => activated.IsWaitingForActivation);
@@ -201,13 +248,21 @@ namespace YLFramework.Tests.ResourceBuild
             using var activeLease = activated.TakeResult();
             using var gate = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Additive, false);
             yield return UntilScene85(() => gate.IsWaitingForActivation);
-            using (var blocked = system.UnloadSceneAsync(activeLease)) Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var blocked = system.UnloadSceneAsync(activeLease))
+            {
+                Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             using var successor = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Additive);
             gate.Dispose();
-            successor.Completed += result => { Assert.That(result.TakeResult().IsValid, Is.True); throw new InvalidOperationException("scene85-observer"); };
+            successor.Completed += result =>
+            {
+                Assert.That(result.TakeResult().IsValid, Is.True);
+                throw new InvalidOperationException("scene85-observer");
+            };
             LogAssert.Expect(LogType.Exception, "InvalidOperationException: scene85-observer");
             yield return Wait(successor);
-            yield return UntilScene85(() => gate.NativeCompleted && gate.Scenes.Count == 1 && gate.Scenes[0].IsUnloaded);
+            yield return UntilScene85(() => gate.IsNativeCompleted && gate.Scenes.Count == 1 && gate.Scenes[0].IsUnloaded);
             foreach (var record in system.GetSceneRecords().ToArray())
             {
                 using var unload = system.UnloadSceneAsync(record);
@@ -230,15 +285,23 @@ namespace YLFramework.Tests.ResourceBuild
             replacement.Cancel();
             yield return UntilScene85(() => replacement.Scenes.Count == 1);
             Assert.That(replacement.Status, Is.EqualTo(ResourceRequestStatus.Canceled));
-            Assert.That(replacement.NativeStarted && replacement.NativeCompleted, Is.True);
+            Assert.That(replacement.HasNativeStarted && replacement.IsNativeCompleted, Is.True);
             Assert.That(old.IsValid, Is.False, "Canceled Single cannot pretend the previous Scene was restored.");
             yield return UntilScene85(() => oldRecord.IsUnloaded);
             var record = replacement.Scenes.Single();
             var texture = record.Scene.GetRootGameObjects().Single().GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
             replacement.Dispose();
             Assert.That(record.IsLoaded, Is.True);
-            using (var last = system.UnloadSceneAsync(record)) Assert.That(last.Error.Kind, Is.EqualTo(ResourceError.Busy));
-            using (var busy = system.ShutdownAsync()) Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            using (var last = system.UnloadSceneAsync(record))
+            {
+                Assert.That(last.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
+            using (var busy = system.ShutdownAsync())
+            {
+                Assert.That(busy.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             Assert.That(system.IsAvailable && texture, Is.True);
             using var single = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Single);
             yield return Wait(single);
@@ -263,7 +326,11 @@ namespace YLFramework.Tests.ResourceBuild
             var issued = false;
             void Interfere(Scene scene, LoadSceneMode mode)
             {
-                if (issued || !string.Equals(scene.path, descriptor.LoadName, StringComparison.OrdinalIgnoreCase)) return;
+                if (issued || !string.Equals(scene.path, descriptor.LoadName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
                 issued = true;
                 SceneManager.LoadScene(descriptor.LoadName, LoadSceneMode.Additive);
             }
@@ -273,7 +340,10 @@ namespace YLFramework.Tests.ResourceBuild
                 request.Activate();
                 yield return Wait(request);
             }
-            finally { SceneManager.sceneLoaded -= Interfere; }
+            finally
+            {
+                SceneManager.sceneLoaded -= Interfere;
+            }
             Assert.That(issued, Is.True);
             Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Failed));
             Assert.That(request.Error.Kind, Is.EqualTo(ResourceError.SceneIdentityAmbiguous));
@@ -281,11 +351,18 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(request.Scenes.All(x => x.IsLoaded && x.IsAmbiguous), Is.True);
             prepared.Dispose();
             Assert.That(system.GetDiagnosticsSnapshot().BundleRootPinCount, Is.EqualTo(2));
-            using (var rejected = system.UnloadSceneAsync(request.Scenes[0])) Assert.That(rejected.Error.Kind, Is.EqualTo(ResourceError.SceneIdentityAmbiguous));
+            using (var rejected = system.UnloadSceneAsync(request.Scenes[0]))
+            {
+                Assert.That(rejected.Error.Kind, Is.EqualTo(ResourceError.SceneIdentityAmbiguous));
+            }
+
             foreach (var candidate in request.Scenes)
             {
                 var unload = SceneManager.UnloadSceneAsync(candidate.Scene);
-                while (!unload.isDone) yield return null;
+                while (!unload.isDone)
+                {
+                    yield return null;
+                }
             }
             yield return Scene85Drained(system);
         }
@@ -306,8 +383,10 @@ namespace YLFramework.Tests.ResourceBuild
             var external = default(Scene);
             void Observe(Scene scene, LoadSceneMode mode)
             {
-                if (request != null && !request.NativeStarted && string.Equals(scene.path, descriptor.LoadName, StringComparison.OrdinalIgnoreCase))
+                if (request != null && !request.HasNativeStarted && string.Equals(scene.path, descriptor.LoadName, StringComparison.OrdinalIgnoreCase))
+                {
                     external = scene;
+                }
             }
             SceneManager.sceneLoaded += Observe;
             try
@@ -324,7 +403,10 @@ namespace YLFramework.Tests.ResourceBuild
                 yield return Wait(unload);
                 Assert.That(external.isLoaded, Is.True, "The external owner retains its pre-existing Scene.");
                 var outside = SceneManager.UnloadSceneAsync(external);
-                while (!outside.isDone) yield return null;
+                while (!outside.isDone)
+                {
+                    yield return null;
+                }
             }
             finally
             {
@@ -405,7 +487,10 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(request.IsDisposed && native.allowSceneActivation, Is.True);
             typeof(ResourceSystem).GetMethod("ResetSession", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
             using (var blocked = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { snapshot.CreateCatalog() })))
+            {
                 Assert.That(blocked.Error.Kind, Is.EqualTo(ResourceError.Busy));
+            }
+
             yield return Scene85Drained(system);
             var next = Initialize(snapshot);
             using var reloaded = next.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Additive);
@@ -432,13 +517,16 @@ namespace YLFramework.Tests.ResourceBuild
                 using var next = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Additive);
                 yield return Wait(failure);
                 Assert.That(failure.Status, Is.EqualTo(ResourceRequestStatus.Failed));
-                Assert.That(failure.NativeStarted, Is.False);
+                Assert.That(failure.HasNativeStarted, Is.False);
                 yield return Wait(next);
                 using var loaded = next.TakeResult();
                 using var unload = system.UnloadSceneAsync(loaded);
                 yield return Wait(unload);
             }
-            finally { File.WriteAllBytes(file, bytes); }
+            finally
+            {
+                File.WriteAllBytes(file, bytes);
+            }
             yield return Scene85Drained(system);
         }
 
@@ -471,12 +559,12 @@ namespace YLFramework.Tests.ResourceBuild
             yield return Scene85Drained(system);
         }
 
-        private static SceneLease exitingScene85Lease;
-        private static SceneRequest exitingScene85Pending;
+        private static SceneLease _exitingScene85Lease;
+        private static SceneRequest _exitingScene85Pending;
         private static void OnActualScene85Quit()
         {
-            SessionState.SetBool(Key + "scene85-quit", !exitingScene85Lease.IsValid && exitingScene85Pending.IsDisposed &&
-                exitingScene85Pending.Status == ResourceRequestStatus.Invalidated && exitingScene85Pending.Native.allowSceneActivation);
+            SessionState.SetBool(Key + "scene85-quit", !_exitingScene85Lease.IsValid && _exitingScene85Pending.IsDisposed &&
+                _exitingScene85Pending.Status == ResourceRequestStatus.Invalidated && _exitingScene85Pending.Native.allowSceneActivation);
             Application.quitting -= OnActualScene85Quit;
         }
 
@@ -486,9 +574,9 @@ namespace YLFramework.Tests.ResourceBuild
             var system = Initialize(snapshot);
             using var single = system.LoadSceneAsync(Address(snapshot, "Owned.unity"), LoadSceneMode.Single);
             yield return Wait(single);
-            exitingScene85Lease = single.TakeResult();
-            exitingScene85Pending = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Additive, false);
-            yield return UntilScene85(() => exitingScene85Pending.IsWaitingForActivation);
+            _exitingScene85Lease = single.TakeResult();
+            _exitingScene85Pending = system.LoadSceneAsync(Address(snapshot, "Other/Alternate.unity"), LoadSceneMode.Additive, false);
+            yield return UntilScene85(() => _exitingScene85Pending.IsWaitingForActivation);
             SessionState.SetBool(Key + "scene85-quit", false);
             Application.quitting += OnActualScene85Quit;
         }

@@ -34,23 +34,23 @@ namespace YLFramework.Platform2D
         [SerializeField]
         private List<Vector3> positions = new List<Vector3>();
 
-        private readonly MoveablePath path = new MoveablePath();
-        private readonly List<Vector3> pathPoints = new List<Vector3>();
-        private bool hasStarted;
-        private int pathVersion;
+        private readonly MoveablePath _path = new MoveablePath();
+        private readonly List<Vector3> _pathPoints = new List<Vector3>();
+        private bool _hasStarted;
+        private int _pathVersion;
 
-        private float timer;
+        private float _timer;
 
         [SerializeField]
         [Tooltip("延迟时间")]
         private float delay = 0;
-        private float delayTimer = 0;
+        private float _delayTimer = 0;
 
         [SerializeField]
         [Tooltip("是否自动运行?")]
         private bool runOnAwake = true;
 
-        private bool isRunning = false;
+        private bool _isRunning = false;
 
         #endregion
 
@@ -61,10 +61,12 @@ namespace YLFramework.Platform2D
         /// </summary>
         public float Speed
         {
-            get {
+            get
+            {
                 return speed;
             }
-            set {
+            set
+            {
                 speed = value;
             }
         }
@@ -74,10 +76,12 @@ namespace YLFramework.Platform2D
         /// </summary>
         public MoveType MoveType
         {
-            get {
+            get
+            {
                 return moveType;
             }
-            set {
+            set
+            {
                 moveType = value;
             }
         }
@@ -91,18 +95,26 @@ namespace YLFramework.Platform2D
         /// </summary>
         public List<Vector3> Positions => positions;
 
-        public PositionType PositionType { get => positionType; set => positionType = value; }
-        public UpdateMode UpdateMode { get => updateMode; set => updateMode = value; }
+        public PositionType PositionType
+        {
+            get => positionType; set => positionType = value;
+        }
+        public UpdateMode UpdateMode
+        {
+            get => updateMode; set => updateMode = value;
+        }
 
         /// <summary>
         /// 延迟时间
         /// </summary>
         public float Delay
         {
-            get {
+            get
+            {
                 return delay;
             }
-            set {
+            set
+            {
                 delay = value;
             }
         }
@@ -110,7 +122,7 @@ namespace YLFramework.Platform2D
         /// <summary>
         /// 是否正在移动中
         /// </summary>
-        public bool IsRunning => isRunning;
+        public bool IsRunning => _isRunning;
 
         /// <summary>
         /// 路径总长度
@@ -119,9 +131,17 @@ namespace YLFramework.Platform2D
         {
             get
             {
-                if (!TryGetPathPoints(out _)) return 0;
+                if (!TryGetPathPoints(out _))
+                {
+                    return 0;
+                }
+
                 float distance = 0;
-                for (int i = 1; i < pathPoints.Count; i++) distance += Vector3.Distance(pathPoints[i - 1], pathPoints[i]);
+                for (int i = 1; i < _pathPoints.Count; i++)
+                {
+                    distance += Vector3.Distance(_pathPoints[i - 1], _pathPoints[i]);
+                }
+
                 return distance;
             }
         }
@@ -159,24 +179,32 @@ namespace YLFramework.Platform2D
         protected virtual void Awake()
         {
             if (runOnAwake)
+            {
                 Run();
+            }
         }
 
         protected virtual void FixedUpdate()
         {
-            if (!isRunning) return;
+            if (!_isRunning)
+            {
+                return;
+            }
 
-            if (delayTimer >= delay)
+            if (_delayTimer >= delay)
+            {
                 Move();
-            else {
+            }
+            else
+            {
 
                 switch (updateMode)
                 {
                     case UpdateMode.Normal:
-                        delayTimer += UnityEngine.Time.fixedDeltaTime;
+                        _delayTimer += UnityEngine.Time.fixedDeltaTime;
                         break;
                     case UpdateMode.UnscaledTime:
-                        delayTimer += UnityEngine.Time.fixedUnscaledDeltaTime;
+                        _delayTimer += UnityEngine.Time.fixedUnscaledDeltaTime;
                         break;
                 }
 
@@ -192,22 +220,42 @@ namespace YLFramework.Platform2D
 
         public bool ValidatePath(out string error)
         {
-            if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed)) { error = "Speed must be finite and greater than zero."; return false; }
-            if (delay < 0 || float.IsNaN(delay) || float.IsInfinity(delay)) { error = "Delay must be finite and non-negative."; return false; }
+            if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed))
+            {
+                error = "Speed must be finite and greater than zero.";
+                return false;
+            }
+            if (delay < 0 || float.IsNaN(delay) || float.IsInfinity(delay))
+            {
+                error = "Delay must be finite and non-negative.";
+                return false;
+            }
             return TryGetPathPoints(out error);
         }
 
         private bool TryGetPathPoints(out string error)
         {
-            pathPoints.Clear();
+            _pathPoints.Clear();
             int count = positionType == PositionType.Positions ? positions?.Count ?? 0 : transforms?.Count ?? 0;
-            if (count == 0) { error = "Path has no nodes (index 0)."; return false; }
+            if (count == 0)
+            {
+                error = "Path has no nodes (index 0).";
+                return false;
+            }
             for (int i = 0; i < count; i++)
             {
-                if (positionType == PositionType.Transforms && !transforms[i]) { error = $"Missing Transform at path node {i}."; return false; }
+                if (positionType == PositionType.Transforms && !transforms[i])
+                {
+                    error = $"Missing Transform at path node {i}.";
+                    return false;
+                }
                 var point = positionType == PositionType.Positions ? positions[i] : transforms[i].position;
-                if (!MoveablePath.IsFinite(point)) { error = $"Path node {i} contains NaN/Infinity."; return false; }
-                pathPoints.Add(point);
+                if (!MoveablePath.IsFinite(point))
+                {
+                    error = $"Path node {i} contains NaN/Infinity.";
+                    return false;
+                }
+                _pathPoints.Add(point);
             }
             error = null;
             return true;
@@ -215,9 +263,13 @@ namespace YLFramework.Platform2D
 
         private bool Init()
         {
-            pathVersion++;
-            if (ValidatePath(out string error) && path.TryBuild(pathPoints, out error)) return true;
-            isRunning = hasStarted = false;
+            _pathVersion++;
+            if (ValidatePath(out string error) && _path.TryBuild(_pathPoints, out error))
+            {
+                return true;
+            }
+
+            _isRunning = _hasStarted = false;
             Debug.LogError($"{GetType().Name} on '{name}': {error}", this);
             return false;
         }
@@ -225,27 +277,38 @@ namespace YLFramework.Platform2D
 
         private void Move()
         {
-            if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed)) { Stop(); return; }
+            if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed))
+            {
+                Stop();
+                return;
+            }
 
             // 向目标位置移动
             switch (updateMode)
             {
                 case UpdateMode.Normal:
-                    timer += UnityEngine.Time.fixedDeltaTime;
+                    _timer += UnityEngine.Time.fixedDeltaTime;
                     break;
                 case UpdateMode.UnscaledTime:
-                    timer += UnityEngine.Time.fixedUnscaledDeltaTime;
+                    _timer += UnityEngine.Time.fixedUnscaledDeltaTime;
                     break;
             }
 
-            float t = MoveablePath.Progress(timer, path.Distance / speed, moveType);
+            float t = MoveablePath.Progress(_timer, _path.Distance / speed, moveType);
 
             Vector3 target = GetPosition(t);
-            int version = pathVersion;
+            int version = _pathVersion;
             onMove?.Invoke(target);
-            if (!this || !isActiveAndEnabled || !isRunning || version != pathVersion) return;
+            if (!this || !isActiveAndEnabled || !_isRunning || version != _pathVersion)
+            {
+                return;
+            }
+
             Move(target);
-            if ((moveType == MoveType.Once && t >= 1) || path.Distance == 0) Stop();
+            if ((moveType == MoveType.Once && t >= 1) || _path.Distance == 0)
+            {
+                Stop();
+            }
         }
 
         /// <summary>
@@ -263,14 +326,20 @@ namespace YLFramework.Platform2D
         public void Run()
         {
             // 正在运行中 不需要再次运行
-            if (isRunning)
+            if (_isRunning)
+            {
                 return;
+            }
 
-            timer = 0;
-            delayTimer = 0;
-            if (!Init()) return;
-            hasStarted = true;
-            isRunning = true;
+            _timer = 0;
+            _delayTimer = 0;
+            if (!Init())
+            {
+                return;
+            }
+
+            _hasStarted = true;
+            _isRunning = true;
             onStartRun?.Invoke();
         }
 
@@ -280,8 +349,12 @@ namespace YLFramework.Platform2D
         /// <param name="pause"></param>
         public void Pause(bool pause)
         {
-            if (!hasStarted || isRunning == !pause) return;
-            isRunning = !pause;
+            if (!_hasStarted || _isRunning == !pause)
+            {
+                return;
+            }
+
+            _isRunning = !pause;
             onPause?.Invoke(pause);
         }
 
@@ -290,12 +363,16 @@ namespace YLFramework.Platform2D
         /// </summary>
         public void Stop()
         {
-            if (!hasStarted && !isRunning) return;
-            pathVersion++;
-            hasStarted = false;
-            isRunning = false;
-            delayTimer = 0;
-            timer = 0;
+            if (!_hasStarted && !_isRunning)
+            {
+                return;
+            }
+
+            _pathVersion++;
+            _hasStarted = false;
+            _isRunning = false;
+            _delayTimer = 0;
+            _timer = 0;
             onStop?.Invoke();
         }
 
@@ -327,13 +404,17 @@ namespace YLFramework.Platform2D
         {
             if (positionType == PositionType.Positions)
             {
-                if(index >= 0 && index < positions.Count)
+                if (index >= 0 && index < positions.Count)
+                {
                     positions.RemoveAt(index);
+                }
             }
             else
             {
                 if (index >= 0 && index < transforms.Count)
+                {
                     transforms.RemoveAt(index);
+                }
             }
 
             Init();
@@ -345,15 +426,19 @@ namespace YLFramework.Platform2D
         public void ClearPosition()
         {
             if (positionType == PositionType.Positions)
+            {
                 positions.Clear();
+            }
             else
+            {
                 transforms.Clear();
+            }
 
             Init();
         }
 
         private Vector3 GetPosition(float t)
-            => path.Evaluate(t);
+            => _path.Evaluate(t);
 
         #endregion
 

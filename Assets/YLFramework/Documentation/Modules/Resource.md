@@ -146,7 +146,7 @@ UnityEngine.Debug.Log(scene.path);
 
 1. 在ResourceProject中登记来源目录和目标Group。规则可以使用多个来源目录中的Sprite；Group也可只由自动图集组成，不必添加虚假的手工条目。
 2. 保存资源项目，在“资源配置 > 图集”或Project Inspector中明确选择Assets或其下已有的文件夹作为父目录，再用“新建并登记生成目录”创建此前不存在的子目录。父目录使用真实GUID登记，不从来源列表推断。建议放在所有资源目录之外；不使用自动图集时无需设置。已有目录（即使为空）、文件或孤立meta均不接管，选择父目录也不授予对其其他内容的管理权限。新目录连同`AutomaticAtlases.asset`、Atlas及meta须一并保留；丢失或换绑原登记身份会阻止构建，不会静默漏掉图集。
-3. 在配置 Inspector 的 `Rules` 添加规则：`Id` 为稳定技术键，`GroupId` 对应已有 Group，`Sources` 选目录或已按 Sprite 导入的 Texture2D。目录递归收集 Sprite 纹理（支持 Multiple Sprite），普通非 Sprite 纹理不自动改 Importer；空目录不会产生空 Atlas。同一纹理不能进入多个自动规则，每个图集的 Sprite 名必须非空且唯一。
+3. 在配置 Inspector 的 `rules` 添加规则：`id` 为稳定技术键，`groupId` 对应已有 Group，`sources` 选目录或已按 Sprite 导入的 Texture2D。目录递归收集 Sprite 纹理（支持 Multiple Sprite），普通非 Sprite 纹理不自动改 Importer；空目录不会产生空 Atlas。同一纹理不能进入多个自动规则，每个图集的 Sprite 名必须非空且唯一。
 4. 选择“合并为一个图集（Together）”，本条规则的Sprite聚为一图，`Address`即完整逻辑地址，例如`atlases/ui`。选择“按实际文件夹生成（PerFolder）”，则按纹理真实父目录分图，地址由规则地址、所属资源目录的持久前缀及相对文件夹路径组成。PerFolder输出身份仍含源文件夹GUID，不会把两个同名末级文件夹当成同一来源；移动后图集GUID可以保持，但派生地址可能变化。需要跨移动稳定的单一业务地址时用Together。
 5. 配置 Padding（2/4/8）、MaxTextureSize（32..8192 二次幂）、旋转/紧密打包、Readable、MipMaps、sRGB、FilterMode 和压缩；默认不旋转、不紧密、无 mip、不可读、Bilinear、2048、Uncompressed。过大内容由 Unity 多页承载，不按不稳定成员 hash 重命名。Sources 不能与生成范围重叠，包括选择其祖先资源根；不要把输出或配置再当来源。
 6. 保存规则后预览待创建、待更新、当前有效及已失效的输出，再点击“生成、更新并准备”。生成只对明确来源候选做必要的正常同步导入，避免PNG已变但缓存仍旧；不改Importer设置，也不替用户保存未提交的Importer改动。正式Workbench/API Build会先生成并准备自有图集，再冻结输入、分析依赖和构建；无需手动把输出加入Group。
@@ -168,11 +168,11 @@ public static class ApplicationAtlases
     public static ResourceAtlasConfiguration Configure(ResourceProject project, Texture2D sprites, string generationParentPath)
     {
         var configuration = ResourceAtlasGenerator.CreateConfiguration(project, generationParentPath, "GeneratedAtlases");
-        configuration.Rules.Add(new ResourceAtlasRule
+        configuration.rules.Add(new ResourceAtlasRule
         {
-            Id = "ui", GroupId = "ui-atlases", Address = "atlases/ui",
-            Grouping = ResourceAtlasGrouping.Together,
-            Sources = new Object[] { sprites }
+            id = "ui", groupId = "ui-atlases", address = "atlases/ui",
+            grouping = ResourceAtlasGrouping.Together,
+            sources = new Object[] { sprites }
         });
         EditorUtility.SetDirty(configuration);
         AssetDatabase.SaveAssetIfDirty(configuration);
@@ -238,15 +238,15 @@ Assets/GameScenes/       地址前缀：scenes
 - 地址、alias及大小写冲突继续严格拒绝并显示两个实际来源，不自动添加索引或随机后缀。子资产仍由原主资源规则派生，没有第二套子资产选择协议。
 - 新增、移除、替换只修改配置，可Undo/Redo，不删除源文件或Group条目。允许保留待修正草稿；目录失效、重复、重叠及失去合法来源的条目或图集规则会明确阻止构建。先恢复登记或明确调整相关条目，再保存和重算，不会静默漏包或扩大到其他目录。
 
-ResourceProject只使用`SourceDirectories`目录列表。一个目录和多个目录采用相同模型；清空列表就表示没有登记来源，构建会明确拒绝，不回退到隐藏字段。浏览与解析不保存资产，保存也不执行格式迁移。脚本可以直接设置列表，或使用支持Undo的正式编辑入口：
+ResourceProject只使用`sourceDirectories`目录列表。一个目录和多个目录采用相同模型；清空列表就表示没有登记来源，构建会明确拒绝，不回退到隐藏字段。浏览与解析不保存资产，保存也不执行格式迁移。脚本可以直接设置列表，或使用支持Undo的正式编辑入口：
 
 现有9个ResourceProject与4个Atlas配置已在本次升级中一次性转换为当前模型，原有目录、选择、地址/alias、GUID/meta及图集位置保持不变。以后从外部导入尚未转换的旧单根Editor配置，不承诺自动读取或迁移；该边界只涉及Editor配置格式，旧Catalog v1发布仍由原Runtime读取路径消费。
 
 ```csharp
 ResourceEditorOperations.SetSourceDirectories(project, new[]
 {
-    new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID("Assets/Art/Textures"), AddressPrefix = "textures" },
-    new ResourceSourceDirectory { Guid = AssetDatabase.AssetPathToGUID("Assets/GamePrefabs"), AddressPrefix = "prefabs" }
+    new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID("Assets/Art/Textures"), addressPrefix = "textures" },
+    new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID("Assets/GamePrefabs"), addressPrefix = "prefabs" }
 });
 ResourceEditorOperations.SaveProject(project);
 ```
@@ -289,6 +289,8 @@ Workspace 按 Project GUID/设置隔离，不可变发布在 `AssetBundles/YLFra
 ### 可共享构建配方
 
 `ResourceBuildRecipe` 是保存在 `Assets/` 的普通配置资产，可随工程共享。通过 `Create/YLFramework/Resource/Build Recipe` 创建，在Workbench内联或原Inspector选择明确 `Project`、`Target`、`AppContentCompatibilityId`、`Action`、`ForceRebuild` 及必要的常量生成选项，再明确保存。Workbench持有同一资产引用/GUID，不复制为可编辑Project；所选资产丢失时保留错误而不静默切换无配方。在构建页编辑配方时，“保存配方”与Ctrl+S只存所选Recipe；进入项目设置后Ctrl+S改为保存可见的Project。顶栏“保存”始终只存Project，不SaveAssets或保存Scene。原不使用配方的工作台、`BuildOnly`、`BuildAndPublish`、Builder/Publisher 调用及默认行为保留。
+
+作者配置的 C# 字段使用 camelCase，例如 `ResourceProject.projectId/sourceDirectories/groups` 与 Recipe 的 `project/target/action/forceRebuild/generateReferences/referenceDirectory`。旧 Unity 资产通过精确 `FormerlySerializedAs` 读取；Catalog、workspace 与发布回执中的 `ProjectId/Groups` 等持久协议键不随作者字段改名。
 
 - 资源选择、Group、Compression、ContentEncryption/ContentKeyId 始终来自引用的 `ResourceProject`，配方不覆盖、不复制、不临时改写 Project，也没有多级继承。
 - `Target` 必须明确、已安装且已激活并匹配本机可读回的桌面目标；配置不会切平台。`Action=BuildOnly` 不发布/生成；`BuildAndPublish` 才可选择 `GenerateReferences` 和 `ReferenceDirectory`，常量仍由原生成器及原完整发布集合决定。
@@ -552,6 +554,7 @@ public static class ArtifactQueryExample
 
 - 输入为正式发布 Catalog；默认文件 `Assets/YLFrameworkData/YLResourceReferences.cs`、namespace `YLFramework.Resources`，仅生成 ProjectId/Addresses/Aliases/Groups/SubAssets 键，不是可变目录或加载器。
 - 程序集 `YLFramework.Generated.ResourceNames` 不依赖框架/Unity/Editor/插件；预定义程序集自动引用，业务 asmdef 显式引用它及 YLFramework.Runtime。
+- 标识符按 Unicode 字母/数字分词并转为 Invariant PascalCase，例如 `hero_icon` 生成 `HeroIcon`、`http_url` 生成 `HttpUrl`，保留 `UI/IO`；数字开头使用必要的 `_` 前缀。只改 C# 标识符，不改变常量中的资源地址、alias、Group 或 ProjectId；转换后重名仍拒绝生成，不自动添加后缀。
 - 碰撞/类型校验先于写入，未知/篡改文件与孤立 meta 不接管；幂等更新保留 GUID，失败保留旧输出。发布、生成、Unity 消费者编译是三个结果；生成物不属默认框架导出。
 
 ## 常见错误
@@ -581,23 +584,23 @@ Unity `2022.3.62f3c1`的Windows Mono文件API仍有260字符限制，原始Works
 
 E04 G1～G3已完成正式接入及Windows Editor/Windows64 Mono Player代表性技术门禁，并获用户技术验收。以下是正式配置与使用合同；G1～G3证据见原Plan 28.10.19，G4交付与定向回归见28.10.20，不以旧G0/B1原型替代，不代表8.9整体完成。
 
-- Project 的 `ContentEncryption` 默认 `None`，旧明文发布不需重写。`None` 继续 `LoadFromFile`/`LoadFromFileAsync`，Editor Simulation、Resources 和直接图片来源不改变。新增默认字段不进入 None 的 build settings 身份；正常保存 SO/代码输入变化仍可能使旧 input fingerprint 自然失效一次。
-- 启用 `Aes256GcmHkdfSegmentedV1` 时，填写仅为标识的 `ContentKeyId`，覆盖该 Project 的内容包、共享依赖包和二进制 root manifest。`.manifest` 文本旁车不加密。正式后端固定为 Windows CNG `Microsoft Primitive Provider` AES-256-GCM，官方 BC 2.7.0 netstandard2.0 仅提供 HKDF-SHA256；不复制系统 DLL，不静默软件 GCM fallback。
+- Project 的 `contentEncryption` 默认 `None`，旧明文发布不需重写。`None` 继续 `LoadFromFile`/`LoadFromFileAsync`，Editor Simulation、Resources 和直接图片来源不改变。新增默认字段不进入 None 的 build settings 身份；正常保存 SO/代码输入变化仍可能使旧 input fingerprint 自然失效一次。
+- 启用 `Aes256GcmHkdfSegmentedV1` 时，填写仅为标识的 `contentKeyId`，覆盖该 Project 的内容包、共享依赖包和二进制 root manifest。`.manifest` 文本旁车不加密。正式后端固定为 Windows CNG `Microsoft Primitive Provider` AES-256-GCM，官方 BC 2.7.0 netstandard2.0 仅提供 HKDF-SHA256；不复制系统 DLL，不静默软件 GCM fallback。
 - 首批支持范围为Unity `2022.3.62f3c1` Windows x64 Editor/Mono Player；后续§30.7已补齐同版本Windows64 IL2CPP。其他环境不能据None可编译推断加密受支持；移动端及Unity 2023/Unity 6等不在本轮支持范围，IL2CPP加密也核对精确受测版号。
 
 Editor 使用显式进程 secret 名或调用方 provider，不在 SO、Inspector、EditorPrefs、指纹或日志中保存 key。工作台默认进程变量为 `YL_RESOURCE_CONTENT_KEY`，严格接受 Base64 编码的 32 字节；非秘密 KeyId 与环境变量名不是密钥材料。
 
 ```csharp
-project.ContentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
-project.ContentKeyId = "content-v1";
+project.contentEncryption = ResourceContentEncryption.Aes256GcmHkdfSegmentedV1;
+project.contentKeyId = "content-v1";
 var keys = ResourceEditorOperations.ContentKeyFromEnvironment(
-    project.ProjectId, project.ContentKeyId, "YL_RESOURCE_CONTENT_KEY");
+    project.projectId, project.contentKeyId, "YL_RESOURCE_CONTENT_KEY");
 var build = ResourceBundleBuilder.BuildWithContentKey(
     project, BuildTarget.StandaloneWindows64, keys);
 var release = ResourcePublisher.PublishWithContentKey(build, "app-v1", keys);
 ```
 
-选择None时令 `project.ContentEncryption = ResourceContentEncryption.None`，使用原 `Build` / `Publish` 即可，不需要key。构建与发布成功后只记录返回的确切ProjectId/Platform/App/CatalogDigest；应用明确 `ResourceLocalSnapshot.Open` 的发布目录或 `OpenBuiltIn` 身份，不猜最新目录。后者不读取 `SnapshotDirectory`、raw workspace或开发机发布绝对路径。
+选择None时令 `project.contentEncryption = ResourceContentEncryption.None`，使用原 `Build` / `Publish` 即可，不需要key。构建与发布成功后只记录返回的确切ProjectId/Platform/App/CatalogDigest；应用明确 `ResourceLocalSnapshot.Open` 的发布目录或 `OpenBuiltIn` 身份，不猜最新目录。后者不读取 `SnapshotDirectory`、raw workspace或开发机发布绝对路径。
 
 raw workspace 仍供原 BuildPipeline 与图集前置使用，独立 delivery 在 Catalog 封口前生成。Catalog v1 的 length/SHA 始终描述实际交付字节；Report 分列 raw/delivery SHA、字节及编码成本。同身份/key 的候选仅在本次完整认证成立时复用确切密文，新加密使用新随机材料；同一 KeyId 换材料不会偷偷重新加密为成功。轮换使用新的 KeyId/配置分区。重复发布也需当前 key 及内容验证；失败/取消不切 index、不破坏旧版本。
 

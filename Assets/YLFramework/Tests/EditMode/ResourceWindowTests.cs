@@ -10,8 +10,8 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Editor.Resource;
-using Object = UnityEngine.Object;
 using YLFramework.Tests.ResourceBuild;
+using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.ResourceEditor
 {
@@ -25,15 +25,18 @@ namespace YLFramework.Tests.ResourceEditor
             var window = ScriptableObject.CreateInstance<ResourceGuiTestWindow>();
             try
             {
-                fixture.Project.DisplayName = string.Concat(Enumerable.Repeat("长项目名称", 20));
+                fixture.Project.displayName = string.Concat(Enumerable.Repeat("长项目名称", 20));
                 EditorUtility.SetDirty(fixture.Project);
                 var before = JsonUtility.ToJson(fixture.Project);
-                window.ShowUtility(); window.SetProject(fixture.Project);
+                window.ShowUtility();
+                window.SetProject(fixture.Project);
                 foreach (var width in new[] { 620, 720, 1080, 1440 })
                 {
                     window.position = new Rect(80, 60, width, 720);
-                    window.Repaint(); yield return null;
-                    window.Repaint(); yield return null;
+                    window.Repaint();
+                    yield return null;
+                    window.Repaint();
+                    yield return null;
                     Assert.That(window.ProjectButton.width, Is.EqualTo(320).Within(1), "A long title clamps to the readable maximum: " + width);
                     Assert.That(window.SaveProjectButton.width, Is.GreaterThan(0), "The compact save action must remain reachable: " + width);
                     Assert.That(window.MoreButton.width, Is.GreaterThan(0));
@@ -50,20 +53,30 @@ namespace YLFramework.Tests.ResourceEditor
                     if (width >= 960)
                     {
                         Assert.That(window.IdentityLabel.y, Is.EqualTo(window.ProjectButton.y).Within(.1f), "ProjectId must not sit below the project name.");
-                        var nameContent = ResourceWorkbenchGUI.Project.padding.Remove(window.ProjectButton);
-                        var idContent = ResourceWorkbenchGUI.Identity.padding.Remove(window.IdentityLabel);
-                        Assert.That(idContent.center.y + ResourceWorkbenchGUI.Identity.contentOffset.y,
-                            Is.EqualTo(nameContent.center.y + ResourceWorkbenchGUI.Project.contentOffset.y).Within(.1f), "Both labels must share the same text baseline geometry.");
+                        var nameContent = ResourceWorkbenchGui.Project.padding.Remove(window.ProjectButton);
+                        var idContent = ResourceWorkbenchGui.Identity.padding.Remove(window.IdentityLabel);
+                        Assert.That(idContent.center.y + ResourceWorkbenchGui.Identity.contentOffset.y,
+                            Is.EqualTo(nameContent.center.y + ResourceWorkbenchGui.Project.contentOffset.y).Within(.1f), "Both labels must share the same text baseline geometry.");
                     }
                 }
                 Assert.That(JsonUtility.ToJson(fixture.Project), Is.EqualTo(before), "Header layout must not mutate the project.");
                 Assert.That(EditorUtility.IsDirty(fixture.Project), Is.True);
-                fixture.Project.DisplayName = "Short";
-                window.Repaint(); yield return null; window.Repaint(); yield return null;
+                fixture.Project.displayName = "Short";
+                window.Repaint();
+                yield return null;
+                window.Repaint();
+                yield return null;
                 Assert.That(window.ProjectPopupAnchor.width, Is.LessThan(240), "A short title sizes to its content so ProjectId sits next to it.");
                 LogAssert.NoUnexpectedReceived();
             }
-            finally { window.Close(); if (previousFocus) previousFocus.Focus(); }
+            finally
+            {
+                window.Close();
+                if (previousFocus)
+                {
+                    previousFocus.Focus();
+                }
+            }
         }
 
         [UnityTest]
@@ -77,9 +90,16 @@ namespace YLFramework.Tests.ResourceEditor
             PopupWindow popup = null;
             try
             {
-                window.ShowUtility(); window.position = new Rect(100, 80, 620, 440); window.Focus(); window.SetProject(fixture.Project);
+                window.ShowUtility();
+                window.position = new Rect(100, 80, 620, 440);
+                window.Focus();
+                window.SetProject(fixture.Project);
                 var before = JsonUtility.ToJson(fixture.Project);
-                for (var frame = 0; frame < 20 && window.MoreButton.width == 0; frame++) { window.Repaint(); yield return null; }
+                for (var frame = 0; frame < 20 && window.MoreButton.width == 0; frame++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(window.MoreButton.width, Is.GreaterThan(0));
                 window.Focus();
                 Click(window, window.MoreButton.center);
@@ -92,15 +112,23 @@ namespace YLFramework.Tests.ResourceEditor
                 Assert.That(popup.position.xMin, Is.GreaterThanOrEqualTo(window.position.x - 4));
                 Assert.That(popup.position.xMax, Is.LessThanOrEqualTo(window.position.xMax + 4), "The actual popup must fit inside the narrow workbench, not extend to the desktop on its right.");
                 Click(popup, new Vector2(100, 48));
-                Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(fixture.Project.ProjectId));
+                Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(fixture.Project.projectId));
                 Assert.That(JsonUtility.ToJson(fixture.Project), Is.EqualTo(before));
                 LogAssert.NoUnexpectedReceived();
             }
             finally
             {
-                if (popup) popup.Close();
-                window.Close(); EditorGUIUtility.systemCopyBuffer = previousClipboard;
-                if (previousFocus) previousFocus.Focus();
+                if (popup)
+                {
+                    popup.Close();
+                }
+
+                window.Close();
+                EditorGUIUtility.systemCopyBuffer = previousClipboard;
+                if (previousFocus)
+                {
+                    previousFocus.Focus();
+                }
             }
         }
 
@@ -114,12 +142,17 @@ namespace YLFramework.Tests.ResourceEditor
             try
             {
                 window.position = new Rect(100, 80, 720, 480);
-                window.ShowUtility(); window.SetProject(fixture.Project);
+                window.ShowUtility();
+                window.SetProject(fixture.Project);
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var layout = typeof(ResServiceEditorWindow).GetField("layout", flags).GetValue(window);
-                layout.GetType().GetField("Settings").SetValue(layout, true);
+                layout.GetType().GetField("settings").SetValue(layout, true);
                 var before = JsonUtility.ToJson(fixture.Project);
-                for (var frame = 0; frame < 20 && window.RootCopyButton.width == 0; frame++) { window.Repaint(); yield return null; }
+                for (var frame = 0; frame < 20 && window.RootCopyButton.width == 0; frame++)
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.That(window.RootCopyButton.width, Is.GreaterThan(0));
                 Click(window, window.RootCopyButton.center);
                 Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(fixture.Folder + "/Content"));
@@ -128,8 +161,12 @@ namespace YLFramework.Tests.ResourceEditor
             }
             finally
             {
-                window.Close(); EditorGUIUtility.systemCopyBuffer = previousClipboard;
-                if (previous) previous.Focus();
+                window.Close();
+                EditorGUIUtility.systemCopyBuffer = previousClipboard;
+                if (previous)
+                {
+                    previous.Focus();
+                }
             }
         }
 
@@ -144,12 +181,13 @@ namespace YLFramework.Tests.ResourceEditor
             try
             {
                 window.position = new Rect(100, 80, 1080, 720);
-                window.ShowUtility(); window.SetProject(fixture.Project);
+                window.ShowUtility();
+                window.SetProject(fixture.Project);
                 yield return null;
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
                 var view = typeof(ResServiceEditorWindow).GetField("_resServiceView", flags).GetValue(window);
-                var definition = typeof(ResServiceView).GetField("definition", flags).GetValue(view);
-                var table = (TreeView)definition.GetType().GetField("table", flags).GetValue(definition);
+                var definition = typeof(ResServiceView).GetField("_definition", flags).GetValue(view);
+                var table = (TreeView)definition.GetType().GetField("_table", flags).GetValue(definition);
                 var rectangle = (Rect)typeof(TreeView).GetProperty("treeViewRect", flags).GetValue(table);
                 DragAndDrop.PrepareStartDrag();
                 DragAndDrop.objectReferences = new[] { AssetDatabase.LoadMainAssetAtPath(path) };
@@ -157,13 +195,19 @@ namespace YLFramework.Tests.ResourceEditor
                 window.SendEvent(new Event { type = EventType.DragUpdated, mousePosition = rectangle.center });
                 window.SendEvent(new Event { type = EventType.DragPerform, mousePosition = rectangle.center });
                 yield return null;
-                Assert.That(fixture.Project.Groups[0].Selections.Count, Is.EqualTo(2), "The real TreeView must not consume an external drop before the definition handler sees it.");
-                Assert.That(fixture.Project.Groups[0].Selections.Last().Guid, Is.EqualTo(AssetDatabase.AssetPathToGUID(path)));
+                Assert.That(fixture.Project.groups[0].selections.Count, Is.EqualTo(2), "The real TreeView must not consume an external drop before the definition handler sees it.");
+                Assert.That(fixture.Project.groups[0].selections.Last().guid, Is.EqualTo(AssetDatabase.AssetPathToGUID(path)));
             }
             finally
             {
-                DragAndDrop.objectReferences = Array.Empty<Object>(); DragAndDrop.paths = Array.Empty<string>();
-                Undo.ClearUndo(fixture.Project); window.Close(); if (previous) previous.Focus();
+                DragAndDrop.objectReferences = Array.Empty<Object>();
+                DragAndDrop.paths = Array.Empty<string>();
+                Undo.ClearUndo(fixture.Project);
+                window.Close();
+                if (previous)
+                {
+                    previous.Focus();
+                }
             }
         }
 
@@ -177,7 +221,7 @@ namespace YLFramework.Tests.ResourceEditor
             try
             {
                 var path = fixture.TextPath;
-                fixture.Project.Groups.RemoveRange(1, fixture.Project.Groups.Count - 1);
+                fixture.Project.groups.RemoveRange(1, fixture.Project.groups.Count - 1);
                 window = ScriptableObject.CreateInstance<ResourceGuiTestWindow>();
                 window.ShowUtility();
                 // ShowUtility会恢复该窗口类型上次的位置，窄窗尺寸必须在显示后设置。
@@ -191,13 +235,16 @@ namespace YLFramework.Tests.ResourceEditor
                 Click(window, new Vector2(window.DefinitionNavigation.center.x, window.DefinitionNavigation.center.y));
                 yield return null;
                 for (var frame = 0; frame < 20 && window.RefreshButton.width == 0; frame++)
-                { window.Repaint(); yield return null; }
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.Greater(window.RefreshButton.width, 0, "Actual GUI refresh button was not laid out.");
                 Click(window, window.RefreshButton.center);
                 yield return null;
                 yield return null;
-                var definition = typeof(ResServiceView).GetField("definition", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
-                var table = (UnityEditor.IMGUI.Controls.TreeView)definition.GetType().GetField("table", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(definition);
+                var definition = typeof(ResServiceView).GetField("_definition", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
+                var table = (UnityEditor.IMGUI.Controls.TreeView)definition.GetType().GetField("_table", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(definition);
                 var tableRect = (Rect)typeof(UnityEditor.IMGUI.Controls.TreeView).GetProperty("treeViewRect", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(table);
                 Assert.That(table.GetRows().Count, Is.GreaterThan(0), "The explicit preview must produce its original resource rows.");
                 Click(window, new Vector2(tableRect.x + 45, tableRect.y + 12));
@@ -206,30 +253,41 @@ namespace YLFramework.Tests.ResourceEditor
                 Click(window, window.DetailButton.center);
                 yield return null;
                 for (var frame = 0; frame < 20 && (window.Repaints == 0 || window.SelectButton.width == 0); frame++)
-                { window.Repaint(); yield return null; }
+                {
+                    window.Repaint();
+                    yield return null;
+                }
                 Assert.Greater(window.Layouts, 0);
                 Assert.Greater(window.Repaints, 0);
                 var layout = typeof(ResServiceEditorWindow).GetField("layout", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(window);
                 Assert.Greater(window.SelectButton.width, 0, "Actual GUI selection button was not laid out. Detail=" + window.DetailButton +
-                    " Select=" + window.SelectButton + " Repaints=" + window.Repaints + " Compact=" + layout.GetType().GetField("CompactDetails").GetValue(layout) +
+                    " Select=" + window.SelectButton + " Repaints=" + window.Repaints + " Compact=" + layout.GetType().GetField("compactDetails").GetValue(layout) +
                     " Window=" + window.position);
                 Selection.objects = Array.Empty<Object>();
                 Click(window, window.SelectButton.center);
                 yield return null;
                 Assert.AreEqual(path, AssetDatabase.GetAssetPath(Selection.activeObject), "Button=" + window.SelectButton + "; status=" +
-                    typeof(ResServiceView).GetField("status", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view));
+                    typeof(ResServiceView).GetField("_status", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view));
                 Assert.IsEmpty(AssetImporter.GetAtPath(path).assetBundleName);
 
                 var calls = 0;
                 typeof(ResServiceView).GetMethod("QueueOperation", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(view, new object[] { new Func<string>(() => { calls++; return "owned callback"; }) });
-                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
+                    .Invoke(view, new object[] { new Func<string>(() =>
+                    {
+                    calls++;
+                    return "owned callback";
+                    }) });
+                var pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("_pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
                 Assert.IsTrue(EditorApplication.update.GetInvocationList().Contains(pending));
                 window.SetProject(null);
                 Assert.IsFalse(EditorApplication.update?.GetInvocationList().Contains(pending) ?? false, "Project switching cancels the old queued action.");
                 typeof(ResServiceView).GetMethod("QueueOperation", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(view, new object[] { new Func<string>(() => { calls++; return "owned callback"; }) });
-                pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
+                    .Invoke(view, new object[] { new Func<string>(() =>
+                    {
+                    calls++;
+                    return "owned callback";
+                    }) });
+                pending = (EditorApplication.CallbackFunction)typeof(ResServiceView).GetField("_pending", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
                 Assert.AreEqual(1, Selection.selectionChanged.GetInvocationList().Count(callback => callback.Target == window));
                 window.Close();
                 Assert.IsFalse(EditorApplication.update?.GetInvocationList().Contains(pending) ?? false);
@@ -240,9 +298,16 @@ namespace YLFramework.Tests.ResourceEditor
             }
             finally
             {
-                if (window) window.Close();
+                if (window)
+                {
+                    window.Close();
+                }
+
                 Selection.objects = previousSelection;
-                if (previousFocus) previousFocus.Focus();
+                if (previousFocus)
+                {
+                    previousFocus.Focus();
+                }
             }
         }
 
@@ -280,11 +345,25 @@ namespace YLFramework.Tests.ResourceEditor
         {
             var type = Event.current.type;
             typeof(ResServiceEditorWindow).GetMethod("OnGUI", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(this, null);
-            if (type == EventType.Layout) Layouts++;
-            if (type != EventType.Repaint) return;
+            if (type == EventType.Layout)
+            {
+                Layouts++;
+            }
+
+            if (type != EventType.Repaint)
+            {
+                return;
+            }
+
             Repaints++;
-            SelectButton = default; RefreshButton = default; DetailButton = default; RootCopyButton = default; DefinitionNavigation = default;
-            ProjectButton = default; SaveProjectButton = default; MoreButton = default;
+            SelectButton = default;
+            RefreshButton = default;
+            DetailButton = default;
+            RootCopyButton = default;
+            DefinitionNavigation = default;
+            ProjectButton = default;
+            SaveProjectButton = default;
+            MoreButton = default;
             IdentityLabel = default;
             var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             var cache = typeof(GUILayoutUtility).GetProperty("current", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)?.GetValue(null) ??
@@ -294,34 +373,77 @@ namespace YLFramework.Tests.ResourceEditor
             Read(group, Vector2.zero);
             Read(cache.GetType().GetField("windows", flags).GetValue(cache), Vector2.zero);
             var anchorFlags = BindingFlags.Instance | BindingFlags.NonPublic;
-            ProjectPopupAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("projectPopupAnchor", anchorFlags).GetValue(this);
-            MoreMenuAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("moreMenuAnchor", anchorFlags).GetValue(this);
-            MorePopupAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("morePopupAnchor", anchorFlags).GetValue(this);
+            ProjectPopupAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("_projectPopupAnchor", anchorFlags).GetValue(this);
+            MoreMenuAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("_moreMenuAnchor", anchorFlags).GetValue(this);
+            MorePopupAnchor = (Rect)typeof(ResServiceEditorWindow).GetField("_morePopupAnchor", anchorFlags).GetValue(this);
             void Read(object entry, Vector2 offset)
             {
                 var entryType = entry.GetType();
                 var rectangle = (Rect)entryType.GetField("rect", flags).GetValue(entry);
-                if ((bool?)(entryType.GetField("resetCoords", flags)?.GetValue(entry)) == true) offset += rectangle.position;
+                if ((bool?)(entryType.GetField("resetCoords", flags)?.GetValue(entry)) == true)
+                {
+                    offset += rectangle.position;
+                }
+
                 var absolute = new Rect(rectangle.position + offset, rectangle.size);
                 // 只接受本测试窗口内的控件；用户同时打开的工作台布局缓存不应参与命中。
                 var inside = absolute.xMin >= -1 && absolute.yMin >= -1 && absolute.xMax <= position.width + 2 && absolute.yMax <= position.height + 2;
                 var style = inside ? (GUIStyle)entryType.GetProperty("style", flags)?.GetValue(entry) : null;
-                if (ReferenceEquals(style, ResourceWorkbenchGUI.Project)) ProjectButton = absolute;
-                if (ReferenceEquals(style, ResourceWorkbenchGUI.Identity)) IdentityLabel = absolute;
-                if (ReferenceEquals(style, ResourceWorkbenchGUI.NavigationStyle) && Mathf.Abs(rectangle.width - 248) < 1) DefinitionNavigation = absolute;
+                if (ReferenceEquals(style, ResourceWorkbenchGui.Project))
+                {
+                    ProjectButton = absolute;
+                }
+
+                if (ReferenceEquals(style, ResourceWorkbenchGui.Identity))
+                {
+                    IdentityLabel = absolute;
+                }
+
+                if (ReferenceEquals(style, ResourceWorkbenchGui.NavigationStyle) && Mathf.Abs(rectangle.width - 248) < 1)
+                {
+                    DefinitionNavigation = absolute;
+                }
+
                 if (absolute.y < 40 && style != null && style.name.IndexOf("button", StringComparison.OrdinalIgnoreCase) >= 0 && Mathf.Abs(rectangle.width - 58) < 1)
+                {
                     SaveProjectButton = absolute;
-                if (absolute.y < 40 && ReferenceEquals(style, ResourceWorkbenchGUI.Menu) && Mathf.Abs(rectangle.width - 54) < 1)
+                }
+
+                if (absolute.y < 40 && ReferenceEquals(style, ResourceWorkbenchGui.Menu) && Mathf.Abs(rectangle.width - 54) < 1)
+                {
                     MoreButton = absolute;
+                }
+
                 if (style != null && style.name.IndexOf("button", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    if (Mathf.Abs(rectangle.width - 50) < 1) SelectButton = absolute;
-                    if (Mathf.Abs(rectangle.width - 74) < 1 && RefreshButton.width == 0) RefreshButton = absolute;
-                    if (Mathf.Abs(rectangle.width - 70) < 1) DetailButton = absolute;
-                    if (style.name == "button" && Mathf.Abs(rectangle.width - 44) < 1 && RootCopyButton.width == 0) RootCopyButton = absolute;
+                    if (Mathf.Abs(rectangle.width - 50) < 1)
+                    {
+                        SelectButton = absolute;
+                    }
+
+                    if (Mathf.Abs(rectangle.width - 74) < 1 && RefreshButton.width == 0)
+                    {
+                        RefreshButton = absolute;
+                    }
+
+                    if (Mathf.Abs(rectangle.width - 70) < 1)
+                    {
+                        DetailButton = absolute;
+                    }
+
+                    if (style.name == "button" && Mathf.Abs(rectangle.width - 44) < 1 && RootCopyButton.width == 0)
+                    {
+                        RootCopyButton = absolute;
+                    }
                 }
                 var children = entryType.GetField("entries", flags)?.GetValue(entry) as IEnumerable;
-                if (children != null) foreach (var child in children) Read(child, offset);
+                if (children != null)
+                {
+                    foreach (var child in children)
+                    {
+                        Read(child, offset);
+                    }
+                }
             }
         }
     }

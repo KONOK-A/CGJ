@@ -8,7 +8,10 @@ namespace YLFramework.Core
         internal PanelRuleSnapshot PanelRules = PanelRuleSnapshot.Empty;
 
         /// <summary>之后接受的 Panel 请求的默认根。null 清除绑定；已销毁的绑定不会回退到宿主默认根。</summary>
-        public UIRootContext PanelRoot { get; set; }
+        public UIRootContext PanelRoot
+        {
+            get; set;
+        }
 
         /// <summary>完整复制并校验已解析规则后原子替换。枚举或校验失败保留旧快照；null/空集合清除可选规则。</summary>
         public void BindPanelRules(IEnumerable<PanelRule> rules) => PanelRules = PanelRuleSnapshot.Capture(rules);

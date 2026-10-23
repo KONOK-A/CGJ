@@ -10,40 +10,88 @@ namespace YLFramework.Services.Resource
     {
         internal const long DataBufferBytes = ResourceBundleEnvelope.DataBufferBytes;
         internal const int NativeReadBufferSize = ResourceBundleEnvelope.NativeReadBufferSize;
-        private readonly object gate = new();
-        private readonly Stream input;
-        private readonly bool leaveOpen;
-        private readonly ResourceBundleEnvelopeHeader envelope;
-        private readonly long deliveryLength;
-        private readonly byte[] tinkHeader = new byte[40];
-        private readonly byte[] nonce = new byte[12];
-        private readonly byte[] cipher = new byte[ResourceBundleEnvelope.SegmentSize];
-        private readonly byte[][] plain = { new byte[ResourceBundleEnvelope.PlainCapacity], new byte[ResourceBundleEnvelope.PlainCapacity] };
-        private readonly long[] indices = { -1, -1 };
-        private readonly int[] lengths = new int[2];
-        private CngSegmentAead aead;
-        private long position;
-        private int nextVictim;
-        private Exception fault;
-        private Exception releaseFault;
-        private Action<Exception> faultNotification;
-        private bool faultNotified;
-        private bool disposed;
-        private bool inputReleased;
-        internal Exception Fault { get { lock (gate) return fault; } }
-        internal Exception ReleaseFault { get { lock (gate) return releaseFault; } }
-        internal long CngKeyObjectBytes { get { lock (gate) return aead?.KeyObjectBytes ?? 0; } }
-        internal bool IsCleanupComplete { get { lock (gate) return disposed && aead == null && (leaveOpen || inputReleased); } }
+        private readonly object _gate = new();
+        private readonly Stream _input;
+        private readonly bool _leaveOpen;
+        private readonly ResourceBundleEnvelopeHeader _envelope;
+        private readonly long _deliveryLength;
+        private readonly byte[] _tinkHeader = new byte[40];
+        private readonly byte[] _nonce = new byte[12];
+        private readonly byte[] _cipher = new byte[ResourceBundleEnvelope.SegmentSize];
+        private readonly byte[][] _plain = { new byte[ResourceBundleEnvelope.PlainCapacity], new byte[ResourceBundleEnvelope.PlainCapacity] };
+        private readonly long[] _indices = { -1, -1 };
+        private readonly int[] _lengths = new int[2];
+        private CngSegmentAead _aead;
+        private long _position;
+        private int _nextVictim;
+        private Exception _fault;
+        private Exception _releaseFault;
+        private Action<Exception> _faultNotification;
+        private bool _hasNotifiedFault;
+        private bool _isDisposed;
+        private bool _isInputReleased;
+        internal Exception Fault
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _fault;
+                }
+            }
+        }
+        internal Exception ReleaseFault
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _releaseFault;
+                }
+            }
+        }
+        internal long CngKeyObjectBytes
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _aead?.KeyObjectBytes ?? 0;
+                }
+            }
+        }
+        internal bool IsCleanupComplete
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _isDisposed && _aead == null && (_leaveOpen || _isInputReleased);
+                }
+            }
+        }
 
         // sink 仅由创建此输入的主体安装，只做有界入队，不得等待主线程或访问 Unity/provider。
         internal void SetFaultNotification(Action<Exception> notification)
         {
-            if (notification == null) throw new ArgumentNullException(nameof(notification));
-            lock (gate)
+            if (notification == null)
             {
-                if (disposed) throw new ObjectDisposedException(nameof(ResourceDecryptStream));
-                if (faultNotification != null) throw new InvalidOperationException("The content input already has a fault notification owner.");
-                faultNotification = notification;
+                throw new ArgumentNullException(nameof(notification));
+            }
+
+            lock (_gate)
+            {
+                if (_isDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(ResourceDecryptStream));
+                }
+
+                if (_faultNotification != null)
+                {
+                    throw new InvalidOperationException("The content input already has a fault notification owner.");
+                }
+
+                _faultNotification = notification;
                 NotifyFault();
             }
         }
@@ -51,211 +99,372 @@ namespace YLFramework.Services.Resource
         internal ResourceDecryptStream(Stream input, ResourceBundleEnvelopeHeader envelope, byte[] key,
             bool leaveOpen, CancellationToken token)
         {
-            this.input = input;
-            this.envelope = envelope;
-            this.leaveOpen = leaveOpen;
-            deliveryLength = input.Length;
+            this._input = input;
+            this._envelope = envelope;
+            this._leaveOpen = leaveOpen;
+            _deliveryLength = input.Length;
             byte[] fileKey = null;
             try
             {
                 token.ThrowIfCancellationRequested();
                 input.Position = envelope.EncodedPrefix.Length;
-                ResourceBundleEnvelope.ReadExact(input, tinkHeader, 0, tinkHeader.Length, token);
-                if (tinkHeader[0] != 40) throw new InvalidDataException("Expected AES256 RAW header length 40.");
-                fileKey = ResourceBundleEnvelope.DeriveKey(key, envelope.EncodedPrefix, tinkHeader);
-                aead = new CngSegmentAead(fileKey);
+                ResourceBundleEnvelope.ReadExact(input, _tinkHeader, 0, _tinkHeader.Length, token);
+                if (_tinkHeader[0] != 40)
+                {
+                    throw new InvalidDataException("Expected AES256 RAW header length 40.");
+                }
+
+                fileKey = ResourceBundleEnvelope.DeriveKey(key, envelope.EncodedPrefix, _tinkHeader);
+                _aead = new CngSegmentAead(fileKey);
                 Array.Clear(fileKey, 0, fileKey.Length);
                 GetSegment(0, token);
-                if (envelope.SegmentCount > 1) GetSegment(envelope.SegmentCount - 1, token);
+                if (envelope.SegmentCount > 1)
+                {
+                    GetSegment(envelope.SegmentCount - 1, token);
+                }
+
                 CheckLength();
                 token.ThrowIfCancellationRequested();
             }
             catch (Exception error)
             {
                 ClearData();
-                if (aead != null)
+                if (_aead != null)
                 {
-                    try { aead.Dispose(); aead = null; }
-                    catch (Exception cleanup) { throw new IOException("Content open and native cleanup failed.", new AggregateException(error, cleanup)); }
+                    try
+                    {
+                        _aead.Dispose();
+                        _aead = null;
+                    }
+                    catch (Exception cleanup)
+                    {
+                        throw new IOException("Content open and native cleanup failed.", new AggregateException(error, cleanup));
+                    }
                 }
-                if (error is OperationCanceledException) throw;
+                if (error is OperationCanceledException)
+                {
+                    throw;
+                }
+
                 throw new IOException("Resource content open/authentication failed.", error);
             }
-            finally { if (fileKey != null) Array.Clear(fileKey, 0, fileKey.Length); }
+            finally
+            {
+                if (fileKey != null)
+                {
+                    Array.Clear(fileKey, 0, fileKey.Length);
+                }
+            }
         }
 
-        public override bool CanRead { get { lock (gate) return !disposed && fault == null; } }
-        public override bool CanSeek { get { lock (gate) return !disposed && fault == null; } }
+        public override bool CanRead
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return !_isDisposed && _fault == null;
+                }
+            }
+        }
+        public override bool CanSeek
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return !_isDisposed && _fault == null;
+                }
+            }
+        }
         public override bool CanWrite => false;
-        public override long Length { get { lock (gate) { RequireUsable(); return envelope.PlainLength; } } }
+        public override long Length
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    RequireUsable();
+                    return _envelope.PlainLength;
+                }
+            }
+        }
         public override long Position
         {
-            get { lock (gate) { RequireUsable(); return position; } }
+            get
+            {
+                lock (_gate)
+                {
+                    RequireUsable();
+                    return _position;
+                }
+            }
             set => Seek(value, SeekOrigin.Begin);
         }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            lock (gate)
+            lock (_gate)
             {
                 RequireUsable();
-                if (buffer == null) throw new ArgumentNullException(nameof(buffer));
-                if (offset < 0 || count < 0) throw new ArgumentOutOfRangeException();
-                if (offset > buffer.Length - count) throw new ArgumentException("Read outside destination bounds.");
-                if (count == 0) return 0;
+                if (buffer == null)
+                {
+                    throw new ArgumentNullException(nameof(buffer));
+                }
+
+                if (offset < 0 || count < 0)
+                {
+                    throw new ArgumentOutOfRangeException();
+                }
+
+                if (offset > buffer.Length - count)
+                {
+                    throw new ArgumentException("Read outside destination bounds.");
+                }
+
+                if (count == 0)
+                {
+                    return 0;
+                }
+
                 try
                 {
                     CheckLength();
                     int total = 0;
-                    while (total < count && position < envelope.PlainLength)
+                    while (total < count && _position < _envelope.PlainLength)
                     {
-                        long index = (position + 40) / ResourceBundleEnvelope.PlainCapacity;
+                        long index = (_position + 40) / ResourceBundleEnvelope.PlainCapacity;
                         long start = index == 0 ? 0 : index * ResourceBundleEnvelope.PlainCapacity - 40;
-                        int within = (int)(position - start);
+                        int within = (int)(_position - start);
                         int slot = GetSegment(index);
-                        int take = Math.Min(count - total, lengths[slot] - within);
-                        if (take <= 0) throw new InvalidDataException("Invalid authenticated segment mapping.");
+                        int take = Math.Min(count - total, _lengths[slot] - within);
+                        if (take <= 0)
+                        {
+                            throw new InvalidDataException("Invalid authenticated segment mapping.");
+                        }
                         // 槽的 index 只在完整 tag 成功后发布；坏段的任何字节均不复制给 caller。
-                        Buffer.BlockCopy(plain[slot], within, buffer, offset + total, take);
-                        position += take;
+                        Buffer.BlockCopy(_plain[slot], within, buffer, offset + total, take);
+                        _position += take;
                         total += take;
                     }
                     return total;
                 }
-                catch (Exception error) { throw Latch(error); }
+                catch (Exception error)
+                {
+                    throw Latch(error);
+                }
             }
         }
 
         public override int ReadByte()
         {
-            lock (gate)
+            lock (_gate)
             {
                 RequireUsable();
                 try
                 {
                     CheckLength();
-                    if (position >= envelope.PlainLength) return -1;
-                    long index = (position + 40) / ResourceBundleEnvelope.PlainCapacity;
+                    if (_position >= _envelope.PlainLength)
+                    {
+                        return -1;
+                    }
+
+                    long index = (_position + 40) / ResourceBundleEnvelope.PlainCapacity;
                     long start = index == 0 ? 0 : index * ResourceBundleEnvelope.PlainCapacity - 40;
                     int slot = GetSegment(index);
-                    int value = plain[slot][(int)(position - start)];
-                    ++position;
+                    int value = _plain[slot][(int)(_position - start)];
+                    ++_position;
                     return value;
                 }
-                catch (Exception error) { throw Latch(error); }
+                catch (Exception error)
+                {
+                    throw Latch(error);
+                }
             }
         }
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            lock (gate)
+            lock (_gate)
             {
                 RequireUsable();
                 long basis;
                 switch (origin)
                 {
-                    case SeekOrigin.Begin: basis = 0; break;
-                    case SeekOrigin.Current: basis = position; break;
-                    case SeekOrigin.End: basis = envelope.PlainLength; break;
-                    default: throw new ArgumentException("Invalid seek origin.", nameof(origin));
+                    case SeekOrigin.Begin:
+                        basis = 0;
+                        break;
+                    case SeekOrigin.Current:
+                        basis = _position;
+                        break;
+                    case SeekOrigin.End:
+                        basis = _envelope.PlainLength;
+                        break;
+                    default:
+                        throw new ArgumentException("Invalid seek origin.", nameof(origin));
                 }
                 long target;
-                try { target = checked(basis + offset); }
-                catch (OverflowException error) { throw new IOException("Seek offset overflow.", error); }
-                if (target < 0) throw new IOException("Cannot seek before the beginning.");
-                position = target;
+                try
+                {
+                    target = checked(basis + offset);
+                }
+                catch (OverflowException error)
+                {
+                    throw new IOException("Seek offset overflow.", error);
+                }
+                if (target < 0)
+                {
+                    throw new IOException("Cannot seek before the beginning.");
+                }
+
+                _position = target;
                 return target;
             }
         }
 
         internal void ValidateAll(CancellationToken token)
         {
-            lock (gate)
+            lock (_gate)
             {
                 RequireUsable();
                 try
                 {
                     using var hash = SHA256.Create();
                     long count = 0;
-                    for (long index = 0; index < envelope.SegmentCount; ++index)
+                    for (long index = 0; index < _envelope.SegmentCount; ++index)
                     {
                         token.ThrowIfCancellationRequested();
                         CheckLength();
                         int slot = GetSegment(index, token);
-                        hash.TransformBlock(plain[slot], 0, lengths[slot], plain[slot], 0);
-                        count = checked(count + lengths[slot]);
+                        hash.TransformBlock(_plain[slot], 0, _lengths[slot], _plain[slot], 0);
+                        count = checked(count + _lengths[slot]);
                     }
                     hash.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-                    if (count != envelope.PlainLength || ResourceBundleEnvelope.Digest(hash.Hash) != envelope.PlainSha256)
+                    if (count != _envelope.PlainLength || ResourceBundleEnvelope.Digest(hash.Hash) != _envelope.PlainSha256)
+                    {
                         throw new InvalidDataException("Authenticated plaintext length/SHA-256 is inconsistent with its envelope.");
+                    }
+
                     CheckLength();
                 }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception error) { throw Latch(error); }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception error)
+                {
+                    throw Latch(error);
+                }
             }
         }
 
         private int GetSegment(long index, CancellationToken token = default)
         {
-            for (int i = 0; i < indices.Length; ++i)
-                if (indices[i] == index) return i;
-            if (index < 0 || index >= envelope.SegmentCount) throw new InvalidDataException("Invalid segment index.");
-            int slot = nextVictim;
-            nextVictim = (nextVictim + 1) % plain.Length;
-            indices[slot] = -1;
-            lengths[slot] = 0;
-            Array.Clear(plain[slot], 0, plain[slot].Length);
+            for (int i = 0; i < _indices.Length; ++i)
+            {
+                if (_indices[i] == index)
+                {
+                    return i;
+                }
+            }
+
+            if (index < 0 || index >= _envelope.SegmentCount)
+            {
+                throw new InvalidDataException("Invalid segment index.");
+            }
+
+            int slot = _nextVictim;
+            _nextVictim = (_nextVictim + 1) % _plain.Length;
+            _indices[slot] = -1;
+            _lengths[slot] = 0;
+            Array.Clear(_plain[slot], 0, _plain[slot].Length);
             long start = index == 0 ? 40 : checked(index * ResourceBundleEnvelope.SegmentSize);
-            int cipherCount = (int)Math.Min(ResourceBundleEnvelope.SegmentSize - (index == 0 ? 40 : 0), envelope.PayloadLength - start);
-            if (cipherCount < 16) throw new InvalidDataException("Incomplete authenticated segment.");
-            input.Position = checked(envelope.EncodedPrefix.Length + start);
-            ResourceBundleEnvelope.ReadExact(input, cipher, 0, cipherCount, token);
-            ResourceBundleEnvelope.SetNonce(tinkHeader, index, index == envelope.SegmentCount - 1, nonce);
-            int written = aead.Decrypt(cipher, cipherCount, nonce, plain[slot]);
-            if (written != cipherCount - 16) throw new CryptographicException("Unexpected authenticated plaintext size.");
-            lengths[slot] = written;
-            indices[slot] = index;
+            int cipherCount = (int)Math.Min(ResourceBundleEnvelope.SegmentSize - (index == 0 ? 40 : 0), _envelope.PayloadLength - start);
+            if (cipherCount < 16)
+            {
+                throw new InvalidDataException("Incomplete authenticated segment.");
+            }
+
+            _input.Position = checked(_envelope.EncodedPrefix.Length + start);
+            ResourceBundleEnvelope.ReadExact(_input, _cipher, 0, cipherCount, token);
+            ResourceBundleEnvelope.SetNonce(_tinkHeader, index, index == _envelope.SegmentCount - 1, _nonce);
+            int written = _aead.Decrypt(_cipher, cipherCount, _nonce, _plain[slot]);
+            if (written != cipherCount - 16)
+            {
+                throw new CryptographicException("Unexpected authenticated plaintext size.");
+            }
+
+            _lengths[slot] = written;
+            _indices[slot] = index;
             return slot;
         }
 
         private void CheckLength()
         {
-            if (input.Length != deliveryLength) throw new InvalidDataException("Ciphertext length changed after authenticated open.");
+            if (_input.Length != _deliveryLength)
+            {
+                throw new InvalidDataException("Ciphertext length changed after authenticated open.");
+            }
         }
 
         private void RequireUsable()
         {
-            if (disposed) throw new ObjectDisposedException(nameof(ResourceDecryptStream));
-            if (fault != null) throw new IOException("Resource content stream is permanently faulted.", fault);
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(ResourceDecryptStream));
+            }
+
+            if (_fault != null)
+            {
+                throw new IOException("Resource content stream is permanently faulted.", _fault);
+            }
         }
 
         private IOException Latch(Exception error)
         {
-            if (fault == null) fault = error;
+            if (_fault == null)
+            {
+                _fault = error;
+            }
+
             ClearData();
-            if (aead != null)
-                try { aead.Dispose(); aead = null; }
-                catch (Exception cleanup) { releaseFault = cleanup; }
+            if (_aead != null)
+            {
+                try
+                {
+                    _aead.Dispose();
+                    _aead = null;
+                }
+                catch (Exception cleanup)
+                {
+                    _releaseFault = cleanup;
+                }
+            }
+
             NotifyFault();
-            return new IOException("Resource content read failed; state is permanently faulted.", fault);
+            return new IOException("Resource content read failed; state is permanently faulted.", _fault);
         }
 
         private void NotifyFault()
         {
-            if (fault == null || faultNotification == null || faultNotified) return;
-            faultNotified = true;
-            faultNotification(fault);
+            if (_fault == null || _faultNotification == null || _hasNotifiedFault)
+            {
+                return;
+            }
+
+            _hasNotifiedFault = true;
+            _faultNotification(_fault);
         }
 
         private void ClearData()
         {
-            Array.Clear(cipher, 0, cipher.Length);
-            Array.Clear(nonce, 0, nonce.Length);
-            for (int i = 0; i < plain.Length; ++i)
+            Array.Clear(_cipher, 0, _cipher.Length);
+            Array.Clear(_nonce, 0, _nonce.Length);
+            for (int i = 0; i < _plain.Length; ++i)
             {
-                Array.Clear(plain[i], 0, plain[i].Length);
-                indices[i] = -1;
-                lengths[i] = 0;
+                Array.Clear(_plain[i], 0, _plain[i].Length);
+                _indices[i] = -1;
+                _lengths[i] = 0;
             }
         }
 
@@ -263,22 +472,40 @@ namespace YLFramework.Services.Resource
         {
             if (disposing)
             {
-                lock (gate)
+                lock (_gate)
                 {
-                    disposed = true;
+                    _isDisposed = true;
                     ClearData();
                     try
                     {
-                        if (aead != null) { aead.Dispose(); aead = null; }
-                        if (!leaveOpen && !inputReleased) { input.Dispose(); inputReleased = true; }
+                        if (_aead != null)
+                        {
+                            _aead.Dispose();
+                            _aead = null;
+                        }
+                        if (!_leaveOpen && !_isInputReleased)
+                        {
+                            _input.Dispose();
+                            _isInputReleased = true;
+                        }
                     }
-                    catch (Exception error) { releaseFault = error; throw; }
+                    catch (Exception error)
+                    {
+                        _releaseFault = error;
+                        throw;
+                    }
                 }
             }
             base.Dispose(disposing);
         }
 
-        public override void Flush() { lock (gate) RequireUsable(); }
+        public override void Flush()
+        {
+            lock (_gate)
+            {
+                RequireUsable();
+            }
+        }
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }

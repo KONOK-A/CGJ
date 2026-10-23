@@ -55,7 +55,11 @@ namespace YLFramework.Tests.Audio
                 var callbacks = 0;
                 foreach (var parameter in method.GetParameters())
                 {
-                    if (parameter.Name != "onStarted" && parameter.Name != "onFinished") continue;
+                    if (parameter.Name != "onStarted" && parameter.Name != "onFinished")
+                    {
+                        continue;
+                    }
+
                     callbacks++;
                     Assert.AreEqual(typeof(Action<AudioClip, AudioHandle>), parameter.ParameterType, name + "." + parameter.Name);
                     Assert.IsTrue(parameter.HasDefaultValue);
@@ -100,7 +104,10 @@ namespace YLFramework.Tests.Audio
                         Assert.AreEqual(0f, handle.Progress);
                     }
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -125,7 +132,10 @@ namespace YLFramework.Tests.Audio
                     Assert.IsTrue(handle.IsValid);
                     Assert.IsTrue(handle.IsPaused);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -150,7 +160,10 @@ namespace YLFramework.Tests.Audio
                     Assert.IsTrue(handle.IsValid);
                     Assert.IsTrue(handle.IsPaused);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -180,7 +193,10 @@ namespace YLFramework.Tests.Audio
                     Assert.AreEqual(.01f, handle.Voice.Source.pitch, .001f);
                     Assert.IsTrue(handle.IsPaused);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -230,7 +246,10 @@ namespace YLFramework.Tests.Audio
                     Assert.AreEqual(1f, next.Voice.Source.pitch);
                     Assert.IsTrue(next.IsValid);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -309,7 +328,10 @@ namespace YLFramework.Tests.Audio
                     Assert.AreEqual(1f, handle.Voice.Source.volume);
                     Assert.AreEqual(1f, handle.Voice.Source.pitch);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -337,7 +359,7 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(.25f, PlayerPrefs.GetFloat(volume.Key));
                 Assert.AreEqual(0, PlayerPrefs.GetInt(enabled.Key));
                 Assert.AreEqual(1, calls);
-                volume.UnRegisterAll();
+                volume.UnregisterAll();
                 volume.Value = .75f;
                 Assert.AreEqual(1, calls);
                 Assert.AreEqual(.75f, new PlayerPrefsFloatProperty(volume.Key).Value);
@@ -420,7 +442,10 @@ namespace YLFramework.Tests.Audio
                     first.SetPitch(2f);
                     Assert.AreEqual(1f, current.Voice.Source.pitch);
                 }
-                finally { UnityEngine.Object.DestroyImmediate(clip); }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
             }
         }
 
@@ -441,9 +466,12 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(1, calls);
                 Assert.AreEqual(changed, PlayerPrefs.GetFloat(key));
                 Assert.AreSame(previous, BindableProperty<float>.Comparer);
-                property.UnRegisterAll();
+                property.UnregisterAll();
             }
-            finally { PlayerPrefs.DeleteKey(key); }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
         }
 
         [TestCase(-1, false)]
@@ -455,14 +483,21 @@ namespace YLFramework.Tests.Audio
             using (new AudioTestSettings())
             {
                 AudioKit.Shutdown();
-                for (var i = 0; i < 3; i++) PlayerPrefs.SetInt(AudioTestSettings.Keys[i], stored);
+                for (var i = 0; i < 3; i++)
+                {
+                    PlayerPrefs.SetInt(AudioTestSettings.Keys[i], stored);
+                }
+
                 var settings = AudioKit.Settings;
                 Assert.AreEqual(expected, settings.IsSoundOn.Value);
                 Assert.AreEqual(expected, settings.IsMusicOn.Value);
                 Assert.AreEqual(expected, settings.IsVoiceOn.Value);
                 Assert.AreEqual(expected, settings.IsOn);
                 settings.IsOn = !expected;
-                for (var i = 0; i < 3; i++) Assert.AreEqual(expected ? 0 : 1, PlayerPrefs.GetInt(AudioTestSettings.Keys[i]));
+                for (var i = 0; i < 3; i++)
+                {
+                    Assert.AreEqual(expected ? 0 : 1, PlayerPrefs.GetInt(AudioTestSettings.Keys[i]));
+                }
             }
         }
     }

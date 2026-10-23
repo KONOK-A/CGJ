@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-    public static class Vector3Extensions  
+    public static class Vector3Extensions
     {
 
         /// <summary>
@@ -14,14 +14,16 @@ namespace YLFramework.Utilities.Extensions
         /// <param name="to"></param>
         /// <param name="current"></param>
         /// <returns></returns>
-        public static float InverseLerp(Vector3 from,Vector3 to,Vector3 current) 
+        public static float InverseLerp(Vector3 from, Vector3 to, Vector3 current)
         {
             float lerp = Mathf.InverseLerp(from.x, to.x, current.x);
 
-            if (lerp > 0 && lerp <= 1) 
+            if (lerp > 0 && lerp <= 1)
             {
-                if(Vector3.Distance(current,Vector3.Lerp(from,to,lerp)) <= 0.01f)  
+                if (Vector3.Distance(current, Vector3.Lerp(from, to, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
 
             lerp = Mathf.InverseLerp(from.y, to.y, current.y);
@@ -29,15 +31,19 @@ namespace YLFramework.Utilities.Extensions
             if (lerp > 0 && lerp <= 1)
             {
                 if (Vector3.Distance(current, Vector3.Lerp(from, to, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
-             
+
             lerp = Mathf.InverseLerp(from.z, to.z, current.z);
 
             if (lerp > 0 && lerp <= 1)
             {
                 if (Vector3.Distance(current, Vector3.Lerp(from, to, lerp)) <= 0.01f)
+                {
                     return lerp;
+                }
             }
 
             return 0;

@@ -13,8 +13,9 @@ namespace YLFramework.Core.Editor
         {
 
             using (new EditorGUI.DisabledScope(true))
+            {
                 EditorGUI.PropertyField(position, property, label, true);
-
+            }
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)

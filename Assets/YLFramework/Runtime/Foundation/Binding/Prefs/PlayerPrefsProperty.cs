@@ -28,18 +28,24 @@ namespace YLFramework.Binding
 
             Key = saveKey;
             DefaultValue = defaultValue;
-            _value = Load(defaultValue);
+            StoredValue = Load(defaultValue);
         }
 
         /// <summary>
         /// PlayerPrefs 存储键，构造后不可变。
         /// </summary>
-        public string Key { get; }
+        public string Key
+        {
+            get;
+        }
 
         /// <summary>
         /// 键不存在或调用 <see cref="Delete"/> 后使用的默认值。
         /// </summary>
-        public T DefaultValue { get; }
+        public T DefaultValue
+        {
+            get;
+        }
 
         /// <summary>
         /// PlayerPrefs 中当前是否存在该键。
@@ -72,7 +78,7 @@ namespace YLFramework.Binding
             }
             else
             {
-                Save(_value);
+                Save(StoredValue);
             }
             base.OnValueChange();
         }

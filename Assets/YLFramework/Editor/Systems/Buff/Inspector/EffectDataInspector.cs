@@ -1,9 +1,9 @@
-using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core.Editor;
+using YLFramework.Foundation;
+using YLFramework.Foundation.Attributes;
 
 
 namespace YLFramework.BuffSystem
@@ -20,27 +20,30 @@ namespace YLFramework.BuffSystem
             get
             {
                 if (_instance == null)
+                {
                     _instance = CreateInstance<EffectDataInspector>();
+                }
+
                 return _instance;
             }
         }
 
-        private EffectData currentEffectData;
+        private EffectData _currentEffectData;
 
-        private SerializedObject currentSerializedObject;
+        private SerializedObject _currentSerializedObject;
 
-        private List<SerializedProperty> currentSerializeProperty;
+        private List<SerializedProperty> _currentSerializeProperty;
 
-        private Vector2 currentPosition;
+        private Vector2 _currentPosition;
 
-        private EffectConfigsWindow window;
+        private EffectConfigsWindow _window;
 
-        private string effect_name;
+        private string _effectName;
 
 
-        private GUIStyle style_dropdown;
+        private GUIStyle _styleDropdown;
 
-        private GUIContent type_content;
+        private GUIContent _typeContent;
 
         public override void OnInspectorGUI()
         {
@@ -55,39 +58,39 @@ namespace YLFramework.BuffSystem
                 EffectData effectData = (EffectData)target;
 
                 EffectConfigsWindow window = EditorWindow.GetWindow<EffectConfigsWindow>();
-                window.currentEffectData = effectData;
+                window.CurrentEffectData = effectData;
                 window.RefreshList();
             }
         }
 
-        internal void OnInspectorGUI( EffectConfigsWindow window, EffectData data)
+        internal void OnInspectorGUI(EffectConfigsWindow window, EffectData data)
         {
-            this.window = window;
+            this._window = window;
 
             if (data != null)
             {
-                if (currentEffectData != data)
+                if (_currentEffectData != data)
                 {
-                    currentEffectData = data;
-                    currentSerializedObject = null;
+                    _currentEffectData = data;
+                    _currentSerializedObject = null;
                 }
 
-                if (currentSerializedObject == null)
+                if (_currentSerializedObject == null)
                 {
-                    currentSerializedObject = new SerializedObject(this.currentEffectData);
-                    currentSerializeProperty = currentSerializedObject.GetAllSerializedProperty();
+                    _currentSerializedObject = new SerializedObject(this._currentEffectData);
+                    _currentSerializeProperty = _currentSerializedObject.GetAllSerializedProperty();
                 }
 
 
-                currentSerializedObject.Update();
+                _currentSerializedObject.Update();
 
-                currentPosition = GUILayout.BeginScrollView(currentPosition);
+                _currentPosition = GUILayout.BeginScrollView(_currentPosition);
 
 
 
-                for (int i = 0; i < currentSerializeProperty.Count; i++)
+                for (int i = 0; i < _currentSerializeProperty.Count; i++)
                 {
-                    SerializedProperty property = currentSerializeProperty[i];
+                    SerializedProperty property = _currentSerializeProperty[i];
 
                     //if (property.displayName == "Script")
                     //    continue;
@@ -98,7 +101,7 @@ namespace YLFramework.BuffSystem
                         continue;
                     }
 
-                    if (property.name == "effect_name")
+                    if (property.name == "effectName")
                     {
                         OnInspectorName();
                         continue;
@@ -127,7 +130,7 @@ namespace YLFramework.BuffSystem
 
                 GUILayout.EndScrollView();
 
-                currentSerializedObject.ApplyModifiedProperties();
+                _currentSerializedObject.ApplyModifiedProperties();
             }
             else
             {
@@ -144,54 +147,58 @@ namespace YLFramework.BuffSystem
 
         private void OnInspectorName()
         {
-            effect_name = currentEffectData.effect_name;
+            _effectName = _currentEffectData.effectName;
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.LabelField(string.Empty, "名称", "BoldLabel");
-            effect_name = EditorGUILayout.DelayedTextField("EffectName",effect_name);
-            if (EditorGUI.EndChangeCheck() )
+            _effectName = EditorGUILayout.DelayedTextField("EffectName", _effectName);
+            if (EditorGUI.EndChangeCheck())
             {
                 foreach (var item in BuffSystemSettings.Instance.AllEffectDatas)
                 {
-                    if (!item) continue;
-                    if (item.effect_name.Equals(effect_name))
+                    if (!item)
                     {
-                        window.ShowNotification(new GUIContent("效果名称重复!"));
+                        continue;
+                    }
+
+                    if (item.effectName.Equals(_effectName))
+                    {
+                        _window.ShowNotification(new GUIContent("效果名称重复!"));
                         return;
                     }
                 }
 
-                currentEffectData.effect_name = effect_name;
-                EditorUtility.SetDirty(currentEffectData);
+                _currentEffectData.effectName = _effectName;
+                EditorUtility.SetDirty(_currentEffectData);
                 AssetDatabase.SaveAssets();
-                AssetDatabase.RenameAsset(AssetDatabase.GetAssetPath(currentEffectData), effect_name);
-                window.RefreshList();
+                AssetDatabase.RenameAsset(AssetDatabase.GetAssetPath(_currentEffectData), _effectName);
+                _window.RefreshList();
             }
         }
 
         private void OnInspectorId()
         {
-            int id = currentEffectData.id;
+            int id = _currentEffectData.id;
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.LabelField(string.Empty, "唯一标识", "BoldLabel");
             id = EditorGUILayout.DelayedIntField("Id", id);
-            if (EditorGUI.EndChangeCheck() )
+            if (EditorGUI.EndChangeCheck())
             {
                 if (id == 0)
                 {
-                    window.ShowNotification(new GUIContent("id不能为0!"));
+                    _window.ShowNotification(new GUIContent("id不能为0!"));
                 }
                 else
                 {
                     if (IsContains(id))
                     {
-                        window.ShowNotification(new GUIContent("效果Id重复!"));
+                        _window.ShowNotification(new GUIContent("效果Id重复!"));
                     }
                     else
                     {
-                        currentEffectData.id = id;
-                        EditorUtility.SetDirty(currentEffectData);
+                        _currentEffectData.id = id;
+                        EditorUtility.SetDirty(_currentEffectData);
                         AssetDatabase.SaveAssets();
-                        window.RefreshList();
+                        _window.RefreshList();
                     }
 
                 }
@@ -203,7 +210,11 @@ namespace YLFramework.BuffSystem
         {
             foreach (var item in BuffSystemSettings.Instance.AllEffectDatas)
             {
-                if (!item) continue;
+                if (!item)
+                {
+                    continue;
+                }
+
                 if (item.id.Equals(id))
                 {
                     return true;
@@ -216,24 +227,26 @@ namespace YLFramework.BuffSystem
         private void OnTypeInspector(SerializedProperty property)
         {
 
-            if (style_dropdown == null)
+            if (_styleDropdown == null)
             {
-                style_dropdown = new GUIStyle("DropDown");
-                style_dropdown.richText = true;
+                _styleDropdown = new GUIStyle("DropDown");
+                _styleDropdown.richText = true;
             }
 
-            if (type_content == null)
-                type_content = new GUIContent();
+            if (_typeContent == null)
+            {
+                _typeContent = new GUIContent();
+            }
 
             EditorGUILayout.LabelField(string.Empty, "类型", "BoldLabel");
 
-            type_content.text = BuffSystemSettings.Instance.GetType(property.intValue);
+            _typeContent.text = BuffSystemSettings.Instance.GetType(property.intValue);
 
             GUILayout.BeginHorizontal();
 
-            EditorGUILayout.LabelField(string.Empty, "Type",GUILayout.Width(148));
+            EditorGUILayout.LabelField(string.Empty, "Type", GUILayout.Width(148));
 
-            if (EditorGUILayout.DropdownButton(type_content, FocusType.Passive, style_dropdown))
+            if (EditorGUILayout.DropdownButton(_typeContent, FocusType.Passive, _styleDropdown))
             {
                 GenericMenu menu = new GenericMenu();
 
@@ -249,7 +262,9 @@ namespace YLFramework.BuffSystem
                 }
 
                 if (BuffSystemSettings.Instance.AllEffectType.Count > 0)
+                {
                     menu.AddSeparator(string.Empty);
+                }
 
                 menu.AddItem(new GUIContent("编辑"), false, () =>
                 {

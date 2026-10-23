@@ -14,17 +14,21 @@ namespace YLFramework.Tests
         [UnityTest]
         public IEnumerator CompleteZipSourcesCompileWithOnlyTrustedBclReferences()
         {
-            const string root = "Assets/YLFramework/Runtime/Utilities/ZipTool";
-            var sources = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories);
+            const string Root = "Assets/YLFramework/Runtime/Utilities/ZipTool";
+            var sources = Directory.GetFiles(Root, "*.cs", SearchOption.AllDirectories);
             Assert.That(sources, Is.Not.Empty);
-            Assert.That(File.Exists(root + "/YLFramework.Utilities.ZipTool.asmdef"), Is.False);
+            Assert.That(File.Exists(Root + "/YLFramework.Utilities.ZipTool.asmdef"), Is.False);
             var folder = Path.Combine(Path.GetTempPath(), "kilo", "YLZip.SourceClosure-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             try
             {
                 var output = Path.Combine(folder, "ZipSourceClosure.dll");
-                var builder = new AssemblyBuilder(output, sources) { flags = AssemblyBuilderFlags.DevelopmentBuild,
-                    buildTarget = BuildTarget.StandaloneWindows64, buildTargetGroup = BuildTargetGroup.Standalone };
+                var builder = new AssemblyBuilder(output, sources)
+                {
+                    flags = AssemblyBuilderFlags.DevelopmentBuild,
+                    buildTarget = BuildTarget.StandaloneWindows64,
+                    buildTargetGroup = BuildTargetGroup.Standalone
+                };
                 var contents = Path.GetFullPath(EditorApplication.applicationContentsPath);
                 var roots = new[] { Path.Combine(contents, "MonoBleedingEdge") + Path.DirectorySeparatorChar,
                     Path.Combine(contents, "NetStandard") + Path.DirectorySeparatorChar };
@@ -44,13 +48,20 @@ namespace YLFramework.Tests
                 CompilerMessage[] messages = null;
                 builder.buildFinished += (_, result) => messages = result;
                 Assert.That(builder.Build(), Is.True);
-                while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+                while (builder.status != AssemblyBuilderStatus.Finished)
+                {
+                    yield return null;
+                }
+
                 Assert.That(messages, Is.Not.Null);
                 Assert.That(messages.Where(message => message.type == CompilerMessageType.Error).Select(message => message.message), Is.Empty);
                 Assert.That(File.Exists(output), Is.True);
                 TestContext.WriteLine("Zip source files: {0}; BCL-only references:\n{1}", sources.Length, string.Join("\n", references));
             }
-            finally { Directory.Delete(folder, true); }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
         }
     }
 }

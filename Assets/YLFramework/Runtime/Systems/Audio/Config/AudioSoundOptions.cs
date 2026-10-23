@@ -33,10 +33,16 @@ namespace YLFramework.Services.Audio
         public AudioSoundOptions()
         {
             var defaults = AudioPlaybackOptions.Defaults;
-            Loop = defaults.Loop; Volume = defaults.Volume; Pitch = defaults.Pitch;
-            PlaySoundMode = defaults.PlaySoundMode; MinDistance = defaults.MinDistance;
-            MaxDistance = defaults.MaxDistance; RolloffMode = defaults.RolloffMode;
-            OutputRoute = defaults.OutputRoute; AutoFade = defaults.AutoFade; Priority = defaults.Priority;
+            Loop = defaults.Loop;
+            Volume = defaults.Volume;
+            Pitch = defaults.Pitch;
+            PlaySoundMode = defaults.PlaySoundMode;
+            MinDistance = defaults.MinDistance;
+            MaxDistance = defaults.MaxDistance;
+            RolloffMode = defaults.RolloffMode;
+            OutputRoute = defaults.OutputRoute;
+            AutoFade = defaults.AutoFade;
+            Priority = defaults.Priority;
         }
         /// <summary>A fresh nonlooping configuration with valid playback defaults.</summary>
         public static AudioSoundOptions Defaults => new AudioSoundOptions();

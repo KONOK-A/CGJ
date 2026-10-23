@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace YLFramework.Actions
@@ -8,7 +8,7 @@ namespace YLFramework.Actions
     /// </summary>
     public class Lerp : IAction
     {
-        private static readonly ActionPool<Lerp> mPool =
+        private static readonly ActionPool<Lerp> _pool =
             new ActionPool<Lerp>(() => new Lerp(), null, 10);
 
         /// <summary>起始值，启动时先通知该值。</summary>
@@ -26,7 +26,7 @@ namespace YLFramework.Actions
         /// <summary>到达插值终点后调用；直接标记 Finish 不会触发。</summary>
         public Action OnLerpFinish;
 
-        private float mCurrentTime = 0.0f;
+        private float _currentTime = 0.0f;
 
         /// <summary>
         /// 分配并初始化线性插值动作。
@@ -39,9 +39,9 @@ namespace YLFramework.Actions
         /// <returns>尚未启动的插值动作，时间源由执行器选择。</returns>
         public static Lerp Allocate(float a, float b, float duration, Action<float> onLerp = null, Action onLerpFinish = null)
         {
-            var retNode = mPool.Allocate();
-            retNode.ActionID = ActionKit.ID_GENERATOR++;
-            retNode.Deinited = false;
+            var retNode = _pool.Allocate();
+            retNode.ActionId = ActionKit.IdGenerator++;
+            retNode.IsDeinitialized = false;
             retNode.Reset();
             retNode.A = a;
             retNode.B = b;
@@ -52,35 +52,44 @@ namespace YLFramework.Actions
         }
 
         /// <inheritdoc />
-        public bool Paused { get; set; }
+        public bool IsPaused
+        {
+            get; set;
+        }
         /// <summary>清零累计时间并重置执行阶段和暂停状态，保留插值配置与回调。</summary>
         public void Reset()
         {
             Status = ActionStatus.NotStart;
-            Paused = false;
-            mCurrentTime = 0.0f;
+            IsPaused = false;
+            _currentTime = 0.0f;
         }
 
         /// <summary>清除插值回调并安排延迟回收，不触发插值结束回调。</summary>
         public void Deinit()
         {
-            if (!Deinited)
+            if (!IsDeinitialized)
             {
-                Deinited = true;
+                IsDeinitialized = true;
                 OnLerp = null;
                 OnLerpFinish = null;
-                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Lerp>(mPool, this));
+                ActionQueue.AddCallback(new ActionQueueRecycleCallback<Lerp>(_pool, this));
             }
         }
 
         /// <inheritdoc />
-        public ulong ActionID { get; set; }
+        public ulong ActionId
+        {
+            get; set;
+        }
         /// <inheritdoc />
-        public ActionStatus Status { get; set; }
+        public ActionStatus Status
+        {
+            get; set;
+        }
         /// <summary>清零累计时间并输出起点，不在启动阶段输出终点。</summary>
         public void OnStart()
         {
-            mCurrentTime = 0.0f;
+            _currentTime = 0.0f;
             OnLerp?.Invoke(Mathf.Lerp(A, B, 0));
         }
 
@@ -88,10 +97,10 @@ namespace YLFramework.Actions
         /// <param name="dt">本次累计的时间增量，单位为秒。</param>
         public void OnExecute(float dt)
         {
-            mCurrentTime += dt;
-            if (mCurrentTime < Duration)
+            _currentTime += dt;
+            if (_currentTime < Duration)
             {
-                OnLerp?.Invoke(Mathf.Lerp(A, B, mCurrentTime / Duration));
+                OnLerp?.Invoke(Mathf.Lerp(A, B, _currentTime / Duration));
             }
             else
             {
@@ -107,7 +116,10 @@ namespace YLFramework.Actions
         }
 
         /// <inheritdoc />
-        public bool Deinited { get; set; }
+        public bool IsDeinitialized
+        {
+            get; set;
+        }
     }
 
     /// <summary>

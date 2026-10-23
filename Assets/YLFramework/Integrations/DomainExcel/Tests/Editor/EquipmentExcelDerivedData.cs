@@ -2,6 +2,9 @@
 using YLFramework.EquipmentSystem;
 namespace YLFramework.Domain.Excel.Tests
 {
-    public sealed class EquipmentExcelDerivedData : EquipmentConfigData { public int bonus = 37; }
+    public sealed class EquipmentExcelDerivedData : EquipmentConfigData
+    {
+        public int bonus = 37;
+    }
 }
 #endif

@@ -10,38 +10,49 @@ namespace YLFramework.Tests.Audio
 {
     public class AudioDefaultsPlaybackTests
     {
-        private static readonly string[] Keys =
+        private static readonly string[] _keys =
         {
             "KEY_AUDIO_MANAGER_SOUND_ON", "KEY_AUDIO_MANAGER_MUSIC_ON", "KEY_AUDIO_MANAGER_VOICE_ON",
             "KEY_AUDIO_MANAGER_SOUND_VOLUME", "KEY_AUDIO_MANAGER_MUSIC_VOLUME", "KEY_AUDIO_MANAGER_VOICE_VOLUME"
         };
-        private readonly bool[] mHadKeys = new bool[6];
-        private readonly int[] mSwitches = new int[3];
-        private readonly float[] mVolumes = new float[3];
-        private AudioClip mClip;
-        private GameObject mListener;
-        private bool mOwnActionSession;
+        private readonly bool[] _hadKeys = new bool[6];
+        private readonly int[] _switches = new int[3];
+        private readonly float[] _volumes = new float[3];
+        private AudioClip _clip;
+        private GameObject _listener;
+        private bool _ownsActionSession;
 
         [SetUp]
         public void SetUp()
         {
             AudioKit.Shutdown();
-            mOwnActionSession = false;
-            for (var i = 0; i < Keys.Length; i++) mHadKeys[i] = PlayerPrefs.HasKey(Keys[i]);
+            _ownsActionSession = false;
+            for (var i = 0; i < _keys.Length; i++)
+            {
+                _hadKeys[i] = PlayerPrefs.HasKey(_keys[i]);
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                mSwitches[i] = PlayerPrefs.GetInt(Keys[i]);
-                mVolumes[i] = PlayerPrefs.GetFloat(Keys[i + 3]);
+                _switches[i] = PlayerPrefs.GetInt(_keys[i]);
+                _volumes[i] = PlayerPrefs.GetFloat(_keys[i + 3]);
             }
-            foreach (var key in Keys) PlayerPrefs.DeleteKey(key);
-            mClip = AudioClip.Create("defaults-playback", 441000, 1, 44100, false);
+            foreach (var key in _keys)
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+
+            _clip = AudioClip.Create("defaults-playback", 441000, 1, 44100, false);
             var hasListener = false;
             foreach (var listener in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+            {
                 hasListener |= listener.isActiveAndEnabled;
+            }
+
             if (!hasListener)
             {
-                mListener = new GameObject("AudioDefaults.Listener");
-                mListener.AddComponent<AudioListener>();
+                _listener = new GameObject("AudioDefaults.Listener");
+                _listener.AddComponent<AudioListener>();
             }
         }
 
@@ -49,16 +60,37 @@ namespace YLFramework.Tests.Audio
         public IEnumerator TearDown()
         {
             AudioKit.Shutdown();
-            if (mOwnActionSession) ActionKit.Shutdown();
+            if (_ownsActionSession)
+            {
+                ActionKit.Shutdown();
+            }
+
             for (var i = 0; i < 3; i++)
             {
-                if (mHadKeys[i]) PlayerPrefs.SetInt(Keys[i], mSwitches[i]);
-                else PlayerPrefs.DeleteKey(Keys[i]);
-                if (mHadKeys[i + 3]) PlayerPrefs.SetFloat(Keys[i + 3], mVolumes[i]);
-                else PlayerPrefs.DeleteKey(Keys[i + 3]);
+                if (_hadKeys[i])
+                {
+                    PlayerPrefs.SetInt(_keys[i], _switches[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i]);
+                }
+
+                if (_hadKeys[i + 3])
+                {
+                    PlayerPrefs.SetFloat(_keys[i + 3], _volumes[i]);
+                }
+                else
+                {
+                    PlayerPrefs.DeleteKey(_keys[i + 3]);
+                }
             }
-            Object.Destroy(mClip);
-            if (mListener) Object.Destroy(mListener);
+            Object.Destroy(_clip);
+            if (_listener)
+            {
+                Object.Destroy(_listener);
+            }
+
             yield return null;
         }
 
@@ -66,9 +98,9 @@ namespace YLFramework.Tests.Audio
         public IEnumerator MinimalPlaybackAndPartialConfigurationWorkWithoutMixerOrInitialization()
         {
             Assert.IsFalse(AudioManager.HasInstance);
-            var music = AudioKit.PlayMusic(mClip);
-            var voice = AudioKit.PlayVoice(mClip);
-            var sound = AudioKit.PlaySound(mClip);
+            var music = AudioKit.PlayMusic(_clip);
+            var voice = AudioKit.PlayVoice(_clip);
+            var sound = AudioKit.PlaySound(_clip);
             yield return null;
             foreach (var handle in new[] { music, voice, sound })
             {
@@ -83,8 +115,8 @@ namespace YLFramework.Tests.Audio
             Assert.IsFalse(voice.Voice.Source.loop);
             Assert.IsFalse(sound.Voice.Source.loop);
             var options = new AudioSoundOptions { Volume = .5f };
-            var first = AudioKit.PlaySound(mClip, options);
-            var second = AudioKit.PlaySound(mClip, options);
+            var first = AudioKit.PlaySound(_clip, options);
+            var second = AudioKit.PlaySound(_clip, options);
             options.Volume = 0f;
             options.Pitch = 0f;
             first.SetVolumeScale(.25f);
@@ -96,18 +128,21 @@ namespace YLFramework.Tests.Audio
             Assert.AreEqual(1f, second.Voice.Source.pitch);
             Assert.AreEqual(0f, options.Volume);
             Assert.AreEqual(0f, options.Pitch);
-            foreach (var key in Keys) Assert.IsFalse(PlayerPrefs.HasKey(key), "Playback must not create preferences.");
+            foreach (var key in _keys)
+            {
+                Assert.IsFalse(PlayerPrefs.HasKey(key), "Playback must not create preferences.");
+            }
         }
 
         [UnityTest]
         public IEnumerator ActionKeepsAllocationSnapshotAcrossFramesAndReset()
         {
-            Assert.IsFalse(ActionKit.Initialized, "Do not release another owner's Action session.");
+            Assert.IsFalse(ActionKit.IsInitialized, "Do not release another owner's Action session.");
             Assert.IsEmpty(Object.FindObjectsByType<ActionRecycleDriver>(FindObjectsInactive.Include, FindObjectsSortMode.None));
             Assert.IsEmpty(Object.FindObjectsByType<MonoUpdateActionExecutor>(FindObjectsInactive.Include, FindObjectsSortMode.None));
-            mOwnActionSession = true;
+            _ownsActionSession = true;
             var options = new AudioSoundOptions { Volume = .4f };
-            var action = PlaySoundAction.AllocateWithOptions(mClip, options);
+            var action = PlaySoundAction.AllocateWithOptions(_clip, options);
             try
             {
                 options.Pitch = 0f;
@@ -126,7 +161,10 @@ namespace YLFramework.Tests.Audio
                 Assert.AreEqual(1f, second.Voice.Source.pitch);
                 Assert.AreEqual(0f, options.Volume);
             }
-            finally { action.Deinit(); }
+            finally
+            {
+                action.Deinit();
+            }
         }
     }
 }

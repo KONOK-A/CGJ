@@ -11,15 +11,15 @@ namespace YLFramework.Tests.Extensions.Behavior
 {
     public class MovingPlatformTests
     {
-        private readonly List<GameObject> owned = new List<GameObject>();
-        private float originalTimeScale;
-        private float originalFixedDeltaTime;
+        private readonly List<GameObject> _owned = new List<GameObject>();
+        private float _originalTimeScale;
+        private float _originalFixedDeltaTime;
 
         [SetUp]
         public void ConfigureFixedClock()
         {
-            originalTimeScale = Time.timeScale;
-            originalFixedDeltaTime = Time.fixedDeltaTime;
+            _originalTimeScale = Time.timeScale;
+            _originalFixedDeltaTime = Time.fixedDeltaTime;
             Time.timeScale = 1;
             Time.fixedDeltaTime = 0.02f;
         }
@@ -28,7 +28,7 @@ namespace YLFramework.Tests.Extensions.Behavior
         {
             var obj = new GameObject("YL.Behavior." + name);
             obj.transform.position = position;
-            owned.Add(obj);
+            _owned.Add(obj);
             return obj;
         }
 
@@ -60,13 +60,20 @@ namespace YLFramework.Tests.Extensions.Behavior
         {
             try
             {
-                foreach (var obj in owned) if (obj) Object.DestroyImmediate(obj);
-                owned.Clear();
+                foreach (var obj in _owned)
+                {
+                    if (obj)
+                    {
+                        Object.DestroyImmediate(obj);
+                    }
+                }
+
+                _owned.Clear();
             }
             finally
             {
-                Time.timeScale = originalTimeScale;
-                Time.fixedDeltaTime = originalFixedDeltaTime;
+                Time.timeScale = _originalTimeScale;
+                Time.fixedDeltaTime = _originalFixedDeltaTime;
             }
         }
 
@@ -150,12 +157,19 @@ namespace YLFramework.Tests.Extensions.Behavior
                 // onMove 在提交前触发，读取的是上一次 FixedUpdate 已提交的位置。
                 float committed = platform.transform.position.x - origin.x;
                 onlyFixedUpdates &= Time.inFixedTimeStep;
-                if (previous > 1.5f && committed < 0.5f) wrapped = true;
+                if (previous > 1.5f && committed < 0.5f)
+                {
+                    wrapped = true;
+                }
+
                 furthest = Mathf.Max(furthest, committed);
                 previous = committed;
             });
             platform.gameObject.SetActive(true);
-            for (int i = 0; i < 24 && !wrapped; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 24 && !wrapped; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             Assert.That(furthest, Is.GreaterThan(1.5f));
             Assert.That(wrapped, Is.True, "Loop must wrap to the start, not stop or reverse.");
@@ -177,7 +191,10 @@ namespace YLFramework.Tests.Extensions.Behavior
                 onlyFixedUpdates &= Time.inFixedTimeStep;
             });
             platform.gameObject.SetActive(true);
-            for (int i = 0; i < 22; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 22; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             int turnaround = committedPositions.FindIndex(x => x >= 1.8f);
             Assert.That(turnaround, Is.GreaterThanOrEqualTo(0));
@@ -202,15 +219,26 @@ namespace YLFramework.Tests.Extensions.Behavior
             platform.onStartRun = new UnityEvent();
             platform.onStop = new UnityEvent();
             platform.onStartRun.AddListener(() => starts++);
-            platform.onStop.AddListener(() => { stops++; positionAtStop = platform.transform.position; });
+            platform.onStop.AddListener(() =>
+            {
+                stops++;
+                positionAtStop = platform.transform.position;
+            });
             platform.gameObject.SetActive(true);
-            for (int i = 0; i < 16 && platform.IsRunning; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 16 && platform.IsRunning; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             Assert.That(platform.IsRunning, Is.False);
             Assert.That(platform.transform.position, Is.EqualTo(origin + Vector3.right * 2));
             Assert.That(positionAtStop, Is.EqualTo(origin + Vector3.right * 2));
             Assert.That(starts, Is.EqualTo(1));
-            for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 3; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
+
             Assert.That(stops, Is.EqualTo(1));
             Assert.That(platform.transform.position, Is.EqualTo(positionAtStop));
         }
@@ -224,10 +252,16 @@ namespace YLFramework.Tests.Extensions.Behavior
             platform.onMove = new Vector3UnityEvent();
             platform.onMove.AddListener(_ =>
             {
-                if (firstMoveAt < 0) firstMoveAt = Time.fixedTime;
+                if (firstMoveAt < 0)
+                {
+                    firstMoveAt = Time.fixedTime;
+                }
             });
             platform.gameObject.SetActive(true);
-            for (int i = 0; i < 16 && firstMoveAt < 0; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 16 && firstMoveAt < 0; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             Assert.That(firstMoveAt - startedAt, Is.InRange(0.12f - 0.005f, 0.12f + 2 * Time.fixedDeltaTime + 0.005f));
             Assert.That(platform.transform.position.x, Is.GreaterThan(origin.x));
@@ -253,7 +287,11 @@ namespace YLFramework.Tests.Extensions.Behavior
             platform.Pause(true);
             var pausedAt = platform.transform.position;
             int movesBeforePause = moves;
-            for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 3; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
+
             Assert.That(platform.transform.position, Is.EqualTo(pausedAt));
             Assert.That(moves, Is.EqualTo(movesBeforePause));
             Assert.That(platform.IsRunning, Is.False);
@@ -266,7 +304,11 @@ namespace YLFramework.Tests.Extensions.Behavior
             var stoppedAt = platform.transform.position;
             int movesBeforeStop = moves;
             platform.Pause(false);
-            for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 3; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
+
             Assert.That(platform.IsRunning, Is.False);
             Assert.That(platform.transform.position, Is.EqualTo(stoppedAt));
             Assert.That(moves, Is.EqualTo(movesBeforeStop));
@@ -296,7 +338,10 @@ namespace YLFramework.Tests.Extensions.Behavior
             catcher.RefreshContacts();
             Assert.That(catcher.Contacts.Exists(hit => hit.rigidbody == body), Is.True);
             var before = body.position;
-            for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 3; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             var platformDelta = (Vector2)(platform.transform.position - origin);
             Assert.That(platformDelta.x, Is.GreaterThan(0));

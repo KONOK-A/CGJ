@@ -15,21 +15,27 @@ namespace YLFramework.Tests.Resource
 {
     public class DynamicTextureSourceTests
     {
-        private string file;
-        private ResourceAddress address;
-        private HttpListener server;
-        private Task serve;
+        private string _file;
+        private ResourceAddress _address;
+        private HttpListener _server;
+        private Task _serve;
 
         [SetUp]
         public void SetUp()
         {
             Assert.That(ResourceSystem.Current, Is.Null);
             Assert.That(Directory.Exists(Application.temporaryCachePath), Is.True);
-            file = Path.Combine(Application.temporaryCachePath, "YL83-CaSe-" + Guid.NewGuid().ToString("N") + ".png");
+            _file = Path.Combine(Application.temporaryCachePath, "YL83-CaSe-" + Guid.NewGuid().ToString("N") + ".png");
             var image = new Texture2D(3, 2);
-            try { File.WriteAllBytes(file, image.EncodeToPNG()); }
-            finally { Object.DestroyImmediate(image); }
-            address = new ResourceAddress("texture83", "image");
+            try
+            {
+                File.WriteAllBytes(_file, image.EncodeToPNG());
+            }
+            finally
+            {
+                Object.DestroyImmediate(image);
+            }
+            _address = new ResourceAddress("texture83", "image");
         }
 
         [TearDown]
@@ -37,18 +43,22 @@ namespace YLFramework.Tests.Resource
         {
             typeof(ResourceSystem).GetMethod("EndSession", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).Invoke(null, null);
             typeof(ResourceSystem).GetMethod("ResetSession", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).Invoke(null, null);
-            File.Delete(file);
-            if (server != null)
+            File.Delete(_file);
+            if (_server != null)
             {
-                server.Stop();
-                server.Close();
-                if (serve != null) Assert.That(serve.Wait(TimeSpan.FromSeconds(3)), Is.True, "Fixture server must settle its own request task.");
-                server = null;
+                _server.Stop();
+                _server.Close();
+                if (_serve != null)
+                {
+                    Assert.That(_serve.Wait(TimeSpan.FromSeconds(3)), Is.True, "Fixture server must settle its own request task.");
+                }
+
+                _server = null;
             }
         }
 
         private ResourceSystem Initialize()
-            => Initialize(new[] { new ResourceCatalogEntry("image", address, new ResourceLocation(ResourceSourceId.LocalTexture, file, typeof(Texture2D))) });
+            => Initialize(new[] { new ResourceCatalogEntry("image", _address, new ResourceLocation(ResourceSourceId.LocalTexture, _file, typeof(Texture2D))) });
 
         private ResourceSystem Initialize(ResourceCatalogEntry[] entries)
         {
@@ -67,21 +77,21 @@ namespace YLFramework.Tests.Resource
             var port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
             portProbe.Stop();
             var root = "http://127.0.0.1:" + port + "/";
-            server = new HttpListener();
-            server.Prefixes.Add(root);
-            server.Start();
-            serve = Task.Run(async () =>
+            _server = new HttpListener();
+            _server.Prefixes.Add(root);
+            _server.Start();
+            _serve = Task.Run(async () =>
             {
                 try
                 {
-                    while (server.IsListening)
+                    while (_server.IsListening)
                     {
-                        var context = await server.GetContextAsync();
+                        var context = await _server.GetContextAsync();
                         await handler(context);
                     }
                 }
-                catch (HttpListenerException) when (!server.IsListening) { }
-                catch (ObjectDisposedException) when (!server.IsListening) { }
+                catch (HttpListenerException) when (!_server.IsListening) { }
+                catch (ObjectDisposedException) when (!_server.IsListening) { }
             });
             return root;
         }
@@ -89,20 +99,28 @@ namespace YLFramework.Tests.Resource
         private static IEnumerator Wait<T>(ResourceRequest<T> request)
         {
             var until = Time.realtimeSinceStartup + 8;
-            while (!request.IsDone && Time.realtimeSinceStartup < until) yield return null;
+            while (!request.IsDone && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(request.IsDone, Is.True, "Texture operation must terminate, including error and abort.");
         }
 
         [Test]
         public void DriveRelativeAndCurrentDriveRootedLocatorsAreNotExplicitAbsoluteFiles()
         {
-            if (Application.platform != RuntimePlatform.WindowsEditor && Application.platform != RuntimePlatform.WindowsPlayer) Assert.Ignore("Windows rooted-path regression.");
-            var drive = Path.GetPathRoot(Path.GetFullPath(file)).Substring(0, 2);
-            foreach (var locator in new[] { drive + Path.GetFileName(file), "\\" + Path.GetFileName(file) })
+            if (Application.platform != RuntimePlatform.WindowsEditor && Application.platform != RuntimePlatform.WindowsPlayer)
+            {
+                Assert.Ignore("Windows rooted-path regression.");
+            }
+
+            var drive = Path.GetPathRoot(Path.GetFullPath(_file)).Substring(0, 2);
+            foreach (var locator in new[] { drive + Path.GetFileName(_file), "\\" + Path.GetFileName(_file) })
             {
                 using var request = ResourceSystem.InitializeAsync(new ResourceConfiguration(new[] { new ResourceCatalog("texture83", new[]
                 {
-                    new ResourceCatalogEntry("image", address, new ResourceLocation(ResourceSourceId.LocalTexture, locator, typeof(Texture2D)))
+                    new ResourceCatalogEntry("image", _address, new ResourceLocation(ResourceSourceId.LocalTexture, locator, typeof(Texture2D)))
                 }) }));
                 Assert.That(request.Status, Is.EqualTo(ResourceRequestStatus.Failed), "Rooted is not necessarily fully qualified on Windows.");
                 Assert.That(request.Error.Kind, Is.EqualTo(ResourceError.InvalidConfiguration));
@@ -113,12 +131,12 @@ namespace YLFramework.Tests.Resource
         public IEnumerator LocalTextureSharesProductionCancelsIndependentlyAndDestroysOnlyCreatedResult()
         {
             var system = Initialize();
-            using var first = system.AcquireAsync<Texture2D>(address);
-            using var second = system.AcquireAsync<Texture2D>(address);
+            using var first = system.AcquireAsync<Texture2D>(_address);
+            using var second = system.AcquireAsync<Texture2D>(_address);
             first.Cancel();
             yield return second;
             using var lease = second.TakeResult();
-            using var other = system.Acquire<Texture2D>(address);
+            using var other = system.Acquire<Texture2D>(_address);
             var native = lease.Asset;
             Assert.That(native.width, Is.EqualTo(3));
             Assert.That(native.height, Is.EqualTo(2));
@@ -135,30 +153,34 @@ namespace YLFramework.Tests.Resource
         public IEnumerator LocalMissingBadImageFinalCancelAndDecodedUnclaimedResultHaveNoOrphan()
         {
             var system = Initialize();
-            File.Delete(file);
-            using (var missing = system.AcquireAsync<Texture2D>(address))
+            File.Delete(_file);
+            using (var missing = system.AcquireAsync<Texture2D>(_address))
             {
                 Assert.That(missing.Error.Kind, Is.EqualTo(ResourceError.LoadFailed));
                 Assert.That(missing.Error.InnerException, Is.InstanceOf<FileNotFoundException>());
             }
-            File.WriteAllBytes(file, Encoding.UTF8.GetBytes("not-an-image"));
-            using (var invalid = system.AcquireAsync<Texture2D>(address))
+            File.WriteAllBytes(_file, Encoding.UTF8.GetBytes("not-an-image"));
+            using (var invalid = system.AcquireAsync<Texture2D>(_address))
             {
                 yield return Wait(invalid);
                 Assert.That(invalid.Status, Is.EqualTo(ResourceRequestStatus.Failed));
             }
             var original = new Texture2D(2, 3);
-            File.WriteAllBytes(file, original.EncodeToPNG());
+            File.WriteAllBytes(_file, original.EncodeToPNG());
             Object.DestroyImmediate(original);
-            using (var canceled = system.AcquireAsync<Texture2D>(address)) canceled.Cancel();
+            using (var canceled = system.AcquireAsync<Texture2D>(_address))
+            {
+                canceled.Cancel();
+            }
+
             using var closing = system.ShutdownAsync();
             yield return Wait(closing);
             Assert.That(closing.TakeResult(), Is.True);
             Assert.That(system.GetDiagnosticsSnapshot().RecordCount, Is.Zero);
             system = Initialize();
-            var holder = system.Acquire<Texture2D>(address);
+            var holder = system.Acquire<Texture2D>(_address);
             var native = holder.Asset;
-            using (var unclaimed = system.AcquireAsync<Texture2D>(address))
+            using (var unclaimed = system.AcquireAsync<Texture2D>(_address))
             {
                 Assert.That(unclaimed.Status, Is.EqualTo(ResourceRequestStatus.Succeeded));
                 holder.Dispose();
@@ -171,14 +193,25 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator UrlCaseIsPreservedSharedConsumerCancellationAndErrorDecodingAreIsolated()
         {
-            var png = File.ReadAllBytes(file);
+            var png = File.ReadAllBytes(_file);
             var imageGets = 0;
             var root = StartServer(async context =>
             {
                 byte[] bytes;
-                if (context.Request.RawUrl == "/Image?Version=AbC") { imageGets++; bytes = png; }
-                else if (context.Request.RawUrl == "/bad") bytes = Encoding.UTF8.GetBytes("bad-image");
-                else { context.Response.StatusCode = 404; bytes = Array.Empty<byte>(); }
+                if (context.Request.RawUrl == "/Image?Version=AbC")
+                {
+                    imageGets++;
+                    bytes = png;
+                }
+                else if (context.Request.RawUrl == "/bad")
+                {
+                    bytes = Encoding.UTF8.GetBytes("bad-image");
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                    bytes = Array.Empty<byte>();
+                }
                 context.Response.ContentLength64 = bytes.Length;
                 await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length);
                 context.Response.Close();
@@ -187,13 +220,13 @@ namespace YLFramework.Tests.Resource
             var bad = new ResourceAddress("texture83", "bad");
             var system = Initialize(new[]
             {
-                new ResourceCatalogEntry("image", address, new ResourceLocation(ResourceSourceId.UrlTexture, root + "Image?Version=AbC", typeof(Texture2D))),
+                new ResourceCatalogEntry("image", _address, new ResourceLocation(ResourceSourceId.UrlTexture, root + "Image?Version=AbC", typeof(Texture2D))),
                 new ResourceCatalogEntry("lower", lower, new ResourceLocation(ResourceSourceId.UrlTexture, root + "image?version=abc", typeof(Texture2D))),
                 new ResourceCatalogEntry("bad", bad, new ResourceLocation(ResourceSourceId.UrlTexture, root + "bad", typeof(Texture2D)))
             });
-            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<Texture2D>(address)).Kind, Is.EqualTo(ResourceError.Unsupported));
-            using var first = system.AcquireAsync<Texture2D>(address);
-            using var second = system.AcquireAsync<Texture2D>(address);
+            Assert.That(Assert.Throws<ResourceException>(() => system.Acquire<Texture2D>(_address)).Kind, Is.EqualTo(ResourceError.Unsupported));
+            using var first = system.AcquireAsync<Texture2D>(_address);
+            using var second = system.AcquireAsync<Texture2D>(_address);
             first.Cancel();
             using var missing = system.AcquireAsync<Texture2D>(lower);
             using var corrupt = system.AcquireAsync<Texture2D>(bad);
@@ -207,7 +240,11 @@ namespace YLFramework.Tests.Resource
             using var lease = second.TakeResult();
             var native = lease.Asset;
             Assert.That(native.width, Is.EqualTo(3));
-            using (var ready = system.Acquire<Texture2D>(address)) Assert.That(ready.Asset, Is.SameAs(native));
+            using (var ready = system.Acquire<Texture2D>(_address))
+            {
+                Assert.That(ready.Asset, Is.SameAs(native));
+            }
+
             lease.Dispose();
             yield return null;
             Assert.That(native == null, Is.True);
@@ -217,10 +254,14 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator UrlFinalCancellationAbortsPrivateIoAndShutdownDrainsWithoutAHost()
         {
-            var root = StartServer(context => { context.Response.Close(); return Task.CompletedTask; });
-            var system = Initialize(new[] { new ResourceCatalogEntry("image", address,
+            var root = StartServer(context =>
+            {
+                context.Response.Close();
+                return Task.CompletedTask;
+            });
+            var system = Initialize(new[] { new ResourceCatalogEntry("image", _address,
                 new ResourceLocation(ResourceSourceId.UrlTexture, root + "cancel", typeof(Texture2D))) });
-            using var request = system.AcquireAsync<Texture2D>(address);
+            using var request = system.AcquireAsync<Texture2D>(_address);
             request.Cancel();
             using var closed = system.ShutdownAsync();
             yield return Wait(closed);
@@ -232,14 +273,18 @@ namespace YLFramework.Tests.Resource
         [UnityTest]
         public IEnumerator StartedUrlCancellationAndImmediateReacquireCannotInheritAnAbortedGeneration()
         {
-            var png = File.ReadAllBytes(file);
+            var png = File.ReadAllBytes(_file);
             var entered = new TaskCompletionSource<bool>();
             var release = new TaskCompletionSource<bool>();
             var count = 0;
             var root = StartServer(async context =>
             {
                 var number = System.Threading.Interlocked.Increment(ref count);
-                if (number == 1) { entered.TrySetResult(true); await release.Task; }
+                if (number == 1)
+                {
+                    entered.TrySetResult(true);
+                    await release.Task;
+                }
                 try
                 {
                     context.Response.ContentLength64 = png.Length;
@@ -248,17 +293,21 @@ namespace YLFramework.Tests.Resource
                 }
                 catch (HttpListenerException) when (number == 1) { }
             });
-            var system = Initialize(new[] { new ResourceCatalogEntry("image", address,
+            var system = Initialize(new[] { new ResourceCatalogEntry("image", _address,
                 new ResourceLocation(ResourceSourceId.UrlTexture, root + "same-key", typeof(Texture2D))) });
-            using var first = system.AcquireAsync<Texture2D>(address);
+            using var first = system.AcquireAsync<Texture2D>(_address);
             var until = Time.realtimeSinceStartup + 8;
-            while (!entered.Task.IsCompleted && Time.realtimeSinceStartup < until) yield return null;
+            while (!entered.Task.IsCompleted && Time.realtimeSinceStartup < until)
+            {
+                yield return null;
+            }
+
             Assert.That(entered.Task.IsCompleted, Is.True, "The server must confirm native transfer started before cancel.");
             using ResourceRequest<AssetLease<Texture2D>> replacement = CancelAndReplace();
             ResourceRequest<AssetLease<Texture2D>> CancelAndReplace()
             {
                 first.Cancel();
-                var next = system.AcquireAsync<Texture2D>(address);
+                var next = system.AcquireAsync<Texture2D>(_address);
                 release.TrySetResult(true);
                 return next;
             }
@@ -279,10 +328,10 @@ namespace YLFramework.Tests.Resource
         {
             var system = Initialize();
             Texture2D native = null;
-            using var request = system.AcquireAsync<Texture2D>(address);
+            using var request = system.AcquireAsync<Texture2D>(_address);
             request.Completed += value =>
             {
-                using var probe = system.Acquire<Texture2D>(address);
+                using var probe = system.Acquire<Texture2D>(_address);
                 native = probe.Asset;
                 value.Dispose();
             };

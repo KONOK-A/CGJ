@@ -25,10 +25,13 @@ namespace YLFramework.Core
         {
             var result = new PanelConfig
             {
-                Layer = Layer ?? defaults.Layer, Priority = Priority ?? defaults.Priority,
-                Modal = Modal ?? defaults.Modal, CoversRoot = CoversRoot ?? defaults.CoversRoot,
-                ParticipatesInTop = ParticipatesInTop ?? defaults.ParticipatesInTop,
-                InstanceMode = InstanceMode ?? defaults.InstanceMode, CacheOnClose = CacheOnClose ?? defaults.CacheOnClose
+                layer = Layer ?? defaults.layer,
+                priority = Priority ?? defaults.priority,
+                modal = Modal ?? defaults.modal,
+                coversRoot = CoversRoot ?? defaults.coversRoot,
+                participatesInTop = ParticipatesInTop ?? defaults.participatesInTop,
+                instanceMode = InstanceMode ?? defaults.instanceMode,
+                cacheOnClose = CacheOnClose ?? defaults.cacheOnClose
             };
             result.Validate();
             return result;
@@ -39,7 +42,9 @@ namespace YLFramework.Core
         {
             Validate();
             if (InstanceMode.HasValue || CacheOnClose.HasValue)
+            {
                 throw new ArgumentException("UpdateDisplay 只接受五个显示字段，不能改变实例模式或缓存策略。");
+            }
         }
     }
 }

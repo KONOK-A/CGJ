@@ -7,7 +7,12 @@ using UnityEngine.UI;
 namespace YLFramework.Localization
 {
     // TMP可用Other的公开string属性绑定，不让主体程序集依赖可选TMP包。
-    public enum ComponentType { Text, TextMesh, Other }
+    public enum ComponentType
+    {
+        Text,
+        TextMesh,
+        Other
+    }
     [AddComponentMenu("YLFramework/Localization/Localize String")]
     public class LocalizeString : LocalizeBase
     {
@@ -27,32 +32,53 @@ namespace YLFramework.Localization
             if (componentType == ComponentType.Text)
             {
                 var target = GetComponent<Text>();
-                if (target) target.text = value;
+                if (target)
+                {
+                    target.text = value;
+                }
+
                 return;
             }
             if (componentType == ComponentType.TextMesh)
             {
                 var target = GetComponent<TextMesh>();
-                if (target) target.text = value;
+                if (target)
+                {
+                    target.text = value;
+                }
+
                 return;
             }
             var other = string.IsNullOrEmpty(componentFullName) ? null : GetComponent(componentFullName);
-            if (!other) throw new InvalidOperationException($"Localization ID={ID}: component '{componentFullName}' is missing.");
+            if (!other)
+            {
+                throw new InvalidOperationException($"Localization ID={Id}: component '{componentFullName}' is missing.");
+            }
+
             var property = other.GetType().GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
             if (property != null && property.PropertyType == typeof(string) && property.CanWrite && property.GetIndexParameters().Length == 0)
-            { property.SetValue(other, value); return; }
+            {
+                property.SetValue(other, value);
+                return;
+            }
             var field = other.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
             if (field != null && field.FieldType == typeof(string) && !field.IsInitOnly)
-            { field.SetValue(other, value); return; }
-            throw new InvalidOperationException($"Localization ID={ID}: '{componentFullName}.{fieldName}' is not a writable public string member. Preserve reflected members in IL2CPP.");
+            {
+                field.SetValue(other, value);
+                return;
+            }
+            throw new InvalidOperationException($"Localization ID={Id}: '{componentFullName}.{fieldName}' is not a writable public string member. Preserve reflected members in IL2CPP.");
         }
 
         public string GetString()
         {
-            try { return LocalizationText.Compose(ID, id => LocalizationManager.GetString(id), args, appends); }
+            try
+            {
+                return LocalizationText.Compose(Id, id => LocalizationManager.GetString(id), args, appends);
+            }
             catch (FormatException error)
             {
-                throw new FormatException($"Localization language={LocalizationManager.RequestedLanguage}, ID={ID}, configs={LocalizationManager.ConfigNames()}: invalid argument/append format.", error);
+                throw new FormatException($"Localization language={LocalizationManager.RequestedLanguage}, ID={Id}, configs={LocalizationManager.ConfigNames()}: invalid argument/append format.", error);
             }
         }
         public string[] GetArgs() => LocalizationText.GetArguments(id => LocalizationManager.GetString(id), args);
@@ -66,7 +92,7 @@ namespace YLFramework.Localization
         public void Append(int id, string richText = null)
         {
             appends ??= new List<AppendData>();
-            appends.Add(new AppendData { type = AppendType.ID, id = id, richText = richText });
+            appends.Add(new AppendData { type = AppendType.Id, id = id, richText = richText });
             Refresh();
         }
 
@@ -77,6 +103,10 @@ namespace YLFramework.Localization
             Refresh();
         }
 
-        public void ClearAppend() { appends?.Clear(); Refresh(); }
+        public void ClearAppend()
+        {
+            appends?.Clear();
+            Refresh();
+        }
     }
 }

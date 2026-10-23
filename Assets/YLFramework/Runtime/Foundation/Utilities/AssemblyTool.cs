@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace YLFramework.Foundation
@@ -9,7 +9,7 @@ namespace YLFramework.Foundation
     public static class AssemblyTool
     {
         // 仅记录成功结果；失败不缓存，避免新程序集加载后命中永久失效的 null。
-        private static readonly Dictionary<string, Type> TypeCacheDict = new(StringComparer.Ordinal);
+        private static readonly Dictionary<string, Type> _typesByName = new(StringComparer.Ordinal);
 
         /// <summary>
         /// 按类型完整名称查找类型，成功结果会被缓存。
@@ -25,18 +25,26 @@ namespace YLFramework.Foundation
         /// </remarks>
         public static Type GetType(string classFullName)
         {
-            if (string.IsNullOrWhiteSpace(classFullName)) return null;
+            if (string.IsNullOrWhiteSpace(classFullName))
+            {
+                return null;
+            }
 
-            if (TypeCacheDict.TryGetValue(classFullName, out var cached) && cached != null)
+            if (_typesByName.TryGetValue(classFullName, out var cached) && cached != null)
+            {
                 return cached;
+            }
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
             foreach (var assembly in assemblies)
             {
                 var type = assembly.GetType(classFullName);
-                if (type == null) continue;
+                if (type == null)
+                {
+                    continue;
+                }
 
-                TypeCacheDict[classFullName] = type;
+                _typesByName[classFullName] = type;
                 return type;
             }
 

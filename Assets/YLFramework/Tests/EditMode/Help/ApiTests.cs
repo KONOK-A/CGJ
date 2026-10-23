@@ -7,44 +7,47 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using NUnit.Framework;
-using YLFramework.Editor.Help;
 using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Editor.Help;
 using Assembly = System.Reflection.Assembly;
 
 namespace YLFramework.Tests.Help
 {
     public sealed class ApiTests
     {
-        private string mFolder;
-        private static readonly Type Fixture = typeof(Fixtures.ApiFixture<>);
-        private static readonly string[] ShortNamespaces = { "YLFramework.Tests.Help.Fixtures", "YLFramework.Tests.Help.Other" };
+        private string _folder;
+        private static readonly Type _fixture = typeof(Fixtures.ApiFixture<>);
+        private static readonly string[] _shortNamespaces = { "YLFramework.Tests.Help.Fixtures", "YLFramework.Tests.Help.Other" };
 
         [SetUp]
         public void SetUp()
         {
-            mFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "kilo",
+            _folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "kilo",
                 "HelpKitTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(mFolder);
+            Directory.CreateDirectory(_folder);
         }
 
         [TearDown]
         public void TearDown()
         {
-            if (Directory.Exists(mFolder)) Directory.Delete(mFolder, true);
+            if (Directory.Exists(_folder))
+            {
+                Directory.Delete(_folder, true);
+            }
         }
 
         private HelpModule Module(params Type[] types) => new HelpModule
         {
             ApiTypes = types.Select(type => new HelpApiTypeDefinition(type, "测试 API")).ToArray(),
             XmlPaths = types.Select(type => type.Assembly).Distinct().ToDictionary(assembly => assembly,
-                assembly => Path.Combine(mFolder, "missing-" + assembly.GetName().Name + ".xml"))
+                assembly => Path.Combine(_folder, "missing-" + assembly.GetName().Name + ".xml"))
         };
 
         private string Xml(Assembly assembly, params XElement[] members)
         {
-            var path = Path.Combine(mFolder, Guid.NewGuid().ToString("N") + ".xml");
+            var path = Path.Combine(_folder, Guid.NewGuid().ToString("N") + ".xml");
             new XDocument(new XElement("doc", new XElement("assembly", new XElement("name", assembly.GetName().Name)),
                 new XElement("members", members))).Save(path);
             return path;
@@ -56,10 +59,10 @@ namespace YLFramework.Tests.Help
         [Test]
         public void FormatterPreservesVisibilityAndDeclaredOnlyMemberCategories()
         {
-            var members = HelpApiFormatter.GetDeclaredApi(Fixture).ToArray();
+            var members = HelpApiFormatter.GetDeclaredApi(_fixture).ToArray();
             CollectionAssert.IsSubsetOf(new[] { "Run", "Protected", "ProtectedInternal", "Value", "Item", "Changed", "Constant", "Readonly", ".ctor" },
                 members.Select(member => member.Name).ToArray());
-            Assert.That(members.All(member => member.DeclaringType == Fixture), Is.True);
+            Assert.That(members.All(member => member.DeclaringType == _fixture), Is.True);
             Assert.That(members.Any(member => member.Name == "Inherited" || member.Name == "Hidden" || member.Name == "Internal" ||
                                             member.Name.StartsWith("get_", StringComparison.Ordinal) || member.Name.StartsWith("add_", StringComparison.Ordinal) ||
                                             member.Name.StartsWith("op_", StringComparison.Ordinal) || member is Type), Is.False);
@@ -71,13 +74,13 @@ namespace YLFramework.Tests.Help
         public void FormatterUsesAllSelectedNamespacesAndHandlesGlobalAndNestedGenerics()
         {
             Assert.That(HelpApiFormatter.FormatType(typeof(HelpKitGlobalFixture)), Is.EqualTo("HelpKitGlobalFixture"));
-            Assert.That(HelpApiFormatter.FormatType(typeof(Fixtures.Outer<int>.Inner<string>), ShortNamespaces), Is.EqualTo("Outer<int>.Inner<string>"));
-            Assert.That(HelpApiFormatter.FormatType(typeof(Fixtures.Outer<int>.Leaf), ShortNamespaces), Is.EqualTo("Outer<int>.Leaf"));
+            Assert.That(HelpApiFormatter.FormatType(typeof(Fixtures.Outer<int>.Inner<string>), _shortNamespaces), Is.EqualTo("Outer<int>.Inner<string>"));
+            Assert.That(HelpApiFormatter.FormatType(typeof(Fixtures.Outer<int>.Leaf), _shortNamespaces), Is.EqualTo("Outer<int>.Leaf"));
             Assert.That(HelpApiFormatter.FormatType(typeof(Dictionary<string, int[,]>)), Is.EqualTo("Dictionary<string, int[,]>"));
-            Assert.That(HelpApiFormatter.FormatType(typeof(Other.ApiFixture), ShortNamespaces), Is.EqualTo("ApiFixture"));
+            Assert.That(HelpApiFormatter.FormatType(typeof(Other.ApiFixture), _shortNamespaces), Is.EqualTo("ApiFixture"));
             Assert.That(HelpApiFormatter.FormatType(typeof(Other.ApiFixture)), Is.EqualTo("YLFramework.Tests.Help.Other.ApiFixture"));
-            Assert.That(HelpApiFormatter.FormatType(typeof(UnityEngine.Vector3), ShortNamespaces), Is.EqualTo("UnityEngine.Vector3"));
-            var index = HelpApiIndex.Build(Module(Fixture, typeof(Other.ApiFixture)));
+            Assert.That(HelpApiFormatter.FormatType(typeof(UnityEngine.Vector3), _shortNamespaces), Is.EqualTo("UnityEngine.Vector3"));
+            var index = HelpApiIndex.Build(Module(_fixture, typeof(Other.ApiFixture)));
             Assert.That(index[0].Declaration, Does.Not.Contain("Run"), "The type declaration must not include member bodies.");
             Assert.That(index[1].Name, Is.EqualTo("ApiFixture"));
             Assert.That(index[0].Entries.Single(entry => entry.Name == "OtherModule").Signature, Is.EqualTo("public void OtherModule(ApiFixture other);"));
@@ -86,55 +89,55 @@ namespace YLFramework.Tests.Help
         [Test]
         public void DeclarationsAndSignaturesRetainConstraintsDefaultsAndMetadataOnlyBehavior()
         {
-            var declaration = HelpApiFormatter.FormatDeclaration(Fixture, ShortNamespaces);
+            var declaration = HelpApiFormatter.FormatDeclaration(_fixture, _shortNamespaces);
             Assert.That(declaration, Does.StartWith("public class ApiFixture<T> : ApiBase"));
             Assert.That(declaration, Does.Contain("IApiContract"));
             Assert.That(declaration, Does.EndWith("where T : class, new()"));
-            Assert.That(HelpApiFormatter.FormatDeclaration(typeof(Fixtures.HelpDelegate), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatDeclaration(typeof(Fixtures.HelpDelegate), _shortNamespaces),
                 Is.EqualTo("public delegate int HelpDelegate(string text);"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetMethod("Run"), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetMethod("Run"), _shortNamespaces),
                 Is.EqualTo("public int Run(int value, string label = \"demo\");"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetMethod("Convert"), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetMethod("Convert"), _shortNamespaces),
                 Is.EqualTo("public U Convert<U>(T input, ref U output) where U : struct;"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetProperty("Value"), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetProperty("Value"), _shortNamespaces),
                 Is.EqualTo("public int Value { get; private set; }"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetProperty("Item"), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetProperty("Item"), _shortNamespaces),
                 Is.EqualTo("public int this[int position] { get; }"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetField("Constant"), ShortNamespaces), Is.EqualTo("public const string Constant = \"fixture\";"));
-            Assert.That(HelpApiFormatter.FormatSignature(Fixture.GetField("Readonly"), ShortNamespaces), Is.EqualTo("public static readonly int Readonly;"));
-            Assert.That(HelpApiFormatter.FormatSignature(typeof(Fixtures.Extensions).GetMethod("Inspect"), ShortNamespaces),
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetField("Constant"), _shortNamespaces), Is.EqualTo("public const string Constant = \"fixture\";"));
+            Assert.That(HelpApiFormatter.FormatSignature(_fixture.GetField("Readonly"), _shortNamespaces), Is.EqualTo("public static readonly int Readonly;"));
+            Assert.That(HelpApiFormatter.FormatSignature(typeof(Fixtures.Extensions).GetMethod("Inspect"), _shortNamespaces),
                 Is.EqualTo("public static void Inspect(this ApiBase value, params string[] labels);"));
-            Assert.That(HelpApiFormatter.FormatSignature(typeof(Fixtures.FixtureEnum).GetField("Two"), ShortNamespaces), Is.EqualTo("Two = 2,"));
+            Assert.That(HelpApiFormatter.FormatSignature(typeof(Fixtures.FixtureEnum).GetField("Two"), _shortNamespaces), Is.EqualTo("Two = 2,"));
             // The fixture initializer, constructor, getter and methods throw if executed.
-            Assert.DoesNotThrow(() => HelpApiIndex.Build(Module(Fixture)));
+            Assert.DoesNotThrow(() => HelpApiIndex.Build(Module(_fixture)));
         }
 
         [Test]
         public void IndexPreservesTypeOrderSortsSignaturesAndAssociatesActualTypes()
         {
-            var module = Module(typeof(Other.ApiFixture), Fixture, typeof(Fixtures.Outer<>.Inner<>));
-            var exact = new HelpPage("exact", "准确关联", "指南", "嵌套 API") { RelatedTypes = new[] { Fixture } };
+            var module = Module(typeof(Other.ApiFixture), _fixture, typeof(Fixtures.Outer<>.Inner<>));
+            var exact = new HelpPage("exact", "准确关联", "指南", "嵌套 API") { RelatedTypes = new[] { _fixture } };
             var other = new HelpPage("other", "同名不关联", "指南", "") { RelatedTypes = new[] { typeof(Other.ApiFixture) } };
-            var featuredOnly = new HelpPage("featured", "精选不等于关联", "指南", "") { FeaturedTypes = new[] { Fixture } };
+            var featuredOnly = new HelpPage("featured", "精选不等于关联", "指南", "") { FeaturedTypes = new[] { _fixture } };
             module.Guides = new[] { exact, other, featuredOnly };
-            module.About = new[] { new HelpPage("about", "关于关联", "关于", "") { RelatedTypes = new[] { Fixture } } };
+            module.About = new[] { new HelpPage("about", "关于关联", "关于", "") { RelatedTypes = new[] { _fixture } } };
             var index = HelpApiIndex.Build(module);
             CollectionAssert.AreEqual(module.ApiTypes.Select(definition => definition.Type).ToArray(), index.Select(type => type.Type).ToArray());
             CollectionAssert.AreEqual(index[1].MemberSignatures.OrderBy(signature => signature, StringComparer.Ordinal).ToArray(), index[1].MemberSignatures);
             CollectionAssert.AreEqual(new[] { "exact", "about" }, index[1].RelatedPages.Select(page => page.Id).ToArray());
             Assert.That(index[2].RelatedPages, Is.Empty, "Nested types are not implicitly associated with their parents.");
-            Assert.That(index[1].Id, Is.EqualTo(Fixture.AssemblyQualifiedName));
+            Assert.That(index[1].Id, Is.EqualTo(_fixture.AssemblyQualifiedName));
             Assert.That(index[1].Entries.Select(entry => entry.Member).ToArray(), Is.EqualTo(index[1].Members));
         }
 
         [Test]
         public void SearchAndsChineseAndEnglishAndDoesNotHighlightPureTypeQueries()
         {
-            var module = Module(Fixture);
-            module.Documentation = member => member == Fixture ? new HelpDocumentation("通用测试类型", null, "类型备注", null,
+            var module = Module(_fixture);
+            module.Documentation = member => member == _fixture ? new HelpDocumentation("通用测试类型", null, "类型备注", null,
                 new[] { new HelpParameter("T", "泛型数据") }) : member.Name == "Run" ? new HelpDocumentation("执行并取消", "执行结果", null,
                 new[] { new HelpParameter("value", "计数参数") }, new[] { new HelpParameter("U", "成员类型说明") }) : null;
-            module.Guides = new[] { new HelpPage("guide", "指南联动", "指南", "停止屏幕") { RelatedTypes = new[] { Fixture } } };
+            module.Guides = new[] { new HelpPage("guide", "指南联动", "指南", "停止屏幕") { RelatedTypes = new[] { _fixture } } };
             var api = HelpApiIndex.Build(module).Single();
             var run = api.Entries.Single(entry => entry.Name == "Run");
             Assert.That(api.Matches("apifixture \t取消"), Is.True);
@@ -154,16 +157,16 @@ namespace YLFramework.Tests.Help
         [Test]
         public void MissingDocumentationIsEmptyAndModuleBuildsDoNotShareCaches()
         {
-            var first = Module(Fixture);
+            var first = Module(_fixture);
             var absent = HelpApiIndex.Build(first).Single();
             Assert.That(absent.Help.Summary, Is.Empty);
             Assert.That(absent.Help.Parameters, Is.Empty);
             Assert.That(absent.Entries.All(entry => entry.Help.Summary.Length == 0 && entry.Help.Parameters.Length == 0), Is.True);
-            var path = first.XmlPaths[Fixture.Assembly];
-            new XDocument(new XElement("doc", new XElement("assembly", new XElement("name", Fixture.Assembly.GetName().Name)),
-                new XElement("members", Entry(Fixture, new XElement("summary", "后来生成"))))).Save(path);
+            var path = first.XmlPaths[_fixture.Assembly];
+            new XDocument(new XElement("doc", new XElement("assembly", new XElement("name", _fixture.Assembly.GetName().Name)),
+                new XElement("members", Entry(_fixture, new XElement("summary", "后来生成"))))).Save(path);
             Assert.That(HelpApiIndex.Build(first).Single().Summary, Is.EqualTo("后来生成"));
-            var second = Module(Fixture);
+            var second = Module(_fixture);
             second.Documentation = member => new HelpDocumentation("另一模块", null, null, null);
             Assert.That(HelpApiIndex.Build(second).Single().Summary, Is.EqualTo("另一模块"));
             Assert.That(HelpApiIndex.Build(first).Single().Matches("另一模块"), Is.False);
@@ -173,17 +176,17 @@ namespace YLFramework.Tests.Help
         [Test]
         public void XmlReadsFiveTagsInlineNamesParagraphsAndSparseOverridesByName()
         {
-            var run = Fixture.GetMethod("Run");
-            var module = Module(Fixture);
-            module.XmlPaths[Fixture.Assembly] = Xml(Fixture.Assembly,
-                Entry(Fixture, new XElement("summary", "XML 类型"), new XElement("remarks", "类型说明"),
+            var run = _fixture.GetMethod("Run");
+            var module = Module(_fixture);
+            module.XmlPaths[_fixture.Assembly] = Xml(_fixture.Assembly,
+                Entry(_fixture, new XElement("summary", "XML 类型"), new XElement("remarks", "类型说明"),
                     new XElement("typeparam", new XAttribute("name", "T"), "XML 泛型参数")),
                 Entry(run, new XElement("summary", "读取 ", new XElement("paramref", new XAttribute("name", "value")),
                         new XElement("para", "中文段落 ", new XElement("see", new XAttribute("cref", "T:System.String")))),
                     new XElement("returns", "XML 返回"), new XElement("remarks", new XElement("typeparamref", new XAttribute("name", "T")), " 限制"),
                     new XElement("param", new XAttribute("name", "label"), "XML 标签"),
                     new XElement("param", new XAttribute("name", "value"), "XML 计数")));
-            module.Documentation = member => member == Fixture ? new HelpDocumentation("已核实类型", " ", "", null,
+            module.Documentation = member => member == _fixture ? new HelpDocumentation("已核实类型", " ", "", null,
                 new[] { new HelpParameter("T", " ") }) : member.Name == "Run" ? new HelpDocumentation(null, "已核实返回", "\t",
                 new[] { new HelpParameter("value", "已核实计数"), new HelpParameter("label", ""), new HelpParameter("extra", "额外覆盖") }) : null;
             var api = HelpApiIndex.Build(module).Single();
@@ -197,7 +200,7 @@ namespace YLFramework.Tests.Help
             Assert.That(help.Remarks, Is.EqualTo("T 限制"));
             CollectionAssert.AreEqual(new[] { "label", "value", "extra" }, help.Parameters.Select(parameter => parameter.Name).ToArray());
             CollectionAssert.AreEqual(new[] { "XML 标签", "已核实计数", "额外覆盖" }, help.Parameters.Select(parameter => parameter.Description).ToArray());
-            module.Documentation = member => member == Fixture ? new HelpDocumentation(null, null, null, null,
+            module.Documentation = member => member == _fixture ? new HelpDocumentation(null, null, null, null,
                 new[] { new HelpParameter("T", "已核实类型参数") }) : null;
             Assert.That(HelpApiIndex.Build(module).Single().Help.TypeParameters.Single().Description, Is.EqualTo("已核实类型参数"));
         }
@@ -205,22 +208,22 @@ namespace YLFramework.Tests.Help
         [Test]
         public void XmlMemberIdsCoverGenericNestedOverloadedByRefArraysAndIndexers()
         {
-            const string owner = "YLFramework.Tests.Help.Fixtures.ApiFixture`1";
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture), Is.EqualTo("T:" + owner));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetConstructor(Type.EmptyTypes)), Is.EqualTo("M:" + owner + ".#ctor"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetConstructor(new[] { typeof(int) })), Is.EqualTo("M:" + owner + ".#ctor(System.Int32)"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.TypeInitializer), Is.EqualTo("M:" + owner + ".#cctor"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetMethod("Convert")), Is.EqualTo("M:" + owner + ".Convert``1(`0,``0@)"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetMethod("Arrays")), Is.EqualTo("M:" + owner + ".Arrays(System.Int32[],System.String[0:,0:],System.Int32[][])"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetMethod("ByRef")), Is.EqualTo("M:" + owner + ".ByRef(System.Int32@,System.String@,System.Int32@)"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetProperty("Item")), Is.EqualTo("P:" + owner + ".Item(System.Int32)"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetField("Constant")), Is.EqualTo("F:" + owner + ".Constant"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetEvent("Changed")), Is.EqualTo("E:" + owner + ".Changed"));
+            const string Owner = "YLFramework.Tests.Help.Fixtures.ApiFixture`1";
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture), Is.EqualTo("T:" + Owner));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetConstructor(Type.EmptyTypes)), Is.EqualTo("M:" + Owner + ".#ctor"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetConstructor(new[] { typeof(int) })), Is.EqualTo("M:" + Owner + ".#ctor(System.Int32)"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.TypeInitializer), Is.EqualTo("M:" + Owner + ".#cctor"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetMethod("Convert")), Is.EqualTo("M:" + Owner + ".Convert``1(`0,``0@)"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetMethod("Arrays")), Is.EqualTo("M:" + Owner + ".Arrays(System.Int32[],System.String[0:,0:],System.Int32[][])"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetMethod("ByRef")), Is.EqualTo("M:" + Owner + ".ByRef(System.Int32@,System.String@,System.Int32@)"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetProperty("Item")), Is.EqualTo("P:" + Owner + ".Item(System.Int32)"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetField("Constant")), Is.EqualTo("F:" + Owner + ".Constant"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetEvent("Changed")), Is.EqualTo("E:" + Owner + ".Changed"));
             Assert.That(HelpXmlDocumentation.MemberId(typeof(Fixtures.Outer<>.Inner<>)), Is.EqualTo("T:YLFramework.Tests.Help.Fixtures.Outer`1.Inner`1"));
-            Assert.That(HelpXmlDocumentation.MemberId(Fixture.GetMethod("Nested")),
-                Is.EqualTo("M:" + owner + ".Nested(YLFramework.Tests.Help.Fixtures.Outer{System.Int32}.Inner{System.String})"));
+            Assert.That(HelpXmlDocumentation.MemberId(_fixture.GetMethod("Nested")),
+                Is.EqualTo("M:" + Owner + ".Nested(YLFramework.Tests.Help.Fixtures.Outer{System.Int32}.Inner{System.String})"));
             Assert.That(HelpXmlDocumentation.MemberId(typeof(Fixtures.ApiFixture<Fixtures.ApiBase>).GetMethod("Convert").MakeGenericMethod(typeof(int))),
-                Is.EqualTo("M:" + owner + ".Convert``1(`0,``0@)"));
+                Is.EqualTo("M:" + Owner + ".Convert``1(`0,``0@)"));
             Assert.That(HelpXmlDocumentation.MemberId(typeof(HelpKitGlobalFixture)), Is.EqualTo("T:HelpKitGlobalFixture"));
         }
 
@@ -270,10 +273,10 @@ namespace YLFramework.Tests.Help
         [TestCase("<doc><assembly><name>WrongAssembly</name></assembly><members/></doc>")]
         public void InvalidXmlWarnsOncePerBuildAndPreservesMetadata(string contents)
         {
-            var path = Path.Combine(mFolder, "invalid.xml");
+            var path = Path.Combine(_folder, "invalid.xml");
             File.WriteAllText(path, contents);
-            var module = Module(Fixture, typeof(Fixtures.ApiBase));
-            module.XmlPaths[Fixture.Assembly] = path;
+            var module = Module(_fixture, typeof(Fixtures.ApiBase));
+            module.XmlPaths[_fixture.Assembly] = path;
             LogAssert.Expect(LogType.Warning, new Regex("HelpKit 无法读取 XML 文档"));
             var index = HelpApiIndex.Build(module);
             Assert.That(index[0].Entries, Is.Not.Empty);
@@ -287,9 +290,9 @@ namespace YLFramework.Tests.Help
         [Test]
         public void UnreadableXmlWarnsOnceAndDoesNotHideProviderErrors()
         {
-            var module = Module(Fixture, typeof(Fixtures.ApiBase));
-            var path = Xml(Fixture.Assembly, Entry(Fixture, new XElement("summary", "锁定文档")));
-            module.XmlPaths[Fixture.Assembly] = path;
+            var module = Module(_fixture, typeof(Fixtures.ApiBase));
+            var path = Xml(_fixture.Assembly, Entry(_fixture, new XElement("summary", "锁定文档")));
+            module.XmlPaths[_fixture.Assembly] = path;
             using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
             {
                 LogAssert.Expect(LogType.Warning, new Regex("HelpKit 无法读取 XML 文档"));
@@ -304,8 +307,8 @@ namespace YLFramework.Tests.Help
         [UnityTest]
         public IEnumerator MemberIdsAndXmlMatchingUseActualCompilerOutputWithoutModuleDependencies()
         {
-            var source = Path.Combine(mFolder, "Fixture.cs");
-            var output = Path.Combine(mFolder, "HelpKitFixture" + Guid.NewGuid().ToString("N") + ".dll");
+            var source = Path.Combine(_folder, "Fixture.cs");
+            var output = Path.Combine(_folder, "HelpKitFixture" + Guid.NewGuid().ToString("N") + ".dll");
             var xml = Path.ChangeExtension(output, ".xml");
             File.WriteAllText(source, CompilerFixture);
             var builder = new AssemblyBuilder(output, new[] { source });
@@ -316,7 +319,11 @@ namespace YLFramework.Tests.Help
             CompilerMessage[] messages = null;
             builder.buildFinished += (_, result) => messages = result;
             Assert.That(builder.Build(), Is.True);
-            while (builder.status != AssemblyBuilderStatus.Finished) yield return null;
+            while (builder.status != AssemblyBuilderStatus.Finished)
+            {
+                yield return null;
+            }
+
             Assert.That(messages, Is.Not.Null);
             Assert.That(messages.Where(message => message.type == CompilerMessageType.Error).Select(message => message.message), Is.Empty);
             Assert.That(File.Exists(xml), Is.True);
@@ -327,7 +334,10 @@ namespace YLFramework.Tests.Help
             var members = types.Cast<MemberInfo>().Concat(types.SelectMany(type => HelpApiFormatter.GetDeclaredApi(type))).ToArray();
             Assert.That(members.Length, Is.GreaterThan(15));
             foreach (var member in members)
+            {
                 Assert.That(docIds, Does.Contain(HelpXmlDocumentation.MemberId(member)), member.ToString());
+            }
+
             var module = new HelpModule
             {
                 ApiTypes = types.Select(type => new HelpApiTypeDefinition(type, "编译 fixture")).ToArray(),
@@ -417,12 +427,19 @@ namespace CompiledFixture
     }
 }
 
-public class HelpKitGlobalFixture { }
+public class HelpKitGlobalFixture
+{
+}
 
 namespace YLFramework.Tests.Help.Fixtures
 {
-    public interface IApiContract { void Contract(); }
-    public interface IChildContract : IApiContract { }
+    public interface IApiContract
+    {
+        void Contract();
+    }
+    public interface IChildContract : IApiContract
+    {
+    }
     public class ApiBase
     {
         public virtual int Inherited(int value) => throw new InvalidOperationException("Metadata only.");
@@ -430,12 +447,24 @@ namespace YLFramework.Tests.Help.Fixtures
     }
     public class ApiFixture<T> : ApiBase, IApiContract where T : class, new()
     {
-        static ApiFixture() { throw new InvalidOperationException("Do not initialize the API fixture."); }
-        public ApiFixture() { throw new InvalidOperationException("Do not construct the API fixture."); }
-        public ApiFixture(int value) { throw new InvalidOperationException("Do not construct the API fixture."); }
+        static ApiFixture()
+        {
+            throw new InvalidOperationException("Do not initialize the API fixture.");
+        }
+        public ApiFixture()
+        {
+            throw new InvalidOperationException("Do not construct the API fixture.");
+        }
+        public ApiFixture(int value)
+        {
+            throw new InvalidOperationException("Do not construct the API fixture.");
+        }
         public const string Constant = "fixture";
         public static readonly int Readonly;
-        public int Value { get => throw new InvalidOperationException("Do not read properties."); private set => throw new InvalidOperationException(); }
+        public int Value
+        {
+            get => throw new InvalidOperationException("Do not read properties."); private set => throw new InvalidOperationException();
+        }
         public int this[int position] => throw new InvalidOperationException("Do not read indexers.");
         public event Action Changed { add => throw new InvalidOperationException(); remove => throw new InvalidOperationException(); }
         public int Run(int value, string label = "demo") => throw new InvalidOperationException();
@@ -450,12 +479,18 @@ namespace YLFramework.Tests.Help.Fixtures
         private void Hidden() => throw new InvalidOperationException();
         internal void Internal() => throw new InvalidOperationException();
         public static ApiFixture<T> operator +(ApiFixture<T> left, ApiFixture<T> right) => throw new InvalidOperationException();
-        public class NestedType { }
+        public class NestedType
+        {
+        }
     }
     public class Outer<T>
     {
-        public class Inner<U> { }
-        public class Leaf { }
+        public class Inner<U>
+        {
+        }
+        public class Leaf
+        {
+        }
     }
     public class Derived : ApiBase, IChildContract
     {
@@ -469,7 +504,10 @@ namespace YLFramework.Tests.Help.Fixtures
         public void Second() => throw new InvalidOperationException();
     }
     public delegate int HelpDelegate(string text);
-    public enum FixtureEnum : ulong { Two = 2 }
+    public enum FixtureEnum : ulong
+    {
+        Two = 2
+    }
     public static class Extensions
     {
         public static void Inspect(this ApiBase value, params string[] labels) => throw new InvalidOperationException();
@@ -478,5 +516,7 @@ namespace YLFramework.Tests.Help.Fixtures
 
 namespace YLFramework.Tests.Help.Other
 {
-    public class ApiFixture { }
+    public class ApiFixture
+    {
+    }
 }

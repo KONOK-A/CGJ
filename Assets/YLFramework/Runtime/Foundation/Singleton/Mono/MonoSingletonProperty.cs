@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,8 +14,8 @@ namespace YLFramework.Core.Singleton
     public class MonoSingletonProperty<T> where T : MonoBehaviour, ISingleton
     {
         private static T _instance;
-        private static readonly HashSet<T> DisposedInstances = new();
-        private static readonly object Lock = new();
+        private static readonly HashSet<T> _disposedInstances = new();
+        private static readonly object _lock = new();
 
         static MonoSingletonProperty()
         {
@@ -41,13 +41,13 @@ namespace YLFramework.Core.Singleton
         public static T GetInstance(bool allowEditMode = false, bool includeInactive = false,
             bool persistent = false, Action<T> onCreated = null)
         {
-            DisposedInstances.RemoveWhere(instance => instance == null);
-            lock (Lock)
+            _disposedInstances.RemoveWhere(instance => instance == null);
+            lock (_lock)
             {
                 if (_instance == null)
                 {
                     _instance = SingletonCreator.CreateMonoSingleton<T>(null, allowEditMode, includeInactive,
-                        persistent, onCreated, DisposedInstances.Contains);
+                        persistent, onCreated, _disposedInstances.Contains);
                 }
             }
 
@@ -63,12 +63,22 @@ namespace YLFramework.Core.Singleton
         public static void ReleaseHost(T instance, bool destroyGameObject = true)
         {
             ResetIfCurrent(instance);
-            if (instance == null) return;
-            DisposedInstances.Add(instance);
+            if (instance == null)
+            {
+                return;
+            }
+
+            _disposedInstances.Add(instance);
             instance.enabled = false;
             UnityEngine.Object target = destroyGameObject ? instance.gameObject : (UnityEngine.Object)instance;
-            if (Application.isPlaying) UnityEngine.Object.Destroy(target);
-            else UnityEngine.Object.DestroyImmediate(target);
+            if (Application.isPlaying)
+            {
+                UnityEngine.Object.Destroy(target);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
         }
 
         /// <summary>
@@ -82,7 +92,9 @@ namespace YLFramework.Core.Singleton
         public static void MakePersistent(T instance)
         {
             if (Application.isPlaying && instance != null && instance.transform.parent == null)
+            {
                 UnityEngine.Object.DontDestroyOnLoad(instance.gameObject);
+            }
         }
 
         /// <summary>
@@ -140,7 +152,7 @@ namespace YLFramework.Core.Singleton
         {
             _instance = null;
             // 会话重置只清理已销毁的占位；仍存活但已退休的宿主继续被排除，防止模块在重置前自行清理后又被认领
-            DisposedInstances.RemoveWhere(instance => instance == null);
+            _disposedInstances.RemoveWhere(instance => instance == null);
         }
     }
 }

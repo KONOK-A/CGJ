@@ -32,7 +32,10 @@ namespace YLFramework.Tests
                 Assert.Throws<ArgumentOutOfRangeException>(() => listener.Register<int>((EventType)999, _ => { }));
                 Assert.Throws<ArgumentException>(() => listener.Register<BaseEventData>(EventType.OnClick, null));
             }
-            finally { Object.DestroyImmediate(root); }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
 
         private static void CheckPayload<T>(EventListener listener, params EventType[] eventTypes)
@@ -58,7 +61,7 @@ namespace YLFramework.Tests
                 var method = typeof(EventListener).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 method.Invoke(listener, new object[] { null });
                 Assert.That(calls, Is.EqualTo(1), eventType.ToString());
-                token.UnRegister();
+                token.Unregister();
             }
         }
 
@@ -143,8 +146,8 @@ namespace YLFramework.Tests
             method.Invoke(listener, new object[] { payload });
             Assert.That(calls, Is.EqualTo(previous + 1));
             Assert.That(flag.activeSelf, Is.True);
-            changeMask.UnRegister();
-            token.UnRegister();
+            changeMask.Unregister();
+            token.Unregister();
         }
 
         [Test]
@@ -166,12 +169,12 @@ namespace YLFramework.Tests
                 listener.Register<PointerEventData>(EventType.OnClick, _ => order.Add("code"));
                 listener.OnPointerClick(null);
                 Assert.That(order, Is.EqualTo(new[] { "code", "persistent" }));
-                listener.UnRegisterAll();
+                listener.UnregisterAll();
                 order.Clear();
                 listener.OnPointerClick(null);
                 Assert.That(order, Is.EqualTo(new[] { "persistent" }));
                 Assert.That(unityEvent.GetPersistentEventCount(), Is.EqualTo(1));
-                listener.UnRegisterAll(true);
+                listener.UnregisterAll(true);
                 order.Clear();
                 listener.OnPointerClick(null);
                 Assert.That(order, Is.Empty);
@@ -192,24 +195,27 @@ namespace YLFramework.Tests
             try
             {
                 root.transform.RemoveAllEvent();
-                root.transform.UnRegisterEvent(EventType.OnClick);
+                root.transform.UnregisterEvent(EventType.OnClick);
                 Assert.That(root.GetComponent<EventListener>(), Is.Null);
                 var calls = new List<string>();
                 root.transform.OnClick(_ =>
                 {
                     calls.Add("first");
-                    root.transform.UnRegisterEvent(EventType.OnClick);
+                    root.transform.UnregisterEvent(EventType.OnClick);
                     root.transform.OnClick(__ => calls.Add("new"));
                 });
                 var old = root.transform.OnClick(_ => calls.Add("old"));
                 var listener = root.GetComponent<EventListener>();
                 listener.OnPointerClick(null);
                 Assert.That(calls, Is.EqualTo(new[] { "first" }));
-                old.UnRegister();
+                old.Unregister();
                 listener.OnPointerClick(null);
                 Assert.That(calls, Is.EqualTo(new[] { "first", "new" }));
             }
-            finally { Object.DestroyImmediate(root); }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
@@ -225,8 +231,14 @@ namespace YLFramework.Tests
                 listener.Register<PointerEventData>(EventType.OnClick, _ =>
                 {
                     pool.Dispose();
-                    try { listener.UnRegisterAll(); }
-                    catch (Exception error) { cleanupError = error; }
+                    try
+                    {
+                        listener.UnregisterAll();
+                    }
+                    catch (Exception error)
+                    {
+                        cleanupError = error;
+                    }
                 });
                 listener.Register<PointerEventData>(EventType.OnClick, _ => oldCalls++);
                 listener.OnPointerClick(null);

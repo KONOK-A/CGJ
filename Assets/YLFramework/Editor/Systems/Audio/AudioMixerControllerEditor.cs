@@ -28,7 +28,10 @@ namespace YLFramework.Editor.Audio
             serializedObject.ApplyModifiedProperties();
             foreach (var selected in targets)
             {
-                using (var serialized = new SerializedObject(selected)) DrawWarnings(serialized);
+                using (var serialized = new SerializedObject(selected))
+                {
+                    DrawWarnings(serialized);
+                }
             }
         }
 
@@ -42,37 +45,66 @@ namespace YLFramework.Editor.Audio
             }
             AudioInspectorUtility.Validate(serialized, config.Validate);
             if (serialized.FindProperty("applyOnAwake").boolValue && !config.MusicGroup && !config.VoiceGroup && !config.SoundGroup)
+            {
                 AudioInspectorUtility.Message(serialized, "Automatic Apply will clear all category routes to Direct. Turn it off for parameter-only control.", MessageType.Warning);
+            }
+
             var mixer = config.Mixer;
             var parameter = serialized.FindProperty("parameterName").stringValue;
             if (!string.IsNullOrEmpty(parameter) && !mixer)
+            {
                 AudioInspectorUtility.Message(serialized, "Parameter control requires a live Mixer in Config.", MessageType.Error);
+            }
+
             var duration = serialized.FindProperty("transitionDuration").floatValue;
             if (!AudioSoundOptions.IsFinite(duration) || duration < 0f)
+            {
                 AudioInspectorUtility.Message(serialized, "Snapshot transition duration must be finite and nonnegative.", MessageType.Error);
+            }
+
             var snapshot = serialized.FindProperty("snapshot").objectReferenceValue as AudioMixerSnapshot;
             if (snapshot && snapshot.audioMixer != mixer)
+            {
                 AudioInspectorUtility.Message(serialized, "The Snapshot must belong to Config's Mixer.", MessageType.Error);
+            }
+
             var snapshots = serialized.FindProperty("snapshots");
             var weights = serialized.FindProperty("weights");
-            if (snapshots.arraySize == 0 && weights.arraySize == 0) return;
+            if (snapshots.arraySize == 0 && weights.arraySize == 0)
+            {
+                return;
+            }
+
             if (snapshots.arraySize != weights.arraySize)
+            {
                 AudioInspectorUtility.Message(serialized, "Snapshots and Weights must have matching lengths.", MessageType.Error);
+            }
+
             for (var i = 0; i < snapshots.arraySize; i++)
             {
                 var entry = snapshots.GetArrayElementAtIndex(i).objectReferenceValue as AudioMixerSnapshot;
                 if (!entry || entry.audioMixer != mixer)
+                {
                     AudioInspectorUtility.Message(serialized, "Snapshot entry " + i + " must be live and belong to Config's Mixer.", MessageType.Error);
+                }
             }
             double total = 0d;
             for (var i = 0; i < weights.arraySize; i++)
             {
                 var weight = weights.GetArrayElementAtIndex(i).floatValue;
                 if (!AudioSoundOptions.IsFinite(weight) || weight < 0f)
+                {
                     AudioInspectorUtility.Message(serialized, "Weight entry " + i + " must be finite and nonnegative.", MessageType.Error);
-                else total += weight;
+                }
+                else
+                {
+                    total += weight;
+                }
             }
-            if (total <= 0d) AudioInspectorUtility.Message(serialized, "Snapshot weights need a positive total.", MessageType.Error);
+            if (total <= 0d)
+            {
+                AudioInspectorUtility.Message(serialized, "Snapshot weights need a positive total.", MessageType.Error);
+            }
         }
     }
 }

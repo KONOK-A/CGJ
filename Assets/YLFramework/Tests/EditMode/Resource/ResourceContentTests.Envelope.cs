@@ -11,7 +11,7 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public partial class ResourceContentTests
     {
-        private static readonly byte[] TestKey = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+        private static readonly byte[] _testKey = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
         private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
 
         [Test]
@@ -22,7 +22,9 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Invoke("Inspect", raw, Context()), Is.Null);
             Assert.That(raw.Position, Is.EqualTo(3));
             foreach (var value in new[] { "", "UnityFS", "UnityFS!", "YLRENC0", "YLRENC02", "garbage!" })
+            {
                 Assert.Throws<InvalidDataException>(() => Invoke("Inspect", new MemoryStream(Encoding.ASCII.GetBytes(value)), Context()));
+            }
         }
 
         [Test]
@@ -49,9 +51,13 @@ namespace YLFramework.Tests.ResourceBuild
                          canonical.Replace("\"ProjectId\":\"fixture\"", "\"ProjectId\":\"other\""),
                          canonical.Replace("\"Version\":1", "\"Version\":1/*comment*/"),
                          canonical + "{}" })
+            {
                 Assert.Throws<InvalidDataException>(() => Invoke("Inspect", EnvelopeBytes(text), Context()), text);
+            }
+
             var badLength = EnvelopeBytes(canonical).ToArray();
-            badLength[8] = 1; badLength[9] = 16;
+            badLength[8] = 1;
+            badLength[9] = 16;
             Assert.Throws<InvalidDataException>(() => Invoke("Inspect", new MemoryStream(badLength), Context()));
             var invalidUtf8 = EnvelopeBytes(canonical).ToArray();
             invalidUtf8[12] = 0xff;
@@ -86,7 +92,7 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(got, Is.EqualTo(expected));
                 CollectionAssert.AreEqual(raw.Skip(position).Take(got), buffer.Take(got));
             }
-            Invoke("ValidateAll", input, Context(), TestKey, CancellationToken.None, null, null);
+            Invoke("ValidateAll", input, Context(), _testKey, CancellationToken.None, null, null);
             Assert.That(input.CanRead, Is.True);
         }
 
@@ -97,11 +103,14 @@ namespace YLFramework.Tests.ResourceBuild
             var raw = Data(200000);
             var first = Encrypt(raw);
             Assert.That(first.SequenceEqual(Encrypt(raw)), Is.False);
-            var key = (byte[])TestKey.Clone(); key[0] ^= 1;
+            var key = (byte[])_testKey.Clone();
+            key[0] ^= 1;
             Assert.Throws<IOException>(() => Open(new MemoryStream(first), key));
             foreach (var context in new[] { Context(project: "other"), Context(logical: "another_bundle"),
                          Context(platform: "StandaloneLinux64"), Context(unity: "other"), Context(role: "Manifest", logical: "manifest") })
+            {
                 Assert.Throws<InvalidDataException>(() => Invoke("Inspect", new MemoryStream(first), context));
+            }
             // A canonical header edit is not merely a parser mismatch: HKDF binds its exact bytes.
             var modified = (byte[])first.Clone();
             var marker = Encoding.ASCII.GetBytes("test-key");
@@ -170,12 +179,12 @@ namespace YLFramework.Tests.ResourceBuild
             RequireBackend();
             var cipher = Encrypt(Data(200000));
             using var input = new MemoryStream(cipher);
-            Assert.Throws<InvalidDataException>(() => Invoke("ValidateAll", input, Context(), TestKey,
+            Assert.Throws<InvalidDataException>(() => Invoke("ValidateAll", input, Context(), _testKey,
                 CancellationToken.None, new string('0', 64), 200000L));
-            Assert.Throws<InvalidDataException>(() => Invoke("ValidateAll", input, Context(), TestKey,
+            Assert.Throws<InvalidDataException>(() => Invoke("ValidateAll", input, Context(), _testKey,
                 CancellationToken.None, null, 200001L));
             cipher[12 + HeaderLength(cipher) + 65536 + 20] ^= 1;
-            Assert.Throws<IOException>(() => Invoke("ValidateAll", new MemoryStream(cipher), Context(), TestKey,
+            Assert.Throws<IOException>(() => Invoke("ValidateAll", new MemoryStream(cipher), Context(), _testKey,
                 CancellationToken.None, null, null));
         }
 
@@ -209,7 +218,8 @@ namespace YLFramework.Tests.ResourceBuild
             RequireBackend();
             var raw = Data(150000);
             var cipher = Encrypt(raw);
-            Parallel.For(0, 8, _ => {
+            Parallel.For(0, 8, _ =>
+            {
                 for (int iteration = 0; iteration < 8; ++iteration)
                 {
                     using var stream = Open(new MemoryStream(cipher));
@@ -219,9 +229,19 @@ namespace YLFramework.Tests.ResourceBuild
                 }
             });
             using var concurrent = Open(new MemoryStream(cipher));
-            var reader = Task.Run(() => {
+            var reader = Task.Run(() =>
+            {
                 for (int i = 0; i < 100; ++i)
-                    try { concurrent.ReadByte(); } catch (ObjectDisposedException) { return; }
+                {
+                    try
+                    {
+                        concurrent.ReadByte();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return;
+                    }
+                }
             });
             concurrent.Dispose();
             reader.GetAwaiter().GetResult();
@@ -231,13 +251,14 @@ namespace YLFramework.Tests.ResourceBuild
         public void CancellationDoesNotTakeCallerOwnershipOrEmitPayload()
         {
             RequireBackend();
-            using var canceled = new CancellationTokenSource(); canceled.Cancel();
+            using var canceled = new CancellationTokenSource();
+            canceled.Cancel();
             using var raw = new MemoryStream(Data(100));
             using var output = new MemoryStream();
-            Assert.Throws<OperationCanceledException>(() => Invoke("Encrypt", raw, output, Context(), "test-key", TestKey, canceled.Token));
+            Assert.Throws<OperationCanceledException>(() => Invoke("Encrypt", raw, output, Context(), "test-key", _testKey, canceled.Token));
             Assert.That(output.Length, Is.Zero);
             using var input = new MemoryStream(Encrypt(Data(100)));
-            Assert.Throws<OperationCanceledException>(() => Invoke("OpenDecrypt", input, Context(), TestKey, false, canceled.Token));
+            Assert.Throws<OperationCanceledException>(() => Invoke("OpenDecrypt", input, Context(), _testKey, false, canceled.Token));
             Assert.That(input.CanRead, Is.True);
         }
 
@@ -251,8 +272,14 @@ namespace YLFramework.Tests.ResourceBuild
 
         private static object Invoke(string method, params object[] arguments)
         {
-            try { return ContentType("ResourceBundleEnvelope").GetMethod(method, Members).Invoke(null, arguments); }
-            catch (TargetInvocationException error) { throw error.InnerException; }
+            try
+            {
+                return ContentType("ResourceBundleEnvelope").GetMethod(method, Members).Invoke(null, arguments);
+            }
+            catch (TargetInvocationException error)
+            {
+                throw error.InnerException;
+            }
         }
 
         private static object Get(object instance, string property) => instance.GetType().GetProperty(property, Members).GetValue(instance);
@@ -265,17 +292,19 @@ namespace YLFramework.Tests.ResourceBuild
         {
             using var input = new MemoryStream(raw);
             using var output = new MemoryStream();
-            Invoke("Encrypt", input, output, Context(), "test-key", TestKey, CancellationToken.None);
+            Invoke("Encrypt", input, output, Context(), "test-key", _testKey, CancellationToken.None);
             return output.ToArray();
         }
 
         private static Stream Open(Stream input, byte[] key = null, bool leaveOpen = false) =>
-            (Stream)Invoke("OpenDecrypt", input, Context(), key ?? TestKey, leaveOpen, CancellationToken.None);
+            (Stream)Invoke("OpenDecrypt", input, Context(), key ?? _testKey, leaveOpen, CancellationToken.None);
 
         private static void RequireBackend()
         {
             if (!(bool)ContentType("ResourceBundleEnvelope").GetProperty("IsSupported", Members).GetValue(null))
+            {
                 Assert.Ignore("Encryption is intentionally limited to Windows x64 Editor/Mono.");
+            }
         }
 
         private static byte[] Data(int length)
@@ -288,7 +317,13 @@ namespace YLFramework.Tests.ResourceBuild
         private static int Find(byte[] bytes, byte[] pattern)
         {
             for (int offset = 0; offset <= bytes.Length - pattern.Length; ++offset)
-                if (pattern.Select((value, index) => bytes[offset + index] == value).All(value => value)) return offset;
+            {
+                if (pattern.Select((value, index) => bytes[offset + index] == value).All(value => value))
+                {
+                    return offset;
+                }
+            }
+
             throw new InvalidOperationException("Fixture marker missing.");
         }
 

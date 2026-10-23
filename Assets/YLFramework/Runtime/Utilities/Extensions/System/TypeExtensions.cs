@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace YLFramework.Utilities.Extensions
 {
-    public static class TypeExtensions 
+    public static class TypeExtensions
     {
         /// <summary>
         /// 获取委托风格的类型显示名称，泛型参数以名称拼接；支持开放/部分构造泛型。
@@ -20,7 +20,11 @@ namespace YLFramework.Utilities.Extensions
         public static string GetDelegateDisplayName(this Type type, bool fullName = true)
         {
 
-            if (type == null) throw new ArgumentNullException(nameof(type));
+            if (type == null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
             Type definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
             string name = fullName ? definition.FullName ?? definition.Name : definition.Name;
             // 只移除每一段的泛型元数，保留嵌套类型名称；构造类型不展示程序集限定参数文本。
@@ -29,9 +33,15 @@ namespace YLFramework.Utilities.Extensions
             {
                 if (name[i] == '`')
                 {
-                    while (i + 1 < name.Length && char.IsDigit(name[i + 1])) i++;
+                    while (i + 1 < name.Length && char.IsDigit(name[i + 1]))
+                    {
+                        i++;
+                    }
                 }
-                else display.Append(name[i]);
+                else
+                {
+                    display.Append(name[i]);
+                }
             }
             name = display.ToString();
             Type[] args = type.IsGenericType ? type.GetGenericArguments() : Type.EmptyTypes;
@@ -50,7 +60,7 @@ namespace YLFramework.Utilities.Extensions
                         // 说明是最后一个
                         builder.Append(")");
                     }
-                    else 
+                    else
                     {
                         // 不是最后一个
                         builder.Append(",");

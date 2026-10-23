@@ -24,7 +24,11 @@ namespace YLFramework.Tests
 
             public override int GetHashCode()
             {
-                if (++HashCalls == FailOnCall) throw Error;
+                if (++HashCalls == FailOnCall)
+                {
+                    throw Error;
+                }
+
                 return 1;
             }
         }
@@ -149,7 +153,9 @@ namespace YLFramework.Tests
         {
             var externalList = new List<Item> { new() };
             var externalDictionary = new Dictionary<string, Item>(StringComparer.OrdinalIgnoreCase)
-                { ["key"] = new Item() };
+            {
+                ["key"] = new Item()
+            };
             Assert.Throws<InvalidOperationException>(() => externalList.RecycleToPool());
             Assert.Throws<InvalidOperationException>(() => externalDictionary.RecycleToPool());
             Assert.That(externalList.Count, Is.EqualTo(1));

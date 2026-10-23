@@ -6,8 +6,8 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
 using UnityEngine.U2D;
+using UnityEngine.UI;
 using YLFramework.Editor.Resource;
 using YLFramework.Services.Resource;
 
@@ -21,8 +21,12 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(AssetDatabase.CopyAsset(fixture.Folder + "/Content/Sprites.png", sprites), Is.True);
             var atlas = ResourceAtlasTests.AddAtlas(fixture, spritePath: sprites);
             var project = fixture.Project;
-            project.Groups.Add(new ResourceGroup { Id = "atlas89", Selections = new List<ResourceSelection> {
-                new() { Guid = AssetDatabase.AssetPathToGUID(atlas) } } });
+            project.groups.Add(new ResourceGroup
+            {
+                id = "atlas89",
+                selections = new List<ResourceSelection> {
+                new() { guid = AssetDatabase.AssetPathToGUID(atlas) } }
+            });
             EditorUtility.SetDirty(project);
             AssetDatabase.SaveAssetIfDirty(project);
             Assert.That(ResourceEditorOperations.PrepareAtlases(project), Is.EqualTo(1));
@@ -90,7 +94,8 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(last == null, Is.True);
                 Assert.That(target.sprite, Is.SameAs(placeholder));
                 Assert.That(held.IsValid, Is.True);
-                Object.Destroy(probe); probe = null;
+                Object.Destroy(probe);
+                probe = null;
                 held.Dispose();
                 yield return UntilScene85(() => system.GetDiagnosticsSnapshot().BundleRecordCount == 0);
                 Assert.That(atlas == null, Is.True);
@@ -111,7 +116,11 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                if (probe) Object.Destroy(probe);
+                if (probe)
+                {
+                    Object.Destroy(probe);
+                }
+
                 Object.DestroyImmediate(host);
                 Object.Destroy(placeholder);
                 Object.Destroy(texture);
@@ -160,7 +169,10 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(independent.IsValid, Is.True);
                 Assert.That(native == null, Is.False, "Catalog Sprite is borrowed from its Bundle, not created by the UI consumer.");
             }
-            finally { Object.DestroyImmediate(host); }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
             independent.Dispose();
             Assert.That(native == null, Is.True);
             Assert.That(system.GetDiagnosticsSnapshot().BundleRecordCount, Is.Zero);

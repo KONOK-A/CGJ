@@ -10,7 +10,10 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 解析失败时的依赖链，例如 "PlayerController -> IWeapon -> IAmmoProvider"；无上下文时为 null。
         /// </summary>
-        public string DependencyPath { get; }
+        public string DependencyPath
+        {
+            get;
+        }
 
         /// <summary>
         /// 使用指定错误消息创建异常。
