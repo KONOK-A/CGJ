@@ -202,12 +202,6 @@ using (var preload = AudioKit.AcquireClip(music))
 AudioKit.ClearClipCache(); // 活跃 Music 不受影响
 ```
 
-### 可选 XFAB 借用
-
-`Integrations/XFAB/Audio/` 独立程序集 `YLFramework.Audio.XFAB` 由包版本约束启用，`autoReferenced=false`，不反向进入正式 Runtime，也不自动注册或纳入默认框架导出。使用方显式引用它并构造 `YLFramework.Integrations.XFAB.Audio.XfabAudioClipProvider(projectName)`，以 `new AudioClipAddress(provider, assetName)` 调用上述入口。
-
-XFAB 适配只借用共享资产，`CanCache=false`；本地租约归零/取消/Shutdown 仅结束本地观察，不调用 `UnloadAsset`、`Abort` 或清除其他完成监听。真正保活与物理释放必须由外部明确的 XFAB 资源 owner 管理；Audio 租约不伪装成 XFAB 全局租约，也不能阻止外部 owner 提前卸载。素材组的 ExternalProvider 必须显式调用 `SetProvider`，不改原游戏 AudioKit/XF 链路或 MainModule Bundle。
-
 ## 素材组与组件
 
 `AudioClipLibrary` 是可共享的选曲资产，不是控制通道或第二个播放器。通过 `Assets/Create/YLFramework/Audio/Clip Library` 新建，`groups` 内填写区分大小写的组名 `name` 及 `entries`；一个组可以混用直接 Clip 和命名定位。`Uniform` 在有效条目中均匀选取，忽略存储的 `weight`；`Weighted` 只选正权重条目，`weight=0` 明确排除。每次提交只抽选一次并保存定位快照，不在异步完成后重新随机。作者字段的旧 PascalCase 键由 `FormerlySerializedAs` 读取，类型、引用及枚举数值不变。
@@ -878,7 +872,7 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 ## 业务接入
 
-原游戏业务资源加载仍由 XFAB 提供 Clip，再以直接 Clip 借用方式提交 AudioKit，不自动改走命名 Provider。正式命名入口使用 ResourceAudioClipProvider，XFAB Provider 是单独选择的可选适配，不自动接管游戏共享资源。`MainModule` 的全局 10 帧配置保留，UI 点击与结算通过 options 显式 EveryOne。点击组件迁为框架 AudioEmitter，BGM 组件迁为 AudioMusicPlayer；Game 的 Gaming 入口取得该组件启动，退出停止自己的 BGM。首次启动的旧 XF 音量键 `AudioConfigVolume:Music` 迁移仍只在业务层。
+原游戏业务资源加载仍由 XFAB 提供 Clip，再以直接 Clip 借用方式提交 AudioKit，不自动改走命名 Provider。正式命名入口使用 ResourceAudioClipProvider，不自动接管游戏共享资源。`MainModule` 的全局 10 帧配置保留，UI 点击与结算通过 options 显式 EveryOne。点击组件迁为框架 AudioEmitter，BGM 组件迁为 AudioMusicPlayer；Game 的 Gaming 入口取得该组件启动，退出停止自己的 BGM。首次启动的旧 XF 音量键 `AudioConfigVolume:Music` 迁移仍只在业务层。
 
 `Art/Prefabs/3DAudioPlayer.prefab` 是无新 Clip、无新增业务引用的固定位置 AudioEmitter 模板；场景 Listener 由业务保持。业务接线与真实 Main/Start/设置/Gaming 流程由独立业务测试和主代理验证，不以单次按钮测试代替完整流程。
 

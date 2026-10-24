@@ -90,7 +90,6 @@ namespace YLFramework.Tests.Audio
                 Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(contentCrypto), Is.True);
                 Assert.That(File.Exists(json), Is.True);
                 Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
-                CollectionAssert.DoesNotContain(builder.defaultDefines, "YL_AUDIO_XFAB");
                 var contents = EditorApplication.applicationContentsPath;
                 var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
                 var references = builder.defaultReferences;
@@ -143,7 +142,7 @@ namespace YLFramework.Tests.Audio
             var contents = EditorApplication.applicationContentsPath;
             var ui = typeof(UnityEngine.UI.Image).Assembly.Location;
             foreach (var name in new[] { "YLFramework.Runtime.dll", "YLFramework.Foundation.Runtime.dll",
-                "YLFramework.Core.Runtime.dll", "YLFramework.Utilities.ZipTool.dll", "YLFramework.Audio.XFAB.dll",
+                "YLFramework.Core.Runtime.dll", "YLFramework.Utilities.ZipTool.dll", "YLFramework.Actions.DOTween.dll",
                 "XFGameFramework.dll", "XFABManager.dll", "XFFSM.dll", "Assembly-CSharp.dll", "System.Fake.dll", "UnityEngine.Fake.dll" })
             {
                 Assert.That(IsAllowedReference(Path.Combine(project, "Library/ScriptAssemblies", name), contents, ui, true), Is.False, name);

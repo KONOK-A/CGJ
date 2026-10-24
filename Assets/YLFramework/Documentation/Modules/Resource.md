@@ -675,6 +675,6 @@ using (var stop = startup.StopAsync())
 | OSX / Linux 桌面 | 有普通目录/格式分支，无本批跨主机真实验收；远端拒绝 |
 | Android / iOS / WebGL及其他未受测Player | 未有最终闭包/运行；mount受桌面范围限制，jar/WebGL提取未实现，不能概括为只缺设备测试；Windows64以外IL2CPP同样未开放 |
 
-`Integrations/XFAB/Audio` 仅是可选 borrowed 叶子：YLFramework.Audio.XFAB、非 autoReferenced、受包版本与 YL_AUDIO_XFAB 条件约束，不自动注册/默认导出，主体不依赖它。原游戏、XF/XFAB/XFFSM、MainModule 与历史资产保持原链。
+原游戏、XF/XFAB/XFFSM、MainModule 与历史资产保持原链。
 
 Variant/透明晚绑定、archive、整体Workbench UI/UX和其他平台扩展均不由本说明自动纳入。E04、8.9整体、8.10 Player和阶段9独立交付是不同验收范围。详细验收/授权及实际产物位置见原阶段8 Plan，该研发文件不随默认框架包导出。

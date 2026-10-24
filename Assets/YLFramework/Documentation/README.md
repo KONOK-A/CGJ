@@ -19,7 +19,6 @@ YLFramework 是统一交付、按需使用的 Unity 游戏框架，面向游戏�
 | [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
 | [`Editor/`](../Editor/) | Editor-only主体；功能工具、模块帮助提供方与共享Help分区 |
 | [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
-| [`Integrations/XFAB/`](../Integrations/XFAB/) | 可选 Audio 借源适配，不自动注册或默认分发 |
 | [`Integrations/Excel/`](../Integrations/Excel/) | 可选 Editor-only xlsx 后端；Runtime 字段合同在 Utilities/Excel |
 | [`Integrations/DomainExcel/`](../Integrations/DomainExcel/) | 依赖可选 Excel 后端的领域作者接入 |
 | [`Integrations/HybridCLR/`](../Integrations/HybridCLR/) | 可选官方 HybridCLR 9.0.3 接入，独立导出；不自动接入原游戏 |
@@ -85,7 +84,7 @@ Runtime 按 Foundation/Core/Systems/Utilities 四个职责分区组织，Editor 
 
 ### 可选集成
 
-DOTween、XFAB Audio、Excel Editor、DomainExcel 与 HybridCLR 均位于 `Integrations/`，不随默认框架包分发，也不成为 Runtime/普通 Editor 的必需依赖。其 namespace 使用 `YLFramework.Integrations.<接入名>`；Excel/DomainExcel 后端为 Editor-only。HybridCLR 的安装与用法见 [现有 README](../Integrations/HybridCLR/README.md)，各集成程序集与边界见 [架构总览](Architecture.md#namespace-与迁移)。
+DOTween、Excel Editor、DomainExcel 与 HybridCLR 均位于 `Integrations/`，不随默认框架包分发，也不成为 Runtime/普通 Editor 的必需依赖。其 namespace 使用 `YLFramework.Integrations.<接入名>`；Excel/DomainExcel 后端为 Editor-only。HybridCLR 的安装与用法见 [现有 README](../Integrations/HybridCLR/README.md)，各集成程序集与边界见 [架构总览](Architecture.md#namespace-与迁移)。
 
 ### 其他内容
 
@@ -111,7 +110,7 @@ Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct �
 - `Plugins/BouncyCastle/` 完整递归且保留原导入平台；不递归整个 Plugins，更不复制或改变宿主商业插件配置。JSONObject/SharpZipLib 的现有来源声明与许可证随 Runtime 保留。
 - 包含Runtime/Editor正式功能分区及唯一 `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 与meta。七项分析器默认Warning，现为Runtime主体及真实引用消费者的编译器输入，不是Player运行引用；配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
-- 框架仍沿用 UGUI、Newtonsoft 等既有依赖，不是零依赖安装包。Runtime/Editor 主体不依赖 XFAB；可选 XFAB Audio 适配独立、显式装配且不默认导出，原游戏保持原链。EventListener 使用原生 Inspector，Sirenix Odin 插件及其编译引用已退出；ProjectSettings 的五个未使用 Odin 宏按配置权限边界保留。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
+- 框架仍沿用 UGUI、Newtonsoft 等既有依赖，不是零依赖安装包。Runtime/Editor 主体不依赖 XFAB，原游戏保持原链。EventListener 使用原生 Inspector，Sirenix Odin 插件及其编译引用已退出；ProjectSettings 的五个未使用 Odin 宏按配置权限边界保留。XML 位于 `Library/`，不默认导出；缺 XML 的 Help 仍保留真实声明。
 - 导出回归应真实解包并检查递归资产内容、GUID / meta、批准的 BouncyCastle 子树、Analyzer 唯一身份与禁用平台及排除项，不等于干净工程导入。历史 Player 门禁与阶段状态单独记录于 [阶段 6 方案](../../../.kilo/plans/xf-yl-6-editor.md#65-帮助导出与阶段收口)，不能替代当前结构的新交付验收。
 
 ## 测试

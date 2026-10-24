@@ -402,7 +402,7 @@ namespace YLFramework.Core.Editor.Tests
 
         private static bool IsForbiddenReference(string name)
         {
-            return name.StartsWith("XF", StringComparison.Ordinal) || name == "YLFramework.Audio.XFAB" ||
+            return name.StartsWith("XF", StringComparison.Ordinal) ||
                 name.StartsWith("Project.Game", StringComparison.Ordinal) || name == "Assembly-CSharp" ||
                 name == "Assembly-CSharp-Editor" ||
                 name == "YLFramework.Core.Editor" || name.StartsWith("YLFramework.Editor.", StringComparison.Ordinal);

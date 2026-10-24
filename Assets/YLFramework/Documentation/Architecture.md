@@ -18,14 +18,13 @@
 | `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、UI 迁移与 Core Help；通用资产/设置/预览支撑归 Utilities |
 | `Editor/Systems/Shared/` | `YLFramework.Editor` | 跨玩法生命周期及 Resource 图标作者支持，不塞入 Core 或中立 Utilities |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
-| `Integrations/XFAB/Audio/` | `YLFramework.Audio.XFAB` | 可选 Audio 借源适配，主体不反向依赖 |
 | `Integrations/Excel/Editor/`、`Integrations/DomainExcel/Editor/` | `YLFramework.Excel.Editor`、`YLFramework.Domain.Excel.Editor` | 可选 xlsx 后端与领域作者接入，仅 Editor |
 | `Integrations/HybridCLR/Runtime/`、`Editor/` | `YLFramework.HybridCLR`、`YLFramework.HybridCLR.Editor` | 可选热更叶子，精确约束官方 HybridCLR 9.0.3；dnlib 只在 Editor，主体无反向依赖 |
 | `Tests/EditMode/` 根 asmdef | `YLFramework.Tests.EditMode` | 编辑器内单元测试；嵌套程序集与 asmref 按测试节保留实际归属 |
 | `Tests/PlayMode/` 根 asmdef | `YLFramework.Tests.PlayMode` | 运行时测试；子目录不机械改成统一程序集 |
 | `Tests/Integrations/DOTween/EditMode/`、`PlayMode/` | `YLFramework.Actions.DOTween.Tests.EditMode`、`.PlayMode` | 独立可选集成测试 |
 
-Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween/XFAB 集成与测试程序集保留各自关闭自动引用和约束。使用 asmdef 的业务仍须显式声明所需引用；五份已退役产品的二进制/AQN消费者须更新并重编译，不提供旧身份兼容壳。
+Runtime / Editor 主体的 `autoReferenced` 为 true；可选 DOTween 集成与测试程序集保留各自关闭自动引用和约束。使用 asmdef 的业务仍须显式声明所需引用；五份已退役产品的二进制/AQN消费者须更新并重编译，不提供旧身份兼容壳。
 
 当前目录概览如下；同一行并列项是分类摘要，不表示额外程序集或字面目录：
 
@@ -43,7 +42,7 @@ Assets/YLFramework/
   Editor/
     Foundation/, Core/, Systems/ (含 Shared/), Utilities/, Help/, Distribution/
     YLFramework.Editor.asmdef
-  Integrations/  DOTween, XFAB, Excel, DomainExcel, HybridCLR
+  Integrations/  DOTween, Excel, DomainExcel, HybridCLR
   Tests/
     EditMode/   Foundation, Core, Systems/<模块>, Utilities, Editor/<功能>
     PlayMode/   Foundation, Core, Systems/<模块>, Utilities
@@ -79,7 +78,6 @@ Editor 同样按所有者划分为 `YLFramework.Editor.Core`、`.Utilities`、`.
 | 可选集成 | 当前 namespace | 保留的程序集名 |
 |---|---|---|
 | DOTween | `YLFramework.Integrations.DOTween` | `YLFramework.Actions.DOTween` |
-| XFAB Audio | `YLFramework.Integrations.XFAB.Audio` | `YLFramework.Audio.XFAB` |
 | Excel Editor | `YLFramework.Integrations.Excel.Editor` | `YLFramework.Excel.Editor` |
 | DomainExcel Editor | `YLFramework.Integrations.DomainExcel.Editor` | `YLFramework.Domain.Excel.Editor` |
 | HybridCLR Runtime / Editor | `YLFramework.Integrations.HybridCLR` / `.Editor` | `YLFramework.HybridCLR` / `YLFramework.HybridCLR.Editor` |
@@ -94,13 +92,12 @@ Module/View/Panel 业务扩展、Audio Provider、Action 扩展、Resource 显�
 
 - `YLFramework.Runtime` → UnityEngine.UI、Newtonsoft.Json.dll；主体不 self-reference 已合入源码，预编译插件使用必要白名单
 - `YLFramework.Editor` → `YLFramework.Runtime`、UnityEngine.UI、Newtonsoft.Json.dll；Help与提供方保持源码职责分离，不再是不同产品DLL
-- `YLFramework.Audio.XFAB` → `YLFramework.Runtime`、XFABManager；独立可选叶子，受包版本和 `YL_AUDIO_XFAB` 约束、`autoReferenced=false`，不反向成为主体必需依赖
 - `YLFramework.Actions.DOTween` → `YLFramework.Runtime` + `DOTween.dll`
 - `YLFramework.HybridCLR` → `YLFramework.Runtime` + 官方 `HybridCLR.Runtime`；对应 Editor 另引用 YL Editor、官方 Editor 和 dnlib，不引入 XF/XFAB 或第二套下载/资源权威
 - `YLFramework.Tests.EditMode` → Runtime、Editor、Foundation 测试辅助、UI、TestRunner / NUnit
 - `YLFramework.Tests.PlayMode` → Runtime、UI、TestRunner / NUnit
 
-模块内协作：`Runtime/Systems/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；DOTween 与可选 `Integrations/XFAB/Audio/` 各保留独立第三方程序集边界。正式 Audio Runtime 不反向引用 XFAB adapter；后者不自动注册或纳入默认导出。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
+模块内协作：`Runtime/Systems/Audio/Actions/PlaySoundAction` → Action 契约 + Audio 播放入口，全部位于同一 Runtime，不是可拆卸的 optional Integration。BCL Observable 同样内建；DOTween 保留独立第三方程序集边界。Runtime / 普通 Editor 不静态引用 DOTween wrapper 或供应商 DLL。
 
 Resource/Audio 的内建装配集中在 `Runtime/Systems/Resource/Integration/Audio/`：`ResourceSystem.Audio.cs` 属于 `YLFramework.Resource`，`ResourceAudioClipProvider.cs` 属于 `YLFramework.Audio`。这是同一 Runtime 内明确登记的 Resource→Audio 协作，不是可选程序集；`GetAudioClipProvider`、同 System/Project 的 Provider 引用身份、会话结束失效及启动失败/回滚合同不因拆文件改变。
 
@@ -203,7 +200,7 @@ Foundation `CustomAsyncOperation` 提供 `IsDone/Progress/Error` 和历史通知
 |---|---|---|
 | Timer | 独立延迟、有限 / 无限周期到期回调 | `TimerScope` 管理命名与匿名任务；普通所有者用 CancelAll / Dispose 清理 |
 | ActionKit | 逐帧进度、插值、条件与 Sequence / Parallel / Repeat 组合 | 命名根动作复用对象 GameObject、当前场景或全局执行器；`ActionHandle` 仅控制原动作执行租约 |
-| AudioKit | Music / Voice / Sound、显式命名同步/异步取得与逻辑取消、代次安全 AudioHandle、随机/空间音效、去重与可选 Mixer | 唯一音频播放生命周期；内建 Action 桥接。直接 Clip / Mixer 借用，命名 Clip 由 ResourceAudioClipProvider 包装独立 AssetLease 保活/受控闲置缓存；Resource 是唯一资产/Bundle 释放权威，XFAB 适配仅借用 |
+| AudioKit | Music / Voice / Sound、显式命名同步/异步取得与逻辑取消、代次安全 AudioHandle、随机/空间音效、去重与可选 Mixer | 唯一音频播放生命周期；内建 Action 桥接。直接 Clip / Mixer 借用，命名 Clip 由 ResourceAudioClipProvider 包装独立 AssetLease 保活/受控闲置缓存；Resource 是唯一资产/Bundle 释放权威 |
 
 Timer 与 Action 使用独立名称索引，不增加共享 scope、全局任务表或第三套执行器。Timing 不提供逐帧 progress；Action 的 Delay 不改写为 Timer 包装，Audio 播放链也不强制绑定 Timer。两者的首帧、循环、异常和时钟行为并不完全等价。
 

@@ -46,7 +46,7 @@ namespace YLFramework.Editor.Help
                         "Action/Audio 保持各自帮助和成熟工具，不在此复制其 API 文档。"),
                     HelpBlock.Notice("交付边界", "默认导出 Editor、Plugins/BouncyCastle、Prefabs、Runtime、Samples、Documentation 六个目录及框架根级文件。" +
                         "不含 Tests、根 Integrations、SDK 工具项目、NuGet/中间产物、游戏资源或 Assets/YLFrameworkData。" +
-                         "框架仍需 UGUI、Newtonsoft 等既有依赖，主体不引用 XFAB 或可选适配；原游戏仍使用原包资源链。EventListener 使用原生 Inspector，Sirenix 插件已退出，宿主商业插件不分发。"),
+                         "框架仍需 UGUI、Newtonsoft 等既有依赖，主体不引用 XFAB；原游戏仍使用原包资源链。EventListener 使用原生 Inspector，Sirenix 插件已退出，宿主商业插件不分发。"),
                     Document("工具导航与导出说明", "README.md"),
                     Document("取色工具接入", "Modules/UI.md")),
                 Guide("attributes", "Attributes 与显示边界", "Foundation 展示元数据与 Core 编译器诊断是不同机制。",

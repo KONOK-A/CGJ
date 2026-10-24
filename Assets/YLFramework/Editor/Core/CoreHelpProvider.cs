@@ -31,7 +31,7 @@ namespace YLFramework.Editor.Core
                         "Model/Controller 的 OnInit 与 OnExit 对应每次注册；Module 负责退出，业务监听与借用资源仍须按自身所有权收尾。"),
                     HelpBlock.Notice("接入边界", "业务 asmdef 显式引用 YLFramework.Runtime；Core、Foundation 和 ZipTool 共用该主体程序集，仍按职责组织源码。" +
                         "ProjectName 是正式 YL Resource ProjectId，不是 XFAB 项目名或 BundleName。命名加载无 XFAB 回退；缺失 Provider 明确失败。" +
-                        "Core 与 Audio 使用唯一正式 ResourceSystem，旧 Resource 运行栈已退出；主体不依赖 XFABManager，可选 XFAB Audio 适配独立且不自动装配。"),
+                        "Core 与 Audio 使用唯一正式 ResourceSystem，旧 Resource 运行栈已退出；主体不依赖 XFABManager。"),
                     HelpBlock.Paragraph("资源启动与退出", "应用持有 ResourceConfiguration，等待 ResourceSystem.InitializeAsync 完成并 TakeResult，调用 resources.BindCoreResourceProvider() 后再启动 Module。" +
                         "关闭业务 Module 后，按所有权归还实例、清理缓存、卸载 Scene，再等待 ShutdownAsync；成功关闭只解绑自身 Provider。SceneLease 释放不卸载场景，SceneRecord 持有依赖直到 native sceneUnloaded。")),
                 Guide("view-ui", "View 与 UI", "Module 唯一拥有业务；Panel 继承 View，使用统一请求和可选配置快照，不需要窗口目录。",
