@@ -66,7 +66,68 @@ try {
     $legacy = & $validator -Root $root
     if ($legacy.IsStyle -or $legacy.PersistentProject -ne (Join-Path $nativeParent 'H26')) { throw 'The existing legacy descriptor contract changed.' }
     $owner.nativePrefix = $prefix
-    'Receiver scope: new exact owner accepted; 13 unsafe/adopted scopes rejected; legacy descriptor preserved; no Unity or native output started.'
+    $root = Join-Path $fixture 'S88'
+    [IO.Directory]::CreateDirectory($root) | Out-Null
+    $owner = @{
+        purpose = 'YLFramework-HybridCLR-9.0.3-independent-reception'
+        project = Join-Path $root 'R'
+        repository = $repository
+        work = 'yl-structure-and-namespaces-20261023'
+        nativePrefix = 'S88'
+        playerRoot = Join-Path $nativeParent 'S88D4'
+        releasePlayerRoot = Join-Path $nativeParent 'S88R'
+        runtimeCacheRoot = Join-Path $nativeParent 'S88C'
+        subsetPlayerRoot = Join-Path $nativeParent 'S88S'
+        subsetCacheRoot = Join-Path $nativeParent 'S88CS'
+        baseline = Join-Path $nativeParent 'S88B'
+        subsetBaseline = Join-Path $nativeParent 'S88BS'
+        compatibilityId = 'yl-structure-native-20261023-s88-v1'
+        releaseCompatibilityId = 'yl-structure-native-20261023-s88-release-v1'
+        subsetCompatibilityId = 'yl-structure-project-subsets-20261023-s88-v1'
+    }
+    Write-Owner
+    $scope = & $validator -Root $root
+    if (-not $scope.IsStructure -or $scope.IsStyle -or $scope.PersistentProject -ne (Join-Path $nativeParent 'S88') -or
+        $scope.SubsetBaseline -ne $owner.subsetBaseline) { throw 'The exact structure scope was not derived.' }
+    $owner.project = $scope.PersistentProject
+    Write-Owner
+    if ((& $validator -Root $root).Project -ne $owner.project) { throw 'The new owned physical short receiver must be accepted.' }
+    foreach ($case in @(
+        @('nativePrefix', 'H26'),
+        @('nativePrefix', '../S88'),
+        @('nativePrefix', 'S87'),
+        @('nativePrefix', 'YS88'),
+        @('project', (Join-Path $nativeParent 'H26')),
+        @('playerRoot', (Join-Path $nativeParent 'H26D4')),
+        @('runtimeCacheRoot', (Join-Path $nativeParent 'HC26')),
+        @('baseline', (Join-Path $root 'Baselines/Native')),
+        @('subsetBaseline', (Join-Path $repository 'Build/HybridCLR/Reception-20261022/ProjectSubsets')),
+        @('compatibilityId', 'hybridclr-base-development'),
+        @('releaseCompatibilityId', 'hybridclr-base-release'),
+        @('subsetCompatibilityId', 'hybridclr-project-subsets-v1'),
+        @('work', 'yl-code-style-naming-cleanup-20261022'),
+        @('repository', $parent)
+    )) {
+        $previous = $owner[$case[0]]
+        $owner[$case[0]] = $case[1]
+        Write-Owner
+        Reject-Owner ('structure ' + ($case -join '='))
+        $owner[$case[0]] = $previous
+    }
+    $owner.Remove('nativePrefix')
+    Write-Owner
+    Reject-Owner 'structure work without an explicit isolated prefix'
+    $owner.nativePrefix = 'S88'
+    $owner.project = Join-Path $root 'R'
+    $owner.repository = Join-Path $fixture 'Other/Projects/Repository'
+    [IO.Directory]::CreateDirectory($owner.repository) | Out-Null
+    $otherParent = [IO.DirectoryInfo]::new($owner.repository).Parent.Parent.FullName
+    foreach ($pair in @(@('playerRoot','S88D4'),@('releasePlayerRoot','S88R'),@('runtimeCacheRoot','S88C'),@('subsetPlayerRoot','S88S'),@('subsetCacheRoot','S88CS'),@('baseline','S88B'),@('subsetBaseline','S88BS'))) {
+        $owner[$pair[0]] = Join-Path $otherParent $pair[1]
+    }
+    Write-Owner
+    Reject-Owner 'Root/R with a different existing repository and self-consistent derived paths'
+    'Receiver scope: style and structure exact owners accepted; original 28 unsafe/adopted scopes plus a self-consistent foreign repository rejected; legacy descriptor preserved; no Unity or native output started.'
 } finally {
     if ([IO.Directory]::Exists($fixture)) { [IO.Directory]::Delete($fixture, $true) }
 }

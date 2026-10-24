@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // 只适配自有部署外壳；payload 的闭合文件集与完整性仍由原 Snapshot 验证。
     internal static class ResourceBuiltInLayout

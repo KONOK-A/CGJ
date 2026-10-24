@@ -1,10 +1,9 @@
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public class StateMachineMenu
+    internal class StateMachineMenu
     {
         // 这里不使用 CreateAssetMenu 来创建配置的原因，是因为创建完成之后，需要对配置添加一些默认数据
         // 所以这里自定义了这个逻辑

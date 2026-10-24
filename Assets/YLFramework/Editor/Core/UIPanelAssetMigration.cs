@@ -11,8 +11,10 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YLFramework.Core;
 using Object = UnityEngine.Object;
+using YLFramework.UI;
+using YLFramework.Editor.Foundation;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Core
 {
     /// <summary>集成后显式执行的 UI Panel 资产迁移。不会自动运行、保存场景或改写非 UI 内容。</summary>
     public static class UIPanelAssetMigration
@@ -24,8 +26,8 @@ namespace YLFramework.Editor
         public const string ColorPath = "Assets/YLFramework/Prefabs/ColorSelector.prefab";
         private static readonly string[] _fixturePanelPaths =
         {
-            "Assets/YLFramework/Tests/Core/Fixtures/YLCoreSmokeModule/YLCoreSmokePanel.prefab",
-            "Assets/YLFramework/Tests/Core/Fixtures/YLCoreResourceModule/YLCoreSmokePanel.prefab"
+            "Assets/YLFramework/Tests/Fixtures/Core/YLCoreSmokeModule/YLCoreSmokePanel.prefab",
+            "Assets/YLFramework/Tests/Fixtures/Core/YLCoreResourceModule/YLCoreSmokePanel.prefab"
         };
 
         [MenuItem("YLFramework/Core/UI Panel/核验资产迁移")]

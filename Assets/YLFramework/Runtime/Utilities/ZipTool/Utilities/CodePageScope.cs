@@ -1,7 +1,7 @@
 using System;
 using YLFramework.Utilities.ZipTool.Zip;
 
-namespace YLFramework.Utilities.ZipTool
+namespace YLFramework.Compression
 {
     /// <summary>
     /// nameCodePage 的 try/finally 临时切换作用域。ZipConstants.DefaultCodePage 为进程级静态，非线程安全。

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>Unity UI 图片消费者。只拥有自己的请求、Lease 与临时 Sprite，不拥有目标上原有的 Texture/Sprite。</summary>
     [AddComponentMenu("YLFramework/Resource/Resource Image")]

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public enum ArtifactQueryStatus
     {

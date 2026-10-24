@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Events;
-using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
-using UpdateManager = YLFramework.Foundation.UpdateManager;
+using CoroutineStarter = YLFramework.Async.CoroutineStarter;
+using UpdateManager = YLFramework.Update.UpdateManager;
 
 namespace YLFramework.Core
 {

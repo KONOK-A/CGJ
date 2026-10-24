@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed class ResourceSigningKey
     {

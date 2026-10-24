@@ -2,9 +2,9 @@ using UnityEditor;
 using UnityEngine;
 
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Foundation
 {
-    [CustomPropertyDrawer(typeof(YLFramework.Foundation.Attributes.DisableEdit))]
+    [CustomPropertyDrawer(typeof(YLFramework.Attributes.DisableEdit))]
     public class DisableEditDrawer : PropertyDrawer
     {
 

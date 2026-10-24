@@ -1,4 +1,4 @@
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 解析路径中同一类型被重复构造（自引用或 A→B→A）时抛出，避免无限递归导致栈溢出。

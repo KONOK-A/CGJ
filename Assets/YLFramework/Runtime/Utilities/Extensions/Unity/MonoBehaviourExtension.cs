@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// Behaviour 启停扩展。属于强制变更类方法，对 null / 已销毁对象不做 no-op 处理。

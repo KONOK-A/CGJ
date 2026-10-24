@@ -6,8 +6,10 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Domain;
+using YLFramework.Editor.Utilities;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     public static class EquipmentsConfigController
     {

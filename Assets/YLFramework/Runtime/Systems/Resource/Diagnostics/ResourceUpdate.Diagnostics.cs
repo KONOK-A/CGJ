@@ -1,6 +1,6 @@
 using System.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ResourceSystem
     {

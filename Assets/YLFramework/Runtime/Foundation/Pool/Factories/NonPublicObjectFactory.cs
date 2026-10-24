@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 使用非公开无参构造函数创建对象的工厂。

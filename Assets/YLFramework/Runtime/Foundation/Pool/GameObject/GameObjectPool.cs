@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 按字符串 key 复用场景实例的主线程单例；空池 Allocate 返回 null，不自动加载或创建。

@@ -10,8 +10,9 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Object = UnityEngine.Object;
+using YLFramework.Excel;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     internal static class ExcelValues
     {
@@ -65,8 +66,8 @@ namespace YLFramework.Excel.Editor
             // 仅本轮迁移的自有领域字段沿用旧表头；不把用户模型的 Unity 别名扩展为 Excel 协议。
             var owner = field.DeclaringType;
             if (owner.Assembly != typeof(ExcelIgnore).Assembly ||
-                owner.Namespace is not ("YLFramework.SkillSystem" or "YLFramework.BuffSystem" or
-                    "YLFramework.MissionSystem" or "YLFramework.EquipmentSystem" or "YLFramework.DataAssets"))
+                owner.Namespace is not ("YLFramework.Skill" or "YLFramework.Buff" or
+                    "YLFramework.Mission" or "YLFramework.Equipment" or "YLFramework.DataAssets"))
             {
                 return field.Name;
             }

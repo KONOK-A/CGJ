@@ -6,12 +6,13 @@ using System.Runtime.Remoting.Messaging;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Mission;
 
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     [CustomEditor(typeof(MissionConfigData))]
     public class MissionConfigDataInspector : UnityEditor.Editor

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>发布签名只认证确切字节；信任公钥必须来自应用配置，绝不从远端导入信任根。</summary>
     internal static class ResourceReleaseSignature

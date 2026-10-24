@@ -5,9 +5,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
-using YLFramework.EquipmentSystem;
-using YLFramework.Services.Resource;
-using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
+using YLFramework.Equipment;
+using YLFramework.Resource;
+using ResourceLocation = YLFramework.Resource.ResourceLocation;
 
 namespace YLFramework.Equipment.Acceptance
 {

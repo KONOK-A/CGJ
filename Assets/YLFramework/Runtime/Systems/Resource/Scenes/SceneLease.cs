@@ -1,7 +1,7 @@
 using System;
 using UnityEngine.SceneManagement;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>本次场景的 caller 身份；Dispose 不卸载场景，也不释放 SceneRecord 的 Bundle 图。</summary>
     public sealed class SceneLease : IDisposable

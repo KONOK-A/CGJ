@@ -7,7 +7,7 @@ using UnityEngine.TestTools;
 using UnityEngine.UI;
 using XFGameFramework;
 using XFFSM;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 using Object = UnityEngine.Object;
 
 public class YLAudioGameFlowPlayModeTests

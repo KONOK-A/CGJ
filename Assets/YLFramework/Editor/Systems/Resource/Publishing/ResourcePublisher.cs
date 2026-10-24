@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {

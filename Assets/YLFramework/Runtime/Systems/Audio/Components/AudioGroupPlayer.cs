@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>显式的组自动播放时机；不改变已有 Emitter/MusicPlayer 的首次 Start 行为。</summary>
     public enum AudioGroupAutoPlay

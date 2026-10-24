@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 标记需要由 IOC 容器注入的实例字段或属性，可指定注册名称。

@@ -13,6 +13,7 @@ param(
     [ValidatePattern('^[a-z0-9-]+$')][string] $Store = 'main',
     [ValidateRange(1,2)][int] $ExpectedVersion = 1,
     [ValidatePattern('^[A-Za-z0-9-]+$')][string] $ProofRun = 'smoke4',
+    [ValidatePattern('^[A-Za-z0-9-]+$')][string] $ImportRun = 'initial',
     [string] $Package = 'YLFramework-Stage9.unitypackage',
     [string] $Unity = 'C:\Program Files\Unity\Hub\Editor\2022.3.62f3c1\Editor\Unity.exe'
 )
@@ -31,6 +32,19 @@ function Read-SharedText([string] $Path) {
     $reader=[IO.StreamReader]::new($stream)
     try { $reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
 }
+function Read-ExportRoots([string] $Source) {
+    $declarations = [regex]::Matches($Source, '(?s)\b_exportRoots\s*=\s*(?:new\s*(?:string)?\s*\[\s*\]\s*)?\{(.*?)\};')
+    if ($declarations.Count -ne 1) { throw 'The current formal exporter must declare exactly one _exportRoots array.' }
+    $roots = @([regex]::Matches($declarations[0].Groups[1].Value, '"(Assets/[^"\r\n]+)"') | ForEach-Object { $_.Groups[1].Value })
+    $required = @('Assets/YLFramework/Editor','Assets/YLFramework/Plugins/BouncyCastle','Assets/YLFramework/Prefabs',
+        'Assets/YLFramework/Runtime','Assets/YLFramework/Samples','Assets/YLFramework/Documentation',
+        'Assets/YLFramework/LICENSE.md','Assets/YLFramework/CodingStyle.md','Assets/YLFramework/AGENTS.md')
+    if ($roots.Count -ne $required.Count -or @($roots | Sort-Object -Unique).Count -ne $required.Count -or
+        @($required | Where-Object { $roots -cnotcontains $_ }).Count -ne 0) {
+        throw 'The formal export closure must contain the exact six product directories and three root files.'
+    }
+    $roots
+}
 function Json([string] $Path, $Value) {
     if (Test-Path -LiteralPath $Path) { throw "Preserve existing evidence: $Path" }
     [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $Value -Depth 50), [Text.UTF8Encoding]::new($false))
@@ -46,7 +60,7 @@ $worktrees = @(& git -C $repo worktree list --porcelain | Where-Object { $_.Star
 foreach ($tree in $worktrees) { if ($root -eq $tree -or $root.StartsWith($tree + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Delivery lies inside a worktree.' } }
 function Protected-Files {
     $relativeRoots = @('Assets/Games','Assets/Scenes','Assets/StreamingAssets','Packages','ProjectSettings','AGENTS.md','.gitignore',
-        'Assets/YLFramework/Plugins/Editor Enhancers Bundle','Assets/YLFramework/Tests/Core/Acceptance',
+        'Assets/YLFramework/Plugins/Editor Enhancers Bundle','Assets/YLFramework/Tests/Acceptance/Core',
         'Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta')
     foreach ($relative in $relativeRoots) {
         $path = Join-Path $repo $relative
@@ -264,9 +278,7 @@ if ($Operation -eq 'AuditPackage') {
     Add-Type -AssemblyName System.Formats.Tar
     $path=Join-Path $root $Package
     $exporter=[IO.File]::ReadAllText((Join-Path $repo 'Assets/YLFramework/Editor/Distribution/ExportUnityPackage.cs'))
-    $block=[regex]::Match($exporter,'(?s)ExportRoots\s*=\s*\{(.*?)\};').Groups[1].Value
-    $roots=@([regex]::Matches($block,'"(Assets/[^"\r\n]+)"') | ForEach-Object { $_.Groups[1].Value })
-    if ($roots.Count -ne 7) { throw 'Read the exact formal exporter roots before auditing.' }
+    $roots=@(Read-ExportRoots $exporter)
     $expected=@{}; foreach ($sourceRoot in $roots) {
         $absolute=Join-Path $repo $sourceRoot
         $expected[$sourceRoot]=Hash ($absolute + '.meta')
@@ -365,7 +377,8 @@ if ($Operation -in @('Import','RecoverImport')) {
 }
 if ($Operation -in @('InstallHarness','SyncHarness')) {
     $packageSha=Receiver-PackageHash
-    $first=Get-Content -LiteralPath (Join-Path $root ($Receiver + '-first-import-initial.json')) -Raw | ConvertFrom-Json
+    $firstPath=Join-Path $root ($Receiver + '-first-import-' + $ImportRun + '.json')
+    $first=Get-Content -LiteralPath $firstPath -Raw | ConvertFrom-Json
     if (-not $first.Passed -or $first.HarnessPresent -or $first.Project -cne $project -or $first.PackageSha256 -cne $packageSha -or $first.Package -cne $Package) { throw 'First prove this exact product package alone compiles.' }
     $destination=Join-Path $project 'Assets/Stage9'
     if ($Operation -eq 'InstallHarness' -and (Test-Path -LiteralPath $destination)) { throw 'Never adopt an existing harness.' }
@@ -380,13 +393,13 @@ if ($Operation -in @('InstallHarness','SyncHarness')) {
         [IO.File]::Copy((Join-Path $PSScriptRoot ($file + '.cs.txt')),$target,$Operation -eq 'SyncHarness')
         @{ Path=$target; Before=$before; After=Hash $target }
     })
-    Json (Join-Path $history 'revision.json') @{ Project=$project; Operation=$Operation; Changes=$changes }
+    Json (Join-Path $history 'revision.json') @{ Project=$project; Operation=$Operation; ProductFirstProof=$firstPath; Changes=$changes }
     'Installed test-only consumers after the product-first compile gate.'
     return
 }
 if ($Operation -eq 'Editor') {
     $log=Join-Path $root ($Receiver + '-' + $Method + '-' + $Run + '.log')
-    Run-Unity @('-batchmode','-nographics','-projectPath',$project,'-buildTarget','Win64','-executeMethod',('Stage9DeliveryEditor.' + $Method),'-s9-run',$Run,'-logFile',$log) $log
+    Run-Unity @('-batchmode','-quit','-nographics','-projectPath',$project,'-buildTarget','Win64','-executeMethod',('Stage9DeliveryEditor.' + $Method),'-s9-run',$Run,'-logFile',$log) $log
     "Completed explicit receiver entry: $Method / $Run"
     return
 }

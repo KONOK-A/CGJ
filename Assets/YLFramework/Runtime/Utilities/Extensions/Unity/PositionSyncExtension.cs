@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// 位置同步扩展：From 系列把源对象的位置写入自身；To 系列把自身位置写入目标对象。

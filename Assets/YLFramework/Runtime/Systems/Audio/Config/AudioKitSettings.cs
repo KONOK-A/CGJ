@@ -2,7 +2,7 @@ using System;
 using UnityEngine.Audio;
 using YLFramework.Binding;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Persistent channel switches and volume, plus runtime-only mute and mixer routing. Keeps the six existing save keys.</summary>
     public sealed class AudioKitSettings : IDisposable

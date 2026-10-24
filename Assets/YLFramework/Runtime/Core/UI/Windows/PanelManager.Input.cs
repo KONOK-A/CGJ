@@ -5,9 +5,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using YLFramework.Events;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using ApplicationTool = YLFramework.Foundation.ApplicationTool;
-using UpdateManager = YLFramework.Foundation.UpdateManager;
+using UpdateManager = YLFramework.Update.UpdateManager;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif

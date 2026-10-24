@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 using XFABManager;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 namespace YLFramework.Integrations.XFAB.Audio
 {

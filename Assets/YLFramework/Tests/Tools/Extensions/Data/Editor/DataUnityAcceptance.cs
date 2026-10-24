@@ -13,8 +13,8 @@ using UnityEditor.Compilation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using YLFramework.DataAssets;
-using YLFramework.DataAssets.Editor;
 using Object = UnityEngine.Object;
+using YLFramework.Editor.DataAssets;
 
 namespace YLFramework.Tests.DataBatch
 {
@@ -367,7 +367,9 @@ namespace YLFramework.Tests.DataBatch
         private static bool IsBPath(string path)
         {
             path = path.Replace('\\', '/');
-            return path.Contains("/Systems/DataAssets/") || path.Contains("/Systems/Localization/") || path.Contains("/Systems/Save/") || path.Contains("/Integrations/Excel/") || path.Contains("/Extensions/Data/");
+            return path.Contains("/Systems/DataAssets/") || path.Contains("/Systems/Localization/") || path.Contains("/Systems/Save/") || path.Contains("/Integrations/Excel/") || path.Contains("/Extensions/Data/") ||
+                path.Contains("/Tests/EditMode/Editor/DataAssets/") || path.Contains("/Tests/EditMode/Editor/Localization/") ||
+                path.Contains("/Tests/EditMode/Editor/Excel/") || path.Contains("/Tests/EditMode/Editor/Data/");
         }
         private static void EnsureFolder(string path)
         {

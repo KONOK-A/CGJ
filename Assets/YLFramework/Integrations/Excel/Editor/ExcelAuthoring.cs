@@ -6,8 +6,9 @@ using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using UnityEngine;
+using YLFramework.Excel;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     public static partial class ExcelAuthoring
     {

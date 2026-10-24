@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using YLFramework.Foundation;
+using YLFramework.Async;
 
 namespace YLFramework.Core
 {

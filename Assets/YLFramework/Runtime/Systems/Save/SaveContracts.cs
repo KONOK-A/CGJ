@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace YLFramework.Services.Save
+namespace YLFramework.Save
 {
     /// <summary>一个槽中的主模型；Id 与槽号一致，额外对象仍通过同一存储引擎保存。</summary>
     public interface ISaveModel

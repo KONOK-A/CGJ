@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Optional category routing configuration. Apply explicitly; editing this asset does not update active routing.</summary>
     [CreateAssetMenu(fileName = "AudioMixerConfig", menuName = "YLFramework/Audio/Mixer Config")]

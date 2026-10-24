@@ -1,7 +1,7 @@
 using System;
 using UnityEditor;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Core
 {
     public class ListenerFileChange : AssetModificationProcessor
     {

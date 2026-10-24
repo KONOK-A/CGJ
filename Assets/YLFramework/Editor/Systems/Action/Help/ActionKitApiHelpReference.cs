@@ -162,7 +162,9 @@ namespace YLFramework.Editor.Actions
 
         private static string Key(Type type)
         {
-            if (type == null || type.Namespace != "YLFramework.Actions")
+            if (type == null || (type.Namespace != "YLFramework.Actions" &&
+                type.FullName is not ("YLFramework.Integrations.DOTween.DOTweenAction" or
+                    "YLFramework.Integrations.DOTween.ActionKitDOTweenExtension")))
             {
                 return "";
             }

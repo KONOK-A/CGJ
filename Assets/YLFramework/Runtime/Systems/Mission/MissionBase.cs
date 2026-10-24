@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using YLFramework.Foundation;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Mission
 {
 
     /// <summary>

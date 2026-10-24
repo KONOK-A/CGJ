@@ -30,7 +30,7 @@ if (-not [IO.File]::Exists($pfx)) {
 }
 if ($CertificateOnly) { 'Created/reused an owned isolated fixture certificate; no system trust or secret output.'; exit 0 }
 $repository = [IO.Path]::GetFullPath($owner.repository)
-$source = [IO.File]::ReadAllText((Join-Path $repository 'Assets/YLFramework/Tests/EditMode/Resource/ResourceTlsServer.cs')).Replace("`r`n", "`n")
+$source = [IO.File]::ReadAllText((Join-Path $repository 'Assets/YLFramework/Tests/EditMode/Systems/Resource/ResourceTlsServer.cs')).Replace("`r`n", "`n")
 $errorStatement = @'
         private void Record(Exception exception)
         {

@@ -4,12 +4,12 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using UnityEngine;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Foundation;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Equipment
 {
     /// <summary>主线程装备入口。创建结果由本域回收，直接 Equip 的外部对象只借用。</summary>
     public static class EquipmentManager

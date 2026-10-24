@@ -7,7 +7,8 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.SkillSystem;
+using YLFramework.Skill;
+using YLFramework.Editor.Skill;
 
 namespace YLFramework.Tests.DomainMain
 {
@@ -57,14 +58,15 @@ namespace YLFramework.Tests.DomainMain
             var roots = new System.Collections.Generic.List<Root>();
             foreach (string module in new[] { "Skill", "Buff", "Mission" })
             {
-                string ns = "YLFramework." + module + "System.";
+                string ns = "YLFramework." + module + ".";
+                string editorNs = "YLFramework.Editor." + module + ".";
                 string plural = module == "Skill" ? "Skills" : module == "Buff" ? "Buffs" : "Missions";
                 var rootType = typeof(SkillsConfig).Assembly.GetType(ns + plural + "Config", true);
                 var dataType = typeof(SkillsConfig).Assembly.GetType(ns + module + "ConfigData", true);
                 var config = ScriptableObject.CreateInstance(rootType);
                 string path = folder + "/" + module + ".asset";
                 AssetDatabase.CreateAsset(config, path);
-                var controller = typeof(SkillsConfigController).Assembly.GetType(ns + plural + "ConfigController", true);
+                var controller = typeof(SkillsConfigController).Assembly.GetType(editorNs + plural + "ConfigController", true);
                 var create = controller.GetMethod("Create" + module + "ConfigData", new[] { typeof(Type), rootType });
                 create.Invoke(null, new object[] { dataType, config });
                 create.Invoke(null, new object[] { dataType, config });
@@ -74,7 +76,7 @@ namespace YLFramework.Tests.DomainMain
                 {
                     module = module,
                     path = path,
-                    windowType = ns + (module == "Buff" ? "BuffConfigsWindow" : "ConfigsWindow"),
+                    windowType = editorNs + (module == "Buff" ? "BuffConfigsWindow" : "ConfigsWindow"),
                     configField = "current" + module + "Config",
                     treeField = module.ToLowerInvariant() + "ListTree"
                 });

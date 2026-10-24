@@ -4,12 +4,13 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Buff;
+using YLFramework.Editor.Utilities;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
 
 
@@ -250,7 +251,7 @@ namespace YLFramework.BuffSystem
                 return;
             }
 
-            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_buffsConfig, _buffsConfig.buffs, data, BuffsConfigController.GetBuffConfigDataPath(_buffsConfig));
+            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_buffsConfig, _buffsConfig.buffs, data, BuffsConfigController.GetBuffConfigDataPath(_buffsConfig));
             _buffsConfig.ClearCache();
             Reload();
 

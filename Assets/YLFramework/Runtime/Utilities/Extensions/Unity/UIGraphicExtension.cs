@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// UI Graphic 与 SpriteRenderer 的颜色、填充扩展。

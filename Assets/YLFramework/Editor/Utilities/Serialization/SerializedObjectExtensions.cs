@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Utilities
 {
 
     public static class SerializedObjectExtensions

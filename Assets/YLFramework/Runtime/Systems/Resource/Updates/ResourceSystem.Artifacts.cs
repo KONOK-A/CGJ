@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ResourceSystem
     {

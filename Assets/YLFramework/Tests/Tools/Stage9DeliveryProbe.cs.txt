@@ -15,12 +15,14 @@ using YLFramework;
 using YLFramework.Actions;
 using YLFramework.Binding;
 using YLFramework.Core;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 using YLFramework.Events;
-using YLFramework.Foundation;
+using YLFramework.Serialization;
+using YLFramework.UI;
 using YLFramework.Samples.Resource;
-using YLFramework.Services.Audio;
-using YLFramework.Services.Resource;
+using YLFramework.Audio;
+using YLFramework.Resource;
+using YLFramework.Save;
 using Timer = YLFramework.Timing.Timer;
 
 // 新接收方的公开API消费者。无测试框架、原游戏、XF、MCP、额外产品程序集或隐藏资源。
@@ -312,12 +314,62 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
         }
         yield return UserInterface(id);
         yield return StopResources();
+        SaveRoundTrip();
         if (_command == "smoke")
         {
             Require(!storeExisted && !Directory.Exists(_store), "Built-in first launch must not rely on or manufacture a persistent Store.");
         }
 
         yield return FinalCleanup();
+    }
+
+    private void SaveRoundTrip()
+    {
+        var runRoot = Path.GetDirectoryName(Path.GetFullPath(_output));
+        var saveRoot = Path.Combine(runRoot, "save-roundtrip");
+        Require(Directory.Exists(runRoot) && !Directory.Exists(saveRoot) && !File.Exists(saveRoot),
+            "Save evidence must use a new directory owned by this Player run.");
+        var previousRoot = SaveManager.StorageRoot;
+        try
+        {
+            SaveManager.SetStorageRoot(saveRoot);
+            Require(SaveManager.GetSaveItemCount() == 0, "A new owned Save root must start empty.");
+            var item = SaveManager.CreateSaveItem();
+            Require(SaveManager.RenameSaveItem(item, "namespace-roundtrip"), "Save index rename failed.");
+            SaveManager.CurrentSaveId = item.SaveId;
+            var original = new Stage9DeliverySaveData { Value = 73, Name = "namespace-roundtrip" };
+            SaveManager.SaveObject(original, item);
+            SaveManager.Close();
+            original.Value = -1;
+            original.Name = "memory-only";
+
+            var items = SaveManager.GetAllSaveItems();
+            Require(items.Count == 1 && items[0].SaveId == item.SaveId && items[0].DisplayName == "namespace-roundtrip" &&
+                SaveManager.CurrentSaveId == item.SaveId, "Save index did not reload its slot metadata from disk.");
+            var read = SaveManager.ReadObject<Stage9DeliverySaveData>(nameof(Stage9DeliverySaveData), item.SaveId);
+            Require(read.Status == SaveReadStatus.Success && !read.IsCached && read.Value != null &&
+                !ReferenceEquals(original, read.Value) && read.Value.Value == 73 && read.Value.Name == "namespace-roundtrip",
+                "Save DTO did not reload its persisted values after closing the owner.");
+            SaveManager.Close();
+            var files = Directory.GetFiles(Path.Combine(saveRoot, "SaveData"), "*.json", SearchOption.AllDirectories);
+            Require(files.Length >= 2, "The Save index and object must both exist on disk.");
+            Step("save-index-object-roundtrip", new
+            {
+                AfterCloseReloaded = true,
+                OwnedRunDirectory = true,
+                SaveRoot = saveRoot,
+                item.SaveId,
+                read.Value.Value,
+                read.Value.Name,
+                PersistedFiles = files.Length,
+                Files = files.Select(path => path.Substring(saveRoot.Length + 1).Replace('\\', '/')).ToArray()
+            });
+        }
+        finally
+        {
+            SaveManager.Close();
+            SaveManager.SetStorageRoot(previousRoot);
+        }
     }
 
     private IEnumerator Foundation()
@@ -730,6 +782,12 @@ public sealed class Stage9DeliveryModel : Model
     {
         Exits++;
     }
+}
+[UnityEngine.Scripting.Preserve]
+public sealed class Stage9DeliverySaveData
+{
+    [UnityEngine.Scripting.Preserve] public int Value;
+    [UnityEngine.Scripting.Preserve] public string Name;
 }
 public sealed class Stage9DeliveryController : Controller
 {

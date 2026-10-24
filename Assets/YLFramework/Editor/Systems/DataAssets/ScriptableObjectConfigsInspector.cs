@@ -1,8 +1,9 @@
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.DataAssets;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     [CustomEditor(typeof(ScriptableObjectConfigs), true)]
     public sealed class ScriptableObjectConfigsInspector : UnityEditor.Editor

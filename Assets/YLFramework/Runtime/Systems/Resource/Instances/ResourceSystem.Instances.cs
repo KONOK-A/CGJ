@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.LowLevel;
 using UnityEngine.SceneManagement;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ResourceSystem
     {

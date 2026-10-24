@@ -1,6 +1,6 @@
 using System;
 using UnityEngine;
-using YLFramework.EquipmentSystem;
+using YLFramework.Equipment;
 
 namespace YLFramework.Equipment.Acceptance
 {

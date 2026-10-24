@@ -86,7 +86,7 @@ namespace YLFramework.Tests.Editor
         {
             var editor = UEditor.CreateEditor(targets);
             _editors.Add(editor);
-            Assert.That(editor.GetType().FullName, Is.EqualTo("YLFramework.Editor.EventListenerEditor"));
+            Assert.That(editor.GetType().FullName, Is.EqualTo("YLFramework.Editor.Foundation.EventListenerEditor"));
             Assert.That(editor.GetType().Assembly.GetName().Name, Is.EqualTo("YLFramework.Editor"));
             return editor;
         }

@@ -7,7 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Samples.Resource.Editor
 {

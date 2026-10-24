@@ -43,8 +43,8 @@ namespace YLFramework.Analyzers.Tests
             yield return Case("Storage_PseudoBclNameNotSeeded", "namespace System.Collections.Generic{class List<T>{public static T cache;}}class C{System.Collections.Generic.List<YLFramework.Core.LoadViewArgs> no;}");
             yield return Case("Storage_ClassNotInterfaceConstraint", "class C<T,U,V>where T:U where U:YLFramework.Core.LoadViewArgs where V:IEnumerable<YLFramework.Core.LoadViewArgs>{T {|YL0005:held|};V no;}");
             yield return Case("Storage_RecordAutoAndPositional", "record R{public YLFramework.Core.LoadViewArgs {|YL0005:Value|}{get;init;}}record S(YLFramework.Core.LoadViewArgs {|YL0005:Value|});");
-            yield return Case("Storage_FakeCoreOwnerNoExemption", "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]class LoadViewArgs{private static readonly Pool.ObjectPool<LoadViewArgs> {|YL0005:_pool|}=new Pool.ObjectPool<LoadViewArgs>(()=>null);}class LoadViewRequest<T>{private LoadViewArgs {|YL0005:_args|};}class PanelManager{internal sealed class PanelOperation{internal LoadViewArgs {|YL0005:Args|};}}}");
-            yield return Case("Storage_ForeignPoolAndFalseSelfOwner", "class C{private static readonly YLFramework.Core.Pool.ObjectPool<YLFramework.Core.LoadViewArgs> {|YL0005:Pool|};}[MethodLocalOnly]class A{private static readonly YLFramework.Core.Pool.ObjectPool<A> {|YL0005:Pool|};}");
+            yield return Case("Storage_FakeCoreOwnerNoExemption", "namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]class LoadViewArgs{private static readonly Pooling.ObjectPool<LoadViewArgs> {|YL0005:_pool|}=new Pooling.ObjectPool<LoadViewArgs>(()=>null);}class LoadViewRequest<T>{private LoadViewArgs {|YL0005:_args|};}class PanelManager{internal sealed class PanelOperation{internal LoadViewArgs {|YL0005:Args|};}}}");
+            yield return Case("Storage_ForeignPoolAndFalseSelfOwner", "class C{private static readonly YLFramework.Pooling.ObjectPool<YLFramework.Core.LoadViewArgs> {|YL0005:Pool|};}[MethodLocalOnly]class A{private static readonly YLFramework.Pooling.ObjectPool<A> {|YL0005:Pool|};}");
         }
 
         private static TestCaseData Case(string name, string source, params string[] parts) => new TestCaseData(source, parts).SetName(name);
@@ -63,8 +63,8 @@ namespace YLFramework.Analyzers.Tests
                 AnalyzerFixture.PoolSource.Replace("private T[] storage", "public T[] storage")
             }, AnalyzerFixture.Platform).WithProperties(new MetadataReferenceProperties(aliases: System.Collections.Immutable.ImmutableArray.Create("foreign")));
             var source = "extern alias foreign;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" +
-                "private static readonly foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs> _pool=" +
-                "new foreign::YLFramework.Core.Pool.ObjectPool<LoadViewArgs>(()=>null);}}";
+                "private static readonly foreign::YLFramework.Pooling.ObjectPool<LoadViewArgs> _pool=" +
+                "new foreign::YLFramework.Pooling.ObjectPool<LoadViewArgs>(()=>null);}}";
             var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source).AddReferences(foreign));
             Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
             Assert.That(diagnostics.Single().Location.SourceSpan.Start,
@@ -76,7 +76,7 @@ namespace YLFramework.Analyzers.Tests
         [TestCase("private static readonly", "ObjectPool<LoadViewArgs>", "OtherPool")]
         public async Task CoreIdentityDoesNotExemptOtherPoolShapes(string modifiers, string type, string name)
         {
-            var source = "using YLFramework.Core.Pool;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" + modifiers + " " + type + " " + name + ";}}";
+            var source = "using YLFramework.Pooling;namespace YLFramework.Core{[RoslynAnalyzers.MethodLocalOnly]public class LoadViewArgs{" + modifiers + " " + type + " " + name + ";}}";
             var diagnostics = await AnalyzerFixture.Diagnostics(AnalyzerFixture.CoreCompilation(source));
             Assert.That(diagnostics.Select(d => d.Id), Is.EqualTo(new[] { "YL0005" }));
             Assert.That(diagnostics.Single().Location.SourceSpan.Start, Is.EqualTo(source.IndexOf(" " + name + ";", System.StringComparison.Ordinal) + 1));

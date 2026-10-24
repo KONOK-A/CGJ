@@ -5,11 +5,12 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Buff;
+using YLFramework.Editor.Utilities;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
 #if UNITY_6000_2_OR_NEWER
     public class EffectTreeViewItem : TreeViewItem<int>

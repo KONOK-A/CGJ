@@ -1,6 +1,5 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 
 using System;
@@ -9,9 +8,11 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Buff;
+using YLFramework.Editor.Utilities;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
     [Serializable]
     public class EffectType
@@ -82,6 +83,7 @@ namespace YLFramework.BuffSystem
 
     }
 
+    [PreviousProjectSettingsName("YLFramework.BuffSystem.BuffSystemSettings")]
     public class BuffSystemSettings : ProjectSettingsScriptableObject<BuffSystemSettings>
     {
 

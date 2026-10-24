@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Events;
-using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
-using UpdateManager = YLFramework.Foundation.UpdateManager;
+using CoroutineStarter = YLFramework.Async.CoroutineStarter;
+using UpdateManager = YLFramework.Update.UpdateManager;
 
 namespace YLFramework.Core
 {

@@ -7,7 +7,7 @@ using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Save
+namespace YLFramework.Save
 {
     /// <summary>
     /// Save 内部文件边界。读取不改盘；原子替换不可用时失败关闭，不删除原件降级写入。

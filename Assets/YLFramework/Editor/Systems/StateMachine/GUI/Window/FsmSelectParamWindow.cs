@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
 
 #if UNITY_6000_2_OR_NEWER
@@ -10,7 +10,7 @@ using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
 using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 #endif
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     public class FsmSelectParamWindow : PopupWindowContent
     {

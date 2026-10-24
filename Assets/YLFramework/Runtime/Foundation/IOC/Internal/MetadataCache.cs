@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 静态反射元数据缓存：类型 → 注入成员清单 / 构造计划。

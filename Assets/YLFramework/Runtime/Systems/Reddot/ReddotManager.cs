@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Events;
 
-namespace YLFramework.ReddotSystem
+namespace YLFramework.RedDots
 {
     /// <summary>主线程路径红点。普通路径为集合，独立来源持有自己的释放凭据。</summary>
     public static class ReddotManager

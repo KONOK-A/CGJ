@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ResourceSystem
     {

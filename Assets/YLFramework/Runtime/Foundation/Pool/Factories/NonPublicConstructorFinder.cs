@@ -2,7 +2,7 @@ using System;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 非公开无参构造函数的查找与调用工具，供 NonPublicObjectFactory 与 MultiObjectFactory 共用。

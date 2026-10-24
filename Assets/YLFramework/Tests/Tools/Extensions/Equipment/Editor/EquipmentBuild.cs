@@ -8,7 +8,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.Compilation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using YLFramework.EquipmentSystem;
+using YLFramework.Equipment;
 
 namespace YLFramework.Tests.EquipmentAcceptance
 {

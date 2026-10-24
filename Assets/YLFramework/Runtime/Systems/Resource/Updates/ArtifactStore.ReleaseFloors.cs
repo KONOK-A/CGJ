@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ArtifactStore
     {

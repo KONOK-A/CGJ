@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 构造函数选择结果的内部描述（按类型缓存）。

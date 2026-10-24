@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 常驻 MonoBehaviour 单例：Instance 首次访问时优先从场景查找，找不到才创建。

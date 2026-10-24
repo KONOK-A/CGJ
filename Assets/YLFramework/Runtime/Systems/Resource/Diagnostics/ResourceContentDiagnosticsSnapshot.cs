@@ -1,4 +1,4 @@
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>显式解密数据预算与额外native成本分列；不是密码模块或进程总内存硬上限。</summary>
     public readonly struct ResourceContentDiagnosticsSnapshot

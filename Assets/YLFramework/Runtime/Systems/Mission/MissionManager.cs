@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Foundation;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Mission
 {
     /// <summary>保留多配表、参数约束、任务状态与奖励配置；不拥有存档权威。</summary>
     public static class MissionManager

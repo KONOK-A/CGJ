@@ -1,6 +1,6 @@
 using UnityEngine;
 using YLFramework;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework.Actions
 {

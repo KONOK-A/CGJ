@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using YLFramework.Foundation;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     /// <summary>
     /// Buff基类

@@ -32,7 +32,7 @@ $editorSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramewo
 $product = Join-Path $root 'Assets/YLFramework/Integrations/Excel/Editor'
 $productSources = @()
 if (Test-Path -LiteralPath $product) { $productSources = @(Get-ChildItem -LiteralPath $product -Recurse -Filter '*.cs' | ForEach-Object FullName) }
-$testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Tests/EditMode/Extensions/Data/Excel') -Recurse -Filter '*.cs' | ForEach-Object FullName)
+$testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Tests/EditMode/Editor/Excel') -Recurse -Filter '*.cs' | ForEach-Object FullName)
 $testSources += Join-Path $PSScriptRoot 'ExcelOfflineRunner.cs'
 foreach ($file in @($compiler, $mono, $nunit, $backend) + $refs + $runtimeSources + $editorSources + $productSources + $testSources) { if (-not (Test-Path -LiteralPath $file)) { throw "Missing real input: $file" } }
 function Invoke-Compilation([string] $Name, [string] $Target, [string[]] $Sources, [string[]] $References, [switch] $AllowUnsafe) {

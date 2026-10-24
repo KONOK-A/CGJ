@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 使用自定义委托创建对象的工厂。

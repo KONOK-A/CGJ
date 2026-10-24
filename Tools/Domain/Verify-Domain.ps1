@@ -26,10 +26,15 @@ $compiler = 'C:\Program Files\dotnet\sdk\9.0.312\Roslyn\bincore\csc.dll'
 $references = @('mscorlib.dll', 'System.dll', 'System.Core.dll', 'Facades\netstandard.dll') | ForEach-Object { Join-Path $framework $_ }
 $references += @($runtime, $nunit, (Join-Path $UnityData 'Managed\Newtonsoft.Json.dll'))
 $references += @(Get-ChildItem -LiteralPath (Join-Path $UnityData 'Managed\UnityEngine') -Filter 'UnityEngine*.dll' | ForEach-Object FullName)
-$sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Extensions\Domain') -Recurse -Filter '*.cs' | ForEach-Object FullName)
-if ($Mode -eq 'Pure') { $sources = @($sources | Where-Object { $_ -notmatch '\\Domain\\Editor\\' }) }
+$modules = @('Skill', 'Buff', 'Mission', 'Reddot', 'Logging')
+$sources = @(foreach ($module in $modules) {
+    Get-ChildItem -LiteralPath (Join-Path $root "Assets\YLFramework\Tests\EditMode\Systems\$module") -Recurse -Filter '*.cs' | ForEach-Object FullName
+})
 if ($Mode -eq 'Tests') {
-    $sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\PlayMode\Extensions\Domain') -Recurse -Filter '*.cs' | ForEach-Object FullName)
+    $sources += @(foreach ($module in $modules + 'Domain') {
+        Get-ChildItem -LiteralPath (Join-Path $root "Assets\YLFramework\Tests\PlayMode\Systems\$module") -Recurse -Filter '*.cs' | ForEach-Object FullName
+    })
+    $sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Editor\Domain') -Recurse -Filter '*.cs' | ForEach-Object FullName)
     $references += Join-Path $root 'Temp\UI.Panel.Offline\EditorTools\YLFramework.Editor.dll'
     $references += @(Get-ChildItem -LiteralPath (Join-Path $UnityData 'Managed') -Filter 'UnityEditor*.dll' | ForEach-Object FullName)
     $references += @(Get-ChildItem -LiteralPath (Join-Path $UnityData 'Managed\UnityEngine') -Filter 'UnityEditor*.dll' | ForEach-Object FullName)

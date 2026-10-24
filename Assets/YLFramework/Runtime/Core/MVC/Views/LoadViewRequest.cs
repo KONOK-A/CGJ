@@ -26,7 +26,7 @@ namespace YLFramework.Core
     }
 
     /// <summary>主线程表现请求；Abort仅取消Core业务结果，不停止或卸载共享后端加载。</summary>
-    public sealed class LoadViewRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadViewRequest<T>>, IPendingViewRequest where T : View
+    public sealed class LoadViewRequest<T> : YLFramework.Async.CustomAsyncOperation<LoadViewRequest<T>>, IPendingViewRequest where T : View
     {
         public T View
         {

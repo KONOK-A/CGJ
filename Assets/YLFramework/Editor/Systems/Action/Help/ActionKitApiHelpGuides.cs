@@ -261,7 +261,7 @@ namespace YLFramework.Editor.Actions
                 "前置用户 callback 抛错时，safeMode 对整个 multicast 捕获可能跳过 adapter 并漏掉完成或取消信号，不能承诺逐 callback 异常隔离。" +
                 "Reset 的内部 version 只保护旧 callback/调用栈重入，不是新增公共 API。Repeat 应用工厂每轮创建新 Tween，" +
                 "ToAction 不会为被 kill 的旧 Tween 创建新实例，也不能用于执行开始后的 Reset 后重新绑定；getter 返回 null、已 kill 或带活动/待清理 ownership marker 的 Tween 会报错并取消。",
-                MethodContext + "\n仅在已安装 wrapper 与 DOTween.dll 后添加 using DG.Tweening;，供 DOTween 扩展方法使用。" +
+                MethodContext + "\n仅在已安装 wrapper 与 DOTween.dll 后添加 using YLFramework.Integrations.DOTween; 和 using DG.Tweening;，供 DOTween 扩展方法使用。" +
                 "在 Unity 正常主线程回调且保留原始 UnitySynchronizationContext 时调用；不要替换上下文或人工 pump。" +
                 "示例用普通 float 局部变量和 DG.Tweening.DOTween.To，不使用依赖额外 Modules 的 DOMove。" +
                 "调用 TweenAction(owner) 以 ActionKit 序列等待独立根 Tween，再输出完成日志；默认 autoKill 负责完成后的 Tween 释放。",

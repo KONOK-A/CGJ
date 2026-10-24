@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     // 不触碰 caller 的层级、启用状态、空间设置或滤镜；每个字段只恢复仍等于本租约最后写入的值。
     internal sealed class AudioBorrowedSource

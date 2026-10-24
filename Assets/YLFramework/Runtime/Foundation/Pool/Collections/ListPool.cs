@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// List&lt;T&gt; 的静态对象池。

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Passive IMGUI diagnostics with explicit statistics reset. Does not initialize playback or create a listener.</summary>
     public static class AudioKitDiagnostics

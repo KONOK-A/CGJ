@@ -13,7 +13,7 @@ if ($Mode -eq 'Syntax') {
     Add-Type -Path (Join-Path $roslyn 'Microsoft.CodeAnalysis.dll')
     Add-Type -Path (Join-Path $roslyn 'Microsoft.CodeAnalysis.CSharp.dll')
     $options = [Microsoft.CodeAnalysis.CSharp.CSharpParseOptions]::Default.WithLanguageVersion([Microsoft.CodeAnalysis.CSharp.LanguageVersion]::CSharp9)
-    $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\Core\Acceptance') -Recurse -Filter '*.cs')
+    $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\Acceptance\Core') -Recurse -Filter '*.cs')
     $failures = @()
     foreach ($editor in @($false, $true)) {
         $symbols = @('UNITY_STANDALONE_WIN', 'ENABLE_INPUT_SYSTEM', 'ENABLE_LEGACY_INPUT_MANAGER')
@@ -48,12 +48,12 @@ if ($Mode -in @('Pure', 'PureCore')) {
     $nunit = Join-Path $env:USERPROFILE '.nuget\packages\nunit\3.14.0\lib\net45\nunit.framework.dll'
     $references += $nunit
     $sources = @('PanelConfig.cs', 'PanelOverrides.cs', 'PanelRule.cs') | ForEach-Object { Join-Path $root "Assets\YLFramework\Runtime\Core\UI\Windows\$_" }
-    $sources += Join-Path $root 'Assets\YLFramework\Tests\Core\EditMode\PanelConfigurationTests.cs'
+    $sources += Join-Path $root 'Assets\YLFramework\Tests\EditMode\Core\PanelConfigurationTests.cs'
     if ($Mode -eq 'PureCore') {
         $references += Join-Path $root 'Temp\UI.Panel.Offline\Runtime\YLFramework.Runtime.dll'
-        $sources = @('CoreLoadViewArgsTests.cs', 'CoreTemporaryCollectionTests.cs') | ForEach-Object { Join-Path $root "Assets\YLFramework\Tests\Core\EditMode\$_" }
-        $sources += Join-Path $root 'Assets\YLFramework\Tests\EditMode\CollectionPoolTests.cs'
-        $sources += Join-Path $root 'Assets\YLFramework\Tests\EditMode\SingletonContractTests.cs'
+        $sources = @('CoreLoadViewArgsTests.cs', 'CoreTemporaryCollectionTests.cs') | ForEach-Object { Join-Path $root "Assets\YLFramework\Tests\EditMode\Core\$_" }
+        $sources += Join-Path $root 'Assets\YLFramework\Tests\EditMode\Foundation\Pool\CollectionPoolTests.cs'
+        $sources += Join-Path $root 'Assets\YLFramework\Tests\EditMode\Foundation\Singleton\SingletonContractTests.cs'
     }
     $sources += Join-Path $PSScriptRoot 'UIPanelOfflineRunner.cs'
     $arguments += @('/target:exe', "/out:$output\PureTests.exe")
@@ -84,9 +84,17 @@ if ($Mode -in @('Pure', 'PureCore')) {
             $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Editor') -Recurse -Filter '*.cs' | ForEach-Object FullName)
         } else {
             $symbols += ';UNITY_INCLUDE_TESTS'
-            $testFolder = switch ($Mode) { 'CorePlayMode' { 'PlayMode' } 'CoreEditMode' { 'EditMode' } 'CoreEditorTests' { 'Editor' } }
+            $testFolders = switch ($Mode) {
+                'CorePlayMode' { @('PlayMode\Core', 'PlayMode\Foundation\Timing\Components') }
+                'CoreEditMode' { @('EditMode\Core', 'EditMode\Utilities\UI') }
+                'CoreEditorTests' { @('EditMode\Editor\Core', 'EditMode\Editor\Foundation\Attributes') }
+            }
             $assemblyName = switch ($Mode) { 'CorePlayMode' { 'YLFramework.Core.Tests.PlayMode' } 'CoreEditMode' { 'YLFramework.Core.Tests.EditMode' } 'CoreEditorTests' { 'YLFramework.Core.Editor.Tests' } }
-            $sources = @(Get-ChildItem -LiteralPath (Join-Path $root "Assets\YLFramework\Tests\Core\$testFolder") -Recurse -Filter '*.cs' | ForEach-Object FullName)
+            # Follow the moved asmref inputs; Core/Scenes still belongs to the root PlayMode assembly.
+            $sources = @(foreach ($folder in $testFolders) {
+                Get-ChildItem -LiteralPath (Join-Path $root "Assets\YLFramework\Tests\$folder") -Recurse -Filter '*.cs' |
+                    Where-Object { $_.FullName -notmatch '[/\\]PlayMode[/\\]Core[/\\]Scenes[/\\]' } | ForEach-Object FullName
+            })
             $references += Join-Path $env:USERPROFILE '.nuget\packages\nunit\3.14.0\lib\netstandard2.0\nunit.framework.dll'
             $testAssemblies = Join-Path $UnityData 'Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.2d-7.0.4\ScriptAssemblies'
             $references += @('UnityEngine.TestRunner.dll', 'UnityEditor.TestRunner.dll') | ForEach-Object { Join-Path $testAssemblies $_ }

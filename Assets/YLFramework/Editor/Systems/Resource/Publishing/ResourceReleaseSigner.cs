@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {

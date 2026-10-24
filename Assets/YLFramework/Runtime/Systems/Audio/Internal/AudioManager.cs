@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Events;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     internal sealed class AudioManager : MonoSingletonHost<AudioManager>
     {

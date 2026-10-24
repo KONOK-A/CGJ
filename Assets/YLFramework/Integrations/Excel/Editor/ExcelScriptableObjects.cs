@@ -9,8 +9,9 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
+using YLFramework.Excel;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     public static partial class ExcelAuthoring
     {

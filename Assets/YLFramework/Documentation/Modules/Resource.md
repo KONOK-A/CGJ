@@ -3,14 +3,26 @@
 > [文档首页](../README.md) · [架构总览](../Architecture.md) · [阶段 8 Plan](../../../../.kilo/plans/xf-yl-8-resource.md)
 >
 > 本文说明当前正式Resource接入合同。Windows远端除原WindowsEditor外，仅开放实际受测的Unity `2022.3.62f3c1`、Windows64 Mono及IL2CPP Player；其他Player平台、32位及其他引擎版本仍由源码明确拒绝。IL2CPP受测Low裁剪，不以Mono或Editor结果代替AOT运行。验收记录、用户授权与阶段状态以原Plan为准，平台边界见文末。
+> 下文已验证结果与阶段数字属于原 Resource 专题及其冻结制品，不代表当前 namespace/目录迁移已重新通过 Unity 测试、干净导入或 Player 验收。
 
 ## 正式入口
 
-`YLFramework.Services.Resource.ResourceSystem` 是每个 Play/Player 会话唯一的资源权威，管理 Catalog、共享生产、租约、实例、Scene 和版本事务。读取 `Current`、构造配置或打开工作台都不初始化；资源操作与 Unity 对象访问在主线程执行，只读配置不代表入口线程无关。
+`YLFramework.Resource.ResourceSystem` 是每个 Play/Player 会话唯一的资源权威，管理 Catalog、共享生产、租约、实例、Scene 和版本事务。读取 `Current`、构造配置或打开工作台都不初始化；资源操作与 Unity 对象访问在主线程执行，只读配置不代表入口线程无关。
 
 - 应用接入：[`ResourceStartup`](../../Runtime/Systems/Resource/Integration/ResourceStartup.cs) 显式启动/关闭并管理自身责任；高级调用方可直接使用 `ResourceSystem.InitializeAsync`，不是第二套内核。
-- [Runtime](../../Runtime/Systems/Resource/) / [Editor](../../Editor/Systems/Resource/) 分属 `YLFramework.Runtime` / `YLFramework.Editor`，namespace 为 `YLFramework.Services.Resource` / `YLFramework.Editor.Resource`；主体依赖 UGUI/Json.NET，不依赖 XF/XFAB。
+- [Runtime](../../Runtime/Systems/Resource/) / [Editor](../../Editor/Systems/Resource/) 分属 `YLFramework.Runtime` / `YLFramework.Editor`，namespace 为 `YLFramework.Resource` / `YLFramework.Editor.Resource`；主体依赖 UGUI/Json.NET，不依赖 XF/XFAB。
 - 旧 Manager/Loader、ResData/BinaryFormatter 与模拟 HotUpdate 栈已退役，不提供旧表、XFAB 或另一资源权威的自动 fallback。
+
+当前 Editor 源码导航如下，均属于 `YLFramework.Editor.Resource`，不因目录细分新增 namespace 或程序集：
+
+| 路径（相对 Editor/Systems/Resource） | 职责 |
+|---|---|
+| [`Workbench/`](../../Editor/Systems/Resource/Workbench/) | 工作台窗口、页面、表格与交付页摘要，含 ResServiceEditorWindow |
+| [`Inspectors/`](../../Editor/Systems/Resource/Inspectors/) | ResourceAtlasConfiguration、ResourceBuildRecipe、ResourceImage 的 Inspector |
+| [`Build/`](../../Editor/Systems/Resource/Build/) | 构建器、Workspace、ResourceBuildProgress 与 ResourceBuildSourceLocator |
+| [`ResourceEditorOperations.cs`](../../Editor/Systems/Resource/ResourceEditorOperations.cs)、[`ResourceEditorSimulation.cs`](../../Editor/Systems/Resource/ResourceEditorSimulation.cs) | 根部正式操作与模拟入口 |
+
+原 `Service/` 混合目录已解散；Publishing/Data/CodeGeneration 保留各自职责。`ResService*` 类短名、菜单、Provider id、配置字段与持久键不随源码归位改写。
 
 ## 初始化与持有
 
@@ -30,7 +42,7 @@ Bundle mount 复用 `ResourceProjectMount`。不传 `cacheRoot` 时每项目须�
 ```csharp
 using System;
 using System.Collections.Generic;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 public static class ApplicationResources
 {
@@ -106,6 +118,7 @@ Player 使用合法 Bundles 配置调用 `BeginBundles()` 或 `Begin/Run`。`Use
 
 - 使用 ResourceStartup 的可选 Provider 装配后再启动命名 Module；直接 InitializeAsync 的高级调用方自行显式绑定。Core `ProjectName` 是 Resource ProjectId；直接 prefab、Attach、默认 Canvas/EventSystem 不要求初始化资源，Module Close 不自动卸外部 Scene。
 - Audio 使用 `AudioClipAddress(resources.GetAudioClipProvider(projectId), logicalAddress)`；每次成功交付独立 clip lease，播放/尾轨/缓存负责消费期持有。直 Clip 是 borrowed，不由 Resource 或 Audio 擅自卸载。
+- 内建桥接集中在 [`Runtime/Systems/Resource/Integration/Audio/`](../../Runtime/Systems/Resource/Integration/Audio/)：`ResourceSystem.Audio.cs` 使用 `YLFramework.Resource`，`ResourceAudioClipProvider.cs` 使用 `YLFramework.Audio`。两者仍在同一 Runtime，保持同 System/Project 的 Provider 引用身份、关闭后失效、缺失项目启动失败与原回滚责任，不是可选 Integration 或另一套资源服务。
 - AudioClipLibrary 的旧枚举及隐藏 BundleName 仅供持久化迁移，不是旧后端。显式迁移要求地址映射，只创建新 GUID 副本、不改原资产；详见 [Audio 素材组](Audio.md#素材组与组件)。
 
 ### Core SceneController
@@ -284,7 +297,7 @@ ResourceEditorOperations.SaveProject(project);
 
 ResourceProject.Compression仅Lz4/Lzma/Uncompressed，恒StrictMode；压缩进入Workspace身份，有显式Force Rebuild，不接受任意flags。只构建已激活、已安装、主机可native读回的桌面目标，不切平台。Publisher输出正式resource-catalog.json与release index；BuildId标识payload，CatalogDigest标识最终bytes，摘要不等于签名。构建、发布、生成分别报告，不以一个成功替代另一个。
 
-Workspace 按 Project GUID/设置隔离，不可变发布在 `AssetBundles/YLFramework/<ProjectId>/<Platform>/<CatalogDigest>/`。ReadHistory/ReadVersion 仅选 owned 完整版本；ExportRelease 只向工程外不存在的 digest 目录导出并复验。未知文件/归属、链接和篡改拒绝，不覆盖旧目录。旧 Service/ResService、BuildScript/AssetBundleExporter 与标记菜单已退役。
+Workspace 按 Project GUID/设置隔离，不可变发布在 `AssetBundles/YLFramework/<ProjectId>/<Platform>/<CatalogDigest>/`。ReadHistory/ReadVersion 仅选 owned 完整版本；ExportRelease 只向工程外不存在的 digest 目录导出并复验。未知文件/归属、链接和篡改拒绝，不覆盖旧目录。历史加载 Service/ResService、BuildScript/AssetBundleExporter 与标记菜单已退役；当前 Workbench 中保留的 ResServiceEditorWindow/ResServiceAssetsMenu 短名不表示恢复旧加载栈。
 
 ### 可共享构建配方
 
@@ -308,7 +321,7 @@ Workspace 按 Project GUID/设置隔离，不可变发布在 `AssetBundles/YLFra
 ```csharp
 using YLFramework.Editor.Resource;
 using YLFramework.Samples.Resource.Editor;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 public static class ApplicationResourceBuild
 {
@@ -333,7 +346,7 @@ B02/F03本批正式记录在[原Plan §28.11](../../../../.kilo/plans/xf-yl-8-re
 - 128MiB是显式内容数据预算，不是总内存限额。Encrypted 7个held输入共1,376,032B，另有声明Unity read buffer229,376B、CNG key-object逻辑22,834B；资源对象、Profiler/managed、进程内存分别看待，采样峰非绝对瞬时峰，allocated与reserved各自峰不相加。真实归还与Stop后按Lease/实例/输入/在途/预算/CNG责任验证，不用全局UnloadAll制造归零。
 - 原始Mono进程计数器“成功返回0”已被Review判无效；working-set/private-memory统一按`null/Unavailable`，不从原始零字段推断占用。8192B分配能力探针亦失败，分配字节为null。原始JSON不覆盖，资格化统计明确排除失效值；没有可靠Audio欠载计数，不以isPlaying或静音播放证明无毛刺。
 
-小型复跑入口及资源生成方式保留在 [`ResourceCostBaselineTests`](../../Tests/EditMode/Resource/ResourceCostBaselineTests.cs) 与其 `.Network.cs`/`.Consumers.cs`，不是只能运行Temp可执行文件。先用实际验证过的准备脚本创建**工程外不存在的新目录**与非生产回环凭据：
+小型复跑入口及资源生成方式保留在 [`ResourceCostBaselineTests`](../../Tests/EditMode/Systems/Resource/ResourceCostBaselineTests.cs) 与其 `.Network.cs`/`.Consumers.cs`，不是只能运行Temp可执行文件。先用实际验证过的准备脚本创建**工程外不存在的新目录**与非生产回环凭据：
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File "Assets/YLFramework/Tests/Tools/Prepare-ResourceCostEvidence.ps1" -OwnedRoot "$env:TEMP\kilo\resource-cost-run"
@@ -468,7 +481,7 @@ public static class ApplicationBuiltInDelivery
 ```csharp
 using System;
 using System.Collections.Generic;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 public static class ApplicationBuiltInStartup
 {
@@ -507,7 +520,7 @@ using System;
 using System.Collections;
 using System.Threading;
 using UnityEngine;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 public static class ArtifactQueryExample
 {
@@ -645,7 +658,7 @@ using (var stop = startup.StopAsync())
 - 远端length、SHA、Range、ETag描述**同一份固定密文**。续传须有实际partial、强ETag与If-Range，并按确切offset追加；服务器200忽略Range要重置，实体变化要重新获取，错误/损坏不能提交半成品。最终还须通过内容认证和原Prepare/激活，不能把HTTPS或SHA成功当作解密成功。缺/错key不是网络重试理由。
 - C02 `Preflight/Deploy/Recover`复制/验证交付字节，不需要内容key，不改Catalog/Complete/密文；真实导入后通过 `OpenBuiltIn` 严格定位到 `payload~`。应用运行时仍须提供key。E05原查询入口无需key、初始化、恢复或解密；统计实际密文与控制文件的逻辑字节，预览不授权删除，清理仍复查最新保护状态。
 - **Resource发布快照**使用 `ResourceEditorOperations.ExportRelease(release, destination)`，目标为工程外已有本地父目录下**不存在且等于CatalogDigest的子目录**；精确交付Catalog、Complete和登记文件，不包含raw缓存或内容key。
-- **YLFramework框架包**使用原菜单，或 `YLFramework.Editor.ExportUnityPackage.Export(absolutePackagePath)`向现有本地父目录导出。默认拒绝覆盖，不保存其他资产；菜单保留原显式保存/覆盖流程。导出根与Recurse不变，包含源码、必要meta、样例、批准的BC DLL；不含Tests、原游戏、XFAB、临时runner/缓存/私钥/证书或系统CNG DLL。
+- **YLFramework框架包**使用原菜单，或 `YLFramework.Editor.Distribution.ExportUnityPackage.Export(absolutePackagePath)`向现有本地父目录导出。默认拒绝覆盖，不保存其他资产；菜单保留原显式保存/覆盖流程。导出根与Recurse不变，包含源码、必要meta、样例、批准的BC DLL；不含Tests、原游戏、XFAB、临时runner/缓存/私钥/证书或系统CNG DLL。
 - BC确切来源、官方2.7.0 netstandard2.0二进制SHA见 `Plugins/BouncyCastle/SOURCE.txt`。现有UGUI/Json.NET等依赖不因导出而消失；商业插件既有公开再分发限制保留。实际导出和源码/二进制闭包不代替阶段9干净工程完整验收。
 
 **保留限制**：Unity Scene native 接手后发生延迟 Stream 读取失败可能引发 native 崩溃，既有 G0/C1 证据仍保留，未被本轮修复或记为受控失败通过。不重新演示该崩溃，也不将合法输入、定位/竞争/提前释放或取消/退出/预算的新缺陷归入该豁免。native 前完整密文 length/SHA、首末认证、读取时每段认证后交付，以及发布/Prepare/激活/回滚的完整认证均不降低。不输出完整明文文件或整包内存 fallback；运行期写入观察的实际范围另按证据说明。

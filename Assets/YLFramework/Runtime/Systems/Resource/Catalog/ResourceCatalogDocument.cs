@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>8.2c 冻结的 Schema v1 持久目录。它不挂载 ResourceSystem，也不按类型字符串反射创建对象。</summary>
     public sealed class ResourceCatalogDocument

@@ -46,7 +46,7 @@ if ($Mode -eq 'Pure') {
         $sources += @(Get-ChildItem -LiteralPath $internalPath -Filter '*.cs' |
             Where-Object { $_.Name -ne 'DataAssetLifetime.cs' } | ForEach-Object FullName)
     }
-    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Extensions/Data/DataAssets/DataAssetIdentityTests.cs'
+    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Systems/DataAssets/DataAssetIdentityTests.cs'
     $sources += Join-Path $root 'Tools/UIPanelOfflineRunner.cs'
     Compile-Sources 'DataAssets.Pure.exe' $sources ($bcl + $nunit) '' -Executable
     Copy-Item -LiteralPath $nunit -Destination $output -Force
@@ -73,7 +73,8 @@ if ($Mode -eq 'Pure') {
     $testRefs = $editorRefs + @($nunit, (Join-Path $output 'YLFramework.Editor.dll'),
         (Join-Path $testRunner 'UnityEngine.TestRunner.dll'), (Join-Path $testRunner 'UnityEditor.TestRunner.dll'))
     foreach ($kind in @('EditMode', 'PlayMode')) {
-        $tests = @(Get-ChildItem -LiteralPath (Join-Path $root "Assets/YLFramework/Tests/$kind/Extensions/Data/DataAssets") -Recurse -Filter '*.cs' | ForEach-Object FullName)
+        $tests = @(Get-ChildItem -LiteralPath (Join-Path $root "Assets/YLFramework/Tests/$kind/Systems/DataAssets") -Recurse -Filter '*.cs' | ForEach-Object FullName)
+        if ($kind -eq 'EditMode') { $tests += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Tests/EditMode/Editor/DataAssets') -Recurse -Filter '*.cs' | ForEach-Object FullName) }
         Compile-Sources "YLFramework.Tests.$kind.dll" $tests $testRefs ($symbols + ';UNITY_EDITOR;UNITY_EDITOR_WIN;UNITY_INCLUDE_TESTS')
     }
 }

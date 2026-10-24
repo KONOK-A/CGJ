@@ -16,13 +16,15 @@ using YLFramework.Editor.Resource;
 using YLFramework.Integrations.HybridCLR;
 using YLFramework.Integrations.HybridCLR.Editor;
 using YLFramework.Samples.HybridCLR.Editor;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.HybridCLRReception.Editor
 {
     // Receiver-only acceptance consumer. Installed only after both product-only import receipts.
     public static class HybridCLRReceptionBootstrap
     {
+        // Bound only by source-side Install/Sync; the unrendered template fails closed.
+        private const string SourceRepository = "__YL_HYBRIDCLR_SOURCE_REPOSITORY__";
         private const string AssetsRoot = "Assets/HCLRExample";
         private const string SampleRoot = "Assets/YLFramework/Integrations/HybridCLR/Samples";
         private const string SupportName = "YLFramework.HybridCLR.Sample.Support";
@@ -48,10 +50,16 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         private static JObject Owned()
         {
+            RequireSubset(IsExplicitReceiverPath(SourceRepository) && Directory.Exists(SourceRepository), "Install or sync this consumer from its trusted source repository before use.");
+            RejectSubsetLinks(SourceRepository);
+            RejectSubsetLinks(Root + "/owner.json");
+            RejectSubsetLinks(Root + "/base-no-package-import.receipt.json");
+            RejectSubsetLinks(Root + "/optional-no-package-import.receipt.json");
             var owner = JObject.Parse(File.ReadAllText(Root + "/owner.json"));
+            RequireSubset(IsExplicitReceiverPath(owner.Value<string>("repository")) && SameSubsetPath(owner.Value<string>("repository"), SourceRepository), "Receiver source repository does not match the installed consumer binding.");
             if (!Application.isBatchMode || Application.unityVersion != "2022.3.62f3c1" ||
                 owner.Value<string>("purpose") != "YLFramework-HybridCLR-9.0.3-independent-reception" ||
-                Path.GetFullPath(owner.Value<string>("project")) != Path.GetFullPath(Project) || Directory.Exists(Project + "/.git") ||
+                !IsExplicitReceiverPath(owner.Value<string>("project")) || !SameSubsetPath(owner.Value<string>("project"), Project) || Directory.Exists(Project + "/.git") ||
                 !JObject.Parse(File.ReadAllText(Root + "/base-no-package-import.receipt.json")).Value<bool>("passed") ||
                 !JObject.Parse(File.ReadAllText(Root + "/optional-no-package-import.receipt.json")).Value<bool>("passed"))
             {
@@ -59,18 +67,17 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             }
 
             var durable = SameSubsetPath(Root, "G:/Unity/YLStyleAcceptance/YS28");
-            if (owner.Property("nativePrefix") != null || owner.Value<string>("work") == "yl-code-style-naming-cleanup-20261022" || durable)
+            var approved = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp/kilo")) + Path.DirectorySeparatorChar;
+            RequireSubset(Root.StartsWith(approved, StringComparison.OrdinalIgnoreCase) || durable, "Expected an explicitly approved independent receiver root.");
+            var parent = Directory.GetParent(SourceRepository).Parent.FullName;
+            var structure = owner.Value<string>("work") == "yl-structure-and-namespaces-20261023";
+            if (owner.Property("nativePrefix") != null || structure || owner.Value<string>("work") == "yl-code-style-naming-cleanup-20261022" || durable)
             {
                 var prefix = owner.Value<string>("nativePrefix");
-                var repository = owner.Value<string>("repository");
-                var approved = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp/kilo")) + Path.DirectorySeparatorChar;
-                RequireSubset((Root.StartsWith(approved, StringComparison.OrdinalIgnoreCase) || durable) &&
-                    !string.IsNullOrEmpty(prefix) && System.Text.RegularExpressions.Regex.IsMatch(prefix, "^YS[0-9]{2}$") &&
+                RequireSubset(!string.IsNullOrEmpty(prefix) && System.Text.RegularExpressions.Regex.IsMatch(prefix, structure ? "^S[0-9]{2}$" : "^YS[0-9]{2}$") &&
                     Path.GetFileName(Root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) == prefix &&
-                    owner.Value<string>("work") == "yl-code-style-naming-cleanup-20261022" &&
-                    !string.IsNullOrEmpty(repository) && Path.IsPathRooted(repository) && Directory.Exists(repository) &&
-                    !SameSubsetPath(repository, Project), "An exact isolated style receiver owner is required; never fall back to historical outputs.");
-                var parent = Directory.GetParent(repository).Parent.FullName;
+                    (structure || owner.Value<string>("work") == "yl-code-style-naming-cleanup-20261022") &&
+                    !SameSubsetPath(SourceRepository, Project), "An exact isolated receiver owner is required; never fall back to historical outputs.");
                 RequireSubset(SameSubsetPath(Project, Path.Combine(Root, "R")) || SameSubsetPath(Project, Path.Combine(parent, prefix)), "Unexpected isolated receiver project.");
                 var paths = new Dictionary<string, string>
                 {
@@ -79,21 +86,27 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                     ["runtimeCacheRoot"] = Path.Combine(parent, prefix + "C"),
                     ["subsetPlayerRoot"] = Path.Combine(parent, prefix + "S"),
                     ["subsetCacheRoot"] = Path.Combine(parent, prefix + "CS"),
-                    ["baseline"] = Path.Combine(Root, "Baselines/Native"),
-                    ["subsetBaseline"] = Path.Combine(Root, "Baselines/ProjectSubsets")
+                    ["baseline"] = structure ? Path.Combine(parent, prefix + "B") : Path.Combine(Root, "Baselines/Native"),
+                    ["subsetBaseline"] = structure ? Path.Combine(parent, prefix + "BS") : Path.Combine(Root, "Baselines/ProjectSubsets")
                 };
                 foreach (var path in paths)
                 {
                     var value = owner.Value<string>(path.Key);
-                    RequireSubset(!string.IsNullOrEmpty(value) && Path.IsPathRooted(value) && SameSubsetPath(value, path.Value), "Unowned isolated receiver path: " + path.Key);
+                    RequireSubset(IsExplicitReceiverPath(value) && SameSubsetPath(value, path.Value), "Unowned isolated receiver path: " + path.Key);
                     RejectSubsetLinks(value);
                 }
-                RequireSubset(owner.Value<string>("compatibilityId") == "yl-style-native-20261022-" + prefix.ToLowerInvariant() + "-v1" &&
-                    owner.Value<string>("releaseCompatibilityId") == "yl-style-native-20261022-" + prefix.ToLowerInvariant() + "-release-v1" &&
-                    owner.Value<string>("subsetCompatibilityId") == "yl-style-project-subsets-20261022-" + prefix.ToLowerInvariant() + "-v1", "The receiver compatibility identities must belong to this exact new scope.");
-                RejectSubsetLinks(Root);
-                RejectSubsetLinks(Project);
+                var identity = structure ? "yl-structure-native-20261023-" : "yl-style-native-20261022-";
+                var subsetIdentity = structure ? "yl-structure-project-subsets-20261023-" : "yl-style-project-subsets-20261022-";
+                RequireSubset(owner.Value<string>("compatibilityId") == identity + prefix.ToLowerInvariant() + "-v1" &&
+                    owner.Value<string>("releaseCompatibilityId") == identity + prefix.ToLowerInvariant() + "-release-v1" &&
+                    owner.Value<string>("subsetCompatibilityId") == subsetIdentity + prefix.ToLowerInvariant() + "-v1", "The receiver compatibility identities must belong to this exact new scope.");
             }
+            else
+            {
+                RequireSubset(SameSubsetPath(Project, Path.Combine(Root, "R")) || SameSubsetPath(Project, Path.Combine(SourceRepository, "Temp/H26")) ||
+                    SameSubsetPath(Project, Path.Combine(parent, "H26")), "Unexpected legacy receiver project.");
+            }
+            RejectSubsetLinks(Project);
             return owner;
         }
         private static string ScopedOwnerValue(string name, string legacyValue)
@@ -109,13 +122,16 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         private static void Receipt(string name, object value)
         {
+            RequireSubset(!string.IsNullOrEmpty(name) && System.Text.RegularExpressions.Regex.IsMatch(name, "^[A-Za-z0-9-]+$"), "Use one receipt name, not a path.");
             var path = Root + "/" + name + ".json";
+            RejectSubsetLinks(path);
             if (File.Exists(path))
             {
                 throw new IOException("Preserve the prior acceptance receipt.");
             }
 
             var pending = path + ".pending-" + Guid.NewGuid().ToString("N");
+            RejectSubsetLinks(pending);
             using (var stream = new FileStream(pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 var bytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(value, Formatting.Indented));
@@ -577,7 +593,7 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         public static void Build()
         {
-            Owned();
+            var owner = Owned();
             var profile = Profile();
             var report = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
             {
@@ -586,10 +602,10 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 subtarget = (int)StandaloneBuildSubtarget.Player,
                 scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(),
                 options = profile.development ? BuildOptions.Development : BuildOptions.None,
-                locationPathName = JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>(profile.development ? "playerRoot" : "releasePlayerRoot") + "/HybridCLR.exe"
+                locationPathName = owner.Value<string>(profile.development ? "playerRoot" : "releasePlayerRoot") + "/HybridCLR.exe"
             });
             WriteReport(report);
-            Receipt(profile.development ? JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>("baseReceiptStem") : "base-release-receipt", new
+            Receipt(profile.development ? owner.Value<string>("baseReceiptStem") : "base-release-receipt", new
             {
                 passed = true,
                 ProjectId = profile.recipe.project.projectId,
@@ -995,7 +1011,11 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         {
             for (var cursor = Path.GetFullPath(path); cursor != null; cursor = Path.GetDirectoryName(cursor))
             {
-                if ((File.Exists(cursor) || Directory.Exists(cursor)) && (File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(cursor); }
+                catch (FileNotFoundException) { continue; }
+                catch (DirectoryNotFoundException) { continue; }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
                 {
                     throw new InvalidDataException("Linked project-subset inputs/outputs are not supported: " + cursor);
                 }
@@ -1003,6 +1023,9 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         private static bool SameSubsetPath(string first, string second) => !string.IsNullOrEmpty(first) && !string.IsNullOrEmpty(second) &&
             Path.GetFullPath(first).TrimEnd('/', '\\').Equals(Path.GetFullPath(second).TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+        private static bool IsExplicitReceiverPath(string path) => !string.IsNullOrEmpty(path) && Path.IsPathRooted(path) &&
+            Path.GetPathRoot(path).Replace('\\', '/').Equals(Path.GetPathRoot(Path.GetFullPath(path)).Replace('\\', '/'), StringComparison.OrdinalIgnoreCase) &&
+            !path.Split('/', '\\').Any(part => part == "." || part == "..");
         private static void RequireSubsetEnvironment()
         {
             RequireSubset(Application.platform == RuntimePlatform.WindowsEditor && EditorUserBuildSettings.activeBuildTarget == BuildTarget.StandaloneWindows64 &&
@@ -1386,7 +1409,7 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         private static string PlayerFingerprint(string variant = "PlayerDev")
         {
-            var directory = JObject.Parse(File.ReadAllText(Root + "/owner.json")).Value<string>(variant == "PlayerRelease" ? "releasePlayerRoot" : "playerRoot");
+            var directory = Owned().Value<string>(variant == "PlayerRelease" ? "releasePlayerRoot" : "playerRoot");
             if (string.IsNullOrEmpty(directory) || !Path.IsPathRooted(directory))
             {
                 throw new InvalidDataException("An explicit owned short Player root is required.");

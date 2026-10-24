@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     internal sealed class EquipmentDeletionRecord : ScriptableObject
     {

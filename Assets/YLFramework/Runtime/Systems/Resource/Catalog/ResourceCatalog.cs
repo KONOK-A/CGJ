@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>canonical 资产与显式 alias；不携带持久化 Schema 或构建配置。</summary>
     public sealed class ResourceCatalogEntry

@@ -1,5 +1,5 @@
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 
 namespace YLFramework.Events.Internal
 {

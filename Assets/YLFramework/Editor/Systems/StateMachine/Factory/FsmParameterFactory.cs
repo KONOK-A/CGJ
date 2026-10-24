@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public class FsmParameterFactory
+    internal class FsmParameterFactory
     {
 
         // 创建参数

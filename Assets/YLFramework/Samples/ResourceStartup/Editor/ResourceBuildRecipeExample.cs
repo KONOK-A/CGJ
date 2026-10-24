@@ -1,6 +1,6 @@
 using UnityEditor;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Samples.Resource.Editor
 {

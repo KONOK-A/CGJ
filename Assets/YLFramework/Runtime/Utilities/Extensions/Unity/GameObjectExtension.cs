@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using YLFramework.Foundation;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// GameObject 链式扩展。变更类方法返回原对象以便串联；查询方法不修改对象。

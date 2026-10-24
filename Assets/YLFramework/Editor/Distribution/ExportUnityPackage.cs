@@ -5,7 +5,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Distribution
 {
     public static class ExportUnityPackage
     {

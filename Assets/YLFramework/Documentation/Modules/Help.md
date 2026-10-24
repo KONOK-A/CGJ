@@ -16,11 +16,11 @@ HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显�
 |---|---|---|
 | [`Editor/Help/`](../../Editor/Help/) | `YLFramework.Editor` | 共享Help功能核心，namespace保持，不增加产品DLL |
 | [`Editor/Systems/Action/Help/`](../../Editor/Systems/Action/Help/)、[`Editor/Systems/Audio/Help/`](../../Editor/Systems/Audio/Help/) | `YLFramework.Editor` | 对应领域提供方，按显式类型索引 |
-| [`Editor/Utilities/Help/FoundationToolsHelpProvider.cs`](../../Editor/Utilities/Help/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 基础机制与工具提供方 |
+| [`Editor/Help/FoundationToolsHelpProvider.cs`](../../Editor/Help/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 基础机制与工具提供方，namespace 为 `YLFramework.Editor.Help` |
 | [`Editor/Core/CoreHelpProvider.cs`](../../Editor/Core/CoreHelpProvider.cs) | `YLFramework.Editor` | Core提供方；主体依赖Runtime/UGUI/Json.NET，不要求XFAB |
-| [`Tests/EditMode/Help/`](../../Tests/EditMode/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
+| [`Tests/EditMode/Editor/Help/`](../../Tests/EditMode/Editor/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
 
-核心namespace保持 `YLFramework.Editor.Help`，所有正式编辑器类型共用Editor-only主体。Help源码与提供方仍按职责分离，注册/索引不扫描程序集、不新增管理中心；窗口GUID、原MovedFrom、菜单/Provider id与配置持久键保持。Editor整体依赖不代表Help需要引用任何领域对象。
+核心 namespace 保持 `YLFramework.Editor.Help`，Core 提供方为 `YLFramework.Editor.Core`，Action/Audio 提供方为 `YLFramework.Editor.Actions` / `.Audio`；所有正式编辑器类型共用 Editor-only 主体。Help源码与提供方仍按职责分离，注册/索引不扫描程序集、不新增管理中心；窗口GUID、菜单/Provider id与配置持久键保持。Editor整体依赖不代表Help需要引用任何领域对象。
 
 Runtime/Editor主体autoReferenced为true，optional/tests保留其独立配置；旧Core.Editor/Editor.Help/ZipTool产品asmdef/meta退役。Editor的同一测试friend只声明一次，不以兼容壳维持旧身份；五类旧二进制/AQN消费者须更新并重编译。完整依赖见 [架构总览](../Architecture.md)。
 
@@ -79,7 +79,7 @@ Runtime/Editor主体autoReferenced为true，optional/tests保留其独立配置�
 - 唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 生成 `Library/YLFramework.Runtime.xml`，覆盖 Action、Observable、Audio、bridge；optional 生成 `Library/YLFramework.Actions.DOTween.xml`。`XmlPaths` 按真实 Assembly key 去重。
 - Help 优先显式 XML 路径，仅文件缺失时回退 DLL 邻接 XML；格式或访问错误只警告，不掩盖为路径回退。`Library/` 是构建产物，不默认导出。
 - Core/Foundation 的 XML 未必生成；新 Provider 不增加编译配置，缺失时保留元数据声明与人工编写的指南，不根据名称伪造成员说明。文档链接仅在点击时打开本地说明，不执行示例或工具操作。
-- `HelpWindow` 与 `AudioKitDebugEditorWindow` 针对既有 layout 旧身份保留 `MovedFrom`；没有 namespace / assembly wrapper。旧 API 导航身份无法匹配时沿用窗口回退，不另建持久化名字转换系统。
+- `HelpWindow` 与 `AudioKitDebugEditorWindow` 针对适用的 Unity layout 旧身份保留 `MovedFrom`；没有 namespace / assembly wrapper，也不使 `Type.GetType` 把旧 AQN 当作别名。旧 API 导航身份无法匹配时沿用窗口回退，不另建持久化名字转换系统。
 - 默认框架包包含 Editor 下帮助核心与提供方及 Documentation，不含 Tests 或根目录 optional；导出与依赖边界见 [文档首页](../README.md#帮助与导出)。
 
 ## Known Notes

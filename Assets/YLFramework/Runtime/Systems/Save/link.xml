@@ -1,6 +1,6 @@
 <linker>
   <assembly fullname="YLFramework.Runtime">
-    <type fullname="YLFramework.Services.Save.SaveIndex" preserve="all" />
-    <type fullname="YLFramework.Services.Save.SaveManager/SaveItem" preserve="all" />
+    <type fullname="YLFramework.Save.SaveIndex" preserve="all" />
+    <type fullname="YLFramework.Save.SaveManager/SaveItem" preserve="all" />
   </assembly>
 </linker>

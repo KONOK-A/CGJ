@@ -5,6 +5,7 @@ using UnityEngine;
 using YLFramework.Core;
 using YLFramework.Foundation;
 using Module = YLFramework.Core.Module;
+using YLFramework.Async;
 
 namespace YLFramework.Integrations.HybridCLR
 {

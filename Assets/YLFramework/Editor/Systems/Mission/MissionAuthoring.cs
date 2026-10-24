@@ -1,8 +1,8 @@
 using System;
 using UnityEditor;
-using YLFramework.Core.Editor;
+using YLFramework.Mission;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     internal static class MissionAuthoring
     {
@@ -31,7 +31,7 @@ namespace YLFramework.MissionSystem
         }
         internal static void Rename(this MissionConfigData data)
         {
-            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), GeneratedDirectory(data.parent));
+            YLFramework.Editor.Utilities.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), GeneratedDirectory(data.parent));
             data.parent.ClearCache();
         }
     }

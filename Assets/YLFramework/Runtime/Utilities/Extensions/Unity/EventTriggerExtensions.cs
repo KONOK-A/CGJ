@@ -1,7 +1,7 @@
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
 
     public static class EventTriggerExtensions

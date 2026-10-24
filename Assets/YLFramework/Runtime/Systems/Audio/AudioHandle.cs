@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>A playback lease. Controls on an expired or recycled lease are safe no-ops.</summary>
     public readonly struct AudioHandle

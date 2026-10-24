@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>素材定位方式；ExternalProvider 必须由调用方显式提供后端，不自动注册 XFAB。</summary>
     public enum AudioClipSource

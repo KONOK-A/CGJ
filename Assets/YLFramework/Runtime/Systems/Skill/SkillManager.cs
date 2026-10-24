@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Events;
 using YLFramework.Foundation;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
+using YLFramework.Update;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Skill
 {
     /// <summary>保留技能装备/释放流程。CLR宿主退出显式CloseHost，整个会话由Shutdown归还。</summary>
     public static class SkillManager

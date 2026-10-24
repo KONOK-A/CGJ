@@ -3,9 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using YLFramework;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Events;
 using YLFramework.Foundation;
+using YLFramework.Update;
 
 namespace YLFramework.Actions
 {

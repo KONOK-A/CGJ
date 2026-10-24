@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // 仅描述创建这一次真实租约的调用来源；不参与图引用、生产或释放判断。
     internal readonly struct BundleLeaseOrigin

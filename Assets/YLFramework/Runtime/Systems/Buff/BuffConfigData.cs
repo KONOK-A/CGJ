@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 using YLFramework.Excel;
 using YLFramework.Foundation;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
 
     [Serializable]

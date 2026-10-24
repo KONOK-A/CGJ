@@ -1,4 +1,4 @@
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Transition gain mapping for music CrossFadeMusic.</summary>
     public enum AudioCrossfadeCurve

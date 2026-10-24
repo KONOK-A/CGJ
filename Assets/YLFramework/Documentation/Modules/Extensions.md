@@ -13,7 +13,7 @@
   - `System/`：`SystemStringExtension`、`SystemIOExtension`、`SystemCollectionsExtension`、`SystemObjectExtension`、`SystemReflectionExtension`
   - `Math/`：`MathExtension`、`VectorExtension`
   - `Utilities/`：`RandomUtility`
-- 所有通用扩展统一 namespace `YLFramework.Utilities.Extensions`，归 `YLFramework.Runtime`。原 Core 的 Animator / Bounds / Color / EventTrigger / LayerMask / Quaternion / Random / Ray / Rigidbody / Scene / Time / Type / Vector2 / Vector3 扩展已按能力进入上述目录，类型及方法名不为形式统一重命名。
+- 所有通用扩展统一 namespace `YLFramework.Extensions`，归 `YLFramework.Runtime`。原 Core 的 Animator / Bounds / Color / EventTrigger / LayerMask / Quaternion / Random / Ray / Rigidbody / Scene / Time / Type / Vector2 / Vector3 扩展已按能力进入上述目录，类型及方法名不为形式统一重命名。
 - 字节与进度显示：[`Runtime/Utilities/StringTools.cs`](../../Runtime/Utilities/StringTools.cs)，namespace `YLFramework.Utilities`，归 Runtime。
 - 共用成员判断：[`Runtime/Foundation/Utilities/LayerMaskUtility.cs`](../../Runtime/Foundation/Utilities/LayerMaskUtility.cs)，namespace `YLFramework.Foundation`，供物理 Listener 与 Runtime 包装扩展使用。
 - 旧 `YLFramework.Core.Extensions` 与 `YLFramework.Core.StringTools` 不保留转发壳；消费者改用上述 namespace，并显式引用 Runtime。旧 GameObjectExtensions / ComponentExtensions 类型退出，递归设层归 `GameObjectExtension.SetLayer`，唯一 Unity fake-null 查询归 `ObjectExtension.IsDestroy(UnityEngine.Object)`，GameObject / Component 扩展调用仍可直接使用。
@@ -92,11 +92,11 @@
 
 ## 测试
 
-- 共用 LayerMask 的真实包装、Unity null 与 Core Trigger 3D/2D 回调过滤回归：`Tests/Core/EditMode/NeutralLayerMaskConsumerTests.cs`。该测试直接调用真实过滤消费者，不代表物理引擎自动分发门禁。
-- `Tests/EditMode/Extensions/ToolsExtensionsContractTests.cs` 与 `ParabolicMotionContractTests.cs`：非法层、单位阈值、Ray 直线/半轴、Quaternion 等价表示、开放 Type、失效 Component、唯一 Object 存活入口、单对象 / 递归设层，以及抛物线可达/退化拒绝。
-- `Tests/PlayMode/Extensions/ParabolicMotionNativeTests.cs`：只模拟自有局部 3D/2D PhysicsScene，验证速度赋值、退化输入不改速度和无重力运动，区分连续解与原生离散积分误差。
+- 共用 LayerMask 的真实包装、Unity null 与 Events Trigger 3D/2D 回调过滤回归：`Tests/EditMode/Core/NeutralLayerMaskConsumerTests.cs`。该测试直接调用真实过滤消费者，不代表物理引擎自动分发门禁。
+- `Tests/EditMode/Utilities/Extensions/ToolsExtensionsContractTests.cs` 与同目录 `ParabolicMotionContractTests.cs`：非法层、单位阈值、Ray 直线/半轴、Quaternion 等价表示、开放 Type、失效 Component、唯一 Object 存活入口、单对象 / 递归设层，以及抛物线可达/退化拒绝。
+- `Tests/PlayMode/Utilities/Extensions/ParabolicMotionNativeTests.cs`：只模拟自有局部 3D/2D PhysicsScene，验证速度赋值、退化输入不改速度和无重力运动，区分连续解与原生离散积分误差。
 - 原文所列 `Tests/EditMode/Extension*.cs` 当前不存在，不作为已执行覆盖的证据；无关扩展的覆盖口径留阶段 5 后续收口。
-- `Tests/PlayMode/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
+- `Tests/PlayMode/Utilities/Extensions/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
 - 消费者代表性回归：正式 `ResourceSystemTests`、`ResourceBundleRuntimeTests` 的实例/销毁用例，以及 `UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。旧 `ResourcePoolTests` 已随旧栈退出，历史提及但不在仓库的 `GameObjectLoaderPlayModeTests` 也不作为已执行证据。
 - 完整Foundation/Core源码边界守卫见 `FoundationBoundaryTests` 与 `CoreArchitectureBoundaryTests`；不施加“所有Utilities不得依赖Core/Systems”的额外规则，取色工具消费Core是合法正例。源码闭包通过不代替本模块各项运行时行为验证。
 

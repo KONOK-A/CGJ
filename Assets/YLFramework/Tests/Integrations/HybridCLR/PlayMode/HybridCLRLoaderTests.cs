@@ -8,8 +8,8 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Integrations.HybridCLR;
-using YLFramework.Services.Resource;
-using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
+using YLFramework.Resource;
+using ResourceLocation = YLFramework.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
 {

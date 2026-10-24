@@ -1,6 +1,6 @@
 using UnityEditor;
-using YLFramework.Foundation.Attributes;
-namespace YLFramework.EquipmentSystem
+using YLFramework.Attributes;
+namespace YLFramework.Editor.Equipment
 {
     internal sealed class CustomEquipmentConfigDataParentGui : CustomPropertyGui
     {

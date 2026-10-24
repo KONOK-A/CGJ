@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Help;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
@@ -41,8 +41,8 @@ namespace YLFramework.Editor.Audio
                 Guides = guides,
                 About = CreateAbout(),
                 ApiTypes = runtime.GetExportedTypes()
-                    .Where(type => type.Namespace == "YLFramework.Services.Audio" ||
-                        (type.Namespace != null && type.Namespace.StartsWith("YLFramework.Services.Audio.", StringComparison.Ordinal)))
+                    .Where(type => type.Namespace == "YLFramework.Audio" ||
+                        (type.Namespace != null && type.Namespace.StartsWith("YLFramework.Audio.", StringComparison.Ordinal)))
                     .OrderBy(type => type.FullName, StringComparer.Ordinal)
                     .Select(type => new HelpApiTypeDefinition(type,
                         type == typeof(PlaySoundAction) || type == typeof(PlaySoundExtension) ? "ActionKit Audio 集成" : "Audio Runtime")).ToArray(),
@@ -59,7 +59,7 @@ namespace YLFramework.Editor.Audio
                 new[] { typeof(AudioKit), typeof(AudioHandle), typeof(AudioSoundOptions), typeof(AudioAutoFade),
                     typeof(AudioSoundConcurrency), typeof(SoundOverflowPolicy), typeof(AudioMusicPlayer), typeof(AudioEmitter), typeof(AudioKitSettings),
                     typeof(AudioClipLibrary), typeof(AudioGroupPlayer) },
-                HelpBlock.Code("代码播放三类 Clip", "using YLFramework.Services.Audio；提供外部 Clip，无需调用 Initialize。Music 默认循环，Voice/Sound 默认单次。",
+                HelpBlock.Code("代码播放三类 Clip", "using YLFramework.Audio；提供外部 Clip，无需调用 Initialize。Music 默认循环，Voice/Sound 默认单次。",
                     "AudioKit.PlayMusic(musicClip);\nAudioKit.PlayVoice(voiceClip);\nAudioKit.PlaySound(soundClip);"),
                 HelpBlock.Paragraph("背景音乐组件", "添加 AudioMusicPlayer 并绑定 Clip，默认 Loop 与 playOnAwake 开启，在首次 Start 自动播放，不是每次 OnEnable。" +
                     "需要手动控制时关闭自动播放，通过 UnityEvent 调用无参 Play/Stop，组件停用只停止自有音乐。"),
@@ -101,7 +101,7 @@ namespace YLFramework.Editor.Audio
                 HelpBlock.Paragraph("高频配置复用", "业务可持有并复用同一个 AudioSoundOptions，避免每次 new 或读取 Defaults/MusicDefaults；每次提交捕获独立内部值快照，之后修改原对象只影响后续请求。" +
                     "省略/null 使用对应类别的内部值默认，不创建配置类。优化仅针对内部 Options 类分配，不承诺整个 Audio 零 GC；初始化、音源创建、集合扩容和 Action 回调闭包等仍可能分配。" +
                     "Unity 2022.3.62f3c1 Editor PlayMode 预热后的 4096 次配置捕获/校验/值存储测得 0 次 GC.Alloc 事件；完整路径前后数据见 Audio 文档，不是字节统计，不能替代 Player/IL2CPP 设备实测。"),
-                HelpBlock.Paragraph("接入", "业务程序集引用 YLFramework.Runtime，代码使用 using YLFramework.Services.Audio。" +
+                HelpBlock.Paragraph("接入", "业务程序集引用 YLFramework.Runtime，代码使用 using YLFramework.Audio。" +
                     "Audio 与 Action 同属共享 Runtime，直接复用 YL 池、Binding 和 Events；不依赖 QFramework、XF、ResKit 或 Timing 调度。" +
                     "直接 Clip 由业务保活；具名素材使用显式 AudioClipAddress/provider 与租约，组配置复用同一加载链，不提供旧 Loader 或 Fluent 播放入口。" +
                     "Mixer 路由、暴露参数与 Snapshot 控制可选；不配置 Mixer 的旧调用保持原功能，不自动绑定 Settings 音量或 Ducking。"),
@@ -364,7 +364,7 @@ namespace YLFramework.Editor.Audio
                     "禁用/销毁不恢复旧配置，不采用播放组件的句柄所有权规则。")),
             Guide("action", "ActionKit 音效动作", "Clip-only 动作桥接，等待请求结束，不保证自然播放成功。",
                 new[] { typeof(PlaySoundAction), typeof(PlaySoundExtension), typeof(AudioSoundOptions), typeof(AudioAutoFade) },
-                HelpBlock.Code("组合", "使用 YLFramework.Actions 与 YLFramework.Services.Audio。",
+                HelpBlock.Code("组合", "使用 YLFramework.Actions 与 YLFramework.Audio。",
                     "ActionKit.Sequence()\n    .PlaySound(soundClip, outputRoute: AudioOutputRoute.ToMixer(uiGroup))\n    .Callback(() => Debug.Log(\"音效等待已结束\"))\n    .Start(host);"),
                 HelpBlock.Code("完整请求配置", "AllocateWithOptions(clip, options, onFinish=null, onStarted=null) 与 sequence.PlaySoundWithOptions(clip, options, onStarted=null)，options 必填，不新增旧方法重载或 Fluent 层。",
                     "var options = AudioSoundOptions.Defaults;\noptions.Priority = 10;\noptions.AutoFade = new AudioAutoFade(0.25f, 0.5f);\n" +
@@ -406,7 +406,7 @@ namespace YLFramework.Editor.Audio
         private static HelpPage[] CreateAbout() => new[]
         {
             new HelpPage("usage", "使用与版本", "关于", "",
-                HelpBlock.Paragraph("", "AudioKit 是 YLFramework 的 Clip 与显式具名资源音频服务，命名空间 YLFramework.Services.Audio，属于共享程序集 YLFramework.Runtime；" +
+                HelpBlock.Paragraph("", "AudioKit 是 YLFramework 的 Clip 与显式具名资源音频服务，命名空间 YLFramework.Audio，属于共享程序集 YLFramework.Runtime；" +
                     "音效动作桥接内建于同一程序集。帮助复用Editor主体中的YLFramework.Editor.Help命名空间。\n\n" +
                     "Unity 版本：" + Application.unityVersion + "\nRuntime 程序集版本：" + typeof(AudioKit).Assembly.GetName().Version +
                     "\n程序集版本来自编译元数据，不代表模块单独发布版本。\n\n" +

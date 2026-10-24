@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// 随机工具，基于 <see cref="UnityEngine.Random"/> 的全局随机状态。

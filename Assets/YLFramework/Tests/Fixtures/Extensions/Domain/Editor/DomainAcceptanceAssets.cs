@@ -4,9 +4,9 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using YLFramework.BuffSystem;
-using YLFramework.MissionSystem;
-using YLFramework.SkillSystem;
+using YLFramework.Buff;
+using YLFramework.Mission;
+using YLFramework.Skill;
 
 namespace YLFramework.Tests.DomainAcceptance.Editor
 {

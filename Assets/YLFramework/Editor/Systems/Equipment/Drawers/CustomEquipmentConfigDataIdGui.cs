@@ -1,8 +1,8 @@
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Foundation.Attributes;
-namespace YLFramework.EquipmentSystem
+using YLFramework.Attributes;
+namespace YLFramework.Editor.Equipment
 {
     internal sealed class CustomEquipmentConfigDataIdGui : CustomPropertyGui
     {

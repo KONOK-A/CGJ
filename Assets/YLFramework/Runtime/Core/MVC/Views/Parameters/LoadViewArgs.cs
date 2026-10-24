@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 using YLFramework.Core.RoslynAnalyzers;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 
 

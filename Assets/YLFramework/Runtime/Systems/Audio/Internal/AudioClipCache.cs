@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     // 缓存只持有真实后端租约；等待者/播放保活与闲置计时不依赖 Source 池。
     internal sealed class AudioClipCache : IDisposable

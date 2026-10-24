@@ -8,9 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using SaveItem = YLFramework.Services.Save.SaveManager.SaveItem;
+using SaveItem = YLFramework.Save.SaveManager.SaveItem;
 
-namespace YLFramework.Services.Save
+namespace YLFramework.Save
 {
     /// <summary>
     /// 唯一的存档引擎。显式根目录、同根独占 owner，同槽串行、跨槽独立；不依赖 Unity。

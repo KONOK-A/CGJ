@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Utilities
 {
     public class SplitWindow : EditorWindow
     {

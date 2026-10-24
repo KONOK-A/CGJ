@@ -16,7 +16,7 @@
 | Safe、IOfPool/IPoolType、非公开/动态创建工具、自有 GO 池 | [`Runtime/Foundation/Pool/`](../../Runtime/Foundation/Pool/) | `YLFramework.Runtime` |
 | LoadViewArgs 私有参数池、Core 临时集合消费者 | [`Runtime/Core/MVC/Views/Parameters/`](../../Runtime/Core/MVC/Views/Parameters/)、[`Runtime/Core/`](../../Runtime/Core/) | `YLFramework.Runtime` |
 
-公开 namespace 保持 `YLFramework.Core.Pool`，不据目录名推断职责。Foundation/Core 共用 Runtime 主体，但池中立源码闭包不消费上层领域或 XF/XFAB；主体已解除 XFAB，仍保留 UGUI/Json.NET，不能宣传整个 DLL 零依赖。会话状态不作为公共 API，friend 仅保留既有实际 Editor/测试/可选集成消费。
+公开 namespace 为 `YLFramework.Pooling`；旧 `YLFramework.Core.Pool` 不保留转发类型，调用方须更新引用。Foundation/Core 共用 Runtime 主体，但池中立源码闭包不消费上层领域或 XF/XFAB；主体已解除 XFAB，仍保留 UGUI/Json.NET，不能宣传整个 DLL 零依赖。会话状态不作为公共 API，friend 仅保留既有实际 Editor/测试/可选集成消费。
 
 ## 主要类型
 
@@ -34,7 +34,7 @@
 
 ```csharp
 using System.Text;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 
 using var pool = new ObjectPool<StringBuilder>(
     () => new StringBuilder(),
@@ -54,7 +54,7 @@ finally
 }
 ```
 
-工厂可以返回接口实现，也可以显式使用 `new ObjectPool<object>(() => MultiObjectFactory.Create(type, constructorArgs))` 创建动态类型。非公开构造可用 `var factory = new NonPublicObjectFactory<MyClass>();`，再传 `factory.Create` 或 `SetObjectFactory(factory)`。这些反射创建工具位于 Runtime；只有公开工厂/普通对象需求的 Core 不需因此引用 Runtime，可直接配置自己的显式委托。IL2CPP/裁剪环境由调用方保留所需构造信息，本专题没有 AOT 自动注册机制。
+工厂可以返回接口实现，也可以显式使用 `new ObjectPool<object>(() => MultiObjectFactory.Create(type, constructorArgs))` 创建动态类型。非公开构造可用 `var factory = new NonPublicObjectFactory<MyClass>();`，再传 `factory.Create` 或 `SetObjectFactory(factory)`。这些反射创建工具位于同一 Runtime 的 Foundation；Core 可直接配置自己的显式委托，不新增程序集依赖。IL2CPP/裁剪环境由调用方保留所需构造信息，本专题没有 AOT 自动注册机制。
 
 构造内核时第二个参数是 `onAllocate`，reset 应使用命名参数 `reset:`。涉及借用初始化、资源取得及失败清理时，配置取得/reset/永久丢弃钩子，不把资源销毁寄托于丢引用。
 
@@ -127,12 +127,12 @@ pool.Clear("Projectile");
 | 反射自动写字段/属性 | 退出，不等价复刻；由类型/领域显式 reset，保留构造默认值与必要资源责任 |
 | IOfPool 类型入口 | Safe 保留接口回调、单例、工厂/容量/预热及扩展钩子，直接组合内核 |
 
-本专题明确改变旧基类/类型身份、外部 new 接纳和异常后重试行为。仓库文本资源/反射引用已定向核查，保留工具和 Safe 的 GUID、namespace、程序集不变；这不证明仓库外源码、DLL 或二进制存档兼容，使用方需按上述方式迁移。反射创建只是显式能力，不恢复自动成员 reset。
+历史 2.1 专题明确改变旧基类/类型身份、外部 new 接纳和异常后重试行为，当时保留的工具/Safe namespace 不变结论仅适用于该批。当前公开域已统一为 `YLFramework.Pooling`，脚本 GUID 与 Runtime 程序集保留；这不证明仓库外源码、DLL 或二进制存档兼容，使用方须按真实身份迁移。反射创建只是显式能力，不恢复自动成员 reset。
 
 ## 当前状态
 
 **2.1-A～E 已全部完成并通过用户验收，2.1 Pool 为 COMPLETE（A～D 已 Git 收口，E 的 Git 收口提交由用户后续执行）；阶段 2 保持 IN PROGRESS，2.2 Events 已 COMPLETE（技术验收完成，待用户 Git 收口），下一专题 2.3 Update 未启动。**正式设计与各批实际结果见 [Pool 专项](../../../../.kilo/plans/xf-yl-2.1-pool.md)。
 
-实际测试入口为 `Tests/Foundation/EditMode/ObjectPoolTests`、`FoundationBoundaryTests`，`Tests/EditMode/PoolContractTests`、`CollectionPoolTests`，正式 `ResourceSystemTests`/`ResourceBundleRuntimeTests` 及 Action/Events/Binding/Audio 定向契约，Core 的参数/临时集合/身份及代表性 PlayMode 用例。GO 专项为 `Tests/PlayMode/GameObjectPoolPlayModeTests`，覆盖真实 Unity 生命周期、场景卸载及关键回归。已退役的 `ResourcePoolTests` 和不存在的旧套件名称不作为覆盖依据。
+当前测试入口为 `Tests/EditMode/Foundation/ObjectPoolTests.cs`、`FoundationBoundaryTests.cs`，以及 `Tests/EditMode/Foundation/Pool/` 下的 `PoolContractTests`、`CollectionPoolTests`；正式 `ResourceSystemTests`/`ResourceBundleRuntimeTests`、Action/Events/Binding/Audio 定向契约和 Core 消费者仍按各自职责归组。GO 专项为 `Tests/PlayMode/Foundation/Pool/GameObjectPoolPlayModeTests.cs`。路径与源码存在不等于本轮已执行通过；已退役的 `ResourcePoolTests` 和不存在的旧套件名称不作为覆盖依据。
 
 领域限制不由普通缓存统一自动解决。旧Resource的ReleaseAllRes与嵌套加载器已退出，正式Scope清理错误聚合、消费者生命周期与失效会话排空由Resource门禁负责；Events、FSM、Action等仍按各自契约处理。主体XFAB解耦不等同最终独立载体验收，也不宣称已验证IL2CPP/全平台。

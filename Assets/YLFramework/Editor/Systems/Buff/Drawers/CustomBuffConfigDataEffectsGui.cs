@@ -1,6 +1,5 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 using System;
 using System.Collections;
@@ -12,9 +11,10 @@ using UnityEditor;
 using UnityEditorInternal;
 #endif
 using UnityEngine;
+using YLFramework.Buff;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
     public class CustomBuffConfigDataEffectsGui : CustomPropertyGui
     {

@@ -1,5 +1,5 @@
 using System;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Localization
 {

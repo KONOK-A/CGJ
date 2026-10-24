@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 
-namespace YLFramework.Utilities.Table
+namespace YLFramework.Tables
 {
     /// <summary>
     /// 为数据项建立按指定键查询的索引。

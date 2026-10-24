@@ -1,9 +1,9 @@
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public class FsmTransitionFactory
+    internal class FsmTransitionFactory
     {
         public static void SetAutoSwitch(RuntimeFsmController controller, FsmTransitionData transition, bool value)
         {

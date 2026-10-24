@@ -1,8 +1,9 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     [CustomEditor(typeof(EquipmentsConfig), true)]
     public sealed class EquipmentsConfigInspector : UnityEditor.Editor

@@ -6,7 +6,7 @@ using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Threading;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // 获取应用 key 的调用边界与后台纯 IO/认证分开；输入句柄保持至提交或取消真正收尾。
     internal sealed class ResourceContentValidation : IDisposable

@@ -4,7 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Utilities
 {
     public static class OpenFolder
     {

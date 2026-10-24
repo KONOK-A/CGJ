@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 按引用比较对象的内部比较器，用于 InjectAll 对同一实例去重。

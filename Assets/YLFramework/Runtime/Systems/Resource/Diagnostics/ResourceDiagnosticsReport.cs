@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     internal interface IAssetLeaseDiagnostics
     {

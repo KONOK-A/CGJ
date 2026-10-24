@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework.Logging
 {

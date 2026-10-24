@@ -1,8 +1,9 @@
 using System;
 using System.IO;
 using UnityEditor;
+using YLFramework.DataAssets;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     /// <summary>
     /// 按资产GUID记住最近导出的工作簿，只保存在本机 EditorPrefs，不写入配置资产或仓库。

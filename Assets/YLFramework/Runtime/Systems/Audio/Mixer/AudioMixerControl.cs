@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Explicit native Mixer control without AudioKit initialization, implicit targets or transition queues.</summary>
     /// <remarks>

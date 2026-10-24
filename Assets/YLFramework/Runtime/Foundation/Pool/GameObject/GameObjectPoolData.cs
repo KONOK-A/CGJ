@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 单个 key 的 FIFO 实例缓存；只在 Unity 主线程使用，不拥有 Prefab 资产。

@@ -6,16 +6,19 @@ using System.Globalization;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.BuffSystem;
-using YLFramework.EquipmentSystem;
-using YLFramework.Excel.Editor;
+using YLFramework.Buff;
+using YLFramework.Equipment;
 using YLFramework.Foundation;
-using YLFramework.MissionSystem;
-using YLFramework.SkillSystem;
-using YLFramework.Services.Resource;
+using YLFramework.Mission;
+using YLFramework.Skill;
+using YLFramework.Resource;
 using Newtonsoft.Json.Linq;
+using YLFramework.Editor.Buff;
+using YLFramework.Editor.Equipment;
+using YLFramework.Editor.Skill;
+using YLFramework.Integrations.Excel.Editor;
 
-namespace YLFramework.Domain.Excel.Editor
+namespace YLFramework.Integrations.DomainExcel.Editor
 {
     /// <summary>依赖B组真实Excel候选；普通Editor不反向引用此可选程序集。</summary>
     public static class DomainExcelCommands
@@ -50,7 +53,7 @@ namespace YLFramework.Domain.Excel.Editor
                 DataType<EquipmentConfigData>(root.typeScriptGuid), data =>
                 {
                     var type = data.equipmentType == EquipmentType.Script ? AssemblyTool.GetType(data.equipmentClassFullName) : null;
-                    data.equipmentClassGuid = YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(type) ? YLFramework.EquipmentSystem.ScriptBindController.GetScriptGuid(type) : "";
+                    data.equipmentClassGuid = YLFramework.Editor.Equipment.ScriptBindController.IsEquipmentType(type) ? YLFramework.Editor.Equipment.ScriptBindController.GetScriptGuid(type) : "";
                 });
             try
             {
@@ -61,7 +64,7 @@ namespace YLFramework.Domain.Excel.Editor
                     if (mode == EquipmentType.Script)
                     {
                         var name = (string)row["equipmentClassFullName"];
-                        if (!YLFramework.EquipmentSystem.ScriptBindController.IsEquipmentType(AssemblyTool.GetType(name)))
+                        if (!YLFramework.Editor.Equipment.ScriptBindController.IsEquipmentType(AssemblyTool.GetType(name)))
                             throw new InvalidOperationException($"装备 {change.Key} 脚本类型无效: {name}");
                     }
                     else if (mode == EquipmentType.Asset)

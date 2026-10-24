@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Excel;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.DataAssets
 {

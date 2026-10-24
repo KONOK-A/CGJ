@@ -5,7 +5,7 @@ using System.Reflection;
 using Newtonsoft.Json;
 using YLFramework.Excel;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     /// <summary>沿用效果ID数组的作者格式；仅Editor解析真实资产，不序列化Unity对象JSON。</summary>
     public sealed class BuffEffectExcel : CustomExcelFieldImportAndExport

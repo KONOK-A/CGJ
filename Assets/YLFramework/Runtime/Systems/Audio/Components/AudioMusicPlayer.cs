@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>序列化的音乐所有者：通过 AudioKit 播放单个 Clip，并追踪自己持有的 lease。</summary>
     /// <remarks>Play 会替换当前音乐，可选择用 Crossfade 过渡。Stop 和 OnDisable 只停止该组件仍在追踪的 lease；Clip 为空时不会影响正在播放的音乐。</remarks>

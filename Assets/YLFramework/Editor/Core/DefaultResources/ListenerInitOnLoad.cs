@@ -5,8 +5,9 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using YLFramework.Core;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Core
 {
     public class ListenerInitOnLoad
     {

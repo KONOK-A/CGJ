@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>typed 批量/Group 的拥有型结果。每个成员是独立正式 Lease，Dispose 只释放本批责任；Errors 保留可选成员失败。</summary>
     public sealed class AssetBatchLease<T> : IDisposable where T : UnityEngine.Object

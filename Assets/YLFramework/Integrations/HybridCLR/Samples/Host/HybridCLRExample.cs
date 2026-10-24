@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using YLFramework.Core;
 using YLFramework.Integrations.HybridCLR;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Samples.HybridCLR
 {

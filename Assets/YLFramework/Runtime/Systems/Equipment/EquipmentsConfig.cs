@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Equipment
 {
     [CreateAssetMenu(menuName = "YLFramework/EquipmentSystem(装备配置)")]
     public class EquipmentsConfig : ScriptableObject

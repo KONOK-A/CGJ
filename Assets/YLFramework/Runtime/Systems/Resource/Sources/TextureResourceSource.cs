@@ -3,7 +3,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>只拥有本来源新创建/解码的 Texture，不纳管外部 Texture。完整 locator 保真，共享与消费者取消由 ResourceSystem 管理。</summary>
     internal sealed class TextureResourceSource : IResourceSource

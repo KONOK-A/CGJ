@@ -5,11 +5,12 @@ using Newtonsoft.Json;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Mission;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
 
     public class MissionListTree : ReorderableTreeView<MissionConfigData>
@@ -318,7 +319,7 @@ namespace YLFramework.MissionSystem
                 return;
             }
 
-            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_missionsConfig, _missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(_missionsConfig));
+            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_missionsConfig, _missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(_missionsConfig));
             _missionsConfig.ClearCache();
             Reload();
         }

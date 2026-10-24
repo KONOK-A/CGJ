@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>项目的交付字节编码；不改变Catalog v1或资源加载所有权。</summary>
     public enum ResourceContentEncryption

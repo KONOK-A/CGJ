@@ -4,11 +4,12 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Mission;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     public class MissionsConfigController
     {

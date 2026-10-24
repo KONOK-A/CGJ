@@ -1,9 +1,9 @@
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
 
-    public class FsmConditionFactory
+    internal class FsmConditionFactory
     {
         public static void SetTargetValue(RuntimeFsmController controller, FsmConditionData condition, float value)
         {

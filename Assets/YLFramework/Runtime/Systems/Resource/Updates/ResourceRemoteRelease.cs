@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>经过可信公钥认证的发布授权；不代表Catalog/文件已下载、Prepared或Active。</summary>
     internal sealed class ResourceRemoteRelease

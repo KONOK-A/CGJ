@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Save
+namespace YLFramework.Save
 {
     /// <summary>
     /// <see cref="Vector3"/> 的可序列化替身：以三个 float 字段存储，便于存档 JSON 或 Unity 序列化读写三维向量。

@@ -2,8 +2,9 @@ using System;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     public static class ScriptBindController
     {

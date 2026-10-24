@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     internal sealed class AssetBundleSource : IResourceSource
     {

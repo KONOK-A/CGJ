@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
 
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public enum Style
+    internal enum Style
     {
         Normal = 0,
         Blue,
@@ -40,7 +39,7 @@ namespace YLFramework.StateMachine
         RedOnHEX,
     }
 
-    public class StateStyles
+    internal class StateStyles
     {
         private static Dictionary<Style, GUIStyle> _styleDictionary = null;
         static StateStyles()

@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using YLFramework.Core;
 using YLFramework.Integrations.HybridCLR;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
 {

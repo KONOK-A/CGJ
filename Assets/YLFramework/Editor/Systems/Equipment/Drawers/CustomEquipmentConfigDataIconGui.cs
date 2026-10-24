@@ -1,8 +1,8 @@
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
-using YLFramework.Foundation.Attributes;
-namespace YLFramework.EquipmentSystem
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+namespace YLFramework.Editor.Equipment
 {
     internal sealed class CustomEquipmentConfigDataIconGui : CustomPropertyGui
     {

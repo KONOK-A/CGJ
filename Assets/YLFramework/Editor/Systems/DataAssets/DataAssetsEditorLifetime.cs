@@ -1,6 +1,7 @@
 using UnityEditor;
+using YLFramework.DataAssets;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     [InitializeOnLoad]
     internal static class DataAssetsEditorLifetime

@@ -1,7 +1,7 @@
 using System;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// IOfPool 的类型化单例入口，缓存与真实所有权由统一内核负责。

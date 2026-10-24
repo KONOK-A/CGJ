@@ -25,7 +25,7 @@ namespace YLFramework.Core
     /// <summary>
     /// ModuleManager创建的非池化启动请求；不支持Abort取消启动协程。
     /// </summary>
-    public sealed class StartUpModuleRequest : YLFramework.Foundation.CustomAsyncOperation<StartUpModuleRequest>
+    public sealed class StartUpModuleRequest : YLFramework.Async.CustomAsyncOperation<StartUpModuleRequest>
     {
 
         public StartingModuleSteps Step

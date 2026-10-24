@@ -794,7 +794,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 4224669040538085320}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -1129,7 +1129,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 4224669040538085320}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:

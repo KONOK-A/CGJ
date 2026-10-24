@@ -7,8 +7,8 @@ using UnityEngine.Events;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using XFGameFramework;
-using AudioKit = YLFramework.Services.Audio.AudioKit;
-using YLFramework.Services.Audio;
+using AudioKit = YLFramework.Audio.AudioKit;
+using YLFramework.Audio;
 
 public class YLClickSoundPlayModeTests
 {

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// RectTransform 扩展。

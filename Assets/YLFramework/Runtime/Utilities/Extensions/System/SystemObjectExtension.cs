@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// System.Object 通用扩展。

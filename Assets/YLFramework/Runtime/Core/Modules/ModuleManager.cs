@@ -6,7 +6,7 @@ using UnityEditor;
 #endif
 using UnityEngine;
 using YLFramework.Foundation;
-using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
+using CoroutineStarter = YLFramework.Async.CoroutineStarter;
 
 namespace YLFramework.Core
 {

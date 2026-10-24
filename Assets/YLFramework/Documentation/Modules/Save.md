@@ -11,6 +11,7 @@
 ## 位置
 
 - 运行时：[`Runtime/Systems/Save/`](../../Runtime/Systems/Save/)
+- namespace 为 `YLFramework.Save`，程序集仍为 `YLFramework.Runtime`；旧 `YLFramework.Services.Save` 调用方须更新 using/完整名，不提供转发壳。
 - 唯一存储引擎：`SaveStore.cs`；Unity门面：`SaveManager.cs`；模型/来源/版本合同：`SaveContracts.cs`。
 - 文件读写辅助：`SaveFileIO.cs`（原子写入 / 备份恢复）；序列化辅助：[`Serialization/`](../../Runtime/Systems/Save/Serialization/)。
 - 通用字典：[`Runtime/Foundation/Serialization/SerializedDictionary.cs`](../../Runtime/Foundation/Serialization/SerializedDictionary.cs)，归 Runtime 主体的 Foundation 职责，不是 Save 专属类型。
@@ -36,7 +37,7 @@
 - `ISaveModel`：当前模型的`Id`合同；`SaveReadResult<T>`、`SaveReadStatus`、`SaveVersionException`、`SaveRecoveryRequiredException`：来源与错误合同。
 - `SaveManager.SaveItem`：存档槽数据（编号、创建 / 最后保存时间、显示名、备注）。
 - `SaveFileIO`（internal）：原子写入、备份恢复与 JSON 读写。
-- `YLFramework.Foundation.SerializedDictionary<TKey,TValue>`：唯一通用字典；`YLFramework.Services.Save` 不再定义另一份字典。
+- `YLFramework.Serialization.SerializedDictionary<TKey,TValue>`：唯一通用字典；`YLFramework.Save` 不再定义另一份字典。
 - `SerializedVector3` / `SerializedVector2` / `SerializedColor`：Save 的可序列化值类型。
 
 ## 依赖
@@ -48,7 +49,7 @@
 
 ```csharp
 using UnityEngine;
-using YLFramework.Foundation;
+using YLFramework.Serialization;
 
 public class ExampleConfig : MonoBehaviour
 {
@@ -73,13 +74,13 @@ public class ExampleConfig : MonoBehaviour
 - UI：同时提供 UI Toolkit `PropertyField`/binding 和 IMGUI 实现；IMGUI 的长诊断可在固定高区域内滚动，避免窄列覆盖后续字段。已验证 Unity 2022.3 原生 GenericInspector 与 IMGUI 自定义 Inspector；不依赖第三方 Inspector，也不承诺第三方抢占的 Editor 会转发原生 Drawer。Sirenix 全局 Inspector 已退出，其他组件回落 Unity 原生或既有 CustomEditor。
 - JSON：当前 SaveManager/Json.NET 输出裸对象，例如 `{"a":2,"b":4}`，只保存有效字典投影；不导出 Unity 原始无效行。支持该后端可往返的 string/int/enum 键及相应值，复杂键的 ToString 不代表可逆编码。自定义 converter/resolver、元数据保留名称（`$type/$id/$ref`）、Unity 对象引用与任意保引用设置需调用方另验实际磁盘往返。
 - 缓存：`SaveObject(dictionary, "scores", slot.SaveId)` 可直接写盘；随后 `LoadObject<SerializedDictionary<string,int>>("scores", slot.SaveId)` 可能命中同一内存对象，不是磁盘验证。隔离测试才使用独占 root、清缓存及重新读盘，不在真实用户目录为测试切换或清除存档状态。
-- 兼容变化：旧 `YLFramework.Core.SerializedDictionary/DictionaryItem` 与 `YLFramework.Services.Save.SerializedDictionary` 已退出，没有 facade 或旧双列表 reader。正式容器保留自有脚本 GUID 与 `datas/Key/Value`，但 namespace/程序集身份改变；不保证旧 assembly-qualified name、SerializeReference 或旧 JSON 包装自动兼容。没有已查实待迁移的真实 YL 资产/存档，发现历史数据时应基于样本另做定向迁移。
+- 兼容变化：旧 `YLFramework.Core.SerializedDictionary/DictionaryItem` 与 Save 专属字典已退出，没有 facade 或旧双列表 reader。正式容器当前为 `YLFramework.Serialization.SerializedDictionary`，仍在 `YLFramework.Runtime`，保留脚本 GUID 与 `datas/Key/Value`；原 Foundation namespace 调用须更新。GUID、字段保留不保证旧 AQN、SerializeReference 或旧 JSON 包装自动兼容，持久身份应按真实样本映射并重导入/往返验证；不改变 Save JSON、槽位键或现有磁盘协议。
 
 2.5-C 的 `SerializedDictionaryEditorTests` 与 `SerializedDictionarySaveTests` 覆盖原生编辑、Prefab 临时资产保存重开及现有 SaveManager 的隔离写盘/清缓存/新实例读回；这些是字典专题证据，不是 Save 全系统故障恢复验收。
 
 ## 当前状态
 
-B接收已替换唯一引擎，当前测试位于`Tests/EditMode/Extensions/Data/Save/`及`SerializedDictionarySaveTests.cs`，覆盖当前模型/槽位/版本拒绝、文件安全、取消并发、缓存来源/显式恢复与JsonUtility联合回归。实际Unity、双轮Play及Release Player结果以正式拓展Plan本轮接收记录为准；旧55项及迁移证据不作为当前合同或新运行证明。
+B接收已替换唯一引擎，当前测试位于 `Tests/EditMode/Systems/Save/`，含 `SerializedDictionarySaveTests.cs`，覆盖当前模型/槽位/版本拒绝、文件安全、取消并发、缓存来源/显式恢复与JsonUtility联合回归。实际Unity、双轮Play及Release Player结果以正式拓展Plan原接收记录为准，不代表当前 namespace 已重验；旧55项及迁移证据不作为当前合同或新运行证明。
 
 ## 备注
 

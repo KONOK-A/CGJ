@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace YLFramework.Utilities.Grid
+namespace YLFramework.Grids
 {
     /// <summary>
     /// 稀疏二维坐标容器：只存储实际写入过的格子，不预设尺寸，支持任意 int 坐标（含负数）。

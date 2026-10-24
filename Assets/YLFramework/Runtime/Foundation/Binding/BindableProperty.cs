@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Events;
 
 namespace YLFramework.Binding

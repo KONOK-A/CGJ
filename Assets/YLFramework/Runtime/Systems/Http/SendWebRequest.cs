@@ -5,10 +5,10 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
-using YLFramework.Core.Singleton;
-using CoroutineStarter = YLFramework.Foundation.CoroutineStarter;
+using YLFramework.Singletons;
+using CoroutineStarter = YLFramework.Async.CoroutineStarter;
 
-namespace YLFramework.Services.Http
+namespace YLFramework.Http
 {
     public enum HttpRequestStatus
     {
@@ -20,7 +20,7 @@ namespace YLFramework.Services.Http
     }
 
     /// <summary>主线程 HTTP 请求，独占原生传输；终态后 Abort 无副作用，yield/完成订阅沿用 Foundation。</summary>
-    public sealed class SendWebRequest : YLFramework.Foundation.CustomAsyncOperation<SendWebRequest>
+    public sealed class SendWebRequest : YLFramework.Async.CustomAsyncOperation<SendWebRequest>
     {
         public HttpRequestStatus Status
         {

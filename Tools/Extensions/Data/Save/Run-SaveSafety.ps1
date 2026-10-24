@@ -21,7 +21,7 @@ foreach ($path in @($compiler, $ReferenceRoot, $Newtonsoft, $NUnit)) {
 }
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Runtime/Systems/Save') -Filter '*.cs' |
     Where-Object Name -ne 'SaveManager.cs' | ForEach-Object FullName)
-$sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Extensions/Data/Save/SaveStoreSafetyTests.cs'
+$sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Systems/Save/SaveStoreSafetyTests.cs'
 $sources += Join-Path $PSScriptRoot 'SaveSafetyRunner.cs'
 $references = @(Get-ChildItem -LiteralPath $ReferenceRoot -Filter '*.dll' | ForEach-Object FullName) + @($Newtonsoft, $NUnit)
 $unityReferences = @()
@@ -32,10 +32,10 @@ if ($WithFacade -or $ReferenceOnly) {
     $sources += Join-Path $root 'Assets/YLFramework/Runtime/Systems/Save/SaveManager.cs'
     $sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Runtime/Systems/Save/Serialization') -Filter '*.cs' | ForEach-Object FullName)
     $sources += Join-Path $root 'Assets/YLFramework/Runtime/Foundation/Serialization/SerializedDictionary.cs'
-    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Extensions/Data/Save/SaveManagerFacadeTests.cs'
-    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/SerializedDictionarySaveTests.cs'
-    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/SerializedDictionaryJsonTests.cs'
-    $sources += Join-Path $root 'Assets/YLFramework/Tests/Foundation/EditMode/SerializedDictionaryTestAsset.cs'
+    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Systems/Save/SaveManagerFacadeTests.cs'
+    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Systems/Save/SerializedDictionarySaveTests.cs'
+    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Foundation/Serialization/SerializedDictionaryJsonTests.cs'
+    $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/Foundation/SerializedDictionaryTestAsset.cs'
 }
 if ($ReferenceOnly) {
     $references = @((Join-Path $UnityData 'NetStandard/ref/2.1.0/netstandard.dll'))

@@ -1,4 +1,4 @@
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// Runtime 领域对象的生命周期接口，实现该接口不等于实例必定进入缓存。

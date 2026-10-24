@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Utilities
 {
 
     public static class HandlesExtensions

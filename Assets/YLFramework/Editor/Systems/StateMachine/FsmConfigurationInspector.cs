@@ -1,7 +1,8 @@
 using UnityEditor;
 using UnityEngine;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     [CustomEditor(typeof(RuntimeFsmController))]
     internal sealed class FsmConfigurationInspector : UnityEditor.Editor

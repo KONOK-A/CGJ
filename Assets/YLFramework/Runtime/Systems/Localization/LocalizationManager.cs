@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Events;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif

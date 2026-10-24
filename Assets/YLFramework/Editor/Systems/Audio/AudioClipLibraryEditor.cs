@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Services.Audio;
-using YLFramework.Services.Resource;
+using YLFramework.Audio;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Audio
 {

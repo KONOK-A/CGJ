@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Excel;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Equipment
 {
     [Serializable]
     public class IconInfo

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Inspector and UnityEvent bridge for explicit Mixer routing, parameter writes and snapshot transitions.</summary>
     /// <remarks>Awake only applies routing. Disabling or destroying this component does not clear global routing or Mixer state.</remarks>

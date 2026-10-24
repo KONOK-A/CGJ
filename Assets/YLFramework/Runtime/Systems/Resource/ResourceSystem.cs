@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public enum ResourceSystemState
     {

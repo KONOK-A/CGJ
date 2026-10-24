@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// 文件与目录路径扩展。路径分隔符统一交给 <see cref="System.IO.Path"/> 处理，兼容 Windows / Unix 形式。

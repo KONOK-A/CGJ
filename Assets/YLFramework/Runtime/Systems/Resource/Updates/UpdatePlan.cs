@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>应用显式绑定的项目、兼容要求和可选内置快照。不会扫描发布目录推断版本。</summary>
     public sealed class ResourceProjectMount

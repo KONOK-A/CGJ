@@ -8,7 +8,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>有界固定 Schema codec。v1 已可读写；最终冻结仍须 8.2c 生成消费门禁，不提供旧格式回退。</summary>
     public static class ResourceCatalogCodec

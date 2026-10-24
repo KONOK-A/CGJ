@@ -13,7 +13,7 @@ $nunit = Join-Path $env:USERPROFILE '.nuget/packages/nunit/3.14.0/lib/net45/nuni
 $refs = @('mscorlib.dll', 'System.dll', 'System.Core.dll', 'Facades/netstandard.dll') | ForEach-Object { Join-Path $framework $_ }
 $refs += @((Join-Path $managed 'UnityEngine.CoreModule.dll'), $nunit)
 $sources = @((Join-Path $root 'Tools/UIPanelOfflineRunner.cs'))
-$sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Tests/EditMode/Extensions/Data/Localization') -Filter 'LocalizationLogicTests.cs' | ForEach-Object FullName)
+$sources += @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets/YLFramework/Tests/EditMode/Systems/Localization') -Filter 'LocalizationLogicTests.cs' | ForEach-Object FullName)
 $sourceDir = Join-Path $root 'Assets/YLFramework/Runtime/Systems/Localization'
 foreach ($name in @('LanguageInfo.cs', 'LocalizationFallback.cs', 'LocalizationEntryIndex.cs', 'LocalizationText.cs')) {
     $path = Join-Path $sourceDir $name

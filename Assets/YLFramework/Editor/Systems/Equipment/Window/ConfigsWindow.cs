@@ -4,12 +4,13 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.Editor.Utilities;
+using YLFramework.Equipment;
 #if UNITY_6000_2_OR_NEWER
 using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
 #endif
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     public sealed class ConfigsWindow : SplitWindow
     {

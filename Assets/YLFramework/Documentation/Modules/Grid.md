@@ -9,7 +9,7 @@
 ## 位置
 
 - 运行时：[`Runtime/Utilities/Grid/`](../../Runtime/Utilities/Grid/)
-- namespace：`YLFramework.Utilities.Grid`；程序集：`YLFramework.Runtime`。直接 `new` 容器，无需 Module、Manager、组件挂载或公共 Root。
+- namespace：`YLFramework.Grids`；程序集：`YLFramework.Runtime`。直接 `new` 容器，无需 Module、Manager、组件挂载或公共 Root。
 - 保留通用二维数据结构职责，不替代普通字典 / 列表，也不因存在 Foundation 容器而强制改为序列化容器、资源索引或网格服务。
 
 ## 坐标与越界约定

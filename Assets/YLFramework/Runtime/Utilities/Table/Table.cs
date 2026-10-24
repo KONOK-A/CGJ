@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace YLFramework.Utilities.Table
+namespace YLFramework.Tables
 {
     /// <summary>
     /// 轻量数据表基类。

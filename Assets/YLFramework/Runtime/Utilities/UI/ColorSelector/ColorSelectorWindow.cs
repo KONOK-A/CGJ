@@ -1,8 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using YLFramework.Core;
 
-namespace YLFramework.Core
+namespace YLFramework.UI
 {
     /// <summary>按需打开的取色工具窗口；复用 Core 的 Module/Panel 生命周期，不创建全局 UI Manager。</summary>
     public sealed class ColorSelectorWindow : Panel

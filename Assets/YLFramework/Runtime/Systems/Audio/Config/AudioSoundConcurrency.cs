@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Choose how a new sound request behaves when the active sound limit is full.</summary>
     public enum SoundOverflowPolicy

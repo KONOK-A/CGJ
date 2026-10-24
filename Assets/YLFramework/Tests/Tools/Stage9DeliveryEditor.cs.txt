@@ -18,7 +18,7 @@ using YLFramework.Core;
 using YLFramework.Editor.Resource;
 using YLFramework.Samples.Resource;
 using YLFramework.Samples.Resource.Editor;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using Object = UnityEngine.Object;
 
 // 仅在product-first编译通过后安装到独立工程；所有产品调用均走公开入口。
@@ -122,7 +122,7 @@ public static class Stage9DeliveryEditor
                 }
             }
         }
-        YLFramework.Editor.UIPanelAssetMigration.ValidateAssets();
+        YLFramework.Editor.Core.UIPanelAssetMigration.ValidateAssets();
         var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages();
         if (packages.Any(p => p.name.StartsWith("com.xf", StringComparison.Ordinal) || p.name.Contains("mcp")))
         {
@@ -144,9 +144,10 @@ public static class Stage9DeliveryEditor
         }
 
         var analyzer = "Assets/YLFramework/Runtime/Core/Analyzers/YLFramework.Analyzers.dll";
-        if (Sha(analyzer) != "e125f5247c632277f26edadfc1888e06760b9476de11959c9813238d0e00c46f")
+        var analyzerRecord = files.Single(file => (string)file["Path"] == analyzer);
+        if ((bool)analyzerRecord["Folder"] || Sha(analyzer) != (string)analyzerRecord["Sha256"])
         {
-            throw new InvalidDataException("Not the final integrated Analyzer artifact.");
+            throw new InvalidDataException("Analyzer differs from this receiver's audited package artifact.");
         }
 
         var responseFiles = Directory.GetFiles("Library/Bee", "*.rsp", SearchOption.AllDirectories)
@@ -172,6 +173,7 @@ public static class Stage9DeliveryEditor
             ["RenderPipeline"] = GraphicsSettings.currentRenderPipeline ? GraphicsSettings.currentRenderPipeline.GetType().FullName : "Built-in",
             ["Packages"] = JArray.FromObject(packages.Select(p => new { p.name, p.version, Source = p.source.ToString(), p.resolvedPath })),
             ["AnalyzerSha256"] = Sha(analyzer),
+            ["AnalyzerExpectedSha256"] = (string)analyzerRecord["Sha256"],
             ["AnalyzerCompilerInputs"] = new JArray(responseFiles),
             ["Assemblies"] = JArray.FromObject(CompilationPipeline.GetAssemblies().Select(a => new { a.name, a.sourceFiles, a.compiledAssemblyReferences }))
         };
@@ -343,7 +345,7 @@ public static class Stage9DeliveryEditor
         var stripping = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone);
         AssetDatabase.SaveAssets();
         var exported = Path.Combine(Delivery, Path.GetFileName(Project) + "-defaults-probe-" + Run + ".unitypackage");
-        YLFramework.Editor.ExportUnityPackage.Export(exported);
+        YLFramework.Editor.Distribution.ExportUnityPackage.Export(exported);
         var after = File.ReadAllText(path);
         Write("default-getters-" + Run + ".json", new JObject
         {
@@ -486,6 +488,11 @@ public static class Stage9DeliveryEditor
         // 2022.3批处理退出时SceneTracker可能晚于MonoManager销毁；仅提前结束本工程自有的已保存场景。
         Selection.objects = Array.Empty<Object>();
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        if (Environment.GetCommandLineArgs().Contains("-quit"))
+        {
+            UnityEditor.SessionState.SetBool("Stage9.ReadyToExit", false);
+            return;
+        }
         UnityEditor.SessionState.SetBool("Stage9.ReadyToExit", true);
         EditorApplication.delayCall += ExitWhenSettled;
     }

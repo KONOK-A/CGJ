@@ -1,8 +1,9 @@
 using System;
 using System.Threading;
 using DG.Tweening;
+using YLFramework.Actions;
 
-namespace YLFramework.Actions
+namespace YLFramework.Integrations.DOTween
 {
     /// <summary>把一个独占持有的 Tween 桥接到 ActionKit 动作生命周期。</summary>
     /// <remarks>

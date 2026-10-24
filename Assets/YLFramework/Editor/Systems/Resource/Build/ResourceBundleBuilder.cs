@@ -14,7 +14,7 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Compilation;
 using UnityEngine;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource

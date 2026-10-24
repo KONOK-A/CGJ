@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Buff;
+using YLFramework.Editor.Utilities;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
     public class BuffsConfigController
     {

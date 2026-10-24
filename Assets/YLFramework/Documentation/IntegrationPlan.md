@@ -247,7 +247,7 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 
 2026-10-10，`fusion/2.3-update`，C 基线 `88cd76f`。A/B 已由用户验收并提交；本轮 C 及专题最终门禁完成，尚未提交。完整契约与验证证据增量记录在 [2.3 专项方案](../../../.kilo/plans/xf-yl-2.3-update.md)。
 
-- 公共三相位唯一正式类型为 `YLFramework.Foundation.UpdateManager`，复用 Events 的 channel、精确 token 与快照/owner 机制；相位内按注册顺序，公共异常继续并报告。Core View/Panel/Audio 消费它；Action 三相位自动消息按全局宿主有效启用状态连接，保持 owned EasyEvent 内部 fail-fast、局部清理及生命周期轮次隔离。
+- 公共三相位唯一正式类型为 `YLFramework.Update.UpdateManager`，复用 Events 的 channel、精确 token 与快照/owner 机制；相位内按注册顺序，公共异常继续并报告。Core View/Panel/Audio 消费它；Action 三相位自动消息按全局宿主有效启用状态连接，保持 owned EasyEvent 内部 fail-fast、局部清理及生命周期轮次隔离。
 - 退出 Core 同职责 UpdateManager/旧静态字段、消费者先 Remove 再 Add 模式、Action 独立三相位转发。Starter 保留独立 DDOL 协程宿主和原 owner/会话路由；Action 执行器/回收、Core Timer、YL Timing/Audio 继续持领域驱动及时间/所有权语义，不强迁、不保证跨领域全序、不宣称性能提升。
 - Foundation 不反向依赖 Core/Runtime；Core、Runtime 继续直接依赖 Foundation，未新增程序集。C 保持七个 Action 消息 API、动作组合、租约/暂停/取消、执行范围、协程和回收；A 的 UpdateManager 类型迁移与 Add 返回 token 兼容影响保留。C 的初始化成功提交、宿主启停与 Quit 先关闭创建门禁契约已写入 Action XML/模块说明。
 - Unity `2022.3.62f3c1` 实际编译无错误；定向 EditMode **13/13**、PlayMode **45/45**（Action 消息 7、生命周期 16、公共 Update 6、Starter 15、原游戏 1）。A/B 未受影响的 Core/程序集等验证沿用历史证据，没有重跑完整 Pool/Events/Core。独立只读审查发现的测试所有权问题已修正，最终复核无阻塞。

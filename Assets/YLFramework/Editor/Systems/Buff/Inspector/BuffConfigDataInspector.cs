@@ -4,12 +4,13 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Buff;
+using YLFramework.Editor.Utilities;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
 
     [CustomEditor(typeof(BuffConfigData), true)]

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// MonoBehaviour 单例缓存入口：为每个封闭类型 T 维护当前实例引用。

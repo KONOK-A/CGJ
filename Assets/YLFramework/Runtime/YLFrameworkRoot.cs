@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 using YLFramework.Core;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework
 {

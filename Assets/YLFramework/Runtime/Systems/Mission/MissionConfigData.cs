@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Foundation;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Mission
 {
     /// <summary>
     /// 图标数据

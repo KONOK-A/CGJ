@@ -15,7 +15,7 @@
 
 - 运行时：[`Runtime/Utilities/Table/`](../../Runtime/Utilities/Table/)
 - `Table.cs`：数据表基类；`TableIndex.cs`：键索引。
-- namespace：`YLFramework.Utilities.Table`；程序集：`YLFramework.Runtime`。
+- namespace：`YLFramework.Tables`；程序集：`YLFramework.Runtime`。
 - 按需 `new` 子类或 `TableIndex`，由调用方负责 `Clear` / `Dispose`；无需 Module、Manager、组件挂载或公共 Root。
 
 ## Table&lt;TDataItem&gt;
@@ -59,7 +59,7 @@ Ownership：
 
 ## 依赖
 
-- Foundation 的 `Pool`：`ListPool<T>` 与 `DictionaryPool<TKey, TValue>`（Clear / Dispose 时归还），沿用既有 `YLFramework.Core.Pool` namespace；这不构成对 `YLFramework.Core.Runtime` 的依赖。
+- Foundation 的 `Pool`：`ListPool<T>` 与 `DictionaryPool<TKey, TValue>`（Clear / Dispose 时归还），沿用既有 `YLFramework.Pooling` namespace；这不构成对 `YLFramework.Core.Runtime` 的依赖。
 - Table 提供数据项与多值索引，不替代 Foundation 的 `SerializedDictionary` 序列化容器，也不接管 Resource 的资源加载、租约或缓存策略。
 
 ## Resource 消费者
@@ -73,8 +73,8 @@ Ownership：
 
 ## 测试
 
-- 当前仓库的 `Tests/EditMode/CollectionPoolTests.cs` 中四个 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约或 Resource 消费者的完整覆盖。
-- `Tests/EditMode/Resource/FrameworkAssemblyIndependenceTests.cs` 的完整 Runtime 源码闭包包含 Table；它验证编译边界，不替代 Table 行为测试。
+- 当前仓库的 `Tests/EditMode/Foundation/Pool/CollectionPoolTests.cs` 中四个 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约或 Resource 消费者的完整覆盖。
+- `Tests/EditMode/Editor/Distribution/FrameworkAssemblyIndependenceTests.cs` 的完整 Runtime 源码闭包包含 Table；它验证编译边界，不替代 Table 行为测试。
 - 文档旧列出的 `TableTests.cs`、`TableIndexTests.cs`、`TableResourceConsumerTests.cs` 当前不在仓库，不作为可运行入口或本批验证证据。阶段 5.3.5 不重跑融合前成熟模块的全面验证。
 
 ## 已知限制

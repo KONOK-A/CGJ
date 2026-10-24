@@ -1,7 +1,7 @@
 using System;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Optional request routing. The zero value inherits the category's runtime output group.</summary>
     [Serializable]

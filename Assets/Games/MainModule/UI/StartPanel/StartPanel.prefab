@@ -201,7 +201,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -669,7 +669,7 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -802,7 +802,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -1181,7 +1181,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Services.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:

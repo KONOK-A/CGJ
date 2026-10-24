@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 using YLFramework.Events;
 using YLFramework.Foundation;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Mission
 {
 
     /// <summary>

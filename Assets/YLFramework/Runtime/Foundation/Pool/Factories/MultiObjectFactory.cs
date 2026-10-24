@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 复合对象工厂：集中提供多种基于反射的创建方式。

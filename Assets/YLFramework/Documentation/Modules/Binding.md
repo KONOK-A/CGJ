@@ -9,6 +9,7 @@
 ## 位置
 
 - 运行时：[`Runtime/Foundation/Binding/`](../../Runtime/Foundation/Binding/)
+- namespace 保持 `YLFramework.Binding`，程序集为 `YLFramework.Runtime`。依赖的事件与池分别使用 `YLFramework.Events` / `YLFramework.Pooling`，不因共用 Runtime 反向依赖 Core 或 Systems。
 
 ## 主要功能
 
@@ -46,7 +47,7 @@
 
 ## 当前状态
 
-已完成。测试：`Tests/EditMode/BindablePropertyTests.cs`、`BindableListTests.cs`、`BindableDictionaryTests.cs`、`MappedPropertyTests.cs`、`BindablePropertyReentrancyTests.cs`、`BindableCollectionReliabilityTests.cs`、`BindablePropertyPoolLifecycleTests.cs`、`EditorPrefsPropertyTests.cs`、`BindPropertyWithUnityEventTests.cs`。
+当前契约入口为 `Tests/EditMode/Foundation/Binding/BindingContractTests.cs`；Foundation 源码闭包另由 `Tests/EditMode/Foundation/FoundationBoundaryTests.cs` 验证。旧文档列举的 BindablePropertyTests 等套件不作为当前可运行路径或本轮通过证据。
 
 ## 已知限制
 

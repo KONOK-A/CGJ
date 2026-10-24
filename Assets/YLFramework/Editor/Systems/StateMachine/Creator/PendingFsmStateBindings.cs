@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     [InitializeOnLoad]
     internal static class PendingFsmStateBindings

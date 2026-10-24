@@ -14,6 +14,8 @@
   - `Asset/`：Prefab / ScriptableObject 单例访问属性（`PrefabSingletonProperty<T>`、`ScriptableSingletonProperty<T>`）
   - `Internal/`：`SingletonCreator` 内部创建逻辑与 `SingletonSessionState` 会话状态重置
 
+公开 namespace 为 `YLFramework.Singletons`，程序集仍为 `YLFramework.Runtime`；目录名 Singleton 不要求与 namespace 同名。旧 `YLFramework.Core.Singleton` 调用方须更新 using/完整名并重编译，不提供旧身份转发壳。
+
 ## 主要功能
 
 - 普通单例 `Singleton<T>`：实现 `ISingleton` 的 C# 单例基类；`Instance` 懒创建，`OnSingletonInit` 只在新实例创建时调用一次。
@@ -51,15 +53,15 @@
 
 ## 依赖
 
-- 仅 UnityEngine 与同程序集内的 Utilities 扩展，无框架内模块依赖。
+- 使用 UnityEngine 与 Foundation 内的会话机制，不反向依赖 Core、Systems、Utilities 或框架根宿主；同一 Runtime 不等于取消这条源码边界。
 
 ## 当前状态
 
-已完成。测试：`Tests/EditMode/SingletonTests.cs`、`Tests/EditMode/SingletonPropertyExtraTests.cs`、`Tests/EditMode/ScriptableDefaultLoaderTests.cs`、`Tests/EditMode/MonoSingletonPathCompatibilityTests.cs`、`Tests/PlayMode/MonoSingletonTests.cs`、`Tests/PlayMode/MonoSingletonPathTests.cs`、`Tests/PlayMode/ReplaceableMonoSingletonTests.cs`、`Tests/PlayMode/PersistentMonoSingletonTests.cs`、`Tests/PlayMode/PrefabSingletonPropertyTests.cs`。
+当前契约入口为 `Tests/EditMode/Foundation/Singleton/SingletonContractTests.cs`，真实宿主生命周期入口为 `Tests/PlayMode/Foundation/Singleton/SingletonHostPlayModeTests.cs`；Foundation 身份/边界另由 `Tests/EditMode/Foundation/FoundationBoundaryTests.cs` 覆盖。旧文档列举的 SingletonTests 等历史套件不作为当前可运行路径或本轮通过证据。
 
 ## 备注
 
-- 层级路径会决定单例对象的场景位置，例如 `YLFramework/Pool/GameObjectPool`；修改路径会影响已有场景中的对象查找。存续单例路径由 `MonoSingletonPathCompatibilityTests` 锁定；旧 UI 与 Resource 服务单例已退出，正式 `UIRootContext` 和显式初始化的 `ResourceSystem` 不采用这些旧单例路径。
+- 层级路径会决定单例对象的场景位置，例如 `YLFramework/Pool/GameObjectPool`；修改路径会影响已有场景中的对象查找。namespace 迁移不改这些宿主字符串；旧 UI 与 Resource 服务单例已退出，正式 `UIRootContext` 和显式初始化的 `ResourceSystem` 不采用这些旧单例路径。
 - 路径层级已存在时按原样复用（不会把已存在的父节点改为 DontDestroyOnLoad）；路径为空时回退为按类型名创建独立对象并 DontDestroyOnLoad。
 - `InstanceWithLoader` 替换的是静态 loader，作用于后续创建；已有实例不会被替换；loader 属于单次 Play Session 配置，进入 Play 会恢复默认。
 - Prefab / Scriptable 加载失败（loader 返回 null 或找不到资源）返回 null 并输出一次警告；loader 抛出的异常不会被吞掉，替换 loader 后可重试；loader 内重入 `Instance` 不会递归创建。

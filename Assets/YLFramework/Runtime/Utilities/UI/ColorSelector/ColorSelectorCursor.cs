@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace YLFramework.Core
+namespace YLFramework.UI
 {
     /// <summary>自绘黑白双线游标，不依赖未授权图片。</summary>
     [RequireComponent(typeof(CanvasRenderer))]

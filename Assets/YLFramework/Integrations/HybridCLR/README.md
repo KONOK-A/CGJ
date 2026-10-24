@@ -6,6 +6,8 @@
 
 解析 commit 必须为 `6cadd24d101f4cbd00cd80190106f6621132d24d`。显式运行官方 Installer，确认 package 与本地 libil2cpp 均为 `9.0.3`。不包含官方包、运行库、dnlib、XF 或 XFAB 副本。支持目标边界为 Unity `2022.3.62f3c1`、Windows64、IL2CPP、.NET Framework；只有实际完成的原生验收才证明相应环境可用。
 
+运行时 namespace 保持 `YLFramework.Integrations.HybridCLR`，Editor 为 `YLFramework.Integrations.HybridCLR.Editor`；程序集名仍为 `YLFramework.HybridCLR` / `YLFramework.HybridCLR.Editor`。宿主使用的 Resource/Core 当前分别为 `YLFramework.Resource` / `YLFramework.Core`；默认框架仍是 Runtime/Editor 两个主体，功能目录不是额外 DLL。完整身份与依赖见 [架构总览](../../Documentation/Architecture.md#namespace-与迁移)。
+
 ## Build
 
 1. 在官方 HybridCLRSettings 配置明确的热更 asmdef/外部 DLL 名单。AOT 不可静态引用热更类型，不使用 Assembly-CSharp 或手写加载顺序。
@@ -17,6 +19,8 @@
 Recipe.Project 必须明确选择 `Generated/hybridclr` 下的 `.bytes`/`.json`，以生成根为 SourceDirectory，得到规范地址 `hybridclr/manifest.json`、`hybridclr/assemblies/*.dll.bytes`、`hybridclr/metadata/*.dll.bytes`。不要选择 owner 记录、原生生成目录或原始 `.dll`。不要修改受管生成文件、遗留未知文件、链接或认领已有用户目录；写入保留 GUID、manifest 最后提交，中断时保留诊断而不冒充可恢复成功。
 
 `BuildBasePlayer`、`PublishPatch` 接受应用注入的 `IResourceContentKeyProvider`；保密密钥不存 profile。签名更新继续使用既有 Resource 签名、Check/Prepare/Activate、发布版本与下载验证，不建立第二套下载器或密钥系统。
+
+这些 Editor 入口使用 `YLFramework.Integrations.HybridCLR.Editor`；资源构建/发布入口使用 `YLFramework.Editor.Resource`。功能域 namespace 升级涉及 AOT API、泛型或裁剪输入时，必须用本轮新基座、metadata 与补丁完成闭环；程序集名称相同不代表旧基座兼容，不覆盖或复用冻结制品来冒充新验收。
 
 ## Project Selection And Shared Base
 
@@ -35,6 +39,8 @@ Recipe.Project 必须明确选择 `Generated/hybridclr` 下的 `.bytes`/`.json`�
 “关联生成资源”显式创建规范目录选择，保留其他 Group，支持 Undo，重复调用不追加重复项。更换生成目录后若仍有旧的规范代码映射，会先拒绝并提示显式调整旧来源/选择，不删除旧文件、不静默合并两套 `hybridclr/*` 地址。
 
 ## Runtime
+
+调用方使用 `using YLFramework.Integrations.HybridCLR;` 与 `using YLFramework.Resource;`，自有 Module 派生类型继续使用 `YLFramework.Core`。旧类型字符串须按真实身份迁移；`MovedFrom` 不是 `Type.GetType` 的旧 AQN 别名。
 
 先启动并挂载 ResourceSystem，再构造 `new HybridCLRLoader(resources, appContentCompatibilityId)`。调用 `LoadAsync` 或 `StartModuleAsync(manifestAddress, entryAssemblyName, moduleTypeFullName)`；请求可 yield，提供 `IsDone/Progress/Error`、原始 Exception、阶段/程序集/native 错误码和 RequiresRestart。类型只在精确入口程序集内解析。启动进度单调映射代码读取 0–0.8 与 Core 启动 0.8–1，终态为 1；Stage 区分读取、metadata/native 和具体 Core 阶段，不为同步 native 调用伪造时间平滑。`Abort` 总在改变状态前拒绝。
 
@@ -63,7 +69,11 @@ EditorFast 要求已有 ResourceSystem 与 Core provider 绑定，仅使用 AppD
 
 应用显式持有 `HybridCLRExample`，yield `Run(configuration, projectId, compatibilityId)` 后读取 Result；关闭时 yield `CloseAsync()`。更新实验可先显式 `CloseCode()` 关闭 Module、实例和 manifest 屏障，待原生销毁排空后 Activate，但仍须新进程运行另一版代码。配置可由 ResourceLocalSnapshot.OpenBuiltIn/ArtifactStore 构造。样例不自动启动、找全场景或接管现有游戏。只改 Support 的版本文本可做 v2 补丁实验，但正式证明仍须相同 Player hash 下的新进程原生执行。
 
-`HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架导出的七个根保持不变。
+`HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架仍导出六个目录（Editor、Plugins/BouncyCastle、Prefabs、Runtime、Samples、Documentation）及三个根文件（LICENSE.md、CodingStyle.md、AGENTS.md），不含本可选叶子或宿主商业插件。
+
+## 历史验收
+
+以下为原 HybridCLR 专题的历史结果，测试数字与 Player 证据不改写为当前结构已通过。框架或相关程序集重编译后，源码仓库的 loader/Module 测试须先用当前程序集执行 `HybridCLRTestFixtures.Prepare()` 生成本机输入，不复用旧 bytes/manifest；参见 [测试说明](../../Documentation/README.md#测试)。当前 namespace 迁移的编译、完整测试与新 Player 仍由本轮整合验收分别确认。
 
 首版迁移已实际验证 Windows64 IL2CPP Development 与 Release Low 基座/运行，以及不改同一 Player 的签名 HTTPS v1→v2、重启屏障、坏 hash/签名/缺 DLL、真实部分 metadata 失败与新原生需求拒绝；这些是专项 Plan §7 的历史证据，不冒充本轮全部重验。
 

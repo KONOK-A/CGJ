@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>由原 BundleRecord 持有；只有确认 native 卸载后才允许释放流和预算。</summary>
     internal sealed class ResourceBundleInput : IDisposable

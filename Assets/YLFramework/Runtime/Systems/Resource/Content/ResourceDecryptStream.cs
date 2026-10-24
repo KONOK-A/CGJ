@@ -3,7 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>每段先认证再交付的独占可定位视图；native 卸载前不能释放。</summary>
     internal sealed class ResourceDecryptStream : Stream

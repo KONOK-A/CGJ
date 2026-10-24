@@ -6,7 +6,7 @@ using System.Threading;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>
     /// 本地制品的唯一写入/归属边界。版本只新增，发布源只读；目录摘要不代表生产签名授权。

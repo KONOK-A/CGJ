@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     // Request-owned value snapshot; Unity resources remain borrowed references.
     internal struct AudioPlaybackOptions

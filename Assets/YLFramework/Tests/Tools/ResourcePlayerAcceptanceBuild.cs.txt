@@ -15,7 +15,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.U2D;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using Object = UnityEngine.Object;
 
 // 只安装到新建、已登记身份的独立验收载体；不在原游戏或主工程执行。
@@ -290,7 +290,7 @@ public static class ResourcePlayerAcceptanceBuild
     public static void Export()
     {
         Verify();
-        YLFramework.Editor.ExportUnityPackage.Export(Path.Combine(Evidence, "YLFramework-8.10.unitypackage"));
+        YLFramework.Editor.Distribution.ExportUnityPackage.Export(Path.Combine(Evidence, "YLFramework-8.10.unitypackage"));
     }
 
     public static void Verify()

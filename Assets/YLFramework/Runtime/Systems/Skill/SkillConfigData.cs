@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Foundation;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Skill
 {
     [Serializable]
     public class IconInfo

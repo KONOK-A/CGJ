@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     internal enum AudioRequestEnd
     {

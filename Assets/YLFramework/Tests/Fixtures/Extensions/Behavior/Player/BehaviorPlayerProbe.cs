@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using YLFramework.Character.Controller2D;
+using YLFramework.Character2D;
 using YLFramework.FSM;
 using YLFramework.Overlap;
 using YLFramework.Platform2D;

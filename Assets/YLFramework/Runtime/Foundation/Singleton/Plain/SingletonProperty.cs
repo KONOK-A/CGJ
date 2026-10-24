@@ -1,4 +1,4 @@
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 普通类单例入口：为每个封闭类型 T 维护一个实例，首次访问 <see cref="Instance"/> 时经

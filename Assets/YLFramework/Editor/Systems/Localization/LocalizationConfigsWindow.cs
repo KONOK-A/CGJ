@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Localization;
+using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.Localization
 {

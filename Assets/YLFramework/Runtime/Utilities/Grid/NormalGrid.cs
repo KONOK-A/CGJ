@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Utilities.Grid
+namespace YLFramework.Grids
 {
     /// <summary>
     /// 固定尺寸的二维网格容器，按 (x, y) 存取数据。

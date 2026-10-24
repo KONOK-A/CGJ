@@ -1,8 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using YLFramework.Core;
 
-namespace YLFramework.Core
+namespace YLFramework.UI
 {
     /// <summary>按需使用的 HSV 取色工具；遵守祖先 Panel 的输入策略，不拥有窗口生命周期。</summary>
     [RequireComponent(typeof(ColorWheelGraphic))]

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 using YLFramework.Timing.Internal;
 
 namespace YLFramework.Timing

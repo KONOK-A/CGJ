@@ -2,10 +2,11 @@
 param()
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$paths = @('Assets\YLFramework\Runtime\Systems', 'Assets\YLFramework\Editor\Systems')
+$paths = @('Assets\YLFramework\Runtime', 'Assets\YLFramework\Editor')
 foreach ($parent in $paths) {
     foreach ($module in @('Overlap', 'CharacterController2D', 'MoveablePlatform', 'StateMachine')) {
-        $directory = Join-Path (Join-Path $root $parent) $module
+        $section = if ($module -eq 'StateMachine') { 'Systems' } else { 'Utilities' }
+        $directory = Join-Path (Join-Path $root $parent) "$section\$module"
         if (-not (Test-Path -LiteralPath $directory)) { continue }
         foreach ($file in @(Get-ChildItem -LiteralPath $directory -Filter '*.cs' -Recurse)) {
             $text = [IO.File]::ReadAllText($file.FullName).Replace("`r`n", "`n")

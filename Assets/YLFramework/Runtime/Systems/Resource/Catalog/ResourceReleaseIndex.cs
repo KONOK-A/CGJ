@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>只定位一个完整 Catalog 快照，不复制资产表，不表示运行时激活或生产签名授权。</summary>
     public sealed class ResourceReleaseIndex

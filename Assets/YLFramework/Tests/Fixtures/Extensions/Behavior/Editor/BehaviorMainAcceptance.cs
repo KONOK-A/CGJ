@@ -180,11 +180,14 @@ namespace YLFramework.Behavior.Acceptance
         {
             path = path.Replace('\\', '/');
             return new[] { "Overlap", "CharacterController2D", "MoveablePlatform", "StateMachine" }.Any(module =>
-                path.StartsWith("Assets/YLFramework/Runtime/Systems/" + module + "/", StringComparison.Ordinal) ||
-                path.StartsWith("Assets/YLFramework/Editor/Systems/" + module + "/", StringComparison.Ordinal)) ||
+                path.StartsWith("Assets/YLFramework/Runtime/" + (module == "StateMachine" ? "Systems/" : "Utilities/") + module + "/", StringComparison.Ordinal) ||
+                path.StartsWith("Assets/YLFramework/Editor/" + (module == "StateMachine" ? "Systems/" : "Utilities/") + module + "/", StringComparison.Ordinal) ||
+                path.StartsWith("Assets/YLFramework/Tests/EditMode/" + (module == "StateMachine" ? "Editor/" : "Utilities/") + module + "/", StringComparison.Ordinal) ||
+                path.StartsWith("Assets/YLFramework/Tests/PlayMode/" + (module == "StateMachine" ? "Systems/" : "Utilities/") + module + "/", StringComparison.Ordinal)) ||
                 path.StartsWith("Assets/YLFramework/Tests/Fixtures/Extensions/Behavior/", StringComparison.Ordinal) ||
-                path.StartsWith("Assets/YLFramework/Tests/EditMode/Extensions/Behavior/", StringComparison.Ordinal) ||
-                path.StartsWith("Assets/YLFramework/Tests/PlayMode/Extensions/Behavior/", StringComparison.Ordinal);
+                path.StartsWith("Assets/YLFramework/Tests/EditMode/Editor/Behavior/", StringComparison.Ordinal) ||
+                path.StartsWith("Assets/YLFramework/Tests/EditMode/Systems/Behavior/", StringComparison.Ordinal) ||
+                path.StartsWith("Assets/YLFramework/Tests/PlayMode/Systems/Behavior/", StringComparison.Ordinal);
         }
 
         public static void Audit(string name)
@@ -204,7 +207,8 @@ namespace YLFramework.Behavior.Acceptance
             var files = Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories).Select(path => path.Replace('\\', '/')).Where(Owned).ToArray();
             foreach (string path in files)
             {
-                string expected = path.Contains("/Runtime/") ? names[0] : path.Contains("/Editor/Systems/") ? names[1] :
+                string expected = path.StartsWith("Assets/YLFramework/Runtime/", StringComparison.Ordinal) ? names[0] :
+                    path.StartsWith("Assets/YLFramework/Editor/", StringComparison.Ordinal) ? names[1] :
                     path.Contains("/Tests/EditMode/") ? names[2] : path.Contains("/Tests/PlayMode/") ? names[3] : path.Contains("/Behavior/Editor/") ? names[5] : names[4];
                 var owner = assemblies.SingleOrDefault(item => item.sourceFiles.Any(file => Path.GetFullPath(file) == Path.GetFullPath(path)));
                 if (owner == null || owner.name != expected)
@@ -503,7 +507,7 @@ namespace YLFramework.Behavior.Acceptance
             _progress.scriptPath = Path.GetDirectoryName(_progress.scene).Replace('\\', '/') + "/MainBoundState" + Guid.NewGuid().ToString("N") + ".cs";
             SaveProgress();
             Hook();
-            var creator = Type.GetType("YLFramework.StateMachine.FsmStateCreator, YLFramework.Editor", true);
+            var creator = Type.GetType("YLFramework.Editor.StateMachine.FsmStateCreator, YLFramework.Editor", true);
             var create = creator.GetMethod("CreateFsmState", BindingFlags.Static | BindingFlags.NonPublic);
             Require((bool)create.Invoke(null, new object[] { _progress.scriptPath, false, asset, node }), "Product Create And Add rejected the owned source path.");
         }

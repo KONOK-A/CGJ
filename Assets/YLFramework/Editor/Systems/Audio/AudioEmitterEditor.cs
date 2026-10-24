@@ -2,7 +2,7 @@ using System;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {

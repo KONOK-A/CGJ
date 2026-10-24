@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif

@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     public class FsmAboutWindow : EditorWindow
     {

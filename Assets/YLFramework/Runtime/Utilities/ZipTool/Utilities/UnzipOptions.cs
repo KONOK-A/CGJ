@@ -1,4 +1,4 @@
-namespace YLFramework.Utilities.ZipTool
+namespace YLFramework.Compression
 {
     /// <summary>
     /// 解压配额选项。各限制为 0 表示不限制，负数非法（解压入口抛 <see cref="System.ArgumentOutOfRangeException"/>）；

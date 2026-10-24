@@ -4,8 +4,10 @@ using System.Linq;
 using UnityEditor;
 using YLFramework.Core.RoslynAnalyzers;
 using YLFramework.Editor.Help;
+using YLFramework.UI;
+using YLFramework.Core;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Core
 {
     [InitializeOnLoad]
     internal static class CoreHelpProvider

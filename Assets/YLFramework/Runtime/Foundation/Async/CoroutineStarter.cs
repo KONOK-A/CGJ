@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Foundation
+namespace YLFramework.Async
 {
     /// <summary>
     /// 非 MonoBehaviour 调用者的协程启动支撑。仅主线程使用，独立 DDOL 宿主跨场景运行。

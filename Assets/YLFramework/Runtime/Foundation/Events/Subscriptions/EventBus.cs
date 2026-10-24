@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework.Events
 {

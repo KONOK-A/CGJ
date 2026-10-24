@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Optional request envelope bound to clip position, not elapsed wall-clock time. The zero value disables it.</summary>
     [Serializable]

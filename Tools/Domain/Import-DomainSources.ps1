@@ -15,14 +15,16 @@ if (-not (Test-Path -LiteralPath (Join-Path $root 'Assets\YLFramework\Runtime\Sy
 function Import-File([string] $path, [string] $target, [bool] $editor) {
     if (Test-Path -LiteralPath $target) { throw "Refusing to overwrite: $target" }
     $text = [IO.File]::ReadAllText($path)
-    $text = $text.Replace('XFGameFramework.SkillSystem', 'YLFramework.SkillSystem').Replace('XFGameFramework.BuffSystem', 'YLFramework.BuffSystem').Replace('XFGameFramework.MissionSystem', 'YLFramework.MissionSystem')
+    $text = $text.Replace('XFGameFramework.SkillSystem', 'YLFramework.Skill').Replace('XFGameFramework.BuffSystem', 'YLFramework.Buff').Replace('XFGameFramework.MissionSystem', 'YLFramework.Mission')
+    # The clipboard prefix is a published data protocol, not a CLR identity.
+    $text = $text.Replace('"YLFramework.Mission.CopyParamter"', '"YLFramework.MissionSystem.CopyParamter"')
     $text = $text.Replace('XFGameFramework.ExcelSystem', 'YLFramework.Excel').Replace('ExcelSystem.', 'YLFramework.Excel.')
     $text = $text.Replace('AssemblyTools', 'AssemblyTool').Replace('using XFABManager;', '').Replace('using XFGameFramework;', '')
     $text = $text.Replace('Assets/Extensions/SkillSystem', 'Assets/YLFrameworkData/Skill').Replace('Assets/Extensions/BuffSystem', 'Assets/YLFrameworkData/Buff').Replace('Assets/Extensions/MissionSystem', 'Assets/YLFrameworkData/Mission')
     $text = $text.Replace('Window/XFKT/XFGameFramework/InstalledExtension/', 'Window/YLFramework/').Replace('XFKT/', 'YLFramework/')
     $text = $text.Replace('"SELECT_GUID_KEY"', '"YLFramework.' + $Module + '.SelectedConfig"')
     if ($editor) {
-        $text = "using YLFramework.Foundation;`nusing YLFramework.Foundation.Attributes;`nusing YLFramework.Core.Editor;`n" + $text
+        $text = "using YLFramework.Foundation;`nusing YLFramework.Attributes;`nusing YLFramework.Editor.Utilities;`n" + $text
         $text = $text.Replace('DragableTreeView<', 'ReorderableTreeView<')
         $text = $text.Replace(': Editor', ': UnityEditor.Editor')
         $text = $text.Replace('base(skillsConfig, skillsConfig.skills,state)', 'base(skillsConfig, () => skillsConfig.skills, state)')
@@ -54,8 +56,9 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
             $text = $text.Replace('using OfficeOpenXml;', '')
         }
         if ($Module -eq 'Mission' -and $path -match 'MissionParameterInspector.cs$') {
-            $text = $text.Replace('public class MissionParameterInspector', 'namespace YLFramework.MissionSystem { public class MissionParameterInspector') + "`n}"
+            $text = $text.Replace('public class MissionParameterInspector', 'namespace YLFramework.Mission { public class MissionParameterInspector') + "`n}"
         }
+        $text = "using YLFramework.$Module;`n" + $text.Replace("namespace YLFramework.$Module", "namespace YLFramework.Editor.$Module")
     } else {
         # Move GUI annotations and Editor methods out of Runtime data types.
         if ($path -notmatch 'Manager.cs$') {
@@ -83,6 +86,7 @@ foreach ($name in $runtimeNames) { Import-File (Join-Path $source "Runtime\$name
 foreach ($file in Get-ChildItem -LiteralPath (Join-Path $source 'Editor') -Recurse -Filter '*.cs') {
     if ($file.Name -eq 'MissionTypePopWindow.cs') { continue }
     $relative = $file.FullName.Substring((Join-Path $source 'Editor').Length + 1)
+    $relative = $relative -replace '^Other[\\/]', 'Listeners\'
     Import-File $file.FullName (Join-Path $editorRoot $relative) $true
 }
 $drawers = if ($Module -eq 'Skill') { 'Runtime\CustomSkillConfigDataProperty' } else { 'Runtime\Attribute' }

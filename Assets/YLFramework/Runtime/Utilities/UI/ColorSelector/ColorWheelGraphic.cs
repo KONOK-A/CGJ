@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace YLFramework.Core
+namespace YLFramework.UI
 {
     /// <summary>独立生成 HSV 色环与三角网格，使用 UGUI 自有材质路径，支持 stencil、RectMask2D 与 alpha。</summary>
     [RequireComponent(typeof(CanvasRenderer))]

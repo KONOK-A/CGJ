@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using YLFramework.Integrations.HybridCLR;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.HybridCLRReception
 {

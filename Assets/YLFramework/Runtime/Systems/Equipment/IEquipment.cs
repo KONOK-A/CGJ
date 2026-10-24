@@ -1,4 +1,4 @@
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Equipment
 {
     public enum EquipState
     {

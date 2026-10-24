@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Services.Audio;
-using YLFramework.Services.Resource;
+using YLFramework.Audio;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Audio
 {
     /// <summary>一次性、逐条显式映射的配置转换。只创建新资产，不修改输入或解释旧 BundleName。</summary>
-    public static class AudioClipLibraryMigration
+    internal static class AudioClipLibraryMigration
     {
         public static AudioClipLibrary CreateCopy(AudioClipLibrary source, string targetPath,
             IReadOnlyDictionary<AudioClipEntry, ResourceAddress> mappings)

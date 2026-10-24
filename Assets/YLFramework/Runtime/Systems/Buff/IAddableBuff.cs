@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using YLFramework.Foundation;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     /// <summary>
     /// 可添加Buff的接口

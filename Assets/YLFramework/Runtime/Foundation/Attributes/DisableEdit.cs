@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Foundation.Attributes
+namespace YLFramework.Attributes
 {
 
     /// <summary>

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 类型/实例注册、解析与成员注入的容器契约。

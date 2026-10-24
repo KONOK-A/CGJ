@@ -72,15 +72,20 @@ namespace YLFramework.Behavior.Acceptance
             path = path.Replace('\\', '/');
             foreach (string module in _modules)
             {
-                if (path.StartsWith("Assets/YLFramework/Runtime/Systems/" + module + "/", StringComparison.Ordinal) || path.StartsWith("Assets/YLFramework/Editor/Systems/" + module + "/", StringComparison.Ordinal)
-                    || path == "Assets/YLFramework/Runtime/Systems/" + module + ".meta" || path == "Assets/YLFramework/Editor/Systems/" + module + ".meta")
+                string layer = module == "StateMachine" ? "Systems/" : "Utilities/";
+                if (new[] { "Runtime/" + layer + module, "Editor/" + layer + module,
+                    "Tests/EditMode/" + (module == "StateMachine" ? "Editor/" : "Utilities/") + module,
+                    "Tests/PlayMode/" + layer + module }.Any(root =>
+                        path.StartsWith("Assets/YLFramework/" + root + "/", StringComparison.Ordinal) ||
+                        path == "Assets/YLFramework/" + root || path == "Assets/YLFramework/" + root + ".meta"))
                 {
                     return true;
                 }
             }
 
-            return path.StartsWith("Assets/YLFramework/Tests/EditMode/Extensions/Behavior", StringComparison.Ordinal)
-                || path.StartsWith("Assets/YLFramework/Tests/PlayMode/Extensions/Behavior", StringComparison.Ordinal)
+            return path.StartsWith("Assets/YLFramework/Tests/EditMode/Editor/Behavior", StringComparison.Ordinal)
+                || path.StartsWith("Assets/YLFramework/Tests/EditMode/Systems/Behavior", StringComparison.Ordinal)
+                || path.StartsWith("Assets/YLFramework/Tests/PlayMode/Systems/Behavior", StringComparison.Ordinal)
                 || path.StartsWith("Assets/YLFramework/Tests/Fixtures/Extensions/Behavior", StringComparison.Ordinal);
         }
 
@@ -236,7 +241,8 @@ namespace YLFramework.Behavior.Acceptance
             var assemblyErrors = names.Where(name => compilation.All(assembly => assembly.name != name)).Select(name => "Missing assembly: " + name).ToList();
             foreach (string path in Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories).Select(path => path.Replace('\\', '/')).Where(Owns))
             {
-                string expectedAssembly = path.Contains("/Runtime/") ? "YLFramework.Runtime" : path.Contains("/Editor/Systems/") ? "YLFramework.Editor"
+                string expectedAssembly = path.StartsWith("Assets/YLFramework/Runtime/", StringComparison.Ordinal) ? "YLFramework.Runtime"
+                    : path.StartsWith("Assets/YLFramework/Editor/", StringComparison.Ordinal) ? "YLFramework.Editor"
                     : path.Contains("/Tests/EditMode/") ? "YLFramework.Tests.EditMode" : path.Contains("/Tests/PlayMode/") ? "YLFramework.Tests.PlayMode"
                     : path.Contains("/Behavior/Editor/") ? "YLFramework.Behavior.Acceptance.Editor" : "YLFramework.Behavior.Acceptance";
                 var owner = compilation.FirstOrDefault(assembly => assembly.sourceFiles.Any(file => file.Replace('\\', '/').EndsWith(path, StringComparison.Ordinal)));

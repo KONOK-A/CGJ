@@ -1,7 +1,8 @@
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     [InitializeOnLoad]
     internal static class EquipmentSessionLifecycle

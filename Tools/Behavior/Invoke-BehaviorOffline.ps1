@@ -46,10 +46,13 @@ if ($Mode -in @('Compile', 'All')) {
         $common += '"/reference:' + $reference + '"'
     }
     foreach ($phase in @('EditMode', 'PlayMode')) {
-        $testPath = Join-Path $root "Assets\YLFramework\Tests\$phase\Extensions\Behavior"
-        if (-not (Test-Path -LiteralPath $testPath)) { continue }
+        $testFolders = @('Systems\StateMachine', 'Systems\Behavior', 'Utilities\Overlap', 'Utilities\CharacterController2D', 'Utilities\MoveablePlatform')
+        if ($phase -eq 'EditMode') { $testFolders += @('Editor\StateMachine', 'Editor\Behavior') }
         $arguments = $common + @('"/target:library"', '"/define:UNITY_EDITOR;UNITY_INCLUDE_TESTS"', ('"/out:' + (Join-Path $output "YLFramework.Tests.$phase.dll") + '"'))
-        $arguments += @(Get-ChildItem -LiteralPath $testPath -Filter '*.cs' -Recurse | ForEach-Object { '"' + $_.FullName + '"' })
+        $arguments += @(foreach ($folder in $testFolders) {
+            $testPath = Join-Path $root "Assets\YLFramework\Tests\$phase\$folder"
+            if (Test-Path -LiteralPath $testPath) { Get-ChildItem -LiteralPath $testPath -Filter '*.cs' -Recurse | ForEach-Object { '"' + $_.FullName + '"' } }
+        })
         $response = Join-Path $output "$phase.rsp"
         [IO.File]::WriteAllLines($response, [string[]]$arguments, [Text.UTF8Encoding]::new($false))
         & dotnet $compiler /noconfig "@$response"
@@ -66,7 +69,9 @@ if ($Mode -in @('Pure', 'Static', 'All')) {
     $references = @('mscorlib.dll', 'System.dll', 'System.Core.dll', 'Facades\netstandard.dll') | ForEach-Object { Join-Path $framework $_ }
     $references += $nunit
     $references += Join-Path $managed 'UnityEngine.CoreModule.dll'
-    $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Extensions\Behavior') -Filter '*OfflineTests.cs' -Recurse | ForEach-Object FullName)
+    $sources = @(foreach ($folder in @('Utilities\Overlap', 'Utilities\CharacterController2D', 'Utilities\MoveablePlatform', 'Editor\StateMachine')) {
+        Get-ChildItem -LiteralPath (Join-Path $root "Assets\YLFramework\Tests\EditMode\$folder") -Filter '*OfflineTests.cs' -Recurse | ForEach-Object FullName
+    })
     $sources += Join-Path $root 'Tools\UIPanelOfflineRunner.cs'
     # Only genuinely managed product logic belongs here. No Unity substitutes or test doubles.
     $pureSources = Join-Path $PSScriptRoot 'PureSources.txt'
@@ -102,7 +107,7 @@ if ($Mode -in @('Legacy', 'All')) {
     $references += @($runtime, (Join-Path $managed 'UnityEngine.CoreModule.dll'), (Join-Path $env:USERPROFILE '.nuget\packages\nunit\3.14.0\lib\net45\nunit.framework.dll'))
     $arguments = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:exe', "/out:$output\LegacyTests.exe")
     $arguments += $references | ForEach-Object { "/reference:$_" }
-    $arguments += @((Join-Path $root 'Tools\UIPanelOfflineRunner.cs'), (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Extensions\Behavior\DualFsmLegacyTests.cs'))
+    $arguments += @((Join-Path $root 'Tools\UIPanelOfflineRunner.cs'), (Join-Path $root 'Assets\YLFramework\Tests\EditMode\Systems\Behavior\DualFsmLegacyTests.cs'))
     $response = Join-Path $output 'legacy.rsp'
     [IO.File]::WriteAllLines($response, [string[]]@($arguments | ForEach-Object { '"' + $_ + '"' }), [Text.UTF8Encoding]::new($false))
     & dotnet $compiler /noconfig "@$response"

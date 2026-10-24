@@ -5,12 +5,11 @@ using UnityEditor;
 using UnityEditor.PackageManager.UI;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.MissionSystem;
+using YLFramework.Attributes;
+using YLFramework.Mission;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     public class MissionParameterInspector
     {

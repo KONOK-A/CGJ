@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 可替换 MonoBehaviour 单例：场景中存在多个实例时保留最后创建的，先创建者被销毁（同一帧内按创建序号区分先后）。

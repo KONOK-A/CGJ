@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     public enum ExcelCommitResult
     {

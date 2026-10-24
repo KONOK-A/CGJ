@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Foundation
+namespace YLFramework.Serialization
 {
 
 #if UNITY_2020_1_OR_NEWER

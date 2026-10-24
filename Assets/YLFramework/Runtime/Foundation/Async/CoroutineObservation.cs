@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace YLFramework.Foundation
+namespace YLFramework.Async
 {
     /// <summary>
     /// 借用 Coroutine 的窄观察句柄。仅主线程使用；Dispose 仅停止自己的观察 wrapper，不停止 producer。

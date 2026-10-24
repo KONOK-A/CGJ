@@ -10,7 +10,7 @@ using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 #endif
 
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Utilities
 {
     [Serializable]
     public class TreeViewStateInfo

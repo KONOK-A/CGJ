@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     [InitializeOnLoad]
-    public static class StateMachineEditorTools
+    internal static class StateMachineEditorTools
     {
         static StateMachineEditorTools()
         {

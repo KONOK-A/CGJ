@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Audio 专用资源后端。所有调用、完成和进度投递均须在 Unity 主线程；不提供物理取消承诺。</summary>
     public interface IAudioClipProvider

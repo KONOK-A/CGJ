@@ -1,4 +1,4 @@
-namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>空闲对象的分配顺序。</summary>
     public enum PoolCacheOrder

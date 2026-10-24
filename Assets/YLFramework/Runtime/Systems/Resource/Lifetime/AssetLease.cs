@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>一次取得对应一次独立责任；只释放自己，不池化公开身份，不使用 finalizer。</summary>
     public sealed class AssetLease<T> : IDisposable, IAssetLeaseDiagnostics where T : UnityEngine.Object

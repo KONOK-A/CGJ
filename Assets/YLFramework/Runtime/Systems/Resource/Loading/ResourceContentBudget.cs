@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // 预算随原 BundleRecord/input 归属；等待者和 native 并发槽不是驻留计量单位。
     internal sealed class ResourceContentBudget

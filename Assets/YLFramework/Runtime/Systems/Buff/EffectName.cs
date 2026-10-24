@@ -2,7 +2,7 @@ using System;
 using YLFramework.Foundation;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
     public class EffectName : Attribute

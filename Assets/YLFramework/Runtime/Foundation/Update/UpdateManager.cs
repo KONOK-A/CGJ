@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Events;
 
-namespace YLFramework.Foundation
+namespace YLFramework.Update
 {
     /// <summary>
     /// 公共 Unity 三相位消息桥。仅主线程使用，有效 Play 注册惰性创建独立 DDOL 宿主。

@@ -1,8 +1,8 @@
 using System;
 using UnityEditor;
-using YLFramework.Core.Editor;
+using YLFramework.Buff;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
     internal static class BuffAuthoring
     {
@@ -29,7 +29,7 @@ namespace YLFramework.BuffSystem
         }
         internal static void Rename(this BuffConfigData data)
         {
-            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), BuffsConfigController.GetBuffConfigDataPath(data.parent));
+            YLFramework.Editor.Utilities.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), BuffsConfigController.GetBuffConfigDataPath(data.parent));
             data.parent.ClearCache();
         }
     }

@@ -6,7 +6,7 @@ using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Integrations.HybridCLR.Editor
 {

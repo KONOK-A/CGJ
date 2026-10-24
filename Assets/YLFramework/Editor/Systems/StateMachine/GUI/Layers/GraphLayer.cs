@@ -1,10 +1,9 @@
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public class GraphLayer
+    internal class GraphLayer
     {
 
         #region 字段

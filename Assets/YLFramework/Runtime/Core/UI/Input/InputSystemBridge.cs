@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework.Core
 {

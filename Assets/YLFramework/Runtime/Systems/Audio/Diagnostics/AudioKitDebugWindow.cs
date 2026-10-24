@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>默认关闭的运行时音频诊断窗口，支持 F1、Android 返回键和 iOS 四指入口。</summary>
     /// <remarks>运行初始化只创建隐藏的入口宿主，不访问 AudioKit；显式打开后才绘制诊断。宿主跨场景保留。快捷键入口和绘制仅在 Editor 或 Development Build 编译。</remarks>

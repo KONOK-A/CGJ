@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public enum ResourceLoadMode
     {
@@ -39,7 +39,7 @@ namespace YLFramework.Services.Resource
 
         /// <summary>只读枚举明确配置的 Store；无需初始化 ResourceSystem。必须在 Unity 主线程逐步驱动并在中止时 Dispose 枚举器。</summary>
         public IEnumerator QueryArtifactsAsync(Action<ArtifactStoreReport> completed, int maxEntries = 10000, CancellationToken cancellation = default)
-            => global::YLFramework.Services.Resource.ArtifactStore.Query(ArtifactStore, completed, maxEntries, cancellation);
+            => global::YLFramework.Resource.ArtifactStore.Query(ArtifactStore, completed, maxEntries, cancellation);
 
         /// <summary>没有 Catalog 时仍可显式使用本地/URL 图片，不扫描或挂载任何项目。</summary>
         public ResourceConfiguration() : this(Array.Empty<ResourceCatalog>()) { }

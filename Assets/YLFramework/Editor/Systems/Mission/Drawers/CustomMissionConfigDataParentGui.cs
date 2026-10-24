@@ -1,6 +1,5 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 
 using System.Collections;
@@ -11,7 +10,7 @@ using UnityEngine;
 
 
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     public class CustomMissionConfigDataParentGui : CustomPropertyGui
     {

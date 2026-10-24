@@ -7,8 +7,9 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using YLFramework.Foundation;
+using YLFramework.Serialization;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Foundation
 {
     [CustomPropertyDrawer(typeof(SerializedDictionary<,>), true)]
     public class SerializedDictionaryDrawer : PropertyDrawer

@@ -1,4 +1,4 @@
-using YLFramework.EquipmentSystem;
+using YLFramework.Equipment;
 namespace YLFramework.Equipment.Acceptance
 {
     public sealed class ProbeEquipmentData : EquipmentConfigData

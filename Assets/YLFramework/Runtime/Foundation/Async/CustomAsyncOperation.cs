@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Foundation
+namespace YLFramework.Async
 {
     public class CustomAsyncOperation<T> : CustomYieldInstruction where T : CustomAsyncOperation<T>
     {

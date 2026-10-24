@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>来源身份，不使用注册顺序或字符串前缀猜测加载后端。</summary>
     public readonly struct ResourceSourceId : IEquatable<ResourceSourceId>

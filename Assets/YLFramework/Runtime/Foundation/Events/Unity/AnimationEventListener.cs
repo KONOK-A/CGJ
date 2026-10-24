@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 
-namespace YLFramework.Core
+namespace YLFramework.Events
 {
     [Serializable]
     public class AnimationEvent : UnityEvent<string>

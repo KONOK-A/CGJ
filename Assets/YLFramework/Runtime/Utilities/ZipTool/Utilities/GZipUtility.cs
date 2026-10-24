@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using YLFramework.Utilities.ZipTool.GZip;
 
-namespace YLFramework.Utilities.ZipTool
+namespace YLFramework.Compression
 {
     /// <summary>
     /// GZip 压缩/解压工具（无 Unity 依赖），基于模块内置的 SharpZipLib GZip 流实现。

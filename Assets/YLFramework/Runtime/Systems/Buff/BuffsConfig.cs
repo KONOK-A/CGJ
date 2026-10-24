@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Foundation;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
 
     /// <summary>

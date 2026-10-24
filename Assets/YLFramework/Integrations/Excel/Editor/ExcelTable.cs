@@ -6,8 +6,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using MiniExcelLibs;
 using MiniExcelLibs.OpenXml;
+using YLFramework.Excel;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     internal sealed class ExcelColumn
     {

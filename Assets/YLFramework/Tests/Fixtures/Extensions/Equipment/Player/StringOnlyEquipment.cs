@@ -1,5 +1,5 @@
 using System;
-using YLFramework.EquipmentSystem;
+using YLFramework.Equipment;
 
 namespace YLFramework.Equipment.Acceptance
 {

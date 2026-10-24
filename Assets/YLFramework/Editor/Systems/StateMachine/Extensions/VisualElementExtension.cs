@@ -1,9 +1,8 @@
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
-using YLFramework.Core.Editor;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     public static class VisualElementExtension
     {

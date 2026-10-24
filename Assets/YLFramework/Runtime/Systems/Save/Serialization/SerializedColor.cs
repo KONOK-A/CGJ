@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Save
+namespace YLFramework.Save
 {
     using UnityEngine;
 

@@ -1,7 +1,7 @@
 using UnityEngine;
 using MonoBehaviour = UnityEngine.MonoBehaviour;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// MonoBehaviour 单例基类：通过 <see cref="MonoSingletonProperty{T}"/> 查找或创建实例，支持在场景中预先摆放。

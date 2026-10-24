@@ -8,8 +8,40 @@ $target = Join-Path $owner "Logs\YLFramework.Domain\Carriers\$Run"
 if (Test-Path -LiteralPath $target) { throw 'Refusing to overwrite an existing carrier.' }
 $null = New-Item -ItemType Directory -Path $target
 $files = @('Assets/YLFramework.meta', 'Assets/YLFramework/LICENSE.md', 'Assets/YLFramework/LICENSE.md.meta', 'Assets/YLFramework/Runtime.meta', 'Assets/YLFramework/Editor.meta', 'Assets/YLFramework/Plugins.meta', 'Assets/YLFramework/Plugins/BouncyCastle.meta', 'Assets/YLFramework/Tests.meta', 'Assets/YLFramework/Tests/EditMode.meta', 'Assets/YLFramework/Tests/PlayMode.meta', 'Assets/YLFramework/Tests/EditMode/YLFramework.Tests.EditMode.asmdef', 'Assets/YLFramework/Tests/EditMode/YLFramework.Tests.EditMode.asmdef.meta', 'Assets/YLFramework/Tests/PlayMode/YLFramework.Tests.PlayMode.asmdef', 'Assets/YLFramework/Tests/PlayMode/YLFramework.Tests.PlayMode.asmdef.meta')
-foreach ($dir in @('Assets/YLFramework/Runtime', 'Assets/YLFramework/Editor', 'Assets/YLFramework/Plugins/BouncyCastle', 'Assets/YLFramework/Tests/EditMode/Extensions/Domain', 'Assets/YLFramework/Tests/PlayMode/Extensions/Domain')) {
+foreach ($dir in @('Assets/YLFramework/Runtime', 'Assets/YLFramework/Editor', 'Assets/YLFramework/Plugins/BouncyCastle')) {
     $files += @(Get-ChildItem -LiteralPath (Join-Path $owner $dir) -Recurse -File | ForEach-Object { $_.FullName.Substring($owner.Length + 1).Replace('\', '/') })
+}
+# Keep the original Domain test set without importing unrelated tests from shared directories.
+$domainTests = @(
+    'EditMode/Systems/Buff/BuffLifecycleTests.cs',
+    'EditMode/Editor/Domain/DomainAuthoringTests.cs',
+    'EditMode/Editor/Domain/DomainBatchAcceptance.cs',
+    'EditMode/Editor/Domain/DomainMainAcceptanceTests.cs',
+    'EditMode/Editor/Domain/DomainReviewAssetTests.cs',
+    'EditMode/Editor/Domain/DomainTwoPlayTests.cs',
+    'EditMode/Systems/Logging/LoggerSessionTests.cs',
+    'EditMode/Systems/Mission/MissionConditionTests.cs',
+    'EditMode/Systems/Mission/MissionParameterCopyTests.cs',
+    'EditMode/Systems/Reddot/ReddotTests.cs',
+    'EditMode/Systems/Skill/SkillBatchReentryTests.cs',
+    'EditMode/Systems/Skill/SkillLifecycleTests.cs',
+    'PlayMode/Systems/Buff/BuffOwnerTests.cs',
+    'PlayMode/Systems/Domain/DomainHostSceneTests.cs',
+    'PlayMode/Systems/Domain/DomainResourceLeaseTests.cs',
+    'PlayMode/Systems/Domain/DomainReviewExitTests.cs',
+    'PlayMode/Systems/Logging/LoggerLifecycleTests.cs',
+    'PlayMode/Systems/Mission/MissionOwnerTests.cs',
+    'PlayMode/Systems/Reddot/ReddotLifecycleTests.cs',
+    'PlayMode/Systems/Skill/SkillOwnerTests.cs'
+)
+foreach ($test in $domainTests) {
+    $relative = 'Assets/YLFramework/Tests/' + $test
+    $files += @($relative, ($relative + '.meta'))
+    $parent = [IO.Path]::GetDirectoryName($relative).Replace('\', '/')
+    while ($parent -ne 'Assets/YLFramework/Tests') {
+        $files += $parent + '.meta'
+        $parent = [IO.Path]::GetDirectoryName($parent).Replace('\', '/')
+    }
 }
 $records = @()
 foreach ($relative in $files | Sort-Object -Unique) {

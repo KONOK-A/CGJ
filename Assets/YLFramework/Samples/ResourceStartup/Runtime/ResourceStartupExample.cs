@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using YLFramework.Services.Audio;
-using YLFramework.Services.Resource;
+using YLFramework.Audio;
+using YLFramework.Resource;
 
 namespace YLFramework.Samples.Resource
 {

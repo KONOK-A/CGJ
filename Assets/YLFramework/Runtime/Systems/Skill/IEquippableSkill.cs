@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using YLFramework.Foundation;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Skill
 {
     /// <summary>
     /// 可装备技能的接口,如果一个游戏角色能够装备技能和释放技能,请实现该接口

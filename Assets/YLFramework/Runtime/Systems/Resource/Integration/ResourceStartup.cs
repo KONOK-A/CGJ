@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using YLFramework.Core;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>应用显式持有的接入责任。构造不初始化；StartAsync复用唯一ResourceSystem，StopAsync只结算本入口的责任。</summary>
     public sealed class ResourceStartup

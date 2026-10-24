@@ -1,9 +1,8 @@
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Serialization;
-using YLFramework.Timing;
 
-namespace YLFramework.Core
+namespace YLFramework.Timing
 {
     /// <summary>
     /// Inspector 计时组件，消费公共 Timing 服务；启用启动一轮，组件或 GameObject 停用取消本轮。

@@ -22,6 +22,8 @@
   - `Exceptions/`：`IOCException` 体系
   - `Internal/`：解析路径、注入元数据与静态反射缓存（internal）
 
+公开 namespace 为 `YLFramework.DependencyInjection`，程序集仍为 `YLFramework.Runtime`；使用 `using YLFramework.DependencyInjection;`。原 `YLFramework.Core.IOC` 不保留转发类型，调用方更新 using、完整类型名及反射/生成绑定后重新编译。
+
 ## 注册
 
 - `Register<TSource>()` / `Register<TSource, TTarget>()` / `Register(Type, Type, name)`：注册类型映射，要求目标可赋值给源类型。
@@ -127,7 +129,7 @@
 
 ## 当前状态
 
-已完成。测试：`Tests/EditMode/`（IocTests、IocRegistrationTests、IocResolveTests、IocConstructorTests、IocCircularDependencyTests、IocMemberInjectionTests、IocInjectAllTests、IocResolveAllTests、IocRelationTests、IocClearOwnershipTests、IocUsageExampleTests、IocReentrancyTests、IocIsolationTests）。
+历史文档列举过 `Tests/EditMode/` 下的 IocTests、IocRegistrationTests、IocResolveTests 等套件；当前仓库未找到这些入口，不作为本轮可执行覆盖或通过证据。Foundation 的新身份与源码依赖边界入口为 `Tests/EditMode/Foundation/FoundationBoundaryTests.cs`，不等同于完整容器行为验证。
 
 ## 备注
 

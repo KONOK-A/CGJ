@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 指定 MonoSingleton 在 Hierarchy 中的查找/创建路径：

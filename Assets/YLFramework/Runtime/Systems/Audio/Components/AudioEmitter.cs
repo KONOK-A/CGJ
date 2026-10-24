@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>序列化的音效所有者：从候选 Clip 中选取一个（均匀或加权随机）并通过 AudioKit 播放。</summary>
     /// <remarks>组件停用时，循环和跟随播放的请求会被停止，2D 与固定位置的 one-shot 继续播放。选曲与校验会在替换自有循环播放之前完成。</remarks>

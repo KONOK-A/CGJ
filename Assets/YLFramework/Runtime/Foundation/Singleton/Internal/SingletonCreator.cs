@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     internal static class SingletonCreator
     {

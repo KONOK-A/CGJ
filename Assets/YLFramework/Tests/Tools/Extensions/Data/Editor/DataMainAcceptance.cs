@@ -406,7 +406,9 @@ namespace YLFramework.Tests.DataBatch
                 DataUnityAcceptance.Audit();
                 var graph = CompilationPipeline.GetAssemblies(AssembliesType.Editor);
                 var files = Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories).Select(p => p.Replace('\\', '/'))
-                    .Where(p => p.Contains("/Systems/DataAssets/") || p.Contains("/Systems/Localization/") || p.Contains("/Systems/Save/") || p.Contains("/Integrations/Excel/") || p.Contains("/Extensions/Data/")).ToArray();
+                    .Where(p => p.Contains("/Systems/DataAssets/") || p.Contains("/Systems/Localization/") || p.Contains("/Systems/Save/") || p.Contains("/Integrations/Excel/") || p.Contains("/Extensions/Data/") ||
+                        p.Contains("/Tests/EditMode/Editor/DataAssets/") || p.Contains("/Tests/EditMode/Editor/Localization/") ||
+                        p.Contains("/Tests/EditMode/Editor/Excel/") || p.Contains("/Tests/EditMode/Editor/Data/")).ToArray();
                 var rows = files.Select(p => new { path = p, sha256 = Hash(p), assembly = graph.SingleOrDefault(a => a.sourceFiles.Any(f => Canonical(f) == Canonical(p)))?.name }).ToArray();
                 Require(rows.All(r => r.assembly != null), "New source was omitted from actual Unity compilation.");
                 foreach (var row in rows)

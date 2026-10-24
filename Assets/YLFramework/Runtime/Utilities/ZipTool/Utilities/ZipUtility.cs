@@ -1,9 +1,10 @@
 using System;
 using System.IO;
+using YLFramework.Utilities.ZipTool;
 using YLFramework.Utilities.ZipTool.Zip;
 using YLFramework.Utilities.ZipTool.Zip.Compression;
 
-namespace YLFramework.Utilities.ZipTool
+namespace YLFramework.Compression
 {
     /// <summary>
     /// zip 打包 / 解压工具（无 Unity 依赖），基于模块内置的 SharpZipLib 源码实现。

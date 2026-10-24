@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // 具体来源的内部边界，不作为面向消费者的插件注册/路由平台。
     internal interface IResourceSource

@@ -18,6 +18,7 @@ JSONObject 用于直接遍历 / 修改 JSON 树；Json.NET 用于强类型对象
   - `JSONTemplates.cs`：Unity 类型互转扩展。
   - `readme.md`：上游说明。
 - namespace：`YLFramework.Utilities.Json`；程序集：`YLFramework.Runtime`。使用 `JSONObject.Create(...)` / `EmptyObject` 等直接入口，无需 Module、组件挂载或公共 Root。
+- JSONObject 是保留来源的第三方子树，本轮不将它改为自有功能域，也不修改其源码、namespace、上游说明或许可证。
 
 ## 核心数据模型
 

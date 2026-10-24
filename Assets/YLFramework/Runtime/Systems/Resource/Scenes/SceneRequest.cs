@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>沿用 Request 的单次领取协议。取消终态不代表 native 操作撤销；Scenes 可在迟到完成后更新。</summary>
     public sealed class SceneRequest : ResourceRequest<SceneLease>

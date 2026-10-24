@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>请求使用的既有分类设置与 Sound 预算；不决定独占或重叠拓扑。</summary>
     public enum AudioCategory

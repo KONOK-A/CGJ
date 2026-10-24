@@ -10,8 +10,8 @@
 
 ## 位置
 
-- 元数据：[`Runtime/Foundation/Attributes/`](../../Runtime/Foundation/Attributes/)，namespace `YLFramework.Foundation.Attributes`。
-- 必要原生 Drawer：[`Editor/Foundation/Attributes/DisableEditDrawer.cs`](../../Editor/Foundation/Attributes/DisableEditDrawer.cs)，程序集 `YLFramework.Editor`，只在Editor主体中消费Runtime元数据；原 `YLFramework.Core.Editor` 类型身份保持。
+- 元数据：[`Runtime/Foundation/Attributes/`](../../Runtime/Foundation/Attributes/)，namespace `YLFramework.Attributes`。
+- 必要原生 Drawer：[`Editor/Foundation/Attributes/DisableEditDrawer.cs`](../../Editor/Foundation/Attributes/DisableEditDrawer.cs)，namespace `YLFramework.Editor.Foundation`，程序集仍为 `YLFramework.Editor`，只在 Editor 主体中消费 Runtime 元数据。
 
 ## CustomClassNameGui
 
@@ -34,10 +34,10 @@
 
 ## Runtime / Editor 边界
 
-- 三个特性均归 `YLFramework.Runtime`，其源码保持中立，不消费 Core/Systems/Utilities；旧自有 Core 与 Tools 元数据副本已退出。合并后的主体允许 Core 当前 XFAB/Json.NET 依赖，不能再用整个 DLL 的引用列表代替元数据源码闭包验证。
+- 三个特性均归 `YLFramework.Runtime`，其源码保持中立，不消费 Core/Systems/Utilities；旧自有 Core 与 Tools 元数据副本已退出。主体沿用 UGUI/Json.NET、不依赖 XFAB，不能用整个 DLL 的引用列表代替元数据源码闭包验证。
 - 仅 `CustomPropertyGui.OnPropertyGui` 位于 `#if UNITY_EDITOR` 内：Editor 编译时存在、Player 编译时不存在，Player 程序集不会残留 `UnityEditor` 引用。
 - 使用 `CustomPropertyGui` 的业务代码需注意：Player 下没有 `OnPropertyGui`，派生类中的重写必须包在 `#if UNITY_EDITOR` 内。
-- `Tests/Foundation/EditMode/AttributesTests.cs` 直接编译正式元数据源码和派生构造使用者，覆盖 Editor 与无 UnityEditor 引用的 Windows Development 源码 profile；不借用预编译 Foundation DLL，不等于实际 Player 构建/运行。
+- `Tests/EditMode/Foundation/AttributesTests.cs` 直接编译正式元数据源码和派生构造使用者，覆盖 Editor 与无 UnityEditor 引用的 Windows Development 源码 profile；不借用预编译 Foundation DLL，不等于实际 Player 构建/运行。
 
 ## 主要类型
 
@@ -51,11 +51,11 @@
 
 ## 当前状态
 
-元数据回归位于 `Tests/Foundation/EditMode/AttributesTests.cs`；真实 SerializedObject、展开高度、子 Drawer 禁用/异常状态恢复与 Clipboard 直接消费者回归位于 `Tests/Core/Editor/DisableEditDrawerTests.cs`。
+元数据回归位于 `Tests/EditMode/Foundation/AttributesTests.cs`；真实 SerializedObject、展开高度、子 Drawer 禁用/异常状态恢复与 Clipboard 直接消费者回归位于 `Tests/EditMode/Editor/Foundation/Attributes/DisableEditDrawerTests.cs`。
 
-`Editor/Utilities/Serialization/SerializedPropertyExtensions` 保留 `YLFramework.Core.Editor` 类型身份、`CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 入口与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；同类型、非混值的单对象和多对象可编辑，沿用真实 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
+`Editor/Utilities/Serialization/SerializedPropertyExtensions` 使用 `YLFramework.Editor.Utilities`，保留 `CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 入口与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；同类型、非混值的单对象和多对象可编辑，沿用真实 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
 
-混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/Core/Editor/CoreSerializedPropertyTests.cs`。
+混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/EditMode/Editor/Core/CoreSerializedPropertyTests.cs`。
 
 CustomClassNameGui / CustomPropertyGui 当前没有正式业务标注或内置读取器；DisableEdit 的必要 Drawer 已正确接线。原 XF 生态继续消费原包特性，不建立跨框架桥。下述 Core 使用诊断与 Foundation 显示元数据共用 Runtime 主体，但属于不同职责和消费方式。
 

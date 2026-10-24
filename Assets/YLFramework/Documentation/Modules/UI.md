@@ -2,7 +2,7 @@
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
-> 当前状态：已整合到 `integration/xf-yl`，完成约定的真实 Unity 编译、输入后端、资产迁移、场景退出及 Windows64 IL2CPP 验收。具体版本、稳定证据与未验证范围记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`；通过范围不外推到其他 Unity/包版本、平台或自定义输入处理。
+> UI 专题历史状态：已整合到 `integration/xf-yl`，完成约定的真实 Unity 编译、输入后端、资产迁移、场景退出及 Windows64 IL2CPP 验收。具体版本、稳定证据与未验证范围记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`；不代表当前 namespace 迁移已通过新一轮验收，也不外推到其他 Unity/包版本、平台或自定义输入处理。
 
 ## 职责与依赖
 
@@ -14,6 +14,9 @@
 ## 打开与配置
 
 ```csharp
+using YLFramework.Core;
+using YLFramework.UI;
+
 owner.PanelRoot = uiRoot;
 owner.BindPanelRules(new[]
 {
@@ -121,7 +124,7 @@ Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 Ca
 
 主工作区已显式迁移并保存以下资产，完成身份、配置默认、Variant 保存重载/实例化及真实排序/输入回归。其他尚未迁移的项目需要显式调用：
 
-1. `YLFramework.Editor.UIPanelAssetMigration.ValidateAssets()`，菜单 `YLFramework/Core/UI Panel/核验资产迁移`。
+1. `YLFramework.Editor.Core.UIPanelAssetMigration.ValidateAssets()`，菜单 `YLFramework/Core/UI Panel/核验资产迁移`。
 2. `MigrateAssets()`，菜单 `YLFramework/Core/UI Panel/执行资产迁移`。
 3. 基础根 `Runtime/Core/Resources/YLFramework/Core/Canvas.prefab` 补显式 Layer0，保留自身 CanvasScaler 配置。
 4. 完整 `Prefabs/YLFramework.prefab` 通过 Unity Prefab API 转换为引用基础根的实例，保留既有层、Camera、Tips、非 UI 内容与差异化缩放值，绑定宿主默认根。
@@ -162,6 +165,10 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 `UITipsPresenter.Show(owner, ...)` 保留 unscaled 时间、位置、淡入淡出、句柄和普通呈现池协议；每次借用仍通过 Module.AttachView，完成/取消/owner 结束沿 View 收尾。不再编码 Overlay 类型或占业务 key；通用 Tips 默认 Layer0、Multiple、非 Modal、不覆盖、不参与 Top，完整模板引用仅覆盖 Layer4 的 UITipsOverlay Variant，Graphics 不拦截射线。
 
+### ColorSelector
+
+四个取色类型位于 `Runtime/Utilities/UI/ColorSelector/`，统一 namespace 为 `YLFramework.UI`；Panel/View 主体仍为 `YLFramework.Core`，两者同属 `YLFramework.Runtime`。这是工具消费 Core 的明确依赖，不把 ColorSelector 塞回 Core，也不新增 UI DLL；旧 Core namespace 调用须更新并重编译，Prefab GUID 与序列化字段保留。
+
 正式 `Prefabs/ColorSelector.prefab` 的窗口通过 `owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(initial, changed), root)` 打开；`CurrentColor` 可读，重开替换值和回调，不重放旧通知。独立 `ColorSelector.BeginSession/EndSession`、SDR RGB、Alpha 保持、色环/三角网格和自有 UI 用法不变，无 Panel 时不强制创建 owner。当前实现为 YL 自有代码。
 
 `UIPointer.CheckPositionOnUI/CheckMouseOnUI` 读取实际 EventSystem 的 UGUI 命中，包含真实模态遮罩；没有系统时返回 false，不创建宿主。
@@ -178,4 +185,4 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 Unity 原生重启会清理工程 Temp，不能依赖旧路径保留交付证据。本轮结果和完整 Player 已复制到实施计划列明的工程外稳定目录。构建的可选 MCP 空程序集警告与 Player 原生分配遥测均保留；未建立零原生泄漏或特定性能预算达标的结论。
 
-`Tests/Core/Acceptance/UIAcceptance.unity` 使用正式 Prefab。连续 Play 每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；不在两轮之间编译或重载。原 XF 游戏、Resource 8.10 实现与 Resource Workbench 不属于本重构；集成以真实共同祖先和其最终代码处理，不使用旧 Apply。
+`Tests/Acceptance/Core/UIAcceptance.unity` 使用正式 Prefab。连续 Play 每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；不在两轮之间编译或重载。对应夹具位于 `Tests/Fixtures/Core/`，Editor 构建入口位于 `Tests/EditMode/Editor/Core/UIPanelAcceptanceBuild.cs`，程序集名称保留。上文 UI 专题结果不替代当前身份的新编译与 Player 验收；原 XF 游戏、Resource 8.10 实现与 Resource Workbench 不属于该 UI 专题，不使用旧 Apply。

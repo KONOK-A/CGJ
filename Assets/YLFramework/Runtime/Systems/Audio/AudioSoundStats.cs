@@ -1,4 +1,4 @@
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Allocation-free session snapshot of Sound requests, idle cache and owned sources. Music and Voice are excluded.</summary>
     /// <remarks>Release counts mean ownership was relinquished and destruction requested, not that Unity destroyed native objects synchronously.</remarks>

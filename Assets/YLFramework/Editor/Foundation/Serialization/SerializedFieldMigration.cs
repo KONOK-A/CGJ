@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Foundation
 {
     /// <summary>显式修复 YL 字段改名后的 Prefab override 路径，不自动导入或保存资产。</summary>
     public static class SerializedFieldMigration

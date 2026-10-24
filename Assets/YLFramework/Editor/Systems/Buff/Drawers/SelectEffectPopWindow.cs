@@ -1,6 +1,5 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 
 using System.Collections.Generic;
@@ -8,9 +7,10 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Buff;
 
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
 #if UNITY_6000_2_OR_NEWER
     public class SelectEffectDataTreeViewItem : TreeViewItem<int>

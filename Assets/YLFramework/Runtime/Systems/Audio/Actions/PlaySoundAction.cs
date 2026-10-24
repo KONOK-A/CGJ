@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using YLFramework.Actions;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Play a borrowed clip and wait for its request to end. Cancellation stops only this lease.</summary>
     public sealed class PlaySoundAction : AbstractAction<PlaySoundAction>, IActionExecutionVersion

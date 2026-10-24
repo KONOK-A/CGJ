@@ -3,6 +3,7 @@ using System.Reflection;
 using DG.Tweening;
 using NUnit.Framework;
 using YLFramework.Actions;
+using YLFramework.Integrations.DOTween;
 
 namespace YLFramework.Tests.Actions.DOTween
 {

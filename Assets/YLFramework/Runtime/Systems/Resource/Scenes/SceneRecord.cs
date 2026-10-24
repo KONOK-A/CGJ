@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>独立于 caller Lease 的真实场景责任。handle + 加载序号 + Catalog 快照共同标识一次加载。</summary>
     public sealed class SceneRecord

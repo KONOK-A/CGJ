@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Foundation.Attributes
+namespace YLFramework.Attributes
 {
     /// <summary>
     /// 标记需要自定义 Editor 绘制的序列化字段。

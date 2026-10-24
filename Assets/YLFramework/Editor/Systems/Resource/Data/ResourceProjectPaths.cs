@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {

@@ -4,9 +4,9 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.DataAssets;
-using YLFramework.DataAssets.Editor;
+using YLFramework.Editor.DataAssets;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     /// <summary>只在可选Excel程序集依赖普通DataAssets作者工具，不建立反向依赖。</summary>
     public static class DataAssetsExcelCommands

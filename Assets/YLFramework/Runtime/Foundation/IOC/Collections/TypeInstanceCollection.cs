@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 多键字典：(服务类型, 名称) → 已注册实例。

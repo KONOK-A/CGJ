@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Skill;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Editor.Skill
 {
     public class ScriptBindController
     {

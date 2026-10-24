@@ -4,7 +4,7 @@ using UnityEngine;
 namespace YLFramework.Core
 {
     /// <summary>独立 Panel 消费者的结果。进度转发真实资源解析，终态进度为 1 不等于成功，必须检查 Status。</summary>
-    public sealed class LoadPanelRequest<T> : YLFramework.Foundation.CustomAsyncOperation<LoadPanelRequest<T>> where T : Panel
+    public sealed class LoadPanelRequest<T> : YLFramework.Async.CustomAsyncOperation<LoadPanelRequest<T>> where T : Panel
     {
         /// <summary>本次成功交付的引用；不延长 Session 寿命，关闭或复用后不会撤回已完成的终态。</summary>
         public T Panel

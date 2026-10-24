@@ -5,7 +5,7 @@ using System.Globalization;
 using System.IO;
 using UnityEngine.Networking;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>单个有界GET。由ResourceSystem现有主线程tick驱动；Dispose同步撤销私有UWR和文件句柄。</summary>
     internal sealed partial class ResourceTransfer : IEnumerator, IDisposable

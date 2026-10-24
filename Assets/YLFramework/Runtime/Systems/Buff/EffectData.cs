@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Foundation;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     /// <summary>
     /// 效果配置数据

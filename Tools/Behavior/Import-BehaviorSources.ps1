@@ -14,8 +14,10 @@ $sources = @{
 $identity = $sources[$Module]
 $source = Join-Path $SourceRoot $identity[0]
 if (-not (Test-Path -LiteralPath $source)) { throw "Missing source: $source" }
-$runtimeParent = Join-Path $root 'Assets\YLFramework\Runtime\Systems'
-$editorParent = Join-Path $root 'Assets\YLFramework\Editor\Systems'
+$section = if ($Module -eq 'StateMachine') { 'Systems' } else { 'Utilities' }
+$feature = switch ($Module) { 'CharacterController2D' { 'Character2D' } 'MoveablePlatform' { 'Platform2D' } default { $Module } }
+$runtimeParent = Join-Path $root "Assets\YLFramework\Runtime\$section"
+$editorParent = Join-Path $root "Assets\YLFramework\Editor\$section"
 foreach ($parent in @($runtimeParent, $editorParent, $PSScriptRoot)) {
     if (-not (Test-Path -LiteralPath $parent)) { throw "Missing destination parent: $parent" }
 }
@@ -35,9 +37,9 @@ foreach ($side in @('Runtime', 'Editor')) {
             continue
         }
         if ($Module -eq 'Overlap') {
-            $text = $text.Replace('XFGameFramework.Overlap', 'YLFramework.Overlap').Replace('namespace XFGameFramework', 'namespace YLFramework.Overlap').Replace('using XFGameFramework;', 'using YLFramework.Core.Editor;')
+            $text = $text.Replace('XFGameFramework.Overlap', 'YLFramework.Overlap').Replace('namespace XFGameFramework', 'namespace YLFramework.Overlap').Replace('using XFGameFramework;', '')
         } elseif ($Module -eq 'CharacterController2D') {
-            $text = $text.Replace('XFGameFramework.Character.Controller2D', 'YLFramework.Character.Controller2D')
+            $text = $text.Replace('XFGameFramework.Character.Controller2D', 'YLFramework.Character2D')
             $text = $text.Replace('CharacterController2D.hits', 'characher.hits')
         } elseif ($Module -eq 'MoveablePlatform') {
             $text = $text.Replace('XFGameFramework.Platform2D', 'YLFramework.Platform2D')
@@ -65,8 +67,11 @@ foreach ($side in @('Runtime', 'Editor')) {
             }
             $text = $lines -join "`n"
         } elseif ($side -eq 'Editor') {
-            $text = 'using YLFramework.Core.Editor;' + "`n" + $text
+            $text = "using YLFramework.Editor.Utilities;`nusing YLFramework.$feature;`n" + $text.Replace("namespace YLFramework.$feature", "namespace YLFramework.Editor.$feature")
             $text = $text.Replace(' : Editor', ' : UnityEditor.Editor')
+            if ($Module -eq 'StateMachine') {
+                $relative = $relative -replace '^Listtener[\\/]', 'Listeners\' -replace '^GUI[\\/]Custom Inspector[\\/]', 'GUI\Inspectors\'
+            }
         } else {
             $text = [regex]::Replace($text, '(?m)^using UnityEditor;\r?\n', '')
         }

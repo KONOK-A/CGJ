@@ -1,7 +1,7 @@
 using UnityEngine;
 using YLFramework.Events;
 
-namespace YLFramework.ReddotSystem
+namespace YLFramework.RedDots
 {
     /// <summary>只切换显式指示器，不批量启停业务子物体，也不持有业务路径来源。</summary>
     [AddComponentMenu("YLFramework/Reddot")]

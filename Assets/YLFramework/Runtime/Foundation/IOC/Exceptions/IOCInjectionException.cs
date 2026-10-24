@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 成员注入失败：成员不可注入（readonly / 无 setter / indexer）或成员依赖无法解析。

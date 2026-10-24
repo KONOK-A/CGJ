@@ -3,7 +3,7 @@
 using System.Reflection;
 using UnityEditor;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Utilities
 {
     public static class ClearLog
     {

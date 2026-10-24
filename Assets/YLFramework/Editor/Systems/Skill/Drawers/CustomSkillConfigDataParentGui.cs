@@ -1,12 +1,11 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 
 using UnityEditor;
 
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Editor.Skill
 {
     public class CustomSkillConfigDataParentGui : CustomPropertyGui
     {

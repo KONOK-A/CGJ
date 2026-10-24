@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public sealed partial class ArtifactStore
     {

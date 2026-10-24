@@ -8,7 +8,7 @@ using UnityEngine;
 
 // Fixed 编码
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Utilities
 {
     public static class SerializedPropertyExtensions
     {

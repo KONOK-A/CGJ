@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 using XFABManager;
 using XFFSM;
 using XFGameFramework;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 using Random = UnityEngine.Random;
 
 public class Gaming : FSMState

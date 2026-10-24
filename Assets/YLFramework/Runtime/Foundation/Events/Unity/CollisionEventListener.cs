@@ -4,7 +4,7 @@ using UnityEngine.Events;
 using YLFramework.Foundation;
 
 
-namespace YLFramework.Core
+namespace YLFramework.Events
 {
 
     [Serializable]

@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 解析失败：必要依赖未注册、目标类型不可实例化、构造函数选择歧义或构造函数自身抛异常。

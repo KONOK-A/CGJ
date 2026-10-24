@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 注册参数非法（null 类型、不可赋值的目标类型或实例）时抛出。

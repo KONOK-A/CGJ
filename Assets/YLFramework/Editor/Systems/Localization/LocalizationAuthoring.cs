@@ -8,7 +8,7 @@ using YLFramework.Localization;
 namespace YLFramework.Editor.Localization
 {
     /// <summary>只编辑显式目标根及其语言资产；不安装全工程删除/自动保存监听。</summary>
-    public static class LocalizationAuthoring
+    internal static class LocalizationAuthoring
     {
         public static string GetLanguageFolder(MultiLanguageConfigs root)
         {

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 可选的单例宿主基类：支持从场景（含未激活对象）收养实例，并按所有权区分“自建宿主”与“借用组件”的释放行为。

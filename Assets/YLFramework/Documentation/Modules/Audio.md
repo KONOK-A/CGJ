@@ -9,7 +9,7 @@
 ### 代码播放三类 Clip
 
 ```csharp
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 AudioKit.PlayMusic(musicClip); // 默认循环
 AudioKit.PlayVoice(voiceClip); // 默认单次，替换旧 Voice
@@ -142,8 +142,8 @@ AudioKit.PlaySound(soundClip, options);
 命名入口不重载旧 Clip API，使用 `PlayMusicNamed`、`PlayVoiceNamed`、`PlaySoundNamed`、`CrossFadeMusicNamed`；对应异步入口为 `PlayMusicAsync`、`PlayVoiceAsync`、`PlaySoundAsync`、`CrossFadeMusicAsync`。命名通道使用 `channel.PlayNamed` / `channel.PlayAsync`，仍复用原 Exclusive/Overlap 拓扑与 `AudioHandle`。异步接口返回可观察、可逻辑取消的 `AudioPlayRequest`，不是通用 Task/协程调度框架。
 
 ```csharp
-using YLFramework.Services.Audio;
-using YLFramework.Services.Resource;
+using YLFramework.Audio;
+using YLFramework.Resource;
 
 // configuration 由应用显式持有，包含所需的 Resources Catalog 或正式 Bundle 快照。
 using var initialize = ResourceSystem.InitializeAsync(configuration);
@@ -236,7 +236,7 @@ GroupPlayer 停用取消自己的 pending 并停止自己的播放，销毁撤�
 素材组选曲也可单独用于代码：
 
 ```csharp
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 // library 为绑定的素材库，channel 为 owner 已显式登记的控制通道。
 if (library.TrySelect("ambience", out var selected))
@@ -254,7 +254,7 @@ if (library.TrySelect("ambience", out var selected))
 
 代码命名借源入口为 `channel.PlayBorrowedNamed(source, address, options)` / `channel.PlayBorrowedAsync(source, address, options)`。加载期间不预留或修改 Source，提交时重新校验；在途 Source 失活/销毁走 Unavailable，占用冲突走异步 Failed/Error（同步抛错）。加载或不可逆替换前校验失败保留旧播放；替换释放旧资源后发生的重入冲突不回滚已结束旧请求，新请求不得覆盖嵌套取得 Source 的 owner，这与原 PlayBorrowed 契约一致。资源在原 Voice 全终态归还，不靠公开 onFinished；释放仍按最后写入字段比较与归属恢复协议，不恢复此前播放历史。同一借源不支持原生 PlayOneShot 重叠；重叠使用池化独立 Source。
 
-自有 `YLFramework.Core` AudioController/AudioPlayer/Extension/AutoPause、旧 Inspector 及重复根/表/Update/卸载协程已退出，不提供永久兼容空壳。原 XF Package 同名类型仍独立保留；游戏正式 AudioEmitter/AudioMusicPlayer 的字段、GUID、程序集与 UnityEvent 不迁移，Core 其他模块与资源过渡不因此退出。
+自有 `YLFramework.Core` AudioController/AudioPlayer/Extension/AutoPause、旧 Inspector 及重复根/表/Update/卸载协程已退出，不提供永久兼容空壳。原 XF Package 同名类型仍独立保留；当前正式 AudioEmitter/AudioMusicPlayer 属于 `YLFramework.Audio`，字段、GUID、Runtime 程序集与事件方法合同保持。旧 `YLFramework.Services.Audio` 的 using/完整名及持久 UnityEvent 类型字符串须同步迁移并实际核验，不能只凭脚本 GUID 不变宣称事件接线兼容。
 
 ## 模块定位
 
@@ -263,7 +263,7 @@ AudioKit 的直接 `AudioClip` 入口只借用外部资源；显式命名入口�
 - 直接 Clip API 不接管资源；命名加载与受控 Clip 缓存只管理后端租约，物理卸载/销毁仍由真正资源 owner 决定。
 - 不提供旧 Loader、裸播放器、Fluent 构建器或 Audio 专属 Binding/注销包装，不保留旧 API 兼容层。
 - Mixer 仅提供可选输出路由、显式暴露参数控制和 Snapshot 切换；句柄淡变控制单请求包络，与音乐 Crossfade 独立叠乘。不提供逻辑分组预算、重要音效无限豁免、距离/可听度抢占、音源虚拟化、自动 Ducking、Mixer 参数淡变调度、DSP 调度、防重复随机、HRTF 或遮挡。
-- namespace 为 `YLFramework.Services.Audio`，与 Action 共用 `YLFramework.Runtime`；音效动作桥接内建，不是可拆卸程序集。
+- namespace 为 `YLFramework.Audio`，与 Action 共用 `YLFramework.Runtime`；音效动作桥接内建，不是可拆卸程序集。
 
 ## 目录与依赖
 
@@ -290,15 +290,16 @@ AudioKit 的直接 `AudioClip` 入口只借用外部资源；显式命名入口�
 | [`Internal/AudioPlaybackOptions.cs`](../../Runtime/Systems/Audio/Internal/AudioPlaybackOptions.cs) | 内部播放值快照、集中有效默认值、公开配置捕获与校验；不新增公开配置类型 |
 | [`Components/`](../../Runtime/Systems/Audio/Components/) | 原 AudioEmitter / AudioMusicPlayer、AudioGroupPlayer 组 owner 与 AudioMixerController 薄配置组件 |
 | [`Actions/`](../../Runtime/Systems/Audio/Actions/) | PlaySoundAction / PlaySoundExtension |
+| [`Resource/Integration/Audio/`](../../Runtime/Systems/Resource/Integration/Audio/) | 内建 Resource/Audio 桥接：`ResourceSystem.Audio.cs` 属于 `YLFramework.Resource`，`ResourceAudioClipProvider.cs` 属于 `YLFramework.Audio`；仍在同一 Runtime |
 | [`Diagnostics/`](../../Runtime/Systems/Audio/Diagnostics/) | 被动诊断；运行 GUI 仅 Editor/Development Build |
 | [`Editor/Systems/Audio/`](../../Editor/Systems/Audio/) | 分层 Inspector、Debug 编辑器窗口与 Help 提供方 |
 
-核心链直接复用 `YLFramework.Core.Pool`、`YLFramework.Binding`、`YLFramework.Events` 和 `MonoSingletonHost<AudioManager>`。没有新增程序集或第三方音频库；共享 Runtime 仍沿用框架既有依赖，不表示零依赖安装包。完整依赖见 [架构总览](../Architecture.md)。
+核心链直接复用 `YLFramework.Pooling`、`YLFramework.Binding`、`YLFramework.Events` 和 `YLFramework.Singletons.MonoSingletonHost<AudioManager>`。Resource 桥接保持同 System/Project 的 Provider 引用身份、会话关闭后失效及 Startup 失败/回滚合同，不因归位另建工厂服务。没有新增程序集或第三方音频库；共享 Runtime 仍沿用框架既有依赖，不表示零依赖安装包。完整依赖见 [架构总览](../Architecture.md)。
 
 ## 播放与句柄
 
 ```csharp
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 // Music 默认循环，Voice 默认不循环；同 Clip 的显式新请求也替换旧请求。
 AudioHandle music = AudioKit.PlayMusic(musicClip, loop: true, volume: 0.6f);
@@ -749,7 +750,7 @@ int added = AudioKit.PrewarmSounds(24); // Target idle count; returns newly cach
 `AudioOutputRoute` 是可序列化 struct，嵌套 `RouteMode` 枚举为 `Inherit/MixerGroup/Direct`，公开字段为 `Mode/Group`。`default` 与 `AudioOutputRoute.Inherit` 等价；`Direct` 明确绕过分类默认 Mixer，`ToMixer(group)` 指定单次输出组。未知 Mode、MixerGroup 模式的空/已销毁 Group，以及 Inherit/Direct 携带非空 Group 都是非法组合，在替换槽位、分配 Source 和提交去重记录前拒绝。单次覆盖可使用另一个 Mixer 的组。
 
 ```csharp
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 // 三项均为 BindableProperty<AudioMixerGroup>，默认 null，不写 PlayerPrefs。
 AudioKit.Settings.MusicOutputGroup.Value = musicGroup;
@@ -832,7 +833,7 @@ Mixer 路由是全局显式生命周期，不属于组件自有播放句柄。�
 
 ```csharp
 using YLFramework.Actions;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 ActionKit.Sequence()
     .PlaySound(soundClip, outputRoute: AudioOutputRoute.ToMixer(uiGroup))
@@ -883,12 +884,12 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 ## 测试与帮助
 
-- [`Tests/EditMode/Audio/`](../../Tests/EditMode/Audio/)：设置六键/默认/重建退订、临时 Mute 分类隔离/池复用/最新音量恢复、只读查询与失效/缺失资源的安全返回、初始与运行时参数校验、倍率截断与分类音量、去重边界与提交/代次清理、随机有效 Clip、快照、句柄隔离、非创建读取、宿主清理与池边界，以及 Action 拒播/Stop/取消/Reset/重入。
-- [`Tests/PlayMode/Audio/`](../../Tests/PlayMode/Audio/)：真实播放进度、暂停冻结/静音推进/循环/Pitch、静音中创建与自然完成、随机回调的实际 Clip 与原句柄、同步开始/完成回调的控制与重入、运行中倍率与请求隔离、待播放请求修改与开关完整重播、显式 Stop、并发/池复用、音量、Sound/Voice 3D→2D 重置、语音分类隔离及同帧重播目标校验、目标移动/停用/销毁/场景卸载、回调替换/Shutdown，以及 Action 序列等待。
+- [`Tests/EditMode/Systems/Audio/`](../../Tests/EditMode/Systems/Audio/)：设置六键/默认/重建退订、临时 Mute 分类隔离/池复用/最新音量恢复、只读查询与失效/缺失资源的安全返回、初始与运行时参数校验、倍率截断与分类音量、去重边界与提交/代次清理、随机有效 Clip、快照、句柄隔离、非创建读取、宿主清理与池边界，以及 Action 拒播/Stop/取消/Reset/重入；Editor 行为另归 `Tests/EditMode/Editor/Audio/`。
+- [`Tests/PlayMode/Systems/Audio/`](../../Tests/PlayMode/Systems/Audio/)：真实播放进度、暂停冻结/静音推进/循环/Pitch、静音中创建与自然完成、随机回调的实际 Clip 与原句柄、同步开始/完成回调的控制与重入、运行中倍率与请求隔离、待播放请求修改与开关完整重播、显式 Stop、并发/池复用、音量、Sound/Voice 3D→2D 重置、语音分类隔离及同帧重播目标校验、目标移动/停用/销毁/场景卸载、回调替换/Shutdown，以及 Action 序列等待。
 - 独立 AB 所有权验收由 EditMode `AudioResourceBundleTests` 自动构建正式 ResourceProject/BuildMap/Catalog/发布，进入真实 Play 后验证 Clip/共享依赖、跨通道与 crossfade、取消/Audio Shutdown/Resource 退出和最终 native 卸载，再恢复原场景并清理其登记的夹具、workspace、发布及 SessionState。跨 Domain Reload 时按具体方法运行并读取叶结果，不把 MCP 发现树总数当成执行数；不涉及正式游戏 Bundle。
 - 旧 AudioLoader 包装专属测试随已删除功能移除；命名 Provider/资源租约另有正式回归，播放、属性和清理断言迁为新契约，不冻结旧 40 公共类型。测试源码存在不等于已通过，结果以当前 Unity 实际编译和运行记录为准。
 - `AudioContinuousPlayTests` 使用真实 Enter/Exit Play，保持同一脚本域与正常 Scene Reload，跨轮验证旧请求/通道/订阅/加载责任隔离。原 XF Logger 的临时原生日志隔离只属于获授权验收 fixture，结束恢复原 handler，不表示修复原包或全框架重复会话。
-- `Tests/Core/Acceptance/AudioAcceptanceEntry` 与 `AudioGameAcceptanceFlow` 是 Editor/Windows64 Mono 共用的显式验收入口，不是产品自动启动入口、不随默认 ExportRoots 分发。自有场景挂 Camera/Listener 与正式 GroupPlayer，配置 Library 的独立 Resources 信号、另两份直接 Clip、MixerConfig 与 ResourceKey；直接 Clip 不复用命名资源实例，避免用场景借用引用掩盖资源归还。临时场景与素材仅供构建，结束清理，产物路径及本轮结果见 [4.5 专项](../../../../.kilo/plans/xf-yl-4-audio.md#9-45-综合验收与待确认门禁2026-10-12)。Player 默认 Audio 模式，`-audio45-game` 走原 Main/XFAB，`-audio45-listen` 延长观察并显示阶段；Listener/DSP 采样、系统出声和听感分层报告，自动 PASS 不代表人工听感通过。
+- `Tests/Acceptance/Core/AudioAcceptanceEntry` 与 `AudioGameAcceptanceFlow` 是 Editor/Windows64 Mono 共用的显式验收入口，不是产品自动启动入口、不随默认导出根分发。自有场景挂 Camera/Listener 与正式 GroupPlayer，配置 Library 的独立 Resources 信号、另两份直接 Clip、MixerConfig 与 ResourceKey；直接 Clip 不复用命名资源实例，避免用场景借用引用掩盖资源归还。临时场景与素材仅供构建，结束清理，历史产物路径及结果见 [4.5 专项](../../../../.kilo/plans/xf-yl-4-audio.md#9-45-综合验收与待确认门禁2026-10-12)。Player 默认 Audio 模式，`-audio45-game` 走原 Main/XFAB，`-audio45-listen` 延长观察并显示阶段；Listener/DSP 采样、系统出声和听感分层报告，自动 PASS 不代表人工听感通过。
 - `AudioMixerTests` / `AudioMixerPlaybackTests` 使用 `Tests/Fixtures/Audio/` 下的独立 Mixer 资产，覆盖三态路由、Inspector 空引用、配置归属、同步重入、池与会话清理、原生参数/快照及组件/Action；夹具不放 Resources，也不修改业务 Mixer。
 - [`Editor/Systems/Audio/Help/AudioKitHelpProvider.cs`](../../Editor/Systems/Audio/Help/AudioKitHelpProvider.cs) 的稳定 id 为 `audiokit`，反射真实 Audio 公开类型，包含组件与 Action，不泄漏内部实例或 Foundation 通用 API。
 - 帮助菜单 `YLFramework/Audio/帮助`；保留 9 个指南页及稳定 ID `overview/control/settings/spatial/mixer/components/action/timer/diagnostics`，在现有 settings/components/action/diagnostics 扩充总量/Clip/Priority/缓存/预热/统计合同，保留原 Sound 开始、Crossfade、手动/自动淡变与加权说明，不新增页面或文档文件。API 反射包含真实 AudioSoundStats、AudioSoundConcurrency/SoundOverflowPolicy、AudioAutoFade、AudioWeightedClip、AudioOutputRoute 及嵌套 RouteMode、AudioMixerConfig、AudioMixerControl、AudioMixerController，XML 来自共享 `Library/YLFramework.Runtime.xml`，不伪造类型或创建播放宿主。`timer` 页保留工具边界与导航，不新增独立 Timing Provider。

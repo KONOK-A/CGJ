@@ -7,7 +7,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.U2D;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {

@@ -1,8 +1,9 @@
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.DataAssets;
+using YLFramework.Editor.Utilities;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     [CustomPropertyDrawer(typeof(IconInfo))]
     public sealed class IconInfoDrawer : PropertyDrawer

@@ -5,8 +5,9 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Core;
 
-namespace YLFramework.Core.Editor
+namespace YLFramework.Editor.Core
 {
     public class CreateModuleCommand : EditorWindow
     {

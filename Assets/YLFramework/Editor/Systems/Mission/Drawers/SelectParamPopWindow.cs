@@ -1,6 +1,5 @@
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
-using YLFramework.Core.Editor;
+using YLFramework.Attributes;
 #if UNITY_EDITOR
 
 using System;
@@ -8,9 +7,10 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using YLFramework.Mission;
 
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
 
     public class ParamPopupTreeView : TreeView

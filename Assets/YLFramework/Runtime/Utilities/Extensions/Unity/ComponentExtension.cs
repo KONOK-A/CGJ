@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using YLFramework.Foundation;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     /// <summary>
     /// Component 链式扩展，与 GameObjectExtension 对应。

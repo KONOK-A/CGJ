@@ -1,12 +1,13 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Editor.Buff
 {
 
     public class BuffSettingsProvider : SettingsProvider
@@ -37,51 +38,72 @@ namespace YLFramework.BuffSystem
 
         public override void OnGUI(string searchContext)
         {
-            //base.OnGUI(searchContext);
-
-            if (_serializedObject == null)
+            try
             {
-                _serializedObject = new SerializedObject(BuffSystemSettings.Instance);
-            }
-
-            if (_serializedProperties == null)
-            {
-                _serializedProperties = _serializedObject.GetAllSerializedProperty();
-            }
-
-            _serializedObject.Update();
-
-            EditorGUI.BeginChangeCheck();
-
-            foreach (var item in _serializedProperties)
-            {
-                if (item.name == "allEffectDatas")
+                var settings = BuffSystemSettings.Instance;
+                if (_serializedObject != null && _serializedObject.targetObject != settings)
                 {
-                    continue;
+                    Reload();
                 }
 
-                if (item.name == "allEffectTypes")
+                if (_serializedObject == null)
                 {
-                    OnTypeGui(item);
-                    continue;
+                    _serializedObject = new SerializedObject(settings);
                 }
 
-                EditorGUI.BeginDisabledGroup(true);
+                if (_serializedProperties == null)
+                {
+                    _serializedProperties = _serializedObject.GetAllSerializedProperty();
+                }
 
-                EditorGUILayout.PropertyField(item);
+                _serializedObject.Update();
 
-                EditorGUI.EndDisabledGroup();
+                EditorGUI.BeginChangeCheck();
+
+                foreach (var item in _serializedProperties)
+                {
+                    if (item.name == "allEffectDatas")
+                    {
+                        continue;
+                    }
+
+                    if (item.name == "allEffectTypes")
+                    {
+                        OnTypeGui(item);
+                        continue;
+                    }
+
+                    EditorGUI.BeginDisabledGroup(true);
+
+                    EditorGUILayout.PropertyField(item);
+
+                    EditorGUI.EndDisabledGroup();
+                }
+
+                _serializedObject.ApplyModifiedProperties();
+                if (EditorGUI.EndChangeCheck())
+                {
+                    BuffSystemSettings.Save();
+                }
             }
-
-
-            _serializedObject.ApplyModifiedProperties();
-            if (EditorGUI.EndChangeCheck())
+            catch (IOException exception)
             {
-                BuffSystemSettings.Save();
+                Reload();
+                EditorGUILayout.HelpBox(exception.Message + "\nMigration menu: " + BuffSettingsMigration.MenuPath +
+                    ". Resolve any old/new file conflict without overwriting either file.", MessageType.Error);
+                return;
             }
         }
 
         private ReorderableList _reorderableListType;
+
+        internal void Reload()
+        {
+            _serializedProperties = null;
+            _reorderableListType = null;
+            _serializedObject?.Dispose();
+            _serializedObject = null;
+        }
 
 
 

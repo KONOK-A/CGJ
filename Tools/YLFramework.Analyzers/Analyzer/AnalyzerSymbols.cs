@@ -32,7 +32,7 @@ namespace YLFramework.Analyzers
             _inherited = Markers.Select(m => m == null || !m.GetAttributes().Any(a =>
                 a.AttributeClass?.ToDisplayString() == "System.AttributeUsageAttribute" && a.NamedArguments.Any(p => p.Key == "Inherited" && Equals(p.Value.Value, false)))).ToArray();
             _attributes = names.Select(_ => new ConcurrentDictionary<ISymbol, ImmutableArray<AttributeData>>(SymbolEqualityComparer.Default)).ToArray();
-            ObjectPool = core.GetTypeByMetadataName("YLFramework.Core.Pool.ObjectPool`1");
+            ObjectPool = core.GetTypeByMetadataName("YLFramework.Pooling.ObjectPool`1");
             var args = core.GetTypeByMetadataName("YLFramework.Core.LoadViewArgs");
             var candidates = args?.GetMembers("_pool").OfType<IFieldSymbol>().ToArray();
             var field = candidates?.Length == 1 ? candidates[0] : null;

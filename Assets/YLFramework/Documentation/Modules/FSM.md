@@ -8,7 +8,7 @@
 
 本模块**不提供可视化 FSM Editor**，也**不以大型状态图制作为目标**：没有 GraphView、节点编辑器、状态机资产、序列化状态图、Hierarchical FSM、State Stack、异步 / 线程安全等能力。需要这些能力时应使用专门的状态机或行为树方案。
 
-独立 XF `XFFSM` 是带完整编辑器的可视化大型状态机，与本模块职责层级不同，允许共存；本模块不替代或依赖 XFFSM，也不需要 Module、统一状态机 Manager 或公共 Root。调用方自行驱动并管理回收，Module 关闭不会自动停止外部 FSM。
+YL 的完整配置/可视化状态机位于 `Runtime/Systems/StateMachine/` 与 `Editor/Systems/StateMachine/`，namespace 为 `YLFramework.StateMachine` / `YLFramework.Editor.StateMachine`，本轮明确保留 Systems；轻量 FSM 仍归 Utilities，不与之合并。外部 XF `XFFSM` 也可独立共存；本模块不替代或依赖它们，也不需要 Module、统一状态机 Manager 或公共 Root。调用方自行驱动并管理回收，Module 关闭不会自动停止外部 FSM。
 
 ## 位置
 
@@ -145,10 +145,10 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 ## 依赖
 
-- `Pool`：实例复用现有 Runtime `SafeObjectPool` 包装及 Foundation 池内核，沿用 `YLFramework.Core.Pool` namespace；不依赖 Core Module / MVC，不新增独立缓存或生命周期管理器。
+- `Pool`：实例复用现有 Runtime `SafeObjectPool` 包装及 Foundation 池内核，沿用 `YLFramework.Pooling` namespace；不依赖 Core Module / MVC，不新增独立缓存或生命周期管理器。
 
 ## 当前状态
 
-成熟实现保持不变。当前可运行的相关入口为 `Tests/EditMode/PoolContractTests.cs` 的 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried`（两个参数用例），仅覆盖 FSM 与池的回调回收 gate、退出失败隔离及正常复用，不代表 FSM 全部行为覆盖。
+成熟实现保持不变。当前可运行的相关入口为 `Tests/EditMode/Foundation/Pool/PoolContractTests.cs` 的 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried`（两个参数用例），仅覆盖 FSM 与池的回调回收 gate、退出失败隔离及正常复用，不代表 FSM 全部行为覆盖。
 
 文档旧列出的 `Tests/EditMode/FSMTests.cs` 当前不在仓库，旧专项 / 全量通过数字不作为当前可执行证据。阶段 5.3.5 仅完善框架定位与接入说明，不重做融合前的全面质量验证。

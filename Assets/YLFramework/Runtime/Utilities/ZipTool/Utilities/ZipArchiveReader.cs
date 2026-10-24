@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using YLFramework.Utilities.ZipTool.Zip;
 
-namespace YLFramework.Utilities.ZipTool
+namespace YLFramework.Compression
 {
     /// <summary>
     /// 会话式 zip 读取器：一次打开归档，多次读取/解压条目，Dispose 时关闭归档并恢复编码。

@@ -4,7 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Excel.Editor
+namespace YLFramework.Integrations.Excel.Editor
 {
     /// <summary>可选领域Editor接线入口；关闭文件对话框不创建计划，关闭预览即取消。</summary>
     public static class ExcelAuthoringCommands

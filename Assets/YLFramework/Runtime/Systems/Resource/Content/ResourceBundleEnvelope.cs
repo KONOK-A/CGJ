@@ -11,7 +11,7 @@ using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     // YL C# adaptation adds the outer context envelope and ownership/failure contracts.
     internal sealed class ResourceBundleEnvelopeHeader

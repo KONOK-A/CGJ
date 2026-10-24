@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>一次 checkout 的独立身份。归还后不可再使用对象；旧 Lease 不能操作下一次 checkout。</summary>
     public sealed class InstanceLease : IDisposable

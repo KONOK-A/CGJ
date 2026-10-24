@@ -101,7 +101,8 @@ namespace YLFramework.Editor.Actions
             "using System;\nusing System.Collections;\nusing System.Threading.Tasks;\nusing UnityEngine;\n" +
             "using YLFramework.Actions;\n" +
             "using YLFramework.Events;\n" +
-            (ApiAssemblies().Any(assembly => assembly.GetName().Name == "YLFramework.Actions.DOTween") ? "using DG.Tweening;\n" : "") +
+            (ApiAssemblies().Any(assembly => assembly.GetName().Name == "YLFramework.Actions.DOTween")
+                ? "using YLFramework.Integrations.DOTween;\nusing DG.Tweening;\n" : "") +
             "namespace ActionKitHelpExamples\n{\npublic static class Usage\n{\n" +
             string.Join("\n\n", Topics.Where(topic => topic.IsAvailable && !topic.IsCompleteExample && topic.Example.Length != 0).Select(topic => topic.Example)) +
             "\n}\n}\n";

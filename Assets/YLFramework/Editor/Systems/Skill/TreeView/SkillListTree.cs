@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Skill;
 
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Editor.Skill
 {
 
     internal class IconGuiContent
@@ -234,7 +235,7 @@ namespace YLFramework.SkillSystem
                 return;
             }
 
-            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_skillsConfig, _skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(_skillsConfig));
+            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_skillsConfig, _skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(_skillsConfig));
             _skillsConfig.ClearCache();
             Reload();
         }

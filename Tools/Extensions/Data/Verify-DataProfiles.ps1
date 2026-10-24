@@ -43,12 +43,13 @@ $refs += @((Join-Path $UnityData 'Managed/Newtonsoft.Json.dll'),
     (Join-Path $root 'Temp/UI.Panel.Offline/EditorTools/YLFramework.Editor.dll'))
 foreach ($reference in $refs) { if (-not (Test-Path -LiteralPath $reference)) { throw "Missing real reference: $reference" } }
 foreach ($mode in @('EditMode', 'PlayMode')) {
-    $folder = Join-Path $root "Assets/YLFramework/Tests/$mode/Extensions/Data"
-    if (-not (Test-Path -LiteralPath $folder)) { continue }
+    $folders = @('DataAssets', 'Localization', 'Save') | ForEach-Object { "Assets/YLFramework/Tests/$mode/Systems/$_" }
+    if ($mode -eq 'EditMode') { $folders += @('DataAssets', 'Localization', 'Data') | ForEach-Object { "Assets/YLFramework/Tests/EditMode/Editor/$_" } }
     # The optional Excel assembly has its own probe and is not a default test dependency.
-    $sources = @(Get-ChildItem -LiteralPath $folder -Recurse -Filter '*.cs' |
-        Where-Object { $_.FullName -notmatch '[/\\]Data[/\\]Excel[/\\]' } | ForEach-Object FullName)
-    if ($mode -eq 'EditMode') { $sources += Join-Path $root 'Assets/YLFramework/Tests/EditMode/SerializedDictionarySaveTests.cs' }
+    $sources = @(foreach ($relative in $folders) {
+        $folder = Join-Path $root $relative
+        if (Test-Path -LiteralPath $folder) { Get-ChildItem -LiteralPath $folder -Recurse -Filter '*.cs' | ForEach-Object FullName }
+    })
     if ($sources.Count -eq 0) { continue }
     $arguments = @('/nologo', '/nostdlib+', '/langversion:9.0', '/target:library',
         "/out:$output/YLFramework.Tests.$mode.dll", '/define:UNITY_EDITOR;UNITY_EDITOR_WIN;UNITY_INCLUDE_TESTS;UNITY_STANDALONE_WIN;UNITY_2022_3_OR_NEWER')

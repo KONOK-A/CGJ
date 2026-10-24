@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 using YLFramework.Events;
 using YLFramework.Foundation;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
+using YLFramework.Update;
 
-namespace YLFramework.BuffSystem
+namespace YLFramework.Buff
 {
     /// <summary>保留Single/Additive、时长与效果查询。宿主拥有Buff集合，退出显式CloseHost。</summary>
     public static class BuffManager

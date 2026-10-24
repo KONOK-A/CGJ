@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public enum ResourceError
     {

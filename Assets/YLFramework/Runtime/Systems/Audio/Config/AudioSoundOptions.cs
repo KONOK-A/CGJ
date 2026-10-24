@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>Mutable playback configuration with valid constructor defaults. Playback captures a value snapshot; Sound deduplication applies only to sounds.</summary>
     [Serializable]

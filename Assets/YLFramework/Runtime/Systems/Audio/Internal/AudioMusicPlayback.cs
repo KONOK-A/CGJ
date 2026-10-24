@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     // Two fixed leases and an epoch keep callback reentry from controlling a later transition.
     internal sealed class AudioMusicPlayback

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     // 帧窗口为闭区间：请求所在帧仍在有效窗口内时会拒播。
     // SoundFrames 模式按每个 Clip 自己的记录帧计算；GlobalFrames 模式共用一个窗口起点，

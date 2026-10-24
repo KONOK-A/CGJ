@@ -4,12 +4,13 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Skill;
 
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Editor.Skill
 {
 
     [CustomEditor(typeof(SkillConfigData), true)]

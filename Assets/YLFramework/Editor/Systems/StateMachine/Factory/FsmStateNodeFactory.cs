@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
-    public class FsmStateNodeFactory
+    internal class FsmStateNodeFactory
     {
         public static FsmStateNodeData CreateStateNode(RuntimeFsmController controller, string name, Rect rect, bool defaultState, bool isSubStateMachine = false, List<string> parent = null, bool isBuildInState = false, string buildInStateName = "")
         {

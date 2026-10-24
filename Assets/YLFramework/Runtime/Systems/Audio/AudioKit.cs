@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>统一 AudioClip 播放内核。直接传 Clip 只借用；显式命名入口通过窄 Provider 持有资源。不创建 AudioListener。</summary>
     /// <remarks>Playback callbacks receive the actual clip and original lease. Start callbacks may run before Play returns.
@@ -31,7 +31,7 @@ namespace YLFramework.Services.Audio
         private static bool _isShuttingDown;
         private static bool _isQuitting;
         internal static bool IsClosing => _isShuttingDown || _isQuitting ||
-            Application.isPlaying && !YLFramework.Core.Singleton.SingletonSessionState.CanRunExecution;
+            Application.isPlaying && !YLFramework.Singletons.SingletonSessionState.CanRunExecution;
         internal static AudioKitSettings CurrentSettings => _settings;
         internal static SoundDeduplicator Channels
         {

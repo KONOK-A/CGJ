@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using YLFramework.Events;
 
-namespace YLFramework.Editor
+namespace YLFramework.Editor.Foundation
 {
     /// <summary>以 Unity 原生序列化展示事件中心，保持派生字段、多选、Undo 与 Prefab 语义。</summary>
     [CustomEditor(typeof(EventListener), true)]

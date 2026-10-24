@@ -10,8 +10,9 @@ using System.Threading;
 using UnityEngine;
 using YLFramework.Core;
 using YLFramework.Foundation;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using Module = YLFramework.Core.Module;
+using YLFramework.Async;
 
 namespace YLFramework.Integrations.HybridCLR
 {

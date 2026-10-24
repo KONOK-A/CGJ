@@ -22,7 +22,7 @@ namespace YLFramework.Analyzers.Tests
         internal static readonly MetadataReference[] Platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
             .Split(Path.PathSeparator).Select(p => MetadataReference.CreateFromFile(p)).ToArray();
         internal static readonly string Root = FindRoot();
-        internal const string PoolSource = "namespace YLFramework.Core.Pool { public class ObjectPool<T> { private T[] storage; public ObjectPool(System.Func<T> factory) {} public T Allocate()=>default; } }";
+        internal const string PoolSource = "namespace YLFramework.Pooling { public class ObjectPool<T> { private T[] storage; public ObjectPool(System.Func<T> factory) {} public T Allocate()=>default; } }";
         internal static readonly MetadataReference Core = CreateCore();
 
         private static string FindRoot()
@@ -71,7 +71,7 @@ namespace YLFramework.Core {
  }
  [RoslynAnalyzers.DisableNew(""Use New"")][RoslynAnalyzers.MethodLocalOnly(""Lease reason"")]
  public class LoadViewArgs {
-   private static readonly Pool.ObjectPool<LoadViewArgs> _pool = new Pool.ObjectPool<LoadViewArgs>(()=>new LoadViewArgs());
+   private static readonly Pooling.ObjectPool<LoadViewArgs> _pool = new Pooling.ObjectPool<LoadViewArgs>(()=>new LoadViewArgs());
    public static LoadViewArgs New()=>_pool.Allocate();
  }
   public class LoadViewRequest<T> { private LoadViewArgs _args; }

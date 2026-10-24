@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
 using static UnityEditor.Progress;
+using YLFramework.Editor.Utilities;
+using YLFramework.Mission;
 
-namespace YLFramework.MissionSystem
+namespace YLFramework.Editor.Mission
 {
     public class ConfigsWindow : SplitWindow
     {

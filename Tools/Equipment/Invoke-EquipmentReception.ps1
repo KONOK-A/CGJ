@@ -53,9 +53,12 @@ if ($owner.purpose -ne 'Equipment-independent-delivery' -or $owner.root -ne $Roo
 if ($Action -eq 'Audit') {
     Add-Type -AssemblyName System.Formats.Tar
     $exporter = [IO.File]::ReadAllText((Join-Path $Repository 'Assets/YLFramework/Editor/Distribution/ExportUnityPackage.cs'))
-    $block = [regex]::Match($exporter,'(?s)ExportRoots\s*=\s*\{(.*?)\};').Groups[1].Value
+    $block = [regex]::Match($exporter,'(?s)\b_exportRoots\s*=\s*\{(.*?)\};').Groups[1].Value
     $roots = @([regex]::Matches($block,'"(Assets/[^"\r\n]+)"') | ForEach-Object { $_.Groups[1].Value })
-    if ($roots.Count -ne 7) { throw 'Expected the unchanged seven formal export roots.' }
+    $expectedRoots = @('Assets/YLFramework/Editor', 'Assets/YLFramework/Plugins/BouncyCastle', 'Assets/YLFramework/Prefabs',
+        'Assets/YLFramework/Runtime', 'Assets/YLFramework/Samples', 'Assets/YLFramework/Documentation',
+        'Assets/YLFramework/LICENSE.md', 'Assets/YLFramework/CodingStyle.md', 'Assets/YLFramework/AGENTS.md')
+    if ($roots.Count -ne $expectedRoots.Count -or @(Compare-Object -ReferenceObject $expectedRoots -DifferenceObject $roots -CaseSensitive).Count) { throw 'Expected the exact six directories and three files from the formal exporter.' }
     $expected = @{}
     foreach ($sourceRoot in $roots) {
         $absolute = Join-Path $Repository $sourceRoot; $expected[$sourceRoot] = Hash ($absolute + '.meta')

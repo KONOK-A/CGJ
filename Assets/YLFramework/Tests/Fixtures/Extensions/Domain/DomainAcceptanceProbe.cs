@@ -5,13 +5,13 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
-using YLFramework.BuffSystem;
+using YLFramework.Buff;
 using YLFramework.Logging;
-using YLFramework.MissionSystem;
-using YLFramework.ReddotSystem;
-using YLFramework.Services.Resource;
-using YLFramework.SkillSystem;
-using ResourceLocation = YLFramework.Services.Resource.ResourceLocation;
+using YLFramework.Mission;
+using YLFramework.RedDots;
+using YLFramework.Resource;
+using YLFramework.Skill;
+using ResourceLocation = YLFramework.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.DomainAcceptance
 {

@@ -1,9 +1,10 @@
 using UnityEditor;
 using UnityEditor.ProjectWindowCallback;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.Editor.Utilities;
+using YLFramework.StateMachine;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     public class RuntimeFsmControllerCreator : EndNameEditAction
     {

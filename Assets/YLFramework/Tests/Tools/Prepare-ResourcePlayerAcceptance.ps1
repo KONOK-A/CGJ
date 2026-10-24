@@ -87,7 +87,7 @@ if (-not $Sync) {
             Json (Join-Path $root 'public-config.json') @{ Endpoint='https://localhost:18443/'; Certificate=[Convert]::ToBase64String($certificate.RawData); SigningKey=@{ Modulus=[Convert]::ToBase64String($public.Modulus); Exponent=[Convert]::ToBase64String($public.Exponent) } }
         } finally { $certificate.Dispose() }
     } finally { $rsa.Dispose() }
-    $protected = @('Assets/Games','Assets/Scenes','Assets/StreamingAssets','Packages','ProjectSettings','.gitignore','.kilo/kilo.jsonc','AGENTS.md','.kilo/plans/1791960935353-ui-panel-redesign.md','Assets/YLFramework/Tests/Core/Acceptance','Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017')
+    $protected = @('Assets/Games','Assets/Scenes','Assets/StreamingAssets','Packages','ProjectSettings','.gitignore','.kilo/kilo.jsonc','AGENTS.md','.kilo/plans/1791960935353-ui-panel-redesign.md','Assets/YLFramework/Tests/Acceptance/Core','Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017')
     $rows = @(foreach ($relative in $protected) {
         $path = Join-Path $repo $relative
         if (-not (Test-Path -LiteralPath $path)) { continue }

@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
     // Fix 编码
 

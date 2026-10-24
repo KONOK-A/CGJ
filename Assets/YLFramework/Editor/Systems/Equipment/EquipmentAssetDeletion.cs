@@ -3,8 +3,9 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     // Unity 的对象 Undo 不包含独立文件删除；用同组内存记录保留文件及 meta 原始身份。
     [InitializeOnLoad]

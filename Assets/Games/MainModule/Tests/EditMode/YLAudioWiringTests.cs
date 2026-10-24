@@ -2,7 +2,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
-using YLFramework.Services.Audio;
+using YLFramework.Audio;
 
 public class YLAudioWiringTests
 {
@@ -81,6 +81,12 @@ public class YLAudioWiringTests
                     if (target is AudioEmitter)
                     {
                         Assert.AreEqual("Play", onClick.GetPersistentMethodName(i), entry.Path + " -> " + button.name);
+                        using (var serialized = new UnityEditor.SerializedObject(button))
+                        {
+                            var call = serialized.FindProperty("m_OnClick.m_PersistentCalls.m_Calls").GetArrayElementAtIndex(i);
+                            Assert.AreEqual("YLFramework.Audio.AudioEmitter, YLFramework.Runtime",
+                                call.FindPropertyRelative("m_TargetAssemblyTypeName").stringValue, entry.Path + " -> " + button.name);
+                        }
                         clickTargets++;
                     }
                 }

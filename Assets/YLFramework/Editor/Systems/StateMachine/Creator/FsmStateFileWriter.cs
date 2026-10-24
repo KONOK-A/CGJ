@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     internal static class FsmStateFileWriter
     {

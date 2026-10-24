@@ -5,12 +5,12 @@ using System.Globalization;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
-namespace YLFramework.Services.Http
+namespace YLFramework.Http
 {
     /// <summary>主线程轻量 HTTP 入口；每笔请求独占传输，不管理认证、重试或共享资源生产者。</summary>
     public class HttpManager

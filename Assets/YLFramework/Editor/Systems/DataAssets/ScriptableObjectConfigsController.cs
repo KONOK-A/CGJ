@@ -6,8 +6,9 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
+using YLFramework.DataAssets;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     public enum DataAssetSort
     {

@@ -7,7 +7,7 @@ using System.Threading;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>显式绑定的本地 v1 发布快照。完整验证只读目录，不选择版本、不写索引、不加载 native Bundle。</summary>
     public sealed class ResourceLocalSnapshot

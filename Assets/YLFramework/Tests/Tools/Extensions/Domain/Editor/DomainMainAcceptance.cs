@@ -776,8 +776,11 @@ namespace YLFramework.Tests.DomainMain
                 string[] modules = { "Reddot", "Logging", "Skill", "Buff", "Mission" };
                 var files = Directory.GetFiles("Assets/YLFramework", "*.cs", SearchOption.AllDirectories).Select(p => p.Replace('\\', '/'))
                     .Where(p => modules.Any(m => p.StartsWith("Assets/YLFramework/Runtime/Systems/" + m + "/", StringComparison.Ordinal) ||
-                        p.StartsWith("Assets/YLFramework/Editor/Systems/" + m + "/", StringComparison.Ordinal)) ||
-                        p.Contains("/Tests/EditMode/Extensions/Domain/") || p.Contains("/Tests/PlayMode/Extensions/Domain/") ||
+                        p.StartsWith("Assets/YLFramework/Editor/Systems/" + m + "/", StringComparison.Ordinal) ||
+                        p.Contains("/Tests/EditMode/Systems/" + m + "/") || p.Contains("/Tests/PlayMode/Systems/" + m + "/")) ||
+                        p.StartsWith("Assets/YLFramework/Editor/Systems/Shared/", StringComparison.Ordinal) ||
+                        p == "Assets/YLFramework/Editor/Utilities/Assets/DomainAssetOwnership.cs" ||
+                        p.Contains("/Tests/EditMode/Editor/Domain/") || p.Contains("/Tests/PlayMode/Systems/Domain/") ||
                         p.Contains("/Tests/Tools/Extensions/Domain/") || (excel && p.Contains("/Integrations/DomainExcel/"))).ToArray();
                 var rows = files.Select(p => new
                 {
@@ -788,9 +791,10 @@ namespace YLFramework.Tests.DomainMain
                 }).ToArray();
                 foreach (var row in rows)
                 {
-                    string expected = row.path.Contains("/Runtime/Systems/") ? "YLFramework.Runtime" : row.path.Contains("/Editor/Systems/") ? "YLFramework.Editor" :
+                    string expected = row.path.StartsWith("Assets/YLFramework/Runtime/", StringComparison.Ordinal) ? "YLFramework.Runtime" :
+                        row.path.StartsWith("Assets/YLFramework/Editor/", StringComparison.Ordinal) ? "YLFramework.Editor" :
                         row.path.Contains("/Tests/EditMode/") ? "YLFramework.Tests.EditMode" : row.path.Contains("/Tests/PlayMode/") ? "YLFramework.Tests.PlayMode" :
-                        row.path.Contains("/Integrations/DomainExcel/Tests/") ? "YLFramework.Domain.Excel.Tests" :
+                        row.path.Contains("/Tests/Integrations/DomainExcel/EditMode/") ? "YLFramework.Domain.Excel.Tests" :
                         row.path.Contains("/Integrations/DomainExcel/Editor/") ? "YLFramework.Domain.Excel.Editor" : "Assembly-CSharp-Editor";
                     Require(row.assembly == expected, row.path + " -> " + row.assembly + ", expected " + expected);
                 }
@@ -925,9 +929,9 @@ namespace YLFramework.Tests.DomainMain
                 {
                     string asset = AssetDatabase.GUIDToAssetPath(guid);
                     var root = AssetDatabase.LoadMainAssetAtPath(asset);
-                    string folder = root is YLFramework.SkillSystem.SkillsConfig ? "Assets/YLFrameworkData/Skill/Skills/" + guid :
-                        root is YLFramework.BuffSystem.BuffsConfig ? "Assets/YLFrameworkData/Buff/Buffs/" + guid :
-                        root is YLFramework.MissionSystem.MissionsConfig ? "Assets/YLFrameworkData/Mission/" + guid : null;
+                    string folder = root is YLFramework.Skill.SkillsConfig ? "Assets/YLFrameworkData/Skill/Skills/" + guid :
+                        root is YLFramework.Buff.BuffsConfig ? "Assets/YLFrameworkData/Buff/Buffs/" + guid :
+                        root is YLFramework.Mission.MissionsConfig ? "Assets/YLFrameworkData/Mission/" + guid : null;
                     if (folder == null)
                     {
                         continue;

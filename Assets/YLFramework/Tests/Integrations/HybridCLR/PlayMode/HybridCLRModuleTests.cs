@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using YLFramework.Core;
 using YLFramework.Integrations.HybridCLR;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using Module = YLFramework.Core.Module;
 
 namespace YLFramework.Tests.Integrations.HybridCLR
@@ -186,7 +186,7 @@ namespace YLFramework.Tests.Integrations.HybridCLR
             var load = _fixture.Loader.LoadAsync(HybridCLRLoaderTests.Address);
             Assert.That(load.IsDone, Is.False, "必须经过真实 pending Resource 加载，不能只验证同步完成。");
             _ownedRequest = _fixture.Loader.StartModuleAsync(HybridCLRLoaderTests.Address, Entry, typeof(HybridCLRWaitingModule).FullName);
-            YLFramework.Foundation.CustomAsyncOperation<HybridCLRModuleRequest> observed = _ownedRequest;
+            YLFramework.Async.CustomAsyncOperation<HybridCLRModuleRequest> observed = _ownedRequest;
             var samples = new List<float>();
             var codeStage = _ownedRequest.Stage;
             var sawCodeProgress = false;

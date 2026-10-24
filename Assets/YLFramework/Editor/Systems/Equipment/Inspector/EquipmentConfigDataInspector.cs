@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     [CustomEditor(typeof(EquipmentConfigData), true)]
     public sealed class EquipmentConfigDataInspector : UnityEditor.Editor

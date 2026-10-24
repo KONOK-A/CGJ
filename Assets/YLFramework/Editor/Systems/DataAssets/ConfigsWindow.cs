@@ -1,9 +1,10 @@
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.DataAssets;
+using YLFramework.Editor.Utilities;
 
-namespace YLFramework.DataAssets.Editor
+namespace YLFramework.Editor.DataAssets
 {
     public sealed class ConfigsWindow : SplitWindow
     {

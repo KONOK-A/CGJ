@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>Resources 为共享 borrowed 来源。释放逻辑记录不表示 native memory 已卸载。</summary>
     internal sealed class UnityResourcesSource : IResourceSource

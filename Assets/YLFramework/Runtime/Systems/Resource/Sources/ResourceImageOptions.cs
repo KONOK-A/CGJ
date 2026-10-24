@@ -1,6 +1,6 @@
 using System;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>图片的有界输入与闲置策略。缓存预算是无 mip RGBA 像素估算，不是 Profiler native memory。</summary>
     public sealed class ResourceImageOptions

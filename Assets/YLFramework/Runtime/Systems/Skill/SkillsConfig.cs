@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using YLFramework.Foundation;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Skill
 {
     /// <summary>
     /// 技能配表

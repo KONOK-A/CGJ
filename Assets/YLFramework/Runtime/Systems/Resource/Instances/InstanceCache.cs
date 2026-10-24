@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using YLFramework.Core.Pool;
+using YLFramework.Pooling;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     public enum InstanceCachePolicy
     {

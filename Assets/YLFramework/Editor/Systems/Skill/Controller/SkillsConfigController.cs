@@ -6,11 +6,12 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
-using YLFramework.Core.Editor;
 using YLFramework.Foundation;
-using YLFramework.Foundation.Attributes;
+using YLFramework.Attributes;
+using YLFramework.Editor.Utilities;
+using YLFramework.Skill;
 
-namespace YLFramework.SkillSystem
+namespace YLFramework.Editor.Skill
 {
 
     public class SkillsConfigController

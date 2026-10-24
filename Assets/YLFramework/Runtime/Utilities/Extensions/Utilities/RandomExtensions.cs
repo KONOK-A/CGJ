@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-namespace YLFramework.Utilities.Extensions
+namespace YLFramework.Extensions
 {
 
     public static class RandomExtensions

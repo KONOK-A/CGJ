@@ -4,8 +4,10 @@ using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Domain;
 using YLFramework.Editor.Resource;
+using YLFramework.Editor.Utilities;
+using YLFramework.Equipment;
 
-namespace YLFramework.EquipmentSystem
+namespace YLFramework.Editor.Equipment
 {
     internal static class EquipmentAuthoring
     {

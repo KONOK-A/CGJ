@@ -8,8 +8,8 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using YLFramework.DataAssets;
 using YLFramework.Localization;
-using YLFramework.Services.Resource;
-using YLFramework.Services.Save;
+using YLFramework.Resource;
+using YLFramework.Save;
 
 namespace YLFramework.Tests.DataBatch
 {

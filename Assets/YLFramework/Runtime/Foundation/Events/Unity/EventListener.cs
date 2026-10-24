@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 using YLFramework.Foundation;
 
 namespace YLFramework.Events

@@ -10,7 +10,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.U2D;
 using YLFramework.Core;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 // 仅由独立Player验收载体编译。消费正式API，不复制加载器或事务实现。
 public sealed class ResourcePlayerAcceptance : MonoBehaviour
@@ -536,7 +536,7 @@ public sealed class ResourcePlayerAcceptance : MonoBehaviour
                 terminal.Assets.Count == 0 && terminal.Bundles.Count == 0 && terminal.InstanceCaches.Count == 0 && terminal.Scenes.Count == 0,
                 "Terminal shutdown must drain real leases, graphs, scenes and native work.");
         }
-        var cng = typeof(ResourceSystem).Assembly.GetType("YLFramework.Services.Resource.CngSegmentAead", true);
+        var cng = typeof(ResourceSystem).Assembly.GetType("YLFramework.Resource.CngSegmentAead", true);
         var counters = new JObject();
         foreach (var name in new[] { "ActiveAlgorithms", "ActiveKeys", "ActiveKeyObjectBytes", "ReleaseFailures", "RetainedReleaseOwners" })
         {

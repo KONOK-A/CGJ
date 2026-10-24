@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Services.Audio
+namespace YLFramework.Audio
 {
     /// <summary>命名请求阶段；Accepted 不保证启播，Started 表示 Source.Play 已提交而非可听见。</summary>
     public enum AudioPlayState

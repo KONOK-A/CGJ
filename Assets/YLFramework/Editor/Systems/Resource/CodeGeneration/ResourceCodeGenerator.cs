@@ -9,7 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.CSharp;
 using UnityEditor;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {

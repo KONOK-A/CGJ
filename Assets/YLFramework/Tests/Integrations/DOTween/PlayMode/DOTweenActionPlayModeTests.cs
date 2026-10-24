@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Actions;
 using Object = UnityEngine.Object;
+using YLFramework.Integrations.DOTween;
 
 namespace YLFramework.Tests.Actions.DOTween
 {

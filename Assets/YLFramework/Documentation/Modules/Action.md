@@ -23,9 +23,9 @@ ActionKit 是 Unity 动作编排模块：把回调、等待、条件、插值等
 | [`Editor/Systems/Action/`](../../Editor/Systems/Action/) | 资源创建工具与 Help 提供方 | `YLFramework.Editor` |
 | [`Integrations/DOTween/Runtime/`](../../Integrations/DOTween/Runtime/) | 可选 `Tween` 适配 | `YLFramework.Actions.DOTween` |
 
-Runtime 引用既有 ZipTool 与 `UnityEngine.UI`；普通 Editor 引用 Runtime、Help、UI。二者不静态引用 DOTween wrapper 或供应商 DLL。Runtime / 普通 Editor / ZipTool 的 `autoReferenced` 为 true，Help / optional / tests 为 false；完整程序集契约见 [架构总览](../Architecture.md)。
+Runtime 内复用 ZipTool 与 `UnityEngine.UI`；普通 Editor 引用 Runtime、UI，Help 是同一 Editor 主体内的功能分区。二者不静态引用 DOTween wrapper 或供应商 DLL。Runtime / Editor 主体的 `autoReferenced` 为 true，ZipTool / Help 不再是独立产品 DLL；optional/tests 保留各自约束。完整程序集契约见 [架构总览](../Architecture.md)。
 
-DOTween wrapper 显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应商 DLL 位于包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`。可选源码另行引入其依赖，不复制 Core / Vendor；默认导出不包含该扩展或 DLL。
+DOTween wrapper 使用 `YLFramework.Integrations.DOTween`，消费者按需添加 `using YLFramework.Integrations.DOTween;`，程序集名仍为 `YLFramework.Actions.DOTween`。它显式引用 Runtime + `DOTween.dll`，要求 `DOTWEEN`；供应商 DLL 位于包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`。可选源码另行引入其依赖，不复制 Core / Vendor；默认导出不包含该扩展或 DLL。
 
 ## Core Concepts
 
@@ -113,7 +113,7 @@ private void OnDisable() => mBackground.Cancel();
 ## 生命周期与资源
 
 - `Initialize()` 幂等懒初始化；`Start` 或全局宿主访问会自动调用。`Shutdown()` 取消模块管理的动作、释放全局宿主与事件；Session reset 处理关闭 Domain Reload 的残留。
-- 全局 `OnUpdate` / `OnFixedUpdate` / `OnLateUpdate` 的自动通知复用 `YLFramework.Foundation.UpdateManager`。每个初始化成功且启用的全局宿主持有三个精确订阅，组件 disabled 或对象 inactive 时断开，恢复后重新连接；借用 inactive 宿主不会被自动激活。连接轮次与执行会话检查拒绝退订后仍留在公共快照中的旧回调。
+- 全局 `OnUpdate` / `OnFixedUpdate` / `OnLateUpdate` 的自动通知复用 `YLFramework.Update.UpdateManager`。每个初始化成功且启用的全局宿主持有三个精确订阅，组件 disabled 或对象 inactive 时断开，恢复后重新连接；借用 inactive 宿主不会被自动激活。连接轮次与执行会话检查拒绝退订后仍留在公共快照中的旧回调。
 - 七个属性继续返回模块自有 `EasyEvent` / `EasyEvent<bool>`；手动 Trigger、UnregisterAll、Dispose 及内部 fail-fast 语义保持。Action 监听抛异常会停止该消息的后续监听，公共源仍继续其他公共消费者并报告异常；清理 Action 消息或 Shutdown 不清理公共源的其他订阅。
 - 初始化补丁中取得宿主不会提前连接，成功提交后刷新已有宿主；初始化失败期间不自动广播。本次不扩展为完整的补丁事务回滚。Shutdown/重建终结旧 owned 消息代次，旧 token 不进入新宿主。
 - GUI/Focus/Pause/Quit 与 Action 协程仍由全局宿主处理；Quit 通知前设置共享会话退出屏障，监听中 Shutdown 后无法重建宿主或启动 Foundation 协程。需要注销的事件或句柄应提前保存，不在退出后重新访问创建式属性。
@@ -125,10 +125,10 @@ private void OnDisable() => mBackground.Cancel();
 
 ## 测试与帮助
 
-- [`Tests/EditMode/Action/`](../../Tests/EditMode/Action/)：执行与回收、命名/重入/租约、生命周期、组合动作、屏幕资源、Help / API；Observable 测试同属普通 EditMode。事件与注销契约由 [`EventsContractTests.cs`](../../Tests/EditMode/EventsContractTests.cs) 覆盖。
-- [`Tests/PlayMode/Action/`](../../Tests/PlayMode/Action/)：三种执行范围、真实帧延迟、宿主/场景销毁、全局消息、屏幕过渡与内建 Observable；事件生命周期触发器由 [`EventsLifecyclePlayModeTests.cs`](../../Tests/PlayMode/EventsLifecyclePlayModeTests.cs) 覆盖。
+- [`Tests/EditMode/Systems/Action/`](../../Tests/EditMode/Systems/Action/)：执行与回收、命名/重入/租约、生命周期、组合动作、屏幕资源与 Observable；Help/API 行为归 [`Tests/EditMode/Editor/Help/`](../../Tests/EditMode/Editor/Help/)。事件与注销契约由 [`EventsContractTests.cs`](../../Tests/EditMode/Foundation/Events/EventsContractTests.cs) 覆盖。
+- [`Tests/PlayMode/Systems/Action/`](../../Tests/PlayMode/Systems/Action/)：三种执行范围、真实帧延迟、宿主/场景销毁、全局消息、屏幕过渡与内建 Observable；事件生命周期触发器由 [`EventsLifecyclePlayModeTests.cs`](../../Tests/PlayMode/Foundation/Events/EventsLifecyclePlayModeTests.cs) 覆盖。
 - [`Tests/Integrations/DOTween/`](../../Tests/Integrations/DOTween/)：两个独立测试程序集，要求 `DOTWEEN` + `UNITY_INCLUDE_TESTS`。
-- [`ApiHelpTests.cs`](../../Tests/EditMode/Action/ApiHelpTests.cs) 保留可信引擎 / BCL 引用筛选回归；全量示例与 core-only 真实 AssemblyBuilder fixture 分别验证，后者不链接 optional wrapper 或供应商 DLL，不代表干净工程导入。
+- [`ApiHelpTests.cs`](../../Tests/EditMode/Editor/Help/ApiHelpTests.cs) 保留可信引擎 / BCL 引用筛选回归；全量示例与 core-only 真实 AssemblyBuilder fixture 分别验证，后者不链接 optional wrapper 或供应商 DLL，不代表干净工程导入。
 - 提供方 namespace `YLFramework.Editor.Actions`，稳定注册 id `actionkit`；factory 惰性构建只读内容，API 文档不会执行 demo。公共菜单 `YLFramework/帮助`。
 - API 筛选所属 namespace 的精确或点分边界，包含内建 Observable 及可用 DOTween 类型，不展示整个共享 Runtime。只有 DOTween 指南保留可选程序集门控。
 - XML 来自唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 的 `Library/YLFramework.Runtime.xml`；optional 使用 `Library/YLFramework.Actions.DOTween.xml`，按真实 Assembly 去重。XML 是构建产物，不默认导出。

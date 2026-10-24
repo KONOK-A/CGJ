@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using YLFramework.Core.Editor;
+using YLFramework.StateMachine;
 
 #if UNITY_6000_2_OR_NEWER
 using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
@@ -11,7 +11,7 @@ using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
 using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 #endif
 
-namespace YLFramework.StateMachine
+namespace YLFramework.Editor.StateMachine
 {
     public class FsmStateTreeViewItem : TreeViewItem
     {

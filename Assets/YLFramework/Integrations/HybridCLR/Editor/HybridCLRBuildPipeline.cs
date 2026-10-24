@@ -15,7 +15,7 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.Compilation;
 using UnityEngine;
 using YLFramework.Editor.Resource;
-using YLFramework.Services.Resource;
+using YLFramework.Resource;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 using Settings = HybridCLR.Settings.HybridCLRSettings;
 using SettingsUtil = HybridCLR.SettingsUtil;

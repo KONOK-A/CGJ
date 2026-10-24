@@ -3,20 +3,34 @@
 param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021')
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
-$rootPath = [IO.Path]::GetFullPath($Root)
-$owner = [IO.File]::ReadAllText((Join-Path $rootPath 'owner.json')) | ConvertFrom-Json
-if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Wrong receiver owner.' }
+$scope = . (Join-Path $PSScriptRoot 'Get-HybridCLRReceptionScope.ps1') -Root $Root
+$rootPath = $scope.Root
+Assert-NoLinks $PSCommandPath
 foreach ($name in @('base-no-package-import','optional-no-package-import')) {
-    $receipt = [IO.File]::ReadAllText((Join-Path $rootPath ($name + '.receipt.json'))) | ConvertFrom-Json
+    $receiptPath = Join-Path $rootPath ($name + '.receipt.json')
+    Assert-NoLinks $receiptPath
+    $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json
     if (-not $receipt.passed -or $receipt.testsPresent) { throw 'Product-only import must succeed before acceptance consumer installation.' }
 }
-$project = [IO.Path]::GetFullPath($owner.project)
+$project = $scope.Project
 if ($project -ne (Join-Path $rootPath 'R')) { throw 'Receiver path mismatch.' }
 $destination = Join-Path $project 'Assets/HCLRReceptionHarness'
+Assert-NoLinks $destination
 if ([IO.Path]::Exists($destination)) { throw 'Never overwrite an existing acceptance consumer.' }
+$template = Join-Path $PSScriptRoot 'HybridCLRReceptionBootstrap.cs.txt'
+Assert-NoLinks $template
+$bootstrap = [IO.File]::ReadAllText($template)
+$marker = '"__YL_HYBRIDCLR_SOURCE_REPOSITORY__"'
+if ([regex]::Matches($bootstrap, [regex]::Escape($marker)).Count -ne 1) { throw 'Expected one unbound SourceRepository literal in the receiver template.' }
+$bootstrap = $bootstrap.Replace($marker, (ConvertTo-Json -InputObject $scope.Repository -Compress))
+foreach ($name in @('HybridCLRReceptionRunner.cs.txt','HybridCLRProjectSubsetProbe.cs.txt')) { Assert-NoLinks (Join-Path $PSScriptRoot $name) }
 [IO.Directory]::CreateDirectory((Join-Path $destination 'Editor')) | Out-Null
 [IO.Directory]::CreateDirectory((Join-Path $destination 'Runtime')) | Out-Null
-[IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionBootstrap.cs.txt'), (Join-Path $destination 'Editor/HybridCLRReceptionBootstrap.cs'))
+foreach ($relative in @('Editor/HybridCLRReceptionBootstrap.cs','Runtime/HybridCLRReceptionRunner.cs','Runtime/HybridCLRProjectSubsetProbe.cs','Runtime/YLFramework.Tests.PlayMode.asmdef','Editor/YLFramework.HybridCLR.Receiver.Editor.asmdef')) {
+    Assert-NoLinks (Join-Path $destination $relative)
+}
+$bootstrapPath = Join-Path $destination 'Editor/HybridCLRReceptionBootstrap.cs'
+[IO.File]::WriteAllText($bootstrapPath, $bootstrap, [Text.UTF8Encoding]::new($false))
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRReceptionRunner.cs.txt'), (Join-Path $destination 'Runtime/HybridCLRReceptionRunner.cs'))
 [IO.File]::Copy((Join-Path $PSScriptRoot 'HybridCLRProjectSubsetProbe.cs.txt'), (Join-Path $destination 'Runtime/HybridCLRProjectSubsetProbe.cs'))
 $runtime = @{ name='YLFramework.Tests.PlayMode'; references=@('YLFramework.Runtime','YLFramework.HybridCLR','YLFramework.HybridCLR.Sample.Host'); overrideReferences=$true; precompiledReferences=@('Newtonsoft.Json.dll'); autoReferenced=$false; noEngineReferences=$false }

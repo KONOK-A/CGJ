@@ -1,5 +1,5 @@
 using System;
-using YLFramework.Core.Singleton;
+using YLFramework.Singletons;
 
 namespace YLFramework.Events
 {

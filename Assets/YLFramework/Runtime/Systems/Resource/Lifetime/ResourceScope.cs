@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace YLFramework.Services.Resource
+namespace YLFramework.Resource
 {
     /// <summary>只聚合自己接管的请求与租约，不建立缓存或第二份资源加载权威。</summary>
     public sealed class ResourceScope : IDisposable

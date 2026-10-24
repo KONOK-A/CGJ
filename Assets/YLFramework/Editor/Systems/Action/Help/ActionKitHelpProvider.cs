@@ -25,9 +25,10 @@ namespace YLFramework.Editor.Actions
             var assemblies = ActionKitApiHelpContent.ApiAssemblies().ToArray();
             var types = assemblies.SelectMany(assembly => assembly.GetExportedTypes())
                 .Where(type => type.Namespace == "YLFramework.Actions" ||
-                    (type.Namespace != null && type.Namespace.StartsWith("YLFramework.Actions.", StringComparison.Ordinal)))
+                    (type.Namespace != null && (type.Namespace.StartsWith("YLFramework.Actions.", StringComparison.Ordinal) ||
+                        type.Namespace == "YLFramework.Integrations.DOTween")))
                 .Where(type => type.Assembly == typeof(ActionKit).Assembly ||
-                    type.FullName == "YLFramework.Actions.DOTweenAction" || type.FullName == "YLFramework.Actions.ActionKitDOTweenExtension")
+                    type.FullName == "YLFramework.Integrations.DOTween.DOTweenAction" || type.FullName == "YLFramework.Integrations.DOTween.ActionKitDOTweenExtension")
                 .OrderBy(ActionKitApiHelpReference.TypeGroup, StringComparer.Ordinal)
                 .ThenBy(ActionKitApiHelpContent.FormatType, StringComparer.Ordinal).ToArray();
             return new HelpModule
