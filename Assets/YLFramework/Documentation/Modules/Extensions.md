@@ -1,4 +1,4 @@
-# Extensions（扩展方法）
+# 扩展工具（Extensions）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
@@ -24,6 +24,19 @@
 - System：字符串解析与清洗、路径/目录/文件操作、集合遍历与字典合并、托管引用判空、反射与 Attribute 查询。
 - 数学：随机取项、角度/弧度换算、三角函数、方向与距离换算。
 
+## 用法
+
+```csharp
+using UnityEngine;
+using YLFramework.Extensions;
+
+LayerMask mask = 0;
+mask.Set(0, true); // 使用层号，不要求额外的层名配置。
+int count = "12".ToInt(defaultValue: 0);
+```
+
+Unity 对象操作仍遵循原生主线程与生命周期规则；扩展方法不自动接入 Module，也不为调用方管理返回的对象或贴图。
+
 ## 关键约定
 
 ### Unity fake-null
@@ -34,14 +47,14 @@
 - `ObjectExtension.IsDestroy` 对 null / 已销毁 Unity 对象返回 true；对存活 GameObject / Component 返回 false，与托管引用判空不合并。
 - `ObjectExtension.InstantiateWithParent(Component parent, ...)` 把已销毁的 parent 视为 null（挂到场景根）；`Transform` 重载本身接受 null。
 
-### Culture
+### 区域格式
 
 - 本模块没有 `ToLower / ToUpper` 等标识符大小写转换 API，不存在区域敏感的大小写归一问题。
 - `ToInt / ToLong / ToFloat / ToDateTime` 使用当前 Culture 解析，失败返回默认值；机器数据调用方需自行固定 Culture。
 - `HtmlColorExtensions.HtmlStringToColor` 基于 `ColorUtility`，与 Culture 无关。
 - `StringTools.FormatByte(long)` 保持当前 Culture 的人类显示、1024 进制及 b/kb/mb/gb/tb 后缀；TB 以上继续以 tb 显示，最大 long 不返回空文本。小于 1024 的历史有符号 b 显示不变，不作为机器解析格式。
 
-### IO
+### 文件与路径
 
 - 路径拼接、文件名、扩展名、目录名都委托 `System.IO.Path`，兼容 Windows 与 Unix 分隔符。
 - `CreateDirIfNotExists` 幂等；`DeleteDirIfExists` 不存在时为空操作；`EmptyDirIfExists` 会清空已有目录，目录不存在时会直接创建。
@@ -72,14 +85,13 @@
 ### Collections / Camera
 
 - `IEnumerable.ForEach` 先物化快照，数组输入直接复用原数组；字典 `ForEach` 是实时枚举，遵循字典自身的迭代修改限制和异常，不为统一语义添加快照分配。反向 List 与带索引遍历保持各自用途。
-- `CaptureCamera` 同步借用相机，恢复原 `targetTexture` 与 `RenderTexture.active` 并销毁自身临时 RenderTexture；返回 Texture2D 由调用方销毁。rect 须落在当前屏幕像素范围，本批不改变其既有前提与资源责任。
+- `CaptureCamera` 同步借用相机，恢复原 `targetTexture` 与 `RenderTexture.active` 并销毁自身临时 RenderTexture；返回 Texture2D 由调用方销毁。rect 须落在当前屏幕像素范围。
 
 ## 主要消费者
 
 - Resource：`InstantiateWithParent`、`GetOrAddComponent`。
 - Foundation 的 Events / Singleton / Pool 不再因便利写法依赖本扩展；原 GetOrAdd / Destroy API 及行为保留，供上层和通用客户端选择使用。
-- 当前 Core/UI 未发现原列举的 `IsNotNullAndEmpty`、`Parent`、`Show/Hide`、`Destroy*` 消费，不以没有仓库调用为由删除这些通用 API。
-- Editor（Resource 工具）：已核实消费 `GetFolderPath`；目录创建/删除、类名清洗和字符串替换等通用入口保留，不冒称当前Resource工具全部使用。
+- Editor（Resource 工具）：使用 `GetFolderPath` 等路径便利入口。目录创建/删除、类名清洗和字符串替换仍为通用工具，不要求特定领域消费者。
 
 ## 已知限制
 
@@ -95,13 +107,10 @@
 - 共用 LayerMask 的真实包装、Unity null 与 Events Trigger 3D/2D 回调过滤回归：`Tests/EditMode/Core/NeutralLayerMaskConsumerTests.cs`。该测试直接调用真实过滤消费者，不代表物理引擎自动分发门禁。
 - `Tests/EditMode/Utilities/Extensions/ToolsExtensionsContractTests.cs` 与同目录 `ParabolicMotionContractTests.cs`：非法层、单位阈值、Ray 直线/半轴、Quaternion 等价表示、开放 Type、失效 Component、唯一 Object 存活入口、单对象 / 递归设层，以及抛物线可达/退化拒绝。
 - `Tests/PlayMode/Utilities/Extensions/ParabolicMotionNativeTests.cs`：只模拟自有局部 3D/2D PhysicsScene，验证速度赋值、退化输入不改速度和无重力运动，区分连续解与原生离散积分误差。
-- 原文所列 `Tests/EditMode/Extension*.cs` 当前不存在，不作为已执行覆盖的证据；无关扩展的覆盖口径留阶段 5 后续收口。
 - `Tests/PlayMode/Utilities/Extensions/ExtensionLifecyclePlayModeTests.cs`：Destroy 延迟时序与 fake-null 行为。
-- 消费者代表性回归：正式 `ResourceSystemTests`、`ResourceBundleRuntimeTests` 的实例/销毁用例，以及 `UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。旧 `ResourcePoolTests` 已随旧栈退出，历史提及但不在仓库的 `GameObjectLoaderPlayModeTests` 也不作为已执行证据。
+- 消费者回归入口包括 `ResourceSystemTests`、`ResourceBundleRuntimeTests` 的实例/销毁用例，以及 `UnityEventListenerContractTests`、`SingletonHostPlayModeTests`。
 - 完整Foundation/Core源码边界守卫见 `FoundationBoundaryTests` 与 `CoreArchitectureBoundaryTests`；不施加“所有Utilities不得依赖Core/Systems”的额外规则，取色工具消费Core是合法正例。源码闭包通过不代替本模块各项运行时行为验证。
 
-## 当前状态
+## 历史记录
 
-- 首轮：目录按 Unity / System / Math / Utilities 分组，补齐简洁中文 XML 文档，修复 null / 越界 / 异常路径 / 重复实现等边界问题。
-- 第二轮稳定性复核：以边界测试锁定 fake-null/Destroy 时序、InstantiateWithParent（inactive/Component 与 Transform 一致性）、CurrentCulture 解析、Split（含并行）、Collections 退化输入、Reflection 搜索范围、Camera 异常状态恢复、LayerMask 极端值、Math/Vector 特殊值、IO 路径误用；修复 `Dictionary.AddRange` 自合并覆盖时的枚举失效问题。public API 未变化。
-- 阶段 5.3 修复的几何 / 掩码 / 格式化算法在 5.4 原样迁移；5.4 收敛正式归属与 Object / GameObject 入口，成熟 FSM / Grid / Json / Table / ZipTool 定位和内部实现不变。历史稳定性说明不代替本轮逐项验证记录。
+上列测试是源码仓库中的回归入口，不表示当前环境已执行，也不覆盖全部扩展。历史迁移、算法修正及验收范围见 [集成记录](../IntegrationPlan.md)。

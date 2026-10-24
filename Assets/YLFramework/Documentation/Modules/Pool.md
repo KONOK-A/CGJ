@@ -1,6 +1,8 @@
-# Pool（对象池）
+# 对象池（Pool）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
+
+本页导航：[主要类型](#主要类型) · [基本用法](#使用) · [回收约束](#生命周期与回收约束) · [容量与会话](#容量与会话) · [领域边界](#领域边界) · [GameObject 实例池](#gameobject-实例池) · [兼容边界](#兼容边界)
 
 ## 作用
 
@@ -16,7 +18,7 @@
 | Safe、IOfPool/IPoolType、非公开/动态创建工具、自有 GO 池 | [`Runtime/Foundation/Pool/`](../../Runtime/Foundation/Pool/) | `YLFramework.Runtime` |
 | LoadViewArgs 私有参数池、Core 临时集合消费者 | [`Runtime/Core/MVC/Views/Parameters/`](../../Runtime/Core/MVC/Views/Parameters/)、[`Runtime/Core/`](../../Runtime/Core/) | `YLFramework.Runtime` |
 
-公开 namespace 为 `YLFramework.Pooling`；旧 `YLFramework.Core.Pool` 不保留转发类型，调用方须更新引用。Foundation/Core 共用 Runtime 主体，但池中立源码闭包不消费上层领域或 XF/XFAB；主体已解除 XFAB，仍保留 UGUI/Json.NET，不能宣传整个 DLL 零依赖。会话状态不作为公共 API，friend 仅保留既有实际 Editor/测试/可选集成消费。
+公开 namespace 为 `YLFramework.Pooling`；旧 `YLFramework.Core.Pool` 不保留转发类型，调用方须更新引用。Foundation/Core 共用 Runtime 主体，但池中立源码不消费上层领域或 XF/XFAB；Runtime 仍保留 UGUI/Json.NET，不能视作整个 DLL 零依赖。会话状态不是公共 API。
 
 ## 主要类型
 
@@ -29,6 +31,8 @@
 | `IObjectFactory<T>` / Default / Custom | 纯创建策略，分别为接口、`new()` 和委托；与 reset 分离 |
 | `NonPublicObjectFactory<T>` / `MultiObjectFactory` | 保留非公开无参构造信息缓存、动态 Type/泛型带参创建和创建后初始化；不维护缓存、不自动重置成员 |
 | `GameObjectPool` / `GameObjectPoolData` | string key + FIFO 实例缓存、稳定归属、转换期保护、预热/容量、场景回迁与永久销毁；Data 共用 Safe 内核，GO 生命周期独立 |
+
+源码入口：[`ObjectPool.cs`](../../Runtime/Foundation/Pool/Object/ObjectPool.cs)、[`SafeObjectPool.cs`](../../Runtime/Foundation/Pool/Object/SafeObjectPool.cs)、[`GameObjectPool.cs`](../../Runtime/Foundation/Pool/GameObject/GameObjectPool.cs) 与 [`GameObjectPoolData.cs`](../../Runtime/Foundation/Pool/GameObject/GameObjectPoolData.cs)。
 
 ## 使用
 
@@ -84,11 +88,11 @@ finally
 - Events、Binding、FSM、Resource 经 Safe 复用；Binding readonly 内部事件仅清监听，不独立归池。Audio 私有池永久丢弃负责销毁 Source。
 - LoadViewArgs 仅通过 Core 专用入口接管/归还，保留线程、Claim、读取窗口及终态即时清值。Module/Model 不恢复默认隐式池化；普通事件、MappedProperty、普通计时 run 不因接口名而自动池化；计时存储的显式复用由 ReusableTimer 负责。
 - 自有 GO 池保持 `MonoSingletonPath("YLFramework/Pool/GameObjectPool")`，`Allocate(key,parent)` 空池返回 null，需要显式预热或接纳已有实例，不自动加载/创建 Prefab。
-- 自有 GO 池、正式 Resource 的 InstanceLease/实例缓存与原 XFAB 的所有权不同。Core命名资源已接入正式Resource，原游戏继续走XFAB原链；旧YL GameObjectLoader退出，Foundation池本身不接管Prefab/Bundle租约或物理卸载。
+- 自有 GO 池、正式 Resource 的 InstanceLease/实例缓存与原 XFAB 的所有权不同。Core 命名资源使用正式 Resource，原游戏仍走 XFAB 原链；Foundation 池不接管 Prefab/Bundle 租约、异步取消或物理卸载。通过资源系统创建的实例须归还其原 owner，不能改交普通池释放。
 
 ## GameObject 实例池
 
-仅在 Unity 主线程、运行期使用。普通入口保持 `InitOneGoData`、`Allocate`、`Recycle`、`Clear/ClearAll`；新增 `GetCachedCount(key)`，查询不会建桶。宿主根进入 DDOL，缓存归还后停用并挂在失活的桶根下；取得时先设置最终父节点，再激活。`parent == null` 时对象移到当前 active scene，显式 parent 则跟随该 parent 的场景，inactive parent 下仅设置 `activeSelf=true`。
+仅在 Unity 主线程、运行期使用。入口为 `InitOneGoData`、`Allocate`、`Recycle`、`Clear/ClearAll`；`GetCachedCount(key)` 查询不会建桶。宿主根进入 DDOL，缓存归还后停用并挂在失活的桶根下；取得时先设置最终父节点，再激活。`parent == null` 时对象移到当前 active scene，显式 parent 则跟随该 parent 的场景，inactive parent 下仅设置 `activeSelf=true`。
 
 ```csharp
 var pool = GameObjectPool.Instance;
@@ -110,12 +114,14 @@ pool.Clear("Projectile");
 - `Clear/ClearAll` 先摘桶再销毁空闲实例及桶根，不主动销毁借出实例；同 key 重建有新生命周期，旧借出对象晚归还到原宿主/key时只销毁，不能进入新桶。内部退休先于停用/Destroy，拒绝同帧待销毁对象重入。宿主销毁和新 Play 会话关闭旧桶；Data 归还原 Safe owner，不静态转接到新池。
 - GO 的 bool 同样仅表示是否缓存，满池/旧桶晚归还的 false 已消费引用。原始旧别名不区分租用代次，归还后禁止保留引用；失活缓存实例和根不得由外部激活、改层级或挂载其他对象。调用方外部 `Destroy` 的同帧排队状态无法被通用池预知，fake-null 后会剔除。
 - Unity 的 OnEnable/OnDisable 等消息异常由引擎记录，通常不从 SetActive 传播；池维持自己的状态但不承诺自动修复组件业务状态。直接向池传播的 API 异常会隔离/销毁当前实例；批量清理尽力处理后聚合错误。
-- `GameObjectPoolData.RootTransform` 变为只读属性，`PoolQueue` 变为只读队列快照，`Count` 为热路径计数，`MaxCapacity` 变为校验/缩容属性。直接外部 Queue 操作或字段反射需要迁移，不再允许破坏缓存状态。独立 Data 用 `Init/OnRecycle` 管理根；从 Safe 类型单例借出的 Data 可 `RecycleToCache` 归还原池，私有 Safe 使用者显式归还自己的 owner。
-- 数组三参数重载改为显式参数，另提供 `InitOneGoData(key, gameObjects)`；修复原来 `InitOneGoData(key, capacity)` 的可选参数歧义，既有显式三参数签名保留。
+- `GameObjectPoolData.RootTransform` 只读，`PoolQueue` 只返回队列快照，`Count` 为热路径计数，`MaxCapacity` 负责校验/缩容。不得直接操作内部 Queue 或用字段反射破坏状态。独立 Data 用 `Init/OnRecycle` 管理根；从 Safe 类型单例借出的 Data 可 `RecycleToCache` 归还原池，私有 Safe 使用者显式归还自己的 owner。
+- 数组入口为显式三参数 `InitOneGoData(key, capacity, gameObjects)` 或两参数 `InitOneGoData(key, gameObjects)`；容量/Prefab 入口使用前述命名参数，避免误选重载。
 
-只共享 Data 的普通缓存和既有会话支撑，不强行用 `ObjectPool<GameObject>` 接纳外部实例或处理 fake-null。GameObject 根和实例的所有权不等于 Prefab/Bundle 租约；正式Resource已通过InstanceLease/实例缓存接入并独占资产pin、异步取消和物理卸载责任，Foundation仍不取得这些领域职责。XFAB 的稳定原桶映射与先摘后毁思想被吸收，没有复制其 hash 身份、全表取闲、混合时钟 TTL 或资产释放代码。
+GO 池仅共享 Data 的普通缓存和会话支撑，不用 `ObjectPool<GameObject>` 接纳外部实例或处理 fake-null。GameObject 根和实例的所有权不等于 Prefab/Bundle 租约；正式 Resource 的 InstanceLease/实例缓存独占资产 pin、取消和卸载责任，不能由 Foundation 池代替。
 
-## 历史 API 迁移
+<a id="历史-api-迁移"></a>
+
+## 兼容边界
 
 `ClassObjectPool`、`IndependentObjectPool<T>`、`Pool<T>`、`SimpleObjectPool<T>` 已退出；Core `ClassObjectPoolManager/IReuseable`、集合 `StaticStackPool` 也不再保留。没有隐藏第二套算法或永久兼容壳。
 
@@ -127,12 +133,12 @@ pool.Clear("Projectile");
 | 反射自动写字段/属性 | 退出，不等价复刻；由类型/领域显式 reset，保留构造默认值与必要资源责任 |
 | IOfPool 类型入口 | Safe 保留接口回调、单例、工厂/容量/预热及扩展钩子，直接组合内核 |
 
-历史 2.1 专题明确改变旧基类/类型身份、外部 new 接纳和异常后重试行为，当时保留的工具/Safe namespace 不变结论仅适用于该批。当前公开域已统一为 `YLFramework.Pooling`，脚本 GUID 与 Runtime 程序集保留；这不证明仓库外源码、DLL 或二进制存档兼容，使用方须按真实身份迁移。反射创建只是显式能力，不恢复自动成员 reset。
+当前公开域统一为 `YLFramework.Pooling`；脚本 GUID 与 Runtime 程序集保留，不代表旧基类身份、仓库外源码/DLL 或二进制存档自动兼容。外部 new 接纳与异常后重试也不能照搬：普通池只收自己的借出对象，取得/reset 失败后永久隔离。反射创建只是显式能力，不恢复自动成员 reset。
 
-## 当前状态
+<a id="当前状态"></a>
 
-**2.1-A～E 已全部完成并通过用户验收，2.1 Pool 为 COMPLETE（A～D 已 Git 收口，E 的 Git 收口提交由用户后续执行）；阶段 2 保持 IN PROGRESS，2.2 Events 已 COMPLETE（技术验收完成，待用户 Git 收口），下一专题 2.3 Update 未启动。**正式设计与各批实际结果见 [Pool 专项](../../../../.kilo/plans/xf-yl-2.1-pool.md)。
+## 验证与历史
 
-当前测试入口为 `Tests/EditMode/Foundation/ObjectPoolTests.cs`、`FoundationBoundaryTests.cs`，以及 `Tests/EditMode/Foundation/Pool/` 下的 `PoolContractTests`、`CollectionPoolTests`；正式 `ResourceSystemTests`/`ResourceBundleRuntimeTests`、Action/Events/Binding/Audio 定向契约和 Core 消费者仍按各自职责归组。GO 专项为 `Tests/PlayMode/Foundation/Pool/GameObjectPoolPlayModeTests.cs`。路径与源码存在不等于本轮已执行通过；已退役的 `ResourcePoolTests` 和不存在的旧套件名称不作为覆盖依据。
+测试入口为 `Tests/EditMode/Foundation/ObjectPoolTests.cs`、`FoundationBoundaryTests.cs`、`Tests/EditMode/Foundation/Pool/` 下的 `PoolContractTests` / `CollectionPoolTests`；GO 专项为 `Tests/PlayMode/Foundation/Pool/GameObjectPoolPlayModeTests.cs`。Resource、Action、Events、Binding、Audio 与 Core 消费者的回归各归其领域；普通缓存不能自动解决这些模块的清理、取消或失效会话排空。
 
-领域限制不由普通缓存统一自动解决。旧Resource的ReleaseAllRes与嵌套加载器已退出，正式Scope清理错误聚合、消费者生命周期与失效会话排空由Resource门禁负责；Events、FSM、Action等仍按各自契约处理。主体XFAB解耦不等同最终独立载体验收，也不宣称已验证IL2CPP/全平台。
+历史集成和验证范围见 [融合记录](../IntegrationPlan.md)，详细方案为源码仓库 `.kilo/plans/xf-yl-2.1-pool.md`，不是导出包运行依赖。阶段进度不作为使用前提；IL2CPP、其他平台与性能结论需有各自的实际验证。

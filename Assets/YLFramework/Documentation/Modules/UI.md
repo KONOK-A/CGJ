@@ -1,8 +1,8 @@
-# UI（统一 Panel / View）
+# 窗口与视图（UI）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
-> UI 专题历史状态：已整合到 `integration/xf-yl`，完成约定的真实 Unity 编译、输入后端、资产迁移、场景退出及 Windows64 IL2CPP 验收。具体版本、稳定证据与未验证范围记录在仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`；不代表当前 namespace 迁移已通过新一轮验收，也不外推到其他 Unity/包版本、平台或自定义输入处理。
+本页导航：[打开与配置](#打开与配置) · [实例与请求](#实例与请求) · [生命周期与显示](#生命周期与显示) · [根与资产](#根与资产) · [输入边界](#输入边界) · [Tips 与控件](#资源tips-与控件) · [验证入口](#验证与迁移关口)
 
 ## 职责与依赖
 
@@ -10,8 +10,11 @@
 - 主体在 `Runtime/Core/UI/Windows`，根、输入、Tips、适配分别分组；namespace 为 `YLFramework.Core`，程序集为 `YLFramework.Runtime`。主体依赖 UGUI，不要求 XFABManager。
 - `PanelManager` 是同一个协调器的 partial，不是资源服务或第二套窗口 owner。不存在必须先注册的窗口目录、业务 key、另一套加载器或 UI 池。
 - 普通根 View 使用 `LoadView/LoadViewAsync`，已有实例使用 `AttachView`；根组件实际是 Panel 时必须使用 Panel 入口。普通 View 的 object[]、LoadViewArgs、Model 和生命周期契约不变。
+- Module/Panel/View、参数袋和显示操作均在 Unity 主线程使用。入口见 [`Module.Panels.cs`](../../Runtime/Core/Modules/Module.Panels.cs)，会话与显示契约见 [`Panel.cs`](../../Runtime/Core/UI/Windows/Panel.cs) 和 [`View.cs`](../../Runtime/Core/MVC/Views/View.cs)。
 
 ## 打开与配置
+
+下面的 `owner` 是已启动的 Module，`uiRoot` 已配置必需组件与层，`colorPrefab` 指向正式 `Prefabs/ColorSelector.prefab`；颜色和回调由业务提供。
 
 ```csharp
 using YLFramework.Core;
@@ -50,21 +53,23 @@ window.Close();
 | instanceMode / InstanceMode | Single | 同 Module、同实际根、同可证明来源的实例模式 |
 | cacheOnClose / CacheOnClose | true | 有效会话正常结束时是否允许既有后端缓存 |
 
-配置值类型统一为 `YLFramework.Core.PanelConfig`，避免与 UI Toolkit 的同名设置类混淆；不保留旧类型别名。`PanelConfig.Default` 才是框架默认值，结构体零值并不等价。Panel 的序列化字段仍名为 `settings`，七个成员及自然 bool 语义不变；更名不表示已取得 Prefab/Variant 导入迁移证据。`PanelOverrides` 的 nullable 字段用 null 表示未指定，显式 false/0 必须生效，不作 Inspector 序列化。
+配置值类型为 `YLFramework.Core.PanelConfig`，避免与 UI Toolkit 的同名设置类混淆；不保留旧类型别名。`PanelConfig.Default` 才是框架默认值，结构体零值并不等价。Panel 的序列化字段为 `settings`，成员见上表；保留字段不能替代 Prefab/Variant 的导入核验。`PanelOverrides` 的 nullable 字段用 null 表示未指定，显式 false/0 必须生效，不作 Inspector 序列化。
 
-`BindPanelRules` 先枚举、复制并完整校验，再原子替换；失败保留旧快照。null/空集合清空可选规则。在途请求不追随重绑，活跃会话不被静默修改。规则按完整地址或 Prefab 二选一；重复身份、白地址、销毁引用、非法值以及资源解析后证明的多规则冲突均失败，不任意挑选一条。同一资源可有多个业务地址，但不会建立跨会话的永久别名表。
+`BindPanelRules` 先枚举、复制并完整校验，再原子替换；失败保留旧快照。null/空集合清空可选规则。在途请求不追随重绑，活跃会话不被静默修改。规则按完整地址或 Prefab 二选一；重复身份、空白地址、销毁引用、非法值以及资源解析后证明的多规则冲突均失败，不任意挑选一条。同一资源可有多个业务地址，但不会建立跨会话的永久别名表。
 
 ## 实例与请求
 
 - Single 重开健康会话会借读新参数调用 `OnOpen`，有效提交后恢复显示并更新序号，不重新走 OnLoaded、Model 或事件注册。未指定的临时字段从 Prefab/规则重新合成，不继承上次临时覆盖。
 - Multiple 每次建立独立会话。活动或已确认的在途同源范围不能混用两种模式；原 Single 关闭后才可重新确定模式。
-- 每次 Async 都有独立 `LoadPanelRequest<T>`、参数、Abort 和终态，一对一进入 `Module.pendingViews`。接受成功先返回 Pending，缓存、直接来源或已有 Single 也不在接受栈内调用数据回调。
+- 每次 Async 都有独立 `LoadPanelRequest<T>`、参数、Abort 和终态，一对一进入内部 `Module.PendingViews`。接受成功先返回 Pending，缓存、直接来源或已有 Single 也不在接受栈内调用数据回调。
 - 解析到相同 Prefab 后，在提交前筛掉取消、错型和非法配置，Single 只用最高有效接受序号的意图打开一次。未知来源可以并行解析，不假设不同地址必然相同。
 - 同步调用不等待或接管已确认的异步 Single 首开；若健康实例已存在，可重开，但迟到的旧请求不倒灌旧数据。有效 Close 对关闭前接受的同源请求形成失效屏障。
 - Abort 只影响本消费者，在首个业务初始化回调前有效；进入提交或失败清理后不抢占既定终态。完成通知前归还参数、退出事务，并在每个通知前复核原 Session、Module 代次、根与资源责任。前一个观察者 Close 后复用同一 GameObject，不能使后续旧消费者获得新 Session 的成功结果。
 - `Panel` 非空只代表该次交付时的成功引用，不延长会话寿命；检查 `Status/Exception`，不能只看 `Progress == 1`。观察异常不阻止其他消费者收尾，原错误保留并附带清理错误。
 
-### 三个短场景
+<a id="三个短场景"></a>
+
+### 常见用例
 
 下面的 `owner` 已有效启动，`prefab` 是同一个存活 Panel Prefab 引用，`rootA/rootB` 是已配置的不同实际根；每次参数袋都独立创建。
 
@@ -100,7 +105,7 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 
 ## 生命周期与显示
 
-首开沿 View 同一个事务：归属/Model 绑定 → Panel 根/Canvas/顺序/门禁准备 → 旧 `OnLoaded(object[])` 与 `OnLoaded(LoadViewArgs)` → 设置 loaded → `OnOpen(LoadViewArgs)` → 恢复事件与 `OnViewEnabled` → 统一显示/输入协调 → 交付。
+首开沿 View 同一个事务：归属/Model 绑定 → Panel 根/Canvas/顺序/门禁准备 → `OnLoaded(object[])` 与 `OnLoaded(LoadViewArgs)` → 设置 loaded → `OnOpen(LoadViewArgs)` → 恢复事件与 `OnViewEnabled` → 统一显示/输入协调 → 交付。
 
 `LoadViewArgs` 由入口 Claim 并在终态归还，借读期间不能保存到字段、属性、委托或容器。普通 View 的参数钩子不变；Panel 的新数据逻辑写 protected `OnOpen`，已有实例经有效 `AttachView` 新会话也调用它。
 
@@ -122,22 +127,27 @@ live.Abort(); // 已终结：不改变结果，也不 Close 已交付的会话�
 
 Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 CanvasScaler 与 `AutomaticAdaptationCanvasScaler`，根不再保存另一份配置。层 0 也必须明确配置，没有 UIRootContext、缺层、外根映射、损坏的必需组件或遮罩都不能运行时补齐。已有 Panel 的 Attach 只认真实祖先根，不搬去默认根，也不加入资源 Single 合流范围。
 
-主工作区已显式迁移并保存以下资产，完成身份、配置默认、Variant 保存重载/实例化及真实排序/输入回归。其他尚未迁移的项目需要显式调用：
+### 资产准备与迁移
 
-1. `YLFramework.Editor.Core.UIPanelAssetMigration.ValidateAssets()`，菜单 `YLFramework/Core/UI Panel/核验资产迁移`。
-2. `MigrateAssets()`，菜单 `YLFramework/Core/UI Panel/执行资产迁移`。
-3. 基础根 `Runtime/Core/Resources/YLFramework/Core/Canvas.prefab` 补显式 Layer0，保留自身 CanvasScaler 配置。
-4. 完整 `Prefabs/YLFramework.prefab` 通过 Unity Prefab API 转换为引用基础根的实例，保留既有层、Camera、Tips、非 UI 内容与差异化缩放值，绑定宿主默认根。
-5. 通用 `Prefabs/UITips.prefab` 写 Layer0、Multiple、非 Modal、不覆盖、不参与 Top；创建 `Prefabs/UITipsOverlay.prefab` Variant，仅将 Layer 覆盖为 4，其余继承，并更新完整模板的 Presenter 引用。`ColorSelector.prefab` 显式写新默认配置；Unity 生成新 Variant meta。迁移检查旧 GUID/fileID，不手写嵌套 Prefab 关系或新 GUID。
-6. 仓库测试另执行 `UIPanelAssetMigration.MigrateTestFixtures()`，菜单 `迁移测试 Panel 夹具`，保存两个 Core 资源夹具 Panel 的七字段默认；该入口不成为正式导出包对 Tests 的依赖。
+从旧 UI 资产接入时，先显式调用 `YLFramework.Editor.Core.UIPanelAssetMigration.ValidateAssets()`（菜单 `YLFramework/Core/UI Panel/核验资产迁移`），审查结果后再调用 `MigrateAssets()`（同目录菜单 `执行资产迁移`）。迁移范围如下，路径相对 `Assets/YLFramework/`：
 
-入口先完整核验，再分阶段保存，可复跑但不是跨资产的原子事务。失败后先审查实际 diff 和报错；保存后的身份核验失败不等于成功，不能继续宣称验收。不会自动运行、保存用户场景、重写自定义 Tips 绑定或用 InitializeOnLoad 修复旧资产。新增 C# 和 Variant 的 meta 已由 Unity 正常导入生成。
+| 资产 | 准备内容 |
+|---|---|
+| `Runtime/Core/Resources/YLFramework/Core/Canvas.prefab` | 显式 Layer0，保留自身 CanvasScaler 配置 |
+| `Prefabs/YLFramework.prefab` | 用 Unity Prefab API 引用基础根，保留层、Camera、Tips、非 UI 内容和差异化缩放值，绑定宿主默认根 |
+| `Prefabs/UITips.prefab` | Layer0、Multiple、非 Modal、不覆盖、不参与 Top |
+| `Prefabs/UITipsOverlay.prefab` | UITips 的 Variant，仅覆盖 Layer4；完整模板的 Presenter 引用该 Variant |
+| `Prefabs/ColorSelector.prefab` | 显式保存 Panel 默认配置 |
 
-当前 Unity 的 Prefab 转换/保存会重新生成部分匹配对象的嵌套 local fileID；迁移工具在 Unity API 建立继承关系后，按原对象身份恢复明确的 stripped 记录及本地引用，再强制导入、重新核验全部原 ID。不会改带 GUID 的来源引用或生成伪造 GUID。预览生命周期可能采用适配组件的待初始化字段，工具同样保存并恢复原始序列化配置，避免把预览状态写回正式资产。
+入口先完整预检，再分阶段保存，可复跑但不是跨资产原子事务。失败后先审查 diff 和报错；身份核验失败不能视为成功。工具不自动运行、不保存用户场景、不覆盖自定义 Tips 绑定，也不用 InitializeOnLoad 修复旧资产。执行前须退出 Play/Prefab Stage 并等待编译、导入完成。
+
+迁移保留旧 GUID/fileID；Unity 建立 Prefab 继承关系后，工具恢复明确的 stripped 记录、本地引用及预览前的序列化配置，再强制导入核验。新 Variant 由 Unity 生成身份，不手写嵌套关系或伪造 GUID。仍需检查重载、实例化与实际输入，不能用文件身份核查替代运行验证。
+
+仅源码仓库的测试夹具另用 `UIPanelAssetMigration.MigrateTestFixtures()`（菜单 `YLFramework/Core/UI Panel/迁移测试 Panel 夹具`）保存两个 Core 资源夹具的七字段默认；正式导出包运行不依赖 Tests。
 
 ## 输入边界
 
-本节描述标准 UGUI 输入合同，已在实施计划列明的实际版本和关口回归，不能由字段或辅助编译外推兼容性。当前引擎一个 GameObject 只能有一个 CanvasGroup；不再尝试追加第二组，也不延迟销毁后同帧争用该组件槽。
+本节描述标准 UGUI 输入合同，不能由字段或辅助编译外推兼容性。一个 GameObject 只能有一个 CanvasGroup；框架不尝试追加第二组，也不延迟销毁后同帧争用该组件槽。
 
 标准 UGUI 有效阻挡与业务原始值相互独立：每个所属 Canvas 有框架 ICanvasRaycastFilter，每个所属 Selectable 使用独立自有门禁，始终按最近 Panel 划界。没有业务组时保留 self group，已有业务组时才使用自有祖先隔离节点。不会保存/恢复业务 `interactable/enabled/raycastTarget/blocksRaycasts`，同值写入也不会丢失。
 
@@ -153,7 +163,7 @@ Camera/RenderMode 直接配置原生 Canvas；分辨率和 match 使用原生 Ca
 
 设备移除或原模块结束时，即使模块已清空/回收 eventData，也需按固定原设备与会话收尾原控件，不能只删除记录。此路径不再改写池化事件镜像，后来的主手势不会被旧设备收尾；仅 eventData 被复用成其他活动手势时直接丢弃旧记录。指针移除停止按压/拖选，不强行结束仍能由键盘继续的文本编辑；因 Modal/隐藏需要失焦时，仍由独立的合法 Deselect/EndEdit 路径完成。
 
-Input System 适配集中在 InputSystemBridge，验证私有字段布局并对值类型逐层写回，保留物理 isPressed/framePressState/pressTime。布局或 IL2CPP 元数据不匹配是明确失败，不假成功；不预先堆 link.xml。当前约定的真实 Editor/Player 门已通过，版本或裁剪方式变化后仍需重验。
+Input System 适配集中在 InputSystemBridge，验证私有字段布局并对值类型逐层写回，保留物理 isPressed/framePressState/pressTime。布局或 IL2CPP 元数据不匹配是明确失败，不假成功；不预先堆 link.xml。引擎、包版本或裁剪方式变化后，必须重新验证真实 Editor/Player 行为。
 
 EventSystem 只借用已有有效外部系统；缺失时自建，Both 优先 Input System，Legacy-only 使用 Standalone，New-only 不静默退 Legacy；最后有效根退出释放自建对象。多系统/不可用模块有诊断，不改外部寿命。自定义 raw handler、业务 ActionMap、Physics/world-space 非 UI 输入仍由业务查询 Panel 状态或自行管理，不在标准 UGUI 取消承诺内。
 
@@ -165,9 +175,11 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 `UITipsPresenter.Show(owner, ...)` 保留 unscaled 时间、位置、淡入淡出、句柄和普通呈现池协议；每次借用仍通过 Module.AttachView，完成/取消/owner 结束沿 View 收尾。不再编码 Overlay 类型或占业务 key；通用 Tips 默认 Layer0、Multiple、非 Modal、不覆盖、不参与 Top，完整模板引用仅覆盖 Layer4 的 UITipsOverlay Variant，Graphics 不拦截射线。
 
-### ColorSelector
+<a id="colorselector"></a>
 
-四个取色类型位于 `Runtime/Utilities/UI/ColorSelector/`，统一 namespace 为 `YLFramework.UI`；Panel/View 主体仍为 `YLFramework.Core`，两者同属 `YLFramework.Runtime`。这是工具消费 Core 的明确依赖，不把 ColorSelector 塞回 Core，也不新增 UI DLL；旧 Core namespace 调用须更新并重编译，Prefab GUID 与序列化字段保留。
+### 取色控件（ColorSelector）
+
+四个取色类型位于 `Runtime/Utilities/UI/ColorSelector/`，namespace 为 `YLFramework.UI`；Panel/View 主体为 `YLFramework.Core`，两者同属 `YLFramework.Runtime`。取色工具消费 Core，不新增 UI DLL；旧 Core namespace 调用须更新并重编译，Prefab GUID 与序列化字段保留。
 
 正式 `Prefabs/ColorSelector.prefab` 的窗口通过 `owner.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(initial, changed), root)` 打开；`CurrentColor` 可读，重开替换值和回调，不重放旧通知。独立 `ColorSelector.BeginSession/EndSession`、SDR RGB、Alpha 保持、色环/三角网格和自有 UI 用法不变，无 Panel 时不强制创建 owner。当前实现为 YL 自有代码。
 
@@ -175,14 +187,21 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 ## 验证与迁移关口
 
-离线复跑：`pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`、`PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 Player/Editor 语法，不检查绑定。输出全部在当前 worktree `Temp/UI.Panel.Offline`，直接使用真实引用和产品源码。辅助编译不复现 Unity 导入、原生状态或精确包 API，不等于 Unity 编译、测试、Player 通过。
+以下是源码仓库的维护入口，Tests、Tools 和历史 Plan 不属于默认导出包的运行依赖：
 
-主工作区已通过 MCP 核对实际 Editor `2022.3.62f3c1`、UGUI `1.0.0`、Input System `1.14.2`、Test Framework `1.3.9`、URP/Core `14.0.12`，且 `Application.dataPath` 指向主工程。部分 manifest/lock 既有声明不同，未顺手修正或升级；原离线八份 General 排除仅属于模板 API 限制，真实 Unity 已编译完整 General 源码，没有沿用排除条件。唯一依赖维护变化是将原 XF LoggerSystem `1.0.1` 官方 Embed，修复禁 Domain Reload 的自身 handler 归还和 static writer/instance 生命周期；版本与原身份保留，lock 由 Unity 更新，不修改共享 PackageCache，也不增加 Core→XF 依赖。
+| 验证 | 入口与边界 |
+|---|---|
+| 离线源码检查 | `pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`；另有 `PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 语法，不检查绑定。输出在当前 worktree `Temp/UI.Panel.Offline`，不替代 Unity 导入、原生行为或 Player |
+| 资产迁移工具 | `Editor/Core/UIPanelAssetMigration.cs`，先预检再显式迁移，检查实际资产 diff、身份、重载和实例化 |
+| 真实场景与连续 Play | `Tests/Acceptance/Core/UIAcceptance.unity` 使用正式 Prefab；夹具在 `Tests/Fixtures/Core/`。每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；两轮之间不编译或重载 |
+| Windows64 IL2CPP | `YLFramework.Editor.UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收`；源码在 `Tests/EditMode/Editor/Core/UIPanelAcceptanceBuild.cs` |
 
-已完成的关口包括实际包/程序集版本、Unity 导入及资产迁移/meta/实例化、完整 Core EditMode/PlayMode、Both/Legacy-only/New-only 的真实编译宏与模块行为、Help/导出和三个分别执行的真实 Resource 租约集成、正常退出及连续 NoDomain 两轮、原游戏 Editor 共存、代表性 Profiler 测量和 Windows64 IL2CPP UIAcceptance。输入切换通过原生重启生效，最后恢复原 Both；Legacy-only 启动时若询问是否启用新后端，应选择 No，而不是将模式改回 Both。具体执行数和证据只在实施计划维护。
+构建入口生成 Development / Medium stripping 的 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，结束后恢复原后端与裁剪设置，不自动运行、不保存脏场景。图形运行需检查 READY、PLAYER_READY_FOR_QUIT、PLAYER_PASS/QUIT_PENDING_PASS、退出码及相关异常；`UI_PANEL_NATIVE_CAPTURE_GATE_REACHED` 只是中间标记。较小 Player 门不替代 Scrollbar/InputField/多指的完整 Editor 矩阵，也不证明原游戏或单后端 Player 全矩阵通过。
 
-`UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收` 准备正式 UIAcceptance 场景的 IL2CPP/Medium stripping 构建，输出 `Temp/UI.Panel.IL2CPP/UIAcceptance.exe`，恢复原设置且不自动运行。本轮已正式构建并图形运行，检查完整 READY、PLAYER_READY_FOR_QUIT、PLAYER_PASS/QUIT_PENDING_PASS、退出码及相关异常；`UI_PANEL_NATIVE_CAPTURE_GATE_REACHED` 只是中间标记。Scrollbar/InputField/多指的完整矩阵由真实 Editor 套件验证，不由较小 Player 门替代；本轮不声称原游戏或单后端 Player 全矩阵已通过。
+输入后端切换须经 Unity 原生重启生效并恢复原设置；Legacy-only 启动询问是否启用新后端时应选 No，避免改变待测模式。原生重启会清理工程 Temp，不能把临时输出目录视作稳定证据存储。
 
-Unity 原生重启会清理工程 Temp，不能依赖旧路径保留交付证据。本轮结果和完整 Player 已复制到实施计划列明的工程外稳定目录。构建的可选 MCP 空程序集警告与 Player 原生分配遥测均保留；未建立零原生泄漏或特定性能预算达标的结论。
+## 历史说明
 
-`Tests/Acceptance/Core/UIAcceptance.unity` 使用正式 Prefab。连续 Play 每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；不在两轮之间编译或重载。对应夹具位于 `Tests/Fixtures/Core/`，Editor 构建入口位于 `Tests/EditMode/Editor/Core/UIPanelAcceptanceBuild.cs`，程序集名称保留。上文 UI 专题结果不替代当前身份的新编译与 Player 验收；原 XF 游戏、Resource 8.10 实现与 Resource Workbench 不属于该 UI 专题，不使用旧 Apply。
+历史集成、资产迁移、输入后端、连续 Play 与 Windows64 IL2CPP 结果见 [融合记录](../IntegrationPlan.md)；详细版本、稳定证据与未验证范围位于源码仓库 `.kilo/plans/1791960935353-ui-panel-redesign.md`。当时实际加载的 Unity/包版本与 manifest 的部分声明不同，不能只据配置文件复用验收结论。
+
+历史结果只覆盖对应版本和输入矩阵，不外推到其他平台、自定义输入、零原生泄漏或性能预算。原游戏、Resource 实现与 Workbench 的验证各归其专题。

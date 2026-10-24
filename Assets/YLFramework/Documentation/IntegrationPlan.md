@@ -1,4 +1,30 @@
-# XFGameFramework × YLFramework 长期融合蓝图
+# 融合设计与验收历史
+
+> [文档首页](README.md) · [当前架构](Architecture.md)
+
+本文件是原长期蓝图与阶段记录的档案，不是当前安装指南、API 合同或任务授权。下方原文中的“当前”“本轮”“未启动”、程序集名称、导出根、固定本机路径和测试结果，均属于记录当时的版本；后文完成某阶段不会回写前文的历史失败或中间状态。
+
+当前使用方式以 [README](README.md)、[Architecture](Architecture.md) 和 [Modules](Modules/) 为准。YL 的正式资源/音频链由自身 ResourceSystem 承担，不再对外提供 XFAB 兼容入口；来源包在原游戏中继续存在，不构成 YL 的运行依赖。历史中的操作授权、默认分支和工作流也不覆盖当前用户要求与有效 AGENTS 约定。
+
+## 档案索引
+
+| 记录 | 内容 |
+|---|---|
+| [目标与边界](#1-目标与边界)、[融合范围](#2-融合范围主框架-18-项与长期系统)、[总体阶段](#3-总体阶段) | 原蓝图和当时的实施顺序，不是当前待办列表 |
+| [阶段 1](#6-阶段-1-启动与任务边界)、[核心验收](#7-14-核心集成与非干扰验收) | 源码承接、MVC / View、原游戏共存、旧资源阻断和恢复 |
+| [Update](#8-23-update-最终技术收口) | 更新机制与当时的重复 Play 验收 |
+| [独立交付](#9-干净工程导入与独立交付验收) | 冻结包、接收工程、Mono / IL2CPP、失败与复验、交付身份 |
+| [Equipment](#10-equipment-独立专项)、[CommonSystem](#11-commonsystem-补充专项)、[HybridCLR](#12-hybridclr-可选专项) | 后续专项的范围与原始门禁记录 |
+| [旧交付命令](#附录旧交付命令) | 从原首页移入的阶段 9 冻结制品操作示例 |
+
+详细专项位于源码仓库 `.kilo/plans/`，不会随默认框架包分发。因此下文指向该目录的链接是仓库内研究入口，不是使用产品文档的前提；导出包中缺少它们不应通过补入原 XF / MCP / 测试依赖解决。
+
+新版本验收必须关联实际源码、包 hash、依赖、输入与输出，不能仅沿用本页测试数量、旧 Player 或恢复旧运行的结果。旧包内文档是当时的导出快照，与此后源码仓库文档可以不同，不覆盖旧制品来消除差异。
+
+## 早期状态回执
+
+<details>
+<summary>展开早期阶段与结构整理的中间状态（历史原文）</summary>
 
 **阶段9当前状态（2026-10-19）：独立工程交付技术验收与用户验收完成，已获精确提交及普通Push授权。** 受测源码由 `integration/xf-yl` / `586eebedaf900d926d2e30301b20ed3129decb27` 加冻结交付修复组成，不能将旧HEAD冒充已含修复的基线。以下阶段8/9“未启动”文字保留为历史快照，本轮范围、证据与边界以本文§9为准；本次只收口阶段9及另行验收的拓展公共准备E0，不自动迁移13项系统、不创建Worktree，不改既有失败、限制或历史制品。
 
@@ -27,6 +53,10 @@
 **最终状态：用户授权修复后，§16/§16.9技术实施完成。** Canvas已按S0精确恢复并通过原资源4项；Core窗口显式注入原最近活跃Panel，混合门禁真实红绿、控件16/View-UI Play97通过；独立审查完成无P0-P2，仅发现的Help职责分组P3已补红绿并通过Provider7项。SDK123、Editor身份/双profile实际Analyzer见证11、最终导出1项通过，最终Editor/Player的13份代表rsp输入已核对。新Windows64/Mono开发Player进一步实际验证Model/Controller初始化/查询/恰一次退出解绑、View/UI混合门禁/复用、持久UnityEvent和真实退出，原生exit0，0errors/4warnings；产品Runtime DLL与前次已修复Player字节相等。全部自有工程夹具/状态键清理，保护资源/配置保持；随阶段 7 最终 Git 收口提交并推送。§17.11保留历史停止，不作为当前状态；最终证据、未验证平台和五类AQN/旧二进制/Bundle重编译限制见§17.12。阶段8/公开独立分发/人工游戏全流程仍不在本轮交付内。
 
 **2.5 状态：2.5-C 实施与验证完成，A/B 验收提交 `13cb2ce` / `045641b`；2.5 的验收与 Git 收口已随阶段 2 完成（里程碑 `milestone/2.5-serialized-dictionary`），阶段 3、4 亦已于后续完成。** 详见 [2.5 专项第 16 节](../../../.kilo/plans/xf-yl-2.5-serialized-dictionary.md)；其他专题的历史状态不由本批改写。
+
+</details>
+
+以下各编号章节继续保留原蓝图和回执，阅读时以章节所述版本为边界。
 
 ## 1. 目标与边界
 
@@ -368,3 +398,28 @@ Player 基线问题必须分类，不能笼统归为融合失败或视为通过�
 2026-10-22 用户明确授权本模块 Git 收口与普通 Push，仅纳入本专项产品、测试、工具、直接文档及官方依赖增量，保留无关工作区改动。精确范围和证据沿用边界见专项 Plan §8；源码收口不代表重新生成已冻结的旧交付包，修正后的可选包与旧交付状态见 §7。
 
 后续功能与 UI 增量已按用户授权补齐：项目入口/依赖闭包发布与全局原生登记分离、显式一跳共享基座、真实启动进度、区别于产物校验 Simulation 的 EditorFast，以及中文分区窗口和显式配置/资源预检。最终 review 修复配置预检与首次验收安装问题，EditMode 121/121；PlayMode 与 CoroutineStarter 40/40 沿用有效证据。新 Windows64 IL2CPP Development Player 已验证 A/B 首发共用同一基座、共享 Assembly 仅一份及实际 async 执行，B 发布和运行不改 Player/基座。技术边界见专项 Plan §9，最终 review/Git 收口见 §10；旧 Release/HTTPS/场景/Prefab 结论保留为历史，不冒充本轮全部重验。
+
+## 附录：旧交付命令
+
+以下从原首页移入，只描述第 9 节的冻结交付，不是当前源码的通用安装或重新验收命令。固定路径对应当时的本机档案，不保证其他机器存在；当前产品安装请返回 [首页](README.md#独立工程安装)。
+
+当时的源码入口为 `Assets/YLFramework/Tests/Tools/Invoke-Stage9Delivery.ps1`，交付根 `G:/Unity/Y9/Tools/` 保存冻结副本。工具属于源码 / 验收设施，不在产品包内，只能在产品本身首次编译证明之后安装，不能用来补齐产品依赖。
+
+原命令使用 PowerShell 7.6；`ReceiverD` 必须尚不存在，脚本拒绝覆盖工程、日志、Player 输出与运行目录：
+
+```powershell
+$entry = 'G:/Unity/Y9/Tools/Invoke-Stage9Delivery.ps1'
+$delivery = @{ DeliveryRoot = 'G:/Unity/Y9'; Receiver = 'ReceiverD'; Package = 'YLFramework-Stage9-Final.unitypackage' }
+& $entry @delivery -Operation Create
+& $entry @delivery -Operation Import
+# 正式包首次 Unity 编译成功后，才安装公开 API 消费者并生成本工程资源。
+& $entry @delivery -Operation InstallHarness
+& $entry @delivery -Operation Editor -Method Audit -Run independent
+& $entry @delivery -Operation Editor -Method Generate -Run independent
+& $entry @delivery -Operation Editor -Method BuildMono -Run independent
+& $entry @delivery -Operation Player -Backend Mono -BuildRun independent -Run independent -Command smoke -Store independent-first
+```
+
+已有运行的 `RecoverPlayer` 必须使用原 `Backend/BuildRun/Run/Command/Store/ExpectedVersion`，`RecoverImport` 同样绑定原包 SHA、参数、PID 和已有退出记录；不能换 Run、补 DLL、重新导入或重启后冒充同一次结果。旧 `Finalize` 与旧基座也不能用于证明当前结构已通过。
+
+若进程已生成报告却在 native 退出期停滞，先核对其专有 `.process.json`、PID / projectPath 与原始日志，只处理明确属于该次验收的进程。方法完成报告不等于 Editor 正常退出；Player 结果仍须独立进程 exit0 和退出后完整日志核验。

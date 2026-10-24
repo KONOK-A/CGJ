@@ -1,4 +1,4 @@
-# Grid（网格数据结构）
+# 网格容器（Grid）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
@@ -11,6 +11,21 @@
 - 运行时：[`Runtime/Utilities/Grid/`](../../Runtime/Utilities/Grid/)
 - namespace：`YLFramework.Grids`；程序集：`YLFramework.Runtime`。直接 `new` 容器，无需 Module、Manager、组件挂载或公共 Root。
 - 保留通用二维数据结构职责，不替代普通字典 / 列表，也不因存在 Foundation 容器而强制改为序列化容器、资源索引或网格服务。
+
+## 用法
+
+```csharp
+using YLFramework.Grids;
+
+var board = new NormalGrid<int>(8, 8);
+board[2, 3] = 7;
+bool inBounds = board.TryGet(2, 3, out var value);
+board.Resize(10, 8); // 保留原坐标上的交集数据。
+
+var sparse = new DynamicGrid<int>();
+sparse[-2, 3] = 0;
+bool exists = sparse.Contains(-2, 3); // true，写入 default 也占一个格子。
+```
 
 ## 坐标与越界约定
 
@@ -27,24 +42,22 @@
 - `Clear(cleanupItem = null)`：保留 `Width` / `Height`，对每个格子调用一次回调（回调可为 null）后写回 `default(T)`；回调抛异常会中断清空，但尺寸与网格后续可用性不受影响。
 - `Fill(value)` / `Fill(valueGetter)`：填充整个网格，遍历顺序为 x 外层、y 内层；`valueGetter` 为 null 抛 `ArgumentNullException`。
 - 查询：`Width`、`Height`、`Count`、`IsEmpty`、`IsInBounds(x, y)`、`TryGet(x, y, out value)`、`TrySet(x, y, value)`。
-- `ForEach(...)`：遍历顺序固定为 x 外层、y 内层递增（y 变化最快），属于稳定契约。
+- `ForEach(...)`：遍历顺序固定为 x 外层、y 内层递增（y 变化最快）；捕获进入时的数组和尺寸，回调内 `Resize` 不改变本次遍历范围。这不是值的深拷贝快照。
 
 ## DynamicGrid<T>
 
 - 只存储实际写入过的格子，不预分配、无边界概念；显式写入 `default(T)` 的格子仍视为已存在（计入 `Count`，`Contains` / `TryGet` 返回 `true`）。
 - `Count`、`IsEmpty`、`Contains(x, y)`、`TryGet(x, y, out value)`。
 - `Clear(cleanupItem = null)`：移除全部条目，对每个已存储项调用一次回调；回调抛异常时不会移除任何条目。
-- `ForEach(...)`：遍历顺序不承诺（取决于 `Dictionary` 枚举顺序），不要依赖顺序。
+- `ForEach(...)`：实时枚举内部字典，顺序不承诺；回调中不要增删坐标，修改限制与异常遵循底层 `Dictionary`。
 
 ## 依赖
 
 - `NormalGrid<T>`：System / UnityEngine（仅越界警告用到 `Debug.LogWarning`）；`DynamicGrid<T>`：仅 System。无框架内模块依赖。
 
-## 当前状态
-
-成熟实现保持不变。当前仓库没有文档旧列出的 `Tests/EditMode/GridTests.cs`，不作为可运行入口或本批验证证据。阶段 5.3.5 不修改 Grid 算法，不重跑融合前成熟模块的全面验证。
-
 ## 已知限制
 
 - `NormalGrid<T>` 不支持负坐标与稀疏存储；`DynamicGrid<T>` 无 `Width` / `Height` / `Resize`。
 - 两个类型只提供 `ForEach`，未实现 `IEnumerable`；不支持序列化。
+- 容器不自动释放格子中的对象。缩小尺寸会丢弃范围外的引用，需要释放资源时由调用方在变更前处理，或显式使用 `Clear(cleanupItem)`。
+- 非线程安全；`Fill` / `Clear` 的用户回调不提供事务回滚，也不应在其中修改网格结构。

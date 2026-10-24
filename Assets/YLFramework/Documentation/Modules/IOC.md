@@ -1,4 +1,4 @@
-# IOC（依赖注入容器）
+# 依赖注入（IOC）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
@@ -24,10 +24,34 @@
 
 公开 namespace 为 `YLFramework.DependencyInjection`，程序集仍为 `YLFramework.Runtime`；使用 `using YLFramework.DependencyInjection;`。原 `YLFramework.Core.IOC` 不保留转发类型，调用方更新 using、完整类型名及反射/生成绑定后重新编译。
 
+## 快速使用
+
+```csharp
+using YLFramework.DependencyInjection;
+
+public interface IMessageSink { }
+public sealed class MessageSink : IMessageSink { }
+
+public sealed class Presenter
+{
+    public IMessageSink Sink { get; }
+    public Presenter(IMessageSink sink) => Sink = sink;
+}
+
+// 以下调用放在业务方法中。
+var container = new IOCContainer();
+container.Register<IMessageSink, MessageSink>();
+var presenter = container.Resolve<Presenter>(); // 自动构造，并解析构造参数。
+container.Clear(); // 只清注册；不会销毁 presenter 或 Sink。
+```
+
+类型映射每次解析创建新对象；需要共享实例时使用 `RegisterInstance<IMessageSink>(instance)`，并由调用方负责其资源释放。
+
 ## 注册
 
 - `Register<TSource>()` / `Register<TSource, TTarget>()` / `Register(Type, Type, name)`：注册类型映射，要求目标可赋值给源类型。
 - `RegisterInstance(...)`：注册实例，可命名；`injectNow` 控制注册时是否立即成员注入；实例为 null 时视为显式注册空值（`IsRegistered` 为 true，解析结果为 null）。
+- `RegisterInstance` 先写入注册再注入；立即注入失败时，注册和此前成功写入的成员不会回滚。
 - `RegisterRelation<TFor, TBase, TConcrete>()`：注册关系映射。
 - **冲突语义统一为“后注册覆盖先注册”**：同一 `(类型, 名称)` 键下 mapping 覆盖 mapping、instance 覆盖 instance；instance 与 mapping 可共存，解析时 instance 优先。
 - 名称的 `null` 与 `""` 等价（无名注册）。
@@ -66,10 +90,7 @@
 - `Inject(object)`：注入带 `InjectAttribute` 的实例字段与属性；`null` 对象不执行任何操作；值类型对象（装箱副本无法回写）抛出异常；成员按顺序注入，某个成员失败时之前已注入的成员保持，异常向上传播（无事务回滚）；重复调用覆盖已有值。
 - `InjectAll()`：对全部已注册实例注入；开始时快照并按引用去重；装箱值类型实例跳过（无法回写成员）；注入过程中新注册的实例本轮不处理；注入回调中再次调用 `InjectAll()` 会被忽略（由外层快照完成本轮注入）；任一实例失败 fail-fast（不回滚已完成的注入）。
 - setter 自身抛出的异常会解包 `TargetInvocationException`，异常消息与 `InnerException` 保留原始异常类型、消息与成员上下文。
-- `MemberSearchModes`（构造时指定，默认 `OnlyPublic`）：
-  - `OnlyPublic`：公开实例字段与属性（含继承）；
-  - `OnlyNonPublic`：非公开（private / protected / internal，含基类私有）；
-  - `All`：两者。
+- `MemberSearchModes` 构造时指定，默认 `OnlyPublic`：只搜索公开实例字段与属性（含继承）。`OnlyNonPublic` 搜索非公开成员（private / protected / internal，含基类私有），`All` 搜索两者。
 - static / const / 方法 / 事件不参与扫描；被标记但不可注入的成员（readonly 字段、无 setter 属性、indexer）抛出 `IOCInjectionException` 并说明原因；private setter 属性可注入。
 - 被标记的成员视为必需依赖：未注册且无法自动构造时抛异常；显式注册的 null 依赖按 null 注入。
 
@@ -85,7 +106,7 @@
 - `RegisterRelation` / `ResolveRelation` 按 `(TFor, TBase)` 解析具体实现；关系只是薄的二级 key 映射，与普通类型映射互不影响。
 - 重复注册覆盖；关系缺失返回 null；具体实现走 `CreateInstance`（含注入与循环检测）；`ResolveRelation<TBase>` 的转换失败会包装为带上下文的异常。
 
-## Ownership 与 Clear
+## 所有权与清理
 
 - 容器只保存引用：`RegisterInstance` 的对象归调用方，`Resolve` 创建的 transient 由调用方持有，容器不追踪、不 Dispose。
 - `Clear()` 清空 mappings / instances / relations，不 Dispose 任何实例，不清静态反射缓存；清空后容器可继续注册与解析。
@@ -112,7 +133,7 @@
 - 不保证线程安全，仅按 Unity / 普通单线程业务使用。
 - 不支持 open generic、映射链、装饰器链、上下文绑定与复杂 Lifetime。
 - `ResolveAll` 某项创建失败会立即抛出，已产出的项不回滚。
-- init-only 属性未做特殊校验：当前 Unity 2023.2 环境不提供 `IsExternalInit`（工程无 polyfill 与使用），本轮不纳入注入策略；如后续引入，需明确其注入语义。
+- init-only 属性未做特殊校验，不应依赖容器保证其只在构造阶段被写入；引入这类属性时需自行约束注入方式。
 - 未注册 concrete class 自动构造不适用于 string / delegate / 值类型 / 数组；命名解析不会自动构造。
 - 非公开成员搜索包含基类私有字段，但不扫描 static / const 成员（标记了也会被忽略）。
 
@@ -127,9 +148,9 @@
 
 - 无框架内模块依赖（纯 C#，使用反射）。
 
-## 当前状态
+## 测试入口
 
-历史文档列举过 `Tests/EditMode/` 下的 IocTests、IocRegistrationTests、IocResolveTests 等套件；当前仓库未找到这些入口，不作为本轮可执行覆盖或通过证据。Foundation 的新身份与源码依赖边界入口为 `Tests/EditMode/Foundation/FoundationBoundaryTests.cs`，不等同于完整容器行为验证。
+`Tests/EditMode/Foundation/FoundationBoundaryTests.cs` 检查 Foundation 的身份与源码依赖边界，不等同于完整容器行为验证；不能据此承诺构造、注入与异常路径均已通过测试。
 
 ## 备注
 

@@ -1,10 +1,10 @@
-# Table（数据表）
+# 数据表与索引（Table）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
 ## 作用
 
-轻量通用数据表基础设施，为 Resource 等模块提供最简单的数据表能力：
+轻量通用数据表与多值索引基础设施：
 
 - `Table<TDataItem>`：数据表抽象基类，统一 `Add` / `Remove` / `Clear` / `Dispose` / 枚举入口，具体存储与索引由子类钩子维护；
 - `TableIndex<TKeyType, TDataItem>`：按键查询的索引，同一键支持多个数据项。
@@ -18,6 +18,20 @@
 - namespace：`YLFramework.Tables`；程序集：`YLFramework.Runtime`。
 - 按需 `new` 子类或 `TableIndex`，由调用方负责 `Clear` / `Dispose`；无需 Module、Manager、组件挂载或公共 Root。
 
+## 用法
+
+```csharp
+using System.Linq;
+using YLFramework.Tables;
+
+using var index = new TableIndex<int, string>(text => text.Length);
+index.Add("cat");
+index.Add("dog");
+var snapshot = index.Get(3).ToArray(); // 需要保留结果时复制，不保存内部列表。
+index.Remove("cat");
+index.Clear(); // 清空并归还列表，index 本身仍可继续使用。
+```
+
 ## Table&lt;TDataItem&gt;
 
 | 成员 | 语义 |
@@ -26,15 +40,15 @@
 | `Remove(item)` | 转发到 `OnRemove`；不存在的项如何处理由子类决定 |
 | `Clear()` | 转发到 `OnClear`；只清数据，实例可以继续使用 |
 | `Dispose()` | 转发到 `OnDispose`；基类不跟踪释放状态，每次调用都会触发钩子（不做幂等保护），子类钩子应自行幂等 |
-| `Update()` | 保留的 no-op 扩展占位（历史空实现），无调用方，仅为 public API 兼容保留，调用无副作用 |
+| `Update()` | 空实现，无刷新行为，也不自动重建索引 |
 | `Count` | 默认按枚举计数（O(n)），virtual，子类可用自有存储覆写 |
 | `GetEnumerator()` | 枚举入口，枚举内容由子类存储决定 |
 
-Ownership：
+所有权：
 
-- `Table` 只维护子类自身的数据结构（存储 / 索引），**从不释放 `TDataItem`**；数据项生命周期归创建者。
+- `Table` 基类没有自有存储，**不自动释放 `TDataItem`**；默认由创建者管理数据项。子类若在钩子中接管资源清理，应单独声明其所有权约定。
 - `Clear` = 清空、可复用；`Dispose` = 由子类决定销毁语义，且可重复触发。
-- Dispose 后是否还能继续使用由子类决定（例如 `TableIndex` 释放后所有操作抛 `ObjectDisposedException`，`ResTable` 释放后查询同样抛 `ObjectDisposedException`）。
+- Dispose 后是否还能继续使用由子类决定。独立的 `TableIndex` 在释放后拒绝继续操作；它不是 `Table` 的派生类。
 - 回调异常：`OnAdd`/`OnRemove`/`OnClear`/`OnDispose` 抛出的异常原样传播给调用方；基类不捕获、不回滚，异常前已产生的子类副作用保留，写入顺序由子类负责。
 
 ## TableIndex&lt;TKeyType, TDataItem&gt;
@@ -67,15 +81,12 @@ Ownership：
 - 旧 `ResTable`、`AssetDataTable` 与 `ResData` 随旧资源栈退役。正式 `ResourceSystem` 使用自己的 Catalog 与资源图，不依赖 Table 维持第二张资源索引。
 - Table 仍作为独立的通用多值索引保留；是否由当前资源系统消费不是其通用能力去留的依据。
 
-## Update() 最终处理
-
-保留 no-op，不删除（避免 public API 兼容风险），不虚拟化（避免外部同名成员隐藏警告）。当前无任何调用方；若未来出现真实刷新需求，再以显式方法或 virtual 钩子单独设计。
-
 ## 测试
 
-- 当前仓库的 `Tests/EditMode/Foundation/Pool/CollectionPoolTests.cs` 中四个 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约或 Resource 消费者的完整覆盖。
+- `Tests/EditMode/Foundation/Pool/CollectionPoolTests.cs` 中的 `Table*` 用例覆盖选择器校验、Clear / Dispose 归还、移除空桶及插入失败归还；这不是 Table 全部契约的完整覆盖。
 - `Tests/EditMode/Editor/Distribution/FrameworkAssemblyIndependenceTests.cs` 的完整 Runtime 源码闭包包含 Table；它验证编译边界，不替代 Table 行为测试。
-- 文档旧列出的 `TableTests.cs`、`TableIndexTests.cs`、`TableResourceConsumerTests.cs` 当前不在仓库，不作为可运行入口或本批验证证据。阶段 5.3.5 不重跑融合前成熟模块的全面验证。
+
+上述路径用于定位回归，不表示当前环境已执行通过。
 
 ## 已知限制
 

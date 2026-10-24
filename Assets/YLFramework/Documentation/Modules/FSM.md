@@ -1,4 +1,4 @@
-# FSM（有限状态机）
+# 代码状态机（FSM）
 
 > [文档首页](../README.md) · [架构总览](../Architecture.md)
 
@@ -8,7 +8,7 @@
 
 本模块**不提供可视化 FSM Editor**，也**不以大型状态图制作为目标**：没有 GraphView、节点编辑器、状态机资产、序列化状态图、Hierarchical FSM、State Stack、异步 / 线程安全等能力。需要这些能力时应使用专门的状态机或行为树方案。
 
-YL 的完整配置/可视化状态机位于 `Runtime/Systems/StateMachine/` 与 `Editor/Systems/StateMachine/`，namespace 为 `YLFramework.StateMachine` / `YLFramework.Editor.StateMachine`，本轮明确保留 Systems；轻量 FSM 仍归 Utilities，不与之合并。外部 XF `XFFSM` 也可独立共存；本模块不替代或依赖它们，也不需要 Module、统一状态机 Manager 或公共 Root。调用方自行驱动并管理回收，Module 关闭不会自动停止外部 FSM。
+YL 的配置/可视化状态机位于 `Runtime/Systems/StateMachine/` 与 `Editor/Systems/StateMachine/`，namespace 为 `YLFramework.StateMachine` / `YLFramework.Editor.StateMachine`；轻量 FSM 归 Utilities，不与之合并。外部 XF `XFFSM` 也可独立共存；本模块不替代或依赖它们，也不需要 Module、统一状态机 Manager 或公共 Root。调用方自行驱动并管理回收，Module 关闭不会自动停止外部 FSM。
 
 ## 位置
 
@@ -47,7 +47,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 - 注册与启动：`Init(owner)`、`AddState(id, state)`、`State(id)`（不存在时自动创建 `CustomState`）、`SetUp(startStateId)`。
 - 驱动：`Update()` / `LateUpdate()` / `FixedUpdate()` / `OnGUI()`，仅在 Running 时执行。
-- 切换：`ChangeState(id, reCurrentState = false)`（带重入保护）、`Pause()`、`Continue()`、`Continue(stateId)`。
+- 切换：`ChangeState(id, reenterCurrentState = false)`（带重入保护）、`Pause()`、`Continue()`、`Continue(stateId)`。
 - 查询：`MachineState`、`IsRunning`、`IsPaused`、`CurrentStateId` / `CurrentState`、`PreviousStateId` / `PreviousState`、`HasState(id)`、`TryGetState(id, out state)`、`StateCount`。
 - 计时：`FrameCountOfCurrentState`、`SecondsOfCurrentState`。
 - 池化：`Allocate()` / `RecycleToCache()`（实现 `IOfPool` / `IPoolType`）。
@@ -63,9 +63,9 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 ## 状态切换
 
-`ChangeState(newStateId, reCurrentState)` 的校验与顺序：
+`ChangeState(newStateId, reenterCurrentState)` 的校验与顺序：
 
-1. 校验：必须 Running、非切换中、目标已注册、`Condition()` 通过（目标与当前相同且 `reCurrentState == false` 时直接返回 false）。
+1. 校验：必须 Running、非切换中、目标已注册、`Condition()` 通过（目标与当前相同且 `reenterCurrentState == false` 时直接返回 false）。
 2. `旧状态.Exit()`。
 3. 更新 `CurrentState` / `PreviousStateId` / `CurrentStateId`。
 4. 触发 `OnStateChanged(previous, next)`。
@@ -87,8 +87,9 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 | `OnStateChanged` | 已提交，且仍会重置计时并执行 `Enter` | Current = 新状态、Previous = 旧状态、计时已重置、新状态已 Enter；异常继续向上传播 |
 | `Enter`（新状态） | 已提交 | Current = 新状态、Previous = 旧状态、计时已重置、`MachineState` 保持 Running；可用 `ChangeState(新状态, true)` 重进 |
 
-- 异常不会被吞掉，全部原样向调用方传播；用户回调异常只影响本次调用，FSM 保持可继续使用。
+- 单个回调的异常向调用方传播，切换标记会恢复；异常不自动撤销用户回调已经造成的外部副作用。
 - `Exit` 已经发生，因此不会自动回滚并重新 `Enter` 旧状态（避免引入事务式回滚）。
+- `OnStateChanged` 与随后 `Enter` 都抛异常时，`Enter` 位于 `finally`，最终传播的是 `Enter` 异常，不聚合前一个异常。
 
 ## Pause / Continue
 
@@ -101,7 +102,7 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 - `FrameCountOfCurrentState`：SetUp / 切换 / `Continue(stateId)` 后为 1；常规帧每次 `Update` 在状态自身 `Update` 之后 +1，因此回调内首帧读到 1。
 - `SecondsOfCurrentState`：仅在 `Update` 中累加 `Time.deltaTime`；FixedUpdate / LateUpdate / OnGUI 不累计，暂停期间不累计。
-- **计时归属进入本次 `Update` 时的状态**：回调内发生切换或暂停时，本帧不计入任何状态，避免把旧状态的一帧记到新状态或被暂停的状态上；从下一帧起归新状态所有。
+- `Update` 仅在回调结束后仍为 Running、且 `CurrentState` 与进入时为同一实例时累计本帧。该判断不追踪切换次数：同状态重进、切走又切回同一实例，或同次回调内 Pause 后 Continue，结束时满足条件仍会累计。
 - `RecycleToCache` 后重置为 frame = 1、seconds = 0。
 
 ## 回调内的操作边界
@@ -117,14 +118,14 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 - 在 `Update` 回调中回收会导致“对象已回池、旧调用栈继续运行”和计时字段被回写，因此明确拒绝；请先退出回调再回收。
 - 回收清理（`DeInit` 回调）期间不允许 `AddState`（返回 false），也不要再操作该 FSM。
 
-## Pool 生命周期
+## 池化生命周期
 
 `Allocate` → 使用 → `RecycleToCache` → `OnRecycle`（Pause 退出当前状态 → 先清空 FSM 自身状态并摘除全部状态引用 → 逐个 `DeInit` → 完成清理）→ 再次 `Allocate` 复用。
 
 - 状态对象由调用方创建并持有，FSM 只保存引用并调用 `Init` / `DeInit`，不会 Dispose 状态对象。同一个状态实例同一时间只应属于一个 FSM。
 - 若某个 `DeInit` 抛异常：其余状态的 `DeInit` 仍会继续执行，只向上抛出第一个异常；FSM 内部状态已清空，且对象池会拒绝把该实例入池，不会以脏状态被复用。
 - 若当前状态的 `Exit` 在回收时抛异常，Safe 池隔离该实例且不会重试 / 重新出借；隔离不等于已完成领域清理，状态引用可能仍保留。调用方仍负责状态所持有的外部资源，不把 Pool 会话重置当作 FSM 的成功退出。
-- 不要修改 Pool 本身；FSM 只依赖 `Pool` 的公开契约。
+- FSM 通过 `SafeObjectPool` 归还自身；直接调用 `OnRecycle` 不是入池入口。
 
 ## 主要类型
 
@@ -147,8 +148,6 @@ fsm.RecycleToCache();                               // 回收，之后不再使�
 
 - `Pool`：实例复用现有 Runtime `SafeObjectPool` 包装及 Foundation 池内核，沿用 `YLFramework.Pooling` namespace；不依赖 Core Module / MVC，不新增独立缓存或生命周期管理器。
 
-## 当前状态
+## 测试入口
 
-成熟实现保持不变。当前可运行的相关入口为 `Tests/EditMode/Foundation/Pool/PoolContractTests.cs` 的 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried`（两个参数用例），仅覆盖 FSM 与池的回调回收 gate、退出失败隔离及正常复用，不代表 FSM 全部行为覆盖。
-
-文档旧列出的 `Tests/EditMode/FSMTests.cs` 当前不在仓库，旧专项 / 全量通过数字不作为当前可执行证据。阶段 5.3.5 仅完善框架定位与接入说明，不重做融合前的全面质量验证。
+`Tests/EditMode/Foundation/Pool/PoolContractTests.cs` 的 `FsmRetainsCallbackReturnGateAndFailedExitIsIsolatedRatherThanRetried` 覆盖 FSM 与池的回调回收限制、退出失败隔离及正常复用，不代表 FSM 全部行为覆盖，也不表示当前环境已执行通过。
