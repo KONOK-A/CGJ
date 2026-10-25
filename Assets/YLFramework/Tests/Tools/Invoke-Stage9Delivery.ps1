@@ -60,7 +60,7 @@ $worktrees = @(& git -C $repo worktree list --porcelain | Where-Object { $_.Star
 foreach ($tree in $worktrees) { if ($root -eq $tree -or $root.StartsWith($tree + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Delivery lies inside a worktree.' } }
 function Protected-Files {
     $relativeRoots = @('Assets/Games','Assets/Scenes','Assets/StreamingAssets','Packages','ProjectSettings','AGENTS.md','.gitignore',
-        'Assets/YLFramework/Plugins/Editor Enhancers Bundle','Assets/YLFramework/Tests/Acceptance/Core',
+        'Assets/Plugins/Editor Enhancers Bundle','Assets/YLFramework/Tests/Acceptance/Core',
         'Assets/YLFramework/Tests/Fixtures/WorkbenchUX1-20261017/AlternateContent.meta')
     foreach ($relative in $relativeRoots) {
         $path = Join-Path $repo $relative

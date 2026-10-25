@@ -108,7 +108,7 @@ namespace YLFramework.Tests
         {
             var roots = (string[])typeof(YLFramework.Editor.Distribution.ExportUnityPackage)
                 .GetField("_exportRoots", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-            var commercial = FrameworkRoot + "/Plugins/Editor Enhancers Bundle";
+            var commercial = "Assets/Plugins/Editor Enhancers Bundle";
             Assert.That(roots.Any(root => IsAtOrBelow(commercial, root)), Is.False,
                 "The independent delivery must not recursively redistribute commercial Editor tools without a redistribution grant.");
             Assert.That(roots, Does.Contain(FrameworkRoot + "/Plugins/BouncyCastle"));
@@ -304,7 +304,7 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Resource",
                 FrameworkRoot + "/Editor/Resource",
                 FrameworkRoot + "/Plugins/Sirenix",
-                FrameworkRoot + "/Plugins/Editor Enhancers Bundle",
+                "Assets/Plugins/Editor Enhancers Bundle",
                 FrameworkRoot + "/Runtime/Tools/AssemblyTool",
                 FrameworkRoot + "/Runtime/Tools/Attributes",
                 FrameworkRoot + "/Runtime/XFMain",
